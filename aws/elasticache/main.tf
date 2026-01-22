@@ -1,0 +1,139 @@
+terraform {
+  required_version = ">= 1.5"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = ">= 6.0"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = ">= 3.5"
+    }
+  }
+}
+
+
+# -----------------------------------------------------------------------------
+# Networking
+# -----------------------------------------------------------------------------
+resource "aws_security_group" "redis" {
+  name        = "${var.project}-redis-sg"
+  description = "Allow Redis (6379) from allowed CIDRs"
+  vpc_id      = var.vpc_id
+
+  ingress {
+    description = "Redis"
+    from_port   = 6379
+    to_port     = 6379
+    protocol    = "tcp"
+    cidr_blocks = var.allowed_cidr_blocks
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = merge({ Name = "${var.project}-redis-sg" }, var.tags)
+}
+
+resource "aws_elasticache_subnet_group" "this" {
+  name       = "${var.project}-redis-subnets"
+  subnet_ids = var.cache_subnet_ids
+  tags       = merge({ Name = "${var.project}-redis-subnets" }, var.tags)
+}
+
+# Optional custom parameter group (family redis7)
+resource "aws_elasticache_parameter_group" "this" {
+  name   = "${var.project}-redis-pg"
+  family = "redis7"
+
+  parameter {
+    name  = "maxmemory-policy"
+    value = "allkeys-lru"
+  }
+
+  tags = merge({ Name = "${var.project}-redis-pg" }, var.tags)
+}
+
+# -----------------------------------------------------------------------------
+# Optional CloudWatch Logs group for Redis log delivery
+# -----------------------------------------------------------------------------
+resource "aws_cloudwatch_log_group" "redis" {
+  count             = var.enable_cloudwatch_logs ? 1 : 0
+  name              = "/aws/elasticache/${var.project}"
+  retention_in_days = 30
+  tags              = merge({ Name = "${var.project}-redis-logs" }, var.tags)
+}
+
+# -----------------------------------------------------------------------------
+# Auth token for TLS/ACL
+# -----------------------------------------------------------------------------
+resource "random_password" "auth" {
+  length           = 40
+  lower            = true
+  upper            = true
+  numeric          = true
+  special          = true
+  min_special      = 1
+  override_special = "!@#%^*-_=+?"
+}
+
+# -----------------------------------------------------------------------------
+# Redis Replication Group (cluster-mode disabled)
+# -----------------------------------------------------------------------------
+resource "aws_elasticache_replication_group" "this" {
+  replication_group_id = "${var.project}-redis"
+  description          = "Redis for ${var.project}"
+
+  engine         = "redis"
+  engine_version = var.engine_version
+  node_type      = var.node_type
+  port           = 6379
+
+  # Cluster mode disabled; single primary + optional replicas
+  num_node_groups         = 1
+  replicas_per_node_group = var.replicas
+
+  automatic_failover_enabled = var.ha
+  multi_az_enabled           = var.ha
+
+  at_rest_encryption_enabled = true
+  transit_encryption_enabled = true
+  auth_token                 = random_password.auth.result
+
+  subnet_group_name    = aws_elasticache_subnet_group.this.name
+  security_group_ids   = [aws_security_group.redis.id]
+  parameter_group_name = aws_elasticache_parameter_group.this.name
+
+  maintenance_window       = var.maintenance_window
+  snapshot_window          = var.snapshot_window
+  snapshot_retention_limit = var.snapshot_retention_days
+
+  apply_immediately = var.apply_immediately
+
+  # Optional CloudWatch log delivery (engine & slow logs)
+  dynamic "log_delivery_configuration" {
+    for_each = var.enable_cloudwatch_logs ? [1] : []
+    content {
+      destination      = aws_cloudwatch_log_group.redis[0].name
+      destination_type = "cloudwatch-logs"
+      log_format       = "text"
+      log_type         = "engine-log"
+    }
+  }
+
+  dynamic "log_delivery_configuration" {
+    for_each = var.enable_cloudwatch_logs ? [1] : []
+    content {
+      destination      = aws_cloudwatch_log_group.redis[0].name
+      destination_type = "cloudwatch-logs"
+      log_format       = "text"
+      log_type         = "slow-log"
+    }
+  }
+
+  tags = merge({ Name = "${var.project}-redis" }, var.tags)
+}

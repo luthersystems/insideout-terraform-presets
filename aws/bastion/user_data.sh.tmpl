@@ -1,0 +1,26 @@
+#!/bin/bash
+set -eux
+
+# Keep base OS up to date
+yum update -y
+
+# Ensure SSM Agent is enabled
+systemctl enable --now amazon-ssm-agent
+
+if [ "${install_eks_tools}" = "true" ]; then
+  # Install AWS CLI v2
+  tmpdir=$(mktemp -d)
+  curl -L "https://awscli.amazonaws.com/awscli-exe-linux-${arch}.zip" -o "$tmpdir/awscliv2.zip"
+  unzip -q "$tmpdir/awscliv2.zip" -d "$tmpdir"
+  $tmpdir/aws/install || true
+
+  # Install kubectl (latest stable)
+  KVER=$(curl -sL https://dl.k8s.io/release/stable.txt)
+  curl -L "https://dl.k8s.io/release/$KVER/bin/linux/${arch}/kubectl" -o /usr/local/bin/kubectl
+  chmod +x /usr/local/bin/kubectl
+
+  # Install eksctl
+  curl -sL "https://github.com/eksctl-io/eksctl/releases/latest/download/eksctl_Linux_${arch}.tar.gz" \
+    | tar xz -C /usr/local/bin
+  chmod +x /usr/local/bin/eksctl
+fi

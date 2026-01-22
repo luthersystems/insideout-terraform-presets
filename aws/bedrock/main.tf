@@ -1,0 +1,90 @@
+resource "aws_iam_role" "bedrock_kb" {
+  name = "${var.project}-bedrock-kb-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "bedrock.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy" "bedrock_kb" {
+  name = "${var.project}-bedrock-kb-policy"
+  role = aws_iam_role.bedrock_kb.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = [
+          "bedrock:InvokeModel"
+        ]
+        Effect   = "Allow"
+        Resource = "arn:aws:bedrock:${var.region}::foundation-model/${var.model_id}"
+      },
+      {
+        Action = [
+          "s3:ListBucket",
+          "s3:GetObject"
+        ]
+        Effect   = "Allow"
+        Resource = [
+          var.s3_bucket_arn,
+          "${var.s3_bucket_arn}/*"
+        ]
+      },
+      {
+        Action = [
+          "es:ESHttpPost",
+          "es:ESHttpGet",
+          "es:DescribeDomain"
+        ]
+        Effect   = "Allow"
+        Resource = "${var.opensearch_arn}/*"
+      }
+    ]
+  })
+}
+
+resource "aws_bedrockagent_knowledge_base" "this" {
+  name     = "${var.project}-${var.knowledge_base_name}"
+  role_arn = aws_iam_role.bedrock_kb.arn
+
+  knowledge_base_configuration {
+    type = "VECTOR"
+    vector_knowledge_base_configuration {
+      embedding_model_arn = "arn:aws:bedrock:${var.region}::foundation-model/${var.embedding_model_id}"
+    }
+  }
+
+  storage_configuration {
+    type = "OPENSEARCH_SERVERLESS"
+    opensearch_serverless_configuration {
+      collection_arn    = var.opensearch_arn
+      vector_index_name = "bedrock-knowledge-base-default-index"
+      field_mapping {
+        vector_field   = "bedrock-knowledge-base-default-vector"
+        text_field     = "AMAZON_BEDROCK_TEXT_CHUNK"
+        metadata_field = "AMAZON_BEDROCK_METADATA"
+      }
+    }
+  }
+}
+
+resource "aws_bedrockagent_data_source" "this" {
+  knowledge_base_id = aws_bedrockagent_knowledge_base.this.id
+  name              = "${var.project}-s3-source"
+  data_source_configuration {
+    type = "S3"
+    s3_configuration {
+      bucket_arn = var.s3_bucket_arn
+    }
+  }
+}
