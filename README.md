@@ -1,10 +1,12 @@
 # InsideOut Terraform Presets
 
-This repository contains the standard, tested, and production-ready Terraform module presets used by [InsideOut](https://insideout.luthersystems.com).
+> **Note:** This project is currently in **Beta** and is considered a prototype. It is not yet recommended for mission-critical production workloads without review.
+
+This repository contains the standard, tested Terraform module presets used by [InsideOut](https://insideout.luthersystems.com) to generate cloud infrastructure.
 
 ## What is InsideOut?
 
-InsideOut is the most streamlined way to build, configure, deploy, and manage your product infrastructure. It allows you to build, configure, deploy, and manage your infra 10x faster, letting you focus on your application instead of your infrastructure.
+InsideOut is a streamlined platform to build, configure, deploy, and manage your product infrastructure. It helps you get your infrastructure up and running faster, letting you focus on your application logic.
 
 *   **Landing Page**: [insideout.luthersystems.com](https://insideout.luthersystems.com)
 *   **Agent Prototype**: [insideout.luthersystemsapp.com](https://insideout.luthersystemsapp.com)
@@ -13,10 +15,12 @@ InsideOut is the most streamlined way to build, configure, deploy, and manage yo
 
 ## About These Presets
 
-This repository serves as the library of standard and tested Terraform modules that are composed by InsideOut to generate complete cloud stacks. They are designed to be:
+This repository serves as the library of standard Terraform modules that are composed by InsideOut to generate complete cloud stacks. They are designed to be:
 - **Modular**: Composable by nature.
 - **Standardized**: Following cloud best practices and security defaults.
 - **Tested**: Verified through the InsideOut deployment and inspection pipelines.
+
+*Based on [Luther Enterprise Terraform Modules](https://github.com/luthersystems/tf-modules).*
 
 ## Structure
 
