@@ -48,3 +48,8 @@ output "region" {
   value       = var.region
 }
 
+output "connector_id" {
+  description = "VPC connector ID (placeholder for Serverless VPC Access)"
+  value       = null
+}
+
