@@ -1,0 +1,34 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(terraform init:*)",
+      "Bash(terraform validate:*)",
+      "Bash(terraform fmt:*)",
+      "Bash(terraform version:*)",
+      "Bash(terraform plan:*)",
+      "Bash(git checkout:*)",
+      "Bash(git branch:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(git fetch:*)",
+      "Bash(git rebase:*)",
+      "Bash(git tag:*)",
+      "Bash(git merge:*)",
+      "Bash(gh pr:*)",
+      "Bash(gh issue:*)",
+      "Bash(gh run:*)",
+      "Bash(gh release:*)",
+      "Bash(gh api:*)",
+      "Bash(find aws:*)",
+      "Bash(find gcp:*)",
+      "Bash(find examples:*)",
+      "Bash(ls:*)",
+      "Bash(mkdir:*)",
+      "Bash(go build:*)"
+    ]
+  }
+}

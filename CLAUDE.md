@@ -80,3 +80,18 @@ These preset files are embedded at build time into the [reliable](https://github
 - **Required variables:** Every preset should declare `project` and `region` variables — the composer always maps these
 - **Defaults matter:** Variables without defaults become required root variables — the mapper MUST provide values or deploy fails
 - **Wiring outputs:** Outputs used for cross-module wiring (e.g., `vpc_id`, `private_subnet_ids`) must be declared in `outputs.tf`
+
+## Skills
+
+Before starting a task, check if a matching skill exists and follow its workflow exactly. Multiple skills can chain: e.g., `/pickup-issue` uses the relevant add-module skill for implementation, `/verify` before committing, and `/pr` to ship.
+
+| Task | Skill | File |
+|------|-------|------|
+| Run local CI validation | `/verify` | `.claude/skills/verify/SKILL.md` |
+| Create a pull request | `/pr` | `.claude/skills/pr/SKILL.md` |
+| Add a new AWS module | `/add-aws-module` | `.claude/skills/add-aws-module/SKILL.md` |
+| Add a new GCP module | `/add-gcp-module` | `.claude/skills/add-gcp-module/SKILL.md` |
+| Add an example stack | `/add-example` | `.claude/skills/add-example/SKILL.md` |
+| Work on a GitHub issue | `/pickup-issue` | `.claude/skills/pickup-issue/SKILL.md` |
+| Tag and release a version | `/release` | `.claude/skills/release/SKILL.md` |
+| Audit modules for issues | `/audit` | `.claude/skills/audit/SKILL.md` |
