@@ -86,7 +86,7 @@ variable "capacity_type" {
   type        = string
   default     = null
   validation {
-    condition     = var.capacity_type == null || contains(["ON_DEMAND", "SPOT"], var.capacity_type)
+    condition     = var.capacity_type == null ? true : contains(["ON_DEMAND", "SPOT"], var.capacity_type)
     error_message = "capacity_type must be null (use provider default) or one of: ON_DEMAND, SPOT."
   }
 }
