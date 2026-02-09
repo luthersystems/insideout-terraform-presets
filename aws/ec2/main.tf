@@ -86,8 +86,8 @@ resource "aws_eks_node_group" "this" {
   # Required; use c7i/c7g/etc. passed from root (computed by composer/mapper)
   instance_types = var.instance_types
 
-  # Intentionally omit capacity_type to use provider default (ON_DEMAND)
-  # capacity_type = "ON_DEMAND"
+  # When null the provider defaults to ON_DEMAND
+  capacity_type = var.capacity_type
 
   # Merge caller-provided labels on top of our default
   labels = merge(
