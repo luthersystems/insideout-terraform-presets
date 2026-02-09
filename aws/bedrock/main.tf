@@ -34,7 +34,7 @@ resource "aws_iam_role_policy" "bedrock_kb" {
           "s3:ListBucket",
           "s3:GetObject"
         ]
-        Effect   = "Allow"
+        Effect = "Allow"
         Resource = [
           var.s3_bucket_arn,
           "${var.s3_bucket_arn}/*"

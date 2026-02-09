@@ -42,7 +42,7 @@ resource "google_identity_platform_config" "this" {
   dynamic "mfa" {
     for_each = var.mfa_enabled ? [1] : []
     content {
-      state = var.mfa_state
+      state             = var.mfa_state
       enabled_providers = var.mfa_enabled_providers
     }
   }

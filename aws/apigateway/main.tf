@@ -12,7 +12,7 @@ terraform {
 resource "aws_apigatewayv2_api" "api" {
   name          = "${var.project}-api"
   protocol_type = "HTTP"
-  
+
   tags = merge({ Name = "${var.project}-api" }, var.tags)
 }
 

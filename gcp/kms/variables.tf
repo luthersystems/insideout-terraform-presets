@@ -23,12 +23,12 @@ variable "keyring_name" {
 variable "keys" {
   description = "List of keys to create"
   type = list(object({
-    name            = string
-    purpose         = optional(string, "ENCRYPT_DECRYPT")
-    rotation_period = optional(string, "7776000s") # 90 days
-    algorithm       = optional(string, "GOOGLE_SYMMETRIC_ENCRYPTION")
+    name             = string
+    purpose          = optional(string, "ENCRYPT_DECRYPT")
+    rotation_period  = optional(string, "7776000s") # 90 days
+    algorithm        = optional(string, "GOOGLE_SYMMETRIC_ENCRYPTION")
     protection_level = optional(string, "SOFTWARE")
-    labels          = optional(map(string), {})
+    labels           = optional(map(string), {})
   }))
   default = [{
     name = "default"

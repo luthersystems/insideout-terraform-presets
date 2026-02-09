@@ -85,8 +85,8 @@ resource "google_compute_resource_policy" "snapshot_schedule" {
 # This local captures the backup configuration for reference
 locals {
   backup_config = {
-    gcs_bucket           = var.enable_gcs_backups ? google_storage_bucket.backups[0].name : null
-    snapshot_schedule    = var.enable_compute_snapshots ? google_compute_resource_policy.snapshot_schedule[0].name : null
-    retention_days       = var.backup_retention_days
+    gcs_bucket        = var.enable_gcs_backups ? google_storage_bucket.backups[0].name : null
+    snapshot_schedule = var.enable_compute_snapshots ? google_compute_resource_policy.snapshot_schedule[0].name : null
+    retention_days    = var.backup_retention_days
   }
 }
