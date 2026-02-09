@@ -12,6 +12,8 @@ data "aws_availability_zones" "available" {
   state = "available"
 }
 
+data "aws_region" "current" {}
+
 locals {
   # Use the first N AZs for subnets
   azs = slice(data.aws_availability_zones.available.names, 0, var.az_count)
@@ -63,7 +65,7 @@ module "this" {
 # Optional: S3 Gateway Endpoint for private subnets (no Internet needed for S3)
 resource "aws_vpc_endpoint" "s3" {
   vpc_id            = module.this.vpc_id
-  service_name      = "com.amazonaws.${var.region}.s3"
+  service_name      = "com.amazonaws.${data.aws_region.current.region}.s3"
   vpc_endpoint_type = "Gateway"
   route_table_ids   = module.this.private_route_table_ids
 

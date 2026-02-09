@@ -15,6 +15,7 @@ locals {
 }
 
 data "aws_caller_identity" "current" {}
+data "aws_region" "current" {}
 
 data "aws_iam_policy_document" "ebs_csi_pod_identity_trust" {
   statement {
@@ -40,7 +41,7 @@ data "aws_iam_policy_document" "ebs_csi_pod_identity_trust" {
       test     = "ArnLike"
       variable = "aws:SourceArn"
       values = [
-        "arn:aws:eks:${var.region}:${data.aws_caller_identity.current.account_id}:cluster/${local.cluster_name}"
+        "arn:aws:eks:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:cluster/${local.cluster_name}"
       ]
     }
   }
