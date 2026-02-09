@@ -62,7 +62,7 @@ module "sql_db" {
   }
 
   # Database and user
-  db_name  = var.database_name
+  db_name      = var.database_name
   db_charset   = "UTF8"
   db_collation = "en_US.UTF8"
 
@@ -127,8 +127,8 @@ module "sql_db_mysql" {
     authorized_networks = var.authorized_networks
   }
 
-  db_name     = var.database_name
-  db_charset  = "utf8mb4"
+  db_name      = var.database_name
+  db_charset   = "utf8mb4"
   db_collation = "utf8mb4_general_ci"
 
   user_name     = var.user_name

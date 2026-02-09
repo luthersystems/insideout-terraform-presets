@@ -1,0 +1,2 @@
+Module uses configuration_aliases (aws.us_east_1) and cannot validate standalone.
+Validated through examples that pass the required provider alias.

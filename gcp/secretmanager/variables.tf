@@ -17,13 +17,13 @@ variable "region" {
 variable "secrets" {
   description = "List of secrets to create"
   type = list(object({
-    name       = string
-    value      = optional(string)
-    labels     = optional(map(string), {})
+    name   = string
+    value  = optional(string)
+    labels = optional(map(string), {})
     replication = optional(object({
       automatic = optional(bool, true)
       user_managed = optional(list(object({
-        location = string
+        location     = string
         kms_key_name = optional(string)
       })))
     }))

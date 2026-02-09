@@ -63,15 +63,15 @@ variable "cdn_cache_mode" {
 variable "backends" {
   description = "Backend configurations"
   type = list(object({
-    name                  = string
-    description           = optional(string)
-    protocol              = optional(string, "HTTP")
-    port                  = optional(number, 80)
-    port_name             = optional(string, "http")
-    timeout_sec           = optional(number, 30)
-    enable_cdn            = optional(bool, false)
-    health_check_path     = optional(string, "/")
-    instance_group        = optional(string)
+    name                   = string
+    description            = optional(string)
+    protocol               = optional(string, "HTTP")
+    port                   = optional(number, 80)
+    port_name              = optional(string, "http")
+    timeout_sec            = optional(number, 30)
+    enable_cdn             = optional(bool, false)
+    health_check_path      = optional(string, "/")
+    instance_group         = optional(string)
     network_endpoint_group = optional(string)
   }))
   default = []

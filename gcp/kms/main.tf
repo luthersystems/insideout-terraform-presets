@@ -13,11 +13,11 @@ module "kms" {
   location   = var.region
   keyring    = local.keyring_name
 
-  keys               = [for k in var.keys : k.name]
-  key_rotation_period = { for k in var.keys : k.name => k.rotation_period }
-  key_algorithm       = { for k in var.keys : k.name => k.algorithm }
+  keys                 = [for k in var.keys : k.name]
+  key_rotation_period  = { for k in var.keys : k.name => k.rotation_period }
+  key_algorithm        = { for k in var.keys : k.name => k.algorithm }
   key_protection_level = { for k in var.keys : k.name => k.protection_level }
-  purpose             = { for k in var.keys : k.name => k.purpose }
+  purpose              = { for k in var.keys : k.name => k.purpose }
 
   prevent_destroy = var.prevent_destroy
 
