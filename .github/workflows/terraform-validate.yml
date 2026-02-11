@@ -99,6 +99,10 @@ jobs:
         with:
           terraform_version: "1.7.5"
 
+      - name: Terraform Init
+        run: terraform init -backend=false -input=false
+        working-directory: ${{ matrix.dir }}
+
       - name: Terraform Test
         run: terraform test -no-color
         working-directory: ${{ matrix.dir }}
