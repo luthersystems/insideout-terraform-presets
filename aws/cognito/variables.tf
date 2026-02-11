@@ -112,7 +112,8 @@ EOT
       && can(regex("^https://", p.issuer))
       && (
         p.attributes_request_method == null
-        || contains(["GET", "POST"], upper(p.attributes_request_method))
+        ? true
+        : contains(["GET", "POST"], upper(p.attributes_request_method))
       )
     ])
     error_message = "Each OIDC provider must have non-empty name/client_id/client_secret, an https:// issuer, and attributes_request_method of GET or POST (if set)."

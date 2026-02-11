@@ -18,8 +18,10 @@ locals {
 
   domain_prefix = lower(replace(coalesce(var.domain_prefix, var.project), "/[^a-z0-9-]/", "-"))
 
-  # Names of configured federated providers (to include on the app client)
-  oidc_idp_names = [for p in var.oidc_identity_providers : p.name]
+  # Names of configured federated providers (to include on the app client).
+  # nonsensitive() is required because the variable is marked sensitive (it
+  # contains client_secret), but provider names are safe to expose as map keys.
+  oidc_idp_names = [for p in nonsensitive(var.oidc_identity_providers) : p.name]
   saml_idp_names = [for p in var.saml_identity_providers : p.name]
   all_idp_names  = concat(local.oidc_idp_names, local.saml_idp_names)
 }
@@ -54,7 +56,7 @@ resource "aws_cognito_user_pool" "this" {
 # Federated Identity Providers (OIDC)
 # -----------------------------------------------------------------------------
 resource "aws_cognito_identity_provider" "oidc" {
-  for_each      = { for p in var.oidc_identity_providers : p.name => p }
+  for_each      = { for p in nonsensitive(var.oidc_identity_providers) : p.name => p }
   user_pool_id  = aws_cognito_user_pool.this.id
   provider_name = each.value.name
   provider_type = "OIDC"

@@ -11,6 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       presets: ${{ steps.find-presets.outputs.dirs }}
+      presets_with_tests: ${{ steps.find-testable.outputs.dirs }}
       examples: ${{ steps.find-examples.outputs.dirs }}
     steps:
       - uses: actions/checkout@v4
@@ -20,6 +21,16 @@ jobs:
         run: |
           dirs=$(find aws gcp -mindepth 1 -maxdepth 1 -type d | sort | while read -r d; do
             [ -f "$d/.validate-skip" ] || echo "$d"
+          done | jq -R -s -c 'split("\n") | map(select(length > 0))')
+          echo "dirs=$dirs" >> "$GITHUB_OUTPUT"
+
+      - id: find-testable
+        name: Discover modules with terraform tests
+        run: |
+          dirs=$(find aws gcp -mindepth 1 -maxdepth 1 -type d | sort | while read -r d; do
+            if ls "$d"/tests/*.tftest.hcl >/dev/null 2>&1 || ls "$d"/*.tftest.hcl >/dev/null 2>&1; then
+              echo "$d"
+            fi
           done | jq -R -s -c 'split("\n") | map(select(length > 0))')
           echo "dirs=$dirs" >> "$GITHUB_OUTPUT"
 
@@ -72,6 +83,33 @@ jobs:
       - name: Terraform Validate
         run: terraform validate
         working-directory: ${{ matrix.dir }}
+
+  test-presets:
+    needs: discover
+    if: ${{ needs.discover.outputs.presets_with_tests != '[]' }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        dir: ${{ fromJson(needs.discover.outputs.presets_with_tests) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.7.5"
+
+      - name: Terraform Test
+        run: terraform test -no-color
+        working-directory: ${{ matrix.dir }}
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Lint sensitive-in-for_each
+        run: bash tests/lint-sensitive-for-each.sh
 
   format-check:
     runs-on: ubuntu-latest
