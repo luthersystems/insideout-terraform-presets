@@ -65,6 +65,13 @@ resource "aws_backup_vault" "this" {
 #   either 'schedule' or 'schedule_expression' from the caller.
 # -----------------------------------------------------------------------------
 locals {
+  any_service_enabled = (
+    var.enable_ec2_ebs ||
+    var.enable_rds ||
+    var.enable_dynamodb ||
+    var.enable_s3
+  )
+
   # Defaults, tolerant to missing keys
   base_defaults = {
     schedule_expression          = try(var.default_rule.schedule, try(var.default_rule.schedule_expression, "cron(0 5 ? * * *)"))
@@ -229,6 +236,13 @@ resource "aws_backup_plan" "this" {
   }
 
   tags = var.tags
+
+  lifecycle {
+    precondition {
+      condition     = local.any_service_enabled
+      error_message = "At least one backup service must be enabled (enable_ec2_ebs, enable_rds, enable_dynamodb, or enable_s3)."
+    }
+  }
 }
 
 # -----------------------------------------------------------------------------
