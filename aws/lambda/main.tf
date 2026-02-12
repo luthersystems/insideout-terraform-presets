@@ -36,7 +36,7 @@ resource "aws_iam_role_policy_attachment" "lambda_basic" {
 }
 
 resource "aws_iam_role_policy_attachment" "lambda_vpc" {
-  count      = var.vpc_id != null ? 1 : 0
+  count      = var.enable_vpc ? 1 : 0
   role       = aws_iam_role.lambda_exec.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
 }
@@ -66,7 +66,7 @@ resource "aws_lambda_function" "this" {
   source_code_hash = fileexists("${path.module}/placeholder.zip") ? filebase64sha256("${path.module}/placeholder.zip") : null
 
   dynamic "vpc_config" {
-    for_each = var.vpc_id != null ? [1] : []
+    for_each = var.enable_vpc ? [1] : []
     content {
       subnet_ids         = var.subnet_ids
       security_group_ids = var.security_group_ids
