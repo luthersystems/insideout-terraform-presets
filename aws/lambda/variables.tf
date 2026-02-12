@@ -34,6 +34,12 @@ variable "handler" {
   default     = "index.handler"
 }
 
+variable "enable_vpc" {
+  description = "Enable VPC access for Lambda (must be true when vpc_id is set)"
+  type        = bool
+  default     = false
+}
+
 variable "vpc_id" {
   description = "Optional VPC ID for Lambda VPC access"
   type        = string

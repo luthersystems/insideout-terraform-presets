@@ -6,6 +6,7 @@ module "vpc" {
 
 module "lambda" {
   source             = "../../aws/lambda"
+  enable_vpc         = true
   vpc_id             = module.vpc.vpc_id
   subnet_ids         = module.vpc.private_subnet_ids
   security_group_ids = []
