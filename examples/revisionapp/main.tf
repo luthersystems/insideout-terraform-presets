@@ -26,7 +26,7 @@ module "lambda" {
 }
 
 module "ec2" {
-  source         = "../../aws/ec2"
+  source         = "../../aws/eks_nodegroup"
   cluster_name   = module.resource.cluster_name
   subnet_ids     = module.vpc.private_subnet_ids
   desired_size   = var.ec2_desired_size

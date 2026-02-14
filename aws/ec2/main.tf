@@ -11,12 +11,55 @@ terraform {
 
 locals {
   common_tags = { Project = var.project }
+  ami_id      = var.ami_id != null ? var.ami_id : data.aws_ami.al2023[0].id
+}
+
+# Pick Amazon Linux 2023 AMI by arch (only when ami_id is not provided)
+data "aws_ami" "al2023" {
+  count       = var.ami_id == null ? 1 : 0
+  owners      = ["137112412989"] # Amazon
+  most_recent = true
+
+  filter {
+    name   = "name"
+    values = ["al2023-ami-*-${var.arch}"]
+  }
 }
 
 # -------------------------------------------------------------
-# IAM role for the managed node group (created only if needed)
+# Security group
 # -------------------------------------------------------------
-data "aws_iam_policy_document" "mng_assume" {
+resource "aws_security_group" "this" {
+  name        = "${var.project}-ec2-sg"
+  description = "Security group for ${var.project} EC2 instance"
+  vpc_id      = var.vpc_id
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = merge({ Name = "${var.project}-ec2-sg" }, local.common_tags, var.tags)
+}
+
+resource "aws_security_group_rule" "custom_ingress" {
+  for_each = toset([for p in var.custom_ingress_ports : tostring(p)])
+
+  type              = "ingress"
+  from_port         = tonumber(each.value)
+  to_port           = tonumber(each.value)
+  protocol          = "tcp"
+  cidr_blocks       = var.ingress_cidr_blocks
+  security_group_id = aws_security_group.this.id
+  description       = "Custom ingress on port ${each.value}"
+}
+
+# -------------------------------------------------------------
+# IAM role + instance profile (SSM access)
+# -------------------------------------------------------------
+data "aws_iam_policy_document" "ec2_assume_role" {
   statement {
     effect = "Allow"
     principals {
@@ -27,85 +70,39 @@ data "aws_iam_policy_document" "mng_assume" {
   }
 }
 
-# Create a role only when node_role_arn is NOT provided
-resource "aws_iam_role" "mng" {
-  count              = var.node_role_arn == null ? 1 : 0
-  name               = "${var.cluster_name}-node-role"
-  assume_role_policy = data.aws_iam_policy_document.mng_assume.json
-  tags               = local.common_tags
+resource "aws_iam_role" "this" {
+  name               = "${var.project}-ec2-role"
+  assume_role_policy = data.aws_iam_policy_document.ec2_assume_role.json
+  tags               = merge(local.common_tags, var.tags)
 }
 
-# Standard policies for EKS worker nodes (only when we created the role)
-resource "aws_iam_role_policy_attachment" "mng_worker" {
-  count      = var.node_role_arn == null ? 1 : 0
-  role       = aws_iam_role.mng[0].name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
-}
-
-resource "aws_iam_role_policy_attachment" "mng_cni" {
-  count      = var.node_role_arn == null ? 1 : 0
-  role       = aws_iam_role.mng[0].name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
-}
-
-resource "aws_iam_role_policy_attachment" "mng_ecr" {
-  count      = var.node_role_arn == null ? 1 : 0
-  role       = aws_iam_role.mng[0].name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
-}
-
-# Optional but handy for SSM Session Manager access to nodes
-resource "aws_iam_role_policy_attachment" "mng_ssm" {
-  count      = var.node_role_arn == null ? 1 : 0
-  role       = aws_iam_role.mng[0].name
+resource "aws_iam_role_policy_attachment" "ssm_core" {
+  role       = aws_iam_role.this.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
+resource "aws_iam_instance_profile" "this" {
+  name = "${var.project}-ec2-profile"
+  role = aws_iam_role.this.name
+}
+
 # -------------------------------------------------------------
-# EKS Managed Node Group
+# EC2 instance
 # -------------------------------------------------------------
-resource "aws_eks_node_group" "this" {
-  cluster_name    = var.cluster_name
-  node_group_name = coalesce(var.node_group_name, "default")
+resource "aws_instance" "this" {
+  ami                         = local.ami_id
+  instance_type               = var.instance_type
+  subnet_id                   = var.subnet_id
+  associate_public_ip_address = var.associate_public_ip
+  vpc_security_group_ids      = [aws_security_group.this.id]
+  iam_instance_profile        = aws_iam_instance_profile.this.name
+  key_name                    = var.key_name
 
-  # Use caller-supplied role if provided; otherwise the role we created.
-  # try(...) avoids errors when count = 0 on aws_iam_role.mng.
-  node_role_arn = coalesce(
-    var.node_role_arn,
-    try(aws_iam_role.mng[0].arn, null)
-  )
+  user_data = var.user_data != "" ? base64encode(var.user_data) : null
 
-  subnet_ids = var.subnet_ids
-
-  scaling_config {
-    desired_size = var.desired_size
-    min_size     = var.min_size
-    max_size     = var.max_size
+  metadata_options {
+    http_tokens = "required"
   }
 
-  # Required; use c7i/c7g/etc. passed from root (computed by composer/mapper)
-  instance_types = var.instance_types
-
-  # When null the provider defaults to ON_DEMAND
-  capacity_type = var.capacity_type
-
-  # Merge caller-provided labels on top of our default
-  labels = merge(
-    { role = "app" },
-    var.labels
-  )
-
-  update_config {
-    max_unavailable_percentage = 33
-  }
-
-  # Merge module/common tags + caller-provided tags
-  tags = merge(
-    local.common_tags,
-    var.tags,
-    {
-      Name   = coalesce(var.node_group_name, "default")
-      backup = "true"
-    }
-  )
+  tags = merge({ Name = "${var.project}-ec2" }, local.common_tags, var.tags)
 }
