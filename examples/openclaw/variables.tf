@@ -18,6 +18,12 @@ variable "ec2_region" {
   type        = string
 }
 
+variable "ec2_ami_id" {
+  description = "AMI ID (Ubuntu 24.04 recommended for OpenClaw)"
+  type        = string
+  default     = null
+}
+
 variable "ec2_instance_type" {
   description = "EC2 instance type"
   type        = string
@@ -30,6 +36,12 @@ variable "ec2_associate_public_ip" {
   default     = true
 }
 
+variable "ec2_key_name" {
+  description = "EC2 key pair name for SSH access (null to rely on SSM only)"
+  type        = string
+  default     = null
+}
+
 variable "ec2_user_data" {
   description = "User data script for the EC2 instance"
   type        = string
@@ -40,10 +52,4 @@ variable "ec2_custom_ingress_ports" {
   description = "TCP ports to open for ingress"
   type        = list(number)
   default     = []
-}
-
-variable "ec2_ingress_cidr_blocks" {
-  description = "CIDR blocks allowed for custom ingress rules"
-  type        = list(string)
-  default     = ["0.0.0.0/0"]
 }
