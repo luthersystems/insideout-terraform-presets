@@ -66,6 +66,12 @@ variable "key_name" {
   default     = null
 }
 
+variable "ssh_public_key" {
+  description = "SSH public key material (e.g., 'ssh-ed25519 AAAA...'). Creates an EC2 key pair when provided."
+  type        = string
+  default     = ""
+}
+
 variable "associate_public_ip" {
   description = "Whether to associate a public IP address with the instance"
   type        = bool

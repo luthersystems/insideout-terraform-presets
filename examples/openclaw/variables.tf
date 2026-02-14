@@ -36,10 +36,10 @@ variable "ec2_associate_public_ip" {
   default     = true
 }
 
-variable "ec2_key_name" {
-  description = "EC2 key pair name for SSH access (null to rely on SSM only)"
+variable "ec2_ssh_public_key" {
+  description = "SSH public key material for EC2 access (e.g., 'ssh-ed25519 AAAA...')"
   type        = string
-  default     = null
+  default     = ""
 }
 
 variable "ec2_user_data" {

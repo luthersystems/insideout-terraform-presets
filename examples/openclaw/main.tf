@@ -11,7 +11,7 @@ module "ec2" {
   ami_id               = var.ec2_ami_id
   associate_public_ip  = var.ec2_associate_public_ip
   instance_type        = var.ec2_instance_type
-  key_name             = var.ec2_key_name
+  ssh_public_key       = var.ec2_ssh_public_key
   user_data            = var.ec2_user_data
   custom_ingress_ports = var.ec2_custom_ingress_ports
   project              = var.ec2_project

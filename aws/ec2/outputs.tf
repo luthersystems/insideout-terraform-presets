@@ -17,3 +17,8 @@ output "security_group_id" {
   description = "Security group ID attached to the instance"
   value       = aws_security_group.this.id
 }
+
+output "ssh_command" {
+  description = "SSH command to connect to the instance"
+  value       = var.associate_public_ip ? "ssh ubuntu@${aws_instance.this.public_ip}" : null
+}

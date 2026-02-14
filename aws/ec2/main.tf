@@ -87,6 +87,16 @@ resource "aws_iam_instance_profile" "this" {
 }
 
 # -------------------------------------------------------------
+# SSH key pair (created only when ssh_public_key is provided)
+# -------------------------------------------------------------
+resource "aws_key_pair" "this" {
+  count      = var.ssh_public_key != "" ? 1 : 0
+  key_name   = "${var.project}-ec2-key"
+  public_key = var.ssh_public_key
+  tags       = merge(local.common_tags, var.tags)
+}
+
+# -------------------------------------------------------------
 # EC2 instance
 # -------------------------------------------------------------
 resource "aws_instance" "this" {
@@ -96,7 +106,7 @@ resource "aws_instance" "this" {
   associate_public_ip_address = var.associate_public_ip
   vpc_security_group_ids      = [aws_security_group.this.id]
   iam_instance_profile        = aws_iam_instance_profile.this.name
-  key_name                    = var.key_name
+  key_name                    = var.ssh_public_key != "" ? aws_key_pair.this[0].key_name : var.key_name
 
   user_data = var.user_data != "" ? base64encode(var.user_data) : null
 

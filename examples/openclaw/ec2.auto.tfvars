@@ -7,10 +7,10 @@ ec2_custom_ingress_ports = [22, 18789]
 # Ubuntu 24.04 LTS (us-west-2) — update for your region
 # ec2_ami_id = "ami-0aef57767f5404a3c"
 
-# SSH key pair — create via AWS console or `aws ec2 create-key-pair`
-# ec2_key_name = "my-keypair"
-
-# Alternatively, access the instance via SSM Session Manager:
+# Paste your SSH public key to enable SSH access:
+# ec2_ssh_public_key = "ssh-ed25519 AAAA..."
+#
+# Or access the instance via SSM Session Manager:
 #   aws ssm start-session --target <instance-id>
 
 ec2_user_data = <<-USERDATA
