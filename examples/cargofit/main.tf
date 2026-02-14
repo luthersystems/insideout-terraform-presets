@@ -31,7 +31,7 @@ module "lambda" {
 }
 
 module "ec2" {
-  source         = "../../aws/ec2"
+  source         = "../../aws/eks_nodegroup"
   subnet_ids     = module.vpc.private_subnet_ids
   desired_size   = var.ec2_desired_size
   instance_types = var.ec2_instance_types
