@@ -8,10 +8,20 @@ terraform {
   }
 }
 
+module "name" {
+  source         = "github.com/luthersystems/tf-modules.git//luthername?ref=v55.13.4"
+  luther_project = var.project
+  aws_region     = var.region
+  luther_env     = var.environment
+  org_name       = "luthersystems"
+  component      = "insideout"
+  subcomponent   = "eks"
+  resource       = "eks"
+}
 
 locals {
   cluster_name = "${var.project}-eks"
-  common_tags  = { Project = var.project }
+  common_tags  = merge(module.name.tags, var.tags)
 }
 
 data "aws_caller_identity" "current" {}

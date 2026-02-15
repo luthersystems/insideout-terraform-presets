@@ -10,6 +10,15 @@ variable "project" {
   default     = "demo"
 }
 
+variable "environment" {
+  description = "Deployment environment (e.g. production, staging, sandbox)"
+  type        = string
+  validation {
+    condition     = length(trimspace(var.environment)) > 0
+    error_message = "environment must be a non-empty string."
+  }
+}
+
 variable "runtime" {
   description = "Lambda runtime (e.g., nodejs20.x, python3.12, go1.x, java21)"
   type        = string

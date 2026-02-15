@@ -16,6 +16,15 @@ variable "project" {
   }
 }
 
+variable "environment" {
+  description = "Deployment environment (e.g. production, staging, sandbox)"
+  type        = string
+  validation {
+    condition     = length(trimspace(var.environment)) > 0
+    error_message = "environment must be a non-empty string."
+  }
+}
+
 variable "cluster_name" {
   description = "Name of the EKS cluster to attach the node group to"
   type        = string

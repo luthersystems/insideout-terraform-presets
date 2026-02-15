@@ -8,6 +8,16 @@ terraform {
   }
 }
 
+module "name" {
+  source         = "github.com/luthersystems/tf-modules.git//luthername?ref=v55.13.4"
+  luther_project = var.project
+  aws_region     = var.region
+  luther_env     = var.environment
+  org_name       = "luthersystems"
+  component      = "insideout"
+  subcomponent   = "lambda"
+  resource       = "lambda"
+}
 
 # -----------------------------------------------------------------------------
 # IAM Role for Lambda
@@ -27,7 +37,7 @@ resource "aws_iam_role" "lambda_exec" {
     }]
   })
 
-  tags = var.tags
+  tags = merge(module.name.tags, var.tags)
 }
 
 resource "aws_iam_role_policy_attachment" "lambda_basic" {
@@ -47,7 +57,7 @@ resource "aws_iam_role_policy_attachment" "lambda_vpc" {
 resource "aws_cloudwatch_log_group" "lambda" {
   name              = "/aws/lambda/${var.project}-function"
   retention_in_days = var.log_retention_days
-  tags              = var.tags
+  tags              = merge(module.name.tags, var.tags)
 }
 
 # -----------------------------------------------------------------------------
@@ -77,7 +87,7 @@ resource "aws_lambda_function" "this" {
     variables = var.environment_variables
   }
 
-  tags = var.tags
+  tags = merge(module.name.tags, var.tags)
 
   depends_on = [
     aws_iam_role_policy_attachment.lambda_basic,

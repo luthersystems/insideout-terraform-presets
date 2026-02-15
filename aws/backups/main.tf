@@ -12,6 +12,16 @@ terraform {
   }
 }
 
+module "name" {
+  source         = "github.com/luthersystems/tf-modules.git//luthername?ref=v55.13.4"
+  luther_project = var.project
+  aws_region     = var.region
+  luther_env     = var.environment
+  org_name       = "luthersystems"
+  component      = "insideout"
+  subcomponent   = "backups"
+  resource       = "backups"
+}
 
 # -----------------------------------------------------------------------------
 # IAM role for AWS Backup service (with a short sleep to dodge IAM propagation)
@@ -30,7 +40,7 @@ data "aws_iam_policy_document" "backup_assume" {
 resource "aws_iam_role" "backup" {
   name               = "${var.project}-backup-role"
   assume_role_policy = data.aws_iam_policy_document.backup_assume.json
-  tags               = var.tags
+  tags               = merge(module.name.tags, var.tags)
 }
 
 # Give IAM a moment to propagate the new role before attaching managed policies
@@ -56,7 +66,7 @@ resource "aws_iam_role_policy_attachment" "restore" {
 # -----------------------------------------------------------------------------
 resource "aws_backup_vault" "this" {
   name = "${var.project}-vault"
-  tags = merge({ Project = var.project }, var.tags)
+  tags = merge(module.name.tags, var.tags)
 }
 
 # -----------------------------------------------------------------------------
@@ -235,7 +245,7 @@ resource "aws_backup_plan" "this" {
     }
   }
 
-  tags = var.tags
+  tags = merge(module.name.tags, var.tags)
 
   lifecycle {
     precondition {

@@ -1,7 +1,6 @@
 variable "region" {
   description = "AWS region"
   type        = string
-  default     = "us-east-1"
   validation {
     condition     = length(trimspace(var.region)) > 0
     error_message = "region must be a non-empty string."
@@ -15,6 +14,15 @@ variable "project" {
   validation {
     condition     = length(trimspace(var.project)) > 0
     error_message = "project must be a non-empty string."
+  }
+}
+
+variable "environment" {
+  description = "Deployment environment (e.g. production, staging, sandbox)"
+  type        = string
+  validation {
+    condition     = length(trimspace(var.environment)) > 0
+    error_message = "environment must be a non-empty string."
   }
 }
 

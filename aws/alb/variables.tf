@@ -9,6 +9,15 @@ variable "project" {
   default     = "demo"
 }
 
+variable "environment" {
+  description = "Deployment environment (e.g. production, staging, sandbox)"
+  type        = string
+  validation {
+    condition     = length(trimspace(var.environment)) > 0
+    error_message = "environment must be a non-empty string."
+  }
+}
+
 variable "vpc_id" {
   description = "VPC ID where the ALB is deployed"
   type        = string

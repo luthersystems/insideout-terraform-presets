@@ -12,6 +12,17 @@ terraform {
   }
 }
 
+module "name" {
+  source         = "github.com/luthersystems/tf-modules.git//luthername?ref=v55.13.4"
+  luther_project = var.project
+  aws_region     = var.region
+  luther_env     = var.environment
+  org_name       = "luthersystems"
+  component      = "insideout"
+  subcomponent   = "s3"
+  resource       = "s3"
+}
+
 
 # Unique suffix to keep bucket name globally unique
 resource "random_id" "suffix" {
@@ -25,7 +36,7 @@ resource "aws_s3_bucket" "this" {
   bucket        = lower(replace("${var.project}-${random_id.suffix.hex}", "/[^a-z0-9.-]/", "-"))
   force_destroy = var.force_destroy
 
-  tags = merge({ Name = "${var.project}-bucket" }, var.tags)
+  tags = merge(module.name.tags, var.tags)
 }
 
 # Bucket ownership/ACL model (recommended)

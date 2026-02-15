@@ -8,10 +8,20 @@ terraform {
   }
 }
 
+module "name" {
+  source         = "github.com/luthersystems/tf-modules.git//luthername?ref=v55.13.4"
+  luther_project = var.project
+  aws_region     = var.region
+  luther_env     = var.environment
+  org_name       = "luthersystems"
+  component      = "insideout"
+  subcomponent   = "msk"
+  resource       = "msk"
+}
 
 locals {
   name = coalesce(var.cluster_name, "${var.project}-msk")
-  tags = merge({ Project = var.project }, var.tags)
+  tags = merge(module.name.tags, var.tags)
 }
 
 # Security group for brokers + clients

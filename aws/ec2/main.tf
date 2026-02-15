@@ -9,9 +9,19 @@ terraform {
 }
 
 
+module "name" {
+  source         = "github.com/luthersystems/tf-modules.git//luthername?ref=v55.13.4"
+  luther_project = var.project
+  aws_region     = var.region
+  luther_env     = var.environment
+  org_name       = "luthersystems"
+  component      = "insideout"
+  subcomponent   = "ec2"
+  resource       = "ec2"
+}
+
 locals {
-  common_tags = { Project = var.project }
-  ami_id      = var.ami_id != null ? var.ami_id : data.aws_ami.al2023[0].id
+  ami_id = var.ami_id != null ? var.ami_id : data.aws_ami.al2023[0].id
 }
 
 # Pick Amazon Linux 2023 AMI by arch (only when ami_id is not provided)
@@ -41,7 +51,7 @@ resource "aws_security_group" "this" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = merge({ Name = "${var.project}-ec2-sg" }, local.common_tags, var.tags)
+  tags = merge(module.name.tags, { Name = "${module.name.prefix}-sg" }, var.tags)
 }
 
 resource "aws_security_group_rule" "custom_ingress" {
@@ -73,7 +83,7 @@ data "aws_iam_policy_document" "ec2_assume_role" {
 resource "aws_iam_role" "this" {
   name               = "${var.project}-ec2-role"
   assume_role_policy = data.aws_iam_policy_document.ec2_assume_role.json
-  tags               = merge(local.common_tags, var.tags)
+  tags               = merge(module.name.tags, var.tags)
 }
 
 resource "aws_iam_role_policy_attachment" "ssm_core" {
@@ -93,7 +103,7 @@ resource "aws_key_pair" "this" {
   count      = var.ssh_public_key != "" ? 1 : 0
   key_name   = "${var.project}-ec2-key"
   public_key = var.ssh_public_key
-  tags       = merge(local.common_tags, var.tags)
+  tags       = merge(module.name.tags, var.tags)
 }
 
 # -------------------------------------------------------------
@@ -114,5 +124,5 @@ resource "aws_instance" "this" {
     http_tokens = "required"
   }
 
-  tags = merge({ Name = "${var.project}-ec2" }, local.common_tags, var.tags)
+  tags = merge(module.name.tags, var.tags)
 }

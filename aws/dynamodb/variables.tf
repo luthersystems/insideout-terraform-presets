@@ -18,6 +18,15 @@ variable "project" {
   }
 }
 
+variable "environment" {
+  description = "Deployment environment (e.g. production, staging, sandbox)"
+  type        = string
+  validation {
+    condition     = length(trimspace(var.environment)) > 0
+    error_message = "environment must be a non-empty string."
+  }
+}
+
 variable "table_name" {
   description = "Specific table name (defaults to <project>-app when null)"
   type        = string

@@ -8,6 +8,17 @@ terraform {
   }
 }
 
+module "name" {
+  source         = "github.com/luthersystems/tf-modules.git//luthername?ref=v55.13.4"
+  luther_project = var.project
+  aws_region     = var.region
+  luther_env     = var.environment
+  org_name       = "luthersystems"
+  component      = "insideout"
+  subcomponent   = "cloudwatchmonitoring"
+  resource       = "cloudwatchmonitoring"
+}
+
 
 locals {
   alarm_name_prefix = "${var.project}-monitoring"
@@ -18,7 +29,7 @@ locals {
 # -----------------------------------------------------------------------------
 resource "aws_sns_topic" "alarms" {
   name = "${var.project}-cw-alarms"
-  tags = var.tags
+  tags = merge(module.name.tags, var.tags)
 }
 
 resource "aws_sns_topic_subscription" "emails" {
@@ -49,7 +60,7 @@ resource "aws_cloudwatch_metric_alarm" "ec2_cpu_high" {
   alarm_actions             = [aws_sns_topic.alarms.arn]
   ok_actions                = [aws_sns_topic.alarms.arn]
   insufficient_data_actions = []
-  tags                      = var.tags
+  tags                      = merge(module.name.tags, var.tags)
 }
 
 # -----------------------------------------------------------------------------
@@ -73,7 +84,7 @@ resource "aws_cloudwatch_metric_alarm" "rds_cpu_high" {
   alarm_actions             = [aws_sns_topic.alarms.arn]
   ok_actions                = [aws_sns_topic.alarms.arn]
   insufficient_data_actions = []
-  tags                      = var.tags
+  tags                      = merge(module.name.tags, var.tags)
 }
 
 resource "aws_cloudwatch_metric_alarm" "rds_free_storage_low" {
@@ -93,7 +104,7 @@ resource "aws_cloudwatch_metric_alarm" "rds_free_storage_low" {
   alarm_actions             = [aws_sns_topic.alarms.arn]
   ok_actions                = [aws_sns_topic.alarms.arn]
   insufficient_data_actions = []
-  tags                      = var.tags
+  tags                      = merge(module.name.tags, var.tags)
 }
 
 # -----------------------------------------------------------------------------
@@ -116,7 +127,7 @@ resource "aws_cloudwatch_metric_alarm" "redis_cpu_high" {
   alarm_actions             = [aws_sns_topic.alarms.arn]
   ok_actions                = [aws_sns_topic.alarms.arn]
   insufficient_data_actions = []
-  tags                      = var.tags
+  tags                      = merge(module.name.tags, var.tags)
 }
 
 # -----------------------------------------------------------------------------
@@ -142,7 +153,7 @@ resource "aws_cloudwatch_metric_alarm" "sqs_backlog" {
   alarm_actions             = [aws_sns_topic.alarms.arn]
   ok_actions                = [aws_sns_topic.alarms.arn]
   insufficient_data_actions = []
-  tags                      = var.tags
+  tags                      = merge(module.name.tags, var.tags)
 }
 
 # -----------------------------------------------------------------------------

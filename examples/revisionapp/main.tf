@@ -1,7 +1,8 @@
 module "vpc" {
-  source  = "../../aws/vpc"
-  project = var.vpc_project
-  region  = var.vpc_region
+  source      = "../../aws/vpc"
+  project     = var.vpc_project
+  environment = var.environment
+  region      = var.vpc_region
 }
 
 module "resource" {
@@ -21,6 +22,7 @@ module "lambda" {
   subnet_ids         = module.vpc.private_subnet_ids
   security_group_ids = []
   project            = var.lambda_project
+  environment        = var.environment
   region             = var.lambda_region
   runtime            = var.lambda_runtime
 }
@@ -42,6 +44,7 @@ module "alb" {
   vpc_id            = module.vpc.vpc_id
   public_subnet_ids = module.vpc.public_subnet_ids
   project           = var.alb_project
+  environment       = var.environment
   region            = var.alb_region
 }
 
@@ -56,9 +59,10 @@ module "elasticache" {
 }
 
 module "s3" {
-  source  = "../../aws/s3"
-  project = var.s3_project
-  region  = var.s3_region
+  source      = "../../aws/s3"
+  project     = var.s3_project
+  environment = var.environment
+  region      = var.s3_region
 }
 
 module "dynamodb" {
@@ -74,6 +78,7 @@ module "cloudfront" {
   custom_origin_domain = module.alb.alb_dns_name
   web_acl_id           = module.waf.web_acl_arn
   project              = var.cloudfront_project
+  environment          = var.environment
   region               = var.cloudfront_region
 }
 
@@ -86,9 +91,10 @@ module "waf" {
 }
 
 module "cloudwatchlogs" {
-  source  = "../../aws/cloudwatchlogs"
-  project = var.cloudwatchlogs_project
-  region  = var.cloudwatchlogs_region
+  source      = "../../aws/cloudwatchlogs"
+  project     = var.cloudwatchlogs_project
+  environment = var.environment
+  region      = var.cloudwatchlogs_region
 }
 
 module "cloudwatchmonitoring" {
@@ -103,14 +109,16 @@ module "cognito" {
   source       = "../../aws/cognito"
   mfa_required = var.cognito_mfa_required
   project      = var.cognito_project
+  environment  = var.environment
   region       = var.cognito_region
   sign_in_type = var.cognito_sign_in_type
 }
 
 module "apigateway" {
-  source  = "../../aws/apigateway"
-  project = var.apigateway_project
-  region  = var.apigateway_region
+  source      = "../../aws/apigateway"
+  project     = var.apigateway_project
+  environment = var.environment
+  region      = var.apigateway_region
 }
 
 module "kms" {
@@ -120,9 +128,10 @@ module "kms" {
 }
 
 module "secretsmanager" {
-  source  = "../../aws/secretsmanager"
-  project = var.secretsmanager_project
-  region  = var.secretsmanager_region
+  source      = "../../aws/secretsmanager"
+  project     = var.secretsmanager_project
+  environment = var.environment
+  region      = var.secretsmanager_region
 }
 
 module "opensearch" {

@@ -8,6 +8,16 @@ terraform {
   }
 }
 
+module "name" {
+  source         = "github.com/luthersystems/tf-modules.git//luthername?ref=v55.13.4"
+  luther_project = var.project
+  aws_region     = var.region
+  luther_env     = var.environment
+  org_name       = "luthersystems"
+  component      = "insideout"
+  subcomponent   = "alb"
+  resource       = "alb"
+}
 
 # Security group for the public ALB
 resource "aws_security_group" "alb_sg" {
@@ -41,7 +51,7 @@ resource "aws_security_group" "alb_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = merge({ Name = "${var.project}-alb-sg" }, var.tags)
+  tags = merge(module.name.tags, { Name = "${module.name.prefix}-sg" }, var.tags)
 }
 
 # Internet-facing ALB
@@ -54,7 +64,7 @@ resource "aws_lb" "alb" {
 
   enable_deletion_protection = var.enable_deletion_protection
 
-  tags = merge({ Name = "${var.project}-alb" }, var.tags)
+  tags = merge(module.name.tags, var.tags)
 }
 
 # Default target group (attach ECS/EKS/instances later)
@@ -76,7 +86,7 @@ resource "aws_lb_target_group" "app" {
     matcher             = "200-399"
   }
 
-  tags = merge({ Name = "${var.project}-tg" }, var.tags)
+  tags = merge(module.name.tags, { Name = "${module.name.prefix}-tg" }, var.tags)
 }
 
 # HTTP listener → forward (when no cert)
