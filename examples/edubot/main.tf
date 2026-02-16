@@ -6,15 +6,14 @@ module "vpc" {
 }
 
 module "lambda" {
-  source             = "../../aws/lambda"
-  enable_vpc         = true
-  vpc_id             = module.vpc.vpc_id
-  subnet_ids         = module.vpc.private_subnet_ids
-  security_group_ids = []
-  project            = var.lambda_project
-  region             = var.lambda_region
-  environment        = var.environment
-  runtime            = var.lambda_runtime
+  source      = "../../aws/lambda"
+  enable_vpc  = true
+  vpc_id      = module.vpc.vpc_id
+  subnet_ids  = module.vpc.private_subnet_ids
+  project     = var.lambda_project
+  region      = var.lambda_region
+  environment = var.environment
+  runtime     = var.lambda_runtime
 }
 
 module "alb" {

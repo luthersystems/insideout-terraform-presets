@@ -50,19 +50,23 @@ variable "enable_vpc" {
 }
 
 variable "vpc_id" {
-  description = "Optional VPC ID for Lambda VPC access"
+  description = "VPC ID for Lambda VPC access (required when enable_vpc is true)"
   type        = string
   default     = null
+  validation {
+    condition     = var.vpc_id == null ? true : length(trimspace(var.vpc_id)) > 0
+    error_message = "vpc_id must be a non-empty string when provided."
+  }
 }
 
 variable "subnet_ids" {
-  description = "Subnet IDs for VPC access"
+  description = "Subnet IDs for VPC access (required when enable_vpc is true)"
   type        = list(string)
   default     = []
 }
 
 variable "security_group_ids" {
-  description = "Security Group IDs for VPC access"
+  description = "Security Group IDs for VPC access. When empty and enable_vpc is true, a default security group with egress-all is created automatically."
   type        = list(string)
   default     = []
 }
