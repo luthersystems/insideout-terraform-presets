@@ -94,3 +94,73 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+# ---------------------------------------------------------------------------
+# Addon toggles
+# ---------------------------------------------------------------------------
+
+variable "enable_coredns" {
+  description = "Whether to install the CoreDNS addon"
+  type        = bool
+  default     = true
+}
+
+variable "enable_kube_proxy" {
+  description = "Whether to install the kube-proxy addon"
+  type        = bool
+  default     = true
+}
+
+variable "enable_ebs_csi_driver" {
+  description = "Whether to install the EBS CSI driver addon"
+  type        = bool
+  default     = true
+}
+
+variable "enable_ebs_csi_volume_modification" {
+  description = "Enable the EBS CSI volume modification feature on the controller"
+  type        = bool
+  default     = true
+}
+
+# ---------------------------------------------------------------------------
+# Addon version overrides (null = use built-in version map for cluster_version)
+# ---------------------------------------------------------------------------
+
+variable "addon_vpc_cni_version" {
+  description = "Override VPC CNI addon version (null = auto-select for cluster_version)"
+  type        = string
+  default     = null
+}
+
+variable "addon_kube_proxy_version" {
+  description = "Override kube-proxy addon version (null = auto-select for cluster_version)"
+  type        = string
+  default     = null
+}
+
+variable "addon_coredns_version" {
+  description = "Override CoreDNS addon version (null = auto-select for cluster_version)"
+  type        = string
+  default     = null
+}
+
+variable "addon_ebs_csi_version" {
+  description = "Override EBS CSI driver addon version (null = auto-select for cluster_version)"
+  type        = string
+  default     = null
+}
+
+# ---------------------------------------------------------------------------
+# Addon timeouts
+# ---------------------------------------------------------------------------
+
+variable "addons_timeouts" {
+  description = "Timeout configuration for EKS addon create/update/delete operations"
+  type = object({
+    create = optional(string)
+    update = optional(string)
+    delete = optional(string)
+  })
+  default = {}
+}
