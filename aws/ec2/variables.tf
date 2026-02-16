@@ -88,7 +88,7 @@ variable "associate_public_ip" {
 }
 
 variable "user_data" {
-  description = "User data script to run on instance launch (plain text, will be base64-encoded)"
+  description = "User data script to run on instance launch (plain text, provider handles encoding)"
   type        = string
   default     = ""
 }
