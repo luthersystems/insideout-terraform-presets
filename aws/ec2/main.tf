@@ -118,7 +118,7 @@ resource "aws_instance" "this" {
   iam_instance_profile        = aws_iam_instance_profile.this.name
   key_name                    = var.ssh_public_key != "" ? aws_key_pair.this[0].key_name : var.key_name
 
-  user_data = var.user_data != "" ? base64encode(var.user_data) : null
+  user_data = var.user_data != "" ? var.user_data : null
 
   metadata_options {
     http_tokens = "required"
