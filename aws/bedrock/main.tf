@@ -1,3 +1,24 @@
+terraform {
+  required_version = ">= 1.5"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = ">= 6.0"
+    }
+  }
+}
+
+module "name" {
+  source         = "github.com/luthersystems/tf-modules.git//luthername?ref=v55.13.4"
+  luther_project = var.project
+  aws_region     = var.region
+  luther_env     = var.environment
+  org_name       = "luthersystems"
+  component      = "insideout"
+  subcomponent   = "bedrock"
+  resource       = "bedrock"
+}
+
 resource "aws_iam_role" "bedrock_kb" {
   name = "${var.project}-bedrock-kb-role"
 
@@ -13,6 +34,8 @@ resource "aws_iam_role" "bedrock_kb" {
       }
     ]
   })
+
+  tags = merge(module.name.tags, var.tags)
 }
 
 resource "aws_iam_role_policy" "bedrock_kb" {
@@ -56,6 +79,7 @@ resource "aws_iam_role_policy" "bedrock_kb" {
 resource "aws_bedrockagent_knowledge_base" "this" {
   name     = "${var.project}-${var.knowledge_base_name}"
   role_arn = aws_iam_role.bedrock_kb.arn
+  tags     = merge(module.name.tags, var.tags)
 
   knowledge_base_configuration {
     type = "VECTOR"

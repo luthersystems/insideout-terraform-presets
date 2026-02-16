@@ -8,6 +8,17 @@ terraform {
   }
 }
 
+module "name" {
+  source         = "github.com/luthersystems/tf-modules.git//luthername?ref=v55.13.4"
+  luther_project = var.project
+  aws_region     = var.region
+  luther_env     = var.environment
+  org_name       = "luthersystems"
+  component      = "insideout"
+  subcomponent   = "vpc"
+  resource       = "vpc"
+}
+
 data "aws_availability_zones" "available" {
   state = "available"
 }
@@ -57,9 +68,7 @@ module "this" {
 
   private_subnet_tags = merge({ "kubernetes.io/role/internal-elb" = "1" }, local.eks_cluster_tag)
 
-  tags = {
-    Project = var.project
-  }
+  tags = merge(module.name.tags, var.tags)
 }
 
 # Optional: S3 Gateway Endpoint for private subnets (no Internet needed for S3)
@@ -69,8 +78,5 @@ resource "aws_vpc_endpoint" "s3" {
   vpc_endpoint_type = "Gateway"
   route_table_ids   = module.this.private_route_table_ids
 
-  tags = {
-    Name    = "${var.project}-s3-gateway-endpoint"
-    Project = var.project
-  }
+  tags = merge(module.name.tags, { Name = "${module.name.prefix}-s3-endpoint" }, var.tags)
 }

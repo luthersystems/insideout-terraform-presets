@@ -8,13 +8,23 @@ terraform {
   }
 }
 
+module "name" {
+  source         = "github.com/luthersystems/tf-modules.git//luthername?ref=v55.13.4"
+  luther_project = var.project
+  aws_region     = var.region
+  luther_env     = var.environment
+  org_name       = "luthersystems"
+  component      = "insideout"
+  subcomponent   = "sqs"
+  resource       = "sqs"
+}
 
 locals {
   base_name  = coalesce(var.queue_name, "${var.project}-queue")
   is_fifo    = var.queue_type == "FIFO"
   queue_name = local.is_fifo ? "${local.base_name}.fifo" : local.base_name
   dlq_name   = local.is_fifo ? "${local.base_name}-dlq.fifo" : "${local.base_name}-dlq"
-  tags       = merge({ Project = var.project }, var.tags)
+  tags       = merge(module.name.tags, var.tags)
 }
 
 # Optional Dead-letter queue

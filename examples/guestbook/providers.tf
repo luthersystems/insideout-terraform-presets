@@ -9,9 +9,19 @@ terraform {
 
 provider "aws" {
   region = "us-west-2"
+  default_tags {
+    tags = {
+      managed-by = "insideout"
+    }
+  }
 }
 
 provider "aws" {
   alias  = "us_east_1"
   region = "us-east-1"
+  default_tags {
+    tags = {
+      managed-by = "insideout"
+    }
+  }
 }

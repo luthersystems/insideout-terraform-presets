@@ -8,12 +8,22 @@ terraform {
   }
 }
 
+module "name" {
+  source         = "github.com/luthersystems/tf-modules.git//luthername?ref=v55.13.4"
+  luther_project = var.project
+  aws_region     = var.region
+  luther_env     = var.environment
+  org_name       = "luthersystems"
+  component      = "insideout"
+  subcomponent   = "apigateway"
+  resource       = "apigateway"
+}
 
 resource "aws_apigatewayv2_api" "api" {
   name          = "${var.project}-api"
   protocol_type = "HTTP"
 
-  tags = merge({ Name = "${var.project}-api" }, var.tags)
+  tags = merge(module.name.tags, var.tags)
 }
 
 resource "aws_apigatewayv2_stage" "default" {
@@ -21,7 +31,7 @@ resource "aws_apigatewayv2_stage" "default" {
   name        = "$default"
   auto_deploy = true
 
-  tags = merge({ Name = "${var.project}-api-default" }, var.tags)
+  tags = merge(module.name.tags, { Name = "${module.name.prefix}-default" }, var.tags)
 }
 
 # Optional Custom Domain and Certificate
@@ -35,7 +45,7 @@ resource "aws_apigatewayv2_domain_name" "api" {
     security_policy = "TLS_1_2"
   }
 
-  tags = merge({ Name = var.domain_name }, var.tags)
+  tags = merge(module.name.tags, { Name = var.domain_name }, var.tags)
 }
 
 resource "aws_apigatewayv2_api_mapping" "api" {

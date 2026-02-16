@@ -1,3 +1,9 @@
+variable "environment" {
+  description = "Deployment environment (e.g. production, staging, sandbox)"
+  type        = string
+  default     = "sandbox"
+}
+
 variable "vpc_project" {
   description = "Project name for VPC"
   type        = string

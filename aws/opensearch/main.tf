@@ -1,3 +1,24 @@
+terraform {
+  required_version = ">= 1.5"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = ">= 6.0"
+    }
+  }
+}
+
+module "name" {
+  source         = "github.com/luthersystems/tf-modules.git//luthername?ref=v55.13.4"
+  luther_project = var.project
+  aws_region     = var.region
+  luther_env     = var.environment
+  org_name       = "luthersystems"
+  component      = "insideout"
+  subcomponent   = "opensearch"
+  resource       = "opensearch"
+}
+
 resource "aws_security_group" "opensearch" {
   name        = "${var.project}-opensearch-sg"
   description = "Security group for OpenSearch domain"
@@ -17,9 +38,7 @@ resource "aws_security_group" "opensearch" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = {
-    Name = "${var.project}-opensearch-sg"
-  }
+  tags = merge(module.name.tags, { Name = "${var.project}-opensearch-sg" }, var.tags)
 }
 
 resource "aws_opensearch_domain" "managed" {
@@ -45,9 +64,7 @@ resource "aws_opensearch_domain" "managed" {
     security_group_ids = [aws_security_group.opensearch.id]
   }
 
-  tags = {
-    Domain = "${var.project}-search"
-  }
+  tags = merge(module.name.tags, { Domain = "${var.project}-search" }, var.tags)
 }
 
 resource "aws_opensearchserverless_collection" "serverless" {
@@ -56,8 +73,6 @@ resource "aws_opensearchserverless_collection" "serverless" {
   name = "${var.project}-search"
   type = "VECTORSEARCH"
 
-  tags = {
-    Name = "${var.project}-search"
-  }
+  tags = merge(module.name.tags, { Name = "${var.project}-search" }, var.tags)
 }
 

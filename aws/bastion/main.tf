@@ -8,6 +8,16 @@ terraform {
   }
 }
 
+module "name" {
+  source         = "github.com/luthersystems/tf-modules.git//luthername?ref=v55.13.4"
+  luther_project = var.project
+  aws_region     = var.region
+  luther_env     = var.environment
+  org_name       = "luthersystems"
+  component      = "insideout"
+  subcomponent   = "bastion"
+  resource       = "bastion"
+}
 
 # Pick Amazon Linux 2023 AMI by arch
 data "aws_ami" "al2023" {
@@ -41,7 +51,7 @@ resource "aws_security_group" "bastion_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = merge({ Name = "${var.project}-bastion-sg" }, var.tags)
+  tags = merge(module.name.tags, { Name = "${module.name.prefix}-sg" }, var.tags)
 }
 
 # Role for SSM Session Manager
@@ -59,7 +69,7 @@ data "aws_iam_policy_document" "ec2_assume_role" {
 resource "aws_iam_role" "bastion_role" {
   name               = "${var.project}-bastion-role"
   assume_role_policy = data.aws_iam_policy_document.ec2_assume_role.json
-  tags               = var.tags
+  tags               = merge(module.name.tags, var.tags)
 }
 
 resource "aws_iam_role_policy_attachment" "ssm_core" {
@@ -97,5 +107,5 @@ resource "aws_instance" "bastion" {
     http_tokens = "required"
   }
 
-  tags = merge({ Name = "${var.project}-bastion" }, var.tags)
+  tags = merge(module.name.tags, var.tags)
 }

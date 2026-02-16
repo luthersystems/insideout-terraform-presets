@@ -8,6 +8,16 @@ terraform {
   }
 }
 
+module "name" {
+  source         = "github.com/luthersystems/tf-modules.git//luthername?ref=v55.13.4"
+  luther_project = var.project
+  aws_region     = var.region
+  luther_env     = var.environment
+  org_name       = "luthersystems"
+  component      = "insideout"
+  subcomponent   = "cognito"
+  resource       = "cognito"
+}
 
 locals {
   # Cognito has two ways to treat emails:
@@ -49,7 +59,7 @@ resource "aws_cognito_user_pool" "this" {
     temporary_password_validity_days = 7
   }
 
-  tags = var.tags
+  tags = merge(module.name.tags, var.tags)
 }
 
 # -----------------------------------------------------------------------------

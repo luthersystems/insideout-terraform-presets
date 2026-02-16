@@ -1,7 +1,8 @@
 module "vpc" {
-  source  = "../../aws/vpc"
-  project = var.vpc_project
-  region  = var.vpc_region
+  source      = "../../aws/vpc"
+  project     = var.vpc_project
+  region      = var.vpc_region
+  environment = var.environment
 }
 
 module "ec2" {
@@ -16,4 +17,5 @@ module "ec2" {
   custom_ingress_ports = var.ec2_custom_ingress_ports
   project              = var.ec2_project
   region               = var.ec2_region
+  environment          = var.environment
 }

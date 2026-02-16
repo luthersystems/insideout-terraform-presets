@@ -12,6 +12,16 @@ terraform {
   }
 }
 
+module "name" {
+  source         = "github.com/luthersystems/tf-modules.git//luthername?ref=v55.13.4"
+  luther_project = var.project
+  aws_region     = var.region
+  luther_env     = var.environment
+  org_name       = "luthersystems"
+  component      = "insideout"
+  subcomponent   = "rds"
+  resource       = "rds"
+}
 
 # Option A (simple): set major version on the instance and let AWS pick preferred minor
 # Option B (explicit): if you prefer a data lookup, use preferred_versions (see variables)
@@ -39,13 +49,13 @@ resource "aws_security_group" "rds" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = merge({ Name = "${var.project}-rds-sg" }, var.tags)
+  tags = merge(module.name.tags, { Name = "${module.name.prefix}-sg" }, var.tags)
 }
 
 resource "aws_db_subnet_group" "this" {
   name       = "${var.project}-rds-subnets"
   subnet_ids = var.subnet_ids
-  tags       = merge({ Name = "${var.project}-rds-subnets" }, var.tags)
+  tags       = merge(module.name.tags, { Name = "${module.name.prefix}-subnets" }, var.tags)
 }
 
 # -----------------------------------------------------------------------------
@@ -104,7 +114,7 @@ resource "aws_db_instance" "primary" {
 
   auto_minor_version_upgrade = true
 
-  tags = merge({ Name = "${var.project}-postgres" }, var.tags)
+  tags = merge(module.name.tags, var.tags)
 }
 
 # -----------------------------------------------------------------------------

@@ -8,9 +8,19 @@ terraform {
   }
 }
 
+module "name" {
+  source         = "github.com/luthersystems/tf-modules.git//luthername?ref=v55.13.4"
+  luther_project = var.project
+  aws_region     = var.region
+  luther_env     = var.environment
+  org_name       = "luthersystems"
+  component      = "insideout"
+  subcomponent   = "eks-nodegroup"
+  resource       = "eks-nodegroup"
+}
 
 locals {
-  common_tags = { Project = var.project }
+  common_tags = module.name.tags
 }
 
 # -------------------------------------------------------------

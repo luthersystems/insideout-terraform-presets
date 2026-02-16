@@ -12,6 +12,16 @@ terraform {
   }
 }
 
+module "name" {
+  source         = "github.com/luthersystems/tf-modules.git//luthername?ref=v55.13.4"
+  luther_project = var.project
+  aws_region     = var.region
+  luther_env     = var.environment
+  org_name       = "luthersystems"
+  component      = "insideout"
+  subcomponent   = "elasticache"
+  resource       = "elasticache"
+}
 
 # -----------------------------------------------------------------------------
 # Networking
@@ -36,13 +46,13 @@ resource "aws_security_group" "redis" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = merge({ Name = "${var.project}-redis-sg" }, var.tags)
+  tags = merge(module.name.tags, { Name = "${module.name.prefix}-sg" }, var.tags)
 }
 
 resource "aws_elasticache_subnet_group" "this" {
   name       = "${var.project}-redis-subnets"
   subnet_ids = var.cache_subnet_ids
-  tags       = merge({ Name = "${var.project}-redis-subnets" }, var.tags)
+  tags       = merge(module.name.tags, { Name = "${module.name.prefix}-subnets" }, var.tags)
 }
 
 # Optional custom parameter group (family redis7)
@@ -55,7 +65,7 @@ resource "aws_elasticache_parameter_group" "this" {
     value = "allkeys-lru"
   }
 
-  tags = merge({ Name = "${var.project}-redis-pg" }, var.tags)
+  tags = merge(module.name.tags, { Name = "${module.name.prefix}-pg" }, var.tags)
 }
 
 # -----------------------------------------------------------------------------
@@ -65,7 +75,7 @@ resource "aws_cloudwatch_log_group" "redis" {
   count             = var.enable_cloudwatch_logs ? 1 : 0
   name              = "/aws/elasticache/${var.project}"
   retention_in_days = 30
-  tags              = merge({ Name = "${var.project}-redis-logs" }, var.tags)
+  tags              = merge(module.name.tags, { Name = "${module.name.prefix}-logs" }, var.tags)
 }
 
 # -----------------------------------------------------------------------------
@@ -135,5 +145,5 @@ resource "aws_elasticache_replication_group" "this" {
     }
   }
 
-  tags = merge({ Name = "${var.project}-redis" }, var.tags)
+  tags = merge(module.name.tags, var.tags)
 }

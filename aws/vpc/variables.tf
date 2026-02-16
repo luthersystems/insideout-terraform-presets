@@ -50,6 +50,15 @@ variable "single_nat_gateway" {
   default     = true
 }
 
+variable "environment" {
+  description = "Deployment environment (e.g. production, staging, sandbox)"
+  type        = string
+  validation {
+    condition     = length(trimspace(var.environment)) > 0
+    error_message = "environment must be a non-empty string."
+  }
+}
+
 variable "eks_cluster_name" {
   description = "If set, tag subnets for this EKS cluster: kubernetes.io/cluster/<name>=shared"
   type        = string
@@ -60,4 +69,10 @@ variable "eks_cluster_name" {
     condition     = var.eks_cluster_name == null ? true : length(trimspace(var.eks_cluster_name)) > 0
     error_message = "eks_cluster_name, when provided, must be a non-empty string."
   }
+}
+
+variable "tags" {
+  description = "Additional AWS tags applied to all resources"
+  type        = map(string)
+  default     = {}
 }

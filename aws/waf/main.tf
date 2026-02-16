@@ -9,6 +9,17 @@ terraform {
   }
 }
 
+module "name" {
+  source         = "github.com/luthersystems/tf-modules.git//luthername?ref=v55.13.4"
+  luther_project = var.project
+  aws_region     = var.region
+  luther_env     = var.environment
+  org_name       = "luthersystems"
+  component      = "insideout"
+  subcomponent   = "waf"
+  resource       = "waf"
+}
+
 # Default provider (used for REGIONAL scope)
 
 # WAF for CLOUDFRONT scope must use us-east-1 endpoint
@@ -90,7 +101,7 @@ resource "aws_wafv2_web_acl" "cf" {
     }
   }
 
-  tags = merge({ Project = var.project }, var.tags)
+  tags = merge(module.name.tags, var.tags)
 }
 
 # No association resource for CLOUDFRONT. Attach via CloudFront's web_acl_id.
@@ -146,7 +157,7 @@ resource "aws_wafv2_web_acl" "regional" {
     }
   }
 
-  tags = merge({ Project = var.project }, var.tags)
+  tags = merge(module.name.tags, var.tags)
 }
 
 resource "aws_wafv2_web_acl_association" "regional" {

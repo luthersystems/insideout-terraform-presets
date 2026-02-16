@@ -1,7 +1,8 @@
 module "vpc" {
-  source  = "../../aws/vpc"
-  project = var.vpc_project
-  region  = var.vpc_region
+  source      = "../../aws/vpc"
+  project     = var.vpc_project
+  environment = var.environment
+  region      = var.vpc_region
 }
 
 module "resource" {
@@ -12,6 +13,7 @@ module "resource" {
   cluster_enabled_log_types = ["api", "audit", "authenticator", "controllerManager", "scheduler"]
   region                    = var.resource_region
   project                   = var.resource_project
+  environment               = var.environment
 }
 
 module "alb" {
@@ -19,20 +21,23 @@ module "alb" {
   vpc_id            = module.vpc.vpc_id
   public_subnet_ids = module.vpc.public_subnet_ids
   project           = var.alb_project
+  environment       = var.environment
   region            = var.alb_region
 }
 
 module "s3" {
-  source     = "../../aws/s3"
-  project    = var.s3_project
-  region     = var.s3_region
-  versioning = var.s3_versioning
+  source      = "../../aws/s3"
+  project     = var.s3_project
+  environment = var.environment
+  region      = var.s3_region
+  versioning  = var.s3_versioning
 }
 
 module "dynamodb" {
   source       = "../../aws/dynamodb"
   billing_mode = var.dynamodb_billing_mode
   project      = var.dynamodb_project
+  environment  = var.environment
   region       = var.dynamodb_region
 }
 
@@ -41,6 +46,7 @@ module "cloudfront" {
   origin_type          = "http"
   custom_origin_domain = module.alb.alb_dns_name
   project              = var.cloudfront_project
+  environment          = var.environment
   region               = var.cloudfront_region
 }
 
@@ -58,11 +64,13 @@ module "backups" {
   enable_ec2_ebs = false
   default_rule   = var.backups_default_rule
   project        = var.backups_project
+  environment    = var.environment
   region         = var.backups_region
 }
 
 module "cloudwatchlogs" {
-  source  = "../../aws/cloudwatchlogs"
-  project = var.cloudwatchlogs_project
-  region  = var.cloudwatchlogs_region
+  source      = "../../aws/cloudwatchlogs"
+  project     = var.cloudwatchlogs_project
+  environment = var.environment
+  region      = var.cloudwatchlogs_region
 }

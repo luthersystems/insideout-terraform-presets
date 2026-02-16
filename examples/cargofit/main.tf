@@ -1,7 +1,8 @@
 module "vpc" {
-  source  = "../../aws/vpc"
-  project = var.vpc_project
-  region  = var.vpc_region
+  source      = "../../aws/vpc"
+  project     = var.vpc_project
+  environment = var.environment
+  region      = var.vpc_region
 }
 
 module "resource" {
@@ -15,6 +16,7 @@ module "resource" {
   timeout            = var.resource_timeout
   memory_size        = var.resource_memory_size
   project            = var.resource_project
+  environment        = var.environment
 }
 
 module "lambda" {
@@ -25,6 +27,7 @@ module "lambda" {
   security_group_ids = []
   memory_size        = var.lambda_memory_size
   project            = var.lambda_project
+  environment        = var.environment
   region             = var.lambda_region
   runtime            = var.lambda_runtime
   timeout            = var.lambda_timeout
@@ -38,6 +41,7 @@ module "ec2" {
   max_size       = var.ec2_max_size
   min_size       = var.ec2_min_size
   project        = var.ec2_project
+  environment    = var.environment
   region         = var.ec2_region
   cluster_name   = var.ec2_cluster_name
 }
@@ -47,20 +51,23 @@ module "alb" {
   vpc_id            = module.vpc.vpc_id
   public_subnet_ids = module.vpc.public_subnet_ids
   project           = var.alb_project
+  environment       = var.environment
   region            = var.alb_region
 }
 
 module "s3" {
-  source     = "../../aws/s3"
-  project    = var.s3_project
-  region     = var.s3_region
-  versioning = var.s3_versioning
+  source      = "../../aws/s3"
+  project     = var.s3_project
+  environment = var.environment
+  region      = var.s3_region
+  versioning  = var.s3_versioning
 }
 
 module "dynamodb" {
   source       = "../../aws/dynamodb"
   billing_mode = var.dynamodb_billing_mode
   project      = var.dynamodb_project
+  environment  = var.environment
   region       = var.dynamodb_region
 }
 
@@ -70,21 +77,24 @@ module "cloudfront" {
   custom_origin_domain = module.alb.alb_dns_name
   web_acl_id           = module.waf.web_acl_arn
   project              = var.cloudfront_project
+  environment          = var.environment
   region               = var.cloudfront_region
 }
 
 module "waf" {
-  source    = "../../aws/waf"
-  providers = { aws = aws, aws.us_east_1 = aws.us_east_1 }
-  scope     = "CLOUDFRONT"
-  region    = "us-east-1"
-  project   = var.waf_project
+  source      = "../../aws/waf"
+  providers   = { aws = aws, aws.us_east_1 = aws.us_east_1 }
+  scope       = "CLOUDFRONT"
+  region      = "us-east-1"
+  project     = var.waf_project
+  environment = var.environment
 }
 
 module "cloudwatchlogs" {
-  source  = "../../aws/cloudwatchlogs"
-  project = var.cloudwatchlogs_project
-  region  = var.cloudwatchlogs_region
+  source      = "../../aws/cloudwatchlogs"
+  project     = var.cloudwatchlogs_project
+  environment = var.environment
+  region      = var.cloudwatchlogs_region
 }
 
 module "cognito" {
@@ -92,12 +102,14 @@ module "cognito" {
   region       = var.cognito_region
   sign_in_type = var.cognito_sign_in_type
   project      = var.cognito_project
+  environment  = var.environment
 }
 
 module "secretsmanager" {
-  source  = "../../aws/secretsmanager"
-  project = var.secretsmanager_project
-  region  = var.secretsmanager_region
+  source      = "../../aws/secretsmanager"
+  project     = var.secretsmanager_project
+  environment = var.environment
+  region      = var.secretsmanager_region
 }
 
 module "githubactions" {

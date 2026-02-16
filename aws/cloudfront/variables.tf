@@ -18,6 +18,15 @@ variable "project" {
   }
 }
 
+variable "environment" {
+  description = "Deployment environment (e.g. production, staging, sandbox)"
+  type        = string
+  validation {
+    condition     = length(trimspace(var.environment)) > 0
+    error_message = "environment must be a non-empty string."
+  }
+}
+
 variable "origin_type" {
   description = "Origin type for CloudFront: 's3' or 'http' (custom origin like an ALB)"
   type        = string

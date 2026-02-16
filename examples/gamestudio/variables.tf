@@ -1,3 +1,9 @@
+variable "environment" {
+  description = "Deployment environment (e.g. production, staging, sandbox)"
+  type        = string
+  default     = "sandbox"
+}
+
 variable "apigateway_project" {
   type = string
 }

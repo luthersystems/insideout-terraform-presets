@@ -8,6 +8,17 @@ terraform {
   }
 }
 
+module "name" {
+  source         = "github.com/luthersystems/tf-modules.git//luthername?ref=v55.13.4"
+  luther_project = var.project
+  aws_region     = var.region
+  luther_env     = var.environment
+  org_name       = "luthersystems"
+  component      = "insideout"
+  subcomponent   = "cloudfront"
+  resource       = "cloudfront"
+}
+
 # Region is only used if we optionally create an S3 bucket for the origin.
 
 # -----------------------------------------------------------------------------
@@ -16,7 +27,7 @@ terraform {
 resource "aws_s3_bucket" "origin" {
   count  = var.origin_type == "s3" && var.create_bucket ? 1 : 0
   bucket = var.s3_bucket_name != null ? var.s3_bucket_name : "${var.project}-cdn-origin"
-  tags   = merge({ Name = "${var.project}-cdn-origin" }, var.tags)
+  tags   = merge(module.name.tags, { Name = "${module.name.prefix}-origin" }, var.tags)
 }
 
 resource "aws_s3_bucket_public_access_block" "origin" {
@@ -154,7 +165,7 @@ resource "aws_cloudfront_distribution" "this" {
     cloudfront_default_certificate = var.acm_certificate_arn == null
   }
 
-  tags = merge({ Name = "${var.project}-cloudfront" }, var.tags)
+  tags = merge(module.name.tags, var.tags)
 
   # Basic guardrails: ensure required inputs per origin type
   lifecycle {

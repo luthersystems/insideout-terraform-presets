@@ -8,6 +8,15 @@ variable "project" {
   }
 }
 
+variable "environment" {
+  description = "Deployment environment (e.g. production, staging, sandbox)"
+  type        = string
+  validation {
+    condition     = length(trimspace(var.environment)) > 0
+    error_message = "environment must be a non-empty string."
+  }
+}
+
 variable "region" {
   description = "AWS region for the EKS control plane provider"
   type        = string
@@ -78,4 +87,10 @@ variable "cluster_enabled_log_types" {
     ]) == length(var.cluster_enabled_log_types)
     error_message = "cluster_enabled_log_types must be a subset of [api, audit, authenticator, controllerManager, scheduler]."
   }
+}
+
+variable "tags" {
+  description = "Additional AWS tags applied to all resources"
+  type        = map(string)
+  default     = {}
 }

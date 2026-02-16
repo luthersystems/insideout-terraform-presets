@@ -3,6 +3,15 @@ variable "project" {
   description = "Project name for resource naming"
 }
 
+variable "environment" {
+  description = "Deployment environment (e.g. production, staging, sandbox)"
+  type        = string
+  validation {
+    condition     = length(trimspace(var.environment)) > 0
+    error_message = "environment must be a non-empty string."
+  }
+}
+
 variable "region" {
   type        = string
   description = "AWS region"
@@ -40,5 +49,11 @@ variable "multi_az" {
   type        = bool
   description = "Whether to enable Multi-AZ deployment"
   default     = false
+}
+
+variable "tags" {
+  description = "Additional AWS tags applied to all resources"
+  type        = map(string)
+  default     = {}
 }
 
