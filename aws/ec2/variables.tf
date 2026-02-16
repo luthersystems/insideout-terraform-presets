@@ -129,6 +129,16 @@ variable "ingress_cidr_blocks" {
   }
 }
 
+variable "root_volume_size" {
+  description = "Root EBS volume size in GB"
+  type        = number
+  default     = 32
+  validation {
+    condition     = var.root_volume_size >= 8 && var.root_volume_size <= 16384
+    error_message = "root_volume_size must be between 8 and 16384 GB."
+  }
+}
+
 variable "tags" {
   description = "Additional AWS tags applied to created resources"
   type        = map(string)
