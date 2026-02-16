@@ -43,3 +43,8 @@ output "cluster_arn" {
   description = "EKS cluster ARN"
   value       = module.eks.cluster_arn
 }
+
+output "ebs_csi_role_arn" {
+  description = "IAM role ARN for the EBS CSI driver"
+  value       = var.enable_ebs_csi_driver ? aws_iam_role.ebs_csi[0].arn : null
+}
