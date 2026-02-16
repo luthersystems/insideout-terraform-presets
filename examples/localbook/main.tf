@@ -24,6 +24,7 @@ module "alb" {
   vpc_id            = module.vpc.vpc_id
   public_subnet_ids = module.vpc.public_subnet_ids
   project           = var.alb_project
+  environment       = var.environment
   region            = var.alb_region
 }
 
@@ -40,6 +41,7 @@ module "cloudfront" {
   custom_origin_domain = module.alb.alb_dns_name
   origin_type          = "http"
   project              = var.cloudfront_project
+  environment          = var.environment
   region               = var.cloudfront_region
 }
 
@@ -92,6 +94,7 @@ module "secretsmanager" {
 }
 
 module "githubactions" {
-  source  = "../../aws/githubactions"
-  project = var.githubactions_project
+  source      = "../../aws/githubactions"
+  project     = var.githubactions_project
+  environment = var.environment
 }

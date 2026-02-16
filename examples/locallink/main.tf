@@ -32,6 +32,7 @@ module "elasticache" {
   cache_subnet_ids = module.vpc.private_subnet_ids
   ha               = var.elasticache_ha
   project          = var.elasticache_project
+  environment      = var.environment
   region           = var.elasticache_region
 }
 
@@ -83,12 +84,14 @@ module "secretsmanager" {
 }
 
 module "sqs" {
-  source  = "../../aws/sqs"
-  project = var.sqs_project
-  region  = var.sqs_region
+  source      = "../../aws/sqs"
+  project     = var.sqs_project
+  environment = var.environment
+  region      = var.sqs_region
 }
 
 module "githubactions" {
-  source  = "../../aws/githubactions"
-  project = var.githubactions_project
+  source      = "../../aws/githubactions"
+  project     = var.githubactions_project
+  environment = var.environment
 }

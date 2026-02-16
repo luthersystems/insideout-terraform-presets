@@ -26,11 +26,12 @@ module "s3" {
 }
 
 module "waf" {
-  source    = "../../aws/waf"
-  providers = { aws = aws, aws.us_east_1 = aws.us_east_1 }
-  scope     = "CLOUDFRONT"
-  region    = "us-east-1"
-  project   = var.waf_project
+  source      = "../../aws/waf"
+  providers   = { aws = aws, aws.us_east_1 = aws.us_east_1 }
+  scope       = "CLOUDFRONT"
+  region      = "us-east-1"
+  project     = var.waf_project
+  environment = var.environment
 }
 
 module "backups" {
@@ -104,6 +105,7 @@ module "sqs" {
 }
 
 module "githubactions" {
-  source  = "../../aws/githubactions"
-  project = var.githubactions_project
+  source      = "../../aws/githubactions"
+  project     = var.githubactions_project
+  environment = var.environment
 }
