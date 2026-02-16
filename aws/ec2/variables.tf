@@ -88,7 +88,13 @@ variable "associate_public_ip" {
 }
 
 variable "user_data" {
-  description = "User data script to run on instance launch (plain text, provider handles encoding)"
+  description = "User data script to run on instance launch (plain text, provider handles encoding). Mutually exclusive with user_data_url."
+  type        = string
+  default     = ""
+}
+
+variable "user_data_url" {
+  description = "URL of a shell script to download and execute on instance launch. Generates a wrapper that fetches and runs the script. Mutually exclusive with user_data."
   type        = string
   default     = ""
 }
