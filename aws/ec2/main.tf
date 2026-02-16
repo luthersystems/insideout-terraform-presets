@@ -21,7 +21,9 @@ module "name" {
 }
 
 locals {
-  ami_id = var.ami_id != null ? var.ami_id : data.aws_ami.al2023[0].id
+  ami_id = var.ami_id != null ? var.ami_id : (
+    var.os_type == "ubuntu" ? data.aws_ami.ubuntu[0].id : data.aws_ami.al2023[0].id
+  )
 
   # Resolve effective user_data: inline script takes priority, URL generates a fetch wrapper.
   effective_user_data = var.user_data != "" ? var.user_data : (
@@ -29,15 +31,32 @@ locals {
   )
 }
 
-# Pick Amazon Linux 2023 AMI by arch (only when ami_id is not provided)
+# Pick Amazon Linux 2023 AMI by arch (only when ami_id is not provided and os_type is amazon-linux)
 data "aws_ami" "al2023" {
-  count       = var.ami_id == null ? 1 : 0
+  count       = var.ami_id == null && var.os_type == "amazon-linux" ? 1 : 0
   owners      = ["137112412989"] # Amazon
   most_recent = true
 
   filter {
     name   = "name"
     values = ["al2023-ami-*-${var.arch}"]
+  }
+}
+
+# Pick Ubuntu 24.04 LTS AMI by arch (only when ami_id is not provided and os_type is ubuntu)
+data "aws_ami" "ubuntu" {
+  count       = var.ami_id == null && var.os_type == "ubuntu" ? 1 : 0
+  owners      = ["099720109477"] # Canonical
+  most_recent = true
+
+  filter {
+    name   = "name"
+    values = ["ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-${var.arch == "arm64" ? "arm64" : "amd64"}-server-*"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
   }
 }
 

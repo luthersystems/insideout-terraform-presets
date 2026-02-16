@@ -54,9 +54,19 @@ variable "instance_type" {
 }
 
 variable "ami_id" {
-  description = "Specific AMI ID to use. If null, the latest Amazon Linux 2023 AMI for the given arch is selected."
+  description = "Specific AMI ID to use. If null, an AMI is selected automatically based on os_type and arch."
   type        = string
   default     = null
+}
+
+variable "os_type" {
+  description = "Operating system for AMI selection when ami_id is null"
+  type        = string
+  default     = "ubuntu"
+  validation {
+    condition     = contains(["amazon-linux", "ubuntu"], var.os_type)
+    error_message = "os_type must be one of: amazon-linux, ubuntu."
+  }
 }
 
 variable "arch" {

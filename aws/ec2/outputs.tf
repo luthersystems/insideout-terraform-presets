@@ -20,5 +20,5 @@ output "security_group_id" {
 
 output "ssh_command" {
   description = "SSH command to connect to the instance"
-  value       = var.associate_public_ip ? "ssh ubuntu@${aws_instance.this.public_ip}" : null
+  value       = var.associate_public_ip ? "ssh ${var.os_type == "ubuntu" ? "ubuntu" : "ec2-user"}@${aws_instance.this.public_ip}" : null
 }
