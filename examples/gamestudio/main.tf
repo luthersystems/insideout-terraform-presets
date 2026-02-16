@@ -6,17 +6,16 @@ module "vpc" {
 }
 
 module "lambda" {
-  source             = "../../aws/lambda"
-  enable_vpc         = true
-  vpc_id             = module.vpc.vpc_id
-  subnet_ids         = module.vpc.private_subnet_ids
-  security_group_ids = []
-  memory_size        = var.lambda_memory_size
-  project            = var.lambda_project
-  environment        = var.environment
-  region             = var.lambda_region
-  runtime            = var.lambda_runtime
-  timeout            = var.lambda_timeout
+  source      = "../../aws/lambda"
+  enable_vpc  = true
+  vpc_id      = module.vpc.vpc_id
+  subnet_ids  = module.vpc.private_subnet_ids
+  memory_size = var.lambda_memory_size
+  project     = var.lambda_project
+  environment = var.environment
+  region      = var.lambda_region
+  runtime     = var.lambda_runtime
+  timeout     = var.lambda_timeout
 }
 
 module "s3" {

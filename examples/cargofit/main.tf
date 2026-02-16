@@ -6,31 +6,29 @@ module "vpc" {
 }
 
 module "resource" {
-  source             = "../../aws/lambda"
-  enable_vpc         = true
-  subnet_ids         = module.vpc.private_subnet_ids
-  security_group_ids = []
-  vpc_id             = module.vpc.vpc_id
-  region             = var.resource_region
-  runtime            = var.resource_runtime
-  timeout            = var.resource_timeout
-  memory_size        = var.resource_memory_size
-  project            = var.resource_project
-  environment        = var.environment
+  source      = "../../aws/lambda"
+  enable_vpc  = true
+  subnet_ids  = module.vpc.private_subnet_ids
+  vpc_id      = module.vpc.vpc_id
+  region      = var.resource_region
+  runtime     = var.resource_runtime
+  timeout     = var.resource_timeout
+  memory_size = var.resource_memory_size
+  project     = var.resource_project
+  environment = var.environment
 }
 
 module "lambda" {
-  source             = "../../aws/lambda"
-  enable_vpc         = true
-  vpc_id             = module.vpc.vpc_id
-  subnet_ids         = module.vpc.private_subnet_ids
-  security_group_ids = []
-  memory_size        = var.lambda_memory_size
-  project            = var.lambda_project
-  environment        = var.environment
-  region             = var.lambda_region
-  runtime            = var.lambda_runtime
-  timeout            = var.lambda_timeout
+  source      = "../../aws/lambda"
+  enable_vpc  = true
+  vpc_id      = module.vpc.vpc_id
+  subnet_ids  = module.vpc.private_subnet_ids
+  memory_size = var.lambda_memory_size
+  project     = var.lambda_project
+  environment = var.environment
+  region      = var.lambda_region
+  runtime     = var.lambda_runtime
+  timeout     = var.lambda_timeout
 }
 
 module "ec2" {

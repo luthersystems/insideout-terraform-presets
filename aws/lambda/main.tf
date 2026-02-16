@@ -52,6 +52,30 @@ resource "aws_iam_role_policy_attachment" "lambda_vpc" {
 }
 
 # -----------------------------------------------------------------------------
+# Default Security Group (created when VPC-enabled and no SGs provided)
+# -----------------------------------------------------------------------------
+locals {
+  create_default_sg            = var.enable_vpc && length(var.security_group_ids) == 0
+  effective_security_group_ids = local.create_default_sg ? [aws_security_group.lambda[0].id] : var.security_group_ids
+}
+
+resource "aws_security_group" "lambda" {
+  count       = local.create_default_sg ? 1 : 0
+  name        = "${var.project}-lambda-sg"
+  description = "Default security group for Lambda VPC access"
+  vpc_id      = var.vpc_id
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = merge(module.name.tags, { Name = "${var.project}-lambda-sg" }, var.tags)
+}
+
+# -----------------------------------------------------------------------------
 # CloudWatch Log Group
 # -----------------------------------------------------------------------------
 resource "aws_cloudwatch_log_group" "lambda" {
@@ -79,7 +103,7 @@ resource "aws_lambda_function" "this" {
     for_each = var.enable_vpc ? [1] : []
     content {
       subnet_ids         = var.subnet_ids
-      security_group_ids = var.security_group_ids
+      security_group_ids = local.effective_security_group_ids
     }
   }
 
