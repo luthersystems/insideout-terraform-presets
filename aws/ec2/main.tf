@@ -22,6 +22,11 @@ module "name" {
 
 locals {
   ami_id = var.ami_id != null ? var.ami_id : data.aws_ami.al2023[0].id
+
+  # Resolve effective user_data: inline script takes priority, URL generates a fetch wrapper.
+  effective_user_data = var.user_data != "" ? var.user_data : (
+    var.user_data_url != "" ? "#!/bin/bash\nset -euo pipefail\ncurl -fsSL '${var.user_data_url}' -o /tmp/user-data-script.sh\nchmod +x /tmp/user-data-script.sh\n/tmp/user-data-script.sh" : ""
+  )
 }
 
 # Pick Amazon Linux 2023 AMI by arch (only when ami_id is not provided)
@@ -118,7 +123,14 @@ resource "aws_instance" "this" {
   iam_instance_profile        = aws_iam_instance_profile.this.name
   key_name                    = var.ssh_public_key != "" ? aws_key_pair.this[0].key_name : var.key_name
 
-  user_data = var.user_data != "" ? var.user_data : null
+  user_data = local.effective_user_data != "" ? local.effective_user_data : null
+
+  lifecycle {
+    precondition {
+      condition     = !(var.user_data != "" && var.user_data_url != "")
+      error_message = "user_data and user_data_url are mutually exclusive. Set one or the other, not both."
+    }
+  }
 
   metadata_options {
     http_tokens = "required"
