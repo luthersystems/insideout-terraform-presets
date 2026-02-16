@@ -7,8 +7,9 @@ run "cognito_with_oidc_providers" {
   command = plan
 
   variables {
-    project = "test"
-    region  = "us-east-1"
+    project     = "test"
+    region      = "us-east-1"
+    environment = "test"
 
     oidc_identity_providers = [
       {
@@ -31,8 +32,9 @@ run "cognito_with_multiple_oidc_providers" {
   command = plan
 
   variables {
-    project = "test"
-    region  = "us-east-1"
+    project     = "test"
+    region      = "us-east-1"
+    environment = "test"
 
     oidc_identity_providers = [
       {
@@ -61,8 +63,9 @@ run "cognito_defaults_only" {
   command = plan
 
   variables {
-    project = "test"
-    region  = "us-east-1"
+    project     = "test"
+    region      = "us-east-1"
+    environment = "test"
   }
 
   assert {

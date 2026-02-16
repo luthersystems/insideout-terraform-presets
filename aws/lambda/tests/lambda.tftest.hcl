@@ -5,8 +5,9 @@ run "lambda_without_vpc" {
   command = plan
 
   variables {
-    project = "test"
-    region  = "us-east-1"
+    project     = "test"
+    region      = "us-east-1"
+    environment = "test"
   }
 
   assert {
@@ -27,6 +28,7 @@ run "lambda_with_vpc" {
   variables {
     project            = "test"
     region             = "us-east-1"
+    environment        = "test"
     enable_vpc         = true
     vpc_id             = "vpc-12345"
     subnet_ids         = ["subnet-aaa", "subnet-bbb"]

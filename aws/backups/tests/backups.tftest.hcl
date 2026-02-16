@@ -13,9 +13,10 @@ run "backups_single_service_enabled" {
   }
 
   variables {
-    project    = "test"
-    region     = "us-east-1"
-    enable_rds = true
+    project     = "test"
+    region      = "us-east-1"
+    environment = "test"
+    enable_rds  = true
   }
 
   assert {
@@ -38,6 +39,7 @@ run "backups_all_services_enabled" {
   variables {
     project         = "test"
     region          = "us-east-1"
+    environment     = "test"
     enable_ec2_ebs  = true
     enable_rds      = true
     enable_dynamodb = true
@@ -63,7 +65,8 @@ run "backups_no_services_fails_precondition" {
   }
 
   variables {
-    project = "test"
-    region  = "us-east-1"
+    project     = "test"
+    region      = "us-east-1"
+    environment = "test"
   }
 }
