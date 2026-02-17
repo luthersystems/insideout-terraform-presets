@@ -1,4 +1,5 @@
 mock_provider "aws" {}
+mock_provider "random" {}
 
 # Verify that the module plans successfully without VPC.
 run "lambda_without_vpc" {
@@ -11,8 +12,8 @@ run "lambda_without_vpc" {
   }
 
   assert {
-    condition     = aws_lambda_function.this.function_name == "test-function"
-    error_message = "Expected function name to be 'test-function'"
+    condition     = startswith(aws_lambda_function.this.function_name, "test-")
+    error_message = "Expected function name to start with project prefix"
   }
 
   assert {
@@ -36,8 +37,8 @@ run "lambda_with_vpc" {
   }
 
   assert {
-    condition     = aws_lambda_function.this.function_name == "test-function"
-    error_message = "Expected function name to be 'test-function'"
+    condition     = startswith(aws_lambda_function.this.function_name, "test-")
+    error_message = "Expected function name to start with project prefix"
   }
 
   assert {

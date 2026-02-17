@@ -21,7 +21,7 @@ run "backups_single_service_enabled" {
 
   assert {
     condition     = aws_backup_plan.this.name == "test-plan"
-    error_message = "Expected backup plan name to be 'test-plan'"
+    error_message = "Expected backup plan name to be 'test-plan' but got '${aws_backup_plan.this.name}'"
   }
 }
 
@@ -48,7 +48,7 @@ run "backups_all_services_enabled" {
 
   assert {
     condition     = aws_backup_plan.this.name == "test-plan"
-    error_message = "Expected backup plan name to be 'test-plan'"
+    error_message = "Expected backup plan name to be 'test-plan' but got '${aws_backup_plan.this.name}'"
   }
 }
 

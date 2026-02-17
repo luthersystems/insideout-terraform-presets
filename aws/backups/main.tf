@@ -38,7 +38,8 @@ data "aws_iam_policy_document" "backup_assume" {
 }
 
 resource "aws_iam_role" "backup" {
-  name               = "${module.name.name}-role"
+  # Backup rule names limited to 50 chars — use var.project throughout
+  name               = "${var.project}-backup-role"
   assume_role_policy = data.aws_iam_policy_document.backup_assume.json
   tags               = merge(module.name.tags, var.tags)
 }
@@ -65,7 +66,7 @@ resource "aws_iam_role_policy_attachment" "restore" {
 # Backup vault (no KMS here; easy to add later if needed)
 # -----------------------------------------------------------------------------
 resource "aws_backup_vault" "this" {
-  name = "${module.name.name}-vault"
+  name = "${var.project}-vault"
   tags = merge(module.name.tags, var.tags)
 }
 
@@ -162,13 +163,13 @@ locals {
 # Only add a rule block when that service is enabled.
 # -----------------------------------------------------------------------------
 resource "aws_backup_plan" "this" {
-  name = "${module.name.name}-plan"
+  name = "${var.project}-plan"
 
   # EC2/EBS rule
   dynamic "rule" {
     for_each = var.enable_ec2_ebs ? [1] : []
     content {
-      rule_name                    = "${module.name.name}-ec2Ebs"
+      rule_name                    = "${var.project}-ec2Ebs"
       target_vault_name            = aws_backup_vault.this.name
       schedule                     = local.ec2_ebs_norm.schedule_expression
       schedule_expression_timezone = local.ec2_ebs_norm.schedule_expression_timezone
@@ -189,7 +190,7 @@ resource "aws_backup_plan" "this" {
   dynamic "rule" {
     for_each = var.enable_rds ? [1] : []
     content {
-      rule_name                    = "${module.name.name}-rds"
+      rule_name                    = "${var.project}-rds"
       target_vault_name            = aws_backup_vault.this.name
       schedule                     = local.rds_norm.schedule_expression
       schedule_expression_timezone = local.rds_norm.schedule_expression_timezone
@@ -209,7 +210,7 @@ resource "aws_backup_plan" "this" {
   dynamic "rule" {
     for_each = var.enable_dynamodb ? [1] : []
     content {
-      rule_name                    = "${module.name.name}-dynamodb"
+      rule_name                    = "${var.project}-dynamodb"
       target_vault_name            = aws_backup_vault.this.name
       schedule                     = local.dynamodb_norm.schedule_expression
       schedule_expression_timezone = local.dynamodb_norm.schedule_expression_timezone
@@ -229,7 +230,7 @@ resource "aws_backup_plan" "this" {
   dynamic "rule" {
     for_each = var.enable_s3 ? [1] : []
     content {
-      rule_name                    = "${module.name.name}-s3"
+      rule_name                    = "${var.project}-s3"
       target_vault_name            = aws_backup_vault.this.name
       schedule                     = local.s3_norm.schedule_expression
       schedule_expression_timezone = local.s3_norm.schedule_expression_timezone
@@ -262,7 +263,7 @@ resource "aws_backup_plan" "this" {
 # EC2/EBS: usually picked by tag (e.g., backup=true), but accept explicit ARNs too
 resource "aws_backup_selection" "ec2_ebs" {
   for_each     = var.enable_ec2_ebs ? toset(["on"]) : toset([])
-  name         = "${module.name.name}-ec2Ebs"
+  name         = "${var.project}-ec2Ebs"
   plan_id      = aws_backup_plan.this.id
   iam_role_arn = aws_iam_role.backup.arn
 
@@ -283,7 +284,7 @@ resource "aws_backup_selection" "ec2_ebs" {
 # RDS: generally explicit DB instance ARNs
 resource "aws_backup_selection" "rds" {
   for_each     = var.enable_rds ? toset(["on"]) : toset([])
-  name         = "${module.name.name}-rds"
+  name         = "${var.project}-rds"
   plan_id      = aws_backup_plan.this.id
   iam_role_arn = aws_iam_role.backup.arn
 
@@ -293,7 +294,7 @@ resource "aws_backup_selection" "rds" {
 # DynamoDB
 resource "aws_backup_selection" "dynamodb" {
   for_each     = var.enable_dynamodb ? toset(["on"]) : toset([])
-  name         = "${module.name.name}-dynamodb"
+  name         = "${var.project}-dynamodb"
   plan_id      = aws_backup_plan.this.id
   iam_role_arn = aws_iam_role.backup.arn
 
@@ -303,7 +304,7 @@ resource "aws_backup_selection" "dynamodb" {
 # S3
 resource "aws_backup_selection" "s3" {
   for_each     = var.enable_s3 ? toset(["on"]) : toset([])
-  name         = "${module.name.name}-s3"
+  name         = "${var.project}-s3"
   plan_id      = aws_backup_plan.this.id
   iam_role_arn = aws_iam_role.backup.arn
 
