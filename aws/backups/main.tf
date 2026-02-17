@@ -38,7 +38,7 @@ data "aws_iam_policy_document" "backup_assume" {
 }
 
 resource "aws_iam_role" "backup" {
-  name               = "${module.name.name}-backup-role"
+  name               = "${module.name.name}-role"
   assume_role_policy = data.aws_iam_policy_document.backup_assume.json
   tags               = merge(module.name.tags, var.tags)
 }

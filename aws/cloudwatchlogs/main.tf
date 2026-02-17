@@ -12,6 +12,11 @@ terraform {
   }
 }
 
+# Unique suffix to ensure log group name uniqueness per environment
+resource "random_id" "suffix" {
+  byte_length = 2
+}
+
 module "name" {
   source         = "github.com/luthersystems/tf-modules.git//luthername?ref=v55.13.4"
   luther_project = var.project
@@ -22,12 +27,6 @@ module "name" {
   subcomponent   = "cwl"
   resource       = "cwl"
   id             = random_id.suffix.hex
-}
-
-
-# Unique suffix to ensure log group name uniqueness per environment
-resource "random_id" "suffix" {
-  byte_length = 2
 }
 
 # -----------------------------------------------------------------------------

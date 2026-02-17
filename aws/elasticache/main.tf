@@ -12,6 +12,11 @@ terraform {
   }
 }
 
+# Unique suffix to avoid log group name collisions on destroy/recreate
+resource "random_id" "suffix" {
+  byte_length = 2
+}
+
 module "name" {
   source         = "github.com/luthersystems/tf-modules.git//luthername?ref=v55.13.4"
   luther_project = var.project
@@ -22,11 +27,6 @@ module "name" {
   subcomponent   = "redis"
   resource       = "redis"
   id             = random_id.suffix.hex
-}
-
-# Unique suffix to avoid log group name collisions on destroy/recreate
-resource "random_id" "suffix" {
-  byte_length = 2
 }
 
 # -----------------------------------------------------------------------------
@@ -101,7 +101,8 @@ resource "random_password" "auth" {
 # Redis Replication Group (cluster-mode disabled)
 # -----------------------------------------------------------------------------
 resource "aws_elasticache_replication_group" "this" {
-  replication_group_id = module.name.name
+  # Replication group IDs limited to 40 chars — use var.project
+  replication_group_id = "${var.project}-redis"
   description          = "Redis for ${var.project}"
 
   engine         = "redis"

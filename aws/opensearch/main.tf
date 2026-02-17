@@ -44,7 +44,8 @@ resource "aws_security_group" "opensearch" {
 resource "aws_opensearch_domain" "managed" {
   count = var.deployment_type == "managed" ? 1 : 0
 
-  domain_name    = module.name.name
+  # OpenSearch domain names limited to 28 chars — use var.project
+  domain_name    = "${var.project}-search"
   engine_version = "OpenSearch_2.11"
 
   cluster_config {
@@ -70,7 +71,8 @@ resource "aws_opensearch_domain" "managed" {
 resource "aws_opensearchserverless_collection" "serverless" {
   count = var.deployment_type == "serverless" ? 1 : 0
 
-  name = module.name.name
+  # OpenSearch collection names limited to 32 chars — use var.project
+  name = "${var.project}-search"
   type = "VECTORSEARCH"
 
   tags = merge(module.name.tags, { Name = module.name.name }, var.tags)
