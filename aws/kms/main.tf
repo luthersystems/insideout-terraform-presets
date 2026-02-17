@@ -5,7 +5,16 @@ terraform {
       source  = "hashicorp/aws"
       version = ">= 6.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = ">= 3.5"
+    }
   }
+}
+
+# Unique suffix to avoid alias collisions with pending-deletion keys (7-30 day window)
+resource "random_id" "suffix" {
+  byte_length = 2
 }
 
 module "name" {
@@ -17,6 +26,8 @@ module "name" {
   component      = "insideout"
   subcomponent   = "kms"
   resource       = "kms"
+  id             = random_id.suffix.hex
+  replication    = var.num_keys
 }
 
 resource "aws_kms_key" "keys" {
@@ -30,6 +41,6 @@ resource "aws_kms_key" "keys" {
 
 resource "aws_kms_alias" "aliases" {
   count         = var.num_keys
-  name          = "alias/${var.project}-key-${count.index}"
+  name          = "alias/${module.name.names[count.index]}"
   target_key_id = aws_kms_key.keys[count.index].key_id
 }

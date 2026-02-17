@@ -15,12 +15,12 @@ module "name" {
   luther_env     = var.environment
   org_name       = "luthersystems"
   component      = "insideout"
-  subcomponent   = "bedrock"
-  resource       = "bedrock"
+  subcomponent   = "br"
+  resource       = "br"
 }
 
 resource "aws_iam_role" "bedrock_kb" {
-  name = "${var.project}-bedrock-kb-role"
+  name = "${module.name.name}-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -39,7 +39,7 @@ resource "aws_iam_role" "bedrock_kb" {
 }
 
 resource "aws_iam_role_policy" "bedrock_kb" {
-  name = "${var.project}-bedrock-kb-policy"
+  name = "${module.name.name}-policy"
   role = aws_iam_role.bedrock_kb.id
 
   policy = jsonencode({
@@ -77,7 +77,7 @@ resource "aws_iam_role_policy" "bedrock_kb" {
 }
 
 resource "aws_bedrockagent_knowledge_base" "this" {
-  name     = "${var.project}-${var.knowledge_base_name}"
+  name     = "${module.name.name}-${var.knowledge_base_name}"
   role_arn = aws_iam_role.bedrock_kb.arn
   tags     = merge(module.name.tags, var.tags)
 
@@ -104,7 +104,7 @@ resource "aws_bedrockagent_knowledge_base" "this" {
 
 resource "aws_bedrockagent_data_source" "this" {
   knowledge_base_id = aws_bedrockagent_knowledge_base.this.id
-  name              = "${var.project}-s3-source"
+  name              = "${module.name.name}-s3-source"
   data_source_configuration {
     type = "S3"
     s3_configuration {

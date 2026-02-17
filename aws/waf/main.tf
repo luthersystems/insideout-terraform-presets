@@ -56,7 +56,7 @@ resource "aws_wafv2_web_acl" "cf" {
   count    = var.scope == "CLOUDFRONT" ? 1 : 0
   provider = aws.us_east_1
 
-  name  = "${var.project}-waf"
+  name  = module.name.name
   scope = "CLOUDFRONT"
 
   default_action {
@@ -65,7 +65,7 @@ resource "aws_wafv2_web_acl" "cf" {
 
   visibility_config {
     cloudwatch_metrics_enabled = true
-    metric_name                = "${var.project}-waf"
+    metric_name                = module.name.name
     sampled_requests_enabled   = true
   }
 
@@ -95,7 +95,7 @@ resource "aws_wafv2_web_acl" "cf" {
 
       visibility_config {
         cloudwatch_metrics_enabled = true
-        metric_name                = "${var.project}-${rule.value.vendor}-${rule.value.name}"
+        metric_name                = "${module.name.name}-${rule.value.vendor}-${rule.value.name}"
         sampled_requests_enabled   = true
       }
     }
@@ -112,7 +112,7 @@ resource "aws_wafv2_web_acl" "cf" {
 resource "aws_wafv2_web_acl" "regional" {
   count = var.scope == "REGIONAL" ? 1 : 0
 
-  name  = "${var.project}-waf"
+  name  = module.name.name
   scope = "REGIONAL"
 
   default_action {
@@ -121,7 +121,7 @@ resource "aws_wafv2_web_acl" "regional" {
 
   visibility_config {
     cloudwatch_metrics_enabled = true
-    metric_name                = "${var.project}-waf"
+    metric_name                = module.name.name
     sampled_requests_enabled   = true
   }
 
@@ -151,7 +151,7 @@ resource "aws_wafv2_web_acl" "regional" {
 
       visibility_config {
         cloudwatch_metrics_enabled = true
-        metric_name                = "${var.project}-${rule.value.vendor}-${rule.value.name}"
+        metric_name                = "${module.name.name}-${rule.value.vendor}-${rule.value.name}"
         sampled_requests_enabled   = true
       }
     }

@@ -64,7 +64,7 @@ data "aws_ami" "ubuntu" {
 # Security group
 # -------------------------------------------------------------
 resource "aws_security_group" "this" {
-  name        = "${var.project}-ec2-sg"
+  name        = "${module.name.name}-sg"
   description = "Security group for ${var.project} EC2 instance"
   vpc_id      = var.vpc_id
 
@@ -105,7 +105,7 @@ data "aws_iam_policy_document" "ec2_assume_role" {
 }
 
 resource "aws_iam_role" "this" {
-  name               = "${var.project}-ec2-role"
+  name               = "${module.name.name}-role"
   assume_role_policy = data.aws_iam_policy_document.ec2_assume_role.json
   tags               = merge(module.name.tags, var.tags)
 }
@@ -116,7 +116,7 @@ resource "aws_iam_role_policy_attachment" "ssm_core" {
 }
 
 resource "aws_iam_instance_profile" "this" {
-  name = "${var.project}-ec2-profile"
+  name = "${module.name.name}-profile"
   role = aws_iam_role.this.name
 }
 
@@ -125,7 +125,7 @@ resource "aws_iam_instance_profile" "this" {
 # -------------------------------------------------------------
 resource "aws_key_pair" "this" {
   count      = var.ssh_public_key != "" ? 1 : 0
-  key_name   = "${var.project}-ec2-key"
+  key_name   = "${module.name.name}-key"
   public_key = var.ssh_public_key
   tags       = merge(module.name.tags, var.tags)
 }

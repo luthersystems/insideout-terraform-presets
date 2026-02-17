@@ -20,7 +20,7 @@ module "name" {
 }
 
 locals {
-  cluster_name = "${var.project}-eks"
+  cluster_name = module.name.name
   common_tags  = merge(module.name.tags, var.tags)
 
   # ---------------------------------------------------------------------------

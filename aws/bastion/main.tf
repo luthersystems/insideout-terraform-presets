@@ -32,7 +32,7 @@ data "aws_ami" "al2023" {
 
 # Security group for bastion
 resource "aws_security_group" "bastion_sg" {
-  name        = "${var.project}-bastion-sg"
+  name        = "${module.name.name}-sg"
   description = "Security group for bastion host"
   vpc_id      = var.vpc_id
 
@@ -67,7 +67,7 @@ data "aws_iam_policy_document" "ec2_assume_role" {
 }
 
 resource "aws_iam_role" "bastion_role" {
-  name               = "${var.project}-bastion-role"
+  name               = "${module.name.name}-role"
   assume_role_policy = data.aws_iam_policy_document.ec2_assume_role.json
   tags               = merge(module.name.tags, var.tags)
 }
@@ -78,7 +78,7 @@ resource "aws_iam_role_policy_attachment" "ssm_core" {
 }
 
 resource "aws_iam_instance_profile" "bastion_profile" {
-  name = "${var.project}-bastion-profile"
+  name = "${module.name.name}-profile"
   role = aws_iam_role.bastion_role.name
 }
 

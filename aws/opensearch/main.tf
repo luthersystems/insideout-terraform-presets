@@ -15,12 +15,12 @@ module "name" {
   luther_env     = var.environment
   org_name       = "luthersystems"
   component      = "insideout"
-  subcomponent   = "opensearch"
-  resource       = "opensearch"
+  subcomponent   = "os"
+  resource       = "os"
 }
 
 resource "aws_security_group" "opensearch" {
-  name        = "${var.project}-opensearch-sg"
+  name        = "${module.name.name}-sg"
   description = "Security group for OpenSearch domain"
   vpc_id      = var.vpc_id
 
@@ -38,12 +38,13 @@ resource "aws_security_group" "opensearch" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = merge(module.name.tags, { Name = "${var.project}-opensearch-sg" }, var.tags)
+  tags = merge(module.name.tags, { Name = "${module.name.name}-sg" }, var.tags)
 }
 
 resource "aws_opensearch_domain" "managed" {
   count = var.deployment_type == "managed" ? 1 : 0
 
+  # OpenSearch domain names limited to 28 chars — use var.project
   domain_name    = "${var.project}-search"
   engine_version = "OpenSearch_2.11"
 
@@ -64,15 +65,16 @@ resource "aws_opensearch_domain" "managed" {
     security_group_ids = [aws_security_group.opensearch.id]
   }
 
-  tags = merge(module.name.tags, { Domain = "${var.project}-search" }, var.tags)
+  tags = merge(module.name.tags, { Domain = module.name.name }, var.tags)
 }
 
 resource "aws_opensearchserverless_collection" "serverless" {
   count = var.deployment_type == "serverless" ? 1 : 0
 
+  # OpenSearch collection names limited to 32 chars — use var.project
   name = "${var.project}-search"
   type = "VECTORSEARCH"
 
-  tags = merge(module.name.tags, { Name = "${var.project}-search" }, var.tags)
+  tags = merge(module.name.tags, { Name = module.name.name }, var.tags)
 }
 

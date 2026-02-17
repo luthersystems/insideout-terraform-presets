@@ -19,8 +19,8 @@ module "name" {
   luther_env     = var.environment
   org_name       = "luthersystems"
   component      = "insideout"
-  subcomponent   = "backups"
-  resource       = "backups"
+  subcomponent   = "bak"
+  resource       = "bak"
 }
 
 # -----------------------------------------------------------------------------
@@ -38,6 +38,7 @@ data "aws_iam_policy_document" "backup_assume" {
 }
 
 resource "aws_iam_role" "backup" {
+  # Backup rule names limited to 50 chars — use var.project throughout
   name               = "${var.project}-backup-role"
   assume_role_policy = data.aws_iam_policy_document.backup_assume.json
   tags               = merge(module.name.tags, var.tags)

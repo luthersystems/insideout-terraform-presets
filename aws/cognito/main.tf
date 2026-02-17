@@ -15,8 +15,8 @@ module "name" {
   luther_env     = var.environment
   org_name       = "luthersystems"
   component      = "insideout"
-  subcomponent   = "cognito"
-  resource       = "cognito"
+  subcomponent   = "cog"
+  resource       = "cog"
 }
 
 locals {
@@ -40,7 +40,7 @@ locals {
 # User pool
 # -----------------------------------------------------------------------------
 resource "aws_cognito_user_pool" "this" {
-  name = "${var.project}-users"
+  name = "${module.name.name}-users"
 
   auto_verified_attributes = ["email"]
   username_attributes      = local.username_attributes
@@ -104,7 +104,7 @@ resource "aws_cognito_identity_provider" "saml" {
 # User pool client (Hosted UI / OAuth2)
 # -----------------------------------------------------------------------------
 resource "aws_cognito_user_pool_client" "web" {
-  name         = "${var.project}-web"
+  name         = "${module.name.name}-web"
   user_pool_id = aws_cognito_user_pool.this.id
 
   generate_secret                      = false

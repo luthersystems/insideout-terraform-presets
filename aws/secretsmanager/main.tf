@@ -5,7 +5,16 @@ terraform {
       source  = "hashicorp/aws"
       version = ">= 6.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = ">= 3.5"
+    }
   }
+}
+
+# Unique suffix to avoid name collisions with deleted secrets (7-day tombstone)
+resource "random_id" "suffix" {
+  byte_length = 2
 }
 
 module "name" {
@@ -15,13 +24,15 @@ module "name" {
   luther_env     = var.environment
   org_name       = "luthersystems"
   component      = "insideout"
-  subcomponent   = "secretsmanager"
-  resource       = "secretsmanager"
+  subcomponent   = "sm"
+  resource       = "sm"
+  id             = random_id.suffix.hex
+  replication    = var.num_secrets
 }
 
 resource "aws_secretsmanager_secret" "secrets" {
   count = var.num_secrets
-  name  = "${var.project}-secret-${count.index}"
+  name  = module.name.names[count.index]
 
   tags = merge(module.name.tags, { Name = "${module.name.prefix}-${count.index}" }, var.tags)
 }

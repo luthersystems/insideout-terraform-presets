@@ -30,7 +30,7 @@ module "name" {
 # Networking
 # -----------------------------------------------------------------------------
 resource "aws_security_group" "rds" {
-  name        = "${var.project}-rds-sg"
+  name        = "${module.name.name}-sg"
   description = "Allow Postgres from allowed CIDRs"
   vpc_id      = var.vpc_id
 
@@ -53,7 +53,7 @@ resource "aws_security_group" "rds" {
 }
 
 resource "aws_db_subnet_group" "this" {
-  name       = "${var.project}-rds-subnets"
+  name       = "${module.name.name}-subnets"
   subnet_ids = var.subnet_ids
   tags       = merge(module.name.tags, { Name = "${module.name.prefix}-subnets" }, var.tags)
 }
@@ -75,7 +75,7 @@ resource "random_password" "db" {
 # Primary RDS instance (PostgreSQL)
 # -----------------------------------------------------------------------------
 resource "aws_db_instance" "primary" {
-  identifier = "${var.project}-postgres"
+  identifier = module.name.name
   engine     = "postgres"
 
   # If var.engine_version is null, set major only (e.g., "15") so AWS chooses the preferred minor.
@@ -126,7 +126,7 @@ locals {
 
 resource "aws_db_instance" "replica" {
   count          = local.replica_count
-  identifier     = "${var.project}-postgres-replica-${count.index + 1}"
+  identifier     = "${module.name.name}-replica-${count.index + 1}"
   engine         = "postgres"
   instance_class = var.instance_class
 
@@ -145,4 +145,6 @@ resource "aws_db_instance" "replica" {
   max_allocated_storage = var.max_allocated_storage
 
   skip_final_snapshot = true
+
+  tags = merge(module.name.tags, var.tags)
 }

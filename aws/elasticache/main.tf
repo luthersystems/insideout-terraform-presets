@@ -12,6 +12,11 @@ terraform {
   }
 }
 
+# Unique suffix to avoid log group name collisions on destroy/recreate
+resource "random_id" "suffix" {
+  byte_length = 2
+}
+
 module "name" {
   source         = "github.com/luthersystems/tf-modules.git//luthername?ref=v55.13.4"
   luther_project = var.project
@@ -19,15 +24,16 @@ module "name" {
   luther_env     = var.environment
   org_name       = "luthersystems"
   component      = "insideout"
-  subcomponent   = "elasticache"
-  resource       = "elasticache"
+  subcomponent   = "redis"
+  resource       = "redis"
+  id             = random_id.suffix.hex
 }
 
 # -----------------------------------------------------------------------------
 # Networking
 # -----------------------------------------------------------------------------
 resource "aws_security_group" "redis" {
-  name        = "${var.project}-redis-sg"
+  name        = "${module.name.name}-sg"
   description = "Allow Redis (6379) from allowed CIDRs"
   vpc_id      = var.vpc_id
 
@@ -50,14 +56,14 @@ resource "aws_security_group" "redis" {
 }
 
 resource "aws_elasticache_subnet_group" "this" {
-  name       = "${var.project}-redis-subnets"
+  name       = "${module.name.name}-subnets"
   subnet_ids = var.cache_subnet_ids
   tags       = merge(module.name.tags, { Name = "${module.name.prefix}-subnets" }, var.tags)
 }
 
 # Optional custom parameter group (family redis7)
 resource "aws_elasticache_parameter_group" "this" {
-  name   = "${var.project}-redis-pg"
+  name   = "${module.name.name}-pg"
   family = "redis7"
 
   parameter {
@@ -73,7 +79,7 @@ resource "aws_elasticache_parameter_group" "this" {
 # -----------------------------------------------------------------------------
 resource "aws_cloudwatch_log_group" "redis" {
   count             = var.enable_cloudwatch_logs ? 1 : 0
-  name              = "/aws/elasticache/${var.project}"
+  name              = "/aws/elasticache/${module.name.name}"
   retention_in_days = 30
   tags              = merge(module.name.tags, { Name = "${module.name.prefix}-logs" }, var.tags)
 }
@@ -95,6 +101,7 @@ resource "random_password" "auth" {
 # Redis Replication Group (cluster-mode disabled)
 # -----------------------------------------------------------------------------
 resource "aws_elasticache_replication_group" "this" {
+  # Replication group IDs limited to 40 chars — use var.project
   replication_group_id = "${var.project}-redis"
   description          = "Redis for ${var.project}"
 

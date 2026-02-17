@@ -15,20 +15,20 @@ module "name" {
   luther_env     = var.environment
   org_name       = "luthersystems"
   component      = "insideout"
-  subcomponent   = "cloudwatchmonitoring"
-  resource       = "cloudwatchmonitoring"
+  subcomponent   = "cwm"
+  resource       = "cwm"
 }
 
 
 locals {
-  alarm_name_prefix = "${var.project}-monitoring"
+  alarm_name_prefix = module.name.name
 }
 
 # -----------------------------------------------------------------------------
 # Alarm notifications
 # -----------------------------------------------------------------------------
 resource "aws_sns_topic" "alarms" {
-  name = "${var.project}-cw-alarms"
+  name = "${module.name.name}-alarms"
   tags = merge(module.name.tags, var.tags)
 }
 
@@ -235,6 +235,6 @@ locals {
 }
 
 resource "aws_cloudwatch_dashboard" "main" {
-  dashboard_name = "${var.project}-monitoring"
+  dashboard_name = module.name.name
   dashboard_body = jsonencode({ widgets = local.dash_metrics })
 }
