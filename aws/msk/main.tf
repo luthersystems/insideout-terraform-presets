@@ -5,7 +5,16 @@ terraform {
       source  = "hashicorp/aws"
       version = ">= 6.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = ">= 3.5"
+    }
   }
+}
+
+# Unique suffix to avoid log group/config name collisions on destroy/recreate
+resource "random_id" "suffix" {
+  byte_length = 2
 }
 
 module "name" {
@@ -17,10 +26,11 @@ module "name" {
   component      = "insideout"
   subcomponent   = "msk"
   resource       = "msk"
+  id             = random_id.suffix.hex
 }
 
 locals {
-  name = coalesce(var.cluster_name, "${var.project}-msk")
+  name = coalesce(var.cluster_name, module.name.name)
   tags = merge(module.name.tags, var.tags)
 }
 

@@ -5,7 +5,16 @@ terraform {
       source  = "hashicorp/aws"
       version = ">= 6.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = ">= 3.5"
+    }
   }
+}
+
+# Unique suffix to avoid log group name collisions on destroy/recreate
+resource "random_id" "suffix" {
+  byte_length = 2
 }
 
 module "name" {
@@ -17,13 +26,14 @@ module "name" {
   component      = "insideout"
   subcomponent   = "lambda"
   resource       = "lambda"
+  id             = random_id.suffix.hex
 }
 
 # -----------------------------------------------------------------------------
 # IAM Role for Lambda
 # -----------------------------------------------------------------------------
 resource "aws_iam_role" "lambda_exec" {
-  name = "${var.project}-lambda-exec"
+  name = "${module.name.name}-exec"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -61,7 +71,7 @@ locals {
 
 resource "aws_security_group" "lambda" {
   count       = local.create_default_sg ? 1 : 0
-  name        = "${var.project}-lambda-sg"
+  name        = "${module.name.name}-sg"
   description = "Default security group for Lambda VPC access"
   vpc_id      = var.vpc_id
 
@@ -72,14 +82,14 @@ resource "aws_security_group" "lambda" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = merge(module.name.tags, { Name = "${var.project}-lambda-sg" }, var.tags)
+  tags = merge(module.name.tags, { Name = "${module.name.name}-sg" }, var.tags)
 }
 
 # -----------------------------------------------------------------------------
 # CloudWatch Log Group
 # -----------------------------------------------------------------------------
 resource "aws_cloudwatch_log_group" "lambda" {
-  name              = "/aws/lambda/${var.project}-function"
+  name              = "/aws/lambda/${module.name.name}"
   retention_in_days = var.log_retention_days
   tags              = merge(module.name.tags, var.tags)
 }
@@ -88,7 +98,7 @@ resource "aws_cloudwatch_log_group" "lambda" {
 # Lambda Function
 # -----------------------------------------------------------------------------
 resource "aws_lambda_function" "this" {
-  function_name = "${var.project}-function"
+  function_name = module.name.name
   role          = aws_iam_role.lambda_exec.arn
   handler       = var.handler
   runtime       = var.runtime

@@ -45,7 +45,7 @@ module "this" {
   source  = "terraform-aws-modules/vpc/aws"
   version = "~> 6.0"
 
-  name = "${var.project}-vpc"
+  name = module.name.name
   cidr = var.vpc_cidr
   azs  = local.azs
 

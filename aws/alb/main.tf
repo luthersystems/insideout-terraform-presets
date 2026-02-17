@@ -21,7 +21,7 @@ module "name" {
 
 # Security group for the public ALB
 resource "aws_security_group" "alb_sg" {
-  name        = "${var.project}-alb-sg"
+  name        = "${module.name.name}-sg"
   description = "Security group for Application Load Balancer"
   vpc_id      = var.vpc_id
 
@@ -56,7 +56,7 @@ resource "aws_security_group" "alb_sg" {
 
 # Internet-facing ALB
 resource "aws_lb" "alb" {
-  name               = "${var.project}-alb"
+  name               = module.name.name
   load_balancer_type = "application"
   internal           = false
   security_groups    = [aws_security_group.alb_sg.id]
@@ -69,7 +69,7 @@ resource "aws_lb" "alb" {
 
 # Default target group (attach ECS/EKS/instances later)
 resource "aws_lb_target_group" "app" {
-  name        = "${var.project}-tg"
+  name        = "${module.name.name}-tg"
   vpc_id      = var.vpc_id
   port        = var.target_port
   protocol    = var.target_protocol

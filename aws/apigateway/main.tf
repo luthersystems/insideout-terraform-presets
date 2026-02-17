@@ -15,12 +15,12 @@ module "name" {
   luther_env     = var.environment
   org_name       = "luthersystems"
   component      = "insideout"
-  subcomponent   = "apigateway"
-  resource       = "apigateway"
+  subcomponent   = "apigw"
+  resource       = "apigw"
 }
 
 resource "aws_apigatewayv2_api" "api" {
-  name          = "${var.project}-api"
+  name          = module.name.name
   protocol_type = "HTTP"
 
   tags = merge(module.name.tags, var.tags)

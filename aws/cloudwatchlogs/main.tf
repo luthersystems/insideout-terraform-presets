@@ -19,8 +19,9 @@ module "name" {
   luther_env     = var.environment
   org_name       = "luthersystems"
   component      = "insideout"
-  subcomponent   = "cloudwatchlogs"
-  resource       = "cloudwatchlogs"
+  subcomponent   = "cwl"
+  resource       = "cwl"
+  id             = random_id.suffix.hex
 }
 
 
@@ -33,7 +34,7 @@ resource "random_id" "suffix" {
 # CloudWatch Logs — app log group (private, optional KMS)
 # -----------------------------------------------------------------------------
 resource "aws_cloudwatch_log_group" "app" {
-  name              = "/${var.project}/${random_id.suffix.hex}/app"
+  name              = "/${module.name.name}/app"
   retention_in_days = var.retention_in_days
   kms_key_id        = var.kms_key_arn != "" ? var.kms_key_arn : null
 
@@ -62,7 +63,7 @@ data "aws_iam_policy_document" "assume" {
 }
 
 resource "aws_iam_role" "writer" {
-  name               = "${var.project}-cwlogs-writer-${random_id.suffix.hex}"
+  name               = "${module.name.name}-writer"
   assume_role_policy = data.aws_iam_policy_document.assume.json
   tags               = merge(module.name.tags, var.tags)
 }
@@ -88,8 +89,9 @@ data "aws_iam_policy_document" "writer" {
 }
 
 resource "aws_iam_policy" "writer" {
-  name   = "${var.project}-cwlogs-writer-${random_id.suffix.hex}"
+  name   = "${module.name.name}-writer-policy"
   policy = data.aws_iam_policy_document.writer.json
+  tags   = merge(module.name.tags, var.tags)
 }
 
 resource "aws_iam_role_policy_attachment" "writer" {
