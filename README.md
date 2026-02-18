@@ -1,6 +1,6 @@
 # InsideOut Terraform Presets
 
-> **Note:** This project is currently in **Beta** and is considered a prototype. It is not yet recommended for mission-critical production workloads without review.
+> **Note:** This project is currently in **Beta**. Always review the terraforms before deploying mission-critical production workloads.
 
 This repository contains the standard, tested Terraform module presets used by [InsideOut](https://insideout.luthersystems.com) to generate cloud infrastructure.
 
