@@ -139,6 +139,12 @@ variable "root_volume_size" {
   }
 }
 
+variable "enable_instance_connect" {
+  description = "Restrict port 22 ingress to EC2 Instance Connect service IPs only"
+  type        = bool
+  default     = false
+}
+
 variable "tags" {
   description = "Additional AWS tags applied to created resources"
   type        = map(string)

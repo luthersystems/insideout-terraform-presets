@@ -78,6 +78,23 @@ resource "aws_security_group" "this" {
   tags = merge(module.name.tags, { Name = "${module.name.prefix}-sg" }, var.tags)
 }
 
+data "aws_ip_ranges" "ec2_instance_connect" {
+  count    = var.enable_instance_connect ? 1 : 0
+  regions  = [var.region]
+  services = ["EC2_INSTANCE_CONNECT"]
+}
+
+resource "aws_security_group_rule" "instance_connect_ssh" {
+  count             = var.enable_instance_connect ? 1 : 0
+  type              = "ingress"
+  from_port         = 22
+  to_port           = 22
+  protocol          = "tcp"
+  cidr_blocks       = data.aws_ip_ranges.ec2_instance_connect[0].cidr_blocks
+  security_group_id = aws_security_group.this.id
+  description       = "SSH from EC2 Instance Connect service IPs"
+}
+
 resource "aws_security_group_rule" "custom_ingress" {
   for_each = toset([for p in var.custom_ingress_ports : tostring(p)])
 
