@@ -9,7 +9,7 @@ terraform {
 }
 
 module "name" {
-  source         = "github.com/luthersystems/tf-modules.git//luthername?ref=v55.13.4"
+  source         = "github.com/luthersystems/tf-modules.git//luthername?ref=v55.15.0"
   luther_project = var.project
   aws_region     = var.region
   luther_env     = var.environment
