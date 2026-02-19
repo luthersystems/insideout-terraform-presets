@@ -20,7 +20,7 @@ module "name" {
 }
 
 resource "aws_iam_role" "bedrock_kb" {
-  name = "${module.name.name}-role"
+  name = "${var.project}-bedrock-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -39,7 +39,7 @@ resource "aws_iam_role" "bedrock_kb" {
 }
 
 resource "aws_iam_role_policy" "bedrock_kb" {
-  name = "${module.name.name}-policy"
+  name = "${var.project}-bedrock-policy"
   role = aws_iam_role.bedrock_kb.id
 
   policy = jsonencode({
