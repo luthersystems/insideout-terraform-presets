@@ -67,7 +67,7 @@ data "aws_iam_policy_document" "ec2_assume_role" {
 }
 
 resource "aws_iam_role" "bastion_role" {
-  name               = "${module.name.name}-role"
+  name               = "${var.project}-bastion-role"
   assume_role_policy = data.aws_iam_policy_document.ec2_assume_role.json
   tags               = merge(module.name.tags, var.tags)
 }
@@ -78,7 +78,7 @@ resource "aws_iam_role_policy_attachment" "ssm_core" {
 }
 
 resource "aws_iam_instance_profile" "bastion_profile" {
-  name = "${module.name.name}-profile"
+  name = "${var.project}-bastion-profile"
   role = aws_iam_role.bastion_role.name
 }
 

@@ -62,7 +62,7 @@ data "aws_iam_policy_document" "assume" {
 }
 
 resource "aws_iam_role" "writer" {
-  name               = "${module.name.name}-writer"
+  name               = "${var.project}-cwl-writer"
   assume_role_policy = data.aws_iam_policy_document.assume.json
   tags               = merge(module.name.tags, var.tags)
 }
@@ -88,7 +88,7 @@ data "aws_iam_policy_document" "writer" {
 }
 
 resource "aws_iam_policy" "writer" {
-  name   = "${module.name.name}-writer-policy"
+  name   = "${var.project}-cwl-writer-policy"
   policy = data.aws_iam_policy_document.writer.json
   tags   = merge(module.name.tags, var.tags)
 }

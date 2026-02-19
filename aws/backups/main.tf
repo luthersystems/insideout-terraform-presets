@@ -289,6 +289,15 @@ resource "aws_backup_selection" "rds" {
   iam_role_arn = aws_iam_role.backup.arn
 
   resources = local.rds_norm.selection.resource_arns
+
+  dynamic "selection_tag" {
+    for_each = toset([for t in local.rds_norm.selection.selection_tags : jsonencode(t)])
+    content {
+      key   = jsondecode(selection_tag.value).key
+      type  = jsondecode(selection_tag.value).type
+      value = jsondecode(selection_tag.value).value
+    }
+  }
 }
 
 # DynamoDB
@@ -299,6 +308,15 @@ resource "aws_backup_selection" "dynamodb" {
   iam_role_arn = aws_iam_role.backup.arn
 
   resources = local.dynamodb_norm.selection.resource_arns
+
+  dynamic "selection_tag" {
+    for_each = toset([for t in local.dynamodb_norm.selection.selection_tags : jsonencode(t)])
+    content {
+      key   = jsondecode(selection_tag.value).key
+      type  = jsondecode(selection_tag.value).type
+      value = jsondecode(selection_tag.value).value
+    }
+  }
 }
 
 # S3
@@ -309,4 +327,13 @@ resource "aws_backup_selection" "s3" {
   iam_role_arn = aws_iam_role.backup.arn
 
   resources = local.s3_norm.selection.resource_arns
+
+  dynamic "selection_tag" {
+    for_each = toset([for t in local.s3_norm.selection.selection_tags : jsonencode(t)])
+    content {
+      key   = jsondecode(selection_tag.value).key
+      type  = jsondecode(selection_tag.value).type
+      value = jsondecode(selection_tag.value).value
+    }
+  }
 }

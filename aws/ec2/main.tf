@@ -122,7 +122,7 @@ data "aws_iam_policy_document" "ec2_assume_role" {
 }
 
 resource "aws_iam_role" "this" {
-  name               = "${module.name.name}-role"
+  name               = "${var.project}-ec2-role"
   assume_role_policy = data.aws_iam_policy_document.ec2_assume_role.json
   tags               = merge(module.name.tags, var.tags)
 }
@@ -133,7 +133,7 @@ resource "aws_iam_role_policy_attachment" "ssm_core" {
 }
 
 resource "aws_iam_instance_profile" "this" {
-  name = "${module.name.name}-profile"
+  name = "${var.project}-ec2-profile"
   role = aws_iam_role.this.name
 }
 

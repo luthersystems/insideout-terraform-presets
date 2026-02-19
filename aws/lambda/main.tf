@@ -33,7 +33,7 @@ module "name" {
 # IAM Role for Lambda
 # -----------------------------------------------------------------------------
 resource "aws_iam_role" "lambda_exec" {
-  name = "${module.name.name}-exec"
+  name = "${var.project}-lambda-exec"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -71,7 +71,7 @@ locals {
 
 resource "aws_security_group" "lambda" {
   count       = local.create_default_sg ? 1 : 0
-  name        = "${module.name.name}-sg"
+  name        = "${var.project}-lambda-sg"
   description = "Default security group for Lambda VPC access"
   vpc_id      = var.vpc_id
 
@@ -82,7 +82,7 @@ resource "aws_security_group" "lambda" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = merge(module.name.tags, { Name = "${module.name.name}-sg" }, var.tags)
+  tags = merge(module.name.tags, { Name = "${var.project}-lambda-sg" }, var.tags)
 }
 
 # -----------------------------------------------------------------------------
