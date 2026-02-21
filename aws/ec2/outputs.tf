@@ -31,6 +31,6 @@ output "region" {
 output "ec2_instance_connect_url" {
   description = "AWS Console URL for EC2 Instance Connect browser terminal"
   value = var.associate_public_ip ? (
-    "https://${var.region}.console.aws.amazon.com/ec2-instance-connect/ssh?connType=standard&instanceId=${aws_instance.this.id}&osUser=${var.os_type == "ubuntu" ? "ubuntu" : "ec2-user"}&region=${var.region}&sshPort=22"
+    "https://${var.region}.console.aws.amazon.com/ec2-instance-connect/ssh?connType=standard&instanceId=${aws_instance.this.id}&osUser=${var.os_type == "ubuntu" ? "ubuntu" : "ec2-user"}&region=${var.region}&sshPort=22&addressFamily=${var.ec2_instance_connect_address_family}"
   ) : null
 }

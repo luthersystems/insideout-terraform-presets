@@ -145,6 +145,16 @@ variable "enable_instance_connect" {
   default     = false
 }
 
+variable "ec2_instance_connect_address_family" {
+  description = "Address family for EC2 Instance Connect URL (ipv4 or ipv6)"
+  type        = string
+  default     = "ipv4"
+  validation {
+    condition     = contains(["ipv4", "ipv6"], var.ec2_instance_connect_address_family)
+    error_message = "ec2_instance_connect_address_family must be one of: ipv4, ipv6."
+  }
+}
+
 variable "tags" {
   description = "Additional AWS tags applied to created resources"
   type        = map(string)
