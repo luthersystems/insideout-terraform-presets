@@ -44,8 +44,20 @@ variable "az_count" {
   }
 }
 
+variable "enable_nat_gateway" {
+  description = "Enable NAT gateway for private subnets (set false for public-only VPCs)"
+  type        = bool
+  default     = true
+}
+
 variable "single_nat_gateway" {
   description = "Use a single NAT gateway (cost saver) instead of one per AZ"
+  type        = bool
+  default     = true
+}
+
+variable "enable_private_subnets" {
+  description = "Create private subnets alongside public subnets (set false for public-only VPCs)"
   type        = bool
   default     = true
 }

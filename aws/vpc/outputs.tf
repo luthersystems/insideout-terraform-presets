@@ -20,7 +20,7 @@ output "private_route_table_ids" {
 
 output "s3_gateway_endpoint_id" {
   description = "S3 VPC Gateway endpoint ID (if created)"
-  value       = try(aws_vpc_endpoint.s3.id, null)
+  value       = try(aws_vpc_endpoint.s3[0].id, null)
 }
 
 output "azs" {

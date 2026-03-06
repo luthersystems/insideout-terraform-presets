@@ -49,14 +49,14 @@ module "this" {
   cidr = var.vpc_cidr
   azs  = local.azs
 
-  private_subnets = local.private_subnet_cidrs
+  private_subnets = var.enable_private_subnets ? local.private_subnet_cidrs : []
   public_subnets  = local.public_subnet_cidrs
 
   enable_dns_support   = true
   enable_dns_hostnames = true
 
   # NAT/IGW
-  enable_nat_gateway = true
+  enable_nat_gateway = var.enable_nat_gateway
   single_nat_gateway = var.single_nat_gateway
 
   enable_vpn_gateway = false
@@ -73,6 +73,7 @@ module "this" {
 
 # Optional: S3 Gateway Endpoint for private subnets (no Internet needed for S3)
 resource "aws_vpc_endpoint" "s3" {
+  count             = var.enable_private_subnets ? 1 : 0
   vpc_id            = module.this.vpc_id
   service_name      = "com.amazonaws.${data.aws_region.current.region}.s3"
   vpc_endpoint_type = "Gateway"
