@@ -56,15 +56,10 @@ variable "single_nat_gateway" {
   default     = true
 }
 
-variable "vpc_mode" {
-  description = "VPC subnet mode: 'private' creates both private and public subnets, 'public' creates only public subnets"
-  type        = string
-  default     = "private"
-
-  validation {
-    condition     = contains(["public", "private"], var.vpc_mode)
-    error_message = "vpc_mode must be either 'public' or 'private'."
-  }
+variable "enable_private_subnets" {
+  description = "Create private subnets alongside public subnets (set false for public-only VPCs)"
+  type        = bool
+  default     = true
 }
 
 variable "environment" {
