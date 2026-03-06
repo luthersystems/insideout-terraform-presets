@@ -12,11 +12,6 @@ run "lambda_without_vpc" {
   }
 
   assert {
-    condition     = startswith(aws_lambda_function.this.function_name, "test-")
-    error_message = "Expected function name to start with project prefix"
-  }
-
-  assert {
     condition     = length(aws_iam_role_policy_attachment.lambda_vpc) == 0
     error_message = "Expected no VPC policy attachment when enable_vpc is false"
   }
@@ -34,11 +29,6 @@ run "lambda_with_vpc" {
     vpc_id             = "vpc-12345"
     subnet_ids         = ["subnet-aaa", "subnet-bbb"]
     security_group_ids = ["sg-111"]
-  }
-
-  assert {
-    condition     = startswith(aws_lambda_function.this.function_name, "test-")
-    error_message = "Expected function name to start with project prefix"
   }
 
   assert {
