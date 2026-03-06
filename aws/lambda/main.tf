@@ -27,6 +27,7 @@ module "name" {
   subcomponent   = "lambda"
   resource       = "lambda"
   id             = random_id.suffix.hex
+  max_length     = 64
 }
 
 # -----------------------------------------------------------------------------
