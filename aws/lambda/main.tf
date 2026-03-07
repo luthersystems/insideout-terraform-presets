@@ -57,7 +57,7 @@ resource "aws_iam_role_policy_attachment" "lambda_basic" {
 }
 
 resource "aws_iam_role_policy_attachment" "lambda_vpc" {
-  count      = var.enable_vpc ? 1 : 0
+  count      = local.enable_vpc_config ? 1 : 0
   role       = aws_iam_role.lambda_exec.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
 }
@@ -66,7 +66,8 @@ resource "aws_iam_role_policy_attachment" "lambda_vpc" {
 # Default Security Group (created when VPC-enabled and no SGs provided)
 # -----------------------------------------------------------------------------
 locals {
-  create_default_sg            = var.enable_vpc && length(var.security_group_ids) == 0
+  enable_vpc_config            = var.enable_vpc && length(var.subnet_ids) > 0
+  create_default_sg            = local.enable_vpc_config && length(var.security_group_ids) == 0
   effective_security_group_ids = local.create_default_sg ? [aws_security_group.lambda[0].id] : var.security_group_ids
 }
 
@@ -111,7 +112,7 @@ resource "aws_lambda_function" "this" {
   source_code_hash = fileexists("${path.module}/placeholder.zip") ? filebase64sha256("${path.module}/placeholder.zip") : null
 
   dynamic "vpc_config" {
-    for_each = var.enable_vpc ? [1] : []
+    for_each = local.enable_vpc_config ? [1] : []
     content {
       subnet_ids         = var.subnet_ids
       security_group_ids = local.effective_security_group_ids
