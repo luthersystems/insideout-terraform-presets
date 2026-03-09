@@ -17,6 +17,12 @@ module "name" {
   component      = "insideout"
   subcomponent   = "eks"
   resource       = "eks"
+
+  # AWS IAM name_prefix is limited to 38 characters. The upstream
+  # terraform-aws-modules/eks appends suffixes like "-cluster-" (9 chars)
+  # and "-eks-auto-" (10 chars) as name_prefix values, so the base
+  # cluster name must be ≤ 28 chars to stay within the limit.
+  max_length = 28
 }
 
 locals {
