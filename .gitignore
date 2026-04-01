@@ -7,5 +7,9 @@
 # Temporary files
 .tmp/
 
+# insideout-import binary (at root only, not cmd/insideout-import/)
+/insideout-import
+imported/
+
 # Claude Code local settings (keep shared .claude/settings.json)
 .claude/settings.local.json
