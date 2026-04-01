@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	ddbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
@@ -107,5 +108,17 @@ func TestDynamoDBDiscoverer_PrefixFilter(t *testing.T) {
 	}
 	if len(resources) != 0 {
 		t.Errorf("expected 0 resources with non-matching prefix, got %d", len(resources))
+	}
+}
+
+func TestDynamoDBDiscoverer_APIError(t *testing.T) {
+	mock := &mockDynamoDB{
+		listTablesErr: fmt.Errorf("throttling exception"),
+	}
+
+	d := &DynamoDBDiscoverer{client: mock}
+	_, err := d.Discover(context.Background(), Filter{})
+	if err == nil {
+		t.Fatal("expected error from API failure")
 	}
 }

@@ -97,7 +97,16 @@ func TestSQSDiscoverer_Discover(t *testing.T) {
 		t.Errorf("resources[0].TerraformType = %q", resources[0].TerraformType)
 	}
 	if resources[1].Name != "my-project-queue-dlq" {
-		t.Errorf("resources[1].Name = %q", resources[1].Name)
+		t.Errorf("resources[1].Name = %q, want %q", resources[1].Name, "my-project-queue-dlq")
+	}
+	if resources[1].ImportID != dlqURL {
+		t.Errorf("resources[1].ImportID = %q, want queue URL", resources[1].ImportID)
+	}
+	if resources[1].ARN != "arn:aws:sqs:us-east-1:123456789012:my-project-queue-dlq" {
+		t.Errorf("resources[1].ARN = %q", resources[1].ARN)
+	}
+	if resources[1].TerraformType != "aws_sqs_queue" {
+		t.Errorf("resources[1].TerraformType = %q", resources[1].TerraformType)
 	}
 }
 

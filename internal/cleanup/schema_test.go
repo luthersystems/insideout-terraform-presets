@@ -1,10 +1,10 @@
 package cleanup
 
 import (
+	"strings"
 	"testing"
 
 	tfjson "github.com/hashicorp/terraform-json"
-	"github.com/zclconf/go-cty/cty"
 )
 
 func TestExtractSchemaInfo(t *testing.T) {
@@ -178,6 +178,16 @@ func TestCleanupWithSchema_WriteOnly(t *testing.T) {
 	for _, block := range body.Blocks() {
 		if block.Type() == "lifecycle" {
 			lifecycleFound = true
+			// Verify ignore_changes contains the write-only attribute
+			ic := block.Body().GetAttribute("ignore_changes")
+			if ic == nil {
+				t.Error("lifecycle block should have ignore_changes attribute")
+			} else {
+				icTokens := string(ic.Expr().BuildTokens(nil).Bytes())
+				if !strings.Contains(icTokens, "force_overwrite_replica_secret") {
+					t.Errorf("ignore_changes should contain force_overwrite_replica_secret, got: %s", icTokens)
+				}
+			}
 		}
 	}
 	if !lifecycleFound {
@@ -187,7 +197,11 @@ func TestCleanupWithSchema_WriteOnly(t *testing.T) {
 	// recovery_window_in_days should be set to default 30 (nullDefaults)
 	attr := body.GetAttribute("recovery_window_in_days")
 	if attr == nil {
-		t.Error("recovery_window_in_days should be set to default")
+		t.Fatal("recovery_window_in_days should be set to default")
+	}
+	rwdTokens := strings.TrimSpace(string(attr.Expr().BuildTokens(nil).Bytes()))
+	if rwdTokens != "30" {
+		t.Errorf("recovery_window_in_days = %q, want %q", rwdTokens, "30")
 	}
 }
 
@@ -208,7 +222,3 @@ func TestWriteOnlyKeys(t *testing.T) {
 		}
 	}
 }
-
-// Reuse the parseHCLResource helper from cleanup_test.go
-// (it's in the same package so it's available)
-var _ = cty.StringVal // ensure cty is used in test deps

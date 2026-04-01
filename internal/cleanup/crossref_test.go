@@ -105,6 +105,35 @@ func TestUnresolvedReferences(t *testing.T) {
 	}
 }
 
+func TestUnresolvedReferences_SkipsJSONPolicyAttrs(t *testing.T) {
+	hcl := `resource "aws_sqs_queue" "q" {
+  name           = "my-queue"
+  redrive_policy = "{\"deadLetterTargetArn\":\"arn:aws:sqs:us-east-1:123456789012:my-dlq\",\"maxReceiveCount\":3}"
+  role           = "arn:aws:iam::123456789012:role/my-role"
+}
+`
+	refMap := BuildCrossRefMap(nil)
+	unresolved, err := UnresolvedReferences([]byte(hcl), refMap)
+	if err != nil {
+		t.Fatalf("error = %v", err)
+	}
+
+	// The IAM role ARN should be found as unresolved
+	foundRole := false
+	for _, ref := range unresolved {
+		if ref == "arn:aws:iam::123456789012:role/my-role" {
+			foundRole = true
+		}
+		// The DLQ ARN inside redrive_policy should NOT appear
+		if ref == "arn:aws:sqs:us-east-1:123456789012:my-dlq" {
+			t.Error("ARN inside redrive_policy (JSON policy attr) should NOT be reported as unresolved")
+		}
+	}
+	if !foundRole {
+		t.Error("IAM role ARN in 'role' attribute should be reported as unresolved")
+	}
+}
+
 func TestLooksLikeAWSRef(t *testing.T) {
 	tests := []struct {
 		input string

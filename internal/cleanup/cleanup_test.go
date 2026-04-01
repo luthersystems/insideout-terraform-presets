@@ -1,6 +1,7 @@
 package cleanup
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/hashicorp/hcl/v2"
@@ -224,9 +225,35 @@ func TestFixupLambda_NoneSet_InsertsPlaceholder(t *testing.T) {
 
 	body := parseHCLResource(t, got)
 
-	// Should add placeholder filename
-	if body.GetAttribute("filename") == nil {
+	// Should add placeholder filename with correct value
+	fnAttr := body.GetAttribute("filename")
+	if fnAttr == nil {
 		t.Fatal("should set filename to placeholder.zip when none specified")
+	}
+	fnVal := strings.TrimSpace(string(fnAttr.Expr().BuildTokens(nil).Bytes()))
+	if fnVal != `"placeholder.zip"` {
+		t.Errorf("filename = %s, want %q", fnVal, "placeholder.zip")
+	}
+	// Should have lifecycle { ignore_changes } for deployment artifacts
+	hasLifecycle := false
+	for _, block := range body.Blocks() {
+		if block.Type() == "lifecycle" {
+			hasLifecycle = true
+			ic := block.Body().GetAttribute("ignore_changes")
+			if ic == nil {
+				t.Error("lifecycle should have ignore_changes")
+			} else {
+				icStr := string(ic.Expr().BuildTokens(nil).Bytes())
+				for _, expected := range []string{"filename", "source_code_hash", "publish"} {
+					if !strings.Contains(icStr, expected) {
+						t.Errorf("ignore_changes should contain %q, got: %s", expected, icStr)
+					}
+				}
+			}
+		}
+	}
+	if !hasLifecycle {
+		t.Error("Lambda should have lifecycle block")
 	}
 	// Should remove the other code source attrs
 	for _, removed := range []string{"image_uri", "s3_bucket", "s3_key"} {
