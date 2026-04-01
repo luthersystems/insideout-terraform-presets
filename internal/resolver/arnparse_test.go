@@ -147,24 +147,28 @@ func TestResourceIDToTerraform(t *testing.T) {
 	tests := []struct {
 		id       string
 		wantType string
+		wantID   string
 		wantOK   bool
 	}{
-		{"sg-abc123", "aws_security_group", true},
-		{"subnet-def456", "aws_subnet", true},
-		{"vpc-ghi789", "aws_vpc", true},
-		{"igw-jkl012", "aws_internet_gateway", true},
-		{"nat-mno345", "aws_nat_gateway", true},
-		{"just-a-name", "", false},
-		{"", "", false},
+		{"sg-abc123", "aws_security_group", "sg-abc123", true},
+		{"subnet-def456", "aws_subnet", "subnet-def456", true},
+		{"vpc-ghi789", "aws_vpc", "vpc-ghi789", true},
+		{"igw-jkl012", "aws_internet_gateway", "igw-jkl012", true},
+		{"nat-mno345", "aws_nat_gateway", "nat-mno345", true},
+		{"just-a-name", "", "", false},
+		{"", "", "", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.id, func(t *testing.T) {
-			gotType, _, gotOK := ResourceIDToTerraform(tt.id)
+			gotType, gotID, gotOK := ResourceIDToTerraform(tt.id)
 			if gotOK != tt.wantOK {
 				t.Errorf("ResourceIDToTerraform(%q) ok = %v, want %v", tt.id, gotOK, tt.wantOK)
 			}
 			if gotType != tt.wantType {
 				t.Errorf("ResourceIDToTerraform(%q) type = %q, want %q", tt.id, gotType, tt.wantType)
+			}
+			if gotID != tt.wantID {
+				t.Errorf("ResourceIDToTerraform(%q) id = %q, want %q", tt.id, gotID, tt.wantID)
 			}
 		})
 	}
@@ -172,15 +176,39 @@ func TestResourceIDToTerraform(t *testing.T) {
 
 func TestResolveReference(t *testing.T) {
 	tests := []struct {
-		name     string
-		ref      string
-		wantType string
-		wantNil  bool
+		name       string
+		ref        string
+		wantType   string
+		wantID     string
+		wantName   string
+		wantNil    bool
 	}{
-		{"IAM role ARN", "arn:aws:iam::123:role/test", "aws_iam_role", false},
-		{"security group ID", "sg-abc123", "aws_security_group", false},
-		{"unknown", "unknown-thing", "", true},
-		{"empty", "", "", true},
+		{
+			"IAM role ARN",
+			"arn:aws:iam::123:role/test",
+			"aws_iam_role", "test", "test",
+			false,
+		},
+		{
+			"IAM role with path",
+			"arn:aws:iam::123:role/service-role/my-role",
+			"aws_iam_role", "my-role", "my-role",
+			false,
+		},
+		{
+			"security group ID",
+			"sg-abc123",
+			"aws_security_group", "sg-abc123", "sg-abc123",
+			false,
+		},
+		{
+			"Lambda function ARN",
+			"arn:aws:lambda:us-east-1:123:function:my-func",
+			"aws_lambda_function", "my-func", "my-func",
+			false,
+		},
+		{"unknown", "unknown-thing", "", "", "", true},
+		{"empty", "", "", "", "", true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -196,6 +224,12 @@ func TestResolveReference(t *testing.T) {
 			}
 			if got.TerraformType != tt.wantType {
 				t.Errorf("type = %q, want %q", got.TerraformType, tt.wantType)
+			}
+			if got.ImportID != tt.wantID {
+				t.Errorf("import_id = %q, want %q", got.ImportID, tt.wantID)
+			}
+			if got.Name != tt.wantName {
+				t.Errorf("name = %q, want %q", got.Name, tt.wantName)
 			}
 		})
 	}

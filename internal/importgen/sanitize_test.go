@@ -59,6 +59,11 @@ func TestDeduplicate(t *testing.T) {
 			[]string{"vpc", "subnet", "vpc_1", "route", "vpc_2"},
 		},
 		{
+			"collision with existing suffix",
+			[]string{"queue", "queue_1", "queue"},
+			[]string{"queue", "queue_1", "queue_1"},
+		},
+		{
 			"empty",
 			[]string{},
 			[]string{},

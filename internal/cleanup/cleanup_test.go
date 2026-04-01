@@ -1,11 +1,29 @@
 package cleanup
 
 import (
-	"strings"
 	"testing"
+
+	"github.com/hashicorp/hcl/v2"
+	"github.com/hashicorp/hcl/v2/hclwrite"
 )
 
-func TestCleanupGeneratedHCL(t *testing.T) {
+// parseHCLResource parses HCL and returns the body of the first resource block.
+func parseHCLResource(t *testing.T, src []byte) *hclwrite.Body {
+	t.Helper()
+	f, diags := hclwrite.ParseConfig(src, "test.tf", hcl.Pos{})
+	if diags.HasErrors() {
+		t.Fatalf("failed to parse output HCL: %s", diags.Error())
+	}
+	for _, block := range f.Body().Blocks() {
+		if block.Type() == "resource" {
+			return block.Body()
+		}
+	}
+	t.Fatal("no resource block found in output")
+	return nil
+}
+
+func TestCleanupGeneratedHCL_SQS(t *testing.T) {
 	input := `resource "aws_sqs_queue" "my_queue" {
   name                       = "my-queue"
   delay_seconds              = 0
@@ -24,35 +42,24 @@ func TestCleanupGeneratedHCL(t *testing.T) {
 		t.Fatalf("CleanupGeneratedHCL() error = %v", err)
 	}
 
-	output := string(got)
+	body := parseHCLResource(t, got)
 
 	// Should keep
-	if !strings.Contains(output, `name`) {
-		t.Error("should keep 'name' attribute")
-	}
-	if !strings.Contains(output, `delay_seconds`) {
-		t.Error("should keep 'delay_seconds' attribute")
-	}
-	if !strings.Contains(output, `tags`) {
-		t.Error("should keep 'tags' attribute")
+	for _, keep := range []string{"name", "delay_seconds", "max_message_size", "tags", "visibility_timeout_seconds"} {
+		if body.GetAttribute(keep) == nil {
+			t.Errorf("should keep %q attribute", keep)
+		}
 	}
 
 	// Should remove
-	if strings.Contains(output, `arn =`) || strings.Contains(output, `arn  `) {
-		t.Error("should remove 'arn' attribute")
-	}
-	if strings.Contains(output, `url =`) || strings.Contains(output, `url  `) {
-		t.Error("should remove 'url' attribute")
-	}
-	if strings.Contains(output, `tags_all`) {
-		t.Error("should remove 'tags_all' attribute")
-	}
-	if strings.Contains(output, `id =`) || strings.Contains(output, `id  `) {
-		t.Error("should remove 'id' attribute")
+	for _, remove := range []string{"arn", "url", "id", "tags_all"} {
+		if body.GetAttribute(remove) != nil {
+			t.Errorf("should remove %q attribute", remove)
+		}
 	}
 }
 
-func TestCleanupDynamoDB(t *testing.T) {
+func TestCleanupGeneratedHCL_DynamoDB(t *testing.T) {
 	input := `resource "aws_dynamodb_table" "my_table" {
   name           = "my-table"
   billing_mode   = "PAY_PER_REQUEST"
@@ -74,22 +81,25 @@ func TestCleanupDynamoDB(t *testing.T) {
 		t.Fatalf("CleanupGeneratedHCL() error = %v", err)
 	}
 
-	output := string(got)
-	if !strings.Contains(output, `name`) {
-		t.Error("should keep 'name'")
+	body := parseHCLResource(t, got)
+
+	for _, keep := range []string{"name", "billing_mode", "hash_key"} {
+		if body.GetAttribute(keep) == nil {
+			t.Errorf("should keep %q", keep)
+		}
 	}
-	if !strings.Contains(output, `hash_key`) {
-		t.Error("should keep 'hash_key'")
+	for _, remove := range []string{"arn", "stream_arn", "stream_label", "id", "tags_all"} {
+		if body.GetAttribute(remove) != nil {
+			t.Errorf("should remove %q", remove)
+		}
 	}
-	if strings.Contains(output, "stream_arn") {
-		t.Error("should remove 'stream_arn'")
-	}
-	if strings.Contains(output, "stream_label") {
-		t.Error("should remove 'stream_label'")
+	// Verify nested attribute block is preserved
+	if len(body.Blocks()) == 0 {
+		t.Error("should preserve nested 'attribute' block")
 	}
 }
 
-func TestCleanupLambda(t *testing.T) {
+func TestCleanupGeneratedHCL_Lambda(t *testing.T) {
 	input := `resource "aws_lambda_function" "my_func" {
   function_name = "my-func"
   handler       = "index.handler"
@@ -109,19 +119,16 @@ func TestCleanupLambda(t *testing.T) {
 		t.Fatalf("CleanupGeneratedHCL() error = %v", err)
 	}
 
-	output := string(got)
-	if !strings.Contains(output, "function_name") {
-		t.Error("should keep 'function_name'")
+	body := parseHCLResource(t, got)
+
+	for _, keep := range []string{"function_name", "handler", "runtime", "role"} {
+		if body.GetAttribute(keep) == nil {
+			t.Errorf("should keep %q", keep)
+		}
 	}
-	if !strings.Contains(output, "handler") {
-		t.Error("should keep 'handler'")
-	}
-	if !strings.Contains(output, "role") {
-		t.Error("should keep 'role'")
-	}
-	for _, removed := range []string{"invoke_arn", "last_modified", "version", "code_sha256"} {
-		if strings.Contains(output, removed) {
-			t.Errorf("should remove '%s'", removed)
+	for _, remove := range []string{"arn", "invoke_arn", "last_modified", "version", "code_sha256", "id", "tags_all"} {
+		if body.GetAttribute(remove) != nil {
+			t.Errorf("should remove %q", remove)
 		}
 	}
 }
@@ -141,17 +148,35 @@ resource "aws_sqs_queue" "q" {
 	if err != nil {
 		t.Fatalf("error = %v", err)
 	}
-	output := string(got)
-	if !strings.Contains(output, "terraform") {
+
+	f, diags := hclwrite.ParseConfig(got, "test.tf", hcl.Pos{})
+	if diags.HasErrors() {
+		t.Fatalf("parse error: %s", diags.Error())
+	}
+
+	hasTerraform := false
+	hasResource := false
+	for _, block := range f.Body().Blocks() {
+		switch block.Type() {
+		case "terraform":
+			hasTerraform = true
+		case "resource":
+			hasResource = true
+		}
+	}
+	if !hasTerraform {
 		t.Error("should preserve terraform block")
+	}
+	if !hasResource {
+		t.Error("should preserve resource block")
 	}
 }
 
 func TestCleanupUnknownResourceType(t *testing.T) {
 	input := `resource "aws_unknown_thing" "x" {
-  name = "x"
-  arn  = "arn:..."
-  id   = "x-123"
+  name     = "x"
+  arn      = "arn:..."
+  id       = "x-123"
   tags_all = {}
 }
 `
@@ -159,13 +184,147 @@ func TestCleanupUnknownResourceType(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error = %v", err)
 	}
-	output := string(got)
-	// Should still remove universal attrs (id, tags_all)
-	if strings.Contains(output, "tags_all") {
+
+	body := parseHCLResource(t, got)
+
+	// Universal attrs should be removed
+	if body.GetAttribute("tags_all") != nil {
 		t.Error("should remove tags_all even for unknown types")
 	}
-	// But keep arn since it's not in the computed list for this type
-	if !strings.Contains(output, "arn") {
+	if body.GetAttribute("id") != nil {
+		t.Error("should remove id even for unknown types")
+	}
+	// arn is NOT in universal list, so should be kept for unknown types
+	if body.GetAttribute("arn") == nil {
 		t.Error("should keep arn for unknown resource types")
+	}
+	if body.GetAttribute("name") == nil {
+		t.Error("should keep name for unknown resource types")
+	}
+}
+
+// --- Lambda fixup tests (all 4 branches) ---
+
+func TestFixupLambda_NoneSet_InsertsPlaceholder(t *testing.T) {
+	input := `resource "aws_lambda_function" "f" {
+  function_name = "my-func"
+  handler       = "index.handler"
+  runtime       = "nodejs20.x"
+  role          = "arn:aws:iam::123:role/r"
+  filename      = null
+  image_uri     = null
+  s3_bucket     = null
+  s3_key        = null
+}
+`
+	got, err := CleanupGeneratedHCL([]byte(input))
+	if err != nil {
+		t.Fatalf("error = %v", err)
+	}
+
+	body := parseHCLResource(t, got)
+
+	// Should add placeholder filename
+	if body.GetAttribute("filename") == nil {
+		t.Fatal("should set filename to placeholder.zip when none specified")
+	}
+	// Should remove the other code source attrs
+	for _, removed := range []string{"image_uri", "s3_bucket", "s3_key"} {
+		if body.GetAttribute(removed) != nil {
+			t.Errorf("should remove %q when using placeholder filename", removed)
+		}
+	}
+}
+
+func TestFixupLambda_S3BucketSet_KeepsS3(t *testing.T) {
+	input := `resource "aws_lambda_function" "f" {
+  function_name      = "my-func"
+  handler            = "index.handler"
+  runtime            = "nodejs20.x"
+  role               = "arn:aws:iam::123:role/r"
+  s3_bucket          = "my-deploy-bucket"
+  s3_key             = "lambda/v1.zip"
+  s3_object_version  = "abc123"
+  filename           = null
+  image_uri          = null
+}
+`
+	got, err := CleanupGeneratedHCL([]byte(input))
+	if err != nil {
+		t.Fatalf("error = %v", err)
+	}
+
+	body := parseHCLResource(t, got)
+
+	// Should keep S3 attrs
+	if body.GetAttribute("s3_bucket") == nil {
+		t.Error("should keep s3_bucket")
+	}
+	if body.GetAttribute("s3_key") == nil {
+		t.Error("should keep s3_key")
+	}
+	// Should remove filename and image_uri
+	if body.GetAttribute("filename") != nil {
+		t.Error("should remove filename when s3_bucket is set")
+	}
+	if body.GetAttribute("image_uri") != nil {
+		t.Error("should remove image_uri when s3_bucket is set")
+	}
+}
+
+func TestFixupLambda_ImageURISet_KeepsImage(t *testing.T) {
+	input := `resource "aws_lambda_function" "f" {
+  function_name = "my-func"
+  handler       = null
+  runtime       = null
+  role          = "arn:aws:iam::123:role/r"
+  image_uri     = "123456789012.dkr.ecr.us-east-1.amazonaws.com/my-image:latest"
+  filename      = null
+  s3_bucket     = null
+  s3_key        = null
+}
+`
+	got, err := CleanupGeneratedHCL([]byte(input))
+	if err != nil {
+		t.Fatalf("error = %v", err)
+	}
+
+	body := parseHCLResource(t, got)
+
+	if body.GetAttribute("image_uri") == nil {
+		t.Error("should keep image_uri")
+	}
+	for _, removed := range []string{"filename", "s3_bucket", "s3_key"} {
+		if body.GetAttribute(removed) != nil {
+			t.Errorf("should remove %q when image_uri is set", removed)
+		}
+	}
+}
+
+func TestFixupLambda_FilenameSet_KeepsFilename(t *testing.T) {
+	input := `resource "aws_lambda_function" "f" {
+  function_name = "my-func"
+  handler       = "index.handler"
+  runtime       = "nodejs20.x"
+  role          = "arn:aws:iam::123:role/r"
+  filename      = "deploy.zip"
+  image_uri     = null
+  s3_bucket     = null
+}
+`
+	got, err := CleanupGeneratedHCL([]byte(input))
+	if err != nil {
+		t.Fatalf("error = %v", err)
+	}
+
+	body := parseHCLResource(t, got)
+
+	if body.GetAttribute("filename") == nil {
+		t.Error("should keep filename")
+	}
+	for _, removed := range []string{"image_uri", "s3_bucket"} {
+		if body.GetAttribute(removed) != nil {
+			t.Errorf("should remove %q when filename is set", removed)
+		}
 	}
 }
