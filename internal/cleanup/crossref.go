@@ -88,30 +88,17 @@ func ResolveCrossReferences(src []byte, refMap *CrossRefMap) ([]byte, error) {
 	return f.Bytes(), nil
 }
 
-// skipCrossRefAttrs are attribute names that should never be cross-referenced.
-// These contain JSON strings, policy documents, or other structured data where
-// replacing an ARN with a terraform reference would break the value format.
-var skipCrossRefAttrs = map[string]bool{
-	"redrive_policy":         true,
-	"redrive_allow_policy":   true,
-	"policy":                 true,
-	"assume_role_policy":     true,
-	"inline_policy":          true,
-	"access_policy":          true,
-	"bucket_policy":          true,
-	"key_policy":             true,
-	"managed_policy_arns":    true,
-	"resource_based_policy":  true,
-}
-
 func resolveBlockCrossRefs(body *hclwrite.Body, refMap *CrossRefMap, selfAddress string) {
 	for attrName, attr := range body.Attributes() {
-		if skipCrossRefAttrs[attrName] {
+		value := extractStringValue(attr.Expr().BuildTokens(nil))
+		if value == "" {
 			continue
 		}
 
-		value := extractStringValue(attr.Expr().BuildTokens(nil))
-		if value == "" {
+		// Skip JSON-encoded values — they may contain embedded ARNs/IDs
+		// (e.g., redrive_policy, assume_role_policy) but replacing them
+		// with terraform references would break the JSON format.
+		if looksLikeJSON(value) {
 			continue
 		}
 
@@ -195,15 +182,14 @@ func UnresolvedReferences(src []byte, refMap *CrossRefMap) ([]string, error) {
 }
 
 func collectUnresolved(body *hclwrite.Body, refMap *CrossRefMap, seen map[string]bool, out *[]string) {
-	for attrName, attr := range body.Attributes() {
-		// Skip JSON policy attributes — ARNs inside JSON strings are not
-		// importable references, they're policy document content.
-		if skipCrossRefAttrs[attrName] {
+	for _, attr := range body.Attributes() {
+		value := extractStringValue(attr.Expr().BuildTokens(nil))
+		if value == "" {
 			continue
 		}
 
-		value := extractStringValue(attr.Expr().BuildTokens(nil))
-		if value == "" {
+		// Skip JSON-encoded values (same reason as resolveBlockCrossRefs)
+		if looksLikeJSON(value) {
 			continue
 		}
 
@@ -225,6 +211,15 @@ func collectUnresolved(body *hclwrite.Body, refMap *CrossRefMap, seen map[string
 	for _, nested := range body.Blocks() {
 		collectUnresolved(nested.Body(), refMap, seen, out)
 	}
+}
+
+// looksLikeJSON returns true if a string value appears to be JSON-encoded.
+// Used to skip cross-referencing ARNs/IDs embedded in JSON policy documents,
+// redrive policies, and other structured string attributes.
+func looksLikeJSON(s string) bool {
+	s = strings.TrimSpace(s)
+	return (strings.HasPrefix(s, "{") && strings.HasSuffix(s, "}")) ||
+		(strings.HasPrefix(s, "[") && strings.HasSuffix(s, "]"))
 }
 
 // looksLikeCloudRef returns true if the value looks like a cloud resource
