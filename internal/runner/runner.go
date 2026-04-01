@@ -237,10 +237,25 @@ func (r *Runner) Run(ctx context.Context) (*Result, error) {
 		}
 	}
 
+	// Filter import blocks to only keep those with matching resource blocks.
+	// This prevents "Configuration for import target does not exist" errors
+	// when a dependency chase fails (e.g., role doesn't exist in account).
+	mergedImports, err := os.ReadFile(importsPath)
+	if err != nil {
+		return nil, fmt.Errorf("read merged imports: %w", err)
+	}
+	filteredImports, err := cleanup.FilterImportBlocks(mergedImports, cleanedHCL)
+	if err != nil {
+		return nil, fmt.Errorf("filter import blocks: %w", err)
+	}
+	if err := os.WriteFile(importsPath, filteredImports, 0644); err != nil {
+		return nil, fmt.Errorf("write filtered imports: %w", err)
+	}
+
 	// Phase 6: Validate
-	// Write the final merged output to a clean validation directory so
-	// terraform validate checks exactly what will be delivered — not the
-	// intermediate files from the dependency chase.
+	// Write the final output to a clean validation directory with both
+	// generated.tf AND imports.tf so terraform validate checks everything
+	// the user will receive — including import block references.
 	r.logger.Info("running terraform validate")
 	validateDir, err := os.MkdirTemp("", "insideout-validate-*")
 	if err != nil {
@@ -253,6 +268,9 @@ func (r *Runner) Run(ctx context.Context) (*Result, error) {
 	}
 	if err := os.WriteFile(filepath.Join(validateDir, "generated.tf"), cleanedHCL, 0644); err != nil {
 		return nil, fmt.Errorf("write validate generated.tf: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(validateDir, "imports.tf"), filteredImports, 0644); err != nil {
+		return nil, fmt.Errorf("write validate imports.tf: %w", err)
 	}
 
 	validateExec, err := r.getTerraformRunner(validateDir)
