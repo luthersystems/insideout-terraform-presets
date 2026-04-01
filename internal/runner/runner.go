@@ -17,11 +17,12 @@ import (
 
 // Config holds the configuration for an import run.
 type Config struct {
-	Project       string   // InsideOut project ID
-	Region        string   // AWS region
+	Provider      string   // Cloud provider: "aws" or "gcp" (default "aws")
+	Project       string   // InsideOut project ID (AWS) or GCP project ID
+	Region        string   // Cloud provider region
 	OutputDir     string   // Directory for generated files
 	TFBinary      string   // Path to terraform binary (auto-detect if empty)
-	ResourceTypes []string // Specific types to import (empty = all Phase 1 types)
+	ResourceTypes []string // Specific types to import (empty = all supported types)
 	DryRun        bool     // Only discover, don't generate
 	Verbose       bool     // Verbose logging
 }
@@ -94,7 +95,7 @@ func (r *Runner) Run(ctx context.Context) (*Result, error) {
 
 	// Write providers.tf
 	providersPath := filepath.Join(workDir, "providers.tf")
-	if err := os.WriteFile(providersPath, ProvidersTF(r.config.Region), 0644); err != nil {
+	if err := os.WriteFile(providersPath, ProvidersTF(r.config.Provider, r.config.Project, r.config.Region), 0644); err != nil {
 		return nil, fmt.Errorf("write providers.tf: %w", err)
 	}
 
@@ -298,7 +299,7 @@ func (r *Runner) Run(ctx context.Context) (*Result, error) {
 	}
 	defer os.RemoveAll(validateDir)
 
-	if err := os.WriteFile(filepath.Join(validateDir, "providers.tf"), ProvidersTF(r.config.Region), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(validateDir, "providers.tf"), ProvidersTF(r.config.Provider, r.config.Project, r.config.Region), 0644); err != nil {
 		return nil, fmt.Errorf("write validate providers.tf: %w", err)
 	}
 	if err := os.WriteFile(filepath.Join(validateDir, "generated.tf"), cleanedHCL, 0644); err != nil {
@@ -346,7 +347,12 @@ func (r *Runner) discoverResources(ctx context.Context) ([]discovery.DiscoveredR
 	if r.discoverer != nil {
 		return r.discoverer.Discover(ctx)
 	}
-	return r.discoverAWS(ctx)
+	switch r.config.Provider {
+	case "gcp":
+		return r.discoverGCP(ctx)
+	default:
+		return r.discoverAWS(ctx)
+	}
 }
 
 func (r *Runner) discoverAWS(ctx context.Context) ([]discovery.DiscoveredResource, error) {
@@ -361,6 +367,21 @@ func (r *Runner) discoverAWS(ctx context.Context) ([]discovery.DiscoveredResourc
 		Region:  r.config.Region,
 	}
 
+	if len(r.config.ResourceTypes) > 0 {
+		return disc.DiscoverTypes(ctx, filter, r.config.ResourceTypes)
+	}
+	return disc.DiscoverAll(ctx, filter)
+}
+
+func (r *Runner) discoverGCP(ctx context.Context) ([]discovery.DiscoveredResource, error) {
+	disc, err := discovery.NewGCPDiscoverer(ctx, r.config.Project, r.logger)
+	if err != nil {
+		return nil, fmt.Errorf("create GCP discoverer: %w", err)
+	}
+	filter := discovery.Filter{
+		Project: r.config.Project,
+		Region:  r.config.Region,
+	}
 	if len(r.config.ResourceTypes) > 0 {
 		return disc.DiscoverTypes(ctx, filter, r.config.ResourceTypes)
 	}

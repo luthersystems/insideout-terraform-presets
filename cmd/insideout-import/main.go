@@ -14,6 +14,7 @@ import (
 
 func main() {
 	var (
+		provider      string
 		project       string
 		region        string
 		outputDir     string
@@ -23,8 +24,9 @@ func main() {
 		verbose       bool
 	)
 
-	flag.StringVar(&project, "project", "", "InsideOut project ID (required)")
-	flag.StringVar(&region, "region", "", "AWS region (required)")
+	flag.StringVar(&provider, "provider", "aws", "Cloud provider (aws, gcp)")
+	flag.StringVar(&project, "project", "", "Project ID — InsideOut project prefix (AWS) or GCP project ID (required)")
+	flag.StringVar(&region, "region", "", "Cloud provider region (required)")
 	flag.StringVar(&outputDir, "output-dir", "./imported", "Output directory for generated files")
 	flag.StringVar(&tfBinary, "terraform-binary", "", "Path to terraform binary (auto-detect if empty)")
 	flag.StringVar(&resourceTypes, "resource-types", "", "Comma-separated resource types to import (default: all)")
@@ -37,6 +39,10 @@ func main() {
 		flag.Usage()
 		os.Exit(1)
 	}
+	if provider != "aws" && provider != "gcp" {
+		fmt.Fprintf(os.Stderr, "error: --provider must be 'aws' or 'gcp', got %q\n", provider)
+		os.Exit(1)
+	}
 
 	level := slog.LevelInfo
 	if verbose {
@@ -45,6 +51,7 @@ func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: level}))
 
 	cfg := runner.Config{
+		Provider:  provider,
 		Project:   project,
 		Region:    region,
 		OutputDir: outputDir,

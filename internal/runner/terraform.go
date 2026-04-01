@@ -81,9 +81,27 @@ func (t *TerraformExecutor) ProvidersSchema(ctx context.Context) (*tfjson.Provid
 }
 
 
-// ProvidersTF returns the provider configuration HCL for the given region.
-func ProvidersTF(region string) []byte {
-	return []byte(fmt.Sprintf(`terraform {
+// ProvidersTF returns the provider configuration HCL for the given provider.
+func ProvidersTF(provider, project, region string) []byte {
+	switch provider {
+	case "gcp":
+		return []byte(fmt.Sprintf(`terraform {
+  required_version = ">= 1.5"
+  required_providers {
+    google = {
+      source  = "hashicorp/google"
+      version = ">= 5.0"
+    }
+  }
+}
+
+provider "google" {
+  project = %q
+  region  = %q
+}
+`, project, region))
+	default:
+		return []byte(fmt.Sprintf(`terraform {
   required_version = ">= 1.5"
   required_providers {
     aws = {
@@ -97,4 +115,5 @@ provider "aws" {
   region = %q
 }
 `, region))
+	}
 }

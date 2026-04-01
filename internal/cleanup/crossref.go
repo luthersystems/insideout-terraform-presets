@@ -44,15 +44,21 @@ func BuildCrossRefMap(resources []discovery.DiscoveredResource) *CrossRefMap {
 // attribute to reference (e.g., ".arn", ".id", ".url").
 func (m *CrossRefMap) Lookup(value string) (address, attrSuffix string, found bool) {
 	if addr, ok := m.arnToAddress[value]; ok {
-		return addr, ".arn", true
+		// Determine suffix based on the reference format
+		suffix := ".arn"
+		if looksLikeGCPRef(value) {
+			suffix = ".name"
+		}
+		return addr, suffix, true
 	}
 	if addr, ok := m.idToAddress[value]; ok {
-		// Determine the right attribute based on the import ID format
 		suffix := ".id"
 		if strings.HasPrefix(value, "https://sqs.") {
 			suffix = ".url"
 		} else if strings.HasPrefix(value, "arn:") {
 			suffix = ".arn"
+		} else if looksLikeGCPRef(value) {
+			suffix = ".name"
 		}
 		return addr, suffix, true
 	}
@@ -202,7 +208,7 @@ func collectUnresolved(body *hclwrite.Body, refMap *CrossRefMap, seen map[string
 		}
 
 		// Check if this looks like an AWS ARN or resource ID
-		if !looksLikeAWSRef(value) {
+		if !looksLikeCloudRef(value) {
 			continue
 		}
 
@@ -221,12 +227,17 @@ func collectUnresolved(body *hclwrite.Body, refMap *CrossRefMap, seen map[string
 	}
 }
 
+// looksLikeCloudRef returns true if the value looks like a cloud resource
+// reference (AWS ARN/ID or GCP resource name/self-link).
+func looksLikeCloudRef(s string) bool {
+	return looksLikeAWSRef(s) || looksLikeGCPRef(s)
+}
+
 // looksLikeAWSRef returns true if the value looks like an AWS ARN or resource ID.
 func looksLikeAWSRef(s string) bool {
 	if strings.HasPrefix(s, "arn:aws:") {
 		return true
 	}
-	// Common AWS resource ID patterns
 	for _, prefix := range []string{
 		"sg-", "subnet-", "vpc-", "igw-", "rtb-", "acl-",
 		"vol-", "snap-", "ami-", "i-", "eni-", "eipalloc-",
@@ -235,6 +246,20 @@ func looksLikeAWSRef(s string) bool {
 		if strings.HasPrefix(s, prefix) {
 			return true
 		}
+	}
+	return false
+}
+
+// looksLikeGCPRef returns true if the value looks like a GCP resource reference.
+func looksLikeGCPRef(s string) bool {
+	if strings.HasPrefix(s, "projects/") {
+		return true
+	}
+	if strings.HasPrefix(s, "//") && strings.Contains(s, ".googleapis.com/") {
+		return true
+	}
+	if strings.HasPrefix(s, "https://www.googleapis.com/") {
+		return true
 	}
 	return false
 }

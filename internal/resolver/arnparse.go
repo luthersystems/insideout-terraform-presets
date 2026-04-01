@@ -195,12 +195,14 @@ func ResolveReference(ref string) *discovery.DiscoveredResource {
 	}
 
 	tfType, importID, ok := ResourceIDToTerraform(ref)
-	if !ok {
-		return nil
+	if ok {
+		return &discovery.DiscoveredResource{
+			TerraformType: tfType,
+			ImportID:      importID,
+			Name:          ref,
+		}
 	}
-	return &discovery.DiscoveredResource{
-		TerraformType: tfType,
-		ImportID:      importID,
-		Name:          ref,
-	}
+
+	// Try GCP resource reference patterns
+	return ResolveGCPReference(ref)
 }

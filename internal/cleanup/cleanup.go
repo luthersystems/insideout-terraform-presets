@@ -75,6 +75,10 @@ func CleanupGeneratedHCL(src []byte, schema *SchemaInfo) ([]byte, error) {
 		switch resourceType {
 		case "aws_lambda_function":
 			fixupLambdaFunction(block.Body())
+		case "google_storage_bucket":
+			// terraform_labels is computed by GCP for buckets previously
+			// managed by terraform (adds goog-terraform-provisioned label).
+			addLifecycleIgnoreChanges(block.Body(), []string{"terraform_labels"})
 		case "aws_secretsmanager_secret":
 			// Merge write-only attrs with hardcoded ignore list.
 			// When schema is available, write-only attrs are already handled
