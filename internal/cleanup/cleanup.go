@@ -50,6 +50,16 @@ var computedOnlyAttrs = map[string][]string{
 	},
 }
 
+// nullDefaults maps resource_type → attribute_name → default value for
+// attributes that terraform generates as null but have provider defaults.
+// Without these, terraform plan shows "update in-place" drift.
+var nullDefaults = map[string]map[string]cty.Value{
+	"aws_secretsmanager_secret": {
+		"recovery_window_in_days":        cty.NumberIntVal(30),
+		"force_overwrite_replica_secret": cty.False,
+	},
+}
+
 // universalRemoveAttrs are attributes that should be removed from all resource types.
 var universalRemoveAttrs = []string{"tags_all", "id"}
 
@@ -82,28 +92,37 @@ func CleanupGeneratedHCL(src []byte) ([]byte, error) {
 			block.Body().RemoveAttribute(attr)
 		}
 
-		// Remove attributes set to null — these cause "update in-place" drift
-		// when terraform applies provider defaults on plan.
-		removeNullAttributes(block.Body())
+		// Replace null attributes that have known provider defaults
+		if defaults, ok := nullDefaults[resourceType]; ok {
+			applyNullDefaults(block.Body(), defaults)
+		}
 
 		// Type-specific fixups
-		if resourceType == "aws_lambda_function" {
+		switch resourceType {
+		case "aws_lambda_function":
 			fixupLambdaFunction(block.Body())
+		case "aws_secretsmanager_secret":
+			// force_overwrite_replica_secret is write-only — not stored in state,
+			// so terraform always shows it as a "change". Ignore it.
+			addLifecycleIgnoreChanges(block.Body(), []string{"force_overwrite_replica_secret", "recovery_window_in_days"})
 		}
 	}
 
 	return f.Bytes(), nil
 }
 
-// removeNullAttributes removes attributes whose value is the literal `null`.
-// Terraform's -generate-config-out emits `attr = null` for unset optional
-// attributes, but leaving them in the config causes terraform to set them
-// to their default values on apply (showing as "update in-place" drift).
-func removeNullAttributes(body *hclwrite.Body) {
-	for name, attr := range body.Attributes() {
-		tokens := attr.Expr().BuildTokens(nil)
-		if isNullValue(tokens) {
-			body.RemoveAttribute(name)
+// applyNullDefaults replaces null attribute values with their known provider
+// defaults to prevent drift on terraform plan.
+func applyNullDefaults(body *hclwrite.Body, defaults map[string]cty.Value) {
+	for name, defaultVal := range defaults {
+		attr := body.GetAttribute(name)
+		if attr == nil {
+			// Attribute missing — set it to the default
+			body.SetAttributeValue(name, defaultVal)
+			continue
+		}
+		if isNullValue(attr.Expr().BuildTokens(nil)) {
+			body.SetAttributeValue(name, defaultVal)
 		}
 	}
 }
@@ -121,9 +140,7 @@ func isNullValue(tokens hclwrite.Tokens) bool {
 }
 
 // fixupLambdaFunction resolves the Lambda filename/image_uri/s3_bucket mutual
-// exclusion. Terraform's generate-config-out sets all three to null/empty, but
-// exactly one group must be specified. We pick based on which has non-empty
-// values, defaulting to filename with a placeholder.
+// exclusion and adds lifecycle ignore_changes for deployment artifacts.
 func fixupLambdaFunction(body *hclwrite.Body) {
 	hasS3 := attrHasNonEmptyValue(body, "s3_bucket")
 	hasImage := attrHasNonEmptyValue(body, "image_uri")
@@ -144,15 +161,40 @@ func fixupLambdaFunction(body *hclwrite.Body) {
 		body.RemoveAttribute("s3_key")
 		body.RemoveAttribute("s3_object_version")
 	default:
-		// None specified — this is the common case for generate-config-out.
-		// Use filename with a placeholder since the actual code package
-		// location isn't derivable from the import.
+		// None specified — use filename with a placeholder.
 		body.RemoveAttribute("image_uri")
 		body.RemoveAttribute("s3_bucket")
 		body.RemoveAttribute("s3_key")
 		body.RemoveAttribute("s3_object_version")
 		body.SetAttributeValue("filename", cty.StringVal("placeholder.zip"))
 	}
+
+	// Add lifecycle { ignore_changes } for deployment artifacts that
+	// will always differ from the imported state. This is the same
+	// approach used by aws2tf.
+	addLifecycleIgnoreChanges(body, []string{"filename", "source_code_hash", "publish"})
+}
+
+// addLifecycleIgnoreChanges adds or updates a lifecycle block with
+// ignore_changes for the given attribute names.
+func addLifecycleIgnoreChanges(body *hclwrite.Body, attrs []string) {
+	// Build the ignore_changes list as raw HCL tokens
+	var items []string
+	for _, a := range attrs {
+		items = append(items, a)
+	}
+	ignoreValue := "[" + strings.Join(items, ", ") + "]"
+
+	// Remove any existing lifecycle block
+	for _, block := range body.Blocks() {
+		if block.Type() == "lifecycle" {
+			body.RemoveBlock(block)
+		}
+	}
+
+	lifecycle := body.AppendNewBlock("lifecycle", nil)
+	lifecycle.Body().SetAttributeRaw("ignore_changes",
+		hclwrite.TokensForIdentifier(ignoreValue))
 }
 
 // attrHasNonEmptyValue checks if an attribute exists and has a non-empty/non-null value.
