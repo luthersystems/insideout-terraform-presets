@@ -80,6 +80,17 @@ func (t *TerraformExecutor) ProvidersSchema(ctx context.Context) (*tfjson.Provid
 	return t.tf.ProvidersSchema(ctx)
 }
 
+// PlanJSON runs terraform plan, saves the plan file, and returns the
+// structured plan output showing what would change.
+func (t *TerraformExecutor) PlanJSON(ctx context.Context) (*tfjson.Plan, error) {
+	planFile := filepath.Join(t.workDir, "tfplan")
+	_, err := t.tf.Plan(ctx, tfexec.Out(planFile))
+	if err != nil {
+		return nil, fmt.Errorf("terraform plan: %w", err)
+	}
+	return t.tf.ShowPlanFile(ctx, planFile)
+}
+
 
 // ProvidersTF returns the provider configuration HCL for the given provider.
 func ProvidersTF(provider, project, region string) []byte {

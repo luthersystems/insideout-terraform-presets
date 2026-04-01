@@ -1,7 +1,6 @@
 package cleanup
 
 import (
-	"sort"
 	"strings"
 
 	"github.com/hashicorp/hcl/v2"
@@ -65,30 +64,16 @@ func CleanupGeneratedHCL(src []byte, schema *SchemaInfo) ([]byte, error) {
 			applyNullDefaults(block.Body(), defaults)
 		}
 
-		// Auto-add lifecycle { ignore_changes } for write-only attributes
-		// detected by the schema (e.g., force_overwrite_replica_secret).
-		if writeOnly := schema.WriteOnlyAttrsFor(resourceType); len(writeOnly) > 0 {
-			addLifecycleIgnoreChanges(block.Body(), WriteOnlyKeys(writeOnly))
+		// Type-specific fixups that schema can't handle
+		if resourceType == "aws_lambda_function" {
+			fixupLambdaFunction(block.Body())
 		}
 
-		// Type-specific fixups that schema can't handle
-		switch resourceType {
-		case "aws_lambda_function":
-			fixupLambdaFunction(block.Body())
-		case "google_storage_bucket":
-			// terraform_labels is computed by GCP for buckets previously
-			// managed by terraform (adds goog-terraform-provisioned label).
-			addLifecycleIgnoreChanges(block.Body(), []string{"terraform_labels"})
-		case "aws_secretsmanager_secret":
-			// Merge write-only attrs with hardcoded ignore list.
-			// When schema is available, write-only attrs are already handled
-			// above. This ensures coverage when schema is nil.
-			if schema.WriteOnlyAttrsFor(resourceType) == nil {
-				addLifecycleIgnoreChanges(block.Body(), []string{
-					"force_overwrite_replica_secret", "recovery_window_in_days",
-				})
-			}
-		}
+		// Note: lifecycle { ignore_changes } is NOT added here.
+		// Instead, the runner does a "plan → inspect drift → fix" pass
+		// via cleanup.FixDriftFromPlan() which dynamically adds
+		// ignore_changes only for attributes that actually show drift.
+		// This eliminates hardcoded per-resource-type ignore lists.
 	}
 
 	return f.Bytes(), nil
@@ -175,73 +160,9 @@ func fixupLambdaFunction(body *hclwrite.Body) {
 		body.SetAttributeValue("filename", cty.StringVal("placeholder.zip"))
 	}
 
-	// Merge Lambda-specific ignore_changes with any schema-driven ones
-	// already on the block.
-	addLifecycleIgnoreChanges(body, []string{"filename", "source_code_hash", "publish"})
-}
-
-// addLifecycleIgnoreChanges adds or replaces a lifecycle block with
-// ignore_changes for the given attribute names. If a lifecycle block already
-// exists, it merges the new attrs with existing ones.
-func addLifecycleIgnoreChanges(body *hclwrite.Body, attrs []string) {
-	// Collect existing ignore_changes attrs if present
-	existing := make(map[string]bool)
-	for _, block := range body.Blocks() {
-		if block.Type() == "lifecycle" {
-			// Try to extract existing ignore_changes values
-			if ic := block.Body().GetAttribute("ignore_changes"); ic != nil {
-				for _, t := range ic.Expr().BuildTokens(nil) {
-					s := strings.TrimSpace(string(t.Bytes))
-					if s != "" && s != "[" && s != "]" && s != "," {
-						existing[s] = true
-					}
-				}
-			}
-			body.RemoveBlock(block)
-		}
-	}
-
-	// Merge new attrs
-	for _, a := range attrs {
-		existing[a] = true
-	}
-
-	// Build sorted list
-	merged := make([]string, 0, len(existing))
-	for k := range existing {
-		merged = append(merged, k)
-	}
-	sort.Strings(merged)
-
-	// Build raw tokens for ignore_changes = [attr1, attr2, ...]
-	// We construct proper HCL tokens rather than abusing TokensForIdentifier.
-	var tokens hclwrite.Tokens
-	tokens = append(tokens, &hclwrite.Token{
-		Type:  hclsyntax.TokenOBrack,
-		Bytes: []byte{'['},
-	})
-	for i, name := range merged {
-		if i > 0 {
-			tokens = append(tokens, &hclwrite.Token{
-				Type:  hclsyntax.TokenComma,
-				Bytes: []byte{','},
-			}, &hclwrite.Token{
-				Type:  hclsyntax.TokenNewline,
-				Bytes: []byte{' '},
-			})
-		}
-		tokens = append(tokens, &hclwrite.Token{
-			Type:  hclsyntax.TokenIdent,
-			Bytes: []byte(name),
-		})
-	}
-	tokens = append(tokens, &hclwrite.Token{
-		Type:  hclsyntax.TokenCBrack,
-		Bytes: []byte{']'},
-	})
-
-	lifecycle := body.AppendNewBlock("lifecycle", nil)
-	lifecycle.Body().SetAttributeRaw("ignore_changes", tokens)
+	// Note: lifecycle { ignore_changes } for Lambda deployment artifacts
+	// (filename, source_code_hash, publish) is handled by the drift-fix
+	// pass in FixDriftFromPlan(), not here. This avoids hardcoded lists.
 }
 
 // attrHasNonEmptyValue checks if an attribute exists and has a non-empty/non-null value.

@@ -173,26 +173,9 @@ func TestCleanupWithSchema_WriteOnly(t *testing.T) {
 		t.Error("arn should be removed by schema")
 	}
 
-	// force_overwrite_replica_secret is write-only — should be in lifecycle ignore_changes
-	lifecycleFound := false
-	for _, block := range body.Blocks() {
-		if block.Type() == "lifecycle" {
-			lifecycleFound = true
-			// Verify ignore_changes contains the write-only attribute
-			ic := block.Body().GetAttribute("ignore_changes")
-			if ic == nil {
-				t.Error("lifecycle block should have ignore_changes attribute")
-			} else {
-				icTokens := string(ic.Expr().BuildTokens(nil).Bytes())
-				if !strings.Contains(icTokens, "force_overwrite_replica_secret") {
-					t.Errorf("ignore_changes should contain force_overwrite_replica_secret, got: %s", icTokens)
-				}
-			}
-		}
-	}
-	if !lifecycleFound {
-		t.Error("write-only attrs should trigger lifecycle { ignore_changes } block")
-	}
+	// Note: lifecycle { ignore_changes } for write-only attrs is now handled
+	// by the drift-fix pass (FixDriftFromPlan), not by CleanupGeneratedHCL.
+	// See TestFixDriftFromPlan for coverage of that flow.
 
 	// recovery_window_in_days should be set to default 30 (nullDefaults)
 	attr := body.GetAttribute("recovery_window_in_days")

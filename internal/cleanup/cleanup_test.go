@@ -234,27 +234,8 @@ func TestFixupLambda_NoneSet_InsertsPlaceholder(t *testing.T) {
 	if fnVal != `"placeholder.zip"` {
 		t.Errorf("filename = %s, want %q", fnVal, "placeholder.zip")
 	}
-	// Should have lifecycle { ignore_changes } for deployment artifacts
-	hasLifecycle := false
-	for _, block := range body.Blocks() {
-		if block.Type() == "lifecycle" {
-			hasLifecycle = true
-			ic := block.Body().GetAttribute("ignore_changes")
-			if ic == nil {
-				t.Error("lifecycle should have ignore_changes")
-			} else {
-				icStr := string(ic.Expr().BuildTokens(nil).Bytes())
-				for _, expected := range []string{"filename", "source_code_hash", "publish"} {
-					if !strings.Contains(icStr, expected) {
-						t.Errorf("ignore_changes should contain %q, got: %s", expected, icStr)
-					}
-				}
-			}
-		}
-	}
-	if !hasLifecycle {
-		t.Error("Lambda should have lifecycle block")
-	}
+	// Note: lifecycle { ignore_changes } is NOT added by CleanupGeneratedHCL.
+	// It's handled by the drift-fix pass (FixDriftFromPlan) in the runner.
 	// Should remove the other code source attrs
 	for _, removed := range []string{"image_uri", "s3_bucket", "s3_key"} {
 		if body.GetAttribute(removed) != nil {

@@ -47,6 +47,7 @@ type terraformRunner interface {
 	PlanGenerateConfig(ctx context.Context, outFile string) error
 	Validate(ctx context.Context) error
 	ProvidersSchema(ctx context.Context) (*tfjson.ProviderSchemas, error)
+	PlanJSON(ctx context.Context) (*tfjson.Plan, error)
 }
 
 // Runner orchestrates the full import pipeline.
@@ -316,6 +317,43 @@ func (r *Runner) Run(ctx context.Context) (*Result, error) {
 	if err := validateExec.Init(ctx); err != nil {
 		return nil, fmt.Errorf("validate init: %w", err)
 	}
+
+	// Drift-fix pass: run terraform plan, inspect which attributes show
+	// drift (update-in-place), and add lifecycle { ignore_changes } for
+	// those specific attributes. This replaces hardcoded per-resource-type
+	// ignore_changes lists with a data-driven approach.
+	//
+	// The loop runs at most 3 iterations:
+	//   1. Plan → find drifting attrs → add ignore_changes → re-write HCL
+	//   2. Plan again → verify drift is gone (or find new drift)
+	//   3. Final plan → should be clean
+	r.logger.Info("running drift-fix pass")
+	for driftIter := 0; driftIter < 3; driftIter++ {
+		plan, err := validateExec.PlanJSON(ctx)
+		if err != nil {
+			r.logger.Warn("drift-fix plan failed, skipping", "error", err)
+			break
+		}
+
+		fixedHCL, err := cleanup.FixDriftFromPlan(cleanedHCL, plan)
+		if err != nil {
+			r.logger.Warn("drift-fix failed, skipping", "error", err)
+			break
+		}
+
+		if string(fixedHCL) == string(cleanedHCL) {
+			r.logger.Info("drift-fix complete, no more drift", "iterations", driftIter+1)
+			break
+		}
+
+		r.logger.Info("drift-fix applied ignore_changes", "iteration", driftIter+1)
+		cleanedHCL = fixedHCL
+		// Re-write the generated.tf with the drift fixes
+		if err := os.WriteFile(filepath.Join(validateDir, "generated.tf"), cleanedHCL, 0644); err != nil {
+			return nil, fmt.Errorf("write drift-fixed generated.tf: %w", err)
+		}
+	}
+
 	if err := validateExec.Validate(ctx); err != nil {
 		r.logger.Warn("terraform validate failed", "error", err)
 		result.ValidationOK = false

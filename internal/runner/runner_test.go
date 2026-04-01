@@ -57,6 +57,11 @@ func (m *mockTF) ProvidersSchema(_ context.Context) (*tfjson.ProviderSchemas, er
 	return nil, nil // tests use fallback cleanup path
 }
 
+func (m *mockTF) PlanJSON(_ context.Context) (*tfjson.Plan, error) {
+	// Return empty plan (no drift) — drift-fix pass sees no changes
+	return &tfjson.Plan{}, nil
+}
+
 func testLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 }
