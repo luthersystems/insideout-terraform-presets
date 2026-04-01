@@ -122,6 +122,16 @@ func TestARNToTerraformResource(t *testing.T) {
 			"aws_kms_key", "12345678-1234-1234-1234-123456789012", true,
 		},
 		{
+			"AWS-managed IAM policy (skip)",
+			"arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+			"", "", false,
+		},
+		{
+			"AWS-managed IAM role (skip)",
+			"arn:aws:iam::aws:role/aws-service-role/something",
+			"", "", false,
+		},
+		{
 			"unsupported service",
 			"arn:aws:elasticache:us-east-1:123456789012:cluster:my-cluster",
 			"", "", false,

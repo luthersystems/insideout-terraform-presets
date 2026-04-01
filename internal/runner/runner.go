@@ -257,8 +257,17 @@ func (r *Runner) discoverAWS(ctx context.Context) ([]discovery.DiscoveredResourc
 	return disc.DiscoverAll(ctx, filter)
 }
 
+// workDirAware is optionally implemented by test mocks that need to know
+// the runner's working directory to write fixture files.
+type workDirAware interface {
+	SetWorkDir(dir string)
+}
+
 func (r *Runner) getTerraformRunner(workDir string) (terraformRunner, error) {
 	if r.tfRunner != nil {
+		if wda, ok := r.tfRunner.(workDirAware); ok {
+			wda.SetWorkDir(workDir)
+		}
 		return r.tfRunner, nil
 	}
 	return NewTerraformExecutor(workDir, r.config.TFBinary)

@@ -61,6 +61,12 @@ func ARNToTerraformResource(arn string) (terraformType, importID string, ok bool
 }
 
 func iamARNToResource(a ARN) (string, string, bool) {
+	// Skip AWS-managed resources (account ID "aws") — these are not customer
+	// resources and cannot be imported.
+	if a.AccountID == "aws" {
+		return "", "", false
+	}
+
 	resource := a.Resource
 	switch {
 	case strings.HasPrefix(resource, "role/"):
