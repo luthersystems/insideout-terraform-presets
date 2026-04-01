@@ -144,7 +144,20 @@ func (r *Runner) Run(ctx context.Context) (*Result, error) {
 		return nil, fmt.Errorf("cross-reference resolution: %w", err)
 	}
 
+	// Write cleaned HCL back to generated.tf so that when terraform runs
+	// again during dependency chasing, it sees valid resource blocks (e.g.,
+	// Lambda with filename="placeholder.zip" instead of all three null).
+	if err := os.WriteFile(generatedPath, cleanedHCL, 0644); err != nil {
+		return nil, fmt.Errorf("write cleaned generated.tf: %w", err)
+	}
+
 	// Phase 5: Dependency chase loop
+	//
+	// Each iteration generates HCL for newly discovered dependencies into a
+	// separate file, then merges it into the accumulated output. This is
+	// necessary because terraform's -generate-config-out only generates config
+	// for import blocks that don't have corresponding resource blocks — on
+	// subsequent iterations it only produces the NEW resources, not all of them.
 	chaser := resolver.NewDependencyChaser(r.logger)
 	allResources := make([]discovery.DiscoveredResource, len(resources))
 	copy(allResources, resources)
@@ -162,38 +175,46 @@ func (r *Runner) Run(ctx context.Context) (*Result, error) {
 		r.logger.Info("chasing dependencies", "iteration", iteration+1, "new_deps", len(newDeps))
 		allResources = append(allResources, newDeps...)
 
-		// Generate import blocks for new deps only
+		// Write import blocks for new deps to a SEPARATE imports file.
+		// Do NOT append to the main imports.tf yet — terraform would see
+		// duplicates. We merge into imports.tf after the loop for the
+		// final output.
 		depImportHCL, err := importgen.GenerateImportBlocks(newDeps)
 		if err != nil {
 			return nil, fmt.Errorf("generate dep import blocks: %w", err)
 		}
-
-		// Append to existing imports
-		existingImports, _ := os.ReadFile(importsPath)
-		if err := os.WriteFile(importsPath, append(existingImports, depImportHCL...), 0644); err != nil {
+		depImportsFile := fmt.Sprintf("imports_dep_%d.tf", iteration)
+		depImportsPath := filepath.Join(workDir, depImportsFile)
+		if err := os.WriteFile(depImportsPath, depImportHCL, 0644); err != nil {
 			return nil, fmt.Errorf("write dep imports: %w", err)
 		}
 
-		// Remove old generated file so terraform can regenerate
-		os.Remove(generatedPath)
-
-		// Re-run terraform plan
-		if err := tfExec.PlanGenerateConfig(ctx, generatedFile); err != nil {
+		// Generate config for ONLY the new deps into a separate file.
+		// The main generated.tf still exists with the original resources,
+		// so terraform won't regenerate those — it only produces HCL for
+		// import blocks without corresponding resource blocks.
+		depGeneratedFile := fmt.Sprintf("generated_dep_%d.tf", iteration)
+		if err := tfExec.PlanGenerateConfig(ctx, depGeneratedFile); err != nil {
 			r.logger.Warn("terraform plan failed during dep chase, stopping", "error", err)
 			break
 		}
 
-		generatedHCL, err = os.ReadFile(generatedPath)
+		depGeneratedPath := filepath.Join(workDir, depGeneratedFile)
+		depGeneratedHCL, err := os.ReadFile(depGeneratedPath)
 		if err != nil {
-			return nil, fmt.Errorf("read regenerated.tf: %w", err)
+			return nil, fmt.Errorf("read dep generated HCL: %w", err)
 		}
 
-		// Re-cleanup and re-resolve
-		cleanedHCL, err = cleanup.CleanupGeneratedHCL(generatedHCL)
+		// Cleanup the new dep HCL
+		depCleanedHCL, err := cleanup.CleanupGeneratedHCL(depGeneratedHCL)
 		if err != nil {
-			return nil, fmt.Errorf("cleanup iteration %d: %w", iteration, err)
+			return nil, fmt.Errorf("cleanup dep iteration %d: %w", iteration, err)
 		}
 
+		// Merge: append new dep resources to the accumulated output
+		cleanedHCL = append(cleanedHCL, depCleanedHCL...)
+
+		// Rebuild cross-ref map with all resources and re-resolve
 		refMap = cleanup.BuildCrossRefMap(allResources)
 		cleanedHCL, err = cleanup.ResolveCrossReferences(cleanedHCL, refMap)
 		if err != nil {
@@ -203,19 +224,55 @@ func (r *Runner) Run(ctx context.Context) (*Result, error) {
 
 	result.ImportedCount = len(allResources)
 
-	// Write final cleaned output
-	if err := os.WriteFile(generatedPath, cleanedHCL, 0644); err != nil {
-		return nil, fmt.Errorf("write cleaned generated.tf: %w", err)
+	// Merge dep import blocks into the main imports.tf for the final output
+	for i := 0; ; i++ {
+		depImportsPath := filepath.Join(workDir, fmt.Sprintf("imports_dep_%d.tf", i))
+		depImports, err := os.ReadFile(depImportsPath)
+		if err != nil {
+			break // no more dep import files
+		}
+		existing, _ := os.ReadFile(importsPath)
+		if err := os.WriteFile(importsPath, append(existing, depImports...), 0644); err != nil {
+			return nil, fmt.Errorf("merge imports: %w", err)
+		}
 	}
 
 	// Phase 6: Validate
+	// Write the final merged output to a clean validation directory so
+	// terraform validate checks exactly what will be delivered — not the
+	// intermediate files from the dependency chase.
 	r.logger.Info("running terraform validate")
-	if err := tfExec.Validate(ctx); err != nil {
+	validateDir, err := os.MkdirTemp("", "insideout-validate-*")
+	if err != nil {
+		return nil, fmt.Errorf("create validate dir: %w", err)
+	}
+	defer os.RemoveAll(validateDir)
+
+	if err := os.WriteFile(filepath.Join(validateDir, "providers.tf"), ProvidersTF(r.config.Region), 0644); err != nil {
+		return nil, fmt.Errorf("write validate providers.tf: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(validateDir, "generated.tf"), cleanedHCL, 0644); err != nil {
+		return nil, fmt.Errorf("write validate generated.tf: %w", err)
+	}
+
+	validateExec, err := r.getTerraformRunner(validateDir)
+	if err != nil {
+		return nil, fmt.Errorf("validate executor: %w", err)
+	}
+	if err := validateExec.Init(ctx); err != nil {
+		return nil, fmt.Errorf("validate init: %w", err)
+	}
+	if err := validateExec.Validate(ctx); err != nil {
 		r.logger.Warn("terraform validate failed", "error", err)
 		result.ValidationOK = false
 	} else {
 		result.ValidationOK = true
 		r.logger.Info("terraform validate passed")
+	}
+
+	// Write final output to working dir for copyOutput
+	if err := os.WriteFile(generatedPath, cleanedHCL, 0644); err != nil {
+		return nil, fmt.Errorf("write cleaned generated.tf: %w", err)
 	}
 
 	// Copy output to destination
