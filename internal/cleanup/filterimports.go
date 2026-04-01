@@ -2,6 +2,7 @@ package cleanup
 
 import (
 	"github.com/hashicorp/hcl/v2"
+	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/hashicorp/hcl/v2/hclwrite"
 )
 
@@ -61,22 +62,17 @@ func FilterImportBlocks(importsSrc, generatedSrc []byte) ([]byte, error) {
 }
 
 // extractTraversalAddress extracts a resource address like "aws_sqs_queue.name"
-// from HCL expression tokens.
+// from HCL expression tokens. Only considers TokenIdent tokens to avoid
+// matching comments, punctuation, or other non-identifier tokens.
 func extractTraversalAddress(tokens hclwrite.Tokens) string {
-	var parts []string
+	var idents []string
 	for _, t := range tokens {
-		s := string(t.Bytes)
-		switch s {
-		case " ", "\t", "\n":
-			continue
-		case ".":
-			continue
-		default:
-			parts = append(parts, s)
+		if hclsyntax.TokenType(t.Type) == hclsyntax.TokenIdent {
+			idents = append(idents, string(t.Bytes))
 		}
 	}
-	if len(parts) >= 2 {
-		return parts[0] + "." + parts[1]
+	if len(idents) >= 2 {
+		return idents[0] + "." + idents[1]
 	}
 	return ""
 }

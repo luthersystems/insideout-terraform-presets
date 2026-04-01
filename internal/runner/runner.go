@@ -174,11 +174,28 @@ func (r *Runner) Run(ctx context.Context) (*Result, error) {
 	allResources := make([]discovery.DiscoveredResource, len(resources))
 	copy(allResources, resources)
 
+	// Track import IDs already chased to avoid duplicates across iterations
+	chasedIDs := make(map[string]bool)
+	for _, r := range resources {
+		chasedIDs[r.ImportID] = true
+	}
+
 	for iteration := 0; iteration < resolver.MaxIterations(); iteration++ {
 		newDeps, err := chaser.FindNewDependencies(cleanedHCL, refMap)
 		if err != nil {
 			return nil, fmt.Errorf("dependency chase iteration %d: %w", iteration, err)
 		}
+
+		// Filter out already-chased dependencies
+		var uniqueDeps []discovery.DiscoveredResource
+		for _, dep := range newDeps {
+			if !chasedIDs[dep.ImportID] {
+				chasedIDs[dep.ImportID] = true
+				uniqueDeps = append(uniqueDeps, dep)
+			}
+		}
+		newDeps = uniqueDeps
+
 		if len(newDeps) == 0 {
 			r.logger.Info("dependency chase complete", "iterations", iteration+1)
 			break
@@ -241,9 +258,15 @@ func (r *Runner) Run(ctx context.Context) (*Result, error) {
 		depImportsPath := filepath.Join(workDir, fmt.Sprintf("imports_dep_%d.tf", i))
 		depImports, err := os.ReadFile(depImportsPath)
 		if err != nil {
-			break // no more dep import files
+			if os.IsNotExist(err) {
+				break // no more dep import files
+			}
+			return nil, fmt.Errorf("read dep imports %d: %w", i, err)
 		}
-		existing, _ := os.ReadFile(importsPath)
+		existing, err := os.ReadFile(importsPath)
+		if err != nil {
+			return nil, fmt.Errorf("read imports.tf for merge: %w", err)
+		}
 		if err := os.WriteFile(importsPath, append(existing, depImports...), 0644); err != nil {
 			return nil, fmt.Errorf("merge imports: %w", err)
 		}

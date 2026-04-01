@@ -79,7 +79,7 @@ func TestARNToTerraformResource(t *testing.T) {
 		{
 			"SQS queue",
 			"arn:aws:sqs:us-east-1:123456789012:my-queue",
-			"aws_sqs_queue", "arn:aws:sqs:us-east-1:123456789012:my-queue", true,
+			"aws_sqs_queue", "https://sqs.us-east-1.amazonaws.com/123456789012/my-queue", true,
 		},
 		{
 			"Lambda function",

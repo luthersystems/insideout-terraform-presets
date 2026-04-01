@@ -10,6 +10,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/lambda v1.88.5
 	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.41.5
 	github.com/aws/aws-sdk-go-v2/service/sqs v1.42.25
+	github.com/hashicorp/go-version v1.8.0
 	github.com/hashicorp/hc-install v0.9.3
 	github.com/hashicorp/hcl/v2 v2.24.0
 	github.com/hashicorp/terraform-exec v0.25.0
@@ -39,7 +40,6 @@ require (
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/hashicorp/go-retryablehttp v0.7.8 // indirect
-	github.com/hashicorp/go-version v1.8.0 // indirect
 	github.com/mitchellh/go-wordwrap v1.0.1 // indirect
 	golang.org/x/crypto v0.45.0 // indirect
 	golang.org/x/mod v0.33.0 // indirect

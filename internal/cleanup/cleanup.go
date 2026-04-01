@@ -209,10 +209,35 @@ func addLifecycleIgnoreChanges(body *hclwrite.Body, attrs []string) {
 	}
 	sort.Strings(merged)
 
-	ignoreValue := "[" + strings.Join(merged, ", ") + "]"
+	// Build raw tokens for ignore_changes = [attr1, attr2, ...]
+	// We construct proper HCL tokens rather than abusing TokensForIdentifier.
+	var tokens hclwrite.Tokens
+	tokens = append(tokens, &hclwrite.Token{
+		Type:  hclsyntax.TokenOBrack,
+		Bytes: []byte{'['},
+	})
+	for i, name := range merged {
+		if i > 0 {
+			tokens = append(tokens, &hclwrite.Token{
+				Type:  hclsyntax.TokenComma,
+				Bytes: []byte{','},
+			}, &hclwrite.Token{
+				Type:  hclsyntax.TokenNewline,
+				Bytes: []byte{' '},
+			})
+		}
+		tokens = append(tokens, &hclwrite.Token{
+			Type:  hclsyntax.TokenIdent,
+			Bytes: []byte(name),
+		})
+	}
+	tokens = append(tokens, &hclwrite.Token{
+		Type:  hclsyntax.TokenCBrack,
+		Bytes: []byte{']'},
+	})
+
 	lifecycle := body.AppendNewBlock("lifecycle", nil)
-	lifecycle.Body().SetAttributeRaw("ignore_changes",
-		hclwrite.TokensForIdentifier(ignoreValue))
+	lifecycle.Body().SetAttributeRaw("ignore_changes", tokens)
 }
 
 // attrHasNonEmptyValue checks if an attribute exists and has a non-empty/non-null value.

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/signal"
 	"strings"
 
 	"github.com/luthersystems/insideout-terraform-presets/internal/runner"
@@ -55,8 +56,11 @@ func main() {
 		cfg.ResourceTypes = strings.Split(resourceTypes, ",")
 	}
 
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer cancel()
+
 	r := runner.New(cfg, logger)
-	result, err := r.Run(context.Background())
+	result, err := r.Run(ctx)
 	if err != nil {
 		logger.Error("import failed", "error", err)
 		os.Exit(1)

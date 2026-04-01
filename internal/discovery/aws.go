@@ -43,10 +43,22 @@ func (d *AWSDiscoverer) DiscoverAll(ctx context.Context, filter Filter) ([]Disco
 }
 
 // DiscoverTypes runs only the discoverers matching the given resource types.
+// Logs a warning for any requested types that are not supported.
 func (d *AWSDiscoverer) DiscoverTypes(ctx context.Context, filter Filter, types []string) ([]DiscoveredResource, error) {
 	typeSet := make(map[string]bool, len(types))
 	for _, t := range types {
 		typeSet[t] = true
+	}
+
+	// Warn about unsupported types
+	supported := make(map[string]bool, len(d.discoverers))
+	for _, disc := range d.discoverers {
+		supported[disc.ResourceType()] = true
+	}
+	for _, t := range types {
+		if !supported[t] {
+			d.logger.Warn("unsupported resource type, skipping", "type", t)
+		}
 	}
 
 	var all []DiscoveredResource

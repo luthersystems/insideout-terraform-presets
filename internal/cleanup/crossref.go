@@ -189,7 +189,13 @@ func UnresolvedReferences(src []byte, refMap *CrossRefMap) ([]string, error) {
 }
 
 func collectUnresolved(body *hclwrite.Body, refMap *CrossRefMap, seen map[string]bool, out *[]string) {
-	for _, attr := range body.Attributes() {
+	for attrName, attr := range body.Attributes() {
+		// Skip JSON policy attributes — ARNs inside JSON strings are not
+		// importable references, they're policy document content.
+		if skipCrossRefAttrs[attrName] {
+			continue
+		}
+
 		value := extractStringValue(attr.Expr().BuildTokens(nil))
 		if value == "" {
 			continue

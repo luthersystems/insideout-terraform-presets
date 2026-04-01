@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/hashicorp/go-version"
 	"github.com/hashicorp/hc-install/product"
 	"github.com/hashicorp/hc-install/releases"
 	"github.com/hashicorp/terraform-exec/tfexec"
@@ -22,8 +23,9 @@ type TerraformExecutor struct {
 // the system terraform or installs one.
 func NewTerraformExecutor(workDir, tfBinary string) (*TerraformExecutor, error) {
 	if tfBinary == "" {
-		installer := &releases.LatestVersion{
+		installer := &releases.ExactVersion{
 			Product: product.Terraform,
+			Version: version.Must(version.NewVersion("1.12.0")),
 		}
 		var err error
 		tfBinary, err = installer.Install(context.Background())

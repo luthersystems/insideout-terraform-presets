@@ -80,8 +80,5 @@ func (d *SQSDiscoverer) Discover(ctx context.Context, filter Filter) ([]Discover
 // URL format: https://sqs.<region>.amazonaws.com/<account>/<queue-name>
 func queueNameFromURL(url string) string {
 	parts := strings.Split(url, "/")
-	if len(parts) > 0 {
-		return parts[len(parts)-1]
-	}
-	return url
+	return parts[len(parts)-1]
 }

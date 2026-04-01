@@ -1,6 +1,7 @@
 package resolver
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/luthersystems/insideout-terraform-presets/internal/discovery"
@@ -42,8 +43,13 @@ func ARNToTerraformResource(arn string) (terraformType, importID string, ok bool
 	case "iam":
 		return iamARNToResource(parsed)
 	case "sqs":
-		// SQS ARN format: arn:aws:sqs:region:account:queue-name
-		return "aws_sqs_queue", arn, true
+		// SQS import requires queue URL, not ARN.
+		// ARN format: arn:aws:sqs:region:account:queue-name
+		// URL format: https://sqs.region.amazonaws.com/account/queue-name
+		queueName := parsed.Resource
+		url := fmt.Sprintf("https://sqs.%s.amazonaws.com/%s/%s",
+			parsed.Region, parsed.AccountID, queueName)
+		return "aws_sqs_queue", url, true
 	case "lambda":
 		return lambdaARNToResource(parsed)
 	case "logs":

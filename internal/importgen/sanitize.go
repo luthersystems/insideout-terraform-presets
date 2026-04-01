@@ -3,7 +3,6 @@ package importgen
 import (
 	"fmt"
 	"strings"
-	"unicode"
 )
 
 // Sanitize converts a resource name into a valid HCL identifier.
@@ -22,10 +21,7 @@ func Sanitize(name string) string {
 		case r == '-', r == '/', r == '.', r == ':', r == '@':
 			b.WriteRune('_')
 		default:
-			if unicode.IsLetter(r) || unicode.IsDigit(r) {
-				b.WriteRune(r)
-			}
-			// Skip other characters
+			// Skip non-ASCII and other characters — HCL requires ASCII identifiers
 		}
 	}
 	s := b.String()
@@ -42,8 +38,16 @@ func Sanitize(name string) string {
 }
 
 // Deduplicate ensures all names in the set are unique by appending numeric
-// suffixes to duplicates. It modifies names in-place and returns them.
+// suffixes to duplicates. Checks generated names against ALL names (both
+// original and previously generated) to avoid collisions like
+// ["foo", "foo", "foo_1"] → ["foo", "foo_1", "foo_1"].
 func Deduplicate(names []string) []string {
+	// First pass: collect all original names
+	allUsed := make(map[string]bool, len(names))
+	for _, name := range names {
+		allUsed[name] = true
+	}
+
 	counts := make(map[string]int)
 	result := make([]string, len(names))
 	for i, name := range names {
@@ -51,7 +55,16 @@ func Deduplicate(names []string) []string {
 		if counts[name] == 1 {
 			result[i] = name
 		} else {
-			result[i] = fmt.Sprintf("%s_%d", name, counts[name]-1)
+			// Find a suffix that doesn't collide with any existing name
+			candidate := ""
+			for n := counts[name] - 1; ; n++ {
+				candidate = fmt.Sprintf("%s_%d", name, n)
+				if !allUsed[candidate] {
+					break
+				}
+			}
+			result[i] = candidate
+			allUsed[candidate] = true
 		}
 	}
 	return result

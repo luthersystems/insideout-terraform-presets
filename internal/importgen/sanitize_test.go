@@ -61,7 +61,12 @@ func TestDeduplicate(t *testing.T) {
 		{
 			"collision with existing suffix",
 			[]string{"queue", "queue_1", "queue"},
-			[]string{"queue", "queue_1", "queue_1"},
+			[]string{"queue", "queue_1", "queue_2"},
+		},
+		{
+			"deep collision",
+			[]string{"x", "x_1", "x_2", "x"},
+			[]string{"x", "x_1", "x_2", "x_3"},
 		},
 		{
 			"empty",
