@@ -82,8 +82,28 @@ func ResolveCrossReferences(src []byte, refMap *CrossRefMap) ([]byte, error) {
 	return f.Bytes(), nil
 }
 
+// skipCrossRefAttrs are attribute names that should never be cross-referenced.
+// These contain JSON strings, policy documents, or other structured data where
+// replacing an ARN with a terraform reference would break the value format.
+var skipCrossRefAttrs = map[string]bool{
+	"redrive_policy":         true,
+	"redrive_allow_policy":   true,
+	"policy":                 true,
+	"assume_role_policy":     true,
+	"inline_policy":          true,
+	"access_policy":          true,
+	"bucket_policy":          true,
+	"key_policy":             true,
+	"managed_policy_arns":    true,
+	"resource_based_policy":  true,
+}
+
 func resolveBlockCrossRefs(body *hclwrite.Body, refMap *CrossRefMap, selfAddress string) {
 	for attrName, attr := range body.Attributes() {
+		if skipCrossRefAttrs[attrName] {
+			continue
+		}
+
 		value := extractStringValue(attr.Expr().BuildTokens(nil))
 		if value == "" {
 			continue

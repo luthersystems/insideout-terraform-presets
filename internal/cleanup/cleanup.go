@@ -82,6 +82,10 @@ func CleanupGeneratedHCL(src []byte) ([]byte, error) {
 			block.Body().RemoveAttribute(attr)
 		}
 
+		// Remove attributes set to null — these cause "update in-place" drift
+		// when terraform applies provider defaults on plan.
+		removeNullAttributes(block.Body())
+
 		// Type-specific fixups
 		if resourceType == "aws_lambda_function" {
 			fixupLambdaFunction(block.Body())
@@ -89,6 +93,31 @@ func CleanupGeneratedHCL(src []byte) ([]byte, error) {
 	}
 
 	return f.Bytes(), nil
+}
+
+// removeNullAttributes removes attributes whose value is the literal `null`.
+// Terraform's -generate-config-out emits `attr = null` for unset optional
+// attributes, but leaving them in the config causes terraform to set them
+// to their default values on apply (showing as "update in-place" drift).
+func removeNullAttributes(body *hclwrite.Body) {
+	for name, attr := range body.Attributes() {
+		tokens := attr.Expr().BuildTokens(nil)
+		if isNullValue(tokens) {
+			body.RemoveAttribute(name)
+		}
+	}
+}
+
+// isNullValue checks if an HCL expression is the literal `null`.
+func isNullValue(tokens hclwrite.Tokens) bool {
+	for _, t := range tokens {
+		s := strings.TrimSpace(string(t.Bytes))
+		if s == "" {
+			continue
+		}
+		return s == "null"
+	}
+	return false
 }
 
 // fixupLambdaFunction resolves the Lambda filename/image_uri/s3_bucket mutual
