@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	tfjson "github.com/hashicorp/terraform-json"
 	"github.com/luthersystems/insideout-terraform-presets/internal/cleanup"
 	"github.com/luthersystems/insideout-terraform-presets/internal/discovery"
 	"github.com/luthersystems/insideout-terraform-presets/internal/importgen"
@@ -44,6 +45,7 @@ type terraformRunner interface {
 	Init(ctx context.Context) error
 	PlanGenerateConfig(ctx context.Context, outFile string) error
 	Validate(ctx context.Context) error
+	ProvidersSchema(ctx context.Context) (*tfjson.ProviderSchemas, error)
 }
 
 // Runner orchestrates the full import pipeline.
@@ -118,6 +120,16 @@ func (r *Runner) Run(ctx context.Context) (*Result, error) {
 		return nil, fmt.Errorf("terraform init: %w", err)
 	}
 
+	// Fetch provider schema for schema-driven cleanup. Falls back to
+	// hardcoded attribute lists if schema is unavailable.
+	r.logger.Info("loading provider schema")
+	var schemaInfo *cleanup.SchemaInfo
+	if tfSchemas, err := tfExec.ProvidersSchema(ctx); err != nil {
+		r.logger.Warn("provider schema unavailable, using fallback cleanup", "error", err)
+	} else {
+		schemaInfo = cleanup.ExtractSchemaInfo(tfSchemas)
+	}
+
 	generatedFile := "generated.tf"
 	r.logger.Info("running terraform plan -generate-config-out")
 	if err := tfExec.PlanGenerateConfig(ctx, generatedFile); err != nil {
@@ -132,7 +144,7 @@ func (r *Runner) Run(ctx context.Context) (*Result, error) {
 
 	// Phase 4: Cleanup + cross-reference resolution
 	r.logger.Info("cleaning up generated HCL")
-	cleanedHCL, err := cleanup.CleanupGeneratedHCL(generatedHCL)
+	cleanedHCL, err := cleanup.CleanupGeneratedHCL(generatedHCL, schemaInfo)
 	if err != nil {
 		return nil, fmt.Errorf("cleanup: %w", err)
 	}
@@ -206,7 +218,7 @@ func (r *Runner) Run(ctx context.Context) (*Result, error) {
 		}
 
 		// Cleanup the new dep HCL
-		depCleanedHCL, err := cleanup.CleanupGeneratedHCL(depGeneratedHCL)
+		depCleanedHCL, err := cleanup.CleanupGeneratedHCL(depGeneratedHCL, schemaInfo)
 		if err != nil {
 			return nil, fmt.Errorf("cleanup dep iteration %d: %w", iteration, err)
 		}

@@ -37,7 +37,7 @@ func TestCleanupGeneratedHCL_SQS(t *testing.T) {
   tags                       = { "Project" = "demo" }
 }
 `
-	got, err := CleanupGeneratedHCL([]byte(input))
+	got, err := CleanupGeneratedHCL([]byte(input), nil)
 	if err != nil {
 		t.Fatalf("CleanupGeneratedHCL() error = %v", err)
 	}
@@ -76,7 +76,7 @@ func TestCleanupGeneratedHCL_DynamoDB(t *testing.T) {
   }
 }
 `
-	got, err := CleanupGeneratedHCL([]byte(input))
+	got, err := CleanupGeneratedHCL([]byte(input), nil)
 	if err != nil {
 		t.Fatalf("CleanupGeneratedHCL() error = %v", err)
 	}
@@ -114,7 +114,7 @@ func TestCleanupGeneratedHCL_Lambda(t *testing.T) {
   tags_all      = {}
 }
 `
-	got, err := CleanupGeneratedHCL([]byte(input))
+	got, err := CleanupGeneratedHCL([]byte(input), nil)
 	if err != nil {
 		t.Fatalf("CleanupGeneratedHCL() error = %v", err)
 	}
@@ -144,7 +144,7 @@ resource "aws_sqs_queue" "q" {
   id   = "q"
 }
 `
-	got, err := CleanupGeneratedHCL([]byte(input))
+	got, err := CleanupGeneratedHCL([]byte(input), nil)
 	if err != nil {
 		t.Fatalf("error = %v", err)
 	}
@@ -180,7 +180,7 @@ func TestCleanupUnknownResourceType(t *testing.T) {
   tags_all = {}
 }
 `
-	got, err := CleanupGeneratedHCL([]byte(input))
+	got, err := CleanupGeneratedHCL([]byte(input), nil)
 	if err != nil {
 		t.Fatalf("error = %v", err)
 	}
@@ -217,7 +217,7 @@ func TestFixupLambda_NoneSet_InsertsPlaceholder(t *testing.T) {
   s3_key        = null
 }
 `
-	got, err := CleanupGeneratedHCL([]byte(input))
+	got, err := CleanupGeneratedHCL([]byte(input), nil)
 	if err != nil {
 		t.Fatalf("error = %v", err)
 	}
@@ -249,7 +249,7 @@ func TestFixupLambda_S3BucketSet_KeepsS3(t *testing.T) {
   image_uri          = null
 }
 `
-	got, err := CleanupGeneratedHCL([]byte(input))
+	got, err := CleanupGeneratedHCL([]byte(input), nil)
 	if err != nil {
 		t.Fatalf("error = %v", err)
 	}
@@ -284,7 +284,7 @@ func TestFixupLambda_ImageURISet_KeepsImage(t *testing.T) {
   s3_key        = null
 }
 `
-	got, err := CleanupGeneratedHCL([]byte(input))
+	got, err := CleanupGeneratedHCL([]byte(input), nil)
 	if err != nil {
 		t.Fatalf("error = %v", err)
 	}
@@ -312,7 +312,7 @@ func TestFixupLambda_FilenameSet_KeepsFilename(t *testing.T) {
   s3_bucket     = null
 }
 `
-	got, err := CleanupGeneratedHCL([]byte(input))
+	got, err := CleanupGeneratedHCL([]byte(input), nil)
 	if err != nil {
 		t.Fatalf("error = %v", err)
 	}

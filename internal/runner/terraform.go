@@ -9,6 +9,7 @@ import (
 	"github.com/hashicorp/hc-install/product"
 	"github.com/hashicorp/hc-install/releases"
 	"github.com/hashicorp/terraform-exec/tfexec"
+	tfjson "github.com/hashicorp/terraform-json"
 )
 
 // TerraformExecutor wraps terraform-exec to drive the Terraform CLI.
@@ -71,6 +72,12 @@ func (t *TerraformExecutor) Validate(ctx context.Context) error {
 	_, err := t.tf.Validate(ctx)
 	return err
 }
+
+// ProvidersSchema returns the provider schema JSON.
+func (t *TerraformExecutor) ProvidersSchema(ctx context.Context) (*tfjson.ProviderSchemas, error) {
+	return t.tf.ProvidersSchema(ctx)
+}
+
 
 // ProvidersTF returns the provider configuration HCL for the given region.
 func ProvidersTF(region string) []byte {

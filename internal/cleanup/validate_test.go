@@ -85,7 +85,7 @@ func TestValidate_CleanedSQS(t *testing.T) {
   tags                              = { "Project" = "demo" }
 }
 `
-	cleaned, err := CleanupGeneratedHCL([]byte(raw))
+	cleaned, err := CleanupGeneratedHCL([]byte(raw), nil)
 	if err != nil {
 		t.Fatalf("cleanup error: %v", err)
 	}
@@ -125,7 +125,7 @@ func TestValidate_CleanedLambdaPlaceholder(t *testing.T) {
   package_type                   = "Zip"
 }
 `
-	cleaned, err := CleanupGeneratedHCL([]byte(raw))
+	cleaned, err := CleanupGeneratedHCL([]byte(raw), nil)
 	if err != nil {
 		t.Fatalf("cleanup error: %v", err)
 	}
@@ -160,7 +160,7 @@ func TestValidate_CleanedDynamoDB(t *testing.T) {
   }
 }
 `
-	cleaned, err := CleanupGeneratedHCL([]byte(raw))
+	cleaned, err := CleanupGeneratedHCL([]byte(raw), nil)
 	if err != nil {
 		t.Fatalf("cleanup error: %v", err)
 	}

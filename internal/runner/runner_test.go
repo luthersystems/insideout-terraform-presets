@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	tfjson "github.com/hashicorp/terraform-json"
 	"github.com/luthersystems/insideout-terraform-presets/internal/discovery"
 )
 
@@ -50,6 +51,10 @@ func (m *mockTF) PlanGenerateConfig(_ context.Context, outFile string) error {
 
 func (m *mockTF) Validate(_ context.Context) error {
 	return m.validateErr
+}
+
+func (m *mockTF) ProvidersSchema(_ context.Context) (*tfjson.ProviderSchemas, error) {
+	return nil, nil // tests use fallback cleanup path
 }
 
 func testLogger() *slog.Logger {
