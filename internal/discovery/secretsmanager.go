@@ -9,9 +9,14 @@ import (
 	smtypes "github.com/aws/aws-sdk-go-v2/service/secretsmanager/types"
 )
 
+// smClient defines the Secrets Manager API methods used by the discoverer.
+type smClient interface {
+	ListSecrets(ctx context.Context, params *secretsmanager.ListSecretsInput, optFns ...func(*secretsmanager.Options)) (*secretsmanager.ListSecretsOutput, error)
+}
+
 // SecretsManagerDiscoverer discovers Secrets Manager secrets.
 type SecretsManagerDiscoverer struct {
-	client *secretsmanager.Client
+	client smClient
 }
 
 func NewSecretsManagerDiscoverer(cfg aws.Config) *SecretsManagerDiscoverer {

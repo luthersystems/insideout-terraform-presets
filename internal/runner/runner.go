@@ -34,10 +34,24 @@ type Result struct {
 	Errors          []error
 }
 
+// resourceDiscoverer abstracts AWS resource discovery for testing.
+type resourceDiscoverer interface {
+	Discover(ctx context.Context) ([]discovery.DiscoveredResource, error)
+}
+
+// terraformRunner abstracts terraform CLI operations for testing.
+type terraformRunner interface {
+	Init(ctx context.Context) error
+	PlanGenerateConfig(ctx context.Context, outFile string) error
+	Validate(ctx context.Context) error
+}
+
 // Runner orchestrates the full import pipeline.
 type Runner struct {
-	config Config
-	logger *slog.Logger
+	config     Config
+	logger     *slog.Logger
+	discoverer resourceDiscoverer // nil = use default AWS discoverer
+	tfRunner   terraformRunner    // nil = use real terraform-exec
 }
 
 func New(cfg Config, logger *slog.Logger) *Runner {
@@ -49,7 +63,7 @@ func (r *Runner) Run(ctx context.Context) (*Result, error) {
 
 	// Phase 1: Discover
 	r.logger.Info("discovering resources", "project", r.config.Project, "region", r.config.Region)
-	resources, err := r.discover(ctx)
+	resources, err := r.discoverResources(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("discovery: %w", err)
 	}
@@ -94,11 +108,12 @@ func (r *Runner) Run(ctx context.Context) (*Result, error) {
 	}
 
 	// Phase 3: Terraform generate config
-	r.logger.Info("running terraform init")
-	tfExec, err := NewTerraformExecutor(workDir, r.config.TFBinary)
+	tfExec, err := r.getTerraformRunner(workDir)
 	if err != nil {
 		return nil, fmt.Errorf("terraform executor: %w", err)
 	}
+
+	r.logger.Info("running terraform init")
 	if err := tfExec.Init(ctx); err != nil {
 		return nil, fmt.Errorf("terraform init: %w", err)
 	}
@@ -217,7 +232,14 @@ func (r *Runner) Run(ctx context.Context) (*Result, error) {
 	return result, nil
 }
 
-func (r *Runner) discover(ctx context.Context) ([]discovery.DiscoveredResource, error) {
+func (r *Runner) discoverResources(ctx context.Context) ([]discovery.DiscoveredResource, error) {
+	if r.discoverer != nil {
+		return r.discoverer.Discover(ctx)
+	}
+	return r.discoverAWS(ctx)
+}
+
+func (r *Runner) discoverAWS(ctx context.Context) ([]discovery.DiscoveredResource, error) {
 	awsCfg, err := awsconfig.LoadDefaultConfig(ctx, awsconfig.WithRegion(r.config.Region))
 	if err != nil {
 		return nil, fmt.Errorf("load AWS config: %w", err)
@@ -233,6 +255,13 @@ func (r *Runner) discover(ctx context.Context) ([]discovery.DiscoveredResource, 
 		return disc.DiscoverTypes(ctx, filter, r.config.ResourceTypes)
 	}
 	return disc.DiscoverAll(ctx, filter)
+}
+
+func (r *Runner) getTerraformRunner(workDir string) (terraformRunner, error) {
+	if r.tfRunner != nil {
+		return r.tfRunner, nil
+	}
+	return NewTerraformExecutor(workDir, r.config.TFBinary)
 }
 
 func (r *Runner) copyOutput(workDir string) error {

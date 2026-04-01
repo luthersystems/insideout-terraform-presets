@@ -8,9 +8,16 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 )
 
+// dynamodbClient defines the DynamoDB API methods used by the discoverer.
+type dynamodbClient interface {
+	ListTables(ctx context.Context, params *dynamodb.ListTablesInput, optFns ...func(*dynamodb.Options)) (*dynamodb.ListTablesOutput, error)
+	DescribeTable(ctx context.Context, params *dynamodb.DescribeTableInput, optFns ...func(*dynamodb.Options)) (*dynamodb.DescribeTableOutput, error)
+	ListTagsOfResource(ctx context.Context, params *dynamodb.ListTagsOfResourceInput, optFns ...func(*dynamodb.Options)) (*dynamodb.ListTagsOfResourceOutput, error)
+}
+
 // DynamoDBDiscoverer discovers DynamoDB tables.
 type DynamoDBDiscoverer struct {
-	client *dynamodb.Client
+	client dynamodbClient
 }
 
 func NewDynamoDBDiscoverer(cfg aws.Config) *DynamoDBDiscoverer {

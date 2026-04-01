@@ -10,9 +10,16 @@ import (
 	sqstypes "github.com/aws/aws-sdk-go-v2/service/sqs/types"
 )
 
+// sqsClient defines the SQS API methods used by the discoverer.
+type sqsClient interface {
+	ListQueues(ctx context.Context, params *sqs.ListQueuesInput, optFns ...func(*sqs.Options)) (*sqs.ListQueuesOutput, error)
+	ListQueueTags(ctx context.Context, params *sqs.ListQueueTagsInput, optFns ...func(*sqs.Options)) (*sqs.ListQueueTagsOutput, error)
+	GetQueueAttributes(ctx context.Context, params *sqs.GetQueueAttributesInput, optFns ...func(*sqs.Options)) (*sqs.GetQueueAttributesOutput, error)
+}
+
 // SQSDiscoverer discovers SQS queues.
 type SQSDiscoverer struct {
-	client *sqs.Client
+	client sqsClient
 }
 
 func NewSQSDiscoverer(cfg aws.Config) *SQSDiscoverer {
@@ -37,51 +44,36 @@ func (d *SQSDiscoverer) Discover(ctx context.Context, filter Filter) ([]Discover
 		for _, queueURL := range page.QueueUrls {
 			name := queueNameFromURL(queueURL)
 
-			tags, err := d.getQueueTags(ctx, queueURL)
+			tags, err := d.client.ListQueueTags(ctx, &sqs.ListQueueTagsInput{
+				QueueUrl: aws.String(queueURL),
+			})
 			if err != nil {
 				return nil, fmt.Errorf("sqs get tags for %s: %w", name, err)
 			}
 
-			if len(filter.Tags) > 0 && !MatchesTags(tags, filter.Tags) {
+			if len(filter.Tags) > 0 && !MatchesTags(tags.Tags, filter.Tags) {
 				continue
 			}
 
-			arn, err := d.getQueueARN(ctx, queueURL)
+			attrs, err := d.client.GetQueueAttributes(ctx, &sqs.GetQueueAttributesInput{
+				QueueUrl:       aws.String(queueURL),
+				AttributeNames: []sqstypes.QueueAttributeName{sqstypes.QueueAttributeNameQueueArn},
+			})
 			if err != nil {
 				return nil, fmt.Errorf("sqs get arn for %s: %w", name, err)
 			}
+			arn := attrs.Attributes[string(sqstypes.QueueAttributeNameQueueArn)]
 
 			resources = append(resources, DiscoveredResource{
 				TerraformType: "aws_sqs_queue",
 				ImportID:      queueURL,
 				Name:          name,
-				Tags:          tags,
+				Tags:          tags.Tags,
 				ARN:           arn,
 			})
 		}
 	}
 	return resources, nil
-}
-
-func (d *SQSDiscoverer) getQueueTags(ctx context.Context, queueURL string) (map[string]string, error) {
-	out, err := d.client.ListQueueTags(ctx, &sqs.ListQueueTagsInput{
-		QueueUrl: aws.String(queueURL),
-	})
-	if err != nil {
-		return nil, err
-	}
-	return out.Tags, nil
-}
-
-func (d *SQSDiscoverer) getQueueARN(ctx context.Context, queueURL string) (string, error) {
-	out, err := d.client.GetQueueAttributes(ctx, &sqs.GetQueueAttributesInput{
-		QueueUrl:       aws.String(queueURL),
-		AttributeNames: []sqstypes.QueueAttributeName{sqstypes.QueueAttributeNameQueueArn},
-	})
-	if err != nil {
-		return "", err
-	}
-	return out.Attributes[string(sqstypes.QueueAttributeNameQueueArn)], nil
 }
 
 // queueNameFromURL extracts the queue name from a queue URL.

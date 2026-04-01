@@ -8,9 +8,15 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 )
 
+// cwlClient defines the CloudWatch Logs API methods used by the discoverer.
+type cwlClient interface {
+	DescribeLogGroups(ctx context.Context, params *cloudwatchlogs.DescribeLogGroupsInput, optFns ...func(*cloudwatchlogs.Options)) (*cloudwatchlogs.DescribeLogGroupsOutput, error)
+	ListTagsForResource(ctx context.Context, params *cloudwatchlogs.ListTagsForResourceInput, optFns ...func(*cloudwatchlogs.Options)) (*cloudwatchlogs.ListTagsForResourceOutput, error)
+}
+
 // CloudWatchLogsDiscoverer discovers CloudWatch Log Groups.
 type CloudWatchLogsDiscoverer struct {
-	client *cloudwatchlogs.Client
+	client cwlClient
 }
 
 func NewCloudWatchLogsDiscoverer(cfg aws.Config) *CloudWatchLogsDiscoverer {
@@ -52,12 +58,17 @@ func (d *CloudWatchLogsDiscoverer) Discover(ctx context.Context, filter Filter) 
 
 				arn := aws.ToString(lg.Arn)
 
-				tags, err := d.getLogGroupTags(ctx, name)
+				tags, err := d.client.ListTagsForResource(ctx, &cloudwatchlogs.ListTagsForResourceInput{
+					ResourceArn: aws.String(arn),
+				})
 				if err != nil {
-					return nil, fmt.Errorf("cloudwatchlogs list tags for %s: %w", name, err)
+					// ListTagsForResource requires a proper ARN. If the ARN is malformed
+					// or the API returns an access error, return empty tags rather than
+					// blocking discovery entirely. Tags are used for optional filtering only.
+					tags = &cloudwatchlogs.ListTagsForResourceOutput{}
 				}
 
-				if len(filter.Tags) > 0 && !MatchesTags(tags, filter.Tags) {
+				if len(filter.Tags) > 0 && !MatchesTags(tags.Tags, filter.Tags) {
 					continue
 				}
 
@@ -65,24 +76,11 @@ func (d *CloudWatchLogsDiscoverer) Discover(ctx context.Context, filter Filter) 
 					TerraformType: "aws_cloudwatch_log_group",
 					ImportID:      name,
 					Name:          name,
-					Tags:          tags,
+					Tags:          tags.Tags,
 					ARN:           arn,
 				})
 			}
 		}
 	}
 	return resources, nil
-}
-
-func (d *CloudWatchLogsDiscoverer) getLogGroupTags(ctx context.Context, logGroupARN string) (map[string]string, error) {
-	out, err := d.client.ListTagsForResource(ctx, &cloudwatchlogs.ListTagsForResourceInput{
-		ResourceArn: aws.String(logGroupARN),
-	})
-	if err != nil {
-		// ListTagsForResource requires a proper ARN. If the ARN is malformed
-		// or the API returns an access error, return empty tags rather than
-		// blocking discovery entirely. Tags are used for optional filtering only.
-		return nil, nil
-	}
-	return out.Tags, nil
 }

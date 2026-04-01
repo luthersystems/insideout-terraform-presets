@@ -8,9 +8,15 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 )
 
+// lambdaClient defines the Lambda API methods used by the discoverer.
+type lambdaClient interface {
+	ListFunctions(ctx context.Context, params *lambda.ListFunctionsInput, optFns ...func(*lambda.Options)) (*lambda.ListFunctionsOutput, error)
+	ListTags(ctx context.Context, params *lambda.ListTagsInput, optFns ...func(*lambda.Options)) (*lambda.ListTagsOutput, error)
+}
+
 // LambdaDiscoverer discovers Lambda functions.
 type LambdaDiscoverer struct {
-	client *lambda.Client
+	client lambdaClient
 }
 
 func NewLambdaDiscoverer(cfg aws.Config) *LambdaDiscoverer {
@@ -38,12 +44,14 @@ func (d *LambdaDiscoverer) Discover(ctx context.Context, filter Filter) ([]Disco
 
 			arn := aws.ToString(fn.FunctionArn)
 
-			tags, err := d.getFunctionTags(ctx, arn)
+			tagsOut, err := d.client.ListTags(ctx, &lambda.ListTagsInput{
+				Resource: aws.String(arn),
+			})
 			if err != nil {
 				return nil, fmt.Errorf("lambda list tags for %s: %w", name, err)
 			}
 
-			if len(filter.Tags) > 0 && !MatchesTags(tags, filter.Tags) {
+			if len(filter.Tags) > 0 && !MatchesTags(tagsOut.Tags, filter.Tags) {
 				continue
 			}
 
@@ -51,20 +59,10 @@ func (d *LambdaDiscoverer) Discover(ctx context.Context, filter Filter) ([]Disco
 				TerraformType: "aws_lambda_function",
 				ImportID:      name,
 				Name:          name,
-				Tags:          tags,
+				Tags:          tagsOut.Tags,
 				ARN:           arn,
 			})
 		}
 	}
 	return resources, nil
-}
-
-func (d *LambdaDiscoverer) getFunctionTags(ctx context.Context, arn string) (map[string]string, error) {
-	out, err := d.client.ListTags(ctx, &lambda.ListTagsInput{
-		Resource: aws.String(arn),
-	})
-	if err != nil {
-		return nil, err
-	}
-	return out.Tags, nil
 }
