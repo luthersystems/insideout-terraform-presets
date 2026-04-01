@@ -1,9 +1,8 @@
 package cleanup
 
 import (
-	"fmt"
+	"reflect"
 	"sort"
-	"strings"
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
@@ -46,12 +45,21 @@ func FixDriftFromPlan(src []byte, plan *tfjson.Plan) ([]byte, error) {
 			continue
 		}
 
-		// Find attributes that differ between before and after
+		// Find attributes that differ between before and after.
+		// Check both directions: keys in after that changed, and keys
+		// in before that were removed.
+		seen := make(map[string]bool)
 		var changed []string
 		for key, afterVal := range after {
 			beforeVal, exists := before[key]
-			if !exists || fmt.Sprintf("%v", beforeVal) != fmt.Sprintf("%v", afterVal) {
+			if !exists || !reflect.DeepEqual(beforeVal, afterVal) {
 				changed = append(changed, key)
+			}
+			seen[key] = true
+		}
+		for key := range before {
+			if !seen[key] {
+				changed = append(changed, key) // deleted in after
 			}
 		}
 		if len(changed) > 0 {
@@ -110,9 +118,8 @@ func addLifecycleIgnoreChanges(body *hclwrite.Body, attrs []string) {
 		if block.Type() == "lifecycle" {
 			if ic := block.Body().GetAttribute("ignore_changes"); ic != nil {
 				for _, t := range ic.Expr().BuildTokens(nil) {
-					s := strings.TrimSpace(string(t.Bytes))
-					if s != "" && s != "[" && s != "]" && s != "," {
-						existing[s] = true
+					if hclsyntax.TokenType(t.Type) == hclsyntax.TokenIdent {
+						existing[string(t.Bytes)] = true
 					}
 				}
 			}

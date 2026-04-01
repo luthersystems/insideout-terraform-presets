@@ -112,7 +112,7 @@ func (r *Runner) Run(ctx context.Context) (*Result, error) {
 	}
 
 	// Phase 3: Terraform generate config
-	tfExec, err := r.getTerraformRunner(workDir)
+	tfExec, err := r.getTerraformRunner(ctx, workDir)
 	if err != nil {
 		return nil, fmt.Errorf("terraform executor: %w", err)
 	}
@@ -310,7 +310,7 @@ func (r *Runner) Run(ctx context.Context) (*Result, error) {
 		return nil, fmt.Errorf("write validate imports.tf: %w", err)
 	}
 
-	validateExec, err := r.getTerraformRunner(validateDir)
+	validateExec, err := r.getTerraformRunner(ctx, validateDir)
 	if err != nil {
 		return nil, fmt.Errorf("validate executor: %w", err)
 	}
@@ -416,6 +416,8 @@ func (r *Runner) discoverGCP(ctx context.Context) ([]discovery.DiscoveredResourc
 	if err != nil {
 		return nil, fmt.Errorf("create GCP discoverer: %w", err)
 	}
+	defer disc.Close()
+
 	filter := discovery.Filter{
 		Project: r.config.Project,
 		Region:  r.config.Region,
@@ -432,14 +434,14 @@ type workDirAware interface {
 	SetWorkDir(dir string)
 }
 
-func (r *Runner) getTerraformRunner(workDir string) (terraformRunner, error) {
+func (r *Runner) getTerraformRunner(ctx context.Context, workDir string) (terraformRunner, error) {
 	if r.tfRunner != nil {
 		if wda, ok := r.tfRunner.(workDirAware); ok {
 			wda.SetWorkDir(workDir)
 		}
 		return r.tfRunner, nil
 	}
-	return NewTerraformExecutor(workDir, r.config.TFBinary)
+	return NewTerraformExecutor(ctx, workDir, r.config.TFBinary)
 }
 
 func (r *Runner) copyOutput(workDir string) error {

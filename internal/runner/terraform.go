@@ -21,14 +21,14 @@ type TerraformExecutor struct {
 
 // NewTerraformExecutor creates a new executor. If tfBinary is empty, it uses
 // the system terraform or installs one.
-func NewTerraformExecutor(workDir, tfBinary string) (*TerraformExecutor, error) {
+func NewTerraformExecutor(ctx context.Context, workDir, tfBinary string) (*TerraformExecutor, error) {
 	if tfBinary == "" {
 		installer := &releases.ExactVersion{
 			Product: product.Terraform,
 			Version: version.Must(version.NewVersion("1.12.0")),
 		}
 		var err error
-		tfBinary, err = installer.Install(context.Background())
+		tfBinary, err = installer.Install(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("install terraform: %w", err)
 		}

@@ -39,6 +39,10 @@ type realAssetSearcher struct {
 	client *asset.Client
 }
 
+func (s *realAssetSearcher) Close() error {
+	return s.client.Close()
+}
+
 func (s *realAssetSearcher) SearchAll(ctx context.Context, scope string, assetTypes []string, query string) ([]gcpAssetResult, error) {
 	req := &assetpb.SearchAllResourcesRequest{
 		Scope:      scope,
@@ -73,7 +77,17 @@ type GCPDiscoverer struct {
 	logger   *slog.Logger
 }
 
+// Close releases the underlying gRPC connection. Should be called when
+// the discoverer is no longer needed.
+func (d *GCPDiscoverer) Close() error {
+	if c, ok := d.searcher.(*realAssetSearcher); ok {
+		return c.Close()
+	}
+	return nil
+}
+
 // NewGCPDiscoverer creates a discoverer for the given GCP project.
+// The caller should call Close() when done to release the gRPC connection.
 func NewGCPDiscoverer(ctx context.Context, project string, logger *slog.Logger) (*GCPDiscoverer, error) {
 	client, err := asset.NewClient(ctx)
 	if err != nil {

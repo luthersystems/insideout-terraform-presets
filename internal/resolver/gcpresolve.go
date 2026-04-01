@@ -47,40 +47,53 @@ func GCPResourceToTerraform(ref string) (terraformType, importID string, ok bool
 
 // parseFullResourceName handles //service.googleapis.com/projects/p/collection/name
 func parseFullResourceName(fullName string) (string, string, bool) {
-	// Strip the // prefix and service domain
+	// Strip the // prefix and extract service domain
 	// Format: //storage.googleapis.com/projects/_/buckets/my-bucket
 	withoutPrefix := strings.TrimPrefix(fullName, "//")
 	slashIdx := strings.Index(withoutPrefix, "/")
 	if slashIdx < 0 {
 		return "", "", false
 	}
+	service := withoutPrefix[:slashIdx] // "storage.googleapis.com"
+	// Extract the service name prefix (e.g., "storage", "compute", "redis")
+	servicePrefix := strings.Split(service, ".")[0]
 	path := withoutPrefix[slashIdx+1:] // "projects/_/buckets/my-bucket"
-	return parseProjectPath(path)
+	return parseProjectPathWithService(path, servicePrefix)
 }
 
-// parseProjectPath handles projects/p/.../collection/name
+// parseProjectPath handles projects/p/.../collection/name without a service hint.
 func parseProjectPath(path string) (string, string, bool) {
+	return parseProjectPathWithService(path, "")
+}
+
+// parseProjectPathWithService handles projects/p/.../collection/name with
+// an optional service prefix hint to disambiguate collection names like
+// "instances" that appear in multiple services (sqladmin vs redis).
+func parseProjectPathWithService(path, serviceHint string) (string, string, bool) {
 	parts := strings.Split(path, "/")
 	if len(parts) < 4 || parts[0] != "projects" {
 		return "", "", false
 	}
 
-	// Find the collection and name. The path structure varies:
-	// projects/p/buckets/name (3 segments after "projects/p")
-	// projects/p/global/networks/name
-	// projects/p/topics/name
-	// projects/p/locations/region/services/name
-
-	// Walk backwards to find the last collection/name pair
 	collection := parts[len(parts)-2]
 
-	// Try to determine the service from the collection
+	// Try to match service/collection in the resource map.
+	// When serviceHint is provided, prefer matches where the map key
+	// starts with the service name to resolve ambiguity.
+	var fallbackType, fallbackPath string
 	for key, tfType := range gcpResourceMap {
 		keyParts := strings.Split(key, "/")
-		if keyParts[len(keyParts)-1] == collection {
-			// Use the full path as import ID (terraform needs it)
+		if keyParts[len(keyParts)-1] != collection {
+			continue
+		}
+		if serviceHint != "" && strings.HasPrefix(key, serviceHint+"/") {
 			return tfType, path, true
 		}
+		fallbackType = tfType
+		fallbackPath = path
+	}
+	if fallbackType != "" {
+		return fallbackType, fallbackPath, true
 	}
 
 	return "", "", false

@@ -44,11 +44,18 @@ func ARNToTerraformResource(arn string) (terraformType, importID string, ok bool
 		return iamARNToResource(parsed)
 	case "sqs":
 		// SQS import requires queue URL, not ARN.
-		// ARN format: arn:aws:sqs:region:account:queue-name
-		// URL format: https://sqs.region.amazonaws.com/account/queue-name
+		// ARN format: arn:partition:sqs:region:account:queue-name
+		// URL format: https://sqs.region.domain/account/queue-name
 		queueName := parsed.Resource
-		url := fmt.Sprintf("https://sqs.%s.amazonaws.com/%s/%s",
-			parsed.Region, parsed.AccountID, queueName)
+		domain := "amazonaws.com"
+		switch parsed.Partition {
+		case "aws-cn":
+			domain = "amazonaws.com.cn"
+		case "aws-us-gov":
+			domain = "amazonaws.com" // GovCloud uses same domain
+		}
+		url := fmt.Sprintf("https://sqs.%s.%s/%s/%s",
+			parsed.Region, domain, parsed.AccountID, queueName)
 		return "aws_sqs_queue", url, true
 	case "lambda":
 		return lambdaARNToResource(parsed)
