@@ -179,7 +179,19 @@ The drift-fix pass uses Terraform's own plan output as the source of truth for w
 - **Schema extraction** replaces per-resource computed attribute lists
 - **Drift-fix** replaces per-resource lifecycle ignore lists
 
-### 5. Graceful Degradation
+### 5. Clean Plans
+
+The output must produce `terraform plan` with **zero changes** — not "close enough," not "just a few computed attrs." A clean plan is the contract: the generated Terraform accurately represents the infrastructure as it exists today. Any drift means the config is wrong.
+
+This principle drove several architectural decisions:
+- The drift-fix loop exists because "almost clean" isn't clean
+- `nullDefaults` exists because a null value that Terraform replaces with a default is a change
+- Lambda gets `filename = "placeholder.zip"` rather than omitting the attribute (which would fail validation)
+- Orphaned import blocks are filtered (an import without a resource block is an error)
+
+If `terraform plan` shows changes, we treat that as a bug in our cleanup, not an acceptable limitation.
+
+### 6. Graceful Degradation
 
 Every dynamic mechanism has a fallback:
 - Schema unavailable → use `fallbackComputedOnly` map
