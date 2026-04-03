@@ -49,7 +49,7 @@ output "region" {
 }
 
 output "connector_id" {
-  description = "VPC connector ID (placeholder for Serverless VPC Access)"
-  value       = null
+  description = "Serverless VPC Access Connector ID (null if disabled)"
+  value       = var.enable_serverless_connector ? google_vpc_access_connector.serverless[0].id : null
 }
 

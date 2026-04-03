@@ -65,3 +65,20 @@ variable "gke_cluster_name" {
   }
 }
 
+variable "enable_serverless_connector" {
+  description = "Create a Serverless VPC Access Connector for Cloud Run / Cloud Functions"
+  type        = bool
+  default     = false
+}
+
+variable "connector_cidr" {
+  description = "CIDR range for the Serverless VPC Access Connector (/28 required)"
+  type        = string
+  default     = "10.8.0.0/28"
+
+  validation {
+    condition     = can(cidrnetmask(var.connector_cidr))
+    error_message = "connector_cidr must be a valid IPv4 CIDR (e.g., 10.8.0.0/28)."
+  }
+}
+
