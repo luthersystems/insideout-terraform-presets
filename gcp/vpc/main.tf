@@ -96,3 +96,14 @@ resource "google_compute_firewall" "allow_ssh_iap" {
   source_ranges = ["35.235.240.0/20"]
 }
 
+# Serverless VPC Access Connector for Cloud Run / Cloud Functions
+resource "google_vpc_access_connector" "serverless" {
+  count = var.enable_serverless_connector ? 1 : 0
+
+  name          = "${var.project}-connector"
+  project       = var.project
+  region        = var.region
+  network       = module.vpc.network_self_link
+  ip_cidr_range = var.connector_cidr
+}
+

@@ -8,10 +8,9 @@ import "embed"
 //
 // Note: Go embed requires at least one file to match each pattern.
 // AWS has .tmpl files (bastion/user_data.sh.tmpl), GCP does not yet.
-// AWS has .zip files (lambda/placeholder.zip), GCP does not yet.
 // We use separate embed lines for optional patterns.
 //
 //go:embed aws/*/*.tf gcp/*/*.tf
 //go:embed aws/*/*.tmpl
-//go:embed aws/*/*.zip
+//go:embed aws/*/*.zip gcp/*/*.zip
 var FS embed.FS
