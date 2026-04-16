@@ -33,6 +33,18 @@ variable "deployment_type" {
   default     = "managed"
 }
 
+variable "create_service_linked_role" {
+  type        = bool
+  description = <<-EOT
+    Whether to create the AWSServiceRoleForAmazonOpenSearchService IAM
+    service-linked role. Required for VPC-mode managed domains on accounts
+    that have never used OpenSearch before. Set to false if the role already
+    exists in the account (e.g. another deploy created it) to avoid a
+    duplicate-resource error.
+  EOT
+  default     = true
+}
+
 variable "instance_type" {
   type        = string
   description = "OpenSearch instance type"

@@ -41,8 +41,19 @@ resource "aws_security_group" "opensearch" {
   tags = merge(module.name.tags, { Name = "${module.name.name}-sg" }, var.tags)
 }
 
+# VPC-mode managed domains require the account-scoped service-linked role
+# AWSServiceRoleForAmazonOpenSearchService. AWS only auto-creates it on first
+# console use, so Terraform-only deploys into a fresh account fail without
+# this. Set create_service_linked_role = false if the role already exists.
+resource "aws_iam_service_linked_role" "opensearch" {
+  count            = var.deployment_type == "managed" && var.create_service_linked_role ? 1 : 0
+  aws_service_name = "opensearchservice.amazonaws.com"
+  description      = "Service-linked role for Amazon OpenSearch Service VPC access"
+}
+
 resource "aws_opensearch_domain" "managed" {
-  count = var.deployment_type == "managed" ? 1 : 0
+  count      = var.deployment_type == "managed" ? 1 : 0
+  depends_on = [aws_iam_service_linked_role.opensearch]
 
   # OpenSearch domain names limited to 28 chars — use var.project
   domain_name    = "${var.project}-search"
