@@ -44,9 +44,16 @@ resource "aws_security_group" "opensearch" {
 # VPC-mode managed domains require the account-scoped service-linked role
 # AWSServiceRoleForAmazonOpenSearchService. AWS only auto-creates it on first
 # console use, so Terraform-only deploys into a fresh account fail without
-# this. Set create_service_linked_role = false if the role already exists.
+# it. We probe for the role and create it only when absent, keeping this
+# idempotent across accounts that already have it from a previous deploy.
+data "aws_iam_roles" "opensearch_slr" {
+  count       = var.deployment_type == "managed" ? 1 : 0
+  name_regex  = "^AWSServiceRoleForAmazonOpenSearchService$"
+  path_prefix = "/aws-service-role/opensearchservice.amazonaws.com/"
+}
+
 resource "aws_iam_service_linked_role" "opensearch" {
-  count            = var.deployment_type == "managed" && var.create_service_linked_role ? 1 : 0
+  count            = var.deployment_type == "managed" && length(data.aws_iam_roles.opensearch_slr) > 0 && length(data.aws_iam_roles.opensearch_slr[0].names) == 0 ? 1 : 0
   aws_service_name = "opensearchservice.amazonaws.com"
   description      = "Service-linked role for Amazon OpenSearch Service VPC access"
 }
