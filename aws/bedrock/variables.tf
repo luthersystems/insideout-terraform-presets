@@ -31,7 +31,7 @@ variable "model_id" {
 
 variable "embedding_model_id" {
   type        = string
-  description = "Bedrock Embedding Model ID"
+  description = "Bedrock Embedding Model ID. If you change this, update aws/opensearch's vector_embedding_dimension to match (titan-embed-text-v1 = 1024, titan-embed-text-v2 = 1024/512/256, cohere.embed-english-v3 = 1024, cohere.embed-multilingual-v3 = 1024). A mismatch will silently corrupt ingestion."
   default     = "amazon.titan-embed-text-v1"
 }
 

@@ -1,6 +1,10 @@
 variable "project" {
   type        = string
-  description = "Project name for resource naming"
+  description = "Project name for resource naming. Used as a prefix for AOSS collection and security policy names, which are capped at 32 chars; longest suffix is '-search' (7), so project must be ≤25."
+  validation {
+    condition     = length(trimspace(var.project)) > 0 && length(var.project) <= 25
+    error_message = "project must be a non-empty string ≤25 characters (AOSS collection and security policy names are capped at 32 chars and this module appends up to 7 chars of suffix)."
+  }
 }
 
 variable "environment" {

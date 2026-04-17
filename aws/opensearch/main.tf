@@ -129,16 +129,19 @@ resource "aws_opensearchserverless_security_policy" "encryption" {
   count = local.is_serverless ? 1 : 0
   name  = "${var.project}-enc"
   type  = "encryption"
-  policy = jsonencode({
-    Rules = [
-      {
-        ResourceType = "collection"
-        Resource     = ["collection/${local.collection_name}"]
-      }
-    ]
-    AWSOwnedKey = var.kms_key_arn == null
-    KmsARN      = var.kms_key_arn
-  })
+  # AOSS expects exactly one of AWSOwnedKey or KmsARN — emit only the
+  # active field, not both with a null. Otherwise AOSS rejects the policy.
+  policy = jsonencode(merge(
+    {
+      Rules = [
+        {
+          ResourceType = "collection"
+          Resource     = ["collection/${local.collection_name}"]
+        }
+      ]
+    },
+    var.kms_key_arn == null ? { AWSOwnedKey = true } : { KmsARN = var.kms_key_arn }
+  ))
 }
 
 resource "aws_opensearchserverless_security_policy" "network" {
@@ -181,18 +184,32 @@ resource "aws_opensearchserverless_access_policy" "data" {
   count = local.emit_data_access ? 1 : 0
   name  = "${var.project}-data"
   type  = "data"
+  # Scoped to the exact permissions Bedrock KB needs plus index
+  # create/update/delete so the Terraform caller can manage the vector
+  # index. Matches the AWS-published reference policy for Bedrock + AOSS.
   policy = jsonencode([
     {
       Rules = [
         {
           ResourceType = "collection"
           Resource     = ["collection/${local.collection_name}"]
-          Permission   = ["aoss:*"]
+          Permission = [
+            "aoss:DescribeCollectionItems",
+            "aoss:CreateCollectionItems",
+            "aoss:UpdateCollectionItems",
+          ]
         },
         {
           ResourceType = "index"
           Resource     = ["index/${local.collection_name}/*"]
-          Permission   = ["aoss:*"]
+          Permission = [
+            "aoss:ReadDocument",
+            "aoss:WriteDocument",
+            "aoss:CreateIndex",
+            "aoss:DescribeIndex",
+            "aoss:UpdateIndex",
+            "aoss:DeleteIndex",
+          ]
         }
       ]
       Principal = local.data_access_principals
@@ -227,9 +244,17 @@ resource "opensearch_index" "bedrock_default" {
   count = local.create_vector_idx ? 1 : 0
   name  = "bedrock-knowledge-base-default-index"
 
-  number_of_shards   = "2"
-  number_of_replicas = "0"
-  index_knn          = true
+  # AOSS manages replica count internally and does not accept
+  # number_of_replicas on index settings; shards and knn only.
+  number_of_shards = "2"
+  index_knn        = true
+
+  lifecycle {
+    precondition {
+      condition     = length(var.data_access_principal_arns) > 0
+      error_message = "create_bedrock_vector_index requires data_access_principal_arns to be non-empty. Pass the Bedrock KB role ARN (e.g. [module.bedrock.role_arn]) so the AOSS data-access policy grants it — and the Terraform runner — aoss:* on the index."
+    }
+  }
 
   mappings = jsonencode({
     properties = {

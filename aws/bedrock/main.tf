@@ -49,8 +49,13 @@ resource "aws_iam_role_policy" "bedrock_kb" {
         Action = [
           "bedrock:InvokeModel"
         ]
-        Effect   = "Allow"
-        Resource = "arn:aws:bedrock:${var.region}::foundation-model/${var.model_id}"
+        Effect = "Allow"
+        # KB ingestion calls the embedding model; downstream consumers
+        # of the KB typically invoke the chat model through the same role.
+        Resource = [
+          "arn:aws:bedrock:${var.region}::foundation-model/${var.model_id}",
+          "arn:aws:bedrock:${var.region}::foundation-model/${var.embedding_model_id}",
+        ]
       },
       {
         Action = [
