@@ -49,8 +49,13 @@ resource "aws_iam_role_policy" "bedrock_kb" {
         Action = [
           "bedrock:InvokeModel"
         ]
-        Effect   = "Allow"
-        Resource = "arn:aws:bedrock:${var.region}::foundation-model/${var.model_id}"
+        Effect = "Allow"
+        # KB ingestion calls the embedding model; downstream consumers
+        # of the KB typically invoke the chat model through the same role.
+        Resource = [
+          "arn:aws:bedrock:${var.region}::foundation-model/${var.model_id}",
+          "arn:aws:bedrock:${var.region}::foundation-model/${var.embedding_model_id}",
+        ]
       },
       {
         Action = [
@@ -64,51 +69,23 @@ resource "aws_iam_role_policy" "bedrock_kb" {
         ]
       },
       {
-        Action = [
-          "es:ESHttpPost",
-          "es:ESHttpGet",
-          "es:DescribeDomain"
-        ]
+        Action   = ["aoss:APIAccessAll"]
         Effect   = "Allow"
-        Resource = "${var.opensearch_arn}/*"
+        Resource = var.opensearch_collection_arn
       }
     ]
   })
 }
 
-resource "aws_bedrockagent_knowledge_base" "this" {
-  name     = "${module.name.name}-${var.knowledge_base_name}"
-  role_arn = aws_iam_role.bedrock_kb.arn
-  tags     = merge(module.name.tags, var.tags)
-
-  knowledge_base_configuration {
-    type = "VECTOR"
-    vector_knowledge_base_configuration {
-      embedding_model_arn = "arn:aws:bedrock:${var.region}::foundation-model/${var.embedding_model_id}"
-    }
-  }
-
-  storage_configuration {
-    type = "OPENSEARCH_SERVERLESS"
-    opensearch_serverless_configuration {
-      collection_arn    = var.opensearch_arn
-      vector_index_name = "bedrock-knowledge-base-default-index"
-      field_mapping {
-        vector_field   = "bedrock-knowledge-base-default-vector"
-        text_field     = "AMAZON_BEDROCK_TEXT_CHUNK"
-        metadata_field = "AMAZON_BEDROCK_METADATA"
-      }
-    }
-  }
-}
-
-resource "aws_bedrockagent_data_source" "this" {
-  knowledge_base_id = aws_bedrockagent_knowledge_base.this.id
-  name              = "${module.name.name}-s3-source"
-  data_source_configuration {
-    type = "S3"
-    s3_configuration {
-      bucket_arn = var.s3_bucket_arn
-    }
-  }
-}
+# The Bedrock Knowledge Base (aws_bedrockagent_knowledge_base) and its S3
+# data source are intentionally NOT managed by this module. Creating the KB
+# at terraform time requires (1) a pre-existing AOSS vector index with the
+# k-NN field mapping Bedrock expects, (2) an AOSS data-access policy
+# granting this role and the terraform runner aoss:* on the collection, and
+# (3) resolving assumed-role session ARNs to their underlying roles. All of
+# that is an application-layer concern — the application that ingests data
+# into the KB is the right place to create the KB, the vector index, and
+# the data-access policy, because only it knows which embedding model /
+# dimension / field names it needs. This module provisions only the IAM
+# role and its policy so the application can assume it when it calls
+# CreateKnowledgeBase and StartIngestionJob.
