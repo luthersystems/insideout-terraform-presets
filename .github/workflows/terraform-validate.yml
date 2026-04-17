@@ -126,3 +126,24 @@ jobs:
 
       - name: Terraform Format Check
         run: terraform fmt -check -recursive
+
+  # Single aggregator status for branch protection to require. Lets the
+  # matrix jobs above grow/shrink without updating the protection rule.
+  ci-gate:
+    needs:
+      - discover
+      - validate-presets
+      - validate-examples
+      - test-presets
+      - lint
+      - format-check
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check all required jobs succeeded
+        run: |
+          if [[ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
+            echo "One or more required CI jobs failed or were cancelled."
+            exit 1
+          fi
+          echo "All required CI jobs passed."
