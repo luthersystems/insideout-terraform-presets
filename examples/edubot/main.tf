@@ -105,21 +105,24 @@ module "secretsmanager" {
 }
 
 module "opensearch" {
-  source      = "../../aws/opensearch"
-  vpc_id      = module.vpc.vpc_id
-  subnet_ids  = module.vpc.private_subnet_ids
-  project     = var.opensearch_project
-  region      = var.opensearch_region
-  environment = var.environment
+  source                      = "../../aws/opensearch"
+  vpc_id                      = module.vpc.vpc_id
+  subnet_ids                  = module.vpc.private_subnet_ids
+  project                     = var.opensearch_project
+  region                      = var.opensearch_region
+  environment                 = var.environment
+  deployment_type             = "serverless"
+  data_access_principal_arns  = [module.bedrock.role_arn]
+  create_bedrock_vector_index = true
 }
 
 module "bedrock" {
-  source         = "../../aws/bedrock"
-  s3_bucket_arn  = module.s3.bucket_arn
-  opensearch_arn = module.opensearch.opensearch_arn
-  project        = var.bedrock_project
-  region         = var.bedrock_region
-  environment    = var.environment
+  source                    = "../../aws/bedrock"
+  s3_bucket_arn             = module.s3.bucket_arn
+  opensearch_collection_arn = module.opensearch.collection_arn
+  project                   = var.bedrock_project
+  region                    = var.bedrock_region
+  environment               = var.environment
 }
 
 module "githubactions" {

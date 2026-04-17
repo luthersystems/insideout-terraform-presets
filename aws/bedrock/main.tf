@@ -64,13 +64,9 @@ resource "aws_iam_role_policy" "bedrock_kb" {
         ]
       },
       {
-        Action = [
-          "es:ESHttpPost",
-          "es:ESHttpGet",
-          "es:DescribeDomain"
-        ]
+        Action   = ["aoss:APIAccessAll"]
         Effect   = "Allow"
-        Resource = "${var.opensearch_arn}/*"
+        Resource = var.opensearch_collection_arn
       }
     ]
   })
@@ -91,7 +87,7 @@ resource "aws_bedrockagent_knowledge_base" "this" {
   storage_configuration {
     type = "OPENSEARCH_SERVERLESS"
     opensearch_serverless_configuration {
-      collection_arn    = var.opensearch_arn
+      collection_arn    = var.opensearch_collection_arn
       vector_index_name = "bedrock-knowledge-base-default-index"
       field_mapping {
         vector_field   = "bedrock-knowledge-base-default-vector"

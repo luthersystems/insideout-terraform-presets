@@ -41,10 +41,14 @@ variable "s3_bucket_arn" {
   default     = null
 }
 
-variable "opensearch_arn" {
+variable "opensearch_collection_arn" {
   type        = string
-  description = "ARN of the OpenSearch domain/collection for the vector store"
+  description = "ARN of the OpenSearch Serverless (AOSS) collection that backs the Bedrock Knowledge Base vector store. Managed-domain ARNs are not supported by Bedrock."
   default     = null
+  validation {
+    condition     = var.opensearch_collection_arn == null ? true : can(regex("^arn:aws[a-z-]*:aoss:[a-z0-9-]+:[0-9]{12}:collection/[a-z0-9]+$", var.opensearch_collection_arn))
+    error_message = "opensearch_collection_arn must be an AOSS collection ARN matching arn:aws:aoss:<region>:<account>:collection/<id>."
+  }
 }
 
 variable "tags" {
