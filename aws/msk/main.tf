@@ -103,8 +103,26 @@ resource "aws_cloudwatch_log_group" "msk" {
   tags              = local.tags
 }
 
+# MSK VPC-attached brokers need AWSServiceRoleForKafka in the account.
+# AWS's CreateCluster API is documented to auto-create it, but we bootstrap
+# defensively to avoid IAM-propagation races on brand-new accounts. Same
+# pattern as aws/opensearch: probe with a plural data source (no error on
+# zero matches) and only create when absent.
+data "aws_iam_roles" "msk_slr" {
+  name_regex  = "^AWSServiceRoleForKafka$"
+  path_prefix = "/aws-service-role/kafka.amazonaws.com/"
+}
+
+resource "aws_iam_service_linked_role" "msk" {
+  count            = length(data.aws_iam_roles.msk_slr.names) == 0 ? 1 : 0
+  aws_service_name = "kafka.amazonaws.com"
+  description      = "Service-linked role for Amazon MSK VPC access"
+}
+
 # The MSK cluster (provisioned)
 resource "aws_msk_cluster" "this" {
+  depends_on = [aws_iam_service_linked_role.msk]
+
   cluster_name           = local.name
   kafka_version          = var.kafka_version
   number_of_broker_nodes = var.number_of_broker_nodes

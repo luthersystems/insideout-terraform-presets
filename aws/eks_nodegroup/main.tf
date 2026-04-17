@@ -72,9 +72,32 @@ resource "aws_iam_role_policy_attachment" "mng_ssm" {
 }
 
 # -------------------------------------------------------------
+# Service-linked role bootstrap
+# -------------------------------------------------------------
+# EKS managed node groups need AWSServiceRoleForAmazonEKSNodegroup in the
+# account. AWS's CreateNodegroup API is documented to auto-create it, but we
+# bootstrap defensively to avoid IAM-propagation races on brand-new accounts
+# and to survive cases where the nodegroup is created before the cluster has
+# finished materialising its own SLR. Same pattern as aws/opensearch: probe
+# with a plural data source (no error on zero matches) and only create when
+# absent.
+data "aws_iam_roles" "eks_nodegroup_slr" {
+  name_regex  = "^AWSServiceRoleForAmazonEKSNodegroup$"
+  path_prefix = "/aws-service-role/eks-nodegroup.amazonaws.com/"
+}
+
+resource "aws_iam_service_linked_role" "eks_nodegroup" {
+  count            = length(data.aws_iam_roles.eks_nodegroup_slr.names) == 0 ? 1 : 0
+  aws_service_name = "eks-nodegroup.amazonaws.com"
+  description      = "Service-linked role for EKS managed node groups"
+}
+
+# -------------------------------------------------------------
 # EKS Managed Node Group
 # -------------------------------------------------------------
 resource "aws_eks_node_group" "this" {
+  depends_on = [aws_iam_service_linked_role.eks_nodegroup]
+
   cluster_name    = var.cluster_name
   node_group_name = coalesce(var.node_group_name, "default")
 
