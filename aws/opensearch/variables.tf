@@ -61,18 +61,6 @@ variable "tags" {
   default     = {}
 }
 
-variable "data_access_principal_arns" {
-  type        = list(string)
-  description = "List of IAM role/user ARNs granted aoss:* on the collection and its indexes via a data-access policy. Serverless mode only. When non-empty, the Terraform caller's underlying role ARN is also added so it can create the vector index."
-  default     = []
-}
-
-variable "create_bedrock_vector_index" {
-  type        = bool
-  description = "When true (and deployment_type is serverless), create the bedrock-knowledge-base-default-index vector index with the k-NN field mapping required by aws_bedrockagent_knowledge_base. Requires data_access_principal_arns to include the Bedrock KB role."
-  default     = false
-}
-
 variable "kms_key_arn" {
   type        = string
   description = "Optional KMS key ARN for the AOSS encryption security policy. If null (default), the AWS-owned AOSS key is used. Serverless mode only."
@@ -84,10 +72,3 @@ variable "allow_public_access" {
   description = "AOSS network security policy: when true (default), the collection and dashboards are reachable from the public internet. Set false only if the stack provisions an aws_opensearchserverless_vpc_endpoint (not included in this module). Serverless mode only."
   default     = true
 }
-
-variable "vector_embedding_dimension" {
-  type        = number
-  description = "Dimension of the k-NN vector field on the Bedrock default index. Default 1024 matches amazon.titan-embed-text-v1. Change if you switch embedding_model_id in the Bedrock module."
-  default     = 1024
-}
-

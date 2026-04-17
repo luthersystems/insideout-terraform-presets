@@ -64,15 +64,13 @@ module "secretsmanager" {
 }
 
 module "opensearch" {
-  source                      = "../../aws/opensearch"
-  vpc_id                      = module.vpc.vpc_id
-  subnet_ids                  = module.vpc.private_subnet_ids
-  project                     = var.opensearch_project
-  environment                 = var.environment
-  region                      = var.opensearch_region
-  deployment_type             = "serverless"
-  data_access_principal_arns  = [module.bedrock.role_arn]
-  create_bedrock_vector_index = true
+  source          = "../../aws/opensearch"
+  vpc_id          = module.vpc.vpc_id
+  subnet_ids      = module.vpc.private_subnet_ids
+  project         = var.opensearch_project
+  environment     = var.environment
+  region          = var.opensearch_region
+  deployment_type = "serverless"
 }
 
 module "bedrock" {
