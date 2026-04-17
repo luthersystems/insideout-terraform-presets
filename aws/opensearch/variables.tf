@@ -1,9 +1,9 @@
 variable "project" {
   type        = string
-  description = "Project name for resource naming. Used as a prefix for AOSS collection and security policy names, which are capped at 32 chars; longest suffix is '-search' (7), so project must be ≤25."
+  description = "Project name for resource naming. Used as a prefix for the OpenSearch domain name (managed) or AOSS collection name (serverless). OpenSearch Service caps domain names at 28 chars; AOSS caps collection/policy names at 32. The module appends '-search' (7 chars), so the tighter managed-mode constraint of 21 applies."
   validation {
-    condition     = length(trimspace(var.project)) > 0 && length(var.project) <= 25
-    error_message = "project must be a non-empty string ≤25 characters (AOSS collection and security policy names are capped at 32 chars and this module appends up to 7 chars of suffix)."
+    condition     = length(trimspace(var.project)) > 0 && length(var.project) <= 21
+    error_message = "project must be a non-empty string ≤21 characters. OpenSearch Service domain names cap at 28 chars; this module appends '-search' (7), so project must be ≤21 to satisfy both managed and serverless modes."
   }
 }
 
@@ -23,18 +23,24 @@ variable "region" {
 
 variable "vpc_id" {
   type        = string
-  description = "VPC ID for OpenSearch domain"
+  description = "VPC ID for the managed-mode OpenSearch domain's VPC interface. Required in managed mode; ignored in serverless mode."
+  default     = null
 }
 
 variable "subnet_ids" {
   type        = list(string)
-  description = "List of subnet IDs for OpenSearch domain"
+  description = "Subnet IDs for the managed-mode OpenSearch domain. Required in managed mode; ignored in serverless mode."
+  default     = []
 }
 
 variable "deployment_type" {
   type        = string
-  description = "Deployment type (Managed or Serverless)"
+  description = "Deployment type. \"managed\" provisions an OpenSearch Service domain in the VPC; \"serverless\" provisions an OpenSearch Serverless collection. Must be lowercase."
   default     = "managed"
+  validation {
+    condition     = contains(["managed", "serverless"], var.deployment_type)
+    error_message = "deployment_type must be either \"managed\" or \"serverless\" (lowercase)."
+  }
 }
 
 variable "instance_type" {

@@ -31,16 +31,14 @@ variable "embedding_model_id" {
 
 variable "s3_bucket_arn" {
   type        = string
-  description = "ARN of the S3 bucket for the data source"
-  default     = null
+  description = "ARN of the S3 bucket the role is granted s3:ListBucket and s3:GetObject on. Required — the Bedrock KB role has no meaningful purpose without an S3 data source."
 }
 
 variable "opensearch_collection_arn" {
   type        = string
-  description = "ARN of the OpenSearch Serverless (AOSS) collection that backs the Bedrock Knowledge Base vector store. Managed-domain ARNs are not supported by Bedrock."
-  default     = null
+  description = "ARN of the OpenSearch Serverless (AOSS) collection that backs the Bedrock Knowledge Base vector store. Managed-domain ARNs are not supported by Bedrock. Required — this role exists specifically to grant aoss:APIAccessAll on this collection."
   validation {
-    condition     = var.opensearch_collection_arn == null ? true : can(regex("^arn:aws[a-z-]*:aoss:[a-z0-9-]+:[0-9]{12}:collection/[a-z0-9]+$", var.opensearch_collection_arn))
+    condition     = can(regex("^arn:aws[a-z-]*:aoss:[a-z0-9-]+:[0-9]{12}:collection/[a-z0-9]+$", var.opensearch_collection_arn))
     error_message = "opensearch_collection_arn must be an AOSS collection ARN matching arn:aws:aoss:<region>:<account>:collection/<id>."
   }
 }

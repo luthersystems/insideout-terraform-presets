@@ -29,6 +29,12 @@ resource "aws_security_group" "opensearch" {
   name        = "${module.name.name}-sg"
   description = "Security group for OpenSearch domain"
   vpc_id      = var.vpc_id
+  lifecycle {
+    precondition {
+      condition     = var.vpc_id != null && length(var.subnet_ids) > 0
+      error_message = "Managed OpenSearch deployment requires vpc_id and at least one subnet_id. Either set deployment_type = \"serverless\" or pass vpc_id and subnet_ids."
+    }
+  }
 
   ingress {
     from_port   = 443
@@ -106,6 +112,12 @@ resource "aws_opensearch_domain" "managed" {
 # in most accounts, but fresh accounts and tight IAM propagation windows can
 # race, so we preemptively probe and create if missing. Same idiom as the
 # managed-OpenSearch SLR above.
+#
+# Note the service-role path: "observability.aoss.amazonaws.com" (not plain
+# "aoss.amazonaws.com"). AWS files the AOSS SLR under the observability
+# service namespace — counterintuitive but correct. Verify by inspecting an
+# account that's already used AOSS: the role lives at
+# /aws-service-role/observability.aoss.amazonaws.com/AWSServiceRoleForAmazonOpenSearchServerless
 data "aws_iam_roles" "aoss_slr" {
   count       = local.is_serverless ? 1 : 0
   name_regex  = "^AWSServiceRoleForAmazonOpenSearchServerless$"
