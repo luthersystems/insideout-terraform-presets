@@ -64,8 +64,13 @@ data "aws_iam_roles" "opensearch_slr" {
   path_prefix = "/aws-service-role/opensearchservice.amazonaws.com/"
 }
 
+# `data.aws_iam_roles.opensearch_slr` is itself count-conditional, so it is a
+# tuple that can be empty. Terraform analyses the `[0]` access statically and
+# rejects it when the tuple is empty — `&&` short-circuit does not help. Wrap
+# the index in try() and default to 1 ("names already present, do nothing") so
+# we never race to create an SLR that may already exist.
 resource "aws_iam_service_linked_role" "opensearch" {
-  count            = var.deployment_type == "managed" && length(data.aws_iam_roles.opensearch_slr) > 0 && length(data.aws_iam_roles.opensearch_slr[0].names) == 0 ? 1 : 0
+  count            = var.deployment_type == "managed" && try(length(data.aws_iam_roles.opensearch_slr[0].names), 1) == 0 ? 1 : 0
   aws_service_name = "opensearchservice.amazonaws.com"
   description      = "Service-linked role for Amazon OpenSearch Service VPC access"
 }
@@ -124,8 +129,10 @@ data "aws_iam_roles" "aoss_slr" {
   path_prefix = "/aws-service-role/observability.aoss.amazonaws.com/"
 }
 
+# Same empty-tuple hazard as aws_iam_service_linked_role.opensearch above —
+# see the comment on that resource for rationale.
 resource "aws_iam_service_linked_role" "aoss" {
-  count            = local.is_serverless && length(data.aws_iam_roles.aoss_slr) > 0 && length(data.aws_iam_roles.aoss_slr[0].names) == 0 ? 1 : 0
+  count            = local.is_serverless && try(length(data.aws_iam_roles.aoss_slr[0].names), 1) == 0 ? 1 : 0
   aws_service_name = "observability.aoss.amazonaws.com"
   description      = "Service-linked role for Amazon OpenSearch Serverless"
 }
