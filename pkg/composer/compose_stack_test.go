@@ -455,7 +455,7 @@ func TestComposeStack_V2KitchenSink(t *testing.T) {
 	}
 
 	comps := awsKitchenSinkCompsV2()
-	cfg := awsKitchenSinkCfg()
+	cfg := awsKitchenSinkCfgV2()
 
 	c := newTestClient()
 	out, err := c.ComposeStack(ComposeStackOpts{
@@ -547,7 +547,7 @@ func TestComposeStack_KitchenSink(t *testing.T) {
 
 	// Enable backups for EC2/EBS + RDS to trigger wiring.
 	comps := awsKitchenSinkCompsLegacy()
-	cfg := awsKitchenSinkCfg()
+	cfg := awsKitchenSinkCfgLegacy()
 
 	c := newTestClient()
 	out, err := c.ComposeStack(ComposeStackOpts{

@@ -75,11 +75,17 @@ func configWithAWSECS(in awsECSCfgInput) *Config {
 	}
 }
 
-// awsKitchenSinkCfg returns the Config shared by the two composer
+// awsKitchenSinkCfgBase returns the Config fields shared by the two composer
 // kitchen-sink tests (legacy- and V2-key variants). Fields use the legacy
 // (un-prefixed) Config names because Config.Normalize() promotes them to
 // the cloud-prefixed equivalents during compose.
-func awsKitchenSinkCfg() *Config {
+//
+// The split into Base / Legacy / V2 (instead of a single shared builder)
+// preserves a subtle fidelity invariant: the V2 test historically did not
+// set RDS.ReadReplicas, exercising the "unset" branch of the RDS mapper,
+// while the legacy test set it to "2". Collapsing into one shared helper
+// would silently couple the two tests on that branch.
+func awsKitchenSinkCfgBase() *Config {
 	return &Config{
 		Region: "us-west-2",
 		Cloudfront: &struct {
@@ -87,11 +93,6 @@ func awsKitchenSinkCfg() *Config {
 			OriginPath *string `json:"originPath,omitempty"`
 			CachePaths *string `json:"cachePaths,omitempty"` // DEPRECATED: use OriginPath
 		}{DefaultTtl: ptrString("3600")},
-		RDS: &struct {
-			CPUSize      string `json:"cpuSize,omitempty"`
-			ReadReplicas string `json:"readReplicas,omitempty"`
-			StorageSize  string `json:"storageSize,omitempty"`
-		}{CPUSize: "db.m7i.2xlarge", ReadReplicas: "2", StorageSize: "20"},
 		SQS: &struct {
 			Type              string `json:"type,omitempty"`
 			VisibilityTimeout string `json:"visibilityTimeout,omitempty"`
@@ -100,6 +101,31 @@ func awsKitchenSinkCfg() *Config {
 			RetentionDays int `json:"retentionDays,omitempty"`
 		}{RetentionDays: 90},
 	}
+}
+
+// awsKitchenSinkCfgV2 returns the Config for TestComposeStack_V2KitchenSink.
+// RDS.ReadReplicas is deliberately unset — the test exercises the default
+// (no-read-replicas) mapper branch for that field.
+func awsKitchenSinkCfgV2() *Config {
+	cfg := awsKitchenSinkCfgBase()
+	cfg.RDS = &struct {
+		CPUSize      string `json:"cpuSize,omitempty"`
+		ReadReplicas string `json:"readReplicas,omitempty"`
+		StorageSize  string `json:"storageSize,omitempty"`
+	}{CPUSize: "db.m7i.2xlarge", StorageSize: "20"}
+	return cfg
+}
+
+// awsKitchenSinkCfgLegacy returns the Config for TestComposeStack_KitchenSink.
+// RDS.ReadReplicas is "2" to exercise the read-replicas mapper branch.
+func awsKitchenSinkCfgLegacy() *Config {
+	cfg := awsKitchenSinkCfgBase()
+	cfg.RDS = &struct {
+		CPUSize      string `json:"cpuSize,omitempty"`
+		ReadReplicas string `json:"readReplicas,omitempty"`
+		StorageSize  string `json:"storageSize,omitempty"`
+	}{CPUSize: "db.m7i.2xlarge", ReadReplicas: "2", StorageSize: "20"}
+	return cfg
 }
 
 // awsKitchenSinkCompsV2 returns the Components shape for the V2-key
@@ -122,7 +148,10 @@ func awsKitchenSinkCompsV2() *Components {
 
 // awsKitchenSinkCompsLegacy returns the Components shape for the legacy-key
 // kitchen-sink: legacy ElastiCache toggle plus legacy Backups. The explicit
-// `false` fields exist to prove the test asserts on them; don't shorten.
+// DynamoDB=false / S3=false fields are load-bearing — the legacy kitchen-sink
+// "wiring/backups" subtest asserts on `enable_dynamodb = false` and
+// `enable_s3 = false` in the composed main.tf, so dropping them would break
+// that test.
 func awsKitchenSinkCompsLegacy() *Components {
 	return &Components{
 		ElastiCache: ptrBool(true),
