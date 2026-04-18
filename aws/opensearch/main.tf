@@ -141,19 +141,28 @@ resource "aws_opensearchserverless_security_policy" "encryption" {
   count = local.is_serverless ? 1 : 0
   name  = "${var.project}-enc"
   type  = "encryption"
-  # AOSS expects exactly one of AWSOwnedKey or KmsARN — emit only the
-  # active field, not both with a null. Otherwise AOSS rejects the policy.
-  policy = jsonencode(merge(
-    {
-      Rules = [
-        {
-          ResourceType = "collection"
-          Resource     = ["collection/${local.collection_name}"]
-        }
-      ]
-    },
-    var.kms_key_arn == null ? { AWSOwnedKey = true } : { KmsARN = var.kms_key_arn }
-  ))
+  # AOSS expects exactly one of AWSOwnedKey (bool) or KmsARN (string).
+  # jsonencode() is applied inside each arm so the ternary unifies on
+  # string, not on a map value type. An earlier merge()-based version
+  # forced HCL to unify bool with string across the two arms and emitted
+  # AWSOwnedKey as the string "true", which AOSS rejects.
+  policy = var.kms_key_arn == null ? jsonencode({
+    Rules = [
+      {
+        ResourceType = "collection"
+        Resource     = ["collection/${local.collection_name}"]
+      }
+    ]
+    AWSOwnedKey = true
+    }) : jsonencode({
+    Rules = [
+      {
+        ResourceType = "collection"
+        Resource     = ["collection/${local.collection_name}"]
+      }
+    ]
+    KmsARN = var.kms_key_arn
+  })
 }
 
 resource "aws_opensearchserverless_security_policy" "network" {
