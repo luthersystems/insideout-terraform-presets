@@ -81,32 +81,63 @@ type Components struct {
 
 	// ==================== Legacy Fields (backward compatibility) ====================
 	// These are kept for backward compatibility when parsing old JSON.
-	// They will be phased out as the codebase migrates to cloud-specific fields.
-	EC2                  string `json:"ec2,omitempty"`
-	Resource             string `json:"resource,omitempty"`
-	VPC                  string `json:"vpc,omitempty"`
-	Bastion              *bool  `json:"bastion,omitempty"`
-	ALB                  *bool  `json:"alb,omitempty"`
-	CloudFront           *bool  `json:"cloudfront,omitempty"`
-	WAF                  *bool  `json:"waf,omitempty"`
-	Postgres             *bool  `json:"postgres,omitempty"`
-	ElastiCache          *bool  `json:"elasticache,omitempty"`
-	S3                   *bool  `json:"s3,omitempty"`
-	DynamoDB             *bool  `json:"dynamodb,omitempty"`
-	SQS                  *bool  `json:"sqs,omitempty"`
-	MSK                  *bool  `json:"msk,omitempty"`
-	CloudWatchLogs       *bool  `json:"cloudwatchlogs,omitempty"`
-	CloudWatchMonitoring *bool  `json:"cloudwatchmonitoring,omitempty"`
-	Grafana              *bool  `json:"grafana,omitempty"`
-	Cognito              *bool  `json:"cognito,omitempty"`
-	APIGateway           *bool  `json:"apigateway,omitempty"`
-	KMS                  *bool  `json:"kms,omitempty"`
-	SecretsManager       *bool  `json:"secretsmanager,omitempty"`
-	OpenSearch           *bool  `json:"opensearch,omitempty"`
-	Bedrock              *bool  `json:"bedrock,omitempty"`
-	Lambda               *bool  `json:"lambda,omitempty"`
-	CodePipeline         *bool  `json:"codepipeline,omitempty"`
-	Backups              *struct {
+	// Deprecated as a group: use the AWS*-prefixed fields above. See doc.go
+	// and insideout-terraform-presets#76 for the removal plan; historical
+	// session JSON should be normalised by reliable's composeradapter before
+	// reaching composer.
+	//
+	// Deprecated: Use AWSEC2 (node-group flavour) or the polymorphic AWS
+	// compute keys. Retained for legacy session JSON parsing only.
+	EC2 string `json:"ec2,omitempty"`
+	// Deprecated: Polymorphic EKS/Lambda indicator kept for legacy session
+	// parsing. Use the prefixed keys on Components directly.
+	Resource string `json:"resource,omitempty"`
+	// Deprecated: Use AWSVPC.
+	VPC string `json:"vpc,omitempty"`
+	// Deprecated: Use AWSBastion.
+	Bastion *bool `json:"bastion,omitempty"`
+	// Deprecated: Use AWSALB.
+	ALB *bool `json:"alb,omitempty"`
+	// Deprecated: Use AWSCloudFront.
+	CloudFront *bool `json:"cloudfront,omitempty"`
+	// Deprecated: Use AWSWAF.
+	WAF *bool `json:"waf,omitempty"`
+	// Deprecated: Use AWSRDS.
+	Postgres *bool `json:"postgres,omitempty"`
+	// Deprecated: Use AWSElastiCache.
+	ElastiCache *bool `json:"elasticache,omitempty"`
+	// Deprecated: Use AWSS3.
+	S3 *bool `json:"s3,omitempty"`
+	// Deprecated: Use AWSDynamoDB.
+	DynamoDB *bool `json:"dynamodb,omitempty"`
+	// Deprecated: Use AWSSQS.
+	SQS *bool `json:"sqs,omitempty"`
+	// Deprecated: Use AWSMSK.
+	MSK *bool `json:"msk,omitempty"`
+	// Deprecated: Use AWSCloudWatchLogs.
+	CloudWatchLogs *bool `json:"cloudwatchlogs,omitempty"`
+	// Deprecated: Use AWSCloudWatchMonitoring.
+	CloudWatchMonitoring *bool `json:"cloudwatchmonitoring,omitempty"`
+	// Deprecated: Use AWSGrafana.
+	Grafana *bool `json:"grafana,omitempty"`
+	// Deprecated: Use AWSCognito.
+	Cognito *bool `json:"cognito,omitempty"`
+	// Deprecated: Use AWSAPIGateway.
+	APIGateway *bool `json:"apigateway,omitempty"`
+	// Deprecated: Use AWSKMS.
+	KMS *bool `json:"kms,omitempty"`
+	// Deprecated: Use AWSSecretsManager.
+	SecretsManager *bool `json:"secretsmanager,omitempty"`
+	// Deprecated: Use AWSOpenSearch.
+	OpenSearch *bool `json:"opensearch,omitempty"`
+	// Deprecated: Use AWSBedrock.
+	Bedrock *bool `json:"bedrock,omitempty"`
+	// Deprecated: Use AWSLambda.
+	Lambda *bool `json:"lambda,omitempty"`
+	// Deprecated: Use AWSCodePipeline.
+	CodePipeline *bool `json:"codepipeline,omitempty"`
+	// Deprecated: Use AWSBackups.
+	Backups *struct {
 		EC2         *bool `json:"ec2,omitempty"`
 		Rds         *bool `json:"rds,omitempty"`
 		ElastiCache *bool `json:"elasticache,omitempty"`
@@ -352,12 +383,19 @@ type Config struct {
 	} `json:"gcp_backups,omitempty"`
 
 	// ==================== Legacy Fields (backward compatibility) ====================
+	// Deprecated as a group: use the AWS*-prefixed fields above. See doc.go
+	// and insideout-terraform-presets#76 for the removal plan; historical
+	// session JSON should be normalised by reliable's composeradapter before
+	// reaching composer.
+	//
+	// Deprecated: Use AWSEC2.
 	EC2 *struct {
 		NumServers        string `json:"numServers,omitempty"`
 		NumCoresPerServer string `json:"numCoresPerServer,omitempty"`
 		DiskSizePerServer string `json:"diskSizePerServer,omitempty"`
 	} `json:"ec2,omitempty"`
 
+	// Deprecated: Use AWSEKS.
 	Eks *struct {
 		HaControlPlane         *bool  `json:"haControlPlane,omitempty"`
 		ControlPlaneVisibility string `json:"controlPlaneVisibility,omitempty"`
@@ -367,18 +405,21 @@ type Config struct {
 		InstanceType           string `json:"instanceType,omitempty"`
 	} `json:"eks,omitempty"`
 
+	// Deprecated: Use AWSCloudfront.
 	Cloudfront *struct {
 		DefaultTtl *string `json:"defaultTtl,omitempty"`
 		OriginPath *string `json:"originPath,omitempty"`
 		CachePaths *string `json:"cachePaths,omitempty"` // DEPRECATED: use OriginPath
 	} `json:"cloudfront,omitempty"`
 
+	// Deprecated: Use AWSRDS.
 	RDS *struct {
 		CPUSize      string `json:"cpuSize,omitempty"`
 		ReadReplicas string `json:"readReplicas,omitempty"`
 		StorageSize  string `json:"storageSize,omitempty"`
 	} `json:"rds,omitempty"`
 
+	// Deprecated: Use AWSElastiCache.
 	ElastiCache *struct {
 		HA       *bool  `json:"ha,omitempty"`
 		Storage  string `json:"storageSize,omitempty"`
@@ -386,51 +427,63 @@ type Config struct {
 		Replicas string `json:"replicas,omitempty"`
 	} `json:"elasticache,omitempty"`
 
+	// Deprecated: Use AWSS3.
 	S3 *struct {
 		Versioning *bool `json:"versioning,omitempty"`
 	} `json:"s3,omitempty"`
+	// Deprecated: Use AWSDynamoDB.
 	DynamoDB *struct {
 		Type string `json:"type,omitempty"`
 	} `json:"dynamodb,omitempty"`
 
+	// Deprecated: Use AWSSQS.
 	SQS *struct {
 		Type              string `json:"type,omitempty"`
 		VisibilityTimeout string `json:"visibilityTimeout,omitempty"`
 	} `json:"sqs,omitempty"`
 
+	// Deprecated: Use AWSMSK.
 	MSK *struct {
 		Retention string `json:"retentionPeriod,omitempty"`
 	} `json:"msk,omitempty"`
+	// Deprecated: Use AWSCloudWatchLogs.
 	CloudWatchLogs *struct {
 		RetentionDays int `json:"retentionDays,omitempty"`
 	} `json:"cloudwatchlogs,omitempty"`
+	// Deprecated: Use AWSCloudWatchMonitoring.
 	CloudWatchMonitoring *struct {
 		RetentionDays int `json:"retentionDays,omitempty"`
 	} `json:"cloudwatchmonitoring,omitempty"`
 
+	// Deprecated: Use AWSCognito.
 	Cognito *struct {
 		SignInType  string `json:"signInType,omitempty"`
 		MFARequired *bool  `json:"mfaRequired,omitempty"`
 	} `json:"cognito,omitempty"`
 
+	// Deprecated: Use AWSLambda.
 	Lambda *struct {
 		Runtime    string `json:"runtime,omitempty"`
 		MemorySize string `json:"memorySize,omitempty"`
 		Timeout    string `json:"timeout,omitempty"`
 	} `json:"lambda,omitempty"`
 
+	// Deprecated: Use AWSAPIGateway.
 	APIGateway *struct {
 		DomainName     string `json:"domainName,omitempty"`
 		CertificateArn string `json:"certificateArn,omitempty"`
 	} `json:"apigateway,omitempty"`
 
+	// Deprecated: Use AWSKMS.
 	KMS *struct {
 		NumKeys string `json:"numKeys,omitempty"`
 	} `json:"kms,omitempty"`
 
+	// Deprecated: Use AWSSecretsManager.
 	SecretsManager *struct {
 		NumSecrets string `json:"numSecrets,omitempty"`
 	} `json:"secretsmanager,omitempty"`
+	// Deprecated: Use AWSOpenSearch.
 	OpenSearch *struct {
 		DeploymentType string `json:"deploymentType,omitempty"`
 		InstanceType   string `json:"instanceType,omitempty"`
@@ -438,12 +491,14 @@ type Config struct {
 		MultiAZ        *bool  `json:"multiAz,omitempty"`
 	} `json:"opensearch,omitempty"`
 
+	// Deprecated: Use AWSBedrock.
 	Bedrock *struct {
 		KnowledgeBaseName string `json:"knowledgeBaseName,omitempty"`
 		ModelID           string `json:"modelId,omitempty"`
 		EmbeddingModelID  string `json:"embeddingModelId,omitempty"`
 	} `json:"bedrock,omitempty"`
 
+	// Deprecated: Use AWSBackups.
 	Backups *struct {
 		Details map[string]struct {
 			FrequencyHours int    `json:"frequencyHours,omitempty"`
