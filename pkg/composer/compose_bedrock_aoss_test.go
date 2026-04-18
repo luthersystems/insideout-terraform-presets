@@ -8,15 +8,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// awsBedrockCollectionArnRegex mirrors the validation regex in
-// insideout-terraform-presets#69 (aws/bedrock/variables.tf). If that regex
+// awsBedrockCollectionArnRegex mirrors the validation regex baked into
+// aws/bedrock/variables.tf in this repo (landed in #69). If that regex
 // tightens, the preview stub below must also tighten.
 var awsBedrockCollectionArnRegex = regexp.MustCompile(
 	`^arn:aws[a-z-]*:aoss:[a-z0-9-]+:[0-9]{12}:collection/[a-z0-9]+$`,
 )
 
-// These tests cover the #904 composer-side wiring for the AOSS/Bedrock
-// preset reshape (insideout-terraform-presets#69). The preset's merged
+// These tests cover composer-side wiring for the AOSS/Bedrock preset
+// reshape (preset shape landed in #69, this repo). The preset's merged
 // approach is a minimal infra skeleton: an AOSS collection (plus network +
 // encryption security policies) and a Bedrock IAM role. Data-access
 // policies and the vector index are an application-layer concern handled

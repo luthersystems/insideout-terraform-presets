@@ -1,11 +1,11 @@
 module github.com/luthersystems/insideout-terraform-presets
 
-go 1.25
+go 1.24.0
 
 require (
 	github.com/hashicorp/hcl/v2 v2.24.0
 	github.com/stretchr/testify v1.11.1
-	github.com/zclconf/go-cty v1.18.1
+	github.com/zclconf/go-cty v1.17.0
 )
 
 require (
