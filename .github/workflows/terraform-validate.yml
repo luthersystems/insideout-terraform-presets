@@ -127,6 +127,36 @@ jobs:
       - name: Terraform Format Check
         run: terraform fmt -check -recursive
 
+  go-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: go build ./...
+
+  go-vet:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: go vet ./...
+
+  go-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: go test -race ./...
+
   # Single aggregator status for branch protection to require. Lets the
   # matrix jobs above grow/shrink without updating the protection rule.
   ci-gate:
@@ -137,6 +167,9 @@ jobs:
       - test-presets
       - lint
       - format-check
+      - go-build
+      - go-vet
+      - go-test
     if: always()
     runs-on: ubuntu-latest
     steps:

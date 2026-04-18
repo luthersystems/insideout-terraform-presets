@@ -1,0 +1,238 @@
+package composer
+
+import (
+	"encoding/json"
+	"testing"
+)
+
+func TestComponents_Normalize_EmptySession(t *testing.T) {
+	t.Parallel()
+	// A fresh session with no components should NOT have cloud set
+	c := Components{}
+	c.Normalize()
+
+	if c.Cloud != "" {
+		t.Errorf("Empty Components.Cloud should be empty, got %q", c.Cloud)
+	}
+}
+
+func TestComponents_Normalize_NoDefaultToAWS(t *testing.T) {
+	t.Parallel()
+	// Regression test: Normalize should NOT default cloud to AWS
+	// when no cloud-specific components are present
+	c := Components{}
+	c.Normalize()
+
+	if c.Cloud == "AWS" {
+		t.Error("Normalize() should NOT default Cloud to 'AWS' for empty sessions")
+	}
+	if c.Cloud == "GCP" {
+		t.Error("Normalize() should NOT default Cloud to 'GCP' for empty sessions")
+	}
+}
+
+func TestComponents_Normalize_ReturnsEarlyIfCloudEmpty(t *testing.T) {
+	t.Parallel()
+	// When cloud is empty, Normalize should return early without modifying anything
+	c := Components{}
+	c.Normalize()
+
+	// Verify nothing was modified
+	if c.Cloud != "" {
+		t.Errorf("Cloud should remain empty, got %q", c.Cloud)
+	}
+}
+
+func TestComponents_Normalize_ClearsGCPFieldsForAWS(t *testing.T) {
+	t.Parallel()
+	// When cloud is AWS, all GCP fields should be cleared to nil
+	c := Components{
+		Cloud:       "AWS",
+		GCPVPC:      boolPtr(true),
+		GCPGKE:      boolPtr(true),
+		GCPCloudSQL: boolPtr(true),
+		GCPCloudKMS: boolPtr(true),
+	}
+	c.Normalize()
+
+	if c.GCPVPC != nil {
+		t.Errorf("GCPVPC should be nil, got %v", c.GCPVPC)
+	}
+	if c.GCPGKE != nil {
+		t.Errorf("GCPGKE should be nil, got %v", c.GCPGKE)
+	}
+	if c.GCPCloudSQL != nil {
+		t.Errorf("GCPCloudSQL should be nil, got %v", c.GCPCloudSQL)
+	}
+	if c.GCPCloudKMS != nil {
+		t.Errorf("GCPCloudKMS should be nil, got %v", c.GCPCloudKMS)
+	}
+}
+
+func TestComponents_Normalize_ClearsAWSFieldsForGCP(t *testing.T) {
+	t.Parallel()
+	// When cloud is GCP, all AWS fields should be cleared
+	c := Components{
+		Cloud:   "GCP",
+		AWSVPC:  "VPC",
+		AWSEKS:  boolPtr(true),
+		AWSRDS:  boolPtr(true),
+		AWSS3:   boolPtr(true),
+	}
+	c.Normalize()
+
+	if c.AWSVPC != "" {
+		t.Errorf("AWSVPC should be empty, got %q", c.AWSVPC)
+	}
+	if c.AWSEKS != nil {
+		t.Errorf("AWSEKS should be nil, got %v", c.AWSEKS)
+	}
+	if c.AWSRDS != nil {
+		t.Errorf("AWSRDS should be nil, got %v", c.AWSRDS)
+	}
+	if c.AWSS3 != nil {
+		t.Errorf("AWSS3 should be nil, got %v", c.AWSS3)
+	}
+}
+
+func TestComponents_Normalize_PreservesExplicitCloud(t *testing.T) {
+	t.Parallel()
+	// If cloud is explicitly set, it should be preserved
+	c := Components{Cloud: "AWS"}
+	c.Normalize()
+	if c.Cloud != "AWS" {
+		t.Errorf("Cloud should remain 'AWS', got %q", c.Cloud)
+	}
+
+	c = Components{Cloud: "GCP"}
+	c.Normalize()
+	if c.Cloud != "GCP" {
+		t.Errorf("Cloud should remain 'GCP', got %q", c.Cloud)
+	}
+}
+
+func TestComponents_Normalize_EmptySessionJSON(t *testing.T) {
+	t.Parallel()
+	// An empty session should serialize to minimal JSON
+	c := Components{}
+	c.Normalize()
+
+	data, err := json.Marshal(c)
+	if err != nil {
+		t.Fatalf("Failed to marshal: %v", err)
+	}
+
+	var m map[string]any
+	if err := json.Unmarshal(data, &m); err != nil {
+		t.Fatalf("Failed to unmarshal: %v", err)
+	}
+
+	if _, exists := m["cloud"]; exists {
+		t.Errorf("Empty session should NOT have 'cloud' in JSON, got %v", m["cloud"])
+	}
+}
+
+func TestComponents_Normalize_SyncsLegacyFieldsForAWS(t *testing.T) {
+	t.Parallel()
+	// When cloud is AWS, legacy fields should be synced with AWS-prefixed fields
+	c := Components{
+		Cloud: "AWS",
+		VPC:   "VPC",
+		EC2:   "Intel",
+	}
+	c.Normalize()
+
+	if c.AWSVPC != "VPC" {
+		t.Errorf("AWSVPC should be 'VPC', got %q", c.AWSVPC)
+	}
+	if c.AWSEC2 != "Intel" {
+		t.Errorf("AWSEC2 should be 'Intel', got %q", c.AWSEC2)
+	}
+}
+
+func TestComponents_Normalize_ClearsLegacyFieldsAfterSync(t *testing.T) {
+	t.Parallel()
+	// After normalization, legacy fields should be cleared to prevent serialization
+	c := Components{
+		Cloud:  "AWS",
+		AWSVPC: "VPC",
+		AWSEC2: "Intel",
+	}
+	c.Normalize()
+
+	// Legacy fields should be empty after normalization
+	if c.VPC != "" {
+		t.Errorf("VPC should be empty after normalization, got %q", c.VPC)
+	}
+	if c.EC2 != "" {
+		t.Errorf("EC2 should be empty after normalization, got %q", c.EC2)
+	}
+	// AWS-prefixed fields should be preserved
+	if c.AWSVPC != "VPC" {
+		t.Errorf("AWSVPC should be 'VPC', got %q", c.AWSVPC)
+	}
+	if c.AWSEC2 != "Intel" {
+		t.Errorf("AWSEC2 should be 'Intel', got %q", c.AWSEC2)
+	}
+}
+
+func TestConfig_Normalize_EmptySession(t *testing.T) {
+	t.Parallel()
+	// A fresh config with no cloud set should not cause issues
+	cfg := Config{}
+	cfg.Normalize()
+
+	// Should complete without panic
+	if cfg.Cloud != "" {
+		// If cloud was somehow set, that's a problem
+		t.Logf("Note: Config.Cloud is %q after Normalize()", cfg.Cloud)
+	}
+}
+
+func TestConfig_Normalize_ClearsGCPFieldsForAWS(t *testing.T) {
+	t.Parallel()
+	// When cloud is AWS, GCP config fields should be cleared
+	cfg := Config{
+		Cloud: "AWS",
+		GCPGKE: &struct {
+			Regional    *bool  `json:"regional,omitempty"`
+			NodeCount   string `json:"nodeCount,omitempty"`
+			MachineType string `json:"machineType,omitempty"`
+		}{
+			NodeCount: "3",
+		},
+	}
+	cfg.Normalize()
+
+	if cfg.GCPGKE != nil {
+		t.Errorf("GCPGKE should be nil for AWS cloud, got %v", cfg.GCPGKE)
+	}
+}
+
+func TestConfig_Normalize_ClearsAWSFieldsForGCP(t *testing.T) {
+	t.Parallel()
+	// When cloud is GCP, AWS config fields should be cleared
+	cfg := Config{
+		Cloud: "GCP",
+		AWSEKS: &struct {
+			HaControlPlane         *bool  `json:"haControlPlane,omitempty"`
+			ControlPlaneVisibility string `json:"controlPlaneVisibility,omitempty"`
+			DesiredSize            string `json:"desiredSize,omitempty"`
+			MaxSize                string `json:"maxSize,omitempty"`
+			MinSize                string `json:"minSize,omitempty"`
+			InstanceType           string `json:"instanceType,omitempty"`
+		}{
+			DesiredSize: "3",
+		},
+	}
+	cfg.Normalize()
+
+	if cfg.AWSEKS != nil {
+		t.Errorf("AWSEKS should be nil for GCP cloud, got %v", cfg.AWSEKS)
+	}
+}
+
+// Helper function
+func boolPtr(b bool) *bool {
+	return &b
+}

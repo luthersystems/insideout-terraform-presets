@@ -1,0 +1,811 @@
+package composer
+
+import (
+	"encoding/json"
+	"reflect"
+	"strings"
+	"testing"
+)
+
+// cfgFromJSON is a test helper that unmarshals a JSON string into a Config.
+func cfgFromJSON(t *testing.T, s string) Config {
+	t.Helper()
+	var c Config
+	if err := json.Unmarshal([]byte(s), &c); err != nil {
+		t.Fatalf("unmarshal config: %v", err)
+	}
+	return c
+}
+
+// --- JSONTagName tests ---
+
+func TestJSONTagName(t *testing.T) {
+	t.Parallel()
+	type sample struct {
+		Named    string `json:"named"`
+		WithOmit string `json:"with_omit,omitempty"`
+		Dashed   string `json:"-"`
+		NoTag    string
+	}
+	st := reflect.TypeFor[sample]()
+	tests := []struct {
+		field string
+		want  string
+	}{
+		{"Named", "named"},
+		{"WithOmit", "with_omit"},
+		{"Dashed", ""},
+		{"NoTag", ""},
+	}
+	for _, tt := range tests {
+		f, _ := st.FieldByName(tt.field)
+		got := JSONTagName(f)
+		if got != tt.want {
+			t.Errorf("JSONTagName(%q) = %q, want %q", tt.field, got, tt.want)
+		}
+	}
+}
+
+// --- IsCloudPrefixed tests ---
+
+func TestIsCloudPrefixed(t *testing.T) {
+	t.Parallel()
+	tests := map[string]bool{
+		"aws_ec2":    true,
+		"aws_rds":    true,
+		"gcp_gke":    true,
+		"gcp_vpc":    true,
+		"ec2":        false,
+		"rds":        false,
+		"":           false,
+		"other_vm":   false,
+		"cloud":      false,
+		"region":     false,
+		"aws_":       true,
+		"gcp_":       true,
+	}
+	for tag, want := range tests {
+		if got := IsCloudPrefixed(tag); got != want {
+			t.Errorf("IsCloudPrefixed(%q) = %v, want %v", tag, got, want)
+		}
+	}
+}
+
+// --- FormatValue tests ---
+
+func TestFormatValue(t *testing.T) {
+	t.Parallel()
+	intVal := 42
+	boolTrue := true
+	boolFalse := false
+	strVal := "hello"
+
+	tests := []struct {
+		name string
+		val  reflect.Value
+		want string
+	}{
+		{"invalid", reflect.Value{}, ""},
+		{"nil_ptr_int", reflect.ValueOf((*int)(nil)), ""},
+		{"nil_ptr_bool", reflect.ValueOf((*bool)(nil)), ""},
+		{"nil_ptr_string", reflect.ValueOf((*string)(nil)), ""},
+		{"ptr_int", reflect.ValueOf(&intVal), "42"},
+		{"ptr_bool_true", reflect.ValueOf(&boolTrue), "true"},
+		{"ptr_bool_false", reflect.ValueOf(&boolFalse), "false"},
+		{"ptr_string", reflect.ValueOf(&strVal), "hello"},
+		{"string", reflect.ValueOf("hello"), "hello"},
+		{"empty_string", reflect.ValueOf(""), ""},
+		{"int", reflect.ValueOf(42), "42"},
+		{"int64", reflect.ValueOf(int64(99)), "99"},
+		{"float64", reflect.ValueOf(3.14), "3.14"},
+		{"float64_whole", reflect.ValueOf(100.0), "100"},
+		{"bool_true", reflect.ValueOf(true), "true"},
+		{"bool_false", reflect.ValueOf(false), "false"},
+		{"nil_slice", reflect.ValueOf([]int(nil)), "[]"},
+		{"empty_slice", reflect.ValueOf([]int{}), "[]"},
+		{"int_slice", reflect.ValueOf([]int{1, 2, 3}), "[1, 2, 3]"},
+		{"string_slice", reflect.ValueOf([]string{"a", "b"}), "[a, b]"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := FormatValue(tt.val)
+			if got != tt.want {
+				t.Errorf("FormatValue() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+// --- DiffConfigs tests ---
+
+func TestDiffConfigs_NoChanges(t *testing.T) {
+	t.Parallel()
+	cfg := cfgFromJSON(t, `{
+		"cloud": "AWS",
+		"region": "us-east-1",
+		"aws_ec2": {"diskSizePerServer": "32", "numServers": "2"},
+		"aws_rds": {"cpuSize": "db.r5.large", "storageSize": "100"}
+	}`)
+	diffs := DiffConfigs(cfg, cfg)
+	if len(diffs) != 0 {
+		t.Errorf("expected no diffs, got %d: %+v", len(diffs), diffs)
+	}
+}
+
+func TestDiffConfigs_IdenticalZeroValues(t *testing.T) {
+	t.Parallel()
+	diffs := DiffConfigs(Config{}, Config{})
+	if len(diffs) != 0 {
+		t.Errorf("expected no diffs for zero-value configs, got %d", len(diffs))
+	}
+}
+
+func TestDiffConfigs_SingleFieldChange(t *testing.T) {
+	t.Parallel()
+	oldCfg := cfgFromJSON(t, `{"aws_ec2": {"diskSizePerServer": "32"}}`)
+	newCfg := cfgFromJSON(t, `{"aws_ec2": {"diskSizePerServer": "40"}}`)
+
+	diffs := DiffConfigs(oldCfg, newCfg)
+	if len(diffs) != 1 {
+		t.Fatalf("expected 1 diff, got %d: %+v", len(diffs), diffs)
+	}
+	d := diffs[0]
+	if d.Component != "aws_ec2" || d.Action != "modified" {
+		t.Errorf("got component=%q action=%q, want aws_ec2/modified", d.Component, d.Action)
+	}
+	if len(d.Changes) != 1 {
+		t.Fatalf("expected 1 field change, got %d: %+v", len(d.Changes), d.Changes)
+	}
+	c := d.Changes[0]
+	if c.Field != "diskSizePerServer" || c.From != "32" || c.To != "40" {
+		t.Errorf("got field=%q from=%q to=%q, want diskSizePerServer/32/40", c.Field, c.From, c.To)
+	}
+}
+
+func TestDiffConfigs_MultipleComponentChanges(t *testing.T) {
+	t.Parallel()
+	oldCfg := cfgFromJSON(t, `{
+		"aws_ec2": {"diskSizePerServer": "32", "numServers": "2"},
+		"aws_rds": {"cpuSize": "db.r5.large", "storageSize": "100"}
+	}`)
+	newCfg := cfgFromJSON(t, `{
+		"aws_ec2": {"diskSizePerServer": "40", "numServers": "2"},
+		"aws_rds": {"cpuSize": "db.r5.xlarge", "storageSize": "200"}
+	}`)
+
+	diffs := DiffConfigs(oldCfg, newCfg)
+	if len(diffs) != 2 {
+		t.Fatalf("expected 2 diffs, got %d: %+v", len(diffs), diffs)
+	}
+
+	byComp := map[string]ComponentDiff{}
+	for _, d := range diffs {
+		byComp[d.Component] = d
+	}
+
+	ec2 := byComp["aws_ec2"]
+	if ec2.Action != "modified" || len(ec2.Changes) != 1 {
+		t.Errorf("aws_ec2: action=%q changes=%d, want modified/1", ec2.Action, len(ec2.Changes))
+	}
+	rds := byComp["aws_rds"]
+	if rds.Action != "modified" || len(rds.Changes) != 2 {
+		t.Errorf("aws_rds: action=%q changes=%d, want modified/2", rds.Action, len(rds.Changes))
+	}
+}
+
+func TestDiffConfigs_ComponentAdded(t *testing.T) {
+	t.Parallel()
+	oldCfg := cfgFromJSON(t, `{"aws_ec2": {"numServers": "2"}}`)
+	newCfg := cfgFromJSON(t, `{
+		"aws_ec2": {"numServers": "2"},
+		"gcp_gke": {"nodeCount": "3"}
+	}`)
+
+	diffs := DiffConfigs(oldCfg, newCfg)
+	if len(diffs) != 1 {
+		t.Fatalf("expected 1 diff, got %d: %+v", len(diffs), diffs)
+	}
+	if diffs[0].Component != "gcp_gke" || diffs[0].Action != "added" {
+		t.Errorf("got %+v, want gcp_gke/added", diffs[0])
+	}
+}
+
+func TestDiffConfigs_ComponentRemoved(t *testing.T) {
+	t.Parallel()
+	oldCfg := cfgFromJSON(t, `{
+		"aws_ec2": {"numServers": "2"},
+		"aws_s3": {"versioning": true}
+	}`)
+	newCfg := cfgFromJSON(t, `{"aws_ec2": {"numServers": "2"}}`)
+
+	diffs := DiffConfigs(oldCfg, newCfg)
+	if len(diffs) != 1 {
+		t.Fatalf("expected 1 diff, got %d: %+v", len(diffs), diffs)
+	}
+	if diffs[0].Component != "aws_s3" || diffs[0].Action != "removed" {
+		t.Errorf("got %+v, want aws_s3/removed", diffs[0])
+	}
+}
+
+func TestDiffConfigs_BoolPointerFields(t *testing.T) {
+	t.Parallel()
+	oldCfg := cfgFromJSON(t, `{"aws_eks": {"haControlPlane": true, "desiredSize": "3"}}`)
+	newCfg := cfgFromJSON(t, `{"aws_eks": {"haControlPlane": false, "desiredSize": "3"}}`)
+
+	diffs := DiffConfigs(oldCfg, newCfg)
+	if len(diffs) != 1 {
+		t.Fatalf("expected 1 diff, got %d: %+v", len(diffs), diffs)
+	}
+	d := diffs[0]
+	if d.Component != "aws_eks" || d.Action != "modified" {
+		t.Errorf("got component=%q action=%q", d.Component, d.Action)
+	}
+	if len(d.Changes) != 1 {
+		t.Fatalf("expected 1 change, got %d: %+v", len(d.Changes), d.Changes)
+	}
+	c := d.Changes[0]
+	if c.Field != "haControlPlane" || c.From != "true" || c.To != "false" {
+		t.Errorf("got field=%q from=%q to=%q", c.Field, c.From, c.To)
+	}
+}
+
+func TestDiffConfigs_SliceFields(t *testing.T) {
+	t.Parallel()
+	oldCfg := cfgFromJSON(t, `{"aws_ec2": {"customIngressPorts": [80, 443]}}`)
+	newCfg := cfgFromJSON(t, `{"aws_ec2": {"customIngressPorts": [80, 443, 8080]}}`)
+
+	diffs := DiffConfigs(oldCfg, newCfg)
+	if len(diffs) != 1 {
+		t.Fatalf("expected 1 diff, got %d: %+v", len(diffs), diffs)
+	}
+	c := diffs[0].Changes[0]
+	if c.Field != "customIngressPorts" {
+		t.Errorf("expected field customIngressPorts, got %q", c.Field)
+	}
+	if c.From != "[80, 443]" || c.To != "[80, 443, 8080]" {
+		t.Errorf("from=%q to=%q", c.From, c.To)
+	}
+}
+
+func TestDiffConfigs_GCPComponents_DetectsFieldChanges(t *testing.T) {
+	t.Parallel()
+	oldCfg := cfgFromJSON(t, `{"gcp_cloudsql": {"tier": "db-f1-micro", "diskSizeGb": 10}}`)
+	newCfg := cfgFromJSON(t, `{"gcp_cloudsql": {"tier": "db-custom-2-4096", "diskSizeGb": 20}}`)
+
+	diffs := DiffConfigs(oldCfg, newCfg)
+	if len(diffs) != 1 {
+		t.Fatalf("expected 1 diff, got %d", len(diffs))
+	}
+	d := diffs[0]
+	if d.Component != "gcp_cloudsql" {
+		t.Fatalf("expected gcp_cloudsql, got %q", d.Component)
+	}
+	if len(d.Changes) != 2 {
+		t.Fatalf("expected 2 changes, got %d: %+v", len(d.Changes), d.Changes)
+	}
+	byField := map[string]FieldDiff{}
+	for _, c := range d.Changes {
+		byField[c.Field] = c
+	}
+	if tier := byField["tier"]; tier.From != "db-f1-micro" || tier.To != "db-custom-2-4096" {
+		t.Errorf("tier: from=%q to=%q", tier.From, tier.To)
+	}
+	if disk := byField["diskSizeGb"]; disk.From != "10" || disk.To != "20" {
+		t.Errorf("diskSizeGb: from=%q to=%q", disk.From, disk.To)
+	}
+}
+
+func TestDiffConfigs_SkipsLegacyFields(t *testing.T) {
+	t.Parallel()
+	oldCfg := cfgFromJSON(t, `{"ec2": {"numServers": "1"}}`)
+	newCfg := cfgFromJSON(t, `{"ec2": {"numServers": "5"}}`)
+
+	diffs := DiffConfigs(oldCfg, newCfg)
+	if len(diffs) != 0 {
+		t.Errorf("expected legacy fields to be skipped, got %d diffs: %+v", len(diffs), diffs)
+	}
+}
+
+func TestDiffConfigs_NormalizedCachePathsNoFalseDiff(t *testing.T) {
+	t.Parallel()
+	// Simulate: applied version has originPath, draft still has cachePaths (same value).
+	// After normalization, both should have originPath only → no diff.
+	applied := cfgFromJSON(t, `{"cloud":"AWS","aws_cloudfront":{"originPath":"public-v1/"}}`)
+	draft := cfgFromJSON(t, `{"cloud":"AWS","aws_cloudfront":{"cachePaths":"public-v1/"}}`)
+	applied.Normalize()
+	draft.Normalize()
+	diffs := DiffConfigs(applied, draft)
+	if len(diffs) != 0 {
+		t.Errorf("expected no diffs after normalizing cachePaths→originPath, got %d: %+v", len(diffs), diffs)
+	}
+}
+
+func TestDiffConfigs_SkipsTopLevelScalars(t *testing.T) {
+	t.Parallel()
+	oldCfg := cfgFromJSON(t, `{"region": "us-east-1", "cloud": "AWS"}`)
+	newCfg := cfgFromJSON(t, `{"region": "eu-west-1", "cloud": "GCP"}`)
+
+	diffs := DiffConfigs(oldCfg, newCfg)
+	if len(diffs) != 0 {
+		t.Errorf("expected top-level scalars to be skipped, got %d diffs", len(diffs))
+	}
+}
+
+func TestDiffConfigs_MixedAddedRemovedModified(t *testing.T) {
+	t.Parallel()
+	oldCfg := cfgFromJSON(t, `{
+		"aws_ec2": {"numServers": "2"},
+		"aws_rds": {"cpuSize": "db.r5.large"}
+	}`)
+	newCfg := cfgFromJSON(t, `{
+		"aws_ec2": {"numServers": "4"},
+		"aws_eks": {"desiredSize": "3"}
+	}`)
+
+	diffs := DiffConfigs(oldCfg, newCfg)
+	byComp := map[string]ComponentDiff{}
+	for _, d := range diffs {
+		byComp[d.Component] = d
+	}
+
+	if byComp["aws_ec2"].Action != "modified" {
+		t.Errorf("aws_ec2 should be modified, got %q", byComp["aws_ec2"].Action)
+	}
+	if byComp["aws_rds"].Action != "removed" {
+		t.Errorf("aws_rds should be removed, got %q", byComp["aws_rds"].Action)
+	}
+	if byComp["aws_eks"].Action != "added" {
+		t.Errorf("aws_eks should be added, got %q", byComp["aws_eks"].Action)
+	}
+}
+
+func TestDiffConfigs_FormatsIntPointer(t *testing.T) {
+	t.Parallel()
+	oldCfg := cfgFromJSON(t, `{"gcp_cloud_run":{"minInstances":1}}`)
+	newCfg := cfgFromJSON(t, `{"gcp_cloud_run":{"minInstances":3}}`)
+	diffs := DiffConfigs(oldCfg, newCfg)
+	if len(diffs) != 1 || len(diffs[0].Changes) != 1 {
+		t.Fatalf("expected 1 diff with 1 change, got %+v", diffs)
+	}
+	c := diffs[0].Changes[0]
+	if c.From != "1" || c.To != "3" {
+		t.Errorf("int ptr: from=%q to=%q", c.From, c.To)
+	}
+}
+
+func TestDiffConfigs_FormatsStringSlice(t *testing.T) {
+	t.Parallel()
+	oldCfg := cfgFromJSON(t, `{"gcp_identity_platform":{"signInMethods":["email"]}}`)
+	newCfg := cfgFromJSON(t, `{"gcp_identity_platform":{"signInMethods":["email","phone"]}}`)
+	diffs := DiffConfigs(oldCfg, newCfg)
+	if len(diffs) != 1 || len(diffs[0].Changes) != 1 {
+		t.Fatalf("expected 1 diff with 1 change, got %+v", diffs)
+	}
+	c := diffs[0].Changes[0]
+	if c.From != "[email]" || c.To != "[email, phone]" {
+		t.Errorf("string slice: from=%q to=%q", c.From, c.To)
+	}
+}
+
+// --- SummarizeChanges tests ---
+
+func TestSummarizeChanges_NoDiffs(t *testing.T) {
+	t.Parallel()
+	s := SummarizeChanges(nil)
+	if s != "No changes." {
+		t.Errorf("got %q, want 'No changes.'", s)
+	}
+}
+
+func TestSummarizeChanges_AddedOnly(t *testing.T) {
+	t.Parallel()
+	diffs := []ComponentDiff{
+		{Component: "aws_ec2", Action: "added"},
+		{Component: "aws_rds", Action: "added"},
+	}
+	s := SummarizeChanges(diffs)
+	if s != "Added: aws_ec2, aws_rds." {
+		t.Errorf("got %q", s)
+	}
+}
+
+func TestSummarizeChanges_RemovedOnly(t *testing.T) {
+	t.Parallel()
+	diffs := []ComponentDiff{
+		{Component: "aws_s3", Action: "removed"},
+	}
+	s := SummarizeChanges(diffs)
+	if s != "Removed: aws_s3." {
+		t.Errorf("got %q, want \"Removed: aws_s3.\"", s)
+	}
+}
+
+func TestSummarizeChanges_ModifiedOnly(t *testing.T) {
+	t.Parallel()
+	diffs := []ComponentDiff{
+		{Component: "aws_eks", Action: "modified", Changes: []FieldDiff{
+			{Field: "desiredSize", From: "3", To: "5"},
+		}},
+	}
+	s := SummarizeChanges(diffs)
+	expected := "Modified: aws_eks (desiredSize: 3 \u2192 5)."
+	if s != expected {
+		t.Errorf("got %q, want %q", s, expected)
+	}
+}
+
+func TestSummarizeChanges_Mixed(t *testing.T) {
+	t.Parallel()
+	diffs := []ComponentDiff{
+		{Component: "aws_ec2", Action: "added"},
+		{Component: "aws_s3", Action: "removed"},
+		{Component: "aws_eks", Action: "modified", Changes: []FieldDiff{
+			{Field: "desiredSize", From: "3", To: "5"},
+		}},
+	}
+	s := SummarizeChanges(diffs)
+	expected := "Added: aws_ec2. Removed: aws_s3. Modified: aws_eks (desiredSize: 3 \u2192 5)."
+	if s != expected {
+		t.Errorf("got:\n  %q\nwant:\n  %q", s, expected)
+	}
+}
+
+func TestSummarizeChanges_TruncatesFieldDetails(t *testing.T) {
+	t.Parallel()
+	diffs := []ComponentDiff{
+		{Component: "aws_rds", Action: "modified", Changes: []FieldDiff{
+			{Field: "cpuSize", From: "db.r5.large", To: "db.r5.xlarge"},
+			{Field: "storageSize", From: "100", To: "200"},
+			{Field: "readReplicas", From: "0", To: "2"},
+		}},
+	}
+	s := SummarizeChanges(diffs)
+	if !strings.Contains(s, "+1 more") {
+		t.Errorf("expected '+1 more' truncation, got %q", s)
+	}
+	if !strings.Contains(s, "cpuSize:") {
+		t.Error("expected cpuSize in summary")
+	}
+	if !strings.Contains(s, "storageSize:") {
+		t.Error("expected storageSize in summary (within 2-field limit)")
+	}
+	if strings.Contains(s, "readReplicas:") {
+		t.Error("readReplicas should be truncated, not shown")
+	}
+}
+
+func TestSummarizeChanges_ModifiedNoChanges(t *testing.T) {
+	t.Parallel()
+	diffs := []ComponentDiff{
+		{Component: "aws_eks", Action: "modified"},
+	}
+	s := SummarizeChanges(diffs)
+	if s != "Modified: aws_eks." {
+		t.Errorf("got %q, want \"Modified: aws_eks.\"", s)
+	}
+}
+
+// --- helper for Components JSON ---
+
+func compFromJSON(t *testing.T, s string) Components {
+	t.Helper()
+	var c Components
+	if err := json.Unmarshal([]byte(s), &c); err != nil {
+		t.Fatalf("unmarshal components: %v", err)
+	}
+	return c
+}
+
+// --- DiffComponents tests ---
+
+func TestDiffComponents_NoChanges(t *testing.T) {
+	t.Parallel()
+	comp := compFromJSON(t, `{"cloud":"AWS","aws_rds":true,"aws_s3":true}`)
+	diffs := DiffComponents(comp, comp)
+	if len(diffs) != 0 {
+		t.Errorf("expected no diffs, got %d: %+v", len(diffs), diffs)
+	}
+}
+
+func TestDiffComponents_BothEmpty(t *testing.T) {
+	t.Parallel()
+	diffs := DiffComponents(Components{}, Components{})
+	if len(diffs) != 0 {
+		t.Errorf("expected no diffs for zero-value structs, got %d", len(diffs))
+	}
+}
+
+func TestDiffComponents_ComponentAdded(t *testing.T) {
+	t.Parallel()
+	oldComp := compFromJSON(t, `{"cloud":"AWS"}`)
+	newComp := compFromJSON(t, `{"cloud":"AWS","aws_rds":true}`)
+
+	diffs := DiffComponents(oldComp, newComp)
+	if len(diffs) != 1 {
+		t.Fatalf("expected 1 diff, got %d: %+v", len(diffs), diffs)
+	}
+	if diffs[0].Component != "aws_rds" || diffs[0].Action != "added" {
+		t.Errorf("got %+v, want aws_rds/added", diffs[0])
+	}
+}
+
+func TestDiffComponents_ComponentRemoved(t *testing.T) {
+	t.Parallel()
+	oldComp := compFromJSON(t, `{"cloud":"AWS","aws_s3":true}`)
+	newComp := compFromJSON(t, `{"cloud":"AWS"}`)
+
+	diffs := DiffComponents(oldComp, newComp)
+	if len(diffs) != 1 {
+		t.Fatalf("expected 1 diff, got %d: %+v", len(diffs), diffs)
+	}
+	if diffs[0].Component != "aws_s3" || diffs[0].Action != "removed" {
+		t.Errorf("got %+v, want aws_s3/removed", diffs[0])
+	}
+}
+
+func TestDiffComponents_MixedAddAndRemove(t *testing.T) {
+	t.Parallel()
+	oldComp := compFromJSON(t, `{"cloud":"AWS","aws_rds":true}`)
+	newComp := compFromJSON(t, `{"cloud":"AWS","aws_s3":true}`)
+
+	diffs := DiffComponents(oldComp, newComp)
+	byComp := map[string]ComponentDiff{}
+	for _, d := range diffs {
+		byComp[d.Component] = d
+	}
+	if len(diffs) != 2 {
+		t.Fatalf("expected 2 diffs, got %d: %+v", len(diffs), diffs)
+	}
+	if byComp["aws_rds"].Action != "removed" {
+		t.Errorf("aws_rds: got %q, want removed", byComp["aws_rds"].Action)
+	}
+	if byComp["aws_s3"].Action != "added" {
+		t.Errorf("aws_s3: got %q, want added", byComp["aws_s3"].Action)
+	}
+}
+
+func TestDiffComponents_StringFieldAddRemove(t *testing.T) {
+	t.Parallel()
+	oldComp := compFromJSON(t, `{"cloud":"AWS","aws_vpc":""}`)
+	newComp := compFromJSON(t, `{"cloud":"AWS","aws_vpc":"Private"}`)
+
+	diffs := DiffComponents(oldComp, newComp)
+	if len(diffs) != 1 {
+		t.Fatalf("expected 1 diff, got %d: %+v", len(diffs), diffs)
+	}
+	if diffs[0].Component != "aws_vpc" || diffs[0].Action != "added" {
+		t.Errorf("got %+v, want aws_vpc/added", diffs[0])
+	}
+
+	// Reverse: removing string field
+	diffs2 := DiffComponents(newComp, oldComp)
+	if len(diffs2) != 1 {
+		t.Fatalf("expected 1 diff, got %d: %+v", len(diffs2), diffs2)
+	}
+	if diffs2[0].Component != "aws_vpc" || diffs2[0].Action != "removed" {
+		t.Errorf("got %+v, want aws_vpc/removed", diffs2[0])
+	}
+}
+
+func TestDiffComponents_SkipsLegacyFields(t *testing.T) {
+	t.Parallel()
+	oldComp := compFromJSON(t, `{"bastion":true}`)
+	newComp := compFromJSON(t, `{}`)
+
+	diffs := DiffComponents(oldComp, newComp)
+	if len(diffs) != 0 {
+		t.Errorf("expected legacy fields to be skipped, got %d diffs: %+v", len(diffs), diffs)
+	}
+}
+
+func TestDiffComponents_SkipsMetadataFields(t *testing.T) {
+	t.Parallel()
+	oldComp := compFromJSON(t, `{"cloud":"AWS","architecture":"microservices"}`)
+	newComp := compFromJSON(t, `{"cloud":"GCP","architecture":"monolith"}`)
+
+	diffs := DiffComponents(oldComp, newComp)
+	if len(diffs) != 0 {
+		t.Errorf("expected metadata fields to be skipped, got %d diffs: %+v", len(diffs), diffs)
+	}
+}
+
+func TestDiffComponents_BackupsStructAddRemove(t *testing.T) {
+	t.Parallel()
+	oldComp := Components{}
+	newComp := Components{
+		AWSBackups: &struct {
+			EC2         *bool `json:"aws_ec2,omitempty"`
+			RDS         *bool `json:"aws_rds,omitempty"`
+			ElastiCache *bool `json:"aws_elasticache,omitempty"`
+			DynamoDB    *bool `json:"aws_dynamodb,omitempty"`
+			S3          *bool `json:"aws_s3,omitempty"`
+		}{
+			EC2: boolPtr(true),
+		},
+	}
+
+	diffs := DiffComponents(oldComp, newComp)
+	if len(diffs) != 1 {
+		t.Fatalf("expected 1 diff, got %d: %+v", len(diffs), diffs)
+	}
+	if diffs[0].Component != "aws_backups" || diffs[0].Action != "added" {
+		t.Errorf("got %+v, want aws_backups/added", diffs[0])
+	}
+
+	// Reverse: removing struct
+	diffs2 := DiffComponents(newComp, oldComp)
+	if len(diffs2) != 1 {
+		t.Fatalf("expected 1 diff, got %d: %+v", len(diffs2), diffs2)
+	}
+	if diffs2[0].Component != "aws_backups" || diffs2[0].Action != "removed" {
+		t.Errorf("got %+v, want aws_backups/removed", diffs2[0])
+	}
+}
+
+func TestDiffComponents_ExternalComponents(t *testing.T) {
+	t.Parallel()
+	oldComp := compFromJSON(t, `{}`)
+	newComp := compFromJSON(t, `{"datadog":true,"splunk":true}`)
+
+	diffs := DiffComponents(oldComp, newComp)
+	byComp := map[string]ComponentDiff{}
+	for _, d := range diffs {
+		byComp[d.Component] = d
+	}
+	if len(diffs) != 2 {
+		t.Fatalf("expected 2 diffs, got %d: %+v", len(diffs), diffs)
+	}
+	if byComp["datadog"].Action != "added" {
+		t.Errorf("datadog: got %q, want added", byComp["datadog"].Action)
+	}
+	if byComp["splunk"].Action != "added" {
+		t.Errorf("splunk: got %q, want added", byComp["splunk"].Action)
+	}
+}
+
+func TestDiffComponents_BoolFalseToTrue(t *testing.T) {
+	t.Parallel()
+	oldComp := Components{AWSRDS: boolPtr(false)}
+	newComp := Components{AWSRDS: boolPtr(true)}
+
+	diffs := DiffComponents(oldComp, newComp)
+	if len(diffs) != 1 {
+		t.Fatalf("expected 1 diff, got %d: %+v", len(diffs), diffs)
+	}
+	if diffs[0].Component != "aws_rds" || diffs[0].Action != "added" {
+		t.Errorf("got %+v, want aws_rds/added", diffs[0])
+	}
+}
+
+func TestDiffComponents_BoolTrueToFalse(t *testing.T) {
+	t.Parallel()
+	oldComp := Components{AWSRDS: boolPtr(true)}
+	newComp := Components{AWSRDS: boolPtr(false)}
+
+	diffs := DiffComponents(oldComp, newComp)
+	if len(diffs) != 1 {
+		t.Fatalf("expected 1 diff, got %d: %+v", len(diffs), diffs)
+	}
+	if diffs[0].Component != "aws_rds" || diffs[0].Action != "removed" {
+		t.Errorf("got %+v, want aws_rds/removed", diffs[0])
+	}
+}
+
+func TestDiffComponents_GCPComponents(t *testing.T) {
+	t.Parallel()
+	oldComp := compFromJSON(t, `{"cloud":"GCP","gcp_cloudsql":true,"gcp_gke":true}`)
+	newComp := compFromJSON(t, `{"cloud":"GCP","gcp_cloudsql":true,"gcp_memorystore":true}`)
+
+	diffs := DiffComponents(oldComp, newComp)
+	byComp := map[string]ComponentDiff{}
+	for _, d := range diffs {
+		byComp[d.Component] = d
+	}
+	if len(diffs) != 2 {
+		t.Fatalf("expected 2 diffs, got %d: %+v", len(diffs), diffs)
+	}
+	if byComp["gcp_gke"].Action != "removed" {
+		t.Errorf("gcp_gke: got %q, want removed", byComp["gcp_gke"].Action)
+	}
+	if byComp["gcp_memorystore"].Action != "added" {
+		t.Errorf("gcp_memorystore: got %q, want added", byComp["gcp_memorystore"].Action)
+	}
+}
+
+// --- MergeComponentDiffs tests ---
+
+func TestMergeComponentDiffs_BothEmpty(t *testing.T) {
+	t.Parallel()
+	merged := MergeComponentDiffs(nil, nil)
+	if len(merged) != 0 {
+		t.Errorf("expected empty, got %d", len(merged))
+	}
+}
+
+func TestMergeComponentDiffs_ConfigOnly(t *testing.T) {
+	t.Parallel()
+	cfgDiffs := []ComponentDiff{
+		{Component: "aws_ec2", Action: "modified", Changes: []FieldDiff{{Field: "numServers", From: "2", To: "4"}}},
+	}
+	merged := MergeComponentDiffs(nil, cfgDiffs)
+	if len(merged) != 1 {
+		t.Fatalf("expected 1, got %d", len(merged))
+	}
+	if merged[0].Component != "aws_ec2" || len(merged[0].Changes) != 1 {
+		t.Errorf("got %+v", merged[0])
+	}
+}
+
+func TestMergeComponentDiffs_ComponentOnly(t *testing.T) {
+	t.Parallel()
+	compDiffs := []ComponentDiff{
+		{Component: "aws_waf", Action: "added"},
+	}
+	merged := MergeComponentDiffs(compDiffs, nil)
+	if len(merged) != 1 {
+		t.Fatalf("expected 1, got %d", len(merged))
+	}
+	if merged[0].Component != "aws_waf" || merged[0].Action != "added" {
+		t.Errorf("got %+v", merged[0])
+	}
+}
+
+func TestMergeComponentDiffs_ConfigTakesPrecedence(t *testing.T) {
+	t.Parallel()
+	compDiffs := []ComponentDiff{
+		{Component: "aws_rds", Action: "added"},
+	}
+	cfgDiffs := []ComponentDiff{
+		{Component: "aws_rds", Action: "added", Changes: []FieldDiff{{Field: "cpuSize", From: "", To: "db.r5.large"}}},
+	}
+	merged := MergeComponentDiffs(compDiffs, cfgDiffs)
+	if len(merged) != 1 {
+		t.Fatalf("expected 1, got %d", len(merged))
+	}
+	// Config diff should win (has Changes with specific field)
+	if len(merged[0].Changes) != 1 {
+		t.Fatalf("expected config diff to take precedence with 1 change, got %+v", merged[0])
+	}
+	if merged[0].Changes[0].Field != "cpuSize" {
+		t.Errorf("expected cpuSize field from config diff, got %q", merged[0].Changes[0].Field)
+	}
+}
+
+func TestMergeComponentDiffs_Disjoint(t *testing.T) {
+	t.Parallel()
+	compDiffs := []ComponentDiff{
+		{Component: "aws_waf", Action: "added"},
+	}
+	cfgDiffs := []ComponentDiff{
+		{Component: "aws_ec2", Action: "modified", Changes: []FieldDiff{{Field: "numServers", From: "2", To: "4"}}},
+	}
+	merged := MergeComponentDiffs(compDiffs, cfgDiffs)
+	if len(merged) != 2 {
+		t.Fatalf("expected 2, got %d", len(merged))
+	}
+	// Should be sorted by component name
+	if merged[0].Component != "aws_ec2" || merged[1].Component != "aws_waf" {
+		t.Errorf("expected sorted [aws_ec2, aws_waf], got [%s, %s]", merged[0].Component, merged[1].Component)
+	}
+}
+
+func TestMergeComponentDiffs_Sorted(t *testing.T) {
+	t.Parallel()
+	compDiffs := []ComponentDiff{
+		{Component: "aws_waf", Action: "added"},
+		{Component: "aws_alb", Action: "added"},
+	}
+	cfgDiffs := []ComponentDiff{
+		{Component: "aws_rds", Action: "modified"},
+	}
+	merged := MergeComponentDiffs(compDiffs, cfgDiffs)
+	if len(merged) != 3 {
+		t.Fatalf("expected 3, got %d", len(merged))
+	}
+	for i := 1; i < len(merged); i++ {
+		if merged[i].Component < merged[i-1].Component {
+			t.Errorf("not sorted: %q < %q at position %d", merged[i].Component, merged[i-1].Component, i)
+		}
+	}
+}
