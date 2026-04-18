@@ -10,10 +10,21 @@ mock_provider "aws" {}
 # `&&` short-circuit does not prevent Terraform from analysing the [0] access,
 # so the guard must be written with try().
 #
-# Each run below forces one of the two data sources to an empty tuple.
+# Each run pins one direction of the hazard and also exercises the positive
+# "create when names is empty" branch by overriding the non-empty probe —
+# otherwise a mutation that replaced the try() with a constant would slip past.
 
-run "managed_mode_plans_with_empty_aoss_slr_tuple" {
+run "managed_mode_creates_slr_and_tolerates_empty_aoss_tuple" {
   command = plan
+
+  # Force the managed-SLR probe to report "role absent" so the try() guard's
+  # creation branch runs — asserting count == 1 pins that branch.
+  override_data {
+    target = data.aws_iam_roles.opensearch_slr[0]
+    values = {
+      names = []
+    }
+  }
 
   variables {
     project         = "test"
@@ -24,16 +35,29 @@ run "managed_mode_plans_with_empty_aoss_slr_tuple" {
     subnet_ids      = ["subnet-aaa"]
   }
 
-  # In managed mode, data.aws_iam_roles.aoss_slr has count=0 (empty tuple).
-  # The aws_iam_service_linked_role.aoss count expression must cope.
+  assert {
+    condition     = length(aws_iam_service_linked_role.opensearch) == 1
+    error_message = "Expected the managed-OpenSearch SLR to be created when the probe returns no matching role"
+  }
+
+  # data.aws_iam_roles.aoss_slr has count = 0 here — empty tuple.
   assert {
     condition     = length(aws_iam_service_linked_role.aoss) == 0
     error_message = "Expected no AOSS SLR resource when deployment_type = managed"
   }
 }
 
-run "serverless_mode_plans_with_empty_opensearch_slr_tuple" {
+run "serverless_mode_creates_aoss_slr_and_tolerates_empty_opensearch_tuple" {
   command = plan
+
+  # Mirror of the managed run: force the AOSS probe to report "role absent"
+  # so the try() creation branch is exercised.
+  override_data {
+    target = data.aws_iam_roles.aoss_slr[0]
+    values = {
+      names = []
+    }
+  }
 
   variables {
     project         = "test"
@@ -42,9 +66,12 @@ run "serverless_mode_plans_with_empty_opensearch_slr_tuple" {
     deployment_type = "serverless"
   }
 
-  # In serverless mode, data.aws_iam_roles.opensearch_slr has count=0
-  # (empty tuple). The aws_iam_service_linked_role.opensearch count
-  # expression must cope.
+  assert {
+    condition     = length(aws_iam_service_linked_role.aoss) == 1
+    error_message = "Expected the AOSS SLR to be created when the probe returns no matching role"
+  }
+
+  # data.aws_iam_roles.opensearch_slr has count = 0 here — empty tuple.
   assert {
     condition     = length(aws_iam_service_linked_role.opensearch) == 0
     error_message = "Expected no managed-OpenSearch SLR resource when deployment_type = serverless"
