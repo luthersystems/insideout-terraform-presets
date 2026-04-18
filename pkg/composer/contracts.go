@@ -3,37 +3,69 @@ package composer
 type ComponentKey string
 
 const (
-	KeyComposer             ComponentKey = "composer"
-	KeyArch                 ComponentKey = "architecture"
-	KeyCloud                ComponentKey = "cloud"
-	KeyEC2                  ComponentKey = "ec2"
-	KeyResource             ComponentKey = "resource"
-	KeyVPC                  ComponentKey = "vpc"
-	KeyBastion              ComponentKey = "bastion"
-	KeyALB                  ComponentKey = "alb"
-	KeyCloudfront           ComponentKey = "cloudfront"
-	KeyWAF                  ComponentKey = "waf"
-	KeyPostgres             ComponentKey = "rds"
-	KeyElastiCache          ComponentKey = "elasticache"
-	KeyS3                   ComponentKey = "s3"
-	KeyDynamoDB             ComponentKey = "dynamodb"
-	KeySQS                  ComponentKey = "sqs"
-	KeyMSK                  ComponentKey = "msk"
-	KeyCloudWatchLogs       ComponentKey = "cloudwatchlogs"
+	KeyComposer ComponentKey = "composer"
+	KeyArch     ComponentKey = "architecture"
+	KeyCloud    ComponentKey = "cloud"
+
+	// KeyEC2 is the polymorphic EKS node-group / Lambda compute key.
+	// Distinct from KeyAWSEC2 (EKS node group only); see GetModuleDir.
+	KeyEC2 ComponentKey = "ec2"
+	// KeyResource is the polymorphic EKS control plane / Lambda runtime key;
+	// see GetModuleDir.
+	KeyResource ComponentKey = "resource"
+
+	// Deprecated: Use KeyAWSVPC.
+	KeyVPC ComponentKey = "vpc"
+	// Deprecated: Use KeyAWSBastion.
+	KeyBastion ComponentKey = "bastion"
+	// Deprecated: Use KeyAWSALB.
+	KeyALB ComponentKey = "alb"
+	// Deprecated: Use KeyAWSCloudfront.
+	KeyCloudfront ComponentKey = "cloudfront"
+	// Deprecated: Use KeyAWSWAF.
+	KeyWAF ComponentKey = "waf"
+	// Deprecated: Use KeyAWSRDS.
+	KeyPostgres ComponentKey = "rds"
+	// Deprecated: Use KeyAWSElastiCache.
+	KeyElastiCache ComponentKey = "elasticache"
+	// Deprecated: Use KeyAWSS3.
+	KeyS3 ComponentKey = "s3"
+	// Deprecated: Use KeyAWSDynamoDB.
+	KeyDynamoDB ComponentKey = "dynamodb"
+	// Deprecated: Use KeyAWSSQS.
+	KeySQS ComponentKey = "sqs"
+	// Deprecated: Use KeyAWSMSK.
+	KeyMSK ComponentKey = "msk"
+	// Deprecated: Use KeyAWSCloudWatchLogs.
+	KeyCloudWatchLogs ComponentKey = "cloudwatchlogs"
+	// Deprecated: Use KeyAWSCloudWatchMonitoring.
 	KeyCloudWatchMonitoring ComponentKey = "cloudwatchmonitoring"
-	KeySplunk               ComponentKey = "splunk"
-	KeyDatadog              ComponentKey = "datadog"
-	KeyGrafana              ComponentKey = "grafana"
-	KeyCognito              ComponentKey = "cognito"
-	KeyBackups              ComponentKey = "backups"
-	KeyGitHubActions        ComponentKey = "githubactions"
-	KeyCodePipeline         ComponentKey = "codepipeline"
-	KeyLambda               ComponentKey = "lambda"
-	KeyAPIGateway           ComponentKey = "apigateway"
-	KeyKMS                  ComponentKey = "kms"
-	KeySecrets              ComponentKey = "secretsmanager"
-	KeyOpenSearch           ComponentKey = "opensearch"
-	KeyBedrock              ComponentKey = "bedrock"
+
+	KeySplunk  ComponentKey = "splunk"
+	KeyDatadog ComponentKey = "datadog"
+
+	// Deprecated: Use KeyAWSGrafana.
+	KeyGrafana ComponentKey = "grafana"
+	// Deprecated: Use KeyAWSCognito.
+	KeyCognito ComponentKey = "cognito"
+	// Deprecated: Use KeyAWSBackups.
+	KeyBackups ComponentKey = "backups"
+	// Deprecated: Use KeyAWSGitHubActions.
+	KeyGitHubActions ComponentKey = "githubactions"
+	// Deprecated: Use KeyAWSCodePipeline.
+	KeyCodePipeline ComponentKey = "codepipeline"
+	// Deprecated: Use KeyAWSLambda.
+	KeyLambda ComponentKey = "lambda"
+	// Deprecated: Use KeyAWSAPIGateway.
+	KeyAPIGateway ComponentKey = "apigateway"
+	// Deprecated: Use KeyAWSKMS.
+	KeyKMS ComponentKey = "kms"
+	// Deprecated: Use KeyAWSSecretsManager.
+	KeySecrets ComponentKey = "secretsmanager"
+	// Deprecated: Use KeyAWSOpenSearch.
+	KeyOpenSearch ComponentKey = "opensearch"
+	// Deprecated: Use KeyAWSBedrock.
+	KeyBedrock ComponentKey = "bedrock"
 
 	// AWS components (new prefixed names for v2)
 	KeyAWSVPC                  ComponentKey = "aws_vpc"
