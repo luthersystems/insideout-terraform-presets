@@ -10,9 +10,12 @@ import (
 
 // TestNoForeignLutherImportsInNonTestFiles guards the invariant that
 // pkg/composer's non-test code has zero luthersystems/* imports *other
-// than* its own parent package (which is how composer discovers the
-// bundled preset FS). Any foreign luthersystems import would couple
-// composer to downstream consumers and block extraction.
+// than* its own parent package root (which is how composer discovers the
+// bundled preset FS). Any foreign luthersystems import — including any
+// subpackage of insideout-terraform-presets other than the root — would
+// couple composer to downstream consumers and block extraction. Only
+// the exact parent path is permitted; subpackage imports must fail so
+// that e.g. an "internal/" helper cannot accidentally leak in.
 func TestNoForeignLutherImportsInNonTestFiles(t *testing.T) {
 	const (
 		parentPkg    = "github.com/luthersystems/insideout-terraform-presets"
