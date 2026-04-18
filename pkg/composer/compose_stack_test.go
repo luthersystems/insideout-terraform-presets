@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"sort"
 	"strings"
 	"testing"
 
@@ -453,40 +454,8 @@ func TestComposeStack_V2KitchenSink(t *testing.T) {
 		KeyAWSGitHubActions,
 	}
 
-	comps := &Components{
-		ElastiCache: ptrBool(true),
-		AWSBackups: &struct {
-			EC2         *bool `json:"aws_ec2,omitempty"`
-			RDS         *bool `json:"aws_rds,omitempty"`
-			ElastiCache *bool `json:"aws_elasticache,omitempty"`
-			DynamoDB    *bool `json:"aws_dynamodb,omitempty"`
-			S3          *bool `json:"aws_s3,omitempty"`
-		}{
-			EC2: ptrBool(true),
-			RDS: ptrBool(true),
-		},
-	}
-
-	cfg := &Config{
-		Region: "us-west-2",
-		Cloudfront: &struct {
-			DefaultTtl *string `json:"defaultTtl,omitempty"`
-			OriginPath *string `json:"originPath,omitempty"`
-			CachePaths *string `json:"cachePaths,omitempty"`
-		}{DefaultTtl: ptrString("3600")},
-		RDS: &struct {
-			CPUSize      string `json:"cpuSize,omitempty"`
-			ReadReplicas string `json:"readReplicas,omitempty"`
-			StorageSize  string `json:"storageSize,omitempty"`
-		}{CPUSize: "db.m7i.2xlarge", StorageSize: "20"},
-		SQS: &struct {
-			Type              string `json:"type,omitempty"`
-			VisibilityTimeout string `json:"visibilityTimeout,omitempty"`
-		}{Type: "FIFO", VisibilityTimeout: "600"},
-		CloudWatchLogs: &struct {
-			RetentionDays int `json:"retentionDays,omitempty"`
-		}{RetentionDays: 90},
-	}
+	comps := awsKitchenSinkCompsV2()
+	cfg := awsKitchenSinkCfg()
 
 	c := newTestClient()
 	out, err := c.ComposeStack(ComposeStackOpts{
@@ -577,49 +546,8 @@ func TestComposeStack_KitchenSink(t *testing.T) {
 	}
 
 	// Enable backups for EC2/EBS + RDS to trigger wiring.
-	comps := &Components{
-		ElastiCache: ptrBool(true),
-		Backups: &struct {
-			EC2         *bool `json:"ec2,omitempty"`
-			Rds         *bool `json:"rds,omitempty"`
-			ElastiCache *bool `json:"elasticache,omitempty"`
-			DynamoDB    *bool `json:"dynamodb,omitempty"`
-			S3          *bool `json:"s3,omitempty"`
-		}{
-			EC2:      ptrBool(true),
-			Rds:      ptrBool(true),
-			DynamoDB: ptrBool(false),
-			S3:       ptrBool(false),
-		},
-	}
-
-	cfg := &Config{
-		Region: "us-west-2",
-		Cloudfront: &struct {
-			DefaultTtl *string `json:"defaultTtl,omitempty"`
-			OriginPath *string `json:"originPath,omitempty"`
-			CachePaths *string `json:"cachePaths,omitempty"`
-		}{DefaultTtl: ptrString("3600")},
-		RDS: &struct {
-			CPUSize      string `json:"cpuSize,omitempty"`
-			ReadReplicas string `json:"readReplicas,omitempty"`
-			StorageSize  string `json:"storageSize,omitempty"`
-		}{
-			CPUSize:      "db.m7i.2xlarge",
-			ReadReplicas: "2",
-			StorageSize:  "20",
-		},
-		SQS: &struct {
-			Type              string `json:"type,omitempty"`
-			VisibilityTimeout string `json:"visibilityTimeout,omitempty"`
-		}{
-			Type:              "FIFO",
-			VisibilityTimeout: "600",
-		},
-		CloudWatchLogs: &struct {
-			RetentionDays int `json:"retentionDays,omitempty"`
-		}{RetentionDays: 90},
-	}
+	comps := awsKitchenSinkCompsLegacy()
+	cfg := awsKitchenSinkCfg()
 
 	c := newTestClient()
 	out, err := c.ComposeStack(ComposeStackOpts{
@@ -968,14 +896,7 @@ func sortedKeys(m map[string]bool) []string {
 	for k := range m {
 		keys = append(keys, k)
 	}
-	// Simple sort
-	for i := 0; i < len(keys)-1; i++ {
-		for j := i + 1; j < len(keys); j++ {
-			if keys[j] < keys[i] {
-				keys[i], keys[j] = keys[j], keys[i]
-			}
-		}
-	}
+	sort.Strings(keys)
 	return keys
 }
 
@@ -1094,13 +1015,6 @@ func TestComposeStack_ConflictingCompute(t *testing.T) {
 			require.Contains(t, err.Error(), tt.errMsg)
 		})
 	}
-}
-
-// TestAllowedExt_IncludesZip verifies that .zip files from presets are included in archives.
-// This is needed for Lambda's placeholder.zip (and any other binary assets in presets).
-func TestAllowedExt_IncludesZip(t *testing.T) {
-	t.Parallel()
-	require.True(t, allowedExt[".zip"], ".zip should be in allowedExt so placeholder.zip is included")
 }
 
 // TestComposeStack_LambdaIncludesPlaceholderZip verifies that a Lambda stack includes

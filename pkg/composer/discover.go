@@ -66,6 +66,12 @@ type OutputMeta struct {
 
 // DiscoverModuleOutputs parses all .tf files in a module preset and returns output metadata
 // including description and sensitive flag.
+//
+// Files whose HCL fails to parse are silently skipped: a composed stack may legitimately
+// include partially-broken preset trees (e.g. a templated file that does not round-trip as
+// HCL on its own), and we want output discovery to reflect what is actually parsable
+// rather than aborting the whole compose. This invariant is locked in by
+// TestDiscoverModuleOutputs_MalformedHCLSkipped.
 func DiscoverModuleOutputs(files map[string][]byte) ([]OutputMeta, error) {
 	var out []OutputMeta
 	for p, b := range files {

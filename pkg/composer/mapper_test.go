@@ -30,21 +30,7 @@ func TestBuildModuleValues_AWSEC2_ArchAndInstanceType(t *testing.T) {
 
 	t.Run("explicit instance_type from config overrides default", func(t *testing.T) {
 		comps := &Components{AWSEC2: "ARM"}
-		cfg := &Config{
-			AWSEC2: &struct {
-				InstanceType       string `json:"instanceType,omitempty"`
-				NumServers         string `json:"numServers,omitempty"`
-				NumCoresPerServer  string `json:"numCoresPerServer,omitempty"`
-				DiskSizePerServer  string `json:"diskSizePerServer,omitempty"`
-				UserData           string `json:"userData,omitempty"`
-				UserDataURL        string `json:"userDataURL,omitempty"`
-				CustomIngressPorts []int  `json:"customIngressPorts,omitempty"`
-				SSHPublicKey       string `json:"sshPublicKey,omitempty"`
-				EnableInstanceConnect *bool   `json:"enableInstanceConnect,omitempty"`
-			}{
-				InstanceType: "c7g.large",
-			},
-		}
+		cfg := configWithAWSEC2(awsEC2CfgInput{InstanceType: "c7g.large"})
 		vals, err := m.BuildModuleValues(KeyAWSEC2, comps, cfg, "", "")
 		require.NoError(t, err)
 		assert.Equal(t, "arm64", vals["arch"])
@@ -56,40 +42,14 @@ func TestBuildModuleValues_AWSEC2_DiskSize(t *testing.T) {
 	m := DefaultMapper{}
 
 	t.Run("diskSizePerServer maps to root_volume_size as int", func(t *testing.T) {
-		cfg := &Config{
-			AWSEC2: &struct {
-				InstanceType       string `json:"instanceType,omitempty"`
-				NumServers         string `json:"numServers,omitempty"`
-				NumCoresPerServer  string `json:"numCoresPerServer,omitempty"`
-				DiskSizePerServer  string `json:"diskSizePerServer,omitempty"`
-				UserData           string `json:"userData,omitempty"`
-				UserDataURL        string `json:"userDataURL,omitempty"`
-				CustomIngressPorts []int  `json:"customIngressPorts,omitempty"`
-				SSHPublicKey       string `json:"sshPublicKey,omitempty"`
-				EnableInstanceConnect *bool   `json:"enableInstanceConnect,omitempty"`
-			}{
-				DiskSizePerServer: "32",
-			},
-		}
+		cfg := configWithAWSEC2(awsEC2CfgInput{DiskSizePerServer: "32"})
 		vals, err := m.BuildModuleValues(KeyAWSEC2, nil, cfg, "", "")
 		require.NoError(t, err)
 		assert.Equal(t, 32, vals["root_volume_size"], "should convert string to int")
 	})
 
 	t.Run("empty diskSizePerServer does not set root_volume_size", func(t *testing.T) {
-		cfg := &Config{
-			AWSEC2: &struct {
-				InstanceType       string `json:"instanceType,omitempty"`
-				NumServers         string `json:"numServers,omitempty"`
-				NumCoresPerServer  string `json:"numCoresPerServer,omitempty"`
-				DiskSizePerServer  string `json:"diskSizePerServer,omitempty"`
-				UserData           string `json:"userData,omitempty"`
-				UserDataURL        string `json:"userDataURL,omitempty"`
-				CustomIngressPorts []int  `json:"customIngressPorts,omitempty"`
-				SSHPublicKey       string `json:"sshPublicKey,omitempty"`
-				EnableInstanceConnect *bool   `json:"enableInstanceConnect,omitempty"`
-			}{},
-		}
+		cfg := configWithAWSEC2(awsEC2CfgInput{})
 		vals, err := m.BuildModuleValues(KeyAWSEC2, nil, cfg, "", "")
 		require.NoError(t, err)
 		_, hasKey := vals["root_volume_size"]
@@ -103,42 +63,14 @@ func TestBuildModuleValues_AWSEC2_EnableInstanceConnect(t *testing.T) {
 	falseVal := false
 
 	t.Run("enableInstanceConnect maps to enable_instance_connect", func(t *testing.T) {
-		cfg := &Config{
-			AWSEC2: &struct {
-				InstanceType          string `json:"instanceType,omitempty"`
-				NumServers            string `json:"numServers,omitempty"`
-				NumCoresPerServer     string `json:"numCoresPerServer,omitempty"`
-				DiskSizePerServer     string `json:"diskSizePerServer,omitempty"`
-				UserData              string `json:"userData,omitempty"`
-				UserDataURL           string `json:"userDataURL,omitempty"`
-				CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
-				SSHPublicKey          string `json:"sshPublicKey,omitempty"`
-				EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
-			}{
-				EnableInstanceConnect: &trueVal,
-			},
-		}
+		cfg := configWithAWSEC2(awsEC2CfgInput{EnableInstanceConnect: &trueVal})
 		vals, err := m.BuildModuleValues(KeyAWSEC2, nil, cfg, "", "")
 		require.NoError(t, err)
 		assert.Equal(t, true, vals["enable_instance_connect"])
 	})
 
 	t.Run("explicit false enableInstanceConnect does not set key", func(t *testing.T) {
-		cfg := &Config{
-			AWSEC2: &struct {
-				InstanceType          string `json:"instanceType,omitempty"`
-				NumServers            string `json:"numServers,omitempty"`
-				NumCoresPerServer     string `json:"numCoresPerServer,omitempty"`
-				DiskSizePerServer     string `json:"diskSizePerServer,omitempty"`
-				UserData              string `json:"userData,omitempty"`
-				UserDataURL           string `json:"userDataURL,omitempty"`
-				CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
-				SSHPublicKey          string `json:"sshPublicKey,omitempty"`
-				EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
-			}{
-				EnableInstanceConnect: &falseVal,
-			},
-		}
+		cfg := configWithAWSEC2(awsEC2CfgInput{EnableInstanceConnect: &falseVal})
 		vals, err := m.BuildModuleValues(KeyAWSEC2, nil, cfg, "", "")
 		require.NoError(t, err)
 		_, hasKey := vals["enable_instance_connect"]
@@ -146,19 +78,7 @@ func TestBuildModuleValues_AWSEC2_EnableInstanceConnect(t *testing.T) {
 	})
 
 	t.Run("nil enableInstanceConnect does not set key", func(t *testing.T) {
-		cfg := &Config{
-			AWSEC2: &struct {
-				InstanceType          string `json:"instanceType,omitempty"`
-				NumServers            string `json:"numServers,omitempty"`
-				NumCoresPerServer     string `json:"numCoresPerServer,omitempty"`
-				DiskSizePerServer     string `json:"diskSizePerServer,omitempty"`
-				UserData              string `json:"userData,omitempty"`
-				UserDataURL           string `json:"userDataURL,omitempty"`
-				CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
-				SSHPublicKey          string `json:"sshPublicKey,omitempty"`
-				EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
-			}{},
-		}
+		cfg := configWithAWSEC2(awsEC2CfgInput{})
 		vals, err := m.BuildModuleValues(KeyAWSEC2, nil, cfg, "", "")
 		require.NoError(t, err)
 		_, hasKey := vals["enable_instance_connect"]
@@ -468,16 +388,7 @@ func TestBuildModuleValues_AWSECS_Defaults(t *testing.T) {
 
 	t.Run("ECS with config produces ECS-specific values", func(t *testing.T) {
 		comps := &Components{AWSECS: ptrBool(true)}
-		cfg := &Config{
-			AWSECS: &struct {
-				EnableContainerInsights *bool    `json:"enableContainerInsights,omitempty"`
-				CapacityProviders       []string `json:"capacityProviders,omitempty"`
-				DefaultCapacityProvider string   `json:"defaultCapacityProvider,omitempty"`
-				EnableServiceConnect    *bool    `json:"enableServiceConnect,omitempty"`
-			}{
-				EnableContainerInsights: ptrBool(true),
-			},
-		}
+		cfg := configWithAWSECS(awsECSCfgInput{EnableContainerInsights: ptrBool(true)})
 		vals, err := m.BuildModuleValues(KeyAWSECS, comps, cfg, "demo", "us-east-1")
 		require.NoError(t, err)
 
@@ -496,19 +407,12 @@ func TestBuildModuleValues_AWSECS_WithConfig(t *testing.T) {
 	m := DefaultMapper{}
 
 	comps := &Components{AWSECS: ptrBool(true)}
-	cfg := &Config{
-		AWSECS: &struct {
-			EnableContainerInsights *bool    `json:"enableContainerInsights,omitempty"`
-			CapacityProviders       []string `json:"capacityProviders,omitempty"`
-			DefaultCapacityProvider string   `json:"defaultCapacityProvider,omitempty"`
-			EnableServiceConnect    *bool    `json:"enableServiceConnect,omitempty"`
-		}{
-			EnableContainerInsights: ptrBool(true),
-			CapacityProviders:       []string{"FARGATE", "FARGATE_SPOT"},
-			DefaultCapacityProvider: "FARGATE_SPOT",
-			EnableServiceConnect:    ptrBool(false),
-		},
-	}
+	cfg := configWithAWSECS(awsECSCfgInput{
+		EnableContainerInsights: ptrBool(true),
+		CapacityProviders:       []string{"FARGATE", "FARGATE_SPOT"},
+		DefaultCapacityProvider: "FARGATE_SPOT",
+		EnableServiceConnect:    ptrBool(false),
+	})
 
 	vals, err := m.BuildModuleValues(KeyAWSECS, comps, cfg, "demo", "us-east-1")
 	require.NoError(t, err)
@@ -524,16 +428,7 @@ func TestBuildModuleValues_AWSECS_PartialConfig(t *testing.T) {
 
 	// Only CapacityProviders set; bool pointers left nil to exercise nil guards.
 	comps := &Components{AWSECS: ptrBool(true)}
-	cfg := &Config{
-		AWSECS: &struct {
-			EnableContainerInsights *bool    `json:"enableContainerInsights,omitempty"`
-			CapacityProviders       []string `json:"capacityProviders,omitempty"`
-			DefaultCapacityProvider string   `json:"defaultCapacityProvider,omitempty"`
-			EnableServiceConnect    *bool    `json:"enableServiceConnect,omitempty"`
-		}{
-			CapacityProviders: []string{"FARGATE"},
-		},
-	}
+	cfg := configWithAWSECS(awsECSCfgInput{CapacityProviders: []string{"FARGATE"}})
 
 	vals, err := m.BuildModuleValues(KeyAWSECS, comps, cfg, "demo", "us-east-1")
 	require.NoError(t, err)
