@@ -8,14 +8,16 @@ import (
 	"testing"
 )
 
-// TestNoParentSelfImportInNonTestFiles guards the invariant that pkg/composer
-// has zero luthersystems/* imports in non-test code. The test-only escape
-// hatch in helpers_test.go is fine (Go allows a subpackage's _test.go to
-// import its parent), but if that import ever leaked into a non-test file the
-// package would form a compile-time import cycle when this repo is consumed
-// as a Go module.
-func TestNoParentSelfImportInNonTestFiles(t *testing.T) {
-	const parentPath = "github.com/luthersystems/insideout-terraform-presets"
+// TestNoForeignLutherImportsInNonTestFiles guards the invariant that
+// pkg/composer's non-test code has zero luthersystems/* imports *other
+// than* its own parent package (which is how composer discovers the
+// bundled preset FS). Any foreign luthersystems import would couple
+// composer to downstream consumers and block extraction.
+func TestNoForeignLutherImportsInNonTestFiles(t *testing.T) {
+	const (
+		parentPkg    = "github.com/luthersystems/insideout-terraform-presets"
+		lutherPrefix = "github.com/luthersystems/"
+	)
 
 	entries, err := os.ReadDir(".")
 	if err != nil {
@@ -34,9 +36,13 @@ func TestNoParentSelfImportInNonTestFiles(t *testing.T) {
 		}
 		for _, imp := range f.Imports {
 			path := strings.Trim(imp.Path.Value, `"`)
-			if path == parentPath || strings.HasPrefix(path, parentPath+"/") {
-				t.Errorf("%s imports %q — non-test files must not import the parent package (would create a compile-time cycle for consumers)", name, path)
+			if !strings.HasPrefix(path, lutherPrefix) {
+				continue
 			}
+			if path == parentPkg {
+				continue // parent package is the permitted exception
+			}
+			t.Errorf("%s imports %q — pkg/composer non-test code may not import luthersystems/* other than the parent package %q", name, path, parentPkg)
 		}
 	}
 }

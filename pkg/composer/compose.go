@@ -6,6 +6,8 @@ import (
 	"path"
 	"sort"
 	"strings"
+
+	terraformpresets "github.com/luthersystems/insideout-terraform-presets"
 )
 
 // Option configures a Client.
@@ -17,8 +19,15 @@ type Client struct {
 	presets          fs.FS
 }
 
+// New returns a Client preconfigured with the preset filesystem bundled
+// alongside this package. Override with WithPresets to point at an
+// alternate preset source (e.g. tests, custom preset distributions).
 func New(opts ...Option) *Client {
-	c := &Client{Mapper: DefaultMapper{}, TerraformVersion: "1.7.5"}
+	c := &Client{
+		Mapper:           DefaultMapper{},
+		TerraformVersion: "1.7.5",
+		presets:          terraformpresets.FS,
+	}
 	for _, o := range opts {
 		o(c)
 	}
@@ -28,9 +37,9 @@ func New(opts ...Option) *Client {
 func WithMapper(m Mapper) Option           { return func(c *Client) { c.Mapper = m } }
 func WithTerraformVersion(v string) Option { return func(c *Client) { c.TerraformVersion = v } }
 
-// WithPresets injects the filesystem that provides Terraform module presets.
-// Callers must supply a non-nil fs.FS; preset-reading methods return an error
-// when unset.
+// WithPresets overrides the preset filesystem. The default (set by New)
+// is the preset bundle embedded in this repository; most callers do not
+// need this option.
 func WithPresets(f fs.FS) Option { return func(c *Client) { c.presets = f } }
 
 type Files map[string][]byte
