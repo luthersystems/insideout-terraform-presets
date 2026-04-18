@@ -66,6 +66,11 @@ type OutputMeta struct {
 
 // DiscoverModuleOutputs parses all .tf files in a module preset and returns output metadata
 // including description and sensitive flag.
+//
+// Discovery is best-effort: .tf files whose HCL fails to parse are skipped rather than
+// aborting the whole operation. Callers that need strict validation of every file should
+// run terraform fmt / validate separately. This skip-on-parse-error behaviour is locked in
+// by TestDiscoverModuleOutputs_MalformedHCLSkipped.
 func DiscoverModuleOutputs(files map[string][]byte) ([]OutputMeta, error) {
 	var out []OutputMeta
 	for p, b := range files {
