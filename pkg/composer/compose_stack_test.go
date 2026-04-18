@@ -178,34 +178,52 @@ func TestDefaultWiring_V2Keys(t *testing.T) {
 		},
 	}
 
+	// Assert per HCL field so a key-swap mutation (e.g. alb_dns_name
+	// landing in web_acl_id, or vice-versa) fails the test. The earlier
+	// "join all RawHCL values then Contains-over-the-blob" form would
+	// pass such a mutation because every substring still appears
+	// somewhere.
 	tests := []struct {
 		name      string
 		key       ComponentKey
-		wantIn    []string // substrings that must appear in RawHCL values
-		wantNotIn []string // substrings that must NOT appear in RawHCL values
+		wantIn    map[string]string // HCL field -> substring that field's value must contain
+		wantNotIn []string          // substrings that must not appear in any RawHCL value
 	}{
 		{
-			name:      "cloudfront references aws_alb and aws_waf",
-			key:       KeyAWSCloudfront,
-			wantIn:    []string{"module.aws_alb.alb_dns_name", "module.aws_waf.web_acl_arn"},
+			name: "cloudfront references aws_alb and aws_waf",
+			key:  KeyAWSCloudfront,
+			wantIn: map[string]string{
+				"custom_origin_domain": "module.aws_alb.alb_dns_name",
+				"web_acl_id":           "module.aws_waf.web_acl_arn",
+			},
 			wantNotIn: []string{"module.alb.", "module.waf."},
 		},
 		{
-			name:      "cloudwatch monitoring references v2 modules",
-			key:       KeyAWSCloudWatchMonitoring,
-			wantIn:    []string{"module.aws_bastion.bastion_instance_id", "module.aws_rds.instance_id", "module.aws_alb.alb_arn_suffix", "module.aws_sqs.queue_arn"},
+			name: "cloudwatch monitoring references v2 modules",
+			key:  KeyAWSCloudWatchMonitoring,
+			wantIn: map[string]string{
+				"instance_ids":     "module.aws_bastion.bastion_instance_id",
+				"rds_instance_ids": "module.aws_rds.instance_id",
+				"alb_arn_suffixes": "module.aws_alb.alb_arn_suffix",
+				"sqs_queue_arns":   "module.aws_sqs.queue_arn",
+			},
 			wantNotIn: []string{"module.bastion.", "module.rds.", "module.alb.", "module.sqs."},
 		},
 		{
-			name:      "bedrock references v2 s3 and opensearch",
-			key:       KeyAWSBedrock,
-			wantIn:    []string{"module.aws_s3.bucket_arn", "module.aws_opensearch.collection_arn"},
+			name: "bedrock references v2 s3 and opensearch",
+			key:  KeyAWSBedrock,
+			wantIn: map[string]string{
+				"s3_bucket_arn":             "module.aws_s3.bucket_arn",
+				"opensearch_collection_arn": "module.aws_opensearch.collection_arn",
+			},
 			wantNotIn: []string{"module.s3.", "module.opensearch.", "opensearch_arn"},
 		},
 		{
-			name:      "backups references v2 rds",
-			key:       KeyAWSBackups,
-			wantIn:    []string{"module.aws_rds.instance_arn"},
+			name: "backups references v2 rds",
+			key:  KeyAWSBackups,
+			wantIn: map[string]string{
+				"rds_rule": "module.aws_rds.instance_arn",
+			},
 			wantNotIn: []string{"module.rds."},
 		},
 	}
@@ -214,15 +232,20 @@ func TestDefaultWiring_V2Keys(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			wi := DefaultWiring(selected, tt.key, comps)
-			allHCL := ""
-			for _, v := range wi.RawHCL {
-				allHCL += v + "\n"
+			for hclKey, want := range tt.wantIn {
+				got, ok := wi.RawHCL[hclKey]
+				require.True(t, ok, "key=%s: missing HCL field %q", tt.key, hclKey)
+				require.Contains(t, got, want,
+					"key=%s field=%s: expected %q in value %q", tt.key, hclKey, want, got)
 			}
-			for _, want := range tt.wantIn {
-				require.Contains(t, allHCL, want, "key=%s: expected %q in wiring HCL", tt.key, want)
-			}
+			// wantNotIn still walks every value in the map to catch legacy
+			// references leaking anywhere in the wiring, not just in the
+			// fields pinned above.
 			for _, notWant := range tt.wantNotIn {
-				require.NotContains(t, allHCL, notWant, "key=%s: unexpected legacy ref %q in wiring HCL", tt.key, notWant)
+				for hclKey, got := range wi.RawHCL {
+					require.NotContains(t, got, notWant,
+						"key=%s field=%s: unexpected legacy ref %q in value %q", tt.key, hclKey, notWant, got)
+				}
 			}
 		})
 	}
@@ -616,110 +639,124 @@ func TestComposeStack_KitchenSink(t *testing.T) {
 		writeOutputs(t, out, dir)
 	}
 
-	// Must-have root files
-	require.Contains(t, out, "/main.tf")
-	require.Contains(t, out, "/variables.tf")
-	require.Contains(t, out, "/.terraform-version")
-
+	// Split assertions into subtests grouped by wiring family. Subtests
+	// share the single ComposeStack output via closure and MUST NOT call
+	// t.Parallel() — they read `out` without coordination and re-running
+	// ComposeStack per subtest would multiply runtime. The split localises
+	// failures: a regression in one wiring family no longer masks the rest.
 	mainTF := string(out["/main.tf"])
 
-	// Presence of modules & sources
-	re := func(p string) *regexp.Regexp {
-		return regexp.MustCompile(`(?m)^\s*source\s*=\s*"` + regexp.QuoteMeta(p) + `"\s*$`)
-	}
-	require.Regexp(t, re("./modules/vpc"), mainTF)
-	require.Regexp(t, re("./modules/eks"), mainTF)
-	require.Regexp(t, re("./modules/eks_nodegroup"), mainTF)
-	require.Regexp(t, re("./modules/bastion"), mainTF)
-	require.Regexp(t, re("./modules/alb"), mainTF)
-	require.Regexp(t, re("./modules/rds"), mainTF)
-	require.Regexp(t, re("./modules/elasticache"), mainTF)
-	require.Regexp(t, re("./modules/waf"), mainTF)
-	require.Regexp(t, re("./modules/cloudfront"), mainTF)
-	require.Regexp(t, re("./modules/backups"), mainTF)
-	require.Regexp(t, re("./modules/cloudwatchlogs"), mainTF)
-	require.Regexp(t, re("./modules/sqs"), mainTF)
-	require.Regexp(t, re("./modules/cloudwatchmonitoring"), mainTF)
-	require.Regexp(t, re("./modules/githubactions"), mainTF)
+	t.Run("root_files", func(t *testing.T) {
+		require.Contains(t, out, "/main.tf")
+		require.Contains(t, out, "/variables.tf")
+		require.Contains(t, out, "/.terraform-version")
+	})
 
-	// Cross-module wiring (matches TS wiring)
-	// resource ← VPC + default CP logs
-	require.Contains(t, mainTF, `vpc_id                    = module.vpc.vpc_id`)
-	require.Contains(t, mainTF, `private_subnet_ids        = module.vpc.private_subnet_ids`)
-	require.Contains(t, mainTF, `public_subnet_ids         = module.vpc.public_subnet_ids`)
-	require.Contains(t, mainTF, `cluster_enabled_log_types = ["api", "audit", "authenticator", "controllerManager", "scheduler"]`)
+	t.Run("module_sources", func(t *testing.T) {
+		re := func(p string) *regexp.Regexp {
+			return regexp.MustCompile(`(?m)^\s*source\s*=\s*"` + regexp.QuoteMeta(p) + `"\s*$`)
+		}
+		for _, src := range []string{
+			"./modules/vpc", "./modules/eks", "./modules/eks_nodegroup",
+			"./modules/bastion", "./modules/alb", "./modules/rds",
+			"./modules/elasticache", "./modules/waf", "./modules/cloudfront",
+			"./modules/backups", "./modules/cloudwatchlogs", "./modules/sqs",
+			"./modules/cloudwatchmonitoring", "./modules/githubactions",
+		} {
+			require.Regexp(t, re(src), mainTF, "missing module source %q", src)
+		}
+	})
 
-	// vm ← resource + VPC
-	require.Contains(t, mainTF, `cluster_name   = module.resource.cluster_name`)
-	require.Contains(t, mainTF, `subnet_ids     = module.vpc.private_subnet_ids`)
+	t.Run("wiring/eks", func(t *testing.T) {
+		require.Contains(t, mainTF, `vpc_id                    = module.vpc.vpc_id`)
+		require.Contains(t, mainTF, `private_subnet_ids        = module.vpc.private_subnet_ids`)
+		require.Contains(t, mainTF, `public_subnet_ids         = module.vpc.public_subnet_ids`)
+		require.Contains(t, mainTF, `cluster_enabled_log_types = ["api", "audit", "authenticator", "controllerManager", "scheduler"]`)
+	})
 
-	// alb ← VPC
-	require.Contains(t, mainTF, `vpc_id            = module.vpc.vpc_id`)
-	require.Contains(t, mainTF, `public_subnet_ids = module.vpc.public_subnet_ids`)
+	t.Run("wiring/nodegroup", func(t *testing.T) {
+		require.Contains(t, mainTF, `cluster_name   = module.resource.cluster_name`)
+		require.Contains(t, mainTF, `subnet_ids     = module.vpc.private_subnet_ids`)
+	})
 
-	// bastion ← VPC
-	require.Regexp(t, regexp.MustCompile(`(?m)^\s*subnet_id\s+=\s+module\.vpc\.public_subnet_ids\[0\]\s*$`), mainTF)
+	t.Run("wiring/alb", func(t *testing.T) {
+		require.Contains(t, mainTF, `vpc_id            = module.vpc.vpc_id`)
+		require.Contains(t, mainTF, `public_subnet_ids = module.vpc.public_subnet_ids`)
+	})
 
-	// postgres ← VPC + convenience flags
-	require.Contains(t, mainTF, `vpc_id                  = module.vpc.vpc_id`)
-	require.Contains(t, mainTF, `subnet_ids              = module.vpc.private_subnet_ids`)
-	require.Contains(t, mainTF, `enable_cloudwatch_logs  = true`)
-	require.Contains(t, mainTF, `cloudwatch_logs_exports = ["postgresql", "upgrade"]`)
-	require.Contains(t, mainTF, `skip_final_snapshot     = true`)
-	require.Contains(t, mainTF, `apply_immediately       = true`)
+	t.Run("wiring/bastion", func(t *testing.T) {
+		require.Regexp(t, regexp.MustCompile(`(?m)^\s*subnet_id\s+=\s+module\.vpc\.public_subnet_ids\[0\]\s*$`), mainTF)
+	})
 
-	// elasticache ← VPC
-	require.Contains(t, mainTF, `vpc_id           = module.vpc.vpc_id`)
-	require.Contains(t, mainTF, `cache_subnet_ids = module.vpc.private_subnet_ids`)
+	t.Run("wiring/postgres", func(t *testing.T) {
+		require.Contains(t, mainTF, `vpc_id                  = module.vpc.vpc_id`)
+		require.Contains(t, mainTF, `subnet_ids              = module.vpc.private_subnet_ids`)
+		require.Contains(t, mainTF, `enable_cloudwatch_logs  = true`)
+		require.Contains(t, mainTF, `cloudwatch_logs_exports = ["postgresql", "upgrade"]`)
+		require.Contains(t, mainTF, `skip_final_snapshot     = true`)
+		require.Contains(t, mainTF, `apply_immediately       = true`)
+	})
 
-	// cdn ← alb + waf
-	require.Contains(t, mainTF, `origin_type          = "http"`)
-	require.Contains(t, mainTF, `custom_origin_domain = module.alb.alb_dns_name`)
-	require.Contains(t, mainTF, `web_acl_id           = module.waf.web_acl_arn`)
+	t.Run("wiring/elasticache", func(t *testing.T) {
+		require.Contains(t, mainTF, `vpc_id           = module.vpc.vpc_id`)
+		require.Contains(t, mainTF, `cache_subnet_ids = module.vpc.private_subnet_ids`)
+	})
 
-	// waf constants (whitespace-agnostic; with providers override)
-	require.Regexp(t, regexp.MustCompile(`(?m)^\s*scope\s*=\s*"CLOUDFRONT"\s*$`), mainTF)
-	require.Regexp(t, regexp.MustCompile(`(?m)^\s*region\s*=\s*"us-east-1"\s*$`), mainTF)
-	require.Regexp(t, regexp.MustCompile(`(?m)^\s*providers\s+=\s+\{`), mainTF)
-	require.Contains(t, mainTF, "aws = aws")
-	require.Contains(t, mainTF, "aws.us_east_1 = aws.us_east_1")
+	t.Run("wiring/cloudfront", func(t *testing.T) {
+		require.Contains(t, mainTF, `origin_type          = "http"`)
+		require.Contains(t, mainTF, `custom_origin_domain = module.alb.alb_dns_name`)
+		require.Contains(t, mainTF, `web_acl_id           = module.waf.web_acl_arn`)
+	})
 
-	// monitoring fan-in
-	require.Contains(t, mainTF, `instance_ids     = [module.bastion.bastion_instance_id]`)
-	require.Contains(t, mainTF, `rds_instance_ids = [module.rds.instance_id]`)
-	require.Contains(t, mainTF, `alb_arn_suffixes = [module.alb.alb_arn_suffix]`)
-	require.Contains(t, mainTF, `sqs_queue_arns   = [module.sqs.queue_arn]`)
+	t.Run("wiring/waf_providers", func(t *testing.T) {
+		require.Regexp(t, regexp.MustCompile(`(?m)^\s*scope\s*=\s*"CLOUDFRONT"\s*$`), mainTF)
+		require.Regexp(t, regexp.MustCompile(`(?m)^\s*region\s*=\s*"us-east-1"\s*$`), mainTF)
+		require.Regexp(t, regexp.MustCompile(`(?m)^\s*providers\s+=\s+\{`), mainTF)
+		require.Contains(t, mainTF, "aws = aws")
+		require.Contains(t, mainTF, "aws.us_east_1 = aws.us_east_1")
+	})
 
-	// backups flags + rules
-	require.Regexp(t, regexp.MustCompile(`(?m)^\s*enable_ec2_ebs\s*=\s*true\s*$`), mainTF)
-	require.Regexp(t, regexp.MustCompile(`(?m)^\s*enable_rds\s*=\s*true\s*$`), mainTF)
-	require.Regexp(t, regexp.MustCompile(`(?m)^\s*enable_dynamodb\s*=\s*false\s*$`), mainTF)
-	require.Regexp(t, regexp.MustCompile(`(?m)^\s*enable_s3\s*=\s*false\s*$`), mainTF)
-	require.Contains(t, mainTF, `selection_tags = [{ type = "STRINGEQUALS", key = "backup", value = "true" }]`)
-	require.Contains(t, mainTF, `resource_arns = [module.rds.instance_arn]`)
-	require.Regexp(t, regexp.MustCompile(`(?m)^\s*default_rule\s*=\s*var\.backups_default_rule\s*$`), mainTF)
+	t.Run("wiring/monitoring", func(t *testing.T) {
+		require.Contains(t, mainTF, `instance_ids     = [module.bastion.bastion_instance_id]`)
+		require.Contains(t, mainTF, `rds_instance_ids = [module.rds.instance_id]`)
+		require.Contains(t, mainTF, `alb_arn_suffixes = [module.alb.alb_arn_suffix]`)
+		require.Contains(t, mainTF, `sqs_queue_arns   = [module.sqs.queue_arn]`)
+	})
 
-	// Some tfvars spot checks (ec2 must carry namespaced project/region)
-	require.Contains(t, out, "/ec2.auto.tfvars")
-	ec2Tf := string(out["/ec2.auto.tfvars"])
-	require.Regexp(t, regexp.MustCompile(`(?m)^\s*ec2_project\s*=\s*"demo"\s*$`), ec2Tf)
-	require.Regexp(t, regexp.MustCompile(`(?m)^\s*ec2_region\s*=\s*"us-west-2"\s*$`), ec2Tf)
+	t.Run("wiring/backups", func(t *testing.T) {
+		require.Regexp(t, regexp.MustCompile(`(?m)^\s*enable_ec2_ebs\s*=\s*true\s*$`), mainTF)
+		require.Regexp(t, regexp.MustCompile(`(?m)^\s*enable_rds\s*=\s*true\s*$`), mainTF)
+		require.Regexp(t, regexp.MustCompile(`(?m)^\s*enable_dynamodb\s*=\s*false\s*$`), mainTF)
+		require.Regexp(t, regexp.MustCompile(`(?m)^\s*enable_s3\s*=\s*false\s*$`), mainTF)
+		require.Contains(t, mainTF, `selection_tags = [{ type = "STRINGEQUALS", key = "backup", value = "true" }]`)
+		require.Contains(t, mainTF, `resource_arns = [module.rds.instance_arn]`)
+		require.Regexp(t, regexp.MustCompile(`(?m)^\s*default_rule\s*=\s*var\.backups_default_rule\s*$`), mainTF)
+	})
 
-	// Root variables should include namespaced entries and global project/region
-	varsTF := string(out["/variables.tf"])
-	require.Contains(t, varsTF, `variable "ec2_project"`)
-	require.Contains(t, varsTF, `variable "ec2_region"`)
-	require.Contains(t, varsTF, `variable "project"`)
-	require.Contains(t, varsTF, `variable "region"`)
+	t.Run("tfvars/ec2_namespacing", func(t *testing.T) {
+		require.Contains(t, out, "/ec2.auto.tfvars")
+		ec2Tf := string(out["/ec2.auto.tfvars"])
+		require.Regexp(t, regexp.MustCompile(`(?m)^\s*ec2_project\s*=\s*"demo"\s*$`), ec2Tf)
+		require.Regexp(t, regexp.MustCompile(`(?m)^\s*ec2_region\s*=\s*"us-west-2"\s*$`), ec2Tf)
+	})
 
-	// Providers file should exist and declare default + us_east_1 alias (and required_providers)
-	require.Contains(t, out, "/providers.tf")
-	prov := string(out["/providers.tf"])
-	require.Contains(t, prov, `terraform {`)
-	require.Contains(t, prov, `required_providers`)
-	require.Contains(t, prov, `provider "aws" {`)
-	require.Contains(t, prov, `alias  = "us_east_1"`)
-	require.Contains(t, prov, `region = "us-east-1"`)
+	t.Run("variables_tf", func(t *testing.T) {
+		varsTF := string(out["/variables.tf"])
+		require.Contains(t, varsTF, `variable "ec2_project"`)
+		require.Contains(t, varsTF, `variable "ec2_region"`)
+		require.Contains(t, varsTF, `variable "project"`)
+		require.Contains(t, varsTF, `variable "region"`)
+	})
+
+	t.Run("providers_tf", func(t *testing.T) {
+		require.Contains(t, out, "/providers.tf")
+		prov := string(out["/providers.tf"])
+		require.Contains(t, prov, `terraform {`)
+		require.Contains(t, prov, `required_providers`)
+		require.Contains(t, prov, `provider "aws" {`)
+		require.Contains(t, prov, `alias  = "us_east_1"`)
+		require.Contains(t, prov, `region = "us-east-1"`)
+	})
 }
 
 func ptrBool(b bool) *bool       { return &b }

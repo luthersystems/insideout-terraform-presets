@@ -5,41 +5,27 @@ import (
 	"testing"
 )
 
-func TestComponents_Normalize_EmptySession(t *testing.T) {
+// TestComponents_Normalize_EmptyIsNoOp locks in the invariant that an
+// empty Components.Normalize() must not invent a cloud and must not
+// populate any cloud-scoped field. Catches the regression "silently
+// default empty sessions to AWS" by checking both the Cloud string and
+// the prefixed field maps stay zero.
+func TestComponents_Normalize_EmptyIsNoOp(t *testing.T) {
 	t.Parallel()
-	// A fresh session with no components should NOT have cloud set
 	c := Components{}
 	c.Normalize()
 
 	if c.Cloud != "" {
-		t.Errorf("Empty Components.Cloud should be empty, got %q", c.Cloud)
+		t.Errorf("Cloud must remain empty for an empty session, got %q", c.Cloud)
 	}
-}
-
-func TestComponents_Normalize_NoDefaultToAWS(t *testing.T) {
-	t.Parallel()
-	// Regression test: Normalize should NOT default cloud to AWS
-	// when no cloud-specific components are present
-	c := Components{}
-	c.Normalize()
-
-	if c.Cloud == "AWS" {
-		t.Error("Normalize() should NOT default Cloud to 'AWS' for empty sessions")
+	if c.AWSVPC != "" || c.AWSEC2 != "" {
+		t.Errorf("AWS fields must remain zero, got AWSVPC=%q AWSEC2=%q", c.AWSVPC, c.AWSEC2)
 	}
-	if c.Cloud == "GCP" {
-		t.Error("Normalize() should NOT default Cloud to 'GCP' for empty sessions")
+	if c.GCPVPC != nil || c.GCPGKE != nil {
+		t.Errorf("GCP fields must remain nil, got GCPVPC=%v GCPGKE=%v", c.GCPVPC, c.GCPGKE)
 	}
-}
-
-func TestComponents_Normalize_ReturnsEarlyIfCloudEmpty(t *testing.T) {
-	t.Parallel()
-	// When cloud is empty, Normalize should return early without modifying anything
-	c := Components{}
-	c.Normalize()
-
-	// Verify nothing was modified
-	if c.Cloud != "" {
-		t.Errorf("Cloud should remain empty, got %q", c.Cloud)
+	if c.VPC != "" || c.EC2 != "" {
+		t.Errorf("legacy fields must remain zero, got VPC=%q EC2=%q", c.VPC, c.EC2)
 	}
 }
 
@@ -178,14 +164,12 @@ func TestComponents_Normalize_ClearsLegacyFieldsAfterSync(t *testing.T) {
 
 func TestConfig_Normalize_EmptySession(t *testing.T) {
 	t.Parallel()
-	// A fresh config with no cloud set should not cause issues
+	// A fresh config with no cloud set must not invent one.
 	cfg := Config{}
 	cfg.Normalize()
 
-	// Should complete without panic
 	if cfg.Cloud != "" {
-		// If cloud was somehow set, that's a problem
-		t.Logf("Note: Config.Cloud is %q after Normalize()", cfg.Cloud)
+		t.Errorf("Config.Cloud must remain empty after Normalize() on an empty session, got %q", cfg.Cloud)
 	}
 }
 
