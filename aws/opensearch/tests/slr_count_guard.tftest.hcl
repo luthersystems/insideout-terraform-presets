@@ -45,6 +45,13 @@ run "managed_mode_creates_slr_and_tolerates_empty_aoss_tuple" {
     condition     = length(aws_iam_service_linked_role.aoss) == 0
     error_message = "Expected no AOSS SLR resource when deployment_type = managed"
   }
+
+  # Encryption policy is AOSS-only. Locks the is_serverless guard at
+  # main.tf so a mutation to `count = 1` can't slip through.
+  assert {
+    condition     = length(aws_opensearchserverless_security_policy.encryption) == 0
+    error_message = "AOSS encryption policy must not exist when deployment_type = managed"
+  }
 }
 
 run "serverless_mode_creates_aoss_slr_and_tolerates_empty_opensearch_tuple" {

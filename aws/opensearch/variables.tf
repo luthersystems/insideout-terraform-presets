@@ -71,6 +71,15 @@ variable "kms_key_arn" {
   type        = string
   description = "Optional KMS key ARN for the AOSS encryption security policy. If null (default), the AWS-owned AOSS key is used. Serverless mode only."
   default     = null
+
+  # Empty string would take the customer-KMS arm of the encryption policy
+  # and emit `"KmsARN":""`, which AOSS rejects. Force null for the default.
+  # Ternary (not `||`) because Terraform validation does not short-circuit —
+  # `trimspace(null)` would blow up before the null check fires.
+  validation {
+    condition     = var.kms_key_arn == null ? true : length(trimspace(var.kms_key_arn)) > 0
+    error_message = "kms_key_arn must be null or a non-empty ARN string."
+  }
 }
 
 variable "allow_public_access" {
