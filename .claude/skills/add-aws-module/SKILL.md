@@ -106,6 +106,32 @@ cd aws/<modulename> && terraform init -backend=false -input=false && terraform v
 go build ./...
 ```
 
+### 8. Tests (optional but encouraged)
+
+`terraform test` files live in `aws/<modulename>/tests/` and follow a filename convention CI relies on:
+
+| File pattern | Behaviour |
+|---|---|
+| `tests/*.tftest.hcl` | Discovered and run by CI on every PR. Must work without AWS credentials. |
+| `tests/*integration*.tftest.hcl` | **Skipped in CI**. Integration tests that apply against a real account; run manually. |
+
+For credential-free unit tests, mock the AWS provider so `data` sources resolve at plan time:
+
+```hcl
+mock_provider "aws" {
+  mock_data "aws_caller_identity" {
+    defaults = { account_id = "111111111111" }
+  }
+}
+```
+
+Use `command = plan` for shape and validation tests. Switch a specific run to `command = apply` only when an assertion depends on a resource attribute (like an ARN) that's "known after apply" — `mock_provider` populates those at apply time without ever calling AWS.
+
+Integration tests should:
+- Suffix any account-scoped resource name with a timestamp (e.g. `formatdate("MMDDhhmmss", timestamp())`) so back-to-back runs don't collide.
+- Document a manual cleanup runbook in the file header for the case where the test is killed mid-apply.
+- Call out any account-level singletons being clobbered (Bedrock invocation logging, AWS Config recorder, etc.).
+
 ## Anti-Patterns
 
 - Using `var.region` instead of `data.aws_region.current.region` in service names

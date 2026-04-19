@@ -10,5 +10,10 @@ output "opensearch_endpoint" {
 
 output "collection_arn" {
   value       = var.deployment_type == "serverless" ? aws_opensearchserverless_collection.serverless[0].arn : null
-  description = "ARN of the AOSS collection. null when deployment_type is managed. Wire this (not opensearch_arn) into aws/bedrock.opensearch_collection_arn. The application layer is responsible for creating data-access policies and vector indexes against this collection."
+  description = "ARN of the AOSS collection. null when deployment_type is managed. Wire this (not opensearch_arn) into aws/bedrock.opensearch_collection_arn. The application layer is responsible for creating the vector index against this collection."
+}
+
+output "collection_name" {
+  value       = var.deployment_type == "serverless" ? aws_opensearchserverless_collection.serverless[0].name : null
+  description = "Name of the AOSS collection (not the ID embedded in the ARN). null when deployment_type is managed. Wire into aws/bedrock.opensearch_collection_name so bedrock can author the AOSS data-access policy granting its role data-plane access — AOSS access policies match collections by name, not ARN."
 }
