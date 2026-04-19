@@ -247,7 +247,10 @@ func isToggleComponentField(f reflect.StructField) bool {
 }
 
 // metadataFields lists Components fields that describe the stack itself
-// rather than an individual component toggle.
+// rather than an individual component toggle. Used by DiffComponents to
+// *exclude* these fields from toggle diffs. A strict superset of
+// stackMetadataDiffFields — the extra entry (cpu_arch) is excluded from
+// toggle diffs AND from metadata diffs.
 var metadataFields = map[string]bool{
 	"cloud":        true,
 	"architecture": true,
@@ -255,9 +258,10 @@ var metadataFields = map[string]bool{
 }
 
 // stackMetadataDiffFields are the metadata fields that DiffMetadata reports
-// transitions for. cpu_arch is intentionally excluded — it is consumed
-// internally by per-component arch (aws_ec2 / gcp_compute) and has no UI
-// tile, so highlighting it would be spurious.
+// transitions for — the inverse view of metadataFields. cpu_arch is
+// intentionally excluded here: it is consumed internally by per-component
+// arch (aws_ec2 / gcp_compute) and has no UI tile, so highlighting it
+// would be spurious.
 var stackMetadataDiffFields = []string{"cloud", "architecture"}
 
 // isComponentActive returns true if a reflect.Value represents an "enabled"

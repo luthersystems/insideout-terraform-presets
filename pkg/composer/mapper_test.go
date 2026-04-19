@@ -459,11 +459,23 @@ func TestBuildModuleValues_AWSEC2_CpuArchPrecedence(t *testing.T) {
 		assert.Equal(t, "arm64", vals["arch"], "AWSEC2=ARM must win over CpuArch=Intel")
 	})
 
+	t.Run("AWSEC2 arch match is case-insensitive (locks EqualFold)", func(t *testing.T) {
+		// Lowercase variants of "ARM" must still map to arm64 — guards against
+		// a careless switch to == that would silently emit x86_64 instead.
+		comps := &Components{AWSEC2: "arm"}
+		vals, err := m.BuildModuleValues(KeyAWSEC2, comps, nil, "", "")
+		require.NoError(t, err)
+		assert.Equal(t, "arm64", vals["arch"], "AWSEC2='arm' must be matched case-insensitively")
+	})
+
 	t.Run("deprecated CpuArch=ARM used as fallback when AWSEC2 empty", func(t *testing.T) {
 		comps := &Components{CpuArch: "ARM"}
 		vals, err := m.BuildModuleValues(KeyAWSEC2, comps, nil, "", "")
 		require.NoError(t, err)
 		assert.Equal(t, "arm64", vals["arch"], "CpuArch fallback should emit arm64")
+		// t4g.medium is the arm64 default instance type; see the fallback
+		// block around mapper.go:309-314 ("Default instance type based on
+		// architecture if not explicitly configured").
 		assert.Equal(t, "t4g.medium", vals["instance_type"], "arm64 fallback should default to t4g.medium")
 	})
 

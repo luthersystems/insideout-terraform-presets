@@ -767,11 +767,22 @@ func TestDiffMetadata_NoChange(t *testing.T) {
 
 func TestDiffMetadata_SkipsCpuArch(t *testing.T) {
 	t.Parallel()
-	oldComp := Components{CpuArch: "Intel"}
-	newComp := Components{CpuArch: "ARM"}
-	diffs := DiffMetadata(oldComp, newComp)
-	if len(diffs) != 0 {
-		t.Errorf("expected cpu_arch to be skipped, got %d: %+v", len(diffs), diffs)
+	cases := []struct {
+		name    string
+		oldComp Components
+		newComp Components
+	}{
+		{"modification", Components{CpuArch: "Intel"}, Components{CpuArch: "ARM"}},
+		{"appears", Components{}, Components{CpuArch: "ARM"}},
+		{"disappears", Components{CpuArch: "ARM"}, Components{}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			diffs := DiffMetadata(tc.oldComp, tc.newComp)
+			if len(diffs) != 0 {
+				t.Errorf("expected cpu_arch to be skipped, got %d: %+v", len(diffs), diffs)
+			}
+		})
 	}
 }
 
@@ -822,24 +833,21 @@ func TestDiffMetadata_DoesNotLeakIntoComponents(t *testing.T) {
 
 func TestVersionDiff_MetadataJSONRoundTrip(t *testing.T) {
 	t.Parallel()
-	vd := VersionDiff{
+	want := VersionDiff{
 		FromVersion: 1,
 		ToVersion:   2,
 		Metadata:    []MetadataDiff{{Field: "cloud", From: "", To: "aws"}},
 	}
-	b, err := json.Marshal(vd)
+	b, err := json.Marshal(want)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	if !strings.Contains(string(b), `"metadata":[{"field":"cloud","from":"","to":"aws"}]`) {
-		t.Errorf("unexpected JSON: %s", string(b))
-	}
-	var back VersionDiff
-	if err := json.Unmarshal(b, &back); err != nil {
+	var got VersionDiff
+	if err := json.Unmarshal(b, &got); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	if len(back.Metadata) != 1 || back.Metadata[0].Field != "cloud" || back.Metadata[0].To != "aws" {
-		t.Errorf("round-trip: got %+v", back.Metadata)
+	if !reflect.DeepEqual(got.Metadata, want.Metadata) {
+		t.Errorf("round-trip: got %+v, want %+v", got.Metadata, want.Metadata)
 	}
 }
 
@@ -851,7 +859,15 @@ func TestVersionDiff_MetadataOmittedWhenEmpty(t *testing.T) {
 		t.Fatalf("marshal: %v", err)
 	}
 	if strings.Contains(string(b), `"metadata"`) {
-		t.Errorf("metadata should be omitted when nil: %s", string(b))
+		t.Errorf("metadata key should be omitted when slice is nil: %s", string(b))
+	}
+	// Round-trip: unmarshaling the emitted JSON yields an empty Metadata slice.
+	var back VersionDiff
+	if err := json.Unmarshal(b, &back); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(back.Metadata) != 0 {
+		t.Errorf("round-trip Metadata should be empty, got %+v", back.Metadata)
 	}
 }
 
