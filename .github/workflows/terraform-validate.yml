@@ -133,6 +133,9 @@ jobs:
       - name: Lint sensitive-in-for_each
         run: bash tests/lint-sensitive-for-each.sh
 
+      - name: Lint Project-tag coverage (AWS)
+        run: bash tests/lint-project-tag.sh
+
   format-check:
     runs-on: ubuntu-latest
     steps:

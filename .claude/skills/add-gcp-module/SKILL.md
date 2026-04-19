@@ -38,6 +38,7 @@ Key rules:
 - Otherwise use direct `google_*` resources
 - If the module needs the `random` provider, add it with `>= 3.5`
 - Enable encryption, enforce least-privilege IAM by default
+- **Label every labelable resource** with `labels = merge(..., var.labels)` (merging in module-scoped labels where available) so `Project` identity propagates to the inspector.
 
 ### 3. Create variables.tf
 
@@ -110,6 +111,7 @@ go build ./...
 - Using `var.x == null || condition` in validation
 - Forgetting `project` or `region` variables
 - Adding `.tmpl` files without updating `zz_embed.go`
+- Creating a labelable GCP resource without `labels = merge(..., var.labels)` — inspector drift detection relies on `Project` label propagation (AWS mirror: issue #81)
 
 ## Checklist
 
@@ -119,6 +121,7 @@ go build ./...
 - [ ] `outputs.tf` with wiring outputs
 - [ ] Null-safe validation (ternary pattern)
 - [ ] Security defaults (encryption, least-privilege IAM)
+- [ ] Every labelable resource has `labels = merge(..., var.labels)`
 - [ ] `terraform fmt` clean
 - [ ] `terraform validate` passes
 - [ ] `go build ./...` succeeds

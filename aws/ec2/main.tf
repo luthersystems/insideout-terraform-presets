@@ -135,6 +135,7 @@ resource "aws_iam_role_policy_attachment" "ssm_core" {
 resource "aws_iam_instance_profile" "this" {
   name = "${var.project}-ec2-profile"
   role = aws_iam_role.this.name
+  tags = merge(module.name.tags, var.tags)
 }
 
 # -------------------------------------------------------------

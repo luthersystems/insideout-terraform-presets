@@ -80,6 +80,7 @@ resource "aws_iam_role_policy_attachment" "ssm_core" {
 resource "aws_iam_instance_profile" "bastion_profile" {
   name = "${var.project}-bastion-profile"
   role = aws_iam_role.bastion_role.name
+  tags = merge(module.name.tags, var.tags)
 }
 
 # locals for template vars
