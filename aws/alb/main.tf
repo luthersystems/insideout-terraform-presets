@@ -102,6 +102,8 @@ resource "aws_lb_listener" "http_forward" {
     type             = "forward"
     target_group_arn = aws_lb_target_group.app.arn
   }
+
+  tags = merge(module.name.tags, var.tags)
 }
 
 # HTTP listener → redirect to HTTPS (when cert provided)
@@ -120,6 +122,8 @@ resource "aws_lb_listener" "http_redirect" {
       status_code = "HTTP_301"
     }
   }
+
+  tags = merge(module.name.tags, var.tags)
 }
 
 # HTTPS listener (when cert provided)
@@ -135,4 +139,6 @@ resource "aws_lb_listener" "https" {
     type             = "forward"
     target_group_arn = aws_lb_target_group.app.arn
   }
+
+  tags = merge(module.name.tags, var.tags)
 }

@@ -69,7 +69,33 @@ grep -rn 'encrypted\s*=\s*false\|encryption\s*=\s*false' aws/ gcp/
 grep -rn '"*"\|"\*"' aws/ gcp/ --include="*.tf"
 ```
 
-### 5. Region Reference Audit (AWS)
+### 5. Tagging Coverage
+
+The downstream reliable3 inspector filters AWS resources by exact `Project = <project>` tag match. Resources without a `tags = merge(module.name.tags, var.tags)` block are invisible to drift detection and CloudWatch metrics. Scan for taggable resources that omit the convention:
+
+```bash
+# AWS — flag resource blocks missing `tags`
+for f in aws/*/main.tf; do
+  awk '
+    /^resource "aws_/ { name=$0; has_tags=0; next }
+    /^  tags[[:space:]]*=/ { has_tags=1 }
+    /^}/ { if (name != "" && !has_tags) print FILENAME": "name; name=""; has_tags=0 }
+  ' "$f"
+done
+
+# GCP — flag resource blocks missing `labels`
+for f in gcp/*/main.tf; do
+  awk '
+    /^resource "google_/ { name=$0; has_labels=0; next }
+    /^  labels[[:space:]]*=/ { has_labels=1 }
+    /^}/ { if (name != "" && !has_labels) print FILENAME": "name; name=""; has_labels=0 }
+  ' "$f"
+done
+```
+
+The heuristic over-reports — some resources are genuinely untaggable (e.g. `aws_iam_role_policy_attachment`, `aws_iam_role_policy`, `aws_route53_record`, `aws_s3_bucket_public_access_block`). Hand-verify each hit against the provider docs before reporting a gap.
+
+### 6. Region Reference Audit (AWS)
 
 Check for direct `var.region` usage in service name construction (should use `data.aws_region.current.region`):
 
@@ -77,7 +103,7 @@ Check for direct `var.region` usage in service name construction (should use `da
 grep -rn 'var\.region' aws/ --include="*.tf" | grep -v 'variables.tf'
 ```
 
-### 6. Cross-Module Wiring
+### 7. Cross-Module Wiring
 
 Verify outputs match what examples expect:
 
@@ -94,7 +120,7 @@ for dir in aws/*/; do
 done
 ```
 
-### 7. Go Embed Coverage
+### 8. Go Embed Coverage
 
 Verify all file patterns are embedded:
 
@@ -103,7 +129,7 @@ Verify all file patterns are embedded:
 find aws gcp -type f | grep -v '\.tf$' | grep -v '\.tmpl$' | grep -v '\.terraform' | grep -v '.validate-skip'
 ```
 
-### 8. Report
+### 9. Report
 
 Produce a structured report:
 
@@ -119,6 +145,9 @@ Produce a structured report:
 ### Validation Safety
 - <list>
 
+### Tagging Coverage
+- <list — resources missing `tags`/`labels` per the Project-tag convention>
+
 ### Wiring Issues
 - <list>
 
@@ -131,6 +160,7 @@ Produce a structured report:
 - [ ] Convention compliance checked (file structure, naming, required variables)
 - [ ] Null validation patterns scanned
 - [ ] Security defaults verified
+- [ ] Tagging coverage verified (AWS `tags`, GCP `labels` on every taggable resource)
 - [ ] Region references audited (AWS)
 - [ ] Cross-module wiring validated
 - [ ] Go embed coverage confirmed

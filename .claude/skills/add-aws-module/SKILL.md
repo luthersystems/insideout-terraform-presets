@@ -40,6 +40,7 @@ Key rules:
 - If the module wraps a community module, use `source = "terraform-aws-modules/<name>/aws"` with a version pin
 - If the module needs a provider alias (like WAF needing `aws.us_east_1`), add `configuration_aliases` and create a `.validate-skip` marker file
 - Enable encryption, block public access, enforce least-privilege IAM by default
+- **Tag every taggable resource** with `tags = merge(module.name.tags, var.tags)`. Listeners (`aws_lb_listener`), instance profiles (`aws_iam_instance_profile`), and any resource that accepts a `tags` attribute must include it — otherwise the downstream reliable3 inspector's exact-match `Project` tag filter skips them (see issue #81).
 
 ### 3. Create variables.tf
 
@@ -139,6 +140,7 @@ Integration tests should:
 - Forgetting `project` or `region` variables
 - Leaving variables without defaults unless intentionally required
 - Public access enabled by default
+- Creating a taggable resource (e.g. `aws_lb_listener`, `aws_iam_instance_profile`, `aws_iam_role`) without `tags = merge(module.name.tags, var.tags)` — inspector filters by exact `Project` tag and silently drops untagged resources
 
 ## Checklist
 
@@ -148,6 +150,7 @@ Integration tests should:
 - [ ] `outputs.tf` with wiring outputs
 - [ ] Null-safe validation (ternary pattern)
 - [ ] Security defaults (encryption, no public access)
+- [ ] Every taggable resource has `tags = merge(module.name.tags, var.tags)`
 - [ ] `terraform fmt` clean
 - [ ] `terraform validate` passes
 - [ ] `go build ./...` succeeds
