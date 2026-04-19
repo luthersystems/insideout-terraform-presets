@@ -71,29 +71,30 @@ grep -rn '"*"\|"\*"' aws/ gcp/ --include="*.tf"
 
 ### 5. Tagging Coverage
 
-The downstream reliable3 inspector filters AWS resources by exact `Project = <project>` tag match. Resources without a `tags = merge(module.name.tags, var.tags)` block are invisible to drift detection and CloudWatch metrics. Scan for taggable resources that omit the convention:
+The downstream reliable3 inspector filters AWS resources by exact `Project = <project>` tag match. Resources without a `tags = merge(module.name.tags, var.tags)` block are invisible to drift detection and CloudWatch metrics.
+
+**AWS is enforced in CI** via `tests/lint-project-tag.sh` (wired into the `lint` job in `.github/workflows/terraform-validate.yml`). Run it locally the same way:
 
 ```bash
-# AWS — flag resource blocks missing `tags`
-for f in aws/*/main.tf; do
-  awk '
-    /^resource "aws_/ { name=$0; has_tags=0; next }
-    /^  tags[[:space:]]*=/ { has_tags=1 }
-    /^}/ { if (name != "" && !has_tags) print FILENAME": "name; name=""; has_tags=0 }
-  ' "$f"
-done
+bash tests/lint-project-tag.sh
+```
 
-# GCP — flag resource blocks missing `labels`
+It reports any taggable AWS resource missing the Project-tag convention. The script ships with a `NON_TAGGABLE_AWS` whitelist of resource types that genuinely don't accept tags in AWS provider 6.x; if CI flags a new hit, either add the `tags` line (usual case) or append to the whitelist with a clear rationale.
+
+**GCP** isn't CI-enforced (too many "no labels arg" resources to maintain a clean whitelist). Audit by hand with:
+
+```bash
 for f in gcp/*/main.tf; do
   awk '
     /^resource "google_/ { name=$0; has_labels=0; next }
     /^  labels[[:space:]]*=/ { has_labels=1 }
+    /^  user_labels[[:space:]]*=/ { has_labels=1 }
     /^}/ { if (name != "" && !has_labels) print FILENAME": "name; name=""; has_labels=0 }
   ' "$f"
 done
 ```
 
-The heuristic over-reports — some resources are genuinely untaggable (e.g. `aws_iam_role_policy_attachment`, `aws_iam_role_policy`, `aws_route53_record`, `aws_s3_bucket_public_access_block`). Hand-verify each hit against the provider docs before reporting a gap.
+Hand-verify each hit against the provider docs before reporting a gap.
 
 ### 6. Region Reference Audit (AWS)
 
