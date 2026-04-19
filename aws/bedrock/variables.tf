@@ -1,6 +1,10 @@
 variable "project" {
   type        = string
-  description = "Project name for resource naming"
+  description = "Project name for resource naming. Caps at 24 chars: tightest derived name is the AOSS data-access policy '${"$"}{project}-br-data' (AOSS limit 32). Other derived names — guardrail (limit 50), IAM logging role (limit 64), CloudWatch log group (limit 512) — fit any 24-char project comfortably."
+  validation {
+    condition     = length(trimspace(var.project)) > 0 && length(var.project) <= 24
+    error_message = "project must be a non-empty string ≤24 characters. The AOSS data-access policy name {project}-br-data caps at 32 chars (AOSS limit), so the project portion is ≤24."
+  }
 }
 
 variable "region" {
@@ -159,6 +163,29 @@ variable "guardrail_pii_entities" {
     "CREDIT_DEBIT_CARD_NUMBER",
     "PASSWORD",
   ]
+
+  # Bedrock's PII entity list is closed and stable; validating locally turns
+  # a generic apply-time error from AWS ("invalid PII entity type") into a
+  # plan-time error pointing at the offending value. Source list:
+  # https://docs.aws.amazon.com/bedrock/latest/APIReference/API_GuardrailPiiEntityConfig.html
+  validation {
+    condition = alltrue([
+      for entity in var.guardrail_pii_entities : contains([
+        "ADDRESS", "AGE", "AWS_ACCESS_KEY", "AWS_SECRET_KEY",
+        "CA_HEALTH_NUMBER", "CA_SOCIAL_INSURANCE_NUMBER",
+        "CREDIT_DEBIT_CARD_CVV", "CREDIT_DEBIT_CARD_EXPIRY",
+        "CREDIT_DEBIT_CARD_NUMBER", "DRIVER_ID", "EMAIL",
+        "INTERNATIONAL_BANK_ACCOUNT_NUMBER", "IP_ADDRESS",
+        "LICENSE_PLATE", "MAC_ADDRESS", "NAME", "PASSWORD",
+        "PHONE", "PIN", "SWIFT_CODE", "UK_NATIONAL_HEALTH_SERVICE_NUMBER",
+        "UK_NATIONAL_INSURANCE_NUMBER", "UK_UNIQUE_TAXPAYER_REFERENCE_NUMBER",
+        "URL", "USERNAME", "US_BANK_ACCOUNT_NUMBER", "US_BANK_ROUTING_NUMBER",
+        "US_INDIVIDUAL_TAX_IDENTIFICATION_NUMBER", "US_PASSPORT_NUMBER",
+        "US_SOCIAL_SECURITY_NUMBER", "VEHICLE_IDENTIFICATION_NUMBER",
+      ], entity)
+    ])
+    error_message = "guardrail_pii_entities contains an unrecognised PII type. See https://docs.aws.amazon.com/bedrock/latest/APIReference/API_GuardrailPiiEntityConfig.html for the canonical list."
+  }
 }
 
 variable "guardrail_denied_topics" {

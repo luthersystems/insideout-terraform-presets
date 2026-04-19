@@ -19,9 +19,19 @@ module "name" {
   resource       = "br"
 }
 
+# Used by the IAM role trust policies below to scope service-principal trust
+# to this account only — AWS's documented mitigation against the
+# cross-account confused-deputy attack on bedrock.amazonaws.com.
+data "aws_caller_identity" "current" {}
+
 resource "aws_iam_role" "bedrock_kb" {
   name = "${var.project}-bedrock-role"
 
+  # Scoping the service trust to aws:SourceAccount = this account closes the
+  # cross-account confused-deputy hole on bedrock.amazonaws.com (an attacker
+  # in another account could otherwise coax Bedrock into assuming this role
+  # from their context). The condition is satisfied automatically by every
+  # legitimate in-account caller, so it is backward-compatible.
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -30,6 +40,11 @@ resource "aws_iam_role" "bedrock_kb" {
         Effect = "Allow"
         Principal = {
           Service = "bedrock.amazonaws.com"
+        }
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = data.aws_caller_identity.current.account_id
+          }
         }
       }
     ]
@@ -163,6 +178,7 @@ resource "aws_iam_role" "invocation_logging" {
   count = var.enable_invocation_logging ? 1 : 0
   name  = "${var.project}-bedrock-logging-role"
 
+  # Same confused-deputy guard as bedrock_kb above.
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -170,6 +186,11 @@ resource "aws_iam_role" "invocation_logging" {
       Effect = "Allow"
       Principal = {
         Service = "bedrock.amazonaws.com"
+      }
+      Condition = {
+        StringEquals = {
+          "aws:SourceAccount" = data.aws_caller_identity.current.account_id
+        }
       }
     }]
   })
