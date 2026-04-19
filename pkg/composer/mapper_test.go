@@ -445,3 +445,52 @@ func TestBuildModuleValues_AWSECS_PartialConfig(t *testing.T) {
 	_, hasDefault := vals["default_capacity_provider"]
 	assert.False(t, hasDefault, "empty DefaultCapacityProvider should not appear")
 }
+
+// TestBuildModuleValues_AWSEC2_CpuArchPrecedence locks the precedence rule
+// documented on the deprecated Components.CpuArch field: per-component AWSEC2
+// wins; CpuArch is only consulted as a fallback. See issue #86.
+func TestBuildModuleValues_AWSEC2_CpuArchPrecedence(t *testing.T) {
+	m := DefaultMapper{}
+
+	t.Run("per-component AWSEC2 wins over deprecated CpuArch", func(t *testing.T) {
+		comps := &Components{CpuArch: "Intel", AWSEC2: "ARM"}
+		vals, err := m.BuildModuleValues(KeyAWSEC2, comps, nil, "", "")
+		require.NoError(t, err)
+		assert.Equal(t, "arm64", vals["arch"], "AWSEC2=ARM must win over CpuArch=Intel")
+	})
+
+	t.Run("AWSEC2 arch match is case-insensitive (locks EqualFold)", func(t *testing.T) {
+		// Lowercase variants of "ARM" must still map to arm64 — guards against
+		// a careless switch to == that would silently emit x86_64 instead.
+		comps := &Components{AWSEC2: "arm"}
+		vals, err := m.BuildModuleValues(KeyAWSEC2, comps, nil, "", "")
+		require.NoError(t, err)
+		assert.Equal(t, "arm64", vals["arch"], "AWSEC2='arm' must be matched case-insensitively")
+	})
+
+	t.Run("deprecated CpuArch=ARM used as fallback when AWSEC2 empty", func(t *testing.T) {
+		comps := &Components{CpuArch: "ARM"}
+		vals, err := m.BuildModuleValues(KeyAWSEC2, comps, nil, "", "")
+		require.NoError(t, err)
+		assert.Equal(t, "arm64", vals["arch"], "CpuArch fallback should emit arm64")
+		// t4g.medium is the arm64 default instance type; see the fallback
+		// block around mapper.go:309-314 ("Default instance type based on
+		// architecture if not explicitly configured").
+		assert.Equal(t, "t4g.medium", vals["instance_type"], "arm64 fallback should default to t4g.medium")
+	})
+
+	t.Run("deprecated CpuArch=Intel used as fallback when AWSEC2 empty", func(t *testing.T) {
+		comps := &Components{CpuArch: "Intel"}
+		vals, err := m.BuildModuleValues(KeyAWSEC2, comps, nil, "", "")
+		require.NoError(t, err)
+		assert.Equal(t, "x86_64", vals["arch"], "CpuArch fallback should emit x86_64")
+	})
+
+	t.Run("no arch set anywhere leaves arch unset", func(t *testing.T) {
+		comps := &Components{}
+		vals, err := m.BuildModuleValues(KeyAWSEC2, comps, nil, "", "")
+		require.NoError(t, err)
+		_, hasArch := vals["arch"]
+		assert.False(t, hasArch, "no arch hint should leave arch unset")
+	})
+}

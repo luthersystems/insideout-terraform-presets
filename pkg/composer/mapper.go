@@ -273,11 +273,19 @@ func (m DefaultMapper) BuildModuleValues(
 		if _, ok := vals["subnet_id"]; !ok {
 			vals["subnet_id"] = ""
 		}
-		// Map CPU architecture from component selection ("Intel"/"ARM") to preset variable
-		if comps != nil && strings.EqualFold(comps.AWSEC2, "ARM") {
-			vals["arch"] = "arm64"
-		} else if comps != nil && comps.AWSEC2 != "" {
-			vals["arch"] = "x86_64"
+		// Map CPU architecture from component selection ("Intel"/"ARM") to preset variable.
+		// Precedence: per-component AWSEC2 wins; fall back to the deprecated top-level
+		// CpuArch for backwards compatibility with pre-deprecation callers (see #86).
+		if comps != nil {
+			archHint := comps.AWSEC2
+			if archHint == "" {
+				archHint = comps.CpuArch
+			}
+			if strings.EqualFold(archHint, "ARM") {
+				vals["arch"] = "arm64"
+			} else if archHint != "" {
+				vals["arch"] = "x86_64"
+			}
 		}
 		// Map config fields to Terraform variables
 		if cfg != nil && cfg.AWSEC2 != nil {

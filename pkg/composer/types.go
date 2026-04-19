@@ -8,7 +8,15 @@ type Components struct {
 	// Cloud-agnostic fields
 	Architecture string `json:"architecture,omitempty"`
 	Cloud        string `json:"cloud,omitempty"`
-	CpuArch      string `json:"cpu_arch,omitempty"`
+
+	// CpuArch is a stack-level default CPU architecture ("Intel" | "ARM").
+	//
+	// Deprecated: prefer per-component arch fields (AWSEC2, GCPCompute).
+	// The mapper reads per-component arch first and only consults CpuArch
+	// as a fallback for callers that have not migrated. New code MUST set
+	// AWSEC2/GCPCompute directly; CpuArch will be removed in a future
+	// release after all known consumers migrate.
+	CpuArch string `json:"cpu_arch,omitempty"`
 
 	// ==================== AWS Components ====================
 	AWSVPC                  string `json:"aws_vpc,omitempty"` // "Private" or "Public"
