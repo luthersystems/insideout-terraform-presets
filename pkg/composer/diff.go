@@ -31,11 +31,20 @@ type PricingDiff struct {
 	Delta     float64 `json:"delta"`
 }
 
+// MetadataDiff describes a transition of a stack-level metadata field
+// (cloud, architecture) between two versions.
+type MetadataDiff struct {
+	Field string `json:"field"`
+	From  string `json:"from"`
+	To    string `json:"to"`
+}
+
 // VersionDiff is the complete diff between two stack versions.
 type VersionDiff struct {
 	FromVersion int             `json:"from_version"`
 	ToVersion   int             `json:"to_version"`
 	Components  []ComponentDiff `json:"components"`
+	Metadata    []MetadataDiff  `json:"metadata,omitempty"`
 	Pricing     []PricingDiff   `json:"pricing,omitempty"`
 	Summary     string          `json:"summary"`
 }
@@ -245,6 +254,12 @@ var metadataFields = map[string]bool{
 	"cpu_arch":     true,
 }
 
+// stackMetadataDiffFields are the metadata fields that DiffMetadata reports
+// transitions for. cpu_arch is intentionally excluded — it is consumed
+// internally by per-component arch (aws_ec2 / gcp_compute) and has no UI
+// tile, so highlighting it would be spurious.
+var stackMetadataDiffFields = []string{"cloud", "architecture"}
+
 // isComponentActive returns true if a reflect.Value represents an "enabled"
 // component toggle. The heuristic: *bool → true, string → non-empty,
 // *struct → non-nil.
@@ -331,6 +346,37 @@ func DiffComponents(oldComp, newComp Components) []ComponentDiff {
 		}
 	}
 
+	return diffs
+}
+
+// DiffMetadata returns one MetadataDiff per stack-level metadata field whose
+// value changed between oldComp and newComp. Only fields in
+// stackMetadataDiffFields (cloud, architecture) are reported; cpu_arch is
+// always skipped. Transitions covered: empty->non-empty, non-empty->different,
+// non-empty->empty. No-op fields are omitted.
+func DiffMetadata(oldComp, newComp Components) []MetadataDiff {
+	oldVal := reflect.ValueOf(oldComp)
+	newVal := reflect.ValueOf(newComp)
+	t := oldVal.Type()
+
+	wanted := make(map[string]bool, len(stackMetadataDiffFields))
+	for _, name := range stackMetadataDiffFields {
+		wanted[name] = true
+	}
+
+	var diffs []MetadataDiff
+	for i := 0; i < t.NumField(); i++ {
+		tag := JSONTagName(t.Field(i))
+		if !wanted[tag] {
+			continue
+		}
+		oldStr := FormatValue(oldVal.Field(i))
+		newStr := FormatValue(newVal.Field(i))
+		if oldStr == newStr {
+			continue
+		}
+		diffs = append(diffs, MetadataDiff{Field: tag, From: oldStr, To: newStr})
+	}
 	return diffs
 }
 

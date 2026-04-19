@@ -713,6 +713,148 @@ func TestDiffComponents_GCPComponents(t *testing.T) {
 	}
 }
 
+// --- DiffMetadata tests ---
+
+func TestDiffMetadata_CloudAppears(t *testing.T) {
+	t.Parallel()
+	oldComp := Components{}
+	newComp := Components{Cloud: "aws"}
+	diffs := DiffMetadata(oldComp, newComp)
+	if len(diffs) != 1 {
+		t.Fatalf("expected 1 diff, got %d: %+v", len(diffs), diffs)
+	}
+	got := diffs[0]
+	if got.Field != "cloud" || got.From != "" || got.To != "aws" {
+		t.Errorf("got %+v, want {cloud,'','aws'}", got)
+	}
+}
+
+func TestDiffMetadata_CloudChanges(t *testing.T) {
+	t.Parallel()
+	oldComp := Components{Cloud: "aws"}
+	newComp := Components{Cloud: "gcp"}
+	diffs := DiffMetadata(oldComp, newComp)
+	if len(diffs) != 1 {
+		t.Fatalf("expected 1 diff, got %d: %+v", len(diffs), diffs)
+	}
+	got := diffs[0]
+	if got.Field != "cloud" || got.From != "aws" || got.To != "gcp" {
+		t.Errorf("got %+v, want {cloud,'aws','gcp'}", got)
+	}
+}
+
+func TestDiffMetadata_CloudDisappears(t *testing.T) {
+	t.Parallel()
+	oldComp := Components{Cloud: "aws"}
+	newComp := Components{}
+	diffs := DiffMetadata(oldComp, newComp)
+	if len(diffs) != 1 {
+		t.Fatalf("expected 1 diff, got %d: %+v", len(diffs), diffs)
+	}
+	if diffs[0].From != "aws" || diffs[0].To != "" {
+		t.Errorf("got %+v, want from=aws to=''", diffs[0])
+	}
+}
+
+func TestDiffMetadata_NoChange(t *testing.T) {
+	t.Parallel()
+	comp := Components{Cloud: "aws", Architecture: "microservices"}
+	diffs := DiffMetadata(comp, comp)
+	if len(diffs) != 0 {
+		t.Errorf("expected 0 diffs, got %d: %+v", len(diffs), diffs)
+	}
+}
+
+func TestDiffMetadata_SkipsCpuArch(t *testing.T) {
+	t.Parallel()
+	oldComp := Components{CpuArch: "Intel"}
+	newComp := Components{CpuArch: "ARM"}
+	diffs := DiffMetadata(oldComp, newComp)
+	if len(diffs) != 0 {
+		t.Errorf("expected cpu_arch to be skipped, got %d: %+v", len(diffs), diffs)
+	}
+}
+
+func TestDiffMetadata_ArchitectureTransitions(t *testing.T) {
+	t.Parallel()
+	oldComp := Components{Architecture: "monolith"}
+	newComp := Components{Architecture: "microservices"}
+	diffs := DiffMetadata(oldComp, newComp)
+	if len(diffs) != 1 {
+		t.Fatalf("expected 1 diff, got %d: %+v", len(diffs), diffs)
+	}
+	got := diffs[0]
+	if got.Field != "architecture" || got.From != "monolith" || got.To != "microservices" {
+		t.Errorf("got %+v", got)
+	}
+}
+
+func TestDiffMetadata_CloudAndArchitectureTogether(t *testing.T) {
+	t.Parallel()
+	oldComp := Components{}
+	newComp := Components{Cloud: "aws", Architecture: "microservices"}
+	diffs := DiffMetadata(oldComp, newComp)
+	if len(diffs) != 2 {
+		t.Fatalf("expected 2 diffs, got %d: %+v", len(diffs), diffs)
+	}
+	byField := map[string]MetadataDiff{}
+	for _, d := range diffs {
+		byField[d.Field] = d
+	}
+	if byField["cloud"].To != "aws" {
+		t.Errorf("cloud: got %+v", byField["cloud"])
+	}
+	if byField["architecture"].To != "microservices" {
+		t.Errorf("architecture: got %+v", byField["architecture"])
+	}
+}
+
+func TestDiffMetadata_DoesNotLeakIntoComponents(t *testing.T) {
+	t.Parallel()
+	// Transitioning only metadata fields must not produce ComponentDiffs.
+	oldComp := Components{}
+	newComp := Components{Cloud: "aws", Architecture: "microservices"}
+	compDiffs := DiffComponents(oldComp, newComp)
+	if len(compDiffs) != 0 {
+		t.Errorf("metadata transitions should not appear in Components diff: %+v", compDiffs)
+	}
+}
+
+func TestVersionDiff_MetadataJSONRoundTrip(t *testing.T) {
+	t.Parallel()
+	vd := VersionDiff{
+		FromVersion: 1,
+		ToVersion:   2,
+		Metadata:    []MetadataDiff{{Field: "cloud", From: "", To: "aws"}},
+	}
+	b, err := json.Marshal(vd)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if !strings.Contains(string(b), `"metadata":[{"field":"cloud","from":"","to":"aws"}]`) {
+		t.Errorf("unexpected JSON: %s", string(b))
+	}
+	var back VersionDiff
+	if err := json.Unmarshal(b, &back); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if len(back.Metadata) != 1 || back.Metadata[0].Field != "cloud" || back.Metadata[0].To != "aws" {
+		t.Errorf("round-trip: got %+v", back.Metadata)
+	}
+}
+
+func TestVersionDiff_MetadataOmittedWhenEmpty(t *testing.T) {
+	t.Parallel()
+	vd := VersionDiff{FromVersion: 1, ToVersion: 2}
+	b, err := json.Marshal(vd)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if strings.Contains(string(b), `"metadata"`) {
+		t.Errorf("metadata should be omitted when nil: %s", string(b))
+	}
+}
+
 // --- MergeComponentDiffs tests ---
 
 func TestMergeComponentDiffs_BothEmpty(t *testing.T) {

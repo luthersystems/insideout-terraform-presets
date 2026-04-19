@@ -23,6 +23,14 @@ module "name" {
   resource       = "rds"
 }
 
+locals {
+  # AWS RDS db instance identifiers reject consecutive hyphens and
+  # leading/trailing hyphens. Upstream inputs (e.g. session-derived project
+  # names) may contain hyphens that collide with suffixes appended here.
+  # Collapse runs of hyphens and strip edges as a defensive choke point.
+  safe_name = trim(replace(module.name.name, "/-+/", "-"), "-")
+}
+
 # Option A (simple): set major version on the instance and let AWS pick preferred minor
 # Option B (explicit): if you prefer a data lookup, use preferred_versions (see variables)
 
@@ -75,7 +83,7 @@ resource "random_password" "db" {
 # Primary RDS instance (PostgreSQL)
 # -----------------------------------------------------------------------------
 resource "aws_db_instance" "primary" {
-  identifier = module.name.name
+  identifier = local.safe_name
   engine     = "postgres"
 
   # If var.engine_version is null, set major only (e.g., "15") so AWS chooses the preferred minor.
@@ -126,7 +134,7 @@ locals {
 
 resource "aws_db_instance" "replica" {
   count          = local.replica_count
-  identifier     = "${module.name.name}-replica-${count.index + 1}"
+  identifier     = "${local.safe_name}-replica-${count.index + 1}"
   engine         = "postgres"
   instance_class = var.instance_class
 
