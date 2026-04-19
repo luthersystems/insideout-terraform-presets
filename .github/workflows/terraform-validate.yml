@@ -25,10 +25,14 @@ jobs:
           echo "dirs=$dirs" >> "$GITHUB_OUTPUT"
 
       - id: find-testable
-        name: Discover modules with terraform tests
+        name: Discover modules with non-integration terraform tests
         run: |
+          # Only consider modules that have at least one non-integration
+          # .tftest.hcl. Files matching *integration* are opt-in: they
+          # require live cloud credentials and are skipped in CI.
           dirs=$(find aws gcp -mindepth 1 -maxdepth 1 -type d | sort | while read -r d; do
-            if ls "$d"/tests/*.tftest.hcl >/dev/null 2>&1 || ls "$d"/*.tftest.hcl >/dev/null 2>&1; then
+            non_integration=$(find "$d" -maxdepth 2 -name '*.tftest.hcl' ! -name '*integration*' 2>/dev/null | head -1)
+            if [ -n "$non_integration" ]; then
               echo "$d"
             fi
           done | jq -R -s -c 'split("\n") | map(select(length > 0))')
@@ -103,8 +107,22 @@ jobs:
         run: terraform init -backend=false -input=false
         working-directory: ${{ matrix.dir }}
 
-      - name: Terraform Test
-        run: terraform test -no-color
+      - name: Terraform Test (non-integration only)
+        # Run every .tftest.hcl file in the module that does NOT contain
+        # "integration" in its name. Integration tests require live cloud
+        # credentials and are run manually, not in CI.
+        run: |
+          set -euo pipefail
+          mapfile -t test_files < <(find . -maxdepth 2 -name '*.tftest.hcl' ! -name '*integration*' 2>/dev/null | sort)
+          if [ "${#test_files[@]}" -eq 0 ]; then
+            echo "No non-integration tests in this module."
+            exit 0
+          fi
+          filter_args=()
+          for f in "${test_files[@]}"; do
+            filter_args+=("-filter=${f#./}")
+          done
+          terraform test -no-color "${filter_args[@]}"
         working-directory: ${{ matrix.dir }}
 
   lint:
