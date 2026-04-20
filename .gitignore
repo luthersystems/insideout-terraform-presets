@@ -16,3 +16,4 @@ insideout-import
 
 # Claude Code local settings (keep shared .claude/settings.json)
 .claude/settings.local.json
+.claude/scheduled_tasks.lock
