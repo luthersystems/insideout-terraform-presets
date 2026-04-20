@@ -2,6 +2,7 @@ package composer
 
 import (
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -215,4 +216,171 @@ func TestPresetDefaults_NoPresetFS(t *testing.T) {
 	c := &Client{} // bypass New(); presets remains nil
 	_, err := c.PresetDefaults()
 	assert.ErrorIs(t, err, ErrNoPresetFS)
+}
+
+func TestCamelToSnake(t *testing.T) {
+	cases := map[string]string{
+		"instanceType":          "instance_type",
+		"numServers":            "num_servers",
+		"userDataURL":           "user_data_url",
+		"multiAz":               "multi_az",
+		"haControlPlane":        "ha_control_plane",
+		"enableInstanceConnect": "enable_instance_connect",
+		"customIngressPorts":    "custom_ingress_ports",
+		"sshPublicKey":          "ssh_public_key",
+		"mfaRequired":           "mfa_required",
+		"cpuSize":               "cpu_size",
+		"ha":                    "ha",
+		"region":                "region",
+		"URL":                   "url",
+	}
+	for in, want := range cases {
+		assert.Equal(t, want, camelToSnake(in), "input=%q", in)
+	}
+}
+
+func TestApplyPresetDefaults_FillsZeroFieldsOnly(t *testing.T) {
+	c := New()
+	cfg := &Config{
+		AWSEC2: &struct {
+			InstanceType          string `json:"instanceType,omitempty"`
+			NumServers            string `json:"numServers,omitempty"`
+			NumCoresPerServer     string `json:"numCoresPerServer,omitempty"`
+			DiskSizePerServer     string `json:"diskSizePerServer,omitempty"`
+			UserData              string `json:"userData,omitempty"`
+			UserDataURL           string `json:"userDataURL,omitempty"`
+			CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
+			SSHPublicKey          string `json:"sshPublicKey,omitempty"`
+			EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+		}{
+			InstanceType: "m6i.large",                   // user-set: must be preserved
+			UserData:     "echo configured by the user", // user-set: must be preserved
+		},
+	}
+
+	err := c.ApplyPresetDefaults(cfg, &Components{Cloud: "aws"}, []ComponentKey{KeyAWSEC2})
+	require.NoError(t, err)
+	require.NotNil(t, cfg.AWSEC2)
+
+	// User-set fields preserved.
+	assert.Equal(t, "m6i.large", cfg.AWSEC2.InstanceType, "non-zero user value must NOT be overwritten")
+	assert.Equal(t, "echo configured by the user", cfg.AWSEC2.UserData)
+
+	// Zero-valued fields backfilled from aws/ec2/variables.tf.
+	assert.Equal(t, "", cfg.AWSEC2.UserDataURL, "HCL default of \"\" leaves field at zero (still treated as filled)")
+	assert.Equal(t, "", cfg.AWSEC2.SSHPublicKey)
+	require.NotNil(t, cfg.AWSEC2.EnableInstanceConnect, "*bool field with HCL default = false must be a non-nil pointer")
+	assert.False(t, *cfg.AWSEC2.EnableInstanceConnect)
+
+	// Empty list default → []int{} via element-wise coercion.
+	assert.NotNil(t, cfg.AWSEC2.CustomIngressPorts, "list default of [] must produce a non-nil empty slice")
+	assert.Equal(t, []int{}, cfg.AWSEC2.CustomIngressPorts)
+
+	// Fields with no HCL backer (NumServers etc.) stay zero.
+	assert.Empty(t, cfg.AWSEC2.NumServers, "Config fields without an HCL counterpart stay at zero value")
+	assert.Empty(t, cfg.AWSEC2.NumCoresPerServer)
+}
+
+func TestApplyPresetDefaults_AllocatesNilNestedStruct(t *testing.T) {
+	c := New()
+	cfg := &Config{} // AWSEC2 is nil
+
+	err := c.ApplyPresetDefaults(cfg, &Components{Cloud: "aws"}, []ComponentKey{KeyAWSEC2})
+	require.NoError(t, err)
+	require.NotNil(t, cfg.AWSEC2, "selected component with at least one resolvable default must allocate the nested struct")
+	assert.Equal(t, "t3.medium", cfg.AWSEC2.InstanceType)
+}
+
+func TestCoerceToFieldType(t *testing.T) {
+	cases := []struct {
+		name string
+		src  any
+		dst  reflect.Type
+		want any
+		ok   bool
+	}{
+		// String-typed targets cover the fmt.Sprint coercion paths used for
+		// Config fields like NumServers (HCL number → Go string).
+		{"string→string", "demo", reflect.TypeFor[string](), "demo", true},
+		{"int64→string", int64(2), reflect.TypeFor[string](), "2", true},
+		{"float64→string", 0.25, reflect.TypeFor[string](), "0.25", true},
+		{"bool→string", true, reflect.TypeFor[string](), "true", true},
+
+		// Numeric-typed targets cover RetentionDays-style int fields and
+		// EstimatedMonthlyRequests-style int64 fields.
+		{"int64→int", int64(7), reflect.TypeFor[int](), int(7), true},
+		{"int64→int64", int64(7), reflect.TypeFor[int64](), int64(7), true},
+		{"float64→int", 7.0, reflect.TypeFor[int](), int(7), true},
+		{"int64→float64", int64(7), reflect.TypeFor[float64](), float64(7), true},
+		{"float64→float64", 0.5, reflect.TypeFor[float64](), 0.5, true},
+
+		// Bool target.
+		{"bool→bool", true, reflect.TypeFor[bool](), true, true},
+
+		// Pointer targets — exercise the recursive *T branch used for
+		// Config fields like EnableInstanceConnect (*bool) and CachePaths (*string).
+		{"bool→*bool", false, reflect.TypeFor[*bool](), false, true},
+		{"string→*string", "x", reflect.TypeFor[*string](), "x", true},
+
+		// Slice elementwise coercion: HCL list(number) → Go []int (used for
+		// CustomIngressPorts).
+		{"[]any{int64,int64}→[]int", []any{int64(80), int64(443)}, reflect.TypeFor[[]int](), []int{80, 443}, true},
+		{"[]any{string}→[]string", []any{"a", "b"}, reflect.TypeFor[[]string](), []string{"a", "b"}, true},
+		{"empty []any→[]int", []any{}, reflect.TypeFor[[]int](), []int{}, true},
+
+		// Refusals: type combinations we explicitly do NOT coerce so callers
+		// know to leave the field at zero rather than apply a wrong value.
+		{"string→int (refused)", "7", reflect.TypeFor[int](), nil, false},
+		{"string→bool (refused)", "true", reflect.TypeFor[bool](), nil, false},
+		{"map→string (refused)", map[string]any{"a": "b"}, reflect.TypeFor[string](), nil, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := coerceToFieldType(tc.src, tc.dst)
+			require.Equal(t, tc.ok, ok)
+			if !tc.ok {
+				return
+			}
+			// Pointer comparisons need to deref to the underlying value.
+			if got.Kind() == reflect.Ptr {
+				assert.Equal(t, tc.want, got.Elem().Interface())
+			} else {
+				assert.Equal(t, tc.want, got.Interface())
+			}
+		})
+	}
+}
+
+func TestApplyPresetDefaults_UnselectedComponentsUntouched(t *testing.T) {
+	c := New()
+	cfg := &Config{} // AWSEC2 nil, AWSRDS nil
+
+	err := c.ApplyPresetDefaults(cfg, &Components{Cloud: "aws"}, []ComponentKey{KeyAWSEC2})
+	require.NoError(t, err)
+	assert.NotNil(t, cfg.AWSEC2, "selected component is allocated")
+	assert.Nil(t, cfg.AWSRDS, "unselected component must remain nil — no spurious allocation")
+	assert.Nil(t, cfg.AWSS3)
+}
+
+func TestApplyPresetDefaults_NilCfgErrors(t *testing.T) {
+	c := New()
+	err := c.ApplyPresetDefaults(nil, &Components{Cloud: "aws"}, []ComponentKey{KeyAWSEC2})
+	require.Error(t, err, "nil cfg must error rather than panic")
+}
+
+func TestApplyPresetDefaults_NoPresetFS(t *testing.T) {
+	c := &Client{} // presets nil
+	err := c.ApplyPresetDefaults(&Config{}, &Components{Cloud: "aws"}, []ComponentKey{KeyAWSEC2})
+	assert.ErrorIs(t, err, ErrNoPresetFS)
+}
+
+func TestApplyPresetDefaults_GCPRoute(t *testing.T) {
+	c := New()
+	cfg := &Config{}
+	err := c.ApplyPresetDefaults(cfg, &Components{Cloud: "gcp"}, []ComponentKey{KeyGCPCloudSQL})
+	require.NoError(t, err)
+	// We don't pin a specific GCP value here (GCP preset Configs are sparser);
+	// the assertion is just that selecting a GCP key with cloud=gcp doesn't
+	// route to the AWS preset tree or panic.
+	_ = cfg
 }

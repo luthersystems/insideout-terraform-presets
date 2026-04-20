@@ -1,7 +1,9 @@
 package composer
 
 import (
+	"fmt"
 	"math/big"
+	"reflect"
 	"strings"
 
 	hcl "github.com/hashicorp/hcl/v2"
@@ -97,6 +99,262 @@ func (c *Client) PresetDefaults() (map[string]map[string]any, error) {
 		}
 	}
 	return out, nil
+}
+
+// ApplyPresetDefaults backfills cfg with statically-resolvable HCL defaults
+// for every key in `selected` that has a preset module under the cloud
+// indicated by comps.Cloud (defaulting to "aws"). It is the typed-Config
+// counterpart to PresetDefaults: where PresetDefaults returns a raw
+// "preset path → variable → value" map, this function lifts those values into
+// the matching nested *struct fields of Config, performing snake_case ↔
+// camelCase JSON-tag matching and per-field type coercion.
+//
+// Backfill semantics — a Config field is filled ONLY when its current value
+// is the zero value for its type (per reflect.Value.IsZero):
+//   - "" for strings, 0 for numerics, false for bools.
+//   - nil for pointers / slices / maps / interfaces.
+//
+// This means a non-nil empty slice (e.g. []int{} the user set explicitly) is
+// preserved, and a *bool set to &false is preserved. The intent is "fill in
+// the blanks the user hasn't filled yet," matching reliable's apply-start
+// flow for materialising defaults into session state.
+//
+// A nested struct field is allocated on demand: if cfg.AWSEC2 is nil and at
+// least one HCL default is statically resolvable for aws/ec2, AWSEC2 is
+// allocated and populated. If no defaults resolve (or the preset has no
+// `default = ...` clauses at all), the nested field stays nil.
+//
+// Type coercion table (HCL value → Go field type):
+//   - HCL string  → string field          : direct
+//   - HCL number  → string field          : fmt.Sprint(v)  ("2", not 2)
+//   - HCL number  → int / int64 / float64 : numeric cast
+//   - HCL bool    → bool field            : direct
+//   - HCL bool    → *bool field           : pointer to value
+//   - HCL string  → *string field         : pointer to value
+//   - HCL list    → []string / []int      : element-wise coerce
+//   - HCL null    → any                   : skipped (treated as "no static default")
+//
+// HCL variables that don't correspond to any Config field, and Config fields
+// without a matching HCL variable, are silently ignored — that's expected,
+// since some Config fields are reliable-side-only (e.g. AWSEC2.NumServers)
+// and many HCL variables are stack-wired (vpc_id, subnet_ids).
+//
+// Returns an error only on HCL-parse / FS failures; missing presets or
+// unmappable values are silently skipped.
+func (c *Client) ApplyPresetDefaults(cfg *Config, comps *Components, selected []ComponentKey) error {
+	if c.presets == nil {
+		return ErrNoPresetFS
+	}
+	if cfg == nil {
+		return fmt.Errorf("composer: ApplyPresetDefaults requires a non-nil *Config")
+	}
+	cloud := "aws"
+	if comps != nil && comps.Cloud != "" {
+		cloud = strings.ToLower(comps.Cloud)
+	}
+
+	// Build a JSON-tag → struct-field-index map for Config's nested *struct
+	// fields, so we can look up which Config field matches a given
+	// ComponentKey (whose string form equals the JSON tag, e.g. "aws_ec2").
+	cfgVal := reflect.ValueOf(cfg).Elem()
+	cfgType := cfgVal.Type()
+	tagIndex := map[string]int{}
+	for i := 0; i < cfgType.NumField(); i++ {
+		ft := cfgType.Field(i)
+		if ft.Type.Kind() != reflect.Ptr || ft.Type.Elem().Kind() != reflect.Struct {
+			continue
+		}
+		tag := jsonTagName(ft.Tag.Get("json"))
+		if tag != "" {
+			tagIndex[tag] = i
+		}
+	}
+
+	for _, key := range selected {
+		fieldIdx, ok := tagIndex[string(key)]
+		if !ok {
+			continue
+		}
+		path := GetPresetPath(cloud, key, comps)
+		files, err := c.GetPresetFiles(path)
+		if err != nil {
+			// Missing preset module: not an error, just nothing to fill.
+			continue
+		}
+		defaults, err := ModuleDefaults(files)
+		if err != nil {
+			return fmt.Errorf("composer: reading defaults for %s: %w", path, err)
+		}
+		if len(defaults) == 0 {
+			continue
+		}
+
+		fieldVal := cfgVal.Field(fieldIdx)
+		// Allocate the inner struct on demand.
+		allocated := false
+		if fieldVal.IsNil() {
+			fieldVal.Set(reflect.New(fieldVal.Type().Elem()))
+			allocated = true
+		}
+		filled := backfillStruct(fieldVal.Elem(), defaults)
+		if allocated && !filled {
+			// Nothing landed; revert to nil so the field stays omitempty.
+			fieldVal.Set(reflect.Zero(fieldVal.Type()))
+		}
+	}
+	return nil
+}
+
+// backfillStruct walks fields of dst (which must be a struct value) and for
+// each zero-valued field looks up the HCL default by snake_case-ified JSON
+// tag. Returns true if at least one field was successfully set.
+func backfillStruct(dst reflect.Value, defaults map[string]any) bool {
+	t := dst.Type()
+	filled := false
+	for i := 0; i < t.NumField(); i++ {
+		ft := t.Field(i)
+		fv := dst.Field(i)
+		if !fv.CanSet() || !fv.IsZero() {
+			continue
+		}
+		tag := jsonTagName(ft.Tag.Get("json"))
+		if tag == "" {
+			continue
+		}
+		hclName := camelToSnake(tag)
+		raw, ok := defaults[hclName]
+		if !ok || raw == nil {
+			continue
+		}
+		coerced, ok := coerceToFieldType(raw, ft.Type)
+		if !ok {
+			continue
+		}
+		fv.Set(coerced)
+		filled = true
+	}
+	return filled
+}
+
+// coerceToFieldType converts a Go value produced by ctyValueToGo into a
+// reflect.Value of the requested destination type, applying the coercion
+// table documented on ApplyPresetDefaults. Returns (zero, false) when the
+// source type cannot be coerced into dst.
+func coerceToFieldType(src any, dst reflect.Type) (reflect.Value, bool) {
+	// Pointer destinations: produce *T from T (one level of indirection).
+	if dst.Kind() == reflect.Ptr {
+		inner, ok := coerceToFieldType(src, dst.Elem())
+		if !ok {
+			return reflect.Value{}, false
+		}
+		ptr := reflect.New(dst.Elem())
+		ptr.Elem().Set(inner)
+		return ptr, true
+	}
+
+	switch dst.Kind() {
+	case reflect.String:
+		switch v := src.(type) {
+		case string:
+			return reflect.ValueOf(v), true
+		case int64:
+			return reflect.ValueOf(fmt.Sprint(v)), true
+		case float64:
+			return reflect.ValueOf(fmt.Sprint(v)), true
+		case bool:
+			return reflect.ValueOf(fmt.Sprint(v)), true
+		}
+	case reflect.Bool:
+		if v, ok := src.(bool); ok {
+			return reflect.ValueOf(v), true
+		}
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		switch v := src.(type) {
+		case int64:
+			rv := reflect.New(dst).Elem()
+			rv.SetInt(v)
+			return rv, true
+		case float64:
+			rv := reflect.New(dst).Elem()
+			rv.SetInt(int64(v))
+			return rv, true
+		}
+	case reflect.Float32, reflect.Float64:
+		switch v := src.(type) {
+		case float64:
+			rv := reflect.New(dst).Elem()
+			rv.SetFloat(v)
+			return rv, true
+		case int64:
+			rv := reflect.New(dst).Elem()
+			rv.SetFloat(float64(v))
+			return rv, true
+		}
+	case reflect.Slice:
+		srcSlice, ok := src.([]any)
+		if !ok {
+			return reflect.Value{}, false
+		}
+		out := reflect.MakeSlice(dst, len(srcSlice), len(srcSlice))
+		for i, e := range srcSlice {
+			ev, ok := coerceToFieldType(e, dst.Elem())
+			if !ok {
+				return reflect.Value{}, false
+			}
+			out.Index(i).Set(ev)
+		}
+		return out, true
+	case reflect.Map:
+		srcMap, ok := src.(map[string]any)
+		if !ok || dst.Key().Kind() != reflect.String {
+			return reflect.Value{}, false
+		}
+		out := reflect.MakeMapWithSize(dst, len(srcMap))
+		for k, v := range srcMap {
+			vv, ok := coerceToFieldType(v, dst.Elem())
+			if !ok {
+				return reflect.Value{}, false
+			}
+			out.SetMapIndex(reflect.ValueOf(k), vv)
+		}
+		return out, true
+	}
+	return reflect.Value{}, false
+}
+
+// jsonTagName extracts just the name portion of a `json:"name,omitempty"` tag.
+func jsonTagName(raw string) string {
+	if raw == "" || raw == "-" {
+		return ""
+	}
+	name, _, _ := strings.Cut(raw, ",")
+	return name
+}
+
+// camelToSnake converts a camelCase JSON tag to its snake_case HCL equivalent.
+// Initialism runs (URL, URI, MFA, CPU, HA, AZ) are preserved as a single
+// underscore-bounded token: userDataURL → user_data_url, multiAz → multi_az,
+// haControlPlane → ha_control_plane. This matches the convention used in
+// Config's JSON tags vs. each preset's variables.tf.
+func camelToSnake(s string) string {
+	var b strings.Builder
+	b.Grow(len(s) + 4)
+	for i, r := range s {
+		isUpper := r >= 'A' && r <= 'Z'
+		if isUpper && i > 0 {
+			prev := rune(s[i-1])
+			prevLowerOrDigit := (prev >= 'a' && prev <= 'z') || (prev >= '0' && prev <= '9')
+			if prevLowerOrDigit {
+				b.WriteByte('_')
+			}
+		}
+		if isUpper {
+			b.WriteRune(r + ('a' - 'A'))
+		} else {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }
 
 // ctyValueToGo converts a fully-known cty.Value to a JSON-marshalable Go
