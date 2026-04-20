@@ -769,3 +769,192 @@ func TestMergeConfigs_Idempotent(t *testing.T) {
 	assert.Same(t, firstPtr, dst.AWSEC2, "second merge must not reallocate the inner *struct")
 	assert.Equal(t, firstSnapshot, *dst.AWSEC2, "second merge must be a no-op — all fields are now non-zero")
 }
+
+// TestMergeConfigs_AWSBackups_NestedPointerSemantics pins MergeConfigs's
+// contract for AWSBackups — the only Config field with *struct children
+// nested inside a *struct parent (EC2, RDS, ElastiCache, DynamoDB, S3 each
+// under AWSBackups). Two important properties are locked in here:
+//
+//  1. Shallow fill: when dst.AWSBackups is nil, it is allocated and each
+//     inner service *struct is copied BY POINTER from src — dst and src
+//     share the inner pointers after merge (consistent with the shallow-
+//     merge contract asserted on *bool in TestMergeConfigs_BoolPointerFill).
+//  2. No deep recursion: when dst.AWSBackups.EC2 is already non-nil,
+//     overlayZero treats the inner pointer as non-zero and skips it
+//     entirely. Partial fields inside dst.AWSBackups.EC2 are NOT merged
+//     from src.AWSBackups.EC2. Sibling services absent in dst (RDS, S3 …)
+//     still get filled by pointer, but populated siblings survive
+//     byte-for-byte.
+//
+// If a future PR adds deep recursion into nested *struct fields, this test
+// fails and forces an explicit contract change.
+func TestMergeConfigs_AWSBackups_NestedPointerSemantics(t *testing.T) {
+	srcEC2 := &struct {
+		FrequencyHours int    `json:"frequencyHours,omitempty"`
+		RetentionDays  int    `json:"retentionDays,omitempty"`
+		Region         string `json:"region,omitempty"`
+	}{FrequencyHours: 24, RetentionDays: 7, Region: "us-east-1"}
+	srcRDS := &struct {
+		FrequencyHours int    `json:"frequencyHours,omitempty"`
+		RetentionDays  int    `json:"retentionDays,omitempty"`
+		Region         string `json:"region,omitempty"`
+	}{FrequencyHours: 12, RetentionDays: 14, Region: "us-east-1"}
+
+	src := &Config{
+		AWSBackups: &struct {
+			EC2 *struct {
+				FrequencyHours int    `json:"frequencyHours,omitempty"`
+				RetentionDays  int    `json:"retentionDays,omitempty"`
+				Region         string `json:"region,omitempty"`
+			} `json:"aws_ec2,omitempty"`
+			RDS *struct {
+				FrequencyHours int    `json:"frequencyHours,omitempty"`
+				RetentionDays  int    `json:"retentionDays,omitempty"`
+				Region         string `json:"region,omitempty"`
+			} `json:"aws_rds,omitempty"`
+			ElastiCache *struct {
+				FrequencyHours int    `json:"frequencyHours,omitempty"`
+				RetentionDays  int    `json:"retentionDays,omitempty"`
+				Region         string `json:"region,omitempty"`
+			} `json:"aws_elasticache,omitempty"`
+			DynamoDB *struct {
+				FrequencyHours int    `json:"frequencyHours,omitempty"`
+				RetentionDays  int    `json:"retentionDays,omitempty"`
+				Region         string `json:"region,omitempty"`
+			} `json:"aws_dynamodb,omitempty"`
+			S3 *struct {
+				FrequencyHours int    `json:"frequencyHours,omitempty"`
+				RetentionDays  int    `json:"retentionDays,omitempty"`
+				Region         string `json:"region,omitempty"`
+			} `json:"aws_s3,omitempty"`
+		}{EC2: srcEC2, RDS: srcRDS},
+	}
+
+	t.Run("shallow fill when dst.AWSBackups is nil", func(t *testing.T) {
+		dst := &Config{}
+
+		MergeConfigs(dst, src)
+
+		require.NotNil(t, dst.AWSBackups, "dst.AWSBackups must be allocated when src has any populated inner service")
+		// Populated inner services: pointers shared (shallow).
+		assert.Same(t, srcEC2, dst.AWSBackups.EC2, "inner EC2 *struct must share pointer with src (shallow merge)")
+		assert.Same(t, srcRDS, dst.AWSBackups.RDS)
+		// Inner field values carried through the pointer.
+		require.NotNil(t, dst.AWSBackups.EC2)
+		assert.Equal(t, 24, dst.AWSBackups.EC2.FrequencyHours)
+		assert.Equal(t, 7, dst.AWSBackups.EC2.RetentionDays)
+		assert.Equal(t, "us-east-1", dst.AWSBackups.EC2.Region)
+		// Services absent in src remain nil (nil in src = zero, nothing to copy).
+		assert.Nil(t, dst.AWSBackups.ElastiCache)
+		assert.Nil(t, dst.AWSBackups.DynamoDB)
+		assert.Nil(t, dst.AWSBackups.S3)
+	})
+
+	t.Run("sibling preservation: populated dst service survives, nil siblings filled from src", func(t *testing.T) {
+		// dst has RDS populated with user-chosen values; src has both EC2 and RDS.
+		// After merge: dst.EC2 must come from src (pointer-shared); dst.RDS must
+		// be preserved byte-for-byte (single-level overlay, no deep merge).
+		dstRDS := &struct {
+			FrequencyHours int    `json:"frequencyHours,omitempty"`
+			RetentionDays  int    `json:"retentionDays,omitempty"`
+			Region         string `json:"region,omitempty"`
+		}{FrequencyHours: 99, RetentionDays: 99}
+		dst := &Config{
+			AWSBackups: &struct {
+				EC2 *struct {
+					FrequencyHours int    `json:"frequencyHours,omitempty"`
+					RetentionDays  int    `json:"retentionDays,omitempty"`
+					Region         string `json:"region,omitempty"`
+				} `json:"aws_ec2,omitempty"`
+				RDS *struct {
+					FrequencyHours int    `json:"frequencyHours,omitempty"`
+					RetentionDays  int    `json:"retentionDays,omitempty"`
+					Region         string `json:"region,omitempty"`
+				} `json:"aws_rds,omitempty"`
+				ElastiCache *struct {
+					FrequencyHours int    `json:"frequencyHours,omitempty"`
+					RetentionDays  int    `json:"retentionDays,omitempty"`
+					Region         string `json:"region,omitempty"`
+				} `json:"aws_elasticache,omitempty"`
+				DynamoDB *struct {
+					FrequencyHours int    `json:"frequencyHours,omitempty"`
+					RetentionDays  int    `json:"retentionDays,omitempty"`
+					Region         string `json:"region,omitempty"`
+				} `json:"aws_dynamodb,omitempty"`
+				S3 *struct {
+					FrequencyHours int    `json:"frequencyHours,omitempty"`
+					RetentionDays  int    `json:"retentionDays,omitempty"`
+					Region         string `json:"region,omitempty"`
+				} `json:"aws_s3,omitempty"`
+			}{RDS: dstRDS},
+		}
+
+		MergeConfigs(dst, src)
+
+		// dst.EC2 was nil → filled by pointer from src.
+		assert.Same(t, srcEC2, dst.AWSBackups.EC2, "nil dst inner service filled by pointer from src")
+		// dst.RDS was non-nil → whole pointer preserved, NOT recursively merged.
+		assert.Same(t, dstRDS, dst.AWSBackups.RDS, "non-nil dst inner service preserved byte-for-byte (no deep merge)")
+		assert.Equal(t, 99, dst.AWSBackups.RDS.FrequencyHours)
+		assert.Equal(t, 99, dst.AWSBackups.RDS.RetentionDays)
+		// Critical: src.RDS.Region ("us-east-1") does NOT leak into dst.RDS
+		// even though dst.RDS.Region is zero — overlayZero is single-level.
+		assert.Equal(t, "", dst.AWSBackups.RDS.Region,
+			"zero-valued sub-field inside non-nil dst inner *struct is NOT recursively backfilled from src")
+	})
+
+	t.Run("no deep merge: partially-populated dst inner service survives as-is", func(t *testing.T) {
+		// dst.EC2 is non-nil but has RetentionDays=0 and Region=""; src.EC2 is
+		// fully populated. Despite the zero sub-fields in dst.EC2, the overlay
+		// stops at the inner *struct pointer level — nothing inside dst.EC2
+		// gets filled from src.EC2.
+		dstEC2 := &struct {
+			FrequencyHours int    `json:"frequencyHours,omitempty"`
+			RetentionDays  int    `json:"retentionDays,omitempty"`
+			Region         string `json:"region,omitempty"`
+		}{FrequencyHours: 6}
+		dst := &Config{
+			AWSBackups: &struct {
+				EC2 *struct {
+					FrequencyHours int    `json:"frequencyHours,omitempty"`
+					RetentionDays  int    `json:"retentionDays,omitempty"`
+					Region         string `json:"region,omitempty"`
+				} `json:"aws_ec2,omitempty"`
+				RDS *struct {
+					FrequencyHours int    `json:"frequencyHours,omitempty"`
+					RetentionDays  int    `json:"retentionDays,omitempty"`
+					Region         string `json:"region,omitempty"`
+				} `json:"aws_rds,omitempty"`
+				ElastiCache *struct {
+					FrequencyHours int    `json:"frequencyHours,omitempty"`
+					RetentionDays  int    `json:"retentionDays,omitempty"`
+					Region         string `json:"region,omitempty"`
+				} `json:"aws_elasticache,omitempty"`
+				DynamoDB *struct {
+					FrequencyHours int    `json:"frequencyHours,omitempty"`
+					RetentionDays  int    `json:"retentionDays,omitempty"`
+					Region         string `json:"region,omitempty"`
+				} `json:"aws_dynamodb,omitempty"`
+				S3 *struct {
+					FrequencyHours int    `json:"frequencyHours,omitempty"`
+					RetentionDays  int    `json:"retentionDays,omitempty"`
+					Region         string `json:"region,omitempty"`
+				} `json:"aws_s3,omitempty"`
+			}{EC2: dstEC2},
+		}
+
+		MergeConfigs(dst, src)
+
+		// dst.EC2 pointer preserved (single-level overlay).
+		assert.Same(t, dstEC2, dst.AWSBackups.EC2, "non-nil dst inner *struct preserved as-is")
+		assert.Equal(t, 6, dst.AWSBackups.EC2.FrequencyHours, "user-set sub-field preserved")
+		// Zero sub-fields inside dst.EC2 are NOT backfilled from src.EC2 —
+		// this is the core "no deep recursion" contract.
+		assert.Equal(t, 0, dst.AWSBackups.EC2.RetentionDays,
+			"zero sub-field is NOT recursively filled from src.EC2.RetentionDays=7 — MergeConfigs is single-level")
+		assert.Equal(t, "", dst.AWSBackups.EC2.Region,
+			"zero sub-field is NOT recursively filled from src.EC2.Region='us-east-1'")
+		// dst.RDS was nil → filled by pointer from src (sibling allocation still works).
+		assert.Same(t, srcRDS, dst.AWSBackups.RDS)
+	})
+}
