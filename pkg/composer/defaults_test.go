@@ -1,6 +1,8 @@
 package composer
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -50,6 +52,10 @@ variable "empty_map" {
   type    = map(string)
   default = {}
 }
+variable "obj" {
+  type    = object({ name = string, port = number })
+  default = { name = "x", port = 80 }
+}
 variable "required" {
   type = string
 }
@@ -71,7 +77,23 @@ variable "required" {
 	assert.Equal(t, map[string]any{"Env": "prod", "Team": "core"}, got["tags"])
 	assert.Equal(t, []any{}, got["empty_list"])
 	assert.Equal(t, map[string]any{}, got["empty_map"])
+	assert.Equal(t, map[string]any{"name": "x", "port": int64(80)}, got["obj"],
+		"object({...}) defaults must round-trip via the IsObjectType branch with int-preservation inside")
 	assert.NotContains(t, got, "required", "variables without `default = ...` must be omitted")
+
+	// JSON round-trip: ModuleDefaults claims to return JSON-marshalable Go
+	// primitives. A regression returning cty.Value, big.Float, or other
+	// non-marshalable types would slip through if we never marshalled.
+	// json.Marshal promotes int64→float64, so we re-assert post-promotion shapes
+	// to document the actual on-the-wire form reliable will see.
+	b, err := json.Marshal(got)
+	require.NoError(t, err, "PresetDefaults output must be JSON-marshalable")
+	var rt map[string]any
+	require.NoError(t, json.Unmarshal(b, &rt))
+	assert.Equal(t, "demo", rt["name"])
+	assert.Equal(t, float64(2), rt["count"], "JSON round-trip promotes int64 to float64; downstream callers see this shape")
+	assert.Equal(t, []any{float64(80), float64(443)}, rt["ports"])
+	assert.Nil(t, rt["nullable"])
 }
 
 func TestModuleDefaults_OmitsDynamicDefaults(t *testing.T) {
@@ -166,14 +188,27 @@ func TestPresetDefaults_EmbeddedFS_CoversBothClouds(t *testing.T) {
 	var awsCount, gcpCount int
 	for k := range all {
 		switch {
-		case len(k) >= 4 && k[:4] == "aws/":
+		case strings.HasPrefix(k, "aws/"):
 			awsCount++
-		case len(k) >= 4 && k[:4] == "gcp/":
+		case strings.HasPrefix(k, "gcp/"):
 			gcpCount++
 		}
 	}
 	assert.Greater(t, awsCount, 0, "must surface AWS preset defaults")
 	assert.Greater(t, gcpCount, 0, "must surface GCP preset defaults")
+
+	// Cross-contamination guard: gcp/vpc::region is "us-central1" in HCL.
+	// aws/vpc::region is "us-east-1". A bug that stuffed AWS defaults under
+	// gcp/ keys (or vice versa) would survive a count-only check, so pin
+	// the actual values per cloud.
+	gcpVPC, ok := all["gcp/vpc"]
+	require.True(t, ok, "gcp/vpc must appear in PresetDefaults()")
+	assert.Equal(t, "us-central1", gcpVPC["region"],
+		"gcp/vpc::region must be the GCP-authored default, not the aws/vpc default")
+
+	awsVPC := all["aws/vpc"]
+	assert.Equal(t, "us-east-1", awsVPC["region"],
+		"aws/vpc::region must be the AWS-authored default, not the gcp/vpc default")
 }
 
 func TestPresetDefaults_NoPresetFS(t *testing.T) {
