@@ -418,3 +418,565 @@ func TestApplyPresetDefaults_GCPRoute(t *testing.T) {
 	// route to the AWS preset tree or panic.
 	_ = cfg
 }
+
+func TestMergeConfigs_NilGuards(t *testing.T) {
+	// All combinations with a nil argument must be no-ops and must not panic.
+	populated := &Config{
+		AWSEC2: &struct {
+			InstanceType          string `json:"instanceType,omitempty"`
+			NumServers            string `json:"numServers,omitempty"`
+			NumCoresPerServer     string `json:"numCoresPerServer,omitempty"`
+			DiskSizePerServer     string `json:"diskSizePerServer,omitempty"`
+			UserData              string `json:"userData,omitempty"`
+			UserDataURL           string `json:"userDataURL,omitempty"`
+			CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
+			SSHPublicKey          string `json:"sshPublicKey,omitempty"`
+			EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+		}{InstanceType: "t3.medium"},
+	}
+
+	assert.NotPanics(t, func() { MergeConfigs(nil, nil) })
+	assert.NotPanics(t, func() { MergeConfigs(nil, populated) })
+	assert.NotPanics(t, func() { MergeConfigs(&Config{}, nil) })
+
+	// nil dst with non-nil src: dst should remain unchanged (nil guard fires).
+	var dst *Config
+	MergeConfigs(dst, populated)
+	assert.Nil(t, dst)
+
+	// Populated dst + nil src: dst must be untouched byte-for-byte.
+	// Distinct branch from "empty dst + nil src" above.
+	before := *populated.AWSEC2
+	MergeConfigs(populated, nil)
+	assert.Equal(t, before, *populated.AWSEC2, "populated dst must be unchanged when src is nil")
+}
+
+func TestMergeConfigs_AllocatesAndFills(t *testing.T) {
+	// AWSEC2 is nil in dst; src has values → struct is allocated and populated.
+	src := &Config{
+		AWSEC2: &struct {
+			InstanceType          string `json:"instanceType,omitempty"`
+			NumServers            string `json:"numServers,omitempty"`
+			NumCoresPerServer     string `json:"numCoresPerServer,omitempty"`
+			DiskSizePerServer     string `json:"diskSizePerServer,omitempty"`
+			UserData              string `json:"userData,omitempty"`
+			UserDataURL           string `json:"userDataURL,omitempty"`
+			CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
+			SSHPublicKey          string `json:"sshPublicKey,omitempty"`
+			EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+		}{InstanceType: "m6i.large"},
+	}
+	dst := &Config{}
+
+	MergeConfigs(dst, src)
+
+	require.NotNil(t, dst.AWSEC2, "nil *struct field in dst must be allocated when src has values")
+	assert.Equal(t, "m6i.large", dst.AWSEC2.InstanceType)
+}
+
+func TestMergeConfigs_PreservesNonZero(t *testing.T) {
+	// Non-zero field in dst must not be overwritten by src.
+	// Also verifies that zero fields in dst ARE filled from src (making the setup load-bearing).
+	trueVal := true
+	src := &Config{
+		AWSEC2: &struct {
+			InstanceType          string `json:"instanceType,omitempty"`
+			NumServers            string `json:"numServers,omitempty"`
+			NumCoresPerServer     string `json:"numCoresPerServer,omitempty"`
+			DiskSizePerServer     string `json:"diskSizePerServer,omitempty"`
+			UserData              string `json:"userData,omitempty"`
+			UserDataURL           string `json:"userDataURL,omitempty"`
+			CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
+			SSHPublicKey          string `json:"sshPublicKey,omitempty"`
+			EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+		}{InstanceType: "m6i.large", SSHPublicKey: "src-key", EnableInstanceConnect: &trueVal},
+	}
+	dst := &Config{
+		AWSEC2: &struct {
+			InstanceType          string `json:"instanceType,omitempty"`
+			NumServers            string `json:"numServers,omitempty"`
+			NumCoresPerServer     string `json:"numCoresPerServer,omitempty"`
+			DiskSizePerServer     string `json:"diskSizePerServer,omitempty"`
+			UserData              string `json:"userData,omitempty"`
+			UserDataURL           string `json:"userDataURL,omitempty"`
+			CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
+			SSHPublicKey          string `json:"sshPublicKey,omitempty"`
+			EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+		}{InstanceType: "t3.medium"},
+	}
+
+	MergeConfigs(dst, src)
+
+	// Pre-set field: must be preserved.
+	assert.Equal(t, "t3.medium", dst.AWSEC2.InstanceType, "non-zero dst field must be preserved")
+	// Zero fields: must be filled from src.
+	assert.Equal(t, "src-key", dst.AWSEC2.SSHPublicKey, "zero string field must be filled from src")
+	require.NotNil(t, dst.AWSEC2.EnableInstanceConnect, "nil *bool in dst must be filled from src's non-nil pointer")
+	assert.True(t, *dst.AWSEC2.EnableInstanceConnect)
+}
+
+func TestMergeConfigs_PartialFill(t *testing.T) {
+	// One sub-field set in dst, one empty → only the empty field is filled.
+	src := &Config{
+		AWSEC2: &struct {
+			InstanceType          string `json:"instanceType,omitempty"`
+			NumServers            string `json:"numServers,omitempty"`
+			NumCoresPerServer     string `json:"numCoresPerServer,omitempty"`
+			DiskSizePerServer     string `json:"diskSizePerServer,omitempty"`
+			UserData              string `json:"userData,omitempty"`
+			UserDataURL           string `json:"userDataURL,omitempty"`
+			CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
+			SSHPublicKey          string `json:"sshPublicKey,omitempty"`
+			EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+		}{InstanceType: "m6i.large", SSHPublicKey: "ssh-ed25519 AAAA..."},
+	}
+	dst := &Config{
+		AWSEC2: &struct {
+			InstanceType          string `json:"instanceType,omitempty"`
+			NumServers            string `json:"numServers,omitempty"`
+			NumCoresPerServer     string `json:"numCoresPerServer,omitempty"`
+			DiskSizePerServer     string `json:"diskSizePerServer,omitempty"`
+			UserData              string `json:"userData,omitempty"`
+			UserDataURL           string `json:"userDataURL,omitempty"`
+			CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
+			SSHPublicKey          string `json:"sshPublicKey,omitempty"`
+			EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+		}{InstanceType: "t3.medium"},
+	}
+
+	MergeConfigs(dst, src)
+
+	assert.Equal(t, "t3.medium", dst.AWSEC2.InstanceType, "pre-set field must not be overwritten")
+	assert.Equal(t, "ssh-ed25519 AAAA...", dst.AWSEC2.SSHPublicKey, "zero field must be filled from src")
+}
+
+func TestMergeConfigs_CrossCloudIsolation(t *testing.T) {
+	// AWS-only src must not touch GCP fields in dst (src.GCPCompute is nil →
+	// the sf.IsNil() guard must prevent allocating or modifying dst.GCPCompute).
+	// Additionally, a component populated in dst but absent in src must survive
+	// unchanged — this exercises the same guard from the other direction.
+	src := &Config{
+		AWSEC2: &struct {
+			InstanceType          string `json:"instanceType,omitempty"`
+			NumServers            string `json:"numServers,omitempty"`
+			NumCoresPerServer     string `json:"numCoresPerServer,omitempty"`
+			DiskSizePerServer     string `json:"diskSizePerServer,omitempty"`
+			UserData              string `json:"userData,omitempty"`
+			UserDataURL           string `json:"userDataURL,omitempty"`
+			CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
+			SSHPublicKey          string `json:"sshPublicKey,omitempty"`
+			EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+		}{InstanceType: "t3.medium"},
+	}
+	existingEKS := &struct {
+		HaControlPlane        *bool  `json:"haControlPlane,omitempty"`
+		ControlPlaneVisibility string `json:"controlPlaneVisibility,omitempty"`
+		DesiredSize           string `json:"desiredSize,omitempty"`
+		MaxSize               string `json:"maxSize,omitempty"`
+		MinSize               string `json:"minSize,omitempty"`
+		InstanceType          string `json:"instanceType,omitempty"`
+	}{InstanceType: "m6i.xlarge", DesiredSize: "3"}
+	dst := &Config{AWSEKS: existingEKS}
+
+	MergeConfigs(dst, src)
+
+	// AWS component from src is applied.
+	assert.NotNil(t, dst.AWSEC2, "AWS field from src must be filled")
+	// GCP components absent in src stay nil.
+	assert.Nil(t, dst.GCPCompute, "GCP field must remain nil when src has no GCP fields")
+	assert.Nil(t, dst.GCPGKE)
+	assert.Nil(t, dst.GCPCloudSQL)
+	// dst-only AWS component (AWSEKS absent in src) is preserved byte-for-byte.
+	assert.Same(t, existingEKS, dst.AWSEKS, "component nil in src must leave dst component pointer untouched")
+	assert.Equal(t, "m6i.xlarge", dst.AWSEKS.InstanceType)
+}
+
+func TestMergeConfigs_BoolPointerFill(t *testing.T) {
+	// *bool field nil in dst + &false in src → pointer is copied (shallow) into dst.
+	// MergeConfigs is a shallow merge: pointer fields are shared, not deep-copied.
+	// Callers must not mutate src after merging.
+	falseVal := false
+	src := &Config{
+		AWSEC2: &struct {
+			InstanceType          string `json:"instanceType,omitempty"`
+			NumServers            string `json:"numServers,omitempty"`
+			NumCoresPerServer     string `json:"numCoresPerServer,omitempty"`
+			DiskSizePerServer     string `json:"diskSizePerServer,omitempty"`
+			UserData              string `json:"userData,omitempty"`
+			UserDataURL           string `json:"userDataURL,omitempty"`
+			CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
+			SSHPublicKey          string `json:"sshPublicKey,omitempty"`
+			EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+		}{EnableInstanceConnect: &falseVal},
+	}
+	dst := &Config{
+		AWSEC2: &struct {
+			InstanceType          string `json:"instanceType,omitempty"`
+			NumServers            string `json:"numServers,omitempty"`
+			NumCoresPerServer     string `json:"numCoresPerServer,omitempty"`
+			DiskSizePerServer     string `json:"diskSizePerServer,omitempty"`
+			UserData              string `json:"userData,omitempty"`
+			UserDataURL           string `json:"userDataURL,omitempty"`
+			CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
+			SSHPublicKey          string `json:"sshPublicKey,omitempty"`
+			EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+		}{},
+	}
+
+	MergeConfigs(dst, src)
+
+	require.NotNil(t, dst.AWSEC2.EnableInstanceConnect, "*bool field must be filled when dst has nil and src has non-nil pointer")
+	assert.False(t, *dst.AWSEC2.EnableInstanceConnect)
+	// Shallow merge: dst and src share the same pointer (document this contract).
+	assert.Same(t, src.AWSEC2.EnableInstanceConnect, dst.AWSEC2.EnableInstanceConnect,
+		"MergeConfigs is a shallow merge — pointer fields are shared, not deep-copied")
+}
+
+func TestMergeConfigs_AllocatedButEmptySrc_RevertsToNil(t *testing.T) {
+	// When src has an allocated-but-all-zero inner struct, the allocated dst
+	// pointer must be reverted to nil so omitempty doesn't emit an empty object.
+	src := &Config{
+		AWSEC2: &struct {
+			InstanceType          string `json:"instanceType,omitempty"`
+			NumServers            string `json:"numServers,omitempty"`
+			NumCoresPerServer     string `json:"numCoresPerServer,omitempty"`
+			DiskSizePerServer     string `json:"diskSizePerServer,omitempty"`
+			UserData              string `json:"userData,omitempty"`
+			UserDataURL           string `json:"userDataURL,omitempty"`
+			CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
+			SSHPublicKey          string `json:"sshPublicKey,omitempty"`
+			EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+		}{}, // all fields zero
+	}
+	dst := &Config{}
+
+	MergeConfigs(dst, src)
+
+	assert.Nil(t, dst.AWSEC2,
+		"src with allocated-but-zero inner struct must not leave an empty *struct in dst (breaks omitempty)")
+}
+
+func TestMergeConfigs_SliceFields(t *testing.T) {
+	// Case A: nil slice in dst + populated slice in src → filled.
+	// Case B: explicit []int{} in dst (non-nil, non-zero per IsZero) + populated src → preserved.
+	// This mirrors the zero-value semantics documented on ApplyPresetDefaults.
+	populated := []int{80, 443}
+	src := &Config{
+		AWSEC2: &struct {
+			InstanceType          string `json:"instanceType,omitempty"`
+			NumServers            string `json:"numServers,omitempty"`
+			NumCoresPerServer     string `json:"numCoresPerServer,omitempty"`
+			DiskSizePerServer     string `json:"diskSizePerServer,omitempty"`
+			UserData              string `json:"userData,omitempty"`
+			UserDataURL           string `json:"userDataURL,omitempty"`
+			CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
+			SSHPublicKey          string `json:"sshPublicKey,omitempty"`
+			EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+		}{CustomIngressPorts: populated},
+	}
+
+	// Case A: nil dst slice.
+	dstA := &Config{
+		AWSEC2: &struct {
+			InstanceType          string `json:"instanceType,omitempty"`
+			NumServers            string `json:"numServers,omitempty"`
+			NumCoresPerServer     string `json:"numCoresPerServer,omitempty"`
+			DiskSizePerServer     string `json:"diskSizePerServer,omitempty"`
+			UserData              string `json:"userData,omitempty"`
+			UserDataURL           string `json:"userDataURL,omitempty"`
+			CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
+			SSHPublicKey          string `json:"sshPublicKey,omitempty"`
+			EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+		}{},
+	}
+	MergeConfigs(dstA, src)
+	assert.Equal(t, []int{80, 443}, dstA.AWSEC2.CustomIngressPorts,
+		"nil slice in dst must be filled from src")
+
+	// Case B: explicit []int{} in dst — non-nil, so IsZero returns false → preserved.
+	dstB := &Config{
+		AWSEC2: &struct {
+			InstanceType          string `json:"instanceType,omitempty"`
+			NumServers            string `json:"numServers,omitempty"`
+			NumCoresPerServer     string `json:"numCoresPerServer,omitempty"`
+			DiskSizePerServer     string `json:"diskSizePerServer,omitempty"`
+			UserData              string `json:"userData,omitempty"`
+			UserDataURL           string `json:"userDataURL,omitempty"`
+			CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
+			SSHPublicKey          string `json:"sshPublicKey,omitempty"`
+			EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+		}{CustomIngressPorts: []int{}},
+	}
+	MergeConfigs(dstB, src)
+	assert.Equal(t, []int{}, dstB.AWSEC2.CustomIngressPorts,
+		"explicit []int{} in dst is non-zero (non-nil pointer) and must not be overwritten by src")
+	assert.NotNil(t, dstB.AWSEC2.CustomIngressPorts)
+}
+
+// TestMergeConfigs_TopLevelScalars pins the contract that MergeConfigs
+// applies the zero-only rule uniformly at every depth, including top-level
+// scalar fields on Config (Region, Cloud, Estimated*). Zero top-level
+// scalars in dst are filled from src; non-zero dst scalars are preserved.
+func TestMergeConfigs_TopLevelScalars(t *testing.T) {
+	src := &Config{
+		Region:                   "us-east-1",
+		Cloud:                    "aws",
+		EstimatedMonthlyRequests: 12345,
+		EstimatedAvgDurationMs:   42,
+	}
+
+	t.Run("zero dst scalars filled from src", func(t *testing.T) {
+		dst := &Config{}
+
+		assert.NotPanics(t, func() { MergeConfigs(dst, src) },
+			"top-level scalar fields must be handled as leaves, not panic")
+
+		assert.Equal(t, "us-east-1", dst.Region, "zero top-level string filled from src")
+		assert.Equal(t, "aws", dst.Cloud)
+		assert.Equal(t, int64(12345), dst.EstimatedMonthlyRequests)
+		assert.Equal(t, 42, dst.EstimatedAvgDurationMs)
+	})
+
+	t.Run("non-zero dst scalars preserved", func(t *testing.T) {
+		dst := &Config{
+			Region:                   "eu-west-2",
+			Cloud:                    "gcp",
+			EstimatedMonthlyRequests: 99,
+			EstimatedAvgDurationMs:   1,
+		}
+
+		MergeConfigs(dst, src)
+
+		assert.Equal(t, "eu-west-2", dst.Region, "non-zero top-level string preserved")
+		assert.Equal(t, "gcp", dst.Cloud)
+		assert.Equal(t, int64(99), dst.EstimatedMonthlyRequests)
+		assert.Equal(t, 1, dst.EstimatedAvgDurationMs)
+	})
+}
+
+// TestMergeConfigs_Idempotent locks in the "fill zero only" semantic by
+// calling MergeConfigs twice and asserting the second call is a no-op.
+// A bug that inverted the df.IsZero() check in overlayZero (overwriting
+// non-zero fields) would pass any single-call test but fail on the second
+// merge.
+func TestMergeConfigs_Idempotent(t *testing.T) {
+	trueVal := true
+	src := &Config{
+		AWSEC2: &struct {
+			InstanceType          string `json:"instanceType,omitempty"`
+			NumServers            string `json:"numServers,omitempty"`
+			NumCoresPerServer     string `json:"numCoresPerServer,omitempty"`
+			DiskSizePerServer     string `json:"diskSizePerServer,omitempty"`
+			UserData              string `json:"userData,omitempty"`
+			UserDataURL           string `json:"userDataURL,omitempty"`
+			CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
+			SSHPublicKey          string `json:"sshPublicKey,omitempty"`
+			EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+		}{InstanceType: "m6i.large", SSHPublicKey: "ssh-ed25519 ABC", EnableInstanceConnect: &trueVal},
+	}
+	dst := &Config{}
+
+	MergeConfigs(dst, src)
+	require.NotNil(t, dst.AWSEC2)
+	firstPtr := dst.AWSEC2
+	firstSnapshot := *dst.AWSEC2
+
+	MergeConfigs(dst, src)
+
+	assert.Same(t, firstPtr, dst.AWSEC2, "second merge must not reallocate the inner *struct")
+	assert.Equal(t, firstSnapshot, *dst.AWSEC2, "second merge must be a no-op — all fields are now non-zero")
+}
+
+// TestMergeConfigs_AWSBackups_DeepRecursion pins MergeConfigs's contract for
+// AWSBackups — the only Config field with *struct children nested inside a
+// *struct parent (EC2, RDS, ElastiCache, DynamoDB, S3 each under AWSBackups).
+// Three properties of the deep-recursion contract are locked in:
+//
+//  1. Fresh allocation at inner *struct boundaries: when dst.AWSBackups is
+//     nil and src's inner services are populated, the inner *struct pointers
+//     in dst are FRESH — dst does not alias src. This keeps post-merge
+//     mutation of src from leaking into dst.
+//  2. Pointer identity preserved at inner *struct boundaries: when
+//     dst.AWSBackups.RDS is already non-nil, overlayZero descends into its
+//     fields rather than replacing the pointer. User-held references to
+//     dst.AWSBackups.RDS remain valid after merge.
+//  3. Deep backfill of zero sub-fields: zero-valued sub-fields inside a
+//     non-nil dst inner *struct ARE backfilled from the corresponding src
+//     sub-field, and non-zero dst sub-fields are preserved. This matches
+//     the zero-only rule applied uniformly at every depth.
+func TestMergeConfigs_AWSBackups_DeepRecursion(t *testing.T) {
+	srcEC2 := &struct {
+		FrequencyHours int    `json:"frequencyHours,omitempty"`
+		RetentionDays  int    `json:"retentionDays,omitempty"`
+		Region         string `json:"region,omitempty"`
+	}{FrequencyHours: 24, RetentionDays: 7, Region: "us-east-1"}
+	srcRDS := &struct {
+		FrequencyHours int    `json:"frequencyHours,omitempty"`
+		RetentionDays  int    `json:"retentionDays,omitempty"`
+		Region         string `json:"region,omitempty"`
+	}{FrequencyHours: 12, RetentionDays: 14, Region: "us-east-1"}
+
+	src := &Config{
+		AWSBackups: &struct {
+			EC2 *struct {
+				FrequencyHours int    `json:"frequencyHours,omitempty"`
+				RetentionDays  int    `json:"retentionDays,omitempty"`
+				Region         string `json:"region,omitempty"`
+			} `json:"aws_ec2,omitempty"`
+			RDS *struct {
+				FrequencyHours int    `json:"frequencyHours,omitempty"`
+				RetentionDays  int    `json:"retentionDays,omitempty"`
+				Region         string `json:"region,omitempty"`
+			} `json:"aws_rds,omitempty"`
+			ElastiCache *struct {
+				FrequencyHours int    `json:"frequencyHours,omitempty"`
+				RetentionDays  int    `json:"retentionDays,omitempty"`
+				Region         string `json:"region,omitempty"`
+			} `json:"aws_elasticache,omitempty"`
+			DynamoDB *struct {
+				FrequencyHours int    `json:"frequencyHours,omitempty"`
+				RetentionDays  int    `json:"retentionDays,omitempty"`
+				Region         string `json:"region,omitempty"`
+			} `json:"aws_dynamodb,omitempty"`
+			S3 *struct {
+				FrequencyHours int    `json:"frequencyHours,omitempty"`
+				RetentionDays  int    `json:"retentionDays,omitempty"`
+				Region         string `json:"region,omitempty"`
+			} `json:"aws_s3,omitempty"`
+		}{EC2: srcEC2, RDS: srcRDS},
+	}
+
+	t.Run("deep fill when dst.AWSBackups is nil — fresh inner pointers", func(t *testing.T) {
+		dst := &Config{}
+
+		MergeConfigs(dst, src)
+
+		require.NotNil(t, dst.AWSBackups, "dst.AWSBackups must be allocated when src has any populated inner service")
+		// Populated inner services: FRESH pointers (deep merge at *struct boundaries).
+		require.NotNil(t, dst.AWSBackups.EC2)
+		require.NotNil(t, dst.AWSBackups.RDS)
+		assert.NotSame(t, srcEC2, dst.AWSBackups.EC2, "inner EC2 *struct must be a fresh allocation, not aliased to src")
+		assert.NotSame(t, srcRDS, dst.AWSBackups.RDS, "inner RDS *struct must be a fresh allocation, not aliased to src")
+		// Inner field values deep-copied from src.
+		assert.Equal(t, 24, dst.AWSBackups.EC2.FrequencyHours)
+		assert.Equal(t, 7, dst.AWSBackups.EC2.RetentionDays)
+		assert.Equal(t, "us-east-1", dst.AWSBackups.EC2.Region)
+		// Services absent in src remain nil (nil in src = zero, nothing to copy).
+		assert.Nil(t, dst.AWSBackups.ElastiCache)
+		assert.Nil(t, dst.AWSBackups.DynamoDB)
+		assert.Nil(t, dst.AWSBackups.S3)
+	})
+
+	t.Run("pointer identity preserved + zero sub-fields filled from src", func(t *testing.T) {
+		// dst has RDS populated with user-chosen values (Region left zero); src
+		// has both EC2 and RDS. After merge: dst.RDS pointer identity must be
+		// preserved (same allocation), non-zero dst sub-fields preserved, but
+		// dst.RDS.Region="" is filled from src.RDS.Region="us-east-1".
+		dstRDS := &struct {
+			FrequencyHours int    `json:"frequencyHours,omitempty"`
+			RetentionDays  int    `json:"retentionDays,omitempty"`
+			Region         string `json:"region,omitempty"`
+		}{FrequencyHours: 99, RetentionDays: 99}
+		dst := &Config{
+			AWSBackups: &struct {
+				EC2 *struct {
+					FrequencyHours int    `json:"frequencyHours,omitempty"`
+					RetentionDays  int    `json:"retentionDays,omitempty"`
+					Region         string `json:"region,omitempty"`
+				} `json:"aws_ec2,omitempty"`
+				RDS *struct {
+					FrequencyHours int    `json:"frequencyHours,omitempty"`
+					RetentionDays  int    `json:"retentionDays,omitempty"`
+					Region         string `json:"region,omitempty"`
+				} `json:"aws_rds,omitempty"`
+				ElastiCache *struct {
+					FrequencyHours int    `json:"frequencyHours,omitempty"`
+					RetentionDays  int    `json:"retentionDays,omitempty"`
+					Region         string `json:"region,omitempty"`
+				} `json:"aws_elasticache,omitempty"`
+				DynamoDB *struct {
+					FrequencyHours int    `json:"frequencyHours,omitempty"`
+					RetentionDays  int    `json:"retentionDays,omitempty"`
+					Region         string `json:"region,omitempty"`
+				} `json:"aws_dynamodb,omitempty"`
+				S3 *struct {
+					FrequencyHours int    `json:"frequencyHours,omitempty"`
+					RetentionDays  int    `json:"retentionDays,omitempty"`
+					Region         string `json:"region,omitempty"`
+				} `json:"aws_s3,omitempty"`
+			}{RDS: dstRDS},
+		}
+
+		MergeConfigs(dst, src)
+
+		// dst.RDS pointer identity preserved — overlayZero descends in place.
+		assert.Same(t, dstRDS, dst.AWSBackups.RDS, "non-nil dst inner *struct pointer identity preserved across merge")
+		// Non-zero sub-fields preserved.
+		assert.Equal(t, 99, dst.AWSBackups.RDS.FrequencyHours, "non-zero dst sub-field preserved")
+		assert.Equal(t, 99, dst.AWSBackups.RDS.RetentionDays)
+		// Zero sub-field NOW filled from src — deep recursion.
+		assert.Equal(t, "us-east-1", dst.AWSBackups.RDS.Region,
+			"zero dst sub-field backfilled from src at depth 2 (deep recursion)")
+		// dst.EC2 was nil → fresh allocation, not aliased to src.
+		require.NotNil(t, dst.AWSBackups.EC2)
+		assert.NotSame(t, srcEC2, dst.AWSBackups.EC2, "freshly allocated sibling is not aliased to src")
+		assert.Equal(t, 24, dst.AWSBackups.EC2.FrequencyHours)
+	})
+
+	t.Run("deep backfill: zero sub-fields in dst.EC2 filled, non-zero preserved", func(t *testing.T) {
+		// dst.EC2 is non-nil with FrequencyHours=6 (non-zero) and RetentionDays=0
+		// and Region="" (both zero); src.EC2 is fully populated. Under deep
+		// recursion: dst.EC2.FrequencyHours stays 6, dst.EC2.RetentionDays gets
+		// src's 7, dst.EC2.Region gets src's "us-east-1".
+		dstEC2 := &struct {
+			FrequencyHours int    `json:"frequencyHours,omitempty"`
+			RetentionDays  int    `json:"retentionDays,omitempty"`
+			Region         string `json:"region,omitempty"`
+		}{FrequencyHours: 6}
+		dst := &Config{
+			AWSBackups: &struct {
+				EC2 *struct {
+					FrequencyHours int    `json:"frequencyHours,omitempty"`
+					RetentionDays  int    `json:"retentionDays,omitempty"`
+					Region         string `json:"region,omitempty"`
+				} `json:"aws_ec2,omitempty"`
+				RDS *struct {
+					FrequencyHours int    `json:"frequencyHours,omitempty"`
+					RetentionDays  int    `json:"retentionDays,omitempty"`
+					Region         string `json:"region,omitempty"`
+				} `json:"aws_rds,omitempty"`
+				ElastiCache *struct {
+					FrequencyHours int    `json:"frequencyHours,omitempty"`
+					RetentionDays  int    `json:"retentionDays,omitempty"`
+					Region         string `json:"region,omitempty"`
+				} `json:"aws_elasticache,omitempty"`
+				DynamoDB *struct {
+					FrequencyHours int    `json:"frequencyHours,omitempty"`
+					RetentionDays  int    `json:"retentionDays,omitempty"`
+					Region         string `json:"region,omitempty"`
+				} `json:"aws_dynamodb,omitempty"`
+				S3 *struct {
+					FrequencyHours int    `json:"frequencyHours,omitempty"`
+					RetentionDays  int    `json:"retentionDays,omitempty"`
+					Region         string `json:"region,omitempty"`
+				} `json:"aws_s3,omitempty"`
+			}{EC2: dstEC2},
+		}
+
+		MergeConfigs(dst, src)
+
+		// dst.EC2 pointer identity preserved.
+		assert.Same(t, dstEC2, dst.AWSBackups.EC2, "non-nil dst inner *struct pointer identity preserved")
+		// Non-zero sub-field preserved.
+		assert.Equal(t, 6, dst.AWSBackups.EC2.FrequencyHours, "user-set sub-field preserved")
+		// Zero sub-fields filled from src.EC2 — deep recursion.
+		assert.Equal(t, 7, dst.AWSBackups.EC2.RetentionDays,
+			"zero sub-field filled from src.EC2.RetentionDays=7 (deep recursion)")
+		assert.Equal(t, "us-east-1", dst.AWSBackups.EC2.Region,
+			"zero sub-field filled from src.EC2.Region='us-east-1' (deep recursion)")
+		// dst.RDS was nil → filled with fresh allocation from src.
+		require.NotNil(t, dst.AWSBackups.RDS)
+		assert.NotSame(t, srcRDS, dst.AWSBackups.RDS, "sibling allocation is fresh, not aliased to src")
+		assert.Equal(t, 12, dst.AWSBackups.RDS.FrequencyHours)
+	})
+}

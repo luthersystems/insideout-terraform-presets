@@ -205,6 +205,88 @@ func (c *Client) ApplyPresetDefaults(cfg *Config, comps *Components, selected []
 	return nil
 }
 
+// MergeConfigs fills zero-valued fields of dst with non-zero values from src,
+// recursively at every depth.
+//
+// Semantics — zero-only, applied uniformly at every level (per reflect.Value.IsZero):
+//   - "" for strings, 0 for numerics, false for bools
+//   - nil for pointers / slices / maps / interfaces
+//
+// A non-nil empty slice (e.g. []int{} the user set explicitly) is preserved;
+// a *bool pointing to false is preserved (non-nil pointer is non-zero).
+//
+// Recursion into *struct sub-fields: MergeConfigs descends into nested *struct
+// fields (e.g. AWSBackups.EC2) with the same zero-only rule. A zero sub-field
+// inside a non-nil dst inner *struct IS backfilled from src — single-level
+// overlay is NOT a special case. Inner *struct pointers are allocated on
+// demand and reverted to nil if no sub-field lands, so json:",omitempty"
+// hides empty structs cleanly at every level.
+//
+// Pointer identity:
+//   - Existing dst inner *struct pointers are preserved (dst keeps its own
+//     pointer; fields are merged in place).
+//   - When dst's inner *struct is nil and must be allocated, dst gets a FRESH
+//     pointer — not shared with src. Values are effectively deep-copied at
+//     each *struct boundary.
+//   - Scalar pointer fields (*bool, *string, *int) are shallow-copied: dst
+//     and src share the pointer after merge. Callers must not mutate src
+//     post-merge.
+//
+// nil dst or nil src is a no-op.
+func MergeConfigs(dst, src *Config) {
+	if dst == nil || src == nil {
+		return
+	}
+	overlayZero(reflect.ValueOf(dst).Elem(), reflect.ValueOf(src).Elem())
+}
+
+// overlayZero copies non-zero values from src into zero-valued fields of dst
+// (both must be struct values of the same type), recursing into nested *struct
+// fields with the same allocate-on-demand / revert-if-empty semantics. Returns
+// true if at least one leaf field was set anywhere in the tree.
+//
+// This is the struct-to-struct counterpart to backfillStruct. Unlike
+// backfillStruct (which reads from a flat map[string]any of HCL defaults and
+// therefore cannot recurse), overlayZero operates on two struct values of the
+// same type, making recursion natural and letting the zero-only rule apply
+// uniformly at every depth.
+func overlayZero(dst, src reflect.Value) bool {
+	filled := false
+	for i := 0; i < dst.NumField(); i++ {
+		df, sf := dst.Field(i), src.Field(i)
+		if !df.CanSet() {
+			continue
+		}
+		// Recurse into nested *struct (e.g. AWSBackups.EC2): a zero sub-field
+		// inside a non-nil dst inner *struct IS backfilled from src.
+		if df.Kind() == reflect.Ptr && df.Type().Elem().Kind() == reflect.Struct {
+			if sf.IsNil() {
+				continue
+			}
+			allocated := false
+			if df.IsNil() {
+				df.Set(reflect.New(df.Type().Elem()))
+				allocated = true
+			}
+			if overlayZero(df.Elem(), sf.Elem()) {
+				filled = true
+			} else if allocated {
+				// Nothing landed; revert to nil so omitempty hides the field.
+				df.Set(reflect.Zero(df.Type()))
+			}
+			continue
+		}
+		// Leaf branch: zero-only copy for scalars, slices, maps, and scalar
+		// pointers (*bool, *string, *int).
+		if !df.IsZero() || sf.IsZero() {
+			continue
+		}
+		df.Set(sf)
+		filled = true
+	}
+	return filled
+}
+
 // backfillStruct walks fields of dst (which must be a struct value) and for
 // each zero-valued field looks up the HCL default by snake_case-ified JSON
 // tag. Returns true if at least one field was successfully set.
