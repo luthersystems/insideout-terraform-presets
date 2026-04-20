@@ -443,6 +443,12 @@ func TestMergeConfigs_NilGuards(t *testing.T) {
 	var dst *Config
 	MergeConfigs(dst, populated)
 	assert.Nil(t, dst)
+
+	// Populated dst + nil src: dst must be untouched byte-for-byte.
+	// Distinct branch from "empty dst + nil src" above.
+	before := *populated.AWSEC2
+	MergeConfigs(populated, nil)
+	assert.Equal(t, before, *populated.AWSEC2, "populated dst must be unchanged when src is nil")
 }
 
 func TestMergeConfigs_AllocatesAndFills(t *testing.T) {
@@ -705,4 +711,61 @@ func TestMergeConfigs_SliceFields(t *testing.T) {
 	assert.Equal(t, []int{}, dstB.AWSEC2.CustomIngressPorts,
 		"explicit []int{} in dst is non-zero (non-nil pointer) and must not be overwritten by src")
 	assert.NotNil(t, dstB.AWSEC2.CustomIngressPorts)
+}
+
+// TestMergeConfigs_IgnoresTopLevelScalars pins the contract that MergeConfigs
+// only merges *struct component fields; top-level scalar fields on Config
+// (Region, Cloud, etc.) are intentionally left alone. This exercises the
+// outer-loop type filter in MergeConfigs (ft.Type.Kind() != reflect.Ptr ||
+// ft.Type.Elem().Kind() != reflect.Struct), which would otherwise panic on
+// the sf.IsNil() call for a non-pointer field.
+func TestMergeConfigs_IgnoresTopLevelScalars(t *testing.T) {
+	src := &Config{
+		Region:                   "us-east-1",
+		Cloud:                    "aws",
+		EstimatedMonthlyRequests: 12345,
+		EstimatedAvgDurationMs:   42,
+	}
+	dst := &Config{}
+
+	assert.NotPanics(t, func() { MergeConfigs(dst, src) },
+		"top-level scalar fields must be skipped, not panic on sf.IsNil()")
+
+	assert.Equal(t, "", dst.Region, "top-level string is not a *struct component — must be ignored")
+	assert.Equal(t, "", dst.Cloud)
+	assert.Equal(t, int64(0), dst.EstimatedMonthlyRequests)
+	assert.Equal(t, 0, dst.EstimatedAvgDurationMs)
+}
+
+// TestMergeConfigs_Idempotent locks in the "fill zero only" semantic by
+// calling MergeConfigs twice and asserting the second call is a no-op.
+// A bug that inverted the df.IsZero() check in overlayZero (overwriting
+// non-zero fields) would pass any single-call test but fail on the second
+// merge.
+func TestMergeConfigs_Idempotent(t *testing.T) {
+	trueVal := true
+	src := &Config{
+		AWSEC2: &struct {
+			InstanceType          string `json:"instanceType,omitempty"`
+			NumServers            string `json:"numServers,omitempty"`
+			NumCoresPerServer     string `json:"numCoresPerServer,omitempty"`
+			DiskSizePerServer     string `json:"diskSizePerServer,omitempty"`
+			UserData              string `json:"userData,omitempty"`
+			UserDataURL           string `json:"userDataURL,omitempty"`
+			CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
+			SSHPublicKey          string `json:"sshPublicKey,omitempty"`
+			EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+		}{InstanceType: "m6i.large", SSHPublicKey: "ssh-ed25519 ABC", EnableInstanceConnect: &trueVal},
+	}
+	dst := &Config{}
+
+	MergeConfigs(dst, src)
+	require.NotNil(t, dst.AWSEC2)
+	firstPtr := dst.AWSEC2
+	firstSnapshot := *dst.AWSEC2
+
+	MergeConfigs(dst, src)
+
+	assert.Same(t, firstPtr, dst.AWSEC2, "second merge must not reallocate the inner *struct")
+	assert.Equal(t, firstSnapshot, *dst.AWSEC2, "second merge must be a no-op — all fields are now non-zero")
 }
