@@ -233,6 +233,12 @@ func TestCamelToSnake(t *testing.T) {
 		"ha":                    "ha",
 		"region":                "region",
 		"URL":                   "url",
+		// Digit-bearing identifiers (real cases from Config: diskSizeGb,
+		// embeddingModelId, modelId, auth0). Digits don't trigger boundaries.
+		"diskSizeGb":       "disk_size_gb",
+		"embeddingModelId": "embedding_model_id",
+		"modelId":          "model_id",
+		"auth0":            "auth0",
 	}
 	for in, want := range cases {
 		assert.Equal(t, want, camelToSnake(in), "input=%q", in)
@@ -328,11 +334,16 @@ func TestCoerceToFieldType(t *testing.T) {
 		{"[]any{string}→[]string", []any{"a", "b"}, reflect.TypeFor[[]string](), []string{"a", "b"}, true},
 		{"empty []any→[]int", []any{}, reflect.TypeFor[[]int](), []int{}, true},
 
+		// Map elementwise coercion (rare in Config but exercises the
+		// reflect.Map branch).
+		{"map[string]any→map[string]string", map[string]any{"k": "v"}, reflect.TypeFor[map[string]string](), map[string]string{"k": "v"}, true},
+
 		// Refusals: type combinations we explicitly do NOT coerce so callers
 		// know to leave the field at zero rather than apply a wrong value.
 		{"string→int (refused)", "7", reflect.TypeFor[int](), nil, false},
 		{"string→bool (refused)", "true", reflect.TypeFor[bool](), nil, false},
 		{"map→string (refused)", map[string]any{"a": "b"}, reflect.TypeFor[string](), nil, false},
+		{"[]any{string}→[]int (refused, element fails)", []any{"x"}, reflect.TypeFor[[]int](), nil, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -372,6 +383,29 @@ func TestApplyPresetDefaults_NoPresetFS(t *testing.T) {
 	c := &Client{} // presets nil
 	err := c.ApplyPresetDefaults(&Config{}, &Components{Cloud: "aws"}, []ComponentKey{KeyAWSEC2})
 	assert.ErrorIs(t, err, ErrNoPresetFS)
+}
+
+// TestApplyPresetDefaults_NamingMismatch_LeavesNilAndZero locks in two
+// related contracts in one test:
+//
+//  1. Silent ignore on snake↔camel mismatch. aws/cloudwatchlogs/variables.tf
+//     declares `retention_in_days` (HCL) but Config.AWSCloudWatchLogs's only
+//     field is RetentionDays with JSON tag `retentionDays` → snake form
+//     `retention_days`. The names don't align, so the field MUST stay zero.
+//     If a future refactor switches to fuzzy matching (or panics on miss)
+//     this test fails and forces an explicit decision.
+//  2. Allocated-but-empty revert. Because no Config field successfully
+//     backfills, the inner *struct that ApplyPresetDefaults allocated must
+//     be reverted to nil so omitempty works downstream. A regression that
+//     leaves the empty inner struct allocated would surface here.
+func TestApplyPresetDefaults_NamingMismatch_LeavesNilAndZero(t *testing.T) {
+	c := New()
+	cfg := &Config{} // AWSCloudWatchLogs is nil
+
+	err := c.ApplyPresetDefaults(cfg, &Components{Cloud: "aws"}, []ComponentKey{KeyAWSCloudWatchLogs})
+	require.NoError(t, err, "naming mismatch must not error")
+	assert.Nil(t, cfg.AWSCloudWatchLogs,
+		"selected component whose preset declares no fields matching any Config tag must leave the inner struct nil (allocated-but-empty revert)")
 }
 
 func TestApplyPresetDefaults_GCPRoute(t *testing.T) {
