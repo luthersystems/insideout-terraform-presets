@@ -470,6 +470,7 @@ func TestMergeConfigs_AllocatesAndFills(t *testing.T) {
 
 func TestMergeConfigs_PreservesNonZero(t *testing.T) {
 	// Non-zero field in dst must not be overwritten by src.
+	// Also verifies that zero fields in dst ARE filled from src (making the setup load-bearing).
 	trueVal := true
 	src := &Config{
 		AWSEC2: &struct {
@@ -482,7 +483,7 @@ func TestMergeConfigs_PreservesNonZero(t *testing.T) {
 			CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
 			SSHPublicKey          string `json:"sshPublicKey,omitempty"`
 			EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
-		}{InstanceType: "m6i.large", EnableInstanceConnect: &trueVal},
+		}{InstanceType: "m6i.large", SSHPublicKey: "src-key", EnableInstanceConnect: &trueVal},
 	}
 	dst := &Config{
 		AWSEC2: &struct {
@@ -500,7 +501,12 @@ func TestMergeConfigs_PreservesNonZero(t *testing.T) {
 
 	MergeConfigs(dst, src)
 
+	// Pre-set field: must be preserved.
 	assert.Equal(t, "t3.medium", dst.AWSEC2.InstanceType, "non-zero dst field must be preserved")
+	// Zero fields: must be filled from src.
+	assert.Equal(t, "src-key", dst.AWSEC2.SSHPublicKey, "zero string field must be filled from src")
+	require.NotNil(t, dst.AWSEC2.EnableInstanceConnect, "nil *bool in dst must be filled from src's non-nil pointer")
+	assert.True(t, *dst.AWSEC2.EnableInstanceConnect)
 }
 
 func TestMergeConfigs_PartialFill(t *testing.T) {
@@ -539,7 +545,10 @@ func TestMergeConfigs_PartialFill(t *testing.T) {
 }
 
 func TestMergeConfigs_CrossCloudIsolation(t *testing.T) {
-	// AWS-only src must not touch GCP fields in dst.
+	// AWS-only src must not touch GCP fields in dst (src.GCPCompute is nil →
+	// the sf.IsNil() guard must prevent allocating or modifying dst.GCPCompute).
+	// Additionally, a component populated in dst but absent in src must survive
+	// unchanged — this exercises the same guard from the other direction.
 	src := &Config{
 		AWSEC2: &struct {
 			InstanceType          string `json:"instanceType,omitempty"`
@@ -553,18 +562,33 @@ func TestMergeConfigs_CrossCloudIsolation(t *testing.T) {
 			EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
 		}{InstanceType: "t3.medium"},
 	}
-	dst := &Config{}
+	existingEKS := &struct {
+		HaControlPlane        *bool  `json:"haControlPlane,omitempty"`
+		ControlPlaneVisibility string `json:"controlPlaneVisibility,omitempty"`
+		DesiredSize           string `json:"desiredSize,omitempty"`
+		MaxSize               string `json:"maxSize,omitempty"`
+		MinSize               string `json:"minSize,omitempty"`
+		InstanceType          string `json:"instanceType,omitempty"`
+	}{InstanceType: "m6i.xlarge", DesiredSize: "3"}
+	dst := &Config{AWSEKS: existingEKS}
 
 	MergeConfigs(dst, src)
 
-	assert.NotNil(t, dst.AWSEC2, "AWS field must be filled")
+	// AWS component from src is applied.
+	assert.NotNil(t, dst.AWSEC2, "AWS field from src must be filled")
+	// GCP components absent in src stay nil.
 	assert.Nil(t, dst.GCPCompute, "GCP field must remain nil when src has no GCP fields")
 	assert.Nil(t, dst.GCPGKE)
 	assert.Nil(t, dst.GCPCloudSQL)
+	// dst-only AWS component (AWSEKS absent in src) is preserved byte-for-byte.
+	assert.Same(t, existingEKS, dst.AWSEKS, "component nil in src must leave dst component pointer untouched")
+	assert.Equal(t, "m6i.xlarge", dst.AWSEKS.InstanceType)
 }
 
 func TestMergeConfigs_BoolPointerFill(t *testing.T) {
-	// *bool field nil in dst + &false in src → pointer is copied into dst.
+	// *bool field nil in dst + &false in src → pointer is copied (shallow) into dst.
+	// MergeConfigs is a shallow merge: pointer fields are shared, not deep-copied.
+	// Callers must not mutate src after merging.
 	falseVal := false
 	src := &Config{
 		AWSEC2: &struct {
@@ -597,4 +621,88 @@ func TestMergeConfigs_BoolPointerFill(t *testing.T) {
 
 	require.NotNil(t, dst.AWSEC2.EnableInstanceConnect, "*bool field must be filled when dst has nil and src has non-nil pointer")
 	assert.False(t, *dst.AWSEC2.EnableInstanceConnect)
+	// Shallow merge: dst and src share the same pointer (document this contract).
+	assert.Same(t, src.AWSEC2.EnableInstanceConnect, dst.AWSEC2.EnableInstanceConnect,
+		"MergeConfigs is a shallow merge — pointer fields are shared, not deep-copied")
+}
+
+func TestMergeConfigs_AllocatedButEmptySrc_RevertsToNil(t *testing.T) {
+	// When src has an allocated-but-all-zero inner struct, the allocated dst
+	// pointer must be reverted to nil so omitempty doesn't emit an empty object.
+	src := &Config{
+		AWSEC2: &struct {
+			InstanceType          string `json:"instanceType,omitempty"`
+			NumServers            string `json:"numServers,omitempty"`
+			NumCoresPerServer     string `json:"numCoresPerServer,omitempty"`
+			DiskSizePerServer     string `json:"diskSizePerServer,omitempty"`
+			UserData              string `json:"userData,omitempty"`
+			UserDataURL           string `json:"userDataURL,omitempty"`
+			CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
+			SSHPublicKey          string `json:"sshPublicKey,omitempty"`
+			EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+		}{}, // all fields zero
+	}
+	dst := &Config{}
+
+	MergeConfigs(dst, src)
+
+	assert.Nil(t, dst.AWSEC2,
+		"src with allocated-but-zero inner struct must not leave an empty *struct in dst (breaks omitempty)")
+}
+
+func TestMergeConfigs_SliceFields(t *testing.T) {
+	// Case A: nil slice in dst + populated slice in src → filled.
+	// Case B: explicit []int{} in dst (non-nil, non-zero per IsZero) + populated src → preserved.
+	// This mirrors the zero-value semantics documented on ApplyPresetDefaults.
+	populated := []int{80, 443}
+	src := &Config{
+		AWSEC2: &struct {
+			InstanceType          string `json:"instanceType,omitempty"`
+			NumServers            string `json:"numServers,omitempty"`
+			NumCoresPerServer     string `json:"numCoresPerServer,omitempty"`
+			DiskSizePerServer     string `json:"diskSizePerServer,omitempty"`
+			UserData              string `json:"userData,omitempty"`
+			UserDataURL           string `json:"userDataURL,omitempty"`
+			CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
+			SSHPublicKey          string `json:"sshPublicKey,omitempty"`
+			EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+		}{CustomIngressPorts: populated},
+	}
+
+	// Case A: nil dst slice.
+	dstA := &Config{
+		AWSEC2: &struct {
+			InstanceType          string `json:"instanceType,omitempty"`
+			NumServers            string `json:"numServers,omitempty"`
+			NumCoresPerServer     string `json:"numCoresPerServer,omitempty"`
+			DiskSizePerServer     string `json:"diskSizePerServer,omitempty"`
+			UserData              string `json:"userData,omitempty"`
+			UserDataURL           string `json:"userDataURL,omitempty"`
+			CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
+			SSHPublicKey          string `json:"sshPublicKey,omitempty"`
+			EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+		}{},
+	}
+	MergeConfigs(dstA, src)
+	assert.Equal(t, []int{80, 443}, dstA.AWSEC2.CustomIngressPorts,
+		"nil slice in dst must be filled from src")
+
+	// Case B: explicit []int{} in dst — non-nil, so IsZero returns false → preserved.
+	dstB := &Config{
+		AWSEC2: &struct {
+			InstanceType          string `json:"instanceType,omitempty"`
+			NumServers            string `json:"numServers,omitempty"`
+			NumCoresPerServer     string `json:"numCoresPerServer,omitempty"`
+			DiskSizePerServer     string `json:"diskSizePerServer,omitempty"`
+			UserData              string `json:"userData,omitempty"`
+			UserDataURL           string `json:"userDataURL,omitempty"`
+			CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
+			SSHPublicKey          string `json:"sshPublicKey,omitempty"`
+			EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+		}{CustomIngressPorts: []int{}},
+	}
+	MergeConfigs(dstB, src)
+	assert.Equal(t, []int{}, dstB.AWSEC2.CustomIngressPorts,
+		"explicit []int{} in dst is non-zero (non-nil pointer) and must not be overwritten by src")
+	assert.NotNil(t, dstB.AWSEC2.CustomIngressPorts)
 }
