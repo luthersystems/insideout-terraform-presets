@@ -713,28 +713,45 @@ func TestMergeConfigs_SliceFields(t *testing.T) {
 	assert.NotNil(t, dstB.AWSEC2.CustomIngressPorts)
 }
 
-// TestMergeConfigs_IgnoresTopLevelScalars pins the contract that MergeConfigs
-// only merges *struct component fields; top-level scalar fields on Config
-// (Region, Cloud, etc.) are intentionally left alone. This exercises the
-// outer-loop type filter in MergeConfigs (ft.Type.Kind() != reflect.Ptr ||
-// ft.Type.Elem().Kind() != reflect.Struct), which would otherwise panic on
-// the sf.IsNil() call for a non-pointer field.
-func TestMergeConfigs_IgnoresTopLevelScalars(t *testing.T) {
+// TestMergeConfigs_TopLevelScalars pins the contract that MergeConfigs
+// applies the zero-only rule uniformly at every depth, including top-level
+// scalar fields on Config (Region, Cloud, Estimated*). Zero top-level
+// scalars in dst are filled from src; non-zero dst scalars are preserved.
+func TestMergeConfigs_TopLevelScalars(t *testing.T) {
 	src := &Config{
 		Region:                   "us-east-1",
 		Cloud:                    "aws",
 		EstimatedMonthlyRequests: 12345,
 		EstimatedAvgDurationMs:   42,
 	}
-	dst := &Config{}
 
-	assert.NotPanics(t, func() { MergeConfigs(dst, src) },
-		"top-level scalar fields must be skipped, not panic on sf.IsNil()")
+	t.Run("zero dst scalars filled from src", func(t *testing.T) {
+		dst := &Config{}
 
-	assert.Equal(t, "", dst.Region, "top-level string is not a *struct component — must be ignored")
-	assert.Equal(t, "", dst.Cloud)
-	assert.Equal(t, int64(0), dst.EstimatedMonthlyRequests)
-	assert.Equal(t, 0, dst.EstimatedAvgDurationMs)
+		assert.NotPanics(t, func() { MergeConfigs(dst, src) },
+			"top-level scalar fields must be handled as leaves, not panic")
+
+		assert.Equal(t, "us-east-1", dst.Region, "zero top-level string filled from src")
+		assert.Equal(t, "aws", dst.Cloud)
+		assert.Equal(t, int64(12345), dst.EstimatedMonthlyRequests)
+		assert.Equal(t, 42, dst.EstimatedAvgDurationMs)
+	})
+
+	t.Run("non-zero dst scalars preserved", func(t *testing.T) {
+		dst := &Config{
+			Region:                   "eu-west-2",
+			Cloud:                    "gcp",
+			EstimatedMonthlyRequests: 99,
+			EstimatedAvgDurationMs:   1,
+		}
+
+		MergeConfigs(dst, src)
+
+		assert.Equal(t, "eu-west-2", dst.Region, "non-zero top-level string preserved")
+		assert.Equal(t, "gcp", dst.Cloud)
+		assert.Equal(t, int64(99), dst.EstimatedMonthlyRequests)
+		assert.Equal(t, 1, dst.EstimatedAvgDurationMs)
+	})
 }
 
 // TestMergeConfigs_Idempotent locks in the "fill zero only" semantic by
@@ -770,25 +787,24 @@ func TestMergeConfigs_Idempotent(t *testing.T) {
 	assert.Equal(t, firstSnapshot, *dst.AWSEC2, "second merge must be a no-op — all fields are now non-zero")
 }
 
-// TestMergeConfigs_AWSBackups_NestedPointerSemantics pins MergeConfigs's
-// contract for AWSBackups — the only Config field with *struct children
-// nested inside a *struct parent (EC2, RDS, ElastiCache, DynamoDB, S3 each
-// under AWSBackups). Two important properties are locked in here:
+// TestMergeConfigs_AWSBackups_DeepRecursion pins MergeConfigs's contract for
+// AWSBackups — the only Config field with *struct children nested inside a
+// *struct parent (EC2, RDS, ElastiCache, DynamoDB, S3 each under AWSBackups).
+// Three properties of the deep-recursion contract are locked in:
 //
-//  1. Shallow fill: when dst.AWSBackups is nil, it is allocated and each
-//     inner service *struct is copied BY POINTER from src — dst and src
-//     share the inner pointers after merge (consistent with the shallow-
-//     merge contract asserted on *bool in TestMergeConfigs_BoolPointerFill).
-//  2. No deep recursion: when dst.AWSBackups.EC2 is already non-nil,
-//     overlayZero treats the inner pointer as non-zero and skips it
-//     entirely. Partial fields inside dst.AWSBackups.EC2 are NOT merged
-//     from src.AWSBackups.EC2. Sibling services absent in dst (RDS, S3 …)
-//     still get filled by pointer, but populated siblings survive
-//     byte-for-byte.
-//
-// If a future PR adds deep recursion into nested *struct fields, this test
-// fails and forces an explicit contract change.
-func TestMergeConfigs_AWSBackups_NestedPointerSemantics(t *testing.T) {
+//  1. Fresh allocation at inner *struct boundaries: when dst.AWSBackups is
+//     nil and src's inner services are populated, the inner *struct pointers
+//     in dst are FRESH — dst does not alias src. This keeps post-merge
+//     mutation of src from leaking into dst.
+//  2. Pointer identity preserved at inner *struct boundaries: when
+//     dst.AWSBackups.RDS is already non-nil, overlayZero descends into its
+//     fields rather than replacing the pointer. User-held references to
+//     dst.AWSBackups.RDS remain valid after merge.
+//  3. Deep backfill of zero sub-fields: zero-valued sub-fields inside a
+//     non-nil dst inner *struct ARE backfilled from the corresponding src
+//     sub-field, and non-zero dst sub-fields are preserved. This matches
+//     the zero-only rule applied uniformly at every depth.
+func TestMergeConfigs_AWSBackups_DeepRecursion(t *testing.T) {
 	srcEC2 := &struct {
 		FrequencyHours int    `json:"frequencyHours,omitempty"`
 		RetentionDays  int    `json:"retentionDays,omitempty"`
@@ -830,17 +846,18 @@ func TestMergeConfigs_AWSBackups_NestedPointerSemantics(t *testing.T) {
 		}{EC2: srcEC2, RDS: srcRDS},
 	}
 
-	t.Run("shallow fill when dst.AWSBackups is nil", func(t *testing.T) {
+	t.Run("deep fill when dst.AWSBackups is nil — fresh inner pointers", func(t *testing.T) {
 		dst := &Config{}
 
 		MergeConfigs(dst, src)
 
 		require.NotNil(t, dst.AWSBackups, "dst.AWSBackups must be allocated when src has any populated inner service")
-		// Populated inner services: pointers shared (shallow).
-		assert.Same(t, srcEC2, dst.AWSBackups.EC2, "inner EC2 *struct must share pointer with src (shallow merge)")
-		assert.Same(t, srcRDS, dst.AWSBackups.RDS)
-		// Inner field values carried through the pointer.
+		// Populated inner services: FRESH pointers (deep merge at *struct boundaries).
 		require.NotNil(t, dst.AWSBackups.EC2)
+		require.NotNil(t, dst.AWSBackups.RDS)
+		assert.NotSame(t, srcEC2, dst.AWSBackups.EC2, "inner EC2 *struct must be a fresh allocation, not aliased to src")
+		assert.NotSame(t, srcRDS, dst.AWSBackups.RDS, "inner RDS *struct must be a fresh allocation, not aliased to src")
+		// Inner field values deep-copied from src.
 		assert.Equal(t, 24, dst.AWSBackups.EC2.FrequencyHours)
 		assert.Equal(t, 7, dst.AWSBackups.EC2.RetentionDays)
 		assert.Equal(t, "us-east-1", dst.AWSBackups.EC2.Region)
@@ -850,10 +867,11 @@ func TestMergeConfigs_AWSBackups_NestedPointerSemantics(t *testing.T) {
 		assert.Nil(t, dst.AWSBackups.S3)
 	})
 
-	t.Run("sibling preservation: populated dst service survives, nil siblings filled from src", func(t *testing.T) {
-		// dst has RDS populated with user-chosen values; src has both EC2 and RDS.
-		// After merge: dst.EC2 must come from src (pointer-shared); dst.RDS must
-		// be preserved byte-for-byte (single-level overlay, no deep merge).
+	t.Run("pointer identity preserved + zero sub-fields filled from src", func(t *testing.T) {
+		// dst has RDS populated with user-chosen values (Region left zero); src
+		// has both EC2 and RDS. After merge: dst.RDS pointer identity must be
+		// preserved (same allocation), non-zero dst sub-fields preserved, but
+		// dst.RDS.Region="" is filled from src.RDS.Region="us-east-1".
 		dstRDS := &struct {
 			FrequencyHours int    `json:"frequencyHours,omitempty"`
 			RetentionDays  int    `json:"retentionDays,omitempty"`
@@ -891,23 +909,25 @@ func TestMergeConfigs_AWSBackups_NestedPointerSemantics(t *testing.T) {
 
 		MergeConfigs(dst, src)
 
-		// dst.EC2 was nil → filled by pointer from src.
-		assert.Same(t, srcEC2, dst.AWSBackups.EC2, "nil dst inner service filled by pointer from src")
-		// dst.RDS was non-nil → whole pointer preserved, NOT recursively merged.
-		assert.Same(t, dstRDS, dst.AWSBackups.RDS, "non-nil dst inner service preserved byte-for-byte (no deep merge)")
-		assert.Equal(t, 99, dst.AWSBackups.RDS.FrequencyHours)
+		// dst.RDS pointer identity preserved — overlayZero descends in place.
+		assert.Same(t, dstRDS, dst.AWSBackups.RDS, "non-nil dst inner *struct pointer identity preserved across merge")
+		// Non-zero sub-fields preserved.
+		assert.Equal(t, 99, dst.AWSBackups.RDS.FrequencyHours, "non-zero dst sub-field preserved")
 		assert.Equal(t, 99, dst.AWSBackups.RDS.RetentionDays)
-		// Critical: src.RDS.Region ("us-east-1") does NOT leak into dst.RDS
-		// even though dst.RDS.Region is zero — overlayZero is single-level.
-		assert.Equal(t, "", dst.AWSBackups.RDS.Region,
-			"zero-valued sub-field inside non-nil dst inner *struct is NOT recursively backfilled from src")
+		// Zero sub-field NOW filled from src — deep recursion.
+		assert.Equal(t, "us-east-1", dst.AWSBackups.RDS.Region,
+			"zero dst sub-field backfilled from src at depth 2 (deep recursion)")
+		// dst.EC2 was nil → fresh allocation, not aliased to src.
+		require.NotNil(t, dst.AWSBackups.EC2)
+		assert.NotSame(t, srcEC2, dst.AWSBackups.EC2, "freshly allocated sibling is not aliased to src")
+		assert.Equal(t, 24, dst.AWSBackups.EC2.FrequencyHours)
 	})
 
-	t.Run("no deep merge: partially-populated dst inner service survives as-is", func(t *testing.T) {
-		// dst.EC2 is non-nil but has RetentionDays=0 and Region=""; src.EC2 is
-		// fully populated. Despite the zero sub-fields in dst.EC2, the overlay
-		// stops at the inner *struct pointer level — nothing inside dst.EC2
-		// gets filled from src.EC2.
+	t.Run("deep backfill: zero sub-fields in dst.EC2 filled, non-zero preserved", func(t *testing.T) {
+		// dst.EC2 is non-nil with FrequencyHours=6 (non-zero) and RetentionDays=0
+		// and Region="" (both zero); src.EC2 is fully populated. Under deep
+		// recursion: dst.EC2.FrequencyHours stays 6, dst.EC2.RetentionDays gets
+		// src's 7, dst.EC2.Region gets src's "us-east-1".
 		dstEC2 := &struct {
 			FrequencyHours int    `json:"frequencyHours,omitempty"`
 			RetentionDays  int    `json:"retentionDays,omitempty"`
@@ -945,16 +965,18 @@ func TestMergeConfigs_AWSBackups_NestedPointerSemantics(t *testing.T) {
 
 		MergeConfigs(dst, src)
 
-		// dst.EC2 pointer preserved (single-level overlay).
-		assert.Same(t, dstEC2, dst.AWSBackups.EC2, "non-nil dst inner *struct preserved as-is")
+		// dst.EC2 pointer identity preserved.
+		assert.Same(t, dstEC2, dst.AWSBackups.EC2, "non-nil dst inner *struct pointer identity preserved")
+		// Non-zero sub-field preserved.
 		assert.Equal(t, 6, dst.AWSBackups.EC2.FrequencyHours, "user-set sub-field preserved")
-		// Zero sub-fields inside dst.EC2 are NOT backfilled from src.EC2 —
-		// this is the core "no deep recursion" contract.
-		assert.Equal(t, 0, dst.AWSBackups.EC2.RetentionDays,
-			"zero sub-field is NOT recursively filled from src.EC2.RetentionDays=7 — MergeConfigs is single-level")
-		assert.Equal(t, "", dst.AWSBackups.EC2.Region,
-			"zero sub-field is NOT recursively filled from src.EC2.Region='us-east-1'")
-		// dst.RDS was nil → filled by pointer from src (sibling allocation still works).
-		assert.Same(t, srcRDS, dst.AWSBackups.RDS)
+		// Zero sub-fields filled from src.EC2 — deep recursion.
+		assert.Equal(t, 7, dst.AWSBackups.EC2.RetentionDays,
+			"zero sub-field filled from src.EC2.RetentionDays=7 (deep recursion)")
+		assert.Equal(t, "us-east-1", dst.AWSBackups.EC2.Region,
+			"zero sub-field filled from src.EC2.Region='us-east-1' (deep recursion)")
+		// dst.RDS was nil → filled with fresh allocation from src.
+		require.NotNil(t, dst.AWSBackups.RDS)
+		assert.NotSame(t, srcRDS, dst.AWSBackups.RDS, "sibling allocation is fresh, not aliased to src")
+		assert.Equal(t, 12, dst.AWSBackups.RDS.FrequencyHours)
 	})
 }
