@@ -418,3 +418,183 @@ func TestApplyPresetDefaults_GCPRoute(t *testing.T) {
 	// route to the AWS preset tree or panic.
 	_ = cfg
 }
+
+func TestMergeConfigs_NilGuards(t *testing.T) {
+	// All combinations with a nil argument must be no-ops and must not panic.
+	populated := &Config{
+		AWSEC2: &struct {
+			InstanceType          string `json:"instanceType,omitempty"`
+			NumServers            string `json:"numServers,omitempty"`
+			NumCoresPerServer     string `json:"numCoresPerServer,omitempty"`
+			DiskSizePerServer     string `json:"diskSizePerServer,omitempty"`
+			UserData              string `json:"userData,omitempty"`
+			UserDataURL           string `json:"userDataURL,omitempty"`
+			CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
+			SSHPublicKey          string `json:"sshPublicKey,omitempty"`
+			EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+		}{InstanceType: "t3.medium"},
+	}
+
+	assert.NotPanics(t, func() { MergeConfigs(nil, nil) })
+	assert.NotPanics(t, func() { MergeConfigs(nil, populated) })
+	assert.NotPanics(t, func() { MergeConfigs(&Config{}, nil) })
+
+	// nil dst with non-nil src: dst should remain unchanged (nil guard fires).
+	var dst *Config
+	MergeConfigs(dst, populated)
+	assert.Nil(t, dst)
+}
+
+func TestMergeConfigs_AllocatesAndFills(t *testing.T) {
+	// AWSEC2 is nil in dst; src has values → struct is allocated and populated.
+	src := &Config{
+		AWSEC2: &struct {
+			InstanceType          string `json:"instanceType,omitempty"`
+			NumServers            string `json:"numServers,omitempty"`
+			NumCoresPerServer     string `json:"numCoresPerServer,omitempty"`
+			DiskSizePerServer     string `json:"diskSizePerServer,omitempty"`
+			UserData              string `json:"userData,omitempty"`
+			UserDataURL           string `json:"userDataURL,omitempty"`
+			CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
+			SSHPublicKey          string `json:"sshPublicKey,omitempty"`
+			EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+		}{InstanceType: "m6i.large"},
+	}
+	dst := &Config{}
+
+	MergeConfigs(dst, src)
+
+	require.NotNil(t, dst.AWSEC2, "nil *struct field in dst must be allocated when src has values")
+	assert.Equal(t, "m6i.large", dst.AWSEC2.InstanceType)
+}
+
+func TestMergeConfigs_PreservesNonZero(t *testing.T) {
+	// Non-zero field in dst must not be overwritten by src.
+	trueVal := true
+	src := &Config{
+		AWSEC2: &struct {
+			InstanceType          string `json:"instanceType,omitempty"`
+			NumServers            string `json:"numServers,omitempty"`
+			NumCoresPerServer     string `json:"numCoresPerServer,omitempty"`
+			DiskSizePerServer     string `json:"diskSizePerServer,omitempty"`
+			UserData              string `json:"userData,omitempty"`
+			UserDataURL           string `json:"userDataURL,omitempty"`
+			CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
+			SSHPublicKey          string `json:"sshPublicKey,omitempty"`
+			EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+		}{InstanceType: "m6i.large", EnableInstanceConnect: &trueVal},
+	}
+	dst := &Config{
+		AWSEC2: &struct {
+			InstanceType          string `json:"instanceType,omitempty"`
+			NumServers            string `json:"numServers,omitempty"`
+			NumCoresPerServer     string `json:"numCoresPerServer,omitempty"`
+			DiskSizePerServer     string `json:"diskSizePerServer,omitempty"`
+			UserData              string `json:"userData,omitempty"`
+			UserDataURL           string `json:"userDataURL,omitempty"`
+			CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
+			SSHPublicKey          string `json:"sshPublicKey,omitempty"`
+			EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+		}{InstanceType: "t3.medium"},
+	}
+
+	MergeConfigs(dst, src)
+
+	assert.Equal(t, "t3.medium", dst.AWSEC2.InstanceType, "non-zero dst field must be preserved")
+}
+
+func TestMergeConfigs_PartialFill(t *testing.T) {
+	// One sub-field set in dst, one empty → only the empty field is filled.
+	src := &Config{
+		AWSEC2: &struct {
+			InstanceType          string `json:"instanceType,omitempty"`
+			NumServers            string `json:"numServers,omitempty"`
+			NumCoresPerServer     string `json:"numCoresPerServer,omitempty"`
+			DiskSizePerServer     string `json:"diskSizePerServer,omitempty"`
+			UserData              string `json:"userData,omitempty"`
+			UserDataURL           string `json:"userDataURL,omitempty"`
+			CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
+			SSHPublicKey          string `json:"sshPublicKey,omitempty"`
+			EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+		}{InstanceType: "m6i.large", SSHPublicKey: "ssh-ed25519 AAAA..."},
+	}
+	dst := &Config{
+		AWSEC2: &struct {
+			InstanceType          string `json:"instanceType,omitempty"`
+			NumServers            string `json:"numServers,omitempty"`
+			NumCoresPerServer     string `json:"numCoresPerServer,omitempty"`
+			DiskSizePerServer     string `json:"diskSizePerServer,omitempty"`
+			UserData              string `json:"userData,omitempty"`
+			UserDataURL           string `json:"userDataURL,omitempty"`
+			CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
+			SSHPublicKey          string `json:"sshPublicKey,omitempty"`
+			EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+		}{InstanceType: "t3.medium"},
+	}
+
+	MergeConfigs(dst, src)
+
+	assert.Equal(t, "t3.medium", dst.AWSEC2.InstanceType, "pre-set field must not be overwritten")
+	assert.Equal(t, "ssh-ed25519 AAAA...", dst.AWSEC2.SSHPublicKey, "zero field must be filled from src")
+}
+
+func TestMergeConfigs_CrossCloudIsolation(t *testing.T) {
+	// AWS-only src must not touch GCP fields in dst.
+	src := &Config{
+		AWSEC2: &struct {
+			InstanceType          string `json:"instanceType,omitempty"`
+			NumServers            string `json:"numServers,omitempty"`
+			NumCoresPerServer     string `json:"numCoresPerServer,omitempty"`
+			DiskSizePerServer     string `json:"diskSizePerServer,omitempty"`
+			UserData              string `json:"userData,omitempty"`
+			UserDataURL           string `json:"userDataURL,omitempty"`
+			CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
+			SSHPublicKey          string `json:"sshPublicKey,omitempty"`
+			EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+		}{InstanceType: "t3.medium"},
+	}
+	dst := &Config{}
+
+	MergeConfigs(dst, src)
+
+	assert.NotNil(t, dst.AWSEC2, "AWS field must be filled")
+	assert.Nil(t, dst.GCPCompute, "GCP field must remain nil when src has no GCP fields")
+	assert.Nil(t, dst.GCPGKE)
+	assert.Nil(t, dst.GCPCloudSQL)
+}
+
+func TestMergeConfigs_BoolPointerFill(t *testing.T) {
+	// *bool field nil in dst + &false in src → pointer is copied into dst.
+	falseVal := false
+	src := &Config{
+		AWSEC2: &struct {
+			InstanceType          string `json:"instanceType,omitempty"`
+			NumServers            string `json:"numServers,omitempty"`
+			NumCoresPerServer     string `json:"numCoresPerServer,omitempty"`
+			DiskSizePerServer     string `json:"diskSizePerServer,omitempty"`
+			UserData              string `json:"userData,omitempty"`
+			UserDataURL           string `json:"userDataURL,omitempty"`
+			CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
+			SSHPublicKey          string `json:"sshPublicKey,omitempty"`
+			EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+		}{EnableInstanceConnect: &falseVal},
+	}
+	dst := &Config{
+		AWSEC2: &struct {
+			InstanceType          string `json:"instanceType,omitempty"`
+			NumServers            string `json:"numServers,omitempty"`
+			NumCoresPerServer     string `json:"numCoresPerServer,omitempty"`
+			DiskSizePerServer     string `json:"diskSizePerServer,omitempty"`
+			UserData              string `json:"userData,omitempty"`
+			UserDataURL           string `json:"userDataURL,omitempty"`
+			CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
+			SSHPublicKey          string `json:"sshPublicKey,omitempty"`
+			EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+		}{},
+	}
+
+	MergeConfigs(dst, src)
+
+	require.NotNil(t, dst.AWSEC2.EnableInstanceConnect, "*bool field must be filled when dst has nil and src has non-nil pointer")
+	assert.False(t, *dst.AWSEC2.EnableInstanceConnect)
+}

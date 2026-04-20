@@ -205,6 +205,56 @@ func (c *Client) ApplyPresetDefaults(cfg *Config, comps *Components, selected []
 	return nil
 }
 
+// MergeConfigs fills zero-valued fields of dst with non-zero values from src.
+// Semantics are identical to ApplyPresetDefaults's zero-only rule: a field is
+// written only when reflect.Value.IsZero reports true for dst's current value.
+// *struct fields are allocated on demand when src is non-nil; if allocation
+// produces no filled fields the pointer is reverted to nil so omitempty works.
+// nil dst or nil src is a no-op.
+func MergeConfigs(dst, src *Config) {
+	if dst == nil || src == nil {
+		return
+	}
+	dv, sv := reflect.ValueOf(dst).Elem(), reflect.ValueOf(src).Elem()
+	t := dv.Type()
+	for i := 0; i < t.NumField(); i++ {
+		ft := t.Field(i)
+		if ft.Type.Kind() != reflect.Ptr || ft.Type.Elem().Kind() != reflect.Struct {
+			continue
+		}
+		sf := sv.Field(i)
+		if sf.IsNil() {
+			continue
+		}
+		df := dv.Field(i)
+		allocated := false
+		if df.IsNil() {
+			df.Set(reflect.New(ft.Type.Elem()))
+			allocated = true
+		}
+		filled := overlayZero(df.Elem(), sf.Elem())
+		if allocated && !filled {
+			df.Set(reflect.Zero(ft.Type))
+		}
+	}
+}
+
+// overlayZero copies non-zero fields from src into zero-valued fields of dst
+// (both must be struct values of the same type). Returns true if at least one
+// field was set. This is the struct-to-struct counterpart to backfillStruct.
+func overlayZero(dst, src reflect.Value) bool {
+	filled := false
+	for i := 0; i < dst.NumField(); i++ {
+		df, sf := dst.Field(i), src.Field(i)
+		if !df.CanSet() || !df.IsZero() || sf.IsZero() {
+			continue
+		}
+		df.Set(sf)
+		filled = true
+	}
+	return filled
+}
+
 // backfillStruct walks fields of dst (which must be a struct value) and for
 // each zero-valued field looks up the HCL default by snake_case-ified JSON
 // tag. Returns true if at least one field was successfully set.
