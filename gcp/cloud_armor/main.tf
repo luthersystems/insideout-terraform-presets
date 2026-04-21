@@ -1,5 +1,6 @@
 resource "google_compute_security_policy" "policy" {
-  name = "main-policy"
+  name    = "main-policy"
+  project = var.project
   rule {
     action   = "allow"
     priority = "2147483647"
@@ -11,4 +12,11 @@ resource "google_compute_security_policy" "policy" {
     }
     description = "Default rule"
   }
+
+  labels = merge(
+    {
+      project = var.project
+    },
+    var.labels
+  )
 }

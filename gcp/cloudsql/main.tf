@@ -22,6 +22,13 @@ resource "google_compute_global_address" "private_ip_address" {
   address_type  = "INTERNAL"
   prefix_length = 16
   network       = var.network_self_link
+
+  labels = merge(
+    {
+      project = var.project
+    },
+    var.labels
+  )
 }
 
 resource "google_service_networking_connection" "private_vpc_connection" {

@@ -136,6 +136,9 @@ jobs:
       - name: Lint Project-tag coverage (AWS)
         run: bash tests/lint-project-tag.sh
 
+      - name: Lint project-label coverage (GCP)
+        run: bash tests/lint-project-label.sh
+
   format-check:
     runs-on: ubuntu-latest
     steps:

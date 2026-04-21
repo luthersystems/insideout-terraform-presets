@@ -38,7 +38,7 @@ Key rules:
 - Otherwise use direct `google_*` resources
 - If the module needs the `random` provider, add it with `>= 3.5`
 - Enable encryption, enforce least-privilege IAM by default
-- **Label every labelable resource** with `labels = merge(..., var.labels)` (merging in module-scoped labels where available) so `Project` identity propagates to the inspector.
+- **Label every labelable resource** with `labels = merge({ project = var.project }, var.labels)` so `Project` identity propagates to the inspector. Coverage is CI-enforced by `tests/lint-project-label.sh` — if you add a new label-capable resource type, add it to the `LABEL_CAPABLE_GCP` allowlist in that script.
 
 ### 3. Create variables.tf
 
