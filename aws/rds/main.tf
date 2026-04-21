@@ -89,7 +89,10 @@ resource "aws_iam_role" "rds_monitoring" {
       Principal = {
         Service = "monitoring.rds.amazonaws.com"
       }
-      Action = "sts:AssumeRole"
+      # Array form (not bare string) matches the shape previously produced
+      # by aws_iam_policy_document — keeps existing deployed stacks from
+      # planning a one-time spurious policy re-apply after this merges.
+      Action = ["sts:AssumeRole"]
     }]
   })
   tags = merge(module.name.tags, var.tags)
