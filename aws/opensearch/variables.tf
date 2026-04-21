@@ -5,6 +5,14 @@ variable "project" {
     condition     = length(trimspace(var.project)) > 0 && length(var.project) <= 21
     error_message = "project must be a non-empty string ≤21 characters. OpenSearch Service domain names cap at 28 chars; this module appends '-search' (7), so project must be ≤21 to satisfy both managed and serverless modes."
   }
+  # Project is interpolated into the aws_cloudwatch_log_resource_policy ARN
+  # wildcard below; restrict to characters safe in both IAM policy ARNs and
+  # CloudWatch log-group names so a value like "*" or "foo/bar" cannot widen
+  # the policy scope. Aligns with OpenSearch domain name rules (a-z 0-9 -).
+  validation {
+    condition     = can(regex("^[a-z0-9][a-z0-9-]*$", var.project))
+    error_message = "project must match ^[a-z0-9][a-z0-9-]*$ — lowercase alphanumerics and hyphens, starting with alphanumeric. Matches OpenSearch domain name rules and prevents IAM-policy-ARN widening via the log resource policy."
+  }
 }
 
 variable "environment" {
@@ -86,4 +94,14 @@ variable "allow_public_access" {
   type        = bool
   description = "AOSS network security policy: when true (default), the collection and dashboards are reachable from the public internet. Set false only if the stack provisions an aws_opensearchserverless_vpc_endpoint (not included in this module). Serverless mode only."
   default     = true
+}
+
+variable "log_retention_days" {
+  description = "Retention (days) for the CloudWatch log groups holding managed-mode OpenSearch index/search slow logs and application logs. Must be one of CloudWatch's supported retention values. Managed mode only."
+  type        = number
+  default     = 30
+  validation {
+    condition     = contains([1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1096, 1827, 2192, 2557, 2922, 3288, 3653], var.log_retention_days)
+    error_message = "log_retention_days must be one of CloudWatch Logs' supported retention values: 1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1096, 1827, 2192, 2557, 2922, 3288, 3653."
+  }
 }
