@@ -94,27 +94,28 @@ resource "aws_cloudwatch_log_group" "opensearch" {
 # CloudWatch account-scoped resource policy authorising the OpenSearch service
 # to write to the log groups above. One policy per project, scoped to the
 # module's log-group prefix — keeps below the 10-policies-per-account limit
-# when multiple domains share an account.
-data "aws_iam_policy_document" "opensearch_logs" {
-  count = var.deployment_type == "managed" ? 1 : 0
-  statement {
-    effect = "Allow"
-    principals {
-      type        = "Service"
-      identifiers = ["es.amazonaws.com"]
-    }
-    actions = [
-      "logs:PutLogEvents",
-      "logs:CreateLogStream",
-    ]
-    resources = ["arn:aws:logs:*:*:log-group:/aws/opensearch/${var.project}-search/*:*"]
-  }
-}
-
+# when multiple domains share an account. policy_document is inlined via
+# jsonencode() rather than an aws_iam_policy_document data source so the
+# provider's client-side JSON validation passes under mock_provider in
+# tftest.hcl tests (the data source returns a non-JSON placeholder there).
 resource "aws_cloudwatch_log_resource_policy" "opensearch_logs" {
-  count           = var.deployment_type == "managed" ? 1 : 0
-  policy_name     = "${var.project}-opensearch-logs"
-  policy_document = data.aws_iam_policy_document.opensearch_logs[0].json
+  count       = var.deployment_type == "managed" ? 1 : 0
+  policy_name = "${var.project}-opensearch-logs"
+  policy_document = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid    = "AllowOpenSearchLogs"
+      Effect = "Allow"
+      Principal = {
+        Service = "es.amazonaws.com"
+      }
+      Action = [
+        "logs:PutLogEvents",
+        "logs:CreateLogStream",
+      ]
+      Resource = "arn:aws:logs:*:*:log-group:/aws/opensearch/${var.project}-search/*:*"
+    }]
+  })
 }
 
 resource "aws_opensearch_domain" "managed" {
