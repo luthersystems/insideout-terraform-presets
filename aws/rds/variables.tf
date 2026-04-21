@@ -229,3 +229,13 @@ variable "cloudwatch_logs_exports" {
     error_message = "cloudwatch_logs_exports must be a list (use empty to disable)."
   }
 }
+
+variable "monitoring_interval" {
+  description = "RDS Enhanced Monitoring sampling interval in seconds. 0 disables Enhanced Monitoring; valid non-zero values are 1, 5, 10, 15, 30, 60."
+  type        = number
+  default     = 60
+  validation {
+    condition     = contains([0, 1, 5, 10, 15, 30, 60], var.monitoring_interval)
+    error_message = "monitoring_interval must be one of: 0, 1, 5, 10, 15, 30, 60."
+  }
+}

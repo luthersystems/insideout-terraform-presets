@@ -62,6 +62,13 @@ resource "aws_iam_role_policy_attachment" "lambda_vpc" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
 }
 
+# Active X-Ray tracing is enabled on the function below; the exec role needs
+# PutTraceSegments / PutTelemetryRecords, which AWSXRayDaemonWriteAccess grants.
+resource "aws_iam_role_policy_attachment" "lambda_xray" {
+  role       = aws_iam_role.lambda_exec.name
+  policy_arn = "arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess"
+}
+
 # -----------------------------------------------------------------------------
 # Default Security Group (created when VPC-enabled and no SGs provided)
 # -----------------------------------------------------------------------------
@@ -123,10 +130,15 @@ resource "aws_lambda_function" "this" {
     variables = var.environment_variables
   }
 
+  tracing_config {
+    mode = "Active"
+  }
+
   tags = merge(module.name.tags, var.tags)
 
   depends_on = [
     aws_iam_role_policy_attachment.lambda_basic,
+    aws_iam_role_policy_attachment.lambda_xray,
     aws_cloudwatch_log_group.lambda,
   ]
 }
