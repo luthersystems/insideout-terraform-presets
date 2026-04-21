@@ -74,22 +74,28 @@ resource "aws_db_subnet_group" "this" {
 # it off means the reliable2 monitoring surface cannot chart anything below the
 # DB-engine layer. The service assumes this role to write to CW Logs in the
 # RDSOSMetrics log group.
-data "aws_iam_policy_document" "rds_monitoring_assume" {
-  count = var.monitoring_interval > 0 ? 1 : 0
-  statement {
-    actions = ["sts:AssumeRole"]
-    principals {
-      type        = "Service"
-      identifiers = ["monitoring.rds.amazonaws.com"]
-    }
-  }
-}
-
 resource "aws_iam_role" "rds_monitoring" {
-  count              = var.monitoring_interval > 0 ? 1 : 0
-  name               = "${module.name.name}-em"
-  assume_role_policy = data.aws_iam_policy_document.rds_monitoring_assume[0].json
-  tags               = merge(module.name.tags, var.tags)
+  count = var.monitoring_interval > 0 ? 1 : 0
+  name  = "${module.name.name}-em"
+  # assume_role_policy is inlined via jsonencode() rather than an
+  # aws_iam_policy_document data source so the provider's client-side JSON
+  # validation passes under mock_provider in tftest.hcl tests (the data
+  # source returns a non-JSON placeholder there). Same rationale as
+  # aws/opensearch's aws_cloudwatch_log_resource_policy.
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = {
+        Service = "monitoring.rds.amazonaws.com"
+      }
+      # Array form (not bare string) matches the shape previously produced
+      # by aws_iam_policy_document — keeps existing deployed stacks from
+      # planning a one-time spurious policy re-apply after this merges.
+      Action = ["sts:AssumeRole"]
+    }]
+  })
+  tags = merge(module.name.tags, var.tags)
 }
 
 resource "aws_iam_role_policy_attachment" "rds_monitoring" {
@@ -102,13 +108,21 @@ resource "aws_iam_role_policy_attachment" "rds_monitoring" {
 # Credentials
 # -----------------------------------------------------------------------------
 resource "random_password" "db" {
-  length           = 20
-  lower            = true
-  upper            = true
-  numeric          = true
-  special          = true
-  min_special      = 1
-  override_special = "!@#%^*-_=+?"
+  length      = 20
+  lower       = true
+  upper       = true
+  numeric     = true
+  special     = true
+  min_special = 1
+
+  # AWS RDS CreateDBInstance rejects `/`, `@`, `"`, and space in
+  # MasterUserPassword (see
+  # https://docs.aws.amazon.com/AmazonRDS/latest/APIReference/API_CreateDBInstance.html).
+  # `@` was previously included here, causing non-deterministic deploy
+  # failures — roughly 88% of deploys at min_special=1, length=20 — with
+  # "InvalidParameterValue: Only printable ASCII characters besides '/',
+  # '@', '\"', ' ' may be used." See issue #100.
+  override_special = "!#%^*-_=+?"
 }
 
 # -----------------------------------------------------------------------------

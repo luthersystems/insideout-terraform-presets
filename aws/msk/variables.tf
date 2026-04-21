@@ -139,9 +139,9 @@ variable "cloudwatch_retention_days" {
 }
 
 variable "enhanced_monitoring" {
-  description = "MSK enhanced monitoring level: DEFAULT | PER_BROKER | PER_TOPIC_PER_BROKER"
+  description = "MSK enhanced monitoring level: DEFAULT (6 broker metrics) | PER_BROKER (~23 metrics/broker, CPU/memory/network/disk) | PER_TOPIC_PER_BROKER (PER_BROKER + per-topic throughput/lag). Default is PER_BROKER so reliable2 panels charting broker-level AWS/Kafka metrics populate out of the box; override to DEFAULT on large clusters where CloudWatch metric cost (~$0.30/metric/broker/month for the ~17 additional PER_BROKER metrics) matters."
   type        = string
-  default     = "DEFAULT"
+  default     = "PER_BROKER"
   validation {
     condition     = contains(["DEFAULT", "PER_BROKER", "PER_TOPIC_PER_BROKER"], var.enhanced_monitoring)
     error_message = "enhanced_monitoring must be one of: DEFAULT, PER_BROKER, PER_TOPIC_PER_BROKER."
