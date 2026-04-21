@@ -30,6 +30,7 @@ NON_TAGGABLE_AWS=(
   aws_cloudfront_monitoring_subscription
   aws_cloudfront_origin_access_identity
   aws_cloudwatch_dashboard
+  aws_cloudwatch_log_resource_policy
   aws_cloudwatch_log_stream
   aws_cognito_identity_provider
   aws_cognito_user_pool_client

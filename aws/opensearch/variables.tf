@@ -87,3 +87,13 @@ variable "allow_public_access" {
   description = "AOSS network security policy: when true (default), the collection and dashboards are reachable from the public internet. Set false only if the stack provisions an aws_opensearchserverless_vpc_endpoint (not included in this module). Serverless mode only."
   default     = true
 }
+
+variable "log_retention_days" {
+  description = "Retention (days) for the CloudWatch log groups holding managed-mode OpenSearch index/search slow logs and application logs. Managed mode only."
+  type        = number
+  default     = 30
+  validation {
+    condition     = var.log_retention_days >= 1
+    error_message = "log_retention_days must be >= 1."
+  }
+}
