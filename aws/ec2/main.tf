@@ -160,6 +160,10 @@ resource "aws_instance" "this" {
   iam_instance_profile        = aws_iam_instance_profile.this.name
   key_name                    = var.ssh_public_key != "" ? aws_key_pair.this[0].key_name : var.key_name
 
+  # 1-minute CloudWatch metrics (default 5-minute). Required for any reliable2
+  # chart that samples CPU/net/disk at sub-5-minute granularity.
+  monitoring = true
+
   user_data = local.effective_user_data != "" ? local.effective_user_data : null
 
   lifecycle {

@@ -80,6 +80,16 @@ variable "enable_deletion_protection" {
   default     = false
 }
 
+variable "access_logs_retention_days" {
+  description = "Days to retain ALB access logs in the in-module S3 bucket before expiration."
+  type        = number
+  default     = 90
+  validation {
+    condition     = var.access_logs_retention_days >= 1
+    error_message = "access_logs_retention_days must be >= 1."
+  }
+}
+
 variable "tags" {
   description = "Common resource tags"
   type        = map(string)

@@ -5,6 +5,10 @@ terraform {
       source  = "hashicorp/aws"
       version = ">= 6.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = ">= 3.5"
+    }
   }
 }
 
@@ -54,6 +58,65 @@ resource "aws_security_group" "alb_sg" {
   tags = merge(module.name.tags, { Name = "${module.name.prefix}-sg" }, var.tags)
 }
 
+# -----------------------------------------------------------------------------
+# Access-logs S3 bucket (owned by this module)
+# -----------------------------------------------------------------------------
+# ALB access logs unlock per-path / per-status / target-response-time analysis
+# that the CloudWatch metric surface alone cannot provide. AWS delivers access
+# logs to S3, so we own a dedicated bucket here (one per ALB) with the
+# service-principal PutObject grant recommended for all regions — including
+# opt-in / post-August-2022 regions where the historical ELB account-ID
+# approach does not work.
+resource "random_id" "alb_logs_suffix" {
+  byte_length = 3
+}
+
+data "aws_caller_identity" "current" {}
+
+resource "aws_s3_bucket" "alb_logs" {
+  bucket        = "${var.project}-alb-logs-${random_id.alb_logs_suffix.hex}"
+  force_destroy = true
+  tags          = merge(module.name.tags, { Name = "${module.name.prefix}-alb-logs" }, var.tags)
+}
+
+resource "aws_s3_bucket_public_access_block" "alb_logs" {
+  bucket                  = aws_s3_bucket.alb_logs.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+data "aws_iam_policy_document" "alb_logs" {
+  statement {
+    sid       = "AllowELBAccessLogDelivery"
+    effect    = "Allow"
+    actions   = ["s3:PutObject"]
+    resources = ["${aws_s3_bucket.alb_logs.arn}/AWSLogs/${data.aws_caller_identity.current.account_id}/*"]
+    principals {
+      type        = "Service"
+      identifiers = ["logdelivery.elasticloadbalancing.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_s3_bucket_policy" "alb_logs" {
+  bucket = aws_s3_bucket.alb_logs.id
+  policy = data.aws_iam_policy_document.alb_logs.json
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "alb_logs" {
+  bucket = aws_s3_bucket.alb_logs.id
+  rule {
+    id     = "expire-access-logs"
+    status = "Enabled"
+    filter {}
+    expiration {
+      days = var.access_logs_retention_days
+    }
+  }
+}
+
 # Internet-facing ALB
 resource "aws_lb" "alb" {
   # ALB names limited to 32 chars — use var.project
@@ -65,7 +128,14 @@ resource "aws_lb" "alb" {
 
   enable_deletion_protection = var.enable_deletion_protection
 
+  access_logs {
+    bucket  = aws_s3_bucket.alb_logs.bucket
+    enabled = true
+  }
+
   tags = merge(module.name.tags, var.tags)
+
+  depends_on = [aws_s3_bucket_policy.alb_logs]
 }
 
 # Default target group (attach ECS/EKS/instances later)

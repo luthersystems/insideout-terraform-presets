@@ -130,9 +130,9 @@ variable "apply_immediately" {
 }
 
 variable "enable_cloudwatch_logs" {
-  description = "Enable Redis log delivery to CloudWatch Logs"
+  description = "Enable Redis log delivery to CloudWatch Logs (engine + slow logs)"
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "tags" {
