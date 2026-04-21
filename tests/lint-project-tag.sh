@@ -27,12 +27,14 @@ NON_TAGGABLE_AWS=(
   aws_apigatewayv2_api_mapping
   aws_backup_selection
   aws_bedrock_model_invocation_logging_configuration
+  aws_cloudfront_monitoring_subscription
   aws_cloudfront_origin_access_identity
   aws_cloudwatch_dashboard
   aws_cloudwatch_log_stream
   aws_cognito_identity_provider
   aws_cognito_user_pool_client
   aws_cognito_user_pool_domain
+  aws_dynamodb_contributor_insights
   aws_ecs_cluster_capacity_providers
   aws_iam_role_policy
   aws_iam_role_policy_attachment
