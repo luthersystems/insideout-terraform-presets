@@ -81,7 +81,7 @@ These preset files are embedded at build time into the [reliable](https://github
 - **Defaults matter:** Variables without defaults become required root variables — the mapper MUST provide values or deploy fails
 - **Wiring outputs:** Outputs used for cross-module wiring (e.g., `vpc_id`, `private_subnet_ids`) must be declared in `outputs.tf`
 - **Project tag is required on every taggable AWS resource.** Use `tags = merge(module.name.tags, var.tags)` so the `Project` tag emitted by `module.name.tags` reaches the resource. The downstream reliable3 inspector filters on exact `Project = <project>` match, so untagged resources are invisible to drift detection and CloudWatch metrics (see issue #81, [reliable PR #1027](https://github.com/luthersystems/reliable/pull/1027)). If a resource accepts any tag-shaped attribute (including listeners, instance profiles, and IAM roles/policies in provider 5.x+), tag it.
-- **GCP mirror:** every labelable GCP resource must set `labels = merge(<module-labels>, var.labels)` (or equivalent) so project identity propagates.
+- **GCP mirror:** every labelable GCP resource must set `labels = merge({ project = var.project }, var.labels)` (or equivalent) so project identity propagates. Enforced in CI by `tests/lint-project-label.sh` using an allowlist of label-capable resource types (see script header for how to extend).
 
 ## Skills
 

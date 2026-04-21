@@ -148,6 +148,13 @@ resource "google_compute_target_http_proxy" "this" {
 resource "google_compute_global_address" "this" {
   name    = "${local.name_prefix}-ip"
   project = var.project
+
+  labels = merge(
+    {
+      project = var.project
+    },
+    var.labels
+  )
 }
 
 # HTTPS forwarding rule

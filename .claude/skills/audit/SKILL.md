@@ -81,20 +81,16 @@ bash tests/lint-project-tag.sh
 
 It reports any taggable AWS resource missing the Project-tag convention. The script ships with a `NON_TAGGABLE_AWS` whitelist of resource types that genuinely don't accept tags in AWS provider 6.x; if CI flags a new hit, either add the `tags` line (usual case) or append to the whitelist with a clear rationale.
 
-**GCP** isn't CI-enforced (too many "no labels arg" resources to maintain a clean whitelist). Audit by hand with:
+**GCP is enforced in CI** via `tests/lint-project-label.sh` (wired into the `lint` job alongside the AWS script). Run it locally the same way:
 
 ```bash
-for f in gcp/*/main.tf; do
-  awk '
-    /^resource "google_/ { name=$0; has_labels=0; next }
-    /^  labels[[:space:]]*=/ { has_labels=1 }
-    /^  user_labels[[:space:]]*=/ { has_labels=1 }
-    /^}/ { if (name != "" && !has_labels) print FILENAME": "name; name=""; has_labels=0 }
-  ' "$f"
-done
+bash tests/lint-project-label.sh
 ```
 
-Hand-verify each hit against the provider docs before reporting a gap.
+Unlike AWS (where most resources accept tags), the GCP script uses an ALLOWLIST of resource types known to support `labels` in the Google provider v5.x/v6.x. When adding a new GCP resource type:
+
+- If the [provider docs](https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/) show a `labels` attribute, add the type to `LABEL_CAPABLE_GCP` in `tests/lint-project-label.sh` (alphabetically) and set `labels = merge({ project = var.project }, var.labels)` on the resource.
+- If the resource does not accept labels, no action is needed — the script ignores it.
 
 ### 6. Region Reference Audit (AWS)
 
