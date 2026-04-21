@@ -90,3 +90,17 @@ resource "aws_dynamodb_table" "this" {
 
   tags = local.tags
 }
+
+# CloudWatch Contributor Insights — exposes hot-partition / most-accessed-key
+# analytics on the table and each GSI. Required for reliable2 panels that chart
+# key-level access patterns; without it CI is disabled and those panels stay on
+# "Pending data".
+resource "aws_dynamodb_contributor_insights" "table" {
+  table_name = aws_dynamodb_table.this.name
+}
+
+resource "aws_dynamodb_contributor_insights" "gsi" {
+  for_each   = { for idx in var.global_secondary_indexes : idx.name => idx }
+  table_name = aws_dynamodb_table.this.name
+  index_name = each.value.name
+}

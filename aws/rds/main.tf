@@ -120,6 +120,8 @@ resource "aws_db_instance" "primary" {
 
   enabled_cloudwatch_logs_exports = var.enable_cloudwatch_logs ? var.cloudwatch_logs_exports : []
 
+  performance_insights_enabled = true
+
   auto_minor_version_upgrade = true
 
   tags = merge(module.name.tags, var.tags)
@@ -153,6 +155,10 @@ resource "aws_db_instance" "replica" {
   max_allocated_storage = var.max_allocated_storage
 
   skip_final_snapshot = true
+
+  enabled_cloudwatch_logs_exports = var.enable_cloudwatch_logs ? var.cloudwatch_logs_exports : []
+
+  performance_insights_enabled = true
 
   tags = merge(module.name.tags, var.tags)
 }

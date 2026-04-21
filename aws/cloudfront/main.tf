@@ -182,3 +182,17 @@ resource "aws_cloudfront_distribution" "this" {
     }
   }
 }
+
+# Enables the "additional CloudFront metrics" (cache-hit rate, origin latency,
+# error-rate-by-status). Without this subscription only the 6 default metrics
+# publish, so reliable2 panels on those additional signals stay on "Pending
+# data" indefinitely.
+resource "aws_cloudfront_monitoring_subscription" "this" {
+  distribution_id = aws_cloudfront_distribution.this.id
+
+  monitoring_subscription {
+    realtime_metrics_subscription_config {
+      realtime_metrics_subscription_status = "Enabled"
+    }
+  }
+}
