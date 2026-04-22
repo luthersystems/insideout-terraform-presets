@@ -1045,10 +1045,13 @@ func (c *Components) Normalize() {
 	c.Backups = nil
 }
 
-// IsLambdaArchitecture returns true if the stack uses Lambda as its compute layer.
-// Callers with legacy session JSON (where the architecture was encoded as the
-// Resource string "Lambda" / "Serverless") must normalise first via
-// Components.Normalize; see #76 for the reliable-legacy migration plan.
+// IsLambdaArchitecture returns true if the stack uses Lambda as its compute
+// layer. Reads only c.AWSLambda — legacy shapes (c.Lambda *bool and the
+// c.Resource string "Lambda" / "Serverless") are promoted to c.AWSLambda by
+// Components.Normalize (AWS branch). ComposeStack / ComposeSingle call
+// Normalize at entry, so most callers never need to think about this; direct
+// callers of IsLambdaArchitecture on a legacy-shaped Components must call
+// Normalize first. See #76.
 func (c *Components) IsLambdaArchitecture() bool {
 	if c == nil {
 		return false

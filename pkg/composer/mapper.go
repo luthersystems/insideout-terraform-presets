@@ -23,9 +23,9 @@ type Mapper interface {
 // These components wire to module.vpc.private_subnet_ids and fail validation
 // when the VPC only has public subnets.
 //
-// Callers that construct Components from historical legacy-key JSON must
-// call [Components.Normalize] first — reliable/composeradapter does this.
-// See #76 for the reliable-legacy migration plan.
+// Reads only the AWS-prefixed fields; legacy pointer fields (c.Postgres,
+// c.ElastiCache, c.OpenSearch) are promoted by Components.Normalize, which
+// ComposeStack / ComposeSingle call at entry.
 func stackNeedsPrivateSubnets(comps *Components) bool {
 	if comps == nil {
 		return false

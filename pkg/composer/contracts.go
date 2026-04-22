@@ -500,9 +500,10 @@ func isLambda(comps *Components) bool {
 	return comps.IsLambdaArchitecture()
 }
 
-// isPublicVPC returns true if the VPC is configured as a Public VPC (no private subnets).
-// Callers with legacy session JSON must normalise first via Components.Normalize;
-// see #76 for the reliable-legacy migration plan.
+// isPublicVPC returns true if the VPC is configured as a Public VPC (no
+// private subnets). Reads only comps.AWSVPC; the legacy comps.VPC string is
+// promoted to AWSVPC by Components.Normalize, which ComposeStack /
+// ComposeSingle call at entry.
 func isPublicVPC(comps *Components) bool {
 	if comps == nil {
 		return false
