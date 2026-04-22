@@ -20,6 +20,9 @@ func NewValidationError(msg string) *ValidationError {
 func (e *ValidationError) Error() string { return e.msg }
 
 type ComputeExclusivityOpts struct {
+	// Deprecated: legacy compute-exclusivity escape hatch tracked by issue #76.
+	// Historical sessions that mixed standalone EC2 with Lambda relied on this;
+	// new callers should not set it.
 	AllowLegacyStandaloneEC2Lambda bool
 }
 

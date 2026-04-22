@@ -199,10 +199,13 @@ func (c *Client) ComposeSingle(opts ComposeSingleOpts) (Files, error) {
 /* ---------- Stack ---------- */
 
 type ComposeStackOpts struct {
-	Cloud                   string // "aws" or "gcp" (defaults to "aws" if empty)
-	SelectedKeys            []ComponentKey
-	Comps                   *Components
-	Cfg                     *Config
+	Cloud        string // "aws" or "gcp" (defaults to "aws" if empty)
+	SelectedKeys []ComponentKey
+	Comps        *Components
+	Cfg          *Config
+	// Deprecated: legacy compute-exclusivity escape hatch tracked by issue #76.
+	// Historical sessions that mixed standalone EC2 with Lambda relied on this;
+	// new callers should not set it.
 	AllowLegacyMixedCompute bool
 	Project, Region         string
 }
