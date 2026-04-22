@@ -21,6 +21,12 @@ func RootVarSchema() map[string]VarSpec {
 	return map[string]VarSpec{
 		"project": {Type: "string", Doc: "Project name prefix"},
 		"region":  {Type: "string", Doc: "AWS region"},
+		// template_ref is written by ui-core into common.auto.tfvars.json so
+		// downstream template scripts (sandbox-infrastructure-template's
+		// shell_utils.sh:getTfVar) can log the ref used to provision the
+		// project. No module currently reads it; declaring it here silences
+		// the "Value for undeclared variable" warning on every Oracle deploy.
+		"template_ref": {Type: "string", Doc: "Git ref of the sandbox-infrastructure-template used to provision this project. Written by ui-core via common.auto.tfvars.json so template shell scripts can log it via getTfVar."},
 	}
 }
 

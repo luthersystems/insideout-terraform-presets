@@ -127,8 +127,9 @@ func (c *Client) ComposeSingle(opts ComposeSingleOpts) (Files, error) {
 
 	inputs := map[string]any{}
 	rootVars := map[string]any{
-		"project": opts.Project,
-		"region":  opts.Region,
+		"project":      opts.Project,
+		"region":       opts.Region,
+		"template_ref": "",
 	}
 	typeHints := map[string]any{
 		"project": opts.Project,
@@ -262,8 +263,9 @@ func (c *Client) ComposeStack(opts ComposeStackOpts) (Files, error) {
 
 	files := Files{}
 	rootVars := map[string]any{
-		"project": opts.Project,
-		"region":  opts.Region,
+		"project":      opts.Project,
+		"region":       opts.Region,
+		"template_ref": "",
 	}
 	typeHints := map[string]any{
 		"project": opts.Project,
