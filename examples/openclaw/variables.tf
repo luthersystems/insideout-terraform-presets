@@ -4,6 +4,12 @@ variable "environment" {
   default     = "sandbox"
 }
 
+variable "project" {
+  description = "Root project name, stamped into the provider default_tags block so every AWS resource carries a Project tag"
+  type        = string
+  default     = "openclaw"
+}
+
 variable "vpc_project" {
   description = "Project name for VPC"
   type        = string

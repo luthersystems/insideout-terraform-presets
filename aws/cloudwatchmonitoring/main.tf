@@ -237,8 +237,8 @@ locals {
 resource "aws_cloudwatch_dashboard" "main" {
   dashboard_name = module.name.name
   dashboard_body = jsonencode({ widgets = local.dash_metrics })
-  # NOTE: aws_cloudwatch_dashboard does not accept a `tags` argument in
-  # the hashicorp/aws provider (as of v6.33.0). CloudWatch dashboards are
+  # NOTE: the hashicorp/aws provider currently does not support the `tags`
+  # argument on `aws_cloudwatch_dashboard`. CloudWatch dashboards are
   # therefore untaggable from Terraform, even though the AWS API supports
   # it. When/if the provider adds the argument, add:
   #   tags = merge(module.name.tags, var.tags)

@@ -18,11 +18,13 @@ func writeOutputs(t *testing.T, files Files, dir string) {
 
 // assertProviderBlocksHaveDefaultTags splits providers.tf by `provider "aws" {`
 // and asserts that (1) exactly wantBlocks provider "aws" blocks exist, and
-// (2) each block contains a default_tags block with Project = var.project and
+// (2) each block declares a default_tags block with Project = var.project and
 // managed-by = "insideout". Split-and-check proves placement per block (a
 // regression dropping default_tags from the alias block would otherwise slip
 // past a global strings.Count), and regex matches tolerate whitespace-only
-// formatting changes from terraform fmt. Locks the safety net for #1112.
+// formatting changes from terraform fmt. Note this locks the HCL surface of
+// the provider blocks — it does not prove rendered resources inherit the tag
+// at terraform apply, which requires a plan-json round-trip.
 func assertProviderBlocksHaveDefaultTags(t *testing.T, prov string, wantBlocks int) {
 	t.Helper()
 	chunks := strings.Split(prov, `provider "aws" {`)
@@ -1866,6 +1868,74 @@ func TestComposeStack_GCP_Provider(t *testing.T) {
 	require.Contains(t, provStr, "hashicorp/google", "should use Google provider")
 	require.Contains(t, provStr, `provider "google"`, "should have google provider block")
 	require.Contains(t, provStr, "us-central1", "should use specified region")
+
+	// GCP intentionally has no default_tags / default_labels safety net: the
+	// google provider has native per-session credential isolation via
+	// creds.ProjectID and Reliable #1112's scope was AWS-only. Guard against
+	// someone adding half-working GCP tagging by accident — if a parity
+	// story ever lands it should be a deliberate feature change that updates
+	// this test, not a drive-by edit.
+	require.NotContains(t, provStr, "default_labels",
+		"GCP provider block should not declare default_labels (see #111; any GCP tagging parity should land via a deliberate feature, not a drive-by edit)")
+	require.NotContains(t, provStr, "default_tags",
+		"GCP provider block should not borrow AWS-shaped default_tags")
+}
+
+// TestComposeStack_DiscoveredProvidersReachRoot exercises the end-to-end path
+// where a child module's non-AWS `required_providers` declaration (e.g. ALB
+// declaring hashicorp/random) is discovered via DiscoverRequiredProviders
+// and merged into the root providers.tf. Unit tests on
+// DiscoverRequiredProviders alone don't cover the merge in generateProvidersTF.
+func TestComposeStack_DiscoveredProvidersReachRoot(t *testing.T) {
+	c := newTestClient()
+	out, err := c.ComposeStack(ComposeStackOpts{
+		Cloud:        "aws",
+		SelectedKeys: []ComponentKey{KeyAWSVPC, KeyAWSALB},
+		Comps:        &Components{AWSVPC: "Private VPC", AWSALB: ptrBool(true)},
+		Cfg:          &Config{},
+		Project:      "discovered-test",
+		Region:       "us-east-1",
+	})
+	require.NoError(t, err)
+
+	prov := string(out["/providers.tf"])
+	require.Contains(t, prov, "hashicorp/random",
+		"root providers.tf should include the ALB module's discovered hashicorp/random required_providers entry")
+	require.Contains(t, prov, "hashicorp/aws",
+		"root providers.tf should keep the cloud's base required_provider entry")
+}
+
+// TestComposeStack_ProjectRoundTrip renders with a distinctive Project value
+// and asserts that value flows through to both the root variables.tf default
+// and per-module .auto.tfvars. Guards against a refactor replacing var.project
+// with a hardcoded literal (which would defeat cross-session isolation).
+func TestComposeStack_ProjectRoundTrip(t *testing.T) {
+	const sentinel = "demo-xyz-round-trip"
+	c := newTestClient()
+	out, err := c.ComposeStack(ComposeStackOpts{
+		Cloud:        "aws",
+		SelectedKeys: []ComponentKey{KeyAWSVPC},
+		Comps:        &Components{AWSVPC: "Private VPC"},
+		Cfg:          &Config{},
+		Project:      sentinel,
+		Region:       "us-east-1",
+	})
+	require.NoError(t, err)
+
+	varsTF := string(out["/variables.tf"])
+	require.Contains(t, varsTF, `variable "project"`,
+		"root variables.tf should declare variable project")
+	require.Contains(t, varsTF, sentinel,
+		"root variables.tf should carry ComposeStackOpts.Project as the project default")
+
+	require.Contains(t, out, "/aws_vpc.auto.tfvars")
+	vpcTf := string(out["/aws_vpc.auto.tfvars"])
+	require.Contains(t, vpcTf, sentinel,
+		"per-module .auto.tfvars should carry the Project value through the namespaced aws_vpc_project binding")
+
+	prov := string(out["/providers.tf"])
+	require.Contains(t, prov, "Project    = var.project",
+		"provider block should bind Project to var.project (not a hardcoded literal)")
 }
 
 func TestDefaultWiring_AWSECS(t *testing.T) {
