@@ -12,6 +12,7 @@ InsideOut is a streamlined platform to build, configure, deploy, and manage your
 *   **Agent Prototype**: [insideout.luthersystemsapp.com](https://insideout.luthersystemsapp.com)
 *   **Discord Community**: [insideout.luthersystems.com/discord](https://insideout.luthersystems.com/discord)
 *   **Subreddit**: [r/luthersystems](https://www.reddit.com/r/luthersystems/)
+*   **Kiro IDE Power**: [insideout-power](https://github.com/luthersystems/insideout-power) — Kiro IDE Power for AI-powered cloud infrastructure design
 
 ## About These Presets
 
