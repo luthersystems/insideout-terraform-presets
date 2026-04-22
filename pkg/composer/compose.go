@@ -3,6 +3,7 @@ package composer
 import (
 	"fmt"
 	"io/fs"
+	"maps"
 	"path"
 	"sort"
 	"strings"
@@ -127,9 +128,7 @@ func (c *Client) ComposeSingle(opts ComposeSingleOpts) (Files, error) {
 	wired := DefaultWiring(selected, opts.Key, opts.Comps)
 
 	files := Files{}
-	for p, b := range rebasePresetFiles(leaf, moduleDir) {
-		files[p] = b
-	}
+	maps.Copy(files, rebasePresetFiles(leaf, moduleDir))
 
 	inputs := map[string]any{}
 	rootVars := map[string]any{
@@ -299,9 +298,7 @@ func (c *Client) ComposeStack(opts ComposeStackOpts) (Files, error) {
 			return nil, fmt.Errorf("preset for %s (path %q) returned no files", k, presetPath)
 		}
 
-		for p, b := range rebasePresetFiles(preset, dir) {
-			files[p] = b
-		}
+		maps.Copy(files, rebasePresetFiles(preset, dir))
 
 		vars, err := DiscoverModuleVars(preset)
 		if err != nil {
@@ -315,9 +312,7 @@ func (c *Client) ComposeStack(opts ComposeStackOpts) (Files, error) {
 		if err != nil {
 			return nil, err
 		}
-		for name, rp := range provs {
-			discoveredProviders[name] = rp
-		}
+		maps.Copy(discoveredProviders, provs)
 		if len(outputs) > 0 {
 			moduleOutputs = append(moduleOutputs, ModuleOutputs{
 				Module:  string(k),
@@ -429,9 +424,7 @@ func generateProvidersTF(cloud, region string, selected map[ComponentKey]bool, d
 			region = "us-central1"
 		}
 		required["google"] = RequiredProvider{Source: "hashicorp/google", Version: ">= 5.0"}
-		for name, rp := range discovered {
-			required[name] = rp
-		}
+		maps.Copy(required, discovered)
 		var b strings.Builder
 		b.WriteString("terraform {\n  required_providers {\n")
 		b.WriteString(renderRequiredProviders(required))
@@ -482,9 +475,7 @@ variable "external_id" {
   }`, insideoutManagedByValue)
 
 		required["aws"] = RequiredProvider{Source: "hashicorp/aws", Version: ">= 6.0"}
-		for name, rp := range discovered {
-			required[name] = rp
-		}
+		maps.Copy(required, discovered)
 
 		var b strings.Builder
 		b.WriteString(awsVarDecls)
