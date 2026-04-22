@@ -1,6 +1,9 @@
 package composer
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // Components mirrors the TypeScript ZComponentsIR schema with cloud-specific field names.
 // Use aws_* fields for AWS cloud, gcp_* fields for GCP cloud.
@@ -731,11 +734,28 @@ func (c *Components) Normalize() {
 			c.Bedrock = c.AWSBedrock
 		}
 
-		// Sync Lambda
+		// Sync Lambda. Legacy sessions encoded Lambda/serverless in THREE
+		// different shapes:
+		//   1. c.Lambda *bool      — earliest form, used in reliable sessions
+		//   2. c.AWSLambda *bool   — v2 form
+		//   3. c.Resource string   — earliest form, the architecture enum
+		//                            ("Lambda" / "Serverless" / "Kubernetes")
+		// Promote all three to c.AWSLambda so downstream composer reads a
+		// single source of truth. Resource stays untouched for its GCP role
+		// (GKE / CloudRun detection) and the final legacy-clearing block at
+		// the end of Normalize clears it.
 		if c.Lambda != nil && c.AWSLambda == nil {
 			c.AWSLambda = c.Lambda
 		} else if c.AWSLambda != nil {
 			c.Lambda = c.AWSLambda
+		}
+		if c.AWSLambda == nil && c.Resource != "" {
+			lower := strings.ToLower(c.Resource)
+			if strings.Contains(lower, "lambda") || strings.Contains(lower, "serverless") {
+				t := true
+				c.AWSLambda = &t
+				c.Lambda = &t // keep legacy mirror in sync
+			}
 		}
 
 		// Sync CodePipeline
@@ -1025,19 +1045,17 @@ func (c *Components) Normalize() {
 	c.Backups = nil
 }
 
-// IsLambdaArchitecture returns true if the resource type indicates Lambda/serverless.
+// IsLambdaArchitecture returns true if the stack uses Lambda as its compute
+// layer. Reads only c.AWSLambda — legacy shapes (c.Lambda *bool and the
+// c.Resource string "Lambda" / "Serverless") are promoted to c.AWSLambda by
+// Components.Normalize (AWS branch). ComposeStack / ComposeSingle call
+// Normalize at entry, so most callers never need to think about this; direct
+// callers of IsLambdaArchitecture on a legacy-shaped Components must call
+// Normalize first. See #76.
 func (c *Components) IsLambdaArchitecture() bool {
 	if c == nil {
 		return false
 	}
-	// Check legacy Resource field for backward compatibility
-	if c.Resource != "" {
-		r := c.Resource
-		if containsIgnoreCase(r, "lambda") || containsIgnoreCase(r, "serverless") {
-			return true
-		}
-	}
-	// Check new AWS Lambda field
 	return boolVal(c.AWSLambda)
 }
 
@@ -1698,31 +1716,4 @@ func (c *Config) Normalize() {
 	c.OpenSearch = nil
 	c.Bedrock = nil
 	c.Backups = nil
-}
-
-func containsIgnoreCase(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr ||
-		len(s) > len(substr) && (containsLower(s, substr)))
-}
-
-func containsLower(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if toLower(s[i:i+len(substr)]) == toLower(substr) {
-			return true
-		}
-	}
-	return false
-}
-
-func toLower(s string) string {
-	b := make([]byte, len(s))
-	for i := range s {
-		c := s[i]
-		if c >= 'A' && c <= 'Z' {
-			b[i] = c + 32
-		} else {
-			b[i] = c
-		}
-	}
-	return string(b)
 }

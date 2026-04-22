@@ -22,6 +22,10 @@ type Mapper interface {
 // require private subnets (EKS, RDS, ElastiCache, OpenSearch, EKS node groups).
 // These components wire to module.vpc.private_subnet_ids and fail validation
 // when the VPC only has public subnets.
+//
+// Reads only the AWS-prefixed fields; legacy pointer fields (c.Postgres,
+// c.ElastiCache, c.OpenSearch) are promoted by Components.Normalize, which
+// ComposeStack / ComposeSingle call at entry.
 func stackNeedsPrivateSubnets(comps *Components) bool {
 	if comps == nil {
 		return false
@@ -29,11 +33,8 @@ func stackNeedsPrivateSubnets(comps *Components) bool {
 	return boolPtrTrue(comps.AWSEKS) ||
 		boolPtrTrue(comps.AWSECS) ||
 		boolPtrTrue(comps.AWSRDS) ||
-		boolPtrTrue(comps.Postgres) ||
 		boolPtrTrue(comps.AWSElastiCache) ||
-		boolPtrTrue(comps.ElastiCache) ||
 		boolPtrTrue(comps.AWSOpenSearch) ||
-		boolPtrTrue(comps.OpenSearch) ||
 		comps.AWSEC2 != "" // EC2 node groups need private subnets
 }
 
