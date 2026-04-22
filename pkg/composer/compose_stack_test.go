@@ -16,6 +16,32 @@ func writeOutputs(t *testing.T, files Files, dir string) {
 	writeBundle(t, dir, files)
 }
 
+// assertProviderBlocksHaveDefaultTags splits providers.tf by `provider "aws" {`
+// and asserts that (1) exactly wantBlocks provider "aws" blocks exist, and
+// (2) each block contains a default_tags block with Project = var.project and
+// managed-by = "insideout". Split-and-check proves placement per block (a
+// regression dropping default_tags from the alias block would otherwise slip
+// past a global strings.Count), and regex matches tolerate whitespace-only
+// formatting changes from terraform fmt. Locks the safety net for #1112.
+func assertProviderBlocksHaveDefaultTags(t *testing.T, prov string, wantBlocks int) {
+	t.Helper()
+	chunks := strings.Split(prov, `provider "aws" {`)
+	require.Len(t, chunks, wantBlocks+1,
+		"expected %d provider \"aws\" blocks, got %d. prov:\n%s",
+		wantBlocks, len(chunks)-1, prov)
+	defaultTagsRe := regexp.MustCompile(`default_tags\s*\{`)
+	projectRe := regexp.MustCompile(`Project\s*=\s*var\.project`)
+	managedByRe := regexp.MustCompile(`managed-by\s*=\s*"insideout"`)
+	for i, chunk := range chunks[1:] {
+		require.Regexpf(t, defaultTagsRe, chunk,
+			"provider block #%d missing default_tags. chunk:\n%s", i+1, chunk)
+		require.Regexpf(t, projectRe, chunk,
+			"provider block #%d missing Project = var.project. chunk:\n%s", i+1, chunk)
+		require.Regexpf(t, managedByRe, chunk,
+			"provider block #%d missing managed-by tag. chunk:\n%s", i+1, chunk)
+	}
+}
+
 func TestVpcRef(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -510,13 +536,11 @@ func TestComposeStack_V2KitchenSink(t *testing.T) {
 	require.Contains(t, prov, `provider "aws" {`)
 	require.Contains(t, prov, `alias  = "us_east_1"`)
 	require.Contains(t, prov, `region = "us-east-1"`)
-	// default_tags must be present on both provider blocks — this is the
-	// safety net that guarantees every AWS resource carries the Project tag
-	// for cross-session isolation in the reliable inspector (#1112).
-	require.Equal(t, 2, strings.Count(prov, "default_tags {"),
-		"expected default_tags on both default and us_east_1 providers, got prov=\n%s", prov)
-	require.Contains(t, prov, `Project    = var.project`)
-	require.Contains(t, prov, `managed-by = "insideout"`)
+	// Verify each provider block independently carries default_tags with
+	// Project = var.project — the #1112 safety net. Split-per-block proves
+	// placement (a regression dropping default_tags from just one block
+	// would otherwise pass a global substring count).
+	assertProviderBlocksHaveDefaultTags(t, prov, 2)
 
 	// Monitoring ← bastion, RDS, ALB, SQS
 	require.Contains(t, mainTF, "module.aws_bastion.bastion_instance_id")
@@ -691,6 +715,9 @@ func TestComposeStack_KitchenSink(t *testing.T) {
 		require.Contains(t, prov, `provider "aws" {`)
 		require.Contains(t, prov, `alias  = "us_east_1"`)
 		require.Contains(t, prov, `region = "us-east-1"`)
+		// WAF is selected here so both default + us_east_1 blocks render;
+		// each must independently carry the #1112 default_tags safety net.
+		assertProviderBlocksHaveDefaultTags(t, prov, 2)
 	})
 }
 
@@ -1154,6 +1181,14 @@ func TestComposeStack_MonolithEC2(t *testing.T) {
 	varsTF := string(out["/variables.tf"])
 	require.Contains(t, varsTF, `variable "aws_ec2_project"`)
 	require.Contains(t, varsTF, `variable "aws_ec2_region"`)
+
+	// NoWAF path: only the default provider "aws" block should render,
+	// and it must carry the #1112 default_tags safety net. A regression
+	// dropping default_tags from the default block would pass the V2/legacy
+	// WAF tests if inadvertently doubled on the alias — only this NoWAF
+	// assertion catches that directly.
+	require.Contains(t, out, "/providers.tf")
+	assertProviderBlocksHaveDefaultTags(t, string(out["/providers.tf"]), 1)
 
 	// Validate all .tf files parse as valid HCL
 	for name, content := range out {
