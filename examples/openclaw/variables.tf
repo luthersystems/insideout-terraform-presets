@@ -11,7 +11,7 @@ variable "project" {
 }
 
 variable "vpc_project" {
-  description = "Project name for VPC"
+  description = "Project name for VPC. Keep in sync with var.project — the Project tag stamped in the provider default_tags block is read from var.project, not var.vpc_project, so a mismatch produces inconsistent tagging."
   type        = string
 }
 
@@ -21,7 +21,7 @@ variable "vpc_region" {
 }
 
 variable "ec2_project" {
-  description = "Project name for EC2 instance"
+  description = "Project name for EC2 instance. Keep in sync with var.project; see vpc_project."
   type        = string
 }
 

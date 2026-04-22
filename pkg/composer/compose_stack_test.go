@@ -1875,6 +1875,12 @@ func TestComposeStack_GCP_Provider(t *testing.T) {
 	// someone adding half-working GCP tagging by accident — if a parity
 	// story ever lands it should be a deliberate feature change that updates
 	// this test, not a drive-by edit.
+	//
+	// Scope note: provStr is the root /providers.tf only (no preset contents),
+	// so a NotContains on the full string has negligible false-positive risk
+	// from a module name or comment mentioning "default_tags". If the haystack
+	// ever widens to include preset bodies, scope the check to the
+	// `provider "google" { ... }` block.
 	require.NotContains(t, provStr, "default_labels",
 		"GCP provider block should not declare default_labels (see #111; any GCP tagging parity should land via a deliberate feature, not a drive-by edit)")
 	require.NotContains(t, provStr, "default_tags",
@@ -1888,6 +1894,18 @@ func TestComposeStack_GCP_Provider(t *testing.T) {
 // DiscoverRequiredProviders alone don't cover the merge in generateProvidersTF.
 func TestComposeStack_DiscoveredProvidersReachRoot(t *testing.T) {
 	c := newTestClient()
+
+	// Precondition: the ALB preset really does declare hashicorp/random in
+	// its required_providers. If this test silently becomes a no-op because
+	// the ALB module dropped the provider, the precondition fails first —
+	// much clearer diagnostic than a passing assertion on an absent string.
+	albFiles, err := c.GetPresetFiles("aws/alb")
+	require.NoError(t, err)
+	albProvs, err := DiscoverRequiredProviders(albFiles)
+	require.NoError(t, err)
+	require.Contains(t, albProvs, "random",
+		"precondition: aws/alb preset should declare a random = {...} required_provider; if this fails, pick a different preset to exercise the discovered-providers merge")
+
 	out, err := c.ComposeStack(ComposeStackOpts{
 		Cloud:        "aws",
 		SelectedKeys: []ComponentKey{KeyAWSVPC, KeyAWSALB},
@@ -1903,12 +1921,19 @@ func TestComposeStack_DiscoveredProvidersReachRoot(t *testing.T) {
 		"root providers.tf should include the ALB module's discovered hashicorp/random required_providers entry")
 	require.Contains(t, prov, "hashicorp/aws",
 		"root providers.tf should keep the cloud's base required_provider entry")
+	// Lock the merge location: hashicorp/random must appear inside a
+	// `random = { ... }` entry (i.e. it's a keyed required_providers block,
+	// not a stray substring in a comment or module name).
+	require.Regexp(t, regexp.MustCompile(`(?s)random\s*=\s*\{[^}]*hashicorp/random`), prov,
+		"hashicorp/random should be attached to a random = {...} entry in required_providers, not just appear as a substring")
 }
 
 // TestComposeStack_ProjectRoundTrip renders with a distinctive Project value
-// and asserts that value flows through to both the root variables.tf default
-// and per-module .auto.tfvars. Guards against a refactor replacing var.project
-// with a hardcoded literal (which would defeat cross-session isolation).
+// and asserts that value flows through to the root variables.tf default, the
+// per-module .auto.tfvars, and the provider default_tags block. Each
+// assertion binds the sentinel to the specific variable/declaration it
+// belongs to — a bare substring match would pass even if the sentinel landed
+// in an unrelated comment or the wrong variable.
 func TestComposeStack_ProjectRoundTrip(t *testing.T) {
 	const sentinel = "demo-xyz-round-trip"
 	c := newTestClient()
@@ -1922,20 +1947,32 @@ func TestComposeStack_ProjectRoundTrip(t *testing.T) {
 	})
 	require.NoError(t, err)
 
+	// Root variables.tf: the sentinel must appear as the default of the
+	// `variable "project"` block, not somewhere else (a module name, a
+	// comment, another variable's default).
 	varsTF := string(out["/variables.tf"])
-	require.Contains(t, varsTF, `variable "project"`,
-		"root variables.tf should declare variable project")
-	require.Contains(t, varsTF, sentinel,
-		"root variables.tf should carry ComposeStackOpts.Project as the project default")
+	require.Regexp(t,
+		regexp.MustCompile(`(?s)variable "project"\s*\{[^}]*default\s*=\s*"`+regexp.QuoteMeta(sentinel)+`"`),
+		varsTF,
+		"root variables.tf should carry ComposeStackOpts.Project as the default of variable \"project\"")
 
+	// Per-module .auto.tfvars: sentinel must be bound to aws_vpc_project
+	// specifically, not aws_vpc_region or any other key.
 	require.Contains(t, out, "/aws_vpc.auto.tfvars")
 	vpcTf := string(out["/aws_vpc.auto.tfvars"])
-	require.Contains(t, vpcTf, sentinel,
-		"per-module .auto.tfvars should carry the Project value through the namespaced aws_vpc_project binding")
+	require.Regexp(t,
+		regexp.MustCompile(`(?m)^\s*aws_vpc_project\s*=\s*"`+regexp.QuoteMeta(sentinel)+`"\s*$`),
+		vpcTf,
+		"aws_vpc.auto.tfvars should bind aws_vpc_project to the sentinel, not leak it into another key")
 
+	// Provider default_tags: `Project = var.project` must appear (the binding
+	// is what makes the round-trip work at apply time). Whitespace-tolerant
+	// regex matches terraform fmt output.
 	prov := string(out["/providers.tf"])
-	require.Contains(t, prov, "Project    = var.project",
-		"provider block should bind Project to var.project (not a hardcoded literal)")
+	require.Regexp(t,
+		regexp.MustCompile(`Project\s*=\s*var\.project`),
+		prov,
+		"provider default_tags should bind Project to var.project (not a hardcoded literal)")
 }
 
 func TestDefaultWiring_AWSECS(t *testing.T) {
