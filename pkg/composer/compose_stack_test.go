@@ -510,6 +510,13 @@ func TestComposeStack_V2KitchenSink(t *testing.T) {
 	require.Contains(t, prov, `provider "aws" {`)
 	require.Contains(t, prov, `alias  = "us_east_1"`)
 	require.Contains(t, prov, `region = "us-east-1"`)
+	// default_tags must be present on both provider blocks — this is the
+	// safety net that guarantees every AWS resource carries the Project tag
+	// for cross-session isolation in the reliable inspector (#1112).
+	require.Equal(t, 2, strings.Count(prov, "default_tags {"),
+		"expected default_tags on both default and us_east_1 providers, got prov=\n%s", prov)
+	require.Contains(t, prov, `Project    = var.project`)
+	require.Contains(t, prov, `managed-by = "insideout"`)
 
 	// Monitoring ← bastion, RDS, ALB, SQS
 	require.Contains(t, mainTF, "module.aws_bastion.bastion_instance_id")

@@ -11,7 +11,20 @@ terraform {
   }
 }
 
+module "name" {
+  source         = "github.com/luthersystems/tf-modules.git//luthername?ref=v55.15.0"
+  luther_project = var.project
+  aws_region     = var.region
+  luther_env     = var.environment
+  org_name       = "luthersystems"
+  component      = "insideout"
+  subcomponent   = "ecs"
+  resource       = "ecs"
+}
+
 locals {
+  # Cluster name is an immutable ForceNew attribute on aws_ecs_cluster;
+  # preserve the historical format to avoid replacing existing clusters.
   cluster_name = "${var.project}-ecs"
 }
 
@@ -24,11 +37,8 @@ resource "aws_ecs_cluster" "this" {
   }
 
   tags = merge(
-    {
-      Name        = local.cluster_name
-      Project     = var.project
-      Environment = var.environment
-    },
+    module.name.tags,
+    { Name = local.cluster_name },
     var.tags,
   )
 }
@@ -53,11 +63,8 @@ resource "aws_service_discovery_private_dns_namespace" "this" {
   vpc         = var.vpc_id
 
   tags = merge(
-    {
-      Name        = "${local.cluster_name}.local"
-      Project     = var.project
-      Environment = var.environment
-    },
+    module.name.tags,
+    { Name = "${local.cluster_name}.local" },
     var.tags,
   )
 }

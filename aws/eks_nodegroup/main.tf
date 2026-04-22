@@ -42,7 +42,7 @@ resource "aws_iam_role" "mng" {
   count              = var.node_role_arn == null ? 1 : 0
   name               = "${var.cluster_name}-node-role"
   assume_role_policy = data.aws_iam_policy_document.mng_assume.json
-  tags               = local.common_tags
+  tags               = merge(local.common_tags, var.tags)
 }
 
 # Standard policies for EKS worker nodes (only when we created the role)
