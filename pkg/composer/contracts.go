@@ -326,6 +326,11 @@ var ImplicitDependencies = map[ComponentKey][]ComponentKey{
 
 // LegacyToV2Key maps legacy (unprefixed) component keys to their V2 (aws_-prefixed) equivalents.
 // Used by DeduplicateKeys to remove legacy duplicates when both forms are present.
+//
+// Deprecated: part of the reliable-legacy compat layer tracked by issue #76.
+// New code should work with KeyAWS*-prefixed keys directly; legacy session
+// payloads should be normalised by reliable's composeradapter before reaching
+// composer.
 var LegacyToV2Key = map[ComponentKey]ComponentKey{
 	KeyVPC:                  KeyAWSVPC,
 	KeyALB:                  KeyAWSALB,
@@ -355,6 +360,9 @@ var LegacyToV2Key = map[ComponentKey]ComponentKey{
 // DeduplicateKeys removes legacy keys when their V2 equivalent is also present.
 // For example, if both KeyVPC and KeyAWSVPC are in keys, only KeyAWSVPC is kept.
 // This prevents duplicate Terraform module blocks for the same infrastructure.
+//
+// Deprecated: part of the reliable-legacy compat layer tracked by issue #76.
+// Callers that already produce AWS-prefixed keys should not need this.
 func DeduplicateKeys(keys []ComponentKey) []ComponentKey {
 	present := make(map[ComponentKey]bool, len(keys))
 	for _, k := range keys {

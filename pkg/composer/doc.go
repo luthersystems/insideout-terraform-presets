@@ -22,8 +22,8 @@
 //
 // These symbols are not part of composer's supported public contract. If you
 // need to consume historical session payloads, use reliable's composeradapter
-// package (see luthersystems/reliable#998), which normalises legacy shapes to
-// the prefixed vocabulary before handing them to composer.
+// package (landed via luthersystems/reliable#1041), which normalises legacy
+// shapes to the prefixed vocabulary before handing them to composer.
 //
 // See luthersystems/insideout-terraform-presets#76 for the phased removal
 // plan.
