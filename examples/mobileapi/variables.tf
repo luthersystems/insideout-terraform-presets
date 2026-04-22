@@ -81,7 +81,7 @@ variable "project" {
 }
 
 variable "region" {
-  description = "AWS region"
+  description = "GCP region"
   type        = string
-  default     = "us-west-2"
+  default     = "us-west1"
 }
