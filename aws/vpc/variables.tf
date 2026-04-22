@@ -33,7 +33,7 @@ variable "vpc_cidr" {
 }
 
 variable "az_count" {
-  description = "Number of AZs to use for subnets"
+  description = "Number of AZs to span with public+private subnets. Also bounds the number of NAT gateways when single_nat_gateway=false. 2 is recommended for HA."
   type        = number
   default     = 2
 
@@ -45,13 +45,23 @@ variable "az_count" {
 }
 
 variable "enable_nat_gateway" {
-  description = "Enable NAT gateway for private subnets (set false for public-only VPCs)"
+  description = "Enable NAT gateways so private subnets can reach the public internet. Set false only for public-only VPCs (no private workloads). Topology (one vs one-per-AZ) is controlled by single_nat_gateway."
   type        = bool
   default     = true
 }
 
 variable "single_nat_gateway" {
-  description = "Use a single NAT gateway (cost saver) instead of one per AZ"
+  description = <<-EOT
+    Provision exactly one NAT gateway (in the first public subnet / first AZ) shared by all private subnets,
+    instead of one NAT gateway per AZ. Defaults to true for cost.
+
+    - true (default): cheapest, ~1/N the NAT cost, but (a) single point of failure if that AZ goes down
+      and (b) every stack in the account lands its NAT in the first AZ — accounts running multiple stacks
+      can exhaust the per-AZ NAT gateway quota (default 5) before running out of the VPC quota.
+    - false: one NAT gateway per AZ (as bounded by az_count). ~N× cost, no per-AZ SPOF, spreads NAT
+      quota usage across AZs. Recommended once an account runs more than a handful of concurrent VPCs
+      or whenever AZ-level availability is a requirement.
+  EOT
   type        = bool
   default     = true
 }

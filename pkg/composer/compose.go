@@ -3,12 +3,19 @@ package composer
 import (
 	"fmt"
 	"io/fs"
+	"maps"
 	"path"
 	"sort"
 	"strings"
 
 	terraformpresets "github.com/luthersystems/insideout-terraform-presets"
 )
+
+// insideoutManagedByValue is the value stamped into the `managed-by` tag on
+// every AWS resource rendered by the composer. Hoisted to a package-level
+// constant so the default_tags emission and any other call sites that care
+// about org identity share a single source of truth.
+const insideoutManagedByValue = "insideout"
 
 // Option configures a Client.
 type Option func(*Client)
@@ -121,9 +128,7 @@ func (c *Client) ComposeSingle(opts ComposeSingleOpts) (Files, error) {
 	wired := DefaultWiring(selected, opts.Key, opts.Comps)
 
 	files := Files{}
-	for p, b := range rebasePresetFiles(leaf, moduleDir) {
-		files[p] = b
-	}
+	maps.Copy(files, rebasePresetFiles(leaf, moduleDir))
 
 	inputs := map[string]any{}
 	rootVars := map[string]any{
@@ -199,10 +204,13 @@ func (c *Client) ComposeSingle(opts ComposeSingleOpts) (Files, error) {
 /* ---------- Stack ---------- */
 
 type ComposeStackOpts struct {
-	Cloud                   string // "aws" or "gcp" (defaults to "aws" if empty)
-	SelectedKeys            []ComponentKey
-	Comps                   *Components
-	Cfg                     *Config
+	Cloud        string // "aws" or "gcp" (defaults to "aws" if empty)
+	SelectedKeys []ComponentKey
+	Comps        *Components
+	Cfg          *Config
+	// Deprecated: legacy compute-exclusivity escape hatch tracked by issue #76.
+	// Historical sessions that mixed standalone EC2 with Lambda relied on this;
+	// new callers should not set it.
 	AllowLegacyMixedCompute bool
 	Project, Region         string
 }
@@ -290,9 +298,7 @@ func (c *Client) ComposeStack(opts ComposeStackOpts) (Files, error) {
 			return nil, fmt.Errorf("preset for %s (path %q) returned no files", k, presetPath)
 		}
 
-		for p, b := range rebasePresetFiles(preset, dir) {
-			files[p] = b
-		}
+		maps.Copy(files, rebasePresetFiles(preset, dir))
 
 		vars, err := DiscoverModuleVars(preset)
 		if err != nil {
@@ -306,9 +312,7 @@ func (c *Client) ComposeStack(opts ComposeStackOpts) (Files, error) {
 		if err != nil {
 			return nil, err
 		}
-		for name, rp := range provs {
-			discoveredProviders[name] = rp
-		}
+		maps.Copy(discoveredProviders, provs)
 		if len(outputs) > 0 {
 			moduleOutputs = append(moduleOutputs, ModuleOutputs{
 				Module:  string(k),
@@ -420,9 +424,7 @@ func generateProvidersTF(cloud, region string, selected map[ComponentKey]bool, d
 			region = "us-central1"
 		}
 		required["google"] = RequiredProvider{Source: "hashicorp/google", Version: ">= 5.0"}
-		for name, rp := range discovered {
-			required[name] = rp
-		}
+		maps.Copy(required, discovered)
 		var b strings.Builder
 		b.WriteString("terraform {\n  required_providers {\n")
 		b.WriteString(renderRequiredProviders(required))
@@ -464,18 +466,16 @@ variable "external_id" {
 		// the `tags = merge(module.name.tags, ...)` convention. The reliable
 		// MCP inspector filters resources by Project to prevent cross-session
 		// data leaks.
-		const awsDefaultTags = `
+		awsDefaultTags := fmt.Sprintf(`
   default_tags {
     tags = {
       Project    = var.project
-      managed-by = "insideout"
+      managed-by = %q
     }
-  }`
+  }`, insideoutManagedByValue)
 
 		required["aws"] = RequiredProvider{Source: "hashicorp/aws", Version: ">= 6.0"}
-		for name, rp := range discovered {
-			required[name] = rp
-		}
+		maps.Copy(required, discovered)
 
 		var b strings.Builder
 		b.WriteString(awsVarDecls)
