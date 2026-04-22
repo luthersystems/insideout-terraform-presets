@@ -192,6 +192,18 @@ type Config struct {
 		EnableServiceConnect    *bool    `json:"enableServiceConnect,omitempty"`
 	} `json:"aws_ecs,omitempty"`
 
+	// AWSVPC surfaces the preset's VPC topology knobs. All fields are pointers
+	// so the zero value means "defer to the module's HCL default" rather than
+	// "force to zero". SingleNATGateway=false spreads NAT gateways across AZs
+	// (one per AZ, bounded by AZCount) — trade higher cost for AZ-level HA and
+	// to avoid exhausting the per-AZ NAT gateway quota when many stacks share
+	// an account.
+	AWSVPC *struct {
+		SingleNATGateway *bool `json:"singleNatGateway,omitempty"`
+		EnableNATGateway *bool `json:"enableNatGateway,omitempty"`
+		AZCount          *int  `json:"azCount,omitempty"`
+	} `json:"aws_vpc,omitempty"`
+
 	AWSCloudfront *struct {
 		DefaultTtl *string `json:"defaultTtl,omitempty"`
 		OriginPath *string `json:"originPath,omitempty"`

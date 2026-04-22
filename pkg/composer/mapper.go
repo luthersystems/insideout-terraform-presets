@@ -161,6 +161,40 @@ func (m DefaultMapper) BuildModuleValues(
 			}
 		}
 
+		// Topology knobs from Config.AWSVPC override Public-VPC-derived defaults.
+		// Unset pointer fields defer to the HCL default.
+		if cfg != nil && cfg.AWSVPC != nil {
+			// Reject EnableNATGateway=false when the stack has components that
+			// require private subnets with egress (EKS/ECS/RDS/ElastiCache/
+			// OpenSearch/EC2 node groups). Private subnets without NAT can't
+			// pull container images or run package installs, so the apply
+			// would break much later than it needs to. Fail fast here.
+			if cfg.AWSVPC.EnableNATGateway != nil && !*cfg.AWSVPC.EnableNATGateway && stackNeedsPrivateSubnets(comps) {
+				return nil, NewValidationError(
+					"AWSVPC.EnableNATGateway=false is incompatible with components that require private subnets " +
+						"(EKS/ECS/RDS/ElastiCache/OpenSearch/EC2 node groups): private subnets without NAT cannot reach " +
+						"the public internet, breaking image pulls and package installs. Either re-enable NAT or drop " +
+						"the downstream components",
+				)
+			}
+			// AZCount bounds — HCL validation says >= 1; enforce the same at
+			// the mapper so users see a Go-level error before `terraform plan`.
+			if cfg.AWSVPC.AZCount != nil && *cfg.AWSVPC.AZCount < 1 {
+				return nil, NewValidationError(fmt.Sprintf(
+					"AWSVPC.AZCount must be >= 1, got %d", *cfg.AWSVPC.AZCount,
+				))
+			}
+			if cfg.AWSVPC.SingleNATGateway != nil {
+				vals["single_nat_gateway"] = *cfg.AWSVPC.SingleNATGateway
+			}
+			if cfg.AWSVPC.EnableNATGateway != nil {
+				vals["enable_nat_gateway"] = *cfg.AWSVPC.EnableNATGateway
+			}
+			if cfg.AWSVPC.AZCount != nil {
+				vals["az_count"] = *cfg.AWSVPC.AZCount
+			}
+		}
+
 	case KeyCloud:
 		// Example: cloud/provider selection
 		if comps != nil && comps.Cloud != "" {
