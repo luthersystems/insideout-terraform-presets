@@ -10,6 +10,12 @@ import (
 	terraformpresets "github.com/luthersystems/insideout-terraform-presets"
 )
 
+// insideoutManagedByValue is the value stamped into the `managed-by` tag on
+// every AWS resource rendered by the composer. Hoisted to a package-level
+// constant so the default_tags emission and any other call sites that care
+// about org identity share a single source of truth.
+const insideoutManagedByValue = "insideout"
+
 // Option configures a Client.
 type Option func(*Client)
 
@@ -464,13 +470,13 @@ variable "external_id" {
 		// the `tags = merge(module.name.tags, ...)` convention. The reliable
 		// MCP inspector filters resources by Project to prevent cross-session
 		// data leaks.
-		const awsDefaultTags = `
+		awsDefaultTags := fmt.Sprintf(`
   default_tags {
     tags = {
       Project    = var.project
-      managed-by = "insideout"
+      managed-by = %q
     }
-  }`
+  }`, insideoutManagedByValue)
 
 		required["aws"] = RequiredProvider{Source: "hashicorp/aws", Version: ">= 6.0"}
 		for name, rp := range discovered {
