@@ -740,15 +740,19 @@ func TestDefaultWiring_LambdaPublicVPC(t *testing.T) {
 		require.False(t, hasSubnetIDs, "Public VPC: Lambda should not have subnet_ids")
 	})
 
-	t.Run("Lambda skips VPC wiring with legacy Public VPC field", func(t *testing.T) {
+	t.Run("Lambda skips VPC wiring for a legacy session that's been Normalized", func(t *testing.T) {
+		// Phase 3b dropped the legacy VPC-string fallback in isPublicVPC.
+		// Legacy sessions must Normalize() before reaching the composer;
+		// reliable's composeradapter does this for us in production.
 		selected := map[ComponentKey]bool{
 			KeyVPC:    true,
 			KeyLambda: true,
 		}
-		comps := &Components{VPC: "Public VPC", Lambda: ptrBool(true)}
+		comps := &Components{Cloud: "AWS", VPC: "Public VPC", Lambda: ptrBool(true)}
+		comps.Normalize()
 		wi := DefaultWiring(selected, KeyLambda, comps)
 		_, hasEnableVPC := wi.RawHCL["enable_vpc"]
-		require.False(t, hasEnableVPC, "Legacy Public VPC: Lambda should not have enable_vpc")
+		require.False(t, hasEnableVPC, "Legacy Public VPC (after Normalize): Lambda should not have enable_vpc")
 	})
 
 	t.Run("Lambda wires VPC when VPC is Private", func(t *testing.T) {

@@ -1025,19 +1025,14 @@ func (c *Components) Normalize() {
 	c.Backups = nil
 }
 
-// IsLambdaArchitecture returns true if the resource type indicates Lambda/serverless.
+// IsLambdaArchitecture returns true if the stack uses Lambda as its compute layer.
+// Callers with legacy session JSON (where the architecture was encoded as the
+// Resource string "Lambda" / "Serverless") must normalise first via
+// Components.Normalize; see #76 for the reliable-legacy migration plan.
 func (c *Components) IsLambdaArchitecture() bool {
 	if c == nil {
 		return false
 	}
-	// Check legacy Resource field for backward compatibility
-	if c.Resource != "" {
-		r := c.Resource
-		if containsIgnoreCase(r, "lambda") || containsIgnoreCase(r, "serverless") {
-			return true
-		}
-	}
-	// Check new AWS Lambda field
 	return boolVal(c.AWSLambda)
 }
 
@@ -1698,31 +1693,4 @@ func (c *Config) Normalize() {
 	c.OpenSearch = nil
 	c.Bedrock = nil
 	c.Backups = nil
-}
-
-func containsIgnoreCase(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr ||
-		len(s) > len(substr) && (containsLower(s, substr)))
-}
-
-func containsLower(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if toLower(s[i:i+len(substr)]) == toLower(substr) {
-			return true
-		}
-	}
-	return false
-}
-
-func toLower(s string) string {
-	b := make([]byte, len(s))
-	for i := range s {
-		c := s[i]
-		if c >= 'A' && c <= 'Z' {
-			b[i] = c + 32
-		} else {
-			b[i] = c
-		}
-	}
-	return string(b)
 }

@@ -115,15 +115,12 @@ func TestBuildModuleValues_VPC_PublicPrivateMode(t *testing.T) {
 		name  string
 		comps *Components
 	}{
-		{"EKS (V2 field)", &Components{AWSVPC: "Public VPC", AWSEKS: boolPtr(true)}},
-		{"RDS (V2 field)", &Components{AWSVPC: "Public VPC", AWSRDS: boolPtr(true)}},
-		{"ElastiCache (V2 field)", &Components{AWSVPC: "Public VPC", AWSElastiCache: boolPtr(true)}},
-		{"OpenSearch (V2 field)", &Components{AWSVPC: "Public VPC", AWSOpenSearch: boolPtr(true)}},
+		{"EKS", &Components{AWSVPC: "Public VPC", AWSEKS: boolPtr(true)}},
+		{"RDS", &Components{AWSVPC: "Public VPC", AWSRDS: boolPtr(true)}},
+		{"ElastiCache", &Components{AWSVPC: "Public VPC", AWSElastiCache: boolPtr(true)}},
+		{"OpenSearch", &Components{AWSVPC: "Public VPC", AWSOpenSearch: boolPtr(true)}},
 		{"EC2 node group", &Components{AWSVPC: "Public VPC", AWSEC2: "Intel"}},
-		{"legacy Postgres field", &Components{AWSVPC: "Public VPC", Postgres: boolPtr(true)}},
-		{"legacy ElastiCache field", &Components{AWSVPC: "Public VPC", ElastiCache: boolPtr(true)}},
-		{"legacy OpenSearch field", &Components{AWSVPC: "Public VPC", OpenSearch: boolPtr(true)}},
-		{"ECS (V2 field)", &Components{AWSVPC: "Public VPC", AWSECS: boolPtr(true)}},
+		{"ECS", &Components{AWSVPC: "Public VPC", AWSECS: boolPtr(true)}},
 		{"EKS + RDS composite stack", &Components{AWSVPC: "Public VPC", AWSEKS: boolPtr(true), AWSRDS: boolPtr(true)}},
 	}
 	for _, tc := range keepsCases {
@@ -180,13 +177,20 @@ func TestStackNeedsPrivateSubnets(t *testing.T) {
 	assert.True(t, stackNeedsPrivateSubnets(&Components{AWSEKS: boolPtr(true)}), "AWSEKS")
 	assert.True(t, stackNeedsPrivateSubnets(&Components{AWSECS: boolPtr(true)}), "AWSECS")
 	assert.True(t, stackNeedsPrivateSubnets(&Components{AWSRDS: boolPtr(true)}), "AWSRDS")
-	assert.True(t, stackNeedsPrivateSubnets(&Components{Postgres: boolPtr(true)}), "legacy Postgres")
 	assert.True(t, stackNeedsPrivateSubnets(&Components{AWSElastiCache: boolPtr(true)}), "AWSElastiCache")
-	assert.True(t, stackNeedsPrivateSubnets(&Components{ElastiCache: boolPtr(true)}), "legacy ElastiCache")
 	assert.True(t, stackNeedsPrivateSubnets(&Components{AWSOpenSearch: boolPtr(true)}), "AWSOpenSearch")
-	assert.True(t, stackNeedsPrivateSubnets(&Components{OpenSearch: boolPtr(true)}), "legacy OpenSearch")
 	assert.True(t, stackNeedsPrivateSubnets(&Components{AWSEC2: "Intel"}), "AWSEC2 Intel")
 	assert.True(t, stackNeedsPrivateSubnets(&Components{AWSEC2: "ARM"}), "AWSEC2 ARM")
+
+	// Legacy-field reads (c.Postgres / c.ElastiCache / c.OpenSearch) were
+	// dropped from stackNeedsPrivateSubnets in Phase 3b. Callers with legacy-
+	// shaped Components must call Normalize() first; the promotion path is
+	// covered by TestComponents_Normalize_SyncsLegacyFieldsForAWS in
+	// types_test.go. Here we just lock the end-to-end round-trip.
+	legacy := &Components{Cloud: "AWS", Postgres: boolPtr(true)}
+	legacy.Normalize()
+	assert.True(t, stackNeedsPrivateSubnets(legacy),
+		"legacy Postgres must still gate private subnets after Normalize() promotes it to AWSRDS")
 }
 
 // cfgWithAWSVPC builds a Config with an AWSVPC sub-config populated from the
@@ -289,8 +293,10 @@ func TestBuildModuleValues_VPC_AWSVPCConfig_Validation(t *testing.T) {
 		require.Error(t, err)
 	})
 
-	t.Run("EnableNATGateway=false with legacy Postgres returns ValidationError", func(t *testing.T) {
-		comps := &Components{Postgres: boolPtr(true)}
+	t.Run("EnableNATGateway=false with legacy Postgres (post-Normalize) returns ValidationError", func(t *testing.T) {
+		// Legacy-field reads were dropped in Phase 3b; callers must Normalize first.
+		comps := &Components{Cloud: "AWS", Postgres: boolPtr(true)}
+		comps.Normalize()
 		cfg := cfgWithAWSVPC(nil, boolPtr(false), nil)
 		_, err := m.BuildModuleValues(KeyAWSVPC, comps, cfg, "test", "us-east-1")
 		require.Error(t, err)

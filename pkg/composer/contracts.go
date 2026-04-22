@@ -501,11 +501,13 @@ func isLambda(comps *Components) bool {
 }
 
 // isPublicVPC returns true if the VPC is configured as a Public VPC (no private subnets).
+// Callers with legacy session JSON must normalise first via Components.Normalize;
+// see #76 for the reliable-legacy migration plan.
 func isPublicVPC(comps *Components) bool {
 	if comps == nil {
 		return false
 	}
-	return comps.AWSVPC == "Public VPC" || comps.VPC == "Public VPC"
+	return comps.AWSVPC == "Public VPC"
 }
 
 type WiredInputs struct {
