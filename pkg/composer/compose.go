@@ -459,6 +459,19 @@ variable "external_id" {
     }
   }`
 
+		// default_tags is a safety net so every AWS resource in the rendered
+		// stack carries the session's Project tag, even if a preset forgets
+		// the `tags = merge(module.name.tags, ...)` convention. The reliable
+		// MCP inspector filters resources by Project to prevent cross-session
+		// data leaks.
+		const awsDefaultTags = `
+  default_tags {
+    tags = {
+      Project    = var.project
+      managed-by = "insideout"
+    }
+  }`
+
 		required["aws"] = RequiredProvider{Source: "hashicorp/aws", Version: ">= 6.0"}
 		for name, rp := range discovered {
 			required[name] = rp
@@ -469,14 +482,14 @@ variable "external_id" {
 		b.WriteString("terraform {\n  required_providers {\n")
 		b.WriteString(renderRequiredProviders(required))
 		b.WriteString("  }\n}\n\n")
-		fmt.Fprintf(&b, "provider \"aws\" {\n  region = %q%s\n}\n", region, awsDynamicAssumeRole)
+		fmt.Fprintf(&b, "provider \"aws\" {\n  region = %q%s%s\n}\n", region, awsDefaultTags, awsDynamicAssumeRole)
 
 		// WAF requires an additional us_east_1 provider alias for CloudFront
 		// certificate validation. This is a root-configuration concern, not a
 		// child-module concern, so it stays cloud-aware here.
 		if selected[KeyWAF] || selected[KeyAWSWAF] {
 			b.WriteString("\n")
-			fmt.Fprintf(&b, "provider \"aws\" {\n  alias  = \"us_east_1\"\n  region = \"us-east-1\"%s\n}\n", awsDynamicAssumeRole)
+			fmt.Fprintf(&b, "provider \"aws\" {\n  alias  = \"us_east_1\"\n  region = \"us-east-1\"%s%s\n}\n", awsDefaultTags, awsDynamicAssumeRole)
 		}
 
 		return []byte(b.String())
