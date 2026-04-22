@@ -27,6 +27,12 @@ func RootVarSchema() map[string]VarSpec {
 		// project. No module currently reads it; declaring it here silences
 		// the "Value for undeclared variable" warning on every Oracle deploy.
 		"template_ref": {Type: "string", Doc: "Git ref of the sandbox-infrastructure-template used to provision this project. Written by ui-core via common.auto.tfvars.json so template shell scripts can log it via getTfVar."},
+		// presets_ref is the self-reported version of this module
+		// (insideout-terraform-presets) at compose time — see PresetsVersion().
+		// Unlike template_ref (written by ui-core), the default is the actual
+		// version string so the deployed archive carries its own provenance
+		// without requiring an external writer.
+		"presets_ref": {Type: "string", Doc: "Module version of insideout-terraform-presets that composed this Terraform archive. Defaults to the version recorded in the consuming binary's Go build info at compose time. Empty when the composer runs in dev/in-tree mode."},
 	}
 }
 

@@ -130,6 +130,7 @@ func (c *Client) ComposeSingle(opts ComposeSingleOpts) (Files, error) {
 		"project":      opts.Project,
 		"region":       opts.Region,
 		"template_ref": "",
+		"presets_ref":  PresetsVersion(),
 	}
 	typeHints := map[string]any{
 		"project": opts.Project,
@@ -266,6 +267,7 @@ func (c *Client) ComposeStack(opts ComposeStackOpts) (Files, error) {
 		"project":      opts.Project,
 		"region":       opts.Region,
 		"template_ref": "",
+		"presets_ref":  PresetsVersion(),
 	}
 	typeHints := map[string]any{
 		"project": opts.Project,
