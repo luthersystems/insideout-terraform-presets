@@ -28,6 +28,28 @@ resource "aws_s3_bucket" "origin" {
   count  = var.origin_type == "s3" && var.create_bucket ? 1 : 0
   bucket = var.s3_bucket_name != null ? var.s3_bucket_name : "${var.project}-cdn-origin"
   tags   = merge(module.name.tags, { Name = "${module.name.prefix}-origin" }, var.tags)
+
+  # Bucket configuration is split across sibling resources
+  # (aws_s3_bucket_policy, _public_access_block). The legacy inline attributes
+  # remain Computed and are repopulated by refresh from API state, causing
+  # drift-check noise.
+  lifecycle {
+    ignore_changes = [
+      acceleration_status,
+      acl,
+      cors_rule,
+      grant,
+      lifecycle_rule,
+      logging,
+      object_lock_configuration,
+      policy,
+      replication_configuration,
+      request_payer,
+      server_side_encryption_configuration,
+      versioning,
+      website,
+    ]
+  }
 }
 
 resource "aws_s3_bucket_public_access_block" "origin" {

@@ -60,6 +60,9 @@ resource "aws_cognito_user_pool" "this" {
   }
 
   tags = merge(module.name.tags, var.tags)
+  # NOTE: domain drifts on refresh but is Computed-only, so
+  # lifecycle.ignore_changes has no effect. Suppression must happen at the
+  # drift-check level — see sandbox-infrastructure-template#93.
 }
 
 # -----------------------------------------------------------------------------

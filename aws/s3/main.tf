@@ -37,6 +37,28 @@ resource "aws_s3_bucket" "this" {
   force_destroy = var.force_destroy
 
   tags = merge(module.name.tags, var.tags)
+
+  # AWS provider 4.x+ split bucket configuration into sibling resources
+  # (aws_s3_bucket_versioning, _lifecycle_configuration, _policy, etc.).
+  # The legacy inline attributes remain Computed and are repopulated by
+  # refresh from API state, causing drift-check noise.
+  lifecycle {
+    ignore_changes = [
+      acceleration_status,
+      acl,
+      cors_rule,
+      grant,
+      lifecycle_rule,
+      logging,
+      object_lock_configuration,
+      policy,
+      replication_configuration,
+      request_payer,
+      server_side_encryption_configuration,
+      versioning,
+      website,
+    ]
+  }
 }
 
 # Bucket ownership/ACL model (recommended)

@@ -49,6 +49,12 @@ resource "aws_iam_role" "lambda_exec" {
   })
 
   tags = merge(module.name.tags, var.tags)
+
+  # Managed policies are attached via aws_iam_role_policy_attachment siblings
+  # below; the provider re-reads them onto the role on refresh.
+  lifecycle {
+    ignore_changes = [managed_policy_arns]
+  }
 }
 
 resource "aws_iam_role_policy_attachment" "lambda_basic" {
