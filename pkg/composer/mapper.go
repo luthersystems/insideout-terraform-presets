@@ -532,12 +532,12 @@ func (m DefaultMapper) BuildModuleValues(
 			if cfg.Lambda.Timeout != "" {
 				// Convert "3s", "30s", "15m" to seconds
 				t := cfg.Lambda.Timeout
-				if strings.HasSuffix(t, "s") {
-					if n, err := strconv.Atoi(strings.TrimSuffix(t, "s")); err == nil {
+				if trimmed, ok := strings.CutSuffix(t, "s"); ok {
+					if n, err := strconv.Atoi(trimmed); err == nil {
 						vals["timeout"] = n
 					}
-				} else if strings.HasSuffix(t, "m") {
-					if n, err := strconv.Atoi(strings.TrimSuffix(t, "m")); err == nil {
+				} else if trimmed, ok := strings.CutSuffix(t, "m"); ok {
+					if n, err := strconv.Atoi(trimmed); err == nil {
 						vals["timeout"] = n * 60
 					}
 				}
