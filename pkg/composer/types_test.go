@@ -3,6 +3,9 @@ package composer
 import (
 	"encoding/json"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // TestComponents_Normalize_EmptyIsNoOp locks in the invariant that an
@@ -133,6 +136,68 @@ func TestComponents_Normalize_SyncsLegacyFieldsForAWS(t *testing.T) {
 	}
 	if c.AWSEC2 != "Intel" {
 		t.Errorf("AWSEC2 should be 'Intel', got %q", c.AWSEC2)
+	}
+}
+
+// TestComponents_Normalize_SyncsLegacyBoolFieldsForAWS pins the AWS-branch
+// promotion of every legacy *bool field composer helpers now rely on. If a
+// future refactor drops one of these ↔ syncs, the corresponding composer
+// helper (stackNeedsPrivateSubnets, IsLambdaArchitecture, ...) silently
+// misreports — this test catches that at the Normalize layer.
+func TestComponents_Normalize_SyncsLegacyBoolFieldsForAWS(t *testing.T) {
+	t.Parallel()
+	boolPtr := func(v bool) *bool { return &v }
+
+	cases := []struct {
+		name     string
+		setup    func(*Components)
+		assertOn func(t *testing.T, c *Components)
+	}{
+		{"Postgres → AWSRDS", func(c *Components) { c.Postgres = boolPtr(true) },
+			func(t *testing.T, c *Components) {
+				require.NotNil(t, c.AWSRDS, "AWSRDS should be non-nil after Normalize")
+				assert.True(t, *c.AWSRDS)
+			}},
+		{"ElastiCache → AWSElastiCache", func(c *Components) { c.ElastiCache = boolPtr(true) },
+			func(t *testing.T, c *Components) {
+				require.NotNil(t, c.AWSElastiCache)
+				assert.True(t, *c.AWSElastiCache)
+			}},
+		{"OpenSearch → AWSOpenSearch", func(c *Components) { c.OpenSearch = boolPtr(true) },
+			func(t *testing.T, c *Components) {
+				require.NotNil(t, c.AWSOpenSearch)
+				assert.True(t, *c.AWSOpenSearch)
+			}},
+		{"Lambda (*bool) → AWSLambda", func(c *Components) { c.Lambda = boolPtr(true) },
+			func(t *testing.T, c *Components) {
+				require.NotNil(t, c.AWSLambda)
+				assert.True(t, *c.AWSLambda)
+			}},
+		{"Resource \"Lambda\" → AWSLambda", func(c *Components) { c.Resource = "Lambda" },
+			func(t *testing.T, c *Components) {
+				require.NotNil(t, c.AWSLambda, "Normalize must promote legacy Resource=\"Lambda\" to AWSLambda")
+				assert.True(t, *c.AWSLambda)
+			}},
+		{"Resource \"Serverless\" → AWSLambda", func(c *Components) { c.Resource = "Serverless" },
+			func(t *testing.T, c *Components) {
+				require.NotNil(t, c.AWSLambda)
+				assert.True(t, *c.AWSLambda)
+			}},
+		{"Resource \"Kubernetes\" leaves AWSLambda unset", func(c *Components) { c.Resource = "Kubernetes" },
+			func(t *testing.T, c *Components) {
+				assert.Nil(t, c.AWSLambda,
+					"Resource=\"Kubernetes\" must NOT promote to AWSLambda (EKS ≠ Lambda)")
+			}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			c := &Components{Cloud: "AWS"}
+			tc.setup(c)
+			c.Normalize()
+			tc.assertOn(t, c)
+		})
 	}
 }
 

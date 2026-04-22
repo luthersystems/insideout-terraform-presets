@@ -81,6 +81,17 @@ func (c *Client) ComposeSingle(opts ComposeSingleOpts) (Files, error) {
 		cloud = "aws" // Default to AWS for backward compatibility
 	}
 
+	// Normalize legacy-key shapes to AWS-prefixed before any helper consumes
+	// Comps/Cfg. Idempotent for already-normalized input (the composeradapter
+	// path) and required for direct Go callers that construct Components from
+	// legacy JSON. See #76.
+	if opts.Comps != nil {
+		opts.Comps.Normalize()
+	}
+	if opts.Cfg != nil {
+		opts.Cfg.Normalize()
+	}
+
 	// 1. Resolve module directory (e.g. resource -> modules/lambda if Lambda)
 	moduleDir := GetModuleDir(opts.Key, opts.Comps)
 	if moduleDir == "" {
@@ -219,6 +230,17 @@ func (c *Client) ComposeStack(opts ComposeStackOpts) (Files, error) {
 	cloud := opts.Cloud
 	if cloud == "" {
 		cloud = "aws" // Default to AWS for backward compatibility
+	}
+
+	// Normalize legacy-key shapes to AWS-prefixed before any helper consumes
+	// Comps/Cfg. Idempotent for already-normalized input (the composeradapter
+	// path) and required for direct Go callers that construct Components from
+	// legacy JSON. See #76.
+	if opts.Comps != nil {
+		opts.Comps.Normalize()
+	}
+	if opts.Cfg != nil {
+		opts.Cfg.Normalize()
 	}
 
 	// 0. Validate compute exclusivity before expanding dependencies.

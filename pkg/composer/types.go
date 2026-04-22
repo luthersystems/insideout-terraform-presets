@@ -1,6 +1,9 @@
 package composer
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // Components mirrors the TypeScript ZComponentsIR schema with cloud-specific field names.
 // Use aws_* fields for AWS cloud, gcp_* fields for GCP cloud.
@@ -731,11 +734,28 @@ func (c *Components) Normalize() {
 			c.Bedrock = c.AWSBedrock
 		}
 
-		// Sync Lambda
+		// Sync Lambda. Legacy sessions encoded Lambda/serverless in THREE
+		// different shapes:
+		//   1. c.Lambda *bool      — earliest form, used in reliable sessions
+		//   2. c.AWSLambda *bool   — v2 form
+		//   3. c.Resource string   — earliest form, the architecture enum
+		//                            ("Lambda" / "Serverless" / "Kubernetes")
+		// Promote all three to c.AWSLambda so downstream composer reads a
+		// single source of truth. Resource stays untouched for its GCP role
+		// (GKE / CloudRun detection) and the final legacy-clearing block at
+		// the end of Normalize clears it.
 		if c.Lambda != nil && c.AWSLambda == nil {
 			c.AWSLambda = c.Lambda
 		} else if c.AWSLambda != nil {
 			c.Lambda = c.AWSLambda
+		}
+		if c.AWSLambda == nil && c.Resource != "" {
+			lower := strings.ToLower(c.Resource)
+			if strings.Contains(lower, "lambda") || strings.Contains(lower, "serverless") {
+				t := true
+				c.AWSLambda = &t
+				c.Lambda = &t // keep legacy mirror in sync
+			}
 		}
 
 		// Sync CodePipeline

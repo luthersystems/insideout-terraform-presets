@@ -157,7 +157,12 @@ func TestBuildModuleValues_VPC_PublicPrivateMode(t *testing.T) {
 		assert.False(t, hasNat)
 	})
 
-	t.Run("legacy KeyVPC with Public VPC also works", func(t *testing.T) {
+	t.Run("KeyVPC (legacy ComponentKey) routes through the same case arm", func(t *testing.T) {
+		// The KeyVPC ComponentKey constant is deprecated (tracked by #76) but
+		// still accepted by the mapper's normalisation switch. This test pins
+		// that accepting the legacy key alongside an AWSVPC string still takes
+		// the Public-VPC branch — regression guard for anyone tempted to drop
+		// legacy-key support before Phase 4.
 		comps := &Components{AWSVPC: "Public VPC"}
 		vals, err := m.BuildModuleValues(KeyVPC, comps, nil, "test", "us-east-1")
 		require.NoError(t, err)
@@ -184,13 +189,27 @@ func TestStackNeedsPrivateSubnets(t *testing.T) {
 
 	// Legacy-field reads (c.Postgres / c.ElastiCache / c.OpenSearch) were
 	// dropped from stackNeedsPrivateSubnets in Phase 3b. Callers with legacy-
-	// shaped Components must call Normalize() first; the promotion path is
-	// covered by TestComponents_Normalize_SyncsLegacyFieldsForAWS in
-	// types_test.go. Here we just lock the end-to-end round-trip.
-	legacy := &Components{Cloud: "AWS", Postgres: boolPtr(true)}
-	legacy.Normalize()
-	assert.True(t, stackNeedsPrivateSubnets(legacy),
-		"legacy Postgres must still gate private subnets after Normalize() promotes it to AWSRDS")
+	// shaped Components must Normalize() first; field-level promotion is
+	// covered by TestComponents_Normalize_SyncsLegacyBoolFieldsForAWS in
+	// types_test.go. Here we lock the end-to-end round-trip for each of the
+	// three legacy fields that previously had direct OR reads.
+	legacyRoundTrips := []struct {
+		name  string
+		setup func(*Components)
+	}{
+		{"Postgres → AWSRDS", func(c *Components) { c.Postgres = boolPtr(true) }},
+		{"ElastiCache → AWSElastiCache", func(c *Components) { c.ElastiCache = boolPtr(true) }},
+		{"OpenSearch → AWSOpenSearch", func(c *Components) { c.OpenSearch = boolPtr(true) }},
+	}
+	for _, tc := range legacyRoundTrips {
+		t.Run("Normalize round-trip: "+tc.name, func(t *testing.T) {
+			c := &Components{Cloud: "AWS"}
+			tc.setup(c)
+			c.Normalize()
+			assert.True(t, stackNeedsPrivateSubnets(c),
+				"legacy %s must still gate private subnets after Normalize()", tc.name)
+		})
+	}
 }
 
 // cfgWithAWSVPC builds a Config with an AWSVPC sub-config populated from the
