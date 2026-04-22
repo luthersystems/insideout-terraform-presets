@@ -189,80 +189,174 @@ func TestStackNeedsPrivateSubnets(t *testing.T) {
 	assert.True(t, stackNeedsPrivateSubnets(&Components{AWSEC2: "ARM"}), "AWSEC2 ARM")
 }
 
+// cfgWithAWSVPC builds a Config with an AWSVPC sub-config populated from the
+// provided pointer fields. Kills the anonymous-struct literal repetition that
+// would otherwise appear in every subtest below.
+func cfgWithAWSVPC(single, enable *bool, az *int) *Config {
+	c := &Config{}
+	c.AWSVPC = &struct {
+		SingleNATGateway *bool `json:"singleNatGateway,omitempty"`
+		EnableNATGateway *bool `json:"enableNatGateway,omitempty"`
+		AZCount          *int  `json:"azCount,omitempty"`
+	}{SingleNATGateway: single, EnableNATGateway: enable, AZCount: az}
+	return c
+}
+
 func TestBuildModuleValues_VPC_AWSVPCConfig(t *testing.T) {
 	m := DefaultMapper{}
 	boolPtr := func(v bool) *bool { return &v }
 	intPtr := func(v int) *int { return &v }
 
 	t.Run("SingleNATGateway=false writes single_nat_gateway=false", func(t *testing.T) {
-		cfg := &Config{AWSVPC: &struct {
-			SingleNATGateway *bool `json:"singleNatGateway,omitempty"`
-			EnableNATGateway *bool `json:"enableNatGateway,omitempty"`
-			AZCount          *int  `json:"azCount,omitempty"`
-		}{SingleNATGateway: boolPtr(false)}}
+		cfg := cfgWithAWSVPC(boolPtr(false), nil, nil)
 		vals, err := m.BuildModuleValues(KeyAWSVPC, &Components{}, cfg, "test", "us-east-1")
 		require.NoError(t, err)
-		assert.Equal(t, false, vals["single_nat_gateway"])
+		// Type-guard the cast so a future mutation writing a stringified bool
+		// would fail the type assertion rather than pass assert.Equal.
+		assert.False(t, vals["single_nat_gateway"].(bool))
 	})
 
-	t.Run("AZCount=3 writes az_count=3", func(t *testing.T) {
-		cfg := &Config{AWSVPC: &struct {
-			SingleNATGateway *bool `json:"singleNatGateway,omitempty"`
-			EnableNATGateway *bool `json:"enableNatGateway,omitempty"`
-			AZCount          *int  `json:"azCount,omitempty"`
-		}{AZCount: intPtr(3)}}
+	t.Run("AZCount=3 writes az_count=3 as int", func(t *testing.T) {
+		cfg := cfgWithAWSVPC(nil, nil, intPtr(3))
 		vals, err := m.BuildModuleValues(KeyAWSVPC, &Components{}, cfg, "test", "us-east-1")
 		require.NoError(t, err)
-		assert.Equal(t, 3, vals["az_count"])
+		assert.Equal(t, 3, vals["az_count"].(int))
 	})
 
 	t.Run("unset fields do not write to vals (defer to HCL default)", func(t *testing.T) {
-		cfg := &Config{AWSVPC: &struct {
-			SingleNATGateway *bool `json:"singleNatGateway,omitempty"`
-			EnableNATGateway *bool `json:"enableNatGateway,omitempty"`
-			AZCount          *int  `json:"azCount,omitempty"`
-		}{}}
+		cfg := cfgWithAWSVPC(nil, nil, nil)
 		vals, err := m.BuildModuleValues(KeyAWSVPC, &Components{}, cfg, "test", "us-east-1")
 		require.NoError(t, err)
-		_, hasSingle := vals["single_nat_gateway"]
-		_, hasEnable := vals["enable_nat_gateway"]
-		_, hasAZ := vals["az_count"]
-		assert.False(t, hasSingle, "SingleNATGateway unset should not write single_nat_gateway")
-		assert.False(t, hasEnable, "EnableNATGateway unset should not write enable_nat_gateway")
-		assert.False(t, hasAZ, "AZCount unset should not write az_count")
+		for _, k := range []string{"single_nat_gateway", "enable_nat_gateway", "az_count"} {
+			_, has := vals[k]
+			assert.False(t, has, "unset pointer should not write %q", k)
+		}
 	})
 
-	t.Run("nil cfg.AWSVPC is a no-op", func(t *testing.T) {
+	t.Run("nil cfg.AWSVPC is a no-op — no VPC-topology keys leak", func(t *testing.T) {
 		vals, err := m.BuildModuleValues(KeyAWSVPC, &Components{}, &Config{}, "test", "us-east-1")
 		require.NoError(t, err)
-		_, hasSingle := vals["single_nat_gateway"]
-		assert.False(t, hasSingle)
+		for _, k := range []string{"single_nat_gateway", "enable_nat_gateway", "az_count"} {
+			_, has := vals[k]
+			assert.False(t, has, "nil cfg.AWSVPC should not write %q", k)
+		}
 	})
 
-	t.Run("Public VPC with user SingleNATGateway=false: both apply (enable_nat_gateway=false from Public VPC, single_nat_gateway=false from user)", func(t *testing.T) {
+	t.Run("Public VPC with user SingleNATGateway=false: both apply", func(t *testing.T) {
+		// Public VPC forces enable_nat_gateway=false (no private subnets);
+		// user's SingleNATGateway=false still applies (vestigial but not wrong).
 		comps := &Components{AWSVPC: "Public VPC"}
-		cfg := &Config{AWSVPC: &struct {
-			SingleNATGateway *bool `json:"singleNatGateway,omitempty"`
-			EnableNATGateway *bool `json:"enableNatGateway,omitempty"`
-			AZCount          *int  `json:"azCount,omitempty"`
-		}{SingleNATGateway: boolPtr(false)}}
+		cfg := cfgWithAWSVPC(boolPtr(false), nil, nil)
 		vals, err := m.BuildModuleValues(KeyAWSVPC, comps, cfg, "test", "us-east-1")
 		require.NoError(t, err)
-		assert.Equal(t, false, vals["enable_nat_gateway"], "Public VPC still wins on enable_nat_gateway")
-		assert.Equal(t, false, vals["single_nat_gateway"], "user config still applies to single_nat_gateway")
+		assert.False(t, vals["enable_nat_gateway"].(bool), "Public VPC sets enable_nat_gateway=false")
+		assert.False(t, vals["single_nat_gateway"].(bool), "user config still applies")
 	})
 
 	t.Run("user EnableNATGateway=true overrides Public-VPC-derived false", func(t *testing.T) {
 		comps := &Components{AWSVPC: "Public VPC"}
-		cfg := &Config{AWSVPC: &struct {
-			SingleNATGateway *bool `json:"singleNatGateway,omitempty"`
-			EnableNATGateway *bool `json:"enableNatGateway,omitempty"`
-			AZCount          *int  `json:"azCount,omitempty"`
-		}{EnableNATGateway: boolPtr(true)}}
+		cfg := cfgWithAWSVPC(nil, boolPtr(true), nil)
 		vals, err := m.BuildModuleValues(KeyAWSVPC, comps, cfg, "test", "us-east-1")
 		require.NoError(t, err)
-		assert.Equal(t, true, vals["enable_nat_gateway"], "user override wins over Public VPC default")
+		assert.True(t, vals["enable_nat_gateway"].(bool), "user override wins over Public VPC default")
 	})
+}
+
+// TestBuildModuleValues_VPC_AWSVPCConfig_Validation pins the mapper-level
+// validation for invalid Config.AWSVPC combinations that would produce a
+// broken stack (private subnets without egress) or fail at `terraform validate`.
+// Catching these in Go fails fast and gives actionable errors.
+func TestBuildModuleValues_VPC_AWSVPCConfig_Validation(t *testing.T) {
+	m := DefaultMapper{}
+	boolPtr := func(v bool) *bool { return &v }
+	intPtr := func(v int) *int { return &v }
+
+	t.Run("EnableNATGateway=false with EKS returns ValidationError", func(t *testing.T) {
+		comps := &Components{AWSEKS: boolPtr(true)}
+		cfg := cfgWithAWSVPC(nil, boolPtr(false), nil)
+		_, err := m.BuildModuleValues(KeyAWSVPC, comps, cfg, "test", "us-east-1")
+		require.Error(t, err)
+		var verr *ValidationError
+		assert.ErrorAs(t, err, &verr, "should return ValidationError so API-layer can HTTP 400")
+		assert.Contains(t, err.Error(), "EnableNATGateway=false",
+			"error should name the offending knob")
+	})
+
+	t.Run("EnableNATGateway=false with RDS returns ValidationError", func(t *testing.T) {
+		comps := &Components{AWSRDS: boolPtr(true)}
+		cfg := cfgWithAWSVPC(nil, boolPtr(false), nil)
+		_, err := m.BuildModuleValues(KeyAWSVPC, comps, cfg, "test", "us-east-1")
+		require.Error(t, err)
+	})
+
+	t.Run("EnableNATGateway=false with legacy Postgres returns ValidationError", func(t *testing.T) {
+		comps := &Components{Postgres: boolPtr(true)}
+		cfg := cfgWithAWSVPC(nil, boolPtr(false), nil)
+		_, err := m.BuildModuleValues(KeyAWSVPC, comps, cfg, "test", "us-east-1")
+		require.Error(t, err)
+	})
+
+	t.Run("EnableNATGateway=false without downstream components is allowed", func(t *testing.T) {
+		comps := &Components{} // no private-subnet consumers
+		cfg := cfgWithAWSVPC(nil, boolPtr(false), nil)
+		vals, err := m.BuildModuleValues(KeyAWSVPC, comps, cfg, "test", "us-east-1")
+		require.NoError(t, err, "public-only VPC with NAT disabled is valid")
+		assert.False(t, vals["enable_nat_gateway"].(bool))
+	})
+
+	t.Run("AZCount=0 returns ValidationError", func(t *testing.T) {
+		cfg := cfgWithAWSVPC(nil, nil, intPtr(0))
+		_, err := m.BuildModuleValues(KeyAWSVPC, &Components{}, cfg, "test", "us-east-1")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "AZCount")
+	})
+
+	t.Run("AZCount=-1 returns ValidationError", func(t *testing.T) {
+		cfg := cfgWithAWSVPC(nil, nil, intPtr(-1))
+		_, err := m.BuildModuleValues(KeyAWSVPC, &Components{}, cfg, "test", "us-east-1")
+		require.Error(t, err)
+	})
+
+	t.Run("AZCount=1 is allowed (HCL default >= 1)", func(t *testing.T) {
+		cfg := cfgWithAWSVPC(nil, nil, intPtr(1))
+		vals, err := m.BuildModuleValues(KeyAWSVPC, &Components{}, cfg, "test", "us-east-1")
+		require.NoError(t, err)
+		assert.Equal(t, 1, vals["az_count"].(int))
+	})
+}
+
+// TestBuildModuleValues_VPC_MapperHCLContract protects against typos in the
+// mapper's output keys. A mutation renaming a vals[...] key in mapper.go to
+// something not declared in aws/vpc/variables.tf previously passed every unit
+// test (the composer's variable-discovery step silently drops unknown keys).
+// Reads the actual preset variables.tf via DiscoverModuleVars and asserts every
+// key the mapper writes for KeyAWSVPC with all AWSVPC knobs set is declared.
+func TestBuildModuleValues_VPC_MapperHCLContract(t *testing.T) {
+	boolPtr := func(v bool) *bool { return &v }
+	intPtr := func(v int) *int { return &v }
+
+	presets, err := newTestClient().GetPresetFiles("aws/vpc")
+	require.NoError(t, err)
+	declared, err := DiscoverModuleVars(presets)
+	require.NoError(t, err)
+	declaredSet := make(map[string]bool, len(declared))
+	for _, v := range declared {
+		declaredSet[v.Name] = true
+	}
+
+	// Exercise every AWSVPC knob so the full set of mapper-written keys is
+	// present in vals.
+	cfg := cfgWithAWSVPC(boolPtr(false), boolPtr(true), intPtr(3))
+	vals, err := DefaultMapper{}.BuildModuleValues(
+		KeyAWSVPC, &Components{AWSVPC: "Private VPC"}, cfg, "test", "us-east-1",
+	)
+	require.NoError(t, err)
+
+	for k := range vals {
+		assert.True(t, declaredSet[k],
+			"mapper wrote key %q but aws/vpc/variables.tf does not declare it; the composer would silently drop it",
+			k)
+	}
 }
 
 // TestBuildModuleValues_V2KeyNormalization verifies that calling BuildModuleValues
