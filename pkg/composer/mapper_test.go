@@ -189,6 +189,82 @@ func TestStackNeedsPrivateSubnets(t *testing.T) {
 	assert.True(t, stackNeedsPrivateSubnets(&Components{AWSEC2: "ARM"}), "AWSEC2 ARM")
 }
 
+func TestBuildModuleValues_VPC_AWSVPCConfig(t *testing.T) {
+	m := DefaultMapper{}
+	boolPtr := func(v bool) *bool { return &v }
+	intPtr := func(v int) *int { return &v }
+
+	t.Run("SingleNATGateway=false writes single_nat_gateway=false", func(t *testing.T) {
+		cfg := &Config{AWSVPC: &struct {
+			SingleNATGateway *bool `json:"singleNatGateway,omitempty"`
+			EnableNATGateway *bool `json:"enableNatGateway,omitempty"`
+			AZCount          *int  `json:"azCount,omitempty"`
+		}{SingleNATGateway: boolPtr(false)}}
+		vals, err := m.BuildModuleValues(KeyAWSVPC, &Components{}, cfg, "test", "us-east-1")
+		require.NoError(t, err)
+		assert.Equal(t, false, vals["single_nat_gateway"])
+	})
+
+	t.Run("AZCount=3 writes az_count=3", func(t *testing.T) {
+		cfg := &Config{AWSVPC: &struct {
+			SingleNATGateway *bool `json:"singleNatGateway,omitempty"`
+			EnableNATGateway *bool `json:"enableNatGateway,omitempty"`
+			AZCount          *int  `json:"azCount,omitempty"`
+		}{AZCount: intPtr(3)}}
+		vals, err := m.BuildModuleValues(KeyAWSVPC, &Components{}, cfg, "test", "us-east-1")
+		require.NoError(t, err)
+		assert.Equal(t, 3, vals["az_count"])
+	})
+
+	t.Run("unset fields do not write to vals (defer to HCL default)", func(t *testing.T) {
+		cfg := &Config{AWSVPC: &struct {
+			SingleNATGateway *bool `json:"singleNatGateway,omitempty"`
+			EnableNATGateway *bool `json:"enableNatGateway,omitempty"`
+			AZCount          *int  `json:"azCount,omitempty"`
+		}{}}
+		vals, err := m.BuildModuleValues(KeyAWSVPC, &Components{}, cfg, "test", "us-east-1")
+		require.NoError(t, err)
+		_, hasSingle := vals["single_nat_gateway"]
+		_, hasEnable := vals["enable_nat_gateway"]
+		_, hasAZ := vals["az_count"]
+		assert.False(t, hasSingle, "SingleNATGateway unset should not write single_nat_gateway")
+		assert.False(t, hasEnable, "EnableNATGateway unset should not write enable_nat_gateway")
+		assert.False(t, hasAZ, "AZCount unset should not write az_count")
+	})
+
+	t.Run("nil cfg.AWSVPC is a no-op", func(t *testing.T) {
+		vals, err := m.BuildModuleValues(KeyAWSVPC, &Components{}, &Config{}, "test", "us-east-1")
+		require.NoError(t, err)
+		_, hasSingle := vals["single_nat_gateway"]
+		assert.False(t, hasSingle)
+	})
+
+	t.Run("Public VPC with user SingleNATGateway=false: both apply (enable_nat_gateway=false from Public VPC, single_nat_gateway=false from user)", func(t *testing.T) {
+		comps := &Components{AWSVPC: "Public VPC"}
+		cfg := &Config{AWSVPC: &struct {
+			SingleNATGateway *bool `json:"singleNatGateway,omitempty"`
+			EnableNATGateway *bool `json:"enableNatGateway,omitempty"`
+			AZCount          *int  `json:"azCount,omitempty"`
+		}{SingleNATGateway: boolPtr(false)}}
+		vals, err := m.BuildModuleValues(KeyAWSVPC, comps, cfg, "test", "us-east-1")
+		require.NoError(t, err)
+		assert.Equal(t, false, vals["enable_nat_gateway"], "Public VPC still wins on enable_nat_gateway")
+		assert.Equal(t, false, vals["single_nat_gateway"], "user config still applies to single_nat_gateway")
+	})
+
+	t.Run("user EnableNATGateway=true overrides Public-VPC-derived false", func(t *testing.T) {
+		comps := &Components{AWSVPC: "Public VPC"}
+		cfg := &Config{AWSVPC: &struct {
+			SingleNATGateway *bool `json:"singleNatGateway,omitempty"`
+			EnableNATGateway *bool `json:"enableNatGateway,omitempty"`
+			AZCount          *int  `json:"azCount,omitempty"`
+		}{EnableNATGateway: boolPtr(true)}}
+		vals, err := m.BuildModuleValues(KeyAWSVPC, comps, cfg, "test", "us-east-1")
+		require.NoError(t, err)
+		assert.Equal(t, true, vals["enable_nat_gateway"], "user override wins over Public VPC default")
+	})
+}
+
 // TestBuildModuleValues_V2KeyNormalization verifies that calling BuildModuleValues
 // with a V2 key (e.g., KeyAWSWAF) produces the same output as calling with the
 // legacy key (e.g., KeyWAF). This catches missing case arms in the normalization switch.

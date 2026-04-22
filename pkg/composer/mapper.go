@@ -161,6 +161,20 @@ func (m DefaultMapper) BuildModuleValues(
 			}
 		}
 
+		// Topology knobs from Config.AWSVPC override Public-VPC-derived defaults.
+		// Unset pointer fields defer to the HCL default.
+		if cfg != nil && cfg.AWSVPC != nil {
+			if cfg.AWSVPC.SingleNATGateway != nil {
+				vals["single_nat_gateway"] = *cfg.AWSVPC.SingleNATGateway
+			}
+			if cfg.AWSVPC.EnableNATGateway != nil {
+				vals["enable_nat_gateway"] = *cfg.AWSVPC.EnableNATGateway
+			}
+			if cfg.AWSVPC.AZCount != nil {
+				vals["az_count"] = *cfg.AWSVPC.AZCount
+			}
+		}
+
 	case KeyCloud:
 		// Example: cloud/provider selection
 		if comps != nil && comps.Cloud != "" {
