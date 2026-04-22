@@ -51,6 +51,13 @@ resource "aws_iam_role" "bedrock_kb" {
   })
 
   tags = merge(module.name.tags, var.tags)
+
+  # Inline + managed policies are attached via aws_iam_role_policy /
+  # aws_iam_role_policy_attachment siblings. The provider re-reads them onto
+  # the role on refresh and drift-check flags them; ignore here.
+  lifecycle {
+    ignore_changes = [inline_policy, managed_policy_arns]
+  }
 }
 
 resource "aws_iam_role_policy" "bedrock_kb" {
@@ -196,6 +203,11 @@ resource "aws_iam_role" "invocation_logging" {
   })
 
   tags = merge(module.name.tags, var.tags)
+
+  # See bedrock_kb above.
+  lifecycle {
+    ignore_changes = [inline_policy, managed_policy_arns]
+  }
 }
 
 resource "aws_iam_role_policy" "invocation_logging" {

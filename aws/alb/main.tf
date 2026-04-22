@@ -77,6 +77,28 @@ resource "aws_s3_bucket" "alb_logs" {
   bucket        = "${var.project}-alb-logs-${random_id.alb_logs_suffix.hex}"
   force_destroy = true
   tags          = merge(module.name.tags, { Name = "${module.name.prefix}-alb-logs" }, var.tags)
+
+  # Bucket configuration is split across sibling resources
+  # (aws_s3_bucket_policy, _public_access_block, _lifecycle_configuration).
+  # The legacy inline attributes remain Computed and are repopulated by
+  # refresh from API state, causing drift-check noise.
+  lifecycle {
+    ignore_changes = [
+      acceleration_status,
+      acl,
+      cors_rule,
+      grant,
+      lifecycle_rule,
+      logging,
+      object_lock_configuration,
+      policy,
+      replication_configuration,
+      request_payer,
+      server_side_encryption_configuration,
+      versioning,
+      website,
+    ]
+  }
 }
 
 resource "aws_s3_bucket_public_access_block" "alb_logs" {

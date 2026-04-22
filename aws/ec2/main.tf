@@ -76,6 +76,13 @@ resource "aws_security_group" "this" {
   }
 
   tags = merge(module.name.tags, { Name = "${module.name.prefix}-sg" }, var.tags)
+
+  # ingress is managed entirely by aws_security_group_rule siblings below.
+  # Mixing inline egress + sibling ingress causes the provider to re-read both
+  # aggregates on refresh, which drift-check then flags.
+  lifecycle {
+    ignore_changes = [ingress, egress]
+  }
 }
 
 data "aws_ip_ranges" "ec2_instance_connect" {

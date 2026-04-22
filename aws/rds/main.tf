@@ -96,6 +96,12 @@ resource "aws_iam_role" "rds_monitoring" {
     }]
   })
   tags = merge(module.name.tags, var.tags)
+
+  # Managed policy is attached via aws_iam_role_policy_attachment.rds_monitoring;
+  # the provider re-reads it onto the role on refresh.
+  lifecycle {
+    ignore_changes = [managed_policy_arns]
+  }
 }
 
 resource "aws_iam_role_policy_attachment" "rds_monitoring" {
@@ -174,6 +180,9 @@ resource "aws_db_instance" "primary" {
   auto_minor_version_upgrade = true
 
   tags = merge(module.name.tags, var.tags)
+  # NOTE: latest_restorable_time and replicas drift on refresh but are
+  # Computed-only, so lifecycle.ignore_changes has no effect. Suppression
+  # must happen at the drift-check level — see sandbox-infrastructure-template#93.
 }
 
 # -----------------------------------------------------------------------------
