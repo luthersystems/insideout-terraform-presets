@@ -357,6 +357,16 @@ func TestValidateNoLegacyKeys(t *testing.T) {
 		require.NoError(t, ValidateNoLegacyKeys([]ComponentKey{KeySplunk, KeyDatadog}))
 	})
 
+	t.Run("GCP-only selection passes (validator is cloud-agnostic)", func(t *testing.T) {
+		// LegacyToV2Key only contains AWS pairs; GCP keys are prefixed from
+		// day one. A pure-GCP selection must not trip the validator. Pinning
+		// this as intentional — anyone adding GCP pairs to LegacyToV2Key
+		// should reason about the rejection semantics here.
+		require.NoError(t, ValidateNoLegacyKeys([]ComponentKey{
+			KeyGCPVPC, KeyGCPGKE, KeyGCPCloudSQL, KeyGCPGCS,
+		}))
+	})
+
 	t.Run("empty selection passes", func(t *testing.T) {
 		require.NoError(t, ValidateNoLegacyKeys(nil))
 		require.NoError(t, ValidateNoLegacyKeys([]ComponentKey{}))

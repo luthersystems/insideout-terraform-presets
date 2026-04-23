@@ -2045,6 +2045,31 @@ func TestComposeStack_RejectsLegacyKeys(t *testing.T) {
 	require.Error(t, err, "ComposeStack must reject purely-legacy SelectedKeys")
 	var ve *ValidationError
 	require.ErrorAs(t, err, &ve, "error must be a ValidationError (HTTP 400, not 500)")
-	require.Contains(t, err.Error(), "legacy ComponentKey",
+	msg := err.Error()
+	require.Contains(t, msg, "legacy ComponentKey",
 		"error must identify legacy-keys as the cause")
+	require.Contains(t, msg, "vpc → aws_vpc",
+		"error must carry the upgrade pair so callers can fix the selection")
+	require.Contains(t, msg, "composeradapter",
+		"error must point callers at reliable's upgrade path")
+}
+
+// TestComposeSingle_RejectsLegacyKey pins the same contract for the
+// single-module entry point: ComposeSingle validates its Key just like
+// ComposeStack validates its SelectedKeys.
+func TestComposeSingle_RejectsLegacyKey(t *testing.T) {
+	c := newTestClient()
+	_, err := c.ComposeSingle(ComposeSingleOpts{
+		Cloud:   "aws",
+		Key:     KeyVPC,
+		Comps:   &Components{},
+		Cfg:     &Config{},
+		Project: "test",
+		Region:  "us-east-1",
+	})
+	require.Error(t, err, "ComposeSingle must reject a legacy Key")
+	var ve *ValidationError
+	require.ErrorAs(t, err, &ve, "error must be a ValidationError")
+	require.Contains(t, err.Error(), "vpc → aws_vpc",
+		"error must carry the upgrade pair")
 }
