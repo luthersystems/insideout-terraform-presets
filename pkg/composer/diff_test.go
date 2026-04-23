@@ -580,6 +580,41 @@ func TestSummarizeChanges_UnsetRenderedForEmptyValues(t *testing.T) {
 	}
 }
 
+// TestDiffConfigs_NativeModifiedRendersUnsetForNilPointerField pins the
+// review-surfaced consequence that displayFieldValue routes ALL modified
+// diffs, not only demoted ones, through the "(unset)" rendering. Here
+// aws_eks stays non-nil on both sides (so the demotion path doesn't apply)
+// but a *bool field inside transitions nil → true — the pre-#126 summary
+// would read "haControlPlane:  → true" (stray blank); after #126 it must
+// read "haControlPlane: (unset) → true". A future refactor that limited
+// displayFieldValue to the demotion path would regress this rendering.
+func TestDiffConfigs_NativeModifiedRendersUnsetForNilPointerField(t *testing.T) {
+	t.Parallel()
+	oldCfg := cfgFromJSON(t, `{"aws_eks":{"desiredSize":"3"}}`)
+	newCfg := cfgFromJSON(t, `{"aws_eks":{"haControlPlane":true,"desiredSize":"3"}}`)
+
+	diffs := DiffConfigs(oldCfg, newCfg)
+	if len(diffs) != 1 || diffs[0].Component != "aws_eks" || diffs[0].Action != "modified" {
+		t.Fatalf("expected [{aws_eks, modified}], got %+v", diffs)
+	}
+	if len(diffs[0].Changes) != 1 {
+		t.Fatalf("expected 1 change, got %+v", diffs[0].Changes)
+	}
+	c := diffs[0].Changes[0]
+	if c.Field != "haControlPlane" || c.From != "" || c.To != "true" {
+		t.Errorf("got %+v, want {haControlPlane, \"\", true}", c)
+	}
+
+	// Summary renders the empty From as "(unset)" and routes the populated
+	// To through HumanizeFieldValue (which humanizes "true" to "Yes" for
+	// boolean-typed fields). Asserts both the (unset) contract and the
+	// HumanizeFieldValue pass-through for non-empty values.
+	summary := SummarizeChanges(diffs)
+	if !strings.Contains(summary, "haControlPlane: (unset) → Yes") {
+		t.Errorf("expected '(unset) → Yes' (HumanizeFieldValue humanizes bool), got %q", summary)
+	}
+}
+
 func TestSummarizeChanges_ModifiedNoChanges(t *testing.T) {
 	t.Parallel()
 	diffs := []ComponentDiff{
