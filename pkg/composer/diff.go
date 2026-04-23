@@ -410,6 +410,12 @@ func DiffMetadata(oldComp, newComp Components) []MetadataDiff {
 // this, two consecutive StackVersions that merely populate / clear a config
 // block would both summarize as "Added: <component>." or "Removed:
 // <component>." even though the toggle itself never changed (issue #123).
+//
+// External toggles (splunk / datadog / githubactions) live on Components but
+// never surface in Config, so they can never appear in configDiffs and the
+// demotion branch is a no-op for them by construction. componentEnabled
+// works for them uniformly; this is a latent capability worth preserving if
+// Config ever grows peer structs for those toggles.
 func MergeComponentDiffs(componentDiffs, configDiffs []ComponentDiff, oldComp, newComp Components) []ComponentDiff {
 	seen := make(map[string]bool, len(configDiffs))
 	merged := make([]ComponentDiff, 0, len(configDiffs)+len(componentDiffs))

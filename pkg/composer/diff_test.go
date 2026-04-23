@@ -997,6 +997,13 @@ func TestMergeComponentDiffs_DemotesAddedWhenComponentAlreadyActive(t *testing.T
 	if merged[0].Component != "aws_vpc" || merged[0].Action != "modified" {
 		t.Errorf("expected {aws_vpc, modified}, got %+v", merged[0])
 	}
+	// Pin current behaviour: DiffConfigs emits no Changes on nil→non-nil,
+	// so the demoted "modified" carries no per-field detail. Follow-up
+	// #126 proposes synthesising Changes here; when that lands this
+	// assertion must be updated deliberately.
+	if len(merged[0].Changes) != 0 {
+		t.Errorf("expected no Changes on demoted diff (DiffConfigs emits none on nil→non-nil), got %+v", merged[0].Changes)
+	}
 
 	summary := SummarizeChanges(merged)
 	if strings.HasPrefix(summary, "Added:") {
@@ -1030,6 +1037,11 @@ func TestMergeComponentDiffs_DemotesRemovedWhenComponentStillActive(t *testing.T
 	merged := MergeComponentDiffs(componentDiffs, configDiffs, oldComp, newComp)
 	if len(merged) != 1 || merged[0].Component != "aws_vpc" || merged[0].Action != "modified" {
 		t.Errorf("expected [{aws_vpc, modified}], got %+v", merged)
+	}
+	// Pin current behaviour (see sibling DemotesAdded test): DiffConfigs
+	// emits no Changes on non-nil→nil, so the demoted diff is field-less.
+	if len(merged[0].Changes) != 0 {
+		t.Errorf("expected no Changes on demoted diff (DiffConfigs emits none on non-nil→nil), got %+v", merged[0].Changes)
 	}
 
 	summary := SummarizeChanges(merged)
@@ -1119,5 +1131,11 @@ func TestMergeComponentDiffs_KeepsAddedWhenComponentInactiveOnBothSides(t *testi
 	merged := MergeComponentDiffs(componentDiffs, configDiffs, oldComp, newComp)
 	if len(merged) != 1 || merged[0].Component != "aws_vpc" || merged[0].Action != "added" {
 		t.Errorf("expected [{aws_vpc, added}] (no demotion, component inactive on both sides), got %+v", merged)
+	}
+	// Defend the user-visible label against future SummarizeChanges
+	// refactors that might accidentally lose the distinction between
+	// "component newly enabled" and "config populated while toggle off".
+	if got := SummarizeChanges(merged); !strings.HasPrefix(got, "Added:") {
+		t.Errorf("expected summary to start with 'Added:', got %q", got)
 	}
 }
