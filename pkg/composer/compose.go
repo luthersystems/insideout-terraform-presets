@@ -81,6 +81,12 @@ func (c *Client) ComposeSingle(opts ComposeSingleOpts) (Files, error) {
 		cloud = "aws" // Default to AWS for backward compatibility
 	}
 
+	// Reject legacy ComponentKeys as the compose Key. Phase 3b of #76 made
+	// the composer's selection vocabulary AWS-prefixed-only.
+	if err := ValidateNoLegacyKeys([]ComponentKey{opts.Key}); err != nil {
+		return nil, err
+	}
+
 	// Normalize legacy-key shapes to AWS-prefixed before any helper consumes
 	// Comps/Cfg. Idempotent for already-normalized input (the composeradapter
 	// path) and required for direct Go callers that construct Components from
@@ -243,7 +249,14 @@ func (c *Client) ComposeStack(opts ComposeStackOpts) (Files, error) {
 		opts.Cfg.Normalize()
 	}
 
-	// 0. Validate compute exclusivity before expanding dependencies.
+	// 0a. Reject legacy ComponentKeys in SelectedKeys. Phase 3b of #76 made
+	// the composer's selection vocabulary AWS-prefixed-only; reliable's
+	// composeradapter upgrades legacy session JSON before handing it off.
+	if err := ValidateNoLegacyKeys(opts.SelectedKeys); err != nil {
+		return nil, err
+	}
+
+	// 0b. Validate compute exclusivity before expanding dependencies.
 	if err := ValidateComputeExclusivityWithOpts(opts.SelectedKeys, ComputeExclusivityOpts{
 		AllowLegacyStandaloneEC2Lambda: opts.AllowLegacyMixedCompute,
 	}); err != nil {
@@ -261,13 +274,12 @@ func (c *Client) ComposeStack(opts ComposeStackOpts) (Files, error) {
 		case "gcp":
 			backupKey = KeyGCPBackups
 		default:
-			// For AWS and legacy, use KeyBackups which maps to modules/backups
-			backupKey = KeyBackups
+			backupKey = KeyAWSBackups
 		}
 
 		found := false
 		for _, k := range expanded {
-			if k == KeyBackups || k == KeyAWSBackups || k == KeyGCPBackups {
+			if k == KeyAWSBackups || k == KeyGCPBackups {
 				found = true
 				break
 			}

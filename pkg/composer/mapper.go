@@ -87,63 +87,9 @@ func (m DefaultMapper) BuildModuleValues(
 	// Environment tag used across all modules for resource tagging.
 	vals["environment"] = "prod"
 
-	// Normalize key for switch (handle prefixed names)
 	switch k {
+
 	case KeyAWSVPC:
-		k = KeyVPC
-	case KeyAWSEKS:
-		k = KeyResource
-	case KeyAWSLambda:
-		k = KeyLambda
-	case KeyAWSALB:
-		k = KeyALB
-	case KeyAWSBastion:
-		k = KeyBastion
-	case KeyAWSRDS:
-		k = KeyPostgres
-	case KeyAWSCloudfront:
-		k = KeyCloudfront
-	case KeyAWSElastiCache:
-		k = KeyElastiCache
-	case KeyAWSS3:
-		k = KeyS3
-	case KeyAWSDynamoDB:
-		k = KeyDynamoDB
-	case KeyAWSSQS:
-		k = KeySQS
-	case KeyAWSMSK:
-		k = KeyMSK
-	case KeyAWSCloudWatchLogs:
-		k = KeyCloudWatchLogs
-	case KeyAWSCloudWatchMonitoring:
-		k = KeyCloudWatchMonitoring
-	case KeyAWSCognito:
-		k = KeyCognito
-	case KeyAWSAPIGateway:
-		k = KeyAPIGateway
-	case KeyAWSKMS:
-		k = KeyKMS
-	case KeyAWSSecretsManager:
-		k = KeySecrets
-	case KeyAWSOpenSearch:
-		k = KeyOpenSearch
-	case KeyAWSBedrock:
-		k = KeyBedrock
-	case KeyAWSWAF:
-		k = KeyWAF
-	case KeyAWSGrafana:
-		k = KeyGrafana
-	case KeyAWSBackups:
-		k = KeyBackups
-	case KeyAWSGitHubActions:
-		k = KeyGitHubActions
-	case KeyAWSCodePipeline:
-		k = KeyCodePipeline
-	}
-
-	switch k {
-
-	case KeyVPC:
 		// Map "Public VPC" / "Private VPC" component enum to preset variables.
 		// "Public VPC" = public subnets only, no NAT gateway.
 		// "Private VPC" (or default) = private + public subnets with NAT.
@@ -202,9 +148,9 @@ func (m DefaultMapper) BuildModuleValues(
 			vals["provider"] = strings.ToLower(comps.Cloud) // "aws", "gcp"
 		}
 
-	case KeyResource: // EKS control plane or Lambda
+	case KeyResource, KeyAWSEKS: // EKS control plane or Lambda
 		if isLambda(comps) {
-			return m.BuildModuleValues(KeyLambda, comps, cfg, project, region)
+			return m.BuildModuleValues(KeyAWSLambda, comps, cfg, project, region)
 		}
 		// Preview-safe stubs for required, usually-wired inputs
 		if _, ok := vals["vpc_id"]; !ok {
@@ -356,7 +302,7 @@ func (m DefaultMapper) BuildModuleValues(
 			// Intel defaults handled by preset (t3.medium)
 		}
 
-	case KeyALB:
+	case KeyAWSALB:
 		// ALB needs VPC + public subnets; stub for preview.
 		if _, ok := vals["vpc_id"]; !ok {
 			vals["vpc_id"] = ""
@@ -365,7 +311,7 @@ func (m DefaultMapper) BuildModuleValues(
 			vals["public_subnet_ids"] = []any{}
 		}
 
-	case KeyBastion:
+	case KeyAWSBastion:
 		// Bastion on a public subnet; stub for preview.
 		if _, ok := vals["vpc_id"]; !ok {
 			vals["vpc_id"] = ""
@@ -374,7 +320,7 @@ func (m DefaultMapper) BuildModuleValues(
 			vals["subnet_id"] = ""
 		}
 
-	case KeyPostgres:
+	case KeyAWSRDS:
 		// RDS requires VPC + private subnets; stub for preview.
 		if _, ok := vals["vpc_id"]; !ok {
 			vals["vpc_id"] = ""
@@ -395,7 +341,7 @@ func (m DefaultMapper) BuildModuleValues(
 			}
 		}
 
-	case KeyCloudfront:
+	case KeyAWSCloudfront:
 		if cfg != nil && cfg.Cloudfront != nil {
 			if cfg.Cloudfront.DefaultTtl != nil && *cfg.Cloudfront.DefaultTtl != "" {
 				vals["default_ttl"] = *cfg.Cloudfront.DefaultTtl
@@ -407,7 +353,7 @@ func (m DefaultMapper) BuildModuleValues(
 			}
 		}
 
-	case KeyElastiCache:
+	case KeyAWSElastiCache:
 		if cfg != nil && cfg.ElastiCache != nil {
 			if cfg.ElastiCache.HA != nil {
 				vals["ha"] = *cfg.ElastiCache.HA
@@ -423,17 +369,17 @@ func (m DefaultMapper) BuildModuleValues(
 			}
 		}
 
-	case KeyS3:
+	case KeyAWSS3:
 		if cfg != nil && cfg.S3 != nil && cfg.S3.Versioning != nil {
 			vals["versioning"] = *cfg.S3.Versioning
 		}
 
-	case KeyDynamoDB:
+	case KeyAWSDynamoDB:
 		if cfg != nil && cfg.DynamoDB != nil && cfg.DynamoDB.Type != "" {
 			vals["billing_mode"] = strings.ToLower(cfg.DynamoDB.Type) // "on demand" | "provisioned"
 		}
 
-	case KeySQS:
+	case KeyAWSSQS:
 		if cfg != nil && cfg.SQS != nil {
 			if cfg.SQS.Type != "" {
 				vals["type"] = cfg.SQS.Type // "Standard" | "FIFO"
@@ -443,12 +389,12 @@ func (m DefaultMapper) BuildModuleValues(
 			}
 		}
 
-	case KeyMSK:
+	case KeyAWSMSK:
 		if cfg != nil && cfg.MSK != nil && cfg.MSK.Retention != "" {
 			vals["retention_period"] = cfg.MSK.Retention
 		}
 
-	case KeyCloudWatchLogs:
+	case KeyAWSCloudWatchLogs:
 		retDays := 0
 		if cfg != nil {
 			if cfg.CloudWatchLogs != nil && cfg.CloudWatchLogs.RetentionDays > 0 {
@@ -461,7 +407,7 @@ func (m DefaultMapper) BuildModuleValues(
 			vals["retention_in_days"] = retDays
 		}
 
-	case KeyCognito:
+	case KeyAWSCognito:
 		if cfg != nil && cfg.Cognito != nil {
 			if cfg.Cognito.SignInType != "" {
 				vals["sign_in_type"] = cfg.Cognito.SignInType
@@ -471,7 +417,7 @@ func (m DefaultMapper) BuildModuleValues(
 			}
 		}
 
-	case KeyAPIGateway:
+	case KeyAWSAPIGateway:
 		if cfg != nil && cfg.APIGateway != nil {
 			if cfg.APIGateway.DomainName != "" {
 				vals["domain_name"] = cfg.APIGateway.DomainName
@@ -481,21 +427,21 @@ func (m DefaultMapper) BuildModuleValues(
 			}
 		}
 
-	case KeyKMS:
+	case KeyAWSKMS:
 		if cfg != nil && cfg.KMS != nil && cfg.KMS.NumKeys != "" {
 			if n, err := strconv.Atoi(cfg.KMS.NumKeys); err == nil {
 				vals["num_keys"] = n
 			}
 		}
 
-	case KeySecrets:
+	case KeyAWSSecretsManager:
 		if cfg != nil && cfg.SecretsManager != nil && cfg.SecretsManager.NumSecrets != "" {
 			if n, err := strconv.Atoi(cfg.SecretsManager.NumSecrets); err == nil {
 				vals["num_secrets"] = n
 			}
 		}
 
-	case KeyOpenSearch:
+	case KeyAWSOpenSearch:
 		if cfg != nil && cfg.OpenSearch != nil {
 			if cfg.OpenSearch.DeploymentType != "" {
 				vals["deployment_type"] = strings.ToLower(cfg.OpenSearch.DeploymentType)
@@ -527,7 +473,7 @@ func (m DefaultMapper) BuildModuleValues(
 			vals["subnet_ids"] = []any{}
 		}
 
-	case KeyBedrock:
+	case KeyAWSBedrock:
 		if cfg != nil && cfg.Bedrock != nil {
 			if cfg.Bedrock.KnowledgeBaseName != "" {
 				vals["knowledge_base_name"] = cfg.Bedrock.KnowledgeBaseName
@@ -553,7 +499,7 @@ func (m DefaultMapper) BuildModuleValues(
 			vals["opensearch_collection_arn"] = "arn:aws:aoss:us-east-1:123456789012:collection/composerpreview"
 		}
 
-	case KeyLambda:
+	case KeyAWSLambda:
 		vals["runtime"] = "nodejs20.x" // Default to nodejs
 		if cfg != nil && cfg.Lambda != nil {
 			if cfg.Lambda.Runtime != "" {
@@ -579,7 +525,7 @@ func (m DefaultMapper) BuildModuleValues(
 			}
 		}
 
-	case KeyBackups:
+	case KeyAWSBackups:
 		// TS parity: provide a sane default_rule (schedule/retention) in addition
 		// to composer-injected enable_* and *_rule raw HCL.
 		bestFreq := 0
