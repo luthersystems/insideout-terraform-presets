@@ -1028,13 +1028,37 @@ func TestMergeComponentDiffs_DemotesRemovedWhenComponentStillActive(t *testing.T
 	}
 
 	merged := MergeComponentDiffs(componentDiffs, configDiffs, oldComp, newComp)
-	if len(merged) != 1 || merged[0].Action != "modified" {
-		t.Errorf("expected removed → modified demotion, got %+v", merged)
+	if len(merged) != 1 || merged[0].Component != "aws_vpc" || merged[0].Action != "modified" {
+		t.Errorf("expected [{aws_vpc, modified}], got %+v", merged)
 	}
 
 	summary := SummarizeChanges(merged)
 	if strings.HasPrefix(summary, "Removed:") {
 		t.Errorf("summary should not start with 'Removed:' for config-only clear, got %q", summary)
+	}
+}
+
+// TestMergeComponentDiffs_DemotesAddedForBoolToggle exercises the *bool
+// shape of Components fields (aws_rds) — distinct from the string shape
+// (aws_vpc) covered above. Without hitting the reflect.Ptr → reflect.Bool
+// branch of isComponentActive, a future narrowing of componentEnabled to
+// string-only toggles would go unnoticed by the other demotion tests.
+func TestMergeComponentDiffs_DemotesAddedForBoolToggle(t *testing.T) {
+	t.Parallel()
+	oldComp := compFromJSON(t, `{"cloud":"AWS","aws_rds":true}`)
+	newComp := compFromJSON(t, `{"cloud":"AWS","aws_rds":true}`)
+	oldCfg := cfgFromJSON(t, `{"cloud":"AWS"}`)
+	newCfg := cfgFromJSON(t, `{"cloud":"AWS","aws_rds":{"cpuSize":"db.r5.large"}}`)
+
+	componentDiffs := DiffComponents(oldComp, newComp)
+	configDiffs := DiffConfigs(oldCfg, newCfg)
+	if len(configDiffs) != 1 || configDiffs[0].Action != "added" {
+		t.Fatalf("DiffConfigs: expected [{aws_rds, added}], got %+v", configDiffs)
+	}
+
+	merged := MergeComponentDiffs(componentDiffs, configDiffs, oldComp, newComp)
+	if len(merged) != 1 || merged[0].Component != "aws_rds" || merged[0].Action != "modified" {
+		t.Errorf("expected [{aws_rds, modified}] — *bool toggle active on both sides, got %+v", merged)
 	}
 }
 
