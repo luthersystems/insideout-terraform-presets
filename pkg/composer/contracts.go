@@ -807,17 +807,14 @@ func DefaultWiring(selected map[ComponentKey]bool, k ComponentKey, comps *Compon
 		}
 
 	case KeyBackups:
+		// Legacy sessions must Normalize before reaching DefaultWiring;
+		// reliable's composeradapter does this for us in production.
 		enableEbs, enableRds, enableDdb, enableS3 := false, false, false, false
 		if comps != nil && comps.AWSBackups != nil {
 			enableEbs = boolVal(comps.AWSBackups.EC2)
 			enableRds = boolVal(comps.AWSBackups.RDS)
 			enableDdb = boolVal(comps.AWSBackups.DynamoDB)
 			enableS3 = boolVal(comps.AWSBackups.S3)
-		} else if comps != nil && comps.Backups != nil {
-			enableEbs = boolVal(comps.Backups.EC2)
-			enableRds = boolVal(comps.Backups.Rds)
-			enableDdb = boolVal(comps.Backups.DynamoDB)
-			enableS3 = boolVal(comps.Backups.S3)
 		}
 		wi.RawHCL["enable_ec2_ebs"] = boolToHCL(enableEbs)
 		wi.RawHCL["enable_rds"] = boolToHCL(enableRds)
