@@ -160,11 +160,23 @@ func DiffConfigs(oldCfg, newCfg Config) []ComponentDiff {
 			continue
 		}
 		if oldNil && !newNil {
-			diffs = append(diffs, ComponentDiff{Component: tag, Action: "added"})
+			// Diff against a zero-value struct so the diff carries per-field
+			// detail. Surfaces after MergeComponentDiffs demotes this to
+			// "modified" (issue #126 / #123); SummarizeChanges then renders
+			// "Modified: <component> (field: (unset) → <value>, ...)" instead
+			// of a bare "Modified: <component>.".
+			zero := reflect.New(newField.Type().Elem()).Elem()
+			fieldDiffs := diffStructFields(zero, newField.Elem())
+			diffs = append(diffs, ComponentDiff{Component: tag, Action: "added", Changes: fieldDiffs})
 			continue
 		}
 		if !oldNil && newNil {
-			diffs = append(diffs, ComponentDiff{Component: tag, Action: "removed"})
+			// Symmetric to the nil → non-nil branch: diff against a zero-value
+			// struct so the demoted "modified" diff reports which fields were
+			// cleared.
+			zero := reflect.New(oldField.Type().Elem()).Elem()
+			fieldDiffs := diffStructFields(oldField.Elem(), zero)
+			diffs = append(diffs, ComponentDiff{Component: tag, Action: "removed", Changes: fieldDiffs})
 			continue
 		}
 		// Both non-nil: compare sub-struct fields.
@@ -178,6 +190,18 @@ func DiffConfigs(oldCfg, newCfg Config) []ComponentDiff {
 		}
 	}
 	return diffs
+}
+
+// displayFieldValue renders a FieldDiff value for human display. An empty
+// string means the field was absent on that side — often because the diff was
+// taken against a zero-value struct on a nil↔non-nil transition (see
+// DiffConfigs) — and is rendered as "(unset)" so the summary reads naturally.
+// All other values flow through HumanizeFieldValue unchanged.
+func displayFieldValue(field, value string) string {
+	if value == "" {
+		return "(unset)"
+	}
+	return HumanizeFieldValue(field, value)
 }
 
 // SummarizeChanges generates a concise human-readable summary from component diffs.
@@ -199,7 +223,7 @@ func SummarizeChanges(diffs []ComponentDiff) string {
 				limit := min(2, len(d.Changes))
 				var fieldDetails []string
 				for _, c := range d.Changes[:limit] {
-					fieldDetails = append(fieldDetails, fmt.Sprintf("%s: %s \u2192 %s", c.Field, HumanizeFieldValue(c.Field, c.From), HumanizeFieldValue(c.Field, c.To)))
+					fieldDetails = append(fieldDetails, fmt.Sprintf("%s: %s \u2192 %s", c.Field, displayFieldValue(c.Field, c.From), displayFieldValue(c.Field, c.To)))
 				}
 				detail += " (" + strings.Join(fieldDetails, ", ") + ")"
 				if len(d.Changes) > 2 {
