@@ -160,11 +160,23 @@ func DiffConfigs(oldCfg, newCfg Config) []ComponentDiff {
 			continue
 		}
 		if oldNil && !newNil {
-			diffs = append(diffs, ComponentDiff{Component: tag, Action: "added"})
+			// Diff against a zero-value struct so the diff carries per-field
+			// detail. Surfaces after MergeComponentDiffs demotes this to
+			// "modified" (issue #126 / #123); SummarizeChanges then renders
+			// "Modified: <component> (field: (unset) → <value>, ...)" instead
+			// of a bare "Modified: <component>.".
+			zero := reflect.New(newField.Type().Elem()).Elem()
+			fieldDiffs := diffStructFields(zero, newField.Elem())
+			diffs = append(diffs, ComponentDiff{Component: tag, Action: "added", Changes: fieldDiffs})
 			continue
 		}
 		if !oldNil && newNil {
-			diffs = append(diffs, ComponentDiff{Component: tag, Action: "removed"})
+			// Symmetric to the nil → non-nil branch: diff against a zero-value
+			// struct so the demoted "modified" diff reports which fields were
+			// cleared.
+			zero := reflect.New(oldField.Type().Elem()).Elem()
+			fieldDiffs := diffStructFields(oldField.Elem(), zero)
+			diffs = append(diffs, ComponentDiff{Component: tag, Action: "removed", Changes: fieldDiffs})
 			continue
 		}
 		// Both non-nil: compare sub-struct fields.
@@ -178,6 +190,18 @@ func DiffConfigs(oldCfg, newCfg Config) []ComponentDiff {
 		}
 	}
 	return diffs
+}
+
+// displayFieldValue renders a FieldDiff value for human display. An empty
+// string means the field was absent on that side — often because the diff was
+// taken against a zero-value struct on a nil↔non-nil transition (see
+// DiffConfigs) — and is rendered as "(unset)" so the summary reads naturally.
+// All other values flow through HumanizeFieldValue unchanged.
+func displayFieldValue(field, value string) string {
+	if value == "" {
+		return "(unset)"
+	}
+	return HumanizeFieldValue(field, value)
 }
 
 // SummarizeChanges generates a concise human-readable summary from component diffs.
@@ -199,7 +223,7 @@ func SummarizeChanges(diffs []ComponentDiff) string {
 				limit := min(2, len(d.Changes))
 				var fieldDetails []string
 				for _, c := range d.Changes[:limit] {
-					fieldDetails = append(fieldDetails, fmt.Sprintf("%s: %s \u2192 %s", c.Field, HumanizeFieldValue(c.Field, c.From), HumanizeFieldValue(c.Field, c.To)))
+					fieldDetails = append(fieldDetails, fmt.Sprintf("%s: %s \u2192 %s", c.Field, displayFieldValue(c.Field, c.From), displayFieldValue(c.Field, c.To)))
 				}
 				detail += " (" + strings.Join(fieldDetails, ", ") + ")"
 				if len(d.Changes) > 2 {
@@ -286,6 +310,21 @@ func isComponentActive(v reflect.Value) bool {
 		return v.String() != ""
 	case reflect.Bool:
 		return v.Bool()
+	}
+	return false
+}
+
+// componentEnabled reports whether the Components field whose JSON tag matches
+// kind is active (non-empty string / non-nil pointer / true bool). Used by
+// MergeComponentDiffs to distinguish a genuine add/remove from a config-only
+// population of an already-enabled component.
+func componentEnabled(c Components, kind string) bool {
+	v := reflect.ValueOf(c)
+	t := v.Type()
+	for i := 0; i < t.NumField(); i++ {
+		if JSONTagName(t.Field(i)) == kind {
+			return isComponentActive(v.Field(i))
+		}
 	}
 	return false
 }
@@ -388,11 +427,29 @@ func DiffMetadata(oldComp, newComp Components) []MetadataDiff {
 // with config-level diffs (from DiffConfigs) into a single slice. Config diffs
 // take precedence when both sources report the same component key, since they
 // carry richer FieldDiff detail. The result is sorted by component name.
-func MergeComponentDiffs(componentDiffs, configDiffs []ComponentDiff) []ComponentDiff {
+//
+// oldComp / newComp correct a blind spot in DiffConfigs: when a component is
+// active on both sides and only its Config sub-struct flipped nil↔non-nil,
+// the config-origin "added" / "removed" is demoted to "modified". Without
+// this, two consecutive StackVersions that merely populate / clear a config
+// block would both summarize as "Added: <component>." or "Removed:
+// <component>." even though the toggle itself never changed (issue #123).
+//
+// External toggles (splunk / datadog / githubactions) live on Components but
+// never surface in Config, so they can never appear in configDiffs and the
+// demotion branch is a no-op for them by construction. componentEnabled
+// works for them uniformly; this is a latent capability worth preserving if
+// Config ever grows peer structs for those toggles.
+func MergeComponentDiffs(componentDiffs, configDiffs []ComponentDiff, oldComp, newComp Components) []ComponentDiff {
 	seen := make(map[string]bool, len(configDiffs))
 	merged := make([]ComponentDiff, 0, len(configDiffs)+len(componentDiffs))
 
 	for _, d := range configDiffs {
+		if (d.Action == "added" || d.Action == "removed") &&
+			componentEnabled(oldComp, d.Component) &&
+			componentEnabled(newComp, d.Component) {
+			d.Action = "modified"
+		}
 		seen[d.Component] = true
 		merged = append(merged, d)
 	}

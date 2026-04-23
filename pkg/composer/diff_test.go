@@ -209,6 +209,15 @@ func TestDiffConfigs_ComponentAdded(t *testing.T) {
 	if diffs[0].Component != "gcp_gke" || diffs[0].Action != "added" {
 		t.Errorf("got %+v, want gcp_gke/added", diffs[0])
 	}
+	// Issue #126: nil→non-nil now synthesises Changes against a
+	// zero-value struct so the demoted "modified" diff carries field detail.
+	if len(diffs[0].Changes) != 1 {
+		t.Fatalf("expected 1 change (nodeCount), got %+v", diffs[0].Changes)
+	}
+	c := diffs[0].Changes[0]
+	if c.Field != "nodeCount" || c.From != "" || c.To != "3" {
+		t.Errorf("got %+v, want {nodeCount, \"\", 3}", c)
+	}
 }
 
 func TestDiffConfigs_ComponentRemoved(t *testing.T) {
@@ -225,6 +234,107 @@ func TestDiffConfigs_ComponentRemoved(t *testing.T) {
 	}
 	if diffs[0].Component != "aws_s3" || diffs[0].Action != "removed" {
 		t.Errorf("got %+v, want aws_s3/removed", diffs[0])
+	}
+	// Issue #126 mirror: non-nil→nil now diffs against a zero-value struct
+	// so cleared fields surface on the demoted "modified" diff.
+	if len(diffs[0].Changes) != 1 {
+		t.Fatalf("expected 1 change (versioning), got %+v", diffs[0].Changes)
+	}
+	c := diffs[0].Changes[0]
+	if c.Field != "versioning" || c.From != "true" || c.To != "" {
+		t.Errorf("got %+v, want {versioning, true, \"\"}", c)
+	}
+}
+
+// TestDiffConfigs_PopulatesChangesOnNilToNonNil is the primary #126
+// regression guard: when a component's Config sub-struct transitions nil →
+// non-nil, DiffConfigs must emit Changes by diffing against a zero-value
+// struct. Surfaces after MergeComponentDiffs demotion so SummarizeChanges
+// can render "Modified: aws_vpc (azCount: (unset) → 2, ...)".
+func TestDiffConfigs_PopulatesChangesOnNilToNonNil(t *testing.T) {
+	t.Parallel()
+	oldCfg := cfgFromJSON(t, `{"cloud":"AWS"}`)
+	newCfg := cfgFromJSON(t, `{"cloud":"AWS","aws_vpc":{"azCount":2,"enableNatGateway":true}}`)
+
+	diffs := DiffConfigs(oldCfg, newCfg)
+	if len(diffs) != 1 {
+		t.Fatalf("expected 1 diff, got %+v", diffs)
+	}
+	d := diffs[0]
+	if d.Component != "aws_vpc" || d.Action != "added" {
+		t.Fatalf("got %+v, want aws_vpc/added", d)
+	}
+	if len(d.Changes) != 2 {
+		t.Fatalf("expected 2 changes (azCount, enableNatGateway), got %+v", d.Changes)
+	}
+	byField := map[string]FieldDiff{}
+	for _, c := range d.Changes {
+		byField[c.Field] = c
+	}
+	if got, ok := byField["azCount"]; !ok || got.From != "" || got.To != "2" {
+		t.Errorf("azCount: got %+v, want {azCount, \"\", 2}", got)
+	}
+	if got, ok := byField["enableNatGateway"]; !ok || got.From != "" || got.To != "true" {
+		t.Errorf("enableNatGateway: got %+v, want {enableNatGateway, \"\", true}", got)
+	}
+}
+
+// TestDiffConfigs_PopulatesChangesOnNonNilToNil mirrors the nil→non-nil
+// case: cleared fields must surface on the emitted ComponentDiff so a demoted
+// "modified" diff can render which knobs were reset to defaults.
+func TestDiffConfigs_PopulatesChangesOnNonNilToNil(t *testing.T) {
+	t.Parallel()
+	oldCfg := cfgFromJSON(t, `{"cloud":"AWS","aws_vpc":{"azCount":3,"enableNatGateway":true}}`)
+	newCfg := cfgFromJSON(t, `{"cloud":"AWS"}`)
+
+	diffs := DiffConfigs(oldCfg, newCfg)
+	if len(diffs) != 1 {
+		t.Fatalf("expected 1 diff, got %+v", diffs)
+	}
+	d := diffs[0]
+	if d.Component != "aws_vpc" || d.Action != "removed" {
+		t.Fatalf("got %+v, want aws_vpc/removed", d)
+	}
+	if len(d.Changes) != 2 {
+		t.Fatalf("expected 2 changes (azCount, enableNatGateway), got %+v", d.Changes)
+	}
+	byField := map[string]FieldDiff{}
+	for _, c := range d.Changes {
+		byField[c.Field] = c
+	}
+	if got, ok := byField["azCount"]; !ok || got.From != "3" || got.To != "" {
+		t.Errorf("azCount: got %+v, want {azCount, 3, \"\"}", got)
+	}
+	if got, ok := byField["enableNatGateway"]; !ok || got.From != "true" || got.To != "" {
+		t.Errorf("enableNatGateway: got %+v, want {enableNatGateway, true, \"\"}", got)
+	}
+}
+
+// TestDiffConfigs_PopulatesChangesForStringPointerField exercises the
+// *string shape of Config sub-struct fields through the zero-value-diff
+// path (aws_cloudfront.defaultTtl is *string). Ensures the reflect.Ptr →
+// reflect.String fallthrough in FormatValue correctly renders a nil
+// *string as "" on the zero side; any regression there would produce
+// garbage From values like "<nil>" or panic on deref.
+func TestDiffConfigs_PopulatesChangesForStringPointerField(t *testing.T) {
+	t.Parallel()
+	oldCfg := cfgFromJSON(t, `{"cloud":"AWS"}`)
+	newCfg := cfgFromJSON(t, `{"cloud":"AWS","aws_cloudfront":{"defaultTtl":"3600"}}`)
+
+	diffs := DiffConfigs(oldCfg, newCfg)
+	if len(diffs) != 1 {
+		t.Fatalf("expected 1 diff, got %+v", diffs)
+	}
+	d := diffs[0]
+	if d.Component != "aws_cloudfront" || d.Action != "added" {
+		t.Fatalf("got %+v, want aws_cloudfront/added", d)
+	}
+	if len(d.Changes) != 1 {
+		t.Fatalf("expected 1 change (defaultTtl), got %+v", d.Changes)
+	}
+	c := d.Changes[0]
+	if c.Field != "defaultTtl" || c.From != "" || c.To != "3600" {
+		t.Errorf("got %+v, want {defaultTtl, \"\", 3600}", c)
 	}
 }
 
@@ -472,6 +582,110 @@ func TestSummarizeChanges_TruncatesFieldDetails(t *testing.T) {
 	}
 	if strings.Contains(s, "readReplicas:") {
 		t.Error("readReplicas should be truncated, not shown")
+	}
+}
+
+// TestSummarizeChanges_UnsetRenderedForEmptyValues locks the #126 rendering
+// contract: empty From/To (the zero-value side of a nil↔non-nil transition)
+// is displayed as "(unset)" rather than an empty string, so the summary
+// reads as "field: (unset) → value" instead of "field:  → value".
+//
+// Also pins displayFieldValue's delegation to HumanizeFieldValue on the
+// populated side — QA review flagged that every prior SummarizeChanges
+// assertion used identity-mapped fields, so a mutation that stopped
+// calling HumanizeFieldValue would have passed. Pair (unset) with:
+//   - versioning (in booleanFields, humanises "true" → "Yes")
+//   - retentionDays (appends " days" suffix)
+// so the delegation contract is enforced both ways.
+//
+// FieldDiff with both sides empty is unreachable from DiffConfigs
+// (diffStructFields only emits when oldStr != newStr), so we don't
+// defend against "(unset) → (unset)" — if a future emitter produces
+// one, the rendering will read exactly that.
+func TestSummarizeChanges_UnsetRenderedForEmptyValues(t *testing.T) {
+	t.Parallel()
+	// 2-field truncation in SummarizeChanges means only the first two
+	// Changes land in the summary head; sort order follows the slice.
+	// Use one (unset)-on-From + one (unset)-on-To to cover both sides,
+	// and pick humanised fields to lock the HumanizeFieldValue route.
+	tests := []struct {
+		name   string
+		diffs  []ComponentDiff
+		wantIn []string
+	}{
+		{
+			name: "versioning_unset_to_true_humanises_to_Yes",
+			diffs: []ComponentDiff{
+				{Component: "aws_s3", Action: "modified", Changes: []FieldDiff{
+					{Field: "versioning", From: "", To: "true"},
+				}},
+			},
+			wantIn: []string{"versioning: (unset) → Yes"},
+		},
+		{
+			name: "retentionDays_30_to_unset_appends_days_suffix",
+			diffs: []ComponentDiff{
+				{Component: "aws_cloudwatch_logs", Action: "modified", Changes: []FieldDiff{
+					{Field: "retentionDays", From: "30", To: ""},
+				}},
+			},
+			wantIn: []string{"retentionDays: 30 days → (unset)"},
+		},
+		{
+			name: "identity_mapped_field_still_renders_unset",
+			diffs: []ComponentDiff{
+				{Component: "aws_vpc", Action: "modified", Changes: []FieldDiff{
+					{Field: "azCount", From: "", To: "2"},
+				}},
+			},
+			wantIn: []string{"azCount: (unset) → 2"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			s := SummarizeChanges(tt.diffs)
+			for _, want := range tt.wantIn {
+				if !strings.Contains(s, want) {
+					t.Errorf("expected %q in summary, got %q", want, s)
+				}
+			}
+		})
+	}
+}
+
+// TestDiffConfigs_NativeModifiedRendersUnsetForNilPointerField pins the
+// review-surfaced consequence that displayFieldValue routes ALL modified
+// diffs, not only demoted ones, through the "(unset)" rendering. Here
+// aws_eks stays non-nil on both sides (so the demotion path doesn't apply)
+// but a *bool field inside transitions nil → true — the pre-#126 summary
+// would read "haControlPlane:  → true" (stray blank); after #126 it must
+// read "haControlPlane: (unset) → true". A future refactor that limited
+// displayFieldValue to the demotion path would regress this rendering.
+func TestDiffConfigs_NativeModifiedRendersUnsetForNilPointerField(t *testing.T) {
+	t.Parallel()
+	oldCfg := cfgFromJSON(t, `{"aws_eks":{"desiredSize":"3"}}`)
+	newCfg := cfgFromJSON(t, `{"aws_eks":{"haControlPlane":true,"desiredSize":"3"}}`)
+
+	diffs := DiffConfigs(oldCfg, newCfg)
+	if len(diffs) != 1 || diffs[0].Component != "aws_eks" || diffs[0].Action != "modified" {
+		t.Fatalf("expected [{aws_eks, modified}], got %+v", diffs)
+	}
+	if len(diffs[0].Changes) != 1 {
+		t.Fatalf("expected 1 change, got %+v", diffs[0].Changes)
+	}
+	c := diffs[0].Changes[0]
+	if c.Field != "haControlPlane" || c.From != "" || c.To != "true" {
+		t.Errorf("got %+v, want {haControlPlane, \"\", true}", c)
+	}
+
+	// Summary renders the empty From as "(unset)" and routes the populated
+	// To through HumanizeFieldValue (which humanizes "true" to "Yes" for
+	// boolean-typed fields). Asserts both the (unset) contract and the
+	// HumanizeFieldValue pass-through for non-empty values.
+	summary := SummarizeChanges(diffs)
+	if !strings.Contains(summary, "haControlPlane: (unset) → Yes") {
+		t.Errorf("expected '(unset) → Yes' (HumanizeFieldValue humanizes bool), got %q", summary)
 	}
 }
 
@@ -875,7 +1089,7 @@ func TestVersionDiff_MetadataOmittedWhenEmpty(t *testing.T) {
 
 func TestMergeComponentDiffs_BothEmpty(t *testing.T) {
 	t.Parallel()
-	merged := MergeComponentDiffs(nil, nil)
+	merged := MergeComponentDiffs(nil, nil, Components{}, Components{})
 	if len(merged) != 0 {
 		t.Errorf("expected empty, got %d", len(merged))
 	}
@@ -886,7 +1100,7 @@ func TestMergeComponentDiffs_ConfigOnly(t *testing.T) {
 	cfgDiffs := []ComponentDiff{
 		{Component: "aws_ec2", Action: "modified", Changes: []FieldDiff{{Field: "numServers", From: "2", To: "4"}}},
 	}
-	merged := MergeComponentDiffs(nil, cfgDiffs)
+	merged := MergeComponentDiffs(nil, cfgDiffs, Components{}, Components{})
 	if len(merged) != 1 {
 		t.Fatalf("expected 1, got %d", len(merged))
 	}
@@ -900,7 +1114,7 @@ func TestMergeComponentDiffs_ComponentOnly(t *testing.T) {
 	compDiffs := []ComponentDiff{
 		{Component: "aws_waf", Action: "added"},
 	}
-	merged := MergeComponentDiffs(compDiffs, nil)
+	merged := MergeComponentDiffs(compDiffs, nil, Components{}, Components{})
 	if len(merged) != 1 {
 		t.Fatalf("expected 1, got %d", len(merged))
 	}
@@ -917,7 +1131,7 @@ func TestMergeComponentDiffs_ConfigTakesPrecedence(t *testing.T) {
 	cfgDiffs := []ComponentDiff{
 		{Component: "aws_rds", Action: "added", Changes: []FieldDiff{{Field: "cpuSize", From: "", To: "db.r5.large"}}},
 	}
-	merged := MergeComponentDiffs(compDiffs, cfgDiffs)
+	merged := MergeComponentDiffs(compDiffs, cfgDiffs, Components{}, Components{})
 	if len(merged) != 1 {
 		t.Fatalf("expected 1, got %d", len(merged))
 	}
@@ -938,7 +1152,7 @@ func TestMergeComponentDiffs_Disjoint(t *testing.T) {
 	cfgDiffs := []ComponentDiff{
 		{Component: "aws_ec2", Action: "modified", Changes: []FieldDiff{{Field: "numServers", From: "2", To: "4"}}},
 	}
-	merged := MergeComponentDiffs(compDiffs, cfgDiffs)
+	merged := MergeComponentDiffs(compDiffs, cfgDiffs, Components{}, Components{})
 	if len(merged) != 2 {
 		t.Fatalf("expected 2, got %d", len(merged))
 	}
@@ -957,7 +1171,7 @@ func TestMergeComponentDiffs_Sorted(t *testing.T) {
 	cfgDiffs := []ComponentDiff{
 		{Component: "aws_rds", Action: "modified"},
 	}
-	merged := MergeComponentDiffs(compDiffs, cfgDiffs)
+	merged := MergeComponentDiffs(compDiffs, cfgDiffs, Components{}, Components{})
 	if len(merged) != 3 {
 		t.Fatalf("expected 3, got %d", len(merged))
 	}
@@ -965,5 +1179,225 @@ func TestMergeComponentDiffs_Sorted(t *testing.T) {
 		if merged[i].Component < merged[i-1].Component {
 			t.Errorf("not sorted: %q < %q at position %d", merged[i].Component, merged[i-1].Component, i)
 		}
+	}
+}
+
+// TestMergeComponentDiffs_DemotesAddedWhenComponentAlreadyActive is the
+// verbatim reproduction from issue #123: two StackVersions with identical
+// Components (aws_vpc already "Private" on both sides) where only the Config
+// sub-struct transitions nil → non-nil. Without the merge-site demotion, the
+// second turn would wrongly summarize as "Added: aws_vpc." even though the
+// toggle never changed.
+func TestMergeComponentDiffs_DemotesAddedWhenComponentAlreadyActive(t *testing.T) {
+	t.Parallel()
+	oldComp := compFromJSON(t, `{"cloud":"AWS","aws_vpc":"Private"}`)
+	newComp := compFromJSON(t, `{"cloud":"AWS","aws_vpc":"Private"}`)
+	oldCfg := cfgFromJSON(t, `{"cloud":"AWS"}`)
+	newCfg := cfgFromJSON(t, `{"cloud":"AWS","aws_vpc":{"azCount":2,"enableNatGateway":true,"singleNatGateway":true}}`)
+
+	componentDiffs := DiffComponents(oldComp, newComp)
+	configDiffs := DiffConfigs(oldCfg, newCfg)
+	if len(componentDiffs) != 0 {
+		t.Fatalf("DiffComponents: expected 0 diffs (toggle unchanged), got %+v", componentDiffs)
+	}
+	if len(configDiffs) != 1 || configDiffs[0].Action != "added" {
+		t.Fatalf("DiffConfigs: expected [{aws_vpc, added}], got %+v", configDiffs)
+	}
+
+	merged := MergeComponentDiffs(componentDiffs, configDiffs, oldComp, newComp)
+	if len(merged) != 1 {
+		t.Fatalf("merged: expected 1 diff, got %+v", merged)
+	}
+	if merged[0].Component != "aws_vpc" || merged[0].Action != "modified" {
+		t.Errorf("expected {aws_vpc, modified}, got %+v", merged[0])
+	}
+	// Issue #126: DiffConfigs now synthesises per-field Changes on
+	// nil→non-nil by diffing against a zero-value struct, so the demoted
+	// "modified" carries the populated field detail end-to-end. Each
+	// FieldDiff must record From="" (the zero-value side) and To=<new>.
+	byField := map[string]FieldDiff{}
+	for _, c := range merged[0].Changes {
+		byField[c.Field] = c
+	}
+	for _, want := range []struct {
+		field string
+		to    string
+	}{
+		{"azCount", "2"},
+		{"enableNatGateway", "true"},
+		{"singleNatGateway", "true"},
+	} {
+		got, ok := byField[want.field]
+		if !ok {
+			t.Errorf("expected Changes to include field %q, got %+v", want.field, merged[0].Changes)
+			continue
+		}
+		if got.From != "" || got.To != want.to {
+			t.Errorf("%s: got From=%q To=%q, want From=\"\" To=%q", want.field, got.From, got.To, want.to)
+		}
+	}
+
+	summary := SummarizeChanges(merged)
+	if strings.HasPrefix(summary, "Added:") {
+		t.Errorf("summary should not start with 'Added:' for config-only population, got %q", summary)
+	}
+	if !strings.HasPrefix(summary, "Modified:") {
+		t.Errorf("summary should start with 'Modified:', got %q", summary)
+	}
+	// The summary must now carry per-field detail (issue #126) — a bare
+	// "Modified: aws_vpc." was the UX regression this follow-up targets.
+	// (Which specific fields land in the summary head is bounded by the
+	// 2-field truncation limit in SummarizeChanges; we just assert *some*
+	// field detail is present and the (unset) marker surfaces.)
+	if !strings.Contains(summary, "(unset) → ") {
+		t.Errorf("summary should render empty From as (unset), got %q", summary)
+	}
+	if !strings.Contains(summary, "aws_vpc (") {
+		t.Errorf("summary should carry field-level detail in parentheses, got %q", summary)
+	}
+	// Three fields go into DiffConfigs; SummarizeChanges truncates to 2
+	// with a "+1 more" suffix. Pin the truncation end-to-end so a mutation
+	// of the min(2, len(...)) limit surfaces via the real pipeline, not
+	// only via the synthetic TestSummarizeChanges_TruncatesFieldDetails.
+	if !strings.Contains(summary, "+1 more") {
+		t.Errorf("summary should end the aws_vpc detail with '+1 more' (3 fields, 2-field limit), got %q", summary)
+	}
+}
+
+// TestMergeComponentDiffs_DemotesRemovedWhenComponentStillActive is the
+// symmetric case: config transitions non-nil → nil while the component
+// remains enabled. A naive merge would summarize as "Removed: aws_vpc."
+// even though the toggle is unchanged.
+func TestMergeComponentDiffs_DemotesRemovedWhenComponentStillActive(t *testing.T) {
+	t.Parallel()
+	oldComp := compFromJSON(t, `{"cloud":"AWS","aws_vpc":"Private"}`)
+	newComp := compFromJSON(t, `{"cloud":"AWS","aws_vpc":"Private"}`)
+	oldCfg := cfgFromJSON(t, `{"cloud":"AWS","aws_vpc":{"azCount":2}}`)
+	newCfg := cfgFromJSON(t, `{"cloud":"AWS"}`)
+
+	componentDiffs := DiffComponents(oldComp, newComp)
+	configDiffs := DiffConfigs(oldCfg, newCfg)
+	if len(componentDiffs) != 0 {
+		t.Fatalf("DiffComponents: expected 0 diffs, got %+v", componentDiffs)
+	}
+	if len(configDiffs) != 1 || configDiffs[0].Action != "removed" {
+		t.Fatalf("DiffConfigs: expected [{aws_vpc, removed}], got %+v", configDiffs)
+	}
+
+	merged := MergeComponentDiffs(componentDiffs, configDiffs, oldComp, newComp)
+	if len(merged) != 1 || merged[0].Component != "aws_vpc" || merged[0].Action != "modified" {
+		t.Errorf("expected [{aws_vpc, modified}], got %+v", merged)
+	}
+	// Issue #126 (symmetric to DemotesAdded): DiffConfigs now diffs
+	// populated→zero to surface which fields were cleared on the demoted
+	// "modified" diff. Each FieldDiff records From=<old> and To="".
+	if len(merged[0].Changes) != 1 {
+		t.Fatalf("expected 1 Change on demoted diff, got %+v", merged[0].Changes)
+	}
+	c := merged[0].Changes[0]
+	if c.Field != "azCount" || c.From != "2" || c.To != "" {
+		t.Errorf("got %+v, want {azCount, 2, \"\"}", c)
+	}
+
+	summary := SummarizeChanges(merged)
+	if strings.HasPrefix(summary, "Removed:") {
+		t.Errorf("summary should not start with 'Removed:' for config-only clear, got %q", summary)
+	}
+	// Per #126 the summary now reports which fields were cleared.
+	if !strings.Contains(summary, "azCount") {
+		t.Errorf("summary should include azCount field detail, got %q", summary)
+	}
+	if !strings.Contains(summary, "(unset)") {
+		t.Errorf("summary should render empty To as (unset), got %q", summary)
+	}
+}
+
+// TestMergeComponentDiffs_DemotesAddedForBoolToggle exercises the *bool
+// shape of Components fields (aws_rds) — distinct from the string shape
+// (aws_vpc) covered above. Without hitting the reflect.Ptr → reflect.Bool
+// branch of isComponentActive, a future narrowing of componentEnabled to
+// string-only toggles would go unnoticed by the other demotion tests.
+func TestMergeComponentDiffs_DemotesAddedForBoolToggle(t *testing.T) {
+	t.Parallel()
+	oldComp := compFromJSON(t, `{"cloud":"AWS","aws_rds":true}`)
+	newComp := compFromJSON(t, `{"cloud":"AWS","aws_rds":true}`)
+	oldCfg := cfgFromJSON(t, `{"cloud":"AWS"}`)
+	newCfg := cfgFromJSON(t, `{"cloud":"AWS","aws_rds":{"cpuSize":"db.r5.large"}}`)
+
+	componentDiffs := DiffComponents(oldComp, newComp)
+	configDiffs := DiffConfigs(oldCfg, newCfg)
+	if len(configDiffs) != 1 || configDiffs[0].Action != "added" {
+		t.Fatalf("DiffConfigs: expected [{aws_rds, added}], got %+v", configDiffs)
+	}
+
+	merged := MergeComponentDiffs(componentDiffs, configDiffs, oldComp, newComp)
+	if len(merged) != 1 || merged[0].Component != "aws_rds" || merged[0].Action != "modified" {
+		t.Errorf("expected [{aws_rds, modified}] — *bool toggle active on both sides, got %+v", merged)
+	}
+}
+
+// TestMergeComponentDiffs_KeepsAddedWhenComponentNewlyEnabled guards against
+// over-demoting: when the component genuinely transitioned from off to on,
+// the "added" label must survive. DiffComponents will also emit "added" for
+// aws_vpc but DiffConfigs wins precedence — we assert the surviving diff is
+// still "added".
+func TestMergeComponentDiffs_KeepsAddedWhenComponentNewlyEnabled(t *testing.T) {
+	t.Parallel()
+	oldComp := compFromJSON(t, `{"cloud":"AWS"}`)
+	newComp := compFromJSON(t, `{"cloud":"AWS","aws_vpc":"Private"}`)
+	oldCfg := cfgFromJSON(t, `{"cloud":"AWS"}`)
+	newCfg := cfgFromJSON(t, `{"cloud":"AWS","aws_vpc":{"azCount":2}}`)
+
+	componentDiffs := DiffComponents(oldComp, newComp)
+	configDiffs := DiffConfigs(oldCfg, newCfg)
+
+	merged := MergeComponentDiffs(componentDiffs, configDiffs, oldComp, newComp)
+	if len(merged) != 1 || merged[0].Component != "aws_vpc" || merged[0].Action != "added" {
+		t.Errorf("expected [{aws_vpc, added}], got %+v", merged)
+	}
+}
+
+// TestMergeComponentDiffs_KeepsRemovedWhenComponentFullyRemoved is the mirror
+// regression guard: component toggle went off AND config cleared → must stay
+// "removed".
+func TestMergeComponentDiffs_KeepsRemovedWhenComponentFullyRemoved(t *testing.T) {
+	t.Parallel()
+	oldComp := compFromJSON(t, `{"cloud":"AWS","aws_vpc":"Private"}`)
+	newComp := compFromJSON(t, `{"cloud":"AWS"}`)
+	oldCfg := cfgFromJSON(t, `{"cloud":"AWS","aws_vpc":{"azCount":2}}`)
+	newCfg := cfgFromJSON(t, `{"cloud":"AWS"}`)
+
+	componentDiffs := DiffComponents(oldComp, newComp)
+	configDiffs := DiffConfigs(oldCfg, newCfg)
+
+	merged := MergeComponentDiffs(componentDiffs, configDiffs, oldComp, newComp)
+	if len(merged) != 1 || merged[0].Component != "aws_vpc" || merged[0].Action != "removed" {
+		t.Errorf("expected [{aws_vpc, removed}], got %+v", merged)
+	}
+}
+
+// TestMergeComponentDiffs_KeepsAddedWhenComponentInactiveOnBothSides covers
+// the edge case where config is populated for a component whose toggle is
+// still off on both sides. Unusual in practice, but the merge must not
+// demote — the user surfaced a config block worth reporting.
+func TestMergeComponentDiffs_KeepsAddedWhenComponentInactiveOnBothSides(t *testing.T) {
+	t.Parallel()
+	oldComp := compFromJSON(t, `{"cloud":"AWS"}`)
+	newComp := compFromJSON(t, `{"cloud":"AWS"}`)
+	oldCfg := cfgFromJSON(t, `{"cloud":"AWS"}`)
+	newCfg := cfgFromJSON(t, `{"cloud":"AWS","aws_vpc":{"azCount":2}}`)
+
+	componentDiffs := DiffComponents(oldComp, newComp)
+	configDiffs := DiffConfigs(oldCfg, newCfg)
+
+	merged := MergeComponentDiffs(componentDiffs, configDiffs, oldComp, newComp)
+	if len(merged) != 1 || merged[0].Component != "aws_vpc" || merged[0].Action != "added" {
+		t.Errorf("expected [{aws_vpc, added}] (no demotion, component inactive on both sides), got %+v", merged)
+	}
+	// Defend the user-visible label against future SummarizeChanges
+	// refactors that might accidentally lose the distinction between
+	// "component newly enabled" and "config populated while toggle off".
+	if got := SummarizeChanges(merged); !strings.HasPrefix(got, "Added:") {
+		t.Errorf("expected summary to start with 'Added:', got %q", got)
 	}
 }
