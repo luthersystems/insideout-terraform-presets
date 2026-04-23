@@ -366,14 +366,18 @@ func TestDefaultWiring_BackupsDynamoDBS3(t *testing.T) {
 		require.False(t, hasS3, "s3_rule must not be wired when S3 backups are disabled")
 	})
 
-	t.Run("legacy Backups shape wires V2 modules", func(t *testing.T) {
+	t.Run("a legacy Backups session that's been Normalized wires V2 modules", func(t *testing.T) {
 		t.Parallel()
+		// Phase 3b dropped the legacy Backups-field fallback in DefaultWiring.
+		// Legacy sessions must Normalize() before reaching the composer;
+		// reliable's composeradapter does this for us in production.
 		selected := map[ComponentKey]bool{
 			KeyBackups:     true,
 			KeyAWSDynamoDB: true,
 			KeyAWSS3:       true,
 		}
 		comps := &Components{
+			Cloud: "AWS",
 			Backups: &struct {
 				EC2         *bool `json:"ec2,omitempty"`
 				Rds         *bool `json:"rds,omitempty"`
@@ -385,6 +389,7 @@ func TestDefaultWiring_BackupsDynamoDBS3(t *testing.T) {
 				S3:       ptrBool(true),
 			},
 		}
+		comps.Normalize()
 		wi := DefaultWiring(selected, KeyBackups, comps)
 		require.Contains(t, wi.RawHCL["dynamodb_rule"], "module.aws_dynamodb.table_arn")
 		require.Contains(t, wi.RawHCL["s3_rule"], "module.aws_s3.bucket_arn")
@@ -578,9 +583,11 @@ func TestComposeStack_KitchenSink(t *testing.T) {
 		KeyGitHubActions,
 	}
 
-	// Enable backups for EC2/EBS + RDS to trigger wiring.
-	comps := awsKitchenSinkCompsLegacy()
-	cfg := awsKitchenSinkCfgLegacy()
+	// Enable backups for EC2/EBS + RDS to trigger wiring. Cfg sets
+	// RDS.ReadReplicas="2" to exercise the read-replicas mapper branch
+	// that the V2 kitchen-sink leaves unset.
+	comps := awsKitchenSinkCompsV2()
+	cfg := awsKitchenSinkCfgWithReadReplicas()
 
 	c := newTestClient()
 	out, err := c.ComposeStack(ComposeStackOpts{

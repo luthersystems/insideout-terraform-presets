@@ -80,11 +80,12 @@ func configWithAWSECS(in awsECSCfgInput) *Config {
 // (un-prefixed) Config names because Config.Normalize() promotes them to
 // the cloud-prefixed equivalents during compose.
 //
-// The split into Base / Legacy / V2 (instead of a single shared builder)
-// preserves a subtle fidelity invariant: the V2 test historically did not
-// set RDS.ReadReplicas, exercising the "unset" branch of the RDS mapper,
-// while the legacy test set it to "2". Collapsing into one shared helper
-// would silently couple the two tests on that branch.
+// The split into Base / WithReadReplicas / V2 (instead of a single shared
+// builder) preserves a subtle fidelity invariant: the V2 variant leaves
+// RDS.ReadReplicas unset, exercising the "unset" branch of the RDS mapper,
+// while the WithReadReplicas variant sets it to "2" so both mapper branches
+// are exercised. Collapsing into one shared helper would silently couple the
+// two tests on that branch.
 func awsKitchenSinkCfgBase() *Config {
 	return &Config{
 		Region: "us-west-2",
@@ -116,9 +117,10 @@ func awsKitchenSinkCfgV2() *Config {
 	return cfg
 }
 
-// awsKitchenSinkCfgLegacy returns the Config for TestComposeStack_KitchenSink.
-// RDS.ReadReplicas is "2" to exercise the read-replicas mapper branch.
-func awsKitchenSinkCfgLegacy() *Config {
+// awsKitchenSinkCfgWithReadReplicas returns the Config for
+// TestComposeStack_KitchenSink. RDS.ReadReplicas is "2" to exercise the
+// read-replicas mapper branch (cfg.RDS.ReadReplicas != "" in mapper.go).
+func awsKitchenSinkCfgWithReadReplicas() *Config {
 	cfg := awsKitchenSinkCfgBase()
 	cfg.RDS = &struct {
 		CPUSize      string `json:"cpuSize,omitempty"`
@@ -128,11 +130,14 @@ func awsKitchenSinkCfgLegacy() *Config {
 	return cfg
 }
 
-// awsKitchenSinkCompsV2 returns the Components shape for the V2-key
-// kitchen-sink: legacy ElastiCache toggle plus AWSBackups (prefixed).
+// awsKitchenSinkCompsV2 returns the Components shape for both kitchen-sink
+// tests: AWSElastiCache toggle plus AWSBackups (prefixed). EC2 and RDS are
+// the only backup targets enabled; DynamoDB and S3 are left unset so
+// boolVal(nil) falls through to false, matching the wiring/backups subtest
+// assertions in both kitchen-sink tests.
 func awsKitchenSinkCompsV2() *Components {
 	return &Components{
-		ElastiCache: ptrBool(true),
+		AWSElastiCache: ptrBool(true),
 		AWSBackups: &struct {
 			EC2         *bool `json:"aws_ec2,omitempty"`
 			RDS         *bool `json:"aws_rds,omitempty"`
@@ -142,30 +147,6 @@ func awsKitchenSinkCompsV2() *Components {
 		}{
 			EC2: ptrBool(true),
 			RDS: ptrBool(true),
-		},
-	}
-}
-
-// awsKitchenSinkCompsLegacy returns the Components shape for the legacy-key
-// kitchen-sink: legacy ElastiCache toggle plus legacy Backups. The explicit
-// DynamoDB=false / S3=false fields are load-bearing — the legacy kitchen-sink
-// "wiring/backups" subtest asserts on `enable_dynamodb = false` and
-// `enable_s3 = false` in the composed main.tf, so dropping them would break
-// that test.
-func awsKitchenSinkCompsLegacy() *Components {
-	return &Components{
-		ElastiCache: ptrBool(true),
-		Backups: &struct {
-			EC2         *bool `json:"ec2,omitempty"`
-			Rds         *bool `json:"rds,omitempty"`
-			ElastiCache *bool `json:"elasticache,omitempty"`
-			DynamoDB    *bool `json:"dynamodb,omitempty"`
-			S3          *bool `json:"s3,omitempty"`
-		}{
-			EC2:      ptrBool(true),
-			Rds:      ptrBool(true),
-			DynamoDB: ptrBool(false),
-			S3:       ptrBool(false),
 		},
 	}
 }

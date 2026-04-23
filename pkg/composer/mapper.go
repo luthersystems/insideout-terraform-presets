@@ -600,7 +600,8 @@ func (m DefaultMapper) BuildModuleValues(
 		}
 
 		// Only consider details for services that are actually enabled, if we know them.
-		// Check AWSBackups (v2) first, then legacy Backups for backward compatibility.
+		// Legacy sessions must Normalize before reaching BuildModuleValues;
+		// reliable's composeradapter does this for us in production.
 		enabled := map[string]bool{}
 		if comps != nil && comps.AWSBackups != nil {
 			enabled["ec2"] = boolVal(comps.AWSBackups.EC2)
@@ -608,12 +609,6 @@ func (m DefaultMapper) BuildModuleValues(
 			enabled["elasticache"] = boolVal(comps.AWSBackups.ElastiCache)
 			enabled["dynamodb"] = boolVal(comps.AWSBackups.DynamoDB)
 			enabled["s3"] = boolVal(comps.AWSBackups.S3)
-		} else if comps != nil && comps.Backups != nil {
-			enabled["ec2"] = boolVal(comps.Backups.EC2)
-			enabled["rds"] = boolVal(comps.Backups.Rds)
-			enabled["elasticache"] = boolVal(comps.Backups.ElastiCache)
-			enabled["dynamodb"] = boolVal(comps.Backups.DynamoDB)
-			enabled["s3"] = boolVal(comps.Backups.S3)
 		}
 
 		if cfg != nil && cfg.Backups != nil {

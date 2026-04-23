@@ -1078,17 +1078,9 @@ func (c *Components) GCPBackupsSelected() bool {
 }
 
 // BackupsSelected returns true if any backup component is selected (AWS or GCP).
+// Callers with legacy session shapes must Normalize first; see composeradapter.
 func (c *Components) BackupsSelected() bool {
-	return c.AWSBackupsSelected() || c.GCPBackupsSelected() || c.legacyBackupsSelected()
-}
-
-// legacyBackupsSelected checks the old Backups field for backward compatibility.
-func (c *Components) legacyBackupsSelected() bool {
-	if c == nil || c.Backups == nil {
-		return false
-	}
-	b := c.Backups
-	return boolVal(b.EC2) || boolVal(b.Rds) || boolVal(b.ElastiCache) || boolVal(b.DynamoDB) || boolVal(b.S3)
+	return c.AWSBackupsSelected() || c.GCPBackupsSelected()
 }
 
 func (c *Config) Normalize() {

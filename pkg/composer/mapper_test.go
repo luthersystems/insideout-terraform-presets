@@ -689,3 +689,46 @@ func TestBuildModuleValues_AWSEC2_CpuArchPrecedence(t *testing.T) {
 		assert.False(t, hasArch, "no arch hint should leave arch unset")
 	})
 }
+
+// TestBuildModuleValues_Postgres_RDSConfig pins the cfg.RDS → module.rds
+// mapping. Previously the kitchen-sink integration test exercised these
+// branches but asserted nothing on the mapper output; the fixture rename
+// in #122 (`awsKitchenSinkCfgWithReadReplicas`) made the gap visible.
+func TestBuildModuleValues_Postgres_RDSConfig(t *testing.T) {
+	m := DefaultMapper{}
+
+	t.Run("ReadReplicas set emits num_read_nodes", func(t *testing.T) {
+		cfg := &Config{RDS: &struct {
+			CPUSize      string `json:"cpuSize,omitempty"`
+			ReadReplicas string `json:"readReplicas,omitempty"`
+			StorageSize  string `json:"storageSize,omitempty"`
+		}{ReadReplicas: "2"}}
+		vals, err := m.BuildModuleValues(KeyPostgres, nil, cfg, "", "")
+		require.NoError(t, err)
+		assert.Equal(t, "2", vals["num_read_nodes"])
+	})
+
+	t.Run("ReadReplicas unset leaves num_read_nodes unset", func(t *testing.T) {
+		cfg := &Config{RDS: &struct {
+			CPUSize      string `json:"cpuSize,omitempty"`
+			ReadReplicas string `json:"readReplicas,omitempty"`
+			StorageSize  string `json:"storageSize,omitempty"`
+		}{CPUSize: "db.m7i.2xlarge"}}
+		vals, err := m.BuildModuleValues(KeyPostgres, nil, cfg, "", "")
+		require.NoError(t, err)
+		_, hasKey := vals["num_read_nodes"]
+		assert.False(t, hasKey, "unset ReadReplicas should not emit num_read_nodes")
+	})
+
+	t.Run("CPUSize and StorageSize map to node_cpu_size and storage_size", func(t *testing.T) {
+		cfg := &Config{RDS: &struct {
+			CPUSize      string `json:"cpuSize,omitempty"`
+			ReadReplicas string `json:"readReplicas,omitempty"`
+			StorageSize  string `json:"storageSize,omitempty"`
+		}{CPUSize: "db.m7i.2xlarge", StorageSize: "20"}}
+		vals, err := m.BuildModuleValues(KeyPostgres, nil, cfg, "", "")
+		require.NoError(t, err)
+		assert.Equal(t, "db.m7i.2xlarge", vals["node_cpu_size"])
+		assert.Equal(t, "20", vals["storage_size"])
+	})
+}
