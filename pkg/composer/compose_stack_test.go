@@ -684,6 +684,12 @@ func TestDefaultWiring_LambdaPublicVPC(t *testing.T) {
 		}
 		comps := &Components{Cloud: "AWS", VPC: "Public VPC", Lambda: ptrBool(true)}
 		comps.Normalize()
+		// Pin that Normalize actually promoted the legacy fields — without
+		// these the assertion below passes vacuously (AWSLambda stays nil →
+		// the KeyAWSLambda wiring arm short-circuits before ever looking at
+		// the VPC).
+		require.Equal(t, "Public VPC", comps.AWSVPC, "Normalize must promote legacy VPC to AWSVPC")
+		require.NotNil(t, comps.AWSLambda, "Normalize must promote legacy Lambda to AWSLambda")
 		wi := DefaultWiring(selected, KeyAWSLambda, comps)
 		_, hasEnableVPC := wi.RawHCL["enable_vpc"]
 		require.False(t, hasEnableVPC, "Legacy Public VPC (after Normalize): Lambda should not have enable_vpc")
@@ -2072,4 +2078,30 @@ func TestComposeSingle_RejectsLegacyKey(t *testing.T) {
 	require.ErrorAs(t, err, &ve, "error must be a ValidationError")
 	require.Contains(t, err.Error(), "vpc → aws_vpc",
 		"error must carry the upgrade pair")
+}
+
+// TestComposeStack_PolymorphicKeyPullsInPrefixedVPC is a regression test for
+// the implicit-dependency leak where ResolveDependencies expanded a
+// polymorphic key to its legacy VPC sibling. A direct Go caller passing only
+// [KeyResource] must still produce a prefixed-only stack: composeradapter
+// upgrades session JSON keys, but in-process callers don't go through it.
+func TestComposeStack_PolymorphicKeyPullsInPrefixedVPC(t *testing.T) {
+	c := newTestClient()
+	out, err := c.ComposeStack(ComposeStackOpts{
+		Cloud:        "aws",
+		SelectedKeys: []ComponentKey{KeyResource}, // polymorphic, pulls VPC via ImplicitDependencies
+		Comps:        &Components{},
+		Cfg:          &Config{Region: "us-east-1"},
+		Project:      "test",
+		Region:       "us-east-1",
+	})
+	require.NoError(t, err, "ComposeStack with polymorphic KeyResource should succeed")
+
+	mainTF := string(out["/main.tf"])
+	require.Contains(t, mainTF, `module "aws_vpc"`,
+		"implicit dep must render aws_vpc, not legacy vpc")
+	require.NotContains(t, mainTF, `module "vpc"`,
+		"legacy module.vpc must never appear in a prefixed-only stack")
+	require.Contains(t, mainTF, `module "resource"`,
+		"polymorphic KeyResource still renders under its own name until Phase 4")
 }

@@ -313,14 +313,18 @@ var ImplicitDependencies = map[ComponentKey][]ComponentKey{
 	KeyCloudfront:      {KeyALB},
 	KeyAWSCloudfront:   {KeyAWSALB},
 	KeyGCPCloudCDN:     {KeyGCPLoadbalancer},
-	KeyResource:        {KeyVPC}, // EKS/Lambda both benefit from/require VPC in our presets
-	KeyAWSEKS:          {KeyAWSVPC},
-	KeyAWSECS:          {KeyAWSVPC},
-	KeyGCPGKE:          {KeyGCPVPC},
-	KeyLambda:          {KeyVPC},
-	KeyAWSLambda:       {KeyAWSVPC},
-	KeyEC2:             {KeyResource, KeyVPC},
-	KeyAWSEC2:          {KeyAWSVPC},
+	// KeyResource and KeyEC2 are polymorphic keys that Phase 4 will rename to
+	// unambiguous prefixed names; their implicit deps target KeyAWSVPC (not
+	// legacy KeyVPC) so that a direct caller selecting only a polymorphic key
+	// still produces a prefixed-only stack.
+	KeyResource:       {KeyAWSVPC},
+	KeyAWSEKS:         {KeyAWSVPC},
+	KeyAWSECS:         {KeyAWSVPC},
+	KeyGCPGKE:         {KeyGCPVPC},
+	KeyLambda:         {KeyVPC},
+	KeyAWSLambda:      {KeyAWSVPC},
+	KeyEC2:            {KeyResource, KeyAWSVPC},
+	KeyAWSEC2:         {KeyAWSVPC},
 	KeyGCPCompute:      {KeyGCPVPC},
 }
 
@@ -538,9 +542,11 @@ func opensearchRef(_ map[ComponentKey]bool) string { return "module.aws_opensear
 func sqsRef(_ map[ComponentKey]bool) string       { return "module.aws_sqs" }
 
 // resourceRef returns the EKS/ECS module reference for the selected stack.
-// Prefers the prefixed KeyAWSEKS / KeyAWSECS keys, but falls back to the
-// polymorphic KeyResource ("module.resource") since Phase 4 has not yet
-// split it into unambiguous cloud-prefixed names.
+// Prefers the prefixed KeyAWSEKS / KeyAWSECS keys, with a KeyResource path
+// for the polymorphic selection Phase 4 has not yet renamed. Falls back to
+// module.aws_eks when nothing matches — the final fallback is effectively
+// unreachable (wiring only runs when `hasResource` is true) but picks the
+// prefixed name defensively.
 func resourceRef(selected map[ComponentKey]bool) string {
 	if selected[KeyAWSEKS] {
 		return "module.aws_eks"

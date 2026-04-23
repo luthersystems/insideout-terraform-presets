@@ -109,6 +109,19 @@ func TestEmitRootMainTF_MovedBlocks_DeterministicOrder(t *testing.T) {
 	}, moves)
 }
 
+func TestEmitRootMainTF_MovedBlocks_CountMatchesInputPrefixedBlocks(t *testing.T) {
+	// Mutation-resistance: a regression that iterated LegacyToV2Key directly
+	// (instead of iterating `blocks`) would emit moved blocks for every V2
+	// key regardless of whether it was in the rendered stack. That produces
+	// `to = module.aws_foo` references pointing at modules that don't exist,
+	// which `terraform validate` rejects. Pin the count explicitly so the
+	// bug surfaces in unit tests, not just in the integration harness.
+	blocks := []ModuleBlock{{Name: "aws_vpc", Source: "./modules/vpc"}}
+	moves := parseMovedBlocks(t, EmitRootMainTF(blocks))
+	require.Len(t, moves, 1, "exactly one moved block when exactly one prefixed module is emitted")
+	assert.Equal(t, movedBlock{from: "module.vpc", to: "module.aws_vpc"}, moves[0])
+}
+
 func TestEmitRootMainTF_MovedBlocks_EmitsAfterModules(t *testing.T) {
 	// The file layout convention is module blocks first, then moved blocks.
 	// This makes the file readable and keeps moved blocks together.
