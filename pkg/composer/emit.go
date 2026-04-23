@@ -403,7 +403,36 @@ func EmitRootMainTF(blocks []ModuleBlock) []byte {
 			body.AppendNewline()
 		}
 	}
+	appendMovedBlocks(body, blocks)
 	return doc.Bytes()
+}
+
+// appendMovedBlocks emits `moved { from = module.<legacy> to = module.<v2> }`
+// for every module in blocks whose Name matches a V2 ComponentKey with a
+// legacy sibling in LegacyToV2Key. This auto-migrates stacks previously
+// deployed under the legacy module name without requiring manual
+// `terraform state mv`. On fresh state moved blocks are a no-op — Terraform
+// treats a `from` address that doesn't exist in state as a vacuous move.
+//
+// Iterating `blocks` (not LegacyToV2Key) gives deterministic output order
+// and ensures we only emit moved blocks for modules actually rendered in
+// this main.tf — a stale moved block pointing at a nonexistent `to` would
+// be a Terraform validation error.
+func appendMovedBlocks(body *hclwrite.Body, blocks []ModuleBlock) {
+	v2ToLegacy := make(map[ComponentKey]ComponentKey, len(LegacyToV2Key))
+	for legacy, v2 := range LegacyToV2Key {
+		v2ToLegacy[v2] = legacy
+	}
+	for _, m := range blocks {
+		legacy, ok := v2ToLegacy[ComponentKey(m.Name)]
+		if !ok {
+			continue
+		}
+		body.AppendNewline()
+		mb := body.AppendNewBlock("moved", nil).Body()
+		setRawExpr(mb, "from", "module."+string(legacy))
+		setRawExpr(mb, "to", "module."+m.Name)
+	}
 }
 
 // EmitAutoTFVars writes <key>.auto.tfvars with provided values (skips RawExpr and nil).
