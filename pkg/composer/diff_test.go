@@ -310,6 +310,34 @@ func TestDiffConfigs_PopulatesChangesOnNonNilToNil(t *testing.T) {
 	}
 }
 
+// TestDiffConfigs_PopulatesChangesForStringPointerField exercises the
+// *string shape of Config sub-struct fields through the zero-value-diff
+// path (aws_cloudfront.defaultTtl is *string). Ensures the reflect.Ptr →
+// reflect.String fallthrough in FormatValue correctly renders a nil
+// *string as "" on the zero side; any regression there would produce
+// garbage From values like "<nil>" or panic on deref.
+func TestDiffConfigs_PopulatesChangesForStringPointerField(t *testing.T) {
+	t.Parallel()
+	oldCfg := cfgFromJSON(t, `{"cloud":"AWS"}`)
+	newCfg := cfgFromJSON(t, `{"cloud":"AWS","aws_cloudfront":{"defaultTtl":"3600"}}`)
+
+	diffs := DiffConfigs(oldCfg, newCfg)
+	if len(diffs) != 1 {
+		t.Fatalf("expected 1 diff, got %+v", diffs)
+	}
+	d := diffs[0]
+	if d.Component != "aws_cloudfront" || d.Action != "added" {
+		t.Fatalf("got %+v, want aws_cloudfront/added", d)
+	}
+	if len(d.Changes) != 1 {
+		t.Fatalf("expected 1 change (defaultTtl), got %+v", d.Changes)
+	}
+	c := d.Changes[0]
+	if c.Field != "defaultTtl" || c.From != "" || c.To != "3600" {
+		t.Errorf("got %+v, want {defaultTtl, \"\", 3600}", c)
+	}
+}
+
 func TestDiffConfigs_BoolPointerFields(t *testing.T) {
 	t.Parallel()
 	oldCfg := cfgFromJSON(t, `{"aws_eks": {"haControlPlane": true, "desiredSize": "3"}}`)
@@ -561,22 +589,68 @@ func TestSummarizeChanges_TruncatesFieldDetails(t *testing.T) {
 // contract: empty From/To (the zero-value side of a nil↔non-nil transition)
 // is displayed as "(unset)" rather than an empty string, so the summary
 // reads as "field: (unset) → value" instead of "field:  → value".
+//
+// Also pins displayFieldValue's delegation to HumanizeFieldValue on the
+// populated side — QA review flagged that every prior SummarizeChanges
+// assertion used identity-mapped fields, so a mutation that stopped
+// calling HumanizeFieldValue would have passed. Pair (unset) with:
+//   - versioning (in booleanFields, humanises "true" → "Yes")
+//   - retentionDays (appends " days" suffix)
+// so the delegation contract is enforced both ways.
+//
+// FieldDiff with both sides empty is unreachable from DiffConfigs
+// (diffStructFields only emits when oldStr != newStr), so we don't
+// defend against "(unset) → (unset)" — if a future emitter produces
+// one, the rendering will read exactly that.
 func TestSummarizeChanges_UnsetRenderedForEmptyValues(t *testing.T) {
 	t.Parallel()
-	diffs := []ComponentDiff{
-		{Component: "aws_vpc", Action: "modified", Changes: []FieldDiff{
-			{Field: "azCount", From: "", To: "2"},
-			{Field: "enableNatGateway", From: "true", To: ""},
-		}},
+	// 2-field truncation in SummarizeChanges means only the first two
+	// Changes land in the summary head; sort order follows the slice.
+	// Use one (unset)-on-From + one (unset)-on-To to cover both sides,
+	// and pick humanised fields to lock the HumanizeFieldValue route.
+	tests := []struct {
+		name   string
+		diffs  []ComponentDiff
+		wantIn []string
+	}{
+		{
+			name: "versioning_unset_to_true_humanises_to_Yes",
+			diffs: []ComponentDiff{
+				{Component: "aws_s3", Action: "modified", Changes: []FieldDiff{
+					{Field: "versioning", From: "", To: "true"},
+				}},
+			},
+			wantIn: []string{"versioning: (unset) → Yes"},
+		},
+		{
+			name: "retentionDays_30_to_unset_appends_days_suffix",
+			diffs: []ComponentDiff{
+				{Component: "aws_cloudwatch_logs", Action: "modified", Changes: []FieldDiff{
+					{Field: "retentionDays", From: "30", To: ""},
+				}},
+			},
+			wantIn: []string{"retentionDays: 30 days → (unset)"},
+		},
+		{
+			name: "identity_mapped_field_still_renders_unset",
+			diffs: []ComponentDiff{
+				{Component: "aws_vpc", Action: "modified", Changes: []FieldDiff{
+					{Field: "azCount", From: "", To: "2"},
+				}},
+			},
+			wantIn: []string{"azCount: (unset) → 2"},
+		},
 	}
-	s := SummarizeChanges(diffs)
-	// azCount: nil → populated renders From as "(unset)".
-	if !strings.Contains(s, "azCount: (unset) → 2") {
-		t.Errorf("expected 'azCount: (unset) -> 2' in summary, got %q", s)
-	}
-	// enableNatGateway: populated → nil renders To as "(unset)".
-	if !strings.Contains(s, "enableNatGateway: true → (unset)") {
-		t.Errorf("expected 'enableNatGateway: true -> (unset)' in summary, got %q", s)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			s := SummarizeChanges(tt.diffs)
+			for _, want := range tt.wantIn {
+				if !strings.Contains(s, want) {
+					t.Errorf("expected %q in summary, got %q", want, s)
+				}
+			}
+		})
 	}
 }
 
@@ -1180,6 +1254,13 @@ func TestMergeComponentDiffs_DemotesAddedWhenComponentAlreadyActive(t *testing.T
 	}
 	if !strings.Contains(summary, "aws_vpc (") {
 		t.Errorf("summary should carry field-level detail in parentheses, got %q", summary)
+	}
+	// Three fields go into DiffConfigs; SummarizeChanges truncates to 2
+	// with a "+1 more" suffix. Pin the truncation end-to-end so a mutation
+	// of the min(2, len(...)) limit surfaces via the real pipeline, not
+	// only via the synthetic TestSummarizeChanges_TruncatesFieldDetails.
+	if !strings.Contains(summary, "+1 more") {
+		t.Errorf("summary should end the aws_vpc detail with '+1 more' (3 fields, 2-field limit), got %q", summary)
 	}
 }
 
