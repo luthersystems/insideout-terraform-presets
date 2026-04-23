@@ -53,67 +53,13 @@ func TestVpcRef(t *testing.T) {
 	}{
 		{"aws_vpc selected", map[ComponentKey]bool{KeyAWSVPC: true}, "module.aws_vpc"},
 		{"gcp_vpc selected", map[ComponentKey]bool{KeyGCPVPC: true}, "module.gcp_vpc"},
-		{"legacy vpc selected", map[ComponentKey]bool{KeyVPC: true}, "module.vpc"},
-		{"no vpc selected", map[ComponentKey]bool{}, "module.vpc"},
-		{"aws_vpc takes precedence over legacy", map[ComponentKey]bool{KeyAWSVPC: true, KeyVPC: true}, "module.aws_vpc"},
+		{"nothing selected defaults to aws_vpc", map[ComponentKey]bool{}, "module.aws_vpc"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			got := vpcRef(tt.selected)
 			require.Equal(t, tt.want, got)
-		})
-	}
-}
-
-// TestV2KeyNormalization verifies that every V2 key in LegacyToV2Key is handled
-// by the DefaultWiring normalization switch. This is a structural test that
-// catches missing normalizations when new V2 keys are added.
-func TestV2KeyNormalization(t *testing.T) {
-	t.Parallel()
-	// Build the set of V2 keys that have dedicated case blocks in DefaultWiring
-	// (e.g., KeyAWSEC2 has its own case and should NOT be normalized).
-	// We test normalization by calling DefaultWiring with each V2 key and a
-	// minimal selected set, then verifying it doesn't silently skip wiring.
-	//
-	// Strategy: for each V2→legacy mapping, call DefaultWiring with the V2 key.
-	// If the legacy key has wiring logic (e.g., KeyWAF sets scope/region),
-	// the V2 key should produce the same wiring names.
-	for legacy, v2 := range LegacyToV2Key {
-		t.Run(string(v2), func(t *testing.T) {
-			t.Parallel()
-			// Use a selected set with common dependencies so wiring can fire
-			selected := map[ComponentKey]bool{
-				v2:               true,
-				KeyAWSVPC:        true,
-				KeyAWSALB:        true,
-				KeyAWSWAF:        true,
-				KeyAWSRDS:        true,
-				KeyAWSS3:         true,
-				KeyAWSEKS:        true,
-				KeyAWSBastion:    true,
-				KeyAWSSQS:        true,
-				KeyAWSOpenSearch: true,
-			}
-			legacySelected := map[ComponentKey]bool{
-				legacy:        true,
-				KeyVPC:        true,
-				KeyALB:        true,
-				KeyWAF:        true,
-				KeyPostgres:   true,
-				KeyS3:         true,
-				KeyResource:   true,
-				KeyBastion:    true,
-				KeySQS:        true,
-				KeyOpenSearch: true,
-			}
-
-			wiV2 := DefaultWiring(selected, v2, &Components{})
-			wiLegacy := DefaultWiring(legacySelected, legacy, &Components{})
-
-			// The V2 and legacy keys must produce the same wiring variable names
-			require.ElementsMatch(t, wiLegacy.Names, wiV2.Names,
-				"V2 key %s and legacy key %s should wire the same variable names", v2, legacy)
 		})
 	}
 }
@@ -126,41 +72,17 @@ func TestModuleRefHelpers(t *testing.T) {
 		selected map[ComponentKey]bool
 		want     string
 	}{
-		// ALB
-		{"alb legacy", albRef, map[ComponentKey]bool{KeyALB: true}, "module.alb"},
-		{"alb v2", albRef, map[ComponentKey]bool{KeyAWSALB: true}, "module.aws_alb"},
-		{"alb both prefers v2", albRef, map[ComponentKey]bool{KeyALB: true, KeyAWSALB: true}, "module.aws_alb"},
-		{"alb neither defaults to legacy", albRef, map[ComponentKey]bool{}, "module.alb"},
-		// WAF
-		{"waf legacy", wafRef, map[ComponentKey]bool{KeyWAF: true}, "module.waf"},
-		{"waf v2", wafRef, map[ComponentKey]bool{KeyAWSWAF: true}, "module.aws_waf"},
-		{"waf neither defaults to legacy", wafRef, map[ComponentKey]bool{}, "module.waf"},
-		// Bastion
-		{"bastion legacy", bastionRef, map[ComponentKey]bool{KeyBastion: true}, "module.bastion"},
-		{"bastion v2", bastionRef, map[ComponentKey]bool{KeyAWSBastion: true}, "module.aws_bastion"},
-		{"bastion neither defaults to legacy", bastionRef, map[ComponentKey]bool{}, "module.bastion"},
-		// RDS
-		{"rds legacy", rdsRef, map[ComponentKey]bool{KeyPostgres: true}, "module.rds"},
-		{"rds v2", rdsRef, map[ComponentKey]bool{KeyAWSRDS: true}, "module.aws_rds"},
-		{"rds neither defaults to legacy", rdsRef, map[ComponentKey]bool{}, "module.rds"},
-		// S3
-		{"s3 legacy", s3Ref, map[ComponentKey]bool{KeyS3: true}, "module.s3"},
-		{"s3 v2", s3Ref, map[ComponentKey]bool{KeyAWSS3: true}, "module.aws_s3"},
-		{"s3 neither defaults to legacy", s3Ref, map[ComponentKey]bool{}, "module.s3"},
-		// OpenSearch
-		{"opensearch legacy", opensearchRef, map[ComponentKey]bool{KeyOpenSearch: true}, "module.opensearch"},
-		{"opensearch v2", opensearchRef, map[ComponentKey]bool{KeyAWSOpenSearch: true}, "module.aws_opensearch"},
-		{"opensearch neither defaults to legacy", opensearchRef, map[ComponentKey]bool{}, "module.opensearch"},
-		// SQS
-		{"sqs legacy", sqsRef, map[ComponentKey]bool{KeySQS: true}, "module.sqs"},
-		{"sqs v2", sqsRef, map[ComponentKey]bool{KeyAWSSQS: true}, "module.aws_sqs"},
-		{"sqs neither defaults to legacy", sqsRef, map[ComponentKey]bool{}, "module.sqs"},
-		// Resource (EKS/ECS)
-		{"resource legacy", resourceRef, map[ComponentKey]bool{KeyResource: true}, "module.resource"},
+		{"alb", albRef, map[ComponentKey]bool{KeyAWSALB: true}, "module.aws_alb"},
+		{"waf", wafRef, map[ComponentKey]bool{KeyAWSWAF: true}, "module.aws_waf"},
+		{"bastion", bastionRef, map[ComponentKey]bool{KeyAWSBastion: true}, "module.aws_bastion"},
+		{"rds", rdsRef, map[ComponentKey]bool{KeyAWSRDS: true}, "module.aws_rds"},
+		{"s3", s3Ref, map[ComponentKey]bool{KeyAWSS3: true}, "module.aws_s3"},
+		{"opensearch", opensearchRef, map[ComponentKey]bool{KeyAWSOpenSearch: true}, "module.aws_opensearch"},
+		{"sqs", sqsRef, map[ComponentKey]bool{KeyAWSSQS: true}, "module.aws_sqs"},
 		{"resource eks v2", resourceRef, map[ComponentKey]bool{KeyAWSEKS: true}, "module.aws_eks"},
 		{"resource ecs v2", resourceRef, map[ComponentKey]bool{KeyAWSECS: true}, "module.aws_ecs"},
 		{"resource eks+ecs prefers eks", resourceRef, map[ComponentKey]bool{KeyAWSEKS: true, KeyAWSECS: true}, "module.aws_eks"},
-		{"resource neither defaults to legacy", resourceRef, map[ComponentKey]bool{}, "module.resource"},
+		{"resource neither defaults to eks", resourceRef, map[ComponentKey]bool{}, "module.aws_eks"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -368,11 +290,12 @@ func TestDefaultWiring_BackupsDynamoDBS3(t *testing.T) {
 
 	t.Run("a legacy Backups session that's been Normalized wires V2 modules", func(t *testing.T) {
 		t.Parallel()
-		// Phase 3b dropped the legacy Backups-field fallback in DefaultWiring.
-		// Legacy sessions must Normalize() before reaching the composer;
-		// reliable's composeradapter does this for us in production.
+		// Phase 3b collapsed both the legacy Backups-field fallback and the
+		// AWS→legacy normalization switch. Legacy Components fields must
+		// Normalize before reaching the composer; reliable's composeradapter
+		// does this in production.
 		selected := map[ComponentKey]bool{
-			KeyBackups:     true,
+			KeyAWSBackups:  true,
 			KeyAWSDynamoDB: true,
 			KeyAWSS3:       true,
 		}
@@ -390,7 +313,7 @@ func TestDefaultWiring_BackupsDynamoDBS3(t *testing.T) {
 			},
 		}
 		comps.Normalize()
-		wi := DefaultWiring(selected, KeyBackups, comps)
+		wi := DefaultWiring(selected, KeyAWSBackups, comps)
 		require.Contains(t, wi.RawHCL["dynamodb_rule"], "module.aws_dynamodb.table_arn")
 		require.Contains(t, wi.RawHCL["s3_rule"], "module.aws_s3.bucket_arn")
 	})
@@ -565,22 +488,25 @@ func TestComposeStack_V2KitchenSink(t *testing.T) {
 }
 
 func TestComposeStack_KitchenSink(t *testing.T) {
-	// Select a broad set of modules to exercise wiring.
+	// Select a broad set of modules to exercise wiring. Uses prefixed keys
+	// plus the polymorphic KeyResource (EKS control plane) and KeyEC2 (EKS
+	// managed node group) — those stay until Phase 4 renames them to
+	// unambiguous `KeyAWSEKSControlPlane` / `KeyAWSEKSNodeGroup`.
 	selected := []ComponentKey{
-		KeyVPC,
-		KeyResource, // EKS control plane
-		KeyEC2,      // node group
-		KeyBastion,
-		KeyALB,
-		KeyPostgres,
-		KeyElastiCache,
-		KeyWAF,
-		KeyCloudfront,
-		KeyBackups,
-		KeyCloudWatchLogs,
-		KeySQS,
-		KeyCloudWatchMonitoring,
-		KeyGitHubActions,
+		KeyAWSVPC,
+		KeyAWSEKS, // EKS control plane
+		KeyEC2,    // EKS node group (polymorphic; KeyAWSEKSNodeGroup lands in Phase 4)
+		KeyAWSBastion,
+		KeyAWSALB,
+		KeyAWSRDS,
+		KeyAWSElastiCache,
+		KeyAWSWAF,
+		KeyAWSCloudfront,
+		KeyAWSBackups,
+		KeyAWSCloudWatchLogs,
+		KeyAWSSQS,
+		KeyAWSCloudWatchMonitoring,
+		KeyAWSGitHubActions,
 	}
 
 	// Enable backups for EC2/EBS + RDS to trigger wiring. Cfg sets
@@ -636,29 +562,29 @@ func TestComposeStack_KitchenSink(t *testing.T) {
 	})
 
 	t.Run("wiring/eks", func(t *testing.T) {
-		require.Contains(t, mainTF, `vpc_id                    = module.vpc.vpc_id`)
-		require.Contains(t, mainTF, `private_subnet_ids        = module.vpc.private_subnet_ids`)
-		require.Contains(t, mainTF, `public_subnet_ids         = module.vpc.public_subnet_ids`)
+		require.Contains(t, mainTF, `vpc_id                    = module.aws_vpc.vpc_id`)
+		require.Contains(t, mainTF, `private_subnet_ids        = module.aws_vpc.private_subnet_ids`)
+		require.Contains(t, mainTF, `public_subnet_ids         = module.aws_vpc.public_subnet_ids`)
 		require.Contains(t, mainTF, `cluster_enabled_log_types = ["api", "audit", "authenticator", "controllerManager", "scheduler"]`)
 	})
 
 	t.Run("wiring/nodegroup", func(t *testing.T) {
-		require.Contains(t, mainTF, `cluster_name   = module.resource.cluster_name`)
-		require.Contains(t, mainTF, `subnet_ids     = module.vpc.private_subnet_ids`)
+		require.Contains(t, mainTF, `cluster_name   = module.aws_eks.cluster_name`)
+		require.Contains(t, mainTF, `subnet_ids     = module.aws_vpc.private_subnet_ids`)
 	})
 
 	t.Run("wiring/alb", func(t *testing.T) {
-		require.Contains(t, mainTF, `vpc_id            = module.vpc.vpc_id`)
-		require.Contains(t, mainTF, `public_subnet_ids = module.vpc.public_subnet_ids`)
+		require.Contains(t, mainTF, `vpc_id            = module.aws_vpc.vpc_id`)
+		require.Contains(t, mainTF, `public_subnet_ids = module.aws_vpc.public_subnet_ids`)
 	})
 
 	t.Run("wiring/bastion", func(t *testing.T) {
-		require.Regexp(t, regexp.MustCompile(`(?m)^\s*subnet_id\s+=\s+module\.vpc\.public_subnet_ids\[0\]\s*$`), mainTF)
+		require.Regexp(t, regexp.MustCompile(`(?m)^\s*subnet_id\s+=\s+module\.aws_vpc\.public_subnet_ids\[0\]\s*$`), mainTF)
 	})
 
 	t.Run("wiring/postgres", func(t *testing.T) {
-		require.Contains(t, mainTF, `vpc_id                  = module.vpc.vpc_id`)
-		require.Contains(t, mainTF, `subnet_ids              = module.vpc.private_subnet_ids`)
+		require.Contains(t, mainTF, `vpc_id                  = module.aws_vpc.vpc_id`)
+		require.Contains(t, mainTF, `subnet_ids              = module.aws_vpc.private_subnet_ids`)
 		require.Contains(t, mainTF, `enable_cloudwatch_logs  = true`)
 		require.Contains(t, mainTF, `cloudwatch_logs_exports = ["postgresql", "upgrade"]`)
 		require.Contains(t, mainTF, `skip_final_snapshot     = true`)
@@ -666,14 +592,14 @@ func TestComposeStack_KitchenSink(t *testing.T) {
 	})
 
 	t.Run("wiring/elasticache", func(t *testing.T) {
-		require.Contains(t, mainTF, `vpc_id           = module.vpc.vpc_id`)
-		require.Contains(t, mainTF, `cache_subnet_ids = module.vpc.private_subnet_ids`)
+		require.Contains(t, mainTF, `vpc_id           = module.aws_vpc.vpc_id`)
+		require.Contains(t, mainTF, `cache_subnet_ids = module.aws_vpc.private_subnet_ids`)
 	})
 
 	t.Run("wiring/cloudfront", func(t *testing.T) {
 		require.Contains(t, mainTF, `origin_type          = "http"`)
-		require.Contains(t, mainTF, `custom_origin_domain = module.alb.alb_dns_name`)
-		require.Contains(t, mainTF, `web_acl_id           = module.waf.web_acl_arn`)
+		require.Contains(t, mainTF, `custom_origin_domain = module.aws_alb.alb_dns_name`)
+		require.Contains(t, mainTF, `web_acl_id           = module.aws_waf.web_acl_arn`)
 	})
 
 	t.Run("wiring/waf_providers", func(t *testing.T) {
@@ -685,10 +611,10 @@ func TestComposeStack_KitchenSink(t *testing.T) {
 	})
 
 	t.Run("wiring/monitoring", func(t *testing.T) {
-		require.Contains(t, mainTF, `instance_ids     = [module.bastion.bastion_instance_id]`)
-		require.Contains(t, mainTF, `rds_instance_ids = [module.rds.instance_id]`)
-		require.Contains(t, mainTF, `alb_arn_suffixes = [module.alb.alb_arn_suffix]`)
-		require.Contains(t, mainTF, `sqs_queue_arns   = [module.sqs.queue_arn]`)
+		require.Contains(t, mainTF, `instance_ids     = [module.aws_bastion.bastion_instance_id]`)
+		require.Contains(t, mainTF, `rds_instance_ids = [module.aws_rds.instance_id]`)
+		require.Contains(t, mainTF, `alb_arn_suffixes = [module.aws_alb.alb_arn_suffix]`)
+		require.Contains(t, mainTF, `sqs_queue_arns   = [module.aws_sqs.queue_arn]`)
 	})
 
 	t.Run("wiring/backups", func(t *testing.T) {
@@ -697,8 +623,8 @@ func TestComposeStack_KitchenSink(t *testing.T) {
 		require.Regexp(t, regexp.MustCompile(`(?m)^\s*enable_dynamodb\s*=\s*false\s*$`), mainTF)
 		require.Regexp(t, regexp.MustCompile(`(?m)^\s*enable_s3\s*=\s*false\s*$`), mainTF)
 		require.Contains(t, mainTF, `selection_tags = [{ type = "STRINGEQUALS", key = "backup", value = "true" }]`)
-		require.Contains(t, mainTF, `resource_arns = [module.rds.instance_arn]`)
-		require.Regexp(t, regexp.MustCompile(`(?m)^\s*default_rule\s*=\s*var\.backups_default_rule\s*$`), mainTF)
+		require.Contains(t, mainTF, `resource_arns = [module.aws_rds.instance_arn]`)
+		require.Regexp(t, regexp.MustCompile(`(?m)^\s*default_rule\s*=\s*var\.aws_backups_default_rule\s*$`), mainTF)
 	})
 
 	t.Run("tfvars/ec2_namespacing", func(t *testing.T) {
@@ -740,7 +666,7 @@ func TestDefaultWiring_LambdaPublicVPC(t *testing.T) {
 			KeyAWSLambda: true,
 		}
 		comps := &Components{AWSVPC: "Public VPC", AWSLambda: ptrBool(true)}
-		wi := DefaultWiring(selected, KeyLambda, comps)
+		wi := DefaultWiring(selected, KeyAWSLambda, comps)
 		_, hasEnableVPC := wi.RawHCL["enable_vpc"]
 		_, hasSubnetIDs := wi.RawHCL["subnet_ids"]
 		require.False(t, hasEnableVPC, "Public VPC: Lambda should not have enable_vpc")
@@ -748,16 +674,23 @@ func TestDefaultWiring_LambdaPublicVPC(t *testing.T) {
 	})
 
 	t.Run("Lambda skips VPC wiring for a legacy session that's been Normalized", func(t *testing.T) {
-		// Phase 3b dropped the legacy VPC-string fallback in isPublicVPC.
-		// Legacy sessions must Normalize() before reaching the composer;
-		// reliable's composeradapter does this for us in production.
+		// Legacy Components struct fields must be Normalize()d before reaching
+		// the composer; reliable's composeradapter does this for us in
+		// production. After Normalize, Lambda/VPC live on AWSLambda/AWSVPC
+		// and the selected map uses prefixed keys.
 		selected := map[ComponentKey]bool{
-			KeyVPC:    true,
-			KeyLambda: true,
+			KeyAWSVPC:    true,
+			KeyAWSLambda: true,
 		}
 		comps := &Components{Cloud: "AWS", VPC: "Public VPC", Lambda: ptrBool(true)}
 		comps.Normalize()
-		wi := DefaultWiring(selected, KeyLambda, comps)
+		// Pin that Normalize actually promoted the legacy fields — without
+		// these the assertion below passes vacuously (AWSLambda stays nil →
+		// the KeyAWSLambda wiring arm short-circuits before ever looking at
+		// the VPC).
+		require.Equal(t, "Public VPC", comps.AWSVPC, "Normalize must promote legacy VPC to AWSVPC")
+		require.NotNil(t, comps.AWSLambda, "Normalize must promote legacy Lambda to AWSLambda")
+		wi := DefaultWiring(selected, KeyAWSLambda, comps)
 		_, hasEnableVPC := wi.RawHCL["enable_vpc"]
 		require.False(t, hasEnableVPC, "Legacy Public VPC (after Normalize): Lambda should not have enable_vpc")
 	})
@@ -768,7 +701,7 @@ func TestDefaultWiring_LambdaPublicVPC(t *testing.T) {
 			KeyAWSLambda: true,
 		}
 		comps := &Components{AWSVPC: "Private VPC", AWSLambda: ptrBool(true)}
-		wi := DefaultWiring(selected, KeyLambda, comps)
+		wi := DefaultWiring(selected, KeyAWSLambda, comps)
 		require.Equal(t, "true", wi.RawHCL["enable_vpc"])
 		require.Contains(t, wi.RawHCL["subnet_ids"], "private_subnet_ids")
 	})
@@ -779,7 +712,7 @@ func TestDefaultWiring_LambdaPublicVPC(t *testing.T) {
 			KeyAWSLambda: true,
 		}
 		comps := &Components{AWSVPC: "", AWSLambda: ptrBool(true)}
-		wi := DefaultWiring(selected, KeyLambda, comps)
+		wi := DefaultWiring(selected, KeyAWSLambda, comps)
 		require.Equal(t, "true", wi.RawHCL["enable_vpc"])
 		require.Contains(t, wi.RawHCL["subnet_ids"], "private_subnet_ids")
 	})
@@ -842,10 +775,10 @@ func TestComposeStack_LambdaPublicVPC(t *testing.T) {
 // This is a lighter-weight check than running `terraform validate` which requires network access.
 func TestComposeStack_AWS_ValidHCL(t *testing.T) {
 	selected := []ComponentKey{
-		KeyVPC,
-		KeyEC2,
-		KeyPostgres,
-		KeyS3,
+		KeyAWSVPC,
+		KeyEC2, // EKS node group (polymorphic)
+		KeyAWSRDS,
+		KeyAWSS3,
 	}
 
 	c := newTestClient()
@@ -873,20 +806,20 @@ func TestComposeStack_AWS_ValidHCL(t *testing.T) {
 // like writing "project" in .auto.tfvars when variables.tf declares "ec2_project".
 func TestComposeStack_TFVarsMatchVariables(t *testing.T) {
 	selected := []ComponentKey{
-		KeyVPC,
-		KeyResource,
-		KeyEC2,
-		KeyBastion,
-		KeyALB,
-		KeyPostgres,
-		KeyElastiCache,
-		KeyS3,
-		KeyCloudWatchLogs,
-		KeySQS,
+		KeyAWSVPC,
+		KeyAWSEKS,
+		KeyEC2, // EKS node group (polymorphic)
+		KeyAWSBastion,
+		KeyAWSALB,
+		KeyAWSRDS,
+		KeyAWSElastiCache,
+		KeyAWSS3,
+		KeyAWSCloudWatchLogs,
+		KeyAWSSQS,
 	}
 
 	comps := &Components{
-		ElastiCache: ptrBool(true),
+		AWSElastiCache: ptrBool(true),
 	}
 	cfg := &Config{
 		Region: "us-west-2",
@@ -964,12 +897,12 @@ func TestComposeStack_TerraformInit(t *testing.T) {
 	}
 
 	selected := []ComponentKey{
-		KeyVPC,
-		KeyResource,
-		KeyEC2,
-		KeyPostgres,
-		KeyS3,
-		KeyCloudWatchLogs,
+		KeyAWSVPC,
+		KeyAWSEKS,
+		KeyEC2, // EKS node group (polymorphic)
+		KeyAWSRDS,
+		KeyAWSS3,
+		KeyAWSCloudWatchLogs,
 	}
 
 	comps := &Components{}
@@ -1021,21 +954,15 @@ func TestComposeStack_ConflictingCompute(t *testing.T) {
 		errMsg string // cloud-specific error substring
 	}{
 		{
-			name:   "Lambda + EKS (legacy keys)",
-			cloud:  "aws",
-			keys:   []ComponentKey{KeyLambda, KeyResource, KeyVPC},
-			errMsg: "incompatible AWS compute",
-		},
-		{
 			name:   "AWS Lambda + AWS EKS (prefixed)",
 			cloud:  "aws",
 			keys:   []ComponentKey{KeyAWSLambda, KeyAWSEKS, KeyAWSVPC},
 			errMsg: "incompatible AWS compute",
 		},
 		{
-			name:   "Lambda + EC2 (implicit EKS dependency)",
+			name:   "AWS Lambda + EC2 node group (implicit EKS dependency)",
 			cloud:  "aws",
-			keys:   []ComponentKey{KeyLambda, KeyEC2, KeyVPC},
+			keys:   []ComponentKey{KeyAWSLambda, KeyEC2, KeyAWSVPC},
 			errMsg: "incompatible AWS compute",
 		},
 		{
@@ -1073,8 +1000,8 @@ func TestComposeStack_LambdaIncludesPlaceholderZip(t *testing.T) {
 	c := newTestClient()
 	out, err := c.ComposeStack(ComposeStackOpts{
 		Cloud:        "aws",
-		SelectedKeys: []ComponentKey{KeyLambda},
-		Comps:        &Components{Lambda: &trueVal},
+		SelectedKeys: []ComponentKey{KeyAWSLambda},
+		Comps:        &Components{AWSLambda: &trueVal},
 		Cfg:          &Config{Region: "us-east-1"},
 		Project:      "test",
 		Region:       "us-east-1",
@@ -1649,11 +1576,11 @@ func TestComposeStack_OutputsTF_KitchenSink(t *testing.T) {
 	t.Parallel()
 
 	selected := []ComponentKey{
-		KeyVPC,
-		KeyResource,
-		KeyEC2,
-		KeyPostgres,
-		KeyS3,
+		KeyAWSVPC,
+		KeyResource, // EKS control plane (polymorphic)
+		KeyEC2,      // EKS node group (polymorphic)
+		KeyAWSRDS,
+		KeyAWSS3,
 	}
 
 	cfg := &Config{
@@ -1683,9 +1610,9 @@ func TestComposeStack_OutputsTF_KitchenSink(t *testing.T) {
 
 	// Structural: verify known outputs map to correct module references
 	knownOutputs := map[string]string{
-		"vpc_vpc_id":     "module.vpc.vpc_id",
-		"rds_db_address": "module.rds.db_address",
-		"s3_bucket_arn":  "module.s3.bucket_arn",
+		"aws_vpc_vpc_id":     "module.aws_vpc.vpc_id",
+		"aws_rds_db_address": "module.aws_rds.db_address",
+		"aws_s3_bucket_arn":  "module.aws_s3.bucket_arn",
 	}
 	for name, valueExpr := range knownOutputs {
 		re := regexp.MustCompile(`(?s)output "` + regexp.QuoteMeta(name) + `"\s*\{[^}]*value\s*=\s*` + regexp.QuoteMeta(valueExpr))
@@ -1857,7 +1784,7 @@ func TestComposeStack_ServerlessLambdaNoDuplicateVPC(t *testing.T) {
 // TestComposeStack_GCP_Provider validates that GCP stacks generate Google provider config.
 func TestComposeStack_GCP_Provider(t *testing.T) {
 	selected := []ComponentKey{
-		KeyVPC,
+		KeyGCPVPC,
 	}
 
 	c := newTestClient()
@@ -2104,4 +2031,77 @@ func TestComposeStack_AWSECS(t *testing.T) {
 	ecsTfStr := string(ecsTfvars)
 	require.Contains(t, ecsTfStr, "aws_ecs_project")
 	require.Contains(t, ecsTfStr, "aws_ecs_region")
+}
+
+// TestComposeStack_RejectsLegacyKeys is the parity test issue #118 calls out:
+// a single end-to-end signal that purely-legacy selections error at the
+// composer entry point, not silently produce un-wired modules. This is the
+// downstream-visible contract reliable's composeradapter upholds — unit
+// coverage of ValidateNoLegacyKeys lives in validate_test.go.
+func TestComposeStack_RejectsLegacyKeys(t *testing.T) {
+	c := newTestClient()
+	_, err := c.ComposeStack(ComposeStackOpts{
+		Cloud:        "aws",
+		SelectedKeys: []ComponentKey{KeyVPC, KeyPostgres, KeyS3},
+		Comps:        &Components{},
+		Cfg:          &Config{Region: "us-east-1"},
+		Project:      "test",
+		Region:       "us-east-1",
+	})
+	require.Error(t, err, "ComposeStack must reject purely-legacy SelectedKeys")
+	var ve *ValidationError
+	require.ErrorAs(t, err, &ve, "error must be a ValidationError (HTTP 400, not 500)")
+	msg := err.Error()
+	require.Contains(t, msg, "legacy ComponentKey",
+		"error must identify legacy-keys as the cause")
+	require.Contains(t, msg, "vpc → aws_vpc",
+		"error must carry the upgrade pair so callers can fix the selection")
+	require.Contains(t, msg, "composeradapter",
+		"error must point callers at reliable's upgrade path")
+}
+
+// TestComposeSingle_RejectsLegacyKey pins the same contract for the
+// single-module entry point: ComposeSingle validates its Key just like
+// ComposeStack validates its SelectedKeys.
+func TestComposeSingle_RejectsLegacyKey(t *testing.T) {
+	c := newTestClient()
+	_, err := c.ComposeSingle(ComposeSingleOpts{
+		Cloud:   "aws",
+		Key:     KeyVPC,
+		Comps:   &Components{},
+		Cfg:     &Config{},
+		Project: "test",
+		Region:  "us-east-1",
+	})
+	require.Error(t, err, "ComposeSingle must reject a legacy Key")
+	var ve *ValidationError
+	require.ErrorAs(t, err, &ve, "error must be a ValidationError")
+	require.Contains(t, err.Error(), "vpc → aws_vpc",
+		"error must carry the upgrade pair")
+}
+
+// TestComposeStack_PolymorphicKeyPullsInPrefixedVPC is a regression test for
+// the implicit-dependency leak where ResolveDependencies expanded a
+// polymorphic key to its legacy VPC sibling. A direct Go caller passing only
+// [KeyResource] must still produce a prefixed-only stack: composeradapter
+// upgrades session JSON keys, but in-process callers don't go through it.
+func TestComposeStack_PolymorphicKeyPullsInPrefixedVPC(t *testing.T) {
+	c := newTestClient()
+	out, err := c.ComposeStack(ComposeStackOpts{
+		Cloud:        "aws",
+		SelectedKeys: []ComponentKey{KeyResource}, // polymorphic, pulls VPC via ImplicitDependencies
+		Comps:        &Components{},
+		Cfg:          &Config{Region: "us-east-1"},
+		Project:      "test",
+		Region:       "us-east-1",
+	})
+	require.NoError(t, err, "ComposeStack with polymorphic KeyResource should succeed")
+
+	mainTF := string(out["/main.tf"])
+	require.Contains(t, mainTF, `module "aws_vpc"`,
+		"implicit dep must render aws_vpc, not legacy vpc")
+	require.NotContains(t, mainTF, `module "vpc"`,
+		"legacy module.vpc must never appear in a prefixed-only stack")
+	require.Contains(t, mainTF, `module "resource"`,
+		"polymorphic KeyResource still renders under its own name until Phase 4")
 }

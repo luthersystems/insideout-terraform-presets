@@ -148,27 +148,13 @@ func TestBuildModuleValues_VPC_PublicPrivateMode(t *testing.T) {
 
 	t.Run("empty AWSVPC uses preset defaults", func(t *testing.T) {
 		comps := &Components{}
-		vals, err := m.BuildModuleValues(KeyVPC, comps, nil, "test", "us-east-1")
+		vals, err := m.BuildModuleValues(KeyAWSVPC, comps, nil, "test", "us-east-1")
 		require.NoError(t, err)
 		assertVPCCaseRan(t, vals)
 		_, hasPrivate := vals["enable_private_subnets"]
 		_, hasNat := vals["enable_nat_gateway"]
 		assert.False(t, hasPrivate)
 		assert.False(t, hasNat)
-	})
-
-	t.Run("KeyVPC (legacy ComponentKey) routes through the same case arm", func(t *testing.T) {
-		// The KeyVPC ComponentKey constant is deprecated (tracked by #76) but
-		// still accepted by the mapper's normalisation switch. This test pins
-		// that accepting the legacy key alongside an AWSVPC string still takes
-		// the Public-VPC branch — regression guard for anyone tempted to drop
-		// legacy-key support before Phase 4.
-		comps := &Components{AWSVPC: "Public VPC"}
-		vals, err := m.BuildModuleValues(KeyVPC, comps, nil, "test", "us-east-1")
-		require.NoError(t, err)
-		assertVPCCaseRan(t, vals)
-		assert.Equal(t, false, vals["enable_private_subnets"])
-		assert.Equal(t, false, vals["enable_nat_gateway"])
 	})
 }
 
@@ -384,25 +370,6 @@ func TestBuildModuleValues_VPC_MapperHCLContract(t *testing.T) {
 	}
 }
 
-// TestBuildModuleValues_V2KeyNormalization verifies that calling BuildModuleValues
-// with a V2 key (e.g., KeyAWSWAF) produces the same output as calling with the
-// legacy key (e.g., KeyWAF). This catches missing case arms in the normalization switch.
-func TestBuildModuleValues_V2KeyNormalization(t *testing.T) {
-	t.Parallel()
-	m := DefaultMapper{}
-	for legacy, v2 := range LegacyToV2Key {
-		t.Run(string(v2), func(t *testing.T) {
-			t.Parallel()
-			valsLegacy, err := m.BuildModuleValues(legacy, &Components{}, &Config{}, "test", "us-east-1")
-			require.NoError(t, err)
-			valsV2, err := m.BuildModuleValues(v2, &Components{}, &Config{}, "test", "us-east-1")
-			require.NoError(t, err)
-			assert.Equal(t, valsLegacy, valsV2,
-				"V2 key %s should produce same values as legacy key %s", v2, legacy)
-		})
-	}
-}
-
 func TestBuildModuleValues_CloudWatchLogs_Retention(t *testing.T) {
 	m := DefaultMapper{}
 
@@ -414,7 +381,7 @@ func TestBuildModuleValues_CloudWatchLogs_Retention(t *testing.T) {
 				RetentionDays: 7,
 			},
 		}
-		vals, err := m.BuildModuleValues(KeyCloudWatchLogs, nil, cfg, "", "")
+		vals, err := m.BuildModuleValues(KeyAWSCloudWatchLogs, nil, cfg, "", "")
 		require.NoError(t, err)
 		assert.Equal(t, 7, vals["retention_in_days"])
 		_, hasOldKey := vals["retention"]
@@ -429,7 +396,7 @@ func TestBuildModuleValues_CloudWatchLogs_Retention(t *testing.T) {
 				RetentionDays: 90,
 			},
 		}
-		vals, err := m.BuildModuleValues(KeyCloudWatchLogs, nil, cfg, "", "")
+		vals, err := m.BuildModuleValues(KeyAWSCloudWatchLogs, nil, cfg, "", "")
 		require.NoError(t, err)
 		assert.Equal(t, 90, vals["retention_in_days"])
 	})
@@ -442,7 +409,7 @@ func TestBuildModuleValues_CloudWatchLogs_Retention(t *testing.T) {
 				RetentionDays: 365,
 			},
 		}
-		vals, err := m.BuildModuleValues(KeyCloudWatchLogs, nil, cfg, "", "")
+		vals, err := m.BuildModuleValues(KeyAWSCloudWatchLogs, nil, cfg, "", "")
 		require.NoError(t, err)
 		assert.Equal(t, 365, vals["retention_in_days"])
 	})
@@ -455,7 +422,7 @@ func TestBuildModuleValues_CloudWatchLogs_Retention(t *testing.T) {
 				RetentionDays: 0,
 			},
 		}
-		vals, err := m.BuildModuleValues(KeyCloudWatchLogs, nil, cfg, "", "")
+		vals, err := m.BuildModuleValues(KeyAWSCloudWatchLogs, nil, cfg, "", "")
 		require.NoError(t, err)
 		_, hasKey := vals["retention_in_days"]
 		assert.False(t, hasKey)
@@ -474,7 +441,7 @@ func TestBuildModuleValues_Cloudfront_OriginPath(t *testing.T) {
 				CachePaths *string `json:"cachePaths,omitempty"`
 			}{OriginPath: &path},
 		}
-		vals, err := m.BuildModuleValues(KeyCloudfront, nil, cfg, "", "")
+		vals, err := m.BuildModuleValues(KeyAWSCloudfront, nil, cfg, "", "")
 		require.NoError(t, err)
 		assert.Equal(t, "/assets", vals["origin_path"])
 	})
@@ -488,7 +455,7 @@ func TestBuildModuleValues_Cloudfront_OriginPath(t *testing.T) {
 				CachePaths *string `json:"cachePaths,omitempty"`
 			}{CachePaths: &path},
 		}
-		vals, err := m.BuildModuleValues(KeyCloudfront, nil, cfg, "", "")
+		vals, err := m.BuildModuleValues(KeyAWSCloudfront, nil, cfg, "", "")
 		require.NoError(t, err)
 		assert.Equal(t, "/legacy", vals["origin_path"])
 	})
@@ -503,7 +470,7 @@ func TestBuildModuleValues_Cloudfront_OriginPath(t *testing.T) {
 				CachePaths *string `json:"cachePaths,omitempty"`
 			}{OriginPath: &newPath, CachePaths: &oldPath},
 		}
-		vals, err := m.BuildModuleValues(KeyCloudfront, nil, cfg, "", "")
+		vals, err := m.BuildModuleValues(KeyAWSCloudfront, nil, cfg, "", "")
 		require.NoError(t, err)
 		assert.Equal(t, "/new", vals["origin_path"])
 	})
@@ -703,7 +670,7 @@ func TestBuildModuleValues_Postgres_RDSConfig(t *testing.T) {
 			ReadReplicas string `json:"readReplicas,omitempty"`
 			StorageSize  string `json:"storageSize,omitempty"`
 		}{ReadReplicas: "2"}}
-		vals, err := m.BuildModuleValues(KeyPostgres, nil, cfg, "", "")
+		vals, err := m.BuildModuleValues(KeyAWSRDS, nil, cfg, "", "")
 		require.NoError(t, err)
 		assert.Equal(t, "2", vals["num_read_nodes"])
 	})
@@ -714,7 +681,7 @@ func TestBuildModuleValues_Postgres_RDSConfig(t *testing.T) {
 			ReadReplicas string `json:"readReplicas,omitempty"`
 			StorageSize  string `json:"storageSize,omitempty"`
 		}{CPUSize: "db.m7i.2xlarge"}}
-		vals, err := m.BuildModuleValues(KeyPostgres, nil, cfg, "", "")
+		vals, err := m.BuildModuleValues(KeyAWSRDS, nil, cfg, "", "")
 		require.NoError(t, err)
 		_, hasKey := vals["num_read_nodes"]
 		assert.False(t, hasKey, "unset ReadReplicas should not emit num_read_nodes")
@@ -726,7 +693,7 @@ func TestBuildModuleValues_Postgres_RDSConfig(t *testing.T) {
 			ReadReplicas string `json:"readReplicas,omitempty"`
 			StorageSize  string `json:"storageSize,omitempty"`
 		}{CPUSize: "db.m7i.2xlarge", StorageSize: "20"}}
-		vals, err := m.BuildModuleValues(KeyPostgres, nil, cfg, "", "")
+		vals, err := m.BuildModuleValues(KeyAWSRDS, nil, cfg, "", "")
 		require.NoError(t, err)
 		assert.Equal(t, "db.m7i.2xlarge", vals["node_cpu_size"])
 		assert.Equal(t, "20", vals["storage_size"])

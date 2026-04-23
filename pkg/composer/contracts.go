@@ -313,14 +313,18 @@ var ImplicitDependencies = map[ComponentKey][]ComponentKey{
 	KeyCloudfront:      {KeyALB},
 	KeyAWSCloudfront:   {KeyAWSALB},
 	KeyGCPCloudCDN:     {KeyGCPLoadbalancer},
-	KeyResource:        {KeyVPC}, // EKS/Lambda both benefit from/require VPC in our presets
-	KeyAWSEKS:          {KeyAWSVPC},
-	KeyAWSECS:          {KeyAWSVPC},
-	KeyGCPGKE:          {KeyGCPVPC},
-	KeyLambda:          {KeyVPC},
-	KeyAWSLambda:       {KeyAWSVPC},
-	KeyEC2:             {KeyResource, KeyVPC},
-	KeyAWSEC2:          {KeyAWSVPC},
+	// KeyResource and KeyEC2 are polymorphic keys that Phase 4 will rename to
+	// unambiguous prefixed names; their implicit deps target KeyAWSVPC (not
+	// legacy KeyVPC) so that a direct caller selecting only a polymorphic key
+	// still produces a prefixed-only stack.
+	KeyResource:       {KeyAWSVPC},
+	KeyAWSEKS:         {KeyAWSVPC},
+	KeyAWSECS:         {KeyAWSVPC},
+	KeyGCPGKE:         {KeyGCPVPC},
+	KeyLambda:         {KeyVPC},
+	KeyAWSLambda:      {KeyAWSVPC},
+	KeyEC2:            {KeyResource, KeyAWSVPC},
+	KeyAWSEC2:         {KeyAWSVPC},
 	KeyGCPCompute:      {KeyGCPVPC},
 }
 
@@ -516,53 +520,33 @@ type WiredInputs struct {
 	RawHCL map[string]string // var name -> raw expression or object literal
 }
 
-// vpcRef returns the correct VPC module reference based on which VPC key is selected.
+// Module-reference helpers return "module.<name>" paths used by wiring to
+// cross-reference resources. Callers with legacy ComponentKey selections
+// must Normalize / use the composeradapter so the `selected` map carries
+// KeyAWS* keys; ComposeStack rejects purely-legacy SelectedKeys at entry.
+// EmitRootMainTF auto-emits `moved {}` blocks for the rename transition.
+
 func vpcRef(selected map[ComponentKey]bool) string {
-	if selected[KeyAWSVPC] {
-		return "module.aws_vpc"
-	}
 	if selected[KeyGCPVPC] {
 		return "module.gcp_vpc"
 	}
-	return "module.vpc"
+	return "module.aws_vpc"
 }
 
-// moduleRef returns "module.<key>" using the V2 key if selected, otherwise the legacy key.
-func moduleRef(selected map[ComponentKey]bool, legacy, v2 ComponentKey) string {
-	if selected[v2] {
-		return "module." + string(v2)
-	}
-	return "module." + string(legacy)
-}
+func albRef(_ map[ComponentKey]bool) string       { return "module.aws_alb" }
+func wafRef(_ map[ComponentKey]bool) string       { return "module.aws_waf" }
+func bastionRef(_ map[ComponentKey]bool) string   { return "module.aws_bastion" }
+func rdsRef(_ map[ComponentKey]bool) string       { return "module.aws_rds" }
+func s3Ref(_ map[ComponentKey]bool) string        { return "module.aws_s3" }
+func opensearchRef(_ map[ComponentKey]bool) string { return "module.aws_opensearch" }
+func sqsRef(_ map[ComponentKey]bool) string       { return "module.aws_sqs" }
 
-func albRef(selected map[ComponentKey]bool) string {
-	return moduleRef(selected, KeyALB, KeyAWSALB)
-}
-
-func wafRef(selected map[ComponentKey]bool) string {
-	return moduleRef(selected, KeyWAF, KeyAWSWAF)
-}
-
-func bastionRef(selected map[ComponentKey]bool) string {
-	return moduleRef(selected, KeyBastion, KeyAWSBastion)
-}
-
-func rdsRef(selected map[ComponentKey]bool) string {
-	return moduleRef(selected, KeyPostgres, KeyAWSRDS)
-}
-
-func s3Ref(selected map[ComponentKey]bool) string {
-	return moduleRef(selected, KeyS3, KeyAWSS3)
-}
-
-func opensearchRef(selected map[ComponentKey]bool) string {
-	return moduleRef(selected, KeyOpenSearch, KeyAWSOpenSearch)
-}
-
-func sqsRef(selected map[ComponentKey]bool) string {
-	return moduleRef(selected, KeySQS, KeyAWSSQS)
-}
-
+// resourceRef returns the EKS/ECS module reference for the selected stack.
+// Prefers the prefixed KeyAWSEKS / KeyAWSECS keys, with a KeyResource path
+// for the polymorphic selection Phase 4 has not yet renamed. Falls back to
+// module.aws_eks when nothing matches — the final fallback is effectively
+// unreachable (wiring only runs when `hasResource` is true) but picks the
+// prefixed name defensively.
 func resourceRef(selected map[ComponentKey]bool) string {
 	if selected[KeyAWSEKS] {
 		return "module.aws_eks"
@@ -570,82 +554,34 @@ func resourceRef(selected map[ComponentKey]bool) string {
 	if selected[KeyAWSECS] {
 		return "module.aws_ecs"
 	}
-	return "module.resource"
+	if selected[KeyResource] {
+		return "module.resource"
+	}
+	return "module.aws_eks"
 }
 
+// DefaultWiring returns cross-module references for module k. The caller's
+// `selected` map must carry KeyAWS*-prefixed keys; ComposeStack rejects
+// purely-legacy SelectedKeys at entry, and Components.Normalize promotes
+// legacy struct fields before this function is reached.
 func DefaultWiring(selected map[ComponentKey]bool, k ComponentKey, comps *Components) WiredInputs {
 	wi := WiredInputs{RawHCL: map[string]string{}}
 
-	// Normalize key for switch (handle prefixed names)
-	switch k {
-	case KeyAWSVPC:
-		k = KeyVPC
-	case KeyAWSEKS:
-		k = KeyResource
-	case KeyAWSLambda:
-		k = KeyLambda
-	case KeyAWSALB:
-		k = KeyALB
-	case KeyAWSBastion:
-		k = KeyBastion
-	case KeyAWSRDS:
-		k = KeyPostgres
-	case KeyAWSCloudfront:
-		k = KeyCloudfront
-	case KeyAWSElastiCache:
-		k = KeyElastiCache
-	case KeyAWSS3:
-		k = KeyS3
-	case KeyAWSDynamoDB:
-		k = KeyDynamoDB
-	case KeyAWSSQS:
-		k = KeySQS
-	case KeyAWSMSK:
-		k = KeyMSK
-	case KeyAWSCloudWatchLogs:
-		k = KeyCloudWatchLogs
-	case KeyAWSCloudWatchMonitoring:
-		k = KeyCloudWatchMonitoring
-	case KeyAWSCognito:
-		k = KeyCognito
-	case KeyAWSAPIGateway:
-		k = KeyAPIGateway
-	case KeyAWSKMS:
-		k = KeyKMS
-	case KeyAWSSecretsManager:
-		k = KeySecrets
-	case KeyAWSOpenSearch:
-		k = KeyOpenSearch
-	case KeyAWSBedrock:
-		k = KeyBedrock
-	case KeyAWSWAF:
-		k = KeyWAF
-	case KeyAWSGrafana:
-		k = KeyGrafana
-	case KeyAWSBackups:
-		k = KeyBackups
-	case KeyAWSGitHubActions:
-		k = KeyGitHubActions
-	case KeyAWSCodePipeline:
-		k = KeyCodePipeline
-	}
-
-	// For Wiring dependencies, check both legacy and prefixed keys
-	hasVPC := selected[KeyVPC] || selected[KeyAWSVPC]
-	hasALB := selected[KeyALB] || selected[KeyAWSALB]
-	hasWAF := selected[KeyWAF] || selected[KeyAWSWAF]
-	hasBastion := selected[KeyBastion] || selected[KeyAWSBastion]
-	hasPostgres := selected[KeyPostgres] || selected[KeyAWSRDS]
-	hasS3 := selected[KeyS3] || selected[KeyAWSS3]
-	hasOpenSearch := selected[KeyOpenSearch] || selected[KeyAWSOpenSearch]
-	hasSQS := selected[KeySQS] || selected[KeyAWSSQS]
-	hasResource := selected[KeyResource] || selected[KeyAWSEKS]
+	hasVPC := selected[KeyAWSVPC]
+	hasALB := selected[KeyAWSALB]
+	hasWAF := selected[KeyAWSWAF]
+	hasBastion := selected[KeyAWSBastion]
+	hasPostgres := selected[KeyAWSRDS]
+	hasS3 := selected[KeyAWSS3]
+	hasOpenSearch := selected[KeyAWSOpenSearch]
+	hasSQS := selected[KeyAWSSQS]
+	hasResource := selected[KeyAWSEKS] || selected[KeyResource]
 
 	switch k {
 
 	/* ---------------- VPC fans out ---------------- */
 
-	case KeyALB:
+	case KeyAWSALB:
 		if hasVPC {
 			vpc := vpcRef(selected)
 			wi.RawHCL["vpc_id"] = vpc + ".vpc_id"
@@ -653,7 +589,7 @@ func DefaultWiring(selected map[ComponentKey]bool, k ComponentKey, comps *Compon
 			wi.Names = append(wi.Names, "vpc_id", "public_subnet_ids")
 		}
 
-	case KeyResource:
+	case KeyResource, KeyAWSEKS:
 		if isLambda(comps) {
 			// Lambda Wiring
 			if hasVPC {
@@ -686,7 +622,7 @@ func DefaultWiring(selected map[ComponentKey]bool, k ComponentKey, comps *Compon
 			wi.Names = append(wi.Names, "vpc_id", "private_subnet_ids", "public_subnet_ids")
 		}
 
-	case KeyLambda:
+	case KeyAWSLambda:
 		// Only wire Lambda to VPC when private subnets are available.
 		// Public VPCs have no private subnets, so Lambda would get empty
 		// subnet_ids which causes AWS API error (SubnetIds and SecurityIds
@@ -725,7 +661,7 @@ func DefaultWiring(selected map[ComponentKey]bool, k ComponentKey, comps *Compon
 			}
 		}
 
-	case KeyBastion:
+	case KeyAWSBastion:
 		if hasVPC {
 			vpc := vpcRef(selected)
 			wi.RawHCL["vpc_id"] = vpc + ".vpc_id"
@@ -733,7 +669,7 @@ func DefaultWiring(selected map[ComponentKey]bool, k ComponentKey, comps *Compon
 			wi.Names = append(wi.Names, "vpc_id", "subnet_id")
 		}
 
-	case KeyPostgres:
+	case KeyAWSRDS:
 		if hasVPC {
 			vpc := vpcRef(selected)
 			wi.RawHCL["vpc_id"] = vpc + ".vpc_id"
@@ -746,7 +682,7 @@ func DefaultWiring(selected map[ComponentKey]bool, k ComponentKey, comps *Compon
 		wi.RawHCL["apply_immediately"] = "true"
 		wi.Names = append(wi.Names, "enable_cloudwatch_logs", "cloudwatch_logs_exports", "skip_final_snapshot", "apply_immediately")
 
-	case KeyElastiCache:
+	case KeyAWSElastiCache:
 		if hasVPC {
 			vpc := vpcRef(selected)
 			wi.RawHCL["vpc_id"] = vpc + ".vpc_id"
@@ -754,7 +690,7 @@ func DefaultWiring(selected map[ComponentKey]bool, k ComponentKey, comps *Compon
 			wi.Names = append(wi.Names, "vpc_id", "cache_subnet_ids")
 		}
 
-	case KeyCloudfront:
+	case KeyAWSCloudfront:
 		if hasALB {
 			wi.RawHCL["origin_type"] = `"http"`
 			wi.RawHCL["custom_origin_domain"] = albRef(selected) + ".alb_dns_name"
@@ -765,12 +701,12 @@ func DefaultWiring(selected map[ComponentKey]bool, k ComponentKey, comps *Compon
 			wi.Names = append(wi.Names, "web_acl_id")
 		}
 
-	case KeyWAF:
+	case KeyAWSWAF:
 		wi.RawHCL["scope"] = `"CLOUDFRONT"`
 		wi.RawHCL["region"] = `"us-east-1"`
 		wi.Names = append(wi.Names, "scope", "region")
 
-	case KeyCloudWatchMonitoring:
+	case KeyAWSCloudWatchMonitoring:
 		if hasBastion {
 			wi.RawHCL["instance_ids"] = "[" + bastionRef(selected) + ".bastion_instance_id]"
 			wi.Names = append(wi.Names, "instance_ids")
@@ -788,7 +724,7 @@ func DefaultWiring(selected map[ComponentKey]bool, k ComponentKey, comps *Compon
 			wi.Names = append(wi.Names, "sqs_queue_arns")
 		}
 
-	case KeyOpenSearch:
+	case KeyAWSOpenSearch:
 		if hasVPC {
 			vpc := vpcRef(selected)
 			wi.RawHCL["vpc_id"] = vpc + ".vpc_id"
@@ -796,7 +732,7 @@ func DefaultWiring(selected map[ComponentKey]bool, k ComponentKey, comps *Compon
 			wi.Names = append(wi.Names, "vpc_id", "subnet_ids")
 		}
 
-	case KeyBedrock:
+	case KeyAWSBedrock:
 		if hasS3 {
 			wi.RawHCL["s3_bucket_arn"] = s3Ref(selected) + ".bucket_arn"
 			wi.Names = append(wi.Names, "s3_bucket_arn")
@@ -806,7 +742,7 @@ func DefaultWiring(selected map[ComponentKey]bool, k ComponentKey, comps *Compon
 			wi.Names = append(wi.Names, "opensearch_collection_arn")
 		}
 
-	case KeyBackups:
+	case KeyAWSBackups:
 		// Legacy sessions must Normalize before reaching DefaultWiring;
 		// reliable's composeradapter does this for us in production.
 		enableEbs, enableRds, enableDdb, enableS3 := false, false, false, false
@@ -832,7 +768,7 @@ func DefaultWiring(selected map[ComponentKey]bool, k ComponentKey, comps *Compon
 		// For each enabled service, wire the in-stack module's ARN. If the target
 		// component isn't in the stack, fall back to a backup=true tag selection
 		// so the selection block remains valid.
-		hasDynamoDB := selected[KeyDynamoDB] || selected[KeyAWSDynamoDB]
+		hasDynamoDB := selected[KeyAWSDynamoDB]
 		tagFallback := `{
   selection = {
     resource_arns  = []
@@ -849,7 +785,7 @@ func DefaultWiring(selected map[ComponentKey]bool, k ComponentKey, comps *Compon
 		}
 		if enableDdb {
 			if hasDynamoDB {
-				wi.RawHCL["dynamodb_rule"] = "{\n  selection = { resource_arns = [" + moduleRef(selected, KeyDynamoDB, KeyAWSDynamoDB) + ".table_arn], selection_tags = [] }\n}"
+				wi.RawHCL["dynamodb_rule"] = "{\n  selection = { resource_arns = [module.aws_dynamodb.table_arn], selection_tags = [] }\n}"
 			} else {
 				wi.RawHCL["dynamodb_rule"] = tagFallback
 			}

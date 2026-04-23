@@ -101,6 +101,35 @@ func filterPresent(set map[ComponentKey]bool, candidates ...ComponentKey) []Comp
 	return found
 }
 
+// ValidateNoLegacyKeys returns a ValidationError if any of the provided
+// keys are deprecated legacy ComponentKey constants that have been renamed
+// to AWS-prefixed equivalents in LegacyToV2Key. Callers with legacy-shaped
+// session JSON should run reliable's composeradapter (or otherwise upgrade
+// keys) before handing them to ComposeStack. Polymorphic keys that haven't
+// been renamed (KeyResource, KeyEC2) and third-party toggles (KeySplunk,
+// KeyDatadog) pass through — only keys present in LegacyToV2Key are rejected.
+func ValidateNoLegacyKeys(keys []ComponentKey) error {
+	var legacy []ComponentKey
+	for _, k := range keys {
+		if _, isLegacy := LegacyToV2Key[k]; isLegacy {
+			legacy = append(legacy, k)
+		}
+	}
+	if len(legacy) == 0 {
+		return nil
+	}
+	// Build human-readable "legacy → prefixed" pairs so the error points at
+	// the fix, not just the problem.
+	pairs := make([]string, 0, len(legacy))
+	for _, k := range legacy {
+		pairs = append(pairs, fmt.Sprintf("%s → %s", k, LegacyToV2Key[k]))
+	}
+	return &ValidationError{msg: fmt.Sprintf(
+		"legacy ComponentKey(s) in SelectedKeys: %s — composer accepts only AWS-prefixed keys; use reliable's composeradapter to upgrade session JSON",
+		strings.Join(pairs, ", "),
+	)}
+}
+
 // ValidateRemovals checks whether removing the given components would break
 // dependencies of the remaining components. Returns a descriptive error for
 // each problematic removal, or nil if all removals are safe.

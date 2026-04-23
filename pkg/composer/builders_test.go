@@ -75,17 +75,10 @@ func configWithAWSECS(in awsECSCfgInput) *Config {
 	}
 }
 
-// awsKitchenSinkCfgBase returns the Config fields shared by the two composer
-// kitchen-sink tests (legacy- and V2-key variants). Fields use the legacy
-// (un-prefixed) Config names because Config.Normalize() promotes them to
-// the cloud-prefixed equivalents during compose.
-//
-// The split into Base / WithReadReplicas / V2 (instead of a single shared
-// builder) preserves a subtle fidelity invariant: the V2 variant leaves
-// RDS.ReadReplicas unset, exercising the "unset" branch of the RDS mapper,
-// while the WithReadReplicas variant sets it to "2" so both mapper branches
-// are exercised. Collapsing into one shared helper would silently couple the
-// two tests on that branch.
+// awsKitchenSinkCfgBase returns the Config fields shared by the composer
+// kitchen-sink tests. Fields use the legacy (un-prefixed) Config names
+// because Config.Normalize() promotes them to the cloud-prefixed
+// equivalents during compose.
 func awsKitchenSinkCfgBase() *Config {
 	return &Config{
 		Region: "us-west-2",
@@ -130,11 +123,10 @@ func awsKitchenSinkCfgWithReadReplicas() *Config {
 	return cfg
 }
 
-// awsKitchenSinkCompsV2 returns the Components shape for both kitchen-sink
-// tests: AWSElastiCache toggle plus AWSBackups (prefixed). EC2 and RDS are
-// the only backup targets enabled; DynamoDB and S3 are left unset so
-// boolVal(nil) falls through to false, matching the wiring/backups subtest
-// assertions in both kitchen-sink tests.
+// awsKitchenSinkCompsV2 returns the Components shape for the kitchen-sink
+// composer tests: AWSElastiCache toggle plus AWSBackups with EC2 + RDS
+// enabled. DynamoDB and S3 are left unset so boolVal(nil) == false reaches
+// the wiring assertions.
 func awsKitchenSinkCompsV2() *Components {
 	return &Components{
 		AWSElastiCache: ptrBool(true),

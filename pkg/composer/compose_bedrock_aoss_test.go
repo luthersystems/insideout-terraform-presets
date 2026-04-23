@@ -33,58 +33,26 @@ var awsBedrockCollectionArnRegex = regexp.MustCompile(
 //     compose so the preset's regex validation passes.
 
 // TestBedrockWiring_AOSSCollectionArn locks in the rename
-// `opensearch_arn` → `opensearch_collection_arn` and the new
-// `.collection_arn` RHS across both the v2 (aws_-prefixed) and legacy key
-// paths. The `case KeyBedrock:` branch in contracts.go serves both after
-// DefaultWiring's normalization switch, so regressing one silently
-// regresses the other — the legacy subtest prevents that.
+// `opensearch_arn` → `opensearch_collection_arn` and the `.collection_arn`
+// RHS for the AWS-prefixed Bedrock wiring. Legacy unprefixed keys no
+// longer reach the composer after Phase 3b strict validation; the
+// legacy-parity signal now lives in TestComposeStack_RejectsLegacyKeys.
 func TestBedrockWiring_AOSSCollectionArn(t *testing.T) {
-	cases := []struct {
-		name         string
-		selected     map[ComponentKey]bool
-		key          ComponentKey
-		wantRHS      string
-		wantLegacyIn string
-	}{
-		{
-			name: "v2 aws_-prefixed keys",
-			selected: map[ComponentKey]bool{
-				KeyAWSS3:         true,
-				KeyAWSOpenSearch: true,
-				KeyAWSBedrock:    true,
-			},
-			key:          KeyAWSBedrock,
-			wantRHS:      "module.aws_opensearch.collection_arn",
-			wantLegacyIn: "module.aws_opensearch",
-		},
-		{
-			name: "legacy unprefixed keys",
-			selected: map[ComponentKey]bool{
-				KeyS3:         true,
-				KeyOpenSearch: true,
-				KeyBedrock:    true,
-			},
-			key:          KeyBedrock,
-			wantRHS:      "module.opensearch.collection_arn",
-			wantLegacyIn: "module.opensearch",
-		},
+	selected := map[ComponentKey]bool{
+		KeyAWSS3:         true,
+		KeyAWSOpenSearch: true,
+		KeyAWSBedrock:    true,
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			wi := DefaultWiring(tc.selected, tc.key, &Components{})
+	wi := DefaultWiring(selected, KeyAWSBedrock, &Components{})
 
-			require.Equal(t, tc.wantRHS, wi.RawHCL["opensearch_collection_arn"],
-				"bedrock must wire opensearch_collection_arn to the AOSS collection output")
-			require.Contains(t, wi.RawHCL["opensearch_collection_arn"], tc.wantLegacyIn,
-				"wiring must target the correct opensearch module for this key family")
+	require.Equal(t, "module.aws_opensearch.collection_arn", wi.RawHCL["opensearch_collection_arn"],
+		"bedrock must wire opensearch_collection_arn to the AOSS collection output")
 
-			_, hasOldKey := wi.RawHCL["opensearch_arn"]
-			require.False(t, hasOldKey, "legacy opensearch_arn input must not be emitted")
+	_, hasOldKey := wi.RawHCL["opensearch_arn"]
+	require.False(t, hasOldKey, "legacy opensearch_arn input must not be emitted")
 
-			require.Contains(t, wi.Names, "opensearch_collection_arn")
-			require.NotContains(t, wi.Names, "opensearch_arn")
-		})
-	}
+	require.Contains(t, wi.Names, "opensearch_collection_arn")
+	require.NotContains(t, wi.Names, "opensearch_arn")
 }
 
 // TestMapper_OpenSearchDeploymentTypeOverride verifies the mapper
@@ -132,13 +100,14 @@ func TestMapper_OpenSearchDeploymentTypeOverride(t *testing.T) {
 			"deployment_type must track user config when Bedrock is absent")
 	})
 
-	t.Run("legacy Bedrock flag also forces serverless", func(t *testing.T) {
-		vals, err := m.BuildModuleValues(
-			KeyOpenSearch,
-			&Components{Bedrock: ptrBool(true), OpenSearch: ptrBool(true)},
-			&Config{},
-			"demo", "us-east-1",
-		)
+	t.Run("Normalized legacy Bedrock/OpenSearch flags still force serverless", func(t *testing.T) {
+		// Legacy Components fields must Normalize before reaching the mapper;
+		// reliable's composeradapter does this in production. After Normalize
+		// the legacy Bedrock/OpenSearch fields have been promoted to their
+		// AWS-prefixed siblings, so the mapper's V2 code path fires.
+		c := &Components{Cloud: "AWS", Bedrock: ptrBool(true), OpenSearch: ptrBool(true)}
+		c.Normalize()
+		vals, err := m.BuildModuleValues(KeyAWSOpenSearch, c, &Config{}, "demo", "us-east-1")
 		require.NoError(t, err)
 		require.Equal(t, "serverless", vals["deployment_type"])
 	})

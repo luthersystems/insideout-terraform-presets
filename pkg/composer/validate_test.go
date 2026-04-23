@@ -336,3 +336,58 @@ func TestDiffComponents_SafeRemovalNoWarnings(t *testing.T) {
 	require.Equal(t, "aws_sqs", diffs[0].Component)
 	require.Empty(t, diffs[0].Warnings, "removing SQS should not produce warnings")
 }
+
+// TestValidateNoLegacyKeys locks in the Phase 3b contract that the composer's
+// public surface rejects legacy ComponentKeys. Adapters (reliable
+// composeradapter) must upgrade session JSON before handing it off.
+func TestValidateNoLegacyKeys(t *testing.T) {
+	t.Run("prefixed-only selection passes", func(t *testing.T) {
+		require.NoError(t, ValidateNoLegacyKeys([]ComponentKey{KeyAWSVPC, KeyAWSRDS, KeyAWSS3}))
+	})
+
+	t.Run("polymorphic keys pass", func(t *testing.T) {
+		// KeyResource / KeyEC2 are polymorphic, not renamed in LegacyToV2Key.
+		// Phase 4 renames them to unambiguous prefixed names; until then
+		// they remain valid.
+		require.NoError(t, ValidateNoLegacyKeys([]ComponentKey{KeyAWSVPC, KeyResource, KeyEC2}))
+	})
+
+	t.Run("third-party toggles pass", func(t *testing.T) {
+		// Splunk / Datadog have no AWS-prefixed siblings.
+		require.NoError(t, ValidateNoLegacyKeys([]ComponentKey{KeySplunk, KeyDatadog}))
+	})
+
+	t.Run("GCP-only selection passes (validator is cloud-agnostic)", func(t *testing.T) {
+		// LegacyToV2Key only contains AWS pairs; GCP keys are prefixed from
+		// day one. A pure-GCP selection must not trip the validator. Pinning
+		// this as intentional — anyone adding GCP pairs to LegacyToV2Key
+		// should reason about the rejection semantics here.
+		require.NoError(t, ValidateNoLegacyKeys([]ComponentKey{
+			KeyGCPVPC, KeyGCPGKE, KeyGCPCloudSQL, KeyGCPGCS,
+		}))
+	})
+
+	t.Run("empty selection passes", func(t *testing.T) {
+		require.NoError(t, ValidateNoLegacyKeys(nil))
+		require.NoError(t, ValidateNoLegacyKeys([]ComponentKey{}))
+	})
+
+	t.Run("single legacy key fails with actionable pair", func(t *testing.T) {
+		err := ValidateNoLegacyKeys([]ComponentKey{KeyVPC})
+		require.Error(t, err)
+		var ve *ValidationError
+		require.ErrorAs(t, err, &ve, "must return a ValidationError so handlers map to HTTP 400")
+		require.Contains(t, err.Error(), "vpc → aws_vpc")
+		require.Contains(t, err.Error(), "composeradapter",
+			"error must point callers at the upgrade path")
+	})
+
+	t.Run("multiple legacy keys all reported", func(t *testing.T) {
+		err := ValidateNoLegacyKeys([]ComponentKey{KeyVPC, KeyAWSRDS, KeyALB, KeyBackups})
+		require.Error(t, err)
+		msg := err.Error()
+		require.Contains(t, msg, "vpc → aws_vpc")
+		require.Contains(t, msg, "alb → aws_alb")
+		require.Contains(t, msg, "backups → aws_backups")
+	})
+}
