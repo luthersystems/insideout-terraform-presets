@@ -290,6 +290,21 @@ func isComponentActive(v reflect.Value) bool {
 	return false
 }
 
+// componentEnabled reports whether the Components field whose JSON tag matches
+// kind is active (non-empty string / non-nil pointer / true bool). Used by
+// MergeComponentDiffs to distinguish a genuine add/remove from a config-only
+// population of an already-enabled component.
+func componentEnabled(c Components, kind string) bool {
+	v := reflect.ValueOf(c)
+	t := v.Type()
+	for i := 0; i < t.NumField(); i++ {
+		if JSONTagName(t.Field(i)) == kind {
+			return isComponentActive(v.Field(i))
+		}
+	}
+	return false
+}
+
 // DiffComponents compares two Components structs and returns diffs for
 // components that were added or removed. It only looks at toggle fields
 // (cloud-prefixed + external); metadata and legacy fields are skipped.
@@ -388,11 +403,23 @@ func DiffMetadata(oldComp, newComp Components) []MetadataDiff {
 // with config-level diffs (from DiffConfigs) into a single slice. Config diffs
 // take precedence when both sources report the same component key, since they
 // carry richer FieldDiff detail. The result is sorted by component name.
-func MergeComponentDiffs(componentDiffs, configDiffs []ComponentDiff) []ComponentDiff {
+//
+// oldComp / newComp correct a blind spot in DiffConfigs: when a component is
+// active on both sides and only its Config sub-struct flipped nil↔non-nil,
+// the config-origin "added" / "removed" is demoted to "modified". Without
+// this, two consecutive StackVersions that merely populate / clear a config
+// block would both summarize as "Added: <component>." or "Removed:
+// <component>." even though the toggle itself never changed (issue #123).
+func MergeComponentDiffs(componentDiffs, configDiffs []ComponentDiff, oldComp, newComp Components) []ComponentDiff {
 	seen := make(map[string]bool, len(configDiffs))
 	merged := make([]ComponentDiff, 0, len(configDiffs)+len(componentDiffs))
 
 	for _, d := range configDiffs {
+		if (d.Action == "added" || d.Action == "removed") &&
+			componentEnabled(oldComp, d.Component) &&
+			componentEnabled(newComp, d.Component) {
+			d.Action = "modified"
+		}
 		seen[d.Component] = true
 		merged = append(merged, d)
 	}

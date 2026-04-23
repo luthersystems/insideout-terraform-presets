@@ -875,7 +875,7 @@ func TestVersionDiff_MetadataOmittedWhenEmpty(t *testing.T) {
 
 func TestMergeComponentDiffs_BothEmpty(t *testing.T) {
 	t.Parallel()
-	merged := MergeComponentDiffs(nil, nil)
+	merged := MergeComponentDiffs(nil, nil, Components{}, Components{})
 	if len(merged) != 0 {
 		t.Errorf("expected empty, got %d", len(merged))
 	}
@@ -886,7 +886,7 @@ func TestMergeComponentDiffs_ConfigOnly(t *testing.T) {
 	cfgDiffs := []ComponentDiff{
 		{Component: "aws_ec2", Action: "modified", Changes: []FieldDiff{{Field: "numServers", From: "2", To: "4"}}},
 	}
-	merged := MergeComponentDiffs(nil, cfgDiffs)
+	merged := MergeComponentDiffs(nil, cfgDiffs, Components{}, Components{})
 	if len(merged) != 1 {
 		t.Fatalf("expected 1, got %d", len(merged))
 	}
@@ -900,7 +900,7 @@ func TestMergeComponentDiffs_ComponentOnly(t *testing.T) {
 	compDiffs := []ComponentDiff{
 		{Component: "aws_waf", Action: "added"},
 	}
-	merged := MergeComponentDiffs(compDiffs, nil)
+	merged := MergeComponentDiffs(compDiffs, nil, Components{}, Components{})
 	if len(merged) != 1 {
 		t.Fatalf("expected 1, got %d", len(merged))
 	}
@@ -917,7 +917,7 @@ func TestMergeComponentDiffs_ConfigTakesPrecedence(t *testing.T) {
 	cfgDiffs := []ComponentDiff{
 		{Component: "aws_rds", Action: "added", Changes: []FieldDiff{{Field: "cpuSize", From: "", To: "db.r5.large"}}},
 	}
-	merged := MergeComponentDiffs(compDiffs, cfgDiffs)
+	merged := MergeComponentDiffs(compDiffs, cfgDiffs, Components{}, Components{})
 	if len(merged) != 1 {
 		t.Fatalf("expected 1, got %d", len(merged))
 	}
@@ -938,7 +938,7 @@ func TestMergeComponentDiffs_Disjoint(t *testing.T) {
 	cfgDiffs := []ComponentDiff{
 		{Component: "aws_ec2", Action: "modified", Changes: []FieldDiff{{Field: "numServers", From: "2", To: "4"}}},
 	}
-	merged := MergeComponentDiffs(compDiffs, cfgDiffs)
+	merged := MergeComponentDiffs(compDiffs, cfgDiffs, Components{}, Components{})
 	if len(merged) != 2 {
 		t.Fatalf("expected 2, got %d", len(merged))
 	}
@@ -957,7 +957,7 @@ func TestMergeComponentDiffs_Sorted(t *testing.T) {
 	cfgDiffs := []ComponentDiff{
 		{Component: "aws_rds", Action: "modified"},
 	}
-	merged := MergeComponentDiffs(compDiffs, cfgDiffs)
+	merged := MergeComponentDiffs(compDiffs, cfgDiffs, Components{}, Components{})
 	if len(merged) != 3 {
 		t.Fatalf("expected 3, got %d", len(merged))
 	}
@@ -965,5 +965,135 @@ func TestMergeComponentDiffs_Sorted(t *testing.T) {
 		if merged[i].Component < merged[i-1].Component {
 			t.Errorf("not sorted: %q < %q at position %d", merged[i].Component, merged[i-1].Component, i)
 		}
+	}
+}
+
+// TestMergeComponentDiffs_DemotesAddedWhenComponentAlreadyActive is the
+// verbatim reproduction from issue #123: two StackVersions with identical
+// Components (aws_vpc already "Private" on both sides) where only the Config
+// sub-struct transitions nil → non-nil. Without the merge-site demotion, the
+// second turn would wrongly summarize as "Added: aws_vpc." even though the
+// toggle never changed.
+func TestMergeComponentDiffs_DemotesAddedWhenComponentAlreadyActive(t *testing.T) {
+	t.Parallel()
+	oldComp := compFromJSON(t, `{"cloud":"AWS","aws_vpc":"Private"}`)
+	newComp := compFromJSON(t, `{"cloud":"AWS","aws_vpc":"Private"}`)
+	oldCfg := cfgFromJSON(t, `{"cloud":"AWS"}`)
+	newCfg := cfgFromJSON(t, `{"cloud":"AWS","aws_vpc":{"azCount":2,"enableNatGateway":true,"singleNatGateway":true}}`)
+
+	componentDiffs := DiffComponents(oldComp, newComp)
+	configDiffs := DiffConfigs(oldCfg, newCfg)
+	if len(componentDiffs) != 0 {
+		t.Fatalf("DiffComponents: expected 0 diffs (toggle unchanged), got %+v", componentDiffs)
+	}
+	if len(configDiffs) != 1 || configDiffs[0].Action != "added" {
+		t.Fatalf("DiffConfigs: expected [{aws_vpc, added}], got %+v", configDiffs)
+	}
+
+	merged := MergeComponentDiffs(componentDiffs, configDiffs, oldComp, newComp)
+	if len(merged) != 1 {
+		t.Fatalf("merged: expected 1 diff, got %+v", merged)
+	}
+	if merged[0].Component != "aws_vpc" || merged[0].Action != "modified" {
+		t.Errorf("expected {aws_vpc, modified}, got %+v", merged[0])
+	}
+
+	summary := SummarizeChanges(merged)
+	if strings.HasPrefix(summary, "Added:") {
+		t.Errorf("summary should not start with 'Added:' for config-only population, got %q", summary)
+	}
+	if !strings.HasPrefix(summary, "Modified:") {
+		t.Errorf("summary should start with 'Modified:', got %q", summary)
+	}
+}
+
+// TestMergeComponentDiffs_DemotesRemovedWhenComponentStillActive is the
+// symmetric case: config transitions non-nil → nil while the component
+// remains enabled. A naive merge would summarize as "Removed: aws_vpc."
+// even though the toggle is unchanged.
+func TestMergeComponentDiffs_DemotesRemovedWhenComponentStillActive(t *testing.T) {
+	t.Parallel()
+	oldComp := compFromJSON(t, `{"cloud":"AWS","aws_vpc":"Private"}`)
+	newComp := compFromJSON(t, `{"cloud":"AWS","aws_vpc":"Private"}`)
+	oldCfg := cfgFromJSON(t, `{"cloud":"AWS","aws_vpc":{"azCount":2}}`)
+	newCfg := cfgFromJSON(t, `{"cloud":"AWS"}`)
+
+	componentDiffs := DiffComponents(oldComp, newComp)
+	configDiffs := DiffConfigs(oldCfg, newCfg)
+	if len(componentDiffs) != 0 {
+		t.Fatalf("DiffComponents: expected 0 diffs, got %+v", componentDiffs)
+	}
+	if len(configDiffs) != 1 || configDiffs[0].Action != "removed" {
+		t.Fatalf("DiffConfigs: expected [{aws_vpc, removed}], got %+v", configDiffs)
+	}
+
+	merged := MergeComponentDiffs(componentDiffs, configDiffs, oldComp, newComp)
+	if len(merged) != 1 || merged[0].Action != "modified" {
+		t.Errorf("expected removed → modified demotion, got %+v", merged)
+	}
+
+	summary := SummarizeChanges(merged)
+	if strings.HasPrefix(summary, "Removed:") {
+		t.Errorf("summary should not start with 'Removed:' for config-only clear, got %q", summary)
+	}
+}
+
+// TestMergeComponentDiffs_KeepsAddedWhenComponentNewlyEnabled guards against
+// over-demoting: when the component genuinely transitioned from off to on,
+// the "added" label must survive. DiffComponents will also emit "added" for
+// aws_vpc but DiffConfigs wins precedence — we assert the surviving diff is
+// still "added".
+func TestMergeComponentDiffs_KeepsAddedWhenComponentNewlyEnabled(t *testing.T) {
+	t.Parallel()
+	oldComp := compFromJSON(t, `{"cloud":"AWS"}`)
+	newComp := compFromJSON(t, `{"cloud":"AWS","aws_vpc":"Private"}`)
+	oldCfg := cfgFromJSON(t, `{"cloud":"AWS"}`)
+	newCfg := cfgFromJSON(t, `{"cloud":"AWS","aws_vpc":{"azCount":2}}`)
+
+	componentDiffs := DiffComponents(oldComp, newComp)
+	configDiffs := DiffConfigs(oldCfg, newCfg)
+
+	merged := MergeComponentDiffs(componentDiffs, configDiffs, oldComp, newComp)
+	if len(merged) != 1 || merged[0].Component != "aws_vpc" || merged[0].Action != "added" {
+		t.Errorf("expected [{aws_vpc, added}], got %+v", merged)
+	}
+}
+
+// TestMergeComponentDiffs_KeepsRemovedWhenComponentFullyRemoved is the mirror
+// regression guard: component toggle went off AND config cleared → must stay
+// "removed".
+func TestMergeComponentDiffs_KeepsRemovedWhenComponentFullyRemoved(t *testing.T) {
+	t.Parallel()
+	oldComp := compFromJSON(t, `{"cloud":"AWS","aws_vpc":"Private"}`)
+	newComp := compFromJSON(t, `{"cloud":"AWS"}`)
+	oldCfg := cfgFromJSON(t, `{"cloud":"AWS","aws_vpc":{"azCount":2}}`)
+	newCfg := cfgFromJSON(t, `{"cloud":"AWS"}`)
+
+	componentDiffs := DiffComponents(oldComp, newComp)
+	configDiffs := DiffConfigs(oldCfg, newCfg)
+
+	merged := MergeComponentDiffs(componentDiffs, configDiffs, oldComp, newComp)
+	if len(merged) != 1 || merged[0].Component != "aws_vpc" || merged[0].Action != "removed" {
+		t.Errorf("expected [{aws_vpc, removed}], got %+v", merged)
+	}
+}
+
+// TestMergeComponentDiffs_KeepsAddedWhenComponentInactiveOnBothSides covers
+// the edge case where config is populated for a component whose toggle is
+// still off on both sides. Unusual in practice, but the merge must not
+// demote — the user surfaced a config block worth reporting.
+func TestMergeComponentDiffs_KeepsAddedWhenComponentInactiveOnBothSides(t *testing.T) {
+	t.Parallel()
+	oldComp := compFromJSON(t, `{"cloud":"AWS"}`)
+	newComp := compFromJSON(t, `{"cloud":"AWS"}`)
+	oldCfg := cfgFromJSON(t, `{"cloud":"AWS"}`)
+	newCfg := cfgFromJSON(t, `{"cloud":"AWS","aws_vpc":{"azCount":2}}`)
+
+	componentDiffs := DiffComponents(oldComp, newComp)
+	configDiffs := DiffConfigs(oldCfg, newCfg)
+
+	merged := MergeComponentDiffs(componentDiffs, configDiffs, oldComp, newComp)
+	if len(merged) != 1 || merged[0].Component != "aws_vpc" || merged[0].Action != "added" {
+		t.Errorf("expected [{aws_vpc, added}] (no demotion, component inactive on both sides), got %+v", merged)
 	}
 }
