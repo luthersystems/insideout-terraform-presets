@@ -208,24 +208,24 @@ func (m DefaultMapper) BuildModuleValues(
 		}
 
 		// Use EKS config if available
-		if cfg != nil && cfg.Eks != nil {
-			if cfg.Eks.DesiredSize != "" {
-				if n, err := strconv.Atoi(cfg.Eks.DesiredSize); err == nil {
+		if cfg != nil && cfg.AWSEKS != nil {
+			if cfg.AWSEKS.DesiredSize != "" {
+				if n, err := strconv.Atoi(cfg.AWSEKS.DesiredSize); err == nil {
 					vals["desired_size"] = n
 				}
 			}
-			if cfg.Eks.MinSize != "" {
-				if n, err := strconv.Atoi(cfg.Eks.MinSize); err == nil {
+			if cfg.AWSEKS.MinSize != "" {
+				if n, err := strconv.Atoi(cfg.AWSEKS.MinSize); err == nil {
 					vals["min_size"] = n
 				}
 			}
-			if cfg.Eks.MaxSize != "" {
-				if n, err := strconv.Atoi(cfg.Eks.MaxSize); err == nil {
+			if cfg.AWSEKS.MaxSize != "" {
+				if n, err := strconv.Atoi(cfg.AWSEKS.MaxSize); err == nil {
 					vals["max_size"] = n
 				}
 			}
-			if cfg.Eks.InstanceType != "" {
-				vals["instance_types"] = []any{cfg.Eks.InstanceType}
+			if cfg.AWSEKS.InstanceType != "" {
+				vals["instance_types"] = []any{cfg.AWSEKS.InstanceType}
 			}
 		}
 
@@ -329,131 +329,121 @@ func (m DefaultMapper) BuildModuleValues(
 			vals["subnet_ids"] = []any{}
 		}
 		// Mirror RDS config if provided
-		if cfg != nil && cfg.RDS != nil {
-			if cfg.RDS.CPUSize != "" {
-				vals["node_cpu_size"] = cfg.RDS.CPUSize
+		if cfg != nil && cfg.AWSRDS != nil {
+			if cfg.AWSRDS.CPUSize != "" {
+				vals["node_cpu_size"] = cfg.AWSRDS.CPUSize
 			}
-			if cfg.RDS.ReadReplicas != "" {
-				vals["num_read_nodes"] = cfg.RDS.ReadReplicas
+			if cfg.AWSRDS.ReadReplicas != "" {
+				vals["num_read_nodes"] = cfg.AWSRDS.ReadReplicas
 			}
-			if cfg.RDS.StorageSize != "" {
-				vals["storage_size"] = cfg.RDS.StorageSize
+			if cfg.AWSRDS.StorageSize != "" {
+				vals["storage_size"] = cfg.AWSRDS.StorageSize
 			}
 		}
 
 	case KeyAWSCloudfront:
-		if cfg != nil && cfg.Cloudfront != nil {
-			if cfg.Cloudfront.DefaultTtl != nil && *cfg.Cloudfront.DefaultTtl != "" {
-				vals["default_ttl"] = *cfg.Cloudfront.DefaultTtl
+		if cfg != nil && cfg.AWSCloudfront != nil {
+			if cfg.AWSCloudfront.DefaultTtl != nil && *cfg.AWSCloudfront.DefaultTtl != "" {
+				vals["default_ttl"] = *cfg.AWSCloudfront.DefaultTtl
 			}
-			if cfg.Cloudfront.OriginPath != nil && *cfg.Cloudfront.OriginPath != "" {
-				vals["origin_path"] = *cfg.Cloudfront.OriginPath
-			} else if cfg.Cloudfront.CachePaths != nil && *cfg.Cloudfront.CachePaths != "" {
-				vals["origin_path"] = *cfg.Cloudfront.CachePaths
+			if cfg.AWSCloudfront.OriginPath != nil && *cfg.AWSCloudfront.OriginPath != "" {
+				vals["origin_path"] = *cfg.AWSCloudfront.OriginPath
 			}
 		}
 
 	case KeyAWSElastiCache:
-		if cfg != nil && cfg.ElastiCache != nil {
-			if cfg.ElastiCache.HA != nil {
-				vals["ha"] = *cfg.ElastiCache.HA
+		if cfg != nil && cfg.AWSElastiCache != nil {
+			if cfg.AWSElastiCache.HA != nil {
+				vals["ha"] = *cfg.AWSElastiCache.HA
 			}
-			if cfg.ElastiCache.NodeSize != "" {
-				vals["node_size"] = cfg.ElastiCache.NodeSize
+			if cfg.AWSElastiCache.NodeSize != "" {
+				vals["node_size"] = cfg.AWSElastiCache.NodeSize
 			}
-			if cfg.ElastiCache.Storage != "" {
-				vals["storage_size"] = cfg.ElastiCache.Storage
+			if cfg.AWSElastiCache.Storage != "" {
+				vals["storage_size"] = cfg.AWSElastiCache.Storage
 			}
-			if cfg.ElastiCache.Replicas != "" {
-				vals["replicas"] = cfg.ElastiCache.Replicas
+			if cfg.AWSElastiCache.Replicas != "" {
+				vals["replicas"] = cfg.AWSElastiCache.Replicas
 			}
 		}
 
 	case KeyAWSS3:
-		if cfg != nil && cfg.S3 != nil && cfg.S3.Versioning != nil {
-			vals["versioning"] = *cfg.S3.Versioning
+		if cfg != nil && cfg.AWSS3 != nil && cfg.AWSS3.Versioning != nil {
+			vals["versioning"] = *cfg.AWSS3.Versioning
 		}
 
 	case KeyAWSDynamoDB:
-		if cfg != nil && cfg.DynamoDB != nil && cfg.DynamoDB.Type != "" {
-			vals["billing_mode"] = strings.ToLower(cfg.DynamoDB.Type) // "on demand" | "provisioned"
+		if cfg != nil && cfg.AWSDynamoDB != nil && cfg.AWSDynamoDB.Type != "" {
+			vals["billing_mode"] = strings.ToLower(cfg.AWSDynamoDB.Type) // "on demand" | "provisioned"
 		}
 
 	case KeyAWSSQS:
-		if cfg != nil && cfg.SQS != nil {
-			if cfg.SQS.Type != "" {
-				vals["type"] = cfg.SQS.Type // "Standard" | "FIFO"
+		if cfg != nil && cfg.AWSSQS != nil {
+			if cfg.AWSSQS.Type != "" {
+				vals["type"] = cfg.AWSSQS.Type // "Standard" | "FIFO"
 			}
-			if cfg.SQS.VisibilityTimeout != "" {
-				vals["visibility_timeout"] = cfg.SQS.VisibilityTimeout
+			if cfg.AWSSQS.VisibilityTimeout != "" {
+				vals["visibility_timeout"] = cfg.AWSSQS.VisibilityTimeout
 			}
 		}
 
 	case KeyAWSMSK:
-		if cfg != nil && cfg.MSK != nil && cfg.MSK.Retention != "" {
-			vals["retention_period"] = cfg.MSK.Retention
+		if cfg != nil && cfg.AWSMSK != nil && cfg.AWSMSK.Retention != "" {
+			vals["retention_period"] = cfg.AWSMSK.Retention
 		}
 
 	case KeyAWSCloudWatchLogs:
-		retDays := 0
-		if cfg != nil {
-			if cfg.CloudWatchLogs != nil && cfg.CloudWatchLogs.RetentionDays > 0 {
-				retDays = cfg.CloudWatchLogs.RetentionDays
-			} else if cfg.AWSCloudWatchLogs != nil && cfg.AWSCloudWatchLogs.RetentionDays > 0 {
-				retDays = cfg.AWSCloudWatchLogs.RetentionDays
-			}
-		}
-		if retDays > 0 {
-			vals["retention_in_days"] = retDays
+		if cfg != nil && cfg.AWSCloudWatchLogs != nil && cfg.AWSCloudWatchLogs.RetentionDays > 0 {
+			vals["retention_in_days"] = cfg.AWSCloudWatchLogs.RetentionDays
 		}
 
 	case KeyAWSCognito:
-		if cfg != nil && cfg.Cognito != nil {
-			if cfg.Cognito.SignInType != "" {
-				vals["sign_in_type"] = cfg.Cognito.SignInType
+		if cfg != nil && cfg.AWSCognito != nil {
+			if cfg.AWSCognito.SignInType != "" {
+				vals["sign_in_type"] = cfg.AWSCognito.SignInType
 			}
-			if cfg.Cognito.MFARequired != nil {
-				vals["mfa_required"] = *cfg.Cognito.MFARequired
+			if cfg.AWSCognito.MFARequired != nil {
+				vals["mfa_required"] = *cfg.AWSCognito.MFARequired
 			}
 		}
 
 	case KeyAWSAPIGateway:
-		if cfg != nil && cfg.APIGateway != nil {
-			if cfg.APIGateway.DomainName != "" {
-				vals["domain_name"] = cfg.APIGateway.DomainName
+		if cfg != nil && cfg.AWSAPIGateway != nil {
+			if cfg.AWSAPIGateway.DomainName != "" {
+				vals["domain_name"] = cfg.AWSAPIGateway.DomainName
 			}
-			if cfg.APIGateway.CertificateArn != "" {
-				vals["certificate_arn"] = cfg.APIGateway.CertificateArn
+			if cfg.AWSAPIGateway.CertificateArn != "" {
+				vals["certificate_arn"] = cfg.AWSAPIGateway.CertificateArn
 			}
 		}
 
 	case KeyAWSKMS:
-		if cfg != nil && cfg.KMS != nil && cfg.KMS.NumKeys != "" {
-			if n, err := strconv.Atoi(cfg.KMS.NumKeys); err == nil {
+		if cfg != nil && cfg.AWSKMS != nil && cfg.AWSKMS.NumKeys != "" {
+			if n, err := strconv.Atoi(cfg.AWSKMS.NumKeys); err == nil {
 				vals["num_keys"] = n
 			}
 		}
 
 	case KeyAWSSecretsManager:
-		if cfg != nil && cfg.SecretsManager != nil && cfg.SecretsManager.NumSecrets != "" {
-			if n, err := strconv.Atoi(cfg.SecretsManager.NumSecrets); err == nil {
+		if cfg != nil && cfg.AWSSecretsManager != nil && cfg.AWSSecretsManager.NumSecrets != "" {
+			if n, err := strconv.Atoi(cfg.AWSSecretsManager.NumSecrets); err == nil {
 				vals["num_secrets"] = n
 			}
 		}
 
 	case KeyAWSOpenSearch:
-		if cfg != nil && cfg.OpenSearch != nil {
-			if cfg.OpenSearch.DeploymentType != "" {
-				vals["deployment_type"] = strings.ToLower(cfg.OpenSearch.DeploymentType)
+		if cfg != nil && cfg.AWSOpenSearch != nil {
+			if cfg.AWSOpenSearch.DeploymentType != "" {
+				vals["deployment_type"] = strings.ToLower(cfg.AWSOpenSearch.DeploymentType)
 			}
-			if cfg.OpenSearch.InstanceType != "" {
-				vals["instance_type"] = cfg.OpenSearch.InstanceType
+			if cfg.AWSOpenSearch.InstanceType != "" {
+				vals["instance_type"] = cfg.AWSOpenSearch.InstanceType
 			}
-			if cfg.OpenSearch.StorageSize != "" {
-				vals["storage_size"] = cfg.OpenSearch.StorageSize
+			if cfg.AWSOpenSearch.StorageSize != "" {
+				vals["storage_size"] = cfg.AWSOpenSearch.StorageSize
 			}
-			if cfg.OpenSearch.MultiAZ != nil {
-				vals["multi_az"] = *cfg.OpenSearch.MultiAZ
+			if cfg.AWSOpenSearch.MultiAZ != nil {
+				vals["multi_az"] = *cfg.AWSOpenSearch.MultiAZ
 			}
 		}
 		// Bedrock KB only supports OpenSearch Serverless (AOSS). Managed
@@ -462,7 +452,7 @@ func (m DefaultMapper) BuildModuleValues(
 		// regardless of what the user requested. Data-access policies and
 		// the vector index are an application-layer concern and are
 		// intentionally outside the preset's scope.
-		if boolPtrTrue(comps.Bedrock) || boolPtrTrue(comps.AWSBedrock) {
+		if boolPtrTrue(comps.AWSBedrock) {
 			vals["deployment_type"] = "serverless"
 		}
 		// Preview-safe stubs
@@ -474,15 +464,15 @@ func (m DefaultMapper) BuildModuleValues(
 		}
 
 	case KeyAWSBedrock:
-		if cfg != nil && cfg.Bedrock != nil {
-			if cfg.Bedrock.KnowledgeBaseName != "" {
-				vals["knowledge_base_name"] = cfg.Bedrock.KnowledgeBaseName
+		if cfg != nil && cfg.AWSBedrock != nil {
+			if cfg.AWSBedrock.KnowledgeBaseName != "" {
+				vals["knowledge_base_name"] = cfg.AWSBedrock.KnowledgeBaseName
 			}
-			if cfg.Bedrock.ModelID != "" {
-				vals["model_id"] = cfg.Bedrock.ModelID
+			if cfg.AWSBedrock.ModelID != "" {
+				vals["model_id"] = cfg.AWSBedrock.ModelID
 			}
-			if cfg.Bedrock.EmbeddingModelID != "" {
-				vals["embedding_model_id"] = cfg.Bedrock.EmbeddingModelID
+			if cfg.AWSBedrock.EmbeddingModelID != "" {
+				vals["embedding_model_id"] = cfg.AWSBedrock.EmbeddingModelID
 			}
 		}
 		// In stacks, wiring supplies s3_bucket_arn and opensearch_collection_arn.
@@ -501,18 +491,18 @@ func (m DefaultMapper) BuildModuleValues(
 
 	case KeyAWSLambda:
 		vals["runtime"] = "nodejs20.x" // Default to nodejs
-		if cfg != nil && cfg.Lambda != nil {
-			if cfg.Lambda.Runtime != "" {
-				vals["runtime"] = cfg.Lambda.Runtime
+		if cfg != nil && cfg.AWSLambda != nil {
+			if cfg.AWSLambda.Runtime != "" {
+				vals["runtime"] = cfg.AWSLambda.Runtime
 			}
-			if cfg.Lambda.MemorySize != "" {
-				if n, err := strconv.Atoi(cfg.Lambda.MemorySize); err == nil {
+			if cfg.AWSLambda.MemorySize != "" {
+				if n, err := strconv.Atoi(cfg.AWSLambda.MemorySize); err == nil {
 					vals["memory_size"] = n
 				}
 			}
-			if cfg.Lambda.Timeout != "" {
+			if cfg.AWSLambda.Timeout != "" {
 				// Convert "3s", "30s", "15m" to seconds
-				t := cfg.Lambda.Timeout
+				t := cfg.AWSLambda.Timeout
 				if trimmed, ok := strings.CutSuffix(t, "s"); ok {
 					if n, err := strconv.Atoi(trimmed); err == nil {
 						vals["timeout"] = n
@@ -545,35 +535,36 @@ func (m DefaultMapper) BuildModuleValues(
 			}
 		}
 
-		// Only consider details for services that are actually enabled, if we know them.
+		// Only consider details for services that are actually enabled.
 		// Legacy sessions must Normalize before reaching BuildModuleValues;
 		// reliable's composeradapter does this for us in production.
-		enabled := map[string]bool{}
-		if comps != nil && comps.AWSBackups != nil {
-			enabled["ec2"] = boolVal(comps.AWSBackups.EC2)
-			enabled["rds"] = boolVal(comps.AWSBackups.RDS)
-			enabled["elasticache"] = boolVal(comps.AWSBackups.ElastiCache)
-			enabled["dynamodb"] = boolVal(comps.AWSBackups.DynamoDB)
-			enabled["s3"] = boolVal(comps.AWSBackups.S3)
+		considerDetail := func(freqHours, retentionDays int) {
+			if freqHours > 0 {
+				if r := rank(freqHours); r > bestRank {
+					bestRank = r
+					bestFreq = freqHours
+				}
+			}
+			if retentionDays > maxRetention {
+				maxRetention = retentionDays
+			}
 		}
 
-		if cfg != nil && cfg.Backups != nil {
-			for svc, det := range cfg.Backups.Details {
-				// svc keys expected like "ec2Ebs", "rds", "dynamodb", "s3"
-				if on, ok := enabled[svc]; ok && !on {
-					continue
-				}
-				if det.FrequencyHours > 0 {
-					if r := rank(det.FrequencyHours); r > bestRank {
-						bestRank = r
-						bestFreq = det.FrequencyHours
-					}
-				}
-				if det.RetentionDays > 0 {
-					if det.RetentionDays > maxRetention {
-						maxRetention = det.RetentionDays
-					}
-				}
+		if cfg != nil && cfg.AWSBackups != nil && comps != nil && comps.AWSBackups != nil {
+			if boolVal(comps.AWSBackups.EC2) && cfg.AWSBackups.EC2 != nil {
+				considerDetail(cfg.AWSBackups.EC2.FrequencyHours, cfg.AWSBackups.EC2.RetentionDays)
+			}
+			if boolVal(comps.AWSBackups.RDS) && cfg.AWSBackups.RDS != nil {
+				considerDetail(cfg.AWSBackups.RDS.FrequencyHours, cfg.AWSBackups.RDS.RetentionDays)
+			}
+			if boolVal(comps.AWSBackups.ElastiCache) && cfg.AWSBackups.ElastiCache != nil {
+				considerDetail(cfg.AWSBackups.ElastiCache.FrequencyHours, cfg.AWSBackups.ElastiCache.RetentionDays)
+			}
+			if boolVal(comps.AWSBackups.DynamoDB) && cfg.AWSBackups.DynamoDB != nil {
+				considerDetail(cfg.AWSBackups.DynamoDB.FrequencyHours, cfg.AWSBackups.DynamoDB.RetentionDays)
+			}
+			if boolVal(comps.AWSBackups.S3) && cfg.AWSBackups.S3 != nil {
+				considerDetail(cfg.AWSBackups.S3.FrequencyHours, cfg.AWSBackups.S3.RetentionDays)
 			}
 		}
 

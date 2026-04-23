@@ -67,7 +67,7 @@ func TestMapper_OpenSearchDeploymentTypeOverride(t *testing.T) {
 			&Components{AWSBedrock: ptrBool(true), AWSOpenSearch: ptrBool(true)},
 			&Config{
 				// User asks for managed — invariant: Bedrock forces serverless.
-				OpenSearch: &struct {
+				AWSOpenSearch: &struct {
 					DeploymentType string `json:"deploymentType,omitempty"`
 					InstanceType   string `json:"instanceType,omitempty"`
 					StorageSize    string `json:"storageSize,omitempty"`
@@ -86,7 +86,7 @@ func TestMapper_OpenSearchDeploymentTypeOverride(t *testing.T) {
 			KeyAWSOpenSearch,
 			&Components{AWSOpenSearch: ptrBool(true)},
 			&Config{
-				OpenSearch: &struct {
+				AWSOpenSearch: &struct {
 					DeploymentType string `json:"deploymentType,omitempty"`
 					InstanceType   string `json:"instanceType,omitempty"`
 					StorageSize    string `json:"storageSize,omitempty"`
@@ -372,7 +372,7 @@ func TestComposeStack_BedrockOpenSearchAOSSEndToEnd(t *testing.T) {
 		},
 		Cfg: &Config{
 			// User requests managed — composer must force serverless.
-			OpenSearch: &struct {
+			AWSOpenSearch: &struct {
 				DeploymentType string `json:"deploymentType,omitempty"`
 				InstanceType   string `json:"instanceType,omitempty"`
 				StorageSize    string `json:"storageSize,omitempty"`

@@ -375,7 +375,7 @@ func TestBuildModuleValues_CloudWatchLogs_Retention(t *testing.T) {
 
 	t.Run("retention days integer set directly", func(t *testing.T) {
 		cfg := &Config{
-			CloudWatchLogs: &struct {
+			AWSCloudWatchLogs: &struct {
 				RetentionDays int `json:"retentionDays,omitempty"`
 			}{
 				RetentionDays: 7,
@@ -390,7 +390,7 @@ func TestBuildModuleValues_CloudWatchLogs_Retention(t *testing.T) {
 
 	t.Run("90 days retention", func(t *testing.T) {
 		cfg := &Config{
-			CloudWatchLogs: &struct {
+			AWSCloudWatchLogs: &struct {
 				RetentionDays int `json:"retentionDays,omitempty"`
 			}{
 				RetentionDays: 90,
@@ -401,14 +401,19 @@ func TestBuildModuleValues_CloudWatchLogs_Retention(t *testing.T) {
 		assert.Equal(t, 90, vals["retention_in_days"])
 	})
 
-	t.Run("V2 AWSCloudWatchLogs config is also used", func(t *testing.T) {
+	t.Run("legacy CloudWatchLogs config after Normalize is also used", func(t *testing.T) {
+		// Phase 3b: the mapper reads AWSCloudWatchLogs only. Legacy callers
+		// must Normalize() first; reliable's composeradapter does this in
+		// production.
 		cfg := &Config{
-			AWSCloudWatchLogs: &struct {
+			Cloud: "AWS",
+			CloudWatchLogs: &struct {
 				RetentionDays int `json:"retentionDays,omitempty"`
 			}{
 				RetentionDays: 365,
 			},
 		}
+		cfg.Normalize()
 		vals, err := m.BuildModuleValues(KeyAWSCloudWatchLogs, nil, cfg, "", "")
 		require.NoError(t, err)
 		assert.Equal(t, 365, vals["retention_in_days"])
@@ -416,7 +421,7 @@ func TestBuildModuleValues_CloudWatchLogs_Retention(t *testing.T) {
 
 	t.Run("zero retention does not set key", func(t *testing.T) {
 		cfg := &Config{
-			CloudWatchLogs: &struct {
+			AWSCloudWatchLogs: &struct {
 				RetentionDays int `json:"retentionDays,omitempty"`
 			}{
 				RetentionDays: 0,
@@ -435,7 +440,7 @@ func TestBuildModuleValues_Cloudfront_OriginPath(t *testing.T) {
 	t.Run("originPath maps to origin_path", func(t *testing.T) {
 		path := "/assets"
 		cfg := &Config{
-			Cloudfront: &struct {
+			AWSCloudfront: &struct {
 				DefaultTtl *string `json:"defaultTtl,omitempty"`
 				OriginPath *string `json:"originPath,omitempty"`
 				CachePaths *string `json:"cachePaths,omitempty"`
@@ -446,15 +451,19 @@ func TestBuildModuleValues_Cloudfront_OriginPath(t *testing.T) {
 		assert.Equal(t, "/assets", vals["origin_path"])
 	})
 
-	t.Run("deprecated cachePaths falls back to origin_path", func(t *testing.T) {
+	t.Run("deprecated cachePaths falls back to origin_path via Normalize", func(t *testing.T) {
+		// Phase 3b: the mapper reads AWSCloudfront.OriginPath only.
+		// Config.Normalize migrates the deprecated CachePaths → OriginPath.
 		path := "/legacy"
 		cfg := &Config{
-			Cloudfront: &struct {
+			Cloud: "AWS",
+			AWSCloudfront: &struct {
 				DefaultTtl *string `json:"defaultTtl,omitempty"`
 				OriginPath *string `json:"originPath,omitempty"`
 				CachePaths *string `json:"cachePaths,omitempty"`
 			}{CachePaths: &path},
 		}
+		cfg.Normalize()
 		vals, err := m.BuildModuleValues(KeyAWSCloudfront, nil, cfg, "", "")
 		require.NoError(t, err)
 		assert.Equal(t, "/legacy", vals["origin_path"])
@@ -464,12 +473,14 @@ func TestBuildModuleValues_Cloudfront_OriginPath(t *testing.T) {
 		newPath := "/new"
 		oldPath := "/old"
 		cfg := &Config{
-			Cloudfront: &struct {
+			Cloud: "AWS",
+			AWSCloudfront: &struct {
 				DefaultTtl *string `json:"defaultTtl,omitempty"`
 				OriginPath *string `json:"originPath,omitempty"`
 				CachePaths *string `json:"cachePaths,omitempty"`
 			}{OriginPath: &newPath, CachePaths: &oldPath},
 		}
+		cfg.Normalize()
 		vals, err := m.BuildModuleValues(KeyAWSCloudfront, nil, cfg, "", "")
 		require.NoError(t, err)
 		assert.Equal(t, "/new", vals["origin_path"])
@@ -657,7 +668,7 @@ func TestBuildModuleValues_AWSEC2_CpuArchPrecedence(t *testing.T) {
 	})
 }
 
-// TestBuildModuleValues_Postgres_RDSConfig pins the cfg.RDS → module.rds
+// TestBuildModuleValues_Postgres_RDSConfig pins the cfg.AWSRDS → module.rds
 // mapping. Previously the kitchen-sink integration test exercised these
 // branches but asserted nothing on the mapper output; the fixture rename
 // in #122 (`awsKitchenSinkCfgWithReadReplicas`) made the gap visible.
@@ -665,7 +676,7 @@ func TestBuildModuleValues_Postgres_RDSConfig(t *testing.T) {
 	m := DefaultMapper{}
 
 	t.Run("ReadReplicas set emits num_read_nodes", func(t *testing.T) {
-		cfg := &Config{RDS: &struct {
+		cfg := &Config{AWSRDS: &struct {
 			CPUSize      string `json:"cpuSize,omitempty"`
 			ReadReplicas string `json:"readReplicas,omitempty"`
 			StorageSize  string `json:"storageSize,omitempty"`
@@ -676,7 +687,7 @@ func TestBuildModuleValues_Postgres_RDSConfig(t *testing.T) {
 	})
 
 	t.Run("ReadReplicas unset leaves num_read_nodes unset", func(t *testing.T) {
-		cfg := &Config{RDS: &struct {
+		cfg := &Config{AWSRDS: &struct {
 			CPUSize      string `json:"cpuSize,omitempty"`
 			ReadReplicas string `json:"readReplicas,omitempty"`
 			StorageSize  string `json:"storageSize,omitempty"`
@@ -688,7 +699,7 @@ func TestBuildModuleValues_Postgres_RDSConfig(t *testing.T) {
 	})
 
 	t.Run("CPUSize and StorageSize map to node_cpu_size and storage_size", func(t *testing.T) {
-		cfg := &Config{RDS: &struct {
+		cfg := &Config{AWSRDS: &struct {
 			CPUSize      string `json:"cpuSize,omitempty"`
 			ReadReplicas string `json:"readReplicas,omitempty"`
 			StorageSize  string `json:"storageSize,omitempty"`
@@ -698,4 +709,80 @@ func TestBuildModuleValues_Postgres_RDSConfig(t *testing.T) {
 		assert.Equal(t, "db.m7i.2xlarge", vals["node_cpu_size"])
 		assert.Equal(t, "20", vals["storage_size"])
 	})
+
+	t.Run("legacy RDS config after Normalize is migrated", func(t *testing.T) {
+		// Phase 3b: the mapper reads AWSRDS only. Legacy callers must
+		// Normalize() first; reliable's composeradapter does this in
+		// production.
+		cfg := &Config{
+			Cloud: "AWS",
+			RDS: &struct {
+				CPUSize      string `json:"cpuSize,omitempty"`
+				ReadReplicas string `json:"readReplicas,omitempty"`
+				StorageSize  string `json:"storageSize,omitempty"`
+			}{CPUSize: "db.m7i.2xlarge", ReadReplicas: "1", StorageSize: "50"},
+		}
+		cfg.Normalize()
+		vals, err := m.BuildModuleValues(KeyAWSRDS, nil, cfg, "", "")
+		require.NoError(t, err)
+		assert.Equal(t, "db.m7i.2xlarge", vals["node_cpu_size"])
+		assert.Equal(t, "1", vals["num_read_nodes"])
+		assert.Equal(t, "50", vals["storage_size"])
+	})
+}
+
+// TestBuildModuleValues_IgnoresUnnormalizedLegacyConfig pins the Phase 3b
+// invariant: the mapper reads AWS-prefixed Config fields only. Legacy fields
+// supplied without a prior Normalize() call are invisible. The downstream
+// contract is that callers (reliable's composeradapter in production, the
+// ComposeStack/ComposeSingle entry points elsewhere) always Normalize first.
+func TestBuildModuleValues_IgnoresUnnormalizedLegacyConfig(t *testing.T) {
+	m := DefaultMapper{}
+
+	cases := []struct {
+		name string
+		key  ComponentKey
+		cfg  *Config
+		// key that should NOT appear in vals because the mapper doesn't read
+		// the legacy Config field this test populates.
+		missing string
+	}{
+		{
+			name: "legacy RDS ignored without Normalize",
+			key:  KeyAWSRDS,
+			cfg: &Config{RDS: &struct {
+				CPUSize      string `json:"cpuSize,omitempty"`
+				ReadReplicas string `json:"readReplicas,omitempty"`
+				StorageSize  string `json:"storageSize,omitempty"`
+			}{CPUSize: "db.m7i.2xlarge"}},
+			missing: "node_cpu_size",
+		},
+		{
+			name: "legacy CloudWatchLogs ignored without Normalize",
+			key:  KeyAWSCloudWatchLogs,
+			cfg: &Config{CloudWatchLogs: &struct {
+				RetentionDays int `json:"retentionDays,omitempty"`
+			}{RetentionDays: 42}},
+			missing: "retention_in_days",
+		},
+		{
+			name: "legacy SQS ignored without Normalize",
+			key:  KeyAWSSQS,
+			cfg: &Config{SQS: &struct {
+				Type              string `json:"type,omitempty"`
+				VisibilityTimeout string `json:"visibilityTimeout,omitempty"`
+			}{Type: "FIFO"}},
+			missing: "type",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			vals, err := m.BuildModuleValues(tc.key, nil, tc.cfg, "", "")
+			require.NoError(t, err)
+			_, present := vals[tc.missing]
+			assert.False(t, present,
+				"legacy Config field without Normalize must not reach the mapper output")
+		})
+	}
 }
