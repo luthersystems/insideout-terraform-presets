@@ -409,14 +409,10 @@ func EmitRootMainTF(blocks []ModuleBlock) []byte {
 
 // legacyModuleRenames is the frozen (v0.4.0) legacy-module-name → v2-module-name
 // map consumed by appendMovedBlocks. Frozen as a static table so that deleting
-// the legacy ComponentKey constants (KeyVPC, KeyALB, …) in Phase 4 does not
+// the public LegacyToV2Key/ComponentKey legacy constants in Phase 4 does not
 // regress state migration for v0.2.x deployed stacks that still carry
-// module.vpc / module.alb / … in their state files.
-//
-// Pinned against KeyAWS* ComponentKey string values by
-// TestLegacyModuleRenames_MatchesKeyAWSConstants in emit_moved_test.go.
-// Scheduled for deletion in v0.5.0 once the v0.2.x migration window has
-// closed. See issue #76.
+// module.vpc / module.alb / … in their state files. Scheduled for deletion in
+// v0.5.0 once the v0.2.x migration window has closed. See issue #76.
 var legacyModuleRenames = map[string]string{
 	"vpc":                  "aws_vpc",
 	"bastion":              "aws_bastion",

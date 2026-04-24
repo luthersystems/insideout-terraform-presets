@@ -72,10 +72,10 @@ func TestEmitRootMainTF_MovedBlocks_LegacyAndPolymorphicModulesSkipped(t *testin
 
 func TestEmitRootMainTF_MovedBlocks_MixedSelection(t *testing.T) {
 	blocks := []ModuleBlock{
-		{Name: "aws_vpc", Source: "./modules/vpc"},       // has moved
-		{Name: "resource", Source: "./modules/eks"},      // skip
+		{Name: "aws_vpc", Source: "./modules/vpc"},         // has moved
+		{Name: "resource", Source: "./modules/eks"},        // skip
 		{Name: "aws_bastion", Source: "./modules/bastion"}, // has moved
-		{Name: "splunk", Source: "./modules/splunk"},     // skip
+		{Name: "splunk", Source: "./modules/splunk"},       // skip
 	}
 	out := EmitRootMainTF(blocks)
 	moves := parseMovedBlocks(t, out)
@@ -122,20 +122,79 @@ func TestEmitRootMainTF_MovedBlocks_CountMatchesInputPrefixedBlocks(t *testing.T
 	assert.Equal(t, movedBlock{from: "module.vpc", to: "module.aws_vpc"}, moves[0])
 }
 
-// TestEmitRootMainTF_MovedBlocks_EveryLegacyRenameEntry iterates every row
-// of the frozen legacyModuleRenames table and asserts that a single-block
-// stack rendered with the v2 name emits exactly one `moved { from =
-// module.<legacy> to = module.<v2> }` block. Catches silent drift between
-// legacyModuleRenames values and the actual KeyAWS* ComponentKey string
-// values (regression guard against the apigateway-style bug where a wrong
-// v2 name would leave a whole service without a state-migration bridge).
+// expectedLegacyModuleRenames is the independently-authored shadow of the
+// frozen legacyModuleRenames table. Keyed on the KeyAWS* ComponentKey
+// constants so any drift between a row's hardcoded RHS in emit.go and the
+// canonical ComponentKey.String() value is caught here, not in production
+// Terraform state.
 //
-// This test also pins legacyModuleRenames as the authoritative source of
-// truth for v0.4.0's state-migration window — any mutation of an entry
-// fails here before it fails in production TF state.
+// Phase 4 freezes the moved-block bridge at 24 rows; any row added or
+// removed must also update this map (and the cardinality assertion
+// below).
+var expectedLegacyModuleRenames = map[ComponentKey]string{
+	KeyAWSVPC:                  "vpc",
+	KeyAWSBastion:              "bastion",
+	KeyAWSALB:                  "alb",
+	KeyAWSCloudfront:           "cloudfront",
+	KeyAWSWAF:                  "waf",
+	KeyAWSRDS:                  "rds",
+	KeyAWSElastiCache:          "elasticache",
+	KeyAWSS3:                   "s3",
+	KeyAWSDynamoDB:             "dynamodb",
+	KeyAWSSQS:                  "sqs",
+	KeyAWSMSK:                  "msk",
+	KeyAWSCloudWatchLogs:       "cloudwatchlogs",
+	KeyAWSCloudWatchMonitoring: "cloudwatchmonitoring",
+	KeyAWSGrafana:              "grafana",
+	KeyAWSCognito:              "cognito",
+	KeyAWSBackups:              "backups",
+	KeyAWSGitHubActions:        "githubactions",
+	KeyAWSCodePipeline:         "codepipeline",
+	KeyAWSLambda:               "lambda",
+	KeyAWSAPIGateway:           "apigateway",
+	KeyAWSKMS:                  "kms",
+	KeyAWSSecretsManager:       "secretsmanager",
+	KeyAWSOpenSearch:           "opensearch",
+	KeyAWSBedrock:              "bedrock",
+}
+
+// TestLegacyModuleRenames_MatchesKeyAWSConstants pins the frozen map against
+// an independent expected table keyed on the KeyAWS* ComponentKey constants.
+// Catches three mutation classes the iterate-self test cannot:
+//  1. row-delete (map cardinality drops)
+//  2. value-flip (RHS stops matching ComponentKey.String())
+//  3. drift of a ComponentKey.String() value on the constant side
+//
+// This is the authoritative source-of-truth check for the v0.4.0 migration
+// window.
+func TestLegacyModuleRenames_MatchesKeyAWSConstants(t *testing.T) {
+	require.Len(t, legacyModuleRenames, len(expectedLegacyModuleRenames),
+		"frozen legacyModuleRenames must have exactly %d rows; a row was added or deleted without updating expectedLegacyModuleRenames",
+		len(expectedLegacyModuleRenames))
+
+	for k, legacy := range expectedLegacyModuleRenames {
+		t.Run(legacy+"_to_"+string(k), func(t *testing.T) {
+			v2 := string(k)
+			got, ok := legacyModuleRenames[legacy]
+			require.True(t, ok,
+				"legacyModuleRenames missing row for legacy=%q (expected → %s)", legacy, v2)
+			require.Equal(t, v2, got,
+				"legacyModuleRenames[%q] must equal %s.String()=%q; got %q",
+				legacy, k, v2, got)
+		})
+	}
+}
+
+// TestEmitRootMainTF_MovedBlocks_EveryLegacyRenameEntry exercises the
+// emitter path for every row of legacyModuleRenames — a rendered single-
+// block stack with the v2 name must produce exactly one `moved { from =
+// module.<legacy> to = module.<v2> }` block. Complements the map-vs-
+// constants pin above: that test catches table drift; this one catches
+// emitter-vs-table drift.
 func TestEmitRootMainTF_MovedBlocks_EveryLegacyRenameEntry(t *testing.T) {
-	for legacy, v2 := range legacyModuleRenames {
-		t.Run(legacy+" → "+v2, func(t *testing.T) {
+	for k, legacy := range expectedLegacyModuleRenames {
+		v2 := string(k)
+		t.Run(legacy+"_to_"+v2, func(t *testing.T) {
 			blocks := []ModuleBlock{{Name: v2, Source: "./modules/" + legacy}}
 			moves := parseMovedBlocks(t, EmitRootMainTF(blocks))
 			require.Len(t, moves, 1,

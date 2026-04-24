@@ -473,6 +473,8 @@ func (c *Config) Normalize() {
 	}
 	switch c.Cloud {
 	case "AWS":
+		// Clear every GCP sub-config (14 fields — keep in sync with the
+		// GCPConfiguration section of the Config struct).
 		c.GCPCompute = nil
 		c.GCPGKE = nil
 		c.GCPCloudSQL = nil
@@ -480,12 +482,13 @@ func (c *Config) Normalize() {
 		c.GCPGCS = nil
 		c.GCPPubSub = nil
 		c.GCPCloudLogging = nil
+		c.GCPCloudRun = nil
+		c.GCPCloudFunctions = nil
 		c.GCPIdentityPlatform = nil
+		c.GCPAPIGateway = nil
 		c.GCPCloudCDN = nil
 		c.GCPLoadbalancer = nil
 		c.GCPBackups = nil
-		c.GCPCloudRun = nil
-		c.GCPCloudFunctions = nil
 		// AWSCloudfront.CachePaths is a within-prefixed deprecated sub-field;
 		// migrate to OriginPath and clear. Distinct from the legacy Cloudfront
 		// struct deletion in Phase 4.
@@ -496,8 +499,12 @@ func (c *Config) Normalize() {
 			c.AWSCloudfront.CachePaths = nil
 		}
 	case "GCP":
+		// Clear every AWS sub-config (21 fields — keep in sync with the
+		// AWSConfiguration section of the Config struct).
 		c.AWSEC2 = nil
 		c.AWSEKS = nil
+		c.AWSECS = nil
+		c.AWSVPC = nil
 		c.AWSCloudfront = nil
 		c.AWSRDS = nil
 		c.AWSElastiCache = nil
