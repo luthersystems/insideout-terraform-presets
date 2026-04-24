@@ -1277,6 +1277,194 @@ func (c *Config) Normalize() {
 			c.AWSSQS.Type = c.SQS.Type
 			c.AWSSQS.VisibilityTimeout = c.SQS.VisibilityTimeout
 		}
+		if c.DynamoDB != nil && c.DynamoDB.Type != "" {
+			if c.AWSDynamoDB == nil {
+				c.AWSDynamoDB = &struct {
+					Type string `json:"type,omitempty"`
+				}{}
+			}
+			if c.AWSDynamoDB.Type == "" {
+				c.AWSDynamoDB.Type = c.DynamoDB.Type
+			}
+		}
+		if c.MSK != nil && c.MSK.Retention != "" {
+			if c.AWSMSK == nil {
+				c.AWSMSK = &struct {
+					Retention string `json:"retentionPeriod,omitempty"`
+				}{}
+			}
+			if c.AWSMSK.Retention == "" {
+				c.AWSMSK.Retention = c.MSK.Retention
+			}
+		}
+		if c.APIGateway != nil && (c.APIGateway.DomainName != "" || c.APIGateway.CertificateArn != "") {
+			if c.AWSAPIGateway == nil {
+				c.AWSAPIGateway = &struct {
+					DomainName     string `json:"domainName,omitempty"`
+					CertificateArn string `json:"certificateArn,omitempty"`
+				}{}
+			}
+			if c.AWSAPIGateway.DomainName == "" {
+				c.AWSAPIGateway.DomainName = c.APIGateway.DomainName
+			}
+			if c.AWSAPIGateway.CertificateArn == "" {
+				c.AWSAPIGateway.CertificateArn = c.APIGateway.CertificateArn
+			}
+		}
+		if c.KMS != nil && c.KMS.NumKeys != "" {
+			if c.AWSKMS == nil {
+				c.AWSKMS = &struct {
+					NumKeys string `json:"numKeys,omitempty"`
+				}{}
+			}
+			if c.AWSKMS.NumKeys == "" {
+				c.AWSKMS.NumKeys = c.KMS.NumKeys
+			}
+		}
+		if c.SecretsManager != nil && c.SecretsManager.NumSecrets != "" {
+			if c.AWSSecretsManager == nil {
+				c.AWSSecretsManager = &struct {
+					NumSecrets string `json:"numSecrets,omitempty"`
+				}{}
+			}
+			if c.AWSSecretsManager.NumSecrets == "" {
+				c.AWSSecretsManager.NumSecrets = c.SecretsManager.NumSecrets
+			}
+		}
+		if c.OpenSearch != nil && (c.OpenSearch.DeploymentType != "" || c.OpenSearch.InstanceType != "" || c.OpenSearch.StorageSize != "" || c.OpenSearch.MultiAZ != nil) {
+			if c.AWSOpenSearch == nil {
+				c.AWSOpenSearch = &struct {
+					DeploymentType string `json:"deploymentType,omitempty"`
+					InstanceType   string `json:"instanceType,omitempty"`
+					StorageSize    string `json:"storageSize,omitempty"`
+					MultiAZ        *bool  `json:"multiAz,omitempty"`
+				}{}
+			}
+			if c.AWSOpenSearch.DeploymentType == "" {
+				c.AWSOpenSearch.DeploymentType = c.OpenSearch.DeploymentType
+			}
+			if c.AWSOpenSearch.InstanceType == "" {
+				c.AWSOpenSearch.InstanceType = c.OpenSearch.InstanceType
+			}
+			if c.AWSOpenSearch.StorageSize == "" {
+				c.AWSOpenSearch.StorageSize = c.OpenSearch.StorageSize
+			}
+			if c.AWSOpenSearch.MultiAZ == nil {
+				c.AWSOpenSearch.MultiAZ = c.OpenSearch.MultiAZ
+			}
+		}
+		if c.Bedrock != nil && (c.Bedrock.KnowledgeBaseName != "" || c.Bedrock.ModelID != "" || c.Bedrock.EmbeddingModelID != "") {
+			if c.AWSBedrock == nil {
+				c.AWSBedrock = &struct {
+					KnowledgeBaseName string `json:"knowledgeBaseName,omitempty"`
+					ModelID           string `json:"modelId,omitempty"`
+					EmbeddingModelID  string `json:"embeddingModelId,omitempty"`
+				}{}
+			}
+			if c.AWSBedrock.KnowledgeBaseName == "" {
+				c.AWSBedrock.KnowledgeBaseName = c.Bedrock.KnowledgeBaseName
+			}
+			if c.AWSBedrock.ModelID == "" {
+				c.AWSBedrock.ModelID = c.Bedrock.ModelID
+			}
+			if c.AWSBedrock.EmbeddingModelID == "" {
+				c.AWSBedrock.EmbeddingModelID = c.Bedrock.EmbeddingModelID
+			}
+		}
+		if c.Lambda != nil && (c.Lambda.Runtime != "" || c.Lambda.MemorySize != "" || c.Lambda.Timeout != "") {
+			if c.AWSLambda == nil {
+				c.AWSLambda = &struct {
+					Runtime    string `json:"runtime,omitempty"`
+					MemorySize string `json:"memorySize,omitempty"`
+					Timeout    string `json:"timeout,omitempty"`
+				}{}
+			}
+			if c.AWSLambda.Runtime == "" {
+				c.AWSLambda.Runtime = c.Lambda.Runtime
+			}
+			if c.AWSLambda.MemorySize == "" {
+				c.AWSLambda.MemorySize = c.Lambda.MemorySize
+			}
+			if c.AWSLambda.Timeout == "" {
+				c.AWSLambda.Timeout = c.Lambda.Timeout
+			}
+		}
+		// Backups.Details is a service-keyed map on the legacy shape; promote
+		// each known service key to its typed AWSBackups sub-struct. The
+		// mapper reads AWSBackups directly (Phase 3b) so without this
+		// migration, sessions that carry backup frequencies/retentions under
+		// legacy keys silently stop being honored.
+		if c.Backups != nil && len(c.Backups.Details) > 0 {
+			if c.AWSBackups == nil {
+				c.AWSBackups = &struct {
+					EC2 *struct {
+						FrequencyHours int    `json:"frequencyHours,omitempty"`
+						RetentionDays  int    `json:"retentionDays,omitempty"`
+						Region         string `json:"region,omitempty"`
+					} `json:"aws_ec2,omitempty"`
+					RDS *struct {
+						FrequencyHours int    `json:"frequencyHours,omitempty"`
+						RetentionDays  int    `json:"retentionDays,omitempty"`
+						Region         string `json:"region,omitempty"`
+					} `json:"aws_rds,omitempty"`
+					ElastiCache *struct {
+						FrequencyHours int    `json:"frequencyHours,omitempty"`
+						RetentionDays  int    `json:"retentionDays,omitempty"`
+						Region         string `json:"region,omitempty"`
+					} `json:"aws_elasticache,omitempty"`
+					DynamoDB *struct {
+						FrequencyHours int    `json:"frequencyHours,omitempty"`
+						RetentionDays  int    `json:"retentionDays,omitempty"`
+						Region         string `json:"region,omitempty"`
+					} `json:"aws_dynamodb,omitempty"`
+					S3 *struct {
+						FrequencyHours int    `json:"frequencyHours,omitempty"`
+						RetentionDays  int    `json:"retentionDays,omitempty"`
+						Region         string `json:"region,omitempty"`
+					} `json:"aws_s3,omitempty"`
+				}{}
+			}
+			if det, ok := c.Backups.Details["ec2"]; ok && c.AWSBackups.EC2 == nil {
+				d := det
+				c.AWSBackups.EC2 = &struct {
+					FrequencyHours int    `json:"frequencyHours,omitempty"`
+					RetentionDays  int    `json:"retentionDays,omitempty"`
+					Region         string `json:"region,omitempty"`
+				}{FrequencyHours: d.FrequencyHours, RetentionDays: d.RetentionDays, Region: d.Region}
+			}
+			if det, ok := c.Backups.Details["rds"]; ok && c.AWSBackups.RDS == nil {
+				d := det
+				c.AWSBackups.RDS = &struct {
+					FrequencyHours int    `json:"frequencyHours,omitempty"`
+					RetentionDays  int    `json:"retentionDays,omitempty"`
+					Region         string `json:"region,omitempty"`
+				}{FrequencyHours: d.FrequencyHours, RetentionDays: d.RetentionDays, Region: d.Region}
+			}
+			if det, ok := c.Backups.Details["elasticache"]; ok && c.AWSBackups.ElastiCache == nil {
+				d := det
+				c.AWSBackups.ElastiCache = &struct {
+					FrequencyHours int    `json:"frequencyHours,omitempty"`
+					RetentionDays  int    `json:"retentionDays,omitempty"`
+					Region         string `json:"region,omitempty"`
+				}{FrequencyHours: d.FrequencyHours, RetentionDays: d.RetentionDays, Region: d.Region}
+			}
+			if det, ok := c.Backups.Details["dynamodb"]; ok && c.AWSBackups.DynamoDB == nil {
+				d := det
+				c.AWSBackups.DynamoDB = &struct {
+					FrequencyHours int    `json:"frequencyHours,omitempty"`
+					RetentionDays  int    `json:"retentionDays,omitempty"`
+					Region         string `json:"region,omitempty"`
+				}{FrequencyHours: d.FrequencyHours, RetentionDays: d.RetentionDays, Region: d.Region}
+			}
+			if det, ok := c.Backups.Details["s3"]; ok && c.AWSBackups.S3 == nil {
+				d := det
+				c.AWSBackups.S3 = &struct {
+					FrequencyHours int    `json:"frequencyHours,omitempty"`
+					RetentionDays  int    `json:"retentionDays,omitempty"`
+					Region         string `json:"region,omitempty"`
+				}{FrequencyHours: d.FrequencyHours, RetentionDays: d.RetentionDays, Region: d.Region}
+			}
+		}
 
 		// Then: Migrate cloud-prefixed AWS fields to legacy fields for unified checking
 		// (This is not needed anymore since we clear legacy fields, but keeping for internal logic)

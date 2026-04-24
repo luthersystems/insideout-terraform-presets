@@ -2084,10 +2084,10 @@ func TestComposeSingle_RejectsLegacyKey(t *testing.T) {
 // that ComposeStack (and ComposeSingle) call Config.Normalize() at entry.
 // Phase 3b dropped the mapper's legacy-field reads, so this invariant is
 // what keeps direct Go callers who build a Config with legacy field names
-// (e.g. `cfg.CloudWatchLogs`) working end-to-end. If someone deletes the
-// Normalize() call at compose.go:98 or compose.go:249, the kitchen-sink
-// tests (which populate prefixed fields directly) will still pass — but
-// this test will fail loudly.
+// (e.g. `cfg.CloudWatchLogs`) working end-to-end. If the Normalize() call
+// inside ComposeStack/ComposeSingle is removed, the kitchen-sink tests
+// (which populate prefixed fields directly) will still pass — but this
+// test will fail loudly.
 func TestComposeStack_NormalizesLegacyConfig(t *testing.T) {
 	c := newTestClient()
 

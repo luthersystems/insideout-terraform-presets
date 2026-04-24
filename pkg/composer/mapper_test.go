@@ -401,7 +401,7 @@ func TestBuildModuleValues_CloudWatchLogs_Retention(t *testing.T) {
 		assert.Equal(t, 90, vals["retention_in_days"])
 	})
 
-	t.Run("365 days retention", func(t *testing.T) {
+	t.Run("AWSCloudWatchLogs RetentionDays maps to retention_in_days", func(t *testing.T) {
 		cfg := &Config{
 			AWSCloudWatchLogs: &struct {
 				RetentionDays int `json:"retentionDays,omitempty"`
@@ -656,6 +656,9 @@ func TestBuildModuleValues_AWSEC2_CpuArchPrecedence(t *testing.T) {
 // mapping. Previously the kitchen-sink integration test exercised these
 // branches but asserted nothing on the mapper output; the fixture rename
 // in #122 (`awsKitchenSinkCfgWithReadReplicas`) made the gap visible.
+// Legacy→prefixed RDS migration is covered by types/Normalize tests and
+// TestComposeSingle_NormalizesLegacyConfig (integration at the compose
+// boundary); this mapper test reads AWS-prefixed fields only.
 func TestBuildModuleValues_Postgres_RDSConfig(t *testing.T) {
 	m := DefaultMapper{}
 
@@ -693,10 +696,6 @@ func TestBuildModuleValues_Postgres_RDSConfig(t *testing.T) {
 		assert.Equal(t, "db.m7i.2xlarge", vals["node_cpu_size"])
 		assert.Equal(t, "20", vals["storage_size"])
 	})
-
-	// Legacy→prefixed RDS migration is covered by types/Normalize tests and
-	// TestComposeSingle_NormalizesLegacyConfig (integration at the compose
-	// boundary). This mapper test reads AWS-prefixed fields only.
 }
 
 // TestBuildModuleValues_IgnoresUnnormalizedLegacyConfig pins the Phase 3b
@@ -718,21 +717,6 @@ func TestBuildModuleValues_IgnoresUnnormalizedLegacyConfig(t *testing.T) {
 		// the legacy Config field this test populates.
 		missing string
 	}{
-		{
-			name: "legacy Eks ignored without Normalize",
-			key:  KeyEC2, // EKS managed node group arm reads cfg.AWSEKS
-			cfg: &Config{Eks: &struct {
-				HaControlPlane         *bool  `json:"haControlPlane,omitempty"`
-				ControlPlaneVisibility string `json:"controlPlaneVisibility,omitempty"`
-				DesiredSize            string `json:"desiredSize,omitempty"`
-				MaxSize                string `json:"maxSize,omitempty"`
-				MinSize                string `json:"minSize,omitempty"`
-				InstanceType           string `json:"instanceType,omitempty"`
-			}{DesiredSize: "9"}},
-			// Mapper falls back to default 3 when AWSEKS is absent; the
-			// legacy field must not bleed through.
-			missing: "", // handled specially below
-		},
 		{
 			name: "legacy RDS ignored without Normalize",
 			key:  KeyAWSRDS,
@@ -893,18 +877,33 @@ func TestBuildModuleValues_IgnoresUnnormalizedLegacyConfig(t *testing.T) {
 			}
 			vals, err := m.BuildModuleValues(tc.key, comps, tc.cfg, "", "")
 			require.NoError(t, err)
-			if tc.missing == "" {
-				// EKS node-group arm: cfg.AWSEKS absent → desired_size default 3
-				assert.Equal(t, 3, vals["desired_size"],
-					"legacy Eks.DesiredSize must not reach mapper output; default 3 should apply")
-				return
-			}
 			_, present := vals[tc.missing]
 			assert.False(t, present,
 				"legacy Config field without Normalize must not produce %q in mapper output",
 				tc.missing)
 		})
 	}
+}
+
+// TestBuildModuleValues_IgnoresUnnormalizedLegacyEksConfig pins the Phase
+// 3b invariant for the EKS node-group arm: unnormalized legacy cfg.Eks is
+// invisible to the mapper, which falls back to its default desired_size.
+// Separate test (not part of the table above) because this arm asserts a
+// positive default rather than the absence of a key.
+func TestBuildModuleValues_IgnoresUnnormalizedLegacyEksConfig(t *testing.T) {
+	m := DefaultMapper{}
+	cfg := &Config{Eks: &struct {
+		HaControlPlane         *bool  `json:"haControlPlane,omitempty"`
+		ControlPlaneVisibility string `json:"controlPlaneVisibility,omitempty"`
+		DesiredSize            string `json:"desiredSize,omitempty"`
+		MaxSize                string `json:"maxSize,omitempty"`
+		MinSize                string `json:"minSize,omitempty"`
+		InstanceType           string `json:"instanceType,omitempty"`
+	}{DesiredSize: "9"}}
+	vals, err := m.BuildModuleValues(KeyEC2, &Components{}, cfg, "", "")
+	require.NoError(t, err)
+	assert.Equal(t, 3, vals["desired_size"],
+		"legacy Eks.DesiredSize must not reach mapper output; default 3 should apply")
 }
 
 // TestBuildModuleValues_IgnoresLegacyBedrockComponent pins the Phase 3b

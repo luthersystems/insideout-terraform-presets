@@ -285,3 +285,193 @@ func TestConfig_Normalize_ClearsAWSFieldsForGCP(t *testing.T) {
 func boolPtr(b bool) *bool {
 	return &b
 }
+
+// TestConfig_Normalize_PromotesLegacyAWSSubConfigs pins the AWS-branch
+// legacy → AWS-prefixed migration for the Config sub-configs that Phase 3b
+// added: DynamoDB, MSK, APIGateway, KMS, SecretsManager, OpenSearch,
+// Bedrock, Lambda, and Backups.Details. Composer's mapper (post-Phase 3b)
+// reads only the AWS-prefixed fields, so these migrations are load-bearing
+// for direct Go callers constructing Config from legacy JSON. Reliable's
+// composeradapter emits prefixed-only Config in production, so this test
+// is primarily a contract guard for direct library consumers.
+func TestConfig_Normalize_PromotesLegacyAWSSubConfigs(t *testing.T) {
+	t.Parallel()
+
+	t.Run("DynamoDB", func(t *testing.T) {
+		cfg := Config{Cloud: "AWS", DynamoDB: &struct {
+			Type string `json:"type,omitempty"`
+		}{Type: "On Demand"}}
+		cfg.Normalize()
+		if cfg.AWSDynamoDB == nil || cfg.AWSDynamoDB.Type != "On Demand" {
+			t.Fatalf("AWSDynamoDB.Type not promoted; got %#v", cfg.AWSDynamoDB)
+		}
+	})
+
+	t.Run("MSK", func(t *testing.T) {
+		cfg := Config{Cloud: "AWS", MSK: &struct {
+			Retention string `json:"retentionPeriod,omitempty"`
+		}{Retention: "168"}}
+		cfg.Normalize()
+		if cfg.AWSMSK == nil || cfg.AWSMSK.Retention != "168" {
+			t.Fatalf("AWSMSK.Retention not promoted; got %#v", cfg.AWSMSK)
+		}
+	})
+
+	t.Run("APIGateway", func(t *testing.T) {
+		cfg := Config{Cloud: "AWS", APIGateway: &struct {
+			DomainName     string `json:"domainName,omitempty"`
+			CertificateArn string `json:"certificateArn,omitempty"`
+		}{DomainName: "api.example.com", CertificateArn: "arn:aws:acm:us-east-1:123456789012:certificate/abc"}}
+		cfg.Normalize()
+		if cfg.AWSAPIGateway == nil ||
+			cfg.AWSAPIGateway.DomainName != "api.example.com" ||
+			cfg.AWSAPIGateway.CertificateArn != "arn:aws:acm:us-east-1:123456789012:certificate/abc" {
+			t.Fatalf("AWSAPIGateway fields not promoted; got %#v", cfg.AWSAPIGateway)
+		}
+	})
+
+	t.Run("KMS", func(t *testing.T) {
+		cfg := Config{Cloud: "AWS", KMS: &struct {
+			NumKeys string `json:"numKeys,omitempty"`
+		}{NumKeys: "3"}}
+		cfg.Normalize()
+		if cfg.AWSKMS == nil || cfg.AWSKMS.NumKeys != "3" {
+			t.Fatalf("AWSKMS.NumKeys not promoted; got %#v", cfg.AWSKMS)
+		}
+	})
+
+	t.Run("SecretsManager", func(t *testing.T) {
+		cfg := Config{Cloud: "AWS", SecretsManager: &struct {
+			NumSecrets string `json:"numSecrets,omitempty"`
+		}{NumSecrets: "5"}}
+		cfg.Normalize()
+		if cfg.AWSSecretsManager == nil || cfg.AWSSecretsManager.NumSecrets != "5" {
+			t.Fatalf("AWSSecretsManager.NumSecrets not promoted; got %#v", cfg.AWSSecretsManager)
+		}
+	})
+
+	t.Run("OpenSearch", func(t *testing.T) {
+		multi := true
+		cfg := Config{Cloud: "AWS", OpenSearch: &struct {
+			DeploymentType string `json:"deploymentType,omitempty"`
+			InstanceType   string `json:"instanceType,omitempty"`
+			StorageSize    string `json:"storageSize,omitempty"`
+			MultiAZ        *bool  `json:"multiAz,omitempty"`
+		}{DeploymentType: "serverless", InstanceType: "t3.medium.search", StorageSize: "50", MultiAZ: &multi}}
+		cfg.Normalize()
+		if cfg.AWSOpenSearch == nil ||
+			cfg.AWSOpenSearch.DeploymentType != "serverless" ||
+			cfg.AWSOpenSearch.InstanceType != "t3.medium.search" ||
+			cfg.AWSOpenSearch.StorageSize != "50" ||
+			cfg.AWSOpenSearch.MultiAZ == nil || !*cfg.AWSOpenSearch.MultiAZ {
+			t.Fatalf("AWSOpenSearch fields not promoted; got %#v", cfg.AWSOpenSearch)
+		}
+	})
+
+	t.Run("Bedrock", func(t *testing.T) {
+		cfg := Config{Cloud: "AWS", Bedrock: &struct {
+			KnowledgeBaseName string `json:"knowledgeBaseName,omitempty"`
+			ModelID           string `json:"modelId,omitempty"`
+			EmbeddingModelID  string `json:"embeddingModelId,omitempty"`
+		}{
+			KnowledgeBaseName: "kb-test",
+			ModelID:           "anthropic.claude-3-sonnet-20240229-v1:0",
+			EmbeddingModelID:  "amazon.titan-embed-text-v1",
+		}}
+		cfg.Normalize()
+		if cfg.AWSBedrock == nil ||
+			cfg.AWSBedrock.KnowledgeBaseName != "kb-test" ||
+			cfg.AWSBedrock.ModelID != "anthropic.claude-3-sonnet-20240229-v1:0" ||
+			cfg.AWSBedrock.EmbeddingModelID != "amazon.titan-embed-text-v1" {
+			t.Fatalf("AWSBedrock fields not promoted; got %#v", cfg.AWSBedrock)
+		}
+	})
+
+	t.Run("Lambda", func(t *testing.T) {
+		cfg := Config{Cloud: "AWS", Lambda: &struct {
+			Runtime    string `json:"runtime,omitempty"`
+			MemorySize string `json:"memorySize,omitempty"`
+			Timeout    string `json:"timeout,omitempty"`
+		}{Runtime: "python3.12", MemorySize: "512", Timeout: "30s"}}
+		cfg.Normalize()
+		if cfg.AWSLambda == nil ||
+			cfg.AWSLambda.Runtime != "python3.12" ||
+			cfg.AWSLambda.MemorySize != "512" ||
+			cfg.AWSLambda.Timeout != "30s" {
+			t.Fatalf("AWSLambda fields not promoted; got %#v", cfg.AWSLambda)
+		}
+	})
+
+	t.Run("Backups.Details map to AWSBackups typed sub-structs", func(t *testing.T) {
+		// Legacy shape: Backups.Details is a service-keyed map. Post-Normalize
+		// each known service key must land on the corresponding typed
+		// sub-struct (AWSBackups.EC2, RDS, ElastiCache, DynamoDB, S3).
+		type det = struct {
+			FrequencyHours int    `json:"frequencyHours,omitempty"`
+			RetentionDays  int    `json:"retentionDays,omitempty"`
+			Region         string `json:"region,omitempty"`
+		}
+		cfg := Config{Cloud: "AWS", Backups: &struct {
+			Details map[string]det `json:"details,omitempty"`
+		}{Details: map[string]det{
+			"ec2":         {FrequencyHours: 1, RetentionDays: 7, Region: "us-east-1"},
+			"rds":         {FrequencyHours: 4, RetentionDays: 14},
+			"elasticache": {FrequencyHours: 24, RetentionDays: 30},
+			"dynamodb":    {FrequencyHours: 24, RetentionDays: 90},
+			"s3":          {FrequencyHours: 24, RetentionDays: 365},
+		}}}
+		cfg.Normalize()
+
+		if cfg.AWSBackups == nil {
+			t.Fatalf("AWSBackups not promoted from Backups.Details map")
+		}
+		if cfg.AWSBackups.EC2 == nil || cfg.AWSBackups.EC2.FrequencyHours != 1 || cfg.AWSBackups.EC2.RetentionDays != 7 || cfg.AWSBackups.EC2.Region != "us-east-1" {
+			t.Errorf("AWSBackups.EC2 mis-promoted: %#v", cfg.AWSBackups.EC2)
+		}
+		if cfg.AWSBackups.RDS == nil || cfg.AWSBackups.RDS.FrequencyHours != 4 || cfg.AWSBackups.RDS.RetentionDays != 14 {
+			t.Errorf("AWSBackups.RDS mis-promoted: %#v", cfg.AWSBackups.RDS)
+		}
+		if cfg.AWSBackups.ElastiCache == nil || cfg.AWSBackups.ElastiCache.RetentionDays != 30 {
+			t.Errorf("AWSBackups.ElastiCache mis-promoted: %#v", cfg.AWSBackups.ElastiCache)
+		}
+		if cfg.AWSBackups.DynamoDB == nil || cfg.AWSBackups.DynamoDB.RetentionDays != 90 {
+			t.Errorf("AWSBackups.DynamoDB mis-promoted: %#v", cfg.AWSBackups.DynamoDB)
+		}
+		if cfg.AWSBackups.S3 == nil || cfg.AWSBackups.S3.RetentionDays != 365 {
+			t.Errorf("AWSBackups.S3 mis-promoted: %#v", cfg.AWSBackups.S3)
+		}
+	})
+
+	t.Run("prefixed wins when both legacy and AWS fields set", func(t *testing.T) {
+		// If a caller supplies both halves, don't overwrite the AWS side.
+		cfg := Config{
+			Cloud:          "AWS",
+			KMS:            &struct{ NumKeys string `json:"numKeys,omitempty"` }{NumKeys: "1"},
+			AWSKMS:         &struct{ NumKeys string `json:"numKeys,omitempty"` }{NumKeys: "99"},
+		}
+		cfg.Normalize()
+		if cfg.AWSKMS.NumKeys != "99" {
+			t.Errorf("pre-set AWSKMS.NumKeys must not be overwritten by legacy KMS; got %q", cfg.AWSKMS.NumKeys)
+		}
+	})
+
+	t.Run("legacy fields are cleared after promotion", func(t *testing.T) {
+		// The post-sync block clears every legacy field; this test pins that
+		// the new migrations don't leave legacy state behind.
+		cfg := Config{Cloud: "AWS",
+			DynamoDB:       &struct{ Type string `json:"type,omitempty"` }{Type: "Provisioned"},
+			Lambda:         &struct {
+				Runtime    string `json:"runtime,omitempty"`
+				MemorySize string `json:"memorySize,omitempty"`
+				Timeout    string `json:"timeout,omitempty"`
+			}{Runtime: "nodejs20.x"},
+		}
+		cfg.Normalize()
+		if cfg.DynamoDB != nil {
+			t.Errorf("legacy DynamoDB should be cleared; got %#v", cfg.DynamoDB)
+		}
+		if cfg.Lambda != nil {
+			t.Errorf("legacy Lambda should be cleared; got %#v", cfg.Lambda)
+		}
+	})
+}

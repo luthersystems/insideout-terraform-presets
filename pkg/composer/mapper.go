@@ -538,6 +538,12 @@ func (m DefaultMapper) BuildModuleValues(
 		// Only consider details for services that are actually enabled.
 		// Legacy sessions must Normalize before reaching BuildModuleValues;
 		// reliable's composeradapter does this for us in production.
+		//
+		// Both comps.AWSBackups and cfg.AWSBackups gates are required: if
+		// no AWSBackups service bool is true there's nothing to back up,
+		// so any cfg details must be ignored (fail-closed). The pre-Phase
+		// 3b map-iteration fell through when comps.AWSBackups was nil,
+		// which was fail-open.
 		considerDetail := func(freqHours, retentionDays int) {
 			if freqHours > 0 {
 				if r := rank(freqHours); r > bestRank {
