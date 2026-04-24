@@ -7,67 +7,22 @@ const (
 	KeyArch     ComponentKey = "architecture"
 	KeyCloud    ComponentKey = "cloud"
 
-	// KeyEC2 is the polymorphic EKS node-group / Lambda compute key.
-	// Distinct from KeyAWSEC2 (EKS node group only); see GetModuleDir.
-	KeyEC2 ComponentKey = "ec2"
-	// KeyResource is the polymorphic EKS control plane / Lambda runtime key;
-	// see GetModuleDir.
-	KeyResource ComponentKey = "resource"
-
-	// Deprecated: Use KeyAWSVPC.
-	KeyVPC ComponentKey = "vpc"
-	// Deprecated: Use KeyAWSBastion.
-	KeyBastion ComponentKey = "bastion"
-	// Deprecated: Use KeyAWSALB.
-	KeyALB ComponentKey = "alb"
-	// Deprecated: Use KeyAWSCloudfront.
-	KeyCloudfront ComponentKey = "cloudfront"
-	// Deprecated: Use KeyAWSWAF.
-	KeyWAF ComponentKey = "waf"
-	// Deprecated: Use KeyAWSRDS.
-	KeyPostgres ComponentKey = "rds"
-	// Deprecated: Use KeyAWSElastiCache.
-	KeyElastiCache ComponentKey = "elasticache"
-	// Deprecated: Use KeyAWSS3.
-	KeyS3 ComponentKey = "s3"
-	// Deprecated: Use KeyAWSDynamoDB.
-	KeyDynamoDB ComponentKey = "dynamodb"
-	// Deprecated: Use KeyAWSSQS.
-	KeySQS ComponentKey = "sqs"
-	// Deprecated: Use KeyAWSMSK.
-	KeyMSK ComponentKey = "msk"
-	// Deprecated: Use KeyAWSCloudWatchLogs.
-	KeyCloudWatchLogs ComponentKey = "cloudwatchlogs"
-	// Deprecated: Use KeyAWSCloudWatchMonitoring.
-	KeyCloudWatchMonitoring ComponentKey = "cloudwatchmonitoring"
+	// KeyAWSEKSNodeGroup is the polymorphic EKS node-group / Lambda compute
+	// key. Preserves the string value "ec2" so TF state continuity with
+	// pre-v0.4.0 stacks is maintained (the module is named `"ec2"` in the
+	// composed main.tf). Distinct from KeyAWSEC2 (standalone EC2 instance);
+	// GetModuleDir routes based on comps.AWSLambda.
+	KeyAWSEKSNodeGroup ComponentKey = "ec2"
+	// KeyAWSEKSControlPlane is the polymorphic EKS control plane / Lambda
+	// runtime key. Preserves the string value "resource" for pre-v0.4.0 TF
+	// state continuity. GetModuleDir routes to modules/lambda when
+	// comps.AWSLambda is set, else modules/eks.
+	KeyAWSEKSControlPlane ComponentKey = "resource"
 
 	KeySplunk  ComponentKey = "splunk"
 	KeyDatadog ComponentKey = "datadog"
 
-	// Deprecated: Use KeyAWSGrafana.
-	KeyGrafana ComponentKey = "grafana"
-	// Deprecated: Use KeyAWSCognito.
-	KeyCognito ComponentKey = "cognito"
-	// Deprecated: Use KeyAWSBackups.
-	KeyBackups ComponentKey = "backups"
-	// Deprecated: Use KeyAWSGitHubActions.
-	KeyGitHubActions ComponentKey = "githubactions"
-	// Deprecated: Use KeyAWSCodePipeline.
-	KeyCodePipeline ComponentKey = "codepipeline"
-	// Deprecated: Use KeyAWSLambda.
-	KeyLambda ComponentKey = "lambda"
-	// Deprecated: Use KeyAWSAPIGateway.
-	KeyAPIGateway ComponentKey = "apigateway"
-	// Deprecated: Use KeyAWSKMS.
-	KeyKMS ComponentKey = "kms"
-	// Deprecated: Use KeyAWSSecretsManager.
-	KeySecrets ComponentKey = "secretsmanager"
-	// Deprecated: Use KeyAWSOpenSearch.
-	KeyOpenSearch ComponentKey = "opensearch"
-	// Deprecated: Use KeyAWSBedrock.
-	KeyBedrock ComponentKey = "bedrock"
-
-	// AWS components (new prefixed names for v2)
+	// AWS components (cloud-prefixed canonical vocabulary)
 	KeyAWSVPC                  ComponentKey = "aws_vpc"
 	KeyAWSBastion              ComponentKey = "aws_bastion"
 	KeyAWSEC2                  ComponentKey = "aws_ec2"
@@ -123,11 +78,10 @@ const (
 )
 
 var ComposeOrder = []ComponentKey{
-	// Match TS intent: deps first, then consumers.
-	KeyVPC,
+	// Deps first, then consumers.
 	KeyAWSVPC,
 	KeyGCPVPC,
-	KeyResource, // EKS cluster or Lambda
+	KeyAWSEKSControlPlane, // EKS cluster or Lambda (polymorphic)
 	KeyAWSEKS,
 	KeyAWSECS,
 	KeyGCPGKE,
@@ -135,72 +89,49 @@ var ComposeOrder = []ComponentKey{
 	KeyGCPBastion,
 	KeyGCPCloudRun,
 	KeyGCPCloudFunctions,
-	KeyLambda, // Alternative key for Lambda
 	KeyAWSLambda,
-	KeyEC2, // node group after cluster
+	KeyAWSEKSNodeGroup, // node group after cluster (polymorphic)
 	KeyAWSEC2,
-	KeyBastion,
 	KeyAWSBastion,
-	KeyALB,
 	KeyAWSALB,
 	KeyGCPLoadbalancer,
-	KeyPostgres,
 	KeyAWSRDS,
 	KeyGCPCloudSQL,
-	KeyElastiCache,
 	KeyAWSElastiCache,
 	KeyGCPMemorystore,
 	KeyGCPFirestore,
-	KeyMSK,
 	KeyAWSMSK,
-	KeyS3,
 	KeyAWSS3,
 	KeyGCPGCS,
-	KeyDynamoDB,
 	KeyAWSDynamoDB,
-	KeyCloudfront,
 	KeyAWSCloudfront,
 	KeyGCPCloudCDN,
-	KeyWAF,
 	KeyAWSWAF,
 	KeyGCPCloudArmor,
-	KeyBackups,
 	KeyAWSBackups,
 	KeyGCPBackups,
-	KeyCloudWatchLogs,
 	KeyAWSCloudWatchLogs,
 	KeyGCPCloudLogging,
-	KeyCloudWatchMonitoring,
 	KeyAWSCloudWatchMonitoring,
 	KeyGCPCloudMonitoring,
 	KeySplunk,
 	KeyDatadog,
-	KeyGrafana,
 	KeyAWSGrafana,
-	KeyCognito,
 	KeyAWSCognito,
 	KeyGCPIdentityPlatform,
-	KeyAPIGateway,
 	KeyAWSAPIGateway,
 	KeyGCPAPIGateway,
-	KeyKMS,
 	KeyAWSKMS,
 	KeyGCPCloudKMS,
-	KeySecrets,
 	KeyAWSSecretsManager,
 	KeyGCPSecretManager,
-	KeyOpenSearch,
 	KeyAWSOpenSearch,
-	KeyBedrock,
 	KeyAWSBedrock,
 	KeyGCPVertexAI,
-	KeySQS,
 	KeyAWSSQS,
 	KeyGCPPubSub,
 	KeyGCPCloudBuild,
-	KeyGitHubActions,
 	KeyAWSGitHubActions,
-	KeyCodePipeline,
 	KeyAWSCodePipeline,
 	KeyArch,
 	KeyCloud,
@@ -209,36 +140,16 @@ var ComposeOrder = []ComponentKey{
 
 // ModulePath defines the base directory for each component's preset.
 var ModulePath = map[ComponentKey]string{
-	KeyVPC:                  "modules/vpc",
-	KeyEC2:                  "modules/eks_nodegroup", // EKS managed node group
-	KeyResource:             "modules/eks", // EKS cluster (default)
-	KeyALB:                  "modules/alb",
-	KeyCloudfront:           "modules/cloudfront",
-	KeyWAF:                  "modules/waf",
-	KeyPostgres:             "modules/rds",
-	KeyElastiCache:          "modules/elasticache",
-	KeyS3:                   "modules/s3",
-	KeyDynamoDB:             "modules/dynamodb",
-	KeySQS:                  "modules/sqs",
-	KeyMSK:                  "modules/msk",
-	KeyCloudWatchLogs:       "modules/cloudwatchlogs",
-	KeyCloudWatchMonitoring: "modules/cloudwatchmonitoring",
-	KeySplunk:               "modules/splunk",
-	KeyDatadog:              "modules/datadog",
-	KeyGrafana:              "modules/grafana",
-	KeyCognito:              "modules/cognito",
-	KeyBackups:              "modules/backups",
-	KeyBastion:              "modules/bastion",
-	KeyGitHubActions:        "modules/githubactions",
-	KeyCodePipeline:         "modules/codepipeline",
-	KeyLambda:               "modules/lambda",
-	KeyAPIGateway:           "modules/apigateway",
-	KeyKMS:                  "modules/kms",
-	KeySecrets:              "modules/secretsmanager",
-	KeyOpenSearch:           "modules/opensearch",
-	KeyBedrock:              "modules/bedrock",
+	// Polymorphic (preserve string-value module names "ec2" / "resource"
+	// for TF state continuity).
+	KeyAWSEKSNodeGroup:    "modules/eks_nodegroup", // EKS managed node group
+	KeyAWSEKSControlPlane: "modules/eks",           // EKS cluster (default; Lambda path via GetModuleDir)
 
-	// AWS (new prefixed names)
+	// Third-party toggles
+	KeySplunk:  "modules/splunk",
+	KeyDatadog: "modules/datadog",
+
+	// AWS (cloud-prefixed canonical vocabulary)
 	KeyAWSVPC:                  "modules/vpc",
 	KeyAWSEC2:                  "modules/ec2",
 	KeyAWSEKS:                  "modules/eks",
@@ -295,92 +206,27 @@ var ModulePath = map[ComponentKey]string{
 // ImplicitDependencies defines components that must be automatically added
 // if a certain component is selected.
 var ImplicitDependencies = map[ComponentKey][]ComponentKey{
-	KeyALB:             {KeyVPC},
 	KeyAWSALB:          {KeyAWSVPC},
 	KeyGCPLoadbalancer: {KeyGCPVPC},
-	KeyBastion:         {KeyVPC},
 	KeyAWSBastion:      {KeyAWSVPC},
-	KeyPostgres:        {KeyVPC},
 	KeyAWSRDS:          {KeyAWSVPC},
 	KeyGCPCloudSQL:     {KeyGCPVPC},
-	KeyElastiCache:     {KeyVPC},
 	KeyAWSElastiCache:  {KeyAWSVPC},
 	KeyGCPMemorystore:  {KeyGCPVPC},
-	KeyOpenSearch:      {KeyVPC},
 	KeyAWSOpenSearch:   {KeyAWSVPC},
-	KeyBedrock:         {KeyS3, KeyOpenSearch},
 	KeyAWSBedrock:      {KeyAWSS3, KeyAWSOpenSearch},
-	KeyCloudfront:      {KeyALB},
 	KeyAWSCloudfront:   {KeyAWSALB},
 	KeyGCPCloudCDN:     {KeyGCPLoadbalancer},
-	// KeyResource and KeyEC2 are polymorphic keys that Phase 4 will rename to
-	// unambiguous prefixed names; their implicit deps target KeyAWSVPC (not
-	// legacy KeyVPC) so that a direct caller selecting only a polymorphic key
-	// still produces a prefixed-only stack.
-	KeyResource:       {KeyAWSVPC},
-	KeyAWSEKS:         {KeyAWSVPC},
-	KeyAWSECS:         {KeyAWSVPC},
-	KeyGCPGKE:         {KeyGCPVPC},
-	KeyLambda:         {KeyVPC},
-	KeyAWSLambda:      {KeyAWSVPC},
-	KeyEC2:            {KeyResource, KeyAWSVPC},
-	KeyAWSEC2:         {KeyAWSVPC},
-	KeyGCPCompute:      {KeyGCPVPC},
-}
-
-// LegacyToV2Key maps legacy (unprefixed) component keys to their V2 (aws_-prefixed) equivalents.
-// Used by DeduplicateKeys to remove legacy duplicates when both forms are present.
-//
-// Deprecated: part of the reliable-legacy compat layer tracked by issue #76.
-// New code should work with KeyAWS*-prefixed keys directly; legacy session
-// payloads should be normalised by reliable's composeradapter before reaching
-// composer.
-var LegacyToV2Key = map[ComponentKey]ComponentKey{
-	KeyVPC:                  KeyAWSVPC,
-	KeyALB:                  KeyAWSALB,
-	KeyBastion:              KeyAWSBastion,
-	KeyPostgres:             KeyAWSRDS,
-	KeyElastiCache:          KeyAWSElastiCache,
-	KeyS3:                   KeyAWSS3,
-	KeyDynamoDB:             KeyAWSDynamoDB,
-	KeySQS:                  KeyAWSSQS,
-	KeyMSK:                  KeyAWSMSK,
-	KeyCloudWatchLogs:       KeyAWSCloudWatchLogs,
-	KeyCloudWatchMonitoring: KeyAWSCloudWatchMonitoring,
-	KeyCognito:              KeyAWSCognito,
-	KeyBackups:              KeyAWSBackups,
-	KeyGitHubActions:        KeyAWSGitHubActions,
-	KeyCodePipeline:         KeyAWSCodePipeline,
-	KeyLambda:               KeyAWSLambda,
-	KeyAPIGateway:           KeyAWSAPIGateway,
-	KeyKMS:                  KeyAWSKMS,
-	KeySecrets:              KeyAWSSecretsManager,
-	KeyOpenSearch:           KeyAWSOpenSearch,
-	KeyBedrock:              KeyAWSBedrock,
-	KeyCloudfront:           KeyAWSCloudfront,
-	KeyWAF:                  KeyAWSWAF,
-}
-
-// DeduplicateKeys removes legacy keys when their V2 equivalent is also present.
-// For example, if both KeyVPC and KeyAWSVPC are in keys, only KeyAWSVPC is kept.
-// This prevents duplicate Terraform module blocks for the same infrastructure.
-//
-// Deprecated: part of the reliable-legacy compat layer tracked by issue #76.
-// Callers that already produce AWS-prefixed keys should not need this.
-func DeduplicateKeys(keys []ComponentKey) []ComponentKey {
-	present := make(map[ComponentKey]bool, len(keys))
-	for _, k := range keys {
-		present[k] = true
-	}
-
-	result := make([]ComponentKey, 0, len(keys))
-	for _, k := range keys {
-		if v2, isLegacy := LegacyToV2Key[k]; isLegacy && present[v2] {
-			continue // skip legacy key — V2 equivalent is present
-		}
-		result = append(result, k)
-	}
-	return result
+	// Polymorphic keys: dep on AWSVPC so a direct caller selecting only a
+	// polymorphic key still produces a prefixed-only stack.
+	KeyAWSEKSControlPlane: {KeyAWSVPC},
+	KeyAWSEKS:             {KeyAWSVPC},
+	KeyAWSECS:             {KeyAWSVPC},
+	KeyGCPGKE:             {KeyGCPVPC},
+	KeyAWSLambda:          {KeyAWSVPC},
+	KeyAWSEKSNodeGroup:    {KeyAWSEKSControlPlane, KeyAWSVPC},
+	KeyAWSEC2:             {KeyAWSVPC},
+	KeyGCPCompute:         {KeyGCPVPC},
 }
 
 // ResolveDependencies recursively finds all required components for a given set of keys.
@@ -416,8 +262,8 @@ func ResolveDependencies(keys []ComponentKey) []ComponentKey {
 // GetModuleDir returns the output directory for a key (e.g., "modules/vpc").
 // This is where the composed terraform files are placed.
 func GetModuleDir(k ComponentKey, comps *Components) string {
-	if k == KeyResource && isLambda(comps) {
-		return ModulePath[KeyLambda]
+	if k == KeyAWSEKSControlPlane && isLambda(comps) {
+		return ModulePath[KeyAWSLambda]
 	}
 	return ModulePath[k]
 }
@@ -425,12 +271,11 @@ func GetModuleDir(k ComponentKey, comps *Components) string {
 // PresetKeyMap maps component keys to their preset directory names.
 // Used when the preset name differs from the component key.
 var PresetKeyMap = map[ComponentKey]string{
-	KeyPostgres:         "rds", // KeyPostgres uses "rds" preset
-	KeyEC2:              "eks_nodegroup", // legacy KeyEC2 is the EKS managed node group
+	KeyAWSEKSNodeGroup: "eks_nodegroup", // polymorphic; preset name differs from string value ("ec2")
 	KeyAWSVPC:           "vpc",
 	KeyAWSBastion:       "bastion",
 	KeyAWSEC2:           "ec2",
-	KeyAWSEKS:           "resource", // Uses the same preset as KeyResource (aws/resource/)
+	KeyAWSEKS:           "resource", // Uses the same preset as KeyAWSEKSControlPlane (aws/resource/)
 	KeyAWSECS:           "ecs",
 	KeyAWSLambda:        "lambda",
 	KeyAWSALB:           "alb",
@@ -480,7 +325,7 @@ var PresetKeyMap = map[ComponentKey]string{
 }
 
 // GetPresetPath returns the cloud-prefixed preset path for a component.
-// For example: GetPresetPath("aws", KeyVPC, nil) returns "aws/vpc"
+// For example: GetPresetPath("aws", KeyAWSVPC, nil) returns "aws/vpc"
 func GetPresetPath(cloud string, k ComponentKey, comps *Components) string {
 	presetName := string(k)
 
@@ -489,9 +334,11 @@ func GetPresetPath(cloud string, k ComponentKey, comps *Components) string {
 		presetName = mapped
 	}
 
-	// Handle dynamic resource -> lambda mapping
-	if k == KeyResource && isLambda(comps) {
-		presetName = string(KeyLambda)
+	// Handle dynamic resource -> lambda mapping. Route through PresetKeyMap
+	// so the preset-path segment matches the canonical Lambda directory
+	// name ("lambda") rather than the ComponentKey's string value.
+	if k == KeyAWSEKSControlPlane && isLambda(comps) {
+		presetName = PresetKeyMap[KeyAWSLambda]
 	}
 
 	return cloud + "/" + presetName
@@ -542,7 +389,7 @@ func opensearchRef(_ map[ComponentKey]bool) string { return "module.aws_opensear
 func sqsRef(_ map[ComponentKey]bool) string       { return "module.aws_sqs" }
 
 // resourceRef returns the EKS/ECS module reference for the selected stack.
-// Prefers the prefixed KeyAWSEKS / KeyAWSECS keys, with a KeyResource path
+// Prefers the prefixed KeyAWSEKS / KeyAWSECS keys, with a KeyAWSEKSControlPlane path
 // for the polymorphic selection Phase 4 has not yet renamed. Falls back to
 // module.aws_eks when nothing matches — the final fallback is effectively
 // unreachable (wiring only runs when `hasResource` is true) but picks the
@@ -554,7 +401,7 @@ func resourceRef(selected map[ComponentKey]bool) string {
 	if selected[KeyAWSECS] {
 		return "module.aws_ecs"
 	}
-	if selected[KeyResource] {
+	if selected[KeyAWSEKSControlPlane] {
 		return "module.resource"
 	}
 	return "module.aws_eks"
@@ -575,7 +422,7 @@ func DefaultWiring(selected map[ComponentKey]bool, k ComponentKey, comps *Compon
 	hasS3 := selected[KeyAWSS3]
 	hasOpenSearch := selected[KeyAWSOpenSearch]
 	hasSQS := selected[KeyAWSSQS]
-	hasResource := selected[KeyAWSEKS] || selected[KeyResource]
+	hasResource := selected[KeyAWSEKS] || selected[KeyAWSEKSControlPlane]
 
 	switch k {
 
@@ -589,7 +436,7 @@ func DefaultWiring(selected map[ComponentKey]bool, k ComponentKey, comps *Compon
 			wi.Names = append(wi.Names, "vpc_id", "public_subnet_ids")
 		}
 
-	case KeyResource, KeyAWSEKS:
+	case KeyAWSEKSControlPlane, KeyAWSEKS:
 		if isLambda(comps) {
 			// Lambda Wiring
 			if hasVPC {
@@ -636,7 +483,7 @@ func DefaultWiring(selected map[ComponentKey]bool, k ComponentKey, comps *Compon
 			wi.Names = append(wi.Names, "enable_vpc", "vpc_id", "subnet_ids", "security_group_ids")
 		}
 
-	case KeyEC2:
+	case KeyAWSEKSNodeGroup:
 		if hasResource && !isLambda(comps) {
 			wi.RawHCL["cluster_name"] = resourceRef(selected) + ".cluster_name"
 			wi.Names = append(wi.Names, "cluster_name")

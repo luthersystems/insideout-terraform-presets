@@ -25,18 +25,13 @@ func TestValidateComputeExclusivity(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:    "valid: Lambda only (serverless)",
-			keys:    []ComponentKey{KeyLambda, KeyAPIGateway, KeyVPC},
-			wantErr: false,
-		},
-		{
 			name:    "valid: AWS Lambda prefixed only",
 			keys:    []ComponentKey{KeyAWSLambda, KeyAWSAPIGateway, KeyAWSVPC},
 			wantErr: false,
 		},
 		{
-			name:    "valid: EKS + EC2 (container)",
-			keys:    []ComponentKey{KeyResource, KeyEC2, KeyVPC, KeyALB},
+			name:    "valid: polymorphic EKS control + node group",
+			keys:    []ComponentKey{KeyAWSEKSControlPlane, KeyAWSEKSNodeGroup, KeyAWSVPC, KeyAWSALB},
 			wantErr: false,
 		},
 		{
@@ -46,12 +41,12 @@ func TestValidateComputeExclusivity(t *testing.T) {
 		},
 		{
 			name:    "valid: single serverless key alone",
-			keys:    []ComponentKey{KeyLambda},
+			keys:    []ComponentKey{KeyAWSLambda},
 			wantErr: false,
 		},
 		{
 			name:    "valid: single container key alone",
-			keys:    []ComponentKey{KeyResource},
+			keys:    []ComponentKey{KeyAWSEKSControlPlane},
 			wantErr: false,
 		},
 		{
@@ -81,18 +76,18 @@ func TestValidateComputeExclusivity(t *testing.T) {
 		},
 		// --- Invalid AWS combinations ---
 		{
-			name:            "invalid: Lambda + EKS (legacy keys)",
-			keys:            []ComponentKey{KeyLambda, KeyResource, KeyVPC},
+			name:            "invalid: AWS Lambda + polymorphic EKS control plane",
+			keys:            []ComponentKey{KeyAWSLambda, KeyAWSEKSControlPlane, KeyAWSVPC},
 			wantErr:         true,
 			errMsg:          "incompatible AWS compute",
-			errContainsKeys: []string{"lambda", "resource"},
+			errContainsKeys: []string{"aws_lambda", "resource"},
 		},
 		{
-			name:            "invalid: Lambda + EC2",
-			keys:            []ComponentKey{KeyLambda, KeyEC2, KeyVPC},
+			name:            "invalid: AWS Lambda + polymorphic EKS node group",
+			keys:            []ComponentKey{KeyAWSLambda, KeyAWSEKSNodeGroup, KeyAWSVPC},
 			wantErr:         true,
 			errMsg:          "incompatible AWS compute",
-			errContainsKeys: []string{"lambda", "ec2"},
+			errContainsKeys: []string{"aws_lambda", "ec2"},
 		},
 		{
 			name:            "invalid: AWS Lambda + AWS EKS (prefixed)",
@@ -116,18 +111,11 @@ func TestValidateComputeExclusivity(t *testing.T) {
 			errContainsKeys: []string{"aws_lambda", "aws_ec2"},
 		},
 		{
-			name:            "invalid: mixed legacy Lambda + prefixed EKS",
-			keys:            []ComponentKey{KeyLambda, KeyAWSEKS},
-			wantErr:         true,
-			errMsg:          "incompatible AWS compute",
-			errContainsKeys: []string{"lambda", "aws_eks"},
-		},
-		{
 			name:            "invalid: duplicate keys still caught",
-			keys:            []ComponentKey{KeyLambda, KeyLambda, KeyResource},
+			keys:            []ComponentKey{KeyAWSLambda, KeyAWSLambda, KeyAWSEKSControlPlane},
 			wantErr:         true,
 			errMsg:          "incompatible AWS compute",
-			errContainsKeys: []string{"lambda", "resource"},
+			errContainsKeys: []string{"aws_lambda", "resource"},
 		},
 		// --- Invalid GCP combinations ---
 		{
@@ -154,7 +142,7 @@ func TestValidateComputeExclusivity(t *testing.T) {
 		// --- Non-compute components only ---
 		{
 			name:    "valid: only storage/network components",
-			keys:    []ComponentKey{KeyVPC, KeyPostgres, KeyS3, KeyElastiCache},
+			keys:    []ComponentKey{KeyAWSVPC, KeyAWSRDS, KeyAWSS3, KeyAWSElastiCache},
 			wantErr: false,
 		},
 	}
@@ -191,28 +179,6 @@ func TestValidateComputeExclusivity_ReturnsValidationError(t *testing.T) {
 	// Wrapped error should still match via errors.As
 	wrapped := fmt.Errorf("compose stack: %w", err)
 	require.True(t, errors.As(wrapped, &ve), "wrapped error should still match *ValidationError")
-}
-
-func TestValidateComputeExclusivityWithOpts_AllowsLegacyStandaloneEC2Lambda(t *testing.T) {
-	t.Parallel()
-
-	keys := []ComponentKey{KeyAWSLambda, KeyAWSEC2, KeyAWSVPC}
-	err := ValidateComputeExclusivityWithOpts(keys, ComputeExclusivityOpts{
-		AllowLegacyStandaloneEC2Lambda: true,
-	})
-	require.NoError(t, err)
-}
-
-func TestValidateComputeExclusivityWithOpts_DoesNotAllowEKSLambda(t *testing.T) {
-	t.Parallel()
-
-	keys := []ComponentKey{KeyAWSLambda, KeyAWSEKS, KeyAWSVPC}
-	err := ValidateComputeExclusivityWithOpts(keys, ComputeExclusivityOpts{
-		AllowLegacyStandaloneEC2Lambda: true,
-	})
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "aws_lambda")
-	require.Contains(t, err.Error(), "aws_eks")
 }
 
 func TestValidateRemovals(t *testing.T) {
@@ -337,57 +303,3 @@ func TestDiffComponents_SafeRemovalNoWarnings(t *testing.T) {
 	require.Empty(t, diffs[0].Warnings, "removing SQS should not produce warnings")
 }
 
-// TestValidateNoLegacyKeys locks in the Phase 3b contract that the composer's
-// public surface rejects legacy ComponentKeys. Adapters (reliable
-// composeradapter) must upgrade session JSON before handing it off.
-func TestValidateNoLegacyKeys(t *testing.T) {
-	t.Run("prefixed-only selection passes", func(t *testing.T) {
-		require.NoError(t, ValidateNoLegacyKeys([]ComponentKey{KeyAWSVPC, KeyAWSRDS, KeyAWSS3}))
-	})
-
-	t.Run("polymorphic keys pass", func(t *testing.T) {
-		// KeyResource / KeyEC2 are polymorphic, not renamed in LegacyToV2Key.
-		// Phase 4 renames them to unambiguous prefixed names; until then
-		// they remain valid.
-		require.NoError(t, ValidateNoLegacyKeys([]ComponentKey{KeyAWSVPC, KeyResource, KeyEC2}))
-	})
-
-	t.Run("third-party toggles pass", func(t *testing.T) {
-		// Splunk / Datadog have no AWS-prefixed siblings.
-		require.NoError(t, ValidateNoLegacyKeys([]ComponentKey{KeySplunk, KeyDatadog}))
-	})
-
-	t.Run("GCP-only selection passes (validator is cloud-agnostic)", func(t *testing.T) {
-		// LegacyToV2Key only contains AWS pairs; GCP keys are prefixed from
-		// day one. A pure-GCP selection must not trip the validator. Pinning
-		// this as intentional — anyone adding GCP pairs to LegacyToV2Key
-		// should reason about the rejection semantics here.
-		require.NoError(t, ValidateNoLegacyKeys([]ComponentKey{
-			KeyGCPVPC, KeyGCPGKE, KeyGCPCloudSQL, KeyGCPGCS,
-		}))
-	})
-
-	t.Run("empty selection passes", func(t *testing.T) {
-		require.NoError(t, ValidateNoLegacyKeys(nil))
-		require.NoError(t, ValidateNoLegacyKeys([]ComponentKey{}))
-	})
-
-	t.Run("single legacy key fails with actionable pair", func(t *testing.T) {
-		err := ValidateNoLegacyKeys([]ComponentKey{KeyVPC})
-		require.Error(t, err)
-		var ve *ValidationError
-		require.ErrorAs(t, err, &ve, "must return a ValidationError so handlers map to HTTP 400")
-		require.Contains(t, err.Error(), "vpc → aws_vpc")
-		require.Contains(t, err.Error(), "composeradapter",
-			"error must point callers at the upgrade path")
-	})
-
-	t.Run("multiple legacy keys all reported", func(t *testing.T) {
-		err := ValidateNoLegacyKeys([]ComponentKey{KeyVPC, KeyAWSRDS, KeyALB, KeyBackups})
-		require.Error(t, err)
-		msg := err.Error()
-		require.Contains(t, msg, "vpc → aws_vpc")
-		require.Contains(t, msg, "alb → aws_alb")
-		require.Contains(t, msg, "backups → aws_backups")
-	})
-}

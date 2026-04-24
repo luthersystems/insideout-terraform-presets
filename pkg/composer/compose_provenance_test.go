@@ -31,7 +31,7 @@ func TestComposedRoot_DeclaresProvenanceVariables(t *testing.T) {
 		c := newTestClient(WithTerraformVersion("1.7.5"))
 		out, err := c.ComposeSingle(ComposeSingleOpts{
 			Cloud:   "aws",
-			Key:     KeyEC2,
+			Key:     KeyAWSEKSNodeGroup,
 			Comps:   &Components{},
 			Cfg:     &Config{},
 			Project: "demo",

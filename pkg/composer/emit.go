@@ -407,30 +407,63 @@ func EmitRootMainTF(blocks []ModuleBlock) []byte {
 	return doc.Bytes()
 }
 
+// legacyModuleRenames is the frozen (v0.4.0) legacy-module-name → v2-module-name
+// map consumed by appendMovedBlocks. Frozen as a static table so that deleting
+// the public LegacyToV2Key/ComponentKey legacy constants in Phase 4 does not
+// regress state migration for v0.2.x deployed stacks that still carry
+// module.vpc / module.alb / … in their state files. Scheduled for deletion in
+// v0.5.0 once the v0.2.x migration window has closed. See issue #76.
+var legacyModuleRenames = map[string]string{
+	"vpc":                  "aws_vpc",
+	"bastion":              "aws_bastion",
+	"alb":                  "aws_alb",
+	"cloudfront":           "aws_cloudfront",
+	"waf":                  "aws_waf",
+	"rds":                  "aws_rds",
+	"elasticache":          "aws_elasticache",
+	"s3":                   "aws_s3",
+	"dynamodb":             "aws_dynamodb",
+	"sqs":                  "aws_sqs",
+	"msk":                  "aws_msk",
+	"cloudwatchlogs":       "aws_cloudwatch_logs",
+	"cloudwatchmonitoring": "aws_cloudwatch_monitoring",
+	"grafana":              "aws_grafana",
+	"cognito":              "aws_cognito",
+	"backups":              "aws_backups",
+	"githubactions":        "aws_github_actions",
+	"codepipeline":         "aws_codepipeline",
+	"lambda":               "aws_lambda",
+	"apigateway":           "aws_api_gateway",
+	"kms":                  "aws_kms",
+	"secretsmanager":       "aws_secretsmanager",
+	"opensearch":           "aws_opensearch",
+	"bedrock":              "aws_bedrock",
+}
+
 // appendMovedBlocks emits `moved { from = module.<legacy> to = module.<v2> }`
-// for every module in blocks whose Name matches a V2 ComponentKey with a
-// legacy sibling in LegacyToV2Key. This auto-migrates stacks previously
+// for every module in blocks whose Name matches a v2 module name with a
+// legacy sibling in legacyModuleRenames. This auto-migrates stacks previously
 // deployed under the legacy module name without requiring manual
 // `terraform state mv`. On fresh state moved blocks are a no-op — Terraform
 // treats a `from` address that doesn't exist in state as a vacuous move.
 //
-// Iterating `blocks` (not LegacyToV2Key) gives deterministic output order
-// and ensures we only emit moved blocks for modules actually rendered in
-// this main.tf — a stale moved block pointing at a nonexistent `to` would
-// be a Terraform validation error.
+// Iterating `blocks` (not legacyModuleRenames) gives deterministic output
+// order and ensures we only emit moved blocks for modules actually rendered
+// in this main.tf — a stale moved block pointing at a nonexistent `to`
+// would be a Terraform validation error.
 func appendMovedBlocks(body *hclwrite.Body, blocks []ModuleBlock) {
-	v2ToLegacy := make(map[ComponentKey]ComponentKey, len(LegacyToV2Key))
-	for legacy, v2 := range LegacyToV2Key {
+	v2ToLegacy := make(map[string]string, len(legacyModuleRenames))
+	for legacy, v2 := range legacyModuleRenames {
 		v2ToLegacy[v2] = legacy
 	}
 	for _, m := range blocks {
-		legacy, ok := v2ToLegacy[ComponentKey(m.Name)]
+		legacy, ok := v2ToLegacy[m.Name]
 		if !ok {
 			continue
 		}
 		body.AppendNewline()
 		mb := body.AppendNewBlock("moved", nil).Body()
-		setRawExpr(mb, "from", "module."+string(legacy))
+		setRawExpr(mb, "from", "module."+legacy)
 		setRawExpr(mb, "to", "module."+m.Name)
 	}
 }

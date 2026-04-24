@@ -173,29 +173,7 @@ func TestStackNeedsPrivateSubnets(t *testing.T) {
 	assert.True(t, stackNeedsPrivateSubnets(&Components{AWSEC2: "Intel"}), "AWSEC2 Intel")
 	assert.True(t, stackNeedsPrivateSubnets(&Components{AWSEC2: "ARM"}), "AWSEC2 ARM")
 
-	// Legacy-field reads (c.Postgres / c.ElastiCache / c.OpenSearch) were
-	// dropped from stackNeedsPrivateSubnets in Phase 3b. Callers with legacy-
-	// shaped Components must Normalize() first; field-level promotion is
-	// covered by TestComponents_Normalize_SyncsLegacyBoolFieldsForAWS in
-	// types_test.go. Here we lock the end-to-end round-trip for each of the
-	// three legacy fields that previously had direct OR reads.
-	legacyRoundTrips := []struct {
-		name  string
-		setup func(*Components)
-	}{
-		{"Postgres → AWSRDS", func(c *Components) { c.Postgres = boolPtr(true) }},
-		{"ElastiCache → AWSElastiCache", func(c *Components) { c.ElastiCache = boolPtr(true) }},
-		{"OpenSearch → AWSOpenSearch", func(c *Components) { c.OpenSearch = boolPtr(true) }},
-	}
-	for _, tc := range legacyRoundTrips {
-		t.Run("Normalize round-trip: "+tc.name, func(t *testing.T) {
-			c := &Components{Cloud: "AWS"}
-			tc.setup(c)
-			c.Normalize()
-			assert.True(t, stackNeedsPrivateSubnets(c),
-				"legacy %s must still gate private subnets after Normalize()", tc.name)
-		})
-	}
+	_ = boolPtr
 }
 
 // cfgWithAWSVPC builds a Config with an AWSVPC sub-config populated from the
@@ -298,14 +276,6 @@ func TestBuildModuleValues_VPC_AWSVPCConfig_Validation(t *testing.T) {
 		require.Error(t, err)
 	})
 
-	t.Run("EnableNATGateway=false with legacy Postgres (post-Normalize) returns ValidationError", func(t *testing.T) {
-		// Legacy-field reads were dropped in Phase 3b; callers must Normalize first.
-		comps := &Components{Cloud: "AWS", Postgres: boolPtr(true)}
-		comps.Normalize()
-		cfg := cfgWithAWSVPC(nil, boolPtr(false), nil)
-		_, err := m.BuildModuleValues(KeyAWSVPC, comps, cfg, "test", "us-east-1")
-		require.Error(t, err)
-	})
 
 	t.Run("EnableNATGateway=false without downstream components is allowed", func(t *testing.T) {
 		comps := &Components{} // no private-subnet consumers
@@ -471,25 +441,11 @@ func TestBuildModuleValues_Cloudfront_OriginPath(t *testing.T) {
 // TestBuildModuleValues_IgnoresUnnormalizedLegacyConfig (negative
 // regression).
 
+// TestConfig_Normalize_CachePathsMigration pins the within-AWSCloudfront
+// deprecation: AWSCloudfront.CachePaths is a deprecated sub-field and must
+// migrate to OriginPath during Normalize. Distinct from the legacy
+// Cloudfront→AWSCloudfront promotion (deleted in Phase 4).
 func TestConfig_Normalize_CachePathsMigration(t *testing.T) {
-	t.Run("legacy Cloudfront CachePaths migrates to AWSCloudfront OriginPath", func(t *testing.T) {
-		path := "/legacy"
-		cfg := Config{
-			Cloud: "AWS",
-			Cloudfront: &struct {
-				DefaultTtl *string `json:"defaultTtl,omitempty"`
-				OriginPath *string `json:"originPath,omitempty"`
-				CachePaths *string `json:"cachePaths,omitempty"`
-			}{CachePaths: &path},
-		}
-		cfg.Normalize()
-		// Normalize migrates legacy Cloudfront → AWSCloudfront, then clears legacy fields
-		require.NotNil(t, cfg.AWSCloudfront)
-		require.NotNil(t, cfg.AWSCloudfront.OriginPath)
-		assert.Equal(t, "/legacy", *cfg.AWSCloudfront.OriginPath)
-		assert.Nil(t, cfg.Cloudfront, "legacy Cloudfront should be nil after Normalize")
-	})
-
 	t.Run("AWSCloudfront CachePaths migrates to OriginPath and is cleared", func(t *testing.T) {
 		path := "/old"
 		cfg := Config{
@@ -501,7 +457,6 @@ func TestConfig_Normalize_CachePathsMigration(t *testing.T) {
 			}{CachePaths: &path},
 		}
 		cfg.Normalize()
-		// AWSCloudfront.CachePaths → Cloudfront.OriginPath (reverse sync), then cleared
 		require.NotNil(t, cfg.AWSCloudfront)
 		require.NotNil(t, cfg.AWSCloudfront.OriginPath)
 		assert.Equal(t, "/old", *cfg.AWSCloudfront.OriginPath)
@@ -513,7 +468,7 @@ func TestConfig_Normalize_CachePathsMigration(t *testing.T) {
 		oldPath := "/old"
 		cfg := Config{
 			Cloud: "AWS",
-			Cloudfront: &struct {
+			AWSCloudfront: &struct {
 				DefaultTtl *string `json:"defaultTtl,omitempty"`
 				OriginPath *string `json:"originPath,omitempty"`
 				CachePaths *string `json:"cachePaths,omitempty"`
@@ -698,248 +653,13 @@ func TestBuildModuleValues_Postgres_RDSConfig(t *testing.T) {
 	})
 }
 
-// TestBuildModuleValues_IgnoresUnnormalizedLegacyConfig pins the Phase 3b
-// invariant: the mapper reads AWS-prefixed Config fields only. Legacy fields
-// supplied without a prior Normalize() call are invisible. The downstream
-// contract is that callers (reliable's composeradapter in production, the
-// ComposeStack/ComposeSingle entry points elsewhere) always Normalize first.
-//
-// Table covers every migrated legacy Config field so a regression that
-// re-introduces `cfg.Foo` reads in a single arm fails loudly.
-func TestBuildModuleValues_IgnoresUnnormalizedLegacyConfig(t *testing.T) {
-	m := DefaultMapper{}
-
-	cases := []struct {
-		name string
-		key  ComponentKey
-		cfg  *Config
-		// key that should NOT appear in vals because the mapper doesn't read
-		// the legacy Config field this test populates.
-		missing string
-	}{
-		{
-			name: "legacy RDS ignored without Normalize",
-			key:  KeyAWSRDS,
-			cfg: &Config{RDS: &struct {
-				CPUSize      string `json:"cpuSize,omitempty"`
-				ReadReplicas string `json:"readReplicas,omitempty"`
-				StorageSize  string `json:"storageSize,omitempty"`
-			}{CPUSize: "db.m7i.2xlarge", ReadReplicas: "3", StorageSize: "100"}},
-			missing: "node_cpu_size",
-		},
-		{
-			name: "legacy Cloudfront ignored without Normalize",
-			key:  KeyAWSCloudfront,
-			cfg: func() *Config {
-				ttl := "3600"
-				path := "/legacy"
-				return &Config{Cloudfront: &struct {
-					DefaultTtl *string `json:"defaultTtl,omitempty"`
-					OriginPath *string `json:"originPath,omitempty"`
-					CachePaths *string `json:"cachePaths,omitempty"`
-				}{DefaultTtl: &ttl, OriginPath: &path}}
-			}(),
-			missing: "origin_path",
-		},
-		{
-			name: "legacy ElastiCache ignored without Normalize",
-			key:  KeyAWSElastiCache,
-			cfg: &Config{ElastiCache: &struct {
-				HA       *bool  `json:"ha,omitempty"`
-				Storage  string `json:"storageSize,omitempty"`
-				NodeSize string `json:"nodeSize,omitempty"`
-				Replicas string `json:"replicas,omitempty"`
-			}{NodeSize: "cache.m5.large"}},
-			missing: "node_size",
-		},
-		{
-			name: "legacy S3 ignored without Normalize",
-			key:  KeyAWSS3,
-			cfg: func() *Config {
-				v := true
-				return &Config{S3: &struct {
-					Versioning *bool `json:"versioning,omitempty"`
-				}{Versioning: &v}}
-			}(),
-			missing: "versioning",
-		},
-		{
-			name: "legacy DynamoDB ignored without Normalize",
-			key:  KeyAWSDynamoDB,
-			cfg: &Config{DynamoDB: &struct {
-				Type string `json:"type,omitempty"`
-			}{Type: "On Demand"}},
-			missing: "billing_mode",
-		},
-		{
-			name: "legacy SQS ignored without Normalize",
-			key:  KeyAWSSQS,
-			cfg: &Config{SQS: &struct {
-				Type              string `json:"type,omitempty"`
-				VisibilityTimeout string `json:"visibilityTimeout,omitempty"`
-			}{Type: "FIFO", VisibilityTimeout: "600"}},
-			missing: "type",
-		},
-		{
-			name: "legacy MSK ignored without Normalize",
-			key:  KeyAWSMSK,
-			cfg: &Config{MSK: &struct {
-				Retention string `json:"retentionPeriod,omitempty"`
-			}{Retention: "168"}},
-			missing: "retention_period",
-		},
-		{
-			name: "legacy CloudWatchLogs ignored without Normalize",
-			key:  KeyAWSCloudWatchLogs,
-			cfg: &Config{CloudWatchLogs: &struct {
-				RetentionDays int `json:"retentionDays,omitempty"`
-			}{RetentionDays: 42}},
-			missing: "retention_in_days",
-		},
-		{
-			name: "legacy Cognito ignored without Normalize",
-			key:  KeyAWSCognito,
-			cfg: &Config{Cognito: &struct {
-				SignInType  string `json:"signInType,omitempty"`
-				MFARequired *bool  `json:"mfaRequired,omitempty"`
-			}{SignInType: "email"}},
-			missing: "sign_in_type",
-		},
-		{
-			name: "legacy APIGateway ignored without Normalize",
-			key:  KeyAWSAPIGateway,
-			cfg: &Config{APIGateway: &struct {
-				DomainName     string `json:"domainName,omitempty"`
-				CertificateArn string `json:"certificateArn,omitempty"`
-			}{DomainName: "api.example.com"}},
-			missing: "domain_name",
-		},
-		{
-			name: "legacy KMS ignored without Normalize",
-			key:  KeyAWSKMS,
-			cfg: &Config{KMS: &struct {
-				NumKeys string `json:"numKeys,omitempty"`
-			}{NumKeys: "3"}},
-			missing: "num_keys",
-		},
-		{
-			name: "legacy SecretsManager ignored without Normalize",
-			key:  KeyAWSSecretsManager,
-			cfg: &Config{SecretsManager: &struct {
-				NumSecrets string `json:"numSecrets,omitempty"`
-			}{NumSecrets: "5"}},
-			missing: "num_secrets",
-		},
-		{
-			name: "legacy OpenSearch ignored without Normalize",
-			key:  KeyAWSOpenSearch,
-			cfg: &Config{OpenSearch: &struct {
-				DeploymentType string `json:"deploymentType,omitempty"`
-				InstanceType   string `json:"instanceType,omitempty"`
-				StorageSize    string `json:"storageSize,omitempty"`
-				MultiAZ        *bool  `json:"multiAz,omitempty"`
-			}{DeploymentType: "managed"}},
-			missing: "deployment_type",
-		},
-		{
-			name: "legacy Bedrock ignored without Normalize",
-			key:  KeyAWSBedrock,
-			cfg: &Config{Bedrock: &struct {
-				KnowledgeBaseName string `json:"knowledgeBaseName,omitempty"`
-				ModelID           string `json:"modelId,omitempty"`
-				EmbeddingModelID  string `json:"embeddingModelId,omitempty"`
-			}{KnowledgeBaseName: "kb"}},
-			missing: "knowledge_base_name",
-		},
-		{
-			name: "legacy Lambda ignored without Normalize",
-			key:  KeyAWSLambda,
-			cfg: &Config{Lambda: &struct {
-				Runtime    string `json:"runtime,omitempty"`
-				MemorySize string `json:"memorySize,omitempty"`
-				Timeout    string `json:"timeout,omitempty"`
-			}{Runtime: "python3.12", MemorySize: "512"}},
-			missing: "memory_size",
-		},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			comps := &Components{}
-			if tc.key == KeyAWSBedrock {
-				// KeyAWSBedrock arm dereferences comps; give it a non-nil
-				// Components with AWSBedrock flagged so we exercise the Config
-				// read path, not the nil guard.
-				comps.AWSBedrock = ptrBool(true)
-			}
-			if tc.key == KeyAWSOpenSearch {
-				comps.AWSOpenSearch = ptrBool(true)
-			}
-			vals, err := m.BuildModuleValues(tc.key, comps, tc.cfg, "", "")
-			require.NoError(t, err)
-			_, present := vals[tc.missing]
-			assert.False(t, present,
-				"legacy Config field without Normalize must not produce %q in mapper output",
-				tc.missing)
-		})
-	}
-}
-
-// TestBuildModuleValues_IgnoresUnnormalizedLegacyEksConfig pins the Phase
-// 3b invariant for the EKS node-group arm: unnormalized legacy cfg.Eks is
-// invisible to the mapper, which falls back to its default desired_size.
-// Separate test (not part of the table above) because this arm asserts a
-// positive default rather than the absence of a key.
-func TestBuildModuleValues_IgnoresUnnormalizedLegacyEksConfig(t *testing.T) {
-	m := DefaultMapper{}
-	cfg := &Config{Eks: &struct {
-		HaControlPlane         *bool  `json:"haControlPlane,omitempty"`
-		ControlPlaneVisibility string `json:"controlPlaneVisibility,omitempty"`
-		DesiredSize            string `json:"desiredSize,omitempty"`
-		MaxSize                string `json:"maxSize,omitempty"`
-		MinSize                string `json:"minSize,omitempty"`
-		InstanceType           string `json:"instanceType,omitempty"`
-	}{DesiredSize: "9"}}
-	vals, err := m.BuildModuleValues(KeyEC2, &Components{}, cfg, "", "")
-	require.NoError(t, err)
-	assert.Equal(t, 3, vals["desired_size"],
-		"legacy Eks.DesiredSize must not reach mapper output; default 3 should apply")
-}
-
-// TestBuildModuleValues_IgnoresLegacyBedrockComponent pins the Phase 3b
-// invariant that the mapper's Bedrock-forces-AOSS override reads
-// comps.AWSBedrock only. Restoring the dropped comps.Bedrock OR-leg would
-// fail this test.
-func TestBuildModuleValues_IgnoresLegacyBedrockComponent(t *testing.T) {
-	m := DefaultMapper{}
-	// Legacy comps.Bedrock set, AWSBedrock nil. Without Normalize, the
-	// serverless override must NOT fire — user config for managed wins.
-	vals, err := m.BuildModuleValues(
-		KeyAWSOpenSearch,
-		&Components{Bedrock: ptrBool(true), AWSOpenSearch: ptrBool(true)},
-		&Config{
-			AWSOpenSearch: &struct {
-				DeploymentType string `json:"deploymentType,omitempty"`
-				InstanceType   string `json:"instanceType,omitempty"`
-				StorageSize    string `json:"storageSize,omitempty"`
-				MultiAZ        *bool  `json:"multiAz,omitempty"`
-			}{DeploymentType: "managed"},
-		},
-		"demo", "us-east-1",
-	)
-	require.NoError(t, err)
-	assert.Equal(t, "managed", vals["deployment_type"],
-		"unnormalized comps.Bedrock must not force serverless")
-}
-
-// TestBuildModuleValues_IgnoresLegacyCachePathsFallback pins the Phase 3b
-// invariant that the mapper does not consult AWSCloudfront.CachePaths. The
-// legacy CachePaths→OriginPath migration lives in Config.Normalize only.
-func TestBuildModuleValues_IgnoresLegacyCachePathsFallback(t *testing.T) {
+// TestBuildModuleValues_IgnoresAWSCloudfrontCachePathsFallback pins that
+// the mapper does not read the deprecated AWSCloudfront.CachePaths sub-field.
+// The within-AWSCloudfront CachePaths→OriginPath migration lives in
+// Config.Normalize only (see TestConfig_Normalize_CachePathsMigration).
+func TestBuildModuleValues_IgnoresAWSCloudfrontCachePathsFallback(t *testing.T) {
 	m := DefaultMapper{}
 	path := "/legacy"
-	// AWSCloudfront.CachePaths populated, OriginPath nil, no Normalize call.
-	// The mapper must not emit origin_path.
 	vals, err := m.BuildModuleValues(
 		KeyAWSCloudfront,
 		nil,
