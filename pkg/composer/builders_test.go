@@ -76,33 +76,33 @@ func configWithAWSECS(in awsECSCfgInput) *Config {
 }
 
 // awsKitchenSinkCfgBase returns the Config fields shared by the composer
-// kitchen-sink tests. Fields use the legacy (un-prefixed) Config names
-// because Config.Normalize() promotes them to the cloud-prefixed
-// equivalents during compose.
+// kitchen-sink tests. Fields use the AWS-prefixed Config names that the
+// mapper reads directly (Phase 3b).
 func awsKitchenSinkCfgBase() *Config {
 	return &Config{
+		Cloud:  "AWS",
 		Region: "us-west-2",
-		Cloudfront: &struct {
+		AWSCloudfront: &struct {
 			DefaultTtl *string `json:"defaultTtl,omitempty"`
 			OriginPath *string `json:"originPath,omitempty"`
 			CachePaths *string `json:"cachePaths,omitempty"` // DEPRECATED: use OriginPath
 		}{DefaultTtl: ptrString("3600")},
-		SQS: &struct {
+		AWSSQS: &struct {
 			Type              string `json:"type,omitempty"`
 			VisibilityTimeout string `json:"visibilityTimeout,omitempty"`
 		}{Type: "FIFO", VisibilityTimeout: "600"},
-		CloudWatchLogs: &struct {
+		AWSCloudWatchLogs: &struct {
 			RetentionDays int `json:"retentionDays,omitempty"`
 		}{RetentionDays: 90},
 	}
 }
 
 // awsKitchenSinkCfgV2 returns the Config for TestComposeStack_V2KitchenSink.
-// RDS.ReadReplicas is deliberately unset — the test exercises the default
+// AWSRDS.ReadReplicas is deliberately unset — the test exercises the default
 // (no-read-replicas) mapper branch for that field.
 func awsKitchenSinkCfgV2() *Config {
 	cfg := awsKitchenSinkCfgBase()
-	cfg.RDS = &struct {
+	cfg.AWSRDS = &struct {
 		CPUSize      string `json:"cpuSize,omitempty"`
 		ReadReplicas string `json:"readReplicas,omitempty"`
 		StorageSize  string `json:"storageSize,omitempty"`
@@ -111,11 +111,11 @@ func awsKitchenSinkCfgV2() *Config {
 }
 
 // awsKitchenSinkCfgWithReadReplicas returns the Config for
-// TestComposeStack_KitchenSink. RDS.ReadReplicas is "2" to exercise the
-// read-replicas mapper branch (cfg.RDS.ReadReplicas != "" in mapper.go).
+// TestComposeStack_KitchenSink. AWSRDS.ReadReplicas is "2" to exercise the
+// read-replicas mapper branch (cfg.AWSRDS.ReadReplicas != "" in mapper.go).
 func awsKitchenSinkCfgWithReadReplicas() *Config {
 	cfg := awsKitchenSinkCfgBase()
-	cfg.RDS = &struct {
+	cfg.AWSRDS = &struct {
 		CPUSize      string `json:"cpuSize,omitempty"`
 		ReadReplicas string `json:"readReplicas,omitempty"`
 		StorageSize  string `json:"storageSize,omitempty"`

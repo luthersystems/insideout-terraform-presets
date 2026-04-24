@@ -67,7 +67,7 @@ func TestMapper_OpenSearchDeploymentTypeOverride(t *testing.T) {
 			&Components{AWSBedrock: ptrBool(true), AWSOpenSearch: ptrBool(true)},
 			&Config{
 				// User asks for managed — invariant: Bedrock forces serverless.
-				OpenSearch: &struct {
+				AWSOpenSearch: &struct {
 					DeploymentType string `json:"deploymentType,omitempty"`
 					InstanceType   string `json:"instanceType,omitempty"`
 					StorageSize    string `json:"storageSize,omitempty"`
@@ -86,7 +86,7 @@ func TestMapper_OpenSearchDeploymentTypeOverride(t *testing.T) {
 			KeyAWSOpenSearch,
 			&Components{AWSOpenSearch: ptrBool(true)},
 			&Config{
-				OpenSearch: &struct {
+				AWSOpenSearch: &struct {
 					DeploymentType string `json:"deploymentType,omitempty"`
 					InstanceType   string `json:"instanceType,omitempty"`
 					StorageSize    string `json:"storageSize,omitempty"`
@@ -100,17 +100,11 @@ func TestMapper_OpenSearchDeploymentTypeOverride(t *testing.T) {
 			"deployment_type must track user config when Bedrock is absent")
 	})
 
-	t.Run("Normalized legacy Bedrock/OpenSearch flags still force serverless", func(t *testing.T) {
-		// Legacy Components fields must Normalize before reaching the mapper;
-		// reliable's composeradapter does this in production. After Normalize
-		// the legacy Bedrock/OpenSearch fields have been promoted to their
-		// AWS-prefixed siblings, so the mapper's V2 code path fires.
-		c := &Components{Cloud: "AWS", Bedrock: ptrBool(true), OpenSearch: ptrBool(true)}
-		c.Normalize()
-		vals, err := m.BuildModuleValues(KeyAWSOpenSearch, c, &Config{}, "demo", "us-east-1")
-		require.NoError(t, err)
-		require.Equal(t, "serverless", vals["deployment_type"])
-	})
+	// Legacy→prefixed Components migration is covered by
+	// TestComponents_Normalize_SyncsLegacyBoolFieldsForAWS (pure Normalize)
+	// and TestBuildModuleValues_IgnoresLegacyBedrockComponent (negative
+	// regression proving unnormalized comps.Bedrock doesn't fire the
+	// serverless override).
 }
 
 // TestMapper_BedrockPreviewStub locks in the preview-safe AOSS ARN stub
@@ -372,7 +366,7 @@ func TestComposeStack_BedrockOpenSearchAOSSEndToEnd(t *testing.T) {
 		},
 		Cfg: &Config{
 			// User requests managed — composer must force serverless.
-			OpenSearch: &struct {
+			AWSOpenSearch: &struct {
 				DeploymentType string `json:"deploymentType,omitempty"`
 				InstanceType   string `json:"instanceType,omitempty"`
 				StorageSize    string `json:"storageSize,omitempty"`

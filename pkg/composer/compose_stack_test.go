@@ -2080,6 +2080,69 @@ func TestComposeSingle_RejectsLegacyKey(t *testing.T) {
 		"error must carry the upgrade pair")
 }
 
+// TestComposeStack_NormalizesLegacyConfig pins the load-bearing contract
+// that ComposeStack (and ComposeSingle) call Config.Normalize() at entry.
+// Phase 3b dropped the mapper's legacy-field reads, so this invariant is
+// what keeps direct Go callers who build a Config with legacy field names
+// (e.g. `cfg.CloudWatchLogs`) working end-to-end. If the Normalize() call
+// inside ComposeStack/ComposeSingle is removed, the kitchen-sink tests
+// (which populate prefixed fields directly) will still pass — but this
+// test will fail loudly.
+func TestComposeStack_NormalizesLegacyConfig(t *testing.T) {
+	c := newTestClient()
+
+	// Legacy Config field populated; AWSCloudWatchLogs left nil. A correct
+	// ComposeStack must call Normalize first so the legacy value reaches
+	// the mapper via its AWS-prefixed sibling.
+	out, err := c.ComposeStack(ComposeStackOpts{
+		Cloud:        "aws",
+		SelectedKeys: []ComponentKey{KeyAWSCloudWatchLogs},
+		Comps:        &Components{Cloud: "AWS", AWSCloudWatchLogs: ptrBool(true)},
+		Cfg: &Config{
+			Cloud:  "AWS",
+			Region: "us-east-1",
+			CloudWatchLogs: &struct {
+				RetentionDays int `json:"retentionDays,omitempty"`
+			}{RetentionDays: 180},
+		},
+		Project: "test",
+		Region:  "us-east-1",
+	})
+	require.NoError(t, err)
+
+	tfvars := string(out["/aws_cloudwatch_logs.auto.tfvars"])
+	require.Contains(t, tfvars, "aws_cloudwatch_logs_retention_in_days = 180",
+		"legacy cfg.CloudWatchLogs.RetentionDays must be promoted by "+
+			"Config.Normalize during ComposeStack and flow through to the mapper output")
+}
+
+// TestComposeSingle_NormalizesLegacyConfig mirrors the ComposeStack test
+// above for the single-module entry point.
+func TestComposeSingle_NormalizesLegacyConfig(t *testing.T) {
+	c := newTestClient()
+
+	out, err := c.ComposeSingle(ComposeSingleOpts{
+		Cloud: "aws",
+		Key:   KeyAWSCloudWatchLogs,
+		Comps: &Components{Cloud: "AWS", AWSCloudWatchLogs: ptrBool(true)},
+		Cfg: &Config{
+			Cloud:  "AWS",
+			Region: "us-east-1",
+			CloudWatchLogs: &struct {
+				RetentionDays int `json:"retentionDays,omitempty"`
+			}{RetentionDays: 180},
+		},
+		Project: "test",
+		Region:  "us-east-1",
+	})
+	require.NoError(t, err)
+
+	tfvars := string(out["/aws_cloudwatch_logs.auto.tfvars"])
+	require.Contains(t, tfvars, "aws_cloudwatch_logs_retention_in_days = 180",
+		"legacy cfg.CloudWatchLogs.RetentionDays must flow through via "+
+			"Config.Normalize in ComposeSingle and reach the preset tfvars")
+}
+
 // TestComposeStack_PolymorphicKeyPullsInPrefixedVPC is a regression test for
 // the implicit-dependency leak where ResolveDependencies expanded a
 // polymorphic key to its legacy VPC sibling. A direct Go caller passing only
