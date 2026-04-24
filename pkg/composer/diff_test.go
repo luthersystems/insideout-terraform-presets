@@ -406,17 +406,6 @@ func TestDiffConfigs_GCPComponents_DetectsFieldChanges(t *testing.T) {
 	}
 }
 
-func TestDiffConfigs_SkipsLegacyFields(t *testing.T) {
-	t.Parallel()
-	oldCfg := cfgFromJSON(t, `{"ec2": {"numServers": "1"}}`)
-	newCfg := cfgFromJSON(t, `{"ec2": {"numServers": "5"}}`)
-
-	diffs := DiffConfigs(oldCfg, newCfg)
-	if len(diffs) != 0 {
-		t.Errorf("expected legacy fields to be skipped, got %d diffs: %+v", len(diffs), diffs)
-	}
-}
-
 func TestDiffConfigs_NormalizedCachePathsNoFalseDiff(t *testing.T) {
 	t.Parallel()
 	// Simulate: applied version has originPath, draft still has cachePaths (same value).
@@ -802,16 +791,6 @@ func TestDiffComponents_StringFieldAddRemove(t *testing.T) {
 	}
 }
 
-func TestDiffComponents_SkipsLegacyFields(t *testing.T) {
-	t.Parallel()
-	oldComp := compFromJSON(t, `{"bastion":true}`)
-	newComp := compFromJSON(t, `{}`)
-
-	diffs := DiffComponents(oldComp, newComp)
-	if len(diffs) != 0 {
-		t.Errorf("expected legacy fields to be skipped, got %d diffs: %+v", len(diffs), diffs)
-	}
-}
 
 func TestDiffComponents_SkipsMetadataFields(t *testing.T) {
 	t.Parallel()

@@ -148,7 +148,7 @@ func (m DefaultMapper) BuildModuleValues(
 			vals["provider"] = strings.ToLower(comps.Cloud) // "aws", "gcp"
 		}
 
-	case KeyResource, KeyAWSEKS: // EKS control plane or Lambda
+	case KeyAWSEKSControlPlane, KeyAWSEKS: // EKS control plane or Lambda
 		if isLambda(comps) {
 			return m.BuildModuleValues(KeyAWSLambda, comps, cfg, project, region)
 		}
@@ -196,7 +196,7 @@ func (m DefaultMapper) BuildModuleValues(
 			}
 		}
 
-	case KeyEC2: // EKS managed node group
+	case KeyAWSEKSNodeGroup: // EKS managed node group
 		// Keep strict validation by making sure all required inputs exist even
 		// when composing this module alone.
 		if _, ok := vals["cluster_name"]; !ok {

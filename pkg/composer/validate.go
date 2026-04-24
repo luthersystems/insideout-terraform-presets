@@ -19,23 +19,12 @@ func NewValidationError(msg string) *ValidationError {
 
 func (e *ValidationError) Error() string { return e.msg }
 
-type ComputeExclusivityOpts struct {
-	// Deprecated: legacy compute-exclusivity escape hatch tracked by issue #76.
-	// Historical sessions that mixed standalone EC2 with Lambda relied on this;
-	// new callers should not set it.
-	AllowLegacyStandaloneEC2Lambda bool
-}
-
 // ValidateComputeExclusivity checks that the selected component keys do not
 // contain incompatible compute combinations. For example, Lambda (serverless)
 // and EKS (container orchestration) cannot coexist in the same stack.
 //
 // Returns a descriptive error listing the conflicting keys, or nil if valid.
 func ValidateComputeExclusivity(keys []ComponentKey) error {
-	return ValidateComputeExclusivityWithOpts(keys, ComputeExclusivityOpts{})
-}
-
-func ValidateComputeExclusivityWithOpts(keys []ComponentKey, opts ComputeExclusivityOpts) error {
 	set := make(map[ComponentKey]bool, len(keys))
 	for _, k := range keys {
 		set[k] = true
@@ -43,25 +32,13 @@ func ValidateComputeExclusivityWithOpts(keys []ComponentKey, opts ComputeExclusi
 
 	// AWS serverless keys
 	awsServerless := filterPresent(set,
-		KeyLambda, KeyAWSLambda,
+		KeyAWSLambda,
 	)
 	// AWS container/VM keys
 	awsContainer := filterPresent(set,
-		KeyResource, KeyAWSEKS, KeyAWSECS,
-		KeyEC2, KeyAWSEC2,
+		KeyAWSEKSControlPlane, KeyAWSEKS, KeyAWSECS,
+		KeyAWSEKSNodeGroup, KeyAWSEC2,
 	)
-
-	allowLegacyStandaloneEC2Lambda := opts.AllowLegacyStandaloneEC2Lambda &&
-		(set[KeyLambda] || set[KeyAWSLambda]) &&
-		set[KeyAWSEC2] &&
-		!set[KeyResource] &&
-		!set[KeyEC2] &&
-		!set[KeyAWSEKS] &&
-		!set[KeyAWSECS]
-
-	if allowLegacyStandaloneEC2Lambda {
-		return nil
-	}
 
 	if len(awsServerless) > 0 && len(awsContainer) > 0 {
 		return &ValidationError{msg: fmt.Sprintf(
@@ -99,35 +76,6 @@ func filterPresent(set map[ComponentKey]bool, candidates ...ComponentKey) []Comp
 		}
 	}
 	return found
-}
-
-// ValidateNoLegacyKeys returns a ValidationError if any of the provided
-// keys are deprecated legacy ComponentKey constants that have been renamed
-// to AWS-prefixed equivalents in LegacyToV2Key. Callers with legacy-shaped
-// session JSON should run reliable's composeradapter (or otherwise upgrade
-// keys) before handing them to ComposeStack. Polymorphic keys that haven't
-// been renamed (KeyResource, KeyEC2) and third-party toggles (KeySplunk,
-// KeyDatadog) pass through — only keys present in LegacyToV2Key are rejected.
-func ValidateNoLegacyKeys(keys []ComponentKey) error {
-	var legacy []ComponentKey
-	for _, k := range keys {
-		if _, isLegacy := LegacyToV2Key[k]; isLegacy {
-			legacy = append(legacy, k)
-		}
-	}
-	if len(legacy) == 0 {
-		return nil
-	}
-	// Build human-readable "legacy → prefixed" pairs so the error points at
-	// the fix, not just the problem.
-	pairs := make([]string, 0, len(legacy))
-	for _, k := range legacy {
-		pairs = append(pairs, fmt.Sprintf("%s → %s", k, LegacyToV2Key[k]))
-	}
-	return &ValidationError{msg: fmt.Sprintf(
-		"legacy ComponentKey(s) in SelectedKeys: %s — composer accepts only AWS-prefixed keys; use reliable's composeradapter to upgrade session JSON",
-		strings.Join(pairs, ", "),
-	)}
 }
 
 // ValidateRemovals checks whether removing the given components would break

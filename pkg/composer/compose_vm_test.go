@@ -61,7 +61,7 @@ func keysOf(m map[string][]byte) []string {
 }
 
 func TestComposeSingle_VM_WithTestify(t *testing.T) {
-	// Ensure eks_nodegroup preset exists in the embedded FS (KeyEC2 maps to aws/eks_nodegroup)
+	// Ensure eks_nodegroup preset exists in the embedded FS (KeyAWSEKSNodeGroup maps to aws/eks_nodegroup)
 	presetFiles, err := newTestClient().GetPresetFiles("aws/eks_nodegroup")
 	require.NoError(t, err, "GetPresetFiles(aws/eks_nodegroup)")
 	require.NotEmpty(t, presetFiles, "aws/eks_nodegroup preset should not be empty")
@@ -73,7 +73,7 @@ func TestComposeSingle_VM_WithTestify(t *testing.T) {
 	c := newTestClient(WithTerraformVersion("1.7.5"))
 	out, err := c.ComposeSingle(ComposeSingleOpts{
 		Cloud:   "aws",
-		Key:     KeyEC2,
+		Key:     KeyAWSEKSNodeGroup,
 		Comps:   &Components{},
 		Cfg:     &Config{},
 		Project: "demo",
@@ -91,7 +91,7 @@ func TestComposeSingle_VM_WithTestify(t *testing.T) {
 	require.True(t, okVer, "expected /.terraform-version in output; got keys: %v", keysOf(out))
 	require.NotEmpty(t, bytes.TrimSpace(tfVer), ".terraform-version must not be empty")
 
-	// Rebased preset should exist under modules/eks_nodegroup (KeyEC2 is EKS managed node group)
+	// Rebased preset should exist under modules/eks_nodegroup (KeyAWSEKSNodeGroup is EKS managed node group)
 	_, ok := out["/modules/eks_nodegroup/variables.tf"]
 	assert.True(t, ok, "expected /modules/eks_nodegroup/variables.tf; got keys: %v", keysOf(out))
 	_, ok = out["/modules/eks_nodegroup/main.tf"]

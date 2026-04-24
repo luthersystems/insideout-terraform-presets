@@ -81,16 +81,9 @@ func (c *Client) ComposeSingle(opts ComposeSingleOpts) (Files, error) {
 		cloud = "aws" // Default to AWS for backward compatibility
 	}
 
-	// Reject legacy ComponentKeys as the compose Key. Phase 3b of #76 made
-	// the composer's selection vocabulary AWS-prefixed-only.
-	if err := ValidateNoLegacyKeys([]ComponentKey{opts.Key}); err != nil {
-		return nil, err
-	}
-
-	// Normalize legacy-key shapes to AWS-prefixed before any helper consumes
-	// Comps/Cfg. Idempotent for already-normalized input (the composeradapter
-	// path) and required for direct Go callers that construct Components from
-	// legacy JSON. See #76.
+	// Normalize Comps/Cfg to canonicalize cloud-specific field populations
+	// (opposite-cloud clearing, cloud inference) before any helper consumes
+	// them. Idempotent for already-normalized input.
 	if opts.Comps != nil {
 		opts.Comps.Normalize()
 	}
@@ -200,7 +193,7 @@ func (c *Client) ComposeSingle(opts ComposeSingleOpts) (Files, error) {
 		Inputs: inputs,
 		Raw:    wired.RawHCL,
 	}
-	if opts.Key == KeyWAF || opts.Key == KeyAWSWAF {
+	if opts.Key == KeyAWSWAF {
 		block.Providers = map[string]string{
 			"aws":           "aws",
 			"aws.us_east_1": "aws.us_east_1",
@@ -222,14 +215,10 @@ func (c *Client) ComposeSingle(opts ComposeSingleOpts) (Files, error) {
 
 type ComposeStackOpts struct {
 	Cloud        string // "aws" or "gcp" (defaults to "aws" if empty)
-	SelectedKeys []ComponentKey
-	Comps        *Components
-	Cfg          *Config
-	// Deprecated: legacy compute-exclusivity escape hatch tracked by issue #76.
-	// Historical sessions that mixed standalone EC2 with Lambda relied on this;
-	// new callers should not set it.
-	AllowLegacyMixedCompute bool
-	Project, Region         string
+	SelectedKeys    []ComponentKey
+	Comps           *Components
+	Cfg             *Config
+	Project, Region string
 }
 
 func (c *Client) ComposeStack(opts ComposeStackOpts) (Files, error) {
@@ -238,10 +227,9 @@ func (c *Client) ComposeStack(opts ComposeStackOpts) (Files, error) {
 		cloud = "aws" // Default to AWS for backward compatibility
 	}
 
-	// Normalize legacy-key shapes to AWS-prefixed before any helper consumes
-	// Comps/Cfg. Idempotent for already-normalized input (the composeradapter
-	// path) and required for direct Go callers that construct Components from
-	// legacy JSON. See #76.
+	// Normalize Comps/Cfg to canonicalize cloud-specific field populations
+	// (opposite-cloud clearing, cloud inference) before any helper consumes
+	// them. Idempotent for already-normalized input.
 	if opts.Comps != nil {
 		opts.Comps.Normalize()
 	}
@@ -249,23 +237,13 @@ func (c *Client) ComposeStack(opts ComposeStackOpts) (Files, error) {
 		opts.Cfg.Normalize()
 	}
 
-	// 0a. Reject legacy ComponentKeys in SelectedKeys. Phase 3b of #76 made
-	// the composer's selection vocabulary AWS-prefixed-only; reliable's
-	// composeradapter upgrades legacy session JSON before handing it off.
-	if err := ValidateNoLegacyKeys(opts.SelectedKeys); err != nil {
-		return nil, err
-	}
-
-	// 0b. Validate compute exclusivity before expanding dependencies.
-	if err := ValidateComputeExclusivityWithOpts(opts.SelectedKeys, ComputeExclusivityOpts{
-		AllowLegacyStandaloneEC2Lambda: opts.AllowLegacyMixedCompute,
-	}); err != nil {
+	// Validate compute exclusivity before expanding dependencies.
+	if err := ValidateComputeExclusivity(opts.SelectedKeys); err != nil {
 		return nil, err
 	}
 
 	// 1. Expand selected keys to include implicit dependencies (e.g. Redis -> VPC)
 	expanded := ResolveDependencies(opts.SelectedKeys)
-	expanded = DeduplicateKeys(expanded) // remove legacy keys when V2 equivalent is present
 
 	// If any backup components are selected, ensure the appropriate backup module key is included.
 	if backupsSelected(opts.Comps) {
@@ -385,7 +363,7 @@ func (c *Client) ComposeStack(opts ComposeStackOpts) (Files, error) {
 			Inputs: inputs,
 			Raw:    wired.RawHCL,
 		}
-		if k == KeyWAF || k == KeyAWSWAF {
+		if k == KeyAWSWAF {
 			block.Providers = map[string]string{
 				"aws":           "aws",
 				"aws.us_east_1": "aws.us_east_1",
@@ -396,7 +374,7 @@ func (c *Client) ComposeStack(opts ComposeStackOpts) (Files, error) {
 		// infer this from attribute references alone because those refer to
 		// outputs that exist as soon as the collection resource is defined,
 		// not after the security policies land.
-		if (k == KeyBedrock || k == KeyAWSBedrock) && (selected[KeyOpenSearch] || selected[KeyAWSOpenSearch]) {
+		if k == KeyAWSBedrock && selected[KeyAWSOpenSearch] {
 			block.DependsOn = []string{opensearchRef(selected)}
 		}
 		blocks = append(blocks, block)
@@ -521,7 +499,7 @@ variable "external_id" {
 		// WAF requires an additional us_east_1 provider alias for CloudFront
 		// certificate validation. This is a root-configuration concern, not a
 		// child-module concern, so it stays cloud-aware here.
-		if selected[KeyWAF] || selected[KeyAWSWAF] {
+		if selected[KeyAWSWAF] {
 			b.WriteString("\n")
 			fmt.Fprintf(&b, "provider \"aws\" {\n  alias  = \"us_east_1\"\n  region = \"us-east-1\"%s%s\n}\n", awsDefaultTags, awsDynamicAssumeRole)
 		}
