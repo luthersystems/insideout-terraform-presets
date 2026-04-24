@@ -347,12 +347,10 @@ type RawExpr struct{ Expr string }
 // simple helpers
 func boolVal(p *bool) bool { return p != nil && *p }
 
-// Normalize returns a Components with legacy fields migrated to cloud-specific fields and vice-versa.
-// This should be called after unmarshaling to ensure consistent field access.
 // Normalize canonicalises a Components by clearing fields that belong to the
-// opposite cloud. Phase 4 dropped the legacy-field sync logic; callers with
-// legacy-shaped session JSON must upgrade via reliable's composeradapter (or
-// equivalent) before handing the Components to composer.
+// opposite cloud. Phase 4 (v0.4.0) dropped the legacy-field sync logic;
+// callers with legacy-shaped session JSON must upgrade via reliable's
+// composeradapter (or equivalent) before handing the Components to composer.
 func (c *Components) Normalize() {
 	if c == nil {
 		return
@@ -417,12 +415,9 @@ func (c *Components) Normalize() {
 }
 
 // IsLambdaArchitecture returns true if the stack uses Lambda as its compute
-// layer. Reads only c.AWSLambda — legacy shapes (c.Lambda *bool and the
-// c.Resource string "Lambda" / "Serverless") are promoted to c.AWSLambda by
-// Components.Normalize (AWS branch). ComposeStack / ComposeSingle call
-// Normalize at entry, so most callers never need to think about this; direct
-// callers of IsLambdaArchitecture on a legacy-shaped Components must call
-// Normalize first. See #76.
+// layer. Reads only c.AWSLambda. In v0.4.0 the legacy c.Lambda / c.Resource
+// fields no longer exist; callers with pre-Phase-4 session JSON must fold
+// those via reliable's composeradapter before reaching composer.
 func (c *Components) IsLambdaArchitecture() bool {
 	if c == nil {
 		return false
