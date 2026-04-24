@@ -34,9 +34,9 @@ var awsBedrockCollectionArnRegex = regexp.MustCompile(
 
 // TestBedrockWiring_AOSSCollectionArn locks in the rename
 // `opensearch_arn` → `opensearch_collection_arn` and the `.collection_arn`
-// RHS for the AWS-prefixed Bedrock wiring. Legacy unprefixed keys no
-// longer reach the composer after Phase 3b strict validation; the
-// legacy-parity signal now lives in TestComposeStack_RejectsLegacyKeys.
+// RHS for the AWS-prefixed Bedrock wiring. Phase 4 deleted the legacy
+// un-prefixed ComponentKey constants entirely, so there is no legacy
+// parity path left to pin.
 func TestBedrockWiring_AOSSCollectionArn(t *testing.T) {
 	selected := map[ComponentKey]bool{
 		KeyAWSS3:         true,

@@ -433,7 +433,7 @@ var legacyModuleRenames = map[string]string{
 	"githubactions":        "aws_github_actions",
 	"codepipeline":         "aws_codepipeline",
 	"lambda":               "aws_lambda",
-	"apigateway":           "aws_api_gateway",
+	"apigateway":           "aws_apigateway",
 	"kms":                  "aws_kms",
 	"secretsmanager":       "aws_secretsmanager",
 	"opensearch":           "aws_opensearch",
