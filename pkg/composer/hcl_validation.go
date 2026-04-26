@@ -2,6 +2,7 @@ package composer
 
 import (
 	"fmt"
+	"net"
 	"sort"
 	"strconv"
 	"strings"
@@ -220,19 +221,66 @@ var validationFunctionsMap map[string]function.Function
 func validationFunctions() map[string]function.Function {
 	validationFunctionsOnce.Do(func() {
 		validationFunctionsMap = map[string]function.Function{
-			"can":        tryfunc.CanFunc,
-			"contains":   stdlib.ContainsFunc,
-			"length":     lengthFunc(),
-			"lower":      stdlib.LowerFunc,
-			"regex":      stdlib.RegexFunc,
-			"replace":    stdlib.ReplaceFunc,
-			"trimspace":  stdlib.TrimSpaceFunc,
-			"upper":      stdlib.UpperFunc,
-			"alltrue":    allTrueFunc(),
-			"startswith": startsWithFunc(),
+			"can":          tryfunc.CanFunc,
+			"contains":     stdlib.ContainsFunc,
+			"length":       lengthFunc(),
+			"lower":        stdlib.LowerFunc,
+			"regex":        stdlib.RegexFunc,
+			"replace":      stdlib.ReplaceFunc,
+			"trimspace":    stdlib.TrimSpaceFunc,
+			"upper":        stdlib.UpperFunc,
+			"alltrue":      allTrueFunc(),
+			"startswith":   startsWithFunc(),
+			"cidrnetmask":  cidrnetmaskFunc(),
+			"cidrhost":     cidrhostFunc(),
 		}
 	})
 	return validationFunctionsMap
+}
+
+// cidrnetmaskFunc stubs Terraform's cidrnetmask() function for offline
+// validation. We don't need the actual netmask — only that the input parses
+// as a valid CIDR — so the implementation just validates and returns a
+// placeholder string. Validation conditions like
+// `can(cidrnetmask(var.foo))` pass iff var.foo is a parseable CIDR.
+func cidrnetmaskFunc() function.Function {
+	return function.New(&function.Spec{
+		Params: []function.Parameter{{Name: "prefix", Type: cty.String}},
+		Type:   function.StaticReturnType(cty.String),
+		Impl: func(args []cty.Value, _ cty.Type) (cty.Value, error) {
+			s := args[0].AsString()
+			if _, _, err := parseCIDR(s); err != nil {
+				return cty.NilVal, fmt.Errorf("invalid CIDR %q: %w", s, err)
+			}
+			return cty.StringVal("0.0.0.0"), nil
+		},
+	})
+}
+
+// cidrhostFunc stubs Terraform's cidrhost() function the same way
+// cidrnetmaskFunc does — validate the input parses, return a placeholder.
+func cidrhostFunc() function.Function {
+	return function.New(&function.Spec{
+		Params: []function.Parameter{
+			{Name: "prefix", Type: cty.String},
+			{Name: "hostnum", Type: cty.Number},
+		},
+		Type: function.StaticReturnType(cty.String),
+		Impl: func(args []cty.Value, _ cty.Type) (cty.Value, error) {
+			s := args[0].AsString()
+			if _, _, err := parseCIDR(s); err != nil {
+				return cty.NilVal, fmt.Errorf("invalid CIDR %q: %w", s, err)
+			}
+			return cty.StringVal("0.0.0.0"), nil
+		},
+	})
+}
+
+// parseCIDR validates that s is a parseable CIDR. The return values are
+// discarded — the cidr* stubs only care about parse success.
+func parseCIDR(s string) (any, any, error) {
+	ip, ipnet, err := net.ParseCIDR(s)
+	return ip, ipnet, err
 }
 
 func allTrueFunc() function.Function {
