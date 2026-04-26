@@ -392,6 +392,9 @@ func (c *Client) composeStackImpl(opts ComposeStackOpts) (*ComposeStackResult, e
 	var moduleOutputs []ModuleOutputs
 	discoveredProviders := map[string]RequiredProvider{}
 	var issues []ValidationIssue
+	// Per-module accumulators consumed by post-loop validators.
+	presetPaths := map[string]string{}        // module name -> preset directory
+	moduleToVals := map[string]map[string]any{} // module name -> mapper output
 
 	for _, k := range ordered {
 		dir := GetModuleDir(k, opts.Comps)
@@ -449,6 +452,8 @@ func (c *Client) composeStackImpl(opts ComposeStackOpts) (*ComposeStackResult, e
 		}
 
 		issues = append(issues, validateRequiredIssues(vars, wired, vals, string(k))...)
+		presetPaths[string(k)] = presetPath
+		moduleToVals[string(k)] = vals
 
 		block := ModuleBlock{
 			Name:   string(k),
@@ -506,13 +511,11 @@ func (c *Client) composeStackImpl(opts ComposeStackOpts) (*ComposeStackResult, e
 	files["/providers.tf"] = generateProvidersTF(cloud, reg, selected, discoveredProviders)
 
 	// Validator dispatcher — runs after the stack is fully composed, before
-	// returning. Each validator appends to issues; later commits add more
-	// validators here (type coercion, wiring graph, cycle detection, provider
-	// conflicts, sensitive propagation, composed-root parse). The
-	// missing-required-variable check ran inline above so its issues are
-	// already accumulated.
-	_ = blocks // accumulated for downstream validators
-	_ = files  // accumulated for downstream validators
+	// returning. Each validator appends to issues. The missing-required check
+	// ran inline above so its issues are already accumulated.
+	issues = append(issues, ValidateValueTypes(moduleToVals, presetPaths)...)
+	issues = append(issues, ValidateModuleWiring(blocks, presetPaths)...)
+	issues = append(issues, ValidateNoModuleCycles(blocks)...)
 
 	return &ComposeStackResult{Files: files, Issues: issues}, nil
 }
