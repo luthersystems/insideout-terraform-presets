@@ -11,20 +11,47 @@ import (
 	terraformpresets "github.com/luthersystems/insideout-terraform-presets"
 )
 
-var presetInspectCache sync.Map // key: presetPath string, value: *tfconfig.Module
+// presetInspectCache keys by (fsIdentity, presetPath) so a Client using
+// WithPresets(customFS) gets its own cache slice and never collides with the
+// global embedded-FS entries.
+var presetInspectCache sync.Map // key: cacheKey, value: *tfconfig.Module
 
-// InspectPreset returns the parsed module surface (variables, outputs, required
-// providers, managed/data resources, module calls, required core) for the
-// preset at presetPath under the embedded preset FS. Result is cached
-// process-wide; callers must treat the returned *tfconfig.Module as immutable.
+type cacheKey struct {
+	fsID       any
+	presetPath string
+}
+
+// InspectPreset returns the parsed module surface (variables, outputs,
+// required providers, managed/data resources, module calls, required core)
+// for the preset at presetPath under the embedded preset FS. Result is
+// cached process-wide; callers must treat the returned *tfconfig.Module as
+// immutable.
 //
-// This is the single public surface for module-shape inspection; the
-// composer's internal compose pipeline goes through it too.
+// This package-level function always reads from the embedded preset FS
+// (luthersystems/insideout-terraform-presets), regardless of any
+// composer.Client's WithPresets override. Callers using WithPresets should
+// use (*Client).InspectPreset instead so their custom FS is honored.
 func InspectPreset(presetPath string) (*tfconfig.Module, error) {
-	if cached, ok := presetInspectCache.Load(presetPath); ok {
+	return inspectPresetFS(terraformpresets.FS, presetPath)
+}
+
+// InspectPreset is the Client-scoped variant that honors WithPresets. The
+// runtime validator dispatcher in ComposeStack/ComposeStackWithIssues uses
+// this method (transitively, via the package-level shortcut) so a Client
+// constructed against a custom preset FS gets consistent results.
+func (c *Client) InspectPreset(presetPath string) (*tfconfig.Module, error) {
+	if c == nil || c.presets == nil {
+		return InspectPreset(presetPath)
+	}
+	return inspectPresetFS(c.presets, presetPath)
+}
+
+func inspectPresetFS(presets fs.FS, presetPath string) (*tfconfig.Module, error) {
+	key := cacheKey{fsID: presets, presetPath: presetPath}
+	if cached, ok := presetInspectCache.Load(key); ok {
 		return cached.(*tfconfig.Module), nil
 	}
-	sub, err := fs.Sub(terraformpresets.FS, presetPath)
+	sub, err := fs.Sub(presets, presetPath)
 	if err != nil {
 		return nil, fmt.Errorf("inspect preset %s: %w", presetPath, err)
 	}
@@ -32,7 +59,7 @@ func InspectPreset(presetPath string) (*tfconfig.Module, error) {
 	if diags.HasErrors() {
 		return nil, fmt.Errorf("inspect preset %s: %s", presetPath, diags.Error())
 	}
-	presetInspectCache.Store(presetPath, mod)
+	presetInspectCache.Store(key, mod)
 	return mod, nil
 }
 

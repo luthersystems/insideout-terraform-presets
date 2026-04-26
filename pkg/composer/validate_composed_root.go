@@ -45,5 +45,6 @@ func ValidateComposedRoot(files Files) []ValidationIssue {
 
 func isHCLFile(p string) bool {
 	lp := strings.ToLower(p)
-	return strings.HasSuffix(lp, ".tf") || strings.HasSuffix(lp, ".tfvars") || strings.HasSuffix(lp, ".auto.tfvars")
+	// .auto.tfvars is covered by the .tfvars check.
+	return strings.HasSuffix(lp, ".tf") || strings.HasSuffix(lp, ".tfvars")
 }

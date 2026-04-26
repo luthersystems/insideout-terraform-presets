@@ -25,6 +25,12 @@ type wiringEdge struct {
 // raw HCL expression. We only inspect the prefix because consumers may write
 // expressions like `module.aws_vpc.private_subnet_ids[0]` and we still want
 // to record `(aws_vpc, private_subnet_ids)`.
+//
+// Contract: this regex is run against ModuleBlock.Raw values, which are HCL
+// expression strings emitted by DefaultWiring (see contracts.go) — never
+// arbitrary user text. If that contract ever loosens (e.g. Raw begins
+// carrying string-literal payloads that may themselves contain "module.X.Y"),
+// this regex would surface false-positive edges.
 var moduleRefPattern = regexp.MustCompile(`module\.([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)`)
 
 // extractWiringEdges walks block.Raw values and returns every `module.X.Y`
@@ -155,10 +161,26 @@ func ValidateNoModuleCycles(blocks []ModuleBlock) []ValidationIssue {
 		return nil
 	}
 	sort.Strings(stuck)
+
+	// Pinpoint at least one closing edge so reviewers know where to break the
+	// cycle. We walk extractWiringEdges again rather than tracking edges in
+	// the topo-sort loop above; the residual graph is small enough that the
+	// extra pass is cheaper than complicating the Kahn's-algorithm code.
+	stuckSet := map[string]bool{}
+	for _, n := range stuck {
+		stuckSet[n] = true
+	}
+	var closing string
+	for _, edge := range extractWiringEdges(blocks) {
+		if stuckSet[edge.Producer] && stuckSet[edge.Consumer] && edge.Producer != edge.Consumer {
+			closing = fmt.Sprintf(" (e.g. %s.%s -> module.%s.%s)", edge.Consumer, edge.Input, edge.Producer, edge.Output)
+			break
+		}
+	}
 	return []ValidationIssue{{
 		Field:  "module_graph",
 		Code:   "module_cycle",
-		Reason: fmt.Sprintf("module dependency cycle involving: %v", stuck),
+		Reason: fmt.Sprintf("module dependency cycle involving: %v%s", stuck, closing),
 	}}
 }
 

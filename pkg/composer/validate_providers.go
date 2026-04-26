@@ -8,11 +8,25 @@ import (
 	"github.com/hashicorp/go-version"
 )
 
+// providerSeed represents the cloud-level required_provider entry that
+// generateProvidersTF stamps on every emitted root, regardless of what the
+// presets declare. ValidateProviderConstraints unions these into the
+// per-provider constraint set so a preset that pins (e.g.) `aws < 6.0`
+// surfaces as a conflict against the seed's `aws >= 6.0` instead of slipping
+// through to terraform init.
+//
+// Mirror these constants on any change to the seeds in generateProvidersTF
+// (compose.go).
+var providerSeeds = map[string]string{
+	"aws":    ">= 6.0",
+	"google": ">= 5.0",
+}
+
 // ValidateProviderConstraints unions the required_providers VersionConstraints
-// across every selected module's preset and reports any provider whose
-// combined constraint set has no satisfying version. terraform init would
-// surface the same error after pulling registry metadata; this catches it
-// pre-init in pure Go.
+// across every selected module's preset (plus the cloud-level seeds emitted
+// by generateProvidersTF) and reports any provider whose combined constraint
+// set has no satisfying version. terraform init would surface the same error
+// after pulling registry metadata; this catches it pre-init in pure Go.
 //
 // presetPaths maps block.Name to preset directory (same shape as
 // ValidateModuleWiring). Modules absent from presetPaths contribute nothing.
@@ -32,6 +46,19 @@ func ValidateProviderConstraints(presetPaths map[string]string) []ValidationIssu
 				perProvider[provName] = map[string][]string{}
 			}
 			perProvider[provName][modName] = append(perProvider[provName][modName], req.VersionConstraints...)
+		}
+	}
+
+	// Layer the cloud-level seed on top of each provider that any preset
+	// declared. Only seed a provider that's already in play — adding
+	// "aws >= 6.0" to a stack that doesn't use AWS would produce
+	// nonsensical conflict reports.
+	for provName, seed := range providerSeeds {
+		if _, present := perProvider[provName]; !present {
+			continue
+		}
+		if perProvider[provName]["__cloud_base__"] == nil {
+			perProvider[provName]["__cloud_base__"] = []string{seed}
 		}
 	}
 
@@ -84,21 +111,28 @@ func ValidateProviderConstraints(presetPaths map[string]string) []ValidationIssu
 }
 
 // findSatisfyingVersion sweeps a representative set of candidate versions and
-// returns true if any of them satisfy the combined constraint set. The sweep
-// covers major versions 0-50 with patch boundaries, which captures every
-// realistic Terraform provider release window.
+// returns true if any of them satisfy the combined constraint set. We need
+// to test enough of the version space that pessimistic three-segment
+// constraints like `~> 5.7.0` (= [5.7.0, 5.8.0)) don't slip through as
+// false negatives.
+//
+// Strategy: every major 0-50, every minor 0-50, with .0 and .99 patches.
+// That's 5,202 candidates — plenty to land inside any realistic
+// constraint window without being meaningfully expensive (each Check is
+// O(constraints)). Coverage assumption: providers don't ship version
+// numbers above 50.50.x, which is true for every Terraform provider in
+// existence today.
 func findSatisfyingVersion(c version.Constraints) bool {
 	for major := 0; major <= 50; major++ {
-		for _, candidate := range []string{
-			fmt.Sprintf("%d.0.0", major),
-			fmt.Sprintf("%d.99.99", major),
-		} {
-			v, err := version.NewVersion(candidate)
-			if err != nil {
-				continue
-			}
-			if c.Check(v) {
-				return true
+		for minor := 0; minor <= 50; minor++ {
+			for _, patch := range []int{0, 99} {
+				v, err := version.NewVersion(fmt.Sprintf("%d.%d.%d", major, minor, patch))
+				if err != nil {
+					continue
+				}
+				if c.Check(v) {
+					return true
+				}
 			}
 		}
 	}
