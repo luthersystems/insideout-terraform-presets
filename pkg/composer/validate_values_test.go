@@ -115,9 +115,18 @@ func TestAllowedValues(t *testing.T) {
 func TestKnownFields(t *testing.T) {
 	t.Parallel()
 
+	expected := make([]string, 0, len(componentFieldValidators)+len(configFieldValidators))
+	for _, cv := range componentFieldValidators {
+		expected = append(expected, cv.field)
+	}
+	for _, fv := range configFieldValidators {
+		expected = append(expected, fv.field)
+	}
+
 	fields := KnownFields()
 	require.NotEmpty(t, fields)
 	require.True(t, sort.StringsAreSorted(fields), "KnownFields should be deterministic")
+	require.ElementsMatch(t, expected, fields)
 
 	seen := map[string]bool{}
 	for _, field := range fields {
