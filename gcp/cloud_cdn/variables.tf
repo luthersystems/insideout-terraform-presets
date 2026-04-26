@@ -19,6 +19,10 @@ variable "default_ttl" {
   description = "Default TTL in seconds for cached content"
   type        = number
   default     = 3600
+  validation {
+    condition     = var.default_ttl >= 0
+    error_message = "default_ttl must be >= 0."
+  }
 }
 
 variable "max_ttl" {

@@ -18,6 +18,10 @@ variable "environment" {
 variable "num_secrets" {
   type    = number
   default = 1
+  validation {
+    condition     = var.num_secrets >= 1
+    error_message = "num_secrets must be >= 1."
+  }
 }
 
 variable "tags" {

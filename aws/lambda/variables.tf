@@ -23,18 +23,30 @@ variable "runtime" {
   description = "Lambda runtime (e.g., nodejs20.x, python3.12, go1.x, java21)"
   type        = string
   default     = "nodejs20.x"
+  validation {
+    condition     = length(trimspace(var.runtime)) > 0 && can(regex("^[A-Za-z0-9][A-Za-z0-9_.-]*$", var.runtime))
+    error_message = "runtime must be a non-empty Lambda runtime token (e.g., nodejs20.x, python3.12, go1.x, java21)."
+  }
 }
 
 variable "memory_size" {
   description = "Memory size in MB"
   type        = number
   default     = 128
+  validation {
+    condition     = var.memory_size >= 128 && var.memory_size <= 10240
+    error_message = "memory_size must be between 128 and 10240 MB."
+  }
 }
 
 variable "timeout" {
   description = "Timeout in seconds"
   type        = number
   default     = 3
+  validation {
+    condition     = var.timeout >= 1 && var.timeout <= 900
+    error_message = "timeout must be between 1 and 900 seconds."
+  }
 }
 
 variable "handler" {

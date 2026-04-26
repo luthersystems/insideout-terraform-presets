@@ -61,6 +61,10 @@ variable "storage_size" {
   type        = string
   description = "Storage size in GB"
   default     = "10GB"
+  validation {
+    condition     = can(regex("^[0-9]+GB$", var.storage_size))
+    error_message = "storage_size must use whole GB format, e.g. 10GB or 1000GB."
+  }
 }
 
 variable "multi_az" {

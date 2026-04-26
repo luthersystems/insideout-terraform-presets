@@ -49,8 +49,11 @@ variable "capacity_providers" {
   default     = ["FARGATE", "FARGATE_SPOT"]
 
   validation {
-    condition     = length(var.capacity_providers) > 0
-    error_message = "At least one capacity provider must be specified."
+    condition = length(var.capacity_providers) > 0 && length([
+      for p in var.capacity_providers : p
+      if contains(["FARGATE", "FARGATE_SPOT"], p)
+    ]) == length(var.capacity_providers)
+    error_message = "capacity_providers must contain at least one value and every value must be one of: FARGATE, FARGATE_SPOT."
   }
 }
 
@@ -58,6 +61,11 @@ variable "default_capacity_provider" {
   description = "Default capacity provider for the cluster"
   type        = string
   default     = "FARGATE"
+
+  validation {
+    condition     = contains(["FARGATE", "FARGATE_SPOT"], var.default_capacity_provider)
+    error_message = "default_capacity_provider must be one of: FARGATE, FARGATE_SPOT."
+  }
 }
 
 variable "enable_service_connect" {

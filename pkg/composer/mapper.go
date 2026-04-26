@@ -163,7 +163,13 @@ func (m DefaultMapper) BuildModuleValues(
 		if _, ok := vals["public_subnet_ids"]; !ok {
 			vals["public_subnet_ids"] = []any{}
 		}
-		// Optional: user config could add more later (e.g., visibility)
+		if cfg != nil && cfg.AWSEKS != nil && cfg.AWSEKS.ControlPlaneVisibility != "" {
+			public, err := normalizeEKSControlPlaneVisibility(cfg.AWSEKS.ControlPlaneVisibility)
+			if err != nil {
+				return nil, err
+			}
+			vals["eks_public_control_plane"] = public.(bool)
+		}
 
 	case KeyAWSECS:
 		// Preview-safe stubs for required, usually-wired inputs
@@ -185,12 +191,20 @@ func (m DefaultMapper) BuildModuleValues(
 			if len(ecsCfg.CapacityProviders) > 0 {
 				cp := make([]any, len(ecsCfg.CapacityProviders))
 				for i, p := range ecsCfg.CapacityProviders {
-					cp[i] = p
+					canonical, err := canonicalECSCapacityProvider(p)
+					if err != nil {
+						return nil, err
+					}
+					cp[i] = canonical
 				}
 				vals["capacity_providers"] = cp
 			}
 			if ecsCfg.DefaultCapacityProvider != "" {
-				vals["default_capacity_provider"] = ecsCfg.DefaultCapacityProvider
+				canonical, err := canonicalECSCapacityProvider(ecsCfg.DefaultCapacityProvider)
+				if err != nil {
+					return nil, err
+				}
+				vals["default_capacity_provider"] = canonical
 			}
 			if ecsCfg.EnableServiceConnect != nil {
 				vals["enable_service_connect"] = *ecsCfg.EnableServiceConnect
@@ -211,19 +225,34 @@ func (m DefaultMapper) BuildModuleValues(
 		// Use EKS config if available
 		if cfg != nil && cfg.AWSEKS != nil {
 			if cfg.AWSEKS.DesiredSize != "" {
-				if n, err := strconv.Atoi(cfg.AWSEKS.DesiredSize); err == nil {
-					vals["desired_size"] = n
+				n, err := strconv.Atoi(strings.TrimSpace(cfg.AWSEKS.DesiredSize))
+				if err != nil {
+					return nil, NewValidationError(fmt.Sprintf(
+						"AWSEKS.DesiredSize=%q: expected an integer",
+						cfg.AWSEKS.DesiredSize,
+					))
 				}
+				vals["desired_size"] = n
 			}
 			if cfg.AWSEKS.MinSize != "" {
-				if n, err := strconv.Atoi(cfg.AWSEKS.MinSize); err == nil {
-					vals["min_size"] = n
+				n, err := strconv.Atoi(strings.TrimSpace(cfg.AWSEKS.MinSize))
+				if err != nil {
+					return nil, NewValidationError(fmt.Sprintf(
+						"AWSEKS.MinSize=%q: expected an integer",
+						cfg.AWSEKS.MinSize,
+					))
 				}
+				vals["min_size"] = n
 			}
 			if cfg.AWSEKS.MaxSize != "" {
-				if n, err := strconv.Atoi(cfg.AWSEKS.MaxSize); err == nil {
-					vals["max_size"] = n
+				n, err := strconv.Atoi(strings.TrimSpace(cfg.AWSEKS.MaxSize))
+				if err != nil {
+					return nil, NewValidationError(fmt.Sprintf(
+						"AWSEKS.MaxSize=%q: expected an integer",
+						cfg.AWSEKS.MaxSize,
+					))
 				}
+				vals["max_size"] = n
 			}
 			if cfg.AWSEKS.InstanceType != "" {
 				vals["instance_types"] = []any{cfg.AWSEKS.InstanceType}
@@ -290,9 +319,14 @@ func (m DefaultMapper) BuildModuleValues(
 				vals["enable_instance_connect"] = true
 			}
 			if cfg.AWSEC2.DiskSizePerServer != "" {
-				if n, err := strconv.Atoi(cfg.AWSEC2.DiskSizePerServer); err == nil {
-					vals["root_volume_size"] = n
+				n, err := strconv.Atoi(strings.TrimSpace(cfg.AWSEC2.DiskSizePerServer))
+				if err != nil {
+					return nil, NewValidationError(fmt.Sprintf(
+						"AWSEC2.DiskSizePerServer=%q: expected an integer",
+						cfg.AWSEC2.DiskSizePerServer,
+					))
 				}
+				vals["root_volume_size"] = n
 			}
 		}
 		// Default instance type based on architecture if not explicitly configured
@@ -472,7 +506,11 @@ func (m DefaultMapper) BuildModuleValues(
 	case KeyAWSCognito:
 		if cfg != nil && cfg.AWSCognito != nil {
 			if cfg.AWSCognito.SignInType != "" {
-				vals["sign_in_type"] = cfg.AWSCognito.SignInType
+				signInType, err := normalizeCognitoSignInType(cfg.AWSCognito.SignInType)
+				if err != nil {
+					return nil, err
+				}
+				vals["sign_in_type"] = signInType.(string)
 			}
 			if cfg.AWSCognito.MFARequired != nil {
 				vals["mfa_required"] = *cfg.AWSCognito.MFARequired
@@ -491,22 +529,36 @@ func (m DefaultMapper) BuildModuleValues(
 
 	case KeyAWSKMS:
 		if cfg != nil && cfg.AWSKMS != nil && cfg.AWSKMS.NumKeys != "" {
-			if n, err := strconv.Atoi(cfg.AWSKMS.NumKeys); err == nil {
-				vals["num_keys"] = n
+			n, err := strconv.Atoi(strings.TrimSpace(cfg.AWSKMS.NumKeys))
+			if err != nil {
+				return nil, NewValidationError(fmt.Sprintf(
+					"AWSKMS.NumKeys=%q: expected an integer",
+					cfg.AWSKMS.NumKeys,
+				))
 			}
+			vals["num_keys"] = n
 		}
 
 	case KeyAWSSecretsManager:
 		if cfg != nil && cfg.AWSSecretsManager != nil && cfg.AWSSecretsManager.NumSecrets != "" {
-			if n, err := strconv.Atoi(cfg.AWSSecretsManager.NumSecrets); err == nil {
-				vals["num_secrets"] = n
+			n, err := strconv.Atoi(strings.TrimSpace(cfg.AWSSecretsManager.NumSecrets))
+			if err != nil {
+				return nil, NewValidationError(fmt.Sprintf(
+					"AWSSecretsManager.NumSecrets=%q: expected an integer",
+					cfg.AWSSecretsManager.NumSecrets,
+				))
 			}
+			vals["num_secrets"] = n
 		}
 
 	case KeyAWSOpenSearch:
 		if cfg != nil && cfg.AWSOpenSearch != nil {
 			if cfg.AWSOpenSearch.DeploymentType != "" {
-				vals["deployment_type"] = strings.ToLower(cfg.AWSOpenSearch.DeploymentType)
+				deploymentType, err := normalizeOpenSearchDeploymentType(cfg.AWSOpenSearch.DeploymentType)
+				if err != nil {
+					return nil, err
+				}
+				vals["deployment_type"] = deploymentType.(string)
 			}
 			if cfg.AWSOpenSearch.InstanceType != "" {
 				vals["instance_type"] = cfg.AWSOpenSearch.InstanceType
@@ -698,11 +750,14 @@ func (m DefaultMapper) BuildModuleValues(
 				vals["machine_type"] = cfg.GCPGKE.MachineType
 			}
 			if cfg.GCPGKE.NodeCount != "" {
-				if n, err := strconv.Atoi(cfg.GCPGKE.NodeCount); err == nil {
-					vals["node_count"] = n
-				} else {
-					vals["node_count"] = cfg.GCPGKE.NodeCount // keep as string if not int
+				n, err := strconv.Atoi(strings.TrimSpace(cfg.GCPGKE.NodeCount))
+				if err != nil {
+					return nil, NewValidationError(fmt.Sprintf(
+						"GCPGKE.NodeCount=%q: expected an integer",
+						cfg.GCPGKE.NodeCount,
+					))
 				}
+				vals["node_count"] = n
 			}
 			if cfg.GCPGKE.Regional != nil {
 				vals["regional"] = *cfg.GCPGKE.Regional
@@ -726,7 +781,11 @@ func (m DefaultMapper) BuildModuleValues(
 	case KeyGCPMemorystore:
 		if cfg != nil && cfg.GCPMemorystore != nil {
 			if cfg.GCPMemorystore.Tier != "" {
-				vals["tier"] = cfg.GCPMemorystore.Tier
+				tier, err := normalizeGCPMemorystoreTier(cfg.GCPMemorystore.Tier)
+				if err != nil {
+					return nil, err
+				}
+				vals["tier"] = tier.(string)
 			}
 			if cfg.GCPMemorystore.MemorySizeGb > 0 {
 				vals["memory_size_gb"] = cfg.GCPMemorystore.MemorySizeGb
@@ -737,7 +796,11 @@ func (m DefaultMapper) BuildModuleValues(
 		vals["bucket_name"] = fmt.Sprintf("%s-data", proj)
 		if cfg != nil && cfg.GCPGCS != nil {
 			if cfg.GCPGCS.StorageClass != "" {
-				vals["storage_class"] = cfg.GCPGCS.StorageClass
+				storageClass, err := normalizeGCPStorageClass(cfg.GCPGCS.StorageClass)
+				if err != nil {
+					return nil, err
+				}
+				vals["storage_class"] = storageClass.(string)
 			}
 			if cfg.GCPGCS.Versioning != nil {
 				vals["versioning_enabled"] = *cfg.GCPGCS.Versioning
@@ -781,7 +844,7 @@ func (m DefaultMapper) BuildModuleValues(
 		vals["min_instances"] = 0
 		vals["max_instances"] = 100
 
-		if cfg.GCPCloudRun != nil {
+		if cfg != nil && cfg.GCPCloudRun != nil {
 			if cfg.GCPCloudRun.Memory != "" {
 				vals["memory"] = cfg.GCPCloudRun.Memory
 			}
@@ -800,6 +863,11 @@ func (m DefaultMapper) BuildModuleValues(
 		// Placeholders for now
 		vals["runtime"] = "nodejs20"
 		vals["available_memory_mb"] = 256
+		if cfg != nil && cfg.GCPCloudFunctions != nil {
+			if cfg.GCPCloudFunctions.Runtime != "" {
+				vals["runtime"] = cfg.GCPCloudFunctions.Runtime
+			}
+		}
 
 	case KeyGCPBastion:
 		// Stubs for preview
@@ -894,11 +962,11 @@ func (m DefaultMapper) BuildModuleValues(
 // ---------------------------------------------------------------------------
 
 var (
-	ddbOnDemandRe      = regexp.MustCompile(`(?i)^\s*(on[\s_-]*demand|pay[_]?per[_]?request)\s*$`)
-	ddbProvRe          = regexp.MustCompile(`(?i)^\s*provisioned\s*$`)
-	leadingIntRe       = regexp.MustCompile(`^\s*(-?\d+)`)
-	storageSizeRe      = regexp.MustCompile(`^\s*(\d+)\s*(GB|TB|MB)\s*$`)
-	mapperDurationRe   = regexp.MustCompile(`^\s*(\d+)\s*([smh])\s*$`)
+	ddbOnDemandRe    = regexp.MustCompile(`(?i)^\s*(on[\s_-]*demand|pay[_]?per[_]?request)\s*$`)
+	ddbProvRe        = regexp.MustCompile(`(?i)^\s*provisioned\s*$`)
+	leadingIntRe     = regexp.MustCompile(`^\s*(-?\d+)`)
+	storageSizeRe    = regexp.MustCompile(`^\s*(\d+)\s*(GB|TB|MB)\s*$`)
+	mapperDurationRe = regexp.MustCompile(`^\s*(\d+)\s*([smh])\s*$`)
 )
 
 // canonicalDdbBillingMode maps IR enum values to the uppercase tokens
