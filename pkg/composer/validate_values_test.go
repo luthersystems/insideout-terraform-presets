@@ -115,24 +115,32 @@ func TestAllowedValues(t *testing.T) {
 func TestKnownFields(t *testing.T) {
 	t.Parallel()
 
-	expected := make([]string, 0, len(componentFieldValidators)+len(configFieldValidators))
+	// Build expected as a set so the assertion mirrors the production
+	// dedupe contract: a field appearing in both validator slices must
+	// surface exactly once, not twice.
+	expected := map[string]struct{}{}
 	for _, cv := range componentFieldValidators {
-		expected = append(expected, cv.field)
+		expected[cv.field] = struct{}{}
 	}
 	for _, fv := range configFieldValidators {
-		expected = append(expected, fv.field)
+		expected[fv.field] = struct{}{}
 	}
 
 	fields := KnownFields()
 	require.NotEmpty(t, fields)
 	require.True(t, sort.StringsAreSorted(fields), "KnownFields should be deterministic")
-	require.ElementsMatch(t, expected, fields)
+	require.Len(t, fields, len(expected), "KnownFields should be deduped to the set of distinct validator fields")
 
 	seen := map[string]bool{}
 	for _, field := range fields {
 		require.NotEmpty(t, field)
 		require.False(t, seen[field], "KnownFields returned duplicate %q", field)
 		seen[field] = true
+		_, ok := expected[field]
+		require.True(t, ok, "KnownFields returned %q which is not declared in any validator slice", field)
+	}
+	for field := range expected {
+		require.True(t, seen[field], "KnownFields missing declared validator field %q", field)
 	}
 
 	for _, field := range []string{
