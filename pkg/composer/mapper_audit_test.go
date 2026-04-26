@@ -533,3 +533,50 @@ func TestBuildModuleValues_AWSLambda_MemoryAndTimeout(t *testing.T) {
 		assert.False(t, hasTmout)
 	})
 }
+
+// ---------------------------------------------------------------------------
+// 10–12. Audit-class follow-ups surfaced when the subset test was refactored
+//        to range over the full ComponentKey registry instead of a static
+//        13-entry allowlist. Each is the same shape as findings 5–8: mapper
+//        emitted under a key the module never declared, so the value was
+//        silently dropped at compose time.
+// ---------------------------------------------------------------------------
+
+// 10. GCP Cloud KMS — module variable is `keyring_name` (one word), not
+//     `key_ring_name` (two). Pre-fix mapper emitted the latter, silently
+//     dropped, and the module default "main" always won.
+func TestBuildModuleValues_GCPCloudKMS_KeyringName(t *testing.T) {
+	m := DefaultMapper{}
+
+	vals, err := m.BuildModuleValues(KeyGCPCloudKMS, nil, nil, "", "")
+	require.NoError(t, err)
+	assert.Equal(t, "main-keyring", vals["keyring_name"])
+	_, hasOld := vals["key_ring_name"]
+	assert.False(t, hasOld, "key_ring_name is the pre-fix key — module variable is keyring_name")
+}
+
+// 11. GCP Secret Manager — module variable is `secrets` (list of objects)
+//     with default `[]`. Pre-fix mapper emitted `secret_id = "main-secret"`
+//     against a non-existent variable; value silently dropped. Drop the
+//     orphan emission so the mapper's output is honest about what it can
+//     actually configure.
+func TestBuildModuleValues_GCPSecretManager_NoOrphanSecretID(t *testing.T) {
+	m := DefaultMapper{}
+
+	vals, err := m.BuildModuleValues(KeyGCPSecretManager, nil, nil, "", "")
+	require.NoError(t, err)
+	_, hasOld := vals["secret_id"]
+	assert.False(t, hasOld, "secret_id is the pre-fix orphan key — gcp/secretmanager declares `secrets` (list); leave it to user tfvars")
+}
+
+// 12. GCP Firestore — module declares only project/region; the (default)
+//     database is created implicitly. Pre-fix mapper emitted
+//     `database_id = "(default)"` against a non-existent variable.
+func TestBuildModuleValues_GCPFirestore_NoOrphanDatabaseID(t *testing.T) {
+	m := DefaultMapper{}
+
+	vals, err := m.BuildModuleValues(KeyGCPFirestore, nil, nil, "", "")
+	require.NoError(t, err)
+	_, hasOld := vals["database_id"]
+	assert.False(t, hasOld, "database_id is the pre-fix orphan key — gcp/firestore declares no such variable")
+}

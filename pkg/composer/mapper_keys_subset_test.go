@@ -89,32 +89,6 @@ func kitchenSinkConfig() *Config {
 	}
 }
 
-// keysToCheck enumerates the ComponentKeys whose mapper cases write
-// component-specific tfvars (i.e., where a stale key name silently
-// drops the user's choice). Common keys (project / region / environment)
-// and preview-stub keys (vpc_id / subnet_ids / cluster_name) are read
-// from this same list because every module that uses them declares them.
-//
-// Each entry is paired with the cloud prefix used by GetPresetPath.
-var mapperKeyCheckTargets = []struct {
-	key   ComponentKey
-	cloud string
-}{
-	{KeyAWSDynamoDB, "aws"},
-	{KeyAWSOpenSearch, "aws"},
-	{KeyAWSElastiCache, "aws"},
-	{KeyAWSRDS, "aws"},
-	{KeyAWSCloudfront, "aws"},
-	{KeyAWSMSK, "aws"},
-	{KeyAWSLambda, "aws"},
-	{KeyAWSSQS, "aws"},
-	{KeyAWSCloudWatchLogs, "aws"},
-	{KeyAWSKMS, "aws"},
-	{KeyAWSSecretsManager, "aws"},
-	{KeyAWSS3, "aws"},
-	{KeyGCPCloudCDN, "gcp"},
-}
-
 func TestMapperKeysSubsetOfModuleVariables(t *testing.T) {
 	m := DefaultMapper{}
 	cfg := kitchenSinkConfig()
@@ -122,12 +96,23 @@ func TestMapperKeysSubsetOfModuleVariables(t *testing.T) {
 
 	varDeclRe := regexp.MustCompile(`variable\s+"([^"]+)"`)
 
-	for _, tt := range mapperKeyCheckTargets {
-		t.Run(string(tt.key), func(t *testing.T) {
-			vals, err := m.BuildModuleValues(tt.key, &Components{}, cfg, "test", "us-east-1")
+	// Common keys DefaultMapper unconditionally sets for every component.
+	// AWS modules consistently declare all three; most GCP modules don't
+	// declare environment yet — that's a metadata-default mismatch the
+	// composer drops, not an audit-class user-data bug. Exempt them so
+	// this test stays focused on the audit class.
+	commonDefaults := map[string]bool{
+		"project":     true,
+		"region":      true,
+		"environment": true,
+	}
+
+	for _, key := range AllComponentKeys {
+		t.Run(string(key), func(t *testing.T) {
+			vals, err := m.BuildModuleValues(key, &Components{}, cfg, "test", "us-east-1")
 			require.NoError(t, err, "mapper should not fail with the kitchen-sink config")
 
-			presetPath := GetPresetPath(tt.cloud, tt.key, &Components{})
+			presetPath := GetPresetPath(CloudFor(key), key, &Components{})
 			files, err := c.GetPresetFiles(presetPath)
 			require.NoError(t, err, "GetPresetFiles(%s)", presetPath)
 			varsTF, ok := files["/variables.tf"]
@@ -138,26 +123,56 @@ func TestMapperKeysSubsetOfModuleVariables(t *testing.T) {
 				declared[m[1]] = true
 			}
 
-			// Common keys that DefaultMapper unconditionally sets for every
-			// component. AWS modules consistently declare all three; some
-			// GCP modules don't declare environment yet (tracked separately
-			// from this audit). The mismatch isn't an audit-class user-data
-			// bug — it's a metadata default that just gets dropped — so
-			// exempt these from the strict subset check.
-			commonDefaults := map[string]bool{
-				"project":     true,
-				"region":      true,
-				"environment": true,
-			}
-
 			for k := range vals {
 				if commonDefaults[k] {
 					continue
 				}
 				assert.True(t, declared[k],
 					"mapper for %s emits key %q which is not declared in %s/variables.tf — declared: %v",
-					tt.key, k, presetPath, sortedKeys(declared))
+					key, k, presetPath, sortedKeys(declared))
 			}
 		})
+	}
+}
+
+// TestAllComponentKeysCoversPresetKeyMap is the registry-consistency
+// guard. AllComponentKeys is the source of truth for which keys back a
+// preset module; PresetKeyMap is the source of truth for the preset
+// directory name. Every key in PresetKeyMap (minus KeySplunk/KeyDatadog,
+// which are toggles with no in-repo preset) must appear in
+// AllComponentKeys, and vice versa. Adding a new component key without
+// updating both lists breaks this test loudly rather than silently
+// dropping the new component from the subset-check coverage.
+func TestAllComponentKeysCoversPresetKeyMap(t *testing.T) {
+	registry := map[ComponentKey]bool{}
+	for _, k := range AllComponentKeys {
+		registry[k] = true
+	}
+
+	// Keys present in PresetKeyMap but intentionally excluded from
+	// AllComponentKeys (no in-repo preset; consumed elsewhere).
+	exempt := map[ComponentKey]bool{
+		KeySplunk:  true,
+		KeyDatadog: true,
+	}
+
+	for k := range PresetKeyMap {
+		if exempt[k] {
+			continue
+		}
+		assert.True(t, registry[k],
+			"PresetKeyMap[%s] is set but AllComponentKeys is missing it — every preset-backed key must be in the registry so the subset test exercises it",
+			k)
+	}
+
+	// And the reverse: every registry entry must resolve to a preset
+	// path. KeyAWSEKSControlPlane is the special case — it isn't in
+	// PresetKeyMap (GetPresetPath uses string(k)="resource" for it) but
+	// does back the aws/resource module.
+	for _, k := range AllComponentKeys {
+		_, inMap := PresetKeyMap[k]
+		if !inMap && k != KeyAWSEKSControlPlane {
+			t.Errorf("AllComponentKeys[%s] is registered but has no PresetKeyMap entry", k)
+		}
 	}
 }

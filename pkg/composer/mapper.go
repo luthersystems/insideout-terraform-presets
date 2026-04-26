@@ -825,13 +825,27 @@ func (m DefaultMapper) BuildModuleValues(
 		}
 
 	case KeyGCPSecretManager:
-		vals["secret_id"] = "main-secret"
+		// gcp/secretmanager declares `secrets` (a list of objects) with
+		// default `[]` — module composes cleanly when no secrets are
+		// requested. Earlier mapper versions emitted `secret_id =
+		// "main-secret"` which the module never declared, so the value
+		// was silently dropped (audit class — see issue #131-followup).
+		// Drop the orphan emission; users provide secrets via tfvars
+		// when they need them.
 
 	case KeyGCPCloudKMS:
-		vals["key_ring_name"] = "main-keyring"
+		// Module variable is `keyring_name` (default "main"). Earlier
+		// versions emitted `key_ring_name`, which the module never
+		// declared, so the user's chosen ring name was silently dropped
+		// and the default "main" always won.
+		vals["keyring_name"] = "main-keyring"
 
 	case KeyGCPFirestore:
-		vals["database_id"] = "(default)"
+		// gcp/firestore declares only project/region; the module creates
+		// a single (default) database implicitly. Earlier versions
+		// emitted `database_id = "(default)"` against a non-existent
+		// variable (audit class — see issue #131-followup). No emission
+		// needed; the module's behaviour is correct out of the box.
 
 	case KeyGCPAPIGateway:
 		vals["openapi_spec"] = ""
