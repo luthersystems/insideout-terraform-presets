@@ -95,6 +95,64 @@ func AllowedValues(field string) []string {
 	return cloneStrings(reg.allowedValues(fv.component, fv.variable))
 }
 
+// ValidateAll aggregates the IR-level Validate(comps, cfg) plus every
+// post-composition validator into a single deterministic []ValidationIssue.
+// Callers that don't go through ComposeStackWithIssues — e.g. reliable's
+// dry-run path that wants to surface issues before the composer even runs
+// — call this with synthesized blocks/files (or empty maps to skip the
+// post-composition layer).
+//
+// Issues are sorted by (Field, Code, Reason) and deduped on the same key
+// triple so the same finding doesn't surface twice when both Validate and
+// the post-composition layer flag it.
+func ValidateAll(
+	comps *Components,
+	cfg *Config,
+	blocks []ModuleBlock,
+	files Files,
+	presetPaths map[string]string,
+	moduleToVals map[string]map[string]any,
+) []ValidationIssue {
+	var all []ValidationIssue
+	all = append(all, Validate(comps, cfg)...)
+	all = append(all, ValidateValueTypes(moduleToVals, presetPaths)...)
+	all = append(all, ValidateModuleWiring(blocks, presetPaths)...)
+	all = append(all, ValidateNoModuleCycles(blocks)...)
+	all = append(all, ValidateProviderConstraints(presetPaths)...)
+	all = append(all, ValidateSensitivePropagation(blocks, presetPaths)...)
+	all = append(all, ValidateComposedRoot(files)...)
+	return dedupeAndSortIssues(all)
+}
+
+// dedupeAndSortIssues returns a deterministic, deduped copy of issues. Two
+// issues are duplicates iff (Field, Code, Reason) match exactly.
+func dedupeAndSortIssues(in []ValidationIssue) []ValidationIssue {
+	if len(in) == 0 {
+		return nil
+	}
+	type key struct{ field, code, reason string }
+	seen := make(map[key]struct{}, len(in))
+	out := make([]ValidationIssue, 0, len(in))
+	for _, iss := range in {
+		k := key{iss.Field, iss.Code, iss.Reason}
+		if _, ok := seen[k]; ok {
+			continue
+		}
+		seen[k] = struct{}{}
+		out = append(out, iss)
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		if out[i].Field != out[j].Field {
+			return out[i].Field < out[j].Field
+		}
+		if out[i].Code != out[j].Code {
+			return out[i].Code < out[j].Code
+		}
+		return out[i].Reason < out[j].Reason
+	})
+	return out
+}
+
 // KnownFields returns the dotted IR field paths covered by the validator.
 //
 // The returned order is deterministic for stable consumer contract-test
