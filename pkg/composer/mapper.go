@@ -2,6 +2,7 @@ package composer
 
 import (
 	"fmt"
+	"regexp"
 	"strconv"
 	"strings"
 )
@@ -328,23 +329,47 @@ func (m DefaultMapper) BuildModuleValues(
 		if _, ok := vals["subnet_ids"]; !ok {
 			vals["subnet_ids"] = []any{}
 		}
-		// Mirror RDS config if provided
+		// Mirror RDS config if provided. Use the module's actual variable
+		// names (instance_class / read_replica_count / allocated_storage)
+		// — earlier versions emitted node_cpu_size / num_read_nodes /
+		// storage_size, none of which the module declares, so user picks
+		// were silently dropped at compose time.
 		if cfg != nil && cfg.AWSRDS != nil {
 			if cfg.AWSRDS.CPUSize != "" {
-				vals["node_cpu_size"] = cfg.AWSRDS.CPUSize
+				cls, err := canonicalRdsInstanceClass(cfg.AWSRDS.CPUSize)
+				if err != nil {
+					return nil, err
+				}
+				vals["instance_class"] = cls
 			}
 			if cfg.AWSRDS.ReadReplicas != "" {
-				vals["num_read_nodes"] = cfg.AWSRDS.ReadReplicas
+				n, err := parseLeadingInt(cfg.AWSRDS.ReadReplicas, "AWSRDS.ReadReplicas")
+				if err != nil {
+					return nil, err
+				}
+				vals["read_replica_count"] = n
 			}
 			if cfg.AWSRDS.StorageSize != "" {
-				vals["storage_size"] = cfg.AWSRDS.StorageSize
+				gb, err := parseStorageSizeGB(cfg.AWSRDS.StorageSize, "AWSRDS.StorageSize")
+				if err != nil {
+					return nil, err
+				}
+				vals["allocated_storage"] = gb
 			}
 		}
 
 	case KeyAWSCloudfront:
 		if cfg != nil && cfg.AWSCloudfront != nil {
 			if cfg.AWSCloudfront.DefaultTtl != nil && *cfg.AWSCloudfront.DefaultTtl != "" {
-				vals["default_ttl"] = *cfg.AWSCloudfront.DefaultTtl
+				// Module variable is default_ttl_seconds (number).
+				// Earlier versions emitted default_ttl (string) which the
+				// module never declared, so the user pick was silently
+				// dropped and the module default of 3600s won.
+				secs, err := parseTTLSeconds(*cfg.AWSCloudfront.DefaultTtl, "AWSCloudfront.DefaultTtl")
+				if err != nil {
+					return nil, err
+				}
+				vals["default_ttl_seconds"] = secs
 			}
 			if cfg.AWSCloudfront.OriginPath != nil && *cfg.AWSCloudfront.OriginPath != "" {
 				vals["origin_path"] = *cfg.AWSCloudfront.OriginPath
@@ -356,14 +381,33 @@ func (m DefaultMapper) BuildModuleValues(
 			if cfg.AWSElastiCache.HA != nil {
 				vals["ha"] = *cfg.AWSElastiCache.HA
 			}
+			// Module variable is node_type (cache.* string). Earlier
+			// versions emitted node_size, which the module did not
+			// declare, so the value was silently dropped. The IR's
+			// "1 vCPU"/"4 vCPU"/"8 vCPU" enum is translated to a
+			// concrete cache instance type below.
 			if cfg.AWSElastiCache.NodeSize != "" {
-				vals["node_size"] = cfg.AWSElastiCache.NodeSize
+				typ, err := canonicalRedisNodeType(cfg.AWSElastiCache.NodeSize)
+				if err != nil {
+					return nil, err
+				}
+				vals["node_type"] = typ
 			}
-			if cfg.AWSElastiCache.Storage != "" {
-				vals["storage_size"] = cfg.AWSElastiCache.Storage
-			}
+			// Redis is not capacity-priced — sizing is by node_type
+			// alone. The module has no storage_size variable, so any
+			// value emitted here would be silently dropped. Drop the
+			// emission entirely; the IR field is informational only.
+			//
+			// (cfg.AWSElastiCache.Storage is intentionally ignored.)
 			if cfg.AWSElastiCache.Replicas != "" {
-				vals["replicas"] = cfg.AWSElastiCache.Replicas
+				// Module variable is `type = number`. Parse leading
+				// integer from values like "0 read replicas" /
+				// "1 read replica" / "2 read replicas".
+				n, err := parseLeadingInt(cfg.AWSElastiCache.Replicas, "AWSElastiCache.Replicas")
+				if err != nil {
+					return nil, err
+				}
+				vals["replicas"] = n
 			}
 		}
 
@@ -373,23 +417,51 @@ func (m DefaultMapper) BuildModuleValues(
 		}
 
 	case KeyAWSDynamoDB:
+		// The module's variables.tf validates billing_mode is exactly
+		// "PAY_PER_REQUEST" or "PROVISIONED" (uppercase). The IR enum
+		// emits human-friendly values like "On demand" / "provisioned",
+		// and the .or(ZNA) escape hatch in reliable lets users pass the
+		// canonical TF values directly. Translate to canonical here so
+		// every variant validates.
 		if cfg != nil && cfg.AWSDynamoDB != nil && cfg.AWSDynamoDB.Type != "" {
-			vals["billing_mode"] = strings.ToLower(cfg.AWSDynamoDB.Type) // "on demand" | "provisioned"
+			canonical, err := canonicalDdbBillingMode(cfg.AWSDynamoDB.Type)
+			if err != nil {
+				return nil, err
+			}
+			vals["billing_mode"] = canonical
 		}
 
 	case KeyAWSSQS:
+		// Module variables are queue_type ("Standard"|"FIFO") and
+		// visibility_timeout_seconds (number). Earlier versions emitted
+		// type / visibility_timeout, neither of which the module declared,
+		// so the user pick was silently dropped.
 		if cfg != nil && cfg.AWSSQS != nil {
 			if cfg.AWSSQS.Type != "" {
-				vals["type"] = cfg.AWSSQS.Type // "Standard" | "FIFO"
+				vals["queue_type"] = cfg.AWSSQS.Type
 			}
 			if cfg.AWSSQS.VisibilityTimeout != "" {
-				vals["visibility_timeout"] = cfg.AWSSQS.VisibilityTimeout
+				secs, err := parseTTLSeconds(cfg.AWSSQS.VisibilityTimeout, "AWSSQS.VisibilityTimeout")
+				if err != nil {
+					return nil, err
+				}
+				vals["visibility_timeout_seconds"] = secs
 			}
 		}
 
 	case KeyAWSMSK:
+		// Module variable is retention_hours (number). The IR enum emits
+		// "3 days"/"7 days"/"14 days"; translate to integer hours so the
+		// user pick actually takes effect (previously emitted under key
+		// retention_period, which the module never declared, and against
+		// a hardcoded log.retention.hours = 168 that ignored the value
+		// regardless).
 		if cfg != nil && cfg.AWSMSK != nil && cfg.AWSMSK.Retention != "" {
-			vals["retention_period"] = cfg.AWSMSK.Retention
+			hrs, err := parseRetentionHours(cfg.AWSMSK.Retention, "AWSMSK.Retention")
+			if err != nil {
+				return nil, err
+			}
+			vals["retention_hours"] = hrs
 		}
 
 	case KeyAWSCloudWatchLogs:
@@ -440,7 +512,19 @@ func (m DefaultMapper) BuildModuleValues(
 				vals["instance_type"] = cfg.AWSOpenSearch.InstanceType
 			}
 			if cfg.AWSOpenSearch.StorageSize != "" {
-				vals["storage_size"] = cfg.AWSOpenSearch.StorageSize
+				// The OpenSearch module declares storage_size as
+				// `type = string` and does
+				//     volume_size = tonumber(replace(var.storage_size, "GB", ""))
+				// in main.tf, which only handles the "GB" suffix. The
+				// IR enum allows "1TB"; pass that through and tonumber
+				// fails at plan time. Normalise to "<N>GB" form so the
+				// module's existing replace() does the right thing
+				// without changing its declared type.
+				normalized, err := normalizeStorageSizeGBString(cfg.AWSOpenSearch.StorageSize, "AWSOpenSearch.StorageSize")
+				if err != nil {
+					return nil, err
+				}
+				vals["storage_size"] = normalized
 			}
 			if cfg.AWSOpenSearch.MultiAZ != nil {
 				vals["multi_az"] = *cfg.AWSOpenSearch.MultiAZ
@@ -496,22 +580,32 @@ func (m DefaultMapper) BuildModuleValues(
 				vals["runtime"] = cfg.AWSLambda.Runtime
 			}
 			if cfg.AWSLambda.MemorySize != "" {
-				if n, err := strconv.Atoi(cfg.AWSLambda.MemorySize); err == nil {
-					vals["memory_size"] = n
+				// Strict: must be a pure integer (the IR enum is
+				// {"128","512","1024","3072"}). Earlier versions
+				// silently dropped anything Atoi rejected — including
+				// "512MB" / "1GB" — so the user pick was lost without
+				// any signal. Fail fast instead.
+				n, err := strconv.Atoi(strings.TrimSpace(cfg.AWSLambda.MemorySize))
+				if err != nil {
+					return nil, NewValidationError(fmt.Sprintf(
+						"AWSLambda.MemorySize=%q: expected a positive integer (MB), e.g. %q",
+						cfg.AWSLambda.MemorySize, "512",
+					))
 				}
+				vals["memory_size"] = n
 			}
 			if cfg.AWSLambda.Timeout != "" {
-				// Convert "3s", "30s", "15m" to seconds
-				t := cfg.AWSLambda.Timeout
-				if trimmed, ok := strings.CutSuffix(t, "s"); ok {
-					if n, err := strconv.Atoi(trimmed); err == nil {
-						vals["timeout"] = n
-					}
-				} else if trimmed, ok := strings.CutSuffix(t, "m"); ok {
-					if n, err := strconv.Atoi(trimmed); err == nil {
-						vals["timeout"] = n * 60
-					}
+				// Strict: support only "<N>s", "<N>m", "<N>h" — the IR
+				// enum is {"3s","30s","15m"}. Earlier versions dropped
+				// anything that didn't end in s or m (e.g. "1h", bare
+				// "30", "30 s") and produced 0 by accident on a few
+				// malformed shapes. Fail fast on unrecognised format
+				// rather than silently feeding the module its default.
+				secs, err := parseDurationToSeconds(cfg.AWSLambda.Timeout, "AWSLambda.Timeout")
+				if err != nil {
+					return nil, err
 				}
+				vals["timeout"] = secs
 			}
 		}
 
@@ -668,7 +762,15 @@ func (m DefaultMapper) BuildModuleValues(
 	case KeyGCPCloudCDN:
 		if cfg != nil && cfg.GCPCloudCDN != nil {
 			if cfg.GCPCloudCDN.DefaultTtl != "" {
-				vals["default_ttl"] = cfg.GCPCloudCDN.DefaultTtl
+				// Module declares default_ttl as `type = number`
+				// (seconds). The IR enum is "0" / "1h" / "1day";
+				// translate to seconds (0 / 3600 / 86400) so the value
+				// passes Terraform's type check.
+				secs, err := parseTTLSeconds(cfg.GCPCloudCDN.DefaultTtl, "GCPCloudCDN.DefaultTtl")
+				if err != nil {
+					return nil, err
+				}
+				vals["default_ttl"] = secs
 			}
 		}
 
@@ -759,6 +861,260 @@ func (m DefaultMapper) BuildModuleValues(
 	}
 
 	return vals, nil
+}
+
+// ---------------------------------------------------------------------------
+// IR → Terraform value translators.
+//
+// These helpers convert the human-friendly enum values reliable's IR uses
+// (e.g. "On demand", "1h", "8 vCPU") into the canonical TF values the
+// downstream modules' variables.tf declarations expect. They live here
+// because every translation is paired with a specific module variable.
+//
+// Design rules:
+//   - On unrecognised input, return *ValidationError (loud).
+//   - The .or(ZNA) escape hatch in reliable's IR lets users pass a TF-canonical
+//     value directly (e.g. "PAY_PER_REQUEST", "db.m7i.large"). Each helper
+//     accepts those passthrough forms in addition to the enum literals so
+//     advanced users aren't blocked by the translation table.
+// ---------------------------------------------------------------------------
+
+var (
+	ddbOnDemandRe      = regexp.MustCompile(`(?i)^\s*(on[\s_-]*demand|pay[_]?per[_]?request)\s*$`)
+	ddbProvRe          = regexp.MustCompile(`(?i)^\s*provisioned\s*$`)
+	leadingIntRe       = regexp.MustCompile(`^\s*(-?\d+)`)
+	storageSizeRe      = regexp.MustCompile(`^\s*(\d+)\s*(GB|TB|MB)\s*$`)
+	mapperDurationRe   = regexp.MustCompile(`^\s*(\d+)\s*([smh])\s*$`)
+)
+
+// canonicalDdbBillingMode maps IR enum values to the uppercase tokens
+// aws/dynamodb/variables.tf accepts: "PAY_PER_REQUEST" or "PROVISIONED".
+func canonicalDdbBillingMode(s string) (string, error) {
+	switch {
+	case ddbOnDemandRe.MatchString(s):
+		return "PAY_PER_REQUEST", nil
+	case ddbProvRe.MatchString(s):
+		return "PROVISIONED", nil
+	default:
+		return "", NewValidationError(fmt.Sprintf(
+			"AWSDynamoDB.Type=%q: expected one of \"On demand\" / \"PAY_PER_REQUEST\" / \"provisioned\" / \"PROVISIONED\"",
+			s,
+		))
+	}
+}
+
+// canonicalRdsInstanceClass maps the IR vCPU enum ("1 vCPU", "4 vCPU",
+// "8 vCPU") to a concrete RDS db.* class. Pass-through if the input
+// already looks like a db.* class so the .or(ZNA) escape hatch works.
+func canonicalRdsInstanceClass(s string) (string, error) {
+	t := strings.TrimSpace(s)
+	if strings.HasPrefix(t, "db.") {
+		return t, nil
+	}
+	switch strings.ToLower(t) {
+	case "1 vcpu":
+		return "db.t3.medium", nil
+	case "4 vcpu":
+		return "db.m7i.xlarge", nil
+	case "8 vcpu":
+		return "db.m7i.2xlarge", nil
+	default:
+		return "", NewValidationError(fmt.Sprintf(
+			"AWSRDS.CPUSize=%q: expected \"1 vCPU\" / \"4 vCPU\" / \"8 vCPU\" or a concrete db.* instance class (e.g. \"db.m7i.large\")",
+			s,
+		))
+	}
+}
+
+// canonicalRedisNodeType maps the IR vCPU enum to a cache.* node type.
+// Pass-through if the input already starts with "cache.".
+func canonicalRedisNodeType(s string) (string, error) {
+	t := strings.TrimSpace(s)
+	if strings.HasPrefix(t, "cache.") {
+		return t, nil
+	}
+	switch strings.ToLower(t) {
+	case "1 vcpu":
+		return "cache.t3.medium", nil
+	case "4 vcpu":
+		return "cache.r6g.xlarge", nil
+	case "8 vcpu":
+		return "cache.r6g.2xlarge", nil
+	default:
+		return "", NewValidationError(fmt.Sprintf(
+			"AWSElastiCache.NodeSize=%q: expected \"1 vCPU\" / \"4 vCPU\" / \"8 vCPU\" or a concrete cache.* node type (e.g. \"cache.r6g.large\")",
+			s,
+		))
+	}
+}
+
+// parseLeadingInt extracts the leading integer from a string like
+// "0 read replicas" / "1 read replica" / "42". Used for IR enums whose
+// human label embeds a number that the corresponding TF variable expects
+// as `type = number`. fieldName is the IR field name for error context.
+func parseLeadingInt(s, fieldName string) (int, error) {
+	m := leadingIntRe.FindStringSubmatch(s)
+	if m == nil {
+		return 0, NewValidationError(fmt.Sprintf(
+			"%s=%q: expected a value beginning with an integer (e.g. \"2 read replicas\")",
+			fieldName, s,
+		))
+	}
+	n, err := strconv.Atoi(m[1])
+	if err != nil { // unreachable given the regex but keep the type signature honest
+		return 0, NewValidationError(fmt.Sprintf("%s=%q: cannot parse leading integer", fieldName, s))
+	}
+	return n, nil
+}
+
+// parseStorageSizeGB converts "20GB" / "200GB" / "1TB" / "2TB" / "100GB" to
+// an integer number of GB. Bare integers are accepted and treated as GB
+// (matches the kitchen-sink fixtures and the .or(ZNA) escape hatch where
+// users may enter just a number). fieldName is the IR field name for error
+// context.
+func parseStorageSizeGB(s, fieldName string) (int, error) {
+	t := strings.ToUpper(strings.TrimSpace(s))
+	if n, err := strconv.Atoi(t); err == nil && n >= 0 {
+		return n, nil
+	}
+	m := storageSizeRe.FindStringSubmatch(t)
+	if m == nil {
+		return 0, NewValidationError(fmt.Sprintf(
+			"%s=%q: expected an integer (GB) or \"<N>GB\" / \"<N>TB\" / \"<N>MB\" (e.g. \"200\", \"200GB\", \"2TB\")",
+			fieldName, s,
+		))
+	}
+	n, err := strconv.Atoi(m[1])
+	if err != nil {
+		return 0, NewValidationError(fmt.Sprintf("%s=%q: cannot parse number", fieldName, s))
+	}
+	switch m[2] {
+	case "TB":
+		return n * 1000, nil // SI GB to match terraform's allocated_storage convention
+	case "GB":
+		return n, nil
+	case "MB":
+		// Round up to the nearest GB; 0MB stays 0.
+		if n == 0 {
+			return 0, nil
+		}
+		gb := (n + 999) / 1000
+		return gb, nil
+	default: // unreachable
+		return 0, NewValidationError(fmt.Sprintf("%s=%q: unexpected unit", fieldName, s))
+	}
+}
+
+// normalizeStorageSizeGBString returns the input expressed as "<N>GB" so
+// modules that declare storage_size as `type = string` and strip the "GB"
+// suffix internally accept the value. Used for OpenSearch's storage_size.
+func normalizeStorageSizeGBString(s, fieldName string) (string, error) {
+	gb, err := parseStorageSizeGB(s, fieldName)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%dGB", gb), nil
+}
+
+// parseTTLSeconds converts a TTL string to seconds. Accepts:
+//   - "0" / "<N>" — bare integer (already in seconds)
+//   - "<N>s" / "<N>m" / "<N>h" — durations
+//   - "1day" / "<N>day" / "<N>days" — day shorthand the IR uses for CDN TTL
+func parseTTLSeconds(s, fieldName string) (int, error) {
+	t := strings.TrimSpace(s)
+
+	// Bare integer
+	if n, err := strconv.Atoi(t); err == nil {
+		if n < 0 {
+			return 0, NewValidationError(fmt.Sprintf("%s=%q: must be >= 0", fieldName, s))
+		}
+		return n, nil
+	}
+
+	// "1day" / "Nday" / "Ndays"
+	low := strings.ToLower(t)
+	for _, suf := range []string{"days", "day", "d"} {
+		if rest, ok := strings.CutSuffix(low, suf); ok {
+			n, err := strconv.Atoi(strings.TrimSpace(rest))
+			if err == nil && n >= 0 {
+				return n * 86400, nil
+			}
+		}
+	}
+
+	// "<N>s" / "<N>m" / "<N>h"
+	if secs, ok := matchDuration(t); ok {
+		return secs, nil
+	}
+
+	return 0, NewValidationError(fmt.Sprintf(
+		"%s=%q: expected seconds, \"<N>s\" / \"<N>m\" / \"<N>h\", or \"<N>day(s)\"",
+		fieldName, s,
+	))
+}
+
+// parseDurationToSeconds is the strict variant for Lambda timeout: only
+// accepts "<N>s" / "<N>m" / "<N>h" (no bare integers, no day suffix).
+func parseDurationToSeconds(s, fieldName string) (int, error) {
+	if secs, ok := matchDuration(strings.TrimSpace(s)); ok {
+		return secs, nil
+	}
+	return 0, NewValidationError(fmt.Sprintf(
+		"%s=%q: expected \"<N>s\" / \"<N>m\" / \"<N>h\" (e.g. \"30s\", \"15m\")",
+		fieldName, s,
+	))
+}
+
+func matchDuration(t string) (int, bool) {
+	m := mapperDurationRe.FindStringSubmatch(t)
+	if m == nil {
+		return 0, false
+	}
+	n, err := strconv.Atoi(m[1])
+	if err != nil { // unreachable
+		return 0, false
+	}
+	switch m[2] {
+	case "s":
+		return n, true
+	case "m":
+		return n * 60, true
+	case "h":
+		return n * 3600, true
+	}
+	return 0, false
+}
+
+// parseRetentionHours converts the IR retention enum ("3 days" / "7 days" /
+// "14 days") to integer hours for MSK's retention_hours variable. Also
+// accepts "<N>h" / "<N>d" passthrough for the .or(ZNA) escape hatch.
+func parseRetentionHours(s, fieldName string) (int, error) {
+	t := strings.TrimSpace(s)
+	low := strings.ToLower(t)
+	for _, suf := range []string{" days", " day", "days", "day", "d"} {
+		if rest, ok := strings.CutSuffix(low, suf); ok {
+			n, err := strconv.Atoi(strings.TrimSpace(rest))
+			if err == nil && n > 0 {
+				return n * 24, nil
+			}
+		}
+	}
+	for _, suf := range []string{" hours", " hour", "hours", "hour", "h"} {
+		if rest, ok := strings.CutSuffix(low, suf); ok {
+			n, err := strconv.Atoi(strings.TrimSpace(rest))
+			if err == nil && n > 0 {
+				return n, nil
+			}
+		}
+	}
+	if n, err := strconv.Atoi(t); err == nil && n > 0 {
+		// Bare integer = hours (matches the module's variable directly).
+		return n, nil
+	}
+	return 0, NewValidationError(fmt.Sprintf(
+		"%s=%q: expected \"<N> days\" or \"<N>h\" / \"<N>d\" (e.g. \"7 days\")",
+		fieldName, s,
+	))
 }
 
 // Helpers for backups default_rule parity with TS
