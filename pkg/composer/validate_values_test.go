@@ -112,6 +112,51 @@ func TestAllowedValues(t *testing.T) {
 	require.Nil(t, AllowedValues("gcp_pubsub.messageRetentionDuration"))
 }
 
+func TestKnownFields(t *testing.T) {
+	t.Parallel()
+
+	// Build expected as a set so the assertion mirrors the production
+	// dedupe contract: a field appearing in both validator slices must
+	// surface exactly once, not twice.
+	expected := map[string]struct{}{}
+	for _, cv := range componentFieldValidators {
+		expected[cv.field] = struct{}{}
+	}
+	for _, fv := range configFieldValidators {
+		expected[fv.field] = struct{}{}
+	}
+
+	fields := KnownFields()
+	require.NotEmpty(t, fields)
+	require.True(t, sort.StringsAreSorted(fields), "KnownFields should be deterministic")
+	require.Len(t, fields, len(expected), "KnownFields should be deduped to the set of distinct validator fields")
+
+	seen := map[string]bool{}
+	for _, field := range fields {
+		require.NotEmpty(t, field)
+		require.False(t, seen[field], "KnownFields returned duplicate %q", field)
+		seen[field] = true
+		_, ok := expected[field]
+		require.True(t, ok, "KnownFields returned %q which is not declared in any validator slice", field)
+	}
+	for field := range expected {
+		require.True(t, seen[field], "KnownFields missing declared validator field %q", field)
+	}
+
+	for _, field := range []string{
+		"cloud",
+		"aws_dynamodb.type",
+		"aws_eks.controlPlaneVisibility",
+		"gcp_cloud_run.memory",
+	} {
+		require.Contains(t, fields, field)
+	}
+
+	require.NotContains(t, fields, "region", "unvalidated config fields should not appear")
+	require.NotEmpty(t, AllowedValues("aws_dynamodb.type"), "enum fields should still be discoverable via AllowedValues")
+	require.Nil(t, AllowedValues("gcp_cloud_run.memory"), "KnownFields includes non-enum validators; consumers should filter with AllowedValues for enum-only contracts")
+}
+
 func TestConfigFieldValidatorsHaveModuleRulesOrExplicitExemption(t *testing.T) {
 	t.Parallel()
 
