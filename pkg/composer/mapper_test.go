@@ -416,7 +416,11 @@ func TestBuildModuleValues_Cloudfront_OriginPath(t *testing.T) {
 		assert.Equal(t, "/assets", vals["origin_path"])
 	})
 
-	t.Run("defaultTtl maps to default_ttl", func(t *testing.T) {
+	t.Run("defaultTtl maps to default_ttl_seconds (number)", func(t *testing.T) {
+		// The CloudFront module variable is default_ttl_seconds (number).
+		// Earlier mapper versions emitted default_ttl (string), which the
+		// module never declared, so the user pick was silently dropped.
+		// See upstream issue #131.
 		ttl := "3600"
 		cfg := &Config{
 			AWSCloudfront: &struct {
@@ -427,7 +431,9 @@ func TestBuildModuleValues_Cloudfront_OriginPath(t *testing.T) {
 		}
 		vals, err := m.BuildModuleValues(KeyAWSCloudfront, nil, cfg, "", "")
 		require.NoError(t, err)
-		assert.Equal(t, "3600", vals["default_ttl"])
+		assert.Equal(t, 3600, vals["default_ttl_seconds"])
+		_, hasOld := vals["default_ttl"]
+		assert.False(t, hasOld, "default_ttl (string) is the pre-fix key — must not be emitted")
 	})
 }
 
@@ -617,7 +623,13 @@ func TestBuildModuleValues_AWSEC2_CpuArchPrecedence(t *testing.T) {
 func TestBuildModuleValues_Postgres_RDSConfig(t *testing.T) {
 	m := DefaultMapper{}
 
-	t.Run("ReadReplicas set emits num_read_nodes", func(t *testing.T) {
+	// The RDS module's actual variable names are instance_class /
+	// read_replica_count / allocated_storage. Earlier versions emitted
+	// node_cpu_size / num_read_nodes / storage_size — none of which the
+	// module declared, so user picks were silently dropped. See upstream
+	// issue #131.
+
+	t.Run("ReadReplicas set emits read_replica_count (number)", func(t *testing.T) {
 		cfg := &Config{AWSRDS: &struct {
 			CPUSize      string `json:"cpuSize,omitempty"`
 			ReadReplicas string `json:"readReplicas,omitempty"`
@@ -625,10 +637,12 @@ func TestBuildModuleValues_Postgres_RDSConfig(t *testing.T) {
 		}{ReadReplicas: "2"}}
 		vals, err := m.BuildModuleValues(KeyAWSRDS, nil, cfg, "", "")
 		require.NoError(t, err)
-		assert.Equal(t, "2", vals["num_read_nodes"])
+		assert.Equal(t, 2, vals["read_replica_count"])
+		_, hasOld := vals["num_read_nodes"]
+		assert.False(t, hasOld, "num_read_nodes is the pre-fix key — must not be emitted")
 	})
 
-	t.Run("ReadReplicas unset leaves num_read_nodes unset", func(t *testing.T) {
+	t.Run("ReadReplicas unset leaves read_replica_count unset", func(t *testing.T) {
 		cfg := &Config{AWSRDS: &struct {
 			CPUSize      string `json:"cpuSize,omitempty"`
 			ReadReplicas string `json:"readReplicas,omitempty"`
@@ -636,11 +650,11 @@ func TestBuildModuleValues_Postgres_RDSConfig(t *testing.T) {
 		}{CPUSize: "db.m7i.2xlarge"}}
 		vals, err := m.BuildModuleValues(KeyAWSRDS, nil, cfg, "", "")
 		require.NoError(t, err)
-		_, hasKey := vals["num_read_nodes"]
-		assert.False(t, hasKey, "unset ReadReplicas should not emit num_read_nodes")
+		_, hasKey := vals["read_replica_count"]
+		assert.False(t, hasKey, "unset ReadReplicas should not emit read_replica_count")
 	})
 
-	t.Run("CPUSize and StorageSize map to node_cpu_size and storage_size", func(t *testing.T) {
+	t.Run("CPUSize and StorageSize map to instance_class and allocated_storage", func(t *testing.T) {
 		cfg := &Config{AWSRDS: &struct {
 			CPUSize      string `json:"cpuSize,omitempty"`
 			ReadReplicas string `json:"readReplicas,omitempty"`
@@ -648,8 +662,12 @@ func TestBuildModuleValues_Postgres_RDSConfig(t *testing.T) {
 		}{CPUSize: "db.m7i.2xlarge", StorageSize: "20"}}
 		vals, err := m.BuildModuleValues(KeyAWSRDS, nil, cfg, "", "")
 		require.NoError(t, err)
-		assert.Equal(t, "db.m7i.2xlarge", vals["node_cpu_size"])
-		assert.Equal(t, "20", vals["storage_size"])
+		assert.Equal(t, "db.m7i.2xlarge", vals["instance_class"])
+		assert.Equal(t, 20, vals["allocated_storage"])
+		_, hasOldCPU := vals["node_cpu_size"]
+		_, hasOldStorage := vals["storage_size"]
+		assert.False(t, hasOldCPU, "node_cpu_size is the pre-fix key — must not be emitted")
+		assert.False(t, hasOldStorage, "storage_size is the pre-fix key — RDS module variable is allocated_storage")
 	})
 }
 

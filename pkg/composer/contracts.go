@@ -1,5 +1,7 @@
 package composer
 
+import "strings"
+
 type ComponentKey string
 
 const (
@@ -342,6 +344,89 @@ func GetPresetPath(cloud string, k ComponentKey, comps *Components) string {
 	}
 
 	return cloud + "/" + presetName
+}
+
+// CloudFor returns the cloud prefix ("aws" or "gcp") for a ComponentKey.
+// Defaults to "aws" for keys whose string value doesn't carry the "gcp_"
+// prefix — covers polymorphic AWS keys (KeyAWSEKSNodeGroup="ec2",
+// KeyAWSEKSControlPlane="resource") whose string identity predates the
+// cloud-prefixed vocabulary.
+func CloudFor(k ComponentKey) string {
+	if strings.HasPrefix(string(k), "gcp_") {
+		return "gcp"
+	}
+	return "aws"
+}
+
+// AllComponentKeys lists every ComponentKey backed by a preset module in
+// this repo. It is the source of truth for tests that need to exercise
+// every component the mapper might touch — TestMapperKeysSubsetOfModule
+// Variables ranges over this list to verify each emitted tfvar matches a
+// declared variable in the corresponding module's variables.tf.
+//
+// Adding a new ComponentKey requires adding it here too:
+// TestAllComponentKeysCoversPresetKeyMap fails on drift between this list
+// and PresetKeyMap.
+//
+// Excluded by design:
+//   - KeyComposer / KeyArch / KeyCloud — conceptual classifiers; no module.
+//   - KeySplunk / KeyDatadog — third-party toggles; no preset in this repo
+//     (consumed directly by reliable's composeradapter).
+var AllComponentKeys = []ComponentKey{
+	// AWS (alphabetical for reviewability)
+	KeyAWSALB,
+	KeyAWSAPIGateway,
+	KeyAWSBackups,
+	KeyAWSBastion,
+	KeyAWSBedrock,
+	KeyAWSCloudWatchLogs,
+	KeyAWSCloudWatchMonitoring,
+	KeyAWSCloudfront,
+	KeyAWSCodePipeline,
+	KeyAWSCognito,
+	KeyAWSDynamoDB,
+	KeyAWSEC2,
+	KeyAWSECS,
+	KeyAWSEKS,
+	KeyAWSEKSControlPlane,
+	KeyAWSEKSNodeGroup,
+	KeyAWSElastiCache,
+	KeyAWSGitHubActions,
+	KeyAWSGrafana,
+	KeyAWSKMS,
+	KeyAWSLambda,
+	KeyAWSMSK,
+	KeyAWSOpenSearch,
+	KeyAWSRDS,
+	KeyAWSS3,
+	KeyAWSSQS,
+	KeyAWSSecretsManager,
+	KeyAWSVPC,
+	KeyAWSWAF,
+	// GCP
+	KeyGCPAPIGateway,
+	KeyGCPBackups,
+	KeyGCPBastion,
+	KeyGCPCloudArmor,
+	KeyGCPCloudBuild,
+	KeyGCPCloudCDN,
+	KeyGCPCloudFunctions,
+	KeyGCPCloudKMS,
+	KeyGCPCloudLogging,
+	KeyGCPCloudMonitoring,
+	KeyGCPCloudRun,
+	KeyGCPCloudSQL,
+	KeyGCPCompute,
+	KeyGCPFirestore,
+	KeyGCPGCS,
+	KeyGCPGKE,
+	KeyGCPIdentityPlatform,
+	KeyGCPLoadbalancer,
+	KeyGCPMemorystore,
+	KeyGCPPubSub,
+	KeyGCPSecretManager,
+	KeyGCPVPC,
+	KeyGCPVertexAI,
 }
 
 func isLambda(comps *Components) bool {

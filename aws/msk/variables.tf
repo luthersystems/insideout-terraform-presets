@@ -138,6 +138,16 @@ variable "cloudwatch_retention_days" {
   }
 }
 
+variable "retention_hours" {
+  description = "Topic message retention in hours (broker-level log.retention.hours). 168 = 7 days (Kafka default). Translates the IR's \"3 days\" / \"7 days\" / \"14 days\" enum to 72 / 168 / 336."
+  type        = number
+  default     = 168
+  validation {
+    condition     = var.retention_hours >= 1
+    error_message = "retention_hours must be >= 1."
+  }
+}
+
 variable "enhanced_monitoring" {
   description = "MSK enhanced monitoring level: DEFAULT (6 broker metrics) | PER_BROKER (~23 metrics/broker, CPU/memory/network/disk) | PER_TOPIC_PER_BROKER (PER_BROKER + per-topic throughput/lag). Default is PER_BROKER so reliable2 panels charting broker-level AWS/Kafka metrics populate out of the box; override to DEFAULT on large clusters where CloudWatch metric cost (~$0.30/metric/broker/month for the ~17 additional PER_BROKER metrics) matters."
   type        = string

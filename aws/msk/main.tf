@@ -89,7 +89,7 @@ resource "aws_msk_configuration" "this" {
   server_properties = <<-PROPS
     auto.create.topics.enable = true
     delete.topic.enable = true
-    log.retention.hours = 168
+    log.retention.hours = ${var.retention_hours}
     default.replication.factor = 3
     min.insync.replicas = 2
   PROPS
