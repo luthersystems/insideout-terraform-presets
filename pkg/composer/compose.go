@@ -8,6 +8,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/hashicorp/terraform-config-inspect/tfconfig"
+
 	terraformpresets "github.com/luthersystems/insideout-terraform-presets"
 )
 
@@ -172,15 +174,13 @@ func (c *Client) composeSingleImpl(opts ComposeSingleOpts) (*ComposeSingleResult
 		return nil, err
 	}
 
-	// 3. Process inputs, variables, and outputs
-	vars, err := DiscoverModuleVars(leaf)
+	// 3. Process inputs, variables, and outputs via tfconfig.
+	mod, err := InspectPreset(presetPath)
 	if err != nil {
 		return nil, err
 	}
-	outputs, err := DiscoverModuleOutputs(leaf)
-	if err != nil {
-		return nil, err
-	}
+	vars := sortedVars(mod)
+	outputs := sortedOutputs(mod)
 	vals, err := c.Mapper.BuildModuleValues(opts.Key, opts.Comps, opts.Cfg, opts.Project, opts.Region)
 	if err != nil {
 		return nil, err
@@ -218,8 +218,8 @@ func (c *Client) composeSingleImpl(opts ComposeSingleOpts) (*ComposeSingleResult
 			inputs[v.Name] = RawExpr{Expr: "var." + ns}
 			rootVars[ns] = nil
 			typeHints[ns] = vals[v.Name]
-			if strings.TrimSpace(v.TypeExpr) != "" {
-				explicitTypes[ns] = v.TypeExpr
+			if strings.TrimSpace(v.Type) != "" {
+				explicitTypes[ns] = v.Type
 			}
 		}
 	}
@@ -390,10 +390,10 @@ func (c *Client) composeStackImpl(opts ComposeStackOpts) (*ComposeStackResult, e
 	explicitTypes := map[string]string{}
 	blocks := []ModuleBlock{}
 	var moduleOutputs []ModuleOutputs
-	discoveredProviders := map[string]RequiredProvider{}
+	discoveredProviders := map[string]*tfconfig.ProviderRequirement{}
 	var issues []ValidationIssue
 	// Per-module accumulators consumed by post-loop validators.
-	presetPaths := map[string]string{}        // module name -> preset directory
+	presetPaths := map[string]string{}          // module name -> preset directory
 	moduleToVals := map[string]map[string]any{} // module name -> mapper output
 
 	for _, k := range ordered {
@@ -410,19 +410,13 @@ func (c *Client) composeStackImpl(opts ComposeStackOpts) (*ComposeStackResult, e
 
 		maps.Copy(files, rebasePresetFiles(preset, dir))
 
-		vars, err := DiscoverModuleVars(preset)
+		mod, err := InspectPreset(presetPath)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("inspect preset for %s: %w", k, err)
 		}
-		outputs, err := DiscoverModuleOutputs(preset)
-		if err != nil {
-			return nil, err
-		}
-		provs, err := DiscoverRequiredProviders(preset)
-		if err != nil {
-			return nil, err
-		}
-		maps.Copy(discoveredProviders, provs)
+		vars := sortedVars(mod)
+		outputs := sortedOutputs(mod)
+		maps.Copy(discoveredProviders, mod.RequiredProviders)
 		if len(outputs) > 0 {
 			moduleOutputs = append(moduleOutputs, ModuleOutputs{
 				Module:  string(k),
@@ -445,8 +439,8 @@ func (c *Client) composeStackImpl(opts ComposeStackOpts) (*ComposeStackResult, e
 				inputs[v.Name] = RawExpr{Expr: "var." + ns}
 				rootVars[ns] = nil
 				typeHints[ns] = vals[v.Name]
-				if strings.TrimSpace(v.TypeExpr) != "" {
-					explicitTypes[ns] = v.TypeExpr
+				if strings.TrimSpace(v.Type) != "" {
+					explicitTypes[ns] = v.Type
 				}
 			}
 		}
@@ -533,17 +527,17 @@ func (c *Client) composeStackImpl(opts ComposeStackOpts) (*ComposeStackResult, e
 // the root-level required_providers block so `terraform init` knows to pull
 // plugins like `opensearch-project/opensearch` that child modules reference
 // via their own module-scoped provider blocks.
-func generateProvidersTF(cloud, region string, selected map[ComponentKey]bool, discovered map[string]RequiredProvider) []byte {
+func generateProvidersTF(cloud, region string, selected map[ComponentKey]bool, discovered map[string]*tfconfig.ProviderRequirement) []byte {
 	// Seed required_providers with the cloud's base entry, then union the
 	// child-module discoveries on top. Discovered entries win on conflict.
-	required := map[string]RequiredProvider{}
+	required := map[string]*tfconfig.ProviderRequirement{}
 
 	switch cloud {
 	case "gcp":
 		if region == "" {
 			region = "us-central1"
 		}
-		required["google"] = RequiredProvider{Source: "hashicorp/google", Version: ">= 5.0"}
+		required["google"] = &tfconfig.ProviderRequirement{Source: "hashicorp/google", VersionConstraints: []string{">= 5.0"}}
 		maps.Copy(required, discovered)
 		var b strings.Builder
 		b.WriteString("terraform {\n  required_providers {\n")
@@ -594,7 +588,7 @@ variable "external_id" {
     }
   }`, insideoutManagedByValue)
 
-		required["aws"] = RequiredProvider{Source: "hashicorp/aws", Version: ">= 6.0"}
+		required["aws"] = &tfconfig.ProviderRequirement{Source: "hashicorp/aws", VersionConstraints: []string{">= 6.0"}}
 		maps.Copy(required, discovered)
 
 		var b strings.Builder
@@ -618,7 +612,7 @@ variable "external_id" {
 
 // renderRequiredProviders renders the body of a `required_providers` block
 // with sorted keys for deterministic output.
-func renderRequiredProviders(m map[string]RequiredProvider) string {
+func renderRequiredProviders(m map[string]*tfconfig.ProviderRequirement) string {
 	names := make([]string, 0, len(m))
 	for n := range m {
 		names = append(names, n)
@@ -627,9 +621,17 @@ func renderRequiredProviders(m map[string]RequiredProvider) string {
 	var b strings.Builder
 	for _, n := range names {
 		rp := m[n]
+		if rp == nil {
+			continue
+		}
 		fmt.Fprintf(&b, "    %s = {\n      source  = %q\n", n, rp.Source)
-		if rp.Version != "" {
-			fmt.Fprintf(&b, "      version = %q\n", rp.Version)
+		// tfconfig.ProviderRequirement.VersionConstraints aggregates every
+		// version expression declared across the .tf files for this provider.
+		// Render them as a comma-separated list — Terraform treats that as
+		// constraint AND, matching how a contributor would have hand-written
+		// the union themselves.
+		if v := strings.Join(rp.VersionConstraints, ", "); v != "" {
+			fmt.Fprintf(&b, "      version = %q\n", v)
 		}
 		b.WriteString("    }\n")
 	}
@@ -641,13 +643,14 @@ func renderRequiredProviders(m map[string]RequiredProvider) string {
 // the composer aggregate every missing-input across all selected modules into
 // a single Result.Issues list, so callers like reliable/Riley can correct
 // every gap in one round-trip.
-func validateRequiredIssues(vars []VarMeta, wired WiredInputs, vals map[string]any, module string) []ValidationIssue {
+func validateRequiredIssues(vars []*tfconfig.Variable, wired WiredInputs, vals map[string]any, module string) []ValidationIssue {
 	var out []ValidationIssue
 	for _, v := range vars {
 		if _, isWired := wired.RawHCL[v.Name]; isWired {
 			continue
 		}
-		if v.HasDefault {
+		// tfconfig.Variable.Required is true iff the variable has no default.
+		if !v.Required {
 			continue
 		}
 		if _, ok := vals[v.Name]; !ok {

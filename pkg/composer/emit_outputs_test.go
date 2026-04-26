@@ -7,6 +7,7 @@ import (
 
 	hcl "github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
+	"github.com/hashicorp/terraform-config-inspect/tfconfig"
 	"github.com/stretchr/testify/require"
 )
 
@@ -77,7 +78,7 @@ func TestEmitRootOutputsTF_SingleModule(t *testing.T) {
 	modules := []ModuleOutputs{
 		{
 			Module: "ec2",
-			Outputs: []OutputMeta{
+			Outputs: []*tfconfig.Output{
 				{Name: "instance_id", Description: "The EC2 instance ID"},
 				{Name: "public_ip", Description: "The public IP address"},
 			},
@@ -106,13 +107,13 @@ func TestEmitRootOutputsTF_MultipleModules(t *testing.T) {
 	modules := []ModuleOutputs{
 		{
 			Module: "vpc",
-			Outputs: []OutputMeta{
+			Outputs: []*tfconfig.Output{
 				{Name: "vpc_id", Description: "The VPC ID"},
 			},
 		},
 		{
 			Module: "rds",
-			Outputs: []OutputMeta{
+			Outputs: []*tfconfig.Output{
 				{Name: "instance_id", Description: "RDS instance ID"},
 				{Name: "db_password", Description: "Database password", Sensitive: true},
 			},
@@ -142,7 +143,7 @@ func TestEmitRootOutputsTF_PreservesSensitive(t *testing.T) {
 	modules := []ModuleOutputs{
 		{
 			Module: "rds",
-			Outputs: []OutputMeta{
+			Outputs: []*tfconfig.Output{
 				{Name: "password", Description: "DB password", Sensitive: true},
 				{Name: "endpoint", Description: "DB endpoint", Sensitive: false},
 			},
@@ -169,7 +170,7 @@ func TestEmitRootOutputsTF_NoDescription(t *testing.T) {
 	modules := []ModuleOutputs{
 		{
 			Module: "s3",
-			Outputs: []OutputMeta{
+			Outputs: []*tfconfig.Output{
 				{Name: "bucket_arn"},
 			},
 		},
@@ -200,7 +201,7 @@ func TestEmitRootOutputsTF_ModuleWithEmptyOutputs(t *testing.T) {
 
 	modules := []ModuleOutputs{
 		{Module: "vpc", Outputs: nil},
-		{Module: "ec2", Outputs: []OutputMeta{
+		{Module: "ec2", Outputs: []*tfconfig.Output{
 			{Name: "id", Description: "Instance ID"},
 		}},
 	}

@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/hashicorp/terraform-config-inspect/tfconfig"
 	"github.com/stretchr/testify/require"
 )
 
@@ -195,9 +196,9 @@ func TestMapper_BedrockPreviewStub_DoesNotOverwrite(t *testing.T) {
 // required_providers are merged into the root providers.tf, the base
 // cloud provider is always included, and WAF + OpenSearch coexist cleanly.
 func TestGenerateProvidersTF_DiscoveryUnion(t *testing.T) {
-	discovered := map[string]RequiredProvider{
-		"opensearch": {Source: "opensearch-project/opensearch", Version: "~> 2.3"},
-		"time":       {Source: "hashicorp/time", Version: ">= 0.9"},
+	discovered := map[string]*tfconfig.ProviderRequirement{
+		"opensearch": {Source: "opensearch-project/opensearch", VersionConstraints: []string{"~> 2.3"}},
+		"time":       {Source: "hashicorp/time", VersionConstraints: []string{">= 0.9"}},
 	}
 
 	t.Run("aws with discovery", func(t *testing.T) {
@@ -225,7 +226,7 @@ func TestGenerateProvidersTF_DiscoveryUnion(t *testing.T) {
 
 	t.Run("aws with no discovery falls back to aws only", func(t *testing.T) {
 		got := string(generateProvidersTF("aws", "us-east-1",
-			map[ComponentKey]bool{}, map[string]RequiredProvider{}))
+			map[ComponentKey]bool{}, map[string]*tfconfig.ProviderRequirement{}))
 		require.Contains(t, got, "hashicorp/aws")
 		require.Equal(t, 1, strings.Count(got, "source  = "),
 			"only aws should be in required_providers")

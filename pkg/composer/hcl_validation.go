@@ -283,6 +283,26 @@ func parseCIDR(s string) (any, any, error) {
 	return ip, ipnet, err
 }
 
+// literalString extracts a string literal from an HCL expression, handling
+// both bare literals and single-part templates (e.g., "~> 2.3"). Returns ""
+// for non-string or interpolated values. Previously lived in discover.go;
+// kept here as a small helper used only by the validation-block walker.
+func literalString(e hclsyntax.Expression) string {
+	switch x := e.(type) {
+	case *hclsyntax.TemplateExpr:
+		if len(x.Parts) == 1 {
+			if lit, ok := x.Parts[0].(*hclsyntax.LiteralValueExpr); ok && lit.Val.Type() == cty.String {
+				return lit.Val.AsString()
+			}
+		}
+	case *hclsyntax.LiteralValueExpr:
+		if x.Val.Type() == cty.String {
+			return x.Val.AsString()
+		}
+	}
+	return ""
+}
+
 func allTrueFunc() function.Function {
 	return function.New(&function.Spec{
 		Params: []function.Parameter{{
