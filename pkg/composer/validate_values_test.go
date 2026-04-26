@@ -4,6 +4,8 @@ import (
 	"sort"
 	"testing"
 
+	hcl "github.com/hashicorp/hcl/v2"
+	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/stretchr/testify/require"
 )
 
@@ -123,4 +125,74 @@ func issuesByField(issues []ValidationIssue) map[string]ValidationIssue {
 		out[issue.Field] = issue
 	}
 	return out
+}
+
+func TestDefaultValidationRegistry_BuildsForEveryEmbeddedModule(t *testing.T) {
+	t.Parallel()
+
+	reg, err := defaultValidationRegistry()
+	require.NoError(t, err)
+	require.NotNil(t, reg)
+	require.NotEmpty(t, reg.variables, "registry should hold variables for embedded modules")
+}
+
+func TestExtractAllowedValues(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name     string
+		varName  string
+		cond     string
+		expected []string
+	}{
+		{
+			name:     "direct contains call",
+			varName:  "tier",
+			cond:     `contains(["BASIC", "STANDARD_HA"], var.tier)`,
+			expected: []string{"BASIC", "STANDARD_HA"},
+		},
+		{
+			name:    "for-comprehension with contains in CondExpr",
+			varName: "capacity_providers",
+			cond: `length([
+				for p in var.capacity_providers : p
+				if contains(["FARGATE", "FARGATE_SPOT"], p)
+			]) == length(var.capacity_providers)`,
+			expected: []string{"FARGATE", "FARGATE_SPOT"},
+		},
+		{
+			name:     "ternary with null escape hatch",
+			varName:  "x",
+			cond:     `var.x == null ? true : contains(["a", "b"], var.x)`,
+			expected: []string{"a", "b"},
+		},
+		{
+			name:     "regex condition has no allowed set",
+			varName:  "memory",
+			cond:     `can(regex("^[1-9][0-9]*Mi$", var.memory))`,
+			expected: nil,
+		},
+		{
+			name:     "numeric range has no allowed set",
+			varName:  "memory_size",
+			cond:     `var.memory_size >= 128 && var.memory_size <= 10240`,
+			expected: nil,
+		},
+		{
+			name:     "contains references different var",
+			varName:  "x",
+			cond:     `contains(["a", "b"], var.y)`,
+			expected: nil,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			expr, diags := hclsyntax.ParseExpression([]byte(tc.cond), "test.tf", hcl.InitialPos)
+			require.False(t, diags.HasErrors(), diags.Error())
+			got := extractAllowedValues(expr, tc.varName)
+			require.ElementsMatch(t, tc.expected, got)
+		})
+	}
 }

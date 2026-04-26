@@ -219,6 +219,14 @@ func (fv configFieldValidator) codeForNormalizeError() string {
 }
 
 func (fv configFieldValidator) codeForValidationFailure(f validationFailure) string {
+	// A registry-side "invalid_value" failure on a field with a known
+	// allowed-set is semantically an enum miss; surface that consistently
+	// regardless of which path (normalize vs HCL eval) caught it.
+	if f.code == "invalid_value" {
+		if len(fv.allowed) > 0 || len(AllowedValues(fv.field)) > 0 {
+			return "invalid_enum"
+		}
+	}
 	if f.code != "" {
 		return f.code
 	}
@@ -242,6 +250,10 @@ var configFieldValidators = []configFieldValidator{
 		normalize: normalizeStrictInt("AWSEC2.DiskSizePerServer"),
 	},
 	{
+		// The module variable is bool, not a closed-set string. Membership is
+		// enforced by normalizeEKSControlPlaneVisibility before HCL ever sees
+		// the value; the exemption in TestConfigFieldValidatorsHaveModuleRulesOrExplicitExemption
+		// matches.
 		field:     "aws_eks.controlPlaneVisibility",
 		component: KeyAWSEKS,
 		variable:  "eks_public_control_plane",
@@ -555,7 +567,11 @@ var configFieldValidators = []configFieldValidator{
 			return c.AWSOpenSearch.StorageSize, true
 		},
 		normalize: func(v any) (any, error) {
-			return normalizeStorageSizeGBString(v.(string), "AWSOpenSearch.StorageSize")
+			s, err := requireString(v, "AWSOpenSearch.StorageSize")
+			if err != nil {
+				return nil, err
+			}
+			return normalizeStorageSizeGBString(s, "AWSOpenSearch.StorageSize")
 		},
 	},
 	{

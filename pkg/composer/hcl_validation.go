@@ -373,42 +373,84 @@ func emptyCollectionForType(target cty.Type) cty.Value {
 }
 
 func extractAllowedValues(expr hcl.Expression, varName string) []string {
+	return extractAllowedValuesWithAliases(expr, varName, nil)
+}
+
+// extractAllowedValuesWithAliases walks an expression looking for the literal
+// set in a `contains([…literals…], <ref>)` call, where <ref> is `var.<varName>`
+// or any name in `aliases`. Aliases handle for-comprehensions:
+// `[for p in var.x : p if contains([…], p)]` binds `p` to elements of `var.x`,
+// so references to `p` inside the comprehension body count as references to
+// `var.x` for allowed-set extraction.
+func extractAllowedValuesWithAliases(expr hcl.Expression, varName string, aliases map[string]bool) []string {
+	if expr == nil {
+		return nil
+	}
 	expr = hcl.UnwrapExpression(expr)
 	switch e := expr.(type) {
 	case *hclsyntax.FunctionCallExpr:
 		var out []string
-		if e.Name == "contains" && len(e.Args) == 2 && exprReferencesVar(e.Args[1], varName) {
+		if e.Name == "contains" && len(e.Args) == 2 && exprReferencesVar(e.Args[1], varName, aliases) {
 			out = append(out, literalTupleValues(e.Args[0])...)
 		}
 		for _, arg := range e.Args {
-			out = appendUniqueStrings(out, extractAllowedValues(arg, varName)...)
+			out = appendUniqueStrings(out, extractAllowedValuesWithAliases(arg, varName, aliases)...)
 		}
 		return out
 	case *hclsyntax.BinaryOpExpr:
 		return appendUniqueStrings(
-			extractAllowedValues(e.LHS, varName),
-			extractAllowedValues(e.RHS, varName)...,
+			extractAllowedValuesWithAliases(e.LHS, varName, aliases),
+			extractAllowedValuesWithAliases(e.RHS, varName, aliases)...,
 		)
 	case *hclsyntax.ConditionalExpr:
-		out := extractAllowedValues(e.Condition, varName)
-		out = appendUniqueStrings(out, extractAllowedValues(e.TrueResult, varName)...)
-		out = appendUniqueStrings(out, extractAllowedValues(e.FalseResult, varName)...)
+		out := extractAllowedValuesWithAliases(e.Condition, varName, aliases)
+		out = appendUniqueStrings(out, extractAllowedValuesWithAliases(e.TrueResult, varName, aliases)...)
+		out = appendUniqueStrings(out, extractAllowedValuesWithAliases(e.FalseResult, varName, aliases)...)
 		return out
 	case *hclsyntax.ForExpr:
-		return extractAllowedValues(e.ValExpr, varName)
+		// Literal sets often live in the comprehension's `if` clause —
+		// e.g. `[for p in var.x : p if contains(["A","B"], p)]` puts the
+		// allowed set in CondExpr, not ValExpr. When the For iterates
+		// `var.<varName>`, the iteration variables alias it inside the body.
+		bodyAliases := aliases
+		if exprReferencesVar(e.CollExpr, varName, aliases) {
+			bodyAliases = make(map[string]bool, len(aliases)+2)
+			for k := range aliases {
+				bodyAliases[k] = true
+			}
+			if e.KeyVar != "" {
+				bodyAliases[e.KeyVar] = true
+			}
+			if e.ValVar != "" {
+				bodyAliases[e.ValVar] = true
+			}
+		}
+		out := extractAllowedValuesWithAliases(e.ValExpr, varName, bodyAliases)
+		out = appendUniqueStrings(out, extractAllowedValuesWithAliases(e.CondExpr, varName, bodyAliases)...)
+		out = appendUniqueStrings(out, extractAllowedValuesWithAliases(e.KeyExpr, varName, bodyAliases)...)
+		return out
 	case *hclsyntax.ParenthesesExpr:
-		return extractAllowedValues(e.Expression, varName)
+		return extractAllowedValuesWithAliases(e.Expression, varName, aliases)
 	default:
 		return nil
 	}
 }
 
-func exprReferencesVar(expr hcl.Expression, varName string) bool {
+func exprReferencesVar(expr hcl.Expression, varName string, aliases map[string]bool) bool {
 	for _, traversal := range expr.Variables() {
-		if len(traversal) < 2 || traversal.RootName() != "var" {
+		if len(traversal) == 0 {
 			continue
 		}
-		if attr, ok := traversal[1].(hcl.TraverseAttr); ok && attr.Name == varName {
+		root := traversal.RootName()
+		if root == "var" {
+			if len(traversal) >= 2 {
+				if attr, ok := traversal[1].(hcl.TraverseAttr); ok && attr.Name == varName {
+					return true
+				}
+			}
+			continue
+		}
+		if aliases[root] {
 			return true
 		}
 	}
@@ -479,7 +521,11 @@ func appendUniqueStrings(dst []string, vals ...string) []string {
 
 func normalizeStringWith(fn func(string) (string, error)) func(any) (any, error) {
 	return func(v any) (any, error) {
-		return fn(v.(string))
+		s, err := requireString(v, "value")
+		if err != nil {
+			return nil, err
+		}
+		return fn(s)
 	}
 }
 
@@ -505,36 +551,60 @@ func normalizeStrictInt(field string) func(any) (any, error) {
 
 func normalizeLeadingInt(field string) func(any) (any, error) {
 	return func(v any) (any, error) {
-		return parseLeadingInt(v.(string), field)
+		s, err := requireString(v, field)
+		if err != nil {
+			return nil, err
+		}
+		return parseLeadingInt(s, field)
 	}
 }
 
 func normalizeStorageGB(field string) func(any) (any, error) {
 	return func(v any) (any, error) {
-		return parseStorageSizeGB(v.(string), field)
+		s, err := requireString(v, field)
+		if err != nil {
+			return nil, err
+		}
+		return parseStorageSizeGB(s, field)
 	}
 }
 
 func normalizeTTLSeconds(field string) func(any) (any, error) {
 	return func(v any) (any, error) {
-		return parseTTLSeconds(v.(string), field)
+		s, err := requireString(v, field)
+		if err != nil {
+			return nil, err
+		}
+		return parseTTLSeconds(s, field)
 	}
 }
 
 func normalizeDurationSeconds(field string) func(any) (any, error) {
 	return func(v any) (any, error) {
-		return parseDurationToSeconds(v.(string), field)
+		s, err := requireString(v, field)
+		if err != nil {
+			return nil, err
+		}
+		return parseDurationToSeconds(s, field)
 	}
 }
 
 func normalizeRetentionHours(field string) func(any) (any, error) {
 	return func(v any) (any, error) {
-		return parseRetentionHours(v.(string), field)
+		s, err := requireString(v, field)
+		if err != nil {
+			return nil, err
+		}
+		return parseRetentionHours(s, field)
 	}
 }
 
 func normalizeEKSControlPlaneVisibility(v any) (any, error) {
-	s := strings.ToLower(strings.TrimSpace(v.(string)))
+	raw, err := requireString(v, "AWSEKS.ControlPlaneVisibility")
+	if err != nil {
+		return nil, err
+	}
+	s := strings.ToLower(strings.TrimSpace(raw))
 	switch s {
 	case "public", "public endpoint", "public control plane":
 		return true, nil
@@ -543,13 +613,19 @@ func normalizeEKSControlPlaneVisibility(v any) (any, error) {
 	default:
 		return nil, NewValidationError(fmt.Sprintf(
 			"AWSEKS.ControlPlaneVisibility=%q: expected \"Public\" or \"Private\"",
-			v.(string),
+			raw,
 		))
 	}
 }
 
 func normalizeECSCapacityProvidersValue(v any) (any, error) {
-	providers := v.([]string)
+	providers, ok := v.([]string)
+	if !ok {
+		return nil, NewValidationError(fmt.Sprintf(
+			"AWSECS.CapacityProviders=%s: expected a list of strings",
+			issueValue(v),
+		))
+	}
 	out := make([]string, len(providers))
 	for i, provider := range providers {
 		canonical, err := canonicalECSCapacityProvider(provider)
@@ -562,7 +638,22 @@ func normalizeECSCapacityProvidersValue(v any) (any, error) {
 }
 
 func normalizeECSCapacityProviderValue(v any) (any, error) {
-	return canonicalECSCapacityProvider(v.(string))
+	s, err := requireString(v, "AWSECS.DefaultCapacityProvider")
+	if err != nil {
+		return nil, err
+	}
+	return canonicalECSCapacityProvider(s)
+}
+
+func requireString(v any, field string) (string, error) {
+	s, ok := v.(string)
+	if !ok {
+		return "", NewValidationError(fmt.Sprintf(
+			"%s=%s: expected a string",
+			field, issueValue(v),
+		))
+	}
+	return s, nil
 }
 
 func canonicalECSCapacityProvider(s string) (string, error) {
@@ -579,7 +670,11 @@ func canonicalECSCapacityProvider(s string) (string, error) {
 }
 
 func normalizeSQSQueueType(v any) (any, error) {
-	switch strings.ToLower(strings.TrimSpace(v.(string))) {
+	raw, err := requireString(v, "AWSSQS.Type")
+	if err != nil {
+		return nil, err
+	}
+	switch strings.ToLower(strings.TrimSpace(raw)) {
 	case "standard":
 		return "Standard", nil
 	case "fifo":
@@ -587,59 +682,75 @@ func normalizeSQSQueueType(v any) (any, error) {
 	default:
 		return nil, NewValidationError(fmt.Sprintf(
 			"AWSSQS.Type=%q: expected \"Standard\" or \"FIFO\"",
-			v.(string),
+			raw,
 		))
 	}
 }
 
 func normalizeCognitoSignInType(v any) (any, error) {
-	s := strings.ToLower(strings.TrimSpace(v.(string)))
+	raw, err := requireString(v, "AWSCognito.SignInType")
+	if err != nil {
+		return nil, err
+	}
+	s := strings.ToLower(strings.TrimSpace(raw))
 	switch s {
 	case "email", "username", "both":
 		return s, nil
 	default:
 		return nil, NewValidationError(fmt.Sprintf(
 			"AWSCognito.SignInType=%q: expected \"email\", \"username\", or \"both\"",
-			v.(string),
+			raw,
 		))
 	}
 }
 
 func normalizeOpenSearchDeploymentType(v any) (any, error) {
-	s := strings.ToLower(strings.TrimSpace(v.(string)))
+	raw, err := requireString(v, "AWSOpenSearch.DeploymentType")
+	if err != nil {
+		return nil, err
+	}
+	s := strings.ToLower(strings.TrimSpace(raw))
 	switch s {
 	case "managed", "serverless":
 		return s, nil
 	default:
 		return nil, NewValidationError(fmt.Sprintf(
 			"AWSOpenSearch.DeploymentType=%q: expected \"managed\" or \"serverless\"",
-			v.(string),
+			raw,
 		))
 	}
 }
 
 func normalizeGCPMemorystoreTier(v any) (any, error) {
-	s := strings.ToUpper(strings.TrimSpace(v.(string)))
+	raw, err := requireString(v, "GCPMemorystore.Tier")
+	if err != nil {
+		return nil, err
+	}
+	s := strings.ToUpper(strings.TrimSpace(raw))
 	switch s {
 	case "BASIC", "STANDARD_HA":
 		return s, nil
 	default:
 		return nil, NewValidationError(fmt.Sprintf(
 			"GCPMemorystore.Tier=%q: expected \"BASIC\" or \"STANDARD_HA\"",
-			v.(string),
+			raw,
 		))
 	}
 }
 
 func normalizeGCPStorageClass(v any) (any, error) {
-	s := strings.ToUpper(strings.TrimSpace(v.(string)))
+	raw, err := requireString(v, "GCPGCS.StorageClass")
+	if err != nil {
+		return nil, err
+	}
+	s := strings.ToUpper(strings.TrimSpace(raw))
 	switch s {
 	case "STANDARD", "NEARLINE", "COLDLINE", "ARCHIVE":
 		return s, nil
 	default:
 		return nil, NewValidationError(fmt.Sprintf(
 			"GCPGCS.StorageClass=%q: expected one of STANDARD, NEARLINE, COLDLINE, ARCHIVE",
-			v.(string),
+			raw,
 		))
 	}
 }
