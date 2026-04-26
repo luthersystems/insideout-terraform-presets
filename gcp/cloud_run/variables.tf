@@ -30,12 +30,20 @@ variable "memory" {
   description = "Memory allocation (e.g., 512Mi, 1Gi, 2Gi)"
   type        = string
   default     = "512Mi"
+  validation {
+    condition     = can(regex("^[1-9][0-9]*(Mi|Gi)$", var.memory))
+    error_message = "memory must use Kubernetes memory format, e.g. 512Mi, 1Gi, or 2Gi."
+  }
 }
 
 variable "cpu" {
   description = "CPU allocation (e.g., 1, 2, 4)"
   type        = string
   default     = "1"
+  validation {
+    condition     = can(regex("^([1-9][0-9]*|[1-9][0-9]*m)$", var.cpu))
+    error_message = "cpu must be a Kubernetes CPU quantity, e.g. 1, 2, 4, or 1000m."
+  }
 }
 
 variable "min_instances" {

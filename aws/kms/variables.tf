@@ -18,6 +18,10 @@ variable "environment" {
 variable "num_keys" {
   type    = number
   default = 1
+  validation {
+    condition     = var.num_keys >= 1
+    error_message = "num_keys must be >= 1."
+  }
 }
 
 variable "tags" {

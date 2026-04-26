@@ -106,6 +106,10 @@ variable "node_count" {
   description = "Initial node count per zone"
   type        = number
   default     = 1
+  validation {
+    condition     = var.node_count >= 1
+    error_message = "node_count must be >= 1."
+  }
 }
 
 variable "min_node_count" {
@@ -155,4 +159,3 @@ variable "labels" {
   type        = map(string)
   default     = {}
 }
-

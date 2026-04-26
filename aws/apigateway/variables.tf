@@ -23,6 +23,10 @@ variable "domain_name" {
 variable "certificate_arn" {
   type    = string
   default = null
+  validation {
+    condition     = var.certificate_arn == null ? true : can(regex("^arn:aws(-[a-z0-9]+)?:acm:[a-z0-9-]+:[0-9]{12}:certificate\\/.+$", var.certificate_arn))
+    error_message = "certificate_arn must be null or a valid ACM certificate ARN."
+  }
 }
 
 variable "throttling_burst_limit" {
