@@ -3,6 +3,7 @@ package composer
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/agext/levenshtein"
@@ -92,6 +93,29 @@ func AllowedValues(field string) []string {
 		return nil
 	}
 	return cloneStrings(reg.allowedValues(fv.component, fv.variable))
+}
+
+// KnownFields returns the dotted IR field paths covered by the validator.
+//
+// The returned order is deterministic for stable consumer contract-test
+// output. Callers that only care about closed-enum drift should pair this with
+// AllowedValues(field): fields with no allowed values may still be validated by
+// regex, numeric range, or other module validation logic.
+func KnownFields() []string {
+	seen := make(map[string]bool, len(componentFieldValidators)+len(configFieldValidators))
+	for _, cv := range componentFieldValidators {
+		seen[cv.field] = true
+	}
+	for _, fv := range configFieldValidators {
+		seen[fv.field] = true
+	}
+
+	fields := make([]string, 0, len(seen))
+	for field := range seen {
+		fields = append(fields, field)
+	}
+	sort.Strings(fields)
+	return fields
 }
 
 type componentFieldValidator struct {
