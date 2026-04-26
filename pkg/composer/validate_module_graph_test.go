@@ -86,8 +86,31 @@ func TestValidateNoModuleCycles_DetectsCycle(t *testing.T) {
 	issues := ValidateNoModuleCycles(blocks)
 	require.Len(t, issues, 1)
 	require.Equal(t, "module_cycle", issues[0].Code)
-	require.Contains(t, issues[0].Reason, "a")
-	require.Contains(t, issues[0].Reason, "b")
+	require.Equal(t, "module_graph", issues[0].Field)
+
+	// Locks the closing-edge hint so the diagnostic remains actionable.
+	// Either edge of the 2-cycle qualifies; assert at least one lands in
+	// the rendered "(e.g. ...)" form so the residual-graph walk can't be
+	// silently regressed away.
+	require.Regexp(t,
+		`\(e\.g\. (a\.x -> module\.b\.x|b\.y -> module\.a\.y)\)`,
+		issues[0].Reason,
+		"cycle reason should pinpoint a closing edge for reviewer diagnostics")
+	require.Contains(t, issues[0].Reason, "[a b]",
+		"cycle reason should enumerate the deterministic-sorted module names")
+}
+
+// TestValidateNoModuleCycles_SelfLoopIgnored guards the explicit
+// edge.Producer == edge.Consumer skip in the topo-sort. A module legitimately
+// self-referencing (rare but valid in HCL) is not a cycle.
+func TestValidateNoModuleCycles_SelfLoopIgnored(t *testing.T) {
+	t.Parallel()
+
+	blocks := []ModuleBlock{
+		{Name: "a", Raw: map[string]string{"x": "module.a.y"}},
+	}
+	require.Empty(t, ValidateNoModuleCycles(blocks),
+		"self-references should not be classified as cycles")
 }
 
 func TestValidateNoModuleCycles_AllowsDAG(t *testing.T) {
@@ -119,6 +142,12 @@ func TestValidateValueTypes_FlagsStringForNumber(t *testing.T) {
 		if iss.Field == "gcp_gke.node_count" {
 			require.Equal(t, "invalid_type", iss.Code)
 			require.Contains(t, iss.Reason, "number")
+			// Lock the offending value into the issue payload so Riley
+			// has the diagnostic it needs without re-resolving the IR.
+			require.NotEmpty(t, iss.Value,
+				"invalid_type issues must carry the offending value via issueValue()")
+			require.Contains(t, iss.Value, "oops",
+				"value should serialize the rejected input verbatim")
 			found = true
 		}
 	}

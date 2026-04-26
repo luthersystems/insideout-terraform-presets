@@ -134,8 +134,13 @@ func TestInspectPreset_LoadsKnownModule(t *testing.T) {
 	mod, err := InspectPreset("aws/vpc")
 	require.NoError(t, err)
 	require.NotNil(t, mod)
-	require.NotEmpty(t, mod.Variables, "vpc preset should declare variables")
-	require.NotEmpty(t, mod.Outputs, "vpc preset should declare outputs")
+	// Pin specific variables/outputs the aws/vpc preset has guaranteed for
+	// multiple releases — so a future maintainer who deletes the variable
+	// list trips this test instead of silently passing the NotEmpty floor.
+	require.Contains(t, mod.Variables, "project",
+		"aws/vpc must declare the standard `project` variable")
+	require.Contains(t, mod.Outputs, "vpc_id",
+		"aws/vpc must export `vpc_id` (every downstream module wires it)")
 
 	// Cache hit on second call returns the same pointer.
 	mod2, err := InspectPreset("aws/vpc")

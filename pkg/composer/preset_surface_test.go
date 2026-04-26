@@ -3,11 +3,25 @@ package composer
 import (
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
+
+// TestKnownFieldsIsSorted independently verifies the runtime contract
+// that KnownFields() returns a sorted slice. The TestKnownFieldsNoShrink
+// golden file happens to be sorted, but only because it was generated
+// post-sort — without this check, dropping the sort.Strings call inside
+// KnownFields would silently regress the contract while still passing
+// the golden diff.
+func TestKnownFieldsIsSorted(t *testing.T) {
+	t.Parallel()
+	fields := KnownFields()
+	require.True(t, sort.StringsAreSorted(fields),
+		"KnownFields() must return a sorted slice independent of the golden fixture")
+}
 
 // TestKnownFieldsNoShrink locks the validator-covered IR field surface
 // against silent erosion. Every PR that adds, removes, or renames an entry

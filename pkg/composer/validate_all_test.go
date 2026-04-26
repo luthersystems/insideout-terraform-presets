@@ -48,6 +48,36 @@ func TestValidateAll_DedupesAndSorts(t *testing.T) {
 	require.True(t, found, "expected unwired_output for aws_alb.missing in ValidateAll output: %v", out)
 }
 
+// TestDedupeAndSortIssues_RemovesDuplicates exercises the dedup path
+// directly. Without this, a regression that turns dedupeAndSortIssues
+// into a passthrough would not be caught — the natural validator wiring
+// rarely produces (Field, Code, Reason) collisions on its own.
+func TestDedupeAndSortIssues_RemovesDuplicates(t *testing.T) {
+	t.Parallel()
+
+	dup := ValidationIssue{Field: "x.y", Code: "invalid_value", Reason: "boom"}
+	other := ValidationIssue{Field: "x.y", Code: "invalid_value", Reason: "different reason"}
+	another := ValidationIssue{Field: "a.b", Code: "missing_required_variable", Reason: "boom"}
+
+	in := []ValidationIssue{dup, dup, other, another, dup}
+	out := dedupeAndSortIssues(in)
+
+	require.Len(t, out, 3, "the three identical (Field, Code, Reason) triples must collapse to one; differing Reason or Field stays distinct")
+
+	// Sort order: by Field, then Code, then Reason. a.b < x.y, and within
+	// x.y the two surviving issues sort by Reason ("boom" < "different reason").
+	require.Equal(t, another, out[0], "a.b should sort first")
+	require.Equal(t, dup, out[1], "x.y/boom should sort before x.y/different reason within same Field+Code")
+	require.Equal(t, other, out[2])
+}
+
+// TestDedupeAndSortIssues_NilAndEmpty pins the edge cases.
+func TestDedupeAndSortIssues_NilAndEmpty(t *testing.T) {
+	t.Parallel()
+	require.Nil(t, dedupeAndSortIssues(nil))
+	require.Nil(t, dedupeAndSortIssues([]ValidationIssue{}))
+}
+
 // TestValidateAll_EmptyInputsReturnsEmpty pins the contract that
 // ValidateAll never panics on nil/empty inputs and returns nil.
 func TestValidateAll_EmptyInputsReturnsEmpty(t *testing.T) {

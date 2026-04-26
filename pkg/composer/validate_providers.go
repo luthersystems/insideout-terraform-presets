@@ -62,6 +62,15 @@ func ValidateProviderConstraints(presetPaths map[string]string) []ValidationIssu
 		}
 	}
 
+	return findProviderConflicts(perProvider)
+}
+
+// findProviderConflicts is the dedicated conflict-detection step extracted
+// from ValidateProviderConstraints so it can be exercised directly with
+// synthetic constraint maps. The split lets us test the firing path
+// (constraints that genuinely don't intersect) without faking real
+// presets — every preset we ship is intentionally compatible.
+func findProviderConflicts(perProvider map[string]map[string][]string) []ValidationIssue {
 	var issues []ValidationIssue
 	provNames := make([]string, 0, len(perProvider))
 	for n := range perProvider {

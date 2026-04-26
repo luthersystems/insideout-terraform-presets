@@ -30,7 +30,7 @@ func TestPresetDefaultsSatisfyValidations(t *testing.T) {
 		keys = append(keys, k)
 	}
 
-	checked := 0
+	checked, eligibleSkipped := 0, 0
 	for _, key := range keys {
 		validator := reg.variables[key]
 		if len(validator.rules) == 0 {
@@ -46,6 +46,7 @@ func TestPresetDefaultsSatisfyValidations(t *testing.T) {
 		}
 		mod, err := InspectPreset(presetPath)
 		if err != nil {
+			eligibleSkipped++
 			t.Logf("skip %s.%s: %v", key.component, key.variable, err)
 			continue
 		}
@@ -55,6 +56,7 @@ func TestPresetDefaultsSatisfyValidations(t *testing.T) {
 		}
 		defaultCty, err := ctyValueForType(v.Default, validator.typ)
 		if err != nil {
+			eligibleSkipped++
 			t.Logf("skip %s.%s default cty conversion: %v", key.component, key.variable, err)
 			continue
 		}
@@ -82,6 +84,11 @@ func TestPresetDefaultsSatisfyValidations(t *testing.T) {
 	// loop body actually runs against at least one real default.
 	require.GreaterOrEqual(t, checked, 1,
 		"expected at least one (default, validation) pair across all presets; got 0")
+	// Skip floor: silent skipping is the failure mode we already saw with
+	// missing cidrnetmask stubs. If skip count balloons relative to checked,
+	// half the registry has stopped being checkable and the test value evaporates.
+	require.Less(t, eligibleSkipped, checked,
+		"too many eligible (default, validation) pairs are being skipped (%d skipped vs %d checked); investigate before silencing", eligibleSkipped, checked)
 }
 
 // emptyPresetAllowlist enumerates presets that intentionally declare zero

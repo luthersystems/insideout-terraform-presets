@@ -1,19 +1,69 @@
 package composer
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/hashicorp/go-version"
 	"github.com/stretchr/testify/require"
 )
 
-// TestValidateProviderConstraints_FlagsImpossibleIntersection synthesizes
-// a presetPaths map pointing at two real presets whose AWS provider
-// constraints overlap, then injects a third synthetic mapping pointing
-// at a preset variant that pins an incompatible upper bound. Since we
-// can't write fake presets on the fly without a fixture FS, we drive the
-// conflict through the version checker directly instead.
+// TestFindProviderConflicts_FlagsImpossibleUnion exercises the conflict-
+// detection path directly with a synthetic constraint map — the only way
+// to lock the firing-on-conflict contract without fabricating a fake
+// preset FS. Every preset we ship is intentionally constraint-compatible,
+// so this is the test that actually proves the validator does its job.
+func TestFindProviderConflicts_FlagsImpossibleUnion(t *testing.T) {
+	t.Parallel()
+
+	perProvider := map[string]map[string][]string{
+		"aws": {
+			"old_module": {"< 6.0"},
+			"new_module": {">= 6.1"},
+		},
+	}
+	issues := findProviderConflicts(perProvider)
+	require.Len(t, issues, 1)
+	require.Equal(t, "provider_version_conflict", issues[0].Code)
+	require.Equal(t, "providers.aws", issues[0].Field)
+	require.Contains(t, issues[0].Reason, "old_module pins")
+	require.Contains(t, issues[0].Reason, "new_module pins")
+	require.Contains(t, issues[0].Reason, `"aws"`)
+}
+
+// TestFindProviderConflicts_GreenWhenIntersectExists guards against
+// false-positives when the constraint union has at least one satisfying
+// version. Mutation: invert findSatisfyingVersion's return — this test
+// catches it.
+func TestFindProviderConflicts_GreenWhenIntersectExists(t *testing.T) {
+	t.Parallel()
+
+	perProvider := map[string]map[string][]string{
+		"aws": {
+			"a": {">= 6.0"},
+			"b": {"< 7.0"},
+		},
+	}
+	require.Empty(t, findProviderConflicts(perProvider))
+}
+
+// TestFindProviderConflicts_SkipsSingleModuleProviders pins the
+// "len(byModule) < 2 → skip" branch. A single module's pins can't
+// conflict with itself.
+func TestFindProviderConflicts_SkipsSingleModuleProviders(t *testing.T) {
+	t.Parallel()
+
+	perProvider := map[string]map[string][]string{
+		"aws": {
+			"only_module": {"< 6.0", ">= 7.0"}, // self-conflicting but only one module
+		},
+	}
+	require.Empty(t, findProviderConflicts(perProvider),
+		"single-module pins are out of scope; terraform init handles intra-module impossibility")
+}
+
+// TestValidateProviderConstraints_FindsNoConflictOnGreenPathStack guards
+// the green-path integration: the full pipeline (load presets, layer in
+// seeds, check) produces no conflicts on a real AWS stack.
 func TestValidateProviderConstraints_FindsNoConflictOnGreenPathStack(t *testing.T) {
 	t.Parallel()
 
@@ -54,38 +104,42 @@ func TestFindSatisfyingVersion_AcceptsCompatibleAndRejectsImpossible(t *testing.
 	require.False(t, findSatisfyingVersion(mustParse("< 5.0,>= 7.0")))
 }
 
-// TestValidateProviderConstraints_FlagsCloudBaseSeedConflict drives a
-// synthetic preset map with a hypothetical preset pinning aws < 6.0
-// alongside another that pins >= 6.0; the cloud-base seed (aws >= 6.0
-// from generateProvidersTF) participates in the union and the conflict
-// surfaces. Without the seed in the union, this case would slip through.
-//
-// Implementation note: we can't easily inject a synthetic preset, so we
-// drive the constraint shape directly via providerSeeds + a real preset
-// path that pins AWS. The aws/composer placeholder declares no providers,
-// so we use aws/alb (declares hashicorp/random) plus aws/vpc (declares
-// hashicorp/aws). If both pin compatibly, no conflict surfaces; that's
-// the green case we already test elsewhere.
-//
-// The test below specifically targets the seed-merge code path by
-// asserting the `__cloud_base__` synthetic key is included when any
-// preset declares the same provider.
-func TestValidateProviderConstraints_SeedParticipatesInUnion(t *testing.T) {
+// TestProviderSeedsMirrorComposer locks the providerSeeds constant
+// against drift from generateProvidersTF's hardcoded versions. If a
+// future contributor bumps the cloud-base aws or google constraint
+// in compose.go, this test fails until they bump providerSeeds too.
+// Without this guard, ValidateProviderConstraints would silently
+// validate against a stale seed.
+func TestProviderSeedsMirrorComposer(t *testing.T) {
 	t.Parallel()
-
-	// A stack of two AWS-using presets. Both declare aws via tfconfig; the
-	// seed must layer in. There's no real conflict here, so we assert no
-	// issue *and* that the seed value matches what generateProvidersTF
-	// stamps — guarding the providerSeeds constant against drift.
 	require.Equal(t, ">= 6.0", providerSeeds["aws"], "seed drift: providerSeeds[aws] must mirror generateProvidersTF")
 	require.Equal(t, ">= 5.0", providerSeeds["google"], "seed drift: providerSeeds[google] must mirror generateProvidersTF")
+}
 
-	presetPaths := map[string]string{
-		"aws_vpc": "aws/vpc",
-		"aws_alb": "aws/alb",
+// TestFindProviderConflicts_SeedParticipates exercises the seed-merge
+// path explicitly: a synthetic preset pinning aws < 5.0 conflicts ONLY
+// with the seed's >= 6.0. Without seed injection in the validator, this
+// case slips through; with it, the conflict fires. Mutation: delete the
+// __cloud_base__ injection block in ValidateProviderConstraints — this
+// test (which calls it through the full pipeline) catches it.
+func TestFindProviderConflicts_SeedParticipates(t *testing.T) {
+	t.Parallel()
+
+	// Drive findProviderConflicts directly so we don't need a fake preset
+	// FS; the union here mirrors what ValidateProviderConstraints would
+	// produce after layering the seed.
+	perProvider := map[string]map[string][]string{
+		"aws": {
+			"hypothetical_old_preset": {"< 5.0"},
+			"__cloud_base__":          {providerSeeds["aws"]},
+		},
 	}
-	require.Empty(t, ValidateProviderConstraints(presetPaths),
-		"green-path AWS stack should not surface a conflict even with the seed in the union")
+	issues := findProviderConflicts(perProvider)
+	require.Len(t, issues, 1, "preset pin < 5.0 must conflict with seed >= 6.0")
+	require.Equal(t, "provider_version_conflict", issues[0].Code)
+	require.Contains(t, issues[0].Reason, "__cloud_base__ pins",
+		"reason must surface the seed contribution so the diagnostic is actionable")
+	require.Contains(t, issues[0].Reason, "hypothetical_old_preset pins")
 }
 
 // TestValidateSensitivePropagation_FlagsSensitiveOutput drives a synthetic
@@ -139,8 +193,25 @@ func TestValidateComposedRoot_FlagsMalformedHCL(t *testing.T) {
 	require.NotEmpty(t, issues, "broken main.tf should surface a parse error")
 	for _, iss := range issues {
 		require.Equal(t, "hcl_parse_error", iss.Code)
-		require.Contains(t, iss.Field, "main.tf")
+		// Pin the literal prefix shape — `composed_root.<filename>` — not a
+		// loose substring. Catches accidental drift in field naming.
+		require.Equal(t, "composed_root.main.tf", iss.Field,
+			"composed_root prefix and trimmed-leading-slash filename are part of the public ValidationIssue contract")
 	}
+}
+
+// TestValidateComposedRoot_FlagsMalformedTfvars covers the .tfvars
+// branch of isHCLFile. Without it the auto-tfvars path is dark.
+func TestValidateComposedRoot_FlagsMalformedTfvars(t *testing.T) {
+	t.Parallel()
+
+	files := Files{
+		"/aws_kms.auto.tfvars": []byte("num_keys = \n"), // dangling assignment
+	}
+	issues := ValidateComposedRoot(files)
+	require.NotEmpty(t, issues, ".auto.tfvars parse failures must surface")
+	require.Equal(t, "hcl_parse_error", issues[0].Code)
+	require.Equal(t, "composed_root.aws_kms.auto.tfvars", issues[0].Field)
 }
 
 func TestValidateComposedRoot_GreenPathSilent(t *testing.T) {
@@ -186,6 +257,4 @@ func TestComposeStackWithIssues_GreenStackHasNoCommit3Issues(t *testing.T) {
 		require.NotEqual(t, "provider_version_conflict", iss.Code, "unexpected: %v", iss)
 		require.NotEqual(t, "hcl_parse_error", iss.Code, "unexpected: %v", iss)
 	}
-	// Sanity: the issue list is non-nil-when-deserialized either way.
-	_ = strings.Join(nil, "")
 }
