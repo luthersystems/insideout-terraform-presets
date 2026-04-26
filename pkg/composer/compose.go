@@ -516,6 +516,9 @@ func (c *Client) composeStackImpl(opts ComposeStackOpts) (*ComposeStackResult, e
 	issues = append(issues, ValidateValueTypes(moduleToVals, presetPaths)...)
 	issues = append(issues, ValidateModuleWiring(blocks, presetPaths)...)
 	issues = append(issues, ValidateNoModuleCycles(blocks)...)
+	issues = append(issues, ValidateProviderConstraints(presetPaths)...)
+	issues = append(issues, ValidateSensitivePropagation(blocks, presetPaths)...)
+	issues = append(issues, ValidateComposedRoot(files)...)
 
 	return &ComposeStackResult{Files: files, Issues: issues}, nil
 }
