@@ -1695,9 +1695,9 @@ func TestComposeStack_GCP_Provider(t *testing.T) {
 
 // TestComposeStack_DiscoveredProvidersReachRoot exercises the end-to-end path
 // where a child module's non-AWS `required_providers` declaration (e.g. ALB
-// declaring hashicorp/random) is discovered via DiscoverRequiredProviders
-// and merged into the root providers.tf. Unit tests on
-// DiscoverRequiredProviders alone don't cover the merge in generateProvidersTF.
+// declaring hashicorp/random) is discovered via InspectPreset and merged
+// into the root providers.tf. Unit tests on InspectPreset alone don't cover
+// the merge in generateProvidersTF.
 func TestComposeStack_DiscoveredProvidersReachRoot(t *testing.T) {
 	c := newTestClient()
 
@@ -1705,11 +1705,9 @@ func TestComposeStack_DiscoveredProvidersReachRoot(t *testing.T) {
 	// its required_providers. If this test silently becomes a no-op because
 	// the ALB module dropped the provider, the precondition fails first —
 	// much clearer diagnostic than a passing assertion on an absent string.
-	albFiles, err := c.GetPresetFiles("aws/alb")
+	albMod, err := InspectPreset("aws/alb")
 	require.NoError(t, err)
-	albProvs, err := DiscoverRequiredProviders(albFiles)
-	require.NoError(t, err)
-	require.Contains(t, albProvs, "random",
+	require.Contains(t, albMod.RequiredProviders, "random",
 		"precondition: aws/alb preset should declare a random = {...} required_provider; if this fails, pick a different preset to exercise the discovered-providers merge")
 
 	out, err := c.ComposeStack(ComposeStackOpts{

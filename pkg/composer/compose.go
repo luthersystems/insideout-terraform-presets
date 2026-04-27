@@ -8,6 +8,8 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/hashicorp/terraform-config-inspect/tfconfig"
+
 	terraformpresets "github.com/luthersystems/insideout-terraform-presets"
 )
 
@@ -51,6 +53,22 @@ func WithPresets(f fs.FS) Option { return func(c *Client) { c.presets = f } }
 
 type Files map[string][]byte
 
+// ComposeStackResult is the aggregated output of ComposeStackWithIssues.
+// Files is the composed stack (same map as ComposeStack returns); Issues is
+// the deduped list of pre-plan validator findings (missing required vars,
+// type mismatches, wiring drift, etc.) that callers like reliable/Riley
+// surface for same-turn correction.
+type ComposeStackResult struct {
+	Files  Files
+	Issues []ValidationIssue
+}
+
+// ComposeSingleResult mirrors ComposeStackResult for the single-module path.
+type ComposeSingleResult struct {
+	Files  Files
+	Issues []ValidationIssue
+}
+
 func rebasePresetFiles(files map[string][]byte, moduleDir string) Files {
 	out := Files{}
 	for p, b := range files {
@@ -73,9 +91,48 @@ type ComposeSingleOpts struct {
 	Comps           *Components
 	Cfg             *Config
 	Project, Region string
+
+	// StrictValidate, when true, escalates any pre-plan validator issue into
+	// an aggregated error from ComposeSingleWithIssues. Default false: issues
+	// are surfaced in Result.Issues and the call still succeeds. The legacy
+	// ComposeSingle entry point preserves its historical hard-fail behavior
+	// regardless of this flag.
+	StrictValidate bool
 }
 
+// ComposeSingle preserves the historical (Files, error) signature. It hard-
+// fails on missing-required-variable issues exactly as before. New callers
+// that want the structured issue list should use ComposeSingleWithIssues.
 func (c *Client) ComposeSingle(opts ComposeSingleOpts) (Files, error) {
+	r, err := c.composeSingleImpl(opts)
+	if err != nil {
+		return nil, err
+	}
+	for _, iss := range r.Issues {
+		if iss.Code == "missing_required_variable" {
+			return nil, fmt.Errorf("%s", iss.Reason)
+		}
+	}
+	return r.Files, nil
+}
+
+// ComposeSingleWithIssues runs the same pipeline as ComposeSingle but returns
+// every pre-plan validator issue alongside the composed files, enabling
+// callers to surface multiple problems in one round-trip. When
+// opts.StrictValidate is true, any non-empty Issues triggers an aggregated
+// error.
+func (c *Client) ComposeSingleWithIssues(opts ComposeSingleOpts) (*ComposeSingleResult, error) {
+	r, err := c.composeSingleImpl(opts)
+	if err != nil {
+		return nil, err
+	}
+	if opts.StrictValidate && len(r.Issues) > 0 {
+		return r, fmt.Errorf("composer: %d validation issue(s): %s", len(r.Issues), summarizeIssues(r.Issues))
+	}
+	return r, nil
+}
+
+func (c *Client) composeSingleImpl(opts ComposeSingleOpts) (*ComposeSingleResult, error) {
 	cloud := opts.Cloud
 	if cloud == "" {
 		cloud = "aws" // Default to AWS for backward compatibility
@@ -91,6 +148,8 @@ func (c *Client) ComposeSingle(opts ComposeSingleOpts) (Files, error) {
 		opts.Cfg.Normalize()
 	}
 
+	var issues []ValidationIssue
+
 	// 1. Resolve module directory (e.g. resource -> modules/lambda if Lambda)
 	moduleDir := GetModuleDir(opts.Key, opts.Comps)
 	if moduleDir == "" {
@@ -105,7 +164,7 @@ func (c *Client) ComposeSingle(opts ComposeSingleOpts) (Files, error) {
 		for p, b := range raw {
 			out[p] = normalizeTfBytes(b)
 		}
-		return out, nil
+		return &ComposeSingleResult{Files: out, Issues: issues}, nil
 	}
 
 	// 2. Load preset files (use cloud-prefixed path for lookup, but moduleDir for rebasing)
@@ -115,15 +174,13 @@ func (c *Client) ComposeSingle(opts ComposeSingleOpts) (Files, error) {
 		return nil, err
 	}
 
-	// 3. Process inputs, variables, and outputs
-	vars, err := DiscoverModuleVars(leaf)
+	// 3. Process inputs, variables, and outputs via tfconfig.
+	mod, err := InspectPreset(presetPath)
 	if err != nil {
 		return nil, err
 	}
-	outputs, err := DiscoverModuleOutputs(leaf)
-	if err != nil {
-		return nil, err
-	}
+	vars := sortedVars(mod)
+	outputs := sortedOutputs(mod)
 	vals, err := c.Mapper.BuildModuleValues(opts.Key, opts.Comps, opts.Cfg, opts.Project, opts.Region)
 	if err != nil {
 		return nil, err
@@ -161,15 +218,13 @@ func (c *Client) ComposeSingle(opts ComposeSingleOpts) (Files, error) {
 			inputs[v.Name] = RawExpr{Expr: "var." + ns}
 			rootVars[ns] = nil
 			typeHints[ns] = vals[v.Name]
-			if strings.TrimSpace(v.TypeExpr) != "" {
-				explicitTypes[ns] = v.TypeExpr
+			if strings.TrimSpace(v.Type) != "" {
+				explicitTypes[ns] = v.Type
 			}
 		}
 	}
 
-	if err := validateRequired(vars, wired, vals, string(opts.Key)); err != nil {
-		return nil, err
-	}
+	issues = append(issues, validateRequiredIssues(vars, wired, vals, string(opts.Key))...)
 
 	var tfvars []VarEntry
 	for _, v := range vars {
@@ -208,7 +263,7 @@ func (c *Client) ComposeSingle(opts ComposeSingleOpts) (Files, error) {
 	}
 
 	files["/.terraform-version"] = []byte(c.TerraformVersion + "\n")
-	return files, nil
+	return &ComposeSingleResult{Files: files, Issues: issues}, nil
 }
 
 /* ---------- Stack ---------- */
@@ -219,9 +274,48 @@ type ComposeStackOpts struct {
 	Comps           *Components
 	Cfg             *Config
 	Project, Region string
+
+	// StrictValidate, when true, escalates any pre-plan validator issue into
+	// an aggregated error from ComposeStackWithIssues. Default false: issues
+	// are surfaced in Result.Issues and the call still succeeds. The legacy
+	// ComposeStack entry point preserves its historical hard-fail behavior
+	// regardless of this flag.
+	StrictValidate bool
 }
 
+// ComposeStack preserves the historical (Files, error) signature. It hard-
+// fails on missing-required-variable issues exactly as before. New callers
+// that want the structured issue list should use ComposeStackWithIssues.
 func (c *Client) ComposeStack(opts ComposeStackOpts) (Files, error) {
+	r, err := c.composeStackImpl(opts)
+	if err != nil {
+		return nil, err
+	}
+	for _, iss := range r.Issues {
+		if iss.Code == "missing_required_variable" {
+			return nil, fmt.Errorf("%s", iss.Reason)
+		}
+	}
+	return r.Files, nil
+}
+
+// ComposeStackWithIssues runs the same pipeline as ComposeStack but returns
+// every pre-plan validator issue alongside the composed files, enabling
+// callers to surface multiple problems in one round-trip. When
+// opts.StrictValidate is true, any non-empty Issues triggers an aggregated
+// error.
+func (c *Client) ComposeStackWithIssues(opts ComposeStackOpts) (*ComposeStackResult, error) {
+	r, err := c.composeStackImpl(opts)
+	if err != nil {
+		return nil, err
+	}
+	if opts.StrictValidate && len(r.Issues) > 0 {
+		return r, fmt.Errorf("composer: %d validation issue(s): %s", len(r.Issues), summarizeIssues(r.Issues))
+	}
+	return r, nil
+}
+
+func (c *Client) composeStackImpl(opts ComposeStackOpts) (*ComposeStackResult, error) {
 	cloud := opts.Cloud
 	if cloud == "" {
 		cloud = "aws" // Default to AWS for backward compatibility
@@ -296,7 +390,11 @@ func (c *Client) ComposeStack(opts ComposeStackOpts) (Files, error) {
 	explicitTypes := map[string]string{}
 	blocks := []ModuleBlock{}
 	var moduleOutputs []ModuleOutputs
-	discoveredProviders := map[string]RequiredProvider{}
+	discoveredProviders := map[string]*tfconfig.ProviderRequirement{}
+	var issues []ValidationIssue
+	// Per-module accumulators consumed by post-loop validators.
+	presetPaths := map[string]string{}          // module name -> preset directory
+	moduleToVals := map[string]map[string]any{} // module name -> mapper output
 
 	for _, k := range ordered {
 		dir := GetModuleDir(k, opts.Comps)
@@ -312,19 +410,13 @@ func (c *Client) ComposeStack(opts ComposeStackOpts) (Files, error) {
 
 		maps.Copy(files, rebasePresetFiles(preset, dir))
 
-		vars, err := DiscoverModuleVars(preset)
+		mod, err := InspectPreset(presetPath)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("inspect preset for %s: %w", k, err)
 		}
-		outputs, err := DiscoverModuleOutputs(preset)
-		if err != nil {
-			return nil, err
-		}
-		provs, err := DiscoverRequiredProviders(preset)
-		if err != nil {
-			return nil, err
-		}
-		maps.Copy(discoveredProviders, provs)
+		vars := sortedVars(mod)
+		outputs := sortedOutputs(mod)
+		maps.Copy(discoveredProviders, mod.RequiredProviders)
 		if len(outputs) > 0 {
 			moduleOutputs = append(moduleOutputs, ModuleOutputs{
 				Module:  string(k),
@@ -347,15 +439,15 @@ func (c *Client) ComposeStack(opts ComposeStackOpts) (Files, error) {
 				inputs[v.Name] = RawExpr{Expr: "var." + ns}
 				rootVars[ns] = nil
 				typeHints[ns] = vals[v.Name]
-				if strings.TrimSpace(v.TypeExpr) != "" {
-					explicitTypes[ns] = v.TypeExpr
+				if strings.TrimSpace(v.Type) != "" {
+					explicitTypes[ns] = v.Type
 				}
 			}
 		}
 
-		if err := validateRequired(vars, wired, vals, string(k)); err != nil {
-			return nil, err
-		}
+		issues = append(issues, validateRequiredIssues(vars, wired, vals, string(k))...)
+		presetPaths[string(k)] = presetPath
+		moduleToVals[string(k)] = vals
 
 		block := ModuleBlock{
 			Name:   string(k),
@@ -412,7 +504,17 @@ func (c *Client) ComposeStack(opts ComposeStackOpts) (Files, error) {
 	// required_providers discovered above.
 	files["/providers.tf"] = generateProvidersTF(cloud, reg, selected, discoveredProviders)
 
-	return files, nil
+	// Validator dispatcher — runs after the stack is fully composed, before
+	// returning. Each validator appends to issues. The missing-required check
+	// ran inline above so its issues are already accumulated.
+	issues = append(issues, ValidateValueTypes(moduleToVals, presetPaths)...)
+	issues = append(issues, ValidateModuleWiring(blocks, presetPaths)...)
+	issues = append(issues, ValidateNoModuleCycles(blocks)...)
+	issues = append(issues, ValidateProviderConstraints(presetPaths)...)
+	issues = append(issues, ValidateSensitivePropagation(blocks, presetPaths)...)
+	issues = append(issues, ValidateComposedRoot(files)...)
+
+	return &ComposeStackResult{Files: files, Issues: issues}, nil
 }
 
 // generateProvidersTF generates cloud-specific provider configuration.
@@ -425,17 +527,17 @@ func (c *Client) ComposeStack(opts ComposeStackOpts) (Files, error) {
 // the root-level required_providers block so `terraform init` knows to pull
 // plugins like `opensearch-project/opensearch` that child modules reference
 // via their own module-scoped provider blocks.
-func generateProvidersTF(cloud, region string, selected map[ComponentKey]bool, discovered map[string]RequiredProvider) []byte {
+func generateProvidersTF(cloud, region string, selected map[ComponentKey]bool, discovered map[string]*tfconfig.ProviderRequirement) []byte {
 	// Seed required_providers with the cloud's base entry, then union the
 	// child-module discoveries on top. Discovered entries win on conflict.
-	required := map[string]RequiredProvider{}
+	required := map[string]*tfconfig.ProviderRequirement{}
 
 	switch cloud {
 	case "gcp":
 		if region == "" {
 			region = "us-central1"
 		}
-		required["google"] = RequiredProvider{Source: "hashicorp/google", Version: ">= 5.0"}
+		required["google"] = &tfconfig.ProviderRequirement{Source: "hashicorp/google", VersionConstraints: []string{">= 5.0"}}
 		maps.Copy(required, discovered)
 		var b strings.Builder
 		b.WriteString("terraform {\n  required_providers {\n")
@@ -486,7 +588,7 @@ variable "external_id" {
     }
   }`, insideoutManagedByValue)
 
-		required["aws"] = RequiredProvider{Source: "hashicorp/aws", Version: ">= 6.0"}
+		required["aws"] = &tfconfig.ProviderRequirement{Source: "hashicorp/aws", VersionConstraints: []string{">= 6.0"}}
 		maps.Copy(required, discovered)
 
 		var b strings.Builder
@@ -510,7 +612,7 @@ variable "external_id" {
 
 // renderRequiredProviders renders the body of a `required_providers` block
 // with sorted keys for deterministic output.
-func renderRequiredProviders(m map[string]RequiredProvider) string {
+func renderRequiredProviders(m map[string]*tfconfig.ProviderRequirement) string {
 	names := make([]string, 0, len(m))
 	for n := range m {
 		names = append(names, n)
@@ -519,28 +621,62 @@ func renderRequiredProviders(m map[string]RequiredProvider) string {
 	var b strings.Builder
 	for _, n := range names {
 		rp := m[n]
+		if rp == nil {
+			continue
+		}
 		fmt.Fprintf(&b, "    %s = {\n      source  = %q\n", n, rp.Source)
-		if rp.Version != "" {
-			fmt.Fprintf(&b, "      version = %q\n", rp.Version)
+		// tfconfig.ProviderRequirement.VersionConstraints aggregates every
+		// version expression declared across the .tf files for this provider.
+		// Render them as a comma-separated list — Terraform treats that as
+		// constraint AND, matching how a contributor would have hand-written
+		// the union themselves.
+		if v := strings.Join(rp.VersionConstraints, ", "); v != "" {
+			fmt.Fprintf(&b, "      version = %q\n", v)
 		}
 		b.WriteString("    }\n")
 	}
 	return b.String()
 }
 
-func validateRequired(vars []VarMeta, wired WiredInputs, vals map[string]any, module string) error {
+// validateRequiredIssues returns a structured ValidationIssue per missing
+// required variable, instead of short-circuiting on the first miss. This lets
+// the composer aggregate every missing-input across all selected modules into
+// a single Result.Issues list, so callers like reliable/Riley can correct
+// every gap in one round-trip.
+func validateRequiredIssues(vars []*tfconfig.Variable, wired WiredInputs, vals map[string]any, module string) []ValidationIssue {
+	var out []ValidationIssue
 	for _, v := range vars {
 		if _, isWired := wired.RawHCL[v.Name]; isWired {
 			continue
 		}
-		if v.HasDefault {
+		// tfconfig.Variable.Required is true iff the variable has no default.
+		if !v.Required {
 			continue
 		}
 		if _, ok := vals[v.Name]; !ok {
-			return fmt.Errorf("module %s requires variable %q (no default and no value provided)", module, v.Name)
+			out = append(out, ValidationIssue{
+				Field:  module + "." + v.Name,
+				Code:   "missing_required_variable",
+				Reason: fmt.Sprintf("module %s requires variable %q (no default and no value provided)", module, v.Name),
+			})
 		}
 	}
-	return nil
+	return out
+}
+
+// summarizeIssues renders a short, human-readable summary of a list of
+// validation issues for use in StrictValidate error messages. The full
+// structured shape is still available via Result.Issues.
+func summarizeIssues(issues []ValidationIssue) string {
+	parts := make([]string, len(issues))
+	for i, iss := range issues {
+		if iss.Field != "" {
+			parts[i] = iss.Field + ": " + iss.Reason
+		} else {
+			parts[i] = iss.Reason
+		}
+	}
+	return strings.Join(parts, "; ")
 }
 
 func topo(order []ComponentKey, selected map[ComponentKey]bool) []ComponentKey {

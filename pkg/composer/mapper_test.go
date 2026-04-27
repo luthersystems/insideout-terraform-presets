@@ -310,19 +310,17 @@ func TestBuildModuleValues_VPC_AWSVPCConfig_Validation(t *testing.T) {
 // mapper's output keys. A mutation renaming a vals[...] key in mapper.go to
 // something not declared in aws/vpc/variables.tf previously passed every unit
 // test (the composer's variable-discovery step silently drops unknown keys).
-// Reads the actual preset variables.tf via DiscoverModuleVars and asserts every
+// Reads the actual preset variables.tf via InspectPreset and asserts every
 // key the mapper writes for KeyAWSVPC with all AWSVPC knobs set is declared.
 func TestBuildModuleValues_VPC_MapperHCLContract(t *testing.T) {
 	boolPtr := func(v bool) *bool { return &v }
 	intPtr := func(v int) *int { return &v }
 
-	presets, err := newTestClient().GetPresetFiles("aws/vpc")
+	mod, err := InspectPreset("aws/vpc")
 	require.NoError(t, err)
-	declared, err := DiscoverModuleVars(presets)
-	require.NoError(t, err)
-	declaredSet := make(map[string]bool, len(declared))
-	for _, v := range declared {
-		declaredSet[v.Name] = true
+	declaredSet := make(map[string]bool, len(mod.Variables))
+	for name := range mod.Variables {
+		declaredSet[name] = true
 	}
 
 	// Exercise every AWSVPC knob so the full set of mapper-written keys is
