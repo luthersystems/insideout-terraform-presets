@@ -349,6 +349,47 @@ existing `ComponentDiff` engine still handles the toggle space; a new
 in the model but are excluded from the planner (visible to the inspector /
 alert pipeline only).
 
+### Composer responsibilities for imported resources
+
+The composer (`pkg/composer/compose.go`) is the only code path that emits the
+final terraform stack. The typed model is inert without composer changes —
+it would let the UI describe edits but never apply them. Specifically the
+composer must:
+
+1. **Accept `ImportedResources` as input.** `ComposeStackWithIssues` grows
+   a third argument (or its `Snapshot` shape grows the field) so it has the
+   imported set in addition to `Components` / `Config`.
+2. **Emit flat HCL blocks** for each `ImportedFlat` / `ImportedConformant`
+   resource alongside the `module "..."` blocks in the composed `main.tf`.
+3. **Apply `FieldEdits` overlays before emission.** This is the mechanism
+   by which Riley's chat edits become terraform changes: for each pending
+   edit on an imported resource, the composer overlays the `NewValue` onto
+   the Layer-1 attribute set before serializing to HCL.
+4. **Wire cross-tier references.** When a composer-managed module call
+   needs to reference an imported resource (e.g.
+   `module "lambda" { dlq_arn = aws_sqs_queue.dlq.arn }`), or vice versa,
+   the composer emits the correct Terraform reference. `Role=Wiring` from
+   the salience map identifies the fields that participate in this graph.
+5. **Inject provenance tags on every emission.** The `InsideOutImport*`
+   tags are emitted via `merge()` on every `terraform apply` — not just at
+   first import — so a resource that loses its tags out-of-band gets them
+   back on the next apply.
+6. **Skip emission for non-managed tiers.** `ImportedMissing`,
+   `ExternalByPolicy`, and `ExternalUnsupported` are not written to the
+   composed root (the planner ignores them). They remain in the snapshot
+   for the inspector / alert pipeline.
+7. **Validate the union graph.** Existing validators
+   (`validate_module_graph.go`, `validate_providers.go`,
+   `validate_composed_root.go`) need to recognize flat imported resources
+   as graph nodes alongside `module.<name>`. Cycle detection, provider
+   version conflicts, HCL parseability, and required-variable aggregation
+   all operate on the union.
+
+In other words: the typed model + salience layer + diff machinery are *for
+authoring*. The composer is *for execution*. Both halves are required for
+imports to be a first-class managed tier rather than a one-shot import-and-
+forget transcript.
+
 ### Two different things called "drift"
 
 Worth being explicit about responsibility because the word "drift" gets used
@@ -416,6 +457,7 @@ don't exist in this architecture.
 | 20 | Out-of-band deletion | **Sticky `ImportedMissing` flag + user surfacing** — when the importer discovers a previously-imported resource is gone from cloud, it does *not* auto-prune. The resource remains in the model with `Tier = ImportedMissing`, and the existing drift alert channel surfaces it to the user. Removal requires explicit operator action. |
 | 21 | Phase 2 scope | **Codegen the original 10** (5 AWS + 5 GCP from PR #58) plus the codegen pipeline itself. Each subsequent resource-type expansion ships its own codegen + salience entries as a separate increment. Avoids a single giant Phase 2 PR. |
 | 22 | Tier naming | **Stable string identifiers**, not numbered — adding/removing categories does not require renumbering. Constants live in `pkg/composer/imported.go` (or sibling). |
+| 23 | Composer execution path | **`ComposeStackWithIssues` extended** to accept `ImportedResources`, emit flat HCL alongside module calls, apply `FieldEdits` overlays before emission, wire cross-tier references, and validate the union graph. Without this, the typed model has no execution path. |
 
 ## Provenance tagging policy
 
