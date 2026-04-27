@@ -33,6 +33,27 @@ variable "keys" {
   default = [{
     name = "default"
   }]
+
+  validation {
+    condition     = length(var.keys) > 0
+    error_message = "var.keys must contain at least one entry."
+  }
+  validation {
+    condition     = length(distinct([for k in var.keys : k.rotation_period])) <= 1
+    error_message = "All keys must share the same rotation_period (the upstream KMS module applies one value to every key in the keyring)."
+  }
+  validation {
+    condition     = length(distinct([for k in var.keys : k.algorithm])) <= 1
+    error_message = "All keys must share the same algorithm."
+  }
+  validation {
+    condition     = length(distinct([for k in var.keys : k.protection_level])) <= 1
+    error_message = "All keys must share the same protection_level."
+  }
+  validation {
+    condition     = length(distinct([for k in var.keys : k.purpose])) <= 1
+    error_message = "All keys must share the same purpose."
+  }
 }
 
 variable "prevent_destroy" {
