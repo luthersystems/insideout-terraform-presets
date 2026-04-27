@@ -14,10 +14,10 @@ module "kms" {
   keyring    = local.keyring_name
 
   keys                 = [for k in var.keys : k.name]
-  key_rotation_period  = { for k in var.keys : k.name => k.rotation_period }
-  key_algorithm        = { for k in var.keys : k.name => k.algorithm }
-  key_protection_level = { for k in var.keys : k.name => k.protection_level }
-  purpose              = { for k in var.keys : k.name => k.purpose }
+  key_rotation_period  = var.keys[0].rotation_period
+  key_algorithm        = var.keys[0].algorithm
+  key_protection_level = var.keys[0].protection_level
+  purpose              = var.keys[0].purpose
 
   prevent_destroy = var.prevent_destroy
 

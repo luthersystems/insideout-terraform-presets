@@ -87,6 +87,16 @@ resource "google_compute_url_map" "this" {
   project         = var.project
   default_service = length(var.backends) > 0 ? google_compute_backend_service.this[var.default_backend != "" ? var.default_backend : var.backends[0].name].id : null
 
+  # GCP requires one of default_service / default_url_redirect on every URL map.
+  dynamic "default_url_redirect" {
+    for_each = length(var.backends) == 0 ? [1] : []
+    content {
+      host_redirect          = "placeholder.invalid"
+      strip_query            = false
+      redirect_response_code = "FOUND"
+    }
+  }
+
   dynamic "host_rule" {
     for_each = var.url_map_hosts
     content {
