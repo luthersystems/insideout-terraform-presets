@@ -182,6 +182,21 @@ jobs:
           cache: true
       - run: go test -race ./...
 
+  # Re-runs cmd/imported-codegen against the committed filtered schemas
+  # and fails if doing so produces a diff in pkg/composer/imported/generated
+  # or schemas/. Catches stale generated output from a forgotten regen
+  # after a generator change. Does NOT install terraform — schemas are
+  # pre-canned in schemas/*.filtered.json.
+  verify-gen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: make verify-gen
+
   # Single aggregator status for branch protection to require. Lets the
   # matrix jobs above grow/shrink without updating the protection rule.
   ci-gate:
@@ -195,6 +210,7 @@ jobs:
       - go-build
       - go-vet
       - go-test
+      - verify-gen
     if: always()
     runs-on: ubuntu-latest
     steps:

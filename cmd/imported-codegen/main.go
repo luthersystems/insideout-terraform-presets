@@ -4,13 +4,13 @@
 //
 // Subcommands:
 //
-//   filter  --in <full.json> --aws-out <path> --google-out <path>
-//           Strip a full ProviderSchemas dump down to just the wanted
-//           types and emit one filtered file per cloud.
+//	filter  --in <full.json> --aws-out <path> --google-out <path>
+//	        Strip a full ProviderSchemas dump down to just the wanted
+//	        types and emit one filtered file per cloud.
 //
-//   gen     --aws-schema <path> --google-schema <path> --out <dir>
-//           Generate <type>.gen.go for every wanted type plus
-//           version.gen.go.
+//	gen     --aws-schema <path> --google-schema <path> --out <dir>
+//	        Generate <type>.gen.go for every wanted type plus
+//	        version.gen.go.
 //
 // Default subcommand is `gen` so plain `imported-codegen --aws-schema=...`
 // works.

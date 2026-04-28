@@ -28,11 +28,11 @@ var goReservedWords = func() map[string]struct{} {
 // GoName converts a Terraform-style snake_case name into an idiomatic Go
 // PascalCase identifier with acronym awareness.
 //
-//   GoName("kms_master_key_id") = "KMSMasterKeyID"
-//   GoName("fifo_queue")        = "FifoQueue"
-//   GoName("vpc_config")        = "VPCConfig"
-//   GoName("type")              = "Type_"  (reserved word)
-//   GoName("9lives")            = "R9lives"  (must start with letter)
+//	GoName("kms_master_key_id") = "KMSMasterKeyID"
+//	GoName("fifo_queue")        = "FifoQueue"
+//	GoName("vpc_config")        = "VPCConfig"
+//	GoName("type")              = "Type_"  (reserved word)
+//	GoName("9lives")            = "R9lives"  (must start with letter)
 //
 // Empty input returns empty.
 func GoName(in string) string {

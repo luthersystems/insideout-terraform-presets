@@ -58,11 +58,11 @@ func EmitVersionFile(outDir, awsVersion, googleVersion string) (string, error) {
 	}
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, map[string]string{
-		"AWSProviderSource":    AWSProviderSource,
-		"AWSProviderVersion":   awsVersion,
-		"GoogleProviderSource": GoogleProviderSource,
+		"AWSProviderSource":     AWSProviderSource,
+		"AWSProviderVersion":    awsVersion,
+		"GoogleProviderSource":  GoogleProviderSource,
 		"GoogleProviderVersion": googleVersion,
-		"SchemaCodegenVersion": SchemaCodegenVersion,
+		"SchemaCodegenVersion":  SchemaCodegenVersion,
 	}); err != nil {
 		return "", fmt.Errorf("execute version template: %w", err)
 	}
@@ -79,10 +79,10 @@ func EmitVersionFile(outDir, awsVersion, googleVersion string) (string, error) {
 
 // TypeData is the value passed to type.gen.go.tmpl.
 type TypeData struct {
-	TFType     string
-	GoName     string
-	Fields     []FieldData
-	NestedTypes []NestedType
+	TFType        string
+	GoName        string
+	Fields        []FieldData
+	NestedTypes   []NestedType
 	SchemaEntries []SchemaEntry
 }
 
@@ -126,7 +126,7 @@ func buildTypeData(res *tfjson.Schema, tfType, providerSource, providerVersion s
 		})
 		td.NestedTypes = append(td.NestedTypes, nested...)
 		td.SchemaEntries = append(td.SchemaEntries, SchemaEntry{
-			TFName: name,
+			TFName:    name,
 			Required:  attr.Required,
 			Optional:  attr.Optional,
 			Computed:  attr.Computed,
