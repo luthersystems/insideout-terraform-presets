@@ -10,7 +10,7 @@ module "vpc" {
   source  = "terraform-google-modules/network/google"
   version = "~> 9.0"
 
-  project_id   = var.project
+  project_id   = var.project_id
   network_name = local.network_name
   routing_mode = "GLOBAL"
 
@@ -42,7 +42,7 @@ module "vpc" {
 resource "google_compute_router" "router" {
   count   = var.enable_cloud_nat ? 1 : 0
   name    = "${var.project}-router"
-  project = var.project
+  project = var.project_id
   region  = var.region
   network = module.vpc.network_id
 }
@@ -53,7 +53,7 @@ module "cloud_nat" {
   source  = "terraform-google-modules/cloud-nat/google"
   version = "~> 5.0"
 
-  project_id    = var.project
+  project_id    = var.project_id
   region        = var.region
   router        = google_compute_router.router[0].name
   name          = "${var.project}-nat"
@@ -64,7 +64,7 @@ module "cloud_nat" {
 # Basic firewall rules
 resource "google_compute_firewall" "allow_internal" {
   name    = "${local.network_name}-allow-internal"
-  project = var.project
+  project = var.project_id
   network = module.vpc.network_name
 
   allow {
@@ -84,7 +84,7 @@ resource "google_compute_firewall" "allow_internal" {
 
 resource "google_compute_firewall" "allow_ssh_iap" {
   name    = "${local.network_name}-allow-ssh-iap"
-  project = var.project
+  project = var.project_id
   network = module.vpc.network_name
 
   allow {
@@ -101,7 +101,7 @@ resource "google_vpc_access_connector" "serverless" {
   count = var.enable_serverless_connector ? 1 : 0
 
   name          = "${var.project}-connector"
-  project       = var.project
+  project       = var.project_id
   region        = var.region
   network       = module.vpc.network_self_link
   ip_cidr_range = var.connector_cidr

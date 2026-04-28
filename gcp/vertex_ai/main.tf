@@ -27,7 +27,7 @@ resource "google_vertex_ai_dataset" "dataset" {
   display_name        = var.dataset_name
   metadata_schema_uri = local.resolved_schema_uri
   region              = var.region
-  project             = var.project
+  project             = var.project_id
 
   dynamic "encryption_spec" {
     for_each = var.encryption_kms_key_name == null ? [] : [var.encryption_kms_key_name]

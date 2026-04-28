@@ -10,7 +10,7 @@ resource "google_secret_manager_secret" "this" {
   for_each = local.secrets_map
 
   secret_id = "${var.project}-${each.key}"
-  project   = var.project
+  project   = var.project_id
 
   labels = merge(
     {
@@ -59,7 +59,7 @@ resource "google_secret_manager_secret_iam_binding" "this" {
   for_each = { for b in var.iam_bindings : "${b.secret_name}-${b.role}" => b }
 
   secret_id = google_secret_manager_secret.this[each.value.secret_name].id
-  project   = var.project
+  project   = var.project_id
   role      = each.value.role
   members   = each.value.members
 }

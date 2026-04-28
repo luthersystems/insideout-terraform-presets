@@ -14,7 +14,7 @@ terraform {
 # GCS bucket for backups
 resource "google_storage_bucket" "backups" {
   count    = var.enable_gcs_backups ? 1 : 0
-  project  = var.project
+  project  = var.project_id
   name     = "${var.project}-backups-${var.region}"
   location = var.region
 
@@ -54,7 +54,7 @@ resource "google_storage_bucket" "backups" {
 # Compute Engine snapshot schedule
 resource "google_compute_resource_policy" "snapshot_schedule" {
   count   = var.enable_compute_snapshots ? 1 : 0
-  project = var.project
+  project = var.project_id
   name    = "${var.project}-snapshot-schedule"
   region  = var.region
 

@@ -12,7 +12,8 @@ run "defaults_plan" {
   command = plan
 
   variables {
-    project = "test"
+    project    = "test"
+    project_id = "test-project"
   }
 }
 
@@ -20,7 +21,8 @@ run "multiple_homogeneous_keys" {
   command = plan
 
   variables {
-    project = "test"
+    project    = "test"
+    project_id = "test-project"
     keys = [
       { name = "data" },
       { name = "logs" },
@@ -32,7 +34,8 @@ run "rejects_heterogeneous_rotation_period" {
   command = plan
 
   variables {
-    project = "test"
+    project    = "test"
+    project_id = "test-project"
     keys = [
       { name = "a", rotation_period = "7776000s" },
       { name = "b", rotation_period = "2592000s" },
@@ -46,7 +49,8 @@ run "rejects_heterogeneous_algorithm" {
   command = plan
 
   variables {
-    project = "test"
+    project    = "test"
+    project_id = "test-project"
     keys = [
       { name = "a", algorithm = "GOOGLE_SYMMETRIC_ENCRYPTION" },
       { name = "b", algorithm = "RSA_SIGN_PSS_2048_SHA256" },
@@ -60,7 +64,8 @@ run "rejects_heterogeneous_protection_level" {
   command = plan
 
   variables {
-    project = "test"
+    project    = "test"
+    project_id = "test-project"
     keys = [
       { name = "a", protection_level = "SOFTWARE" },
       { name = "b", protection_level = "HSM" },
@@ -74,7 +79,8 @@ run "rejects_heterogeneous_purpose" {
   command = plan
 
   variables {
-    project = "test"
+    project    = "test"
+    project_id = "test-project"
     keys = [
       { name = "a", purpose = "ENCRYPT_DECRYPT" },
       { name = "b", purpose = "ASYMMETRIC_SIGN" },
@@ -88,8 +94,9 @@ run "rejects_empty_keys" {
   command = plan
 
   variables {
-    project = "test"
-    keys    = []
+    project    = "test"
+    project_id = "test-project"
+    keys       = []
   }
 
   expect_failures = [var.keys]
