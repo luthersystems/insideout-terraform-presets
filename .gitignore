@@ -10,9 +10,9 @@
 # Local environment / secrets
 .env
 
-# Imported/scratch artifacts
-imported/
-insideout-import
+# Imported/scratch artifacts (top-level only — pkg/composer/imported is real)
+/imported/
+/insideout-import
 
 # Claude Code local settings (keep shared .claude/settings.json)
 .claude/settings.local.json
