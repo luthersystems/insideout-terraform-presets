@@ -101,3 +101,31 @@ run "rejects_empty_keys" {
 
   expect_failures = [var.keys]
 }
+
+# Issue #157: var.project_id has a regex validation enforcing GCP's project
+# ID rules. A typo that loosens the regex (e.g. {4,28} -> {4,128}) would
+# silently let invalid values through. These two cases pin the validation:
+# uppercase and underscore are explicit invalid shapes that the regex
+# must reject.
+
+run "rejects_uppercase_project_id" {
+  command = plan
+
+  variables {
+    project    = "test"
+    project_id = "BadProject"
+  }
+
+  expect_failures = [var.project_id]
+}
+
+run "rejects_underscore_project_id" {
+  command = plan
+
+  variables {
+    project    = "test"
+    project_id = "bad_project_id"
+  }
+
+  expect_failures = [var.project_id]
+}

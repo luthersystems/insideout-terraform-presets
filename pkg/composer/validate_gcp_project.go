@@ -9,6 +9,16 @@ import (
 // gcpProjectIDPattern enforces GCP's documented project ID rules:
 // 6–30 chars, lowercase letters / digits / hyphens, must start with a letter,
 // must end alphanumeric. Reference: https://cloud.google.com/resource-manager/docs/creating-managing-projects
+//
+// Length encoding: 1 (leading [a-z]) + 4..28 (middle) + 1 (trailing [a-z0-9])
+// = 6..30 characters total. Adjusting the {4,28} bounds shifts the total
+// range — the boundary tests in TestValidateGCPProjectID lock this in.
+//
+// Note that this pattern alone does NOT distinguish "real GCP project ID" from
+// an AWS-style naming prefix that happens to use the same character set
+// (e.g. "io-abc123def456" passes). The defense-in-depth is requiring callers
+// to set GCPProjectID explicitly — see ValidateGCPProjectID's docstring and
+// issue #157.
 var gcpProjectIDPattern = regexp.MustCompile(`^[a-z][a-z0-9-]{4,28}[a-z0-9]$`)
 
 // ValidateOpts returns ValidationIssues for ComposeStackOpts fields that can't
