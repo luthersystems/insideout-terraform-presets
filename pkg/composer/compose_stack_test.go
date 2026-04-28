@@ -9,6 +9,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	terraformpresets "github.com/luthersystems/insideout-terraform-presets"
 )
 
 // shim so this test can reuse the helper defined in compose_vm_test.go
@@ -1731,6 +1733,56 @@ func TestComposeStack_DiscoveredProvidersReachRoot(t *testing.T) {
 	// not a stray substring in a comment or module name).
 	require.Regexp(t, regexp.MustCompile(`(?s)random\s*=\s*\{[^}]*hashicorp/random`), prov,
 		"hashicorp/random should be attached to a random = {...} entry in required_providers, not just appear as a substring")
+}
+
+// TestComposeStack_GCPRandomIDSuffix locks in the issue #159 contract: every
+// GCP module that creates a named cloud resource declares a random_id
+// "suffix" and appends its hex to the resource name, and the random
+// provider lifts into the root providers.tf so a `terraform init` on the
+// composed stack succeeds. State-loss recovery (re-applying after losing
+// state on a project that already has e.g. an undeletable KMS keyring)
+// depends on this end-to-end.
+//
+// The test exercises KMS specifically because it's the customer-incident
+// driver (reliable #1167 → #1168 — a prior keyring 409'd every retry on
+// the same project, requiring a fresh GCP project to recover).
+func TestComposeStack_GCPRandomIDSuffix(t *testing.T) {
+	c := newTestClient()
+
+	// Precondition 1: the kms preset declares random in required_providers.
+	// If a future edit drops it, this assertion fails first with a clearer
+	// signal than the indirect "hashicorp/random missing from providers.tf".
+	kmsMod, err := InspectPreset("gcp/kms")
+	require.NoError(t, err)
+	require.Contains(t, kmsMod.RequiredProviders, "random",
+		"precondition: gcp/kms preset must declare a random = {...} required_provider for the suffix pattern to work")
+
+	// Precondition 2: the kms preset's main.tf actually interpolates
+	// random_id.suffix.hex into the keyring name. A passing
+	// required_providers assertion alone doesn't prove the suffix wires up.
+	kmsBytes, err := terraformpresets.FS.ReadFile("gcp/kms/main.tf")
+	require.NoError(t, err)
+	require.Contains(t, string(kmsBytes), "random_id.suffix.hex",
+		"gcp/kms/main.tf must interpolate random_id.suffix.hex (issue #159 — keyrings are undeletable, so name reuse blocks every retry)")
+
+	out, err := c.ComposeStack(ComposeStackOpts{
+		Cloud:        "gcp",
+		SelectedKeys: []ComponentKey{KeyGCPVPC, KeyGCPCloudKMS},
+		Comps:        &Components{},
+		Cfg:          &Config{Region: "us-central1"},
+		Project:      "suffix-test",
+		GCPProjectID: "suffix-test-12345",
+		Region:       "us-central1",
+	})
+	require.NoError(t, err, "ComposeStack(gcp) with KMS+VPC should succeed")
+
+	// Root providers.tf must include the random provider so terraform init
+	// can resolve it.
+	prov := string(out["/providers.tf"])
+	require.Contains(t, prov, "hashicorp/random",
+		"root providers.tf should include the random provider lifted from the kms preset's required_providers")
+	require.Regexp(t, regexp.MustCompile(`(?s)random\s*=\s*\{[^}]*hashicorp/random`), prov,
+		"hashicorp/random should be attached to a random = {...} entry, not just appear as a substring")
 }
 
 // TestComposeStack_ProjectRoundTrip renders with a distinctive Project value

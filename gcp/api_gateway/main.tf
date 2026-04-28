@@ -11,7 +11,17 @@ terraform {
       source  = "hashicorp/google-beta"
       version = ">= 5.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = ">= 3.5"
+    }
   }
+}
+
+# Per-deploy suffix so retries after state loss don't 409 on the api / gateway
+# IDs (issue #159). The api_config_id already rotates per-apply via timestamp().
+resource "random_id" "suffix" {
+  byte_length = 4
 }
 
 # Enable API Gateway API
@@ -40,7 +50,7 @@ resource "google_project_service" "service_control" {
 resource "google_api_gateway_api" "this" {
   provider = google-beta
   project  = var.project_id
-  api_id   = "${var.project}-api"
+  api_id   = "${var.project}-api-${random_id.suffix.hex}"
 
   labels = {
     project = var.project
@@ -59,7 +69,7 @@ resource "google_api_gateway_api_config" "this" {
   provider      = google-beta
   project       = var.project_id
   api           = google_api_gateway_api.this.api_id
-  api_config_id = "${var.project}-api-config-${formatdate("YYYYMMDDhhmmss", timestamp())}"
+  api_config_id = "${var.project}-api-config-${random_id.suffix.hex}-${formatdate("YYYYMMDDhhmmss", timestamp())}"
 
   openapi_documents {
     document {
@@ -90,7 +100,7 @@ resource "google_api_gateway_gateway" "this" {
   project    = var.project_id
   region     = var.region
   api_config = google_api_gateway_api_config.this.id
-  gateway_id = "${var.project}-gateway"
+  gateway_id = "${var.project}-gateway-${random_id.suffix.hex}"
 
   labels = {
     project = var.project

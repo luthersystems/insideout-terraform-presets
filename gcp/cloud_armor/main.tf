@@ -8,11 +8,21 @@ terraform {
       source  = "hashicorp/google"
       version = ">= 5.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = ">= 3.5"
+    }
   }
 }
 
+# Per-deploy suffix so retries after state loss don't 409 on the security
+# policy name (issue #159).
+resource "random_id" "suffix" {
+  byte_length = 4
+}
+
 locals {
-  policy_name = "${var.project}-${var.name}"
+  policy_name = "${var.project}-${var.name}-${random_id.suffix.hex}"
 }
 
 resource "google_compute_security_policy" "policy" {

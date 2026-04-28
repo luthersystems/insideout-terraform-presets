@@ -1,6 +1,12 @@
 # GCP Secret Manager Module
 # Using native google_secret_manager_secret resources
 
+# Per-deploy suffix so retries after state loss dodge the 30-day soft-delete
+# name reservation on Secret Manager secret IDs (issue #159).
+resource "random_id" "suffix" {
+  byte_length = 4
+}
+
 locals {
   secrets_map = { for s in var.secrets : s.name => s }
 }
@@ -9,7 +15,7 @@ locals {
 resource "google_secret_manager_secret" "this" {
   for_each = local.secrets_map
 
-  secret_id = "${var.project}-${each.key}"
+  secret_id = "${var.project}-${each.key}-${random_id.suffix.hex}"
   project   = var.project_id
 
   labels = merge(

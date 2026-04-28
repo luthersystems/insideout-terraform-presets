@@ -1,9 +1,15 @@
 # GCP VPC Module using terraform-google-network
 # https://github.com/terraform-google-modules/terraform-google-network
 
+# Per-deploy suffix so retries after state loss don't 409 on existing
+# network/subnet/firewall/router/connector names (issue #159).
+resource "random_id" "suffix" {
+  byte_length = 4
+}
+
 locals {
-  network_name = "${var.project}-${var.network_name}"
-  subnet_name  = "${var.project}-subnet-${var.region}"
+  network_name = "${var.project}-${var.network_name}-${random_id.suffix.hex}"
+  subnet_name  = "${var.project}-subnet-${var.region}-${random_id.suffix.hex}"
 }
 
 module "vpc" {
@@ -27,11 +33,11 @@ module "vpc" {
   secondary_ranges = var.gke_cluster_name != null ? {
     (local.subnet_name) = [
       {
-        range_name    = "${var.project}-pods"
+        range_name    = "${var.project}-pods-${random_id.suffix.hex}"
         ip_cidr_range = var.secondary_ranges.pods_cidr
       },
       {
-        range_name    = "${var.project}-services"
+        range_name    = "${var.project}-services-${random_id.suffix.hex}"
         ip_cidr_range = var.secondary_ranges.services_cidr
       }
     ]
@@ -41,7 +47,7 @@ module "vpc" {
 # Cloud Router for NAT
 resource "google_compute_router" "router" {
   count   = var.enable_cloud_nat ? 1 : 0
-  name    = "${var.project}-router"
+  name    = "${var.project}-router-${random_id.suffix.hex}"
   project = var.project_id
   region  = var.region
   network = module.vpc.network_id
@@ -56,7 +62,7 @@ module "cloud_nat" {
   project_id    = var.project_id
   region        = var.region
   router        = google_compute_router.router[0].name
-  name          = "${var.project}-nat"
+  name          = "${var.project}-nat-${random_id.suffix.hex}"
   network       = module.vpc.network_id
   create_router = false
 }
@@ -100,7 +106,9 @@ resource "google_compute_firewall" "allow_ssh_iap" {
 resource "google_vpc_access_connector" "serverless" {
   count = var.enable_serverless_connector ? 1 : 0
 
-  name          = "${var.project}-connector"
+  # Connector names are limited to 25 chars total. Use a 4-char suffix slice
+  # to keep within budget while still cycling on state-loss recovery.
+  name          = "${var.project}-conn-${substr(random_id.suffix.hex, 0, 4)}"
   project       = var.project_id
   region        = var.region
   network       = module.vpc.network_self_link

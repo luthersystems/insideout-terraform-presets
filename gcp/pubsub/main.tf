@@ -7,12 +7,22 @@ terraform {
       source  = "hashicorp/google"
       version = ">= 5.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = ">= 3.5"
+    }
   }
+}
+
+# Per-deploy suffix so retries after state loss don't 409 on the topic /
+# subscription / dead-letter-topic names (issue #159).
+resource "random_id" "suffix" {
+  byte_length = 4
 }
 
 resource "google_pubsub_topic" "this" {
   project = var.project_id
-  name    = "${var.project}-${var.topic_name}"
+  name    = "${var.project}-${var.topic_name}-${random_id.suffix.hex}"
 
   message_retention_duration = var.message_retention_duration
 
@@ -24,7 +34,7 @@ resource "google_pubsub_topic" "this" {
 
 resource "google_pubsub_subscription" "this" {
   project = var.project_id
-  name    = "${var.project}-${var.topic_name}-sub"
+  name    = "${var.project}-${var.topic_name}-sub-${random_id.suffix.hex}"
   topic   = google_pubsub_topic.this.id
 
   ack_deadline_seconds       = var.ack_deadline_seconds
@@ -50,7 +60,7 @@ resource "google_pubsub_subscription" "this" {
 resource "google_pubsub_topic" "dead_letter" {
   count   = var.enable_dead_letter ? 1 : 0
   project = var.project_id
-  name    = "${var.project}-${var.topic_name}-dlq"
+  name    = "${var.project}-${var.topic_name}-dlq-${random_id.suffix.hex}"
 
   labels = {
     project = var.project

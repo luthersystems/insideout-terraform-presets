@@ -25,8 +25,13 @@ variable "region" {
 }
 
 variable "bucket_name" {
-  description = "Name of the bucket (must be globally unique)"
+  description = "Name of the bucket (must be globally unique). The module appends a 9-char random suffix, so this value must be ≤ 54 chars to stay within GCS's 63-char ceiling."
   type        = string
+
+  validation {
+    condition     = length(var.bucket_name) <= 54
+    error_message = "bucket_name must be ≤ 54 chars (the module appends a 9-char '-<8hex>' suffix; GCS bucket names are limited to 63 chars)."
+  }
 }
 
 variable "location" {

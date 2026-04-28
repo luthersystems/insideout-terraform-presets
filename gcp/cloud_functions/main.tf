@@ -15,15 +15,16 @@ terraform {
   }
 }
 
-locals {
-  function_name = "${var.project}-${var.function_name}"
-  bucket_name   = var.source_archive_bucket != "" ? var.source_archive_bucket : "${var.project}-gcf-source-${random_id.bucket_suffix[0].hex}"
+# Per-deploy suffix for the function name so retries after state loss don't
+# 409 on the existing function (issue #159). Reused for the auto-created
+# source bucket so both rotate together.
+resource "random_id" "suffix" {
+  byte_length = 4
 }
 
-# Random suffix for auto-created source bucket
-resource "random_id" "bucket_suffix" {
-  count       = var.source_archive_bucket == "" ? 1 : 0
-  byte_length = 4
+locals {
+  function_name = "${var.project}-${var.function_name}-${random_id.suffix.hex}"
+  bucket_name   = var.source_archive_bucket != "" ? var.source_archive_bucket : "${var.project}-gcf-source-${random_id.suffix.hex}"
 }
 
 # Source code bucket (created only if not provided)

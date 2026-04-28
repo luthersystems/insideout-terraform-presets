@@ -1,8 +1,14 @@
 # Cloud Run Service
 # https://registry.terraform.io/providers/hashicorp/google/latest/docs/resources/cloud_run_v2_service
 
+# Per-deploy suffix so retries after state loss don't 409 on the existing
+# Cloud Run service name (issue #159).
+resource "random_id" "suffix" {
+  byte_length = 4
+}
+
 locals {
-  service_name = "${var.project}-${var.service_name}"
+  service_name = "${var.project}-${var.service_name}-${random_id.suffix.hex}"
 }
 
 resource "google_cloud_run_v2_service" "main" {

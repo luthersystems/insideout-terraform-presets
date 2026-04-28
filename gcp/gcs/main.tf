@@ -1,8 +1,15 @@
 # GCS Bucket Module
 # Using native google_storage_bucket resource
 
+# Per-deploy suffix so retries after state loss dodge the 7-day soft-delete
+# name reservation on globally-unique bucket names (issue #159). Stable
+# across applies via state.
+resource "random_id" "suffix" {
+  byte_length = 4
+}
+
 resource "google_storage_bucket" "this" {
-  name     = var.bucket_name
+  name     = "${var.bucket_name}-${random_id.suffix.hex}"
   project  = var.project_id
   location = var.location
 

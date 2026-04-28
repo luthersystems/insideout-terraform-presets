@@ -1,8 +1,14 @@
 # GCP Compute Engine Instance Module
 # https://github.com/terraform-google-modules/terraform-google-vm
 
+# Per-deploy suffix so retries after state loss don't 409 on existing
+# compute instance names (issue #159).
+resource "random_id" "suffix" {
+  byte_length = 4
+}
+
 locals {
-  instance_name = "${var.project}-${var.instance_name}"
+  instance_name = "${var.project}-${var.instance_name}-${random_id.suffix.hex}"
 }
 
 data "google_compute_image" "this" {
