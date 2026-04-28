@@ -14,6 +14,13 @@
 /imported/
 /insideout-import
 
+# Codegen scratch — full schema dumps are 30 MB and never committed.
+# .terraform/ already covered by the top-level rule. Filtered schemas
+# under schemas/<cloud>.filtered.json ARE committed; only the unfiltered
+# intermediate is excluded.
+/schemas/.full.json
+/imported-codegen
+
 # Claude Code local settings (keep shared .claude/settings.json)
 .claude/settings.local.json
 .claude/scheduled_tasks.lock

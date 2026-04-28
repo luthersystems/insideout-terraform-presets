@@ -139,11 +139,13 @@ func buildTypeData(res *tfjson.Schema, tfType, providerSource, providerVersion s
 		})
 	}
 
-	// Top-level nested blocks.
+	// Top-level nested blocks. buildBlockNested recurses into child blocks
+	// and returns every NestedType it produced so the outer file declares
+	// all of them.
 	for _, name := range SortedBlockTypeNames(block) {
 		nb := block.NestedBlocks[name]
 		nestedTypeName := typeName + GoName(name)
-		nested, err := buildBlockNested(nestedTypeName, nb, typeName)
+		nestedSet, err := buildBlockNested(nestedTypeName, nb, typeName)
 		if err != nil {
 			return nil, fmt.Errorf("block %q: %w", name, err)
 		}
@@ -160,7 +162,7 @@ func buildTypeData(res *tfjson.Schema, tfType, providerSource, providerVersion s
 			TFName:    name,
 			BlockKind: blockKind,
 		})
-		td.NestedTypes = append(td.NestedTypes, nested)
+		td.NestedTypes = append(td.NestedTypes, nestedSet...)
 		// NestedBlocks are present in the schema but don't have their own
 		// FieldSchema entry in the design — Required/Optional gets
 		// inferred from MinItems/MaxItems. Keep schema map simple by
@@ -183,22 +185,28 @@ func buildTypeData(res *tfjson.Schema, tfType, providerSource, providerVersion s
 	return td, nil
 }
 
-func buildBlockNested(typeName string, nb *tfjson.SchemaBlockType, parent string) (NestedType, error) {
+// buildBlockNested constructs the NestedType for typeName from nb and
+// recurses into any further nested blocks so caller receives every
+// NestedType the file must declare. The returned slice is in declaration
+// order (parent first, then children depth-first).
+func buildBlockNested(typeName string, nb *tfjson.SchemaBlockType, parent string) ([]NestedType, error) {
 	if nb.Block == nil {
-		return NestedType{GoName: typeName}, nil
+		return []NestedType{{GoName: typeName}}, nil
 	}
 	out := NestedType{GoName: typeName}
+	var children []NestedType
 	for _, name := range SortedAttrNames(nb.Block) {
 		attr := nb.Block.Attributes[name]
-		gt, _, _, err := GoFieldType(attr.AttributeType, name, typeName)
+		gt, objNested, _, err := GoFieldType(attr.AttributeType, name, typeName)
 		if err != nil {
-			return NestedType{}, fmt.Errorf("nested attr %q: %w", name, err)
+			return nil, fmt.Errorf("nested attr %q: %w", name, err)
 		}
 		out.Fields = append(out.Fields, NestedField{
 			TFName: name,
 			GoName: GoName(name),
 			GoType: gt,
 		})
+		children = append(children, objNested...)
 	}
 	for _, name := range SortedBlockTypeNames(nb.Block) {
 		child := nb.Block.NestedBlocks[name]
@@ -216,9 +224,14 @@ func buildBlockNested(typeName string, nb *tfjson.SchemaBlockType, parent string
 			GoType:    childGoType,
 			BlockKind: blockKind,
 		})
+		grand, err := buildBlockNested(childTypeName, child, typeName)
+		if err != nil {
+			return nil, fmt.Errorf("nested block %q: %w", name, err)
+		}
+		children = append(children, grand...)
 	}
 	_ = parent
-	return out, nil
+	return append([]NestedType{out}, children...), nil
 }
 
 func dedupNested(in []NestedType) []NestedType {
