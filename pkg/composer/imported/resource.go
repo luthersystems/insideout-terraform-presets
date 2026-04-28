@@ -7,6 +7,14 @@ import (
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer"
 )
 
+// Note on Attrs vs Attributes: ImportedResource carries two attribute
+// representations to support a phased migration to the typed Layer 1 model.
+// Attributes is the Phase 1 opaque map; Attrs holds the typed shape decoded
+// from a generated struct (see pkg/composer/imported/generated). Storing
+// Attrs as json.RawMessage keeps this package free of any dependency on the
+// generated package and avoids future import cycles. Decoding goes through
+// generated.UnmarshalAttrs(id.Type, ir.Attrs).
+
 // ImportedResource is the IR carrier for one cloud resource that lives outside
 // the preset module call space — either imported via reverse-Terraform or
 // observed by the inspector. It rides alongside composer.Components in the
@@ -42,6 +50,15 @@ type ImportedResource struct {
 	// conflicts between Riley's pending edits and independent cloud changes
 	// at re-import time. Cleared when an apply succeeds.
 	FieldEdits map[string]FieldEdit `json:"field_edits,omitempty"`
+
+	// Attrs is the typed Layer 1 attribute payload for this resource,
+	// stored as raw JSON to keep the carrier free of any dependency on
+	// pkg/composer/imported/generated. Decode via
+	// generated.UnmarshalAttrs(Identity.Type, Attrs). When both Attributes
+	// (opaque map) and Attrs are present, callers should treat Attrs as
+	// the authoritative desired state and Attributes as the Phase 1
+	// fallback for consumers that have not yet adopted the typed model.
+	Attrs json.RawMessage `json:"attrs,omitempty"`
 
 	// GraduationCandidate is populated by the shape-matcher when the
 	// imported graph could be wrapped in a preset module call. Phase 3+;
