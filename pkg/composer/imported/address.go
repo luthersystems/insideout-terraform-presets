@@ -26,6 +26,10 @@ const (
 // addresses so previously-claimed names are never reused unless reclaiming the
 // same canonical identity.
 //
+// id.Type is mandatory — there is no valid Terraform address without a
+// resource type. If id.Type is empty (after trimming whitespace), the
+// function returns "" so callers can detect the misuse.
+//
 // Algorithm (per docs/managed-resource-tiers.md lines 528-544):
 //
 //  1. Pick the first non-empty name hint from id.NameHint, NativeIDs["name"],
@@ -39,6 +43,9 @@ const (
 //  4. Otherwise append `_<8hex>` of the canonical identity hash.
 //  5. If still colliding, append a numeric counter `_2`, `_3`, ...
 func GenerateAddress(id ResourceIdentity, exists func(addr string) bool) string {
+	if strings.TrimSpace(id.Type) == "" {
+		return ""
+	}
 	hash := identityHash(id)
 
 	hint := pickNameHint(id, hash)

@@ -156,40 +156,85 @@ func TestImportedResource_RoundTrip_Full(t *testing.T) {
 	assert.Equal(t, r, got)
 }
 
-func TestImportedResource_OmitEmpty(t *testing.T) {
+// TestOmitEmpty pins the exact JSON shape of zero-or-minimal values for every
+// type in this package that uses json:"...,omitempty" tags. Stronger than
+// "key X is absent" — any change to which fields are omitempty (including
+// accidental removal) shows up as an exact-string diff.
+//
+// FieldEdit.EditedAt intentionally has no omitempty: a missing edit_at
+// timestamp on an audit record would silently lose information, so the zero
+// value is preserved on the wire.
+func TestOmitEmpty(t *testing.T) {
 	t.Parallel()
-	r := ImportedResource{
-		Identity: ResourceIdentity{Cloud: "aws", Type: "aws_sqs_queue"},
-		Tier:     TierImportedFlat,
-		Source:   SourceImporter,
+	cases := []struct {
+		name string
+		in   any
+		want string
+	}{
+		{
+			name: "ResourceIdentity_zero",
+			in:   ResourceIdentity{},
+			want: `{}`,
+		},
+		{
+			name: "PresetMatch_zero",
+			in:   PresetMatch{},
+			want: `{}`,
+		},
+		{
+			name: "FieldEdit_zero",
+			in:   FieldEdit{},
+			want: `{"edited_at":"0001-01-01T00:00:00Z"}`,
+		},
+		{
+			name: "ImportedResource_minimal",
+			in: ImportedResource{
+				Identity: ResourceIdentity{Cloud: "aws", Type: "aws_sqs_queue"},
+				Tier:     TierImportedFlat,
+				Source:   SourceImporter,
+			},
+			want: `{"identity":{"cloud":"aws","type":"aws_sqs_queue"},"tier":"ImportedFlat","source":"importer"}`,
+		},
 	}
-	b, err := json.Marshal(r)
-	require.NoError(t, err)
-	s := string(b)
-	for _, key := range []string{"attributes", "field_edits", "graduation_candidate"} {
-		assert.NotContainsf(t, s, key, "empty %s must be omitted; got %s", key, s)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			b, err := json.Marshal(tc.in)
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, string(b))
+		})
 	}
 }
 
-func TestFieldEdit_RoundTrip_UTC(t *testing.T) {
+// TestFieldEdit_MarshalJSON_ConvertsToUTC proves that FieldEdit.MarshalJSON
+// converts a non-UTC time.Time to UTC before serialization. Without the
+// custom MarshalJSON, encoding/json would emit a numeric offset (e.g.
+// "-07:00") that violates the RFC3339Nano UTC contract.
+func TestFieldEdit_MarshalJSON_ConvertsToUTC(t *testing.T) {
 	t.Parallel()
-	loc, err := time.LoadLocation("America/Los_Angeles")
+	la, err := time.LoadLocation("America/Los_Angeles")
 	require.NoError(t, err)
-	original := time.Date(2026, 4, 27, 7, 30, 15, 123_456_789, loc)
+	// Same instant as 2026-04-27T14:30:15.123456789Z, but expressed in
+	// LA local time. The serializer must convert this back to UTC.
+	laTime := time.Date(2026, 4, 27, 7, 30, 15, 123_456_789, la)
 	fe := FieldEdit{
 		Source:   SourceRiley,
-		EditedAt: original.UTC(),
+		EditedAt: laTime,
 		OldValue: "before",
 		NewValue: "after",
 	}
 	b, err := json.Marshal(fe)
 	require.NoError(t, err)
 	assert.Contains(t, string(b), `"edited_at":"2026-04-27T14:30:15.123456789Z"`,
-		"FieldEdit.EditedAt must serialize as RFC3339Nano UTC with Z suffix")
+		"non-UTC EditedAt must be converted to UTC at marshal time; got %s", string(b))
+	assert.NotContains(t, string(b), "-07:00",
+		"serialized output must not retain the source time zone offset")
 
 	var got FieldEdit
 	require.NoError(t, json.Unmarshal(b, &got))
 	assert.True(t, got.EditedAt.Equal(fe.EditedAt))
+	assert.Equal(t, time.UTC, got.EditedAt.Location(),
+		"unmarshalled EditedAt must be in UTC")
 	assert.Equal(t, fe.Source, got.Source)
 	assert.Equal(t, fe.OldValue, got.OldValue)
 	assert.Equal(t, fe.NewValue, got.NewValue)
@@ -210,6 +255,15 @@ func TestPresetMatch_RoundTrip(t *testing.T) {
 	}
 	b, err := json.Marshal(pm)
 	require.NoError(t, err)
+
+	// Cross-package byte assertion: catches an upstream rename of
+	// composer.FieldDiff or composer.ComponentKey JSON tags here, in the
+	// package that owns the contract, instead of in some downstream
+	// consumer's failure stack.
+	s := string(b)
+	assert.Contains(t, s, `"preset_key":"aws_vpc"`)
+	assert.Contains(t, s, `"field":"cidr_block"`)
+	assert.Contains(t, s, `"from":"10.0.0.0/16"`)
 
 	var got PresetMatch
 	require.NoError(t, json.Unmarshal(b, &got))

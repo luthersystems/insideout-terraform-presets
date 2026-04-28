@@ -1,6 +1,7 @@
 package imported
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer"
@@ -49,12 +50,25 @@ type ImportedResource struct {
 }
 
 // FieldEdit is audit/conflict metadata for one model-side edit to a single
-// attribute. EditedAt is RFC3339Nano UTC.
+// attribute. EditedAt is always serialized as RFC3339Nano UTC regardless of
+// the caller-supplied time.Location; see MarshalJSON.
 type FieldEdit struct {
 	Source   Source    `json:"source,omitempty"`
 	EditedAt time.Time `json:"edited_at"`
 	OldValue any       `json:"old_value,omitempty"`
 	NewValue any       `json:"new_value,omitempty"`
+}
+
+// MarshalJSON enforces RFC3339Nano UTC on EditedAt. Without this, a caller
+// passing a non-UTC time.Time would serialize with a numeric offset (e.g.
+// "-07:00"), which the design contract forbids. The zero value is left
+// untouched so the canonical "0001-01-01T00:00:00Z" form is preserved.
+func (f FieldEdit) MarshalJSON() ([]byte, error) {
+	type alias FieldEdit
+	if !f.EditedAt.IsZero() {
+		f.EditedAt = f.EditedAt.UTC()
+	}
+	return json.Marshal(alias(f))
 }
 
 // PresetMatch is a forward-declared graduation hint. It is populated by the

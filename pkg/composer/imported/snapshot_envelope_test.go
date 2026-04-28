@@ -96,8 +96,11 @@ func TestSnapshotEnvelope_RoundTrip(t *testing.T) {
 
 	second, err := json.Marshal(got)
 	require.NoError(t, err)
-	assert.JSONEq(t, string(first), string(second),
-		"envelope must round-trip without semantic loss")
+	// Byte-identical round trip: encoding/json sorts map keys alphabetically
+	// on both passes, so any drift indicates a real serialization bug
+	// (re-ordered struct fields, hand-rolled MarshalJSON misbehavior, etc.).
+	require.Equal(t, string(first), string(second),
+		"envelope must round-trip byte-identically")
 
 	// And the imported slice itself must round-trip back to the same Go
 	// value.
