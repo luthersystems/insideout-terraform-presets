@@ -92,6 +92,13 @@ type ComposeSingleOpts struct {
 	Cfg             *Config
 	Project, Region string
 
+	// GCPProjectID is the real GCP project ID (e.g. "my-prod-12345") that
+	// becomes var.project_id on every GCP module. Required when
+	// Cloud == "gcp"; ignored for AWS. Distinct from Project, which is the
+	// stack naming/label prefix and is allowed to be a session-derived value
+	// like "io-abcdef" that would not satisfy GCP project ID rules.
+	GCPProjectID string
+
 	// StrictValidate, when true, escalates any pre-plan validator issue into
 	// an aggregated error from ComposeSingleWithIssues. Default false: issues
 	// are surfaced in Result.Issues and the call still succeeds. The legacy
@@ -185,6 +192,15 @@ func (c *Client) composeSingleImpl(opts ComposeSingleOpts) (*ComposeSingleResult
 	if err != nil {
 		return nil, err
 	}
+	// For GCP composes, inject the real GCP project ID alongside the naming
+	// prefix. Modules that don't declare var.project_id (cloud_build /
+	// cloud_monitoring / cloud_cdn, plus every AWS module) will have it
+	// filtered out by the namespacing loop below. Skip on empty so the
+	// dedicated validator (issues "gcp_project_id_required") fires instead of
+	// silently flowing "" through to apply time. See issue #157.
+	if cloud == "gcp" && strings.TrimSpace(opts.GCPProjectID) != "" {
+		vals["project_id"] = opts.GCPProjectID
+	}
 
 	// Resolve implicit dependencies so DefaultWiring can connect modules (e.g. Redis -> VPC)
 	expanded := ResolveDependencies([]ComponentKey{opts.Key})
@@ -225,6 +241,7 @@ func (c *Client) composeSingleImpl(opts ComposeSingleOpts) (*ComposeSingleResult
 	}
 
 	issues = append(issues, validateRequiredIssues(vars, wired, vals, string(opts.Key))...)
+	issues = append(issues, ValidateGCPProjectID(cloud, opts.GCPProjectID)...)
 
 	var tfvars []VarEntry
 	for _, v := range vars {
@@ -269,11 +286,18 @@ func (c *Client) composeSingleImpl(opts ComposeSingleOpts) (*ComposeSingleResult
 /* ---------- Stack ---------- */
 
 type ComposeStackOpts struct {
-	Cloud        string // "aws" or "gcp" (defaults to "aws" if empty)
+	Cloud           string // "aws" or "gcp" (defaults to "aws" if empty)
 	SelectedKeys    []ComponentKey
 	Comps           *Components
 	Cfg             *Config
 	Project, Region string
+
+	// GCPProjectID is the real GCP project ID (e.g. "my-prod-12345") that
+	// becomes var.project_id on every GCP module. Required when
+	// Cloud == "gcp"; ignored for AWS. Distinct from Project, which is the
+	// stack naming/label prefix and is allowed to be a session-derived value
+	// like "io-abcdef" that would not satisfy GCP project ID rules.
+	GCPProjectID string
 
 	// StrictValidate, when true, escalates any pre-plan validator issue into
 	// an aggregated error from ComposeStackWithIssues. Default false: issues
@@ -427,6 +451,16 @@ func (c *Client) composeStackImpl(opts ComposeStackOpts) (*ComposeStackResult, e
 		if err != nil {
 			return nil, err
 		}
+		// For GCP composes, inject the real GCP project ID alongside the
+		// naming prefix. Modules that don't declare var.project_id
+		// (cloud_build / cloud_monitoring / cloud_cdn, plus every AWS
+		// module) will have it filtered out by the namespacing loop below.
+		// Skip on empty so the dedicated validator (issues
+		// "gcp_project_id_required") fires instead of silently flowing ""
+		// through to apply time. See issue #157.
+		if cloud == "gcp" && strings.TrimSpace(opts.GCPProjectID) != "" {
+			vals["project_id"] = opts.GCPProjectID
+		}
 		wired := DefaultWiring(selected, k, opts.Comps)
 
 		inputs := map[string]any{}
@@ -513,6 +547,7 @@ func (c *Client) composeStackImpl(opts ComposeStackOpts) (*ComposeStackResult, e
 	issues = append(issues, ValidateProviderConstraints(presetPaths)...)
 	issues = append(issues, ValidateSensitivePropagation(blocks, presetPaths)...)
 	issues = append(issues, ValidateComposedRoot(files)...)
+	issues = append(issues, ValidateGCPProjectID(cloud, opts.GCPProjectID)...)
 
 	return &ComposeStackResult{Files: files, Issues: issues}, nil
 }

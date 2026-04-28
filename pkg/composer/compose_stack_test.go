@@ -1662,6 +1662,7 @@ func TestComposeStack_GCP_Provider(t *testing.T) {
 		Comps:        &Components{},
 		Cfg:          &Config{Region: "us-central1"},
 		Project:      "test-project",
+		GCPProjectID: "test-project-12345",
 		Region:       "us-central1",
 	})
 	require.NoError(t, err, "ComposeStack(gcp) should succeed")

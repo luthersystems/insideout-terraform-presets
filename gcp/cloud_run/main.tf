@@ -8,7 +8,7 @@ locals {
 resource "google_cloud_run_v2_service" "main" {
   name     = local.service_name
   location = var.region
-  project  = var.project
+  project  = var.project_id
 
   template {
     scaling {
@@ -70,7 +70,7 @@ resource "google_cloud_run_v2_service" "main" {
 resource "google_cloud_run_v2_service_iam_member" "public" {
   count = var.allow_unauthenticated ? 1 : 0
 
-  project  = var.project
+  project  = var.project_id
   location = var.region
   name     = google_cloud_run_v2_service.main.name
   role     = "roles/run.invoker"

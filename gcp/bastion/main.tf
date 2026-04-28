@@ -19,12 +19,12 @@ locals {
 resource "google_service_account" "bastion" {
   account_id   = "${var.project}-bastion"
   display_name = "${var.project} Bastion Host"
-  project      = var.project
+  project      = var.project_id
 }
 
 # Allow IAP tunneling to the bastion
 resource "google_project_iam_member" "iap_tunnel" {
-  project = var.project
+  project = var.project_id
   role    = "roles/iap.tunnelResourceAccessor"
   member  = "serviceAccount:${google_service_account.bastion.email}"
 }
@@ -36,7 +36,7 @@ data "google_compute_image" "this" {
 
 resource "google_compute_instance" "bastion" {
   name         = local.instance_name
-  project      = var.project
+  project      = var.project_id
   zone         = var.zone
   machine_type = var.machine_type
 
@@ -91,7 +91,7 @@ resource "google_compute_instance" "bastion" {
 # Firewall rule: allow SSH from IAP range only
 resource "google_compute_firewall" "bastion_iap_ssh" {
   name    = "${local.instance_name}-allow-iap-ssh"
-  project = var.project
+  project = var.project_id
   network = var.network_self_link
 
   allow {
