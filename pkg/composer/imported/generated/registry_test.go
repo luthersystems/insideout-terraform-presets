@@ -59,6 +59,30 @@ func TestUnmarshalAttrs_UnknownTypeErrors(t *testing.T) {
 	assert.Contains(t, err.Error(), "no registered type")
 }
 
+// TestRegistry_AllTenPhase1Registered locks in the Phase 1 coverage:
+// every name in this list must appear in the registry, populated by the
+// generated init() side effects. Adding or removing a generated type
+// requires updating this list.
+func TestRegistry_AllTenPhase1Registered(t *testing.T) {
+	t.Parallel()
+	want := []string{
+		"aws_cloudwatch_log_group",
+		"aws_dynamodb_table",
+		"aws_lambda_function",
+		"aws_secretsmanager_secret",
+		"aws_sqs_queue",
+		"google_compute_network",
+		"google_pubsub_subscription",
+		"google_pubsub_topic",
+		"google_secret_manager_secret",
+		"google_storage_bucket",
+	}
+	for _, t1 := range want {
+		_, _, ok := Lookup(t1)
+		assert.Truef(t, ok, "expected type %q to be registered", t1)
+	}
+}
+
 func TestRegisteredTypes_SortedAndStable(t *testing.T) {
 	const a = "_test_registry_aaa"
 	const b = "_test_registry_bbb"
