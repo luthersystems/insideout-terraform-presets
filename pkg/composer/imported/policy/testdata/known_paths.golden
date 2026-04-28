@@ -1,0 +1,226 @@
+aws_cloudwatch_log_group	arn	Identity		UIVisible	Never		
+aws_cloudwatch_log_group	kms_key_id	Wiring	Security	RileyVisible	RelationshipOnly		
+aws_cloudwatch_log_group	log_group_class	Tuning	Performance	RileyVisible	ChatSafe		MayReplace
+aws_cloudwatch_log_group	name	Identity		UIVisible	Never		
+aws_cloudwatch_log_group	retention_in_days	Tuning	Reliability	RileyVisible	ChatSafe		
+aws_cloudwatch_log_group	skip_destroy	Tuning	Reliability	RileyVisible	RequiresApproval		
+aws_cloudwatch_log_group	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_cloudwatch_log_group	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_dynamodb_table	arn	Identity		UIVisible	Never		
+aws_dynamodb_table	billing_mode	Tuning	Performance	RileyVisible	ChatSafe		
+aws_dynamodb_table	deletion_protection_enabled	Tuning	Reliability	RileyVisible	RequiresApproval		
+aws_dynamodb_table	hash_key	Wiring		UIVisible	Never		AlwaysReplace
+aws_dynamodb_table	id	Identity		RileyVisible	Never		
+aws_dynamodb_table	name	Identity		UIVisible	Never		
+aws_dynamodb_table	point_in_time_recovery.enabled	Tuning	Reliability	RileyVisible	ChatSafe		
+aws_dynamodb_table	range_key	Wiring		UIVisible	Never		AlwaysReplace
+aws_dynamodb_table	read_capacity	Tuning	Performance	RileyVisible	ChatSafe		
+aws_dynamodb_table	replica.kms_key_arn	Wiring	Security	RileyVisible	RelationshipOnly		
+aws_dynamodb_table	replica.region_name	Wiring	Reliability	RileyVisible	RelationshipOnly		
+aws_dynamodb_table	restore_source_table_arn	Wiring	Reliability	RileyVisible	RelationshipOnly		
+aws_dynamodb_table	server_side_encryption.enabled	Tuning	Security	RileyVisible	RequiresApproval		
+aws_dynamodb_table	server_side_encryption.kms_key_arn	Wiring	Security	RileyVisible	RelationshipOnly		
+aws_dynamodb_table	stream_arn	Identity		RileyVisible	Never		
+aws_dynamodb_table	stream_enabled	Tuning	Reliability	RileyVisible	ChatSafe		
+aws_dynamodb_table	stream_view_type	Tuning	Reliability	RileyVisible	ChatSafe		
+aws_dynamodb_table	table_class	Tuning	Performance	RileyVisible	ChatSafe		
+aws_dynamodb_table	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_dynamodb_table	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_dynamodb_table	timeouts	Tuning		Hidden	SystemOnly		
+aws_dynamodb_table	ttl.attribute_name	Tuning		RileyVisible	ChatSafe		
+aws_dynamodb_table	ttl.enabled	Tuning	Performance	RileyVisible	ChatSafe		
+aws_dynamodb_table	write_capacity	Tuning	Performance	RileyVisible	ChatSafe		
+aws_lambda_function	architectures	Tuning	Performance	RileyVisible	ChatSafe		MayReplace
+aws_lambda_function	arn	Identity		UIVisible	Never		
+aws_lambda_function	code_signing_config_arn	Wiring	Security	RileyVisible	RelationshipOnly		
+aws_lambda_function	dead_letter_config.target_arn	Wiring	Reliability	RileyVisible	RelationshipOnly		
+aws_lambda_function	environment.variables	Tuning	Security	Hidden	SystemOnly	Sensitive	
+aws_lambda_function	ephemeral_storage.size	Tuning	Performance	RileyVisible	ChatSafe		
+aws_lambda_function	file_system_config.arn	Wiring		RileyVisible	RelationshipOnly		
+aws_lambda_function	file_system_config.local_mount_path	Tuning		RileyVisible	ChatSafe		
+aws_lambda_function	function_name	Identity		UIVisible	Never		
+aws_lambda_function	handler	Tuning		RileyVisible	ChatSafe		
+aws_lambda_function	image_config.command	Tuning		RileyVisible	ChatSafe		
+aws_lambda_function	image_config.entry_point	Tuning		RileyVisible	ChatSafe		
+aws_lambda_function	image_config.working_directory	Tuning		RileyVisible	ChatSafe		
+aws_lambda_function	invoke_arn	Identity		RileyVisible	Never		
+aws_lambda_function	kms_key_arn	Wiring	Security	RileyVisible	RelationshipOnly		
+aws_lambda_function	layers	Wiring		RileyVisible	RelationshipOnly		
+aws_lambda_function	logging_config.application_log_level	Tuning		RileyVisible	ChatSafe		
+aws_lambda_function	logging_config.log_format	Tuning		RileyVisible	ChatSafe		
+aws_lambda_function	logging_config.log_group	Wiring	Reliability	RileyVisible	RelationshipOnly		
+aws_lambda_function	logging_config.system_log_level	Tuning		RileyVisible	ChatSafe		
+aws_lambda_function	memory_size	Tuning	Performance	RileyVisible	ChatSafe		
+aws_lambda_function	package_type	Tuning		UIVisible	Never		AlwaysReplace
+aws_lambda_function	publish	Tuning		RileyVisible	ChatSafe		
+aws_lambda_function	qualified_arn	Identity		RileyVisible	Never		
+aws_lambda_function	qualified_invoke_arn	Identity		RileyVisible	Never		
+aws_lambda_function	replacement_security_group_ids	Wiring	Security	RileyVisible	RelationshipOnly		
+aws_lambda_function	reserved_concurrent_executions	Tuning	Reliability	RileyVisible	ChatSafe		
+aws_lambda_function	role	Wiring	Security	UIVisible	RelationshipOnly		
+aws_lambda_function	runtime	Tuning		RileyVisible	ChatSafe		
+aws_lambda_function	s3_bucket	Wiring		RileyVisible	RelationshipOnly		
+aws_lambda_function	s3_key	Tuning		RileyVisible	ChatSafe		
+aws_lambda_function	s3_object_version	Tuning		RileyVisible	ChatSafe		
+aws_lambda_function	snap_start.apply_on	Tuning	Performance	RileyVisible	ChatSafe		
+aws_lambda_function	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_lambda_function	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_lambda_function	timeout	Tuning	Reliability	RileyVisible	ChatSafe		
+aws_lambda_function	timeouts	Tuning		Hidden	SystemOnly		
+aws_lambda_function	tracing_config.mode	Tuning		RileyVisible	ChatSafe		
+aws_lambda_function	version	Identity		RileyVisible	Never		
+aws_lambda_function	vpc_config.security_group_ids	Wiring	Security	RileyVisible	RelationshipOnly		
+aws_lambda_function	vpc_config.subnet_ids	Wiring	Reliability	RileyVisible	RelationshipOnly		
+aws_lambda_function	vpc_config.vpc_id	Wiring		RileyVisible	RelationshipOnly		
+aws_secretsmanager_secret	arn	Identity		UIVisible	Never		
+aws_secretsmanager_secret	description	Tuning		RileyVisible	ChatSafe		
+aws_secretsmanager_secret	kms_key_id	Wiring	Security	RileyVisible	RelationshipOnly		
+aws_secretsmanager_secret	name	Identity		UIVisible	Never		
+aws_secretsmanager_secret	policy	Tuning	Security	RileyVisible	RequiresApproval		
+aws_secretsmanager_secret	recovery_window_in_days	Tuning	Reliability	RileyVisible	RequiresApproval		
+aws_secretsmanager_secret	replica.kms_key_id	Wiring	Security	RileyVisible	RelationshipOnly		
+aws_secretsmanager_secret	replica.region	Wiring	Reliability	RileyVisible	RelationshipOnly		
+aws_secretsmanager_secret	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_secretsmanager_secret	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_sqs_queue	arn	Identity		UIVisible	Never		
+aws_sqs_queue	content_based_deduplication	Tuning		RileyVisible	ChatSafe		
+aws_sqs_queue	delay_seconds	Tuning		RileyVisible	ChatSafe		
+aws_sqs_queue	fifo_queue	Tuning		UIVisible	Never		AlwaysReplace
+aws_sqs_queue	kms_master_key_id	Wiring	Security	RileyVisible	RelationshipOnly		MayReplace
+aws_sqs_queue	max_message_size	Tuning		RileyVisible	ChatSafe		
+aws_sqs_queue	message_retention_seconds	Tuning	Reliability	RileyVisible	ChatSafe		
+aws_sqs_queue	name	Identity		UIVisible	Never		
+aws_sqs_queue	receive_wait_time_seconds	Tuning	Performance	RileyVisible	ChatSafe		
+aws_sqs_queue	redrive_policy.deadLetterTargetArn	Wiring	Reliability	RileyVisible	RelationshipOnly		
+aws_sqs_queue	redrive_policy.maxReceiveCount	Tuning	Reliability	RileyVisible	ChatSafe		
+aws_sqs_queue	sqs_managed_sse_enabled	Tuning	Security	RileyVisible	RequiresApproval		MayReplace
+aws_sqs_queue	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_sqs_queue	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_sqs_queue	visibility_timeout_seconds	Tuning	Reliability	RileyVisible	ChatSafe		
+google_compute_network	auto_create_subnetworks	Tuning	Reliability	RileyVisible	RequiresApproval		MayReplace
+google_compute_network	delete_default_routes_on_create	Tuning	Security	RileyVisible	Never		AlwaysReplace
+google_compute_network	description	Tuning		RileyVisible	ChatSafe		
+google_compute_network	enable_ula_internal_ipv6	Tuning	Performance	RileyVisible	ChatSafe		
+google_compute_network	gateway_ipv4	Identity		RileyVisible	Never		
+google_compute_network	id	Identity		RileyVisible	Never		
+google_compute_network	mtu	Tuning	Performance	RileyVisible	ChatSafe		
+google_compute_network	name	Identity		UIVisible	Never		
+google_compute_network	network_firewall_policy_enforcement_order	Tuning	Security	RileyVisible	RequiresApproval		
+google_compute_network	numeric_id	Identity		RileyVisible	Never		
+google_compute_network	project	Identity		UIVisible	Never		AlwaysReplace
+google_compute_network	routing_mode	Tuning	Performance	RileyVisible	ChatSafe		
+google_compute_network	self_link	Identity		RileyVisible	Never		
+google_compute_network	timeouts	Tuning		Hidden	SystemOnly		
+google_pubsub_subscription	ack_deadline_seconds	Tuning	Reliability	RileyVisible	ChatSafe		
+google_pubsub_subscription	bigquery_config.drop_unknown_fields	Tuning		RileyVisible	ChatSafe		
+google_pubsub_subscription	bigquery_config.service_account_email	Wiring	Security	RileyVisible	RelationshipOnly		
+google_pubsub_subscription	bigquery_config.table	Wiring		RileyVisible	RelationshipOnly		
+google_pubsub_subscription	bigquery_config.use_table_schema	Tuning		RileyVisible	ChatSafe		
+google_pubsub_subscription	bigquery_config.use_topic_schema	Tuning		RileyVisible	ChatSafe		
+google_pubsub_subscription	bigquery_config.write_metadata	Tuning		RileyVisible	ChatSafe		
+google_pubsub_subscription	cloud_storage_config.avro_config.use_topic_schema	Tuning		RileyVisible	ChatSafe		
+google_pubsub_subscription	cloud_storage_config.avro_config.write_metadata	Tuning		RileyVisible	ChatSafe		
+google_pubsub_subscription	cloud_storage_config.bucket	Wiring		RileyVisible	RelationshipOnly		
+google_pubsub_subscription	cloud_storage_config.filename_datetime_format	Tuning		RileyVisible	ChatSafe		
+google_pubsub_subscription	cloud_storage_config.filename_prefix	Tuning		RileyVisible	ChatSafe		
+google_pubsub_subscription	cloud_storage_config.filename_suffix	Tuning		RileyVisible	ChatSafe		
+google_pubsub_subscription	cloud_storage_config.max_bytes	Tuning	Performance	RileyVisible	ChatSafe		
+google_pubsub_subscription	cloud_storage_config.max_duration	Tuning	Performance	RileyVisible	ChatSafe		
+google_pubsub_subscription	cloud_storage_config.max_messages	Tuning	Performance	RileyVisible	ChatSafe		
+google_pubsub_subscription	cloud_storage_config.service_account_email	Wiring	Security	RileyVisible	RelationshipOnly		
+google_pubsub_subscription	dead_letter_policy.dead_letter_topic	Wiring	Reliability	RileyVisible	RelationshipOnly		
+google_pubsub_subscription	dead_letter_policy.max_delivery_attempts	Tuning	Reliability	RileyVisible	ChatSafe		
+google_pubsub_subscription	effective_labels	Tuning		Hidden	SystemOnly	Redacted	
+google_pubsub_subscription	enable_exactly_once_delivery	Tuning	Reliability	RileyVisible	ChatSafe		
+google_pubsub_subscription	enable_message_ordering	Tuning	Reliability	RileyVisible	Never		AlwaysReplace
+google_pubsub_subscription	expiration_policy.ttl	Tuning	Reliability	RileyVisible	ChatSafe		
+google_pubsub_subscription	filter	Tuning		RileyVisible	Never		AlwaysReplace
+google_pubsub_subscription	id	Identity		RileyVisible	Never		
+google_pubsub_subscription	labels	Tuning		Hidden	SystemOnly	Redacted	
+google_pubsub_subscription	message_retention_duration	Tuning	Reliability	RileyVisible	ChatSafe		
+google_pubsub_subscription	name	Identity		UIVisible	Never		
+google_pubsub_subscription	project	Identity		UIVisible	Never		AlwaysReplace
+google_pubsub_subscription	push_config.attributes	Tuning	Security	RileyVisible	RequiresApproval	Redacted	
+google_pubsub_subscription	push_config.oidc_token.audience	Tuning	Security	RileyVisible	RequiresApproval	Redacted	
+google_pubsub_subscription	push_config.oidc_token.service_account_email	Wiring	Security	RileyVisible	RelationshipOnly		
+google_pubsub_subscription	push_config.push_endpoint	Tuning	Security	RileyVisible	RequiresApproval	Redacted	
+google_pubsub_subscription	retain_acked_messages	Tuning	Reliability	RileyVisible	ChatSafe		
+google_pubsub_subscription	retry_policy.maximum_backoff	Tuning	Reliability	RileyVisible	ChatSafe		
+google_pubsub_subscription	retry_policy.minimum_backoff	Tuning	Reliability	RileyVisible	ChatSafe		
+google_pubsub_subscription	terraform_labels	Tuning		Hidden	SystemOnly	Redacted	
+google_pubsub_subscription	timeouts	Tuning		Hidden	SystemOnly		
+google_pubsub_subscription	topic	Wiring	Reliability	UIVisible	RelationshipOnly		
+google_pubsub_topic	effective_labels	Tuning		Hidden	SystemOnly	Redacted	
+google_pubsub_topic	id	Identity		RileyVisible	Never		
+google_pubsub_topic	ingestion_data_source_settings.aws_kinesis.aws_role_arn	Wiring	Security	RileyVisible	RelationshipOnly		
+google_pubsub_topic	ingestion_data_source_settings.aws_kinesis.consumer_arn	Wiring		RileyVisible	RelationshipOnly		
+google_pubsub_topic	ingestion_data_source_settings.aws_kinesis.gcp_service_account	Wiring	Security	RileyVisible	RelationshipOnly		
+google_pubsub_topic	ingestion_data_source_settings.aws_kinesis.stream_arn	Wiring		RileyVisible	RelationshipOnly		
+google_pubsub_topic	ingestion_data_source_settings.cloud_storage.bucket	Wiring		RileyVisible	RelationshipOnly		
+google_pubsub_topic	ingestion_data_source_settings.cloud_storage.match_glob	Tuning		RileyVisible	ChatSafe		
+google_pubsub_topic	ingestion_data_source_settings.cloud_storage.minimum_object_create_time	Tuning		RileyVisible	ChatSafe		
+google_pubsub_topic	ingestion_data_source_settings.cloud_storage.text_format.delimiter	Tuning		RileyVisible	ChatSafe		
+google_pubsub_topic	ingestion_data_source_settings.platform_logs_settings.severity	Tuning	Reliability	RileyVisible	ChatSafe		
+google_pubsub_topic	kms_key_name	Wiring	Security	RileyVisible	RelationshipOnly		
+google_pubsub_topic	labels	Tuning		Hidden	SystemOnly	Redacted	
+google_pubsub_topic	message_retention_duration	Tuning	Reliability	RileyVisible	ChatSafe		
+google_pubsub_topic	message_storage_policy.allowed_persistence_regions	Tuning	Reliability	RileyVisible	RequiresApproval		
+google_pubsub_topic	name	Identity		UIVisible	Never		
+google_pubsub_topic	project	Identity		UIVisible	Never		AlwaysReplace
+google_pubsub_topic	schema_settings.encoding	Tuning		RileyVisible	ChatSafe		
+google_pubsub_topic	schema_settings.schema	Wiring		RileyVisible	RelationshipOnly		
+google_pubsub_topic	terraform_labels	Tuning		Hidden	SystemOnly	Redacted	
+google_pubsub_topic	timeouts	Tuning		Hidden	SystemOnly		
+google_secret_manager_secret	annotations	Tuning		Hidden	SystemOnly	Redacted	
+google_secret_manager_secret	effective_annotations	Tuning		Hidden	SystemOnly	Redacted	
+google_secret_manager_secret	effective_labels	Tuning		Hidden	SystemOnly	Redacted	
+google_secret_manager_secret	expire_time	Tuning		RileyVisible	ChatSafe		
+google_secret_manager_secret	id	Identity		RileyVisible	Never		
+google_secret_manager_secret	labels	Tuning		Hidden	SystemOnly	Redacted	
+google_secret_manager_secret	name	Identity		UIVisible	Never		
+google_secret_manager_secret	project	Identity		UIVisible	Never		AlwaysReplace
+google_secret_manager_secret	replication.auto.customer_managed_encryption.kms_key_name	Wiring	Security	RileyVisible	RelationshipOnly		
+google_secret_manager_secret	replication.user_managed.replicas.customer_managed_encryption.kms_key_name	Wiring	Security	RileyVisible	RelationshipOnly		
+google_secret_manager_secret	replication.user_managed.replicas.location	Wiring	Reliability	RileyVisible	RelationshipOnly		
+google_secret_manager_secret	rotation.next_rotation_time	Tuning	Security	RileyVisible	ChatSafe		
+google_secret_manager_secret	rotation.rotation_period	Tuning	Security	RileyVisible	ChatSafe		
+google_secret_manager_secret	secret_id	Identity		UIVisible	Never		
+google_secret_manager_secret	terraform_labels	Tuning		Hidden	SystemOnly	Redacted	
+google_secret_manager_secret	timeouts	Tuning		Hidden	SystemOnly		
+google_secret_manager_secret	topics.name	Wiring	Reliability	RileyVisible	RelationshipOnly		
+google_secret_manager_secret	ttl	Tuning	Reliability	RileyVisible	ChatSafe		
+google_secret_manager_secret	version_destroy_ttl	Tuning	Reliability	RileyVisible	ChatSafe		
+google_storage_bucket	autoclass.enabled	Tuning	Performance	RileyVisible	ChatSafe		
+google_storage_bucket	cors.max_age_seconds	Tuning		RileyVisible	ChatSafe		
+google_storage_bucket	cors.method	Tuning		RileyVisible	ChatSafe		
+google_storage_bucket	cors.origin	Tuning	Security	RileyVisible	ChatSafe		
+google_storage_bucket	cors.response_header	Tuning		RileyVisible	ChatSafe		
+google_storage_bucket	effective_labels	Tuning		Hidden	SystemOnly	Redacted	
+google_storage_bucket	encryption.default_kms_key_name	Wiring	Security	RileyVisible	RelationshipOnly		
+google_storage_bucket	force_destroy	Tuning	Reliability	RileyVisible	RequiresApproval		
+google_storage_bucket	id	Identity		RileyVisible	Never		
+google_storage_bucket	labels	Tuning		Hidden	SystemOnly	Redacted	
+google_storage_bucket	lifecycle_rule.action.storage_class	Tuning	Performance	RileyVisible	ChatSafe		
+google_storage_bucket	lifecycle_rule.action.type	Tuning	Reliability	RileyVisible	ChatSafe		
+google_storage_bucket	lifecycle_rule.condition.age	Tuning		RileyVisible	ChatSafe		
+google_storage_bucket	lifecycle_rule.condition.with_state	Tuning		RileyVisible	ChatSafe		
+google_storage_bucket	location	Identity		UIVisible	Never		AlwaysReplace
+google_storage_bucket	logging.log_bucket	Wiring	Reliability	RileyVisible	RelationshipOnly		
+google_storage_bucket	logging.log_object_prefix	Tuning		RileyVisible	ChatSafe		
+google_storage_bucket	name	Identity		UIVisible	Never		
+google_storage_bucket	project	Identity		UIVisible	Never		AlwaysReplace
+google_storage_bucket	public_access_prevention	Tuning	Security	RileyVisible	RequiresApproval		MayReplace
+google_storage_bucket	requester_pays	Tuning		RileyVisible	ChatSafe		
+google_storage_bucket	retention_policy.is_locked	Tuning	Reliability	RileyVisible	RequiresApproval		MayReplace
+google_storage_bucket	retention_policy.retention_period	Tuning	Reliability	RileyVisible	RequiresApproval		
+google_storage_bucket	rpo	Tuning	Reliability	RileyVisible	ChatSafe		
+google_storage_bucket	self_link	Identity		RileyVisible	Never		
+google_storage_bucket	soft_delete_policy.retention_duration_seconds	Tuning	Reliability	RileyVisible	ChatSafe		
+google_storage_bucket	storage_class	Tuning	Performance	RileyVisible	ChatSafe		
+google_storage_bucket	terraform_labels	Tuning		Hidden	SystemOnly	Redacted	
+google_storage_bucket	timeouts	Tuning		Hidden	SystemOnly		
+google_storage_bucket	uniform_bucket_level_access	Tuning	Security	RileyVisible	RequiresApproval		
+google_storage_bucket	url	Identity		RileyVisible	Never		
+google_storage_bucket	versioning.enabled	Tuning	Reliability	RileyVisible	ChatSafe		
+google_storage_bucket	website.main_page_suffix	Tuning		RileyVisible	ChatSafe		
+google_storage_bucket	website.not_found_page	Tuning		RileyVisible	ChatSafe		
