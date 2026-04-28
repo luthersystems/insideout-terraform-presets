@@ -105,6 +105,12 @@ func AllowedValues(field string) []string {
 // Issues are sorted by (Field, Code, Reason) and deduped on the same key
 // triple so the same finding doesn't surface twice when both Validate and
 // the post-composition layer flag it.
+//
+// The variadic opts argument is a forward-compatible seam for validators
+// that need ComposeStackOpts fields not derivable from comps/cfg (currently
+// just GCPProjectID — see ValidateOpts and issue #157). Pass at most one
+// ComposeStackOpts; additional values are ignored. Callers that don't have
+// opts can omit the argument to preserve the historical behavior.
 func ValidateAll(
 	comps *Components,
 	cfg *Config,
@@ -112,6 +118,7 @@ func ValidateAll(
 	files Files,
 	presetPaths map[string]string,
 	moduleToVals map[string]map[string]any,
+	opts ...ComposeStackOpts,
 ) []ValidationIssue {
 	var all []ValidationIssue
 	all = append(all, Validate(comps, cfg)...)
@@ -121,6 +128,9 @@ func ValidateAll(
 	all = append(all, ValidateProviderConstraints(presetPaths)...)
 	all = append(all, ValidateSensitivePropagation(blocks, presetPaths)...)
 	all = append(all, ValidateComposedRoot(files)...)
+	if len(opts) > 0 {
+		all = append(all, ValidateOpts(opts[0])...)
+	}
 	return dedupeAndSortIssues(all)
 }
 

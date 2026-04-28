@@ -17,7 +17,7 @@ resource "random_password" "user_password" {
 resource "google_compute_global_address" "private_ip_address" {
   count         = var.enable_private_ip && var.network_self_link != null ? 1 : 0
   name          = "${local.instance_name}-private-ip"
-  project       = var.project
+  project       = var.project_id
   purpose       = "VPC_PEERING"
   address_type  = "INTERNAL"
   prefix_length = 16
@@ -45,7 +45,7 @@ module "sql_db" {
 
   count = local.is_postgres ? 1 : 0
 
-  project_id       = var.project
+  project_id       = var.project_id
   name             = local.instance_name
   database_version = var.database_version
   region           = var.region
@@ -112,7 +112,7 @@ module "sql_db_mysql" {
 
   count = !local.is_postgres ? 1 : 0
 
-  project_id       = var.project
+  project_id       = var.project_id
   name             = local.instance_name
   database_version = var.database_version
   region           = var.region

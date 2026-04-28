@@ -9,7 +9,7 @@ module "kms" {
   source  = "terraform-google-modules/kms/google"
   version = "~> 3.0"
 
-  project_id = var.project
+  project_id = var.project_id
   location   = var.region
   keyring    = local.keyring_name
 

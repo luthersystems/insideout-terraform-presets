@@ -16,21 +16,21 @@ terraform {
 
 # Enable API Gateway API
 resource "google_project_service" "api_gateway" {
-  project = var.project
+  project = var.project_id
   service = "apigateway.googleapis.com"
 
   disable_on_destroy = false
 }
 
 resource "google_project_service" "service_management" {
-  project = var.project
+  project = var.project_id
   service = "servicemanagement.googleapis.com"
 
   disable_on_destroy = false
 }
 
 resource "google_project_service" "service_control" {
-  project = var.project
+  project = var.project_id
   service = "servicecontrol.googleapis.com"
 
   disable_on_destroy = false
@@ -39,7 +39,7 @@ resource "google_project_service" "service_control" {
 # API definition
 resource "google_api_gateway_api" "this" {
   provider = google-beta
-  project  = var.project
+  project  = var.project_id
   api_id   = "${var.project}-api"
 
   labels = {
@@ -57,7 +57,7 @@ resource "google_api_gateway_api" "this" {
 # API Config (OpenAPI spec)
 resource "google_api_gateway_api_config" "this" {
   provider      = google-beta
-  project       = var.project
+  project       = var.project_id
   api           = google_api_gateway_api.this.api_id
   api_config_id = "${var.project}-api-config-${formatdate("YYYYMMDDhhmmss", timestamp())}"
 
@@ -87,7 +87,7 @@ resource "google_api_gateway_api_config" "this" {
 # Gateway deployment
 resource "google_api_gateway_gateway" "this" {
   provider   = google-beta
-  project    = var.project
+  project    = var.project_id
   region     = var.region
   api_config = google_api_gateway_api_config.this.id
   gateway_id = "${var.project}-gateway"

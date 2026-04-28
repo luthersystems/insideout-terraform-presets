@@ -12,7 +12,7 @@ terraform {
 
 # Enable Identity Platform API
 resource "google_project_service" "identity_platform" {
-  project = var.project
+  project = var.project_id
   service = "identitytoolkit.googleapis.com"
 
   disable_on_destroy = false
@@ -20,7 +20,7 @@ resource "google_project_service" "identity_platform" {
 
 # Identity Platform configuration
 resource "google_identity_platform_config" "this" {
-  project = var.project
+  project = var.project_id
 
   sign_in {
     allow_duplicate_emails = var.allow_duplicate_emails
@@ -53,7 +53,7 @@ resource "google_identity_platform_config" "this" {
 # OAuth client for web applications
 resource "google_identity_platform_default_supported_idp_config" "google" {
   count   = var.enable_google_signin ? 1 : 0
-  project = var.project
+  project = var.project_id
 
   idp_id        = "google.com"
   client_id     = var.google_client_id

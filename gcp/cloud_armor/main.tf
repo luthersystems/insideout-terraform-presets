@@ -17,7 +17,7 @@ locals {
 
 resource "google_compute_security_policy" "policy" {
   name        = local.policy_name
-  project     = var.project
+  project     = var.project_id
   description = var.description
 
   # Default rule — priority 2147483647 is required by the API and

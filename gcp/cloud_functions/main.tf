@@ -31,7 +31,7 @@ resource "google_storage_bucket" "source" {
   count = var.source_archive_bucket == "" ? 1 : 0
 
   name                        = local.bucket_name
-  project                     = var.project
+  project                     = var.project_id
   location                    = var.region
   uniform_bucket_level_access = true
   force_destroy               = true
@@ -51,7 +51,7 @@ resource "google_storage_bucket_object" "source" {
 resource "google_cloudfunctions2_function" "this" {
   name     = local.function_name
   location = var.region
-  project  = var.project
+  project  = var.project_id
 
   build_config {
     runtime     = var.runtime
@@ -91,7 +91,7 @@ resource "google_cloudfunctions2_function" "this" {
 resource "google_cloudfunctions2_function_iam_member" "public" {
   count = var.allow_unauthenticated ? 1 : 0
 
-  project        = var.project
+  project        = var.project_id
   location       = var.region
   cloud_function = google_cloudfunctions2_function.this.name
   role           = "roles/cloudfunctions.invoker"

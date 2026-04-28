@@ -12,7 +12,7 @@ data "google_compute_image" "this" {
 
 resource "google_compute_instance" "this" {
   name         = local.instance_name
-  project      = var.project
+  project      = var.project_id
   zone         = var.zone
   machine_type = var.machine_type
 

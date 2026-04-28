@@ -37,6 +37,6 @@ output "service_account" {
 
 output "identity_namespace" {
   description = "Workload Identity namespace"
-  value       = var.enable_workload_identity ? "${var.project}.svc.id.goog" : null
+  value       = var.enable_workload_identity ? "${var.project_id}.svc.id.goog" : null
 }
 

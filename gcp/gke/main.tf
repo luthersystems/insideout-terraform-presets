@@ -9,7 +9,7 @@ module "gke" {
   source  = "terraform-google-modules/kubernetes-engine/google//modules/private-cluster"
   version = "~> 33.0"
 
-  project_id = var.project
+  project_id = var.project_id
   name       = local.cluster_name
   region     = var.region
   regional   = var.regional
@@ -30,8 +30,10 @@ module "gke" {
 
   master_authorized_networks = var.master_authorized_networks
 
-  # Workload Identity
-  identity_namespace = var.enable_workload_identity ? "${var.project}.svc.id.goog" : null
+  # Workload Identity pool name MUST be the real GCP project ID — that's what
+  # the pool resource at <project_id>.svc.id.goog actually is. Using the
+  # naming prefix here would silently break Workload Identity bindings.
+  identity_namespace = var.enable_workload_identity ? "${var.project_id}.svc.id.goog" : null
 
   # Remove default node pool
   remove_default_node_pool = true

@@ -26,6 +26,10 @@ variable "gcp_cloud_run_project" {
   type = string
 }
 
+variable "gcp_cloud_run_project_id" {
+  type = string
+}
+
 variable "gcp_cloud_run_region" {
   type = string
 }
@@ -35,6 +39,10 @@ variable "gcp_cloudsql_availability_type" {
 }
 
 variable "gcp_cloudsql_project" {
+  type = string
+}
+
+variable "gcp_cloudsql_project_id" {
   type = string
 }
 
@@ -54,6 +62,10 @@ variable "gcp_gcs_project" {
   type = string
 }
 
+variable "gcp_gcs_project_id" {
+  type = string
+}
+
 variable "gcp_gcs_region" {
   type = string
 }
@@ -67,6 +79,10 @@ variable "gcp_gcs_versioning_enabled" {
 }
 
 variable "gcp_vpc_project" {
+  type = string
+}
+
+variable "gcp_vpc_project_id" {
   type = string
 }
 

@@ -11,6 +11,7 @@ run "empty_backends_uses_redirect_placeholder" {
 
   variables {
     project           = "test"
+    project_id        = "test-project"
     network_self_link = "projects/test/global/networks/n"
     subnet_self_link  = "projects/test/regions/us-central1/subnetworks/s"
   }
@@ -41,6 +42,7 @@ run "with_backends_uses_default_service" {
 
   variables {
     project           = "test"
+    project_id        = "test-project"
     network_self_link = "projects/test/global/networks/n"
     subnet_self_link  = "projects/test/regions/us-central1/subnetworks/s"
     backends = [

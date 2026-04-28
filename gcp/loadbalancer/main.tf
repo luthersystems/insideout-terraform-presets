@@ -10,7 +10,7 @@ resource "google_compute_health_check" "this" {
   for_each = { for b in var.backends : b.name => b }
 
   name    = "${local.name_prefix}-${each.key}-hc"
-  project = var.project
+  project = var.project_id
 
   http_health_check {
     port         = each.value.port
@@ -28,7 +28,7 @@ resource "google_compute_backend_service" "this" {
   for_each = { for b in var.backends : b.name => b }
 
   name        = "${local.name_prefix}-${each.key}"
-  project     = var.project
+  project     = var.project_id
   protocol    = each.value.protocol
   port_name   = each.value.port_name
   timeout_sec = each.value.timeout_sec
@@ -84,7 +84,7 @@ resource "google_compute_backend_service" "this" {
 # URL map
 resource "google_compute_url_map" "this" {
   name            = "${local.name_prefix}-urlmap"
-  project         = var.project
+  project         = var.project_id
   default_service = length(var.backends) > 0 ? google_compute_backend_service.this[var.default_backend != "" ? var.default_backend : var.backends[0].name].id : null
 
   # GCP requires one of default_service / default_url_redirect on every URL map.
@@ -127,7 +127,7 @@ resource "google_compute_managed_ssl_certificate" "this" {
   count = length(var.managed_ssl_domains) > 0 ? 1 : 0
 
   name    = "${local.name_prefix}-cert"
-  project = var.project
+  project = var.project_id
 
   managed {
     domains = var.managed_ssl_domains
@@ -139,7 +139,7 @@ resource "google_compute_target_https_proxy" "this" {
   count = var.enable_ssl ? 1 : 0
 
   name    = "${local.name_prefix}-https-proxy"
-  project = var.project
+  project = var.project_id
   url_map = google_compute_url_map.this.id
 
   ssl_certificates = length(var.ssl_certificates) > 0 ? var.ssl_certificates : (
@@ -150,14 +150,14 @@ resource "google_compute_target_https_proxy" "this" {
 # HTTP proxy (for redirect or direct access)
 resource "google_compute_target_http_proxy" "this" {
   name    = "${local.name_prefix}-http-proxy"
-  project = var.project
+  project = var.project_id
   url_map = google_compute_url_map.this.id
 }
 
 # Global static IP
 resource "google_compute_global_address" "this" {
   name    = "${local.name_prefix}-ip"
-  project = var.project
+  project = var.project_id
 
   labels = merge(
     {
@@ -172,7 +172,7 @@ resource "google_compute_global_forwarding_rule" "https" {
   count = var.enable_ssl ? 1 : 0
 
   name       = "${local.name_prefix}-https"
-  project    = var.project
+  project    = var.project_id
   target     = google_compute_target_https_proxy.this[0].id
   port_range = "443"
   ip_address = google_compute_global_address.this.address
@@ -183,7 +183,7 @@ resource "google_compute_global_forwarding_rule" "https" {
 # HTTP forwarding rule
 resource "google_compute_global_forwarding_rule" "http" {
   name       = "${local.name_prefix}-http"
-  project    = var.project
+  project    = var.project_id
   target     = google_compute_target_http_proxy.this.id
   port_range = "80"
   ip_address = google_compute_global_address.this.address

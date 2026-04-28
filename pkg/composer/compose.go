@@ -83,14 +83,44 @@ func rebasePresetFiles(files map[string][]byte, moduleDir string) Files {
 
 func nsKey(comp ComponentKey, name string) string { return fmt.Sprintf("%s_%s", comp, name) }
 
+// maybeInjectGCPProjectID seeds vals["project_id"] for GCP composes only.
+// Skipped for AWS, and skipped on empty so the dedicated validator
+// (gcp_project_id_required) fires instead of silently flowing "" through to
+// apply time. Modules that don't declare var.project_id (cloud_build /
+// cloud_monitoring / cloud_cdn, plus every AWS module) have it filtered out
+// by the namespacing loop in the caller. See issue #157.
+func maybeInjectGCPProjectID(cloud, gcpProjectID string, vals map[string]any) {
+	if cloud == "gcp" && strings.TrimSpace(gcpProjectID) != "" {
+		vals["project_id"] = gcpProjectID
+	}
+}
+
 /* ---------- Single ---------- */
 
 type ComposeSingleOpts struct {
-	Cloud           string // "aws" or "gcp" (defaults to "aws" if empty)
-	Key             ComponentKey
-	Comps           *Components
-	Cfg             *Config
-	Project, Region string
+	Cloud string // "aws" or "gcp" (defaults to "aws" if empty)
+	Key   ComponentKey
+	Comps *Components
+	Cfg   *Config
+
+	// Project is the stack-wide naming/label prefix. For AWS it seeds the
+	// resource name interpolations and the default_tags Project tag. For
+	// GCP it seeds the per-resource label value (the prefix reliable3's
+	// inspector groups by) and module name interpolations. It is NOT a
+	// GCP project ID — values like "io-<sessionhash>" are legal here and
+	// must not be passed to a google_*.project = ... argument. See
+	// GCPProjectID for the real GCP project ID.
+	Project string
+
+	// Region is the cloud region (e.g. "us-east-1", "us-central1").
+	Region string
+
+	// GCPProjectID is the real GCP project ID (e.g. "my-prod-12345") that
+	// becomes var.project_id on every GCP module. Required when
+	// Cloud == "gcp"; ignored for AWS. Distinct from Project, which is the
+	// stack naming/label prefix and is allowed to be a session-derived value
+	// like "io-abcdef" that would not satisfy GCP project ID rules.
+	GCPProjectID string
 
 	// StrictValidate, when true, escalates any pre-plan validator issue into
 	// an aggregated error from ComposeSingleWithIssues. Default false: issues
@@ -185,6 +215,7 @@ func (c *Client) composeSingleImpl(opts ComposeSingleOpts) (*ComposeSingleResult
 	if err != nil {
 		return nil, err
 	}
+	maybeInjectGCPProjectID(cloud, opts.GCPProjectID, vals)
 
 	// Resolve implicit dependencies so DefaultWiring can connect modules (e.g. Redis -> VPC)
 	expanded := ResolveDependencies([]ComponentKey{opts.Key})
@@ -225,6 +256,7 @@ func (c *Client) composeSingleImpl(opts ComposeSingleOpts) (*ComposeSingleResult
 	}
 
 	issues = append(issues, validateRequiredIssues(vars, wired, vals, string(opts.Key))...)
+	issues = append(issues, ValidateGCPProjectID(cloud, opts.GCPProjectID)...)
 
 	var tfvars []VarEntry
 	for _, v := range vars {
@@ -270,10 +302,28 @@ func (c *Client) composeSingleImpl(opts ComposeSingleOpts) (*ComposeSingleResult
 
 type ComposeStackOpts struct {
 	Cloud        string // "aws" or "gcp" (defaults to "aws" if empty)
-	SelectedKeys    []ComponentKey
-	Comps           *Components
-	Cfg             *Config
-	Project, Region string
+	SelectedKeys []ComponentKey
+	Comps        *Components
+	Cfg          *Config
+
+	// Project is the stack-wide naming/label prefix. For AWS it seeds the
+	// resource name interpolations and the default_tags Project tag. For
+	// GCP it seeds the per-resource label value (the prefix reliable3's
+	// inspector groups by) and module name interpolations. It is NOT a
+	// GCP project ID — values like "io-<sessionhash>" are legal here and
+	// must not be passed to a google_*.project = ... argument. See
+	// GCPProjectID for the real GCP project ID.
+	Project string
+
+	// Region is the cloud region (e.g. "us-east-1", "us-central1").
+	Region string
+
+	// GCPProjectID is the real GCP project ID (e.g. "my-prod-12345") that
+	// becomes var.project_id on every GCP module. Required when
+	// Cloud == "gcp"; ignored for AWS. Distinct from Project, which is the
+	// stack naming/label prefix and is allowed to be a session-derived value
+	// like "io-abcdef" that would not satisfy GCP project ID rules.
+	GCPProjectID string
 
 	// StrictValidate, when true, escalates any pre-plan validator issue into
 	// an aggregated error from ComposeStackWithIssues. Default false: issues
@@ -427,6 +477,7 @@ func (c *Client) composeStackImpl(opts ComposeStackOpts) (*ComposeStackResult, e
 		if err != nil {
 			return nil, err
 		}
+		maybeInjectGCPProjectID(cloud, opts.GCPProjectID, vals)
 		wired := DefaultWiring(selected, k, opts.Comps)
 
 		inputs := map[string]any{}
@@ -513,6 +564,7 @@ func (c *Client) composeStackImpl(opts ComposeStackOpts) (*ComposeStackResult, e
 	issues = append(issues, ValidateProviderConstraints(presetPaths)...)
 	issues = append(issues, ValidateSensitivePropagation(blocks, presetPaths)...)
 	issues = append(issues, ValidateComposedRoot(files)...)
+	issues = append(issues, ValidateGCPProjectID(cloud, opts.GCPProjectID)...)
 
 	return &ComposeStackResult{Files: files, Issues: issues}, nil
 }
