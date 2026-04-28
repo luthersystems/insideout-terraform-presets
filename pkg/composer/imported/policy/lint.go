@@ -23,13 +23,16 @@ func (i Issue) String() string {
 // Lint codes. Each links to a docs/managed-resource-tiers.md decision so
 // reviewers can trace policy back to spec.
 const (
-	CodeUnknownPath               = "unknown_path"               // path doesn't resolve in Layer 1 or projection
-	CodeRoleRequired              = "role_required"              // Role is the zero value (decision #43)
-	CodeAxisInvalidValue          = "axis_invalid_value"         // any axis fails Valid()
-	CodeSensitiveVisibleNoReason  = "sensitive_visible_no_rationale" // visible+sensitive needs rationale (#36)
-	CodeWiringChatEditable        = "wiring_chat_editable"       // Wiring fields can't be ChatSafe (#33)
-	CodeTagFieldNotSystemOnly     = "tag_field_not_system_only"  // tags/labels/annotations must be SystemOnly
-	CodeIdentityEditable          = "identity_editable"          // identity fields must be Edit=Never
+	CodeUnknownPath                   = "unknown_path"                   // path doesn't resolve in Layer 1 or projection
+	CodeRoleRequired                  = "role_required"                  // Role is the zero value (decision #43)
+	CodeAxisInvalidValue              = "axis_invalid_value"             // any axis fails Valid()
+	CodeSensitiveVisibleNoRationale   = "sensitive_visible_no_rationale" // visible+sensitive needs rationale (#36)
+	CodeWiringChatEditable            = "wiring_chat_editable"           // Wiring fields can't be ChatSafe (#33)
+	CodeTagFieldNotSystemOnly         = "tag_field_not_system_only"      // tags/labels/annotations must be SystemOnly
+	CodeIdentityEditable              = "identity_editable"              // top-level identity attrs must be Edit=Never
+	CodeHiddenChatEditable            = "hidden_chat_editable"           // Riley can't edit what it can't see
+	CodeSensitiveChatEditable         = "sensitive_chat_editable"        // Sensitive values must not flow through chat
+	CodeIdentitySensitive             = "identity_sensitive"             // Identity fields are not sensitive values
 )
 
 // tagAttrSuffixes lists Terraform attribute names that are tag- or
@@ -49,24 +52,28 @@ var tagAttrSuffixes = []string{
 // Matched against the leaf segment of the path (the part after the
 // last dot, with brackets stripped).
 var identityAttrLeaves = map[string]struct{}{
-	"arn":                   {},
-	"id":                    {},
-	"name":                  {},
-	"name_prefix":           {},
-	"self_link":              {}, //nolint:gofmt
-	"url":                   {},
-	"numeric_id":            {},
-	"qualified_arn":         {},
-	"invoke_arn":            {},
-	"qualified_invoke_arn":  {},
-	"stream_arn":            {},
-	"function_name":         {},
-	"secret_id":             {},
+	"arn":                  {},
+	"id":                   {},
+	"name":                 {},
+	"name_prefix":          {},
+	"self_link":            {},
+	"url":                  {},
+	"numeric_id":           {},
+	"qualified_arn":        {},
+	"invoke_arn":           {},
+	"qualified_invoke_arn": {},
+	"stream_arn":           {},
+	"function_name":        {},
+	"secret_id":            {},
 }
 
 // Lint runs all checks against the policy registered for tfType.
-// Returns issues sorted by Path. An unregistered tfType yields a single
-// issue with the tfType-level CodeUnknownPath code.
+// Returns issues sorted by Path. An unregistered tfType yields a
+// single issue with the tfType-level CodeUnknownPath code.
+//
+// Lint is a thin wrapper over LintMap that performs the registry
+// lookup; the rule engine itself lives in LintMap so tests can drive
+// it with synthetic maps against real Layer 1 tfTypes.
 func Lint(tfType string) []Issue {
 	m, ok := Lookup(tfType)
 	if !ok {
@@ -76,6 +83,16 @@ func Lint(tfType string) []Issue {
 			Message: "no policy map registered",
 		}}
 	}
+	return LintMap(tfType, m)
+}
+
+// LintMap runs the rule engine against an arbitrary policy map
+// without consulting the registry. tfType is still required because
+// path resolution walks the Layer 1 generated struct registered for
+// that tfType in pkg/composer/imported/generated.
+//
+// Issues are returned sorted by (Path, Code) for stable diffs.
+func LintMap(tfType string, m Map) []Issue {
 	var issues []Issue
 	for path, fp := range m {
 		issues = append(issues, lintEntry(tfType, path, fp)...)
@@ -141,7 +158,7 @@ func lintEntry(tfType, path string, fp FieldPolicy) []Issue {
 	if fp.Sensitivity == SensitivitySensitive &&
 		fp.Visibility != VisibilityHidden &&
 		strings.TrimSpace(fp.Rationale) == "" {
-		add(CodeSensitiveVisibleNoReason,
+		add(CodeSensitiveVisibleNoRationale,
 			"Sensitivity=Sensitive with non-Hidden Visibility requires Rationale (decision #36)")
 	}
 
@@ -149,6 +166,26 @@ func lintEntry(tfType, path string, fp FieldPolicy) []Issue {
 	if fp.Role == RoleWiring && fp.Edit == EditChatSafe {
 		add(CodeWiringChatEditable,
 			"Role=Wiring is incompatible with Edit=ChatSafe; use RelationshipOnly, RequiresApproval, or Never (decision #33)")
+	}
+
+	// Riley cannot edit what it cannot see.
+	if fp.Visibility == VisibilityHidden && fp.Edit == EditChatSafe {
+		add(CodeHiddenChatEditable,
+			"Visibility=Hidden is incompatible with Edit=ChatSafe; Riley cannot edit what it cannot see")
+	}
+
+	// Sensitive values must not flow through chat. RequiresApproval
+	// is borderline — the operator confirms against the plan and
+	// never has to read the raw value — so it is allowed.
+	if fp.Sensitivity == SensitivitySensitive && fp.Edit == EditChatSafe {
+		add(CodeSensitiveChatEditable,
+			"Sensitivity=Sensitive is incompatible with Edit=ChatSafe; route through SystemOnly or RequiresApproval")
+	}
+
+	// Identity fields are by definition references, not secrets.
+	if fp.Role == RoleIdentity && fp.Sensitivity == SensitivitySensitive {
+		add(CodeIdentitySensitive,
+			"Role=Identity is incompatible with Sensitivity=Sensitive; identity fields are not secret values")
 	}
 
 	// Tag/label-shaped attributes must be SystemOnly.

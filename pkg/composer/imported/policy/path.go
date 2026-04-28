@@ -184,6 +184,10 @@ func splitPath(path string) ([]pathSegment, error) {
 
 // walkSegments descends through goType applying segs in order. Returns
 // nil when every segment is consumed at a reachable point in the type.
+//
+// A bracket suffix (`tags["key"]` / `ingress[0]`) is only legal on a
+// map or slice field; using brackets on a scalar leaf is a structural
+// mistake and is rejected.
 func walkSegments(goType reflect.Type, segs []pathSegment) error {
 	cur := goType
 	for i, seg := range segs {
@@ -221,6 +225,9 @@ func walkSegments(goType reflect.Type, segs []pathSegment) error {
 		// Pointer-to-Value[T] leaves.
 		if ft.Kind() == reflect.Pointer && ft.Elem().Kind() == reflect.Struct &&
 			strings.HasPrefix(ft.Elem().Name(), "Value[") {
+			if seg.hasBucket {
+				return fmt.Errorf("segment %d %q: bracket suffix not valid on scalar leaf", i, seg.name)
+			}
 			if i != len(segs)-1 {
 				return fmt.Errorf("segment %d %q: descended past *Value leaf", i, seg.name)
 			}
@@ -235,11 +242,17 @@ func walkSegments(goType reflect.Type, segs []pathSegment) error {
 		}
 		// Pointer-to-struct (`,block` singleton like timeouts).
 		if ft.Kind() == reflect.Pointer && ft.Elem().Kind() == reflect.Struct {
+			if seg.hasBucket {
+				return fmt.Errorf("segment %d %q: bracket suffix not valid on singleton block", i, seg.name)
+			}
 			cur = ft.Elem()
 			continue
 		}
 		// Struct directly.
 		if ft.Kind() == reflect.Struct {
+			if seg.hasBucket {
+				return fmt.Errorf("segment %d %q: bracket suffix not valid on inline struct", i, seg.name)
+			}
 			cur = ft
 			continue
 		}

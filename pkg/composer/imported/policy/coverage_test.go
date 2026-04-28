@@ -16,6 +16,12 @@ import (
 	_ "github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported/generated"
 )
 
+// syntheticTypePrefix is the namespace used by registry_test.go for
+// synthetic test-only tfTypes. Production tests in this package must
+// filter out registrations carrying this prefix so concurrent test
+// runs don't observe each other through RegisteredTypes() or LintAll().
+const syntheticTypePrefix = "policy_test_"
+
 // phase1Types pins the exact set of Phase 1 import resource types that
 // must have a Layer 2 policy registered. Adding or removing a type
 // requires updating this list — the diff makes the surface change
@@ -45,19 +51,24 @@ func TestPhase1Coverage(t *testing.T) {
 	}
 }
 
-func TestRegisteredTypes_NoExtras(t *testing.T) {
+// TestRegisteredTypes_PhaseSetExact filters out synthetic test
+// registrations (the "policy_test_" prefix used by registry_test.go
+// and lint_test.go helpers) and asserts the remaining production
+// registrations match the Phase 1 set exactly. Adding or removing a
+// production tfType requires a deliberate edit to phase1Types.
+func TestRegisteredTypes_PhaseSetExact(t *testing.T) {
 	t.Parallel()
 	got := RegisteredTypes()
+	production := got[:0:0]
+	for _, tfType := range got {
+		if !strings.HasPrefix(tfType, syntheticTypePrefix) {
+			production = append(production, tfType)
+		}
+	}
 	want := append([]string(nil), phase1Types...)
 	sort.Strings(want)
-	// Filter out synthetic test-only types (lint_test register helpers
-	// add them) by matching against the phase1 set. Production
-	// registrations should match phase1Types exactly when the test
-	// runs in isolation; in the suite, leftover test types may
-	// briefly appear, so we only assert that phase1Types is a subset.
-	for _, t1 := range want {
-		assert.Contains(t, got, t1)
-	}
+	assert.Equal(t, want, production,
+		"production policy registrations must equal phase1Types exactly")
 }
 
 func TestLintAll_Clean(t *testing.T) {

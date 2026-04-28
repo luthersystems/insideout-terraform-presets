@@ -16,7 +16,8 @@ func TestFieldRole_Valid(t *testing.T) {
 		{RoleWiring, true},
 		{RoleTuning, true},
 		{"", false},
-		{"identity", false},
+		{"identity", false}, // case-sensitive
+		{"Identitty", false}, // typo close to a real const
 		{"unknown", false},
 	}
 	for _, tc := range cases {
@@ -52,7 +53,9 @@ func TestVisibilityPolicy_Valid(t *testing.T) {
 		{VisibilityRileyVisible, true},
 		{VisibilityUIVisible, true},
 		{"", false},
-		{"hidden", false},
+		{"hidden", false},      // case-sensitive
+		{"Hidden ", false},     // trailing space
+		{"RileyVisable", false}, // typo close to a real const
 	}
 	for _, tc := range cases {
 		assert.Equal(t, tc.want, tc.in.Valid(), "VisibilityPolicy(%q).Valid()", string(tc.in))
@@ -72,6 +75,8 @@ func TestEditPolicy_Valid(t *testing.T) {
 		{EditSystemOnly, true},
 		{"", false},
 		{"chatsafe", false},
+		{"chat_safe", false},
+		{"ChatSaef", false}, // typo
 	}
 	for _, tc := range cases {
 		assert.Equal(t, tc.want, tc.in.Valid(), "EditPolicy(%q).Valid()", string(tc.in))
@@ -117,14 +122,18 @@ func TestChangeRiskPolicy_Valid(t *testing.T) {
 
 func TestSharedPolicies(t *testing.T) {
 	t.Parallel()
-	tag := tagPolicy()
-	assert.Equal(t, RoleTuning, tag.Role)
-	assert.Equal(t, EditSystemOnly, tag.Edit)
-	assert.Equal(t, VisibilityHidden, tag.Visibility)
-	assert.Equal(t, SensitivityRedacted, tag.Sensitivity)
-
-	tm := timeoutsPolicy()
-	assert.Equal(t, RoleTuning, tm.Role)
-	assert.Equal(t, EditSystemOnly, tm.Edit)
-	assert.Equal(t, VisibilityHidden, tm.Visibility)
+	// Whole-struct equality: these constructors are baked into every
+	// curated map, so any silent drift propagates everywhere. Pin the
+	// exact FieldPolicy shape, not just a few fields.
+	assert.Equal(t, FieldPolicy{
+		Role:        RoleTuning,
+		Visibility:  VisibilityHidden,
+		Edit:        EditSystemOnly,
+		Sensitivity: SensitivityRedacted,
+	}, tagPolicy())
+	assert.Equal(t, FieldPolicy{
+		Role:       RoleTuning,
+		Visibility: VisibilityHidden,
+		Edit:       EditSystemOnly,
+	}, timeoutsPolicy())
 }
