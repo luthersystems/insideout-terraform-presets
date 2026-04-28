@@ -158,11 +158,15 @@ func lintEntry(tfType, path string, fp FieldPolicy) []Issue {
 			"tag/label fields must be Edit=SystemOnly")
 	}
 
-	// Identity fields must be Edit=Never (or SystemOnly when also a
-	// tag-like attribute, which doesn't apply to the identity set).
-	if _, ok := identityAttrLeaves[leaf]; ok && fp.Edit != EditNever {
-		add(CodeIdentityEditable,
-			"identity attribute must be Edit=Never")
+	// Identity fields must be Edit=Never. Only top-level paths (no
+	// dot) are considered the resource's own identity; nested paths
+	// like `file_system_config.arn` are wiring references to OTHER
+	// resources and follow the wiring rules instead.
+	if !strings.Contains(path, ".") {
+		if _, ok := identityAttrLeaves[leaf]; ok && fp.Edit != EditNever {
+			add(CodeIdentityEditable,
+				"identity attribute must be Edit=Never")
+		}
 	}
 
 	return issues

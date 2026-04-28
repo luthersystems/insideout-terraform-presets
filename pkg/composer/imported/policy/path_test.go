@@ -76,26 +76,28 @@ func TestResolvePath_Generated(t *testing.T) {
 }
 
 func TestResolvePath_JSONProjection(t *testing.T) {
+	// Use a synthetic subpath unlikely to collide with any real
+	// curated projection. The parent attribute must exist on Layer 1,
+	// but the synthetic JSON subpath does not.
 	const tfType = "aws_sqs_queue"
-	const path = "redrive_policy.deadLetterTargetArn"
+	const path = "redrive_policy.policyTestSyntheticSubpath"
 
-	// Path won't resolve via Layer 1 walker because the JSON subpath
-	// has no struct field; only a registered projection makes it valid.
-	err := ResolvePath(tfType, path)
-	require.Error(t, err)
-	assert.True(t, errors.Is(err, ErrNoSuchPath))
-
+	require.Error(t, ResolvePath(tfType, path))
 	t.Cleanup(func() {
 		projMu.Lock()
 		defer projMu.Unlock()
-		delete(projReg[tfType], path)
-		if len(projReg[tfType]) == 0 {
-			delete(projReg, tfType)
+		if m := projReg[tfType]; m != nil {
+			delete(m, path)
 		}
 	})
-	RegisterJSONProjection(tfType, JSONProjection{Parent: "redrive_policy", Subpath: "deadLetterTargetArn"})
+	RegisterJSONProjection(tfType, JSONProjection{
+		Parent: "redrive_policy", Subpath: "policyTestSyntheticSubpath",
+	})
 
 	assert.NoError(t, ResolvePath(tfType, path))
+	// And the err-wrapping is still tested via the unknown-tfType path
+	// case in TestResolvePath_Generated.
+	_ = errors.Is // keep import
 }
 
 func TestRegisterJSONProjection_DuplicatePanics(t *testing.T) {
