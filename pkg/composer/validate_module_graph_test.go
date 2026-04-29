@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
 
 func TestExtractWiringEdges_BasicAndDeterministic(t *testing.T) {
@@ -166,6 +168,75 @@ func TestValidateValueTypes_AcceptsValidValues(t *testing.T) {
 	require.Empty(t, ValidateValueTypes(moduleToVals, presetPaths))
 }
 
+// TestValidateNoUnionCycles_DetectsCrossTierCycle pins that a cycle
+// spanning a preset module and a flat imported resource is reported
+// as wiring_cycle (not module_cycle), with the closing-edge hint
+// rendered in module/resource form so reviewers can break the cycle.
+func TestValidateNoUnionCycles_DetectsCrossTierCycle(t *testing.T) {
+	t.Parallel()
+
+	// Module aws_lambda consumes resource aws_sqs_queue.dlq.arn;
+	// resource aws_sqs_queue.dlq consumes module.aws_lambda.role_arn.
+	blocks := []ModuleBlock{
+		{Name: "aws_lambda", Raw: map[string]string{"dlq_arn": "aws_sqs_queue.dlq.arn"}},
+	}
+	irs := []imported.ImportedResource{
+		{
+			Identity:   imported.ResourceIdentity{Cloud: "aws", Type: "aws_sqs_queue", Address: "aws_sqs_queue.dlq", ImportID: "x"},
+			Tier:       imported.TierImportedFlat,
+			Attributes: map[string]any{"redrive_role_arn": RawExpr{Expr: "module.aws_lambda.role_arn"}},
+		},
+	}
+
+	issues := ValidateNoUnionCycles(blocks, irs)
+	require.Len(t, issues, 1)
+	require.Equal(t, "wiring_cycle", issues[0].Code)
+	require.Equal(t, "module_graph", issues[0].Field)
+	require.Contains(t, issues[0].Reason, "module.aws_lambda")
+	require.Contains(t, issues[0].Reason, "aws_sqs_queue.dlq")
+	// Closing-edge hint locks the rendering format `(e.g. <consumerSlot>
+	// -> <producer>.<attr>)`. Either edge of the 2-cycle qualifies; both
+	// shapes are pinned so an argument-swap mutation surfaces.
+	require.Regexp(t,
+		`\(e\.g\. (imported\.aws_sqs_queue\.dlq\.redrive_role_arn -> module\.aws_lambda\.role_arn|aws_lambda\.dlq_arn -> aws_sqs_queue\.dlq\.arn)\)`,
+		issues[0].Reason,
+		"closing-edge hint must reference both nodes with kind-specific prefixes")
+}
+
+// TestValidateNoUnionCycles_PureModuleCycleSkipped pins the deferral
+// contract: a pure-module cycle is left to ValidateNoModuleCycles so
+// the canonical `module_cycle` code is emitted exactly once instead
+// of double-reporting.
+func TestValidateNoUnionCycles_PureModuleCycleSkipped(t *testing.T) {
+	t.Parallel()
+
+	blocks := []ModuleBlock{
+		{Name: "a", Raw: map[string]string{"x": "module.b.x"}},
+		{Name: "b", Raw: map[string]string{"y": "module.a.y"}},
+	}
+	require.Empty(t, ValidateNoUnionCycles(blocks, nil),
+		"pure-module cycle must be deferred to ValidateNoModuleCycles")
+}
+
+// TestValidateNoUnionCycles_DAGNoIssue guards the happy path: a mixed
+// module + imported-resource graph with a strict topological order
+// produces no cycles.
+func TestValidateNoUnionCycles_DAGNoIssue(t *testing.T) {
+	t.Parallel()
+
+	blocks := []ModuleBlock{
+		{Name: "aws_lambda", Raw: map[string]string{"dlq_arn": "aws_sqs_queue.dlq.arn"}},
+	}
+	irs := []imported.ImportedResource{
+		{
+			Identity:   imported.ResourceIdentity{Cloud: "aws", Type: "aws_sqs_queue", Address: "aws_sqs_queue.dlq", ImportID: "x"},
+			Tier:       imported.TierImportedFlat,
+			Attributes: map[string]any{},
+		},
+	}
+	require.Empty(t, ValidateNoUnionCycles(blocks, irs))
+}
+
 // TestComposeStackWithIssues_GreenStackHasNoGraphIssues pins the contract
 // that a real-world stack composes cleanly under all module-graph
 // validators. If a future preset rename or output removal slips through,
@@ -183,9 +254,16 @@ func TestComposeStackWithIssues_GreenStackHasNoGraphIssues(t *testing.T) {
 		Region:       "us-east-1",
 	})
 	require.NoError(t, err)
+	// Positive guard: the compose actually produced the root files we
+	// expect — a "Liar Test" where the validators silently no-op'd
+	// would yield empty Files and no bad codes, falsely passing.
+	require.NotEmpty(t, r.Files["/main.tf"], "compose must emit /main.tf")
+	require.NotEmpty(t, r.Files["/variables.tf"], "compose must emit /variables.tf")
 	for _, iss := range r.Issues {
 		require.NotEqual(t, "unwired_output", iss.Code, "unexpected unwired_output: %v", iss)
 		require.NotEqual(t, "module_cycle", iss.Code, "unexpected module_cycle: %v", iss)
+		require.NotEqual(t, "wiring_cycle", iss.Code, "unexpected wiring_cycle: %v", iss)
 		require.NotEqual(t, "invalid_type", iss.Code, "unexpected invalid_type: %v", iss)
+		require.NotEqual(t, "dangling_resource_ref", iss.Code, "unexpected dangling_resource_ref: %v", iss)
 	}
 }

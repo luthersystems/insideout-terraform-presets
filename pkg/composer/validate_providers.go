@@ -17,6 +17,11 @@ import (
 //
 // Mirror these constants on any change to the seeds in generateProvidersTF
 // (compose.go).
+//
+// The imported provider aliases (`aws.imported` / `google.imported`,
+// emitted by generateProvidersTF when ComposeStackOpts.Imported is
+// non-empty) share the same provider source/version as the default
+// alias; they introduce no new entry here.
 var providerSeeds = map[string]string{
 	"aws":    ">= 6.0",
 	"google": ">= 5.0",
