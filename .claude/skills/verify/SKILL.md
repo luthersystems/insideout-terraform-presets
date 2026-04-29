@@ -22,6 +22,20 @@ If formatting issues are found, fix them:
 terraform fmt -recursive
 ```
 
+### 1.5. Static Lints
+
+Run the repo's static analysis scripts. These catch HCL-level patterns that
+`terraform validate` cannot:
+
+```bash
+bash tests/lint-project-tag.sh
+bash tests/lint-project-label.sh
+bash tests/lint-sensitive-for-each.sh
+bash tests/lint-foreach-unknown-keys.sh
+```
+
+Each must print `PASS`. Fail the whole verification if any prints `FAIL`.
+
 ### 2. Discover Modules
 
 Find all preset modules, respecting `.validate-skip` markers:
@@ -70,6 +84,7 @@ grep -rl '<module-dir>' examples/*/main.tf | xargs -I{} dirname {} | sort -u
 ## Checklist
 
 - [ ] `terraform fmt -check -recursive` passes (or issues fixed)
+- [ ] All four static lint scripts pass (`lint-project-tag.sh`, `lint-project-label.sh`, `lint-sensitive-for-each.sh`, `lint-foreach-unknown-keys.sh`)
 - [ ] All preset modules validate (excluding `.validate-skip`)
 - [ ] All example stacks validate
 - [ ] Results summarized to user

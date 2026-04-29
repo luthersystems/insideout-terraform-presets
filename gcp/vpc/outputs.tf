@@ -30,12 +30,12 @@ output "subnet_names" {
 
 output "pods_range_name" {
   description = "Name of the secondary range for GKE pods"
-  value       = var.gke_cluster_name != null ? "${var.project}-pods-${random_id.suffix.hex}" : null
+  value       = var.gke_cluster_name != null ? "${var.project}-pods" : null
 }
 
 output "services_range_name" {
   description = "Name of the secondary range for GKE services"
-  value       = var.gke_cluster_name != null ? "${var.project}-services-${random_id.suffix.hex}" : null
+  value       = var.gke_cluster_name != null ? "${var.project}-services" : null
 }
 
 output "router_name" {
