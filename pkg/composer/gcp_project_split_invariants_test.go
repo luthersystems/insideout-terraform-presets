@@ -195,10 +195,11 @@ func TestGCPModules_ProjectIDDeclaredAndUsed(t *testing.T) {
 	// project-scoped resources (a build trigger and a logging sink) that
 	// would land in whatever default project the provider was configured
 	// with. Issue #159's self-review fixed that and they are now full
-	// project-scoped modules.
+	// project-scoped modules. cloud_monitoring was on the list for the
+	// same reason and was fixed in the issue #168 sibling pass — its
+	// dashboard now declares project = var.project_id explicitly.
 	exempt := map[string]bool{
-		"cloud_monitoring": true, // single hardcoded dashboard
-		"cloud_cdn":        true, // locals-only stub
+		"cloud_cdn": true, // locals-only stub
 	}
 
 	consumesPattern := regexp.MustCompile(`var\.project_id`)
