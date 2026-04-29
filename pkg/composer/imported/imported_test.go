@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/luthersystems/insideout-terraform-presets/pkg/composer"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -142,18 +141,45 @@ func TestImportedResource_RoundTrip_Full(t *testing.T) {
 			},
 		},
 		GraduationCandidate: &PresetMatch{
-			PresetKey:  composer.KeyAWSSQS,
+			PresetKey:  "aws_sqs",
 			Confidence: 0.85,
 			MovedBlocks: []MovedBlock{
 				{From: "aws_sqs_queue.dlq", To: "module.aws_sqs.aws_sqs_queue.dlq"},
 			},
-			BlockingDeltas: []composer.FieldDiff{
+			BlockingDeltas: []FieldDelta{
 				{Field: "fifo_queue", From: "false", To: "true"},
 			},
 		},
 	}
 	got := mustRoundTripIdenticalResource(t, r)
 	assert.Equal(t, r, got)
+}
+
+// TestImportedResource_RoundTrip_Missing exercises the TierImportedMissing
+// path with an operator-chosen Remediation. The composer reads Remediation to
+// decide whether to emit a recreate block or block the apply entirely.
+func TestImportedResource_RoundTrip_Missing(t *testing.T) {
+	t.Parallel()
+	for _, action := range []MissingAction{
+		ActionRemoveFromInsideOut,
+		ActionRecreateFromLastImport,
+		ActionReclaimExisting,
+	} {
+		t.Run(string(action), func(t *testing.T) {
+			t.Parallel()
+			r := ImportedResource{
+				Identity:    fullIdentity(),
+				Tier:        TierImportedMissing,
+				Source:      SourceImporter,
+				Remediation: action,
+			}
+			got := mustRoundTripIdenticalResource(t, r)
+			assert.Equal(t, r, got)
+			b, err := json.Marshal(r)
+			require.NoError(t, err)
+			assert.Contains(t, string(b), `"remediation":"`+string(action)+`"`)
+		})
+	}
 }
 
 // TestOmitEmpty pins the exact JSON shape of zero-or-minimal values for every
@@ -243,23 +269,22 @@ func TestFieldEdit_MarshalJSON_ConvertsToUTC(t *testing.T) {
 func TestPresetMatch_RoundTrip(t *testing.T) {
 	t.Parallel()
 	pm := PresetMatch{
-		PresetKey:  composer.KeyAWSVPC,
+		PresetKey:  "aws_vpc",
 		Confidence: 0.42,
 		MovedBlocks: []MovedBlock{
 			{From: "aws_vpc.main", To: "module.aws_vpc.aws_vpc.main"},
 			{From: "aws_subnet.a", To: "module.aws_vpc.aws_subnet.a"},
 		},
-		BlockingDeltas: []composer.FieldDiff{
+		BlockingDeltas: []FieldDelta{
 			{Field: "cidr_block", From: "10.0.0.0/16", To: "10.1.0.0/16"},
 		},
 	}
 	b, err := json.Marshal(pm)
 	require.NoError(t, err)
 
-	// Cross-package byte assertion: catches an upstream rename of
-	// composer.FieldDiff or composer.ComponentKey JSON tags here, in the
-	// package that owns the contract, instead of in some downstream
-	// consumer's failure stack.
+	// Cross-package byte assertion: pins the wire shape of PresetMatch.
+	// FieldDelta's JSON tags match composer.FieldDiff exactly so consumers
+	// reading this envelope across the boundary see no change.
 	s := string(b)
 	assert.Contains(t, s, `"preset_key":"aws_vpc"`)
 	assert.Contains(t, s, `"field":"cidr_block"`)

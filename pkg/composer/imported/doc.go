@@ -4,9 +4,18 @@
 //
 // This package is the Phase 2 foundation of the imported-resource model. It
 // owns identity, tier classification, desired-state storage, and edit/conflict
-// metadata. It does not generate provider-specific structs (#145/#146), emit
-// HCL (#148), validate the union graph (#150), or extend the diff engine
-// (#151) — those are downstream Phase 2 sub-tickets.
+// metadata. Provider-specific typed structs and HCL marshaling live in
+// pkg/composer/imported/generated (#145/#146); per-resource field policy in
+// pkg/composer/imported/policy (#147); composer emission and validation
+// (EmitImportedTF / ValidateImportedResources, #148) in pkg/composer.
+//
+// Composer/runtime boundary: the composer renders desired state from
+// Attributes/Attrs into flat HCL plus permanent `import {}` blocks (see
+// EmitImportedTF). Confirming that a real `terraform plan` produces only the
+// expected import operations and provenance-tag repairs is a runtime check;
+// it lives in the reliable repo, not in the composer's pre-plan validators.
+// See docs/managed-resource-tiers.md "Composer responsibilities for imported
+// resources" and "Plan acceptance rules".
 //
 // The full model is documented in docs/managed-resource-tiers.md, especially
 // the sections "How this maps to the current pkg/composer IR" (lines 406-544),

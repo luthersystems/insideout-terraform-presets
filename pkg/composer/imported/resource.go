@@ -3,8 +3,6 @@ package imported
 import (
 	"encoding/json"
 	"time"
-
-	"github.com/luthersystems/insideout-terraform-presets/pkg/composer"
 )
 
 // Note on Attrs vs Attributes: ImportedResource carries two attribute
@@ -64,6 +62,12 @@ type ImportedResource struct {
 	// imported graph could be wrapped in a preset module call. Phase 3+;
 	// see decision #16 in the design doc.
 	GraduationCandidate *PresetMatch `json:"graduation_candidate,omitempty"`
+
+	// Remediation is the operator-chosen action for a TierImportedMissing
+	// resource. Empty for non-Missing tiers; the composer blocks emission
+	// of a TierImportedMissing resource until Remediation is set. See
+	// docs/managed-resource-tiers.md "ImportedMissing operator actions".
+	Remediation MissingAction `json:"remediation,omitempty"`
 }
 
 // FieldEdit is audit/conflict metadata for one model-side edit to a single
@@ -91,16 +95,33 @@ func (f FieldEdit) MarshalJSON() ([]byte, error) {
 // PresetMatch is a forward-declared graduation hint. It is populated by the
 // shape-matcher (Phase 3+) when an imported resource could be wrapped in a
 // preset module call. Composer never reads this field today.
+//
+// PresetKey and BlockingDeltas use plain types (string and FieldDelta) rather
+// than composer.ComponentKey / composer.FieldDiff so this package does not
+// import composer. That keeps the dependency direction one-way (composer →
+// imported) and lets the composer call into emission/validation helpers
+// without import cycles. The JSON shape matches composer.FieldDiff exactly,
+// so callers reading or writing JSON across the boundary need no change.
 type PresetMatch struct {
-	// PresetKey identifies the candidate preset module.
-	PresetKey composer.ComponentKey `json:"preset_key,omitempty"`
+	// PresetKey identifies the candidate preset module. Wire format matches
+	// composer.ComponentKey (which is type ComponentKey string).
+	PresetKey string `json:"preset_key,omitempty"`
 	// Confidence is a 0.0-1.0 score from the matcher.
 	Confidence float64 `json:"confidence,omitempty"`
 	// MovedBlocks are the proposed `moved {}` blocks for promotion.
 	MovedBlocks []MovedBlock `json:"moved_blocks,omitempty"`
 	// BlockingDeltas are attributes that would have to change to fit the
-	// preset shape.
-	BlockingDeltas []composer.FieldDiff `json:"blocking_deltas,omitempty"`
+	// preset shape. JSON shape matches composer.FieldDiff.
+	BlockingDeltas []FieldDelta `json:"blocking_deltas,omitempty"`
+}
+
+// FieldDelta is a per-attribute before/after pair for graduation diffs. Its
+// JSON shape matches composer.FieldDiff so consumers that already read those
+// fields by name see no change.
+type FieldDelta struct {
+	Field string `json:"field"`
+	From  string `json:"from"`
+	To    string `json:"to"`
 }
 
 // MovedBlock is the minimal shape of a Terraform `moved {}` block: a from /

@@ -130,6 +130,7 @@ func ValidateAll(
 	all = append(all, ValidateComposedRoot(files)...)
 	if len(opts) > 0 {
 		all = append(all, ValidateOpts(opts[0])...)
+		all = append(all, ValidateImportedResources(opts[0].Cloud, opts[0].Imported)...)
 	}
 	return dedupeAndSortIssues(all)
 }
