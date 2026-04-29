@@ -1735,36 +1735,147 @@ func TestComposeStack_DiscoveredProvidersReachRoot(t *testing.T) {
 		"hashicorp/random should be attached to a random = {...} entry in required_providers, not just appear as a substring")
 }
 
-// TestComposeStack_GCPRandomIDSuffix locks in the issue #159 contract: every
-// GCP module that creates a named cloud resource declares a random_id
-// "suffix" and appends its hex to the resource name, and the random
-// provider lifts into the root providers.tf so a `terraform init` on the
-// composed stack succeeds. State-loss recovery (re-applying after losing
-// state on a project that already has e.g. an undeletable KMS keyring)
-// depends on this end-to-end.
+// TestGCPPresets_AllSuffixedResourceNames pins the issue #159 contract
+// across every GCP module that creates a named cloud resource: each must
+// (a) declare hashicorp/random in required_providers, (b) declare a
+// resource "random_id" "suffix" block, and (c) interpolate
+// ${random_id.suffix.hex} as a real HCL expression somewhere in the
+// preset's source.
 //
-// The test exercises KMS specifically because it's the customer-incident
-// driver (reliable #1167 → #1168 — a prior keyring 409'd every retry on
-// the same project, requiring a fresh GCP project to recover).
+// Why a table sweep, not a single-instance smoke test:
+// the customer incident chain that motivated #159 (reliable #1167 → #1168)
+// hit *three* dead-ends — the KMS keyring (undeletable), the Firestore
+// (default) database (singleton), and a GCS bucket (7-day soft-delete name
+// reservation). A KMS-only assertion would let a future edit silently
+// revert gcp/firestore/main.tf back to "(default)" with green CI and
+// reproduce the original incident. Enumerating every in-scope module here
+// makes "remove the suffix from any one preset" fail loudly.
+//
+// The skip allowlist captures the four GCP modules that the PR
+// intentionally left untouched: cloud_cdn (config-only, no cloud
+// resources), cloud_monitoring (only a non-unique displayName JSON),
+// identity_platform (singleton per project, no name field), vertex_ai
+// (display_name is non-unique server-side; the resource ID is
+// server-assigned). New GCP modules must either land on the suffix list
+// or be added to the skip allowlist with a justification.
+func TestGCPPresets_AllSuffixedResourceNames(t *testing.T) {
+	// In-scope modules — every named cloud resource must carry the suffix.
+	suffixedPresets := []string{
+		"gcp/api_gateway",
+		"gcp/backups",
+		"gcp/bastion",
+		"gcp/cloud_armor",
+		"gcp/cloud_build",
+		"gcp/cloud_functions",
+		"gcp/cloud_logging",
+		"gcp/cloud_run",
+		"gcp/cloudsql",
+		"gcp/compute",
+		"gcp/firestore",
+		"gcp/gcs",
+		"gcp/gke",
+		"gcp/kms",
+		"gcp/loadbalancer",
+		"gcp/memorystore",
+		"gcp/pubsub",
+		"gcp/secretmanager",
+		"gcp/vpc",
+	}
+
+	// Pre-anchored regexes — declared once so test-loop hot path stays cheap.
+	// randomIDBlockRe: a real `resource "random_id" "suffix" { ... }` block
+	//   (not just the substring random_id.suffix in a comment or string).
+	// suffixInterpRe: ${random_id.suffix.hex} as an HCL interpolation —
+	//   the dollar+brace anchors it to a real expression. Matches both
+	//   the bare form and the substr() slice form (vpc connector / bastion
+	//   service account budget cases) since both contain
+	//   `random_id.suffix.hex` inside a `${...}` interpolation.
+	randomIDBlockRe := regexp.MustCompile(`(?m)^\s*resource\s+"random_id"\s+"suffix"\s*\{`)
+	suffixInterpRe := regexp.MustCompile(`\$\{[^}]*random_id\.suffix\.hex[^}]*\}`)
+
+	for _, preset := range suffixedPresets {
+		t.Run(preset, func(t *testing.T) {
+			// (a) The preset declares the random required_provider. Use
+			//     InspectPreset (not raw string match) so this fails with
+			//     a clear "missing provider" diagnostic if versions.tf is
+			//     malformed.
+			mod, err := InspectPreset(preset)
+			require.NoError(t, err, "InspectPreset(%q) failed", preset)
+			require.Contains(t, mod.RequiredProviders, "random",
+				"%s must declare a random = {...} required_provider (issue #159)", preset)
+
+			// (b)+(c): read every .tf file in the preset and assert at
+			// least one carries the random_id "suffix" block, and at least
+			// one carries a ${random_id.suffix.hex} HCL interpolation.
+			// Splitting (b)/(c) across files is fine — most modules keep
+			// the resource block in main.tf; some keep providers in
+			// versions.tf.
+			entries, err := terraformpresets.FS.ReadDir(preset)
+			require.NoError(t, err, "ReadDir(%q) failed", preset)
+
+			var concatenated []byte
+			for _, e := range entries {
+				if e.IsDir() || !strings.HasSuffix(e.Name(), ".tf") {
+					continue
+				}
+				b, readErr := terraformpresets.FS.ReadFile(preset + "/" + e.Name())
+				require.NoError(t, readErr, "ReadFile(%q/%q) failed", preset, e.Name())
+				concatenated = append(concatenated, b...)
+				concatenated = append(concatenated, '\n')
+			}
+
+			require.Regexp(t, randomIDBlockRe, string(concatenated),
+				`%s must declare a top-level resource "random_id" "suffix" {} block (issue #159 — without it, retries after state loss 409 on the existing resource name)`,
+				preset)
+			require.Regexp(t, suffixInterpRe, string(concatenated),
+				`%s must interpolate ${random_id.suffix.hex} into at least one HCL expression (issue #159 — a comment-only reference does not propagate the suffix to a resource name and would silently allow the original customer incident to recur)`,
+				preset)
+		})
+	}
+}
+
+// TestGCPPresets_NoSharedRootRandomID pins the per-module-suffix design
+// decision from issue #159: each GCP module declares its OWN random_id
+// "suffix", rather than the composer hoisting a single shared random_id
+// into the composed root. This matches the existing AWS convention (each
+// AWS module that needs uniqueness declares its own random_id "suffix")
+// and avoids requiring composer changes.
+//
+// If a future change hoists random_id into the composed root, suffix
+// collisions and rotation semantics change in ways callers may not
+// expect. That's a deliberate decision worth a separate review, not a
+// drive-by edit.
+func TestGCPPresets_NoSharedRootRandomID(t *testing.T) {
+	c := newTestClient()
+	out, err := c.ComposeStack(ComposeStackOpts{
+		Cloud: "gcp",
+		// VPC + KMS + Firestore — three of the four customer-incident
+		// modules in one composition (GCS isn't selectable as a default
+		// component the same way; the per-module assertion in the sister
+		// test above already covers it).
+		SelectedKeys: []ComponentKey{KeyGCPVPC, KeyGCPCloudKMS, KeyGCPFirestore},
+		Comps:        &Components{},
+		Cfg:          &Config{Region: "us-central1"},
+		Project:      "suffix-test",
+		GCPProjectID: "suffix-test-12345",
+		Region:       "us-central1",
+	})
+	require.NoError(t, err)
+
+	rootMain := string(out["/main.tf"])
+	require.NotEmpty(t, rootMain, "composed root main.tf must exist")
+	require.NotRegexp(t, regexp.MustCompile(`(?m)^\s*resource\s+"random_id"`), rootMain,
+		"composed root main.tf must NOT declare a top-level random_id resource (issue #159: per-module suffix, not shared root). Each preset declares its own resource \"random_id\" \"suffix\" block; hoisting one to the root changes collision and rotation semantics.")
+}
+
+// TestComposeStack_GCPRandomIDSuffix smoke-tests the end-to-end provider
+// merge path for the GCP/random case: composing a GCP stack with KMS
+// must lift hashicorp/random into the composed root providers.tf so a
+// `terraform init` on the result succeeds. The wider per-module contract
+// is enforced by TestGCPPresets_AllSuffixedResourceNames; this test only
+// covers the composer's role in stitching the modules together.
 func TestComposeStack_GCPRandomIDSuffix(t *testing.T) {
 	c := newTestClient()
-
-	// Precondition 1: the kms preset declares random in required_providers.
-	// If a future edit drops it, this assertion fails first with a clearer
-	// signal than the indirect "hashicorp/random missing from providers.tf".
-	kmsMod, err := InspectPreset("gcp/kms")
-	require.NoError(t, err)
-	require.Contains(t, kmsMod.RequiredProviders, "random",
-		"precondition: gcp/kms preset must declare a random = {...} required_provider for the suffix pattern to work")
-
-	// Precondition 2: the kms preset's main.tf actually interpolates
-	// random_id.suffix.hex into the keyring name. A passing
-	// required_providers assertion alone doesn't prove the suffix wires up.
-	kmsBytes, err := terraformpresets.FS.ReadFile("gcp/kms/main.tf")
-	require.NoError(t, err)
-	require.Contains(t, string(kmsBytes), "random_id.suffix.hex",
-		"gcp/kms/main.tf must interpolate random_id.suffix.hex (issue #159 — keyrings are undeletable, so name reuse blocks every retry)")
-
 	out, err := c.ComposeStack(ComposeStackOpts{
 		Cloud:        "gcp",
 		SelectedKeys: []ComponentKey{KeyGCPVPC, KeyGCPCloudKMS},
@@ -1777,7 +1888,9 @@ func TestComposeStack_GCPRandomIDSuffix(t *testing.T) {
 	require.NoError(t, err, "ComposeStack(gcp) with KMS+VPC should succeed")
 
 	// Root providers.tf must include the random provider so terraform init
-	// can resolve it.
+	// can resolve it. Lock the merge location: hashicorp/random must
+	// appear inside a `random = {...}` entry, not as a stray substring in
+	// a comment or module name.
 	prov := string(out["/providers.tf"])
 	require.Contains(t, prov, "hashicorp/random",
 		"root providers.tf should include the random provider lifted from the kms preset's required_providers")
