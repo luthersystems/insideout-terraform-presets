@@ -22,6 +22,6 @@ resource "random_id" "suffix" {
 resource "google_firestore_database" "database" {
   project     = var.project_id
   name        = "${var.project}-firestore-${random_id.suffix.hex}"
-  location_id = var.region
+  location_id = var.location_id != "" ? var.location_id : var.region
   type        = "FIRESTORE_NATIVE"
 }

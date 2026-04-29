@@ -111,7 +111,7 @@ variable "source_archive_bucket" {
 }
 
 variable "source_archive_object" {
-  description = "GCS object path for function source archive (uses placeholder if empty)"
+  description = "GCS object path for function source archive. The default uploads a minimal-but-Cloud-Build-valid Node.js stub (index.js + package.json) that exports var.entry_point's default 'helloWorld' so the module composes and applies cleanly out of the box; override by setting both var.source_archive_bucket and var.source_archive_object to your own pre-built bundle."
   type        = string
   default     = ""
 }

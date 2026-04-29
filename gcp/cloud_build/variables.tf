@@ -18,4 +18,14 @@ variable "project_id" {
   }
 }
 
-variable "region" { type = string }
+variable "region" {
+  description = "GCP region for the Cloud Build trigger"
+  type        = string
+  default     = "us-central1"
+}
+
+variable "labels" {
+  description = "Additional labels to apply to label-capable resources (the project label is always merged in)"
+  type        = map(string)
+  default     = {}
+}
