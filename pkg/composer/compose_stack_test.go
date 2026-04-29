@@ -2087,3 +2087,152 @@ func TestComposeStack_PolymorphicKeyPullsInPrefixedVPC(t *testing.T) {
 	require.Contains(t, mainTF, `module "resource"`,
 		"polymorphic KeyAWSEKSControlPlane preserves its string value and renders as module.resource")
 }
+
+// TestComposeStack_RemoteBackend_Default is a regression guard: with the
+// default opts (RemoteBackend unset), neither the AWS nor the GCP composed
+// /providers.tf may declare a terraform state backend block. The composer
+// must preserve historical local-state behavior for every existing caller.
+// See issue #169.
+func TestComposeStack_RemoteBackend_Default(t *testing.T) {
+	t.Parallel()
+
+	c := newTestClient()
+
+	awsOut, err := c.ComposeStack(ComposeStackOpts{
+		Cloud:        "aws",
+		SelectedKeys: []ComponentKey{KeyAWSVPC},
+		Comps:        &Components{},
+		Cfg:          &Config{Region: "us-east-1"},
+		Project:      "test",
+		Region:       "us-east-1",
+	})
+	require.NoError(t, err)
+	awsProv := string(awsOut["/providers.tf"])
+	require.NotContains(t, awsProv, `backend "s3"`,
+		"AWS default opts must not declare an s3 state backend")
+	require.NotContains(t, awsProv, `backend "gcs"`,
+		"AWS providers.tf must never declare a gcs backend")
+
+	gcpOut, err := c.ComposeStack(ComposeStackOpts{
+		Cloud:        "gcp",
+		SelectedKeys: []ComponentKey{KeyGCPVPC},
+		Comps:        &Components{},
+		Cfg:          &Config{Region: "us-central1"},
+		Project:      "test-project",
+		GCPProjectID: "test-project-12345",
+		Region:       "us-central1",
+	})
+	require.NoError(t, err)
+	gcpProv := string(gcpOut["/providers.tf"])
+	require.NotContains(t, gcpProv, `backend "gcs"`,
+		"GCP default opts must not declare a gcs state backend")
+	require.NotContains(t, gcpProv, `backend "s3"`,
+		"GCP providers.tf must never declare an s3 backend")
+}
+
+// TestComposeStack_RemoteBackend_AWS verifies that opts.RemoteBackend=true
+// on an AWS stack emits an empty `backend "s3" {}` sub-block inside the
+// composed terraform { ... } block. The bucket is filled in at
+// `terraform init -backend-config=...` time by the apply container —
+// composer does not interpolate it. See issue #169.
+func TestComposeStack_RemoteBackend_AWS(t *testing.T) {
+	t.Parallel()
+
+	c := newTestClient()
+	out, err := c.ComposeStack(ComposeStackOpts{
+		Cloud:         "aws",
+		SelectedKeys:  []ComponentKey{KeyAWSVPC},
+		Comps:         &Components{},
+		Cfg:           &Config{Region: "us-east-1"},
+		Project:       "test",
+		Region:        "us-east-1",
+		RemoteBackend: true,
+	})
+	require.NoError(t, err)
+
+	prov := string(out["/providers.tf"])
+	require.Contains(t, prov, `backend "s3" {}`,
+		"AWS RemoteBackend=true should emit an empty backend \"s3\" {} sub-block")
+
+	// Lock placement: backend block must live inside the terraform { ... }
+	// block, not as a stray top-level block. The literal we emit puts the
+	// backend block right after required_providers closes, then the
+	// terraform block's own closing brace on the next line.
+	require.Contains(t, prov, "  }\n  backend \"s3\" {}\n}\n",
+		"backend \"s3\" {} must be a sub-block inside terraform { ... } immediately after required_providers")
+
+	// No interpolation: the composer must not invent bucket/region/key
+	// values — those are supplied at terraform init time.
+	require.NotRegexp(t,
+		regexp.MustCompile(`backend\s*"s3"\s*\{\s*\w`),
+		prov,
+		"backend \"s3\" block must be empty; bucket/region/key are -backend-config=... at init time")
+}
+
+// TestComposeStack_RemoteBackend_GCP is the GCP counterpart to
+// TestComposeStack_RemoteBackend_AWS — opts.RemoteBackend=true on a GCP
+// stack emits an empty `backend "gcs" {}` sub-block. See issue #169.
+func TestComposeStack_RemoteBackend_GCP(t *testing.T) {
+	t.Parallel()
+
+	c := newTestClient()
+	out, err := c.ComposeStack(ComposeStackOpts{
+		Cloud:         "gcp",
+		SelectedKeys:  []ComponentKey{KeyGCPVPC},
+		Comps:         &Components{},
+		Cfg:           &Config{Region: "us-central1"},
+		Project:       "test-project",
+		GCPProjectID:  "test-project-12345",
+		Region:        "us-central1",
+		RemoteBackend: true,
+	})
+	require.NoError(t, err)
+
+	prov := string(out["/providers.tf"])
+	require.Contains(t, prov, `backend "gcs" {}`,
+		"GCP RemoteBackend=true should emit an empty backend \"gcs\" {} sub-block")
+
+	require.Contains(t, prov, "  }\n  backend \"gcs\" {}\n}\n",
+		"backend \"gcs\" {} must be a sub-block inside terraform { ... } immediately after required_providers")
+
+	require.NotRegexp(t,
+		regexp.MustCompile(`backend\s*"gcs"\s*\{\s*\w`),
+		prov,
+		"backend \"gcs\" block must be empty; bucket/prefix are -backend-config=... at init time")
+}
+
+// TestComposeStack_RemoteBackend_TerraformInit writes a RemoteBackend=true
+// composition to a temp dir and runs `terraform init -backend=false +
+// terraform validate` on it. -backend=false skips backend initialization,
+// so the empty backend block remains valid HCL and validation passes —
+// this proves callers can keep using their existing -backend=false test
+// path even when opting into a remote backend at deploy time.
+//
+// Skipped when terraform CLI is not available.
+func TestComposeStack_RemoteBackend_TerraformInit(t *testing.T) {
+	if _, err := exec.LookPath("terraform"); err != nil {
+		t.Skip("terraform CLI not available, skipping init test")
+	}
+
+	c := newTestClient()
+	out, err := c.ComposeStack(ComposeStackOpts{
+		Cloud:         "aws",
+		SelectedKeys:  []ComponentKey{KeyAWSVPC},
+		Comps:         &Components{},
+		Cfg:           &Config{Region: "us-east-1"},
+		Project:       "test",
+		Region:        "us-east-1",
+		RemoteBackend: true,
+	})
+	require.NoError(t, err, "ComposeStack with RemoteBackend should succeed")
+
+	dir := t.TempDir()
+	writeBundle(t, dir, out)
+
+	initCmd := exec.Command("terraform", "init", "-backend=false", "-no-color")
+	initCmd.Dir = dir
+	initOutput, err := initCmd.CombinedOutput()
+	require.NoError(t, err,
+		"terraform init -backend=false should succeed with an empty backend \"s3\" {} block:\n%s",
+		string(initOutput))
+}

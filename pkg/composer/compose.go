@@ -346,6 +346,15 @@ type ComposeStackOpts struct {
 	// reported via ValidationIssue codes (imported_resource_*). Nil or
 	// empty preserves the historical no-op behavior.
 	Imported []imported.ImportedResource
+
+	// RemoteBackend, when true, emits an empty `backend "s3" {}` (AWS) or
+	// `backend "gcs" {}` (GCP) sub-block inside the composed providers.tf
+	// terraform { ... } block. The bucket, region, and key/prefix are
+	// supplied at terraform init time via -backend-config=... by the
+	// caller's apply container (HashiCorp partial-configuration pattern).
+	// Default false preserves the historical local-state behavior. See
+	// issue #169.
+	RemoteBackend bool
 }
 
 // ComposeStack preserves the historical (Files, error) signature. It hard-
@@ -577,7 +586,15 @@ func (c *Client) composeStackImpl(opts ComposeStackOpts) (*ComposeStackResult, e
 		files["/imported.tf"] = importedTF
 	}
 
-	files["/providers.tf"] = generateProvidersTF(cloud, reg, opts.GCPProjectID, selected, discoveredProviders, importedClouds)
+	files["/providers.tf"] = generateProvidersTF(providersTFInput{
+		Cloud:          cloud,
+		Region:         reg,
+		GCPProjectID:   opts.GCPProjectID,
+		Selected:       selected,
+		Discovered:     discoveredProviders,
+		ImportedClouds: importedClouds,
+		RemoteBackend:  opts.RemoteBackend,
+	})
 
 	// Validator dispatcher — runs after the stack is fully composed, before
 	// returning. Each validator appends to issues. The missing-required check
@@ -593,28 +610,64 @@ func (c *Client) composeStackImpl(opts ComposeStackOpts) (*ComposeStackResult, e
 	return &ComposeStackResult{Files: files, Issues: issues}, nil
 }
 
+// providersTFInput bundles every input needed to render the composed
+// `/providers.tf`. Grouping them in a struct keeps the call sites stable
+// when new optional inputs land — append a field, set it where it
+// matters, leave the rest at their zero values.
+type providersTFInput struct {
+	// Cloud is "aws" or "gcp". Empty defaults to "aws" upstream.
+	Cloud string
+
+	// Region is the cloud region (e.g. "us-east-1", "us-central1").
+	// Empty falls back to a per-cloud default.
+	Region string
+
+	// GCPProjectID is the real GCP project id (matches
+	// ComposeStackOpts.GCPProjectID). Only consumed when emitting the
+	// `google.imported` alias; ignored on AWS.
+	GCPProjectID string
+
+	// Selected is the set of ComponentKeys composed into the stack.
+	// Drives root-level provider aliases that depend on which presets are
+	// present (e.g. the WAF us_east_1 alias for CloudFront cert validation).
+	Selected map[ComponentKey]bool
+
+	// Discovered is the union of every child module's required_providers
+	// declaration (parsed from the preset files). Merged into the
+	// root-level `required_providers` so `terraform init` knows to pull
+	// plugins like `opensearch-project/opensearch` that child modules
+	// reference via their own module-scoped provider blocks.
+	Discovered map[string]*tfconfig.ProviderRequirement
+
+	// ImportedClouds keys ("aws", "gcp") request additional provider
+	// aliases dedicated to imported resources (issue #148). The imported
+	// alias inherits the cloud's region (and assume_role for AWS,
+	// project for GCP) but deliberately omits default_tags /
+	// default_labels — imported resources must not inherit the stack's
+	// Project tag because they may pre-date the InsideOut session.
+	ImportedClouds map[string]bool
+
+	// RemoteBackend opts the composed root into a remote terraform state
+	// backend (issue #169). When true, an empty `backend "s3" {}` (AWS)
+	// or `backend "gcs" {}` (GCP) sub-block is emitted inside the
+	// `terraform { ... }` block; the caller supplies bucket/region/key
+	// at `terraform init -backend-config=...` time. Default false
+	// preserves local-state behavior.
+	RemoteBackend bool
+}
+
 // generateProvidersTF generates cloud-specific provider configuration.
 // For AWS it includes assume_role blocks with bootstrap_role_arn and
 // external_id variables so Oracle can deploy into the customer's account
 // using cross-account role assumption with confused-deputy protection.
-//
-// `discovered` is the union of every child module's required_providers
-// declaration (parsed from the preset files). Those entries are merged into
-// the root-level required_providers block so `terraform init` knows to pull
-// plugins like `opensearch-project/opensearch` that child modules reference
-// via their own module-scoped provider blocks.
-//
-// `gcpProjectID` is the real GCP project id (as in ComposeStackOpts) and is
-// only consumed when emitting the google.imported alias; ignored on AWS.
-//
-// `importedClouds` keys ("aws", "gcp") request additional provider aliases
-// dedicated to imported resources (issue #148). The imported alias inherits
-// the cloud's region (and assume_role for AWS, project for GCP) but
-// deliberately omits default_tags / default_labels — imported resources
-// must not inherit the stack's Project tag because they may pre-date the
-// InsideOut session. EmitImportedTF returns this map; the wiring is no-op
-// when no imported resources were emitted.
-func generateProvidersTF(cloud, region, gcpProjectID string, selected map[ComponentKey]bool, discovered map[string]*tfconfig.ProviderRequirement, importedClouds map[string]bool) []byte {
+func generateProvidersTF(in providersTFInput) []byte {
+	cloud := in.Cloud
+	region := in.Region
+	gcpProjectID := in.GCPProjectID
+	selected := in.Selected
+	discovered := in.Discovered
+	importedClouds := in.ImportedClouds
+	remoteBackend := in.RemoteBackend
 	// Seed required_providers with the cloud's base entry, then union the
 	// child-module discoveries on top. Discovered entries win on conflict.
 	required := map[string]*tfconfig.ProviderRequirement{}
@@ -629,7 +682,11 @@ func generateProvidersTF(cloud, region, gcpProjectID string, selected map[Compon
 		var b strings.Builder
 		b.WriteString("terraform {\n  required_providers {\n")
 		b.WriteString(renderRequiredProviders(required))
-		b.WriteString("  }\n}\n\n")
+		b.WriteString("  }\n")
+		if remoteBackend {
+			b.WriteString("  backend \"gcs\" {}\n")
+		}
+		b.WriteString("}\n\n")
 		fmt.Fprintf(&b, "provider \"google\" {\n  region = %q\n}\n", region)
 		if importedClouds["gcp"] {
 			b.WriteString("\n")
@@ -694,7 +751,11 @@ variable "external_id" {
 		b.WriteString(awsVarDecls)
 		b.WriteString("terraform {\n  required_providers {\n")
 		b.WriteString(renderRequiredProviders(required))
-		b.WriteString("  }\n}\n\n")
+		b.WriteString("  }\n")
+		if remoteBackend {
+			b.WriteString("  backend \"s3\" {}\n")
+		}
+		b.WriteString("}\n\n")
 		fmt.Fprintf(&b, "provider \"aws\" {\n  region = %q%s%s\n}\n", region, awsDefaultTags, awsDynamicAssumeRole)
 
 		// WAF requires an additional us_east_1 provider alias for CloudFront
