@@ -9,7 +9,11 @@ resource "random_id" "suffix" {
 
 locals {
   network_name = "${var.project}-${var.network_name}-${random_id.suffix.hex}"
-  subnet_name  = "${var.project}-subnet-${var.region}-${random_id.suffix.hex}"
+  # subnet_name is intentionally suffix-free: it becomes a for_each map key
+  # in the upstream subnets sub-module (which rekeys by subnet_name), and
+  # for_each keys must be plan-time-known. Subnets are network-scoped, so
+  # the suffix on network_name already protects state-loss recovery (#163).
+  subnet_name = "${var.project}-subnet-${var.region}"
 }
 
 module "vpc" {
@@ -33,11 +37,11 @@ module "vpc" {
   secondary_ranges = var.gke_cluster_name != null ? {
     (local.subnet_name) = [
       {
-        range_name    = "${var.project}-pods-${random_id.suffix.hex}"
+        range_name    = "${var.project}-pods"
         ip_cidr_range = var.secondary_ranges.pods_cidr
       },
       {
-        range_name    = "${var.project}-services-${random_id.suffix.hex}"
+        range_name    = "${var.project}-services"
         ip_cidr_range = var.secondary_ranges.services_cidr
       }
     ]
