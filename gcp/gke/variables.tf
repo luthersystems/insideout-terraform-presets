@@ -25,9 +25,14 @@ variable "region" {
 }
 
 variable "cluster_name" {
-  description = "Name of the GKE cluster"
+  description = "Name of the GKE cluster (without project prefix or random suffix). The composed name is <project>-<cluster_name>-<8hex>; GKE caps cluster names at 40 chars total, so cluster_name must leave room for the project prefix and the 9-char suffix."
   type        = string
   default     = "main"
+
+  validation {
+    condition     = length(var.cluster_name) <= 14
+    error_message = "cluster_name must be ≤ 14 chars. GKE caps cluster names at 40 chars; the module composes <project>-<cluster_name>-<8hex>. Assuming a 15-char project prefix (typical InsideOut session ID), 14 chars here keeps the total at 40."
+  }
 }
 
 variable "network_self_link" {
