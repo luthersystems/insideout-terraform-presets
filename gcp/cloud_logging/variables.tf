@@ -19,3 +19,20 @@ variable "project_id" {
 }
 
 variable "region" { type = string }
+
+variable "retention_days" {
+  description = "Number of days to retain archived log objects in the logs bucket before deletion."
+  type        = number
+  default     = 30
+
+  validation {
+    condition     = var.retention_days >= 1
+    error_message = "retention_days must be >= 1."
+  }
+}
+
+variable "labels" {
+  description = "Additional labels to apply to module resources. Merged with module-managed labels."
+  type        = map(string)
+  default     = {}
+}
