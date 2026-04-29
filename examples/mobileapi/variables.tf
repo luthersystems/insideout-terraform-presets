@@ -2,6 +2,10 @@ variable "gcp_cloud_logging_project" {
   type = string
 }
 
+variable "gcp_cloud_logging_project_id" {
+  type = string
+}
+
 variable "gcp_cloud_logging_region" {
   type = string
 }

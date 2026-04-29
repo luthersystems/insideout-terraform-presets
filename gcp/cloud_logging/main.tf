@@ -19,6 +19,7 @@ resource "random_id" "suffix" {
 }
 
 resource "google_logging_project_sink" "sink" {
+  project     = var.project_id
   name        = "${var.project}-sink-${random_id.suffix.hex}"
   destination = "storage.googleapis.com/${var.project}-logs"
   filter      = "severity >= ERROR"

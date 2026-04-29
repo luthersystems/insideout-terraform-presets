@@ -22,6 +22,18 @@ resource "random_id" "suffix" {
   byte_length = 4
 }
 
+# Migrate state from the pre-#159 conditional `random_id.bucket_suffix[0]`
+# resource to the unconditional `random_id.suffix` resource. For stacks
+# that were deployed with source_archive_bucket = "" (the prior count = 1
+# case), this preserves the existing hex value so the auto-created source
+# bucket name does not change on first apply after upgrade. For stacks
+# deployed with a caller-supplied bucket (prior count = 0), the moved
+# block is a no-op and `random_id.suffix` is created fresh.
+moved {
+  from = random_id.bucket_suffix[0]
+  to   = random_id.suffix
+}
+
 locals {
   function_name = "${var.project}-${var.function_name}-${random_id.suffix.hex}"
   bucket_name   = var.source_archive_bucket != "" ? var.source_archive_bucket : "${var.project}-gcf-source-${random_id.suffix.hex}"

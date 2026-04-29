@@ -66,10 +66,14 @@ resource "google_api_gateway_api" "this" {
 
 # API Config (OpenAPI spec)
 resource "google_api_gateway_api_config" "this" {
-  provider      = google-beta
-  project       = var.project_id
-  api           = google_api_gateway_api.this.api_id
-  api_config_id = "${var.project}-api-config-${random_id.suffix.hex}-${formatdate("YYYYMMDDhhmmss", timestamp())}"
+  provider = google-beta
+  project  = var.project_id
+  api      = google_api_gateway_api.this.api_id
+  # timestamp() already changes every apply (and survives state loss — a
+  # fresh apply just gets a fresh timestamp), so the random_id suffix is
+  # redundant here. Kept on api_id and gateway_id where there's no
+  # timestamp to fall back on.
+  api_config_id = "${var.project}-api-config-${formatdate("YYYYMMDDhhmmss", timestamp())}"
 
   openapi_documents {
     document {

@@ -113,5 +113,17 @@ resource "google_vpc_access_connector" "serverless" {
   region        = var.region
   network       = module.vpc.network_self_link
   ip_cidr_range = var.connector_cidr
+
+  lifecycle {
+    # The composed connector name "<project>-conn-<4hex>" budgets exactly
+    # 25 chars when var.project is 15 chars (the InsideOut session-prefix
+    # default). Surface the constraint at plan time so a too-long
+    # var.project fails fast with a clear message instead of erroring at
+    # apply when the GCP API rejects the name.
+    precondition {
+      condition     = length(var.project) <= 15
+      error_message = "var.project must be ≤ 15 chars when enable_serverless_connector = true. The composed connector name is \"<project>-conn-<4hex>\" (project + 10 chars), and the VPC connector API caps names at 25 chars. Either disable enable_serverless_connector or shorten var.project."
+    }
+  }
 }
 

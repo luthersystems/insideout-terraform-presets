@@ -19,6 +19,7 @@ resource "random_id" "suffix" {
 }
 
 resource "google_cloudbuild_trigger" "trigger" {
+  project  = var.project_id
   name     = "${var.project}-trigger-${random_id.suffix.hex}"
   filename = "cloudbuild.yaml"
   trigger_template {
