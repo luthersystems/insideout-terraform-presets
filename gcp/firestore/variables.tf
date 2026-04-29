@@ -13,4 +13,14 @@ variable "project_id" {
   }
 }
 
-variable "region" { type = string }
+variable "region" {
+  description = "GCP region. Used as the Firestore location_id when var.location_id is empty — Firestore has a fixed list of valid locations (see var.location_id) that overlaps with but is not identical to the set of regular GCP regions, so override location_id when your stack region isn't a Firestore-valid value."
+  type        = string
+  default     = "us-central1"
+}
+
+variable "location_id" {
+  description = "Firestore database location_id. When empty, defaults to var.region. Firestore accepts a fixed list of locations: multi-region (nam5, eur3) or specific regions like us-central1, us-east1, europe-west1, asia-east1. See https://cloud.google.com/firestore/docs/locations for the full list. Override this when your stack region (var.region) isn't on that list."
+  type        = string
+  default     = ""
+}
