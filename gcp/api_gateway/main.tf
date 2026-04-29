@@ -19,9 +19,30 @@ terraform {
 }
 
 # Per-deploy suffix so retries after state loss don't 409 on the api / gateway
-# IDs (issue #159). The api_config_id already rotates per-apply via timestamp().
+# IDs (issue #159).
 resource "random_id" "suffix" {
   byte_length = 4
+}
+
+# Rotate api_config_id only when the OpenAPI spec actually changes.
+# Previously this used formatdate(timestamp()) which forced replacement
+# on every apply — functionally fine (api configs are versioned and
+# immutable by design, so the intended deployment model IS create + swap)
+# but surfaces as drift_detected=true on every plan even when the spec
+# hasn't changed. Reliable's tfstatus flow then shows a false drift
+# signal on otherwise-quiescent stacks.
+#
+# Using random_id with keepers tied to md5(var.openapi_spec):
+#   - same spec → same hex → same config_id → no churn → no drift
+#   - spec change → new hex → new config created, gateway switches
+#     (create_before_destroy on the api_config below makes this safe)
+#   - state loss → random_id regenerates → fresh config (the operator
+#     cleans up the orphan in GCP — config_ids don't 409 on retry)
+resource "random_id" "config_version" {
+  byte_length = 4
+  keepers = {
+    spec_hash = md5(var.openapi_spec)
+  }
 }
 
 # Enable API Gateway API
@@ -66,14 +87,10 @@ resource "google_api_gateway_api" "this" {
 
 # API Config (OpenAPI spec)
 resource "google_api_gateway_api_config" "this" {
-  provider = google-beta
-  project  = var.project_id
-  api      = google_api_gateway_api.this.api_id
-  # timestamp() already changes every apply (and survives state loss — a
-  # fresh apply just gets a fresh timestamp), so the random_id suffix is
-  # redundant here. Kept on api_id and gateway_id where there's no
-  # timestamp to fall back on.
-  api_config_id = "${var.project}-api-config-${formatdate("YYYYMMDDhhmmss", timestamp())}"
+  provider      = google-beta
+  project       = var.project_id
+  api           = google_api_gateway_api.this.api_id
+  api_config_id = "${var.project}-api-config-${random_id.config_version.hex}"
 
   openapi_documents {
     document {
