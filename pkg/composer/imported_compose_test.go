@@ -417,3 +417,112 @@ func TestEmitImportedTF_ProducesValidHCL(t *testing.T) {
 	_, diags := hclsyntax.ParseConfig(out, "imported.tf", hcl.InitialPos)
 	require.False(t, diags.HasErrors(), "EmitImportedTF must produce valid HCL: %s", diags.Error())
 }
+
+// TestComposeStackWithIssues_CrossTierWiring_RoundTrip pins the issue
+// #150 happy path: an imported resource referencing another imported
+// resource via RawExpr round-trips through ComposeStackWithIssues
+// without introducing dangling_resource_ref / wiring_cycle issues
+// and emits the expression text verbatim in /imported.tf.
+func TestComposeStackWithIssues_CrossTierWiring_RoundTrip(t *testing.T) {
+	t.Parallel()
+
+	c := newTestClient()
+	res, err := c.ComposeStackWithIssues(ComposeStackOpts{
+		Cloud:        "aws",
+		SelectedKeys: []ComponentKey{KeyAWSVPC},
+		Comps:        &Components{Cloud: "AWS"},
+		Cfg:          &Config{},
+		Project:      "demo",
+		Region:       "us-east-1",
+		Imported: []imported.ImportedResource{
+			{
+				Identity: imported.ResourceIdentity{
+					Cloud:    "aws",
+					Type:     "aws_dynamodb_table",
+					Address:  "aws_dynamodb_table.users",
+					ImportID: "users",
+				},
+				Tier: imported.TierImportedFlat,
+				Attributes: map[string]any{
+					"name":     "users",
+					"hash_key": "id",
+				},
+			},
+			{
+				Identity: imported.ResourceIdentity{
+					Cloud:    "aws",
+					Type:     "aws_lambda_function",
+					Address:  "aws_lambda_function.api",
+					ImportID: "api",
+				},
+				Tier: imported.TierImportedFlat,
+				Attributes: map[string]any{
+					"function_name": "api",
+					// Cross-tier reference: api Lambda reads users table ARN.
+					"description": RawExpr{Expr: "aws_dynamodb_table.users.arn"},
+				},
+			},
+		},
+	})
+	require.NoError(t, err)
+	for _, iss := range res.Issues {
+		require.NotEqual(t, "dangling_resource_ref", iss.Code, "unexpected: %v", iss)
+		require.NotEqual(t, "dangling_module_ref_from_imported", iss.Code, "unexpected: %v", iss)
+		require.NotEqual(t, "unwired_resource_attr", iss.Code, "unexpected: %v", iss)
+		require.NotEqual(t, "wiring_cycle", iss.Code, "unexpected: %v", iss)
+		require.NotEqual(t, "hcl_parse_error", iss.Code, "unexpected: %v", iss)
+	}
+	importedTF := string(res.Files["/imported.tf"])
+	// Assert the *unquoted* form: `description = aws_dynamodb_table.users.arn`,
+	// not `description = "aws_dynamodb_table.users.arn"`. The latter
+	// would still satisfy a substring check while breaking semantics.
+	require.Regexp(t,
+		`description\s*=\s*aws_dynamodb_table\.users\.arn`,
+		importedTF,
+		"RawExpr must round-trip as a Terraform reference, not a quoted string")
+}
+
+// TestComposeStackWithIssues_CrossTierWiring_DanglingFlagged pins the
+// negative path: a module input referencing a flat imported address
+// that isn't in the stack surfaces exactly one dangling_resource_ref
+// issue (and not multiple noisy variants).
+func TestComposeStackWithIssues_CrossTierWiring_DanglingFlagged(t *testing.T) {
+	t.Parallel()
+
+	c := newTestClient()
+	res, err := c.ComposeStackWithIssues(ComposeStackOpts{
+		Cloud:        "aws",
+		SelectedKeys: []ComponentKey{KeyAWSVPC},
+		Comps:        &Components{Cloud: "AWS"},
+		Cfg:          &Config{},
+		Project:      "demo",
+		Region:       "us-east-1",
+		Imported: []imported.ImportedResource{
+			{
+				Identity: imported.ResourceIdentity{
+					Cloud:    "aws",
+					Type:     "aws_lambda_function",
+					Address:  "aws_lambda_function.api",
+					ImportID: "api",
+				},
+				Tier: imported.TierImportedFlat,
+				Attributes: map[string]any{
+					"function_name": "api",
+					"description":   RawExpr{Expr: "aws_dynamodb_table.absent.arn"},
+				},
+			},
+		},
+	})
+	require.NoError(t, err)
+	require.NotEmpty(t, res.Issues, "compose must emit issues for a dangling reference")
+	require.NotEmpty(t, res.Files["/imported.tf"],
+		"compose must still emit /imported.tf even when references dangle")
+	dangling := 0
+	for _, iss := range res.Issues {
+		if iss.Code == "dangling_resource_ref" {
+			dangling++
+			require.Equal(t, "imported.aws_lambda_function.api.description", iss.Field)
+		}
+	}
+	require.Equal(t, 1, dangling, "expected exactly one dangling_resource_ref, got: %v", res.Issues)
+}

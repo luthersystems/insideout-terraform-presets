@@ -23,6 +23,10 @@ import (
 //     typed Layer 1 structs that the composer must consume to emit
 //     /imported.tf (issue #148). These are infrastructure owned by the
 //     composer, not downstream consumers.
+//   - github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported/policy
+//     — Phase 2 Layer 2 field-policy registry (issue #147) used by
+//     cross-tier wiring validators (issue #150) to classify
+//     wiring vs scalar attributes.
 //
 // Subpackages outside the allowlist (e.g. an "internal/" helper) must fail
 // so coupling can't accidentally leak in.
@@ -34,6 +38,7 @@ func TestNoForeignLutherImportsInNonTestFiles(t *testing.T) {
 	allowedSubpackages := map[string]struct{}{
 		parentPkg + "/pkg/composer/imported":           {},
 		parentPkg + "/pkg/composer/imported/generated": {},
+		parentPkg + "/pkg/composer/imported/policy":    {},
 	}
 
 	entries, err := os.ReadDir(".")

@@ -5,6 +5,8 @@ import (
 
 	"github.com/hashicorp/go-version"
 	"github.com/stretchr/testify/require"
+
+	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
 
 // TestFindProviderConflicts_FlagsImpossibleUnion exercises the conflict-
@@ -256,5 +258,40 @@ func TestComposeStackWithIssues_GreenStackHasNoCommit3Issues(t *testing.T) {
 		// stay clean.
 		require.NotEqual(t, "provider_version_conflict", iss.Code, "unexpected: %v", iss)
 		require.NotEqual(t, "hcl_parse_error", iss.Code, "unexpected: %v", iss)
+	}
+}
+
+// TestValidateProviderConstraints_ImportedAliasNoOp pins that adding
+// imported resources to a compose run does not introduce a
+// provider_version_conflict — the aws.imported / google.imported
+// aliases share the same provider source/version as the default
+// alias, so the version-constraint aggregation must remain a no-op.
+func TestValidateProviderConstraints_ImportedAliasNoOp(t *testing.T) {
+	t.Parallel()
+
+	c := newTestClient()
+	r, err := c.ComposeStackWithIssues(ComposeStackOpts{
+		Cloud:        "aws",
+		SelectedKeys: []ComponentKey{KeyAWSVPC},
+		Comps:        &Components{Cloud: "AWS"},
+		Cfg:          &Config{},
+		Project:      "p",
+		Region:       "us-east-1",
+		Imported: []imported.ImportedResource{
+			{
+				Identity: imported.ResourceIdentity{
+					Cloud:    "aws",
+					Type:     "aws_sqs_queue",
+					Address:  "aws_sqs_queue.dlq",
+					ImportID: "https://sqs.us-east-1.amazonaws.com/123/dlq",
+				},
+				Tier: imported.TierImportedFlat,
+			},
+		},
+	})
+	require.NoError(t, err)
+	for _, iss := range r.Issues {
+		require.NotEqual(t, "provider_version_conflict", iss.Code,
+			"imported alias must not introduce a version conflict: %v", iss)
 	}
 }

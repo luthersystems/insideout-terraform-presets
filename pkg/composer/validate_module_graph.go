@@ -4,12 +4,15 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
+	"strings"
 
 	hcl "github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/ext/typeexpr"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/zclconf/go-cty/cty"
 	"github.com/zclconf/go-cty/cty/convert"
+
+	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
 
 // wiringEdge describes a single `module.<consumer>.<input> = module.<producer>.<output>`
@@ -182,6 +185,145 @@ func ValidateNoModuleCycles(blocks []ModuleBlock) []ValidationIssue {
 		Code:   "module_cycle",
 		Reason: fmt.Sprintf("module dependency cycle involving: %v%s", stuck, closing),
 	}}
+}
+
+// ValidateNoUnionCycles topo-sorts the union wiring graph (preset
+// module calls + flat imported resources) and reports cycles that
+// span at least one resource node. Pure module-only cycles are left
+// to ValidateNoModuleCycles so the existing `module_cycle` issue
+// shape is preserved; this validator owns the new `wiring_cycle`
+// code emitted only when an imported resource participates in the
+// cycle.
+//
+// Field stays "module_graph" (matching ValidateNoModuleCycles) so
+// dedupeAndSortIssues groups graph-level issues consistently.
+func ValidateNoUnionCycles(blocks []ModuleBlock, irs []imported.ImportedResource) []ValidationIssue {
+	nodes := map[GraphNode]bool{}
+	for _, b := range blocks {
+		nodes[GraphNode{Kind: NodeKindModule, Addr: b.Name}] = true
+	}
+	for _, ir := range irs {
+		if !isEmitEligibleConsumer(ir) {
+			continue
+		}
+		addr := strings.TrimSpace(ir.Identity.Address)
+		if addr == "" {
+			continue
+		}
+		nodes[GraphNode{Kind: NodeKindResource, Addr: addr}] = true
+	}
+
+	indeg := map[GraphNode]int{}
+	deps := map[GraphNode]map[GraphNode]bool{} // producer -> set(consumers)
+	for n := range nodes {
+		indeg[n] = 0
+		deps[n] = map[GraphNode]bool{}
+	}
+
+	edges := extractUnionEdges(blocks, irs)
+	for _, e := range edges {
+		if !nodes[e.Producer] || !nodes[e.Consumer] {
+			continue
+		}
+		if e.Producer == e.Consumer {
+			continue
+		}
+		if !deps[e.Producer][e.Consumer] {
+			deps[e.Producer][e.Consumer] = true
+			indeg[e.Consumer]++
+		}
+	}
+
+	// Kahn's algorithm. Sort by node string for deterministic queue
+	// ordering (matches ValidateNoModuleCycles).
+	queueKeys := make([]GraphNode, 0, len(indeg))
+	for n, d := range indeg {
+		if d == 0 {
+			queueKeys = append(queueKeys, n)
+		}
+	}
+	sortNodes(queueKeys)
+	visited := map[GraphNode]bool{}
+	for len(queueKeys) > 0 {
+		n := queueKeys[0]
+		queueKeys = queueKeys[1:]
+		visited[n] = true
+		next := make([]GraphNode, 0, len(deps[n]))
+		for d := range deps[n] {
+			indeg[d]--
+			if indeg[d] == 0 {
+				next = append(next, d)
+			}
+		}
+		sortNodes(next)
+		queueKeys = append(queueKeys, next...)
+	}
+
+	var stuck []GraphNode
+	for n := range nodes {
+		if !visited[n] {
+			stuck = append(stuck, n)
+		}
+	}
+	if len(stuck) == 0 {
+		return nil
+	}
+	// Defer to ValidateNoModuleCycles for the pure-module case so the
+	// `module_cycle` code stays canonical and we don't double-report.
+	hasResource := false
+	for _, n := range stuck {
+		if n.Kind == NodeKindResource {
+			hasResource = true
+			break
+		}
+	}
+	if !hasResource {
+		return nil
+	}
+	sortNodes(stuck)
+
+	stuckSet := map[GraphNode]bool{}
+	for _, n := range stuck {
+		stuckSet[n] = true
+	}
+	// Pinpoint at least one closing edge so reviewers can see where to
+	// break the cycle. When the graph contains multiple disjoint
+	// cycles this picks one of them; the full stuck-node list is in
+	// the Reason regardless, so the operator can grep the rendered
+	// composed root for the rest.
+	var closing string
+	for _, e := range edges {
+		if stuckSet[e.Producer] && stuckSet[e.Consumer] && e.Producer != e.Consumer {
+			var consumerSlot string
+			if e.Consumer.Kind == NodeKindResource {
+				consumerSlot = "imported." + e.Consumer.Addr + "." + e.ConsumerInput
+			} else {
+				consumerSlot = e.Consumer.Addr + "." + e.ConsumerInput
+			}
+			closing = fmt.Sprintf(" (e.g. %s -> %s.%s)", consumerSlot, e.Producer.String(), e.ProducerAttr)
+			break
+		}
+	}
+	stuckNames := make([]string, len(stuck))
+	for i, n := range stuck {
+		stuckNames[i] = n.String()
+	}
+	return []ValidationIssue{{
+		Field:  "module_graph",
+		Code:   "wiring_cycle",
+		Reason: fmt.Sprintf("cross-tier wiring cycle involving: %v%s", stuckNames, closing),
+	}}
+}
+
+// sortNodes orders GraphNodes deterministically by Kind then Addr. The
+// kind ordering (module < resource) matches GraphNodeKind iota order.
+func sortNodes(ns []GraphNode) {
+	sort.Slice(ns, func(i, j int) bool {
+		if ns[i].Kind != ns[j].Kind {
+			return ns[i].Kind < ns[j].Kind
+		}
+		return ns[i].Addr < ns[j].Addr
+	})
 }
 
 // ValidateValueTypes asserts each mapped module input value is convertible
