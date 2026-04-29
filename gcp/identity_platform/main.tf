@@ -62,4 +62,11 @@ resource "google_identity_platform_default_supported_idp_config" "google" {
   enabled = true
 
   depends_on = [google_identity_platform_config.this]
+
+  lifecycle {
+    precondition {
+      condition     = length(trimspace(var.google_client_id)) > 0 && length(trimspace(var.google_client_secret)) > 0
+      error_message = "google_client_id and google_client_secret are required when enable_google_signin is true (issue #168 sibling: prevents Identity Platform's 400 'client_id must not be empty' at apply)."
+    }
+  }
 }
