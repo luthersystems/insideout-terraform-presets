@@ -202,7 +202,7 @@ func TestGenerateProvidersTF_DiscoveryUnion(t *testing.T) {
 	}
 
 	t.Run("aws with discovery", func(t *testing.T) {
-		got := string(generateProvidersTF("aws", "us-east-1",
+		got := string(generateProvidersTF("aws", "us-east-1", "",
 			map[ComponentKey]bool{KeyAWSOpenSearch: true}, discovered, nil))
 		require.Contains(t, got, "hashicorp/aws", "base aws provider required")
 		require.Contains(t, got, "opensearch-project/opensearch", "discovered provider required")
@@ -213,7 +213,7 @@ func TestGenerateProvidersTF_DiscoveryUnion(t *testing.T) {
 	})
 
 	t.Run("aws with WAF + discovery coexist", func(t *testing.T) {
-		got := string(generateProvidersTF("aws", "us-east-1",
+		got := string(generateProvidersTF("aws", "us-east-1", "",
 			map[ComponentKey]bool{KeyAWSWAF: true, KeyAWSOpenSearch: true}, discovered, nil))
 		require.Contains(t, got, `alias  = "us_east_1"`, "WAF us-east-1 alias block")
 		require.Contains(t, got, "opensearch-project/opensearch",
@@ -225,7 +225,7 @@ func TestGenerateProvidersTF_DiscoveryUnion(t *testing.T) {
 	})
 
 	t.Run("aws with no discovery falls back to aws only", func(t *testing.T) {
-		got := string(generateProvidersTF("aws", "us-east-1",
+		got := string(generateProvidersTF("aws", "us-east-1", "",
 			map[ComponentKey]bool{}, map[string]*tfconfig.ProviderRequirement{}, nil))
 		require.Contains(t, got, "hashicorp/aws")
 		require.Equal(t, 1, strings.Count(got, "source  = "),
@@ -233,7 +233,7 @@ func TestGenerateProvidersTF_DiscoveryUnion(t *testing.T) {
 	})
 
 	t.Run("gcp base + discovery", func(t *testing.T) {
-		got := string(generateProvidersTF("gcp", "us-central1",
+		got := string(generateProvidersTF("gcp", "us-central1", "demo-project-12345",
 			map[ComponentKey]bool{}, discovered, nil))
 		require.Contains(t, got, "hashicorp/google")
 		require.Contains(t, got, "opensearch-project/opensearch")
@@ -244,16 +244,16 @@ func TestGenerateProvidersTF_DiscoveryUnion(t *testing.T) {
 		// Use an empty map rather than nil for `selected` — matches the
 		// other subtests in this table and avoids a nil-vs-empty-map
 		// divergence that could hide a real regression.
-		a := string(generateProvidersTF("aws", "us-east-1", map[ComponentKey]bool{}, discovered, nil))
-		b := string(generateProvidersTF("aws", "us-east-1", map[ComponentKey]bool{}, discovered, nil))
+		a := string(generateProvidersTF("aws", "us-east-1", "", map[ComponentKey]bool{}, discovered, nil))
+		b := string(generateProvidersTF("aws", "us-east-1", "", map[ComponentKey]bool{}, discovered, nil))
 		require.Equal(t, a, b, "providers.tf output must be deterministic")
 	})
 
 	t.Run("nil selected is equivalent to empty", func(t *testing.T) {
 		// Defensive: Go map reads of a nil map return the zero value, so
 		// the WAF/OpenSearch guards should treat nil and empty identically.
-		nilOut := string(generateProvidersTF("aws", "us-east-1", nil, discovered, nil))
-		emptyOut := string(generateProvidersTF("aws", "us-east-1", map[ComponentKey]bool{}, discovered, nil))
+		nilOut := string(generateProvidersTF("aws", "us-east-1", "", nil, discovered, nil))
+		emptyOut := string(generateProvidersTF("aws", "us-east-1", "", map[ComponentKey]bool{}, discovered, nil))
 		require.Equal(t, emptyOut, nilOut,
 			"nil and empty `selected` must produce identical providers.tf")
 	})

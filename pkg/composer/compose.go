@@ -577,7 +577,7 @@ func (c *Client) composeStackImpl(opts ComposeStackOpts) (*ComposeStackResult, e
 		files["/imported.tf"] = importedTF
 	}
 
-	files["/providers.tf"] = generateProvidersTF(cloud, reg, selected, discoveredProviders, importedClouds)
+	files["/providers.tf"] = generateProvidersTF(cloud, reg, opts.GCPProjectID, selected, discoveredProviders, importedClouds)
 
 	// Validator dispatcher — runs after the stack is fully composed, before
 	// returning. Each validator appends to issues. The missing-required check
@@ -604,14 +604,17 @@ func (c *Client) composeStackImpl(opts ComposeStackOpts) (*ComposeStackResult, e
 // plugins like `opensearch-project/opensearch` that child modules reference
 // via their own module-scoped provider blocks.
 //
+// `gcpProjectID` is the real GCP project id (as in ComposeStackOpts) and is
+// only consumed when emitting the google.imported alias; ignored on AWS.
+//
 // `importedClouds` keys ("aws", "gcp") request additional provider aliases
 // dedicated to imported resources (issue #148). The imported alias inherits
-// the cloud's region (and assume_role for AWS, project_id for GCP) but
+// the cloud's region (and assume_role for AWS, project for GCP) but
 // deliberately omits default_tags / default_labels — imported resources
 // must not inherit the stack's Project tag because they may pre-date the
 // InsideOut session. EmitImportedTF returns this map; the wiring is no-op
 // when no imported resources were emitted.
-func generateProvidersTF(cloud, region string, selected map[ComponentKey]bool, discovered map[string]*tfconfig.ProviderRequirement, importedClouds map[string]bool) []byte {
+func generateProvidersTF(cloud, region, gcpProjectID string, selected map[ComponentKey]bool, discovered map[string]*tfconfig.ProviderRequirement, importedClouds map[string]bool) []byte {
 	// Seed required_providers with the cloud's base entry, then union the
 	// child-module discoveries on top. Discovered entries win on conflict.
 	required := map[string]*tfconfig.ProviderRequirement{}
@@ -631,11 +634,14 @@ func generateProvidersTF(cloud, region string, selected map[ComponentKey]bool, d
 		if importedClouds["gcp"] {
 			b.WriteString("\n")
 			// google.imported drives Terraform's import {} for previously
-			// existing GCP resources. project = var.gcp_project_id matches
-			// the default provider's project plumbing so imports land in
-			// the same project. No default_labels: imported resources keep
-			// any pre-existing labels untouched.
-			fmt.Fprintf(&b, "provider \"google\" {\n  alias   = \"imported\"\n  region  = %q\n  project = var.gcp_project_id\n}\n", region)
+			// existing GCP resources. project is rendered as a literal —
+			// the root stack does not declare var.gcp_project_id, and the
+			// project ID is known at compose time. No default_labels:
+			// imported resources keep any pre-existing labels untouched.
+			// An empty gcpProjectID still emits an empty literal: the
+			// gcp_project_id_required ValidationIssue surfaces the real
+			// fix to the caller before apply.
+			fmt.Fprintf(&b, "provider \"google\" {\n  alias   = \"imported\"\n  region  = %q\n  project = %q\n}\n", region, gcpProjectID)
 		}
 		return []byte(b.String())
 

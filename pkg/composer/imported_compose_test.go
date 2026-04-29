@@ -61,13 +61,22 @@ func TestComposeStackWithIssues_Imported_AWS(t *testing.T) {
 	require.NotEmpty(t, importedTF, "/imported.tf must be emitted")
 	assert.Contains(t, importedTF, `resource "aws_sqs_queue" "orders_dlq"`)
 	assert.Contains(t, importedTF, `resource "aws_dynamodb_table" "users"`)
-	assert.Contains(t, importedTF, "import {")
-	assert.Contains(t, importedTF, "to = aws_sqs_queue.orders_dlq")
-	assert.Contains(t, importedTF, "to = aws_dynamodb_table.users")
+
+	// Each imported resource must have its `import {}` block paired with
+	// the correct id — pin (to, id) jointly so an argument-swap mutation
+	// surfaces. Walking the parsed import blocks rather than substring
+	// matching also catches re-emission of an unrelated id.
+	pairs := parseImportPairs(t, importedTF)
+	assert.Equal(t,
+		map[string]string{
+			"aws_sqs_queue.orders_dlq":   "https://sqs.us-east-1.amazonaws.com/123/orders-DLQ",
+			"aws_dynamodb_table.users":   "users",
+		},
+		pairs,
+		"every imported resource must have a paired import block with the matching id")
 
 	providersTF := string(res.Files["/providers.tf"])
-	assert.Contains(t, providersTF, `alias  = "imported"`,
-		"providers.tf must declare the aws.imported alias")
+	assertImportedAliasDeclared(t, providersTF, "aws")
 	assertImportedProviderHasNoDefaultTags(t, providersTF, "aws")
 
 	// Composed root must parse cleanly — ValidateComposedRoot is the
@@ -111,13 +120,16 @@ func TestComposeStackWithIssues_Imported_GCP(t *testing.T) {
 	importedTF := string(res.Files["/imported.tf"])
 	require.NotEmpty(t, importedTF)
 	assert.Contains(t, importedTF, `resource "google_pubsub_topic" "events"`)
-	assert.Contains(t, importedTF, "to = google_pubsub_topic.events")
+	assert.Equal(t,
+		map[string]string{"google_pubsub_topic.events": "projects/demo-project-12345/topics/events"},
+		parseImportPairs(t, importedTF),
+		"imported google resource must have a paired import block")
 
 	providersTF := string(res.Files["/providers.tf"])
-	assert.Contains(t, providersTF, `alias   = "imported"`,
-		"providers.tf must declare google.imported alias")
-	assert.Contains(t, providersTF, "project = var.gcp_project_id",
-		"google.imported must inherit the real GCP project ID")
+	assertImportedAliasDeclared(t, providersTF, "gcp")
+	assert.True(t, hasProviderAttr(providersTF, "gcp", "project", `"demo-project-12345"`),
+		"google.imported must carry project as a literal (root vars do not declare gcp_project_id):\n%s",
+		providersTF)
 	assertImportedProviderHasNoDefaultTags(t, providersTF, "gcp")
 
 	for _, iss := range res.Issues {
@@ -167,19 +179,21 @@ func TestComposeStackWithIssues_Imported_MissingBlocksApply(t *testing.T) {
 		"no imported.tf should be emitted when only blocked records are present")
 
 	providersTF := string(res.Files["/providers.tf"])
-	assert.NotContains(t, providersTF, `alias  = "imported"`,
-		"no aws.imported alias should be declared when nothing emits")
+	assertImportedAliasNotDeclared(t, providersTF, "aws")
 }
 
 // TestComposeStackWithIssues_Imported_StrictValidateEscalates pins that
 // StrictValidate=true escalates an imported_resource_* issue into the
 // aggregated error from ComposeStackWithIssues. Files are still returned so
-// callers can inspect the partial output.
+// callers can inspect the partial output. We assert by issue *code*, not by
+// error-string substring — substring matching of error messages is fragile
+// and would not catch a refactor that emitted the wrong code with the right
+// reason text.
 func TestComposeStackWithIssues_Imported_StrictValidateEscalates(t *testing.T) {
 	t.Parallel()
 
 	c := newTestClient()
-	_, err := c.ComposeStackWithIssues(ComposeStackOpts{
+	res, err := c.ComposeStackWithIssues(ComposeStackOpts{
 		Cloud:          "aws",
 		SelectedKeys:   []ComponentKey{KeyAWSVPC},
 		Comps:          &Components{Cloud: "AWS"},
@@ -200,10 +214,13 @@ func TestComposeStackWithIssues_Imported_StrictValidateEscalates(t *testing.T) {
 		},
 	})
 	require.Error(t, err, "StrictValidate must escalate validator issues")
-	// summarizeIssues renders "<field>: <reason>"; assert against a stable
-	// substring of the reason copy that names the missing piece.
-	assert.Contains(t, err.Error(), "imported.aws_sqs_queue.bad")
-	assert.Contains(t, err.Error(), "ImportID")
+	require.NotNil(t, res, "files must still be returned alongside the error")
+	codes := make([]string, 0, len(res.Issues))
+	for _, iss := range res.Issues {
+		codes = append(codes, iss.Code)
+	}
+	assert.Contains(t, codes, "imported_resource_missing_import_id",
+		"the structured issue code must be present in res.Issues")
 }
 
 // TestComposeStack_NoImportedKeepsExistingBehavior pins backward
@@ -227,8 +244,7 @@ func TestComposeStack_NoImportedKeepsExistingBehavior(t *testing.T) {
 	assert.False(t, hasImportedTF,
 		"composes without Imported must not produce imported.tf")
 	providers := string(files["/providers.tf"])
-	assert.NotContains(t, providers, `alias  = "imported"`,
-		"composes without Imported must not declare the aws.imported alias")
+	assertImportedAliasNotDeclared(t, providers, "aws")
 }
 
 // TestImportedResource_EveryTierBranchExercised acts as a CI gate ensuring
@@ -291,27 +307,94 @@ func TestImportedResource_EveryTierBranchExercised(t *testing.T) {
 	}
 }
 
+// providerKindForCloud maps the cloud token to the provider name used in
+// HCL ("aws" or "google"). Centralised so the helpers below stay in sync.
+func providerKindForCloud(cloud string) string {
+	if cloud == "gcp" {
+		return "google"
+	}
+	return "aws"
+}
+
+// importedAliasBlockPattern returns a regex that matches the imported alias
+// block for cloud, tolerant of hclwrite's variable equal-sign alignment.
+func importedAliasBlockPattern(cloud string) *regexp.Regexp {
+	provider := providerKindForCloud(cloud)
+	return regexp.MustCompile(`(?s)provider\s+"` + provider + `"\s*\{[^}]*alias\s*=\s*"imported"[^}]*\}`)
+}
+
+// assertImportedAliasDeclared asserts a `provider "<provider>" { alias =
+// "imported" ... }` block exists in providersTF for cloud. Tolerant of
+// hclwrite's equal-sign alignment so adding sibling attributes doesn't
+// silently break the assertion.
+func assertImportedAliasDeclared(t *testing.T, providersTF, cloud string) {
+	t.Helper()
+	require.Regexp(t, importedAliasBlockPattern(cloud), providersTF,
+		"imported provider alias for %q must be declared:\n%s", cloud, providersTF)
+}
+
+// assertImportedAliasNotDeclared asserts no imported alias block exists.
+func assertImportedAliasNotDeclared(t *testing.T, providersTF, cloud string) {
+	t.Helper()
+	assert.NotRegexp(t, importedAliasBlockPattern(cloud), providersTF,
+		"unexpected imported alias for %q in providers.tf:\n%s", cloud, providersTF)
+}
+
+// hasProviderAttr reports whether the imported alias block for cloud contains
+// `<name> = <value>` (whitespace-tolerant).
+func hasProviderAttr(providersTF, cloud, name, value string) bool {
+	block := importedAliasBlockPattern(cloud).FindString(providersTF)
+	if block == "" {
+		return false
+	}
+	pattern := regexp.MustCompile(`(?m)^\s*` + regexp.QuoteMeta(name) + `\s*=\s*` + regexp.QuoteMeta(value) + `\s*$`)
+	return pattern.MatchString(block)
+}
+
 // assertImportedProviderHasNoDefaultTags asserts the imported provider alias
 // block does not carry default_tags (AWS) / default_labels (GCP). Imported
 // resources may pre-date the InsideOut session and must keep their existing
 // tags untouched.
 func assertImportedProviderHasNoDefaultTags(t *testing.T, providersTF, cloud string) {
 	t.Helper()
-	var blockPattern *regexp.Regexp
-	switch cloud {
-	case "aws":
-		blockPattern = regexp.MustCompile(`(?s)provider\s+"aws"\s*\{[^}]*alias\s*=\s*"imported"[^}]*\}`)
-	case "gcp":
-		blockPattern = regexp.MustCompile(`(?s)provider\s+"google"\s*\{[^}]*alias\s*=\s*"imported"[^}]*\}`)
-	default:
-		t.Fatalf("unsupported cloud %q", cloud)
-	}
-	match := blockPattern.FindString(providersTF)
+	match := importedAliasBlockPattern(cloud).FindString(providersTF)
 	require.NotEmpty(t, match, "imported provider alias block not found in providers.tf:\n%s", providersTF)
 	assert.NotContains(t, match, "default_tags",
 		"imported provider alias must not carry default_tags")
 	assert.NotContains(t, match, "default_labels",
 		"imported provider alias must not carry default_labels")
+}
+
+// parseImportPairs walks importedTF and returns map[address]importID for
+// every `import {}` block. Joint extraction defends against argument-swap
+// regressions that would still pass a substring-only assertion.
+func parseImportPairs(t *testing.T, importedTF string) map[string]string {
+	t.Helper()
+	file, diags := hclsyntax.ParseConfig([]byte(importedTF), "imported.tf", hcl.InitialPos)
+	require.False(t, diags.HasErrors(), "parseImportPairs: %s", diags.Error())
+	body, ok := file.Body.(*hclsyntax.Body)
+	require.True(t, ok)
+	pairs := map[string]string{}
+	for _, blk := range body.Blocks {
+		if blk.Type != "import" {
+			continue
+		}
+		toAttr, ok := blk.Body.Attributes["to"]
+		require.True(t, ok, "import block missing `to`")
+		idAttr, ok := blk.Body.Attributes["id"]
+		require.True(t, ok, "import block missing `id`")
+
+		// `to` is a traversal expression — capture verbatim source text.
+		toRange := toAttr.Expr.Range()
+		to := strings.TrimSpace(importedTF[toRange.Start.Byte:toRange.End.Byte])
+
+		// `id` is a string literal.
+		idVal, _ := idAttr.Expr.Value(nil)
+		require.True(t, idVal.IsKnown() && idVal.Type().FriendlyName() == "string",
+			"import id must be a string literal")
+		pairs[to] = idVal.AsString()
+	}
+	return pairs
 }
 
 // pinValidateComposedRootTerminal locks in that EmitImportedTF outputs valid
