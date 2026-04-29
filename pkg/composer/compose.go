@@ -11,6 +11,7 @@ import (
 	"github.com/hashicorp/terraform-config-inspect/tfconfig"
 
 	terraformpresets "github.com/luthersystems/insideout-terraform-presets"
+	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
 
 // insideoutManagedByValue is the value stamped into the `managed-by` tag on
@@ -128,6 +129,12 @@ type ComposeSingleOpts struct {
 	// ComposeSingle entry point preserves its historical hard-fail behavior
 	// regardless of this flag.
 	StrictValidate bool
+
+	// Imported is a parity field with ComposeStackOpts.Imported. The
+	// single-module flow does not currently emit imported resources, but
+	// the field exists so reliable's adapter can hand the same shape to
+	// either entry point. See ComposeStackOpts.Imported.
+	Imported []imported.ImportedResource
 }
 
 // ComposeSingle preserves the historical (Files, error) signature. It hard-
@@ -331,6 +338,14 @@ type ComposeStackOpts struct {
 	// ComposeStack entry point preserves its historical hard-fail behavior
 	// regardless of this flag.
 	StrictValidate bool
+
+	// Imported lists resources observed via reverse-Terraform that the
+	// composer must emit as flat HCL alongside the preset module calls. See
+	// pkg/composer/imported and issue #148. Resources whose Identity.Cloud
+	// does not match Cloud are skipped silently; tier-related blockers are
+	// reported via ValidationIssue codes (imported_resource_*). Nil or
+	// empty preserves the historical no-op behavior.
+	Imported []imported.ImportedResource
 }
 
 // ComposeStack preserves the historical (Files, error) signature. It hard-
@@ -553,7 +568,16 @@ func (c *Client) composeStackImpl(opts ComposeStackOpts) (*ComposeStackResult, e
 
 	// Generate cloud-specific providers.tf, merging any child-module
 	// required_providers discovered above.
-	files["/providers.tf"] = generateProvidersTF(cloud, reg, selected, discoveredProviders)
+	// Build /imported.tf for resources observed via reverse-Terraform
+	// (issue #148). This must happen before generateProvidersTF so that
+	// importedClouds tells the provider emitter which alias to declare.
+	issues = append(issues, ValidateImportedResources(cloud, opts.Imported)...)
+	importedTF, importedClouds := EmitImportedTF(cloud, opts.Imported)
+	if len(importedTF) > 0 {
+		files["/imported.tf"] = importedTF
+	}
+
+	files["/providers.tf"] = generateProvidersTF(cloud, reg, selected, discoveredProviders, importedClouds)
 
 	// Validator dispatcher — runs after the stack is fully composed, before
 	// returning. Each validator appends to issues. The missing-required check
@@ -579,7 +603,15 @@ func (c *Client) composeStackImpl(opts ComposeStackOpts) (*ComposeStackResult, e
 // the root-level required_providers block so `terraform init` knows to pull
 // plugins like `opensearch-project/opensearch` that child modules reference
 // via their own module-scoped provider blocks.
-func generateProvidersTF(cloud, region string, selected map[ComponentKey]bool, discovered map[string]*tfconfig.ProviderRequirement) []byte {
+//
+// `importedClouds` keys ("aws", "gcp") request additional provider aliases
+// dedicated to imported resources (issue #148). The imported alias inherits
+// the cloud's region (and assume_role for AWS, project_id for GCP) but
+// deliberately omits default_tags / default_labels — imported resources
+// must not inherit the stack's Project tag because they may pre-date the
+// InsideOut session. EmitImportedTF returns this map; the wiring is no-op
+// when no imported resources were emitted.
+func generateProvidersTF(cloud, region string, selected map[ComponentKey]bool, discovered map[string]*tfconfig.ProviderRequirement, importedClouds map[string]bool) []byte {
 	// Seed required_providers with the cloud's base entry, then union the
 	// child-module discoveries on top. Discovered entries win on conflict.
 	required := map[string]*tfconfig.ProviderRequirement{}
@@ -596,6 +628,15 @@ func generateProvidersTF(cloud, region string, selected map[ComponentKey]bool, d
 		b.WriteString(renderRequiredProviders(required))
 		b.WriteString("  }\n}\n\n")
 		fmt.Fprintf(&b, "provider \"google\" {\n  region = %q\n}\n", region)
+		if importedClouds["gcp"] {
+			b.WriteString("\n")
+			// google.imported drives Terraform's import {} for previously
+			// existing GCP resources. project = var.gcp_project_id matches
+			// the default provider's project plumbing so imports land in
+			// the same project. No default_labels: imported resources keep
+			// any pre-existing labels untouched.
+			fmt.Fprintf(&b, "provider \"google\" {\n  alias   = \"imported\"\n  region  = %q\n  project = var.gcp_project_id\n}\n", region)
+		}
 		return []byte(b.String())
 
 	default: // aws
@@ -656,6 +697,18 @@ variable "external_id" {
 		if selected[KeyAWSWAF] {
 			b.WriteString("\n")
 			fmt.Fprintf(&b, "provider \"aws\" {\n  alias  = \"us_east_1\"\n  region = \"us-east-1\"%s%s\n}\n", awsDefaultTags, awsDynamicAssumeRole)
+		}
+
+		// aws.imported is the dedicated alias for resources discovered via
+		// reverse-Terraform import (issue #148). It carries the same region
+		// and assume_role plumbing as the default provider but deliberately
+		// omits default_tags: imported resources may pre-date the InsideOut
+		// session and must not silently inherit the stack's Project tag.
+		// Provenance tagging is system-owned and re-emitted in the resource
+		// body via merge() instead (issue #153).
+		if importedClouds["aws"] {
+			b.WriteString("\n")
+			fmt.Fprintf(&b, "provider \"aws\" {\n  alias  = \"imported\"\n  region = %q%s\n}\n", region, awsDynamicAssumeRole)
 		}
 
 		return []byte(b.String())

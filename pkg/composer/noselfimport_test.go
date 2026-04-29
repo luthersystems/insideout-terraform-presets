@@ -11,16 +11,30 @@ import (
 // TestNoForeignLutherImportsInNonTestFiles guards the invariant that
 // pkg/composer's non-test code has zero luthersystems/* imports *other
 // than* its own parent package root (which is how composer discovers the
-// bundled preset FS). Any foreign luthersystems import — including any
-// subpackage of insideout-terraform-presets other than the root — would
-// couple composer to downstream consumers and block extraction. Only
-// the exact parent path is permitted; subpackage imports must fail so
-// that e.g. an "internal/" helper cannot accidentally leak in.
+// bundled preset FS) and the explicit allowlist of composer-owned
+// subpackages. Any foreign luthersystems import would couple composer to
+// downstream consumers and block extraction.
+//
+// Allowlist:
+//   - github.com/luthersystems/insideout-terraform-presets — parent root
+//     (preset filesystem).
+//   - github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported
+//     and ...imported/generated — Phase 2 imported-resource carriers and
+//     typed Layer 1 structs that the composer must consume to emit
+//     /imported.tf (issue #148). These are infrastructure owned by the
+//     composer, not downstream consumers.
+//
+// Subpackages outside the allowlist (e.g. an "internal/" helper) must fail
+// so coupling can't accidentally leak in.
 func TestNoForeignLutherImportsInNonTestFiles(t *testing.T) {
 	const (
 		parentPkg    = "github.com/luthersystems/insideout-terraform-presets"
 		lutherPrefix = "github.com/luthersystems/"
 	)
+	allowedSubpackages := map[string]struct{}{
+		parentPkg + "/pkg/composer/imported":           {},
+		parentPkg + "/pkg/composer/imported/generated": {},
+	}
 
 	entries, err := os.ReadDir(".")
 	if err != nil {
@@ -45,7 +59,10 @@ func TestNoForeignLutherImportsInNonTestFiles(t *testing.T) {
 			if path == parentPkg {
 				continue // parent package is the permitted exception
 			}
-			t.Errorf("%s imports %q — pkg/composer non-test code may not import luthersystems/* other than the parent package %q", name, path, parentPkg)
+			if _, ok := allowedSubpackages[path]; ok {
+				continue // explicit composer-owned subpackage allowlist
+			}
+			t.Errorf("%s imports %q — pkg/composer non-test code may not import luthersystems/* other than the parent package %q or composer-owned subpackages", name, path, parentPkg)
 		}
 	}
 }
