@@ -133,6 +133,9 @@ jobs:
       - name: Lint sensitive-in-for_each
         run: bash tests/lint-sensitive-for-each.sh
 
+      - name: Lint apply-time-unknown values in for_each map keys (#163)
+        run: bash tests/lint-foreach-unknown-keys.sh
+
       - name: Lint Project-tag coverage (AWS)
         run: bash tests/lint-project-tag.sh
 
@@ -180,6 +183,14 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      # Terraform is required by the integration tests in pkg/composer that
+      # exercise terraform init/plan against composed bundles (e.g.
+      # compose_gcp_vpc_plan_integration_test.go for issue #163). Tests skip
+      # gracefully if it's missing; installing it ensures CI actually runs
+      # them rather than silently skipping.
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.7.5"
       - run: go test -race ./...
 
   # Re-runs cmd/imported-codegen against the committed filtered schemas
