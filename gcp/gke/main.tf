@@ -1,8 +1,14 @@
 # GKE Cluster Module using terraform-google-kubernetes-engine
 # https://github.com/terraform-google-modules/terraform-google-kubernetes-engine
 
+# Per-deploy suffix so retries after state loss don't 409 on the GKE
+# cluster name (issue #159). GKE cluster names are limited to 40 chars.
+resource "random_id" "suffix" {
+  byte_length = 4
+}
+
 locals {
-  cluster_name = "${var.project}-${var.cluster_name}"
+  cluster_name = "${var.project}-${var.cluster_name}-${random_id.suffix.hex}"
 }
 
 module "gke" {

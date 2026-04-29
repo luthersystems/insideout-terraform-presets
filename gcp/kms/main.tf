@@ -1,8 +1,14 @@
 # GCP Cloud KMS Module using terraform-google-kms
 # https://github.com/terraform-google-modules/terraform-google-kms
 
+# Per-deploy suffix so retries after state loss don't 409 on the undeletable
+# keyring shell (issue #159). Stable across applies via state.
+resource "random_id" "suffix" {
+  byte_length = 4
+}
+
 locals {
-  keyring_name = "${var.project}-${var.keyring_name}"
+  keyring_name = "${var.project}-${var.keyring_name}-${random_id.suffix.hex}"
 }
 
 module "kms" {

@@ -189,11 +189,16 @@ func TestGCPModules_ProjectIDDeclaredAndUsed(t *testing.T) {
 	// therefore don't declare project_id. Listed explicitly so a future
 	// addition of project-scoped resources to one of these surfaces as a
 	// test failure rather than silent miss.
+	//
+	// cloud_build and cloud_logging were on this list as "skeletons", but
+	// the project_id-less form was a latent bug — both create real
+	// project-scoped resources (a build trigger and a logging sink) that
+	// would land in whatever default project the provider was configured
+	// with. Issue #159's self-review fixed that and they are now full
+	// project-scoped modules.
 	exempt := map[string]bool{
-		"cloud_build":      true, // skeleton, no project-scoped resources
 		"cloud_monitoring": true, // single hardcoded dashboard
 		"cloud_cdn":        true, // locals-only stub
-		"cloud_logging":    true, // sink uses bucket name only, no project arg
 	}
 
 	consumesPattern := regexp.MustCompile(`var\.project_id`)

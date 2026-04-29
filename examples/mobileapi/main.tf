@@ -39,7 +39,8 @@ module "gcp_gcs" {
 }
 
 module "gcp_cloud_logging" {
-  source  = "../../gcp/cloud_logging"
-  project = var.gcp_cloud_logging_project
-  region  = var.gcp_cloud_logging_region
+  source     = "../../gcp/cloud_logging"
+  project    = var.gcp_cloud_logging_project
+  project_id = var.gcp_cloud_logging_project_id
+  region     = var.gcp_cloud_logging_region
 }

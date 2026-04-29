@@ -1,8 +1,15 @@
 # Cloud SQL Module using terraform-google-sql-db
 # https://github.com/terraform-google-modules/terraform-google-sql-db
 
+# Per-deploy suffix so retries after state loss dodge Cloud SQL's 7-day
+# instance-name reservation after delete (issue #159). Stable across applies
+# via state.
+resource "random_id" "suffix" {
+  byte_length = 4
+}
+
 locals {
-  instance_name = "${var.project}-${var.instance_name}"
+  instance_name = "${var.project}-${var.instance_name}-${random_id.suffix.hex}"
   is_postgres   = startswith(var.database_version, "POSTGRES")
 }
 

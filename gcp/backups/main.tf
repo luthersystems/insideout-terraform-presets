@@ -8,14 +8,24 @@ terraform {
       source  = "hashicorp/google"
       version = ">= 5.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = ">= 3.5"
+    }
   }
+}
+
+# Per-deploy suffix so retries after state loss dodge the 7-day soft-delete
+# name reservation on the backups bucket and the snapshot policy name (issue #159).
+resource "random_id" "suffix" {
+  byte_length = 4
 }
 
 # GCS bucket for backups
 resource "google_storage_bucket" "backups" {
   count    = var.enable_gcs_backups ? 1 : 0
   project  = var.project_id
-  name     = "${var.project}-backups-${var.region}"
+  name     = "${var.project}-backups-${var.region}-${random_id.suffix.hex}"
   location = var.region
 
   uniform_bucket_level_access = true
@@ -55,7 +65,7 @@ resource "google_storage_bucket" "backups" {
 resource "google_compute_resource_policy" "snapshot_schedule" {
   count   = var.enable_compute_snapshots ? 1 : 0
   project = var.project_id
-  name    = "${var.project}-snapshot-schedule"
+  name    = "${var.project}-snapshot-schedule-${random_id.suffix.hex}"
   region  = var.region
 
   snapshot_schedule_policy {

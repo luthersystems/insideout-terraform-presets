@@ -8,16 +8,27 @@ terraform {
       source  = "hashicorp/google"
       version = ">= 5.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = ">= 3.5"
+    }
   }
 }
 
+# Per-deploy suffix so retries after state loss don't 409 on the existing
+# instance / service account / firewall names (issue #159). Service account
+# IDs are capped at 30 chars, so the SA uses a 4-char suffix slice.
+resource "random_id" "suffix" {
+  byte_length = 4
+}
+
 locals {
-  instance_name = "${var.project}-bastion"
+  instance_name = "${var.project}-bastion-${random_id.suffix.hex}"
 }
 
 # Dedicated service account for the bastion
 resource "google_service_account" "bastion" {
-  account_id   = "${var.project}-bastion"
+  account_id   = "${var.project}-bastion-${substr(random_id.suffix.hex, 0, 4)}"
   display_name = "${var.project} Bastion Host"
   project      = var.project_id
 }

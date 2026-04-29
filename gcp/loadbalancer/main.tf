@@ -1,8 +1,16 @@
 # GCP HTTP(S) Load Balancer Module using terraform-google-lb-http
 # https://github.com/terraform-google-modules/terraform-google-lb-http
 
+# Per-deploy suffix so retries after state loss don't 409 on the load
+# balancer's named compute resources (issue #159). The suffix flows through
+# local.name_prefix to every backend / health check / URL map / proxy /
+# certificate / forwarding rule.
+resource "random_id" "suffix" {
+  byte_length = 4
+}
+
 locals {
-  name_prefix = "${var.project}-${var.name}"
+  name_prefix = "${var.project}-${var.name}-${random_id.suffix.hex}"
 }
 
 # Health checks for backends
