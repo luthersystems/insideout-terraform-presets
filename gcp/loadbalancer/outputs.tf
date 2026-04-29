@@ -24,8 +24,10 @@ output "http_proxy_id" {
 }
 
 output "https_proxy_id" {
-  description = "The HTTPS proxy ID (if SSL enabled)"
-  value       = var.enable_ssl ? google_compute_target_https_proxy.this[0].id : null
+  description = "The HTTPS proxy ID, or null when no SSL cert / managed domain was supplied (issue #166)."
+  value = length(google_compute_target_https_proxy.this) > 0 ? (
+    google_compute_target_https_proxy.this[0].id
+  ) : null
 }
 
 output "backend_service_ids" {

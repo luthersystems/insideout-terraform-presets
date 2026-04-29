@@ -92,3 +92,25 @@ variable "connector_cidr" {
   }
 }
 
+variable "connector_min_instances" {
+  description = "Minimum instances for the Serverless VPC Access Connector. GCP requires >= 2."
+  type        = number
+  default     = 2
+
+  validation {
+    condition     = var.connector_min_instances >= 2
+    error_message = "connector_min_instances must be >= 2 (GCP minimum)."
+  }
+}
+
+variable "connector_max_instances" {
+  description = "Maximum instances for the Serverless VPC Access Connector. GCP allows 3..10 and requires it (or max_throughput) to be set."
+  type        = number
+  default     = 3
+
+  validation {
+    condition     = var.connector_max_instances >= 3 && var.connector_max_instances <= 10
+    error_message = "connector_max_instances must be between 3 and 10."
+  }
+}
+

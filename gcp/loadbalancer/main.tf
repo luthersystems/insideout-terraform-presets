@@ -11,6 +11,16 @@ resource "random_id" "suffix" {
 
 locals {
   name_prefix = "${var.project}-${var.name}-${random_id.suffix.hex}"
+
+  # HTTPS proxy + forwarding rule are only created when SSL is requested
+  # AND a cert source is supplied. Without this guard, default settings
+  # (var.enable_ssl = true, no certs) produce a target_https_proxy with an
+  # empty ssl_certificates list, which GCP rejects with HTTP 412 at apply
+  # (issue #166 part 3). With the guard, default settings yield an HTTP-only
+  # LB; supplying ssl_certificates or managed_ssl_domains opts into HTTPS.
+  https_enabled = var.enable_ssl && (
+    length(var.ssl_certificates) > 0 || length(var.managed_ssl_domains) > 0
+  )
 }
 
 # Health checks for backends
@@ -144,7 +154,7 @@ resource "google_compute_managed_ssl_certificate" "this" {
 
 # HTTPS proxy
 resource "google_compute_target_https_proxy" "this" {
-  count = var.enable_ssl ? 1 : 0
+  count = local.https_enabled ? 1 : 0
 
   name    = "${local.name_prefix}-https-proxy"
   project = var.project_id
@@ -177,7 +187,7 @@ resource "google_compute_global_address" "this" {
 
 # HTTPS forwarding rule
 resource "google_compute_global_forwarding_rule" "https" {
-  count = var.enable_ssl ? 1 : 0
+  count = local.https_enabled ? 1 : 0
 
   name       = "${local.name_prefix}-https"
   project    = var.project_id

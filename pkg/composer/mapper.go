@@ -916,7 +916,10 @@ func (m DefaultMapper) BuildModuleValues(
 		// needed; the module's behaviour is correct out of the box.
 
 	case KeyGCPAPIGateway:
-		vals["openapi_spec"] = ""
+		// Don't emit openapi_spec when the caller didn't supply one — the
+		// module's variables.tf default is a minimal-but-GCP-valid spec
+		// (issue #166). Emitting "" here previously sabotaged that default
+		// and produced a 400 from API Gateway's spec validator at apply.
 		if cfg != nil && cfg.GCPAPIGateway != nil {
 			if cfg.GCPAPIGateway.DomainName != "" {
 				vals["domain_name"] = cfg.GCPAPIGateway.DomainName

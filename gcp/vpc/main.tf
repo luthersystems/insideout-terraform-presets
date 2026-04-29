@@ -118,6 +118,12 @@ resource "google_vpc_access_connector" "serverless" {
   network       = module.vpc.network_self_link
   ip_cidr_range = var.connector_cidr
 
+  # GCP requires at least one of max_throughput / max_instances; the API
+  # rejects creation outright otherwise (issue #166 part 4). Use the modern
+  # *_instances form — max_throughput is being phased out by the provider.
+  min_instances = var.connector_min_instances
+  max_instances = var.connector_max_instances
+
   lifecycle {
     # The composed connector name "<project>-conn-<4hex>" budgets exactly
     # 25 chars when var.project is 15 chars (the InsideOut session-prefix
@@ -127,6 +133,12 @@ resource "google_vpc_access_connector" "serverless" {
     precondition {
       condition     = length(var.project) <= 15
       error_message = "var.project must be ≤ 15 chars when enable_serverless_connector = true. The composed connector name is \"<project>-conn-<4hex>\" (project + 10 chars), and the VPC connector API caps names at 25 chars. Either disable enable_serverless_connector or shorten var.project."
+    }
+    # Cross-variable check: max must exceed min (single-variable validation
+    # blocks can't see another variable, so this lives on the resource).
+    precondition {
+      condition     = var.connector_max_instances > var.connector_min_instances
+      error_message = "connector_max_instances (${var.connector_max_instances}) must be > connector_min_instances (${var.connector_min_instances})."
     }
   }
 }

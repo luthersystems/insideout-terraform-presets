@@ -20,13 +20,15 @@ variable "region" {
 }
 
 variable "openapi_spec" {
-  description = "OpenAPI specification for the API"
+  description = "OpenAPI 2.0 specification for the API. The default is a minimal spec that satisfies GCP API Gateway's validator (host + x-google-backend on each operation) so the module composes and applies cleanly out of the box; override it with your real spec."
   type        = string
   default     = <<-EOT
     swagger: '2.0'
     info:
       title: API
+      description: Placeholder API. Override var.openapi_spec to publish your own.
       version: '1.0'
+    host: example.com
     schemes:
       - https
     produces:
@@ -36,9 +38,13 @@ variable "openapi_spec" {
         get:
           summary: Health check
           operationId: healthCheck
+          x-google-backend:
+            address: https://example.com/health
           responses:
             '200':
               description: OK
+              schema:
+                type: string
   EOT
 }
 
