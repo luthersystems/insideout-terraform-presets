@@ -3,6 +3,7 @@ package composer
 import (
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -2259,6 +2260,109 @@ func TestComposeStack_GCPRouterAndConnectorOutputs_TerraformValidate(t *testing.
 				"terraform validate surfaced 'Invalid index' (issue #178 regression)")
 			require.NotContains(t, string(validateOut), "empty tuple",
 				"terraform validate surfaced 'empty tuple' (issue #178 regression)")
+		})
+	}
+}
+
+// TestComposeStack_GCPCloudKMS_TerraformValidate is the formal closure
+// for issue #182's acceptance criterion: a fresh GCP session that
+// selects gcp/kms with default config (and with non-default
+// iam_bindings) must plan cleanly on first run with empty state. PR
+// #181 surgically wrapped the upstream's broken slice() in try() to
+// protect default consumers but left a hole when iam_bindings is
+// non-empty; #182 replaced the upstream entirely with direct
+// google_kms_* resources keyed by for_each, closing the hole. This
+// test runs `terraform init` + `terraform validate` against the
+// composed stack to prove there's no Invalid index / empty tuple
+// regression — mirroring TestComposeStack_GCPRouterAndConnectorOutputs_TerraformValidate
+// which closed #178's analogous criterion.
+//
+// CI vs local skip rules match the router/connector test:
+//   - In CI (CI=true): terraform init failure is a hard failure (the
+//     gate must not silently skip on transient registry blips).
+//   - Local dev: skip on init failure so offline `go test ./...` works.
+//
+// Use `go test -short` to skip entirely (e.g. in pre-commit hooks).
+func TestComposeStack_GCPCloudKMS_TerraformValidate(t *testing.T) {
+	if testing.Short() {
+		t.Skip("-short skips multi-second terraform init+validate")
+	}
+	if _, err := exec.LookPath("terraform"); err != nil {
+		t.Skip("terraform binary not on PATH; skipping integration validate")
+	}
+
+	inCI := os.Getenv("CI") == "true"
+
+	// Two combos: kms alone (the leaf default), and kms with a
+	// non-empty iam_bindings shape that the composer surfaces. The
+	// composer mapper does not currently surface var.iam_bindings as
+	// a Component-driven knob, so the second combo writes an extra
+	// kms.auto.tfvars after composition to inject the binding —
+	// faithful to what a reliable3-side mapper would emit and to
+	// what a real customer's stack would look like. The plan-time
+	// resolution of that binding is exactly the case PR #181 could
+	// not protect.
+	combos := []struct {
+		name        string
+		extraTFVars string
+	}{
+		{"kms alone with default config", ""},
+		{
+			"kms with non-empty iam_bindings",
+			`kms_iam_bindings = [
+  {
+    key_name = "default"
+    role     = "roles/cloudkms.cryptoKeyEncrypter"
+    members  = ["serviceAccount:test@test-project-12345.iam.gserviceaccount.com"]
+  },
+]
+`,
+		},
+	}
+
+	for _, combo := range combos {
+		t.Run(combo.name, func(t *testing.T) {
+			c := newTestClient()
+			out, err := c.ComposeStack(ComposeStackOpts{
+				Cloud:        "gcp",
+				SelectedKeys: []ComponentKey{KeyGCPCloudKMS},
+				Comps:        &Components{},
+				Cfg:          &Config{Region: "us-central1"},
+				Project:      "test",
+				Region:       "us-central1",
+				GCPProjectID: "test-project-12345",
+			})
+			require.NoError(t, err)
+
+			dir := t.TempDir()
+			writeOutputs(t, out, dir)
+
+			if combo.extraTFVars != "" {
+				require.NoError(t,
+					os.WriteFile(filepath.Join(dir, "kms_iam_bindings.auto.tfvars"), []byte(combo.extraTFVars), 0o600),
+					"write extra tfvars")
+			}
+
+			initCmd := exec.Command("terraform", "init", "-backend=false", "-input=false", "-no-color")
+			initCmd.Dir = dir
+			initOut, err := initCmd.CombinedOutput()
+			if err != nil {
+				if inCI {
+					require.NoError(t, err,
+						"terraform init must succeed in CI; this gate is the formal closure for issue #182 and must not silently skip on transient registry failures:\n%s", initOut)
+				}
+				t.Skipf("terraform init unavailable (network/cache) in local dev: %s\n%s", err, initOut)
+			}
+			validateCmd := exec.Command("terraform", "validate", "-no-color")
+			validateCmd.Dir = dir
+			validateOut, err := validateCmd.CombinedOutput()
+			require.NoError(t, err, "terraform validate must succeed on composed gcp/kms stack (issue #182):\n%s", validateOut)
+			require.NotContains(t, string(validateOut), "Invalid index",
+				"terraform validate surfaced 'Invalid index' (issue #182 regression)")
+			require.NotContains(t, string(validateOut), "empty tuple",
+				"terraform validate surfaced 'empty tuple' (issue #182 regression)")
+			require.NotContains(t, string(validateOut), "slice",
+				"terraform validate surfaced 'slice' (issue #182 regression — upstream module re-introduced)")
 		})
 	}
 }

@@ -1,12 +1,13 @@
 mock_provider "google" {}
 
-# Regression for #141. terraform-google-modules/kms ~> 3.0 declares
-# key_rotation_period / key_algorithm / key_protection_level / purpose as
-# scalar string. A previous revision of main.tf passed map(string) values
-# built from `for k in var.keys : ...`, which the upstream module rejected
-# with `string required` at apply time. The wrapper now passes scalars
-# from var.keys[0] and the variable validates that all keys agree on
-# those four fields — these tests pin both halves.
+# Regression for #141. The wrapper passes one shared rotation_period /
+# algorithm / protection_level / purpose into each google_kms_crypto_key
+# instance and var.keys validates that all keys agree on those four
+# fields — these tests pin both halves. The homogeneity validations are
+# retained for public-API stability across the issue #182 upstream
+# replacement; they no longer reflect a technical constraint of the
+# implementation (the per-key for_each could legally take heterogeneous
+# values) but expanding the surface is out of scope for #182.
 
 run "defaults_plan" {
   command = plan
@@ -130,20 +131,25 @@ run "rejects_underscore_project_id" {
   expect_failures = [var.project_id]
 }
 
-# Regression for #180. The upstream terraform-google-modules/kms/google's
-# `local.keys_by_name` calls slice() over a count-controlled splat which
-# can error on first plan against an empty state. Our preset wraps that
-# value in `try(module.kms.keys, {})` so plan progresses even if the
-# upstream errors during evaluation. These two cases pin the bypass
-# semantics:
+# Regression for #180/#182. Issue #180 was the upstream
+# terraform-google-modules/kms/google's `local.keys_by_name` calling
+# slice() on a count-controlled splat which can error during plan
+# against an empty state. PR #181 surgically wrapped that consumption
+# in `try(...)`. Issue #182 replaced the upstream entirely with direct
+# google_kms_* resources keyed by for_each, so the slice expression is
+# gone. These cases continue to pin the empty-state plan path:
 #
-#   - With prevent_destroy=true (default), the upstream's slice fires on
-#     google_kms_crypto_key.key (count=N). plan must succeed.
-#   - With prevent_destroy=false, the upstream picks the ephemeral
-#     branch's slice. plan must succeed.
+#   - With prevent_destroy=true (default), google_kms_crypto_key.protected
+#     fires for_each. plan must succeed.
+#   - With prevent_destroy=false, google_kms_crypto_key.ephemeral fires
+#     instead. plan must succeed.
+#   - With non-empty iam_bindings, google_kms_crypto_key_iam_binding.this
+#     resolves crypto_key_id from local.keys_by_name (a plain for_each
+#     map, no slice). This is the case PR #181 could not protect.
 #
-# Both arms must work; if either regresses to a slice-end-index error,
-# real customers see plan_summary.stage_errors=["custom-stack-provision"].
+# Both branches must work; if a future change reintroduces a slice
+# expression here or re-vendors the upstream, real customers see
+# plan_summary.stage_errors=["custom-stack-provision"].
 
 run "issue_180_prevent_destroy_true_plans_clean" {
   command = plan
@@ -179,5 +185,51 @@ run "issue_180_iam_bindings_resolve_against_local" {
         members  = ["serviceAccount:test@test-project.iam.gserviceaccount.com"]
       }
     ]
+  }
+}
+
+# Issue #182: the prevent_destroy split is two distinct resources
+# (google_kms_crypto_key.protected vs .ephemeral) gated by mutually
+# exclusive for_each. These cases pin which branch fires for each
+# var.prevent_destroy value, so a refactor that collapses both into one
+# resource — or flips the gating direction — fails CI.
+
+run "issue_182_prevent_destroy_true_uses_protected_branch" {
+  command = plan
+
+  variables {
+    project         = "test"
+    project_id      = "test-project"
+    prevent_destroy = true
+    keys            = [{ name = "data" }]
+  }
+
+  assert {
+    condition     = length(google_kms_crypto_key.protected) == 1
+    error_message = "prevent_destroy=true must populate google_kms_crypto_key.protected"
+  }
+  assert {
+    condition     = length(google_kms_crypto_key.ephemeral) == 0
+    error_message = "prevent_destroy=true must leave google_kms_crypto_key.ephemeral empty"
+  }
+}
+
+run "issue_182_prevent_destroy_false_uses_ephemeral_branch" {
+  command = plan
+
+  variables {
+    project         = "test"
+    project_id      = "test-project"
+    prevent_destroy = false
+    keys            = [{ name = "data" }]
+  }
+
+  assert {
+    condition     = length(google_kms_crypto_key.ephemeral) == 1
+    error_message = "prevent_destroy=false must populate google_kms_crypto_key.ephemeral"
+  }
+  assert {
+    condition     = length(google_kms_crypto_key.protected) == 0
+    error_message = "prevent_destroy=false must leave google_kms_crypto_key.protected empty"
   }
 }
