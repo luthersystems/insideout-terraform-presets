@@ -441,7 +441,7 @@ func (r *Runner) getTerraformRunner(ctx context.Context, workDir string) (terraf
 		}
 		return r.tfRunner, nil
 	}
-	return NewTerraformExecutor(ctx, workDir, r.config.TFBinary)
+	return NewTerraformExecutor(ctx, workDir, r.config.TFBinary, r.logger)
 }
 
 func (r *Runner) copyOutput(workDir string) error {

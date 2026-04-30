@@ -1,6 +1,10 @@
 package runner
 
 import (
+	"bytes"
+	"errors"
+	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -100,4 +104,92 @@ func TestCopyOutput_CreatesOutputDir(t *testing.T) {
 	if _, err := os.Stat(dstDir); err != nil {
 		t.Errorf("output dir should be created: %v", err)
 	}
+}
+
+// TestClassifyPlanGenerateConfigError covers the decision matrix for
+// PlanGenerateConfig's swallow-or-propagate behavior. The key contract:
+// errors are only swallowed when terraform DID write the output file —
+// indicating the plan tripped a post-generation diagnostic that the
+// cleanup phase can fix (e.g. the Lambda required-arg case). Errors
+// without a written file propagate so the runner doesn't continue with
+// garbage HCL.
+func TestClassifyPlanGenerateConfigError(t *testing.T) {
+	cases := []struct {
+		name      string
+		planErr   error
+		fileExist bool
+		wantNil   bool
+		wantWarn  bool
+	}{
+		{
+			name:      "happy path: no plan error",
+			planErr:   nil,
+			fileExist: true,
+			wantNil:   true,
+			wantWarn:  false,
+		},
+		{
+			name:      "happy path: no plan error and no file (caller decides)",
+			planErr:   nil,
+			fileExist: false,
+			wantNil:   true,
+			wantWarn:  false,
+		},
+		{
+			name:      "post-generation validation error: file written, error swallowed with warn",
+			planErr:   errors.New("Error: Missing required argument"),
+			fileExist: true,
+			wantNil:   true,
+			wantWarn:  true,
+		},
+		{
+			name:      "executor failure: no file, error propagates",
+			planErr:   errors.New("Error: NoCredentialProviders"),
+			fileExist: false,
+			wantNil:   false,
+			wantWarn:  false,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			logger := slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+
+			got := classifyPlanGenerateConfigError(logger, tc.planErr, tc.fileExist, "generated.tf")
+
+			if tc.wantNil && got != nil {
+				t.Errorf("expected nil, got %v", got)
+			}
+			if !tc.wantNil && got == nil {
+				t.Errorf("expected error, got nil")
+			}
+			if !tc.wantNil && got != nil && !errors.Is(got, tc.planErr) {
+				t.Errorf("returned error must wrap the plan error; got %v", got)
+			}
+			gotWarn := strings.Contains(buf.String(), "level=WARN")
+			if tc.wantWarn != gotWarn {
+				t.Errorf("warn=%v, log output=%q", gotWarn, buf.String())
+			}
+			// When swallowing, the warn must include the plan error
+			// string so an operator can spot real failures vs the
+			// documented Lambda case.
+			if tc.wantWarn && !strings.Contains(buf.String(), tc.planErr.Error()) {
+				t.Errorf("warn must include plan error text; got %q", buf.String())
+			}
+		})
+	}
+}
+
+// TestClassifyPlanGenerateConfigError_NilLoggerSafe ensures the helper
+// doesn't panic on a nil logger — the constructor defaults to
+// slog.Default(), but a future caller bypassing the constructor must not
+// crash the runner.
+func TestClassifyPlanGenerateConfigError_NilLoggerSafe(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			t.Errorf("nil-logger path must not panic; got %v", r)
+		}
+	}()
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	_ = classifyPlanGenerateConfigError(logger, errors.New("x"), true, "generated.tf")
 }

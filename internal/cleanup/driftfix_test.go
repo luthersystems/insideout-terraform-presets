@@ -231,3 +231,87 @@ func TestFixDriftFromPlan_ImportOnly(t *testing.T) {
 		t.Error("import-only action should not add lifecycle")
 	}
 }
+
+// TestFixDriftFromPlan_ReplaceAction pins the new behavior: replace
+// actions ({delete, create}) carry meaningful drift on imported
+// resources and must produce ignore_changes the same way update
+// actions do. Pre-fix, FixDriftFromPlan only filtered on "update" so
+// replace-action drift slipped through silently and the next plan
+// would still show the replace.
+func TestFixDriftFromPlan_ReplaceAction(t *testing.T) {
+	hcl := `resource "aws_lambda_function" "f" {
+  function_name = "my-fn"
+  architectures = ["x86_64"]
+}
+`
+	cases := []struct {
+		name    string
+		actions tfjson.Actions
+	}{
+		{"delete then create", tfjson.Actions{"delete", "create"}},
+		{"create then delete", tfjson.Actions{"create", "delete"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			plan := &tfjson.Plan{
+				ResourceChanges: []*tfjson.ResourceChange{
+					{
+						Address: "aws_lambda_function.f",
+						Type:    "aws_lambda_function",
+						Name:    "f",
+						Change: &tfjson.Change{
+							Actions: tc.actions,
+							Before: map[string]interface{}{
+								"function_name": "my-fn",
+								"architectures": []interface{}{"x86_64"},
+							},
+							After: map[string]interface{}{
+								"function_name": "my-fn",
+								"architectures": []interface{}{"arm64"},
+							},
+						},
+					},
+				},
+			}
+
+			got, err := FixDriftFromPlan([]byte(hcl), plan)
+			if err != nil {
+				t.Fatalf("error = %v", err)
+			}
+			output := string(got)
+			if !strings.Contains(output, "lifecycle") {
+				t.Fatalf("replace action must add lifecycle block; got %s", output)
+			}
+			if !strings.Contains(output, "architectures") {
+				t.Errorf("ignore_changes must contain architectures (drifting attr); got %s", output)
+			}
+		})
+	}
+}
+
+// TestIsDriftAction covers the action-classifier edge cases. Update is
+// the original baseline; replace-as-{delete,create} or {create,delete}
+// is the new coverage; pure create / pure delete / no-op must NOT
+// trigger ignore_changes synthesis (those aren't drift).
+func TestIsDriftAction(t *testing.T) {
+	cases := []struct {
+		name    string
+		actions tfjson.Actions
+		want    bool
+	}{
+		{"update only", tfjson.Actions{"update"}, true},
+		{"delete then create (replace)", tfjson.Actions{"delete", "create"}, true},
+		{"create then delete (replace)", tfjson.Actions{"create", "delete"}, true},
+		{"create only (import / new)", tfjson.Actions{"create"}, false},
+		{"delete only", tfjson.Actions{"delete"}, false},
+		{"no-op", tfjson.Actions{"no-op"}, false},
+		{"empty actions", tfjson.Actions{}, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isDriftAction(tc.actions); got != tc.want {
+				t.Errorf("isDriftAction(%v) = %v, want %v", tc.actions, got, tc.want)
+			}
+		})
+	}
+}
