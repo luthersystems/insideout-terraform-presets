@@ -14,21 +14,29 @@ locals {
   # `local.keys_by_name` calls slice() over a count-controlled splat which
   # can error during plan against an empty state with
   # "slice end_index past the length" — the documented failure mode in
-  # issue #180 (split out from #178). try() catches that evaluation error
-  # and degrades to an empty map. Consumers reading our `keys` /
-  # `key_self_links` outputs see the degraded value and can skip
-  # downstream wiring rather than the entire plan failing.
+  # issue #180 (split out from #178).
+  #
+  # Terraform's try() catches errors raised during evaluation of the
+  # wrapped expression, INCLUDING function-call failures inside
+  # transitively-evaluated locals of the referenced module. When we read
+  # module.kms.keys, terraform evaluates the upstream's local.keys_by_name,
+  # slice() fires, and the error propagates as a diagnostic to our
+  # expression context where try() traps it. This guarantee is stable
+  # across Terraform 1.5+ (versions.tf pins required_version >= 1.3).
   #
   # On the steady-state happy path (default prevent_destroy=true, default
   # var.keys with one entry), slice() is well-formed and try() is a no-op
   # — module.kms.keys returns the real {name => key_id} map.
   #
-  # Note: the iam_bindings resource below still indexes into this local
+  # The iam_bindings resource below still indexes into this local
   # directly. When iam_bindings is empty (the default), the local is
   # never evaluated for that resource and the plan proceeds. When it's
   # non-empty AND the upstream errored, the binding's plan fails — that's
-  # a known degradation; the surgical fix here protects the common-case
-  # output consumers without forking the upstream.
+  # a known degradation, tracked as #182. The permanent fix is to replace
+  # the upstream module with direct google_kms_* resources using for_each
+  # (no slice expressions); shipping the surgical fix here unblocks the
+  # default-config customer in #178's repro without the migration risk
+  # of the upstream replacement.
   keys_by_name = try(module.kms.keys, {})
 }
 
