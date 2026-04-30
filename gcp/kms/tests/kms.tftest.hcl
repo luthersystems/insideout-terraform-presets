@@ -129,3 +129,55 @@ run "rejects_underscore_project_id" {
 
   expect_failures = [var.project_id]
 }
+
+# Regression for #180. The upstream terraform-google-modules/kms/google's
+# `local.keys_by_name` calls slice() over a count-controlled splat which
+# can error on first plan against an empty state. Our preset wraps that
+# value in `try(module.kms.keys, {})` so plan progresses even if the
+# upstream errors during evaluation. These two cases pin the bypass
+# semantics:
+#
+#   - With prevent_destroy=true (default), the upstream's slice fires on
+#     google_kms_crypto_key.key (count=N). plan must succeed.
+#   - With prevent_destroy=false, the upstream picks the ephemeral
+#     branch's slice. plan must succeed.
+#
+# Both arms must work; if either regresses to a slice-end-index error,
+# real customers see plan_summary.stage_errors=["custom-stack-provision"].
+
+run "issue_180_prevent_destroy_true_plans_clean" {
+  command = plan
+
+  variables {
+    project         = "test"
+    project_id      = "test-project"
+    prevent_destroy = true
+  }
+}
+
+run "issue_180_prevent_destroy_false_plans_clean" {
+  command = plan
+
+  variables {
+    project         = "test"
+    project_id      = "test-project"
+    prevent_destroy = false
+  }
+}
+
+run "issue_180_iam_bindings_resolve_against_local" {
+  command = plan
+
+  variables {
+    project    = "test"
+    project_id = "test-project"
+    keys       = [{ name = "data" }]
+    iam_bindings = [
+      {
+        key_name = "data"
+        role     = "roles/cloudkms.cryptoKeyEncrypter"
+        members  = ["serviceAccount:test@test-project.iam.gserviceaccount.com"]
+      }
+    ]
+  }
+}
