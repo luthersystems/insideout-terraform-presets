@@ -210,12 +210,206 @@ func TestValidateImportedResources_FieldFormat(t *testing.T) {
 	assert.Contains(t, fields, "imported.[1]")
 }
 
+func TestValidateProvenanceConflicts_Empty(t *testing.T) {
+	t.Parallel()
+	assert.Nil(t, ValidateProvenanceConflicts("aws", nil, ProvenanceOpts{ImportProjectID: "io-1"}))
+	assert.Nil(t, ValidateProvenanceConflicts("aws", []imported.ImportedResource{}, ProvenanceOpts{ImportProjectID: "io-1"}))
+}
+
+func TestValidateProvenanceConflicts_NoProjectIDAdvisory(t *testing.T) {
+	t.Parallel()
+	irs := []imported.ImportedResource{
+		{
+			Identity: imported.ResourceIdentity{Cloud: "aws", Type: "aws_sqs_queue", Address: "aws_sqs_queue.q", ImportID: "x"},
+			Tier:     imported.TierImportedFlat,
+		},
+	}
+	issues := ValidateProvenanceConflicts("aws", irs, ProvenanceOpts{})
+	require.Len(t, issues, 1)
+	assert.Equal(t, "imported_resource_provenance_skipped_no_project_id", issues[0].Code)
+}
+
+func TestValidateProvenanceConflicts_AbsentTagOK(t *testing.T) {
+	t.Parallel()
+	irs := []imported.ImportedResource{
+		{
+			Identity: imported.ResourceIdentity{Cloud: "aws", Type: "aws_sqs_queue", Address: "aws_sqs_queue.q", ImportID: "x"},
+			Tier:     imported.TierImportedFlat,
+		},
+	}
+	issues := ValidateProvenanceConflicts("aws", irs, ProvenanceOpts{ImportProjectID: "io-1"})
+	assert.Empty(t, issues)
+}
+
+func TestValidateProvenanceConflicts_MatchingTagOK(t *testing.T) {
+	t.Parallel()
+	irs := []imported.ImportedResource{
+		{
+			Identity: imported.ResourceIdentity{Cloud: "aws", Type: "aws_dynamodb_table", Address: "aws_dynamodb_table.t", ImportID: "t"},
+			Tier:     imported.TierImportedFlat,
+			Attributes: map[string]any{
+				"name": "t",
+				"tags": map[string]any{
+					"InsideOutImportProject": "io-1",
+				},
+			},
+		},
+	}
+	issues := ValidateProvenanceConflicts("aws", irs, ProvenanceOpts{ImportProjectID: "io-1"})
+	assert.Empty(t, issues)
+}
+
+func TestValidateProvenanceConflicts_DifferentTagFails(t *testing.T) {
+	t.Parallel()
+	irs := []imported.ImportedResource{
+		{
+			Identity: imported.ResourceIdentity{Cloud: "aws", Type: "aws_dynamodb_table", Address: "aws_dynamodb_table.t", ImportID: "t"},
+			Tier:     imported.TierImportedFlat,
+			Attributes: map[string]any{
+				"name": "t",
+				"tags": map[string]any{
+					"InsideOutImportProject": "io-other",
+				},
+			},
+		},
+	}
+	issues := ValidateProvenanceConflicts("aws", irs, ProvenanceOpts{ImportProjectID: "io-1"})
+	require.Len(t, issues, 1)
+	assert.Equal(t, "imported_resource_provenance_conflict", issues[0].Code)
+	assert.Equal(t, "io-other", issues[0].Value)
+	assert.Equal(t, "imported.aws_dynamodb_table.t", issues[0].Field)
+}
+
+func TestValidateProvenanceConflicts_ForceTakeoverValid(t *testing.T) {
+	t.Parallel()
+	irs := []imported.ImportedResource{
+		{
+			Identity: imported.ResourceIdentity{Cloud: "aws", Type: "aws_dynamodb_table", Address: "aws_dynamodb_table.t", ImportID: "t"},
+			Tier:     imported.TierImportedFlat,
+			Attributes: map[string]any{
+				"name": "t",
+				"tags": map[string]any{
+					"InsideOutImportProject": "io-other",
+				},
+			},
+			ForceTakeover: &imported.ForceTakeover{
+				Actor:         "sam@luthersystems.com",
+				Reason:        "merging environments after #173 ramp",
+				PreviousOwner: "io-other",
+				ApprovedAt:    fixedTime(),
+			},
+		},
+	}
+	issues := ValidateProvenanceConflicts("aws", irs, ProvenanceOpts{ImportProjectID: "io-1"})
+	assert.Empty(t, issues, "valid ForceTakeover suppresses the conflict")
+}
+
+func TestValidateProvenanceConflicts_ForceTakeoverIncomplete(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		ft   imported.ForceTakeover
+	}{
+		{"missing Actor", imported.ForceTakeover{Reason: "r", PreviousOwner: "io-other", ApprovedAt: fixedTime()}},
+		{"missing Reason", imported.ForceTakeover{Actor: "a", PreviousOwner: "io-other", ApprovedAt: fixedTime()}},
+		{"missing PreviousOwner", imported.ForceTakeover{Actor: "a", Reason: "r", ApprovedAt: fixedTime()}},
+		{"zero ApprovedAt", imported.ForceTakeover{Actor: "a", Reason: "r", PreviousOwner: "io-other"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ft := tc.ft
+			irs := []imported.ImportedResource{
+				{
+					Identity: imported.ResourceIdentity{Cloud: "aws", Type: "aws_dynamodb_table", Address: "aws_dynamodb_table.t", ImportID: "t"},
+					Tier:     imported.TierImportedFlat,
+					Attributes: map[string]any{
+						"name": "t",
+						"tags": map[string]any{"InsideOutImportProject": "io-other"},
+					},
+					ForceTakeover: &ft,
+				},
+			}
+			issues := ValidateProvenanceConflicts("aws", irs, ProvenanceOpts{ImportProjectID: "io-1"})
+			require.Len(t, issues, 1)
+			assert.Equal(t, "imported_resource_force_takeover_invalid", issues[0].Code)
+		})
+	}
+}
+
+func TestValidateProvenanceConflicts_ForceTakeoverWrongPreviousOwner(t *testing.T) {
+	t.Parallel()
+	irs := []imported.ImportedResource{
+		{
+			Identity: imported.ResourceIdentity{Cloud: "aws", Type: "aws_dynamodb_table", Address: "aws_dynamodb_table.t", ImportID: "t"},
+			Tier:     imported.TierImportedFlat,
+			Attributes: map[string]any{
+				"name": "t",
+				"tags": map[string]any{"InsideOutImportProject": "io-other"},
+			},
+			ForceTakeover: &imported.ForceTakeover{
+				Actor:         "a",
+				Reason:        "r",
+				PreviousOwner: "io-someone-else", // mismatch with observed
+				ApprovedAt:    fixedTime(),
+			},
+		},
+	}
+	issues := ValidateProvenanceConflicts("aws", irs, ProvenanceOpts{ImportProjectID: "io-1"})
+	require.Len(t, issues, 1)
+	assert.Equal(t, "imported_resource_force_takeover_invalid", issues[0].Code)
+}
+
+func TestValidateProvenanceConflicts_UntaggableSkipsCheck(t *testing.T) {
+	t.Parallel()
+	// google_compute_network has no Labels field — weak-lock fallback. Even
+	// if Attributes carry a labels map (which the schema would reject), the
+	// validator must not raise a conflict.
+	irs := []imported.ImportedResource{
+		{
+			Identity: imported.ResourceIdentity{Cloud: "gcp", Type: "google_compute_network", Address: "google_compute_network.vpc", ImportID: "vpc"},
+			Tier:     imported.TierImportedFlat,
+			Attributes: map[string]any{
+				"name":   "vpc",
+				"labels": map[string]any{"insideout-import-project": "io-other"},
+			},
+		},
+	}
+	issues := ValidateProvenanceConflicts("gcp", irs, ProvenanceOpts{ImportProjectID: "io-1"})
+	assert.Empty(t, issues, "weak-lock resources must skip mutual-exclusion check")
+}
+
+func TestValidateProvenanceConflicts_GCPTagFromTypedAttrs(t *testing.T) {
+	t.Parallel()
+	irs := []imported.ImportedResource{
+		{
+			Identity: imported.ResourceIdentity{Cloud: "gcp", Type: "google_storage_bucket", Address: "google_storage_bucket.b", ImportID: "b"},
+			Tier:     imported.TierImportedFlat,
+			Attrs:    []byte(`{"Name":{"Literal":"b"},"Labels":{"insideout-import-project":{"Literal":"io-other"}}}`),
+		},
+	}
+	issues := ValidateProvenanceConflicts("gcp", irs, ProvenanceOpts{ImportProjectID: "io-1"})
+	require.Len(t, issues, 1)
+	assert.Equal(t, "imported_resource_provenance_conflict", issues[0].Code)
+	assert.Equal(t, "io-other", issues[0].Value)
+}
+
 func issueCodes(issues []ValidationIssue) []string {
 	out := make([]string, 0, len(issues))
 	for _, i := range issues {
 		out = append(out, i.Code)
 	}
 	return out
+}
+
+// countCode returns the number of issues whose Code equals code.
+func countCode(issues []ValidationIssue, code string) int {
+	n := 0
+	for _, i := range issues {
+		if i.Code == code {
+			n++
+		}
+	}
+	return n
 }
 
 func issueFields(issues []ValidationIssue) []string {

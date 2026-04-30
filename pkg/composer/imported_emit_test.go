@@ -24,7 +24,7 @@ func hasAttr(t *testing.T, body, name, value string) bool {
 
 func TestEmitImportedTF_Empty(t *testing.T) {
 	t.Parallel()
-	out, used := EmitImportedTF("aws", nil)
+	out, used := EmitImportedTF("aws", nil, EmitImportedOpts{})
 	assert.Nil(t, out)
 	assert.Nil(t, used)
 }
@@ -41,7 +41,7 @@ func TestEmitImportedTF_TypedAWS(t *testing.T) {
 		Tier:  imported.TierImportedFlat,
 		Attrs: []byte(`{"Name":{"Literal":"orders-DLQ"},"FIFOQueue":{"Literal":false}}`),
 	}
-	out, used := EmitImportedTF("aws", []imported.ImportedResource{ir})
+	out, used := EmitImportedTF("aws", []imported.ImportedResource{ir}, EmitImportedOpts{})
 	require.NotNil(t, out)
 	s := string(out)
 	assert.True(t, used["aws"])
@@ -71,7 +71,7 @@ func TestEmitImportedTF_TypedGCP(t *testing.T) {
 		Tier:  imported.TierImportedFlat,
 		Attrs: []byte(`{"Name":{"Literal":"events"}}`),
 	}
-	out, used := EmitImportedTF("gcp", []imported.ImportedResource{ir})
+	out, used := EmitImportedTF("gcp", []imported.ImportedResource{ir}, EmitImportedOpts{})
 	require.NotNil(t, out)
 	s := string(out)
 	assert.True(t, used["gcp"])
@@ -103,7 +103,7 @@ func TestEmitImportedTF_OpaqueAttributes(t *testing.T) {
 			},
 		},
 	}
-	out, _ := EmitImportedTF("aws", []imported.ImportedResource{ir})
+	out, _ := EmitImportedTF("aws", []imported.ImportedResource{ir}, EmitImportedOpts{})
 	s := string(out)
 	assert.True(t, hasAttr(t, s, "name", `"users"`), "name attr missing in:\n%s", s)
 	assert.True(t, hasAttr(t, s, "hash_key", `"id"`), "hash_key attr missing in:\n%s", s)
@@ -133,7 +133,7 @@ func TestEmitImportedTF_OpaqueWithRawExpr(t *testing.T) {
 			"kms_master_key_id": RawExpr{Expr: "aws_kms_key.queues.arn"},
 		},
 	}
-	out, _ := EmitImportedTF("aws", []imported.ImportedResource{ir})
+	out, _ := EmitImportedTF("aws", []imported.ImportedResource{ir}, EmitImportedOpts{})
 	s := string(out)
 	assert.True(t, hasAttr(t, s, "name", `"dlq"`), "name attr missing in:\n%s", s)
 	assert.True(t, hasAttr(t, s, "kms_master_key_id", "aws_kms_key.queues.arn"),
@@ -159,7 +159,7 @@ func TestEmitImportedTF_TierGating(t *testing.T) {
 			// no Remediation
 		},
 	}
-	out, used := EmitImportedTF("aws", irs)
+	out, used := EmitImportedTF("aws", irs, EmitImportedOpts{})
 	assert.Nil(t, out)
 	// Stronger than Empty(used): assert every cloud key is explicitly
 	// false. A regression that flipped used["aws"]=true *before* the skip
@@ -188,7 +188,7 @@ func TestEmitImportedTF_MissingRemediations(t *testing.T) {
 
 	t.Run("recreate emits resource only", func(t *testing.T) {
 		t.Parallel()
-		out, _ := EmitImportedTF("aws", []imported.ImportedResource{mkResource(imported.ActionRecreateFromLastImport)})
+		out, _ := EmitImportedTF("aws", []imported.ImportedResource{mkResource(imported.ActionRecreateFromLastImport)}, EmitImportedOpts{})
 		s := string(out)
 		assert.Contains(t, s, `resource "aws_sqs_queue" "legacy"`)
 		assert.NotContains(t, s, "import {", "recreate must NOT emit import block (resource is being recreated, not imported)")
@@ -196,7 +196,7 @@ func TestEmitImportedTF_MissingRemediations(t *testing.T) {
 
 	t.Run("reclaim emits resource and import", func(t *testing.T) {
 		t.Parallel()
-		out, _ := EmitImportedTF("aws", []imported.ImportedResource{mkResource(imported.ActionReclaimExisting)})
+		out, _ := EmitImportedTF("aws", []imported.ImportedResource{mkResource(imported.ActionReclaimExisting)}, EmitImportedOpts{})
 		s := string(out)
 		assert.Contains(t, s, `resource "aws_sqs_queue" "legacy"`)
 		assert.Contains(t, s, "import {")
@@ -205,7 +205,7 @@ func TestEmitImportedTF_MissingRemediations(t *testing.T) {
 
 	t.Run("remove emits removed block only", func(t *testing.T) {
 		t.Parallel()
-		out, _ := EmitImportedTF("aws", []imported.ImportedResource{mkResource(imported.ActionRemoveFromInsideOut)})
+		out, _ := EmitImportedTF("aws", []imported.ImportedResource{mkResource(imported.ActionRemoveFromInsideOut)}, EmitImportedOpts{})
 		s := string(out)
 		assert.Contains(t, s, "removed {")
 		assert.Contains(t, s, "from = aws_sqs_queue.legacy")
@@ -231,7 +231,7 @@ func TestEmitImportedTF_CloudFiltering(t *testing.T) {
 			Attrs:    []byte(`{"Name":{"Literal":"y"}}`),
 		},
 	}
-	out, used := EmitImportedTF("aws", irs)
+	out, used := EmitImportedTF("aws", irs, EmitImportedOpts{})
 	s := string(out)
 	assert.Contains(t, s, "aws_sqs_queue.x")
 	assert.NotContains(t, s, "google_pubsub_topic.y")
@@ -265,13 +265,13 @@ func TestEmitImportedTF_DeterministicOrder(t *testing.T) {
 		}
 		return out
 	}
-	canonical, _ := EmitImportedTF("aws", mkSlice(addresses))
+	canonical, _ := EmitImportedTF("aws", mkSlice(addresses), EmitImportedOpts{})
 	// Reverse the input and compare bytes — must be identical.
 	reversed := append([]string(nil), addresses...)
 	for i, j := 0, len(reversed)-1; i < j; i, j = i+1, j-1 {
 		reversed[i], reversed[j] = reversed[j], reversed[i]
 	}
-	rev, _ := EmitImportedTF("aws", mkSlice(reversed))
+	rev, _ := EmitImportedTF("aws", mkSlice(reversed), EmitImportedOpts{})
 	assert.Equal(t, string(canonical), string(rev),
 		"input order must not change emitted bytes")
 
@@ -328,7 +328,7 @@ func TestEmitImportedTF_TypedDecodeFailureDropsRecord(t *testing.T) {
 		Tier:  imported.TierImportedFlat,
 		Attrs: []byte(`{"foo":"bar"}`),
 	}
-	out, used := EmitImportedTF("aws", []imported.ImportedResource{good, bad})
+	out, used := EmitImportedTF("aws", []imported.ImportedResource{good, bad}, EmitImportedOpts{})
 	require.NotEmpty(t, out)
 	s := string(out)
 	assert.Contains(t, s, `resource "aws_sqs_queue" "good"`,
@@ -359,7 +359,7 @@ func TestEmitImportedTF_OpaqueRawExprMalformedDropsRecord(t *testing.T) {
 			"kms_master_key_id": RawExpr{Expr: "1 +"}, // unterminated expression
 		},
 	}
-	out, _ := EmitImportedTF("aws", []imported.ImportedResource{good, bad})
+	out, _ := EmitImportedTF("aws", []imported.ImportedResource{good, bad}, EmitImportedOpts{})
 	s := string(out)
 	assert.Contains(t, s, `resource "aws_sqs_queue" "ok"`)
 	assert.NotContains(t, s, "aws_sqs_queue.bad",
@@ -392,7 +392,7 @@ func TestEmitImportedTF_OpaqueValueTypes(t *testing.T) {
 			},
 		},
 	}
-	out, _ := EmitImportedTF("aws", []imported.ImportedResource{ir})
+	out, _ := EmitImportedTF("aws", []imported.ImportedResource{ir}, EmitImportedOpts{})
 	s := string(out)
 	assert.True(t, hasAttr(t, s, "name", `"varied"`), "string attr in:\n%s", s)
 	assert.True(t, hasAttr(t, s, "fifo_queue", "true"), "bool attr in:\n%s", s)
@@ -419,7 +419,7 @@ func TestEmitImportedTF_EmptyAttrsEmitsBareResource(t *testing.T) {
 		},
 		Tier: imported.TierImportedFlat,
 	}
-	out, used := EmitImportedTF("aws", []imported.ImportedResource{ir})
+	out, used := EmitImportedTF("aws", []imported.ImportedResource{ir}, EmitImportedOpts{})
 	s := string(out)
 	assert.Contains(t, s, `resource "aws_sqs_queue" "bare"`)
 	assert.True(t, hasAttr(t, s, "provider", "aws.imported"))
@@ -448,7 +448,7 @@ func TestEmitImportedTF_SectionOrdering(t *testing.T) {
 			Attributes: map[string]any{"name": "live"},
 		},
 	}
-	out, _ := EmitImportedTF("aws", irs)
+	out, _ := EmitImportedTF("aws", irs, EmitImportedOpts{})
 	s := string(out)
 	idxImport := strings.Index(s, "import {")
 	idxResource := strings.Index(s, `resource "aws_sqs_queue"`)
@@ -462,4 +462,95 @@ func TestEmitImportedTF_SectionOrdering(t *testing.T) {
 	assert.Truef(t, idxResource < idxRemoved,
 		"resources must precede removed blocks; idxResource=%d idxRemoved=%d",
 		idxResource, idxRemoved)
+}
+
+// TestEmitImportedTF_ProvenanceTags pins the end-to-end provenance shape:
+// taggable imported resources get tags = merge({InsideOutImport...}, {...}),
+// labelable GCP resources get the lower-cased hyphenated equivalent, and
+// untaggable types (google_compute_network) emit unchanged.
+func TestEmitImportedTF_ProvenanceTags(t *testing.T) {
+	t.Parallel()
+	awsIR := imported.ImportedResource{
+		Identity: imported.ResourceIdentity{Cloud: "aws", Type: "aws_sqs_queue", Address: "aws_sqs_queue.q", ImportID: "x"},
+		Tier:     imported.TierImportedFlat,
+		Attrs:    []byte(`{"Name":{"Literal":"q"}}`),
+	}
+	gcpIR := imported.ImportedResource{
+		Identity: imported.ResourceIdentity{Cloud: "gcp", Type: "google_storage_bucket", Address: "google_storage_bucket.b", ImportID: "b"},
+		Tier:     imported.TierImportedFlat,
+		Attrs:    []byte(`{"Name":{"Literal":"b"}}`),
+	}
+	gcpVPC := imported.ImportedResource{
+		Identity: imported.ResourceIdentity{Cloud: "gcp", Type: "google_compute_network", Address: "google_compute_network.vpc", ImportID: "vpc"},
+		Tier:     imported.TierImportedFlat,
+		Attrs:    []byte(`{"Name":{"Literal":"vpc"}}`),
+	}
+
+	opts := EmitImportedOpts{
+		ImportProjectID: "io-stack-1",
+		ImportSessionID: "sess-9",
+		ImportedAt:      fixedTime(),
+	}
+
+	awsIRs := []imported.ImportedResource{awsIR}
+	awsOut, _ := EmitImportedTF("aws", awsIRs, opts)
+	awsStr := string(awsOut)
+	assert.Contains(t, awsStr, `tags = merge(`)
+	assert.Contains(t, awsStr, `InsideOutImportProject = "io-stack-1"`)
+	assert.Contains(t, awsStr, `InsideOutImportSession = "sess-9"`)
+	assert.Contains(t, awsStr, `InsideOutImported`)
+	assert.Contains(t, awsStr, `InsideOutImportedAt`)
+	assert.False(t, awsIRs[0].WeakLocked)
+
+	gcpIRs := []imported.ImportedResource{gcpIR, gcpVPC}
+	gcpOut, _ := EmitImportedTF("gcp", gcpIRs, opts)
+	gcpStr := string(gcpOut)
+	assert.Contains(t, gcpStr, `labels = merge(`)
+	assert.Contains(t, gcpStr, `"insideout-import-project" = "io-stack-1"`)
+	assert.Contains(t, gcpStr, `"insideout-imported-at"    = "2026-04-29t14-30-00z"`)
+	// The VPC body must NOT have a labels merge.
+	vpcBlock := extractResourceBlock(t, gcpStr, "google_compute_network", "vpc")
+	assert.NotContains(t, vpcBlock, "labels = merge(",
+		"google_compute_network is untaggable; provenance must not be injected")
+	assert.True(t, gcpIRs[1].WeakLocked, "google_compute_network must be flagged WeakLocked")
+}
+
+// TestEmitImportedTF_ProvenanceDisabled confirms the backwards-compat path:
+// when EmitImportedOpts.ImportProjectID is empty, no merge() is emitted and
+// existing behavior (issue #148) is preserved bit-for-bit.
+func TestEmitImportedTF_ProvenanceDisabled(t *testing.T) {
+	t.Parallel()
+	ir := imported.ImportedResource{
+		Identity: imported.ResourceIdentity{Cloud: "aws", Type: "aws_sqs_queue", Address: "aws_sqs_queue.q", ImportID: "x"},
+		Tier:     imported.TierImportedFlat,
+		Attrs:    []byte(`{"Name":{"Literal":"q"}}`),
+	}
+	out, _ := EmitImportedTF("aws", []imported.ImportedResource{ir}, EmitImportedOpts{})
+	s := string(out)
+	assert.NotContains(t, s, "tags = merge(")
+	assert.NotContains(t, s, "InsideOutImportProject")
+}
+
+// extractResourceBlock returns the bytes between the `resource "<type>"
+// "<label>"` line and the matching closing `}` brace. Used to scope an
+// assertion to one resource's body inside a multi-resource emission.
+func extractResourceBlock(t *testing.T, hcl, tfType, label string) string {
+	t.Helper()
+	header := `resource "` + tfType + `" "` + label + `"`
+	start := strings.Index(hcl, header)
+	require.GreaterOrEqual(t, start, 0, "resource %s.%s not found in:\n%s", tfType, label, hcl)
+	depth := 0
+	for i := start; i < len(hcl); i++ {
+		switch hcl[i] {
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				return hcl[start : i+1]
+			}
+		}
+	}
+	t.Fatalf("unterminated resource block for %s.%s", tfType, label)
+	return ""
 }

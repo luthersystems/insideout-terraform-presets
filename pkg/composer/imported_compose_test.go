@@ -4,6 +4,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
@@ -12,6 +13,246 @@ import (
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
+
+// TestComposeStackWithIssues_ProvenanceTags exercises the issue #153
+// end-to-end path: ImportProjectID + ImportSessionID propagate through
+// composeStackImpl into EmitImportedTF, which writes merge({InsideOut...},
+// {...}) into the body of every taggable imported resource. Pins the
+// imported_at timestamp via withFixedNow so the assertion is exact, not
+// merely "key present". The composed root must remain HCL-valid.
+func TestComposeStackWithIssues_ProvenanceTags(t *testing.T) {
+	// Pinning nowFn requires serial execution because nowFn is package-
+	// global; t.Parallel() would race with other tests that touch it.
+
+	restore := withFixedNow(time.Date(2026, 4, 29, 14, 30, 0, 0, time.UTC))
+	defer restore()
+
+	c := newTestClient()
+	res, err := c.ComposeStackWithIssues(ComposeStackOpts{
+		Cloud:           "aws",
+		SelectedKeys:    []ComponentKey{KeyAWSVPC},
+		Comps:           &Components{Cloud: "AWS"},
+		Cfg:             &Config{},
+		Project:         "demo",
+		Region:          "us-east-1",
+		ImportProjectID: "io-stack-1",
+		ImportSessionID: "sess-9",
+		Imported: []imported.ImportedResource{
+			{
+				Identity: imported.ResourceIdentity{
+					Cloud: "aws", Type: "aws_sqs_queue",
+					Address: "aws_sqs_queue.q", ImportID: "https://sqs/.../q",
+				},
+				Tier:  imported.TierImportedFlat,
+				Attrs: []byte(`{"Name":{"Literal":"q"}}`),
+			},
+		},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, res)
+
+	importedTF := string(res.Files["/imported.tf"])
+	require.NotEmpty(t, importedTF)
+	assert.Contains(t, importedTF, "tags = merge(")
+	assert.True(t, hasAttr(t, importedTF, "InsideOutImportProject", `"io-stack-1"`),
+		"missing InsideOutImportProject in:\n%s", importedTF)
+	assert.True(t, hasAttr(t, importedTF, "InsideOutImportSession", `"sess-9"`),
+		"missing InsideOutImportSession in:\n%s", importedTF)
+	assert.True(t, hasAttr(t, importedTF, "InsideOutImportedAt", `"2026-04-29T14:30:00Z"`),
+		"timestamp must reflect the pinned nowFn value; got:\n%s", importedTF)
+
+	for _, iss := range res.Issues {
+		require.NotEqualf(t, "hcl_parse_error", iss.Code,
+			"composed root must parse: %+v", iss)
+	}
+}
+
+// TestComposeStackWithIssues_ProvenanceConflict pins three contracts:
+//
+//  1. The validator surfaces imported_resource_provenance_conflict with
+//     the structured payload (Field, Value, Suggestion) callers rely on.
+//  2. The injector does NOT overwrite the existing tag value (the new
+//     project ID must be absent from the emitted HCL; the prior owner
+//     must remain). This is the design's "differs → refuse" rule.
+//  3. StrictValidate=true escalates the conflict to a hard error so
+//     callers that opt in get refusal rather than a silently-emitted
+//     conflict.
+func TestComposeStackWithIssues_ProvenanceConflict(t *testing.T) {
+	t.Parallel()
+
+	conflictIR := imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Cloud: "aws", Type: "aws_dynamodb_table",
+			Address: "aws_dynamodb_table.t", ImportID: "t",
+		},
+		Tier: imported.TierImportedFlat,
+		Attributes: map[string]any{
+			"name": "t",
+			"tags": map[string]any{"InsideOutImportProject": "io-other"},
+		},
+	}
+
+	c := newTestClient()
+	res, err := c.ComposeStackWithIssues(ComposeStackOpts{
+		Cloud:           "aws",
+		SelectedKeys:    []ComponentKey{KeyAWSVPC},
+		Comps:           &Components{Cloud: "AWS"},
+		Cfg:             &Config{},
+		Project:         "demo",
+		Region:          "us-east-1",
+		ImportProjectID: "io-stack-1",
+		Imported:        []imported.ImportedResource{conflictIR},
+	})
+	require.NoError(t, err)
+
+	// (1) Structured issue payload.
+	var found *ValidationIssue
+	for i := range res.Issues {
+		if res.Issues[i].Code == "imported_resource_provenance_conflict" {
+			found = &res.Issues[i]
+			break
+		}
+	}
+	require.NotNil(t, found, "expected imported_resource_provenance_conflict issue; got %+v", res.Issues)
+	assert.Equal(t, "io-other", found.Value, "Value must carry the observed prior owner")
+	assert.Equal(t, "imported.aws_dynamodb_table.t", found.Field)
+	assert.NotEmpty(t, found.Suggestion, "Suggestion should hint at ForceTakeover")
+
+	// (2) Negative-emission: the new project ID must NOT have replaced the
+	// conflicting tag in /imported.tf, and the prior owner must remain.
+	importedTF := string(res.Files["/imported.tf"])
+	require.NotEmpty(t, importedTF)
+	assert.NotContains(t, importedTF, "io-stack-1",
+		"injector must not silently overwrite conflicting tag without ForceTakeover")
+	assert.Contains(t, importedTF, "io-other",
+		"the existing tag value must remain in the emitted HCL")
+
+	// (3) StrictValidate escalates.
+	strictRes, err := c.ComposeStackWithIssues(ComposeStackOpts{
+		Cloud:           "aws",
+		SelectedKeys:    []ComponentKey{KeyAWSVPC},
+		Comps:           &Components{Cloud: "AWS"},
+		Cfg:             &Config{},
+		Project:         "demo",
+		Region:          "us-east-1",
+		ImportProjectID: "io-stack-1",
+		StrictValidate:  true,
+		Imported:        []imported.ImportedResource{conflictIR},
+	})
+	require.Error(t, err, "StrictValidate=true must escalate conflict to error")
+	require.NotNil(t, strictRes)
+	assert.Contains(t, issueCodes(strictRes.Issues), "imported_resource_provenance_conflict")
+}
+
+// TestComposeStackWithIssues_ForceTakeoverSuppresses pins the audited-
+// override path at the compose layer: a fully-populated ForceTakeover
+// matching the observed prior owner suppresses the conflict issue AND
+// authorizes the injector to overwrite with the new project ID.
+func TestComposeStackWithIssues_ForceTakeoverSuppresses(t *testing.T) {
+	t.Parallel()
+
+	c := newTestClient()
+	res, err := c.ComposeStackWithIssues(ComposeStackOpts{
+		Cloud:           "aws",
+		SelectedKeys:    []ComponentKey{KeyAWSVPC},
+		Comps:           &Components{Cloud: "AWS"},
+		Cfg:             &Config{},
+		Project:         "demo",
+		Region:          "us-east-1",
+		ImportProjectID: "io-stack-1",
+		Imported: []imported.ImportedResource{
+			{
+				Identity: imported.ResourceIdentity{
+					Cloud: "aws", Type: "aws_dynamodb_table",
+					Address: "aws_dynamodb_table.t", ImportID: "t",
+				},
+				Tier: imported.TierImportedFlat,
+				Attributes: map[string]any{
+					"name": "t",
+					"tags": map[string]any{"InsideOutImportProject": "io-other"},
+				},
+				ForceTakeover: &imported.ForceTakeover{
+					Actor:         "sam@luthersystems.com",
+					Reason:        "session merge after #173 ramp",
+					PreviousOwner: "io-other",
+					ApprovedAt:    time.Date(2026, 4, 29, 14, 30, 0, 0, time.UTC),
+				},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	codes := issueCodes(res.Issues)
+	assert.NotContains(t, codes, "imported_resource_provenance_conflict",
+		"valid ForceTakeover must suppress the conflict issue")
+	assert.NotContains(t, codes, "imported_resource_force_takeover_invalid")
+
+	importedTF := string(res.Files["/imported.tf"])
+	assert.Contains(t, importedTF, "io-stack-1",
+		"valid ForceTakeover must allow injector to overwrite the conflicting tag")
+}
+
+// TestComposeStackWithIssues_ProvenanceSkippedAdvisory pins three things:
+//
+//  1. When ImportProjectID is empty and Imported is non-empty, the composer
+//     surfaces the advisory issue.
+//  2. The advisory fires EXACTLY ONCE per compose, not once per resource —
+//     a regression that emitted N copies for N resources would clutter
+//     callers' UX. Multi-resource fixture proves this.
+//  3. Pre-#153 emission shape is preserved: no merge() wrapper, no
+//     provenance keys leak into the HCL.
+func TestComposeStackWithIssues_ProvenanceSkippedAdvisory(t *testing.T) {
+	t.Parallel()
+
+	c := newTestClient()
+	res, err := c.ComposeStackWithIssues(ComposeStackOpts{
+		Cloud:        "aws",
+		SelectedKeys: []ComponentKey{KeyAWSVPC},
+		Comps:        &Components{Cloud: "AWS"},
+		Cfg:          &Config{},
+		Project:      "demo",
+		Region:       "us-east-1",
+		// Multi-resource fixture: if the advisory fires per-resource, this
+		// would surface N copies. The validator's break-after-first-eligible
+		// is the contract under test.
+		Imported: []imported.ImportedResource{
+			{
+				Identity: imported.ResourceIdentity{
+					Cloud: "aws", Type: "aws_sqs_queue",
+					Address: "aws_sqs_queue.q1", ImportID: "1",
+				},
+				Tier:  imported.TierImportedFlat,
+				Attrs: []byte(`{"Name":{"Literal":"q1"}}`),
+			},
+			{
+				Identity: imported.ResourceIdentity{
+					Cloud: "aws", Type: "aws_sqs_queue",
+					Address: "aws_sqs_queue.q2", ImportID: "2",
+				},
+				Tier:  imported.TierImportedFlat,
+				Attrs: []byte(`{"Name":{"Literal":"q2"}}`),
+			},
+			{
+				Identity: imported.ResourceIdentity{
+					Cloud: "aws", Type: "aws_dynamodb_table",
+					Address: "aws_dynamodb_table.t", ImportID: "3",
+				},
+				Tier:       imported.TierImportedFlat,
+				Attributes: map[string]any{"name": "t", "hash_key": "id"},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	codes := issueCodes(res.Issues)
+	assert.Contains(t, codes, "imported_resource_provenance_skipped_no_project_id")
+	assert.Equal(t, 1, countCode(res.Issues, "imported_resource_provenance_skipped_no_project_id"),
+		"advisory must fire exactly once per compose, not once per resource")
+
+	importedTF := string(res.Files["/imported.tf"])
+	assert.NotContains(t, importedTF, "tags = merge(", "merge() must not be emitted in pre-#153 mode")
+	assert.NotContains(t, importedTF, "InsideOutImportProject")
+}
 
 // TestComposeStackWithIssues_Imported_AWS exercises the end-to-end path:
 // ComposeStackWithIssues runs the imported validator, emits /imported.tf,
@@ -284,7 +525,7 @@ func TestImportedResource_EveryTierBranchExercised(t *testing.T) {
 				Tier: tier,
 			}
 			issues := ValidateImportedResources("aws", []imported.ImportedResource{ir})
-			out, _ := EmitImportedTF("aws", []imported.ImportedResource{ir})
+			out, _ := EmitImportedTF("aws", []imported.ImportedResource{ir}, EmitImportedOpts{})
 
 			// Composer/External tiers are explicitly out of scope for #148:
 			// no validation issues, no emission. Verify both.
@@ -412,7 +653,7 @@ func TestEmitImportedTF_ProducesValidHCL(t *testing.T) {
 			Tier:       imported.TierImportedFlat,
 			Attributes: map[string]any{"name": "x"},
 		},
-	})
+	}, EmitImportedOpts{})
 	require.NotEmpty(t, out)
 	_, diags := hclsyntax.ParseConfig(out, "imported.tf", hcl.InitialPos)
 	require.False(t, diags.HasErrors(), "EmitImportedTF must produce valid HCL: %s", diags.Error())
