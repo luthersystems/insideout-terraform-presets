@@ -1,24 +1,30 @@
 package cleanup
 
 import (
-	"strings"
+	"sort"
 	"testing"
+
+	"github.com/hashicorp/hcl/v2"
+	"github.com/hashicorp/hcl/v2/hclwrite"
 )
 
-// TestFilterImportBlocks_DroppedList pins the dropped-targets contract.
-// FilterImportBlocks now returns the list of "to" addresses that were
-// filtered out so the runner can surface them at Warn. Before this
-// change, un-importable references were silently dropped and the
-// consuming HCL still referenced them as literal ARNs — terraform
-// validate passed against a stack that referenced resources outside
-// its own state, and apply failed at runtime (issue #58 review).
-func TestFilterImportBlocks_DroppedList(t *testing.T) {
+// TestFilterImportBlocks_DroppedAndMalformed pins the three-bucket
+// contract: kept imports, dropped well-formed targets, and malformed
+// blocks. Pre-#58-review FilterImportBlocks silently dropped both kinds
+// and the runner reported success against incomplete HCL — terraform
+// validate would pass but apply would fail at runtime when the unresolved
+// reference hit the provider.
+//
+// Test parses the filtered HCL with hclwrite (rather than substring-
+// matching) so future formatting changes from hclwrite don't false-fail.
+func TestFilterImportBlocks_DroppedAndMalformed(t *testing.T) {
 	cases := []struct {
-		name        string
-		imports     string
-		generated   string
-		wantKept    []string
-		wantDropped []string
+		name          string
+		imports       string
+		generated     string
+		wantKept      []string
+		wantDropped   []string
+		wantMalformed int
 	}{
 		{
 			name: "all imports have matching resources",
@@ -72,33 +78,93 @@ resource "aws_sqs_queue" "q" {
 			wantKept:    nil,
 			wantDropped: []string{"aws_iam_role.cross_account"},
 		},
+		{
+			name: "import with missing `to` is malformed, not dropped",
+			imports: `
+import {
+  id = "no-target"
+}
+import {
+  to = aws_sqs_queue.kept
+  id = "kept-id"
+}
+`,
+			generated: `
+resource "aws_sqs_queue" "kept" {
+  name = "kept"
+}
+`,
+			wantKept:      []string{"aws_sqs_queue.kept"},
+			wantMalformed: 1,
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			filtered, dropped, err := FilterImportBlocks([]byte(tc.imports), []byte(tc.generated))
+			filtered, dropped, malformed, err := FilterImportBlocks([]byte(tc.imports), []byte(tc.generated))
 			if err != nil {
 				t.Fatalf("FilterImportBlocks error: %v", err)
 			}
-			gotKept := []string{}
-			for _, addr := range tc.wantKept {
-				if !strings.Contains(string(filtered), "to = "+addr) {
-					t.Errorf("expected filtered output to keep %q; got\n%s", addr, filtered)
-				}
-				gotKept = append(gotKept, addr)
+
+			gotKept := parseImportTargets(t, filtered)
+			sortStrings(gotKept)
+			sortStrings(tc.wantKept)
+			if !equalStrings(gotKept, tc.wantKept) {
+				t.Errorf("filtered kept = %v, want %v", gotKept, tc.wantKept)
 			}
-			for _, addr := range tc.wantDropped {
-				if strings.Contains(string(filtered), "to = "+addr) {
-					t.Errorf("expected filtered output to NOT contain dropped target %q; got\n%s", addr, filtered)
-				}
+
+			sortStrings(dropped)
+			sortStrings(tc.wantDropped)
+			if !equalStrings(dropped, tc.wantDropped) {
+				t.Errorf("dropped = %v, want %v", dropped, tc.wantDropped)
 			}
-			if len(dropped) != len(tc.wantDropped) {
-				t.Fatalf("dropped len = %d, want %d (got %v)", len(dropped), len(tc.wantDropped), dropped)
-			}
-			for i, want := range tc.wantDropped {
-				if dropped[i] != want {
-					t.Errorf("dropped[%d] = %q, want %q", i, dropped[i], want)
-				}
+
+			if len(malformed) != tc.wantMalformed {
+				t.Errorf("malformed len = %d, want %d (got %v)", len(malformed), tc.wantMalformed, malformed)
 			}
 		})
 	}
+}
+
+// parseImportTargets returns the `to` addresses from an imports.tf body,
+// using hclwrite + the production extractTraversalAddress helper. The
+// test deliberately reuses the same helper the production code uses so
+// a regression there fails BOTH the production behavior and the test —
+// not just the test's substring expectation.
+func parseImportTargets(t *testing.T, src []byte) []string {
+	t.Helper()
+	if len(src) == 0 {
+		return nil
+	}
+	f, diags := hclwrite.ParseConfig(src, "filtered.tf", hcl.Pos{})
+	if diags.HasErrors() {
+		t.Fatalf("parse filtered HCL: %v", diags)
+	}
+	var out []string
+	for _, block := range f.Body().Blocks() {
+		if block.Type() != "import" {
+			continue
+		}
+		toAttr := block.Body().GetAttribute("to")
+		if toAttr == nil {
+			continue
+		}
+		if addr := extractTraversalAddress(toAttr.Expr().BuildTokens(nil)); addr != "" {
+			out = append(out, addr)
+		}
+	}
+	return out
+}
+
+func sortStrings(s []string) { sort.Strings(s) }
+
+func equalStrings(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }

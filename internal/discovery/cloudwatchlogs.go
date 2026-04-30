@@ -62,15 +62,18 @@ func (d *CloudWatchLogsDiscoverer) Discover(ctx context.Context, filter Filter) 
 					ResourceArn: aws.String(arn),
 				})
 				if err != nil {
-					// Match the Lambda / SQS / DynamoDB / SecretsManager
-					// policy: tag-fetch errors abort discovery (issue #58
-					// review). The previous behavior swallowed the error
-					// and treated the resource as untagged, which (a)
-					// silently dropped resources from --tags filtering
-					// and (b) emitted a misleading "no tags" report for
-					// resources whose tags were inaccessible. Both
-					// outcomes are wrong for a security-relevant tool;
-					// fail-loud is the symmetric policy.
+					// Match the Lambda / SQS / DynamoDB policy: tag-fetch
+					// errors abort discovery (issue #58 review).
+					// SecretsManager has no separate tag call — its tags
+					// are inline in ListSecrets — so it has no tag-step
+					// to fail-loud on. The previous CWL behavior
+					// swallowed the error and treated the resource as
+					// untagged, which (a) silently dropped resources
+					// from --tags filtering and (b) emitted a misleading
+					// "no tags" report for resources whose tags were
+					// inaccessible. Both outcomes are wrong for a
+					// security-relevant tool; fail-loud is the symmetric
+					// policy.
 					return nil, fmt.Errorf("cloudwatchlogs list tags for %s: %w", name, err)
 				}
 

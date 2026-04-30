@@ -125,8 +125,9 @@ func TestCloudWatchLogsDiscoverer_Deduplication(t *testing.T) {
 // dropped resources from --tags filtering and (b) emitted a misleading
 // "no tags" report for resources whose tags were inaccessible. Both
 // outcomes are wrong for a security-relevant tool. Lambda / SQS /
-// DynamoDB / SecretsManager already failed-loud on tag errors; CWL now
-// matches them.
+// DynamoDB already failed-loud on tag errors; CWL now matches them.
+// (SecretsManager has no separate tag call — tags are inline in
+// ListSecrets — so it has no tag-step to fail-loud on.)
 func TestCloudWatchLogsDiscoverer_TagErrorFailsLoud(t *testing.T) {
 	mock := &mockCWL{
 		describeLogGroupsPages: map[string][]cloudwatchlogs.DescribeLogGroupsOutput{
