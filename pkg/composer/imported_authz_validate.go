@@ -101,17 +101,21 @@ func ValidateImportedResourceAuthorization(cloud string, irs []imported.Imported
 				continue
 			}
 
-			if err := policy.ResolvePath(ir.Identity.Type, path); err != nil {
-				issues = append(issues, ValidationIssue{
-					Field:  issueField,
-					Code:   "imported_resource_field_edit_unknown_path",
-					Reason: fmt.Sprintf("imported resource path %q does not resolve against %s: %s", path, ir.Identity.Type, err.Error()),
-				})
-				continue
-			}
-
+			// Curated paths short-circuit the reflective ResolvePath walk:
+			// presence in the policy map implies resolvability (the lint
+			// rejects unresolvable curated paths). Only run ResolvePath to
+			// disambiguate "unknown path" vs "uncurated path" for paths
+			// the curator hasn't listed.
 			entry, hasEntry := polMap[path]
 			if !hasEntry {
+				if err := policy.ResolvePath(ir.Identity.Type, path); err != nil {
+					issues = append(issues, ValidationIssue{
+						Field:  issueField,
+						Code:   "imported_resource_field_edit_unknown_path",
+						Reason: fmt.Sprintf("imported resource path %q does not resolve against %s: %s", path, ir.Identity.Type, err.Error()),
+					})
+					continue
+				}
 				issues = append(issues, ValidationIssue{
 					Field:  issueField,
 					Code:   "imported_resource_field_edit_no_policy_for_path",
