@@ -101,7 +101,11 @@ func TestProvenanceKeysFor_GCP(t *testing.T) {
 	entries := provenanceKeysFor("gcp", "io-stack-1", "sess-9", fixedTime())
 	require.Len(t, entries, 4)
 	assert.Equal(t, gcpLabelImportProject, entries[0].Key)
+	assert.Equal(t, "io-stack-1", entries[0].Value)
 	assert.Equal(t, gcpLabelImportSession, entries[1].Key)
+	assert.Equal(t, "sess-9", entries[1].Value)
+	assert.Equal(t, gcpLabelImported, entries[2].Key)
+	assert.Equal(t, "true", entries[2].Value)
 	assert.Equal(t, gcpLabelImportedAt, entries[3].Key)
 	assert.Equal(t, "2026-04-29t14-30-00z", entries[3].Value)
 }
@@ -214,7 +218,13 @@ func TestInjectProvenance_OpaqueAttributes(t *testing.T) {
 	assert.Contains(t, s, `InsideOutImportProject = "io-stack-1"`)
 }
 
-func TestInjectProvenance_Idempotent(t *testing.T) {
+// TestInjectProvenance_Deterministic confirms two independent injection
+// passes over the same fresh body produce byte-identical output. This is
+// determinism, not idempotency: injectProvenance is contracted to run on
+// the IR's desired-state body (Attrs / Attributes), never on previously-
+// injected HCL. EmitImportedTF guarantees this by always rebuilding the
+// body via emitImportedResourceBody before calling the injector.
+func TestInjectProvenance_Deterministic(t *testing.T) {
 	t.Parallel()
 	ir := imported.ImportedResource{
 		Identity: imported.ResourceIdentity{Cloud: "aws", Type: "aws_sqs_queue", Address: "aws_sqs_queue.q"},
@@ -230,6 +240,32 @@ func TestInjectProvenance_Idempotent(t *testing.T) {
 	assert.Equal(t, string(first), string(second), "two injections with same opts must be byte-identical")
 }
 
+// TestInjectProvenance_DoubleInjectionNests pins the contract that
+// injectProvenance is NOT idempotent on already-injected output: a second
+// pass treats the existing merge() expression as the user's prior tags and
+// nests it. This is not a defect — the function is contracted to run only
+// on fresh bodies — but capturing the behavior here means a future caller
+// that mistakenly re-runs the injector on emitted HCL will get a clear
+// signal about what is happening.
+func TestInjectProvenance_DoubleInjectionNests(t *testing.T) {
+	t.Parallel()
+	ir := imported.ImportedResource{
+		Identity: imported.ResourceIdentity{Cloud: "aws", Type: "aws_sqs_queue", Address: "aws_sqs_queue.q"},
+		Tier:     imported.TierImportedFlat,
+		Attrs:    []byte(`{"Name":{"Literal":"q"}}`),
+	}
+	body, _, err := emitTestBody(t, ir)
+	require.NoError(t, err)
+	first, err := injectProvenance(body, &ir, "io-stack-1", "sess-9", fixedTime())
+	require.NoError(t, err)
+	second, err := injectProvenance(first, &ir, "io-stack-1", "sess-9", fixedTime())
+	require.NoError(t, err)
+	// Two `merge(` substrings means we nested. Single-pass output has only
+	// one. The bytes should differ.
+	assert.NotEqual(t, string(first), string(second), "double injection must differ from single injection (non-idempotent contract)")
+	assert.Equal(t, 2, strings.Count(string(second), "merge("), "second pass nests merge() inside the existing one")
+}
+
 // emitTestBody is a small helper that runs the same body-emission path as
 // EmitImportedTF (typed Attrs → MarshalHCL, opaque → emitOpaqueAttrsBody) so
 // the injector tests get a realistic input.
@@ -237,6 +273,69 @@ func emitTestBody(t *testing.T, ir imported.ImportedResource) ([]byte, string, e
 	t.Helper()
 	body, err := emitImportedResourceBody(ir)
 	return body, "", err
+}
+
+// TestParseBashArray pins the parser's edge cases so a regression here
+// can't quietly mask drift between the Go allowlists and the bash lint
+// scripts. Without these the cross-check test below could pass on a
+// truncated parse.
+func TestParseBashArray(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		src  string
+		want []string
+	}{
+		{
+			name: "multi-line plain",
+			src: `LIST=(
+  a
+  b
+  c
+)`,
+			want: []string{"a", "b", "c"},
+		},
+		{
+			name: "comment containing close paren must not terminate parse",
+			src: `LIST=(
+  a
+  b  # see ticket (#42)
+  c
+)`,
+			want: []string{"a", "b", "c"},
+		},
+		{
+			name: "single-line array",
+			src:  `LIST=( a b c )`,
+			want: []string{"a", "b", "c"},
+		},
+		{
+			name: "header with trailing comment",
+			src: `LIST=(  # ordered
+  a
+  b
+)`,
+			want: []string{"a", "b"},
+		},
+		{
+			name: "quoted entries are unquoted",
+			src: `LIST=(
+  "a"
+  'b'
+)`,
+			want: []string{"a", "b"},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tmp := t.TempDir() + "/script.sh"
+			require.NoError(t, os.WriteFile(tmp, []byte(tc.src), 0o644))
+			got, err := parseBashArray(tmp, "LIST")
+			require.NoError(t, err)
+			assert.Equal(t, tc.want, got)
+		})
+	}
 }
 
 // TestUntaggableAllowlistsMatchLintScripts cross-checks that the Go-side
@@ -294,8 +393,11 @@ func lastDir(p string) string {
 
 // parseBashArray extracts a bash array assignment of the form
 // `NAME=( a b c )` from a script. Lines inside the parentheses may carry
-// `#` comments (stripped) and arbitrary whitespace. Returns the unsorted
-// list of unquoted entries.
+// `#` comments (stripped first, then closing `)` is detected) and arbitrary
+// whitespace. The header (`NAME=(`) and closing `)` may occur on separate
+// lines or on the same line.
+//
+// Returns the unsorted list of unquoted entries.
 func parseBashArray(path, name string) ([]string, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -305,23 +407,36 @@ func parseBashArray(path, name string) ([]string, error) {
 
 	var out []string
 	scanner := bufio.NewScanner(f)
-	state := 0 // 0 = looking for "NAME=(", 1 = inside the array
+	state := 0 // 0 = looking for "NAME=(", 1 = inside the array, 2 = done
 	header := name + "=("
 	for scanner.Scan() {
-		line := scanner.Text()
+		raw := scanner.Text()
+
+		// Strip line comments first so a `# … (…)` annotation cannot fool
+		// either the header or close detector. Comments must be in
+		// unquoted context — the lint scripts don't use embedded `#` in
+		// quoted entries today, so a naive split is sufficient.
+		line := raw
+		if i := strings.Index(line, "#"); i >= 0 {
+			line = line[:i]
+		}
+
 		switch state {
 		case 0:
 			if strings.Contains(line, header) {
 				state = 1
+				// Trim everything up to and including the header so a
+				// single-line `NAME=( a b c )` parses correctly.
+				if i := strings.Index(line, header); i >= 0 {
+					line = line[i+len(header):]
+				}
+				// Fall through to state-1 parsing on the remainder.
+			} else {
+				continue
 			}
+			fallthrough
 		case 1:
-			if strings.Contains(line, ")") {
-				state = 2
-			}
-			// Strip comments and whitespace, then parse one entry per token.
-			if i := strings.Index(line, "#"); i >= 0 {
-				line = line[:i]
-			}
+			closed := strings.Contains(line, ")")
 			line = strings.TrimSpace(line)
 			line = strings.TrimSuffix(line, ")")
 			line = strings.TrimSpace(line)
@@ -331,6 +446,9 @@ func parseBashArray(path, name string) ([]string, error) {
 				}
 				tok = strings.Trim(tok, `"'`)
 				out = append(out, tok)
+			}
+			if closed {
+				state = 2
 			}
 		}
 		if state == 2 {

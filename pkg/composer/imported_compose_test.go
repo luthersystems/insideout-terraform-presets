@@ -59,7 +59,12 @@ func TestComposeStackWithIssues_ProvenanceTags(t *testing.T) {
 
 // TestComposeStackWithIssues_ProvenanceConflict pins that the validator
 // surfaces a structured ValidationIssue when an imported resource's existing
-// InsideOutImportProject tag does not match the composer's ImportProjectID.
+// InsideOutImportProject tag does not match the composer's ImportProjectID,
+// AND that the conflict issue carries the observed prior owner so the caller
+// can render an actionable message. The composer is contracted to surface
+// the issue via Result.Issues; whether the caller hard-fails on it (via
+// StrictValidate) or refuses takeover is the caller's policy, not this
+// layer's. We pin the structured payload so callers can rely on it.
 func TestComposeStackWithIssues_ProvenanceConflict(t *testing.T) {
 	t.Parallel()
 
@@ -88,8 +93,48 @@ func TestComposeStackWithIssues_ProvenanceConflict(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	codes := issueCodes(res.Issues)
-	assert.Contains(t, codes, "imported_resource_provenance_conflict")
+	// Find the conflict issue and pin its structured fields so the caller
+	// can render "claimed by <observed>" UX without re-parsing.
+	var found *ValidationIssue
+	for i := range res.Issues {
+		if res.Issues[i].Code == "imported_resource_provenance_conflict" {
+			found = &res.Issues[i]
+			break
+		}
+	}
+	require.NotNil(t, found, "expected imported_resource_provenance_conflict issue; got %+v", res.Issues)
+	assert.Equal(t, "io-other", found.Value, "Value must carry the observed prior owner")
+	assert.Equal(t, "imported.aws_dynamodb_table.t", found.Field)
+	assert.NotEmpty(t, found.Suggestion, "Suggestion should hint at ForceTakeover")
+
+	// StrictValidate=true must escalate the conflict to an error so callers
+	// that opt in get a hard refusal rather than a silently-overwritten tag.
+	strictRes, err := c.ComposeStackWithIssues(ComposeStackOpts{
+		Cloud:           "aws",
+		SelectedKeys:    []ComponentKey{KeyAWSVPC},
+		Comps:           &Components{Cloud: "AWS"},
+		Cfg:             &Config{},
+		Project:         "demo",
+		Region:          "us-east-1",
+		ImportProjectID: "io-stack-1",
+		StrictValidate:  true,
+		Imported: []imported.ImportedResource{
+			{
+				Identity: imported.ResourceIdentity{
+					Cloud: "aws", Type: "aws_dynamodb_table",
+					Address: "aws_dynamodb_table.t", ImportID: "t",
+				},
+				Tier: imported.TierImportedFlat,
+				Attributes: map[string]any{
+					"name": "t",
+					"tags": map[string]any{"InsideOutImportProject": "io-other"},
+				},
+			},
+		},
+	})
+	require.Error(t, err, "StrictValidate=true must escalate conflict to error")
+	require.NotNil(t, strictRes)
+	assert.Contains(t, issueCodes(strictRes.Issues), "imported_resource_provenance_conflict")
 }
 
 // TestComposeStackWithIssues_ProvenanceSkippedAdvisory pins the
