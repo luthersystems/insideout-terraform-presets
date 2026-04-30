@@ -40,7 +40,10 @@ output "services_range_name" {
 
 output "router_name" {
   description = "Cloud Router name (if Cloud NAT enabled)"
-  value       = var.enable_cloud_nat ? google_compute_router.router[0].name : null
+  # try() defends against empty-tuple errors on first plan with empty state
+  # (issue #178). The ternary alone is correct in steady state; try() adds
+  # belt-and-braces for the unmaterialized first-plan case.
+  value = try(google_compute_router.router[0].name, null)
 }
 
 output "region" {
@@ -50,6 +53,7 @@ output "region" {
 
 output "connector_id" {
   description = "Serverless VPC Access Connector ID (null if disabled)"
-  value       = var.enable_serverless_connector ? google_vpc_access_connector.serverless[0].id : null
+  # try() — see router_name above (issue #178).
+  value = try(google_vpc_access_connector.serverless[0].id, null)
 }
 
