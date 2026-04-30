@@ -2128,15 +2128,78 @@ func TestDefaultWiring_GCPSubnetSelfLinkUsesTryGuard(t *testing.T) {
 }
 
 // TestComposeStack_GCPSubnetSelfLinkInGeneratedHCL is the integration check:
-// a real ComposeStack run against a GCP+VPC+GKE stack must emit the try()
-// expression in the composed main.tf — not the raw [0] form. Mirrors
-// TestComposeStack_AWS_ValidHCL's structural HCL check but targets the
-// specific issue #178 string.
+// a real ComposeStack run against each GCP+VPC consumer combo must emit the
+// try() expression in the composed main.tf and never the raw [0] form
+// outside that try(). Targets issue #178 acceptance criteria: composed HCL
+// against an empty state must not contain unguarded [0] indices on the
+// VPC's subnets_self_links output.
 func TestComposeStack_GCPSubnetSelfLinkInGeneratedHCL(t *testing.T) {
+	// Match `try(module.gcp_vpc.subnet_self_links[0], null)` exactly.
+	guardedRE := regexp.MustCompile(`try\(\s*module\.gcp_vpc\.subnet_self_links\[0\]\s*,\s*null\s*\)`)
+	// Match the unguarded substring (with bracketed [0]). Used to count
+	// raw occurrences and subtract guarded matches; any leftover is an
+	// unguarded bug.
+	rawSubstr := "module.gcp_vpc.subnet_self_links[0]"
+
+	consumerCombos := []struct {
+		name string
+		keys []ComponentKey
+	}{
+		{"gke", []ComponentKey{KeyGCPVPC, KeyGCPGKE}},
+		{"loadbalancer", []ComponentKey{KeyGCPVPC, KeyGCPLoadbalancer}},
+		{"compute", []ComponentKey{KeyGCPVPC, KeyGCPCompute}},
+		{"bastion", []ComponentKey{KeyGCPVPC, KeyGCPBastion}},
+	}
+	for _, combo := range consumerCombos {
+		t.Run(combo.name, func(t *testing.T) {
+			c := newTestClient()
+			out, err := c.ComposeStack(ComposeStackOpts{
+				Cloud:        "gcp",
+				SelectedKeys: combo.keys,
+				Comps:        &Components{},
+				Cfg:          &Config{Region: "us-central1"},
+				Project:      "test",
+				Region:       "us-central1",
+				GCPProjectID: "test-project-12345",
+			})
+			require.NoError(t, err)
+
+			mainTF := string(out["/main.tf"])
+			require.True(t, guardedRE.MatchString(mainTF),
+				"%s: composed main.tf must contain try(module.gcp_vpc.subnet_self_links[0], null) (issue #178)", combo.name)
+
+			for name, body := range out {
+				if !strings.HasSuffix(name, ".tf") {
+					continue
+				}
+				s := string(body)
+				rawCount := strings.Count(s, rawSubstr)
+				guardedCount := len(guardedRE.FindAllString(s, -1))
+				require.Equal(t, rawCount, guardedCount,
+					"%s/%s: every occurrence of %q must be inside try(..., null); raw=%d guarded=%d (issue #178)",
+					combo.name, name, rawSubstr, rawCount, guardedCount)
+			}
+		})
+	}
+}
+
+// TestComposeStack_GCPRouterAndConnectorOutputs_TerraformValidate runs
+// `terraform validate` on a freshly composed GCP+VPC stack to formally
+// close issue #178's acceptance criterion: composed HCL must validate
+// against an empty state (no plan errors on first run). Skips when the
+// terraform binary isn't installed or when network access (for `init`) is
+// unavailable.
+func TestComposeStack_GCPRouterAndConnectorOutputs_TerraformValidate(t *testing.T) {
+	if _, err := exec.LookPath("terraform"); err != nil {
+		t.Skip("terraform binary not on PATH; skipping integration validate")
+	}
+	if os.Getenv("CI_OFFLINE") == "1" {
+		t.Skip("CI_OFFLINE=1 skips terraform init network calls")
+	}
 	c := newTestClient()
 	out, err := c.ComposeStack(ComposeStackOpts{
 		Cloud:        "gcp",
-		SelectedKeys: []ComponentKey{KeyGCPVPC, KeyGCPGKE},
+		SelectedKeys: []ComponentKey{KeyGCPVPC, KeyGCPGKE, KeyGCPLoadbalancer, KeyGCPCompute, KeyGCPBastion},
 		Comps:        &Components{},
 		Cfg:          &Config{Region: "us-central1"},
 		Project:      "test",
@@ -2145,36 +2208,24 @@ func TestComposeStack_GCPSubnetSelfLinkInGeneratedHCL(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	mainTF := string(out["/main.tf"])
-	require.Contains(t, mainTF, "try(module.gcp_vpc.subnet_self_links[0], null)",
-		"composed main.tf must use try() guard on subnet_self_links (issue #178)")
-	// Defense: scan every .tf file for the unguarded form.
-	for name, body := range out {
-		if !strings.HasSuffix(name, ".tf") {
-			continue
-		}
-		// The unguarded "module.gcp_vpc.subnet_self_links[0]" substring will
-		// appear inside the try() expression too; the check below ensures
-		// it never appears WITHOUT the surrounding try(...).
-		s := string(body)
-		idx := 0
-		for {
-			at := strings.Index(s[idx:], "module.gcp_vpc.subnet_self_links[0]")
-			if at < 0 {
-				break
-			}
-			start := idx + at
-			prefix := s[max0(start-len("try(")):start]
-			require.Contains(t, prefix, "try(",
-				"%s contains unguarded module.gcp_vpc.subnet_self_links[0] near offset %d", name, start)
-			idx = start + 1
-		}
-	}
-}
+	dir := t.TempDir()
+	writeOutputs(t, out, dir)
 
-func max0(n int) int {
-	if n < 0 {
-		return 0
+	initCmd := exec.Command("terraform", "init", "-backend=false", "-input=false", "-no-color")
+	initCmd.Dir = dir
+	initOut, err := initCmd.CombinedOutput()
+	if err != nil {
+		t.Skipf("terraform init unavailable (network/cache): %s\n%s", err, initOut)
 	}
-	return n
+	validateCmd := exec.Command("terraform", "validate", "-no-color")
+	validateCmd.Dir = dir
+	validateOut, err := validateCmd.CombinedOutput()
+	require.NoError(t, err, "terraform validate must succeed on composed stack (issue #178):\n%s", validateOut)
+	// Empty-tuple errors and slice errors are the two specific failure
+	// modes from issue #178. If they reappear, fail loud with the
+	// terraform output so a human can see exactly what regressed.
+	require.NotContains(t, string(validateOut), "Invalid index",
+		"terraform validate surfaced 'Invalid index' (issue #178 regression)")
+	require.NotContains(t, string(validateOut), "empty tuple",
+		"terraform validate surfaced 'empty tuple' (issue #178 regression)")
 }

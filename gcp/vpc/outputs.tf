@@ -40,10 +40,12 @@ output "services_range_name" {
 
 output "router_name" {
   description = "Cloud Router name (if Cloud NAT enabled)"
-  # try() defends against empty-tuple errors on first plan with empty state
-  # (issue #178). The ternary alone is correct in steady state; try() adds
-  # belt-and-braces for the unmaterialized first-plan case.
-  value = try(google_compute_router.router[0].name, null)
+  # The ternary preserves the deterministic disabled-by-config contract
+  # (router_name=null when var.enable_cloud_nat=false). The inner try()
+  # defends against the empty-tuple plan-time error on first plan with
+  # empty state (issue #178). Layered: ternary picks the branch
+  # statically, try() makes the picked branch never error.
+  value = var.enable_cloud_nat ? try(google_compute_router.router[0].name, null) : null
 }
 
 output "region" {
@@ -53,7 +55,7 @@ output "region" {
 
 output "connector_id" {
   description = "Serverless VPC Access Connector ID (null if disabled)"
-  # try() — see router_name above (issue #178).
-  value = try(google_vpc_access_connector.serverless[0].id, null)
+  # Layered ternary + try(): see router_name above (issue #178).
+  value = var.enable_serverless_connector ? try(google_vpc_access_connector.serverless[0].id, null) : null
 }
 
