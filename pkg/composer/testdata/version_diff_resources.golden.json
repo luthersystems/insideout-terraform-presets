@@ -1,0 +1,29 @@
+{
+  "from_version": 1,
+  "to_version": 2,
+  "components": [
+    {
+      "component": "aws_vpc",
+      "action": "added"
+    }
+  ],
+  "resources": [
+    {
+      "address": "aws_sqs_queue.q",
+      "type": "aws_sqs_queue",
+      "cloud": "aws",
+      "action": "modified",
+      "changes": [
+        {
+          "path": "visibility_timeout_seconds",
+          "from": "30",
+          "to": "60",
+          "role": "Tuning",
+          "pillar": "Reliability",
+          "edit_policy": "ChatSafe"
+        }
+      ]
+    }
+  ],
+  "summary": "test"
+}
