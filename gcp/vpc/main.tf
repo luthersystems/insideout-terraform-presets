@@ -63,9 +63,13 @@ module "cloud_nat" {
   source  = "terraform-google-modules/cloud-nat/google"
   version = "~> 5.0"
 
-  project_id    = var.project_id
-  region        = var.region
-  router        = google_compute_router.router[0].name
+  project_id = var.project_id
+  region     = var.region
+  # try() defends against empty-tuple errors when terraform evaluates the
+  # router reference during validation/plan against an empty state (issue
+  # #178). count gates instantiation; try() guarantees the expression itself
+  # never errors.
+  router        = try(google_compute_router.router[0].name, null)
   name          = "${var.project}-nat-${random_id.suffix.hex}"
   network       = module.vpc.network_id
   create_router = false

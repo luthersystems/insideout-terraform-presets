@@ -218,3 +218,47 @@ func TestGetPresetFiles_GCP_AllModules(t *testing.T) {
 		})
 	}
 }
+
+// TestGetPresetFiles_GCP_KMS_HasUpstreamSliceBypass pins the issue #180
+// fix at the embedded-FS layer. The upstream
+// terraform-google-modules/kms/google module's local.keys_by_name calls
+// slice() on a count-controlled splat that errors during plan against an
+// empty state. Our preset wraps that consumption in
+// `try(module.kms.keys, {})` so the slice failure is caught and the
+// degraded value flows to outputs as `{}` rather than failing the plan.
+//
+// This is a structural pin: it cannot reproduce the runtime slice error
+// (mock_provider populates count splats with the right shape), but it
+// catches a future revert that removes the try() wrapper. A real-plan
+// integration test against an empty state is tracked as part of the
+// upstream-replacement work in #182.
+func TestGetPresetFiles_GCP_KMS_HasUpstreamSliceBypass(t *testing.T) {
+	t.Parallel()
+	files, err := newTestClient().GetPresetFiles("gcp/kms")
+	require.NoError(t, err)
+
+	mainTF, ok := files["/main.tf"]
+	require.True(t, ok, "gcp/kms must include main.tf")
+
+	body := string(mainTF)
+
+	// The literal try() wrap on module.kms.keys is the bypass that
+	// prevents the upstream slice() error from failing the plan.
+	require.Contains(t, body, "try(module.kms.keys, {})",
+		"gcp/kms/main.tf must wrap module.kms.keys in try() (issue #180); a regression here lets the upstream slice end_index error reach customers")
+
+	// The local.keys_by_name local is the named carrier so consumers
+	// (outputs, IAM bindings) can reference one stable name. The next
+	// two checks ensure the bypass is actually the one consumed by the
+	// outputs, not just a dead local.
+	require.Contains(t, body, "keys_by_name = try(module.kms.keys, {})",
+		"local.keys_by_name must be the carrier of the bypass result")
+
+	outputsTF, ok := files["/outputs.tf"]
+	require.True(t, ok, "gcp/kms must include outputs.tf")
+	outputsBody := string(outputsTF)
+	require.Contains(t, outputsBody, "local.keys_by_name",
+		"gcp/kms/outputs.tf must consume the bypass local, not module.kms.keys directly")
+	require.NotContains(t, outputsBody, "module.kms.keys",
+		"gcp/kms/outputs.tf must not bypass the issue #180 wrapper by reading module.kms.keys directly")
+}

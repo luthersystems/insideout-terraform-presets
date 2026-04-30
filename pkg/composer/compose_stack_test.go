@@ -2087,3 +2087,178 @@ func TestComposeStack_PolymorphicKeyPullsInPrefixedVPC(t *testing.T) {
 	require.Contains(t, mainTF, `module "resource"`,
 		"polymorphic KeyAWSEKSControlPlane preserves its string value and renders as module.resource")
 }
+
+// TestDefaultWiring_GCPSubnetSelfLinkUsesTryGuard pins the issue #178 fix:
+// every GCP module that consumes the VPC's subnets_self_links output must do
+// so via try(module.gcp_vpc.subnet_self_links[0], null), not the raw [0]
+// index. The raw form errors with "Invalid index ... empty tuple" on first
+// terraform plan against an empty state and surfaces as a stage_error in
+// Oracle's custom-stack-provision pipeline.
+//
+// This test exercises every module that consumes subnet_self_link as a
+// scalar wiring input; if a future caller is added without the try() guard
+// the test fails before the regression reaches a customer.
+func TestDefaultWiring_GCPSubnetSelfLinkUsesTryGuard(t *testing.T) {
+	t.Parallel()
+	const wantExpr = "try(module.gcp_vpc.subnet_self_links[0], null)"
+	const rawForm = "module.gcp_vpc.subnet_self_links[0]"
+
+	selected := map[ComponentKey]bool{
+		KeyGCPVPC:          true,
+		KeyGCPGKE:          true,
+		KeyGCPLoadbalancer: true,
+		KeyGCPCompute:      true,
+		KeyGCPBastion:      true,
+	}
+	consumers := []ComponentKey{
+		KeyGCPGKE, KeyGCPLoadbalancer, KeyGCPCompute, KeyGCPBastion,
+	}
+	for _, key := range consumers {
+		t.Run(string(key), func(t *testing.T) {
+			t.Parallel()
+			wi := DefaultWiring(selected, key, &Components{})
+			got, ok := wi.RawHCL["subnet_self_link"]
+			require.True(t, ok, "%s must wire subnet_self_link from gcp_vpc", key)
+			require.Equal(t, wantExpr, got,
+				"%s subnet_self_link must use try() guard (issue #178); raw [0] errors on first plan with empty state", key)
+			require.NotContains(t, got, rawForm+"\n",
+				"%s must not emit unguarded [0] index", key)
+		})
+	}
+}
+
+// TestComposeStack_GCPSubnetSelfLinkInGeneratedHCL is the integration check:
+// a real ComposeStack run against each GCP+VPC consumer combo must emit the
+// try() expression in the composed main.tf and never the raw [0] form
+// outside that try(). Targets issue #178 acceptance criteria: composed HCL
+// against an empty state must not contain unguarded [0] indices on the
+// VPC's subnets_self_links output.
+func TestComposeStack_GCPSubnetSelfLinkInGeneratedHCL(t *testing.T) {
+	// Match `try(module.gcp_vpc.subnet_self_links[0], null)` exactly.
+	guardedRE := regexp.MustCompile(`try\(\s*module\.gcp_vpc\.subnet_self_links\[0\]\s*,\s*null\s*\)`)
+	// Match the unguarded substring (with bracketed [0]). Used to count
+	// raw occurrences and subtract guarded matches; any leftover is an
+	// unguarded bug.
+	rawSubstr := "module.gcp_vpc.subnet_self_links[0]"
+
+	consumerCombos := []struct {
+		name string
+		keys []ComponentKey
+	}{
+		{"gke", []ComponentKey{KeyGCPVPC, KeyGCPGKE}},
+		{"loadbalancer", []ComponentKey{KeyGCPVPC, KeyGCPLoadbalancer}},
+		{"compute", []ComponentKey{KeyGCPVPC, KeyGCPCompute}},
+		{"bastion", []ComponentKey{KeyGCPVPC, KeyGCPBastion}},
+	}
+	for _, combo := range consumerCombos {
+		t.Run(combo.name, func(t *testing.T) {
+			c := newTestClient()
+			out, err := c.ComposeStack(ComposeStackOpts{
+				Cloud:        "gcp",
+				SelectedKeys: combo.keys,
+				Comps:        &Components{},
+				Cfg:          &Config{Region: "us-central1"},
+				Project:      "test",
+				Region:       "us-central1",
+				GCPProjectID: "test-project-12345",
+			})
+			require.NoError(t, err)
+
+			mainTF := string(out["/main.tf"])
+			require.True(t, guardedRE.MatchString(mainTF),
+				"%s: composed main.tf must contain try(module.gcp_vpc.subnet_self_links[0], null) (issue #178)", combo.name)
+
+			for name, body := range out {
+				if !strings.HasSuffix(name, ".tf") {
+					continue
+				}
+				s := string(body)
+				rawCount := strings.Count(s, rawSubstr)
+				guardedCount := len(guardedRE.FindAllString(s, -1))
+				require.Equal(t, rawCount, guardedCount,
+					"%s/%s: every occurrence of %q must be inside try(..., null); raw=%d guarded=%d (issue #178)",
+					combo.name, name, rawSubstr, rawCount, guardedCount)
+			}
+		})
+	}
+}
+
+// TestComposeStack_GCPRouterAndConnectorOutputs_TerraformValidate runs
+// `terraform validate` on freshly composed GCP+VPC stacks (multiple
+// consumer combos) to formally close issue #178's acceptance criterion:
+// composed HCL must validate against an empty state with no
+// "Invalid index" / "empty tuple" errors.
+//
+// Behavior on init failure differs by environment:
+//
+//   - In CI (env CI=true, set by GitHub Actions): require the test runs.
+//     A `terraform init` failure is a hard test failure so a transient
+//     registry blip can never silently skip the gate that's the formal
+//     closure for #178.
+//   - Local dev (no CI env): skip on init failure so a developer offline
+//     can still run `go test ./...` without the gate forcing a network
+//     round-trip for every test invocation.
+//
+// Use `go test -short` to skip the test entirely (e.g. in pre-commit
+// hooks where the multi-second init+validate is too costly).
+func TestComposeStack_GCPRouterAndConnectorOutputs_TerraformValidate(t *testing.T) {
+	if testing.Short() {
+		t.Skip("-short skips multi-second terraform init+validate")
+	}
+	if _, err := exec.LookPath("terraform"); err != nil {
+		t.Skip("terraform binary not on PATH; skipping integration validate")
+	}
+
+	inCI := os.Getenv("CI") == "true"
+
+	// Multiple subset combos catch a regression that only manifests
+	// outside the kitchen-sink stack — e.g. a wiring rule that fires
+	// only when one consumer is paired with the VPC. The subset combos
+	// also exercise enable_cloud_nat / enable_serverless_connector
+	// independently across stacks.
+	combos := []struct {
+		name string
+		keys []ComponentKey
+	}{
+		{"vpc+compute alone", []ComponentKey{KeyGCPVPC, KeyGCPCompute}},
+		{"vpc+gke+loadbalancer+compute+bastion", []ComponentKey{KeyGCPVPC, KeyGCPGKE, KeyGCPLoadbalancer, KeyGCPCompute, KeyGCPBastion}},
+	}
+
+	for _, combo := range combos {
+		t.Run(combo.name, func(t *testing.T) {
+			c := newTestClient()
+			out, err := c.ComposeStack(ComposeStackOpts{
+				Cloud:        "gcp",
+				SelectedKeys: combo.keys,
+				Comps:        &Components{},
+				Cfg:          &Config{Region: "us-central1"},
+				Project:      "test",
+				Region:       "us-central1",
+				GCPProjectID: "test-project-12345",
+			})
+			require.NoError(t, err)
+
+			dir := t.TempDir()
+			writeOutputs(t, out, dir)
+
+			initCmd := exec.Command("terraform", "init", "-backend=false", "-input=false", "-no-color")
+			initCmd.Dir = dir
+			initOut, err := initCmd.CombinedOutput()
+			if err != nil {
+				if inCI {
+					require.NoError(t, err,
+						"terraform init must succeed in CI; this gate is the formal closure for issue #178 and must not silently skip on transient registry failures:\n%s", initOut)
+				}
+				t.Skipf("terraform init unavailable (network/cache) in local dev: %s\n%s", err, initOut)
+			}
+			validateCmd := exec.Command("terraform", "validate", "-no-color")
+			validateCmd.Dir = dir
+			validateOut, err := validateCmd.CombinedOutput()
+			require.NoError(t, err, "terraform validate must succeed on composed stack (issue #178):\n%s", validateOut)
+			require.NotContains(t, string(validateOut), "Invalid index",
+				"terraform validate surfaced 'Invalid index' (issue #178 regression)")
+			require.NotContains(t, string(validateOut), "empty tuple",
+				"terraform validate surfaced 'empty tuple' (issue #178 regression)")
+		})
+	}
+}
