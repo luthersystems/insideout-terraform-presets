@@ -2,6 +2,7 @@ package runner
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -32,6 +33,12 @@ type mockTF struct {
 	validateErr    error
 	generatedPages []string // HCL to write on successive PlanGenerateConfig calls
 	planCallCount  int
+
+	// Error injection for the loud-failure tests (issue #58 review):
+	// planErrAtCall fails PlanGenerateConfig on the nth call (1-indexed,
+	// 0 = never). planJSONErr fails every PlanJSON call.
+	planErrAtCall int
+	planJSONErr   error
 }
 
 func (m *mockTF) SetWorkDir(dir string) { m.workDir = dir }
@@ -41,11 +48,15 @@ func (m *mockTF) Init(_ context.Context) error {
 }
 
 func (m *mockTF) PlanGenerateConfig(_ context.Context, outFile string) error {
-	if m.planCallCount >= len(m.generatedPages) {
+	m.planCallCount++
+	if m.planErrAtCall != 0 && m.planCallCount == m.planErrAtCall {
+		return errors.New("simulated terraform plan failure")
+	}
+	idx := m.planCallCount - 1
+	if idx >= len(m.generatedPages) {
 		return nil
 	}
-	hcl := m.generatedPages[m.planCallCount]
-	m.planCallCount++
+	hcl := m.generatedPages[idx]
 	return os.WriteFile(filepath.Join(m.workDir, outFile), []byte(hcl), 0644)
 }
 
@@ -58,6 +69,9 @@ func (m *mockTF) ProvidersSchema(_ context.Context) (*tfjson.ProviderSchemas, er
 }
 
 func (m *mockTF) PlanJSON(_ context.Context) (*tfjson.Plan, error) {
+	if m.planJSONErr != nil {
+		return nil, m.planJSONErr
+	}
 	// Return empty plan (no drift) — drift-fix pass sees no changes
 	return &tfjson.Plan{}, nil
 }
@@ -414,5 +428,89 @@ resource "aws_iam_role" "my_project_lambda_exec" {
 	// --- Verify validation ran ---
 	if !result.ValidationOK {
 		t.Error("ValidationOK should be true (mock returns no error)")
+	}
+}
+
+// TestRunner_DepChasePlanError_Escalates pins the issue #58 review fix:
+// when the dep-chase iteration's PlanGenerateConfig fails (the real
+// terraform-failure path, post-#187 — the Lambda-style validation gap is
+// returned as nil + Warn from PlanGenerateConfig itself), the runner
+// must escalate the error so the operator sees a non-zero exit instead
+// of a "successful" run with internally-inconsistent HCL referencing
+// dependencies that were never imported.
+func TestRunner_DepChasePlanError_Escalates(t *testing.T) {
+	// Use the iteration1HCL shape from TestRunner_DependencyChase: it
+	// contains a hardcoded IAM role ARN that the dep chaser will detect
+	// as an unresolved reference, triggering a second PlanGenerateConfig
+	// call. We fail that second call to exercise the escalation path.
+	iteration1HCL := `# __generated__ by Terraform
+resource "aws_lambda_function" "fn" {
+  function_name = "my-project-fn"
+  role          = "arn:aws:iam::123456789012:role/my-project-lambda-exec"
+  runtime       = "nodejs20.x"
+  handler       = "index.handler"
+}
+`
+	mock := &mockTF{
+		generatedPages: []string{iteration1HCL},
+		planErrAtCall:  2, // initial plan succeeds; dep-chase plan fails
+	}
+	r := New(Config{
+		Project:   "my-project",
+		Region:    "us-east-1",
+		OutputDir: filepath.Join(t.TempDir(), "output"),
+	}, testLogger())
+	r.discoverer = &mockDiscoverer{
+		resources: []discovery.DiscoveredResource{{
+			TerraformType: "aws_lambda_function",
+			ImportID:      "my-project-fn",
+			Name:          "my-project-fn",
+		}},
+	}
+	r.tfRunner = mock
+
+	_, err := r.Run(context.Background())
+	if err == nil {
+		t.Fatal("dep-chase plan failure must propagate; got nil error")
+	}
+	if !strings.Contains(err.Error(), "dep chase") {
+		t.Errorf("error must name the failing phase; got %v", err)
+	}
+}
+
+// TestRunner_DriftFixPlanError_Escalates pins the issue #58 review fix:
+// when the drift-fix loop's PlanJSON fails, the runner must escalate
+// instead of silently breaking and reporting ValidationOK against HCL
+// that may still have un-fixed drift.
+func TestRunner_DriftFixPlanError_Escalates(t *testing.T) {
+	iteration1HCL := `# __generated__ by Terraform
+resource "aws_sqs_queue" "q" {
+  name = "my-project-queue"
+}
+`
+	mock := &mockTF{
+		generatedPages: []string{iteration1HCL},
+		planJSONErr:    errors.New("simulated drift-fix plan failure"),
+	}
+	r := New(Config{
+		Project:   "my-project",
+		Region:    "us-east-1",
+		OutputDir: filepath.Join(t.TempDir(), "output"),
+	}, testLogger())
+	r.discoverer = &mockDiscoverer{
+		resources: []discovery.DiscoveredResource{{
+			TerraformType: "aws_sqs_queue",
+			ImportID:      "https://sqs.us-east-1.amazonaws.com/123/my-project-queue",
+			Name:          "my-project-queue",
+		}},
+	}
+	r.tfRunner = mock
+
+	_, err := r.Run(context.Background())
+	if err == nil {
+		t.Fatal("drift-fix plan failure must propagate; got nil error")
+	}
+	if !strings.Contains(err.Error(), "drift-fix") {
+		t.Errorf("error must name the failing phase; got %v", err)
 	}
 }
