@@ -127,28 +127,45 @@ func DiffImportedResources(old, new []imported.ImportedResource) []ResourceDiff 
 	oldByAddr := indexImportedByAddress(old)
 	newByAddr := indexImportedByAddress(new)
 
-	var diffs []ResourceDiff
-	for addr, oldIR := range oldByAddr {
-		newIR, ok := newByAddr[addr]
-		if !ok {
+	addrs := sortedUnionAddresses(oldByAddr, newByAddr)
+	diffs := make([]ResourceDiff, 0, len(addrs))
+	for _, addr := range addrs {
+		oldIR, hasOld := oldByAddr[addr]
+		newIR, hasNew := newByAddr[addr]
+		switch {
+		case !hasOld && hasNew:
+			diffs = append(diffs, addedResourceDiff(newIR))
+		case hasOld && !hasNew:
 			diffs = append(diffs, removedResourceDiff(oldIR))
-			continue
-		}
-		if d, ok := modifiedResourceDiff(oldIR, newIR); ok {
-			diffs = append(diffs, d)
+		case hasOld && hasNew:
+			if d, ok := modifiedResourceDiff(oldIR, newIR); ok {
+				diffs = append(diffs, d)
+			}
 		}
 	}
-	for addr, newIR := range newByAddr {
-		if _, ok := oldByAddr[addr]; ok {
-			continue
-		}
-		diffs = append(diffs, addedResourceDiff(newIR))
+	if len(diffs) == 0 {
+		return nil
 	}
-
-	sort.Slice(diffs, func(i, j int) bool {
-		return diffs[i].Address < diffs[j].Address
-	})
 	return diffs
+}
+
+// sortedUnionAddresses returns the sorted union of map keys from two
+// address-indexed snapshots. Single allocation; eliminates the post-hoc
+// sort.Slice after random map iteration.
+func sortedUnionAddresses(a, b map[string]imported.ImportedResource) []string {
+	seen := make(map[string]struct{}, len(a)+len(b))
+	for k := range a {
+		seen[k] = struct{}{}
+	}
+	for k := range b {
+		seen[k] = struct{}{}
+	}
+	out := make([]string, 0, len(seen))
+	for k := range seen {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // indexImportedByAddress builds an Address->ImportedResource map. Resources

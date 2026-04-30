@@ -23,6 +23,23 @@
           "edit_policy": "ChatSafe"
         }
       ]
+    },
+    {
+      "address": "test_only.r",
+      "type": "test_only_type",
+      "cloud": "aws",
+      "action": "modified",
+      "changes": [
+        {
+          "path": "secret_field",
+          "from": "***",
+          "to": "***",
+          "role": "Tuning",
+          "sensitivity": "Sensitive",
+          "edit_policy": "ChatSafe",
+          "redacted": true
+        }
+      ]
     }
   ],
   "summary": "test"

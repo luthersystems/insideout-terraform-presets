@@ -48,9 +48,11 @@ type VersionDiff struct {
 	Pricing     []PricingDiff   `json:"pricing,omitempty"`
 	// Resources carries imported-resource diffs (Phase 2, issue #151).
 	// Populated by DiffImportedResources from the two snapshots'
-	// ImportedResource lists. Empty when both sides have no imported
-	// resources or when the visible diff is a no-op.
-	Resources []ResourceDiff `json:"resources,omitempty"`
+	// ImportedResource lists. Always present in JSON (mirrors Components)
+	// so consumers see a stable shape; an empty array means "no imported
+	// resource changes," distinct from a nil array which would imply the
+	// field is missing.
+	Resources []ResourceDiff `json:"resources"`
 	Summary   string         `json:"summary"`
 }
 

@@ -196,6 +196,87 @@ func TestMakeFieldDiff_RedactsSensitiveValues(t *testing.T) {
 	}
 }
 
+// TestDiffImportedResources_HiddenSensitiveFilteredEndToEnd exercises the
+// integration for a Hidden+Sensitive pair: aws_lambda_function's
+// environment.variables. Hidden filters before redaction so no FieldDiff
+// surfaces and raw sensitive values cannot leak.
+func TestDiffImportedResources_HiddenSensitiveFilteredEndToEnd(t *testing.T) {
+	t.Parallel()
+	requirePolicyEntry(t, "aws_lambda_function", "environment.variables", policy.FieldPolicy{
+		Visibility:  policy.VisibilityHidden,
+		Sensitivity: policy.SensitivitySensitive,
+	})
+	const oldSecret = "DB_PASSWORD=old-leaks-this"
+	const newSecret = "DB_PASSWORD=new-leaks-this-too"
+
+	old := imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Cloud: "aws", Type: "aws_lambda_function", Address: "aws_lambda_function.f", ImportID: "f",
+		},
+		Tier:       imported.TierImportedFlat,
+		Attributes: map[string]any{"environment.variables": oldSecret},
+	}
+	new := old
+	new.Attributes = map[string]any{"environment.variables": newSecret}
+
+	diffs := DiffImportedResources([]imported.ImportedResource{old}, []imported.ImportedResource{new})
+	require.Empty(t, diffs, "Hidden filter must drop sensitive fields end-to-end")
+
+	// Defense-in-depth: marshal the diffs slice and assert no secret leaked
+	// into any rendering of the result.
+	b, err := json.Marshal(diffs)
+	require.NoError(t, err)
+	assert.NotContains(t, string(b), oldSecret)
+	assert.NotContains(t, string(b), newSecret)
+}
+
+// TestDiffImportedResources_VisibleRedactedEndToEnd exercises the integration
+// for a real Visible+Redacted curated entry: google_pubsub_subscription's
+// push_config.attributes (a JSON-projection path). The diff must surface the
+// change so the operator sees that something moved, but values must be
+// replaced with the redacted placeholder so raw subscriber metadata cannot
+// leak into Reliable's JSON.
+func TestDiffImportedResources_VisibleRedactedEndToEnd(t *testing.T) {
+	t.Parallel()
+	requirePolicyEntry(t, "google_pubsub_subscription", "push_config.attributes", policy.FieldPolicy{
+		Visibility:  policy.VisibilityRileyVisible,
+		Sensitivity: policy.SensitivityRedacted,
+	})
+	const oldSecret = "x-goog-version-not-public"
+	const newSecret = "x-goog-version-rotated"
+
+	old := imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Cloud: "gcp", Type: "google_pubsub_subscription", Address: "google_pubsub_subscription.s", ImportID: "s",
+		},
+		Tier: imported.TierImportedFlat,
+		Attributes: map[string]any{
+			"push_config": `{"attributes":{"x-goog-version":"` + oldSecret + `"}}`,
+		},
+	}
+	new := old
+	new.Attributes = map[string]any{
+		"push_config": `{"attributes":{"x-goog-version":"` + newSecret + `"}}`,
+	}
+
+	diffs := DiffImportedResources([]imported.ImportedResource{old}, []imported.ImportedResource{new})
+	require.Len(t, diffs, 1)
+	require.Len(t, diffs[0].Changes, 1)
+	c := diffs[0].Changes[0]
+	assert.Equal(t, "push_config.attributes", c.Path)
+	assert.True(t, c.Redacted, "Visible+Redacted must set the redacted flag")
+	assert.Equal(t, redactedPlaceholder, c.From)
+	assert.Equal(t, redactedPlaceholder, c.To)
+	assert.Equal(t, policy.SensitivityRedacted, c.Sensitivity)
+
+	// Defense-in-depth: marshal the full ResourceDiff and assert no secret
+	// leaks anywhere — Path, Reason, JSON encoding, none of it.
+	b, err := json.Marshal(diffs)
+	require.NoError(t, err)
+	assert.NotContains(t, string(b), oldSecret, "redacted JSON must never contain the old value")
+	assert.NotContains(t, string(b), newSecret, "redacted JSON must never contain the new value")
+}
+
 func TestDiffAttributeMaps_HiddenSkipsRedaction(t *testing.T) {
 	t.Parallel()
 	// Hidden + Sensitive should never reach the redaction code path —
@@ -396,15 +477,40 @@ func TestDiffImportedResources_VersionDiffWiringGolden(t *testing.T) {
 	// Pin the wire format that consumers (Reliable, ui-core) rely on. Re-seed
 	// with `UPDATE_GOLDEN=1 go test ./pkg/composer/...` after intentional
 	// shape changes; otherwise drift here is a customer-facing wire break.
+	//
+	// The Resources slice combines the live diff path (a curated ChatSafe
+	// change) with a hand-constructed redacted-shape entry. The Phase 1
+	// curated set never produces Visible+Sensitive (every Sensitive /
+	// Redacted entry is also Hidden — see TestNoVisibleSensitiveInPhase1),
+	// so a regression in the placeholder constant or the Redacted flag would
+	// otherwise go unpinned in JSON. This test pins both shapes in one
+	// golden so renderers (Reliable / ui-core) get a stable contract.
+	live := DiffImportedResources(
+		[]imported.ImportedResource{sampleSQS("q", 30)},
+		[]imported.ImportedResource{sampleSQS("q", 60)},
+	)
+	redacted := ResourceDiff{
+		Address: "test_only.r",
+		Type:    "test_only_type",
+		Cloud:   "aws",
+		Action:  ResourceActionModified,
+		Changes: []ResourceFieldDiff{{
+			Path:        "secret_field",
+			From:        redactedPlaceholder,
+			To:          redactedPlaceholder,
+			Role:        policy.RoleTuning,
+			Sensitivity: policy.SensitivitySensitive,
+			EditPolicy:  policy.EditChatSafe,
+			Redacted:    true,
+		}},
+	}
+
 	vd := VersionDiff{
 		FromVersion: 1,
 		ToVersion:   2,
 		Components:  []ComponentDiff{{Component: "aws_vpc", Action: ResourceActionAdded}},
-		Resources: DiffImportedResources(
-			[]imported.ImportedResource{sampleSQS("q", 30)},
-			[]imported.ImportedResource{sampleSQS("q", 60)},
-		),
-		Summary: "test",
+		Resources:   append(live, redacted),
+		Summary:     "test",
 	}
 	got, err := json.MarshalIndent(vd, "", "  ")
 	require.NoError(t, err)
