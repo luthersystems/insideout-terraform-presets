@@ -762,12 +762,17 @@ func firstUncuratedResolvablePath(tfType string, candidates []string) (string, b
 // premise so a future curator change surfaces as a clear premise failure
 // rather than a confusing test-body assertion drift.
 //
-// PR #151 (ResourceDiff) ships a same-named helper in imported_diff_test.go;
-// when both PRs land, whichever merges second hits a redeclaration error
-// and the duplicate must be deleted as part of that merge. Keeping the
-// names identical (rather than mechanically suffixing one) forces that
-// cleanup to happen rather than leaving two near-identical helpers in the
-// package.
+// PR #151 (ResourceDiff) ships a same-named helper in imported_diff_test.go.
+// Once both PRs merge, the package will contain two definitions of
+// requirePolicyEntry and `go test ./pkg/composer/...` fails to compile
+// with "requirePolicyEntry redeclared." (Note: the text-level git merge
+// itself succeeds — different files, no overlap — so this is NOT caught
+// by `git merge`; the second PR's CI catches it pre-merge only when
+// branch protection requires up-to-date-with-main.) The duplicate must
+// be deleted as part of that second merge. Tracked in #183 so the
+// cleanup doesn't get lost. Keeping the names identical (rather than
+// mechanically suffixing one) forces the consolidation rather than
+// leaving two near-identical helpers in the package permanently.
 func requirePolicyEntry(t *testing.T, tfType, path string, want policy.FieldPolicy) {
 	t.Helper()
 	m, ok := policy.Lookup(tfType)
