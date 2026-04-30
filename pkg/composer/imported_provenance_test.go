@@ -3,7 +3,9 @@ package composer
 import (
 	"bufio"
 	"os"
+	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strings"
 	"testing"
@@ -134,12 +136,15 @@ func TestInjectProvenance_AWSTypedAttrsExisting(t *testing.T) {
 	s := string(got)
 	assert.False(t, ir.WeakLocked, "AWS taggable resource must not be weak-locked")
 	assert.Contains(t, s, "tags = merge(")
-	assert.Contains(t, s, `InsideOutImportProject = "io-stack-1"`)
-	assert.Contains(t, s, `InsideOutImportSession = "sess-9"`)
-	assert.Contains(t, s, `InsideOutImported      = "true"`)
-	assert.Contains(t, s, `InsideOutImportedAt    = "2026-04-29T14:30:00Z"`)
+	// hasAttr tolerates the column-alignment padding hclwrite applies, so
+	// these assertions don't break when a future change shifts the longest
+	// key.
+	assert.True(t, hasAttr(t, s, "InsideOutImportProject", `"io-stack-1"`), "missing InsideOutImportProject in:\n%s", s)
+	assert.True(t, hasAttr(t, s, "InsideOutImportSession", `"sess-9"`), "missing InsideOutImportSession in:\n%s", s)
+	assert.True(t, hasAttr(t, s, "InsideOutImported", `"true"`), "missing InsideOutImported in:\n%s", s)
+	assert.True(t, hasAttr(t, s, "InsideOutImportedAt", `"2026-04-29T14:30:00Z"`), "missing InsideOutImportedAt in:\n%s", s)
 	// Existing user tag preserved verbatim in the second merge argument.
-	assert.Contains(t, s, `Owner = "team-payments"`)
+	assert.True(t, hasAttr(t, s, "Owner", `"team-payments"`), "user-supplied Owner tag missing in:\n%s", s)
 }
 
 func TestInjectProvenance_GCPTypedAttrsExisting(t *testing.T) {
@@ -157,11 +162,157 @@ func TestInjectProvenance_GCPTypedAttrsExisting(t *testing.T) {
 	s := string(got)
 	assert.False(t, ir.WeakLocked)
 	assert.Contains(t, s, "labels = merge(")
-	assert.Contains(t, s, `"insideout-import-project" = "io-stack-1"`)
-	assert.Contains(t, s, `"insideout-import-session" = "sess-9"`)
-	assert.Contains(t, s, `"insideout-imported"       = "true"`)
-	assert.Contains(t, s, `"insideout-imported-at"    = "2026-04-29t14-30-00z"`)
-	assert.Contains(t, s, `team = "docs"`)
+	// GCP label keys are hyphenated and so emit quoted; hasAttr handles the
+	// quoted-key regex. The key argument includes the surrounding quotes.
+	assert.True(t, hasAttr(t, s, `"insideout-import-project"`, `"io-stack-1"`), "missing insideout-import-project in:\n%s", s)
+	assert.True(t, hasAttr(t, s, `"insideout-import-session"`, `"sess-9"`), "missing insideout-import-session in:\n%s", s)
+	assert.True(t, hasAttr(t, s, `"insideout-imported"`, `"true"`), "missing insideout-imported in:\n%s", s)
+	assert.True(t, hasAttr(t, s, `"insideout-imported-at"`, `"2026-04-29t14-30-00z"`), "missing insideout-imported-at in:\n%s", s)
+	assert.True(t, hasAttr(t, s, "team", `"docs"`), "user-supplied team label missing in:\n%s", s)
+}
+
+// TestInjectProvenance_GCPAllowlistFallback exercises the labelableGCP
+// allowlist fallback for resource types that are NOT in the Phase 1
+// generated registry. google_redis_instance is on the allowlist (in
+// labelableGCP) but has no .gen.go schema; google_kms_key_ring is neither
+// registered nor on the allowlist and should weak-lock. Both paths exist
+// in taggable() but were only covered at the predicate level by
+// TestTaggable_AllowlistFallback — this test pins the end-to-end emit.
+func TestInjectProvenance_GCPAllowlistFallback(t *testing.T) {
+	t.Parallel()
+
+	t.Run("allowlisted but unregistered → labels emitted", func(t *testing.T) {
+		ir := imported.ImportedResource{
+			Identity: imported.ResourceIdentity{Cloud: "gcp", Type: "google_redis_instance", Address: "google_redis_instance.cache"},
+			Tier:     imported.TierImportedFlat,
+			Attributes: map[string]any{
+				"name": "cache",
+			},
+		}
+		body, _, err := emitTestBody(t, ir)
+		require.NoError(t, err)
+		got, err := injectProvenance(body, &ir, "io-stack-1", "sess-9", fixedTime())
+		require.NoError(t, err)
+		s := string(got)
+		assert.False(t, ir.WeakLocked, "allowlisted GCP type must not be weak-locked")
+		assert.Contains(t, s, "labels = merge(")
+		assert.True(t, hasAttr(t, s, `"insideout-import-project"`, `"io-stack-1"`),
+			"missing insideout-import-project in fallback emit:\n%s", s)
+	})
+
+	t.Run("not allowlisted and not registered → weak-lock, no labels", func(t *testing.T) {
+		ir := imported.ImportedResource{
+			Identity: imported.ResourceIdentity{Cloud: "gcp", Type: "google_kms_key_ring", Address: "google_kms_key_ring.r"},
+			Tier:     imported.TierImportedFlat,
+			Attributes: map[string]any{
+				"name": "r",
+			},
+		}
+		body, _, err := emitTestBody(t, ir)
+		require.NoError(t, err)
+		got, err := injectProvenance(body, &ir, "io-stack-1", "sess-9", fixedTime())
+		require.NoError(t, err)
+		assert.True(t, ir.WeakLocked, "non-allowlisted unregistered GCP type must weak-lock")
+		assert.Equal(t, string(body), string(got), "weak-lock body must be returned unchanged")
+		assert.NotContains(t, string(got), "labels = merge(")
+	})
+}
+
+// TestInjectProvenance_AWSAllowlistFallback mirrors the GCP fallback test
+// for the AWS side: an unregistered type that is not on the
+// untaggableAWS block-list should get tags injected; one that is should
+// weak-lock.
+func TestInjectProvenance_AWSAllowlistFallback(t *testing.T) {
+	t.Parallel()
+
+	t.Run("unregistered and not blocked → tags emitted", func(t *testing.T) {
+		ir := imported.ImportedResource{
+			Identity: imported.ResourceIdentity{Cloud: "aws", Type: "aws_kinesis_stream", Address: "aws_kinesis_stream.events"},
+			Tier:     imported.TierImportedFlat,
+			Attributes: map[string]any{
+				"name": "events",
+			},
+		}
+		body, _, err := emitTestBody(t, ir)
+		require.NoError(t, err)
+		got, err := injectProvenance(body, &ir, "io-stack-1", "sess-9", fixedTime())
+		require.NoError(t, err)
+		s := string(got)
+		assert.False(t, ir.WeakLocked)
+		assert.Contains(t, s, "tags = merge(")
+		assert.True(t, hasAttr(t, s, "InsideOutImportProject", `"io-stack-1"`),
+			"missing InsideOutImportProject in fallback emit:\n%s", s)
+	})
+
+	t.Run("blocklisted → weak-lock, no tags", func(t *testing.T) {
+		ir := imported.ImportedResource{
+			Identity: imported.ResourceIdentity{Cloud: "aws", Type: "aws_iam_role_policy", Address: "aws_iam_role_policy.p"},
+			Tier:     imported.TierImportedFlat,
+			Attributes: map[string]any{
+				"name": "p",
+			},
+		}
+		body, _, err := emitTestBody(t, ir)
+		require.NoError(t, err)
+		got, err := injectProvenance(body, &ir, "io-stack-1", "sess-9", fixedTime())
+		require.NoError(t, err)
+		assert.True(t, ir.WeakLocked)
+		assert.Equal(t, string(body), string(got))
+	})
+}
+
+// TestInjectProvenance_ConflictRefusesOverwrite pins the design contract
+// that the injector does NOT overwrite a conflicting prior owner without a
+// valid ForceTakeover. The validator surfaces the issue separately; this
+// test only verifies the injector's emit-side guard.
+func TestInjectProvenance_ConflictRefusesOverwrite(t *testing.T) {
+	t.Parallel()
+	ir := imported.ImportedResource{
+		Identity: imported.ResourceIdentity{Cloud: "aws", Type: "aws_dynamodb_table", Address: "aws_dynamodb_table.t"},
+		Tier:     imported.TierImportedFlat,
+		Attributes: map[string]any{
+			"name": "t",
+			"tags": map[string]any{"InsideOutImportProject": "io-other"},
+		},
+	}
+	body, _, err := emitTestBody(t, ir)
+	require.NoError(t, err)
+
+	got, err := injectProvenance(body, &ir, "io-stack-1", "sess-9", fixedTime())
+	require.NoError(t, err)
+	s := string(got)
+	assert.NotContains(t, s, "io-stack-1", "injector must not overwrite conflicting tag without ForceTakeover")
+	assert.Contains(t, s, "io-other", "the existing owner tag must remain")
+}
+
+// TestInjectProvenance_ValidForceTakeoverOverwrites pins the inverse: a
+// fully-populated ForceTakeover with matching PreviousOwner authorizes the
+// injector to overwrite the conflicting tag.
+func TestInjectProvenance_ValidForceTakeoverOverwrites(t *testing.T) {
+	t.Parallel()
+	ir := imported.ImportedResource{
+		Identity: imported.ResourceIdentity{Cloud: "aws", Type: "aws_dynamodb_table", Address: "aws_dynamodb_table.t"},
+		Tier:     imported.TierImportedFlat,
+		Attributes: map[string]any{
+			"name": "t",
+			"tags": map[string]any{"InsideOutImportProject": "io-other"},
+		},
+		ForceTakeover: &imported.ForceTakeover{
+			Actor:         "sam@luthersystems.com",
+			Reason:        "session merge after #173 ramp",
+			PreviousOwner: "io-other",
+			ApprovedAt:    fixedTime(),
+		},
+	}
+	body, _, err := emitTestBody(t, ir)
+	require.NoError(t, err)
+
+	got, err := injectProvenance(body, &ir, "io-stack-1", "sess-9", fixedTime())
+	require.NoError(t, err)
+	s := string(got)
+	assert.Contains(t, s, "tags = merge(")
+	assert.True(t, hasAttr(t, s, "InsideOutImportProject", `"io-stack-1"`),
+		"valid ForceTakeover must allow overwrite; got:\n%s", s)
 }
 
 func TestInjectProvenance_GCPUntaggableType(t *testing.T) {
@@ -362,33 +513,15 @@ func TestUntaggableAllowlistsMatchLintScripts(t *testing.T) {
 	assert.Equal(t, gcpLint, gotGCP, "labelableGCP drift vs lint-project-label.sh")
 }
 
-// findRepoRoot walks up from the current package directory until it finds a
-// .git directory, then returns the absolute path. Tests use this to locate
-// the bash lint scripts.
+// findRepoRoot returns the repository root by walking up from this test
+// file's own location, which is `<repo>/pkg/composer/imported_provenance_test.go`.
+// Using runtime.Caller is deterministic across worktrees and CI sandboxes
+// and does not depend on the test process's working directory.
 func findRepoRoot(t *testing.T) string {
 	t.Helper()
-	wd, err := os.Getwd()
-	require.NoError(t, err)
-	for cur := wd; cur != "/" && cur != ""; {
-		if _, err := os.Stat(cur + "/.git"); err == nil {
-			return cur
-		}
-		parent := strings.TrimSuffix(cur, "/"+lastDir(cur))
-		if parent == cur {
-			break
-		}
-		cur = parent
-	}
-	t.Fatalf("could not find repo root from %s", wd)
-	return ""
-}
-
-func lastDir(p string) string {
-	idx := strings.LastIndex(p, "/")
-	if idx < 0 {
-		return p
-	}
-	return p[idx+1:]
+	_, file, _, ok := runtime.Caller(0)
+	require.True(t, ok, "runtime.Caller failed")
+	return filepath.Clean(filepath.Join(filepath.Dir(file), "..", ".."))
 }
 
 // parseBashArray extracts a bash array assignment of the form

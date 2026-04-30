@@ -7,7 +7,6 @@ import (
 	"path"
 	"sort"
 	"strings"
-	"time"
 
 	"github.com/hashicorp/terraform-config-inspect/tfconfig"
 
@@ -606,12 +605,12 @@ func (c *Client) composeStackImpl(opts ComposeStackOpts) (*ComposeStackResult, e
 	// (issue #148). This must happen before generateProvidersTF so that
 	// importedClouds tells the provider emitter which alias to declare.
 	issues = append(issues, ValidateImportedResources(cloud, opts.Imported)...)
-	provOpts := ProvenanceOpts{ImportProjectID: opts.ImportProjectID, ImportSessionID: opts.ImportSessionID}
+	provOpts := ProvenanceOpts{ImportProjectID: opts.ImportProjectID}
 	issues = append(issues, ValidateProvenanceConflicts(cloud, opts.Imported, provOpts)...)
 	emitOpts := EmitImportedOpts{
 		ImportProjectID: opts.ImportProjectID,
 		ImportSessionID: opts.ImportSessionID,
-		ImportedAt:      time.Now().UTC(),
+		ImportedAt:      nowFn(),
 	}
 	importedTF, importedClouds := EmitImportedTF(cloud, opts.Imported, emitOpts)
 	if len(importedTF) > 0 {

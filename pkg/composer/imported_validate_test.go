@@ -401,6 +401,17 @@ func issueCodes(issues []ValidationIssue) []string {
 	return out
 }
 
+// countCode returns the number of issues whose Code equals code.
+func countCode(issues []ValidationIssue, code string) int {
+	n := 0
+	for _, i := range issues {
+		if i.Code == code {
+			n++
+		}
+	}
+	return n
+}
+
 func issueFields(issues []ValidationIssue) []string {
 	out := make([]string, 0, len(issues))
 	for _, i := range issues {

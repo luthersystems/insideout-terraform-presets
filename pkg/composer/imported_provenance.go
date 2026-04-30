@@ -277,6 +277,21 @@ func readTypedTagLiteral(tfType string, raw []byte, attrName, key string) (strin
 	return "", false
 }
 
+// validForceTakeover reports whether ft is non-nil, fully-populated, and
+// whose PreviousOwner matches the value observed on the resource. The
+// validator uses this to decide between imported_resource_provenance_conflict
+// vs imported_resource_force_takeover_invalid; the injector uses it to
+// decide whether overwriting is authorized.
+func validForceTakeover(ft *imported.ForceTakeover, observed string) bool {
+	if ft == nil {
+		return false
+	}
+	if strings.TrimSpace(ft.Actor) == "" || strings.TrimSpace(ft.Reason) == "" || strings.TrimSpace(ft.PreviousOwner) == "" || ft.ApprovedAt.IsZero() {
+		return false
+	}
+	return ft.PreviousOwner == observed
+}
+
 // readOpaqueTagLiteral reads attrs[attrName][key] from the Phase 1 opaque
 // attribute bag. Returns ok=false on any type mismatch.
 func readOpaqueTagLiteral(attrs map[string]any, attrName, key string) (string, bool) {
@@ -308,6 +323,14 @@ func readOpaqueTagLiteral(attrs map[string]any, attrName, key string) (string, b
 // If ir's Terraform type is not taggable/labelable, body is returned
 // unchanged and ir.WeakLocked is set to true.
 //
+// If the resource already advertises a different InsideOutImportProject /
+// insideout-import-project value AND no valid ForceTakeover is supplied,
+// the body is returned unchanged — refusing to silently overwrite the
+// conflicting tag (design decision #45). The validator
+// (ValidateProvenanceConflicts) is responsible for surfacing the
+// imported_resource_provenance_conflict issue separately; this arm just
+// keeps the injector from racing past it.
+//
 // projectID must be non-empty; the caller (composeStackImpl) gates the call
 // when ImportProjectID is empty so this function can assume it has work to
 // do once it's reached.
@@ -315,6 +338,14 @@ func injectProvenance(body []byte, ir *imported.ImportedResource, projectID, ses
 	attrName, ok := taggable(*ir)
 	if !ok {
 		ir.WeakLocked = true
+		return body, nil
+	}
+
+	// Refuse to overwrite a conflicting prior owner without a valid force-
+	// takeover. Mirrors the validator's branching: any existing owner that
+	// is neither equal to projectID nor accompanied by a valid ForceTakeover
+	// blocks the rewrite.
+	if existing, has := existingProvenanceProject(*ir); has && existing != projectID && !validForceTakeover(ir.ForceTakeover, existing) {
 		return body, nil
 	}
 
@@ -404,6 +435,20 @@ func tokenizeExpression(expr string) (hclwrite.Tokens, error) {
 		return nil, fmt.Errorf("internal: expected __expr attribute")
 	}
 	return attr.Expr().BuildTokens(nil), nil
+}
+
+// nowFn is the package-private clock seam used by composeStackImpl to
+// stamp the imported_at timestamp. Tests override it via withFixedNow to
+// pin the value across a compose pass.
+var nowFn = func() time.Time { return time.Now().UTC() }
+
+// withFixedNow temporarily replaces nowFn with a fixed value for the
+// duration of the returned restore func; intended for tests that need to
+// pin imported_at across a compose call.
+func withFixedNow(t time.Time) (restore func()) {
+	prev := nowFn
+	nowFn = func() time.Time { return t }
+	return func() { nowFn = prev }
 }
 
 // untaggableAWSSlice returns the sorted untaggable AWS resource type list

@@ -143,12 +143,11 @@ func ValidateImportedResources(cloud string, irs []imported.ImportedResource) []
 
 // ProvenanceOpts carries the per-compose context needed by
 // ValidateProvenanceConflicts. ImportProjectID is the logical claim/owner ID
-// used cross-cloud (decision #46 in docs/managed-resource-tiers.md);
-// ImportSessionID is unused for the conflict check itself but lives on the
-// struct so the same opts value can be threaded into the injector.
+// used cross-cloud (decision #46 in docs/managed-resource-tiers.md). The
+// session ID is not relevant to the conflict check (sessions are advisory)
+// and is omitted from this struct deliberately.
 type ProvenanceOpts struct {
 	ImportProjectID string
-	ImportSessionID string
 }
 
 // ValidateProvenanceConflicts enforces cross-session mutual exclusion on
