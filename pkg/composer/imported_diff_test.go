@@ -13,6 +13,45 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// TestDiffImportedResources_EmptyMarshalsAsArray pins the wire-shape
+// contract that VersionDiff.Resources is "always an array, possibly empty"
+// on the JSON side. DiffImportedResources must return a non-nil slice so
+// json.Marshal emits `[]` and not `null` — Reliable's snapshot consumers
+// compare diff JSON byte-for-byte, so a nil↔[] flip would churn every
+// stack the first time it acquires or sheds an imported resource.
+func TestDiffImportedResources_EmptyMarshalsAsArray(t *testing.T) {
+	t.Parallel()
+	cases := map[string][2][]imported.ImportedResource{
+		"both nil":          {nil, nil},
+		"both empty":        {{}, {}},
+		"identical content": {{sampleSQS("a", 30)}, {sampleSQS("a", 30)}},
+	}
+	for name, sides := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			diffs := DiffImportedResources(sides[0], sides[1])
+			b, err := json.Marshal(diffs)
+			require.NoError(t, err)
+			assert.Equal(t, "[]", string(b),
+				"DiffImportedResources must return non-nil so empty marshals as []")
+			// VersionDiff round-trip: empty Resources must serialize as
+			// `"resources":[]`, never `"resources":null`.
+			vd := VersionDiff{
+				FromVersion: 1, ToVersion: 2,
+				Components: []ComponentDiff{},
+				Resources:  diffs,
+				Summary:    "no-op",
+			}
+			vdBytes, err := json.Marshal(vd)
+			require.NoError(t, err)
+			assert.Contains(t, string(vdBytes), `"resources":[]`,
+				"VersionDiff.Resources must always be an array on the wire (issue: nil-vs-[] churn)")
+			assert.NotContains(t, string(vdBytes), `"resources":null`,
+				"VersionDiff.Resources must never serialize as null")
+		})
+	}
+}
+
 func TestDiffImportedResources_NoOp(t *testing.T) {
 	t.Parallel()
 	cases := map[string][2][]imported.ImportedResource{
@@ -222,12 +261,15 @@ func TestDiffImportedResources_HiddenSensitiveFilteredEndToEnd(t *testing.T) {
 	diffs := DiffImportedResources([]imported.ImportedResource{old}, []imported.ImportedResource{new})
 	require.Empty(t, diffs, "Hidden filter must drop sensitive fields end-to-end")
 
-	// Defense-in-depth: marshal the diffs slice and assert no secret leaked
-	// into any rendering of the result.
+	// Pin the wire shape: the diffs slice must marshal as `[]`, not `null`.
+	// Reliable's snapshot consumers compare diff JSON byte-for-byte, so a
+	// nil↔[] flip would churn every stack the first time it onboards an
+	// imported resource. The previous defense-in-depth NotContains check
+	// here was vacuous because it ran against the literal "null" string.
 	b, err := json.Marshal(diffs)
 	require.NoError(t, err)
-	assert.NotContains(t, string(b), oldSecret)
-	assert.NotContains(t, string(b), newSecret)
+	assert.Equal(t, "[]", string(b),
+		"empty diff slice must marshal as []; if this regresses to null, VersionDiff.Resources flips its wire shape and Reliable's byte-for-byte snapshot tests churn")
 }
 
 // TestDiffImportedResources_VisibleRedactedEndToEnd exercises the integration
