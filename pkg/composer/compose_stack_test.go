@@ -2184,48 +2184,81 @@ func TestComposeStack_GCPSubnetSelfLinkInGeneratedHCL(t *testing.T) {
 }
 
 // TestComposeStack_GCPRouterAndConnectorOutputs_TerraformValidate runs
-// `terraform validate` on a freshly composed GCP+VPC stack to formally
-// close issue #178's acceptance criterion: composed HCL must validate
-// against an empty state (no plan errors on first run). Skips when the
-// terraform binary isn't installed or when network access (for `init`) is
-// unavailable.
+// `terraform validate` on freshly composed GCP+VPC stacks (multiple
+// consumer combos) to formally close issue #178's acceptance criterion:
+// composed HCL must validate against an empty state with no
+// "Invalid index" / "empty tuple" errors.
+//
+// Behavior on init failure differs by environment:
+//
+//   - In CI (env CI=true, set by GitHub Actions): require the test runs.
+//     A `terraform init` failure is a hard test failure so a transient
+//     registry blip can never silently skip the gate that's the formal
+//     closure for #178.
+//   - Local dev (no CI env): skip on init failure so a developer offline
+//     can still run `go test ./...` without the gate forcing a network
+//     round-trip for every test invocation.
+//
+// Use `go test -short` to skip the test entirely (e.g. in pre-commit
+// hooks where the multi-second init+validate is too costly).
 func TestComposeStack_GCPRouterAndConnectorOutputs_TerraformValidate(t *testing.T) {
+	if testing.Short() {
+		t.Skip("-short skips multi-second terraform init+validate")
+	}
 	if _, err := exec.LookPath("terraform"); err != nil {
 		t.Skip("terraform binary not on PATH; skipping integration validate")
 	}
-	if os.Getenv("CI_OFFLINE") == "1" {
-		t.Skip("CI_OFFLINE=1 skips terraform init network calls")
-	}
-	c := newTestClient()
-	out, err := c.ComposeStack(ComposeStackOpts{
-		Cloud:        "gcp",
-		SelectedKeys: []ComponentKey{KeyGCPVPC, KeyGCPGKE, KeyGCPLoadbalancer, KeyGCPCompute, KeyGCPBastion},
-		Comps:        &Components{},
-		Cfg:          &Config{Region: "us-central1"},
-		Project:      "test",
-		Region:       "us-central1",
-		GCPProjectID: "test-project-12345",
-	})
-	require.NoError(t, err)
 
-	dir := t.TempDir()
-	writeOutputs(t, out, dir)
+	inCI := os.Getenv("CI") == "true"
 
-	initCmd := exec.Command("terraform", "init", "-backend=false", "-input=false", "-no-color")
-	initCmd.Dir = dir
-	initOut, err := initCmd.CombinedOutput()
-	if err != nil {
-		t.Skipf("terraform init unavailable (network/cache): %s\n%s", err, initOut)
+	// Multiple subset combos catch a regression that only manifests
+	// outside the kitchen-sink stack — e.g. a wiring rule that fires
+	// only when one consumer is paired with the VPC. The subset combos
+	// also exercise enable_cloud_nat / enable_serverless_connector
+	// independently across stacks.
+	combos := []struct {
+		name string
+		keys []ComponentKey
+	}{
+		{"vpc+compute alone", []ComponentKey{KeyGCPVPC, KeyGCPCompute}},
+		{"vpc+gke+loadbalancer+compute+bastion", []ComponentKey{KeyGCPVPC, KeyGCPGKE, KeyGCPLoadbalancer, KeyGCPCompute, KeyGCPBastion}},
 	}
-	validateCmd := exec.Command("terraform", "validate", "-no-color")
-	validateCmd.Dir = dir
-	validateOut, err := validateCmd.CombinedOutput()
-	require.NoError(t, err, "terraform validate must succeed on composed stack (issue #178):\n%s", validateOut)
-	// Empty-tuple errors and slice errors are the two specific failure
-	// modes from issue #178. If they reappear, fail loud with the
-	// terraform output so a human can see exactly what regressed.
-	require.NotContains(t, string(validateOut), "Invalid index",
-		"terraform validate surfaced 'Invalid index' (issue #178 regression)")
-	require.NotContains(t, string(validateOut), "empty tuple",
-		"terraform validate surfaced 'empty tuple' (issue #178 regression)")
+
+	for _, combo := range combos {
+		t.Run(combo.name, func(t *testing.T) {
+			c := newTestClient()
+			out, err := c.ComposeStack(ComposeStackOpts{
+				Cloud:        "gcp",
+				SelectedKeys: combo.keys,
+				Comps:        &Components{},
+				Cfg:          &Config{Region: "us-central1"},
+				Project:      "test",
+				Region:       "us-central1",
+				GCPProjectID: "test-project-12345",
+			})
+			require.NoError(t, err)
+
+			dir := t.TempDir()
+			writeOutputs(t, out, dir)
+
+			initCmd := exec.Command("terraform", "init", "-backend=false", "-input=false", "-no-color")
+			initCmd.Dir = dir
+			initOut, err := initCmd.CombinedOutput()
+			if err != nil {
+				if inCI {
+					require.NoError(t, err,
+						"terraform init must succeed in CI; this gate is the formal closure for issue #178 and must not silently skip on transient registry failures:\n%s", initOut)
+				}
+				t.Skipf("terraform init unavailable (network/cache) in local dev: %s\n%s", err, initOut)
+			}
+			validateCmd := exec.Command("terraform", "validate", "-no-color")
+			validateCmd.Dir = dir
+			validateOut, err := validateCmd.CombinedOutput()
+			require.NoError(t, err, "terraform validate must succeed on composed stack (issue #178):\n%s", validateOut)
+			require.NotContains(t, string(validateOut), "Invalid index",
+				"terraform validate surfaced 'Invalid index' (issue #178 regression)")
+			require.NotContains(t, string(validateOut), "empty tuple",
+				"terraform validate surfaced 'empty tuple' (issue #178 regression)")
+		})
+	}
 }
