@@ -34,6 +34,23 @@ type Result struct {
 	GeneratedFiles  []string
 	ValidationOK    bool
 	Errors          []error
+
+	// DroppedImports lists the Terraform addresses (e.g. "aws_iam_role.x")
+	// whose import blocks were filtered out because the dependency chase
+	// couldn't generate a matching resource block (e.g. cross-account IAM
+	// roles, denied IAM permissions, depth-limited chase). The consuming
+	// HCL still references these as literal ARNs, so terraform plan/apply
+	// will fail at runtime. Surfaced in Result so callers / CI can fail
+	// loud rather than relying on log scraping (issue #58 review).
+	DroppedImports []string
+
+	// MalformedImports lists import blocks whose `to` attribute couldn't
+	// be parsed into a resource address. These are anomalies (parse
+	// failures, malformed HCL) — distinct from DroppedImports which are
+	// well-formed but missing a target. Tracked separately so a regression
+	// in extractTraversalAddress doesn't masquerade as "dep chase did its
+	// job and dropped some references."
+	MalformedImports []string
 }
 
 // resourceDiscoverer abstracts AWS resource discovery for testing.
@@ -289,9 +306,41 @@ func (r *Runner) Run(ctx context.Context) (*Result, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read merged imports: %w", err)
 	}
-	filteredImports, err := cleanup.FilterImportBlocks(mergedImports, cleanedHCL)
+	filteredImports, droppedImports, malformedImports, err := cleanup.FilterImportBlocks(mergedImports, cleanedHCL)
 	if err != nil {
 		return nil, fmt.Errorf("filter import blocks: %w", err)
+	}
+	result.DroppedImports = droppedImports
+	result.MalformedImports = malformedImports
+
+	// Surface dropped imports at Warn with cause classes + remediation so
+	// an operator at 2am has a starting point. Common causes for a
+	// well-formed import target that's missing from the generated HCL:
+	//
+	//   - The target is in another AWS account (dep chase can't reach it).
+	//   - IAM denies the permission needed to import (terraform plan
+	//     -generate-config-out gave up on it).
+	//   - The dep chase ran out of iterations before reaching the target.
+	//
+	// Remediation: re-run with broader IAM, mark the target as expected-
+	// external in your stack docs, or accept the warning if the literal
+	// ARN reference is intentional (e.g. a customer-owned KMS key shared
+	// with this account). Run is escalated to an error at the end of
+	// Run() because the resulting HCL won't satisfy the "0 changes plan"
+	// contract — see end of Run().
+	for _, target := range droppedImports {
+		r.logger.Warn(
+			"dropped un-importable reference; the consuming HCL still references it as a literal value, so terraform apply may fail at runtime (issue #58 review)",
+			"target", target,
+			"likely_causes", "cross-account resource | denied IAM permission | dep chase depth limit",
+			"remediation", "broaden IAM, accept the literal reference if intentional, or extend dep chase depth",
+		)
+	}
+	for _, anomaly := range malformedImports {
+		r.logger.Warn(
+			"malformed import block in generated imports.tf; this is a parse-level anomaly, not a dep-chase miss — likely a regression in extractTraversalAddress",
+			"detail", anomaly,
+		)
 	}
 	if err := os.WriteFile(importsPath, filteredImports, 0644); err != nil {
 		return nil, fmt.Errorf("write filtered imports: %w", err)
@@ -393,6 +442,18 @@ func (r *Runner) Run(ctx context.Context) (*Result, error) {
 		filepath.Join(r.config.OutputDir, "providers.tf"),
 		filepath.Join(r.config.OutputDir, "imports.tf"),
 		filepath.Join(r.config.OutputDir, "generated.tf"),
+	}
+
+	// Escalate dropped or malformed imports to a non-zero exit. The Warn
+	// logs above carry the actionable detail; this gate ensures CI / shell
+	// scripts wrapping the CLI see a non-zero status code rather than
+	// having to scrape logs. The "0 changes plan" contract from the design
+	// doc cannot hold when imports were filtered out — the consuming HCL
+	// still references those targets as literal values and apply fails
+	// at runtime (issue #58 review).
+	if len(result.DroppedImports) > 0 || len(result.MalformedImports) > 0 {
+		return result, fmt.Errorf("import generation produced an incomplete stack: %d dropped reference(s), %d malformed import block(s); see Warn logs for details and remediation",
+			len(result.DroppedImports), len(result.MalformedImports))
 	}
 
 	return result, nil

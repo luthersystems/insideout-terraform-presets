@@ -514,3 +514,75 @@ resource "aws_sqs_queue" "q" {
 		t.Errorf("error must name the failing phase; got %v", err)
 	}
 }
+
+// TestRunner_DroppedImports_Escalates pins the issue #58 review fix:
+// when FilterImportBlocks drops un-importable references (e.g. cross-
+// account IAM roles the dep chaser can't reach), the runner must escalate
+// to a non-zero exit AND surface the dropped list in the Result. Pre-fix
+// the runner returned ValidationOK=true silently while the consuming HCL
+// still referenced the un-importable target as a literal ARN — terraform
+// validate would pass and apply would fail at runtime.
+//
+// The fixture: an iteration-1 HCL that references an IAM role ARN.
+// Discovery only knows about the SQS queue, so the dep chase generates
+// import blocks for the role but never produces a matching resource
+// (we don't extend planErrAtCall — the dep-chase plan succeeds with no
+// new resources, and FilterImportBlocks then has an orphan import).
+func TestRunner_DroppedImports_Escalates(t *testing.T) {
+	// iteration1 declares a Lambda referencing an IAM role.
+	iteration1HCL := `# __generated__ by Terraform
+resource "aws_lambda_function" "fn" {
+  function_name = "my-project-fn"
+  role          = "arn:aws:iam::123456789012:role/my-project-lambda-exec"
+  runtime       = "nodejs20.x"
+  handler       = "index.handler"
+}
+`
+	// iteration2 (the dep-chase pass) returns the SAME body — no new
+	// resource for the IAM role. The dep chaser will still emit an
+	// import block for the role; FilterImportBlocks drops it because
+	// no resource matches.
+	iteration2HCL := iteration1HCL
+
+	mock := &mockTF{
+		generatedPages: []string{iteration1HCL, iteration2HCL},
+	}
+	r := New(Config{
+		Project:   "my-project",
+		Region:    "us-east-1",
+		OutputDir: filepath.Join(t.TempDir(), "output"),
+	}, testLogger())
+	r.discoverer = &mockDiscoverer{
+		resources: []discovery.DiscoveredResource{{
+			TerraformType: "aws_lambda_function",
+			ImportID:      "my-project-fn",
+			Name:          "my-project-fn",
+		}},
+	}
+	r.tfRunner = mock
+
+	result, err := r.Run(context.Background())
+	if err == nil {
+		t.Fatal("dropped imports must escalate to a non-zero exit (issue #58 review)")
+	}
+	if !strings.Contains(err.Error(), "incomplete stack") {
+		t.Errorf("error must name the incomplete-stack contract; got %v", err)
+	}
+	if result == nil {
+		t.Fatal("Result must be returned even when escalating so callers see the dropped list")
+	}
+	if len(result.DroppedImports) == 0 {
+		t.Errorf("Result.DroppedImports must list the un-importable targets; got %v", result.DroppedImports)
+	}
+	// The IAM role is the realistic target the dep chase can't import.
+	found := false
+	for _, addr := range result.DroppedImports {
+		if strings.HasPrefix(addr, "aws_iam_role.") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected an aws_iam_role.* in DroppedImports, got %v", result.DroppedImports)
+	}
+}

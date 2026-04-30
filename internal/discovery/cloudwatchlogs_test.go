@@ -3,6 +3,7 @@ package discovery
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -118,26 +119,34 @@ func TestCloudWatchLogsDiscoverer_Deduplication(t *testing.T) {
 	}
 }
 
-func TestCloudWatchLogsDiscoverer_TagErrorGraceful(t *testing.T) {
+// TestCloudWatchLogsDiscoverer_TagErrorFailsLoud pins the symmetric tag-
+// error policy. Pre-#58-review CWL silently swallowed ListTagsForResource
+// errors and emitted the resource with empty tags — which (a) silently
+// dropped resources from --tags filtering and (b) emitted a misleading
+// "no tags" report for resources whose tags were inaccessible. Both
+// outcomes are wrong for a security-relevant tool. Lambda / SQS /
+// DynamoDB already failed-loud on tag errors; CWL now matches them.
+// (SecretsManager has no separate tag call — tags are inline in
+// ListSecrets — so it has no tag-step to fail-loud on.)
+func TestCloudWatchLogsDiscoverer_TagErrorFailsLoud(t *testing.T) {
 	mock := &mockCWL{
 		describeLogGroupsPages: map[string][]cloudwatchlogs.DescribeLogGroupsOutput{
 			"/my-project": {
 				{LogGroups: []cwltypes.LogGroup{
-					{LogGroupName: aws.String("/my-project-logs"), Arn: aws.String("arn:invalid")},
+					{LogGroupName: aws.String("/my-project-logs"), Arn: aws.String("arn:aws:logs:us-east-1:123456789012:log-group:/my-project-logs")},
 				}},
 			},
 			"/aws/lambda/my-project": {},
 		},
-		// Tag listing fails — should not block discovery
 		listTagsErr: fmt.Errorf("access denied"),
 	}
 
 	d := &CloudWatchLogsDiscoverer{client: mock}
-	resources, err := d.Discover(context.Background(), Filter{Project: "my-project"})
-	if err != nil {
-		t.Fatalf("Discover() should not fail when tag listing fails: %v", err)
+	_, err := d.Discover(context.Background(), Filter{Project: "my-project"})
+	if err == nil {
+		t.Fatal("Discover() must fail loud on tag-listing error (symmetric with Lambda / SQS / DynamoDB / SecretsManager)")
 	}
-	if len(resources) != 1 {
-		t.Errorf("expected 1 resource even with tag errors, got %d", len(resources))
+	if !strings.Contains(err.Error(), "list tags for /my-project-logs") {
+		t.Errorf("error must name the log group whose tags failed; got %v", err)
 	}
 }
