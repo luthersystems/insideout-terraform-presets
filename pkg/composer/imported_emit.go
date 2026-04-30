@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclwrite"
@@ -13,6 +14,26 @@ import (
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported/generated"
 )
+
+// EmitImportedOpts bundles the provenance inputs threaded into EmitImportedTF
+// (issue #153). Zero-valued opts disables provenance injection entirely; the
+// composer surfaces this via imported_resource_provenance_skipped_no_project_id
+// from ValidateProvenanceConflicts so callers know they're running in
+// pre-#153 mode.
+type EmitImportedOpts struct {
+	ImportProjectID string
+	ImportSessionID string
+	ImportedAt      time.Time
+}
+
+// shouldInject reports whether the opts carry enough state for the injector
+// to produce a merge() wrapper. Empty ProjectID disables; everything else
+// (including a zero ImportedAt) is treated as "go" — the injector will use
+// time.Time zero, which the caller can replace with time.Now() before
+// passing.
+func (o EmitImportedOpts) shouldInject() bool {
+	return strings.TrimSpace(o.ImportProjectID) != ""
+}
 
 // emitMode classifies how a single ImportedResource is rendered.
 type emitMode int
@@ -33,7 +54,14 @@ const (
 // validator (ValidateImportedResources) is responsible for reporting blocking
 // issues separately. EmitImportedTF returns nil bytes when no resource
 // emits.
-func EmitImportedTF(cloud string, irs []imported.ImportedResource) (out []byte, providersUsed map[string]bool) {
+//
+// opts threads provenance state into the per-resource body via
+// injectProvenance (issue #153). When opts.ImportProjectID is empty
+// provenance is disabled and bodies emit unchanged for backwards
+// compatibility. EmitImportedTF mutates ir.WeakLocked in irs to record the
+// provenance decision per resource — callers that need the original slice
+// untouched should pass a copy.
+func EmitImportedTF(cloud string, irs []imported.ImportedResource, opts EmitImportedOpts) (out []byte, providersUsed map[string]bool) {
 	if len(irs) == 0 {
 		return nil, nil
 	}
@@ -48,7 +76,8 @@ func EmitImportedTF(cloud string, irs []imported.ImportedResource) (out []byte, 
 	}
 
 	var entries []entry
-	for _, ir := range irs {
+	for i := range irs {
+		ir := &irs[i]
 		got := strings.ToLower(strings.TrimSpace(ir.Identity.Cloud))
 		if got != "aws" && got != "gcp" {
 			continue
@@ -56,7 +85,7 @@ func EmitImportedTF(cloud string, irs []imported.ImportedResource) (out []byte, 
 		if wantCloud != "" && got != wantCloud {
 			continue
 		}
-		mode := classifyEmitMode(ir)
+		mode := classifyEmitMode(*ir)
 		if mode == emitModeSkip {
 			continue
 		}
@@ -68,9 +97,15 @@ func EmitImportedTF(cloud string, irs []imported.ImportedResource) (out []byte, 
 		e := entry{address: addr}
 		switch mode {
 		case emitModeResourceImport, emitModeResourceOnly:
-			body, err := emitImportedResourceBody(ir)
+			body, err := emitImportedResourceBody(*ir)
 			if err != nil {
 				continue
+			}
+			if opts.shouldInject() {
+				body, err = injectProvenance(body, ir, opts.ImportProjectID, opts.ImportSessionID, opts.ImportedAt)
+				if err != nil {
+					continue
+				}
 			}
 			e.resource = wrapResourceBlock(ir.Identity.Type, addressLabel(addr), providerAliasFor(got), body)
 			if mode == emitModeResourceImport {

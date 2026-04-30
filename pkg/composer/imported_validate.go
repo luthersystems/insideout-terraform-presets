@@ -141,6 +141,132 @@ func ValidateImportedResources(cloud string, irs []imported.ImportedResource) []
 	return issues
 }
 
+// ProvenanceOpts carries the per-compose context needed by
+// ValidateProvenanceConflicts. ImportProjectID is the logical claim/owner ID
+// used cross-cloud (decision #46 in docs/managed-resource-tiers.md);
+// ImportSessionID is unused for the conflict check itself but lives on the
+// struct so the same opts value can be threaded into the injector.
+type ProvenanceOpts struct {
+	ImportProjectID string
+	ImportSessionID string
+}
+
+// ValidateProvenanceConflicts enforces cross-session mutual exclusion on
+// imported resources. Issues:
+//
+//   - imported_resource_provenance_skipped_no_project_id — emitted once when
+//     opts.ImportProjectID is empty but irs is non-empty. Indicates the
+//     composer is running in pre-#153 backwards-compatible mode and no
+//     provenance tags will be written.
+//   - imported_resource_provenance_conflict — the resource already advertises
+//     a different InsideOutImportProject / insideout-import-project value and
+//     no ForceTakeover is supplied. Hard-fails per design decision #45.
+//   - imported_resource_force_takeover_invalid — ForceTakeover is set but
+//     missing required audit metadata, or its PreviousOwner does not match
+//     the value observed on the resource.
+//
+// Resources that do not support tags/labels (taggable returns false) are
+// skipped silently — they fall back to weak-lock semantics, which rely on
+// ResourceIdentity uniqueness already enforced by
+// imported_resource_address_collision in ValidateImportedResources.
+func ValidateProvenanceConflicts(cloud string, irs []imported.ImportedResource, opts ProvenanceOpts) []ValidationIssue {
+	if len(irs) == 0 {
+		return nil
+	}
+	want := strings.ToLower(strings.TrimSpace(cloud))
+	var issues []ValidationIssue
+
+	if strings.TrimSpace(opts.ImportProjectID) == "" {
+		// Backwards-compat path: surface a single advisory issue so the
+		// caller knows provenance is disabled, then skip per-resource
+		// checks.
+		hasEligible := false
+		for _, ir := range irs {
+			got := strings.ToLower(strings.TrimSpace(ir.Identity.Cloud))
+			if got != "aws" && got != "gcp" {
+				continue
+			}
+			if want != "" && got != want {
+				continue
+			}
+			if !isImportedTier(ir.Tier) {
+				continue
+			}
+			hasEligible = true
+			break
+		}
+		if hasEligible {
+			issues = append(issues, ValidationIssue{
+				Field:      "imported",
+				Code:       "imported_resource_provenance_skipped_no_project_id",
+				Reason:     "ComposeStackOpts.ImportProjectID is empty; provenance tags will not be emitted and cross-session mutual exclusion is disabled",
+				Suggestion: "set opts.ImportProjectID to the InsideOut stack/session import-project identifier (issue #153)",
+			})
+		}
+		return issues
+	}
+
+	for i, ir := range irs {
+		got := strings.ToLower(strings.TrimSpace(ir.Identity.Cloud))
+		if got != "aws" && got != "gcp" {
+			continue
+		}
+		if want != "" && got != want {
+			continue
+		}
+		if !isImportedTier(ir.Tier) {
+			continue
+		}
+		// Resources without tag/label support are weak-locked; mutual
+		// exclusion falls back to address-uniqueness only.
+		if _, ok := taggable(ir); !ok {
+			continue
+		}
+
+		observed, hasOwner := existingProvenanceProject(ir)
+		if !hasOwner {
+			continue
+		}
+		if observed == opts.ImportProjectID {
+			continue
+		}
+
+		field := importedField(ir, i)
+		if ir.ForceTakeover == nil {
+			issues = append(issues, ValidationIssue{
+				Field:   field,
+				Value:   observed,
+				Code:    "imported_resource_provenance_conflict",
+				Reason:  fmt.Sprintf("imported resource %q is already claimed by import project %q; refusing to overwrite without an audited force-takeover", ir.Identity.Address, observed),
+				Suggestion: "set ImportedResource.ForceTakeover with actor, reason, previous_owner, and approved_at to override (audited)",
+			})
+			continue
+		}
+		ft := ir.ForceTakeover
+		if strings.TrimSpace(ft.Actor) == "" || strings.TrimSpace(ft.Reason) == "" || strings.TrimSpace(ft.PreviousOwner) == "" || ft.ApprovedAt.IsZero() {
+			issues = append(issues, ValidationIssue{
+				Field:      field,
+				Value:      observed,
+				Code:       "imported_resource_force_takeover_invalid",
+				Reason:     "ForceTakeover requires non-empty Actor, Reason, PreviousOwner, and a non-zero ApprovedAt timestamp",
+				Suggestion: "populate every audit field on ImportedResource.ForceTakeover before retrying",
+			})
+			continue
+		}
+		if ft.PreviousOwner != observed {
+			issues = append(issues, ValidationIssue{
+				Field:      field,
+				Value:      observed,
+				Code:       "imported_resource_force_takeover_invalid",
+				Reason:     fmt.Sprintf("ForceTakeover.PreviousOwner %q does not match the observed import project %q on the resource", ft.PreviousOwner, observed),
+				Suggestion: "ensure ForceTakeover.PreviousOwner matches the InsideOutImportProject value currently on the cloud resource",
+			})
+		}
+	}
+
+	return issues
+}
+
 // isImportedTier reports whether t is a tier that the composer emits as flat
 // imported HCL (or, for ImportedMissing, would emit once Remediation is set).
 func isImportedTier(t imported.Tier) bool {

@@ -13,6 +13,121 @@ import (
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
 
+// TestComposeStackWithIssues_ProvenanceTags exercises the issue #153
+// end-to-end path: ImportProjectID + ImportSessionID propagate through
+// composeStackImpl into EmitImportedTF, which writes merge({InsideOut...},
+// {...}) into the body of every taggable imported resource. The composed
+// root must remain HCL-valid.
+func TestComposeStackWithIssues_ProvenanceTags(t *testing.T) {
+	t.Parallel()
+
+	c := newTestClient()
+	res, err := c.ComposeStackWithIssues(ComposeStackOpts{
+		Cloud:           "aws",
+		SelectedKeys:    []ComponentKey{KeyAWSVPC},
+		Comps:           &Components{Cloud: "AWS"},
+		Cfg:             &Config{},
+		Project:         "demo",
+		Region:          "us-east-1",
+		ImportProjectID: "io-stack-1",
+		ImportSessionID: "sess-9",
+		Imported: []imported.ImportedResource{
+			{
+				Identity: imported.ResourceIdentity{
+					Cloud: "aws", Type: "aws_sqs_queue",
+					Address: "aws_sqs_queue.q", ImportID: "https://sqs/.../q",
+				},
+				Tier:  imported.TierImportedFlat,
+				Attrs: []byte(`{"Name":{"Literal":"q"}}`),
+			},
+		},
+	})
+	require.NoError(t, err)
+	require.NotNil(t, res)
+
+	importedTF := string(res.Files["/imported.tf"])
+	require.NotEmpty(t, importedTF)
+	assert.Contains(t, importedTF, "tags = merge(")
+	assert.Contains(t, importedTF, `InsideOutImportProject = "io-stack-1"`)
+	assert.Contains(t, importedTF, `InsideOutImportSession = "sess-9"`)
+
+	for _, iss := range res.Issues {
+		require.NotEqualf(t, "hcl_parse_error", iss.Code,
+			"composed root must parse: %+v", iss)
+	}
+}
+
+// TestComposeStackWithIssues_ProvenanceConflict pins that the validator
+// surfaces a structured ValidationIssue when an imported resource's existing
+// InsideOutImportProject tag does not match the composer's ImportProjectID.
+func TestComposeStackWithIssues_ProvenanceConflict(t *testing.T) {
+	t.Parallel()
+
+	c := newTestClient()
+	res, err := c.ComposeStackWithIssues(ComposeStackOpts{
+		Cloud:           "aws",
+		SelectedKeys:    []ComponentKey{KeyAWSVPC},
+		Comps:           &Components{Cloud: "AWS"},
+		Cfg:             &Config{},
+		Project:         "demo",
+		Region:          "us-east-1",
+		ImportProjectID: "io-stack-1",
+		Imported: []imported.ImportedResource{
+			{
+				Identity: imported.ResourceIdentity{
+					Cloud: "aws", Type: "aws_dynamodb_table",
+					Address: "aws_dynamodb_table.t", ImportID: "t",
+				},
+				Tier: imported.TierImportedFlat,
+				Attributes: map[string]any{
+					"name": "t",
+					"tags": map[string]any{"InsideOutImportProject": "io-other"},
+				},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	codes := issueCodes(res.Issues)
+	assert.Contains(t, codes, "imported_resource_provenance_conflict")
+}
+
+// TestComposeStackWithIssues_ProvenanceSkippedAdvisory pins the
+// backwards-compat path: when ImportProjectID is empty but Imported is not,
+// the composer surfaces a low-severity advisory issue and does not emit
+// merge() — pre-#153 behavior is preserved.
+func TestComposeStackWithIssues_ProvenanceSkippedAdvisory(t *testing.T) {
+	t.Parallel()
+
+	c := newTestClient()
+	res, err := c.ComposeStackWithIssues(ComposeStackOpts{
+		Cloud:        "aws",
+		SelectedKeys: []ComponentKey{KeyAWSVPC},
+		Comps:        &Components{Cloud: "AWS"},
+		Cfg:          &Config{},
+		Project:      "demo",
+		Region:       "us-east-1",
+		Imported: []imported.ImportedResource{
+			{
+				Identity: imported.ResourceIdentity{
+					Cloud: "aws", Type: "aws_sqs_queue",
+					Address: "aws_sqs_queue.q", ImportID: "x",
+				},
+				Tier:  imported.TierImportedFlat,
+				Attrs: []byte(`{"Name":{"Literal":"q"}}`),
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	codes := issueCodes(res.Issues)
+	assert.Contains(t, codes, "imported_resource_provenance_skipped_no_project_id")
+
+	importedTF := string(res.Files["/imported.tf"])
+	assert.NotContains(t, importedTF, "tags = merge(", "merge() must not be emitted in pre-#153 mode")
+	assert.NotContains(t, importedTF, "InsideOutImportProject")
+}
+
 // TestComposeStackWithIssues_Imported_AWS exercises the end-to-end path:
 // ComposeStackWithIssues runs the imported validator, emits /imported.tf,
 // and adds the aws.imported provider alias in /providers.tf — alongside an
@@ -284,7 +399,7 @@ func TestImportedResource_EveryTierBranchExercised(t *testing.T) {
 				Tier: tier,
 			}
 			issues := ValidateImportedResources("aws", []imported.ImportedResource{ir})
-			out, _ := EmitImportedTF("aws", []imported.ImportedResource{ir})
+			out, _ := EmitImportedTF("aws", []imported.ImportedResource{ir}, EmitImportedOpts{})
 
 			// Composer/External tiers are explicitly out of scope for #148:
 			// no validation issues, no emission. Verify both.
@@ -412,7 +527,7 @@ func TestEmitImportedTF_ProducesValidHCL(t *testing.T) {
 			Tier:       imported.TierImportedFlat,
 			Attributes: map[string]any{"name": "x"},
 		},
-	})
+	}, EmitImportedOpts{})
 	require.NotEmpty(t, out)
 	_, diags := hclsyntax.ParseConfig(out, "imported.tf", hcl.InitialPos)
 	require.False(t, diags.HasErrors(), "EmitImportedTF must produce valid HCL: %s", diags.Error())

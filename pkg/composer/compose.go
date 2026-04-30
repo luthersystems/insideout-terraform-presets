@@ -7,6 +7,7 @@ import (
 	"path"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/hashicorp/terraform-config-inspect/tfconfig"
 
@@ -135,6 +136,22 @@ type ComposeSingleOpts struct {
 	// the field exists so reliable's adapter can hand the same shape to
 	// either entry point. See ComposeStackOpts.Imported.
 	Imported []imported.ImportedResource
+
+	// ImportProjectID is the logical claim/owner identifier shared across
+	// AWS+GCP for one InsideOut stack/session. It is emitted as
+	// InsideOutImportProject (AWS tag) and insideout-import-project (GCP
+	// label) on every imported resource that supports tags/labels. Empty
+	// disables provenance tagging for backward compatibility with callers
+	// that have not yet adopted issue #153 — a low-severity
+	// imported_resource_provenance_skipped_no_project_id issue is recorded
+	// when Imported is non-empty but ImportProjectID is blank.
+	ImportProjectID string
+
+	// ImportSessionID is the finer-grained importing session identifier.
+	// Emitted as InsideOutImportSession / insideout-import-session.
+	// Optional when ImportProjectID is set; if blank the session tag/label
+	// is omitted and only the project-level claim is enforced.
+	ImportSessionID string
 }
 
 // ComposeSingle preserves the historical (Files, error) signature. It hard-
@@ -346,6 +363,23 @@ type ComposeStackOpts struct {
 	// reported via ValidationIssue codes (imported_resource_*). Nil or
 	// empty preserves the historical no-op behavior.
 	Imported []imported.ImportedResource
+
+	// ImportProjectID is the logical claim/owner identifier shared across
+	// AWS+GCP for one InsideOut stack/session. It is emitted as
+	// InsideOutImportProject (AWS tag) and insideout-import-project (GCP
+	// label) on every imported resource that supports tags/labels, and
+	// drives the mutual-exclusion check (ValidateProvenanceConflicts).
+	// Empty disables provenance tagging for backward compatibility with
+	// callers that have not yet adopted issue #153 — a low-severity
+	// imported_resource_provenance_skipped_no_project_id issue is recorded
+	// when Imported is non-empty but ImportProjectID is blank.
+	ImportProjectID string
+
+	// ImportSessionID is the finer-grained importing session identifier.
+	// Emitted as InsideOutImportSession / insideout-import-session.
+	// Optional when ImportProjectID is set; if blank the session tag/label
+	// is omitted and only the project-level claim is enforced.
+	ImportSessionID string
 }
 
 // ComposeStack preserves the historical (Files, error) signature. It hard-
@@ -572,7 +606,14 @@ func (c *Client) composeStackImpl(opts ComposeStackOpts) (*ComposeStackResult, e
 	// (issue #148). This must happen before generateProvidersTF so that
 	// importedClouds tells the provider emitter which alias to declare.
 	issues = append(issues, ValidateImportedResources(cloud, opts.Imported)...)
-	importedTF, importedClouds := EmitImportedTF(cloud, opts.Imported)
+	provOpts := ProvenanceOpts{ImportProjectID: opts.ImportProjectID, ImportSessionID: opts.ImportSessionID}
+	issues = append(issues, ValidateProvenanceConflicts(cloud, opts.Imported, provOpts)...)
+	emitOpts := EmitImportedOpts{
+		ImportProjectID: opts.ImportProjectID,
+		ImportSessionID: opts.ImportSessionID,
+		ImportedAt:      time.Now().UTC(),
+	}
+	importedTF, importedClouds := EmitImportedTF(cloud, opts.Imported, emitOpts)
 	if len(importedTF) > 0 {
 		files["/imported.tf"] = importedTF
 	}

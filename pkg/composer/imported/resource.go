@@ -68,6 +68,49 @@ type ImportedResource struct {
 	// of a TierImportedMissing resource until Remediation is set. See
 	// docs/managed-resource-tiers.md "ImportedMissing operator actions".
 	Remediation MissingAction `json:"remediation,omitempty"`
+
+	// ForceTakeover is the audited operator override for a provenance
+	// conflict — i.e. the composer observed an InsideOutImportProject /
+	// insideout-import-project tag on this resource that names a different
+	// import project than the current compose pass. Setting this field
+	// suppresses imported_resource_provenance_conflict for this resource and
+	// instructs the provenance injector to overwrite the existing tag value.
+	// All four sub-fields are required. See docs/managed-resource-tiers.md
+	// "Provenance tagging policy" decision #45.
+	ForceTakeover *ForceTakeover `json:"force_takeover,omitempty"`
+
+	// WeakLocked is set by the provenance injector to true when this
+	// resource's Terraform type does not support tags/labels. Mutual
+	// exclusion is then a best-effort check based on ResourceIdentity alone
+	// (see imported_resource_address_collision); the four-key provenance
+	// schema is not emitted. Read-only metadata; callers should not set it.
+	WeakLocked bool `json:"weak_locked,omitempty"`
+}
+
+// ForceTakeover is the audited operator override for a cross-session
+// provenance conflict. Every field is required: a takeover with missing
+// metadata is rejected by ValidateProvenanceConflicts as
+// imported_resource_force_takeover_invalid. ApprovedAt is always serialized
+// as RFC3339Nano UTC regardless of the caller-supplied time.Location;
+// see MarshalJSON.
+type ForceTakeover struct {
+	Actor         string    `json:"actor"`
+	Reason        string    `json:"reason"`
+	PreviousOwner string    `json:"previous_owner"`
+	ApprovedAt    time.Time `json:"approved_at"`
+}
+
+// MarshalJSON enforces RFC3339Nano UTC on ApprovedAt. Mirrors FieldEdit's
+// MarshalJSON — without this, a caller passing a non-UTC time.Time would
+// serialize with a numeric offset (e.g. "-07:00"), which the design contract
+// forbids. The zero value is left untouched so the canonical
+// "0001-01-01T00:00:00Z" form is preserved.
+func (f ForceTakeover) MarshalJSON() ([]byte, error) {
+	type alias ForceTakeover
+	if !f.ApprovedAt.IsZero() {
+		f.ApprovedAt = f.ApprovedAt.UTC()
+	}
+	return json.Marshal(alias(f))
 }
 
 // FieldEdit is audit/conflict metadata for one model-side edit to a single
