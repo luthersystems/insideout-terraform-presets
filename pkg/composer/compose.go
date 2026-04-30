@@ -346,15 +346,6 @@ type ComposeStackOpts struct {
 	// reported via ValidationIssue codes (imported_resource_*). Nil or
 	// empty preserves the historical no-op behavior.
 	Imported []imported.ImportedResource
-
-	// RemoteBackend, when true, emits an empty `backend "s3" {}` (AWS) or
-	// `backend "gcs" {}` (GCP) sub-block inside the composed providers.tf
-	// terraform { ... } block. The bucket, region, and key/prefix are
-	// supplied at terraform init time via -backend-config=... by the
-	// caller's apply container (HashiCorp partial-configuration pattern).
-	// Default false preserves the historical local-state behavior. See
-	// issue #169.
-	RemoteBackend bool
 }
 
 // ComposeStack preserves the historical (Files, error) signature. It hard-
@@ -593,7 +584,6 @@ func (c *Client) composeStackImpl(opts ComposeStackOpts) (*ComposeStackResult, e
 		Selected:       selected,
 		Discovered:     discoveredProviders,
 		ImportedClouds: importedClouds,
-		RemoteBackend:  opts.RemoteBackend,
 	})
 
 	// Validator dispatcher — runs after the stack is fully composed, before
@@ -648,14 +638,6 @@ type providersTFInput struct {
 	// default_labels — imported resources must not inherit the stack's
 	// Project tag because they may pre-date the InsideOut session.
 	ImportedClouds map[string]bool
-
-	// RemoteBackend opts the composed root into a remote terraform state
-	// backend (issue #169). When true, an empty `backend "s3" {}` (AWS)
-	// or `backend "gcs" {}` (GCP) sub-block is emitted inside the
-	// `terraform { ... }` block; the caller supplies bucket/region/key
-	// at `terraform init -backend-config=...` time. Default false
-	// preserves local-state behavior.
-	RemoteBackend bool
 }
 
 // generateProvidersTF generates cloud-specific provider configuration.
@@ -669,7 +651,6 @@ func generateProvidersTF(in providersTFInput) []byte {
 	selected := in.Selected
 	discovered := in.Discovered
 	importedClouds := in.ImportedClouds
-	remoteBackend := in.RemoteBackend
 	// Seed required_providers with the cloud's base entry, then union the
 	// child-module discoveries on top. Discovered entries win on conflict.
 	required := map[string]*tfconfig.ProviderRequirement{}
@@ -684,11 +665,7 @@ func generateProvidersTF(in providersTFInput) []byte {
 		var b strings.Builder
 		b.WriteString("terraform {\n  required_providers {\n")
 		b.WriteString(renderRequiredProviders(required))
-		b.WriteString("  }\n")
-		if remoteBackend {
-			b.WriteString("  backend \"gcs\" {}\n")
-		}
-		b.WriteString("}\n\n")
+		b.WriteString("  }\n}\n\n")
 		fmt.Fprintf(&b, "provider \"google\" {\n  region = %q\n}\n", region)
 		if importedClouds["gcp"] {
 			b.WriteString("\n")
@@ -753,11 +730,7 @@ variable "external_id" {
 		b.WriteString(awsVarDecls)
 		b.WriteString("terraform {\n  required_providers {\n")
 		b.WriteString(renderRequiredProviders(required))
-		b.WriteString("  }\n")
-		if remoteBackend {
-			b.WriteString("  backend \"s3\" {}\n")
-		}
-		b.WriteString("}\n\n")
+		b.WriteString("  }\n}\n\n")
 		fmt.Fprintf(&b, "provider \"aws\" {\n  region = %q%s%s\n}\n", region, awsDefaultTags, awsDynamicAssumeRole)
 
 		// WAF requires an additional us_east_1 provider alias for CloudFront
