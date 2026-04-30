@@ -16,13 +16,18 @@ locals {
   # "slice end_index past the length" — the documented failure mode in
   # issue #180 (split out from #178).
   #
-  # Terraform's try() catches errors raised during evaluation of the
-  # wrapped expression, INCLUDING function-call failures inside
-  # transitively-evaluated locals of the referenced module. When we read
-  # module.kms.keys, terraform evaluates the upstream's local.keys_by_name,
-  # slice() fires, and the error propagates as a diagnostic to our
-  # expression context where try() traps it. This guarantee is stable
-  # across Terraform 1.5+ (versions.tf pins required_version >= 1.3).
+  # Per the Terraform docs for try() —
+  # https://developer.hashicorp.com/terraform/language/functions/try —
+  # try() catches errors raised during evaluation of the wrapped
+  # expression, including function-call failures inside transitively-
+  # evaluated locals of a referenced module. When we read
+  # module.kms.keys, terraform evaluates the upstream's
+  # local.keys_by_name, slice() fires, and the error propagates as a
+  # diagnostic to our expression context where try() traps it.
+  # versions.tf pins required_version >= 1.3 which is the floor for this
+  # behavior; we rely on Terraform's documented contract rather than a
+  # cross-version-verified test (a real-plan integration test against
+  # an empty state is tracked in #182).
   #
   # On the steady-state happy path (default prevent_destroy=true, default
   # var.keys with one entry), slice() is well-formed and try() is a no-op
