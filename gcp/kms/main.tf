@@ -9,6 +9,27 @@ resource "random_id" "suffix" {
 
 locals {
   keyring_name = "${var.project}-${var.keyring_name}-${random_id.suffix.hex}"
+
+  # The upstream terraform-google-modules/kms/google module's
+  # `local.keys_by_name` calls slice() over a count-controlled splat which
+  # can error during plan against an empty state with
+  # "slice end_index past the length" — the documented failure mode in
+  # issue #180 (split out from #178). try() catches that evaluation error
+  # and degrades to an empty map. Consumers reading our `keys` /
+  # `key_self_links` outputs see the degraded value and can skip
+  # downstream wiring rather than the entire plan failing.
+  #
+  # On the steady-state happy path (default prevent_destroy=true, default
+  # var.keys with one entry), slice() is well-formed and try() is a no-op
+  # — module.kms.keys returns the real {name => key_id} map.
+  #
+  # Note: the iam_bindings resource below still indexes into this local
+  # directly. When iam_bindings is empty (the default), the local is
+  # never evaluated for that resource and the plan proceeds. When it's
+  # non-empty AND the upstream errored, the binding's plan fails — that's
+  # a known degradation; the surgical fix here protects the common-case
+  # output consumers without forking the upstream.
+  keys_by_name = try(module.kms.keys, {})
 }
 
 module "kms" {
@@ -30,11 +51,16 @@ module "kms" {
   labels = var.labels
 }
 
-# Additional IAM bindings
+# Additional IAM bindings. crypto_key_id consumes local.keys_by_name
+# directly; when iam_bindings is empty (the default) the local is not
+# evaluated for this resource and the plan proceeds even if the upstream
+# slice() errors (issue #180). When iam_bindings is non-empty the failure
+# surface is unchanged from before this fix — the surgical fix here
+# protects the output path, which is what most consumers depend on.
 resource "google_kms_crypto_key_iam_binding" "this" {
   for_each = { for b in var.iam_bindings : "${b.key_name}-${b.role}" => b }
 
-  crypto_key_id = module.kms.keys[each.value.key_name]
+  crypto_key_id = local.keys_by_name[each.value.key_name]
   role          = each.value.role
   members       = each.value.members
 }
