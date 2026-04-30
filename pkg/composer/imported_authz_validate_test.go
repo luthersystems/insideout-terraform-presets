@@ -71,7 +71,7 @@ func TestValidateImportedResourceAuthorization_NonImportedTiersFiltered(t *testi
 // structural validator stopped reporting missing_remediation.
 func TestValidateImportedResourceAuthorization_TierImportedMissingFiresBothValidators(t *testing.T) {
 	t.Parallel()
-	requirePolicyEntryAuthz(t, "aws_sqs_queue", "name", policy.FieldPolicy{
+	requirePolicyEntry(t, "aws_sqs_queue", "name", policy.FieldPolicy{
 		Role: policy.RoleIdentity, Edit: policy.EditNever,
 	})
 	irs := []imported.ImportedResource{{
@@ -130,7 +130,15 @@ func TestValidateImportedResourceAuthorization_ReimportConflictNoOpsOnNestedPath
 			// If the curator removes or downgrades it, this test would
 			// silently pass for the wrong reason (the path would now route
 			// through no_policy_for_path instead of being authorized).
-			requirePolicyEntryAuthz(t, "google_pubsub_subscription", tc.path, policy.FieldPolicy{
+			//
+			// Sensitivity is intentionally NOT pinned here. The curator
+			// has push_config.attributes as Sensitivity=Redacted, but this
+			// test asserts no issue surfaces — so the redaction code path
+			// (which only formats ValidationIssue.Value) never runs.
+			// A curator flipping Sensitivity wouldn't change this test's
+			// outcome; pinning it would couple the premise to detail the
+			// test doesn't depend on.
+			requirePolicyEntry(t, "google_pubsub_subscription", tc.path, policy.FieldPolicy{
 				Edit: policy.EditRequiresApproval,
 			})
 
@@ -749,12 +757,18 @@ func firstUncuratedResolvablePath(tfType string, candidates []string) (string, b
 	return "", false
 }
 
-// requirePolicyEntryAuthz asserts that tfType has a curated FieldPolicy for
-// path matching the non-zero fields of want. Mirrors the same-named helper
-// in imported_diff_test.go (declared separately so the two test files don't
-// depend on each other's build order). Renamed _Authz to dodge the linker
-// collision when both test files are linked into the same package.
-func requirePolicyEntryAuthz(t *testing.T, tfType, path string, want policy.FieldPolicy) {
+// requirePolicyEntry asserts that tfType has a curated FieldPolicy for
+// path matching the non-zero fields of want. Tests use it to pin their
+// premise so a future curator change surfaces as a clear premise failure
+// rather than a confusing test-body assertion drift.
+//
+// PR #151 (ResourceDiff) ships a same-named helper in imported_diff_test.go;
+// when both PRs land, whichever merges second hits a redeclaration error
+// and the duplicate must be deleted as part of that merge. Keeping the
+// names identical (rather than mechanically suffixing one) forces that
+// cleanup to happen rather than leaving two near-identical helpers in the
+// package.
+func requirePolicyEntry(t *testing.T, tfType, path string, want policy.FieldPolicy) {
 	t.Helper()
 	m, ok := policy.Lookup(tfType)
 	require.True(t, ok, "test premise: %q must be a curated type", tfType)
