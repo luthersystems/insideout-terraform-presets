@@ -3,6 +3,7 @@ package runner
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 
@@ -17,11 +18,17 @@ import (
 type TerraformExecutor struct {
 	tf      *tfexec.Terraform
 	workDir string
+	logger  *slog.Logger
 }
 
 // NewTerraformExecutor creates a new executor. If tfBinary is empty, it uses
-// the system terraform or installs one.
-func NewTerraformExecutor(ctx context.Context, workDir, tfBinary string) (*TerraformExecutor, error) {
+// the system terraform or installs one. logger is used to surface non-fatal
+// terraform diagnostics that would otherwise be silently swallowed (e.g.
+// PlanGenerateConfig generating HCL successfully despite a validation
+// error — the caller still gets nil but the underlying error is logged at
+// Warn so operators can spot real failures vs the documented Lambda case).
+// A nil logger defaults to slog.Default() so existing callers don't change.
+func NewTerraformExecutor(ctx context.Context, workDir, tfBinary string, logger *slog.Logger) (*TerraformExecutor, error) {
 	if tfBinary == "" {
 		installer := &releases.ExactVersion{
 			Product: product.Terraform,
@@ -39,7 +46,10 @@ func NewTerraformExecutor(ctx context.Context, workDir, tfBinary string) (*Terra
 		return nil, fmt.Errorf("create terraform executor: %w", err)
 	}
 
-	return &TerraformExecutor{tf: tf, workDir: workDir}, nil
+	if logger == nil {
+		logger = slog.Default()
+	}
+	return &TerraformExecutor{tf: tf, workDir: workDir, logger: logger}, nil
 }
 
 // Init runs terraform init in the working directory.
@@ -50,23 +60,53 @@ func (t *TerraformExecutor) Init(ctx context.Context) error {
 // PlanGenerateConfig runs terraform plan with -generate-config-out to produce
 // HCL configuration from import blocks. The generated file may be written even
 // if plan returns an error (e.g., validation errors on generated resources).
-// Returns nil if the output file was produced, regardless of plan outcome.
+// Returns nil if the output file was produced, regardless of plan outcome —
+// downstream cleanup phases fix common validation gaps like the Lambda
+// "requires one of filename/image_uri/s3_bucket" case.
+//
+// When swallowing the plan error, the underlying diagnostic is logged at
+// Warn so an operator running `insideout-import` can distinguish the
+// expected Lambda-style validation gap from a real terraform failure (auth
+// expiry, state corruption, provider crash) that left a partial file. The
+// previous implementation returned nil silently in both cases — see
+// PR review on #58. If the file was NOT written, the original error
+// propagates.
 func (t *TerraformExecutor) PlanGenerateConfig(ctx context.Context, outFile string) error {
-	_, err := t.tf.Plan(ctx, tfexec.GenerateConfigOut(outFile))
-	if err != nil {
-		// Check if the generated file was written despite the error.
-		// terraform plan -generate-config-out writes the file before validation,
-		// so it may exist even when the plan fails (e.g., Lambda requires
-		// one of filename/image_uri/s3_bucket).
-		outPath := filepath.Join(t.workDir, outFile)
-		if _, statErr := os.Stat(outPath); statErr == nil {
-			// File exists — the generation succeeded, even if plan didn't.
-			// Our cleanup phase will fix the validation issues.
-			return nil
-		}
-		return fmt.Errorf("terraform plan: %w", err)
+	_, planErr := t.tf.Plan(ctx, tfexec.GenerateConfigOut(outFile))
+	outPath := filepath.Join(t.workDir, outFile)
+	_, statErr := os.Stat(outPath)
+	return classifyPlanGenerateConfigError(t.logger, planErr, statErr == nil, outFile)
+}
+
+// classifyPlanGenerateConfigError encodes the swallow-or-propagate decision
+// for a `terraform plan -generate-config-out` invocation. It is extracted
+// so the policy can be unit-tested without spinning up terraform — the
+// only state it inspects is the plan error, the file-exists flag, and the
+// supplied logger.
+//
+// Decision matrix:
+//
+//	planErr=nil               -> nil (happy path)
+//	planErr!=nil, file exists -> nil + Warn (terraform generated HCL but
+//	                              tripped a post-generation diagnostic;
+//	                              cleanup phases will fix common gaps
+//	                              like the Lambda required-arg case)
+//	planErr!=nil, no file     -> propagate (plan executor itself failed
+//	                              before writing anything; cleanup cannot
+//	                              salvage)
+func classifyPlanGenerateConfigError(logger *slog.Logger, planErr error, outFileExists bool, outFile string) error {
+	if planErr == nil {
+		return nil
 	}
-	return nil
+	if outFileExists {
+		logger.Warn(
+			"terraform plan -generate-config-out wrote the output file but plan returned an error; proceeding to cleanup phase",
+			slog.String("out_file", outFile),
+			slog.String("plan_err", planErr.Error()),
+		)
+		return nil
+	}
+	return fmt.Errorf("terraform plan: %w", planErr)
 }
 
 // Validate runs terraform validate.
@@ -90,7 +130,6 @@ func (t *TerraformExecutor) PlanJSON(ctx context.Context) (*tfjson.Plan, error) 
 	}
 	return t.tf.ShowPlanFile(ctx, planFile)
 }
-
 
 // ProvidersTF returns the provider configuration HCL for the given provider.
 func ProvidersTF(provider, project, region string) []byte {

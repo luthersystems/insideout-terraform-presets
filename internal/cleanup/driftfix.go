@@ -17,9 +17,18 @@ import (
 //
 // The approach:
 //  1. Parse the plan's ResourceChanges
-//  2. For each resource with action "update", diff Before/After
+//  2. For each resource with a drift-bearing action (update OR replace),
+//     diff Before/After
 //  3. Identify which attributes changed
 //  4. Add those attributes to lifecycle { ignore_changes } in the HCL
+//
+// Both "update" and "replace" actions carry meaningful drift. An "update"
+// is a single-step change; a "replace" (delete+create or create+delete)
+// fires when terraform detects a change that the provider deems
+// non-modifiable in place. For an imported resource, BOTH cases mean
+// "the desired state diverged from the cloud state" — adding
+// ignore_changes on the drifting attribute is the right cleanup for
+// either action so the imported config produces a clean plan.
 //
 // This replaces hardcoded per-resource-type ignore_changes lists with
 // a data-driven approach that works for any provider and resource type.
@@ -34,8 +43,7 @@ func FixDriftFromPlan(src []byte, plan *tfjson.Plan) ([]byte, error) {
 		if rc.Change == nil {
 			continue
 		}
-		// Only care about "update" actions (drift on import)
-		if !containsAction(rc.Change.Actions, "update") {
+		if !isDriftAction(rc.Change.Actions) {
 			continue
 		}
 
@@ -106,6 +114,29 @@ func containsAction(actions tfjson.Actions, action string) bool {
 		}
 	}
 	return false
+}
+
+// isDriftAction reports whether a ResourceChange's actions indicate
+// drift-on-import that ignore_changes can suppress. Two action shapes
+// qualify:
+//
+//   - {"update"} — the provider can adjust in place.
+//   - {"delete","create"} or {"create","delete"} — terraform's "replace"
+//     encoding; fires when the provider deems the changed attribute
+//     non-modifiable in place. For imported resources, replace usually
+//     means "your config has a different value than the cloud reality"
+//     and the cleanup is the same as update: add the drifting attribute
+//     to ignore_changes so the next plan is clean.
+//
+// "no-op" and pure-create / pure-delete actions are excluded; those
+// don't represent drift on the imported resource.
+func isDriftAction(actions tfjson.Actions) bool {
+	if containsAction(actions, "update") {
+		return true
+	}
+	hasCreate := containsAction(actions, "create")
+	hasDelete := containsAction(actions, "delete")
+	return hasCreate && hasDelete
 }
 
 // addLifecycleIgnoreChanges adds or merges a lifecycle block with

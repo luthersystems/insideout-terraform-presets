@@ -226,8 +226,16 @@ func (r *Runner) Run(ctx context.Context) (*Result, error) {
 		// import blocks without corresponding resource blocks.
 		depGeneratedFile := fmt.Sprintf("generated_dep_%d.tf", iteration)
 		if err := tfExec.PlanGenerateConfig(ctx, depGeneratedFile); err != nil {
-			r.logger.Warn("terraform plan failed during dep chase, stopping", "error", err)
-			break
+			// PlanGenerateConfig only returns non-nil when the file was NOT
+			// written (the post-#187 contract; the Lambda-style validation
+			// gap is logged at Warn and returns nil). A real terraform
+			// failure here means the dep-chase iteration produced no HCL
+			// while the accumulated cleanedHCL references its ARN — silent
+			// break would leave the output internally inconsistent with
+			// orphaned references that pass validate but fail apply
+			// (issue #58 review). Escalate so the operator sees the
+			// failure and can re-run.
+			return nil, fmt.Errorf("terraform plan failed during dep chase iteration %d: %w", iteration, err)
 		}
 
 		depGeneratedPath := filepath.Join(workDir, depGeneratedFile)
@@ -331,14 +339,23 @@ func (r *Runner) Run(ctx context.Context) (*Result, error) {
 	for driftIter := 0; driftIter < 3; driftIter++ {
 		plan, err := validateExec.PlanJSON(ctx)
 		if err != nil {
-			r.logger.Warn("drift-fix plan failed, skipping", "error", err)
-			break
+			// The drift-fix plan IS the input to drift detection; if it
+			// fails, we cannot honor the "0 changes plan" contract from
+			// the design doc ("drift is a bug, not a limitation"). The
+			// pre-#187 silent break marked the run ValidationOK against
+			// HCL with un-fixed drift — a customer would then see drift
+			// on their NEXT plan and report a false positive. Escalate
+			// instead so the operator re-runs and the contract holds.
+			return nil, fmt.Errorf("drift-fix plan failed at iteration %d: %w", driftIter, err)
 		}
 
 		fixedHCL, err := cleanup.FixDriftFromPlan(cleanedHCL, plan)
 		if err != nil {
-			r.logger.Warn("drift-fix failed, skipping", "error", err)
-			break
+			// FixDriftFromPlan parses HCL and rewrites lifecycle blocks.
+			// A failure here means we have a partial rewrite or invalid
+			// HCL output. Escalating ensures the operator sees the issue
+			// rather than getting a "successful" run with broken output.
+			return nil, fmt.Errorf("drift-fix HCL rewrite failed at iteration %d: %w", driftIter, err)
 		}
 
 		if string(fixedHCL) == string(cleanedHCL) {
@@ -441,7 +458,7 @@ func (r *Runner) getTerraformRunner(ctx context.Context, workDir string) (terraf
 		}
 		return r.tfRunner, nil
 	}
-	return NewTerraformExecutor(ctx, workDir, r.config.TFBinary)
+	return NewTerraformExecutor(ctx, workDir, r.config.TFBinary, r.logger)
 }
 
 func (r *Runner) copyOutput(workDir string) error {
