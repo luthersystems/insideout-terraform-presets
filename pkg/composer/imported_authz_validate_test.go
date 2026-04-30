@@ -59,6 +59,96 @@ func TestValidateImportedResourceAuthorization_NonImportedTiersFiltered(t *testi
 	}
 }
 
+// TestValidateImportedResourceAuthorization_TierImportedMissingFiresAuthzGates
+// pins the current behavior for FieldEdits against a TierImportedMissing
+// resource: authorization gates DO fire (the structural validator reports
+// imported_resource_missing_remediation in parallel via ValidateImportedResources).
+// A future maintainer who decides ImportedMissing should skip authorization
+// must update this test together with the design doc.
+func TestValidateImportedResourceAuthorization_TierImportedMissingFiresAuthzGates(t *testing.T) {
+	t.Parallel()
+	// name is Edit=Never on aws_sqs_queue — a forbidden edit on a missing
+	// resource still produces the forbidden code. The operator sees both
+	// the missing-remediation issue (from the structural validator) AND
+	// the authorization issue (from this validator) so the error message
+	// is coherent: pick a remediation AND don't try to edit identity.
+	irs := []imported.ImportedResource{{
+		Identity: imported.ResourceIdentity{
+			Cloud:    "aws",
+			Type:     "aws_sqs_queue",
+			Address:  "aws_sqs_queue.q",
+			ImportID: "q",
+		},
+		Tier: imported.TierImportedMissing,
+		FieldEdits: map[string]imported.FieldEdit{
+			"name": {Source: imported.SourceRiley, NewValue: "rename"},
+		},
+	}}
+	issues := ValidateImportedResourceAuthorization("aws", irs)
+	require.Len(t, issues, 1)
+	assert.Equal(t, "imported_resource_field_edit_forbidden", issues[0].Code,
+		"TierImportedMissing must not silently bypass EditPolicy gates")
+}
+
+// TestValidateImportedResourceAuthorization_ReimportConflictNoOpsOnNestedPaths
+// pins the current Phase 2 v1 behavior: re-import conflict detection is
+// deliberately conservative and only checks top-level Attribute paths.
+// Dotted (environment.variables) and bracketed (lifecycle_rule[0]) paths
+// no-op the conflict gate to avoid speculating about JSON projections.
+//
+// If a future PR expands lookupTopLevelAttribute to handle nested paths
+// (e.g. via decodeJSONProjection from imported_diff.go), this test must be
+// updated alongside that change so the gap closure is visible.
+func TestValidateImportedResourceAuthorization_ReimportConflictNoOpsOnNestedPaths(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		path string
+	}{
+		// google_pubsub_subscription has push_config.attributes as a real
+		// curated path. Edit=RequiresApproval, so we supply a complete
+		// approval to bypass that gate; only the conflict gate could fire.
+		{"dotted JSON-projection path", "push_config.attributes"},
+	}
+	approval := &imported.FieldEditApproval{
+		Approver:   "ops@luthersystems.com",
+		ApprovedAt: time.Now(),
+		PlanHash:   "plan-nested",
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			// FieldEdit.NewValue diverges from Attributes — would trip the
+			// conflict gate if it ran. The conservative no-op behavior
+			// means no issue surfaces.
+			irs := []imported.ImportedResource{{
+				Identity: imported.ResourceIdentity{
+					Cloud:    "gcp",
+					Type:     "google_pubsub_subscription",
+					Address:  "google_pubsub_subscription.s",
+					ImportID: "s",
+				},
+				Tier: imported.TierImportedFlat,
+				Attributes: map[string]any{
+					"push_config": `{"attributes":{"x-goog-version":"old"}}`,
+				},
+				FieldEdits: map[string]imported.FieldEdit{
+					tc.path: {
+						Source:   imported.SourceRiley,
+						NewValue: "wholly-different",
+						Approval: approval,
+					},
+				},
+			}}
+			issues := ValidateImportedResourceAuthorization("gcp", irs)
+			for _, iss := range issues {
+				assert.NotEqual(t, "imported_resource_field_edit_reimport_conflict", iss.Code,
+					"nested paths currently no-op the conflict gate; if this changed, update TestValidateImportedResourceAuthorization_ReimportConflictNoOpsOnNestedPaths together with lookupTopLevelAttribute")
+			}
+		})
+	}
+}
+
 func TestValidateImportedResourceAuthorization_CloudMismatch(t *testing.T) {
 	t.Parallel()
 	// Compose cloud differs from the resource's cloud — the structural
@@ -248,6 +338,7 @@ func TestValidateImportedResourceAuthorization_RequiresApprovalIncomplete(t *tes
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			ap := tc.ap
 			irs := []imported.ImportedResource{{
 				Identity: imported.ResourceIdentity{
