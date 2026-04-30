@@ -46,7 +46,14 @@ type VersionDiff struct {
 	Components  []ComponentDiff `json:"components"`
 	Metadata    []MetadataDiff  `json:"metadata,omitempty"`
 	Pricing     []PricingDiff   `json:"pricing,omitempty"`
-	Summary     string          `json:"summary"`
+	// Resources carries imported-resource diffs (Phase 2, issue #151).
+	// Populated by DiffImportedResources from the two snapshots'
+	// ImportedResource lists. Always present in JSON (mirrors Components)
+	// so consumers see a stable shape; an empty array means "no imported
+	// resource changes," distinct from a nil array which would imply the
+	// field is missing.
+	Resources []ResourceDiff `json:"resources"`
+	Summary   string         `json:"summary"`
 }
 
 // JSONTagName extracts the JSON tag name from a struct field, stripping ",omitempty".

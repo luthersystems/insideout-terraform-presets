@@ -116,11 +116,18 @@ func (f ForceTakeover) MarshalJSON() ([]byte, error) {
 // FieldEdit is audit/conflict metadata for one model-side edit to a single
 // attribute. EditedAt is always serialized as RFC3339Nano UTC regardless of
 // the caller-supplied time.Location; see MarshalJSON.
+//
+// Approval is the optional plan-tied operator confirmation required for edits
+// against fields whose curated FieldPolicy is Edit=RequiresApproval, or whose
+// ChangeRiskPolicy implies a destroy/replace plan (MayReplace, AlwaysReplace,
+// Unknown). Absent for the common Edit=ChatSafe / ChangeInPlace path. See
+// docs/managed-resource-tiers.md decision #42.
 type FieldEdit struct {
-	Source   Source    `json:"source,omitempty"`
-	EditedAt time.Time `json:"edited_at"`
-	OldValue any       `json:"old_value,omitempty"`
-	NewValue any       `json:"new_value,omitempty"`
+	Source   Source             `json:"source,omitempty"`
+	EditedAt time.Time          `json:"edited_at"`
+	OldValue any                `json:"old_value,omitempty"`
+	NewValue any                `json:"new_value,omitempty"`
+	Approval *FieldEditApproval `json:"approval,omitempty"`
 }
 
 // MarshalJSON enforces RFC3339Nano UTC on EditedAt. Without this, a caller
@@ -133,6 +140,33 @@ func (f FieldEdit) MarshalJSON() ([]byte, error) {
 		f.EditedAt = f.EditedAt.UTC()
 	}
 	return json.Marshal(alias(f))
+}
+
+// FieldEditApproval is the plan-tied operator confirmation that authorizes a
+// FieldEdit against an Edit=RequiresApproval policy or a ChangeRisk in
+// {MayReplace, AlwaysReplace, Unknown}. All four required fields must be
+// populated; partial approvals are rejected by the authorization validator
+// (imported_resource_field_edit_approval_invalid). PlanHash binds the
+// approval to a specific Terraform plan run so an approval cannot be
+// silently reused against a different plan output.
+//
+// ApprovedAt is always serialized as RFC3339Nano UTC regardless of the
+// caller-supplied time.Location; see MarshalJSON.
+type FieldEditApproval struct {
+	Approver   string    `json:"approver"`
+	ApprovedAt time.Time `json:"approved_at"`
+	PlanHash   string    `json:"plan_hash"`
+	Note       string    `json:"note,omitempty"`
+}
+
+// MarshalJSON enforces RFC3339Nano UTC on ApprovedAt. Mirrors FieldEdit's
+// MarshalJSON.
+func (a FieldEditApproval) MarshalJSON() ([]byte, error) {
+	type alias FieldEditApproval
+	if !a.ApprovedAt.IsZero() {
+		a.ApprovedAt = a.ApprovedAt.UTC()
+	}
+	return json.Marshal(alias(a))
 }
 
 // PresetMatch is a forward-declared graduation hint. It is populated by the
