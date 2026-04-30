@@ -21,10 +21,22 @@ import (
 // stack the first time it acquires or sheds an imported resource.
 func TestDiffImportedResources_EmptyMarshalsAsArray(t *testing.T) {
 	t.Parallel()
+
+	// hiddenOnlyDelta exercises the modifiedResourceDiff no-visible-delta
+	// return path: two snapshots of the same address differ ONLY in tags
+	// (Hidden via tagPolicy), so diffAttributeMaps filters every change
+	// out, modifiedResourceDiff returns (_, false), and the diff slice
+	// stays empty. The other three cases short-circuit earlier paths.
+	hiddenOldOnly := sampleSQS("q", 30)
+	hiddenOldOnly.Attributes["tags"] = map[string]any{"Project": "before"}
+	hiddenNewOnly := sampleSQS("q", 30)
+	hiddenNewOnly.Attributes["tags"] = map[string]any{"Project": "after"}
+
 	cases := map[string][2][]imported.ImportedResource{
 		"both nil":          {nil, nil},
 		"both empty":        {{}, {}},
 		"identical content": {{sampleSQS("a", 30)}, {sampleSQS("a", 30)}},
+		"hidden-only delta": {{hiddenOldOnly}, {hiddenNewOnly}},
 	}
 	for name, sides := range cases {
 		t.Run(name, func(t *testing.T) {
