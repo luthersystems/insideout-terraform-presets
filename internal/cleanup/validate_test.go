@@ -236,9 +236,12 @@ import {
   id = "missing-role"
 }
 `
-	filtered, err := FilterImportBlocks([]byte(imports), []byte(generated))
+	filtered, dropped, err := FilterImportBlocks([]byte(imports), []byte(generated))
 	if err != nil {
 		t.Fatalf("FilterImportBlocks error: %v", err)
+	}
+	if len(dropped) != 1 || dropped[0] != "aws_iam_role.missing_role" {
+		t.Errorf("expected dropped=[aws_iam_role.missing_role], got %v", dropped)
 	}
 
 	// Write both to a dir and validate

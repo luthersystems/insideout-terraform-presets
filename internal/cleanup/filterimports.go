@@ -9,11 +9,20 @@ import (
 // FilterImportBlocks removes import blocks whose target resource doesn't exist
 // in the generated HCL. This prevents "Configuration for import target does
 // not exist" errors when a dependency chase fails to import a resource.
-func FilterImportBlocks(importsSrc, generatedSrc []byte) ([]byte, error) {
+//
+// Returns:
+//   - filtered: the imports HCL with un-importable blocks removed.
+//   - dropped: the list of "to" addresses that were filtered out. Callers
+//     should surface this list at Warn so the operator sees that the tool
+//     dropped imports — silently dropping them produces a stack that
+//     references resources outside its own state, validates clean, but
+//     fails on apply (issue #58 review).
+//   - err: HCL parse errors.
+func FilterImportBlocks(importsSrc, generatedSrc []byte) (filtered []byte, dropped []string, err error) {
 	// Parse generated HCL to find declared resource addresses
 	genFile, diags := hclwrite.ParseConfig(generatedSrc, "generated.tf", hcl.Pos{})
 	if diags.HasErrors() {
-		return nil, diags
+		return nil, nil, diags
 	}
 
 	declared := make(map[string]bool)
@@ -29,7 +38,7 @@ func FilterImportBlocks(importsSrc, generatedSrc []byte) ([]byte, error) {
 	// Parse import blocks and keep only those with declared targets
 	impFile, diags := hclwrite.ParseConfig(importsSrc, "imports.tf", hcl.Pos{})
 	if diags.HasErrors() {
-		return nil, diags
+		return nil, nil, diags
 	}
 
 	outFile := hclwrite.NewEmptyFile()
@@ -46,7 +55,11 @@ func FilterImportBlocks(importsSrc, generatedSrc []byte) ([]byte, error) {
 
 		// Extract the traversal target (e.g., "aws_sqs_queue.my_queue")
 		target := extractTraversalAddress(toAttr.Expr().BuildTokens(nil))
-		if target == "" || !declared[target] {
+		if target == "" {
+			continue
+		}
+		if !declared[target] {
+			dropped = append(dropped, target)
 			continue
 		}
 
@@ -58,7 +71,7 @@ func FilterImportBlocks(importsSrc, generatedSrc []byte) ([]byte, error) {
 		outBody.AppendNewline()
 	}
 
-	return outFile.Bytes(), nil
+	return outFile.Bytes(), dropped, nil
 }
 
 // extractTraversalAddress extracts a resource address like "aws_sqs_queue.name"

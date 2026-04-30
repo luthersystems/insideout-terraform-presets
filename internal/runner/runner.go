@@ -289,9 +289,22 @@ func (r *Runner) Run(ctx context.Context) (*Result, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read merged imports: %w", err)
 	}
-	filteredImports, err := cleanup.FilterImportBlocks(mergedImports, cleanedHCL)
+	filteredImports, droppedImports, err := cleanup.FilterImportBlocks(mergedImports, cleanedHCL)
 	if err != nil {
 		return nil, fmt.Errorf("filter import blocks: %w", err)
+	}
+	// Surface dropped import targets at Warn so the operator sees that
+	// the tool removed un-importable references (e.g. cross-account IAM
+	// roles that the dep chaser couldn't resolve). Pre-#58-review these
+	// were silently filtered and the consuming HCL still referenced
+	// them as literal ARNs — terraform validate passed against a stack
+	// that referenced resources outside its own state, and apply failed
+	// at runtime.
+	for _, target := range droppedImports {
+		r.logger.Warn(
+			"dropped un-importable reference; consuming HCL still references it as a literal value and may fail at terraform apply (issue #58 review)",
+			"target", target,
+		)
 	}
 	if err := os.WriteFile(importsPath, filteredImports, 0644); err != nil {
 		return nil, fmt.Errorf("write filtered imports: %w", err)
