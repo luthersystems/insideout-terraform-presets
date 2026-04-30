@@ -59,19 +59,21 @@ func TestValidateImportedResourceAuthorization_NonImportedTiersFiltered(t *testi
 	}
 }
 
-// TestValidateImportedResourceAuthorization_TierImportedMissingFiresAuthzGates
-// pins the current behavior for FieldEdits against a TierImportedMissing
-// resource: authorization gates DO fire (the structural validator reports
-// imported_resource_missing_remediation in parallel via ValidateImportedResources).
-// A future maintainer who decides ImportedMissing should skip authorization
-// must update this test together with the design doc.
-func TestValidateImportedResourceAuthorization_TierImportedMissingFiresAuthzGates(t *testing.T) {
+// TestValidateImportedResourceAuthorization_TierImportedMissingFiresBothValidators
+// pins the dual-issue behavior on TierImportedMissing resources with
+// FieldEdits: ValidateImportedResources reports missing_remediation AND
+// ValidateImportedResourceAuthorization reports the authz gate violation.
+// Both fire from one ValidateAll call so the operator sees a coherent
+// message ("pick a remediation AND don't try to edit identity"). A future
+// maintainer who wants ImportedMissing to skip authorization must update
+// both this test and the design doc — the previous formulation only ran
+// the authz validator and would not have caught a regression where the
+// structural validator stopped reporting missing_remediation.
+func TestValidateImportedResourceAuthorization_TierImportedMissingFiresBothValidators(t *testing.T) {
 	t.Parallel()
-	// name is Edit=Never on aws_sqs_queue — a forbidden edit on a missing
-	// resource still produces the forbidden code. The operator sees both
-	// the missing-remediation issue (from the structural validator) AND
-	// the authorization issue (from this validator) so the error message
-	// is coherent: pick a remediation AND don't try to edit identity.
+	requirePolicyEntryAuthz(t, "aws_sqs_queue", "name", policy.FieldPolicy{
+		Role: policy.RoleIdentity, Edit: policy.EditNever,
+	})
 	irs := []imported.ImportedResource{{
 		Identity: imported.ResourceIdentity{
 			Cloud:    "aws",
@@ -84,10 +86,16 @@ func TestValidateImportedResourceAuthorization_TierImportedMissingFiresAuthzGate
 			"name": {Source: imported.SourceRiley, NewValue: "rename"},
 		},
 	}}
-	issues := ValidateImportedResourceAuthorization("aws", irs)
-	require.Len(t, issues, 1)
-	assert.Equal(t, "imported_resource_field_edit_forbidden", issues[0].Code,
-		"TierImportedMissing must not silently bypass EditPolicy gates")
+
+	all := ValidateAll(nil, nil, nil, nil, nil, nil, ComposeStackOpts{
+		Cloud:    "aws",
+		Imported: irs,
+	})
+	codes := issueCodes(all)
+	assert.Contains(t, codes, "imported_resource_missing_remediation",
+		"structural validator must surface missing_remediation; got codes=%v", codes)
+	assert.Contains(t, codes, "imported_resource_field_edit_forbidden",
+		"authz validator must still gate Edit=Never even on TierImportedMissing; got codes=%v", codes)
 }
 
 // TestValidateImportedResourceAuthorization_ReimportConflictNoOpsOnNestedPaths
@@ -118,9 +126,18 @@ func TestValidateImportedResourceAuthorization_ReimportConflictNoOpsOnNestedPath
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
+			// Premise: the path must be a real curated RequiresApproval entry.
+			// If the curator removes or downgrades it, this test would
+			// silently pass for the wrong reason (the path would now route
+			// through no_policy_for_path instead of being authorized).
+			requirePolicyEntryAuthz(t, "google_pubsub_subscription", tc.path, policy.FieldPolicy{
+				Edit: policy.EditRequiresApproval,
+			})
+
 			// FieldEdit.NewValue diverges from Attributes — would trip the
 			// conflict gate if it ran. The conservative no-op behavior
-			// means no issue surfaces.
+			// means NO issue surfaces (the approval is complete, the path
+			// is curated, the conflict gate skips dotted paths).
 			irs := []imported.ImportedResource{{
 				Identity: imported.ResourceIdentity{
 					Cloud:    "gcp",
@@ -141,10 +158,12 @@ func TestValidateImportedResourceAuthorization_ReimportConflictNoOpsOnNestedPath
 				},
 			}}
 			issues := ValidateImportedResourceAuthorization("gcp", irs)
-			for _, iss := range issues {
-				assert.NotEqual(t, "imported_resource_field_edit_reimport_conflict", iss.Code,
-					"nested paths currently no-op the conflict gate; if this changed, update TestValidateImportedResourceAuthorization_ReimportConflictNoOpsOnNestedPaths together with lookupTopLevelAttribute")
-			}
+			// Stricter than NotEqual on each code: a regression that
+			// silently masks the conflict gate behind some OTHER gate
+			// (e.g. unknown_path) would have passed the previous
+			// formulation. Require zero issues so any masking surfaces.
+			require.Empty(t, issues,
+				"nested-path conflict gate must no-op AND no other gate may mask it; if this regresses, update lookupTopLevelAttribute together with this test")
 		})
 	}
 }
@@ -728,4 +747,55 @@ func firstUncuratedResolvablePath(tfType string, candidates []string) (string, b
 		return c, true
 	}
 	return "", false
+}
+
+// requirePolicyEntryAuthz asserts that tfType has a curated FieldPolicy for
+// path matching the non-zero fields of want. Mirrors the same-named helper
+// in imported_diff_test.go (declared separately so the two test files don't
+// depend on each other's build order). Renamed _Authz to dodge the linker
+// collision when both test files are linked into the same package.
+func requirePolicyEntryAuthz(t *testing.T, tfType, path string, want policy.FieldPolicy) {
+	t.Helper()
+	m, ok := policy.Lookup(tfType)
+	require.True(t, ok, "test premise: %q must be a curated type", tfType)
+	got, ok := m[path]
+	require.True(t, ok, "test premise: %q must have a curated entry for path %q", tfType, path)
+	if want.Role != "" {
+		assert.Equal(t, want.Role, got.Role, "Role mismatch on %s.%s", tfType, path)
+	}
+	if want.Edit != "" {
+		assert.Equal(t, want.Edit, got.Edit, "Edit mismatch on %s.%s", tfType, path)
+	}
+	if want.Visibility != "" {
+		assert.Equal(t, want.Visibility, got.Visibility, "Visibility mismatch on %s.%s", tfType, path)
+	}
+	if want.Sensitivity != "" {
+		assert.Equal(t, want.Sensitivity, got.Sensitivity, "Sensitivity mismatch on %s.%s", tfType, path)
+	}
+	if want.ChangeRisk != "" {
+		assert.Equal(t, want.ChangeRisk, got.ChangeRisk, "ChangeRisk mismatch on %s.%s", tfType, path)
+	}
+}
+
+// TestEveryCuratedPathResolves makes the curator-lint dependency explicit:
+// every curated path on every registered type must resolve cleanly via
+// policy.ResolvePath against the generated struct (or a registered JSON
+// projection). The authz validator's gate-chain reorder skips ResolvePath on
+// curated paths to avoid the reflective walk on the hot path; that
+// optimization is correct only if EVERY curated path is structurally
+// reachable. Without this test, a curator typo (or a generator-side rename)
+// could bypass the unknown_path diagnostic and emit a confusing
+// forbidden/approval issue against a path that doesn't exist on the struct.
+func TestEveryCuratedPathResolves(t *testing.T) {
+	t.Parallel()
+	for _, tfType := range policy.RegisteredTypes() {
+		m, ok := policy.Lookup(tfType)
+		require.True(t, ok)
+		for path := range m {
+			err := policy.ResolvePath(tfType, path)
+			assert.NoErrorf(t, err,
+				"curated policy %s.%s must resolve via policy.ResolvePath; if this fails, the authz validator's curated-path optimization (imported_authz_validate.go) bypasses the unknown_path diagnostic for this entry",
+				tfType, path)
+		}
+	}
 }
