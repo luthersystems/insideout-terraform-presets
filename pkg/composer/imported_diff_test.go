@@ -609,32 +609,7 @@ func hasPolicy(tfType string) bool {
 	return ok
 }
 
-// requirePolicyEntry asserts that the curated FieldPolicy at (tfType, path)
-// matches the non-zero fields of want. Tests that depend on a specific
-// curator decision call this so a future policy edit surfaces as a clear
-// premise failure rather than a silent assertion drift.
-//
-// Only the fields populated on want are compared; zero-valued axes are
-// ignored so each test only pins what it depends on.
-func requirePolicyEntry(t *testing.T, tfType, path string, want policy.FieldPolicy) {
-	t.Helper()
-	m, ok := policy.Lookup(tfType)
-	require.True(t, ok, "test premise: %q must be a curated type", tfType)
-	got, ok := m[path]
-	require.True(t, ok, "test premise: %q must have a curated entry for path %q", tfType, path)
-	if want.Role != "" {
-		assert.Equal(t, want.Role, got.Role, "Role mismatch on %s.%s", tfType, path)
-	}
-	if want.Edit != "" {
-		assert.Equal(t, want.Edit, got.Edit, "Edit mismatch on %s.%s", tfType, path)
-	}
-	if want.Visibility != "" {
-		assert.Equal(t, want.Visibility, got.Visibility, "Visibility mismatch on %s.%s", tfType, path)
-	}
-	if want.Sensitivity != "" {
-		assert.Equal(t, want.Sensitivity, got.Sensitivity, "Sensitivity mismatch on %s.%s", tfType, path)
-	}
-	if want.ChangeRisk != "" {
-		assert.Equal(t, want.ChangeRisk, got.ChangeRisk, "ChangeRisk mismatch on %s.%s", tfType, path)
-	}
-}
+// requirePolicyEntry is defined in imported_authz_validate_test.go (the
+// other test file in this package). Both PRs (#149 / authz validator and
+// #151 / ResourceDiff) shipped identical helpers; per #183 the duplicate
+// in this file is dropped on bundle-merge so the package compiles.
