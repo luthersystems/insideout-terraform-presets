@@ -119,11 +119,12 @@ const redactedPlaceholder = "***"
 // registered, the diff is emitted at the projection path. Parse failures
 // fall back to a raw parent diff so the change is never silently dropped.
 //
-// Output is sorted by Address for stable consumption.
+// Output is sorted by Address for stable consumption. Always returns a
+// non-nil slice — empty when there are no diffs — so VersionDiff.Resources
+// marshals as the JSON array `[]` rather than `null`. Reliable's snapshot
+// consumers compare diff JSON byte-for-byte, so nil↔[] flips would churn
+// every stack the first time it acquires or sheds an imported resource.
 func DiffImportedResources(old, new []imported.ImportedResource) []ResourceDiff {
-	if len(old) == 0 && len(new) == 0 {
-		return nil
-	}
 	oldByAddr := indexImportedByAddress(old)
 	newByAddr := indexImportedByAddress(new)
 
@@ -142,9 +143,6 @@ func DiffImportedResources(old, new []imported.ImportedResource) []ResourceDiff 
 				diffs = append(diffs, d)
 			}
 		}
-	}
-	if len(diffs) == 0 {
-		return nil
 	}
 	return diffs
 }
