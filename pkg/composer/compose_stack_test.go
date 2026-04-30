@@ -2087,3 +2087,94 @@ func TestComposeStack_PolymorphicKeyPullsInPrefixedVPC(t *testing.T) {
 	require.Contains(t, mainTF, `module "resource"`,
 		"polymorphic KeyAWSEKSControlPlane preserves its string value and renders as module.resource")
 }
+
+// TestDefaultWiring_GCPSubnetSelfLinkUsesTryGuard pins the issue #178 fix:
+// every GCP module that consumes the VPC's subnets_self_links output must do
+// so via try(module.gcp_vpc.subnet_self_links[0], null), not the raw [0]
+// index. The raw form errors with "Invalid index ... empty tuple" on first
+// terraform plan against an empty state and surfaces as a stage_error in
+// Oracle's custom-stack-provision pipeline.
+//
+// This test exercises every module that consumes subnet_self_link as a
+// scalar wiring input; if a future caller is added without the try() guard
+// the test fails before the regression reaches a customer.
+func TestDefaultWiring_GCPSubnetSelfLinkUsesTryGuard(t *testing.T) {
+	t.Parallel()
+	const wantExpr = "try(module.gcp_vpc.subnet_self_links[0], null)"
+	const rawForm = "module.gcp_vpc.subnet_self_links[0]"
+
+	selected := map[ComponentKey]bool{
+		KeyGCPVPC:          true,
+		KeyGCPGKE:          true,
+		KeyGCPLoadbalancer: true,
+		KeyGCPCompute:      true,
+		KeyGCPBastion:      true,
+	}
+	consumers := []ComponentKey{
+		KeyGCPGKE, KeyGCPLoadbalancer, KeyGCPCompute, KeyGCPBastion,
+	}
+	for _, key := range consumers {
+		t.Run(string(key), func(t *testing.T) {
+			t.Parallel()
+			wi := DefaultWiring(selected, key, &Components{})
+			got, ok := wi.RawHCL["subnet_self_link"]
+			require.True(t, ok, "%s must wire subnet_self_link from gcp_vpc", key)
+			require.Equal(t, wantExpr, got,
+				"%s subnet_self_link must use try() guard (issue #178); raw [0] errors on first plan with empty state", key)
+			require.NotContains(t, got, rawForm+"\n",
+				"%s must not emit unguarded [0] index", key)
+		})
+	}
+}
+
+// TestComposeStack_GCPSubnetSelfLinkInGeneratedHCL is the integration check:
+// a real ComposeStack run against a GCP+VPC+GKE stack must emit the try()
+// expression in the composed main.tf — not the raw [0] form. Mirrors
+// TestComposeStack_AWS_ValidHCL's structural HCL check but targets the
+// specific issue #178 string.
+func TestComposeStack_GCPSubnetSelfLinkInGeneratedHCL(t *testing.T) {
+	c := newTestClient()
+	out, err := c.ComposeStack(ComposeStackOpts{
+		Cloud:        "gcp",
+		SelectedKeys: []ComponentKey{KeyGCPVPC, KeyGCPGKE},
+		Comps:        &Components{},
+		Cfg:          &Config{Region: "us-central1"},
+		Project:      "test",
+		Region:       "us-central1",
+		GCPProjectID: "test-project-12345",
+	})
+	require.NoError(t, err)
+
+	mainTF := string(out["/main.tf"])
+	require.Contains(t, mainTF, "try(module.gcp_vpc.subnet_self_links[0], null)",
+		"composed main.tf must use try() guard on subnet_self_links (issue #178)")
+	// Defense: scan every .tf file for the unguarded form.
+	for name, body := range out {
+		if !strings.HasSuffix(name, ".tf") {
+			continue
+		}
+		// The unguarded "module.gcp_vpc.subnet_self_links[0]" substring will
+		// appear inside the try() expression too; the check below ensures
+		// it never appears WITHOUT the surrounding try(...).
+		s := string(body)
+		idx := 0
+		for {
+			at := strings.Index(s[idx:], "module.gcp_vpc.subnet_self_links[0]")
+			if at < 0 {
+				break
+			}
+			start := idx + at
+			prefix := s[max0(start-len("try(")):start]
+			require.Contains(t, prefix, "try(",
+				"%s contains unguarded module.gcp_vpc.subnet_self_links[0] near offset %d", name, start)
+			idx = start + 1
+		}
+	}
+}
+
+func max0(n int) int {
+	if n < 0 {
+		return 0
+	}
+	return n
+}

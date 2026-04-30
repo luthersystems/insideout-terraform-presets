@@ -2,6 +2,16 @@ package composer
 
 import "strings"
 
+// vpcSubnetSelfLinkExpr is the wiring expression for any module that consumes
+// gcp_vpc's subnets_self_links output as a single value. It uses try() so
+// terraform plan succeeds against an empty state on the first run (issue
+// #178). On steady state subnet_self_links has length 1 and the [0] index
+// resolves; on first plan when the upstream VPC module hasn't yet
+// materialized the subnet list, the fallback null lets terraform plan
+// progress without producing the "Invalid index ... empty tuple" stage_error
+// that the custom-stack-provision pipeline previously surfaced.
+const vpcSubnetSelfLinkExpr = "try(module.gcp_vpc.subnet_self_links[0], null)"
+
 type ComponentKey string
 
 const (
@@ -745,7 +755,7 @@ func DefaultWiring(selected map[ComponentKey]bool, k ComponentKey, comps *Compon
 	case KeyGCPGKE:
 		if selected[KeyGCPVPC] {
 			wi.RawHCL["network_self_link"] = "module.gcp_vpc.network_self_link"
-			wi.RawHCL["subnet_self_link"] = "module.gcp_vpc.subnet_self_links[0]"
+			wi.RawHCL["subnet_self_link"] = vpcSubnetSelfLinkExpr
 			wi.RawHCL["pods_range_name"] = "module.gcp_vpc.pods_range_name"
 			wi.RawHCL["services_range_name"] = "module.gcp_vpc.services_range_name"
 			wi.Names = append(wi.Names, "network_self_link", "subnet_self_link", "pods_range_name", "services_range_name")
@@ -754,7 +764,7 @@ func DefaultWiring(selected map[ComponentKey]bool, k ComponentKey, comps *Compon
 	case KeyGCPLoadbalancer:
 		if selected[KeyGCPVPC] {
 			wi.RawHCL["network_self_link"] = "module.gcp_vpc.network_self_link"
-			wi.RawHCL["subnet_self_link"] = "module.gcp_vpc.subnet_self_links[0]"
+			wi.RawHCL["subnet_self_link"] = vpcSubnetSelfLinkExpr
 			wi.Names = append(wi.Names, "network_self_link", "subnet_self_link")
 		}
 		if selected[KeyGCPCloudCDN] {
@@ -781,14 +791,14 @@ func DefaultWiring(selected map[ComponentKey]bool, k ComponentKey, comps *Compon
 	case KeyGCPCompute:
 		if selected[KeyGCPVPC] {
 			wi.RawHCL["network_self_link"] = "module.gcp_vpc.network_self_link"
-			wi.RawHCL["subnet_self_link"] = "module.gcp_vpc.subnet_self_links[0]"
+			wi.RawHCL["subnet_self_link"] = vpcSubnetSelfLinkExpr
 			wi.Names = append(wi.Names, "network_self_link", "subnet_self_link")
 		}
 
 	case KeyGCPBastion:
 		if selected[KeyGCPVPC] {
 			wi.RawHCL["network_self_link"] = "module.gcp_vpc.network_self_link"
-			wi.RawHCL["subnet_self_link"] = "module.gcp_vpc.subnet_self_links[0]"
+			wi.RawHCL["subnet_self_link"] = vpcSubnetSelfLinkExpr
 			wi.Names = append(wi.Names, "network_self_link", "subnet_self_link")
 		}
 
