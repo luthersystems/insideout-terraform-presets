@@ -389,6 +389,15 @@ func (m DefaultMapper) BuildModuleValues(
 					return nil, err
 				}
 				vals["allocated_storage"] = gb
+				// AWS rejects allocated_storage >= max_allocated_storage at
+				// apply time. Auto-derive a 2x autoscaling ceiling, floored at
+				// the module default of 1000 GB so small picks keep the
+				// existing headroom (issue #205). Disabling autoscaling
+				// (max_allocated_storage = 0) is a future opt-in via an IR
+				// field — not user-controllable today.
+				if _, set := vals["max_allocated_storage"]; !set {
+					vals["max_allocated_storage"] = max(gb*2, 1000)
+				}
 			}
 		}
 

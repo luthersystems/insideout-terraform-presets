@@ -241,7 +241,7 @@ func (c *Client) composeSingleImpl(opts ComposeSingleOpts) (*ComposeSingleResult
 	maybeInjectGCPProjectID(cloud, opts.GCPProjectID, vals)
 
 	// Resolve implicit dependencies so DefaultWiring can connect modules (e.g. Redis -> VPC)
-	expanded := ResolveDependencies([]ComponentKey{opts.Key})
+	expanded := ResolveDependenciesForCompose([]ComponentKey{opts.Key}, opts.Comps)
 	selected := make(map[ComponentKey]bool)
 	for _, k := range expanded {
 		selected[k] = true
@@ -434,8 +434,10 @@ func (c *Client) composeStackImpl(opts ComposeStackOpts) (*ComposeStackResult, e
 		return nil, err
 	}
 
-	// 1. Expand selected keys to include implicit dependencies (e.g. Redis -> VPC)
-	expanded := ResolveDependencies(opts.SelectedKeys)
+	// 1. Expand selected keys to include implicit dependencies (e.g. Redis -> VPC).
+	// Comps-aware so EKS auto-includes the worker node group on non-Lambda
+	// architectures (issue #206) without dragging it into Lambda stacks.
+	expanded := ResolveDependenciesForCompose(opts.SelectedKeys, opts.Comps)
 
 	// If any backup components are selected, ensure the appropriate backup module key is included.
 	if backupsSelected(opts.Comps) {

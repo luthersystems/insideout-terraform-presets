@@ -57,6 +57,7 @@ variable "subnet_ids" {
 variable "instance_types" {
   description = "Instance types for the node group (e.g., [\"c7i.large\"])"
   type        = list(string)
+  default     = ["c7i.large"]
   validation {
     condition     = length(var.instance_types) >= 1 && alltrue([for t in var.instance_types : length(trimspace(t)) > 0])
     error_message = "instance_types must include at least one non-empty EC2 type (e.g., \"c7i.large\")."
@@ -66,6 +67,7 @@ variable "instance_types" {
 variable "desired_size" {
   description = "Desired number of nodes"
   type        = number
+  default     = 2
   validation {
     condition     = var.desired_size >= 0
     error_message = "desired_size must be >= 0."
@@ -75,6 +77,7 @@ variable "desired_size" {
 variable "min_size" {
   description = "Minimum number of nodes"
   type        = number
+  default     = 1
   validation {
     condition     = var.min_size >= 0
     error_message = "min_size must be >= 0."
@@ -84,6 +87,7 @@ variable "min_size" {
 variable "max_size" {
   description = "Maximum number of nodes"
   type        = number
+  default     = 3
   validation {
     condition     = var.max_size >= 0
     error_message = "max_size must be >= 0."

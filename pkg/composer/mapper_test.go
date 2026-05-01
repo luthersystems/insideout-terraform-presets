@@ -662,10 +662,77 @@ func TestBuildModuleValues_Postgres_RDSConfig(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "db.m7i.2xlarge", vals["instance_class"])
 		assert.Equal(t, 20, vals["allocated_storage"])
+		// Issue #205: small allocated_storage (20 GB) must still emit a
+		// max_allocated_storage that is strictly greater (else AWS rejects at
+		// apply). Floor is the module default of 1000 GB.
+		assert.Equal(t, 1000, vals["max_allocated_storage"],
+			"max_allocated_storage must default to module floor of 1000 when allocated_storage*2 is below it")
 		_, hasOldCPU := vals["node_cpu_size"]
 		_, hasOldStorage := vals["storage_size"]
 		assert.False(t, hasOldCPU, "node_cpu_size is the pre-fix key — must not be emitted")
 		assert.False(t, hasOldStorage, "storage_size is the pre-fix key — RDS module variable is allocated_storage")
+	})
+
+	// TestBuildModuleValues_RDSStorageSize2TBAutoDerivesMaxAllocatedStorage
+	// is the issue #205 regression. Picking the largest IR storage (2TB →
+	// 2000 GB) emitted allocated_storage=2000 but left max_allocated_storage
+	// at the module default of 1000, which AWS rejects at apply with
+	// "InvalidParameterCombination: Max storage size must be greater than
+	// storage size". The mapper must auto-derive max_allocated_storage as
+	// max(allocated_storage*2, 1000).
+	t.Run("StorageSize 2TB triggers max_allocated_storage = 4000", func(t *testing.T) {
+		cfg := &Config{AWSRDS: &struct {
+			CPUSize      string `json:"cpuSize,omitempty"`
+			ReadReplicas string `json:"readReplicas,omitempty"`
+			StorageSize  string `json:"storageSize,omitempty"`
+		}{StorageSize: "2TB"}}
+		vals, err := m.BuildModuleValues(KeyAWSRDS, nil, cfg, "", "")
+		require.NoError(t, err)
+		assert.Equal(t, 2000, vals["allocated_storage"])
+		assert.Equal(t, 4000, vals["max_allocated_storage"],
+			"2TB pick must auto-derive max_allocated_storage = 2 * allocated_storage = 4000")
+	})
+
+	t.Run("StorageSize unset leaves max_allocated_storage unset (module default applies)", func(t *testing.T) {
+		cfg := &Config{AWSRDS: &struct {
+			CPUSize      string `json:"cpuSize,omitempty"`
+			ReadReplicas string `json:"readReplicas,omitempty"`
+			StorageSize  string `json:"storageSize,omitempty"`
+		}{CPUSize: "db.m7i.2xlarge"}}
+		vals, err := m.BuildModuleValues(KeyAWSRDS, nil, cfg, "", "")
+		require.NoError(t, err)
+		_, hasMax := vals["max_allocated_storage"]
+		assert.False(t, hasMax, "without StorageSize, mapper must not override module default")
+	})
+
+	// Boundary cases at the floor: max(gb*2, 1000) flips behavior at gb=500.
+	// These pin the formula against off-by-one mutations
+	// (e.g. max(gb*2+1, 1000) or max(gb*2, 999) would survive only the
+	// 20 / 2000 cases above).
+	t.Run("StorageSize 500GB sits exactly on the floor", func(t *testing.T) {
+		cfg := &Config{AWSRDS: &struct {
+			CPUSize      string `json:"cpuSize,omitempty"`
+			ReadReplicas string `json:"readReplicas,omitempty"`
+			StorageSize  string `json:"storageSize,omitempty"`
+		}{StorageSize: "500"}}
+		vals, err := m.BuildModuleValues(KeyAWSRDS, nil, cfg, "", "")
+		require.NoError(t, err)
+		assert.Equal(t, 500, vals["allocated_storage"])
+		assert.Equal(t, 1000, vals["max_allocated_storage"],
+			"at allocated=500, gb*2=1000 ties with the floor — must emit 1000 (strictly > 500 satisfies AWS)")
+	})
+
+	t.Run("StorageSize 501GB just above the floor", func(t *testing.T) {
+		cfg := &Config{AWSRDS: &struct {
+			CPUSize      string `json:"cpuSize,omitempty"`
+			ReadReplicas string `json:"readReplicas,omitempty"`
+			StorageSize  string `json:"storageSize,omitempty"`
+		}{StorageSize: "501"}}
+		vals, err := m.BuildModuleValues(KeyAWSRDS, nil, cfg, "", "")
+		require.NoError(t, err)
+		assert.Equal(t, 501, vals["allocated_storage"])
+		assert.Equal(t, 1002, vals["max_allocated_storage"],
+			"at allocated=501, gb*2=1002 exceeds the floor — must emit 1002, not 1000")
 	})
 }
 

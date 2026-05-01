@@ -2070,6 +2070,9 @@ func TestComposeStack_AWSECS(t *testing.T) {
 // the implicit-dependency leak where ResolveDependencies would have expanded
 // a polymorphic key to a legacy VPC sibling. A direct Go caller passing only
 // [KeyAWSEKSControlPlane] must still produce a prefixed-only stack.
+//
+// Post-#206: the comps-aware resolver also auto-includes the worker node group
+// (module "ec2") when comps is non-Lambda, so the assertion set covers that.
 func TestComposeStack_PolymorphicKeyPullsInPrefixedVPC(t *testing.T) {
 	c := newTestClient()
 	out, err := c.ComposeStack(ComposeStackOpts{
@@ -2087,6 +2090,127 @@ func TestComposeStack_PolymorphicKeyPullsInPrefixedVPC(t *testing.T) {
 		"implicit dep must render aws_vpc")
 	require.Contains(t, mainTF, `module "resource"`,
 		"polymorphic KeyAWSEKSControlPlane preserves its string value and renders as module.resource")
+	require.Contains(t, mainTF, `module "ec2"`,
+		"non-Lambda EKS must auto-include the worker node group (issue #206)")
+}
+
+// TestComposeStack_EKSAutoIncludesNodeGroup is the issue #206 regression: a
+// caller selecting only KeyAWSEKS (or KeyAWSEKSControlPlane) on a non-Lambda
+// architecture must end up with the worker node group module composed,
+// otherwise EKS addons (coredns, kube-proxy, aws-ebs-csi-driver) have nowhere
+// to schedule and `terraform apply` times out at 20 min in DEGRADED state.
+//
+// The expected cluster-module name depends on which cluster key the caller
+// selected: KeyAWSEKS ("aws_eks") composes module "aws_eks", and
+// KeyAWSEKSControlPlane ("resource") composes module "resource". The
+// auto-include must emit *exactly one* cluster module — not both — so that
+// the prefix-aware key path doesn't drag the legacy polymorphic key in via
+// the node group's static dep.
+func TestComposeStack_EKSAutoIncludesNodeGroup(t *testing.T) {
+	t.Parallel()
+	awsEKSEnabled := true
+	cases := []struct {
+		name        string
+		selected    []ComponentKey
+		comps       *Components
+		wantCluster string // module name expected for the EKS control plane
+		notCluster  string // module name that must NOT be present
+	}{
+		{"OnlyEKS_AutoAddsNodeGroup", []ComponentKey{KeyAWSEKS}, &Components{}, `module "aws_eks"`, `module "resource"`},
+		{"OnlyControlPlane_AutoAddsNodeGroup", []ComponentKey{KeyAWSEKSControlPlane}, &Components{}, `module "resource"`, `module "aws_eks"`},
+		{"EKSPlusVPC_AutoAddsNodeGroup", []ComponentKey{KeyAWSEKS, KeyAWSVPC}, &Components{}, `module "aws_eks"`, `module "resource"`},
+		// Non-empty non-Lambda comps confirms isLambda returns false on a
+		// populated Components{} where AWSLambda is unset — guards against a
+		// regression where isLambda might check non-nil instead of the field.
+		{"EKSWithEnabledFlag_NonEmptyComps", []ComponentKey{KeyAWSEKS}, &Components{AWSEKS: &awsEKSEnabled}, `module "aws_eks"`, `module "resource"`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			c := newTestClient()
+			out, err := c.ComposeStack(ComposeStackOpts{
+				Cloud:        "aws",
+				SelectedKeys: tc.selected,
+				Comps:        tc.comps,
+				Cfg:          &Config{Region: "us-east-1"},
+				Project:      "eks-autoinclude",
+				Region:       "us-east-1",
+			})
+			require.NoError(t, err, "ComposeStack should succeed")
+			mainTF := string(out["/main.tf"])
+			require.Contains(t, mainTF, `module "aws_vpc"`)
+			require.Contains(t, mainTF, tc.wantCluster,
+				"EKS control plane module must compose")
+			require.NotContains(t, mainTF, tc.notCluster,
+				"only one cluster module must compose — the auto-include must not pull in the other polymorphic alias")
+			// Match the block-opening shape, not just a substring, so a
+			// rename of the node-group module wouldn't accidentally credit
+			// (e.g.) a "module \"ec2_legacy_workers\"" occurrence. Pins the
+			// composed name "ec2" and asserts the source path resolves to
+			// the eks_nodegroup preset, which is what actually keeps EKS
+			// schedulable per #206.
+			require.Regexp(t, regexp.MustCompile(`(?m)^module "ec2"\s*\{`), mainTF,
+				"EKS worker node group (polymorphic key 'ec2') must auto-include for non-Lambda EKS (issue #206)")
+			ec2Blocks := regexp.MustCompile(`(?m)^module "ec2"\s*\{`).FindAllStringIndex(mainTF, -1)
+			require.Len(t, ec2Blocks, 1,
+				"node group must compose exactly once — auto-include must not duplicate when user pre-selects KeyAWSEKSNodeGroup")
+			require.Regexp(t, regexp.MustCompile(`source\s*=\s*"\./modules/eks_nodegroup"`), mainTF,
+				"node group module's source must resolve to ./modules/eks_nodegroup")
+		})
+	}
+}
+
+// TestComposeStack_EKSAutoIncludeIdempotent pins ResolveDependenciesForCompose's
+// hasNodeGroup short-circuit: when the caller already selected
+// KeyAWSEKSNodeGroup explicitly, the auto-include must not append a second
+// copy. A mutation removing the hasNodeGroup check would emit two
+// `module "ec2"` blocks, which terraform would reject at init.
+//
+// Note: pre-existing static-map behavior emits two cluster modules
+// (`module "aws_eks"` AND `module "resource"`) when both KeyAWSEKS and
+// KeyAWSEKSNodeGroup are selected explicitly, because the static map declares
+// KeyAWSEKSNodeGroup's dep as KeyAWSEKSControlPlane (the legacy polymorphic
+// alias). That's a separate latent issue outside #206's scope and is not
+// asserted here — this test pins only the node-group-not-doubled invariant.
+func TestComposeStack_EKSAutoIncludeIdempotent(t *testing.T) {
+	t.Parallel()
+	c := newTestClient()
+	out, err := c.ComposeStack(ComposeStackOpts{
+		Cloud:        "aws",
+		SelectedKeys: []ComponentKey{KeyAWSEKS, KeyAWSEKSNodeGroup},
+		Comps:        &Components{},
+		Cfg:          &Config{Region: "us-east-1"},
+		Project:      "eks-idempotent",
+		Region:       "us-east-1",
+	})
+	require.NoError(t, err, "ComposeStack should succeed")
+	mainTF := string(out["/main.tf"])
+	ec2Blocks := regexp.MustCompile(`(?m)^module "ec2"\s*\{`).FindAllStringIndex(mainTF, -1)
+	require.Len(t, ec2Blocks, 1,
+		"node group must compose exactly once even when caller pre-selects KeyAWSEKSNodeGroup — pins the hasNodeGroup short-circuit in ResolveDependenciesForCompose")
+}
+
+// TestComposeStack_EKSControlPlaneLambdaSkipsNodeGroup pins the Lambda gate:
+// when comps.AWSLambda is set, KeyAWSEKSControlPlane routes to the Lambda
+// runtime preset (not EKS), so the auto-include of the worker node group
+// must NOT fire.
+func TestComposeStack_EKSControlPlaneLambdaSkipsNodeGroup(t *testing.T) {
+	t.Parallel()
+	trueVal := true
+	c := newTestClient()
+	out, err := c.ComposeStack(ComposeStackOpts{
+		Cloud:        "aws",
+		SelectedKeys: []ComponentKey{KeyAWSEKSControlPlane},
+		Comps:        &Components{AWSLambda: &trueVal}, // Lambda architecture
+		Cfg:          &Config{Region: "us-east-1"},
+		Project:      "lambda-no-eks",
+		Region:       "us-east-1",
+	})
+	require.NoError(t, err, "ComposeStack(Lambda) should succeed")
+	mainTF := string(out["/main.tf"])
+	require.Contains(t, mainTF, `module "resource"`,
+		"polymorphic KeyAWSEKSControlPlane still composes as module 'resource'")
+	require.NotContains(t, mainTF, `module "ec2"`,
+		"Lambda architecture must NOT auto-include the EKS worker node group (issue #206)")
 }
 
 // TestDefaultWiring_GCPSubnetSelfLinkUsesTryGuard pins the issue #178 fix:
