@@ -9,6 +9,10 @@ terraform {
       source  = "hashicorp/random"
       version = ">= 3.5"
     }
+    time = {
+      source  = "hashicorp/time"
+      version = ">= 0.9"
+    }
   }
 }
 
@@ -95,6 +99,21 @@ resource "google_secret_manager_secret_iam_member" "cloudbuild_webhook_accessor"
   member = local.cloudbuild_service_agent
 }
 
+# IAM propagation wait (issue #197). PR #191 added the secretAccessor
+# binding above and a `depends_on` from the trigger to it, but the
+# trigger create still hit `400 INVALID_ARGUMENT` on the customer's
+# repro. Root cause: GCP IAM is eventually consistent. `depends_on`
+# orders the create call but not the propagation of the binding to
+# the Cloud Build trigger validator. Resource-level Secret Manager
+# bindings have observed propagation of ~60s p50 / ~120s p99, so 90s
+# covers the long tail. `time_sleep` only fires on creation — no
+# penalty on subsequent applies (and no penalty on destroy/apply
+# cycles where this resource is re-created from scratch each time).
+resource "time_sleep" "wait_iam_propagation" {
+  depends_on      = [google_secret_manager_secret_iam_member.cloudbuild_webhook_accessor]
+  create_duration = "90s"
+}
+
 resource "google_cloudbuild_trigger" "trigger" {
   project  = var.project_id
   location = var.region
@@ -113,11 +132,12 @@ resource "google_cloudbuild_trigger" "trigger" {
     timeout = "60s"
   }
 
-  # The IAM binding must exist before trigger create — see #190 comment
-  # block above the data source. Without this depends_on the binding
-  # races the trigger create call.
+  # Wait for IAM propagation before issuing the trigger create — see
+  # `time_sleep.wait_iam_propagation` comment above (#197). The
+  # `time_sleep` itself depends on the IAM binding, so this single
+  # depends_on transitively orders binding → propagation → create.
   depends_on = [
     google_project_service.cloudbuild,
-    google_secret_manager_secret_iam_member.cloudbuild_webhook_accessor,
+    time_sleep.wait_iam_propagation,
   ]
 }

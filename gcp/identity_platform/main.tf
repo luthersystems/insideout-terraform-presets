@@ -1,4 +1,27 @@
 # GCP Identity Platform Configuration
+#
+# Idempotency contract (issue #197): Identity Platform is a GCP singleton
+# product — once enabled on a project, the API has no way to disable it.
+# A `terraform destroy` cannot truly remove the underlying state; the
+# next `terraform apply` would issue a CREATE that GCP rejects with
+# `400 INVALID_PROJECT_ID: Identity Platform has already been enabled
+# for this project`. This breaks back-to-back destroy/apply cycles and
+# also fails on shared/test projects where IP was previously enabled
+# (e.g. customer repro `diagramtest2025-09-14`).
+#
+# Fix: adopt the existing config via an `import {}` block (TF 1.5+) and
+# pin `lifecycle { ignore_changes = all }` so the resource behaves like
+# a synthetic data source backed by the provider's own read logic. The
+# provider does not ship `data "google_identity_platform_config"`, and
+# `data "http"` against `:config` returns 200 in both greenfield and
+# previously-enabled cases (so it can't discriminate). The import path
+# works for both because the `:config` GET endpoint is always available
+# once `identitytoolkit.googleapis.com` is enabled.
+#
+# Trade-off: module variables (sign_in, mfa, etc.) are advisory under
+# this contract — they document intent but are NOT enforced once the
+# config is adopted. If GCP later exposes idempotent re-enablement we
+# can lift `ignore_changes` and apply variables again.
 
 terraform {
   required_version = ">= 1.5"
@@ -18,7 +41,19 @@ resource "google_project_service" "identity_platform" {
   disable_on_destroy = false
 }
 
-# Identity Platform configuration
+# Adopt the project's existing Identity Platform config rather than
+# attempting CREATE — see header comment (#197). The `:config` GET
+# returns 200 with a default body for any project where the API is
+# enabled, so this works on both greenfield and previously-enabled
+# projects.
+import {
+  to = google_identity_platform_config.this
+  id = "projects/${var.project_id}/config"
+}
+
+# Identity Platform configuration. Adopted via `import` above; the
+# sign_in/mfa blocks are retained as documented intent but are not
+# enforced — see `lifecycle.ignore_changes = all`.
 resource "google_identity_platform_config" "this" {
   project = var.project_id
 
@@ -45,6 +80,11 @@ resource "google_identity_platform_config" "this" {
       state             = var.mfa_state
       enabled_providers = var.mfa_enabled_providers
     }
+  }
+
+  lifecycle {
+    # Idempotency contract (#197): config is adopted, not enforced.
+    ignore_changes = all
   }
 
   depends_on = [google_project_service.identity_platform]
