@@ -455,30 +455,28 @@ func TestGetPresetFiles_GCP_CloudBuild_HasWebhookSecretIAM(t *testing.T) {
 		"gcp/cloud_build/main.tf trigger must depend_on time_sleep.wait_iam_propagation (issue #197)")
 }
 
-// TestGetPresetFiles_GCP_IdentityPlatform_HasIdempotentImport pins the
-// issue #197 idempotency fix at the embedded-FS layer.
+// TestGetPresetFiles_GCP_IdentityPlatform_NoRootOnlyBlocks pins the
+// issue #199 regression fix at the embedded-FS layer.
 //
-// Identity Platform is a GCP singleton — once enabled, the API has no
-// way to disable it, so terraform destroy can't truly remove the
-// underlying state. The next apply's CREATE call hits
-// `400 INVALID_PROJECT_ID: Identity Platform has already been enabled
-// for this project`, breaking back-to-back destroy/apply cycles and
-// failing on shared/test projects where IP was previously enabled.
+// v0.7.0 attempted to fix #197 (Identity Platform singleton non-
+// idempotency) with a child-module `import {}` block. Terraform 1.5+
+// rejects `import {}` and `removed {}` blocks anywhere except the root
+// module — when the composer instantiates this preset as
+// `module "gcp_identity_platform" {}`, `terraform init` fails with
+// "An import block was detected in 'module.gcp_identity_platform'.
+// Import blocks are only allowed in the root module." That regressed
+// harder than #197: hard fail at init, before apply could even start.
 //
-// Fix: adopt the existing config via an `import {}` block (TF 1.5+)
-// targeting `projects/${var.project_id}/config`, plus
-// `lifecycle { ignore_changes = all }` so the resource behaves like
-// a synthetic data source backed by the provider's own read logic.
-// The Google provider does not ship a `data "google_identity_platform_config"`
-// (verified against terraform-provider-google source) and the `:config`
-// GET endpoint can't discriminate greenfield from previously-enabled
-// projects (returns 200 in both), so import-and-ignore is the canonical
-// adoption shape — see CLAUDE.md "Idempotency contract".
+// The proper adoption fix lives in the composer (root module emits
+// `import { to = module.gcp_identity_platform.google_identity_platform_config.this ... }`).
+// Until that lands, this preset CREATEs the resource normally and
+// keeps `lifecycle { ignore_changes = all }` so subsequent applies
+// don't fight console edits.
 //
-// A regression that drops the import block or ignore_changes reopens
-// #197 on every previously-enabled project and on every destroy/apply
-// cycle.
-func TestGetPresetFiles_GCP_IdentityPlatform_HasIdempotentImport(t *testing.T) {
+// A regression that re-introduces `import {}` (or `removed {}`) inside
+// this child module reopens #199 — every customer deploy hits the init
+// failure before any other fix can run.
+func TestGetPresetFiles_GCP_IdentityPlatform_NoRootOnlyBlocks(t *testing.T) {
 	t.Parallel()
 	files, err := newTestClient().GetPresetFiles("gcp/identity_platform")
 	require.NoError(t, err)
@@ -487,24 +485,26 @@ func TestGetPresetFiles_GCP_IdentityPlatform_HasIdempotentImport(t *testing.T) {
 	require.True(t, ok, "gcp/identity_platform must include main.tf")
 	body := string(mainTF)
 
-	// (1) The import block must exist and target the config singleton
-	// at the canonical projects/{project}/config id.
-	require.Contains(t, body, "import {",
-		"gcp/identity_platform/main.tf must declare an import block adopting the existing config (issue #197)")
-	require.Contains(t, body, "to = google_identity_platform_config.this",
-		"gcp/identity_platform/main.tf import block must target google_identity_platform_config.this (issue #197)")
-	require.Contains(t, body, `id = "projects/${var.project_id}/config"`,
-		"gcp/identity_platform/main.tf import id must be projects/${var.project_id}/config (issue #197)")
+	// (1) Root-only block guard. `import {}` and `removed {}` are TF
+	// 1.5+ root-module-only constructs (#199). Match a top-level
+	// declaration: a line that starts with `import {` or `removed {`
+	// (no leading whitespace), which excludes the word appearing inside
+	// comments (which begin with `#` or `//`) or inside other blocks.
+	for line := range strings.SplitSeq(body, "\n") {
+		require.False(t, strings.HasPrefix(line, "import {"),
+			"gcp/identity_platform/main.tf must not contain a top-level `import {}` block — root-only in TF 1.5+ (issue #199)")
+		require.False(t, strings.HasPrefix(line, "removed {"),
+			"gcp/identity_platform/main.tf must not contain a top-level `removed {}` block — root-only in TF 1.5+ (issue #199 sibling)")
+	}
 
-	// (2) lifecycle.ignore_changes = all prevents drift fights against
-	// the adopted config — the customer's existing IP settings are
-	// preserved, and module variables become advisory.
+	// (2) The CREATE-with-ignore_changes path remains in place. Once
+	// the resource is in state, ignore_changes = all prevents drift
+	// fights against console edits or post-CREATE GCP-side changes.
 	require.Contains(t, body, "ignore_changes = all",
-		"gcp/identity_platform/main.tf must pin lifecycle.ignore_changes = all on the adopted config (issue #197)")
+		"gcp/identity_platform/main.tf must pin lifecycle.ignore_changes = all on the singleton config (issues #197, #199)")
 
-	// (3) Regression guard: the API-enable resource must remain in place
-	// — the import block depends on `identitytoolkit.googleapis.com`
-	// being enabled for the GET to return 200.
+	// (3) Regression guard: the API-enable resource must remain in
+	// place — every Identity Platform deploy starts here.
 	require.Contains(t, body, `resource "google_project_service" "identity_platform"`,
 		"gcp/identity_platform/main.tf must keep the identitytoolkit.googleapis.com API enable (issue #197)")
 	require.Contains(t, body, `service = "identitytoolkit.googleapis.com"`,
