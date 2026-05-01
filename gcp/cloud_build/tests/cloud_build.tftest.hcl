@@ -1,4 +1,5 @@
 mock_provider "google" {}
+mock_provider "time" {}
 
 # Smoke for the cloud_build preset under mock_provider. Pins that the
 # default config plans cleanly — the mock provider can't reproduce

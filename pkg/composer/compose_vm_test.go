@@ -390,7 +390,7 @@ func TestGetPresetFiles_GCP_KMS_NoUpstreamModule(t *testing.T) {
 }
 
 // TestGetPresetFiles_GCP_CloudBuild_HasWebhookSecretIAM pins the
-// issue #190 fix at the embedded-FS layer.
+// issue #190 + #197 fixes at the embedded-FS layer.
 //
 // google_cloudbuild_trigger validates webhook secret access on the
 // create call. Without an IAM binding granting
@@ -403,10 +403,17 @@ func TestGetPresetFiles_GCP_KMS_NoUpstreamModule(t *testing.T) {
 //      after-enable.
 //   2. google_secret_manager_secret_iam_member.cloudbuild_webhook_accessor
 //      grants secretAccessor on the webhook secret to the P4SA.
-//   3. The trigger depends_on the binding so the binding propagates
-//      before the trigger create call fires.
+//   3. time_sleep.wait_iam_propagation defers the trigger create by
+//      90s after the IAM binding (issue #197). depends_on alone
+//      orders the create CALL but not GCP IAM propagation, which is
+//      eventually consistent (~60s p50 / ~120s p99 for resource-level
+//      Secret Manager bindings); without the sleep, the trigger
+//      validator may not see the binding and rejects with 400.
+//   4. The trigger depends_on the time_sleep, which itself depends_on
+//      the IAM binding — transitive ordering binding → propagation →
+//      create.
 //
-// A regression that drops any of those three pieces leaves customers
+// A regression that drops any of those four pieces leaves customers
 // hitting INVALID_ARGUMENT on every fresh-project deploy.
 func TestGetPresetFiles_GCP_CloudBuild_HasWebhookSecretIAM(t *testing.T) {
 	t.Parallel()
@@ -429,9 +436,77 @@ func TestGetPresetFiles_GCP_CloudBuild_HasWebhookSecretIAM(t *testing.T) {
 	require.Contains(t, body, `gcp-sa-cloudbuild.iam.gserviceaccount.com`,
 		"gcp/cloud_build/main.tf must target the Cloud Build P4SA service-{PROJECT_NUMBER}@gcp-sa-cloudbuild (issue #190)")
 
-	// (3) The trigger depends on the IAM binding so propagation happens
-	// before trigger create fires. A trigger that only depends on the
-	// API enable still races the IAM propagation.
+	// (3) time_sleep absorbs IAM propagation latency before trigger create
+	// fires (issue #197). The hashicorp/time provider must be declared,
+	// the resource must exist, and the duration must be at least 60s to
+	// cover the documented p99 propagation tail.
+	require.Contains(t, body, `source  = "hashicorp/time"`,
+		"gcp/cloud_build/main.tf must declare hashicorp/time provider for time_sleep (issue #197)")
+	require.Contains(t, body, `resource "time_sleep" "wait_iam_propagation"`,
+		"gcp/cloud_build/main.tf must declare time_sleep.wait_iam_propagation between IAM binding and trigger (issue #197)")
+	require.Contains(t, body, `create_duration = "90s"`,
+		"gcp/cloud_build/main.tf time_sleep must wait 90s for IAM propagation (issue #197)")
+
+	// (4) The substring asserts both: the resource declaration AND the
+	// time_sleep's depends_on on it (transitive trigger ordering).
 	require.Contains(t, body, "google_secret_manager_secret_iam_member.cloudbuild_webhook_accessor",
-		"gcp/cloud_build/main.tf trigger must depend_on the IAM binding (issue #190)")
+		"gcp/cloud_build/main.tf must reference the IAM binding (issue #190; transitive ordering via time_sleep #197)")
+	require.Contains(t, body, "time_sleep.wait_iam_propagation",
+		"gcp/cloud_build/main.tf trigger must depend_on time_sleep.wait_iam_propagation (issue #197)")
+}
+
+// TestGetPresetFiles_GCP_IdentityPlatform_HasIdempotentImport pins the
+// issue #197 idempotency fix at the embedded-FS layer.
+//
+// Identity Platform is a GCP singleton — once enabled, the API has no
+// way to disable it, so terraform destroy can't truly remove the
+// underlying state. The next apply's CREATE call hits
+// `400 INVALID_PROJECT_ID: Identity Platform has already been enabled
+// for this project`, breaking back-to-back destroy/apply cycles and
+// failing on shared/test projects where IP was previously enabled.
+//
+// Fix: adopt the existing config via an `import {}` block (TF 1.5+)
+// targeting `projects/${var.project_id}/config`, plus
+// `lifecycle { ignore_changes = all }` so the resource behaves like
+// a synthetic data source backed by the provider's own read logic.
+// The Google provider does not ship a `data "google_identity_platform_config"`
+// (verified against terraform-provider-google source) and the `:config`
+// GET endpoint can't discriminate greenfield from previously-enabled
+// projects (returns 200 in both), so import-and-ignore is the canonical
+// adoption shape — see CLAUDE.md "Idempotency contract".
+//
+// A regression that drops the import block or ignore_changes reopens
+// #197 on every previously-enabled project and on every destroy/apply
+// cycle.
+func TestGetPresetFiles_GCP_IdentityPlatform_HasIdempotentImport(t *testing.T) {
+	t.Parallel()
+	files, err := newTestClient().GetPresetFiles("gcp/identity_platform")
+	require.NoError(t, err)
+
+	mainTF, ok := files["/main.tf"]
+	require.True(t, ok, "gcp/identity_platform must include main.tf")
+	body := string(mainTF)
+
+	// (1) The import block must exist and target the config singleton
+	// at the canonical projects/{project}/config id.
+	require.Contains(t, body, "import {",
+		"gcp/identity_platform/main.tf must declare an import block adopting the existing config (issue #197)")
+	require.Contains(t, body, "to = google_identity_platform_config.this",
+		"gcp/identity_platform/main.tf import block must target google_identity_platform_config.this (issue #197)")
+	require.Contains(t, body, `id = "projects/${var.project_id}/config"`,
+		"gcp/identity_platform/main.tf import id must be projects/${var.project_id}/config (issue #197)")
+
+	// (2) lifecycle.ignore_changes = all prevents drift fights against
+	// the adopted config — the customer's existing IP settings are
+	// preserved, and module variables become advisory.
+	require.Contains(t, body, "ignore_changes = all",
+		"gcp/identity_platform/main.tf must pin lifecycle.ignore_changes = all on the adopted config (issue #197)")
+
+	// (3) Regression guard: the API-enable resource must remain in place
+	// — the import block depends on `identitytoolkit.googleapis.com`
+	// being enabled for the GET to return 200.
+	require.Contains(t, body, `resource "google_project_service" "identity_platform"`,
+		"gcp/identity_platform/main.tf must keep the identitytoolkit.googleapis.com API enable (issue #197)")
+	require.Contains(t, body, `service = "identitytoolkit.googleapis.com"`,
+		"gcp/identity_platform/main.tf must enable identitytoolkit.googleapis.com (issue #197)")
 }
