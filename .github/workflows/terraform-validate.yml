@@ -19,7 +19,13 @@ jobs:
       - id: find-presets
         name: Discover preset modules
         run: |
+          # Skip leading-underscore dirs (e.g. aws/_shared, gcp/_shared) —
+          # they are internal helper buckets bundled by the composer, not
+          # top-level presets. Mirrors composer.isInternalDirName and
+          # tests/validate-as-child.sh::is_shared_path (issue #203).
           dirs=$(find aws gcp -mindepth 1 -maxdepth 1 -type d | sort | while read -r d; do
+            base="$(basename "$d")"
+            case "$base" in _*) continue ;; esac
             [ -f "$d/.validate-skip" ] || echo "$d"
           done | jq -R -s -c 'split("\n") | map(select(length > 0))')
           echo "dirs=$dirs" >> "$GITHUB_OUTPUT"
@@ -30,7 +36,11 @@ jobs:
           # Only consider modules that have at least one non-integration
           # .tftest.hcl. Files matching *integration* are opt-in: they
           # require live cloud credentials and are skipped in CI.
+          # Skip leading-underscore dirs (issue #203) for the same reason
+          # find-presets does.
           dirs=$(find aws gcp -mindepth 1 -maxdepth 1 -type d | sort | while read -r d; do
+            base="$(basename "$d")"
+            case "$base" in _*) continue ;; esac
             non_integration=$(find "$d" -maxdepth 2 -name '*.tftest.hcl' ! -name '*integration*' 2>/dev/null | head -1)
             if [ -n "$non_integration" ]; then
               echo "$d"

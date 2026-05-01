@@ -16,7 +16,24 @@ var allowedExt = map[string]bool{
 	".tf": true, ".tfvars": true, ".tf.json": true, ".terraform-version": true, ".tmpl": true, ".zip": true,
 }
 
+// isInternalDirName reports whether a preset-FS directory entry is an
+// internal (non-preset) bucket — i.e., shared/helper modules that the
+// composer must NOT enumerate as top-level presets. Issue #203 reserves
+// the leading-underscore convention (e.g. "_shared", "_smoke") for this.
+//
+// Centralised here so every walker (ListClouds, ListPresetKeysForCloud,
+// future callers) shares one definition; if a future PR moves the
+// convention to a different sigil or tightens it (e.g. "_shared" only),
+// this is the single edit site.
+func isInternalDirName(name string) bool {
+	return strings.HasPrefix(name, "_")
+}
+
 // ListClouds returns the available cloud providers (aws, gcp, etc).
+//
+// Top-level directories whose names begin with `_` are treated as internal
+// shared-module buckets (see issue #203 and `_shared/README.md`) and are
+// NOT returned — they are not consumable as standalone clouds.
 func (c *Client) ListClouds() ([]string, error) {
 	if c.presets == nil {
 		return nil, ErrNoPresetFS
@@ -27,9 +44,13 @@ func (c *Client) ListClouds() ([]string, error) {
 	}
 	var clouds []string
 	for _, e := range ents {
-		if e.IsDir() {
-			clouds = append(clouds, e.Name())
+		if !e.IsDir() {
+			continue
 		}
+		if isInternalDirName(e.Name()) {
+			continue
+		}
+		clouds = append(clouds, e.Name())
 	}
 	sort.Strings(clouds)
 	return clouds, nil
@@ -95,6 +116,11 @@ func (c *Client) ListAvailableComponentKeys() ([]string, error) {
 
 // ListPresetKeysForCloud lists module keys for a specific cloud provider.
 // Returns keys like "aws/vpc", "aws/ec2", etc.
+//
+// Sub-directories whose names begin with `_` are treated as internal
+// shared-module buckets (see issue #203 and `<cloud>/_shared/README.md`)
+// and are NOT returned — they are not top-level presets and the composer
+// must not emit `module "<key>" {}` blocks for them.
 func (c *Client) ListPresetKeysForCloud(cloud string) ([]string, error) {
 	if c.presets == nil {
 		return nil, ErrNoPresetFS
@@ -105,9 +131,13 @@ func (c *Client) ListPresetKeysForCloud(cloud string) ([]string, error) {
 	}
 	var keys []string
 	for _, e := range ents {
-		if e.IsDir() {
-			keys = append(keys, cloud+"/"+e.Name())
+		if !e.IsDir() {
+			continue
 		}
+		if isInternalDirName(e.Name()) {
+			continue
+		}
+		keys = append(keys, cloud+"/"+e.Name())
 	}
 	sort.Strings(keys)
 	return keys, nil

@@ -87,6 +87,65 @@ These preset files are embedded at build time into the [reliable](https://github
 - **Root-only blocks are forbidden in presets (issue #199):** Terraform 1.5+ permits `import {}` and `removed {}` blocks **only in the root module**. Every preset in this repo is consumed as a *child* module by the composer (`luthersystems/reliable` emits `module "<key>" { source = "..." }` in a generated root), so any `import {}` or `removed {}` block placed in `aws/<m>/*.tf` or `gcp/<m>/*.tf` will fail `terraform init` with `An import block was detected in "module.<name>". Import blocks are only allowed in the root module.` This regressed v0.7.0 (#199) — standalone `terraform validate` accepted the block because the preset was treated as the root, but the bundle failed init at customer deploy time. Enforced in CI by `tests/lint-no-root-only-blocks.sh` (static grep) and the `validate-presets-as-child` workflow job (wraps each preset and runs `terraform init`). The same rule applies to `provider {}` blocks with arguments — root-only since TF 0.13.
 - **Idempotency contract (issues #197, #199):** every preset must support back-to-back `terraform destroy` → `terraform apply` cycles without manual intervention. Resources backed by cloud-API singletons that can't truly be deleted — Identity Platform, Firestore databases, KMS key rings, project-level service activations — must be modeled as **adoption**, not creation, because the provider's CREATE will reject the second apply with `400 INVALID_*` once the underlying GCP/AWS state survives the destroy. The adoption mechanism is a root-level `import { to = module.<name>.<resource> ... }` block — but per the rule above, the preset itself **cannot** declare it. The composer must emit the import block alongside the module instantiation; until that lands, presets pin `lifecycle { ignore_changes = all }` and document that callers running against pre-existing singletons must `terraform import` out-of-band before the first apply. See `gcp/identity_platform/main.tf` for the current shape (CREATE + `ignore_changes = all`, header comment links #199). For race-prone resources whose CREATE is order-sensitive (e.g. GCP IAM eventual consistency before downstream resource validation), insert an explicit `time_sleep` between the binding and the dependent — see `gcp/cloud_build/main.tf::time_sleep.wait_iam_propagation` (90s covers ~p99 propagation; only fires on creation). Today's known singleton candidates: `gcp_identity_platform` (#197 mitigated, #199 composer-emit-import follow-up). Audit follow-up: `gcp_firestore` (singleton database — once created, the project's default database can't be removed; needs the same adoption treatment, blocked on the same composer change).
 
+## Shared / Helper Modules (issue #203)
+
+Three reserved buckets hold internal helper modules consumed by other presets
+via `source = "../_shared/<name>"` (per-cloud) or
+`source = "../../_shared/<name>"` (cross-cloud). They are NOT top-level
+presets — the composer skips any directory whose name begins with `_` when
+listing preset keys, so they never get a `module "<key>" {}` block in the
+composed root.
+
+| Path | Scope | Examples |
+|---|---|---|
+| `aws/_shared/<name>/` | AWS-only helpers | AWS tag merging, ARN parsing, account-ID validation, S3 bucket-name sanitization |
+| `gcp/_shared/<name>/` | GCP-only helpers | Singleton existence probe (#202 inline precedent), GCP label merging, project / project_id split helpers |
+| `_shared/<name>/` (top-level) | Cloud-agnostic helpers | Severity tagging conventions (#204), runbook URL prefix builders, naming-prefix normalization, time/date utilities |
+
+### Conventions
+
+- **Leading-underscore signals "not a top-level preset."** The composer's
+  `ListPresetKeysForCloud` and `ListClouds` skip `_*` dir entries via
+  `composer.isInternalDirName`. Do not work around this — if a directory
+  needs to be enumerated as a preset, name it without the underscore.
+- **Per-cloud isolation.** GCP-only stacks must not pull AWS helpers into
+  their composed workspace, and vice versa. AWS helpers go in
+  `aws/_shared/`; GCP helpers go in `gcp/_shared/`. Cross-cloud helpers go
+  in top-level `_shared/`.
+- **Cross-cloud helpers MUST NOT declare cloud-specific providers.**
+  Modules under top-level `_shared/` may not declare `aws`, `google`,
+  `google-beta`, `azurerm`, etc. — they ride along with both AWS-only and
+  GCP-only stacks, so dragging in a cloud-specific provider would force
+  every consumer to install it. Enforced by
+  `tests/lint-shared-no-cloud-providers.sh`. If a helper genuinely needs
+  to touch a cloud API, it belongs in a per-cloud bucket.
+- **Plan-time-known outputs.** If a consumer's `count` / `for_each` will
+  depend on a shared-module output, the output must be plan-time-known. The
+  v0.7.2 inline existence-probe (PR #202) is the canonical example —
+  `data.http` of a deterministic-name resource is plan-time-known iff the
+  inputs are plan-time-known.
+- **Module-package boundaries.** Terraform rejects `../` source traversal
+  across module package boundaries with `Local module path escapes module
+  package`. The composer (`luthersystems/reliable`) is responsible for
+  bundling shared modules into the same workspace as their consumers so the
+  relative source path resolves within a single package. For local
+  `tests/validate-as-child.sh` runs, the script auto-detects
+  `source = "../_shared/..."` references and copies the referenced helpers
+  into the synthetic child-module package alongside the wrapped preset.
+- **Embed coverage.** New file extensions in `_shared` buckets need
+  matching `//go:embed` directives in `zz_embed.go` (the existing globs
+  cover `.tf` for all three buckets and `.tmpl` for AWS top-level only —
+  add a glob if a shared module needs other extensions). Each `_shared`
+  glob requires at least one matching file at compile time; the
+  `_smoke` placeholder fixtures in each bucket satisfy this until real
+  shared modules land.
+- **No real shared modules ship in this repo yet.** Issue #203 set up the
+  framework / plumbing only. The `gcp/identity_platform` inline existence
+  probe from PR #202 stays inline for now; conversion to
+  `gcp/_shared/<name>` is a follow-up PR once a second consumer materializes
+  or once the framework is exercised by a real cross-cloud helper (likely
+  the severity-tagging convention from #204).
+
 ## Skills
 
 Before starting a task, check if a matching skill exists and follow its workflow exactly. Multiple skills can chain: e.g., `/pickup-issue` uses the relevant add-module skill for implementation, `/verify` before committing, and `/pr` to ship.

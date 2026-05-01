@@ -99,20 +99,32 @@ output "id" {
 
 Common wiring outputs: `id`, `name`, `self_link`, `network_id`, `ip_address`.
 
-### 5. Check Go Embedding
+### 5. Reusing helper logic? Consider a shared module
+
+If your new module needs a small helper that you suspect a second module
+will eventually want too (the singleton existence-probe pattern from #203,
+project-vs-project_id sanitization, label merging variants, etc.), put the
+helper in `gcp/_shared/<helper_name>/` and reference it from your module via
+`source = "../_shared/<helper_name>"`. The composer skips `_`-prefixed dirs
+during preset enumeration and bundles them alongside any preset that
+references them. See `gcp/_shared/README.md` and issue #203 for the
+contract; for genuinely cloud-agnostic helpers (severity tagging conventions,
+runbook URL builders), use the top-level `_shared/<name>/` bucket instead.
+
+### 6. Check Go Embedding
 
 Verify patterns in `zz_embed.go`:
 - `.tf` files: already covered by `gcp/*/*.tf`
 - `.tmpl` files: **NOT covered** — if adding `.tmpl` files, add `//go:embed gcp/*/*.tmpl` to `zz_embed.go`
 
-### 6. Format and Validate
+### 7. Format and Validate
 
 ```bash
 terraform fmt gcp/<module_name>/
 cd gcp/<module_name> && terraform init -backend=false -input=false && terraform validate
 ```
 
-### 7. Verify Go Embed Compiles
+### 8. Verify Go Embed Compiles
 
 ```bash
 go build ./...

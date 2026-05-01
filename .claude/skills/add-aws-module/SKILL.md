@@ -87,27 +87,39 @@ output "arn" {
 
 Common wiring outputs: `arn`, `id`, `vpc_id`, `private_subnet_ids`, `security_group_id`, `endpoint`.
 
-### 5. Check Go Embedding
+### 5. Reusing helper logic? Consider a shared module
+
+If your new module needs a small helper that you suspect a second module
+will eventually want too (tag merging, ARN parsing, account ID validation,
+naming-prefix sanitization, an existence-probe pattern, etc.), put the
+helper in `aws/_shared/<helper_name>/` and reference it from your module via
+`source = "../_shared/<helper_name>"`. The composer skips `_`-prefixed dirs
+during preset enumeration and bundles them alongside any preset that
+references them. See `aws/_shared/README.md` and issue #203 for the
+contract; for genuinely cloud-agnostic helpers (severity tagging conventions,
+runbook URL builders), use the top-level `_shared/<name>/` bucket instead.
+
+### 6. Check Go Embedding
 
 Verify the new file patterns are covered by `zz_embed.go`:
 - `.tf` files: already covered by `aws/*/*.tf`
 - `.tmpl` files: already covered by `aws/*/*.tmpl`
 - New extensions: add a `//go:embed` directive to `zz_embed.go`
 
-### 6. Format and Validate
+### 7. Format and Validate
 
 ```bash
 terraform fmt aws/<modulename>/
 cd aws/<modulename> && terraform init -backend=false -input=false && terraform validate
 ```
 
-### 7. Verify Go Embed Compiles
+### 8. Verify Go Embed Compiles
 
 ```bash
 go build ./...
 ```
 
-### 8. Tests (optional but encouraged)
+### 9. Tests (optional but encouraged)
 
 `terraform test` files live in `aws/<modulename>/tests/` and follow a filename convention CI relies on:
 
