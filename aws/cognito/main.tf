@@ -50,6 +50,9 @@ resource "aws_cognito_user_pool" "this" {
   # MFA factor — required when mfa_configuration = "ON". TOTP is the only
   # factor that needs no extra wiring (SMS needs SNS origination identity,
   # Email needs SES domain). #208.
+  # TODO(#208): when SMS / Email factors are added to the variable's allowed
+  # set, add the corresponding `dynamic "sms_configuration"` /
+  # `dynamic "email_mfa_configuration"` blocks here, gated on the factor.
   dynamic "software_token_mfa_configuration" {
     for_each = var.mfa_required && var.mfa_factor == "totp" ? [1] : []
     content {

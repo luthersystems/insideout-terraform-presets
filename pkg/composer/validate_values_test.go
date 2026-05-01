@@ -96,12 +96,15 @@ func TestValidate_HCLBackedValues_CollectsMultipleIssues(t *testing.T) {
 
 // TestValidate_AWSCognitoMFAFactor_InvalidEnum locks in the issue #208
 // guarantee that an unsupported MFA factor is caught at compose time as a
-// structured ValidationIssue, not at apply time as an AWS API error.
+// structured ValidationIssue, not at apply time as an AWS API error. Uses a
+// close typo ("totq") so the AI-corrector Suggestion contract is testable —
+// nearestSuggestion caps at edit distance < 4, so far-away strings like "sms"
+// would correctly produce an empty Suggestion.
 func TestValidate_AWSCognitoMFAFactor_InvalidEnum(t *testing.T) {
 	t.Parallel()
 
 	cfg := cfgFromJSON(t, `{
-		"aws_cognito": {"mfaRequired": true, "mfaFactor": "sms"}
+		"aws_cognito": {"mfaRequired": true, "mfaFactor": "totq"}
 	}`)
 
 	issues := Validate(nil, &cfg)
@@ -112,6 +115,10 @@ func TestValidate_AWSCognitoMFAFactor_InvalidEnum(t *testing.T) {
 	require.Equal(t, "invalid_enum", got.Code)
 	require.ElementsMatch(t, []string{"totp"}, got.Allowed,
 		"invalid_enum issues must carry the Allowed set so the AI corrector can suggest the legal value")
+	// Pin Reason and Suggestion so a mutation that empties either field — and
+	// thereby breaks the AI-corrector contract — is caught at compose time.
+	require.NotEmpty(t, got.Reason, "ValidationIssue.Reason must explain why the value is rejected")
+	require.Equal(t, "totp", got.Suggestion, "Suggestion must point the corrector at the legal value")
 }
 
 func TestAllowedValues(t *testing.T) {

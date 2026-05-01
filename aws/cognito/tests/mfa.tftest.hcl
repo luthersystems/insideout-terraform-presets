@@ -24,6 +24,14 @@ run "cognito_mfa_required_emits_totp_factor" {
     condition     = length(aws_cognito_user_pool.this.software_token_mfa_configuration) == 1
     error_message = "mfa_required=true with default factor should emit exactly one software_token_mfa_configuration block"
   }
+
+  # Pin the inner field — `length == 1` alone would still pass if `enabled`
+  # were silently swapped to false, which AWS would also reject. Close the
+  # weak-assertion gap explicitly.
+  assert {
+    condition     = aws_cognito_user_pool.this.software_token_mfa_configuration[0].enabled == true
+    error_message = "TOTP factor block must have enabled=true"
+  }
 }
 
 run "cognito_mfa_off_omits_factor_block" {
