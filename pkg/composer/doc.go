@@ -24,15 +24,6 @@
 // normalise through reliable's composeradapter package, which produces
 // prefixed-only Components/Config ready for ComposeStack / ComposeSingle.
 //
-// A transitional moved{} block is still emitted in main.tf for one release
-// (v0.4.0) to migrate Terraform state that references legacy module names
-// (module.vpc → module.aws_vpc, etc.); see appendMovedBlocks. The frozen
-// legacy→prefixed map is scheduled for deletion in v0.5.0 once the migration
-// window closes.
-//
-// See luthersystems/insideout-terraform-presets#76 for the full phased
-// removal plan.
-//
 // # Pre-plan validators
 //
 // ComposeStackWithIssues / ComposeSingleWithIssues run a battery of
