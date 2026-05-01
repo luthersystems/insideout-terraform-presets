@@ -117,3 +117,19 @@ variable "node_role_arn" {
   type        = string
   default     = null
 }
+
+variable "ami_type" {
+  description = "EKS node AMI type. When null (default), the module derives the AMI type from var.instance_types: ARM/Graviton families (c7g, m7g, r7g, t4g, c8g, m8g, r8g, etc. — names ending in `g`) get AL2023_ARM_64_STANDARD; all other families get AL2023_x86_64_STANDARD. Set explicitly to override (e.g. BOTTLEROCKET_x86_64, AL2_x86_64_GPU)."
+  type        = string
+  default     = null
+
+  validation {
+    condition = var.ami_type == null ? true : contains([
+      "AL2_x86_64", "AL2_x86_64_GPU", "AL2_ARM_64",
+      "AL2023_x86_64_STANDARD", "AL2023_ARM_64_STANDARD", "AL2023_x86_64_NEURON", "AL2023_x86_64_NVIDIA",
+      "BOTTLEROCKET_x86_64", "BOTTLEROCKET_ARM_64", "BOTTLEROCKET_x86_64_NVIDIA", "BOTTLEROCKET_ARM_64_NVIDIA",
+      "WINDOWS_CORE_2019_x86_64", "WINDOWS_FULL_2019_x86_64", "WINDOWS_CORE_2022_x86_64", "WINDOWS_FULL_2022_x86_64",
+    ], var.ami_type)
+    error_message = "ami_type must be a supported EKS-managed AMI type. See https://docs.aws.amazon.com/eks/latest/APIReference/API_Nodegroup.html#AmazonEKS-Type-Nodegroup-amiType."
+  }
+}

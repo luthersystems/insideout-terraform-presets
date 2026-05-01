@@ -21,6 +21,23 @@ module "name" {
 
 locals {
   common_tags = module.name.tags
+
+  # Auto-derive ami_type from the first instance type's family so ARM/Graviton
+  # node groups (c7g.large, m7g.xlarge, etc.) don't silently fall back to the
+  # provider's x86 default and produce DEGRADED addons (#207). Graviton/ARM
+  # EC2 families end in `g` (e.g. c7g, m7g, r7g, t4g, c8g, m8g, r8g; with the
+  # optional `d`, `n`, `en`, `ad`, `adn` storage/network suffixes).
+  # Match the family prefix before the size suffix: `c7g.large` → family
+  # `c7g` → ARM. The first instance type drives the choice; mixed-arch
+  # instance lists are not supported by EKS managed node groups (homogeneous
+  # AMI requirement) and are rejected upstream regardless. Caller can
+  # override via var.ami_type.
+  _first_instance_type = length(var.instance_types) > 0 ? var.instance_types[0] : "c7i.large"
+  _instance_family     = split(".", local._first_instance_type)[0]
+  _is_arm_family       = can(regex("^[a-z]+[0-9]+g(d|n|en|ad|adn)?$", local._instance_family))
+
+  derived_ami_type  = local._is_arm_family ? "AL2023_ARM_64_STANDARD" : "AL2023_x86_64_STANDARD"
+  resolved_ami_type = coalesce(var.ami_type, local.derived_ami_type)
 }
 
 # -------------------------------------------------------------
@@ -118,6 +135,12 @@ resource "aws_eks_node_group" "this" {
 
   # Required; use c7i/c7g/etc. passed from root (computed by composer/mapper)
   instance_types = var.instance_types
+
+  # Auto-derived from the first instance type's family unless var.ami_type is
+  # set explicitly. Without this argument the provider defaults to
+  # AL2023_x86_64_STANDARD, which silently breaks ARM instance choices like
+  # c7g.large (#207).
+  ami_type = local.resolved_ami_type
 
   # When null the provider defaults to ON_DEMAND
   capacity_type = var.capacity_type
