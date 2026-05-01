@@ -1,27 +1,37 @@
 # GCP Identity Platform Configuration
 #
-# Idempotency contract (issue #197): Identity Platform is a GCP singleton
-# product — once enabled on a project, the API has no way to disable it.
-# A `terraform destroy` cannot truly remove the underlying state; the
-# next `terraform apply` would issue a CREATE that GCP rejects with
+# Idempotency contract (issues #197, #199): Identity Platform is a GCP
+# singleton — once enabled on a project, the API has no way to disable
+# it. `terraform destroy` cannot truly remove the underlying state, so
+# the next `terraform apply` would issue a CREATE that GCP rejects with
 # `400 INVALID_PROJECT_ID: Identity Platform has already been enabled
 # for this project`. This breaks back-to-back destroy/apply cycles and
-# also fails on shared/test projects where IP was previously enabled
-# (e.g. customer repro `diagramtest2025-09-14`).
+# also fails on shared/test projects where IP was previously enabled.
 #
-# Fix: adopt the existing config via an `import {}` block (TF 1.5+) and
-# pin `lifecycle { ignore_changes = all }` so the resource behaves like
-# a synthetic data source backed by the provider's own read logic. The
-# provider does not ship `data "google_identity_platform_config"`, and
-# `data "http"` against `:config` returns 200 in both greenfield and
-# previously-enabled cases (so it can't discriminate). The import path
-# works for both because the `:config` GET endpoint is always available
-# once `identitytoolkit.googleapis.com` is enabled.
+# v0.7.0 attempted to fix this with a child-module `import {}` block.
+# That regressed harder: TF 1.5+ only permits `import {}` blocks in the
+# root module, so `terraform init` rejected the bundle outright (#199,
+# "An import block was detected in 'module.gcp_identity_platform'.
+# Import blocks are only allowed in the root module."). Same constraint
+# applies to `removed {}` blocks — both are root-only.
 #
-# Trade-off: module variables (sign_in, mfa, etc.) are advisory under
-# this contract — they document intent but are NOT enforced once the
-# config is adopted. If GCP later exposes idempotent re-enablement we
-# can lift `ignore_changes` and apply variables again.
+# Current state (v0.7.1+): the module CREATEs the resource normally and
+# pins `lifecycle { ignore_changes = all }` so that once it lands in
+# state, subsequent applies don't fight customer-side tweaks made via
+# the GCP console. The first-apply-on-previously-enabled-project failure
+# is a known limitation tracked in #199 — the proper fix lives in the
+# composer (`luthersystems/reliable`), which must emit a root-level
+# `import { to = module.gcp_identity_platform.google_identity_platform_config.this ... }`
+# alongside the module instantiation. Until that lands, callers running
+# against pre-existing IP projects must `terraform import` the resource
+# into state out-of-band before the first apply.
+#
+# Trade-off: module variables (sign_in, mfa, etc.) ARE applied on
+# greenfield projects but are NOT enforced on subsequent applies (per
+# `ignore_changes = all`). They document intent and seed the initial
+# config; ongoing config changes go through the GCP console or out-of-
+# band tooling. This matches the singleton semantics of the underlying
+# API.
 
 terraform {
   required_version = ">= 1.5"
@@ -41,19 +51,10 @@ resource "google_project_service" "identity_platform" {
   disable_on_destroy = false
 }
 
-# Adopt the project's existing Identity Platform config rather than
-# attempting CREATE — see header comment (#197). The `:config` GET
-# returns 200 with a default body for any project where the API is
-# enabled, so this works on both greenfield and previously-enabled
-# projects.
-import {
-  to = google_identity_platform_config.this
-  id = "projects/${var.project_id}/config"
-}
-
-# Identity Platform configuration. Adopted via `import` above; the
-# sign_in/mfa blocks are retained as documented intent but are not
-# enforced — see `lifecycle.ignore_changes = all`.
+# Identity Platform configuration. CREATEd on greenfield projects;
+# `lifecycle.ignore_changes = all` prevents drift fights once in state.
+# See header comment for the singleton semantics and the follow-up
+# composer change tracked in #199.
 resource "google_identity_platform_config" "this" {
   project = var.project_id
 
@@ -83,7 +84,8 @@ resource "google_identity_platform_config" "this" {
   }
 
   lifecycle {
-    # Idempotency contract (#197): config is adopted, not enforced.
+    # Singleton config: once in state, ignore drift so we don't fight
+    # console edits or re-CREATE on a previously-enabled project.
     ignore_changes = all
   }
 

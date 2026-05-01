@@ -142,6 +142,36 @@ jobs:
       - name: Lint project-label coverage (GCP)
         run: bash tests/lint-project-label.sh
 
+      - name: Lint root-only blocks (import / removed) in preset modules (#199)
+        run: bash tests/lint-no-root-only-blocks.sh
+
+  # Wraps each preset in a synthetic root and runs terraform init. This
+  # is the actual consumption shape used by the composer
+  # (luthersystems/reliable instantiates each preset as a child module),
+  # and it surfaces classes of failures that standalone `terraform
+  # validate` misses — most notably the v0.7.0 `import {}` regression
+  # tracked in #199, where the standalone preset directory was treated
+  # as the root module and the invalid block silently passed CI.
+  #
+  # Matrix-fanned out one preset per runner (mirrors validate-presets) so
+  # provider downloads happen in parallel rather than sequentially.
+  validate-presets-as-child:
+    needs: discover
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        dir: ${{ fromJson(needs.discover.outputs.presets) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.7.5"
+
+      - name: Validate ${{ matrix.dir }} wrapped as a child module
+        run: bash tests/validate-as-child.sh "${{ matrix.dir }}"
+
   format-check:
     runs-on: ubuntu-latest
     steps:
@@ -214,6 +244,7 @@ jobs:
     needs:
       - discover
       - validate-presets
+      - validate-presets-as-child
       - validate-examples
       - test-presets
       - lint
