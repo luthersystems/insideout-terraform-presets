@@ -242,6 +242,13 @@ var ImplicitDependencies = map[ComponentKey][]ComponentKey{
 }
 
 // ResolveDependencies recursively finds all required components for a given set of keys.
+//
+// This signature is kept stable for downstream callers (e.g. reliable2). For
+// EKS auto-include of the worker node group, callers that have *Components
+// available should use ResolveDependenciesForCompose instead — without comps,
+// we cannot tell EKS-the-Kubernetes-cluster apart from
+// KeyAWSEKSControlPlane-as-Lambda-runtime, and unconditionally adding the node
+// group would produce a stray ec2 module in Lambda stacks.
 func ResolveDependencies(keys []ComponentKey) []ComponentKey {
 	added := make(map[ComponentKey]bool)
 	var final []ComponentKey
@@ -269,6 +276,44 @@ func ResolveDependencies(keys []ComponentKey) []ComponentKey {
 	}
 
 	return final
+}
+
+// ResolveDependenciesForCompose is the comps-aware resolver used by ComposeStack
+// and ComposeSingle. It runs ResolveDependencies first, then auto-includes
+// KeyAWSEKSNodeGroup whenever a non-Lambda EKS cluster is in the resolved set
+// (issue #206). The injection is gated on isLambda(comps) so the polymorphic
+// KeyAWSEKSControlPlane key doesn't drag a worker node group into a Lambda
+// stack. KeyAWSEKS is always Kubernetes (never polymorphic with Lambda), so
+// it always gets the node group.
+func ResolveDependenciesForCompose(keys []ComponentKey, comps *Components) []ComponentKey {
+	resolved := ResolveDependencies(keys)
+	if isLambda(comps) {
+		return resolved
+	}
+	hasEKS := false
+	hasNodeGroup := false
+	for _, k := range resolved {
+		switch k {
+		case KeyAWSEKS, KeyAWSEKSControlPlane:
+			hasEKS = true
+		case KeyAWSEKSNodeGroup:
+			hasNodeGroup = true
+		}
+	}
+	if !hasEKS || hasNodeGroup {
+		return resolved
+	}
+	// Append KeyAWSEKSNodeGroup directly rather than re-resolving via the
+	// static map. The static map declares KeyAWSEKSNodeGroup deps as
+	// {KeyAWSEKSControlPlane, KeyAWSVPC} — re-resolving would force the
+	// legacy polymorphic cluster key into a stack that already has the
+	// prefix-aware KeyAWSEKS, emitting two cluster modules
+	// (module "aws_eks" and module "resource"). Both deps are already
+	// covered: KeyAWSVPC by the cluster key's own dep, and the cluster
+	// itself by the user-selected KeyAWSEKS or KeyAWSEKSControlPlane.
+	// Wiring (resourceRef, contracts.go:528) routes node-group references
+	// to whichever cluster key is present.
+	return append(resolved, KeyAWSEKSNodeGroup)
 }
 
 // GetModuleDir returns the output directory for a key (e.g., "modules/vpc").

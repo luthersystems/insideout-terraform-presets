@@ -183,6 +183,18 @@ resource "aws_db_instance" "primary" {
   # NOTE: latest_restorable_time and replicas drift on refresh but are
   # Computed-only, so lifecycle.ignore_changes has no effect. Suppression
   # must happen at the drift-check level — see sandbox-infrastructure-template#93.
+
+  lifecycle {
+    # AWS rejects allocated_storage >= max_allocated_storage with
+    # InvalidParameterCombination at apply time, after a real ENI / subnet
+    # group / IAM has been provisioned. Catch the misconfig at plan time so
+    # callers that bypass the composer's auto-derive (issue #205) still fail
+    # cleanly. max_allocated_storage = 0 disables autoscaling.
+    precondition {
+      condition     = var.max_allocated_storage == 0 || var.max_allocated_storage > var.allocated_storage
+      error_message = "max_allocated_storage (${var.max_allocated_storage}) must be 0 (autoscaling disabled) or strictly greater than allocated_storage (${var.allocated_storage})."
+    }
+  }
 }
 
 # -----------------------------------------------------------------------------
