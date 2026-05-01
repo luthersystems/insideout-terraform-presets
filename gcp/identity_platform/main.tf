@@ -1,37 +1,37 @@
 # GCP Identity Platform Configuration
 #
-# Idempotency contract (issues #197, #199): Identity Platform is a GCP
-# singleton — once enabled on a project, the API has no way to disable
-# it. `terraform destroy` cannot truly remove the underlying state, so
-# the next `terraform apply` would issue a CREATE that GCP rejects with
+# Singleton adoption (issues #197, #199, #201): Identity Platform's
+# `projects/<id>/config` resource is a true GCP singleton — once
+# enabled, the API has no way to disable it, and CREATE rejects with
 # `400 INVALID_PROJECT_ID: Identity Platform has already been enabled
-# for this project`. This breaks back-to-back destroy/apply cycles and
-# also fails on shared/test projects where IP was previously enabled.
+# for this project` on previously-enabled projects.
 #
-# v0.7.0 attempted to fix this with a child-module `import {}` block.
-# That regressed harder: TF 1.5+ only permits `import {}` blocks in the
-# root module, so `terraform init` rejected the bundle outright (#199,
-# "An import block was detected in 'module.gcp_identity_platform'.
-# Import blocks are only allowed in the root module."). Same constraint
-# applies to `removed {}` blocks — both are root-only.
+# v0.7.0 attempted a child-module `import {}` block (rejected by TF 1.5+
+# root-only rule, #199); v0.7.1 reverted to plain CREATE + lifecycle.
+# v0.7.2 lands the canonical fix in-tree: data.google_client_config
+# pulls the OAuth2 token the google provider already minted, and
+# data.http issues a plan-time REST GET against
+# `https://identitytoolkit.googleapis.com/v2/projects/<id>/config`. If
+# the GET returns 200, the config already exists and `count = 0` skips
+# the CREATE; if 404 (or any other non-2xx — 403 from missing API
+# enablement, etc.), `count = 1` proceeds with the CREATE on greenfield.
+# No cross-repo coupling, no out-of-band `terraform import` step, no
+# gcloud-on-deploy-container assumption.
 #
-# Current state (v0.7.1+): the module CREATEs the resource normally and
-# pins `lifecycle { ignore_changes = all }` so that once it lands in
-# state, subsequent applies don't fight customer-side tweaks made via
-# the GCP console. The first-apply-on-previously-enabled-project failure
-# is a known limitation tracked in #199 — the proper fix lives in the
-# composer (`luthersystems/reliable`), which must emit a root-level
-# `import { to = module.gcp_identity_platform.google_identity_platform_config.this ... }`
-# alongside the module instantiation. Until that lands, callers running
-# against pre-existing IP projects must `terraform import` the resource
-# into state out-of-band before the first apply.
+# Trade-off on adopted projects: the module's input variables (sign_in,
+# mfa, etc.) are NOT applied to a pre-existing config — `count = 0`
+# means the variables seed nothing, and `lifecycle.ignore_changes = all`
+# remains as a belt-and-suspenders against any future apply-time drift
+# fights on the greenfield path. Ongoing config changes go through the
+# GCP console or out-of-band tooling. Matches the singleton semantics
+# of the underlying API.
 #
-# Trade-off: module variables (sign_in, mfa, etc.) ARE applied on
-# greenfield projects but are NOT enforced on subsequent applies (per
-# `ignore_changes = all`). They document intent and seed the initial
-# config; ongoing config changes go through the GCP console or out-of-
-# band tooling. This matches the singleton semantics of the underlying
-# API.
+# Outputs: `config_name` returns the canonical path
+# `projects/<id>/config` regardless of greenfield-vs-adopt. The
+# `authorized_domains` output is null on adopted projects since we
+# don't have the resource's attribute readout — callers needing this
+# on adopted projects must query the IP REST API directly. The
+# `adopted` output exposes which path was taken.
 
 terraform {
   required_version = ">= 1.5"
@@ -39,6 +39,10 @@ terraform {
     google = {
       source  = "hashicorp/google"
       version = ">= 5.0"
+    }
+    http = {
+      source  = "hashicorp/http"
+      version = ">= 3.4"
     }
   }
 }
@@ -51,11 +55,48 @@ resource "google_project_service" "identity_platform" {
   disable_on_destroy = false
 }
 
-# Identity Platform configuration. CREATEd on greenfield projects;
-# `lifecycle.ignore_changes = all` prevents drift fights once in state.
-# See header comment for the singleton semantics and the follow-up
-# composer change tracked in #199.
+# Singleton existence probe (issue #201). Pull the OAuth2 token the
+# google provider already minted via data.google_client_config, then
+# issue a single REST GET against the IP config endpoint via
+# data.http. The hashicorp/http provider returns status_code without
+# erroring on non-2xx responses (a 404 from a missing config is the
+# expected greenfield case), so status_code is plan-time-known and
+# safe to gate the resource's count on.
+#
+# No depends_on on google_project_service.identity_platform: that
+# would defer status_code to apply time and break the count expression.
+# The probe is safe pre-API-enable —
+#   greenfield, API disabled: probe returns 403/404 → count=1 → CREATE
+#     fires after the API enable lands in apply order
+#   previously enabled, API enabled: probe returns 200 → count=0 →
+#     SKIP, which is the correct outcome
+# The exotic case (API disabled but config already exists from a prior
+# session) is outside this module's contract.
+data "google_client_config" "current" {}
+
+data "http" "ip_existence_check" {
+  url = "https://identitytoolkit.googleapis.com/v2/projects/${var.project_id}/config"
+  request_headers = {
+    Authorization = "Bearer ${data.google_client_config.current.access_token}"
+    Accept        = "application/json"
+  }
+}
+
+locals {
+  # True when CREATE should fire: probe returned anything other than
+  # 200 (404 = config doesn't exist yet, 403 = API not enabled, etc.).
+  ip_should_create = data.http.ip_existence_check.status_code != 200
+}
+
+# Identity Platform configuration. CREATEd on greenfield projects
+# (count=1 when the probe returned non-200); SKIPPED on previously-
+# enabled projects (count=0 when the probe returned 200).
+# `lifecycle.ignore_changes = all` is retained as a defensive pin
+# against any future apply-time drift on the greenfield path. See
+# header comment for the full adoption rationale (#201).
 resource "google_identity_platform_config" "this" {
+  count = local.ip_should_create ? 1 : 0
+
   project = var.project_id
 
   sign_in {
@@ -92,9 +133,12 @@ resource "google_identity_platform_config" "this" {
   depends_on = [google_project_service.identity_platform]
 }
 
-# OAuth client for web applications
+# OAuth client for web applications. Gated on both var.enable_google_signin
+# and module.adopt.should_create — on adopted projects we don't manage
+# the IdP config either, matching the parent's stance of leaving
+# pre-existing IP state alone.
 resource "google_identity_platform_default_supported_idp_config" "google" {
-  count   = var.enable_google_signin ? 1 : 0
+  count   = var.enable_google_signin && local.ip_should_create ? 1 : 0
   project = var.project_id
 
   idp_id        = "google.com"

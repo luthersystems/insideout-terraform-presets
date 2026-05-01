@@ -9,10 +9,6 @@ terraform {
       source  = "hashicorp/random"
       version = ">= 3.5"
     }
-    time = {
-      source  = "hashicorp/time"
-      version = ">= 0.9"
-    }
   }
 }
 
@@ -62,13 +58,35 @@ resource "google_secret_manager_secret_version" "webhook" {
   secret_data = random_password.webhook_secret.result
 }
 
+# BYOSA runner SA (issue #201). Cloud Build's regional webhook trigger
+# API rejects CREATE with `400 INVALID_ARGUMENT` (no fieldViolations[])
+# when `service_account` is omitted. Reproducing outside Terraform with
+# `gcloud builds triggers create webhook` confirmed the missing
+# `--service-account` flag is the sole cause; the IAM-propagation
+# hypothesis from #190/#197 was incorrect.
+#
+# account_id has a 4-30 char limit and a `[a-z]([-a-z0-9]*[a-z0-9])`
+# regex. var.project (the stack naming prefix, not the GCP project ID)
+# can be up to ~50 chars and would overflow when combined with the
+# random suffix; the runner SA is project-local so the random suffix
+# alone is enough disambiguation. The display_name carries the project
+# label for human readability.
+resource "google_service_account" "cloudbuild_runner" {
+  project      = var.project_id
+  account_id   = "cb-runner-${random_id.suffix.hex}" # 18 chars, fits the 30-char limit
+  display_name = "Cloud Build webhook trigger runner (project ${var.project})"
+}
+
+resource "google_project_iam_member" "cloudbuild_runner_builds_builder" {
+  project = var.project_id
+  role    = "roles/cloudbuild.builds.builder"
+  member  = "serviceAccount:${google_service_account.cloudbuild_runner.email}"
+}
+
 # The Cloud Build P4SA (service-PROJECT_NUMBER@gcp-sa-cloudbuild) needs
-# roles/secretmanager.secretAccessor on the webhook secret BEFORE the
-# trigger is created — otherwise google_cloudbuild_trigger validates
-# secret access on the create call and rejects with
-# `400 INVALID_ARGUMENT: Request contains an invalid argument` (issue
-# #190). Without this binding the trigger create fails on every
-# fresh-project deploy.
+# roles/secretmanager.secretAccessor on the webhook secret so the trigger
+# can read the webhook secret at runtime. Without this binding the
+# trigger creates but webhook calls fail at invocation time.
 #
 # We resolve the project number from data.google_project rather than
 # adopting the google-beta provider just for `google_project_service_identity`.
@@ -99,25 +117,16 @@ resource "google_secret_manager_secret_iam_member" "cloudbuild_webhook_accessor"
   member = local.cloudbuild_service_agent
 }
 
-# IAM propagation wait (issue #197). PR #191 added the secretAccessor
-# binding above and a `depends_on` from the trigger to it, but the
-# trigger create still hit `400 INVALID_ARGUMENT` on the customer's
-# repro. Root cause: GCP IAM is eventually consistent. `depends_on`
-# orders the create call but not the propagation of the binding to
-# the Cloud Build trigger validator. Resource-level Secret Manager
-# bindings have observed propagation of ~60s p50 / ~120s p99, so 90s
-# covers the long tail. `time_sleep` only fires on creation — no
-# penalty on subsequent applies (and no penalty on destroy/apply
-# cycles where this resource is re-created from scratch each time).
-resource "time_sleep" "wait_iam_propagation" {
-  depends_on      = [google_secret_manager_secret_iam_member.cloudbuild_webhook_accessor]
-  create_duration = "90s"
-}
-
 resource "google_cloudbuild_trigger" "trigger" {
   project  = var.project_id
   location = var.region
   name     = "${var.project}-trigger-${random_id.suffix.hex}"
+
+  # BYOSA: Cloud Build's regional webhook trigger API rejects CREATE
+  # with `400 INVALID_ARGUMENT` (no fieldViolations[]) when
+  # service_account is omitted. See header comment on
+  # google_service_account.cloudbuild_runner above (#201).
+  service_account = google_service_account.cloudbuild_runner.id
 
   webhook_config {
     secret = google_secret_manager_secret_version.webhook.id
@@ -132,12 +141,9 @@ resource "google_cloudbuild_trigger" "trigger" {
     timeout = "60s"
   }
 
-  # Wait for IAM propagation before issuing the trigger create — see
-  # `time_sleep.wait_iam_propagation` comment above (#197). The
-  # `time_sleep` itself depends on the IAM binding, so this single
-  # depends_on transitively orders binding → propagation → create.
   depends_on = [
     google_project_service.cloudbuild,
-    time_sleep.wait_iam_propagation,
+    google_secret_manager_secret_iam_member.cloudbuild_webhook_accessor,
+    google_project_iam_member.cloudbuild_runner_builds_builder,
   ]
 }
