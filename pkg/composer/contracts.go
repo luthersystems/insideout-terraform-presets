@@ -466,7 +466,6 @@ type WiredInputs struct {
 // cross-reference resources. Callers with legacy ComponentKey selections
 // must Normalize / use the composeradapter so the `selected` map carries
 // KeyAWS* keys; ComposeStack rejects purely-legacy SelectedKeys at entry.
-// EmitRootMainTF auto-emits `moved {}` blocks for the rename transition.
 
 func vpcRef(selected map[ComponentKey]bool) string {
 	if selected[KeyGCPVPC] {
