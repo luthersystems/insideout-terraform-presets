@@ -191,6 +191,8 @@ This avoids touching every existing per-component `case` and keeps the wiring sh
 
 ### Authority table (the canonical mapping)
 
+The shape must carry every field both the **server-side metric-fetch path** (CloudWatch `GetMetricData`, Cloud Monitoring `timeSeries.list`) and the **UI render path** consume today. UI-render trace details in §UI render contract below.
+
 New file `pkg/observability/component_observability.go`:
 
 ```go
@@ -199,16 +201,38 @@ package observability
 import "github.com/luthersystems/insideout-terraform-presets/pkg/composer"
 
 type ComponentObservability struct {
-    Service   string       // e.g. "rds"
-    Namespace string       // e.g. "AWS/RDS"
-    Metrics   []MetricSpec // every metric the component publishes
+    Service string         // e.g. "rds" — UI-side join key, also used by inspector dispatch
+    AWS     *AWSObs        // populated for AWS components
+    GCP     *GCPObs        // populated for GCP components
 }
 
-type MetricSpec struct {
-    Name       string // e.g. "CPUUtilization"
-    Stat       string // "Average", "Sum", ...
-    Alarmed    bool   // true => must have a matching alarm in observability.tf
-    AlarmIssue string // if Alarmed=false on purpose, an issue ref tracking the gap
+type AWSObs struct {
+    Namespace     string         // e.g. "AWS/RDS" (CloudWatch namespace)
+    DimensionName string         // e.g. "DBInstanceIdentifier"
+    Metrics       []AWSMetricSpec
+}
+
+type AWSMetricSpec struct {
+    Name       string // raw CloudWatch metric name (UI-side join key, e.g. "CPUUtilization")
+    Stat       string // "Average" | "Sum" | "Maximum"
+    Label      string // friendly display label; empty => fall back to metric_display_labels.json
+    Alarmed    bool
+    AlarmIssue string // issue ref if Alarmed=false on purpose
+}
+
+type GCPObs struct {
+    Metrics []GCPMetricSpec
+}
+
+type GCPMetricSpec struct {
+    DisplayName   string   // doubles as the UI-side join key on GCP today
+    MetricType    string   // e.g. "compute.googleapis.com/instance/cpu/utilization"
+    ResourceType  string   // e.g. "gce_instance"
+    LabelKey      string   // resource label to group by, e.g. "instance_id"
+    Aligner       string   // "ALIGN_MEAN" | "ALIGN_RATE" | "ALIGN_PERCENTILE_99"
+    GroupByLabels []string // metric labels to group by for breakdowns (e.g. ["status"])
+    Alarmed       bool
+    AlarmIssue    string
 }
 
 var Observability = map[composer.ComponentKey]ComponentObservability{ ... }
@@ -218,7 +242,66 @@ var Observability = map[composer.ComponentKey]ComponentObservability{ ... }
 var observabilityDeferred = map[composer.ComponentKey]string{ ... }
 ```
 
-Initial values are seeded directly from `aws_metrics.go:258` + `gcp_metrics.go:141`. All entries start with `Alarmed=false` plus deferred-allowlist refs to follow-up issues. Subsequent migration PRs flip entries to `Alarmed=true` and add the matching TF resources.
+The struct mirrors `metricDef`/`serviceMetricDef` (`aws_metrics.go:246-255`) and `gcpMetricDef`/`gcpServiceDef` (`gcp_metrics.go:127-138`) one-for-one, with `Alarmed` / `AlarmIssue` added. Initial values are seeded directly from `aws_metrics.go:258` + `gcp_metrics.go:141`. All entries start with `Alarmed=false` plus deferred-allowlist refs to follow-up issues. Subsequent migration PRs flip entries to `Alarmed=true` and add the matching TF resources.
+
+#### Why two cloud-specific sub-shapes instead of one unified `MetricSpec`
+
+A unified shape would either lose information (drop GCP-only fields like `Aligner` / `GroupByLabels`) or carry unused dead fields on AWS. The split mirrors how `aws_metrics.go` and `gcp_metrics.go` are structured today and keeps the migration drop-in. A future cleanup can introduce a `CloudMetric` interface if a real cross-cloud consumer materializes; today there is none.
+
+#### `metric_display_labels.json` migration
+
+The file is loaded **directly by both Go and TS** today: `internal/agentapi/component_metrics.go:25` (`//go:embed`) and `lib/stack/component-detail-utils.ts:12` (`import ... from "@/internal/agentapi/metric_display_labels.json"` via tsconfig path alias). When the file moves to `pkg/observability/metric_display_labels.json`, the TS side has two viable paths:
+
+- **(a) Update the TS path alias** to point at `node_modules/.../insideout-terraform-presets/pkg/observability/metric_display_labels.json` (or wherever the presets package lands in reliable's deps tree). Lowest-friction.
+- **(b) Drop the TS-side direct import** and have the API include a `label` field on every emitted `MetricResult`, so the TS chart UI no longer needs the JSON. Cleaner long-term but requires a coordinated change to `MetricResult` and the chart code (`ChartWindow.tsx:33-55`).
+
+Recommend (a) for the migration PR; (b) is a follow-up cleanup once the Go-side authority is settled.
+
+### UI render contract (what the chart panel needs)
+
+The reliable UI flow for "show me telemetry for this component" runs through:
+
+- `lib/hooks/useComponentMetrics.ts:52-76` — SWR hook fetches `/api/v2/component/metrics?session_id=…&component_key=…`.
+- `apiserver/router.go:165` → `internal/agentapi/component_metrics.go:489-680` (`OnComponentMetrics`).
+- AWS path: `tryFetchAWSComponentMetrics` → `getServiceMetrics` (`aws_metrics.go:614`) — uses `metricDefinitions[svc].{Namespace, DimensionName, Metrics[].{Name, Stat}}` to call CloudWatch `GetMetricData`.
+- GCP path: `tryFetchGCPComponentMetrics` → `getGCPServiceMetrics` (`gcp_metrics.go:378`) — uses `gcpMetricDefinitions[svc].Metrics[].{MetricType, ResourceType, LabelKey, Aligner, GroupByLabels, DisplayName}` to call `timeSeries.list`.
+- Chart UI: `components/chat/ChartWindow.tsx` (recharts `LineChart`).
+
+What the chart actually consumes from the response, per the trace:
+
+| Field | Source | Notes |
+|---|---|---|
+| `metric.name` | server response (`MetricResult.Name` / `GCPMetricResult.Name`) | UI-side join key for `extractTimeSeries` (`ChartWindow.tsx:33-55`). On AWS this is the raw CloudWatch metric name; on GCP it's the `DisplayName`. |
+| Friendly label / tooltip | `metric_display_labels.json` (consumed directly by TS via `import`) | NOT served via API. |
+| `datapoints[].timestamp`, `.average`/`.sum`/`.maximum` | server response | AWS-shaped; GCP datapoints carry `value` instead, currently dropped by the UI (see "Latent UI bugs" below). |
+
+What the UI **does not consume** today (so the migration target need not preserve):
+
+- Unit (`MetricResult.Unit` is declared but never populated; UI infers from name substring rules in `component-detail-utils.ts:506-527`).
+- Color / line style — hardcoded `#2dd4bf` at `ChartWindow.tsx:23`.
+- Y-axis hints — inferred from name.
+- Time-window / period — server defaults; UI subtitle is the hardcoded "Last 6 hours".
+- Alarm threshold horizontal line — **not rendered today**. No `ReferenceLine` in `ChartWindow.tsx`. So `Alarmed=true` on a `MetricSpec` does not need a chart-side overlay; it remains a *server-side enforcement signal* (does an alarm resource exist?) plus, in future, a separate UI surface (alarm list / banner). Out of scope for this PR.
+- `GCPMetricResult.Labels` — set on the wire by `getGCPServiceMetrics` but ignored by the chart (`ChartWindow.tsx:42` filters only on `metric.name`).
+
+What the multi-resource fan-out looks like:
+
+- One `ResourceMetrics` per discovered cloud resource (e.g. one per RDS DB). Same metric repeats per resource. The chart UI flattens datapoints across resources into a single line — no per-instance picker, no aggregation, no per-instance lines (`ChartWindow.tsx:33-55`). Migration preserves the existing shape; UI behavior unchanged.
+
+What `tracked_metrics` (the placeholder grid before live data lands) looks like:
+
+- AWS: `{Name: <CloudWatch raw name>, Label: <metric_display_labels.json lookup>}` (`component_metrics.go:371-410`).
+- GCP: `{Name: <DisplayName>, Label: <DisplayName>}` (`component_metrics.go:380-384`).
+
+This asymmetry must survive migration — the chart-target URL on AWS uses the raw CloudWatch name as a join key, while GCP uses the friendly display name. The `AWSMetricSpec.Name` / `GCPMetricSpec.DisplayName` split in the proposed authority table preserves it explicitly.
+
+#### Latent UI bug surfaced by this trace (not introduced by migration; flag for followup)
+
+`ChartWindow.tsx:46` reads `dp.average ?? dp.sum ?? dp.maximum ?? 0`. GCP datapoints emit `value`, not any of those — so **GCP charts render as flat zero today**. Same chain at `component-detail-utils.ts:550`. Independent of this migration; opening as its own issue is part of the verification step below.
+
+#### `METRICS_SUPPORTED_KEYS` allowlist
+
+`lib/hooks/useComponentMetrics.ts:29-44` carries a TS-side allowlist that gates the SWR fetch (returns `null` key for non-allowlisted components, suppressing a 400 from the backend). Today it's drift-tested by `internal/agentapi/component_metrics_drift_test.go:138` (`TestMetricsSupportedKeys_MatchesGoMapping`) which parses the TS literal and asserts two-way set equality with `componentMetricsMapping`. After PR 5 (when `componentMetricsMapping` migrates here as `pkg/observability.Observability`), this drift test moves with it OR — cleanlier — the TS allowlist is regenerated from the Go authority via the same source-of-truth flip pattern as `AllComponentKeys`. PR 5's acceptance criteria include "drift test parity preserved or replaced." Decision deferred to PR 5.
 
 ### CI-test contract (drift gates)
 
@@ -315,6 +398,8 @@ These do not block the migration but need decisions during specific PRs:
 3. **Inspector envelope contract.** PR 9 (extractors) requires a stable typed shape for the JSON the reliable dispatcher passes to extractors. Today extractors traverse `map[string]any` shaped by reliable's per-service handlers. Two options: (a) define `pkg/observability/extractors.InspectorEnvelope` as a tagged-union, dispatcher converts to it before calling extractors; (b) keep `map[string]any` and document the per-component shape contract in extractor doc comments. Recommend (a) — testable contract, stronger drift gate.
 4. **Repackaging reliable.** Final PR renames `internal/agentapi/` to better reflect its post-migration responsibility — candidates: `internal/cloudapi/`, `internal/inspector/`. Decide in the cleanup PR.
 5. **TS-side hand-written component-key lists** — `components/terraform/composer/module-contracts.ts`, `lib/hooks/useComponentMetrics.ts::METRICS_SUPPORTED_KEYS`, `lib/hooks/useTFOutputs.ts`, `lib/stack/providers.ts`, `lib/hooks/useStackViewV2.ts`. Each is a drift hazard. After the source-of-truth flip (PR 2), a follow-up TS-side cleanup can converge them on a single import or a generated mirror.
+6. **Pre-existing GCP chart bug.** `ChartWindow.tsx:46` reads `dp.average ?? dp.sum ?? dp.maximum ?? 0` and ignores GCP's `value` field — GCP charts render as flat zero today. Independent of this migration but surfaced by the UI-render trace; file in `reliable` as its own issue and link from PR 5.
+7. **Per-instance UI.** Today the chart flattens all resources' datapoints into a single line (`ChartWindow.tsx:33-55`), with no picker. If we later want per-instance lines (one per RDS DB, one per ALB target), the migrated authority table already carries the dimension-name fields needed — but the UI surface is a separate, larger change.
 
 ## References
 
