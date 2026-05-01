@@ -219,17 +219,60 @@ func TestGetPresetFiles_GCP_AllModules(t *testing.T) {
 	}
 }
 
-// stripHCLComments returns the input HCL with `#`- and `//`-prefixed
-// comment lines removed. Useful for structural pins that need to
-// assert against active code only — the migration recipes in
-// gcp/kms/main.tf's header comment legitimately reference the
-// upstream's old module addresses, but those references are
-// documentation, not active code. moved {} blocks describing the old
-// upstream addresses are intentionally NOT stripped: they ARE active
-// HCL (terraform reads them on plan) and the structural pin treats
-// them as such — a moved.from address pointing at module.kms is
-// expected and necessary.
-func stripHCLComments(s string) string {
+// extractMovedBlocks parses a (comment-stripped) HCL body and returns
+// the from→to address pairs declared in `moved {}` blocks. Used to
+// pin state-migration assertions in structural tests.
+//
+// The regex tolerates any whitespace between `moved`, `{`, `from =`,
+// `to =`, and `}`. It captures the address expressions verbatim
+// (including bracket-keyed indices like `["default"]` and `[0]`).
+//
+// fatals via the testing.T on a parse failure rather than returning
+// an error — these are deterministic structural pins, never expected
+// to silently degrade.
+func extractMovedBlocks(t *testing.T, hclBody string) map[string]string {
+	t.Helper()
+	// (?ms) → multiline + dotall. Each capture group:
+	//   1: the `from = ...` rhs (terminated by newline)
+	//   2: the `to = ...` rhs (terminated by newline)
+	re := regexp.MustCompile(`(?ms)moved\s*\{\s*from\s*=\s*([^\n]+?)\s*to\s*=\s*([^\n]+?)\s*\}`)
+	matches := re.FindAllStringSubmatch(hclBody, -1)
+	out := make(map[string]string, len(matches))
+	for _, m := range matches {
+		require.Len(t, m, 3, "regex capture shape changed; expected 3 groups (full match + from + to)")
+		from := strings.TrimSpace(m[1])
+		to := strings.TrimSpace(m[2])
+		require.NotContains(t, out, from,
+			"duplicate `from = %s` in moved blocks — terraform forbids two moved blocks rebinding the same source", from)
+		out[from] = to
+	}
+	return out
+}
+
+// stripFullLineComments removes lines whose first non-whitespace
+// character begins a `#`- or `//`-style comment. It does NOT handle:
+//
+//   - Inline trailing comments (e.g. `name = "foo" # bar` keeps the
+//     entire line, including the trailing `# bar`).
+//   - Block comments (`/* ... */` is preserved verbatim).
+//   - String literals that happen to contain a `#` or `//` (e.g.
+//     `"#abc123"` is preserved, which is the correct behavior).
+//
+// Use it for structural pins that need to ignore documentation
+// blocks (e.g. the migration recipe in gcp/kms/main.tf's header
+// comment legitimately references the upstream's old module
+// addresses — those references are documentation, not active
+// code). Callers MUST keep banned-token references on full-line
+// comments only — appending `# preserved for slice() history` to an
+// active code line would silently invalidate any
+// `require.NotContains(stripped, "slice(")` assertion that depends
+// on this helper.
+//
+// moved {} blocks describing old upstream addresses are intentionally
+// NOT stripped: they ARE active HCL (terraform reads them on plan)
+// and structural pins treat them as such — a `moved.from` address
+// pointing at `module.kms` is expected and necessary.
+func stripFullLineComments(s string) string {
 	lines := strings.Split(s, "\n")
 	out := make([]string, 0, len(lines))
 	for _, l := range lines {
@@ -282,7 +325,7 @@ func TestGetPresetFiles_GCP_KMS_NoUpstreamModule(t *testing.T) {
 	require.True(t, ok, "gcp/kms must include main.tf")
 
 	body := string(mainTF)
-	bodyNoComments := stripHCLComments(body)
+	bodyNoComments := stripFullLineComments(body)
 
 	// The upstream module source is gone (only the active HCL is
 	// checked — the migration recipe in the header comment
@@ -311,15 +354,33 @@ func TestGetPresetFiles_GCP_KMS_NoUpstreamModule(t *testing.T) {
 		"gcp/kms/main.tf must declare google_kms_crypto_key.ephemeral for prevent_destroy=false (issue #182)")
 
 	// Three moved {} blocks for the default-config state migration:
-	// keyring + protected[default] + ephemeral[default]. Anything
-	// less and customers upgrading from the upstream module see
-	// replace plans on existing keys.
-	require.GreaterOrEqual(t, strings.Count(bodyNoComments, "moved {"), 3,
-		"gcp/kms/main.tf must include 3 moved {} blocks for default-config state migration (issue #182)")
+	// keyring + protected[default] + ephemeral[default]. The exact
+	// from→to pairs matter — a refactor that renames `protected` to
+	// `current` and forgets to update the moved block silently
+	// destroys customers' keys (the rebind targets a non-existent
+	// address, then the new resource creates fresh and the old
+	// state entry is orphaned). The pin asserts each expected pair
+	// rather than just counting blocks.
+	moved := extractMovedBlocks(t, bodyNoComments)
+	expectedMoves := map[string]string{
+		"module.kms.google_kms_key_ring.key_ring":            "google_kms_key_ring.this",
+		`module.kms.google_kms_crypto_key.key[0]`:            `google_kms_crypto_key.protected["default"]`,
+		`module.kms.google_kms_crypto_key.key_ephemeral[0]`:  `google_kms_crypto_key.ephemeral["default"]`,
+	}
+	require.Len(t, moved, len(expectedMoves),
+		"gcp/kms/main.tf must include exactly %d moved {} blocks for default-config state migration (issue #182); got %d: %v",
+		len(expectedMoves), len(moved), moved)
+	for from, wantTo := range expectedMoves {
+		gotTo, ok := moved[from]
+		require.True(t, ok,
+			"gcp/kms/main.tf is missing the moved {} block for `from = %s` (issue #182 — customers' state for this address will not migrate)", from)
+		require.Equal(t, wantTo, gotTo,
+			"gcp/kms/main.tf moved block for `from = %s` rebinds to `%s` but should rebind to `%s` (issue #182 — wrong target silently orphans state and creates a fresh resource)", from, gotTo, wantTo)
+	}
 
 	outputsTF, ok := files["/outputs.tf"]
 	require.True(t, ok, "gcp/kms must include outputs.tf")
-	outputsBodyNoComments := stripHCLComments(string(outputsTF))
+	outputsBodyNoComments := stripFullLineComments(string(outputsTF))
 	require.Contains(t, outputsBodyNoComments, "google_kms_key_ring.this",
 		"gcp/kms/outputs.tf must read from the direct resource (issue #182)")
 	require.NotContains(t, outputsBodyNoComments, "module.kms",

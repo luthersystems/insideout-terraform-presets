@@ -2264,18 +2264,31 @@ func TestComposeStack_GCPRouterAndConnectorOutputs_TerraformValidate(t *testing.
 	}
 }
 
-// TestComposeStack_GCPCloudKMS_TerraformValidate is the formal closure
+// TestComposeStack_GCPCloudKMS_TerraformPlan is the formal closure
 // for issue #182's acceptance criterion: a fresh GCP session that
 // selects gcp/kms with default config (and with non-default
-// iam_bindings) must plan cleanly on first run with empty state. PR
-// #181 surgically wrapped the upstream's broken slice() in try() to
-// protect default consumers but left a hole when iam_bindings is
+// iam_bindings) must **plan** cleanly on first run with empty state.
+// PR #181 surgically wrapped the upstream's broken slice() in try()
+// to protect default consumers but left a hole when iam_bindings is
 // non-empty; #182 replaced the upstream entirely with direct
-// google_kms_* resources keyed by for_each, closing the hole. This
-// test runs `terraform init` + `terraform validate` against the
-// composed stack to prove there's no Invalid index / empty tuple
-// regression — mirroring TestComposeStack_GCPRouterAndConnectorOutputs_TerraformValidate
-// which closed #178's analogous criterion.
+// google_kms_* resources keyed by for_each, closing the hole.
+//
+// `terraform plan -refresh=false` (NOT `terraform validate`) is the
+// right gate here: the upstream's failure mode is a `slice()` end-
+// index error during expression evaluation, which `validate` does
+// NOT exercise — `validate` only checks HCL syntax + type
+// conformance + attribute existence, not expression evaluation. A
+// regression that re-vendors the upstream module would slip past a
+// validate-only gate but be caught by plan. (The sibling
+// TestComposeStack_GCPRouterAndConnectorOutputs_TerraformValidate
+// uses validate because issue #178's failure mode is `Invalid
+// index` on tuple access, which validate DOES surface — different
+// failure mode, different gate.)
+//
+// `-refresh=false` skips the credential-requiring provider refresh
+// (this test runs offline against an empty state with no real GCP
+// project) — the failure mode we're guarding against fires during
+// expression evaluation in plan, well before any provider call.
 //
 // CI vs local skip rules match the router/connector test:
 //   - In CI (CI=true): terraform init failure is a hard failure (the
@@ -2283,12 +2296,12 @@ func TestComposeStack_GCPRouterAndConnectorOutputs_TerraformValidate(t *testing.
 //   - Local dev: skip on init failure so offline `go test ./...` works.
 //
 // Use `go test -short` to skip entirely (e.g. in pre-commit hooks).
-func TestComposeStack_GCPCloudKMS_TerraformValidate(t *testing.T) {
+func TestComposeStack_GCPCloudKMS_TerraformPlan(t *testing.T) {
 	if testing.Short() {
-		t.Skip("-short skips multi-second terraform init+validate")
+		t.Skip("-short skips multi-second terraform init+plan")
 	}
 	if _, err := exec.LookPath("terraform"); err != nil {
-		t.Skip("terraform binary not on PATH; skipping integration validate")
+		t.Skip("terraform binary not on PATH; skipping integration plan")
 	}
 
 	inCI := os.Getenv("CI") == "true"
@@ -2297,11 +2310,11 @@ func TestComposeStack_GCPCloudKMS_TerraformValidate(t *testing.T) {
 	// non-empty iam_bindings shape that the composer surfaces. The
 	// composer mapper does not currently surface var.iam_bindings as
 	// a Component-driven knob, so the second combo writes an extra
-	// kms.auto.tfvars after composition to inject the binding —
-	// faithful to what a reliable3-side mapper would emit and to
-	// what a real customer's stack would look like. The plan-time
-	// resolution of that binding is exactly the case PR #181 could
-	// not protect.
+	// kms_iam_bindings.auto.tfvars after composition to inject the
+	// binding — faithful to what a reliable3-side mapper would emit
+	// and to what a real customer's stack would look like. The
+	// plan-time resolution of that binding is exactly the case PR
+	// #181 could not protect.
 	combos := []struct {
 		name        string
 		extraTFVars string
@@ -2353,16 +2366,254 @@ func TestComposeStack_GCPCloudKMS_TerraformValidate(t *testing.T) {
 				}
 				t.Skipf("terraform init unavailable (network/cache) in local dev: %s\n%s", err, initOut)
 			}
-			validateCmd := exec.Command("terraform", "validate", "-no-color")
-			validateCmd.Dir = dir
-			validateOut, err := validateCmd.CombinedOutput()
-			require.NoError(t, err, "terraform validate must succeed on composed gcp/kms stack (issue #182):\n%s", validateOut)
-			require.NotContains(t, string(validateOut), "Invalid index",
-				"terraform validate surfaced 'Invalid index' (issue #182 regression)")
-			require.NotContains(t, string(validateOut), "empty tuple",
-				"terraform validate surfaced 'empty tuple' (issue #182 regression)")
-			require.NotContains(t, string(validateOut), "slice",
-				"terraform validate surfaced 'slice' (issue #182 regression — upstream module re-introduced)")
+			planCmd := exec.Command("terraform", "plan", "-refresh=false", "-input=false", "-no-color")
+			planCmd.Dir = dir
+			planOut, err := planCmd.CombinedOutput()
+			require.NoError(t, err, "terraform plan must succeed on composed gcp/kms stack (issue #182 — formal closure for the slice end-index failure):\n%s", planOut)
+			// Belt-and-braces: even if plan exits 0, surface the
+			// upstream's specific error string in case a future
+			// terraform version downgrades the failure to a
+			// warning instead of an error.
+			require.NotContains(t, string(planOut), "slice end_index",
+				"terraform plan surfaced 'slice end_index' (issue #182 regression — upstream module re-introduced)")
+			require.NotContains(t, string(planOut), "Invalid index",
+				"terraform plan surfaced 'Invalid index' (related #178 regression)")
 		})
 	}
+}
+
+// TestComposeStack_GCPCloudKMS_MovedBlocksRebindUpstreamState exercises
+// the issue #182 `moved {}` blocks against a synthetic state file
+// that mimics what an existing default-config customer's state looks
+// like AFTER the old upstream-vendoring config was applied — i.e. the
+// state contains `module.gcp_cloud_kms.module.kms.google_kms_key_ring.key_ring`
+// and `.google_kms_crypto_key.key[0]`. The composer wraps the kms
+// preset as `module "gcp_cloud_kms"` (named after the ComponentKey),
+// and inside the wrapper preset the old upstream vendoring was
+// `module "kms" { source = "terraform-google-modules/kms/google" }` —
+// hence the doubled `module.gcp_cloud_kms.module.kms.` prefix in
+// real customer state. Without the moved {} blocks, terraform would
+// see those addresses as orphans (wrapper module no longer declares
+// the inner `module "kms"`) and plan to destroy them.
+//
+// The test composes the stack, writes the state file as
+// `terraform.tfstate`, runs `terraform init`, then `terraform plan
+// -refresh=false` and asserts:
+//
+//   - plan succeeds (the moved blocks parse and the source addresses
+//     in state are recognized).
+//   - plan output explicitly acknowledges the moved-block rebinding
+//     ("has moved from" is terraform's standard phrasing — a moved
+//     block whose source address is absent from state silently
+//     becomes a no-op, so the acknowledgment string is the proof
+//     that the rebind actually fired).
+//   - plan output does NOT contain a destroy plan for the old
+//     upstream addresses (which would mean the rebind failed and
+//     terraform sees the old resources as orphaned).
+//
+// `-refresh=false` skips the credential-requiring provider refresh
+// — the synthetic state has bare-bones attributes that wouldn't
+// match a real GCP read.
+//
+// Limitations: the synthetic state intentionally omits
+// `random_id.suffix` and uses a baked keyring name that won't match
+// a fresh re-deploy's `random_id.suffix.hex`. As a result, `plan`
+// will also propose creating a NEW `random_id.suffix` (and possibly
+// re-creating the keyring under the new name). This is fine for
+// what the test asserts — the moved-block acknowledgment fires
+// before any attribute-drift comparison. A test that asserts "0
+// resources to destroy" would require synthesizing the random_id
+// state too AND interpolating its hex into the keyring name; the
+// test's contract is "moved blocks rebind correctly," not "default
+// config produces a no-op upgrade plan" (the latter is the manual
+// sandbox-apply gate documented in the PR).
+func TestComposeStack_GCPCloudKMS_MovedBlocksRebindUpstreamState(t *testing.T) {
+	if testing.Short() {
+		t.Skip("-short skips multi-second terraform init+plan")
+	}
+	if _, err := exec.LookPath("terraform"); err != nil {
+		t.Skip("terraform binary not on PATH; skipping integration plan")
+	}
+
+	inCI := os.Getenv("CI") == "true"
+
+	c := newTestClient()
+	out, err := c.ComposeStack(ComposeStackOpts{
+		Cloud:        "gcp",
+		SelectedKeys: []ComponentKey{KeyGCPCloudKMS},
+		Comps:        &Components{},
+		Cfg:          &Config{Region: "us-central1"},
+		Project:      "test",
+		Region:       "us-central1",
+		GCPProjectID: "test-project-12345",
+	})
+	require.NoError(t, err)
+
+	dir := t.TempDir()
+	writeOutputs(t, out, dir)
+
+	// Synthetic state: mimics an existing customer's default-config
+	// stack as it was last applied with the pre-#182 upstream
+	// vendoring. Includes:
+	//   - random_id.suffix (in the wrapper at module.gcp_cloud_kms)
+	//     with a known hex value of "deadbeef" so the keyring name
+	//     `${var.project}-${var.keyring_name}-${random_id.suffix.hex}`
+	//     matches what's already in state; without this the plan
+	//     would regenerate the random_id and trigger a force-new
+	//     on the keyring name (then chain to a prevent_destroy
+	//     error on the crypto_key).
+	//   - google_kms_key_ring at the doubly-prefixed
+	//     module.gcp_cloud_kms.module.kms.* address.
+	//   - google_kms_crypto_key.key[0] (count-indexed in the
+	//     upstream — `each` field is omitted since count-indexed
+	//     resources don't have it).
+	//
+	// Refresh=false skips the live read so any drift from real GCP
+	// schemas is irrelevant.
+	state := `{
+  "version": 4,
+  "terraform_version": "1.5.0",
+  "serial": 1,
+  "lineage": "00000000-0000-0000-0000-000000000182",
+  "outputs": {},
+  "resources": [
+    {
+      "module": "module.gcp_cloud_kms",
+      "mode": "managed",
+      "type": "random_id",
+      "name": "suffix",
+      "provider": "provider[\"registry.terraform.io/hashicorp/random\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "b64_std": "3q2+7w==",
+            "b64_url": "3q2-7w",
+            "byte_length": 4,
+            "dec": "3735928559",
+            "hex": "deadbeef",
+            "id": "3q2-7w",
+            "keepers": null,
+            "prefix": null
+          },
+          "sensitive_attributes": []
+        }
+      ]
+    },
+    {
+      "module": "module.gcp_cloud_kms.module.kms",
+      "mode": "managed",
+      "type": "google_kms_key_ring",
+      "name": "key_ring",
+      "provider": "provider[\"registry.terraform.io/hashicorp/google\"]",
+      "instances": [
+        {
+          "schema_version": 0,
+          "attributes": {
+            "id": "projects/test-project-12345/locations/us-central1/keyRings/test-main-keyring-deadbeef",
+            "location": "us-central1",
+            "name": "test-main-keyring-deadbeef",
+            "project": "test-project-12345",
+            "timeouts": null
+          },
+          "sensitive_attributes": []
+        }
+      ]
+    },
+    {
+      "module": "module.gcp_cloud_kms.module.kms",
+      "mode": "managed",
+      "type": "google_kms_crypto_key",
+      "name": "key",
+      "provider": "provider[\"registry.terraform.io/hashicorp/google\"]",
+      "instances": [
+        {
+          "index_key": 0,
+          "schema_version": 1,
+          "attributes": {
+            "id": "projects/test-project-12345/locations/us-central1/keyRings/test-main-keyring-deadbeef/cryptoKeys/default",
+            "key_ring": "projects/test-project-12345/locations/us-central1/keyRings/test-main-keyring-deadbeef",
+            "name": "default",
+            "purpose": "ENCRYPT_DECRYPT",
+            "rotation_period": "7776000s",
+            "labels": {},
+            "import_only": false,
+            "skip_initial_version_creation": false,
+            "destroy_scheduled_duration": "86400s",
+            "version_template": [
+              {
+                "algorithm": "GOOGLE_SYMMETRIC_ENCRYPTION",
+                "protection_level": "SOFTWARE"
+              }
+            ],
+            "timeouts": null
+          },
+          "sensitive_attributes": []
+        }
+      ]
+    }
+  ],
+  "check_results": null
+}
+`
+	require.NoError(t,
+		os.WriteFile(filepath.Join(dir, "terraform.tfstate"), []byte(state), 0o600),
+		"write synthetic state")
+
+	initCmd := exec.Command("terraform", "init", "-backend=false", "-input=false", "-no-color")
+	initCmd.Dir = dir
+	initOut, err := initCmd.CombinedOutput()
+	if err != nil {
+		if inCI {
+			require.NoError(t, err,
+				"terraform init must succeed in CI; this gate is the moved-blocks pin for #182:\n%s", initOut)
+		}
+		t.Skipf("terraform init unavailable (network/cache) in local dev: %s\n%s", err, initOut)
+	}
+
+	planCmd := exec.Command("terraform", "plan", "-refresh=false", "-input=false", "-no-color")
+	planCmd.Dir = dir
+	planOut, err := planCmd.CombinedOutput()
+	require.NoError(t, err, "terraform plan must succeed against synthetic upstream-state (issue #182 moved-blocks gate):\n%s", planOut)
+
+	// Each moved block's source address must trigger terraform's
+	// rebind acknowledgment. A moved block whose source address is
+	// absent from state silently becomes a no-op, so this string
+	// is the proof that the rebind actually fired.
+	planStr := string(planOut)
+	for _, want := range []string{
+		`module.gcp_cloud_kms.module.kms.google_kms_key_ring.key_ring`,
+		`module.gcp_cloud_kms.module.kms.google_kms_crypto_key.key[0]`,
+	} {
+		require.Contains(t, planStr, want,
+			"terraform plan output must reference the old upstream address `%s` as the moved-block source — a missing reference means the moved block silently became a no-op and customers' state will NOT migrate (issue #182):\n%s",
+			want, planStr)
+	}
+	// Terraform uses two interchangeable phrasings for moved-block
+	// acknowledgment in plan output:
+	//   - `has moved to <new_address>` (when the resource has no
+	//     other changes — pure address rebind).
+	//   - `(moved from <old_address>)` (when the resource has other
+	//     changes too — e.g. computed attributes added by a newer
+	//     provider version).
+	// Either is proof the moved block fired. Two moved sources in
+	// state → at least two acknowledgments combined.
+	movedCount := strings.Count(planStr, "has moved to") + strings.Count(planStr, "moved from")
+	require.GreaterOrEqual(t, movedCount, 2,
+		"terraform plan output must contain at least 2 moved-block acknowledgments combined (`has moved to` + `moved from`); got %d. Fewer means moved blocks aren't rebinding (issue #182):\n%s", movedCount, planStr)
+
+	// The strongest assertion: 0 destroys. If the moved blocks fully
+	// rebound the synthetic state, terraform should not plan to
+	// destroy anything. (Updates-in-place are fine — they reflect
+	// computed-attribute additions in the new provider version, not
+	// a re-creation of the keyring or crypto_key.)
+	require.Contains(t, planStr, "0 to destroy",
+		"terraform plan must show 0 destroys after moved-block rebind — a non-zero destroy count means the moved block didn't catch the source address and customers' state would lose the resource on apply (issue #182):\n%s", planStr)
+
+	// Belt-and-braces: the slice() failure mode must not surface
+	// even with state present (a regression that re-vendored the
+	// upstream would fire here too, possibly with attribute-shape
+	// errors layered on top).
+	require.NotContains(t, planStr, "slice end_index",
+		"terraform plan surfaced 'slice end_index' (issue #182 regression):\n%s", planStr)
 }

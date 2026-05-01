@@ -88,7 +88,11 @@ resource "google_secret_manager_secret_iam_member" "cloudbuild_webhook_accessor"
   project   = var.project_id
   secret_id = google_secret_manager_secret.webhook.secret_id
   role      = "roles/secretmanager.secretAccessor"
-  member    = local.cloudbuild_service_agent
+  # local.cloudbuild_service_agent reads data.google_project.this.number,
+  # which the depends_on above defers to the apply phase — so `member`
+  # shows as `(known after apply)` in the plan. The binding still
+  # creates correctly; only the plan readout is delayed.
+  member = local.cloudbuild_service_agent
 }
 
 resource "google_cloudbuild_trigger" "trigger" {
