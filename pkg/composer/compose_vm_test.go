@@ -219,20 +219,104 @@ func TestGetPresetFiles_GCP_AllModules(t *testing.T) {
 	}
 }
 
-// TestGetPresetFiles_GCP_KMS_HasUpstreamSliceBypass pins the issue #180
-// fix at the embedded-FS layer. The upstream
-// terraform-google-modules/kms/google module's local.keys_by_name calls
-// slice() on a count-controlled splat that errors during plan against an
-// empty state. Our preset wraps that consumption in
-// `try(module.kms.keys, {})` so the slice failure is caught and the
-// degraded value flows to outputs as `{}` rather than failing the plan.
+// extractMovedBlocks parses a (comment-stripped) HCL body and returns
+// the from→to address pairs declared in `moved {}` blocks. Used to
+// pin state-migration assertions in structural tests.
 //
-// This is a structural pin: it cannot reproduce the runtime slice error
-// (mock_provider populates count splats with the right shape), but it
-// catches a future revert that removes the try() wrapper. A real-plan
-// integration test against an empty state is tracked as part of the
-// upstream-replacement work in #182.
-func TestGetPresetFiles_GCP_KMS_HasUpstreamSliceBypass(t *testing.T) {
+// The regex tolerates any whitespace between `moved`, `{`, `from =`,
+// `to =`, and `}`. It captures the address expressions verbatim
+// (including bracket-keyed indices like `["default"]` and `[0]`).
+//
+// fatals via the testing.T on a parse failure rather than returning
+// an error — these are deterministic structural pins, never expected
+// to silently degrade.
+func extractMovedBlocks(t *testing.T, hclBody string) map[string]string {
+	t.Helper()
+	// (?ms) → multiline + dotall. Each capture group:
+	//   1: the `from = ...` rhs (terminated by newline)
+	//   2: the `to = ...` rhs (terminated by newline)
+	re := regexp.MustCompile(`(?ms)moved\s*\{\s*from\s*=\s*([^\n]+?)\s*to\s*=\s*([^\n]+?)\s*\}`)
+	matches := re.FindAllStringSubmatch(hclBody, -1)
+	out := make(map[string]string, len(matches))
+	for _, m := range matches {
+		require.Len(t, m, 3, "regex capture shape changed; expected 3 groups (full match + from + to)")
+		from := strings.TrimSpace(m[1])
+		to := strings.TrimSpace(m[2])
+		require.NotContains(t, out, from,
+			"duplicate `from = %s` in moved blocks — terraform forbids two moved blocks rebinding the same source", from)
+		out[from] = to
+	}
+	return out
+}
+
+// stripFullLineComments removes lines whose first non-whitespace
+// character begins a `#`- or `//`-style comment. It does NOT handle:
+//
+//   - Inline trailing comments (e.g. `name = "foo" # bar` keeps the
+//     entire line, including the trailing `# bar`).
+//   - Block comments (`/* ... */` is preserved verbatim).
+//   - String literals that happen to contain a `#` or `//` (e.g.
+//     `"#abc123"` is preserved, which is the correct behavior).
+//
+// Use it for structural pins that need to ignore documentation
+// blocks (e.g. the migration recipe in gcp/kms/main.tf's header
+// comment legitimately references the upstream's old module
+// addresses — those references are documentation, not active
+// code). Callers MUST keep banned-token references on full-line
+// comments only — appending `# preserved for slice() history` to an
+// active code line would silently invalidate any
+// `require.NotContains(stripped, "slice(")` assertion that depends
+// on this helper.
+//
+// moved {} blocks describing old upstream addresses are intentionally
+// NOT stripped: they ARE active HCL (terraform reads them on plan)
+// and structural pins treat them as such — a `moved.from` address
+// pointing at `module.kms` is expected and necessary.
+func stripFullLineComments(s string) string {
+	lines := strings.Split(s, "\n")
+	out := make([]string, 0, len(lines))
+	for _, l := range lines {
+		trimmed := strings.TrimSpace(l)
+		if strings.HasPrefix(trimmed, "#") || strings.HasPrefix(trimmed, "//") {
+			continue
+		}
+		out = append(out, l)
+	}
+	return strings.Join(out, "\n")
+}
+
+// TestGetPresetFiles_GCP_KMS_NoUpstreamModule pins the issue #182
+// upstream-replacement at the embedded-FS layer.
+//
+// History: the preset originally wrapped
+// terraform-google-modules/kms/google ~> 3.0. That module's
+// local.keys_by_name calls slice() on a count-controlled splat which
+// errors during plan against an empty state (issue #180). PR #181
+// surgically wrapped the consumption in try() to unblock the
+// default-config customer in #178's repro, but iam_bindings still
+// referenced the slice expression directly so non-default users hit a
+// hole. Issue #182 replaced the upstream module entirely with direct
+// google_kms_* resources keyed by for_each — eliminating the slice
+// expression so the failure mode cannot recur and closing the
+// iam_bindings hole by construction.
+//
+// This structural pin asserts (against comment-stripped HCL, since
+// the header comment legitimately documents the migration recipe by
+// referencing the old upstream addresses):
+//   - The upstream module is gone (no module "kms" block, no
+//     terraform-google-modules/kms source, no slice() call, no
+//     try() wrap of the upstream).
+//   - The replacement resources (key_ring + protected/ephemeral
+//     for_each crypto_keys) are present.
+//   - The default-config moved {} blocks (3 of them) are present so
+//     existing customers' state migrates without replace plans. The
+//     moved {} blocks intentionally reference module.kms.* on the
+//     `from` side — those are active HCL describing prior state.
+//   - outputs.tf reads from the direct resource, not from a module
+//     reference.
+//
+// A revert that re-vendors the upstream now fails this test loud.
+func TestGetPresetFiles_GCP_KMS_NoUpstreamModule(t *testing.T) {
 	t.Parallel()
 	files, err := newTestClient().GetPresetFiles("gcp/kms")
 	require.NoError(t, err)
@@ -241,24 +325,113 @@ func TestGetPresetFiles_GCP_KMS_HasUpstreamSliceBypass(t *testing.T) {
 	require.True(t, ok, "gcp/kms must include main.tf")
 
 	body := string(mainTF)
+	bodyNoComments := stripFullLineComments(body)
 
-	// The literal try() wrap on module.kms.keys is the bypass that
-	// prevents the upstream slice() error from failing the plan.
-	require.Contains(t, body, "try(module.kms.keys, {})",
-		"gcp/kms/main.tf must wrap module.kms.keys in try() (issue #180); a regression here lets the upstream slice end_index error reach customers")
+	// The upstream module source is gone (only the active HCL is
+	// checked — the migration recipe in the header comment
+	// legitimately mentions the old source).
+	require.NotContains(t, bodyNoComments, "terraform-google-modules/kms/google",
+		"gcp/kms/main.tf must not re-vendor the upstream module (issue #182)")
+	// No module "kms" {} block. Asserting on the block-header form
+	// (with quotes) lets the moved {} blocks below legitimately use
+	// the bare `module.kms.*` address syntax on their `from` side.
+	require.NotContains(t, bodyNoComments, `module "kms"`,
+		"gcp/kms/main.tf must not declare a module \"kms\" block (issue #182)")
+	require.NotContains(t, bodyNoComments, "slice(",
+		"gcp/kms/main.tf must not contain slice() expressions — the upstream's failure mode (issue #180/#182)")
+	require.NotContains(t, bodyNoComments, "try(module.kms",
+		"gcp/kms/main.tf must not retain the surgical try() wrap from PR #181 — the upstream is gone (issue #182)")
 
-	// The local.keys_by_name local is the named carrier so consumers
-	// (outputs, IAM bindings) can reference one stable name. The next
-	// two checks ensure the bypass is actually the one consumed by the
-	// outputs, not just a dead local.
-	require.Contains(t, body, "keys_by_name = try(module.kms.keys, {})",
-		"local.keys_by_name must be the carrier of the bypass result")
+	// The replacement resources are present. Asserting on the
+	// resource-block headers (rather than on resource address
+	// references) catches a rename of the resources themselves, which
+	// would also break the moved {} blocks below.
+	require.Contains(t, bodyNoComments, `resource "google_kms_key_ring" "this"`,
+		"gcp/kms/main.tf must declare google_kms_key_ring.this (issue #182)")
+	require.Contains(t, bodyNoComments, `resource "google_kms_crypto_key" "protected"`,
+		"gcp/kms/main.tf must declare google_kms_crypto_key.protected for prevent_destroy=true (issue #182)")
+	require.Contains(t, bodyNoComments, `resource "google_kms_crypto_key" "ephemeral"`,
+		"gcp/kms/main.tf must declare google_kms_crypto_key.ephemeral for prevent_destroy=false (issue #182)")
+
+	// Three moved {} blocks for the default-config state migration:
+	// keyring + protected[default] + ephemeral[default]. The exact
+	// from→to pairs matter — a refactor that renames `protected` to
+	// `current` and forgets to update the moved block silently
+	// destroys customers' keys (the rebind targets a non-existent
+	// address, then the new resource creates fresh and the old
+	// state entry is orphaned). The pin asserts each expected pair
+	// rather than just counting blocks.
+	moved := extractMovedBlocks(t, bodyNoComments)
+	expectedMoves := map[string]string{
+		"module.kms.google_kms_key_ring.key_ring":            "google_kms_key_ring.this",
+		`module.kms.google_kms_crypto_key.key[0]`:            `google_kms_crypto_key.protected["default"]`,
+		`module.kms.google_kms_crypto_key.key_ephemeral[0]`:  `google_kms_crypto_key.ephemeral["default"]`,
+	}
+	require.Len(t, moved, len(expectedMoves),
+		"gcp/kms/main.tf must include exactly %d moved {} blocks for default-config state migration (issue #182); got %d: %v",
+		len(expectedMoves), len(moved), moved)
+	for from, wantTo := range expectedMoves {
+		gotTo, ok := moved[from]
+		require.True(t, ok,
+			"gcp/kms/main.tf is missing the moved {} block for `from = %s` (issue #182 — customers' state for this address will not migrate)", from)
+		require.Equal(t, wantTo, gotTo,
+			"gcp/kms/main.tf moved block for `from = %s` rebinds to `%s` but should rebind to `%s` (issue #182 — wrong target silently orphans state and creates a fresh resource)", from, gotTo, wantTo)
+	}
 
 	outputsTF, ok := files["/outputs.tf"]
 	require.True(t, ok, "gcp/kms must include outputs.tf")
-	outputsBody := string(outputsTF)
-	require.Contains(t, outputsBody, "local.keys_by_name",
-		"gcp/kms/outputs.tf must consume the bypass local, not module.kms.keys directly")
-	require.NotContains(t, outputsBody, "module.kms.keys",
-		"gcp/kms/outputs.tf must not bypass the issue #180 wrapper by reading module.kms.keys directly")
+	outputsBodyNoComments := stripFullLineComments(string(outputsTF))
+	require.Contains(t, outputsBodyNoComments, "google_kms_key_ring.this",
+		"gcp/kms/outputs.tf must read from the direct resource (issue #182)")
+	require.NotContains(t, outputsBodyNoComments, "module.kms",
+		"gcp/kms/outputs.tf must not reference the removed upstream module (issue #182)")
+	require.NotContains(t, outputsBodyNoComments, "try(",
+		"gcp/kms/outputs.tf must not retain the PR #181 try() wrap — the upstream is gone (issue #182)")
+}
+
+// TestGetPresetFiles_GCP_CloudBuild_HasWebhookSecretIAM pins the
+// issue #190 fix at the embedded-FS layer.
+//
+// google_cloudbuild_trigger validates webhook secret access on the
+// create call. Without an IAM binding granting
+// roles/secretmanager.secretAccessor on the webhook secret to the
+// Cloud Build P4SA (service-PROJECT_NUMBER@gcp-sa-cloudbuild) the
+// create fails with `400 INVALID_ARGUMENT: Request contains an
+// invalid argument`. The fix:
+//
+//   1. data.google_project.this resolves the project number
+//      after-enable.
+//   2. google_secret_manager_secret_iam_member.cloudbuild_webhook_accessor
+//      grants secretAccessor on the webhook secret to the P4SA.
+//   3. The trigger depends_on the binding so the binding propagates
+//      before the trigger create call fires.
+//
+// A regression that drops any of those three pieces leaves customers
+// hitting INVALID_ARGUMENT on every fresh-project deploy.
+func TestGetPresetFiles_GCP_CloudBuild_HasWebhookSecretIAM(t *testing.T) {
+	t.Parallel()
+	files, err := newTestClient().GetPresetFiles("gcp/cloud_build")
+	require.NoError(t, err)
+
+	mainTF, ok := files["/main.tf"]
+	require.True(t, ok, "gcp/cloud_build must include main.tf")
+	body := string(mainTF)
+
+	// (1) Project number lookup with depends_on on the API enable.
+	require.Contains(t, body, `data "google_project" "this"`,
+		"gcp/cloud_build/main.tf must look up data.google_project.this for the P4SA project number (issue #190)")
+
+	// (2) IAM binding granting secretAccessor on the webhook secret.
+	require.Contains(t, body, `resource "google_secret_manager_secret_iam_member" "cloudbuild_webhook_accessor"`,
+		"gcp/cloud_build/main.tf must declare google_secret_manager_secret_iam_member.cloudbuild_webhook_accessor (issue #190)")
+	require.Contains(t, body, `roles/secretmanager.secretAccessor`,
+		"gcp/cloud_build/main.tf must grant roles/secretmanager.secretAccessor on the webhook secret (issue #190)")
+	require.Contains(t, body, `gcp-sa-cloudbuild.iam.gserviceaccount.com`,
+		"gcp/cloud_build/main.tf must target the Cloud Build P4SA service-{PROJECT_NUMBER}@gcp-sa-cloudbuild (issue #190)")
+
+	// (3) The trigger depends on the IAM binding so propagation happens
+	// before trigger create fires. A trigger that only depends on the
+	// API enable still races the IAM propagation.
+	require.Contains(t, body, "google_secret_manager_secret_iam_member.cloudbuild_webhook_accessor",
+		"gcp/cloud_build/main.tf trigger must depend_on the IAM binding (issue #190)")
 }

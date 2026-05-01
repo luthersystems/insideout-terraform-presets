@@ -58,6 +58,43 @@ resource "google_secret_manager_secret_version" "webhook" {
   secret_data = random_password.webhook_secret.result
 }
 
+# The Cloud Build P4SA (service-PROJECT_NUMBER@gcp-sa-cloudbuild) needs
+# roles/secretmanager.secretAccessor on the webhook secret BEFORE the
+# trigger is created — otherwise google_cloudbuild_trigger validates
+# secret access on the create call and rejects with
+# `400 INVALID_ARGUMENT: Request contains an invalid argument` (issue
+# #190). Without this binding the trigger create fails on every
+# fresh-project deploy.
+#
+# We resolve the project number from data.google_project rather than
+# adopting the google-beta provider just for `google_project_service_identity`.
+# The P4SA is created by GCP automatically when cloudbuild.googleapis.com
+# is enabled (`google_project_service.cloudbuild` above), and the
+# data source's depends_on pins read-after-enable so the project
+# number is always available. The SA email shape
+# `service-${project_number}@gcp-sa-cloudbuild.iam.gserviceaccount.com`
+# is a stable Google contract for Cloud Build P4SAs.
+data "google_project" "this" {
+  project_id = var.project_id
+
+  depends_on = [google_project_service.cloudbuild]
+}
+
+locals {
+  cloudbuild_service_agent = "serviceAccount:service-${data.google_project.this.number}@gcp-sa-cloudbuild.iam.gserviceaccount.com"
+}
+
+resource "google_secret_manager_secret_iam_member" "cloudbuild_webhook_accessor" {
+  project   = var.project_id
+  secret_id = google_secret_manager_secret.webhook.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  # local.cloudbuild_service_agent reads data.google_project.this.number,
+  # which the depends_on above defers to the apply phase — so `member`
+  # shows as `(known after apply)` in the plan. The binding still
+  # creates correctly; only the plan readout is delayed.
+  member = local.cloudbuild_service_agent
+}
+
 resource "google_cloudbuild_trigger" "trigger" {
   project  = var.project_id
   location = var.region
@@ -76,5 +113,11 @@ resource "google_cloudbuild_trigger" "trigger" {
     timeout = "60s"
   }
 
-  depends_on = [google_project_service.cloudbuild]
+  # The IAM binding must exist before trigger create — see #190 comment
+  # block above the data source. Without this depends_on the binding
+  # races the trigger create call.
+  depends_on = [
+    google_project_service.cloudbuild,
+    google_secret_manager_secret_iam_member.cloudbuild_webhook_accessor,
+  ]
 }
