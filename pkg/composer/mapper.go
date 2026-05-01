@@ -515,6 +515,18 @@ func (m DefaultMapper) BuildModuleValues(
 			if cfg.AWSCognito.MFARequired != nil {
 				vals["mfa_required"] = *cfg.AWSCognito.MFARequired
 			}
+			// Factor — explicit wins. If MFA is on and no factor was given,
+			// back-fill "totp" so the user pool always emits a factor sub-block
+			// (#208: prevents AWS InvalidParameterException at apply time).
+			if cfg.AWSCognito.MFAFactor != "" {
+				factor, err := normalizeCognitoMFAFactor(cfg.AWSCognito.MFAFactor)
+				if err != nil {
+					return nil, err
+				}
+				vals["mfa_factor"] = factor.(string)
+			} else if cfg.AWSCognito.MFARequired != nil && *cfg.AWSCognito.MFARequired {
+				vals["mfa_factor"] = "totp"
+			}
 		}
 
 	case KeyAWSAPIGateway:

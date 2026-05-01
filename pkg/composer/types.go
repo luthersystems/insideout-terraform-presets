@@ -184,6 +184,7 @@ type Config struct {
 	AWSCognito *struct {
 		SignInType  string `json:"signInType,omitempty"`
 		MFARequired *bool  `json:"mfaRequired,omitempty"`
+		MFAFactor   string `json:"mfaFactor,omitempty"`
 		Okta        *struct {
 			SelfSignupAllowed *bool `json:"selfSignupAllowed,omitempty"`
 		} `json:"okta,omitempty"`

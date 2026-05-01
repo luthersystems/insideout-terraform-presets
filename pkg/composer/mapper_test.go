@@ -869,3 +869,78 @@ func TestBuildModuleValues_AWSBackups_DefaultRule(t *testing.T) {
 		}
 	})
 }
+
+// TestBuildModuleValues_AWSCognito_MFAFactor covers the issue #208 acceptance
+// criteria: when MFA is enabled the mapper must back-fill mfa_factor=totp so
+// the Cognito user pool always has a working factor sub-block; when MFA is
+// off the mapper must not set mfa_factor; an explicit factor passes through
+// (lowercased); an unsupported factor returns an error.
+func TestBuildModuleValues_AWSCognito_MFAFactor(t *testing.T) {
+	m := DefaultMapper{}
+	trueVal := true
+	falseVal := false
+
+	t.Run("mfa_required=true with empty factor back-fills totp", func(t *testing.T) {
+		cfg := configWithAWSCognito(awsCognitoCfgInput{MFARequired: &trueVal})
+		vals, err := m.BuildModuleValues(KeyAWSCognito, nil, cfg, "", "")
+		require.NoError(t, err)
+		assert.Equal(t, true, vals["mfa_required"])
+		assert.Equal(t, "totp", vals["mfa_factor"], "MFA on with empty factor must back-fill totp (#208)")
+	})
+
+	t.Run("mfa_required=false does not back-fill factor", func(t *testing.T) {
+		cfg := configWithAWSCognito(awsCognitoCfgInput{MFARequired: &falseVal})
+		vals, err := m.BuildModuleValues(KeyAWSCognito, nil, cfg, "", "")
+		require.NoError(t, err)
+		assert.Equal(t, false, vals["mfa_required"])
+		_, hasFactor := vals["mfa_factor"]
+		assert.False(t, hasFactor, "MFA off must not set mfa_factor")
+	})
+
+	t.Run("mfa_required nil does not back-fill factor", func(t *testing.T) {
+		cfg := configWithAWSCognito(awsCognitoCfgInput{})
+		vals, err := m.BuildModuleValues(KeyAWSCognito, nil, cfg, "", "")
+		require.NoError(t, err)
+		_, hasFactor := vals["mfa_factor"]
+		assert.False(t, hasFactor, "nil MFARequired must not set mfa_factor")
+		_, hasMFARequired := vals["mfa_required"]
+		assert.False(t, hasMFARequired, "nil MFARequired must not set mfa_required")
+	})
+
+	t.Run("sign_in_type passes through normalized", func(t *testing.T) {
+		// Covers the SignInType branch of KeyAWSCognito — otherwise un-exercised
+		// by any test in this package despite the case-statement carrying it.
+		cfg := configWithAWSCognito(awsCognitoCfgInput{SignInType: "EMAIL"})
+		vals, err := m.BuildModuleValues(KeyAWSCognito, nil, cfg, "", "")
+		require.NoError(t, err)
+		assert.Equal(t, "email", vals["sign_in_type"], "sign_in_type must be normalized to lowercase")
+	})
+
+	t.Run("explicit TOTP passes through lowercased", func(t *testing.T) {
+		cfg := configWithAWSCognito(awsCognitoCfgInput{MFARequired: &trueVal, MFAFactor: "TOTP"})
+		vals, err := m.BuildModuleValues(KeyAWSCognito, nil, cfg, "", "")
+		require.NoError(t, err)
+		assert.Equal(t, "totp", vals["mfa_factor"])
+	})
+
+	t.Run("explicit factor passes through regardless of mfa_required", func(t *testing.T) {
+		// Decouples the explicit-wins branch from the back-fill branch — a
+		// mutation that gates pass-through on MFARequired wouldn't be caught
+		// by the lowercased-pass-through subtest. Use a value that ONLY the
+		// normalize path could produce (mixed case + padding) so a mutation
+		// that drops normalize from the explicit branch is still caught here.
+		cfg := configWithAWSCognito(awsCognitoCfgInput{MFAFactor: "  TOTP  "})
+		vals, err := m.BuildModuleValues(KeyAWSCognito, nil, cfg, "", "")
+		require.NoError(t, err)
+		assert.Equal(t, "totp", vals["mfa_factor"])
+		_, hasMFARequired := vals["mfa_required"]
+		assert.False(t, hasMFARequired, "nil MFARequired must not set mfa_required")
+	})
+
+	t.Run("unsupported factor returns error", func(t *testing.T) {
+		cfg := configWithAWSCognito(awsCognitoCfgInput{MFARequired: &trueVal, MFAFactor: "sms"})
+		_, err := m.BuildModuleValues(KeyAWSCognito, nil, cfg, "", "")
+		require.Error(t, err)
+		assert.ErrorContains(t, err, `expected "totp"`)
+	})
+}

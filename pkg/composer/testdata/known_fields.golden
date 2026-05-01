@@ -1,5 +1,6 @@
 aws_api_gateway.certificateArn
 aws_cloudwatch_logs.retentionDays
+aws_cognito.mfaFactor
 aws_cognito.signInType
 aws_dynamodb.type
 aws_ec2

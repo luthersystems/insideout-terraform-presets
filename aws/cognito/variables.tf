@@ -42,6 +42,16 @@ variable "mfa_required" {
   default     = false
 }
 
+variable "mfa_factor" {
+  description = "MFA factor when mfa_required=true. Currently only 'totp' (Software Token / TOTP) is supported. SMS and Email factors require additional wiring (SNS origination identity / SES domain) and are not yet implemented (#208)."
+  type        = string
+  default     = "totp"
+  validation {
+    condition     = contains(["totp"], var.mfa_factor)
+    error_message = "mfa_factor must be 'totp' (SMS and Email factors are not yet supported — see #208)."
+  }
+}
+
 variable "oauth_callback_urls" {
   description = "Allowed OAuth2 callback URLs for the hosted UI/app client"
   type        = list(string)
