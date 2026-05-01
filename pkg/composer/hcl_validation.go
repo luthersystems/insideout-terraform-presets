@@ -772,6 +772,23 @@ func normalizeCognitoSignInType(v any) (any, error) {
 	}
 }
 
+func normalizeCognitoMFAFactor(v any) (any, error) {
+	raw, err := requireString(v, "AWSCognito.MFAFactor")
+	if err != nil {
+		return nil, err
+	}
+	s := strings.ToLower(strings.TrimSpace(raw))
+	switch s {
+	case "totp":
+		return s, nil
+	default:
+		return nil, NewValidationError(fmt.Sprintf(
+			"AWSCognito.MFAFactor=%q: expected \"totp\" (SMS and Email not yet supported — see #208)",
+			raw,
+		))
+	}
+}
+
 func normalizeOpenSearchDeploymentType(v any) (any, error) {
 	raw, err := requireString(v, "AWSOpenSearch.DeploymentType")
 	if err != nil {

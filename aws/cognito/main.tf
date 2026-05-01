@@ -47,6 +47,16 @@ resource "aws_cognito_user_pool" "this" {
   alias_attributes         = local.alias_attributes
   mfa_configuration        = var.mfa_required ? "ON" : "OFF"
 
+  # MFA factor — required when mfa_configuration = "ON". TOTP is the only
+  # factor that needs no extra wiring (SMS needs SNS origination identity,
+  # Email needs SES domain). #208.
+  dynamic "software_token_mfa_configuration" {
+    for_each = var.mfa_required && var.mfa_factor == "totp" ? [1] : []
+    content {
+      enabled = true
+    }
+  }
+
   email_verification_subject = "${var.project} verification code"
   email_verification_message = "Your verification code is {####}"
 

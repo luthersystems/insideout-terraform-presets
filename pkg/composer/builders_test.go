@@ -50,6 +50,35 @@ func configWithAWSEC2(in awsEC2CfgInput) *Config {
 	}
 }
 
+// awsCognitoCfgInput mirrors the subset of Config.AWSCognito fields exercised
+// by mapper / validator tests.
+type awsCognitoCfgInput struct {
+	SignInType  string
+	MFARequired *bool
+	MFAFactor   string
+}
+
+// configWithAWSCognito returns *Config with AWSCognito populated from input.
+func configWithAWSCognito(in awsCognitoCfgInput) *Config {
+	return &Config{
+		AWSCognito: &struct {
+			SignInType  string `json:"signInType,omitempty"`
+			MFARequired *bool  `json:"mfaRequired,omitempty"`
+			MFAFactor   string `json:"mfaFactor,omitempty"`
+			Okta        *struct {
+				SelfSignupAllowed *bool `json:"selfSignupAllowed,omitempty"`
+			} `json:"okta,omitempty"`
+			Auth0 *struct {
+				MFARequired *bool `json:"mfaRequired,omitempty"`
+			} `json:"auth0,omitempty"`
+		}{
+			SignInType:  in.SignInType,
+			MFARequired: in.MFARequired,
+			MFAFactor:   in.MFAFactor,
+		},
+	}
+}
+
 // awsECSCfgInput mirrors Config.AWSECS.
 type awsECSCfgInput struct {
 	EnableContainerInsights *bool

@@ -567,6 +567,20 @@ var configFieldValidators = []configFieldValidator{
 		code:      "invalid_enum",
 	},
 	{
+		field:     "aws_cognito.mfaFactor",
+		component: KeyAWSCognito,
+		variable:  "mfa_factor",
+		value: func(c *Config) (any, bool) {
+			if c == nil || c.AWSCognito == nil || c.AWSCognito.MFAFactor == "" {
+				return nil, false
+			}
+			return c.AWSCognito.MFAFactor, true
+		},
+		normalize: normalizeCognitoMFAFactor,
+		allowed:   []string{"totp"},
+		code:      "invalid_enum",
+	},
+	{
 		field:     "aws_lambda.runtime",
 		component: KeyAWSLambda,
 		variable:  "runtime",

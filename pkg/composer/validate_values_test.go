@@ -94,6 +94,26 @@ func TestValidate_HCLBackedValues_CollectsMultipleIssues(t *testing.T) {
 	require.Contains(t, byField["aws_kms.numKeys"].Reason, "num_keys must be >= 1")
 }
 
+// TestValidate_AWSCognitoMFAFactor_InvalidEnum locks in the issue #208
+// guarantee that an unsupported MFA factor is caught at compose time as a
+// structured ValidationIssue, not at apply time as an AWS API error.
+func TestValidate_AWSCognitoMFAFactor_InvalidEnum(t *testing.T) {
+	t.Parallel()
+
+	cfg := cfgFromJSON(t, `{
+		"aws_cognito": {"mfaRequired": true, "mfaFactor": "sms"}
+	}`)
+
+	issues := Validate(nil, &cfg)
+	byField := issuesByField(issues)
+
+	got, ok := byField["aws_cognito.mfaFactor"]
+	require.True(t, ok, "expected an issue on aws_cognito.mfaFactor; got %+v", issues)
+	require.Equal(t, "invalid_enum", got.Code)
+	require.ElementsMatch(t, []string{"totp"}, got.Allowed,
+		"invalid_enum issues must carry the Allowed set so the AI corrector can suggest the legal value")
+}
+
 func TestAllowedValues(t *testing.T) {
 	t.Parallel()
 
