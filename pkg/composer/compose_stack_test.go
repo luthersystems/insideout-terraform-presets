@@ -2368,6 +2368,12 @@ func TestComposeStack_GCPCloudKMS_TerraformPlan(t *testing.T) {
 			}
 			planCmd := exec.Command("terraform", "plan", "-refresh=false", "-input=false", "-no-color")
 			planCmd.Dir = dir
+			// The google provider's Configure() step tries to load
+			// Application Default Credentials even when -refresh=false
+			// suppresses live API calls. Inject a fake OAuth token so
+			// the provider initializes cleanly in CI (where ADC is
+			// unavailable). The test never reaches a real GCP call.
+			planCmd.Env = append(os.Environ(), "GOOGLE_OAUTH_ACCESS_TOKEN=ya29.test-token-not-real")
 			planOut, err := planCmd.CombinedOutput()
 			require.NoError(t, err, "terraform plan must succeed on composed gcp/kms stack (issue #182 — formal closure for the slice end-index failure):\n%s", planOut)
 			// Belt-and-braces: even if plan exits 0, surface the
@@ -2573,6 +2579,11 @@ func TestComposeStack_GCPCloudKMS_MovedBlocksRebindUpstreamState(t *testing.T) {
 
 	planCmd := exec.Command("terraform", "plan", "-refresh=false", "-input=false", "-no-color")
 	planCmd.Dir = dir
+	// See sibling TestComposeStack_GCPCloudKMS_TerraformPlan: the
+	// google provider's Configure() requires SOME credential source,
+	// even with -refresh=false. Inject a fake token so CI (no ADC)
+	// can initialize the provider; the test never makes a real call.
+	planCmd.Env = append(os.Environ(), "GOOGLE_OAUTH_ACCESS_TOKEN=ya29.test-token-not-real")
 	planOut, err := planCmd.CombinedOutput()
 	require.NoError(t, err, "terraform plan must succeed against synthetic upstream-state (issue #182 moved-blocks gate):\n%s", planOut)
 
