@@ -390,31 +390,23 @@ func TestGetPresetFiles_GCP_KMS_NoUpstreamModule(t *testing.T) {
 }
 
 // TestGetPresetFiles_GCP_CloudBuild_HasWebhookSecretIAM pins the
-// issue #190 + #197 fixes at the embedded-FS layer.
+// issue #190 webhook-secret IAM binding shape at the embedded-FS
+// layer. (#197's time_sleep mitigation was retired in v0.7.2 once the
+// real root cause — missing BYOSA on the trigger — was isolated; see
+// pkg/composer/cloud_build_byosa_test.go for the BYOSA pins.)
 //
-// google_cloudbuild_trigger validates webhook secret access on the
-// create call. Without an IAM binding granting
-// roles/secretmanager.secretAccessor on the webhook secret to the
-// Cloud Build P4SA (service-PROJECT_NUMBER@gcp-sa-cloudbuild) the
-// create fails with `400 INVALID_ARGUMENT: Request contains an
-// invalid argument`. The fix:
+// The Cloud Build P4SA (service-PROJECT_NUMBER@gcp-sa-cloudbuild)
+// needs roles/secretmanager.secretAccessor on the webhook secret so
+// the trigger can read the secret at invocation time. Without the
+// binding, webhook calls fail at runtime even if the trigger creates
+// successfully:
 //
 //   1. data.google_project.this resolves the project number
 //      after-enable.
 //   2. google_secret_manager_secret_iam_member.cloudbuild_webhook_accessor
 //      grants secretAccessor on the webhook secret to the P4SA.
-//   3. time_sleep.wait_iam_propagation defers the trigger create by
-//      90s after the IAM binding (issue #197). depends_on alone
-//      orders the create CALL but not GCP IAM propagation, which is
-//      eventually consistent (~60s p50 / ~120s p99 for resource-level
-//      Secret Manager bindings); without the sleep, the trigger
-//      validator may not see the binding and rejects with 400.
-//   4. The trigger depends_on the time_sleep, which itself depends_on
-//      the IAM binding — transitive ordering binding → propagation →
-//      create.
-//
-// A regression that drops any of those four pieces leaves customers
-// hitting INVALID_ARGUMENT on every fresh-project deploy.
+//   3. The trigger depends_on the IAM binding so the binding lands
+//      before the trigger is created.
 func TestGetPresetFiles_GCP_CloudBuild_HasWebhookSecretIAM(t *testing.T) {
 	t.Parallel()
 	files, err := newTestClient().GetPresetFiles("gcp/cloud_build")
@@ -436,23 +428,9 @@ func TestGetPresetFiles_GCP_CloudBuild_HasWebhookSecretIAM(t *testing.T) {
 	require.Contains(t, body, `gcp-sa-cloudbuild.iam.gserviceaccount.com`,
 		"gcp/cloud_build/main.tf must target the Cloud Build P4SA service-{PROJECT_NUMBER}@gcp-sa-cloudbuild (issue #190)")
 
-	// (3) time_sleep absorbs IAM propagation latency before trigger create
-	// fires (issue #197). The hashicorp/time provider must be declared,
-	// the resource must exist, and the duration must be at least 60s to
-	// cover the documented p99 propagation tail.
-	require.Contains(t, body, `source  = "hashicorp/time"`,
-		"gcp/cloud_build/main.tf must declare hashicorp/time provider for time_sleep (issue #197)")
-	require.Contains(t, body, `resource "time_sleep" "wait_iam_propagation"`,
-		"gcp/cloud_build/main.tf must declare time_sleep.wait_iam_propagation between IAM binding and trigger (issue #197)")
-	require.Contains(t, body, `create_duration = "90s"`,
-		"gcp/cloud_build/main.tf time_sleep must wait 90s for IAM propagation (issue #197)")
-
-	// (4) The substring asserts both: the resource declaration AND the
-	// time_sleep's depends_on on it (transitive trigger ordering).
+	// (3) Trigger depends_on the IAM binding (transitive ordering).
 	require.Contains(t, body, "google_secret_manager_secret_iam_member.cloudbuild_webhook_accessor",
-		"gcp/cloud_build/main.tf must reference the IAM binding (issue #190; transitive ordering via time_sleep #197)")
-	require.Contains(t, body, "time_sleep.wait_iam_propagation",
-		"gcp/cloud_build/main.tf trigger must depend_on time_sleep.wait_iam_propagation (issue #197)")
+		"gcp/cloud_build/main.tf trigger depends_on must reference the webhook-secret IAM binding (issue #190)")
 }
 
 // TestGetPresetFiles_GCP_IdentityPlatform_NoRootOnlyBlocks pins the
@@ -467,11 +445,11 @@ func TestGetPresetFiles_GCP_CloudBuild_HasWebhookSecretIAM(t *testing.T) {
 // Import blocks are only allowed in the root module." That regressed
 // harder than #197: hard fail at init, before apply could even start.
 //
-// The proper adoption fix lives in the composer (root module emits
-// `import { to = module.gcp_identity_platform.google_identity_platform_config.this ... }`).
-// Until that lands, this preset CREATEs the resource normally and
-// keeps `lifecycle { ignore_changes = all }` so subsequent applies
-// don't fight console edits.
+// v0.7.2 (#201) lands the proper adoption fix in-tree via the
+// gcp/adopt_singleton helper module: `module "adopt"` issues a
+// plan-time REST GET against the IP config endpoint and outputs a
+// plan-time-known should_create boolean that gates `count` on the
+// singleton resource. No cross-module `import {}` block needed.
 //
 // A regression that re-introduces `import {}` (or `removed {}`) inside
 // this child module reopens #199 — every customer deploy hits the init
