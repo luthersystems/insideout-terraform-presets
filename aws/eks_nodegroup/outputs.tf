@@ -22,3 +22,8 @@ output "capacity_type" {
   description = "Capacity type for this node group (ON_DEMAND or SPOT)"
   value       = var.capacity_type
 }
+
+output "ami_type" {
+  description = "Resolved AMI type used by the node group (derived from instance_types when var.ami_type is null; #207)."
+  value       = local.resolved_ami_type
+}
