@@ -11,10 +11,11 @@ All component-coupled logic lives in this repo:
 - **TF emit** — alarms, dashboards, log filters, notification primitives.
 - **Go data tables** — metric definitions, key→service mappings, display names, public-endpoint allowlists.
 - **Live-config extractors** — the per-component JSON-shaping functions that turn inspector output into UI-renderable config maps.
+- **AWS SDK / GCP SDK call sites** — the per-component discovery dispatchers (`ec2.DescribeInstances`, `rds.DescribeDBInstances`, `compute.Instances.List`, etc.), the CloudWatch `GetMetricData` and Cloud Monitoring `timeSeries.list` wrappers, and the Project-tag/label filter logic that joins them. Reliable supplies credentials and a session context; the SDK calls happen here, against typed inputs and outputs.
 
-`luthersystems/reliable` shrinks to a thin client: SDK plumbing (`GetMetricData`, `timeSeries.list`, per-service AWS/GCP describe/list dispatchers), auth and credential management, Oracle/agent-session glue. It contains zero `map[ComponentKey]X` declarations.
+`luthersystems/reliable` shrinks to: auth and credential management, HTTP route handlers, agent/Oracle/chat session plumbing, drift-surface bookkeeping. Reliable contains zero `map[ComponentKey]X` declarations and zero per-service SDK dispatch.
 
-Adding a new component anywhere becomes a single-PR change in this repo: preset + alarms + extractor + drift gates, all tested fast and pure-Go. Drift between "we shipped a new RDS feature" and "we forgot to update the alarm pack" becomes structurally impossible to land.
+Adding a new component anywhere becomes a single-PR change in this repo: preset + alarms + extractor + discoverer + metric-fetcher + drift gates. Tests use mocked SDK clients; the inner loop runs in milliseconds. Drift between "we shipped a new RDS feature" and "we forgot to update the alarm pack" becomes structurally impossible to land.
 
 ## Why move
 
@@ -30,7 +31,7 @@ Adding a new component anywhere becomes a single-PR change in this repo: preset 
 
 `grep -rln 'cloudwatch_metric_alarm|monitoring_alert_policy|monitoring_dashboard|logging_metric|notification_channel|sns_topic' --include='*.tf' --include='*.tmpl' --include='*.go'` over `reliable/internal/` returns **zero matches** in `.tf`/`.tmpl`/Go-emit code. There is no Go template/HCL emit path in reliable that authors a CloudWatch alarm, a Cloud Monitoring alert policy, a dashboard, a log metric, or a notification channel.
 
-What `reliable` actually owns is the **read side**: per-AWS-service and per-GCP-service metric tables that the inspector queries, plus per-component extractor functions that shape inspector output for the UI. So the migration is **not** "move TF from reliable to presets" — it is **"unify the alarm-author surface with the metric-watch surface, both inside this repo, and migrate the read-side data tables alongside."**
+What `reliable` actually owns is the **read side**: per-AWS-service and per-GCP-service metric tables, the SDK-call dispatchers that discover live resources by Project tag/label, the CloudWatch / Cloud Monitoring metric-fetch wrappers, and per-component extractor functions that shape inspector output for the UI. So the migration is **not** "move TF from reliable to presets" — it is **"unify the alarm-author surface with the metric-watch surface, both inside this repo, and migrate the entire read-side stack (data tables + SDK call sites + tag filtering + extractors) alongside."** Reliable becomes a credentials/transport/session shell calling into typed library functions here.
 
 ## Audit — current state
 
@@ -62,16 +63,21 @@ Component-coupled Go symbols in `reliable` that need to migrate. Targets in the 
 
 | Symbol | File:line in reliable | Entries | Migration target | Notes |
 |---|---|---|---|---|
-| `metricDefinitions` | `internal/agentapi/aws_metrics.go:258` | 25 services | `pkg/observability/aws_metrics.go` | Pure data table; 1989-line file shrinks to its `GetMetricData` plumbing |
+| `metricDefinitions` | `internal/agentapi/aws_metrics.go:258` | 25 services | `pkg/observability/aws_metrics.go` | Pure data table |
 | `gcpMetricDefinitions` | `internal/agentapi/gcp_metrics.go:141` | 21 services | `pkg/observability/gcp_metrics.go` | Same shape, GCP |
 | `componentMetricsMapping` | `internal/agentapi/component_metrics.go:96` | 47 | `pkg/observability/component_metrics.go` | `ComponentKey → (service, action)` |
 | `componentDisplayName` | `internal/agentapi/component_metrics.go:244` | 51-case switch | `pkg/observability/display.go` | User-facing names |
 | `emptyDiscoveryAllowlist` | `internal/agentapi/component_metrics.go:209` | 3 | same file as `componentMetricsMapping` | Allowlist |
 | `testTrafficPublicEndpoints` | `internal/agentapi/component_test_traffic.go:46` | 3 | `pkg/observability/test_traffic.go` | Direct contract with preset `outputs.tf` |
-| `awsServiceActions` | `internal/agentapi/inspect_normalize.go:77` | 25 services | `pkg/observability/service_actions.go` | Registry only — dispatcher stays |
+| `awsServiceActions` | `internal/agentapi/inspect_normalize.go:77` | 25 services | `pkg/observability/service_actions.go` | Registry |
 | `gcpServiceActions` | `internal/agentapi/inspect_normalize.go:262` | 21 services | same | |
 | `metric_display_labels.json` | `internal/agentapi/metric_display_labels.json` | 41 lines | `pkg/observability/metric_display_labels.json` | embed.FS asset; cross-language note in §Open follow-ups |
-| `config_extractors.go` | `internal/agentapi/config_extractors.go:13` | 47 funcs / 1998 lines | `pkg/observability/extractors/` | Core deliverable; reliable's file shrinks to a 10-line dispatcher |
+| `config_extractors.go` | `internal/agentapi/config_extractors.go:13` | 47 funcs / 1998 lines | `pkg/observability/extractors/` | Reliable's file shrinks to a 10-line dispatcher |
+| **CloudWatch `GetMetricData` wrapper** | `internal/agentapi/aws_metrics.go:614-1989` (everything below the data table) | — | `pkg/observability/metrics/aws.go` | Takes `aws.Config` + spec, returns typed result |
+| **Cloud Monitoring `timeSeries.list` wrapper** | `internal/agentapi/gcp_metrics.go:378-871` | — | `pkg/observability/metrics/gcp.go` | Same shape, GCP |
+| **AWS inspector dispatcher** | `internal/agentapi/aws_inspect.go` | giant per-service switch (~1100 lines) | `pkg/observability/discovery/aws/` (one file per service) | Per-component discoverers behind `Discover(ctx, key, awsCfg)` |
+| **GCP inspector dispatcher** | `internal/agentapi/gcp_inspect.go` | per-service switch | `pkg/observability/discovery/gcp/` | Same |
+| **Project tag/label filter** | `internal/agentapi/resource_filter.go:25-100` | EC2-style `tag:Project` filter | `pkg/observability/filter/project.go` | Joins per-component discovery; tag convention already enforced by this repo's `tests/lint-project-tag.sh` |
 | 6 drift tests | `internal/agentapi/*_drift_test.go` | — | move with their data | See list below |
 
 **Drift tests in reliable today** (each guards a piece of the migration target):
@@ -85,10 +91,11 @@ Component-coupled Go symbols in `reliable` that need to migrate. Targets in the 
 
 **What stays in reliable** (post-migration thin client):
 
-- `aws_metrics.go` lines 1–258 — `GetMetricData` SDK plumbing; everything below that line moves.
-- `gcp_metrics.go` lines 1–140 — `timeSeries.list` SDK plumbing.
-- `aws_inspect.go`, `gcp_inspect.go` — inspector dispatcher switches (AWS/GCP SDK clients per service).
-- Auth, credentials, Oracle session, agent-chat plumbing — generic, not component-coupled.
+- Auth, credentials, role-assumption (`internal/credentials/`, `internal/agentapi/credentials*.go`).
+- HTTP server, route handlers (`apiserver/router.go`, the `On*` handler functions in `internal/agentapi/`).
+- Agent / Oracle / chat session plumbing (`internal/chatv2/`, `internal/agentapi/session_*.go`, MCP transport).
+- Drift-surface bookkeeping (`markSessionDriftDetected` and friends).
+- Observability call sites become 3-5 line glue: handlers grab credentials, pass them to `pkg/observability/discovery.Discover(...)` + `pkg/observability/metrics.Fetch(...)` + `pkg/observability/extractors.Extract(...)`, marshal the typed result.
 
 ### Coverage gap (alarm authority drift)
 
@@ -257,6 +264,54 @@ The file is loaded **directly by both Go and TS** today: `internal/agentapi/comp
 
 Recommend (a) for the migration PR; (b) is a follow-up cleanup once the Go-side authority is settled.
 
+### Package layout
+
+The post-migration `pkg/observability/` tree:
+
+```
+pkg/observability/
+├── component_observability.go     # authority table (Observability, observabilityDeferred)
+├── component_metrics.go           # componentMetricsMapping, emptyDiscoveryAllowlist
+├── display.go                     # componentDisplayName
+├── service_actions.go             # awsServiceActions, gcpServiceActions registries
+├── test_traffic.go                # testTrafficPublicEndpoints
+├── metric_display_labels.json     # embed.FS asset
+├── filter/
+│   └── project.go                 # Project tag/label filter (was resource_filter.go)
+├── extractors/
+│   ├── extractors.go              # dispatch (was config_extractors.go switch)
+│   ├── aws_*.go                   # 25 per-service AWS extractors
+│   └── gcp_*.go                   # 22 per-service GCP extractors
+├── metrics/
+│   ├── aws.go                     # CloudWatch GetMetricData wrapper
+│   └── gcp.go                     # Cloud Monitoring timeSeries.list wrapper
+└── discovery/
+    ├── aws/
+    │   ├── dispatcher.go          # ComponentKey -> per-service Discover func
+    │   ├── ec2.go, rds.go, ...    # one file per AWS service
+    │   └── client.go              # aws.Config wiring
+    └── gcp/
+        ├── dispatcher.go
+        ├── compute.go, gke.go, ...
+        └── client.go
+```
+
+Public API surface that reliable's HTTP handlers call:
+
+```go
+// Discover returns the live cloud resources matching the given component key,
+// filtered by Project tag / label. Caller supplies credentials.
+discovery.Discover(ctx, awsCfg, key, projectName) ([]Resource, error)
+
+// Fetch returns metric time-series for the given component's resources.
+metrics.Fetch(ctx, awsCfg, key, resources, params) (MetricsResult, error)
+
+// Extract converts inspector envelope JSON into a UI-renderable config map.
+extractors.Extract(key, envelope) (map[string]string, error)
+```
+
+Each function takes a credentials/client object the caller owns; this repo never reads `~/.aws/credentials`, never assumes IAM roles, never writes session state. That responsibility stays in reliable.
+
 ### UI render contract (what the chart panel needs)
 
 The reliable UI flow for "show me telemetry for this component" runs through:
@@ -371,8 +426,13 @@ One PR per row. Each PR is independently safe and reverts cleanly.
 | 7 | **Second per-module: `gcp/memorystore`.** Forces the GCP alert-policy + notification-channel surface (currently absent everywhere). `gcp/cloud_monitoring` gains `notification_channels` variable and output. Severity/runbook helpers refactored into `_shared/` once this PR demonstrates a second consumer. | Same gauntlet for GCP. |
 | 8 | **Third per-module: `aws/rds` (multi-instance for_each).** Three alarms (CPU, FreeStorage, DatabaseConnections — last is currently absent). Exercises the for_each keying problem in `moved {}` block emission. | Drift gate flips three RDS deferred-allowlist entries to `Alarmed=true`. |
 | 9 | **Migrate `config_extractors.go`** (1998 lines, 47 funcs) into `pkg/observability/extractors/`. Defines the inspector envelope contract here as a typed input (`type InspectorEnvelope struct { ... }`); reliable's dispatcher feeds raw JSON in and gets `map[string]string` back. Drift tests `TestExtractLiveConfig_CoversAllAWSComponents` + `TestExtractLiveConfig_CoversAllGCPComponents` move with it. | Reliable's `internal/agentapi/config_extractors.go` becomes a 10-line file calling `extractors.Extract(key, envelope)`. |
-| 10..N | **Remaining components.** One PR per component, mechanical after PRs 6-9 land. Each PR deletes its row from `observabilityDeferred`. ECS, EKS, Lambda, CloudFront, APIGW, OpenSearch, Bedrock, Cognito, DynamoDB, MSK, plus all remaining GCP. | Final PR removes `observabilityDeferred` entirely; drift gate empty-allowlist healthy. |
-| Final | **Reliable cleanup.** With everything component-coupled in this repo, reliable's `internal/agentapi/` shrinks to: SDK clients, the inspector dispatcher switch, auth/credential plumbing, Oracle session glue. Final PR deletes vestigial component-keyed code and renames the package to reflect the new responsibility (candidates: `internal/cloudapi/`, `internal/inspector/`). | Reliable contains zero `map[ComponentKey]X` declarations. The "thin API" end state. |
+| 10 | **Migrate Project tag/label filter** (`resource_filter.go:25-100`, ~75 lines) to `pkg/observability/filter/project.go`. Pure function — takes raw EC2/RDS/ALB tag-shapes, returns filtered IDs. No SDK dependency on either side. New drift test `TestProjectFilter_HandlesEveryAWSResourceShape` mirrors reliable's existing tests. | Reliable's `resource_filter.go` becomes a re-export. |
+| 11 | **Migrate CloudWatch metric-fetch wrapper** (`aws_metrics.go:614-1989` — `getServiceMetrics` + `BuildMetricDataQueries` + `fetchMetrics`) to `pkg/observability/metrics/aws.go`. Public API: `Fetch(ctx, awsCfg, ComponentObservability, []ResourceID, params) (MetricsResult, error)`. AWS SDK becomes a dependency of this repo (aws-sdk-go-v2). Reliable supplies `aws.Config`; everything else lives here. Test surface: mocked CloudWatch client (move from reliable). | Reliable's `tryFetchAWSComponentMetrics` becomes a 5-line call into `pkg/observability/metrics`. |
+| 12 | **Migrate Cloud Monitoring metric-fetch wrapper** (`gcp_metrics.go:378-871`) to `pkg/observability/metrics/gcp.go`. Same shape: `Fetch(ctx, gcpClient, ComponentObservability, []ResourceID, params) (GCPMetricsResult, error)`. `google.golang.org/api/monitoring/v3` becomes a dep here. | Reliable's `tryFetchGCPComponentMetrics` becomes a 5-line call. |
+| 13 | **Migrate AWS discovery dispatchers** (`aws_inspect.go:147-1100+`) to `pkg/observability/discovery/aws/`. One file per service: `ec2.go`, `rds.go`, `alb.go`, `s3.go`, `cognito.go`, … Each exports `func Discover<Service>(ctx, awsCfg, projectFilter) ([]Resource, error)`. Top-level `discovery/aws/dispatcher.go` keys off `composer.ComponentKey`. Drift test: every key in `AllComponentKeys` with `CloudFor(k) == "aws"` has a registered discoverer (or appears in deferred allowlist). aws-sdk-go-v2 service clients (~25 of them) become deps of this repo. | Reliable's `inspectAWSCore` becomes a 10-line call into `pkg/observability/discovery/aws`. |
+| 14 | **Migrate GCP discovery dispatchers** (`gcp_inspect.go`) to `pkg/observability/discovery/gcp/`. Same shape. `google.golang.org/api/{compute,run,sqladmin,...}/v*` become deps. | Reliable's `InspectGCP` becomes a 10-line call. |
+| 15..N | **Remaining components.** One PR per component for any per-component observability backfill, mechanical after PRs 6-14 land. Each PR deletes its row from `observabilityDeferred`. ECS, EKS, Lambda, CloudFront, APIGW, OpenSearch, Bedrock, Cognito, DynamoDB, MSK, plus all remaining GCP. | Final PR removes `observabilityDeferred` entirely; drift gate empty-allowlist healthy. |
+| Final | **Reliable cleanup.** With every per-component data table, extractor, discoverer, and metric-fetch wrapper here, reliable's `internal/agentapi/` shrinks to: HTTP route handlers, auth/credential plumbing, Oracle/agent-session glue, drift-surface bookkeeping. Final PR deletes vestigial component-keyed code and renames the package to reflect the new responsibility (candidates: `internal/cloudapi/`, `internal/sessionapi/`). | Reliable contains zero `map[ComponentKey]X` declarations and zero per-service SDK dispatch. The "thin API" end state. |
 
 ## Test coverage parity
 
@@ -400,6 +460,8 @@ These do not block the migration but need decisions during specific PRs:
 5. **TS-side hand-written component-key lists** — `components/terraform/composer/module-contracts.ts`, `lib/hooks/useComponentMetrics.ts::METRICS_SUPPORTED_KEYS`, `lib/hooks/useTFOutputs.ts`, `lib/stack/providers.ts`, `lib/hooks/useStackViewV2.ts`. Each is a drift hazard. After the source-of-truth flip (PR 2), a follow-up TS-side cleanup can converge them on a single import or a generated mirror.
 6. **Pre-existing GCP chart bug.** `ChartWindow.tsx:46` reads `dp.average ?? dp.sum ?? dp.maximum ?? 0` and ignores GCP's `value` field — GCP charts render as flat zero today. Filed as [`luthersystems/reliable#1243`](https://github.com/luthersystems/reliable/issues/1243); independent of this migration.
 7. **Per-instance UI.** Today the chart flattens all resources' datapoints into a single line (`ChartWindow.tsx:33-55`), with no picker. If we later want per-instance lines (one per RDS DB, one per ALB target), the migrated authority table already carries the dimension-name fields needed — but the UI surface is a separate, larger change.
+8. **SDK dependency footprint.** PRs 11–14 add aws-sdk-go-v2 (~25 service clients), `google.golang.org/api/{compute,run,sqladmin,monitoring,...}/v*`, and the CloudWatch/Cloud Monitoring clients as direct dependencies of this repo. Currently the only Go runtime dependency is `hashicorp/hcl/v2` for the composer. Build-time and test-time impact: per-package go test wall-time goes up by ~5–10s, vendored module size by ~50 MB. Mitigations: keep the SDK clients behind a `client.go` per cloud (lazy-init, easy to mock), gate SDK-touching test packages with `-short` (the inner-loop drift gates remain pure-Go and fast). Decide module structure in PR 11 — single `pkg/observability` with sub-packages, or split into `pkg/observability` (data) + `pkg/observability/cloud` (SDK clients).
+9. **Test fixtures for SDK calls.** Reliable today has mocked AWS/GCP SDK clients for `aws_metrics_test.go` (3793 lines) and `gcp_metrics_test.go` (1044 lines). These move with PRs 11–14. The fixtures themselves are ~5MB of JSON — embed them under `pkg/observability/metrics/testdata/` and `discovery/{aws,gcp}/testdata/`. New `tests/` lint that asserts every per-service discoverer has at least one happy-path fixture test.
 
 ## References
 
