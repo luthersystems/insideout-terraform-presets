@@ -49,7 +49,7 @@ resource "google_storage_bucket" "source" {
   uniform_bucket_level_access = true
   force_destroy               = true
 
-  labels = var.labels
+  labels = merge({ project = var.project }, var.labels)
 }
 
 # Placeholder source archive object
@@ -90,8 +90,11 @@ resource "google_cloudfunctions2_function" "this" {
     vpc_connector_egress_settings = var.vpc_connector != "" ? var.vpc_egress : null
   }
 
-  labels = var.labels
+  labels = merge({ project = var.project }, var.labels)
 
+  # NOTE: update_time drifts on refresh but is Computed-only, so
+  # lifecycle.ignore_changes has no effect on it. Suppression must happen at
+  # the drift-check level — see sandbox-infrastructure-template#93 (#215).
   lifecycle {
     ignore_changes = [
       # Allow external deployments to update source

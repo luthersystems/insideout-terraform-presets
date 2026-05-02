@@ -37,6 +37,7 @@ LABEL_CAPABLE_GCP=(
   google_compute_global_forwarding_rule
   google_compute_instance
   google_compute_security_policy
+  google_kms_crypto_key
   google_pubsub_subscription
   google_pubsub_topic
   google_redis_instance

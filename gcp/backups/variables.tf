@@ -48,3 +48,9 @@ variable "snapshot_start_time" {
   type        = string
   default     = "03:00"
 }
+
+variable "labels" {
+  description = "Labels to apply to backup resources. Merged with the canonical { project = var.project, purpose = \"backups\", managed = \"terraform\" } baseline."
+  type        = map(string)
+  default     = {}
+}

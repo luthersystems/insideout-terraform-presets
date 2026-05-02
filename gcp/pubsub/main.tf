@@ -26,10 +26,10 @@ resource "google_pubsub_topic" "this" {
 
   message_retention_duration = var.message_retention_duration
 
-  labels = {
+  labels = merge({
     project = var.project
     managed = "terraform"
-  }
+  }, var.labels)
 }
 
 resource "google_pubsub_subscription" "this" {
@@ -50,10 +50,10 @@ resource "google_pubsub_subscription" "this" {
     maximum_backoff = var.retry_maximum_backoff
   }
 
-  labels = {
+  labels = merge({
     project = var.project
     managed = "terraform"
-  }
+  }, var.labels)
 }
 
 # Dead letter topic for failed messages
@@ -62,8 +62,8 @@ resource "google_pubsub_topic" "dead_letter" {
   project = var.project_id
   name    = "${var.project}-${var.topic_name}-dlq-${random_id.suffix.hex}"
 
-  labels = {
+  labels = merge({
     project = var.project
     managed = "terraform"
-  }
+  }, var.labels)
 }

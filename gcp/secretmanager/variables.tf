@@ -57,3 +57,9 @@ variable "labels" {
   default     = {}
 }
 
+variable "annotations" {
+  description = "Annotations to apply to all secrets. Setting an explicit map (default {}) instead of leaving it null avoids `+ annotations = {}` phantom drift on refresh (#215)."
+  type        = map(string)
+  default     = {}
+}
+

@@ -195,7 +195,7 @@ resource "google_compute_global_forwarding_rule" "https" {
   port_range = "443"
   ip_address = google_compute_global_address.this.address
 
-  labels = var.labels
+  labels = merge({ project = var.project }, var.labels)
 }
 
 # HTTP forwarding rule
@@ -206,6 +206,6 @@ resource "google_compute_global_forwarding_rule" "http" {
   port_range = "80"
   ip_address = google_compute_global_address.this.address
 
-  labels = var.labels
+  labels = merge({ project = var.project }, var.labels)
 }
 

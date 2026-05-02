@@ -92,3 +92,9 @@ variable "enable_dead_letter" {
   type        = bool
   default     = false
 }
+
+variable "labels" {
+  description = "Labels to apply to Pub/Sub topics and subscriptions. Merged with the canonical { project = var.project, managed = \"terraform\" } baseline."
+  type        = map(string)
+  default     = {}
+}

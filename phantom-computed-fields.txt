@@ -1,0 +1,48 @@
+# phantom-computed-fields.txt
+#
+# Provider Computed-only fields that drift on `terraform plan -refresh-only`
+# but cannot be silenced via lifecycle.ignore_changes — Terraform skips the
+# block on Computed-only attributes and emits a warning (terraform#30517).
+# Downstream orchestration (sandbox-infrastructure-template's drift-check
+# wrapper) MUST filter these out of drift reports.
+#
+# Cross-references
+#   * Issue:    https://github.com/luthersystems/insideout-terraform-presets/issues/215
+#   * Consumer: https://github.com/luthersystems/sandbox-infrastructure-template/issues/93
+#   * Wrapper:  sandbox-infrastructure-template/tf/drift-check.sh (the
+#               existing IGNORED_ATTRS hardcode at lines ~116-119 is what
+#               this file replaces).
+#
+# Format
+#   One entry per line, "<resource_type>.<attribute>".
+#   Lines starting with `#` and blank lines are ignored.
+#   Sorted alphabetically.
+#
+# Bash consumer pattern
+#   mapfile -t IGNORED_ATTRS \
+#     < <(grep -v '^#' phantom-computed-fields.txt | grep -v '^$')
+#
+# Adding an entry
+#   1. Confirm the field is pure Computed in the provider schema (look for
+#      Computed: true with Optional: false, Required: false). If it is
+#      Optional+Computed, fix it upstream via lifecycle.ignore_changes
+#      instead of adding it here.
+#   2. Add the canonical NOTE comment to the relevant resource in its
+#      module main.tf (see aws/cognito/main.tf:76-78 for the wording).
+#   3. Add the line below.
+#   4. tests/lint-phantom-computed-fields.sh enforces the cross-reference.
+
+# AWS — annotated in module main.tf with the
+# "drift-check level — see sandbox-infrastructure-template#93" NOTE.
+aws_cognito_user_pool.domain
+aws_db_instance.latest_restorable_time
+aws_db_instance.replicas
+aws_iam_policy.attachment_count
+
+# GCP — annotated in module main.tf with the
+# "drift-check level — see sandbox-infrastructure-template#93 (#215)" NOTE.
+google_cloudfunctions2_function.update_time
+google_firestore_database.earliest_version_time
+google_firestore_database.etag
+google_project_iam_member.etag
+google_vpc_access_connector.connected_projects

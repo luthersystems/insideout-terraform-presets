@@ -155,6 +155,53 @@ jobs:
       - name: Lint root-only blocks (import / removed) in preset modules (#199)
         run: bash tests/lint-no-root-only-blocks.sh
 
+      - name: Lint phantom-computed-fields denylist ↔ NOTE comments (#215)
+        run: bash tests/lint-phantom-computed-fields.sh
+
+  # Validates phantom-computed-fields.txt against the live provider schema
+  # pinned by schemas/providers.tf. Catches the failure mode where a
+  # provider upgrade flips a field from pure-Computed to Optional+Computed
+  # (or removes it entirely), silently invalidating the denylist that
+  # sandbox-infrastructure-template's drift-check wrapper consumes (#215).
+  verify-phantom-schema:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.7.5"
+
+      - name: Verify phantom-computed-fields.txt against provider schema
+        run: make verify-phantom-schema
+
+  # Real Terraform linter — catches deprecated syntax, unused
+  # declarations, provider-specific best-practice violations the custom
+  # shell lints under tests/lint-*.sh don't model. Single runner, recursive
+  # over the tree; plugins downloaded once. See .tflint.hcl for the
+  # plugin pin and rule set.
+  tflint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: terraform-linters/setup-tflint@v4
+        with:
+          tflint_version: latest
+
+      - name: Init tflint plugins
+        run: tflint --init
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run tflint
+        # --minimum-failure-severity=error: gate only on errors, not
+        # warnings. The repo has pre-existing warnings (legacy aws/datadog,
+        # aws/splunk, etc.) that are tracked for cleanup but not in scope
+        # for #215. Errors (real bugs — bad provider config, syntax issues)
+        # still fail CI.
+        run: tflint --recursive --format=compact --minimum-failure-severity=error
+
   # Wraps each preset in a synthetic root and runs terraform init. This
   # is the actual consumption shape used by the composer
   # (luthersystems/reliable instantiates each preset as a child module),
@@ -263,6 +310,8 @@ jobs:
       - go-vet
       - go-test
       - verify-gen
+      - verify-phantom-schema
+      - tflint
     if: always()
     runs-on: ubuntu-latest
     steps:

@@ -86,7 +86,7 @@ resource "google_kms_crypto_key" "protected" {
   key_ring        = google_kms_key_ring.this.id
   rotation_period = each.value.rotation_period
   purpose         = each.value.purpose
-  labels          = each.value.labels
+  labels          = merge({ project = var.project }, var.labels, each.value.labels)
 
   version_template {
     algorithm        = each.value.algorithm
@@ -107,7 +107,7 @@ resource "google_kms_crypto_key" "ephemeral" {
   key_ring        = google_kms_key_ring.this.id
   rotation_period = each.value.rotation_period
   purpose         = each.value.purpose
-  labels          = each.value.labels
+  labels          = merge({ project = var.project }, var.labels, each.value.labels)
 
   version_template {
     algorithm        = each.value.algorithm

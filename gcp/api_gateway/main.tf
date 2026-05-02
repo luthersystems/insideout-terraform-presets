@@ -73,10 +73,10 @@ resource "google_api_gateway_api" "this" {
   project  = var.project_id
   api_id   = "${var.project}-api-${random_id.suffix.hex}"
 
-  labels = {
+  labels = merge({
     project = var.project
     managed = "terraform"
-  }
+  }, var.labels)
 
   depends_on = [
     google_project_service.api_gateway,
@@ -105,10 +105,10 @@ resource "google_api_gateway_api_config" "this" {
     }
   }
 
-  labels = {
+  labels = merge({
     project = var.project
     managed = "terraform"
-  }
+  }, var.labels)
 
   lifecycle {
     create_before_destroy = true
@@ -123,8 +123,8 @@ resource "google_api_gateway_gateway" "this" {
   api_config = google_api_gateway_api_config.this.id
   gateway_id = "${var.project}-gateway-${random_id.suffix.hex}"
 
-  labels = {
+  labels = merge({
     project = var.project
     managed = "terraform"
-  }
+  }, var.labels)
 }
