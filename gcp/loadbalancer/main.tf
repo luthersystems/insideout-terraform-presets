@@ -39,6 +39,11 @@ resource "google_compute_health_check" "this" {
   timeout_sec         = 5
   healthy_threshold   = 2
   unhealthy_threshold = 3
+
+  # Project label keeps the resource visible to reliable3's drift inspector
+  # (which filters on Project = <project>) and prevents `+ labels = {}`
+  # phantom drift on refresh (#215).
+  labels = merge({ project = var.project }, var.labels)
 }
 
 # Backend services
@@ -195,7 +200,7 @@ resource "google_compute_global_forwarding_rule" "https" {
   port_range = "443"
   ip_address = google_compute_global_address.this.address
 
-  labels = var.labels
+  labels = merge({ project = var.project }, var.labels)
 }
 
 # HTTP forwarding rule
@@ -206,6 +211,6 @@ resource "google_compute_global_forwarding_rule" "http" {
   port_range = "80"
   ip_address = google_compute_global_address.this.address
 
-  labels = var.labels
+  labels = merge({ project = var.project }, var.labels)
 }
 

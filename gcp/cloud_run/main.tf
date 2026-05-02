@@ -59,10 +59,12 @@ resource "google_cloud_run_v2_service" "main" {
 
     max_instance_request_concurrency = var.concurrency
 
-    labels = var.labels
+    labels      = merge({ project = var.project }, var.labels)
+    annotations = var.annotations
   }
 
-  labels = var.labels
+  labels      = merge({ project = var.project }, var.labels)
+  annotations = var.annotations
 
   lifecycle {
     ignore_changes = [

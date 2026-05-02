@@ -126,3 +126,9 @@ variable "labels" {
   type        = map(string)
   default     = {}
 }
+
+variable "annotations" {
+  description = "Annotations to apply to the Cloud Run service (top-level + template). Setting an explicit map (default {}) instead of leaving it null avoids `+ annotations = {}` phantom drift on refresh (#215)."
+  type        = map(string)
+  default     = {}
+}

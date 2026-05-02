@@ -54,11 +54,11 @@ resource "google_storage_bucket" "backups" {
     }
   }
 
-  labels = {
+  labels = merge({
     project = var.project
     purpose = "backups"
     managed = "terraform"
-  }
+  }, var.labels)
 }
 
 # Compute Engine snapshot schedule
@@ -83,10 +83,10 @@ resource "google_compute_resource_policy" "snapshot_schedule" {
 
     snapshot_properties {
       storage_locations = [var.region]
-      labels = {
+      labels = merge({
         project = var.project
         managed = "terraform"
-      }
+      }, var.labels)
     }
   }
 }

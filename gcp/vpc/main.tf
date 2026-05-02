@@ -129,6 +129,13 @@ resource "google_vpc_access_connector" "serverless" {
   max_instances = var.connector_max_instances
 
   lifecycle {
+    # connected_projects is Optional+Computed: GCP populates it after the
+    # connector is attached to a Cloud Run / Cloud Functions consumer, so
+    # the next refresh shows phantom drift "[] -> [<project>]". The field
+    # is tautological from our side (we'd be setting it to whatever GCP is
+    # going to set it to anyway), so ignoring is the right move (#215).
+    ignore_changes = [connected_projects]
+
     # The composed connector name "<project>-conn-<4hex>" budgets exactly
     # 25 chars when var.project is 15 chars (the InsideOut session-prefix
     # default). Surface the constraint at plan time so a too-long

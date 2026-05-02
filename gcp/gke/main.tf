@@ -55,7 +55,7 @@ module "gke" {
   logging_service    = "logging.googleapis.com/kubernetes"
   monitoring_service = "monitoring.googleapis.com/kubernetes"
 
-  cluster_resource_labels = var.labels
+  cluster_resource_labels = merge({ project = var.project }, var.labels)
 
   node_pools = [
     {

@@ -26,6 +26,8 @@ resource "google_secret_manager_secret" "this" {
     each.value.labels
   )
 
+  annotations = var.annotations
+
   replication {
     dynamic "auto" {
       for_each = each.value.replication == null || try(each.value.replication.automatic, true) ? [1] : []

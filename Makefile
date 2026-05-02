@@ -49,3 +49,14 @@ verify-gen: gen-imported ## Fail if regenerating produces a diff (CI gate).
 .PHONY: test
 test: ## Run go test -race for the whole module.
 	$(GO) test -race ./...
+
+.PHONY: verify-phantom-schema
+verify-phantom-schema: ## Validate phantom-computed-fields.txt against pinned provider schema.
+	@command -v terraform >/dev/null || { echo "terraform not found on PATH"; exit 1; }
+	@command -v jq >/dev/null || { echo "jq not found on PATH"; exit 1; }
+	@tmp=$$(mktemp -d); \
+	  cp $(SCHEMAS_DIR)/providers.tf "$$tmp/"; \
+	  ( cd "$$tmp" && terraform init -input=false -upgrade >/dev/null && \
+	    terraform providers schema -json > schema.json ) && \
+	  bash tests/verify-phantom-computed-schema.sh "$$tmp/schema.json"; \
+	  rc=$$?; rm -rf "$$tmp"; exit $$rc

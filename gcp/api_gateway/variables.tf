@@ -53,3 +53,9 @@ variable "backend_service_account" {
   type        = string
   default     = ""
 }
+
+variable "labels" {
+  description = "Labels to apply to API Gateway resources. Merged with the canonical { project = var.project, managed = \"terraform\" } baseline."
+  type        = map(string)
+  default     = {}
+}

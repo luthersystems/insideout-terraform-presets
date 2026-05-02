@@ -55,3 +55,9 @@ variable "redis_version" {
   type        = string
   default     = "REDIS_7_0"
 }
+
+variable "labels" {
+  description = "Labels to apply to the Memorystore instance. Merged with the canonical { project = var.project, managed = \"terraform\" } baseline."
+  type        = map(string)
+  default     = {}
+}

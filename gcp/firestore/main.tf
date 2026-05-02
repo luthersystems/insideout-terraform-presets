@@ -24,4 +24,13 @@ resource "google_firestore_database" "database" {
   name        = "${var.project}-firestore-${random_id.suffix.hex}"
   location_id = var.location_id != "" ? var.location_id : var.region
   type        = "FIRESTORE_NATIVE"
+
+  labels = merge({ project = var.project }, var.labels)
+
+  # NOTE: etag drifts on refresh but is Computed-only, so
+  # lifecycle.ignore_changes has no effect. Suppression must happen at the
+  # drift-check level — see sandbox-infrastructure-template#93 (#215).
+  # NOTE: earliest_version_time drifts on refresh but is Computed-only, so
+  # lifecycle.ignore_changes has no effect. Suppression must happen at the
+  # drift-check level — see sandbox-infrastructure-template#93 (#215).
 }

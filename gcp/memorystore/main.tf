@@ -29,8 +29,8 @@ resource "google_redis_instance" "this" {
   authorized_network = var.authorized_network
   redis_version      = var.redis_version
 
-  labels = {
+  labels = merge({
     project = var.project
     managed = "terraform"
-  }
+  }, var.labels)
 }
