@@ -16,16 +16,28 @@ import (
 )
 
 // Project extracts the "project" value from a JSON filters string.
-// Returns "" if not present or unparseable.
+// Returns "" if not present, the project value is not a string, or the
+// envelope is unparseable. Sibling fields with non-string values
+// (numbers, bools, arrays, nested objects) do not affect extraction —
+// the envelope is parsed as map[string]json.RawMessage and only the
+// "project" key is decoded as a string.
 func Project(filters string) string {
 	if filters == "" {
 		return ""
 	}
-	var m map[string]string
+	var m map[string]json.RawMessage
 	if err := json.Unmarshal([]byte(filters), &m); err != nil {
 		return ""
 	}
-	return m["project"]
+	raw, ok := m["project"]
+	if !ok {
+		return ""
+	}
+	var p string
+	if err := json.Unmarshal(raw, &p); err != nil {
+		return ""
+	}
+	return p
 }
 
 // EnsureProject injects "project"=<name> into a JSON filters string when
@@ -39,11 +51,12 @@ func Project(filters string) string {
 //     (an explicit "project":"" is treated as no project set and is
 //     overwritten — Project() reports such filters as having no project)
 //   - filters == ""                   → return {"project":<name>}
-//   - filters is an object of strings → merge project=<name> in
-//   - filters is unparseable, JSON null,
-//     or contains any non-string value → return {"project":<name>}
-//     (the original other-keys are dropped; the parse contract matches
-//     Project(), which treats values as strings)
+//   - filters is a JSON object        → merge project=<name> in;
+//     sibling fields of any JSON type (strings, numbers, bools, arrays,
+//     nested objects) are preserved byte-exact via json.RawMessage
+//   - filters is unparseable, JSON null, or a non-object →
+//     return {"project":<name>} (the original input is dropped; the
+//     fallback is order-independent so output is deterministic)
 func EnsureProject(filters, project string) string {
 	if project == "" {
 		return filters
@@ -51,15 +64,16 @@ func EnsureProject(filters, project string) string {
 	if Project(filters) != "" {
 		return filters
 	}
-	m := make(map[string]string)
+	m := make(map[string]json.RawMessage)
 	if filters != "" {
 		if err := json.Unmarshal([]byte(filters), &m); err != nil || m == nil {
 			// Drop on any parse failure or JSON null — order-independent
 			// fallback to a fresh map so output is deterministic.
-			m = make(map[string]string)
+			m = make(map[string]json.RawMessage)
 		}
 	}
-	m["project"] = project
+	pj, _ := json.Marshal(project)
+	m["project"] = pj
 	b, _ := json.Marshal(m)
 	return string(b)
 }
