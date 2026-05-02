@@ -953,9 +953,6 @@ func TestFetchGCP_DeterministicResourceOrder(t *testing.T) {
 // untranslatable aligner or an empty MetricType.
 func TestFetchGCP_AllAuthoritySpecsAreUsable(t *testing.T) {
 	t.Parallel()
-	mon := &fakeMonitoring{}
-	c := gcpClientsWithMon(mon)
-
 	for _, key := range composer.AllComponentKeys {
 		o, ok := observability.Lookup(key)
 		if !ok || o.GCP == nil || len(o.GCP.Metrics) == 0 {
@@ -965,6 +962,10 @@ func TestFetchGCP_AllAuthoritySpecsAreUsable(t *testing.T) {
 		obs := o
 		t.Run(string(k), func(t *testing.T) {
 			t.Parallel()
+			// Each subtest gets its own fakeMonitoring — fakeMonitoring
+			// mutates `calls` without a lock, so a shared instance plus
+			// t.Parallel() trips the race detector.
+			c := gcpClientsWithMon(&fakeMonitoring{})
 			result, err := FetchGCP(context.Background(), c, obs.Service, obs.GCP, nil, MetricsFilter{Hours: 6, Period: 300})
 			require.NoError(t, err)
 			assert.Equal(t, obs.Service, result.Service)
