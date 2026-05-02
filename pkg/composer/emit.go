@@ -359,6 +359,27 @@ type ModuleBlock struct {
 	// that can't be inferred from attribute references alone (e.g. Bedrock
 	// KB creation waiting on AOSS security policies).
 	DependsOn []string
+	// Moved emits one or more top-level `moved { from = <expr>; to = <expr> }`
+	// blocks after the module block. Used by the observability migration
+	// (issue #204) to relocate per-component alarms from the
+	// aws_cloudwatchmonitoring aggregator into the per-component modules
+	// without forcing destroy+create. The `to` address typically references a
+	// resource in this same module (e.g. module.aws_sqs.aws_cloudwatch_metric_alarm.backlog["0"]).
+	//
+	// Per Terraform semantics `moved {}` is a root-only block — emitting it
+	// here at root composition time is the only valid placement. Presets
+	// themselves cannot declare `moved {}` blocks (enforced by
+	// tests/lint-no-root-only-blocks.sh).
+	Moved []MovedRef
+}
+
+// MovedRef is one source/destination pair for a top-level `moved {}` block.
+// Both addresses are raw HCL expressions — callers are responsible for
+// quoting string keys (`module.foo.aws_x.y["0"]`) since `moved` blocks
+// take resource references, not strings.
+type MovedRef struct {
+	From string
+	To   string
 }
 
 func EmitRootMainTF(blocks []ModuleBlock) []byte {
@@ -398,6 +419,17 @@ func EmitRootMainTF(blocks []ModuleBlock) []byte {
 		}
 		if len(m.DependsOn) > 0 {
 			setRawExpr(mb, "depends_on", "["+strings.Join(m.DependsOn, ", ")+"]")
+		}
+		// Emit any `moved {}` blocks immediately after the module they
+		// relocate into. Source addresses typically reference an old
+		// aggregator module (e.g. module.aws_cloudwatchmonitoring.aws_cloudwatch_metric_alarm.foo["0"])
+		// and destination addresses reference a resource in this module
+		// (e.g. module.aws_sqs.aws_cloudwatch_metric_alarm.backlog["0"]).
+		for _, mv := range m.Moved {
+			body.AppendNewline()
+			mvBlock := body.AppendNewBlock("moved", nil).Body()
+			setRawExpr(mvBlock, "from", mv.From)
+			setRawExpr(mvBlock, "to", mv.To)
 		}
 		// Add a blank line between module blocks for readability.
 		if i < len(blocks)-1 {
