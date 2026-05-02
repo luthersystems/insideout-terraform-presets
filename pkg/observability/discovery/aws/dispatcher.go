@@ -29,6 +29,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 
@@ -45,9 +46,13 @@ var ErrUseMetricsPackage = errors.New("get-metrics is handled by pkg/observabili
 
 // ErrUnsupportedService is returned when the service key is not in
 // observability.AWSServiceActions and is not a known alias. Use
-// errors.Is to detect; the wrapped error carries the rejected key + the
-// list of valid services for callers that want to render a hint.
-var ErrUnsupportedService = errors.New("unsupported aws service")
+// errors.Is to detect; the wrapped error carries the rejected key, a
+// did-you-mean hint when one is close, and the full list of valid
+// services. The sentinel text matches the prefix of
+// observability.UnsupportedServiceError so the wrapped output reads as
+// `unsupported service: "<svc>" (did you mean "<closest>"?). Supported
+// services: ...` — the format reliable's LLM consumer expects.
+var ErrUnsupportedService = errors.New("unsupported service")
 
 // Inspect dispatches a single discovery request against the supplied
 // AWS config. service may be a canonical key (see
@@ -129,7 +134,7 @@ func Inspect(ctx context.Context, cfg aws.Config, service, action, filtersJSON s
 	case "account":
 		return inspectAccount(ctx, cfg, action, filtersJSON)
 	default:
-		return nil, fmt.Errorf("%w: %q (valid: %v)", ErrUnsupportedService, service, observability.AWSServiceNames())
+		return nil, unsupportedServiceError(service)
 	}
 }
 
@@ -140,14 +145,34 @@ func metricsRouted(service string) (any, error) {
 	return nil, fmt.Errorf("%w (service=%s)", ErrUseMetricsPackage, service)
 }
 
-// unsupportedActionError mirrors reliable's
-// inspect_normalize.go:unsupportedActionError but skips the levenshtein
-// "did you mean?" hint to keep this package free of the
-// github.com/agext/levenshtein dependency. The action registry already
-// lives in pkg/observability/service_actions.go; callers that want a
-// hint can compare the rejected action against
-// observability.AWSServiceActions[service] themselves.
+// unsupportedActionError builds the "unsupported <service> action"
+// error including the did-you-mean hint and supported-action list.
+// Thin wrapper over observability.UnsupportedActionError that pulls the
+// per-service action list from the canonical registry. Used by every
+// per-service inspector's default switch arm — they all pass the
+// canonical service key, so registry lookup is the right default.
+//
+// Format matches reliable's inspect_normalize.go::unsupportedActionError
+// byte-for-byte (#227): the string is round-tripped to the LLM as a
+// tool-result envelope, and reliable's consumer tests (and prompts) lock
+// the substring `did you mean "..."`.
 func unsupportedActionError(service, action string) error {
-	valid := observability.AWSServiceActions[service]
-	return fmt.Errorf("unsupported %s action: %q. Supported: %v", service, action, valid)
+	return observability.UnsupportedActionError(service, action, observability.AWSServiceActions[service])
+}
+
+// unsupportedServiceError builds the "unsupported service" error and
+// wraps ErrUnsupportedService so callers can use errors.Is to detect
+// the dispatch fall-through. The message format mirrors reliable's
+// unsupportedServiceError; the sentinel's literal text matches the
+// "unsupported service" prefix so the wrapped output reads cleanly as a
+// single string rather than a sentinel-prefix-plus-message hybrid.
+func unsupportedServiceError(service string) error {
+	valid := observability.AWSServiceNames()
+	body := observability.UnsupportedServiceError(service, valid).Error()
+	// body always starts with "unsupported service" (the literal first
+	// fmt.Fprintf in UnsupportedServiceError); strip it so the wrapped
+	// error reads `unsupported service: "foo" ...` rather than double-
+	// printing the prefix once via %w and once via the body.
+	rest := strings.TrimPrefix(body, "unsupported service")
+	return fmt.Errorf("%w%s", ErrUnsupportedService, rest)
 }
