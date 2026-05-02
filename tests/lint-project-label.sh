@@ -15,8 +15,11 @@
 # (registry.terraform.io/providers/hashicorp/google/latest/docs/resources/<name>):
 #   - If the resource supports labels: add the type to LABEL_CAPABLE_GCP
 #     below and set labels = merge(...) on the resource.
-#   - If the resource does NOT support labels: no action needed; the script
-#     ignores it.
+#   - If the resource does NOT support labels: this script ignores it,
+#     but its sibling tests/lint-labelless-name-prefix.sh enforces that
+#     label-less queryable GCP resources carry var.project in their
+#     name (so name-prefix scoping covers what label scoping cannot).
+#     See issue #215 comment-4364048339 for context.
 #
 # Scope: GCP only. See tests/lint-project-tag.sh for the AWS companion.
 
