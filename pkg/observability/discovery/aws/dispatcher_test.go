@@ -52,12 +52,6 @@ func TestInspectCoversAllAWSServices(t *testing.T) {
 	for _, svc := range observability.AWSServiceNames() {
 		t.Run(svc, func(t *testing.T) {
 			t.Parallel()
-			// cost-explorer + account aren't ported in C14 — they're
-			// reliable's sts + costexplorer surfaces. Skip so the gate
-			// doesn't false-fail until those land in a follow-up.
-			if svc == "cost-explorer" || svc == "account" {
-				t.Skipf("service %q not yet ported to discovery package (deferred follow-up)", svc)
-			}
 			action := firstAction(svc)
 			_, err := Inspect(context.Background(), cfg, svc, action, "")
 			// The AWS call is expected to fail (no real credentials);
@@ -132,9 +126,6 @@ func TestInspectGetMetricsContractAcrossAllServices(t *testing.T) {
 		}
 		t.Run(svc, func(t *testing.T) {
 			t.Parallel()
-			if svc == "cost-explorer" || svc == "account" {
-				t.Skipf("service %q not yet ported (deferred follow-up)", svc)
-			}
 			_, err := Inspect(context.Background(), cfg, svc, "get-metrics", "")
 			require.Error(t, err, "get-metrics must return an error sentinel, not nil")
 			assert.True(t, errors.Is(err, ErrUseMetricsPackage),

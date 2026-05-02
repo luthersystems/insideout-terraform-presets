@@ -124,6 +124,10 @@ func Inspect(ctx context.Context, cfg aws.Config, service, action, filtersJSON s
 		return inspectBedrock(ctx, cfg, action, filtersJSON)
 	case "cloudwatchlogs":
 		return inspectCloudWatchLogs(ctx, cfg, action, filtersJSON)
+	case "cost-explorer":
+		return inspectCostExplorer(ctx, cfg, action, filtersJSON)
+	case "account":
+		return inspectAccount(ctx, cfg, action, filtersJSON)
 	default:
 		return nil, fmt.Errorf("%w: %q (valid: %v)", ErrUnsupportedService, service, observability.AWSServiceNames())
 	}
