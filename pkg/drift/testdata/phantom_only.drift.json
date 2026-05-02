@@ -1,0 +1,27 @@
+{
+  "drift_detected": true,
+  "drift_count": 1,
+  "actionable": false,
+  "template_version": "v0.7.0",
+  "presets_version": "v0.7.3",
+  "resources": [
+    {
+      "address": "module.gcp_firestore.google_firestore_database.default",
+      "type": "google_firestore_database",
+      "name": "default",
+      "action": ["no-op"],
+      "change": {
+        "before": {
+          "name": "(default)",
+          "earliest_version_time": "2026-04-30T18:00:00Z",
+          "etag": "abc123"
+        },
+        "after": {
+          "name": "(default)",
+          "earliest_version_time": "2026-05-01T18:00:00Z",
+          "etag": "def456"
+        }
+      }
+    }
+  ]
+}

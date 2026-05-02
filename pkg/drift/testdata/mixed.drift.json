@@ -1,0 +1,49 @@
+{
+  "drift_detected": true,
+  "drift_count": 4,
+  "actionable": true,
+  "template_version": "v0.7.0",
+  "presets_version": "v0.7.3",
+  "resources": [
+    {
+      "address": "aws_iam_role.inspector[0]",
+      "type": "aws_iam_role",
+      "name": "inspector",
+      "action": ["update"],
+      "change": {
+        "before": { "managed_policy_arns": [] },
+        "after": { "managed_policy_arns": ["arn:aws:iam::aws:policy/ReadOnlyAccess"] }
+      }
+    },
+    {
+      "address": "module.gcp_firestore.google_firestore_database.default",
+      "type": "google_firestore_database",
+      "name": "default",
+      "action": ["no-op"],
+      "change": {
+        "before": { "etag": "abc" },
+        "after": { "etag": "def" }
+      }
+    },
+    {
+      "address": "module.aws_alb.aws_lb_listener.main",
+      "type": "aws_lb_listener",
+      "name": "main",
+      "action": ["no-op"],
+      "change": {
+        "before": { "tags": {}, "tags_all": {} },
+        "after": { "tags": null, "tags_all": null }
+      }
+    },
+    {
+      "address": "module.aws_rds.aws_db_instance.main",
+      "type": "aws_db_instance",
+      "name": "main",
+      "action": ["update"],
+      "change": {
+        "before": { "engine_version": "16.1" },
+        "after": { "engine_version": "16.3" }
+      }
+    }
+  ]
+}
