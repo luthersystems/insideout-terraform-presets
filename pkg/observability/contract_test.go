@@ -75,21 +75,48 @@ func TestObservabilityDeferred_OnlyKnownKeys(t *testing.T) {
 	}
 }
 
-// TestObservabilityDeferred_OnlyForEmptyEntries ensures the deferred
-// allowlist is not used to silence drift on entries that already have
-// real data. An entry with non-empty Service / non-nil AWS / non-nil GCP
-// is "live" — it must not appear in observabilityDeferred. This keeps
-// the deferred list shrinking monotonically as data lands across PRs.
-func TestObservabilityDeferred_OnlyForEmptyEntries(t *testing.T) {
+// TestObservabilityDeferred_OnlyForUnalarmedComponents ensures a
+// component is in the deferred allowlist only when none of its metrics
+// have Alarmed=true. Once every metric for a key has been authored as
+// an alarm in the per-component observability.tf, the key MUST be
+// removed from observabilityDeferred. This keeps the deferred list
+// shrinking monotonically as alarms land across PRs.
+//
+// Vacuously holds while every spec is Alarmed=false (C2 state); starts
+// enforcing in C9 when alarms are authored.
+func TestObservabilityDeferred_OnlyForUnalarmedComponents(t *testing.T) {
 	for k := range observabilityDeferred {
 		o, ok := Observability[k]
 		if !ok {
 			continue // covered by TestObservabilityDeferred_OnlyKnownKeys
 		}
-		isEmpty := o.Service == "" && o.AWS == nil && o.GCP == nil
-		assert.True(t, isEmpty,
-			"observabilityDeferred[%s] is set but Observability[%s] already has live data (Service=%q AWS=%v GCP=%v) — remove the deferred entry once data lands",
-			k, k, o.Service, o.AWS != nil, o.GCP != nil)
+		anyUnalarmed := false
+		hasAnyMetric := false
+		if o.AWS != nil {
+			for _, m := range o.AWS.Metrics {
+				hasAnyMetric = true
+				if !m.Alarmed {
+					anyUnalarmed = true
+					break
+				}
+			}
+		}
+		if !anyUnalarmed && o.GCP != nil {
+			for _, m := range o.GCP.Metrics {
+				hasAnyMetric = true
+				if !m.Alarmed {
+					anyUnalarmed = true
+					break
+				}
+			}
+		}
+		// Empty entry (no metrics yet) is also legitimately deferred —
+		// data is not seeded. anyUnalarmed=false && !hasAnyMetric is OK.
+		if hasAnyMetric {
+			assert.True(t, anyUnalarmed,
+				"observabilityDeferred[%s] is set but every metric in Observability[%s] has Alarmed=true — remove the deferred entry once all alarms are authored",
+				k, k)
+		}
 	}
 }
 
