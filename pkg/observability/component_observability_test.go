@@ -9,27 +9,34 @@ import (
 )
 
 // TestGCPMetricDefinitions_FirestoreResourceType pins the firestore
-// service-catalog entry against regression. Cloud Monitoring publishes
-// firestore time series under resource.type =
-// "firestore.googleapis.com/Database"; reliable historically used the
-// invalid "firestore_instance" string, which silently produced empty
-// queries. The four metric types here are the surface that
-// alarmedGCPMetrics[KeyGCPFirestore] expects to flip Alarmed=true on
-// (request_latencies) — losing any of them dim-sums the firestore
-// panel and the alarm-author handshake.
+// service-catalog entry against regression on TWO fronts:
 //
-// Ported from reliable PR #1259, which fixed the same bug in
-// reliable's local catalog. The fix has lived upstream here since
-// v0.7.x; this test is the regression pin so future edits to
-// gcpServiceMetrics["firestore"] can't silently re-introduce the
-// "firestore_instance" mistake.
+//  1. Every metric must use the canonical
+//     "firestore.googleapis.com/Database" resource type (the only
+//     resource type that carries database_id, location, and
+//     resource_container labels). The legacy "firestore_instance"
+//     resource only carries project_id, so panels using it cannot
+//     scope per-database.
+//  2. Every metric must publish under that resource type — verified
+//     against Cloud Monitoring's MetricDescriptors API. Picking a
+//     metric whose monitoredResourceTypes doesn't include
+//     "firestore.googleapis.com/Database" silently produces empty
+//     queries (this trapped reliable#1259's first attempt: the legacy
+//     document/{read,write,delete}_count metrics only publish under
+//     firestore_instance — their *_ops_count modern variants are the
+//     ones that publish under Database).
+//
+// Reliable historically used "firestore_instance"; reliable#1259
+// fixed that for request_latencies but accidentally shipped the
+// non-publishing legacy *_count names on Database for the other
+// three. This pin trips on either mistake.
 func TestGCPMetricDefinitions_FirestoreResourceType(t *testing.T) {
 	t.Parallel()
 
 	def, ok := gcpServiceMetrics["firestore"]
 	require.True(t, ok, `gcpServiceMetrics["firestore"] must be present`)
 	require.Len(t, def.Metrics, 4,
-		"firestore catalog must declare exactly four metrics (request_latencies + document {read,write,delete}_count)")
+		"firestore catalog must declare exactly four metrics (request_latencies + document {read,write,delete}_ops_count)")
 
 	const wantResourceType = "firestore.googleapis.com/Database"
 	for i, m := range def.Metrics {
@@ -41,19 +48,23 @@ func TestGCPMetricDefinitions_FirestoreResourceType(t *testing.T) {
 	// Pin metric-type set + order. Order matters because
 	// alarmedGCPMetrics flips Alarmed by name match and the panel
 	// renders metrics in slice order; reordering changes the user-
-	// visible default chart layout.
+	// visible default chart layout. The *_ops_count names are the
+	// modern variants that actually publish under
+	// firestore.googleapis.com/Database (the legacy *_count names only
+	// publish under the firestore_instance resource type and would
+	// return zero data here).
 	wantOrder := []string{
 		"firestore.googleapis.com/api/request_latencies",
-		"firestore.googleapis.com/document/read_count",
-		"firestore.googleapis.com/document/write_count",
-		"firestore.googleapis.com/document/delete_count",
+		"firestore.googleapis.com/document/read_ops_count",
+		"firestore.googleapis.com/document/write_ops_count",
+		"firestore.googleapis.com/document/delete_ops_count",
 	}
 	gotOrder := make([]string, 0, len(def.Metrics))
 	for _, m := range def.Metrics {
 		gotOrder = append(gotOrder, m.MetricType)
 	}
 	assert.Equal(t, wantOrder, gotOrder,
-		"firestore metric order has drifted; reliable#1259 expected request_latencies first so the alarm-author handshake (alarmedGCPMetrics[KeyGCPFirestore]) lands on Alarmed=true")
+		"firestore metric names have drifted; the *_ops_count variants publish under firestore.googleapis.com/Database while the legacy *_count variants only publish under firestore_instance")
 }
 
 // TestGCPMetricDefinitions_FirestoreAlarmBinding pins the

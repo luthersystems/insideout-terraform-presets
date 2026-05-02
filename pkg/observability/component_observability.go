@@ -388,17 +388,30 @@ var gcpServiceMetrics = map[string]GCPObs{
 		},
 	},
 	"firestore": {
-		// Canonical resource.type for Cloud Monitoring queries against
-		// Firestore is firestore.googleapis.com/Database. Reliable's
-		// catalog had "firestore_instance" — kept here historically but
-		// time series are NOT published under that name. Plus a
-		// request_latencies entry so alarmedGCPMetrics[KeyGCPFirestore]
-		// has a spec to flip Alarmed=true on. #204 P2.
+		// Canonical resource.type for per-database firestore queries is
+		// firestore.googleapis.com/Database (carries database_id /
+		// location / resource_container labels). The legacy
+		// firestore_instance type only carries project_id and is NOT
+		// scopable per-database — so reliable's old catalog using it +
+		// reliable#1259's first attempt to "fix" by setting Database
+		// on document/{read,write,delete}_count both broke per-database
+		// scoping in different ways.
+		//
+		// The truthful catalog (verified live against the Cloud
+		// Monitoring MetricDescriptors API on 2026-05-02): of the four
+		// metrics we want here, only `request_latencies` publishes
+		// under Database. The legacy `document/{read,write,delete}_count`
+		// metrics publish ONLY under firestore_instance — but their
+		// modern `*_ops_count` variants publish under Database with
+		// database_id, which is what we want.
+		//
+		// Plus a request_latencies entry so alarmedGCPMetrics[
+		// KeyGCPFirestore] has a spec to flip Alarmed=true on (#204).
 		Metrics: []GCPMetricSpec{
 			{MetricType: "firestore.googleapis.com/api/request_latencies", ResourceType: "firestore.googleapis.com/Database", LabelKey: "database_id", Aligner: "ALIGN_PERCENTILE_99", DisplayName: "API Request Latency (p99)"},
-			{MetricType: "firestore.googleapis.com/document/read_count", ResourceType: "firestore.googleapis.com/Database", LabelKey: "database_id", Aligner: "ALIGN_RATE", DisplayName: "Document Reads"},
-			{MetricType: "firestore.googleapis.com/document/write_count", ResourceType: "firestore.googleapis.com/Database", LabelKey: "database_id", Aligner: "ALIGN_RATE", DisplayName: "Document Writes"},
-			{MetricType: "firestore.googleapis.com/document/delete_count", ResourceType: "firestore.googleapis.com/Database", LabelKey: "database_id", Aligner: "ALIGN_RATE", DisplayName: "Document Deletes"},
+			{MetricType: "firestore.googleapis.com/document/read_ops_count", ResourceType: "firestore.googleapis.com/Database", LabelKey: "database_id", Aligner: "ALIGN_RATE", DisplayName: "Document Read Ops"},
+			{MetricType: "firestore.googleapis.com/document/write_ops_count", ResourceType: "firestore.googleapis.com/Database", LabelKey: "database_id", Aligner: "ALIGN_RATE", DisplayName: "Document Write Ops"},
+			{MetricType: "firestore.googleapis.com/document/delete_ops_count", ResourceType: "firestore.googleapis.com/Database", LabelKey: "database_id", Aligner: "ALIGN_RATE", DisplayName: "Document Delete Ops"},
 		},
 	},
 	"cloudarmor": {
