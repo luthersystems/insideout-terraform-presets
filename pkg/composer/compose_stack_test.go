@@ -467,8 +467,8 @@ func TestComposeStack_KitchenSink(t *testing.T) {
 	// unambiguous `KeyAWSEKSControlPlane` / `KeyAWSEKSNodeGroup`.
 	selected := []ComponentKey{
 		KeyAWSVPC,
-		KeyAWSEKS, // EKS control plane
-		KeyAWSEKSNodeGroup,    // EKS node group (polymorphic; KeyAWSEKSNodeGroup lands in Phase 4)
+		KeyAWSEKS,          // EKS control plane
+		KeyAWSEKSNodeGroup, // EKS node group (polymorphic; KeyAWSEKSNodeGroup lands in Phase 4)
 		KeyAWSBastion,
 		KeyAWSALB,
 		KeyAWSRDS,
@@ -542,8 +542,13 @@ func TestComposeStack_KitchenSink(t *testing.T) {
 	})
 
 	t.Run("wiring/nodegroup", func(t *testing.T) {
-		require.Contains(t, mainTF, `cluster_name   = module.aws_eks.cluster_name`)
-		require.Contains(t, mainTF, `subnet_ids     = module.aws_vpc.private_subnet_ids`)
+		// nodegroup block is padded to enable_observability (20 chars;
+		// #204 — KeyAWSEKSNodeGroup added to PricingDependencies so the
+		// per-component EKS alarm gets its alarm_topic_arn wired).
+		require.Contains(t, mainTF, `cluster_name         = module.aws_eks.cluster_name`)
+		require.Contains(t, mainTF, `subnet_ids           = module.aws_vpc.private_subnet_ids`)
+		require.Contains(t, mainTF, `alarm_topic_arn      = module.aws_cloudwatchmonitoring.sns_topic_arn`)
+		require.Contains(t, mainTF, `enable_observability = true`)
 	})
 
 	t.Run("wiring/alb", func(t *testing.T) {
@@ -1495,7 +1500,7 @@ func TestComposeStack_OutputsTF_KitchenSink(t *testing.T) {
 	selected := []ComponentKey{
 		KeyAWSVPC,
 		KeyAWSEKSControlPlane, // EKS control plane (polymorphic)
-		KeyAWSEKSNodeGroup,      // EKS node group (polymorphic)
+		KeyAWSEKSNodeGroup,    // EKS node group (polymorphic)
 		KeyAWSRDS,
 		KeyAWSS3,
 	}

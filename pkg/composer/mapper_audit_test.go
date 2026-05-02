@@ -542,7 +542,7 @@ func TestBuildModuleValues_AWSLambda_MemoryAndTimeout(t *testing.T) {
 //        silently dropped at compose time.
 // ---------------------------------------------------------------------------
 
-// 10. GCP Cloud KMS — module variable is `keyring_name` (one word), not
+//  10. GCP Cloud KMS — module variable is `keyring_name` (one word), not
 //     `key_ring_name` (two). Pre-fix mapper emitted the latter, silently
 //     dropped, and the module default "main" always won.
 func TestBuildModuleValues_GCPCloudKMS_KeyringName(t *testing.T) {
@@ -555,7 +555,7 @@ func TestBuildModuleValues_GCPCloudKMS_KeyringName(t *testing.T) {
 	assert.False(t, hasOld, "key_ring_name is the pre-fix key — module variable is keyring_name")
 }
 
-// 11. GCP Secret Manager — module variable is `secrets` (list of objects)
+//  11. GCP Secret Manager — module variable is `secrets` (list of objects)
 //     with default `[]`. Pre-fix mapper emitted `secret_id = "main-secret"`
 //     against a non-existent variable; value silently dropped. Drop the
 //     orphan emission so the mapper's output is honest about what it can
@@ -569,7 +569,7 @@ func TestBuildModuleValues_GCPSecretManager_NoOrphanSecretID(t *testing.T) {
 	assert.False(t, hasOld, "secret_id is the pre-fix orphan key — gcp/secretmanager declares `secrets` (list); leave it to user tfvars")
 }
 
-// 12. GCP Firestore — module declares only project/region; the (default)
+//  12. GCP Firestore — module declares only project/region; the (default)
 //     database is created implicitly. Pre-fix mapper emitted
 //     `database_id = "(default)"` against a non-existent variable.
 func TestBuildModuleValues_GCPFirestore_NoOrphanDatabaseID(t *testing.T) {

@@ -233,10 +233,10 @@ func ValidateProvenanceConflicts(cloud string, irs []imported.ImportedResource, 
 		field := importedField(ir, i)
 		if ir.ForceTakeover == nil {
 			issues = append(issues, ValidationIssue{
-				Field:   field,
-				Value:   observed,
-				Code:    "imported_resource_provenance_conflict",
-				Reason:  fmt.Sprintf("imported resource %q is already claimed by import project %q; refusing to overwrite without an audited force-takeover", ir.Identity.Address, observed),
+				Field:      field,
+				Value:      observed,
+				Code:       "imported_resource_provenance_conflict",
+				Reason:     fmt.Sprintf("imported resource %q is already claimed by import project %q; refusing to overwrite without an audited force-takeover", ir.Identity.Address, observed),
 				Suggestion: "set ImportedResource.ForceTakeover with actor, reason, previous_owner, and approved_at to override (audited)",
 			})
 			continue

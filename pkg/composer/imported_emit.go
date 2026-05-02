@@ -39,10 +39,10 @@ func (o EmitImportedOpts) shouldInject() bool {
 type emitMode int
 
 const (
-	emitModeSkip            emitMode = iota // not rendered (External tiers, Missing without remediation)
-	emitModeResourceImport                  // resource block + import block (Flat / Conformant / Missing+Reclaim)
-	emitModeResourceOnly                    // resource block, no import (Missing+Recreate)
-	emitModeRemovedBlock                    // `removed { from = ... lifecycle { destroy = false } }` only
+	emitModeSkip           emitMode = iota // not rendered (External tiers, Missing without remediation)
+	emitModeResourceImport                 // resource block + import block (Flat / Conformant / Missing+Reclaim)
+	emitModeResourceOnly                   // resource block, no import (Missing+Recreate)
+	emitModeRemovedBlock                   // `removed { from = ... lifecycle { destroy = false } }` only
 )
 
 // EmitImportedTF emits the contents of /imported.tf for the supplied imported

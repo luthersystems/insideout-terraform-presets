@@ -56,11 +56,11 @@ func TestComponents_Normalize_ClearsAWSFieldsForGCP(t *testing.T) {
 	t.Parallel()
 	// When cloud is GCP, all AWS fields should be cleared
 	c := Components{
-		Cloud:   "GCP",
-		AWSVPC:  "VPC",
-		AWSEKS:  boolPtr(true),
-		AWSRDS:  boolPtr(true),
-		AWSS3:   boolPtr(true),
+		Cloud:  "GCP",
+		AWSVPC: "VPC",
+		AWSEKS: boolPtr(true),
+		AWSRDS: boolPtr(true),
+		AWSS3:  boolPtr(true),
 	}
 	c.Normalize()
 
@@ -173,4 +173,3 @@ func TestConfig_Normalize_ClearsAWSFieldsForGCP(t *testing.T) {
 func boolPtr(b bool) *bool {
 	return &b
 }
-

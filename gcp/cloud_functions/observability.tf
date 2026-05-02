@@ -36,8 +36,14 @@ variable "runbook_url_prefix" {
 
 locals {
   _obs_user_labels = { project = var.project, severity = var.alarm_severity }
+  # error_rate is misleading — the underlying metric is execution_count
+  # filtered by status!=ok and ALIGN_RATEd, so units are
+  # errors-per-second, not a percentage. Default 0.05 means "alert if
+  # the function has sustained ≥1 error every 20s." A true ratio
+  # (errors/total) would require a paired-metric alert; tracked as
+  # follow-up.
   _obs_thresholds = merge({
-    error_rate = 0.05
+    error_rate_per_second = 0.05
   }, var.alarm_threshold_overrides)
   _obs_runbook = var.runbook_url_prefix == "" ? "" : "Runbook: ${var.runbook_url_prefix}/cloud_functions/errors"
 }
@@ -52,12 +58,12 @@ resource "google_monitoring_alert_policy" "errors_high" {
   combiner     = "OR"
 
   conditions {
-    display_name = "Cloud Functions error rate above ${local._obs_thresholds["error_rate"] * 100}%"
+    display_name = "Cloud Functions errors above ${local._obs_thresholds["error_rate_per_second"]} per second"
     condition_threshold {
       filter          = "metric.type=\"cloudfunctions.googleapis.com/function/execution_count\" AND resource.type=\"cloud_function\" AND metric.label.\"status\"!=\"ok\""
       duration        = "300s"
       comparison      = "COMPARISON_GT"
-      threshold_value = local._obs_thresholds["error_rate"]
+      threshold_value = local._obs_thresholds["error_rate_per_second"]
       aggregations {
         alignment_period   = "60s"
         per_series_aligner = "ALIGN_RATE"

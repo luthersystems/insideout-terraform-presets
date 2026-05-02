@@ -51,18 +51,18 @@ func TestJSONTagName(t *testing.T) {
 func TestIsCloudPrefixed(t *testing.T) {
 	t.Parallel()
 	tests := map[string]bool{
-		"aws_ec2":    true,
-		"aws_rds":    true,
-		"gcp_gke":    true,
-		"gcp_vpc":    true,
-		"ec2":        false,
-		"rds":        false,
-		"":           false,
-		"other_vm":   false,
-		"cloud":      false,
-		"region":     false,
-		"aws_":       true,
-		"gcp_":       true,
+		"aws_ec2":  true,
+		"aws_rds":  true,
+		"gcp_gke":  true,
+		"gcp_vpc":  true,
+		"ec2":      false,
+		"rds":      false,
+		"":         false,
+		"other_vm": false,
+		"cloud":    false,
+		"region":   false,
+		"aws_":     true,
+		"gcp_":     true,
 	}
 	for tag, want := range tests {
 		if got := IsCloudPrefixed(tag); got != want {
@@ -585,6 +585,7 @@ func TestSummarizeChanges_TruncatesFieldDetails(t *testing.T) {
 // calling HumanizeFieldValue would have passed. Pair (unset) with:
 //   - versioning (in booleanFields, humanises "true" → "Yes")
 //   - retentionDays (appends " days" suffix)
+//
 // so the delegation contract is enforced both ways.
 //
 // FieldDiff with both sides empty is unreachable from DiffConfigs
@@ -790,7 +791,6 @@ func TestDiffComponents_StringFieldAddRemove(t *testing.T) {
 		t.Errorf("got %+v, want aws_vpc/removed", diffs2[0])
 	}
 }
-
 
 func TestDiffComponents_SkipsMetadataFields(t *testing.T) {
 	t.Parallel()

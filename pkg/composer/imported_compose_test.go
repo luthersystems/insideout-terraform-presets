@@ -310,8 +310,8 @@ func TestComposeStackWithIssues_Imported_AWS(t *testing.T) {
 	pairs := parseImportPairs(t, importedTF)
 	assert.Equal(t,
 		map[string]string{
-			"aws_sqs_queue.orders_dlq":   "https://sqs.us-east-1.amazonaws.com/123/orders-DLQ",
-			"aws_dynamodb_table.users":   "users",
+			"aws_sqs_queue.orders_dlq": "https://sqs.us-east-1.amazonaws.com/123/orders-DLQ",
+			"aws_dynamodb_table.users": "users",
 		},
 		pairs,
 		"every imported resource must have a paired import block with the matching id")

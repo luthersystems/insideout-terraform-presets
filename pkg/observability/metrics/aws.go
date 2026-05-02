@@ -266,4 +266,3 @@ func getMetricData(
 	}
 	return results, nil
 }
-

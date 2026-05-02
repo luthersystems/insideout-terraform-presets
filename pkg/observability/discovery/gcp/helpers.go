@@ -20,8 +20,17 @@ package gcp
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 )
+
+// gcpFilterValueSafe limits caller-supplied label keys/values to a
+// charset that has no syntactic meaning in the GCP legacy filter
+// dialect (no quote, no space, no equals, no AND/OR). Without this
+// gate a value like `x AND labels.project=other` would inject an
+// extra clause via fmt.Sprintf into a filter that runs against the
+// caller's GCP credentials. #204 P1.
+var gcpFilterValueSafe = regexp.MustCompile(`^[A-Za-z0-9._\-/]{1,128}$`)
 
 // unsupportedActionError builds a descriptive error for an unknown action,
 // listing the supported actions for the service. Mirrors reliable's
@@ -81,8 +90,18 @@ func projectFromFilters(filtersJSON string) string {
 // scoping — "io-test" would over-include "io-test-2").
 //
 // Mirrors reliable's gcp_filter.go gcpLegacyLabelFilter.
+//
+// Caller-supplied key and value are validated against
+// gcpFilterValueSafe — values that contain quote / space / "=" / " AND "
+// would otherwise inject extra clauses into the filter expression
+// (#204 P1). Invalid inputs return "" (no filter), which is treated by
+// the SDK as "match everything"; callers that need stricter behavior
+// must validate upstream.
 func gcpLegacyLabelFilter(key, value string) string {
 	if key == "" || value == "" {
+		return ""
+	}
+	if !gcpFilterValueSafe.MatchString(key) || !gcpFilterValueSafe.MatchString(value) {
 		return ""
 	}
 	return fmt.Sprintf("labels.%s=%s", key, value)
@@ -112,8 +131,14 @@ func gcpLegacyLabelFilterAnd(a, b string) string {
 // AIP-160 dialect requires spaces around the operator and quotes around
 // non-numeric literals. See https://google.aip.dev/160. Mirrors
 // reliable's gcp_filter.go gcpAIP160LabelFilter.
+//
+// Caller-supplied key is validated against gcpFilterValueSafe (the
+// value is %q-quoted by Sprintf and so is safe; the key is not). #204 P1.
 func gcpAIP160LabelFilter(key, value string) string {
 	if key == "" || value == "" {
+		return ""
+	}
+	if !gcpFilterValueSafe.MatchString(key) {
 		return ""
 	}
 	return fmt.Sprintf("labels.%s = %q", key, value)

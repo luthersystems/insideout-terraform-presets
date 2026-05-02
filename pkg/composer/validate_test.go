@@ -302,4 +302,3 @@ func TestDiffComponents_SafeRemovalNoWarnings(t *testing.T) {
 	require.Equal(t, "aws_sqs", diffs[0].Component)
 	require.Empty(t, diffs[0].Warnings, "removing SQS should not produce warnings")
 }
-

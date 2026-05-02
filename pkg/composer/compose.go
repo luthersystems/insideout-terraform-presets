@@ -379,6 +379,20 @@ type ComposeStackOpts struct {
 	// Optional when ImportProjectID is set; if blank the session tag/label
 	// is omitted and only the project-level claim is enforced.
 	ImportSessionID string
+
+	// EmitObservabilityMoves opts in to emitting `moved {}` blocks that
+	// relocate Terraform state from the legacy aggregator alarms (under
+	// module.aws_cloudwatchmonitoring) to the new per-component alarms
+	// (e.g. module.aws_bastion). Default false: per-component alarms ship
+	// in addition to the aggregator (the documented duplicate-alarm
+	// window). Callers MUST flip this to true in the same apply that
+	// flips disable_legacy_per_component_alarms=true on the
+	// cloudwatchmonitoring module — emitting moves while the aggregator
+	// alarm config is still active causes Terraform to recreate the
+	// legacy alarm at its original address (state was moved away, config
+	// still demands it), producing an alarm-flap. See
+	// pkg/composer/observability_moves.go and #204.
+	EmitObservabilityMoves bool
 }
 
 // ComposeStack preserves the historical (Files, error) signature. It hard-
@@ -601,12 +615,19 @@ func (c *Client) composeStackImpl(opts ComposeStackOpts) (*ComposeStackResult, e
 			block.DependsOn = []string{opensearchRef(selected)}
 		}
 		// Observability moves: when both this component and the legacy
-		// aws_cloudwatchmonitoring aggregator are selected, emit moved {}
+		// aws_cloudwatchmonitoring aggregator are selected AND the caller
+		// has opted in via opts.EmitObservabilityMoves, emit moved {}
 		// blocks relocating the legacy per-component alarms into this
-		// module. Inert when the aggregator is not selected — the moved
-		// addresses would reference a non-existent module and Terraform
-		// would skip the block silently. Issue #204.
-		if selected[KeyAWSCloudWatchMonitoring] {
+		// module. Caller opt-in is required because emitting moves while
+		// disable_legacy_per_component_alarms is still false (the
+		// default) causes Terraform to recreate the legacy alarm at its
+		// original address (state was relocated by the move, but config
+		// still demands the resource at the original address) — that's
+		// an alarm-flap on every apply, not the clean cutover the moved
+		// block is meant to enable. Callers MUST flip the flag in the
+		// same apply that flips disable_legacy_per_component_alarms=true
+		// on cloudwatchmonitoring. Issue #204.
+		if opts.EmitObservabilityMoves && selected[KeyAWSCloudWatchMonitoring] {
 			if moves := ObservabilityMoves(k); len(moves) > 0 {
 				block.Moved = moves
 			}

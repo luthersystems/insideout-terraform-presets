@@ -18,8 +18,9 @@ package composer
 // `for_each = var.enable_observability ? { "0" = true } : {}` to
 // produce the same `["0"]` address shape on the destination side.
 //
-// Aggregator wiring footnotes (pkg/composer/contracts.go:695-711
-// shows the existing case):
+// Aggregator wiring footnotes (see DefaultWiring's
+// `case KeyAWSCloudWatchMonitoring` arm in pkg/composer/contracts.go for
+// the legacy aggregator wiring):
 //
 //   - ec2_cpu_high targets `instance_ids` which is wired ONLY from
 //     bastion (NOT from aws_ec2 today). So the source maps cleanly to

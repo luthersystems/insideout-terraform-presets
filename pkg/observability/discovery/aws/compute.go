@@ -342,10 +342,14 @@ func inspectEKS(ctx context.Context, cfg aws.Config, action, filters string) (an
 	case "get-metrics":
 		return metricsRouted("eks")
 	default:
-		// Reliable falls back to filterEKSClustersByProjectTag here (any
-		// unknown action returns the cluster list). Replicate to keep
-		// the contract identical.
-		return filterEKSClustersByProjectTag(ctx, eks.NewFromConfig(cfg), project)
+		// Every sibling inspector returns unsupportedActionError on an
+		// unknown action — matching that here keeps the contract
+		// uniform across the dispatcher (a typo'd action like
+		// "list-cluster" should fail loudly, not silently return the
+		// cluster list). Diverges intentionally from reliable's
+		// inspectEKS, which used the cluster list as a default fallback.
+		// #204 P2.
+		return nil, unsupportedActionError("eks", action)
 	}
 }
 

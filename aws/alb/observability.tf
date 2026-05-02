@@ -1,9 +1,12 @@
 # observability.tf — issue #204
 #
-# Co-located alarm authoring for the ALB this module owns. Two alarms:
-# elb_5xx_high (target 5xx response count) and target_response_slow.
-# Net-new — the legacy aggregator dashboards ALB metrics but never
-# alarmed on them (audit gap from docs/observability-consolidation.md).
+# Co-located alarm authoring for the ALB this module owns. Currently one
+# alarm: elb_5xx_high (target 5xx response count). Net-new — the legacy
+# aggregator dashboards ALB metrics but never alarmed on them (audit gap
+# from docs/observability-consolidation.md). A target-response-time
+# alarm (TargetResponseTime, p95) is tracked as a follow-up — would
+# need careful threshold tuning per-stack since target response time is
+# heavily workload-dependent.
 
 variable "enable_observability" {
   description = "When true, emit per-component CloudWatch alarms gated on this module's resources (issue #204)."
@@ -43,8 +46,7 @@ locals {
   _obs_actions = var.alarm_topic_arn == null ? [] : [var.alarm_topic_arn]
   _obs_tags    = merge(module.name.tags, var.tags, { severity = var.alarm_severity })
   _obs_thresholds = merge({
-    elb_5xx_count          = 50
-    target_response_p95_ms = 1000
+    elb_5xx_count = 50
   }, var.alarm_threshold_overrides)
   _obs_runbook = var.runbook_url_prefix == "" ? "" : " Runbook: ${var.runbook_url_prefix}/alb/"
 }

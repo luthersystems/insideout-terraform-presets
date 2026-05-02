@@ -15,6 +15,7 @@ package aws
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -49,7 +50,6 @@ func TestInspectCoversAllAWSServices(t *testing.T) {
 	t.Parallel()
 	cfg := aws.Config{Region: "us-east-1"}
 	for _, svc := range observability.AWSServiceNames() {
-		svc := svc
 		t.Run(svc, func(t *testing.T) {
 			t.Parallel()
 			// cost-explorer + account aren't ported in C14 — they're
@@ -113,4 +113,32 @@ func TestInspectGetMetricsRoutesToMetricsPackage(t *testing.T) {
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, ErrUseMetricsPackage),
 		"get-metrics on a service that supports it must route to the metrics-package sentinel")
+}
+
+// TestInspectGetMetricsContractAcrossAllServices walks every AWS
+// service in the canonical registry that lists "get-metrics" as a
+// supported action and asserts the dispatcher returns
+// ErrUseMetricsPackage. Catches the regression where a new per-service
+// inspector forgets the explicit `case "get-metrics": return
+// metricsRouted(...)` branch — without that, get-metrics silently
+// returns the cluster/list result instead of routing to the metric-fetch
+// path. #204 P2.
+func TestInspectGetMetricsContractAcrossAllServices(t *testing.T) {
+	t.Parallel()
+	cfg := aws.Config{Region: "us-east-1"}
+	for _, svc := range observability.AWSServiceNames() {
+		if !slices.Contains(observability.AWSServiceActions[svc], "get-metrics") {
+			continue
+		}
+		t.Run(svc, func(t *testing.T) {
+			t.Parallel()
+			if svc == "cost-explorer" || svc == "account" {
+				t.Skipf("service %q not yet ported (deferred follow-up)", svc)
+			}
+			_, err := Inspect(context.Background(), cfg, svc, "get-metrics", "")
+			require.Error(t, err, "get-metrics must return an error sentinel, not nil")
+			assert.True(t, errors.Is(err, ErrUseMetricsPackage),
+				"service %q action 'get-metrics' must return ErrUseMetricsPackage; got %v", svc, err)
+		})
+	}
 }

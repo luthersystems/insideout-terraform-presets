@@ -331,57 +331,57 @@ func GetModuleDir(k ComponentKey, comps *Components) string {
 // PresetKeyMap maps component keys to their preset directory names.
 // Used when the preset name differs from the component key.
 var PresetKeyMap = map[ComponentKey]string{
-	KeyAWSEKSNodeGroup: "eks_nodegroup", // polymorphic; preset name differs from string value ("ec2")
-	KeyAWSVPC:           "vpc",
-	KeyAWSBastion:       "bastion",
-	KeyAWSEC2:           "ec2",
-	KeyAWSEKS:           "resource", // Uses the same preset as KeyAWSEKSControlPlane (aws/resource/)
-	KeyAWSECS:           "ecs",
-	KeyAWSLambda:        "lambda",
-	KeyAWSALB:           "alb",
-	KeyAWSCloudfront:    "cloudfront",
-	KeyAWSWAF:           "waf",
-	KeyAWSAPIGateway:    "apigateway",
-	KeyAWSRDS:           "rds",
-	KeyAWSElastiCache:   "elasticache",
-	KeyAWSDynamoDB:      "dynamodb",
-	KeyAWSOpenSearch:    "opensearch",
-	KeyAWSS3:            "s3",
-	KeyAWSKMS:           "kms",
-	KeyAWSSecretsManager: "secretsmanager",
-	KeyAWSBedrock:       "bedrock",
-	KeyAWSSQS:           "sqs",
-	KeyAWSMSK:           "msk",
-	KeyAWSCloudWatchLogs: "cloudwatchlogs",
+	KeyAWSEKSNodeGroup:         "eks_nodegroup", // polymorphic; preset name differs from string value ("ec2")
+	KeyAWSVPC:                  "vpc",
+	KeyAWSBastion:              "bastion",
+	KeyAWSEC2:                  "ec2",
+	KeyAWSEKS:                  "resource", // Uses the same preset as KeyAWSEKSControlPlane (aws/resource/)
+	KeyAWSECS:                  "ecs",
+	KeyAWSLambda:               "lambda",
+	KeyAWSALB:                  "alb",
+	KeyAWSCloudfront:           "cloudfront",
+	KeyAWSWAF:                  "waf",
+	KeyAWSAPIGateway:           "apigateway",
+	KeyAWSRDS:                  "rds",
+	KeyAWSElastiCache:          "elasticache",
+	KeyAWSDynamoDB:             "dynamodb",
+	KeyAWSOpenSearch:           "opensearch",
+	KeyAWSS3:                   "s3",
+	KeyAWSKMS:                  "kms",
+	KeyAWSSecretsManager:       "secretsmanager",
+	KeyAWSBedrock:              "bedrock",
+	KeyAWSSQS:                  "sqs",
+	KeyAWSMSK:                  "msk",
+	KeyAWSCloudWatchLogs:       "cloudwatchlogs",
 	KeyAWSCloudWatchMonitoring: "cloudwatchmonitoring",
-	KeyAWSGrafana:       "grafana",
-	KeyAWSCognito:       "cognito",
-	KeyAWSBackups:       "backups",
-	KeyAWSGitHubActions: "githubactions",
-	KeyAWSCodePipeline:  "codepipeline",
-	KeyGCPVPC:           "vpc",
-	KeyGCPCompute:       "compute",
-	KeyGCPGKE:           "gke",
-	KeyGCPLoadbalancer:  "loadbalancer",
-	KeyGCPCloudCDN:      "cloud_cdn",
-	KeyGCPCloudSQL:      "cloudsql",
-	KeyGCPMemorystore:   "memorystore",
-	KeyGCPGCS:           "gcs",
-	KeyGCPCloudLogging:  "cloud_logging",
-	KeyGCPSecretManager:    "secretmanager",
-	KeyGCPCloudKMS:         "kms",
-	KeyGCPPubSub:           "pubsub",
-	KeyGCPCloudMonitoring:  "cloud_monitoring",
-	KeyGCPVertexAI:         "vertex_ai",
-	KeyGCPCloudBuild:       "cloud_build",
-	KeyGCPFirestore:        "firestore",
-	KeyGCPCloudArmor:       "cloud_armor",
-	KeyGCPAPIGateway:       "api_gateway",
-	KeyGCPBackups:          "backups",
-	KeyGCPIdentityPlatform: "identity_platform",
-	KeyGCPCloudRun:         "cloud_run",
-	KeyGCPCloudFunctions:   "cloud_functions",
-	KeyGCPBastion:          "bastion",
+	KeyAWSGrafana:              "grafana",
+	KeyAWSCognito:              "cognito",
+	KeyAWSBackups:              "backups",
+	KeyAWSGitHubActions:        "githubactions",
+	KeyAWSCodePipeline:         "codepipeline",
+	KeyGCPVPC:                  "vpc",
+	KeyGCPCompute:              "compute",
+	KeyGCPGKE:                  "gke",
+	KeyGCPLoadbalancer:         "loadbalancer",
+	KeyGCPCloudCDN:             "cloud_cdn",
+	KeyGCPCloudSQL:             "cloudsql",
+	KeyGCPMemorystore:          "memorystore",
+	KeyGCPGCS:                  "gcs",
+	KeyGCPCloudLogging:         "cloud_logging",
+	KeyGCPSecretManager:        "secretmanager",
+	KeyGCPCloudKMS:             "kms",
+	KeyGCPPubSub:               "pubsub",
+	KeyGCPCloudMonitoring:      "cloud_monitoring",
+	KeyGCPVertexAI:             "vertex_ai",
+	KeyGCPCloudBuild:           "cloud_build",
+	KeyGCPFirestore:            "firestore",
+	KeyGCPCloudArmor:           "cloud_armor",
+	KeyGCPAPIGateway:           "api_gateway",
+	KeyGCPBackups:              "backups",
+	KeyGCPIdentityPlatform:     "identity_platform",
+	KeyGCPCloudRun:             "cloud_run",
+	KeyGCPCloudFunctions:       "cloud_functions",
+	KeyGCPBastion:              "bastion",
 }
 
 // GetPresetPath returns the cloud-prefixed preset path for a component.
@@ -522,13 +522,13 @@ func vpcRef(selected map[ComponentKey]bool) string {
 	return "module.aws_vpc"
 }
 
-func albRef(_ map[ComponentKey]bool) string       { return "module.aws_alb" }
-func wafRef(_ map[ComponentKey]bool) string       { return "module.aws_waf" }
-func bastionRef(_ map[ComponentKey]bool) string   { return "module.aws_bastion" }
-func rdsRef(_ map[ComponentKey]bool) string       { return "module.aws_rds" }
-func s3Ref(_ map[ComponentKey]bool) string        { return "module.aws_s3" }
+func albRef(_ map[ComponentKey]bool) string        { return "module.aws_alb" }
+func wafRef(_ map[ComponentKey]bool) string        { return "module.aws_waf" }
+func bastionRef(_ map[ComponentKey]bool) string    { return "module.aws_bastion" }
+func rdsRef(_ map[ComponentKey]bool) string        { return "module.aws_rds" }
+func s3Ref(_ map[ComponentKey]bool) string         { return "module.aws_s3" }
 func opensearchRef(_ map[ComponentKey]bool) string { return "module.aws_opensearch" }
-func sqsRef(_ map[ComponentKey]bool) string       { return "module.aws_sqs" }
+func sqsRef(_ map[ComponentKey]bool) string        { return "module.aws_sqs" }
 
 // resourceRef returns the EKS/ECS module reference for the selected stack.
 // Prefers the prefixed KeyAWSEKS / KeyAWSECS keys, with a KeyAWSEKSControlPlane path

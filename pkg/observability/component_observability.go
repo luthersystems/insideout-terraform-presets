@@ -373,10 +373,17 @@ var gcpServiceMetrics = map[string]GCPObs{
 		},
 	},
 	"firestore": {
+		// Canonical resource.type for Cloud Monitoring queries against
+		// Firestore is firestore.googleapis.com/Database. Reliable's
+		// catalog had "firestore_instance" — kept here historically but
+		// time series are NOT published under that name. Plus a
+		// request_latencies entry so alarmedGCPMetrics[KeyGCPFirestore]
+		// has a spec to flip Alarmed=true on. #204 P2.
 		Metrics: []GCPMetricSpec{
-			{MetricType: "firestore.googleapis.com/document/read_count", ResourceType: "firestore_instance", LabelKey: "database_id", Aligner: "ALIGN_RATE", DisplayName: "Document Reads"},
-			{MetricType: "firestore.googleapis.com/document/write_count", ResourceType: "firestore_instance", LabelKey: "database_id", Aligner: "ALIGN_RATE", DisplayName: "Document Writes"},
-			{MetricType: "firestore.googleapis.com/document/delete_count", ResourceType: "firestore_instance", LabelKey: "database_id", Aligner: "ALIGN_RATE", DisplayName: "Document Deletes"},
+			{MetricType: "firestore.googleapis.com/api/request_latencies", ResourceType: "firestore.googleapis.com/Database", LabelKey: "database_id", Aligner: "ALIGN_PERCENTILE_99", DisplayName: "API Request Latency (p99)"},
+			{MetricType: "firestore.googleapis.com/document/read_count", ResourceType: "firestore.googleapis.com/Database", LabelKey: "database_id", Aligner: "ALIGN_RATE", DisplayName: "Document Reads"},
+			{MetricType: "firestore.googleapis.com/document/write_count", ResourceType: "firestore.googleapis.com/Database", LabelKey: "database_id", Aligner: "ALIGN_RATE", DisplayName: "Document Writes"},
+			{MetricType: "firestore.googleapis.com/document/delete_count", ResourceType: "firestore.googleapis.com/Database", LabelKey: "database_id", Aligner: "ALIGN_RATE", DisplayName: "Document Deletes"},
 		},
 	},
 	"cloudarmor": {
@@ -524,10 +531,12 @@ var alarmedAWSMetrics = map[composer.ComponentKey]AlarmAuthor{
 // entry at all). Those alarms exist in HCL but cannot flip a spec
 // here. Reverse-drift gate is a follow-up under #204.
 var alarmedGCPMetrics = map[composer.ComponentKey]AlarmAuthor{
+	composer.KeyGCPAPIGateway:     {Module: "gcp/api_gateway", Metrics: []string{"apigateway.googleapis.com/gateway/request_count"}},
 	composer.KeyGCPCloudFunctions: {Module: "gcp/cloud_functions", Metrics: []string{"cloudfunctions.googleapis.com/function/execution_count"}},
 	composer.KeyGCPCloudRun:       {Module: "gcp/cloud_run", Metrics: []string{"run.googleapis.com/request_latencies"}},
 	composer.KeyGCPCloudSQL:       {Module: "gcp/cloudsql", Metrics: []string{"cloudsql.googleapis.com/database/cpu/utilization"}},
 	composer.KeyGCPCompute:        {Module: "gcp/compute", Metrics: []string{"compute.googleapis.com/instance/cpu/utilization"}},
+	composer.KeyGCPFirestore:      {Module: "gcp/firestore", Metrics: []string{"firestore.googleapis.com/api/request_latencies"}},
 	composer.KeyGCPLoadbalancer:   {Module: "gcp/loadbalancer", Metrics: []string{"loadbalancing.googleapis.com/https/backend_latencies"}},
 	composer.KeyGCPMemorystore:    {Module: "gcp/memorystore", Metrics: []string{"redis.googleapis.com/stats/cpu_utilization"}},
 	composer.KeyGCPPubSub:         {Module: "gcp/pubsub", Metrics: []string{"pubsub.googleapis.com/subscription/num_undelivered_messages"}},

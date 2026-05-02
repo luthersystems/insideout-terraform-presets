@@ -3,9 +3,16 @@
 # Co-located alarm authoring for the ElastiCache replication group this
 # module owns. The cpu_high alarm matches the legacy aggregator-side
 # redis_cpu_high alarm. The aggregator never had its
-# elasticache_replication_group_ids input wired (see
-# pkg/composer/contracts.go:709 — no elasticache case), so the legacy
-# alarm has been dormant; this is the first wiring.
+# elasticache_replication_group_ids input wired (no elasticache case
+# inside DefaultWiring's `case KeyAWSCloudWatchMonitoring` arm in
+# pkg/composer/contracts.go), so the legacy alarm has been dormant;
+# this is the first wiring.
+#
+# Known limitation (#204 P2): CacheClusterId here gets the replication-
+# group ID, not per-node cache-cluster IDs (e.g. <rg>-001-001). AWS
+# publishes ElastiCache CPU at the per-node level, so this alarm will
+# not match a real time series until reworked to fan out via
+# aws_elasticache_replication_group.this.member_clusters.
 
 variable "enable_observability" {
   description = "When true, emit per-component CloudWatch alarms gated on this module's resources (issue #204)."

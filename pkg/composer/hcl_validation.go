@@ -221,18 +221,18 @@ var validationFunctionsMap map[string]function.Function
 func validationFunctions() map[string]function.Function {
 	validationFunctionsOnce.Do(func() {
 		validationFunctionsMap = map[string]function.Function{
-			"can":          tryfunc.CanFunc,
-			"contains":     stdlib.ContainsFunc,
-			"length":       lengthFunc(),
-			"lower":        stdlib.LowerFunc,
-			"regex":        stdlib.RegexFunc,
-			"replace":      stdlib.ReplaceFunc,
-			"trimspace":    stdlib.TrimSpaceFunc,
-			"upper":        stdlib.UpperFunc,
-			"alltrue":      allTrueFunc(),
-			"startswith":   startsWithFunc(),
-			"cidrnetmask":  cidrnetmaskFunc(),
-			"cidrhost":     cidrhostFunc(),
+			"can":         tryfunc.CanFunc,
+			"contains":    stdlib.ContainsFunc,
+			"length":      lengthFunc(),
+			"lower":       stdlib.LowerFunc,
+			"regex":       stdlib.RegexFunc,
+			"replace":     stdlib.ReplaceFunc,
+			"trimspace":   stdlib.TrimSpaceFunc,
+			"upper":       stdlib.UpperFunc,
+			"alltrue":     allTrueFunc(),
+			"startswith":  startsWithFunc(),
+			"cidrnetmask": cidrnetmaskFunc(),
+			"cidrhost":    cidrhostFunc(),
 		}
 	})
 	return validationFunctionsMap

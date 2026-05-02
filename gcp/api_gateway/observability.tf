@@ -52,7 +52,12 @@ resource "google_monitoring_alert_policy" "errors_high" {
   conditions {
     display_name = "API Gateway 5xx error rate above ${local._obs_thresholds["error_rate_5xx"] * 100}%"
     condition_threshold {
-      filter          = "metric.type=\"apigateway.googleapis.com/api/request_count\" AND resource.type=\"apigateway.googleapis.com/Api\" AND metric.label.\"response_code_class\"=\"5xx\""
+      # GCP API Gateway publishes apigateway.googleapis.com/gateway/* under
+      # resource.type apigateway.googleapis.com/Gateway. The api/* names and
+      # /Api resource type are NOT real (would silently never match). Catalog
+      # in pkg/observability/component_observability.go:338-339 carries the
+      # canonical names; alarmedGCPMetrics[KeyGCPAPIGateway] gates drift.
+      filter          = "metric.type=\"apigateway.googleapis.com/gateway/request_count\" AND resource.type=\"apigateway.googleapis.com/Gateway\" AND metric.label.\"response_code_class\"=\"5xx\""
       duration        = "300s"
       comparison      = "COMPARISON_GT"
       threshold_value = local._obs_thresholds["error_rate_5xx"]

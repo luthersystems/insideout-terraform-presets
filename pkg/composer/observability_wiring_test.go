@@ -87,10 +87,10 @@ func TestDefaultWiring_ObservabilityGCP_AggregatorItself(t *testing.T) {
 }
 
 // TestComposeStack_EmitsObservabilityMovedBlocks_AWS composes a stack
-// with aws_vpc + aws_sqs + aws_cloudwatchmonitoring and asserts the
-// emitted root main.tf contains the moved {} block relocating the SQS
-// alarm into the per-component module. End-to-end exercise of C3 emit +
-// C4 moves table + C5 compose-loop population.
+// with aws_vpc + aws_sqs + aws_cloudwatchmonitoring and EmitObservabilityMoves=true,
+// asserts the emitted root main.tf contains the moved {} block relocating
+// the SQS alarm into the per-component module. End-to-end exercise of C3
+// emit + C4 moves table + C5 compose-loop population.
 func TestComposeStack_EmitsObservabilityMovedBlocks_AWS(t *testing.T) {
 	c := newTestClient()
 	out, err := c.ComposeStack(ComposeStackOpts{
@@ -100,10 +100,11 @@ func TestComposeStack_EmitsObservabilityMovedBlocks_AWS(t *testing.T) {
 			KeyAWSSQS,
 			KeyAWSCloudWatchMonitoring,
 		},
-		Comps:   &Components{},
-		Cfg:     &Config{Region: "us-east-1"},
-		Project: "test-obs-204",
-		Region:  "us-east-1",
+		Comps:                  &Components{},
+		Cfg:                    &Config{Region: "us-east-1"},
+		Project:                "test-obs-204",
+		Region:                 "us-east-1",
+		EmitObservabilityMoves: true,
 	})
 	require.NoError(t, err)
 
@@ -125,12 +126,13 @@ func TestComposeStack_EmitsObservabilityMovedBlocks_AWS(t *testing.T) {
 func TestComposeStack_NoMovedBlocksWithoutAggregator(t *testing.T) {
 	c := newTestClient()
 	out, err := c.ComposeStack(ComposeStackOpts{
-		Cloud:        "aws",
-		SelectedKeys: []ComponentKey{KeyAWSVPC, KeyAWSSQS},
-		Comps:        &Components{},
-		Cfg:          &Config{Region: "us-east-1"},
-		Project:      "test-obs-204",
-		Region:       "us-east-1",
+		Cloud:                  "aws",
+		SelectedKeys:           []ComponentKey{KeyAWSVPC, KeyAWSSQS},
+		Comps:                  &Components{},
+		Cfg:                    &Config{Region: "us-east-1"},
+		Project:                "test-obs-204",
+		Region:                 "us-east-1",
+		EmitObservabilityMoves: true,
 	})
 	require.NoError(t, err)
 
@@ -140,6 +142,35 @@ func TestComposeStack_NoMovedBlocksWithoutAggregator(t *testing.T) {
 	body := string(mainTF)
 	assert.NotContains(t, body, "moved {",
 		"composed root main.tf must not contain moved {} blocks when the aggregator is absent")
+}
+
+// TestComposeStack_NoMovedBlocksWithoutOptIn verifies the moved {} blocks
+// are NOT emitted when EmitObservabilityMoves is false (the default), even
+// with the aggregator selected. Default behavior preserves the documented
+// duplicate-alarm window without disrupting legacy state.
+func TestComposeStack_NoMovedBlocksWithoutOptIn(t *testing.T) {
+	c := newTestClient()
+	out, err := c.ComposeStack(ComposeStackOpts{
+		Cloud: "aws",
+		SelectedKeys: []ComponentKey{
+			KeyAWSVPC,
+			KeyAWSSQS,
+			KeyAWSCloudWatchMonitoring,
+		},
+		Comps:   &Components{},
+		Cfg:     &Config{Region: "us-east-1"},
+		Project: "test-obs-204",
+		Region:  "us-east-1",
+		// EmitObservabilityMoves intentionally not set (default false).
+	})
+	require.NoError(t, err)
+
+	mainTF, ok := out["/main.tf"]
+	require.True(t, ok)
+
+	body := string(mainTF)
+	assert.NotContains(t, body, "moved {",
+		"composed root main.tf must not contain moved {} blocks when EmitObservabilityMoves is false (default), even with the aggregator selected")
 }
 
 // TestComposeStack_FilteredWiring_PassThroughForKnownVars verifies the

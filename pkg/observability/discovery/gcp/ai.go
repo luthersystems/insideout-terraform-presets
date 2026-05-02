@@ -24,6 +24,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"regexp"
 
 	aiplatform "cloud.google.com/go/aiplatform/apiv1"
 	"cloud.google.com/go/aiplatform/apiv1/aiplatformpb"
@@ -33,6 +34,14 @@ import (
 	"github.com/luthersystems/insideout-terraform-presets/pkg/observability"
 )
 
+// gcpRegionPattern restricts caller-supplied region values before they
+// are interpolated into a Vertex AI endpoint URL. Without this gate a
+// region like "evil.com:443/" would point the SDK (carrying the
+// caller's GCP credentials) at an attacker-controlled endpoint —
+// classic confused-deputy. Matches the GCP region naming convention
+// (lowercase letter + 1–30 of letter/digit/dash). #204 P1.
+var gcpRegionPattern = regexp.MustCompile(`^[a-z][a-z0-9-]{1,30}$`)
+
 // vertexAIDefaultRegion is the fallback region when filters omit
 // "region". Mirrors reliable's gcp_inspect.go:533. The caller can
 // override with filters={"region":"<region>"} for other deployments.
@@ -41,15 +50,25 @@ const vertexAIDefaultRegion = "us-central1"
 // extractVertexAIRegion returns (region, regionExplicit) from filters.
 // Isolated so the JSON key and default can be locked against
 // regression. Mirrors reliable's gcp_inspect.go:539.
+//
+// Caller-supplied region is validated against gcpRegionPattern before
+// it is returned — invalid values fall back to vertexAIDefaultRegion
+// so the caller never gets a region that could escape the endpoint
+// URL (#204 P1, confused-deputy on option.WithEndpoint).
 func extractVertexAIRegion(filters string) (string, bool) {
 	m := parseFilterMap(filters)
 	if m == nil {
 		return vertexAIDefaultRegion, false
 	}
-	if r := m["region"]; r != "" {
-		return r, true
+	r := m["region"]
+	if r == "" {
+		return vertexAIDefaultRegion, false
 	}
-	return vertexAIDefaultRegion, false
+	if !gcpRegionPattern.MatchString(r) {
+		log.Printf("[discovery/gcp vertexai] rejected invalid region=%q (must match %s); falling back to default", r, gcpRegionPattern.String())
+		return vertexAIDefaultRegion, false
+	}
+	return r, true
 }
 
 func inspectVertexAI(ctx context.Context, projectID, action, filters string, opts ...option.ClientOption) (any, error) {

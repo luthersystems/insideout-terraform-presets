@@ -52,7 +52,10 @@ resource "google_monitoring_alert_policy" "api_latency_high" {
   conditions {
     display_name = "Firestore API p99 request latency above ${local._obs_thresholds["api_request_latency_p99_ms"]}ms"
     condition_threshold {
-      filter          = "metric.type=\"firestore.googleapis.com/api/request_latencies\" AND resource.type=\"firestore_database\""
+      # Canonical resource.type per Cloud Monitoring is
+      # firestore.googleapis.com/Database (not the older "firestore_database" /
+      # "firestore_instance" forms — those won't match published time series).
+      filter          = "metric.type=\"firestore.googleapis.com/api/request_latencies\" AND resource.type=\"firestore.googleapis.com/Database\""
       duration        = "300s"
       comparison      = "COMPARISON_GT"
       threshold_value = local._obs_thresholds["api_request_latency_p99_ms"]

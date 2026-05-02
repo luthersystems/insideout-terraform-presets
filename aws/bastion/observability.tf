@@ -4,7 +4,8 @@
 # owns. The cpu_high alarm matches the legacy aggregator-side
 # ec2_cpu_high alarm in aws/cloudwatchmonitoring/main.tf
 # (which today is only wired with bastion instance IDs — see
-# pkg/composer/contracts.go:697). Per-component cutover via
+# DefaultWiring's `case KeyAWSCloudWatchMonitoring` arm in
+# pkg/composer/contracts.go). Per-component cutover via
 # disable_legacy_per_component_alarms (issue #204).
 
 variable "enable_observability" {
