@@ -1,0 +1,11 @@
+{
+  "drift_detected": true,
+  "drift_count": 2,
+  "actionable": false,
+  "template_version": "v0.5.0",
+  "presets_version": "v0.6.0",
+  "resources": [
+    { "address": "aws_iam_role.legacy_role" },
+    { "address": "google_firestore_database.default" }
+  ]
+}

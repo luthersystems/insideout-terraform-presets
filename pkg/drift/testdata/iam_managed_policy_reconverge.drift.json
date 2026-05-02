@@ -1,0 +1,38 @@
+{
+  "drift_detected": true,
+  "drift_count": 1,
+  "actionable": true,
+  "template_version": "v0.7.0",
+  "presets_version": "v0.7.3",
+  "resources": [
+    {
+      "address": "aws_iam_role.insideout_inspector[0]",
+      "module_address": "module.iam",
+      "mode": "managed",
+      "type": "aws_iam_role",
+      "name": "insideout_inspector",
+      "provider_name": "registry.terraform.io/hashicorp/aws",
+      "change": {
+        "actions": ["update"],
+        "before": {
+          "name": "insideout-inspector-de9def7c",
+          "managed_policy_arns": [],
+          "inline_policy": []
+        },
+        "after": {
+          "name": "insideout-inspector-de9def7c",
+          "managed_policy_arns": ["arn:aws:iam::aws:policy/ReadOnlyAccess"],
+          "inline_policy": []
+        },
+        "after_unknown": {
+          "managed_policy_arns": [false]
+        },
+        "before_sensitive": {},
+        "after_sensitive": {
+          "managed_policy_arns": [false]
+        }
+      },
+      "action": ["update"]
+    }
+  ]
+}

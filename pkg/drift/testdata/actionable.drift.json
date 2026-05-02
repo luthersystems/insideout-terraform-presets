@@ -1,0 +1,25 @@
+{
+  "drift_detected": true,
+  "drift_count": 1,
+  "actionable": true,
+  "template_version": "v0.7.0",
+  "presets_version": "v0.7.3",
+  "resources": [
+    {
+      "address": "module.aws_rds.aws_db_instance.main",
+      "type": "aws_db_instance",
+      "name": "main",
+      "action": ["update"],
+      "change": {
+        "before": {
+          "engine_version": "16.1",
+          "instance_class": "db.t3.medium"
+        },
+        "after": {
+          "engine_version": "16.3",
+          "instance_class": "db.t3.large"
+        }
+      }
+    }
+  ]
+}
