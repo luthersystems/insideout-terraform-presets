@@ -17,6 +17,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/aws-sdk-go-v2/service/ecs"
 	ecstypes "github.com/aws/aws-sdk-go-v2/service/ecs/types"
 	"github.com/aws/aws-sdk-go-v2/service/eks"
@@ -339,6 +340,8 @@ func inspectEKS(ctx context.Context, cfg aws.Config, action, filters string) (an
 		// callers that need a single cluster's details know to call
 		// DescribeCluster directly with the cluster name.
 		return nil, fmt.Errorf("describe-cluster requires a cluster name in filters (not yet implemented)")
+	case "list-nodes":
+		return listEKSNodeInstances(ctx, eks.NewFromConfig(cfg), ec2.NewFromConfig(cfg), project)
 	case "get-metrics":
 		return metricsRouted("eks")
 	default:
@@ -351,6 +354,73 @@ func inspectEKS(ctx context.Context, cfg aws.Config, action, filters string) (an
 		// #204 P2.
 		return nil, unsupportedActionError("eks", action)
 	}
+}
+
+// ec2InstancesClient is the subset of the ec2 SDK used by
+// listEKSNodeInstances. Narrow per-handler interface so test fakes
+// only implement what the helper calls — same pattern used by the
+// other per-service inspector clients in this file.
+type ec2InstancesClient interface {
+	DescribeInstances(ctx context.Context, params *ec2.DescribeInstancesInput, optFns ...func(*ec2.Options)) (*ec2.DescribeInstancesOutput, error)
+}
+
+// listEKSNodeInstances pivots EKS metric discovery from cluster-name
+// to EC2 InstanceId via the AWS-managed `eks:cluster-name` tag, so the
+// observability panel can query AWS/EC2 CPUUtilization per node instead
+// of the unpopulated AWS/EKS namespace (#231 / Option A — works on
+// existing deployments without the amazon-cloudwatch-observability
+// addon).
+//
+// Lists clusters by Project tag, then for each cluster lists EC2
+// instances tagged Project=<project> AND eks:cluster-name=<cluster>
+// (an AWS-managed tag the EKS managed node group attaches to its
+// underlying ASG / EC2 instances), returning the deduped flat list of
+// instance IDs. Per-cluster errors log+skip — partial result beats
+// empty when one cluster has an IAM denial or throttle, matching the
+// contract every other tag-fan-out helper in this package follows.
+//
+// The ContainerInsights namespace would surface richer node + pod
+// metrics but requires the amazon-cloudwatch-observability addon,
+// which our aws/eks_nodegroup preset does not install today (#231
+// follow-up Option B).
+func listEKSNodeInstances(ctx context.Context, eksClient eksClustersClient, ec2Client ec2InstancesClient, project string) ([]string, error) {
+	clusters, err := filterEKSClustersByProjectTag(ctx, eksClient, project)
+	if err != nil {
+		return nil, err
+	}
+	seen := make(map[string]struct{})
+	var instances []string
+	for _, cluster := range clusters {
+		filters := []ec2types.Filter{{
+			Name:   aws.String("tag:eks:cluster-name"),
+			Values: []string{cluster},
+		}}
+		if project != "" {
+			filters = append(filters, ec2types.Filter{
+				Name:   aws.String("tag:Project"),
+				Values: []string{project},
+			})
+		}
+		out, descErr := ec2Client.DescribeInstances(ctx, &ec2.DescribeInstancesInput{Filters: filters})
+		if descErr != nil {
+			log.Printf("[eks list-nodes] cluster=%s DescribeInstances skip: %v", cluster, descErr)
+			continue
+		}
+		for _, res := range out.Reservations {
+			for _, inst := range res.Instances {
+				if inst.InstanceId == nil {
+					continue
+				}
+				id := aws.ToString(inst.InstanceId)
+				if _, dup := seen[id]; dup {
+					continue
+				}
+				seen[id] = struct{}{}
+				instances = append(instances, id)
+			}
+		}
+	}
+	return instances, nil
 }
 
 // filterEKSClustersByProjectTag lists clusters and, when project!="",

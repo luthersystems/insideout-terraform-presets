@@ -23,7 +23,11 @@ var AWSServiceActions = map[string][]string{
 	"kms":            {"list-keys", "list-aliases", "get-metrics"},
 	"secretsmanager": {"list-secrets", "get-metrics"},
 	"ecs":            {"list-clusters", "list-services", "describe-services", "get-metrics"},
-	"eks":            {"list-clusters", "describe-cluster", "get-metrics"},
+	// list-nodes pivots EKS metric discovery from cluster-name to EC2
+	// InstanceId via the AWS-managed `eks:cluster-name` tag, so the
+	// observability panel queries AWS/EC2 CPUUtilization per node
+	// instead of the unpopulated AWS/EKS namespace (#231 / Option A).
+	"eks":            {"list-clusters", "describe-cluster", "list-nodes", "get-metrics"},
 	"cloudfront":     {"list-distributions", "get-metrics"},
 	"cloudwatchlogs": {"describe-log-groups", "get-metrics"},
 	"alb":            {"describe-load-balancers", "get-metrics"},

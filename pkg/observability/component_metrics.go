@@ -34,8 +34,15 @@ var ComponentMetricsMapping = map[composer.ComponentKey]ComponentMetricsBinding{
 	// Service-level metrics need a ClusterName+ServiceName dimension join,
 	// which discovery does not resolve. Use list-services via the MCP
 	// inspector directly for a service inventory.
-	composer.KeyAWSECS:                  {Service: "ecs", Action: "list-clusters"},
-	composer.KeyAWSEKS:                  {Service: "eks", Action: "list-clusters"},
+	composer.KeyAWSECS: {Service: "ecs", Action: "list-clusters"},
+	// EKS metrics are pivoted onto EC2 InstanceId via the
+	// `eks:cluster-name` tag (#231 Option A) — list-nodes returns the
+	// cluster's underlying instance IDs so the panel can query AWS/EC2
+	// CPUUtilization per node. The list-clusters action is still
+	// available via the dispatcher for callers that need a cluster
+	// inventory; the panel-default just doesn't use it because the
+	// AWS/EKS namespace publishes nothing usable on stock deployments.
+	composer.KeyAWSEKS:                  {Service: "eks", Action: "list-nodes"},
 	composer.KeyAWSRDS:                  {Service: "rds", Action: "describe-db-instances"},
 	composer.KeyAWSElastiCache:          {Service: "elasticache", Action: "describe-cache-clusters"},
 	composer.KeyAWSS3:                   {Service: "s3", Action: "list-buckets"},

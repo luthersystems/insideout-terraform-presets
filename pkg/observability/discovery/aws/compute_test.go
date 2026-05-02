@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/aws-sdk-go-v2/service/ecs"
 	ecstypes "github.com/aws/aws-sdk-go-v2/service/ecs/types"
@@ -245,6 +246,201 @@ func TestFilterEKSClustersByProjectTag_DescribeErrorSkips(t *testing.T) {
 	got, err := filterEKSClustersByProjectTag(context.Background(), client, "my-stack")
 	require.NoError(t, err)
 	assert.Empty(t, got)
+}
+
+// --- EC2 fake (for EKS list-nodes fan-out) ---
+
+// fakeEC2InstancesClient records the filters it observes so tests can
+// assert per-cluster filter shape, and returns per-cluster
+// DescribeInstances results keyed off the `tag:eks:cluster-name`
+// filter value. errByCluster lets a test simulate IAM denials /
+// throttles on a subset of clusters to exercise the log+skip path.
+type fakeEC2InstancesClient struct {
+	reservationsByCluster map[string][]ec2types.Reservation
+	errByCluster          map[string]error
+	calls                 []ec2.DescribeInstancesInput
+}
+
+func (f *fakeEC2InstancesClient) DescribeInstances(_ context.Context, in *ec2.DescribeInstancesInput, _ ...func(*ec2.Options)) (*ec2.DescribeInstancesOutput, error) {
+	if in != nil {
+		f.calls = append(f.calls, *in)
+	}
+	cluster := ""
+	for _, ft := range in.Filters {
+		if aws.ToString(ft.Name) == "tag:eks:cluster-name" && len(ft.Values) > 0 {
+			cluster = ft.Values[0]
+			break
+		}
+	}
+	if err, ok := f.errByCluster[cluster]; ok {
+		return nil, err
+	}
+	return &ec2.DescribeInstancesOutput{Reservations: f.reservationsByCluster[cluster]}, nil
+}
+
+// instanceReservation builds the [Reservation{Instance{InstanceId}}]
+// shape the EC2 SDK returns for the test fakes.
+func instanceReservation(ids ...string) []ec2types.Reservation {
+	res := ec2types.Reservation{}
+	for _, id := range ids {
+		res.Instances = append(res.Instances, ec2types.Instance{InstanceId: aws.String(id)})
+	}
+	return []ec2types.Reservation{res}
+}
+
+func TestListEKSNodeInstances_ScopedByProjectAndClusterTag(t *testing.T) {
+	t.Parallel()
+	// Two clusters; only foo carries the matching Project tag, so
+	// filterEKSClustersByProjectTag prunes bar before the EC2 fan-out
+	// even gets a chance to ask. The EC2 fake then returns foo's two
+	// node instances scoped by the eks:cluster-name=foo tag.
+	eksFake := &fakeEKSClient{
+		listClustersOut: &eks.ListClustersOutput{Clusters: []string{"foo", "bar"}},
+		describeByName: map[string]*eks.DescribeClusterOutput{
+			"foo": {Cluster: &ekstypes.Cluster{
+				Name: aws.String("foo"),
+				Tags: map[string]string{"Project": "my-stack"},
+			}},
+			"bar": {Cluster: &ekstypes.Cluster{
+				Name: aws.String("bar"),
+				Tags: map[string]string{"Project": "other"},
+			}},
+		},
+	}
+	ec2Fake := &fakeEC2InstancesClient{
+		reservationsByCluster: map[string][]ec2types.Reservation{
+			"foo": instanceReservation("i-aaaa", "i-bbbb"),
+			"bar": instanceReservation("i-cccc"), // must NOT appear: cluster pruned upstream
+		},
+	}
+
+	got, err := listEKSNodeInstances(context.Background(), eksFake, ec2Fake, "my-stack")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"i-aaaa", "i-bbbb"}, got)
+
+	// Filter-shape assertion: every EC2 call must carry both
+	// tag:eks:cluster-name AND tag:Project so the EC2 API enforces the
+	// project scope server-side (defense in depth — the EKS-side
+	// project filter could be bypassed if a cluster is mis-tagged).
+	require.Len(t, ec2Fake.calls, 1, "bar must be pruned upstream so EC2 is only called once")
+	filters := ec2Fake.calls[0].Filters
+	require.Len(t, filters, 2)
+	assert.Equal(t, "tag:eks:cluster-name", aws.ToString(filters[0].Name))
+	assert.Equal(t, []string{"foo"}, filters[0].Values)
+	assert.Equal(t, "tag:Project", aws.ToString(filters[1].Name))
+	assert.Equal(t, []string{"my-stack"}, filters[1].Values)
+}
+
+func TestListEKSNodeInstances_EmptyProjectFansOutWithoutProjectFilter(t *testing.T) {
+	t.Parallel()
+	// Empty project: every cluster passes the EKS-side filter, and the
+	// EC2 fan-out only carries the tag:eks:cluster-name filter (no
+	// project clause). Mirrors the contract used by every other
+	// per-service inspector — empty filter means "everything visible
+	// to the credentials".
+	eksFake := &fakeEKSClient{
+		listClustersOut: &eks.ListClustersOutput{Clusters: []string{"foo"}},
+	}
+	ec2Fake := &fakeEC2InstancesClient{
+		reservationsByCluster: map[string][]ec2types.Reservation{
+			"foo": instanceReservation("i-1234"),
+		},
+	}
+	got, err := listEKSNodeInstances(context.Background(), eksFake, ec2Fake, "")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"i-1234"}, got)
+
+	require.Len(t, ec2Fake.calls, 1)
+	filters := ec2Fake.calls[0].Filters
+	require.Len(t, filters, 1, "no project → no tag:Project filter")
+	assert.Equal(t, "tag:eks:cluster-name", aws.ToString(filters[0].Name))
+}
+
+func TestListEKSNodeInstances_PerClusterErrorLogsAndSkips(t *testing.T) {
+	t.Parallel()
+	// Two project-matched clusters; EC2 denies one. The helper logs
+	// and continues — partial result beats empty when one cluster has
+	// an IAM denial or throttle, matching every other tag-fan-out
+	// helper in this package.
+	eksFake := &fakeEKSClient{
+		listClustersOut: &eks.ListClustersOutput{Clusters: []string{"foo", "bar"}},
+		describeByName: map[string]*eks.DescribeClusterOutput{
+			"foo": {Cluster: &ekstypes.Cluster{
+				Name: aws.String("foo"),
+				Tags: map[string]string{"Project": "my-stack"},
+			}},
+			"bar": {Cluster: &ekstypes.Cluster{
+				Name: aws.String("bar"),
+				Tags: map[string]string{"Project": "my-stack"},
+			}},
+		},
+	}
+	ec2Fake := &fakeEC2InstancesClient{
+		reservationsByCluster: map[string][]ec2types.Reservation{
+			"foo": instanceReservation("i-aaaa"),
+		},
+		errByCluster: map[string]error{
+			"bar": errors.New("denied"),
+		},
+	}
+
+	got, err := listEKSNodeInstances(context.Background(), eksFake, ec2Fake, "my-stack")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"i-aaaa"}, got)
+}
+
+func TestListEKSNodeInstances_DedupesInstanceIDsAcrossClusters(t *testing.T) {
+	t.Parallel()
+	// Same instance reported under two clusters. Doesn't happen in
+	// practice (an EC2 instance carries exactly one
+	// eks:cluster-name=...) but pin the contract so a future refactor
+	// that, e.g., joins the result of two queries doesn't
+	// double-count.
+	eksFake := &fakeEKSClient{
+		listClustersOut: &eks.ListClustersOutput{Clusters: []string{"foo", "bar"}},
+		describeByName: map[string]*eks.DescribeClusterOutput{
+			"foo": {Cluster: &ekstypes.Cluster{Name: aws.String("foo"), Tags: map[string]string{"Project": "my-stack"}}},
+			"bar": {Cluster: &ekstypes.Cluster{Name: aws.String("bar"), Tags: map[string]string{"Project": "my-stack"}}},
+		},
+	}
+	ec2Fake := &fakeEC2InstancesClient{
+		reservationsByCluster: map[string][]ec2types.Reservation{
+			"foo": instanceReservation("i-shared", "i-foo-only"),
+			"bar": instanceReservation("i-shared", "i-bar-only"),
+		},
+	}
+	got, err := listEKSNodeInstances(context.Background(), eksFake, ec2Fake, "my-stack")
+	require.NoError(t, err)
+	assert.Equal(t, []string{"i-shared", "i-foo-only", "i-bar-only"}, got)
+}
+
+func TestListEKSNodeInstances_NoClustersReturnsEmpty(t *testing.T) {
+	t.Parallel()
+	// filterEKSClustersByProjectTag returning an empty list short-
+	// circuits the fan-out — the helper must not call EC2 once.
+	eksFake := &fakeEKSClient{
+		listClustersOut: &eks.ListClustersOutput{},
+	}
+	ec2Fake := &fakeEC2InstancesClient{}
+
+	got, err := listEKSNodeInstances(context.Background(), eksFake, ec2Fake, "my-stack")
+	require.NoError(t, err)
+	assert.Empty(t, got)
+	assert.Empty(t, ec2Fake.calls, "no clusters → no EC2 calls")
+}
+
+func TestListEKSNodeInstances_ListClustersErrorPropagates(t *testing.T) {
+	t.Parallel()
+	// EKS ListClusters failure is fatal — there's nothing to fan out
+	// from and the caller needs to know the discovery side broke.
+	// This mirrors filterEKSClustersByProjectTag's contract; we just
+	// confirm listEKSNodeInstances propagates instead of swallowing.
+	eksFake := &fakeEKSClient{
+		listClustersErr: errors.New("denied"),
+	}
+	_, err := listEKSNodeInstances(context.Background(), eksFake, &fakeEC2InstancesClient{}, "")
+	require.Error(t, err)
+	assert.ErrorContains(t, err, "ListClusters")
 }
 
 // --- Lambda fake ---
