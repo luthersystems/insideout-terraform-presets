@@ -46,12 +46,15 @@ var ErrUseMetricsPackage = errors.New("get-metrics is handled by pkg/observabili
 
 // ErrUnsupportedService is returned when the service key is not in
 // observability.AWSServiceActions and is not a known alias. Use
-// errors.Is to detect; the wrapped error carries the rejected key, a
+// errors.Is to detect. The wrapped error carries the rejected key, a
 // did-you-mean hint when one is close, and the full list of valid
-// services. The sentinel text matches the prefix of
-// observability.UnsupportedServiceError so the wrapped output reads as
-// `unsupported service: "<svc>" (did you mean "<closest>"?). Supported
-// services: ...` — the format reliable's LLM consumer expects.
+// services in reliable's wire-format (#227). The sentinel text matches
+// the canonical prefix produced by observability.UnsupportedServiceError
+// so unsupportedServiceError can dedupe via strings.TrimPrefix; both
+// halves of that coupling are pinned by tests
+// (pkg/observability/unsupported_test.go::
+// "starts_with_canonical_prefix_for_sentinel_wrapping" and
+// dispatcher_test.go::TestInspectUnsupportedServiceErrorGoldenFormat).
 var ErrUnsupportedService = errors.New("unsupported service")
 
 // Inspect dispatches a single discovery request against the supplied

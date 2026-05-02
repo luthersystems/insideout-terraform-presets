@@ -1,6 +1,7 @@
 package observability
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -57,7 +58,11 @@ func UnsupportedActionError(service, action string, validActions []string) error
 		fmt.Fprintf(&sb, ". Supported actions: %s", strings.Join(validActions, ", "))
 	}
 	sb.WriteString(`. Use action "list-actions" to see all supported actions for a service.`)
-	return fmt.Errorf("%s", sb.String())
+	// errors.New (rather than fmt.Errorf with a format string) so the
+	// no-wrap intent is loud: per-cloud dispatchers add their own %w
+	// sentinel wrapping over this body — see
+	// pkg/observability/discovery/aws/dispatcher.go::unsupportedServiceError.
+	return errors.New(sb.String())
 }
 
 // UnsupportedServiceError builds the canonical "unsupported service"
@@ -73,5 +78,5 @@ func UnsupportedServiceError(service string, validServices []string) error {
 	if len(validServices) > 0 {
 		fmt.Fprintf(&sb, ". Supported services: %s", strings.Join(validServices, ", "))
 	}
-	return fmt.Errorf("%s", sb.String())
+	return errors.New(sb.String())
 }
