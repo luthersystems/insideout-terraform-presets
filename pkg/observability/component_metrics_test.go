@@ -107,23 +107,45 @@ func TestObservability_AWSEntriesHaveAWSObs(t *testing.T) {
 	}
 }
 
-// TestObservability_AllAlarmedFalseAtC2 documents the C2 invariant:
-// no metric has Alarmed=true yet. Alarms land in C7-C9. When this test
-// fails it means C9 has landed — update or delete it then.
-func TestObservability_AllAlarmedFalseAtC2(t *testing.T) {
+// TestObservability_AlarmedSpecsHaveAuthorityEntry is the post-C9
+// invariant complementing TestObservabilitySpecMatchesEmittedAlarms:
+// every Alarmed=true spec must originate from alarmedAWSMetrics /
+// alarmedGCPMetrics. Catches accidental Alarmed=true left in the
+// service catalog (which is intentionally Alarmed=false everywhere
+// because catalogs are shared across multiple component keys).
+func TestObservability_AlarmedSpecsHaveAuthorityEntry(t *testing.T) {
 	for k, o := range Observability {
+		var awsAuthority, gcpAuthority map[string]bool
+		if a, ok := alarmedAWSMetrics[k]; ok {
+			awsAuthority = make(map[string]bool, len(a.Metrics))
+			for _, m := range a.Metrics {
+				awsAuthority[m] = true
+			}
+		}
+		if a, ok := alarmedGCPMetrics[k]; ok {
+			gcpAuthority = make(map[string]bool, len(a.Metrics))
+			for _, m := range a.Metrics {
+				gcpAuthority[m] = true
+			}
+		}
 		if o.AWS != nil {
 			for _, m := range o.AWS.Metrics {
-				assert.False(t, m.Alarmed,
-					"Observability[%s].AWS.Metrics[%q].Alarmed=true at C2 — update this test when C9 lands the first alarm",
-					k, m.Name)
+				if !m.Alarmed {
+					continue
+				}
+				assert.True(t, awsAuthority[m.Name],
+					"Observability[%s].AWS.Metrics[%q].Alarmed=true but %q not in alarmedAWSMetrics[%s] — service catalog must remain Alarmed=false; flips happen via the per-key authority map",
+					k, m.Name, m.Name, k)
 			}
 		}
 		if o.GCP != nil {
 			for _, m := range o.GCP.Metrics {
-				assert.False(t, m.Alarmed,
-					"Observability[%s].GCP.Metrics[%q].Alarmed=true at C2 — update this test when C9 lands the first alarm",
-					k, m.DisplayName)
+				if !m.Alarmed {
+					continue
+				}
+				assert.True(t, gcpAuthority[m.MetricType],
+					"Observability[%s].GCP.Metrics[%q].Alarmed=true but %q not in alarmedGCPMetrics[%s]",
+					k, m.MetricType, m.MetricType, k)
 			}
 		}
 	}
