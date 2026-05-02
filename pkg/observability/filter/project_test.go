@@ -17,9 +17,15 @@ func TestProject(t *testing.T) {
 	}{
 		{name: "empty string", filters: "", want: ""},
 		{name: "invalid JSON", filters: "not-json", want: ""},
+		{name: "literal JSON null", filters: "null", want: ""},
+		{name: "non-object JSON (array)", filters: `[1,2,3]`, want: ""},
 		{name: "no project key", filters: `{"foo":"bar"}`, want: ""},
 		{name: "valid project", filters: `{"project":"io-abc123"}`, want: "io-abc123"},
 		{name: "project with other keys", filters: `{"project":"io-test","zone":"us-east-1a"}`, want: "io-test"},
+		{name: "project with numeric sibling", filters: `{"hours":6,"project":"io-test"}`, want: "io-test"},
+		{name: "project with array sibling", filters: `{"groupBy":["a","b"],"project":"io-test"}`, want: "io-test"},
+		{name: "project with nested-object sibling", filters: `{"nested":{"k":"v"},"project":"io-test"}`, want: "io-test"},
+		{name: "non-string project value treated as absent", filters: `{"project":42}`, want: ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -37,13 +43,12 @@ func TestEnsureProject(t *testing.T) {
 		filters string
 		project string
 		// Exactly one of the assertion modes below applies per row:
-		// - wantSame=true asserts byte-equality with `filters`; wantProject
-		//   and wantOther are ignored.
-		// - otherwise wantProject is the expected Project(out), and the
-		//   parsed output map must equal {project:<wantProject>} ∪ wantOther.
-		wantSame    bool
-		wantProject string
-		wantOther   map[string]string
+		// - wantSame=true asserts byte-equality with `filters`; wantJSON
+		//   is ignored.
+		// - otherwise wantJSON is the expected output, compared via
+		//   assert.JSONEq so key order doesn't matter.
+		wantSame bool
+		wantJSON string
 	}{
 		{
 			name:     "empty project + empty filters → unchanged",
@@ -58,10 +63,10 @@ func TestEnsureProject(t *testing.T) {
 			wantSame: true,
 		},
 		{
-			name:        "empty filters + project → fresh JSON",
-			filters:     "",
-			project:     "io-abc123",
-			wantProject: "io-abc123",
+			name:     "empty filters + project → fresh JSON",
+			filters:  "",
+			project:  "io-abc123",
+			wantJSON: `{"project":"io-abc123"}`,
 		},
 		{
 			name:     "filters already has project → unchanged (single key)",
@@ -76,38 +81,77 @@ func TestEnsureProject(t *testing.T) {
 			wantSame: true,
 		},
 		{
-			name:        "filters with other keys, no project → merge",
-			filters:     `{"zone":"us-east-1a"}`,
-			project:     "io-test",
-			wantProject: "io-test",
-			wantOther:   map[string]string{"zone": "us-east-1a"},
+			name:     "filters already has project → unchanged (with numeric sibling)",
+			filters:  `{"hours":6,"project":"io-existing"}`,
+			project:  "io-override",
+			wantSame: true,
 		},
 		{
-			name:        "explicit empty project value → overwrite",
-			filters:     `{"project":"","zone":"us-east-1a"}`,
-			project:     "io-real",
-			wantProject: "io-real",
-			wantOther:   map[string]string{"zone": "us-east-1a"},
+			name:     "filters with other keys, no project → merge",
+			filters:  `{"zone":"us-east-1a"}`,
+			project:  "io-test",
+			wantJSON: `{"zone":"us-east-1a","project":"io-test"}`,
 		},
 		{
-			name:        "unparseable JSON → fresh JSON, drop bad input",
-			filters:     "not-json",
-			project:     "io-recover",
-			wantProject: "io-recover",
+			name:     "explicit empty project value → overwrite, preserve siblings",
+			filters:  `{"project":"","zone":"us-east-1a"}`,
+			project:  "io-real",
+			wantJSON: `{"zone":"us-east-1a","project":"io-real"}`,
 		},
 		{
-			name:        "literal JSON null → fresh JSON (no panic)",
-			filters:     "null",
-			project:     "io-recover",
-			wantProject: "io-recover",
+			name:     "unparseable JSON → fresh JSON, drop bad input",
+			filters:  "not-json",
+			project:  "io-recover",
+			wantJSON: `{"project":"io-recover"}`,
 		},
 		{
-			name:        "mixed-type values → fresh JSON, all original keys dropped",
-			filters:     `{"zone":"us-east-1a","limit":10}`,
-			project:     "io-test",
-			wantProject: "io-test",
-			// wantOther nil: the contract is order-independent reset on
-			// any parse failure, so "zone" is dropped along with "limit".
+			name:     "literal JSON null → fresh JSON (no panic)",
+			filters:  "null",
+			project:  "io-recover",
+			wantJSON: `{"project":"io-recover"}`,
+		},
+		{
+			name:     "non-object JSON (array) → fresh JSON, drop bad input",
+			filters:  `[1,2,3]`,
+			project:  "io-recover",
+			wantJSON: `{"project":"io-recover"}`,
+		},
+		// Issue #234: non-string sibling fields must be preserved.
+		{
+			name:     "numeric sibling preserved (hours)",
+			filters:  `{"hours":6}`,
+			project:  "io-test",
+			wantJSON: `{"hours":6,"project":"io-test"}`,
+		},
+		{
+			name:     "numeric + string siblings preserved (cost-summary shape)",
+			filters:  `{"days":7,"granularity":"DAILY"}`,
+			project:  "io-test",
+			wantJSON: `{"days":7,"granularity":"DAILY","project":"io-test"}`,
+		},
+		{
+			name:     "string + numeric siblings preserved (cost-by-tag shape)",
+			filters:  `{"tag_key":"Environment","days":30}`,
+			project:  "io-test",
+			wantJSON: `{"tag_key":"Environment","days":30,"project":"io-test"}`,
+		},
+		{
+			name:     "array sibling preserved",
+			filters:  `{"groupBy":["a","b"]}`,
+			project:  "io-test",
+			wantJSON: `{"groupBy":["a","b"],"project":"io-test"}`,
+		},
+		{
+			name:     "nested-object sibling preserved",
+			filters:  `{"nested":{"k":"v"}}`,
+			project:  "io-test",
+			wantJSON: `{"nested":{"k":"v"},"project":"io-test"}`,
+		},
+		{
+			name:     "mixed string + numeric siblings preserved",
+			filters:  `{"zone":"us-east-1a","limit":10}`,
+			project:  "io-test",
+			wantJSON: `{"zone":"us-east-1a","limit":10,"project":"io-test"}`,
 		},
 	}
 	for _, tt := range tests {
@@ -118,17 +162,16 @@ func TestEnsureProject(t *testing.T) {
 				assert.Equal(t, tt.filters, got)
 				return
 			}
-			assert.Equal(t, tt.wantProject, Project(got),
-				"Project() on output should match wantProject")
-			var parsed map[string]string
-			require.NoError(t, json.Unmarshal([]byte(got), &parsed),
-				"output must be parseable as map[string]string")
-			// Output must contain exactly project + wantOther — no
-			// stray injected keys, no missing ones.
-			assert.Len(t, parsed, len(tt.wantOther)+1,
-				"output map should have exactly len(wantOther)+1 keys")
-			for k, v := range tt.wantOther {
-				assert.Equal(t, v, parsed[k], "key %q should be preserved", k)
+			assert.JSONEq(t, tt.wantJSON, got,
+				"output JSON should match wantJSON ignoring key order")
+			// Cross-check: Project() on the output should agree with the
+			// project field embedded in wantJSON, exercising the early-
+			// return guard inside EnsureProject for any future calls.
+			var expected map[string]any
+			require.NoError(t, json.Unmarshal([]byte(tt.wantJSON), &expected))
+			if want, ok := expected["project"].(string); ok {
+				assert.Equal(t, want, Project(got),
+					"Project() on output should equal wantJSON.project")
 			}
 		})
 	}
