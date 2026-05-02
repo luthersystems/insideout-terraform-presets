@@ -1,3 +1,7 @@
+terraform {
+  required_version = ">= 1.5"
+}
+
 # GitHub Actions CI/CD Integration Module
 #
 # This is a placeholder module for GitHub Actions CI/CD integration.

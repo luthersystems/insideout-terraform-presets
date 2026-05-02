@@ -31,6 +31,7 @@ variable "private_subnet_ids" {
   default     = []
 }
 
+# tflint-ignore: terraform_unused_declarations  # reserved for future wiring; kept for API stability across composer revisions
 variable "public_subnet_ids" {
   description = "Public subnet IDs (accepted for wiring compatibility, not used by cluster)"
   type        = list(string)

@@ -94,6 +94,7 @@ resource "google_compute_resource_policy" "snapshot_schedule" {
 # Cloud SQL backups are configured on the Cloud SQL instance itself
 # This local captures the backup configuration for reference
 locals {
+  # tflint-ignore: terraform_unused_declarations  # documentation-only: captures the backup configuration for output-by-reference (no resources reference it)
   backup_config = {
     gcs_bucket        = var.enable_gcs_backups ? google_storage_bucket.backups[0].name : null
     snapshot_schedule = var.enable_compute_snapshots ? google_compute_resource_policy.snapshot_schedule[0].name : null

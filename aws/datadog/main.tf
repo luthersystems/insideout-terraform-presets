@@ -1,3 +1,7 @@
+terraform {
+  required_version = ">= 1.5"
+}
+
 # Datadog Integration Module
 #
 # This is a placeholder module for Datadog observability integration.

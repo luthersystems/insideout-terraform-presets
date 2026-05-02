@@ -1,3 +1,7 @@
+terraform {
+  required_version = ">= 1.5"
+}
+
 # AWS CodePipeline CI/CD Module
 #
 # This is a placeholder module for AWS CodePipeline CI/CD.

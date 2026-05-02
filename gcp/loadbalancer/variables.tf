@@ -18,6 +18,7 @@ variable "project_id" {
   }
 }
 
+# tflint-ignore: terraform_unused_declarations  # composer always wires var.region at the root (CLAUDE.md mandate)
 variable "region" {
   description = "GCP region"
   type        = string
@@ -30,11 +31,13 @@ variable "name" {
   default     = "main"
 }
 
+# tflint-ignore: terraform_unused_declarations  # reserved for future wiring; kept for API stability across composer revisions
 variable "network_self_link" {
   description = "VPC network self link"
   type        = string
 }
 
+# tflint-ignore: terraform_unused_declarations  # reserved for future wiring; kept for API stability across composer revisions
 variable "subnet_self_link" {
   description = "Subnet self link"
   type        = string

@@ -94,12 +94,14 @@ variable "gcp_vpc_region" {
   type = string
 }
 
+# tflint-ignore: terraform_unused_declarations  # composer always wires var.project at the root (CLAUDE.md mandate)
 variable "project" {
   description = "Project name prefix"
   type        = string
   default     = ""
 }
 
+# tflint-ignore: terraform_unused_declarations  # composer always wires var.region at the root (CLAUDE.md mandate)
 variable "region" {
   description = "GCP region"
   type        = string

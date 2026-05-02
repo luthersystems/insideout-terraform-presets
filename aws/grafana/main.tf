@@ -1,3 +1,7 @@
+terraform {
+  required_version = ">= 1.5"
+}
+
 # Grafana Integration Module
 #
 # This is a placeholder module for Amazon Managed Grafana (AMG).

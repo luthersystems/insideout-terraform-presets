@@ -1679,20 +1679,24 @@ func TestComposeStack_GCP_Provider(t *testing.T) {
 	require.Contains(t, provStr, `provider "google"`, "should have google provider block")
 	require.Contains(t, provStr, "us-central1", "should use specified region")
 
-	// GCP intentionally has no default_tags / default_labels safety net: the
-	// google provider has native per-session credential isolation via
-	// creds.ProjectID and Reliable #1112's scope was AWS-only. Guard against
-	// someone adding half-working GCP tagging by accident — if a parity
-	// story ever lands it should be a deliberate feature change that updates
-	// this test, not a drive-by edit.
+	// GCP default_labels safety net: parity with the AWS default_tags shape.
+	// #111 deferred this; the deliberate feature change landed via #215 as
+	// a belt-and-suspenders for the phantom-`+ labels = {}` drift fix
+	// (every preset module is supposed to render
+	// `labels = merge({ project = var.project }, var.labels)`, but a missed
+	// site silently leaves the resource without the project label that
+	// reliable3's drift inspector filters on). default_labels at the
+	// provider level guarantees the project label reaches every label-capable
+	// resource regardless of whether the preset wires labels itself.
 	//
-	// Scope note: provStr is the root /providers.tf only (no preset contents),
-	// so a NotContains on the full string has negligible false-positive risk
-	// from a module name or comment mentioning "default_tags". If the haystack
-	// ever widens to include preset bodies, scope the check to the
-	// `provider "google" { ... }` block.
-	require.NotContains(t, provStr, "default_labels",
-		"GCP provider block should not declare default_labels (see #111; any GCP tagging parity should land via a deliberate feature, not a drive-by edit)")
+	// Requires google provider 5.16+ (default_labels was introduced there);
+	// generateProvidersTF pins the GCP required_providers to ">= 5.16".
+	require.Contains(t, provStr, "default_labels",
+		"GCP provider block should declare default_labels as the project-label safety net (#215)")
+	require.Contains(t, provStr, "project    = var.project",
+		"default_labels should bind project = var.project so reliable3's drift inspector can filter by project")
+	require.Contains(t, provStr, `managed-by = "insideout"`,
+		"default_labels should also carry managed-by = \"insideout\" mirroring the AWS default_tags shape")
 	require.NotContains(t, provStr, "default_tags",
 		"GCP provider block should not borrow AWS-shaped default_tags")
 }

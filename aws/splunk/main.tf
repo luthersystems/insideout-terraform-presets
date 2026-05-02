@@ -1,3 +1,7 @@
+terraform {
+  required_version = ">= 1.5"
+}
+
 # Splunk Integration Module
 #
 # This is a placeholder module for Splunk log forwarding integration.

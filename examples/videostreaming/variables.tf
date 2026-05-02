@@ -58,6 +58,7 @@ variable "project" {
   default     = ""
 }
 
+# tflint-ignore: terraform_unused_declarations  # composer always wires var.region at the root (CLAUDE.md mandate)
 variable "region" {
   description = "AWS region"
   type        = string

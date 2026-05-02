@@ -703,13 +703,31 @@ func generateProvidersTF(in providersTFInput) []byte {
 		if region == "" {
 			region = "us-central1"
 		}
-		required["google"] = &tfconfig.ProviderRequirement{Source: "hashicorp/google", VersionConstraints: []string{">= 5.0"}}
+		// Provider 5.16+ added default_labels; ">= 5.0" allows older
+		// minors. Hard-bumping to ">= 5.16" guarantees the safety net
+		// emitted below is always honored.
+		required["google"] = &tfconfig.ProviderRequirement{Source: "hashicorp/google", VersionConstraints: []string{">= 5.16"}}
 		maps.Copy(required, discovered)
+
+		// default_labels is a safety net so every GCP resource in the
+		// rendered stack carries the session's project label, even if a
+		// preset forgets the `labels = merge({ project = var.project },
+		// var.labels)` convention. Mirrors the AWS default_tags shape;
+		// reliable3's drift inspector filters resources by exact
+		// `project = <project>` match. Label keys/values must be lowercase
+		// alphanumeric + dash/underscore; both `project` and `managed-by`
+		// satisfy GCP's label-key regex.
+		gcpDefaultLabels := fmt.Sprintf(`
+  default_labels = {
+    project    = var.project
+    managed-by = %q
+  }`, insideoutManagedByValue)
+
 		var b strings.Builder
 		b.WriteString("terraform {\n  required_providers {\n")
 		b.WriteString(renderRequiredProviders(required))
 		b.WriteString("  }\n}\n\n")
-		fmt.Fprintf(&b, "provider \"google\" {\n  region = %q\n}\n", region)
+		fmt.Fprintf(&b, "provider \"google\" {\n  region = %q%s\n}\n", region, gcpDefaultLabels)
 		if importedClouds["gcp"] {
 			b.WriteString("\n")
 			// google.imported drives Terraform's import {} for previously

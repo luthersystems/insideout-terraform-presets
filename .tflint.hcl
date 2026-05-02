@@ -35,3 +35,9 @@ plugin "aws" {
   version = "0.39.0"
   source  = "github.com/terraform-linters/tflint-ruleset-aws"
 }
+
+// terraform_unused_declarations stays enabled — composer-mandated vars
+// (var.project / var.region / var.environment) that the module body
+// doesn't reference are annotated with `# tflint-ignore:
+// terraform_unused_declarations` directly above the variable block, with
+// a comment explaining why. Genuinely unused declarations still fail.
