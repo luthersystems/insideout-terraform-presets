@@ -237,29 +237,29 @@ var awsServiceMetrics = map[string]AWSObs{
 		},
 	},
 	"eks": {
-		// EKS metrics are pivoted onto AWS/EC2 InstanceId via the
-		// AWS-managed `eks:cluster-name` tag: the orchestrator's
-		// metrics-discovery action is `list-nodes` (see
-		// ComponentMetricsMapping[KeyAWSEKS] in component_metrics.go),
-		// which returns the cluster's underlying EC2 instance IDs.
-		// Querying CPUUtilization on those instances surfaces real data
-		// on every existing EKS deployment (#231 Option A).
+		// ContainerInsights — node + pod metrics published by the
+		// amazon-cloudwatch-observability addon (CloudWatch agent +
+		// fluent-bit DaemonSets). The aws/eks_nodegroup preset
+		// installs the addon by default as of #233 Option B-1
+		// (configurable via var.enable_container_insights). On
+		// fresh deployments the panel populates ~5 minutes after
+		// apply; clusters that opt out via the variable will
+		// render "no observable resources" until they re-enable.
 		//
-		// AWS/EKS itself only publishes a small set of cluster-level
-		// metrics (cluster_failed_node_count, control-plane API server
-		// latency); the node_cpu_utilization / pod_cpu_utilization
-		// names previously listed here are ContainerInsights metrics
-		// that only publish when the amazon-cloudwatch-observability
-		// addon is installed in-cluster — the aws/eks_nodegroup preset
-		// does not install it today, so those queries returned zero
-		// datapoints on every deployment and the panel rendered "no
-		// observable resources". A follow-up issue (#231 Option B)
-		// covers shipping the addon and pivoting back to
-		// ContainerInsights for richer node + pod metrics.
-		Namespace:     "AWS/EC2",
-		DimensionName: "InstanceId",
+		// Predecessors: #231 Option A pivoted onto AWS/EC2
+		// InstanceId via the `eks:cluster-name` tag as a no-preset
+		// fix; that path is gone now (the registry can only
+		// register one namespace per service). Callers that want
+		// instance-level data can still drive the dispatcher's
+		// `eks list-nodes` action directly.
+		Namespace:     "ContainerInsights",
+		DimensionName: "ClusterName",
 		Metrics: []AWSMetricSpec{
-			{Name: "CPUUtilization", Stat: "Average"},
+			{Name: "node_cpu_utilization", Stat: "Average"},
+			{Name: "node_memory_utilization", Stat: "Average"},
+			{Name: "pod_cpu_utilization", Stat: "Average"},
+			{Name: "pod_memory_utilization", Stat: "Average"},
+			{Name: "cluster_failed_node_count", Stat: "Maximum"},
 		},
 	},
 	"elasticache": {

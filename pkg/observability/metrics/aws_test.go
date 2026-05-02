@@ -140,11 +140,13 @@ func TestBuildGetMetricDataQueries_VerifiesDimensionValues(t *testing.T) {
 		{"cognito", composer.KeyAWSCognito, "cognito", "us-east-1_ABC123", 3, "AWS/Cognito", "UserPoolId"},
 		{"opensearch", composer.KeyAWSOpenSearch, "opensearch", "io-projx-search", 9, "AWS/ES", "DomainName"},
 		{"bedrock", composer.KeyAWSBedrock, "bedrock", "anthropic.claude-3-5-sonnet", 6, "AWS/Bedrock", "ModelId"},
-		// EKS metrics are pivoted onto AWS/EC2 InstanceId via the
-		// `eks:cluster-name` tag (#231 Option A); the resource ID
-		// passed in here is an EC2 instance, not a cluster name, and
-		// the registry advertises a single CPUUtilization metric.
-		{"eks", composer.KeyAWSEKS, "eks", "i-0a1b2c3d4e5f60718", 1, "AWS/EC2", "InstanceId"},
+		// EKS panel queries ContainerInsights metrics keyed on
+		// ClusterName (#233 Option B-1). The aws/eks_nodegroup
+		// preset installs amazon-cloudwatch-observability by
+		// default so the namespace is populated. Five metrics:
+		// node_cpu/memory_utilization, pod_cpu/memory_utilization,
+		// cluster_failed_node_count.
+		{"eks", composer.KeyAWSEKS, "eks", "demo-cluster", 5, "ContainerInsights", "ClusterName"},
 		{"elasticache", composer.KeyAWSElastiCache, "elasticache", "io-projx-redis-001", 8, "AWS/ElastiCache", "CacheClusterId"},
 		{"msk", composer.KeyAWSMSK, "msk", "io-projx-kafka", 13, "AWS/Kafka", "Cluster Name"},
 		{"waf", composer.KeyAWSWAF, "waf", "io-projx-webacl", 4, "AWS/WAFV2", "WebACL"},

@@ -17,29 +17,43 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
+	cloudwatchlogstypes "github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs/types"
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/observability/filter"
 )
 
+// cloudWatchLogsClient is the narrowed surface used by the
+// describe-log-groups action. Lets tests inject a fake without doing
+// real AWS auth.
+type cloudWatchLogsClient interface {
+	DescribeLogGroups(ctx context.Context, params *cloudwatchlogs.DescribeLogGroupsInput, optFns ...func(*cloudwatchlogs.Options)) (*cloudwatchlogs.DescribeLogGroupsOutput, error)
+}
+
 func inspectCloudWatchLogs(ctx context.Context, cfg aws.Config, action, filters string) (any, error) {
-	client := cloudwatchlogs.NewFromConfig(cfg)
 	project := filter.Project(filters)
 
 	switch action {
 	case "describe-log-groups":
-		input := &cloudwatchlogs.DescribeLogGroupsInput{}
-		if project != "" {
-			prefix := "/aws/" + project
-			input.LogGroupNamePrefix = &prefix
-		}
-		out, err := client.DescribeLogGroups(ctx, input)
-		if err != nil {
-			return nil, err
-		}
-		return out.LogGroups, nil
+		return describeProjectLogGroups(ctx, cloudwatchlogs.NewFromConfig(cfg), project)
 	case "get-metrics":
 		return metricsRouted("cloudwatchlogs")
 	default:
 		return nil, unsupportedActionError("cloudwatchlogs", action)
 	}
+}
+
+// describeProjectLogGroups runs DescribeLogGroups, applying the
+// `/aws/<project>` LogGroupNamePrefix filter when project is non-empty
+// so callers see only this stack's groups.
+func describeProjectLogGroups(ctx context.Context, client cloudWatchLogsClient, project string) ([]cloudwatchlogstypes.LogGroup, error) {
+	input := &cloudwatchlogs.DescribeLogGroupsInput{}
+	if project != "" {
+		prefix := "/aws/" + project
+		input.LogGroupNamePrefix = &prefix
+	}
+	out, err := client.DescribeLogGroups(ctx, input)
+	if err != nil {
+		return nil, err
+	}
+	return out.LogGroups, nil
 }

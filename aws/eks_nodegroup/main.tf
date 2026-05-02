@@ -88,6 +88,17 @@ resource "aws_iam_role_policy_attachment" "mng_ssm" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
+# CloudWatchAgentServerPolicy grants cloudwatch:PutMetricData + the
+# logs:CreateLogStream/PutLogEvents needed by the
+# amazon-cloudwatch-observability addon's CloudWatch agent + fluent-bit
+# DaemonSets. Attached only when this module creates the role; callers
+# that supply node_role_arn are responsible for the equivalent grant.
+resource "aws_iam_role_policy_attachment" "mng_cloudwatch_agent" {
+  count      = var.node_role_arn == null && var.enable_container_insights ? 1 : 0
+  role       = aws_iam_role.mng[0].name
+  policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+}
+
 # -------------------------------------------------------------
 # Service-linked role bootstrap
 # -------------------------------------------------------------
@@ -164,4 +175,39 @@ resource "aws_eks_node_group" "this" {
       backup = "true"
     }
   )
+}
+
+# -------------------------------------------------------------
+# CloudWatch Container Insights addon
+# -------------------------------------------------------------
+# amazon-cloudwatch-observability installs the CloudWatch agent +
+# fluent-bit DaemonSets in-cluster so node + pod metrics publish under
+# the ContainerInsights namespace (node_cpu_utilization,
+# pod_memory_utilization, etc.). Without the addon, AWS/EKS itself only
+# publishes a small set of cluster-level metrics — see issue #233 / #231.
+#
+# Default-on (cliff per #233 Option B-1): existing deployments that
+# haven't opted out will install the addon on the next apply and the
+# ContainerInsights panel begins populating ~5 minutes later.
+# CloudWatch ingest cost (~$0.30/GB) is the trade-off; opt out via
+# var.enable_container_insights = false.
+#
+# Depends on the node group being up so the addon's DaemonSets can
+# schedule, and on the CloudWatchAgentServerPolicy attachment so the
+# agent has cloudwatch:PutMetricData when it starts.
+resource "aws_eks_addon" "cloudwatch_observability" {
+  count = var.enable_container_insights ? 1 : 0
+
+  cluster_name = var.cluster_name
+  addon_name   = "amazon-cloudwatch-observability"
+
+  resolve_conflicts_on_create = "OVERWRITE"
+  resolve_conflicts_on_update = "OVERWRITE"
+
+  tags = merge(local.common_tags, var.tags)
+
+  depends_on = [
+    aws_eks_node_group.this,
+    aws_iam_role_policy_attachment.mng_cloudwatch_agent,
+  ]
 }
