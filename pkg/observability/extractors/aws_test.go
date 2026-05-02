@@ -1166,6 +1166,19 @@ func TestExtractEKSConfig(t *testing.T) {
 		t.Parallel()
 		assert.Nil(t, extractEKSConfig(map[string]any{"Clusters": []any{}}))
 	})
+
+	// EmptyName covers the `if names[0] != ""` branch in
+	// extractEKSConfig: when the first cluster name is the empty
+	// string, clusterCount is still emitted but clusterName must be
+	// omitted (an empty clusterName would render as "" in the panel).
+	t.Run("EmptyName", func(t *testing.T) {
+		t.Parallel()
+		got := extractEKSConfig([]any{""})
+		require.NotNil(t, got)
+		assert.Equal(t, "1", got["clusterCount"])
+		_, hasName := got["clusterName"]
+		assert.False(t, hasName, "empty cluster name must NOT produce a clusterName key")
+	})
 }
 
 // --- extractWAFConfig ---

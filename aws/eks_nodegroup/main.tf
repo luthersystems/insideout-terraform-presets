@@ -201,8 +201,14 @@ resource "aws_eks_addon" "cloudwatch_observability" {
   cluster_name = var.cluster_name
   addon_name   = "amazon-cloudwatch-observability"
 
+  # OVERWRITE on create lets us adopt an existing addon if one was
+  # installed out-of-band. PRESERVE on update means hand-tuned in-
+  # cluster customizations (e.g. agent ConfigMap edits) survive subsequent
+  # applies — at the cost of silently drifting from the addon's
+  # default config. Customers who want a forced re-sync can re-create
+  # the addon.
   resolve_conflicts_on_create = "OVERWRITE"
-  resolve_conflicts_on_update = "OVERWRITE"
+  resolve_conflicts_on_update = "PRESERVE"
 
   tags = merge(local.common_tags, var.tags)
 

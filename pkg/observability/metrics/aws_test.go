@@ -161,20 +161,26 @@ func TestBuildGetMetricDataQueries_VerifiesDimensionValues(t *testing.T) {
 
 			require.Len(t, queries, tt.wantCount)
 
-			for _, q := range queries {
-				require.NotNil(t, q.MetricStat)
+			for i, q := range queries {
+				require.NotNil(t, q.MetricStat, "query[%d]", i)
 				assert.Equal(t, tt.wantNamespace, aws.ToString(q.MetricStat.Metric.Namespace))
 
 				dims := q.MetricStat.Metric.Dimensions
-				require.NotEmpty(t, dims)
+				require.NotEmpty(t, dims, "query[%d]", i)
 				assert.Equal(t, tt.wantDimName, aws.ToString(dims[0].Name))
 				assert.Equal(t, tt.resourceID, aws.ToString(dims[0].Value), "resource ID must appear in dimension value")
 
-				assert.NotEmpty(t, aws.ToString(q.MetricStat.Stat))
+				// Per-metric Name + Stat must match the spec
+				// position-by-position. Catches mutations that swap a
+				// stat (e.g. `Sum` → `Average`) on a specific metric —
+				// a `NotEmpty` check would survive that.
+				assert.Equal(t, obs.Metrics[i].Name, aws.ToString(q.MetricStat.Metric.MetricName),
+					"query[%d] metric name drift", i)
+				assert.Equal(t, obs.Metrics[i].Stat, aws.ToString(q.MetricStat.Stat),
+					"query[%d] stat drift (expected %q)", i, obs.Metrics[i].Stat)
 			}
 
 			assert.Equal(t, obs.Metrics[0].Name, aws.ToString(queries[0].Label))
-			assert.Equal(t, obs.Metrics[0].Stat, aws.ToString(queries[0].MetricStat.Stat))
 		})
 	}
 }

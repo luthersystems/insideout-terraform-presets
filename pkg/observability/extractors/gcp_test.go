@@ -255,7 +255,6 @@ func TestExtractGCPLocationFromName(t *testing.T) {
 		{"TrailingLocation", "projects/p/locations/us-east1", "us-east1"},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			assert.Equal(t, tc.out, extractGCPLocationFromName(tc.in))
@@ -358,12 +357,11 @@ func TestExtractGCPCloudSQLConfig(t *testing.T) {
 		assert.NotContains(t, got, "highAvailability")
 	})
 
-	t.Run("BackupConfig_NoEffect", func(t *testing.T) {
+	t.Run("BackupConfig_PendingIssue236", func(t *testing.T) {
 		t.Parallel()
+		t.Logf("TODO #236: extractGCPCloudSQLConfig does not surface backupConfiguration.enabled; flip this assertion when the field is wired through.")
 		// The current extractor reads availabilityType but does NOT
-		// surface backupConfiguration.enabled into the output. Test
-		// confirms current behavior — flip this when issue #236
-		// follow-up wires it through.
+		// surface backupConfiguration.enabled into the output.
 		rawEnabled := map[string]any{"items": []any{map[string]any{
 			"settings": map[string]any{
 				"backupConfiguration": map[string]any{"enabled": true},
@@ -371,7 +369,7 @@ func TestExtractGCPCloudSQLConfig(t *testing.T) {
 			},
 		}}}
 		gotEnabled := extractGCPCloudSQLConfig(rawEnabled)
-		assert.NotContains(t, gotEnabled, "backupEnabled")
+		require.NotContains(t, gotEnabled, "backupEnabled")
 
 		rawDisabled := map[string]any{"items": []any{map[string]any{
 			"settings": map[string]any{
@@ -443,13 +441,9 @@ func TestExtractGCPGCSConfig(t *testing.T) {
 		assert.Equal(t, "US", got["location"])
 	})
 
-	t.Run("LifecycleNotSurfaced", func(t *testing.T) {
+	t.Run("LifecyclePolicy_PendingIssue236", func(t *testing.T) {
 		t.Parallel()
-		// Issue #236 spec calls for a `lifecyclePolicy=enabled` branch
-		// when `lifecycle.rule` is present, but the inspector
-		// pre-flattens to {name, location, storageClass, created} so
-		// the extractor has no lifecycle field to read. Test asserts
-		// current behavior — flip when the inspector surface widens.
+		t.Logf("TODO #236: extractGCPGCSConfig does not surface lifecyclePolicy; the inspector pre-flattens away the lifecycle field. Flip when the inspector surface widens.")
 		rawWithLifecycle := []any{map[string]any{
 			"name":         "lc-bucket",
 			"location":     "us-east1",
@@ -457,7 +451,7 @@ func TestExtractGCPGCSConfig(t *testing.T) {
 			"lifecycle":    map[string]any{"rule": []any{map[string]any{"action": map[string]any{"type": "Delete"}}}},
 		}}
 		got := extractGCPGCSConfig(rawWithLifecycle)
-		assert.NotContains(t, got, "lifecyclePolicy")
+		require.NotContains(t, got, "lifecyclePolicy")
 
 		rawAbsent := []any{map[string]any{
 			"name":         "plain-bucket",
@@ -825,16 +819,12 @@ func TestExtractGCPVPCConfig(t *testing.T) {
 		// — the current extractor surfaces only autoCreateSubnetworks
 		// directly. Confirm the alias key is NOT present so a future
 		// implementer of #236 has a failing assertion to flip.
-		assert.NotContains(t, got, "vpcMode")
+		require.NotContains(t, got, "vpcMode")
 	})
 
-	t.Run("IGWClassificationNotSurfaced", func(t *testing.T) {
+	t.Run("IGWClassification_PendingIssue236", func(t *testing.T) {
 		t.Parallel()
-		// The current extractor does NOT inspect firewall rules to
-		// classify Public/Private/Mixed (issue #236 calls for it but
-		// the inspector returns []computeapi.Network, not firewalls).
-		// Lock in current behavior so a future implementer has a
-		// failing assertion to flip.
+		t.Logf("TODO #236: extractGCPVPCConfig does not classify Public/Private/Mixed; the inspector returns []computeapi.Network, not firewalls. Flip when the inspector surface widens.")
 		raw := []any{map[string]any{
 			"name":                  "fw-vpc",
 			"autoCreateSubnetworks": false,
@@ -844,8 +834,8 @@ func TestExtractGCPVPCConfig(t *testing.T) {
 			},
 		}}
 		got := extractGCPVPCConfig(raw)
-		assert.NotContains(t, got, "igwClassification")
-		assert.NotContains(t, got, "internetExposure")
+		require.NotContains(t, got, "igwClassification")
+		require.NotContains(t, got, "internetExposure")
 	})
 
 	t.Run("NoSubnetworks", func(t *testing.T) {

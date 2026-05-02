@@ -123,7 +123,7 @@ variable "node_role_arn" {
 }
 
 variable "enable_container_insights" {
-  description = "Install the amazon-cloudwatch-observability addon so node + pod metrics publish to the ContainerInsights namespace. Adds CloudWatch ingest cost (~$0.30/GB ingested + per-metric pricing); set to false to disable."
+  description = "Install the amazon-cloudwatch-observability addon so node + pod metrics publish to the ContainerInsights namespace. Adds CloudWatch ingest cost (~$0.30/GB ingested + per-metric pricing); set to false to disable. NOTE: if you supply var.node_role_arn (i.e. bring your own node IAM role), you are responsible for attaching arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy to it — without that grant the addon installs but the in-cluster CloudWatch agent fails to publish metrics."
   type        = bool
   default     = true
 }

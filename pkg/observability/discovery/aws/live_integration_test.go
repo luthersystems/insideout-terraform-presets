@@ -18,6 +18,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
@@ -27,10 +28,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestLive_GatherAccountInfo runs the account-info compose against the
-// live caller account. Asserts the structural shape — the actual values
-// depend on the account.
-func TestLive_GatherAccountInfo(t *testing.T) {
+// loadOrSkip loads ambient AWS config or skips the test. Defaults the
+// region to eu-west-2 when the SDK can't infer one (e.g. running with
+// just static creds in env vars).
+//
+// IMPORTANT: config.LoadDefaultConfig succeeds even when no credentials
+// are resolvable — failures only surface on the first SDK call. We
+// probe with sts.GetCallerIdentity here so a credential-less run skips
+// cleanly instead of failing partway through. Per qa-professor review.
+func loadOrSkip(t *testing.T) aws.Config {
+	t.Helper()
 	cfg, err := config.LoadDefaultConfig(context.Background())
 	if err != nil {
 		t.Skipf("no AWS config: %v", err)
@@ -38,6 +45,21 @@ func TestLive_GatherAccountInfo(t *testing.T) {
 	if cfg.Region == "" {
 		cfg.Region = "eu-west-2"
 	}
+
+	// Probe credentials so missing/expired auth produces a Skip,
+	// not a confusing late failure inside the actual test body.
+	if _, err := sts.NewFromConfig(cfg).GetCallerIdentity(context.Background(), &sts.GetCallerIdentityInput{}); err != nil {
+		t.Skipf("no usable AWS credentials (sts.GetCallerIdentity failed): %v", err)
+	}
+	return cfg
+}
+
+// TestLive_GatherAccountInfo runs the account-info compose against the
+// live caller account. After loadOrSkip's auth probe, STS is known to
+// work — so AccountId/Arn/UserId are required, not "warn if missing".
+func TestLive_GatherAccountInfo(t *testing.T) {
+	t.Parallel()
+	cfg := loadOrSkip(t)
 
 	stsClient := sts.NewFromConfig(cfg)
 	iamClient := iam.NewFromConfig(cfg)
@@ -46,31 +68,27 @@ func TestLive_GatherAccountInfo(t *testing.T) {
 
 	dumpJSON(t, "gatherAccountInfo", got)
 
-	// Region is always set (no SDK call, just the cfg field).
 	assert.Equal(t, cfg.Region, got["Region"])
 
-	// AccountId / Arn / UserId should be present unless STS is broken.
-	if accountID, ok := got["AccountId"].(string); ok {
-		assert.Regexp(t, `^\d{12}$`, accountID, "AccountId must be a 12-digit number")
-	} else {
-		t.Log("warning: GetCallerIdentity did not populate AccountId — STS issue?")
-	}
-	if arn, ok := got["Arn"].(string); ok {
-		assert.Regexp(t, `^arn:aws:.*:\d{12}:`, arn, "Arn must be a real ARN with the account id")
-	}
+	accountID, ok := got["AccountId"].(string)
+	require.True(t, ok, "AccountId must be populated — loadOrSkip probed STS so this is a real regression if missing")
+	assert.Regexp(t, `^\d{12}$`, accountID, "AccountId must be a 12-digit number")
+
+	arn, ok := got["Arn"].(string)
+	require.True(t, ok, "Arn must be populated")
+	assert.Regexp(t, `^arn:aws:.*:\d{12}:`, arn, "Arn must be a real ARN with the account id")
+
+	userID, ok := got["UserId"].(string)
+	require.True(t, ok, "UserId must be populated")
+	assert.NotEmpty(t, userID)
 }
 
 // TestLive_DescribeProjectLogGroups_NoFilter exercises the no-prefix
 // path. Should return at least one log group on any account that's
 // done anything.
 func TestLive_DescribeProjectLogGroups_NoFilter(t *testing.T) {
-	cfg, err := config.LoadDefaultConfig(context.Background())
-	if err != nil {
-		t.Skipf("no AWS config: %v", err)
-	}
-	if cfg.Region == "" {
-		cfg.Region = "eu-west-2"
-	}
+	t.Parallel()
+	cfg := loadOrSkip(t)
 
 	client := cloudwatchlogs.NewFromConfig(cfg)
 	got, err := describeProjectLogGroups(context.Background(), client, "")
@@ -86,18 +104,13 @@ func TestLive_DescribeProjectLogGroups_NoFilter(t *testing.T) {
 // Without it we skip — the prefix-scoping behaviour can't be verified
 // without a known matching prefix.
 func TestLive_DescribeProjectLogGroups_PrefixScoping(t *testing.T) {
+	t.Parallel()
 	project := os.Getenv("LIVE_PROJECT")
 	if project == "" {
 		t.Skip("LIVE_PROJECT not set; export the project name to test prefix scoping")
 	}
 
-	cfg, err := config.LoadDefaultConfig(context.Background())
-	if err != nil {
-		t.Skipf("no AWS config: %v", err)
-	}
-	if cfg.Region == "" {
-		cfg.Region = "eu-west-2"
-	}
+	cfg := loadOrSkip(t)
 
 	client := cloudwatchlogs.NewFromConfig(cfg)
 	got, err := describeProjectLogGroups(context.Background(), client, project)
@@ -115,13 +128,8 @@ func TestLive_DescribeProjectLogGroups_PrefixScoping(t *testing.T) {
 // dumps the (instanceId → InstanceConnectURL) map. Confirms the
 // enrichment composes correctly with the real SDK shape.
 func TestLive_EnrichEC2WithConnectURLs(t *testing.T) {
-	cfg, err := config.LoadDefaultConfig(context.Background())
-	if err != nil {
-		t.Skipf("no AWS config: %v", err)
-	}
-	if cfg.Region == "" {
-		cfg.Region = "eu-west-2"
-	}
+	t.Parallel()
+	cfg := loadOrSkip(t)
 
 	ec2Client := ec2.NewFromConfig(cfg)
 	out, err := ec2Client.DescribeInstances(context.Background(), &ec2.DescribeInstancesInput{})

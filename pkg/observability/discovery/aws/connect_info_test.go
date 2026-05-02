@@ -161,6 +161,12 @@ func TestEnrichEC2WithConnectURLs_RegionPropagatesIntoURL(t *testing.T) {
 
 // TestEnrichEC2WithConnectURLs_EmptyInstanceIDSkipped — instances with
 // no InstanceId must not gain a URL nor crash the enrichment.
+//
+// Walk the enriched output directly rather than checking urls[""],
+// because urls[""] returns the empty-string default when no key
+// exists — that would make this test pass even if the enrichment
+// somehow inserted an InstanceConnectURL keyed under "". Per
+// qa-professor review.
 func TestEnrichEC2WithConnectURLs_EmptyInstanceIDSkipped(t *testing.T) {
 	t.Parallel()
 	res := ec2types.Reservation{
@@ -169,10 +175,15 @@ func TestEnrichEC2WithConnectURLs_EmptyInstanceIDSkipped(t *testing.T) {
 		},
 	}
 	got := enrichEC2WithConnectURLs("eu-west-2", []ec2types.Reservation{res})
-	urls := urlsFromEnriched(t, got)
-	require.NotNil(t, urls)
-	url := urls[""]
-	assert.Empty(t, url, "instances without an InstanceId must not produce a URL")
+	enriched, ok := got.([]map[string]any)
+	require.True(t, ok)
+	require.Len(t, enriched, 1)
+
+	instances, _ := enriched[0]["Instances"].([]any)
+	require.Len(t, instances, 1)
+	m := instances[0].(map[string]any)
+	_, present := m["InstanceConnectURL"]
+	assert.False(t, present, "instances without an InstanceId must not have an InstanceConnectURL key in their map at all")
 }
 
 // TestEnrichEC2WithConnectURLs_PreservesNonStateInstanceFields — the
