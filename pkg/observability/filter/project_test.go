@@ -1,6 +1,7 @@
 package filter
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -23,6 +24,75 @@ func TestProject(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			assert.Equal(t, tt.want, Project(tt.filters))
+		})
+	}
+}
+
+func TestEnsureProject(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name        string
+		filters     string
+		project     string
+		wantProject string            // value Project() should return on the output
+		wantOther   map[string]string // other keys we expect preserved (nil = none)
+		wantSame    bool              // when true, output must equal input verbatim
+	}{
+		{
+			name:     "empty project + empty filters → unchanged",
+			filters:  "",
+			project:  "",
+			wantSame: true,
+		},
+		{
+			name:     "empty project + non-empty filters → unchanged",
+			filters:  `{"zone":"us-east-1a"}`,
+			project:  "",
+			wantSame: true,
+		},
+		{
+			name:        "empty filters + project → fresh JSON",
+			filters:     "",
+			project:     "io-abc123",
+			wantProject: "io-abc123",
+		},
+		{
+			name:        "filters already has project → unchanged",
+			filters:     `{"project":"io-existing"}`,
+			project:     "io-override",
+			wantSame:    true,
+			wantProject: "io-existing",
+		},
+		{
+			name:        "filters with other keys, no project → merge",
+			filters:     `{"zone":"us-east-1a"}`,
+			project:     "io-test",
+			wantProject: "io-test",
+			wantOther:   map[string]string{"zone": "us-east-1a"},
+		},
+		{
+			name:        "unparseable JSON → fresh JSON, dropping bad input",
+			filters:     "not-json",
+			project:     "io-recover",
+			wantProject: "io-recover",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := EnsureProject(tt.filters, tt.project)
+			if tt.wantSame {
+				assert.Equal(t, tt.filters, got)
+			}
+			assert.Equal(t, tt.wantProject, Project(got),
+				"Project() on output should match wantProject")
+			if tt.wantOther != nil {
+				var parsed map[string]string
+				assert.NoError(t, json.Unmarshal([]byte(got), &parsed))
+				for k, v := range tt.wantOther {
+					assert.Equal(t, v, parsed[k], "key %q should be preserved", k)
+				}
+			}
 		})
 	}
 }

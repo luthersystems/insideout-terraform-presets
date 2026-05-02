@@ -3,10 +3,10 @@
 // are scoped via the `Project=<name>` tag (kv- or map-shaped depending
 // on the service); GCP resources via the `project=<name>` label.
 //
-// Ported from reliable internal/agentapi/resource_filter.go (#204).
-// `ensureProjectFilter` is intentionally NOT ported — it depends on
-// reliable's session-ID → project-name translation which has no
-// analogue here. Callers pass the project name directly.
+// Ported from reliable internal/agentapi/resource_filter.go (#204, #228).
+// The session-ID → project-name translation that lives reliable-side
+// is intentionally NOT ported; callers translate session/tenant
+// identifiers into project names before calling EnsureProject.
 package filter
 
 import (
@@ -26,6 +26,40 @@ func Project(filters string) string {
 		return ""
 	}
 	return m["project"]
+}
+
+// EnsureProject injects "project"=<name> into a JSON filters string when
+// no project filter is already set. Pure filter manipulation; callers
+// that translate a session/tenant identifier into a project name do so
+// before calling this helper.
+//
+// Behaviour:
+//   - project == ""               → return filters unchanged
+//   - filters already has project → return filters unchanged
+//   - filters == ""               → return {"project":<name>}
+//   - filters has other keys      → merge project=<name> in
+//   - filters is unparseable JSON → return {"project":<name>}
+//
+// The parse contract matches Project(): values are treated as strings,
+// so mixed-type filter JSON round-trips identically to how Project()
+// already (silently) handles it.
+func EnsureProject(filters, project string) string {
+	if project == "" {
+		return filters
+	}
+	if Project(filters) != "" {
+		return filters
+	}
+	m := make(map[string]string)
+	if filters != "" {
+		_ = json.Unmarshal([]byte(filters), &m)
+	}
+	m["project"] = project
+	b, err := json.Marshal(m)
+	if err != nil {
+		return filters
+	}
+	return string(b)
 }
 
 // ProjectTagFilter returns EC2-style tag filters for the Project tag.
