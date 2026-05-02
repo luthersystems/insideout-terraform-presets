@@ -18,6 +18,7 @@ variable "project_id" {
   }
 }
 
+# tflint-ignore: terraform_unused_declarations  # composer always wires var.region at the root (CLAUDE.md mandate)
 variable "region" {
   description = "GCP region (for regional buckets)"
   type        = string

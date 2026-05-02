@@ -1,3 +1,4 @@
+# tflint-ignore: terraform_unused_declarations  # composer always wires var.project at the root (CLAUDE.md mandate)
 variable "project" {
   description = "Naming/label prefix for stack resources (NOT a GCP project ID — see var.project_id)."
   type        = string
@@ -13,6 +14,7 @@ variable "project_id" {
   }
 }
 
+# tflint-ignore: terraform_unused_declarations  # composer always wires var.region at the root (CLAUDE.md mandate)
 variable "region" {
   description = "GCP region"
   type        = string

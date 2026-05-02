@@ -195,12 +195,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run tflint
-        # --minimum-failure-severity=error: gate only on errors, not
-        # warnings. The repo has pre-existing warnings (legacy aws/datadog,
-        # aws/splunk, etc.) that are tracked for cleanup but not in scope
-        # for #215. Errors (real bugs — bad provider config, syntax issues)
-        # still fail CI.
-        run: tflint --recursive --format=compact --minimum-failure-severity=error
+        run: tflint --recursive --format=compact
 
   # Wraps each preset in a synthetic root and runs terraform init. This
   # is the actual consumption shape used by the composer

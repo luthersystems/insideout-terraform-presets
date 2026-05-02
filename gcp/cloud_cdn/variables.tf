@@ -1,8 +1,10 @@
+# tflint-ignore: terraform_unused_declarations  # composer always wires var.project at the root (CLAUDE.md mandate)
 variable "project" {
   description = "GCP project ID"
   type        = string
 }
 
+# tflint-ignore: terraform_unused_declarations  # composer always wires var.region at the root (CLAUDE.md mandate)
 variable "region" {
   description = "GCP region"
   type        = string

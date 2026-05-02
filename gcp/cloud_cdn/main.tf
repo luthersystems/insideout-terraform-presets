@@ -15,6 +15,7 @@ terraform {
 # Cloud CDN cache policy is configured via the load balancer backend service.
 # This local captures the CDN configuration for reference and outputs.
 locals {
+  # tflint-ignore: terraform_unused_declarations  # documentation-only: cloud_cdn is a doc-only preset (no resources); local captures the intended config shape for future implementations
   cdn_config = {
     enabled           = true
     cache_mode        = var.cache_mode
