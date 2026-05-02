@@ -154,3 +154,20 @@ variable "tags" {
   type        = map(string)
   default     = {}
 }
+
+# disable_legacy_per_component_alarms is the opt-out switch for the
+# observability consolidation (issue #204). Defaults to false so the
+# 5 legacy aggregator-side alarms (ec2_cpu_high, rds_cpu_high,
+# rds_free_storage_low, redis_cpu_high, sqs_backlog) continue to fire
+# exactly as they did before this PR.
+#
+# When the per-component observability.tf files (in aws/<module>/) are
+# in use AND the composer-emitted moved {} blocks have relocated state
+# into them, set this variable to true to retire the legacy duplicates.
+# Reliable's composeradapter is expected to flip this in a follow-up
+# PR after the duplicate-alarm soak period.
+variable "disable_legacy_per_component_alarms" {
+  description = "When true, suppress the 5 legacy aggregator-side per-component alarms (ec2_cpu_high, rds_cpu_high, rds_free_storage_low, redis_cpu_high, sqs_backlog). Per-component observability.tf in each consumer module owns the equivalent alarms going forward (issue #204)."
+  type        = bool
+  default     = false
+}
