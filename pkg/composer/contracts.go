@@ -1,6 +1,9 @@
 package composer
 
-import "strings"
+import (
+	"slices"
+	"strings"
+)
 
 // vpcSubnetSelfLinkExpr is the wiring expression for any module that consumes
 // gcp_vpc's subnets_self_links output as a single value. It uses try() so
@@ -856,6 +859,41 @@ func DefaultWiring(selected map[ComponentKey]bool, k ComponentKey, comps *Compon
 		if selected[KeyGCPVPC] {
 			wi.RawHCL["vpc_connector"] = "module.gcp_vpc.connector_id"
 			wi.Names = append(wi.Names, "vpc_connector")
+		}
+	}
+
+	// Observability post-switch wiring (issue #204). Driven off the
+	// PricingDependencies driver lists so a component added there
+	// gets observability wiring "for free." When the matching
+	// aggregator (aws_cloudwatchmonitoring or gcp_cloud_monitoring) is
+	// selected, every per-component emitter receives the SNS topic ARN
+	// (AWS) or notification channels (GCP) plus an enable_observability
+	// = true gate. The aggregator itself is excluded.
+	//
+	// The per-component module's variables.tf must declare
+	// alarm_topic_arn (AWS) or notification_channels (GCP) and
+	// enable_observability for these inputs to bind; modules without
+	// observability.tf today (lands in C7/C8) accept the wiring as
+	// declared-but-unused via the validateRequiredIssues path.
+	//
+	// Backwards-compat: emitting these inputs is a no-op for any
+	// module that hasn't yet adopted the per-component alarm pattern —
+	// the module simply ignores variables it doesn't declare. The
+	// composer's preset-inspection layer (compose.go) skips wiring
+	// that doesn't match a declared variable, so the input never
+	// reaches a module that can't consume it.
+	if k != KeyAWSCloudWatchMonitoring && CloudFor(k) == "aws" && selected[KeyAWSCloudWatchMonitoring] {
+		if slices.Contains(PricingDependencies[KeyAWSCloudWatchMonitoring], k) {
+			wi.RawHCL["alarm_topic_arn"] = "module.aws_cloudwatchmonitoring.sns_topic_arn"
+			wi.RawHCL["enable_observability"] = "true"
+			wi.Names = append(wi.Names, "alarm_topic_arn", "enable_observability")
+		}
+	}
+	if k != KeyGCPCloudMonitoring && CloudFor(k) == "gcp" && selected[KeyGCPCloudMonitoring] {
+		if slices.Contains(PricingDependencies[KeyGCPCloudMonitoring], k) {
+			wi.RawHCL["notification_channels"] = "module.gcp_cloud_monitoring.notification_channels"
+			wi.RawHCL["enable_observability"] = "true"
+			wi.Names = append(wi.Names, "notification_channels", "enable_observability")
 		}
 	}
 

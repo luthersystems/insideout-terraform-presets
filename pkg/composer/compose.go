@@ -530,6 +530,36 @@ func (c *Client) composeStackImpl(opts ComposeStackOpts) (*ComposeStackResult, e
 		maybeInjectGCPProjectID(cloud, opts.GCPProjectID, vals)
 		wired := DefaultWiring(selected, k, opts.Comps)
 
+		// Drop wired RawHCL entries that don't match a variable
+		// declared by the preset. The post-switch observability wiring
+		// (issue #204) is opportunistic — it sets alarm_topic_arn /
+		// notification_channels / enable_observability on every emitter
+		// in PricingDependencies regardless of whether the destination
+		// module has gained an observability.tf yet. Without this
+		// filter, terraform plan rejects "An argument named X is not
+		// expected here" for modules that pre-date the C7/C8 alarm
+		// authoring rollout.
+		//
+		// Pre-existing wiring cases (KeyAWSCloudWatchMonitoring's
+		// instance_ids etc.) declare only inputs the target preset has
+		// always supported, so the filter is a no-op for them.
+		declared := make(map[string]bool, len(vars))
+		for _, v := range vars {
+			declared[v.Name] = true
+		}
+		for name := range wired.RawHCL {
+			if !declared[name] {
+				delete(wired.RawHCL, name)
+			}
+		}
+		filtered := wired.Names[:0]
+		for _, name := range wired.Names {
+			if declared[name] {
+				filtered = append(filtered, name)
+			}
+		}
+		wired.Names = filtered
+
 		inputs := map[string]any{}
 		for _, v := range vars {
 			if _, isWired := wired.RawHCL[v.Name]; isWired {
@@ -569,6 +599,17 @@ func (c *Client) composeStackImpl(opts ComposeStackOpts) (*ComposeStackResult, e
 		// not after the security policies land.
 		if k == KeyAWSBedrock && selected[KeyAWSOpenSearch] {
 			block.DependsOn = []string{opensearchRef(selected)}
+		}
+		// Observability moves: when both this component and the legacy
+		// aws_cloudwatchmonitoring aggregator are selected, emit moved {}
+		// blocks relocating the legacy per-component alarms into this
+		// module. Inert when the aggregator is not selected — the moved
+		// addresses would reference a non-existent module and Terraform
+		// would skip the block silently. Issue #204.
+		if selected[KeyAWSCloudWatchMonitoring] {
+			if moves := ObservabilityMoves(k); len(moves) > 0 {
+				block.Moved = moves
+			}
 		}
 		blocks = append(blocks, block)
 
