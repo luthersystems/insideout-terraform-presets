@@ -4,10 +4,14 @@ import (
 	"context"
 	"fmt"
 
+	monitoring "cloud.google.com/go/monitoring/apiv3/v2"
+	"cloud.google.com/go/monitoring/apiv3/v2/monitoringpb"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatch"
+	"google.golang.org/api/iterator"
+	"google.golang.org/api/option"
 )
 
 // CloudWatchAPI is the subset of the CloudWatch v2 SDK client the
@@ -101,4 +105,109 @@ func (c *Clients) cloudFrontClient(ctx context.Context) (CloudWatchAPI, error) {
 	}
 	c.cloudFrontCW = cloudwatch.NewFromConfig(usEast1Cfg)
 	return c.cloudFrontCW, nil
+}
+
+// MonitoringAPI is the subset of the Cloud Monitoring v3 client the
+// metric-fetch path actually invokes. Mirrors reliable's GCPMonitoringAPI
+// (gcp_metrics.go:50). Narrowed to ListTimeSeries because that's the
+// only Cloud Monitoring op FetchGCP issues — alert policies and other
+// surfaces live in the discovery dispatchers (C15) and don't share this
+// interface. Kept as an interface so tests can inject a fake without
+// standing up the full monitoring client.
+//
+// The real client returns a server-streaming iterator; this interface
+// forces the implementation to drain it to a slice up front. That's
+// fine for the metric-fetch path — Cloud Monitoring's ListTimeSeries
+// caps results well below memory pressure for typical
+// (project, metric type) windows.
+type MonitoringAPI interface {
+	ListTimeSeries(ctx context.Context, req *monitoringpb.ListTimeSeriesRequest) ([]*monitoringpb.TimeSeries, error)
+}
+
+// realMonitoringClient wraps the Cloud Monitoring metric client to drain
+// its iterator into a slice. Mirrors reliable's realGCPMonitoringClient
+// (gcp_metrics.go:55). Kept unexported — callers construct one via
+// NewGCPClients.
+type realMonitoringClient struct {
+	client *monitoring.MetricClient
+}
+
+func (r *realMonitoringClient) ListTimeSeries(ctx context.Context, req *monitoringpb.ListTimeSeriesRequest) ([]*monitoringpb.TimeSeries, error) {
+	it := r.client.ListTimeSeries(ctx, req)
+	var results []*monitoringpb.TimeSeries
+	for {
+		ts, err := it.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, ts)
+	}
+	return results, nil
+}
+
+// GCPClients bundles the GCP service clients the metric-fetch path
+// needs. Today that's just the Cloud Monitoring metric client — the
+// per-service discovery clients (Compute, Cloud Run, Functions, …) used
+// by reliable's GCP discoverers land in C15 alongside the GCP inspector
+// port. We give callers a Clients struct anyway so the C15 expansion is
+// additive: new fields slot in without changing the public constructor
+// signature.
+//
+// Kept separate from Clients (the AWS bundle) because the construction
+// paths diverge: AWS uses LoadDefaultConfig(WithRegion) and binds to a
+// region; GCP uses option.ClientOption with project-scoped credentials
+// and binds to a project. Folding them into one struct would force
+// every caller to supply both even when only one cloud is in scope.
+type GCPClients struct {
+	// ProjectID is the GCP project the Monitoring client is scoped to.
+	// Used by FetchGCP to build the "projects/<id>" parent path on
+	// every ListTimeSeries request.
+	ProjectID string
+
+	// Monitoring is the Cloud Monitoring v3 client used to issue
+	// ListTimeSeries calls. Replaceable via the MonitoringAPI interface
+	// for tests.
+	Monitoring MonitoringAPI
+
+	// closer carries the underlying *monitoring.MetricClient so Close()
+	// can release the gRPC connection. nil when Monitoring was injected
+	// directly (tests).
+	closer *monitoring.MetricClient
+}
+
+// NewGCPClients builds a GCPClients value bound to projectID. Mirrors
+// reliable's getGCPServiceMetrics inline construction (gcp_metrics.go:378-389).
+// Ambient credentials only — Application Default Credentials. The Oracle
+// service-account-token machinery in reliable lives outside the
+// metric-fetch core and is not needed here; callers wanting to pass
+// scoped credentials can inject MonitoringAPI directly.
+//
+// Variadic option.ClientOption is the natural extension point for
+// callers that need to override credentials, endpoint, or quota project
+// — same shape as monitoring.NewMetricClient itself.
+func NewGCPClients(ctx context.Context, projectID string, opts ...option.ClientOption) (*GCPClients, error) {
+	if projectID == "" {
+		return nil, fmt.Errorf("metrics: projectID is required")
+	}
+	client, err := monitoring.NewMetricClient(ctx, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("metrics: create monitoring client: %w", err)
+	}
+	return &GCPClients{
+		ProjectID:  projectID,
+		Monitoring: &realMonitoringClient{client: client},
+		closer:     client,
+	}, nil
+}
+
+// Close releases the underlying gRPC connection. Safe to call on a
+// GCPClients with an injected MonitoringAPI (no-op in that case).
+func (c *GCPClients) Close() error {
+	if c == nil || c.closer == nil {
+		return nil
+	}
+	return c.closer.Close()
 }

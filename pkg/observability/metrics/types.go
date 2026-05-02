@@ -42,11 +42,17 @@ type ResourceMetrics struct {
 // Renamed from reliable's MetricResult (aws_metrics.go:88) to disambiguate
 // from MetricsResult and from the Go convention that *Result implies a
 // type returned at the top of an API call. The JSON shape ("name",
-// "unit", "datapoints") is preserved unchanged.
+// "unit", "datapoints") is preserved unchanged for AWS; "labels" is
+// the GCP-side breakdown surface ported from reliable's GCPMetricResult
+// (gcp_metrics.go:98). AWS callers leave Labels nil and Unit string;
+// GCP callers leave Unit empty and populate Labels for breakdown
+// metrics (e.g. cloudfunctions execution_count by status=ok/error).
+// Both shapes co-exist on the wire with omitempty.
 type MetricSeries struct {
-	Name       string      `json:"name"`
-	Unit       string      `json:"unit,omitempty"`
-	Datapoints []Datapoint `json:"datapoints"`
+	Name       string            `json:"name"`
+	Unit       string            `json:"unit,omitempty"`
+	Labels     map[string]string `json:"labels,omitempty"`
+	Datapoints []Datapoint       `json:"datapoints"`
 }
 
 // Datapoint is a single metric value at a point in time. Mirrors
