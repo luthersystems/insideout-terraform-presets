@@ -1,6 +1,7 @@
 package drift
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 )
@@ -33,14 +34,95 @@ type wireDrift struct {
 // "action" is the post-#105 enrichment (the address-join result from
 // resource_changes[]); change.actions is the pre-#105 nested location
 // (terraform's own resource_changes[].change.actions). We accept both
-// — when only the nested form is present we lift it onto Action so
-// rules don't need to special-case schema versions.
+// — when the top-level field is absent we lift the nested form onto
+// Action so rules don't need to special-case schema versions.
+//
+// actionState records the three states the post-#107 schema cares
+// about (encoding/json on its own can't disambiguate them, since both
+// "missing key" and "key with null value" decode to a nil slice):
+//
+//	actionAbsent → top-level "action" key not present in the JSON
+//	               object (pre-#105 input). Falls back to
+//	               change.actions for the Action slice.
+//	actionNull   → top-level "action" key present and explicitly
+//	               null (post-#107 refresh-only / no-op address).
+//	               Action stays nil — the upstream's join already
+//	               decided null is the correct value, do NOT fall
+//	               back to change.actions.
+//	actionList   → top-level "action" key present with a JSON array
+//	               value; Action = the list, change.actions is
+//	               ignored.
+//
+// Populated by wireResourceDrift.UnmarshalJSON so it can inspect raw
+// key presence; the field tags on this struct are advisory.
 type wireResourceDrift struct {
-	Address string     `json:"address"`
-	Type    string     `json:"type"`
-	Name    string     `json:"name"`
-	Action  []string   `json:"action"`
-	Change  wireChange `json:"change"`
+	Address     string     `json:"address"`
+	Type        string     `json:"type"`
+	Name        string     `json:"name"`
+	Change      wireChange `json:"change"`
+	Action      []string   `json:"-"`
+	actionState actionState
+}
+
+// actionState is the trichotomy described on wireResourceDrift.
+type actionState int
+
+const (
+	actionAbsent actionState = iota
+	actionNull
+	actionList
+)
+
+// UnmarshalJSON decodes a single resource entry, distinguishing
+// "action key absent" from "action key present with null value." We
+// can't get this distinction from struct-field tags alone — both decode
+// to a nil slice — so we route through a map[string]json.RawMessage
+// intermediate and inspect key presence directly.
+//
+// Unknown JSON keys (e.g. mode, module_address, provider_name, the
+// post-#107 enrichment fields the classifier doesn't read) are
+// silently dropped — same as the default behavior of encoding/json.
+func (w *wireResourceDrift) UnmarshalJSON(data []byte) error {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+	// Decode the simple fields directly. A missing key leaves the
+	// field at its zero value, matching encoding/json's default.
+	if raw, ok := fields["address"]; ok {
+		if err := json.Unmarshal(raw, &w.Address); err != nil {
+			return fmt.Errorf("address: %w", err)
+		}
+	}
+	if raw, ok := fields["type"]; ok {
+		if err := json.Unmarshal(raw, &w.Type); err != nil {
+			return fmt.Errorf("type: %w", err)
+		}
+	}
+	if raw, ok := fields["name"]; ok {
+		if err := json.Unmarshal(raw, &w.Name); err != nil {
+			return fmt.Errorf("name: %w", err)
+		}
+	}
+	if raw, ok := fields["change"]; ok && len(raw) > 0 && !bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		if err := json.Unmarshal(raw, &w.Change); err != nil {
+			return fmt.Errorf("change: %w", err)
+		}
+	}
+	// Action: the trichotomy lives here.
+	raw, ok := fields["action"]
+	switch {
+	case !ok:
+		w.actionState = actionAbsent
+	case len(bytes.TrimSpace(raw)) == 0 || bytes.Equal(bytes.TrimSpace(raw), []byte("null")):
+		w.actionState = actionNull
+	default:
+		if err := json.Unmarshal(raw, &w.Action); err != nil {
+			return fmt.Errorf("action: %w", err)
+		}
+		w.actionState = actionList
+	}
+	return nil
 }
 
 type wireChange struct {
@@ -78,20 +160,11 @@ func UnmarshalJSON(data []byte) (Drift, error) {
 	if len(w.Resources) > 0 {
 		d.Resources = make([]ResourceDrift, len(w.Resources))
 		for i, wr := range w.Resources {
-			action := wr.Action
-			// Fall back to the nested change.actions location for
-			// inputs written by older drift-check.sh versions that
-			// haven't been updated to project Action onto the
-			// top-level. Both fields together are a no-op (we
-			// prefer the top-level when populated).
-			if len(action) == 0 && len(wr.Change.Actions) > 0 {
-				action = wr.Change.Actions
-			}
 			d.Resources[i] = ResourceDrift{
 				Address: wr.Address,
 				Type:    wr.Type,
 				Name:    wr.Name,
-				Action:  action,
+				Action:  resolveAction(wr),
 				Change: Change{
 					Before: wr.Change.Before,
 					After:  wr.Change.After,
@@ -100,6 +173,30 @@ func UnmarshalJSON(data []byte) (Drift, error) {
 		}
 	}
 	return d, nil
+}
+
+// resolveAction implements the schema-tolerant action resolution
+// documented on wireResourceDrift. State machine:
+//
+//	actionAbsent → fall back to change.actions (pre-#105 input).
+//	actionNull   → return nil (post-#107 refresh-only / no-op join
+//	               result; preserve the upstream signal — do NOT
+//	               fall back to change.actions).
+//	actionList   → return the parsed list; change.actions ignored.
+func resolveAction(wr wireResourceDrift) []string {
+	switch wr.actionState {
+	case actionAbsent:
+		if len(wr.Change.Actions) > 0 {
+			return wr.Change.Actions
+		}
+		return nil
+	case actionNull:
+		return nil
+	case actionList:
+		return wr.Action
+	default:
+		return nil
+	}
 }
 
 // HasClassifiableDetail returns true iff d carries enough per-resource

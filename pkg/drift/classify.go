@@ -2,7 +2,7 @@ package drift
 
 import (
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -92,7 +92,7 @@ func summarize(r Result) string {
 	for c := range classCounts {
 		classes = append(classes, c)
 	}
-	sort.Slice(classes, func(i, j int) bool { return classes[i] < classes[j] })
+	slices.Sort(classes)
 	for _, c := range classes {
 		fmt.Fprintf(&sb, ", %d %s", classCounts[c], c)
 	}

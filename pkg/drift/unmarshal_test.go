@@ -188,3 +188,118 @@ func TestUnmarshalJSON_EmptyDriftIsClassifiable(t *testing.T) {
 		t.Errorf("HasClassifiableDetail = false on empty-resources input; want true")
 	}
 }
+
+// TestUnmarshalJSON_PostEnrichmentNoOpFields verifies the decoder
+// tolerates the full real-world post-#107 emitted shape: top-level
+// "mode", "module_address", "provider_name" alongside in-change
+// "actions", "after_unknown", "before_sensitive", "after_sensitive".
+// None of these are decoded into Drift / ResourceDrift / Change today
+// (we only need address/type/name/action + before/after); this test
+// pins the "ignore unknown fields" contract so a future schema bump
+// upstream doesn't break parsing.
+func TestUnmarshalJSON_PostEnrichmentNoOpFields(t *testing.T) {
+	t.Parallel()
+	d, err := UnmarshalJSON(readFixture(t, "iam_managed_policy_reconverge.drift.json"))
+	if err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if got := len(d.Resources); got != 1 {
+		t.Fatalf("len(Resources) = %d; want 1", got)
+	}
+	r := d.Resources[0]
+	// Top-level "action" — the post-#107 enrichment field — wins over
+	// nested change.actions when both are present.
+	if len(r.Action) != 1 || r.Action[0] != "update" {
+		t.Errorf("Action = %v; want [update] (top-level field)", r.Action)
+	}
+	// Sanity: classification succeeds end-to-end on the enriched
+	// shape — the decoder fed Change.Before / Change.After through
+	// cleanly despite the surrounding noise fields.
+	if !HasClassifiableDetail(d) {
+		t.Errorf("HasClassifiableDetail = false on enriched input; want true")
+	}
+}
+
+// TestUnmarshalJSON_ActionNullFromRefreshOnly captures the post-#107
+// case where the join against resource_changes[] yielded null because
+// terraform isn't planning anything for this address (refresh-only
+// plans, or addresses outside the plan's actionable set). The decoder
+// must accept this and leave Action nil. The new Action field being
+// nil is NOT disqualifying for HasClassifiableDetail — phantom drift
+// legitimately has null action — Type + Change.{Before,After} are the
+// classifiable-detail markers.
+func TestUnmarshalJSON_ActionNullFromRefreshOnly(t *testing.T) {
+	t.Parallel()
+	raw := []byte(`{
+		"drift_detected": true,
+		"drift_count": 1,
+		"resources": [
+			{
+				"address": "module.firestore.google_firestore_database.default",
+				"mode": "managed",
+				"type": "google_firestore_database",
+				"name": "default",
+				"provider_name": "registry.terraform.io/hashicorp/google",
+				"change": {
+					"actions": ["no-op"],
+					"before": {"etag": "abc"},
+					"after":  {"etag": "def"},
+					"after_unknown": {},
+					"before_sensitive": {},
+					"after_sensitive": {}
+				},
+				"action": null
+			}
+		]
+	}`)
+	d, err := UnmarshalJSON(raw)
+	if err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	r := d.Resources[0]
+	// action: null at the top level — Action must be nil. The nested
+	// change.actions fallback should NOT apply here (top-level field
+	// is present and explicitly null, indicating "no plan action,"
+	// not "older schema").
+	if r.Action != nil {
+		t.Errorf("Action = %v; want nil for top-level action: null", r.Action)
+	}
+	// HasClassifiableDetail must still return true: Type and
+	// Change.Before/After are populated, which is the contract.
+	if !HasClassifiableDetail(d) {
+		t.Errorf("HasClassifiableDetail = false with action: null; want true (Action nil is not disqualifying)")
+	}
+}
+
+// TestUnmarshalJSON_MissingChangeFieldDoesNotError defends against
+// drift-check.sh's `if ($entry.change == null) then $entry` branch —
+// a resource entry whose change key is absent (or null) must decode
+// to a zero Change struct without erroring.
+func TestUnmarshalJSON_MissingChangeFieldDoesNotError(t *testing.T) {
+	t.Parallel()
+	raw := []byte(`{
+		"drift_detected": true,
+		"drift_count": 1,
+		"resources": [
+			{
+				"address": "aws_s3_bucket.b",
+				"type": "aws_s3_bucket",
+				"name": "b"
+			}
+		]
+	}`)
+	d, err := UnmarshalJSON(raw)
+	if err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	r := d.Resources[0]
+	if len(r.Change.Before) != 0 || len(r.Change.After) != 0 {
+		t.Errorf("Change populated despite missing change key; want zero")
+	}
+	// HasClassifiableDetail must return false: even though Type is
+	// populated, neither Before nor After is, so rules have nothing
+	// to match against.
+	if HasClassifiableDetail(d) {
+		t.Errorf("HasClassifiableDetail = true with missing change; want false")
+	}
+}

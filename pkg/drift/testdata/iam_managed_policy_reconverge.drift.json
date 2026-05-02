@@ -7,10 +7,13 @@
   "resources": [
     {
       "address": "aws_iam_role.insideout_inspector[0]",
+      "module_address": "module.iam",
+      "mode": "managed",
       "type": "aws_iam_role",
       "name": "insideout_inspector",
-      "action": ["update"],
+      "provider_name": "registry.terraform.io/hashicorp/aws",
       "change": {
+        "actions": ["update"],
         "before": {
           "name": "insideout-inspector-de9def7c",
           "managed_policy_arns": [],
@@ -20,8 +23,16 @@
           "name": "insideout-inspector-de9def7c",
           "managed_policy_arns": ["arn:aws:iam::aws:policy/ReadOnlyAccess"],
           "inline_policy": []
+        },
+        "after_unknown": {
+          "managed_policy_arns": [false]
+        },
+        "before_sensitive": {},
+        "after_sensitive": {
+          "managed_policy_arns": [false]
         }
-      }
+      },
+      "action": ["update"]
     }
   ]
 }
