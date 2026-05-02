@@ -10,10 +10,13 @@
 // no AWS analogue.
 //
 // Error helpers mirror reliable's inspect_normalize.go::
-// unsupportedActionError / unsupportedServiceError. The "did you mean?"
-// hint is intentionally omitted here — adding the levenshtein dep just
-// for inspector errors isn't worth it; callers see the supported-action
-// list directly.
+// unsupportedActionError / unsupportedServiceError, including the
+// Levenshtein "did you mean?" hint (#227). The hint is consumed by the
+// LLM as part of the tool-result envelope, so the format here matches
+// reliable's byte-for-byte. The actual builders live at
+// observability.UnsupportedActionError /
+// observability.UnsupportedServiceError; these wrappers preserve the
+// per-callsite signatures already in use across this package.
 
 package gcp
 
@@ -21,7 +24,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
-	"strings"
+
+	"github.com/luthersystems/insideout-terraform-presets/pkg/observability"
 )
 
 // gcpFilterValueSafe limits caller-supplied label keys/values to a
@@ -32,26 +36,21 @@ import (
 // caller's GCP credentials. #204 P1.
 var gcpFilterValueSafe = regexp.MustCompile(`^[A-Za-z0-9._\-/]{1,128}$`)
 
-// unsupportedActionError builds a descriptive error for an unknown action,
-// listing the supported actions for the service. Mirrors reliable's
-// unsupportedActionError sans the levenshtein "did you mean?" hint.
+// unsupportedActionError builds a descriptive error for an unknown
+// action, listing supported actions and a Levenshtein-based "did you
+// mean?" hint when one is close. Thin wrapper over
+// observability.UnsupportedActionError so per-service callsites can
+// keep passing the human-friendly display name (e.g. "Cloud Run") and
+// their pre-fetched action list without repeating the hint logic.
 func unsupportedActionError(service, action string, validActions []string) error {
-	if len(validActions) == 0 {
-		return fmt.Errorf("unsupported %s action: %q", service, action)
-	}
-	return fmt.Errorf("unsupported %s action: %q. Supported actions: %s",
-		service, action, strings.Join(validActions, ", "))
+	return observability.UnsupportedActionError(service, action, validActions)
 }
 
-// unsupportedServiceError builds a descriptive error for an unknown service,
-// listing the canonical service registry. Mirrors reliable's
-// unsupportedServiceError sans the levenshtein hint.
+// unsupportedServiceError builds a descriptive error for an unknown
+// service, listing the canonical service registry and a "did you mean?"
+// hint. Thin wrapper over observability.UnsupportedServiceError.
 func unsupportedServiceError(service string, validServices []string) error {
-	if len(validServices) == 0 {
-		return fmt.Errorf("unsupported service: %q", service)
-	}
-	return fmt.Errorf("unsupported service: %q. Supported services: %s",
-		service, strings.Join(validServices, ", "))
+	return observability.UnsupportedServiceError(service, validServices)
 }
 
 // parseFilterMap pulls the filter envelope into a map[string]string.

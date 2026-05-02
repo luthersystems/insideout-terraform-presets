@@ -16,6 +16,7 @@ import (
 	"context"
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -98,6 +99,33 @@ func TestInspectUnsupportedServiceReturnsSentinel(t *testing.T) {
 	_, err := Inspect(context.Background(), cfg, "definitely-not-a-service", "list-anything", "")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, ErrUnsupportedService))
+}
+
+// TestInspectUnsupportedServiceErrorGoldenFormat pins the wire-format
+// shape of the wrapped sentinel — `errors.Is` only verifies that the
+// sentinel chain is intact, but the rendered string is what reliable's
+// LLM consumer reads as a tool-result envelope (#227). A regression in
+// either half of the dedupe (the sentinel text vs. the upstream
+// observability.UnsupportedServiceError prefix) would silently emit a
+// double-prefixed or partial string while keeping `errors.Is` happy;
+// this assertion fails that loud. The corresponding upstream
+// invariant ("body starts with 'unsupported service'") is locked in
+// pkg/observability/unsupported_test.go.
+func TestInspectUnsupportedServiceErrorGoldenFormat(t *testing.T) {
+	t.Parallel()
+	cfg := aws.Config{Region: "us-east-1"}
+	_, err := Inspect(context.Background(), cfg, "ec3", "list-anything", "")
+	require.Error(t, err)
+
+	// The supported-services list comes straight from the canonical
+	// registry — interpolate it so this golden survives registry
+	// growth without becoming a maintenance burden, while still
+	// pinning every other byte of the wire format.
+	// No trailing period after the services list — pinned by the
+	// upstream golden in pkg/observability/unsupported_test.go.
+	want := `unsupported service: "ec3" (did you mean "ec2"?). Supported services: ` +
+		strings.Join(observability.AWSServiceNames(), ", ")
+	assert.Equal(t, want, err.Error())
 }
 
 func TestInspectGetMetricsRoutesToMetricsPackage(t *testing.T) {
