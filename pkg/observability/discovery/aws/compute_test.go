@@ -155,11 +155,18 @@ func TestHasProjectTagECS(t *testing.T) {
 
 // --- EKS fake ---
 
+// fakeEKSClient routes DescribeCluster per-cluster-name via the
+// describeByName map so a test can return distinct responses per cluster
+// (e.g. one tagged Project=my-stack, one tagged Project=other) and verify
+// the filter actually selects on the tag value. The single-output
+// describeClusterOut field is retained for tests that don't need
+// per-name routing.
 type fakeEKSClient struct {
 	listClustersOut    *eks.ListClustersOutput
 	listClustersErr    error
 	describeClusterOut *eks.DescribeClusterOutput
 	describeClusterErr error
+	describeByName     map[string]*eks.DescribeClusterOutput
 }
 
 func (f *fakeEKSClient) ListClusters(_ context.Context, _ *eks.ListClustersInput, _ ...func(*eks.Options)) (*eks.ListClustersOutput, error) {
@@ -172,9 +179,15 @@ func (f *fakeEKSClient) ListClusters(_ context.Context, _ *eks.ListClustersInput
 	return f.listClustersOut, nil
 }
 
-func (f *fakeEKSClient) DescribeCluster(_ context.Context, _ *eks.DescribeClusterInput, _ ...func(*eks.Options)) (*eks.DescribeClusterOutput, error) {
+func (f *fakeEKSClient) DescribeCluster(_ context.Context, in *eks.DescribeClusterInput, _ ...func(*eks.Options)) (*eks.DescribeClusterOutput, error) {
 	if f.describeClusterErr != nil {
 		return nil, f.describeClusterErr
+	}
+	if f.describeByName != nil {
+		if out, ok := f.describeByName[aws.ToString(in.Name)]; ok {
+			return out, nil
+		}
+		return &eks.DescribeClusterOutput{}, nil
 	}
 	if f.describeClusterOut == nil {
 		return &eks.DescribeClusterOutput{}, nil
@@ -188,22 +201,24 @@ func TestFilterEKSClustersByProjectTag_Match(t *testing.T) {
 		listClustersOut: &eks.ListClustersOutput{
 			Clusters: []string{"foo", "bar"},
 		},
-		// DescribeCluster is called per-name; we return the same canned
-		// output for both. The Tags map decides the filter outcome —
-		// here, only the Project=my-stack tag matches so the result of
-		// the second DescribeCluster (also tagged my-stack via the same
-		// fake) means BOTH end up matched. To get a single match we'd
-		// need a per-name response — beyond a happy-path test scope.
-		describeClusterOut: &eks.DescribeClusterOutput{
-			Cluster: &ekstypes.Cluster{
-				Name: aws.String("matched"),
+		// Per-name routing: foo carries the matching Project tag, bar
+		// does not. If the filter is a no-op the test fails because both
+		// clusters would come back.
+		describeByName: map[string]*eks.DescribeClusterOutput{
+			"foo": {Cluster: &ekstypes.Cluster{
+				Name: aws.String("foo"),
 				Tags: map[string]string{"Project": "my-stack"},
-			},
+			}},
+			"bar": {Cluster: &ekstypes.Cluster{
+				Name: aws.String("bar"),
+				Tags: map[string]string{"Project": "other"},
+			}},
 		},
 	}
 	got, err := filterEKSClustersByProjectTag(context.Background(), client, "my-stack")
 	require.NoError(t, err)
-	assert.Len(t, got, 2)
+	require.Len(t, got, 1)
+	assert.Equal(t, "foo", got[0])
 }
 
 func TestFilterEKSClustersByProjectTag_EmptyProjectReturnsAll(t *testing.T) {

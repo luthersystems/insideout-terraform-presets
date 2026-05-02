@@ -12,8 +12,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/luthersystems/insideout-terraform-presets/pkg/observability"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer"
+	"github.com/luthersystems/insideout-terraform-presets/pkg/observability"
 )
 
 // --- Mock CloudWatch client ---
@@ -484,7 +484,10 @@ func TestFetch_S3PeriodAndHoursOverride(t *testing.T) {
 }
 
 // TestFetch_S3DoesNotShortenLongerHours — caller-supplied Hours=72
-// must NOT be clamped down to 48; the >=48 guard is a floor only.
+// must NOT be clamped down to 48; the >=48 guard is a floor only. We
+// also assert the actual GetMetricDataInput.StartTime/EndTime span
+// reflects 72h, since the human-readable TimeRange string could in
+// principle be derived independently of the API call.
 func TestFetch_S3DoesNotShortenLongerHours(t *testing.T) {
 	t.Parallel()
 	mock := &fakeCloudWatch{output: &cloudwatch.GetMetricDataOutput{}}
@@ -497,6 +500,14 @@ func TestFetch_S3DoesNotShortenLongerHours(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, result.TimeRange, "72")
 	assert.Equal(t, 86400, result.Period)
+
+	// Verify the API call interval reflects 72h, not the 48h floor.
+	require.NotNil(t, mock.lastInput, "Fetch must invoke GetMetricData")
+	require.NotNil(t, mock.lastInput.StartTime)
+	require.NotNil(t, mock.lastInput.EndTime)
+	span := mock.lastInput.EndTime.Sub(*mock.lastInput.StartTime)
+	assert.Equal(t, 72*time.Hour, span,
+		"GetMetricData interval must reflect the caller-supplied 72h, not the 48h floor")
 }
 
 // TestFetch_CloudFrontRoutesToUSEast1AndReturnsAllMetrics combines two

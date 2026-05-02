@@ -2,6 +2,7 @@ package observability
 
 import (
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 	"testing"
@@ -14,18 +15,88 @@ import (
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer"
 )
 
+// excludedFromAuthority lists (module, metric) alarm pairs that exist in
+// HCL but are intentionally NOT carried in alarmedAWSMetrics /
+// alarmedGCPMetrics — typically because the alarm's metric.type has no
+// corresponding entry in awsServiceMetrics / gcpServiceMetrics, or because
+// the component's service catalog was deliberately scoped narrower than the
+// alarm surface (e.g. gcp/bastion reuses the compute CPU metric under a
+// label filter; gcp/gke alarms on kubernetes.io node metrics that the
+// reliable catalog never covered).
+//
+// Adding an entry requires a non-empty issue ref so the gap is tracked.
+// The reverse-direction gate
+// (TestObservabilityHCLAlarmsHaveCatalogOrAllowlistEntry) consults this
+// list before failing on an HCL alarm with no catalog match.
+//
+// Key shape: "<module>:<metric_name_or_type>" (e.g.
+// "gcp/gke:kubernetes.io/node/cpu/allocatable_utilization"). Module path is
+// repo-relative; metric is the AWS CloudWatch metric_name attribute or the
+// GCP metric.type literal (the bare metric type, not the surrounding filter
+// expression).
+var excludedFromAuthority = map[string]string{
+	// gcp/bastion reuses the compute service CPU metric under a
+	// metadata.user_labels."role"="bastion" filter — the alarm exists in
+	// gcp/bastion's HCL but the catalog only carries this metric type
+	// under the "compute" service (KeyGCPCompute). Tracked as a follow-up
+	// so the reliable inspector grows a bastion-scoped GCPMetricSpec.
+	"gcp/bastion:compute.googleapis.com/instance/cpu/utilization": "#204",
+	// gcp/gke alarms on kubernetes.io/node metrics. The reliable catalog
+	// has no "gke" service entry, so the alert surface is HCL-only. Add a
+	// gke entry to gcpServiceMetrics in a follow-up to retire this
+	// exclusion.
+	"gcp/gke:kubernetes.io/node/cpu/allocatable_utilization": "#204",
+}
+
+// awsModuleAuthor inverts alarmedAWSMetrics by module path so the reverse
+// gate can look up "is this metric_name in the catalog for this module?"
+// in O(1) per alarm.
+func awsModuleAuthor() map[string]map[string]bool {
+	out := make(map[string]map[string]bool, len(alarmedAWSMetrics))
+	for _, a := range alarmedAWSMetrics {
+		set := out[a.Module]
+		if set == nil {
+			set = make(map[string]bool, len(a.Metrics))
+			out[a.Module] = set
+		}
+		for _, m := range a.Metrics {
+			set[m] = true
+		}
+	}
+	return out
+}
+
+// gcpModuleAuthor inverts alarmedGCPMetrics. Same shape as
+// awsModuleAuthor; values are metric.type literals.
+func gcpModuleAuthor() map[string]map[string]bool {
+	out := make(map[string]map[string]bool, len(alarmedGCPMetrics))
+	for _, a := range alarmedGCPMetrics {
+		set := out[a.Module]
+		if set == nil {
+			set = make(map[string]bool, len(a.Metrics))
+			out[a.Module] = set
+		}
+		for _, m := range a.Metrics {
+			set[m] = true
+		}
+	}
+	return out
+}
+
+// gcpMetricTypePattern extracts the metric.type literal from a Cloud
+// Monitoring filter expression. Filters look like
+// `metric.type="foo.googleapis.com/bar" AND resource.type="..."`.
+var gcpMetricTypePattern = regexp.MustCompile(`metric\.type="([^"]+)"`)
+
 // TestObservabilitySpecMatchesEmittedAlarms is the C9 forward-direction
 // drift gate: every (component, metric) declared in alarmedAWSMetrics
 // or alarmedGCPMetrics must have a matching alarm resource in the
 // referenced module's observability.tf.
 //
-// Forward direction protects against the most common regression:
-// deleting an HCL alarm but forgetting to flip the catalog Alarmed
-// flag → the gate trips. The reverse direction (HCL alarm with no
-// matching catalog spec) is intentionally NOT enforced here — several
-// shipped alarms target metrics outside the ported reliable catalog
-// (api_gateway, firestore, gke, bastion on GCP) and reverse-drift is
-// tracked under #204 follow-up once the catalog is rebased.
+// Reverse direction (HCL alarm with no matching catalog entry) is
+// covered by TestObservabilityHCLAlarmsHaveCatalogOrAllowlistEntry, which
+// fails unless the alarm is either catalog-mapped or in the explicit
+// excludedFromAuthority allowlist with an issue ref.
 func TestObservabilitySpecMatchesEmittedAlarms(t *testing.T) {
 	root := repoRoot(t)
 	for k, author := range alarmedAWSMetrics {
@@ -62,6 +133,97 @@ func TestObservabilitySpecMatchesEmittedAlarms(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestObservabilityHCLAlarmsHaveCatalogOrAllowlistEntry is the C9
+// reverse-direction drift gate. For every aws_cloudwatch_metric_alarm and
+// google_monitoring_alert_policy resource in any aws/<m>/observability.tf
+// or gcp/<m>/observability.tf, the metric must be either:
+//
+//   - in the corresponding alarmedAWSMetrics / alarmedGCPMetrics catalog
+//     entry for that module, OR
+//   - in the explicit excludedFromAuthority allowlist (which itself
+//     requires an issue ref via TestExcludedFromAuthority_AllHaveIssueRef).
+//
+// Catches the regression where an alarm is added to HCL without flipping
+// the catalog Alarmed flag, leaving the inspector blind to a metric that
+// production is paging on.
+func TestObservabilityHCLAlarmsHaveCatalogOrAllowlistEntry(t *testing.T) {
+	root := repoRoot(t)
+	awsAuthor := awsModuleAuthor()
+	gcpAuthor := gcpModuleAuthor()
+
+	awsModules, err := filepath.Glob(filepath.Join(root, "aws", "*", "observability.tf"))
+	require.NoError(t, err)
+	for _, path := range awsModules {
+		mod := relativeModule(t, root, path)
+		t.Run(mod, func(t *testing.T) {
+			haveByMetric := parseAWSAlarmMetricNames(t, path)
+			catalog := awsAuthor[mod]
+			for metric := range haveByMetric {
+				if catalog[metric] {
+					continue
+				}
+				if _, allowed := excludedFromAuthority[mod+":"+metric]; allowed {
+					continue
+				}
+				t.Errorf("aws_cloudwatch_metric_alarm metric_name=%q in %s has no entry in alarmedAWSMetrics for module %q and is not in excludedFromAuthority — flip the catalog Alarmed flag or add an excludedFromAuthority entry with an issue ref",
+					metric, path, mod)
+			}
+		})
+	}
+
+	gcpModules, err := filepath.Glob(filepath.Join(root, "gcp", "*", "observability.tf"))
+	require.NoError(t, err)
+	for _, path := range gcpModules {
+		mod := relativeModule(t, root, path)
+		t.Run(mod, func(t *testing.T) {
+			filters := parseGCPAlertFilters(t, path)
+			catalog := gcpAuthor[mod]
+			for _, f := range filters {
+				match := gcpMetricTypePattern.FindStringSubmatch(f)
+				if len(match) != 2 {
+					t.Errorf("could not extract metric.type from filter %q in %s — filter must contain a `metric.type=\"...\"` literal",
+						f, path)
+					continue
+				}
+				metric := match[1]
+				if catalog[metric] {
+					continue
+				}
+				if _, allowed := excludedFromAuthority[mod+":"+metric]; allowed {
+					continue
+				}
+				t.Errorf("google_monitoring_alert_policy metric.type=%q in %s has no entry in alarmedGCPMetrics for module %q and is not in excludedFromAuthority — flip the catalog Alarmed flag or add an excludedFromAuthority entry with an issue ref",
+					metric, path, mod)
+			}
+		})
+	}
+}
+
+// TestExcludedFromAuthority_AllHaveIssueRef enforces the allowlist
+// invariant: every excluded (module, metric) pair must be tagged with a
+// non-empty issue ref so the gap remains tracked. Mirrors the
+// observabilityDeferred contract.
+func TestExcludedFromAuthority_AllHaveIssueRef(t *testing.T) {
+	for k, ref := range excludedFromAuthority {
+		assert.NotEmpty(t, strings.TrimSpace(ref),
+			"excludedFromAuthority[%q] must carry a non-empty issue ref", k)
+		// "<module>:<metric>" — the colon split must yield two parts.
+		parts := strings.SplitN(k, ":", 2)
+		assert.Len(t, parts, 2,
+			"excludedFromAuthority key %q must be \"<module>:<metric>\"", k)
+	}
+}
+
+// relativeModule converts an absolute observability.tf path to the
+// repo-relative module path key used in alarmedAWSMetrics /
+// alarmedGCPMetrics (e.g. "/abs/aws/rds/observability.tf" → "aws/rds").
+func relativeModule(t *testing.T, root, path string) string {
+	t.Helper()
+	rel, err := filepath.Rel(root, filepath.Dir(path))
+	require.NoError(t, err)
+	return filepath.ToSlash(rel)
 }
 
 // TestAlarmedMetricsKeysAreKnown catches typos / stale keys after a
