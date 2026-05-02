@@ -160,9 +160,9 @@ func TestValidateCrossTierWiring_DeterministicOrder(t *testing.T) {
 	}
 	blocks := []ModuleBlock{
 		{Name: "aws_lambda", Raw: map[string]string{
-			"a_attr": "aws_sqs_queue.absent.arn",            // dangling_resource_ref
+			"a_attr": "aws_sqs_queue.absent.arn",             // dangling_resource_ref
 			"m_attr": "aws_dynamodb_table.t.bogus_attribute", // unwired_resource_attr
-			"z_attr": "aws_iam_role.absent.arn",             // dangling_resource_ref
+			"z_attr": "aws_iam_role.absent.arn",              // dangling_resource_ref
 		}},
 	}
 	issues := ValidateCrossTierWiring(blocks, irs)

@@ -26,6 +26,22 @@ variable "region" {
   default     = "us-central1"
 }
 
+variable "labels" {
+  description = "Additional labels merged into the project label on the notification channels (issue #204)."
+  type        = map(string)
+  default     = {}
+}
+
+variable "notification_channel_emails" {
+  description = "Email addresses to register as Cloud Monitoring notification channels. Empty list disables channel creation. The notification_channels output is consumed by per-component alert policies in gcp/<module>/observability.tf (issue #204)."
+  type        = list(string)
+  default     = []
+  validation {
+    condition     = alltrue([for e in var.notification_channel_emails : can(regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$", e))])
+    error_message = "notification_channel_emails entries must be valid email addresses."
+  }
+}
+
 variable "dashboard_json" {
   description = "Dashboard JSON spec. The default is a minimal-but-Monitoring-API-valid dashboard with one widget that satisfies the API's 'must contain at least one widget' check; override with your real dashboard JSON."
   type        = string

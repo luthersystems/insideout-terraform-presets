@@ -382,10 +382,10 @@ func TestEmitImportedTF_OpaqueValueTypes(t *testing.T) {
 		Tier: imported.TierImportedFlat,
 		Attributes: map[string]any{
 			"name":                       "varied",
-			"fifo_queue":                 true,                // bool
-			"delay_seconds":              int64(45),           // int
-			"visibility_timeout_seconds": float64(30),         // float
-			"kms_master_key_id":          nil,                 // null
+			"fifo_queue":                 true,        // bool
+			"delay_seconds":              int64(45),   // int
+			"visibility_timeout_seconds": float64(30), // float
+			"kms_master_key_id":          nil,         // null
 			"tags": map[string]any{ // nested map
 				"Project": "demo",
 				"Owner":   "ops",

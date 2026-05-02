@@ -97,11 +97,11 @@ func TestExtractImportedEdges_MultiSegmentTraversals(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
-		name        string
-		expr        string
-		wantProd    GraphNode
-		wantAttr    string
-		wantCount   int
+		name      string
+		expr      string
+		wantProd  GraphNode
+		wantAttr  string
+		wantCount int
 	}{
 		{
 			name:      "index access on module list output",
@@ -380,8 +380,8 @@ func TestExtractUnionEdges_DeterministicSort(t *testing.T) {
 			Identity: imported.ResourceIdentity{Cloud: "aws", Type: "aws_sqs_queue", Address: "aws_sqs_queue.q", ImportID: "x"},
 			Tier:     imported.TierImportedFlat,
 			Attributes: map[string]any{
-				"a_kms":  RawExpr{Expr: "aws_kms_key.alpha.arn"},
-				"z_kms":  RawExpr{Expr: "aws_kms_key.beta.arn"},
+				"a_kms": RawExpr{Expr: "aws_kms_key.alpha.arn"},
+				"z_kms": RawExpr{Expr: "aws_kms_key.beta.arn"},
 			},
 		},
 	}

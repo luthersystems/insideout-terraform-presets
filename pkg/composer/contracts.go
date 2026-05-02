@@ -1,6 +1,9 @@
 package composer
 
-import "strings"
+import (
+	"slices"
+	"strings"
+)
 
 // vpcSubnetSelfLinkExpr is the wiring expression for any module that consumes
 // gcp_vpc's subnets_self_links output as a single value. It uses try() so
@@ -328,57 +331,57 @@ func GetModuleDir(k ComponentKey, comps *Components) string {
 // PresetKeyMap maps component keys to their preset directory names.
 // Used when the preset name differs from the component key.
 var PresetKeyMap = map[ComponentKey]string{
-	KeyAWSEKSNodeGroup: "eks_nodegroup", // polymorphic; preset name differs from string value ("ec2")
-	KeyAWSVPC:           "vpc",
-	KeyAWSBastion:       "bastion",
-	KeyAWSEC2:           "ec2",
-	KeyAWSEKS:           "resource", // Uses the same preset as KeyAWSEKSControlPlane (aws/resource/)
-	KeyAWSECS:           "ecs",
-	KeyAWSLambda:        "lambda",
-	KeyAWSALB:           "alb",
-	KeyAWSCloudfront:    "cloudfront",
-	KeyAWSWAF:           "waf",
-	KeyAWSAPIGateway:    "apigateway",
-	KeyAWSRDS:           "rds",
-	KeyAWSElastiCache:   "elasticache",
-	KeyAWSDynamoDB:      "dynamodb",
-	KeyAWSOpenSearch:    "opensearch",
-	KeyAWSS3:            "s3",
-	KeyAWSKMS:           "kms",
-	KeyAWSSecretsManager: "secretsmanager",
-	KeyAWSBedrock:       "bedrock",
-	KeyAWSSQS:           "sqs",
-	KeyAWSMSK:           "msk",
-	KeyAWSCloudWatchLogs: "cloudwatchlogs",
+	KeyAWSEKSNodeGroup:         "eks_nodegroup", // polymorphic; preset name differs from string value ("ec2")
+	KeyAWSVPC:                  "vpc",
+	KeyAWSBastion:              "bastion",
+	KeyAWSEC2:                  "ec2",
+	KeyAWSEKS:                  "resource", // Uses the same preset as KeyAWSEKSControlPlane (aws/resource/)
+	KeyAWSECS:                  "ecs",
+	KeyAWSLambda:               "lambda",
+	KeyAWSALB:                  "alb",
+	KeyAWSCloudfront:           "cloudfront",
+	KeyAWSWAF:                  "waf",
+	KeyAWSAPIGateway:           "apigateway",
+	KeyAWSRDS:                  "rds",
+	KeyAWSElastiCache:          "elasticache",
+	KeyAWSDynamoDB:             "dynamodb",
+	KeyAWSOpenSearch:           "opensearch",
+	KeyAWSS3:                   "s3",
+	KeyAWSKMS:                  "kms",
+	KeyAWSSecretsManager:       "secretsmanager",
+	KeyAWSBedrock:              "bedrock",
+	KeyAWSSQS:                  "sqs",
+	KeyAWSMSK:                  "msk",
+	KeyAWSCloudWatchLogs:       "cloudwatchlogs",
 	KeyAWSCloudWatchMonitoring: "cloudwatchmonitoring",
-	KeyAWSGrafana:       "grafana",
-	KeyAWSCognito:       "cognito",
-	KeyAWSBackups:       "backups",
-	KeyAWSGitHubActions: "githubactions",
-	KeyAWSCodePipeline:  "codepipeline",
-	KeyGCPVPC:           "vpc",
-	KeyGCPCompute:       "compute",
-	KeyGCPGKE:           "gke",
-	KeyGCPLoadbalancer:  "loadbalancer",
-	KeyGCPCloudCDN:      "cloud_cdn",
-	KeyGCPCloudSQL:      "cloudsql",
-	KeyGCPMemorystore:   "memorystore",
-	KeyGCPGCS:           "gcs",
-	KeyGCPCloudLogging:  "cloud_logging",
-	KeyGCPSecretManager:    "secretmanager",
-	KeyGCPCloudKMS:         "kms",
-	KeyGCPPubSub:           "pubsub",
-	KeyGCPCloudMonitoring:  "cloud_monitoring",
-	KeyGCPVertexAI:         "vertex_ai",
-	KeyGCPCloudBuild:       "cloud_build",
-	KeyGCPFirestore:        "firestore",
-	KeyGCPCloudArmor:       "cloud_armor",
-	KeyGCPAPIGateway:       "api_gateway",
-	KeyGCPBackups:          "backups",
-	KeyGCPIdentityPlatform: "identity_platform",
-	KeyGCPCloudRun:         "cloud_run",
-	KeyGCPCloudFunctions:   "cloud_functions",
-	KeyGCPBastion:          "bastion",
+	KeyAWSGrafana:              "grafana",
+	KeyAWSCognito:              "cognito",
+	KeyAWSBackups:              "backups",
+	KeyAWSGitHubActions:        "githubactions",
+	KeyAWSCodePipeline:         "codepipeline",
+	KeyGCPVPC:                  "vpc",
+	KeyGCPCompute:              "compute",
+	KeyGCPGKE:                  "gke",
+	KeyGCPLoadbalancer:         "loadbalancer",
+	KeyGCPCloudCDN:             "cloud_cdn",
+	KeyGCPCloudSQL:             "cloudsql",
+	KeyGCPMemorystore:          "memorystore",
+	KeyGCPGCS:                  "gcs",
+	KeyGCPCloudLogging:         "cloud_logging",
+	KeyGCPSecretManager:        "secretmanager",
+	KeyGCPCloudKMS:             "kms",
+	KeyGCPPubSub:               "pubsub",
+	KeyGCPCloudMonitoring:      "cloud_monitoring",
+	KeyGCPVertexAI:             "vertex_ai",
+	KeyGCPCloudBuild:           "cloud_build",
+	KeyGCPFirestore:            "firestore",
+	KeyGCPCloudArmor:           "cloud_armor",
+	KeyGCPAPIGateway:           "api_gateway",
+	KeyGCPBackups:              "backups",
+	KeyGCPIdentityPlatform:     "identity_platform",
+	KeyGCPCloudRun:             "cloud_run",
+	KeyGCPCloudFunctions:       "cloud_functions",
+	KeyGCPBastion:              "bastion",
 }
 
 // GetPresetPath returns the cloud-prefixed preset path for a component.
@@ -519,13 +522,13 @@ func vpcRef(selected map[ComponentKey]bool) string {
 	return "module.aws_vpc"
 }
 
-func albRef(_ map[ComponentKey]bool) string       { return "module.aws_alb" }
-func wafRef(_ map[ComponentKey]bool) string       { return "module.aws_waf" }
-func bastionRef(_ map[ComponentKey]bool) string   { return "module.aws_bastion" }
-func rdsRef(_ map[ComponentKey]bool) string       { return "module.aws_rds" }
-func s3Ref(_ map[ComponentKey]bool) string        { return "module.aws_s3" }
+func albRef(_ map[ComponentKey]bool) string        { return "module.aws_alb" }
+func wafRef(_ map[ComponentKey]bool) string        { return "module.aws_waf" }
+func bastionRef(_ map[ComponentKey]bool) string    { return "module.aws_bastion" }
+func rdsRef(_ map[ComponentKey]bool) string        { return "module.aws_rds" }
+func s3Ref(_ map[ComponentKey]bool) string         { return "module.aws_s3" }
 func opensearchRef(_ map[ComponentKey]bool) string { return "module.aws_opensearch" }
-func sqsRef(_ map[ComponentKey]bool) string       { return "module.aws_sqs" }
+func sqsRef(_ map[ComponentKey]bool) string        { return "module.aws_sqs" }
 
 // resourceRef returns the EKS/ECS module reference for the selected stack.
 // Prefers the prefixed KeyAWSEKS / KeyAWSECS keys, with a KeyAWSEKSControlPlane path
@@ -856,6 +859,41 @@ func DefaultWiring(selected map[ComponentKey]bool, k ComponentKey, comps *Compon
 		if selected[KeyGCPVPC] {
 			wi.RawHCL["vpc_connector"] = "module.gcp_vpc.connector_id"
 			wi.Names = append(wi.Names, "vpc_connector")
+		}
+	}
+
+	// Observability post-switch wiring (issue #204). Driven off the
+	// PricingDependencies driver lists so a component added there
+	// gets observability wiring "for free." When the matching
+	// aggregator (aws_cloudwatchmonitoring or gcp_cloud_monitoring) is
+	// selected, every per-component emitter receives the SNS topic ARN
+	// (AWS) or notification channels (GCP) plus an enable_observability
+	// = true gate. The aggregator itself is excluded.
+	//
+	// The per-component module's variables.tf must declare
+	// alarm_topic_arn (AWS) or notification_channels (GCP) and
+	// enable_observability for these inputs to bind; modules without
+	// observability.tf today (lands in C7/C8) accept the wiring as
+	// declared-but-unused via the validateRequiredIssues path.
+	//
+	// Backwards-compat: emitting these inputs is a no-op for any
+	// module that hasn't yet adopted the per-component alarm pattern —
+	// the module simply ignores variables it doesn't declare. The
+	// composer's preset-inspection layer (compose.go) skips wiring
+	// that doesn't match a declared variable, so the input never
+	// reaches a module that can't consume it.
+	if k != KeyAWSCloudWatchMonitoring && CloudFor(k) == "aws" && selected[KeyAWSCloudWatchMonitoring] {
+		if slices.Contains(PricingDependencies[KeyAWSCloudWatchMonitoring], k) {
+			wi.RawHCL["alarm_topic_arn"] = "module.aws_cloudwatchmonitoring.sns_topic_arn"
+			wi.RawHCL["enable_observability"] = "true"
+			wi.Names = append(wi.Names, "alarm_topic_arn", "enable_observability")
+		}
+	}
+	if k != KeyGCPCloudMonitoring && CloudFor(k) == "gcp" && selected[KeyGCPCloudMonitoring] {
+		if slices.Contains(PricingDependencies[KeyGCPCloudMonitoring], k) {
+			wi.RawHCL["notification_channels"] = "module.gcp_cloud_monitoring.notification_channels"
+			wi.RawHCL["enable_observability"] = "true"
+			wi.Names = append(wi.Names, "notification_channels", "enable_observability")
 		}
 	}
 

@@ -1,6 +1,5 @@
 package composer
 
-
 // Components mirrors the TypeScript ZComponentsIR schema with cloud-specific field names.
 // Use aws_* fields for AWS cloud, gcp_* fields for GCP cloud.
 type Components struct {
@@ -53,28 +52,28 @@ type Components struct {
 	} `json:"aws_backups,omitempty"`
 
 	// ==================== GCP Components ====================
-	GCPVPC              *bool `json:"gcp_vpc,omitempty"`
-	GCPBastion          *bool `json:"gcp_bastion,omitempty"`
+	GCPVPC              *bool  `json:"gcp_vpc,omitempty"`
+	GCPBastion          *bool  `json:"gcp_bastion,omitempty"`
 	GCPCompute          string `json:"gcp_compute,omitempty"` // "Intel" or "ARM" or empty for boolean
-	GCPGKE              *bool `json:"gcp_gke,omitempty"`
-	GCPCloudRun         *bool `json:"gcp_cloud_run,omitempty"`
-	GCPCloudFunctions   *bool `json:"gcp_cloud_functions,omitempty"`
-	GCPLoadbalancer     *bool `json:"gcp_loadbalancer,omitempty"`
-	GCPCloudCDN         *bool `json:"gcp_cloud_cdn,omitempty"`
-	GCPCloudArmor       *bool `json:"gcp_cloud_armor,omitempty"`
-	GCPAPIGateway       *bool `json:"gcp_api_gateway,omitempty"`
-	GCPCloudSQL         *bool `json:"gcp_cloudsql,omitempty"`
-	GCPMemorystore      *bool `json:"gcp_memorystore,omitempty"`
-	GCPFirestore        *bool `json:"gcp_firestore,omitempty"`
-	GCPGCS              *bool `json:"gcp_gcs,omitempty"`
-	GCPCloudKMS         *bool `json:"gcp_cloud_kms,omitempty"`
-	GCPSecretManager    *bool `json:"gcp_secret_manager,omitempty"`
-	GCPVertexAI         *bool `json:"gcp_vertex_ai,omitempty"`
-	GCPPubSub           *bool `json:"gcp_pubsub,omitempty"`
-	GCPCloudLogging     *bool `json:"gcp_cloud_logging,omitempty"`
-	GCPCloudMonitoring  *bool `json:"gcp_cloud_monitoring,omitempty"`
-	GCPIdentityPlatform *bool `json:"gcp_identity_platform,omitempty"`
-	GCPCloudBuild       *bool `json:"gcp_cloud_build,omitempty"`
+	GCPGKE              *bool  `json:"gcp_gke,omitempty"`
+	GCPCloudRun         *bool  `json:"gcp_cloud_run,omitempty"`
+	GCPCloudFunctions   *bool  `json:"gcp_cloud_functions,omitempty"`
+	GCPLoadbalancer     *bool  `json:"gcp_loadbalancer,omitempty"`
+	GCPCloudCDN         *bool  `json:"gcp_cloud_cdn,omitempty"`
+	GCPCloudArmor       *bool  `json:"gcp_cloud_armor,omitempty"`
+	GCPAPIGateway       *bool  `json:"gcp_api_gateway,omitempty"`
+	GCPCloudSQL         *bool  `json:"gcp_cloudsql,omitempty"`
+	GCPMemorystore      *bool  `json:"gcp_memorystore,omitempty"`
+	GCPFirestore        *bool  `json:"gcp_firestore,omitempty"`
+	GCPGCS              *bool  `json:"gcp_gcs,omitempty"`
+	GCPCloudKMS         *bool  `json:"gcp_cloud_kms,omitempty"`
+	GCPSecretManager    *bool  `json:"gcp_secret_manager,omitempty"`
+	GCPVertexAI         *bool  `json:"gcp_vertex_ai,omitempty"`
+	GCPPubSub           *bool  `json:"gcp_pubsub,omitempty"`
+	GCPCloudLogging     *bool  `json:"gcp_cloud_logging,omitempty"`
+	GCPCloudMonitoring  *bool  `json:"gcp_cloud_monitoring,omitempty"`
+	GCPIdentityPlatform *bool  `json:"gcp_identity_platform,omitempty"`
+	GCPCloudBuild       *bool  `json:"gcp_cloud_build,omitempty"`
 	GCPBackups          *struct {
 		Compute  *bool `json:"gcp_compute,omitempty"`
 		CloudSQL *bool `json:"gcp_cloudsql,omitempty"`
@@ -98,13 +97,13 @@ type Config struct {
 
 	// ==================== AWS Configuration ====================
 	AWSEC2 *struct {
-		InstanceType       string `json:"instanceType,omitempty"`
-		NumServers         string `json:"numServers,omitempty"`
-		NumCoresPerServer  string `json:"numCoresPerServer,omitempty"`
-		DiskSizePerServer  string `json:"diskSizePerServer,omitempty"`
-		UserData           string `json:"userData,omitempty"`
-		UserDataURL        string `json:"userDataURL,omitempty"`
-		CustomIngressPorts []int  `json:"customIngressPorts,omitempty"`
+		InstanceType          string `json:"instanceType,omitempty"`
+		NumServers            string `json:"numServers,omitempty"`
+		NumCoresPerServer     string `json:"numCoresPerServer,omitempty"`
+		DiskSizePerServer     string `json:"diskSizePerServer,omitempty"`
+		UserData              string `json:"userData,omitempty"`
+		UserDataURL           string `json:"userDataURL,omitempty"`
+		CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
 		SSHPublicKey          string `json:"sshPublicKey,omitempty"`
 		EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
 	} `json:"aws_ec2,omitempty"`
@@ -335,7 +334,6 @@ type Config struct {
 			Enabled *bool `json:"enabled,omitempty"`
 		} `json:"gcp_gcs,omitempty"`
 	} `json:"gcp_backups,omitempty"`
-
 }
 
 // VarEntry holds a module variable name and a value (or nil). RawExpr can be used for expressions.

@@ -569,12 +569,12 @@ func TestMergeConfigs_CrossCloudIsolation(t *testing.T) {
 		}{InstanceType: "t3.medium"},
 	}
 	existingEKS := &struct {
-		HaControlPlane        *bool  `json:"haControlPlane,omitempty"`
+		HaControlPlane         *bool  `json:"haControlPlane,omitempty"`
 		ControlPlaneVisibility string `json:"controlPlaneVisibility,omitempty"`
-		DesiredSize           string `json:"desiredSize,omitempty"`
-		MaxSize               string `json:"maxSize,omitempty"`
-		MinSize               string `json:"minSize,omitempty"`
-		InstanceType          string `json:"instanceType,omitempty"`
+		DesiredSize            string `json:"desiredSize,omitempty"`
+		MaxSize                string `json:"maxSize,omitempty"`
+		MinSize                string `json:"minSize,omitempty"`
+		InstanceType           string `json:"instanceType,omitempty"`
 	}{InstanceType: "m6i.xlarge", DesiredSize: "3"}
 	dst := &Config{AWSEKS: existingEKS}
 

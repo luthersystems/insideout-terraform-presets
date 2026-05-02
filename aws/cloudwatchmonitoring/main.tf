@@ -43,8 +43,10 @@ resource "aws_sns_topic_subscription" "emails" {
 # EC2 CPU alarms (bastion/VMs)
 # -----------------------------------------------------------------------------
 resource "aws_cloudwatch_metric_alarm" "ec2_cpu_high" {
-  # Use stable keys (indices) so the set of instances is known at plan time
-  for_each = { for i in tolist(range(length(var.instance_ids))) : i => true }
+  # Use stable keys (indices) so the set of instances is known at plan time.
+  # disable_legacy_per_component_alarms (issue #204) zeroes the for_each so
+  # this alarm goes away once the per-component module owns the equivalent.
+  for_each = var.disable_legacy_per_component_alarms ? {} : { for i in tolist(range(length(var.instance_ids))) : i => true }
 
   alarm_name                = "${local.alarm_name_prefix}-ec2-cpu-${replace(var.instance_ids[tonumber(each.key)], "/[^a-zA-Z0-9._-]/", "-")}"
   comparison_operator       = "GreaterThanThreshold"
@@ -67,8 +69,9 @@ resource "aws_cloudwatch_metric_alarm" "ec2_cpu_high" {
 # RDS alarms (CPU and FreeStorageSpace)
 # -----------------------------------------------------------------------------
 resource "aws_cloudwatch_metric_alarm" "rds_cpu_high" {
-  # Same index-key trick to avoid unknown keys at plan time
-  for_each = { for i in tolist(range(length(var.rds_instance_ids))) : i => true }
+  # Same index-key trick to avoid unknown keys at plan time.
+  # disable_legacy_per_component_alarms (issue #204) zeroes the for_each.
+  for_each = var.disable_legacy_per_component_alarms ? {} : { for i in tolist(range(length(var.rds_instance_ids))) : i => true }
 
   alarm_name                = "${local.alarm_name_prefix}-rds-cpu-${var.rds_instance_ids[tonumber(each.key)]}"
   comparison_operator       = "GreaterThanThreshold"
@@ -88,7 +91,8 @@ resource "aws_cloudwatch_metric_alarm" "rds_cpu_high" {
 }
 
 resource "aws_cloudwatch_metric_alarm" "rds_free_storage_low" {
-  for_each = { for i in tolist(range(length(var.rds_instance_ids))) : i => true }
+  # disable_legacy_per_component_alarms (issue #204) zeroes the for_each.
+  for_each = var.disable_legacy_per_component_alarms ? {} : { for i in tolist(range(length(var.rds_instance_ids))) : i => true }
 
   alarm_name                = "${local.alarm_name_prefix}-rds-freestorage-${var.rds_instance_ids[tonumber(each.key)]}"
   comparison_operator       = "LessThanThreshold"
@@ -111,7 +115,8 @@ resource "aws_cloudwatch_metric_alarm" "rds_free_storage_low" {
 # ElastiCache / Redis CPU alarm
 # -----------------------------------------------------------------------------
 resource "aws_cloudwatch_metric_alarm" "redis_cpu_high" {
-  for_each = { for i in tolist(range(length(var.elasticache_replication_group_ids))) : i => true }
+  # disable_legacy_per_component_alarms (issue #204) zeroes the for_each.
+  for_each = var.disable_legacy_per_component_alarms ? {} : { for i in tolist(range(length(var.elasticache_replication_group_ids))) : i => true }
 
   alarm_name                = "${local.alarm_name_prefix}-redis-cpu-${var.elasticache_replication_group_ids[tonumber(each.key)]}"
   comparison_operator       = "GreaterThanThreshold"
@@ -134,8 +139,9 @@ resource "aws_cloudwatch_metric_alarm" "redis_cpu_high" {
 # SQS backlog alarm (visible messages)
 # -----------------------------------------------------------------------------
 resource "aws_cloudwatch_metric_alarm" "sqs_backlog" {
-  # Use stable keys (indices) to avoid unknown set keys
-  for_each = { for i in tolist(range(length(var.sqs_queue_arns))) : i => true }
+  # Use stable keys (indices) to avoid unknown set keys.
+  # disable_legacy_per_component_alarms (issue #204) zeroes the for_each.
+  for_each = var.disable_legacy_per_component_alarms ? {} : { for i in tolist(range(length(var.sqs_queue_arns))) : i => true }
 
   alarm_name          = "${local.alarm_name_prefix}-sqs-backlog-${replace(var.sqs_queue_arns[tonumber(each.key)], "/[:]/", "-")}"
   comparison_operator = "GreaterThanThreshold"

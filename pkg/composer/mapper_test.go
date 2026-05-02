@@ -276,7 +276,6 @@ func TestBuildModuleValues_VPC_AWSVPCConfig_Validation(t *testing.T) {
 		require.Error(t, err)
 	})
 
-
 	t.Run("EnableNATGateway=false without downstream components is allowed", func(t *testing.T) {
 		comps := &Components{} // no private-subnet consumers
 		cfg := cfgWithAWSVPC(nil, boolPtr(false), nil)

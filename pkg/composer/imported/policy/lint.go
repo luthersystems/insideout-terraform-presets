@@ -23,16 +23,16 @@ func (i Issue) String() string {
 // Lint codes. Each links to a docs/managed-resource-tiers.md decision so
 // reviewers can trace policy back to spec.
 const (
-	CodeUnknownPath                   = "unknown_path"                   // path doesn't resolve in Layer 1 or projection
-	CodeRoleRequired                  = "role_required"                  // Role is the zero value (decision #43)
-	CodeAxisInvalidValue              = "axis_invalid_value"             // any axis fails Valid()
-	CodeSensitiveVisibleNoRationale   = "sensitive_visible_no_rationale" // visible+sensitive needs rationale (#36)
-	CodeWiringChatEditable            = "wiring_chat_editable"           // Wiring fields can't be ChatSafe (#33)
-	CodeTagFieldNotSystemOnly         = "tag_field_not_system_only"      // tags/labels/annotations must be SystemOnly
-	CodeIdentityEditable              = "identity_editable"              // top-level identity attrs must be Edit=Never
-	CodeHiddenChatEditable            = "hidden_chat_editable"           // Riley can't edit what it can't see
-	CodeSensitiveChatEditable         = "sensitive_chat_editable"        // Sensitive values must not flow through chat
-	CodeIdentitySensitive             = "identity_sensitive"             // Identity fields are not sensitive values
+	CodeUnknownPath                 = "unknown_path"                   // path doesn't resolve in Layer 1 or projection
+	CodeRoleRequired                = "role_required"                  // Role is the zero value (decision #43)
+	CodeAxisInvalidValue            = "axis_invalid_value"             // any axis fails Valid()
+	CodeSensitiveVisibleNoRationale = "sensitive_visible_no_rationale" // visible+sensitive needs rationale (#36)
+	CodeWiringChatEditable          = "wiring_chat_editable"           // Wiring fields can't be ChatSafe (#33)
+	CodeTagFieldNotSystemOnly       = "tag_field_not_system_only"      // tags/labels/annotations must be SystemOnly
+	CodeIdentityEditable            = "identity_editable"              // top-level identity attrs must be Edit=Never
+	CodeHiddenChatEditable          = "hidden_chat_editable"           // Riley can't edit what it can't see
+	CodeSensitiveChatEditable       = "sensitive_chat_editable"        // Sensitive values must not flow through chat
+	CodeIdentitySensitive           = "identity_sensitive"             // Identity fields are not sensitive values
 )
 
 // tagAttrSuffixes lists Terraform attribute names that are tag- or

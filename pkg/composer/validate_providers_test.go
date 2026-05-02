@@ -154,7 +154,7 @@ func TestValidateSensitivePropagation_FlagsSensitiveOutput(t *testing.T) {
 		{
 			Name: "downstream_consumer",
 			Raw: map[string]string{
-				"db_secret":   "module.aws_rds.db_password",  // sensitive output
+				"db_secret":   "module.aws_rds.db_password", // sensitive output
 				"db_endpoint": "module.aws_rds.db_endpoint", // not sensitive
 			},
 		},

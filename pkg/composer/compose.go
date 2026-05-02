@@ -379,6 +379,20 @@ type ComposeStackOpts struct {
 	// Optional when ImportProjectID is set; if blank the session tag/label
 	// is omitted and only the project-level claim is enforced.
 	ImportSessionID string
+
+	// EmitObservabilityMoves opts in to emitting `moved {}` blocks that
+	// relocate Terraform state from the legacy aggregator alarms (under
+	// module.aws_cloudwatchmonitoring) to the new per-component alarms
+	// (e.g. module.aws_bastion). Default false: per-component alarms ship
+	// in addition to the aggregator (the documented duplicate-alarm
+	// window). Callers MUST flip this to true in the same apply that
+	// flips disable_legacy_per_component_alarms=true on the
+	// cloudwatchmonitoring module — emitting moves while the aggregator
+	// alarm config is still active causes Terraform to recreate the
+	// legacy alarm at its original address (state was moved away, config
+	// still demands it), producing an alarm-flap. See
+	// pkg/composer/observability_moves.go and #204.
+	EmitObservabilityMoves bool
 }
 
 // ComposeStack preserves the historical (Files, error) signature. It hard-
@@ -530,6 +544,36 @@ func (c *Client) composeStackImpl(opts ComposeStackOpts) (*ComposeStackResult, e
 		maybeInjectGCPProjectID(cloud, opts.GCPProjectID, vals)
 		wired := DefaultWiring(selected, k, opts.Comps)
 
+		// Drop wired RawHCL entries that don't match a variable
+		// declared by the preset. The post-switch observability wiring
+		// (issue #204) is opportunistic — it sets alarm_topic_arn /
+		// notification_channels / enable_observability on every emitter
+		// in PricingDependencies regardless of whether the destination
+		// module has gained an observability.tf yet. Without this
+		// filter, terraform plan rejects "An argument named X is not
+		// expected here" for modules that pre-date the C7/C8 alarm
+		// authoring rollout.
+		//
+		// Pre-existing wiring cases (KeyAWSCloudWatchMonitoring's
+		// instance_ids etc.) declare only inputs the target preset has
+		// always supported, so the filter is a no-op for them.
+		declared := make(map[string]bool, len(vars))
+		for _, v := range vars {
+			declared[v.Name] = true
+		}
+		for name := range wired.RawHCL {
+			if !declared[name] {
+				delete(wired.RawHCL, name)
+			}
+		}
+		filtered := wired.Names[:0]
+		for _, name := range wired.Names {
+			if declared[name] {
+				filtered = append(filtered, name)
+			}
+		}
+		wired.Names = filtered
+
 		inputs := map[string]any{}
 		for _, v := range vars {
 			if _, isWired := wired.RawHCL[v.Name]; isWired {
@@ -569,6 +613,24 @@ func (c *Client) composeStackImpl(opts ComposeStackOpts) (*ComposeStackResult, e
 		// not after the security policies land.
 		if k == KeyAWSBedrock && selected[KeyAWSOpenSearch] {
 			block.DependsOn = []string{opensearchRef(selected)}
+		}
+		// Observability moves: when both this component and the legacy
+		// aws_cloudwatchmonitoring aggregator are selected AND the caller
+		// has opted in via opts.EmitObservabilityMoves, emit moved {}
+		// blocks relocating the legacy per-component alarms into this
+		// module. Caller opt-in is required because emitting moves while
+		// disable_legacy_per_component_alarms is still false (the
+		// default) causes Terraform to recreate the legacy alarm at its
+		// original address (state was relocated by the move, but config
+		// still demands the resource at the original address) — that's
+		// an alarm-flap on every apply, not the clean cutover the moved
+		// block is meant to enable. Callers MUST flip the flag in the
+		// same apply that flips disable_legacy_per_component_alarms=true
+		// on cloudwatchmonitoring. Issue #204.
+		if opts.EmitObservabilityMoves && selected[KeyAWSCloudWatchMonitoring] {
+			if moves := ObservabilityMoves(k); len(moves) > 0 {
+				block.Moved = moves
+			}
 		}
 		blocks = append(blocks, block)
 

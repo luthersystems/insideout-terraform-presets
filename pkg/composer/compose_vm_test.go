@@ -363,9 +363,9 @@ func TestGetPresetFiles_GCP_KMS_NoUpstreamModule(t *testing.T) {
 	// rather than just counting blocks.
 	moved := extractMovedBlocks(t, bodyNoComments)
 	expectedMoves := map[string]string{
-		"module.kms.google_kms_key_ring.key_ring":            "google_kms_key_ring.this",
-		`module.kms.google_kms_crypto_key.key[0]`:            `google_kms_crypto_key.protected["default"]`,
-		`module.kms.google_kms_crypto_key.key_ephemeral[0]`:  `google_kms_crypto_key.ephemeral["default"]`,
+		"module.kms.google_kms_key_ring.key_ring":           "google_kms_key_ring.this",
+		`module.kms.google_kms_crypto_key.key[0]`:           `google_kms_crypto_key.protected["default"]`,
+		`module.kms.google_kms_crypto_key.key_ephemeral[0]`: `google_kms_crypto_key.ephemeral["default"]`,
 	}
 	require.Len(t, moved, len(expectedMoves),
 		"gcp/kms/main.tf must include exactly %d moved {} blocks for default-config state migration (issue #182); got %d: %v",
@@ -401,12 +401,12 @@ func TestGetPresetFiles_GCP_KMS_NoUpstreamModule(t *testing.T) {
 // binding, webhook calls fail at runtime even if the trigger creates
 // successfully:
 //
-//   1. data.google_project.this resolves the project number
-//      after-enable.
-//   2. google_secret_manager_secret_iam_member.cloudbuild_webhook_accessor
-//      grants secretAccessor on the webhook secret to the P4SA.
-//   3. The trigger depends_on the IAM binding so the binding lands
-//      before the trigger is created.
+//  1. data.google_project.this resolves the project number
+//     after-enable.
+//  2. google_secret_manager_secret_iam_member.cloudbuild_webhook_accessor
+//     grants secretAccessor on the webhook secret to the P4SA.
+//  3. The trigger depends_on the IAM binding so the binding lands
+//     before the trigger is created.
 func TestGetPresetFiles_GCP_CloudBuild_HasWebhookSecretIAM(t *testing.T) {
 	t.Parallel()
 	files, err := newTestClient().GetPresetFiles("gcp/cloud_build")

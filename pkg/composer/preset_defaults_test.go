@@ -97,13 +97,13 @@ func TestPresetDefaultsSatisfyValidations(t *testing.T) {
 // document why — silent placeholder accumulation defeats this test's
 // purpose.
 var emptyPresetAllowlist = map[string]string{
-	"aws/codepipeline":   "placeholder for AWS-native CI/CD; implementation deferred (see main.tf header)",
-	"aws/composer":       "synthetic key for the composer itself; never emits resources",
-	"aws/datadog":        "third-party SaaS placeholder; configured via provider blocks elsewhere",
-	"aws/githubactions":  "placeholder for GitHub Actions CI/CD; implementation deferred",
-	"aws/grafana":        "placeholder for Amazon Managed Grafana; implementation deferred",
-	"aws/splunk":         "third-party SaaS placeholder; configured via provider blocks elsewhere",
-	"gcp/cloud_cdn":      "CDN config lives on the load balancer backend; this preset is a marker only",
+	"aws/codepipeline":  "placeholder for AWS-native CI/CD; implementation deferred (see main.tf header)",
+	"aws/composer":      "synthetic key for the composer itself; never emits resources",
+	"aws/datadog":       "third-party SaaS placeholder; configured via provider blocks elsewhere",
+	"aws/githubactions": "placeholder for GitHub Actions CI/CD; implementation deferred",
+	"aws/grafana":       "placeholder for Amazon Managed Grafana; implementation deferred",
+	"aws/splunk":        "third-party SaaS placeholder; configured via provider blocks elsewhere",
+	"gcp/cloud_cdn":     "CDN config lives on the load balancer backend; this preset is a marker only",
 }
 
 // TestEveryPresetHasResourceOrModuleCall asserts every preset on disk
@@ -141,4 +141,3 @@ func TestEveryPresetHasResourceOrModuleCall(t *testing.T) {
 		require.NoError(t, err, "emptyPresetAllowlist entry %q points at a missing preset", presetPath)
 	}
 }
-

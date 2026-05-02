@@ -12,16 +12,16 @@ import (
 // three systems that cooperate on the composed Terraform archive:
 //
 //   - template_ref   — written by ui-core into common.auto.tfvars.json, read
-//                      by sandbox-infrastructure-template's shell scripts via
-//                      getTfVar (see ui-core#289, sandbox-infra-template#94).
-//                      Default "" keeps the variable optional for standalone
-//                      applies (getTfVar falls back to "unknown").
+//     by sandbox-infrastructure-template's shell scripts via
+//     getTfVar (see ui-core#289, sandbox-infra-template#94).
+//     Default "" keeps the variable optional for standalone
+//     applies (getTfVar falls back to "unknown").
 //
 //   - presets_ref    — self-reported version of insideout-terraform-presets
-//                      at compose time via debug.ReadBuildInfo. Defaults to
-//                      the actual version string so the deployed archive
-//                      carries its own provenance without needing ui-core to
-//                      write it.
+//     at compose time via debug.ReadBuildInfo. Defaults to
+//     the actual version string so the deployed archive
+//     carries its own provenance without needing ui-core to
+//     write it.
 //
 // Missing either declaration triggers a "Value for undeclared variable"
 // warning on every Oracle deploy (for template_ref) or loses drift-debug

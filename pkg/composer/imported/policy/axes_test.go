@@ -16,7 +16,7 @@ func TestFieldRole_Valid(t *testing.T) {
 		{RoleWiring, true},
 		{RoleTuning, true},
 		{"", false},
-		{"identity", false}, // case-sensitive
+		{"identity", false},  // case-sensitive
 		{"Identitty", false}, // typo close to a real const
 		{"unknown", false},
 	}
@@ -53,8 +53,8 @@ func TestVisibilityPolicy_Valid(t *testing.T) {
 		{VisibilityRileyVisible, true},
 		{VisibilityUIVisible, true},
 		{"", false},
-		{"hidden", false},      // case-sensitive
-		{"Hidden ", false},     // trailing space
+		{"hidden", false},       // case-sensitive
+		{"Hidden ", false},      // trailing space
 		{"RileyVisable", false}, // typo close to a real const
 	}
 	for _, tc := range cases {
