@@ -90,8 +90,7 @@ resource "google_cloudfunctions2_function" "this" {
     vpc_connector_egress_settings = var.vpc_connector != "" ? var.vpc_egress : null
   }
 
-  labels      = merge({ project = var.project }, var.labels)
-  annotations = var.annotations
+  labels = merge({ project = var.project }, var.labels)
 
   # NOTE: update_time drifts on refresh but is Computed-only, so
   # lifecycle.ignore_changes has no effect on it. Suppression must happen at

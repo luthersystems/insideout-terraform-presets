@@ -39,11 +39,6 @@ resource "google_compute_health_check" "this" {
   timeout_sec         = 5
   healthy_threshold   = 2
   unhealthy_threshold = 3
-
-  # Project label keeps the resource visible to reliable3's drift inspector
-  # (which filters on Project = <project>) and prevents `+ labels = {}`
-  # phantom drift on refresh (#215).
-  labels = merge({ project = var.project }, var.labels)
 }
 
 # Backend services

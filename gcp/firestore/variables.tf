@@ -24,9 +24,3 @@ variable "location_id" {
   type        = string
   default     = ""
 }
-
-variable "labels" {
-  description = "Labels to apply to the Firestore database. Merged with the canonical { project = var.project } baseline."
-  type        = map(string)
-  default     = {}
-}

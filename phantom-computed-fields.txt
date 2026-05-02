@@ -45,3 +45,4 @@ google_cloudfunctions2_function.update_time
 google_firestore_database.earliest_version_time
 google_firestore_database.etag
 google_project_iam_member.etag
+google_vpc_access_connector.connected_projects

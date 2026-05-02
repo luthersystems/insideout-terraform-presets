@@ -35,10 +35,8 @@ LABEL_CAPABLE_GCP=(
   google_cloudfunctions2_function
   google_compute_global_address
   google_compute_global_forwarding_rule
-  google_compute_health_check
   google_compute_instance
   google_compute_security_policy
-  google_firestore_database
   google_kms_crypto_key
   google_pubsub_subscription
   google_pubsub_topic
