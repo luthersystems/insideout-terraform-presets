@@ -34,15 +34,16 @@ func Project(filters string) string {
 // before calling this helper.
 //
 // Behaviour:
-//   - project == ""               → return filters unchanged
-//   - filters already has project → return filters unchanged
-//   - filters == ""               → return {"project":<name>}
-//   - filters has other keys      → merge project=<name> in
-//   - filters is unparseable JSON → return {"project":<name>}
-//
-// The parse contract matches Project(): values are treated as strings,
-// so mixed-type filter JSON round-trips identically to how Project()
-// already (silently) handles it.
+//   - project == ""                   → return filters unchanged
+//   - filters has a non-empty project → return filters unchanged
+//     (an explicit "project":"" is treated as no project set and is
+//     overwritten — Project() reports such filters as having no project)
+//   - filters == ""                   → return {"project":<name>}
+//   - filters is an object of strings → merge project=<name> in
+//   - filters is unparseable, JSON null,
+//     or contains any non-string value → return {"project":<name>}
+//     (the original other-keys are dropped; the parse contract matches
+//     Project(), which treats values as strings)
 func EnsureProject(filters, project string) string {
 	if project == "" {
 		return filters
@@ -52,13 +53,14 @@ func EnsureProject(filters, project string) string {
 	}
 	m := make(map[string]string)
 	if filters != "" {
-		_ = json.Unmarshal([]byte(filters), &m)
+		if err := json.Unmarshal([]byte(filters), &m); err != nil || m == nil {
+			// Drop on any parse failure or JSON null — order-independent
+			// fallback to a fresh map so output is deterministic.
+			m = make(map[string]string)
+		}
 	}
 	m["project"] = project
-	b, err := json.Marshal(m)
-	if err != nil {
-		return filters
-	}
+	b, _ := json.Marshal(m)
 	return string(b)
 }
 
