@@ -16,3 +16,21 @@ resource "google_monitoring_dashboard" "dashboard" {
   project        = var.project_id
   dashboard_json = var.dashboard_json
 }
+
+# Email notification channels (issue #204) — opt-in via
+# var.notification_channel_emails. Per-component alert policies in
+# gcp/<module>/observability.tf consume the notification_channels
+# output below. Composer wires that output into every emitter when
+# gcp_cloud_monitoring is selected (pkg/composer/contracts.go
+# post-switch loop).
+resource "google_monitoring_notification_channel" "email" {
+  for_each = toset(var.notification_channel_emails)
+
+  project      = var.project_id
+  display_name = "email:${each.value}"
+  type         = "email"
+  labels = {
+    email_address = each.value
+  }
+  user_labels = merge({ project = var.project }, var.labels)
+}
