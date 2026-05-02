@@ -547,8 +547,9 @@ func TestComposeStack_KitchenSink(t *testing.T) {
 	})
 
 	t.Run("wiring/alb", func(t *testing.T) {
-		require.Contains(t, mainTF, `vpc_id            = module.aws_vpc.vpc_id`)
-		require.Contains(t, mainTF, `public_subnet_ids = module.aws_vpc.public_subnet_ids`)
+		// ALB block is padded to enable_observability (20 chars; #204).
+		require.Contains(t, mainTF, `vpc_id               = module.aws_vpc.vpc_id`)
+		require.Contains(t, mainTF, `public_subnet_ids    = module.aws_vpc.public_subnet_ids`)
 	})
 
 	t.Run("wiring/bastion", func(t *testing.T) {
@@ -565,8 +566,9 @@ func TestComposeStack_KitchenSink(t *testing.T) {
 	})
 
 	t.Run("wiring/elasticache", func(t *testing.T) {
-		require.Contains(t, mainTF, `vpc_id           = module.aws_vpc.vpc_id`)
-		require.Contains(t, mainTF, `cache_subnet_ids = module.aws_vpc.private_subnet_ids`)
+		// ElastiCache block is padded to enable_observability (20 chars; #204).
+		require.Contains(t, mainTF, `vpc_id               = module.aws_vpc.vpc_id`)
+		require.Contains(t, mainTF, `cache_subnet_ids     = module.aws_vpc.private_subnet_ids`)
 	})
 
 	t.Run("wiring/cloudfront", func(t *testing.T) {
