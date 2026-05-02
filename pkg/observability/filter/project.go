@@ -3,10 +3,10 @@
 // are scoped via the `Project=<name>` tag (kv- or map-shaped depending
 // on the service); GCP resources via the `project=<name>` label.
 //
-// Ported from reliable internal/agentapi/resource_filter.go (#204).
-// `ensureProjectFilter` is intentionally NOT ported — it depends on
-// reliable's session-ID → project-name translation which has no
-// analogue here. Callers pass the project name directly.
+// Ported from reliable internal/agentapi/resource_filter.go (#204, #228).
+// The session-ID → project-name translation that lives reliable-side
+// is intentionally NOT ported; callers translate session/tenant
+// identifiers into project names before calling EnsureProject.
 package filter
 
 import (
@@ -26,6 +26,42 @@ func Project(filters string) string {
 		return ""
 	}
 	return m["project"]
+}
+
+// EnsureProject injects "project"=<name> into a JSON filters string when
+// no project filter is already set. Pure filter manipulation; callers
+// that translate a session/tenant identifier into a project name do so
+// before calling this helper.
+//
+// Behaviour:
+//   - project == ""                   → return filters unchanged
+//   - filters has a non-empty project → return filters unchanged
+//     (an explicit "project":"" is treated as no project set and is
+//     overwritten — Project() reports such filters as having no project)
+//   - filters == ""                   → return {"project":<name>}
+//   - filters is an object of strings → merge project=<name> in
+//   - filters is unparseable, JSON null,
+//     or contains any non-string value → return {"project":<name>}
+//     (the original other-keys are dropped; the parse contract matches
+//     Project(), which treats values as strings)
+func EnsureProject(filters, project string) string {
+	if project == "" {
+		return filters
+	}
+	if Project(filters) != "" {
+		return filters
+	}
+	m := make(map[string]string)
+	if filters != "" {
+		if err := json.Unmarshal([]byte(filters), &m); err != nil || m == nil {
+			// Drop on any parse failure or JSON null — order-independent
+			// fallback to a fresh map so output is deterministic.
+			m = make(map[string]string)
+		}
+	}
+	m["project"] = project
+	b, _ := json.Marshal(m)
+	return string(b)
 }
 
 // ProjectTagFilter returns EC2-style tag filters for the Project tag.

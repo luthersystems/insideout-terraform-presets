@@ -1,9 +1,11 @@
 package filter
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestProject(t *testing.T) {
@@ -23,6 +25,111 @@ func TestProject(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			assert.Equal(t, tt.want, Project(tt.filters))
+		})
+	}
+}
+
+func TestEnsureProject(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name string
+		// Inputs.
+		filters string
+		project string
+		// Exactly one of the assertion modes below applies per row:
+		// - wantSame=true asserts byte-equality with `filters`; wantProject
+		//   and wantOther are ignored.
+		// - otherwise wantProject is the expected Project(out), and the
+		//   parsed output map must equal {project:<wantProject>} ∪ wantOther.
+		wantSame    bool
+		wantProject string
+		wantOther   map[string]string
+	}{
+		{
+			name:     "empty project + empty filters → unchanged",
+			filters:  "",
+			project:  "",
+			wantSame: true,
+		},
+		{
+			name:     "empty project + non-empty filters → unchanged",
+			filters:  `{"zone":"us-east-1a"}`,
+			project:  "",
+			wantSame: true,
+		},
+		{
+			name:        "empty filters + project → fresh JSON",
+			filters:     "",
+			project:     "io-abc123",
+			wantProject: "io-abc123",
+		},
+		{
+			name:     "filters already has project → unchanged (single key)",
+			filters:  `{"project":"io-existing"}`,
+			project:  "io-override",
+			wantSame: true,
+		},
+		{
+			name:     "filters already has project → unchanged (with extra keys)",
+			filters:  `{"project":"io-existing","zone":"us-east-1a"}`,
+			project:  "io-override",
+			wantSame: true,
+		},
+		{
+			name:        "filters with other keys, no project → merge",
+			filters:     `{"zone":"us-east-1a"}`,
+			project:     "io-test",
+			wantProject: "io-test",
+			wantOther:   map[string]string{"zone": "us-east-1a"},
+		},
+		{
+			name:        "explicit empty project value → overwrite",
+			filters:     `{"project":"","zone":"us-east-1a"}`,
+			project:     "io-real",
+			wantProject: "io-real",
+			wantOther:   map[string]string{"zone": "us-east-1a"},
+		},
+		{
+			name:        "unparseable JSON → fresh JSON, drop bad input",
+			filters:     "not-json",
+			project:     "io-recover",
+			wantProject: "io-recover",
+		},
+		{
+			name:        "literal JSON null → fresh JSON (no panic)",
+			filters:     "null",
+			project:     "io-recover",
+			wantProject: "io-recover",
+		},
+		{
+			name:        "mixed-type values → fresh JSON, all original keys dropped",
+			filters:     `{"zone":"us-east-1a","limit":10}`,
+			project:     "io-test",
+			wantProject: "io-test",
+			// wantOther nil: the contract is order-independent reset on
+			// any parse failure, so "zone" is dropped along with "limit".
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			got := EnsureProject(tt.filters, tt.project)
+			if tt.wantSame {
+				assert.Equal(t, tt.filters, got)
+				return
+			}
+			assert.Equal(t, tt.wantProject, Project(got),
+				"Project() on output should match wantProject")
+			var parsed map[string]string
+			require.NoError(t, json.Unmarshal([]byte(got), &parsed),
+				"output must be parseable as map[string]string")
+			// Output must contain exactly project + wantOther — no
+			// stray injected keys, no missing ones.
+			assert.Len(t, parsed, len(tt.wantOther)+1,
+				"output map should have exactly len(wantOther)+1 keys")
+			for k, v := range tt.wantOther {
+				assert.Equal(t, v, parsed[k], "key %q should be preserved", k)
+			}
 		})
 	}
 }
