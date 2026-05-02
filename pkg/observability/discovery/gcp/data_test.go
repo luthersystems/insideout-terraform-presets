@@ -99,14 +99,24 @@ func TestInspectCloudSQL_DescribeInstance(t *testing.T) {
 
 func TestInspectCloudSQL_DescribeInstance_MissingFilter(t *testing.T) {
 	t.Parallel()
-	_, err := inspectCloudSQL(context.Background(), "demo-proj", "describe-instance", "")
+	// inspectCloudSQL constructs sqladmin.NewService BEFORE dispatching,
+	// so we must pass the unreachable-endpoint + no-auth options or CI
+	// without ADC fails on credential discovery before reaching the
+	// precondition check.
+	_, err := inspectCloudSQL(context.Background(), "demo-proj", "describe-instance", "",
+		option.WithEndpoint(unreachableEndpoint),
+		option.WithoutAuthentication(),
+	)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "instance in filters")
 }
 
 func TestInspectCloudSQL_UnsupportedAction(t *testing.T) {
 	t.Parallel()
-	_, err := inspectCloudSQL(context.Background(), "demo-proj", "no-such", "")
+	_, err := inspectCloudSQL(context.Background(), "demo-proj", "no-such", "",
+		option.WithEndpoint(unreachableEndpoint),
+		option.WithoutAuthentication(),
+	)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unsupported Cloud SQL action")
 }
