@@ -203,12 +203,12 @@ func TestLive_ComputeV1FilterRegimes(t *testing.T) {
 	)
 
 	type probe struct {
-		name        string
-		url         string // without ?filter=...
-		regime      string
-		legacyCode  int    // expected status with the legacy dialect
-		aip160Code  int    // expected status with the AIP-160 dialect
-		noFilterOK  bool   // expected to return 200 with no filter
+		name       string
+		url        string // without ?filter=...
+		regime     string
+		legacyCode int  // expected status with the legacy dialect
+		aip160Code int  // expected status with the AIP-160 dialect
+		noFilterOK bool // expected to return 200 with no filter
 	}
 
 	probes := []probe{
