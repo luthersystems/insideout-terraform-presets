@@ -153,3 +153,66 @@ func TestInspectFirestore_UnsupportedAction(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unsupported Firestore action")
 }
+
+// TestFirestoreDatabaseFromFilters_Roundtrip pins the parse + safety-
+// check behavior used by inspectFirestore (#245). Validation is
+// exercised here without spinning up a Firestore client — the
+// happy/sad paths are pure-Go.
+func TestFirestoreDatabaseFromFilters_Roundtrip(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name    string
+		filters string
+		want    string
+	}{
+		{"empty filters → default", "", ""},
+		{"missing key → default", `{"project":"io-foo"}`, ""},
+		{"empty value → default", `{"database_name":""}`, ""},
+		{
+			name:    "preset-shaped name accepted",
+			filters: `{"database_name":"io-cc7ndmjcolun-firestore-8a3bfd07"}`,
+			want:    "io-cc7ndmjcolun-firestore-8a3bfd07",
+		},
+		{
+			name:    "(default) literal accepted",
+			filters: `{"database_name":"(default)"}`,
+			want:    "(default)",
+		},
+		// Defense-in-depth: anything outside the GCP database-id
+		// charset must NOT reach firestore.NewClientWithDatabase.
+		{"semicolon injection rejected", `{"database_name":"foo;rm -rf /"}`, ""},
+		{"slash rejected", `{"database_name":"foo/bar"}`, ""},
+		{"quote rejected", `{"database_name":"foo\"bar"}`, ""},
+		{"uppercase chars rejected", `{"database_name":"FooBar"}`, ""},
+		{"trailing-dash rejected", `{"database_name":"foo-"}`, ""},
+		{"malformed JSON → default", `not-json`, ""},
+
+		// Regex boundaries (qa-professor §5): anchor checks for
+		// length and start/end-char rules — without these a
+		// regex weakening (e.g. dropping the {2,61} bound) would
+		// not be caught by the test suite.
+		{"length-3 rejected (min total length is 4)", `{"database_name":"abc"}`, ""},
+		{"length-2 rejected (under min)", `{"database_name":"ab"}`, ""},
+		{
+			name:    "length-4 minimum accepted",
+			filters: `{"database_name":"abcd"}`,
+			want:    "abcd",
+		},
+		{
+			name:    "length-63 maximum accepted",
+			filters: `{"database_name":"a` + strings.Repeat("b", 61) + `c"}`,
+			want:    "a" + strings.Repeat("b", 61) + "c",
+		},
+		{"length-64 rejected (over max)", `{"database_name":"a` + strings.Repeat("b", 62) + `c"}`, ""},
+		{"leading digit rejected", `{"database_name":"1foo"}`, ""},
+		{"leading hyphen rejected", `{"database_name":"-foo-bar"}`, ""},
+		{"(Default) wrong-case rejected", `{"database_name":"(Default)"}`, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := firestoreDatabaseFromFilters(tc.filters)
+			assert.Equal(t, tc.want, got)
+		})
+	}
+}

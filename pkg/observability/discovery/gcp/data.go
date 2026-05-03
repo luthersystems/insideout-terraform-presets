@@ -16,6 +16,8 @@ package gcp
 import (
 	"context"
 	"fmt"
+	"log"
+	"regexp"
 
 	"cloud.google.com/go/firestore"
 	redis "cloud.google.com/go/redis/apiv1"
@@ -26,6 +28,17 @@ import (
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/observability"
 )
+
+// firestoreDatabaseNameSafe constrains caller-supplied database names
+// before they're passed to firestore.NewClientWithDatabase. The
+// firestore admin spec allows lowercase letters, digits, and hyphens,
+// 4-63 chars, must start with a letter, must end with a letter or
+// digit. We accept that subset plus the literal "(default)" sentinel
+// which is the SDK's symbolic name for the unnamed database. Anything
+// else falls back to the SDK default with a warn log so a malformed
+// caller value doesn't escape into a gRPC target path (#245, defense-
+// in-depth on a string interpolated into the Firestore client target).
+var firestoreDatabaseNameSafe = regexp.MustCompile(`^(\(default\)|[a-z][a-z0-9-]{2,61}[a-z0-9])$`)
 
 func inspectCloudSQL(ctx context.Context, projectID, action, filters string, opts ...option.ClientOption) (any, error) {
 	svc, err := sqladmin.NewService(ctx, opts...)
@@ -125,12 +138,29 @@ func inspectMemorystore(ctx context.Context, projectID, action, filters string, 
 	}
 }
 
-// inspectFirestore — no labels.project filter applies. Firestore
-// exposes a single Database per project, and Collections() returns
-// root collection names. The API is project-scoped; nothing to
-// label-filter against.
-func inspectFirestore(ctx context.Context, projectID, action, _ string, opts ...option.ClientOption) (any, error) {
-	client, err := firestore.NewClient(ctx, projectID, opts...)
+// inspectFirestore — no labels.project filter applies. Firestore is
+// project-scoped at the client level. The preset (gcp/firestore/main.
+// tf, issue #159) deliberately creates a non-default named database
+// so retries after state loss don't 409 on the singleton; callers
+// must thread that name in via filters as `database_name`. When
+// omitted, the SDK falls back to "(default)" — which the preset
+// never creates, so production calls hit `NotFound` (#245). The
+// caller-supplied name is regex-validated before it reaches
+// firestore.NewClientWithDatabase as defense-in-depth.
+func inspectFirestore(ctx context.Context, projectID, action, filters string, opts ...option.ClientOption) (any, error) {
+	dbName := firestoreDatabaseFromFilters(filters)
+	var (
+		client *firestore.Client
+		err    error
+	)
+	if dbName != "" && dbName != "(default)" {
+		client, err = firestore.NewClientWithDatabase(ctx, projectID, dbName, opts...)
+	} else {
+		if dbName == "" {
+			log.Printf("[discovery/gcp firestore] no database_name in filters; falling back to (default) — preset gcp/firestore creates a non-default DB (#159), pass database_name from the preset's database_name output")
+		}
+		client, err = firestore.NewClient(ctx, projectID, opts...)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -155,4 +185,23 @@ func inspectFirestore(ctx context.Context, projectID, action, _ string, opts ...
 	default:
 		return nil, unsupportedActionError("Firestore", action, observability.GCPServiceActions["firestore"])
 	}
+}
+
+// firestoreDatabaseFromFilters extracts and validates the
+// `database_name` filter key. Returns "" when missing, malformed, or
+// unsafe so the caller falls back to the SDK default.
+func firestoreDatabaseFromFilters(filters string) string {
+	m := parseFilterMap(filters)
+	if m == nil {
+		return ""
+	}
+	name := m["database_name"]
+	if name == "" {
+		return ""
+	}
+	if !firestoreDatabaseNameSafe.MatchString(name) {
+		log.Printf("[discovery/gcp firestore] rejected unsafe database_name=%q (must match %s); falling back to default", name, firestoreDatabaseNameSafe.String())
+		return ""
+	}
+	return name
 }

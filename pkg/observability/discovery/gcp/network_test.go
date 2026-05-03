@@ -59,20 +59,31 @@ func TestInspectVPC_ListNetworks(t *testing.T) {
 	assert.Empty(t, capturedFilter)
 }
 
-func TestInspectVPC_ListNetworks_AppliesProjectFilter(t *testing.T) {
+// TestInspectVPC_ListNetworks_NoServerSideLabelsFilter pins #245:
+// networks.list rejects ALL labels filters with HTTP 400 ("Invalid
+// list filter expression") because Network has no `labels` field on
+// the v1 schema. The handler MUST send no `filter` query parameter
+// even when the caller passes a project filter; project-scoping
+// happens at the GCP project boundary, not via per-resource labels.
+//
+// If a future refactor re-introduces gcpAIP160LabelFilter or
+// gcpLegacyLabelFilter on this call site, this test fails. Reverses
+// the previous (broken) #239 broadening (commit 8465e59).
+func TestInspectVPC_ListNetworks_NoServerSideLabelsFilter(t *testing.T) {
 	t.Parallel()
 	var capturedFilter string
 	srv, opts := fakeComputeAPIREST(t, func(w http.ResponseWriter, r *http.Request) {
 		capturedFilter = r.URL.Query().Get("filter")
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"items":[]}`))
+		_, _ = w.Write([]byte(`{"items":[{"name":"net-a"}]}`))
 	})
 	defer srv.Close()
 
 	_, err := inspectVPC(context.Background(), "demo-proj", "list-networks",
 		`{"project":"io-foo"}`, opts...)
 	require.NoError(t, err)
-	assert.Equal(t, `labels.project = "io-foo"`, capturedFilter)
+	assert.Empty(t, capturedFilter,
+		"networks.list rejects labels filters server-side; handler must send no filter param (#245)")
 }
 
 func TestInspectVPC_ListFirewallsUnfiltered(t *testing.T) {
@@ -110,20 +121,129 @@ func TestInspectVPC_UnsupportedAction(t *testing.T) {
 	assert.Contains(t, err.Error(), "unsupported VPC action")
 }
 
-func TestInspectLoadBalancer_ListBackendServices_AppliesFilter(t *testing.T) {
+// TestInspectLoadBalancer_ListBackendServices_NoServerSideLabelsFilter
+// pins #245: backendServices.list rejects ALL labels filters with
+// HTTP 400 because BackendService has no `labels` field on the v1
+// schema. Same regime applies to UrlMaps, TargetHttp(s)Proxies — all
+// covered by the regime-(a) live-probe table in network.go. Handler
+// MUST not send a filter query param.
+//
+// The fake handler asserts the URL path so a future switch-case
+// crossing (e.g. list-backend-services accidentally calling
+// UrlMaps.List) is caught by the path guard, not silently passed as
+// "filter param empty" (qa-professor §P2.4).
+func TestInspectLoadBalancer_ListBackendServices_NoServerSideLabelsFilter(t *testing.T) {
 	t.Parallel()
 	var capturedFilter string
 	srv, opts := fakeComputeAPIREST(t, func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.URL.Path, "/backendServices") {
+			http.Error(w, "unexpected path: "+r.URL.Path, http.StatusInternalServerError)
+			return
+		}
 		capturedFilter = r.URL.Query().Get("filter")
 		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write([]byte(`{"items":[]}`))
+		_, _ = w.Write([]byte(`{"items":[{"name":"bs-a"}]}`))
 	})
 	defer srv.Close()
 
 	_, err := inspectLoadBalancer(context.Background(), "demo-proj", "list-backend-services",
 		`{"project":"io-foo"}`, opts...)
 	require.NoError(t, err)
-	assert.Equal(t, `labels.project = "io-foo"`, capturedFilter)
+	assert.Empty(t, capturedFilter,
+		"backendServices.list rejects labels filters server-side; handler must send no filter param (#245)")
+}
+
+// TestInspectLoadBalancer_ListUrlMaps_NoServerSideLabelsFilter — same
+// regime as backend-services per the network.go header comment.
+func TestInspectLoadBalancer_ListUrlMaps_NoServerSideLabelsFilter(t *testing.T) {
+	t.Parallel()
+	var capturedFilter string
+	srv, opts := fakeComputeAPIREST(t, func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.URL.Path, "/urlMaps") {
+			http.Error(w, "unexpected path: "+r.URL.Path, http.StatusInternalServerError)
+			return
+		}
+		capturedFilter = r.URL.Query().Get("filter")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"items":[{"name":"um-a"}]}`))
+	})
+	defer srv.Close()
+
+	_, err := inspectLoadBalancer(context.Background(), "demo-proj", "list-url-maps",
+		`{"project":"io-foo"}`, opts...)
+	require.NoError(t, err)
+	assert.Empty(t, capturedFilter,
+		"urlMaps.list rejects labels filters server-side; handler must send no filter param (#245)")
+}
+
+// TestInspectLoadBalancer_ListTargetHttp{,s}Proxies_NoServerSideLabelsFilter
+// — same regime.
+func TestInspectLoadBalancer_ListTargetHttpProxies_NoServerSideLabelsFilter(t *testing.T) {
+	t.Parallel()
+	var capturedFilter string
+	srv, opts := fakeComputeAPIREST(t, func(w http.ResponseWriter, r *http.Request) {
+		// Note the trailing-slash-resistant guard: targetHttpProxies
+		// has a longer cousin (targetHttpsProxies) — match on the
+		// exact path segment.
+		if !strings.Contains(r.URL.Path, "/targetHttpProxies") || strings.Contains(r.URL.Path, "/targetHttpsProxies") {
+			http.Error(w, "unexpected path: "+r.URL.Path, http.StatusInternalServerError)
+			return
+		}
+		capturedFilter = r.URL.Query().Get("filter")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"items":[{"name":"thp-a"}]}`))
+	})
+	defer srv.Close()
+
+	_, err := inspectLoadBalancer(context.Background(), "demo-proj", "list-target-http-proxies",
+		`{"project":"io-foo"}`, opts...)
+	require.NoError(t, err)
+	assert.Empty(t, capturedFilter)
+}
+
+func TestInspectLoadBalancer_ListTargetHttpsProxies_NoServerSideLabelsFilter(t *testing.T) {
+	t.Parallel()
+	var capturedFilter string
+	srv, opts := fakeComputeAPIREST(t, func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.URL.Path, "/targetHttpsProxies") {
+			http.Error(w, "unexpected path: "+r.URL.Path, http.StatusInternalServerError)
+			return
+		}
+		capturedFilter = r.URL.Query().Get("filter")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"items":[{"name":"thsp-a"}]}`))
+	})
+	defer srv.Close()
+
+	_, err := inspectLoadBalancer(context.Background(), "demo-proj", "list-target-https-proxies",
+		`{"project":"io-foo"}`, opts...)
+	require.NoError(t, err)
+	assert.Empty(t, capturedFilter)
+}
+
+// TestInspectLoadBalancer_ListForwardingRules_AppliesAIP160Filter
+// pins #245 regime (b): globalForwardingRules.list accepts the
+// AIP-160 server-side label filter. ForwardingRule carries `labels`
+// on the v1 schema, so the handler keeps the original behavior.
+func TestInspectLoadBalancer_ListForwardingRules_AppliesAIP160Filter(t *testing.T) {
+	t.Parallel()
+	var capturedFilter string
+	srv, opts := fakeComputeAPIREST(t, func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.URL.Path, "/forwardingRules") {
+			http.Error(w, "unexpected path: "+r.URL.Path, http.StatusInternalServerError)
+			return
+		}
+		capturedFilter = r.URL.Query().Get("filter")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"items":[]}`))
+	})
+	defer srv.Close()
+
+	_, err := inspectLoadBalancer(context.Background(), "demo-proj", "list-forwarding-rules",
+		`{"project":"io-foo"}`, opts...)
+	require.NoError(t, err)
+	assert.Equal(t, `labels.project = "io-foo"`, capturedFilter,
+		"globalForwardingRules.list accepts AIP-160; handler must keep server-side filter (#245)")
 }
 
 func TestInspectLoadBalancer_UnsupportedAction(t *testing.T) {
@@ -182,50 +302,33 @@ func TestInspectCloudCDN_UnsupportedAction(t *testing.T) {
 	assert.Contains(t, err.Error(), "unsupported Cloud CDN action")
 }
 
-// TestCloudCDNAggregatedListRequest_AIP160DialectForProjectFilter pins
-// the dialect choice from #239: backendServices.aggregatedList rejects
-// the GCE legacy filter form (`labels.project=<value>`) with HTTP 400
-// "Invalid list filter expression" and requires the AIP-160 form
-// (`labels.project = "<value>"`). This is the same Compute v1 REST API
-// as VPC / LoadBalancer / CloudArmor, but accessed via the newer
-// cloud.google.com/go/compute/apiv1 client which enforces AIP-160.
+// TestCloudCDNAggregatedListRequest_NoServerSideLabelsFilter pins
+// the corrected #245 contract: backendServices.aggregatedList rejects
+// labels filters in BOTH dialects (legacy AND AIP-160) with HTTP 400
+// "Invalid list filter expression". BackendService has no `labels`
+// field on the v1 schema, so server-side label filtering is
+// impossible regardless of dialect. The constructor MUST NOT set
+// req.Filter.
 //
-// If a future refactor flips this back to gcpLegacyLabelFilter (or
-// changes the helper's output shape), this test fails. Reproduces the
-// staging session sess_v2_qtyB4nkwp5N8 / project io-qtyb4nkwp5n8 bug.
-func TestCloudCDNAggregatedListRequest_AIP160DialectForProjectFilter(t *testing.T) {
+// This reverses the (broken) #239 unit test
+// `TestCloudCDNAggregatedListRequest_AIP160DialectForProjectFilter`
+// — that test pinned a wire format the live server actually rejects.
+// Without a live integration test, the bug shipped to v0.9.0; the
+// new TestLive_ComputeV1FilterRegimes integration test in
+// live_integration_test.go closes that loop.
+//
+// One row is enough — the constructor's signature ignores `filters`
+// (`_ string`), so iterating over many rows would be tautological
+// (qa-professor §6). The behavioral pin against `inspectCloudCDN` +
+// fakeComputeAPIREST in TestInspectCloudCDN_NoLabelsFilter exercises
+// the live wire path.
+func TestCloudCDNAggregatedListRequest_NoServerSideLabelsFilter(t *testing.T) {
 	t.Parallel()
 	req := cloudCDNAggregatedListRequest("demo-proj", `{"project":"io-qtyb4nkwp5n8"}`)
-
-	require.NotNil(t, req, "request must always be returned")
-	assert.Equal(t, "demo-proj", req.GetProject(), "Project must be set on the AggregatedList request")
-	require.NotNil(t, req.Filter, "non-empty project filter must populate req.Filter")
-	assert.Equal(t, `labels.project = "io-qtyb4nkwp5n8"`, *req.Filter,
-		"filter must use AIP-160 dialect (spaces around =, quoted value); the GCE legacy form is rejected by backendServices.aggregatedList with HTTP 400 — see #239")
-}
-
-// TestCloudCDNAggregatedListRequest_NoFilterWhenProjectMissing — no
-// filter must be set when the caller doesn't supply a project; the SDK
-// treats nil as "no filter" / match all.
-func TestCloudCDNAggregatedListRequest_NoFilterWhenProjectMissing(t *testing.T) {
-	t.Parallel()
-
-	for _, tc := range []struct {
-		name    string
-		filters string
-	}{
-		{"empty filters", ""},
-		{"missing project key", `{"region":"us-central1"}`},
-		{"empty project value", `{"project":""}`},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			req := cloudCDNAggregatedListRequest("demo-proj", tc.filters)
-			require.NotNil(t, req)
-			assert.Equal(t, "demo-proj", req.GetProject())
-			assert.Nil(t, req.Filter, "no project filter → req.Filter must be nil so backendServices.aggregatedList returns everything in the project")
-		})
-	}
+	require.NotNil(t, req)
+	assert.Equal(t, "demo-proj", req.GetProject())
+	assert.Nil(t, req.Filter,
+		"req.Filter must be nil — backendServices.aggregatedList rejects labels filters server-side regardless of dialect (#245)")
 }
 
 func TestInspectAPIGateway_UnsupportedAction(t *testing.T) {
