@@ -28,12 +28,6 @@ variable "alarm_threshold_overrides" {
   default     = {}
 }
 
-variable "runbook_url_prefix" {
-  description = "Reserved for future runbook content support — currently a no-op. The documentation{} block was removed to fix #240 (empty content rejected by GCP Monitoring API with 400). Will be re-introduced with structured content in a follow-up once the runbook URL convention is settled."
-  type        = string
-  default     = ""
-}
-
 locals {
   _obs_user_labels = { project = var.project, severity = var.alarm_severity }
   _obs_thresholds = merge({
