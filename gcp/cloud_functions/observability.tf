@@ -29,7 +29,7 @@ variable "alarm_threshold_overrides" {
 }
 
 variable "runbook_url_prefix" {
-  description = "Optional runbook URL prefix."
+  description = "Reserved for future runbook content support — currently a no-op. The documentation{} block was removed to fix #240 (empty content rejected by GCP Monitoring API with 400). Will be re-introduced with structured content in a follow-up once the runbook URL convention is settled."
   type        = string
   default     = ""
 }
@@ -45,7 +45,6 @@ locals {
   _obs_thresholds = merge({
     error_rate_per_second = 0.05
   }, var.alarm_threshold_overrides)
-  _obs_runbook = var.runbook_url_prefix == "" ? "" : "Runbook: ${var.runbook_url_prefix}/cloud_functions/errors"
 }
 
 # Gen1 Cloud Functions execution status counter; Gen2 functions are
@@ -73,9 +72,4 @@ resource "google_monitoring_alert_policy" "errors_high" {
 
   notification_channels = var.notification_channels
   user_labels           = local._obs_user_labels
-
-  documentation {
-    content   = local._obs_runbook
-    mime_type = "text/markdown"
-  }
 }
