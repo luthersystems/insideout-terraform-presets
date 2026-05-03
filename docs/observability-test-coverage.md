@@ -77,7 +77,7 @@ auth produces a `Skip` rather than a confusing late failure.
 | `monitoredResourceDescriptors/firestore_instance` | label key check | ✅ live | Only `project_id` label — cannot scope per-database |
 | `monitoredResourceDescriptors/firestore.googleapis.com/Database` | label key check | ✅ live | `database_id`, `location`, `resource_container` — supports per-database scoping |
 | `timeSeries.list` for firestore | catalog data round-trip | ✅ live | 0 series in 72h (quiet stack) — descriptor truth is authoritative regardless |
-| `compute.AggregatedListBackendServices` (no filter) | `inspectCloudCDN` | ⏳ pending GCP reauth | Unit test pins AIP-160 dialect (#239); live call needs `gcloud auth application-default login` |
+| `compute.AggregatedListBackendServices` + every other Compute v1 list endpoint | `inspectCloudCDN`, `inspectVPC`, `inspectLoadBalancer`, `inspectCloudArmor`, `inspectBastion` | ✅ live (via MCP) | Staging session `sess_v2_qtyB4nkwp5N8` exercised via `gcpinspect_batch`. Pre-fix: VPC/LB/CDN endpoints all returned HTTP 400 with the GCE legacy filter dialect. Post-fix unit tests pin AIP-160 (`labels.foo = "bar"`); local Go integration test (`live_integration_test.go`) covers the no-filter and with-filter paths but currently needs `gcloud auth application-default login` to run end-to-end. |
 
 ## 3. Coverage gaps (NOT yet tested live)
 
