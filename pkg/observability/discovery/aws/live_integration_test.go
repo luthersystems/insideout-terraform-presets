@@ -99,15 +99,18 @@ func TestLive_DescribeProjectLogGroups_NoFilter(t *testing.T) {
 	}
 }
 
-// TestLive_DescribeProjectLogGroups_PrefixScoping requires the env var
-// LIVE_PROJECT to be set to a known project name on the account.
-// Without it we skip — the prefix-scoping behaviour can't be verified
-// without a known matching prefix.
-func TestLive_DescribeProjectLogGroups_PrefixScoping(t *testing.T) {
+// TestLive_DescribeProjectLogGroups_SubstringScoping requires the env
+// var LIVE_PROJECT to be set to a known project name on the account.
+// Without it we skip — the substring scoping can't be verified without
+// a known matching project. The expectation is non-zero results AND
+// every returned log group containing the project name as a substring
+// (not necessarily the `/aws/<project>` prefix — see the helper's
+// header comment for why prefix-scoping was wrong).
+func TestLive_DescribeProjectLogGroups_SubstringScoping(t *testing.T) {
 	t.Parallel()
 	project := os.Getenv("LIVE_PROJECT")
 	if project == "" {
-		t.Skip("LIVE_PROJECT not set; export the project name to test prefix scoping")
+		t.Skip("LIVE_PROJECT not set; export the project name to test substring scoping")
 	}
 
 	cfg := loadOrSkip(t)
@@ -116,9 +119,12 @@ func TestLive_DescribeProjectLogGroups_PrefixScoping(t *testing.T) {
 	got, err := describeProjectLogGroups(context.Background(), client, project)
 	require.NoError(t, err)
 	t.Logf("describeProjectLogGroups(%q) returned %d log groups", project, len(got))
+	require.NotEmpty(t, got,
+		"a real project on the account should return at least one log group via substring scoping; "+
+			"if this returned zero, either LIVE_PROJECT is wrong or the project genuinely emits no logs")
 	for _, g := range got {
-		assert.Contains(t, *g.LogGroupName, "/aws/"+project,
-			"every returned log group must carry the /aws/%s prefix", project)
+		assert.Contains(t, *g.LogGroupName, project,
+			"every returned log group must contain %q as a substring (LogGroupNamePattern contract)", project)
 		t.Logf("  - %s", *g.LogGroupName)
 	}
 }

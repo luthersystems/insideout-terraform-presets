@@ -1,9 +1,13 @@
-// CloudWatch Logs inspector tests. Covers the `/aws/<project>` prefix
-// scoping that lets the panel show only this stack's log groups instead
-// of fanning out per-resource ListTagsForResource calls.
+// CloudWatch Logs inspector tests. Covers the substring scoping
+// (LogGroupNamePattern = project) that lets the panel show only this
+// stack's log groups across the four real-world naming shapes
+// (`/aws/eks/...`, `/aws/rds/instance/...`, `/aws/lambda/...`,
+// `/<project>-...`) instead of fanning out per-resource
+// ListTagsForResource calls.
 //
 // Ported from reliable internal/agentapi/aws_inspect_test.go cases for
-// inspectCloudWatchLogs.
+// inspectCloudWatchLogs; the prefix→substring switch is documented in
+// cloudwatchlogs.go's header.
 
 package aws
 
@@ -38,33 +42,44 @@ func (f *fakeCloudWatchLogsClient) DescribeLogGroups(_ context.Context, in *clou
 	return f.out, nil
 }
 
-// TestDescribeProjectLogGroups_PrefixScoping pins the prefix scoping
-// contract: a non-empty project becomes `/aws/<project>` so AWS does
-// the filtering server-side.
-func TestDescribeProjectLogGroups_PrefixScoping(t *testing.T) {
+// TestDescribeProjectLogGroups_SubstringScoping pins the substring
+// scoping contract: a non-empty project becomes a LogGroupNamePattern
+// (server-side case-sensitive substring match) so the four real-world
+// preset naming shapes all match — `/aws/eks/<project>-...`,
+// `/aws/rds/instance/<project>-...`, `/aws/lambda/<project>-...`,
+// `/<project>-...`. LogGroupNamePrefix would only catch the (rare)
+// `/aws/<project>` shape and miss the others, returning 0 results on
+// real cust2 stacks.
+func TestDescribeProjectLogGroups_SubstringScoping(t *testing.T) {
 	t.Parallel()
 	client := &fakeCloudWatchLogsClient{
 		out: &cloudwatchlogs.DescribeLogGroupsOutput{
 			LogGroups: []cloudwatchlogstypes.LogGroup{
-				{LogGroupName: aws.String("/aws/myproj/lambda/foo")},
-				{LogGroupName: aws.String("/aws/myproj/eks/cluster")},
+				{LogGroupName: aws.String("/aws/eks/myproj-prod-lu-eks0/cluster")},
+				{LogGroupName: aws.String("/aws/rds/instance/myproj-prod-rds0/postgresql")},
+				{LogGroupName: aws.String("/aws/lambda/myproj-fn")},
+				{LogGroupName: aws.String("/myproj-prod-cwl/app")},
 			},
 		},
 	}
 
 	got, err := describeProjectLogGroups(context.Background(), client, "myproj")
 	require.NoError(t, err)
-	require.Len(t, got, 2)
+	require.Len(t, got, 4)
 
 	require.NotNil(t, client.lastInput, "DescribeLogGroups must be called once")
-	require.NotNil(t, client.lastInput.LogGroupNamePrefix, "non-empty project must populate LogGroupNamePrefix")
-	assert.Equal(t, "/aws/myproj", aws.ToString(client.lastInput.LogGroupNamePrefix))
+	require.NotNil(t, client.lastInput.LogGroupNamePattern, "non-empty project must populate LogGroupNamePattern")
+	assert.Equal(t, "myproj", aws.ToString(client.lastInput.LogGroupNamePattern),
+		"the pattern must be the bare project name — substring match catches all four real preset naming shapes")
+	assert.Nil(t, client.lastInput.LogGroupNamePrefix,
+		"LogGroupNamePrefix and LogGroupNamePattern are mutually exclusive at the AWS API; only the substring filter must be set")
 }
 
-// TestDescribeProjectLogGroups_EmptyProjectNoPrefix — when no project
-// filter is supplied, the call must NOT pass a prefix or the panel
-// shows nothing on stacks where log groups predate the convention.
-func TestDescribeProjectLogGroups_EmptyProjectNoPrefix(t *testing.T) {
+// TestDescribeProjectLogGroups_EmptyProjectNoFilter — when no project
+// filter is supplied, the call must NOT pass any name filter or the
+// panel would return zero on stacks where log groups predate the
+// project convention.
+func TestDescribeProjectLogGroups_EmptyProjectNoFilter(t *testing.T) {
 	t.Parallel()
 	client := &fakeCloudWatchLogsClient{
 		out: &cloudwatchlogs.DescribeLogGroupsOutput{
@@ -79,7 +94,8 @@ func TestDescribeProjectLogGroups_EmptyProjectNoPrefix(t *testing.T) {
 	require.Len(t, got, 1)
 
 	require.NotNil(t, client.lastInput)
-	assert.Nil(t, client.lastInput.LogGroupNamePrefix, "empty project must NOT set a prefix")
+	assert.Nil(t, client.lastInput.LogGroupNamePattern, "empty project must NOT set a pattern")
+	assert.Nil(t, client.lastInput.LogGroupNamePrefix, "empty project must NOT set a prefix either")
 }
 
 // TestDescribeProjectLogGroups_APIError surfaces the error verbatim;

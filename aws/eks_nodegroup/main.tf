@@ -178,6 +178,43 @@ resource "aws_eks_node_group" "this" {
 }
 
 # -------------------------------------------------------------
+# Tag propagation to EC2 instances (CLAUDE.md / issue #81)
+# -------------------------------------------------------------
+# `aws_eks_node_group.this.tags` tag the node-group RESOURCE only —
+# AWS does NOT propagate them to the EC2 instances spawned by the
+# managed node group's auto-derived ASG. This was discovered live on
+# cust2 (project `io-hrbs5zprbk51`): five running EKS workers carried
+# the AWS-managed `eks:cluster-name` tag but had no `Project` tag, so
+# reliable3's `Project`-scoped EC2 inspector returned zero.
+#
+# `aws_autoscaling_group_tag` writes each tag onto the underlying ASG
+# with `propagate_at_launch = true` — newly launched instances inherit
+# every tag in `local.common_tags + var.tags` (Project, Environment,
+# Component, customer-supplied additions). Already-running instances
+# do NOT pick up the tag retroactively; a node refresh / cordoned
+# rotation is required to fully retag the fleet (or an out-of-band
+# `aws ec2 create-tags` for the existing instance IDs).
+#
+# `for_each` keys are tag names — strings sourced from
+# `module.name.tags` / `var.tags`, all plan-time-known. The ASG name
+# itself is apply-time-known (`aws_eks_node_group.this.resources[0]
+# .autoscaling_groups[0].name`) but only flows into the resource's
+# attributes, not its for_each key, so the lint-foreach-unknown-keys
+# tripwire is satisfied. EKS managed-node-group ASGs always emit
+# `resources[0].autoscaling_groups[0]` (one ASG per node group).
+resource "aws_autoscaling_group_tag" "node_tags" {
+  for_each = merge(local.common_tags, var.tags)
+
+  autoscaling_group_name = aws_eks_node_group.this.resources[0].autoscaling_groups[0].name
+
+  tag {
+    key                 = each.key
+    value               = each.value
+    propagate_at_launch = true
+  }
+}
+
+# -------------------------------------------------------------
 # CloudWatch Container Insights addon
 # -------------------------------------------------------------
 # amazon-cloudwatch-observability installs the CloudWatch agent +

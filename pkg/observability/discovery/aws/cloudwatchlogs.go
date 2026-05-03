@@ -3,12 +3,25 @@
 // Ported from reliable internal/agentapi/aws_inspect.go
 // (cloudwatchlogs:790).
 //
-// CloudWatch Logs supports server-side LogGroupNamePrefix filtering, so
-// project scoping happens via a `/aws/<project>` prefix rather than a
-// fan-out tag check. This relies on the preset convention of naming
-// project log groups under `/aws/<project>/...` — if the preset ever
-// drops that convention, the prefix filter goes from "narrow" to
-// "empty". Mirrors the prefix path reliable already shipped.
+// Project scoping uses LogGroupNamePattern (server-side case-sensitive
+// substring match) rather than LogGroupNamePrefix. Real-world preset
+// log group names don't share a single prefix:
+//
+//   /aws/eks/<project>-prod-lu-eks0/cluster
+//   /aws/rds/instance/<project>-prod-...-rds0/postgresql
+//   /aws/lambda/<project>-...
+//   /<project>-prod-...-cwl<id>/app
+//
+// A `/aws/<project>` prefix matches none of these. The project name
+// itself is contained as a substring in every project-scoped log group
+// emitted by these presets, so a substring filter scopes correctly
+// across all four shapes. Verified live on cust2 (project
+// `io-hrbs5zprbk51`, us-east-1) where the prefix path returned 0 of 4
+// project-scoped log groups; the substring path returns all 4.
+//
+// LogGroupNamePattern reduces the response to {arn, creationTime,
+// logGroupName}. Discovery only consumes logGroupName, so the field
+// reduction is a non-issue.
 
 package aws
 
@@ -42,14 +55,15 @@ func inspectCloudWatchLogs(ctx context.Context, cfg aws.Config, action, filters 
 	}
 }
 
-// describeProjectLogGroups runs DescribeLogGroups, applying the
-// `/aws/<project>` LogGroupNamePrefix filter when project is non-empty
-// so callers see only this stack's groups.
+// describeProjectLogGroups runs DescribeLogGroups, applying the project
+// name as a LogGroupNamePattern (server-side substring match) when
+// project is non-empty so callers see only this stack's groups —
+// regardless of whether the log group's prefix is `/aws/eks/`,
+// `/aws/rds/instance/`, `/aws/lambda/`, or the bare `/<project>-...`.
 func describeProjectLogGroups(ctx context.Context, client cloudWatchLogsClient, project string) ([]cloudwatchlogstypes.LogGroup, error) {
 	input := &cloudwatchlogs.DescribeLogGroupsInput{}
 	if project != "" {
-		prefix := "/aws/" + project
-		input.LogGroupNamePrefix = &prefix
+		input.LogGroupNamePattern = aws.String(project)
 	}
 	out, err := client.DescribeLogGroups(ctx, input)
 	if err != nil {
