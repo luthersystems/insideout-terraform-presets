@@ -16,11 +16,22 @@ import (
 //  2. phantomComputedRule — denylist lookup; needs Type populated.
 //  3. iamManagedPolicyReconvergeRule — narrow shape match for the
 //     known IAM reconverge case.
+//  4. noOpRule — catch-all for resources whose only planner action
+//     is "no-op". Last so the more specific rules above can claim
+//     ownership (and their reasons) first; without this rule those
+//     resources hit the actionable fallback (issue #251).
+//  5. readRule — symmetric catch-all for resources whose only
+//     planner action is "read" (data-source refresh). Reading a
+//     data source never mutates infrastructure, so any Before/After
+//     diff is informational. Co-located with noOpRule because both
+//     classify on a non-mutating planner action.
 func defaultRules() []Rule {
 	return []Rule{
 		providerNoiseRule{},
 		phantomComputedRule{},
 		iamManagedPolicyReconvergeRule{},
+		noOpRule{},
+		readRule{},
 	}
 }
 
@@ -274,4 +285,61 @@ func (iamManagedPolicyReconvergeRule) Match(r ResourceDrift) (Class, string, boo
 // ["update", "replace"] which we don't want to classify as benign.
 func actionIsExactly(actions []string, want string) bool {
 	return len(actions) == 1 && actions[0] == want
+}
+
+// noOpRule classifies a resource whose plan action set is non-empty
+// and contains only "no-op" entries as [ClassNoOp]. Terraform's
+// resource_changes[].change.actions for a no-op resource is
+// canonically ["no-op"], so a subset check is mostly defensive — but
+// the rule does require at least one entry so an empty Action slice
+// (refresh-only addresses with action: null upstream) still falls
+// through to ClassUnknown rather than being silently filtered.
+//
+// Placed near the end of defaultRules so the more specific
+// providerNoiseRule / phantomComputedRule / iamManagedPolicyReconvergeRule
+// can claim ownership of no-op resources first and surface their
+// fine-grained reason. Without this rule, no-op-only resources that
+// don't match any specific rule hit the actionable fallback in
+// classifyOne — the false positive reported in issue #251 against
+// module.gcp_cloud_functions.google_storage_bucket.source[0].
+type noOpRule struct{}
+
+func (noOpRule) Match(r ResourceDrift) (Class, string, bool) {
+	if !actionsAllEqual(r.Action, "no-op") {
+		return "", "", false
+	}
+	return ClassNoOp, "plan action is no-op", true
+}
+
+// readRule classifies a resource whose plan action set is non-empty
+// and contains only "read" entries as [ClassRead]. The "read" action
+// is emitted for data sources whose result is being refreshed — the
+// operation queries cloud state but never mutates it, so any
+// Before/After diff is informational. Symmetric to noOpRule; both
+// signal "planner decided no apply will modify infrastructure."
+type readRule struct{}
+
+func (readRule) Match(r ResourceDrift) (Class, string, bool) {
+	if !actionsAllEqual(r.Action, "read") {
+		return "", "", false
+	}
+	return ClassRead, "plan action is read", true
+}
+
+// actionsAllEqual returns true when actions is non-empty and every
+// entry equals want. Subset semantics rather than exact-singleton —
+// terraform canonically emits a singleton ["no-op"] / ["read"] today,
+// but the permissive form keeps the rules from regressing if the
+// upstream ever joins multiple identical planner actions onto one
+// address.
+func actionsAllEqual(actions []string, want string) bool {
+	if len(actions) == 0 {
+		return false
+	}
+	for _, a := range actions {
+		if a != want {
+			return false
+		}
+	}
+	return true
 }

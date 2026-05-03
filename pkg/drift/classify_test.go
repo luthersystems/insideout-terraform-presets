@@ -209,6 +209,150 @@ func TestIAMManagedPolicyReconverge_DoesNotFireWhenBeforeNonEmpty(t *testing.T) 
 	}
 }
 
+// --- noOpRule ---
+
+func TestNoOpRule_OnlyNoOpAction(t *testing.T) {
+	t.Parallel()
+	// Issue #251 repro: action ["no-op"] on a resource type that
+	// none of the specific rules cover. Without noOpRule the
+	// resource hits the actionable fallback; with it, the verdict
+	// is the dedicated no_op class.
+	d := Drift{Resources: []ResourceDrift{
+		rd("module.gcp_cloud_functions.google_storage_bucket.source[0]",
+			"google_storage_bucket",
+			[]string{"no-op"},
+			`{"labels": {"managed-by": "terraform"}}`,
+			`{"labels": {"managed-by": "terraform", "drift": "phantom"}}`),
+	}}
+	got := Classify(d)
+	if got.Resources[0].Class != ClassNoOp {
+		t.Errorf("Class = %q; want %q", got.Resources[0].Class, ClassNoOp)
+	}
+	if got.Resources[0].Reason != "plan action is no-op" {
+		t.Errorf("Reason = %q; want %q", got.Resources[0].Reason, "plan action is no-op")
+	}
+	if got.ActionableCount != 0 {
+		t.Errorf("ActionableCount = %d; want 0", got.ActionableCount)
+	}
+	if got.FilteredCount != 1 {
+		t.Errorf("FilteredCount = %d; want 1", got.FilteredCount)
+	}
+}
+
+func TestNoOpRule_DoesNotFireOnUpdateAction(t *testing.T) {
+	t.Parallel()
+	// Mixed-or-non-no-op actions must not be silenced by noOpRule.
+	d := Drift{Resources: []ResourceDrift{
+		rd("aws_s3_bucket.b", "aws_s3_bucket", []string{"update"},
+			`{"acl": "private"}`, `{"acl": "public-read"}`),
+		rd("aws_s3_bucket.c", "aws_s3_bucket", []string{"no-op", "update"},
+			`{"acl": "private"}`, `{"acl": "public-read"}`),
+	}}
+	got := Classify(d)
+	for i, res := range got.Resources {
+		if res.Class == ClassNoOp {
+			t.Errorf("Resources[%d].Class = no_op for action %v; must abstain", i, res.Action)
+		}
+	}
+}
+
+func TestNoOpRule_DoesNotFireOnEmptyAction(t *testing.T) {
+	t.Parallel()
+	// Action == nil (refresh-only address with upstream action:null
+	// per the wireResourceDrift trichotomy) must continue falling
+	// through to ClassUnknown — not get silently filtered as no_op.
+	d := Drift{Resources: []ResourceDrift{
+		rd("aws_s3_bucket.b", "aws_s3_bucket", nil,
+			`{"acl": "private"}`, `{"acl": "public-read"}`),
+	}}
+	got := Classify(d)
+	if got.Resources[0].Class != ClassUnknown {
+		t.Errorf("Class = %q; want %q", got.Resources[0].Class, ClassUnknown)
+	}
+}
+
+func TestNoOpRule_SpecificRulesWinFirst(t *testing.T) {
+	t.Parallel()
+	// All three resources have action ["no-op"]. The more specific
+	// rules earlier in the chain must claim them ahead of noOpRule
+	// so the per-resource Reason carries the finer-grained signal.
+	d := Drift{Resources: []ResourceDrift{
+		// providerNoiseRule should fire on null/empty equivalence.
+		rd("module.alb.aws_lb_listener.main", "aws_lb_listener",
+			[]string{"no-op"},
+			`{"tags": {}}`, `{"tags": null}`),
+		// phantomComputedRule should fire on denylisted-only attrs.
+		rd("module.gcp_firestore.google_firestore_database.default",
+			"google_firestore_database", []string{"no-op"},
+			`{"etag": "abc"}`, `{"etag": "def"}`),
+	}}
+	got := Classify(d)
+	if got.Resources[0].Class != ClassProviderNoise {
+		t.Errorf("Resources[0].Class = %q; want %q",
+			got.Resources[0].Class, ClassProviderNoise)
+	}
+	if got.Resources[1].Class != ClassPhantomComputed {
+		t.Errorf("Resources[1].Class = %q; want %q",
+			got.Resources[1].Class, ClassPhantomComputed)
+	}
+}
+
+// --- readRule ---
+
+func TestReadRule_OnlyReadAction(t *testing.T) {
+	t.Parallel()
+	// Symmetric to TestNoOpRule_OnlyNoOpAction: a data source that
+	// surfaces in resource_drift with action ["read"] must classify
+	// as benign because reading never mutates infrastructure.
+	d := Drift{Resources: []ResourceDrift{
+		rd("data.aws_caller_identity.current", "aws_caller_identity",
+			[]string{"read"},
+			`{"account_id": "111111111111"}`,
+			`{"account_id": "222222222222"}`),
+	}}
+	got := Classify(d)
+	if got.Resources[0].Class != ClassRead {
+		t.Errorf("Class = %q; want %q", got.Resources[0].Class, ClassRead)
+	}
+	if got.Resources[0].Reason != "plan action is read" {
+		t.Errorf("Reason = %q; want %q", got.Resources[0].Reason, "plan action is read")
+	}
+	if got.ActionableCount != 0 {
+		t.Errorf("ActionableCount = %d; want 0", got.ActionableCount)
+	}
+	if got.FilteredCount != 1 {
+		t.Errorf("FilteredCount = %d; want 1", got.FilteredCount)
+	}
+}
+
+func TestReadRule_DoesNotFireOnNoOp(t *testing.T) {
+	t.Parallel()
+	// noOpRule and readRule must remain disjoint — a no-op-only
+	// resource must classify as ClassNoOp, not ClassRead.
+	d := Drift{Resources: []ResourceDrift{
+		rd("aws_s3_bucket.b", "aws_s3_bucket", []string{"no-op"},
+			`{"x": 1}`, `{"x": 2}`),
+	}}
+	got := Classify(d)
+	if got.Resources[0].Class != ClassNoOp {
+		t.Errorf("Class = %q; want %q", got.Resources[0].Class, ClassNoOp)
+	}
+}
+
+func TestReadRule_DoesNotFireOnMixedAction(t *testing.T) {
+	t.Parallel()
+	// ["read", "update"] is nonsense in practice but must not be
+	// silenced — readRule fires only when every action is "read".
+	d := Drift{Resources: []ResourceDrift{
+		rd("aws_s3_bucket.b", "aws_s3_bucket", []string{"read", "update"},
+			`{"x": 1}`, `{"x": 2}`),
+	}}
+	got := Classify(d)
+	if got.Resources[0].Class == ClassRead {
+		t.Errorf("Class = read for action %v; must abstain", got.Resources[0].Action)
+	}
+}
+
 // --- fall-through: actionable / unknown ---
 
 func TestClassify_FallThroughActionable(t *testing.T) {
@@ -348,6 +492,21 @@ func TestClassify_FixtureRoundTrip(t *testing.T) {
 			// abstain because Type is empty, so resources fall
 			// through to ClassUnknown (no Action populated either).
 			[]Class{ClassUnknown, ClassUnknown},
+		},
+		{
+			"no_op_only.drift.json",
+			true, 1, 0,
+			// Issue #251: action ["no-op"] on a resource that no
+			// specific rule covers must classify as no_op (not
+			// actionable).
+			[]Class{ClassNoOp},
+		},
+		{
+			"read_only.drift.json",
+			true, 1, 0,
+			// Symmetric coverage: action ["read"] is non-mutating
+			// and must classify as read (not actionable).
+			[]Class{ClassRead},
 		},
 	}
 	for _, tt := range tests {
