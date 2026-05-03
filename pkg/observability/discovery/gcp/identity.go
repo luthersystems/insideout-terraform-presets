@@ -22,9 +22,12 @@ package gcp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
+	"strings"
 
+	"google.golang.org/api/googleapi"
 	"google.golang.org/api/identitytoolkit/v2"
 	"google.golang.org/api/option"
 
@@ -57,6 +60,18 @@ func inspectIdentityPlatform(ctx context.Context, projectID, action, _ string, o
 			}
 			resp, err := call.Do()
 			if err != nil {
+				if isIdentityPlatformMultitenancyDisabled(err) {
+					// Identity Platform multi-tenancy is a per-
+					// project opt-in — the API is enabled but the
+					// /v2/projects/{p}/tenants endpoint returns 400
+					// INVALID_PROJECT_ID until a tenant is first
+					// created via the console or REST. Surface a
+					// structured envelope so the panel renders a
+					// clean "feature not enabled" empty state
+					// instead of leaking the raw 400 (#245).
+					return nil, observability.NewGCPFeatureNotEnabledError(
+						"identity_platform_multitenancy", projectID, err)
+				}
 				return nil, err
 			}
 			tenants = append(tenants, resp.Tenants...)
@@ -108,4 +123,24 @@ func inspectIdentityPlatform(ctx context.Context, projectID, action, _ string, o
 	default:
 		return nil, unsupportedActionError("Identity Platform", action, observability.GCPServiceActions["identityplatform"])
 	}
+}
+
+// isIdentityPlatformMultitenancyDisabled reports whether err is the
+// specific "400 INVALID_PROJECT_ID" signature returned by /v2/
+// projects/{p}/tenants when multi-tenancy hasn't been provisioned.
+// Other Identity Platform endpoints on the same project return 200
+// fine (verified live against diagramtest2025-09-14, #245), so the
+// signature is precise enough to dispatch on without false positives.
+func isIdentityPlatformMultitenancyDisabled(err error) bool {
+	if err == nil {
+		return false
+	}
+	var gerr *googleapi.Error
+	if !errors.As(err, &gerr) {
+		return false
+	}
+	if gerr.Code != 400 {
+		return false
+	}
+	return strings.Contains(gerr.Message, "INVALID_PROJECT_ID")
 }

@@ -58,6 +58,7 @@ require (
 	github.com/hashicorp/terraform-json v0.27.2
 	github.com/stretchr/testify v1.11.1
 	github.com/zclconf/go-cty v1.17.0
+	golang.org/x/oauth2 v0.36.0
 	google.golang.org/api v0.277.0
 	google.golang.org/genproto v0.0.0-20260319201613-d00831a3d3e7
 	google.golang.org/genproto/googleapis/api v0.0.0-20260401024825-9d38bb4040a9
@@ -119,7 +120,6 @@ require (
 	golang.org/x/crypto v0.50.0 // indirect
 	golang.org/x/mod v0.34.0 // indirect
 	golang.org/x/net v0.53.0 // indirect
-	golang.org/x/oauth2 v0.36.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/sys v0.43.0 // indirect
 	golang.org/x/text v0.36.0 // indirect

@@ -80,3 +80,51 @@ func UnsupportedServiceError(service string, validServices []string) error {
 	}
 	return errors.New(sb.String())
 }
+
+// GCPFeatureNotEnabledError signals that a per-project GCP feature is
+// not provisioned even though the underlying API is enabled — for
+// example, Identity Platform multi-tenancy on a project that has
+// `identitytoolkit.googleapis.com` enabled but never opted in to
+// multi-tenancy. The discovery layer wraps the upstream 4xx in this
+// type so callers (reliable's panel renderer) can render a clean
+// "feature not enabled" empty state via errors.As instead of leaking
+// a raw `400 INVALID_PROJECT_ID` string into the UI (#245).
+//
+// Feature is a stable identifier (snake_case) — reliable matches on
+// it without parsing the human-readable Error() string. ProjectID is
+// the GCP project the call was made against.
+type GCPFeatureNotEnabledError struct {
+	Feature   string
+	ProjectID string
+	Cause     error
+}
+
+// Error renders a human-readable form. The Feature identifier is the
+// machine-checkable contract — callers should use errors.As, not
+// string matching.
+func (e *GCPFeatureNotEnabledError) Error() string {
+	if e == nil {
+		return "<nil>"
+	}
+	if e.Cause != nil {
+		return fmt.Sprintf("gcp_feature_not_enabled[%s] project=%s: %v", e.Feature, e.ProjectID, e.Cause)
+	}
+	return fmt.Sprintf("gcp_feature_not_enabled[%s] project=%s", e.Feature, e.ProjectID)
+}
+
+// Unwrap exposes the upstream googleapi.Error / wrapped error so
+// callers can inspect status codes if they need to.
+func (e *GCPFeatureNotEnabledError) Unwrap() error {
+	if e == nil {
+		return nil
+	}
+	return e.Cause
+}
+
+// NewGCPFeatureNotEnabledError constructs the typed envelope. Use
+// from per-service inspectors when an upstream 4xx specifically
+// signals "feature not provisioned on this project" rather than a
+// generic API or auth failure.
+func NewGCPFeatureNotEnabledError(feature, projectID string, cause error) error {
+	return &GCPFeatureNotEnabledError{Feature: feature, ProjectID: projectID, Cause: cause}
+}

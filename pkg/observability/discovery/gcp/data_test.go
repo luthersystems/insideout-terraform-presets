@@ -153,3 +153,46 @@ func TestInspectFirestore_UnsupportedAction(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unsupported Firestore action")
 }
+
+// TestFirestoreDatabaseFromFilters_Roundtrip pins the parse + safety-
+// check behavior used by inspectFirestore (#245). Validation is
+// exercised here without spinning up a Firestore client — the
+// happy/sad paths are pure-Go.
+func TestFirestoreDatabaseFromFilters_Roundtrip(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name    string
+		filters string
+		want    string
+	}{
+		{"empty filters → default", "", ""},
+		{"missing key → default", `{"project":"io-foo"}`, ""},
+		{"empty value → default", `{"database_name":""}`, ""},
+		{
+			name:    "preset-shaped name accepted",
+			filters: `{"database_name":"io-cc7ndmjcolun-firestore-8a3bfd07"}`,
+			want:    "io-cc7ndmjcolun-firestore-8a3bfd07",
+		},
+		{
+			name:    "(default) literal accepted",
+			filters: `{"database_name":"(default)"}`,
+			want:    "(default)",
+		},
+		// Defense-in-depth: anything outside the GCP database-id
+		// charset must NOT reach firestore.NewClientWithDatabase.
+		{"semicolon injection rejected", `{"database_name":"foo;rm -rf /"}`, ""},
+		{"slash rejected", `{"database_name":"foo/bar"}`, ""},
+		{"quote rejected", `{"database_name":"foo\"bar"}`, ""},
+		{"uppercase rejected", `{"database_name":"FooBar"}`, ""},
+		{"too-short rejected", `{"database_name":"ab"}`, ""},
+		{"trailing-dash rejected", `{"database_name":"foo-"}`, ""},
+		{"malformed JSON → default", `not-json`, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := firestoreDatabaseFromFilters(tc.filters)
+			assert.Equal(t, tc.want, got)
+		})
+	}
+}

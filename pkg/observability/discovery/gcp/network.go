@@ -28,7 +28,6 @@ import (
 	computeapi "google.golang.org/api/compute/v1"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
-	"google.golang.org/protobuf/proto"
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/observability"
 )
@@ -39,42 +38,49 @@ func inspectVPC(ctx context.Context, projectID, action, filters string, opts ...
 		return nil, err
 	}
 
-	// AIP-160 filter, applied where the resource type carries labels
-	// (Networks, Subnetworks). Firewalls and Routes have no labels
-	// field on the GCE API (per the v1 schema) so they stay un-filtered
-	// — they're scoped by parent network association rather than
-	// labels.
+	// Compute v1 list endpoints split into THREE filter regimes
+	// (verified live against project diagramtest2025-09-14, #245):
 	//
-	// Compute v1's per-endpoint filter parser is inconsistent: some
-	// endpoints accept the GCE legacy dialect (`labels.foo=bar`) and
-	// some reject it with HTTP 400 "Invalid list filter expression".
-	// `networks.list`, `subnetworks.aggregatedList`,
-	// `backendServices.list`, `urlMaps.list`, `targetHttp(s)Proxies.
-	// list` all reject the legacy dialect (verified live on staging
-	// session sess_v2_qtyB4nkwp5N8 — see #239 broader sweep). AIP-160
-	// is the standard dialect and works on every Compute v1 endpoint
-	// we exercise.
-	projectFilter := gcpAIP160LabelFilter("project", projectFromFilters(filters))
+	//   (a) Resource type has no `labels` field at the API surface:
+	//       networks, subnetworks, backendServices, urlMaps,
+	//       targetHttp(s)Proxies, firewalls, routes. The server
+	//       rejects `labels.*` filters with HTTP 400 "Invalid list
+	//       filter expression"; post-filtering is impossible too
+	//       because the SDK's struct has no Labels field. Return
+	//       everything in the project.
+	//   (b) Resource type carries `labels` and accepts the AIP-160
+	//       server-side filter dialect: globalForwardingRules,
+	//       securityPolicies, instances.aggregatedList. Filter
+	//       server-side via gcpAIP160LabelFilter.
+	//
+	// The earlier #239 fix unilaterally flipped every Compute v1
+	// call site to AIP-160 thinking that was the universal answer.
+	// Live probing showed AIP-160 fails just as hard as the legacy
+	// dialect on regime-(a) endpoints, including the original
+	// backendServices.aggregatedList that #239 patched. The fix
+	// here drops the labels filter on regime-(a) endpoints
+	// entirely. Project-level attribution for those resource types
+	// happens via Project tag on the GCP project itself, not via
+	// per-resource labels.
+	//
+	// TestLive_ComputeV1FilterRegimes in live_integration_test.go
+	// pins the regime table against the real API so future
+	// Google-side parser changes are caught immediately.
 
 	switch action {
 	case "list-networks":
-		call := svc.Networks.List(projectID).Context(ctx)
-		if projectFilter != "" {
-			call = call.Filter(projectFilter)
-		}
-		resp, err := call.Do()
+		// Regime (a) — Network has no Labels field; drop filter;
+		// return everything in the project.
+		resp, err := svc.Networks.List(projectID).Context(ctx).Do()
 		if err != nil {
 			return nil, err
 		}
 		return resp.Items, nil
 
 	case "list-subnets":
+		// Regime (a) — Subnetwork has no Labels field; drop filter;
 		// AggregatedList covers every region.
-		call := svc.Subnetworks.AggregatedList(projectID).Context(ctx)
-		if projectFilter != "" {
-			call = call.Filter(projectFilter)
-		}
-		resp, err := call.Do()
+		resp, err := svc.Subnetworks.AggregatedList(projectID).Context(ctx).Do()
 		if err != nil {
 			return nil, err
 		}
@@ -113,65 +119,56 @@ func inspectLoadBalancer(ctx context.Context, projectID, action, filters string,
 		return nil, err
 	}
 
-	// AIP-160 filter — every load-balancer resource type listed below
-	// carries `labels` in the v1 schema (BackendServices, UrlMaps,
-	// TargetHttp[s]Proxies, GlobalForwardingRules). Was the GCE legacy
-	// dialect, but BackendServices.list / UrlMaps.list / TargetHttp(s)
-	// Proxies.list reject it with HTTP 400 (see #239 + the network.go
-	// header comment on the per-endpoint filter parser inconsistency).
-	projectFilter := gcpAIP160LabelFilter("project", projectFromFilters(filters))
+	// Filter regime per endpoint — see the network.go inspectVPC
+	// header comment for the full table. Summary for the load-
+	// balancer resource family:
+	//   - backendServices, urlMaps, targetHttp(s)Proxies — regime
+	//     (a): no Labels on the resource type. Drop the filter;
+	//     return everything.
+	//   - globalForwardingRules — regime (b): AIP-160 works.
+	aip160 := gcpAIP160LabelFilter("project", projectFromFilters(filters))
 
 	switch action {
 	case "list-backend-services":
-		// Global backend services.
-		call := svc.BackendServices.List(projectID).Context(ctx)
-		if projectFilter != "" {
-			call = call.Filter(projectFilter)
-		}
-		resp, err := call.Do()
+		// Regime (a) — BackendService has no Labels field; drop
+		// filter.
+		resp, err := svc.BackendServices.List(projectID).Context(ctx).Do()
 		if err != nil {
 			return nil, err
 		}
 		return resp.Items, nil
 
 	case "list-url-maps":
-		call := svc.UrlMaps.List(projectID).Context(ctx)
-		if projectFilter != "" {
-			call = call.Filter(projectFilter)
-		}
-		resp, err := call.Do()
+		// Regime (a) — UrlMap has no Labels field; drop filter.
+		resp, err := svc.UrlMaps.List(projectID).Context(ctx).Do()
 		if err != nil {
 			return nil, err
 		}
 		return resp.Items, nil
 
 	case "list-target-http-proxies":
-		call := svc.TargetHttpProxies.List(projectID).Context(ctx)
-		if projectFilter != "" {
-			call = call.Filter(projectFilter)
-		}
-		resp, err := call.Do()
+		// Regime (a) — TargetHttpProxy has no Labels field; drop
+		// filter. The reliable side attributes ownership via the
+		// URL-map → backend-service chain when needed.
+		resp, err := svc.TargetHttpProxies.List(projectID).Context(ctx).Do()
 		if err != nil {
 			return nil, err
 		}
 		return resp.Items, nil
 
 	case "list-target-https-proxies":
-		call := svc.TargetHttpsProxies.List(projectID).Context(ctx)
-		if projectFilter != "" {
-			call = call.Filter(projectFilter)
-		}
-		resp, err := call.Do()
+		// Regime (a) — same as list-target-http-proxies.
+		resp, err := svc.TargetHttpsProxies.List(projectID).Context(ctx).Do()
 		if err != nil {
 			return nil, err
 		}
 		return resp.Items, nil
 
 	case "list-forwarding-rules":
-		// Global forwarding rules.
+		// Regime (b) — AIP-160 server-side filter accepted.
 		call := svc.GlobalForwardingRules.List(projectID).Context(ctx)
-		if projectFilter != "" {
-			call = call.Filter(projectFilter)
+		if aip160 != "" {
+			call = call.Filter(aip160)
 		}
 		resp, err := call.Do()
 		if err != nil {
@@ -220,14 +217,16 @@ func inspectCloudArmor(ctx context.Context, projectID, action, filters string, o
 }
 
 // cloudCDNAggregatedListRequest builds the AggregatedList request for
-// the Cloud CDN inspector. Pulled out so the AIP-160 dialect choice
-// (#239) is pinned by a unit test instead of a comment.
-func cloudCDNAggregatedListRequest(projectID, filters string) *computepb.AggregatedListBackendServicesRequest {
-	req := &computepb.AggregatedListBackendServicesRequest{Project: projectID}
-	if f := gcpAIP160LabelFilter("project", projectFromFilters(filters)); f != "" {
-		req.Filter = proto.String(f)
-	}
-	return req
+// the Cloud CDN inspector. Pulled out so the no-filter contract (#245)
+// is pinned by a unit test.
+//
+// `filters` is accepted for forward compatibility but currently
+// unused: BackendService has no Labels field on either the legacy
+// (computeapi) or gapic (computepb) representation, so there's nothing
+// to attribute by even client-side. Project-level scoping is enforced
+// at the project boundary (caller controls projectID).
+func cloudCDNAggregatedListRequest(projectID string, _ string) *computepb.AggregatedListBackendServicesRequest {
+	return &computepb.AggregatedListBackendServicesRequest{Project: projectID}
 }
 
 func inspectCloudCDN(ctx context.Context, projectID, action, filters string, opts ...option.ClientOption) (any, error) {
@@ -237,26 +236,18 @@ func inspectCloudCDN(ctx context.Context, projectID, action, filters string, opt
 		// (EnableCdn=true), not a standalone resource — list backend
 		// services across all scopes and keep the CDN-enabled ones.
 		//
-		// IMPORTANT (#239): server-side scoping uses the AIP-160 dialect
-		// (`labels.project = "<value>"`), NOT the GCE legacy dialect
-		// (`labels.project=<value>`) used by every other inspector in
-		// this file. The same Compute v1 REST API exposes BOTH dialects
-		// per-endpoint:
-		//
-		//   - VPC / LoadBalancer / CloudArmor go through
-		//     google.golang.org/api/compute/v1 (computeapi.NewService)
-		//     — the older REST client — whose List/AggregatedList
-		//     accept the bare-equality legacy filter.
-		//   - CloudCDN goes through cloud.google.com/go/compute/apiv1
-		//     (compute.NewBackendServicesRESTClient) — the newer
-		//     gRPC-shaped client — whose AggregatedList rejects the
-		//     legacy form with HTTP 400 "Invalid list filter
-		//     expression" and requires the AIP-160 form. This was the
-		//     symptom on staging session sess_v2_qtyB4nkwp5N8 (#239).
-		//
-		// If we ever migrate the rest of this file to the newer
-		// compute apiv1 client, those call sites must flip to
-		// gcpAIP160LabelFilter at the same time.
+		// CORRECTION (#245): the previous #239 fix passed the
+		// AIP-160 `labels.project = "<value>"` server-side filter,
+		// claiming backendServices.aggregatedList accepted it. Live
+		// probing against project diagramtest2025-09-14 showed the
+		// endpoint REJECTS labels filters in BOTH dialects with
+		// HTTP 400 "Invalid list filter expression" — BackendService
+		// has no `labels` field on the v1 schema. The earlier unit
+		// test `TestCloudCDNAggregatedListRequest_AIP160DialectFor
+		// ProjectFilter` pinned a wire format the server actually
+		// rejects; without a live integration test, the bug shipped
+		// to v0.9.0. Fix: drop the labels filter; the EnableCDN
+		// post-filter on returned services already scopes correctly.
 		client, err := compute.NewBackendServicesRESTClient(ctx, opts...)
 		if err != nil {
 			return nil, err

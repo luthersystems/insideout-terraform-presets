@@ -2,6 +2,7 @@ package gcp
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -11,6 +12,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/api/identitytoolkit/v2"
 	"google.golang.org/api/option"
+
+	"github.com/luthersystems/insideout-terraform-presets/pkg/observability"
 )
 
 // fakeIdentityToolkitREST stands in for the Identity Toolkit v2 REST
@@ -117,4 +120,62 @@ func TestInspectIdentityPlatform_UnsupportedAction(t *testing.T) {
 	_, err := inspectIdentityPlatform(context.Background(), "demo-proj", "no-such", "", opts...)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unsupported Identity Platform action")
+}
+
+// TestInspectIdentityPlatform_ListTenants_MultitenancyDisabledReturnsStructuredError
+// pins #245: the /v2/projects/{p}/tenants endpoint returns 400
+// INVALID_PROJECT_ID when multi-tenancy hasn't been provisioned on
+// the project (the API IS enabled and other Identity Platform
+// endpoints work fine on the same project). The handler must wrap
+// that signature in observability.GCPFeatureNotEnabledError so
+// reliable's panel renderer can render a clean empty state via
+// errors.As instead of leaking the raw 400 string into the UI.
+func TestInspectIdentityPlatform_ListTenants_MultitenancyDisabledReturnsStructuredError(t *testing.T) {
+	t.Parallel()
+	srv, opts := fakeIdentityToolkitREST(t, func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.URL.Path, "/tenants") {
+			http.Error(w, "unexpected path: "+r.URL.Path, http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{
+		  "error": {
+		    "code": 400,
+		    "message": "INVALID_PROJECT_ID",
+		    "status": "INVALID_ARGUMENT"
+		  }
+		}`))
+	})
+	defer srv.Close()
+
+	_, err := inspectIdentityPlatform(context.Background(), "diagramtest2025-09-14", "list-tenants", "", opts...)
+	require.Error(t, err)
+
+	var feErr *observability.GCPFeatureNotEnabledError
+	require.True(t, errors.As(err, &feErr),
+		"err must wrap GCPFeatureNotEnabledError so reliable can errors.As it; got %T (%v)", err, err)
+	assert.Equal(t, "identity_platform_multitenancy", feErr.Feature)
+	assert.Equal(t, "diagramtest2025-09-14", feErr.ProjectID)
+	require.NotNil(t, feErr.Cause, "Cause must preserve the upstream googleapi error for diagnostics")
+}
+
+// TestInspectIdentityPlatform_ListTenants_OtherErrorsPassThrough — the
+// structured envelope is precise: only the INVALID_PROJECT_ID 400
+// from the tenants endpoint gets wrapped. Generic 5xx / 403 errors
+// propagate as-is so callers can distinguish "feature not provisioned"
+// from "transient API failure".
+func TestInspectIdentityPlatform_ListTenants_OtherErrorsPassThrough(t *testing.T) {
+	t.Parallel()
+	srv, opts := fakeIdentityToolkitREST(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = w.Write([]byte(`{"error":{"code":500,"message":"backend unavailable","status":"INTERNAL"}}`))
+	})
+	defer srv.Close()
+
+	_, err := inspectIdentityPlatform(context.Background(), "demo-proj", "list-tenants", "", opts...)
+	require.Error(t, err)
+	var feErr *observability.GCPFeatureNotEnabledError
+	assert.False(t, errors.As(err, &feErr), "5xx errors must NOT be wrapped as feature-not-enabled")
 }
