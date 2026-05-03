@@ -72,7 +72,7 @@ func TestInspectVPC_ListNetworks_AppliesProjectFilter(t *testing.T) {
 	_, err := inspectVPC(context.Background(), "demo-proj", "list-networks",
 		`{"project":"io-foo"}`, opts...)
 	require.NoError(t, err)
-	assert.Equal(t, "labels.project=io-foo", capturedFilter)
+	assert.Equal(t, `labels.project = "io-foo"`, capturedFilter)
 }
 
 func TestInspectVPC_ListFirewallsUnfiltered(t *testing.T) {
@@ -123,7 +123,7 @@ func TestInspectLoadBalancer_ListBackendServices_AppliesFilter(t *testing.T) {
 	_, err := inspectLoadBalancer(context.Background(), "demo-proj", "list-backend-services",
 		`{"project":"io-foo"}`, opts...)
 	require.NoError(t, err)
-	assert.Equal(t, "labels.project=io-foo", capturedFilter)
+	assert.Equal(t, `labels.project = "io-foo"`, capturedFilter)
 }
 
 func TestInspectLoadBalancer_UnsupportedAction(t *testing.T) {
@@ -149,7 +149,7 @@ func TestInspectCloudArmor_ListPolicies_AppliesFilter(t *testing.T) {
 	_, err := inspectCloudArmor(context.Background(), "demo-proj", "list-policies",
 		`{"project":"io-foo"}`, opts...)
 	require.NoError(t, err)
-	assert.Equal(t, "labels.project=io-foo", capturedFilter)
+	assert.Equal(t, `labels.project = "io-foo"`, capturedFilter)
 }
 
 func TestInspectCloudArmor_DescribePolicy_MissingFilter(t *testing.T) {
@@ -180,6 +180,52 @@ func TestInspectCloudCDN_UnsupportedAction(t *testing.T) {
 	)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unsupported Cloud CDN action")
+}
+
+// TestCloudCDNAggregatedListRequest_AIP160DialectForProjectFilter pins
+// the dialect choice from #239: backendServices.aggregatedList rejects
+// the GCE legacy filter form (`labels.project=<value>`) with HTTP 400
+// "Invalid list filter expression" and requires the AIP-160 form
+// (`labels.project = "<value>"`). This is the same Compute v1 REST API
+// as VPC / LoadBalancer / CloudArmor, but accessed via the newer
+// cloud.google.com/go/compute/apiv1 client which enforces AIP-160.
+//
+// If a future refactor flips this back to gcpLegacyLabelFilter (or
+// changes the helper's output shape), this test fails. Reproduces the
+// staging session sess_v2_qtyB4nkwp5N8 / project io-qtyb4nkwp5n8 bug.
+func TestCloudCDNAggregatedListRequest_AIP160DialectForProjectFilter(t *testing.T) {
+	t.Parallel()
+	req := cloudCDNAggregatedListRequest("demo-proj", `{"project":"io-qtyb4nkwp5n8"}`)
+
+	require.NotNil(t, req, "request must always be returned")
+	assert.Equal(t, "demo-proj", req.GetProject(), "Project must be set on the AggregatedList request")
+	require.NotNil(t, req.Filter, "non-empty project filter must populate req.Filter")
+	assert.Equal(t, `labels.project = "io-qtyb4nkwp5n8"`, *req.Filter,
+		"filter must use AIP-160 dialect (spaces around =, quoted value); the GCE legacy form is rejected by backendServices.aggregatedList with HTTP 400 — see #239")
+}
+
+// TestCloudCDNAggregatedListRequest_NoFilterWhenProjectMissing — no
+// filter must be set when the caller doesn't supply a project; the SDK
+// treats nil as "no filter" / match all.
+func TestCloudCDNAggregatedListRequest_NoFilterWhenProjectMissing(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name    string
+		filters string
+	}{
+		{"empty filters", ""},
+		{"missing project key", `{"region":"us-central1"}`},
+		{"empty project value", `{"project":""}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			req := cloudCDNAggregatedListRequest("demo-proj", tc.filters)
+			require.NotNil(t, req)
+			assert.Equal(t, "demo-proj", req.GetProject())
+			assert.Nil(t, req.Filter, "no project filter → req.Filter must be nil so backendServices.aggregatedList returns everything in the project")
+		})
+	}
 }
 
 func TestInspectAPIGateway_UnsupportedAction(t *testing.T) {

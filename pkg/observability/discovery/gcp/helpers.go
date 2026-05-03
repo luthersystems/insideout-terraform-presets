@@ -143,6 +143,24 @@ func gcpAIP160LabelFilter(key, value string) string {
 	return fmt.Sprintf("labels.%s = %q", key, value)
 }
 
+// gcpAIP160LabelFilterAnd joins two AIP-160 filters with " AND ". Empty
+// operands are dropped so callers can pass a base + optional addition
+// without guarding the empty case. The AIP-160 dialect uses the same
+// `AND` keyword as the legacy dialect, so the join shape is identical
+// — only the per-clause format differs.
+func gcpAIP160LabelFilterAnd(a, b string) string {
+	switch {
+	case a == "" && b == "":
+		return ""
+	case a == "":
+		return b
+	case b == "":
+		return a
+	default:
+		return a + " AND " + b
+	}
+}
+
 // gcpLabelMatches reports whether labels[key] == want. An empty `want`
 // is treated as match-all (caller didn't supply a project filter).
 // Mirrors reliable's gcp_filter.go gcpLabelMatches. Used by post-filter

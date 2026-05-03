@@ -237,29 +237,29 @@ var awsServiceMetrics = map[string]AWSObs{
 		},
 	},
 	"eks": {
-		// EKS metrics are pivoted onto AWS/EC2 InstanceId via the
-		// AWS-managed `eks:cluster-name` tag: the orchestrator's
-		// metrics-discovery action is `list-nodes` (see
-		// ComponentMetricsMapping[KeyAWSEKS] in component_metrics.go),
-		// which returns the cluster's underlying EC2 instance IDs.
-		// Querying CPUUtilization on those instances surfaces real data
-		// on every existing EKS deployment (#231 Option A).
+		// ContainerInsights — node + pod metrics published by the
+		// amazon-cloudwatch-observability addon (CloudWatch agent +
+		// fluent-bit DaemonSets). The aws/eks_nodegroup preset
+		// installs the addon by default as of #233 Option B-1
+		// (configurable via var.enable_container_insights). On
+		// fresh deployments the panel populates ~5 minutes after
+		// apply; clusters that opt out via the variable will
+		// render "no observable resources" until they re-enable.
 		//
-		// AWS/EKS itself only publishes a small set of cluster-level
-		// metrics (cluster_failed_node_count, control-plane API server
-		// latency); the node_cpu_utilization / pod_cpu_utilization
-		// names previously listed here are ContainerInsights metrics
-		// that only publish when the amazon-cloudwatch-observability
-		// addon is installed in-cluster — the aws/eks_nodegroup preset
-		// does not install it today, so those queries returned zero
-		// datapoints on every deployment and the panel rendered "no
-		// observable resources". A follow-up issue (#231 Option B)
-		// covers shipping the addon and pivoting back to
-		// ContainerInsights for richer node + pod metrics.
-		Namespace:     "AWS/EC2",
-		DimensionName: "InstanceId",
+		// Predecessors: #231 Option A pivoted onto AWS/EC2
+		// InstanceId via the `eks:cluster-name` tag as a no-preset
+		// fix; that path is gone now (the registry can only
+		// register one namespace per service). Callers that want
+		// instance-level data can still drive the dispatcher's
+		// `eks list-nodes` action directly.
+		Namespace:     "ContainerInsights",
+		DimensionName: "ClusterName",
 		Metrics: []AWSMetricSpec{
-			{Name: "CPUUtilization", Stat: "Average"},
+			{Name: "node_cpu_utilization", Stat: "Average"},
+			{Name: "node_memory_utilization", Stat: "Average"},
+			{Name: "pod_cpu_utilization", Stat: "Average"},
+			{Name: "pod_memory_utilization", Stat: "Average"},
+			{Name: "cluster_failed_node_count", Stat: "Maximum"},
 		},
 	},
 	"elasticache": {
@@ -388,17 +388,30 @@ var gcpServiceMetrics = map[string]GCPObs{
 		},
 	},
 	"firestore": {
-		// Canonical resource.type for Cloud Monitoring queries against
-		// Firestore is firestore.googleapis.com/Database. Reliable's
-		// catalog had "firestore_instance" — kept here historically but
-		// time series are NOT published under that name. Plus a
-		// request_latencies entry so alarmedGCPMetrics[KeyGCPFirestore]
-		// has a spec to flip Alarmed=true on. #204 P2.
+		// Canonical resource.type for per-database firestore queries is
+		// firestore.googleapis.com/Database (carries database_id /
+		// location / resource_container labels). The legacy
+		// firestore_instance type only carries project_id and is NOT
+		// scopable per-database — so reliable's old catalog using it +
+		// reliable#1259's first attempt to "fix" by setting Database
+		// on document/{read,write,delete}_count both broke per-database
+		// scoping in different ways.
+		//
+		// The truthful catalog (verified live against the Cloud
+		// Monitoring MetricDescriptors API on 2026-05-02): of the four
+		// metrics we want here, only `request_latencies` publishes
+		// under Database. The legacy `document/{read,write,delete}_count`
+		// metrics publish ONLY under firestore_instance — but their
+		// modern `*_ops_count` variants publish under Database with
+		// database_id, which is what we want.
+		//
+		// Plus a request_latencies entry so alarmedGCPMetrics[
+		// KeyGCPFirestore] has a spec to flip Alarmed=true on (#204).
 		Metrics: []GCPMetricSpec{
 			{MetricType: "firestore.googleapis.com/api/request_latencies", ResourceType: "firestore.googleapis.com/Database", LabelKey: "database_id", Aligner: "ALIGN_PERCENTILE_99", DisplayName: "API Request Latency (p99)"},
-			{MetricType: "firestore.googleapis.com/document/read_count", ResourceType: "firestore.googleapis.com/Database", LabelKey: "database_id", Aligner: "ALIGN_RATE", DisplayName: "Document Reads"},
-			{MetricType: "firestore.googleapis.com/document/write_count", ResourceType: "firestore.googleapis.com/Database", LabelKey: "database_id", Aligner: "ALIGN_RATE", DisplayName: "Document Writes"},
-			{MetricType: "firestore.googleapis.com/document/delete_count", ResourceType: "firestore.googleapis.com/Database", LabelKey: "database_id", Aligner: "ALIGN_RATE", DisplayName: "Document Deletes"},
+			{MetricType: "firestore.googleapis.com/document/read_ops_count", ResourceType: "firestore.googleapis.com/Database", LabelKey: "database_id", Aligner: "ALIGN_RATE", DisplayName: "Document Read Ops"},
+			{MetricType: "firestore.googleapis.com/document/write_ops_count", ResourceType: "firestore.googleapis.com/Database", LabelKey: "database_id", Aligner: "ALIGN_RATE", DisplayName: "Document Write Ops"},
+			{MetricType: "firestore.googleapis.com/document/delete_ops_count", ResourceType: "firestore.googleapis.com/Database", LabelKey: "database_id", Aligner: "ALIGN_RATE", DisplayName: "Document Delete Ops"},
 		},
 	},
 	"cloudarmor": {

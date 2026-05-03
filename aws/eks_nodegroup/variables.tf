@@ -122,6 +122,12 @@ variable "node_role_arn" {
   default     = null
 }
 
+variable "enable_container_insights" {
+  description = "Install the amazon-cloudwatch-observability addon so node + pod metrics publish to the ContainerInsights namespace. Adds CloudWatch ingest cost (~$0.30/GB ingested + per-metric pricing); set to false to disable. NOTE: if you supply var.node_role_arn (i.e. bring your own node IAM role), you are responsible for attaching arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy to it — without that grant the addon installs but the in-cluster CloudWatch agent fails to publish metrics."
+  type        = bool
+  default     = true
+}
+
 variable "ami_type" {
   description = "EKS node AMI type. When null (default), the module derives the AMI type from var.instance_types: ARM/Graviton families (c7g, m7g, r7g, t4g, c8g, m8g, r8g, etc. — names ending in `g`) get AL2023_ARM_64_STANDARD; all other families get AL2023_x86_64_STANDARD. Set explicitly to override (e.g. BOTTLEROCKET_x86_64, AL2_x86_64_GPU)."
   type        = string

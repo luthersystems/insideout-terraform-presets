@@ -88,6 +88,17 @@ resource "aws_iam_role_policy_attachment" "mng_ssm" {
   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
+# CloudWatchAgentServerPolicy grants cloudwatch:PutMetricData + the
+# logs:CreateLogStream/PutLogEvents needed by the
+# amazon-cloudwatch-observability addon's CloudWatch agent + fluent-bit
+# DaemonSets. Attached only when this module creates the role; callers
+# that supply node_role_arn are responsible for the equivalent grant.
+resource "aws_iam_role_policy_attachment" "mng_cloudwatch_agent" {
+  count      = var.node_role_arn == null && var.enable_container_insights ? 1 : 0
+  role       = aws_iam_role.mng[0].name
+  policy_arn = "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+}
+
 # -------------------------------------------------------------
 # Service-linked role bootstrap
 # -------------------------------------------------------------
@@ -164,4 +175,82 @@ resource "aws_eks_node_group" "this" {
       backup = "true"
     }
   )
+}
+
+# -------------------------------------------------------------
+# Tag propagation to EC2 instances (CLAUDE.md / issue #81)
+# -------------------------------------------------------------
+# `aws_eks_node_group.this.tags` tag the node-group RESOURCE only —
+# AWS does NOT propagate them to the EC2 instances spawned by the
+# managed node group's auto-derived ASG. This was discovered live on
+# cust2 (project `io-hrbs5zprbk51`): five running EKS workers carried
+# the AWS-managed `eks:cluster-name` tag but had no `Project` tag, so
+# reliable3's `Project`-scoped EC2 inspector returned zero.
+#
+# `aws_autoscaling_group_tag` writes each tag onto the underlying ASG
+# with `propagate_at_launch = true` — newly launched instances inherit
+# every tag in `local.common_tags + var.tags` (Project, Environment,
+# Component, customer-supplied additions). Already-running instances
+# do NOT pick up the tag retroactively; a node refresh / cordoned
+# rotation is required to fully retag the fleet (or an out-of-band
+# `aws ec2 create-tags` for the existing instance IDs).
+#
+# `for_each` keys are tag names — strings sourced from
+# `module.name.tags` / `var.tags`, all plan-time-known. The ASG name
+# itself is apply-time-known (`aws_eks_node_group.this.resources[0]
+# .autoscaling_groups[0].name`) but only flows into the resource's
+# attributes, not its for_each key, so the lint-foreach-unknown-keys
+# tripwire is satisfied. EKS managed-node-group ASGs always emit
+# `resources[0].autoscaling_groups[0]` (one ASG per node group).
+resource "aws_autoscaling_group_tag" "node_tags" {
+  for_each = merge(local.common_tags, var.tags)
+
+  autoscaling_group_name = aws_eks_node_group.this.resources[0].autoscaling_groups[0].name
+
+  tag {
+    key                 = each.key
+    value               = each.value
+    propagate_at_launch = true
+  }
+}
+
+# -------------------------------------------------------------
+# CloudWatch Container Insights addon
+# -------------------------------------------------------------
+# amazon-cloudwatch-observability installs the CloudWatch agent +
+# fluent-bit DaemonSets in-cluster so node + pod metrics publish under
+# the ContainerInsights namespace (node_cpu_utilization,
+# pod_memory_utilization, etc.). Without the addon, AWS/EKS itself only
+# publishes a small set of cluster-level metrics — see issue #233 / #231.
+#
+# Default-on (cliff per #233 Option B-1): existing deployments that
+# haven't opted out will install the addon on the next apply and the
+# ContainerInsights panel begins populating ~5 minutes later.
+# CloudWatch ingest cost (~$0.30/GB) is the trade-off; opt out via
+# var.enable_container_insights = false.
+#
+# Depends on the node group being up so the addon's DaemonSets can
+# schedule, and on the CloudWatchAgentServerPolicy attachment so the
+# agent has cloudwatch:PutMetricData when it starts.
+resource "aws_eks_addon" "cloudwatch_observability" {
+  count = var.enable_container_insights ? 1 : 0
+
+  cluster_name = var.cluster_name
+  addon_name   = "amazon-cloudwatch-observability"
+
+  # OVERWRITE on create lets us adopt an existing addon if one was
+  # installed out-of-band. PRESERVE on update means hand-tuned in-
+  # cluster customizations (e.g. agent ConfigMap edits) survive subsequent
+  # applies — at the cost of silently drifting from the addon's
+  # default config. Customers who want a forced re-sync can re-create
+  # the addon.
+  resolve_conflicts_on_create = "OVERWRITE"
+  resolve_conflicts_on_update = "PRESERVE"
+
+  tags = merge(local.common_tags, var.tags)
+
+  depends_on = [
+    aws_eks_node_group.this,
+    aws_iam_role_policy_attachment.mng_cloudwatch_agent,
+  ]
 }

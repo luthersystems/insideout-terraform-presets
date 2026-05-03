@@ -180,8 +180,11 @@ func TestInspectBastion_UnsupportedAction(t *testing.T) {
 // TestInspectBastion_AppliesRoleAndProjectFilter exercises the bastion
 // label filter — bastions are GCE instances tagged labels.role=bastion;
 // we assert the AggregatedListInstances request carries BOTH labels
-// when a project filter is also set. Mirrors the AND semantic in
-// gcpLegacyLabelFilterAnd.
+// joined by " AND " when a project filter is also set. Pinned to the
+// AIP-160 dialect (`labels.role = "bastion"`) per #239 — Compute v1
+// rejects the GCE legacy dialect on enough endpoints (networks.list,
+// backendServices.list, urlMaps.list, etc.) that we use AIP-160
+// universally.
 func TestInspectBastion_AppliesRoleAndProjectFilter(t *testing.T) {
 	t.Parallel()
 	var capturedFilter string
@@ -195,14 +198,14 @@ func TestInspectBastion_AppliesRoleAndProjectFilter(t *testing.T) {
 	_, err := inspectBastion(context.Background(), "demo-proj", "list-bastion-instances",
 		`{"project":"io-foo"}`, opts...)
 	require.NoError(t, err)
-	assert.Contains(t, capturedFilter, "labels.role=bastion")
-	assert.Contains(t, capturedFilter, "labels.project=io-foo")
+	assert.Contains(t, capturedFilter, `labels.role = "bastion"`)
+	assert.Contains(t, capturedFilter, `labels.project = "io-foo"`)
 	assert.Contains(t, capturedFilter, " AND ")
 }
 
 // TestInspectBastion_NoProjectStillSetsRoleFilter — when the caller
 // hasn't supplied a project filter, bastion still scopes to
-// labels.role=bastion alone.
+// `labels.role = "bastion"` (AIP-160) alone.
 func TestInspectBastion_NoProjectStillSetsRoleFilter(t *testing.T) {
 	t.Parallel()
 	var capturedFilter string
@@ -215,5 +218,5 @@ func TestInspectBastion_NoProjectStillSetsRoleFilter(t *testing.T) {
 
 	_, err := inspectBastion(context.Background(), "demo-proj", "list-bastion-instances", "", opts...)
 	require.NoError(t, err)
-	assert.Equal(t, "labels.role=bastion", capturedFilter)
+	assert.Equal(t, `labels.role = "bastion"`, capturedFilter)
 }
