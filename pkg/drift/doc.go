@@ -101,6 +101,13 @@
 //     [] to a non-empty list of strings, with an `update` action. The
 //     resource reconverges to the same state on next refresh after
 //     apply. Classifies as [ClassReconverge].
+//  4. noOpRule — catch-all for resources whose plan action set is
+//     non-empty and contains only "no-op". Terraform's planner has
+//     authoritatively decided no apply will happen, so any
+//     refresh-only Before/After diff on the resource is benign.
+//     Placed last so the more specific rules above can claim
+//     ownership (and a finer-grained reason) first. Classifies as
+//     [ClassNoOp].
 //
 // Anything that doesn't match a rule falls through to
 // [ClassActionable] (when an Action is present — the "presumed real

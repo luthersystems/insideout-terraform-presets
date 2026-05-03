@@ -16,11 +16,16 @@ import (
 //  2. phantomComputedRule — denylist lookup; needs Type populated.
 //  3. iamManagedPolicyReconvergeRule — narrow shape match for the
 //     known IAM reconverge case.
+//  4. noOpRule — catch-all for resources whose only planner action
+//     is "no-op". Last so the more specific rules above can claim
+//     ownership (and their reasons) first; without this rule those
+//     resources hit the actionable fallback (issue #251).
 func defaultRules() []Rule {
 	return []Rule{
 		providerNoiseRule{},
 		phantomComputedRule{},
 		iamManagedPolicyReconvergeRule{},
+		noOpRule{},
 	}
 }
 
@@ -274,4 +279,45 @@ func (iamManagedPolicyReconvergeRule) Match(r ResourceDrift) (Class, string, boo
 // ["update", "replace"] which we don't want to classify as benign.
 func actionIsExactly(actions []string, want string) bool {
 	return len(actions) == 1 && actions[0] == want
+}
+
+// noOpRule classifies a resource whose plan action set is non-empty
+// and contains only "no-op" entries as [ClassNoOp]. Terraform's
+// resource_changes[].change.actions for a no-op resource is
+// canonically ["no-op"], so a subset check is mostly defensive — but
+// the rule does require at least one entry so an empty Action slice
+// (refresh-only addresses with action: null upstream) still falls
+// through to ClassUnknown rather than being silently filtered.
+//
+// Placed last in defaultRules so the more specific
+// providerNoiseRule / phantomComputedRule / iamManagedPolicyReconvergeRule
+// can claim ownership of no-op resources first and surface their
+// fine-grained reason. Without this rule, no-op-only resources that
+// don't match any specific rule hit the actionable fallback in
+// classifyOne — the false positive reported in issue #251 against
+// module.gcp_cloud_functions.google_storage_bucket.source[0].
+type noOpRule struct{}
+
+func (noOpRule) Match(r ResourceDrift) (Class, string, bool) {
+	if !actionsAllNoOp(r.Action) {
+		return "", "", false
+	}
+	return ClassNoOp, "plan action is no-op", true
+}
+
+// actionsAllNoOp returns true when actions is non-empty and every
+// entry is "no-op". Subset-of-{"no-op"} semantics rather than exact
+// match — terraform always emits a singleton ["no-op"] today, but the
+// permissive form keeps the rule from regressing if the upstream ever
+// joins multiple no-op planner actions onto one address.
+func actionsAllNoOp(actions []string) bool {
+	if len(actions) == 0 {
+		return false
+	}
+	for _, a := range actions {
+		if a != "no-op" {
+			return false
+		}
+	}
+	return true
 }

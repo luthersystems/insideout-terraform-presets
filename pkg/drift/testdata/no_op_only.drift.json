@@ -1,0 +1,19 @@
+{
+  "drift_detected": true,
+  "drift_count": 1,
+  "actionable": false,
+  "template_version": "v0.7.0",
+  "presets_version": "v0.9.1",
+  "resources": [
+    {
+      "address": "module.gcp_cloud_functions.google_storage_bucket.source[0]",
+      "type": "google_storage_bucket",
+      "name": "source",
+      "action": ["no-op"],
+      "change": {
+        "before": { "labels": {"managed-by": "terraform"} },
+        "after":  { "labels": {"managed-by": "terraform", "drift": "phantom"} }
+      }
+    }
+  ]
+}

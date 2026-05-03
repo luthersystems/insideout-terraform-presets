@@ -34,6 +34,15 @@ const (
 	// from the user's perspective; not actionable.
 	ClassReconverge Class = "reconverge"
 
+	// ClassNoOp marks a resource whose only plan action is "no-op".
+	// Terraform's planner has authoritatively decided the resource
+	// will not change on apply, so any Before/After diff visible in
+	// resource_drift is refresh-only noise. Used as a catch-all when
+	// the more specific noise/phantom/reconverge rules don't fire —
+	// without it, no-op-only resources hit the actionable fallback
+	// (issue #251).
+	ClassNoOp Class = "no_op"
+
 	// ClassUnknown is the fallback when no rule matched and the
 	// resource also has no Action populated — typically because the
 	// input drift.json was the pre-#105 schema and slipped past
