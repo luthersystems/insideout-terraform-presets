@@ -55,12 +55,13 @@ type Clients struct {
 	cloudFrontCW CloudWatchAPI
 }
 
-// NewClients builds a Clients value bound to region. Mirrors the
-// LoadDefaultConfig path used by reliable's getServiceMetrics
-// (aws_metrics.go:614) — ambient credentials only. STS-AssumeRole
-// machinery in reliable is integration-test scaffolding (see
-// aws_metrics_test.go:125 integrationAWSConfig); not part of the
-// metric-fetch production path, so not ported.
+// NewClients builds a Clients value bound to region. Loads ambient
+// credentials via config.LoadDefaultConfig — appropriate for callers
+// that run inside the same trust boundary as the resources they're
+// fetching metrics for. Callers that already hold a resolved aws.Config
+// (reliable's broker-issued assumed-role config, integration-test
+// configs built via STS AssumeRole, etc.) should use NewClientsFromConfig
+// instead so the resolved credentials flow through unchanged.
 func NewClients(ctx context.Context, region string) (*Clients, error) {
 	if region == "" {
 		return nil, fmt.Errorf("metrics: region is required")
@@ -71,6 +72,28 @@ func NewClients(ctx context.Context, region string) (*Clients, error) {
 	}
 	return &Clients{
 		Region:     region,
+		CloudWatch: cloudwatch.NewFromConfig(cfg),
+		baseCfg:    cfg,
+	}, nil
+}
+
+// NewClientsFromConfig builds a Clients value from an already-resolved
+// aws.Config. Use this when the caller has obtained credentials through
+// a path other than ambient default-config resolution — e.g. reliable's
+// Oracle credential-broker assumed-role flow, or an integration test
+// that built a config via sts.AssumeRole.
+//
+// Region is taken from cfg.Region; if cfg.Region is empty an error is
+// returned (the caller should set it explicitly via
+// config.WithRegion(...) when building cfg). The supplied cfg is also
+// retained as baseCfg so the lazy CloudFront us-east-1 client can clone
+// the resolved credentials without reissuing them.
+func NewClientsFromConfig(cfg aws.Config) (*Clients, error) {
+	if cfg.Region == "" {
+		return nil, fmt.Errorf("metrics: cfg.Region is required")
+	}
+	return &Clients{
+		Region:     cfg.Region,
 		CloudWatch: cloudwatch.NewFromConfig(cfg),
 		baseCfg:    cfg,
 	}, nil
