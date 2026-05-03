@@ -297,6 +297,62 @@ func TestNoOpRule_SpecificRulesWinFirst(t *testing.T) {
 	}
 }
 
+// --- readRule ---
+
+func TestReadRule_OnlyReadAction(t *testing.T) {
+	t.Parallel()
+	// Symmetric to TestNoOpRule_OnlyNoOpAction: a data source that
+	// surfaces in resource_drift with action ["read"] must classify
+	// as benign because reading never mutates infrastructure.
+	d := Drift{Resources: []ResourceDrift{
+		rd("data.aws_caller_identity.current", "aws_caller_identity",
+			[]string{"read"},
+			`{"account_id": "111111111111"}`,
+			`{"account_id": "222222222222"}`),
+	}}
+	got := Classify(d)
+	if got.Resources[0].Class != ClassRead {
+		t.Errorf("Class = %q; want %q", got.Resources[0].Class, ClassRead)
+	}
+	if got.Resources[0].Reason != "plan action is read" {
+		t.Errorf("Reason = %q; want %q", got.Resources[0].Reason, "plan action is read")
+	}
+	if got.ActionableCount != 0 {
+		t.Errorf("ActionableCount = %d; want 0", got.ActionableCount)
+	}
+	if got.FilteredCount != 1 {
+		t.Errorf("FilteredCount = %d; want 1", got.FilteredCount)
+	}
+}
+
+func TestReadRule_DoesNotFireOnNoOp(t *testing.T) {
+	t.Parallel()
+	// noOpRule and readRule must remain disjoint — a no-op-only
+	// resource must classify as ClassNoOp, not ClassRead.
+	d := Drift{Resources: []ResourceDrift{
+		rd("aws_s3_bucket.b", "aws_s3_bucket", []string{"no-op"},
+			`{"x": 1}`, `{"x": 2}`),
+	}}
+	got := Classify(d)
+	if got.Resources[0].Class != ClassNoOp {
+		t.Errorf("Class = %q; want %q", got.Resources[0].Class, ClassNoOp)
+	}
+}
+
+func TestReadRule_DoesNotFireOnMixedAction(t *testing.T) {
+	t.Parallel()
+	// ["read", "update"] is nonsense in practice but must not be
+	// silenced — readRule fires only when every action is "read".
+	d := Drift{Resources: []ResourceDrift{
+		rd("aws_s3_bucket.b", "aws_s3_bucket", []string{"read", "update"},
+			`{"x": 1}`, `{"x": 2}`),
+	}}
+	got := Classify(d)
+	if got.Resources[0].Class == ClassRead {
+		t.Errorf("Class = read for action %v; must abstain", got.Resources[0].Action)
+	}
+}
+
 // --- fall-through: actionable / unknown ---
 
 func TestClassify_FallThroughActionable(t *testing.T) {
@@ -444,6 +500,13 @@ func TestClassify_FixtureRoundTrip(t *testing.T) {
 			// specific rule covers must classify as no_op (not
 			// actionable).
 			[]Class{ClassNoOp},
+		},
+		{
+			"read_only.drift.json",
+			true, 1, 0,
+			// Symmetric coverage: action ["read"] is non-mutating
+			// and must classify as read (not actionable).
+			[]Class{ClassRead},
 		},
 	}
 	for _, tt := range tests {

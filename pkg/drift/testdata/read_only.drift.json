@@ -1,0 +1,19 @@
+{
+  "drift_detected": true,
+  "drift_count": 1,
+  "actionable": false,
+  "template_version": "v0.7.0",
+  "presets_version": "v0.9.1",
+  "resources": [
+    {
+      "address": "data.aws_caller_identity.current",
+      "type": "aws_caller_identity",
+      "name": "current",
+      "action": ["read"],
+      "change": {
+        "before": { "account_id": "111111111111" },
+        "after":  { "account_id": "222222222222" }
+      }
+    }
+  ]
+}

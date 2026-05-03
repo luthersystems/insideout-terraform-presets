@@ -43,6 +43,14 @@ const (
 	// (issue #251).
 	ClassNoOp Class = "no_op"
 
+	// ClassRead marks a resource whose only plan action is "read" —
+	// the data-source refresh action. Reading a data source never
+	// mutates infrastructure, so any Before/After diff is informational
+	// and not gating. Symmetric to [ClassNoOp]; both are "planner
+	// decided no apply will modify infrastructure," differing only in
+	// the planner action emitted.
+	ClassRead Class = "read"
+
 	// ClassUnknown is the fallback when no rule matched and the
 	// resource also has no Action populated — typically because the
 	// input drift.json was the pre-#105 schema and slipped past

@@ -105,9 +105,13 @@
 //     non-empty and contains only "no-op". Terraform's planner has
 //     authoritatively decided no apply will happen, so any
 //     refresh-only Before/After diff on the resource is benign.
-//     Placed last so the more specific rules above can claim
+//     Placed near the end so the more specific rules above can claim
 //     ownership (and a finer-grained reason) first. Classifies as
 //     [ClassNoOp].
+//  5. readRule — symmetric catch-all for resources whose plan action
+//     set is non-empty and contains only "read" — the data-source
+//     refresh action. Reading never mutates infrastructure, so any
+//     Before/After diff is informational. Classifies as [ClassRead].
 //
 // Anything that doesn't match a rule falls through to
 // [ClassActionable] (when an Action is present — the "presumed real
