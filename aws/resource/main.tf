@@ -87,35 +87,64 @@ locals {
   # Pod identity for EBS CSI is declared inline to fix ordering: the upstream
   # module creates the association BEFORE the addon, ensuring IAM permissions
   # are in place when the driver pods start.
+  #
+  # Every entry sets resolve_conflicts_on_create = "OVERWRITE" and
+  # resolve_conflicts_on_update = "OVERWRITE" (issue #223). The upstream
+  # module's default of "NONE" wedges every subsequent apply with HTTP 409
+  # ResourceInUseException whenever a partial prior apply leaves an addon
+  # created in EKS but not persisted in Terraform state — apply-time
+  # crash, network blip, downstream resource error, user Ctrl-C, etc. all
+  # produce the same orphan. Production session sess_v2_hrbS5zpRBk51 was
+  # wedged on this exact path. OVERWRITE on both create and update is the
+  # right choice here because addon versions are pinned in
+  # local.*_versions and configuration_values are explicit — the config
+  # IS the source of truth, we want TF to reconcile to match config
+  # rather than preserve whatever the orphan left behind.
+  #
+  # Diverges from aws/eks_nodegroup's amazon-cloudwatch-observability
+  # addon (PR #238), which uses OVERWRITE/PRESERVE because it ships a
+  # CloudWatch agent + fluent-bit DaemonSets that operators may
+  # hand-tune in-cluster. The five core addons here have no such
+  # customization story.
   # ---------------------------------------------------------------------------
   addons = merge(
     {
       vpc-cni = {
-        addon_version  = local.effective_vpc_cni_version
-        before_compute = true
-        most_recent    = false
+        addon_version               = local.effective_vpc_cni_version
+        before_compute              = true
+        most_recent                 = false
+        resolve_conflicts_on_create = "OVERWRITE"
+        resolve_conflicts_on_update = "OVERWRITE"
       }
       eks-pod-identity-agent = {
-        before_compute = true
+        before_compute              = true
+        resolve_conflicts_on_create = "OVERWRITE"
+        resolve_conflicts_on_update = "OVERWRITE"
       }
     },
     var.enable_kube_proxy ? {
       kube-proxy = {
-        addon_version = local.effective_kube_proxy_version
-        most_recent   = false
+        addon_version               = local.effective_kube_proxy_version
+        most_recent                 = false
+        resolve_conflicts_on_create = "OVERWRITE"
+        resolve_conflicts_on_update = "OVERWRITE"
       }
     } : {},
     var.enable_coredns ? {
       coredns = {
-        addon_version = local.effective_coredns_version
-        most_recent   = false
+        addon_version               = local.effective_coredns_version
+        most_recent                 = false
+        resolve_conflicts_on_create = "OVERWRITE"
+        resolve_conflicts_on_update = "OVERWRITE"
       }
     } : {},
     var.enable_ebs_csi_driver ? {
       aws-ebs-csi-driver = {
-        addon_version        = local.effective_ebs_csi_version
-        most_recent          = false
-        configuration_values = local.ebs_csi_configuration_values
+        addon_version               = local.effective_ebs_csi_version
+        most_recent                 = false
+        configuration_values        = local.ebs_csi_configuration_values
+        resolve_conflicts_on_create = "OVERWRITE"
+        resolve_conflicts_on_update = "OVERWRITE"
         pod_identity_association = [{
           role_arn        = aws_iam_role.ebs_csi[0].arn
           service_account = "ebs-csi-controller-sa"

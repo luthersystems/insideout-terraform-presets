@@ -972,3 +972,176 @@ func TestFetchGCP_AllAuthoritySpecsAreUsable(t *testing.T) {
 		})
 	}
 }
+
+// TestEveryGCPSpec_PinsMetricTypesAndDisplayNames pins the (MetricType,
+// DisplayName) ordered pair of every metric in every GCP service's
+// catalog spec. Imported from reliable's deleted
+// `internal/agentapi/gcp_metrics_test.go::TestGCPMetricDefinitions_
+// SpecificValues` — the upstream consolidation (reliable#1252 / #1266)
+// removed it, but its assertions are load-bearing and have no
+// equivalent upstream.
+//
+// What this catches that nothing else does:
+//
+//   - Metric-path typos (e.g. swapping topic_id ↔ subscription_id in
+//     pubsub paths, or fat-fingering the namespace).
+//   - Cross-service metric-namespace pivots: cloudkms / cloudbuild /
+//     identityplatform all pull from `serviceruntime.googleapis.com/
+//     api/request_count` and pin DIFFERENT DisplayNames per service —
+//     a future "cleanup" that collapses them to one DisplayName would
+//     silently break the panel legends across three components.
+//   - User-visible display-name drift. Cloudfunctions' "(Gen1)" /
+//     "(Gen1, p99)" suffixes were added in reliable#1143 to
+//     disambiguate from cloudrun (Gen2 metrics under cloud_run_revision).
+//     Drop them and the chart legend silently lies.
+//   - Resource-type / metric-type mismatches that PR #238 already
+//     corrected once (firestore document/{read,write,delete}_count
+//     publishing only under firestore_instance, not Database).
+//     Pinning the modern *_ops_count names traps re-regression.
+//
+// Order matters: reliable's UI legends iterate in spec order. A re-
+// arrangement that doesn't change the set still changes the user
+// experience, so the test asserts ordered equality, not set equality.
+//
+// The test pins **all 17** GCP services with non-empty Metrics —
+// not the 13 in the original reliable test (the catalog has grown by
+// 4 services since: apigateway, cloudbuild, cloudcdn, identityplatform,
+// vertexai, cloudarmor were added or expanded). The "EveryGCPSpec"
+// name is intentional — when a future contributor adds a new GCP
+// service to the catalog, the drift trap below forces them to add an
+// expectation here too.
+func TestEveryGCPSpec_PinsMetricTypesAndDisplayNames(t *testing.T) {
+	t.Parallel()
+
+	type pin struct {
+		metricType  string
+		displayName string
+	}
+
+	expected := map[composer.ComponentKey][]pin{
+		composer.KeyGCPCompute: {
+			{"compute.googleapis.com/instance/cpu/utilization", "CPU Utilization"},
+			{"compute.googleapis.com/instance/disk/read_ops_count", "Disk Read Ops"},
+			{"compute.googleapis.com/instance/disk/write_ops_count", "Disk Write Ops"},
+			{"compute.googleapis.com/instance/network/received_bytes_count", "Network Received Bytes"},
+			{"compute.googleapis.com/instance/network/sent_bytes_count", "Network Sent Bytes"},
+		},
+		composer.KeyGCPCloudRun: {
+			{"run.googleapis.com/request_count", "Request Count"},
+			{"run.googleapis.com/container/instance_count", "Instance Count"},
+			{"run.googleapis.com/request_latencies", "Request Latency (p99)"},
+		},
+		composer.KeyGCPCloudFunctions: {
+			// (Gen1) suffix disambiguates from cloudrun (Gen2). Drop
+			// it and the panel legend silently lies — reliable#1143.
+			{"cloudfunctions.googleapis.com/function/execution_count", "Execution Count (Gen1)"},
+			{"cloudfunctions.googleapis.com/function/execution_times", "Execution Time (Gen1, p99)"},
+		},
+		composer.KeyGCPLoadbalancer: {
+			{"loadbalancing.googleapis.com/https/request_count", "Request Count"},
+			{"loadbalancing.googleapis.com/https/backend_latencies", "Backend Latency (p99)"},
+		},
+		composer.KeyGCPCloudCDN: {
+			{"loadbalancing.googleapis.com/https/request_count", "Request Count"},
+			{"loadbalancing.googleapis.com/https/backend_latencies", "Backend Latency (p99)"},
+			{"loadbalancing.googleapis.com/https/backend_request_bytes_count", "Backend Request Bytes"},
+		},
+		composer.KeyGCPAPIGateway: {
+			{"apigateway.googleapis.com/gateway/request_count", "Request Count"},
+			{"apigateway.googleapis.com/gateway/latencies", "Latency (p99)"},
+		},
+		composer.KeyGCPGCS: {
+			{"storage.googleapis.com/storage/total_bytes", "Total Bytes"},
+			{"storage.googleapis.com/storage/object_count", "Object Count"},
+			{"storage.googleapis.com/api/request_count", "API Request Count"},
+		},
+		composer.KeyGCPCloudSQL: {
+			{"cloudsql.googleapis.com/database/cpu/utilization", "CPU Utilization"},
+			{"cloudsql.googleapis.com/database/memory/utilization", "Memory Utilization"},
+			{"cloudsql.googleapis.com/database/disk/utilization", "Disk Utilization"},
+			{"cloudsql.googleapis.com/database/network/connections", "Connections"},
+		},
+		composer.KeyGCPVPC: {
+			{"compute.googleapis.com/firewall/dropped_packets_count", "Firewall Dropped Packets"},
+			{"router.googleapis.com/nat/sent_bytes_count", "NAT Sent Bytes"},
+		},
+		composer.KeyGCPCloudKMS: {
+			// KMS metrics live under serviceruntime, NOT
+			// cloudkms.googleapis.com — easy to fat-finger and
+			// silently break Key Request Count panels.
+			{"serviceruntime.googleapis.com/api/request_count", "Key Request Count"},
+		},
+		composer.KeyGCPPubSub: {
+			{"pubsub.googleapis.com/topic/send_message_operation_count", "Topic Send Message Count"},
+			{"pubsub.googleapis.com/subscription/num_undelivered_messages", "Subscription Backlog"},
+			{"pubsub.googleapis.com/subscription/oldest_unacked_message_age", "Oldest Unacked Message Age"},
+		},
+		composer.KeyGCPFirestore: {
+			// All four under resource.type
+			// firestore.googleapis.com/Database (per-database
+			// scoping). The legacy *_count variants only publish
+			// under firestore_instance — re-introducing them here
+			// silently regresses PR #238's catalog correction.
+			{"firestore.googleapis.com/api/request_latencies", "API Request Latency (p99)"},
+			{"firestore.googleapis.com/document/read_ops_count", "Document Read Ops"},
+			{"firestore.googleapis.com/document/write_ops_count", "Document Write Ops"},
+			{"firestore.googleapis.com/document/delete_ops_count", "Document Delete Ops"},
+		},
+		composer.KeyGCPCloudArmor: {
+			{"networksecurity.googleapis.com/https/request_count", "Cloud Armor Requests"},
+		},
+		composer.KeyGCPMemorystore: {
+			{"redis.googleapis.com/stats/memory/usage_ratio", "Memory Usage Ratio"},
+			{"redis.googleapis.com/clients/connected", "Connected Clients"},
+			{"redis.googleapis.com/stats/cpu_utilization", "CPU Utilization"},
+		},
+		composer.KeyGCPCloudBuild: {
+			// Same MetricType as cloudkms + identityplatform; the
+			// per-service DisplayName is the disambiguator, so a
+			// "cleanup" that collapses them to one string would
+			// break three panels at once.
+			{"serviceruntime.googleapis.com/api/request_count", "Cloud Build API Requests"},
+		},
+		composer.KeyGCPIdentityPlatform: {
+			{"serviceruntime.googleapis.com/api/request_count", "Identity Platform API Requests"},
+		},
+		composer.KeyGCPVertexAI: {
+			{"aiplatform.googleapis.com/prediction/online/prediction_count", "Online Prediction Count"},
+			{"aiplatform.googleapis.com/prediction/online/error_count", "Online Prediction Errors"},
+			{"aiplatform.googleapis.com/prediction/online/prediction_latencies", "Online Prediction Latency (p99)"},
+		},
+	}
+
+	// Per-service ordered pin assertions.
+	for key, want := range expected {
+		t.Run(string(key), func(t *testing.T) {
+			t.Parallel()
+			spec := gcpSpec(t, key)
+			require.Len(t, spec.Metrics, len(want),
+				"%s: catalog metric count drift — want %d, got %d (panel legend will gain or drop entries)", key, len(want), len(spec.Metrics))
+			for i, m := range spec.Metrics {
+				assert.Equal(t, want[i].metricType, m.MetricType,
+					"%s metric[%d]: MetricType drift — request will hit a path the API doesn't publish", key, i)
+				assert.Equal(t, want[i].displayName, m.DisplayName,
+					"%s metric[%d]: DisplayName drift — the UI legend will silently show %q instead", key, i, m.DisplayName)
+			}
+		})
+	}
+
+	// Drift trap: every catalog key with non-empty Metrics must have an
+	// expectation. Catches the "added a service to the catalog, forgot
+	// to pin it here" case — without this, new metrics drift silently.
+	t.Run("DriftTrap_EveryGCPSpecCovered", func(t *testing.T) {
+		t.Parallel()
+		for _, key := range composer.AllComponentKeys {
+			o, ok := observability.Lookup(key)
+			if !ok || o.GCP == nil || len(o.GCP.Metrics) == 0 {
+				continue
+			}
+			if _, pinned := expected[key]; !pinned {
+				t.Errorf("key %q has %d GCP metrics in the catalog but no pin in TestEveryGCPSpec_PinsMetricTypesAndDisplayNames — add an expected entry so panel-legend drift trips this test",
+					key, len(o.GCP.Metrics))
+			}
+		}
+	})
+}

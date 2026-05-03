@@ -28,18 +28,11 @@ variable "alarm_threshold_overrides" {
   default     = {}
 }
 
-variable "runbook_url_prefix" {
-  description = "Optional runbook URL prefix."
-  type        = string
-  default     = ""
-}
-
 locals {
   _obs_user_labels = { project = var.project, severity = var.alarm_severity }
   _obs_thresholds = merge({
     request_latency_p99_ms = 2000
   }, var.alarm_threshold_overrides)
-  _obs_runbook = var.runbook_url_prefix == "" ? "" : "Runbook: ${var.runbook_url_prefix}/cloud_run/latency"
 }
 
 resource "google_monitoring_alert_policy" "latency_high" {
@@ -65,9 +58,4 @@ resource "google_monitoring_alert_policy" "latency_high" {
 
   notification_channels = var.notification_channels
   user_labels           = local._obs_user_labels
-
-  documentation {
-    content   = local._obs_runbook
-    mime_type = "text/markdown"
-  }
 }
