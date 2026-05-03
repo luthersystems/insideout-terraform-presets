@@ -13,9 +13,43 @@
 // (tests/verify-phantom-computed-schema.sh) extends naturally to keep
 // the Go classifier and the embedded denylist in sync.
 //
+// # Canonical entry point
+//
+// Consumers parse and classify in one step via [ClassifyJSON]:
+//
+//	v, err := drift.ClassifyJSON(driftJSONBytes)
+//	switch {
+//	case errors.Is(err, drift.ErrNoClassifiableDetail):
+//	    // Producer wrote pre-#105 schema. Treat as input error.
+//	case err != nil:
+//	    // Malformed JSON.
+//	default:
+//	    if v.ShouldBlockApply() { /* apply gate fires */ }
+//	    if v.IsInformationalOnly() { /* non-blocking notice */ }
+//	    log.Printf("drift: %s template=%s presets=%s",
+//	        v.Result, v.TemplateVersion(), v.PresetsVersion())
+//	}
+//
+// All consumer questions — "any drift?", "block apply?", "informational
+// only?", "what versions produced this?", "resources grouped by class?"
+// — have method answers on [Verdict] / [Result] / [Class]. New consumer
+// code should call those methods rather than reach into struct fields,
+// so the wire format can evolve without churning call sites.
+//
+// # Persistence
+//
+// [Verdict] is the canonical hand-off shape. Persistence layers should
+// store the original drift.json bytes (in a DB column, opaque protobuf
+// Struct, session metadata, etc.) and re-derive [Verdict] via
+// [ClassifyJSON] on read. The classifier is pure and inexpensive;
+// storing only the input means the classifier version can change
+// without invalidating cached rows.
+//
 // # Parse / classify split
 //
-// The package is split deliberately:
+// The package keeps the parse and classify steps separately reachable
+// for the rule-test suite, which constructs [Drift] literals directly
+// in Go and skips the JSON layer entirely:
 //
 //   - [UnmarshalJSON] (in unmarshal.go) parses the drift.json bytes
 //     written by sandbox-infrastructure-template/tf/drift-check.sh into
@@ -23,13 +57,18 @@
 //     the new (post-#105 additive) schema; missing fields decode to
 //     zero values without error.
 //   - [Classify] (in classify.go) runs the rule chain over a [Drift]
-//     and returns a [Result]. Tests for individual rules construct
-//     [Drift] literals directly in Go and skip the JSON layer entirely.
+//     and returns a [Result].
+//   - [HasClassifiableDetail] is the precondition gate [ClassifyJSON]
+//     uses internally; exported so callers can assert it on a [Drift]
+//     they assembled some other way.
 //
-// Callers that get a Drift with insufficient detail (see
-// [HasClassifiableDetail]) should fall back to whatever coarse signal
-// they had before. Today that's reliable's existing trust-the-boolean
-// path against Job.drift_actionable.
+// Callers that get [ErrNoClassifiableDetail] from [ClassifyJSON]
+// should treat it as an input error from an out-of-date producer, not
+// silently fall back to a coarser drift signal — there is no longer
+// any "coarse signal" path to fall back to. The producer pipeline has
+// emitted the post-#105 schema since 2026-04, and the legacy schema is
+// not classifiable: a Drift with addresses but no per-resource detail
+// gives the rules engine nothing to match on.
 //
 // # Versioning
 //
