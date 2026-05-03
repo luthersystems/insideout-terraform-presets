@@ -204,25 +204,51 @@ func inspectCloudArmor(ctx context.Context, projectID, action, filters string, o
 	}
 }
 
+// cloudCDNAggregatedListRequest builds the AggregatedList request for
+// the Cloud CDN inspector. Pulled out so the AIP-160 dialect choice
+// (#239) is pinned by a unit test instead of a comment.
+func cloudCDNAggregatedListRequest(projectID, filters string) *computepb.AggregatedListBackendServicesRequest {
+	req := &computepb.AggregatedListBackendServicesRequest{Project: projectID}
+	if f := gcpAIP160LabelFilter("project", projectFromFilters(filters)); f != "" {
+		req.Filter = proto.String(f)
+	}
+	return req
+}
+
 func inspectCloudCDN(ctx context.Context, projectID, action, filters string, opts ...option.ClientOption) (any, error) {
 	switch action {
 	case "list-backend-services-cdn":
 		// Cloud CDN is a flag on Compute backend services
 		// (EnableCdn=true), not a standalone resource — list backend
 		// services across all scopes and keep the CDN-enabled ones.
-		// Server-side scope to the project label via GCE legacy
-		// filter.
+		//
+		// IMPORTANT (#239): server-side scoping uses the AIP-160 dialect
+		// (`labels.project = "<value>"`), NOT the GCE legacy dialect
+		// (`labels.project=<value>`) used by every other inspector in
+		// this file. The same Compute v1 REST API exposes BOTH dialects
+		// per-endpoint:
+		//
+		//   - VPC / LoadBalancer / CloudArmor go through
+		//     google.golang.org/api/compute/v1 (computeapi.NewService)
+		//     — the older REST client — whose List/AggregatedList
+		//     accept the bare-equality legacy filter.
+		//   - CloudCDN goes through cloud.google.com/go/compute/apiv1
+		//     (compute.NewBackendServicesRESTClient) — the newer
+		//     gRPC-shaped client — whose AggregatedList rejects the
+		//     legacy form with HTTP 400 "Invalid list filter
+		//     expression" and requires the AIP-160 form. This was the
+		//     symptom on staging session sess_v2_qtyB4nkwp5N8 (#239).
+		//
+		// If we ever migrate the rest of this file to the newer
+		// compute apiv1 client, those call sites must flip to
+		// gcpAIP160LabelFilter at the same time.
 		client, err := compute.NewBackendServicesRESTClient(ctx, opts...)
 		if err != nil {
 			return nil, err
 		}
 		defer func() { _ = client.Close() }()
 
-		req := &computepb.AggregatedListBackendServicesRequest{Project: projectID}
-		if f := gcpLegacyLabelFilter("project", projectFromFilters(filters)); f != "" {
-			req.Filter = proto.String(f)
-		}
-		it := client.AggregatedList(ctx, req)
+		it := client.AggregatedList(ctx, cloudCDNAggregatedListRequest(projectID, filters))
 		var services []*computepb.BackendService
 		for {
 			pair, err := it.Next()
