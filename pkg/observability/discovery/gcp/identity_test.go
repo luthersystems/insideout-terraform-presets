@@ -179,3 +179,40 @@ func TestInspectIdentityPlatform_ListTenants_OtherErrorsPassThrough(t *testing.T
 	var feErr *observability.GCPFeatureNotEnabledError
 	assert.False(t, errors.As(err, &feErr), "5xx errors must NOT be wrapped as feature-not-enabled")
 }
+
+// TestInspectIdentityPlatform_ListProviders_INVALIDPROJECTIDNotWrapped
+// pins the action-scoping contract: the
+// GCPFeatureNotEnabledError wrap is gated to the list-tenants
+// branch only. If an unrelated action (e.g. list-providers) ever
+// returns 400 INVALID_PROJECT_ID, that's a different failure class
+// (truly bad project ID, missing IAM, etc.) and must propagate as
+// the raw error so the caller can diagnose. Without this test, a
+// future refactor that hoisted the wrap to a shared error path
+// would silently swallow real caller bugs as
+// "feature_not_enabled".
+func TestInspectIdentityPlatform_ListProviders_INVALIDPROJECTIDNotWrapped(t *testing.T) {
+	t.Parallel()
+	srv, opts := fakeIdentityToolkitREST(t, func(w http.ResponseWriter, r *http.Request) {
+		// Both halves of list-providers (oauthIdpConfigs and
+		// defaultSupportedIdpConfigs) return the same 400 body. The
+		// list-providers handler folds errors into an inline map, so
+		// success of THIS test means the per-half error string lands
+		// inline AND the outer call is not wrapped.
+		_ = r
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte(`{"error":{"code":400,"message":"INVALID_PROJECT_ID","status":"INVALID_ARGUMENT"}}`))
+	})
+	defer srv.Close()
+
+	got, err := inspectIdentityPlatform(context.Background(), "diagramtest2025-09-14", "list-providers", "", opts...)
+	// list-providers tolerates per-half failure inline (it does
+	// not surface the call as an error), so err is nil here. The
+	// key invariant is that NO GCPFeatureNotEnabledError is
+	// constructed for list-providers paths.
+	require.NoError(t, err)
+	m, ok := got.(map[string]any)
+	require.True(t, ok)
+	assert.NotNil(t, m["oauth_idp_configs_error"], "OAuth half error must surface inline (not wrapped)")
+	assert.NotNil(t, m["default_supported_idp_configs_error"], "default-supported half error must surface inline (not wrapped)")
+}

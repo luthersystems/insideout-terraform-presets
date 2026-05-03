@@ -39,10 +39,14 @@ import (
 	"testing"
 	"time"
 
+	"cloud.google.com/go/aiplatform/apiv1/aiplatformpb"
+	"cloud.google.com/go/apigateway/apiv1/apigatewaypb"
+	"cloud.google.com/go/functions/apiv2/functionspb"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
+	computeapi "google.golang.org/api/compute/v1"
 	"google.golang.org/api/option"
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/observability"
@@ -85,29 +89,56 @@ func (gcloudTokenSource) Token() (*oauth2.Token, error) {
 	return &oauth2.Token{AccessToken: tok, Expiry: time.Now().Add(30 * time.Minute)}, nil
 }
 
-// liveAuthOpts returns option.ClientOption(s) suitable for the SDK
-// clients used by the inspectors. It tries ADC first; on failure,
-// falls back to a `gcloud auth print-access-token` token source so a
-// developer with `gcloud auth login` (active account or impersonated
-// service account) can run the suite without needing to refresh
-// application-default credentials separately.
+// gcloudReusableTokenSource caches the gcloud-issued access token
+// across calls so the SDK's per-RPC token fetch doesn't shell out
+// to `gcloud auth print-access-token` every time. The wrapped
+// gcloudTokenSource{} sets a 30-minute Expiry; ReuseTokenSource
+// honors that and re-fetches only when the cache expires.
+func gcloudReusableTokenSource() oauth2.TokenSource {
+	return oauth2.ReuseTokenSource(nil, gcloudTokenSource{})
+}
+
+// resolveLiveAuth returns the credentials we should use for live
+// probes, picking ADC when usable and falling back to gcloud-CLI
+// when allowed. Critical: ADC's "find" can succeed even when the
+// cached refresh token is in invalid_grant / invalid_rapt state —
+// so we MUST issue a real token via TokenSource.Token() to confirm
+// before letting the SDK use it.
 //
-// Critical: ADC's "find" can succeed even when the cached refresh
-// token is in invalid_grant / invalid_rapt state — so we MUST issue
-// a real token via TokenSource.Token() to confirm before letting
-// the SDK use it. Otherwise the per-inspector tests below would
-// silently inherit broken ADC even though the regime probe (which
-// uses liveHTTPClient with the same check) works fine.
-func liveAuthOpts(t *testing.T) []option.ClientOption {
+// Set LIVE_GCP_REQUIRE_ADC=1 to disable the gcloud fallback (CI mode
+// + paranoid local runs); the test fatals instead of falling back.
+// Without that env var, the fallback is enabled by default for local
+// developer ergonomics — broken ADC otherwise blocks every test run
+// until the operator runs `gcloud auth application-default login`,
+// which is friction without much defensive value (the next gcloud
+// command would have surfaced it anyway).
+//
+// Returns the chosen TokenSource and a bool indicating whether the
+// fallback was taken (purely for the t.Logf line at the call site).
+func resolveLiveAuth(t *testing.T, ctx context.Context) (ts oauth2.TokenSource, viaGcloud bool) {
 	t.Helper()
-	creds, err := google.FindDefaultCredentials(context.Background(), "https://www.googleapis.com/auth/cloud-platform")
+	creds, err := google.FindDefaultCredentials(ctx, "https://www.googleapis.com/auth/cloud-platform")
 	if err == nil && creds != nil {
 		if _, terr := creds.TokenSource.Token(); terr == nil {
-			return nil
+			return creds.TokenSource, false
 		}
 	}
-	t.Logf("ADC unavailable or token fetch failed; falling back to `gcloud auth print-access-token`")
-	return []option.ClientOption{option.WithTokenSource(gcloudTokenSource{})}
+	if os.Getenv("LIVE_GCP_REQUIRE_ADC") == "1" {
+		t.Fatalf("ADC unavailable or token fetch failed and LIVE_GCP_REQUIRE_ADC=1; refresh ADC with `gcloud auth application-default login` or unset the env var to allow the gcloud-CLI fallback")
+	}
+	return gcloudReusableTokenSource(), true
+}
+
+// liveAuthOpts returns option.ClientOption(s) suitable for the SDK
+// clients used by the inspectors. ADC first; gcloud fallback when
+// ADC is broken (see resolveLiveAuth).
+func liveAuthOpts(t *testing.T) []option.ClientOption {
+	t.Helper()
+	ts, viaGcloud := resolveLiveAuth(t, context.Background())
+	if viaGcloud {
+		t.Logf("WARN: ADC unavailable or token fetch failed; falling back to `gcloud auth print-access-token`. Set LIVE_GCP_REQUIRE_ADC=1 to fatal instead.")
+	}
+	return []option.ClientOption{option.WithTokenSource(ts)}
 }
 
 // liveHTTPClient returns an http.Client backed by the same auth
@@ -117,18 +148,11 @@ func liveAuthOpts(t *testing.T) []option.ClientOption {
 func liveHTTPClient(t *testing.T) *http.Client {
 	t.Helper()
 	ctx := context.Background()
-	if c, err := google.DefaultClient(ctx, "https://www.googleapis.com/auth/cloud-platform"); err == nil {
-		// Smoke-check by issuing a token; if invalid_grant fires here,
-		// fall through to the gcloud fallback below.
-		creds, _ := google.FindDefaultCredentials(ctx, "https://www.googleapis.com/auth/cloud-platform")
-		if creds != nil {
-			if _, terr := creds.TokenSource.Token(); terr == nil {
-				return c
-			}
-		}
+	ts, viaGcloud := resolveLiveAuth(t, ctx)
+	if viaGcloud {
+		t.Logf("WARN: ADC unavailable or token fetch failed; falling back to `gcloud auth print-access-token` for direct REST probes. Set LIVE_GCP_REQUIRE_ADC=1 to fatal instead.")
 	}
-	t.Logf("ADC unavailable; falling back to `gcloud auth print-access-token` for direct REST probes")
-	return oauth2.NewClient(ctx, gcloudTokenSource{})
+	return oauth2.NewClient(ctx, ts)
 }
 
 // TestLive_InspectCloudCDN_NoCDNFilter exercises the AggregatedList
@@ -268,38 +292,60 @@ func TestLive_ComputeV1FilterRegimes(t *testing.T) {
 }
 
 // TestLive_InspectVPC exercises every VPC action against a real
-// project. None should error.
+// project. Asserts the concrete return type per action so a
+// switch-case fallthrough (e.g. list-subnets returning []*Network)
+// would fail loudly (qa-professor §P1.3) instead of slipping through
+// as a no-error result.
 func TestLive_InspectVPC(t *testing.T) {
 	t.Parallel()
 	projectID := liveProjectOrSkip(t)
 	ctx := context.Background()
 
-	for _, action := range []string{"list-networks", "list-subnets", "list-firewalls", "list-routes"} {
-		t.Run(action, func(t *testing.T) {
+	cases := []struct {
+		action   string
+		wantType any
+	}{
+		{"list-networks", []*computeapi.Network(nil)},
+		{"list-subnets", []*computeapi.Subnetwork(nil)},
+		{"list-firewalls", []*computeapi.Firewall(nil)},
+		{"list-routes", []*computeapi.Route(nil)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.action, func(t *testing.T) {
 			t.Parallel()
-			got, err := inspectVPC(ctx, projectID, action, `{"project":"`+projectID+`"}`, liveAuthOpts(t)...)
-			require.NoError(t, err, "inspectVPC %s must succeed against a real project (#245)", action)
-			t.Logf("%s returned %T", action, got)
+			got, err := inspectVPC(ctx, projectID, tc.action, `{"project":"`+projectID+`"}`, liveAuthOpts(t)...)
+			require.NoError(t, err, "inspectVPC %s must succeed against a real project (#245)", tc.action)
+			require.IsType(t, tc.wantType, got, "concrete return type drift on %s — switch-case fallthrough?", tc.action)
+			t.Logf("%s returned %T", tc.action, got)
 		})
 	}
 }
 
 // TestLive_InspectLoadBalancer exercises every load-balancer action.
+// Same return-type assertion as TestLive_InspectVPC (qa-professor
+// §P1.3).
 func TestLive_InspectLoadBalancer(t *testing.T) {
 	t.Parallel()
 	projectID := liveProjectOrSkip(t)
 	ctx := context.Background()
 
-	for _, action := range []string{
-		"list-backend-services", "list-url-maps",
-		"list-target-http-proxies", "list-target-https-proxies",
-		"list-forwarding-rules",
-	} {
-		t.Run(action, func(t *testing.T) {
+	cases := []struct {
+		action   string
+		wantType any
+	}{
+		{"list-backend-services", []*computeapi.BackendService(nil)},
+		{"list-url-maps", []*computeapi.UrlMap(nil)},
+		{"list-target-http-proxies", []*computeapi.TargetHttpProxy(nil)},
+		{"list-target-https-proxies", []*computeapi.TargetHttpsProxy(nil)},
+		{"list-forwarding-rules", []*computeapi.ForwardingRule(nil)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.action, func(t *testing.T) {
 			t.Parallel()
-			got, err := inspectLoadBalancer(ctx, projectID, action, `{"project":"`+projectID+`"}`, liveAuthOpts(t)...)
-			require.NoError(t, err, "inspectLoadBalancer %s must succeed (#245)", action)
-			t.Logf("%s returned %T", action, got)
+			got, err := inspectLoadBalancer(ctx, projectID, tc.action, `{"project":"`+projectID+`"}`, liveAuthOpts(t)...)
+			require.NoError(t, err, "inspectLoadBalancer %s must succeed (#245)", tc.action)
+			require.IsType(t, tc.wantType, got, "concrete return type drift on %s — switch-case fallthrough?", tc.action)
+			t.Logf("%s returned %T", tc.action, got)
 		})
 	}
 }
@@ -311,6 +357,7 @@ func TestLive_InspectAPIGateway(t *testing.T) {
 	projectID := liveProjectOrSkip(t)
 	got, err := inspectAPIGateway(context.Background(), projectID, "list-apis", `{"project":"`+projectID+`"}`, liveAuthOpts(t)...)
 	require.NoError(t, err, "inspectAPIGateway list-apis must succeed (#245)")
+	require.IsType(t, []*apigatewaypb.Api(nil), got, "concrete return type drift on list-apis")
 	t.Logf("list-apis returned %T", got)
 }
 
@@ -321,6 +368,7 @@ func TestLive_InspectCloudFunctions(t *testing.T) {
 	projectID := liveProjectOrSkip(t)
 	got, err := inspectCloudFunctions(context.Background(), projectID, "list-functions", `{"project":"`+projectID+`"}`, liveAuthOpts(t)...)
 	require.NoError(t, err, "inspectCloudFunctions list-functions must succeed (#245)")
+	require.IsType(t, []*functionspb.Function(nil), got, "concrete return type drift on list-functions")
 	t.Logf("list-functions returned %T", got)
 }
 
@@ -330,21 +378,33 @@ func TestLive_InspectVertexAI(t *testing.T) {
 	projectID := liveProjectOrSkip(t)
 	got, err := inspectVertexAI(context.Background(), projectID, "list-endpoints", `{"project":"`+projectID+`"}`, liveAuthOpts(t)...)
 	require.NoError(t, err, "inspectVertexAI list-endpoints must succeed (#245)")
+	require.IsType(t, []*aiplatformpb.Endpoint(nil), got, "concrete return type drift on list-endpoints")
 	t.Logf("list-endpoints returned %T", got)
 }
 
 // TestLive_InspectFirestore_DefaultDB exercises the fallback path —
 // when database_name is omitted, the inspector uses (default). Most
-// projects don't have a (default) database (the preset uses a named
-// DB per #159), so this is allowed to surface a NotFound; the call
-// itself must not be silently swallowed.
+// preset-deployed projects don't have a (default) database (#159 —
+// the preset deliberately uses a named DB), so the call must surface
+// either a successful empty-list OR a clear NotFound from the
+// gRPC layer. A no-op implementation that returned nil/nil would
+// pass the previous version of this test (qa-professor §P3.2);
+// this version asserts we got *some* meaningful response.
 func TestLive_InspectFirestore_DefaultDB(t *testing.T) {
 	t.Parallel()
 	projectID := liveProjectOrSkip(t)
-	_, err := inspectFirestore(context.Background(), projectID, "list-collections", "", liveAuthOpts(t)...)
-	if err != nil {
-		t.Logf("inspectFirestore (default) returned (expected on preset-deployed projects): %v", err)
+	got, err := inspectFirestore(context.Background(), projectID, "list-collections", "", liveAuthOpts(t)...)
+	if err == nil {
+		// Default DB exists on this project — happy path.
+		require.IsType(t, []string(nil), got, "list-collections must return []string, not nil-pretending-to-be-anything")
+		t.Logf("inspectFirestore (default) succeeded: %T = %v", got, got)
+		return
 	}
+	// Default DB missing — must be the explicit gRPC NotFound, not a
+	// silently-swallowed wrong-shape error.
+	assert.Contains(t, err.Error(), "NotFound",
+		"expected explicit gRPC NotFound on default-DB-missing projects (the preset uses a non-default name per #159); got %v", err)
+	t.Logf("inspectFirestore (default) NotFound (expected on preset-deployed projects): %v", err)
 }
 
 // TestLive_InspectFirestore_NamedDB confirms the database_name

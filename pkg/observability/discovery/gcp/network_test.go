@@ -127,10 +127,19 @@ func TestInspectVPC_UnsupportedAction(t *testing.T) {
 // schema. Same regime applies to UrlMaps, TargetHttp(s)Proxies — all
 // covered by the regime-(a) live-probe table in network.go. Handler
 // MUST not send a filter query param.
+//
+// The fake handler asserts the URL path so a future switch-case
+// crossing (e.g. list-backend-services accidentally calling
+// UrlMaps.List) is caught by the path guard, not silently passed as
+// "filter param empty" (qa-professor §P2.4).
 func TestInspectLoadBalancer_ListBackendServices_NoServerSideLabelsFilter(t *testing.T) {
 	t.Parallel()
 	var capturedFilter string
 	srv, opts := fakeComputeAPIREST(t, func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.URL.Path, "/backendServices") {
+			http.Error(w, "unexpected path: "+r.URL.Path, http.StatusInternalServerError)
+			return
+		}
 		capturedFilter = r.URL.Query().Get("filter")
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"items":[{"name":"bs-a"}]}`))
@@ -150,6 +159,10 @@ func TestInspectLoadBalancer_ListUrlMaps_NoServerSideLabelsFilter(t *testing.T) 
 	t.Parallel()
 	var capturedFilter string
 	srv, opts := fakeComputeAPIREST(t, func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.URL.Path, "/urlMaps") {
+			http.Error(w, "unexpected path: "+r.URL.Path, http.StatusInternalServerError)
+			return
+		}
 		capturedFilter = r.URL.Query().Get("filter")
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"items":[{"name":"um-a"}]}`))
@@ -169,6 +182,13 @@ func TestInspectLoadBalancer_ListTargetHttpProxies_NoServerSideLabelsFilter(t *t
 	t.Parallel()
 	var capturedFilter string
 	srv, opts := fakeComputeAPIREST(t, func(w http.ResponseWriter, r *http.Request) {
+		// Note the trailing-slash-resistant guard: targetHttpProxies
+		// has a longer cousin (targetHttpsProxies) — match on the
+		// exact path segment.
+		if !strings.Contains(r.URL.Path, "/targetHttpProxies") || strings.Contains(r.URL.Path, "/targetHttpsProxies") {
+			http.Error(w, "unexpected path: "+r.URL.Path, http.StatusInternalServerError)
+			return
+		}
 		capturedFilter = r.URL.Query().Get("filter")
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"items":[{"name":"thp-a"}]}`))
@@ -185,6 +205,10 @@ func TestInspectLoadBalancer_ListTargetHttpsProxies_NoServerSideLabelsFilter(t *
 	t.Parallel()
 	var capturedFilter string
 	srv, opts := fakeComputeAPIREST(t, func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.URL.Path, "/targetHttpsProxies") {
+			http.Error(w, "unexpected path: "+r.URL.Path, http.StatusInternalServerError)
+			return
+		}
 		capturedFilter = r.URL.Query().Get("filter")
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"items":[{"name":"thsp-a"}]}`))
@@ -205,6 +229,10 @@ func TestInspectLoadBalancer_ListForwardingRules_AppliesAIP160Filter(t *testing.
 	t.Parallel()
 	var capturedFilter string
 	srv, opts := fakeComputeAPIREST(t, func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.URL.Path, "/forwardingRules") {
+			http.Error(w, "unexpected path: "+r.URL.Path, http.StatusInternalServerError)
+			return
+		}
 		capturedFilter = r.URL.Query().Get("filter")
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"items":[]}`))
@@ -288,28 +316,19 @@ func TestInspectCloudCDN_UnsupportedAction(t *testing.T) {
 // Without a live integration test, the bug shipped to v0.9.0; the
 // new TestLive_ComputeV1FilterRegimes integration test in
 // live_integration_test.go closes that loop.
+//
+// One row is enough — the constructor's signature ignores `filters`
+// (`_ string`), so iterating over many rows would be tautological
+// (qa-professor §6). The behavioral pin against `inspectCloudCDN` +
+// fakeComputeAPIREST in TestInspectCloudCDN_NoLabelsFilter exercises
+// the live wire path.
 func TestCloudCDNAggregatedListRequest_NoServerSideLabelsFilter(t *testing.T) {
 	t.Parallel()
-
-	for _, tc := range []struct {
-		name    string
-		filters string
-	}{
-		{"empty filters", ""},
-		{"missing project key", `{"region":"us-central1"}`},
-		{"empty project value", `{"project":""}`},
-		{"populated project", `{"project":"io-qtyb4nkwp5n8"}`},
-		{"populated project + extra", `{"project":"io-foo","region":"us-central1"}`},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			req := cloudCDNAggregatedListRequest("demo-proj", tc.filters)
-			require.NotNil(t, req)
-			assert.Equal(t, "demo-proj", req.GetProject())
-			assert.Nil(t, req.Filter,
-				"req.Filter must be nil — backendServices.aggregatedList rejects labels filters server-side regardless of dialect (#245)")
-		})
-	}
+	req := cloudCDNAggregatedListRequest("demo-proj", `{"project":"io-qtyb4nkwp5n8"}`)
+	require.NotNil(t, req)
+	assert.Equal(t, "demo-proj", req.GetProject())
+	assert.Nil(t, req.Filter,
+		"req.Filter must be nil — backendServices.aggregatedList rejects labels filters server-side regardless of dialect (#245)")
 }
 
 func TestInspectAPIGateway_UnsupportedAction(t *testing.T) {
