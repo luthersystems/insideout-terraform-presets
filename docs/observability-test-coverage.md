@@ -159,44 +159,62 @@ consumes `logGroupName`, so the reduction is a non-issue.
   shapes (4 from the bug repro + 4 `/aws/containerinsights/...` log
   groups from PR #238's addon install).
 
-### Bug #3 — Cloud CDN AggregatedList filter dialect (#239)
+### Bug #3 — Compute v1 AggregatedList filter dialect (#239)
 
-**Repro on staging session `sess_v2_qtyB4nkwp5N8`**, project
-`io-qtyb4nkwp5n8`:
+Originally filed as a Cloud-CDN-only bug; live MCP probe against
+staging session `sess_v2_qtyB4nkwp5N8` (`gcpinspect_batch`)
+revealed the bug is wider — multiple Compute v1 endpoints reject the
+GCE legacy filter dialect:
 
-- `/api/v2/gcp/inspect` for `service=cloudcdn`,
-  `action=list-backend-services-cdn` returned HTTP 400:
-  `Invalid value for field 'filter': 'labels.project=io-qtyb4nkwp5n8'.`
-  `Invalid list filter expression.`
+| Service | Action | Result |
+|---|---|---|
+| `vpc` | `list-networks` | HTTP 400 |
+| `loadbalancer` | `list-backend-services` | HTTP 400 |
+| `loadbalancer` | `list-url-maps` | HTTP 400 |
+| `loadbalancer` | `list-target-https-proxies` | HTTP 400 |
+| `cloudcdn` | `list-backend-services-cdn` | HTTP 400 |
+| `compute` | `list-instances` | OK (this endpoint accepts legacy) |
+| `loadbalancer` | `list-forwarding-rules` | OK |
 
-**Root cause**: `pkg/observability/discovery/gcp/network.go::inspectCloudCDN`
-used `gcpLegacyLabelFilter` (GCE legacy dialect, e.g.
-`labels.project=<value>`). The Compute v1 REST API exposes both
-filter dialects per-endpoint:
+All seven use the GCE legacy filter dialect (`labels.project=<value>`)
+under the hood. The Compute v1 REST API's per-endpoint filter parser
+is inconsistent — some endpoints accept legacy, others reject it with
+HTTP 400 "Invalid list filter expression". The pattern doesn't track
+the Go client library either: VPC / LoadBalancer use the older
+`google.golang.org/api/compute/v1` client; Cloud CDN uses the newer
+`cloud.google.com/go/compute/apiv1` client; both reject legacy on
+their respective `aggregatedList`/`list` endpoints.
 
-- `google.golang.org/api/compute/v1` (`computeapi.NewService`) — older
-  client, used by VPC / LoadBalancer / CloudArmor inspectors. Accepts
-  the legacy dialect.
-- `cloud.google.com/go/compute/apiv1` — newer client, used by
-  `inspectCloudCDN` because Cloud CDN is a flag on backend services
-  rather than its own resource type. **Rejects** the legacy dialect
-  for `backendServices.aggregatedList` and requires AIP-160
-  (`labels.project = "<value>"`).
+**Impact**: every InsideOut session whose stack contains any of the
+above components saw a 400 in the panel — not just `gcp_cloud_cdn` as
+the issue originally claimed.
 
-**Impact**: every InsideOut session whose stack contains a
-`gcp_cloud_cdn` component saw a 400 in the panel.
+**Fix (broader than the issue)**: flipped every call site in
+`pkg/observability/discovery/gcp/{network,compute}.go` from
+`gcpLegacyLabelFilter` to `gcpAIP160LabelFilter` (and added a
+`gcpAIP160LabelFilterAnd` helper for the bastion `role` + `project`
+combination). AIP-160 is the modern standard and works on every
+Compute v1 endpoint we exercise — including the ones that do accept
+legacy (instances, forwardingRules, etc.), so we get one universal
+dialect across the codebase.
 
-**Fix**: switched to `gcpAIP160LabelFilter`, factored the request
-construction into `cloudCDNAggregatedListRequest()` so the dialect
-choice is pinned by `TestCloudCDNAggregatedListRequest_AIP160DialectForProjectFilter`.
-Live integration tests (`live_integration_test.go`) cover the no-filter
-and with-filter paths against any real GCP project.
+Pinned by:
+- `TestCloudCDNAggregatedListRequest_AIP160DialectForProjectFilter` —
+  exact filter string for the original symptom.
+- Updated `TestInspectVPC_ListNetworks_AppliesProjectFilter`,
+  `TestInspectLoadBalancer_ListBackendServices_AppliesFilter`,
+  `TestInspectCloudArmor_ListPolicies_AppliesFilter`,
+  `TestInspectBastion_*` — pin the AIP-160 form for every other
+  endpoint.
+- `TestGCPAIP160LabelFilterAnd` — pins the AND-join shape.
+- Live integration tests (`live_integration_test.go`) for the
+  Cloud CDN no-filter + with-filter paths.
 
-The other call sites in `network.go` (VPC, LoadBalancer, CloudArmor)
-use the older `computeapi` client and remain on the legacy dialect —
-they are NOT affected by this bug. A header comment in
-`inspectCloudCDN` documents the asymmetry so a future migration to
-the newer client across the board flips them all in lockstep.
+The legacy helpers (`gcpLegacyLabelFilter`, `gcpLegacyLabelFilterAnd`)
+remain in `helpers.go` for now — no production call site uses them,
+but tests still cover them and they document the dialect we used to
+emit. They'll be deleted in a follow-up cleanup if no consumer reaches
+for them.
 
 ## 5. Test-quality coverage (unit / branch)
 

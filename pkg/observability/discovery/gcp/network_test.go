@@ -72,7 +72,7 @@ func TestInspectVPC_ListNetworks_AppliesProjectFilter(t *testing.T) {
 	_, err := inspectVPC(context.Background(), "demo-proj", "list-networks",
 		`{"project":"io-foo"}`, opts...)
 	require.NoError(t, err)
-	assert.Equal(t, "labels.project=io-foo", capturedFilter)
+	assert.Equal(t, `labels.project = "io-foo"`, capturedFilter)
 }
 
 func TestInspectVPC_ListFirewallsUnfiltered(t *testing.T) {
@@ -123,7 +123,7 @@ func TestInspectLoadBalancer_ListBackendServices_AppliesFilter(t *testing.T) {
 	_, err := inspectLoadBalancer(context.Background(), "demo-proj", "list-backend-services",
 		`{"project":"io-foo"}`, opts...)
 	require.NoError(t, err)
-	assert.Equal(t, "labels.project=io-foo", capturedFilter)
+	assert.Equal(t, `labels.project = "io-foo"`, capturedFilter)
 }
 
 func TestInspectLoadBalancer_UnsupportedAction(t *testing.T) {
@@ -149,7 +149,7 @@ func TestInspectCloudArmor_ListPolicies_AppliesFilter(t *testing.T) {
 	_, err := inspectCloudArmor(context.Background(), "demo-proj", "list-policies",
 		`{"project":"io-foo"}`, opts...)
 	require.NoError(t, err)
-	assert.Equal(t, "labels.project=io-foo", capturedFilter)
+	assert.Equal(t, `labels.project = "io-foo"`, capturedFilter)
 }
 
 func TestInspectCloudArmor_DescribePolicy_MissingFilter(t *testing.T) {

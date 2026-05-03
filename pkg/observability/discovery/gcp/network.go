@@ -39,12 +39,22 @@ func inspectVPC(ctx context.Context, projectID, action, filters string, opts ...
 		return nil, err
 	}
 
-	// GCE legacy filter, applied where the resource type carries
-	// labels (Networks, Subnetworks). Firewalls and Routes have no
-	// labels field on the GCE API (per the v1 schema) so they stay
-	// un-filtered — they're scoped by parent network association
-	// rather than labels.
-	projectFilter := gcpLegacyLabelFilter("project", projectFromFilters(filters))
+	// AIP-160 filter, applied where the resource type carries labels
+	// (Networks, Subnetworks). Firewalls and Routes have no labels
+	// field on the GCE API (per the v1 schema) so they stay un-filtered
+	// — they're scoped by parent network association rather than
+	// labels.
+	//
+	// Compute v1's per-endpoint filter parser is inconsistent: some
+	// endpoints accept the GCE legacy dialect (`labels.foo=bar`) and
+	// some reject it with HTTP 400 "Invalid list filter expression".
+	// `networks.list`, `subnetworks.aggregatedList`,
+	// `backendServices.list`, `urlMaps.list`, `targetHttp(s)Proxies.
+	// list` all reject the legacy dialect (verified live on staging
+	// session sess_v2_qtyB4nkwp5N8 — see #239 broader sweep). AIP-160
+	// is the standard dialect and works on every Compute v1 endpoint
+	// we exercise.
+	projectFilter := gcpAIP160LabelFilter("project", projectFromFilters(filters))
 
 	switch action {
 	case "list-networks":
@@ -103,10 +113,13 @@ func inspectLoadBalancer(ctx context.Context, projectID, action, filters string,
 		return nil, err
 	}
 
-	// GCE legacy filter — every load-balancer resource type listed
-	// below carries `labels` in the v1 schema (BackendServices,
-	// UrlMaps, TargetHttp[s]Proxies, GlobalForwardingRules).
-	projectFilter := gcpLegacyLabelFilter("project", projectFromFilters(filters))
+	// AIP-160 filter — every load-balancer resource type listed below
+	// carries `labels` in the v1 schema (BackendServices, UrlMaps,
+	// TargetHttp[s]Proxies, GlobalForwardingRules). Was the GCE legacy
+	// dialect, but BackendServices.list / UrlMaps.list / TargetHttp(s)
+	// Proxies.list reject it with HTTP 400 (see #239 + the network.go
+	// header comment on the per-endpoint filter parser inconsistency).
+	projectFilter := gcpAIP160LabelFilter("project", projectFromFilters(filters))
 
 	switch action {
 	case "list-backend-services":
@@ -180,9 +193,11 @@ func inspectCloudArmor(ctx context.Context, projectID, action, filters string, o
 	switch action {
 	case "list-policies":
 		// SecurityPolicy carries a Labels field on the v1 schema; apply
-		// the GCE legacy filter when the caller has a project.
+		// the AIP-160 filter when the caller has a project. (Was the
+		// GCE legacy dialect; flipped alongside #239 — securityPolicies
+		// .list is one of the endpoints that rejects legacy.)
 		call := svc.SecurityPolicies.List(projectID).Context(ctx)
-		if f := gcpLegacyLabelFilter("project", projectFromFilters(filters)); f != "" {
+		if f := gcpAIP160LabelFilter("project", projectFromFilters(filters)); f != "" {
 			call = call.Filter(f)
 		}
 		resp, err := call.Do()

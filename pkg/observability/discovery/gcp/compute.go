@@ -38,12 +38,19 @@ func inspectCompute(ctx context.Context, projectID, action, filters string, opts
 		}
 		defer func() { _ = client.Close() }()
 
-		// Server-side scope to the caller's project label using the GCE
-		// legacy filter dialect. gcpLegacyLabelFilter returns "" when
+		// Server-side scope to the caller's project label using the
+		// AIP-160 filter dialect. gcpAIP160LabelFilter returns "" when
 		// no project is set (e.g. demo session), which Compute treats
 		// as "no filter".
+		//
+		// Was the GCE legacy dialect — instances.aggregatedList does
+		// accept legacy on this endpoint, but the same Compute v1 REST
+		// API rejects legacy on networks.list, backendServices.list,
+		// urlMaps.list, etc. (verified live on staging session
+		// sess_v2_qtyB4nkwp5N8). AIP-160 works everywhere, so we pick
+		// the universally-compatible dialect.
 		req := &computepb.AggregatedListInstancesRequest{Project: projectID}
-		if f := gcpLegacyLabelFilter("project", projectFromFilters(filters)); f != "" {
+		if f := gcpAIP160LabelFilter("project", projectFromFilters(filters)); f != "" {
 			req.Filter = proto.String(f)
 		}
 
@@ -137,21 +144,27 @@ func inspectBastion(ctx context.Context, projectID, action, filters string, opts
 	switch action {
 	case "list-bastion-instances":
 		// Bastions in luthersystems presets are GCE instances tagged
-		// with `labels.role=bastion`. Compute v1 uses the legacy GCE
-		// filter dialect (NOT AIP-160) — `:` would mean substring
-		// match and over-include `bastion-prod`, `super-bastion`, etc.
-		// `=` is the equality operator. AND-combine with the project
+		// with `labels.role=bastion`. AIP-160 dialect (`labels.role =
+		// "bastion"`) — quoted string equality — so bastion-prod /
+		// super-bastion don't over-match. AND-combine with the project
 		// filter so a project hosting >1 InsideOut session sees only
 		// its own bastions.
+		//
+		// Was the GCE legacy dialect; flipped alongside #239 because
+		// the same Compute v1 REST API rejects legacy on multiple
+		// other endpoints (networks.list, backendServices.list, etc.).
+		// AIP-160 is universally accepted — the `:` substring vs `=`
+		// equality concern from the legacy comment doesn't apply,
+		// because AIP-160's `=` is also strict equality.
 		client, err := compute.NewInstancesRESTClient(ctx, opts...)
 		if err != nil {
 			return nil, err
 		}
 		defer func() { _ = client.Close() }()
 
-		filterStr := gcpLegacyLabelFilterAnd(
-			"labels.role=bastion",
-			gcpLegacyLabelFilter("project", projectFromFilters(filters)),
+		filterStr := gcpAIP160LabelFilterAnd(
+			gcpAIP160LabelFilter("role", "bastion"),
+			gcpAIP160LabelFilter("project", projectFromFilters(filters)),
 		)
 		it := client.AggregatedList(ctx, &computepb.AggregatedListInstancesRequest{
 			Project: projectID,

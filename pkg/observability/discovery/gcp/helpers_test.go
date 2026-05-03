@@ -77,6 +77,18 @@ func TestGCPAIP160LabelFilter(t *testing.T) {
 	assert.Equal(t, `labels.project = "io-foo"`, gcpAIP160LabelFilter("project", "io-foo"))
 }
 
+func TestGCPAIP160LabelFilterAnd(t *testing.T) {
+	t.Parallel()
+	assert.Equal(t, "", gcpAIP160LabelFilterAnd("", ""))
+	assert.Equal(t, `labels.role = "bastion"`,
+		gcpAIP160LabelFilterAnd(`labels.role = "bastion"`, ""))
+	assert.Equal(t, `labels.project = "io-foo"`,
+		gcpAIP160LabelFilterAnd("", `labels.project = "io-foo"`))
+	assert.Equal(t,
+		`labels.role = "bastion" AND labels.project = "io-foo"`,
+		gcpAIP160LabelFilterAnd(`labels.role = "bastion"`, `labels.project = "io-foo"`))
+}
+
 func TestGCPLabelMatches(t *testing.T) {
 	t.Parallel()
 	// Empty want is match-all (no caller-side filter).
