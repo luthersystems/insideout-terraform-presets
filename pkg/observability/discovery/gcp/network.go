@@ -2,11 +2,11 @@
 // (LB-backed), API Gateway.
 //
 // Mirrors:
-//   - inspectGCPVPC          — reliable gcp_inspect.go:1397
-//   - inspectGCPLoadBalancer — reliable gcp_inspect.go:1244
-//   - inspectGCPCloudArmor   — reliable gcp_inspect.go:1321
-//   - inspectGCPCloudCDN     — reliable gcp_metrics.go:745
-//   - inspectGCPAPIGateway   — reliable gcp_metrics.go:707
+//   - inspectGCPVPC          — the InsideOut backend gcp_inspect.go:1397
+//   - inspectGCPLoadBalancer — the InsideOut backend gcp_inspect.go:1244
+//   - inspectGCPCloudArmor   — the InsideOut backend gcp_inspect.go:1321
+//   - inspectGCPCloudCDN     — the InsideOut backend gcp_metrics.go:745
+//   - inspectGCPAPIGateway   — the InsideOut backend gcp_metrics.go:707
 //
 // VPC, load balancer, and Cloud Armor share the
 // google.golang.org/api/compute/v1 service handle (computeapi.NewService),
@@ -151,7 +151,7 @@ func inspectLoadBalancer(ctx context.Context, projectID, action, filters string,
 
 	case "list-target-http-proxies":
 		// Regime (a) — TargetHttpProxy has no Labels field; drop
-		// filter. The reliable side attributes ownership via the
+		// filter. The InsideOut backend side attributes ownership via the
 		// URL-map → backend-service chain when needed.
 		resp, err := svc.TargetHttpProxies.List(projectID).Context(ctx).Do()
 		if err != nil {

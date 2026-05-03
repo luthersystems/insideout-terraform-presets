@@ -201,12 +201,12 @@ jobs:
         run: tflint --recursive --format=compact
 
   # Wraps each preset in a synthetic root and runs terraform init. This
-  # is the actual consumption shape used by the composer
-  # (luthersystems/reliable instantiates each preset as a child module),
-  # and it surfaces classes of failures that standalone `terraform
-  # validate` misses — most notably the v0.7.0 `import {}` regression
-  # tracked in #199, where the standalone preset directory was treated
-  # as the root module and the invalid block silently passed CI.
+  # is the actual consumption shape used by the InsideOut composer
+  # (each preset is instantiated as a child module), and it surfaces
+  # classes of failures that standalone `terraform validate` misses —
+  # most notably the v0.7.0 `import {}` regression tracked in #199,
+  # where the standalone preset directory was treated as the root
+  # module and the invalid block silently passed CI.
   #
   # Matrix-fanned out one preset per runner (mirrors validate-presets) so
   # provider downloads happen in parallel rather than sequentially.

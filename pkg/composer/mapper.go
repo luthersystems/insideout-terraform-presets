@@ -463,7 +463,7 @@ func (m DefaultMapper) BuildModuleValues(
 		// The module's variables.tf validates billing_mode is exactly
 		// "PAY_PER_REQUEST" or "PROVISIONED" (uppercase). The IR enum
 		// emits human-friendly values like "On demand" / "provisioned",
-		// and the .or(ZNA) escape hatch in reliable lets users pass the
+		// and the .or(ZNA) escape hatch in the InsideOut backend lets users pass the
 		// canonical TF values directly. Translate to canonical here so
 		// every variant validates.
 		if cfg != nil && cfg.AWSDynamoDB != nil && cfg.AWSDynamoDB.Type != "" {
@@ -707,7 +707,7 @@ func (m DefaultMapper) BuildModuleValues(
 
 		// Only consider details for services that are actually enabled.
 		// Legacy sessions must Normalize before reaching BuildModuleValues;
-		// reliable's composeradapter does this for us in production.
+		// the InsideOut backend's composeradapter does this for us in production.
 		//
 		// Both comps.AWSBackups and cfg.AWSBackups gates are required: if
 		// no AWSBackups service bool is true there's nothing to back up,
@@ -962,14 +962,14 @@ func (m DefaultMapper) BuildModuleValues(
 // ---------------------------------------------------------------------------
 // IR → Terraform value translators.
 //
-// These helpers convert the human-friendly enum values reliable's IR uses
+// These helpers convert the human-friendly enum values the InsideOut backend's IR uses
 // (e.g. "On demand", "1h", "8 vCPU") into the canonical TF values the
 // downstream modules' variables.tf declarations expect. They live here
 // because every translation is paired with a specific module variable.
 //
 // Design rules:
 //   - On unrecognised input, return *ValidationError (loud).
-//   - The .or(ZNA) escape hatch in reliable's IR lets users pass a TF-canonical
+//   - The .or(ZNA) escape hatch in the InsideOut backend's IR lets users pass a TF-canonical
 //     value directly (e.g. "PAY_PER_REQUEST", "db.m7i.large"). Each helper
 //     accepts those passthrough forms in addition to the enum literals so
 //     advanced users aren't blocked by the translation table.

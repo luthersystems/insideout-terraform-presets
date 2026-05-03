@@ -65,7 +65,7 @@ func TestObservabilityMoves_DestinationsAreKnownComponentKeys(t *testing.T) {
 // legacy alarm without a corresponding move would silently leave that
 // alarm orphaned in customer state once
 // `disable_legacy_per_component_alarms = true` is flipped (a future
-// reliable PR).
+// The InsideOut backend PR).
 func TestObservabilityMovesCoversAllAggregatorAlarms(t *testing.T) {
 	resources := parseAggregatorAlarmResources(t)
 	require.NotEmpty(t, resources,

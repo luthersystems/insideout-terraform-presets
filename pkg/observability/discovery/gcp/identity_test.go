@@ -128,7 +128,7 @@ func TestInspectIdentityPlatform_UnsupportedAction(t *testing.T) {
 // the project (the API IS enabled and other Identity Platform
 // endpoints work fine on the same project). The handler must wrap
 // that signature in observability.GCPFeatureNotEnabledError so
-// reliable's panel renderer can render a clean empty state via
+// The InsideOut backend's panel renderer can render a clean empty state via
 // errors.As instead of leaking the raw 400 string into the UI.
 func TestInspectIdentityPlatform_ListTenants_MultitenancyDisabledReturnsStructuredError(t *testing.T) {
 	t.Parallel()
@@ -154,7 +154,7 @@ func TestInspectIdentityPlatform_ListTenants_MultitenancyDisabledReturnsStructur
 
 	var feErr *observability.GCPFeatureNotEnabledError
 	require.True(t, errors.As(err, &feErr),
-		"err must wrap GCPFeatureNotEnabledError so reliable can errors.As it; got %T (%v)", err, err)
+		"err must wrap GCPFeatureNotEnabledError so the InsideOut backend can errors.As it; got %T (%v)", err, err)
 	assert.Equal(t, "identity_platform_multitenancy", feErr.Feature)
 	assert.Equal(t, "diagramtest2025-09-14", feErr.ProjectID)
 	require.NotNil(t, feErr.Cause, "Cause must preserve the upstream googleapi error for diagnostics")

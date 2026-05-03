@@ -2,9 +2,9 @@
 // Cloud Build.
 //
 // Mirrors:
-//   - inspectGCPCloudRun       — reliable gcp_inspect.go:474
-//   - inspectGCPCloudFunctions — reliable gcp_metrics.go:670
-//   - inspectGCPCloudBuild     — reliable gcp_inspect.go:788
+//   - inspectGCPCloudRun       — the InsideOut backend gcp_inspect.go:474
+//   - inspectGCPCloudFunctions — the InsideOut backend gcp_metrics.go:670
+//   - inspectGCPCloudBuild     — the InsideOut backend gcp_inspect.go:788
 //
 // Cloud Run uses the v2 ServicesClient. Cloud Functions uses the v2
 // FunctionClient (gen2 Cloud Functions, the preset target). Cloud
@@ -33,7 +33,7 @@ import (
 // cloudBuildMaxBuilds bounds the list-builds response. Cloud Build
 // returns builds newest-first per the ListBuilds API contract, so the
 // cap yields the N most-recent. A warn-log fires if we hit the cap with
-// more builds pending upstream. Mirrors reliable's
+// more builds pending upstream. Mirrors the InsideOut backend's
 // gcp_inspect.go:777.
 const cloudBuildMaxBuilds = 100
 

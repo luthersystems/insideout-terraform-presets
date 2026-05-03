@@ -11,7 +11,7 @@
 //  3. an allowlist entry omits a rationale
 //     (TestConfigExtractorAllowlist_HasRationale).
 //
-// Pattern lifted verbatim from reliable
+// Pattern lifted verbatim from the InsideOut backend
 // internal/agentapi/config_extractors_drift_test.go (#204 port).
 
 package extractors
@@ -52,7 +52,7 @@ import (
 //
 // GCP — every GCP key currently has either a real extractor or a
 // `[no-inspector]` rationale (the GCP equivalent of placeholder for
-// keys with no list-* dispatch in reliable).
+// keys with no list-* dispatch in the InsideOut backend).
 var configExtractorAllowlist = map[string]string{
 	"aws_bastion":        "[placeholder] mapped to ec2.describe-instances, no dedicated shape (#204)",
 	"aws_grafana":        "[placeholder] mapped to ec2.describe-instances, no dedicated shape (#204)",
@@ -269,7 +269,7 @@ var extractorFixtures = map[string]any{
 		map[string]any{
 			"name":     "projects/demo/triggers/deploy-on-main",
 			"filename": "cloudbuild.yaml",
-			"github":   map[string]any{"owner": "luthersystems", "name": "reliable"},
+			"github":   map[string]any{"owner": "luthersystems", "name": "the InsideOut backend"},
 			"disabled": false,
 		},
 	},

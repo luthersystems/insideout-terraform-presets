@@ -7,9 +7,9 @@ import (
 )
 
 // TestExtractVertexAIRegion locks the JSON key + default region for
-// the Vertex AI inspector. Mirrors reliable's
+// the Vertex AI inspector. Mirrors the InsideOut backend's
 // TestVertexAIRegionExtraction (gcp_inspect.go references; the test in
-// reliable validates the same shape). If this regresses, callers
+// The InsideOut backend validates the same shape). If this regresses, callers
 // asking for "describe my Vertex deployment" without a region filter
 // silently query the wrong region — that's the bug we'd ship.
 func TestExtractVertexAIRegion(t *testing.T) {

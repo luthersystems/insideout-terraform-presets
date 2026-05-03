@@ -16,7 +16,7 @@ import (
 
 // fakeBillingClient is a minimal stub of the Cloud Billing client that
 // returns a canned ProjectBillingInfo. Mirrors the interface-injection
-// pattern reliable uses in gcp_inspect.go::inspectGCPBillingWithDeps.
+// pattern the InsideOut backend uses in gcp_inspect.go::inspectGCPBillingWithDeps.
 type fakeBillingClient struct {
 	info *billingpb.ProjectBillingInfo
 	err  error

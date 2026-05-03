@@ -15,7 +15,7 @@ import (
 )
 
 // Service-name constants for the special-cases the GetMetricData path
-// has to know about. Keep these in sync with the keys in reliable's
+// has to know about. Keep these in sync with the keys in the InsideOut backend's
 // metricDefinitions map (aws_metrics.go:258) — the inspector-side join
 // key (observability.ComponentObservability.Service).
 const (
@@ -25,7 +25,7 @@ const (
 
 // S3 storage tile metrics need a daily aggregation period (CloudWatch
 // only publishes BucketSizeBytes / NumberOfObjects once a day). Mirrors
-// the S3 override in reliable's getServiceMetricsWithDeps
+// the S3 override in the InsideOut backend's getServiceMetricsWithDeps
 // (aws_metrics.go:666-672).
 const (
 	s3PeriodSeconds = 86400 // 1 day
@@ -33,7 +33,7 @@ const (
 )
 
 // ParseMetricsFilter parses the filters JSON into MetricsFilter with
-// defaults applied. Mirrors reliable's ParseMetricsFilter
+// defaults applied. Mirrors the InsideOut backend's ParseMetricsFilter
 // (aws_metrics.go:597). Empty / malformed input returns the defaults
 // silently — callers that need to surface a parse error should
 // json.Unmarshal directly.
@@ -68,7 +68,7 @@ func ParseMetricsFilter(filtersJSON string) MetricsFilter {
 //     bump mf.Hours to >=48 so the chart has at least two datapoints.
 //
 // Per-resource GetMetricData failures log+skip rather than aborting the
-// whole call — mirrors reliable (aws_metrics.go:692). Returning a
+// whole call — mirrors the InsideOut backend (aws_metrics.go:692). Returning a
 // partial result is preferable to losing every datapoint when one
 // resource hits an IAM denial or throttle.
 //
@@ -102,7 +102,7 @@ func Fetch(
 	}
 
 	// Empty resource list short-circuits to a well-formed empty result
-	// — same shape reliable returns at aws_metrics.go:657.
+	// — same shape the InsideOut backend returns at aws_metrics.go:657.
 	if len(resources) == 0 {
 		return MetricsResult{
 			Service:   service,
@@ -132,7 +132,7 @@ func Fetch(
 		queries := BuildGetMetricDataQueries(obs, res, service)
 		series, err := getMetricData(ctx, cw, queries, startTime, endTime, int32(clampedPeriod)) //nolint:gosec // clamped to [1, 86400]
 		if err != nil {
-			// Per-resource failures log and skip; matches reliable's
+			// Per-resource failures log and skip; matches the InsideOut backend's
 			// aws_metrics.go:692 contract — a partial result beats
 			// nothing when one resource hits an IAM denial or throttle.
 			log.Printf("[metrics] warning: GetMetricData failed for %s/%s: %v", service, res.ID, err)
@@ -153,7 +153,7 @@ func Fetch(
 }
 
 // BuildGetMetricDataQueries constructs the per-resource MetricDataQuery
-// slice from obs. Mirrors reliable's BuildMetricDataQueries
+// slice from obs. Mirrors the InsideOut backend's BuildMetricDataQueries
 // (aws_metrics.go:712).
 //
 // Two service-shaped quirks survive intact:
@@ -222,12 +222,12 @@ func BuildGetMetricDataQueries(obs *observability.AWSObs, res ResourceID, servic
 }
 
 // getMetricData is the unexported CloudWatch GetMetricData wrapper.
-// Mirrors reliable's fetchMetrics (aws_metrics.go:765). Overwrites the
+// Mirrors the InsideOut backend's fetchMetrics (aws_metrics.go:765). Overwrites the
 // per-query Period with the caller's clamped value before issuing the
 // call so the placeholder set in BuildGetMetricDataQueries doesn't
 // leak into production. Caller-side timestamp/value-len mismatches in
 // the response are tolerated by truncating to the shorter of the two
-// — same defensive trim reliable does at aws_metrics.go:787.
+// — same defensive trim the InsideOut backend does at aws_metrics.go:787.
 func getMetricData(
 	ctx context.Context,
 	cw CloudWatchAPI,

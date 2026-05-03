@@ -101,7 +101,7 @@ func TestInspectCoversAllGCPServices(t *testing.T) {
 }
 
 // TestInspectAliasResolution verifies the dispatcher canonicalizes
-// aliases before the switch. Mirrors reliable's contract that callers
+// aliases before the switch. Mirrors the InsideOut backend's contract that callers
 // using "kms" / "logging" / "lb" / "armor" / "network" / "functions" /
 // "cdn" land on the canonical handler.
 func TestInspectAliasResolution(t *testing.T) {

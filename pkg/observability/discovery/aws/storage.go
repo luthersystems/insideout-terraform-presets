@@ -1,7 +1,7 @@
 // Storage / secret-management AWS service inspectors: S3, Secrets
 // Manager, KMS, Backup, SQS.
 //
-// Ported from reliable internal/agentapi/aws_inspect.go (s3:567,
+// Ported from the InsideOut backend internal/agentapi/aws_inspect.go (s3:567,
 // kms:580, secretsmanager:599, backup:972) plus the helpers in
 // aws_metrics.go (filterS3BucketsByProjectTag:1233,
 // filterKMSAliasesByProjectTag:198,
@@ -39,7 +39,7 @@ import (
 // --- S3 ---
 
 // s3BucketsClient is the subset of the s3 SDK used by the bucket filter
-// helper. Mirrors reliable's s3BucketsClient (aws_metrics.go:1173).
+// helper. Mirrors the InsideOut backend's s3BucketsClient (aws_metrics.go:1173).
 type s3BucketsClient interface {
 	ListBuckets(ctx context.Context, params *s3.ListBucketsInput, optFns ...func(*s3.Options)) (*s3.ListBucketsOutput, error)
 	GetBucketTagging(ctx context.Context, params *s3.GetBucketTaggingInput, optFns ...func(*s3.Options)) (*s3.GetBucketTaggingOutput, error)
@@ -49,7 +49,7 @@ type s3BucketsClient interface {
 // that the filter should tolerate by excluding the bucket (fail-closed)
 // rather than aborting the whole pass.
 //
-// Mirrors reliable's s3TaggingSkipCodes (aws_metrics.go:1194).
+// Mirrors the InsideOut backend's s3TaggingSkipCodes (aws_metrics.go:1194).
 var s3TaggingSkipCodes = map[string]struct{}{
 	"NoSuchTagSet":       {},
 	"AccessDenied":       {},
@@ -87,7 +87,7 @@ func inspectS3(ctx context.Context, cfg aws.Config, action, filters string) (any
 // them as "not ours" (see s3TaggingSkipCodes); other errors abort so
 // callers don't silently get a partial scan.
 //
-// Mirrors reliable's filterS3BucketsByProjectTag (aws_metrics.go:1233).
+// Mirrors the InsideOut backend's filterS3BucketsByProjectTag (aws_metrics.go:1233).
 func filterS3BucketsByProjectTag(ctx context.Context, client s3BucketsClient, project string) ([]s3types.Bucket, error) {
 	out, err := client.ListBuckets(ctx, &s3.ListBucketsInput{})
 	if err != nil {
@@ -153,7 +153,7 @@ func inspectSecretsManager(ctx context.Context, cfg aws.Config, action, filters 
 // --- KMS ---
 
 // kmsKeysClient is the subset of the kms SDK used by the alias-filter
-// helper. Mirrors reliable's kmsKeysClient (aws_metrics.go:151).
+// helper. Mirrors the InsideOut backend's kmsKeysClient (aws_metrics.go:151).
 type kmsKeysClient interface {
 	ListKeys(ctx context.Context, params *kms.ListKeysInput, optFns ...func(*kms.Options)) (*kms.ListKeysOutput, error)
 	ListAliases(ctx context.Context, params *kms.ListAliasesInput, optFns ...func(*kms.Options)) (*kms.ListAliasesOutput, error)
@@ -198,7 +198,7 @@ func hasProjectTagKMS(tags []kmstypes.Tag, project string) bool {
 // ListResourceTags errors return (false, true, err) — caller log+skip.
 // project=="" short-circuits to true (demo-session fallback).
 //
-// Mirrors reliable's kmsKeyOwnedByProject (aws_metrics.go:174).
+// Mirrors the InsideOut backend's kmsKeyOwnedByProject (aws_metrics.go:174).
 func kmsKeyOwnedByProject(ctx context.Context, client kmsKeysClient, keyID, project string) (matched bool, skip bool, err error) {
 	if project == "" {
 		return true, false, nil
@@ -223,7 +223,7 @@ func kmsKeyOwnedByProject(ctx context.Context, client kmsKeysClient, keyID, proj
 // target the same key; re-issuing DescribeKey + ListResourceTags per
 // alias is wasteful and worsens Cognito-style throttling.
 //
-// Mirrors reliable's filterKMSAliasesByProjectTag (aws_metrics.go:198).
+// Mirrors the InsideOut backend's filterKMSAliasesByProjectTag (aws_metrics.go:198).
 func filterKMSAliasesByProjectTag(ctx context.Context, client kmsKeysClient, project string) ([]kmstypes.AliasListEntry, error) {
 	var all []kmstypes.AliasListEntry
 	paginator := kms.NewListAliasesPaginator(client, &kms.ListAliasesInput{})
@@ -270,7 +270,7 @@ func filterKMSAliasesByProjectTag(ctx context.Context, client kmsKeysClient, pro
 // --- Backup ---
 
 // backupVaultsClient is the subset of the backup SDK used by the vault
-// filter helper. Mirrors reliable's backupVaultsClient
+// filter helper. Mirrors the InsideOut backend's backupVaultsClient
 // (aws_metrics.go:834).
 type backupVaultsClient interface {
 	ListBackupVaults(ctx context.Context, params *backup.ListBackupVaultsInput, optFns ...func(*backup.Options)) (*backup.ListBackupVaultsOutput, error)
@@ -292,7 +292,7 @@ func inspectBackup(ctx context.Context, cfg aws.Config, action, filters string) 
 // tagged Project=<project>. Per-vault errors log+skip; ListBackupVaults
 // errors abort.
 //
-// Mirrors reliable's filterBackupVaultsByProjectTag (aws_metrics.go:845).
+// Mirrors the InsideOut backend's filterBackupVaultsByProjectTag (aws_metrics.go:845).
 func filterBackupVaultsByProjectTag(ctx context.Context, client backupVaultsClient, project string) ([]backuptypes.BackupVaultListMember, error) {
 	var all []backuptypes.BackupVaultListMember
 	paginator := backup.NewListBackupVaultsPaginator(client, &backup.ListBackupVaultsInput{})

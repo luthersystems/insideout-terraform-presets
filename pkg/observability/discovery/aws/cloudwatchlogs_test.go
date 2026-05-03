@@ -5,7 +5,7 @@
 // `/<project>-...`) instead of fanning out per-resource
 // ListTagsForResource calls.
 //
-// Ported from reliable internal/agentapi/aws_inspect_test.go cases for
+// Ported from the InsideOut backend internal/agentapi/aws_inspect_test.go cases for
 // inspectCloudWatchLogs; the prefix→substring switch is documented in
 // cloudwatchlogs.go's header.
 

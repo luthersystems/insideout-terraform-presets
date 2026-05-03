@@ -29,11 +29,11 @@ const (
 //
 // Tier transitions: when the same address moves between Tiers (e.g.
 // ImportedFlat → ImportedConformant, ImportedFlat → ImportedMissing), Action
-// is "modified" and FromTier / ToTier carry the move. Reliable's UI
+// is "modified" and FromTier / ToTier carry the move. The InsideOut backend's UI
 // distinguishes a tier move from a field-only modification by checking
 // whether FromTier and ToTier differ.
 //
-// Field changes use ResourceFieldDiff so Reliable can render policy metadata
+// Field changes use ResourceFieldDiff so the InsideOut backend can render policy metadata
 // (role, sensitivity, change-risk) without separately querying the policy
 // registry.
 type ResourceDiff struct {
@@ -54,7 +54,7 @@ type ResourceDiff struct {
 }
 
 // ResourceFieldDiff describes a per-field change with the policy metadata
-// Reliable needs to group, label, badge, and redact. Policy fields default
+// The InsideOut backend needs to group, label, badge, and redact. Policy fields default
 // to the empty string when no curated entry exists for the path or the
 // resource type is unregistered; renderers should treat empty as "no
 // curator opinion" and fall back to a generic display.
@@ -75,7 +75,7 @@ type ResourceFieldDiff struct {
 	Redacted bool `json:"redacted,omitempty"`
 
 	// RelationshipOnly is true when the curated EditPolicy is
-	// EditRelationshipOnly. Reliable uses this to render the change as a
+	// EditRelationshipOnly. The InsideOut backend uses this to render the change as a
 	// graph relationship, not as an ordinary scalar edit (decisions #30,
 	// #31). The underlying value still diffs so the operator can see the
 	// referenced address; chat-side scalar edits are blocked separately
@@ -121,7 +121,7 @@ const redactedPlaceholder = "***"
 //
 // Output is sorted by Address for stable consumption. Always returns a
 // non-nil slice — empty when there are no diffs — so VersionDiff.Resources
-// marshals as the JSON array `[]` rather than `null`. Reliable's snapshot
+// marshals as the JSON array `[]` rather than `null`. The InsideOut backend's snapshot
 // consumers compare diff JSON byte-for-byte, so nil↔[] flips would churn
 // every stack the first time it acquires or sheds an imported resource.
 func DiffImportedResources(old, new []imported.ImportedResource) []ResourceDiff {

@@ -11,7 +11,7 @@ import (
 )
 
 // metric_display_labels.json is the single source of truth for metric
-// name -> display label overrides, shared with the TS client (reliable's
+// name -> display label overrides, shared with the TS client (the InsideOut backend's
 // lib/stack/component-detail-utils.ts imports the same file via a path
 // alias). Drift between server and client labels is prevented at the
 // source: adding or changing an entry updates both surfaces in lockstep.
@@ -41,7 +41,7 @@ func MetricDisplayLabels() map[string]string {
 
 // MetricDisplayLabel returns the user-facing label for a CloudWatch /
 // Cloud Monitoring metric name. Falls back to a CamelCase-split of the
-// metric name when the JSON has no override. Mirrors reliable's
+// metric name when the JSON has no override. Mirrors the InsideOut backend's
 // metricDisplayLabel (internal/agentapi/component_metrics.go:353).
 //
 // Names with consecutive capitals or underscores that need smarter
@@ -63,9 +63,9 @@ func MetricDisplayLabel(name string) string {
 }
 
 // ComponentDisplayName returns the user-facing display name for a
-// composer.ComponentKey. Mirrors reliable's componentDisplayName
+// composer.ComponentKey. Mirrors the InsideOut backend's componentDisplayName
 // (internal/agentapi/component_metrics.go:244) one-for-one for keys
-// reliable knows about; unknown keys fall back to the
+// The InsideOut backend knows about; unknown keys fall back to the
 // CamelCase-from-snake_case convention.
 //
 // The fallback path is a defense-in-depth safety net: every key in

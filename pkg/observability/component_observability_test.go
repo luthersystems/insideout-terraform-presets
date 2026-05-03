@@ -21,12 +21,12 @@ import (
 //     against Cloud Monitoring's MetricDescriptors API. Picking a
 //     metric whose monitoredResourceTypes doesn't include
 //     "firestore.googleapis.com/Database" silently produces empty
-//     queries (this trapped reliable#1259's first attempt: the legacy
+//     queries (this trapped the InsideOut backend#1259's first attempt: the legacy
 //     document/{read,write,delete}_count metrics only publish under
 //     firestore_instance — their *_ops_count modern variants are the
 //     ones that publish under Database).
 //
-// Reliable historically used "firestore_instance"; reliable#1259
+// The InsideOut backend historically used "firestore_instance"; the InsideOut backend#1259
 // fixed that for request_latencies but accidentally shipped the
 // non-publishing legacy *_count names on Database for the other
 // three. This pin trips on either mistake.
@@ -68,7 +68,7 @@ func TestGCPMetricDefinitions_FirestoreResourceType(t *testing.T) {
 }
 
 // TestGCPMetricDefinitions_FirestoreAlarmBinding pins the
-// alarm-author handshake half of reliable#1259's fix: the alarm bound
+// alarm-author handshake half of the InsideOut backend#1259's fix: the alarm bound
 // to KeyGCPFirestore must reference a metric_type that exists in the
 // catalog above, otherwise componentObs() can't flip Alarmed=true and
 // TestObservabilitySpecMatchesEmittedAlarms (the HCL-side gate) loses

@@ -116,7 +116,7 @@ func (c *Client) PresetDefaults() (map[string]map[string]any, error) {
 //
 // This means a non-nil empty slice (e.g. []int{} the user set explicitly) is
 // preserved, and a *bool set to &false is preserved. The intent is "fill in
-// the blanks the user hasn't filled yet," matching reliable's apply-start
+// the blanks the user hasn't filled yet," matching the InsideOut backend's apply-start
 // flow for materialising defaults into session state.
 //
 // A nested struct field is allocated on demand: if cfg.AWSEC2 is nil and at
@@ -136,7 +136,7 @@ func (c *Client) PresetDefaults() (map[string]map[string]any, error) {
 //
 // HCL variables that don't correspond to any Config field, and Config fields
 // without a matching HCL variable, are silently ignored — that's expected,
-// since some Config fields are reliable-side-only (e.g. AWSEC2.NumServers)
+// since some Config fields are InsideOut-backend-side-only (e.g. AWSEC2.NumServers)
 // and many HCL variables are stack-wired (vpc_id, subnet_ids).
 //
 // Returns an error only on HCL-parse / FS failures; missing presets or

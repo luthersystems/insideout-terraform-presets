@@ -2,9 +2,9 @@
 // Pub/Sub.
 //
 // Mirrors:
-//   - inspectGCPLogging          — reliable gcp_inspect.go:1215
-//   - inspectGCPCloudMonitoring  — reliable gcp_metrics.go:831
-//   - inspectGCPPubSub           — reliable gcp_inspect.go:1144
+//   - inspectGCPLogging          — the InsideOut backend gcp_inspect.go:1215
+//   - inspectGCPCloudMonitoring  — the InsideOut backend gcp_metrics.go:831
+//   - inspectGCPPubSub           — the InsideOut backend gcp_inspect.go:1144
 //
 // Cloud Logging logs and Cloud Monitoring alert policies have no
 // labels.project filter — Cloud Logging returns log NAMES (strings)

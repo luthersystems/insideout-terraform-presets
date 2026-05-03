@@ -1,7 +1,7 @@
 // Network-tier AWS service inspectors: VPC, ALB, WAF, CloudFront,
 // APIGateway.
 //
-// Ported from reliable internal/agentapi/aws_inspect.go (vpc:444,
+// Ported from the InsideOut backend internal/agentapi/aws_inspect.go (vpc:444,
 // alb:814, waf:858, cloudfront:775, apigateway:996) plus the helpers in
 // aws_metrics.go (filterCloudFrontDistributionsByProjectTag:1077,
 // filterWAFWebACLsByScope:1867, filterELBv2ARNsByProjectTag:1934).
@@ -35,7 +35,7 @@ import (
 // --- VPC ---
 
 // vpcDescribeAPI is the subset of the EC2 SDK used by inspectVPCWithIGW.
-// Mirrors reliable's vpcDescribeAPI (aws_inspect.go:478).
+// Mirrors the InsideOut backend's vpcDescribeAPI (aws_inspect.go:478).
 type vpcDescribeAPI interface {
 	DescribeVpcs(ctx context.Context, in *ec2.DescribeVpcsInput, opts ...func(*ec2.Options)) (*ec2.DescribeVpcsOutput, error)
 	DescribeInternetGateways(ctx context.Context, in *ec2.DescribeInternetGatewaysInput, opts ...func(*ec2.Options)) (*ec2.DescribeInternetGatewaysOutput, error)
@@ -50,7 +50,7 @@ type vpcDescribeAPI interface {
 // top level and appends HasInternetGateway alongside — the shape the
 // extractor (extractVPCConfig) expects.
 //
-// Mirrors reliable's vpcWithIGW (aws_inspect.go:492).
+// Mirrors the InsideOut backend's vpcWithIGW (aws_inspect.go:492).
 type vpcWithIGW struct {
 	ec2types.Vpc
 	HasInternetGateway bool `json:"HasInternetGateway"`
@@ -79,7 +79,7 @@ func inspectVPC(ctx context.Context, cfg aws.Config, action, filters string) (an
 	case "get-metrics":
 		return metricsRouted("vpc")
 	default:
-		// Reliable's default path falls back to inspectEC2 so the VPC
+		// the InsideOut backend's default path falls back to inspectEC2 so the VPC
 		// service key accepts any EC2 action (describe-subnets, etc.).
 		// Replicate to keep the contract identical.
 		return inspectEC2(ctx, cfg, action, filters)
@@ -100,7 +100,7 @@ func inspectVPC(ctx context.Context, cfg aws.Config, action, filters string) (an
 // HasInternetGateway=false (which extractVPCConfig surfaces as
 // deploymentType=private).
 //
-// Mirrors reliable's inspectVPCWithIGW (aws_inspect.go:507).
+// Mirrors the InsideOut backend's inspectVPCWithIGW (aws_inspect.go:507).
 func inspectVPCWithIGW(ctx context.Context, client vpcDescribeAPI, project string) ([]vpcWithIGW, error) {
 	vpcInput := &ec2.DescribeVpcsInput{}
 	if tagFilters := filter.ProjectTagFilter(project); len(tagFilters) > 0 {
@@ -155,7 +155,7 @@ func inspectVPCWithIGW(ctx context.Context, client vpcDescribeAPI, project strin
 // --- ALB ---
 
 // elbv2TagsAPI is the subset of the ELBv2 SDK used for tag-based ALB
-// filtering. Mirrors reliable's elbv2TagsAPI (aws_metrics.go:1918).
+// filtering. Mirrors the InsideOut backend's elbv2TagsAPI (aws_metrics.go:1918).
 type elbv2TagsAPI interface {
 	DescribeLoadBalancers(ctx context.Context, in *elasticloadbalancingv2.DescribeLoadBalancersInput, opts ...func(*elasticloadbalancingv2.Options)) (*elasticloadbalancingv2.DescribeLoadBalancersOutput, error)
 	DescribeTags(ctx context.Context, in *elasticloadbalancingv2.DescribeTagsInput, opts ...func(*elasticloadbalancingv2.Options)) (*elasticloadbalancingv2.DescribeTagsOutput, error)
@@ -208,7 +208,7 @@ func inspectALB(ctx context.Context, cfg aws.Config, action, filters string) (an
 // Project tag matches `project`. ELBv2 DescribeTags accepts at most 20
 // ARNs per call so callers with more get batched automatically.
 //
-// Mirrors reliable's filterELBv2ARNsByProjectTag (aws_metrics.go:1934).
+// Mirrors the InsideOut backend's filterELBv2ARNsByProjectTag (aws_metrics.go:1934).
 func filterELBv2ARNsByProjectTag(ctx context.Context, client elbv2TagsAPI, arns []string, project string) (map[string]struct{}, error) {
 	matched := make(map[string]struct{}, len(arns))
 	if project == "" || len(arns) == 0 {
@@ -241,7 +241,7 @@ func filterELBv2ARNsByProjectTag(ctx context.Context, client elbv2TagsAPI, arns 
 // --- WAF ---
 
 // wafv2WebACLsClient is the subset of the wafv2 SDK used by the shared
-// WAF filter helper. Mirrors reliable's wafv2WebACLsClient
+// WAF filter helper. Mirrors the InsideOut backend's wafv2WebACLsClient
 // (aws_metrics.go:1835).
 type wafv2WebACLsClient interface {
 	ListWebACLs(ctx context.Context, params *wafv2.ListWebACLsInput, optFns ...func(*wafv2.Options)) (*wafv2.ListWebACLsOutput, error)
@@ -283,7 +283,7 @@ func inspectWAF(ctx context.Context, cfg aws.Config, action, filters string) (an
 // applies the Project-tag filter. Shared between Regional (caller
 // region) and CLOUDFRONT (us-east-1) scopes.
 //
-// Mirrors reliable's filterWAFWebACLsByScope (aws_metrics.go:1867).
+// Mirrors the InsideOut backend's filterWAFWebACLsByScope (aws_metrics.go:1867).
 func filterWAFWebACLsByScope(ctx context.Context, client wafv2WebACLsClient, scope wafv2types.Scope, project string) ([]wafv2types.WebACLSummary, error) {
 	out, err := client.ListWebACLs(ctx, &wafv2.ListWebACLsInput{Scope: scope})
 	if err != nil {
@@ -318,7 +318,7 @@ func filterWAFWebACLsByScope(ctx context.Context, client wafv2WebACLsClient, sco
 // --- CloudFront ---
 
 // cloudFrontDistributionsClient is the subset of the cloudfront SDK
-// used by the filter helper. Mirrors reliable's
+// used by the filter helper. Mirrors the InsideOut backend's
 // cloudFrontDistributionsClient (aws_metrics.go:1045).
 type cloudFrontDistributionsClient interface {
 	ListDistributions(ctx context.Context, params *cloudfront.ListDistributionsInput, optFns ...func(*cloudfront.Options)) (*cloudfront.ListDistributionsOutput, error)
@@ -348,7 +348,7 @@ func inspectCloudFront(ctx context.Context, cfg aws.Config, action, filters stri
 // observed returning a pointer to an empty string. Treat both as "no
 // more pages" to avoid an infinite loop that passes Marker="" back in.
 //
-// Mirrors reliable's filterCloudFrontDistributionsByProjectTag
+// Mirrors the InsideOut backend's filterCloudFrontDistributionsByProjectTag
 // (aws_metrics.go:1077).
 func filterCloudFrontDistributionsByProjectTag(ctx context.Context, client cloudFrontDistributionsClient, project string) ([]cloudfronttypes.DistributionSummary, error) {
 	var all []cloudfronttypes.DistributionSummary

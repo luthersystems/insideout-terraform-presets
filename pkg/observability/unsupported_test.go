@@ -108,7 +108,7 @@ func TestUnsupportedServiceError(t *testing.T) {
 		err := UnsupportedServiceError("ec3", validServices)
 		require.Error(t, err)
 		// Note: the service builder does NOT append a trailing period
-		// after the supported-services list (reliable's reference
+		// after the supported-services list (the InsideOut backend's reference
 		// behavior — pin it here so a future "tidiness" tweak doesn't
 		// silently change the wire format).
 		want := `unsupported service: "ec3" (did you mean "ec2"?). Supported services: ec2, rds, s3, vpc`

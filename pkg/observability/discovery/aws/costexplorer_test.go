@@ -1,8 +1,8 @@
 // Mock-based unit tests for the Cost Explorer inspector.
 //
-// Ported from reliable internal/agentapi/aws_billing_test.go (1-386).
-// Reliable's integration tests (billingAWSConfig + the live-API tests
-// after line 471) are intentionally NOT ported — they wrap reliable's
+// Ported from the InsideOut backend internal/agentapi/aws_billing_test.go (1-386).
+// The InsideOut backend's integration tests (billingAWSConfig + the live-API tests
+// after line 471) are intentionally NOT ported — they wrap the InsideOut backend's
 // session/Oracle layer that the issue header for #225 explicitly excludes.
 
 package aws

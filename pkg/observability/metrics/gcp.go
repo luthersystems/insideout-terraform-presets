@@ -17,7 +17,7 @@ import (
 )
 
 // Service-name constants for the GCP-side special cases the metric-fetch
-// path has to know about. The "gcs" override mirrors reliable's
+// path has to know about. The "gcs" override mirrors the InsideOut backend's
 // getGCPServiceMetricsWithDeps GCS branch (gcp_metrics.go:411-417).
 const (
 	serviceGCS     = "gcs"
@@ -26,7 +26,7 @@ const (
 
 // GCS bucket-storage metrics need a daily aggregation period (Cloud
 // Monitoring only publishes storage/total_bytes / object_count once a
-// day). Mirrors the GCS override in reliable's
+// day). Mirrors the GCS override in the InsideOut backend's
 // getGCPServiceMetricsWithDeps (gcp_metrics.go:411-417). The 48h floor
 // guarantees the chart renders at least two datapoints.
 const (
@@ -36,9 +36,9 @@ const (
 
 // validAligners maps the string aligner names carried on
 // observability.GCPMetricSpec to the proto enum values Cloud Monitoring
-// expects on the Aggregation request. Mirrors reliable's validAligners
+// expects on the Aggregation request. Mirrors the InsideOut backend's validAligners
 // (gcp_metrics.go:278). Specs carrying any other aligner are skipped
-// with a logged warning — same defensive contract reliable holds.
+// with a logged warning — same defensive contract the InsideOut backend holds.
 var validAligners = map[string]monitoringpb.Aggregation_Aligner{
 	"ALIGN_MEAN":          monitoringpb.Aggregation_ALIGN_MEAN,
 	"ALIGN_RATE":          monitoringpb.Aggregation_ALIGN_RATE,
@@ -64,7 +64,7 @@ var validAligners = map[string]monitoringpb.Aggregation_Aligner{
 //     project. resources is honored as a post-filter when non-empty
 //     (caller wants to scope to a known inventory) and ignored when
 //     empty (caller wants whatever the project surfaces). The empty-
-//     slice contract matches reliable's getGCPServiceMetricsWithDeps,
+//     slice contract matches the InsideOut backend's getGCPServiceMetricsWithDeps,
 //     which has no resource filter at all.
 //
 // service is the inspector-side join key (e.g. "compute", "cloudrun",
@@ -75,7 +75,7 @@ var validAligners = map[string]monitoringpb.Aggregation_Aligner{
 //  2. service=="gcs" — daily metrics override; mf.Period to 86400 and
 //     mf.Hours floor to >=48 so the chart has at least two datapoints.
 //
-// Note: bastion-alias resolution (bastion → compute) lives in reliable
+// Note: bastion-alias resolution (bastion → compute) lives in the InsideOut backend
 // at gcp_metrics.go:399-401 because the catalog there is keyed by the
 // post-resolution service. This package's authority join
 // (componentObs/observability.Lookup) already resolves the alias before
@@ -84,7 +84,7 @@ var validAligners = map[string]monitoringpb.Aggregation_Aligner{
 // and we don't need to re-resolve it here.
 //
 // Per-metric ListTimeSeries failures log+skip rather than aborting the
-// whole call — same partial-result contract as reliable
+// whole call — same partial-result contract as the InsideOut backend
 // (gcp_metrics.go:471-473) and the AWS Fetch (aws.go:138).
 func FetchGCP(
 	ctx context.Context,
@@ -119,7 +119,7 @@ func FetchGCP(
 
 	// resourceFilter is non-nil only when the caller explicitly scoped
 	// to a list — otherwise we accept every resource the project
-	// surfaces (matches reliable's no-filter contract).
+	// surfaces (matches the InsideOut backend's no-filter contract).
 	var resourceFilter map[string]bool
 	if len(resources) > 0 {
 		resourceFilter = make(map[string]bool, len(resources))
@@ -136,12 +136,12 @@ func FetchGCP(
 	// type with breakdown labels (e.g. cloudfunctions execution_count
 	// per status=ok/error) yields one MetricSeries per label
 	// combination — the breakdown surfaces as repeated entries with
-	// the same Name. Mirrors reliable's resourceMetrics map
+	// the same Name. Mirrors the InsideOut backend's resourceMetrics map
 	// (gcp_metrics.go:424-428).
 	resourceMetrics, metricErrors := fetchGCPSeries(ctx, clients, obs, period, startTime, endTime, resourceFilter)
 
 	// Build sorted result for deterministic JSON output. Same sort
-	// comparators reliable uses (gcp_metrics.go:534-550).
+	// comparators the InsideOut backend uses (gcp_metrics.go:534-550).
 	resourceList := make([]ResourceMetrics, 0, len(resourceMetrics))
 	for resID, metricsMap := range resourceMetrics {
 		series := make([]MetricSeries, 0, len(metricsMap))
@@ -154,7 +154,7 @@ func FetchGCP(
 			}
 			// Two entries with the same Name differ only by their
 			// breakdown labels — serialize for a stable secondary
-			// key, matching reliable's sort comparator
+			// key, matching the InsideOut backend's sort comparator
 			// (gcp_metrics.go:539-541).
 			li, _ := json.Marshal(series[i].Labels)
 			lj, _ := json.Marshal(series[j].Labels)
@@ -170,7 +170,7 @@ func FetchGCP(
 	})
 
 	if len(metricErrors) > 0 {
-		// Aggregated warning preserves reliable's diagnostic surface
+		// Aggregated warning preserves the InsideOut backend's diagnostic surface
 		// (gcp_metrics.go:559-561) without spamming one log line per
 		// failed metric type.
 		log.Printf("[metrics] partial failures for gcp/%s: %s", service, strings.Join(metricErrors, "; "))
@@ -229,7 +229,7 @@ func fetchGCPSeries(
 		// dimension AND the resource label key intact across the
 		// reducer (which we flip to REDUCE_SUM so per-resource counts
 		// sum across the value space we're not breaking down on).
-		// Mirrors reliable's GroupByFields construction
+		// Mirrors the InsideOut backend's GroupByFields construction
 		// (gcp_metrics.go:448-456).
 		if len(spec.GroupByLabels) > 0 {
 			for _, label := range spec.GroupByLabels {
@@ -270,7 +270,7 @@ func fetchGCPSeries(
 // logic — which has its own nil-handling, dedup, and label-extraction
 // quirks — can be unit-tested independently of the request loop.
 //
-// Mirrors reliable's per-spec inner loop (gcp_metrics.go:476-524).
+// Mirrors the InsideOut backend's per-spec inner loop (gcp_metrics.go:476-524).
 func shapeGCPSeries(
 	timeSeries []*monitoringpb.TimeSeries,
 	spec observability.GCPMetricSpec,
@@ -279,7 +279,7 @@ func shapeGCPSeries(
 ) {
 	for _, ts := range timeSeries {
 		// Resource ID extraction. The "unknown" fallback is a
-		// reliable contract (gcp_metrics.go:482-484): time series
+		// the InsideOut backend contract (gcp_metrics.go:482-484): time series
 		// arriving with nil Resource or no LabelKey value still
 		// surface in the result rather than being dropped — useful
 		// for diagnosing aggregation misconfiguration.
@@ -344,7 +344,7 @@ func shapeGCPSeries(
 }
 
 // ExtractGCPValue extracts a float64 from a Cloud Monitoring
-// TypedValue. Mirrors reliable's extractGCPValue (gcp_metrics.go:567).
+// TypedValue. Mirrors the InsideOut backend's extractGCPValue (gcp_metrics.go:567).
 //
 // Distribution values surface their Mean — Cloud Monitoring's
 // distribution shape carries Count + BucketCounts as well, but the

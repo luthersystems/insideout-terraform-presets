@@ -6,13 +6,13 @@ import (
 )
 
 // AWSServiceActions maps each canonical AWS service key to its valid
-// inspector actions. Source of truth ported from reliable's
+// inspector actions. Source of truth ported from the InsideOut backend's
 // awsServiceActions (internal/agentapi/inspect_normalize.go:77).
 //
 // Drift gates: AWSServiceActions is the registry against which
-// reliable's MCP dispatcher and the per-service summarizer validate
+// The InsideOut backend's MCP dispatcher and the per-service summarizer validate
 // caller input. Adding a new action here without wiring the
-// corresponding handler in reliable's per-service inspect_*.go is the
+// corresponding handler in the InsideOut backend's per-service inspect_*.go is the
 // classic "panel renders unsupported-action error" failure mode.
 var AWSServiceActions = map[string][]string{
 	"ec2":            {"describe-instances", "describe-vpcs", "describe-subnets", "describe-security-groups", "get-metrics"},
@@ -49,7 +49,7 @@ var AWSServiceActions = map[string][]string{
 // AWSServiceAliases maps caller-supplied aliases to canonical service
 // keys. Aliases are NOT registered in AWSServiceActions and MUST NOT
 // appear in docs or list-actions output — they only normalize input at
-// the dispatch boundary. Source of truth ported from reliable's
+// the dispatch boundary. Source of truth ported from the InsideOut backend's
 // awsServiceAliases (internal/agentapi/inspect_normalize.go:112).
 var AWSServiceAliases = map[string]string{
 	"elb":     "alb",
@@ -65,7 +65,7 @@ var AWSServiceAliases = map[string]string{
 // This absorbs common LLM-guessed action names that the upstream AWS
 // SDK method names don't match. Resolved BEFORE the dispatch switch so
 // the caller sees a successful result instead of an unsupported-action
-// error. Source of truth ported from reliable's awsActionAliases
+// error. Source of truth ported from the InsideOut backend's awsActionAliases
 // (internal/agentapi/inspect_normalize.go:140).
 var AWSActionAliases = map[string]map[string]string{
 	"account": {
@@ -89,7 +89,7 @@ var AWSActionAliases = map[string]map[string]string{
 }
 
 // GCPServiceActions is the GCP analog of AWSServiceActions. Source of
-// truth ported from reliable's gcpServiceActions
+// truth ported from the InsideOut backend's gcpServiceActions
 // (internal/agentapi/inspect_normalize.go:262).
 var GCPServiceActions = map[string][]string{
 	"compute":          {"list-instances", "describe-instance", "get-metrics"},

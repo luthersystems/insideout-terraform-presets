@@ -442,7 +442,7 @@ func TestLive_InspectIdentityPlatform_TenantsOnUnprovisionedProject(t *testing.T
 
 	var feErr *observability.GCPFeatureNotEnabledError
 	require.True(t, errors.As(err, &feErr),
-		"err must be wrapped as GCPFeatureNotEnabledError so reliable's panel renderer can errors.As it (#245); got %T (%v)", err, err)
+		"err must be wrapped as GCPFeatureNotEnabledError so the InsideOut backend's panel renderer can errors.As it (#245); got %T (%v)", err, err)
 	assert.Equal(t, "identity_platform_multitenancy", feErr.Feature)
 	assert.Equal(t, projectID, feErr.ProjectID)
 }

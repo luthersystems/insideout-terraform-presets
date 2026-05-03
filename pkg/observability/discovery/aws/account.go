@@ -1,18 +1,18 @@
 // Account-summary inspector.
 //
-// Ported from reliable internal/agentapi/aws_inspect.go (account:
+// Ported from the InsideOut backend internal/agentapi/aws_inspect.go (account:
 // 1774-1812). Issue #225: AWSServiceActions advertised "account" but the
 // discovery dispatcher had no arm — calls fell through to
 // ErrUnsupportedService.
 //
-// The issue text mentions aws-sdk-go-v2/service/account; reliable's real
+// The issue text mentions aws-sdk-go-v2/service/account; the InsideOut backend's real
 // implementation composes sts.GetCallerIdentity + iam.ListAccountAliases +
 // iam.GetAccountSummary. Both SDKs are already in go.mod, and this is the
-// shape reliable's frontend reads, so the port preserves it.
+// shape the InsideOut backend's frontend reads, so the port preserves it.
 //
 // Per-call errors log+continue rather than fail — partial answers
 // (AccountId without Aliases, etc.) are more useful in the panel than a
-// 500. Mirrors reliable's behaviour.
+// 500. Mirrors the InsideOut backend's behaviour.
 
 package aws
 

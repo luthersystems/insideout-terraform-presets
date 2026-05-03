@@ -1,7 +1,7 @@
 // Data-tier AWS service inspectors: RDS, DynamoDB, ElastiCache,
 // OpenSearch (managed + serverless union), MSK.
 //
-// Ported from reliable internal/agentapi/aws_inspect.go (rds:412,
+// Ported from the InsideOut backend internal/agentapi/aws_inspect.go (rds:412,
 // dynamodb:902, elasticache:889, opensearch:1033, msk:938) plus the
 // corresponding tag-filter helpers in aws_metrics.go
 // (filterDynamoDBTablesByProjectTag:1323,
@@ -13,7 +13,7 @@
 // service in the registry covers BOTH managed-domain and AOSS serverless
 // collections. discoverOpenSearchUnion fans out to both backends and
 // merges the result so an AOSS-only deploy doesn't appear as zero
-// resources (drift-detection bug #1018 in reliable).
+// resources (drift-detection bug #1018 in the InsideOut backend).
 
 package aws
 
@@ -70,7 +70,7 @@ func inspectRDS(ctx context.Context, cfg aws.Config, action, filters string) (an
 // --- DynamoDB ---
 
 // dynamoDBTablesClient is the subset of the dynamodb SDK used by the
-// shared filter helper. Mirrors reliable's dynamoDBTablesClient
+// shared filter helper. Mirrors the InsideOut backend's dynamoDBTablesClient
 // (aws_metrics.go:1293).
 type dynamoDBTablesClient interface {
 	ListTables(ctx context.Context, params *dynamodb.ListTablesInput, optFns ...func(*dynamodb.Options)) (*dynamodb.ListTablesOutput, error)
@@ -82,7 +82,7 @@ type dynamoDBTablesClient interface {
 // ListTables only returns names — we synthesize the ARN from
 // arn:aws:dynamodb:<region>:<account>:table/<name>.
 //
-// Mirrors reliable's stsAccountClient (aws_metrics.go:1301).
+// Mirrors the InsideOut backend's stsAccountClient (aws_metrics.go:1301).
 type stsAccountClient interface {
 	GetCallerIdentity(ctx context.Context, params *sts.GetCallerIdentityInput, optFns ...func(*sts.Options)) (*sts.GetCallerIdentityOutput, error)
 }
@@ -106,9 +106,9 @@ func inspectDynamoDB(ctx context.Context, cfg aws.Config, action, filters string
 //
 // TODO: derive partition from region (arn:aws-us-gov:, arn:aws-cn:) when
 // GovCloud / China support arrives. Hardcoded to aws partition —
-// commercial-only today, mirrors reliable's stance.
+// commercial-only today, mirrors the InsideOut backend's stance.
 //
-// Mirrors reliable's filterDynamoDBTablesByProjectTag (aws_metrics.go:1323).
+// Mirrors the InsideOut backend's filterDynamoDBTablesByProjectTag (aws_metrics.go:1323).
 func filterDynamoDBTablesByProjectTag(ctx context.Context, client dynamoDBTablesClient, stsClient stsAccountClient, region, project string) ([]string, error) {
 	var all []string
 	paginator := dynamodb.NewListTablesPaginator(client, &dynamodb.ListTablesInput{})
@@ -148,7 +148,7 @@ func filterDynamoDBTablesByProjectTag(ctx context.Context, client dynamoDBTables
 // --- ElastiCache ---
 
 // elasticacheClustersClient is the subset of the elasticache SDK used
-// by the shared filter helpers. Mirrors reliable's
+// by the shared filter helpers. Mirrors the InsideOut backend's
 // elasticacheClustersClient (aws_metrics.go:1698).
 type elasticacheClustersClient interface {
 	DescribeCacheClusters(ctx context.Context, params *elasticache.DescribeCacheClustersInput, optFns ...func(*elasticache.Options)) (*elasticache.DescribeCacheClustersOutput, error)
@@ -213,7 +213,7 @@ func filterElastiCacheReplicationGroupsByProjectTag(ctx context.Context, client 
 // arnOf adapts the per-type ARN accessor; op gets interpolated into the
 // log-grep prefix on paginator errors.
 //
-// Mirrors reliable's filterElastiCacheByProjectTag (aws_metrics.go:1775).
+// Mirrors the InsideOut backend's filterElastiCacheByProjectTag (aws_metrics.go:1775).
 func filterElastiCacheByProjectTag[T any](
 	ctx context.Context,
 	client elasticacheClustersClient,
@@ -254,7 +254,7 @@ func filterElastiCacheByProjectTag[T any](
 // --- OpenSearch (managed + AOSS union) ---
 
 // opensearchAPI is the subset of the opensearch SDK used by the managed
-// discovery helper. Mirrors reliable's opensearchAPI (aws_inspect.go:1228).
+// discovery helper. Mirrors the InsideOut backend's opensearchAPI (aws_inspect.go:1228).
 type opensearchAPI interface {
 	ListDomainNames(ctx context.Context, in *opensearch.ListDomainNamesInput, opts ...func(*opensearch.Options)) (*opensearch.ListDomainNamesOutput, error)
 	DescribeDomains(ctx context.Context, in *opensearch.DescribeDomainsInput, opts ...func(*opensearch.Options)) (*opensearch.DescribeDomainsOutput, error)
@@ -262,7 +262,7 @@ type opensearchAPI interface {
 }
 
 // aossAPI is the subset of the opensearchserverless SDK used by the AOSS
-// discovery helper. Mirrors reliable's aossAPI (aws_inspect.go:1234).
+// discovery helper. Mirrors the InsideOut backend's aossAPI (aws_inspect.go:1234).
 type aossAPI interface {
 	ListCollections(ctx context.Context, in *opensearchserverless.ListCollectionsInput, opts ...func(*opensearchserverless.Options)) (*opensearchserverless.ListCollectionsOutput, error)
 	ListTagsForResource(ctx context.Context, in *opensearchserverless.ListTagsForResourceInput, opts ...func(*opensearchserverless.Options)) (*opensearchserverless.ListTagsForResourceOutput, error)
@@ -284,7 +284,7 @@ func inspectOpenSearch(ctx context.Context, cfg aws.Config, action, filters stri
 		// picked Serverless, managed-domain discovery returns empty —
 		// falling back to AOSS keeps either deployment style resolving
 		// to a non-empty discovery and prevents the drift false-positive
-		// reliable hit in #1036.
+		// the InsideOut backend hit in #1036.
 		return discoverOpenSearchUnion(ctx, opensearch.NewFromConfig(cfg), opensearchserverless.NewFromConfig(cfg), project)
 	case "list-collections":
 		return discoverOpenSearchServerless(ctx, opensearchserverless.NewFromConfig(cfg), project)
@@ -299,10 +299,10 @@ func inspectOpenSearch(ctx context.Context, cfg aws.Config, action, filters stri
 // Per-side errors are logged and skipped so an AOSS-only deploy in a
 // region where managed ListDomainNames fails (transient API hiccup)
 // still returns the serverless half. If both sides error, the managed
-// error is surfaced as the primary signal — mirrors reliable's pre-#1036
+// error is surfaced as the primary signal — mirrors the InsideOut backend's pre-#1036
 // behaviour for backward compatibility.
 //
-// Mirrors reliable's discoverOpenSearchUnion (aws_inspect.go:1076).
+// Mirrors the InsideOut backend's discoverOpenSearchUnion (aws_inspect.go:1076).
 func discoverOpenSearchUnion(ctx context.Context, managedClient opensearchAPI, serverlessClient aossAPI, project string) (any, error) {
 	merged := []map[string]any{}
 
@@ -343,7 +343,7 @@ func opensearchResultToMaps(v any) []map[string]any {
 // Filters by Project tag via opensearch.ListTags(arn); returns all when
 // project filter is empty.
 //
-// Mirrors reliable's discoverOpenSearchManaged (aws_inspect.go:1124).
+// Mirrors the InsideOut backend's discoverOpenSearchManaged (aws_inspect.go:1124).
 func discoverOpenSearchManaged(ctx context.Context, client opensearchAPI, project string) (any, error) {
 	listOut, err := client.ListDomainNames(ctx, &opensearch.ListDomainNamesInput{})
 	if err != nil {
@@ -392,7 +392,7 @@ func discoverOpenSearchManaged(ctx context.Context, client opensearchAPI, projec
 // opensearchserverless.ListCollections + ListTagsForResource(arn) per
 // collection.
 //
-// Mirrors reliable's discoverOpenSearchServerless (aws_inspect.go:1173).
+// Mirrors the InsideOut backend's discoverOpenSearchServerless (aws_inspect.go:1173).
 func discoverOpenSearchServerless(ctx context.Context, client aossAPI, project string) (any, error) {
 	listOut, err := client.ListCollections(ctx, &opensearchserverless.ListCollectionsInput{})
 	if err != nil {

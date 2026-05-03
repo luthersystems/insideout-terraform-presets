@@ -2,7 +2,7 @@
 # Static analysis: preset modules must NOT contain top-level `import {}`
 # or `removed {}` blocks. Both are TF 1.5+ root-module-only constructs —
 # when a preset is composed as a child module (the actual consumption
-# shape via `luthersystems/reliable`), terraform init fails with:
+# shape via the InsideOut composer), terraform init fails with:
 #
 #   Error: Invalid import configuration
 #     An import block was detected in "module.<name>". Import blocks
@@ -47,8 +47,8 @@ if (( any_fail )); then
   echo
   echo "FAIL: One or more preset modules contain root-only blocks."
   echo "Fix: remove the import/removed block from the child module. If"
-  echo "adoption is required, the composer (luthersystems/reliable) must"
-  echo "emit the block at the root, e.g.:"
+  echo "adoption is required, the InsideOut composer must emit the block"
+  echo "at the root, e.g.:"
   echo "  import {"
   echo "    to = module.<name>.<resource_addr>"
   echo "    id = ..."

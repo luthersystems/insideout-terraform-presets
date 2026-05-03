@@ -2,10 +2,10 @@
 # Static analysis: every taggable AWS resource must carry
 #   tags = merge(module.name.tags, var.tags)
 # (or an equivalent merge containing module.name.tags) so the Project tag
-# emitted by module.name.tags reaches the resource. The downstream reliable3
-# inspector filters AWS resources by exact Project = <project> match —
-# untagged resources are invisible to drift detection and CloudWatch metrics.
-# See issue #81 and https://github.com/luthersystems/reliable/pull/1027.
+# emitted by module.name.tags reaches the resource. The downstream
+# InsideOut inspector filters AWS resources by exact Project = <project>
+# match — untagged resources are invisible to drift detection and CloudWatch
+# metrics. See issue #81.
 #
 # When this check fails, the fix is almost always:
 #   tags = merge(module.name.tags, var.tags)

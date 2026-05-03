@@ -1,12 +1,12 @@
 // Compute-family AWS service inspectors: EC2, EBS, Lambda, ECS, EKS.
 //
-// Ported from reliable internal/agentapi/aws_inspect.go (ec2:328,
+// Ported from the InsideOut backend internal/agentapi/aws_inspect.go (ec2:328,
 // ebs:380, ecs:635, eks:762, lambda:983) and the corresponding tag-filter
 // helpers in aws_metrics.go (filterEKSClustersByProjectTag:1668,
 // filterLambdaFunctionsByProjectTag:899). The per-service interface
 // shapes (ecsClient, eksClustersClient, lambdaFunctionsClient) are kept
 // narrow so test fakes only implement what the inspector calls — same
-// pattern reliable uses.
+// pattern the InsideOut backend uses.
 
 package aws
 
@@ -118,7 +118,7 @@ func inspectEBS(ctx context.Context, cfg aws.Config, action, filters string) (an
 // --- Lambda ---
 
 // lambdaFunctionsClient is the subset of the lambda SDK used by the
-// shared Lambda filter helper. Mirrors reliable's lambdaFunctionsClient
+// shared Lambda filter helper. Mirrors the InsideOut backend's lambdaFunctionsClient
 // (aws_metrics.go:875).
 type lambdaFunctionsClient interface {
 	ListFunctions(ctx context.Context, params *lambda.ListFunctionsInput, optFns ...func(*lambda.Options)) (*lambda.ListFunctionsOutput, error)
@@ -143,7 +143,7 @@ func inspectLambda(ctx context.Context, cfg aws.Config, action, filters string) 
 // (fail-closed); ListFunctions errors abort so callers don't see a
 // silently-truncated account scan.
 //
-// Mirrors reliable's filterLambdaFunctionsByProjectTag (aws_metrics.go:899).
+// Mirrors the InsideOut backend's filterLambdaFunctionsByProjectTag (aws_metrics.go:899).
 func filterLambdaFunctionsByProjectTag(ctx context.Context, client lambdaFunctionsClient, project string) ([]lambdatypes.FunctionConfiguration, error) {
 	var all []lambdatypes.FunctionConfiguration
 	paginator := lambda.NewListFunctionsPaginator(client, &lambda.ListFunctionsInput{})
@@ -176,7 +176,7 @@ func filterLambdaFunctionsByProjectTag(ctx context.Context, client lambdaFunctio
 
 // ecsClient is the subset of the ECS SDK used by the cluster/service
 // filter helpers below. Narrowed so test fakes implement only the four
-// ops we call. Mirrors reliable's ecsClient (aws_inspect.go:628).
+// ops we call. Mirrors the InsideOut backend's ecsClient (aws_inspect.go:628).
 type ecsClient interface {
 	ListClusters(ctx context.Context, in *ecs.ListClustersInput, opts ...func(*ecs.Options)) (*ecs.ListClustersOutput, error)
 	DescribeClusters(ctx context.Context, in *ecs.DescribeClustersInput, opts ...func(*ecs.Options)) (*ecs.DescribeClustersOutput, error)
@@ -205,7 +205,7 @@ func inspectECS(ctx context.Context, cfg aws.Config, action, filters string) (an
 // limit), and returns clusters whose Project tag matches. Empty project
 // returns every cluster unchanged.
 //
-// Mirrors reliable's filterECSClustersByProjectTag (aws_inspect.go:657).
+// Mirrors the InsideOut backend's filterECSClustersByProjectTag (aws_inspect.go:657).
 func filterECSClustersByProjectTag(ctx context.Context, client ecsClient, project string) ([]ecstypes.Cluster, error) {
 	var arns []string
 	paginator := ecs.NewListClustersPaginator(client, &ecs.ListClustersInput{})
@@ -249,7 +249,7 @@ func filterECSClustersByProjectTag(ctx context.Context, client ecsClient, projec
 // listECSServicesAcrossClusters returns cluster-ARN → []service-ARN for
 // every project-tagged cluster.
 //
-// Mirrors reliable's listECSServicesAcrossClusters (aws_inspect.go:698).
+// Mirrors the InsideOut backend's listECSServicesAcrossClusters (aws_inspect.go:698).
 func listECSServicesAcrossClusters(ctx context.Context, client ecsClient, project string) (map[string][]string, error) {
 	clusters, err := filterECSClustersByProjectTag(ctx, client, project)
 	if err != nil {
@@ -278,7 +278,7 @@ func listECSServicesAcrossClusters(ctx context.Context, client ecsClient, projec
 // describeECSServicesAcrossClusters batches DescribeServices 10 at a
 // time (ECS API limit) across every project-tagged cluster.
 //
-// Mirrors reliable's describeECSServicesAcrossClusters (aws_inspect.go:726).
+// Mirrors the InsideOut backend's describeECSServicesAcrossClusters (aws_inspect.go:726).
 func describeECSServicesAcrossClusters(ctx context.Context, client ecsClient, project string) ([]ecstypes.Service, error) {
 	serviceArnsByCluster, err := listECSServicesAcrossClusters(ctx, client, project)
 	if err != nil {
@@ -321,7 +321,7 @@ func hasProjectTagECS(tags []ecstypes.Tag, project string) bool {
 // --- EKS ---
 
 // eksClustersClient is the subset of the eks SDK used by the cluster
-// filter helper. Mirrors reliable's eksClustersClient (aws_metrics.go:1653).
+// filter helper. Mirrors the InsideOut backend's eksClustersClient (aws_metrics.go:1653).
 type eksClustersClient interface {
 	ListClusters(ctx context.Context, params *eks.ListClustersInput, optFns ...func(*eks.Options)) (*eks.ListClustersOutput, error)
 	DescribeCluster(ctx context.Context, params *eks.DescribeClusterInput, optFns ...func(*eks.Options)) (*eks.DescribeClusterOutput, error)
@@ -333,7 +333,7 @@ func inspectEKS(ctx context.Context, cfg aws.Config, action, filters string) (an
 	case "list-clusters":
 		return filterEKSClustersByProjectTag(ctx, eks.NewFromConfig(cfg), project)
 	case "describe-cluster":
-		// reliable returned an explicit "not yet implemented fully" here
+		// the InsideOut backend returned an explicit "not yet implemented fully" here
 		// because the action requires a cluster name in filters that the
 		// session-based dispatcher couldn't surface. We preserve that
 		// stub so the action is recognized (drift gate passes) but
@@ -349,7 +349,7 @@ func inspectEKS(ctx context.Context, cfg aws.Config, action, filters string) (an
 		// unknown action — matching that here keeps the contract
 		// uniform across the dispatcher (a typo'd action like
 		// "list-cluster" should fail loudly, not silently return the
-		// cluster list). Diverges intentionally from reliable's
+		// cluster list). Diverges intentionally from the InsideOut backend's
 		// inspectEKS, which used the cluster list as a default fallback.
 		// #204 P2.
 		return nil, unsupportedActionError("eks", action)
@@ -428,7 +428,7 @@ func listEKSNodeInstances(ctx context.Context, eksClient eksClustersClient, ec2C
 // DescribeCluster errors log+skip so one bad cluster does not wipe the
 // whole pass.
 //
-// Mirrors reliable's filterEKSClustersByProjectTag (aws_metrics.go:1668).
+// Mirrors the InsideOut backend's filterEKSClustersByProjectTag (aws_metrics.go:1668).
 func filterEKSClustersByProjectTag(ctx context.Context, client eksClustersClient, project string) ([]string, error) {
 	var names []string
 	paginator := eks.NewListClustersPaginator(client, &eks.ListClustersInput{})

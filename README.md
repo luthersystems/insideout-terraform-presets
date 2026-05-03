@@ -30,7 +30,7 @@ This repository serves as the library of standard Terraform modules that are com
 
 ## How InsideOut Consumes These Presets
 
-This repo is imported as a Go module (`github.com/luthersystems/insideout-terraform-presets`) by the [reliable](https://github.com/luthersystems/reliable) backend. It exposes an embedded `fs.FS` filesystem (via `go:embed`) containing Terraform preset files (`.tf`, `.tfvars`, `.tmpl`) organized by cloud provider and component:
+This repo is imported as a Go module (`github.com/luthersystems/insideout-terraform-presets`) by the InsideOut backend. It exposes an embedded `fs.FS` filesystem (via `go:embed`) containing Terraform preset files (`.tf`, `.tfvars`, `.tmpl`) organized by cloud provider and component:
 
 ```
 aws/vpc/          → variables.tf, main.tf
@@ -39,20 +39,12 @@ gcp/cloudsql/     → variables.tf, main.tf
 ...
 ```
 
-The reliable repo's Terraform composition engine (`internal/reliabletf/`) reads these presets at build time and uses them to:
+The InsideOut Terraform composition engine reads these presets at build time and uses them to:
 
-1. **Compose full Terraform stacks** — When a user designs infrastructure through the AI chat, the backend maps each selected component (e.g. `KeyVPC`, `KeyPostgres`) to a preset directory via `PresetKeyMap` in `contracts.go` (e.g. `KeyPostgres` → `aws/rds/`).
+1. **Compose full Terraform stacks** — When a user designs infrastructure through the AI chat, the backend maps each selected component (e.g. `KeyVPC`, `KeyPostgres`) to a preset directory (e.g. `KeyPostgres` → `aws/rds/`).
 2. **Discover module variables** — Parses `variables.tf` from each preset to understand what inputs each module accepts, enabling dynamic variable injection from user-provided config.
 3. **Rebase and merge** — Preset files are rebased into a unified directory structure under `modules/<component>/` and combined with a root `main.tf` that wires everything together.
-4. **Send to Oracle** — The composed Terraform is sent to the Oracle deployment service which runs `terraform init/plan/apply`.
-
-### Update workflow
-
-After changing presets here, pull the latest version in the reliable repo:
-
-```bash
-go get github.com/luthersystems/insideout-terraform-presets@main
-```
+4. **Apply** — The composed Terraform is handed to the InsideOut deployment service which runs `terraform init/plan/apply`.
 
 ## Standalone Usage
 

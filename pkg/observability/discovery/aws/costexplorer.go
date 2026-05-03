@@ -1,10 +1,10 @@
 // Cost Explorer service inspector.
 //
-// Ported from reliable internal/agentapi/aws_inspect.go (cost-explorer:
+// Ported from the InsideOut backend internal/agentapi/aws_inspect.go (cost-explorer:
 // 1505-1772). Issue #225: AWSServiceActions advertised "cost-explorer" but
 // the discovery dispatcher had no arm — calls fell through to
-// ErrUnsupportedService. This brings the surface back here so reliable's
-// Phase B swap to pkg/observability (reliable#1252 PR 2) doesn't regress
+// ErrUnsupportedService. This brings the surface back here so the InsideOut backend's
+// Phase B swap to pkg/observability (the InsideOut backend#1252 PR 2) doesn't regress
 // production cost reporting.
 //
 // Cost Explorer is a global API: callers should construct cfg in
@@ -29,9 +29,9 @@ import (
 )
 
 // CostExplorerAPI is the subset of the Cost Explorer SDK used by the
-// inspector. Mirrors reliable's CostExplorerAPI
+// inspector. Mirrors the InsideOut backend's CostExplorerAPI
 // (aws_inspect.go:1505-1509) — exported so tests can inject a mock and
-// callers porting from reliable need no rename.
+// callers porting from the InsideOut backend need no rename.
 type CostExplorerAPI interface {
 	GetCostAndUsage(ctx context.Context, params *costexplorer.GetCostAndUsageInput, optFns ...func(*costexplorer.Options)) (*costexplorer.GetCostAndUsageOutput, error)
 	GetCostForecast(ctx context.Context, params *costexplorer.GetCostForecastInput, optFns ...func(*costexplorer.Options)) (*costexplorer.GetCostForecastOutput, error)

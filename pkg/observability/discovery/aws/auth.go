@@ -1,6 +1,6 @@
 // Auth-tier AWS service inspector: Cognito user pools.
 //
-// Ported from reliable internal/agentapi/aws_inspect.go (cognito:959)
+// Ported from the InsideOut backend internal/agentapi/aws_inspect.go (cognito:959)
 // plus the helper in aws_metrics.go
 // (filterCognitoUserPoolsByProjectTag:1405).
 //
@@ -25,7 +25,7 @@ import (
 )
 
 // cognitoUserPoolsClient is the subset of the cognito-idp SDK used by
-// the user-pool filter helper. Mirrors reliable's cognitoUserPoolsClient
+// the user-pool filter helper. Mirrors the InsideOut backend's cognitoUserPoolsClient
 // (aws_metrics.go:1380).
 type cognitoUserPoolsClient interface {
 	ListUserPools(ctx context.Context, params *cognitoidentityprovider.ListUserPoolsInput, optFns ...func(*cognitoidentityprovider.Options)) (*cognitoidentityprovider.ListUserPoolsOutput, error)
@@ -51,7 +51,7 @@ func inspectCognito(ctx context.Context, cfg aws.Config, action, filters string)
 // causes are concurrent delete and Cognito's throttle-prone
 // TooManyRequestsException.
 //
-// Mirrors reliable's filterCognitoUserPoolsByProjectTag
+// Mirrors the InsideOut backend's filterCognitoUserPoolsByProjectTag
 // (aws_metrics.go:1405).
 func filterCognitoUserPoolsByProjectTag(ctx context.Context, client cognitoUserPoolsClient, project string) ([]cognitoidptypes.UserPoolDescriptionType, error) {
 	var all []cognitoidptypes.UserPoolDescriptionType

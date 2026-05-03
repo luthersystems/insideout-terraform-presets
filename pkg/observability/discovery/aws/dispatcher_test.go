@@ -103,7 +103,7 @@ func TestInspectUnsupportedServiceReturnsSentinel(t *testing.T) {
 
 // TestInspectUnsupportedServiceErrorGoldenFormat pins the wire-format
 // shape of the wrapped sentinel — `errors.Is` only verifies that the
-// sentinel chain is intact, but the rendered string is what reliable's
+// sentinel chain is intact, but the rendered string is what the InsideOut backend's
 // LLM consumer reads as a tool-result envelope (#227). A regression in
 // either half of the dedupe (the sentinel text vs. the upstream
 // observability.UnsupportedServiceError prefix) would silently emit a

@@ -1692,7 +1692,7 @@ func TestComposeStack_GCP_Provider(t *testing.T) {
 	// (every preset module is supposed to render
 	// `labels = merge({ project = var.project }, var.labels)`, but a missed
 	// site silently leaves the resource without the project label that
-	// reliable3's drift inspector filters on). default_labels at the
+	// the InsideOut inspector filters on). default_labels at the
 	// provider level guarantees the project label reaches every label-capable
 	// resource regardless of whether the preset wires labels itself.
 	//
@@ -1701,7 +1701,7 @@ func TestComposeStack_GCP_Provider(t *testing.T) {
 	require.Contains(t, provStr, "default_labels",
 		"GCP provider block should declare default_labels as the project-label safety net (#215)")
 	require.Contains(t, provStr, "project    = var.project",
-		"default_labels should bind project = var.project so reliable3's drift inspector can filter by project")
+		"default_labels should bind project = var.project so the InsideOut inspector can filter by project")
 	require.Contains(t, provStr, `managed-by = "insideout"`,
 		"default_labels should also carry managed-by = \"insideout\" mirroring the AWS default_tags shape")
 	require.NotContains(t, provStr, "default_tags",
@@ -1755,7 +1755,7 @@ func TestComposeStack_DiscoveredProvidersReachRoot(t *testing.T) {
 // preset's source.
 //
 // Why a table sweep, not a single-instance smoke test:
-// the customer incident chain that motivated #159 (reliable #1167 → #1168)
+// the customer incident chain that motivated #159 (the InsideOut backend #1167 → #1168)
 // hit *three* dead-ends — the KMS keyring (undeletable), the Firestore
 // (default) database (singleton), and a GCS bucket (7-day soft-delete name
 // reservation). A KMS-only assertion would let a future edit silently
@@ -2445,7 +2445,7 @@ func TestComposeStack_GCPCloudKMS_TerraformPlan(t *testing.T) {
 	// composer mapper does not currently surface var.iam_bindings as
 	// a Component-driven knob, so the second combo writes an extra
 	// kms_iam_bindings.auto.tfvars after composition to inject the
-	// binding — faithful to what a reliable3-side mapper would emit
+	// binding — faithful to what a InsideOut-inspector-side mapper would emit
 	// and to what a real customer's stack would look like. The
 	// plan-time resolution of that binding is exactly the case PR
 	// #181 could not protect.

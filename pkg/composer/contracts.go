@@ -243,7 +243,7 @@ var ImplicitDependencies = map[ComponentKey][]ComponentKey{
 
 // ResolveDependencies recursively finds all required components for a given set of keys.
 //
-// This signature is kept stable for downstream callers (e.g. reliable2). For
+// This signature is kept stable for downstream callers (e.g. The InsideOut backend). For
 // EKS auto-include of the worker node group, callers that have *Components
 // available should use ResolveDependenciesForCompose instead — without comps,
 // we cannot tell EKS-the-Kubernetes-cluster apart from
@@ -425,7 +425,7 @@ func CloudFor(k ComponentKey) string {
 // Excluded by design:
 //   - KeyComposer / KeyArch / KeyCloud — conceptual classifiers; no module.
 //   - KeySplunk / KeyDatadog — third-party toggles; no preset in this repo
-//     (consumed directly by reliable's composeradapter).
+//     (consumed directly by the InsideOut backend's composeradapter).
 var AllComponentKeys = []ComponentKey{
 	// AWS (alphabetical for reviewability)
 	KeyAWSALB,
@@ -736,7 +736,7 @@ func DefaultWiring(selected map[ComponentKey]bool, k ComponentKey, comps *Compon
 
 	case KeyAWSBackups:
 		// Legacy sessions must Normalize before reaching DefaultWiring;
-		// reliable's composeradapter does this for us in production.
+		// the InsideOut backend's composeradapter does this for us in production.
 		enableEbs, enableRds, enableDdb, enableS3 := false, false, false, false
 		if comps != nil && comps.AWSBackups != nil {
 			enableEbs = boolVal(comps.AWSBackups.EC2)

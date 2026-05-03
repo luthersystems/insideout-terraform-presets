@@ -71,7 +71,7 @@ grep -rn '"*"\|"\*"' aws/ gcp/ --include="*.tf"
 
 ### 5. Tagging Coverage
 
-The downstream reliable3 inspector filters AWS resources by exact `Project = <project>` tag match. Resources without a `tags = merge(module.name.tags, var.tags)` block are invisible to drift detection and CloudWatch metrics.
+The downstream InsideOut inspector filters AWS resources by exact `Project = <project>` tag match. Resources without a `tags = merge(module.name.tags, var.tags)` block are invisible to drift detection and CloudWatch metrics.
 
 **AWS is enforced in CI** via `tests/lint-project-tag.sh` (wired into the `lint` job in `.github/workflows/terraform-validate.yml`). Run it locally the same way:
 

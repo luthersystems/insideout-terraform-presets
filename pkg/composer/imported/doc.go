@@ -13,7 +13,7 @@
 // Attributes/Attrs into flat HCL plus permanent `import {}` blocks (see
 // EmitImportedTF). Confirming that a real `terraform plan` produces only the
 // expected import operations and provenance-tag repairs is a runtime check;
-// it lives in the reliable repo, not in the composer's pre-plan validators.
+// it lives in the InsideOut backend repo, not in the composer's pre-plan validators.
 // See docs/managed-resource-tiers.md "Composer responsibilities for imported
 // resources" and "Plan acceptance rules".
 //

@@ -68,7 +68,7 @@ auth produces a `Skip` rather than a confusing late failure.
 
 ## 2. Live cloud testing — GCP
 
-**Project**: `diagramtest2025-09-14` (SA `reliable-test-deploy@...`)
+**Project**: `diagramtest2025-09-14` (SA `presets-test-deploy@...`)
 
 | API call | Where | Tested? | Result |
 |---|---|---|---|
@@ -237,7 +237,7 @@ for them.
   already had unit tests at the inspector level — would have been
   redundant.
 - End-to-end pipeline tests (config envelope → extractor → renderer →
-  panel JSON) — out of scope; that's reliable's wrapper layer.
+  panel JSON) — out of scope; that's the InsideOut backend's wrapper layer.
 
 ## 6. Updating this doc
 

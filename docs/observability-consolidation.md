@@ -1,6 +1,6 @@
 # Observability Consolidation
 
-Audit + design proposal for [issue #204](https://github.com/luthersystems/insideout-terraform-presets/issues/204) — consolidating observability/metrics logic from `luthersystems/reliable` into this repo so each preset's alarms, dashboards, log-based metrics, and live-config extractors live alongside the component.
+Audit + design proposal for [issue #204](https://github.com/luthersystems/insideout-terraform-presets/issues/204) — consolidating observability/metrics logic from the InsideOut backend into this repo so each preset's alarms, dashboards, log-based metrics, and live-config extractors live alongside the component.
 
 Related: [#203](https://github.com/luthersystems/insideout-terraform-presets/issues/203) (shared/common modules pattern — observability is its first real consumer).
 
@@ -11,27 +11,27 @@ All component-coupled logic lives in this repo:
 - **TF emit** — alarms, dashboards, log filters, notification primitives.
 - **Go data tables** — metric definitions, key→service mappings, display names, public-endpoint allowlists.
 - **Live-config extractors** — the per-component JSON-shaping functions that turn inspector output into UI-renderable config maps.
-- **AWS SDK / GCP SDK call sites** — the per-component discovery dispatchers (`ec2.DescribeInstances`, `rds.DescribeDBInstances`, `compute.Instances.List`, etc.), the CloudWatch `GetMetricData` and Cloud Monitoring `timeSeries.list` wrappers, and the Project-tag/label filter logic that joins them. Reliable supplies credentials and a session context; the SDK calls happen here, against typed inputs and outputs.
+- **AWS SDK / GCP SDK call sites** — the per-component discovery dispatchers (`ec2.DescribeInstances`, `rds.DescribeDBInstances`, `compute.Instances.List`, etc.), the CloudWatch `GetMetricData` and Cloud Monitoring `timeSeries.list` wrappers, and the Project-tag/label filter logic that joins them. The InsideOut backend supplies credentials and a session context; the SDK calls happen here, against typed inputs and outputs.
 
-`luthersystems/reliable` shrinks to: auth and credential management, HTTP route handlers, agent/Oracle/chat session plumbing, drift-surface bookkeeping. Reliable contains zero `map[ComponentKey]X` declarations and zero per-service SDK dispatch.
+The InsideOut backend shrinks to: auth and credential management, HTTP route handlers, agent/Oracle/chat session plumbing, drift-surface bookkeeping. The InsideOut backend contains zero `map[ComponentKey]X` declarations and zero per-service SDK dispatch.
 
 Adding a new component anywhere becomes a single-PR change in this repo: preset + alarms + extractor + discoverer + metric-fetcher + drift gates. Tests use mocked SDK clients; the inner loop runs in milliseconds. Drift between "we shipped a new RDS feature" and "we forgot to update the alarm pack" becomes structurally impossible to land.
 
 ## Why move
 
 - **Component and "is this component being watched correctly" are the same review.** Splitting them across repos is a process artifact, not a domain boundary.
-- **Reliable's observability tests are slow** because they go through agent-chat round-trips. Anything testable purely in TF/Go here is dramatically faster — both for the contributor's inner loop and for CI gating.
+- **The InsideOut backend's observability tests are slow** because they go through agent-chat round-trips. Anything testable purely in TF/Go here is dramatically faster — both for the contributor's inner loop and for CI gating.
 - **Drift is the failure mode.** It is not theoretical — it is what happens every time the two sides update on different cadences. Today RDS publishes 3 metrics per `aws_metrics.go:289` but our preset alarms on 2. ALB publishes 3 metrics; we dashboard 2 and alarm 0. ECS/EKS/Lambda/CloudFront/APIGW/OpenSearch/Bedrock/Cognito/DynamoDB are in `metricDefinitions` with **zero alarms anywhere**.
 - **Discoverability.** A contributor reading `gcp/cloudsql/main.tf` has no signal today that there is a corresponding alarm pack across a repository boundary. Co-location surfaces the relationship structurally.
-- **Preset library completeness.** Customers consuming presets via the composer get observability "for free" instead of needing a parallel `reliable` dependency.
+- **Preset library completeness.** Customers consuming presets via the composer get observability "for free" instead of needing a parallel backend-side dependency.
 
 ## A note on the issue's premise
 
-[#204](https://github.com/luthersystems/insideout-terraform-presets/issues/204) opens with "move emit code from reliable to presets." That premise needs correcting before the migration plan makes sense.
+[#204](https://github.com/luthersystems/insideout-terraform-presets/issues/204) opens with "move emit code from the InsideOut backend to presets." That premise needs correcting before the migration plan makes sense.
 
-`grep -rln 'cloudwatch_metric_alarm|monitoring_alert_policy|monitoring_dashboard|logging_metric|notification_channel|sns_topic' --include='*.tf' --include='*.tmpl' --include='*.go'` over `reliable/internal/` returns **zero matches** in `.tf`/`.tmpl`/Go-emit code. There is no Go template/HCL emit path in reliable that authors a CloudWatch alarm, a Cloud Monitoring alert policy, a dashboard, a log metric, or a notification channel.
+`grep -rln 'cloudwatch_metric_alarm|monitoring_alert_policy|monitoring_dashboard|logging_metric|notification_channel|sns_topic' --include='*.tf' --include='*.tmpl' --include='*.go'` over `internal/` returns **zero matches** in `.tf`/`.tmpl`/Go-emit code. There is no Go template/HCL emit path in the InsideOut backend that authors a CloudWatch alarm, a Cloud Monitoring alert policy, a dashboard, a log metric, or a notification channel.
 
-What `reliable` actually owns is the **read side**: per-AWS-service and per-GCP-service metric tables, the SDK-call dispatchers that discover live resources by Project tag/label, the CloudWatch / Cloud Monitoring metric-fetch wrappers, and per-component extractor functions that shape inspector output for the UI. So the migration is **not** "move TF from reliable to presets" — it is **"unify the alarm-author surface with the metric-watch surface, both inside this repo, and migrate the entire read-side stack (data tables + SDK call sites + tag filtering + extractors) alongside."** Reliable becomes a credentials/transport/session shell calling into typed library functions here.
+What the InsideOut backend actually owns is the **read side**: per-AWS-service and per-GCP-service metric tables, the SDK-call dispatchers that discover live resources by Project tag/label, the CloudWatch / Cloud Monitoring metric-fetch wrappers, and per-component extractor functions that shape inspector output for the UI. So the migration is **not** "move TF from the InsideOut backend to presets" — it is **"unify the alarm-author surface with the metric-watch surface, both inside this repo, and migrate the entire read-side stack (data tables + SDK call sites + tag filtering + extractors) alongside."** The InsideOut backend becomes a credentials/transport/session shell calling into typed library functions here.
 
 ## Audit — current state
 
@@ -57,11 +57,11 @@ Every observability resource in this repo today, grouped by aggregator vs per-co
 **Per-component log groups** (today's only co-located observability):
 - `aws/opensearch/main.tf:87`, `aws/bedrock/main.tf:177`, `aws/msk/main.tf:99`, `aws/lambda/main.tf:106`, `aws/elasticache/main.tf:80`
 
-### Reliable-side Go data inventory
+### InsideOut-backend-side Go data inventory
 
-Component-coupled Go symbols in `reliable` that need to migrate. Targets in the right column reflect the post-migration end state.
+Component-coupled Go symbols in the InsideOut backend that need to migrate. Targets in the right column reflect the post-migration end state.
 
-| Symbol | File:line in reliable | Entries | Migration target | Notes |
+| Symbol | File:line in the InsideOut backend | Entries | Migration target | Notes |
 |---|---|---|---|---|
 | `metricDefinitions` | `internal/agentapi/aws_metrics.go:258` | 25 services | `pkg/observability/aws_metrics.go` | Pure data table |
 | `gcpMetricDefinitions` | `internal/agentapi/gcp_metrics.go:141` | 21 services | `pkg/observability/gcp_metrics.go` | Same shape, GCP |
@@ -72,7 +72,7 @@ Component-coupled Go symbols in `reliable` that need to migrate. Targets in the 
 | `awsServiceActions` | `internal/agentapi/inspect_normalize.go:77` | 25 services | `pkg/observability/service_actions.go` | Registry |
 | `gcpServiceActions` | `internal/agentapi/inspect_normalize.go:262` | 21 services | same | |
 | `metric_display_labels.json` | `internal/agentapi/metric_display_labels.json` | 41 lines | `pkg/observability/metric_display_labels.json` | embed.FS asset; cross-language note in §Open follow-ups |
-| `config_extractors.go` | `internal/agentapi/config_extractors.go:13` | 47 funcs / 1998 lines | `pkg/observability/extractors/` | Reliable's file shrinks to a 10-line dispatcher |
+| `config_extractors.go` | `internal/agentapi/config_extractors.go:13` | 47 funcs / 1998 lines | `pkg/observability/extractors/` | The InsideOut backend's file shrinks to a 10-line dispatcher |
 | **CloudWatch `GetMetricData` wrapper** | `internal/agentapi/aws_metrics.go:614-1989` (everything below the data table) | — | `pkg/observability/metrics/aws.go` | Takes `aws.Config` + spec, returns typed result |
 | **Cloud Monitoring `timeSeries.list` wrapper** | `internal/agentapi/gcp_metrics.go:378-871` | — | `pkg/observability/metrics/gcp.go` | Same shape, GCP |
 | **AWS inspector dispatcher** | `internal/agentapi/aws_inspect.go` | giant per-service switch (~1100 lines) | `pkg/observability/discovery/aws/` (one file per service) | Per-component discoverers behind `Discover(ctx, key, awsCfg)` |
@@ -80,7 +80,7 @@ Component-coupled Go symbols in `reliable` that need to migrate. Targets in the 
 | **Project tag/label filter** | `internal/agentapi/resource_filter.go:25-100` | EC2-style `tag:Project` filter | `pkg/observability/filter/project.go` | Joins per-component discovery; tag convention already enforced by this repo's `tests/lint-project-tag.sh` |
 | 6 drift tests | `internal/agentapi/*_drift_test.go` | — | move with their data | See list below |
 
-**Tests in reliable that migrate with their data.** Every test file below moves alongside the production code it covers; reliable does not retain a stub or shadow copy. Test budget for each PR includes the test files.
+**Tests in the InsideOut backend that migrate with their data.** Every test file below moves alongside the production code it covers; the InsideOut backend does not retain a stub or shadow copy. Test budget for each PR includes the test files.
 
 | Test file | Lines | Covers | Destination |
 |---|---|---|---|
@@ -89,8 +89,8 @@ Component-coupled Go symbols in `reliable` that need to migrate. Targets in the 
 | `internal/agentapi/config_extractors_drift_test.go` | 520 | per-component extractor coverage + allowlist | `pkg/observability/extractors/drift_test.go` |
 | `internal/agentapi/chatv2_tool_schema_drift_test.go` | 273 | chat-V2 tool schema vs registries | `pkg/observability/service_actions_drift_test.go` |
 | `internal/agentapi/gcp_dispatcher_drift_test.go` | 77 | GCP dispatcher coverage | `pkg/observability/discovery/gcp/dispatcher_drift_test.go` |
-| `internal/agentapi/zod_presets_contract_test.go` | 432 | Zod IR ↔ `composer.AllowedValues` cross-repo contract | **stays in reliable** — it's a cross-repo seam, lives on the seam |
-| `internal/chatv2/pricing_schema_drift_test.go` | 95 | pricing struct ↔ `composer.ComposeOrder`/`ModulePath` | stays in reliable (pricing IR lives there) |
+| `internal/agentapi/zod_presets_contract_test.go` | 432 | Zod IR ↔ `composer.AllowedValues` cross-repo contract | **stays in the InsideOut backend** — it's a cross-repo seam, lives on the seam |
+| `internal/chatv2/pricing_schema_drift_test.go` | 95 | pricing struct ↔ `composer.ComposeOrder`/`ModulePath` | stays in the InsideOut backend (pricing IR lives there) |
 | `internal/agentapi/aws_metrics_test.go` | 3793 | per-service CloudWatch metric-fetch (mocked SDK) | `pkg/observability/metrics/aws_test.go` + fixtures |
 | `internal/agentapi/gcp_metrics_test.go` | 1044 | per-service Cloud Monitoring fetch (mocked SDK) | `pkg/observability/metrics/gcp_test.go` + fixtures |
 | `internal/agentapi/aws_inspect_test.go` (and per-service `*_inspect_test.go` siblings) | varies | per-service AWS discoverer behavior | `pkg/observability/discovery/aws/<service>_test.go` |
@@ -98,7 +98,7 @@ Component-coupled Go symbols in `reliable` that need to migrate. Targets in the 
 | `internal/agentapi/component_test_traffic_test.go` | 176 | public-endpoint allowlist | `pkg/observability/test_traffic_test.go` |
 | `internal/agentapi/resource_filter_test.go` (if exists) | — | Project tag/label filter | `pkg/observability/filter/project_test.go` |
 
-**What stays in reliable** (post-migration thin client):
+**What stays in the InsideOut backend** (post-migration thin client):
 
 - Auth, credentials, role-assumption (`internal/credentials/`, `internal/agentapi/credentials*.go`).
 - HTTP server, route handlers (`apiserver/router.go`, the `On*` handler functions in `internal/agentapi/`).
@@ -108,7 +108,7 @@ Component-coupled Go symbols in `reliable` that need to migrate. Targets in the 
 
 ### Coverage gap (alarm authority drift)
 
-The metric authority lives in reliable's `metricDefinitions`; the alarm surface lives in this repo's `cloudwatchmonitoring`. They are not synchronized:
+The metric authority lives in the InsideOut backend's `metricDefinitions`; the alarm surface lives in this repo's `cloudwatchmonitoring`. They are not synchronized:
 
 | Component | Metrics published (per `aws_metrics.go`) | Metrics alarmed (per `cloudwatchmonitoring/main.tf`) | Gap |
 |---|---|---|---|
@@ -122,7 +122,7 @@ The metric authority lives in reliable's `metricDefinitions`; the alarm surface 
 
 The drift gate proposed below converts this gap from invisible to enforced.
 
-### Recent reliable activity (~6 weeks)
+### Recent InsideOut backend activity (~6 weeks)
 
 Confirms the maintainer's "even more observability has been added recently" framing. Filtered to PRs that touched component-coupled code:
 
@@ -136,11 +136,11 @@ Confirms the maintainer's "even more observability has been added recently" fram
 - **#1058** — preset-defaults overlay backfilled into management-phase stack view
 - **Preset version bumps** — #1094, #1122, #1138, #1155, #1195, #1238
 
-Two new packages also landed in reliable: `internal/composeradapter/` (replaces in-tree pkg/composer; thin adapter over upstream) and `internal/stackdiff/` (typed diff helpers bridging composer + models).
+Two new packages also landed in the InsideOut backend: `internal/composeradapter/` (replaces in-tree pkg/composer; thin adapter over upstream) and `internal/stackdiff/` (typed diff helpers bridging composer + models).
 
 ### `AllComponentKeys` plumbing today
 
-`pkg/composer/contracts.go:430-485` defines `AllComponentKeys()` (51 entries) as the Go-side canonical list. `internal/chatv2/component-keys.json` in reliable is a 47-entry Zod-derived JSON, generated by `scripts/generate-schemas.ts`. The two are kept consistent via `internal/agentapi/zod_presets_contract_test.go`.
+`pkg/composer/contracts.go:430-485` defines `AllComponentKeys()` (51 entries) as the Go-side canonical list. `internal/chatv2/component-keys.json` in the InsideOut backend is a 47-entry Zod-derived JSON, generated by `scripts/generate-schemas.ts`. The two are kept consistent via `internal/agentapi/zod_presets_contract_test.go`.
 
 Eight internal drift tests in this repo already enforce `AllComponentKeys` as authority for `PresetKeyMap`, `AWSIAMActions`, `GCPIAMPermissions`, `GCPServices`, and per-preset `variables.tf` coverage. Three other hand-written component-key lists exist as drift hazards inside this repo:
 
@@ -268,7 +268,7 @@ A unified shape would either lose information (drop GCP-only fields like `Aligne
 
 The file is loaded **directly by both Go and TS** today: `internal/agentapi/component_metrics.go:25` (`//go:embed`) and `lib/stack/component-detail-utils.ts:12` (`import ... from "@/internal/agentapi/metric_display_labels.json"` via tsconfig path alias). When the file moves to `pkg/observability/metric_display_labels.json`, the TS side has two viable paths:
 
-- **(a) Update the TS path alias** to point at `node_modules/.../insideout-terraform-presets/pkg/observability/metric_display_labels.json` (or wherever the presets package lands in reliable's deps tree). Lowest-friction.
+- **(a) Update the TS path alias** to point at `node_modules/.../insideout-terraform-presets/pkg/observability/metric_display_labels.json` (or wherever the presets package lands in the InsideOut backend's deps tree). Lowest-friction.
 - **(b) Drop the TS-side direct import** and have the API include a `label` field on every emitted `MetricResult`, so the TS chart UI no longer needs the JSON. Cleaner long-term but requires a coordinated change to `MetricResult` and the chart code (`ChartWindow.tsx:33-55`).
 
 Recommend (a) for the migration PR; (b) is a follow-up cleanup once the Go-side authority is settled.
@@ -305,7 +305,7 @@ pkg/observability/
         └── client.go
 ```
 
-Public API surface that reliable's HTTP handlers call:
+Public API surface that the InsideOut backend's HTTP handlers call:
 
 ```go
 // Discover returns the live cloud resources matching the given component key,
@@ -319,11 +319,11 @@ metrics.Fetch(ctx, awsCfg, key, resources, params) (MetricsResult, error)
 extractors.Extract(key, envelope) (map[string]string, error)
 ```
 
-Each function takes a credentials/client object the caller owns; this repo never reads `~/.aws/credentials`, never assumes IAM roles, never writes session state. That responsibility stays in reliable.
+Each function takes a credentials/client object the caller owns; this repo never reads `~/.aws/credentials`, never assumes IAM roles, never writes session state. That responsibility stays in the InsideOut backend.
 
 ### UI render contract (what the chart panel needs)
 
-The reliable UI flow for "show me telemetry for this component" runs through:
+The InsideOut backend UI flow for "show me telemetry for this component" runs through:
 
 - `lib/hooks/useComponentMetrics.ts:52-76` — SWR hook fetches `/api/v2/component/metrics?session_id=…&component_key=…`.
 - `apiserver/router.go:165` → `internal/agentapi/component_metrics.go:489-680` (`OnComponentMetrics`).
@@ -377,15 +377,15 @@ Three new tests, all pure-Go and fast (target <1s combined for all 47 components
 
 These extend the existing `iam_actions_test.go` / `gcp_services_test.go` / `pricing_deps_test.go` pattern. The third test is what enforces "you cannot land a new component without observability" — it fails CI if a contributor adds a component to `Observability` with `Alarmed=true` and forgets to author the alarm resource.
 
-A fourth test ports from reliable when the extractors migrate (PR 9):
+A fourth test ports from the InsideOut backend when the extractors migrate (PR 9):
 
-4. **`TestExtractLiveConfigCoversEveryComponentKey`** — every key in `AllComponentKeys` has a registered extractor in `pkg/observability/extractors`, or appears in the extractor allowlist with a rationale. Direct port of reliable's `TestExtractLiveConfig_CoversAllAWSComponents` + `TestExtractLiveConfig_CoversAllGCPComponents`.
+4. **`TestExtractLiveConfigCoversEveryComponentKey`** — every key in `AllComponentKeys` has a registered extractor in `pkg/observability/extractors`, or appears in the extractor allowlist with a rationale. Direct port of the InsideOut backend's `TestExtractLiveConfig_CoversAllAWSComponents` + `TestExtractLiveConfig_CoversAllGCPComponents`.
 
 ### Source-of-truth flip
 
 `composer.AllComponentKeys()` becomes the canonical list. Mechanics:
 
-1. **Reliable replaces `chatv2.AllComponentKeys()`** body — today it loads `internal/chatv2/component-keys.json` via embed — with a one-line direct call to `composer.AllComponentKeys()`. The composer package is already imported into `internal/agentapi/`, `internal/composeradapter/`, `internal/stackdiff/`, and `internal/chatv2/`.
+1. **The InsideOut backend replaces `chatv2.AllComponentKeys()`** body — today it loads `internal/chatv2/component-keys.json` via embed — with a one-line direct call to `composer.AllComponentKeys()`. The composer package is already imported into `internal/agentapi/`, `internal/composeradapter/`, `internal/stackdiff/`, and `internal/chatv2/`.
 2. **Delete `internal/chatv2/component-keys.json`** plus its loader and the codegen step (`scripts/generate-schemas.ts:67-82`) that produces it.
 3. **Invert the Zod ↔ presets contract test.** `internal/agentapi/zod_presets_contract_test.go` already asserts `Zod ⊆ composer.AllowedValues`; extend it to assert exact set equality between Zod and `composer.AllComponentKeys` modulo the documented exclusions:
    - Container-shaped keys: `aws_backups`, `gcp_backups` (declared as objects in Zod, not boolean toggles).
@@ -426,72 +426,72 @@ Each row in the migration plan below is **the Phase A PR only**. Every migration
 
 | Phase | Repo | What lands |
 |---|---|---|
-| **A — Add** | `insideout-terraform-presets` (this repo) | New code at the migration target (`pkg/observability/<x>.go` + tests + drift gates). Reliable is unchanged; both repos build green; both copies of the data exist temporarily. |
-| **B — Swap** | `luthersystems/reliable` | Reliable's local declarations are replaced with re-exports / direct imports from this repo. The local file shrinks to a 3–10 line wrapper (or is replaced by a `var X = observability.X` alias). Drift tests in reliable that survive the move (e.g. cross-repo Zod contract) point at the imported authority. Reliable's CI green. |
-| **C — Delete** | `luthersystems/reliable` | Reliable removes the now-empty wrapper file, deletes any test file that fully migrated, and drops the related deferred-allowlist entries. After this phase the data exists in only one place. |
+| **A — Add** | `insideout-terraform-presets` (this repo) | New code at the migration target (`pkg/observability/<x>.go` + tests + drift gates). The InsideOut backend is unchanged; both repos build green; both copies of the data exist temporarily. |
+| **B — Swap** | the InsideOut backend | The InsideOut backend's local declarations are replaced with re-exports / direct imports from this repo. The local file shrinks to a 3–10 line wrapper (or is replaced by a `var X = observability.X` alias). Drift tests in the InsideOut backend that survive the move (e.g. cross-repo Zod contract) point at the imported authority. The InsideOut backend's CI green. |
+| **C — Delete** | the InsideOut backend | The InsideOut backend removes the now-empty wrapper file, deletes any test file that fully migrated, and drops the related deferred-allowlist entries. After this phase the data exists in only one place. |
 
 Why three PRs and not one:
 
 - **No flag day.** A single coordinated cross-repo PR is fragile: a CI failure in either repo blocks the other. Three sequenced PRs — each independently mergeable, each leaving both repos building — eliminate the coordination cost.
-- **Cache busts.** Phase A → B requires a `go get -u` of the presets module in reliable. That's a routine bump; doing it as its own PR isolates dep-graph changes from logic changes.
+- **Cache busts.** Phase A → B requires a `go get -u` of the presets module in the InsideOut backend. That's a routine bump; doing it as its own PR isolates dep-graph changes from logic changes.
 - **Reviewer focus.** Phase A reviewers care about the new data shape and tests. Phase B reviewers care that the swap is wire-equivalent. Phase C reviewers care that nothing else still imports the removed code. Different scopes → different reviewers → faster turnaround.
-- **Rollback granularity.** If Phase B exposes a behavior delta, reverting Phase B alone restores reliable's local copy (still present from Phase A). The presets-side data added in Phase A is never reverted; it stays as the canonical home.
+- **Rollback granularity.** If Phase B exposes a behavior delta, reverting Phase B alone restores the InsideOut backend's local copy (still present from Phase A). The presets-side data added in Phase A is never reverted; it stays as the canonical home.
 
-Tests migrate as part of Phase A — they ship with their data. Phase C deletes the now-orphaned test file in reliable. Drift tests that span the cross-repo seam (e.g. `zod_presets_contract_test.go`) stay in reliable because the seam itself is what they protect.
+Tests migrate as part of Phase A — they ship with their data. Phase C deletes the now-orphaned test file in the InsideOut backend. Drift tests that span the cross-repo seam (e.g. `zod_presets_contract_test.go`) stay in the InsideOut backend because the seam itself is what they protect.
 
-**Coordination across migrations.** The 15+ Phase A PRs in this repo can stack: each is a leaf change in its own subdirectory of `pkg/observability/`, no cross-edits required. The Phase B/C PRs in reliable are sequenced strictly after their corresponding Phase A merges, but parallel Phase B PRs across migrations are fine — each is a small import-swap. Final cleanup PR (the post-table "reliable cleanup" row) is the single coordinated cross-repo synchronization point, run only after every Phase C lands.
+**Coordination across migrations.** The 15+ Phase A PRs in this repo can stack: each is a leaf change in its own subdirectory of `pkg/observability/`, no cross-edits required. The Phase B/C PRs in the InsideOut backend are sequenced strictly after their corresponding Phase A merges, but parallel Phase B PRs across migrations are fine — each is a small import-swap. Final cleanup PR (the post-table "the InsideOut backend cleanup" row) is the single coordinated cross-repo synchronization point, run only after every Phase C lands.
 
 ## Migration plan
 
-One PR per row — these are the **Phase A** PRs in this repo. Each row's "Acceptance" column references the corresponding Phase B and C PRs in reliable. Phases A→B→C are strict per-migration ordering; cross-migration parallelism is fine.
+One PR per row — these are the **Phase A** PRs in this repo. Each row's "Acceptance" column references the corresponding Phase B and C PRs in the InsideOut backend. Phases A→B→C are strict per-migration ordering; cross-migration parallelism is fine.
 
 | # | PR scope | Acceptance |
 |---|---|---|
 | 1 | **(this PR)** Audit + design doc at `docs/observability-consolidation.md`. No code changes. | Doc lands; subsequent PRs reference its tables. |
-| 2 | **(A) Source-of-truth flip — declare authority.** Extend `pkg/composer/AllComponentKeys` doc here to declare canonical authority over the component-key vocabulary. No code change to reliable in Phase A. | (A) doc-only here. (B) reliable replaces `chatv2.AllComponentKeys()` body with a direct call to `composer.AllComponentKeys()`; updates `zod_presets_contract_test.go` to assert exact equality. (C) reliable deletes `component-keys.json` + the Zod codegen step + `Makefile:verify-schemas`. |
-| 3 | **(A) Migrate `testTrafficPublicEndpoints`.** Smallest data move (3 entries). Lands `pkg/observability/test_traffic.go` + `test_traffic_test.go` (176 lines, moved from reliable) + new drift test `TestTestTrafficCoverage` (asserts every `OutputKey` exists in the matching `<module>/outputs.tf`). | (A) preset tests green. (B) reliable swaps local map for `observability.TestTrafficPublicEndpoints` import; reliable CI green. (C) reliable deletes `component_test_traffic.go` + `component_test_traffic_test.go`. |
-| 4 | **(A) Migrate `componentDisplayName` + `emptyDiscoveryAllowlist`.** Cheap, no SDK dependencies. | (A) tests green. (B) reliable swaps callers. (C) reliable deletes the local switches + allowlist. |
-| 5 | **(A) Migrate `componentMetricsMapping` + service-actions registries + metric definitions.** All four together — they share drift tests. Authority table (`pkg/observability/component_observability.go`) lands with `Alarmed=false` everywhere and a complete `observabilityDeferred` allowlist. `component_metrics_drift_test.go` (212 lines) and `component_metrics_test.go` (958 lines) move with the data. New drift tests `TestObservabilityCoversEveryComponentKey` + `TestObservabilityNoUnknownKeys` go green immediately. `TestObservabilitySpecMatchesEmittedAlarms` is a no-op while every `Alarmed=false`. | (A) all drift gates pass here. (B) reliable swaps `componentMetricsMapping[k]` lookups for `observability.Lookup(k)`; reliable's `metricDefinitions` / `gcpMetricDefinitions` data tables become re-exports. (C) reliable deletes the now-empty data tables; `aws_metrics.go` / `gcp_metrics.go` shrink to their SDK-call layer. |
+| 2 | **(A) Source-of-truth flip — declare authority.** Extend `pkg/composer/AllComponentKeys` doc here to declare canonical authority over the component-key vocabulary. No code change to the InsideOut backend in Phase A. | (A) doc-only here. (B) the InsideOut backend replaces `chatv2.AllComponentKeys()` body with a direct call to `composer.AllComponentKeys()`; updates `zod_presets_contract_test.go` to assert exact equality. (C) the InsideOut backend deletes `component-keys.json` + the Zod codegen step + `Makefile:verify-schemas`. |
+| 3 | **(A) Migrate `testTrafficPublicEndpoints`.** Smallest data move (3 entries). Lands `pkg/observability/test_traffic.go` + `test_traffic_test.go` (176 lines, moved from the InsideOut backend) + new drift test `TestTestTrafficCoverage` (asserts every `OutputKey` exists in the matching `<module>/outputs.tf`). | (A) preset tests green. (B) the InsideOut backend swaps local map for `observability.TestTrafficPublicEndpoints` import; the InsideOut backend CI green. (C) the InsideOut backend deletes `component_test_traffic.go` + `component_test_traffic_test.go`. |
+| 4 | **(A) Migrate `componentDisplayName` + `emptyDiscoveryAllowlist`.** Cheap, no SDK dependencies. | (A) tests green. (B) the InsideOut backend swaps callers. (C) the InsideOut backend deletes the local switches + allowlist. |
+| 5 | **(A) Migrate `componentMetricsMapping` + service-actions registries + metric definitions.** All four together — they share drift tests. Authority table (`pkg/observability/component_observability.go`) lands with `Alarmed=false` everywhere and a complete `observabilityDeferred` allowlist. `component_metrics_drift_test.go` (212 lines) and `component_metrics_test.go` (958 lines) move with the data. New drift tests `TestObservabilityCoversEveryComponentKey` + `TestObservabilityNoUnknownKeys` go green immediately. `TestObservabilitySpecMatchesEmittedAlarms` is a no-op while every `Alarmed=false`. | (A) all drift gates pass here. (B) the InsideOut backend swaps `componentMetricsMapping[k]` lookups for `observability.Lookup(k)`; the InsideOut backend's `metricDefinitions` / `gcpMetricDefinitions` data tables become re-exports. (C) the InsideOut backend deletes the now-empty data tables; `aws_metrics.go` / `gcp_metrics.go` shrink to their SDK-call layer. |
 | 6 | **First per-module `observability.tf`: `aws/sqs`.** Single-repo PR (no A/B/C — preset-only change). Single alarm (`backlog`, threshold on `ApproximateNumberOfMessagesVisible`). No `for_each` on the destination. Aggregator-side per-SQS alarm at `cloudwatchmonitoring/main.tf:136` deleted. Composer-emitted `moved {}` for SQS. `KeyAWSSQS` row in the deferred allowlist flipped to `Alarmed=true` for the one metric. Severity / runbook conventions inlined. | Drift gate `TestObservabilitySpecMatchesEmittedAlarms` enforces the alarm exists. End-to-end: synthetic VPC+SQS+CloudWatchMonitoring stack composes, plans without destroys against pre-cutover state, alarms still fire. |
 | 7 | **Second per-module: `gcp/memorystore`.** Single-repo PR. Forces the GCP alert-policy + notification-channel surface (currently absent everywhere). `gcp/cloud_monitoring` gains `notification_channels` variable and output. Severity/runbook helpers refactored into `_shared/` once this PR demonstrates a second consumer. | Same gauntlet for GCP. |
 | 8 | **Third per-module: `aws/rds` (multi-instance for_each).** Single-repo PR. Three alarms (CPU, FreeStorage, DatabaseConnections — last is currently absent). Exercises the for_each keying problem in `moved {}` block emission. | Drift gate flips three RDS deferred-allowlist entries to `Alarmed=true`. |
-| 9 | **(A) Migrate `config_extractors.go`** (1998 lines, 47 funcs) into `pkg/observability/extractors/`. Defines the inspector envelope contract here as a typed input (`type InspectorEnvelope struct { ... }`); reliable's dispatcher feeds raw JSON in and gets `map[string]string` back. `config_extractors_drift_test.go` (520 lines) moves with the code. | (A) extractor coverage gate green here. (B) reliable's `internal/agentapi/config_extractors.go` becomes a 10-line file calling `extractors.Extract(key, envelope)`. (C) reliable deletes the per-extractor functions + drift test. |
-| 10 | **(A) Migrate Project tag/label filter** (`resource_filter.go:25-100`, ~75 lines) to `pkg/observability/filter/project.go`. Pure function — takes raw EC2/RDS/ALB tag-shapes, returns filtered IDs. No SDK dependency. Tests move with the code. New drift test `TestProjectFilter_HandlesEveryAWSResourceShape`. | (A) gate green. (B) reliable's `resource_filter.go` re-exports. (C) reliable deletes. |
-| 11 | **(A) Migrate CloudWatch metric-fetch wrapper** (`aws_metrics.go:614-1989` — `getServiceMetrics` + `BuildMetricDataQueries` + `fetchMetrics`) to `pkg/observability/metrics/aws.go`. Public API: `Fetch(ctx, awsCfg, ComponentObservability, []ResourceID, params) (MetricsResult, error)`. aws-sdk-go-v2 + CloudWatch client become deps of this repo. `aws_metrics_test.go` (3793 lines) and its mock-CloudWatch fixtures move under `pkg/observability/metrics/testdata/`. | (A) test parity here. (B) reliable's `tryFetchAWSComponentMetrics` becomes a 5-line call. (C) reliable deletes the wrapper + test. |
-| 12 | **(A) Migrate Cloud Monitoring metric-fetch wrapper** (`gcp_metrics.go:378-871`) to `pkg/observability/metrics/gcp.go`. Same shape: `Fetch(ctx, gcpClient, ComponentObservability, []ResourceID, params) (GCPMetricsResult, error)`. `google.golang.org/api/monitoring/v3` becomes a dep here. `gcp_metrics_test.go` (1044 lines) + fixtures move with it. | (A) gate green. (B) reliable's `tryFetchGCPComponentMetrics` shrinks. (C) deletion. |
-| 13 | **(A) Migrate AWS discovery dispatchers** (`aws_inspect.go:147-1100+`) to `pkg/observability/discovery/aws/`. One file per service: `ec2.go`, `rds.go`, `alb.go`, `s3.go`, `cognito.go`, … Each exports `func Discover<Service>(ctx, awsCfg, projectFilter) ([]Resource, error)`. Top-level `discovery/aws/dispatcher.go` keys off `composer.ComponentKey`. Drift test: every key in `AllComponentKeys` with `CloudFor(k) == "aws"` has a registered discoverer. aws-sdk-go-v2 service clients (~25 of them) become deps. Per-service `*_inspect_test.go` siblings (mock SDK fixtures) move alongside. | (A) drift gate green; per-service tests pass with mocked SDK. (B) reliable's `inspectAWSCore` becomes a 10-line call. (C) reliable deletes the dispatcher + per-service handlers + tests. |
-| 14 | **(A) Migrate GCP discovery dispatchers** (`gcp_inspect.go`) to `pkg/observability/discovery/gcp/`. Same shape. `google.golang.org/api/{compute,run,sqladmin,...}/v*` become deps. Per-service tests + `gcp_dispatcher_drift_test.go` move with the code. | (A) gate green. (B) reliable's `InspectGCP` shrinks. (C) deletion. |
+| 9 | **(A) Migrate `config_extractors.go`** (1998 lines, 47 funcs) into `pkg/observability/extractors/`. Defines the inspector envelope contract here as a typed input (`type InspectorEnvelope struct { ... }`); the InsideOut backend's dispatcher feeds raw JSON in and gets `map[string]string` back. `config_extractors_drift_test.go` (520 lines) moves with the code. | (A) extractor coverage gate green here. (B) the InsideOut backend's `internal/agentapi/config_extractors.go` becomes a 10-line file calling `extractors.Extract(key, envelope)`. (C) the InsideOut backend deletes the per-extractor functions + drift test. |
+| 10 | **(A) Migrate Project tag/label filter** (`resource_filter.go:25-100`, ~75 lines) to `pkg/observability/filter/project.go`. Pure function — takes raw EC2/RDS/ALB tag-shapes, returns filtered IDs. No SDK dependency. Tests move with the code. New drift test `TestProjectFilter_HandlesEveryAWSResourceShape`. | (A) gate green. (B) the InsideOut backend's `resource_filter.go` re-exports. (C) the InsideOut backend deletes. |
+| 11 | **(A) Migrate CloudWatch metric-fetch wrapper** (`aws_metrics.go:614-1989` — `getServiceMetrics` + `BuildMetricDataQueries` + `fetchMetrics`) to `pkg/observability/metrics/aws.go`. Public API: `Fetch(ctx, awsCfg, ComponentObservability, []ResourceID, params) (MetricsResult, error)`. aws-sdk-go-v2 + CloudWatch client become deps of this repo. `aws_metrics_test.go` (3793 lines) and its mock-CloudWatch fixtures move under `pkg/observability/metrics/testdata/`. | (A) test parity here. (B) the InsideOut backend's `tryFetchAWSComponentMetrics` becomes a 5-line call. (C) the InsideOut backend deletes the wrapper + test. |
+| 12 | **(A) Migrate Cloud Monitoring metric-fetch wrapper** (`gcp_metrics.go:378-871`) to `pkg/observability/metrics/gcp.go`. Same shape: `Fetch(ctx, gcpClient, ComponentObservability, []ResourceID, params) (GCPMetricsResult, error)`. `google.golang.org/api/monitoring/v3` becomes a dep here. `gcp_metrics_test.go` (1044 lines) + fixtures move with it. | (A) gate green. (B) the InsideOut backend's `tryFetchGCPComponentMetrics` shrinks. (C) deletion. |
+| 13 | **(A) Migrate AWS discovery dispatchers** (`aws_inspect.go:147-1100+`) to `pkg/observability/discovery/aws/`. One file per service: `ec2.go`, `rds.go`, `alb.go`, `s3.go`, `cognito.go`, … Each exports `func Discover<Service>(ctx, awsCfg, projectFilter) ([]Resource, error)`. Top-level `discovery/aws/dispatcher.go` keys off `composer.ComponentKey`. Drift test: every key in `AllComponentKeys` with `CloudFor(k) == "aws"` has a registered discoverer. aws-sdk-go-v2 service clients (~25 of them) become deps. Per-service `*_inspect_test.go` siblings (mock SDK fixtures) move alongside. | (A) drift gate green; per-service tests pass with mocked SDK. (B) the InsideOut backend's `inspectAWSCore` becomes a 10-line call. (C) the InsideOut backend deletes the dispatcher + per-service handlers + tests. |
+| 14 | **(A) Migrate GCP discovery dispatchers** (`gcp_inspect.go`) to `pkg/observability/discovery/gcp/`. Same shape. `google.golang.org/api/{compute,run,sqladmin,...}/v*` become deps. Per-service tests + `gcp_dispatcher_drift_test.go` move with the code. | (A) gate green. (B) the InsideOut backend's `InspectGCP` shrinks. (C) deletion. |
 | 15..N | **Remaining components.** One PR per component for any per-component observability backfill, mechanical after PRs 6-14 land. Single-repo PRs (preset-only). Each PR deletes its row from `observabilityDeferred`. ECS, EKS, Lambda, CloudFront, APIGW, OpenSearch, Bedrock, Cognito, DynamoDB, MSK, plus all remaining GCP. | Final PR removes `observabilityDeferred` entirely; drift gate empty-allowlist healthy. |
-| Final | **Reliable cleanup + rename.** Done as a single coordinated reliable-side PR after every prior Phase C has landed. Verifies reliable contains zero `map[ComponentKey]X` declarations, zero per-service SDK dispatch, zero observability TF emit. Renames `internal/agentapi/` to reflect post-migration responsibility (candidates: `internal/cloudapi/`, `internal/sessionapi/`). | The "thin API" end state. |
+| Final | **The InsideOut backend cleanup + rename.** Done as a single coordinated InsideOut-backend-side PR after every prior Phase C has landed. Verifies the InsideOut backend contains zero `map[ComponentKey]X` declarations, zero per-service SDK dispatch, zero observability TF emit. Renames `internal/agentapi/` to reflect post-migration responsibility (candidates: `internal/cloudapi/`, `internal/sessionapi/`). | The "thin API" end state. |
 
 ## Test coverage parity
 
-Reliable's drift tests today take <1 second each (the slowest agentapi tests are SDK-mock integration tests at 5–10s, not drift tests). The migration preserves and extends the speed:
+The InsideOut backend's drift tests today take <1 second each (the slowest agentapi tests are SDK-mock integration tests at 5–10s, not drift tests). The migration preserves and extends the speed:
 
-| Reliable test today | Migration target | Speed |
+| Backend test today | Migration target | Speed |
 |---|---|---|
 | `TestComponentMetricsMapping_CoversEveryGeneratedKey` | `TestObservabilityCoversEveryComponentKey` (this repo) | <100ms |
 | `TestComponentMetricsMapping_NoUnknownKeys` | `TestObservabilityNoUnknownKeys` | <100ms |
 | `TestExtractLiveConfig_CoversAllAWSComponents` | `TestExtractLiveConfigCoversAllAWS` | <100ms |
 | `TestExtractLiveConfig_CoversAllGCPComponents` | `TestExtractLiveConfigCoversAllGCP` | <100ms |
-| `TestMetricsSupportedKeys_MatchesGoMapping` | stays in reliable (TS file lives there) | <100ms |
+| `TestMetricsSupportedKeys_MatchesGoMapping` | stays in the InsideOut backend (TS file lives there) | <100ms |
 | (new) | `TestObservabilitySpecMatchesEmittedAlarms` (HCL-parses every `observability.tf`) | <500ms for 47 components |
 
-No agent-chat replay tests run in CI today (the fixture-driven `prompt_replay_test.go` and `eval_v2_test.go` files are gated behind env flags). The slow tests in reliable that the maintainer's framing references are SDK-integration and credential-await tests, which remain in reliable because they exercise reliable's responsibility.
+No agent-chat replay tests run in CI today (the fixture-driven `prompt_replay_test.go` and `eval_v2_test.go` files are gated behind env flags). The slow tests in the InsideOut backend that the maintainer's framing references are SDK-integration and credential-await tests, which remain in the InsideOut backend because they exercise the InsideOut backend's responsibility.
 
 ## Open follow-ups
 
 These do not block the migration but need decisions during specific PRs:
 
 1. **GCP notification channels — placement.** PR 7 introduces them. Choice: (a) channels owned by `gcp/cloud_monitoring` aggregator (centralized) vs (b) a new `gcp/notification_channels` preset (composable). Recommend (a) until a use case forces (b).
-2. **Cross-language `metric_display_labels.json`.** The 41-line JSON is shared with the TS UI client (`lib/stack/component-detail-utils.ts`). When the JSON moves to `pkg/observability/`, the TS side either (a) imports a generated mirror, or (b) the JSON stays in reliable as a UI-side asset. Defer to the migration PR.
-3. **Inspector envelope contract.** PR 9 (extractors) requires a stable typed shape for the JSON the reliable dispatcher passes to extractors. Today extractors traverse `map[string]any` shaped by reliable's per-service handlers. Two options: (a) define `pkg/observability/extractors.InspectorEnvelope` as a tagged-union, dispatcher converts to it before calling extractors; (b) keep `map[string]any` and document the per-component shape contract in extractor doc comments. Recommend (a) — testable contract, stronger drift gate.
-4. **Repackaging reliable.** Final PR renames `internal/agentapi/` to better reflect its post-migration responsibility — candidates: `internal/cloudapi/`, `internal/inspector/`. Decide in the cleanup PR.
+2. **Cross-language `metric_display_labels.json`.** The 41-line JSON is shared with the TS UI client (`lib/stack/component-detail-utils.ts`). When the JSON moves to `pkg/observability/`, the TS side either (a) imports a generated mirror, or (b) the JSON stays in the InsideOut backend as a UI-side asset. Defer to the migration PR.
+3. **Inspector envelope contract.** PR 9 (extractors) requires a stable typed shape for the JSON the InsideOut backend dispatcher passes to extractors. Today extractors traverse `map[string]any` shaped by the InsideOut backend's per-service handlers. Two options: (a) define `pkg/observability/extractors.InspectorEnvelope` as a tagged-union, dispatcher converts to it before calling extractors; (b) keep `map[string]any` and document the per-component shape contract in extractor doc comments. Recommend (a) — testable contract, stronger drift gate.
+4. **Repackaging the InsideOut backend.** Final PR renames `internal/agentapi/` to better reflect its post-migration responsibility — candidates: `internal/cloudapi/`, `internal/inspector/`. Decide in the cleanup PR.
 5. **TS-side hand-written component-key lists** — `components/terraform/composer/module-contracts.ts`, `lib/hooks/useComponentMetrics.ts::METRICS_SUPPORTED_KEYS`, `lib/hooks/useTFOutputs.ts`, `lib/stack/providers.ts`, `lib/hooks/useStackViewV2.ts`. Each is a drift hazard. After the source-of-truth flip (PR 2), a follow-up TS-side cleanup can converge them on a single import or a generated mirror.
-6. **Pre-existing GCP chart bug.** `ChartWindow.tsx:46` reads `dp.average ?? dp.sum ?? dp.maximum ?? 0` and ignores GCP's `value` field — GCP charts render as flat zero today. Filed as [`luthersystems/reliable#1243`](https://github.com/luthersystems/reliable/issues/1243); independent of this migration.
+6. **Pre-existing GCP chart bug.** `ChartWindow.tsx:46` reads `dp.average ?? dp.sum ?? dp.maximum ?? 0` and ignores GCP's `value` field — GCP charts render as flat zero today. Filed as the InsideOut backend issue tracker; independent of this migration.
 7. **Per-instance UI.** Today the chart flattens all resources' datapoints into a single line (`ChartWindow.tsx:33-55`), with no picker. If we later want per-instance lines (one per RDS DB, one per ALB target), the migrated authority table already carries the dimension-name fields needed — but the UI surface is a separate, larger change.
 8. **SDK dependency footprint.** PRs 11–14 add aws-sdk-go-v2 (~25 service clients), `google.golang.org/api/{compute,run,sqladmin,monitoring,...}/v*`, and the CloudWatch/Cloud Monitoring clients as direct dependencies of this repo. Currently the only Go runtime dependency is `hashicorp/hcl/v2` for the composer. Build-time and test-time impact: per-package go test wall-time goes up by ~5–10s, vendored module size by ~50 MB. Mitigations: keep the SDK clients behind a `client.go` per cloud (lazy-init, easy to mock), gate SDK-touching test packages with `-short` (the inner-loop drift gates remain pure-Go and fast). Decide module structure in PR 11 — single `pkg/observability` with sub-packages, or split into `pkg/observability` (data) + `pkg/observability/cloud` (SDK clients).
-9. **Test fixtures for SDK calls.** Reliable today has mocked AWS/GCP SDK clients for `aws_metrics_test.go` (3793 lines) and `gcp_metrics_test.go` (1044 lines). These move with PRs 11–14. The fixtures themselves are ~5MB of JSON — embed them under `pkg/observability/metrics/testdata/` and `discovery/{aws,gcp}/testdata/`. New `tests/` lint that asserts every per-service discoverer has at least one happy-path fixture test.
+9. **Test fixtures for SDK calls.** the InsideOut backend today has mocked AWS/GCP SDK clients for `aws_metrics_test.go` (3793 lines) and `gcp_metrics_test.go` (1044 lines). These move with PRs 11–14. The fixtures themselves are ~5MB of JSON — embed them under `pkg/observability/metrics/testdata/` and `discovery/{aws,gcp}/testdata/`. New `tests/` lint that asserts every per-service discoverer has at least one happy-path fixture test.
 
 ## References
 

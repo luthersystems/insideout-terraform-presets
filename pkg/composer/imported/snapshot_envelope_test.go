@@ -14,7 +14,7 @@ import (
 // shape (components, config, pricing — modeled here as opaque RawMessage) and
 // a populated imported list round-trips byte-identically.
 //
-// The real envelope is owned by the reliable repo's stack_versions row; this
+// The real envelope is owned by the InsideOut backend repo's stack_versions row; this
 // test does not attempt to mirror it field-by-field. It only proves that
 // adding "imported" alongside the existing keys does not lose semantic data.
 func TestSnapshotEnvelope_RoundTrip(t *testing.T) {

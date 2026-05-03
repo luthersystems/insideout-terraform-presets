@@ -10,7 +10,7 @@ import (
 )
 
 // TestNewClientsFromConfig_PreservesResolvedCredentials covers the
-// motivating use case: a caller (reliable's Oracle credential broker,
+// motivating use case: a caller (the InsideOut backend's Oracle credential broker,
 // integration tests building configs via STS AssumeRole) hands in an
 // already-resolved aws.Config, and the resulting Clients carries that
 // exact config — no re-resolution against ambient defaults.

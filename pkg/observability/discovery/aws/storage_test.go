@@ -100,7 +100,7 @@ func TestFilterS3BucketsByProjectTag_Match(t *testing.T) {
 func TestFilterS3BucketsByProjectTag_NoSuchTagSetSkips(t *testing.T) {
 	t.Parallel()
 	// NoSuchTagSet is the SDK's way of saying "this bucket has zero
-	// tags" — reliable treats it as "not ours" (fail-closed) and skips
+	// tags" — the InsideOut backend treats it as "not ours" (fail-closed) and skips
 	// the bucket. Other code paths must NOT abort the whole pass.
 	client := &fakeS3Client{
 		listOut: &s3.ListBucketsOutput{

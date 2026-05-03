@@ -2,7 +2,7 @@ package composer
 
 // Tests for the IR → terraform translation bugs catalogued in
 // luthersystems/insideout-terraform-presets#131 (the upstream audit ticket
-// spawned by reliable#1149).
+// spawned by the InsideOut backend#1149).
 //
 // Each Test* function below corresponds to one bug in that audit:
 //   1 — DynamoDB billing_mode lower-case → uppercase validation reject

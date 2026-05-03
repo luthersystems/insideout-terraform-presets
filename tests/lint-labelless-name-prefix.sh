@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Static analysis: every label-less GCP resource that creates queryable
 # infrastructure must carry `var.project` in its name (or its closest naming
-# attribute), so the downstream reliable3 inspector can attribute the
+# attribute), so the downstream InsideOut inspector can attribute the
 # resource to the originating session/project via name-prefix scoping.
 #
 # Background (issue #215, comment-4364048339):
@@ -12,7 +12,7 @@
 #
 #   That fix does NOT cover GCP resource types whose API has no `labels`
 #   field at all — the canonical examples are `google_kms_key_ring` and
-#   `google_firestore_database`. The reliable3 inspector handles these
+#   `google_firestore_database`. The InsideOut inspector handles these
 #   with a project-scoped API path (KMS: `projects/<id>/locations/<loc>`,
 #   Firestore: project-scoped client) so the LIST itself only returns
 #   this project's resources, but the resource NAME is also used in the

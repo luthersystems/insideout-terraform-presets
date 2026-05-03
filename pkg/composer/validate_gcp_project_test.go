@@ -81,7 +81,7 @@ func TestValidateOpts(t *testing.T) {
 	t.Run("opts.Cloud=aws is a no-op even when Comps.Cloud=GCP", func(t *testing.T) {
 		t.Parallel()
 		// Mismatch case: explicit opts.Cloud wins over Comps.Cloud. This
-		// matters for the chat-preview path where reliable might pass
+		// matters for the chat-preview path where the InsideOut backend might pass
 		// Cloud="aws" deliberately while Comps still carries leftover GCP
 		// fields from a prior turn.
 		got := ValidateOpts(ComposeStackOpts{
@@ -307,7 +307,7 @@ func TestComposeSingle_GCP(t *testing.T) {
 }
 
 // TestValidateAll_PicksUpGCPOpts confirms the variadic seam on ValidateAll
-// is wired so reliable's dry-run path (which goes through ValidateAll, not
+// is wired so the InsideOut backend's dry-run path (which goes through ValidateAll, not
 // ComposeStackWithIssues) picks up the GCP project ID validation. Without
 // the seam, the validator would only fire inside the compose flow and
 // dry-run callers would miss the bug.

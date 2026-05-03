@@ -1,17 +1,17 @@
 // Package gcp implements the per-service GCP discovery dispatcher used by
-// the observability layer. It mirrors reliable's
+// the observability layer. It mirrors the InsideOut backend's
 // internal/agentapi/gcp_inspect.go::inspectGCPCore (#204): every supported
 // canonical GCP service routes to a list-* / describe-* SDK call against
 // the live project, returning raw SDK proto / struct values.
 //
 // The HTTP handler, session-auth, Oracle credential-fetch glue, and
-// proto-normalization wrapper that sit around inspectGCPCore in reliable
+// proto-normalization wrapper that sit around inspectGCPCore in the InsideOut backend
 // are NOT ported — they're webserver glue. Callers in this codebase pass
 // credentials in via the variadic option.ClientOption parameter (the
 // natural extension point for tests + alternative auth flows). Production
 // callers usually pass none and rely on Application Default Credentials.
 //
-// Action contract diverges from reliable in one place: this dispatcher
+// Action contract diverges from the InsideOut backend in one place: this dispatcher
 // does NOT short-circuit list-actions / list-metrics — that registry surface
 // already lives in pkg/observability.GCPServiceActions and callers can
 // consult it directly without paying for a network round-trip. The
@@ -42,7 +42,7 @@ import (
 // Tests use option.WithEndpoint + option.WithoutAuthentication to point
 // the SDKs at an httptest fake.
 //
-// Mirrors reliable's inspectGCPCore (gcp_inspect.go:216). Aliases are
+// Mirrors the InsideOut backend's inspectGCPCore (gcp_inspect.go:216). Aliases are
 // resolved here via observability.CanonicalGCPService so callers using
 // "kms" / "logging" / "lb" / "armor" / "network" / "functions" / "cdn"
 // land on the right per-service handler.

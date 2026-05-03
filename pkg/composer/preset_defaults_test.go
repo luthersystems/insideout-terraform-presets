@@ -11,7 +11,7 @@ import (
 // TestPresetDefaultsSatisfyValidations protects against the silent-drift class
 // where a maintainer tightens a variable's `validation { condition }` block
 // past its own `default`. Without this guard, a downstream stack that lets
-// the variable fall to its default would deploy fine until reliable's user
+// the variable fall to its default would deploy fine until the InsideOut backend's user
 // hits it — and the failure surface would be terraform plan, not the
 // composer.
 //

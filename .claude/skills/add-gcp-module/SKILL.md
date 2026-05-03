@@ -79,7 +79,7 @@ variable "labels" {
 
 **Where to use each in main.tf:**
 - `var.project_id` — every `project = ...` argument on a `google_*` resource, every vendored sub-module's `project_id = ...`, and the workload-identity pool name `${var.project_id}.svc.id.goog`. These are the real project IDs Google's API checks.
-- `var.project` — naming interpolations (`name = "${var.project}-..."`) and label values (`labels = merge({ project = var.project }, var.labels)`). The reliable3 inspector groups by the `project` label value being the per-stack prefix; do NOT switch label values to `var.project_id`.
+- `var.project` — naming interpolations (`name = "${var.project}-..."`) and label values (`labels = merge({ project = var.project }, var.labels)`). The InsideOut inspector groups by the `project` label value being the per-stack prefix; do NOT switch label values to `var.project_id`.
 
 **Validation patterns:**
 - **Null-safe validation:** Always use ternary: `var.x == null ? true : contains([...], var.x)`

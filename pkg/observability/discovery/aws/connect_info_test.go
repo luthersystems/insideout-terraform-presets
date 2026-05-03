@@ -2,7 +2,7 @@
 // AWS SDK calls — covers the running/stopped state filter, mixed
 // reservation merging, and the JSON round-trip fallback contract.
 //
-// Ported from reliable internal/agentapi/aws_inspect_test.go::
+// Ported from the InsideOut backend internal/agentapi/aws_inspect_test.go::
 // TestEnrichEC2WithConnectURLs.
 
 package aws
