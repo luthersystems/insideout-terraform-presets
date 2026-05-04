@@ -71,3 +71,45 @@ func TestToSliceOfMaps_UnmarshalFailure_ReturnsNil(t *testing.T) {
 	out := toSliceOfMaps(struct{ X int }{X: 1})
 	assert.Nil(t, out, "shape mismatch must surface as nil (fail-closed)")
 }
+
+// TestNilSliceToEmpty pins the #255 Pattern B fix: AWS SDK V2 list-*
+// responses commonly populate slice fields with typed-nil on empty
+// results. The helper normalizes that nil to []T{} so json.Marshal
+// emits `[]` instead of `null`.
+func TestNilSliceToEmpty(t *testing.T) {
+	t.Parallel()
+
+	t.Run("typed nil []string → non-nil []string{}", func(t *testing.T) {
+		t.Parallel()
+		var in []string
+		got := nilSliceToEmpty(in)
+		require.NotNil(t, got)
+		assert.Empty(t, got)
+		b, err := json.Marshal(got)
+		require.NoError(t, err)
+		assert.Equal(t, "[]", string(b))
+	})
+	t.Run("typed nil []int → non-nil []int{}", func(t *testing.T) {
+		t.Parallel()
+		var in []int
+		got := nilSliceToEmpty(in)
+		require.NotNil(t, got)
+		assert.Empty(t, got)
+		b, err := json.Marshal(got)
+		require.NoError(t, err)
+		assert.Equal(t, "[]", string(b))
+	})
+	t.Run("non-nil empty slice → returned unchanged", func(t *testing.T) {
+		t.Parallel()
+		in := []string{}
+		got := nilSliceToEmpty(in)
+		require.NotNil(t, got)
+		assert.Empty(t, got)
+	})
+	t.Run("non-empty slice → returned unchanged", func(t *testing.T) {
+		t.Parallel()
+		in := []string{"a", "b"}
+		got := nilSliceToEmpty(in)
+		assert.Equal(t, []string{"a", "b"}, got)
+	})
+}

@@ -53,7 +53,7 @@ func inspectEC2(ctx context.Context, cfg aws.Config, action, filters string) (an
 		if err != nil {
 			return nil, err
 		}
-		return out.Vpcs, nil
+		return nilSliceToEmpty(out.Vpcs), nil
 	case "describe-subnets":
 		input := &ec2.DescribeSubnetsInput{}
 		if len(tagFilters) > 0 {
@@ -63,7 +63,7 @@ func inspectEC2(ctx context.Context, cfg aws.Config, action, filters string) (an
 		if err != nil {
 			return nil, err
 		}
-		return out.Subnets, nil
+		return nilSliceToEmpty(out.Subnets), nil
 	case "describe-security-groups":
 		input := &ec2.DescribeSecurityGroupsInput{}
 		if len(tagFilters) > 0 {
@@ -73,7 +73,7 @@ func inspectEC2(ctx context.Context, cfg aws.Config, action, filters string) (an
 		if err != nil {
 			return nil, err
 		}
-		return out.SecurityGroups, nil
+		return nilSliceToEmpty(out.SecurityGroups), nil
 	case "get-metrics":
 		return metricsRouted("ec2")
 	default:
@@ -97,7 +97,7 @@ func inspectEBS(ctx context.Context, cfg aws.Config, action, filters string) (an
 		if err != nil {
 			return nil, err
 		}
-		return out.Volumes, nil
+		return nilSliceToEmpty(out.Volumes), nil
 	case "describe-snapshots":
 		// "self" excludes the millions of public/AWS-owned snapshots —
 		// without this the call times out before pagination starts.
@@ -109,7 +109,7 @@ func inspectEBS(ctx context.Context, cfg aws.Config, action, filters string) (an
 		if err != nil {
 			return nil, err
 		}
-		return out.Snapshots, nil
+		return nilSliceToEmpty(out.Snapshots), nil
 	default:
 		return nil, unsupportedActionError("ebs", action)
 	}

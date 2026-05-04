@@ -91,3 +91,29 @@ func firstNonEmptyString(s ...string) string {
 	}
 	return ""
 }
+
+// nilSliceToEmpty returns []T{} when s is nil so the JSON wire shape
+// is `[]` not `null` (#255). AWS SDK V2 list-* responses commonly
+// emit typed-nil slices on empty results — a discovery inspector that
+// returns `out.SomeSliceField` directly inherits that nil and json.
+// Marshal renders it as the JSON literal `null`, which the downstream
+// reliable UI gates the panel render on.
+//
+// Wrap every direct SDK-slice passthrough at the inspector boundary:
+//
+//	// Bad — emits JSON null on empty:
+//	return out.QueueUrls, nil
+//
+//	// Good:
+//	return nilSliceToEmpty(out.QueueUrls), nil
+//
+// Loops that build a slice locally should declare it as `X := []T{}`
+// at construction so the nil case never arises (the per-site fix in
+// the original #255 audit). Use this helper when the loop is owned
+// by the AWS SDK and you can't change the construction.
+func nilSliceToEmpty[T any](s []T) []T {
+	if s == nil {
+		return []T{}
+	}
+	return s
+}
