@@ -6,6 +6,7 @@
 
 # Temporary files
 .tmp/
+tasks/
 
 # Local environment / secrets
 .env
