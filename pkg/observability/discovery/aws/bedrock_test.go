@@ -141,7 +141,7 @@ func TestDiscoverBedrockKnowledgeBases_KBMatch(t *testing.T) {
 	// Note: the KB summary has KnowledgeBaseId but no KnowledgeBaseArn,
 	// so the ARN extraction in tagFilterBedrockResources falls through
 	// firstNonEmptyString and returns "". To make the match path fire
-	// we need an Arn-bearing field. Reliable's KB summary type carries
+	// we need an Arn-bearing field. The InsideOut backend's KB summary type carries
 	// KnowledgeBaseId only; the ARN comes from KnowledgeBaseArn on the
 	// detailed response. For this test we exercise the path by passing
 	// project="" so tag-filter is bypassed.

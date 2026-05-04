@@ -57,7 +57,7 @@ type Files map[string][]byte
 // ComposeStackResult is the aggregated output of ComposeStackWithIssues.
 // Files is the composed stack (same map as ComposeStack returns); Issues is
 // the deduped list of pre-plan validator findings (missing required vars,
-// type mismatches, wiring drift, etc.) that callers like reliable/Riley
+// type mismatches, wiring drift, etc.) that callers like the InsideOut backend/Riley
 // surface for same-turn correction.
 type ComposeStackResult struct {
 	Files  Files
@@ -106,7 +106,7 @@ type ComposeSingleOpts struct {
 
 	// Project is the stack-wide naming/label prefix. For AWS it seeds the
 	// resource name interpolations and the default_tags Project tag. For
-	// GCP it seeds the per-resource label value (the prefix reliable3's
+	// GCP it seeds the per-resource label value (the prefix the InsideOut inspector's
 	// inspector groups by) and module name interpolations. It is NOT a
 	// GCP project ID — values like "io-<sessionhash>" are legal here and
 	// must not be passed to a google_*.project = ... argument. See
@@ -132,7 +132,7 @@ type ComposeSingleOpts struct {
 
 	// Imported is a parity field with ComposeStackOpts.Imported. The
 	// single-module flow does not currently emit imported resources, but
-	// the field exists so reliable's adapter can hand the same shape to
+	// the field exists so the InsideOut backend's adapter can hand the same shape to
 	// either entry point. See ComposeStackOpts.Imported.
 	Imported []imported.ImportedResource
 
@@ -331,7 +331,7 @@ type ComposeStackOpts struct {
 
 	// Project is the stack-wide naming/label prefix. For AWS it seeds the
 	// resource name interpolations and the default_tags Project tag. For
-	// GCP it seeds the per-resource label value (the prefix reliable3's
+	// GCP it seeds the per-resource label value (the prefix the InsideOut inspector's
 	// inspector groups by) and module name interpolations. It is NOT a
 	// GCP project ID — values like "io-<sessionhash>" are legal here and
 	// must not be passed to a google_*.project = ... argument. See
@@ -775,7 +775,7 @@ func generateProvidersTF(in providersTFInput) []byte {
 		// rendered stack carries the session's project label, even if a
 		// preset forgets the `labels = merge({ project = var.project },
 		// var.labels)` convention. Mirrors the AWS default_tags shape;
-		// reliable3's drift inspector filters resources by exact
+		// the InsideOut inspector filters resources by exact
 		// `project = <project>` match. Label keys/values must be lowercase
 		// alphanumeric + dash/underscore; both `project` and `managed-by`
 		// satisfy GCP's label-key regex.
@@ -835,7 +835,7 @@ variable "external_id" {
 
 		// default_tags is a safety net so every AWS resource in the rendered
 		// stack carries the session's Project tag, even if a preset forgets
-		// the `tags = merge(module.name.tags, ...)` convention. The reliable
+		// the `tags = merge(module.name.tags, ...)` convention. The InsideOut backend
 		// MCP inspector filters resources by Project to prevent cross-session
 		// data leaks.
 		awsDefaultTags := fmt.Sprintf(`
@@ -911,7 +911,7 @@ func renderRequiredProviders(m map[string]*tfconfig.ProviderRequirement) string 
 // validateRequiredIssues returns a structured ValidationIssue per missing
 // required variable, instead of short-circuiting on the first miss. This lets
 // the composer aggregate every missing-input across all selected modules into
-// a single Result.Issues list, so callers like reliable/Riley can correct
+// a single Result.Issues list, so callers like the InsideOut backend/Riley can correct
 // every gap in one round-trip.
 func validateRequiredIssues(vars []*tfconfig.Variable, wired WiredInputs, vals map[string]any, module string) []ValidationIssue {
 	var out []ValidationIssue

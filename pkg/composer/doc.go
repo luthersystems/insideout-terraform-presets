@@ -20,8 +20,8 @@
 // # Historical session JSON
 //
 // Composer no longer carries the legacy (un-prefixed) compat layer. Callers
-// with historical session JSON (e.g. from reliable pre-Phase-1) should
-// normalise through reliable's composeradapter package, which produces
+// with historical session JSON (e.g. from the InsideOut backend pre-Phase-1) should
+// normalise through the InsideOut backend's composeradapter package, which produces
 // prefixed-only Components/Config ready for ComposeStack / ComposeSingle.
 //
 // # Pre-plan validators
@@ -53,7 +53,7 @@
 // The standalone Validate(comps, cfg) entry point checks IR-level fields
 // (KnownFields()) before any composition runs and is independent of the
 // ComposeStack dispatcher. ValidateAll aggregates both surfaces for callers
-// (e.g. reliable's dry-run path) that want the full picture without going
+// (e.g. The InsideOut backend's dry-run path) that want the full picture without going
 // through ComposeStack.
 //
 // Use StrictValidate on the WithIssues entry points to escalate any

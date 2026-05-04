@@ -1,9 +1,9 @@
 // Compute Engine, GKE, and bastion (a Compute instance subset) inspectors.
 //
 // Mirrors:
-//   - inspectGCPCompute   — reliable gcp_inspect.go:353
-//   - inspectGCPGKE       — reliable gcp_inspect.go:422
-//   - inspectGCPBastion   — reliable gcp_metrics.go:787
+//   - inspectGCPCompute   — the InsideOut backend gcp_inspect.go:353
+//   - inspectGCPGKE       — the InsideOut backend gcp_inspect.go:422
+//   - inspectGCPBastion   — the InsideOut backend gcp_metrics.go:787
 //
 // The bastion handler shares the Compute Instances client with
 // inspectCompute (bastions in luthersystems presets are GCE instances

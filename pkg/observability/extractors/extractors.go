@@ -1,11 +1,11 @@
 // Package extractors normalizes per-component live-config envelopes
-// returned by the cloud inspectors (reliable's awsinspect / gcpinspect)
+// returned by the cloud inspectors (the InsideOut backend's awsinspect / gcpinspect)
 // into a flat map[string]string keyed by frontend-friendly camelCase
 // fields. Each extractor handles one (componentKey, action) pair and
 // returns nil when the envelope shape is unrecognized — callers fall
 // back to design values in that case.
 //
-// Ported from reliable internal/agentapi/config_extractors.go (#204).
+// Ported from the InsideOut backend internal/agentapi/config_extractors.go (#204).
 // Inspector envelope stays `any` so callers don't need to coerce; a
 // typed envelope shape is a follow-up.
 package extractors

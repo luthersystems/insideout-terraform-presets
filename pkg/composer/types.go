@@ -341,7 +341,7 @@ func boolVal(p *bool) bool { return p != nil && *p }
 
 // Normalize canonicalises a Components by clearing fields that belong to the
 // opposite cloud. Phase 4 (v0.4.0) dropped the legacy-field sync logic;
-// callers with legacy-shaped session JSON must upgrade via reliable's
+// callers with legacy-shaped session JSON must upgrade via the InsideOut backend's
 // composeradapter (or equivalent) before handing the Components to composer.
 func (c *Components) Normalize() {
 	if c == nil {
@@ -408,7 +408,7 @@ func (c *Components) Normalize() {
 // IsLambdaArchitecture returns true if the stack uses Lambda as its compute
 // layer. Reads only c.AWSLambda. In v0.4.0 the legacy c.Lambda / c.Resource
 // fields no longer exist; callers with pre-Phase-4 session JSON must fold
-// those via reliable's composeradapter before reaching composer.
+// those via the InsideOut backend's composeradapter before reaching composer.
 func (c *Components) IsLambdaArchitecture() bool {
 	if c == nil {
 		return false
@@ -444,7 +444,7 @@ func (c *Components) BackupsSelected() bool {
 // prefixed sub-configs are populated, then clearing the opposite cloud's
 // fields. It also migrates the within-AWSCloudfront deprecated sub-field
 // CachePaths to OriginPath (separate from the legacy-field removal in Phase
-// 4). Legacy session JSON should be upgraded by reliable's composeradapter
+// 4). Legacy session JSON should be upgraded by the InsideOut backend's composeradapter
 // before reaching composer.
 func (c *Config) Normalize() {
 	if c == nil {

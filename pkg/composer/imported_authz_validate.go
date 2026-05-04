@@ -272,7 +272,7 @@ func approvalCompletenessIssue(issueField, path string, ap *imported.FieldEditAp
 // the operator must explicitly resolve before apply. Returns no issue when
 // either side cannot be observed deterministically (nested paths, typed-only
 // Attrs, or absent OldValue/NewValue) — the structural Phase 1 validators and
-// Reliable's chat-stream loop carry the rest.
+// The InsideOut backend's chat-stream loop carry the rest.
 func evaluateReimportConflict(issueField, path string, edit imported.FieldEdit, ir imported.ImportedResource) (ValidationIssue, bool) {
 	desired, ok := lookupTopLevelAttribute(ir.Attributes, path)
 	if !ok {

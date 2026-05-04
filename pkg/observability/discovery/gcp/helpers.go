@@ -1,6 +1,6 @@
 // Helper functions used by the per-service GCP inspectors.
 //
-// Filter-string helpers mirror reliable's
+// Filter-string helpers mirror the InsideOut backend's
 // internal/agentapi/gcp_filter.go (gcpLegacyLabelFilter,
 // gcpLegacyLabelFilterAnd, gcpAIP160LabelFilter, gcpLabelMatches). They
 // stay in the discovery package rather than the shared filter package
@@ -9,11 +9,11 @@
 // concerns (legacy " AND " join syntax, AIP-160 quote rules) that have
 // no AWS analogue.
 //
-// Error helpers mirror reliable's inspect_normalize.go::
+// Error helpers mirror the InsideOut backend's inspect_normalize.go::
 // unsupportedActionError / unsupportedServiceError, including the
 // Levenshtein "did you mean?" hint (#227). The hint is consumed by the
 // LLM as part of the tool-result envelope, so the format here matches
-// reliable's byte-for-byte. The actual builders live at
+// The InsideOut backend's byte-for-byte. The actual builders live at
 // observability.UnsupportedActionError /
 // observability.UnsupportedServiceError; these wrappers preserve the
 // per-callsite signatures already in use across this package.
@@ -70,7 +70,7 @@ func parseFilterMap(filtersJSON string) map[string]string {
 // projectFromFilters extracts the "project" key from filtersJSON. Returns
 // "" when not present — every per-service handler treats "" as "no
 // project filter, return everything in the GCP project" (matches
-// reliable's parseProjectFilter contract).
+// The InsideOut backend's parseProjectFilter contract).
 func projectFromFilters(filtersJSON string) string {
 	m := parseFilterMap(filtersJSON)
 	if m == nil {
@@ -88,7 +88,7 @@ func projectFromFilters(filtersJSON string) string {
 // spaces around the operator. ":" is substring (do NOT use for project
 // scoping — "io-test" would over-include "io-test-2").
 //
-// Mirrors reliable's gcp_filter.go gcpLegacyLabelFilter.
+// Mirrors the InsideOut backend's gcp_filter.go gcpLegacyLabelFilter.
 //
 // Caller-supplied key and value are validated against
 // gcpFilterValueSafe — values that contain quote / space / "=" / " AND "
@@ -108,7 +108,7 @@ func gcpLegacyLabelFilter(key, value string) string {
 
 // gcpLegacyLabelFilterAnd joins two legacy filters with " AND ". Empty
 // operands are dropped so callers can pass a base + optional addition
-// without guarding the empty case. Mirrors reliable's
+// without guarding the empty case. Mirrors the InsideOut backend's
 // gcp_filter.go gcpLegacyLabelFilterAnd.
 func gcpLegacyLabelFilterAnd(a, b string) string {
 	switch {
@@ -129,7 +129,7 @@ func gcpLegacyLabelFilterAnd(a, b string) string {
 //
 // AIP-160 dialect requires spaces around the operator and quotes around
 // non-numeric literals. See https://google.aip.dev/160. Mirrors
-// reliable's gcp_filter.go gcpAIP160LabelFilter.
+// The InsideOut backend's gcp_filter.go gcpAIP160LabelFilter.
 //
 // Caller-supplied key is validated against gcpFilterValueSafe (the
 // value is %q-quoted by Sprintf and so is safe; the key is not). #204 P1.
@@ -163,7 +163,7 @@ func gcpAIP160LabelFilterAnd(a, b string) string {
 
 // gcpLabelMatches reports whether labels[key] == want. An empty `want`
 // is treated as match-all (caller didn't supply a project filter).
-// Mirrors reliable's gcp_filter.go gcpLabelMatches. Used by post-filter
+// Mirrors the InsideOut backend's gcp_filter.go gcpLabelMatches. Used by post-filter
 // handlers to scope returned proto slices to the session's project
 // label without an SDK-level Filter call.
 func gcpLabelMatches(labels map[string]string, key, want string) bool {

@@ -22,7 +22,7 @@ import (
 // the component's service catalog was deliberately scoped narrower than the
 // alarm surface (e.g. gcp/bastion reuses the compute CPU metric under a
 // label filter; gcp/gke alarms on kubernetes.io node metrics that the
-// reliable catalog never covered).
+// The InsideOut backend catalog never covered).
 //
 // Adding an entry requires a non-empty issue ref so the gap is tracked.
 // The reverse-direction gate
@@ -39,9 +39,9 @@ var excludedFromAuthority = map[string]string{
 	// metadata.user_labels."role"="bastion" filter — the alarm exists in
 	// gcp/bastion's HCL but the catalog only carries this metric type
 	// under the "compute" service (KeyGCPCompute). Tracked as a follow-up
-	// so the reliable inspector grows a bastion-scoped GCPMetricSpec.
+	// so the InsideOut backend inspector grows a bastion-scoped GCPMetricSpec.
 	"gcp/bastion:compute.googleapis.com/instance/cpu/utilization": "#204",
-	// gcp/gke alarms on kubernetes.io/node metrics. The reliable catalog
+	// gcp/gke alarms on kubernetes.io/node metrics. The InsideOut backend catalog
 	// has no "gke" service entry, so the alert surface is HCL-only. Add a
 	// gke entry to gcpServiceMetrics in a follow-up to retire this
 	// exclusion.

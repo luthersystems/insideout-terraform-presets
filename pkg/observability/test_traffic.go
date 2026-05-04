@@ -4,7 +4,7 @@ import "github.com/luthersystems/insideout-terraform-presets/pkg/composer"
 
 // TestTrafficPublicOutput describes how to resolve a public-facing URL
 // from a Terraform output for a supported component key. Source of
-// truth ported from reliable's testTrafficPublicOutput
+// truth ported from the InsideOut backend's testTrafficPublicOutput
 // (internal/agentapi/component_test_traffic.go:31).
 type TestTrafficPublicOutput struct {
 	// OutputKey is the unprefixed output name emitted by the preset
@@ -22,10 +22,10 @@ type TestTrafficPublicOutput struct {
 
 // TestTrafficPublicEndpoints is the allow-list of component keys whose
 // public endpoints can be exercised without credentials. Keep in sync
-// with reliable's frontend TEST_TRAFFIC_SUPPORTED_KEYS /
+// with the InsideOut backend's frontend TEST_TRAFFIC_SUPPORTED_KEYS /
 // TEST_TRAFFIC_OUTPUT_KEY maps in lib/hooks/useTestTraffic.ts.
 //
-// Source of truth ported from reliable's testTrafficPublicEndpoints
+// Source of truth ported from the InsideOut backend's testTrafficPublicEndpoints
 // (internal/agentapi/component_test_traffic.go:46).
 var TestTrafficPublicEndpoints = map[composer.ComponentKey]TestTrafficPublicOutput{
 	composer.KeyAWSALB:        {OutputKey: "alb_dns_name", Scheme: "http"},

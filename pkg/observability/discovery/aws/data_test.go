@@ -134,7 +134,7 @@ func TestDiscoverOpenSearchManaged_EmptyProjectReturnsRaw(t *testing.T) {
 	}
 	got, err := discoverOpenSearchManaged(context.Background(), managed, "")
 	require.NoError(t, err)
-	// Empty project returns the raw typed slice — preserves reliable's
+	// Empty project returns the raw typed slice — preserves the InsideOut backend's
 	// shape (descOut.DomainStatusList passed through).
 	statuses, ok := got.([]opensearchtypes.DomainStatus)
 	require.True(t, ok)
@@ -177,7 +177,7 @@ func TestDiscoverOpenSearchUnion_BothSidesContribute(t *testing.T) {
 func TestDiscoverOpenSearchUnion_AOSSAloneSurvivesManagedFailure(t *testing.T) {
 	t.Parallel()
 	// Managed errors → log+continue. AOSS still returns its result.
-	// Mirrors the bug fix in reliable #1036: AOSS-only deploys must not
+	// Mirrors the bug fix in the InsideOut backend #1036: AOSS-only deploys must not
 	// be invisible to drift just because managed-side discovery hiccups.
 	managed := &fakeOpenSearchAPI{listErr: errors.New("managed denied")}
 	aoss := &fakeAOSSAPI{

@@ -20,7 +20,7 @@ import (
 
 // fakeCloudWatch captures the last GetMetricData input so tests can
 // assert which client got called (CloudFront → us-east-1 vs default).
-// Mirrors reliable's mockCloudWatchClient (aws_metrics_test.go:72).
+// Mirrors the InsideOut backend's mockCloudWatchClient (aws_metrics_test.go:72).
 type fakeCloudWatch struct {
 	output    *cloudwatch.GetMetricDataOutput
 	err       error
@@ -79,7 +79,7 @@ func awsSpecForService(t *testing.T, key composer.ComponentKey, wantService stri
 	return o.AWS
 }
 
-// --- ParseMetricsFilter (from reliable aws_metrics_test.go:163) ---
+// --- ParseMetricsFilter (from the InsideOut backend aws_metrics_test.go:163) ---
 
 func TestParseMetricsFilter(t *testing.T) {
 	t.Parallel()
@@ -108,7 +108,7 @@ func TestParseMetricsFilter(t *testing.T) {
 	}
 }
 
-// --- BuildGetMetricDataQueries (from reliable aws_metrics_test.go:192) ---
+// --- BuildGetMetricDataQueries (from the InsideOut backend aws_metrics_test.go:192) ---
 
 // TestBuildGetMetricDataQueries_VerifiesDimensionValues walks every
 // service spec exposed via observability.Lookup and confirms each
@@ -185,7 +185,7 @@ func TestBuildGetMetricDataQueries_VerifiesDimensionValues(t *testing.T) {
 	}
 }
 
-// TestBuildGetMetricDataQueries_CloudFrontRegionGlobal mirrors reliable's
+// TestBuildGetMetricDataQueries_CloudFrontRegionGlobal mirrors the InsideOut backend's
 // aws_metrics_test.go:252. CloudFront metrics carry an extra
 // Region=Global dimension so AWS knows we want the us-east-1-only
 // publication and not some hypothetical regional split.
@@ -207,7 +207,7 @@ func TestBuildGetMetricDataQueries_CloudFrontRegionGlobal(t *testing.T) {
 
 // TestBuildGetMetricDataQueries_APIGatewayHTTPv2MetricNames pins the
 // HTTP-API-v2 metric names ("4xx", "5xx", "Latency", "Count") into the
-// query layer. Mirrors reliable's aws_metrics_test.go:275 — the
+// query layer. Mirrors the InsideOut backend's aws_metrics_test.go:275 — the
 // regression that prompted the assertion was a flip back to v1 names
 // ("4XXError" / "5XXError") which produced empty Pending-data panels.
 func TestBuildGetMetricDataQueries_APIGatewayHTTPv2MetricNames(t *testing.T) {
@@ -234,7 +234,7 @@ func TestBuildGetMetricDataQueries_APIGatewayHTTPv2MetricNames(t *testing.T) {
 // TestBuildGetMetricDataQueries_CloudFrontAdditionalMetrics locks the
 // full set of CloudFront metric names through the BuildGetMetricDataQueries
 // path, including the additional-metrics surface unlocked by
-// aws_cloudfront_monitoring_subscription. Mirrors reliable's
+// aws_cloudfront_monitoring_subscription. Mirrors the InsideOut backend's
 // aws_metrics_test.go:301.
 func TestBuildGetMetricDataQueries_CloudFrontAdditionalMetrics(t *testing.T) {
 	t.Parallel()
@@ -263,7 +263,7 @@ func TestBuildGetMetricDataQueries_CloudFrontAdditionalMetrics(t *testing.T) {
 	assert.Equal(t, want, got)
 }
 
-// TestBuildGetMetricDataQueries_S3StorageType mirrors reliable's
+// TestBuildGetMetricDataQueries_S3StorageType mirrors the InsideOut backend's
 // aws_metrics_test.go:327. S3 BucketSizeBytes uses StandardStorage,
 // NumberOfObjects uses AllStorageTypes — get either wrong and AWS
 // returns no datapoints.
@@ -366,7 +366,7 @@ func TestGetMetricData_HappyPath(t *testing.T) {
 // TestGetMetricData_MismatchedTimestampsAndValues — a CloudWatch quirk
 // where the response carries more timestamps than values. Truncate to
 // the shorter of the two rather than panicking on out-of-bounds. Mirrors
-// reliable's aws_metrics_test.go:400.
+// The InsideOut backend's aws_metrics_test.go:400.
 func TestGetMetricData_MismatchedTimestampsAndValues(t *testing.T) {
 	t.Parallel()
 	now := time.Now().UTC()
@@ -459,7 +459,7 @@ func TestFetch_ZeroResources(t *testing.T) {
 	assert.Equal(t, 0, mock.calls, "no resources → no GetMetricData calls")
 }
 
-// TestFetch_S3PeriodAndHoursOverride mirrors reliable's
+// TestFetch_S3PeriodAndHoursOverride mirrors the InsideOut backend's
 // aws_metrics_test.go:496 — S3 daily metrics force Period=86400 and
 // bump Hours to >=48.
 func TestFetch_S3PeriodAndHoursOverride(t *testing.T) {
@@ -523,7 +523,7 @@ func TestFetch_S3DoesNotShortenLongerHours(t *testing.T) {
 }
 
 // TestFetch_CloudFrontRoutesToUSEast1AndReturnsAllMetrics combines two
-// production-shape contracts in one exercise. Mirrors reliable's
+// production-shape contracts in one exercise. Mirrors the InsideOut backend's
 // aws_metrics_test.go:533.
 //
 //  1. CloudFront queries must go to the us-east-1 client, not the
@@ -572,7 +572,7 @@ func TestFetch_CloudFrontRoutesToUSEast1AndReturnsAllMetrics(t *testing.T) {
 	assert.Equal(t, wantValues, gotValues, "every cloudfront metric must round-trip by name → value")
 }
 
-// TestFetch_PartialResourceFailure_Skips mirrors reliable's
+// TestFetch_PartialResourceFailure_Skips mirrors the InsideOut backend's
 // aws_metrics_test.go:585 — when GetMetricData fails for every
 // resource, Fetch returns a no-error empty-resources result rather
 // than aborting (so chart panels render "no data" not "broken").
@@ -592,7 +592,7 @@ func TestFetch_PartialResourceFailure_Skips(t *testing.T) {
 }
 
 // TestFetch_EC2_EndToEnd is the canonical happy-path end-to-end exercise.
-// Mirrors reliable's aws_metrics_test.go:605.
+// Mirrors the InsideOut backend's aws_metrics_test.go:605.
 func TestFetch_EC2_EndToEnd(t *testing.T) {
 	t.Parallel()
 	now := time.Now().UTC()
@@ -691,7 +691,7 @@ func TestEveryAWSSpecBuildsValidQueries(t *testing.T) {
 }
 
 // TestAllSpecsHaveValidStats — every AWS spec stat must be one of the
-// CloudWatch-recognised aggregates. Mirrors reliable's
+// CloudWatch-recognised aggregates. Mirrors the InsideOut backend's
 // aws_metrics_test.go:942.
 func TestAllSpecsHaveValidStats(t *testing.T) {
 	t.Parallel()
@@ -713,7 +713,7 @@ func TestAllSpecsHaveValidStats(t *testing.T) {
 // --- Shared structural validator ---
 
 // assertValidMetricsResult validates the structural contract of a
-// MetricsResult. Mirrors reliable's assertValidAWSMetricsResult
+// MetricsResult. Mirrors the InsideOut backend's assertValidAWSMetricsResult
 // (aws_metrics_test.go:89). Both unit tests and any future integration
 // tests should call this so the mock output and any real-API output
 // are validated by the same shape contract.

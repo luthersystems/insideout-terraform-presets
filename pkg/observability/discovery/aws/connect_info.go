@@ -1,7 +1,7 @@
 // EC2 Instance Connect URL enrichment.
 //
-// Ported from reliable internal/agentapi/aws_inspect.go:1463
-// (enrichEC2WithConnectURLs). Reliable's aws_connect_info.go file is
+// Ported from the InsideOut backend internal/agentapi/aws_inspect.go:1463
+// (enrichEC2WithConnectURLs). The InsideOut backend's aws_connect_info.go file is
 // session/Oracle webserver glue and is NOT ported here — only the URL
 // builder for the inspector response is needed.
 //

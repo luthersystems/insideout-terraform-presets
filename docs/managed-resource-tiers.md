@@ -60,7 +60,7 @@ manageable through the preset's surface.
 ### ImportedManaged
 Resources that exist in the account before InsideOut sees them. The reverse-
 Terraform tool (`insideout-import`) discovers them and emits flat HCL so
-Riley/Reliable can diff and change them. **No attempt** to fit them inside
+Riley/the InsideOut backend can diff and change them. **No attempt** to fit them inside
 preset module calls by default.
 
 - **`ImportedFlat`** — `aws_sqs_queue.dlq { ... }`, with all attributes
@@ -189,7 +189,7 @@ The field policy layer has **three jobs**:
 1. **Metadata** — annotate each field with its `Role` (Identity / Wiring /
    Tuning) and optionally a `Pillar` (Security / Performance / Reliability).
    Drives diff grouping, badging, and Riley's prompt context.
-2. **Presentation boundary** — define which fields Riley and Reliable surface
+2. **Presentation boundary** — define which fields Riley and the InsideOut backend surface
    to users. Salience means "this field is worth showing / reasoning about";
    it does **not** automatically mean "editable".
 3. **Write-permission boundary** — define which visible fields Riley can
@@ -228,7 +228,7 @@ Direct HCL editing is not a supported product path. The importer generates
 flat HCL once during adoption; after that, the model is the source of truth
 and the composer re-emits HCL from the model on every apply.
 
-Reliable's UI today is **chat-driven**, not form-driven: users edit via
+The InsideOut backend's UI today is **chat-driven**, not form-driven: users edit via
 conversation with Riley, who emits a full `[Core.*]` state block; the server
 re-extracts `(Components, Config)` from the stream, writes a `draft` row in
 `stack_versions`, and renders the snapshot-vs-snapshot diff
@@ -249,7 +249,7 @@ Given that architecture, the field policy layer's **actual** consumers are:
 It is **not**:
 - A schema (Layer 1 is the schema)
 - A validation system (validators live in `pkg/composer/validate.go`)
-- A drift detector (Reliable does that on tfstate, post-apply)
+- A drift detector (the InsideOut backend does that on tfstate, post-apply)
 - A cost/pricing calculator (separate concern in `pricing_deps.go`)
 - A driver of form widgets or confirmation modals — there are none today
 - A license for Riley to mutate tags / labels — those are system-owned
@@ -354,15 +354,15 @@ the product-facing path vocabulary.
 | `Reliability` | Backups, replication, multi-AZ, retry/DLQ | `backup_retention_period`, `multi_az`, `redrive_policy` |
 | `None` | No operational pillar applies | — |
 
-This vocabulary aligns with reliable's existing `eval_scoring.go` categories
+This vocabulary aligns with the InsideOut backend's existing `eval_scoring.go` categories
 (`Security`, `Performance`, `Ops Excellence`) modulo the rename of
 `Ops Excellence` → `Reliability` to match AWS Well-Architected vocabulary
 and provide field-level semantics actionable enough to drive UX decisions.
-Reliable's check-level `Severity` (`critical | high | medium`) is
+The InsideOut backend's check-level `Severity` (`critical | high | medium`) is
 perpendicular and unaffected.
 
 A field can have both a `Role` and a `Pillar`: `kms_master_key_id` is
-`Role=Wiring, Pillar=Security` — accurate on both dimensions, and Reliable
+`Role=Wiring, Pillar=Security` — accurate on both dimensions, and the InsideOut backend
 can use either when scoping a query.
 
 **Axis 3 — Edit policy (authorization, optional):**
@@ -642,7 +642,7 @@ failure even if the field was otherwise editable.
 #### `ImportedMissing` operator actions
 
 When a previously imported resource disappears from cloud, the importer marks
-it `ImportedMissing` and Reliable blocks apply for that stack. The operator
+it `ImportedMissing` and the InsideOut backend blocks apply for that stack. The operator
 must choose one action:
 
 | Action | Effect |
@@ -695,7 +695,7 @@ for two unrelated things:
 | Output | `composer.VersionDiff` rendered as highlights | Drift banner + alert |
 | How it's stored | Immutable `stack_versions` rows (`draft → confirmed → applied`) | `StackMeta.driftReason`, `driftByComponent` |
 | Consumes this model | **Yes — directly** | No (works on tfstate / cloud APIs) |
-| Lives in | reliable's chat handler + composer diff functions | reliable + Oracle |
+| Lives in | the InsideOut backend's chat handler + composer diff functions | the InsideOut backend + Oracle |
 
 The two channels are **not joined**. Drift surfaces as a banner; editing is
 never blocked by drift. So the typed model's primary job is:
@@ -715,7 +715,7 @@ don't exist in this architecture.
 - PR #58 lands `ImportedFlat` mechanics (flat import, zero-drift output) —
   the right shape for the default landing zone.
 - The composer IR doesn't yet model anything beyond `ComposerManaged`, so
-  Riley/Reliable can't currently diff against imported HCL through the same
+  Riley/the InsideOut backend can't currently diff against imported HCL through the same
   code path it uses for composer-generated stacks. That's the next bit of
   work.
 - `ImportedConformant` (shape-matching → graduation) and the
@@ -734,7 +734,7 @@ don't exist in this architecture.
 | 5 | Resource identity | **Composite** `ResourceIdentity`: immutable Terraform `Address` plus cloud scope (`Cloud`, account/project, region/location) and provider import identity (`ImportID` or `ProviderIdentity`) |
 | 6 | `ExternalObserved` handling | **In the model** with `ExternalByPolicy` / `ExternalUnsupported` flags; planner skips them, inspector / alert pipeline observes them |
 | 7 | Field policy taxonomy | **Multiple axes**: `Role`, `Pillar`, `Visibility`, `EditPolicy`, `SensitivityPolicy`, and `ChangeRiskPolicy` capture independent concerns without overloading one enum. |
-| 8 | Visibility vs editability | **Separated** — field policy controls what Riley / Reliable can show and reason about; `EditPolicy` controls what Riley can write |
+| 8 | Visibility vs editability | **Separated** — field policy controls what Riley / the InsideOut backend can show and reason about; `EditPolicy` controls what Riley can write |
 | 9 | Authorship model | **Hybrid** — importer is the only creator of new imported resources; Riley can modify existing ones only where `EditPolicy` permits chat writes |
 | 10 | Snapshot persistence | **New top-level field** `Imported` on `StackVersion` (sibling to `Components` / `Config` / `Pricing`); separate JSON column |
 | 11 | Diff representation | **`ResourceDiff` sibling** to `ComponentDiff`, keyed by `(Type, Address)` with field-level `Changes []FieldDiff`; `VersionDiff` grows a `Resources []ResourceDiff` field |
@@ -746,7 +746,7 @@ don't exist in this architecture.
 | 17 | Provenance tags | **Distinct `InsideOutImport*` namespace** (AWS) / `insideout-import-*` (GCP) — `ImportedManaged` resources do *not* share `ComposerManaged`'s generic `Project` tag. Importer adds tags if missing, never overwrites. Tags double as a soft lock for cross-session mutual exclusion. See "Provenance tagging policy" below. |
 | 18 | Phase 1 scope | Hand-written carrier with opaque attribute bag; codegen + field policy map land in Phase 2 |
 | 19 | Re-import conflict resolution | **Surface to operator** — importer refuses to clobber a field that Riley has edited since the last apply. Conflict emitted as a `ValidationIssue`; operator resolves (accept cloud / keep edit / abort). Requires per-field edit tracking on `ImportedResource`. |
-| 20 | Out-of-band deletion | **Sticky `ImportedMissing` flag + blocked apply** — when the importer discovers a previously-imported resource is gone from cloud, it does *not* auto-prune or recreate. The resource remains in the model, Reliable alerts the user, and apply is blocked until the operator chooses remove, recreate, or reclaim. |
+| 20 | Out-of-band deletion | **Sticky `ImportedMissing` flag + blocked apply** — when the importer discovers a previously-imported resource is gone from cloud, it does *not* auto-prune or recreate. The resource remains in the model, the InsideOut backend alerts the user, and apply is blocked until the operator chooses remove, recreate, or reclaim. |
 | 21 | Phase 2 scope | **Codegen the original 10** (5 AWS + 5 GCP from PR #58) plus the codegen pipeline itself. Each subsequent resource-type expansion ships its own codegen + policy entries as a separate increment. Avoids a single giant Phase 2 PR. |
 | 22 | Tier naming | **Stable string identifiers**, not numbered — adding/removing categories does not require renumbering. Constants live in `pkg/composer/imported.go` (or sibling). |
 | 23 | Composer execution path | **`ComposeStackWithIssues` extended** to accept `ImportedResources`, emit flat HCL + permanent `import {}` blocks alongside module calls, serialize current desired `Attributes` / typed `Attrs`, wire cross-tier references, and validate the union graph. Without this, the typed model has no execution path. |
@@ -766,14 +766,14 @@ don't exist in this architecture.
 | 37 | Configurable vs computed fields | **Emit configurable fields only** — composer emits `Required` / `Optional` fields from desired state and retains computed-only fields for inspection / correlation only. |
 | 38 | Provider/schema versioning | **Persist with identity** — imported resources record provider source, provider version, and generated schema/codegen version used at import. |
 | 39 | Re-import semantics | **Operator-gated reconciliation** — re-import never silently mutates desired `Attributes`; cloud deltas are surfaced for operator choice, and pending edits create conflicts. |
-| 40 | Untaggable resources | **Weak lock allowed** — resources without tag/label support can be imported, but cross-session tag locks are skipped and Reliable marks them as weakly locked. |
+| 40 | Untaggable resources | **Weak lock allowed** — resources without tag/label support can be imported, but cross-session tag locks are skipped and the InsideOut backend marks them as weakly locked. |
 | 41 | Terraform address generation | **Deterministic from canonical identity** — generate once from stable name hints plus cloud/provider identity, append deterministic hash on collision, persist `NameHint`, and never recompute after import. |
 | 42 | Replacement-risk confirmation | **Plan-tied operator confirmation** — `MayReplace`, `AlwaysReplace`, and `Unknown` imported-resource changes require review of the concrete Terraform plan plus explicit confirmation before apply; `Unknown` follows the `MayReplace` workflow rather than blocking until curated. |
 | 43 | Field policy curation | **Human-reviewed code change** — new generated provider fields default hidden / system-owned / not Riley-editable. Making a field visible or editable requires a reviewed policy-map PR with role, visibility, edit, sensitivity, and change-risk metadata. |
 | 44 | Riley import-result context | **Structured import summary block** — importer results enter Riley's session as a structured context/tool-result block containing addresses, tiers, identities, visible fields, warnings, conflicts, and redacted sensitive values; do not mutate the system prompt ad hoc. |
 | 45 | Force takeover | **Explicit audited operator action** — cross-session provenance conflicts are refused by default. Override requires a named force-takeover action with actor, reason, previous owner, and plan review; manual tag deletion is not the product path. |
 | 46 | Cross-cloud import IDs | **Same logical import project ID across clouds** — one InsideOut stack/session uses one `<import-project-id>` across AWS tags and GCP labels; cloud-specific key names plus `ResourceIdentity.Cloud` provide disambiguation. |
-| 47 | Reliability vocabulary | **Map, do not rename in Phase 2** — Reliable may keep `Ops Excellence` in existing checks while mapping imported field `Pillar=Reliability` into that vocabulary for display/scoring. |
+| 47 | Reliability vocabulary | **Map, do not rename in Phase 2** — the InsideOut backend may keep `Ops Excellence` in existing checks while mapping imported field `Pillar=Reliability` into that vocabulary for display/scoring. |
 
 ## Agent handoff work packages
 
@@ -798,7 +798,7 @@ Phase 2's initial typed surface covers the 10 Phase 1 import resource types:
 | #150 | Cross-tier graph wiring | #148, #147 | Relationship-preserving resolver and union graph validation across modules and flat imported resources |
 | #149 | Write authorization | #144, #147 | `validateImportedResources` enforcing `EditPolicy`, sensitivity, missing-resource, and replacement-risk gates |
 | #151 | Resource diffs | #144, #147 | `ResourceDiff`, redaction, field-policy grouping, tier-transition rendering, change-risk badges |
-| #152 | Reliable integration | #144, #151, #153 | Inspector filter updates, drift surfacing, structured Riley import-result context, confirmation UX |
+| #152 | the InsideOut backend integration | #144, #151, #153 | Inspector filter updates, drift surfacing, structured Riley import-result context, confirmation UX |
 
 Critical path for an end-to-end demo:
 
@@ -808,7 +808,7 @@ Critical path for an end-to-end demo:
 4. #153 provenance tags / locks
 5. #148 composer emission
 6. #149 validation and #151 diffs
-7. #152 Reliable integration
+7. #152 the InsideOut backend integration
 
 Agents can work #144, #146, and #153 in parallel. #150 should wait until the
 composer has a concrete flat-resource emission path to extend.
@@ -817,9 +817,9 @@ composer has a concrete flat-resource emission path to extend.
 
 Provenance tags serve two purposes:
 
-1. **Inspector filtering.** The reliable3 inspector filters resources by tag
+1. **Inspector filtering.** The InsideOut inspector filters resources by tag
    match. Imported resources without the right tag are invisible to drift
-   detection and CloudWatch metrics (see CLAUDE.md and reliable PR #1027).
+   detection and CloudWatch metrics (see CLAUDE.md and the InsideOut backend PR #1027).
 2. **Mutual exclusion across sessions.** The tags act as a soft lock so two
    InsideOut sessions can't independently claim the same cloud resource.
 
@@ -906,12 +906,12 @@ Before claiming a resource, the importer reads
   Layer 1 schema introspection and skips tag injection for them, logging a
   notice and flagging them in the inspector view as "weak import lock". For
   those resources, the cross-session tag/label lock constraint is not
-  enforced; Reliable should rely on `ResourceIdentity` plus its own session /
+  enforced; the InsideOut backend should rely on `ResourceIdentity` plus its own session /
   stack registry to detect obvious duplicate claims where possible.
 
-### Downstream dependency on reliable
+### Downstream dependency on the InsideOut backend
 
-Reliable's inspector currently filters on `Project = <project>` only. To
+The InsideOut backend's inspector currently filters on `Project = <project>` only. To
 see `ImportedManaged` resources it must learn the new namespace — its
 effective filter becomes:
 
@@ -919,8 +919,8 @@ effective filter becomes:
 Project = <project> OR InsideOutImportProject = <project>
 ```
 
-This is a reliable-repo change (not insideout-terraform-presets); the import
-PR should be paired with a reliable PR that extends the inspector filter and
+This is an InsideOut backend-repo change (not insideout-terraform-presets); the import
+PR should be paired with an InsideOut backend PR that extends the inspector filter and
 the corresponding GCP label query.
 
 ## Remaining non-blocking follow-ups
@@ -932,6 +932,6 @@ These are intentionally out of the Phase 2 implementation path:
    gated and no automatic graduation logic ships.
 2. Customer-extensible field policy overlays remain out of scope. Phase 2
    policies are code-owned and changed through reviewed PRs only.
-3. The exact Reliable UI surface for force takeover and plan-tied
-   confirmation lives in the paired Reliable work, but the model contract is
+3. The exact the InsideOut backend UI surface for force takeover and plan-tied
+   confirmation lives in the paired the InsideOut backend work, but the model contract is
    fixed here: both are explicit audited operator actions.

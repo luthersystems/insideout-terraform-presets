@@ -1,6 +1,6 @@
 // Bedrock service inspector.
 //
-// Ported from reliable internal/agentapi/aws_inspect.go (bedrock:1251)
+// Ported from the InsideOut backend internal/agentapi/aws_inspect.go (bedrock:1251)
 // plus the discovery helpers (discoverBedrockKnowledgeBases:1297,
 // discoverBedrockAgents:1313, tagFilterBedrockResources:1325,
 // lookupBedrockIAMRole:1367, discoverBedrockGuardrails:1389).
@@ -36,7 +36,7 @@ import (
 )
 
 // bedrockAgentAPI covers the bedrockagent SDK subset we use. Mirrors
-// reliable's bedrockAgentAPI (aws_inspect.go:1213).
+// The InsideOut backend's bedrockAgentAPI (aws_inspect.go:1213).
 type bedrockAgentAPI interface {
 	ListKnowledgeBases(ctx context.Context, in *bedrockagent.ListKnowledgeBasesInput, opts ...func(*bedrockagent.Options)) (*bedrockagent.ListKnowledgeBasesOutput, error)
 	ListAgents(ctx context.Context, in *bedrockagent.ListAgentsInput, opts ...func(*bedrockagent.Options)) (*bedrockagent.ListAgentsOutput, error)
@@ -45,7 +45,7 @@ type bedrockAgentAPI interface {
 }
 
 // bedrockAPI covers the subset of the bedrock (runtime) SDK used for
-// guardrail discovery. Mirrors reliable's bedrockAPI (aws_inspect.go:1223).
+// guardrail discovery. Mirrors the InsideOut backend's bedrockAPI (aws_inspect.go:1223).
 type bedrockAPI interface {
 	ListGuardrails(ctx context.Context, in *bedrock.ListGuardrailsInput, opts ...func(*bedrock.Options)) (*bedrock.ListGuardrailsOutput, error)
 	ListTagsForResource(ctx context.Context, in *bedrock.ListTagsForResourceInput, opts ...func(*bedrock.Options)) (*bedrock.ListTagsForResourceOutput, error)
@@ -55,7 +55,7 @@ type bedrockAPI interface {
 // fallback. Kept tiny so tests can fake {role found, NoSuchEntity,
 // generic error} without dragging in the full IAM SDK.
 //
-// Mirrors reliable's iamGetRoleAPI (aws_inspect.go:1239).
+// Mirrors the InsideOut backend's iamGetRoleAPI (aws_inspect.go:1239).
 type iamGetRoleAPI interface {
 	GetRole(ctx context.Context, in *iam.GetRoleInput, opts ...func(*iam.Options)) (*iam.GetRoleOutput, error)
 }
@@ -105,7 +105,7 @@ func inspectBedrock(ctx context.Context, cfg aws.Config, action, filters string)
 // `${project}-bedrock-role` IAM role so a successful deploy still
 // produces a non-empty result and drift detection stays correct.
 //
-// Mirrors reliable's discoverBedrockKnowledgeBases (aws_inspect.go:1297).
+// Mirrors the InsideOut backend's discoverBedrockKnowledgeBases (aws_inspect.go:1297).
 func discoverBedrockKnowledgeBases(ctx context.Context, client bedrockAgentAPI, iamClient iamGetRoleAPI, project string) (any, error) {
 	out, err := client.ListKnowledgeBases(ctx, &bedrockagent.ListKnowledgeBasesInput{})
 	if err != nil {
@@ -135,7 +135,7 @@ func discoverBedrockAgents(ctx context.Context, client bedrockAgentAPI, project 
 //
 // The bedrockagent SDK returns Tags as map[string]string ("map" format).
 //
-// Mirrors reliable's tagFilterBedrockResources (aws_inspect.go:1325).
+// Mirrors the InsideOut backend's tagFilterBedrockResources (aws_inspect.go:1325).
 func tagFilterBedrockResources(ctx context.Context, client bedrockAgentAPI, resources []map[string]any, project string) []map[string]any {
 	if project == "" {
 		return resources
@@ -173,7 +173,7 @@ func tagFilterBedrockResources(ctx context.Context, client bedrockAgentAPI, reso
 // (added by preset PR #80 for invocation logging). Returns false if
 // neither exists.
 //
-// Mirrors reliable's lookupBedrockIAMRole (aws_inspect.go:1367).
+// Mirrors the InsideOut backend's lookupBedrockIAMRole (aws_inspect.go:1367).
 func lookupBedrockIAMRole(ctx context.Context, iamClient iamGetRoleAPI, project string) (map[string]any, bool) {
 	for _, suffix := range []string{"-bedrock-role", "-bedrock-logging-role"} {
 		roleName := project + suffix
@@ -198,7 +198,7 @@ func lookupBedrockIAMRole(ctx context.Context, iamClient iamGetRoleAPI, project 
 // tags as kv-shape ([]bedrocktypes.Tag), distinct from bedrockagent's
 // map[string]string.
 //
-// Mirrors reliable's discoverBedrockGuardrails (aws_inspect.go:1389).
+// Mirrors the InsideOut backend's discoverBedrockGuardrails (aws_inspect.go:1389).
 func discoverBedrockGuardrails(ctx context.Context, client bedrockAPI, project string) (any, error) {
 	out, err := client.ListGuardrails(ctx, &bedrock.ListGuardrailsInput{})
 	if err != nil {

@@ -4,7 +4,7 @@
 # (or an equivalent merge containing the module's project-bearing labels) so
 # the Project label emitted by the module reaches the resource. This mirrors
 # the AWS Project-tag convention enforced by lint-project-tag.sh — the
-# downstream reliable3 inspector filters GCP resources by exact
+# downstream InsideOut inspector filters GCP resources by exact
 # project = <project> label match.
 #
 # Unlike AWS (where most resources accept tags), the majority of GCP

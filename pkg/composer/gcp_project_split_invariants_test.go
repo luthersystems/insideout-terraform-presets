@@ -100,7 +100,7 @@ var labelBlockRe = regexp.MustCompile(`(?s)labels\s*=\s*(?:\{[^}]*\}|merge\([^)]
 
 // TestGCPLabels_UseProjectNotProjectID pins the labels-vs-project_id
 // contract from issue #157. Labels MUST keep using var.project (the
-// per-stack naming prefix) so reliable3's inspector — which groups GCP
+// per-stack naming prefix) so the InsideOut inspector — which groups GCP
 // resources by exact label-value match — continues to work. A "consistency
 // cleanup" PR that mass-renames var.project -> var.project_id inside
 // label merges would silently break that grouping; this test catches it
@@ -165,7 +165,7 @@ func TestGCPLabels_UseProjectNotProjectID(t *testing.T) {
 			require.NotRegexp(t,
 				`project\s*=\s*var\.project_id`,
 				labelMatch,
-				"%s: %s labels block must NOT use var.project_id — that would break reliable3 inspector grouping (issue #157, #81). Got: %q",
+				"%s: %s labels block must NOT use var.project_id — that would break InsideOut inspector grouping (issue #157, #81). Got: %q",
 				mainPath, resType, labelMatch)
 		}
 	}

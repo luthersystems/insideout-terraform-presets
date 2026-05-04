@@ -4,7 +4,7 @@
 //
 // We never call real AWS — every test injects a fake client implementing
 // the per-service interface (ecsClient, eksClustersClient,
-// lambdaFunctionsClient). Mirrors the reliable testing pattern.
+// lambdaFunctionsClient). Mirrors the InsideOut backend testing pattern.
 
 package aws
 
@@ -150,7 +150,7 @@ func TestHasProjectTagECS(t *testing.T) {
 	assert.True(t, hasProjectTagECS(tags, "my-stack"))
 	assert.False(t, hasProjectTagECS(tags, "other"))
 	// Empty project means "no scope" → matches everything (the demo
-	// session fallback reliable preserves).
+	// session fallback the InsideOut backend preserves).
 	assert.True(t, hasProjectTagECS(tags, ""))
 }
 

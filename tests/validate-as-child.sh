@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Wrap each preset module as a child of a synthetic root and run
-# `terraform init`. Mirrors the actual consumption shape: the composer
-# (`luthersystems/reliable`) instantiates every preset as
+# `terraform init`. Mirrors the actual consumption shape: the InsideOut
+# composer instantiates every preset as
 # `module "<name>" { source = "..." }` in a generated root. A subset of
 # Terraform constructs are root-module-only (`import {}`, `removed {}`,
 # certain `provider` block forms) and pass standalone `terraform validate`

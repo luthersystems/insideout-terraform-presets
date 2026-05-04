@@ -72,16 +72,16 @@
 //
 // # Versioning
 //
-// reliable's classifier uses *its own* embedded denylist + rules
-// (whatever pkg/drift version reliable was built against), regardless
+// The InsideOut backend's classifier uses *its own* embedded denylist + rules
+// (whatever pkg/drift version the InsideOut backend was built against), regardless
 // of the customer's pinned custom_presets_version. Rationale:
 //
-//   - Forward-compatible. Newer reliable can correctly classify phantom
+//   - Forward-compatible. Newer the InsideOut backend can correctly classify phantom
 //     drift on stacks composed before the denylist existed.
 //   - Never escalates anything to actionable that older sandbox-infra
 //     would have ignored — only ever filters more. A presets release
 //     that adds a denylist entry can't make a previously-passing
-//     deployment start failing on the reliable side.
+//     deployment start failing on the InsideOut backend side.
 //
 // # Default rule chain
 //

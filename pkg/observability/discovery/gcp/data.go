@@ -2,9 +2,9 @@
 // Firestore.
 //
 // Mirrors:
-//   - inspectGCPCloudSQL    — reliable gcp_inspect.go:929
-//   - inspectGCPMemorystore — reliable gcp_inspect.go:868
-//   - inspectGCPFirestore   — reliable gcp_inspect.go:1365
+//   - inspectGCPCloudSQL    — the InsideOut backend gcp_inspect.go:929
+//   - inspectGCPMemorystore — the InsideOut backend gcp_inspect.go:868
+//   - inspectGCPFirestore   — the InsideOut backend gcp_inspect.go:1365
 //
 // Cloud SQL uses the older google.golang.org/api/sqladmin/v1 surface
 // (not a cloud.google.com/go SDK — there isn't one for the admin API).

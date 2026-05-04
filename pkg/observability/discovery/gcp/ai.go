@@ -1,8 +1,8 @@
 // Vertex AI inspector.
 //
 // Mirrors:
-//   - inspectGCPVertexAI       — reliable gcp_inspect.go:567
-//   - extractVertexAIRegion    — reliable gcp_inspect.go:539
+//   - inspectGCPVertexAI       — the InsideOut backend gcp_inspect.go:567
+//   - extractVertexAIRegion    — the InsideOut backend gcp_inspect.go:539
 //
 // Vertex AI is region-scoped — each Google-managed endpoint host looks
 // like "<region>-aiplatform.googleapis.com". The caller passes "region"
@@ -43,13 +43,13 @@ import (
 var gcpRegionPattern = regexp.MustCompile(`^[a-z][a-z0-9-]{1,30}$`)
 
 // vertexAIDefaultRegion is the fallback region when filters omit
-// "region". Mirrors reliable's gcp_inspect.go:533. The caller can
+// "region". Mirrors the InsideOut backend's gcp_inspect.go:533. The caller can
 // override with filters={"region":"<region>"} for other deployments.
 const vertexAIDefaultRegion = "us-central1"
 
 // extractVertexAIRegion returns (region, regionExplicit) from filters.
 // Isolated so the JSON key and default can be locked against
-// regression. Mirrors reliable's gcp_inspect.go:539.
+// regression. Mirrors the InsideOut backend's gcp_inspect.go:539.
 //
 // Caller-supplied region is validated against gcpRegionPattern before
 // it is returned — invalid values fall back to vertexAIDefaultRegion

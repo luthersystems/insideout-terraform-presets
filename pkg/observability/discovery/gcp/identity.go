@@ -1,7 +1,7 @@
 // Identity Platform inspector.
 //
 // Mirrors:
-//   - inspectGCPIdentityPlatform — reliable gcp_inspect.go:698
+//   - inspectGCPIdentityPlatform — the InsideOut backend gcp_inspect.go:698
 //
 // The admin surface for Identity Platform lives in the REST-only SDK at
 // google.golang.org/api/identitytoolkit/v2 — the native
@@ -37,7 +37,7 @@ import (
 // identityPlatformMaxTenants bounds the list-tenants response. 1000 is
 // the server-side PageSize ceiling; pagination stops accumulating past
 // this cap and a warn-log fires so operators can spot under-reporting
-// without a shape-breaking envelope change. Mirrors reliable's
+// without a shape-breaking envelope change. Mirrors the InsideOut backend's
 // gcp_inspect.go:680.
 const identityPlatformMaxTenants = 1000
 

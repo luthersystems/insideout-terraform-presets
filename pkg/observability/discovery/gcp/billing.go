@@ -1,8 +1,8 @@
 // Cloud Billing inspector.
 //
 // Mirrors:
-//   - inspectGCPBilling         — reliable gcp_inspect.go:1490
-//   - inspectGCPBillingWithDeps — reliable gcp_inspect.go:1509
+//   - inspectGCPBilling         — the InsideOut backend gcp_inspect.go:1490
+//   - inspectGCPBillingWithDeps — the InsideOut backend gcp_inspect.go:1509
 //
 // No labels.project filter applies — billing info and budgets are
 // scoped at the API level by project ID and billing-account-name.
@@ -35,7 +35,7 @@ import (
 )
 
 // gcpBillingAPI is the subset of the Cloud Billing client we need.
-// Mirrors reliable's GCPBillingAPI (gcp_inspect.go:1464). Kept
+// Mirrors the InsideOut backend's GCPBillingAPI (gcp_inspect.go:1464). Kept
 // unexported — the billing dispatcher constructs the real client
 // directly.
 type gcpBillingAPI interface {
@@ -43,19 +43,19 @@ type gcpBillingAPI interface {
 }
 
 // budgetIterator abstracts the budget iterator for testability. Mirrors
-// reliable's BudgetIterator (gcp_inspect.go:1469).
+// The InsideOut backend's BudgetIterator (gcp_inspect.go:1469).
 type budgetIterator interface {
 	Next() (*budgetspb.Budget, error)
 }
 
 // gcpBudgetAPI is the subset of the Budget client we need. Mirrors
-// reliable's GCPBudgetAPI (gcp_inspect.go:1474).
+// The InsideOut backend's GCPBudgetAPI (gcp_inspect.go:1474).
 type gcpBudgetAPI interface {
 	ListBudgets(ctx context.Context, req *budgetspb.ListBudgetsRequest, opts ...gax.CallOption) budgetIterator
 }
 
 // realBudgetClientAdapter wraps the real budget client to implement
-// gcpBudgetAPI. Mirrors reliable's realBudgetClientAdapter
+// gcpBudgetAPI. Mirrors the InsideOut backend's realBudgetClientAdapter
 // (gcp_inspect.go:1478).
 type realBudgetClientAdapter struct {
 	client *budgets.BudgetClient
@@ -82,7 +82,7 @@ func inspectBilling(ctx context.Context, projectID, action, filters string, opts
 }
 
 // inspectBillingWithDeps is the testable core — accepts injected
-// billing and budget clients. Mirrors reliable's inspectGCPBillingWithDeps
+// billing and budget clients. Mirrors the InsideOut backend's inspectGCPBillingWithDeps
 // (gcp_inspect.go:1509). Exported via the unit tests.
 func inspectBillingWithDeps(ctx context.Context, billingClient gcpBillingAPI, budgetClient gcpBudgetAPI, projectID, action, _ string) (any, error) {
 	switch action {

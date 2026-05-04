@@ -3,7 +3,7 @@
 // iam.ListAccountAliases, iam.GetAccountSummary) can fail independently
 // and gatherAccountInfo must still return whatever it managed to fetch.
 //
-// Ported from reliable internal/agentapi/aws_inspect_test.go cases
+// Ported from the InsideOut backend internal/agentapi/aws_inspect_test.go cases
 // covering inspectAccount.
 
 package aws
@@ -161,7 +161,7 @@ func TestGatherAccountInfo_IAMSummaryFailureLogsAndContinues(t *testing.T) {
 	assert.False(t, hasSummary, "AccountSummary must be omitted when GetAccountSummary fails")
 }
 
-// TestGatherAccountInfo_EmptyAliasesNotSet mirrors reliable's
+// TestGatherAccountInfo_EmptyAliasesNotSet mirrors the InsideOut backend's
 // behaviour: ListAccountAliases returning successfully but empty must
 // NOT add an "AccountAliases":[] key — keeps the panel JSON tight.
 func TestGatherAccountInfo_EmptyAliasesNotSet(t *testing.T) {

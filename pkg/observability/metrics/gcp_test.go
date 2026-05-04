@@ -23,7 +23,7 @@ import (
 
 // fakeMonitoring captures every ListTimeSeries request the wrapper
 // issues so tests can assert which filters / aggregation shapes hit
-// the API. Mirrors reliable's mockGCPMonitoringClient
+// the API. Mirrors the InsideOut backend's mockGCPMonitoringClient
 // (gcp_metrics_test.go:28). Match keys are substrings of the metric
 // type — the request filter carries `metric.type = "<full-type>"` so
 // "cpu/utilization" or "execution_count" are unambiguous.
@@ -79,7 +79,7 @@ func gcpSpecForService(t *testing.T, key composer.ComponentKey, wantService stri
 	return o.GCP
 }
 
-// --- ExtractGCPValue (from reliable gcp_metrics_test.go:870) ---
+// --- ExtractGCPValue (from the InsideOut backend gcp_metrics_test.go:870) ---
 
 func TestExtractGCPValue(t *testing.T) {
 	t.Parallel()
@@ -182,7 +182,7 @@ func TestFetchGCP_NilObs(t *testing.T) {
 
 // TestFetchGCP_EmptyAPIResponse verifies the well-formed empty result
 // when the API returns no time series for any metric. Mirrors
-// reliable's TestGetGCPServiceMetrics_EmptyResults
+// The InsideOut backend's TestGetGCPServiceMetrics_EmptyResults
 // (gcp_metrics_test.go:296).
 func TestFetchGCP_EmptyAPIResponse(t *testing.T) {
 	t.Parallel()
@@ -204,7 +204,7 @@ func TestFetchGCP_EmptyAPIResponse(t *testing.T) {
 
 // --- FetchGCP happy path ---
 
-// TestFetchGCP_Compute_HappyPath mirrors reliable's
+// TestFetchGCP_Compute_HappyPath mirrors the InsideOut backend's
 // TestGetGCPServiceMetrics_Compute_HappyPath (gcp_metrics_test.go:312)
 // — two metrics, two values on one, one value on the other, all on
 // the same instance.
@@ -279,7 +279,7 @@ func TestFetchGCP_Compute_HappyPath(t *testing.T) {
 
 // --- FetchGCP per-service overrides ---
 
-// TestFetchGCP_GCS_DailyOverride mirrors reliable's
+// TestFetchGCP_GCS_DailyOverride mirrors the InsideOut backend's
 // TestGetGCPServiceMetrics_GCS_DailyOverride (gcp_metrics_test.go:381)
 // — service=="gcs" forces Period=86400 and Hours floor to 48.
 func TestFetchGCP_GCS_DailyOverride(t *testing.T) {
@@ -337,7 +337,7 @@ func TestFetchGCP_GCSDoesNotShortenLongerHours(t *testing.T) {
 
 // --- FetchGCP partial failures ---
 
-// TestFetchGCP_PartialFailure mirrors reliable's
+// TestFetchGCP_PartialFailure mirrors the InsideOut backend's
 // TestGetGCPServiceMetrics_PartialFailure (gcp_metrics_test.go:421).
 // One metric returns a permission-denied error; the other still
 // surfaces its data and the overall call does NOT bubble up the
@@ -379,7 +379,7 @@ func TestFetchGCP_PartialFailure(t *testing.T) {
 
 // --- Label breakdown ---
 
-// TestFetchGCP_CloudFunctions_LabelBreakdown mirrors reliable's
+// TestFetchGCP_CloudFunctions_LabelBreakdown mirrors the InsideOut backend's
 // TestGetGCPServiceMetrics_CloudFunctions_LabelBreakdown
 // (gcp_metrics_test.go:463). Two time series for the same function
 // with different status labels become two MetricSeries entries with
@@ -449,7 +449,7 @@ func TestFetchGCP_CloudFunctions_LabelBreakdown(t *testing.T) {
 }
 
 // TestFetchGCP_CloudFunctions_GroupByFieldsInRequest mirrors
-// reliable's TestGetGCPServiceMetrics_CloudFunctions_GroupByFieldsInRequest
+// The InsideOut backend's TestGetGCPServiceMetrics_CloudFunctions_GroupByFieldsInRequest
 // (gcp_metrics_test.go:725) — verifies the Aggregation request
 // carries GroupByFields when the spec has GroupByLabels.
 func TestFetchGCP_CloudFunctions_GroupByFieldsInRequest(t *testing.T) {
@@ -475,7 +475,7 @@ func TestFetchGCP_CloudFunctions_GroupByFieldsInRequest(t *testing.T) {
 
 // --- Mixed resource types ---
 
-// TestFetchGCP_VPC_MixedResources mirrors reliable's
+// TestFetchGCP_VPC_MixedResources mirrors the InsideOut backend's
 // TestGetGCPServiceMetrics_VPC_MixedResources (gcp_metrics_test.go:536).
 // VPC mixes firewall metrics on gce_instance (instance_id) with NAT
 // metrics on nat_gateway (gateway_name) — they end up as two
@@ -537,7 +537,7 @@ func TestFetchGCP_VPC_MixedResources(t *testing.T) {
 // --- Bastion alias is NOT resolved here (callers pass the resolved spec) ---
 
 // TestFetchGCP_AcceptsAnyServiceLabelWithComputeSpec documents the
-// intentional split with reliable: reliable's getGCPServiceMetricsWithDeps
+// intentional split with the InsideOut backend: the InsideOut backend's getGCPServiceMetricsWithDeps
 // resolved the bastion→compute alias inline (gcp_metrics.go:399-401)
 // because the catalog lived in the wrapper file. The local design
 // keeps the catalog in the authority layer (component_observability.go)
@@ -580,7 +580,7 @@ func TestFetchGCP_AcceptsAnyServiceLabelWithComputeSpec(t *testing.T) {
 
 // --- "unknown" fallback ---
 
-// TestFetchGCP_NilResourceFallsBackToUnknown mirrors reliable's
+// TestFetchGCP_NilResourceFallsBackToUnknown mirrors the InsideOut backend's
 // TestGetGCPServiceMetrics_NilResourceFallsBackToUnknown
 // (gcp_metrics_test.go:638). Time series with nil Resource (or
 // missing LabelKey value) end up under "unknown" rather than being
@@ -619,7 +619,7 @@ func TestFetchGCP_NilResourceFallsBackToUnknown(t *testing.T) {
 	assert.Equal(t, "unknown", result.Resources[0].ResourceID)
 }
 
-// TestFetchGCP_NilIntervalAndValueSkipped mirrors reliable's
+// TestFetchGCP_NilIntervalAndValueSkipped mirrors the InsideOut backend's
 // TestGetGCPServiceMetrics_NilIntervalAndValueSkipped
 // (gcp_metrics_test.go:679). Datapoints with nil Interval or nil
 // Value are skipped rather than panicking.
@@ -661,10 +661,10 @@ func TestFetchGCP_NilIntervalAndValueSkipped(t *testing.T) {
 	assert.InDelta(t, 0.5, cpu.Datapoints[0].Average, 0.001)
 }
 
-// --- Resource filter (local extension; not in reliable) ---
+// --- Resource filter (local extension; not in the InsideOut backend) ---
 
 // TestFetchGCP_ResourceFilter exercises the post-filter path that
-// scopes results to a caller-supplied resource list. Reliable's GCP
+// scopes results to a caller-supplied resource list. The InsideOut backend's GCP
 // wrapper has no such filter (it returns whatever ListTimeSeries
 // surfaces); the local API surfaces it for symmetry with AWS Fetch.
 // The "unknown" fallback is always allowed through so misconfigured
@@ -786,7 +786,7 @@ func TestFetchGCP_RequestShape(t *testing.T) {
 // TestFetchGCP_InvalidAlignerSkipped ensures a spec carrying an
 // unknown aligner string doesn't blow up the whole call — the metric
 // is dropped with a logged warning, every other metric still ships.
-// The defensive contract matches reliable's
+// The defensive contract matches the InsideOut backend's
 // gcp_metrics.go:435-439.
 func TestFetchGCP_InvalidAlignerSkipped(t *testing.T) {
 	t.Parallel()
@@ -975,9 +975,9 @@ func TestFetchGCP_AllAuthoritySpecsAreUsable(t *testing.T) {
 
 // TestEveryGCPSpec_PinsMetricTypesAndDisplayNames pins the (MetricType,
 // DisplayName) ordered pair of every metric in every GCP service's
-// catalog spec. Imported from reliable's deleted
+// catalog spec. Imported from the InsideOut backend's deleted
 // `internal/agentapi/gcp_metrics_test.go::TestGCPMetricDefinitions_
-// SpecificValues` — the upstream consolidation (reliable#1252 / #1266)
+// SpecificValues` — the upstream consolidation (the InsideOut backend#1252 / #1266)
 // removed it, but its assertions are load-bearing and have no
 // equivalent upstream.
 //
@@ -991,7 +991,7 @@ func TestFetchGCP_AllAuthoritySpecsAreUsable(t *testing.T) {
 //     a future "cleanup" that collapses them to one DisplayName would
 //     silently break the panel legends across three components.
 //   - User-visible display-name drift. Cloudfunctions' "(Gen1)" /
-//     "(Gen1, p99)" suffixes were added in reliable#1143 to
+//     "(Gen1, p99)" suffixes were added in the InsideOut backend#1143 to
 //     disambiguate from cloudrun (Gen2 metrics under cloud_run_revision).
 //     Drop them and the chart legend silently lies.
 //   - Resource-type / metric-type mismatches that PR #238 already
@@ -999,12 +999,12 @@ func TestFetchGCP_AllAuthoritySpecsAreUsable(t *testing.T) {
 //     publishing only under firestore_instance, not Database).
 //     Pinning the modern *_ops_count names traps re-regression.
 //
-// Order matters: reliable's UI legends iterate in spec order. A re-
+// Order matters: the InsideOut backend's UI legends iterate in spec order. A re-
 // arrangement that doesn't change the set still changes the user
 // experience, so the test asserts ordered equality, not set equality.
 //
 // The test pins **all 17** GCP services with non-empty Metrics —
-// not the 13 in the original reliable test (the catalog has grown by
+// not the 13 in the original the InsideOut backend test (the catalog has grown by
 // 4 services since: apigateway, cloudbuild, cloudcdn, identityplatform,
 // vertexai, cloudarmor were added or expanded). The "EveryGCPSpec"
 // name is intentional — when a future contributor adds a new GCP
@@ -1033,7 +1033,7 @@ func TestEveryGCPSpec_PinsMetricTypesAndDisplayNames(t *testing.T) {
 		},
 		composer.KeyGCPCloudFunctions: {
 			// (Gen1) suffix disambiguates from cloudrun (Gen2). Drop
-			// it and the panel legend silently lies — reliable#1143.
+			// it and the panel legend silently lies — the InsideOut backend#1143.
 			{"cloudfunctions.googleapis.com/function/execution_count", "Execution Count (Gen1)"},
 			{"cloudfunctions.googleapis.com/function/execution_times", "Execution Time (Gen1, p99)"},
 		},

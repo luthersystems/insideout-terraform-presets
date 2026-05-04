@@ -74,7 +74,7 @@ EOF
 
 ### 8. Verify Downstream Consumption
 
-After release, the downstream `reliable` repo can update its `go.mod`:
+After release, the downstream InsideOut backend repo can update its `go.mod`:
 
 ```bash
 go get github.com/luthersystems/insideout-terraform-presets@v<X.Y.Z>

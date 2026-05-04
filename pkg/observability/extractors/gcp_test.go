@@ -958,7 +958,7 @@ func TestExtractGCPCloudBuildConfig(t *testing.T) {
 		raw := []any{map[string]any{
 			"name":     "projects/demo/triggers/deploy-on-main",
 			"filename": "cloudbuild.yaml",
-			"github":   map[string]any{"owner": "luthersystems", "name": "reliable"},
+			"github":   map[string]any{"owner": "acme", "name": "service"},
 			"disabled": false,
 		}}
 		got := extractGCPCloudBuildConfig(raw)
@@ -967,7 +967,7 @@ func TestExtractGCPCloudBuildConfig(t *testing.T) {
 		assert.Equal(t, "deploy-on-main", got["triggerName"]) // basename
 		assert.Equal(t, "cloudbuild.yaml", got["filename"])
 		assert.Equal(t, "No", got["disabled"])
-		assert.Equal(t, "luthersystems/reliable", got["githubRepo"])
+		assert.Equal(t, "acme/service", got["githubRepo"])
 	})
 
 	t.Run("DisabledTrigger", func(t *testing.T) {

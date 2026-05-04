@@ -97,7 +97,7 @@ func AllowedValues(field string) []string {
 
 // ValidateAll aggregates the IR-level Validate(comps, cfg) plus every
 // post-composition validator into a single deterministic []ValidationIssue.
-// Callers that don't go through ComposeStackWithIssues — e.g. reliable's
+// Callers that don't go through ComposeStackWithIssues — e.g. The InsideOut backend's
 // dry-run path that wants to surface issues before the composer even runs
 // — call this with synthesized blocks/files (or empty maps to skip the
 // post-composition layer).

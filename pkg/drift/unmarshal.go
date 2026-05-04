@@ -23,7 +23,7 @@ type wireDrift struct {
 	PresetsVersion  string              `json:"presets_version"`
 	Resources       []wireResourceDrift `json:"resources"`
 	// Note: top-level "actionable" is intentionally ignored here —
-	// reliable's classifier owns that verdict now via Classify(). The
+	// the InsideOut backend's classifier owns that verdict now via Classify(). The
 	// field is still emitted by sandbox-infra for the
 	// trust-the-boolean fallback path that callers take when
 	// HasClassifiableDetail returns false; that fallback reads from

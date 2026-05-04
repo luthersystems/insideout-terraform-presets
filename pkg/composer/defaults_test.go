@@ -86,7 +86,7 @@ variable "required" {
 	// primitives. A regression returning cty.Value, big.Float, or other
 	// non-marshalable types would slip through if we never marshalled.
 	// json.Marshal promotes int64→float64, so we re-assert post-promotion shapes
-	// to document the actual on-the-wire form reliable will see.
+	// to document the actual on-the-wire form the InsideOut backend will see.
 	b, err := json.Marshal(got)
 	require.NoError(t, err, "PresetDefaults output must be JSON-marshalable")
 	var rt map[string]any

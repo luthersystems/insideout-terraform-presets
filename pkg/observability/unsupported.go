@@ -17,7 +17,7 @@ import (
 // through (a missing switch case is the usual culprit). Without this
 // guard the caller sees `unsupported X action: "foo" (did you mean
 // "foo"?)`, a confusing tell of an internal routing bug rather than a
-// typo. (Ported from reliable internal/agentapi/inspect_normalize.go.)
+// typo. (Ported from the InsideOut backend internal/agentapi/inspect_normalize.go.)
 func didYouMean(input string, valid []string) string {
 	if len(valid) == 0 {
 		return ""
@@ -36,16 +36,16 @@ func didYouMean(input string, valid []string) string {
 
 // UnsupportedActionError builds the canonical "unsupported X action"
 // error string used by every discovery dispatcher in this package and
-// (post #1252 swap) by reliable. Includes a "did you mean?" hint when a
+// (post #1252 swap) by the InsideOut backend. Includes a "did you mean?" hint when a
 // registered action is within Levenshtein distance 3, plus the full list
 // of supported actions and a pointer to the list-actions discovery verb.
 //
-// Format matches reliable's inspect_normalize.go::unsupportedActionError
+// Format matches the InsideOut backend's inspect_normalize.go::unsupportedActionError
 // byte-for-byte so tests asserting the hint substring continue to pass
 // once callers swap their local helper for this one. The string is
 // round-tripped to the LLM as a tool-result envelope (see
-// reliable/mcp-server/server/svc/aws_inspect.go and
-// reliable/internal/agentapi/chat_v2.go), so the format is part of the
+// The InsideOut backend/mcp-server/server/svc/aws_inspect.go and
+// internal/agentapi/chat_v2.go), so the format is part of the
 // agent-facing contract — don't churn it.
 func UnsupportedActionError(service, action string, validActions []string) error {
 	hint := didYouMean(action, validActions)
@@ -86,11 +86,11 @@ func UnsupportedServiceError(service string, validServices []string) error {
 // example, Identity Platform multi-tenancy on a project that has
 // `identitytoolkit.googleapis.com` enabled but never opted in to
 // multi-tenancy. The discovery layer wraps the upstream 4xx in this
-// type so callers (reliable's panel renderer) can render a clean
+// type so callers (the InsideOut backend's panel renderer) can render a clean
 // "feature not enabled" empty state via errors.As instead of leaking
 // a raw `400 INVALID_PROJECT_ID` string into the UI (#245).
 //
-// Feature is a stable identifier (snake_case) — reliable matches on
+// Feature is a stable identifier (snake_case) — the InsideOut backend matches on
 // it without parsing the human-readable Error() string. ProjectID is
 // the GCP project the call was made against.
 type GCPFeatureNotEnabledError struct {

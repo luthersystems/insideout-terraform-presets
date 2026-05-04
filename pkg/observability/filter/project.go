@@ -3,8 +3,8 @@
 // are scoped via the `Project=<name>` tag (kv- or map-shaped depending
 // on the service); GCP resources via the `project=<name>` label.
 //
-// Ported from reliable internal/agentapi/resource_filter.go (#204, #228).
-// The session-ID → project-name translation that lives reliable-side
+// Ported from the InsideOut backend internal/agentapi/resource_filter.go (#204, #228).
+// The session-ID → project-name translation that lives InsideOut-backend-side
 // is intentionally NOT ported; callers translate session/tenant
 // identifiers into project names before calling EnsureProject.
 package filter

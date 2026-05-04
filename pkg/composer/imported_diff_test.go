@@ -16,7 +16,7 @@ import (
 // TestDiffImportedResources_EmptyMarshalsAsArray pins the wire-shape
 // contract that VersionDiff.Resources is "always an array, possibly empty"
 // on the JSON side. DiffImportedResources must return a non-nil slice so
-// json.Marshal emits `[]` and not `null` — Reliable's snapshot consumers
+// json.Marshal emits `[]` and not `null` — the InsideOut backend's snapshot consumers
 // compare diff JSON byte-for-byte, so a nil↔[] flip would churn every
 // stack the first time it acquires or sheds an imported resource.
 func TestDiffImportedResources_EmptyMarshalsAsArray(t *testing.T) {
@@ -274,14 +274,14 @@ func TestDiffImportedResources_HiddenSensitiveFilteredEndToEnd(t *testing.T) {
 	require.Empty(t, diffs, "Hidden filter must drop sensitive fields end-to-end")
 
 	// Pin the wire shape: the diffs slice must marshal as `[]`, not `null`.
-	// Reliable's snapshot consumers compare diff JSON byte-for-byte, so a
+	// the InsideOut backend's snapshot consumers compare diff JSON byte-for-byte, so a
 	// nil↔[] flip would churn every stack the first time it onboards an
 	// imported resource. The previous defense-in-depth NotContains check
 	// here was vacuous because it ran against the literal "null" string.
 	b, err := json.Marshal(diffs)
 	require.NoError(t, err)
 	assert.Equal(t, "[]", string(b),
-		"empty diff slice must marshal as []; if this regresses to null, VersionDiff.Resources flips its wire shape and Reliable's byte-for-byte snapshot tests churn")
+		"empty diff slice must marshal as []; if this regresses to null, VersionDiff.Resources flips its wire shape and the InsideOut backend's byte-for-byte snapshot tests churn")
 }
 
 // TestDiffImportedResources_VisibleRedactedEndToEnd exercises the integration
@@ -289,7 +289,7 @@ func TestDiffImportedResources_HiddenSensitiveFilteredEndToEnd(t *testing.T) {
 // push_config.attributes (a JSON-projection path). The diff must surface the
 // change so the operator sees that something moved, but values must be
 // replaced with the redacted placeholder so raw subscriber metadata cannot
-// leak into Reliable's JSON.
+// leak into the InsideOut backend's JSON.
 func TestDiffImportedResources_VisibleRedactedEndToEnd(t *testing.T) {
 	t.Parallel()
 	requirePolicyEntry(t, "google_pubsub_subscription", "push_config.attributes", policy.FieldPolicy{
@@ -528,7 +528,7 @@ func TestDiffImportedResources_NoPolicyForType(t *testing.T) {
 
 func TestDiffImportedResources_VersionDiffWiringGolden(t *testing.T) {
 	t.Parallel()
-	// Pin the wire format that consumers (Reliable, ui-core) rely on. Re-seed
+	// Pin the wire format that consumers (the InsideOut backend, ui-core) rely on. Re-seed
 	// with `UPDATE_GOLDEN=1 go test ./pkg/composer/...` after intentional
 	// shape changes; otherwise drift here is a customer-facing wire break.
 	//
@@ -538,7 +538,7 @@ func TestDiffImportedResources_VersionDiffWiringGolden(t *testing.T) {
 	// Redacted entry is also Hidden — see TestNoVisibleSensitiveInPhase1),
 	// so a regression in the placeholder constant or the Redacted flag would
 	// otherwise go unpinned in JSON. This test pins both shapes in one
-	// golden so renderers (Reliable / ui-core) get a stable contract.
+	// golden so renderers (the InsideOut backend / ui-core) get a stable contract.
 	live := DiffImportedResources(
 		[]imported.ImportedResource{sampleSQS("q", 30)},
 		[]imported.ImportedResource{sampleSQS("q", 60)},

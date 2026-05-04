@@ -1,6 +1,6 @@
 // Helpers used across multiple per-service files.
 //
-// Ported from reliable internal/agentapi/aws_inspect.go +
+// Ported from the InsideOut backend internal/agentapi/aws_inspect.go +
 // resource_filter.go + config_extractors.go. The pkg/observability/filter
 // package owns the canonical project-tag/label matching primitives;
 // helpers here are local conveniences (slice-of-maps round-trip, string
@@ -22,7 +22,7 @@ import (
 // than panicking — callers treat nil as "no records" which yields an
 // empty-but-clean response.
 //
-// Mirrors reliable's toSliceOfMaps (config_extractors.go:172).
+// Mirrors the InsideOut backend's toSliceOfMaps (config_extractors.go:172).
 func toSliceOfMaps(v any) []map[string]any {
 	raw, err := json.Marshal(v)
 	if err != nil {
@@ -39,7 +39,7 @@ func toSliceOfMaps(v any) []map[string]any {
 // inspector can attach computed fields (HasInternetGateway, Kind=...) or
 // pipe the record through tag-format-agnostic helpers.
 //
-// Mirrors reliable's toMapAny (aws_inspect.go:1447).
+// Mirrors the InsideOut backend's toMapAny (aws_inspect.go:1447).
 func toMapAny(v any) map[string]any {
 	raw, err := json.Marshal(v)
 	if err != nil {
@@ -54,7 +54,7 @@ func toMapAny(v any) map[string]any {
 
 // getString extracts a string field from a JSON-shaped record. Returns
 // "" when the key is missing or the value is nil. Non-string values are
-// fmt.Sprintf'd — preserves reliable's permissive behaviour for SDKs
+// fmt.Sprintf'd — preserves the InsideOut backend's permissive behaviour for SDKs
 // that occasionally return numeric ARNs etc.
 func getString(m map[string]any, key string) string {
 	v, ok := m[key]
@@ -72,7 +72,7 @@ func getString(m map[string]any, key string) string {
 // {KnowledgeBaseArn, AgentArn, GuardrailArn, Arn} depending on which
 // AWS shape produced it.
 //
-// Mirrors reliable's firstNonEmptyString (aws_inspect.go:1435).
+// Mirrors the InsideOut backend's firstNonEmptyString (aws_inspect.go:1435).
 func firstNonEmptyString(s ...string) string {
 	for _, v := range s {
 		if v != "" {

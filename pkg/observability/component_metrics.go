@@ -6,7 +6,7 @@ import (
 
 // ComponentMetricsBinding pairs a component key with the (service, action)
 // the inspector dispatcher should call to produce the panel-default
-// resources view for that component. Mirrors the value type of reliable's
+// resources view for that component. Mirrors the value type of the InsideOut backend's
 // componentMetricsMapping (internal/agentapi/component_metrics.go:96).
 type ComponentMetricsBinding struct {
 	Service string
@@ -15,7 +15,7 @@ type ComponentMetricsBinding struct {
 
 // ComponentMetricsMapping maps composer.ComponentKey to the (service,
 // action) the inspector dispatcher invokes for that component's panel.
-// Source of truth ported from reliable's componentMetricsMapping.
+// Source of truth ported from the InsideOut backend's componentMetricsMapping.
 //
 // Keys not present here have no panel-default discovery and the UI shows
 // "no observable resources" — typically third-party toggles or
@@ -94,7 +94,7 @@ var ComponentMetricsMapping = map[composer.ComponentKey]ComponentMetricsBinding{
 	// panel surfaces the user's actual monitoring posture (alert policies)
 	// instead of compute/get-metrics, which returned an empty payload on any
 	// session without GCE instances and rendered as "No live observable
-	// resources were found" — misleading in reliable#1234.
+	// resources were found" — misleading in the InsideOut backend#1234.
 	composer.KeyGCPCloudMonitoring: {Service: "cloudmonitoring", Action: "list-alert-policies"},
 }
 
@@ -107,7 +107,7 @@ var ComponentMetricsMapping = map[composer.ComponentKey]ComponentMetricsBinding{
 //     sinks) but discoverable resources (log groups) are created on first
 //     use by other services — empty immediately after deploy is expected.
 //
-// Source of truth ported from reliable's emptyDiscoveryAllowlist
+// Source of truth ported from the InsideOut backend's emptyDiscoveryAllowlist
 // (internal/agentapi/component_metrics.go:209).
 var EmptyDiscoveryAllowlist = map[composer.ComponentKey]bool{
 	composer.KeyAWSCloudWatchLogs:       true,

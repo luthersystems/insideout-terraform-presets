@@ -1,6 +1,6 @@
 // CloudWatch Logs service inspector.
 //
-// Ported from reliable internal/agentapi/aws_inspect.go
+// Ported from the InsideOut backend internal/agentapi/aws_inspect.go
 // (cloudwatchlogs:790).
 //
 // Project scoping uses LogGroupNamePattern (server-side case-sensitive

@@ -26,7 +26,7 @@ func TestPresetsVersionFromBuildInfo(t *testing.T) {
 			name: "imported as dep with release tag",
 			ok:   true,
 			info: &debug.BuildInfo{
-				Main: debug.Module{Path: "github.com/luthersystems/ui-core", Version: "v2.5.0"},
+				Main: debug.Module{Path: "github.com/example/composer-host", Version: "v2.5.0"},
 				Deps: []*debug.Module{
 					{Path: "github.com/stretchr/testify", Version: "v1.9.0"},
 					{Path: "github.com/luthersystems/insideout-terraform-presets", Version: "v1.4.2"},
@@ -38,7 +38,7 @@ func TestPresetsVersionFromBuildInfo(t *testing.T) {
 			name: "imported as dep with pseudo-version (untagged)",
 			ok:   true,
 			info: &debug.BuildInfo{
-				Main: debug.Module{Path: "github.com/luthersystems/ui-core", Version: "v2.5.0"},
+				Main: debug.Module{Path: "github.com/example/composer-host", Version: "v2.5.0"},
 				Deps: []*debug.Module{
 					{Path: "github.com/luthersystems/insideout-terraform-presets", Version: "v0.0.0-20260420000000-abc123def456"},
 				},

@@ -40,7 +40,7 @@ Key rules:
 - If the module wraps a community module, use `source = "terraform-aws-modules/<name>/aws"` with a version pin
 - If the module needs a provider alias (like WAF needing `aws.us_east_1`), add `configuration_aliases` and create a `.validate-skip` marker file
 - Enable encryption, block public access, enforce least-privilege IAM by default
-- **Tag every taggable resource** with `tags = merge(module.name.tags, var.tags)`. Listeners (`aws_lb_listener`), instance profiles (`aws_iam_instance_profile`), and any resource that accepts a `tags` attribute must include it — otherwise the downstream reliable3 inspector's exact-match `Project` tag filter skips them (see issue #81).
+- **Tag every taggable resource** with `tags = merge(module.name.tags, var.tags)`. Listeners (`aws_lb_listener`), instance profiles (`aws_iam_instance_profile`), and any resource that accepts a `tags` attribute must include it — otherwise the downstream InsideOut inspector's exact-match `Project` tag filter skips them (see issue #81).
 
 ### 3. Create variables.tf
 

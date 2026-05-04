@@ -1,13 +1,13 @@
 // Storage / secret-material inspectors: GCS, Secret Manager, Cloud KMS.
 //
 // Mirrors:
-//   - inspectGCPGCS           — reliable gcp_inspect.go:979
-//   - inspectGCPSecretManager — reliable gcp_inspect.go:1104
-//   - inspectGCPKMS           — reliable gcp_inspect.go:1021
+//   - inspectGCPGCS           — the InsideOut backend gcp_inspect.go:979
+//   - inspectGCPSecretManager — the InsideOut backend gcp_inspect.go:1104
+//   - inspectGCPKMS           — the InsideOut backend gcp_inspect.go:1021
 //
 // GCS list-buckets returns a hand-shaped subset of bucket attrs (name,
 // location, storageClass, created) — the storage SDK BucketAttrs has
-// many more fields, but the inspector contract here mirrors reliable
+// many more fields, but the inspector contract here mirrors the InsideOut backend
 // exactly so consumers see the same shape.
 
 package gcp

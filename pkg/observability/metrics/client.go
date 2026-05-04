@@ -15,7 +15,7 @@ import (
 )
 
 // CloudWatchAPI is the subset of the CloudWatch v2 SDK client the
-// metric-fetch path actually invokes. Mirrors reliable's CloudWatchAPI
+// metric-fetch path actually invokes. Mirrors the InsideOut backend's CloudWatchAPI
 // (aws_metrics.go:58). Narrowed to GetMetricData because that's the only
 // CloudWatch op Fetch issues — every other CloudWatch surface (alarms,
 // dashboards, etc.) lives elsewhere. Kept as an interface so tests can
@@ -26,7 +26,7 @@ type CloudWatchAPI interface {
 
 // Clients bundles the AWS service clients the metric-fetch path needs.
 // Today that's just CloudWatch — the per-service discovery clients
-// (EC2, RDS, Lambda, …) used by reliable's discoverers land in C14
+// (EC2, RDS, Lambda, …) used by the InsideOut backend's discoverers land in C14
 // alongside the inspector port. We give callers a Clients struct anyway
 // so the C14 expansion is additive: new fields slot in without changing
 // the public constructor signature.
@@ -59,7 +59,7 @@ type Clients struct {
 // credentials via config.LoadDefaultConfig — appropriate for callers
 // that run inside the same trust boundary as the resources they're
 // fetching metrics for. Callers that already hold a resolved aws.Config
-// (reliable's broker-issued assumed-role config, integration-test
+// (the InsideOut backend's broker-issued assumed-role config, integration-test
 // configs built via STS AssumeRole, etc.) should use NewClientsFromConfig
 // instead so the resolved credentials flow through unchanged.
 func NewClients(ctx context.Context, region string) (*Clients, error) {
@@ -79,7 +79,7 @@ func NewClients(ctx context.Context, region string) (*Clients, error) {
 
 // NewClientsFromConfig builds a Clients value from an already-resolved
 // aws.Config. Use this when the caller has obtained credentials through
-// a path other than ambient default-config resolution — e.g. reliable's
+// a path other than ambient default-config resolution — e.g. The InsideOut backend's
 // Oracle credential-broker assumed-role flow, or an integration test
 // that built a config via sts.AssumeRole.
 //
@@ -100,7 +100,7 @@ func NewClientsFromConfig(cfg aws.Config) (*Clients, error) {
 }
 
 // cloudFrontClient returns a CloudWatch client pinned to us-east-1,
-// reusing the base config's resolved credentials. Mirrors reliable's
+// reusing the base config's resolved credentials. Mirrors the InsideOut backend's
 // createCloudFrontMetricsConfig (aws_metrics.go:1975). Lazy: only the
 // first call pays for credentials.Retrieve + LoadDefaultConfig.
 //
@@ -131,7 +131,7 @@ func (c *Clients) cloudFrontClient(ctx context.Context) (CloudWatchAPI, error) {
 }
 
 // MonitoringAPI is the subset of the Cloud Monitoring v3 client the
-// metric-fetch path actually invokes. Mirrors reliable's GCPMonitoringAPI
+// metric-fetch path actually invokes. Mirrors the InsideOut backend's GCPMonitoringAPI
 // (gcp_metrics.go:50). Narrowed to ListTimeSeries because that's the
 // only Cloud Monitoring op FetchGCP issues — alert policies and other
 // surfaces live in the discovery dispatchers (C15) and don't share this
@@ -148,7 +148,7 @@ type MonitoringAPI interface {
 }
 
 // realMonitoringClient wraps the Cloud Monitoring metric client to drain
-// its iterator into a slice. Mirrors reliable's realGCPMonitoringClient
+// its iterator into a slice. Mirrors the InsideOut backend's realGCPMonitoringClient
 // (gcp_metrics.go:55). Kept unexported — callers construct one via
 // NewGCPClients.
 type realMonitoringClient struct {
@@ -174,7 +174,7 @@ func (r *realMonitoringClient) ListTimeSeries(ctx context.Context, req *monitori
 // GCPClients bundles the GCP service clients the metric-fetch path
 // needs. Today that's just the Cloud Monitoring metric client — the
 // per-service discovery clients (Compute, Cloud Run, Functions, …) used
-// by reliable's GCP discoverers land in C15 alongside the GCP inspector
+// by the InsideOut backend's GCP discoverers land in C15 alongside the GCP inspector
 // port. We give callers a Clients struct anyway so the C15 expansion is
 // additive: new fields slot in without changing the public constructor
 // signature.
@@ -202,9 +202,9 @@ type GCPClients struct {
 }
 
 // NewGCPClients builds a GCPClients value bound to projectID. Mirrors
-// reliable's getGCPServiceMetrics inline construction (gcp_metrics.go:378-389).
+// The InsideOut backend's getGCPServiceMetrics inline construction (gcp_metrics.go:378-389).
 // Ambient credentials only — Application Default Credentials. The Oracle
-// service-account-token machinery in reliable lives outside the
+// service-account-token machinery in the InsideOut backend lives outside the
 // metric-fetch core and is not needed here; callers wanting to pass
 // scoped credentials can inject MonitoringAPI directly.
 //

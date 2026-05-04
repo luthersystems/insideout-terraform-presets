@@ -19,7 +19,7 @@ import (
 // the deferred allowlist tracks "alarms not yet authored" separately.
 type ComponentObservability struct {
 	// Service is the inspector-side join key (e.g. "rds", "compute") that
-	// reliable's per-service discoverer dispatches on. Mirrors the value
+	// the InsideOut backend's per-service discoverer dispatches on. Mirrors the value
 	// in ComponentMetricsMapping[k].Service.
 	Service string
 
@@ -33,7 +33,7 @@ type ComponentObservability struct {
 	GCP *GCPObs
 }
 
-// AWSObs is the AWS half of ComponentObservability. Mirrors reliable's
+// AWSObs is the AWS half of ComponentObservability. Mirrors the InsideOut backend's
 // serviceMetricDef one-for-one; AWSMetricSpec.Alarmed / AlarmIssue are
 // net-new, used by TestObservabilitySpecMatchesEmittedAlarms (lands in
 // C9) to enforce that every Alarmed=true spec has a matching
@@ -52,7 +52,7 @@ type AWSMetricSpec struct {
 	AlarmIssue string
 }
 
-// GCPObs is the GCP half. Mirrors reliable's gcpServiceDef.
+// GCPObs is the GCP half. Mirrors the InsideOut backend's gcpServiceDef.
 type GCPObs struct {
 	Metrics []GCPMetricSpec
 }
@@ -68,7 +68,7 @@ type GCPMetricSpec struct {
 	AlarmIssue    string
 }
 
-// awsServiceMetrics is the per-service catalog ported from reliable's
+// awsServiceMetrics is the per-service catalog ported from the InsideOut backend's
 // metricDefinitions (internal/agentapi/aws_metrics.go:258). The
 // Observability map below joins each ComponentKey to a service entry
 // here via ComponentMetricsMapping. The split exists because multiple
@@ -310,7 +310,7 @@ var awsServiceMetrics = map[string]AWSObs{
 	},
 }
 
-// gcpServiceMetrics is the per-service catalog ported from reliable's
+// gcpServiceMetrics is the per-service catalog ported from the InsideOut backend's
 // gcpMetricDefinitions (internal/agentapi/gcp_metrics.go:141).
 var gcpServiceMetrics = map[string]GCPObs{
 	"compute": {
@@ -392,8 +392,8 @@ var gcpServiceMetrics = map[string]GCPObs{
 		// firestore.googleapis.com/Database (carries database_id /
 		// location / resource_container labels). The legacy
 		// firestore_instance type only carries project_id and is NOT
-		// scopable per-database — so reliable's old catalog using it +
-		// reliable#1259's first attempt to "fix" by setting Database
+		// scopable per-database — so the InsideOut backend's old catalog using it +
+		// the InsideOut backend#1259's first attempt to "fix" by setting Database
 		// on document/{read,write,delete}_count both broke per-database
 		// scoping in different ways.
 		//
@@ -595,7 +595,7 @@ func AlarmedGCPMetrics(k composer.ComponentKey) AlarmAuthor {
 // definitions and per-component alarm authoring.
 //
 // During the migration window every entry is seeded with Service +
-// AWS/GCP metric specs (ported from reliable's metricDefinitions /
+// AWS/GCP metric specs (ported from the InsideOut backend's metricDefinitions /
 // gcpMetricDefinitions), but Alarmed=false everywhere — alarm authoring
 // lands in C7-C9 of this PR series. Components in observabilityDeferred
 // have at least one Alarmed=false metric (or no metric surface at all).
