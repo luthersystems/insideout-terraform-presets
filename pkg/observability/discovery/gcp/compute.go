@@ -55,7 +55,7 @@ func inspectCompute(ctx context.Context, projectID, action, filters string, opts
 		}
 
 		it := client.AggregatedList(ctx, req)
-		var instances []*computepb.Instance
+		instances := []*computepb.Instance{}
 		for {
 			pair, err := it.Next()
 			if err == iterator.Done {
@@ -116,7 +116,7 @@ func inspectGKE(ctx context.Context, projectID, action, filters string, opts ...
 		if project == "" {
 			return resp.Clusters, nil
 		}
-		var clusters []*containerpb.Cluster
+		clusters := []*containerpb.Cluster{}
 		for _, c := range resp.Clusters {
 			if gcpLabelMatches(c.GetResourceLabels(), "project", project) {
 				clusters = append(clusters, c)
@@ -170,7 +170,7 @@ func inspectBastion(ctx context.Context, projectID, action, filters string, opts
 			Project: projectID,
 			Filter:  proto.String(filterStr),
 		})
-		var instances []*computepb.Instance
+		instances := []*computepb.Instance{}
 		for {
 			pair, err := it.Next()
 			if err == iterator.Done {

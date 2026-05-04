@@ -87,7 +87,7 @@ func inspectVPC(ctx context.Context, projectID, action, filters string, opts ...
 		if err != nil {
 			return nil, err
 		}
-		var subnets []*computeapi.Subnetwork
+		subnets := []*computeapi.Subnetwork{}
 		for _, item := range resp.Items {
 			subnets = append(subnets, item.Subnetworks...)
 		}
@@ -258,7 +258,7 @@ func inspectCloudCDN(ctx context.Context, projectID, action, filters string, opt
 		defer func() { _ = client.Close() }()
 
 		it := client.AggregatedList(ctx, cloudCDNAggregatedListRequest(projectID, filters))
-		var services []*computepb.BackendService
+		services := []*computepb.BackendService{}
 		for {
 			pair, err := it.Next()
 			if err == iterator.Done {
@@ -298,7 +298,7 @@ func inspectAPIGateway(ctx context.Context, projectID, action, filters string, o
 			req.Filter = f
 		}
 		it := client.ListApis(ctx, req)
-		var apis []*apigatewaypb.Api
+		apis := []*apigatewaypb.Api{}
 		for {
 			api, err := it.Next()
 			if err == iterator.Done {

@@ -50,7 +50,7 @@ func inspectIdentityPlatform(ctx context.Context, projectID, action, _ string, o
 
 	switch action {
 	case "list-tenants":
-		var tenants []*identitytoolkit.GoogleCloudIdentitytoolkitAdminV2Tenant
+		tenants := []*identitytoolkit.GoogleCloudIdentitytoolkitAdminV2Tenant{}
 		var pageToken string
 		truncated := false
 		for {

@@ -110,7 +110,7 @@ func inspectDynamoDB(ctx context.Context, cfg aws.Config, action, filters string
 //
 // Mirrors the InsideOut backend's filterDynamoDBTablesByProjectTag (aws_metrics.go:1323).
 func filterDynamoDBTablesByProjectTag(ctx context.Context, client dynamoDBTablesClient, stsClient stsAccountClient, region, project string) ([]string, error) {
-	var all []string
+	all := []string{}
 	paginator := dynamodb.NewListTablesPaginator(client, &dynamodb.ListTablesInput{})
 	for paginator.HasMorePages() {
 		page, err := paginator.NextPage(ctx)
@@ -174,7 +174,7 @@ func filterElastiCacheCacheClustersByProjectTag(ctx context.Context, client elas
 	return filterElastiCacheByProjectTag(
 		ctx, client, project, "DescribeCacheClusters",
 		func(ctx context.Context) ([]elasticachetypes.CacheCluster, error) {
-			var all []elasticachetypes.CacheCluster
+			all := []elasticachetypes.CacheCluster{}
 			p := elasticache.NewDescribeCacheClustersPaginator(client, &elasticache.DescribeCacheClustersInput{})
 			for p.HasMorePages() {
 				page, err := p.NextPage(ctx)
@@ -193,7 +193,7 @@ func filterElastiCacheReplicationGroupsByProjectTag(ctx context.Context, client 
 	return filterElastiCacheByProjectTag(
 		ctx, client, project, "DescribeReplicationGroups",
 		func(ctx context.Context) ([]elasticachetypes.ReplicationGroup, error) {
-			var all []elasticachetypes.ReplicationGroup
+			all := []elasticachetypes.ReplicationGroup{}
 			p := elasticache.NewDescribeReplicationGroupsPaginator(client, &elasticache.DescribeReplicationGroupsInput{})
 			for p.HasMorePages() {
 				page, err := p.NextPage(ctx)

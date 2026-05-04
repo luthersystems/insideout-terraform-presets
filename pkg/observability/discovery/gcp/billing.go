@@ -122,7 +122,7 @@ func inspectBillingWithDeps(ctx context.Context, billingClient gcpBillingAPI, bu
 			Scope:  fmt.Sprintf("projects/%s", projectID),
 		})
 
-		var budgetList []map[string]any
+		budgetList := []map[string]any{}
 		for {
 			b, err := it.Next()
 			if err == iterator.Done {

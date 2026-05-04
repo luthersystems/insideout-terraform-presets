@@ -121,7 +121,7 @@ func Match(resources []map[string]any, project, tagFieldName string, tagFormat T
 	if project == "" || len(resources) == 0 {
 		return resources
 	}
-	var out []map[string]any
+	out := []map[string]any{}
 	for _, r := range resources {
 		tags := r[tagFieldName]
 		if tags == nil {

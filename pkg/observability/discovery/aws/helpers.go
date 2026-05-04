@@ -28,7 +28,7 @@ func toSliceOfMaps(v any) []map[string]any {
 	if err != nil {
 		return nil
 	}
-	var out []map[string]any
+	out := []map[string]any{}
 	if err := json.Unmarshal(raw, &out); err != nil {
 		return nil
 	}

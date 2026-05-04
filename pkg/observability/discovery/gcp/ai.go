@@ -110,7 +110,7 @@ func inspectVertexAI(ctx context.Context, projectID, action, filters string, opt
 			req.Filter = projectFilter
 		}
 		it := client.ListDatasets(ctx, req)
-		var datasets []*aiplatformpb.Dataset
+		datasets := []*aiplatformpb.Dataset{}
 		for {
 			ds, err := it.Next()
 			if err == iterator.Done {
@@ -136,7 +136,7 @@ func inspectVertexAI(ctx context.Context, projectID, action, filters string, opt
 			req.Filter = projectFilter
 		}
 		it := client.ListEndpoints(ctx, req)
-		var endpoints []*aiplatformpb.Endpoint
+		endpoints := []*aiplatformpb.Endpoint{}
 		for {
 			ep, err := it.Next()
 			if err == iterator.Done {
@@ -162,7 +162,7 @@ func inspectVertexAI(ctx context.Context, projectID, action, filters string, opt
 			req.Filter = projectFilter
 		}
 		it := client.ListModels(ctx, req)
-		var models []*aiplatformpb.Model
+		models := []*aiplatformpb.Model{}
 		for {
 			m, err := it.Next()
 			if err == iterator.Done {

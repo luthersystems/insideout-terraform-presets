@@ -40,7 +40,7 @@ func inspectGCS(ctx context.Context, projectID, action, filters string, opts ...
 		// storage.Buckets has no server-side label filter; post-filter
 		// on BucketAttrs.Labels.
 		project := projectFromFilters(filters)
-		var buckets []map[string]any
+		buckets := []map[string]any{}
 		for {
 			b, err := it.Next()
 			if err == iterator.Done {
@@ -81,7 +81,7 @@ func inspectSecretManager(ctx context.Context, projectID, action, filters string
 		// ListSecrets has no server-side label filter; post-filter on
 		// Secret.Labels.
 		project := projectFromFilters(filters)
-		var secrets []*secretmanagerpb.Secret
+		secrets := []*secretmanagerpb.Secret{}
 		for {
 			s, err := it.Next()
 			if err == iterator.Done {
@@ -124,7 +124,7 @@ func inspectKMS(ctx context.Context, projectID, action, filters string, opts ...
 		it := client.ListKeyRings(ctx, &kmspb.ListKeyRingsRequest{
 			Parent: fmt.Sprintf("projects/%s/locations/%s", projectID, location),
 		})
-		var keyRings []*kmspb.KeyRing
+		keyRings := []*kmspb.KeyRing{}
 		for {
 			kr, err := it.Next()
 			if err == iterator.Done {
@@ -151,7 +151,7 @@ func inspectKMS(ctx context.Context, projectID, action, filters string, opts ...
 		// ListCryptoKeys has no server-side label filter; post-filter
 		// on CryptoKey.Labels.
 		project := projectFromFilters(filters)
-		var keys []*kmspb.CryptoKey
+		keys := []*kmspb.CryptoKey{}
 		for {
 			k, err := it.Next()
 			if err == iterator.Done {

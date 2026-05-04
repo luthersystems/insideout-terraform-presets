@@ -225,7 +225,7 @@ func kmsKeyOwnedByProject(ctx context.Context, client kmsKeysClient, keyID, proj
 //
 // Mirrors the InsideOut backend's filterKMSAliasesByProjectTag (aws_metrics.go:198).
 func filterKMSAliasesByProjectTag(ctx context.Context, client kmsKeysClient, project string) ([]kmstypes.AliasListEntry, error) {
-	var all []kmstypes.AliasListEntry
+	all := []kmstypes.AliasListEntry{}
 	paginator := kms.NewListAliasesPaginator(client, &kms.ListAliasesInput{})
 	for paginator.HasMorePages() {
 		page, err := paginator.NextPage(ctx)
@@ -294,7 +294,7 @@ func inspectBackup(ctx context.Context, cfg aws.Config, action, filters string) 
 //
 // Mirrors the InsideOut backend's filterBackupVaultsByProjectTag (aws_metrics.go:845).
 func filterBackupVaultsByProjectTag(ctx context.Context, client backupVaultsClient, project string) ([]backuptypes.BackupVaultListMember, error) {
-	var all []backuptypes.BackupVaultListMember
+	all := []backuptypes.BackupVaultListMember{}
 	paginator := backup.NewListBackupVaultsPaginator(client, &backup.ListBackupVaultsInput{})
 	for paginator.HasMorePages() {
 		page, err := paginator.NextPage(ctx)

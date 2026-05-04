@@ -59,7 +59,7 @@ func inspectCloudSQL(ctx context.Context, projectID, action, filters string, opt
 		if project == "" {
 			return resp.Items, nil
 		}
-		var items []*sqladmin.DatabaseInstance
+		items := []*sqladmin.DatabaseInstance{}
 		for _, inst := range resp.Items {
 			if inst.Settings == nil {
 				continue
@@ -100,7 +100,7 @@ func inspectMemorystore(ctx context.Context, projectID, action, filters string, 
 		// ListInstances has no server-side label filter; post-filter
 		// on Instance.Labels.
 		project := projectFromFilters(filters)
-		var instances []*redispb.Instance
+		instances := []*redispb.Instance{}
 		for {
 			inst, err := it.Next()
 			if err == iterator.Done {
@@ -168,23 +168,38 @@ func inspectFirestore(ctx context.Context, projectID, action, filters string, op
 
 	switch action {
 	case "list-collections":
-		it := client.Collections(ctx)
-		var collections []string
-		for {
-			c, err := it.Next()
-			if err == iterator.Done {
-				break
-			}
-			if err != nil {
-				return nil, err
-			}
-			collections = append(collections, c.ID)
-		}
-		return collections, nil
+		return collectFirestoreCollectionIDs(client.Collections(ctx))
 
 	default:
 		return nil, unsupportedActionError("Firestore", action, observability.GCPServiceActions["firestore"])
 	}
+}
+
+// firestoreCollectionIterator is the minimal slice of
+// *firestore.CollectionIterator that collectFirestoreCollectionIDs
+// consumes, narrow enough to fake in unit tests without a real
+// Firestore client.
+type firestoreCollectionIterator interface {
+	Next() (*firestore.CollectionRef, error)
+}
+
+// collectFirestoreCollectionIDs drains a Firestore collection iterator
+// into a non-nil []string. The empty-iterator path returns [], NOT nil
+// — pinned by TestInspectFirestore_NoCollections_EmptySlice (#255) so
+// downstream JSON marshals as `[]` instead of `null`.
+func collectFirestoreCollectionIDs(it firestoreCollectionIterator) ([]string, error) {
+	collections := []string{}
+	for {
+		c, err := it.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		collections = append(collections, c.ID)
+	}
+	return collections, nil
 }
 
 // firestoreDatabaseFromFilters extracts and validates the

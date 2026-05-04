@@ -351,7 +351,7 @@ func inspectCloudFront(ctx context.Context, cfg aws.Config, action, filters stri
 // Mirrors the InsideOut backend's filterCloudFrontDistributionsByProjectTag
 // (aws_metrics.go:1077).
 func filterCloudFrontDistributionsByProjectTag(ctx context.Context, client cloudFrontDistributionsClient, project string) ([]cloudfronttypes.DistributionSummary, error) {
-	var all []cloudfronttypes.DistributionSummary
+	all := []cloudfronttypes.DistributionSummary{}
 	var marker *string
 	for {
 		out, err := client.ListDistributions(ctx, &cloudfront.ListDistributionsInput{Marker: marker})

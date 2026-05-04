@@ -2,13 +2,16 @@ package gcp
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"cloud.google.com/go/firestore"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 	sqladmin "google.golang.org/api/sqladmin/v1"
 )
@@ -152,6 +155,67 @@ func TestInspectFirestore_UnsupportedAction(t *testing.T) {
 	)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unsupported Firestore action")
+}
+
+// fakeFirestoreIterator stands in for *firestore.CollectionIterator
+// for the empty + happy-path tests of collectFirestoreCollectionIDs.
+type fakeFirestoreIterator struct {
+	refs []*firestore.CollectionRef
+	idx  int
+	err  error
+}
+
+func (f *fakeFirestoreIterator) Next() (*firestore.CollectionRef, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	if f.idx >= len(f.refs) {
+		return nil, iterator.Done
+	}
+	r := f.refs[f.idx]
+	f.idx++
+	return r, nil
+}
+
+// TestInspectFirestore_NoCollections_EmptySlice is the canonical #255
+// regression test. A freshly-deployed Firestore database has zero
+// collections (Firestore creates them lazily on first write) so the
+// iterator returns iterator.Done immediately. The pre-fix code declared
+// `var collections []string` which marshaled as `null`, collapsing the
+// reliable UI's `resources` field through every empty-state branch and
+// surfacing the misleading "Deploy infrastructure first." fallback.
+// Post-fix, the empty path returns []string{} which marshals as `[]`.
+func TestInspectFirestore_NoCollections_EmptySlice(t *testing.T) {
+	t.Parallel()
+	got, err := collectFirestoreCollectionIDs(&fakeFirestoreIterator{})
+	require.NoError(t, err)
+	require.NotNil(t, got, "must be non-nil so encoding/json emits [] not null")
+	assert.Empty(t, got)
+
+	b, err := json.Marshal(got)
+	require.NoError(t, err)
+	assert.Equal(t, "[]", string(b),
+		"empty Firestore list-collections must marshal as [] not null (#255)")
+}
+
+func TestInspectFirestore_ListCollections_Happy(t *testing.T) {
+	t.Parallel()
+	got, err := collectFirestoreCollectionIDs(&fakeFirestoreIterator{
+		refs: []*firestore.CollectionRef{
+			{ID: "users"},
+			{ID: "orders"},
+		},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"users", "orders"}, got)
+}
+
+func TestInspectFirestore_ListCollections_Error(t *testing.T) {
+	t.Parallel()
+	_, err := collectFirestoreCollectionIDs(&fakeFirestoreIterator{
+		err: assert.AnError,
+	})
+	require.Error(t, err)
 }
 
 // TestFirestoreDatabaseFromFilters_Roundtrip pins the parse + safety-

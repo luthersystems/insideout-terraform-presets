@@ -219,18 +219,25 @@ func TestMatch_KVFormat(t *testing.T) {
 		assert.Len(t, result, 1)
 		assert.Equal(t, "instance-1", result[0]["Name"])
 	})
-	t.Run("no match returns empty", func(t *testing.T) {
+	t.Run("no match returns non-nil empty slice (#255)", func(t *testing.T) {
 		t.Parallel()
 		result := Match(resources, "io-nonexistent", "Tags", FormatKV)
-		assert.Nil(t, result)
+		require.NotNil(t, result, "must be non-nil so encoding/json emits [] not null")
+		assert.Empty(t, result)
+		b, err := json.Marshal(result)
+		require.NoError(t, err)
+		assert.Equal(t, "[]", string(b), "filter.Match no-match must marshal as [] not null (#255)")
 	})
 	t.Run("empty project returns all", func(t *testing.T) {
 		t.Parallel()
 		result := Match(resources, "", "Tags", FormatKV)
 		assert.Len(t, result, 3)
 	})
-	t.Run("nil resources returns nil", func(t *testing.T) {
+	t.Run("nil resources returns nil (passthrough)", func(t *testing.T) {
 		t.Parallel()
+		// Passing nil into Match preserves nil — the per-site fix for
+		// #255 happens at the caller (toSliceOfMaps) which now returns
+		// an empty slice instead of nil for the success path.
 		assert.Nil(t, Match(nil, "io-abc", "Tags", FormatKV))
 	})
 }
@@ -263,9 +270,14 @@ func TestMatch_MapFormat(t *testing.T) {
 		assert.Len(t, result, 1)
 		assert.Equal(t, "cluster-1", result[0]["Name"])
 	})
-	t.Run("no match returns empty", func(t *testing.T) {
+	t.Run("no match returns non-nil empty slice (#255)", func(t *testing.T) {
 		t.Parallel()
-		assert.Nil(t, Match(resources, "io-nonexistent", "Tags", FormatMap))
+		result := Match(resources, "io-nonexistent", "Tags", FormatMap)
+		require.NotNil(t, result)
+		assert.Empty(t, result)
+		b, err := json.Marshal(result)
+		require.NoError(t, err)
+		assert.Equal(t, "[]", string(b))
 	})
 }
 
@@ -282,9 +294,14 @@ func TestMatch_LabelsFormat(t *testing.T) {
 		assert.Len(t, result, 1)
 		assert.Equal(t, "topic-1", result[0]["name"])
 	})
-	t.Run("no match returns empty", func(t *testing.T) {
+	t.Run("no match returns non-nil empty slice (#255)", func(t *testing.T) {
 		t.Parallel()
-		assert.Nil(t, Match(resources, "io-nonexistent", "labels", FormatLabels))
+		result := Match(resources, "io-nonexistent", "labels", FormatLabels)
+		require.NotNil(t, result)
+		assert.Empty(t, result)
+		b, err := json.Marshal(result)
+		require.NoError(t, err)
+		assert.Equal(t, "[]", string(b))
 	})
 	t.Run("empty project returns all", func(t *testing.T) {
 		t.Parallel()
@@ -296,7 +313,9 @@ func TestMatch_LabelsFormat(t *testing.T) {
 		mixed := []map[string]any{
 			{"name": "x", "labels": map[string]any{"Project": "io-abc"}},
 		}
-		assert.Nil(t, Match(mixed, "io-abc", "labels", FormatLabels))
+		result := Match(mixed, "io-abc", "labels", FormatLabels)
+		require.NotNil(t, result)
+		assert.Empty(t, result)
 	})
 	t.Run("typed map[string]string also accepted", func(t *testing.T) {
 		t.Parallel()
