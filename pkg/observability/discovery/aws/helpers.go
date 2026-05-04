@@ -18,9 +18,16 @@ import (
 // []map[string]any shape the filter package operates on. Used when an
 // SDK response carries typed structs but the project-tag check needs the
 // reflected map form (filter.Match's tagFieldName lookup works on any
-// JSON-shaped record). Returns nil on marshal/unmarshal failure rather
-// than panicking — callers treat nil as "no records" which yields an
-// empty-but-clean response.
+// JSON-shaped record).
+//
+// Always returns a non-nil slice on the success path so downstream
+// JSON marshaling emits `[]` not `null` (#255). AWS SDK V2 list
+// responses expose empty results as typed-nil slices like
+// `[]bedrockagenttypes.KnowledgeBaseSummary(nil)`, which json.Marshal
+// renders as the JSON literal `null`; unmarshaling that back into
+// `out` would leave it nil, so we restore an empty slice before
+// returning. Returns nil only on marshal/unmarshal failure
+// (fail-closed for shape mismatches).
 //
 // Mirrors the InsideOut backend's toSliceOfMaps (config_extractors.go:172).
 func toSliceOfMaps(v any) []map[string]any {
@@ -31,6 +38,9 @@ func toSliceOfMaps(v any) []map[string]any {
 	out := []map[string]any{}
 	if err := json.Unmarshal(raw, &out); err != nil {
 		return nil
+	}
+	if out == nil {
+		return []map[string]any{}
 	}
 	return out
 }

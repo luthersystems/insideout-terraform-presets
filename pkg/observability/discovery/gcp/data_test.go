@@ -159,6 +159,10 @@ func TestInspectFirestore_UnsupportedAction(t *testing.T) {
 
 // fakeFirestoreIterator stands in for *firestore.CollectionIterator
 // for the empty + happy-path tests of collectFirestoreCollectionIDs.
+//
+// Fidelity note: errors short-circuit on the first Next() call before
+// any data is yielded. For mid-stream-error scenarios (yield N items,
+// then error), extend the fake with a per-call error slice.
 type fakeFirestoreIterator struct {
 	refs []*firestore.CollectionRef
 	idx  int
@@ -215,7 +219,7 @@ func TestInspectFirestore_ListCollections_Error(t *testing.T) {
 	_, err := collectFirestoreCollectionIDs(&fakeFirestoreIterator{
 		err: assert.AnError,
 	})
-	require.Error(t, err)
+	assert.ErrorIs(t, err, assert.AnError)
 }
 
 // TestFirestoreDatabaseFromFilters_Roundtrip pins the parse + safety-

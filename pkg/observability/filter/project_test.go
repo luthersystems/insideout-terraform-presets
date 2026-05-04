@@ -308,7 +308,7 @@ func TestMatch_LabelsFormat(t *testing.T) {
 		result := Match(resources, "", "labels", FormatLabels)
 		assert.Len(t, result, 3)
 	})
-	t.Run("uppercase Project does not match — labels key is lowercase", func(t *testing.T) {
+	t.Run("uppercase Project does not match — labels key is lowercase (#255)", func(t *testing.T) {
 		t.Parallel()
 		mixed := []map[string]any{
 			{"name": "x", "labels": map[string]any{"Project": "io-abc"}},
@@ -316,6 +316,9 @@ func TestMatch_LabelsFormat(t *testing.T) {
 		result := Match(mixed, "io-abc", "labels", FormatLabels)
 		require.NotNil(t, result)
 		assert.Empty(t, result)
+		b, err := json.Marshal(result)
+		require.NoError(t, err)
+		assert.Equal(t, "[]", string(b))
 	})
 	t.Run("typed map[string]string also accepted", func(t *testing.T) {
 		t.Parallel()
