@@ -167,8 +167,6 @@ func ComponentDisplayName(key composer.ComponentKey) string {
 		return "GCP Vertex AI"
 	case composer.KeyGCPBastion:
 		return "GCP Bastion"
-	case composer.KeyGCPCloudCDN:
-		return "GCP Cloud CDN"
 	case composer.KeyGCPAPIGateway:
 		return "GCP API Gateway"
 	case composer.KeyGCPCloudLogging:

@@ -238,13 +238,6 @@ func TestValidateRemovals(t *testing.T) {
 			wantKeys:  []string{"gcp_vpc", "gcp_cloudsql", "gcp_gke"},
 		},
 		{
-			name:      "GCP: remove load balancer breaks CDN",
-			removed:   []ComponentKey{KeyGCPLoadbalancer},
-			remaining: []ComponentKey{KeyGCPVPC, KeyGCPCloudCDN},
-			wantWarn:  1,
-			wantKeys:  []string{"gcp_loadbalancer", "gcp_cloud_cdn"},
-		},
-		{
 			name:      "remove dependent too — no warning",
 			removed:   []ComponentKey{KeyAWSVPC, KeyAWSALB},
 			remaining: []ComponentKey{KeyAWSSQS},

@@ -90,7 +90,7 @@ func (c *Client) ListAvailableComponentKeys() ([]string, error) {
 
 		// GCP keys
 		KeyGCPVPC, KeyGCPBastion, KeyGCPCompute, KeyGCPGKE, KeyGCPCloudRun,
-		KeyGCPCloudFunctions, KeyGCPLoadbalancer, KeyGCPCloudCDN, KeyGCPCloudArmor,
+		KeyGCPCloudFunctions, KeyGCPLoadbalancer, KeyGCPCloudArmor,
 		KeyGCPAPIGateway, KeyGCPCloudSQL, KeyGCPMemorystore, KeyGCPFirestore,
 		KeyGCPGCS, KeyGCPCloudKMS, KeyGCPSecretManager, KeyGCPVertexAI,
 		KeyGCPPubSub, KeyGCPCloudLogging, KeyGCPCloudMonitoring,

@@ -1763,13 +1763,12 @@ func TestComposeStack_DiscoveredProvidersReachRoot(t *testing.T) {
 // reproduce the original incident. Enumerating every in-scope module here
 // makes "remove the suffix from any one preset" fail loudly.
 //
-// The skip allowlist captures the four GCP modules that the PR
-// intentionally left untouched: cloud_cdn (config-only, no cloud
-// resources), cloud_monitoring (only a non-unique displayName JSON),
-// identity_platform (singleton per project, no name field), vertex_ai
-// (display_name is non-unique server-side; the resource ID is
-// server-assigned). New GCP modules must either land on the suffix list
-// or be added to the skip allowlist with a justification.
+// The skip allowlist captures the GCP modules the PR intentionally
+// left untouched: cloud_monitoring (only a non-unique displayName
+// JSON), identity_platform (singleton per project, no name field),
+// vertex_ai (display_name is non-unique server-side; the resource ID
+// is server-assigned). New GCP modules must either land on the suffix
+// list or be added to the skip allowlist with a justification.
 func TestGCPPresets_AllSuffixedResourceNames(t *testing.T) {
 	// In-scope modules — every named cloud resource must carry the suffix.
 	suffixedPresets := []string{

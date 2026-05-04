@@ -1041,11 +1041,6 @@ func TestEveryGCPSpec_PinsMetricTypesAndDisplayNames(t *testing.T) {
 			{"loadbalancing.googleapis.com/https/request_count", "Request Count"},
 			{"loadbalancing.googleapis.com/https/backend_latencies", "Backend Latency (p99)"},
 		},
-		composer.KeyGCPCloudCDN: {
-			{"loadbalancing.googleapis.com/https/request_count", "Request Count"},
-			{"loadbalancing.googleapis.com/https/backend_latencies", "Backend Latency (p99)"},
-			{"loadbalancing.googleapis.com/https/backend_request_bytes_count", "Backend Request Bytes"},
-		},
 		composer.KeyGCPAPIGateway: {
 			{"apigateway.googleapis.com/gateway/request_count", "Request Count"},
 			{"apigateway.googleapis.com/gateway/latencies", "Latency (p99)"},

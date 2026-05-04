@@ -1,5 +1,5 @@
-// Network-plane inspectors: VPC, load balancer, Cloud Armor, Cloud CDN,
-// API Gateway.
+// Network-plane inspectors: VPC, load balancer, Cloud Armor, Cloud CDN
+// (LB-backed), API Gateway.
 //
 // Mirrors:
 //   - inspectGCPVPC          — reliable gcp_inspect.go:1397
@@ -12,7 +12,10 @@
 // google.golang.org/api/compute/v1 service handle (computeapi.NewService),
 // which is the discoverable client for the older REST surface those
 // resource types live on. Cloud CDN is a flag on Compute backend
-// services (EnableCdn=true) — there's no "Cloud CDN" resource type.
+// services (EnableCdn=true) — there's no "Cloud CDN" resource type;
+// the standalone gcp_cloud_cdn component was removed in #253 but the
+// inspector handler stays so a future loadbalancer panel can surface
+// per-backend CDN status.
 // API Gateway uses the apigateway apiv1 client.
 
 package gcp

@@ -74,7 +74,6 @@ const (
 	KeyGCPCloudRun         ComponentKey = "gcp_cloud_run"
 	KeyGCPCloudFunctions   ComponentKey = "gcp_cloud_functions"
 	KeyGCPLoadbalancer     ComponentKey = "gcp_loadbalancer"
-	KeyGCPCloudCDN         ComponentKey = "gcp_cloud_cdn"
 	KeyGCPCloudSQL         ComponentKey = "gcp_cloudsql"
 	KeyGCPMemorystore      ComponentKey = "gcp_memorystore"
 	KeyGCPGCS              ComponentKey = "gcp_gcs"
@@ -120,7 +119,6 @@ var ComposeOrder = []ComponentKey{
 	KeyGCPGCS,
 	KeyAWSDynamoDB,
 	KeyAWSCloudfront,
-	KeyGCPCloudCDN,
 	KeyAWSWAF,
 	KeyGCPCloudArmor,
 	KeyAWSBackups,
@@ -231,7 +229,6 @@ var ImplicitDependencies = map[ComponentKey][]ComponentKey{
 	KeyAWSOpenSearch:   {KeyAWSVPC},
 	KeyAWSBedrock:      {KeyAWSS3, KeyAWSOpenSearch},
 	KeyAWSCloudfront:   {KeyAWSALB},
-	KeyGCPCloudCDN:     {KeyGCPLoadbalancer},
 	// Polymorphic keys: dep on AWSVPC so a direct caller selecting only a
 	// polymorphic key still produces a prefixed-only stack.
 	KeyAWSEKSControlPlane: {KeyAWSVPC},
@@ -363,7 +360,6 @@ var PresetKeyMap = map[ComponentKey]string{
 	KeyGCPCompute:              "compute",
 	KeyGCPGKE:                  "gke",
 	KeyGCPLoadbalancer:         "loadbalancer",
-	KeyGCPCloudCDN:             "cloud_cdn",
 	KeyGCPCloudSQL:             "cloudsql",
 	KeyGCPMemorystore:          "memorystore",
 	KeyGCPGCS:                  "gcs",
@@ -467,7 +463,6 @@ var AllComponentKeys = []ComponentKey{
 	KeyGCPBastion,
 	KeyGCPCloudArmor,
 	KeyGCPCloudBuild,
-	KeyGCPCloudCDN,
 	KeyGCPCloudFunctions,
 	KeyGCPCloudKMS,
 	KeyGCPCloudLogging,
@@ -679,6 +674,14 @@ func DefaultWiring(selected map[ComponentKey]bool, k ComponentKey, comps *Compon
 			wi.Names = append(wi.Names, "vpc_id", "cache_subnet_ids")
 		}
 
+	case KeyAWSMSK:
+		if hasVPC {
+			vpc := vpcRef(selected)
+			wi.RawHCL["vpc_id"] = vpc + ".vpc_id"
+			wi.RawHCL["subnet_ids"] = vpc + ".private_subnet_ids"
+			wi.Names = append(wi.Names, "vpc_id", "subnet_ids")
+		}
+
 	case KeyAWSCloudfront:
 		if hasALB {
 			wi.RawHCL["origin_type"] = `"http"`
@@ -813,10 +816,6 @@ func DefaultWiring(selected map[ComponentKey]bool, k ComponentKey, comps *Compon
 			wi.RawHCL["network_self_link"] = "module.gcp_vpc.network_self_link"
 			wi.RawHCL["subnet_self_link"] = vpcSubnetSelfLinkExpr
 			wi.Names = append(wi.Names, "network_self_link", "subnet_self_link")
-		}
-		if selected[KeyGCPCloudCDN] {
-			wi.RawHCL["enable_cdn"] = "true"
-			wi.Names = append(wi.Names, "enable_cdn")
 		}
 		if selected[KeyGCPCloudArmor] {
 			wi.RawHCL["security_policy"] = "module.gcp_cloud_armor.security_policy_id"

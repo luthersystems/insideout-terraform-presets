@@ -128,7 +128,7 @@ func TestGCPLabels_UseProjectNotProjectID(t *testing.T) {
 		mainPath := filepath.Join(gcpDir, e.Name(), "main.tf")
 		body, err := os.ReadFile(mainPath)
 		if err != nil {
-			continue // some modules (e.g. cloud_cdn) have no main.tf
+			continue
 		}
 		src := string(body)
 
@@ -186,21 +186,11 @@ func TestGCPModules_ProjectIDDeclaredAndUsed(t *testing.T) {
 	require.NoError(t, err)
 
 	// Modules that intentionally have NO project-scoped resources and
-	// therefore don't declare project_id. Listed explicitly so a future
-	// addition of project-scoped resources to one of these surfaces as a
-	// test failure rather than silent miss.
-	//
-	// cloud_build and cloud_logging were on this list as "skeletons", but
-	// the project_id-less form was a latent bug — both create real
-	// project-scoped resources (a build trigger and a logging sink) that
-	// would land in whatever default project the provider was configured
-	// with. Issue #159's self-review fixed that and they are now full
-	// project-scoped modules. cloud_monitoring was on the list for the
-	// same reason and was fixed in the issue #168 sibling pass — its
-	// dashboard now declares project = var.project_id explicitly.
-	exempt := map[string]bool{
-		"cloud_cdn": true, // locals-only stub
-	}
+	// therefore don't declare project_id. Empty today: every GCP preset
+	// creates project-scoped resources. Re-add an entry only when a
+	// preset truly has zero project-scoped resources; the cloud_cdn
+	// doc-only preset that previously lived here was removed in #253.
+	exempt := map[string]bool{}
 
 	consumesPattern := regexp.MustCompile(`var\.project_id`)
 	declaresPattern := regexp.MustCompile(`(?m)^variable\s+"project_id"\s*\{`)

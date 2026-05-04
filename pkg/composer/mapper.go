@@ -622,9 +622,12 @@ func (m DefaultMapper) BuildModuleValues(
 
 	case KeyAWSBedrock:
 		if cfg != nil && cfg.AWSBedrock != nil {
-			if cfg.AWSBedrock.KnowledgeBaseName != "" {
-				vals["knowledge_base_name"] = cfg.AWSBedrock.KnowledgeBaseName
-			}
+			// KnowledgeBaseName is intentionally NOT plumbed through.
+			// The bedrock preset doesn't create the knowledge base
+			// (that's an application-layer concern; see aws/bedrock/main.tf
+			// header). The mapper used to write it anyway, which the
+			// module silently ignored — surfaced by the
+			// TestMapperKeysSubsetOfModuleVariables gate (#253 follow-up).
 			if cfg.AWSBedrock.ModelID != "" {
 				vals["model_id"] = cfg.AWSBedrock.ModelID
 			}
@@ -761,7 +764,7 @@ func (m DefaultMapper) BuildModuleValues(
 				vals["machine_type"] = cfg.GCPCompute.MachineType
 			}
 			if cfg.GCPCompute.DiskSizeGb > 0 {
-				vals["boot_disk_size_gb"] = cfg.GCPCompute.DiskSizeGb
+				vals["disk_size_gb"] = cfg.GCPCompute.DiskSizeGb
 			}
 		}
 
@@ -791,7 +794,7 @@ func (m DefaultMapper) BuildModuleValues(
 				vals["tier"] = cfg.GCPCloudSQL.Tier
 			}
 			if cfg.GCPCloudSQL.DiskSizeGb > 0 {
-				vals["disk_size"] = cfg.GCPCloudSQL.DiskSizeGb
+				vals["disk_size_gb"] = cfg.GCPCloudSQL.DiskSizeGb
 			}
 			vals["availability_type"] = "ZONAL"
 			if cfg.GCPCloudSQL.HighAvailability != nil && *cfg.GCPCloudSQL.HighAvailability {
@@ -840,21 +843,6 @@ func (m DefaultMapper) BuildModuleValues(
 		if cfg != nil && cfg.GCPCloudLogging != nil {
 			if cfg.GCPCloudLogging.RetentionDays > 0 {
 				vals["retention_days"] = cfg.GCPCloudLogging.RetentionDays
-			}
-		}
-
-	case KeyGCPCloudCDN:
-		if cfg != nil && cfg.GCPCloudCDN != nil {
-			if cfg.GCPCloudCDN.DefaultTtl != "" {
-				// Module declares default_ttl as `type = number`
-				// (seconds). The IR enum is "0" / "1h" / "1day";
-				// translate to seconds (0 / 3600 / 86400) so the value
-				// passes Terraform's type check.
-				secs, err := parseTTLSeconds(cfg.GCPCloudCDN.DefaultTtl, "GCPCloudCDN.DefaultTtl")
-				if err != nil {
-					return nil, err
-				}
-				vals["default_ttl"] = secs
 			}
 		}
 
@@ -941,11 +929,13 @@ func (m DefaultMapper) BuildModuleValues(
 		// module's variables.tf default is a minimal-but-GCP-valid spec
 		// (issue #166). Emitting "" here previously sabotaged that default
 		// and produced a 400 from API Gateway's spec validator at apply.
-		if cfg != nil && cfg.GCPAPIGateway != nil {
-			if cfg.GCPAPIGateway.DomainName != "" {
-				vals["domain_name"] = cfg.GCPAPIGateway.DomainName
-			}
-		}
+		//
+		// DomainName is intentionally not plumbed through: the gcp/api_gateway
+		// preset doesn't yet manage a custom domain (no `domain_name`
+		// variable). The mapper used to write it and the module silently
+		// dropped it — surfaced by TestMapperKeysSubsetOfModuleVariables
+		// (#253 follow-up). Re-add when the preset gains a domain knob.
+		_ = cfg
 
 	case KeyGCPIdentityPlatform:
 		vals["enable_email_signin"] = true

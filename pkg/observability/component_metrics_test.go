@@ -1,6 +1,7 @@
 package observability
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer"
@@ -24,19 +25,6 @@ func TestComponentMetricsMapping_OnlyKnownKeys(t *testing.T) {
 // service-actions map. Without this gate, an entry here that references
 // an unknown service silently produces a panel "unsupported action"
 // error at runtime (#1010).
-//
-// NOTE: this gate intentionally does NOT assert the Action is in the
-// service's action list, because the ported data has known drift:
-// reliable's componentMetricsMapping["aws_vpc"] = (vpc,
-// describe-vpcs) but awsServiceActions["vpc"] = [describe-nat-gateways,
-// get-metrics]. describe-vpcs is registered under the "ec2" service.
-// Reliable's runtime behavior is unclear (likely rejects on dispatch
-// validation); this PR preserves the data as-ported and tracks the
-// inconsistency as a follow-up.
-//
-// TODO(#204): once reliable's actual dispatch behavior is confirmed,
-// either fix the mapping (point aws_vpc at "ec2") or document the
-// fall-through and re-enable the strict action assertion.
 func TestComponentMetricsMapping_ServiceRegistered(t *testing.T) {
 	for k, binding := range ComponentMetricsMapping {
 		if composer.CloudFor(k) == "aws" {
@@ -50,6 +38,59 @@ func TestComponentMetricsMapping_ServiceRegistered(t *testing.T) {
 		assert.True(t, ok,
 			"ComponentMetricsMapping[%s].Service=%q is not in GCPServiceActions",
 			k, binding.Service)
+	}
+}
+
+// componentMetricsActionAllowlist records ComponentMetricsMapping
+// entries whose Action is intentionally NOT in the registered
+// AWSServiceActions/GCPServiceActions list for the bound Service.
+// Each entry needs a justification — the gate exists precisely to make
+// this kind of drift loud (Vertex AI's list-endpoints typo in #253 is
+// what motivated it).
+var componentMetricsActionAllowlist = map[composer.ComponentKey]string{
+	// aws_vpc binds (vpc, describe-vpcs) but describe-vpcs is registered
+	// under the "ec2" service per the AWS SDK split. Either fix the
+	// mapping (point aws_vpc at "ec2") or move describe-vpcs into the
+	// "vpc" service's action list — both touch downstream dispatchers.
+	// Tracked separately as a follow-up to #253.
+	composer.KeyAWSVPC: "describe-vpcs is registered under ec2, not vpc — needs cross-repo dispatch alignment",
+}
+
+// TestComponentMetricsMapping_ActionRegistered is the forward-direction
+// gate that would have caught Vertex AI's list-endpoints typo in #253.
+// For every entry in ComponentMetricsMapping, assert the Action is in
+// the registered action list of the bound Service. Mismatches are
+// allowlisted via componentMetricsActionAllowlist with a justification.
+func TestComponentMetricsMapping_ActionRegistered(t *testing.T) {
+	for k, binding := range ComponentMetricsMapping {
+		if reason, exempt := componentMetricsActionAllowlist[k]; exempt {
+			t.Logf("allowlisted: %s (%s)", k, reason)
+			continue
+		}
+		registry := AWSServiceActions
+		if composer.CloudFor(k) == "gcp" {
+			registry = GCPServiceActions
+		}
+		actions, ok := registry[binding.Service]
+		if !ok {
+			// Already covered by TestComponentMetricsMapping_ServiceRegistered.
+			continue
+		}
+		assert.True(t, slices.Contains(actions, binding.Action),
+			"ComponentMetricsMapping[%s].Action=%q is not in the registered action list for service %q (have %v) — adding the action to the service registry, fixing the mapping, or allowlisting in componentMetricsActionAllowlist with a justification will all unblock",
+			k, binding.Action, binding.Service, actions)
+	}
+}
+
+// TestComponentMetricsActionAllowlist_NotStale guards against the
+// allowlist outliving its purpose — every entry must point at a real
+// ComponentMetricsMapping binding.
+func TestComponentMetricsActionAllowlist_NotStale(t *testing.T) {
+	for k := range componentMetricsActionAllowlist {
+		_, ok := ComponentMetricsMapping[k]
+		assert.True(t, ok,
+			"componentMetricsActionAllowlist entry %q has no matching ComponentMetricsMapping binding — drop it",
+			k)
 	}
 }
 

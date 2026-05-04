@@ -766,18 +766,6 @@ var configFieldValidators = []configFieldValidator{
 			return c.GCPCloudFunctions.Runtime, true
 		},
 	},
-	{
-		field:     "gcp_cloud_cdn.defaultTtl",
-		component: KeyGCPCloudCDN,
-		variable:  "default_ttl",
-		value: func(c *Config) (any, bool) {
-			if c == nil || c.GCPCloudCDN == nil || c.GCPCloudCDN.DefaultTtl == "" {
-				return nil, false
-			}
-			return c.GCPCloudCDN.DefaultTtl, true
-		},
-		normalize: normalizeTTLSeconds("GCPCloudCDN.DefaultTtl"),
-	},
 }
 
 var validatorsByField = func() map[string]configFieldValidator {

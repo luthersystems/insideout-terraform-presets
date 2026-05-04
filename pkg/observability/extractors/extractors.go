@@ -108,8 +108,6 @@ func Extract(componentKey composer.ComponentKey, rawResult any) map[string]strin
 		return extractGCPCloudFunctionsConfig(rawResult)
 	case "gcp_api_gateway":
 		return extractGCPAPIGatewayConfig(rawResult)
-	case "gcp_cloud_cdn":
-		return extractGCPCloudCDNConfig(rawResult)
 	case "gcp_bastion":
 		return extractGCPBastionConfig(rawResult)
 	default:
@@ -1941,41 +1939,6 @@ func extractGCPAPIGatewayConfig(rawResult any) map[string]string {
 	}
 	if v := getString(first, "state"); v != "" {
 		cfg["state"] = v
-	}
-	return cfg
-}
-
-// extractGCPCloudCDNConfig extracts config from the
-// list-backend-services-cdn response (inspectGCPCloudCDN →
-// compute.BackendServicesRESTClient.AggregatedList filtered to
-// EnableCDN=true). Shape (after JSON round-trip of []*computepb.
-// BackendService):
-//
-//	[ { name, description, enableCDN (bool),
-//	    cdnPolicy: { cacheMode, defaultTtl, maxTtl, ... } } ]
-//
-// gcp_cloud_cdn in lib/stack/ir.ts is a bare boolean. Surface backend
-// identity + cacheMode so drift fires on an operator flipping cacheMode
-// from CACHE_ALL_STATIC to USE_ORIGIN_HEADERS without updating design.
-func extractGCPCloudCDNConfig(rawResult any) map[string]string {
-	items := sliceFromEnvelope(rawResult, "backendServices")
-	if len(items) == 0 {
-		return nil
-	}
-	cfg := map[string]string{
-		"backendCount": strconv.Itoa(len(items)),
-	}
-	first := items[0]
-	if v := gcpResourceBasename(getString(first, "name")); v != "" {
-		cfg["backendName"] = v
-	}
-	if v := boolStr(first, "enableCDN"); v != "" {
-		cfg["enableCdn"] = v
-	}
-	if cdn := toMap(first["cdnPolicy"]); cdn != nil {
-		if v := getString(cdn, "cacheMode"); v != "" {
-			cfg["cacheMode"] = v
-		}
 	}
 	return cfg
 }

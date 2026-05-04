@@ -39,7 +39,15 @@ variable "secrets" {
       })))
     }))
   }))
-  default = []
+  # Default seeds one empty container so a freshly-deployed stack with
+  # gcp_secret_manager toggled on always produces a discoverable resource.
+  # Empty default surfaced as "no metrics / drift detected" in #253.
+  # Override with a typed Secrets[] from the IR layer when that lands.
+  default = [
+    {
+      name = "main-secret"
+    }
+  ]
 }
 
 variable "iam_bindings" {

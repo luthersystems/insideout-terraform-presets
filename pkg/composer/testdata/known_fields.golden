@@ -29,7 +29,6 @@ aws_sqs.visibilityTimeout
 aws_vpc
 cloud
 cpu_arch
-gcp_cloud_cdn.defaultTtl
 gcp_cloud_functions.runtime
 gcp_cloud_run.cpu
 gcp_cloud_run.memory

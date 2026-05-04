@@ -24,69 +24,202 @@ import (
 // kitchenSinkConfig populates every cfg sub-struct the mapper reads with
 // values that exercise each mapper branch. Used to drive a single mapper
 // invocation per ComponentKey for the cross-module check below.
+//
+// The completeness of THIS struct gates whether
+// TestMapperKeysSubsetOfModuleVariables can detect mapper-key/preset-var
+// drift. The historical compute-mapper bug (`boot_disk_size_gb` →
+// `disk_size_gb`) and the SM `secret_id` bug from #253 both slipped past
+// the subset gate because the corresponding cfg sub-struct (GCPCompute,
+// no GCP coverage at all) was unset, so the mapper branch never fired.
+// Add a new entry here whenever a new cfg sub-struct lands in types.go.
 func kitchenSinkConfig() *Config {
-	ttl := "1h"
-	op := "/v1"
 	t := true
+	one := 1
+	ten := 10
 
-	return &Config{
+	cfg := &Config{
 		Cloud:  "aws",
 		Region: "us-east-1",
-		AWSCloudfront: &struct {
-			DefaultTtl *string `json:"defaultTtl,omitempty"`
-			OriginPath *string `json:"originPath,omitempty"`
-			CachePaths *string `json:"cachePaths,omitempty"` // DEPRECATED: use OriginPath
-		}{DefaultTtl: &ttl, OriginPath: &op},
-		AWSRDS: &struct {
-			CPUSize      string `json:"cpuSize,omitempty"`
-			ReadReplicas string `json:"readReplicas,omitempty"`
-			StorageSize  string `json:"storageSize,omitempty"`
-		}{CPUSize: "8 vCPU", ReadReplicas: "2 read replicas", StorageSize: "200GB"},
-		AWSElastiCache: &struct {
-			HA       *bool  `json:"ha,omitempty"`
-			Storage  string `json:"storageSize,omitempty"`
-			NodeSize string `json:"nodeSize,omitempty"`
-			Replicas string `json:"replicas,omitempty"`
-		}{HA: &t, Storage: "20GB", NodeSize: "8 vCPU", Replicas: "2 read replicas"},
-		AWSS3: &struct {
-			Versioning *bool `json:"versioning,omitempty"`
-		}{Versioning: &t},
-		AWSDynamoDB: &struct {
-			Type string `json:"type,omitempty"`
-		}{Type: "On demand"},
-		AWSSQS: &struct {
-			Type              string `json:"type,omitempty"`
-			VisibilityTimeout string `json:"visibilityTimeout,omitempty"`
-		}{Type: "FIFO", VisibilityTimeout: "600"},
-		AWSMSK: &struct {
-			Retention string `json:"retentionPeriod,omitempty"`
-		}{Retention: "7 days"},
-		AWSCloudWatchLogs: &struct {
-			RetentionDays int `json:"retentionDays,omitempty"`
-		}{RetentionDays: 90},
-		AWSLambda: &struct {
-			Runtime    string `json:"runtime,omitempty"`
-			MemorySize string `json:"memorySize,omitempty"`
-			Timeout    string `json:"timeout,omitempty"`
-		}{Runtime: "nodejs20.x", MemorySize: "512", Timeout: "30s"},
-		AWSOpenSearch: &struct {
-			DeploymentType string `json:"deploymentType,omitempty"`
-			InstanceType   string `json:"instanceType,omitempty"`
-			StorageSize    string `json:"storageSize,omitempty"`
-			MultiAZ        *bool  `json:"multiAz,omitempty"`
-		}{DeploymentType: "managed", InstanceType: "t3.medium.search", StorageSize: "1TB", MultiAZ: &t},
-		AWSKMS: &struct {
-			NumKeys string `json:"numKeys,omitempty"`
-		}{NumKeys: "1"},
-		AWSSecretsManager: &struct {
-			NumSecrets string `json:"numSecrets,omitempty"`
-		}{NumSecrets: "1"},
-		GCPCloudCDN: &struct {
-			DefaultTtl string `json:"defaultTtl,omitempty"`
-			OriginPath string `json:"originPath,omitempty"`
-			CachePaths string `json:"cachePaths,omitempty"` // DEPRECATED: use OriginPath
-		}{DefaultTtl: "1h"},
 	}
+
+	// AWS
+	cfg.AWSEC2 = &struct {
+		InstanceType          string `json:"instanceType,omitempty"`
+		NumServers            string `json:"numServers,omitempty"`
+		NumCoresPerServer     string `json:"numCoresPerServer,omitempty"`
+		DiskSizePerServer     string `json:"diskSizePerServer,omitempty"`
+		UserData              string `json:"userData,omitempty"`
+		UserDataURL           string `json:"userDataURL,omitempty"`
+		CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
+		SSHPublicKey          string `json:"sshPublicKey,omitempty"`
+		EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+	}{
+		InstanceType:          "t3.medium",
+		DiskSizePerServer:     "100",
+		UserData:              "#!/bin/bash\necho hello",
+		CustomIngressPorts:    []int{8080},
+		SSHPublicKey:          "ssh-rsa AAAA...",
+		EnableInstanceConnect: &t,
+	}
+	cfg.AWSEKS = &struct {
+		HaControlPlane         *bool  `json:"haControlPlane,omitempty"`
+		ControlPlaneVisibility string `json:"controlPlaneVisibility,omitempty"`
+		DesiredSize            string `json:"desiredSize,omitempty"`
+		MaxSize                string `json:"maxSize,omitempty"`
+		MinSize                string `json:"minSize,omitempty"`
+		InstanceType           string `json:"instanceType,omitempty"`
+	}{
+		HaControlPlane:         &t,
+		ControlPlaneVisibility: "private",
+		DesiredSize:            "2",
+		MinSize:                "1",
+		MaxSize:                "3",
+		InstanceType:           "t3.medium",
+	}
+	cfg.AWSECS = &struct {
+		EnableContainerInsights *bool    `json:"enableContainerInsights,omitempty"`
+		CapacityProviders       []string `json:"capacityProviders,omitempty"`
+		DefaultCapacityProvider string   `json:"defaultCapacityProvider,omitempty"`
+		EnableServiceConnect    *bool    `json:"enableServiceConnect,omitempty"`
+	}{
+		EnableContainerInsights: &t,
+		CapacityProviders:       []string{"FARGATE"},
+		DefaultCapacityProvider: "FARGATE",
+		EnableServiceConnect:    &t,
+	}
+	cfg.AWSVPC = &struct {
+		SingleNATGateway *bool `json:"singleNatGateway,omitempty"`
+		EnableNATGateway *bool `json:"enableNatGateway,omitempty"`
+		AZCount          *int  `json:"azCount,omitempty"`
+	}{SingleNATGateway: &t, EnableNATGateway: &t, AZCount: &ten}
+	ttl := "1h"
+	op := "/v1"
+	cfg.AWSCloudfront = &struct {
+		DefaultTtl *string `json:"defaultTtl,omitempty"`
+		OriginPath *string `json:"originPath,omitempty"`
+		CachePaths *string `json:"cachePaths,omitempty"` // DEPRECATED: use OriginPath
+	}{DefaultTtl: &ttl, OriginPath: &op}
+	cfg.AWSRDS = &struct {
+		CPUSize      string `json:"cpuSize,omitempty"`
+		ReadReplicas string `json:"readReplicas,omitempty"`
+		StorageSize  string `json:"storageSize,omitempty"`
+	}{CPUSize: "8 vCPU", ReadReplicas: "2 read replicas", StorageSize: "200GB"}
+	cfg.AWSElastiCache = &struct {
+		HA       *bool  `json:"ha,omitempty"`
+		Storage  string `json:"storageSize,omitempty"`
+		NodeSize string `json:"nodeSize,omitempty"`
+		Replicas string `json:"replicas,omitempty"`
+	}{HA: &t, Storage: "20GB", NodeSize: "8 vCPU", Replicas: "2 read replicas"}
+	cfg.AWSS3 = &struct {
+		Versioning *bool `json:"versioning,omitempty"`
+	}{Versioning: &t}
+	cfg.AWSDynamoDB = &struct {
+		Type string `json:"type,omitempty"`
+	}{Type: "On demand"}
+	cfg.AWSSQS = &struct {
+		Type              string `json:"type,omitempty"`
+		VisibilityTimeout string `json:"visibilityTimeout,omitempty"`
+	}{Type: "FIFO", VisibilityTimeout: "600"}
+	cfg.AWSMSK = &struct {
+		Retention string `json:"retentionPeriod,omitempty"`
+	}{Retention: "7 days"}
+	cfg.AWSCloudWatchLogs = &struct {
+		RetentionDays int `json:"retentionDays,omitempty"`
+	}{RetentionDays: 90}
+	cfg.AWSCloudWatchMonitoring = &struct {
+		RetentionDays int `json:"retentionDays,omitempty"`
+	}{RetentionDays: 90}
+	cfg.AWSCognito = &struct {
+		SignInType  string `json:"signInType,omitempty"`
+		MFARequired *bool  `json:"mfaRequired,omitempty"`
+		MFAFactor   string `json:"mfaFactor,omitempty"`
+		Okta        *struct {
+			SelfSignupAllowed *bool `json:"selfSignupAllowed,omitempty"`
+		} `json:"okta,omitempty"`
+		Auth0 *struct {
+			MFARequired *bool `json:"mfaRequired,omitempty"`
+		} `json:"auth0,omitempty"`
+	}{SignInType: "email", MFARequired: &t, MFAFactor: "TOTP"}
+	cfg.AWSLambda = &struct {
+		Runtime    string `json:"runtime,omitempty"`
+		MemorySize string `json:"memorySize,omitempty"`
+		Timeout    string `json:"timeout,omitempty"`
+	}{Runtime: "nodejs20.x", MemorySize: "512", Timeout: "30s"}
+	cfg.AWSAPIGateway = &struct {
+		DomainName     string `json:"domainName,omitempty"`
+		CertificateArn string `json:"certificateArn,omitempty"`
+	}{DomainName: "api.example.com", CertificateArn: "arn:aws:acm:us-east-1:123456789012:certificate/abc"}
+	cfg.AWSKMS = &struct {
+		NumKeys string `json:"numKeys,omitempty"`
+	}{NumKeys: "1"}
+	cfg.AWSSecretsManager = &struct {
+		NumSecrets string `json:"numSecrets,omitempty"`
+	}{NumSecrets: "1"}
+	cfg.AWSOpenSearch = &struct {
+		DeploymentType string `json:"deploymentType,omitempty"`
+		InstanceType   string `json:"instanceType,omitempty"`
+		StorageSize    string `json:"storageSize,omitempty"`
+		MultiAZ        *bool  `json:"multiAz,omitempty"`
+	}{DeploymentType: "managed", InstanceType: "t3.medium.search", StorageSize: "1TB", MultiAZ: &t}
+	cfg.AWSBedrock = &struct {
+		KnowledgeBaseName string `json:"knowledgeBaseName,omitempty"`
+		ModelID           string `json:"modelId,omitempty"`
+		EmbeddingModelID  string `json:"embeddingModelId,omitempty"`
+	}{KnowledgeBaseName: "kb", ModelID: "anthropic.claude-3", EmbeddingModelID: "amazon.titan-embed"}
+
+	// GCP
+	cfg.GCPCompute = &struct {
+		NumServers  string `json:"numServers,omitempty"`
+		MachineType string `json:"machineType,omitempty"`
+		DiskSizeGb  int    `json:"diskSizeGb,omitempty"`
+	}{NumServers: "1", MachineType: "e2-medium", DiskSizeGb: 50}
+	cfg.GCPGKE = &struct {
+		Regional    *bool  `json:"regional,omitempty"`
+		NodeCount   string `json:"nodeCount,omitempty"`
+		MachineType string `json:"machineType,omitempty"`
+	}{Regional: &t, NodeCount: "3", MachineType: "e2-standard-2"}
+	cfg.GCPCloudSQL = &struct {
+		Tier             string `json:"tier,omitempty"`
+		DiskSizeGb       int    `json:"diskSizeGb,omitempty"`
+		HighAvailability *bool  `json:"highAvailability,omitempty"`
+	}{Tier: "db-f1-micro", DiskSizeGb: 10, HighAvailability: &t}
+	cfg.GCPMemorystore = &struct {
+		Tier         string `json:"tier,omitempty"`
+		MemorySizeGb int    `json:"memorySizeGb,omitempty"`
+	}{Tier: "STANDARD_HA", MemorySizeGb: 5}
+	cfg.GCPGCS = &struct {
+		StorageClass string `json:"storageClass,omitempty"`
+		Versioning   *bool  `json:"versioning,omitempty"`
+	}{StorageClass: "STANDARD", Versioning: &t}
+	cfg.GCPPubSub = &struct {
+		MessageRetentionDuration string `json:"messageRetentionDuration,omitempty"`
+	}{MessageRetentionDuration: "604800s"}
+	cfg.GCPCloudLogging = &struct {
+		RetentionDays int `json:"retentionDays,omitempty"`
+	}{RetentionDays: 30}
+	cfg.GCPCloudRun = &struct {
+		Memory       string `json:"memory,omitempty"`
+		CPU          string `json:"cpu,omitempty"`
+		MinInstances *int   `json:"minInstances,omitempty"`
+		MaxInstances *int   `json:"maxInstances,omitempty"`
+	}{Memory: "512Mi", CPU: "1", MinInstances: &one, MaxInstances: &ten}
+	cfg.GCPCloudFunctions = &struct {
+		Runtime    string `json:"runtime,omitempty"`
+		MemorySize string `json:"memorySize,omitempty"`
+		Timeout    string `json:"timeout,omitempty"`
+	}{Runtime: "nodejs20", MemorySize: "256", Timeout: "60s"}
+	cfg.GCPIdentityPlatform = &struct {
+		SignInMethods []string `json:"signInMethods,omitempty"`
+		MFARequired   *bool    `json:"mfaRequired,omitempty"`
+	}{SignInMethods: []string{"EMAIL"}, MFARequired: &t}
+	cfg.GCPAPIGateway = &struct {
+		DomainName string `json:"domainName,omitempty"`
+	}{DomainName: "api.example.com"}
+	cfg.GCPLoadbalancer = &struct {
+		EnableCDN *bool `json:"enable_cdn,omitempty"`
+	}{EnableCDN: &t}
+
+	return cfg
 }
 
 func TestMapperKeysSubsetOfModuleVariables(t *testing.T) {
