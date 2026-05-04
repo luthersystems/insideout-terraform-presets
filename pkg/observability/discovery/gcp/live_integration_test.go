@@ -30,6 +30,7 @@ package gcp
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/url"
@@ -411,6 +412,11 @@ func TestLive_InspectFirestore_DefaultDB(t *testing.T) {
 // passthrough works against a real preset-deployed Firestore. Set
 // LIVE_GCP_FIRESTORE_DB to the database_name output of the deployed
 // stack (e.g. io-cc7ndmjcolun-firestore-8a3bfd07).
+//
+// Also pins the #255 wire-shape contract: the result must marshal
+// as a JSON array (`[]` for the empty case, `[…]` for non-empty),
+// never as JSON `null`. The downstream reliable UI gates the panel
+// render on that shape.
 func TestLive_InspectFirestore_NamedDB(t *testing.T) {
 	t.Parallel()
 	projectID := liveProjectOrSkip(t)
@@ -422,7 +428,15 @@ func TestLive_InspectFirestore_NamedDB(t *testing.T) {
 	filters := `{"database_name":"` + dbName + `"}`
 	got, err := inspectFirestore(context.Background(), projectID, "list-collections", filters, liveAuthOpts(t)...)
 	require.NoError(t, err, "inspectFirestore with database_name=%q must succeed against a preset-deployed Firestore (#245)", dbName)
-	t.Logf("list-collections (db=%s) returned %T: %v", dbName, got, got)
+	require.NotNil(t, got, "list-collections must be non-nil so JSON marshals as [] not null (#255)")
+
+	b, err := json.Marshal(got)
+	require.NoError(t, err)
+	assert.NotEqual(t, "null", string(b),
+		"empty Firestore list-collections must NOT marshal as null — that was the #255 bug")
+	assert.True(t, strings.HasPrefix(string(b), "["),
+		"list-collections must marshal as a JSON array; got %s", string(b))
+	t.Logf("list-collections (db=%s) returned %T: %v; JSON: %s", dbName, got, got, string(b))
 }
 
 // TestLive_InspectIdentityPlatform_TenantsOnUnprovisionedProject
