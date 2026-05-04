@@ -7,7 +7,7 @@ package composer
 // Each Test* function below corresponds to one bug in that audit:
 //   1 — DynamoDB billing_mode lower-case → uppercase validation reject
 //   2 — OpenSearch storage_size "1TB" → tonumber() reject
-//   3 — GCP CloudCDN default_ttl string → number reject
+//   3 — (removed in #253) GCP CloudCDN default_ttl — preset deleted
 //   4 — ElastiCache replicas string → number reject
 //   5 — RDS key names (node_cpu_size etc.) didn't match module variables
 //   6 — ElastiCache key names (node_size, orphan storage_size)
@@ -51,16 +51,6 @@ func openSearchCfg(storage string) *Config {
 			StorageSize    string `json:"storageSize,omitempty"`
 			MultiAZ        *bool  `json:"multiAz,omitempty"`
 		}{StorageSize: storage},
-	}
-}
-
-func gcpCdnCfg(ttl string) *Config {
-	return &Config{
-		GCPCloudCDN: &struct {
-			DefaultTtl string `json:"defaultTtl,omitempty"`
-			OriginPath string `json:"originPath,omitempty"`
-			CachePaths string `json:"cachePaths,omitempty"` // DEPRECATED: use OriginPath
-		}{DefaultTtl: ttl},
 	}
 }
 
@@ -207,41 +197,6 @@ func TestBuildModuleValues_AWSOpenSearch_StorageSize(t *testing.T) {
 
 	t.Run("rejects garbage with ValidationError", func(t *testing.T) {
 		_, err := m.BuildModuleValues(KeyAWSOpenSearch, &Components{}, openSearchCfg("huge"), "", "")
-		assertValidationError(t, err)
-	})
-}
-
-// ---------------------------------------------------------------------------
-// 3. GCP CloudCDN default_ttl — module declares type = number; strings like
-//    "1h" / "1day" rejected at plan time. Translate to seconds.
-// ---------------------------------------------------------------------------
-
-func TestBuildModuleValues_GCPCloudCDN_DefaultTTL(t *testing.T) {
-	m := DefaultMapper{}
-
-	cases := []struct {
-		in   string
-		want int
-	}{
-		{"0", 0},
-		{"1h", 3600},
-		{"1day", 86400},
-		{"30s", 30},
-		{"5m", 300},
-		{"7days", 7 * 86400},
-		{"3600", 3600}, // bare seconds passthrough
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.in, func(t *testing.T) {
-			vals, err := m.BuildModuleValues(KeyGCPCloudCDN, nil, gcpCdnCfg(tc.in), "", "")
-			require.NoError(t, err)
-			assert.Equal(t, tc.want, vals["default_ttl"])
-		})
-	}
-
-	t.Run("rejects garbage with ValidationError", func(t *testing.T) {
-		_, err := m.BuildModuleValues(KeyGCPCloudCDN, nil, gcpCdnCfg("forever"), "", "")
 		assertValidationError(t, err)
 	})
 }

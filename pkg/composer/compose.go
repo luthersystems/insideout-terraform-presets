@@ -87,9 +87,9 @@ func nsKey(comp ComponentKey, name string) string { return fmt.Sprintf("%s_%s", 
 // maybeInjectGCPProjectID seeds vals["project_id"] for GCP composes only.
 // Skipped for AWS, and skipped on empty so the dedicated validator
 // (gcp_project_id_required) fires instead of silently flowing "" through to
-// apply time. Modules that don't declare var.project_id (cloud_build /
-// cloud_monitoring / cloud_cdn, plus every AWS module) have it filtered out
-// by the namespacing loop in the caller. See issue #157.
+// apply time. Modules that don't declare var.project_id (every AWS module
+// plus a small set of GCP modules) have it filtered out by the namespacing
+// loop in the caller. See issue #157.
 func maybeInjectGCPProjectID(cloud, gcpProjectID string, vals map[string]any) {
 	if cloud == "gcp" && strings.TrimSpace(gcpProjectID) != "" {
 		vals["project_id"] = gcpProjectID

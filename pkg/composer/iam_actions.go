@@ -145,7 +145,6 @@ var GCPIAMPermissions = map[ComponentKey][]string{
 	KeyGCPCompute:      nil,
 	KeyGCPBastion:      nil,
 	KeyGCPLoadbalancer: nil, // covered by always-required compute.networks.create.
-	KeyGCPCloudCDN:     nil, // covered by always-required compute.networks.create.
 	KeyGCPCloudArmor:   nil, // covered by always-required compute.networks.create.
 }
 

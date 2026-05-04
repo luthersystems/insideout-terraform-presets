@@ -1241,64 +1241,6 @@ func TestExtractGCPAPIGatewayConfig(t *testing.T) {
 	})
 }
 
-// ---------- gcp_cloud_cdn ----------
-
-func TestExtractGCPCloudCDNConfig(t *testing.T) {
-	t.Parallel()
-
-	t.Run("HappyPath", func(t *testing.T) {
-		t.Parallel()
-		raw := []any{map[string]any{
-			"name":      "demo-backend",
-			"enableCDN": true,
-			"cdnPolicy": map[string]any{"cacheMode": "CACHE_ALL_STATIC"},
-		}}
-		got := extractGCPCloudCDNConfig(raw)
-		require.NotNil(t, got)
-		assert.Equal(t, "1", got["backendCount"])
-		assert.Equal(t, "demo-backend", got["backendName"])
-		assert.Equal(t, "Yes", got["enableCdn"])
-		assert.Equal(t, "CACHE_ALL_STATIC", got["cacheMode"])
-	})
-
-	t.Run("UseOriginHeaders", func(t *testing.T) {
-		t.Parallel()
-		raw := []any{map[string]any{
-			"name":      "use-origin",
-			"enableCDN": true,
-			"cdnPolicy": map[string]any{"cacheMode": "USE_ORIGIN_HEADERS"},
-		}}
-		got := extractGCPCloudCDNConfig(raw)
-		assert.Equal(t, "USE_ORIGIN_HEADERS", got["cacheMode"])
-	})
-
-	t.Run("CDNDisabled", func(t *testing.T) {
-		t.Parallel()
-		raw := []any{map[string]any{
-			"name":      "off-backend",
-			"enableCDN": false,
-		}}
-		got := extractGCPCloudCDNConfig(raw)
-		assert.Equal(t, "No", got["enableCdn"])
-		assert.NotContains(t, got, "cacheMode")
-	})
-
-	t.Run("Envelope", func(t *testing.T) {
-		t.Parallel()
-		raw := map[string]any{"backendServices": []any{
-			map[string]any{"name": "wrap-backend", "enableCDN": true},
-		}}
-		got := extractGCPCloudCDNConfig(raw)
-		assert.Equal(t, "wrap-backend", got["backendName"])
-	})
-
-	t.Run("Empty", func(t *testing.T) {
-		t.Parallel()
-		assert.Nil(t, extractGCPCloudCDNConfig(nil))
-		assert.Nil(t, extractGCPCloudCDNConfig([]any{}))
-	})
-}
-
 // ---------- gcp_bastion ----------
 
 func TestExtractGCPBastionConfig(t *testing.T) {

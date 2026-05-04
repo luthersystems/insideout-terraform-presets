@@ -843,21 +843,6 @@ func (m DefaultMapper) BuildModuleValues(
 			}
 		}
 
-	case KeyGCPCloudCDN:
-		if cfg != nil && cfg.GCPCloudCDN != nil {
-			if cfg.GCPCloudCDN.DefaultTtl != "" {
-				// Module declares default_ttl as `type = number`
-				// (seconds). The IR enum is "0" / "1h" / "1day";
-				// translate to seconds (0 / 3600 / 86400) so the value
-				// passes Terraform's type check.
-				secs, err := parseTTLSeconds(cfg.GCPCloudCDN.DefaultTtl, "GCPCloudCDN.DefaultTtl")
-				if err != nil {
-					return nil, err
-				}
-				vals["default_ttl"] = secs
-			}
-		}
-
 	case KeyGCPCloudRun:
 		// Cloud Run configuration
 		vals["memory"] = "512Mi" // Default

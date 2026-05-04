@@ -301,13 +301,6 @@ var extractorFixtures = map[string]any{
 			"state":       "ACTIVE",
 		},
 	},
-	"gcp_cloud_cdn": []any{
-		map[string]any{
-			"name":      "demo-backend",
-			"enableCDN": true,
-			"cdnPolicy": map[string]any{"cacheMode": "CACHE_ALL_STATIC"},
-		},
-	},
 	"gcp_bastion": []any{
 		map[string]any{
 			"name":        "demo-bastion",
@@ -345,7 +338,6 @@ var extractorExpectedFieldCount = map[string]int{
 	"gcp_cloud_monitoring":  4,
 	"gcp_cloud_functions":   4,
 	"gcp_api_gateway":       4,
-	"gcp_cloud_cdn":         4,
 	"gcp_bastion":           5,
 }
 

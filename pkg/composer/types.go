@@ -59,7 +59,6 @@ type Components struct {
 	GCPCloudRun         *bool  `json:"gcp_cloud_run,omitempty"`
 	GCPCloudFunctions   *bool  `json:"gcp_cloud_functions,omitempty"`
 	GCPLoadbalancer     *bool  `json:"gcp_loadbalancer,omitempty"`
-	GCPCloudCDN         *bool  `json:"gcp_cloud_cdn,omitempty"`
 	GCPCloudArmor       *bool  `json:"gcp_cloud_armor,omitempty"`
 	GCPAPIGateway       *bool  `json:"gcp_api_gateway,omitempty"`
 	GCPCloudSQL         *bool  `json:"gcp_cloudsql,omitempty"`
@@ -311,12 +310,6 @@ type Config struct {
 		DomainName string `json:"domainName,omitempty"`
 	} `json:"gcp_api_gateway,omitempty"`
 
-	GCPCloudCDN *struct {
-		DefaultTtl string `json:"defaultTtl,omitempty"`
-		OriginPath string `json:"originPath,omitempty"`
-		CachePaths string `json:"cachePaths,omitempty"` // DEPRECATED: use OriginPath
-	} `json:"gcp_cloud_cdn,omitempty"`
-
 	GCPLoadbalancer *struct {
 		EnableCDN *bool `json:"enable_cdn,omitempty"`
 	} `json:"gcp_loadbalancer,omitempty"`
@@ -365,7 +358,6 @@ func (c *Components) Normalize() {
 		c.GCPCloudRun = nil
 		c.GCPCloudFunctions = nil
 		c.GCPLoadbalancer = nil
-		c.GCPCloudCDN = nil
 		c.GCPCloudArmor = nil
 		c.GCPAPIGateway = nil
 		c.GCPCloudSQL = nil
@@ -480,7 +472,6 @@ func (c *Config) Normalize() {
 		c.GCPCloudFunctions = nil
 		c.GCPIdentityPlatform = nil
 		c.GCPAPIGateway = nil
-		c.GCPCloudCDN = nil
 		c.GCPLoadbalancer = nil
 		c.GCPBackups = nil
 		// AWSCloudfront.CachePaths is a within-prefixed deprecated sub-field;

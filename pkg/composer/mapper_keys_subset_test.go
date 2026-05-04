@@ -81,11 +81,6 @@ func kitchenSinkConfig() *Config {
 		AWSSecretsManager: &struct {
 			NumSecrets string `json:"numSecrets,omitempty"`
 		}{NumSecrets: "1"},
-		GCPCloudCDN: &struct {
-			DefaultTtl string `json:"defaultTtl,omitempty"`
-			OriginPath string `json:"originPath,omitempty"`
-			CachePaths string `json:"cachePaths,omitempty"` // DEPRECATED: use OriginPath
-		}{DefaultTtl: "1h"},
 	}
 }
 

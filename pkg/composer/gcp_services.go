@@ -79,7 +79,6 @@ var GCPServices = map[ComponentKey][]GCPService{
 	KeyGCPCompute:      nil,
 	KeyGCPBastion:      nil,
 	KeyGCPLoadbalancer: nil, // covered by always-required Compute Engine.
-	KeyGCPCloudCDN:     nil, // covered by always-required Compute Engine.
 	KeyGCPCloudArmor:   nil, // covered by always-required Compute Engine.
 }
 

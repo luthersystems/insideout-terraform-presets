@@ -82,9 +82,12 @@ var ComponentMetricsMapping = map[composer.ComponentKey]ComponentMetricsBinding{
 	composer.KeyGCPCloudBuild:       {Service: "cloudbuild", Action: "list-triggers"},
 	composer.KeyGCPCloudFunctions:   {Service: "cloudfunctions", Action: "list-functions"},
 	composer.KeyGCPIdentityPlatform: {Service: "identityplatform", Action: "list-tenants"},
-	composer.KeyGCPVertexAI:         {Service: "vertexai", Action: "list-endpoints"},
+	// list-datasets matches what gcp/vertex_ai/main.tf actually creates
+	// (google_vertex_ai_dataset). The previous list-endpoints binding
+	// surfaced "no metrics available" because the preset declares no
+	// endpoints (#253).
+	composer.KeyGCPVertexAI: {Service: "vertexai", Action: "list-datasets"},
 	composer.KeyGCPBastion:          {Service: "bastion", Action: "list-bastion-instances"},
-	composer.KeyGCPCloudCDN:         {Service: "cloudcdn", Action: "list-backend-services-cdn"},
 	composer.KeyGCPAPIGateway:       {Service: "apigateway", Action: "list-apis"},
 	composer.KeyGCPCloudLogging:     {Service: "cloudlogging", Action: "list-logs"},
 	// Cloud Monitoring routed to its own list-alert-policies discovery so the
@@ -110,4 +113,8 @@ var EmptyDiscoveryAllowlist = map[composer.ComponentKey]bool{
 	composer.KeyAWSCloudWatchLogs:       true,
 	composer.KeyAWSCloudWatchMonitoring: true,
 	composer.KeyGCPCloudLogging:         true,
+	// Firestore on day 0 = a database with zero collections. Empty
+	// list-collections is the steady state until the application writes
+	// its first document; not drift (#253).
+	composer.KeyGCPFirestore: true,
 }

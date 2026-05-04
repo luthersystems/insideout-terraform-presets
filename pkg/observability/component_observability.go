@@ -657,7 +657,6 @@ var observabilityDeferred = map[composer.ComponentKey]string{
 	composer.KeyGCPBastion:              "#204",
 	composer.KeyGCPCloudArmor:           "#204",
 	composer.KeyGCPCloudBuild:           "#204",
-	composer.KeyGCPCloudCDN:             "#204",
 	composer.KeyGCPCloudFunctions:       "#204",
 	composer.KeyGCPCloudKMS:             "#204",
 	composer.KeyGCPCloudLogging:         "#204",

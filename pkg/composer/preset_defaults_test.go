@@ -103,7 +103,6 @@ var emptyPresetAllowlist = map[string]string{
 	"aws/githubactions": "placeholder for GitHub Actions CI/CD; implementation deferred",
 	"aws/grafana":       "placeholder for Amazon Managed Grafana; implementation deferred",
 	"aws/splunk":        "third-party SaaS placeholder; configured via provider blocks elsewhere",
-	"gcp/cloud_cdn":     "CDN config lives on the load balancer backend; this preset is a marker only",
 }
 
 // TestEveryPresetHasResourceOrModuleCall asserts every preset on disk
