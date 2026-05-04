@@ -86,10 +86,10 @@ var ComponentMetricsMapping = map[composer.ComponentKey]ComponentMetricsBinding{
 	// (google_vertex_ai_dataset). The previous list-endpoints binding
 	// surfaced "no metrics available" because the preset declares no
 	// endpoints (#253).
-	composer.KeyGCPVertexAI: {Service: "vertexai", Action: "list-datasets"},
-	composer.KeyGCPBastion:          {Service: "bastion", Action: "list-bastion-instances"},
-	composer.KeyGCPAPIGateway:       {Service: "apigateway", Action: "list-apis"},
-	composer.KeyGCPCloudLogging:     {Service: "cloudlogging", Action: "list-logs"},
+	composer.KeyGCPVertexAI:     {Service: "vertexai", Action: "list-datasets"},
+	composer.KeyGCPBastion:      {Service: "bastion", Action: "list-bastion-instances"},
+	composer.KeyGCPAPIGateway:   {Service: "apigateway", Action: "list-apis"},
+	composer.KeyGCPCloudLogging: {Service: "cloudlogging", Action: "list-logs"},
 	// Cloud Monitoring routed to its own list-alert-policies discovery so the
 	// panel surfaces the user's actual monitoring posture (alert policies)
 	// instead of compute/get-metrics, which returned an empty payload on any

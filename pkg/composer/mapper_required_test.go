@@ -175,6 +175,7 @@ func kitchenSinkSelected() map[ComponentKey]bool {
 }
 
 func TestEveryRequiredVariableIsMappedOrWired(t *testing.T) {
+	t.Parallel()
 	m := DefaultMapper{}
 	cfg := kitchenSinkConfig()
 	comps := kitchenSinkComponents()
@@ -183,6 +184,7 @@ func TestEveryRequiredVariableIsMappedOrWired(t *testing.T) {
 
 	for _, key := range AllComponentKeys {
 		t.Run(string(key), func(t *testing.T) {
+			t.Parallel()
 			presetPath := GetPresetPath(CloudFor(key), key, comps)
 			mod, err := InspectPreset(presetPath)
 			require.NoError(t, err, "InspectPreset(%s)", presetPath)
@@ -260,6 +262,7 @@ func TestEveryRequiredVariableIsMappedOrWired(t *testing.T) {
 // TestRequiredVariableAllowlist_NotStale ensures every entry in the
 // allowlist still names a real (component, variable) pair.
 func TestRequiredVariableAllowlist_NotStale(t *testing.T) {
+	t.Parallel()
 	for key, varNames := range requiredVariableAllowlist {
 		mod, err := InspectPreset(GetPresetPath(CloudFor(key), key, &Components{}))
 		if err != nil {

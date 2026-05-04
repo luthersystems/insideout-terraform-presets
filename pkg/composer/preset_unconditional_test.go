@@ -1,29 +1,29 @@
 package composer
 
-// TestEveryPresetHasUnconditionalResource is the static counterpart to
-// "would terraform plan create at least one resource on default mapper
-// input?" — without paying the cost of an actual plan per preset.
+// TestEveryPresetHasUnconditionalResource is a static guard against the
+// "all-gated preset" failure mode flagged in #253: a preset where every
+// managed resource / module call carries a top-level `for_each` / `count`
+// gate, the gate evaluates to empty on default input, and the preset
+// silently produces zero plan-time infrastructure.
 //
-// Motivation (#253): the gcp/secretmanager preset declared
-// `for_each = local.secrets_map` where secrets_map iterated `var.secrets`
-// (default `[]`). With no caller-supplied secrets, the for_each expanded
-// to `{}` and zero `google_secret_manager_secret` resources were created
-// — apply succeeded, discovery returned empty, the panel said "drift".
-// `TestEveryPresetHasResourceOrModuleCall` counts declared blocks; it
-// does NOT see that those blocks are gated on a defaulted-empty input.
+// Honest scope:
+//   - The historical gcp/secretmanager bug from #253 had `for_each =
+//     local.secrets_map` (defaulted-empty) on `google_secret_manager_secret`
+//     — but it ALSO declared an unconditional `random_id "suffix"`, so
+//     this gate would not have flagged it. The preset-default fix in this
+//     PR (var.secrets default = [{name = "main-secret"}]) is what closes
+//     the SM regression directly.
+//   - This gate covers the worse-shape variant: a future preset where
+//     EVERY managed block is gated and there's no helper resource to
+//     anchor it. Cheap static check; doesn't try to evaluate the gate.
+//   - `data` blocks are excluded — they don't create infrastructure, so
+//     an unconditional data block doesn't keep the preset out of the
+//     all-gated trap.
 //
-// This test scans every preset's HCL source and for each managed
-// resource block records whether it carries a `for_each = ...` or
-// `count = ...` line. A preset where EVERY resource is so gated is
-// "fully conditional" — its default-input footprint is zero — and must
-// either be allowlisted (with a justification) or have at least one
-// resource that fires unconditionally.
-//
-// The check is intentionally conservative: it doesn't try to evaluate
-// the gating expression. A `count = var.enable ? 1 : 0` resource where
-// `var.enable` defaults to `true` is correctly counted as conditional
-// here even though it would expand to 1 resource at plan time. The
-// allowlist absorbs that class with a note.
+// The check is intentionally conservative on the gate side: a
+// `count = var.enable ? 1 : 0` resource is counted as gated even when
+// `var.enable` defaults to true. Allowlist entries with a justification
+// absorb that.
 
 import (
 	"regexp"
@@ -105,48 +105,59 @@ func resourceTopLevelGated(body string) bool {
 // (preset_defaults_test.go:99) are caught by the count-zero gate
 // (TestEveryPresetHasResourceOrModuleCall) and don't need a second
 // allowlist entry.
-var fullyConditionalPresetAllowlist = map[string]string{
-	"aws/opensearch": "every resource gated on `var.deployment_type == \"managed\"`; default = \"managed\" so the managed-domain branch fires",
-	"aws/resource":   "polymorphic preset (EKS / Lambda); resources gated on the runtime-mode boolean which is always set on root composition",
-	"aws/waf":        "two resources gated on `var.scope == \"CLOUDFRONT\"` / `\"REGIONAL\"`; default scope = \"CLOUDFRONT\" so the CF web ACL fires",
+//
+// Currently empty: previous opensearch / resource / waf entries were stale
+// — each preset has an unconditional `module "name"` (and aws/resource
+// also has unconditional `module "eks"`) so they're already past this
+// gate without help. TestFullyConditionalPresetAllowlist_NotStale guards
+// against re-adding entries that the gate would let through anyway.
+var fullyConditionalPresetAllowlist = map[string]string{}
+
+// blockHeaderRe matches resource / module blocks at top level. Module
+// calls count toward the unconditional pool because aws/vpc and similar
+// wrap a community module — the resource itself is the module call.
+// `data` blocks are excluded: they query existing infrastructure rather
+// than create it, so an unconditional data block doesn't rescue a preset
+// from the all-gated trap.
+var blockHeaderRe = regexp.MustCompile(`(?m)^(resource|module)\s+"[^"]*"\s*("[^"]*"\s*)?\{`)
+
+// presetBlockGating returns (total, conditional) counts of top-level
+// resource / module blocks across every .tf file in the preset.
+func presetBlockGating(c *Client, presetPath string) (total, conditional int, err error) {
+	files, err := c.GetPresetFiles(presetPath)
+	if err != nil {
+		return 0, 0, err
+	}
+	var allTF strings.Builder
+	for path, body := range files {
+		if !strings.HasSuffix(path, ".tf") {
+			continue
+		}
+		allTF.Write(body)
+		allTF.WriteString("\n")
+	}
+	src := allTF.String()
+	for _, loc := range blockHeaderRe.FindAllStringIndex(src, -1) {
+		total++
+		body := extractBraceBody(src[loc[1]-1:])
+		if resourceTopLevelGated(body) {
+			conditional++
+		}
+	}
+	return total, conditional, nil
 }
 
 func TestEveryPresetHasUnconditionalResource(t *testing.T) {
 	t.Parallel()
 	c := newTestClient()
 
-	// Match resource / data / module blocks at top level. Module calls
-	// count toward the unconditional pool because aws/vpc and similar
-	// wrap a community module — the resource itself is the module call.
-	blockHeader := regexp.MustCompile(`(?m)^(resource|module|data)\s+"[^"]*"\s*("[^"]*"\s*)?\{`)
-
 	for _, cloud := range []string{"aws", "gcp"} {
 		paths, err := c.ListPresetKeysForCloud(cloud)
 		require.NoError(t, err)
 
 		for _, presetPath := range paths {
-			files, err := c.GetPresetFiles(presetPath)
-			require.NoError(t, err, "GetPresetFiles(%s)", presetPath)
-
-			var allTF strings.Builder
-			for path, body := range files {
-				if !strings.HasSuffix(path, ".tf") {
-					continue
-				}
-				allTF.Write(body)
-				allTF.WriteString("\n")
-			}
-			src := allTF.String()
-
-			total := 0
-			conditional := 0
-			for _, loc := range blockHeader.FindAllStringIndex(src, -1) {
-				total++
-				body := extractBraceBody(src[loc[1]-1:])
-				if resourceTopLevelGated(body) {
-					conditional++
-				}
-			}
+			total, conditional, err := presetBlockGating(c, presetPath)
+			require.NoError(t, err, "presetBlockGating(%s)", presetPath)
 
 			// Zero managed resources is already covered by
 			// TestEveryPresetHasResourceOrModuleCall — skip those here
@@ -166,10 +177,22 @@ func TestEveryPresetHasUnconditionalResource(t *testing.T) {
 				presetPath, total)
 		}
 	}
+}
 
-	// Stale allowlist guard.
+// TestFullyConditionalPresetAllowlist_NotStale asserts every allowlist
+// entry is actually NEEDED — i.e., the preset really is fully conditional
+// today. The previous opensearch / resource / waf entries were stale (each
+// preset has unconditional `module "name"` so the gate already passes
+// them) and silently invited drift. If you allowlist a preset, the gate
+// must fail without that entry.
+func TestFullyConditionalPresetAllowlist_NotStale(t *testing.T) {
+	t.Parallel()
+	c := newTestClient()
 	for presetPath := range fullyConditionalPresetAllowlist {
-		_, err := InspectPreset(presetPath)
-		require.NoError(t, err, "fullyConditionalPresetAllowlist entry %q points at a missing preset", presetPath)
+		total, conditional, err := presetBlockGating(c, presetPath)
+		require.NoError(t, err, "fullyConditionalPresetAllowlist entry %q points at a missing or unreadable preset", presetPath)
+		assert.Falsef(t, total > conditional,
+			"fullyConditionalPresetAllowlist[%s] is stale: preset has %d unconditional block(s) of %d total — TestEveryPresetHasUnconditionalResource would already pass it. Drop the entry.",
+			presetPath, total-conditional, total)
 	}
 }

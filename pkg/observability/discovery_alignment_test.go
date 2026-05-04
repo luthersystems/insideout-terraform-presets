@@ -23,6 +23,7 @@ package observability
 import (
 	"io/fs"
 	"regexp"
+	"sort"
 	"strings"
 	"testing"
 
@@ -84,11 +85,6 @@ var expectedResourceTypesByAction = map[string][]string{
 	"gcp/apigateway/list-apis":                {"google_api_gateway_api"},
 	"gcp/cloudlogging/list-logs":              {"google_logging_project_sink", "google_logging_project_bucket_config"},
 	"gcp/cloudmonitoring/list-alert-policies": {"google_monitoring_alert_policy"},
-
-	// Aggregate / discovery-only actions where the preset is intentionally
-	// NOT shaped around the queried resource (placeholders, polymorphic
-	// keys, monitoring envelopes).
-	"aws/cloudwatchlogs/describe-log-groups/skip": {}, // sentinel pattern; real rows above
 }
 
 // presetMatchesActionAllowlist holds (component, reason) entries for
@@ -121,10 +117,10 @@ var presetMatchesActionAllowlist = map[composer.ComponentKey]string{
 	composer.KeyAWSCloudWatchMonitoring: "panel binds to log-groups for the empty-state allowlist; preset declares CW alarm policies, not log groups",
 	// Wrapped-module presets — the discovered resource is created by
 	// the upstream community module, not a top-level resource block.
-	composer.KeyAWSEKS:     "wraps terraform-aws-modules/eks/aws which creates aws_eks_cluster",
-	composer.KeyAWSVPC:     "wraps terraform-aws-modules/vpc/aws which creates aws_vpc",
-	composer.KeyAWSBedrock: "knowledge base is provisioned via the wrapped module path; preset declares the surrounding IAM/log/guardrail surface",
-	composer.KeyGCPGKE:     "wraps terraform-google-modules/kubernetes-engine/google which creates google_container_cluster",
+	composer.KeyAWSEKS:      "wraps terraform-aws-modules/eks/aws which creates aws_eks_cluster",
+	composer.KeyAWSVPC:      "wraps terraform-aws-modules/vpc/aws which creates aws_vpc",
+	composer.KeyAWSBedrock:  "knowledge base is provisioned via the wrapped module path; preset declares the surrounding IAM/log/guardrail surface",
+	composer.KeyGCPGKE:      "wraps terraform-google-modules/kubernetes-engine/google which creates google_container_cluster",
 	composer.KeyGCPCloudSQL: "wraps terraform-google-modules/sql-db/google which creates google_sql_database_instance",
 	composer.KeyGCPVPC:      "wraps terraform-google-modules/network/google which creates google_compute_network",
 	// Cloud Monitoring's panel queries alert policies (which live on
@@ -134,10 +130,12 @@ var presetMatchesActionAllowlist = map[composer.ComponentKey]string{
 }
 
 func TestComponentMetricsMapping_PresetResourcesAlignWithAction(t *testing.T) {
+	t.Parallel()
 	resourceRe := regexp.MustCompile(`(?m)^resource\s+"([^"]+)"\s+"[^"]+"\s*\{`)
 
 	for k, binding := range ComponentMetricsMapping {
 		t.Run(string(k), func(t *testing.T) {
+			t.Parallel()
 			if reason, exempt := presetMatchesActionAllowlist[k]; exempt {
 				t.Logf("allowlisted: %s (%s)", k, reason)
 				return
@@ -185,6 +183,7 @@ func TestComponentMetricsMapping_PresetResourcesAlignWithAction(t *testing.T) {
 // entries that no longer correspond to a ComponentMetricsMapping
 // binding.
 func TestPresetMatchesActionAllowlist_NotStale(t *testing.T) {
+	t.Parallel()
 	for k := range presetMatchesActionAllowlist {
 		_, ok := ComponentMetricsMapping[k]
 		assert.True(t, ok,
@@ -193,19 +192,13 @@ func TestPresetMatchesActionAllowlist_NotStale(t *testing.T) {
 	}
 }
 
-// sortedSetKeys is a small helper for deterministic error-message
-// output. Lifted here to avoid pulling the composer-package version
-// into observability.
+// sortedSetKeys returns the map's keys in sorted order for deterministic
+// error-message output.
 func sortedSetKeys(m map[string]bool) []string {
 	out := make([]string, 0, len(m))
 	for k := range m {
 		out = append(out, k)
 	}
-	// Simple insertion sort — n is tiny.
-	for i := 1; i < len(out); i++ {
-		for j := i; j > 0 && out[j-1] > out[j]; j-- {
-			out[j-1], out[j] = out[j], out[j-1]
-		}
-	}
+	sort.Strings(out)
 	return out
 }
