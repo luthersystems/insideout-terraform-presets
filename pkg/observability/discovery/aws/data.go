@@ -50,7 +50,7 @@ func inspectRDS(ctx context.Context, cfg aws.Config, action, filters string) (an
 		if project != "" {
 			return filter.Match(toSliceOfMaps(out.DBInstances), project, "TagList", filter.FormatKV), nil
 		}
-		return out.DBInstances, nil
+		return nilSliceToEmpty(out.DBInstances), nil
 	case "describe-db-clusters":
 		out, err := client.DescribeDBClusters(ctx, &rds.DescribeDBClustersInput{})
 		if err != nil {
@@ -59,7 +59,7 @@ func inspectRDS(ctx context.Context, cfg aws.Config, action, filters string) (an
 		if project != "" {
 			return filter.Match(toSliceOfMaps(out.DBClusters), project, "TagList", filter.FormatKV), nil
 		}
-		return out.DBClusters, nil
+		return nilSliceToEmpty(out.DBClusters), nil
 	case "get-metrics":
 		return metricsRouted("rds")
 	default:
@@ -110,7 +110,7 @@ func inspectDynamoDB(ctx context.Context, cfg aws.Config, action, filters string
 //
 // Mirrors the InsideOut backend's filterDynamoDBTablesByProjectTag (aws_metrics.go:1323).
 func filterDynamoDBTablesByProjectTag(ctx context.Context, client dynamoDBTablesClient, stsClient stsAccountClient, region, project string) ([]string, error) {
-	var all []string
+	all := []string{}
 	paginator := dynamodb.NewListTablesPaginator(client, &dynamodb.ListTablesInput{})
 	for paginator.HasMorePages() {
 		page, err := paginator.NextPage(ctx)
@@ -174,7 +174,7 @@ func filterElastiCacheCacheClustersByProjectTag(ctx context.Context, client elas
 	return filterElastiCacheByProjectTag(
 		ctx, client, project, "DescribeCacheClusters",
 		func(ctx context.Context) ([]elasticachetypes.CacheCluster, error) {
-			var all []elasticachetypes.CacheCluster
+			all := []elasticachetypes.CacheCluster{}
 			p := elasticache.NewDescribeCacheClustersPaginator(client, &elasticache.DescribeCacheClustersInput{})
 			for p.HasMorePages() {
 				page, err := p.NextPage(ctx)
@@ -193,7 +193,7 @@ func filterElastiCacheReplicationGroupsByProjectTag(ctx context.Context, client 
 	return filterElastiCacheByProjectTag(
 		ctx, client, project, "DescribeReplicationGroups",
 		func(ctx context.Context) ([]elasticachetypes.ReplicationGroup, error) {
-			var all []elasticachetypes.ReplicationGroup
+			all := []elasticachetypes.ReplicationGroup{}
 			p := elasticache.NewDescribeReplicationGroupsPaginator(client, &elasticache.DescribeReplicationGroupsInput{})
 			for p.HasMorePages() {
 				page, err := p.NextPage(ctx)
@@ -277,7 +277,7 @@ func inspectOpenSearch(ctx context.Context, cfg aws.Config, action, filters stri
 		if err != nil {
 			return nil, err
 		}
-		return out.DomainNames, nil
+		return nilSliceToEmpty(out.DomainNames), nil
 	case "describe-domains":
 		// Union discovery: the `aws_opensearch` preset can deploy as
 		// Managed OR Serverless on a single schema node. When a user
@@ -443,7 +443,7 @@ func inspectMSK(ctx context.Context, cfg aws.Config, action, filters string) (an
 		if project != "" {
 			return filter.Match(toSliceOfMaps(out.ClusterInfoList), project, "Tags", filter.FormatMap), nil
 		}
-		return out.ClusterInfoList, nil
+		return nilSliceToEmpty(out.ClusterInfoList), nil
 	case "get-metrics":
 		return metricsRouted("msk")
 	default:

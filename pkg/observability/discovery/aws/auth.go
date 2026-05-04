@@ -54,7 +54,7 @@ func inspectCognito(ctx context.Context, cfg aws.Config, action, filters string)
 // Mirrors the InsideOut backend's filterCognitoUserPoolsByProjectTag
 // (aws_metrics.go:1405).
 func filterCognitoUserPoolsByProjectTag(ctx context.Context, client cognitoUserPoolsClient, project string) ([]cognitoidptypes.UserPoolDescriptionType, error) {
-	var all []cognitoidptypes.UserPoolDescriptionType
+	all := []cognitoidptypes.UserPoolDescriptionType{}
 	paginator := cognitoidentityprovider.NewListUserPoolsPaginator(client, &cognitoidentityprovider.ListUserPoolsInput{
 		// 60 is the ListUserPools MaxResults API max — minimises
 		// round-trips against Cognito's throttle ceiling.

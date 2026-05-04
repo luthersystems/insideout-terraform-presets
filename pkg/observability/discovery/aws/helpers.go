@@ -18,9 +18,16 @@ import (
 // []map[string]any shape the filter package operates on. Used when an
 // SDK response carries typed structs but the project-tag check needs the
 // reflected map form (filter.Match's tagFieldName lookup works on any
-// JSON-shaped record). Returns nil on marshal/unmarshal failure rather
-// than panicking — callers treat nil as "no records" which yields an
-// empty-but-clean response.
+// JSON-shaped record).
+//
+// Always returns a non-nil slice on the success path so downstream
+// JSON marshaling emits `[]` not `null` (#255). AWS SDK V2 list
+// responses expose empty results as typed-nil slices like
+// `[]bedrockagenttypes.KnowledgeBaseSummary(nil)`, which json.Marshal
+// renders as the JSON literal `null`; unmarshaling that back into
+// `out` would leave it nil, so we restore an empty slice before
+// returning. Returns nil only on marshal/unmarshal failure
+// (fail-closed for shape mismatches).
 //
 // Mirrors the InsideOut backend's toSliceOfMaps (config_extractors.go:172).
 func toSliceOfMaps(v any) []map[string]any {
@@ -28,9 +35,12 @@ func toSliceOfMaps(v any) []map[string]any {
 	if err != nil {
 		return nil
 	}
-	var out []map[string]any
+	out := []map[string]any{}
 	if err := json.Unmarshal(raw, &out); err != nil {
 		return nil
+	}
+	if out == nil {
+		return []map[string]any{}
 	}
 	return out
 }
@@ -80,4 +90,30 @@ func firstNonEmptyString(s ...string) string {
 		}
 	}
 	return ""
+}
+
+// nilSliceToEmpty returns []T{} when s is nil so the JSON wire shape
+// is `[]` not `null` (#255). AWS SDK V2 list-* responses commonly
+// emit typed-nil slices on empty results — a discovery inspector that
+// returns `out.SomeSliceField` directly inherits that nil and json.
+// Marshal renders it as the JSON literal `null`, which the downstream
+// reliable UI gates the panel render on.
+//
+// Wrap every direct SDK-slice passthrough at the inspector boundary:
+//
+//	// Bad — emits JSON null on empty:
+//	return out.QueueUrls, nil
+//
+//	// Good:
+//	return nilSliceToEmpty(out.QueueUrls), nil
+//
+// Loops that build a slice locally should declare it as `X := []T{}`
+// at construction so the nil case never arises (the per-site fix in
+// the original #255 audit). Use this helper when the loop is owned
+// by the AWS SDK and you can't change the construction.
+func nilSliceToEmpty[T any](s []T) []T {
+	if s == nil {
+		return []T{}
+	}
+	return s
 }

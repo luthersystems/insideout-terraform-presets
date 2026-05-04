@@ -94,7 +94,7 @@ func filterS3BucketsByProjectTag(ctx context.Context, client s3BucketsClient, pr
 		return nil, fmt.Errorf("s3 ListBuckets: %w", err)
 	}
 	if project == "" {
-		return out.Buckets, nil
+		return nilSliceToEmpty(out.Buckets), nil
 	}
 	matched := make([]s3types.Bucket, 0, len(out.Buckets))
 	for _, b := range out.Buckets {
@@ -142,7 +142,7 @@ func inspectSecretsManager(ctx context.Context, cfg aws.Config, action, filters 
 		if err != nil {
 			return nil, err
 		}
-		return out.SecretList, nil
+		return nilSliceToEmpty(out.SecretList), nil
 	case "get-metrics":
 		return metricsRouted("secretsmanager")
 	default:
@@ -225,7 +225,7 @@ func kmsKeyOwnedByProject(ctx context.Context, client kmsKeysClient, keyID, proj
 //
 // Mirrors the InsideOut backend's filterKMSAliasesByProjectTag (aws_metrics.go:198).
 func filterKMSAliasesByProjectTag(ctx context.Context, client kmsKeysClient, project string) ([]kmstypes.AliasListEntry, error) {
-	var all []kmstypes.AliasListEntry
+	all := []kmstypes.AliasListEntry{}
 	paginator := kms.NewListAliasesPaginator(client, &kms.ListAliasesInput{})
 	for paginator.HasMorePages() {
 		page, err := paginator.NextPage(ctx)
@@ -294,7 +294,7 @@ func inspectBackup(ctx context.Context, cfg aws.Config, action, filters string) 
 //
 // Mirrors the InsideOut backend's filterBackupVaultsByProjectTag (aws_metrics.go:845).
 func filterBackupVaultsByProjectTag(ctx context.Context, client backupVaultsClient, project string) ([]backuptypes.BackupVaultListMember, error) {
-	var all []backuptypes.BackupVaultListMember
+	all := []backuptypes.BackupVaultListMember{}
 	paginator := backup.NewListBackupVaultsPaginator(client, &backup.ListBackupVaultsInput{})
 	for paginator.HasMorePages() {
 		page, err := paginator.NextPage(ctx)
@@ -340,7 +340,7 @@ func inspectSQS(ctx context.Context, cfg aws.Config, action, filters string) (an
 		if err != nil {
 			return nil, err
 		}
-		return out.QueueUrls, nil
+		return nilSliceToEmpty(out.QueueUrls), nil
 	case "get-metrics":
 		return metricsRouted("sqs")
 	default:

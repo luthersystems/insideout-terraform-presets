@@ -41,7 +41,7 @@ func inspectLogging(ctx context.Context, projectID, action, _ string, opts ...op
 	switch action {
 	case "list-logs":
 		it := client.Logs(ctx)
-		var logs []string
+		logs := []string{}
 		for {
 			l, err := it.Next()
 			if err == iterator.Done {
@@ -76,7 +76,7 @@ func inspectCloudMonitoring(ctx context.Context, projectID, action, _ string, op
 		it := client.ListAlertPolicies(ctx, &monitoringpb.ListAlertPoliciesRequest{
 			Name: fmt.Sprintf("projects/%s", projectID),
 		})
-		var policies []*monitoringpb.AlertPolicy
+		policies := []*monitoringpb.AlertPolicy{}
 		for {
 			p, err := it.Next()
 			if err == iterator.Done {
@@ -110,7 +110,7 @@ func inspectPubSub(ctx context.Context, projectID, action, filters string, opts 
 		it := client.ListTopics(ctx, &pubsubpb.ListTopicsRequest{
 			Project: fmt.Sprintf("projects/%s", projectID),
 		})
-		var topics []*pubsubpb.Topic
+		topics := []*pubsubpb.Topic{}
 		for {
 			t, err := it.Next()
 			if err == iterator.Done {
@@ -136,7 +136,7 @@ func inspectPubSub(ctx context.Context, projectID, action, filters string, opts 
 		it := client.ListSubscriptions(ctx, &pubsubpb.ListSubscriptionsRequest{
 			Project: fmt.Sprintf("projects/%s", projectID),
 		})
-		var subs []*pubsubpb.Subscription
+		subs := []*pubsubpb.Subscription{}
 		for {
 			s, err := it.Next()
 			if err == iterator.Done {

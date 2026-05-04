@@ -70,7 +70,7 @@ func inspectVPC(ctx context.Context, cfg aws.Config, action, filters string) (an
 		if err != nil {
 			return nil, err
 		}
-		return out.NatGateways, nil
+		return nilSliceToEmpty(out.NatGateways), nil
 	case "describe-vpcs":
 		// Enrich with IGW attachments so extractVPCConfig can report
 		// deploymentType=public|private without a second inspector
@@ -196,7 +196,7 @@ func inspectALB(ctx context.Context, cfg aws.Config, action, filters string) (an
 			}
 			return filtered, nil
 		}
-		return out.LoadBalancers, nil
+		return nilSliceToEmpty(out.LoadBalancers), nil
 	case "get-metrics":
 		return metricsRouted("alb")
 	default:
@@ -290,7 +290,7 @@ func filterWAFWebACLsByScope(ctx context.Context, client wafv2WebACLsClient, sco
 		return nil, fmt.Errorf("wafv2 ListWebACLs scope=%s: %w", scope, err)
 	}
 	if project == "" {
-		return out.WebACLs, nil
+		return nilSliceToEmpty(out.WebACLs), nil
 	}
 	matched := make([]wafv2types.WebACLSummary, 0, len(out.WebACLs))
 	for _, w := range out.WebACLs {
@@ -351,7 +351,7 @@ func inspectCloudFront(ctx context.Context, cfg aws.Config, action, filters stri
 // Mirrors the InsideOut backend's filterCloudFrontDistributionsByProjectTag
 // (aws_metrics.go:1077).
 func filterCloudFrontDistributionsByProjectTag(ctx context.Context, client cloudFrontDistributionsClient, project string) ([]cloudfronttypes.DistributionSummary, error) {
-	var all []cloudfronttypes.DistributionSummary
+	all := []cloudfronttypes.DistributionSummary{}
 	var marker *string
 	for {
 		out, err := client.ListDistributions(ctx, &cloudfront.ListDistributionsInput{Marker: marker})
@@ -410,7 +410,7 @@ func inspectAPIGateway(ctx context.Context, cfg aws.Config, action, filters stri
 		if project != "" {
 			return filter.Match(toSliceOfMaps(out.Items), project, "Tags", filter.FormatMap), nil
 		}
-		return out.Items, nil
+		return nilSliceToEmpty(out.Items), nil
 	case "get-domain-names":
 		out, err := client.GetDomainNames(ctx, &apigatewayv2.GetDomainNamesInput{})
 		if err != nil {
@@ -419,7 +419,7 @@ func inspectAPIGateway(ctx context.Context, cfg aws.Config, action, filters stri
 		if project != "" {
 			return filter.Match(toSliceOfMaps(out.Items), project, "Tags", filter.FormatMap), nil
 		}
-		return out.Items, nil
+		return nilSliceToEmpty(out.Items), nil
 	case "get-metrics":
 		return metricsRouted("apigateway")
 	default:

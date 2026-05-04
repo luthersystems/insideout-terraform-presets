@@ -125,7 +125,7 @@ func inspectCostExplorerWithDeps(ctx context.Context, client CostExplorerAPI, ac
 			Service string `json:"service"`
 			Cost    string `json:"cost"`
 		}
-		var sorted []serviceCostEntry
+		sorted := []serviceCostEntry{}
 		for svc, cost := range serviceCosts {
 			sorted = append(sorted, serviceCostEntry{Service: svc, Cost: formatUSD(fmt.Sprintf("%f", cost))})
 		}
@@ -270,7 +270,7 @@ func inspectCostExplorerWithDeps(ctx context.Context, client CostExplorerAPI, ac
 			TagValue string `json:"tag_value"`
 			Cost     string `json:"cost"`
 		}
-		var sorted []tagCostEntry
+		sorted := []tagCostEntry{}
 		for tag, cost := range tagCosts {
 			sorted = append(sorted, tagCostEntry{TagValue: tag, Cost: formatUSD(fmt.Sprintf("%f", cost))})
 		}

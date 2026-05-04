@@ -30,7 +30,7 @@ func enrichEC2WithConnectURLs(region string, reservations []ec2types.Reservation
 	if err != nil {
 		return reservations
 	}
-	var enriched []map[string]any
+	enriched := []map[string]any{}
 	if err := json.Unmarshal(raw, &enriched); err != nil {
 		return reservations
 	}

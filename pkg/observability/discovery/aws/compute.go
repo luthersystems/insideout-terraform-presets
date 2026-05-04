@@ -53,7 +53,7 @@ func inspectEC2(ctx context.Context, cfg aws.Config, action, filters string) (an
 		if err != nil {
 			return nil, err
 		}
-		return out.Vpcs, nil
+		return nilSliceToEmpty(out.Vpcs), nil
 	case "describe-subnets":
 		input := &ec2.DescribeSubnetsInput{}
 		if len(tagFilters) > 0 {
@@ -63,7 +63,7 @@ func inspectEC2(ctx context.Context, cfg aws.Config, action, filters string) (an
 		if err != nil {
 			return nil, err
 		}
-		return out.Subnets, nil
+		return nilSliceToEmpty(out.Subnets), nil
 	case "describe-security-groups":
 		input := &ec2.DescribeSecurityGroupsInput{}
 		if len(tagFilters) > 0 {
@@ -73,7 +73,7 @@ func inspectEC2(ctx context.Context, cfg aws.Config, action, filters string) (an
 		if err != nil {
 			return nil, err
 		}
-		return out.SecurityGroups, nil
+		return nilSliceToEmpty(out.SecurityGroups), nil
 	case "get-metrics":
 		return metricsRouted("ec2")
 	default:
@@ -97,7 +97,7 @@ func inspectEBS(ctx context.Context, cfg aws.Config, action, filters string) (an
 		if err != nil {
 			return nil, err
 		}
-		return out.Volumes, nil
+		return nilSliceToEmpty(out.Volumes), nil
 	case "describe-snapshots":
 		// "self" excludes the millions of public/AWS-owned snapshots —
 		// without this the call times out before pagination starts.
@@ -109,7 +109,7 @@ func inspectEBS(ctx context.Context, cfg aws.Config, action, filters string) (an
 		if err != nil {
 			return nil, err
 		}
-		return out.Snapshots, nil
+		return nilSliceToEmpty(out.Snapshots), nil
 	default:
 		return nil, unsupportedActionError("ebs", action)
 	}
@@ -145,7 +145,7 @@ func inspectLambda(ctx context.Context, cfg aws.Config, action, filters string) 
 //
 // Mirrors the InsideOut backend's filterLambdaFunctionsByProjectTag (aws_metrics.go:899).
 func filterLambdaFunctionsByProjectTag(ctx context.Context, client lambdaFunctionsClient, project string) ([]lambdatypes.FunctionConfiguration, error) {
-	var all []lambdatypes.FunctionConfiguration
+	all := []lambdatypes.FunctionConfiguration{}
 	paginator := lambda.NewListFunctionsPaginator(client, &lambda.ListFunctionsInput{})
 	for paginator.HasMorePages() {
 		page, err := paginator.NextPage(ctx)
@@ -219,7 +219,7 @@ func filterECSClustersByProjectTag(ctx context.Context, client ecsClient, projec
 	if len(arns) == 0 {
 		return []ecstypes.Cluster{}, nil
 	}
-	var all []ecstypes.Cluster
+	all := []ecstypes.Cluster{}
 	for i := 0; i < len(arns); i += 100 {
 		end := i + 100
 		if end > len(arns) {
@@ -284,7 +284,7 @@ func describeECSServicesAcrossClusters(ctx context.Context, client ecsClient, pr
 	if err != nil {
 		return nil, err
 	}
-	var all []ecstypes.Service
+	all := []ecstypes.Service{}
 	for cluster, arns := range serviceArnsByCluster {
 		for i := 0; i < len(arns); i += 10 {
 			end := i + 10
@@ -389,7 +389,7 @@ func listEKSNodeInstances(ctx context.Context, eksClient eksClustersClient, ec2C
 		return nil, err
 	}
 	seen := make(map[string]struct{})
-	var instances []string
+	instances := []string{}
 	for _, cluster := range clusters {
 		filters := []ec2types.Filter{{
 			Name:   aws.String("tag:eks:cluster-name"),
@@ -430,7 +430,7 @@ func listEKSNodeInstances(ctx context.Context, eksClient eksClustersClient, ec2C
 //
 // Mirrors the InsideOut backend's filterEKSClustersByProjectTag (aws_metrics.go:1668).
 func filterEKSClustersByProjectTag(ctx context.Context, client eksClustersClient, project string) ([]string, error) {
-	var names []string
+	names := []string{}
 	paginator := eks.NewListClustersPaginator(client, &eks.ListClustersInput{})
 	for paginator.HasMorePages() {
 		page, err := paginator.NextPage(ctx)
@@ -442,7 +442,7 @@ func filterEKSClustersByProjectTag(ctx context.Context, client eksClustersClient
 	if project == "" {
 		return names, nil
 	}
-	var matched []string
+	matched := []string{}
 	for _, name := range names {
 		descOut, descErr := client.DescribeCluster(ctx, &eks.DescribeClusterInput{Name: aws.String(name)})
 		if descErr != nil {

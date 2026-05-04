@@ -69,5 +69,5 @@ func describeProjectLogGroups(ctx context.Context, client cloudWatchLogsClient, 
 	if err != nil {
 		return nil, err
 	}
-	return out.LogGroups, nil
+	return nilSliceToEmpty(out.LogGroups), nil
 }

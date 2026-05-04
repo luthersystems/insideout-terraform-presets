@@ -52,7 +52,7 @@ func inspectCloudRun(ctx context.Context, projectID, action, filters string, opt
 			Parent: fmt.Sprintf("projects/%s/locations/-", projectID),
 		})
 		project := projectFromFilters(filters)
-		var services []*runpb.Service
+		services := []*runpb.Service{}
 		for {
 			svc, err := it.Next()
 			if err == iterator.Done {
@@ -101,7 +101,7 @@ func inspectCloudFunctions(ctx context.Context, projectID, action, filters strin
 			req.Filter = f
 		}
 		it := client.ListFunctions(ctx, req)
-		var fns []*functionspb.Function
+		fns := []*functionspb.Function{}
 		for {
 			fn, err := it.Next()
 			if err == iterator.Done {
@@ -136,7 +136,7 @@ func inspectCloudBuild(ctx context.Context, projectID, action, _ string, opts ..
 		it := client.ListBuildTriggers(ctx, &cloudbuildpb.ListBuildTriggersRequest{
 			ProjectId: projectID,
 		})
-		var triggers []*cloudbuildpb.BuildTrigger
+		triggers := []*cloudbuildpb.BuildTrigger{}
 		for {
 			tr, err := it.Next()
 			if err == iterator.Done {
@@ -153,7 +153,7 @@ func inspectCloudBuild(ctx context.Context, projectID, action, _ string, opts ..
 		it := client.ListBuilds(ctx, &cloudbuildpb.ListBuildsRequest{
 			ProjectId: projectID,
 		})
-		var builds []*cloudbuildpb.Build
+		builds := []*cloudbuildpb.Build{}
 		truncated := false
 		for range cloudBuildMaxBuilds {
 			b, err := it.Next()

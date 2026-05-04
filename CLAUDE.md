@@ -146,6 +146,37 @@ composed root.
   or once the framework is exercised by a real cross-cloud helper (likely
   the severity-tagging convention from #204).
 
+## Discovery Inspector Constraints (#255)
+
+When you add or modify an inspector under `pkg/observability/discovery/{aws,gcp}/`,
+every slice-shaped return must marshal to a JSON array (`[]` or `[…]`),
+never JSON `null`. The downstream `reliable` UI gates panel rendering on
+that shape; `null` collapses through every empty-state branch onto the
+"Deploy infrastructure first." fallback even on healthy resources whose
+handler legitimately returns zero items.
+
+Rules and the new-inspector checklist live in
+[`pkg/observability/discovery/CONTRIBUTING.md`](pkg/observability/discovery/CONTRIBUTING.md).
+Highlights:
+
+- **Pattern A — loop accumulator:** declare with a non-nil composite
+  literal at the construction site. `collections := []string{}`, NOT
+  `var collections []string`.
+- **Pattern B — direct SDK-slice passthrough (AWS-V2 specifically):**
+  wrap with `nilSliceToEmpty(out.X)` from
+  `pkg/observability/discovery/aws/helpers.go`. AWS SDK V2 emits typed-
+  nil slices on empty list responses; passing them through unchanged
+  reintroduces #255.
+- **Pattern C — wrapped-in-parent:** apply A or B to the inner slice
+  field before stuffing into the parent map.
+- **Test contract pin:** `require.NotNil` + `json.Marshal` ==
+  `"[]"`. `assert.Empty` alone is insufficient — it accepts both nil
+  and `[]`.
+- **Live probes:** `TestLive255_AllInspectorsJSONShape` (GCP) and
+  `TestLive255_AWSInspectorsJSONShape` (AWS) exercise every inspector
+  end-to-end against a real account. Run pre-release with
+  `-tags=integration`.
+
 ## Skills
 
 Before starting a task, check if a matching skill exists and follow its workflow exactly. Multiple skills can chain: e.g., `/pickup-issue` uses the relevant add-module skill for implementation, `/verify` before committing, and `/pr` to ship.
