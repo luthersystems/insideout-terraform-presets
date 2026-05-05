@@ -21,7 +21,6 @@ import (
 	secretmanager "cloud.google.com/go/secretmanager/apiv1"
 	"cloud.google.com/go/secretmanager/apiv1/secretmanagerpb"
 	"cloud.google.com/go/storage"
-	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/observability"
@@ -36,34 +35,40 @@ func inspectGCS(ctx context.Context, projectID, action, filters string, opts ...
 
 	switch action {
 	case "list-buckets":
-		it := client.Buckets(ctx, projectID)
 		// storage.Buckets has no server-side label filter; post-filter
 		// on BucketAttrs.Labels.
 		project := projectFromFilters(filters)
-		buckets := []map[string]any{}
-		for {
-			b, err := it.Next()
-			if err == iterator.Done {
-				break
-			}
-			if err != nil {
-				return nil, err
-			}
-			if !gcpLabelMatches(b.Labels, "project", project) {
-				continue
-			}
-			buckets = append(buckets, map[string]any{
-				"name":         b.Name,
-				"location":     b.Location,
-				"storageClass": b.StorageClass,
-				"created":      b.Created,
-			})
+		attrs, err := drainIterator(
+			client.Buckets(ctx, projectID),
+			func(b *storage.BucketAttrs) bool {
+				return gcpLabelMatches(b.Labels, "project", project)
+			},
+		)
+		if err != nil {
+			return nil, err
 		}
-		return buckets, nil
+		return bucketAttrsToMaps(attrs), nil
 
 	default:
 		return nil, unsupportedActionError("GCS", action, observability.GCPServiceActions["gcs"])
 	}
+}
+
+// bucketAttrsToMaps shapes []*storage.BucketAttrs into the
+// hand-rolled JSON shape the inspector contract returns. The output
+// is always a non-nil slice so an empty input marshals as `[]`,
+// pinned by the per-site empty-state test (#256).
+func bucketAttrsToMaps(attrs []*storage.BucketAttrs) []map[string]any {
+	out := make([]map[string]any, 0, len(attrs))
+	for _, b := range attrs {
+		out = append(out, map[string]any{
+			"name":         b.Name,
+			"location":     b.Location,
+			"storageClass": b.StorageClass,
+			"created":      b.Created,
+		})
+	}
+	return out
 }
 
 func inspectSecretManager(ctx context.Context, projectID, action, filters string, opts ...option.ClientOption) (any, error) {
@@ -75,27 +80,17 @@ func inspectSecretManager(ctx context.Context, projectID, action, filters string
 
 	switch action {
 	case "list-secrets":
-		it := client.ListSecrets(ctx, &secretmanagerpb.ListSecretsRequest{
-			Parent: fmt.Sprintf("projects/%s", projectID),
-		})
 		// ListSecrets has no server-side label filter; post-filter on
 		// Secret.Labels.
 		project := projectFromFilters(filters)
-		secrets := []*secretmanagerpb.Secret{}
-		for {
-			s, err := it.Next()
-			if err == iterator.Done {
-				break
-			}
-			if err != nil {
-				return nil, err
-			}
-			if !gcpLabelMatches(s.GetLabels(), "project", project) {
-				continue
-			}
-			secrets = append(secrets, s)
-		}
-		return secrets, nil
+		return drainIterator(
+			client.ListSecrets(ctx, &secretmanagerpb.ListSecretsRequest{
+				Parent: fmt.Sprintf("projects/%s", projectID),
+			}),
+			func(s *secretmanagerpb.Secret) bool {
+				return gcpLabelMatches(s.GetLabels(), "project", project)
+			},
+		)
 
 	default:
 		return nil, unsupportedActionError("Secret Manager", action, observability.GCPServiceActions["secretmanager"])
@@ -121,21 +116,12 @@ func inspectKMS(ctx context.Context, projectID, action, filters string, opts ...
 			location = "global" // default to global
 		}
 
-		it := client.ListKeyRings(ctx, &kmspb.ListKeyRingsRequest{
-			Parent: fmt.Sprintf("projects/%s/locations/%s", projectID, location),
-		})
-		keyRings := []*kmspb.KeyRing{}
-		for {
-			kr, err := it.Next()
-			if err == iterator.Done {
-				break
-			}
-			if err != nil {
-				return nil, err
-			}
-			keyRings = append(keyRings, kr)
-		}
-		return keyRings, nil
+		return drainIterator(
+			client.ListKeyRings(ctx, &kmspb.ListKeyRingsRequest{
+				Parent: fmt.Sprintf("projects/%s/locations/%s", projectID, location),
+			}),
+			nil,
+		)
 
 	case "list-keys":
 		fm := parseFilterMap(filters)
@@ -145,27 +131,17 @@ func inspectKMS(ctx context.Context, projectID, action, filters string, opts ...
 			return nil, fmt.Errorf("list-keys requires location and keyring in filters")
 		}
 
-		it := client.ListCryptoKeys(ctx, &kmspb.ListCryptoKeysRequest{
-			Parent: fmt.Sprintf("projects/%s/locations/%s/keyRings/%s", projectID, location, keyring),
-		})
 		// ListCryptoKeys has no server-side label filter; post-filter
 		// on CryptoKey.Labels.
 		project := projectFromFilters(filters)
-		keys := []*kmspb.CryptoKey{}
-		for {
-			k, err := it.Next()
-			if err == iterator.Done {
-				break
-			}
-			if err != nil {
-				return nil, err
-			}
-			if !gcpLabelMatches(k.GetLabels(), "project", project) {
-				continue
-			}
-			keys = append(keys, k)
-		}
-		return keys, nil
+		return drainIterator(
+			client.ListCryptoKeys(ctx, &kmspb.ListCryptoKeysRequest{
+				Parent: fmt.Sprintf("projects/%s/locations/%s/keyRings/%s", projectID, location, keyring),
+			}),
+			func(k *kmspb.CryptoKey) bool {
+				return gcpLabelMatches(k.GetLabels(), "project", project)
+			},
+		)
 
 	default:
 		return nil, unsupportedActionError("Cloud KMS", action, observability.GCPServiceActions["cloudkms"])

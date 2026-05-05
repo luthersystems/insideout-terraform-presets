@@ -28,7 +28,6 @@ import (
 
 	aiplatform "cloud.google.com/go/aiplatform/apiv1"
 	"cloud.google.com/go/aiplatform/apiv1/aiplatformpb"
-	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/observability"
@@ -109,17 +108,9 @@ func inspectVertexAI(ctx context.Context, projectID, action, filters string, opt
 		if projectFilter != "" {
 			req.Filter = projectFilter
 		}
-		it := client.ListDatasets(ctx, req)
-		datasets := []*aiplatformpb.Dataset{}
-		for {
-			ds, err := it.Next()
-			if err == iterator.Done {
-				break
-			}
-			if err != nil {
-				return nil, err
-			}
-			datasets = append(datasets, ds)
+		datasets, err := drainIterator(client.ListDatasets(ctx, req), nil)
+		if err != nil {
+			return nil, err
 		}
 		emitEmptyRegionHint("datasets", len(datasets))
 		return datasets, nil
@@ -135,17 +126,9 @@ func inspectVertexAI(ctx context.Context, projectID, action, filters string, opt
 		if projectFilter != "" {
 			req.Filter = projectFilter
 		}
-		it := client.ListEndpoints(ctx, req)
-		endpoints := []*aiplatformpb.Endpoint{}
-		for {
-			ep, err := it.Next()
-			if err == iterator.Done {
-				break
-			}
-			if err != nil {
-				return nil, err
-			}
-			endpoints = append(endpoints, ep)
+		endpoints, err := drainIterator(client.ListEndpoints(ctx, req), nil)
+		if err != nil {
+			return nil, err
 		}
 		emitEmptyRegionHint("endpoints", len(endpoints))
 		return endpoints, nil
@@ -161,17 +144,9 @@ func inspectVertexAI(ctx context.Context, projectID, action, filters string, opt
 		if projectFilter != "" {
 			req.Filter = projectFilter
 		}
-		it := client.ListModels(ctx, req)
-		models := []*aiplatformpb.Model{}
-		for {
-			m, err := it.Next()
-			if err == iterator.Done {
-				break
-			}
-			if err != nil {
-				return nil, err
-			}
-			models = append(models, m)
+		models, err := drainIterator(client.ListModels(ctx, req), nil)
+		if err != nil {
+			return nil, err
 		}
 		emitEmptyRegionHint("models", len(models))
 		return models, nil

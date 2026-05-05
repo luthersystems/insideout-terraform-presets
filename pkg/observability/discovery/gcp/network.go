@@ -29,7 +29,6 @@ import (
 	compute "cloud.google.com/go/compute/apiv1"
 	"cloud.google.com/go/compute/apiv1/computepb"
 	computeapi "google.golang.org/api/compute/v1"
-	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/observability"
@@ -257,23 +256,18 @@ func inspectCloudCDN(ctx context.Context, projectID, action, filters string, opt
 		}
 		defer func() { _ = client.Close() }()
 
-		it := client.AggregatedList(ctx, cloudCDNAggregatedListRequest(projectID, filters))
-		services := []*computepb.BackendService{}
-		for {
-			pair, err := it.Next()
-			if err == iterator.Done {
-				break
-			}
-			if err != nil {
-				return nil, err
-			}
-			for _, bs := range pair.Value.BackendServices {
-				if bs.GetEnableCDN() {
-					services = append(services, bs)
+		return drainAggregatedIterator(
+			client.AggregatedList(ctx, cloudCDNAggregatedListRequest(projectID, filters)),
+			func(p compute.BackendServicesScopedListPair) []*computepb.BackendService {
+				if p.Value == nil {
+					return nil
 				}
-			}
-		}
-		return services, nil
+				return p.Value.BackendServices
+			},
+			func(bs *computepb.BackendService) bool {
+				return bs.GetEnableCDN()
+			},
+		)
 
 	default:
 		return nil, unsupportedActionError("Cloud CDN", action, observability.GCPServiceActions["cloudcdn"])
@@ -297,19 +291,7 @@ func inspectAPIGateway(ctx context.Context, projectID, action, filters string, o
 		if f := gcpAIP160LabelFilter("project", projectFromFilters(filters)); f != "" {
 			req.Filter = f
 		}
-		it := client.ListApis(ctx, req)
-		apis := []*apigatewaypb.Api{}
-		for {
-			api, err := it.Next()
-			if err == iterator.Done {
-				break
-			}
-			if err != nil {
-				return nil, err
-			}
-			apis = append(apis, api)
-		}
-		return apis, nil
+		return drainIterator(client.ListApis(ctx, req), nil)
 
 	default:
 		return nil, unsupportedActionError("API Gateway", action, observability.GCPServiceActions["apigateway"])

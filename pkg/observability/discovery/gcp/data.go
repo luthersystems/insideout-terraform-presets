@@ -99,27 +99,17 @@ func inspectMemorystore(ctx context.Context, projectID, action, filters string, 
 
 		// Parent format projects/<id>/locations/-, which the server
 		// expands to every region the caller can see.
-		it := client.ListInstances(ctx, &redispb.ListInstancesRequest{
-			Parent: fmt.Sprintf("projects/%s/locations/-", projectID),
-		})
 		// ListInstances has no server-side label filter; post-filter
 		// on Instance.Labels.
 		project := projectFromFilters(filters)
-		instances := []*redispb.Instance{}
-		for {
-			inst, err := it.Next()
-			if err == iterator.Done {
-				break
-			}
-			if err != nil {
-				return nil, err
-			}
-			if !gcpLabelMatches(inst.GetLabels(), "project", project) {
-				continue
-			}
-			instances = append(instances, inst)
-		}
-		return instances, nil
+		return drainIterator(
+			client.ListInstances(ctx, &redispb.ListInstancesRequest{
+				Parent: fmt.Sprintf("projects/%s/locations/-", projectID),
+			}),
+			func(inst *redispb.Instance) bool {
+				return gcpLabelMatches(inst.GetLabels(), "project", project)
+			},
+		)
 
 	case "describe-instance":
 		fm := parseFilterMap(filters)

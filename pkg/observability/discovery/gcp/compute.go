@@ -22,7 +22,6 @@ import (
 	"cloud.google.com/go/compute/apiv1/computepb"
 	container "cloud.google.com/go/container/apiv1"
 	"cloud.google.com/go/container/apiv1/containerpb"
-	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 	"google.golang.org/protobuf/proto"
 
@@ -54,21 +53,16 @@ func inspectCompute(ctx context.Context, projectID, action, filters string, opts
 			req.Filter = proto.String(f)
 		}
 
-		it := client.AggregatedList(ctx, req)
-		instances := []*computepb.Instance{}
-		for {
-			pair, err := it.Next()
-			if err == iterator.Done {
-				break
-			}
-			if err != nil {
-				return nil, err
-			}
-			if pair.Value.Instances != nil {
-				instances = append(instances, pair.Value.Instances...)
-			}
-		}
-		return instances, nil
+		return drainAggregatedIterator(
+			client.AggregatedList(ctx, req),
+			func(p compute.InstancesScopedListPair) []*computepb.Instance {
+				if p.Value == nil {
+					return nil
+				}
+				return p.Value.Instances
+			},
+			nil,
+		)
 
 	case "describe-instance":
 		fm := parseFilterMap(filters)
@@ -166,22 +160,19 @@ func inspectBastion(ctx context.Context, projectID, action, filters string, opts
 			gcpAIP160LabelFilter("role", "bastion"),
 			gcpAIP160LabelFilter("project", projectFromFilters(filters)),
 		)
-		it := client.AggregatedList(ctx, &computepb.AggregatedListInstancesRequest{
-			Project: projectID,
-			Filter:  proto.String(filterStr),
-		})
-		instances := []*computepb.Instance{}
-		for {
-			pair, err := it.Next()
-			if err == iterator.Done {
-				break
-			}
-			if err != nil {
-				return nil, err
-			}
-			instances = append(instances, pair.Value.Instances...)
-		}
-		return instances, nil
+		return drainAggregatedIterator(
+			client.AggregatedList(ctx, &computepb.AggregatedListInstancesRequest{
+				Project: projectID,
+				Filter:  proto.String(filterStr),
+			}),
+			func(p compute.InstancesScopedListPair) []*computepb.Instance {
+				if p.Value == nil {
+					return nil
+				}
+				return p.Value.Instances
+			},
+			nil,
+		)
 
 	default:
 		return nil, unsupportedActionError("Bastion", action, observability.GCPServiceActions["bastion"])
