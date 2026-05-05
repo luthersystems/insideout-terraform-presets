@@ -11,6 +11,8 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 
+	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/awsdiscover"
+	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/depchase"
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/driftfix"
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/genconfig"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
@@ -83,12 +85,30 @@ type fakeAggregator struct {
 	gotAccount string
 	gotTypes   []string
 	called     int
+
+	// DiscoverByID wiring for Stage 2c3 dep-chase tests. byID is keyed
+	// on tfType|id; missing entries return ErrNotFound.
+	byID      map[string]imported.ImportedResource
+	byIDErr   error
+	byIDCalls []string
 }
 
 func (f *fakeAggregator) DiscoverTypes(_ context.Context, types []string, project, region, accountID string) ([]imported.ImportedResource, error) {
 	f.called++
 	f.gotProject, f.gotRegion, f.gotAccount, f.gotTypes = project, region, accountID, types
 	return f.out, f.err
+}
+
+func (f *fakeAggregator) DiscoverByID(_ context.Context, tfType, id, _, _ string) (imported.ImportedResource, error) {
+	key := tfType + "|" + id
+	f.byIDCalls = append(f.byIDCalls, key)
+	if f.byIDErr != nil {
+		return imported.ImportedResource{}, f.byIDErr
+	}
+	if r, ok := f.byID[key]; ok {
+		return r, nil
+	}
+	return imported.ImportedResource{}, awsdiscover.ErrNotFound
 }
 
 // fakeDriftfix records driftfix invocations so the happy-path tests can
@@ -139,6 +159,17 @@ func (f *fakeGenconfig) Run(_ context.Context, opts genconfig.Options, resources
 	}, nil
 }
 
+// noopDepChase is the test-default for Stage 2c3: returns a clean
+// result with zero iterations and no warnings. Tests that exercise
+// the depchase orchestrator branch override runDepChase directly.
+func noopDepChase(_ context.Context, opts depchase.Options, resources []imported.ImportedResource) (*depchase.Result, error) {
+	return &depchase.Result{
+		GeneratedPath: filepath.Join(opts.Workdir, "generated.tf"),
+		Iterations:    0,
+		Resources:     resources,
+	}, nil
+}
+
 func okDeps(agg *fakeAggregator) discoverDeps {
 	return discoverDeps{
 		loadConfig:    func(_ context.Context, _ string) (aws.Config, error) { return aws.Config{}, nil },
@@ -146,6 +177,7 @@ func okDeps(agg *fakeAggregator) discoverDeps {
 		newDiscoverer: func(_ aws.Config, _ int) discoveryAggregator { return agg },
 		runGenconfig:  (&fakeGenconfig{}).Run,
 		runDriftfix:   (&fakeDriftfix{}).Run,
+		runDepChase:   noopDepChase,
 	}
 }
 
@@ -493,6 +525,210 @@ func TestRunDiscoverWithDeps_NoDriftfixSkipsStage2c(t *testing.T) {
 	}
 	if df.called != 0 {
 		t.Errorf("runDriftfix called %d times with --no-driftfix, want 0", df.called)
+	}
+}
+
+// fakeDepChase records depchase invocations and returns canned
+// results. Mirrors fakeDriftfix's shape — used by tests that need to
+// observe whether Stage 2c3 was reached and how it was invoked.
+type fakeDepChase struct {
+	called  int
+	gotOpts depchase.Options
+	gotIn   []imported.ImportedResource
+	out     *depchase.Result
+	err     error
+}
+
+func (f *fakeDepChase) Run(_ context.Context, opts depchase.Options, resources []imported.ImportedResource) (*depchase.Result, error) {
+	f.called++
+	f.gotOpts = opts
+	f.gotIn = resources
+	if f.err != nil {
+		return f.out, f.err
+	}
+	if f.out != nil {
+		return f.out, nil
+	}
+	return &depchase.Result{
+		GeneratedPath: filepath.Join(opts.Workdir, "generated.tf"),
+		Iterations:    0,
+		Resources:     resources,
+	}, nil
+}
+
+// okDepsWithDC mirrors okDepsWithDF but also lets the caller observe
+// depchase invocations.
+func okDepsWithDC(agg *fakeAggregator, gc *fakeGenconfig, df *fakeDriftfix, dc *fakeDepChase) discoverDeps {
+	d := okDepsWithDF(agg, gc, df)
+	d.runDepChase = dc.Run
+	return d
+}
+
+// TestRunDiscoverWithDeps_DepChaseInvokedAfterDriftfix pins the full
+// Stage 2c1 → 2c3 sequencing on the happy path. Stage 2c3 receives
+// the post-driftfix workdir + the genconfig-attribute-populated
+// resource set + the aggregator (so it can call DiscoverByID on
+// dep-chase iterations).
+func TestRunDiscoverWithDeps_DepChaseInvokedAfterDriftfix(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	gc := &fakeGenconfig{}
+	df := &fakeDriftfix{}
+	dc := &fakeDepChase{}
+	agg := &fakeAggregator{out: []imported.ImportedResource{validResource("aws_sqs_queue.alpha")}}
+	rc := runDiscoverWithDeps([]string{
+		"--provider", "aws", "--project", "p", "--region", "us-east-1", "--output-dir", dir,
+	}, okDepsWithDC(agg, gc, df, dc))
+	if rc != discoverExitOK {
+		t.Fatalf("rc=%d, want OK", rc)
+	}
+	if dc.called != 1 {
+		t.Fatalf("runDepChase called %d times, want 1", dc.called)
+	}
+	if dc.gotOpts.Workdir != filepath.Join(dir, "genconfig") {
+		t.Errorf("depchase Workdir=%q, want <output>/genconfig", dc.gotOpts.Workdir)
+	}
+	if dc.gotOpts.Region != "us-east-1" {
+		t.Errorf("depchase Region=%q, want us-east-1", dc.gotOpts.Region)
+	}
+	if dc.gotOpts.AccountID != "1234567890" {
+		t.Errorf("depchase AccountID=%q", dc.gotOpts.AccountID)
+	}
+	if dc.gotOpts.Discoverer == nil {
+		t.Error("depchase Discoverer must be set (aggregator threaded through)")
+	}
+	if dc.gotOpts.Pipeline.RunGenconfig == nil || dc.gotOpts.Pipeline.RunDriftfix == nil {
+		t.Error("depchase Pipeline.RunGenconfig + RunDriftfix must be set")
+	}
+	if len(dc.gotIn) != 1 || dc.gotIn[0].Identity.Address != "aws_sqs_queue.alpha" {
+		t.Errorf("depchase resources=%+v, want one alpha", dc.gotIn)
+	}
+}
+
+// TestRunDiscoverWithDeps_NoDepChaseSkipsStage2c3 pins --no-depchase.
+// The operator-facing handle to bail out of dep-chase if it's misbehaving.
+func TestRunDiscoverWithDeps_NoDepChaseSkipsStage2c3(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	gc := &fakeGenconfig{}
+	df := &fakeDriftfix{}
+	dc := &fakeDepChase{}
+	agg := &fakeAggregator{out: []imported.ImportedResource{validResource("aws_sqs_queue.alpha")}}
+	rc := runDiscoverWithDeps([]string{
+		"--provider", "aws", "--project", "p", "--region", "us-east-1", "--output-dir", dir, "--no-depchase",
+	}, okDepsWithDC(agg, gc, df, dc))
+	if rc != discoverExitOK {
+		t.Fatalf("rc=%d, want OK", rc)
+	}
+	if dc.called != 0 {
+		t.Errorf("runDepChase called %d times with --no-depchase, want 0", dc.called)
+	}
+	if df.called != 1 {
+		t.Errorf("runDriftfix should still run with --no-depchase; called=%d", df.called)
+	}
+}
+
+// TestRunDiscoverWithDeps_NoDriftfixAlsoSkipsDepChase pins that
+// skipping driftfix necessarily skips dep-chase too — depchase reads
+// the cleaned generated.tf that driftfix produces, so running 2c3
+// without 2c1 would feed it possibly-drifting input.
+func TestRunDiscoverWithDeps_NoDriftfixAlsoSkipsDepChase(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	gc := &fakeGenconfig{}
+	df := &fakeDriftfix{}
+	dc := &fakeDepChase{}
+	agg := &fakeAggregator{out: []imported.ImportedResource{validResource("aws_sqs_queue.alpha")}}
+	rc := runDiscoverWithDeps([]string{
+		"--provider", "aws", "--project", "p", "--region", "us-east-1", "--output-dir", dir, "--no-driftfix",
+	}, okDepsWithDC(agg, gc, df, dc))
+	if rc != discoverExitOK {
+		t.Fatalf("rc=%d, want OK", rc)
+	}
+	if dc.called != 0 {
+		t.Errorf("--no-driftfix must skip dep-chase too; runDepChase called=%d", dc.called)
+	}
+}
+
+// TestRunDiscoverWithDeps_DepChaseFailureExitsFatal pins that a Stage
+// 2c3 failure (cycle, max-iterations exceeded, discoverer SDK error)
+// exits non-zero with a remediation hint pointing at --no-depchase
+// and the on-disk artifacts surviving for inspection.
+func TestRunDiscoverWithDeps_DepChaseFailureExitsFatal(t *testing.T) {
+	dir := t.TempDir()
+	gc := &fakeGenconfig{}
+	df := &fakeDriftfix{}
+	dc := &fakeDepChase{err: depchase.ErrCyclicDependency}
+	agg := &fakeAggregator{out: []imported.ImportedResource{validResource("aws_sqs_queue.alpha")}}
+	stderr := captureStderr(t, func() {
+		rc := runDiscoverWithDeps([]string{
+			"--provider", "aws", "--project", "p", "--region", "us-east-1", "--output-dir", dir,
+		}, okDepsWithDC(agg, gc, df, dc))
+		if rc != discoverExitFatal {
+			t.Errorf("rc=%d, want fatal", rc)
+		}
+	})
+	if !strings.Contains(stderr, "--no-depchase") {
+		t.Errorf("stderr must include the --no-depchase remediation hint; got:\n%s", stderr)
+	}
+	if !strings.Contains(stderr, "dependency chase") {
+		t.Errorf("stderr must include the failing-stage label; got:\n%s", stderr)
+	}
+}
+
+// TestRunDiscoverWithDeps_DepChaseAddedResourcesRewriteManifest pins
+// that depchase-added resources land in imported.json — without this
+// the manifest would diverge from the on-disk generated.tf.
+func TestRunDiscoverWithDeps_DepChaseAddedResourcesRewriteManifest(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	gc := &fakeGenconfig{}
+	df := &fakeDriftfix{}
+	addedRole := imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Cloud:    "aws",
+			Type:     "aws_iam_role",
+			Address:  "aws_iam_role.dep_role",
+			ImportID: "dep-role",
+			NameHint: "dep-role",
+			NativeIDs: map[string]string{
+				"name": "dep-role",
+				"arn":  "arn:aws:iam::1234567890:role/dep-role",
+			},
+		},
+		Tier:   imported.TierImportedFlat,
+		Source: imported.SourceImporter,
+	}
+	dc := &fakeDepChase{out: &depchase.Result{
+		GeneratedPath: filepath.Join(dir, "genconfig", "generated.tf"),
+		Iterations:    1,
+		Resources:     []imported.ImportedResource{validResource("aws_sqs_queue.alpha"), addedRole},
+		Added:         []imported.ImportedResource{addedRole},
+	}}
+	agg := &fakeAggregator{out: []imported.ImportedResource{validResource("aws_sqs_queue.alpha")}}
+	rc := runDiscoverWithDeps([]string{
+		"--provider", "aws", "--project", "p", "--region", "us-east-1", "--output-dir", dir,
+	}, okDepsWithDC(agg, gc, df, dc))
+	if rc != discoverExitOK {
+		t.Fatalf("rc=%d, want OK", rc)
+	}
+	// imported.json must include the depchase-added role.
+	body, err := os.ReadFile(filepath.Join(dir, "imported.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []imported.ImportedResource
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatal(err)
+	}
+	foundRole := false
+	for _, r := range got {
+		if r.Identity.Address == "aws_iam_role.dep_role" {
+			foundRole = true
+		}
+	}
+	if !foundRole {
+		t.Errorf("imported.json should include the depchase-added role; got:\n%s", body)
 	}
 }
 

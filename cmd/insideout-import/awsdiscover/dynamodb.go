@@ -2,12 +2,16 @@ package awsdiscover
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	awsarn "github.com/aws/aws-sdk-go-v2/aws/arn"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	dynamotypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
@@ -17,6 +21,7 @@ import (
 type dynamoClient interface {
 	ListTables(ctx context.Context, in *dynamodb.ListTablesInput, opts ...func(*dynamodb.Options)) (*dynamodb.ListTablesOutput, error)
 	ListTagsOfResource(ctx context.Context, in *dynamodb.ListTagsOfResourceInput, opts ...func(*dynamodb.Options)) (*dynamodb.ListTagsOfResourceOutput, error)
+	DescribeTable(ctx context.Context, in *dynamodb.DescribeTableInput, opts ...func(*dynamodb.Options)) (*dynamodb.DescribeTableOutput, error)
 }
 
 type dynamoDiscoverer struct {
@@ -143,8 +148,70 @@ func (d *dynamoDiscoverer) Discover(ctx context.Context, project, region, accoun
 }
 
 // hasPrefix is a stdlib helper inlined here so the prefix check stays
-// readable next to the ListTables loop. Using strings.HasPrefix would
-// require importing "strings" only for one call.
+// readable next to the ListTables loop.
 func hasPrefix(s, prefix string) bool {
 	return len(s) >= len(prefix) && s[:len(prefix)] == prefix
+}
+
+// DiscoverByID resolves a DynamoDB table by ARN
+// (arn:aws:dynamodb:<region>:<account>:table/<name>) or bare table
+// name. Issues a single DescribeTable call to verify existence.
+func (d *dynamoDiscoverer) DiscoverByID(ctx context.Context, id, region, accountID string) (imported.ImportedResource, error) {
+	name, err := dynamoNameFromID(id)
+	if err != nil {
+		return imported.ImportedResource{}, err
+	}
+	client := d.new()
+	out, err := client.DescribeTable(ctx, &dynamodb.DescribeTableInput{TableName: aws.String(name)})
+	if err != nil {
+		var notFound *dynamotypes.ResourceNotFoundException
+		if errors.As(err, &notFound) {
+			return imported.ImportedResource{}, fmt.Errorf("aws_dynamodb_table %q: %w", name, ErrNotFound)
+		}
+		return imported.ImportedResource{}, fmt.Errorf("DescribeTable: %w", err)
+	}
+	arn := ""
+	if out.Table != nil {
+		arn = aws.ToString(out.Table.TableArn)
+	}
+	if arn == "" && accountID != "" && region != "" {
+		arn = fmt.Sprintf("arn:aws:dynamodb:%s:%s:table/%s", region, accountID, name)
+	}
+	return makeImportedResource(
+		addressBook{},
+		"aws_dynamodb_table",
+		name,
+		name,
+		region,
+		accountID,
+		map[string]string{"arn": arn},
+	), nil
+}
+
+// dynamoNameFromID extracts the DynamoDB table name from an ARN
+// (arn:aws:dynamodb:<region>:<account>:table/<name>) or bare name.
+func dynamoNameFromID(id string) (string, error) {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return "", fmt.Errorf("dynamodb: empty id: %w", ErrNotSupported)
+	}
+	if awsarn.IsARN(id) {
+		parsed, err := awsarn.Parse(id)
+		if err != nil {
+			return "", fmt.Errorf("dynamodb: parse arn: %w", err)
+		}
+		if parsed.Service != "dynamodb" {
+			return "", fmt.Errorf("dynamodb: not a dynamodb arn (service=%q): %w", parsed.Service, ErrNotSupported)
+		}
+		// Resource is "table/<name>" — split on first slash.
+		parts := strings.SplitN(parsed.Resource, "/", 2)
+		if len(parts) != 2 || parts[0] != "table" || parts[1] == "" {
+			return "", fmt.Errorf("dynamodb: arn resource %q is not table/<name>: %w", parsed.Resource, ErrNotSupported)
+		}
+		return parts[1], nil
+	}
+	if strings.ContainsAny(id, " :/") {
+		return "", fmt.Errorf("dynamodb: unrecognized id %q: %w", id, ErrNotSupported)
+	}
+	return id, nil
 }

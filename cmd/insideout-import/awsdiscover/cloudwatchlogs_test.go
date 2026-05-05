@@ -122,3 +122,100 @@ func TestCWLDiscover_PropagatesError(t *testing.T) {
 		t.Fatal("expected error")
 	}
 }
+
+func TestCWLDiscoverByID_AcceptsARN(t *testing.T) {
+	t.Parallel()
+	name := "/aws/lambda/io-foo-handler"
+	arn := "arn:aws:logs:us-east-1:123:log-group:" + name + ":*"
+	d := &cwlDiscoverer{new: func() cwlClient {
+		return &fakeCWLClient{
+			pages: []cloudwatchlogs.DescribeLogGroupsOutput{
+				{LogGroups: []cwltypes.LogGroup{
+					{LogGroupName: aws.String(name), Arn: aws.String(arn)},
+				}},
+			},
+		}
+	}}
+	got, err := d.DiscoverByID(context.Background(), arn, "us-east-1", "123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Identity.Type != "aws_cloudwatch_log_group" {
+		t.Errorf("Type=%q", got.Identity.Type)
+	}
+	if got.Identity.NameHint != name {
+		t.Errorf("NameHint=%q, want %q", got.Identity.NameHint, name)
+	}
+	if got.Identity.NativeIDs["arn"] != arn {
+		t.Errorf("NativeIDs[arn]=%q, want %q", got.Identity.NativeIDs["arn"], arn)
+	}
+}
+
+func TestCWLDiscoverByID_AcceptsBareName(t *testing.T) {
+	t.Parallel()
+	name := "/aws/lambda/io-foo-handler"
+	d := &cwlDiscoverer{new: func() cwlClient {
+		return &fakeCWLClient{
+			pages: []cloudwatchlogs.DescribeLogGroupsOutput{
+				{LogGroups: []cwltypes.LogGroup{
+					{LogGroupName: aws.String(name), Arn: aws.String("arn:test")},
+				}},
+			},
+		}
+	}}
+	got, err := d.DiscoverByID(context.Background(), name, "us-east-1", "123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Identity.NameHint != name {
+		t.Errorf("NameHint=%q", got.Identity.NameHint)
+	}
+}
+
+func TestCWLDiscoverByID_NotFound(t *testing.T) {
+	t.Parallel()
+	d := &cwlDiscoverer{new: func() cwlClient {
+		// Empty pages → CWL returns empty list (no typed not-found error).
+		return &fakeCWLClient{}
+	}}
+	_, err := d.DiscoverByID(context.Background(), "/aws/lambda/missing", "us-east-1", "123")
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("err=%v, want ErrNotFound", err)
+	}
+}
+
+func TestCWLDiscoverByID_NotFoundOnPrefixMatchOnly(t *testing.T) {
+	t.Parallel()
+	// CWL prefix match returns names that share a prefix; DiscoverByID
+	// must require an exact match.
+	d := &cwlDiscoverer{new: func() cwlClient {
+		return &fakeCWLClient{
+			pages: []cloudwatchlogs.DescribeLogGroupsOutput{
+				{LogGroups: []cwltypes.LogGroup{
+					{LogGroupName: aws.String("/aws/lambda/missing-extended"), Arn: aws.String("arn:test")},
+				}},
+			},
+		}
+	}}
+	_, err := d.DiscoverByID(context.Background(), "/aws/lambda/missing", "us-east-1", "123")
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("err=%v, want ErrNotFound", err)
+	}
+}
+
+func TestCWLDiscoverByID_UnsupportedID(t *testing.T) {
+	t.Parallel()
+	d := &cwlDiscoverer{new: func() cwlClient { return &fakeCWLClient{} }}
+	cases := []string{
+		"",
+		"arn:aws:s3:::a-bucket", // wrong service
+		"arn:aws:logs:us-east-1:123:metric-filter", // wrong resource type
+		"name with spaces",
+	}
+	for _, id := range cases {
+		_, err := d.DiscoverByID(context.Background(), id, "us-east-1", "123")
+		if !errors.Is(err, ErrNotSupported) {
+			t.Errorf("id=%q: err=%v, want ErrNotSupported", id, err)
+		}
+	}
+}

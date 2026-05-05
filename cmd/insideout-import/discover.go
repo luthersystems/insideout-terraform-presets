@@ -15,6 +15,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/awsdiscover"
+	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/depchase"
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/driftfix"
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/genconfig"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
@@ -40,8 +41,13 @@ const discoverRetryMaxAttempts = 8
 // discoveryAggregator is the small subset of awsdiscover.AWSDiscoverer the
 // orchestrator needs. Defining the interface in main lets tests inject a
 // fake aggregator without standing up real AWS clients.
+//
+// DiscoverByID is part of the contract since Stage 2c3 (#271): the
+// dep-chase loop calls into the aggregator to resolve unresolved ARNs
+// inside generated.tf to fresh ImportedResource entries.
 type discoveryAggregator interface {
 	DiscoverTypes(ctx context.Context, types []string, project, region, accountID string) ([]imported.ImportedResource, error)
+	DiscoverByID(ctx context.Context, tfType, id, region, accountID string) (imported.ImportedResource, error)
 }
 
 // discoverDeps gathers the AWS-side and terraform-side seams that
@@ -60,6 +66,14 @@ type discoverDeps struct {
 	// runDriftfix drives Stage 2c1. Same shape as runGenconfig: production
 	// shells out, tests fake.
 	runDriftfix func(ctx context.Context, opts driftfix.Options) (*driftfix.Result, error)
+	// runDepChase drives Stage 2c3. Wraps the genconfig→driftfix pair
+	// in a bounded loop that walks the cleaned generated.tf for
+	// unresolved ARNs and pulls them in via the aggregator's
+	// DiscoverByID. Production wires opts.Pipeline to call the same
+	// runGenconfig + runDriftfix functions on each iteration; tests
+	// fake the depchase package directly to exercise the orchestrator
+	// branch without scripting a multi-pass pipeline.
+	runDepChase func(ctx context.Context, opts depchase.Options, resources []imported.ImportedResource) (*depchase.Result, error)
 }
 
 func productionDiscoverDeps() discoverDeps {
@@ -85,6 +99,7 @@ func productionDiscoverDeps() discoverDeps {
 		},
 		runGenconfig: genconfig.Run,
 		runDriftfix:  driftfix.Run,
+		runDepChase:  depchase.Run,
 	}
 }
 
@@ -101,13 +116,23 @@ func runDiscoverWithDeps(args []string, deps discoverDeps) int {
 Usage:
   insideout-import discover --provider aws --project P --region R --output-dir DIR [flags]
 
-Stages 2a + 2b + 2c1 + 2c2: AWS only, SDK-driven discovery for the 5 Phase
-1 resource types (errgroup-bounded fan-out, raised retryer attempt budget),
-terraform plan -generate-config-out + schema cleanup, then a drift-fix loop
-that patches generated.tf until the plan is empty. Pass --no-hcl to skip
-Stage 2b (manifest only) or --no-driftfix to stop after Stage 2b (validate-
-clean but possibly drifting). GCP support, dependency chasing, and a
-localstack CI gate land in Stage 2d (see #189 for the chain).
+Stages 2a + 2b + 2c1–2c3: AWS only, SDK-driven discovery for 9 resource
+types (the 5 Phase 1 types plus IAM role/policy, KMS key, S3 bucket
+added for dep-chase reference resolution), with errgroup-bounded
+fan-out and a raised retryer attempt budget. Stage 2b runs
+terraform plan -generate-config-out + schema cleanup; Stage 2c1
+patches drifting attributes until the plan is empty; Stage 2c3 walks
+the cleaned generated.tf for ARN literals pointing at resources not
+in the import set, pulls those in via per-ID lookups, and re-runs
+the regenerate + drift-fix cycle until the references converge or a
+bounded iteration count is hit.
+
+Pass --no-hcl to skip Stage 2b (manifest only), --no-driftfix to
+stop after Stage 2b (validate-clean but possibly drifting), or
+--no-depchase to stop after Stage 2c1 (drift-fix-converged but
+references to external resources may still drift). GCP support and
+the localstack CI gate land in Stages 2c4 / 2d (see #189 for the
+chain).
 
 Flags:`)
 		fs.PrintDefaults()
@@ -121,9 +146,11 @@ Exit codes:
 	project := fs.String("project", "", "project name prefix used to filter resources (required)")
 	region := fs.String("region", "", "AWS region to scan (required for --provider aws)")
 	outputDir := fs.String("output-dir", "", "directory to write imported.json into (required)")
-	resourceTypes := fs.String("resource-types", "", "comma-separated subset of types to discover; default: all 5 Phase 1 types")
+	resourceTypes := fs.String("resource-types", "", "comma-separated subset of types to discover; default: all 9 supported types")
 	noHCL := fs.Bool("no-hcl", false, "skip Stage 2b HCL generation (terraform plan -generate-config-out + cleanup); leaves imported.json with empty Attributes")
 	noDriftFix := fs.Bool("no-driftfix", false, "skip Stage 2c1 drift fix loop after HCL generation; leaves generated.tf at validate-clean rather than plan-clean")
+	noDepChase := fs.Bool("no-depchase", false, "skip Stage 2c3 dependency chase loop after drift fix; leaves dangling external ARN references in generated.tf as drift")
+	maxDepChaseIter := fs.Int("max-depchase-iterations", depchase.DefaultMaxIterations, "max dependency-chase iterations before surfacing the residual unresolved set as a fatal")
 	maxConcurrency := fs.Int("max-concurrency", awsdiscover.DefaultMaxConcurrency, "max in-flight per-resource AWS API calls inside the DynamoDB and Lambda discoverers; raise on accounts with thousands of resources, lower if the SDK retryer keeps tripping")
 
 	if err := fs.Parse(args); err != nil {
@@ -244,6 +271,81 @@ Exit codes:
 		return discoverExitFatal
 	}
 	fmt.Printf("drift fix converged after %d iteration(s); generated HCL at %s\n", dfRes.Iterations, dfRes.GeneratedPath)
+
+	if *noDepChase {
+		return discoverExitOK
+	}
+
+	// Stage 2c3: walk the cleaned generated.tf for ARN literals
+	// pointing at resources outside the import set; pull each in via
+	// the aggregator's DiscoverByID and re-run genconfig + driftfix
+	// on the expanded set until references converge.
+	//
+	// The pipeline is closed-over here so the depchase package can
+	// invoke the same runGenconfig + runDriftfix functions on each
+	// iteration without taking a dep on either subpackage. After
+	// each successful iteration we rewrite imported.json so the
+	// manifest stays consistent with the on-disk generated.tf.
+	pipeline := depchase.PipelineFns{
+		RunGenconfig: func(ictx context.Context, expanded []imported.ImportedResource) (*depchase.GenconfigResult, error) {
+			r, err := deps.runGenconfig(ictx, genconfig.Options{Workdir: gcWorkdir, Region: *region}, expanded)
+			if err != nil {
+				return nil, err
+			}
+			if _, _, err := writeManifest(*outputDir, "aws", r.Resources); err != nil {
+				return nil, fmt.Errorf("write manifest after depchase regenerate: %w", err)
+			}
+			return &depchase.GenconfigResult{
+				GeneratedPath: r.GeneratedPath,
+				Resources:     r.Resources,
+			}, nil
+		},
+		RunDriftfix: func(ictx context.Context) (*depchase.DriftfixResult, error) {
+			r, err := deps.runDriftfix(ictx, driftfix.Options{Workdir: gcWorkdir})
+			if err != nil {
+				return nil, err
+			}
+			return &depchase.DriftfixResult{
+				GeneratedPath: r.GeneratedPath,
+				Iterations:    r.Iterations,
+			}, nil
+		},
+	}
+	dcRes, err := deps.runDepChase(ctx, depchase.Options{
+		Workdir:       gcWorkdir,
+		Region:        *region,
+		AccountID:     accountID,
+		MaxIterations: *maxDepChaseIter,
+		Discoverer:    d,
+		Pipeline:      pipeline,
+	}, res.Resources)
+	if dcRes != nil {
+		for _, w := range dcRes.Warnings {
+			fmt.Fprintf(os.Stderr, "discover: depchase warning: %s\n", w)
+		}
+	}
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "discover: dependency chase: %v\n", err)
+		fmt.Fprintln(os.Stderr, "discover: imported.json + generated.tf are on disk. Re-run with --no-depchase to skip Stage 2c3 explicitly, or raise --max-depchase-iterations and rerun.")
+		return discoverExitFatal
+	}
+	if dcRes == nil {
+		// Defensive: production runDepChase always returns a non-nil
+		// Result on success; a nil-result-with-no-error indicates a
+		// dep injection bug.
+		fmt.Fprintln(os.Stderr, "discover: dep chase returned nil result with no error (programming error)")
+		return discoverExitFatal
+	}
+	if len(dcRes.Added) > 0 {
+		// One last manifest rewrite so any depchase-added resources
+		// land in imported.json with the converged attributes.
+		if _, _, err := writeManifest(*outputDir, "aws", dcRes.Resources); err != nil {
+			fmt.Fprintf(os.Stderr, "discover: write manifest after depchase: %v\n", err)
+			return discoverExitFatal
+		}
+	}
+	fmt.Printf("dep chase converged after %d iteration(s); added %d dependency resource(s); generated HCL at %s\n",
+		dcRes.Iterations, len(dcRes.Added), dcRes.GeneratedPath)
 	return discoverExitOK
 }
 
