@@ -190,6 +190,72 @@ func TestRun_RejectsEmptyOpts(t *testing.T) {
 	}
 }
 
+// TestRun_SkipsLambdaButPreservesEntry pins the Stage-2b limitation around
+// aws_lambda_function: terraform plan -generate-config-out cannot produce
+// validating HCL for an existing function (no source-code attribute), so
+// genconfig skips it. The manifest entry survives unchanged so the
+// operator's imported.json stays complete; only Attributes stays empty
+// until Stage 2c. A mutation that ran the skipped resource through
+// genconfig (or dropped it from the result) would break this contract.
+func TestRun_SkipsLambdaButPreservesEntry(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	runner := &fakeRunner{
+		// Plan body covers only the in-batch sqs resource — Lambda was
+		// filtered out before imports.tf was emitted.
+		planBody: `resource "aws_sqs_queue" "x" { name = "alpha" }`,
+		schemas:  minimalAWSSchema(),
+	}
+	res, err := Run(context.Background(), Options{Workdir: dir, Region: "us-east-1", Runner: runner},
+		[]imported.ImportedResource{
+			{Identity: imported.ResourceIdentity{Type: "aws_sqs_queue", Address: "aws_sqs_queue.x", ImportID: "x"}},
+			{Identity: imported.ResourceIdentity{Type: "aws_lambda_function", Address: "aws_lambda_function.fn", ImportID: "fn"}},
+		})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Resources) != 2 {
+		t.Fatalf("Resources len=%d, want 2 (1 generated + 1 skipped)", len(res.Resources))
+	}
+	// Find both by address.
+	got := map[string]map[string]any{}
+	for _, r := range res.Resources {
+		got[r.Identity.Address] = r.Attributes
+	}
+	if got["aws_sqs_queue.x"]["name"] != "alpha" {
+		t.Errorf("sqs Attributes not populated; got %v", got["aws_sqs_queue.x"])
+	}
+	if got["aws_lambda_function.fn"] != nil {
+		t.Errorf("lambda Attributes must remain empty (Stage 2c lifts this); got %v", got["aws_lambda_function.fn"])
+	}
+	// imports.tf must contain the sqs block but NOT a lambda block — pin
+	// the gate that keeps the broken type out of the scratch stack.
+	body, _ := os.ReadFile(filepath.Join(dir, importsFile))
+	if !strings.Contains(string(body), "aws_sqs_queue.x") {
+		t.Errorf("imports.tf missing sqs entry; got:\n%s", body)
+	}
+	if strings.Contains(string(body), "aws_lambda_function.fn") {
+		t.Errorf("imports.tf must NOT contain skipped lambda; got:\n%s", body)
+	}
+}
+
+// TestRun_AllSkippedIsError pins that a manifest with only skipped types
+// is fatal — the operator should know the entire batch is unreachable
+// rather than receive an empty workdir and a "success" exit.
+func TestRun_AllSkippedIsError(t *testing.T) {
+	t.Parallel()
+	_, err := Run(context.Background(), Options{Workdir: t.TempDir(), Region: "us-east-1", Runner: &fakeRunner{}},
+		[]imported.ImportedResource{
+			{Identity: imported.ResourceIdentity{Type: "aws_lambda_function", Address: "aws_lambda_function.fn", ImportID: "fn"}},
+		})
+	if err == nil {
+		t.Fatal("expected error when every resource is on the skip list")
+	}
+	if !strings.Contains(err.Error(), "skip list") {
+		t.Errorf("err = %v, want substring \"skip list\"", err)
+	}
+}
+
 // TestRun_EmptyResourcesIsError pins that the orchestrator refuses to run
 // against an empty manifest. terraform plan -generate-config-out against an
 // empty stack produces nothing (or worse, errors confusingly), so the
