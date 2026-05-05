@@ -7,6 +7,7 @@ package aws
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 
@@ -364,4 +365,30 @@ func TestFilterBackupVaultsByProjectTag_TagsErrorSkips(t *testing.T) {
 	got, err := filterBackupVaultsByProjectTag(context.Background(), client, "my-stack")
 	require.NoError(t, err) // log+skip, not abort
 	assert.Empty(t, got)
+}
+
+// --- Empty-state JSON-shape pins per #256 ---
+
+func TestFilterKMSAliasesByProjectTag_NoAliases_EmptySlice(t *testing.T) {
+	t.Parallel()
+	client := &fakeKMSClient{aliasOut: &kms.ListAliasesOutput{}}
+	got, err := filterKMSAliasesByProjectTag(context.Background(), client, "any-project")
+	require.NoError(t, err)
+	require.NotNil(t, got, "must be non-nil so encoding/json emits [] not null")
+	b, err := json.Marshal(got)
+	require.NoError(t, err)
+	assert.Equal(t, "[]", string(b),
+		"empty KMS list-aliases must marshal as [] not null (#256)")
+}
+
+func TestFilterBackupVaultsByProjectTag_NoVaults_EmptySlice(t *testing.T) {
+	t.Parallel()
+	client := &fakeBackupClient{vaultsOut: &backup.ListBackupVaultsOutput{}}
+	got, err := filterBackupVaultsByProjectTag(context.Background(), client, "any-project")
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	b, err := json.Marshal(got)
+	require.NoError(t, err)
+	assert.Equal(t, "[]", string(b),
+		"empty Backup list-backup-vaults must marshal as [] not null (#256)")
 }

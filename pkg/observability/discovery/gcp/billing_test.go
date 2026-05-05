@@ -2,6 +2,7 @@ package gcp
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 
@@ -183,4 +184,33 @@ func TestInspectBilling_UnsupportedAction(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unsupported Billing action")
 	assert.Contains(t, err.Error(), `"no-such"`)
+}
+
+// TestInspectBilling_GetBudgets_NoBudgets_EmptySlice pins the
+// wrapped-parent empty-state shape (Pattern C from CONTRIBUTING.md):
+// when the iterator yields zero budgets, m["budgets"] must be []
+// (non-nil empty), not null. Pre-fix, declaring `var budgetList
+// []map[string]any` would marshal m["budgets"] as JSON null inside
+// the parent envelope. (#256)
+func TestInspectBilling_GetBudgets_NoBudgets_EmptySlice(t *testing.T) {
+	t.Parallel()
+	bc := &fakeBillingClient{
+		info: &billingpb.ProjectBillingInfo{
+			ProjectId:          "demo-proj",
+			BillingAccountName: "billingAccounts/0123-4567-89AB",
+		},
+	}
+	bgc := &fakeBudgetClient{} // no budgets, no error
+	got, err := inspectBillingWithDeps(context.Background(), bc, bgc, "demo-proj", "get-budgets", "")
+	require.NoError(t, err)
+
+	m, ok := got.(map[string]any)
+	require.True(t, ok)
+	bs := m["budgets"]
+	require.NotNil(t, bs, "budgets must be non-nil so JSON emits [] not null (#256)")
+
+	b, err := json.Marshal(bs)
+	require.NoError(t, err)
+	assert.Equal(t, "[]", string(b),
+		"empty Billing get-budgets must marshal as [] not null (#256)")
 }

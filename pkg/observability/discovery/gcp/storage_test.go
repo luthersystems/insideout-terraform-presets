@@ -2,10 +2,14 @@ package gcp
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"cloud.google.com/go/kms/apiv1/kmspb"
+	"cloud.google.com/go/secretmanager/apiv1/secretmanagerpb"
+	"cloud.google.com/go/storage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/api/option"
@@ -127,4 +131,76 @@ func TestInspectKMS_ListKeysMissingFilters(t *testing.T) {
 	)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "location and keyring")
+}
+
+// Empty-state pins per #256 for the storage-plane sites.
+
+func TestInspectGCS_ListBuckets_NoMatches_EmptySlice(t *testing.T) {
+	t.Parallel()
+	// inspectGCS routes through drainIterator + bucketAttrsToMaps. The
+	// pin covers the post-transform shape: when drainIterator returns
+	// []*storage.BucketAttrs{}, bucketAttrsToMaps returns
+	// []map[string]any{} (NOT nil) so the JSON wire is `[]`.
+	got := bucketAttrsToMaps(nil)
+	require.NotNil(t, got, "bucketAttrsToMaps(nil) must be non-nil for empty-state contract")
+	b, err := json.Marshal(got)
+	require.NoError(t, err)
+	assert.Equal(t, "[]", string(b),
+		"empty GCS list-buckets must marshal as [] not null (#256)")
+}
+
+func TestInspectGCS_DrainEmpty_EmptySlice(t *testing.T) {
+	t.Parallel()
+	// Also pin the upstream drainIterator path (the iterator yields no
+	// BucketAttrs at all).
+	got, err := drainIterator(
+		&emptyIterator[*storage.BucketAttrs]{},
+		func(*storage.BucketAttrs) bool { return true },
+	)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	maps := bucketAttrsToMaps(got)
+	b, err := json.Marshal(maps)
+	require.NoError(t, err)
+	assert.Equal(t, "[]", string(b),
+		"empty GCS drain → bucketAttrsToMaps must marshal as [] not null (#256)")
+}
+
+func TestInspectSecretManager_ListSecrets_NoMatches_EmptySlice(t *testing.T) {
+	t.Parallel()
+	got, err := drainIterator(
+		&emptyIterator[*secretmanagerpb.Secret]{},
+		func(*secretmanagerpb.Secret) bool { return true },
+	)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	b, err := json.Marshal(got)
+	require.NoError(t, err)
+	assert.Equal(t, "[]", string(b),
+		"empty Secret Manager list-secrets must marshal as [] not null (#256)")
+}
+
+func TestInspectKMS_ListKeyrings_NoMatches_EmptySlice(t *testing.T) {
+	t.Parallel()
+	got, err := drainIterator(&emptyIterator[*kmspb.KeyRing]{}, nil)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	b, err := json.Marshal(got)
+	require.NoError(t, err)
+	assert.Equal(t, "[]", string(b),
+		"empty KMS list-keyrings must marshal as [] not null (#256)")
+}
+
+func TestInspectKMS_ListKeys_NoMatches_EmptySlice(t *testing.T) {
+	t.Parallel()
+	got, err := drainIterator(
+		&emptyIterator[*kmspb.CryptoKey]{},
+		func(*kmspb.CryptoKey) bool { return true },
+	)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	b, err := json.Marshal(got)
+	require.NoError(t, err)
+	assert.Equal(t, "[]", string(b),
+		"empty KMS list-keys must marshal as [] not null (#256)")
 }

@@ -2,11 +2,14 @@ package gcp
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"cloud.google.com/go/apigateway/apiv1/apigatewaypb"
+	"cloud.google.com/go/compute/apiv1/computepb"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	computeapi "google.golang.org/api/compute/v1"
@@ -339,4 +342,69 @@ func TestInspectAPIGateway_UnsupportedAction(t *testing.T) {
 	)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unsupported API Gateway action")
+}
+
+// Empty-state pins per #256 for the network-plane sites that route
+// through drainIterator / drainAggregatedIterator.
+
+func TestInspectAPIGateway_ListAPIs_NoMatches_EmptySlice(t *testing.T) {
+	t.Parallel()
+	got, err := drainIterator(&emptyIterator[*apigatewaypb.Api]{}, nil)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	b, err := json.Marshal(got)
+	require.NoError(t, err)
+	assert.Equal(t, "[]", string(b),
+		"empty API Gateway list-apis must marshal as [] not null (#256)")
+}
+
+// TestInspectVPC_ListSubnets_NoMatches_EmptySlice exercises the
+// post-drain path where AggregatedList returns no items per region.
+// inspectVPC list-subnets walks the SDK's resp.Items map directly
+// (not drainAggregatedIterator), so this httptest fake exercises the
+// full inspector path.
+func TestInspectVPC_ListSubnets_NoMatches_EmptySlice(t *testing.T) {
+	t.Parallel()
+	srv, opts := fakeComputeAPIREST(t, func(w http.ResponseWriter, r *http.Request) {
+		if !strings.Contains(r.URL.Path, "/aggregated/subnetworks") {
+			http.Error(w, "unexpected path: "+r.URL.Path, http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		// Empty AggregatedList — items map omitted entirely so the
+		// per-region loop never enters.
+		_, _ = w.Write([]byte(`{"kind":"compute#subnetworkAggregatedList","items":{}}`))
+	})
+	defer srv.Close()
+
+	got, err := inspectVPC(context.Background(), "demo-proj", "list-subnets", "", opts...)
+	require.NoError(t, err)
+	require.NotNil(t, got, "must be non-nil so encoding/json emits [] not null")
+
+	subnets, ok := got.([]*computeapi.Subnetwork)
+	require.True(t, ok, "expected []*computeapi.Subnetwork, got %T", got)
+	assert.Empty(t, subnets)
+
+	b, err := json.Marshal(got)
+	require.NoError(t, err)
+	assert.Equal(t, "[]", string(b),
+		"empty VPC list-subnets must marshal as [] not null (#256)")
+}
+
+func TestInspectCloudCDN_ListBackendServices_NoMatches_EmptySlice(t *testing.T) {
+	t.Parallel()
+	// inspectCloudCDN routes through drainAggregatedIterator with the
+	// EnableCDN predicate. Pin the empty-iterator path; the EnableCDN
+	// closure is exercised by the existing happy-path tests.
+	got, err := drainAggregatedIterator(
+		&emptyIterator[any]{},
+		func(any) []*computepb.BackendService { return nil },
+		func(*computepb.BackendService) bool { return true },
+	)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	b, err := json.Marshal(got)
+	require.NoError(t, err)
+	assert.Equal(t, "[]", string(b),
+		"empty Cloud CDN list-backend-services-cdn must marshal as [] not null (#256)")
 }

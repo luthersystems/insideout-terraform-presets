@@ -9,10 +9,13 @@ package aws
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/cloudfront"
+	cloudfronttypes "github.com/aws/aws-sdk-go-v2/service/cloudfront/types"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2"
@@ -221,4 +224,49 @@ func TestFilterELBv2ARNsByProjectTag_ErrorPropagates(t *testing.T) {
 	_, err := filterELBv2ARNsByProjectTag(context.Background(), client, []string{"arn:lb1"}, "my-stack")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "elbv2 DescribeTags")
+}
+
+// --- CloudFront fake (#256) ---
+
+type fakeCloudFrontClient struct {
+	listOut *cloudfront.ListDistributionsOutput
+	listErr error
+	tagsOut *cloudfront.ListTagsForResourceOutput
+	tagsErr error
+}
+
+func (f *fakeCloudFrontClient) ListDistributions(_ context.Context, _ *cloudfront.ListDistributionsInput, _ ...func(*cloudfront.Options)) (*cloudfront.ListDistributionsOutput, error) {
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
+	if f.listOut == nil {
+		// Default: empty distribution list, no NextMarker → terminates the
+		// hand-rolled pagination loop after one iteration.
+		return &cloudfront.ListDistributionsOutput{
+			DistributionList: &cloudfronttypes.DistributionList{},
+		}, nil
+	}
+	return f.listOut, nil
+}
+
+func (f *fakeCloudFrontClient) ListTagsForResource(_ context.Context, _ *cloudfront.ListTagsForResourceInput, _ ...func(*cloudfront.Options)) (*cloudfront.ListTagsForResourceOutput, error) {
+	if f.tagsErr != nil {
+		return nil, f.tagsErr
+	}
+	if f.tagsOut == nil {
+		return &cloudfront.ListTagsForResourceOutput{}, nil
+	}
+	return f.tagsOut, nil
+}
+
+func TestFilterCloudFrontDistributionsByProjectTag_NoDistributions_EmptySlice(t *testing.T) {
+	t.Parallel()
+	client := &fakeCloudFrontClient{}
+	got, err := filterCloudFrontDistributionsByProjectTag(context.Background(), client, "any-project")
+	require.NoError(t, err)
+	require.NotNil(t, got, "must be non-nil so encoding/json emits [] not null")
+	b, err := json.Marshal(got)
+	require.NoError(t, err)
+	assert.Equal(t, "[]", string(b),
+		"empty CloudFront list-distributions must marshal as [] not null (#256)")
 }

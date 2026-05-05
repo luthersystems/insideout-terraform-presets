@@ -2,6 +2,7 @@ package gcp
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -215,4 +216,32 @@ func TestInspectIdentityPlatform_ListProviders_INVALIDPROJECTIDNotWrapped(t *tes
 	require.True(t, ok)
 	assert.NotNil(t, m["oauth_idp_configs_error"], "OAuth half error must surface inline (not wrapped)")
 	assert.NotNil(t, m["default_supported_idp_configs_error"], "default-supported half error must surface inline (not wrapped)")
+}
+
+// TestInspectIdentityPlatform_ListTenants_NoTenants_EmptySlice pins
+// the empty-state JSON shape (#256). Pre-fix, declaring `var tenants
+// []*Tenant` would marshal as `null` for projects with no tenants,
+// collapsing reliable's panel onto the Deploy-first fallback.
+func TestInspectIdentityPlatform_ListTenants_NoTenants_EmptySlice(t *testing.T) {
+	t.Parallel()
+	srv, opts := fakeIdentityToolkitREST(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		// Empty response — no `tenants` key (server's encoded form
+		// when the list is genuinely empty).
+		_, _ = w.Write([]byte(`{}`))
+	})
+	defer srv.Close()
+
+	got, err := inspectIdentityPlatform(context.Background(), "demo-proj", "list-tenants", "", opts...)
+	require.NoError(t, err)
+	require.NotNil(t, got, "must be non-nil so encoding/json emits [] not null")
+
+	tenants, ok := got.([]*identitytoolkit.GoogleCloudIdentitytoolkitAdminV2Tenant)
+	require.True(t, ok, "expected []*Tenant, got %T", got)
+	assert.Empty(t, tenants)
+
+	b, err := json.Marshal(got)
+	require.NoError(t, err)
+	assert.Equal(t, "[]", string(b),
+		"empty Identity Platform list-tenants must marshal as [] not null (#256)")
 }

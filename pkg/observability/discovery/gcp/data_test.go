@@ -11,6 +11,7 @@ import (
 
 	"cloud.google.com/go/firestore"
 	"cloud.google.com/go/firestore/apiv1/admin/adminpb"
+	"cloud.google.com/go/redis/apiv1/redispb"
 	gax "github.com/googleapis/gax-go/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -310,6 +311,55 @@ func TestDescribeFirestoreDatabase_GetDatabaseError(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "GetDatabase")
 	assert.Contains(t, err.Error(), "NotFound")
+}
+
+// TestInspectMemorystore_ListInstances_NoMatches_EmptySlice pins the
+// empty-state JSON shape for the Memorystore list-instances site
+// (gcp/data.go inspectMemorystore — uses drainIterator with the
+// labels.project predicate). Pre-#255, declaring `var instances []*redispb.Instance`
+// would marshal as JSON null and collapse reliable's panel onto the
+// "Deploy infrastructure first." fallback even on healthy projects
+// with zero matching instances. (#256)
+func TestInspectMemorystore_ListInstances_NoMatches_EmptySlice(t *testing.T) {
+	t.Parallel()
+	got, err := drainIterator(
+		&emptyIterator[*redispb.Instance]{},
+		func(*redispb.Instance) bool { return true },
+	)
+	require.NoError(t, err)
+	require.NotNil(t, got, "must be non-nil so encoding/json emits [] not null")
+	b, err := json.Marshal(got)
+	require.NoError(t, err)
+	assert.Equal(t, "[]", string(b),
+		"empty Memorystore list-instances must marshal as [] not null (#256)")
+}
+
+// TestInspectCloudSQL_ListInstances_FiltersByProject_NoMatches_EmptySlice
+// covers the project-filter path in inspectCloudSQL: when the caller
+// supplies a project that matches zero rows, the inspector declares
+// `items := []*sqladmin.DatabaseInstance{}` (#256). httptest fake
+// returns a populated upstream so the filter is exercised.
+func TestInspectCloudSQL_ListInstances_FiltersByProject_NoMatches_EmptySlice(t *testing.T) {
+	t.Parallel()
+	srv, opts := fakeSQLAdminREST(t, func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(listSQLInstancesResponse))
+	})
+	defer srv.Close()
+
+	got, err := inspectCloudSQL(context.Background(), "demo-proj", "list-instances",
+		`{"project":"no-such-project"}`, opts...)
+	require.NoError(t, err)
+	require.NotNil(t, got, "must be non-nil so encoding/json emits [] not null")
+
+	items, ok := got.([]*sqladmin.DatabaseInstance)
+	require.True(t, ok)
+	assert.Empty(t, items, "no-match project filter expected zero instances")
+
+	b, err := json.Marshal(got)
+	require.NoError(t, err)
+	assert.Equal(t, "[]", string(b),
+		"no-match Cloud SQL list-instances must marshal as [] not null (#256)")
 }
 
 // TestFirestoreDatabaseFromFilters_Roundtrip pins the parse + safety-

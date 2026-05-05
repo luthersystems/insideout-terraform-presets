@@ -106,17 +106,7 @@ func inspectGKE(ctx context.Context, projectID, action, filters string, opts ...
 		if err != nil {
 			return nil, err
 		}
-		project := projectFromFilters(filters)
-		if project == "" {
-			return resp.Clusters, nil
-		}
-		clusters := []*containerpb.Cluster{}
-		for _, c := range resp.Clusters {
-			if gcpLabelMatches(c.GetResourceLabels(), "project", project) {
-				clusters = append(clusters, c)
-			}
-		}
-		return clusters, nil
+		return filterGKEClustersByProject(resp.GetClusters(), projectFromFilters(filters)), nil
 
 	case "describe-cluster":
 		fm := parseFilterMap(filters)
@@ -132,6 +122,23 @@ func inspectGKE(ctx context.Context, projectID, action, filters string, opts ...
 	default:
 		return nil, unsupportedActionError("GKE", action, observability.GCPServiceActions["gke"])
 	}
+}
+
+// filterGKEClustersByProject post-filters a synchronous ListClusters
+// response by the caller's project label. project=="" means "no
+// filter; pass through". Always returns a non-nil slice so the empty
+// path marshals as `[]`, not `null` (#255 / #256). The pre-#256 code
+// passed resp.GetClusters() through directly when project=="" — a
+// Pattern B nil-slice passthrough risk that this helper closes.
+func filterGKEClustersByProject(clusters []*containerpb.Cluster, project string) []*containerpb.Cluster {
+	out := []*containerpb.Cluster{}
+	for _, c := range clusters {
+		if project != "" && !gcpLabelMatches(c.GetResourceLabels(), "project", project) {
+			continue
+		}
+		out = append(out, c)
+	}
+	return out
 }
 
 func inspectBastion(ctx context.Context, projectID, action, filters string, opts ...option.ClientOption) (any, error) {
