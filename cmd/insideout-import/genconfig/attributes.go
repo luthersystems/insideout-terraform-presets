@@ -1,0 +1,130 @@
+package genconfig
+
+import (
+	"encoding/json"
+	"fmt"
+	"strings"
+
+	"github.com/hashicorp/hcl/v2"
+	"github.com/hashicorp/hcl/v2/hclsyntax"
+	"github.com/hashicorp/hcl/v2/hclwrite"
+	ctyjson "github.com/zclconf/go-cty/cty/json"
+
+	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
+)
+
+// extractAttributes parses the cleaned generated.tf and returns a copy of
+// the input slice with each ImportedResource.Attributes populated from its
+// matching `resource "TYPE" "NAME"` block.
+//
+// Decoding rules:
+//
+//   - Scalar literals (string, number, bool) decode to their Go-native form
+//     and land in Attributes as a value of that type.
+//   - List/object/map literals decode through cty -> JSON -> any so the
+//     downstream consumer can re-marshal.
+//   - Non-literal expressions (refs to other resources, function calls,
+//     anything with interpolation) are stored as their HCL source text. This
+//     is the only safe representation: there's no canonical Go-native form
+//     for `aws_kms_key.foo.arn`, and stripping refs would corrupt the
+//     desired-state contract.
+//
+// Resources whose blocks are missing from the HCL are returned with their
+// existing Attributes preserved, so an empty/error case never silently
+// blanks the manifest.
+func extractAttributes(cleaned []byte, resources []imported.ImportedResource) ([]imported.ImportedResource, error) {
+	f, diags := hclwrite.ParseConfig(cleaned, generatedFile, hcl.Pos{Line: 1, Column: 1})
+	if diags.HasErrors() {
+		return nil, fmt.Errorf("parse cleaned generated.tf: %s", diags.Error())
+	}
+
+	byAddr := make(map[string]*hclwrite.Block)
+	for _, blk := range f.Body().Blocks() {
+		if blk.Type() != "resource" {
+			continue
+		}
+		labels := blk.Labels()
+		if len(labels) != 2 {
+			continue
+		}
+		byAddr[labels[0]+"."+labels[1]] = blk
+	}
+
+	out := make([]imported.ImportedResource, len(resources))
+	copy(out, resources)
+	for i := range out {
+		blk, ok := byAddr[out[i].Identity.Address]
+		if !ok {
+			continue
+		}
+		attrs, err := decodeBlockAttrs(blk)
+		if err != nil {
+			return nil, fmt.Errorf("resource %q: %w", out[i].Identity.Address, err)
+		}
+		if len(attrs) > 0 {
+			out[i].Attributes = attrs
+		}
+	}
+	return out, nil
+}
+
+// decodeBlockAttrs returns the populated Attributes map for one resource
+// block. Nested sub-blocks (e.g. `lifecycle`, `redrive_policy`) are skipped
+// — Stage 2c can fold them in once the typed Attrs decoder lands and we
+// know the canonical wire shape.
+func decodeBlockAttrs(blk *hclwrite.Block) (map[string]any, error) {
+	body := blk.Body()
+	out := make(map[string]any, len(body.Attributes()))
+	for name, attr := range body.Attributes() {
+		v, err := decodeAttribute(attr)
+		if err != nil {
+			return nil, fmt.Errorf("attribute %q: %w", name, err)
+		}
+		out[name] = v
+	}
+	return out, nil
+}
+
+// decodeAttribute returns the Go-native value of a single attribute, or its
+// HCL source text when the expression is non-literal. See extractAttributes
+// docstring for the contract.
+func decodeAttribute(attr *hclwrite.Attribute) (any, error) {
+	tokens := attr.Expr().BuildTokens(nil)
+	src := tokensToString(tokens)
+	src = strings.TrimSpace(src)
+
+	parsedExpr, diags := hclsyntax.ParseExpression([]byte(src), "attribute", hcl.Pos{Line: 1, Column: 1})
+	if diags.HasErrors() {
+		return src, nil // unparseable: fall back to raw source
+	}
+	val, diags := parsedExpr.Value(nil)
+	if diags.HasErrors() {
+		// Has variables / refs / funcs we can't evaluate without context.
+		// Return the source text — Stage 2c can teach consumers to
+		// re-resolve it.
+		return src, nil
+	}
+
+	// json round-trip: cty -> JSON -> any. This handles all cty types
+	// uniformly without us re-implementing the type switch.
+	jsBytes, err := ctyjson.Marshal(val, val.Type())
+	if err != nil {
+		return src, nil
+	}
+	var goVal any
+	if err := json.Unmarshal(jsBytes, &goVal); err != nil {
+		return src, nil
+	}
+	return goVal, nil
+}
+
+// tokensToString concatenates a token sequence back into source text. The
+// hclwrite library does the inverse on parse, so this is lossless modulo
+// whitespace normalization.
+func tokensToString(tokens hclwrite.Tokens) string {
+	var b strings.Builder
+	for _, t := range tokens {
+		b.Write(t.Bytes)
+	}
+	return b.String()
+}
