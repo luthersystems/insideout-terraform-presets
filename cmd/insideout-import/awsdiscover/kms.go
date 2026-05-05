@@ -51,7 +51,6 @@ func (d *kmsDiscoverer) Discover(ctx context.Context, project, region, accountID
 
 	type key struct {
 		uuid  string
-		arn   string
 		alias string
 	}
 	var keys []key
@@ -78,9 +77,12 @@ func (d *kmsDiscoverer) Discover(ctx context.Context, project, region, accountID
 			if strings.HasPrefix(alias, "alias/aws/") {
 				continue
 			}
+			// Note: a.AliasArn is the *alias* ARN, not the key ARN we
+			// want for NativeIDs[arn]. The key ARN is synthesized
+			// below from region + accountID + target UUID; alias arn
+			// is intentionally NOT carried into NativeIDs.
 			keys = append(keys, key{
 				uuid:  target,
-				arn:   aws.ToString(a.AliasArn),
 				alias: alias,
 			})
 		}

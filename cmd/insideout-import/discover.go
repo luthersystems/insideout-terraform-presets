@@ -191,6 +191,10 @@ Exit codes:
 		fmt.Fprintf(os.Stderr, "discover: --max-concurrency must be positive (got %d)\n", *maxConcurrency)
 		return discoverExitFatal
 	}
+	if *maxDepChaseIter <= 0 {
+		fmt.Fprintf(os.Stderr, "discover: --max-depchase-iterations must be positive (got %d)\n", *maxDepChaseIter)
+		return discoverExitFatal
+	}
 
 	types := splitCSV(*resourceTypes)
 

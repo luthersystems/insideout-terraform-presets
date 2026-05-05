@@ -84,11 +84,22 @@ func collectFromBody(body *hclwrite.Body, resolved map[string]struct{}, out map[
 }
 
 // isARNLiteral is the cheap "is this value worth feeding to ParseRef"
-// test. AWS ARNs always begin with "arn:" — anything else is filtered
-// out before parsing. Trims whitespace defensively but does not
-// validate beyond the prefix; ParseRef does the real validation.
+// test. AWS ARNs are colon-separated and follow
+// `arn:<partition>:<service>:<region>:<account>:<resource>` — six
+// fields, five colons minimum. Pre-filtering to that shape keeps
+// malformed string literals (e.g. `arn:foo`) out of the warnings
+// stream rather than producing a noisy "could not parse ARN"
+// warning per literal per iteration. ParseRef does the real
+// validation; this is just the "worth trying" gate.
 func isARNLiteral(s string) bool {
-	return strings.HasPrefix(strings.TrimSpace(s), "arn:")
+	s = strings.TrimSpace(s)
+	if !strings.HasPrefix(s, "arn:") {
+		return false
+	}
+	// Count colons cheaply; stdlib `strings.Count` is one allocation-
+	// free pass. The fifth colon may sit inside the resource portion
+	// (e.g. logs `log-group:<name>:*`), so we require AT LEAST 5.
+	return strings.Count(s, ":") >= 5
 }
 
 // buildResolvedSet inverts the in-batch resource list into a set of

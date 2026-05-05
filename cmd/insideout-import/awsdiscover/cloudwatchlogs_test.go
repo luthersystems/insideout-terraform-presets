@@ -184,6 +184,38 @@ func TestCWLDiscoverByID_NotFound(t *testing.T) {
 	}
 }
 
+func TestCWLDiscoverByID_PaginatesToExactMatch(t *testing.T) {
+	t.Parallel()
+	// The exact-name match is on page 2 behind a prefix-collision
+	// sibling on page 1. A non-paginating implementation would
+	// return ErrNotFound spuriously.
+	exact := "/aws/lambda/io-foo"
+	d := &cwlDiscoverer{new: func() cwlClient {
+		return &fakeCWLClient{
+			pages: []cloudwatchlogs.DescribeLogGroupsOutput{
+				{
+					LogGroups: []cwltypes.LogGroup{
+						{LogGroupName: aws.String("/aws/lambda/io-foo-extra"), Arn: aws.String("arn:test:extra")},
+					},
+					NextToken: aws.String("page2"),
+				},
+				{
+					LogGroups: []cwltypes.LogGroup{
+						{LogGroupName: aws.String(exact), Arn: aws.String("arn:test:exact")},
+					},
+				},
+			},
+		}
+	}}
+	got, err := d.DiscoverByID(context.Background(), exact, "us-east-1", "123")
+	if err != nil {
+		t.Fatalf("err=%v (must paginate to exact match)", err)
+	}
+	if got.Identity.NameHint != exact {
+		t.Errorf("NameHint=%q, want %q", got.Identity.NameHint, exact)
+	}
+}
+
 func TestCWLDiscoverByID_NotFoundOnPrefixMatchOnly(t *testing.T) {
 	t.Parallel()
 	// CWL prefix match returns names that share a prefix; DiscoverByID

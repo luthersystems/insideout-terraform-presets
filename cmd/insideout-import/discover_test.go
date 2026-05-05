@@ -654,6 +654,8 @@ func TestRunDiscoverWithDeps_NoDriftfixAlsoSkipsDepChase(t *testing.T) {
 // 2c3 failure (cycle, max-iterations exceeded, discoverer SDK error)
 // exits non-zero with a remediation hint pointing at --no-depchase
 // and the on-disk artifacts surviving for inspection.
+//
+// NOT t.Parallel(): captures global os.Stderr.
 func TestRunDiscoverWithDeps_DepChaseFailureExitsFatal(t *testing.T) {
 	dir := t.TempDir()
 	gc := &fakeGenconfig{}
@@ -673,6 +675,12 @@ func TestRunDiscoverWithDeps_DepChaseFailureExitsFatal(t *testing.T) {
 	}
 	if !strings.Contains(stderr, "dependency chase") {
 		t.Errorf("stderr must include the failing-stage label; got:\n%s", stderr)
+	}
+	// On-disk artifacts must survive — the docstring contract is
+	// "fail loud, but leave the workdir for inspection." Mirrors the
+	// driftfix-failure test's check of imported.json.
+	if _, err := os.Stat(filepath.Join(dir, "imported.json")); err != nil {
+		t.Errorf("imported.json must survive a depchase failure for inspection: %v", err)
 	}
 }
 

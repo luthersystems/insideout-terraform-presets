@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"reflect"
+	"slices"
 	"sort"
 
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/awsdiscover"
@@ -46,13 +46,23 @@ type Discoverer interface {
 // each iteration's expanded resource set. The orchestrator passes the
 // production wrappers; tests pass fakes that touch a synthetic
 // generated.tf without standing up terraform.
+//
+// Contract: RunGenconfig must return a GenconfigResult whose
+// Resources slice is a *superset* of the input — i.e. it may
+// populate Attributes on the input resources or add metadata, but it
+// must not drop entries. Depchase relies on this to keep the
+// resolved-set monotonic across iterations; a regenerate that
+// silently filters resources would let the loop oscillate by
+// re-marking previously resolved ARNs as unresolved.
 type PipelineFns struct {
 	// RunGenconfig regenerates generated.tf from the current resource
 	// set. Receives the current []ImportedResource (the original set
 	// plus everything depchase has added so far) and is expected to
 	// produce the same Workdir+generated.tf shape genconfig.Run would
 	// emit. Returns a Result so the orchestrator can rewrite the
-	// outer manifest with attribute-populated resources.
+	// outer manifest with attribute-populated resources. Per the
+	// PipelineFns contract above, the returned Resources slice must
+	// include every input resource.
 	RunGenconfig func(ctx context.Context, resources []imported.ImportedResource) (*GenconfigResult, error)
 	// RunDriftfix runs the drift-fix loop against the regenerated
 	// stack. Receives no input — all state lives in Workdir. Returns
@@ -129,8 +139,11 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 	if opts.Discoverer == nil {
 		return nil, fmt.Errorf("depchase: Discoverer required")
 	}
-	if opts.Pipeline.RunGenconfig == nil || opts.Pipeline.RunDriftfix == nil {
-		return nil, fmt.Errorf("depchase: Pipeline.RunGenconfig + RunDriftfix required")
+	if opts.Pipeline.RunGenconfig == nil {
+		return nil, fmt.Errorf("depchase: Pipeline.RunGenconfig required")
+	}
+	if opts.Pipeline.RunDriftfix == nil {
+		return nil, fmt.Errorf("depchase: Pipeline.RunDriftfix required")
 	}
 	if opts.MaxIterations <= 0 {
 		opts.MaxIterations = DefaultMaxIterations
@@ -169,7 +182,7 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 		// Either way: warn and stop. (Without this guard the loop
 		// would still terminate via iteration bound, but the error
 		// would be ErrMaxIterations — less actionable than "cycle".)
-		if iter > 1 && reflect.DeepEqual(unresolved, prevUnresolved) {
+		if iter > 1 && slices.Equal(unresolved, prevUnresolved) {
 			emitUnresolvedAsWarnings(unresolved, res, seenWarning)
 			res.GeneratedPath = generatedPath
 			// If NO resource was ever added and the unresolved set
@@ -232,7 +245,6 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 
 		res.Resources = append(res.Resources, added...)
 		res.Added = append(res.Added, added...)
-		res.Iterations = iter
 
 		gcRes, err := opts.Pipeline.RunGenconfig(ctx, res.Resources)
 		if err != nil {
@@ -248,6 +260,10 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 		if _, err := opts.Pipeline.RunDriftfix(ctx); err != nil {
 			return res, fmt.Errorf("depchase iter %d: driftfix: %w", iter, err)
 		}
+		// Increment only after both pipeline calls succeed so a partial
+		// iteration that fails halfway through doesn't claim a complete
+		// pass to observability output.
+		res.Iterations = iter
 	}
 
 	// Loop bound exceeded. Surface the residual unresolved set.
