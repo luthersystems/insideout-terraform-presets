@@ -18,13 +18,18 @@ import (
 	"fmt"
 	"log"
 	"regexp"
+	"time"
 
 	"cloud.google.com/go/firestore"
+	firestoreadmin "cloud.google.com/go/firestore/apiv1/admin"
+	"cloud.google.com/go/firestore/apiv1/admin/adminpb"
 	redis "cloud.google.com/go/redis/apiv1"
 	"cloud.google.com/go/redis/apiv1/redispb"
+	gax "github.com/googleapis/gax-go/v2"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 	sqladmin "google.golang.org/api/sqladmin/v1"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/observability"
 )
@@ -147,28 +152,50 @@ func inspectMemorystore(ctx context.Context, projectID, action, filters string, 
 // never creates, so production calls hit `NotFound` (#245). The
 // caller-supplied name is regex-validated before it reaches
 // firestore.NewClientWithDatabase as defense-in-depth.
+//
+// list-collections walks the data plane (Firestore client) and is the
+// LLM-agent-facing introspection action ("what data is in this DB?").
+// describe-database walks the admin plane (Firestore Admin client,
+// distinct from the data-plane client) and is the panel-probe action
+// ("does this resource exist? what type is it?"). Collections are
+// application data created lazily on first write, so list-collections
+// is a poor "is the resource live?" probe (#258).
 func inspectFirestore(ctx context.Context, projectID, action, filters string, opts ...option.ClientOption) (any, error) {
-	dbName := firestoreDatabaseFromFilters(filters)
-	var (
-		client *firestore.Client
-		err    error
-	)
-	if dbName != "" && dbName != "(default)" {
-		client, err = firestore.NewClientWithDatabase(ctx, projectID, dbName, opts...)
-	} else {
-		if dbName == "" {
-			log.Printf("[discovery/gcp firestore] no database_name in filters; falling back to (default) — preset gcp/firestore creates a non-default DB (#159), pass database_name from the preset's database_name output")
-		}
-		client, err = firestore.NewClient(ctx, projectID, opts...)
-	}
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = client.Close() }()
-
 	switch action {
 	case "list-collections":
+		dbName := firestoreDatabaseFromFilters(filters)
+		var (
+			client *firestore.Client
+			err    error
+		)
+		if dbName != "" && dbName != "(default)" {
+			client, err = firestore.NewClientWithDatabase(ctx, projectID, dbName, opts...)
+		} else {
+			if dbName == "" {
+				log.Printf("[discovery/gcp firestore] no database_name in filters; falling back to (default) — preset gcp/firestore creates a non-default DB (#159), pass database_name from the preset's database_name output")
+			}
+			client, err = firestore.NewClient(ctx, projectID, opts...)
+		}
+		if err != nil {
+			return nil, err
+		}
+		defer func() { _ = client.Close() }()
 		return collectFirestoreCollectionIDs(client.Collections(ctx))
+
+	case "describe-database":
+		// For describe-database, an absent or unsafe database_name is a
+		// hard error (vs list-collections which falls back to "(default)").
+		// We have nothing to describe without a name.
+		dbName := firestoreDatabaseFromFilters(filters)
+		if dbName == "" {
+			return nil, fmt.Errorf("firestore describe-database requires database_name in filters (preset gcp/firestore creates a non-default DB; pass the database_name output)")
+		}
+		admin, err := firestoreadmin.NewFirestoreAdminClient(ctx, opts...)
+		if err != nil {
+			return nil, err
+		}
+		defer func() { _ = admin.Close() }()
+		return describeFirestoreDatabase(ctx, admin, projectID, dbName)
 
 	default:
 		return nil, unsupportedActionError("Firestore", action, observability.GCPServiceActions["firestore"])
@@ -200,6 +227,45 @@ func collectFirestoreCollectionIDs(it firestoreCollectionIterator) ([]string, er
 		collections = append(collections, c.ID)
 	}
 	return collections, nil
+}
+
+// firestoreAdminAPI is the minimal slice of *firestoreadmin.FirestoreAdminClient
+// that describeFirestoreDatabase consumes — narrow enough to fake in
+// unit tests without a real admin client (#258).
+type firestoreAdminAPI interface {
+	GetDatabase(ctx context.Context, req *adminpb.GetDatabaseRequest, opts ...gax.CallOption) (*adminpb.Database, error)
+}
+
+// describeFirestoreDatabase fetches the admin-plane Database object and
+// returns a normalized JSON shape with enums rendered as strings (e.g.
+// "FIRESTORE_NATIVE", "DATASTORE_MODE") and timestamps in RFC3339, so
+// downstream UIs don't have to grok protobuf enum integers (#258).
+func describeFirestoreDatabase(ctx context.Context, admin firestoreAdminAPI, projectID, dbName string) (any, error) {
+	db, err := admin.GetDatabase(ctx, &adminpb.GetDatabaseRequest{
+		Name: fmt.Sprintf("projects/%s/databases/%s", projectID, dbName),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("firestore GetDatabase: %w", err)
+	}
+	return map[string]any{
+		"name":                          db.GetName(),
+		"uid":                           db.GetUid(),
+		"locationId":                    db.GetLocationId(),
+		"type":                          db.GetType().String(),
+		"concurrencyMode":               db.GetConcurrencyMode().String(),
+		"appEngineIntegrationMode":      db.GetAppEngineIntegrationMode().String(),
+		"pointInTimeRecoveryEnablement": db.GetPointInTimeRecoveryEnablement().String(),
+		"createTime":                    formatTimestamp(db.GetCreateTime()),
+		"updateTime":                    formatTimestamp(db.GetUpdateTime()),
+		"etag":                          db.GetEtag(),
+	}, nil
+}
+
+func formatTimestamp(ts *timestamppb.Timestamp) string {
+	if ts == nil {
+		return ""
+	}
+	return ts.AsTime().UTC().Format(time.RFC3339)
 }
 
 // firestoreDatabaseFromFilters extracts and validates the

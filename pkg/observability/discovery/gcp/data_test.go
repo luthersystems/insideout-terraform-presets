@@ -3,17 +3,21 @@ package gcp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"cloud.google.com/go/firestore"
+	"cloud.google.com/go/firestore/apiv1/admin/adminpb"
+	gax "github.com/googleapis/gax-go/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 	sqladmin "google.golang.org/api/sqladmin/v1"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // fakeSQLAdminREST stands in for the Cloud SQL Admin REST endpoint.
@@ -220,6 +224,92 @@ func TestInspectFirestore_ListCollections_Error(t *testing.T) {
 		err: assert.AnError,
 	})
 	assert.ErrorIs(t, err, assert.AnError)
+}
+
+// fakeFirestoreAdminAPI stands in for *firestoreadmin.FirestoreAdminClient
+// for describeFirestoreDatabase unit tests (#258). The admin client is
+// a separate gRPC client from the data-plane firestore.Client used by
+// list-collections, so it gets its own narrow interface.
+type fakeFirestoreAdminAPI struct {
+	gotName string
+	db      *adminpb.Database
+	err     error
+}
+
+func (f *fakeFirestoreAdminAPI) GetDatabase(_ context.Context, req *adminpb.GetDatabaseRequest, _ ...gax.CallOption) (*adminpb.Database, error) {
+	f.gotName = req.GetName()
+	if f.err != nil {
+		return nil, f.err
+	}
+	return f.db, nil
+}
+
+func TestInspectFirestore_DescribeDatabase_MissingName(t *testing.T) {
+	t.Parallel()
+	// inspectFirestore's describe-database arm hard-errors on missing
+	// database_name (vs list-collections which falls back to "(default)") —
+	// nothing to describe without a name.
+	_, err := inspectFirestore(context.Background(), "demo-proj", "describe-database", "",
+		option.WithEndpoint(unreachableEndpoint),
+		option.WithoutAuthentication(),
+	)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "database_name")
+}
+
+func TestInspectFirestore_DescribeDatabase_UnsafeName(t *testing.T) {
+	t.Parallel()
+	// Unsafe names (rejected by firestoreDatabaseNameSafe) collapse to
+	// "" and trigger the same hard-error as a missing name.
+	_, err := inspectFirestore(context.Background(), "demo-proj", "describe-database",
+		`{"database_name":"FooBar"}`,
+		option.WithEndpoint(unreachableEndpoint),
+		option.WithoutAuthentication(),
+	)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "database_name")
+}
+
+func TestDescribeFirestoreDatabase_Happy(t *testing.T) {
+	t.Parallel()
+	now := timestamppb.New(timestamppb.Now().AsTime())
+	fake := &fakeFirestoreAdminAPI{
+		db: &adminpb.Database{
+			Name:                          "projects/demo-proj/databases/io-demo-firestore-abc",
+			Uid:                           "uid-1234",
+			LocationId:                    "us-central1",
+			Type:                          adminpb.Database_FIRESTORE_NATIVE,
+			ConcurrencyMode:               adminpb.Database_OPTIMISTIC,
+			AppEngineIntegrationMode:      adminpb.Database_DISABLED,
+			PointInTimeRecoveryEnablement: adminpb.Database_POINT_IN_TIME_RECOVERY_DISABLED,
+			CreateTime:                    now,
+			UpdateTime:                    now,
+			Etag:                          "etag-v1",
+		},
+	}
+	got, err := describeFirestoreDatabase(context.Background(), fake, "demo-proj", "io-demo-firestore-abc")
+	require.NoError(t, err)
+	assert.Equal(t,
+		"projects/demo-proj/databases/io-demo-firestore-abc",
+		fake.gotName, "request must thread project + db into the fully-qualified name")
+
+	m, ok := got.(map[string]any)
+	require.True(t, ok, "expected map[string]any, got %T", got)
+	assert.Equal(t, "FIRESTORE_NATIVE", m["type"], "enum must render as string for the panel")
+	assert.Equal(t, "us-central1", m["locationId"])
+	assert.Equal(t, "uid-1234", m["uid"])
+	assert.Equal(t, "OPTIMISTIC", m["concurrencyMode"])
+	assert.Equal(t, "etag-v1", m["etag"])
+	require.NotEmpty(t, m["createTime"], "createTime must be RFC3339-rendered, not the proto struct")
+}
+
+func TestDescribeFirestoreDatabase_GetDatabaseError(t *testing.T) {
+	t.Parallel()
+	fake := &fakeFirestoreAdminAPI{err: errors.New("rpc: NotFound")}
+	_, err := describeFirestoreDatabase(context.Background(), fake, "demo-proj", "io-missing")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "GetDatabase")
+	assert.Contains(t, err.Error(), "NotFound")
 }
 
 // TestFirestoreDatabaseFromFilters_Roundtrip pins the parse + safety-

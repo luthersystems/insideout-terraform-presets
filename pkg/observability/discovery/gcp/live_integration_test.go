@@ -439,6 +439,56 @@ func TestLive_InspectFirestore_NamedDB(t *testing.T) {
 	t.Logf("list-collections (db=%s) returned %T: %v; JSON: %s", dbName, got, got, string(b))
 }
 
+// TestLive_InspectFirestore_DescribeDatabase_NamedDB pins the
+// admin-plane describe-database probe (#258) against a real
+// preset-deployed Firestore. Set LIVE_GCP_FIRESTORE_DB to the
+// database_name output of the deployed stack.
+//
+// Unlike list-collections (data plane, returns []), describe-database
+// returns a single object with the database type/location/etc. — the
+// shape reliable's panel probe should be reading.
+func TestLive_InspectFirestore_DescribeDatabase_NamedDB(t *testing.T) {
+	t.Parallel()
+	projectID := liveProjectOrSkip(t)
+	dbName := os.Getenv("LIVE_GCP_FIRESTORE_DB")
+	if dbName == "" {
+		t.Skip("LIVE_GCP_FIRESTORE_DB not set; export the database_name output of a deployed gcp/firestore preset to exercise describe-database (#258)")
+	}
+
+	filters := `{"database_name":"` + dbName + `"}`
+	got, err := inspectFirestore(context.Background(), projectID, "describe-database", filters, liveAuthOpts(t)...)
+	require.NoError(t, err, "inspectFirestore describe-database with database_name=%q must succeed against a preset-deployed Firestore (#258)", dbName)
+	require.NotNil(t, got)
+
+	m, ok := got.(map[string]any)
+	require.True(t, ok, "describe-database must return map[string]any, got %T", got)
+
+	// Type must be a non-empty enum string (FIRESTORE_NATIVE / DATASTORE_MODE) —
+	// this is the value reliable's panel probe should render in place of
+	// the current "Not configured" fallback.
+	require.NotEmpty(t, m["type"], "type must be populated; reliable renders this in the panel (#258)")
+	assert.Contains(t, []string{"FIRESTORE_NATIVE", "DATASTORE_MODE"}, m["type"],
+		"type must be one of the known DatabaseType enum strings; got %v", m["type"])
+
+	require.NotEmpty(t, m["name"], "name must be the fully-qualified resource name")
+	require.NotEmpty(t, m["locationId"], "locationId must be populated for a healthy database")
+
+	b, err := json.Marshal(got)
+	require.NoError(t, err)
+	t.Logf("describe-database (db=%s): %s", dbName, string(b))
+}
+
+// TestLive_InspectFirestore_DescribeDatabase_MissingName pins the
+// hard-error path: no database_name in filters → typed error before
+// any RPC. (#258)
+func TestLive_InspectFirestore_DescribeDatabase_MissingName(t *testing.T) {
+	t.Parallel()
+	projectID := liveProjectOrSkip(t)
+	_, err := inspectFirestore(context.Background(), projectID, "describe-database", "", liveAuthOpts(t)...)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "database_name")
+}
+
 // TestLive_InspectIdentityPlatform_TenantsOnUnprovisionedProject
 // confirms the structured-error envelope on a project that has the
 // API enabled but multi-tenancy not provisioned. By default this

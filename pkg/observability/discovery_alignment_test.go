@@ -73,6 +73,7 @@ var expectedResourceTypesByAction = map[string][]string{
 	"gcp/cloudkms/list-keyrings":              {"google_kms_key_ring"},
 	"gcp/pubsub/list-topics":                  {"google_pubsub_topic"},
 	"gcp/firestore/list-collections":          {"google_firestore_database"},
+	"gcp/firestore/describe-database":         {"google_firestore_database"},
 	"gcp/vpc/list-networks":                   {"google_compute_network"},
 	"gcp/loadbalancer/list-url-maps":          {"google_compute_url_map"},
 	"gcp/memorystore/list-instances":          {"google_redis_instance", "google_memcache_instance"},
