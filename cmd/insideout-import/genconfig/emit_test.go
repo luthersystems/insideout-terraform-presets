@@ -90,7 +90,7 @@ func TestEmitImports_RejectsBadAddress(t *testing.T) {
 func TestEmitProviders_HappyPath(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	if err := emitProviders(dir, "us-west-2"); err != nil {
+	if err := emitProviders(dir, "us-west-2", ""); err != nil {
 		t.Fatal(err)
 	}
 	body, err := os.ReadFile(filepath.Join(dir, providersFile))
@@ -108,4 +108,115 @@ func TestEmitProviders_HappyPath(t *testing.T) {
 			t.Errorf("providers.tf missing %q\n--- got ---\n%s", want, got)
 		}
 	}
+	// LocalStack-only attrs must NOT appear when endpointURL is "".
+	// Use anchored attribute/block-start patterns rather than substring
+	// blocklists so a future header comment that mentions one of these
+	// words doesn't trip the check.
+	bannedPatterns := []string{
+		`(?m)^\s*endpoints\s*\{`,
+		`(?m)^\s*access_key\s*=`,
+		`(?m)^\s*skip_credentials_validation\s*=`,
+		`(?m)^\s*s3_use_path_style\s*=`,
+	}
+	for _, pat := range bannedPatterns {
+		if regexp.MustCompile(pat).MatchString(got) {
+			t.Errorf("providers.tf must not contain pattern %q when endpointURL is empty\n--- got ---\n%s", pat, got)
+		}
+	}
+}
+
+// TestEmitProviders_LocalStackEndpoint pins the Stage 2c4 (#272) shape:
+// when endpointURL is set, the emitted providers.tf carries the LocalStack
+// attribute set the gate's seed and the discover-generated stack both share.
+// One canonical shape across both consumers means a future change to the
+// LocalStack contract lands in exactly one place.
+//
+// Assertions are presence-only (no column alignment pinning) so a change
+// to hclwrite's whitespace rules doesn't flake the test.
+func TestEmitProviders_LocalStackEndpoint(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	if err := emitProviders(dir, "us-east-1", "http://localhost:4566"); err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(filepath.Join(dir, providersFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(body)
+
+	// Auth + skip flags. Match attribute name + `= <value>` with arbitrary
+	// inter-token whitespace so the test survives hclwrite alignment.
+	authPatterns := []string{
+		`region\s*=\s*"us-east-1"`,
+		`access_key\s*=\s*"test"`,
+		`secret_key\s*=\s*"test"`,
+		`skip_credentials_validation\s*=\s*true`,
+		`skip_metadata_api_check\s*=\s*true`,
+		`skip_requesting_account_id\s*=\s*true`,
+		`s3_use_path_style\s*=\s*true`,
+		`endpoints\s*\{`,
+	}
+	for _, pat := range authPatterns {
+		if !regexp.MustCompile(pat).MatchString(got) {
+			t.Errorf("providers.tf missing pattern %q\n--- got ---\n%s", pat, got)
+		}
+	}
+
+	// Extract the body of the `endpoints { ... }` block and assert
+	// service mappings against THAT scope only — a mutation that
+	// emitted, say, `sqs = "..."` at provider scope (outside endpoints)
+	// would not get a regex match on the slice contents alone.
+	endpointsBody := extractEndpointsBlock(t, got)
+
+	// Hardcode a load-bearing subset that the LocalStack gate's seed
+	// depends on directly (not derived from the production slice). A
+	// teammate shrinking localstackEndpointServices and dropping any of
+	// these would now fail this test rather than silently skipping
+	// coverage. Symmetric with the seed's main.tf which exercises these
+	// services end-to-end.
+	loadBearing := []string{"s3", "dynamodb", "lambda", "iam", "sts"}
+	for _, svc := range loadBearing {
+		pat := `(?m)^\s*` + svc + `\s*=\s*"http://localhost:4566"`
+		if !regexp.MustCompile(pat).MatchString(endpointsBody) {
+			t.Errorf("endpoints {} block missing hardcoded mapping for %q (pattern %q)\n--- endpoints block ---\n%s", svc, pat, endpointsBody)
+		}
+	}
+
+	// Then every service in the production slice must also appear,
+	// inside the endpoints block.
+	for _, svc := range localstackEndpointServices {
+		pat := `(?m)^\s*` + svc + `\s*=\s*"http://localhost:4566"`
+		if !regexp.MustCompile(pat).MatchString(endpointsBody) {
+			t.Errorf("endpoints {} block missing mapping for %q (pattern %q)\n--- endpoints block ---\n%s", svc, pat, endpointsBody)
+		}
+	}
+}
+
+// extractEndpointsBlock pulls the contents of the first `endpoints {
+// ... }` block out of an HCL providers.tf body. Naive brace-balance
+// scan is fine here because the emit path doesn't nest blocks under
+// `endpoints {}`; if that ever changes the test will see it as a
+// false positive on the first inner closing brace.
+func extractEndpointsBlock(t *testing.T, hcl string) string {
+	t.Helper()
+	loc := regexp.MustCompile(`(?s)endpoints\s*\{`).FindStringIndex(hcl)
+	if loc == nil {
+		t.Fatalf("no endpoints {} block in providers.tf\n--- hcl ---\n%s", hcl)
+	}
+	rest := hcl[loc[1]:]
+	depth := 1
+	for i, r := range rest {
+		switch r {
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				return rest[:i]
+			}
+		}
+	}
+	t.Fatalf("unbalanced braces inside endpoints {} block\n--- hcl ---\n%s", hcl)
+	return ""
 }

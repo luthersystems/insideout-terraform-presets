@@ -28,6 +28,14 @@ type Options struct {
 	Workdir string
 	Region  string
 
+	// AWSEndpointURL, when non-empty, retargets the emitted providers.tf
+	// at a single URL (LocalStack) for every AWS service the discoverers
+	// touch, plus the LocalStack auth/skip attribute set. Empty means
+	// emit the standard provider block (region only). Set by the
+	// --aws-endpoint-url discover flag, intended for the Stage 2c4 CI
+	// gate (#272).
+	AWSEndpointURL string
+
 	// Runner is optional. If nil, Run constructs an execRunner that shells
 	// out to the `terraform` binary on PATH. Tests inject a fake here to
 	// avoid the binary dependency.
@@ -84,7 +92,7 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 	if err := emitImports(opts.Workdir, resources); err != nil {
 		return nil, fmt.Errorf("emit imports.tf: %w", err)
 	}
-	if err := emitProviders(opts.Workdir, opts.Region); err != nil {
+	if err := emitProviders(opts.Workdir, opts.Region, opts.AWSEndpointURL); err != nil {
 		return nil, fmt.Errorf("emit providers.tf: %w", err)
 	}
 

@@ -56,7 +56,14 @@ type discoveryAggregator interface {
 // branches (validator failure, DiscoverTypes error, nil STS account, HCL
 // generation failure) without real AWS credentials or a terraform binary.
 type discoverDeps struct {
-	loadConfig    func(ctx context.Context, region string) (aws.Config, error)
+	// loadConfig builds the aws.Config the orchestrator hands to every
+	// per-service discoverer. The endpointURL parameter is the
+	// --aws-endpoint-url flag value: empty for real AWS, non-empty to
+	// route every SDK client at LocalStack (Stage 2c4 / #272). Empty
+	// preserves whatever AWS_ENDPOINT_URL the caller's shell has set, so
+	// operators using AWS-compatible endpoints unrelated to this gate
+	// keep working unchanged.
+	loadConfig    func(ctx context.Context, region, endpointURL string) (aws.Config, error)
 	getAccount    func(ctx context.Context, cfg aws.Config) (string, error)
 	newDiscoverer func(cfg aws.Config, maxConcurrency int) discoveryAggregator
 	// runGenconfig drives Stage 2b. The default shells out to the
@@ -78,11 +85,15 @@ type discoverDeps struct {
 
 func productionDiscoverDeps() discoverDeps {
 	return discoverDeps{
-		loadConfig: func(ctx context.Context, region string) (aws.Config, error) {
-			return config.LoadDefaultConfig(ctx,
+		loadConfig: func(ctx context.Context, region, endpointURL string) (aws.Config, error) {
+			opts := []func(*config.LoadOptions) error{
 				config.WithRegion(region),
 				config.WithRetryMaxAttempts(discoverRetryMaxAttempts),
-			)
+			}
+			if endpointURL != "" {
+				opts = append(opts, config.WithBaseEndpoint(endpointURL))
+			}
+			return config.LoadDefaultConfig(ctx, opts...)
 		},
 		getAccount: func(ctx context.Context, cfg aws.Config) (string, error) {
 			out, err := sts.NewFromConfig(cfg).GetCallerIdentity(ctx, &sts.GetCallerIdentityInput{})
@@ -152,6 +163,7 @@ Exit codes:
 	noDepChase := fs.Bool("no-depchase", false, "skip Stage 2c3 dependency chase loop after drift fix; leaves dangling external ARN references in generated.tf as drift")
 	maxDepChaseIter := fs.Int("max-depchase-iterations", depchase.DefaultMaxIterations, "max dependency-chase iterations before surfacing the residual unresolved set as a fatal")
 	maxConcurrency := fs.Int("max-concurrency", awsdiscover.DefaultMaxConcurrency, "max in-flight per-resource AWS API calls inside the DynamoDB and Lambda discoverers; raise on accounts with thousands of resources, lower if the SDK retryer keeps tripping")
+	awsEndpointURL := fs.String("aws-endpoint-url", "", "override the AWS endpoint URL for both SDK and terraform provider; intended for the Stage 2c4 LocalStack-backed CI gate (#272) — pass http://localhost:4566 to retarget every service at LocalStack. Empty (default) uses real AWS.")
 
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -201,7 +213,7 @@ Exit codes:
 	ctx, cancel := context.WithTimeout(context.Background(), discoverTimeout)
 	defer cancel()
 
-	cfg, err := deps.loadConfig(ctx, *region)
+	cfg, err := deps.loadConfig(ctx, *region, *awsEndpointURL)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "discover: load AWS config: %v\n", err)
 		return discoverExitFatal
@@ -242,8 +254,9 @@ Exit codes:
 	// inside output-dir so cleanup is the operator's choice, not ours.
 	gcWorkdir := filepath.Join(*outputDir, "genconfig")
 	res, err := deps.runGenconfig(ctx, genconfig.Options{
-		Workdir: gcWorkdir,
-		Region:  *region,
+		Workdir:        gcWorkdir,
+		Region:         *region,
+		AWSEndpointURL: *awsEndpointURL,
 	}, resources)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "discover: HCL generation: %v\n", err)
@@ -292,7 +305,11 @@ Exit codes:
 	// manifest stays consistent with the on-disk generated.tf.
 	pipeline := depchase.PipelineFns{
 		RunGenconfig: func(ictx context.Context, expanded []imported.ImportedResource) (*depchase.GenconfigResult, error) {
-			r, err := deps.runGenconfig(ictx, genconfig.Options{Workdir: gcWorkdir, Region: *region}, expanded)
+			r, err := deps.runGenconfig(ictx, genconfig.Options{
+				Workdir:        gcWorkdir,
+				Region:         *region,
+				AWSEndpointURL: *awsEndpointURL,
+			}, expanded)
 			if err != nil {
 				return nil, err
 			}

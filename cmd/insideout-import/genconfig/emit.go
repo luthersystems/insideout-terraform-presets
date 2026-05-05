@@ -45,10 +45,35 @@ func emitImports(dir string, resources []imported.ImportedResource) error {
 	return os.WriteFile(filepath.Join(dir, importsFile), f.Bytes(), 0o644)
 }
 
+// localstackEndpointServices is the set of TF AWS provider `endpoints {}`
+// keys we retarget when emitting a LocalStack-backed providers.tf. It's the
+// union of services every discoverer in awsdiscover/ touches plus `sts`
+// (called by the orchestrator's getAccount).
+//
+// Order is fixed so the emitted HCL is byte-stable across runs (golden-file
+// friendly).
+var localstackEndpointServices = []string{
+	"cloudwatchlogs",
+	"dynamodb",
+	"iam",
+	"kms",
+	"lambda",
+	"s3",
+	"secretsmanager",
+	"sqs",
+	"sts",
+}
+
 // emitProviders writes <dir>/providers.tf with the AWS provider pinned to the
 // same major as the rest of the repo (>= 6.0). The provider block is
 // unaliased — see emitImports for why.
-func emitProviders(dir, region string) error {
+//
+// If endpointURL is non-empty (set via --aws-endpoint-url, used by the
+// Stage 2c4 LocalStack CI gate #272), the block is augmented with the
+// LocalStack attribute set: `endpoints {}` map covering every service the
+// discoverers + STS touch, plus dummy creds and the four `skip_*`/path-
+// style flags that LocalStack's documentation requires for v3+.
+func emitProviders(dir, region, endpointURL string) error {
 	f := hclwrite.NewEmptyFile()
 	body := f.Body()
 
@@ -62,6 +87,19 @@ func emitProviders(dir, region string) error {
 	body.AppendNewline()
 	prov := body.AppendNewBlock("provider", []string{"aws"})
 	prov.Body().SetAttributeValue("region", cty.StringVal(region))
+
+	if endpointURL != "" {
+		prov.Body().SetAttributeValue("access_key", cty.StringVal("test"))
+		prov.Body().SetAttributeValue("secret_key", cty.StringVal("test"))
+		prov.Body().SetAttributeValue("skip_credentials_validation", cty.True)
+		prov.Body().SetAttributeValue("skip_metadata_api_check", cty.True)
+		prov.Body().SetAttributeValue("skip_requesting_account_id", cty.True)
+		prov.Body().SetAttributeValue("s3_use_path_style", cty.True)
+		ep := prov.Body().AppendNewBlock("endpoints", nil)
+		for _, svc := range localstackEndpointServices {
+			ep.Body().SetAttributeValue(svc, cty.StringVal(endpointURL))
+		}
+	}
 
 	return os.WriteFile(filepath.Join(dir, providersFile), f.Bytes(), 0o644)
 }
