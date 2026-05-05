@@ -56,7 +56,14 @@ type discoveryAggregator interface {
 // branches (validator failure, DiscoverTypes error, nil STS account, HCL
 // generation failure) without real AWS credentials or a terraform binary.
 type discoverDeps struct {
-	loadConfig    func(ctx context.Context, region string) (aws.Config, error)
+	// loadConfig builds the aws.Config the orchestrator hands to every
+	// per-service discoverer. The endpointURL parameter is the
+	// --aws-endpoint-url flag value: empty for real AWS, non-empty to
+	// route every SDK client at LocalStack (Stage 2c4 / #272). Empty
+	// preserves whatever AWS_ENDPOINT_URL the caller's shell has set, so
+	// operators using AWS-compatible endpoints unrelated to this gate
+	// keep working unchanged.
+	loadConfig    func(ctx context.Context, region, endpointURL string) (aws.Config, error)
 	getAccount    func(ctx context.Context, cfg aws.Config) (string, error)
 	newDiscoverer func(cfg aws.Config, maxConcurrency int) discoveryAggregator
 	// runGenconfig drives Stage 2b. The default shells out to the
@@ -78,11 +85,15 @@ type discoverDeps struct {
 
 func productionDiscoverDeps() discoverDeps {
 	return discoverDeps{
-		loadConfig: func(ctx context.Context, region string) (aws.Config, error) {
-			return config.LoadDefaultConfig(ctx,
+		loadConfig: func(ctx context.Context, region, endpointURL string) (aws.Config, error) {
+			opts := []func(*config.LoadOptions) error{
 				config.WithRegion(region),
 				config.WithRetryMaxAttempts(discoverRetryMaxAttempts),
-			)
+			}
+			if endpointURL != "" {
+				opts = append(opts, config.WithBaseEndpoint(endpointURL))
+			}
+			return config.LoadDefaultConfig(ctx, opts...)
 		},
 		getAccount: func(ctx context.Context, cfg aws.Config) (string, error) {
 			out, err := sts.NewFromConfig(cfg).GetCallerIdentity(ctx, &sts.GetCallerIdentityInput{})
@@ -199,24 +210,10 @@ Exit codes:
 
 	types := splitCSV(*resourceTypes)
 
-	// SDK side of the LocalStack endpoint override. aws-sdk-go-v2's
-	// LoadDefaultConfig honors AWS_ENDPOINT_URL natively (since v1.27),
-	// and the env-var path covers every per-service client built off the
-	// shared aws.Config without retro-fitting BaseEndpoint into nine
-	// constructors. Set before deps.loadConfig so the production loader
-	// picks it up; tests that inject a fake loadConfig observe the env
-	// var directly.
-	if *awsEndpointURL != "" {
-		if err := os.Setenv("AWS_ENDPOINT_URL", *awsEndpointURL); err != nil {
-			fmt.Fprintf(os.Stderr, "discover: set AWS_ENDPOINT_URL: %v\n", err)
-			return discoverExitFatal
-		}
-	}
-
 	ctx, cancel := context.WithTimeout(context.Background(), discoverTimeout)
 	defer cancel()
 
-	cfg, err := deps.loadConfig(ctx, *region)
+	cfg, err := deps.loadConfig(ctx, *region, *awsEndpointURL)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "discover: load AWS config: %v\n", err)
 		return discoverExitFatal

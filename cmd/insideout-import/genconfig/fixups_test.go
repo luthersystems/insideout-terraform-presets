@@ -171,20 +171,41 @@ func TestFixupKMS_RotationPeriodZeroDropped(t *testing.T) {
 // real AWS returning a meaningful 365-day rotation must NOT have its
 // value silently dropped. Only the literal 0 from LocalStack triggers
 // the fixup.
+//
+// Table-driven so the carve-outs documented on isAttrLiteralZero
+// ("does NOT match `0.0`, `00`, or any computed expression") are
+// pinned by tests, not just docstrings. A mutation broadening the
+// trigger to `strings.HasPrefix(s, "0")` or `== "00"` would now fail
+// these cases.
 func TestFixupKMS_RotationPeriodNonZeroPreserved(t *testing.T) {
 	t.Parallel()
-	in := []byte(`resource "aws_kms_key" "main" {
+	cases := []struct {
+		name, value string
+	}{
+		{name: "real AWS value", value: "365"},
+		{name: "minimum valid", value: "90"},
+		{name: "maximum valid", value: "2560"},
+		{name: "leading-zero literal (carve-out: not the LocalStack shape)", value: "00"},
+		{name: "float-zero literal (carve-out: not the LocalStack shape)", value: "0.0"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			in := []byte(`resource "aws_kms_key" "main" {
   description             = "x"
-  rotation_period_in_days = 365
+  rotation_period_in_days = ` + tc.value + `
 }
 `)
-	out, err := applyResourceTypeFixups(in)
-	if err != nil {
-		t.Fatal(err)
-	}
-	got := string(out)
-	if !regexp.MustCompile(`rotation_period_in_days\s*=\s*365`).MatchString(got) {
-		t.Errorf("non-zero rotation_period_in_days must be preserved\n--- got ---\n%s", got)
+			out, err := applyResourceTypeFixups(in)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := string(out)
+			pat := `rotation_period_in_days\s*=\s*` + regexp.QuoteMeta(tc.value)
+			if !regexp.MustCompile(pat).MatchString(got) {
+				t.Errorf("value %q must be preserved (only literal `0` is dropped)\n--- got ---\n%s", tc.value, got)
+			}
+		})
 	}
 }
 
@@ -218,15 +239,79 @@ func TestFixupDynamoDB_PITRRecoveryPeriodZeroDropped(t *testing.T) {
 }
 
 // TestFixupDynamoDB_PITRRecoveryPeriodNonZeroPreserved is the symmetric
-// non-zero case — a real PITR window of 14 days must reach the emitted
-// HCL untouched.
+// non-zero case — a real PITR window must reach the emitted HCL
+// untouched. Table-driven to also pin the literal-zero carve-outs
+// documented on isAttrLiteralZero.
 func TestFixupDynamoDB_PITRRecoveryPeriodNonZeroPreserved(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name, value string
+	}{
+		{name: "real AWS value", value: "14"},
+		{name: "minimum valid", value: "1"},
+		{name: "maximum valid", value: "35"},
+		{name: "leading-zero literal (carve-out)", value: "00"},
+		{name: "float-zero literal (carve-out)", value: "0.0"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			in := []byte(`resource "aws_dynamodb_table" "main" {
+  name = "x"
+  point_in_time_recovery {
+    enabled                 = true
+    recovery_period_in_days = ` + tc.value + `
+  }
+}
+`)
+			out, err := applyResourceTypeFixups(in)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := string(out)
+			pat := `recovery_period_in_days\s*=\s*` + regexp.QuoteMeta(tc.value)
+			if !regexp.MustCompile(pat).MatchString(got) {
+				t.Errorf("value %q must be preserved (only literal `0` is dropped)\n--- got ---\n%s", tc.value, got)
+			}
+		})
+	}
+}
+
+// TestFixupDynamoDB_NoPITRBlockNoOp pins the canonical real-AWS shape:
+// when point_in_time_recovery isn't even present, the fixup must be a
+// pure no-op. A mutation that "helpfully" injected a PITR block or
+// touched other sub-blocks would fail this.
+func TestFixupDynamoDB_NoPITRBlockNoOp(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_dynamodb_table" "main" {
+  name     = "x"
+  hash_key = "id"
+
+  attribute {
+    name = "id"
+    type = "S"
+  }
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(out) != string(in) {
+		t.Errorf("absent point_in_time_recovery must yield identical output\n--- in ---\n%s\n--- out ---\n%s", in, out)
+	}
+}
+
+// TestFixupDynamoDB_PITRBlockPresentAttrAbsentNoOp pins that a PITR
+// block carrying only `enabled = false` (no recovery_period_in_days)
+// is also a no-op. A mutation that always added or removed
+// recovery_period_in_days regardless of presence would fail.
+func TestFixupDynamoDB_PITRBlockPresentAttrAbsentNoOp(t *testing.T) {
 	t.Parallel()
 	in := []byte(`resource "aws_dynamodb_table" "main" {
   name = "x"
   point_in_time_recovery {
-    enabled                 = true
-    recovery_period_in_days = 14
+    enabled = false
   }
 }
 `)
@@ -235,8 +320,43 @@ func TestFixupDynamoDB_PITRRecoveryPeriodNonZeroPreserved(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := string(out)
-	if !regexp.MustCompile(`recovery_period_in_days\s*=\s*14`).MatchString(got) {
-		t.Errorf("non-zero recovery_period_in_days must be preserved\n--- got ---\n%s", got)
+	if !regexp.MustCompile(`(?m)^\s*enabled\s*=\s*false`).MatchString(got) {
+		t.Errorf("enabled=false must be preserved\n--- got ---\n%s", got)
+	}
+	if regexp.MustCompile(`recovery_period_in_days`).MatchString(got) {
+		t.Errorf("absent recovery_period_in_days must NOT appear after fixup\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupDynamoDB_MultiplePITRBlocksAllZerosDropped pins iteration:
+// if a (hypothetical) DynamoDB resource has multiple
+// point_in_time_recovery sub-blocks (Terraform doesn't support this in
+// reality, but `terraform plan -generate-config-out` has emitted
+// duplicate blocks before for other types), the fixup must process
+// all of them — not break after the first match. A mutation
+// substituting `break` for `continue` after the inner remove would
+// survive single-block tests but fail this.
+func TestFixupDynamoDB_MultiplePITRBlocksAllZerosDropped(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_dynamodb_table" "main" {
+  name = "x"
+  point_in_time_recovery {
+    enabled                 = false
+    recovery_period_in_days = 0
+  }
+  point_in_time_recovery {
+    enabled                 = false
+    recovery_period_in_days = 0
+  }
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if regexp.MustCompile(`recovery_period_in_days`).MatchString(got) {
+		t.Errorf("all zero-valued recovery_period_in_days must be dropped, even across multiple PITR blocks\n--- got ---\n%s", got)
 	}
 }
 

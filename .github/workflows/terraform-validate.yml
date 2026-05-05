@@ -281,11 +281,12 @@ jobs:
   # End-to-end LocalStack-backed assertion of the discover orchestrator's
   # zero-drift contract (Stage 2c4 / #272). Spins LocalStack as a service
   # container, applies tests/testdata/localstack-seed/ to populate it
-  # with one of each of the 9 supported AWS resource types, then runs
-  # `insideout-import discover --aws-endpoint-url ...` against it and
-  # asserts `terraform plan -detailed-exitcode == 0` on the generated
-  # stack. Without this, the orchestrator's plan-clean exit-code contract
-  # is documented-only — same gap PR #58's QA flagged as P0.
+  # with one of each of 8 supported AWS resource types (SQS is excluded
+  # — see seed's main.tf header for the LocalStack URL-shape reason),
+  # then runs `insideout-import discover --aws-endpoint-url ...` against
+  # it and asserts terraform plan-clean post-import. Without this, the
+  # orchestrator's plan-clean exit-code contract is documented-only —
+  # same gap PR #58's QA flagged as P0.
   localstack-discover-gate:
     runs-on: ubuntu-latest
     timeout-minutes: 15

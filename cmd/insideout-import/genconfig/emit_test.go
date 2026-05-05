@@ -109,9 +109,18 @@ func TestEmitProviders_HappyPath(t *testing.T) {
 		}
 	}
 	// LocalStack-only attrs must NOT appear when endpointURL is "".
-	for _, banned := range []string{"endpoints", "access_key", "skip_credentials_validation", "s3_use_path_style"} {
-		if strings.Contains(got, banned) {
-			t.Errorf("providers.tf must not contain %q when endpointURL is empty\n--- got ---\n%s", banned, got)
+	// Use anchored attribute/block-start patterns rather than substring
+	// blocklists so a future header comment that mentions one of these
+	// words doesn't trip the check.
+	bannedPatterns := []string{
+		`(?m)^\s*endpoints\s*\{`,
+		`(?m)^\s*access_key\s*=`,
+		`(?m)^\s*skip_credentials_validation\s*=`,
+		`(?m)^\s*s3_use_path_style\s*=`,
+	}
+	for _, pat := range bannedPatterns {
+		if regexp.MustCompile(pat).MatchString(got) {
+			t.Errorf("providers.tf must not contain pattern %q when endpointURL is empty\n--- got ---\n%s", pat, got)
 		}
 	}
 }
@@ -154,11 +163,60 @@ func TestEmitProviders_LocalStackEndpoint(t *testing.T) {
 		}
 	}
 
-	// Every service in localstackEndpointServices must point at the URL.
-	for _, svc := range localstackEndpointServices {
-		pat := svc + `\s*=\s*"http://localhost:4566"`
-		if !regexp.MustCompile(pat).MatchString(got) {
-			t.Errorf("providers.tf missing endpoint mapping for %q (pattern %q)\n--- got ---\n%s", svc, pat, got)
+	// Extract the body of the `endpoints { ... }` block and assert
+	// service mappings against THAT scope only — a mutation that
+	// emitted, say, `sqs = "..."` at provider scope (outside endpoints)
+	// would not get a regex match on the slice contents alone.
+	endpointsBody := extractEndpointsBlock(t, got)
+
+	// Hardcode a load-bearing subset that the LocalStack gate's seed
+	// depends on directly (not derived from the production slice). A
+	// teammate shrinking localstackEndpointServices and dropping any of
+	// these would now fail this test rather than silently skipping
+	// coverage. Symmetric with the seed's main.tf which exercises these
+	// services end-to-end.
+	loadBearing := []string{"s3", "dynamodb", "lambda", "iam", "sts"}
+	for _, svc := range loadBearing {
+		pat := `(?m)^\s*` + svc + `\s*=\s*"http://localhost:4566"`
+		if !regexp.MustCompile(pat).MatchString(endpointsBody) {
+			t.Errorf("endpoints {} block missing hardcoded mapping for %q (pattern %q)\n--- endpoints block ---\n%s", svc, pat, endpointsBody)
 		}
 	}
+
+	// Then every service in the production slice must also appear,
+	// inside the endpoints block.
+	for _, svc := range localstackEndpointServices {
+		pat := `(?m)^\s*` + svc + `\s*=\s*"http://localhost:4566"`
+		if !regexp.MustCompile(pat).MatchString(endpointsBody) {
+			t.Errorf("endpoints {} block missing mapping for %q (pattern %q)\n--- endpoints block ---\n%s", svc, pat, endpointsBody)
+		}
+	}
+}
+
+// extractEndpointsBlock pulls the contents of the first `endpoints {
+// ... }` block out of an HCL providers.tf body. Naive brace-balance
+// scan is fine here because the emit path doesn't nest blocks under
+// `endpoints {}`; if that ever changes the test will see it as a
+// false positive on the first inner closing brace.
+func extractEndpointsBlock(t *testing.T, hcl string) string {
+	t.Helper()
+	loc := regexp.MustCompile(`(?s)endpoints\s*\{`).FindStringIndex(hcl)
+	if loc == nil {
+		t.Fatalf("no endpoints {} block in providers.tf\n--- hcl ---\n%s", hcl)
+	}
+	rest := hcl[loc[1]:]
+	depth := 1
+	for i, r := range rest {
+		switch r {
+		case '{':
+			depth++
+		case '}':
+			depth--
+			if depth == 0 {
+				return rest[:i]
+			}
+		}
+	}
+	t.Fatalf("unbalanced braces inside endpoints {} block\n--- hcl ---\n%s", hcl)
+	return ""
 }

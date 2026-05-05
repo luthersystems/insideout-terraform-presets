@@ -132,7 +132,7 @@ case "${plan_rc}" in
 esac
 
 # ---------------------------------------------------------------------------
-# 5. Manifest sanity check. Each of the 9 seeded types must appear.
+# 5. Manifest sanity check. Each of the 8 seeded types must appear.
 # ---------------------------------------------------------------------------
 
 MANIFEST="${OUT_DIR}/imported.json"

@@ -10,6 +10,8 @@ import (
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/awsdiscover"
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/depchase"
@@ -172,7 +174,7 @@ func noopDepChase(_ context.Context, opts depchase.Options, resources []imported
 
 func okDeps(agg *fakeAggregator) discoverDeps {
 	return discoverDeps{
-		loadConfig:    func(_ context.Context, _ string) (aws.Config, error) { return aws.Config{}, nil },
+		loadConfig:    func(_ context.Context, _, _ string) (aws.Config, error) { return aws.Config{}, nil },
 		getAccount:    func(_ context.Context, _ aws.Config) (string, error) { return "1234567890", nil },
 		newDiscoverer: func(_ aws.Config, _ int) discoveryAggregator { return agg },
 		runGenconfig:  (&fakeGenconfig{}).Run,
@@ -237,7 +239,7 @@ func TestRunDiscoverWithDeps_LoadConfigFails(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	deps := discoverDeps{
-		loadConfig: func(_ context.Context, _ string) (aws.Config, error) {
+		loadConfig: func(_ context.Context, _, _ string) (aws.Config, error) {
 			return aws.Config{}, errors.New("env unreadable")
 		},
 		getAccount:    func(_ context.Context, _ aws.Config) (string, error) { t.Fatal("should not be called"); return "", nil },
@@ -258,7 +260,7 @@ func TestRunDiscoverWithDeps_STSFails(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	deps := discoverDeps{
-		loadConfig:    func(_ context.Context, _ string) (aws.Config, error) { return aws.Config{}, nil },
+		loadConfig:    func(_ context.Context, _, _ string) (aws.Config, error) { return aws.Config{}, nil },
 		getAccount:    func(_ context.Context, _ aws.Config) (string, error) { return "", errors.New("AccessDenied") },
 		newDiscoverer: func(_ aws.Config, _ int) discoveryAggregator { t.Fatal("should not be called"); return nil },
 	}
@@ -280,7 +282,7 @@ func TestRunDiscoverWithDeps_NilSTSAccountThreadsEmpty(t *testing.T) {
 	dir := t.TempDir()
 	agg := &fakeAggregator{}
 	deps := discoverDeps{
-		loadConfig:    func(_ context.Context, _ string) (aws.Config, error) { return aws.Config{}, nil },
+		loadConfig:    func(_ context.Context, _, _ string) (aws.Config, error) { return aws.Config{}, nil },
 		getAccount:    func(_ context.Context, _ aws.Config) (string, error) { return "", nil }, // success but empty account
 		newDiscoverer: func(_ aws.Config, _ int) discoveryAggregator { return agg },
 	}
@@ -843,7 +845,7 @@ func TestRunDiscoverWithDeps_DefaultMaxConcurrencyThreaded(t *testing.T) {
 	agg := &fakeAggregator{}
 	var gotMax int
 	deps := discoverDeps{
-		loadConfig: func(_ context.Context, _ string) (aws.Config, error) { return aws.Config{}, nil },
+		loadConfig: func(_ context.Context, _, _ string) (aws.Config, error) { return aws.Config{}, nil },
 		getAccount: func(_ context.Context, _ aws.Config) (string, error) { return "1234567890", nil },
 		newDiscoverer: func(_ aws.Config, max int) discoveryAggregator {
 			gotMax = max
@@ -871,7 +873,7 @@ func TestRunDiscoverWithDeps_MaxConcurrencyOverride(t *testing.T) {
 	agg := &fakeAggregator{}
 	var gotMax int
 	deps := discoverDeps{
-		loadConfig: func(_ context.Context, _ string) (aws.Config, error) { return aws.Config{}, nil },
+		loadConfig: func(_ context.Context, _, _ string) (aws.Config, error) { return aws.Config{}, nil },
 		getAccount: func(_ context.Context, _ aws.Config) (string, error) { return "1234567890", nil },
 		newDiscoverer: func(_ aws.Config, max int) discoveryAggregator {
 			gotMax = max
@@ -901,7 +903,7 @@ func TestRunDiscoverWithDeps_MaxConcurrencyRejectsNonPositive(t *testing.T) {
 	for _, n := range []string{"0", "-1"} {
 		dir := t.TempDir()
 		deps := discoverDeps{
-			loadConfig: func(_ context.Context, _ string) (aws.Config, error) { return aws.Config{}, nil },
+			loadConfig: func(_ context.Context, _, _ string) (aws.Config, error) { return aws.Config{}, nil },
 			getAccount: func(_ context.Context, _ aws.Config) (string, error) { return "1", nil },
 			newDiscoverer: func(_ aws.Config, _ int) discoveryAggregator {
 				t.Fatalf("n=%s: newDiscoverer must not run when --max-concurrency invalid", n)
@@ -931,7 +933,7 @@ func TestRunDiscoverWithDeps_MaxConcurrencyRejectsNonPositive(t *testing.T) {
 func TestProductionDiscoverDeps_LoadConfigSetsRetryMaxAttempts(t *testing.T) {
 	t.Parallel()
 	deps := productionDiscoverDeps()
-	cfg, err := deps.loadConfig(context.Background(), "us-east-1")
+	cfg, err := deps.loadConfig(context.Background(), "us-east-1", "")
 	if err != nil {
 		t.Fatalf("loadConfig: %v (the WithRetryMaxAttempts option is applied independent of credential resolution; an err here means LoadDefaultConfig failed for an unrelated reason that needs investigating)", err)
 	}
@@ -940,83 +942,161 @@ func TestProductionDiscoverDeps_LoadConfigSetsRetryMaxAttempts(t *testing.T) {
 	}
 }
 
-// TestRunDiscoverWithDeps_AWSEndpointURLThreaded pins the Stage 2c4 (#272)
-// LocalStack flag wiring on both sides of the seam:
-//   - genconfig.Options.AWSEndpointURL receives the flag value (so the
-//     emitted providers.tf points at LocalStack via emitProviders).
-//   - The AWS_ENDPOINT_URL env var is set before deps.loadConfig fires,
-//     so production loadConfig (and every per-service SDK client built
-//     off the resulting aws.Config) routes API calls to the same URL.
+// TestProductionDiscoverDeps_LoadConfigBaseEndpoint pins how the
+// endpointURL parameter reaches aws.Config.BaseEndpoint across the
+// flag/env precedence matrix that the orchestrator-level table test
+// (TestRunDiscoverWithDeps_AWSEndpointURLWiresFlagToBothSeams) only
+// exercises with a fake loader. The Stage 2c4 LocalStack gate (#272)
+// depends on this being threaded through every per-service SDK client
+// built off the shared aws.Config.
 //
-// Both branches matter: a regression that drops env-var setting would
-// produce HCL pointing at LocalStack while the discoverers still hit
-// real AWS, silently emptying the manifest. The reverse breaks
-// terraform plan against an unmocked endpoint.
-func TestRunDiscoverWithDeps_AWSEndpointURLThreaded(t *testing.T) {
-	dir := t.TempDir()
-	agg := &fakeAggregator{out: []imported.ImportedResource{validResource("aws_sqs_queue.q")}}
-	gc := &fakeGenconfig{}
-
-	// Snapshot the env var observed at loadConfig time. t.Setenv handles
-	// cleanup so the value doesn't leak into other tests; production
-	// loadConfig fires only after runDiscoverWithDeps's setenv, so an
-	// initial value of "" is the contract under test.
-	t.Setenv("AWS_ENDPOINT_URL", "")
-	var loadConfigSawEnv string
-	deps := discoverDeps{
-		loadConfig: func(_ context.Context, _ string) (aws.Config, error) {
-			loadConfigSawEnv = os.Getenv("AWS_ENDPOINT_URL")
-			return aws.Config{}, nil
+// The "garbage URL" case is intentional: this layer is a thin wrapper
+// over LoadDefaultConfig and inherits its threading semantics — it
+// does NOT validate the URL. That contract is locked here so a future
+// "helpful" refactor that adds URL validation (and silently drops
+// unrecognized schemes) is caught.
+//
+// NOT t.Parallel(): t.Setenv calls on AWS_ENDPOINT_URL would race
+// with sibling tests using the same var.
+func TestProductionDiscoverDeps_LoadConfigBaseEndpoint(t *testing.T) {
+	cases := []struct {
+		name        string
+		shellEnv    string
+		endpointURL string
+		want        string // expected aws.Config.BaseEndpoint after load; "" means BaseEndpoint must be nil
+	}{
+		{
+			name:        "param empty, env empty → BaseEndpoint nil",
+			shellEnv:    "",
+			endpointURL: "",
+			want:        "",
 		},
-		getAccount:    func(_ context.Context, _ aws.Config) (string, error) { return "1234567890", nil },
-		newDiscoverer: func(_ aws.Config, _ int) discoveryAggregator { return agg },
-		runGenconfig:  gc.Run,
-		runDriftfix:   (&fakeDriftfix{}).Run,
-		runDepChase:   noopDepChase,
+		{
+			name:        "param set, env empty → param threaded to BaseEndpoint",
+			shellEnv:    "",
+			endpointURL: "http://localhost:4566",
+			want:        "http://localhost:4566",
+		},
+		{
+			name:        "param empty, env set → SDK fallback resolves env into BaseEndpoint",
+			shellEnv:    "http://from-env.example",
+			endpointURL: "",
+			want:        "http://from-env.example",
+		},
+		{
+			name:        "param set, env set → param wins (WithBaseEndpoint overrides env)",
+			shellEnv:    "http://from-env.example",
+			endpointURL: "http://localhost:4566",
+			want:        "http://localhost:4566",
+		},
+		{
+			name:        "garbage URL passed through verbatim (no validation at this layer)",
+			shellEnv:    "",
+			endpointURL: "://broken-scheme",
+			want:        "://broken-scheme",
+		},
 	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("AWS_ENDPOINT_URL", tc.shellEnv)
+			deps := productionDiscoverDeps()
+			cfg, err := deps.loadConfig(context.Background(), "us-east-1", tc.endpointURL)
+			require.NoError(t, err, "loadConfig must not fail on the WithRetryMaxAttempts/WithBaseEndpoint composition")
 
-	rc := runDiscoverWithDeps([]string{
-		"--provider", "aws", "--project", "p", "--region", "us-east-1", "--output-dir", dir,
-		"--aws-endpoint-url", "http://localhost:4566",
-	}, deps)
-	if rc != discoverExitOK {
-		t.Fatalf("rc=%d, want OK", rc)
-	}
-	if loadConfigSawEnv != "http://localhost:4566" {
-		t.Errorf("loadConfig saw AWS_ENDPOINT_URL=%q, want %q (env var must be set BEFORE loadConfig)", loadConfigSawEnv, "http://localhost:4566")
-	}
-	if gc.gotOpts.AWSEndpointURL != "http://localhost:4566" {
-		t.Errorf("genconfig.Options.AWSEndpointURL=%q, want %q (flag must propagate to providers.tf emitter)", gc.gotOpts.AWSEndpointURL, "http://localhost:4566")
+			var got string
+			if cfg.BaseEndpoint != nil {
+				got = *cfg.BaseEndpoint
+			}
+			assert.Equal(t, tc.want, got, "aws.Config.BaseEndpoint")
+			if tc.want == "" {
+				assert.Nil(t, cfg.BaseEndpoint, "empty want must yield nil BaseEndpoint, not empty string")
+			}
+		})
 	}
 }
 
-// TestRunDiscoverWithDeps_AWSEndpointURLDefaultsEmpty pins that omitting
-// --aws-endpoint-url leaves the env var alone (real AWS behavior) and
-// passes "" to genconfig (standard provider block). Without this, a
-// loose default that pre-set AWS_ENDPOINT_URL="" would still mutate
-// inherited env in unrelated test runs.
-func TestRunDiscoverWithDeps_AWSEndpointURLDefaultsEmpty(t *testing.T) {
-	dir := t.TempDir()
-	agg := &fakeAggregator{out: []imported.ImportedResource{validResource("aws_sqs_queue.q")}}
-	gc := &fakeGenconfig{}
-
-	// Pre-set a sentinel that must NOT be overwritten when the flag is
-	// absent. (Real-world analogue: an operator already exported
-	// AWS_ENDPOINT_URL for another tool — discover should not clobber it.)
-	t.Setenv("AWS_ENDPOINT_URL", "http://preexisting.invalid")
-	deps := okDepsWithGC(agg, gc)
-
-	rc := runDiscoverWithDeps([]string{
-		"--provider", "aws", "--project", "p", "--region", "us-east-1", "--output-dir", dir,
-	}, deps)
-	if rc != discoverExitOK {
-		t.Fatalf("rc=%d, want OK", rc)
+// TestRunDiscoverWithDeps_AWSEndpointURLWiresFlagToBothSeams pins the
+// Stage 2c4 (#272) LocalStack flag wiring on both sides of the seam,
+// table-driven:
+//   - loadConfig receives the flag value as its third arg (so production
+//     loadConfig threads it onto aws.Config.BaseEndpoint, retargeting
+//     every per-service SDK client built off it).
+//   - genconfig.Options.AWSEndpointURL receives the same flag value (so
+//     the emitted providers.tf points at LocalStack via emitProviders).
+//
+// Both branches matter: a regression that drops the loadConfig threading
+// would produce HCL pointing at LocalStack while the discoverers still
+// hit real AWS, silently emptying the manifest. The reverse breaks
+// terraform plan against an unmocked endpoint.
+//
+// Precedence is pinned in both directions:
+//   - flag set + env set: flag wins at the orchestrator seam (the SDK
+//     never sees env when WithBaseEndpoint is applied).
+//   - flag empty + env set: orchestrator threads "" through to
+//     loadConfig; the production loader then defers to the SDK's own
+//     env-fallback (covered by TestProductionDiscoverDeps_LoadConfigBaseEndpoint).
+func TestRunDiscoverWithDeps_AWSEndpointURLWiresFlagToBothSeams(t *testing.T) {
+	cases := []struct {
+		name      string
+		shellEnv  string // AWS_ENDPOINT_URL pre-set at test start
+		flagValue string // value passed to --aws-endpoint-url, or "" to omit the flag
+		wantArg   string // expected third arg to loadConfig + genconfig.Options.AWSEndpointURL
+	}{
+		{
+			name:      "flag set, shell env empty → flag value at both seams",
+			shellEnv:  "",
+			flagValue: "http://localhost:4566",
+			wantArg:   "http://localhost:4566",
+		},
+		{
+			name:      "flag omitted, shell env empty → empty at both seams",
+			shellEnv:  "",
+			flagValue: "",
+			wantArg:   "",
+		},
+		{
+			name:      "flag set, shell env set to different value → flag wins",
+			shellEnv:  "http://preexisting.invalid",
+			flagValue: "http://localhost:4566",
+			wantArg:   "http://localhost:4566",
+		},
+		{
+			name:      "flag omitted, shell env set → orchestrator threads \"\" (env handled by SDK, not us)",
+			shellEnv:  "http://from-env.example",
+			flagValue: "",
+			wantArg:   "",
+		},
 	}
-	if got := os.Getenv("AWS_ENDPOINT_URL"); got != "http://preexisting.invalid" {
-		t.Errorf("AWS_ENDPOINT_URL mutated to %q without --aws-endpoint-url; pre-existing env must be preserved", got)
-	}
-	if gc.gotOpts.AWSEndpointURL != "" {
-		t.Errorf("genconfig.Options.AWSEndpointURL=%q, want empty (flag default)", gc.gotOpts.AWSEndpointURL)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("AWS_ENDPOINT_URL", tc.shellEnv)
+
+			dir := t.TempDir()
+			agg := &fakeAggregator{out: []imported.ImportedResource{validResource("aws_sqs_queue.q")}}
+			gc := &fakeGenconfig{}
+
+			var loadConfigSawArg string
+			deps := discoverDeps{
+				loadConfig: func(_ context.Context, _, endpointURL string) (aws.Config, error) {
+					loadConfigSawArg = endpointURL
+					return aws.Config{}, nil
+				},
+				getAccount:    func(_ context.Context, _ aws.Config) (string, error) { return "1234567890", nil },
+				newDiscoverer: func(_ aws.Config, _ int) discoveryAggregator { return agg },
+				runGenconfig:  gc.Run,
+				runDriftfix:   (&fakeDriftfix{}).Run,
+				runDepChase:   noopDepChase,
+			}
+
+			args := []string{"--provider", "aws", "--project", "p", "--region", "us-east-1", "--output-dir", dir}
+			if tc.flagValue != "" {
+				args = append(args, "--aws-endpoint-url", tc.flagValue)
+			}
+			rc := runDiscoverWithDeps(args, deps)
+			require.Equal(t, discoverExitOK, rc)
+			assert.Equal(t, tc.wantArg, loadConfigSawArg, "loadConfig third arg")
+			assert.Equal(t, tc.wantArg, gc.gotOpts.AWSEndpointURL, "genconfig.Options.AWSEndpointURL")
+		})
 	}
 }
 
