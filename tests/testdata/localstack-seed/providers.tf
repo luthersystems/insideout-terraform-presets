@@ -6,6 +6,7 @@
 # Used only by tests/localstack-discover-gate.sh (Stage 2c4 / #272).
 
 terraform {
+  required_version = ">= 1.5"
   required_providers {
     aws = {
       source  = "hashicorp/aws"
