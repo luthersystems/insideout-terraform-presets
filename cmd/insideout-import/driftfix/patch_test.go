@@ -464,6 +464,41 @@ func TestApplyIgnoreChangesEscalation_NoUpdatesShortCircuits(t *testing.T) {
 	}
 }
 
+// TestApplyIgnoreChangesEscalation_RebuildsOnFunctionExpression pins
+// the documented fallback: when the existing ignore_changes is a
+// shape we can't safely parse (function call, variable ref, splat),
+// the merge function rebuilds with the new attrs only rather than
+// returning a garbage union. A mutation that walked TokenIdent
+// indiscriminately would silently produce e.g. ignore_changes =
+// [concat, filename, var, extra, delay_seconds].
+func TestApplyIgnoreChangesEscalation_RebuildsOnFunctionExpression(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_sqs_queue" "x" {
+  name = "alpha"
+
+  lifecycle {
+    ignore_changes = concat([filename], var.extra)
+  }
+}
+`)
+	cs := []driftClassification{{
+		address:    "aws_sqs_queue.x",
+		driftAttrs: []string{"delay_seconds"},
+	}}
+	out, err := applyIgnoreChangesEscalation(in, cs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The rebuild must NOT carry forward `concat`/`var`/`extra` as
+	// pseudo-entries; only the new attr should appear.
+	if strings.Contains(string(out), "concat") || strings.Contains(string(out), "var.extra") {
+		t.Errorf("non-list-literal expression must not be merged in; got:\n%s", out)
+	}
+	if !hclHasIgnoreChanges(t, out, "aws_sqs_queue.x", []string{"delay_seconds"}) {
+		t.Errorf("rebuild must contain new attr `delay_seconds`; got:\n%s", out)
+	}
+}
+
 func TestUniqueSorted(t *testing.T) {
 	t.Parallel()
 	got := uniqueSorted([]string{"b", "a", "b", "c", "a"})

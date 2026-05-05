@@ -250,11 +250,14 @@ func ensureIgnoreChanges(blk *hclwrite.Block, attrs []string) {
 }
 
 // mergeLifecycleIgnoreChanges adds `attrs` to an existing lifecycle
-// block's ignore_changes list. The current implementation parses the
-// existing list as a string-literal slice; if it isn't (e.g. operator
-// hand-edited to use traversal references), the function rebuilds from
-// scratch with `attrs` only. That's lossy in the rare hand-edit case
-// but matches the conservative "we rewrote your file" expectation.
+// block's ignore_changes list, preserving entries already present in
+// either traversal (`[a]`) or quoted-string (`["a"]`) form. If the
+// existing expression doesn't parse as a flat list literal — e.g.
+// the operator hand-edited it to a function expression like
+// `concat([filename], var.extra)` — parseIgnoreChangesList returns
+// nil and we rebuild from `attrs` only. That's lossy in the rare
+// hand-edit case but matches the conservative "we rewrote your file"
+// expectation.
 func mergeLifecycleIgnoreChanges(lc *hclwrite.Block, attrs []string) {
 	body := lc.Body()
 	existing := []string{}
@@ -267,10 +270,14 @@ func mergeLifecycleIgnoreChanges(lc *hclwrite.Block, attrs []string) {
 
 // parseIgnoreChangesList returns the attribute names from a
 // `[a, b]` (traversal) or `["a", "b"]` (string-literal) ignore_changes
-// attribute. Returns nil for any shape it doesn't understand (the
-// caller falls back to overwriting).
+// attribute. Returns nil for any shape it doesn't understand (e.g.
+// `concat(...)` or `var.x` — anything other than a flat bracketed
+// list literal). The caller treats nil as "rebuild from scratch."
 func parseIgnoreChangesList(attr *hclwrite.Attribute) []string {
 	tokens := attr.Expr().BuildTokens(nil)
+	if !isFlatListLiteral(tokens) {
+		return nil
+	}
 	out := []string{}
 	for _, t := range tokens {
 		switch t.Type {
@@ -279,6 +286,41 @@ func parseIgnoreChangesList(attr *hclwrite.Attribute) []string {
 		}
 	}
 	return out
+}
+
+// isFlatListLiteral reports whether the token sequence is the shape
+// `[ident-or-quoted (, ident-or-quoted)* ]` (with optional
+// surrounding quotes around quoted entries). Anything else — function
+// calls, variable refs, splat — returns false so the caller falls
+// back to overwriting.
+func isFlatListLiteral(tokens hclwrite.Tokens) bool {
+	// Strip leading/trailing whitespace and newline tokens.
+	first := -1
+	last := -1
+	for i, t := range tokens {
+		if t.Type == hclsyntax.TokenNewline {
+			continue
+		}
+		if first < 0 {
+			first = i
+		}
+		last = i
+	}
+	if first < 0 || tokens[first].Type != hclsyntax.TokenOBrack || tokens[last].Type != hclsyntax.TokenCBrack {
+		return false
+	}
+	for _, t := range tokens[first+1 : last] {
+		switch t.Type {
+		case hclsyntax.TokenIdent, hclsyntax.TokenQuotedLit,
+			hclsyntax.TokenComma, hclsyntax.TokenOQuote,
+			hclsyntax.TokenCQuote, hclsyntax.TokenNewline,
+			hclsyntax.TokenComment:
+			// permitted
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // buildIgnoreChangesTokens emits the token sequence for

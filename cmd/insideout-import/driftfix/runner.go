@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"strings"
 
 	"github.com/hashicorp/terraform-exec/tfexec"
 	tfjson "github.com/hashicorp/terraform-json"
@@ -66,7 +67,21 @@ func (r *execRunner) Validate(ctx context.Context) error {
 		return err
 	}
 	if !out.Valid {
-		return fmt.Errorf("terraform validate reported %d error diagnostic(s)", out.ErrorCount)
+		msgs := make([]string, 0, len(out.Diagnostics))
+		for _, d := range out.Diagnostics {
+			if d.Severity != tfjson.DiagnosticSeverityError {
+				continue
+			}
+			msg := d.Summary
+			if d.Detail != "" {
+				msg = msg + ": " + d.Detail
+			}
+			if d.Range != nil {
+				msg = fmt.Sprintf("%s:%d: %s", d.Range.Filename, d.Range.Start.Line, msg)
+			}
+			msgs = append(msgs, msg)
+		}
+		return fmt.Errorf("terraform validate reported %d error diagnostic(s): %s", out.ErrorCount, strings.Join(msgs, "; "))
 	}
 	return nil
 }

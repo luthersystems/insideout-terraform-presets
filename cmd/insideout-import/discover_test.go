@@ -551,6 +551,10 @@ func TestRunDiscoverWithDeps_DriftfixFailureExitsFatal(t *testing.T) {
 // captureStderr swaps os.Stderr for a pipe, runs fn, and returns the
 // captured output. Callers using this must NOT mark the test parallel
 // — os.Stderr is global state.
+//
+// The pipe writer is closed via defer so a panic inside fn still
+// unblocks the reader goroutine; otherwise the test would deadlock
+// on <-done.
 func captureStderr(t *testing.T, fn func()) string {
 	t.Helper()
 	r, w, err := os.Pipe()
@@ -577,8 +581,10 @@ func captureStderr(t *testing.T, fn func()) string {
 		done <- string(buf)
 	}()
 
-	fn()
-	_ = w.Close()
+	func() {
+		defer func() { _ = w.Close() }()
+		fn()
+	}()
 	return <-done
 }
 
