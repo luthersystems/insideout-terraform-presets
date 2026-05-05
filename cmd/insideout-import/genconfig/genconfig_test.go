@@ -75,6 +75,24 @@ func (f *fakeRunner) ProvidersSchema(_ context.Context) (*tfjson.ProviderSchemas
 	return f.schemas, nil
 }
 
+// recoveringFakeRunner models the real `terraform plan -generate-config-out`
+// behavior: write generated.tf even when post-write validation fails, and
+// return a non-nil error. The pipeline must recover from this case (see
+// TestRun_RecoversFromPlanErrorWhenFileWritten).
+type recoveringFakeRunner struct {
+	fakeRunner
+	planError error
+}
+
+func (r *recoveringFakeRunner) PlanGenerate(ctx context.Context, generatedPath string) (bool, error) {
+	r.calls = append(r.calls, "plan")
+	r.planCalled++
+	r.generatedPath = generatedPath
+	// Write the body first, THEN return the error — the order matters.
+	_ = os.WriteFile(generatedPath, []byte(r.planBody), 0o644)
+	return false, r.planError
+}
+
 func minimalAWSSchema() *tfjson.ProviderSchemas {
 	return &tfjson.ProviderSchemas{
 		Schemas: map[string]*tfjson.ProviderSchema{
@@ -190,69 +208,49 @@ func TestRun_RejectsEmptyOpts(t *testing.T) {
 	}
 }
 
-// TestRun_SkipsLambdaButPreservesEntry pins the Stage-2b limitation around
-// aws_lambda_function: terraform plan -generate-config-out cannot produce
-// validating HCL for an existing function (no source-code attribute), so
-// genconfig skips it. The manifest entry survives unchanged so the
-// operator's imported.json stays complete; only Attributes stays empty
-// until Stage 2c. A mutation that ran the skipped resource through
-// genconfig (or dropped it from the result) would break this contract.
-func TestRun_SkipsLambdaButPreservesEntry(t *testing.T) {
+// TestRun_RecoversFromPlanErrorWhenFileWritten pins the real-world
+// behavior of `terraform plan -generate-config-out`: when a resource
+// type like aws_lambda_function fails plan-time validation, plan still
+// writes generated.tf before returning a non-nil error. The pipeline
+// must continue past the plan error if the file landed on disk so the
+// fixup + cleanup + validate sequence can patch and re-validate. A
+// mutation that hard-aborts on every plan error reverts Lambda imports
+// to the live-smoke regression that motivated this code.
+func TestRun_RecoversFromPlanErrorWhenFileWritten(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	runner := &fakeRunner{
-		// Plan body covers only the in-batch sqs resource — Lambda was
-		// filtered out before imports.tf was emitted.
-		planBody: `resource "aws_sqs_queue" "x" { name = "alpha" }`,
-		schemas:  minimalAWSSchema(),
+	runner := &recoveringFakeRunner{
+		fakeRunner: fakeRunner{
+			planBody: `resource "aws_sqs_queue" "x" { name = "alpha" }`,
+			schemas:  minimalAWSSchema(),
+		},
+		planError: errors.New("AtLeastOneOf: filename missing"),
 	}
 	res, err := Run(context.Background(), Options{Workdir: dir, Region: "us-east-1", Runner: runner},
-		[]imported.ImportedResource{
-			{Identity: imported.ResourceIdentity{Type: "aws_sqs_queue", Address: "aws_sqs_queue.x", ImportID: "x"}},
-			{Identity: imported.ResourceIdentity{Type: "aws_lambda_function", Address: "aws_lambda_function.fn", ImportID: "fn"}},
-		})
+		[]imported.ImportedResource{{Identity: imported.ResourceIdentity{Address: "aws_sqs_queue.x", ImportID: "x"}}})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("expected recovery from plan error; got: %v", err)
 	}
-	if len(res.Resources) != 2 {
-		t.Fatalf("Resources len=%d, want 2 (1 generated + 1 skipped)", len(res.Resources))
-	}
-	// Find both by address.
-	got := map[string]map[string]any{}
-	for _, r := range res.Resources {
-		got[r.Identity.Address] = r.Attributes
-	}
-	if got["aws_sqs_queue.x"]["name"] != "alpha" {
-		t.Errorf("sqs Attributes not populated; got %v", got["aws_sqs_queue.x"])
-	}
-	if got["aws_lambda_function.fn"] != nil {
-		t.Errorf("lambda Attributes must remain empty (Stage 2c lifts this); got %v", got["aws_lambda_function.fn"])
-	}
-	// imports.tf must contain the sqs block but NOT a lambda block — pin
-	// the gate that keeps the broken type out of the scratch stack.
-	body, _ := os.ReadFile(filepath.Join(dir, importsFile))
-	if !strings.Contains(string(body), "aws_sqs_queue.x") {
-		t.Errorf("imports.tf missing sqs entry; got:\n%s", body)
-	}
-	if strings.Contains(string(body), "aws_lambda_function.fn") {
-		t.Errorf("imports.tf must NOT contain skipped lambda; got:\n%s", body)
+	if res == nil || len(res.Resources) != 1 {
+		t.Errorf("Run did not produce a Result after recovery: %+v", res)
 	}
 }
 
-// TestRun_AllSkippedIsError pins that a manifest with only skipped types
-// is fatal — the operator should know the entire batch is unreachable
-// rather than receive an empty workdir and a "success" exit.
-func TestRun_AllSkippedIsError(t *testing.T) {
+// TestRun_PropagatesPlanErrorWhenFileMissing pins the negative side of
+// the recovery: a plan error with no on-disk file is fatal — there's
+// nothing for the fixup pass to act on, so the operator gets the
+// underlying terraform error verbatim.
+func TestRun_PropagatesPlanErrorWhenFileMissing(t *testing.T) {
 	t.Parallel()
-	_, err := Run(context.Background(), Options{Workdir: t.TempDir(), Region: "us-east-1", Runner: &fakeRunner{}},
-		[]imported.ImportedResource{
-			{Identity: imported.ResourceIdentity{Type: "aws_lambda_function", Address: "aws_lambda_function.fn", ImportID: "fn"}},
-		})
+	dir := t.TempDir()
+	runner := &fakeRunner{planErr: errors.New("init blew up before plan wrote anything")}
+	_, err := Run(context.Background(), Options{Workdir: dir, Region: "us-east-1", Runner: runner},
+		[]imported.ImportedResource{{Identity: imported.ResourceIdentity{Address: "aws_sqs_queue.x", ImportID: "x"}}})
 	if err == nil {
-		t.Fatal("expected error when every resource is on the skip list")
+		t.Fatal("expected error when plan fails AND no file is written")
 	}
-	if !strings.Contains(err.Error(), "skip list") {
-		t.Errorf("err = %v, want substring \"skip list\"", err)
+	if !strings.Contains(err.Error(), "init blew up") {
+		t.Errorf("err = %v, want underlying plan error verbatim", err)
 	}
 }
 

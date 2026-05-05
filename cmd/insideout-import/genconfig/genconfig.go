@@ -22,22 +22,6 @@ import (
 // path.
 const generatedFile = "generated.tf"
 
-// hclSkippedTypes are resource types whose Stage 2b HCL generation is
-// known-broken upstream. terraform plan -generate-config-out cannot emit
-// the AtLeastOneOf source attributes (filename / image_uri / s3_bucket)
-// for an existing aws_lambda_function — the function code lives in AWS,
-// not on the operator's disk, so the generated HCL is structurally
-// invalid and `terraform validate` rejects it. Stage 2c (#263) will
-// teach the pipeline to inject placeholder source values + a
-// `lifecycle { ignore_changes = [filename, image_uri, s3_bucket, ...] }`
-// pin so the import can survive validate without a real source pointer.
-//
-// For now: skip aws_lambda_function in genconfig. The manifest entry is
-// preserved (Stage 2a output is unchanged) but Attributes stays empty.
-var hclSkippedTypes = map[string]string{
-	"aws_lambda_function": "Stage 2c (#263): generate-config-out cannot emit code source for existing functions",
-}
-
 // Options is the input to Run. Workdir must exist and be writable; Region
 // flows into the emitted provider block.
 type Options struct {
@@ -97,17 +81,7 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 	}
 	opts.Workdir = absWorkdir
 
-	// Split the input into "go through HCL gen" vs "manifest-only because
-	// the type doesn't survive generate-config-out today." The skipped
-	// resources rejoin Result.Resources unchanged so the operator's
-	// imported.json keeps every entry; only their Attributes stays empty
-	// until Stage 2c lifts the limitation.
-	gen, skipped := splitForHCLGen(resources)
-	if len(gen) == 0 {
-		return nil, fmt.Errorf("genconfig: every input resource is on the Stage-2b skip list (%d skipped); nothing to generate", len(skipped))
-	}
-
-	if err := emitImports(opts.Workdir, gen); err != nil {
+	if err := emitImports(opts.Workdir, resources); err != nil {
 		return nil, fmt.Errorf("emit imports.tf: %w", err)
 	}
 	if err := emitProviders(opts.Workdir, opts.Region); err != nil {
@@ -129,7 +103,17 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 
 	generatedPath := filepath.Join(opts.Workdir, generatedFile)
 	if _, err := runner.PlanGenerate(ctx, generatedPath); err != nil {
-		return nil, fmt.Errorf("terraform plan -generate-config-out: %w", err)
+		// `terraform plan -generate-config-out` writes generated.tf and
+		// then immediately validates the result. For resource types like
+		// aws_lambda_function the validation fails — the AtLeastOneOf
+		// source attrs (filename / image_uri / s3_bucket) can't be filled
+		// from the imported state — but the file IS already on disk with
+		// the rest of the body. Recover when the file exists so the
+		// fixup pass can plug the placeholder; otherwise propagate the
+		// error verbatim.
+		if _, statErr := os.Stat(generatedPath); os.IsNotExist(statErr) {
+			return nil, fmt.Errorf("terraform plan -generate-config-out: %w", err)
+		}
 	}
 
 	schemas, err := runner.ProvidersSchema(ctx)
@@ -147,7 +131,16 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 		return nil, fmt.Errorf("schema cleanup: %w", err)
 	}
 
-	cleaned, err = applyCrossRefs(cleaned, gen)
+	// Per-resource-type fixups for cases the schema alone can't describe
+	// — today, only injecting a placeholder source + ignore_changes for
+	// aws_lambda_function so it survives `terraform validate` without
+	// real code on disk. See fixups.go.
+	cleaned, err = applyResourceTypeFixups(cleaned)
+	if err != nil {
+		return nil, fmt.Errorf("resource-type fixups: %w", err)
+	}
+
+	cleaned, err = applyCrossRefs(cleaned, resources)
 	if err != nil {
 		return nil, fmt.Errorf("cross-ref: %w", err)
 	}
@@ -160,29 +153,9 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 		return nil, fmt.Errorf("terraform validate: %w", err)
 	}
 
-	out, err := extractAttributes(cleaned, gen)
+	out, err := extractAttributes(cleaned, resources)
 	if err != nil {
 		return nil, fmt.Errorf("extract attributes: %w", err)
 	}
-
-	// Append the skipped resources back so the manifest writer sees the
-	// full input set. Skipped entries keep whatever Attributes they
-	// already had (typically nil from Stage 2a).
-	out = append(out, skipped...)
 	return &Result{GeneratedPath: generatedPath, Resources: out}, nil
-}
-
-// splitForHCLGen partitions the input set into resources that go through
-// the genconfig pipeline vs. resources whose type is on the Stage-2b
-// skip list (hclSkippedTypes). Order is preserved within each partition
-// so the manifest stays deterministic.
-func splitForHCLGen(in []imported.ImportedResource) (gen, skipped []imported.ImportedResource) {
-	for _, r := range in {
-		if _, skip := hclSkippedTypes[r.Identity.Type]; skip {
-			skipped = append(skipped, r)
-			continue
-		}
-		gen = append(gen, r)
-	}
-	return gen, skipped
 }
