@@ -5,9 +5,9 @@ import (
 	"sort"
 
 	"github.com/hashicorp/hcl/v2"
+	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/hashicorp/hcl/v2/hclwrite"
 	tfjson "github.com/hashicorp/terraform-json"
-	"github.com/zclconf/go-cty/cty"
 )
 
 // awsProviderKey is the registry source for the AWS provider as it appears in
@@ -104,7 +104,7 @@ func applySchemaToBlock(blk *hclwrite.Block, schema *tfjson.SchemaBlock) {
 		}
 	}
 	lc := blk.Body().AppendNewBlock("lifecycle", nil)
-	lc.Body().SetAttributeValue("ignore_changes", traversalListValue(sensitive))
+	lc.Body().SetAttributeRaw("ignore_changes", ignoreChangesTokens(sensitive))
 }
 
 // mergeIgnoreChanges is a placeholder for the case where a `lifecycle` block
@@ -112,21 +112,24 @@ func applySchemaToBlock(blk *hclwrite.Block, schema *tfjson.SchemaBlock) {
 // attribute from scratch — a smarter merge can land in Stage 2c if a real
 // caller hits it.
 func mergeIgnoreChanges(lc *hclwrite.Block, sensitive []string) {
-	lc.Body().SetAttributeValue("ignore_changes", traversalListValue(sensitive))
+	lc.Body().SetAttributeRaw("ignore_changes", ignoreChangesTokens(sensitive))
 }
 
-// traversalListValue builds the cty value for ignore_changes. Terraform's
-// schema technically wants a list of attribute references, not a list of
-// strings, but for the unaliased-attribute case (no nested blocks) the string
-// form is interpreted identically by the engine. We use the string form here
-// because hclwrite's SetAttributeValue can't accept naked traversals.
-func traversalListValue(names []string) cty.Value {
-	out := make([]cty.Value, 0, len(names))
-	for _, n := range names {
-		out = append(out, cty.StringVal(n))
+// ignoreChangesTokens emits the canonical `[name1, name2, ...]` form
+// (traversal references, NOT quoted strings). terraform 1.5+ deprecates
+// the quoted form with a warning at every plan; using traversal form
+// keeps generated.tf warning-free and matches what `terraform fmt`
+// would produce.
+func ignoreChangesTokens(names []string) hclwrite.Tokens {
+	tokens := hclwrite.Tokens{
+		{Type: hclsyntax.TokenOBrack, Bytes: []byte("[")},
 	}
-	if len(out) == 0 {
-		return cty.ListValEmpty(cty.String)
+	for i, n := range names {
+		if i > 0 {
+			tokens = append(tokens, &hclwrite.Token{Type: hclsyntax.TokenComma, Bytes: []byte(", ")})
+		}
+		tokens = append(tokens, &hclwrite.Token{Type: hclsyntax.TokenIdent, Bytes: []byte(n)})
 	}
-	return cty.ListVal(out)
+	tokens = append(tokens, &hclwrite.Token{Type: hclsyntax.TokenCBrack, Bytes: []byte("]")})
+	return tokens
 }

@@ -96,7 +96,7 @@ func fixupLambdaSource(blk *hclwrite.Block) {
 		}
 	}
 	lc := body.AppendNewBlock("lifecycle", nil)
-	lc.Body().SetAttributeValue("ignore_changes", traversalListValue(lambdaIgnoreChanges))
+	lc.Body().SetAttributeRaw("ignore_changes", ignoreChangesTokens(lambdaIgnoreChanges))
 }
 
 // hasUsableValue reports whether the named attribute is both present and
