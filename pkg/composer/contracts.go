@@ -412,6 +412,22 @@ func CloudFor(k ComponentKey) string {
 	return "aws"
 }
 
+// CloudFromKeys returns the dominant cloud ("aws" or "gcp") for a slice
+// of component keys. Returns "gcp" if any key carries the "gcp_" prefix,
+// otherwise "aws". Mirrors CloudFor's bias toward "aws" for legacy
+// non-prefixed keys (KeyAWSEKSNodeGroup="ec2",
+// KeyAWSEKSControlPlane="resource"). Use this when only string keys are
+// in hand — e.g. derived from a session's selected components — and the
+// typed ComponentKey form isn't available.
+func CloudFromKeys(keys []string) string {
+	for _, k := range keys {
+		if strings.HasPrefix(k, "gcp_") {
+			return "gcp"
+		}
+	}
+	return "aws"
+}
+
 // AllComponentKeys lists every ComponentKey backed by a preset module in
 // this repo. It is the source of truth for tests that need to exercise
 // every component the mapper might touch — TestMapperKeysSubsetOfModule
