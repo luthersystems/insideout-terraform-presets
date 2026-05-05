@@ -22,7 +22,6 @@ import (
 	"cloud.google.com/go/compute/apiv1/computepb"
 	container "cloud.google.com/go/container/apiv1"
 	"cloud.google.com/go/container/apiv1/containerpb"
-	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 	"google.golang.org/protobuf/proto"
 
@@ -54,21 +53,16 @@ func inspectCompute(ctx context.Context, projectID, action, filters string, opts
 			req.Filter = proto.String(f)
 		}
 
-		it := client.AggregatedList(ctx, req)
-		instances := []*computepb.Instance{}
-		for {
-			pair, err := it.Next()
-			if err == iterator.Done {
-				break
-			}
-			if err != nil {
-				return nil, err
-			}
-			if pair.Value.Instances != nil {
-				instances = append(instances, pair.Value.Instances...)
-			}
-		}
-		return instances, nil
+		return drainAggregatedIterator(
+			client.AggregatedList(ctx, req),
+			func(p compute.InstancesScopedListPair) []*computepb.Instance {
+				if p.Value == nil {
+					return nil
+				}
+				return p.Value.Instances
+			},
+			nil,
+		)
 
 	case "describe-instance":
 		fm := parseFilterMap(filters)
@@ -112,17 +106,7 @@ func inspectGKE(ctx context.Context, projectID, action, filters string, opts ...
 		if err != nil {
 			return nil, err
 		}
-		project := projectFromFilters(filters)
-		if project == "" {
-			return resp.Clusters, nil
-		}
-		clusters := []*containerpb.Cluster{}
-		for _, c := range resp.Clusters {
-			if gcpLabelMatches(c.GetResourceLabels(), "project", project) {
-				clusters = append(clusters, c)
-			}
-		}
-		return clusters, nil
+		return filterGKEClustersByProject(resp.GetClusters(), projectFromFilters(filters)), nil
 
 	case "describe-cluster":
 		fm := parseFilterMap(filters)
@@ -138,6 +122,23 @@ func inspectGKE(ctx context.Context, projectID, action, filters string, opts ...
 	default:
 		return nil, unsupportedActionError("GKE", action, observability.GCPServiceActions["gke"])
 	}
+}
+
+// filterGKEClustersByProject post-filters a synchronous ListClusters
+// response by the caller's project label. project=="" means "no
+// filter; pass through". Always returns a non-nil slice so the empty
+// path marshals as `[]`, not `null` (#255 / #256). The pre-#256 code
+// passed resp.GetClusters() through directly when project=="" — a
+// Pattern B nil-slice passthrough risk that this helper closes.
+func filterGKEClustersByProject(clusters []*containerpb.Cluster, project string) []*containerpb.Cluster {
+	out := []*containerpb.Cluster{}
+	for _, c := range clusters {
+		if project != "" && !gcpLabelMatches(c.GetResourceLabels(), "project", project) {
+			continue
+		}
+		out = append(out, c)
+	}
+	return out
 }
 
 func inspectBastion(ctx context.Context, projectID, action, filters string, opts ...option.ClientOption) (any, error) {
@@ -166,22 +167,19 @@ func inspectBastion(ctx context.Context, projectID, action, filters string, opts
 			gcpAIP160LabelFilter("role", "bastion"),
 			gcpAIP160LabelFilter("project", projectFromFilters(filters)),
 		)
-		it := client.AggregatedList(ctx, &computepb.AggregatedListInstancesRequest{
-			Project: projectID,
-			Filter:  proto.String(filterStr),
-		})
-		instances := []*computepb.Instance{}
-		for {
-			pair, err := it.Next()
-			if err == iterator.Done {
-				break
-			}
-			if err != nil {
-				return nil, err
-			}
-			instances = append(instances, pair.Value.Instances...)
-		}
-		return instances, nil
+		return drainAggregatedIterator(
+			client.AggregatedList(ctx, &computepb.AggregatedListInstancesRequest{
+				Project: projectID,
+				Filter:  proto.String(filterStr),
+			}),
+			func(p compute.InstancesScopedListPair) []*computepb.Instance {
+				if p.Value == nil {
+					return nil
+				}
+				return p.Value.Instances
+			},
+			nil,
+		)
 
 	default:
 		return nil, unsupportedActionError("Bastion", action, observability.GCPServiceActions["bastion"])

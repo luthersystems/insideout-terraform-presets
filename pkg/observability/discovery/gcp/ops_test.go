@@ -2,8 +2,11 @@ package gcp
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
+	"cloud.google.com/go/monitoring/apiv3/v2/monitoringpb"
+	"cloud.google.com/go/pubsub/v2/apiv1/pubsubpb"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/api/option"
@@ -58,6 +61,58 @@ func TestInspectPubSub_UnsupportedAction(t *testing.T) {
 	)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unsupported Pub/Sub action")
+}
+
+// Empty-state pins per #256 for the four ops-plane sites.
+
+func TestInspectLogging_ListLogs_NoMatches_EmptySlice(t *testing.T) {
+	t.Parallel()
+	got, err := drainIterator(&emptyIterator[string]{}, nil)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	b, err := json.Marshal(got)
+	require.NoError(t, err)
+	assert.Equal(t, "[]", string(b),
+		"empty Cloud Logging list-logs must marshal as [] not null (#256)")
+}
+
+func TestInspectCloudMonitoring_ListAlertPolicies_NoMatches_EmptySlice(t *testing.T) {
+	t.Parallel()
+	got, err := drainIterator(&emptyIterator[*monitoringpb.AlertPolicy]{}, nil)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	b, err := json.Marshal(got)
+	require.NoError(t, err)
+	assert.Equal(t, "[]", string(b),
+		"empty Cloud Monitoring list-alert-policies must marshal as [] not null (#256)")
+}
+
+func TestInspectPubSub_ListTopics_NoMatches_EmptySlice(t *testing.T) {
+	t.Parallel()
+	got, err := drainIterator(
+		&emptyIterator[*pubsubpb.Topic]{},
+		func(*pubsubpb.Topic) bool { return true },
+	)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	b, err := json.Marshal(got)
+	require.NoError(t, err)
+	assert.Equal(t, "[]", string(b),
+		"empty Pub/Sub list-topics must marshal as [] not null (#256)")
+}
+
+func TestInspectPubSub_ListSubscriptions_NoMatches_EmptySlice(t *testing.T) {
+	t.Parallel()
+	got, err := drainIterator(
+		&emptyIterator[*pubsubpb.Subscription]{},
+		func(*pubsubpb.Subscription) bool { return true },
+	)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	b, err := json.Marshal(got)
+	require.NoError(t, err)
+	assert.Equal(t, "[]", string(b),
+		"empty Pub/Sub list-subscriptions must marshal as [] not null (#256)")
 }
 
 // TestIdentityPlatformMaxTenantsConstant locks the cap. Same rationale

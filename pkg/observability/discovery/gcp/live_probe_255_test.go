@@ -57,6 +57,8 @@ func TestLive255_AllInspectorsJSONShape(t *testing.T) {
 				return inspectMemorystore(ctx, projectID, "list-instances", projectFilter, opts...)
 			}, filters: projectFilter},
 		// firestore/list-collections — covered by TestLive_InspectFirestore_NamedDB
+		// firestore/describe-database — covered by TestLive_InspectFirestore_DescribeDatabase_NamedDB
+		// (single-object return; #258 wrapped-in-parent shape pinned there.)
 
 		// compute.go
 		{name: "compute/list-instances",

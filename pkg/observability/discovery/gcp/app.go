@@ -24,7 +24,6 @@ import (
 	"cloud.google.com/go/functions/apiv2/functionspb"
 	run "cloud.google.com/go/run/apiv2"
 	"cloud.google.com/go/run/apiv2/runpb"
-	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/observability"
@@ -48,25 +47,15 @@ func inspectCloudRun(ctx context.Context, projectID, action, filters string, opt
 	case "list-services":
 		// Cloud Run v2 ListServicesRequest has no Filter field, so
 		// scope is enforced by post-filtering on Service.Labels.
-		it := client.ListServices(ctx, &runpb.ListServicesRequest{
-			Parent: fmt.Sprintf("projects/%s/locations/-", projectID),
-		})
 		project := projectFromFilters(filters)
-		services := []*runpb.Service{}
-		for {
-			svc, err := it.Next()
-			if err == iterator.Done {
-				break
-			}
-			if err != nil {
-				return nil, err
-			}
-			if !gcpLabelMatches(svc.GetLabels(), "project", project) {
-				continue
-			}
-			services = append(services, svc)
-		}
-		return services, nil
+		return drainIterator(
+			client.ListServices(ctx, &runpb.ListServicesRequest{
+				Parent: fmt.Sprintf("projects/%s/locations/-", projectID),
+			}),
+			func(svc *runpb.Service) bool {
+				return gcpLabelMatches(svc.GetLabels(), "project", project)
+			},
+		)
 
 	case "describe-service":
 		fm := parseFilterMap(filters)
@@ -100,19 +89,7 @@ func inspectCloudFunctions(ctx context.Context, projectID, action, filters strin
 		if f := gcpAIP160LabelFilter("project", projectFromFilters(filters)); f != "" {
 			req.Filter = f
 		}
-		it := client.ListFunctions(ctx, req)
-		fns := []*functionspb.Function{}
-		for {
-			fn, err := it.Next()
-			if err == iterator.Done {
-				break
-			}
-			if err != nil {
-				return nil, err
-			}
-			fns = append(fns, fn)
-		}
-		return fns, nil
+		return drainIterator(client.ListFunctions(ctx, req), nil)
 
 	default:
 		return nil, unsupportedActionError("Cloud Functions", action, observability.GCPServiceActions["cloudfunctions"])
@@ -133,46 +110,22 @@ func inspectCloudBuild(ctx context.Context, projectID, action, _ string, opts ..
 
 	switch action {
 	case "list-triggers":
-		it := client.ListBuildTriggers(ctx, &cloudbuildpb.ListBuildTriggersRequest{
-			ProjectId: projectID,
-		})
-		triggers := []*cloudbuildpb.BuildTrigger{}
-		for {
-			tr, err := it.Next()
-			if err == iterator.Done {
-				break
-			}
-			if err != nil {
-				return nil, err
-			}
-			triggers = append(triggers, tr)
-		}
-		return triggers, nil
+		return drainIterator(
+			client.ListBuildTriggers(ctx, &cloudbuildpb.ListBuildTriggersRequest{
+				ProjectId: projectID,
+			}),
+			nil,
+		)
 
 	case "list-builds":
-		it := client.ListBuilds(ctx, &cloudbuildpb.ListBuildsRequest{
-			ProjectId: projectID,
-		})
-		builds := []*cloudbuildpb.Build{}
-		truncated := false
-		for range cloudBuildMaxBuilds {
-			b, err := it.Next()
-			if err == iterator.Done {
-				break
-			}
-			if err != nil {
-				return nil, err
-			}
-			builds = append(builds, b)
-		}
-		// If the loop stopped at the cap, probe the iterator once more
-		// to distinguish "exactly N builds exist" from "we capped".
-		// Pagination reads a full page ahead, so the extra Next() is a
-		// local check and doesn't fetch another page.
-		if len(builds) == cloudBuildMaxBuilds {
-			if _, peekErr := it.Next(); peekErr != iterator.Done {
-				truncated = true
-			}
+		builds, truncated, err := drainIteratorBounded(
+			client.ListBuilds(ctx, &cloudbuildpb.ListBuildsRequest{
+				ProjectId: projectID,
+			}),
+			cloudBuildMaxBuilds,
+		)
+		if err != nil {
+			return nil, err
 		}
 		if truncated {
 			log.Printf("[discovery/gcp cloudbuild] list-builds TRUNCATED at cap=%d — "+

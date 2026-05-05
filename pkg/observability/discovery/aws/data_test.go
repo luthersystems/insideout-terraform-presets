@@ -7,12 +7,14 @@ package aws
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	dynamodbtypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
+	"github.com/aws/aws-sdk-go-v2/service/elasticache"
 	"github.com/aws/aws-sdk-go-v2/service/opensearch"
 	opensearchtypes "github.com/aws/aws-sdk-go-v2/service/opensearch/types"
 	"github.com/aws/aws-sdk-go-v2/service/opensearchserverless"
@@ -299,4 +301,79 @@ func TestFilterDynamoDBTablesByProjectTag_PerTableTagErrorSkips(t *testing.T) {
 	got, err := filterDynamoDBTablesByProjectTag(context.Background(), ddb, stsClient, "us-east-1", "my-stack")
 	require.NoError(t, err)
 	assert.Empty(t, got)
+}
+
+// --- ElastiCache fake ---
+//
+// fakeElastiCacheClient implements elasticacheClustersClient for the
+// #256 empty-state pins. Pre-empty pages from both Describe* methods so
+// the paginator-driven helpers see a single empty page and exit cleanly.
+type fakeElastiCacheClient struct {
+	cacheClustersOut     *elasticache.DescribeCacheClustersOutput
+	cacheClustersErr     error
+	replicationGroupsOut *elasticache.DescribeReplicationGroupsOutput
+	replicationGroupsErr error
+}
+
+func (f *fakeElastiCacheClient) DescribeCacheClusters(_ context.Context, _ *elasticache.DescribeCacheClustersInput, _ ...func(*elasticache.Options)) (*elasticache.DescribeCacheClustersOutput, error) {
+	if f.cacheClustersErr != nil {
+		return nil, f.cacheClustersErr
+	}
+	if f.cacheClustersOut == nil {
+		return &elasticache.DescribeCacheClustersOutput{}, nil
+	}
+	return f.cacheClustersOut, nil
+}
+
+func (f *fakeElastiCacheClient) DescribeReplicationGroups(_ context.Context, _ *elasticache.DescribeReplicationGroupsInput, _ ...func(*elasticache.Options)) (*elasticache.DescribeReplicationGroupsOutput, error) {
+	if f.replicationGroupsErr != nil {
+		return nil, f.replicationGroupsErr
+	}
+	if f.replicationGroupsOut == nil {
+		return &elasticache.DescribeReplicationGroupsOutput{}, nil
+	}
+	return f.replicationGroupsOut, nil
+}
+
+func (f *fakeElastiCacheClient) ListTagsForResource(_ context.Context, _ *elasticache.ListTagsForResourceInput, _ ...func(*elasticache.Options)) (*elasticache.ListTagsForResourceOutput, error) {
+	return &elasticache.ListTagsForResourceOutput{}, nil
+}
+
+// --- Empty-state JSON-shape pins per #256 ---
+
+func TestFilterDynamoDBTablesByProjectTag_NoTables_EmptySlice(t *testing.T) {
+	t.Parallel()
+	ddb := &fakeDynamoDBClient{tablesOut: &dynamodb.ListTablesOutput{}}
+	stsClient := &fakeSTSClient{}
+	got, err := filterDynamoDBTablesByProjectTag(context.Background(), ddb, stsClient, "us-east-1", "")
+	require.NoError(t, err)
+	require.NotNil(t, got, "must be non-nil so encoding/json emits [] not null")
+	b, err := json.Marshal(got)
+	require.NoError(t, err)
+	assert.Equal(t, "[]", string(b),
+		"empty DynamoDB list-tables must marshal as [] not null (#256)")
+}
+
+func TestFilterElastiCacheCacheClustersByProjectTag_NoClusters_EmptySlice(t *testing.T) {
+	t.Parallel()
+	client := &fakeElastiCacheClient{}
+	got, err := filterElastiCacheCacheClustersByProjectTag(context.Background(), client, "any-project")
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	b, err := json.Marshal(got)
+	require.NoError(t, err)
+	assert.Equal(t, "[]", string(b),
+		"empty ElastiCache describe-cache-clusters must marshal as [] not null (#256)")
+}
+
+func TestFilterElastiCacheReplicationGroupsByProjectTag_NoGroups_EmptySlice(t *testing.T) {
+	t.Parallel()
+	client := &fakeElastiCacheClient{}
+	got, err := filterElastiCacheReplicationGroupsByProjectTag(context.Background(), client, "any-project")
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	b, err := json.Marshal(got)
+	require.NoError(t, err)
+	assert.Equal(t, "[]", string(b),
+		"empty ElastiCache describe-replication-groups must marshal as [] not null (#256)")
 }

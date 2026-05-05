@@ -6,6 +6,7 @@ package aws
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 
@@ -155,4 +156,16 @@ func TestFilterCognitoUserPoolsByProjectTag_ListErrorAborts(t *testing.T) {
 	client := &fakeCognitoClient{listErr: errors.New("denied")}
 	_, err := filterCognitoUserPoolsByProjectTag(context.Background(), client, "my-stack")
 	require.Error(t, err)
+}
+
+func TestFilterCognitoUserPoolsByProjectTag_NoPools_EmptySlice(t *testing.T) {
+	t.Parallel()
+	client := &fakeCognitoClient{listOut: &cognitoidentityprovider.ListUserPoolsOutput{}}
+	got, err := filterCognitoUserPoolsByProjectTag(context.Background(), client, "any-project")
+	require.NoError(t, err)
+	require.NotNil(t, got, "must be non-nil so encoding/json emits [] not null")
+	b, err := json.Marshal(got)
+	require.NoError(t, err)
+	assert.Equal(t, "[]", string(b),
+		"empty Cognito list-user-pools must marshal as [] not null (#256)")
 }

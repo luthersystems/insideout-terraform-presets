@@ -441,3 +441,53 @@ func assertCostSummaryResult(t *testing.T, result any) map[string]any {
 
 	return m
 }
+
+// --- Empty-state JSON-shape pins per #256 ---
+//
+// Cost Explorer wraps slices in parent maps, so the assertion shape is
+// wrapped-parent (Pattern C in CONTRIBUTING.md): assert m["by_service"]
+// / m["by_tag"] is non-nil and marshals to "[]". Pre-fix, declaring
+// `sorted := []serviceCostEntry(nil)` would marshal as JSON null
+// inside the parent envelope.
+
+func TestCostSummary_NoResults_EmptySlice_ByService(t *testing.T) {
+	t.Parallel()
+	mock := &mockCostExplorerClient{
+		getCostAndUsageOutput: &costexplorer.GetCostAndUsageOutput{
+			ResultsByTime: []cetypes.ResultByTime{},
+		},
+	}
+	result, err := inspectCostExplorerWithDeps(context.Background(), mock, "get-cost-summary", "")
+	require.NoError(t, err)
+
+	m := assertCostSummaryResult(t, result)
+	by := m["by_service"]
+	require.NotNil(t, by, "by_service must be non-nil so JSON emits [] not null (#256)")
+
+	b, err := json.Marshal(by)
+	require.NoError(t, err)
+	assert.Equal(t, "[]", string(b),
+		"empty Cost Explorer get-cost-summary by_service must marshal as [] not null (#256)")
+}
+
+func TestCostByTag_NoResults_EmptySlice_ByTag(t *testing.T) {
+	t.Parallel()
+	mock := &mockCostExplorerClient{
+		getCostAndUsageOutput: &costexplorer.GetCostAndUsageOutput{
+			ResultsByTime: []cetypes.ResultByTime{},
+		},
+	}
+	result, err := inspectCostExplorerWithDeps(context.Background(), mock, "get-cost-by-tag",
+		`{"tag_key":"Project"}`)
+	require.NoError(t, err)
+
+	m, ok := result.(map[string]any)
+	require.True(t, ok)
+	by := m["by_tag"]
+	require.NotNil(t, by, "by_tag must be non-nil so JSON emits [] not null (#256)")
+
+	b, err := json.Marshal(by)
+	require.NoError(t, err)
+	assert.Equal(t, "[]", string(b),
+		"empty Cost Explorer get-cost-by-tag by_tag must marshal as [] not null (#256)")
+}

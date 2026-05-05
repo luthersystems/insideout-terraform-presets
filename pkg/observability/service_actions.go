@@ -107,7 +107,7 @@ var GCPServiceActions = map[string][]string{
 	"cloudbuild":       {"list-triggers", "list-builds", "get-metrics"},
 	"identityplatform": {"list-tenants", "list-providers", "get-metrics"},
 	"vertexai":         {"list-datasets", "list-endpoints", "list-models", "get-metrics"},
-	"firestore":        {"list-collections", "get-metrics"},
+	"firestore":        {"list-collections", "describe-database", "get-metrics"},
 	"vpc":              {"list-networks", "list-subnets", "list-firewalls", "list-routes", "get-metrics"},
 	"cloudfunctions":   {"list-functions", "get-metrics"},
 	"apigateway":       {"list-apis", "get-metrics"},

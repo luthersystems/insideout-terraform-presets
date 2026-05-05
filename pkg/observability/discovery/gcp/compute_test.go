@@ -2,12 +2,15 @@ package gcp
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	compute "cloud.google.com/go/compute/apiv1"
 	"cloud.google.com/go/compute/apiv1/computepb"
+	"cloud.google.com/go/container/apiv1/containerpb"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/api/option"
@@ -219,4 +222,96 @@ func TestInspectBastion_NoProjectStillSetsRoleFilter(t *testing.T) {
 	_, err := inspectBastion(context.Background(), "demo-proj", "list-bastion-instances", "", opts...)
 	require.NoError(t, err)
 	assert.Equal(t, `labels.role = "bastion"`, capturedFilter)
+}
+
+// Empty-state pins per #256 for the AggregatedList sites in compute.go
+// (Compute, Bastion) plus the post-filter sync-response site (GKE).
+
+func TestInspectCompute_ListInstances_NoMatches_EmptySlice(t *testing.T) {
+	t.Parallel()
+	got, err := drainAggregatedIterator(
+		&emptyIterator[compute.InstancesScopedListPair]{},
+		func(p compute.InstancesScopedListPair) []*computepb.Instance {
+			if p.Value == nil {
+				return nil
+			}
+			return p.Value.Instances
+		},
+		nil,
+	)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	b, err := json.Marshal(got)
+	require.NoError(t, err)
+	assert.Equal(t, "[]", string(b),
+		"empty Compute list-instances must marshal as [] not null (#256)")
+}
+
+func TestInspectBastion_ListBastionInstances_NoMatches_EmptySlice(t *testing.T) {
+	t.Parallel()
+	got, err := drainAggregatedIterator(
+		&emptyIterator[compute.InstancesScopedListPair]{},
+		func(p compute.InstancesScopedListPair) []*computepb.Instance {
+			if p.Value == nil {
+				return nil
+			}
+			return p.Value.Instances
+		},
+		nil,
+	)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	b, err := json.Marshal(got)
+	require.NoError(t, err)
+	assert.Equal(t, "[]", string(b),
+		"empty Bastion list-bastion-instances must marshal as [] not null (#256)")
+}
+
+// TestFilterGKEClustersByProject_Empty_EmptySlice pins the empty
+// input → []*containerpb.Cluster{} contract. Pre-#256, the no-project
+// branch passed resp.Clusters through directly — a Pattern B nil-slice
+// passthrough that the new filterGKEClustersByProject helper closes.
+func TestFilterGKEClustersByProject_Empty_EmptySlice(t *testing.T) {
+	t.Parallel()
+	got := filterGKEClustersByProject(nil, "")
+	require.NotNil(t, got, "must be non-nil so encoding/json emits [] not null")
+	b, err := json.Marshal(got)
+	require.NoError(t, err)
+	assert.Equal(t, "[]", string(b),
+		"empty GKE list-clusters must marshal as [] not null (#256)")
+}
+
+func TestFilterGKEClustersByProject_NoProjectFilter_PassesThrough(t *testing.T) {
+	t.Parallel()
+	in := []*containerpb.Cluster{
+		{Name: "a"},
+		{Name: "b"},
+	}
+	got := filterGKEClustersByProject(in, "")
+	assert.Len(t, got, 2)
+}
+
+func TestFilterGKEClustersByProject_NoMatches_EmptySlice(t *testing.T) {
+	t.Parallel()
+	in := []*containerpb.Cluster{
+		{Name: "prod", ResourceLabels: map[string]string{"project": "io-foo"}},
+		{Name: "dev", ResourceLabels: map[string]string{"project": "io-bar"}},
+	}
+	got := filterGKEClustersByProject(in, "no-such-project")
+	require.NotNil(t, got)
+	b, err := json.Marshal(got)
+	require.NoError(t, err)
+	assert.Equal(t, "[]", string(b),
+		"no-match GKE list-clusters must marshal as [] not null (#256)")
+}
+
+func TestFilterGKEClustersByProject_FiltersByLabel(t *testing.T) {
+	t.Parallel()
+	in := []*containerpb.Cluster{
+		{Name: "prod", ResourceLabels: map[string]string{"project": "io-foo"}},
+		{Name: "dev", ResourceLabels: map[string]string{"project": "io-bar"}},
+	}
+	got := filterGKEClustersByProject(in, "io-foo")
+	require.Len(t, got, 1)
+	assert.Equal(t, "prod", got[0].GetName())
 }

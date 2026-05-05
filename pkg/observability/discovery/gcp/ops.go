@@ -25,7 +25,6 @@ import (
 	"cloud.google.com/go/monitoring/apiv3/v2/monitoringpb"
 	pubsubadmin "cloud.google.com/go/pubsub/v2/apiv1"
 	"cloud.google.com/go/pubsub/v2/apiv1/pubsubpb"
-	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/observability"
@@ -40,19 +39,7 @@ func inspectLogging(ctx context.Context, projectID, action, _ string, opts ...op
 
 	switch action {
 	case "list-logs":
-		it := client.Logs(ctx)
-		logs := []string{}
-		for {
-			l, err := it.Next()
-			if err == iterator.Done {
-				break
-			}
-			if err != nil {
-				return nil, err
-			}
-			logs = append(logs, l)
-		}
-		return logs, nil
+		return drainIterator(client.Logs(ctx), nil)
 
 	default:
 		return nil, unsupportedActionError("Cloud Logging", action, observability.GCPServiceActions["cloudlogging"])
@@ -73,21 +60,12 @@ func inspectCloudMonitoring(ctx context.Context, projectID, action, _ string, op
 		}
 		defer func() { _ = client.Close() }()
 
-		it := client.ListAlertPolicies(ctx, &monitoringpb.ListAlertPoliciesRequest{
-			Name: fmt.Sprintf("projects/%s", projectID),
-		})
-		policies := []*monitoringpb.AlertPolicy{}
-		for {
-			p, err := it.Next()
-			if err == iterator.Done {
-				break
-			}
-			if err != nil {
-				return nil, err
-			}
-			policies = append(policies, p)
-		}
-		return policies, nil
+		return drainIterator(
+			client.ListAlertPolicies(ctx, &monitoringpb.ListAlertPoliciesRequest{
+				Name: fmt.Sprintf("projects/%s", projectID),
+			}),
+			nil,
+		)
 
 	default:
 		return nil, unsupportedActionError("Cloud Monitoring", action, observability.GCPServiceActions["cloudmonitoring"])
@@ -107,24 +85,14 @@ func inspectPubSub(ctx context.Context, projectID, action, filters string, opts 
 		}
 		defer func() { _ = client.Close() }()
 
-		it := client.ListTopics(ctx, &pubsubpb.ListTopicsRequest{
-			Project: fmt.Sprintf("projects/%s", projectID),
-		})
-		topics := []*pubsubpb.Topic{}
-		for {
-			t, err := it.Next()
-			if err == iterator.Done {
-				break
-			}
-			if err != nil {
-				return nil, err
-			}
-			if !gcpLabelMatches(t.GetLabels(), "project", project) {
-				continue
-			}
-			topics = append(topics, t)
-		}
-		return topics, nil
+		return drainIterator(
+			client.ListTopics(ctx, &pubsubpb.ListTopicsRequest{
+				Project: fmt.Sprintf("projects/%s", projectID),
+			}),
+			func(t *pubsubpb.Topic) bool {
+				return gcpLabelMatches(t.GetLabels(), "project", project)
+			},
+		)
 
 	case "list-subscriptions":
 		client, err := pubsubadmin.NewSubscriptionAdminClient(ctx, opts...)
@@ -133,24 +101,14 @@ func inspectPubSub(ctx context.Context, projectID, action, filters string, opts 
 		}
 		defer func() { _ = client.Close() }()
 
-		it := client.ListSubscriptions(ctx, &pubsubpb.ListSubscriptionsRequest{
-			Project: fmt.Sprintf("projects/%s", projectID),
-		})
-		subs := []*pubsubpb.Subscription{}
-		for {
-			s, err := it.Next()
-			if err == iterator.Done {
-				break
-			}
-			if err != nil {
-				return nil, err
-			}
-			if !gcpLabelMatches(s.GetLabels(), "project", project) {
-				continue
-			}
-			subs = append(subs, s)
-		}
-		return subs, nil
+		return drainIterator(
+			client.ListSubscriptions(ctx, &pubsubpb.ListSubscriptionsRequest{
+				Project: fmt.Sprintf("projects/%s", projectID),
+			}),
+			func(s *pubsubpb.Subscription) bool {
+				return gcpLabelMatches(s.GetLabels(), "project", project)
+			},
+		)
 
 	default:
 		return nil, unsupportedActionError("Pub/Sub", action, observability.GCPServiceActions["pubsub"])

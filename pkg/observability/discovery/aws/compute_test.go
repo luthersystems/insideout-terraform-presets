@@ -10,6 +10,7 @@ package aws
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 
@@ -568,4 +569,102 @@ func TestEnrichEC2WithConnectURLs_EmptyReservationsReturnsEmptySlice(t *testing.
 	default:
 		t.Fatalf("unexpected return type: %T", out)
 	}
+}
+
+// --- Empty-state JSON-shape pins per #256 ---
+//
+// These complement the existing `_NoArns/_NoMatch` short-circuit tests
+// that use `assert.Empty` (which accepts both nil and []). The pins
+// here assert the JSON wire shape is `[]` not `null`, which is what
+// reliable's panel renderer gates on.
+
+func TestFilterLambdaFunctionsByProjectTag_NoResults_EmptySlice(t *testing.T) {
+	t.Parallel()
+	client := &fakeLambdaClient{listFunctionsOut: &lambda.ListFunctionsOutput{}}
+	got, err := filterLambdaFunctionsByProjectTag(context.Background(), client, "any-project")
+	require.NoError(t, err)
+	require.NotNil(t, got, "must be non-nil so encoding/json emits [] not null")
+	b, err := json.Marshal(got)
+	require.NoError(t, err)
+	assert.Equal(t, "[]", string(b),
+		"empty Lambda list-functions must marshal as [] not null (#256)")
+}
+
+func TestFilterECSClustersByProjectTag_NoResults_EmptySlice(t *testing.T) {
+	t.Parallel()
+	client := &fakeECSClient{
+		listClustersOut: &ecs.ListClustersOutput{
+			ClusterArns: []string{"arn:aws:ecs:us-east-1:111:cluster/foo"},
+		},
+		describeClustersOut: &ecs.DescribeClustersOutput{
+			Clusters: []ecstypes.Cluster{
+				{
+					ClusterArn:  aws.String("arn:aws:ecs:us-east-1:111:cluster/foo"),
+					ClusterName: aws.String("foo"),
+					Tags:        []ecstypes.Tag{{Key: aws.String("Project"), Value: aws.String("other")}},
+				},
+			},
+		},
+	}
+	got, err := filterECSClustersByProjectTag(context.Background(), client, "no-such-project")
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	b, err := json.Marshal(got)
+	require.NoError(t, err)
+	assert.Equal(t, "[]", string(b),
+		"no-match ECS list-clusters must marshal as [] not null (#256)")
+}
+
+func TestDescribeECSServicesAcrossClusters_NoClusters_EmptySlice(t *testing.T) {
+	t.Parallel()
+	// No matching clusters → no services → all := []ecstypes.Service{}.
+	client := &fakeECSClient{
+		listClustersOut: &ecs.ListClustersOutput{}, // zero ARNs
+	}
+	got, err := describeECSServicesAcrossClusters(context.Background(), client, "any-project")
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	b, err := json.Marshal(got)
+	require.NoError(t, err)
+	assert.Equal(t, "[]", string(b),
+		"empty ECS describe-services must marshal as [] not null (#256)")
+}
+
+func TestFilterEKSClustersByProjectTag_NoResults_EmptySlice(t *testing.T) {
+	t.Parallel()
+	client := &fakeEKSClient{listClustersOut: &eks.ListClustersOutput{}}
+	got, err := filterEKSClustersByProjectTag(context.Background(), client, "any-project")
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	b, err := json.Marshal(got)
+	require.NoError(t, err)
+	assert.Equal(t, "[]", string(b),
+		"empty EKS list-clusters must marshal as [] not null (#256)")
+}
+
+func TestListEKSNodeInstances_NoClusters_EmptySlice(t *testing.T) {
+	t.Parallel()
+	// No EKS clusters in this project → no node instances → []string{}.
+	eksFake := &fakeEKSClient{listClustersOut: &eks.ListClustersOutput{}}
+	ec2Fake := &fakeEC2InstancesClient{}
+	got, err := listEKSNodeInstances(context.Background(), eksFake, ec2Fake, "any-project")
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	b, err := json.Marshal(got)
+	require.NoError(t, err)
+	assert.Equal(t, "[]", string(b),
+		"empty EKS list-nodes must marshal as [] not null (#256)")
+}
+
+// TestEnrichEC2WithConnectURLs_NoReservations_EmptySlice pins the
+// pure-transform site at aws/connect_info.go:33. enrichEC2WithConnectURLs
+// is called with a `[]ec2types.Reservation` literal — no fake required.
+func TestEnrichEC2WithConnectURLs_NoReservations_EmptySlice(t *testing.T) {
+	t.Parallel()
+	got := enrichEC2WithConnectURLs("us-east-1", []ec2types.Reservation{})
+	require.NotNil(t, got)
+	b, err := json.Marshal(got)
+	require.NoError(t, err)
+	assert.Equal(t, "[]", string(b),
+		"empty enrichEC2WithConnectURLs must marshal as [] not null (#256)")
 }

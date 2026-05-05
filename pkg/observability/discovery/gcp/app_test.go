@@ -2,8 +2,12 @@ package gcp
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
+	"cloud.google.com/go/cloudbuild/apiv1/v2/cloudbuildpb"
+	"cloud.google.com/go/functions/apiv2/functionspb"
+	"cloud.google.com/go/run/apiv2/runpb"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/api/option"
@@ -63,6 +67,60 @@ func TestInspectCloudBuild_UnsupportedAction(t *testing.T) {
 	)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unsupported Cloud Build action")
+}
+
+// Empty-state pins per #256: each site routes through drainIterator
+// (or drainIteratorBounded for list-builds), so the helper-test file
+// already pins the contract. These per-site tests pin the *call-site
+// type* end-to-end so a future refactor that bypasses drainIterator
+// (e.g. inlining `var X []T` again) is caught at the inspector level.
+
+func TestInspectCloudRun_ListServices_NoMatches_EmptySlice(t *testing.T) {
+	t.Parallel()
+	got, err := drainIterator(
+		&emptyIterator[*runpb.Service]{},
+		func(*runpb.Service) bool { return true },
+	)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	b, err := json.Marshal(got)
+	require.NoError(t, err)
+	assert.Equal(t, "[]", string(b),
+		"empty Cloud Run list-services must marshal as [] not null (#256)")
+}
+
+func TestInspectCloudFunctions_ListFunctions_NoMatches_EmptySlice(t *testing.T) {
+	t.Parallel()
+	got, err := drainIterator(&emptyIterator[*functionspb.Function]{}, nil)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	b, err := json.Marshal(got)
+	require.NoError(t, err)
+	assert.Equal(t, "[]", string(b),
+		"empty Cloud Functions list-functions must marshal as [] not null (#256)")
+}
+
+func TestInspectCloudBuild_ListTriggers_NoMatches_EmptySlice(t *testing.T) {
+	t.Parallel()
+	got, err := drainIterator(&emptyIterator[*cloudbuildpb.BuildTrigger]{}, nil)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	b, err := json.Marshal(got)
+	require.NoError(t, err)
+	assert.Equal(t, "[]", string(b),
+		"empty Cloud Build list-triggers must marshal as [] not null (#256)")
+}
+
+func TestInspectCloudBuild_ListBuilds_NoBuilds_EmptySlice(t *testing.T) {
+	t.Parallel()
+	got, truncated, err := drainIteratorBounded(&emptyIterator[*cloudbuildpb.Build]{}, cloudBuildMaxBuilds)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.False(t, truncated, "empty list-builds must NOT report truncated")
+	b, err := json.Marshal(got)
+	require.NoError(t, err)
+	assert.Equal(t, "[]", string(b),
+		"empty Cloud Build list-builds must marshal as [] not null (#256)")
 }
 
 // TestCloudBuildMaxBuildsConstant locks the cap so a future change has
