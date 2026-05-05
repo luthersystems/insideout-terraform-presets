@@ -9,10 +9,11 @@
 //	          runs `terraform plan -json` to verify the plan is import-only.
 //	          See cmd/insideout-import/README.md.
 //
-//	discover  Discover existing cloud resources and emit imported.json
-//	          (Stage 2a, AWS only). Stage 2b layers `terraform plan
-//	          -generate-config-out` on top to produce HCL; Stage 2c adds
-//	          drift fixing and dependency chasing; Stage 2d adds GCP.
+//	discover  Discover existing cloud resources, emit imported.json, and
+//	          generate validated HCL bodies via `terraform plan
+//	          -generate-config-out` + schema cleanup (Stages 2a + 2b, AWS
+//	          only). Stage 2c adds drift fixing and dependency chasing;
+//	          Stage 2d adds GCP.
 //
 // Run `insideout-import <subcommand> --help` for subcommand flags.
 package main
@@ -47,7 +48,7 @@ func usage() {
 
 Subcommands:
   adopt     emit import {} blocks against a known preset stack
-  discover  discover cloud resources and write imported.json (AWS only — Stage 2a of #189)
+  discover  discover cloud resources, write imported.json, and generate validated HCL (AWS only — Stages 2a+2b of #189)
 
 Run 'insideout-import <subcommand> --help' for subcommand flags.`)
 }
