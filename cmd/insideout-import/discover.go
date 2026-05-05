@@ -27,6 +27,16 @@ const (
 	discoverTimeout = 15 * time.Minute
 )
 
+// discoverRetryMaxAttempts raises the SDK retryer's attempt budget above
+// the v2 default of 3 so transient Throttling errors during a multi-
+// thousand-resource discover run don't abort mid-batch. 8 covers the
+// empirical worst case observed in audit data: a saturated DynamoDB
+// ListTagsOfResource fanout on a few-hundred-table account. With v2's
+// adaptive backoff (jitter + exponential) attempt 8 lands ~30s after
+// attempt 1, which matches the per-call budget the operator-facing
+// 15-minute discoverTimeout can absorb.
+const discoverRetryMaxAttempts = 8
+
 // discoveryAggregator is the small subset of awsdiscover.AWSDiscoverer the
 // orchestrator needs. Defining the interface in main lets tests inject a
 // fake aggregator without standing up real AWS clients.
@@ -42,7 +52,7 @@ type discoveryAggregator interface {
 type discoverDeps struct {
 	loadConfig    func(ctx context.Context, region string) (aws.Config, error)
 	getAccount    func(ctx context.Context, cfg aws.Config) (string, error)
-	newDiscoverer func(cfg aws.Config) discoveryAggregator
+	newDiscoverer func(cfg aws.Config, maxConcurrency int) discoveryAggregator
 	// runGenconfig drives Stage 2b. The default shells out to the
 	// `terraform` binary on PATH; tests inject a fake to skip the binary
 	// dependency.
@@ -55,7 +65,10 @@ type discoverDeps struct {
 func productionDiscoverDeps() discoverDeps {
 	return discoverDeps{
 		loadConfig: func(ctx context.Context, region string) (aws.Config, error) {
-			return config.LoadDefaultConfig(ctx, config.WithRegion(region))
+			return config.LoadDefaultConfig(ctx,
+				config.WithRegion(region),
+				config.WithRetryMaxAttempts(discoverRetryMaxAttempts),
+			)
 		},
 		getAccount: func(ctx context.Context, cfg aws.Config) (string, error) {
 			out, err := sts.NewFromConfig(cfg).GetCallerIdentity(ctx, &sts.GetCallerIdentityInput{})
@@ -67,8 +80,8 @@ func productionDiscoverDeps() discoverDeps {
 			}
 			return *out.Account, nil
 		},
-		newDiscoverer: func(cfg aws.Config) discoveryAggregator {
-			return awsdiscover.NewAWSDiscoverer(cfg)
+		newDiscoverer: func(cfg aws.Config, maxConcurrency int) discoveryAggregator {
+			return awsdiscover.NewAWSDiscovererWithConcurrency(cfg, maxConcurrency)
 		},
 		runGenconfig: genconfig.Run,
 		runDriftfix:  driftfix.Run,
@@ -88,13 +101,13 @@ func runDiscoverWithDeps(args []string, deps discoverDeps) int {
 Usage:
   insideout-import discover --provider aws --project P --region R --output-dir DIR [flags]
 
-Stages 2a + 2b + 2c1: AWS only, SDK-driven discovery for the 5 Phase 1
-resource types, terraform plan -generate-config-out + schema cleanup, then
-a drift-fix loop that patches generated.tf until the plan is empty. Pass
---no-hcl to skip Stage 2b (manifest only) or --no-driftfix to stop after
-Stage 2b (validate-clean but possibly drifting). GCP support, SDK QoS,
-dependency chasing, and a localstack CI gate land in Stages 2c2–2d (see
-#189 for the chain).
+Stages 2a + 2b + 2c1 + 2c2: AWS only, SDK-driven discovery for the 5 Phase
+1 resource types (errgroup-bounded fan-out, raised retryer attempt budget),
+terraform plan -generate-config-out + schema cleanup, then a drift-fix loop
+that patches generated.tf until the plan is empty. Pass --no-hcl to skip
+Stage 2b (manifest only) or --no-driftfix to stop after Stage 2b (validate-
+clean but possibly drifting). GCP support, dependency chasing, and a
+localstack CI gate land in Stage 2d (see #189 for the chain).
 
 Flags:`)
 		fs.PrintDefaults()
@@ -111,6 +124,7 @@ Exit codes:
 	resourceTypes := fs.String("resource-types", "", "comma-separated subset of types to discover; default: all 5 Phase 1 types")
 	noHCL := fs.Bool("no-hcl", false, "skip Stage 2b HCL generation (terraform plan -generate-config-out + cleanup); leaves imported.json with empty Attributes")
 	noDriftFix := fs.Bool("no-driftfix", false, "skip Stage 2c1 drift fix loop after HCL generation; leaves generated.tf at validate-clean rather than plan-clean")
+	maxConcurrency := fs.Int("max-concurrency", awsdiscover.DefaultMaxConcurrency, "max in-flight per-resource AWS API calls inside the DynamoDB and Lambda discoverers; raise on accounts with thousands of resources, lower if the SDK retryer keeps tripping")
 
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -146,6 +160,10 @@ Exit codes:
 		fmt.Fprintln(os.Stderr, "discover: --output-dir is required")
 		return discoverExitFatal
 	}
+	if *maxConcurrency <= 0 {
+		fmt.Fprintf(os.Stderr, "discover: --max-concurrency must be positive (got %d)\n", *maxConcurrency)
+		return discoverExitFatal
+	}
 
 	types := splitCSV(*resourceTypes)
 
@@ -170,7 +188,7 @@ Exit codes:
 		return discoverExitFatal
 	}
 
-	d := deps.newDiscoverer(cfg)
+	d := deps.newDiscoverer(cfg, *maxConcurrency)
 	resources, err := d.DiscoverTypes(ctx, types, *project, *region, accountID)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "discover: %v\n", err)
