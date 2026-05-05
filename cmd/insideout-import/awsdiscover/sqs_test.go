@@ -6,12 +6,18 @@ import (
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/service/sqs"
+	sqstypes "github.com/aws/aws-sdk-go-v2/service/sqs/types"
 )
 
 type fakeSQSClient struct {
 	pages []sqs.ListQueuesOutput
 	calls []sqs.ListQueuesInput
 	err   error // when non-nil, every ListQueues call returns this
+
+	// GetQueueUrl wiring: tests set getURLByName to control responses.
+	getURLByName map[string]string
+	getURLErr    error // when non-nil, GetQueueUrl returns this
+	getURLCalls  []sqs.GetQueueUrlInput
 }
 
 func (f *fakeSQSClient) ListQueues(_ context.Context, in *sqs.ListQueuesInput, _ ...func(*sqs.Options)) (*sqs.ListQueuesOutput, error) {
@@ -25,6 +31,17 @@ func (f *fakeSQSClient) ListQueues(_ context.Context, in *sqs.ListQueuesInput, _
 		return &sqs.ListQueuesOutput{}, nil
 	}
 	return &f.pages[idx], nil
+}
+
+func (f *fakeSQSClient) GetQueueUrl(_ context.Context, in *sqs.GetQueueUrlInput, _ ...func(*sqs.Options)) (*sqs.GetQueueUrlOutput, error) {
+	f.getURLCalls = append(f.getURLCalls, *in)
+	if f.getURLErr != nil {
+		return nil, f.getURLErr
+	}
+	if url, ok := f.getURLByName[*in.QueueName]; ok {
+		return &sqs.GetQueueUrlOutput{QueueUrl: &url}, nil
+	}
+	return nil, &sqstypes.QueueDoesNotExist{}
 }
 
 func ptr(s string) *string { return &s }
@@ -129,5 +146,72 @@ func TestSQSDiscover_PropagatesError(t *testing.T) {
 	_, err := d.Discover(context.Background(), "io-foo", "us-east-1", "123")
 	if err == nil {
 		t.Fatal("expected error")
+	}
+}
+
+func TestSQSDiscoverByID_AcceptsURL(t *testing.T) {
+	t.Parallel()
+	fake := &fakeSQSClient{getURLByName: map[string]string{
+		"io-foo-orders": "https://sqs.us-east-1.amazonaws.com/123/io-foo-orders",
+	}}
+	d := &sqsDiscoverer{new: func() sqsClient { return fake }}
+	got, err := d.DiscoverByID(context.Background(),
+		"https://sqs.us-east-1.amazonaws.com/123/io-foo-orders", "us-east-1", "123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Identity.Type != "aws_sqs_queue" {
+		t.Errorf("Type=%q", got.Identity.Type)
+	}
+	if got.Identity.NameHint != "io-foo-orders" {
+		t.Errorf("NameHint=%q, want io-foo-orders", got.Identity.NameHint)
+	}
+	if got.Identity.NativeIDs["url"] == "" {
+		t.Error("NativeIDs[url] empty")
+	}
+	if len(fake.getURLCalls) != 1 || *fake.getURLCalls[0].QueueName != "io-foo-orders" {
+		t.Errorf("expected one GetQueueUrl call with name=io-foo-orders; got %v", fake.getURLCalls)
+	}
+}
+
+func TestSQSDiscoverByID_AcceptsARN(t *testing.T) {
+	t.Parallel()
+	fake := &fakeSQSClient{getURLByName: map[string]string{
+		"io-foo-orders": "https://sqs.us-east-1.amazonaws.com/123/io-foo-orders",
+	}}
+	d := &sqsDiscoverer{new: func() sqsClient { return fake }}
+	got, err := d.DiscoverByID(context.Background(),
+		"arn:aws:sqs:us-east-1:123:io-foo-orders", "us-east-1", "123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Identity.NameHint != "io-foo-orders" {
+		t.Errorf("NameHint=%q, want io-foo-orders", got.Identity.NameHint)
+	}
+}
+
+func TestSQSDiscoverByID_NotFound(t *testing.T) {
+	t.Parallel()
+	fake := &fakeSQSClient{} // empty getURLByName triggers QueueDoesNotExist
+	d := &sqsDiscoverer{new: func() sqsClient { return fake }}
+	_, err := d.DiscoverByID(context.Background(), "io-foo-missing", "us-east-1", "123")
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("err=%v, want ErrNotFound", err)
+	}
+}
+
+func TestSQSDiscoverByID_UnsupportedID(t *testing.T) {
+	t.Parallel()
+	d := &sqsDiscoverer{new: func() sqsClient { return &fakeSQSClient{} }}
+	cases := []string{
+		"",
+		"arn:aws:s3:::some-bucket", // wrong service
+		"arn:aws:lambda:us-east-1:123:function:hello", // wrong service
+	}
+	for _, id := range cases {
+		_, err := d.DiscoverByID(context.Background(), id, "us-east-1", "123")
+		if !errors.Is(err, ErrNotSupported) {
+			t.Errorf("id=%q: err=%v, want ErrNotSupported", id, err)
+		}
 	}
 }

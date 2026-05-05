@@ -18,6 +18,7 @@ package awsdiscover
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 
@@ -25,6 +26,20 @@ import (
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
+
+// ErrNotSupported signals that a discoverer cannot resolve a given ID
+// (e.g. an ARN whose service portion does not match this discoverer's
+// resource type, or an ID shape this discoverer does not parse). Stage
+// 2c3's dep-chase loop converts ErrNotSupported into an operator-facing
+// warning rather than a fatal error.
+var ErrNotSupported = errors.New("discoverer does not support this ID")
+
+// ErrNotFound signals that the ID parsed correctly but the resource
+// does not exist in the operator's account / region (or returned a
+// no-such-entity error from the underlying SDK). Stage 2c3 surfaces
+// this as a warning too — the operator can decide whether to remove
+// the dangling reference or rerun once the resource is created.
+var ErrNotFound = errors.New("resource not found")
 
 // Discoverer is the per-resource-type contract. Each implementation handles
 // one Terraform type (e.g. "aws_sqs_queue") and returns []imported.ImportedResource
@@ -40,6 +55,15 @@ type Discoverer interface {
 	// per matched cloud resource. Implementations populate Identity and set
 	// Tier=TierImportedFlat, Source=SourceImporter on each entry.
 	Discover(ctx context.Context, project, region, accountID string) ([]imported.ImportedResource, error)
+	// DiscoverByID looks up a single resource by its native ID (an ARN or
+	// the natural key the discoverer's Discover method emits — queue URL,
+	// table name, log group name, etc.). Used by Stage 2c3's dep-chase
+	// loop when the generated.tf references a resource not in the
+	// original import set. Returns (zero, ErrNotSupported) for an ID
+	// shape this discoverer does not parse, (zero, ErrNotFound) for a
+	// well-formed ID whose underlying resource does not exist, or any
+	// other error for a real SDK failure.
+	DiscoverByID(ctx context.Context, id, region, accountID string) (imported.ImportedResource, error)
 }
 
 // DefaultMaxConcurrency is the per-discoverer fan-out limit applied when
@@ -65,13 +89,15 @@ func NewAWSDiscoverer(cfg aws.Config) *AWSDiscoverer {
 }
 
 // NewAWSDiscovererWithConcurrency wires up the production set of AWS
-// discoverers (the 5 Phase 1 types: SQS, DynamoDB, CloudWatch Logs, Secrets
-// Manager, Lambda). All discoverers share the same aws.Config; per-type SDK
-// clients are constructed inside each discoverer. maxConcurrency is the
-// upper bound on per-resource tag-fanout calls inside the DynamoDB and
-// Lambda discoverers (the only two with per-item API fan-out today). The
-// other three discoverers either filter server-side (SecretsManager) or
-// only issue a single List call (SQS, CloudWatchLogs) and ignore the limit.
+// discoverers — the 5 Phase 1 types (SQS, DynamoDB, CloudWatch Logs,
+// Secrets Manager, Lambda) plus the 4 dep-chase reference types added
+// in Stage 2c3 (#271): IAM role, IAM policy, KMS key, S3 bucket. All
+// discoverers share the same aws.Config; per-type SDK clients are
+// constructed inside each discoverer. maxConcurrency is the upper
+// bound on per-resource tag-fanout calls inside the DynamoDB and
+// Lambda discoverers (the only two with per-item API fan-out today).
+// The other discoverers either filter server-side (SecretsManager) or
+// only issue a single List/page call and ignore the limit.
 //
 // A non-positive maxConcurrency falls back to DefaultMaxConcurrency rather
 // than serializing — callers should validate flag input upstream and fail
@@ -88,6 +114,10 @@ func NewAWSDiscovererWithConcurrency(cfg aws.Config, maxConcurrency int) *AWSDis
 			"aws_cloudwatch_log_group":  newCloudWatchLogsDiscoverer(cfg),
 			"aws_secretsmanager_secret": newSecretsManagerDiscoverer(cfg),
 			"aws_lambda_function":       newLambdaDiscoverer(cfg, maxConcurrency),
+			"aws_iam_role":              newIAMRoleDiscoverer(cfg),
+			"aws_iam_policy":            newIAMPolicyDiscoverer(cfg),
+			"aws_kms_key":               newKMSDiscoverer(cfg),
+			"aws_s3_bucket":             newS3Discoverer(cfg),
 		},
 	}
 }
@@ -101,6 +131,20 @@ func (a *AWSDiscoverer) SupportedTypes() []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// DiscoverByID dispatches a per-ID lookup to the discoverer registered
+// for the given Terraform type. Used by Stage 2c3's dep-chase loop.
+// Returns ErrNotSupported if no discoverer is registered for the
+// requested type — dep-chase converts that into a warning so the
+// operator can decide whether to remove the dangling reference or add
+// a discoverer for the missing type.
+func (a *AWSDiscoverer) DiscoverByID(ctx context.Context, tfType, id, region, accountID string) (imported.ImportedResource, error) {
+	d, ok := a.byType[tfType]
+	if !ok {
+		return imported.ImportedResource{}, fmt.Errorf("no discoverer registered for %q: %w", tfType, ErrNotSupported)
+	}
+	return d.DiscoverByID(ctx, id, region, accountID)
 }
 
 // DiscoverTypes runs each named discoverer in series and concatenates the

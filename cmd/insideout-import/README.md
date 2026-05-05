@@ -7,7 +7,7 @@ CLI for bringing existing cloud resources under InsideOut management.
 | Subcommand | Status | Purpose |
 |---|---|---|
 | `adopt` | implemented | Emit `import {}` blocks against an *already-known* preset stack. |
-| `discover` | Stage 2c1 (AWS, manifest + HCL + drift fix) | Discover existing cloud resources, emit `imported.json`, generate validated HCL bodies, and loop `terraform plan` patches until the stack is plan-clean. Stage 2c2/2c3/2c4 add SDK QoS, dependency chase, and a localstack CI gate; Stage 2d adds GCP. See #189 for the chain. |
+| `discover` | Stage 2c3 (AWS, manifest + HCL + drift fix + dep chase) | Discover existing cloud resources, emit `imported.json`, generate validated HCL bodies, loop `terraform plan` patches until plan-clean, then walk the cleaned generated.tf for ARN literals pointing at resources outside the import set and pull them in until the references converge. Stage 2c4 adds the localstack zero-drift CI gate; Stage 2d adds GCP. See #189 for the chain. |
 
 ## `adopt`
 
@@ -72,7 +72,7 @@ These are intentionally out of scope for Stage 1; see #259 for context:
 - **No provenance tag/label injection on the imported resources.** The composer can apply provenance when it composes the stack; `adopt` will not silently mutate user-authored HCL.
 - **No `imported.json` manifest.** That manifest is meaningful only when discovery populates `Identity` and `Tier` from cloud state.
 
-## `discover` (Stage 2a + 2b)
+## `discover` (Stages 2a + 2b + 2c1 + 2c3)
 
 ```
 insideout-import discover \
@@ -81,18 +81,21 @@ insideout-import discover \
   --region us-east-1 \
   --output-dir ./imported \
   [--resource-types aws_sqs_queue,aws_lambda_function,...] \
-  [--no-hcl]
+  [--no-hcl] [--no-driftfix] [--no-depchase] \
+  [--max-depchase-iterations N]
 ```
 
 ### Inputs
 
-- `--provider` (required) — only `aws` is supported in Stages 2a/2b; `gcp` returns a "not yet implemented" error pointing at #264 (Stage 2d).
+- `--provider` (required) — only `aws` is supported in Stages 2a–2c3; `gcp` returns a "not yet implemented" error pointing at #264 (Stage 2d).
 - `--project` (required) — project name used as the prefix / `Project` tag value to filter discovered resources.
 - `--region` (required for AWS) — AWS region to scan.
 - `--output-dir` (required) — directory to write `imported.json` into.
-- `--resource-types` — comma-separated subset of supported types. Default: all 5 Phase 1 types (`aws_sqs_queue`, `aws_dynamodb_table`, `aws_cloudwatch_log_group`, `aws_secretsmanager_secret`, `aws_lambda_function`).
-- `--no-hcl` — skip Stage 2b's HCL generation (`terraform plan -generate-config-out` + cleanup). Use when no `terraform` binary is available or when only the manifest is needed.
-- `--no-driftfix` — skip Stage 2c1's drift-fix loop. The generated stack is left at validate-clean rather than plan-clean; useful when iterating on the import and you don't yet care about drift convergence.
+- `--resource-types` — comma-separated subset of supported types. Default: all 9 supported types (the 5 Phase 1 types plus the 4 dep-chase reference types added by Stage 2c3 — `aws_iam_role`, `aws_iam_policy`, `aws_kms_key`, `aws_s3_bucket`).
+- `--no-hcl` — skip Stage 2b's HCL generation (`terraform plan -generate-config-out` + cleanup). Use when no `terraform` binary is available or when only the manifest is needed. Implies `--no-driftfix` and `--no-depchase`.
+- `--no-driftfix` — skip Stage 2c1's drift-fix loop. The generated stack is left at validate-clean rather than plan-clean; useful when iterating on the import and you don't yet care about drift convergence. Implies `--no-depchase`.
+- `--no-depchase` — skip Stage 2c3's dependency chase. Useful when the operator wants to inspect external ARN references before pulling them in, or when the dep-chase loop is misbehaving. Leaves dangling references in `generated.tf` as drift.
+- `--max-depchase-iterations` — bound on the dep-chase loop (default 5). Raise if the import set has a long dependency chain; lower if cycles are suspected.
 
 ### Output
 
@@ -112,15 +115,21 @@ Records are sorted by `Identity.Address` so `imported.json` is byte-identical ac
 
 ### Per-type SDK calls
 
-| Terraform type | SDK call(s) | Filter | Import ID |
-|---|---|---|---|
-| `aws_sqs_queue` | `ListQueues(QueueNamePrefix)` | server-side prefix | queue URL |
-| `aws_dynamodb_table` | `ListTables` + `ListTagsOfResource(ARN)` | name prefix + Project tag | table name |
-| `aws_cloudwatch_log_group` | `DescribeLogGroups(LogGroupNamePrefix)` | server-side prefix | log group name |
-| `aws_secretsmanager_secret` | `ListSecrets(Filters: tag:Project=<p>)` | server-side tag filter | secret ARN |
-| `aws_lambda_function` | `ListFunctions` + `ListTags(ARN)` | Project tag | function name |
+| Terraform type | Discover SDK call(s) | DiscoverByID SDK call | Filter | Import ID |
+|---|---|---|---|---|
+| `aws_sqs_queue` | `ListQueues(QueueNamePrefix)` | `GetQueueUrl(QueueName)` | server-side prefix | queue URL |
+| `aws_dynamodb_table` | `ListTables` + `ListTagsOfResource(ARN)` | `DescribeTable(TableName)` | name prefix + Project tag | table name |
+| `aws_cloudwatch_log_group` | `DescribeLogGroups(LogGroupNamePrefix)` | `DescribeLogGroups(LogGroupNamePrefix=name, exact match)` | server-side prefix | log group name |
+| `aws_secretsmanager_secret` | `ListSecrets(Filters: tag:Project=<p>)` | `DescribeSecret(SecretId)` | server-side tag filter | secret ARN |
+| `aws_lambda_function` | `ListFunctions` + `ListTags(ARN)` | `GetFunction(FunctionName)` | Project tag | function name |
+| `aws_iam_role` (2c3) | `ListRoles` (paginated) | `GetRole(RoleName)` | name prefix | role name |
+| `aws_iam_policy` (2c3) | `ListPolicies(Scope=Local)` | `GetPolicy(PolicyArn)` | name prefix + scope=Local | policy ARN |
+| `aws_kms_key` (2c3) | `ListAliases` → `TargetKeyId` | `DescribeKey(KeyId)` | alias contains project, skip aws-managed | key UUID |
+| `aws_s3_bucket` (2c3) | `ListBuckets` (account-global) | `HeadBucket(Bucket)` | name prefix (client-side) | bucket name |
 
 DynamoDB and Lambda fail-closed on per-resource `ListTags` errors — a transient throttle skips the resource rather than letting an unverified entry into the manifest. `ListFunctions` / `ListTables` errors abort the whole run.
+
+`DiscoverByID` returns the typed `awsdiscover.ErrNotFound` for valid-but-missing resources and `awsdiscover.ErrNotSupported` for ID shapes the discoverer cannot parse (e.g. an SQS-shape ARN handed to the IAM-role discoverer). Stage 2c3 converts both into operator-facing warnings so the run completes with a documented unresolvable reference rather than a fatal abort.
 
 ### Exit codes
 
@@ -129,11 +138,10 @@ DynamoDB and Lambda fail-closed on per-resource `ListTags` errors — a transien
 | `0` | Manifest written; `composer.ValidateImportedResources` returned no issues. With Stage 2b on, `terraform validate` passed against the cleaned `generated.tf`. With Stage 2c1 on (default), `terraform plan -detailed-exitcode` exits 0 against the same stack. |
 | `1` | Fatal: AWS error, validator failure, terraform binary missing or failing, drift-fix replace/delete or stable-drift escalation, or bad inputs. No partial manifest is written when validation fails before the write step; with Stage 2b/2c1, intermediate artifacts (`imported.json`, `generated.tf`, the workdir's `.terraform` dir) survive on disk for inspection. |
 
-### What `discover` does *not* do (Stage 2c1)
+### What `discover` does *not* do (Stage 2c3)
 
-- **No dependency chasing.** Stage 2c3 (`#271`) finds ARNs that point at *un-imported* resources and walks the dependency graph; Stage 2c1 only patches drift within the current batch.
-- **No nested-block drift patching.** Top-level attribute drift is dropped; drift inside nested blocks (timeouts, lifecycle on a non-import-flow resource, etc.) is reported via the stable-drift escalation but not auto-resolved. Stage 2c3 / 2c4 cover those.
-- **No throttle/retry tuning or bounded concurrency.** Stage 2c2 (`#270`).
+- **No nested-block drift patching.** Top-level attribute drift is dropped; drift inside nested blocks (timeouts, lifecycle on a non-import-flow resource, etc.) is reported via the stable-drift escalation but not auto-resolved. Stage 2c4 covers those.
+- **No nested-block ARN reference detection in dep-chase.** The Stage 2c3 finder walks top-level attribute literals only. ARN-shaped values inside nested blocks (e.g. `environment { variables = { ... } }`) or interpolations are not surfaced. If a real-world stack puts dep-chase-relevant ARNs in nested attributes, the surface can be widened in a follow-up.
 - **No localstack CI gate proving zero drift end-to-end.** Stage 2c4 (`#272`).
 - **No GCP support.** Stage 2d (`#264`).
 

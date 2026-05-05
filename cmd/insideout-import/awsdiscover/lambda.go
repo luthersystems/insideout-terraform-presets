@@ -2,12 +2,16 @@ package awsdiscover
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	awsarn "github.com/aws/aws-sdk-go-v2/aws/arn"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
+	lambdatypes "github.com/aws/aws-sdk-go-v2/service/lambda/types"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
@@ -18,6 +22,7 @@ import (
 type lambdaClient interface {
 	ListFunctions(ctx context.Context, in *lambda.ListFunctionsInput, opts ...func(*lambda.Options)) (*lambda.ListFunctionsOutput, error)
 	ListTags(ctx context.Context, in *lambda.ListTagsInput, opts ...func(*lambda.Options)) (*lambda.ListTagsOutput, error)
+	GetFunction(ctx context.Context, in *lambda.GetFunctionInput, opts ...func(*lambda.Options)) (*lambda.GetFunctionOutput, error)
 }
 
 type lambdaDiscoverer struct {
@@ -130,4 +135,74 @@ func (d *lambdaDiscoverer) Discover(ctx context.Context, project, region, accoun
 		))
 	}
 	return out, nil
+}
+
+// DiscoverByID resolves a Lambda function by ARN
+// (arn:aws:lambda:<region>:<account>:function:<name>) or bare function
+// name. Issues a single GetFunction call to verify existence.
+func (d *lambdaDiscoverer) DiscoverByID(ctx context.Context, id, region, accountID string) (imported.ImportedResource, error) {
+	name, err := lambdaNameFromID(id)
+	if err != nil {
+		return imported.ImportedResource{}, err
+	}
+	client := d.new()
+	out, err := client.GetFunction(ctx, &lambda.GetFunctionInput{FunctionName: aws.String(name)})
+	if err != nil {
+		var notFound *lambdatypes.ResourceNotFoundException
+		if errors.As(err, &notFound) {
+			return imported.ImportedResource{}, fmt.Errorf("aws_lambda_function %q: %w", name, ErrNotFound)
+		}
+		return imported.ImportedResource{}, fmt.Errorf("GetFunction: %w", err)
+	}
+	arn := ""
+	if out.Configuration != nil {
+		arn = aws.ToString(out.Configuration.FunctionArn)
+	}
+	return makeImportedResource(
+		addressBook{},
+		"aws_lambda_function",
+		name,
+		name,
+		region,
+		accountID,
+		map[string]string{"arn": arn},
+	), nil
+}
+
+// lambdaNameFromID extracts the function name from an ARN
+// (arn:aws:lambda:<region>:<account>:function:<name>[:<version-or-alias>])
+// or bare name. The function ARN's resource portion uses ":" not "/" as
+// the delimiter, and may carry a version/alias suffix that we strip.
+func lambdaNameFromID(id string) (string, error) {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return "", fmt.Errorf("lambda: empty id: %w", ErrNotSupported)
+	}
+	if awsarn.IsARN(id) {
+		parsed, err := awsarn.Parse(id)
+		if err != nil {
+			return "", fmt.Errorf("lambda: parse arn: %w", err)
+		}
+		if parsed.Service != "lambda" {
+			return "", fmt.Errorf("lambda: not a lambda arn (service=%q): %w", parsed.Service, ErrNotSupported)
+		}
+		// function:<name>[:<qualifier>]
+		const prefix = "function:"
+		if !strings.HasPrefix(parsed.Resource, prefix) {
+			return "", fmt.Errorf("lambda: arn resource %q is not function:<name>: %w", parsed.Resource, ErrNotSupported)
+		}
+		rest := strings.TrimPrefix(parsed.Resource, prefix)
+		// Drop a trailing :version or :alias if present.
+		if i := strings.IndexByte(rest, ':'); i != -1 {
+			rest = rest[:i]
+		}
+		if rest == "" {
+			return "", fmt.Errorf("lambda: empty name in arn %q: %w", id, ErrNotSupported)
+		}
+		return rest, nil
+	}
+	if strings.ContainsAny(id, " :/") {
+		return "", fmt.Errorf("lambda: unrecognized id %q: %w", id, ErrNotSupported)
+	}
+	return id, nil
 }

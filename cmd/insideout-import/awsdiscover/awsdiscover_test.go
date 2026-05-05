@@ -17,6 +17,12 @@ type fakeDiscoverer struct {
 	gotProj string
 	gotReg  string
 	gotAcct string
+
+	// DiscoverByID wiring (unused by the existing tests, populated by
+	// new tests that exercise the dep-chase aggregator path).
+	byIDOut   imported.ImportedResource
+	byIDErr   error
+	byIDCalls []string
 }
 
 func (f *fakeDiscoverer) ResourceType() string { return f.t }
@@ -24,6 +30,11 @@ func (f *fakeDiscoverer) Discover(_ context.Context, project, region, accountID 
 	f.called++
 	f.gotProj, f.gotReg, f.gotAcct = project, region, accountID
 	return f.out, f.err
+}
+
+func (f *fakeDiscoverer) DiscoverByID(_ context.Context, id, _, _ string) (imported.ImportedResource, error) {
+	f.byIDCalls = append(f.byIDCalls, id)
+	return f.byIDOut, f.byIDErr
 }
 
 func ir(addr string) imported.ImportedResource {
@@ -116,16 +127,22 @@ func TestSupportedTypes_IsSorted(t *testing.T) {
 	}
 }
 
-func TestNewAWSDiscoverer_Registers5PhaseOneTypes(t *testing.T) {
+func TestNewAWSDiscoverer_RegistersAllSupportedTypes(t *testing.T) {
 	t.Parallel()
 	agg := NewAWSDiscoverer(awsDummyConfig())
 	got := agg.SupportedTypes()
 	want := map[string]bool{
+		// Phase 1 (#266).
 		"aws_sqs_queue":             false,
 		"aws_dynamodb_table":        false,
 		"aws_cloudwatch_log_group":  false,
 		"aws_secretsmanager_secret": false,
 		"aws_lambda_function":       false,
+		// Stage 2c3 dep-chase reference types (#271).
+		"aws_iam_role":   false,
+		"aws_iam_policy": false,
+		"aws_kms_key":    false,
+		"aws_s3_bucket":  false,
 	}
 	for _, typ := range got {
 		want[typ] = true
@@ -134,6 +151,27 @@ func TestNewAWSDiscoverer_Registers5PhaseOneTypes(t *testing.T) {
 		if !ok {
 			t.Errorf("expected %q to be registered", k)
 		}
+	}
+}
+
+// TestNewAWSDiscoverer_DiscoverByID_DispatchesAndPropagatesErrNotSupported
+// pins the aggregator's per-type dispatch contract: registered types
+// route to the matching discoverer; unregistered types return
+// ErrNotSupported so dep-chase can convert them to warnings.
+func TestNewAWSDiscoverer_DiscoverByID_DispatchesAndPropagatesErrNotSupported(t *testing.T) {
+	t.Parallel()
+	a := &fakeDiscoverer{t: "type_a"}
+	agg := &AWSDiscoverer{byType: map[string]Discoverer{"type_a": a}}
+
+	if _, err := agg.DiscoverByID(context.Background(), "type_a", "id-1", "us-east-1", "123"); err != nil {
+		t.Fatal(err)
+	}
+	if len(a.byIDCalls) != 1 || a.byIDCalls[0] != "id-1" {
+		t.Errorf("expected DiscoverByID to dispatch to type_a; calls=%v", a.byIDCalls)
+	}
+	_, err := agg.DiscoverByID(context.Background(), "type_unknown", "id-1", "us-east-1", "123")
+	if !errors.Is(err, ErrNotSupported) {
+		t.Errorf("err=%v, want ErrNotSupported for unregistered type", err)
 	}
 }
 

@@ -2,10 +2,13 @@ package awsdiscover
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	awsarn "github.com/aws/aws-sdk-go-v2/aws/arn"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	smtypes "github.com/aws/aws-sdk-go-v2/service/secretsmanager/types"
 
@@ -15,6 +18,7 @@ import (
 // smClient is the narrow subset of the Secrets Manager SDK we consume.
 type smClient interface {
 	ListSecrets(ctx context.Context, in *secretsmanager.ListSecretsInput, opts ...func(*secretsmanager.Options)) (*secretsmanager.ListSecretsOutput, error)
+	DescribeSecret(ctx context.Context, in *secretsmanager.DescribeSecretInput, opts ...func(*secretsmanager.Options)) (*secretsmanager.DescribeSecretOutput, error)
 }
 
 type secretsManagerDiscoverer struct {
@@ -87,4 +91,50 @@ func (d *secretsManagerDiscoverer) Discover(ctx context.Context, project, region
 		))
 	}
 	return imps, nil
+}
+
+// DiscoverByID resolves a Secrets Manager secret by ARN or bare name.
+// DescribeSecret accepts either shape natively, so we hand the input to
+// the SDK after a rough validity check.
+func (d *secretsManagerDiscoverer) DiscoverByID(ctx context.Context, id, region, accountID string) (imported.ImportedResource, error) {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return imported.ImportedResource{}, fmt.Errorf("secretsmanager: empty id: %w", ErrNotSupported)
+	}
+	if awsarn.IsARN(id) {
+		parsed, err := awsarn.Parse(id)
+		if err != nil {
+			return imported.ImportedResource{}, fmt.Errorf("secretsmanager: parse arn: %w", err)
+		}
+		if parsed.Service != "secretsmanager" {
+			return imported.ImportedResource{}, fmt.Errorf("secretsmanager: not a secretsmanager arn (service=%q): %w", parsed.Service, ErrNotSupported)
+		}
+		if !strings.HasPrefix(parsed.Resource, "secret:") {
+			return imported.ImportedResource{}, fmt.Errorf("secretsmanager: arn resource %q is not secret:<name>: %w", parsed.Resource, ErrNotSupported)
+		}
+	}
+
+	client := d.new()
+	out, err := client.DescribeSecret(ctx, &secretsmanager.DescribeSecretInput{SecretId: aws.String(id)})
+	if err != nil {
+		var notFound *smtypes.ResourceNotFoundException
+		if errors.As(err, &notFound) {
+			return imported.ImportedResource{}, fmt.Errorf("aws_secretsmanager_secret %q: %w", id, ErrNotFound)
+		}
+		return imported.ImportedResource{}, fmt.Errorf("DescribeSecret: %w", err)
+	}
+	name := aws.ToString(out.Name)
+	arn := aws.ToString(out.ARN)
+	if arn == "" && awsarn.IsARN(id) {
+		arn = id
+	}
+	return makeImportedResource(
+		addressBook{},
+		"aws_secretsmanager_secret",
+		name,
+		arn,
+		region,
+		accountID,
+		map[string]string{"arn": arn},
+	), nil
 }

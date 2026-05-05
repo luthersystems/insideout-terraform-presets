@@ -22,6 +22,12 @@ type fakeDynamoClient struct {
 	listCalls []dynamodb.ListTablesInput
 	tagCalls  []string
 	listErr   error
+
+	// DescribeTable wiring for DiscoverByID tests.
+	describeByName     map[string]*dynamotypes.TableDescription
+	describeErr        error
+	describeCalls      []string
+	describeReturnsErr bool
 }
 
 func (f *fakeDynamoClient) ListTables(_ context.Context, in *dynamodb.ListTablesInput, _ ...func(*dynamodb.Options)) (*dynamodb.ListTablesOutput, error) {
@@ -47,6 +53,20 @@ func (f *fakeDynamoClient) ListTagsOfResource(_ context.Context, in *dynamodb.Li
 		return nil, err
 	}
 	return &dynamodb.ListTagsOfResourceOutput{Tags: f.tagsByID[arn]}, nil
+}
+
+func (f *fakeDynamoClient) DescribeTable(_ context.Context, in *dynamodb.DescribeTableInput, _ ...func(*dynamodb.Options)) (*dynamodb.DescribeTableOutput, error) {
+	name := aws.ToString(in.TableName)
+	f.mu.Lock()
+	f.describeCalls = append(f.describeCalls, name)
+	f.mu.Unlock()
+	if f.describeErr != nil {
+		return nil, f.describeErr
+	}
+	if td, ok := f.describeByName[name]; ok {
+		return &dynamodb.DescribeTableOutput{Table: td}, nil
+	}
+	return nil, &dynamotypes.ResourceNotFoundException{}
 }
 
 func tagPair(k, v string) dynamotypes.Tag {
@@ -240,6 +260,13 @@ func (c *blockingDynamoClient) ListTagsOfResource(ctx context.Context, in *dynam
 	}
 }
 
+// DescribeTable is unused by the concurrency tests but required to
+// satisfy the dynamoClient interface; the DiscoverByID code path is
+// covered by fakeDynamoClient.
+func (c *blockingDynamoClient) DescribeTable(_ context.Context, _ *dynamodb.DescribeTableInput, _ ...func(*dynamodb.Options)) (*dynamodb.DescribeTableOutput, error) {
+	return nil, errors.New("blockingDynamoClient.DescribeTable: not used in concurrency tests")
+}
+
 // TestDynamoDBDiscover_BoundedConcurrency mirrors the Lambda test for
 // the DynamoDB code path — distinct discoverer, distinct errgroup, so
 // we pin both. Without separate coverage a regression that drops
@@ -356,5 +383,76 @@ func TestDynamoDBDiscover_ContextCancellationUnblocksSiblings(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("Discover did not return after parent ctx cancelled — siblings stuck")
+	}
+}
+
+func TestDynamoDBDiscoverByID_AcceptsARN(t *testing.T) {
+	t.Parallel()
+	arn := "arn:aws:dynamodb:us-east-1:123:table/io-foo-orders"
+	fake := &fakeDynamoClient{
+		describeByName: map[string]*dynamotypes.TableDescription{
+			"io-foo-orders": {TableArn: aws.String(arn), TableName: aws.String("io-foo-orders")},
+		},
+	}
+	d := &dynamoDiscoverer{new: func() dynamoClient { return fake }}
+	got, err := d.DiscoverByID(context.Background(), arn, "us-east-1", "123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Identity.Type != "aws_dynamodb_table" {
+		t.Errorf("Type=%q", got.Identity.Type)
+	}
+	if got.Identity.NameHint != "io-foo-orders" {
+		t.Errorf("NameHint=%q", got.Identity.NameHint)
+	}
+	if got.Identity.NativeIDs["arn"] != arn {
+		t.Errorf("NativeIDs[arn]=%q, want %q", got.Identity.NativeIDs["arn"], arn)
+	}
+}
+
+func TestDynamoDBDiscoverByID_AcceptsBareName(t *testing.T) {
+	t.Parallel()
+	fake := &fakeDynamoClient{
+		describeByName: map[string]*dynamotypes.TableDescription{
+			"orders": {TableName: aws.String("orders")},
+		},
+	}
+	d := &dynamoDiscoverer{new: func() dynamoClient { return fake }}
+	got, err := d.DiscoverByID(context.Background(), "orders", "us-east-1", "123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Identity.NameHint != "orders" {
+		t.Errorf("NameHint=%q", got.Identity.NameHint)
+	}
+	// arn is constructed locally when DescribeTable does not echo it back.
+	if got.Identity.NativeIDs["arn"] != "arn:aws:dynamodb:us-east-1:123:table/orders" {
+		t.Errorf("NativeIDs[arn]=%q (expected synthesized)", got.Identity.NativeIDs["arn"])
+	}
+}
+
+func TestDynamoDBDiscoverByID_NotFound(t *testing.T) {
+	t.Parallel()
+	fake := &fakeDynamoClient{} // empty describeByName triggers ResourceNotFoundException
+	d := &dynamoDiscoverer{new: func() dynamoClient { return fake }}
+	_, err := d.DiscoverByID(context.Background(), "missing", "us-east-1", "123")
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("err=%v, want ErrNotFound", err)
+	}
+}
+
+func TestDynamoDBDiscoverByID_UnsupportedID(t *testing.T) {
+	t.Parallel()
+	d := &dynamoDiscoverer{new: func() dynamoClient { return &fakeDynamoClient{} }}
+	cases := []string{
+		"",
+		"arn:aws:s3:::a-bucket", // wrong service
+		"arn:aws:dynamodb:us-east-1:123:stream/io-foo/abc", // not a table arn
+	}
+	for _, id := range cases {
+		_, err := d.DiscoverByID(context.Background(), id, "us-east-1", "123")
+		if !errors.Is(err, ErrNotSupported) {
+			t.Errorf("id=%q: err=%v, want ErrNotSupported", id, err)
+		}
 	}
 }

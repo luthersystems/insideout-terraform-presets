@@ -21,6 +21,12 @@ type fakeLambdaClient struct {
 	mu        sync.Mutex
 	listCalls int
 	tagCalls  []string
+
+	// GetFunction wiring for DiscoverByID tests.
+	getByName    map[string]*lambda.GetFunctionOutput
+	getErr       error
+	getFnCalls   []string
+	getFnCallsMu sync.Mutex
 }
 
 func (f *fakeLambdaClient) ListFunctions(_ context.Context, _ *lambda.ListFunctionsInput, _ ...func(*lambda.Options)) (*lambda.ListFunctionsOutput, error) {
@@ -41,6 +47,20 @@ func (f *fakeLambdaClient) ListTags(_ context.Context, in *lambda.ListTagsInput,
 		return nil, err
 	}
 	return &lambda.ListTagsOutput{Tags: f.tagsByID[arn]}, nil
+}
+
+func (f *fakeLambdaClient) GetFunction(_ context.Context, in *lambda.GetFunctionInput, _ ...func(*lambda.Options)) (*lambda.GetFunctionOutput, error) {
+	name := aws.ToString(in.FunctionName)
+	f.getFnCallsMu.Lock()
+	f.getFnCalls = append(f.getFnCalls, name)
+	f.getFnCallsMu.Unlock()
+	if f.getErr != nil {
+		return nil, f.getErr
+	}
+	if out, ok := f.getByName[name]; ok {
+		return out, nil
+	}
+	return nil, &lambdatypes.ResourceNotFoundException{}
 }
 
 func fn(name, arn string) lambdatypes.FunctionConfiguration {
@@ -208,6 +228,10 @@ func (c *lambdaErrClient) ListTags(_ context.Context, _ *lambda.ListTagsInput, _
 	return nil, c.err
 }
 
+func (c *lambdaErrClient) GetFunction(_ context.Context, _ *lambda.GetFunctionInput, _ ...func(*lambda.Options)) (*lambda.GetFunctionOutput, error) {
+	return nil, c.err
+}
+
 // blockingLambdaClient is a fake whose ListTags signals when each call
 // enters and then blocks until release is closed (or ctx is cancelled).
 // Used by the concurrency + cancellation tests to observe peak in-flight
@@ -256,6 +280,13 @@ func (c *blockingLambdaClient) ListTags(ctx context.Context, in *lambda.ListTags
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	}
+}
+
+// GetFunction is unused by the concurrency tests but required to satisfy
+// the lambdaClient interface; the DiscoverByID path is covered by
+// fakeLambdaClient.
+func (c *blockingLambdaClient) GetFunction(_ context.Context, _ *lambda.GetFunctionInput, _ ...func(*lambda.Options)) (*lambda.GetFunctionOutput, error) {
+	return nil, errors.New("blockingLambdaClient.GetFunction: not used in concurrency tests")
 }
 
 // TestLambdaDiscover_BoundedConcurrency pins g.SetLimit(maxConcurrency).
@@ -381,5 +412,75 @@ func TestLambdaDiscover_ContextCancellationUnblocksSiblings(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("Discover did not return after parent ctx cancelled — siblings stuck")
+	}
+}
+
+func TestLambdaDiscoverByID_AcceptsARN(t *testing.T) {
+	t.Parallel()
+	arn := "arn:aws:lambda:us-east-1:123:function:io-foo-handler"
+	d := &lambdaDiscoverer{new: func() lambdaClient {
+		return &fakeLambdaClient{getByName: map[string]*lambda.GetFunctionOutput{
+			"io-foo-handler": {Configuration: &lambdatypes.FunctionConfiguration{
+				FunctionName: aws.String("io-foo-handler"),
+				FunctionArn:  aws.String(arn),
+			}},
+		}}
+	}}
+	got, err := d.DiscoverByID(context.Background(), arn, "us-east-1", "123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Identity.Type != "aws_lambda_function" {
+		t.Errorf("Type=%q", got.Identity.Type)
+	}
+	if got.Identity.NameHint != "io-foo-handler" {
+		t.Errorf("NameHint=%q", got.Identity.NameHint)
+	}
+	if got.Identity.NativeIDs["arn"] != arn {
+		t.Errorf("NativeIDs[arn]=%q, want %q", got.Identity.NativeIDs["arn"], arn)
+	}
+}
+
+func TestLambdaDiscoverByID_StripsVersionFromARN(t *testing.T) {
+	t.Parallel()
+	d := &lambdaDiscoverer{new: func() lambdaClient {
+		return &fakeLambdaClient{getByName: map[string]*lambda.GetFunctionOutput{
+			"io-foo-handler": {Configuration: &lambdatypes.FunctionConfiguration{
+				FunctionName: aws.String("io-foo-handler"),
+				FunctionArn:  aws.String("arn:aws:lambda:us-east-1:123:function:io-foo-handler"),
+			}},
+		}}
+	}}
+	// Versioned/aliased ARN — Lambda's import expects the bare name.
+	_, err := d.DiscoverByID(context.Background(),
+		"arn:aws:lambda:us-east-1:123:function:io-foo-handler:PROD",
+		"us-east-1", "123")
+	if err != nil {
+		t.Fatalf("expected version stripped to bare name; got %v", err)
+	}
+}
+
+func TestLambdaDiscoverByID_NotFound(t *testing.T) {
+	t.Parallel()
+	d := &lambdaDiscoverer{new: func() lambdaClient { return &fakeLambdaClient{} }}
+	_, err := d.DiscoverByID(context.Background(), "missing", "us-east-1", "123")
+	if !errors.Is(err, ErrNotFound) {
+		t.Errorf("err=%v, want ErrNotFound", err)
+	}
+}
+
+func TestLambdaDiscoverByID_UnsupportedID(t *testing.T) {
+	t.Parallel()
+	d := &lambdaDiscoverer{new: func() lambdaClient { return &fakeLambdaClient{} }}
+	cases := []string{
+		"",
+		"arn:aws:s3:::a-bucket",
+		"arn:aws:lambda:us-east-1:123:layer:my-layer:1",
+	}
+	for _, id := range cases {
+		_, err := d.DiscoverByID(context.Background(), id, "us-east-1", "123")
+		if !errors.Is(err, ErrNotSupported) {
+			t.Errorf("id=%q: err=%v, want ErrNotSupported", id, err)
+		}
 	}
 }
