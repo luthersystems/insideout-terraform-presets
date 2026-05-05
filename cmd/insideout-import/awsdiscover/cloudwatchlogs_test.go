@@ -57,19 +57,29 @@ func TestCWLDiscover_HappyPath(t *testing.T) {
 	}
 }
 
-func TestCWLDiscover_PassesPrefixServerSide(t *testing.T) {
+func TestCWLDiscover_PassesProjectAsLogGroupNamePattern(t *testing.T) {
 	t.Parallel()
 	fake := &fakeCWLClient{}
 	d := &cwlDiscoverer{new: func() cwlClient { return fake }}
 	if _, err := d.Discover(context.Background(), "io-foo", "us-east-1", "123"); err != nil {
 		t.Fatal(err)
 	}
-	if len(fake.calls) == 0 || fake.calls[0].LogGroupNamePrefix == nil || *fake.calls[0].LogGroupNamePrefix != "io-foo" {
-		t.Errorf("expected LogGroupNamePrefix=io-foo, got %+v", fake.calls)
+	if len(fake.calls) == 0 {
+		t.Fatal("expected at least one DescribeLogGroups call")
+	}
+	in := fake.calls[0]
+	if in.LogGroupNamePattern == nil || *in.LogGroupNamePattern != "io-foo" {
+		t.Errorf("LogGroupNamePattern=%v, want io-foo", in.LogGroupNamePattern)
+	}
+	// Pin: prefix must NOT be set — the two filters are mutually
+	// exclusive at the server. A regression that sends both would fail
+	// at runtime with InvalidParameterException.
+	if in.LogGroupNamePrefix != nil {
+		t.Errorf("LogGroupNamePrefix=%v, must be nil (mutually exclusive with LogGroupNamePattern)", in.LogGroupNamePrefix)
 	}
 }
 
-func TestCWLDiscover_EmptyProjectPassesNoPrefix(t *testing.T) {
+func TestCWLDiscover_EmptyProjectPassesNoFilter(t *testing.T) {
 	t.Parallel()
 	fake := &fakeCWLClient{}
 	d := &cwlDiscoverer{new: func() cwlClient { return fake }}
@@ -79,8 +89,9 @@ func TestCWLDiscover_EmptyProjectPassesNoPrefix(t *testing.T) {
 	if len(fake.calls) == 0 {
 		t.Fatal("expected at least one DescribeLogGroups call")
 	}
-	if fake.calls[0].LogGroupNamePrefix != nil {
-		t.Errorf("LogGroupNamePrefix=%v, want nil for empty project", fake.calls[0].LogGroupNamePrefix)
+	if fake.calls[0].LogGroupNamePattern != nil || fake.calls[0].LogGroupNamePrefix != nil {
+		t.Errorf("expected no filter for empty project; pattern=%v prefix=%v",
+			fake.calls[0].LogGroupNamePattern, fake.calls[0].LogGroupNamePrefix)
 	}
 }
 

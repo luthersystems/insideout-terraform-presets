@@ -26,8 +26,13 @@ func newCloudWatchLogsDiscoverer(cfg aws.Config) Discoverer {
 
 func (d *cwlDiscoverer) ResourceType() string { return "aws_cloudwatch_log_group" }
 
-// Discover finds log groups whose name starts with the project prefix.
-// The CWL API supports server-side LogGroupNamePrefix, so we filter cheaply.
+// Discover finds log groups whose name *contains* the project name. We
+// use the CWL API's LogGroupNamePattern (server-side case-sensitive
+// substring match), not LogGroupNamePrefix — Lambda-emitted log groups
+// are named `/aws/lambda/<fn>` and inspector-style log groups
+// (`/<project>-...`) start with `/`, so a strict prefix match would miss
+// them. Substring match keeps the filter server-side without losing
+// either of those two common shapes.
 //
 // Import ID for aws_cloudwatch_log_group is the log group name.
 func (d *cwlDiscoverer) Discover(ctx context.Context, project, region, accountID string) ([]imported.ImportedResource, error) {
@@ -35,7 +40,7 @@ func (d *cwlDiscoverer) Discover(ctx context.Context, project, region, accountID
 	input := &cloudwatchlogs.DescribeLogGroupsInput{}
 	if project != "" {
 		p := project
-		input.LogGroupNamePrefix = &p
+		input.LogGroupNamePattern = &p
 	}
 
 	type group struct {
