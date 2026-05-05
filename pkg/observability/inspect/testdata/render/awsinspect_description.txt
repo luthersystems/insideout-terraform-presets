@@ -1,0 +1,24 @@
+INSPECTION: Inspect AWS infrastructure for a deployed project
+⚠️ **PREREQUISITE**: This tool requires a prior deployment ATTEMPT (successful or failed).
+Check convostatus for hasDeployAttempt=true before calling. Works even after failed deploys to inspect orphaned resources.
+
+Inspect deployed AWS resources after a deployment attempt.
+Use this tool when the user asks about the status or details of their deployed infrastructure.
+It fetches temporary read-only credentials securely and queries the AWS API directly.
+
+RESPONSE TIERS (default is summary for token efficiency):
+- Summary (default): Key fields only (~500 tokens). Set detail=false, raw=false or omit both.
+- Detail: Full metadata for a specific resource. Set detail=true + resource filter.
+- Raw: Complete unprocessed API response. Set raw=true.
+
+REQUIRES: session_id from convoopen response (format: sess_v2_...).
+Supported services: account, alb, apigateway, backup, bedrock, cloudfront, cloudwatchlogs, cognito, cost-explorer, dynamodb, ebs, ec2, ecs, eks, elasticache, kms, lambda, msk, opensearch, rds, s3, secretsmanager, sqs, vpc, waf
+For a specific service's actions, call with action="list-actions".
+METRICS: Use list-metrics to discover available metrics for a service (no credentials needed). Then use get-metrics to retrieve data (auto-discovers resources). Most services return CloudWatch time-series. KMS returns key health (rotation, state). SecretsManager returns secret health (rotation, last accessed/rotated). Optional filters JSON: {"hours":6,"period":300}.
+BILLING: Use service=cost-explorer to inspect AWS costs. Actions: get-cost-summary (last 30 days by service, filters: {"days":7,"granularity":"DAILY"}), get-cost-forecast (projected spend through end of month), get-cost-by-tag (costs grouped by tag, filters: {"tag_key":"Environment","days":30}). Requires ce:GetCostAndUsage and ce:GetCostForecast IAM permissions.
+
+EXAMPLES:
+- awsinspect(session_id=..., service="ec2", action="describe-instances")
+- awsinspect(session_id=..., service="cost-explorer", action="get-cost-summary")
+- awsinspect(session_id=..., service="ec2", action="get-metrics", filters="{\"hours\":6}")
+- awsinspect(session_id=..., service="rds", action="describe-db-instances", detail=true)

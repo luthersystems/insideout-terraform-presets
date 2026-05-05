@@ -1,0 +1,37 @@
+BATCH INSPECTION: run up to 32 GCP inspect probes in one call.
+⚠️ **PREREQUISITE**: Same as gcpinspect — deploy attempt required.
+Check convostatus for hasDeployAttempt=true before calling.
+
+Use this when you need to check more than ~3 resources. The backend fetches
+Oracle credentials ONCE per batch and fans out probes against a single GCP
+credentials blob — a 12-resource health check is ~5–8× faster and 12× fewer
+Oracle round-trips than calling gcpinspect 12 times.
+
+BUDGETS:
+- Up to 32 sub-probes per call (subs array length).
+- 30s per-sub timeout; 60s total batch wall-clock.
+- Concurrency cap 8.
+- 512 KB response cap: subs past the cap keep their envelope
+  (index/service/action/ok) but have result replaced with truncated=true.
+
+PARTIAL FAILURE IS EXPECTED. The response is an ordered results array;
+each entry has {index, service, action, ok, result, error}. Inspect each
+result — do NOT abort on the first error. A credential fetch failure
+leaves cred-less probes (list-actions, list-metrics) succeeding anyway.
+
+REQUIRES: session_id from convoopen response (format: sess_v2_...).
+Supported services: apigateway, bastion, billing, cloudarmor, cloudbuild, cloudcdn, cloudfunctions, cloudkms, cloudlogging, cloudmonitoring, cloudrun, cloudsql, compute, firestore, gcs, gke, identityplatform, loadbalancer, memorystore, pubsub, secretmanager, vertexai, vpc
+For a specific service's actions, use gcpinspect (singular) with
+action="list-actions" — batch is not the place for discovery.
+Batch responses are always summarized (no detail/raw per-sub); use
+singular gcpinspect when you need full metadata or raw API output for one
+resource.
+
+EXAMPLES:
+- gcpinspect_batch(session_id=..., subs=[
+    {"service":"compute","action":"list-instances"},
+    {"service":"gke","action":"list-clusters"},
+    {"service":"cloudsql","action":"list-instances"}])
+- gcpinspect_batch(session_id=..., subs=[
+    {"service":"compute","action":"get-metrics","filters":"{\"hours\":6}"},
+    {"service":"cloudrun","action":"get-metrics","filters":"{\"hours\":6}"}])
