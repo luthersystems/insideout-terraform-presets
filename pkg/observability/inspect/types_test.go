@@ -111,10 +111,9 @@ func TestSubResult_JSONShape(t *testing.T) {
 	t.Parallel()
 	t.Run("success result with payload", func(t *testing.T) {
 		t.Parallel()
-		// Use a map because SubResult.Result is `any` — Go's MarshalJSON
-		// of a typed struct would serialize differently. The dispatcher
-		// always returns the inner result as decoded JSON (map / slice
-		// / scalar), so map is the realistic shape.
+		// The dispatcher returns inner results as decoded JSON (map /
+		// slice / scalar after `json.Unmarshal` into `any`), so a
+		// map is the realistic shape — not a typed Go struct.
 		in := SubResult{
 			Index:      3,
 			Service:    "lambda",
@@ -282,6 +281,52 @@ func TestBatchResponse_RoundTripJSON(t *testing.T) {
 	}
 	if string(first) != string(second) {
 		t.Errorf("round-trip drift:\n  first  = %s\n second = %s", first, second)
+	}
+}
+
+// TestBatchResponse_OKIsHTTPEnvelopeNotAggregate pins the documented
+// semantics of the outer OK field: it is the HTTP-envelope success
+// bit, not an aggregate over Results[i].OK. Reliable's existing
+// dispatchers (aws_inspect_batch.go:101, gcp_inspect_batch.go:76)
+// always set outer OK=true on HTTP 200 even when some sub-probes
+// failed. The doc on BatchResponse pins this explicitly; this test
+// pins that the struct can in fact represent the
+// "outer-OK-true-with-failed-sub" shape — a regression that flipped
+// outer OK to an aggregate would not break this test directly (the
+// aggregation would happen at the dispatcher), but encoding the
+// shape here documents the contract in code so a future dispatcher
+// author building against this type sees the canonical example.
+func TestBatchResponse_OKIsHTTPEnvelopeNotAggregate(t *testing.T) {
+	t.Parallel()
+	in := BatchResponse{
+		OK: true, // dispatcher ran to completion
+		Results: []SubResult{
+			{Index: 0, Service: "lambda", Action: "list-functions", OK: true, Result: []any{}, DurationMS: 10},
+			{Index: 1, Service: "ec2", Action: "list-instances", OK: false, Error: "throttling", DurationMS: 5},
+		},
+	}
+	got, err := json.Marshal(in)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	// The mixed-success batch must serialize with outer OK=true and
+	// per-sub OK reflecting individual outcomes.
+	want := `{"ok":true,"results":[{"index":0,"service":"lambda","action":"list-functions","ok":true,"result":[],"duration_ms":10},{"index":1,"service":"ec2","action":"list-instances","ok":false,"error":"throttling","duration_ms":5}]}`
+	if string(got) != want {
+		t.Errorf("\n  got = %s\n want = %s", got, want)
+	}
+	// Decode and assert outer OK is independent of inner OKs — pins
+	// that the type does not enforce an aggregate constraint at the
+	// data-model layer.
+	var rt BatchResponse
+	if err := json.Unmarshal(got, &rt); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if !rt.OK {
+		t.Error("outer OK must remain true on decode despite a failed sub-probe")
+	}
+	if rt.Results[1].OK {
+		t.Error("Results[1].OK must remain false on decode")
 	}
 }
 

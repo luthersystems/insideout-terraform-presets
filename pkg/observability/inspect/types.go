@@ -67,18 +67,28 @@ type SubResult struct {
 // A single shape covers both clouds because the request shape is
 // cloud-agnostic — the route the request lands on (`/aws/...` vs
 // `/gcp/...`) carries the cloud selection. Reliable's legacy
-// AWSInspectBatchRequest / GCPInspectBatchRequest are aliases for
-// this same struct shape; the lift to a single canonical type is
-// part of the #276 cleanup.
+// AWSInspectBatchRequest / GCPInspectBatchRequest are
+// structurally-identical types (NOT Go aliases — separate named
+// declarations with the same fields and json tags); collapsing them
+// into a single canonical BatchRequest is part of the #276 cleanup.
 type BatchRequest struct {
 	SessionID string       `json:"session_id"`
 	Subs      []SubRequest `json:"subs"`
 }
 
 // BatchResponse is the wire envelope returned by the same two
-// endpoints. OK is the AND of every Result.OK (i.e. true iff every
-// sub-probe succeeded). Results is index-aligned with the original
-// Subs slice: Results[i].Index == i.
+// endpoints. OK is the HTTP-envelope success bit — true iff the
+// dispatcher itself ran to completion (HTTP 200 path). Per-sub
+// success/failure is encoded in Results[i].OK and Results[i].Error,
+// NOT aggregated into this outer OK. This matches the legacy
+// reliable dispatcher semantics
+// (reliable/internal/agentapi/{aws,gcp}_inspect_batch.go:
+// `writeJSON(w, http.StatusOK, ...{OK: true, Results: results})`):
+// a partial-failure batch (some Results[i].OK == false) still
+// returns outer OK == true.
+//
+// Results is index-aligned with the original Subs slice:
+// Results[i].Index == i.
 type BatchResponse struct {
 	OK      bool        `json:"ok"`
 	Results []SubResult `json:"results"`
