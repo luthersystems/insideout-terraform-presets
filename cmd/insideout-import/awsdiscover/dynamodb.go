@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"sync"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
@@ -18,11 +20,18 @@ type dynamoClient interface {
 }
 
 type dynamoDiscoverer struct {
-	new func() dynamoClient
+	new            func() dynamoClient
+	maxConcurrency int
 }
 
-func newDynamoDBDiscoverer(cfg aws.Config) Discoverer {
-	return &dynamoDiscoverer{new: func() dynamoClient { return dynamodb.NewFromConfig(cfg) }}
+func newDynamoDBDiscoverer(cfg aws.Config, maxConcurrency int) Discoverer {
+	if maxConcurrency <= 0 {
+		maxConcurrency = DefaultMaxConcurrency
+	}
+	return &dynamoDiscoverer{
+		new:            func() dynamoClient { return dynamodb.NewFromConfig(cfg) },
+		maxConcurrency: maxConcurrency,
+	}
 }
 
 func (d *dynamoDiscoverer) ResourceType() string { return "aws_dynamodb_table" }
@@ -32,6 +41,14 @@ func (d *dynamoDiscoverer) ResourceType() string { return "aws_dynamodb_table" }
 // runs ListTagsOfResource to confirm the Project tag. The double check
 // (prefix + tag) defends against table names that share the project prefix
 // by accident.
+//
+// Per-table tag lookups fan out under a bounded errgroup so a few-thousand
+// table account does not serialize into a multi-minute wall-time. Per-item
+// SDK errors stay fail-closed (transient ListTagsOfResource failures skip
+// the table rather than aborting the run, since the SDK retryer has
+// already exhausted its budget by then). Parent-context cancellation IS
+// propagated: gctx unblocks any in-flight goroutines and Discover returns
+// ctx.Err() rather than a silently-truncated set.
 //
 // Import ID for aws_dynamodb_table is the table name.
 func (d *dynamoDiscoverer) Discover(ctx context.Context, project, region, accountID string) ([]imported.ImportedResource, error) {
@@ -59,24 +76,48 @@ func (d *dynamoDiscoverer) Discover(ctx context.Context, project, region, accoun
 	if project == "" || accountID == "" || region == "" {
 		// Without an account ID + region we cannot construct the ARN
 		// ListTagsOfResource needs. Fall back to prefix-only filtering and
-		// trust the operator-supplied scope. Stage 2c will add a hard-fail
-		// when STS lookup is mandatory.
+		// trust the operator-supplied scope.
 		matched = all
 	} else {
-		for _, name := range all {
-			arn := fmt.Sprintf("arn:aws:dynamodb:%s:%s:table/%s", region, accountID, name)
-			tagsOut, err := client.ListTagsOfResource(ctx, &dynamodb.ListTagsOfResourceInput{ResourceArn: aws.String(arn)})
-			if err != nil {
-				// Fail-closed; same rationale as Lambda discoverer.
-				continue
-			}
-			for _, tag := range tagsOut.Tags {
-				if aws.ToString(tag.Key) == "Project" && aws.ToString(tag.Value) == project {
-					matched = append(matched, name)
-					break
-				}
-			}
+		var (
+			mu sync.Mutex
+			ok []string
+		)
+		limit := d.maxConcurrency
+		if limit <= 0 {
+			limit = DefaultMaxConcurrency
 		}
+		g, gctx := errgroup.WithContext(ctx)
+		g.SetLimit(limit)
+		for _, name := range all {
+			name := name
+			g.Go(func() error {
+				if err := gctx.Err(); err != nil {
+					return err
+				}
+				arn := fmt.Sprintf("arn:aws:dynamodb:%s:%s:table/%s", region, accountID, name)
+				tagsOut, err := client.ListTagsOfResource(gctx, &dynamodb.ListTagsOfResourceInput{ResourceArn: aws.String(arn)})
+				if err != nil {
+					if cerr := gctx.Err(); cerr != nil {
+						return cerr
+					}
+					return nil
+				}
+				for _, tag := range tagsOut.Tags {
+					if aws.ToString(tag.Key) == "Project" && aws.ToString(tag.Value) == project {
+						mu.Lock()
+						ok = append(ok, name)
+						mu.Unlock()
+						return nil
+					}
+				}
+				return nil
+			})
+		}
+		if err := g.Wait(); err != nil {
+			return nil, fmt.Errorf("ListTagsOfResource: %w", err)
+		}
+		matched = ok
 	}
 
 	sort.Strings(matched)

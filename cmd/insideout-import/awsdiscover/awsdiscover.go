@@ -1,9 +1,14 @@
-// Package awsdiscover holds the AWS-side per-resource-type discoverers used
-// by the insideout-import discover subcommand (Stage 2a of #189). Each
-// discoverer issues read-only AWS SDK calls against the operator's account
-// and returns Phase 2 imported.ImportedResource entries — no terraform-exec,
+// Package awsdiscover holds the AWS-side per-resource-type discoverers
+// used by the insideout-import discover subcommand. Each discoverer
+// issues read-only AWS SDK calls against the operator's account and
+// returns Phase 2 imported.ImportedResource entries — no terraform-exec,
 // no HCL generation. Stage 2b layers `terraform plan -generate-config-out`
 // on top of this manifest to produce the actual .tf files.
+//
+// Originally landed as Stage 2a (#266); Stage 2c2 (#270) added bounded-
+// concurrency errgroup fan-out inside the DynamoDB and Lambda discoverers
+// (the only two with per-item tag API calls), gated by DefaultMaxConcurrency
+// or a caller-supplied override on NewAWSDiscovererWithConcurrency.
 //
 // Discoverers in this package own narrow client interfaces so unit tests
 // can mock the SDK boundary without depending on real AWS credentials.
@@ -37,6 +42,14 @@ type Discoverer interface {
 	Discover(ctx context.Context, project, region, accountID string) ([]imported.ImportedResource, error)
 }
 
+// DefaultMaxConcurrency is the per-discoverer fan-out limit applied when
+// the caller does not request a specific value. 10 is the empirical sweet
+// spot from the audit in #270 — high enough to keep a few-thousand-resource
+// account scan under a minute, low enough that the SDK's adaptive retryer
+// can absorb transient Throttling without exhausting the configured retry
+// budget.
+const DefaultMaxConcurrency = 10
+
 // AWSDiscoverer aggregates the per-type discoverers and fans out a single
 // DiscoverTypes call across all of them. Construct with NewAWSDiscoverer
 // in production; tests can build it directly with mock discoverers.
@@ -44,18 +57,37 @@ type AWSDiscoverer struct {
 	byType map[string]Discoverer
 }
 
-// NewAWSDiscoverer wires up the production set of AWS discoverers (the 5
-// Phase 1 types: SQS, DynamoDB, CloudWatch Logs, Secrets Manager, Lambda).
-// All discoverers share the same aws.Config; per-type SDK clients are
-// constructed inside each discoverer.
+// NewAWSDiscoverer wires up the production set of AWS discoverers with the
+// default per-type fan-out limit. Equivalent to
+// NewAWSDiscovererWithConcurrency(cfg, DefaultMaxConcurrency).
 func NewAWSDiscoverer(cfg aws.Config) *AWSDiscoverer {
+	return NewAWSDiscovererWithConcurrency(cfg, DefaultMaxConcurrency)
+}
+
+// NewAWSDiscovererWithConcurrency wires up the production set of AWS
+// discoverers (the 5 Phase 1 types: SQS, DynamoDB, CloudWatch Logs, Secrets
+// Manager, Lambda). All discoverers share the same aws.Config; per-type SDK
+// clients are constructed inside each discoverer. maxConcurrency is the
+// upper bound on per-resource tag-fanout calls inside the DynamoDB and
+// Lambda discoverers (the only two with per-item API fan-out today). The
+// other three discoverers either filter server-side (SecretsManager) or
+// only issue a single List call (SQS, CloudWatchLogs) and ignore the limit.
+//
+// A non-positive maxConcurrency falls back to DefaultMaxConcurrency rather
+// than serializing — callers should validate flag input upstream and fail
+// loudly there. The fallback exists only as a safety net for direct
+// programmatic callers.
+func NewAWSDiscovererWithConcurrency(cfg aws.Config, maxConcurrency int) *AWSDiscoverer {
+	if maxConcurrency <= 0 {
+		maxConcurrency = DefaultMaxConcurrency
+	}
 	return &AWSDiscoverer{
 		byType: map[string]Discoverer{
 			"aws_sqs_queue":             newSQSDiscoverer(cfg),
-			"aws_dynamodb_table":        newDynamoDBDiscoverer(cfg),
+			"aws_dynamodb_table":        newDynamoDBDiscoverer(cfg, maxConcurrency),
 			"aws_cloudwatch_log_group":  newCloudWatchLogsDiscoverer(cfg),
 			"aws_secretsmanager_secret": newSecretsManagerDiscoverer(cfg),
-			"aws_lambda_function":       newLambdaDiscoverer(cfg),
+			"aws_lambda_function":       newLambdaDiscoverer(cfg, maxConcurrency),
 		},
 	}
 }
@@ -76,10 +108,11 @@ func (a *AWSDiscoverer) SupportedTypes() []string {
 // invalid names (not interleaved with partial results) so the operator sees
 // the full set of misspellings in one shot.
 //
-// Concurrency is intentionally serial in Stage 2a — Stage 2c will introduce
-// errgroup with bounded parallelism + the SDK retryer config (per #189's
-// QA carry-forward). Keeping it simple here means deterministic test output
-// and no throttling surprises on small/medium accounts.
+// The aggregator itself is sequential across resource types — concurrency
+// lives inside individual discoverers (DynamoDB, Lambda) where per-item
+// tag-fanout dominates wall time. Stage 2c2 (#270) bounded that fanout via
+// errgroup; the SDK retryer config in cmd/insideout-import/discover.go
+// raises maxAttempts so transient Throttling no longer aborts a run.
 func (a *AWSDiscoverer) DiscoverTypes(ctx context.Context, types []string, project, region, accountID string) ([]imported.ImportedResource, error) {
 	if len(types) == 0 {
 		types = a.SupportedTypes()

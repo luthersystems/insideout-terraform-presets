@@ -136,3 +136,63 @@ func TestNewAWSDiscoverer_Registers5PhaseOneTypes(t *testing.T) {
 		}
 	}
 }
+
+// TestNewAWSDiscoverer_AppliesDefaultMaxConcurrency pins that the legacy
+// single-arg constructor delegates with DefaultMaxConcurrency rather than
+// silently serializing (which would defeat the point of #270). The
+// literal-value pin guards the audit-grounded constant: a refactor that
+// re-points DefaultMaxConcurrency to 1 must fail this test.
+func TestNewAWSDiscoverer_AppliesDefaultMaxConcurrency(t *testing.T) {
+	t.Parallel()
+	if DefaultMaxConcurrency != 10 {
+		t.Errorf("DefaultMaxConcurrency=%d, want 10 (audit-grounded sweet spot per #270 — change requires updating both the constant doc and this pin)", DefaultMaxConcurrency)
+	}
+	agg := NewAWSDiscoverer(awsDummyConfig())
+	dyn, ok := agg.byType["aws_dynamodb_table"].(*dynamoDiscoverer)
+	if !ok {
+		t.Fatalf("dynamodb discoverer is not *dynamoDiscoverer (got %T)", agg.byType["aws_dynamodb_table"])
+	}
+	if dyn.maxConcurrency != DefaultMaxConcurrency {
+		t.Errorf("dynamo maxConcurrency=%d, want %d", dyn.maxConcurrency, DefaultMaxConcurrency)
+	}
+	lam, ok := agg.byType["aws_lambda_function"].(*lambdaDiscoverer)
+	if !ok {
+		t.Fatalf("lambda discoverer is not *lambdaDiscoverer (got %T)", agg.byType["aws_lambda_function"])
+	}
+	if lam.maxConcurrency != DefaultMaxConcurrency {
+		t.Errorf("lambda maxConcurrency=%d, want %d", lam.maxConcurrency, DefaultMaxConcurrency)
+	}
+}
+
+// TestNewAWSDiscovererWithConcurrency_ThreadsValueToFanoutDiscoverers
+// pins that an explicit concurrency value reaches both per-item-fanout
+// discoverers (DynamoDB and Lambda). The single-call discoverers (SQS,
+// CloudWatch Logs, SecretsManager) ignore the value by design.
+func TestNewAWSDiscovererWithConcurrency_ThreadsValueToFanoutDiscoverers(t *testing.T) {
+	t.Parallel()
+	agg := NewAWSDiscovererWithConcurrency(awsDummyConfig(), 25)
+	if d := agg.byType["aws_dynamodb_table"].(*dynamoDiscoverer); d.maxConcurrency != 25 {
+		t.Errorf("dynamo maxConcurrency=%d, want 25", d.maxConcurrency)
+	}
+	if l := agg.byType["aws_lambda_function"].(*lambdaDiscoverer); l.maxConcurrency != 25 {
+		t.Errorf("lambda maxConcurrency=%d, want 25", l.maxConcurrency)
+	}
+}
+
+// TestNewAWSDiscovererWithConcurrency_NonPositiveFallsBackToDefault
+// is the safety net for direct programmatic callers. The CLI rejects
+// non-positive --max-concurrency upstream, but a Go caller using this
+// constructor directly should not get a deadlocked errgroup
+// (g.SetLimit(0) blocks forever).
+func TestNewAWSDiscovererWithConcurrency_NonPositiveFallsBackToDefault(t *testing.T) {
+	t.Parallel()
+	for _, n := range []int{0, -1, -100} {
+		agg := NewAWSDiscovererWithConcurrency(awsDummyConfig(), n)
+		if d := agg.byType["aws_dynamodb_table"].(*dynamoDiscoverer); d.maxConcurrency != DefaultMaxConcurrency {
+			t.Errorf("n=%d: dynamo maxConcurrency=%d, want %d", n, d.maxConcurrency, DefaultMaxConcurrency)
+		}
+		if l := agg.byType["aws_lambda_function"].(*lambdaDiscoverer); l.maxConcurrency != DefaultMaxConcurrency {
+			t.Errorf("n=%d: lambda maxConcurrency=%d, want %d", n, l.maxConcurrency, DefaultMaxConcurrency)
+		}
+	}
+}

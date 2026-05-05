@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"sync"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
@@ -19,11 +21,18 @@ type lambdaClient interface {
 }
 
 type lambdaDiscoverer struct {
-	new func() lambdaClient
+	new            func() lambdaClient
+	maxConcurrency int
 }
 
-func newLambdaDiscoverer(cfg aws.Config) Discoverer {
-	return &lambdaDiscoverer{new: func() lambdaClient { return lambda.NewFromConfig(cfg) }}
+func newLambdaDiscoverer(cfg aws.Config, maxConcurrency int) Discoverer {
+	if maxConcurrency <= 0 {
+		maxConcurrency = DefaultMaxConcurrency
+	}
+	return &lambdaDiscoverer{
+		new:            func() lambdaClient { return lambda.NewFromConfig(cfg) },
+		maxConcurrency: maxConcurrency,
+	}
 }
 
 func (d *lambdaDiscoverer) ResourceType() string { return "aws_lambda_function" }
@@ -32,9 +41,13 @@ func (d *lambdaDiscoverer) ResourceType() string { return "aws_lambda_function" 
 // keep functions tagged Project=<project>. Lambda has no server-side tag
 // filter, so this is the cheapest correct shape.
 //
-// ListTags errors per-arn log-and-skip (fail-closed: an unreachable ListTags
-// is treated as "no Project tag", not "include anyway"). ListFunctions
-// errors abort so we never return a silently-truncated account scan.
+// Per-function ListTags calls run under a bounded errgroup so a thousand-
+// function account does not serialize into a multi-minute wall-time.
+// Per-item SDK errors are fail-closed (an unreachable ListTags is treated
+// as "no Project tag", not "include anyway") since the SDK retryer has
+// already exhausted its budget. Parent-context cancellation IS propagated:
+// gctx unblocks any in-flight goroutines and Discover returns ctx.Err()
+// rather than a silently-truncated set. ListFunctions errors abort.
 //
 // Import ID for aws_lambda_function is the function name.
 func (d *lambdaDiscoverer) Discover(ctx context.Context, project, region, accountID string) ([]imported.ImportedResource, error) {
@@ -64,19 +77,41 @@ func (d *lambdaDiscoverer) Discover(ctx context.Context, project, region, accoun
 	if project == "" {
 		matched = allFns
 	} else {
-		for _, f := range allFns {
-			tagsOut, err := client.ListTags(ctx, &lambda.ListTagsInput{Resource: aws.String(f.arn)})
-			if err != nil {
-				// Fail-closed: a transient ListTags failure should not silently
-				// leak a function into the import set with no proof of project
-				// ownership. Log and skip — the operator sees the gap and can
-				// re-run after the throttle / permission issue resolves.
-				continue
-			}
-			if tagsOut.Tags["Project"] == project {
-				matched = append(matched, f)
-			}
+		var (
+			mu sync.Mutex
+			ok []fn
+		)
+		limit := d.maxConcurrency
+		if limit <= 0 {
+			limit = DefaultMaxConcurrency
 		}
+		g, gctx := errgroup.WithContext(ctx)
+		g.SetLimit(limit)
+		for _, f := range allFns {
+			f := f
+			g.Go(func() error {
+				if err := gctx.Err(); err != nil {
+					return err
+				}
+				tagsOut, err := client.ListTags(gctx, &lambda.ListTagsInput{Resource: aws.String(f.arn)})
+				if err != nil {
+					if cerr := gctx.Err(); cerr != nil {
+						return cerr
+					}
+					return nil
+				}
+				if tagsOut.Tags["Project"] == project {
+					mu.Lock()
+					ok = append(ok, f)
+					mu.Unlock()
+				}
+				return nil
+			})
+		}
+		if err := g.Wait(); err != nil {
+			return nil, fmt.Errorf("ListTags: %w", err)
+		}
+		matched = ok
 	}
 
 	sort.Slice(matched, func(i, j int) bool { return matched[i].name < matched[j].name })

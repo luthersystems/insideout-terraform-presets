@@ -3,7 +3,10 @@ package awsdiscover
 import (
 	"context"
 	"errors"
+	"fmt"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
@@ -15,6 +18,7 @@ type fakeLambdaClient struct {
 	tagsByID map[string]map[string]string
 	tagsErr  map[string]error // errors keyed by ARN
 
+	mu        sync.Mutex
 	listCalls int
 	tagCalls  []string
 }
@@ -30,7 +34,9 @@ func (f *fakeLambdaClient) ListFunctions(_ context.Context, _ *lambda.ListFuncti
 
 func (f *fakeLambdaClient) ListTags(_ context.Context, in *lambda.ListTagsInput, _ ...func(*lambda.Options)) (*lambda.ListTagsOutput, error) {
 	arn := aws.ToString(in.Resource)
+	f.mu.Lock()
 	f.tagCalls = append(f.tagCalls, arn)
+	f.mu.Unlock()
 	if err, ok := f.tagsErr[arn]; ok {
 		return nil, err
 	}
@@ -200,4 +206,180 @@ func (c *lambdaErrClient) ListFunctions(_ context.Context, _ *lambda.ListFunctio
 
 func (c *lambdaErrClient) ListTags(_ context.Context, _ *lambda.ListTagsInput, _ ...func(*lambda.Options)) (*lambda.ListTagsOutput, error) {
 	return nil, c.err
+}
+
+// blockingLambdaClient is a fake whose ListTags signals when each call
+// enters and then blocks until release is closed (or ctx is cancelled).
+// Used by the concurrency + cancellation tests to observe peak in-flight
+// goroutine count and to model a real cloud call that would otherwise
+// keep a goroutine pinned waiting for a response.
+type blockingLambdaClient struct {
+	pages   []lambda.ListFunctionsOutput
+	release chan struct{}
+	tags    map[string]map[string]string
+
+	mu          sync.Mutex
+	inflight    int
+	maxInflight int
+	starts      chan string // optional: published on each ListTags entry
+}
+
+func (c *blockingLambdaClient) ListFunctions(_ context.Context, _ *lambda.ListFunctionsInput, _ ...func(*lambda.Options)) (*lambda.ListFunctionsOutput, error) {
+	if len(c.pages) == 0 {
+		return &lambda.ListFunctionsOutput{}, nil
+	}
+	out := c.pages[0]
+	c.pages = c.pages[1:]
+	return &out, nil
+}
+
+func (c *blockingLambdaClient) ListTags(ctx context.Context, in *lambda.ListTagsInput, _ ...func(*lambda.Options)) (*lambda.ListTagsOutput, error) {
+	arn := aws.ToString(in.Resource)
+	c.mu.Lock()
+	c.inflight++
+	if c.inflight > c.maxInflight {
+		c.maxInflight = c.inflight
+	}
+	c.mu.Unlock()
+	if c.starts != nil {
+		c.starts <- arn
+	}
+	defer func() {
+		c.mu.Lock()
+		c.inflight--
+		c.mu.Unlock()
+	}()
+
+	select {
+	case <-c.release:
+		return &lambda.ListTagsOutput{Tags: c.tags[arn]}, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+// TestLambdaDiscover_BoundedConcurrency pins g.SetLimit(maxConcurrency).
+// 50 functions are dispatched but no more than maxConcurrency=3 may run
+// concurrently. Without this pin a mutation that drops g.SetLimit (or
+// passes a value derived from len(items)) silently regresses the QoS
+// contract that protects shared accounts from a noisy-neighbor scan.
+func TestLambdaDiscover_BoundedConcurrency(t *testing.T) {
+	t.Parallel()
+	const total = 50
+	const limit = 3
+
+	pages := []lambda.ListFunctionsOutput{{Functions: make([]lambdatypes.FunctionConfiguration, total)}}
+	tags := make(map[string]map[string]string, total)
+	for i := 0; i < total; i++ {
+		name := fmt.Sprintf("io-foo-%d", i)
+		arn := fmt.Sprintf("arn-%d", i)
+		pages[0].Functions[i] = fn(name, arn)
+		tags[arn] = map[string]string{"Project": "io-foo"}
+	}
+	release := make(chan struct{})
+	bc := &blockingLambdaClient{pages: pages, release: release, tags: tags}
+
+	d := &lambdaDiscoverer{
+		new:            func() lambdaClient { return bc },
+		maxConcurrency: limit,
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, err := d.Discover(context.Background(), "io-foo", "us-east-1", "123")
+		done <- err
+	}()
+
+	// Wait until at least `limit` calls are in flight, then sample peak.
+	deadline := time.After(2 * time.Second)
+	for {
+		bc.mu.Lock()
+		got := bc.inflight
+		bc.mu.Unlock()
+		if got >= limit {
+			break
+		}
+		select {
+		case <-deadline:
+			t.Fatalf("never reached %d in-flight; saw %d", limit, got)
+		case <-time.After(5 * time.Millisecond):
+		}
+	}
+	// Hold for a moment to catch any over-shoot.
+	time.Sleep(50 * time.Millisecond)
+	bc.mu.Lock()
+	peak := bc.maxInflight
+	bc.mu.Unlock()
+	if peak > limit {
+		t.Errorf("peak in-flight=%d exceeded limit=%d", peak, limit)
+	}
+
+	close(release)
+	if err := <-done; err != nil {
+		t.Fatalf("Discover returned error: %v", err)
+	}
+}
+
+// TestLambdaDiscover_ContextCancellationUnblocksSiblings pins that a
+// cancelled parent context propagates through gctx and unblocks any
+// goroutines stuck on a long-running ListTags. Without errgroup wiring,
+// the fail-closed handler would leave them hanging until the SDK call
+// itself observed the cancellation.
+//
+// Implementation note (deviation from #270 brief): the brief asked for
+// "return an error immediately for one item" to trigger sibling cancel.
+// Doing that would require flipping the documented fail-closed semantic
+// (existing tests TestLambdaDiscover_FailClosedOnTagsError and
+// TestDynamoDBDiscover_FailClosedOnTagsError both pin per-item errors as
+// non-fatal). Parent-context cancellation is the equivalent path that
+// the real operator hits (Ctrl+C, parent timeout) and exercises the
+// same "siblings unblock via gctx, Discover returns the error" wiring.
+func TestLambdaDiscover_ContextCancellationUnblocksSiblings(t *testing.T) {
+	t.Parallel()
+	const total = 5
+	pages := []lambda.ListFunctionsOutput{{Functions: make([]lambdatypes.FunctionConfiguration, total)}}
+	tags := make(map[string]map[string]string, total)
+	for i := 0; i < total; i++ {
+		name := fmt.Sprintf("io-foo-%d", i)
+		arn := fmt.Sprintf("arn-%d", i)
+		pages[0].Functions[i] = fn(name, arn)
+		tags[arn] = map[string]string{"Project": "io-foo"}
+	}
+	release := make(chan struct{}) // never closed: every call blocks until ctx cancels
+	starts := make(chan string, total)
+	bc := &blockingLambdaClient{pages: pages, release: release, tags: tags, starts: starts}
+
+	d := &lambdaDiscoverer{
+		new:            func() lambdaClient { return bc },
+		maxConcurrency: total, // allow all to dispatch at once
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		_, err := d.Discover(ctx, "io-foo", "us-east-1", "123")
+		done <- err
+	}()
+
+	// Wait until every blocked goroutine has entered ListTags so we know
+	// the cancel signal must propagate via gctx, not via "no goroutine
+	// started yet".
+	for i := 0; i < total; i++ {
+		select {
+		case <-starts:
+		case <-time.After(2 * time.Second):
+			t.Fatalf("only %d goroutines entered ListTags before timeout", i)
+		}
+	}
+	cancel()
+
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("expected cancelled-context error; got nil")
+		}
+		if !errors.Is(err, context.Canceled) {
+			t.Errorf("err=%v, want context.Canceled (wrapped is OK)", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Discover did not return after parent ctx cancelled — siblings stuck")
+	}
 }

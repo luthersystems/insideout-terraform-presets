@@ -143,7 +143,7 @@ func okDeps(agg *fakeAggregator) discoverDeps {
 	return discoverDeps{
 		loadConfig:    func(_ context.Context, _ string) (aws.Config, error) { return aws.Config{}, nil },
 		getAccount:    func(_ context.Context, _ aws.Config) (string, error) { return "1234567890", nil },
-		newDiscoverer: func(_ aws.Config) discoveryAggregator { return agg },
+		newDiscoverer: func(_ aws.Config, _ int) discoveryAggregator { return agg },
 		runGenconfig:  (&fakeGenconfig{}).Run,
 		runDriftfix:   (&fakeDriftfix{}).Run,
 	}
@@ -209,7 +209,7 @@ func TestRunDiscoverWithDeps_LoadConfigFails(t *testing.T) {
 			return aws.Config{}, errors.New("env unreadable")
 		},
 		getAccount:    func(_ context.Context, _ aws.Config) (string, error) { t.Fatal("should not be called"); return "", nil },
-		newDiscoverer: func(_ aws.Config) discoveryAggregator { t.Fatal("should not be called"); return nil },
+		newDiscoverer: func(_ aws.Config, _ int) discoveryAggregator { t.Fatal("should not be called"); return nil },
 	}
 	rc := runDiscoverWithDeps([]string{
 		"--provider", "aws", "--project", "p", "--region", "us-east-1", "--output-dir", dir,
@@ -228,7 +228,7 @@ func TestRunDiscoverWithDeps_STSFails(t *testing.T) {
 	deps := discoverDeps{
 		loadConfig:    func(_ context.Context, _ string) (aws.Config, error) { return aws.Config{}, nil },
 		getAccount:    func(_ context.Context, _ aws.Config) (string, error) { return "", errors.New("AccessDenied") },
-		newDiscoverer: func(_ aws.Config) discoveryAggregator { t.Fatal("should not be called"); return nil },
+		newDiscoverer: func(_ aws.Config, _ int) discoveryAggregator { t.Fatal("should not be called"); return nil },
 	}
 	rc := runDiscoverWithDeps([]string{
 		"--provider", "aws", "--project", "p", "--region", "us-east-1", "--output-dir", dir,
@@ -250,7 +250,7 @@ func TestRunDiscoverWithDeps_NilSTSAccountThreadsEmpty(t *testing.T) {
 	deps := discoverDeps{
 		loadConfig:    func(_ context.Context, _ string) (aws.Config, error) { return aws.Config{}, nil },
 		getAccount:    func(_ context.Context, _ aws.Config) (string, error) { return "", nil }, // success but empty account
-		newDiscoverer: func(_ aws.Config) discoveryAggregator { return agg },
+		newDiscoverer: func(_ aws.Config, _ int) discoveryAggregator { return agg },
 	}
 	rc := runDiscoverWithDeps([]string{
 		"--provider", "aws", "--project", "p", "--region", "us-east-1", "--output-dir", dir,
@@ -586,6 +586,114 @@ func captureStderr(t *testing.T, fn func()) string {
 		fn()
 	}()
 	return <-done
+}
+
+// TestRunDiscoverWithDeps_DefaultMaxConcurrencyThreaded pins that the
+// CLI's default --max-concurrency value reaches newDiscoverer. A
+// regression that hard-codes 0 or stops threading the flag would silently
+// serialize the per-item tag fan-out and reintroduce the QoS pain #270
+// fixed.
+func TestRunDiscoverWithDeps_DefaultMaxConcurrencyThreaded(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	agg := &fakeAggregator{}
+	var gotMax int
+	deps := discoverDeps{
+		loadConfig: func(_ context.Context, _ string) (aws.Config, error) { return aws.Config{}, nil },
+		getAccount: func(_ context.Context, _ aws.Config) (string, error) { return "1234567890", nil },
+		newDiscoverer: func(_ aws.Config, max int) discoveryAggregator {
+			gotMax = max
+			return agg
+		},
+		runGenconfig: (&fakeGenconfig{}).Run,
+		runDriftfix:  (&fakeDriftfix{}).Run,
+	}
+	rc := runDiscoverWithDeps([]string{
+		"--provider", "aws", "--project", "p", "--region", "us-east-1", "--output-dir", dir,
+	}, deps)
+	if rc != discoverExitOK {
+		t.Fatalf("rc=%d, want OK", rc)
+	}
+	if gotMax != 10 {
+		t.Errorf("default --max-concurrency threaded as %d, want 10", gotMax)
+	}
+}
+
+// TestRunDiscoverWithDeps_MaxConcurrencyOverride pins that an explicit
+// flag value reaches newDiscoverer unchanged.
+func TestRunDiscoverWithDeps_MaxConcurrencyOverride(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	agg := &fakeAggregator{}
+	var gotMax int
+	deps := discoverDeps{
+		loadConfig: func(_ context.Context, _ string) (aws.Config, error) { return aws.Config{}, nil },
+		getAccount: func(_ context.Context, _ aws.Config) (string, error) { return "1234567890", nil },
+		newDiscoverer: func(_ aws.Config, max int) discoveryAggregator {
+			gotMax = max
+			return agg
+		},
+		runGenconfig: (&fakeGenconfig{}).Run,
+		runDriftfix:  (&fakeDriftfix{}).Run,
+	}
+	rc := runDiscoverWithDeps([]string{
+		"--provider", "aws", "--project", "p", "--region", "us-east-1", "--output-dir", dir,
+		"--max-concurrency", "42",
+	}, deps)
+	if rc != discoverExitOK {
+		t.Fatalf("rc=%d, want OK", rc)
+	}
+	if gotMax != 42 {
+		t.Errorf("override --max-concurrency threaded as %d, want 42", gotMax)
+	}
+}
+
+// TestRunDiscoverWithDeps_MaxConcurrencyRejectsNonPositive pins that
+// the CLI fails fast on 0 or negative values rather than silently
+// falling back. errgroup.SetLimit(0) blocks every goroutine forever, so
+// a soft fallback would surface as a 15-minute discoverTimeout hang.
+func TestRunDiscoverWithDeps_MaxConcurrencyRejectsNonPositive(t *testing.T) {
+	t.Parallel()
+	for _, n := range []string{"0", "-1"} {
+		dir := t.TempDir()
+		deps := discoverDeps{
+			loadConfig: func(_ context.Context, _ string) (aws.Config, error) { return aws.Config{}, nil },
+			getAccount: func(_ context.Context, _ aws.Config) (string, error) { return "1", nil },
+			newDiscoverer: func(_ aws.Config, _ int) discoveryAggregator {
+				t.Fatalf("n=%s: newDiscoverer must not run when --max-concurrency invalid", n)
+				return nil
+			},
+		}
+		rc := runDiscoverWithDeps([]string{
+			"--provider", "aws", "--project", "p", "--region", "us-east-1", "--output-dir", dir,
+			"--max-concurrency", n,
+		}, deps)
+		if rc != discoverExitFatal {
+			t.Errorf("n=%s: rc=%d, want fatal", n, rc)
+		}
+	}
+}
+
+// TestProductionDiscoverDeps_LoadConfigSetsRetryMaxAttempts pins that
+// the production loadConfig path threads discoverRetryMaxAttempts (8)
+// onto the resulting aws.Config. The SDK consumes this value when each
+// per-service client is constructed and uses it as the retryer attempt
+// budget, which is what protects a long discover run from a transient
+// Throttling burst aborting mid-batch.
+//
+// Pinning the literal value 8 (not the constant) is intentional: a
+// mutation that re-points the constant to 0 must fail this test. The
+// constant is the contract the operator-visible behavior depends on.
+func TestProductionDiscoverDeps_LoadConfigSetsRetryMaxAttempts(t *testing.T) {
+	t.Parallel()
+	deps := productionDiscoverDeps()
+	cfg, err := deps.loadConfig(context.Background(), "us-east-1")
+	if err != nil {
+		t.Fatalf("loadConfig: %v (the WithRetryMaxAttempts option is applied independent of credential resolution; an err here means LoadDefaultConfig failed for an unrelated reason that needs investigating)", err)
+	}
+	if cfg.RetryMaxAttempts != 8 {
+		t.Errorf("aws.Config.RetryMaxAttempts=%d, want 8 (constant discoverRetryMaxAttempts must be threaded through productionDiscoverDeps.loadConfig)", cfg.RetryMaxAttempts)
+	}
 }
 
 func TestSplitCSV(t *testing.T) {
