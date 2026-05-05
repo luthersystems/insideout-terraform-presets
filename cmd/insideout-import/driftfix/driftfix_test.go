@@ -5,9 +5,12 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
+	"github.com/hashicorp/hcl/v2"
+	"github.com/hashicorp/hcl/v2/hclwrite"
 	tfjson "github.com/hashicorp/terraform-json"
 )
 
@@ -158,6 +161,13 @@ func TestRun_ImportOnlyPlanReturnsClean(t *testing.T) {
 	if res.Iterations != 1 {
 		t.Errorf("Iterations=%d, want 1 (clean plan converges immediately)", res.Iterations)
 	}
+	// Validate must NOT run on the early-return path: no patch was
+	// written, so there's nothing to validate. A mutation that always
+	// validated would mask a logic bug where the loop wrote a partial
+	// patch before short-circuiting.
+	if runner.validateCalls != 0 {
+		t.Errorf("validate must not run on early-return path; got %d calls", runner.validateCalls)
+	}
 }
 
 // alwaysHasChangesRunner forces PlanTo to report hasChanges=true even
@@ -201,12 +211,34 @@ func TestRun_DriftThenCleanConverges(t *testing.T) {
 		t.Errorf("Iterations=%d, want 2", res.Iterations)
 	}
 	body, _ := os.ReadFile(filepath.Join(dir, generatedFile))
-	if strings.Contains(string(body), "delay_seconds") {
+	if hclResourceHasAttr(t, body, "aws_sqs_queue.x", "delay_seconds") {
 		t.Errorf("delay_seconds must be dropped after patch\n--- got ---\n%s", body)
 	}
 	if runner.validateCalls != 1 {
 		t.Errorf("validate must run once per patched iteration; got %d", runner.validateCalls)
 	}
+}
+
+// hclResourceHasAttr parses raw HCL and reports whether the named
+// resource address has the named top-level attribute. Robust to
+// formatter whitespace and comments.
+func hclResourceHasAttr(t *testing.T, raw []byte, address, attr string) bool {
+	t.Helper()
+	f, diags := hclwrite.ParseConfig(raw, "test.tf", hcl.Pos{Line: 1, Column: 1})
+	if diags.HasErrors() {
+		t.Fatalf("parse: %s", diags.Error())
+	}
+	for _, blk := range f.Body().Blocks() {
+		if blk.Type() != "resource" {
+			continue
+		}
+		labels := blk.Labels()
+		if len(labels) != 2 || labels[0]+"."+labels[1] != address {
+			continue
+		}
+		return blk.Body().GetAttribute(attr) != nil
+	}
+	return false
 }
 
 // TestRun_RecurringDriftEscalatesToIgnoreChanges pins the two-strategy
@@ -234,8 +266,22 @@ func TestRun_RecurringDriftEscalatesToIgnoreChanges(t *testing.T) {
 		t.Errorf("Iterations=%d, want 3 (drop, escalate, converge)", res.Iterations)
 	}
 	body, _ := os.ReadFile(filepath.Join(dir, generatedFile))
-	if !strings.Contains(string(body), "ignore_changes") {
-		t.Errorf("escalation must add lifecycle.ignore_changes\n--- got ---\n%s", body)
+	if !hclResourceHasIgnoreChange(t, body, "aws_sqs_queue.x", "name") {
+		t.Errorf("escalation must add `name` to lifecycle.ignore_changes\n--- got ---\n%s", body)
+	}
+	// Validate must run TWICE: once after the drop patch, once after
+	// the escalation. A mutation that skipped the escalation-side
+	// validate would survive without this check (the test would pass
+	// even if a Required attr were dropped during escalation).
+	if runner.validateCalls != 2 {
+		t.Errorf("validate calls = %d, want 2 (one per patched iteration)", runner.validateCalls)
+	}
+	// Pin call ordering so a mutation that flipped patch+validate
+	// wouldn't slip past. Expected: plan, show, validate, plan, show,
+	// validate, plan, (no show on clean plan).
+	wantOrder := []string{"plan", "show", "validate", "plan", "show", "validate", "plan"}
+	if !equalStringSlices(runner.calls, wantOrder) {
+		t.Errorf("call order = %v, want %v", runner.calls, wantOrder)
 	}
 }
 
@@ -259,6 +305,78 @@ func TestRun_DriftStableAfterEscalationFatal(t *testing.T) {
 	if !strings.Contains(err.Error(), "stable but unresolved") {
 		t.Errorf("err=%v, want stable-but-unresolved message", err)
 	}
+	// Pin that the escalation patch DID run before the fatal: the
+	// disk file must contain ignore_changes at the time of failure.
+	// A mutation that returned the fatal without performing the
+	// escalation patch on iter 2 would survive a message-only check.
+	body, _ := os.ReadFile(filepath.Join(dir, generatedFile))
+	if !hclResourceHasIgnoreChange(t, body, "aws_sqs_queue.x", "name") {
+		t.Errorf("escalation must have run (writing ignore_changes) before fatal\n--- got ---\n%s", body)
+	}
+}
+
+// TestRun_ValidateFailureAfterEscalationFatal pins that validate
+// failure on the escalation path surfaces the escalation-specific
+// error message, distinct from validate failure on the drop path.
+// A mutation that hard-coded "validate after patch" everywhere would
+// survive the drop-path-only TestRun_ValidateFailureFatal.
+func TestRun_ValidateFailureAfterEscalationFatal(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	writeFixture(t, dir)
+	driftP := updatePlan("aws_sqs_queue.x",
+		map[string]any{"name": "alpha"},
+		map[string]any{"name": "bravo"})
+	// failOnNthValidate fails ONLY the second validate (the one on
+	// the escalation path). The first validate (drop pass) succeeds.
+	runner := &validateNthFailRunner{
+		scriptedRunner: scriptedRunner{plansByCall: []*tfjson.Plan{driftP, driftP, emptyPlan()}},
+		failOnCall:     2,
+		failErr:        errors.New("hcl unexpected token"),
+	}
+	_, err := Run(context.Background(), Options{Workdir: dir, Runner: runner.toBase()})
+	if err == nil {
+		t.Fatal("expected validate error on escalation path")
+	}
+	if !strings.Contains(err.Error(), "validate after ignore_changes") {
+		t.Errorf("err=%v, want escalation-specific validate message", err)
+	}
+}
+
+// validateNthFailRunner returns failErr on the failOnCall-th call to
+// Validate (1-indexed). All other Validate calls succeed.
+type validateNthFailRunner struct {
+	scriptedRunner
+	failOnCall int
+	failErr    error
+}
+
+func (r *validateNthFailRunner) Validate(_ context.Context) error {
+	r.calls = append(r.calls, "validate")
+	r.validateCalls++
+	if r.validateCalls == r.failOnCall {
+		return r.failErr
+	}
+	return nil
+}
+
+// toBase returns the runner as a terraformRunner — needed because Go
+// embeds the base struct's methods but Run takes the interface.
+func (r *validateNthFailRunner) toBase() terraformRunner { return r }
+
+// equalStringSlices reports whether two string slices are equal.
+// Used for pinning call sequence order without a third-party diff
+// library.
+func equalStringSlices(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // TestRun_ReplaceFatal pins that a plan with a delete-create pair never
@@ -268,6 +386,7 @@ func TestRun_ReplaceFatal(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	writeFixture(t, dir)
+	pre, _ := os.ReadFile(filepath.Join(dir, generatedFile))
 	replaceP := &tfjson.Plan{ResourceChanges: []*tfjson.ResourceChange{{
 		Address: "aws_sqs_queue.x",
 		Change: &tfjson.Change{
@@ -283,6 +402,13 @@ func TestRun_ReplaceFatal(t *testing.T) {
 	if !strings.Contains(err.Error(), "must be replaced") {
 		t.Errorf("err=%v, want must-be-replaced message", err)
 	}
+	// generated.tf must be untouched on a fatal — a mutation that
+	// patched before classifying as fatal would silently corrupt the
+	// operator's only debugging artifact.
+	post, _ := os.ReadFile(filepath.Join(dir, generatedFile))
+	if string(pre) != string(post) {
+		t.Errorf("generated.tf must be byte-identical on fatal exit\n--- pre ---\n%s\n--- post ---\n%s", pre, post)
+	}
 }
 
 // TestRun_DeleteFatal pins that a bare delete is fatal.
@@ -290,6 +416,7 @@ func TestRun_DeleteFatal(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	writeFixture(t, dir)
+	pre, _ := os.ReadFile(filepath.Join(dir, generatedFile))
 	deleteP := &tfjson.Plan{ResourceChanges: []*tfjson.ResourceChange{{
 		Address: "aws_sqs_queue.x",
 		Change:  &tfjson.Change{Actions: tfjson.Actions{tfjson.ActionDelete}},
@@ -302,6 +429,44 @@ func TestRun_DeleteFatal(t *testing.T) {
 	if !strings.Contains(err.Error(), "marked for delete") {
 		t.Errorf("err=%v, want marked-for-delete message", err)
 	}
+	post, _ := os.ReadFile(filepath.Join(dir, generatedFile))
+	if string(pre) != string(post) {
+		t.Errorf("generated.tf must be byte-identical on fatal exit\n--- pre ---\n%s\n--- post ---\n%s", pre, post)
+	}
+}
+
+// hclResourceHasIgnoreChange parses raw HCL and reports whether the
+// named resource address has an attr in lifecycle.ignore_changes.
+// Use this rather than strings.Contains so the assertion isn't
+// fragile to formatter whitespace, comments, or attr ordering.
+func hclResourceHasIgnoreChange(t *testing.T, raw []byte, address, attr string) bool {
+	t.Helper()
+	f, diags := hclwrite.ParseConfig(raw, "test.tf", hcl.Pos{Line: 1, Column: 1})
+	if diags.HasErrors() {
+		t.Fatalf("parse: %s", diags.Error())
+	}
+	for _, blk := range f.Body().Blocks() {
+		if blk.Type() != "resource" {
+			continue
+		}
+		labels := blk.Labels()
+		if len(labels) != 2 || labels[0]+"."+labels[1] != address {
+			continue
+		}
+		for _, sub := range blk.Body().Blocks() {
+			if sub.Type() != "lifecycle" {
+				continue
+			}
+			ic := sub.Body().GetAttribute("ignore_changes")
+			if ic == nil {
+				continue
+			}
+			if slices.Contains(parseIgnoreChangesList(ic), attr) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // TestRun_ValidateFailureFatal pins that if patching breaks `terraform

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -518,22 +519,67 @@ func TestRunDiscoverWithDeps_NoHCLSkipsBothStages(t *testing.T) {
 // TestRunDiscoverWithDeps_DriftfixFailureExitsFatal pins that a Stage
 // 2c1 failure (replace, stable drift, validate-after-patch failure)
 // exits non-zero. The on-disk imported.json + generated.tf survive so
-// the operator can inspect.
+// the operator can inspect. Also pins that the operator-facing
+// remediation hint ("Re-run with --no-driftfix...") reaches stderr —
+// regressing that string would silently degrade the failure UX.
+//
+// NOT t.Parallel(): captures global os.Stderr.
 func TestRunDiscoverWithDeps_DriftfixFailureExitsFatal(t *testing.T) {
-	t.Parallel()
 	dir := t.TempDir()
 	gc := &fakeGenconfig{}
 	df := &fakeDriftfix{err: errors.New("must be replaced")}
 	agg := &fakeAggregator{out: []imported.ImportedResource{validResource("aws_sqs_queue.alpha")}}
-	rc := runDiscoverWithDeps([]string{
-		"--provider", "aws", "--project", "p", "--region", "us-east-1", "--output-dir", dir,
-	}, okDepsWithDF(agg, gc, df))
-	if rc != discoverExitFatal {
-		t.Errorf("rc=%d, want fatal", rc)
-	}
+	stderr := captureStderr(t, func() {
+		rc := runDiscoverWithDeps([]string{
+			"--provider", "aws", "--project", "p", "--region", "us-east-1", "--output-dir", dir,
+		}, okDepsWithDF(agg, gc, df))
+		if rc != discoverExitFatal {
+			t.Errorf("rc=%d, want fatal", rc)
+		}
+	})
 	if _, err := os.Stat(filepath.Join(dir, "imported.json")); err != nil {
 		t.Errorf("imported.json must exist after Stage 2b even if Stage 2c1 fails: %v", err)
 	}
+	if !strings.Contains(stderr, "--no-driftfix") {
+		t.Errorf("stderr must include the --no-driftfix remediation hint; got:\n%s", stderr)
+	}
+	if !strings.Contains(stderr, "drift fix") {
+		t.Errorf("stderr must include the failing-stage label; got:\n%s", stderr)
+	}
+}
+
+// captureStderr swaps os.Stderr for a pipe, runs fn, and returns the
+// captured output. Callers using this must NOT mark the test parallel
+// — os.Stderr is global state.
+func captureStderr(t *testing.T, fn func()) string {
+	t.Helper()
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe: %v", err)
+	}
+	orig := os.Stderr
+	os.Stderr = w
+	t.Cleanup(func() { os.Stderr = orig })
+
+	done := make(chan string, 1)
+	go func() {
+		buf := make([]byte, 0, 4096)
+		tmp := make([]byte, 1024)
+		for {
+			n, err := r.Read(tmp)
+			if n > 0 {
+				buf = append(buf, tmp[:n]...)
+			}
+			if err != nil {
+				break
+			}
+		}
+		done <- string(buf)
+	}()
+
+	fn()
+	_ = w.Close()
+	return <-done
 }
 
 func TestSplitCSV(t *testing.T) {

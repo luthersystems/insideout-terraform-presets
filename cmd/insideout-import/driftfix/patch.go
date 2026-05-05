@@ -3,6 +3,7 @@ package driftfix
 import (
 	"fmt"
 	"reflect"
+	"slices"
 	"sort"
 
 	"github.com/hashicorp/hcl/v2"
@@ -63,17 +64,19 @@ func isUpdateOnly(actions tfjson.Actions) bool {
 }
 
 func hasAction(actions tfjson.Actions, want tfjson.Action) bool {
-	for _, a := range actions {
-		if a == want {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(actions, want)
 }
 
 // topLevelDrift returns the sorted set of top-level attribute names
 // whose After differs from Before. Sorted so the patch pass produces
 // byte-identical output across runs of the same plan.
+//
+// The walk visits the union of Before+After keys so a key dropped on
+// the After side (After omits a key Before has) still classifies as
+// drift. terraform-json typically emits both maps with identical key
+// sets and null values for unset attrs, but a key-drop case is what
+// the patch pass would see if a future provider release shifts an
+// attr to deprecated/computed.
 //
 // Nested-block drift (timeouts, lifecycle, etc.) is intentionally not
 // reported — Stage 2c1's contract is "patch the plain attrs"; nested
@@ -84,13 +87,18 @@ func hasAction(actions tfjson.Actions, want tfjson.Action) bool {
 func topLevelDrift(before, after any) []string {
 	beforeMap, _ := before.(map[string]any)
 	afterMap, _ := after.(map[string]any)
-	if afterMap == nil {
+	if beforeMap == nil && afterMap == nil {
 		return nil
 	}
 	seen := map[string]struct{}{}
 	for k, av := range afterMap {
 		bv, ok := beforeMap[k]
 		if !ok || !reflect.DeepEqual(av, bv) {
+			seen[k] = struct{}{}
+		}
+	}
+	for k := range beforeMap {
+		if _, ok := afterMap[k]; !ok {
 			seen[k] = struct{}{}
 		}
 	}
