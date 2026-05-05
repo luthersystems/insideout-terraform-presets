@@ -74,16 +74,30 @@ type DriftReporter interface {
 	MissingResource(ctx context.Context, sessionID, reason, componentKey string)
 }
 
-// MetricsFetcher handles the special `get-metrics` action which is NOT
-// routed through pkg/observability/discovery/{aws,gcp}.Inspect (the
-// upstream AWS dispatcher returns ErrUseMetricsPackage; the GCP
-// dispatcher does not route get-metrics). Reliable injects its
-// CloudWatch / Cloud Monitoring catalog here so the lifted dispatcher
-// does not have to own a per-service metrics catalog.
+// MetricsFetcher handles the special `get-metrics` action and the
+// cred-less `list-metrics` discovery action. Neither is routed through
+// pkg/observability/discovery/{aws,gcp}.Inspect (the upstream AWS
+// dispatcher returns ErrUseMetricsPackage; the GCP dispatcher does
+// not route get-metrics). Reliable injects its CloudWatch /
+// Cloud Monitoring catalog here so the lifted dispatcher does not
+// have to own a per-service metrics catalog.
 //
 // Optional — a Dispatcher with nil Metrics returns
-// "metrics fetcher not configured" on `get-metrics`.
+// "metrics fetcher not configured" on `get-metrics`, and a stub
+// `{service, metrics: [], note}` shape on `list-metrics`. Reliable's
+// existing `listAvailableMetrics` / `listAvailableGCPMetrics` are
+// the byte-equal implementations callers should wire in.
 type MetricsFetcher interface {
 	AWSGet(ctx context.Context, cfg aws.Config, service, filters string) (any, error)
 	GCPGet(ctx context.Context, creds *GCPCreds, service, filters string) (any, error)
+	// ListAWS returns the per-service AWS metrics catalog (no
+	// credentials needed). Mirrors reliable's
+	// listAvailableMetrics(service) at aws_metrics.go:131. Wire
+	// shape: a struct with `namespace`, `metrics: [...]`, `dimension_*`,
+	// and `note` keys per the reliable contract — pass-through to
+	// the existing reliable implementation.
+	ListAWS(service string) any
+	// ListGCP is the GCP twin of ListAWS. Mirrors reliable's
+	// listAvailableGCPMetrics(service) at gcp_metrics.go:91.
+	ListGCP(service string) any
 }

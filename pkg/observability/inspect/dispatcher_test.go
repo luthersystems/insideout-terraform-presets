@@ -18,6 +18,7 @@ package inspect
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"sync"
@@ -60,34 +61,41 @@ func (s *stubCreds) GCP(ctx context.Context, projectID string) (*GCPCreds, error
 	return s.gcpCreds, s.gcpErr
 }
 
+type driftCall struct {
+	sessionID    string
+	reason       string
+	componentKey string
+}
+
 type stubDrift struct {
 	calls atomic.Int32
 	mu    sync.Mutex
-	last  struct {
-		sessionID    string
-		reason       string
-		componentKey string
-	}
+	all   []driftCall // every call, in arrival order
 }
 
 func (s *stubDrift) MissingResource(ctx context.Context, sessionID, reason, componentKey string) {
 	s.calls.Add(1)
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.last.sessionID = sessionID
-	s.last.reason = reason
-	s.last.componentKey = componentKey
+	s.all = append(s.all, driftCall{sessionID: sessionID, reason: reason, componentKey: componentKey})
 }
 
-// snapshotLast returns a copy of the most recent MissingResource args
-// under the mutex. Tests must use this rather than reading
-// s.last.* directly.
-func (s *stubDrift) snapshotLast() (sessionID, reason, componentKey string) {
+// snapshotAll returns a copy of every recorded MissingResource call.
+// Tests must use this rather than reading s.all directly.
+func (s *stubDrift) snapshotAll() []driftCall {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.last.sessionID, s.last.reason, s.last.componentKey
+	out := make([]driftCall, len(s.all))
+	copy(out, s.all)
+	return out
 }
 
+// stubMetrics is a hand-rolled MetricsFetcher fake. All result/err
+// fields are write-once-before-dispatch — callers MUST configure
+// them at construction time and not mutate while the Dispatcher is
+// in flight. Reads happen on per-sub goroutines (batch fan-out), so
+// post-construction mutation would be a data race. Counters are
+// atomic and safe to read at any time.
 type stubMetrics struct {
 	awsResult any
 	gcpResult any
@@ -95,6 +103,13 @@ type stubMetrics struct {
 	gcpErr    error
 	awsCalls  atomic.Int32
 	gcpCalls  atomic.Int32
+	// listAWSResult / listGCPResult are returned from ListAWS /
+	// ListGCP. Default to nil — most tests don't exercise the
+	// list-metrics path through the catalog.
+	listAWSResult any
+	listGCPResult any
+	listAWSCalls  atomic.Int32
+	listGCPCalls  atomic.Int32
 }
 
 func (s *stubMetrics) AWSGet(ctx context.Context, cfg aws.Config, service, filters string) (any, error) {
@@ -105,6 +120,16 @@ func (s *stubMetrics) AWSGet(ctx context.Context, cfg aws.Config, service, filte
 func (s *stubMetrics) GCPGet(ctx context.Context, creds *GCPCreds, service, filters string) (any, error) {
 	s.gcpCalls.Add(1)
 	return s.gcpResult, s.gcpErr
+}
+
+func (s *stubMetrics) ListAWS(service string) any {
+	s.listAWSCalls.Add(1)
+	return s.listAWSResult
+}
+
+func (s *stubMetrics) ListGCP(service string) any {
+	s.listGCPCalls.Add(1)
+	return s.listGCPResult
 }
 
 func validAWSCreds() *AWSCreds {
@@ -296,7 +321,8 @@ func TestDispatcherAWS_GetMetricsRoutesToFetcher(t *testing.T) {
 	t.Parallel()
 	resolver := &stubResolver{projectID: "p", cloud: "aws"}
 	creds := &stubCreds{awsCreds: validAWSCreds()}
-	metrics := &stubMetrics{awsResult: map[string]any{"datapoints": []any{}}}
+	sentinel := map[string]any{"datapoints": []any{1.0, 2.0, 3.0}}
+	metrics := &stubMetrics{awsResult: sentinel}
 	d := &Dispatcher{Resolver: resolver, Creds: creds, Metrics: metrics}
 
 	got, err := d.AWS(context.Background(), "sess", "ec2", "get-metrics", "")
@@ -306,8 +332,96 @@ func TestDispatcherAWS_GetMetricsRoutesToFetcher(t *testing.T) {
 	if metrics.awsCalls.Load() != 1 {
 		t.Errorf("MetricsFetcher.AWSGet called %d times, want 1", metrics.awsCalls.Load())
 	}
-	if got == nil {
-		t.Error("result = nil, want non-nil from MetricsFetcher")
+	gotMap, ok := got.(map[string]any)
+	if !ok {
+		t.Fatalf("result type = %T, want map[string]any from MetricsFetcher", got)
+	}
+	pts, ok := gotMap["datapoints"].([]any)
+	if !ok || len(pts) != 3 {
+		t.Errorf("result[datapoints] = %v, want 3-element []any (sentinel pass-through)", gotMap["datapoints"])
+	}
+}
+
+// TestDispatcherAWS_ListMetricsRoutesToCatalog confirms the
+// list-metrics action delegates to MetricsFetcher.ListAWS when one
+// is configured. Pins the catalog seam so reliable's
+// listAvailableMetrics(service) survives the cutover byte-equal —
+// the dispatcher passes the call through, no shape rewriting.
+func TestDispatcherAWS_ListMetricsRoutesToCatalog(t *testing.T) {
+	t.Parallel()
+	creds := &stubCreds{}
+	resolver := &stubResolver{}
+	sentinel := map[string]any{
+		"namespace": "AWS/EC2",
+		"metrics":   []any{"CPUUtilization", "DiskReadOps"},
+	}
+	metrics := &stubMetrics{listAWSResult: sentinel}
+	d := &Dispatcher{Resolver: resolver, Creds: creds, Metrics: metrics}
+
+	got, err := d.AWS(context.Background(), "sess", "ec2", "list-metrics", "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if metrics.listAWSCalls.Load() != 1 {
+		t.Errorf("MetricsFetcher.ListAWS called %d times, want 1", metrics.listAWSCalls.Load())
+	}
+	if creds.awsCalls.Load() != 0 {
+		t.Errorf("CredsProvider.AWS called %d times, want 0 (list-metrics is cred-less)", creds.awsCalls.Load())
+	}
+	gotMap, ok := got.(map[string]any)
+	if !ok {
+		t.Fatalf("result type = %T, want map[string]any from catalog", got)
+	}
+	if gotMap["namespace"] != "AWS/EC2" {
+		t.Errorf("result[namespace] = %v, want %q (catalog must pass through unchanged)", gotMap["namespace"], "AWS/EC2")
+	}
+}
+
+// TestDispatcherGCP_ListMetricsRoutesToCatalog — GCP twin.
+func TestDispatcherGCP_ListMetricsRoutesToCatalog(t *testing.T) {
+	t.Parallel()
+	creds := &stubCreds{}
+	resolver := &stubResolver{}
+	sentinel := map[string]any{"service": "compute", "metrics": []any{"cpu/utilization"}}
+	metrics := &stubMetrics{listGCPResult: sentinel}
+	d := &Dispatcher{Resolver: resolver, Creds: creds, Metrics: metrics}
+
+	got, err := d.GCP(context.Background(), "sess", "compute", "list-metrics", "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if metrics.listGCPCalls.Load() != 1 {
+		t.Errorf("MetricsFetcher.ListGCP called %d times, want 1", metrics.listGCPCalls.Load())
+	}
+	if creds.gcpCalls.Load() != 0 {
+		t.Errorf("CredsProvider.GCP called %d times, want 0 (list-metrics is cred-less)", creds.gcpCalls.Load())
+	}
+	gotMap, ok := got.(map[string]any)
+	if !ok {
+		t.Fatalf("result type = %T, want map[string]any from catalog", got)
+	}
+	if gotMap["service"] != "compute" {
+		t.Errorf("result[service] = %v, want %q (catalog must pass through unchanged)", gotMap["service"], "compute")
+	}
+}
+
+// TestDispatcherAWS_ListMetricsStubWhenFetcherNil confirms the
+// presets-only callers (no MetricsFetcher) get a recognizable stub
+// rather than a panic. The "requires a MetricsFetcher" note is the
+// signal for callers without a catalog.
+func TestDispatcherAWS_ListMetricsStubWhenFetcherNil(t *testing.T) {
+	t.Parallel()
+	d := &Dispatcher{Resolver: &stubResolver{}, Creds: &stubCreds{}}
+	got, err := d.AWS(context.Background(), "sess", "ec2", "list-metrics", "")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	gotMap, ok := got.(map[string]any)
+	if !ok {
+		t.Fatalf("result type = %T, want map[string]any", got)
+	}
+	if note, _ := gotMap["note"].(string); !strings.Contains(note, "MetricsFetcher") {
+		t.Errorf("stub note = %q, want substring 'MetricsFetcher'", note)
 	}
 }
 
@@ -336,7 +450,8 @@ func TestDispatcherGCP_GetMetricsRoutesToFetcher(t *testing.T) {
 	t.Parallel()
 	resolver := &stubResolver{projectID: "p", cloud: "gcp"}
 	creds := &stubCreds{gcpCreds: validGCPCreds()}
-	metrics := &stubMetrics{gcpResult: map[string]any{"series": []any{}}}
+	sentinel := map[string]any{"series": []any{"a", "b"}}
+	metrics := &stubMetrics{gcpResult: sentinel}
 	d := &Dispatcher{Resolver: resolver, Creds: creds, Metrics: metrics}
 
 	got, err := d.GCP(context.Background(), "sess", "compute", "get-metrics", "")
@@ -346,8 +461,13 @@ func TestDispatcherGCP_GetMetricsRoutesToFetcher(t *testing.T) {
 	if metrics.gcpCalls.Load() != 1 {
 		t.Errorf("MetricsFetcher.GCPGet called %d times, want 1", metrics.gcpCalls.Load())
 	}
-	if got == nil {
-		t.Error("result = nil, want non-nil from MetricsFetcher")
+	gotMap, ok := got.(map[string]any)
+	if !ok {
+		t.Fatalf("result type = %T, want map[string]any from MetricsFetcher", got)
+	}
+	series, ok := gotMap["series"].([]any)
+	if !ok || len(series) != 2 {
+		t.Errorf("result[series] = %v, want 2-element []any (sentinel pass-through)", gotMap["series"])
 	}
 }
 
@@ -375,15 +495,19 @@ func TestDispatcherAWS_DriftReporterFiresOnMissingResource(t *testing.T) {
 	if drift.calls.Load() != 1 {
 		t.Fatalf("DriftReporter called %d times, want 1 on missing-resource", drift.calls.Load())
 	}
-	gotSessionID, gotReason, gotComponentKey := drift.snapshotLast()
-	if gotSessionID != "sess-42" {
-		t.Errorf("drift sessionID = %q, want %q", gotSessionID, "sess-42")
+	calls := drift.snapshotAll()
+	if calls[0].sessionID != "sess-42" {
+		t.Errorf("drift sessionID = %q, want %q", calls[0].sessionID, "sess-42")
 	}
-	if gotComponentKey != "" {
-		t.Errorf("drift componentKey = %q, want empty (session-level drift)", gotComponentKey)
+	if calls[0].componentKey != "" {
+		t.Errorf("drift componentKey = %q, want empty (session-level drift)", calls[0].componentKey)
 	}
-	if !strings.Contains(gotReason, "not found") {
-		t.Errorf("drift reason = %q, want contains %q", gotReason, "not found")
+	// Pin the exact reason string — reliable's UI displays it
+	// verbatim. The wrap shape is `aws_operation_failed: %v` per
+	// inspectAWSCore at dispatcher.go:177.
+	const wantReason = "aws_operation_failed: DBInstance prod-db not found"
+	if calls[0].reason != wantReason {
+		t.Errorf("drift reason = %q, want byte-equal %q", calls[0].reason, wantReason)
 	}
 }
 
@@ -410,8 +534,11 @@ func TestDispatcherAWS_DriftReporterSilentOnNonDriftErrors(t *testing.T) {
 }
 
 // TestDispatcherAWS_NilDriftIsSafe confirms a missing-resource error
-// with Drift==nil is a no-op. Without this the Dispatcher would force
-// every caller to supply a DriftReporter.
+// with Drift==nil is a no-op. Without this the Dispatcher would
+// force every caller to supply a DriftReporter. Asserts both that
+// the dispatcher reached the drift-gate (err passes IsMissingResource)
+// and that the call returned cleanly without invoking a nil
+// DriftReporter.
 func TestDispatcherAWS_NilDriftIsSafe(t *testing.T) {
 	t.Parallel()
 	resolver := &stubResolver{projectID: "p", cloud: "aws"}
@@ -423,13 +550,22 @@ func TestDispatcherAWS_NilDriftIsSafe(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
+	// Confirm the error WOULD have triggered the drift gate — so
+	// this test is meaningfully exercising the nil-drift skip path.
+	// Without this assertion, a regression that wrapped the error
+	// such that IsMissingResource(err) is false would silently make
+	// this test a no-op.
+	if !IsMissingResource(err) {
+		t.Errorf("err = %q, expected to pass IsMissingResource — test is no longer meaningful", err)
+	}
 }
 
 // TestDispatcherAWS_ProjectFilterInjected verifies the project-filter
-// chain runs when a ProjectNameForFilter is configured. Asserts the
-// filter is passed through to the MetricsFetcher (the easiest
-// observation point in tests; the discovery dispatcher requires real
-// creds).
+// chain runs when a ProjectNameForFilter is configured. Parses the
+// JSON the dispatcher passed downstream and asserts both the
+// pre-existing key (`hours:6`) and the injected `project` field —
+// substring-only would let a duplicate-key bug
+// (`{"project":"io-test-stack","project":"demo"}`) slip through.
 func TestDispatcherAWS_ProjectFilterInjected(t *testing.T) {
 	t.Parallel()
 	resolver := &stubResolver{projectID: "p", cloud: "aws"}
@@ -448,8 +584,15 @@ func TestDispatcherAWS_ProjectFilterInjected(t *testing.T) {
 	if _, err := d.AWS(context.Background(), "sess", "rds", "get-metrics", `{"hours":6}`); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !strings.Contains(seenFilter, `"project":"io-test-stack"`) {
-		t.Errorf("filters seen by metrics = %q, want substring %q", seenFilter, `"project":"io-test-stack"`)
+	var parsed map[string]any
+	if err := json.Unmarshal([]byte(seenFilter), &parsed); err != nil {
+		t.Fatalf("filter JSON not valid: %v (raw=%q)", err, seenFilter)
+	}
+	if parsed["project"] != "io-test-stack" {
+		t.Errorf("parsed[project] = %v, want %q", parsed["project"], "io-test-stack")
+	}
+	if parsed["hours"] == nil {
+		t.Errorf("parsed[hours] missing — pre-existing filter dropped on injection (raw=%q)", seenFilter)
 	}
 }
 
@@ -532,6 +675,14 @@ func (f *filterCapturingMetrics) AWSGet(ctx context.Context, cfg aws.Config, ser
 func (f *filterCapturingMetrics) GCPGet(ctx context.Context, creds *GCPCreds, service, filters string) (any, error) {
 	*f.capture = filters
 	return f.inner.GCPGet(ctx, creds, service, filters)
+}
+
+func (f *filterCapturingMetrics) ListAWS(service string) any {
+	return f.inner.ListAWS(service)
+}
+
+func (f *filterCapturingMetrics) ListGCP(service string) any {
+	return f.inner.ListGCP(service)
 }
 
 // Compile-time assertion that the helper satisfies MetricsFetcher.

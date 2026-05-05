@@ -15,6 +15,9 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/aws/aws-sdk-go-v2/aws"
 )
 
 func TestAWSBatch_RejectsEmpty(t *testing.T) {
@@ -36,6 +39,27 @@ func TestAWSBatch_RejectsTooMany(t *testing.T) {
 	_, err := d.AWSBatch(context.Background(), "sess", subs)
 	if err == nil || !strings.Contains(err.Error(), "too_many_subs") {
 		t.Errorf("expected too_many_subs error, got %v", err)
+	}
+}
+
+// TestAWSBatch_AcceptsExactlyMaxBatchSubs pins the off-by-one
+// boundary: a batch of exactly MaxBatchSubs probes must succeed.
+// Without this, a regression that flipped the comparison from
+// `len(subs) > MaxBatchSubs` to `len(subs) >= MaxBatchSubs` would
+// silently reject the maximum-size batches.
+func TestAWSBatch_AcceptsExactlyMaxBatchSubs(t *testing.T) {
+	t.Parallel()
+	d := &Dispatcher{Resolver: &stubResolver{}, Creds: &stubCreds{}}
+	subs := make([]SubRequest, MaxBatchSubs)
+	for i := range subs {
+		subs[i] = SubRequest{Service: "ec2", Action: "list-actions"}
+	}
+	results, err := d.AWSBatch(context.Background(), "sess", subs)
+	if err != nil {
+		t.Fatalf("expected MaxBatchSubs to be accepted, got error: %v", err)
+	}
+	if len(results) != MaxBatchSubs {
+		t.Errorf("got %d results, want %d", len(results), MaxBatchSubs)
 	}
 }
 
@@ -174,13 +198,15 @@ func TestAWSBatch_ResultsIndexAligned(t *testing.T) {
 // invoked for each missing-resource error in the batch. Reliable's
 // drift state machine treats per-sub drift signals as session-level
 // drift; the dispatcher fires one MissingResource call per failing
-// sub so reliable's component-key tracking can disambiguate.
+// sub. Asserts each call carried the right sessionID and a reason
+// containing the failing-sub error so a regression that fired drift
+// without per-sub context wouldn't slip through (counter-only check
+// would).
 func TestAWSBatch_DriftFiresPerFailingSub(t *testing.T) {
 	t.Parallel()
 	resolver := &stubResolver{cloud: "aws", projectID: "p"}
 	creds := &stubCreds{awsCreds: validAWSCreds()}
 	drift := &stubDrift{}
-	// Two subs, both miss (return 'not found'); one sub OK.
 	metrics := &stubMetrics{awsErr: errors.New("DBInstance prod-db not found")}
 	d := &Dispatcher{Resolver: resolver, Creds: creds, Drift: drift, Metrics: metrics}
 
@@ -193,8 +219,17 @@ func TestAWSBatch_DriftFiresPerFailingSub(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if drift.calls.Load() != 2 {
-		t.Errorf("DriftReporter called %d times, want 2 (one per failing sub)", drift.calls.Load())
+	calls := drift.snapshotAll()
+	if len(calls) != 2 {
+		t.Fatalf("DriftReporter called %d times, want 2 (one per failing sub); calls=%+v", len(calls), calls)
+	}
+	for i, c := range calls {
+		if c.sessionID != "sess" {
+			t.Errorf("calls[%d].sessionID = %q, want %q", i, c.sessionID, "sess")
+		}
+		if !strings.Contains(c.reason, "DBInstance prod-db not found") {
+			t.Errorf("calls[%d].reason = %q, want substring %q", i, c.reason, "DBInstance prod-db not found")
+		}
 	}
 }
 
@@ -275,42 +310,81 @@ func TestBatch_WallClockBoundsTotal(t *testing.T) {
 
 	resolver := &stubResolver{cloud: "aws", projectID: "p"}
 	creds := &stubCreds{awsCreds: validAWSCreds()}
-	// MetricsFetcher always returns "OK" so we can't blame the test
-	// outcome on the cred fetch hook — the wall-clock cancellation
-	// must still surface.
-	metrics := &stubMetrics{awsResult: map[string]any{"ok": true}}
+	// Metrics fetcher blocks until ctx.Done — so the only way the
+	// sub returns is via the wall-clock-derived per-sub deadline.
+	// Without `context.WithTimeout(ctx, DefaultBatchWallClock)` in
+	// AWSBatch, the sub would block past the test's t.Deadline()
+	// instead of returning a context-canceled SubResult.
+	metrics := &blockingMetrics{}
 	d := &Dispatcher{Resolver: resolver, Creds: creds, Metrics: metrics}
 
 	subs := []SubRequest{{Service: "ec2", Action: "get-metrics"}}
+	start := time.Now()
 	results, err := d.AWSBatch(context.Background(), "sess", subs)
+	elapsed := time.Since(start)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// With wall clock essentially zero we expect the sub to either
-	// timeout or skip — but never panic, never miss the result slot.
 	if len(results) != 1 {
 		t.Fatalf("got %d results, want 1", len(results))
 	}
 	if results[0].Index != 0 {
 		t.Errorf("results[0].Index = %d, want 0", results[0].Index)
 	}
+	// With a ~30ns wall clock the sub must NOT succeed — the
+	// per-sub deadline derived from the wall clock fires
+	// effectively immediately. A regression that removed
+	// `context.WithTimeout(ctx, DefaultBatchWallClock)` would block
+	// here in blockingMetrics until the test runner's own deadline
+	// fires.
+	if results[0].OK {
+		t.Errorf("results[0].OK = true under near-zero wall clock; wall clock not applied (%+v)", results[0])
+	}
+	// Defense in depth: if the wall clock is applied, the batch
+	// must finish within a few seconds well below any reasonable
+	// test runner deadline. 5s is generous for CI jitter.
+	if elapsed > 5*time.Second {
+		t.Errorf("batch took %v under near-zero wall clock; wall clock effectively not applied", elapsed)
+	}
 }
 
-// TestAWSBatch_PerSubErrorContainment guarantees one panicking or
-// erroring sub doesn't take down siblings. The batch_runner panic-
-// recovery covers most of this; here we re-pin it at the
-// Dispatcher.AWSBatch level so the seam is exercised end-to-end.
+// blockingMetrics blocks AWSGet/GCPGet on ctx — so a sub against
+// it can only return when the per-sub context is canceled (the
+// wall-clock-derived deadline, the per-sub timeout, or caller ctx
+// cancel). Used in the wall-clock bounds test to assert the
+// dispatcher actually applies DefaultBatchWallClock.
+type blockingMetrics struct{}
+
+func (b *blockingMetrics) AWSGet(ctx context.Context, cfg aws.Config, service, filters string) (any, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func (b *blockingMetrics) GCPGet(ctx context.Context, creds *GCPCreds, service, filters string) (any, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func (b *blockingMetrics) ListAWS(service string) any { return nil }
+func (b *blockingMetrics) ListGCP(service string) any { return nil }
+
+// TestAWSBatch_PerSubErrorContainment guarantees one erroring sub
+// doesn't take down siblings. Sub idx=1 returns an error from the
+// MetricsFetcher; siblings (idx=0 and idx=2) must still succeed and
+// the failing sub must surface its error in SubResult.Error without
+// affecting the others. The runner-level panic recovery is covered
+// by TestRunSubsBounded_PanicRecovery; this test pins the
+// Dispatcher.AWSBatch end-to-end seam.
 func TestAWSBatch_PerSubErrorContainment(t *testing.T) {
 	t.Parallel()
 	resolver := &stubResolver{cloud: "aws", projectID: "p"}
 	creds := &stubCreds{awsCreds: validAWSCreds()}
 
-	// MetricsFetcher returns OK every time. Only one sub fails the
-	// project_lookup gate — but that's a top-level cred error, so it
-	// won't path here. Instead simulate a per-sub failure via an
-	// erroring metrics fetcher for one sub; we approximate by using
-	// the panic path of the runner.
-	metrics := &stubMetrics{awsResult: map[string]any{"ok": true}}
+	// erringMetrics returns OK except for one specific service.
+	metrics := &erringMetrics{
+		awsResult: map[string]any{"ok": true},
+		errFor:    map[string]error{"rds": errors.New("rds outage")},
+	}
 	d := &Dispatcher{Resolver: resolver, Creds: creds, Metrics: metrics}
 
 	subs := []SubRequest{
@@ -322,12 +396,41 @@ func TestAWSBatch_PerSubErrorContainment(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	for i, r := range results {
-		if !r.OK {
-			t.Errorf("sub %d not OK: %+v", i, r)
-		}
+	if !results[0].OK || !results[2].OK {
+		t.Errorf("sibling subs should be OK, got results[0]=%+v results[2]=%+v", results[0], results[2])
+	}
+	if results[1].OK {
+		t.Errorf("erroring sub should not be OK: %+v", results[1])
+	}
+	if !strings.Contains(results[1].Error, "rds outage") {
+		t.Errorf("results[1].Error = %q, want substring %q", results[1].Error, "rds outage")
 	}
 }
+
+// erringMetrics is a per-service erroring MetricsFetcher used by
+// TestAWSBatch_PerSubErrorContainment. Other tests should keep using
+// stubMetrics.
+type erringMetrics struct {
+	awsResult any
+	errFor    map[string]error // keyed by service
+}
+
+func (e *erringMetrics) AWSGet(ctx context.Context, cfg aws.Config, service, filters string) (any, error) {
+	if err, ok := e.errFor[service]; ok {
+		return nil, err
+	}
+	return e.awsResult, nil
+}
+
+func (e *erringMetrics) GCPGet(ctx context.Context, creds *GCPCreds, service, filters string) (any, error) {
+	if err, ok := e.errFor[service]; ok {
+		return nil, err
+	}
+	return e.awsResult, nil
+}
+
+func (e *erringMetrics) ListAWS(service string) any { return nil }
+func (e *erringMetrics) ListGCP(service string) any { return nil }
 
 // TestGCPBatch_DriftFiresPerFailingSub mirrors TestAWSBatch's drift
 // hook coverage on the GCP path.

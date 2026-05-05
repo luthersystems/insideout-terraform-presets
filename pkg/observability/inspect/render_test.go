@@ -16,6 +16,7 @@ package inspect
 import (
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 
@@ -78,6 +79,10 @@ func TestRenderSupportedServicesLine_ContainsEveryRegistryService(t *testing.T) 
 // ordering. A regression to map-iteration order would make tool
 // descriptions churn across MCP handshakes — clients dedupe them by
 // content, so non-determinism breaks dedupe.
+//
+// Asserts BOTH consistency (5× identical) AND alphabetical order on
+// the service column (consistency-only would pass for a stable-but-
+// reverse-sorted output).
 func TestRenderServiceTable_DeterministicSorted(t *testing.T) {
 	t.Parallel()
 	first := RenderServiceTable("aws")
@@ -85,6 +90,25 @@ func TestRenderServiceTable_DeterministicSorted(t *testing.T) {
 		if got := RenderServiceTable("aws"); got != first {
 			t.Fatalf("RenderServiceTable(aws) non-deterministic between calls (iteration %d)", i)
 		}
+	}
+	// Pin alphabetical order on the service column. Each row looks
+	// like "| ec2 | ...". Extract the service tokens between the
+	// first two pipes and assert sort.StringsAreSorted.
+	var services []string
+	for _, line := range strings.Split(first, "\n") {
+		// Skip header rows ("| Service |", "|----|").
+		if !strings.HasPrefix(line, "| ") || strings.Contains(line, "Service") || strings.HasPrefix(line, "|---") {
+			continue
+		}
+		// Extract the second segment of "| svc | actions |".
+		parts := strings.SplitN(line, "|", 3)
+		if len(parts) < 3 {
+			continue
+		}
+		services = append(services, strings.TrimSpace(parts[1]))
+	}
+	if !sort.StringsAreSorted(services) {
+		t.Errorf("services in table not sorted: %v", services)
 	}
 }
 

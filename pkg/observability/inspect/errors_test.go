@@ -2,22 +2,28 @@ package inspect
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 )
 
-// TestCredentialFetchError_ErrorString pins the user-visible message for
-// each category. Reliable's component-metrics handler displays this
-// string, so a regression in formatting is a UX regression. The
-// auth-category assertion deliberately verifies the BodyExcerpt is NOT
-// in the string — 401/403 bodies sometimes echo the token back, and
-// surfacing it would be a credential leak.
+// TestCredentialFetchError_ErrorString pins the user-visible message
+// for each category byte-for-byte against reliable's source at
+// gcp_inspect.go:380-401. Reliable's component-metrics handler
+// displays this string, so any drift is a UX regression. The
+// auth-category assertion deliberately verifies the BodyExcerpt is
+// NOT in the string — 401/403 bodies sometimes echo the token back,
+// and surfacing it would be a credential leak.
+//
+// Exact-match (not substring) on purpose: a regression that swapped
+// "oracle" for "upstream" would still pass a substring test for
+// "503" and "retry may help" but break the wire contract.
 func TestCredentialFetchError_ErrorString(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
 		name       string
 		err        *CredentialFetchError
-		mustHave   []string
+		want       string
 		mustNotHas []string
 	}{
 		{
@@ -28,7 +34,7 @@ func TestCredentialFetchError_ErrorString(t *testing.T) {
 				BodyExcerpt:  "service unavailable",
 				Retryable:    true,
 			},
-			mustHave: []string{"503", "retry may help", "service unavailable"},
+			want: "oracle 5xx (upstream — retry may help, status=503): service unavailable",
 		},
 		{
 			name: "config_4xx includes status and body",
@@ -37,7 +43,7 @@ func TestCredentialFetchError_ErrorString(t *testing.T) {
 				OracleStatus: 400,
 				BodyExcerpt:  "missing project_id",
 			},
-			mustHave: []string{"400", "rejected request", "missing project_id"},
+			want: "oracle rejected request (status 400): missing project_id",
 		},
 		{
 			name: "auth_4xx omits body excerpt to avoid token leakage",
@@ -46,7 +52,7 @@ func TestCredentialFetchError_ErrorString(t *testing.T) {
 				OracleStatus: 401,
 				BodyExcerpt:  "invalid bearer 'eyJsecret'",
 			},
-			mustHave:   []string{"401", "auth failure"},
+			want:       "oracle auth failure (status 401)",
 			mustNotHas: []string{"eyJsecret", "invalid bearer"},
 		},
 		{
@@ -55,12 +61,12 @@ func TestCredentialFetchError_ErrorString(t *testing.T) {
 				Category:   CredFetchNetwork,
 				Underlying: errors.New("dial tcp: timeout"),
 			},
-			mustHave: []string{"unreachable", "dial tcp: timeout"},
+			want: "oracle unreachable: dial tcp: timeout",
 		},
 		{
-			name:     "network without underlying still readable",
-			err:      &CredentialFetchError{Category: CredFetchNetwork},
-			mustHave: []string{"unreachable"},
+			name: "network without underlying still readable",
+			err:  &CredentialFetchError{Category: CredFetchNetwork},
+			want: "oracle unreachable",
 		},
 		{
 			name: "unknown category falls through to generic",
@@ -69,17 +75,15 @@ func TestCredentialFetchError_ErrorString(t *testing.T) {
 				OracleStatus: 418,
 				BodyExcerpt:  "teapot",
 			},
-			mustHave: []string{"418", "teapot", "credential fetch failed"},
+			want: "credential fetch failed (status 418): teapot",
 		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			got := tc.err.Error()
-			for _, want := range tc.mustHave {
-				if !strings.Contains(got, want) {
-					t.Errorf("Error() = %q, missing substring %q", got, want)
-				}
+			if got != tc.want {
+				t.Errorf("Error() = %q, want byte-equal %q", got, tc.want)
 			}
 			for _, banned := range tc.mustNotHas {
 				if strings.Contains(got, banned) {
@@ -110,7 +114,7 @@ func TestCredentialFetchError_Unwrap(t *testing.T) {
 		t.Error("errors.Is(cfe, underlying) = false, want true")
 	}
 
-	wrapped := errAddContext("credential_fetch_failed", cfe)
+	wrapped := fmt.Errorf("credential_fetch_failed: %w", cfe)
 	var via *CredentialFetchError
 	if !errors.As(wrapped, &via) {
 		t.Fatal("errors.As(wrapped, &CredentialFetchError) = false, want true")
@@ -131,18 +135,3 @@ func TestCredentialFetchError_NilUnwrap(t *testing.T) {
 		t.Errorf("Unwrap() with nil Underlying = %v, want nil", got)
 	}
 }
-
-// errAddContext is a test-local helper that wraps err with %w. Lives in
-// the test file (not production) so we don't ship a generic wrapper
-// anyone might be tempted to import.
-func errAddContext(prefix string, err error) error {
-	return &wrappedErr{prefix: prefix, err: err}
-}
-
-type wrappedErr struct {
-	prefix string
-	err    error
-}
-
-func (w *wrappedErr) Error() string { return w.prefix + ": " + w.err.Error() }
-func (w *wrappedErr) Unwrap() error { return w.err }

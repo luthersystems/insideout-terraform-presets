@@ -51,23 +51,29 @@ type CredentialFetchError struct {
 }
 
 func (e *CredentialFetchError) Error() string {
+	// The "oracle" prefix is byte-equal with reliable's existing
+	// CredentialFetchError.Error() at gcp_inspect.go:380-401. The
+	// reliable component-metrics handler renders these strings to
+	// the UI, so changing them would be a UX-visible regression.
+	// Renaming to a generic "upstream" tag must coordinate with a
+	// reliable-side wire change first.
 	switch e.Category {
 	case CredFetchUpstream5xx:
-		return fmt.Sprintf("upstream 5xx (retry may help, status=%d): %s", e.OracleStatus, e.BodyExcerpt)
+		return fmt.Sprintf("oracle 5xx (upstream — retry may help, status=%d): %s", e.OracleStatus, e.BodyExcerpt)
 	case CredFetchConfig4xx:
-		return fmt.Sprintf("upstream rejected request (status %d): %s", e.OracleStatus, e.BodyExcerpt)
+		return fmt.Sprintf("oracle rejected request (status %d): %s", e.OracleStatus, e.BodyExcerpt)
 	case CredFetchAuth4xx:
-		// Deliberately omit BodyExcerpt: 401/403 bodies sometimes echo
-		// the supplied token / cookie back in an error message
-		// ("invalid bearer 'eyJ…'"). Implementations should still log
-		// the body server-side, but we don't want it leaving the
-		// process in the user-visible error string.
-		return fmt.Sprintf("upstream auth failure (status %d)", e.OracleStatus)
+		// Deliberately omit BodyExcerpt: oracle's 401/403 bodies
+		// sometimes echo the supplied token / cookie back in an error
+		// message ("invalid bearer 'eyJ…'"). Implementations should
+		// still log the body server-side, but we don't want it
+		// leaving the process in the user-visible error string.
+		return fmt.Sprintf("oracle auth failure (status %d)", e.OracleStatus)
 	case CredFetchNetwork:
 		if e.Underlying != nil {
-			return fmt.Sprintf("upstream unreachable: %v", e.Underlying)
+			return fmt.Sprintf("oracle unreachable: %v", e.Underlying)
 		}
-		return "upstream unreachable"
+		return "oracle unreachable"
 	default:
 		return fmt.Sprintf("credential fetch failed (status %d): %s", e.OracleStatus, e.BodyExcerpt)
 	}

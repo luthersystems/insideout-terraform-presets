@@ -67,7 +67,9 @@ func (d *Dispatcher) AWSBatch(ctx context.Context, sessionID string, subs []SubR
 		} else {
 			creds, err := d.Creds.AWS(ctx, projectID)
 			if err != nil {
-				credErr = fmt.Errorf("credential_fetch_failed: %v", err)
+				// %w preserves typed envelopes — see dispatcher.go
+				// AWS path for the symmetry rationale.
+				credErr = fmt.Errorf("credential_fetch_failed: %w", err)
 			} else {
 				cfg, err := d.awsConfig(ctx, creds)
 				if err != nil {

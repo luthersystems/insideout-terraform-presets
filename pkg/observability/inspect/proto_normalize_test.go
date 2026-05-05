@@ -217,33 +217,45 @@ func TestProtoNormalize_HeterogeneousInterfaceSlicePassthrough(t *testing.T) {
 }
 
 // TestProtoNormalize_NilAndEmpty — defensive: nil and empty inputs
-// must be handled without panicking. The original form of this test
-// in reliable wrapped already-evaluated `out` in NotPanics, which was
-// a tautology — by the time the closure ran, the panic (if any) had
-// already happened. This version actually wraps the call.
+// must be handled without panicking AND must return shape-preserved
+// results. A regression that returned a sentinel "BUG" string instead
+// of the input slice would slip through a `_ = protoNormalize(...)`-
+// only test.
 func TestProtoNormalize_NilAndEmpty(t *testing.T) {
 	t.Parallel()
 	if got := protoNormalize(nil); got != nil {
 		t.Errorf("protoNormalize(nil) = %v, want nil", got)
 	}
 
-	// Empty proto slice — the function returns the original slice (no
-	// elements to normalize), and downstream JSON encoding emits []
-	// either way. We only require no panic.
+	// Empty proto slice — the function returns the original slice
+	// (no elements to normalize). Pin shape preservation.
 	mustNotPanic(t, "empty proto slice", func() {
-		var empty []*pubsubpb.Topic
-		_ = protoNormalize(empty)
+		empty := []*pubsubpb.Topic{}
+		got := protoNormalize(empty)
+		gotSlice, ok := got.([]*pubsubpb.Topic)
+		if !ok {
+			t.Errorf("empty proto slice → %T, want []*pubsubpb.Topic (shape preservation)", got)
+			return
+		}
+		if len(gotSlice) != 0 {
+			t.Errorf("empty proto slice → %d elements, want 0", len(gotSlice))
+		}
 	})
 
 	// Typed slice containing a nil proto pointer. (*pubsubpb.Topic)(nil)
-	// satisfies proto.Message (typed nil), so normalizeProtoSlice will
-	// try to marshal it; protojson.Marshal returns an error on nil
-	// messages, protoMessageToMap returns (nil, false), and
-	// normalizeProtoSlice gives up — passing the original slice
-	// through unchanged.
+	// satisfies proto.Message (typed nil) so normalizeProtoSlice
+	// enters the marshaling path; protojson's behavior on a typed-
+	// nil message is implementation-defined (today it produces an
+	// empty `{}`), so we don't pin the exact output shape — only
+	// that the function returns SOMETHING and doesn't panic. A
+	// regression that switched to encoding/json would panic on the
+	// nil dereference; this test catches that.
 	mustNotPanic(t, "typed slice with nil proto pointer", func() {
 		withNil := []*pubsubpb.Topic{nil}
-		_ = protoNormalize(withNil)
+		got := protoNormalize(withNil)
+		if got == nil {
+			t.Errorf("nil-proto slice → nil, want a non-nil slice")
+		}
 	})
 }
 

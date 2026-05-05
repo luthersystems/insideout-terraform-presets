@@ -38,6 +38,13 @@ import (
 	"github.com/luthersystems/insideout-terraform-presets/pkg/observability/filter"
 )
 
+// gcpOperationFailedFmt wraps upstream GCP inspection errors. %w (not
+// %v) is load-bearing: typed envelopes the upstream layer returns —
+// e.g. *observability.GCPFeatureNotEnabledError (presets #245 —
+// Identity Platform multi-tenancy) — must survive this wrap so the
+// reliable panel renderer can errors.As on them.
+const gcpOperationFailedFmt = "gcp_operation_failed: %w"
+
 // Dispatcher resolves a session ID to credentials via injected
 // interfaces and delegates discovery dispatch to
 // pkg/observability/discovery/{aws,gcp}.Inspect. Methods are safe to
@@ -102,7 +109,12 @@ func (d *Dispatcher) AWS(ctx context.Context, sessionID, service, action, filter
 
 	creds, err := d.Creds.AWS(ctx, projectID)
 	if err != nil {
-		return nil, fmt.Errorf("credential_fetch_failed: %v", err)
+		// %w (not %v) so callers can errors.As() into typed
+		// envelopes the CredsProvider may wrap (today reliable's
+		// AWS path returns plain errors, but symmetry with the GCP
+		// path future-proofs against an AWS-side switch to
+		// *CredentialFetchError).
+		return nil, fmt.Errorf("credential_fetch_failed: %w", err)
 	}
 
 	cfg, err := d.awsConfig(ctx, creds)
@@ -198,13 +210,6 @@ func (d *Dispatcher) inspectAWSCore(ctx context.Context, cfg aws.Config, service
 	return result, nil
 }
 
-// gcpOperationFailedFmt wraps upstream GCP inspection errors. %w (not
-// %v) is load-bearing: typed envelopes the upstream layer returns —
-// e.g. *observability.GCPFeatureNotEnabledError (presets #245 —
-// Identity Platform multi-tenancy) — must survive this wrap so the
-// reliable panel renderer can errors.As on them.
-const gcpOperationFailedFmt = "gcp_operation_failed: %w"
-
 // inspectGCPCore is the post-creds dispatch stage shared by GCP and
 // GCPBatch. Routes get-metrics through the optional MetricsFetcher;
 // every other action goes to gcpdiscovery.Inspect with protoNormalize
@@ -232,10 +237,11 @@ func (d *Dispatcher) inspectGCPCore(ctx context.Context, creds *GCPCreds, servic
 }
 
 // awsConfig builds an aws.Config from inspector credentials. Mirrors
-// reliable's createAWSConfig at aws_inspect.go:223. Optional caller-
-// supplied config.LoadOptions are appended after the static creds +
-// region so a custom HTTP transport (used by tests) overrides the
-// default.
+// reliable's createAWSConfig at aws_inspect.go:223. Caller-supplied
+// AWSConfigOptions are appended AFTER the static creds + region; the
+// AWS SDK applies LoadOptions last-wins, so caller-supplied options
+// (e.g. WithHTTPClient for a test transport, WithRetryer for tighter
+// retry policy) override the defaults set above.
 func (d *Dispatcher) awsConfig(ctx context.Context, creds *AWSCreds) (aws.Config, error) {
 	opts := []func(*config.LoadOptions) error{
 		config.WithRegion(creds.Region),
@@ -287,17 +293,24 @@ func (d *Dispatcher) maybeReportDrift(ctx context.Context, sessionID string, err
 	d.Drift.MissingResource(ctx, sessionID, err.Error(), "")
 }
 
-// listAWSMetricsResponse builds the cred-less list-metrics response.
-// Without a MetricsFetcher we cannot enumerate the catalog, so the
-// response is a stub the caller can detect on. Reliable supplies the
-// real catalog via MetricsFetcher in its component-metrics handler.
+// listAWSMetricsResponse delegates to the optional MetricsFetcher's
+// catalog. When MetricsFetcher is nil the dispatcher returns a stub
+// shape so presets-only callers without a catalog don't crash; the
+// stub is byte-equal-distinct from reliable's catalog so a missing-
+// MetricsFetcher misconfig surfaces immediately at the caller.
 func (d *Dispatcher) listAWSMetricsResponse(service string) (any, error) {
-	return map[string]any{"service": service, "metrics": []any{}, "note": "list-metrics requires a MetricsFetcher"}, nil
+	if d.Metrics == nil {
+		return map[string]any{"service": service, "metrics": []any{}, "note": "list-metrics requires a MetricsFetcher"}, nil
+	}
+	return d.Metrics.ListAWS(service), nil
 }
 
 // listGCPMetricsResponse — see listAWSMetricsResponse.
 func (d *Dispatcher) listGCPMetricsResponse(service string) (any, error) {
-	return map[string]any{"service": service, "metrics": []any{}, "note": "list-metrics requires a MetricsFetcher"}, nil
+	if d.Metrics == nil {
+		return map[string]any{"service": service, "metrics": []any{}, "note": "list-metrics requires a MetricsFetcher"}, nil
+	}
+	return d.Metrics.ListGCP(service), nil
 }
 
 // listActionsResponse builds the list-actions response: per-service
@@ -305,6 +318,10 @@ func (d *Dispatcher) listGCPMetricsResponse(service string) (any, error) {
 // unsupported-service error when service is non-empty but unknown.
 // Mirrors reliable's logic at aws_inspect.go:106-114 and
 // gcp_inspect.go:144-152.
+//
+// Defensively copies the registry's actions slice so a downstream
+// caller that mutates the response doesn't aliase the package-level
+// AWSServiceActions / GCPServiceActions maps.
 func listActionsResponse(service string, registry map[string][]string, allServices []string) (any, error) {
 	if actions, ok := registry[service]; ok {
 		out := make([]string, len(actions))
