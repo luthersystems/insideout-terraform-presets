@@ -7,7 +7,7 @@ CLI for bringing existing cloud resources under InsideOut management.
 | Subcommand | Status | Purpose |
 |---|---|---|
 | `adopt` | implemented | Emit `import {}` blocks against an *already-known* preset stack. |
-| `discover` | not yet implemented (#189) | Reverse-Terraform discovery + HCL generation. |
+| `discover` | Stage 2a (AWS, manifest only) | Discover existing cloud resources and emit `imported.json`. Stage 2b layers HCL generation; Stage 2c adds drift fixing; Stage 2d adds GCP. See #189 for the chain. |
 
 ## `adopt`
 
@@ -72,6 +72,61 @@ These are intentionally out of scope for Stage 1; see #259 for context:
 - **No provenance tag/label injection on the imported resources.** The composer can apply provenance when it composes the stack; `adopt` will not silently mutate user-authored HCL.
 - **No `imported.json` manifest.** That manifest is meaningful only when discovery populates `Identity` and `Tier` from cloud state.
 
+## `discover` (Stage 2a)
+
+```
+insideout-import discover \
+  --provider aws \
+  --project io-buqiks112yag \
+  --region us-east-1 \
+  --output-dir ./imported \
+  [--resource-types aws_sqs_queue,aws_lambda_function,...]
+```
+
+### Inputs
+
+- `--provider` (required) — only `aws` is supported in Stage 2a; `gcp` returns a "not yet implemented" error pointing at #264 (Stage 2d).
+- `--project` (required) — project name used as the prefix / `Project` tag value to filter discovered resources.
+- `--region` (required for AWS) — AWS region to scan.
+- `--output-dir` (required) — directory to write `imported.json` into.
+- `--resource-types` — comma-separated subset of supported types. Default: all 5 Phase 1 types (`aws_sqs_queue`, `aws_dynamodb_table`, `aws_cloudwatch_log_group`, `aws_secretsmanager_secret`, `aws_lambda_function`).
+
+### Output
+
+`<output-dir>/imported.json` — JSON array of `imported.ImportedResource` (the Phase 2 carrier defined in `pkg/composer/imported`). Each entry has:
+
+- `Tier = "TierImportedFlat"`, `Source = "importer"`.
+- `Identity.{Cloud, Type, Address, ImportID, NameHint, ProviderSource, AccountID, Region, NativeIDs}` populated.
+- `Attributes` and `Attrs` left empty — Stage 2b populates them via `terraform plan -generate-config-out`.
+
+Records are sorted by `Identity.Address` so the file is byte-identical across runs for the same input.
+
+### Per-type SDK calls
+
+| Terraform type | SDK call(s) | Filter | Import ID |
+|---|---|---|---|
+| `aws_sqs_queue` | `ListQueues(QueueNamePrefix)` | server-side prefix | queue URL |
+| `aws_dynamodb_table` | `ListTables` + `ListTagsOfResource(ARN)` | name prefix + Project tag | table name |
+| `aws_cloudwatch_log_group` | `DescribeLogGroups(LogGroupNamePrefix)` | server-side prefix | log group name |
+| `aws_secretsmanager_secret` | `ListSecrets(Filters: tag:Project=<p>)` | server-side tag filter | secret ARN |
+| `aws_lambda_function` | `ListFunctions` + `ListTags(ARN)` | Project tag | function name |
+
+DynamoDB and Lambda fail-closed on per-resource `ListTags` errors — a transient throttle skips the resource rather than letting an unverified entry into the manifest. `ListFunctions` / `ListTables` errors abort the whole run.
+
+### Exit codes
+
+| Code | Meaning |
+|---|---|
+| `0` | Manifest written; `composer.ValidateImportedResources` returned no issues. |
+| `1` | Fatal: AWS error, validator failure, or bad inputs. No partial manifest written. |
+
+### What `discover` does *not* do (Stage 2a)
+
+- **No HCL generation.** The `imports.tf` / `generated.tf` / `providers.tf` files come from Stage 2b (`#262`).
+- **No drift fixing or dependency chasing.** Stage 2c (`#263`).
+- **No GCP support.** Stage 2d (`#264`).
+- **No throttle/retry tuning or bounded concurrency.** Stage 2c.
+
 ## Development
 
 ```bash
@@ -79,5 +134,4 @@ go build ./cmd/insideout-import
 go test  ./cmd/insideout-import/...
 ```
 
-The `terraform` binary is *not* required for `go test` — the plan-output
-parser is exercised against fixed text fixtures.
+Neither the `terraform` binary nor AWS credentials are required for `go test` — discoverers use mocked SDK clients via narrow client interfaces, and the `adopt` plan-parser runs against fixed text fixtures.
