@@ -940,6 +940,86 @@ func TestProductionDiscoverDeps_LoadConfigSetsRetryMaxAttempts(t *testing.T) {
 	}
 }
 
+// TestRunDiscoverWithDeps_AWSEndpointURLThreaded pins the Stage 2c4 (#272)
+// LocalStack flag wiring on both sides of the seam:
+//   - genconfig.Options.AWSEndpointURL receives the flag value (so the
+//     emitted providers.tf points at LocalStack via emitProviders).
+//   - The AWS_ENDPOINT_URL env var is set before deps.loadConfig fires,
+//     so production loadConfig (and every per-service SDK client built
+//     off the resulting aws.Config) routes API calls to the same URL.
+//
+// Both branches matter: a regression that drops env-var setting would
+// produce HCL pointing at LocalStack while the discoverers still hit
+// real AWS, silently emptying the manifest. The reverse breaks
+// terraform plan against an unmocked endpoint.
+func TestRunDiscoverWithDeps_AWSEndpointURLThreaded(t *testing.T) {
+	dir := t.TempDir()
+	agg := &fakeAggregator{out: []imported.ImportedResource{validResource("aws_sqs_queue.q")}}
+	gc := &fakeGenconfig{}
+
+	// Snapshot the env var observed at loadConfig time. t.Setenv handles
+	// cleanup so the value doesn't leak into other tests; production
+	// loadConfig fires only after runDiscoverWithDeps's setenv, so an
+	// initial value of "" is the contract under test.
+	t.Setenv("AWS_ENDPOINT_URL", "")
+	var loadConfigSawEnv string
+	deps := discoverDeps{
+		loadConfig: func(_ context.Context, _ string) (aws.Config, error) {
+			loadConfigSawEnv = os.Getenv("AWS_ENDPOINT_URL")
+			return aws.Config{}, nil
+		},
+		getAccount:    func(_ context.Context, _ aws.Config) (string, error) { return "1234567890", nil },
+		newDiscoverer: func(_ aws.Config, _ int) discoveryAggregator { return agg },
+		runGenconfig:  gc.Run,
+		runDriftfix:   (&fakeDriftfix{}).Run,
+		runDepChase:   noopDepChase,
+	}
+
+	rc := runDiscoverWithDeps([]string{
+		"--provider", "aws", "--project", "p", "--region", "us-east-1", "--output-dir", dir,
+		"--aws-endpoint-url", "http://localhost:4566",
+	}, deps)
+	if rc != discoverExitOK {
+		t.Fatalf("rc=%d, want OK", rc)
+	}
+	if loadConfigSawEnv != "http://localhost:4566" {
+		t.Errorf("loadConfig saw AWS_ENDPOINT_URL=%q, want %q (env var must be set BEFORE loadConfig)", loadConfigSawEnv, "http://localhost:4566")
+	}
+	if gc.gotOpts.AWSEndpointURL != "http://localhost:4566" {
+		t.Errorf("genconfig.Options.AWSEndpointURL=%q, want %q (flag must propagate to providers.tf emitter)", gc.gotOpts.AWSEndpointURL, "http://localhost:4566")
+	}
+}
+
+// TestRunDiscoverWithDeps_AWSEndpointURLDefaultsEmpty pins that omitting
+// --aws-endpoint-url leaves the env var alone (real AWS behavior) and
+// passes "" to genconfig (standard provider block). Without this, a
+// loose default that pre-set AWS_ENDPOINT_URL="" would still mutate
+// inherited env in unrelated test runs.
+func TestRunDiscoverWithDeps_AWSEndpointURLDefaultsEmpty(t *testing.T) {
+	dir := t.TempDir()
+	agg := &fakeAggregator{out: []imported.ImportedResource{validResource("aws_sqs_queue.q")}}
+	gc := &fakeGenconfig{}
+
+	// Pre-set a sentinel that must NOT be overwritten when the flag is
+	// absent. (Real-world analogue: an operator already exported
+	// AWS_ENDPOINT_URL for another tool — discover should not clobber it.)
+	t.Setenv("AWS_ENDPOINT_URL", "http://preexisting.invalid")
+	deps := okDepsWithGC(agg, gc)
+
+	rc := runDiscoverWithDeps([]string{
+		"--provider", "aws", "--project", "p", "--region", "us-east-1", "--output-dir", dir,
+	}, deps)
+	if rc != discoverExitOK {
+		t.Fatalf("rc=%d, want OK", rc)
+	}
+	if got := os.Getenv("AWS_ENDPOINT_URL"); got != "http://preexisting.invalid" {
+		t.Errorf("AWS_ENDPOINT_URL mutated to %q without --aws-endpoint-url; pre-existing env must be preserved", got)
+	}
+	if gc.gotOpts.AWSEndpointURL != "" {
+		t.Errorf("genconfig.Options.AWSEndpointURL=%q, want empty (flag default)", gc.gotOpts.AWSEndpointURL)
+	}
+}
+
 func TestSplitCSV(t *testing.T) {
 	t.Parallel()
 	cases := []struct {

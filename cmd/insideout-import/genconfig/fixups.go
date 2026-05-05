@@ -51,6 +51,8 @@ func applyResourceTypeFixups(raw []byte) ([]byte, error) {
 // by cleanGenerated.
 var resourceTypeFixups = map[string]func(*hclwrite.Block){
 	"aws_lambda_function": fixupLambdaSource,
+	"aws_kms_key":         fixupKMSRotationPeriodZero,
+	"aws_dynamodb_table":  fixupDynamoDBPITRRecoveryPeriodZero,
 }
 
 // lambdaPlaceholderFile is what we set `filename` to so the block
@@ -97,6 +99,57 @@ func fixupLambdaSource(blk *hclwrite.Block) {
 	}
 	lc := body.AppendNewBlock("lifecycle", nil)
 	lc.Body().SetAttributeRaw("ignore_changes", ignoreChangesTokens(lambdaIgnoreChanges))
+}
+
+// fixupKMSRotationPeriodZero drops aws_kms_key.rotation_period_in_days
+// when its emitted value is the literal `0`. Real AWS DescribeKey leaves
+// the field absent when key rotation isn't enabled (the provider's
+// validator pins it to 90-2560), so generate-config-out wouldn't emit
+// the line in the first place. LocalStack 4.x returns 0 instead of
+// leaving the field unset, which makes the import bundle fail
+// `terraform validate` with `expected rotation_period_in_days to be in
+// the range (90 - 2560), got 0`.
+//
+// The fixup is conservative — it only touches the literal `0`, so a
+// real value coming back from AWS (e.g. 365) is preserved. No-op
+// against real AWS.
+func fixupKMSRotationPeriodZero(blk *hclwrite.Block) {
+	if isAttrLiteralZero(blk.Body(), "rotation_period_in_days") {
+		blk.Body().RemoveAttribute("rotation_period_in_days")
+	}
+}
+
+// fixupDynamoDBPITRRecoveryPeriodZero drops the analogous LocalStack 0
+// for aws_dynamodb_table.point_in_time_recovery.recovery_period_in_days
+// (validator: 1-35). Same conservative shape as fixupKMSRotationPeriodZero;
+// only the literal `0` is removed.
+func fixupDynamoDBPITRRecoveryPeriodZero(blk *hclwrite.Block) {
+	for _, sub := range blk.Body().Blocks() {
+		if sub.Type() != "point_in_time_recovery" {
+			continue
+		}
+		if isAttrLiteralZero(sub.Body(), "recovery_period_in_days") {
+			sub.Body().RemoveAttribute("recovery_period_in_days")
+		}
+	}
+}
+
+// isAttrLiteralZero reports whether the named attribute exists and its
+// expression is exactly the literal `0` (after whitespace trimming).
+// It does NOT match `0.0`, `00`, or any computed expression that
+// happens to evaluate to zero — only the raw literal terraform plan
+// -generate-config-out would emit for an int-shaped field.
+func isAttrLiteralZero(body *hclwrite.Body, name string) bool {
+	attr := body.GetAttribute(name)
+	if attr == nil {
+		return false
+	}
+	tokens := attr.Expr().BuildTokens(nil)
+	var sb strings.Builder
+	for _, t := range tokens {
+		sb.Write(t.Bytes)
+	}
+	return strings.TrimSpace(sb.String()) == "0"
 }
 
 // hasUsableValue reports whether the named attribute is both present and

@@ -90,7 +90,7 @@ func TestEmitImports_RejectsBadAddress(t *testing.T) {
 func TestEmitProviders_HappyPath(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	if err := emitProviders(dir, "us-west-2"); err != nil {
+	if err := emitProviders(dir, "us-west-2", ""); err != nil {
 		t.Fatal(err)
 	}
 	body, err := os.ReadFile(filepath.Join(dir, providersFile))
@@ -106,6 +106,59 @@ func TestEmitProviders_HappyPath(t *testing.T) {
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("providers.tf missing %q\n--- got ---\n%s", want, got)
+		}
+	}
+	// LocalStack-only attrs must NOT appear when endpointURL is "".
+	for _, banned := range []string{"endpoints", "access_key", "skip_credentials_validation", "s3_use_path_style"} {
+		if strings.Contains(got, banned) {
+			t.Errorf("providers.tf must not contain %q when endpointURL is empty\n--- got ---\n%s", banned, got)
+		}
+	}
+}
+
+// TestEmitProviders_LocalStackEndpoint pins the Stage 2c4 (#272) shape:
+// when endpointURL is set, the emitted providers.tf carries the LocalStack
+// attribute set the gate's seed and the discover-generated stack both share.
+// One canonical shape across both consumers means a future change to the
+// LocalStack contract lands in exactly one place.
+//
+// Assertions are presence-only (no column alignment pinning) so a change
+// to hclwrite's whitespace rules doesn't flake the test.
+func TestEmitProviders_LocalStackEndpoint(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	if err := emitProviders(dir, "us-east-1", "http://localhost:4566"); err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(filepath.Join(dir, providersFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(body)
+
+	// Auth + skip flags. Match attribute name + `= <value>` with arbitrary
+	// inter-token whitespace so the test survives hclwrite alignment.
+	authPatterns := []string{
+		`region\s*=\s*"us-east-1"`,
+		`access_key\s*=\s*"test"`,
+		`secret_key\s*=\s*"test"`,
+		`skip_credentials_validation\s*=\s*true`,
+		`skip_metadata_api_check\s*=\s*true`,
+		`skip_requesting_account_id\s*=\s*true`,
+		`s3_use_path_style\s*=\s*true`,
+		`endpoints\s*\{`,
+	}
+	for _, pat := range authPatterns {
+		if !regexp.MustCompile(pat).MatchString(got) {
+			t.Errorf("providers.tf missing pattern %q\n--- got ---\n%s", pat, got)
+		}
+	}
+
+	// Every service in localstackEndpointServices must point at the URL.
+	for _, svc := range localstackEndpointServices {
+		pat := svc + `\s*=\s*"http://localhost:4566"`
+		if !regexp.MustCompile(pat).MatchString(got) {
+			t.Errorf("providers.tf missing endpoint mapping for %q (pattern %q)\n--- got ---\n%s", svc, pat, got)
 		}
 	}
 }
