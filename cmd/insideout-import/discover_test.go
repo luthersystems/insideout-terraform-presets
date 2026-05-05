@@ -681,23 +681,18 @@ func TestRunDiscoverWithDeps_MaxConcurrencyRejectsNonPositive(t *testing.T) {
 // budget, which is what protects a long discover run from a transient
 // Throttling burst aborting mid-batch.
 //
-// We invoke loadConfig with an empty region to avoid pulling shared
-// credentials off disk; the retry config option is applied independent
-// of credential resolution, so the assertion still holds.
+// Pinning the literal value 8 (not the constant) is intentional: a
+// mutation that re-points the constant to 0 must fail this test. The
+// constant is the contract the operator-visible behavior depends on.
 func TestProductionDiscoverDeps_LoadConfigSetsRetryMaxAttempts(t *testing.T) {
 	t.Parallel()
 	deps := productionDiscoverDeps()
 	cfg, err := deps.loadConfig(context.Background(), "us-east-1")
 	if err != nil {
-		// Anonymous credential resolution may fail on hosts with no AWS
-		// env at all; we still check the config we did get back below.
-		t.Logf("loadConfig returned err=%v (treating as soft for env-without-creds)", err)
+		t.Fatalf("loadConfig: %v (the WithRetryMaxAttempts option is applied independent of credential resolution; an err here means LoadDefaultConfig failed for an unrelated reason that needs investigating)", err)
 	}
-	if cfg.RetryMaxAttempts != discoverRetryMaxAttempts {
-		t.Errorf("aws.Config.RetryMaxAttempts=%d, want %d", cfg.RetryMaxAttempts, discoverRetryMaxAttempts)
-	}
-	if discoverRetryMaxAttempts <= 3 {
-		t.Errorf("discoverRetryMaxAttempts=%d must exceed SDK default of 3 to harden against Throttling bursts", discoverRetryMaxAttempts)
+	if cfg.RetryMaxAttempts != 8 {
+		t.Errorf("aws.Config.RetryMaxAttempts=%d, want 8 (constant discoverRetryMaxAttempts must be threaded through productionDiscoverDeps.loadConfig)", cfg.RetryMaxAttempts)
 	}
 }
 

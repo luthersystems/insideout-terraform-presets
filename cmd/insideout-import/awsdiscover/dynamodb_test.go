@@ -25,11 +25,13 @@ type fakeDynamoClient struct {
 }
 
 func (f *fakeDynamoClient) ListTables(_ context.Context, in *dynamodb.ListTablesInput, _ ...func(*dynamodb.Options)) (*dynamodb.ListTablesOutput, error) {
+	f.mu.Lock()
 	f.listCalls = append(f.listCalls, *in)
+	idx := len(f.listCalls) - 1
+	f.mu.Unlock()
 	if f.listErr != nil {
 		return nil, f.listErr
 	}
-	idx := len(f.listCalls) - 1
 	if idx >= len(f.pages) {
 		return &dynamodb.ListTablesOutput{}, nil
 	}

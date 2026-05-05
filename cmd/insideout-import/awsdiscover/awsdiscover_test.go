@@ -139,9 +139,14 @@ func TestNewAWSDiscoverer_Registers5PhaseOneTypes(t *testing.T) {
 
 // TestNewAWSDiscoverer_AppliesDefaultMaxConcurrency pins that the legacy
 // single-arg constructor delegates with DefaultMaxConcurrency rather than
-// silently serializing (which would defeat the point of #270).
+// silently serializing (which would defeat the point of #270). The
+// literal-value pin guards the audit-grounded constant: a refactor that
+// re-points DefaultMaxConcurrency to 1 must fail this test.
 func TestNewAWSDiscoverer_AppliesDefaultMaxConcurrency(t *testing.T) {
 	t.Parallel()
+	if DefaultMaxConcurrency != 10 {
+		t.Errorf("DefaultMaxConcurrency=%d, want 10 (audit-grounded sweet spot per #270 — change requires updating both the constant doc and this pin)", DefaultMaxConcurrency)
+	}
 	agg := NewAWSDiscoverer(awsDummyConfig())
 	dyn, ok := agg.byType["aws_dynamodb_table"].(*dynamoDiscoverer)
 	if !ok {

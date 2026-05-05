@@ -1,9 +1,14 @@
-// Package awsdiscover holds the AWS-side per-resource-type discoverers used
-// by the insideout-import discover subcommand (Stage 2a of #189). Each
-// discoverer issues read-only AWS SDK calls against the operator's account
-// and returns Phase 2 imported.ImportedResource entries — no terraform-exec,
+// Package awsdiscover holds the AWS-side per-resource-type discoverers
+// used by the insideout-import discover subcommand. Each discoverer
+// issues read-only AWS SDK calls against the operator's account and
+// returns Phase 2 imported.ImportedResource entries — no terraform-exec,
 // no HCL generation. Stage 2b layers `terraform plan -generate-config-out`
 // on top of this manifest to produce the actual .tf files.
+//
+// Originally landed as Stage 2a (#266); Stage 2c2 (#270) added bounded-
+// concurrency errgroup fan-out inside the DynamoDB and Lambda discoverers
+// (the only two with per-item tag API calls), gated by DefaultMaxConcurrency
+// or a caller-supplied override on NewAWSDiscovererWithConcurrency.
 //
 // Discoverers in this package own narrow client interfaces so unit tests
 // can mock the SDK boundary without depending on real AWS credentials.
