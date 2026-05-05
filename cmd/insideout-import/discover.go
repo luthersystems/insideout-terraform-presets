@@ -15,6 +15,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/awsdiscover"
+	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/driftfix"
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/genconfig"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
@@ -46,6 +47,9 @@ type discoverDeps struct {
 	// `terraform` binary on PATH; tests inject a fake to skip the binary
 	// dependency.
 	runGenconfig func(ctx context.Context, opts genconfig.Options, resources []imported.ImportedResource) (*genconfig.Result, error)
+	// runDriftfix drives Stage 2c1. Same shape as runGenconfig: production
+	// shells out, tests fake.
+	runDriftfix func(ctx context.Context, opts driftfix.Options) (*driftfix.Result, error)
 }
 
 func productionDiscoverDeps() discoverDeps {
@@ -67,6 +71,7 @@ func productionDiscoverDeps() discoverDeps {
 			return awsdiscover.NewAWSDiscoverer(cfg)
 		},
 		runGenconfig: genconfig.Run,
+		runDriftfix:  driftfix.Run,
 	}
 }
 
@@ -78,15 +83,18 @@ func runDiscoverWithDeps(args []string, deps discoverDeps) int {
 	fs := flag.NewFlagSet("discover", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	fs.Usage = func() {
-		fmt.Fprintln(os.Stderr, `insideout-import discover — discover existing cloud resources, write imported.json, and generate validated HCL.
+		fmt.Fprintln(os.Stderr, `insideout-import discover — discover existing cloud resources, write imported.json, generate validated HCL, and patch drift.
 
 Usage:
   insideout-import discover --provider aws --project P --region R --output-dir DIR [flags]
 
-Stages 2a + 2b: AWS only, SDK-driven discovery for the 5 Phase 1 resource
-types, then terraform plan -generate-config-out + schema cleanup. Pass
---no-hcl to skip Stage 2b (manifest only). GCP, drift fixing, and dependency
-chasing land in Stages 2c–2d (see #189 for the chain).
+Stages 2a + 2b + 2c1: AWS only, SDK-driven discovery for the 5 Phase 1
+resource types, terraform plan -generate-config-out + schema cleanup, then
+a drift-fix loop that patches generated.tf until the plan is empty. Pass
+--no-hcl to skip Stage 2b (manifest only) or --no-driftfix to stop after
+Stage 2b (validate-clean but possibly drifting). GCP support, SDK QoS,
+dependency chasing, and a localstack CI gate land in Stages 2c2–2d (see
+#189 for the chain).
 
 Flags:`)
 		fs.PrintDefaults()
@@ -102,6 +110,7 @@ Exit codes:
 	outputDir := fs.String("output-dir", "", "directory to write imported.json into (required)")
 	resourceTypes := fs.String("resource-types", "", "comma-separated subset of types to discover; default: all 5 Phase 1 types")
 	noHCL := fs.Bool("no-hcl", false, "skip Stage 2b HCL generation (terraform plan -generate-config-out + cleanup); leaves imported.json with empty Attributes")
+	noDriftFix := fs.Bool("no-driftfix", false, "skip Stage 2c1 drift fix loop after HCL generation; leaves generated.tf at validate-clean rather than plan-clean")
 
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -202,6 +211,21 @@ Exit codes:
 		return discoverExitFatal
 	}
 	fmt.Printf("wrote %s (%d resource(s) with Attributes); generated HCL at %s\n", out, n, res.GeneratedPath)
+
+	if *noDriftFix {
+		return discoverExitOK
+	}
+
+	// Stage 2c1: loop terraform plan against the generated stack and
+	// patch drifting attributes until the plan is empty. Same workdir as
+	// genconfig (re-uses the .terraform dir).
+	dfRes, err := deps.runDriftfix(ctx, driftfix.Options{Workdir: gcWorkdir})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "discover: drift fix: %v\n", err)
+		fmt.Fprintln(os.Stderr, "discover: imported.json + generated.tf are on disk. Re-run with --no-driftfix to skip Stage 2c1 explicitly, or inspect the workdir to fix manually.")
+		return discoverExitFatal
+	}
+	fmt.Printf("drift fix converged after %d iteration(s); generated HCL at %s\n", dfRes.Iterations, dfRes.GeneratedPath)
 	return discoverExitOK
 }
 

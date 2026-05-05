@@ -10,6 +10,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 
+	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/driftfix"
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/genconfig"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
@@ -89,6 +90,26 @@ func (f *fakeAggregator) DiscoverTypes(_ context.Context, types []string, projec
 	return f.out, f.err
 }
 
+// fakeDriftfix records driftfix invocations so the happy-path tests can
+// assert Stage 2c1 was reached without standing up a terraform binary.
+type fakeDriftfix struct {
+	called  int
+	gotOpts driftfix.Options
+	err     error
+}
+
+func (f *fakeDriftfix) Run(_ context.Context, opts driftfix.Options) (*driftfix.Result, error) {
+	f.called++
+	f.gotOpts = opts
+	if f.err != nil {
+		return nil, f.err
+	}
+	return &driftfix.Result{
+		GeneratedPath: filepath.Join(opts.Workdir, "generated.tf"),
+		Iterations:    1,
+	}, nil
+}
+
 // fakeGenconfig records its inputs and returns the resources unchanged so the
 // happy-path tests can assert HCL generation was invoked without standing up
 // a terraform binary.
@@ -123,6 +144,7 @@ func okDeps(agg *fakeAggregator) discoverDeps {
 		getAccount:    func(_ context.Context, _ aws.Config) (string, error) { return "1234567890", nil },
 		newDiscoverer: func(_ aws.Config) discoveryAggregator { return agg },
 		runGenconfig:  (&fakeGenconfig{}).Run,
+		runDriftfix:   (&fakeDriftfix{}).Run,
 	}
 }
 
@@ -130,6 +152,13 @@ func okDeps(agg *fakeAggregator) discoverDeps {
 func okDepsWithGC(agg *fakeAggregator, gc *fakeGenconfig) discoverDeps {
 	d := okDeps(agg)
 	d.runGenconfig = gc.Run
+	return d
+}
+
+// okDepsWithDF mirrors okDeps but lets the caller observe driftfix invocations.
+func okDepsWithDF(agg *fakeAggregator, gc *fakeGenconfig, df *fakeDriftfix) discoverDeps {
+	d := okDepsWithGC(agg, gc)
+	d.runDriftfix = df.Run
 	return d
 }
 
@@ -419,6 +448,91 @@ func TestRunDiscoverWithDeps_GenconfigResourcesRewriteManifest(t *testing.T) {
 	}
 	if got[0].Attributes["delay_seconds"] != float64(30) {
 		t.Errorf("Attributes[delay_seconds]=%v, want 30", got[0].Attributes["delay_seconds"])
+	}
+}
+
+// TestRunDiscoverWithDeps_DriftfixInvokedOnHappyPath pins that Stage 2c1
+// runs by default after Stage 2b succeeds. A mutation that flipped
+// --no-driftfix's default to true would silently revert to Stage 2b
+// behavior and skip the zero-drift contract.
+func TestRunDiscoverWithDeps_DriftfixInvokedOnHappyPath(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	gc := &fakeGenconfig{}
+	df := &fakeDriftfix{}
+	agg := &fakeAggregator{out: []imported.ImportedResource{validResource("aws_sqs_queue.alpha")}}
+	rc := runDiscoverWithDeps([]string{
+		"--provider", "aws", "--project", "p", "--region", "us-east-1", "--output-dir", dir,
+	}, okDepsWithDF(agg, gc, df))
+	if rc != discoverExitOK {
+		t.Fatalf("rc=%d, want OK", rc)
+	}
+	if df.called != 1 {
+		t.Errorf("runDriftfix called %d times, want 1", df.called)
+	}
+	if df.gotOpts.Workdir != filepath.Join(dir, "genconfig") {
+		t.Errorf("driftfix Workdir=%q, want <output>/genconfig", df.gotOpts.Workdir)
+	}
+}
+
+// TestRunDiscoverWithDeps_NoDriftfixSkipsStage2c pins that --no-driftfix
+// turns off Stage 2c1 — for operators who only want validate-clean HCL
+// or who hit drift they want to inspect manually.
+func TestRunDiscoverWithDeps_NoDriftfixSkipsStage2c(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	gc := &fakeGenconfig{}
+	df := &fakeDriftfix{}
+	agg := &fakeAggregator{out: []imported.ImportedResource{validResource("aws_sqs_queue.alpha")}}
+	rc := runDiscoverWithDeps([]string{
+		"--provider", "aws", "--project", "p", "--region", "us-east-1", "--output-dir", dir, "--no-driftfix",
+	}, okDepsWithDF(agg, gc, df))
+	if rc != discoverExitOK {
+		t.Fatalf("rc=%d, want OK", rc)
+	}
+	if df.called != 0 {
+		t.Errorf("runDriftfix called %d times with --no-driftfix, want 0", df.called)
+	}
+}
+
+// TestRunDiscoverWithDeps_NoHCLSkipsBothStages pins that --no-hcl skips
+// Stage 2b AND its downstream Stage 2c1 — running drift fix without
+// Stage 2b's generated.tf would error confusingly.
+func TestRunDiscoverWithDeps_NoHCLSkipsBothStages(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	gc := &fakeGenconfig{}
+	df := &fakeDriftfix{}
+	agg := &fakeAggregator{out: []imported.ImportedResource{validResource("aws_sqs_queue.alpha")}}
+	rc := runDiscoverWithDeps([]string{
+		"--provider", "aws", "--project", "p", "--region", "us-east-1", "--output-dir", dir, "--no-hcl",
+	}, okDepsWithDF(agg, gc, df))
+	if rc != discoverExitOK {
+		t.Fatalf("rc=%d, want OK", rc)
+	}
+	if gc.called != 0 || df.called != 0 {
+		t.Errorf("--no-hcl must skip both Stage 2b (gc=%d) and Stage 2c1 (df=%d)", gc.called, df.called)
+	}
+}
+
+// TestRunDiscoverWithDeps_DriftfixFailureExitsFatal pins that a Stage
+// 2c1 failure (replace, stable drift, validate-after-patch failure)
+// exits non-zero. The on-disk imported.json + generated.tf survive so
+// the operator can inspect.
+func TestRunDiscoverWithDeps_DriftfixFailureExitsFatal(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	gc := &fakeGenconfig{}
+	df := &fakeDriftfix{err: errors.New("must be replaced")}
+	agg := &fakeAggregator{out: []imported.ImportedResource{validResource("aws_sqs_queue.alpha")}}
+	rc := runDiscoverWithDeps([]string{
+		"--provider", "aws", "--project", "p", "--region", "us-east-1", "--output-dir", dir,
+	}, okDepsWithDF(agg, gc, df))
+	if rc != discoverExitFatal {
+		t.Errorf("rc=%d, want fatal", rc)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "imported.json")); err != nil {
+		t.Errorf("imported.json must exist after Stage 2b even if Stage 2c1 fails: %v", err)
 	}
 }
 

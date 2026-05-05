@@ -7,7 +7,7 @@ CLI for bringing existing cloud resources under InsideOut management.
 | Subcommand | Status | Purpose |
 |---|---|---|
 | `adopt` | implemented | Emit `import {}` blocks against an *already-known* preset stack. |
-| `discover` | Stage 2b (AWS, manifest + HCL) | Discover existing cloud resources, emit `imported.json`, and generate validated HCL bodies via `terraform plan -generate-config-out`. Stage 2c adds drift fixing; Stage 2d adds GCP. See #189 for the chain. |
+| `discover` | Stage 2c1 (AWS, manifest + HCL + drift fix) | Discover existing cloud resources, emit `imported.json`, generate validated HCL bodies, and loop `terraform plan` patches until the stack is plan-clean. Stage 2c2/2c3/2c4 add SDK QoS, dependency chase, and a localstack CI gate; Stage 2d adds GCP. See #189 for the chain. |
 
 ## `adopt`
 
@@ -92,6 +92,7 @@ insideout-import discover \
 - `--output-dir` (required) — directory to write `imported.json` into.
 - `--resource-types` — comma-separated subset of supported types. Default: all 5 Phase 1 types (`aws_sqs_queue`, `aws_dynamodb_table`, `aws_cloudwatch_log_group`, `aws_secretsmanager_secret`, `aws_lambda_function`).
 - `--no-hcl` — skip Stage 2b's HCL generation (`terraform plan -generate-config-out` + cleanup). Use when no `terraform` binary is available or when only the manifest is needed.
+- `--no-driftfix` — skip Stage 2c1's drift-fix loop. The generated stack is left at validate-clean rather than plan-clean; useful when iterating on the import and you don't yet care about drift convergence.
 
 ### Output
 
@@ -125,15 +126,16 @@ DynamoDB and Lambda fail-closed on per-resource `ListTags` errors — a transien
 
 | Code | Meaning |
 |---|---|
-| `0` | Manifest written; `composer.ValidateImportedResources` returned no issues. With Stage 2b on, `terraform validate` also passed against the cleaned `generated.tf`. |
-| `1` | Fatal: AWS error, validator failure, terraform binary missing or failing, or bad inputs. No partial manifest is written when validation fails before the write step; with Stage 2b, `imported.json` (Stage 2a output) survives even if Stage 2b fails so the operator can inspect it. |
+| `0` | Manifest written; `composer.ValidateImportedResources` returned no issues. With Stage 2b on, `terraform validate` passed against the cleaned `generated.tf`. With Stage 2c1 on (default), `terraform plan -detailed-exitcode` exits 0 against the same stack. |
+| `1` | Fatal: AWS error, validator failure, terraform binary missing or failing, drift-fix replace/delete or stable-drift escalation, or bad inputs. No partial manifest is written when validation fails before the write step; with Stage 2b/2c1, intermediate artifacts (`imported.json`, `generated.tf`, the workdir's `.terraform` dir) survive on disk for inspection. |
 
-### What `discover` does *not* do (Stage 2b)
+### What `discover` does *not* do (Stage 2c1)
 
-- **No drift fixing or dependency chasing.** Stage 2c (`#263`) finds ARNs that point at *un-imported* resources and walks the dependency graph; Stage 2b only cross-refs within the current batch.
-- **No nested-literal cross-refs.** Literals inside object/map values (e.g. `dimensions = { QueueName = "https://..." }`) stay literal. Stage 2c covers those.
+- **No dependency chasing.** Stage 2c3 (`#271`) finds ARNs that point at *un-imported* resources and walks the dependency graph; Stage 2c1 only patches drift within the current batch.
+- **No nested-block drift patching.** Top-level attribute drift is dropped; drift inside nested blocks (timeouts, lifecycle on a non-import-flow resource, etc.) is reported via the stable-drift escalation but not auto-resolved. Stage 2c3 / 2c4 cover those.
+- **No throttle/retry tuning or bounded concurrency.** Stage 2c2 (`#270`).
+- **No localstack CI gate proving zero drift end-to-end.** Stage 2c4 (`#272`).
 - **No GCP support.** Stage 2d (`#264`).
-- **No throttle/retry tuning or bounded concurrency.** Stage 2c.
 
 ## Development
 
