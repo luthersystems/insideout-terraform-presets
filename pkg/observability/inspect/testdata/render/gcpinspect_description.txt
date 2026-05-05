@@ -1,0 +1,29 @@
+INSPECTION: Inspect GCP infrastructure for a deployed project
+⚠️ **PREREQUISITE**: This tool requires a prior deployment ATTEMPT (successful or failed).
+Check convostatus for hasDeployAttempt=true before calling. Works even after failed deploys to inspect orphaned resources.
+
+Inspect deployed GCP resources after a deployment attempt.
+Use this tool when the user asks about the status or details of their deployed GCP infrastructure.
+It fetches temporary read-only credentials securely and queries the GCP API directly.
+
+RESPONSE TIERS (default is summary for token efficiency):
+- Summary (default): Key fields only (~500 tokens). Set detail=false, raw=false or omit both.
+- Detail: Full metadata for a specific resource. Set detail=true + resource filter.
+- Raw: Complete unprocessed API response. Set raw=true.
+
+REQUIRES: session_id from convoopen response (format: sess_v2_...).
+Supported services: apigateway, bastion, billing, cloudarmor, cloudbuild, cloudcdn, cloudfunctions, cloudkms, cloudlogging, cloudmonitoring, cloudrun, cloudsql, compute, firestore, gcs, gke, identityplatform, loadbalancer, memorystore, pubsub, secretmanager, vertexai, vpc
+For a specific service's actions, call with action="list-actions".
+
+METRICS: Use list-metrics to see available Cloud Monitoring metrics for any service (no credentials needed — progressive disclosure). Use get-metrics to retrieve time-series data. Optional filters JSON: {"hours":6,"period":300}.
+Label breakdowns: Cloud Functions (by status), Load Balancer/API Gateway (by response_code_class), Cloud CDN (by cache_result).
+Secret Manager get-metrics returns operational health (version count, replication, create time) — no time-series.
+Bastion is an alias for Compute Engine metrics (SSH connection count not available as a GCP metric).
+BILLING: Use service=billing to inspect GCP billing. Actions: get-billing-info (check if billing enabled, which billing account), get-budgets (list budget alerts for the project — auto-fetches billing account). Requires roles/billing.viewer IAM role.
+Required IAM roles: Monitoring Viewer (roles/monitoring.viewer) for metrics, Secret Manager Viewer (roles/secretmanager.viewer) for secret health, Billing Viewer (roles/billing.viewer) for billing.
+
+EXAMPLES:
+- gcpinspect(session_id=..., service="compute", action="list-instances")
+- gcpinspect(session_id=..., service="gke", action="list-clusters")
+- gcpinspect(session_id=..., service="cloudsql", action="get-metrics", filters="{\"hours\":6}")
+- gcpinspect(session_id=..., service="billing", action="get-billing-info")

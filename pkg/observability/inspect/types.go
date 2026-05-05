@@ -1,6 +1,7 @@
-// Package inspect holds the wire envelope types for the
+// Package inspect holds the session-aware AWS / GCP inspect
+// dispatcher and the wire envelope types for the
 // /api/v2/aws/inspect/batch and /api/v2/gcp/inspect/batch endpoints.
-// The types are the canonical contract between the Vercel-hosted
+// The package is the canonical contract between the Vercel-hosted
 // reliable handlers and the MCP server (currently
 // luthersystems/reliable/mcp-server/, future
 // luthersystems/insideout-agent-skills).
@@ -11,11 +12,13 @@
 // types_test.go pin the exact json tags and `omitempty` semantics so
 // drift surfaces at unit-test time rather than at HTTP-decode time.
 //
-// The dispatcher (InspectAWSBatch / InspectGCPBatch + bounded fan-out)
-// currently lives in reliable/internal/agentapi/ and lifts to
-// pkg/observability/discovery/{aws,gcp}/ in a follow-up PR (#276
-// Item 3). Until then this package owns only the wire types and any
-// constants that are truly part of the wire contract (MaxBatchSubs).
+// The Dispatcher (singular AWS/GCP + AWSBatch/GCPBatch) lifts the
+// reliable-internal logic from internal/agentapi/{aws,gcp}_inspect{,_batch}.go
+// into this repo (#276 Item 3) and abstracts the four reliable-owned
+// concerns behind the four interfaces declared in interfaces.go:
+// ProjectResolver, CredsProvider, DriftReporter, MetricsFetcher.
+// The MCP doc-render helpers (the four tool descriptions and two
+// service tables) live in render.go.
 package inspect
 
 // MaxBatchSubs caps the number of sub-probes per batch request. The

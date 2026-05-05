@@ -1,0 +1,25 @@
+| Service | Common Actions |
+|---------|----------------|
+| apigateway | list-apis, get-metrics |
+| bastion | list-bastion-instances, get-metrics |
+| billing | get-billing-info, get-budgets |
+| cloudarmor | list-policies, describe-policy, get-metrics |
+| cloudbuild | list-triggers, list-builds, get-metrics |
+| cloudcdn | list-backend-services-cdn, get-metrics |
+| cloudfunctions | list-functions, get-metrics |
+| cloudkms | list-keyrings, list-keys, get-metrics |
+| cloudlogging | list-logs |
+| cloudmonitoring | list-alert-policies |
+| cloudrun | list-services, describe-service, get-metrics |
+| cloudsql | list-instances, describe-instance, get-metrics |
+| compute | list-instances, describe-instance, get-metrics |
+| firestore | list-collections, describe-database, get-metrics |
+| gcs | list-buckets, get-metrics |
+| gke | list-clusters, describe-cluster |
+| identityplatform | list-tenants, list-providers, get-metrics |
+| loadbalancer | list-backend-services, list-url-maps, list-target-http-proxies, list-target-https-proxies, list-forwarding-rules, get-metrics |
+| memorystore | list-instances, describe-instance, get-metrics |
+| pubsub | list-topics, list-subscriptions, get-metrics |
+| secretmanager | list-secrets, get-metrics |
+| vertexai | list-datasets, list-endpoints, list-models, get-metrics |
+| vpc | list-networks, list-subnets, list-firewalls, list-routes, get-metrics |

@@ -1,0 +1,27 @@
+| Service | Common Actions |
+|---------|----------------|
+| account | get-info |
+| alb | describe-load-balancers, get-metrics |
+| apigateway | get-apis, get-domain-names, get-metrics |
+| backup | list-backup-vaults |
+| bedrock | list-knowledge-bases, describe-knowledge-base, list-agents, list-guardrails, get-metrics |
+| cloudfront | list-distributions, get-metrics |
+| cloudwatchlogs | describe-log-groups, get-metrics |
+| cognito | list-user-pools, get-metrics |
+| cost-explorer | get-cost-summary, get-cost-forecast, get-cost-by-tag |
+| dynamodb | list-tables, get-metrics |
+| ebs | describe-volumes, describe-snapshots |
+| ec2 | describe-instances, describe-vpcs, describe-subnets, describe-security-groups, get-metrics |
+| ecs | list-clusters, list-services, describe-services, get-metrics |
+| eks | list-clusters, describe-cluster, list-nodes, get-metrics |
+| elasticache | describe-cache-clusters, describe-replication-groups, get-metrics |
+| kms | list-keys, list-aliases, get-metrics |
+| lambda | list-functions, get-metrics |
+| msk | list-clusters, get-metrics |
+| opensearch | list-domains, describe-domains, list-collections, get-metrics |
+| rds | describe-db-instances, describe-db-clusters, get-metrics |
+| s3 | list-buckets, get-metrics |
+| secretsmanager | list-secrets, get-metrics |
+| sqs | list-queues, get-metrics |
+| vpc | describe-nat-gateways, get-metrics |
+| waf | list-web-acls, get-metrics |
