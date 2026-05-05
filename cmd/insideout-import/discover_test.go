@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 
+	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/genconfig"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
 
@@ -87,12 +89,48 @@ func (f *fakeAggregator) DiscoverTypes(_ context.Context, types []string, projec
 	return f.out, f.err
 }
 
+// fakeGenconfig records its inputs and returns the resources unchanged so the
+// happy-path tests can assert HCL generation was invoked without standing up
+// a terraform binary.
+type fakeGenconfig struct {
+	called   int
+	gotOpts  genconfig.Options
+	gotCount int
+	err      error
+	out      []imported.ImportedResource
+}
+
+func (f *fakeGenconfig) Run(_ context.Context, opts genconfig.Options, resources []imported.ImportedResource) (*genconfig.Result, error) {
+	f.called++
+	f.gotOpts = opts
+	f.gotCount = len(resources)
+	if f.err != nil {
+		return nil, f.err
+	}
+	out := f.out
+	if out == nil {
+		out = resources
+	}
+	return &genconfig.Result{
+		GeneratedPath: filepath.Join(opts.Workdir, "generated.tf"),
+		Resources:     out,
+	}, nil
+}
+
 func okDeps(agg *fakeAggregator) discoverDeps {
 	return discoverDeps{
 		loadConfig:    func(_ context.Context, _ string) (aws.Config, error) { return aws.Config{}, nil },
 		getAccount:    func(_ context.Context, _ aws.Config) (string, error) { return "1234567890", nil },
 		newDiscoverer: func(_ aws.Config) discoveryAggregator { return agg },
+		runGenconfig:  (&fakeGenconfig{}).Run,
 	}
+}
+
+// okDepsWithGC mirrors okDeps but lets the caller observe genconfig invocations.
+func okDepsWithGC(agg *fakeAggregator, gc *fakeGenconfig) discoverDeps {
+	d := okDeps(agg)
+	d.runGenconfig = gc.Run
+	return d
 }
 
 func validResource(addr string) imported.ImportedResource {
@@ -231,6 +269,156 @@ func TestRunDiscoverWithDeps_ValidatorFailsExitsFatal(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, "imported.json")); !os.IsNotExist(err) {
 		t.Errorf("manifest must not be written when validator fails")
+	}
+}
+
+// TestRunDiscoverWithDeps_GenconfigInvokedOnHappyPath pins that Stage 2b's
+// HCL pipeline runs by default after a successful manifest write. A mutation
+// that drops the genconfig dispatch (e.g. flipping --no-hcl's default to
+// true) would silently regress to Stage 2a output.
+func TestRunDiscoverWithDeps_GenconfigInvokedOnHappyPath(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	gc := &fakeGenconfig{}
+	agg := &fakeAggregator{out: []imported.ImportedResource{
+		validResource("aws_sqs_queue.alpha"),
+	}}
+	rc := runDiscoverWithDeps([]string{
+		"--provider", "aws", "--project", "p", "--region", "us-east-1", "--output-dir", dir,
+	}, okDepsWithGC(agg, gc))
+	if rc != discoverExitOK {
+		t.Fatalf("rc=%d, want OK", rc)
+	}
+	if gc.called != 1 {
+		t.Errorf("runGenconfig called %d times, want 1", gc.called)
+	}
+	if gc.gotOpts.Region != "us-east-1" {
+		t.Errorf("gc Region = %q, want us-east-1", gc.gotOpts.Region)
+	}
+	if gc.gotOpts.Workdir != filepath.Join(dir, "genconfig") {
+		t.Errorf("gc Workdir = %q, want %s/genconfig", gc.gotOpts.Workdir, dir)
+	}
+}
+
+// TestRunDiscoverWithDeps_NoHCLSkipsGenconfig pins that --no-hcl skips the
+// Stage 2b pipeline entirely — for operators with no terraform binary or
+// who only need the manifest.
+func TestRunDiscoverWithDeps_NoHCLSkipsGenconfig(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	gc := &fakeGenconfig{}
+	agg := &fakeAggregator{out: []imported.ImportedResource{
+		validResource("aws_sqs_queue.alpha"),
+	}}
+	rc := runDiscoverWithDeps([]string{
+		"--provider", "aws", "--project", "p", "--region", "us-east-1", "--output-dir", dir, "--no-hcl",
+	}, okDepsWithGC(agg, gc))
+	if rc != discoverExitOK {
+		t.Fatalf("rc=%d, want OK", rc)
+	}
+	if gc.called != 0 {
+		t.Errorf("runGenconfig called %d times with --no-hcl, want 0", gc.called)
+	}
+}
+
+// TestRunDiscoverWithDeps_GenconfigSkippedOnEmptyResources pins the
+// short-circuit: zero resources means no terraform plan -generate-config-out
+// to drive (which would error: "no changes" or worse), so the Stage 2b
+// pipeline is skipped without --no-hcl.
+func TestRunDiscoverWithDeps_GenconfigSkippedOnEmptyResources(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	gc := &fakeGenconfig{}
+	agg := &fakeAggregator{} // empty
+	rc := runDiscoverWithDeps([]string{
+		"--provider", "aws", "--project", "p", "--region", "us-east-1", "--output-dir", dir,
+	}, okDepsWithGC(agg, gc))
+	if rc != discoverExitOK {
+		t.Fatalf("rc=%d, want OK", rc)
+	}
+	if gc.called != 0 {
+		t.Errorf("runGenconfig called %d times for empty result, want 0", gc.called)
+	}
+}
+
+// TestRunDiscoverWithDeps_GenconfigFailureExitsFatal pins that an HCL
+// pipeline failure (terraform missing, plan error, validate error) is
+// fatal — not a soft warning. The manifest-only path is what the operator
+// asked for explicitly via --no-hcl; without that flag, "all the way through
+// validate" is the contract.
+//
+// Also pins that on Stage 2b failure, the on-disk imported.json is the
+// Stage 2a output (Attributes == nil). A mutation that ran the second
+// writeManifest unconditionally would corrupt the manifest with whatever
+// half-baked Result the failed pipeline returned (or panic on res==nil).
+func TestRunDiscoverWithDeps_GenconfigFailureExitsFatal(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	gc := &fakeGenconfig{err: errors.New("terraform not found")}
+	agg := &fakeAggregator{out: []imported.ImportedResource{
+		validResource("aws_sqs_queue.alpha"),
+	}}
+	rc := runDiscoverWithDeps([]string{
+		"--provider", "aws", "--project", "p", "--region", "us-east-1", "--output-dir", dir,
+	}, okDepsWithGC(agg, gc))
+	if rc != discoverExitFatal {
+		t.Errorf("rc=%d, want fatal", rc)
+	}
+	body, err := os.ReadFile(filepath.Join(dir, "imported.json"))
+	if err != nil {
+		t.Fatalf("imported.json must exist after Stage 2a even if Stage 2b fails: %v", err)
+	}
+	var got []imported.ImportedResource
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatalf("manifest is not valid JSON: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("manifest len=%d, want 1 (Stage 2a output preserved)", len(got))
+	}
+	if got[0].Attributes != nil {
+		t.Errorf("Attributes must be nil on Stage 2b failure (Stage 2a output preserved); got %v", got[0].Attributes)
+	}
+}
+
+// TestRunDiscoverWithDeps_GenconfigResourcesRewriteManifest pins that the
+// Resources returned by genconfig (with populated Attributes) overwrite the
+// initial Stage 2a manifest. A mutation that drops the second writeManifest
+// call would leave Attributes empty on disk despite Stage 2b having run.
+//
+// Asserts the actual decoded value, not just the presence of an
+// "attributes" string, so a future writeManifest that emits an empty
+// "attributes": {} for every resource cannot smuggle past this test.
+func TestRunDiscoverWithDeps_GenconfigResourcesRewriteManifest(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	enriched := validResource("aws_sqs_queue.alpha")
+	enriched.Attributes = map[string]any{"name": "alpha", "delay_seconds": float64(30)}
+	gc := &fakeGenconfig{out: []imported.ImportedResource{enriched}}
+	agg := &fakeAggregator{out: []imported.ImportedResource{
+		validResource("aws_sqs_queue.alpha"),
+	}}
+	rc := runDiscoverWithDeps([]string{
+		"--provider", "aws", "--project", "p", "--region", "us-east-1", "--output-dir", dir,
+	}, okDepsWithGC(agg, gc))
+	if rc != discoverExitOK {
+		t.Fatalf("rc=%d, want OK", rc)
+	}
+	body, err := os.ReadFile(filepath.Join(dir, "imported.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []imported.ImportedResource
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatalf("manifest invalid JSON: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("manifest len=%d, want 1", len(got))
+	}
+	if got[0].Attributes["name"] != "alpha" {
+		t.Errorf("Attributes[name]=%v, want alpha", got[0].Attributes["name"])
+	}
+	if got[0].Attributes["delay_seconds"] != float64(30) {
+		t.Errorf("Attributes[delay_seconds]=%v, want 30", got[0].Attributes["delay_seconds"])
 	}
 }
 

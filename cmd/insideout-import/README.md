@@ -7,7 +7,7 @@ CLI for bringing existing cloud resources under InsideOut management.
 | Subcommand | Status | Purpose |
 |---|---|---|
 | `adopt` | implemented | Emit `import {}` blocks against an *already-known* preset stack. |
-| `discover` | Stage 2a (AWS, manifest only) | Discover existing cloud resources and emit `imported.json`. Stage 2b layers HCL generation; Stage 2c adds drift fixing; Stage 2d adds GCP. See #189 for the chain. |
+| `discover` | Stage 2b (AWS, manifest + HCL) | Discover existing cloud resources, emit `imported.json`, and generate validated HCL bodies via `terraform plan -generate-config-out`. Stage 2c adds drift fixing; Stage 2d adds GCP. See #189 for the chain. |
 
 ## `adopt`
 
@@ -72,7 +72,7 @@ These are intentionally out of scope for Stage 1; see #259 for context:
 - **No provenance tag/label injection on the imported resources.** The composer can apply provenance when it composes the stack; `adopt` will not silently mutate user-authored HCL.
 - **No `imported.json` manifest.** That manifest is meaningful only when discovery populates `Identity` and `Tier` from cloud state.
 
-## `discover` (Stage 2a)
+## `discover` (Stage 2a + 2b)
 
 ```
 insideout-import discover \
@@ -80,16 +80,18 @@ insideout-import discover \
   --project io-buqiks112yag \
   --region us-east-1 \
   --output-dir ./imported \
-  [--resource-types aws_sqs_queue,aws_lambda_function,...]
+  [--resource-types aws_sqs_queue,aws_lambda_function,...] \
+  [--no-hcl]
 ```
 
 ### Inputs
 
-- `--provider` (required) — only `aws` is supported in Stage 2a; `gcp` returns a "not yet implemented" error pointing at #264 (Stage 2d).
+- `--provider` (required) — only `aws` is supported in Stages 2a/2b; `gcp` returns a "not yet implemented" error pointing at #264 (Stage 2d).
 - `--project` (required) — project name used as the prefix / `Project` tag value to filter discovered resources.
 - `--region` (required for AWS) — AWS region to scan.
 - `--output-dir` (required) — directory to write `imported.json` into.
 - `--resource-types` — comma-separated subset of supported types. Default: all 5 Phase 1 types (`aws_sqs_queue`, `aws_dynamodb_table`, `aws_cloudwatch_log_group`, `aws_secretsmanager_secret`, `aws_lambda_function`).
+- `--no-hcl` — skip Stage 2b's HCL generation (`terraform plan -generate-config-out` + cleanup). Use when no `terraform` binary is available or when only the manifest is needed.
 
 ### Output
 
@@ -97,9 +99,15 @@ insideout-import discover \
 
 - `Tier = "TierImportedFlat"`, `Source = "importer"`.
 - `Identity.{Cloud, Type, Address, ImportID, NameHint, ProviderSource, AccountID, Region, NativeIDs}` populated.
-- `Attributes` and `Attrs` left empty — Stage 2b populates them via `terraform plan -generate-config-out`.
+- `Attributes` populated from the cleaned `generated.tf` (Stage 2b). With `--no-hcl`, `Attributes` is empty (Stage 2a-only behavior).
 
-Records are sorted by `Identity.Address` so the file is byte-identical across runs for the same input.
+Stage 2b also writes `<output-dir>/genconfig/`:
+
+- `imports.tf` — one `import { to = ADDR; id = "..." }` per discovered resource.
+- `providers.tf` — pinned `hashicorp/aws ~> 6.0`, `region = <--region>`.
+- `generated.tf` — output of `terraform plan -generate-config-out`, then schema-cleaned (Computed-only attrs dropped, Sensitive attrs gated by `lifecycle { ignore_changes }`) and cross-ref-replaced (literal ARNs/URLs of in-batch resources rewritten as Terraform refs at the top level — nested map literals deferred to Stage 2c).
+
+Records are sorted by `Identity.Address` so `imported.json` is byte-identical across runs for the same input.
 
 ### Per-type SDK calls
 
@@ -117,13 +125,13 @@ DynamoDB and Lambda fail-closed on per-resource `ListTags` errors — a transien
 
 | Code | Meaning |
 |---|---|
-| `0` | Manifest written; `composer.ValidateImportedResources` returned no issues. |
-| `1` | Fatal: AWS error, validator failure, or bad inputs. No partial manifest written. |
+| `0` | Manifest written; `composer.ValidateImportedResources` returned no issues. With Stage 2b on, `terraform validate` also passed against the cleaned `generated.tf`. |
+| `1` | Fatal: AWS error, validator failure, terraform binary missing or failing, or bad inputs. No partial manifest is written when validation fails before the write step; with Stage 2b, `imported.json` (Stage 2a output) survives even if Stage 2b fails so the operator can inspect it. |
 
-### What `discover` does *not* do (Stage 2a)
+### What `discover` does *not* do (Stage 2b)
 
-- **No HCL generation.** The `imports.tf` / `generated.tf` / `providers.tf` files come from Stage 2b (`#262`).
-- **No drift fixing or dependency chasing.** Stage 2c (`#263`).
+- **No drift fixing or dependency chasing.** Stage 2c (`#263`) finds ARNs that point at *un-imported* resources and walks the dependency graph; Stage 2b only cross-refs within the current batch.
+- **No nested-literal cross-refs.** Literals inside object/map values (e.g. `dimensions = { QueueName = "https://..." }`) stay literal. Stage 2c covers those.
 - **No GCP support.** Stage 2d (`#264`).
 - **No throttle/retry tuning or bounded concurrency.** Stage 2c.
 
@@ -134,4 +142,4 @@ go build ./cmd/insideout-import
 go test  ./cmd/insideout-import/...
 ```
 
-Neither the `terraform` binary nor AWS credentials are required for `go test` — discoverers use mocked SDK clients via narrow client interfaces, and the `adopt` plan-parser runs against fixed text fixtures.
+Neither the `terraform` binary nor AWS credentials are required for `go test` — discoverers use mocked SDK clients via narrow client interfaces, the `adopt` plan-parser runs against fixed text fixtures, and the Stage 2b genconfig pipeline takes a `terraformRunner` interface that tests fake out.
