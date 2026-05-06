@@ -21,7 +21,15 @@ import (
 // rewrite substrings, interpolations, or non-string types — those are noise
 // for Stage 2b's "validates clean" gate, and they materially raise the risk
 // of producing HCL that Terraform can no longer evaluate.
-func applyCrossRefs(raw []byte, resources []imported.ImportedResource) ([]byte, error) {
+//
+// Currently AWS-only: the rewriter's heuristics (ARN-shape detection, URL
+// matching) are tuned for AWS-flavored literals. GCP self-link / resource-
+// name crossref is a follow-up tracked in the #264 plan; for ProviderGCP
+// this function is a no-op so generated.tf passes through unchanged.
+func applyCrossRefs(raw []byte, resources []imported.ImportedResource, provider string) ([]byte, error) {
+	if provider == ProviderGCP {
+		return raw, nil
+	}
 	idx := buildCrossRefIndex(resources)
 	if len(idx) == 0 {
 		return raw, nil

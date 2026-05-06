@@ -64,40 +64,63 @@ var localstackEndpointServices = []string{
 	"sts",
 }
 
-// emitProviders writes <dir>/providers.tf with the AWS provider pinned to the
-// same major as the rest of the repo (>= 6.0). The provider block is
+// emitProviders writes <dir>/providers.tf with the configured provider
+// pinned to the same major as the rest of the repo. The provider block is
 // unaliased — see emitImports for why.
 //
-// If endpointURL is non-empty (set via --aws-endpoint-url, used by the
-// Stage 2c4 LocalStack CI gate #272), the block is augmented with the
-// LocalStack attribute set: `endpoints {}` map covering every service the
-// discoverers + STS touch, plus dummy creds and the four `skip_*`/path-
-// style flags that LocalStack's documentation requires for v3+.
-func emitProviders(dir, region, endpointURL string) error {
+// On AWS (provider == ProviderAWS):
+//   - required_providers entry for hashicorp/aws ~> 6.0
+//   - provider "aws" { region = ... }
+//   - When awsEndpointURL is non-empty (LocalStack CI gate #272),
+//     emits the LocalStack attribute set + endpoints {} map.
+//
+// On GCP (provider == ProviderGCP):
+//   - required_providers entry for hashicorp/google ~> 5.0
+//   - provider "google" { project = gcpProjectID; region = ... } (region
+//     omitted when empty so project-global stacks don't emit a stray
+//     attribute the provider would warn on).
+//   - awsEndpointURL is ignored. The Cloud Asset Inventory API has no
+//     emulator (issue #264) so the GCP gate is a manual smoke against a
+//     real project; there's no LocalStack-equivalent shape to emit.
+func emitProviders(dir, provider, region, gcpProjectID, awsEndpointURL string) error {
 	f := hclwrite.NewEmptyFile()
 	body := f.Body()
 
 	tfBlk := body.AppendNewBlock("terraform", nil)
 	rp := tfBlk.Body().AppendNewBlock("required_providers", nil)
-	rp.Body().SetAttributeValue("aws", cty.ObjectVal(map[string]cty.Value{
-		"source":  cty.StringVal("hashicorp/aws"),
-		"version": cty.StringVal("~> 6.0"),
-	}))
 
 	body.AppendNewline()
-	prov := body.AppendNewBlock("provider", []string{"aws"})
-	prov.Body().SetAttributeValue("region", cty.StringVal(region))
 
-	if endpointURL != "" {
-		prov.Body().SetAttributeValue("access_key", cty.StringVal("test"))
-		prov.Body().SetAttributeValue("secret_key", cty.StringVal("test"))
-		prov.Body().SetAttributeValue("skip_credentials_validation", cty.True)
-		prov.Body().SetAttributeValue("skip_metadata_api_check", cty.True)
-		prov.Body().SetAttributeValue("skip_requesting_account_id", cty.True)
-		prov.Body().SetAttributeValue("s3_use_path_style", cty.True)
-		ep := prov.Body().AppendNewBlock("endpoints", nil)
-		for _, svc := range localstackEndpointServices {
-			ep.Body().SetAttributeValue(svc, cty.StringVal(endpointURL))
+	switch provider {
+	case ProviderGCP:
+		rp.Body().SetAttributeValue("google", cty.ObjectVal(map[string]cty.Value{
+			"source":  cty.StringVal("hashicorp/google"),
+			"version": cty.StringVal("~> 5.0"),
+		}))
+		prov := body.AppendNewBlock("provider", []string{"google"})
+		prov.Body().SetAttributeValue("project", cty.StringVal(gcpProjectID))
+		if region != "" {
+			prov.Body().SetAttributeValue("region", cty.StringVal(region))
+		}
+	default: // ProviderAWS
+		rp.Body().SetAttributeValue("aws", cty.ObjectVal(map[string]cty.Value{
+			"source":  cty.StringVal("hashicorp/aws"),
+			"version": cty.StringVal("~> 6.0"),
+		}))
+		prov := body.AppendNewBlock("provider", []string{"aws"})
+		prov.Body().SetAttributeValue("region", cty.StringVal(region))
+
+		if awsEndpointURL != "" {
+			prov.Body().SetAttributeValue("access_key", cty.StringVal("test"))
+			prov.Body().SetAttributeValue("secret_key", cty.StringVal("test"))
+			prov.Body().SetAttributeValue("skip_credentials_validation", cty.True)
+			prov.Body().SetAttributeValue("skip_metadata_api_check", cty.True)
+			prov.Body().SetAttributeValue("skip_requesting_account_id", cty.True)
+			prov.Body().SetAttributeValue("s3_use_path_style", cty.True)
+			ep := prov.Body().AppendNewBlock("endpoints", nil)
+			for _, svc := range localstackEndpointServices {
+				ep.Body().SetAttributeValue(svc, cty.StringVal(awsEndpointURL))
+			}
 		}
 	}
 

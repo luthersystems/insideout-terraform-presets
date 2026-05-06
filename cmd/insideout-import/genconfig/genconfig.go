@@ -28,18 +28,47 @@ type Options struct {
 	Workdir string
 	Region  string
 
+	// Provider selects the emitted required_providers entry, schema-key
+	// for cleanup, and the per-cloud cross-reference rewriter. Accepts
+	// "aws" (default) or "gcp". Empty defaults to "aws" so existing
+	// callers stay source-compatible.
+	Provider string
+
+	// GCPProjectID is the real GCP project ID (per #157, distinct from
+	// the stack `project` name). Used for the emitted google provider
+	// block when Provider == "gcp". Ignored on AWS.
+	GCPProjectID string
+
 	// AWSEndpointURL, when non-empty, retargets the emitted providers.tf
 	// at a single URL (LocalStack) for every AWS service the discoverers
 	// touch, plus the LocalStack auth/skip attribute set. Empty means
 	// emit the standard provider block (region only). Set by the
 	// --aws-endpoint-url discover flag, intended for the Stage 2c4 CI
-	// gate (#272).
+	// gate (#272). Ignored on GCP — the Cloud Asset Inventory API has
+	// no equivalent emulator (see issue #264 for the gap analysis).
 	AWSEndpointURL string
 
 	// Runner is optional. If nil, Run constructs an execRunner that shells
 	// out to the `terraform` binary on PATH. Tests inject a fake here to
 	// avoid the binary dependency.
 	Runner terraformRunner
+}
+
+const (
+	// ProviderAWS is the default Options.Provider value. Equivalent to "".
+	ProviderAWS = "aws"
+	// ProviderGCP selects the Google provider emit + cleanup path.
+	ProviderGCP = "gcp"
+)
+
+// providerOrDefault returns the Options.Provider value, defaulting to
+// ProviderAWS for empty input so the existing AWS callers stay
+// source-compatible without explicit field-init.
+func providerOrDefault(p string) string {
+	if p == "" {
+		return ProviderAWS
+	}
+	return p
 }
 
 // Result reports what Run produced for downstream consumers (the discover
@@ -68,8 +97,18 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 	if opts.Workdir == "" {
 		return nil, fmt.Errorf("genconfig: Workdir required")
 	}
-	if opts.Region == "" {
-		return nil, fmt.Errorf("genconfig: Region required")
+	provider := providerOrDefault(opts.Provider)
+	switch provider {
+	case ProviderAWS:
+		if opts.Region == "" {
+			return nil, fmt.Errorf("genconfig: Region required for provider %q", provider)
+		}
+	case ProviderGCP:
+		if opts.GCPProjectID == "" {
+			return nil, fmt.Errorf("genconfig: GCPProjectID required for provider %q", provider)
+		}
+	default:
+		return nil, fmt.Errorf("genconfig: unknown Provider %q (want %q or %q)", provider, ProviderAWS, ProviderGCP)
 	}
 	if len(resources) == 0 {
 		return nil, fmt.Errorf("genconfig: no resources to generate; nothing to do")
@@ -92,7 +131,7 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 	if err := emitImports(opts.Workdir, resources); err != nil {
 		return nil, fmt.Errorf("emit imports.tf: %w", err)
 	}
-	if err := emitProviders(opts.Workdir, opts.Region, opts.AWSEndpointURL); err != nil {
+	if err := emitProviders(opts.Workdir, provider, opts.Region, opts.GCPProjectID, opts.AWSEndpointURL); err != nil {
 		return nil, fmt.Errorf("emit providers.tf: %w", err)
 	}
 
@@ -134,7 +173,7 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 		return nil, fmt.Errorf("read generated.tf: %w", err)
 	}
 
-	cleaned, err := cleanGenerated(raw, schemas)
+	cleaned, err := cleanGenerated(raw, schemas, provider)
 	if err != nil {
 		return nil, fmt.Errorf("schema cleanup: %w", err)
 	}
@@ -148,7 +187,7 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 		return nil, fmt.Errorf("resource-type fixups: %w", err)
 	}
 
-	cleaned, err = applyCrossRefs(cleaned, resources)
+	cleaned, err = applyCrossRefs(cleaned, resources, provider)
 	if err != nil {
 		return nil, fmt.Errorf("cross-ref: %w", err)
 	}

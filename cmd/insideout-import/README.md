@@ -7,7 +7,7 @@ CLI for bringing existing cloud resources under InsideOut management.
 | Subcommand | Status | Purpose |
 |---|---|---|
 | `adopt` | implemented | Emit `import {}` blocks against an *already-known* preset stack. |
-| `discover` | Stage 2c3 (AWS, manifest + HCL + drift fix + dep chase) | Discover existing cloud resources, emit `imported.json`, generate validated HCL bodies, loop `terraform plan` patches until plan-clean, then walk the cleaned generated.tf for ARN literals pointing at resources outside the import set and pull them in until the references converge. Stage 2c4 adds the localstack zero-drift CI gate; Stage 2d adds GCP. See #189 for the chain. |
+| `discover` | Stage 2d (AWS + GCP, manifest + HCL + drift fix + dep chase) | Discover existing cloud resources, emit `imported.json`, generate validated HCL bodies, loop `terraform plan` patches until plan-clean, then walk the cleaned generated.tf for ARN literals pointing at resources outside the import set and pull them in until the references converge. Stage 2c4 adds the LocalStack zero-drift CI gate (AWS); Stage 2d (#264) adds GCP via Cloud Asset Inventory. See #189 for the chain. |
 
 ## `adopt`
 
@@ -72,9 +72,10 @@ These are intentionally out of scope for Stage 1; see #259 for context:
 - **No provenance tag/label injection on the imported resources.** The composer can apply provenance when it composes the stack; `adopt` will not silently mutate user-authored HCL.
 - **No `imported.json` manifest.** That manifest is meaningful only when discovery populates `Identity` and `Tier` from cloud state.
 
-## `discover` (Stages 2a + 2b + 2c1 + 2c3)
+## `discover` (Stages 2a + 2b + 2c1 + 2c3 + 2d)
 
 ```
+# AWS
 insideout-import discover \
   --provider aws \
   --project io-buqiks112yag \
@@ -83,18 +84,28 @@ insideout-import discover \
   [--resource-types aws_sqs_queue,aws_lambda_function,...] \
   [--no-hcl] [--no-driftfix] [--no-depchase] \
   [--max-depchase-iterations N]
+
+# GCP (Stage 2d — #264)
+insideout-import discover \
+  --provider gcp \
+  --project io-foo \
+  --gcp-project-id my-sandbox-12345 \
+  [--region us-central1] \
+  --output-dir ./imported \
+  [--resource-types google_pubsub_topic,google_storage_bucket,...]
 ```
 
 ### Inputs
 
-- `--provider` (required) — only `aws` is supported in Stages 2a–2c3; `gcp` returns a "not yet implemented" error pointing at #264 (Stage 2d).
-- `--project` (required) — project name used as the prefix / `Project` tag value to filter discovered resources.
-- `--region` (required for AWS) — AWS region to scan.
+- `--provider` (required) — `aws` or `gcp`.
+- `--project` (required) — project name. On AWS: used as the `Project` tag value / name prefix to filter discovered resources. On GCP: used as the `labels.project:<project>` Cloud Asset Inventory query filter.
+- `--region` — AWS region to scan (required for `--provider aws`); optional GCP location filter (`location:<region>` query) for `--provider gcp`. Empty on GCP means project-global search.
+- `--gcp-project-id` (required for `--provider gcp`) — real GCP project ID, distinct from `--project` per #157. The Cloud Asset Inventory scope is `projects/<gcp-project-id>` and `Identity.ProjectID` on every emitted resource is set to this value.
 - `--output-dir` (required) — directory to write `imported.json` into.
-- `--resource-types` — comma-separated subset of supported types. Default: all 9 supported types (the 5 Phase 1 types plus the 4 dep-chase reference types added by Stage 2c3 — `aws_iam_role`, `aws_iam_policy`, `aws_kms_key`, `aws_s3_bucket`).
+- `--resource-types` — comma-separated subset of supported types. Default: all supported types for the chosen provider. AWS: 9 types (5 Phase 1 + 4 dep-chase reference types — `aws_iam_role`, `aws_iam_policy`, `aws_kms_key`, `aws_s3_bucket`). GCP: 5 Phase 1 types — `google_pubsub_topic`, `google_pubsub_subscription`, `google_storage_bucket`, `google_secret_manager_secret`, `google_compute_network`.
 - `--no-hcl` — skip Stage 2b's HCL generation (`terraform plan -generate-config-out` + cleanup). Use when no `terraform` binary is available or when only the manifest is needed. Implies `--no-driftfix` and `--no-depchase`.
 - `--no-driftfix` — skip Stage 2c1's drift-fix loop. The generated stack is left at validate-clean rather than plan-clean; useful when iterating on the import and you don't yet care about drift convergence. Implies `--no-depchase`.
-- `--no-depchase` — skip Stage 2c3's dependency chase. Useful when the operator wants to inspect external ARN references before pulling them in, or when the dep-chase loop is misbehaving. Leaves dangling references in `generated.tf` as drift.
+- `--no-depchase` — skip Stage 2c3's dependency chase. Useful when the operator wants to inspect external ARN references before pulling them in, or when the dep-chase loop is misbehaving. Leaves dangling references in `generated.tf` as drift. Note: GCP self-link literals don't match the AWS-flavored ARN finder, so the dep-chase loop converges trivially on `--provider gcp` regardless.
 - `--max-depchase-iterations` — bound on the dep-chase loop (default 5). Raise if the import set has a long dependency chain; lower if cycles are suspected.
 
 ### Output
@@ -138,12 +149,42 @@ DynamoDB and Lambda fail-closed on per-resource `ListTags` errors — a transien
 | `0` | Manifest written; `composer.ValidateImportedResources` returned no issues. With Stage 2b on, `terraform validate` passed against the cleaned `generated.tf`. With Stage 2c1 on (default), `terraform plan -detailed-exitcode` exits 0 against the same stack. |
 | `1` | Fatal: AWS error, validator failure, terraform binary missing or failing, drift-fix replace/delete or stable-drift escalation, or bad inputs. No partial manifest is written when validation fails before the write step; with Stage 2b/2c1, intermediate artifacts (`imported.json`, `generated.tf`, the workdir's `.terraform` dir) survive on disk for inspection. |
 
-### What `discover` does *not* do (Stage 2c3)
+### Per-type Cloud Asset queries (`--provider gcp`)
 
-- **No nested-block drift patching.** Top-level attribute drift is dropped; drift inside nested blocks (timeouts, lifecycle on a non-import-flow resource, etc.) is reported via the stable-drift escalation but not auto-resolved. Stage 2c4 covers those.
-- **No nested-block ARN reference detection in dep-chase.** The Stage 2c3 finder walks top-level attribute literals only. ARN-shaped values inside nested blocks (e.g. `environment { variables = { ... } }`) or interpolations are not surfaced. If a real-world stack puts dep-chase-relevant ARNs in nested attributes, the surface can be widened in a follow-up.
-- **No localstack CI gate proving zero drift end-to-end.** Stage 2c4 (`#272`).
-- **No GCP support.** Stage 2d (`#264`).
+| Terraform type | Cloud Asset Inventory type | Import ID format |
+|---|---|---|
+| `google_pubsub_topic` | `pubsub.googleapis.com/Topic` | `projects/<id>/topics/<name>` |
+| `google_pubsub_subscription` | `pubsub.googleapis.com/Subscription` | `projects/<id>/subscriptions/<name>` |
+| `google_storage_bucket` | `storage.googleapis.com/Bucket` | `<bucket-name>` (bare; globally unique) |
+| `google_secret_manager_secret` | `secretmanager.googleapis.com/Secret` | `projects/<id>/secrets/<name>` |
+| `google_compute_network` | `compute.googleapis.com/Network` | `projects/<id>/global/networks/<name>` |
+
+Discovery on GCP issues a single `SearchAllResources` call covering every requested asset type, server-side filtered by `labels.project:<stack>` (and optional `location:<region>`). No per-resource fan-out, no STS-equivalent call.
+
+### Smoke test (`--provider gcp`)
+
+The Cloud Asset Inventory API has **no first-party emulator** (LocalStack covers AWS only; Google does not publish a Cloud Asset emulator). The AWS path's LocalStack-driven CI gate at `tests/localstack-discover-gate.sh` therefore has no GCP equivalent that can run unattended in CI. Stage 2d ships an opt-in operator-driven smoke instead:
+
+```bash
+gcloud auth application-default login
+
+cd tests/testdata/gcp-seed
+TF_VAR_project_id=my-sandbox-12345 terraform init
+TF_VAR_project_id=my-sandbox-12345 terraform apply -auto-approve
+
+cd ../../..
+GCP_PROJECT_ID=my-sandbox-12345 bash tests/gcp-discover-smoke.sh
+```
+
+The smoke applies a 5-resource seed stack, runs `discover`, hydrates state via `terraform apply` of the import blocks, and asserts `terraform plan -detailed-exitcode == 0` against the discover-generated workdir. It exits with rc=2 (skip) when `GCP_PROJECT_ID` or ADC is missing — wire it into your own CI behind a credential gate if you need automated coverage. Production CI for this repo runs only the unit tests; the live smoke is on operators.
+
+### What `discover` does *not* do (Stage 2d)
+
+- **No nested-block drift patching.** Top-level attribute drift is dropped; drift inside nested blocks (timeouts, lifecycle on a non-import-flow resource, etc.) is reported via the stable-drift escalation but not auto-resolved.
+- **No nested-block ARN reference detection in dep-chase.** The Stage 2c3 finder walks top-level attribute literals only. ARN-shaped values inside nested blocks (e.g. `environment { variables = { ... } }`) or interpolations are not surfaced.
+- **No GCP self-link cross-reference rewriting.** `applyCrossRefs` is AWS-flavored (ARN/URL pattern matching). On `--provider gcp`, the rewriter is a no-op — literal self-links stay as quoted strings instead of becoming `google_*.<addr>.id` references. Filed as a follow-up; not a customer blocker because Cloud Asset's eventual consistency means cross-resource references are rarely drift-clean on first pass anyway.
+- **No GCP self-link dep-chase.** The dep-chase loop's literal-finder only matches `arn:` shapes. GCP self-links pass through; if a generated.tf references a resource not in the import set, it shows up as drift rather than auto-pulled. Filed as a follow-up.
+- **No automated GCP CI gate.** Cloud Asset Inventory has no emulator (#264 documents the gap). Smoke is opt-in via `tests/gcp-discover-smoke.sh`.
 
 ## Development
 

@@ -26,7 +26,7 @@ func TestApplyCrossRefs_ReplacesArnLiteral(t *testing.T) {
 		ir("aws_lambda_function.fanout", "arn:aws:lambda:us-east-1:123:function:fanout",
 			map[string]string{"arn": "arn:aws:lambda:us-east-1:123:function:fanout"}),
 	}
-	out, err := applyCrossRefs(in, resources)
+	out, err := applyCrossRefs(in, resources, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +56,7 @@ func TestApplyCrossRefs_ReplacesQueueURLAtTopLevel(t *testing.T) {
 		ir("aws_sqs_queue.orders", "https://sqs.us-east-1.amazonaws.com/123/orders",
 			map[string]string{"url": "https://sqs.us-east-1.amazonaws.com/123/orders"}),
 	}
-	out, err := applyCrossRefs(in, resources)
+	out, err := applyCrossRefs(in, resources, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +82,7 @@ func TestApplyCrossRefs_NestedLiteralUntouched(t *testing.T) {
 		ir("aws_sqs_queue.orders", "https://sqs.us-east-1.amazonaws.com/123/orders",
 			map[string]string{"url": "https://sqs.us-east-1.amazonaws.com/123/orders"}),
 	}
-	out, err := applyCrossRefs(in, resources)
+	out, err := applyCrossRefs(in, resources, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +102,7 @@ func TestApplyCrossRefs_LeavesUnknownLiteralsAlone(t *testing.T) {
   role       = "some-role"
 }
 `)
-	out, err := applyCrossRefs(in, []imported.ImportedResource{}) // empty index
+	out, err := applyCrossRefs(in, []imported.ImportedResource{}, "") // empty index
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +127,7 @@ func TestApplyCrossRefs_DoesNotSelfReference(t *testing.T) {
 		ir("aws_sqs_queue.orders", "arn:aws:sqs:us-east-1:123:orders",
 			map[string]string{"arn": "arn:aws:sqs:us-east-1:123:orders"}),
 	}
-	out, err := applyCrossRefs(in, resources)
+	out, err := applyCrossRefs(in, resources, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,7 +151,7 @@ func TestApplyCrossRefs_HonorsImportIDOverArn(t *testing.T) {
 	resources := []imported.ImportedResource{
 		ir("aws_iam_policy.foo", "arn:aws:iam::123:policy/foo", nil), // ImportID only
 	}
-	out, err := applyCrossRefs(in, resources)
+	out, err := applyCrossRefs(in, resources, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,11 +164,44 @@ func TestApplyCrossRefs_NoResourcesNoChange(t *testing.T) {
 	t.Parallel()
 	in := []byte(`resource "aws_sqs_queue" "x" { name = "alpha" }
 `)
-	out, err := applyCrossRefs(in, nil)
+	out, err := applyCrossRefs(in, nil, "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if string(out) != string(in) {
 		t.Errorf("empty resource list must produce identical output\n--- want ---\n%s\n--- got ---\n%s", in, out)
+	}
+}
+
+// TestApplyCrossRefs_GCPIsNoOp pins the documented GCP scope: the
+// AWS-shaped ARN/URL crossref rewriter would silently mishandle GCP
+// self-link literals if it ran against google_* resources. ProviderGCP
+// short-circuits before the buildCrossRefIndex pass — the input bytes
+// must come through byte-identical.
+func TestApplyCrossRefs_GCPIsNoOp(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "google_pubsub_topic" "x" {
+  name = "io-events"
+}
+
+resource "google_pubsub_subscription" "y" {
+  name  = "io-events-sub"
+  topic = "projects/real-proj/topics/io-events"
+}
+`)
+	resources := []imported.ImportedResource{
+		{Identity: imported.ResourceIdentity{
+			Cloud:    "gcp",
+			Type:     "google_pubsub_topic",
+			Address:  "google_pubsub_topic.x",
+			ImportID: "projects/real-proj/topics/io-events",
+		}},
+	}
+	out, err := applyCrossRefs(in, resources, ProviderGCP)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(out) != string(in) {
+		t.Errorf("ProviderGCP path must be a byte-identical no-op\n--- want ---\n%s\n--- got ---\n%s", in, out)
 	}
 }

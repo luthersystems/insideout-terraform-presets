@@ -17,6 +17,7 @@ import (
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/awsdiscover"
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/depchase"
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/driftfix"
+	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/gcpdiscover"
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/genconfig"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
@@ -50,11 +51,11 @@ type discoveryAggregator interface {
 	DiscoverByID(ctx context.Context, tfType, id, region, accountID string) (imported.ImportedResource, error)
 }
 
-// discoverDeps gathers the AWS-side and terraform-side seams that
+// discoverDeps gathers the AWS- and GCP-side and terraform-side seams that
 // runDiscover would otherwise hit directly. Production code passes
 // productionDiscoverDeps(); tests pass fakes to exercise the post-STS
 // branches (validator failure, DiscoverTypes error, nil STS account, HCL
-// generation failure) without real AWS credentials or a terraform binary.
+// generation failure) without real AWS/GCP credentials or a terraform binary.
 type discoverDeps struct {
 	// loadConfig builds the aws.Config the orchestrator hands to every
 	// per-service discoverer. The endpointURL parameter is the
@@ -66,6 +67,10 @@ type discoverDeps struct {
 	loadConfig    func(ctx context.Context, region, endpointURL string) (aws.Config, error)
 	getAccount    func(ctx context.Context, cfg aws.Config) (string, error)
 	newDiscoverer func(cfg aws.Config, maxConcurrency int) discoveryAggregator
+	// newGCPDiscoverer constructs the GCP-side aggregator + asset searcher.
+	// Returns the aggregator and a cleanup func that releases the gRPC
+	// connection (no-op for fakes). Stage 2d (#264).
+	newGCPDiscoverer func(ctx context.Context, gcpProjectID string) (discoveryAggregator, func() error, error)
 	// runGenconfig drives Stage 2b. The default shells out to the
 	// `terraform` binary on PATH; tests inject a fake to skip the binary
 	// dependency.
@@ -108,6 +113,13 @@ func productionDiscoverDeps() discoverDeps {
 		newDiscoverer: func(cfg aws.Config, maxConcurrency int) discoveryAggregator {
 			return awsdiscover.NewAWSDiscovererWithConcurrency(cfg, maxConcurrency)
 		},
+		newGCPDiscoverer: func(ctx context.Context, gcpProjectID string) (discoveryAggregator, func() error, error) {
+			s, err := gcpdiscover.NewRealAssetSearcher(ctx)
+			if err != nil {
+				return nil, func() error { return nil }, err
+			}
+			return gcpdiscover.NewGCPDiscoverer(s, gcpProjectID), s.Close, nil
+		},
 		runGenconfig: genconfig.Run,
 		runDriftfix:  driftfix.Run,
 		runDepChase:  depchase.Run,
@@ -127,23 +139,23 @@ func runDiscoverWithDeps(args []string, deps discoverDeps) int {
 Usage:
   insideout-import discover --provider aws --project P --region R --output-dir DIR [flags]
 
-Stages 2a + 2b + 2c1–2c3: AWS only, SDK-driven discovery for 9 resource
-types (the 5 Phase 1 types plus IAM role/policy, KMS key, S3 bucket
-added for dep-chase reference resolution), with errgroup-bounded
-fan-out and a raised retryer attempt budget. Stage 2b runs
+Stages 2a + 2b + 2c1–2c4 + 2d: AWS-side SDK-driven discovery for 9
+resource types (the 5 Phase 1 types plus IAM role/policy, KMS key, S3
+bucket for dep-chase reference resolution); GCP-side Cloud Asset
+Inventory discovery for 5 Phase 1 types (Pub/Sub topic + subscription,
+GCS bucket, Secret Manager secret, Compute Network). Stage 2b runs
 terraform plan -generate-config-out + schema cleanup; Stage 2c1
 patches drifting attributes until the plan is empty; Stage 2c3 walks
 the cleaned generated.tf for ARN literals pointing at resources not
 in the import set, pulls those in via per-ID lookups, and re-runs
 the regenerate + drift-fix cycle until the references converge or a
-bounded iteration count is hit.
+bounded iteration count is hit. The dep-chase loop is AWS-flavored
+(ARN-shaped literals only); on GCP it converges trivially.
 
 Pass --no-hcl to skip Stage 2b (manifest only), --no-driftfix to
 stop after Stage 2b (validate-clean but possibly drifting), or
 --no-depchase to stop after Stage 2c1 (drift-fix-converged but
-references to external resources may still drift). GCP support and
-the localstack CI gate land in Stages 2c4 / 2d (see #189 for the
-chain).
+references to external resources may still drift).
 
 Flags:`)
 		fs.PrintDefaults()
@@ -153,17 +165,18 @@ Exit codes:
   1  fatal: bad inputs, AWS errors, or validator failure (no partial manifest written)`)
 	}
 
-	provider := fs.String("provider", "", "cloud provider: aws (gcp lands in Stage 2d) (required)")
+	provider := fs.String("provider", "", "cloud provider: aws or gcp (required)")
 	project := fs.String("project", "", "project name prefix used to filter resources (required)")
-	region := fs.String("region", "", "AWS region to scan (required for --provider aws)")
+	region := fs.String("region", "", "AWS region (required for --provider aws); GCP location filter (optional for --provider gcp)")
 	outputDir := fs.String("output-dir", "", "directory to write imported.json into (required)")
-	resourceTypes := fs.String("resource-types", "", "comma-separated subset of types to discover; default: all 9 supported types")
+	resourceTypes := fs.String("resource-types", "", "comma-separated subset of types to discover; default: all supported types for the chosen provider")
 	noHCL := fs.Bool("no-hcl", false, "skip Stage 2b HCL generation (terraform plan -generate-config-out + cleanup); leaves imported.json with empty Attributes")
 	noDriftFix := fs.Bool("no-driftfix", false, "skip Stage 2c1 drift fix loop after HCL generation; leaves generated.tf at validate-clean rather than plan-clean")
 	noDepChase := fs.Bool("no-depchase", false, "skip Stage 2c3 dependency chase loop after drift fix; leaves dangling external ARN references in generated.tf as drift")
 	maxDepChaseIter := fs.Int("max-depchase-iterations", depchase.DefaultMaxIterations, "max dependency-chase iterations before surfacing the residual unresolved set as a fatal")
-	maxConcurrency := fs.Int("max-concurrency", awsdiscover.DefaultMaxConcurrency, "max in-flight per-resource AWS API calls inside the DynamoDB and Lambda discoverers; raise on accounts with thousands of resources, lower if the SDK retryer keeps tripping")
-	awsEndpointURL := fs.String("aws-endpoint-url", "", "override the AWS endpoint URL for both SDK and terraform provider; intended for the Stage 2c4 LocalStack-backed CI gate (#272) — pass http://localhost:4566 to retarget every service at LocalStack. Empty (default) uses real AWS.")
+	maxConcurrency := fs.Int("max-concurrency", awsdiscover.DefaultMaxConcurrency, "max in-flight per-resource AWS API calls inside the DynamoDB and Lambda discoverers; raise on accounts with thousands of resources, lower if the SDK retryer keeps tripping. Ignored for --provider gcp (Cloud Asset is a single-call surface).")
+	awsEndpointURL := fs.String("aws-endpoint-url", "", "override the AWS endpoint URL for both SDK and terraform provider; intended for the Stage 2c4 LocalStack-backed CI gate (#272) — pass http://localhost:4566 to retarget every service at LocalStack. Empty (default) uses real AWS. Ignored for --provider gcp.")
+	gcpProjectID := fs.String("gcp-project-id", "", "real GCP project ID (per #157, distinct from --project); required for --provider gcp. The Cloud Asset Inventory scope is `projects/<gcp-project-id>` and Identity.ProjectID on every emitted resource is set to this value.")
 
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -172,18 +185,16 @@ Exit codes:
 		return discoverExitFatal
 	}
 
-	switch strings.TrimSpace(*provider) {
-	case "aws":
-		// fallthrough to AWS path
-	case "gcp":
-		fmt.Fprintln(os.Stderr, "discover: --provider gcp not yet implemented (tracked in #264 / Stage 2d)")
-		return discoverExitFatal
+	cloud := strings.TrimSpace(*provider)
+	switch cloud {
+	case "aws", "gcp":
+		// fallthrough
 	case "":
-		fmt.Fprintln(os.Stderr, "discover: --provider is required (only 'aws' is supported in Stage 2a)")
+		fmt.Fprintln(os.Stderr, "discover: --provider is required (one of: aws, gcp)")
 		fs.Usage()
 		return discoverExitFatal
 	default:
-		fmt.Fprintf(os.Stderr, "discover: unknown --provider %q (only 'aws' is supported in Stage 2a)\n", *provider)
+		fmt.Fprintf(os.Stderr, "discover: unknown --provider %q (one of: aws, gcp)\n", *provider)
 		return discoverExitFatal
 	}
 
@@ -191,8 +202,12 @@ Exit codes:
 		fmt.Fprintln(os.Stderr, "discover: --project is required")
 		return discoverExitFatal
 	}
-	if strings.TrimSpace(*region) == "" {
+	if cloud == "aws" && strings.TrimSpace(*region) == "" {
 		fmt.Fprintln(os.Stderr, "discover: --region is required for --provider aws")
+		return discoverExitFatal
+	}
+	if cloud == "gcp" && strings.TrimSpace(*gcpProjectID) == "" {
+		fmt.Fprintln(os.Stderr, "discover: --gcp-project-id is required for --provider gcp (per #157, distinct from --project)")
 		return discoverExitFatal
 	}
 	if strings.TrimSpace(*outputDir) == "" {
@@ -213,32 +228,51 @@ Exit codes:
 	ctx, cancel := context.WithTimeout(context.Background(), discoverTimeout)
 	defer cancel()
 
-	cfg, err := deps.loadConfig(ctx, *region, *awsEndpointURL)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "discover: load AWS config: %v\n", err)
-		return discoverExitFatal
+	var (
+		d         discoveryAggregator
+		accountID string // AWS account ID, or real GCP project ID for the cloud-agnostic interface slot
+	)
+	switch cloud {
+	case "aws":
+		cfg, err := deps.loadConfig(ctx, *region, *awsEndpointURL)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "discover: load AWS config: %v\n", err)
+			return discoverExitFatal
+		}
+		// One STS GetCallerIdentity call per run; the result is threaded into
+		// every per-type discoverer so they don't each re-hit STS. We require
+		// the account ID for ARN construction (DynamoDB) and provenance, so a
+		// failure here is fatal. A nil Account on the STS response is treated
+		// as accountID="" — the DynamoDB discoverer's prefix-only fallback
+		// handles that case (see TestDynamoDBDiscover_PrefixOnlyFallback).
+		accountID, err = deps.getAccount(ctx, cfg)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "discover: STS GetCallerIdentity: %v\n", err)
+			return discoverExitFatal
+		}
+		d = deps.newDiscoverer(cfg, *maxConcurrency)
+	case "gcp":
+		gd, closeFn, err := deps.newGCPDiscoverer(ctx, *gcpProjectID)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "discover: build GCP discoverer: %v\n", err)
+			return discoverExitFatal
+		}
+		// closeFn releases the gRPC connection after the run completes.
+		// The discover orchestrator owns the lifetime; defer here so the
+		// downstream genconfig / driftfix / depchase passes don't see a
+		// closed client mid-run.
+		defer func() { _ = closeFn() }()
+		d = gd
+		accountID = *gcpProjectID
 	}
 
-	// One STS GetCallerIdentity call per run; the result is threaded into
-	// every per-type discoverer so they don't each re-hit STS. We require
-	// the account ID for ARN construction (DynamoDB) and provenance, so a
-	// failure here is fatal. A nil Account on the STS response is treated
-	// as accountID="" — the DynamoDB discoverer's prefix-only fallback
-	// handles that case (see TestDynamoDBDiscover_PrefixOnlyFallback).
-	accountID, err := deps.getAccount(ctx, cfg)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "discover: STS GetCallerIdentity: %v\n", err)
-		return discoverExitFatal
-	}
-
-	d := deps.newDiscoverer(cfg, *maxConcurrency)
 	resources, err := d.DiscoverTypes(ctx, types, *project, *region, accountID)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "discover: %v\n", err)
 		return discoverExitFatal
 	}
 
-	out, n, err := writeManifest(*outputDir, "aws", resources)
+	out, n, err := writeManifest(*outputDir, cloud, resources)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "discover: %v\n", err)
 		return discoverExitFatal
@@ -253,11 +287,14 @@ Exit codes:
 	// HCL bodies + populated Attributes back. The scratch workdir lives
 	// inside output-dir so cleanup is the operator's choice, not ours.
 	gcWorkdir := filepath.Join(*outputDir, "genconfig")
-	res, err := deps.runGenconfig(ctx, genconfig.Options{
+	gcOptsBase := genconfig.Options{
 		Workdir:        gcWorkdir,
+		Provider:       cloud,
 		Region:         *region,
+		GCPProjectID:   *gcpProjectID,
 		AWSEndpointURL: *awsEndpointURL,
-	}, resources)
+	}
+	res, err := deps.runGenconfig(ctx, gcOptsBase, resources)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "discover: HCL generation: %v\n", err)
 		fmt.Fprintln(os.Stderr, "discover: imported.json was written, but Attributes are empty. Re-run with --no-hcl to skip Stage 2b explicitly.")
@@ -267,7 +304,7 @@ Exit codes:
 	// Re-write imported.json with the populated Attributes from the
 	// cleaned generated.tf. Determinism + validation are owned by
 	// writeManifest, so this is one call, no plumbing change.
-	out, n, err = writeManifest(*outputDir, "aws", res.Resources)
+	out, n, err = writeManifest(*outputDir, cloud, res.Resources)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "discover: %v\n", err)
 		return discoverExitFatal
@@ -305,15 +342,11 @@ Exit codes:
 	// manifest stays consistent with the on-disk generated.tf.
 	pipeline := depchase.PipelineFns{
 		RunGenconfig: func(ictx context.Context, expanded []imported.ImportedResource) (*depchase.GenconfigResult, error) {
-			r, err := deps.runGenconfig(ictx, genconfig.Options{
-				Workdir:        gcWorkdir,
-				Region:         *region,
-				AWSEndpointURL: *awsEndpointURL,
-			}, expanded)
+			r, err := deps.runGenconfig(ictx, gcOptsBase, expanded)
 			if err != nil {
 				return nil, err
 			}
-			if _, _, err := writeManifest(*outputDir, "aws", r.Resources); err != nil {
+			if _, _, err := writeManifest(*outputDir, cloud, r.Resources); err != nil {
 				return nil, fmt.Errorf("write manifest after depchase regenerate: %w", err)
 			}
 			return &depchase.GenconfigResult{
@@ -360,7 +393,7 @@ Exit codes:
 	if len(dcRes.Added) > 0 {
 		// One last manifest rewrite so any depchase-added resources
 		// land in imported.json with the converged attributes.
-		if _, _, err := writeManifest(*outputDir, "aws", dcRes.Resources); err != nil {
+		if _, _, err := writeManifest(*outputDir, cloud, dcRes.Resources); err != nil {
 			fmt.Fprintf(os.Stderr, "discover: write manifest after depchase: %v\n", err)
 			return discoverExitFatal
 		}

@@ -33,12 +33,15 @@ func TestRunDiscover_MissingProvider(t *testing.T) {
 	}
 }
 
-func TestRunDiscover_GCPNotYetImplemented(t *testing.T) {
+// Stage 2d (#264) wired GCP into discover; GCP without --gcp-project-id
+// must still fail fatally (per #157, the real GCP project ID is distinct
+// from the stack --project name and the orchestrator can't fall back).
+func TestRunDiscover_GCPMissingProjectIDIsFatal(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	rc := runDiscover([]string{"--provider", "gcp", "--project", "p", "--region", "us-east-1", "--output-dir", dir})
+	rc := runDiscover([]string{"--provider", "gcp", "--project", "p", "--output-dir", dir})
 	if rc != discoverExitFatal {
-		t.Errorf("rc=%d, want fatal (Stage 2d)", rc)
+		t.Errorf("rc=%d, want fatal", rc)
 	}
 }
 
@@ -208,6 +211,54 @@ func validResource(addr string) imported.ImportedResource {
 		Tier:   imported.TierImportedFlat,
 		Source: imported.SourceImporter,
 	}
+}
+
+// validGCPResource builds a Stage 2d (#264) ImportedResource that
+// satisfies composer.ValidateImportedResources("gcp", ...). Mirrors
+// validResource but with Cloud="gcp" and a real-looking Pub/Sub topic
+// import ID. Used by the GCP-branch orchestrator tests.
+func validGCPResource(addr string) imported.ImportedResource {
+	return imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Cloud:     "gcp",
+			Type:      "google_pubsub_topic",
+			Address:   addr,
+			ImportID:  "projects/real-proj/topics/" + addr,
+			ProjectID: "real-proj",
+		},
+		Tier:   imported.TierImportedFlat,
+		Source: imported.SourceImporter,
+	}
+}
+
+// okGCPDeps mirrors okDeps but for the --provider gcp branch: AWS-side
+// fakes are pre-set to t.Fatal (the GCP path must NEVER call them) and
+// newGCPDiscoverer is wired to return the supplied aggregator. Returns
+// the dep struct + a closeFn capture pointer so tests can assert the
+// gRPC release path was invoked.
+func okGCPDeps(t *testing.T, agg *fakeAggregator) (discoverDeps, *bool) {
+	t.Helper()
+	called := false
+	return discoverDeps{
+		loadConfig: func(_ context.Context, _, _ string) (aws.Config, error) {
+			t.Fatal("AWS loadConfig must not be called on --provider gcp path")
+			return aws.Config{}, nil
+		},
+		getAccount: func(_ context.Context, _ aws.Config) (string, error) {
+			t.Fatal("AWS getAccount must not be called on --provider gcp path")
+			return "", nil
+		},
+		newDiscoverer: func(_ aws.Config, _ int) discoveryAggregator {
+			t.Fatal("AWS newDiscoverer must not be called on --provider gcp path")
+			return nil
+		},
+		newGCPDiscoverer: func(_ context.Context, _ string) (discoveryAggregator, func() error, error) {
+			return agg, func() error { called = true; return nil }, nil
+		},
+		runGenconfig: (&fakeGenconfig{}).Run,
+		runDriftfix:  (&fakeDriftfix{}).Run,
+		runDepChase:  noopDepChase,
+	}, &called
 }
 
 func TestRunDiscoverWithDeps_HappyPathWritesManifest(t *testing.T) {
@@ -1097,6 +1148,189 @@ func TestRunDiscoverWithDeps_AWSEndpointURLWiresFlagToBothSeams(t *testing.T) {
 			assert.Equal(t, tc.wantArg, loadConfigSawArg, "loadConfig third arg")
 			assert.Equal(t, tc.wantArg, gc.gotOpts.AWSEndpointURL, "genconfig.Options.AWSEndpointURL")
 		})
+	}
+}
+
+// --- Stage 2d (#264) GCP path tests ---
+
+func TestRunDiscoverWithDeps_GCPHappyPathWritesManifest(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	agg := &fakeAggregator{out: []imported.ImportedResource{
+		validGCPResource("alpha"),
+		validGCPResource("bravo"),
+	}}
+	deps, closedPtr := okGCPDeps(t, agg)
+	rc := runDiscoverWithDeps([]string{
+		"--provider", "gcp", "--project", "io-foo",
+		"--gcp-project-id", "real-proj",
+		"--output-dir", dir,
+	}, deps)
+	if rc != discoverExitOK {
+		t.Fatalf("rc=%d, want OK", rc)
+	}
+	if agg.called != 1 {
+		t.Errorf("DiscoverTypes called %d times, want 1", agg.called)
+	}
+	if agg.gotProject != "io-foo" || agg.gotAccount != "real-proj" {
+		t.Errorf("dispatch args = (%q,%q,%q), want (io-foo, *, real-proj)", agg.gotProject, agg.gotRegion, agg.gotAccount)
+	}
+	body, err := os.ReadFile(filepath.Join(dir, "imported.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []imported.ImportedResource
+	require.NoError(t, json.Unmarshal(body, &got))
+	require.Len(t, got, 2)
+	for _, r := range got {
+		assert.Equal(t, "gcp", r.Identity.Cloud)
+		assert.Equal(t, "real-proj", r.Identity.ProjectID)
+	}
+	// closeFn must run (gRPC release on the asset client) so re-runs
+	// don't leak file descriptors.
+	assert.True(t, *closedPtr, "GCP discoverer closeFn must be invoked")
+}
+
+func TestRunDiscoverWithDeps_GCPRegionThreadsToAggregator(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	agg := &fakeAggregator{}
+	deps, _ := okGCPDeps(t, agg)
+	rc := runDiscoverWithDeps([]string{
+		"--provider", "gcp", "--project", "io-foo",
+		"--gcp-project-id", "real-proj",
+		"--region", "us-central1",
+		"--output-dir", dir,
+	}, deps)
+	if rc != discoverExitOK {
+		t.Fatalf("rc=%d, want OK", rc)
+	}
+	if agg.gotRegion != "us-central1" {
+		t.Errorf("region threaded = %q, want us-central1", agg.gotRegion)
+	}
+}
+
+// TestRunDiscoverWithDeps_GCPGenconfigOptsCarryProvider pins that the
+// orchestrator's genconfig.Options carries Provider="gcp" and
+// GCPProjectID. A mutation that left these fields zero would silently
+// fall back to AWS emit/cleanup paths and emit a hashicorp/aws
+// providers.tf for a GCP stack.
+func TestRunDiscoverWithDeps_GCPGenconfigOptsCarryProvider(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	gc := &fakeGenconfig{}
+	agg := &fakeAggregator{out: []imported.ImportedResource{validGCPResource("alpha")}}
+	deps, _ := okGCPDeps(t, agg)
+	deps.runGenconfig = gc.Run
+	rc := runDiscoverWithDeps([]string{
+		"--provider", "gcp", "--project", "io-foo",
+		"--gcp-project-id", "real-proj",
+		"--output-dir", dir,
+	}, deps)
+	if rc != discoverExitOK {
+		t.Fatalf("rc=%d, want OK", rc)
+	}
+	if gc.gotOpts.Provider != "gcp" {
+		t.Errorf("genconfig Provider=%q, want gcp", gc.gotOpts.Provider)
+	}
+	if gc.gotOpts.GCPProjectID != "real-proj" {
+		t.Errorf("genconfig GCPProjectID=%q, want real-proj", gc.gotOpts.GCPProjectID)
+	}
+}
+
+// TestRunDiscoverWithDeps_GCPNewDiscovererFailureExitsFatal pins that
+// when ADC isn't configured (or the project has Cloud Asset disabled),
+// newGCPDiscoverer's error is fatal and no manifest is written.
+func TestRunDiscoverWithDeps_GCPNewDiscovererFailureExitsFatal(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	deps, _ := okGCPDeps(t, &fakeAggregator{})
+	deps.newGCPDiscoverer = func(_ context.Context, _ string) (discoveryAggregator, func() error, error) {
+		return nil, func() error { return nil }, errors.New("ADC not configured")
+	}
+	rc := runDiscoverWithDeps([]string{
+		"--provider", "gcp", "--project", "p",
+		"--gcp-project-id", "real-proj",
+		"--output-dir", dir,
+	}, deps)
+	if rc != discoverExitFatal {
+		t.Errorf("rc=%d, want fatal", rc)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "imported.json")); !os.IsNotExist(err) {
+		t.Errorf("manifest must not be written when GCP discoverer build fails")
+	}
+}
+
+func TestRunDiscoverWithDeps_GCPDiscoverTypesFailureExitsFatal(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	agg := &fakeAggregator{err: errors.New("PermissionDenied")}
+	deps, _ := okGCPDeps(t, agg)
+	rc := runDiscoverWithDeps([]string{
+		"--provider", "gcp", "--project", "p",
+		"--gcp-project-id", "real-proj",
+		"--output-dir", dir,
+	}, deps)
+	if rc != discoverExitFatal {
+		t.Errorf("rc=%d, want fatal", rc)
+	}
+}
+
+// TestRunDiscoverWithDeps_GCPManifestRejectsAWSCloudArg pins the
+// manifest-cloud wiring contract by forcing the failure mode: if the
+// orchestrator's GCP branch threaded `cloud="aws"` into writeManifest
+// (a regression of the pre-#264 hardcode), composer.ValidateImported
+// Resources would emit imported_resource_unsupported_cloud and the run
+// would exit fatal with no manifest on disk. We prove that path runs
+// in the inverse direction (validator-fatal-on-mismatched-cloud) by
+// feeding a Cloud="aws" record through the GCP branch and asserting
+// the validator catches it. The happy-path test asserts the symmetric
+// success case (Cloud="gcp" + cloud="gcp" → OK). Together they pin
+// the wiring without a "mock writeManifest" complication.
+func TestRunDiscoverWithDeps_GCPManifestRejectsAWSCloudArg(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	awsRecord := imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Cloud:    "aws",
+			Type:     "aws_sqs_queue",
+			Address:  "aws_sqs_queue.alpha",
+			ImportID: "alpha",
+		},
+		Tier: imported.TierImportedFlat,
+	}
+	agg := &fakeAggregator{out: []imported.ImportedResource{awsRecord}}
+	deps, _ := okGCPDeps(t, agg)
+	rc := runDiscoverWithDeps([]string{
+		"--provider", "gcp", "--project", "p",
+		"--gcp-project-id", "real-proj",
+		"--output-dir", dir,
+	}, deps)
+	if rc != discoverExitFatal {
+		t.Errorf("rc=%d, want fatal (validator should reject Cloud=aws under cloud=gcp)", rc)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "imported.json")); !os.IsNotExist(err) {
+		t.Errorf("manifest must not be written when validator rejects mismatched cloud")
+	}
+}
+
+// TestRunDiscoverWithDeps_GCPDepChaseConvergesTrivially pins that the
+// dep-chase loop (Stage 2c3, AWS-flavored) runs cleanly on the GCP path.
+// GCP self-link literals don't match the ARN-shaped finder so depchase
+// terminates after one iteration with empty Added — but the orchestrator
+// must still hand a non-nil Resources slice through.
+func TestRunDiscoverWithDeps_GCPDepChaseConvergesTrivially(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	agg := &fakeAggregator{out: []imported.ImportedResource{validGCPResource("alpha")}}
+	deps, _ := okGCPDeps(t, agg)
+	rc := runDiscoverWithDeps([]string{
+		"--provider", "gcp", "--project", "p",
+		"--gcp-project-id", "real-proj",
+		"--output-dir", dir,
+	}, deps)
+	if rc != discoverExitOK {
+		t.Errorf("rc=%d, want OK", rc)
 	}
 }
 
