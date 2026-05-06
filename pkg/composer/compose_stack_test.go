@@ -153,15 +153,26 @@ func TestDefaultWiring_V2Keys(t *testing.T) {
 			wantNotIn: []string{"module.alb.", "module.waf."},
 		},
 		{
-			name: "cloudwatch monitoring references v2 modules",
+			// #285: when per-component consumers are selected alongside
+			// the aggregator, the back-edge wiring is suppressed (would
+			// otherwise close a 2-cycle with each consumer) and the
+			// disable flag flips so the legacy aggregator-side alarms
+			// retire — per-component observability.tf in each consumer
+			// owns the equivalent alarms. wantNotIn pins both the legacy
+			// module name shape (regression of #283-class drift) and the
+			// V2-prefixed back-edge references (regression of #285).
+			name: "cloudwatch monitoring disables legacy alarms when per-component consumers are present",
 			key:  KeyAWSCloudWatchMonitoring,
 			wantIn: map[string]string{
-				"instance_ids":     "module.aws_bastion.bastion_instance_id",
-				"rds_instance_ids": "module.aws_rds.instance_id",
-				"alb_arn_suffixes": "module.aws_alb.alb_arn_suffix",
-				"sqs_queue_arns":   "module.aws_sqs.queue_arn",
+				"disable_legacy_per_component_alarms": "true",
 			},
-			wantNotIn: []string{"module.bastion.", "module.rds.", "module.alb.", "module.sqs."},
+			wantNotIn: []string{
+				"module.bastion.", "module.rds.", "module.alb.", "module.sqs.",
+				"module.aws_bastion.bastion_instance_id",
+				"module.aws_rds.instance_id",
+				"module.aws_alb.alb_arn_suffix",
+				"module.aws_sqs.queue_arn",
+			},
 		},
 		{
 			name: "bedrock references v2 s3 and opensearch",
@@ -445,11 +456,25 @@ func TestComposeStack_V2KitchenSink(t *testing.T) {
 	// would otherwise pass a global substring count).
 	assertProviderBlocksHaveDefaultTags(t, prov, 2)
 
-	// Monitoring ← bastion, RDS, ALB, SQS
-	require.Contains(t, mainTF, "module.aws_bastion.bastion_instance_id")
-	require.Contains(t, mainTF, "module.aws_rds.instance_id")
-	require.Contains(t, mainTF, "module.aws_alb.alb_arn_suffix")
-	require.Contains(t, mainTF, "module.aws_sqs.queue_arn")
+	// Monitoring: per-component observability is active (consumers selected
+	// alongside cwm), so the legacy aggregator-side back-edges are dropped
+	// and disable_legacy_per_component_alarms flips on (#285). Per-component
+	// alarms still notify via the cwm SNS topic via the post-switch
+	// alarm_topic_arn forward-edge.
+	require.Regexp(t,
+		regexp.MustCompile(`(?m)^\s*disable_legacy_per_component_alarms\s*=\s*true\s*$`),
+		mainTF,
+		"cwm must disable legacy alarms when per-component consumers are present (#285)")
+	require.NotContains(t, mainTF, "module.aws_bastion.bastion_instance_id",
+		"back-edge from cwm to bastion must not render (#285)")
+	require.NotContains(t, mainTF, "module.aws_rds.instance_id",
+		"back-edge from cwm to rds must not render (#285)")
+	require.NotContains(t, mainTF, "module.aws_alb.alb_arn_suffix",
+		"back-edge from cwm to alb must not render (#285)")
+	require.NotContains(t, mainTF, "module.aws_sqs.queue_arn",
+		"back-edge from cwm to sqs must not render (#285)")
+	require.Contains(t, mainTF, "module.aws_cloudwatch_monitoring.sns_topic_arn",
+		"forward-edge alarm_topic_arn must still render so per-component alarms notify")
 
 	// Must NOT contain legacy module references
 	require.NotContains(t, mainTF, "module.alb.")
@@ -591,10 +616,21 @@ func TestComposeStack_KitchenSink(t *testing.T) {
 	})
 
 	t.Run("wiring/monitoring", func(t *testing.T) {
-		require.Contains(t, mainTF, `instance_ids     = [module.aws_bastion.bastion_instance_id]`)
-		require.Contains(t, mainTF, `rds_instance_ids = [module.aws_rds.instance_id]`)
-		require.Contains(t, mainTF, `alb_arn_suffixes = [module.aws_alb.alb_arn_suffix]`)
-		require.Contains(t, mainTF, `sqs_queue_arns   = [module.aws_sqs.queue_arn]`)
+		// #285: when per-component observability consumers are in the
+		// stack, the cwm aggregator drops its back-edge wiring (which
+		// would otherwise close a 2-cycle with each consumer) and flips
+		// disable_legacy_per_component_alarms = true so the legacy
+		// aggregator-side alarms retire — per-component observability.tf
+		// in each consumer module owns the equivalent alarms.
+		require.Regexp(t,
+			regexp.MustCompile(`(?m)^\s*disable_legacy_per_component_alarms\s*=\s*true\s*$`),
+			mainTF,
+			"cwm must disable legacy alarms when per-component observability consumers are in the stack")
+		require.NotContains(t, mainTF, "instance_ids     = [module.aws_bastion.bastion_instance_id]",
+			"back-edge from cwm to bastion must not render once per-component observability is wired (#285)")
+		require.NotContains(t, mainTF, "rds_instance_ids = [module.aws_rds.instance_id]")
+		require.NotContains(t, mainTF, "alb_arn_suffixes = [module.aws_alb.alb_arn_suffix]")
+		require.NotContains(t, mainTF, "sqs_queue_arns   = [module.aws_sqs.queue_arn]")
 	})
 
 	t.Run("wiring/backups", func(t *testing.T) {

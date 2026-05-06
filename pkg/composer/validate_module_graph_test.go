@@ -1,6 +1,7 @@
 package composer
 
 import (
+	"regexp"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -266,4 +267,118 @@ func TestComposeStackWithIssues_GreenStackHasNoGraphIssues(t *testing.T) {
 		require.NotEqual(t, "invalid_type", iss.Code, "unexpected invalid_type: %v", iss)
 		require.NotEqual(t, "dangling_resource_ref", iss.Code, "unexpected dangling_resource_ref: %v", iss)
 	}
+}
+
+// TestComposeStack_NoCycleWithCloudWatchMonitoringAndConsumers regresses
+// the bug surfaced by reliable session sess_v2_T8vvrDtATMBN where
+// ValidateNoModuleCycles reported [aws_alb aws_apigateway aws_cloudfront
+// aws_cloudwatch_monitoring aws_elasticache aws_lambda aws_rds] stuck due
+// to the monitoring<->consumer 2-cycles formed by the legacy aggregator-
+// side wiring (instance_ids/rds_instance_ids/alb_arn_suffixes/sqs_queue_arns)
+// combined with the per-component observability wiring
+// (alarm_topic_arn = module.aws_cloudwatch_monitoring.sns_topic_arn).
+//
+// Fix: when any per-component observability consumer is in the stack,
+// the cwm aggregator drops its back-edge wiring and flips
+// disable_legacy_per_component_alarms = true. The forward-edge stays so
+// per-component alarms continue to notify via the shared SNS topic.
+// Issue #285.
+func TestComposeStack_NoCycleWithCloudWatchMonitoringAndConsumers(t *testing.T) {
+	t.Parallel()
+
+	c := newTestClient()
+	r, err := c.ComposeStackWithIssues(ComposeStackOpts{
+		Project: "demo",
+		Region:  "us-east-1",
+		Cloud:   "aws",
+		SelectedKeys: []ComponentKey{
+			KeyAWSVPC,
+			KeyAWSRDS,
+			KeyAWSALB,
+			KeyAWSLambda,
+			KeyAWSAPIGateway,
+			KeyAWSElastiCache,
+			KeyAWSCloudfront,
+			KeyAWSCloudWatchMonitoring,
+		},
+		Comps: &Components{
+			Cloud:                   "AWS",
+			AWSVPC:                  "Private VPC",
+			AWSRDS:                  ptrBool(true),
+			AWSALB:                  ptrBool(true),
+			AWSLambda:               ptrBool(true),
+			AWSAPIGateway:           ptrBool(true),
+			AWSElastiCache:          ptrBool(true),
+			AWSCloudFront:           ptrBool(true),
+			AWSCloudWatchMonitoring: ptrBool(true),
+		},
+		Cfg: &Config{},
+	})
+	require.NoError(t, err, "compose must succeed for cwm + consumers stack")
+	require.NotNil(t, r)
+
+	for _, iss := range r.Issues {
+		require.NotEqual(t, "module_cycle", iss.Code,
+			"no module_cycle expected for cwm + consumers stack: %v", iss)
+		require.NotEqual(t, "wiring_cycle", iss.Code,
+			"no wiring_cycle expected for cwm + consumers stack: %v", iss)
+	}
+
+	mainTF := string(r.Files["/main.tf"])
+	require.NotEmpty(t, mainTF, "compose must emit /main.tf")
+
+	// Aggregator-side: legacy alarms disabled, back-edges absent.
+	require.Regexp(t,
+		regexp.MustCompile(`(?m)^\s*disable_legacy_per_component_alarms\s*=\s*true\s*$`),
+		mainTF,
+		"legacy alarms must be disabled when per-component observability is wired")
+	require.NotContains(t, mainTF, "instance_ids     = [module.aws_bastion.bastion_instance_id]",
+		"back-edge from cwm to bastion must not render (#285)")
+	require.NotContains(t, mainTF, "rds_instance_ids = [module.aws_rds.instance_id]",
+		"back-edge from cwm to rds must not render (#285)")
+	require.NotContains(t, mainTF, "alb_arn_suffixes = [module.aws_alb.alb_arn_suffix]",
+		"back-edge from cwm to alb must not render (#285)")
+	require.NotContains(t, mainTF, "sqs_queue_arns   = [module.aws_sqs.queue_arn]",
+		"back-edge from cwm to sqs must not render (#285)")
+
+	// Forward-edge: per-component alarms still notify via the cwm SNS topic.
+	require.Contains(t, mainTF, "alarm_topic_arn      = module.aws_cloudwatch_monitoring.sns_topic_arn",
+		"forward-edge alarm_topic_arn must still render so per-component alarms notify")
+	require.Regexp(t,
+		regexp.MustCompile(`(?m)^\s*enable_observability\s*=\s*true\s*$`),
+		mainTF,
+		"forward-edge enable_observability must still render")
+
+	// Cross-check: every emitted module.<X>.… reference resolves to a
+	// declared module block (defense against #283-class regressions).
+	assertComposedRefsResolveToBlocks(t, mainTF, KeyAWSCloudWatchMonitoring)
+}
+
+// TestValidateNoModuleCycles_PinsCWMConsumer2Cycle locks the lower-level
+// validator behavior on the specific 2-cycle shape (cwm <-> rds) so a
+// regression to the wiring layer that re-introduces the back-edge
+// surfaces here as well. Independent of the wiring fix — this is a
+// validator-shape pin. Issue #285.
+func TestValidateNoModuleCycles_PinsCWMConsumer2Cycle(t *testing.T) {
+	t.Parallel()
+
+	blocks := []ModuleBlock{
+		{
+			Name: "aws_cloudwatch_monitoring",
+			Raw: map[string]string{
+				"rds_instance_ids": "[module.aws_rds.instance_id]",
+			},
+		},
+		{
+			Name: "aws_rds",
+			Raw: map[string]string{
+				"alarm_topic_arn": "module.aws_cloudwatch_monitoring.sns_topic_arn",
+			},
+		},
+	}
+	issues := ValidateNoModuleCycles(blocks)
+	require.Len(t, issues, 1)
+	require.Equal(t, "module_cycle", issues[0].Code)
+	require.Contains(t, issues[0].Reason, "[aws_cloudwatch_monitoring aws_rds]",
+		"cycle reason should enumerate the two modules involved")
 }

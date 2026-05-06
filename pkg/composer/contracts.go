@@ -718,6 +718,30 @@ func DefaultWiring(selected map[ComponentKey]bool, k ComponentKey, comps *Compon
 		wi.Names = append(wi.Names, "scope", "region")
 
 	case KeyAWSCloudWatchMonitoring:
+		// When any per-component observability consumer is in the stack
+		// (issue #204), the per-component observability.tf files own the
+		// CPU/storage/etc. alarms — disable the legacy aggregator-side
+		// alarms and skip the back-edge wiring that would otherwise close
+		// a 2-cycle with each consumer (issue #285). The forward-edge
+		// wiring (alarm_topic_arn = module.aws_cloudwatch_monitoring.sns_topic_arn,
+		// emitted post-switch) keeps per-component alarms notifying via
+		// the shared SNS topic.
+		perComponentActive := false
+		for _, dep := range PricingDependencies[KeyAWSCloudWatchMonitoring] {
+			if selected[dep] {
+				perComponentActive = true
+				break
+			}
+		}
+		if perComponentActive {
+			wi.RawHCL["disable_legacy_per_component_alarms"] = "true"
+			wi.Names = append(wi.Names, "disable_legacy_per_component_alarms")
+			break
+		}
+		// Aggregator-only fall-through: a stack that selects the aggregator
+		// without any per-component consumer (e.g. dashboards over
+		// out-of-stack EC2) keeps the legacy back-edge wiring so dashboard
+		// widgets render per-resource series.
 		if hasBastion {
 			wi.RawHCL["instance_ids"] = "[" + bastionRef(selected) + ".bastion_instance_id]"
 			wi.Names = append(wi.Names, "instance_ids")
