@@ -10,10 +10,27 @@ import (
 	tfjson "github.com/hashicorp/terraform-json"
 )
 
-// awsProviderKey is the registry source for the AWS provider as it appears in
-// tfjson.ProviderSchemas.Schemas. Anything else in the map is ignored — Stage
-// 2b only handles AWS.
-const awsProviderKey = "registry.terraform.io/hashicorp/aws"
+// awsProviderKey and gcpProviderKey are the registry sources for the
+// AWS and Google providers as they appear in tfjson.ProviderSchemas.Schemas.
+// cleanGenerated picks one based on the caller's provider parameter; other
+// entries in the schemas response are ignored.
+const (
+	awsProviderKey = "registry.terraform.io/hashicorp/aws"
+	gcpProviderKey = "registry.terraform.io/hashicorp/google"
+)
+
+// providerSchemaKey returns the schema-map key for the given Options.Provider
+// value. Defaults to AWS for empty/unknown — matches providerOrDefault's
+// fallback so a missing Provider field on Options doesn't bypass cleanup
+// silently.
+func providerSchemaKey(provider string) string {
+	switch provider {
+	case ProviderGCP:
+		return gcpProviderKey
+	default:
+		return awsProviderKey
+	}
+}
 
 // cleanGenerated walks every `resource` block in the generated HCL and:
 //
@@ -31,13 +48,14 @@ const awsProviderKey = "registry.terraform.io/hashicorp/aws"
 // Returns the cleaned bytes. Resource types whose schema is missing from the
 // provider response are passed through untouched with a warning recorded in
 // the error chain (so Stage 2c can fix the schema fetch separately).
-func cleanGenerated(raw []byte, schemas *tfjson.ProviderSchemas) ([]byte, error) {
+func cleanGenerated(raw []byte, schemas *tfjson.ProviderSchemas, provider string) ([]byte, error) {
 	if schemas == nil || schemas.Schemas == nil {
 		return nil, fmt.Errorf("provider schemas response is empty; cannot clean generated.tf")
 	}
-	awsSchema, ok := schemas.Schemas[awsProviderKey]
-	if !ok || awsSchema == nil || awsSchema.ResourceSchemas == nil {
-		return nil, fmt.Errorf("AWS provider schema missing from response (looked for %q)", awsProviderKey)
+	key := providerSchemaKey(provider)
+	providerSchema, ok := schemas.Schemas[key]
+	if !ok || providerSchema == nil || providerSchema.ResourceSchemas == nil {
+		return nil, fmt.Errorf("provider schema missing from response (looked for %q)", key)
 	}
 
 	f, diags := hclwrite.ParseConfig(raw, generatedFile, hcl.Pos{Line: 1, Column: 1})
@@ -54,7 +72,7 @@ func cleanGenerated(raw []byte, schemas *tfjson.ProviderSchemas) ([]byte, error)
 			continue
 		}
 		resType := labels[0]
-		rs, ok := awsSchema.ResourceSchemas[resType]
+		rs, ok := providerSchema.ResourceSchemas[resType]
 		if !ok || rs == nil || rs.Block == nil {
 			// Schema missing for this type — leave the block untouched so
 			// the operator can still terraform-validate the file. Stage 2c

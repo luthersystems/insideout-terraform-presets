@@ -32,7 +32,7 @@ func TestCleanGenerated_DropsComputedOnly(t *testing.T) {
 		"name": {AttributeType: cty.String, Required: true},
 		"arn":  {AttributeType: cty.String, Computed: true},
 	})
-	out, err := cleanGenerated(in, schema)
+	out, err := cleanGenerated(in, schema, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +66,7 @@ resource "aws_sqs_queue" "bravo" {
 		"name": {AttributeType: cty.String, Required: true},
 		"arn":  {AttributeType: cty.String, Computed: true},
 	})
-	out, err := cleanGenerated(in, schema)
+	out, err := cleanGenerated(in, schema, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +108,7 @@ func TestCleanGenerated_MergesIntoExistingLifecycle(t *testing.T) {
 		"secret_id":     {AttributeType: cty.String, Required: true},
 		"secret_string": {AttributeType: cty.String, Optional: true, Sensitive: true},
 	})
-	out, err := cleanGenerated(in, schema)
+	out, err := cleanGenerated(in, schema, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -137,7 +137,7 @@ func TestCleanGenerated_KeepsComputedOptional(t *testing.T) {
 		"name":              {AttributeType: cty.String, Required: true},
 		"kms_master_key_id": {AttributeType: cty.String, Optional: true, Computed: true},
 	})
-	out, err := cleanGenerated(in, schema)
+	out, err := cleanGenerated(in, schema, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,7 +157,7 @@ func TestCleanGenerated_AddsLifecycleForSensitive(t *testing.T) {
 		"secret_id":     {AttributeType: cty.String, Required: true},
 		"secret_string": {AttributeType: cty.String, Optional: true, Sensitive: true},
 	})
-	out, err := cleanGenerated(in, schema)
+	out, err := cleanGenerated(in, schema, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -183,7 +183,7 @@ func TestCleanGenerated_NoSensitiveNoLifecycle(t *testing.T) {
 	schema := awsSchemas("aws_sqs_queue", map[string]*tfjson.SchemaAttribute{
 		"name": {AttributeType: cty.String, Required: true},
 	})
-	out, err := cleanGenerated(in, schema)
+	out, err := cleanGenerated(in, schema, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -201,7 +201,7 @@ func TestCleanGenerated_UnknownTypePassedThrough(t *testing.T) {
 	in := []byte(`resource "aws_brand_new" "x" { foo = "bar" }
 `)
 	schema := awsSchemas("aws_other", map[string]*tfjson.SchemaAttribute{}) // no aws_brand_new
-	out, err := cleanGenerated(in, schema)
+	out, err := cleanGenerated(in, schema, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -219,9 +219,59 @@ func TestCleanGenerated_EmptySchemaErrors(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
-			if _, err := cleanGenerated([]byte(`resource "aws_sqs_queue" "x" {}`), schema); err == nil {
+			if _, err := cleanGenerated([]byte(`resource "aws_sqs_queue" "x" {}`), schema, ""); err == nil {
 				t.Error("expected error for missing AWS schema")
 			}
 		})
+	}
+}
+
+// TestCleanGenerated_GCPSchemaKey pins that ProviderGCP routes cleanup
+// through the hashicorp/google schema bucket, not hashicorp/aws. A
+// mutation that hardcoded awsProviderKey would silently leave google_*
+// resources unprocessed (Computed-only attrs leaking through, no
+// Sensitive-attr lifecycle escalation).
+func TestCleanGenerated_GCPSchemaKey(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "google_pubsub_topic" "x" {
+  name = "io-events"
+  etag = "abc"
+}
+`)
+	schemas := &tfjson.ProviderSchemas{
+		Schemas: map[string]*tfjson.ProviderSchema{
+			gcpProviderKey: {
+				ResourceSchemas: map[string]*tfjson.Schema{
+					"google_pubsub_topic": {Block: &tfjson.SchemaBlock{Attributes: map[string]*tfjson.SchemaAttribute{
+						"name": {AttributeType: cty.String, Required: true},
+						"etag": {AttributeType: cty.String, Computed: true},
+					}}},
+				},
+			},
+		},
+	}
+	out, err := cleanGenerated(in, schemas, ProviderGCP)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if regexp.MustCompile(`(?m)^\s*etag\s*=`).MatchString(got) {
+		t.Errorf("Computed-only `etag` must be dropped on GCP path\n--- got ---\n%s", got)
+	}
+	if !strings.Contains(got, `name = "io-events"`) {
+		t.Errorf("Required attr must survive\n--- got ---\n%s", got)
+	}
+}
+
+// TestCleanGenerated_GCPProviderMissingErrors pins that a Provider == "gcp"
+// run with only AWS schemas in the response surfaces an explicit error
+// (rather than silently passing every block through unchanged).
+func TestCleanGenerated_GCPProviderMissingErrors(t *testing.T) {
+	t.Parallel()
+	awsOnly := awsSchemas("aws_sqs_queue", map[string]*tfjson.SchemaAttribute{
+		"name": {AttributeType: cty.String, Required: true},
+	})
+	if _, err := cleanGenerated([]byte(`resource "google_pubsub_topic" "x" {}`), awsOnly, ProviderGCP); err == nil {
+		t.Error("expected error for GCP provider when only AWS schema is present")
 	}
 }

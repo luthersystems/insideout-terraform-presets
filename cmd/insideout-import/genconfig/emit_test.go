@@ -90,7 +90,7 @@ func TestEmitImports_RejectsBadAddress(t *testing.T) {
 func TestEmitProviders_HappyPath(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	if err := emitProviders(dir, "us-west-2", ""); err != nil {
+	if err := emitProviders(dir, ProviderAWS, "us-west-2", "", ""); err != nil {
 		t.Fatal(err)
 	}
 	body, err := os.ReadFile(filepath.Join(dir, providersFile))
@@ -136,7 +136,7 @@ func TestEmitProviders_HappyPath(t *testing.T) {
 func TestEmitProviders_LocalStackEndpoint(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	if err := emitProviders(dir, "us-east-1", "http://localhost:4566"); err != nil {
+	if err := emitProviders(dir, ProviderAWS, "us-east-1", "", "http://localhost:4566"); err != nil {
 		t.Fatal(err)
 	}
 	body, err := os.ReadFile(filepath.Join(dir, providersFile))
@@ -190,6 +190,92 @@ func TestEmitProviders_LocalStackEndpoint(t *testing.T) {
 		if !regexp.MustCompile(pat).MatchString(endpointsBody) {
 			t.Errorf("endpoints {} block missing mapping for %q (pattern %q)\n--- endpoints block ---\n%s", svc, pat, endpointsBody)
 		}
+	}
+}
+
+// TestEmitProviders_GCPHappyPath pins the Stage 2d (#264) shape: when
+// Provider == ProviderGCP, the emitted providers.tf carries the
+// hashicorp/google required_providers entry plus a `provider "google"`
+// block with `project = <real-id>` and (optional) region. None of the
+// AWS-flavored attributes (LocalStack endpoints, skip_*, access_key)
+// must appear — the rewriter is provider-flat, not additive.
+func TestEmitProviders_GCPHappyPath(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	if err := emitProviders(dir, ProviderGCP, "us-central1", "real-proj-12345", ""); err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(filepath.Join(dir, providersFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(body)
+
+	if !strings.Contains(got, "required_providers") {
+		t.Errorf("providers.tf missing required_providers block\n--- got ---\n%s", got)
+	}
+	// hclwrite aligns sibling attribute `=` so use whitespace-tolerant
+	// patterns rather than alignment-dependent literals.
+	for _, pat := range []string{
+		`source\s*=\s*"hashicorp/google"`,
+		`version\s*=\s*"~> 5\.0"`,
+		`project\s*=\s*"real-proj-12345"`,
+		`region\s*=\s*"us-central1"`,
+	} {
+		if !regexp.MustCompile(pat).MatchString(got) {
+			t.Errorf("providers.tf missing pattern %q\n--- got ---\n%s", pat, got)
+		}
+	}
+	// AWS-flavored attributes must NOT appear in a GCP block.
+	bannedPatterns := []string{
+		`hashicorp/aws`,
+		`(?m)^\s*endpoints\s*\{`,
+		`(?m)^\s*access_key\s*=`,
+		`(?m)^\s*skip_credentials_validation\s*=`,
+		`(?m)^\s*s3_use_path_style\s*=`,
+	}
+	for _, pat := range bannedPatterns {
+		if regexp.MustCompile(pat).MatchString(got) {
+			t.Errorf("providers.tf must not contain pattern %q on GCP path\n--- got ---\n%s", pat, got)
+		}
+	}
+}
+
+// TestEmitProviders_GCPOmitsEmptyRegion pins that an empty region (Cloud
+// Asset's project-global default) doesn't leak a `region = ""` attribute.
+// The Google provider warns (not errors) on `region = ""`, but a clean
+// providers.tf is the contract.
+func TestEmitProviders_GCPOmitsEmptyRegion(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	if err := emitProviders(dir, ProviderGCP, "", "real-proj", ""); err != nil {
+		t.Fatal(err)
+	}
+	body, _ := os.ReadFile(filepath.Join(dir, providersFile))
+	got := string(body)
+	if regexp.MustCompile(`(?m)^\s*region\s*=`).MatchString(got) {
+		t.Errorf("providers.tf must not emit `region` when region is empty\n--- got ---\n%s", got)
+	}
+	if !strings.Contains(got, `project = "real-proj"`) {
+		t.Errorf("providers.tf must still emit project on GCP path\n--- got ---\n%s", got)
+	}
+}
+
+// TestEmitProviders_GCPIgnoresAWSEndpointURL pins that the AWS-only
+// LocalStack retarget knob has no effect on the GCP path — Cloud Asset
+// has no LocalStack equivalent (#264) and the cleanup logic for
+// hashicorp/google's resources doesn't know LocalStack-induced quirks
+// either, so silently passing the URL through would be misleading.
+func TestEmitProviders_GCPIgnoresAWSEndpointURL(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	if err := emitProviders(dir, ProviderGCP, "us-central1", "real-proj", "http://localhost:4566"); err != nil {
+		t.Fatal(err)
+	}
+	body, _ := os.ReadFile(filepath.Join(dir, providersFile))
+	got := string(body)
+	if regexp.MustCompile(`(?m)^\s*endpoints\s*\{`).MatchString(got) {
+		t.Errorf("providers.tf must not emit endpoints {} on GCP path even with awsEndpointURL set\n--- got ---\n%s", got)
 	}
 }
 
