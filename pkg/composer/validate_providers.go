@@ -176,8 +176,8 @@ func ValidateSensitivePropagation(blocks []ModuleBlock, presetPaths map[string]s
 		issues = append(issues, ValidationIssue{
 			Field: edge.Consumer + "." + edge.Input,
 			Code:  "sensitive_propagation",
-			Reason: fmt.Sprintf("module.%s.%s is sensitive; ensure %s.%s is declared with sensitive = true",
-				edge.Producer, edge.Output, edge.Consumer, edge.Input),
+			Reason: fmt.Sprintf("%s is sensitive; ensure %s.%s is declared with sensitive = true",
+				WireRef(ComponentKey(edge.Producer), edge.Output), edge.Consumer, edge.Input),
 		})
 	}
 	return issues

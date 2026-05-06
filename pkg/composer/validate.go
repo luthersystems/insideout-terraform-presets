@@ -822,6 +822,33 @@ func stringInAllowedFold(value string, allowed []string) bool {
 	return false
 }
 
+// AWSServerlessKeys lists every AWS ComponentKey that
+// ValidateComputeExclusivity classifies as serverless. Exported so
+// tests can iterate without re-listing (and so changes here are
+// automatically picked up by the runtime gate in
+// compose_module_refs_test.go).
+var AWSServerlessKeys = []ComponentKey{
+	KeyAWSLambda,
+}
+
+// AWSContainerKeys lists every AWS ComponentKey that
+// ValidateComputeExclusivity classifies as container/VM compute.
+var AWSContainerKeys = []ComponentKey{
+	KeyAWSEKSControlPlane, KeyAWSEKS, KeyAWSECS,
+	KeyAWSEKSNodeGroup, KeyAWSEC2,
+}
+
+// GCPServerlessKeys is the GCP equivalent of AWSServerlessKeys.
+var GCPServerlessKeys = []ComponentKey{
+	KeyGCPCloudFunctions,
+	KeyGCPCloudRun,
+}
+
+// GCPContainerKeys is the GCP equivalent of AWSContainerKeys.
+var GCPContainerKeys = []ComponentKey{
+	KeyGCPGKE,
+}
+
 // ValidateComputeExclusivity checks that the selected component keys do not
 // contain incompatible compute combinations. For example, Lambda (serverless)
 // and EKS (container orchestration) cannot coexist in the same stack.
@@ -833,15 +860,8 @@ func ValidateComputeExclusivity(keys []ComponentKey) error {
 		set[k] = true
 	}
 
-	// AWS serverless keys
-	awsServerless := filterPresent(set,
-		KeyAWSLambda,
-	)
-	// AWS container/VM keys
-	awsContainer := filterPresent(set,
-		KeyAWSEKSControlPlane, KeyAWSEKS, KeyAWSECS,
-		KeyAWSEKSNodeGroup, KeyAWSEC2,
-	)
+	awsServerless := filterPresent(set, AWSServerlessKeys...)
+	awsContainer := filterPresent(set, AWSContainerKeys...)
 
 	if len(awsServerless) > 0 && len(awsContainer) > 0 {
 		return &ValidationError{msg: fmt.Sprintf(
@@ -850,15 +870,8 @@ func ValidateComputeExclusivity(keys []ComponentKey) error {
 		)}
 	}
 
-	// GCP serverless keys
-	gcpServerless := filterPresent(set,
-		KeyGCPCloudFunctions,
-		KeyGCPCloudRun,
-	)
-	// GCP container keys
-	gcpContainer := filterPresent(set,
-		KeyGCPGKE,
-	)
+	gcpServerless := filterPresent(set, GCPServerlessKeys...)
+	gcpContainer := filterPresent(set, GCPContainerKeys...)
 
 	if len(gcpServerless) > 0 && len(gcpContainer) > 0 {
 		return &ValidationError{msg: fmt.Sprintf(

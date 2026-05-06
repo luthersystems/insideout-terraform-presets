@@ -73,11 +73,12 @@ func ValidateCrossTierWiring(blocks []ModuleBlock, irs []imported.ImportedResour
 			if edge.Consumer.Kind != NodeKindResource {
 				continue
 			}
+			ref := WireRef(ComponentKey(edge.Producer.Addr), edge.ProducerAttr)
 			issues = append(issues, ValidationIssue{
 				Field:  consumerField(edge),
 				Code:   "dangling_module_ref_from_imported",
-				Value:  "module." + edge.Producer.Addr + "." + edge.ProducerAttr,
-				Reason: fmt.Sprintf("imported resource %s references module.%s.%s, but no module %q is in the stack", edge.Consumer.String(), edge.Producer.Addr, edge.ProducerAttr, edge.Producer.Addr),
+				Value:  ref,
+				Reason: fmt.Sprintf("imported resource %s references %s, but no module %q is in the stack", edge.Consumer.String(), ref, edge.Producer.Addr),
 			})
 		}
 	}

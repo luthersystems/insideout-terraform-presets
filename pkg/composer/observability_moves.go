@@ -2,9 +2,9 @@ package composer
 
 // observabilityMoves declares the moved {} block address pairs the
 // composer emits when a per-component module that owns observability
-// alarms is selected alongside aws_cloudwatchmonitoring. Each entry
+// alarms is selected alongside aws_cloudwatch_monitoring. Each entry
 // relocates a legacy aggregator-side alarm (in module
-// "aws_cloudwatchmonitoring") into the per-component module's own
+// "aws_cloudwatch_monitoring") into the per-component module's own
 // observability.tf so existing customer state continues to refer to a
 // real resource without forcing destroy+create.
 //
@@ -42,26 +42,31 @@ package composer
 // lookup.
 var observabilityMoves = map[ComponentKey][]MovedRef{
 	KeyAWSBastion: {{
-		From: `module.aws_cloudwatchmonitoring.aws_cloudwatch_metric_alarm.ec2_cpu_high["0"]`,
-		To:   `module.aws_bastion.aws_cloudwatch_metric_alarm.cpu_high["0"]`,
+		FromComponent: KeyAWSCloudWatchMonitoring,
+		FromAddress:   `aws_cloudwatch_metric_alarm.ec2_cpu_high["0"]`,
+		To:            `module.aws_bastion.aws_cloudwatch_metric_alarm.cpu_high["0"]`,
 	}},
 	KeyAWSRDS: {
 		{
-			From: `module.aws_cloudwatchmonitoring.aws_cloudwatch_metric_alarm.rds_cpu_high["0"]`,
-			To:   `module.aws_rds.aws_cloudwatch_metric_alarm.cpu_high["0"]`,
+			FromComponent: KeyAWSCloudWatchMonitoring,
+			FromAddress:   `aws_cloudwatch_metric_alarm.rds_cpu_high["0"]`,
+			To:            `module.aws_rds.aws_cloudwatch_metric_alarm.cpu_high["0"]`,
 		},
 		{
-			From: `module.aws_cloudwatchmonitoring.aws_cloudwatch_metric_alarm.rds_free_storage_low["0"]`,
-			To:   `module.aws_rds.aws_cloudwatch_metric_alarm.free_storage_low["0"]`,
+			FromComponent: KeyAWSCloudWatchMonitoring,
+			FromAddress:   `aws_cloudwatch_metric_alarm.rds_free_storage_low["0"]`,
+			To:            `module.aws_rds.aws_cloudwatch_metric_alarm.free_storage_low["0"]`,
 		},
 	},
 	KeyAWSElastiCache: {{
-		From: `module.aws_cloudwatchmonitoring.aws_cloudwatch_metric_alarm.redis_cpu_high["0"]`,
-		To:   `module.aws_elasticache.aws_cloudwatch_metric_alarm.cpu_high["0"]`,
+		FromComponent: KeyAWSCloudWatchMonitoring,
+		FromAddress:   `aws_cloudwatch_metric_alarm.redis_cpu_high["0"]`,
+		To:            `module.aws_elasticache.aws_cloudwatch_metric_alarm.cpu_high["0"]`,
 	}},
 	KeyAWSSQS: {{
-		From: `module.aws_cloudwatchmonitoring.aws_cloudwatch_metric_alarm.sqs_backlog["0"]`,
-		To:   `module.aws_sqs.aws_cloudwatch_metric_alarm.backlog["0"]`,
+		FromComponent: KeyAWSCloudWatchMonitoring,
+		FromAddress:   `aws_cloudwatch_metric_alarm.sqs_backlog["0"]`,
+		To:            `module.aws_sqs.aws_cloudwatch_metric_alarm.backlog["0"]`,
 	}},
 }
 

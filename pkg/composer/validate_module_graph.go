@@ -92,8 +92,8 @@ func ValidateModuleWiring(blocks []ModuleBlock, presetPaths map[string]string) [
 			issues = append(issues, ValidationIssue{
 				Field: edge.Consumer + "." + edge.Input,
 				Code:  "unwired_output",
-				Reason: fmt.Sprintf("module %q references module.%s.%s, but %s declares no output %q",
-					edge.Consumer, edge.Producer, edge.Output, edge.Producer, edge.Output),
+				Reason: fmt.Sprintf("module %q references %s, but %s declares no output %q",
+					edge.Consumer, WireRef(ComponentKey(edge.Producer), edge.Output), edge.Producer, edge.Output),
 			})
 		}
 	}
@@ -176,7 +176,7 @@ func ValidateNoModuleCycles(blocks []ModuleBlock) []ValidationIssue {
 	var closing string
 	for _, edge := range extractWiringEdges(blocks) {
 		if stuckSet[edge.Producer] && stuckSet[edge.Consumer] && edge.Producer != edge.Consumer {
-			closing = fmt.Sprintf(" (e.g. %s.%s -> module.%s.%s)", edge.Consumer, edge.Input, edge.Producer, edge.Output)
+			closing = fmt.Sprintf(" (e.g. %s.%s -> %s)", edge.Consumer, edge.Input, WireRef(ComponentKey(edge.Producer), edge.Output))
 			break
 		}
 	}

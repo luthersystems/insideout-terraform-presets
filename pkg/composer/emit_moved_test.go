@@ -31,8 +31,9 @@ func TestEmitRootMainTF_OneMovedBlock(t *testing.T) {
 			Source: "./aws/sqs",
 			Moved: []MovedRef{
 				{
-					From: `module.aws_cloudwatchmonitoring.aws_cloudwatch_metric_alarm.sqs_backlog["0"]`,
-					To:   `module.aws_sqs.aws_cloudwatch_metric_alarm.backlog["0"]`,
+					FromComponent: KeyAWSCloudWatchMonitoring,
+					FromAddress:   `aws_cloudwatch_metric_alarm.sqs_backlog["0"]`,
+					To:            `module.aws_sqs.aws_cloudwatch_metric_alarm.backlog["0"]`,
 				},
 			},
 		},
@@ -41,8 +42,8 @@ func TestEmitRootMainTF_OneMovedBlock(t *testing.T) {
 
 	assert.Contains(t, got, `moved {`,
 		"emitted output should contain a moved {} block")
-	assert.Contains(t, got, `from = module.aws_cloudwatchmonitoring.aws_cloudwatch_metric_alarm.sqs_backlog["0"]`,
-		"emitted moved.from should match the source address verbatim")
+	assert.Contains(t, got, `from = module.aws_cloudwatch_monitoring.aws_cloudwatch_metric_alarm.sqs_backlog["0"]`,
+		"emitted moved.from should match WireRef(FromComponent, FromAddress) — the prefix matches the declared module block label")
 	assert.Contains(t, got, `to   = module.aws_sqs.aws_cloudwatch_metric_alarm.backlog["0"]`,
 		"emitted moved.to should match the destination address verbatim")
 }
@@ -56,12 +57,14 @@ func TestEmitRootMainTF_MultipleMovedBlocks(t *testing.T) {
 			Source: "./aws/rds",
 			Moved: []MovedRef{
 				{
-					From: `module.aws_cloudwatchmonitoring.aws_cloudwatch_metric_alarm.rds_cpu_high["0"]`,
-					To:   `module.aws_rds.aws_cloudwatch_metric_alarm.cpu_high["0"]`,
+					FromComponent: KeyAWSCloudWatchMonitoring,
+					FromAddress:   `aws_cloudwatch_metric_alarm.rds_cpu_high["0"]`,
+					To:            `module.aws_rds.aws_cloudwatch_metric_alarm.cpu_high["0"]`,
 				},
 				{
-					From: `module.aws_cloudwatchmonitoring.aws_cloudwatch_metric_alarm.rds_free_storage_low["0"]`,
-					To:   `module.aws_rds.aws_cloudwatch_metric_alarm.free_storage_low["0"]`,
+					FromComponent: KeyAWSCloudWatchMonitoring,
+					FromAddress:   `aws_cloudwatch_metric_alarm.rds_free_storage_low["0"]`,
+					To:            `module.aws_rds.aws_cloudwatch_metric_alarm.free_storage_low["0"]`,
 				},
 			},
 		},
@@ -81,8 +84,9 @@ func TestEmitRootMainTF_MovedBlocksRoundTripParse(t *testing.T) {
 			Name:   "aws_sqs",
 			Source: "./aws/sqs",
 			Moved: []MovedRef{{
-				From: `module.aws_cloudwatchmonitoring.aws_cloudwatch_metric_alarm.sqs_backlog["0"]`,
-				To:   `module.aws_sqs.aws_cloudwatch_metric_alarm.backlog["0"]`,
+				FromComponent: KeyAWSCloudWatchMonitoring,
+				FromAddress:   `aws_cloudwatch_metric_alarm.sqs_backlog["0"]`,
+				To:            `module.aws_sqs.aws_cloudwatch_metric_alarm.backlog["0"]`,
 			}},
 		},
 	}
@@ -112,8 +116,9 @@ func TestEmitRootMainTF_MovedFollowsModule(t *testing.T) {
 			Name:   "aws_sqs",
 			Source: "./aws/sqs",
 			Moved: []MovedRef{{
-				From: `module.aws_cloudwatchmonitoring.aws_cloudwatch_metric_alarm.sqs_backlog["0"]`,
-				To:   `module.aws_sqs.aws_cloudwatch_metric_alarm.backlog["0"]`,
+				FromComponent: KeyAWSCloudWatchMonitoring,
+				FromAddress:   `aws_cloudwatch_metric_alarm.sqs_backlog["0"]`,
+				To:            `module.aws_sqs.aws_cloudwatch_metric_alarm.backlog["0"]`,
 			}},
 		},
 	}

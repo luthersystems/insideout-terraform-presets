@@ -362,7 +362,7 @@ type ModuleBlock struct {
 	// Moved emits one or more top-level `moved { from = <expr>; to = <expr> }`
 	// blocks after the module block. Used by the observability migration
 	// (issue #204) to relocate per-component alarms from the
-	// aws_cloudwatchmonitoring aggregator into the per-component modules
+	// aws_cloudwatch_monitoring aggregator into the per-component modules
 	// without forcing destroy+create. The `to` address typically references a
 	// resource in this same module (e.g. module.aws_sqs.aws_cloudwatch_metric_alarm.backlog["0"]).
 	//
@@ -374,12 +374,27 @@ type ModuleBlock struct {
 }
 
 // MovedRef is one source/destination pair for a top-level `moved {}` block.
-// Both addresses are raw HCL expressions — callers are responsible for
-// quoting string keys (`module.foo.aws_x.y["0"]`) since `moved` blocks
-// take resource references, not strings.
+//
+// FromComponent identifies the source module by ComponentKey; the rendered
+// `from = module.<key>.<addr>` is built from `WireRef(FromComponent, FromAddress)`
+// so the prefix is guaranteed to match the composer's emitted block label.
+// FromAddress is the resource address inside the source module, e.g.
+// `aws_cloudwatch_metric_alarm.ec2_cpu_high["0"]`. Callers are responsible
+// for quoting string for_each keys (`["0"]`) since `moved` blocks take
+// resource references, not strings.
+//
+// To is the destination address rendered verbatim — typically a fully
+// qualified `module.<other>.<resource>...` reference produced by the same
+// composer.
 type MovedRef struct {
-	From string
-	To   string
+	FromComponent ComponentKey
+	FromAddress   string
+	To            string
+}
+
+// FromHCL renders the `from = ...` expression for the moved block.
+func (m MovedRef) FromHCL() string {
+	return WireRef(m.FromComponent, m.FromAddress)
 }
 
 func EmitRootMainTF(blocks []ModuleBlock) []byte {
@@ -421,14 +436,17 @@ func EmitRootMainTF(blocks []ModuleBlock) []byte {
 			setRawExpr(mb, "depends_on", "["+strings.Join(m.DependsOn, ", ")+"]")
 		}
 		// Emit any `moved {}` blocks immediately after the module they
-		// relocate into. Source addresses typically reference an old
-		// aggregator module (e.g. module.aws_cloudwatchmonitoring.aws_cloudwatch_metric_alarm.foo["0"])
+		// relocate into. Source addresses typically reference the legacy
+		// aggregator module (e.g. module.aws_cloudwatch_monitoring.aws_cloudwatch_metric_alarm.foo["0"])
 		// and destination addresses reference a resource in this module
 		// (e.g. module.aws_sqs.aws_cloudwatch_metric_alarm.backlog["0"]).
+		// FromHCL() renders the source from the typed (FromComponent,
+		// FromAddress) pair, so the prefix matches the declared block
+		// label by construction (#283).
 		for _, mv := range m.Moved {
 			body.AppendNewline()
 			mvBlock := body.AppendNewBlock("moved", nil).Body()
-			setRawExpr(mvBlock, "from", mv.From)
+			setRawExpr(mvBlock, "from", mv.FromHCL())
 			setRawExpr(mvBlock, "to", mv.To)
 		}
 		// Add a blank line between module blocks for readability.
@@ -504,7 +522,7 @@ func EmitRootOutputsTF(modules []ModuleOutputs) []byte {
 				ob.SetAttributeValue("description", cty.StringVal(o.Description))
 			}
 
-			valueExpr := fmt.Sprintf("module.%s.%s", m.Module, o.Name)
+			valueExpr := WireRef(ComponentKey(m.Module), o.Name)
 			setRawExpr(ob, "value", valueExpr)
 
 			if o.Sensitive {

@@ -382,7 +382,7 @@ type ComposeStackOpts struct {
 
 	// EmitObservabilityMoves opts in to emitting `moved {}` blocks that
 	// relocate Terraform state from the legacy aggregator alarms (under
-	// module.aws_cloudwatchmonitoring) to the new per-component alarms
+	// module.aws_cloudwatch_monitoring) to the new per-component alarms
 	// (e.g. module.aws_bastion). Default false: per-component alarms ship
 	// in addition to the aggregator (the documented duplicate-alarm
 	// window). Callers MUST flip this to true in the same apply that
@@ -615,7 +615,7 @@ func (c *Client) composeStackImpl(opts ComposeStackOpts) (*ComposeStackResult, e
 			block.DependsOn = []string{opensearchRef(selected)}
 		}
 		// Observability moves: when both this component and the legacy
-		// aws_cloudwatchmonitoring aggregator are selected AND the caller
+		// aws_cloudwatch_monitoring aggregator are selected AND the caller
 		// has opted in via opts.EmitObservabilityMoves, emit moved {}
 		// blocks relocating the legacy per-component alarms into this
 		// module. Caller opt-in is required because emitting moves while
