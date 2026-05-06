@@ -2,6 +2,7 @@ package inspect
 
 import (
 	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -98,6 +99,48 @@ func TestSubRequest_JSONShape(t *testing.T) {
 			}
 			if rt != tc.in {
 				t.Errorf("round-trip mismatch:\n  got = %+v\n want = %+v", rt, tc.in)
+			}
+		})
+	}
+}
+
+// TestSubRequest_JSONSchemaTagsPresent pins that the `jsonschema:"..."`
+// tags on SubRequest are present and carry the load-bearing description
+// content. Reliable's MCP server reads these via
+// github.com/google/jsonschema-go reflection to publish per-property
+// descriptions on tools/list (#280). A regression that deleted or
+// truncated a tag would silently drop the description from the MCP
+// schema and tank the Smithery quality score downstream.
+//
+// Substring-anchored rather than full-string-equal so copy-edits to
+// the description wording don't break the test — the concern is
+// "tag deleted" / "tag truncated to one word", not "wording polished".
+func TestSubRequest_JSONSchemaTagsPresent(t *testing.T) {
+	t.Parallel()
+	rt := reflect.TypeFor[SubRequest]()
+	cases := []struct {
+		field   string
+		anchors []string
+	}{
+		{"Service", []string{"Cloud service to query", "list-actions"}},
+		{"Action", []string{"Operation on the service", "list-metrics"}},
+		{"Filters", []string{"JSON-encoded filter object", "hours"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.field, func(t *testing.T) {
+			t.Parallel()
+			f, ok := rt.FieldByName(tc.field)
+			if !ok {
+				t.Fatalf("SubRequest has no field named %q", tc.field)
+			}
+			tag := f.Tag.Get("jsonschema")
+			if tag == "" {
+				t.Fatalf("SubRequest.%s missing jsonschema tag (#280)", tc.field)
+			}
+			for _, anchor := range tc.anchors {
+				if !strings.Contains(tag, anchor) {
+					t.Errorf("SubRequest.%s jsonschema tag missing anchor %q\n  got: %q", tc.field, anchor, tag)
+				}
 			}
 		})
 	}
