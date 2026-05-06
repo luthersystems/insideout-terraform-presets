@@ -37,10 +37,14 @@ const MaxBatchSubs = 32
 // Detail / raw flags are deliberately NOT exposed: batch always
 // returns summarized results. Callers needing detail or raw output
 // should use the singular awsinspect / gcpinspect tools.
+//
+// The `jsonschema:"..."` tags are read by MCP clients via
+// github.com/google/jsonschema-go reflection to publish per-property
+// descriptions on tools/list. They are inert for encoding/json.
 type SubRequest struct {
-	Service string `json:"service"`
-	Action  string `json:"action"`
-	Filters string `json:"filters,omitempty"`
+	Service string `json:"service" jsonschema:"Cloud service to query (e.g. 'ec2', 'rds', 's3' for AWS; 'compute', 'storage', 'cloudsql' for GCP). Use the singular awsinspect/gcpinspect tool with action='list-actions' to discover supported services."`
+	Action  string `json:"action" jsonschema:"Operation on the service (e.g. 'describe-instances', 'list-buckets', 'list-actions' for discovery, 'list-metrics' / 'get-metrics' for time-series)."`
+	Filters string `json:"filters,omitempty" jsonschema:"Optional JSON-encoded filter object passed through to the underlying API. Examples: '{\"hours\":6}' for metric windows, '{\"days\":7}' for cost queries."`
 }
 
 // SubResult is one probe's outcome. Index pins the result back to the
