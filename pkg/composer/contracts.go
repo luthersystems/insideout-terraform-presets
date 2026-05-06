@@ -796,7 +796,7 @@ func DefaultWiring(selected map[ComponentKey]bool, k ComponentKey, comps *Compon
 		}
 		if enableDdb {
 			if hasDynamoDB {
-				wi.RawHCL["dynamodb_rule"] = "{\n  selection = { resource_arns = [module.aws_dynamodb.table_arn], selection_tags = [] }\n}"
+				wi.RawHCL["dynamodb_rule"] = "{\n  selection = { resource_arns = [" + WireRef(KeyAWSDynamoDB, "table_arn") + "], selection_tags = [] }\n}"
 			} else {
 				wi.RawHCL["dynamodb_rule"] = tagFallback
 			}

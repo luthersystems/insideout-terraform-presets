@@ -522,7 +522,7 @@ func EmitRootOutputsTF(modules []ModuleOutputs) []byte {
 				ob.SetAttributeValue("description", cty.StringVal(o.Description))
 			}
 
-			valueExpr := fmt.Sprintf("module.%s.%s", m.Module, o.Name)
+			valueExpr := WireRef(ComponentKey(m.Module), o.Name)
 			setRawExpr(ob, "value", valueExpr)
 
 			if o.Sensitive {

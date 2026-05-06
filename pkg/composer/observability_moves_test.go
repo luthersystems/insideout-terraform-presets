@@ -21,6 +21,8 @@ import (
 // destroy+create. The drift design discussion is in
 // docs/observability-consolidation.md (Risks).
 func TestObservabilityMoves_KeyShapeIsZero(t *testing.T) {
+	require.NotEmpty(t, observabilityMoves,
+		"observabilityMoves must declare at least one entry — empty map would make every loop assertion vacuously pass")
 	for k, refs := range observabilityMoves {
 		for i, mv := range refs {
 			from := mv.FromHCL()
@@ -62,6 +64,8 @@ func TestObservabilityMoves_FromComponentIsAggregator(t *testing.T) {
 // TestObservabilityMoves_DestinationsAreKnownComponentKeys catches
 // typos / stale destination keys after a key rename or removal.
 func TestObservabilityMoves_DestinationsAreKnownComponentKeys(t *testing.T) {
+	require.NotEmpty(t, observabilityMoves,
+		"observabilityMoves must declare at least one entry — empty map would make every assertion vacuously pass")
 	known := make(map[ComponentKey]bool, len(AllComponentKeys))
 	for _, k := range AllComponentKeys {
 		known[k] = true
@@ -94,10 +98,15 @@ func TestObservabilityMovesCoversAllAggregatorAlarms(t *testing.T) {
 	}
 
 	for _, res := range resources {
-		expected := WireRef(KeyAWSCloudWatchMonitoring, `aws_cloudwatch_metric_alarm.`+res+`["0"]`)
+		// Expected literal is pinned (NOT WireRef-derived) so this
+		// assertion catches helper drift independent of the production
+		// rendering. If WireRef ever rewrites the prefix, both sides
+		// of a WireRef-vs-WireRef comparison would move together and
+		// silently pass.
+		expected := `module.aws_cloudwatch_monitoring.aws_cloudwatch_metric_alarm.` + res + `["0"]`
 		assert.True(t, froms[expected],
-			"aws_cloudwatch_metric_alarm.%s in aws/cloudwatchmonitoring/main.tf has no matching observabilityMoves entry rendering as %q — add an entry to pkg/composer/observability_moves.go so the relocation is wired",
-			res, expected)
+			"aws_cloudwatch_metric_alarm.%s in aws/cloudwatchmonitoring/main.tf has no matching observabilityMoves entry rendering as %q — add an entry to pkg/composer/observability_moves.go so the relocation is wired (%v)",
+			res, expected, froms)
 	}
 }
 
