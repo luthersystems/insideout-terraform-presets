@@ -155,6 +155,9 @@ jobs:
       - name: Lint label-less GCP resources for var.project name-prefix scoping (#215)
         run: bash tests/lint-labelless-name-prefix.sh
 
+      - name: Lint GCP project = var.project_id pin coverage (#287)
+        run: bash tests/lint-gcp-project-pin.sh
+
       - name: Lint root-only blocks (import / removed) in preset modules (#199)
         run: bash tests/lint-no-root-only-blocks.sh
 
