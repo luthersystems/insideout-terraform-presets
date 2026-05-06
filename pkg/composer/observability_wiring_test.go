@@ -30,9 +30,9 @@ func TestDefaultWiring_ObservabilityAWS_SelectedDriver(t *testing.T) {
 		KeyAWSSQS:                  true,
 	}
 	wi := DefaultWiring(selected, KeyAWSSQS, &Components{})
-	assert.Equal(t, "module.aws_cloudwatchmonitoring.sns_topic_arn",
+	assert.Equal(t, "module.aws_cloudwatch_monitoring.sns_topic_arn",
 		wi.RawHCL["alarm_topic_arn"],
-		"SQS should receive the SNS topic ARN from the aggregator when both are selected")
+		"SQS should receive the SNS topic ARN from the aggregator when both are selected; the prefix must match the rendered `module \"aws_cloudwatch_monitoring\"` block label (#283)")
 	assert.Equal(t, "true", wi.RawHCL["enable_observability"],
 		"SQS should be opted into observability by default when the aggregator is selected")
 }
@@ -113,8 +113,8 @@ func TestComposeStack_EmitsObservabilityMovedBlocks_AWS(t *testing.T) {
 
 	body := string(mainTF)
 	assert.Contains(t, body,
-		`from = module.aws_cloudwatchmonitoring.aws_cloudwatch_metric_alarm.sqs_backlog["0"]`,
-		"composed root main.tf must contain SQS-source moved.from")
+		`from = module.aws_cloudwatch_monitoring.aws_cloudwatch_metric_alarm.sqs_backlog["0"]`,
+		"composed root main.tf must contain SQS-source moved.from (rendered via WireRef from KeyAWSCloudWatchMonitoring; #283)")
 	assert.Contains(t, body,
 		`to   = module.aws_sqs.aws_cloudwatch_metric_alarm.backlog["0"]`,
 		"composed root main.tf must contain SQS-destination moved.to")
@@ -211,7 +211,7 @@ func TestComposeStack_FilteredWiring_PassThroughForKnownVars(t *testing.T) {
 	sqsBlock := rest[:end]
 	assert.Contains(t, sqsBlock, "alarm_topic_arn",
 		"aws_sqs module block must contain alarm_topic_arn after C7 — variable is declared and aggregator wires it")
-	assert.Contains(t, sqsBlock, "module.aws_cloudwatchmonitoring.sns_topic_arn",
+	assert.Contains(t, sqsBlock, "module.aws_cloudwatch_monitoring.sns_topic_arn",
 		"alarm_topic_arn must reference the aggregator's SNS topic ARN")
 }
 

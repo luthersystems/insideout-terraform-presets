@@ -23,9 +23,10 @@ import (
 func TestObservabilityMoves_KeyShapeIsZero(t *testing.T) {
 	for k, refs := range observabilityMoves {
 		for i, mv := range refs {
-			assert.Contains(t, mv.From, `["0"]`,
-				"observabilityMoves[%s][%d].From=%q must contain string-keyed [\"0\"] (matches the legacy for_each = { for i in tolist(range(...)) : i => true } shape)",
-				k, i, mv.From)
+			from := mv.FromHCL()
+			assert.Contains(t, from, `["0"]`,
+				"observabilityMoves[%s][%d].FromHCL()=%q must contain string-keyed [\"0\"] (matches the legacy for_each = { for i in tolist(range(...)) : i => true } shape)",
+				k, i, from)
 			assert.Contains(t, mv.To, `["0"]`,
 				"observabilityMoves[%s][%d].To=%q must contain string-keyed [\"0\"] (matches the per-component for_each = var.enable_observability ? { \"0\" = true } : {} shape)",
 				k, i, mv.To)
@@ -39,8 +40,22 @@ func TestObservabilityMoves_KeyShapeIsZero(t *testing.T) {
 func TestObservabilityMoves_DestinationCloudIsAWS(t *testing.T) {
 	for k := range observabilityMoves {
 		assert.Equal(t, "aws", CloudFor(k),
-			"observabilityMoves[%s] destination component is non-AWS; only AWS keys belong here (legacy aggregator is aws_cloudwatchmonitoring)",
+			"observabilityMoves[%s] destination component is non-AWS; only AWS keys belong here (legacy aggregator is aws_cloudwatch_monitoring)",
 			k)
+	}
+}
+
+// TestObservabilityMoves_FromComponentIsAggregator asserts every move
+// entry's source component is the legacy aggregator KeyAWSCloudWatchMonitoring.
+// Catches a future entry that accidentally points at a different source
+// module (which would silently fail to relocate the legacy alarm).
+func TestObservabilityMoves_FromComponentIsAggregator(t *testing.T) {
+	for k, refs := range observabilityMoves {
+		for i, mv := range refs {
+			assert.Equal(t, KeyAWSCloudWatchMonitoring, mv.FromComponent,
+				"observabilityMoves[%s][%d].FromComponent=%q must be KeyAWSCloudWatchMonitoring (legacy aggregator)",
+				k, i, mv.FromComponent)
+		}
 	}
 }
 
@@ -74,14 +89,14 @@ func TestObservabilityMovesCoversAllAggregatorAlarms(t *testing.T) {
 	froms := make(map[string]bool)
 	for _, refs := range observabilityMoves {
 		for _, mv := range refs {
-			froms[mv.From] = true
+			froms[mv.FromHCL()] = true
 		}
 	}
 
 	for _, res := range resources {
-		expected := `module.aws_cloudwatchmonitoring.aws_cloudwatch_metric_alarm.` + res + `["0"]`
+		expected := WireRef(KeyAWSCloudWatchMonitoring, `aws_cloudwatch_metric_alarm.`+res+`["0"]`)
 		assert.True(t, froms[expected],
-			"aws_cloudwatch_metric_alarm.%s in aws/cloudwatchmonitoring/main.tf has no matching observabilityMoves From=%q — add an entry to pkg/composer/observability_moves.go so the relocation is wired",
+			"aws_cloudwatch_metric_alarm.%s in aws/cloudwatchmonitoring/main.tf has no matching observabilityMoves entry rendering as %q — add an entry to pkg/composer/observability_moves.go so the relocation is wired",
 			res, expected)
 	}
 }
@@ -100,15 +115,18 @@ func TestObservabilityMoves_NoUnknownAggregatorAlarms(t *testing.T) {
 	for k, refs := range observabilityMoves {
 		for i, mv := range refs {
 			// Extract resource name between `aws_cloudwatch_metric_alarm.` and `[`.
-			const prefix = `module.aws_cloudwatchmonitoring.aws_cloudwatch_metric_alarm.`
+			require.Equal(t, KeyAWSCloudWatchMonitoring, mv.FromComponent,
+				"observabilityMoves[%s][%d].FromComponent=%q does not match the legacy aggregator (KeyAWSCloudWatchMonitoring)",
+				k, i, mv.FromComponent)
+			const prefix = `aws_cloudwatch_metric_alarm.`
 			require.True(t,
-				strings.HasPrefix(mv.From, prefix),
-				"observabilityMoves[%s][%d].From=%q does not match the legacy aggregator address shape (prefix=%q)",
-				k, i, mv.From, prefix)
-			rest := strings.TrimPrefix(mv.From, prefix)
+				strings.HasPrefix(mv.FromAddress, prefix),
+				"observabilityMoves[%s][%d].FromAddress=%q does not match the legacy aggregator address shape (prefix=%q)",
+				k, i, mv.FromAddress, prefix)
+			rest := strings.TrimPrefix(mv.FromAddress, prefix)
 			name := rest[:strings.IndexByte(rest, '[')]
 			assert.True(t, known[name],
-				"observabilityMoves[%s][%d].From references aggregator alarm %q which does not exist in aws/cloudwatchmonitoring/main.tf — stale entry, remove it",
+				"observabilityMoves[%s][%d].FromAddress references aggregator alarm %q which does not exist in aws/cloudwatchmonitoring/main.tf — stale entry, remove it",
 				k, i, name)
 		}
 	}
@@ -120,14 +138,18 @@ func TestObservabilityMoves_NoUnknownAggregatorAlarms(t *testing.T) {
 func TestObservabilityMoves_PublicAccessor(t *testing.T) {
 	got := ObservabilityMoves(KeyAWSSQS)
 	require.Len(t, got, 1, "KeyAWSSQS should have exactly one move")
+	assert.Equal(t, KeyAWSCloudWatchMonitoring, got[0].FromComponent)
 	assert.Equal(t,
-		`module.aws_cloudwatchmonitoring.aws_cloudwatch_metric_alarm.sqs_backlog["0"]`,
-		got[0].From)
+		`aws_cloudwatch_metric_alarm.sqs_backlog["0"]`,
+		got[0].FromAddress)
+	assert.Equal(t,
+		`module.aws_cloudwatch_monitoring.aws_cloudwatch_metric_alarm.sqs_backlog["0"]`,
+		got[0].FromHCL())
 
 	// Mutate the returned slice and verify the package map is unchanged.
-	got[0].From = "phantom"
+	got[0].FromAddress = "phantom"
 	got2 := ObservabilityMoves(KeyAWSSQS)
-	assert.NotEqual(t, "phantom", got2[0].From,
+	assert.NotEqual(t, "phantom", got2[0].FromAddress,
 		"ObservabilityMoves must return a defensive copy")
 }
 

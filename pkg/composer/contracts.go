@@ -13,7 +13,10 @@ import (
 // materialized the subnet list, the fallback null lets terraform plan
 // progress without producing the "Invalid index ... empty tuple" stage_error
 // that the custom-stack-provision pipeline previously surfaced.
-const vpcSubnetSelfLinkExpr = "try(module.gcp_vpc.subnet_self_links[0], null)"
+//
+// Built from WireRef so the prefix is guaranteed to match the rendered
+// `module "gcp_vpc" {}` block label (#283).
+var vpcSubnetSelfLinkExpr = "try(" + WireRef(KeyGCPVPC, "subnet_self_links") + "[0], null)"
 
 type ComponentKey string
 
@@ -528,18 +531,18 @@ type WiredInputs struct {
 
 func vpcRef(selected map[ComponentKey]bool) string {
 	if selected[KeyGCPVPC] {
-		return "module.gcp_vpc"
+		return ModuleRef(KeyGCPVPC)
 	}
-	return "module.aws_vpc"
+	return ModuleRef(KeyAWSVPC)
 }
 
-func albRef(_ map[ComponentKey]bool) string        { return "module.aws_alb" }
-func wafRef(_ map[ComponentKey]bool) string        { return "module.aws_waf" }
-func bastionRef(_ map[ComponentKey]bool) string    { return "module.aws_bastion" }
-func rdsRef(_ map[ComponentKey]bool) string        { return "module.aws_rds" }
-func s3Ref(_ map[ComponentKey]bool) string         { return "module.aws_s3" }
-func opensearchRef(_ map[ComponentKey]bool) string { return "module.aws_opensearch" }
-func sqsRef(_ map[ComponentKey]bool) string        { return "module.aws_sqs" }
+func albRef(_ map[ComponentKey]bool) string        { return ModuleRef(KeyAWSALB) }
+func wafRef(_ map[ComponentKey]bool) string        { return ModuleRef(KeyAWSWAF) }
+func bastionRef(_ map[ComponentKey]bool) string    { return ModuleRef(KeyAWSBastion) }
+func rdsRef(_ map[ComponentKey]bool) string        { return ModuleRef(KeyAWSRDS) }
+func s3Ref(_ map[ComponentKey]bool) string         { return ModuleRef(KeyAWSS3) }
+func opensearchRef(_ map[ComponentKey]bool) string { return ModuleRef(KeyAWSOpenSearch) }
+func sqsRef(_ map[ComponentKey]bool) string        { return ModuleRef(KeyAWSSQS) }
 
 // resourceRef returns the EKS/ECS module reference for the selected stack.
 // Prefers the prefixed KeyAWSEKS / KeyAWSECS keys, with a KeyAWSEKSControlPlane path
@@ -549,15 +552,15 @@ func sqsRef(_ map[ComponentKey]bool) string        { return "module.aws_sqs" }
 // prefixed name defensively.
 func resourceRef(selected map[ComponentKey]bool) string {
 	if selected[KeyAWSEKS] {
-		return "module.aws_eks"
+		return ModuleRef(KeyAWSEKS)
 	}
 	if selected[KeyAWSECS] {
-		return "module.aws_ecs"
+		return ModuleRef(KeyAWSECS)
 	}
 	if selected[KeyAWSEKSControlPlane] {
-		return "module.resource"
+		return ModuleRef(KeyAWSEKSControlPlane)
 	}
-	return "module.aws_eks"
+	return ModuleRef(KeyAWSEKS)
 }
 
 // DefaultWiring returns cross-module references for module k. The caller's
@@ -820,59 +823,59 @@ func DefaultWiring(selected map[ComponentKey]bool, k ComponentKey, comps *Compon
 
 	case KeyGCPGKE:
 		if selected[KeyGCPVPC] {
-			wi.RawHCL["network_self_link"] = "module.gcp_vpc.network_self_link"
+			wi.RawHCL["network_self_link"] = WireRef(KeyGCPVPC, "network_self_link")
 			wi.RawHCL["subnet_self_link"] = vpcSubnetSelfLinkExpr
-			wi.RawHCL["pods_range_name"] = "module.gcp_vpc.pods_range_name"
-			wi.RawHCL["services_range_name"] = "module.gcp_vpc.services_range_name"
+			wi.RawHCL["pods_range_name"] = WireRef(KeyGCPVPC, "pods_range_name")
+			wi.RawHCL["services_range_name"] = WireRef(KeyGCPVPC, "services_range_name")
 			wi.Names = append(wi.Names, "network_self_link", "subnet_self_link", "pods_range_name", "services_range_name")
 		}
 
 	case KeyGCPLoadbalancer:
 		if selected[KeyGCPVPC] {
-			wi.RawHCL["network_self_link"] = "module.gcp_vpc.network_self_link"
+			wi.RawHCL["network_self_link"] = WireRef(KeyGCPVPC, "network_self_link")
 			wi.RawHCL["subnet_self_link"] = vpcSubnetSelfLinkExpr
 			wi.Names = append(wi.Names, "network_self_link", "subnet_self_link")
 		}
 		if selected[KeyGCPCloudArmor] {
-			wi.RawHCL["security_policy"] = "module.gcp_cloud_armor.security_policy_id"
+			wi.RawHCL["security_policy"] = WireRef(KeyGCPCloudArmor, "security_policy_id")
 			wi.Names = append(wi.Names, "security_policy")
 		}
 
 	case KeyGCPCloudSQL:
 		if selected[KeyGCPVPC] {
-			wi.RawHCL["network_self_link"] = "module.gcp_vpc.network_self_link"
+			wi.RawHCL["network_self_link"] = WireRef(KeyGCPVPC, "network_self_link")
 			wi.Names = append(wi.Names, "network_self_link")
 		}
 
 	case KeyGCPMemorystore:
 		if selected[KeyGCPVPC] {
-			wi.RawHCL["authorized_network"] = "module.gcp_vpc.network_self_link"
+			wi.RawHCL["authorized_network"] = WireRef(KeyGCPVPC, "network_self_link")
 			wi.Names = append(wi.Names, "authorized_network")
 		}
 
 	case KeyGCPCompute:
 		if selected[KeyGCPVPC] {
-			wi.RawHCL["network_self_link"] = "module.gcp_vpc.network_self_link"
+			wi.RawHCL["network_self_link"] = WireRef(KeyGCPVPC, "network_self_link")
 			wi.RawHCL["subnet_self_link"] = vpcSubnetSelfLinkExpr
 			wi.Names = append(wi.Names, "network_self_link", "subnet_self_link")
 		}
 
 	case KeyGCPBastion:
 		if selected[KeyGCPVPC] {
-			wi.RawHCL["network_self_link"] = "module.gcp_vpc.network_self_link"
+			wi.RawHCL["network_self_link"] = WireRef(KeyGCPVPC, "network_self_link")
 			wi.RawHCL["subnet_self_link"] = vpcSubnetSelfLinkExpr
 			wi.Names = append(wi.Names, "network_self_link", "subnet_self_link")
 		}
 
 	case KeyGCPCloudRun:
 		if selected[KeyGCPVPC] {
-			wi.RawHCL["vpc_connector"] = "module.gcp_vpc.connector_id"
+			wi.RawHCL["vpc_connector"] = WireRef(KeyGCPVPC, "connector_id")
 			wi.Names = append(wi.Names, "vpc_connector")
 		}
 
 	case KeyGCPCloudFunctions:
 		if selected[KeyGCPVPC] {
-			wi.RawHCL["vpc_connector"] = "module.gcp_vpc.connector_id"
+			wi.RawHCL["vpc_connector"] = WireRef(KeyGCPVPC, "connector_id")
 			wi.Names = append(wi.Names, "vpc_connector")
 		}
 	}
@@ -880,7 +883,7 @@ func DefaultWiring(selected map[ComponentKey]bool, k ComponentKey, comps *Compon
 	// Observability post-switch wiring (issue #204). Driven off the
 	// PricingDependencies driver lists so a component added there
 	// gets observability wiring "for free." When the matching
-	// aggregator (aws_cloudwatchmonitoring or gcp_cloud_monitoring) is
+	// aggregator (aws_cloudwatch_monitoring or gcp_cloud_monitoring) is
 	// selected, every per-component emitter receives the SNS topic ARN
 	// (AWS) or notification channels (GCP) plus an enable_observability
 	// = true gate. The aggregator itself is excluded.
@@ -899,14 +902,14 @@ func DefaultWiring(selected map[ComponentKey]bool, k ComponentKey, comps *Compon
 	// reaches a module that can't consume it.
 	if k != KeyAWSCloudWatchMonitoring && CloudFor(k) == "aws" && selected[KeyAWSCloudWatchMonitoring] {
 		if slices.Contains(PricingDependencies[KeyAWSCloudWatchMonitoring], k) {
-			wi.RawHCL["alarm_topic_arn"] = "module.aws_cloudwatchmonitoring.sns_topic_arn"
+			wi.RawHCL["alarm_topic_arn"] = WireRef(KeyAWSCloudWatchMonitoring, "sns_topic_arn")
 			wi.RawHCL["enable_observability"] = "true"
 			wi.Names = append(wi.Names, "alarm_topic_arn", "enable_observability")
 		}
 	}
 	if k != KeyGCPCloudMonitoring && CloudFor(k) == "gcp" && selected[KeyGCPCloudMonitoring] {
 		if slices.Contains(PricingDependencies[KeyGCPCloudMonitoring], k) {
-			wi.RawHCL["notification_channels"] = "module.gcp_cloud_monitoring.notification_channels"
+			wi.RawHCL["notification_channels"] = WireRef(KeyGCPCloudMonitoring, "notification_channels")
 			wi.RawHCL["enable_observability"] = "true"
 			wi.Names = append(wi.Names, "notification_channels", "enable_observability")
 		}
