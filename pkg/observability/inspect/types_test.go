@@ -114,17 +114,50 @@ func TestSubRequest_JSONShape(t *testing.T) {
 //
 // Substring-anchored rather than full-string-equal so copy-edits to
 // the description wording don't break the test — the concern is
-// "tag deleted" / "tag truncated to one word", not "wording polished".
+// "tag deleted" / "tag truncated to a stub", not "wording polished".
+//
+// Each field is pinned by:
+//  1. Two distinct semantic anchors — one descriptive lead-in, one
+//     concrete example literal. Single stem-words like "hours" or
+//     "list-actions" alone are too short to defeat a vandalizing
+//     truncation, so the second anchor is a quoted example fragment.
+//  2. A minimum-length floor (60 chars). A regression that replaced
+//     each tag with just the two anchors concatenated would still
+//     fail the floor — the actual tags are >100 chars, so 60 leaves
+//     comfortable room for legitimate copy-edits.
 func TestSubRequest_JSONSchemaTagsPresent(t *testing.T) {
 	t.Parallel()
+	const minTagLen = 60
 	rt := reflect.TypeFor[SubRequest]()
 	cases := []struct {
 		field   string
 		anchors []string
 	}{
-		{"Service", []string{"Cloud service to query", "list-actions"}},
-		{"Action", []string{"Operation on the service", "list-metrics"}},
-		{"Filters", []string{"JSON-encoded filter object", "hours"}},
+		{
+			"Service",
+			[]string{
+				"Cloud service to query",
+				"action='list-actions' to discover",
+			},
+		},
+		{
+			"Action",
+			[]string{
+				"Operation on the service",
+				"'list-metrics' / 'get-metrics'",
+			},
+		},
+		{
+			"Filters",
+			[]string{
+				"JSON-encoded filter object",
+				// reflect.StructTag.Get unescapes \" to " when extracting
+				// the tag value, so the anchor matches the unescaped form
+				// the MCP server actually publishes — not the source-level
+				// escape sequence.
+				`'{"hours":6}'`,
+			},
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.field, func(t *testing.T) {
@@ -136,6 +169,9 @@ func TestSubRequest_JSONSchemaTagsPresent(t *testing.T) {
 			tag := f.Tag.Get("jsonschema")
 			if tag == "" {
 				t.Fatalf("SubRequest.%s missing jsonschema tag (#280)", tc.field)
+			}
+			if len(tag) < minTagLen {
+				t.Errorf("SubRequest.%s jsonschema tag is suspiciously short (%d < %d) — likely truncated:\n  got: %q", tc.field, len(tag), minTagLen, tag)
 			}
 			for _, anchor := range tc.anchors {
 				if !strings.Contains(tag, anchor) {
