@@ -328,17 +328,19 @@ func TestComposeStack_NoCycleWithCloudWatchMonitoringAndConsumers(t *testing.T) 
 	require.NotEmpty(t, mainTF, "compose must emit /main.tf")
 
 	// Aggregator-side: legacy alarms disabled, back-edges absent.
+	// Bare-RHS substrings (no whitespace alignment) so a renderer alignment
+	// change can't make these checks vacuously pass.
 	require.Regexp(t,
 		regexp.MustCompile(`(?m)^\s*disable_legacy_per_component_alarms\s*=\s*true\s*$`),
 		mainTF,
 		"legacy alarms must be disabled when per-component observability is wired")
-	require.NotContains(t, mainTF, "instance_ids     = [module.aws_bastion.bastion_instance_id]",
+	require.NotContains(t, mainTF, "module.aws_bastion.bastion_instance_id",
 		"back-edge from cwm to bastion must not render (#285)")
-	require.NotContains(t, mainTF, "rds_instance_ids = [module.aws_rds.instance_id]",
+	require.NotContains(t, mainTF, "module.aws_rds.instance_id",
 		"back-edge from cwm to rds must not render (#285)")
-	require.NotContains(t, mainTF, "alb_arn_suffixes = [module.aws_alb.alb_arn_suffix]",
+	require.NotContains(t, mainTF, "module.aws_alb.alb_arn_suffix",
 		"back-edge from cwm to alb must not render (#285)")
-	require.NotContains(t, mainTF, "sqs_queue_arns   = [module.aws_sqs.queue_arn]",
+	require.NotContains(t, mainTF, "module.aws_sqs.queue_arn",
 		"back-edge from cwm to sqs must not render (#285)")
 
 	// Forward-edge: per-component alarms still notify via the cwm SNS topic.
@@ -379,6 +381,11 @@ func TestValidateNoModuleCycles_PinsCWMConsumer2Cycle(t *testing.T) {
 	issues := ValidateNoModuleCycles(blocks)
 	require.Len(t, issues, 1)
 	require.Equal(t, "module_cycle", issues[0].Code)
-	require.Contains(t, issues[0].Reason, "[aws_cloudwatch_monitoring aws_rds]",
-		"cycle reason should enumerate the two modules involved")
+	// Assert each module name independently rather than the bracketed
+	// slice form — decouples this test from Go's default slice-print
+	// formatting so a cosmetic reformatter change doesn't break it.
+	require.Contains(t, issues[0].Reason, "aws_cloudwatch_monitoring",
+		"cycle reason should reference the cwm module")
+	require.Contains(t, issues[0].Reason, "aws_rds",
+		"cycle reason should reference the rds module")
 }

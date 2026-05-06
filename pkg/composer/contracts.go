@@ -738,10 +738,15 @@ func DefaultWiring(selected map[ComponentKey]bool, k ComponentKey, comps *Compon
 			wi.Names = append(wi.Names, "disable_legacy_per_component_alarms")
 			break
 		}
-		// Aggregator-only fall-through: a stack that selects the aggregator
-		// without any per-component consumer (e.g. dashboards over
-		// out-of-stack EC2) keeps the legacy back-edge wiring so dashboard
-		// widgets render per-resource series.
+		// Aggregator-only fall-through. Today every back-edge target
+		// (bastion/rds/alb/sqs) is itself in
+		// PricingDependencies[KeyAWSCloudWatchMonitoring], so the
+		// `if has*` blocks below cannot fire — any stack that selects
+		// one of those keys flips perComponentActive=true above and
+		// breaks first. The blocks remain as defense-in-depth: if a key
+		// is later removed from PricingDependencies (intentional opt-out
+		// of per-component observability), the legacy back-edge wiring
+		// keeps the cwm dashboard widgets rendering per-resource series.
 		if hasBastion {
 			wi.RawHCL["instance_ids"] = "[" + bastionRef(selected) + ".bastion_instance_id]"
 			wi.Names = append(wi.Names, "instance_ids")

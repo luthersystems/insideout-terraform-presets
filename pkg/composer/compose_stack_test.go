@@ -626,11 +626,21 @@ func TestComposeStack_KitchenSink(t *testing.T) {
 			regexp.MustCompile(`(?m)^\s*disable_legacy_per_component_alarms\s*=\s*true\s*$`),
 			mainTF,
 			"cwm must disable legacy alarms when per-component observability consumers are in the stack")
-		require.NotContains(t, mainTF, "instance_ids     = [module.aws_bastion.bastion_instance_id]",
+		// Bare-RHS substrings: whitespace-independent so a renderer
+		// alignment change can't make these vacuously pass.
+		require.NotContains(t, mainTF, "module.aws_bastion.bastion_instance_id",
 			"back-edge from cwm to bastion must not render once per-component observability is wired (#285)")
-		require.NotContains(t, mainTF, "rds_instance_ids = [module.aws_rds.instance_id]")
-		require.NotContains(t, mainTF, "alb_arn_suffixes = [module.aws_alb.alb_arn_suffix]")
-		require.NotContains(t, mainTF, "sqs_queue_arns   = [module.aws_sqs.queue_arn]")
+		require.NotContains(t, mainTF, "module.aws_rds.instance_id",
+			"back-edge from cwm to rds must not render (#285)")
+		require.NotContains(t, mainTF, "module.aws_alb.alb_arn_suffix",
+			"back-edge from cwm to alb must not render (#285)")
+		require.NotContains(t, mainTF, "module.aws_sqs.queue_arn",
+			"back-edge from cwm to sqs must not render (#285)")
+		// Forward-edge: per-component alarms still notify via the cwm
+		// SNS topic (silent-paging-failure regression net — a mutation
+		// that drops the post-switch wiring is caught here).
+		require.Contains(t, mainTF, "alarm_topic_arn      = module.aws_cloudwatch_monitoring.sns_topic_arn",
+			"forward-edge alarm_topic_arn must still render so per-component alarms notify")
 	})
 
 	t.Run("wiring/backups", func(t *testing.T) {
