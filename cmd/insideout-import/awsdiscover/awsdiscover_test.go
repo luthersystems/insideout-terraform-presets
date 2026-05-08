@@ -3,10 +3,12 @@ package awsdiscover
 import (
 	"context"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
+	"github.com/luthersystems/insideout-terraform-presets/pkg/insideout-import/registry"
 )
 
 type fakeDiscoverer struct {
@@ -232,5 +234,28 @@ func TestNewAWSDiscovererWithConcurrency_NonPositiveFallsBackToDefault(t *testin
 		if l := agg.byType["aws_lambda_function"].(*lambdaDiscoverer); l.maxConcurrency != DefaultMaxConcurrency {
 			t.Errorf("n=%d: lambda maxConcurrency=%d, want %d", n, l.maxConcurrency, DefaultMaxConcurrency)
 		}
+	}
+}
+
+// TestRegistryParity_AWS_LiveMatchesRegistry guards against drift between
+// this package's live constructor map and the public list in
+// pkg/insideout-import/registry. If a new type is registered here without
+// updating the registry (or vice versa), the reliable-side wizard will
+// silently disagree with what the CLI actually supports — this test fails
+// first instead.
+//
+// Note this only pins drift between the two sources of truth. Literal-value
+// pinning (the contract reliable consumers depend on) lives in the registry
+// package's own tests; we don't reach across the import boundary to assert
+// it twice.
+func TestRegistryParity_AWS_LiveMatchesRegistry(t *testing.T) {
+	t.Parallel()
+	live := NewAWSDiscoverer(awsDummyConfig()).SupportedTypes()
+	if len(live) == 0 {
+		t.Fatal("awsdiscover registered no types — registry parity check would be tautologically empty")
+	}
+	pub := registry.SupportedDiscoverTypes(registry.ProviderAWS)
+	if !reflect.DeepEqual(live, pub) {
+		t.Errorf("registry drift: awsdiscover=%v, registry=%v", live, pub)
 	}
 }

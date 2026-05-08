@@ -3,10 +3,12 @@ package gcpdiscover
 import (
 	"context"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
+	"github.com/luthersystems/insideout-terraform-presets/pkg/insideout-import/registry"
 )
 
 func TestNewGCPDiscoverer_RegistersPhase1Types(t *testing.T) {
@@ -310,5 +312,28 @@ func TestBuildSearchQuery_Composition(t *testing.T) {
 				t.Errorf("got %q, want %q", got, tc.want)
 			}
 		})
+	}
+}
+
+// TestRegistryParity_GCP_LiveMatchesRegistry guards against drift between
+// this package's live constructor map and the public list in
+// pkg/insideout-import/registry. If a new type is registered here without
+// updating the registry (or vice versa), the reliable-side wizard will
+// silently disagree with what the CLI actually supports — this test fails
+// first instead.
+//
+// Note this only pins drift between the two sources of truth. Literal-value
+// pinning (the contract reliable consumers depend on) lives in the registry
+// package's own tests; we don't reach across the import boundary to assert
+// it twice.
+func TestRegistryParity_GCP_LiveMatchesRegistry(t *testing.T) {
+	t.Parallel()
+	live := NewGCPDiscoverer(&fakeAssetSearcher{}, "p").SupportedTypes()
+	if len(live) == 0 {
+		t.Fatal("gcpdiscover registered no types — registry parity check would be tautologically empty")
+	}
+	pub := registry.SupportedDiscoverTypes(registry.ProviderGCP)
+	if !reflect.DeepEqual(live, pub) {
+		t.Errorf("registry drift: gcpdiscover=%v, registry=%v", live, pub)
 	}
 }
