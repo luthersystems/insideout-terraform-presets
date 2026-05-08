@@ -28,6 +28,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
@@ -72,8 +73,11 @@ type Discoverer interface {
 	// FromAsset translates a single Cloud Asset SearchAllResources result
 	// (already filtered to this discoverer's AssetType) into an
 	// ImportedResource. Implementations populate Identity (Cloud, Type,
-	// Address, ImportID, NameHint, ProjectID, Location, NativeIDs) and
-	// set Tier=TierImportedFlat, Source=SourceImporter on each entry.
+	// Address, ImportID, NameHint, ProjectID, Location, NativeIDs, Tags)
+	// and set Tier=TierImportedFlat, Source=SourceImporter on each entry.
+	// asset.Labels (#291 tag-persist) is the asset's labels map — pass
+	// it through to makeImportedResource so the manifest carries the
+	// tag/label values for downstream selectors and summary consumers.
 	FromAsset(book addressBook, asset gcpAssetResult, projectID string) imported.ImportedResource
 	// DiscoverByID looks up a single resource by its Cloud Asset full
 	// resource name (// host / path / segments), used by the dep-chase
@@ -134,16 +138,16 @@ func (g *GCPDiscoverer) SupportedTypes() []string {
 // Terraform type, then fans out per-asset translation across the registered
 // discoverers. Unknown type names are reported as a single error containing
 // all invalid names so the operator sees the full set of misspellings in
-// one shot. The accountID parameter is unused on GCP — the project ID lives
-// on the GCPDiscoverer struct (set at construction); the parameter exists
-// only to satisfy the orchestrator's discoveryAggregator interface that the
-// AWS path also implements.
+// one shot.
 //
-// region is treated as an optional asset-location filter. Cloud Asset's
-// SearchAllResources accepts a `location:<region>` qualifier; an empty
-// region means search all locations (the default for project-global
-// resource types like Pub/Sub topics and VPC networks).
-func (g *GCPDiscoverer) DiscoverTypes(ctx context.Context, types []string, project, region, accountID string) ([]imported.ImportedResource, error) {
+// args.Regions populates the Cloud Asset query's `location:` filter. Zero
+// regions ⇒ no location clause (asset-API "all locations"). One ⇒
+// `location:r1`. Two or more ⇒ `(location:r1 OR location:r2 OR ...)`.
+// args.TagSelectors append `labels.<k>:<v>` clauses to the asset query
+// (server-side AND-conjunction). The legacy implicit
+// `labels.project:<project>` clause is preserved when args.Project is
+// non-empty.
+func (g *GCPDiscoverer) DiscoverTypes(ctx context.Context, types []string, args DiscoverArgs) ([]imported.ImportedResource, error) {
 	if len(types) == 0 {
 		types = g.SupportedTypes()
 	}
@@ -165,7 +169,7 @@ func (g *GCPDiscoverer) DiscoverTypes(ctx context.Context, types []string, proje
 	}
 
 	scope := fmt.Sprintf("projects/%s", g.projectID)
-	query := buildSearchQuery(project, region)
+	query := buildSearchQuery(args.Project, args.Regions, args.TagSelectors)
 
 	results, err := g.searcher.SearchAll(ctx, scope, assetTypes, query)
 	if err != nil {
@@ -216,30 +220,57 @@ func (g *GCPDiscoverer) DiscoverByID(ctx context.Context, tfType, id, region, ac
 	return d.DiscoverByID(ctx, g.searcher, id, projectID)
 }
 
-// buildSearchQuery composes the SearchAllResources `query` string from the
-// stack project name (label-filter) and the optional region. Returns "" when
-// neither is set so the search is unfiltered.
+// buildSearchQuery composes the SearchAllResources `query` string from
+// the stack project name (label-filter), zero-or-more locations, and
+// zero-or-more operator-supplied label selectors. Returns "" when none
+// are set so the search is unfiltered.
 //
-// Cloud Asset query syntax: `labels.<key>:<value>` and `location:<region>`,
-// AND-combined with whitespace. The `:` operator is a substring match on
-// values; for our project label values that's identical to equality (the
-// label isn't a substring of any other valid project name), but if a future
-// stack project shadows another's label-prefix this will need an explicit
-// `=` operator.
-func buildSearchQuery(stackProject, region string) string {
-	parts := make([]string, 0, 2)
+// Cloud Asset query syntax: `labels.<key>:<value>` and `location:<l>`,
+// AND-combined with whitespace. The `:` operator is a substring match
+// on values; for our project label values that's identical to equality
+// (the label isn't a substring of any other valid project name), but a
+// future stack project shadowing another's label-prefix would need an
+// explicit `=` operator.
+//
+// Multi-region (#291): two-or-more locations emit a parenthesized
+// `(location:l1 OR location:l2)` clause. Implicit precedence — `AND`
+// binds tighter than `OR` — is the reason the parens are non-optional.
+//
+// Known surprise (carried forward from pre-#291): four of five Phase-1
+// GCP types are project-global (their asset-side `location` is empty),
+// so any non-empty Regions will exclude them. A fix that auto-includes
+// `(location:l1 OR location:l2 OR NOT location:*)` is a follow-up.
+func buildSearchQuery(stackProject string, locations []string, selectors []TagSelector) string {
+	// Filter empty location strings so callers can pass a single-element
+	// `[]string{""}` (the natural shape when --regions is unset and we
+	// fall through the GCP no-default path) without producing the
+	// invalid `location:` clause.
+	nonEmpty := make([]string, 0, len(locations))
+	for _, l := range locations {
+		if l != "" {
+			nonEmpty = append(nonEmpty, l)
+		}
+	}
+	locations = nonEmpty
+
+	var clauses []string
 	if stackProject != "" {
-		parts = append(parts, "labels.project:"+stackProject)
+		clauses = append(clauses, "labels.project:"+stackProject)
 	}
-	if region != "" {
-		parts = append(parts, "location:"+region)
-	}
-	switch len(parts) {
+	switch len(locations) {
 	case 0:
-		return ""
+		// no location clause
 	case 1:
-		return parts[0]
+		clauses = append(clauses, "location:"+locations[0])
 	default:
-		return parts[0] + " AND " + parts[1]
+		locClauses := make([]string, 0, len(locations))
+		for _, l := range locations {
+			locClauses = append(locClauses, "location:"+l)
+		}
+		clauses = append(clauses, "("+strings.Join(locClauses, " OR ")+")")
 	}
+	for _, s := range selectors {
+		clauses = append(clauses, "labels."+s.Key+":"+s.Value)
+	}
+	return strings.Join(clauses, " AND ")
 }

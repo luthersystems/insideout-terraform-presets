@@ -45,8 +45,14 @@ var ErrNotFound = errors.New("resource not found")
 // one Terraform type (e.g. "aws_sqs_queue") and returns []imported.ImportedResource
 // directly — no intermediate flat shape, per #189.
 //
-// Project, region, and accountID are passed in rather than re-derived per
-// discoverer so the aggregator can call STS GetCallerIdentity once.
+// The bulk Discover takes a DiscoverArgs struct (#291): Project, Regions,
+// TagSelectors, AccountID. Per-region SDK clients are constructed inside
+// each implementation so global services (IAM, S3) can ignore Regions
+// without polluting the aggregator with per-cloud branching.
+//
+// DiscoverByID stays on the legacy 4-arg shape because single-resource
+// lookups have no meaningful multi-region or tag-selector semantics —
+// dep-chase resolves one ID at a time, in one region, with no filters.
 type Discoverer interface {
 	// ResourceType returns the Terraform type this discoverer covers, e.g.
 	// "aws_sqs_queue".
@@ -54,7 +60,7 @@ type Discoverer interface {
 	// Discover performs read-only SDK calls and returns one ImportedResource
 	// per matched cloud resource. Implementations populate Identity and set
 	// Tier=TierImportedFlat, Source=SourceImporter on each entry.
-	Discover(ctx context.Context, project, region, accountID string) ([]imported.ImportedResource, error)
+	Discover(ctx context.Context, args DiscoverArgs) ([]imported.ImportedResource, error)
 	// DiscoverByID looks up a single resource by its native ID (an ARN or
 	// the natural key the discoverer's Discover method emits — queue URL,
 	// table name, log group name, etc.). Used by Stage 2c3's dep-chase
@@ -77,8 +83,14 @@ const DefaultMaxConcurrency = 10
 // AWSDiscoverer aggregates the per-type discoverers and fans out a single
 // DiscoverTypes call across all of them. Construct with NewAWSDiscoverer
 // in production; tests can build it directly with mock discoverers.
+//
+// defaultRegion is captured from the construction-time aws.Config and
+// substituted into args.Regions when the operator passes none —
+// preserves the pre-#291 single-region behavior so callers that haven't
+// migrated to --regions still scan the configured-region.
 type AWSDiscoverer struct {
-	byType map[string]Discoverer
+	byType        map[string]Discoverer
+	defaultRegion string
 }
 
 // NewAWSDiscoverer wires up the production set of AWS discoverers with the
@@ -108,6 +120,7 @@ func NewAWSDiscovererWithConcurrency(cfg aws.Config, maxConcurrency int) *AWSDis
 		maxConcurrency = DefaultMaxConcurrency
 	}
 	return &AWSDiscoverer{
+		defaultRegion: cfg.Region,
 		byType: map[string]Discoverer{
 			"aws_sqs_queue":             newSQSDiscoverer(cfg),
 			"aws_dynamodb_table":        newDynamoDBDiscoverer(cfg, maxConcurrency),
@@ -157,9 +170,19 @@ func (a *AWSDiscoverer) DiscoverByID(ctx context.Context, tfType, id, region, ac
 // tag-fanout dominates wall time. Stage 2c2 (#270) bounded that fanout via
 // errgroup; the SDK retryer config in cmd/insideout-import/discover.go
 // raises maxAttempts so transient Throttling no longer aborts a run.
-func (a *AWSDiscoverer) DiscoverTypes(ctx context.Context, types []string, project, region, accountID string) ([]imported.ImportedResource, error) {
+//
+// Multi-region (#291): each per-service Discover loops args.Regions
+// internally and builds per-region SDK clients via the configured
+// aws.Config; global services (IAM role/policy, S3) ignore Regions. An
+// empty args.Regions defaults to the configured-region of the
+// aws.Config inside each per-service implementation, preserving the
+// pre-#291 single-region behavior.
+func (a *AWSDiscoverer) DiscoverTypes(ctx context.Context, types []string, args DiscoverArgs) ([]imported.ImportedResource, error) {
 	if len(types) == 0 {
 		types = a.SupportedTypes()
+	}
+	if len(args.Regions) == 0 {
+		args.Regions = []string{a.defaultRegion}
 	}
 
 	var unknown []string
@@ -178,7 +201,7 @@ func (a *AWSDiscoverer) DiscoverTypes(ctx context.Context, types []string, proje
 
 	var all []imported.ImportedResource
 	for _, d := range selected {
-		entries, err := d.Discover(ctx, project, region, accountID)
+		entries, err := d.Discover(ctx, args)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", d.ResourceType(), err)
 		}

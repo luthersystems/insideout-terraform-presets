@@ -14,6 +14,14 @@ type fakeCWLClient struct {
 	pages []cloudwatchlogs.DescribeLogGroupsOutput
 	calls []cloudwatchlogs.DescribeLogGroupsInput
 	err   error
+
+	// ListTagsForResource wiring (#291). tagsByARN maps log-group ARN →
+	// tag map. Empty map for groups without tags. tagsErr is returned
+	// for every ListTagsForResource call when set. tagsCalls records
+	// the ARN observed for assertions.
+	tagsByARN map[string]map[string]string
+	tagsErr   error
+	tagsCalls []string
 }
 
 func (f *fakeCWLClient) DescribeLogGroups(_ context.Context, in *cloudwatchlogs.DescribeLogGroupsInput, _ ...func(*cloudwatchlogs.Options)) (*cloudwatchlogs.DescribeLogGroupsOutput, error) {
@@ -28,9 +36,20 @@ func (f *fakeCWLClient) DescribeLogGroups(_ context.Context, in *cloudwatchlogs.
 	return &f.pages[idx], nil
 }
 
+func (f *fakeCWLClient) ListTagsForResource(_ context.Context, in *cloudwatchlogs.ListTagsForResourceInput, _ ...func(*cloudwatchlogs.Options)) (*cloudwatchlogs.ListTagsForResourceOutput, error) {
+	f.tagsCalls = append(f.tagsCalls, *in.ResourceArn)
+	if f.tagsErr != nil {
+		return nil, f.tagsErr
+	}
+	if tags, ok := f.tagsByARN[*in.ResourceArn]; ok {
+		return &cloudwatchlogs.ListTagsForResourceOutput{Tags: tags}, nil
+	}
+	return &cloudwatchlogs.ListTagsForResourceOutput{}, nil
+}
+
 func TestCWLDiscover_HappyPath(t *testing.T) {
 	t.Parallel()
-	d := &cwlDiscoverer{new: func() cwlClient {
+	d := &cwlDiscoverer{new: func(_ string) cwlClient {
 		return &fakeCWLClient{
 			pages: []cloudwatchlogs.DescribeLogGroupsOutput{
 				{
@@ -42,7 +61,7 @@ func TestCWLDiscover_HappyPath(t *testing.T) {
 			},
 		}
 	}}
-	got, err := d.Discover(context.Background(), "io-foo", "us-east-1", "123")
+	got, err := d.Discover(context.Background(), DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,8 +79,8 @@ func TestCWLDiscover_HappyPath(t *testing.T) {
 func TestCWLDiscover_PassesProjectAsLogGroupNamePattern(t *testing.T) {
 	t.Parallel()
 	fake := &fakeCWLClient{}
-	d := &cwlDiscoverer{new: func() cwlClient { return fake }}
-	if _, err := d.Discover(context.Background(), "io-foo", "us-east-1", "123"); err != nil {
+	d := &cwlDiscoverer{new: func(_ string) cwlClient { return fake }}
+	if _, err := d.Discover(context.Background(), DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"}); err != nil {
 		t.Fatal(err)
 	}
 	if len(fake.calls) == 0 {
@@ -82,8 +101,8 @@ func TestCWLDiscover_PassesProjectAsLogGroupNamePattern(t *testing.T) {
 func TestCWLDiscover_EmptyProjectPassesNoFilter(t *testing.T) {
 	t.Parallel()
 	fake := &fakeCWLClient{}
-	d := &cwlDiscoverer{new: func() cwlClient { return fake }}
-	if _, err := d.Discover(context.Background(), "", "us-east-1", "123"); err != nil {
+	d := &cwlDiscoverer{new: func(_ string) cwlClient { return fake }}
+	if _, err := d.Discover(context.Background(), DiscoverArgs{Project: "", Regions: []string{"us-east-1"}, AccountID: "123"}); err != nil {
 		t.Fatal(err)
 	}
 	if len(fake.calls) == 0 {
@@ -97,7 +116,7 @@ func TestCWLDiscover_EmptyProjectPassesNoFilter(t *testing.T) {
 
 func TestCWLDiscover_PaginatesUntilNoToken(t *testing.T) {
 	t.Parallel()
-	d := &cwlDiscoverer{new: func() cwlClient {
+	d := &cwlDiscoverer{new: func(_ string) cwlClient {
 		return &fakeCWLClient{
 			pages: []cloudwatchlogs.DescribeLogGroupsOutput{
 				{LogGroups: []cwltypes.LogGroup{{LogGroupName: aws.String("/io-foo-a"), Arn: aws.String("a")}}, NextToken: aws.String("t1")},
@@ -105,7 +124,7 @@ func TestCWLDiscover_PaginatesUntilNoToken(t *testing.T) {
 			},
 		}
 	}}
-	got, err := d.Discover(context.Background(), "io-foo", "us-east-1", "123")
+	got, err := d.Discover(context.Background(), DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,8 +135,8 @@ func TestCWLDiscover_PaginatesUntilNoToken(t *testing.T) {
 
 func TestCWLDiscover_PropagatesError(t *testing.T) {
 	t.Parallel()
-	d := &cwlDiscoverer{new: func() cwlClient { return &fakeCWLClient{err: errors.New("Throttling")} }}
-	_, err := d.Discover(context.Background(), "io-foo", "us-east-1", "123")
+	d := &cwlDiscoverer{new: func(_ string) cwlClient { return &fakeCWLClient{err: errors.New("Throttling")} }}
+	_, err := d.Discover(context.Background(), DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"})
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -127,7 +146,7 @@ func TestCWLDiscoverByID_AcceptsARN(t *testing.T) {
 	t.Parallel()
 	name := "/aws/lambda/io-foo-handler"
 	arn := "arn:aws:logs:us-east-1:123:log-group:" + name + ":*"
-	d := &cwlDiscoverer{new: func() cwlClient {
+	d := &cwlDiscoverer{new: func(_ string) cwlClient {
 		return &fakeCWLClient{
 			pages: []cloudwatchlogs.DescribeLogGroupsOutput{
 				{LogGroups: []cwltypes.LogGroup{
@@ -154,7 +173,7 @@ func TestCWLDiscoverByID_AcceptsARN(t *testing.T) {
 func TestCWLDiscoverByID_AcceptsBareName(t *testing.T) {
 	t.Parallel()
 	name := "/aws/lambda/io-foo-handler"
-	d := &cwlDiscoverer{new: func() cwlClient {
+	d := &cwlDiscoverer{new: func(_ string) cwlClient {
 		return &fakeCWLClient{
 			pages: []cloudwatchlogs.DescribeLogGroupsOutput{
 				{LogGroups: []cwltypes.LogGroup{
@@ -174,7 +193,7 @@ func TestCWLDiscoverByID_AcceptsBareName(t *testing.T) {
 
 func TestCWLDiscoverByID_NotFound(t *testing.T) {
 	t.Parallel()
-	d := &cwlDiscoverer{new: func() cwlClient {
+	d := &cwlDiscoverer{new: func(_ string) cwlClient {
 		// Empty pages → CWL returns empty list (no typed not-found error).
 		return &fakeCWLClient{}
 	}}
@@ -190,7 +209,7 @@ func TestCWLDiscoverByID_PaginatesToExactMatch(t *testing.T) {
 	// sibling on page 1. A non-paginating implementation would
 	// return ErrNotFound spuriously.
 	exact := "/aws/lambda/io-foo"
-	d := &cwlDiscoverer{new: func() cwlClient {
+	d := &cwlDiscoverer{new: func(_ string) cwlClient {
 		return &fakeCWLClient{
 			pages: []cloudwatchlogs.DescribeLogGroupsOutput{
 				{
@@ -220,7 +239,7 @@ func TestCWLDiscoverByID_NotFoundOnPrefixMatchOnly(t *testing.T) {
 	t.Parallel()
 	// CWL prefix match returns names that share a prefix; DiscoverByID
 	// must require an exact match.
-	d := &cwlDiscoverer{new: func() cwlClient {
+	d := &cwlDiscoverer{new: func(_ string) cwlClient {
 		return &fakeCWLClient{
 			pages: []cloudwatchlogs.DescribeLogGroupsOutput{
 				{LogGroups: []cwltypes.LogGroup{
@@ -237,7 +256,7 @@ func TestCWLDiscoverByID_NotFoundOnPrefixMatchOnly(t *testing.T) {
 
 func TestCWLDiscoverByID_UnsupportedID(t *testing.T) {
 	t.Parallel()
-	d := &cwlDiscoverer{new: func() cwlClient { return &fakeCWLClient{} }}
+	d := &cwlDiscoverer{new: func(_ string) cwlClient { return &fakeCWLClient{} }}
 	cases := []string{
 		"",
 		"arn:aws:s3:::a-bucket", // wrong service

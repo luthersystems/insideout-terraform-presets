@@ -85,8 +85,8 @@ func TestDynamoDBDiscover_PrefixThenTagFilter(t *testing.T) {
 			"arn:aws:dynamodb:us-east-1:123:table/io-foo-untagged": {tagPair("Owner", "team")},
 		},
 	}
-	d := &dynamoDiscoverer{new: func() dynamoClient { return fake }}
-	got, err := d.Discover(context.Background(), "io-foo", "us-east-1", "123")
+	d := &dynamoDiscoverer{new: func(_ string) dynamoClient { return fake }}
+	got, err := d.Discover(context.Background(), DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +111,7 @@ func TestDynamoDBDiscover_PrefixThenTagFilter(t *testing.T) {
 
 func TestDynamoDBDiscover_PaginatesUntilNoLastEvaluatedKey(t *testing.T) {
 	t.Parallel()
-	d := &dynamoDiscoverer{new: func() dynamoClient {
+	d := &dynamoDiscoverer{new: func(_ string) dynamoClient {
 		return &fakeDynamoClient{
 			pages: []dynamodb.ListTablesOutput{
 				{TableNames: []string{"io-foo-a"}, LastEvaluatedTableName: aws.String("io-foo-a")},
@@ -123,7 +123,7 @@ func TestDynamoDBDiscover_PaginatesUntilNoLastEvaluatedKey(t *testing.T) {
 			},
 		}
 	}}
-	got, err := d.Discover(context.Background(), "io-foo", "us-east-1", "123")
+	got, err := d.Discover(context.Background(), DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +134,7 @@ func TestDynamoDBDiscover_PaginatesUntilNoLastEvaluatedKey(t *testing.T) {
 
 func TestDynamoDBDiscover_FailClosedOnTagsError(t *testing.T) {
 	t.Parallel()
-	d := &dynamoDiscoverer{new: func() dynamoClient {
+	d := &dynamoDiscoverer{new: func(_ string) dynamoClient {
 		return &fakeDynamoClient{
 			pages: []dynamodb.ListTablesOutput{
 				{TableNames: []string{"io-foo-good", "io-foo-throttled"}},
@@ -147,7 +147,7 @@ func TestDynamoDBDiscover_FailClosedOnTagsError(t *testing.T) {
 			},
 		}
 	}}
-	got, err := d.Discover(context.Background(), "io-foo", "us-east-1", "123")
+	got, err := d.Discover(context.Background(), DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -181,8 +181,8 @@ func TestDynamoDBDiscover_PrefixOnlyFallback(t *testing.T) {
 					{TableNames: []string{"io-foo-x", "other-y"}},
 				},
 			}
-			d := &dynamoDiscoverer{new: func() dynamoClient { return fake }}
-			got, err := d.Discover(context.Background(), "io-foo", tc.region, tc.accountID)
+			d := &dynamoDiscoverer{new: func(_ string) dynamoClient { return fake }}
+			got, err := d.Discover(context.Background(), DiscoverArgs{Project: "io-foo", Regions: []string{tc.region}, AccountID: tc.accountID})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -200,10 +200,10 @@ func TestDynamoDBDiscover_PrefixOnlyFallback(t *testing.T) {
 
 func TestDynamoDBDiscover_PropagatesListTablesError(t *testing.T) {
 	t.Parallel()
-	d := &dynamoDiscoverer{new: func() dynamoClient {
+	d := &dynamoDiscoverer{new: func(_ string) dynamoClient {
 		return &fakeDynamoClient{listErr: errors.New("AccessDenied")}
 	}}
-	_, err := d.Discover(context.Background(), "io-foo", "us-east-1", "123")
+	_, err := d.Discover(context.Background(), DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"})
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -291,13 +291,13 @@ func TestDynamoDBDiscover_BoundedConcurrency(t *testing.T) {
 		release: release,
 	}
 	d := &dynamoDiscoverer{
-		new:            func() dynamoClient { return bc },
+		new:            func(_ string) dynamoClient { return bc },
 		maxConcurrency: limit,
 	}
 
 	done := make(chan error, 1)
 	go func() {
-		_, err := d.Discover(context.Background(), "io-foo", "us-east-1", "123")
+		_, err := d.Discover(context.Background(), DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"})
 		done <- err
 	}()
 
@@ -353,14 +353,14 @@ func TestDynamoDBDiscover_ContextCancellationUnblocksSiblings(t *testing.T) {
 		starts:  starts,
 	}
 	d := &dynamoDiscoverer{
-		new:            func() dynamoClient { return bc },
+		new:            func(_ string) dynamoClient { return bc },
 		maxConcurrency: total,
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() {
-		_, err := d.Discover(ctx, "io-foo", "us-east-1", "123")
+		_, err := d.Discover(ctx, DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"})
 		done <- err
 	}()
 
@@ -394,7 +394,7 @@ func TestDynamoDBDiscoverByID_AcceptsARN(t *testing.T) {
 			"io-foo-orders": {TableArn: aws.String(arn), TableName: aws.String("io-foo-orders")},
 		},
 	}
-	d := &dynamoDiscoverer{new: func() dynamoClient { return fake }}
+	d := &dynamoDiscoverer{new: func(_ string) dynamoClient { return fake }}
 	got, err := d.DiscoverByID(context.Background(), arn, "us-east-1", "123")
 	if err != nil {
 		t.Fatal(err)
@@ -417,7 +417,7 @@ func TestDynamoDBDiscoverByID_AcceptsBareName(t *testing.T) {
 			"orders": {TableName: aws.String("orders")},
 		},
 	}
-	d := &dynamoDiscoverer{new: func() dynamoClient { return fake }}
+	d := &dynamoDiscoverer{new: func(_ string) dynamoClient { return fake }}
 	got, err := d.DiscoverByID(context.Background(), "orders", "us-east-1", "123")
 	if err != nil {
 		t.Fatal(err)
@@ -434,7 +434,7 @@ func TestDynamoDBDiscoverByID_AcceptsBareName(t *testing.T) {
 func TestDynamoDBDiscoverByID_NotFound(t *testing.T) {
 	t.Parallel()
 	fake := &fakeDynamoClient{} // empty describeByName triggers ResourceNotFoundException
-	d := &dynamoDiscoverer{new: func() dynamoClient { return fake }}
+	d := &dynamoDiscoverer{new: func(_ string) dynamoClient { return fake }}
 	_, err := d.DiscoverByID(context.Background(), "missing", "us-east-1", "123")
 	if !errors.Is(err, ErrNotFound) {
 		t.Errorf("err=%v, want ErrNotFound", err)
@@ -443,7 +443,7 @@ func TestDynamoDBDiscoverByID_NotFound(t *testing.T) {
 
 func TestDynamoDBDiscoverByID_UnsupportedID(t *testing.T) {
 	t.Parallel()
-	d := &dynamoDiscoverer{new: func() dynamoClient { return &fakeDynamoClient{} }}
+	d := &dynamoDiscoverer{new: func(_ string) dynamoClient { return &fakeDynamoClient{} }}
 	cases := []string{
 		"",
 		"arn:aws:s3:::a-bucket", // wrong service

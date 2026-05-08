@@ -47,7 +47,7 @@ func (f *fakeSMClient) DescribeSecret(_ context.Context, in *secretsmanager.Desc
 
 func TestSecretsManagerDiscover_HappyPath(t *testing.T) {
 	t.Parallel()
-	d := &secretsManagerDiscoverer{new: func() smClient {
+	d := &secretsManagerDiscoverer{new: func(_ string) smClient {
 		return &fakeSMClient{
 			pages: []secretsmanager.ListSecretsOutput{
 				{
@@ -59,7 +59,7 @@ func TestSecretsManagerDiscover_HappyPath(t *testing.T) {
 			},
 		}
 	}}
-	got, err := d.Discover(context.Background(), "io-foo", "us-east-1", "123")
+	got, err := d.Discover(context.Background(), DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,8 +79,8 @@ func TestSecretsManagerDiscover_HappyPath(t *testing.T) {
 func TestSecretsManagerDiscover_UsesServerSideTagFilter(t *testing.T) {
 	t.Parallel()
 	fake := &fakeSMClient{}
-	d := &secretsManagerDiscoverer{new: func() smClient { return fake }}
-	if _, err := d.Discover(context.Background(), "io-foo", "us-east-1", "123"); err != nil {
+	d := &secretsManagerDiscoverer{new: func(_ string) smClient { return fake }}
+	if _, err := d.Discover(context.Background(), DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"}); err != nil {
 		t.Fatal(err)
 	}
 	if len(fake.calls) == 0 {
@@ -116,8 +116,8 @@ func equalStrings(a, b []string) bool {
 func TestSecretsManagerDiscover_EmptyProjectNoFilters(t *testing.T) {
 	t.Parallel()
 	fake := &fakeSMClient{}
-	d := &secretsManagerDiscoverer{new: func() smClient { return fake }}
-	if _, err := d.Discover(context.Background(), "", "us-east-1", "123"); err != nil {
+	d := &secretsManagerDiscoverer{new: func(_ string) smClient { return fake }}
+	if _, err := d.Discover(context.Background(), DiscoverArgs{Project: "", Regions: []string{"us-east-1"}, AccountID: "123"}); err != nil {
 		t.Fatal(err)
 	}
 	if len(fake.calls) == 0 || len(fake.calls[0].Filters) != 0 {
@@ -127,7 +127,7 @@ func TestSecretsManagerDiscover_EmptyProjectNoFilters(t *testing.T) {
 
 func TestSecretsManagerDiscover_PaginatesUntilNoToken(t *testing.T) {
 	t.Parallel()
-	d := &secretsManagerDiscoverer{new: func() smClient {
+	d := &secretsManagerDiscoverer{new: func(_ string) smClient {
 		return &fakeSMClient{
 			pages: []secretsmanager.ListSecretsOutput{
 				{SecretList: []smtypes.SecretListEntry{{Name: aws.String("a"), ARN: aws.String("arn-a")}}, NextToken: aws.String("t1")},
@@ -135,7 +135,7 @@ func TestSecretsManagerDiscover_PaginatesUntilNoToken(t *testing.T) {
 			},
 		}
 	}}
-	got, err := d.Discover(context.Background(), "io-foo", "us-east-1", "123")
+	got, err := d.Discover(context.Background(), DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,8 +146,8 @@ func TestSecretsManagerDiscover_PaginatesUntilNoToken(t *testing.T) {
 
 func TestSecretsManagerDiscover_PropagatesError(t *testing.T) {
 	t.Parallel()
-	d := &secretsManagerDiscoverer{new: func() smClient { return &fakeSMClient{err: errors.New("AccessDenied")} }}
-	_, err := d.Discover(context.Background(), "io-foo", "us-east-1", "123")
+	d := &secretsManagerDiscoverer{new: func(_ string) smClient { return &fakeSMClient{err: errors.New("AccessDenied")} }}
+	_, err := d.Discover(context.Background(), DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"})
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -156,7 +156,7 @@ func TestSecretsManagerDiscover_PropagatesError(t *testing.T) {
 func TestSecretsManagerDiscoverByID_AcceptsARN(t *testing.T) {
 	t.Parallel()
 	arn := "arn:aws:secretsmanager:us-east-1:123:secret:io-foo/db-AbCdEf"
-	d := &secretsManagerDiscoverer{new: func() smClient {
+	d := &secretsManagerDiscoverer{new: func(_ string) smClient {
 		return &fakeSMClient{describeByID: map[string]*secretsmanager.DescribeSecretOutput{
 			arn: {ARN: aws.String(arn), Name: aws.String("io-foo/db")},
 		}}
@@ -178,7 +178,7 @@ func TestSecretsManagerDiscoverByID_AcceptsARN(t *testing.T) {
 
 func TestSecretsManagerDiscoverByID_AcceptsBareName(t *testing.T) {
 	t.Parallel()
-	d := &secretsManagerDiscoverer{new: func() smClient {
+	d := &secretsManagerDiscoverer{new: func(_ string) smClient {
 		return &fakeSMClient{describeByID: map[string]*secretsmanager.DescribeSecretOutput{
 			"io-foo/db": {ARN: aws.String("arn:test"), Name: aws.String("io-foo/db")},
 		}}
@@ -194,7 +194,7 @@ func TestSecretsManagerDiscoverByID_AcceptsBareName(t *testing.T) {
 
 func TestSecretsManagerDiscoverByID_NotFound(t *testing.T) {
 	t.Parallel()
-	d := &secretsManagerDiscoverer{new: func() smClient { return &fakeSMClient{} }}
+	d := &secretsManagerDiscoverer{new: func(_ string) smClient { return &fakeSMClient{} }}
 	_, err := d.DiscoverByID(context.Background(), "missing", "us-east-1", "123")
 	if !errors.Is(err, ErrNotFound) {
 		t.Errorf("err=%v, want ErrNotFound", err)
@@ -203,7 +203,7 @@ func TestSecretsManagerDiscoverByID_NotFound(t *testing.T) {
 
 func TestSecretsManagerDiscoverByID_UnsupportedID(t *testing.T) {
 	t.Parallel()
-	d := &secretsManagerDiscoverer{new: func() smClient { return &fakeSMClient{} }}
+	d := &secretsManagerDiscoverer{new: func(_ string) smClient { return &fakeSMClient{} }}
 	cases := []string{
 		"",
 		"arn:aws:s3:::a-bucket",

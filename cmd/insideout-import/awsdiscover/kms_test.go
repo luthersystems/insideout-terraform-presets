@@ -18,6 +18,11 @@ type fakeKMSClient struct {
 	describeByID  map[string]*kmstypes.KeyMetadata
 	describeErr   error
 	describeCalls []string
+
+	// ListResourceTags wiring (#291).
+	tagsByKey map[string][]kmstypes.Tag
+	tagsErr   error
+	tagsCalls []string
 }
 
 func (f *fakeKMSClient) ListAliases(_ context.Context, in *kms.ListAliasesInput, _ ...func(*kms.Options)) (*kms.ListAliasesOutput, error) {
@@ -44,9 +49,21 @@ func (f *fakeKMSClient) DescribeKey(_ context.Context, in *kms.DescribeKeyInput,
 	return nil, &kmstypes.NotFoundException{}
 }
 
+func (f *fakeKMSClient) ListResourceTags(_ context.Context, in *kms.ListResourceTagsInput, _ ...func(*kms.Options)) (*kms.ListResourceTagsOutput, error) {
+	id := aws.ToString(in.KeyId)
+	f.tagsCalls = append(f.tagsCalls, id)
+	if f.tagsErr != nil {
+		return nil, f.tagsErr
+	}
+	if t, ok := f.tagsByKey[id]; ok {
+		return &kms.ListResourceTagsOutput{Tags: t}, nil
+	}
+	return &kms.ListResourceTagsOutput{}, nil
+}
+
 func TestKMSDiscover_FiltersByAliasContainsProject(t *testing.T) {
 	t.Parallel()
-	d := &kmsDiscoverer{new: func() kmsClient {
+	d := &kmsDiscoverer{new: func(_ string) kmsClient {
 		return &fakeKMSClient{pages: []kms.ListAliasesOutput{
 			{Aliases: []kmstypes.AliasListEntry{
 				{
@@ -69,7 +86,7 @@ func TestKMSDiscover_FiltersByAliasContainsProject(t *testing.T) {
 			}},
 		}}
 	}}
-	got, err := d.Discover(context.Background(), "io-foo", "us-east-1", "123")
+	got, err := d.Discover(context.Background(), DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,10 +106,10 @@ func TestKMSDiscover_FiltersByAliasContainsProject(t *testing.T) {
 
 func TestKMSDiscover_PropagatesError(t *testing.T) {
 	t.Parallel()
-	d := &kmsDiscoverer{new: func() kmsClient {
+	d := &kmsDiscoverer{new: func(_ string) kmsClient {
 		return &fakeKMSClient{err: errors.New("AccessDenied")}
 	}}
-	_, err := d.Discover(context.Background(), "io-foo", "us-east-1", "123")
+	_, err := d.Discover(context.Background(), DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"})
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -101,7 +118,7 @@ func TestKMSDiscover_PropagatesError(t *testing.T) {
 func TestKMSDiscoverByID_AcceptsKeyARN(t *testing.T) {
 	t.Parallel()
 	arn := "arn:aws:kms:us-east-1:123:key/uuid-1"
-	d := &kmsDiscoverer{new: func() kmsClient {
+	d := &kmsDiscoverer{new: func(_ string) kmsClient {
 		return &fakeKMSClient{describeByID: map[string]*kmstypes.KeyMetadata{
 			arn: {KeyId: aws.String("uuid-1"), Arn: aws.String(arn)},
 		}}
@@ -123,7 +140,7 @@ func TestKMSDiscoverByID_AcceptsKeyARN(t *testing.T) {
 
 func TestKMSDiscoverByID_AcceptsBareUUID(t *testing.T) {
 	t.Parallel()
-	d := &kmsDiscoverer{new: func() kmsClient {
+	d := &kmsDiscoverer{new: func(_ string) kmsClient {
 		return &fakeKMSClient{describeByID: map[string]*kmstypes.KeyMetadata{
 			"uuid-1": {KeyId: aws.String("uuid-1"), Arn: aws.String("arn:aws:kms:us-east-1:123:key/uuid-1")},
 		}}
@@ -139,7 +156,7 @@ func TestKMSDiscoverByID_AcceptsBareUUID(t *testing.T) {
 
 func TestKMSDiscoverByID_AcceptsAliasName(t *testing.T) {
 	t.Parallel()
-	d := &kmsDiscoverer{new: func() kmsClient {
+	d := &kmsDiscoverer{new: func(_ string) kmsClient {
 		return &fakeKMSClient{describeByID: map[string]*kmstypes.KeyMetadata{
 			"alias/io-foo-data": {KeyId: aws.String("uuid-1"), Arn: aws.String("arn:aws:kms:us-east-1:123:key/uuid-1")},
 		}}
@@ -155,7 +172,7 @@ func TestKMSDiscoverByID_AcceptsAliasName(t *testing.T) {
 
 func TestKMSDiscoverByID_NotFound(t *testing.T) {
 	t.Parallel()
-	d := &kmsDiscoverer{new: func() kmsClient { return &fakeKMSClient{} }}
+	d := &kmsDiscoverer{new: func(_ string) kmsClient { return &fakeKMSClient{} }}
 	_, err := d.DiscoverByID(context.Background(), "uuid-missing", "us-east-1", "123")
 	if !errors.Is(err, ErrNotFound) {
 		t.Errorf("err=%v, want ErrNotFound", err)
@@ -164,7 +181,7 @@ func TestKMSDiscoverByID_NotFound(t *testing.T) {
 
 func TestKMSDiscoverByID_UnsupportedID(t *testing.T) {
 	t.Parallel()
-	d := &kmsDiscoverer{new: func() kmsClient { return &fakeKMSClient{} }}
+	d := &kmsDiscoverer{new: func(_ string) kmsClient { return &fakeKMSClient{} }}
 	cases := []string{
 		"",
 		"arn:aws:s3:::a-bucket",

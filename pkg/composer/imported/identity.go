@@ -45,4 +45,10 @@ type ResourceIdentity struct {
 	ProviderIdentity map[string]string `json:"provider_identity,omitempty"`
 	// NativeIDs holds cloud-side identifiers (arn, url, self_link, name).
 	NativeIDs map[string]string `json:"native_ids,omitempty"`
+	// Tags is the cloud-side tag (AWS) or label (GCP) map captured at
+	// discover time. Empty map (not nil) when the resource genuinely has
+	// no tags; nil when the discoverer didn't fetch tags. Downstream
+	// consumers (#291 tag selectors, #289 gap-#6 DiscoverySummary.byTag)
+	// rely on the nil-vs-empty distinction.
+	Tags map[string]string `json:"tags,omitempty"`
 }

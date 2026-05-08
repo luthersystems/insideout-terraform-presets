@@ -10,7 +10,21 @@ import (
 func TestMakeImportedResource_PopulatesRequiredFields(t *testing.T) {
 	t.Parallel()
 	book := addressBook{}
-	got := makeImportedResource(book, "aws_sqs_queue", "io-foo-q", "https://sqs.us-east-1.amazonaws.com/123/io-foo-q", "us-east-1", "123", map[string]string{"url": "https://sqs.us-east-1.amazonaws.com/123/io-foo-q"})
+	wantTags := map[string]string{"Project": "io-foo", "env": "prod"}
+	got := makeImportedResource(book, "aws_sqs_queue", "io-foo-q", "https://sqs.us-east-1.amazonaws.com/123/io-foo-q", "us-east-1", "123",
+		map[string]string{"url": "https://sqs.us-east-1.amazonaws.com/123/io-foo-q"},
+		wantTags,
+	)
+
+	// Tags carrier (#291) — pin both presence and shape. A regression
+	// that drops the field would surface here before any downstream
+	// consumer (selector-filter, summary builder) silently breaks.
+	if got.Identity.Tags == nil {
+		t.Error("Tags must be populated when discoverer fetched a tag map")
+	}
+	if got.Identity.Tags["Project"] != "io-foo" || got.Identity.Tags["env"] != "prod" {
+		t.Errorf("Tags=%v, want %v", got.Identity.Tags, wantTags)
+	}
 
 	if got.Identity.Cloud != "aws" {
 		t.Errorf("Cloud=%q, want aws", got.Identity.Cloud)
@@ -60,8 +74,8 @@ func TestMakeImportedResource_PopulatesRequiredFields(t *testing.T) {
 func TestMakeImportedResource_ResolvesAddressCollisionsWithinBatch(t *testing.T) {
 	t.Parallel()
 	book := addressBook{}
-	a := makeImportedResource(book, "aws_sqs_queue", "io-q", "https://example/io-q-1", "us-east-1", "123", nil)
-	b := makeImportedResource(book, "aws_sqs_queue", "io-q", "https://example/io-q-2", "us-east-1", "123", nil)
+	a := makeImportedResource(book, "aws_sqs_queue", "io-q", "https://example/io-q-1", "us-east-1", "123", nil, nil)
+	b := makeImportedResource(book, "aws_sqs_queue", "io-q", "https://example/io-q-2", "us-east-1", "123", nil, nil)
 
 	// Identical NameHint but different ImportID → identityHash differs →
 	// GenerateAddress's `_<8hex>` collision suffix should produce

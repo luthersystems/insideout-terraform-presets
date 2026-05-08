@@ -72,7 +72,7 @@ func fn(name, arn string) lambdatypes.FunctionConfiguration {
 
 func TestLambdaDiscover_FiltersByProjectTag(t *testing.T) {
 	t.Parallel()
-	d := &lambdaDiscoverer{new: func() lambdaClient {
+	d := &lambdaDiscoverer{new: func(_ string) lambdaClient {
 		return &fakeLambdaClient{
 			pages: []lambda.ListFunctionsOutput{
 				{Functions: []lambdatypes.FunctionConfiguration{
@@ -88,7 +88,7 @@ func TestLambdaDiscover_FiltersByProjectTag(t *testing.T) {
 			},
 		}
 	}}
-	got, err := d.Discover(context.Background(), "io-foo", "us-east-1", "123")
+	got, err := d.Discover(context.Background(), DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,14 +104,14 @@ func TestLambdaDiscover_FiltersByProjectTag(t *testing.T) {
 
 func TestLambdaDiscover_EmptyProjectReturnsAll(t *testing.T) {
 	t.Parallel()
-	d := &lambdaDiscoverer{new: func() lambdaClient {
+	d := &lambdaDiscoverer{new: func(_ string) lambdaClient {
 		return &fakeLambdaClient{
 			pages: []lambda.ListFunctionsOutput{
 				{Functions: []lambdatypes.FunctionConfiguration{fn("a", "arn-a"), fn("b", "arn-b")}},
 			},
 		}
 	}}
-	got, err := d.Discover(context.Background(), "", "us-east-1", "123")
+	got, err := d.Discover(context.Background(), DiscoverArgs{Project: "", Regions: []string{"us-east-1"}, AccountID: "123"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,8 +134,8 @@ func TestLambdaDiscover_FailClosedOnTagsError(t *testing.T) {
 		},
 		tagsErr: map[string]error{"arn-a": errors.New("Throttling")},
 	}
-	d := &lambdaDiscoverer{new: func() lambdaClient { return fake }}
-	got, err := d.Discover(context.Background(), "io-foo", "us-east-1", "123")
+	d := &lambdaDiscoverer{new: func(_ string) lambdaClient { return fake }}
+	got, err := d.Discover(context.Background(), DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -167,7 +167,7 @@ func TestLambdaDiscover_FailClosedOnTagsError(t *testing.T) {
 // in place if the conditional is altered.
 func TestLambdaDiscover_SkipsFunctionWithNoProjectTag(t *testing.T) {
 	t.Parallel()
-	d := &lambdaDiscoverer{new: func() lambdaClient {
+	d := &lambdaDiscoverer{new: func(_ string) lambdaClient {
 		return &fakeLambdaClient{
 			pages: []lambda.ListFunctionsOutput{
 				{Functions: []lambdatypes.FunctionConfiguration{
@@ -181,7 +181,7 @@ func TestLambdaDiscover_SkipsFunctionWithNoProjectTag(t *testing.T) {
 			},
 		}
 	}}
-	got, err := d.Discover(context.Background(), "io-foo", "us-east-1", "123")
+	got, err := d.Discover(context.Background(), DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -208,8 +208,8 @@ func TestLambdaDiscover_AbortsOnListFunctionsError(t *testing.T) {
 	// surfaces it directly via NextPage. Use an empty fake struct and
 	// inject error via a wrapping client.
 	wrap := &lambdaErrClient{err: errors.New("AccessDenied")}
-	d := &lambdaDiscoverer{new: func() lambdaClient { return wrap }}
-	_, err := d.Discover(context.Background(), "io-foo", "us-east-1", "123")
+	d := &lambdaDiscoverer{new: func(_ string) lambdaClient { return wrap }}
+	_, err := d.Discover(context.Background(), DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"})
 	if err == nil {
 		t.Fatal("expected ListFunctions error to abort")
 	}
@@ -311,12 +311,12 @@ func TestLambdaDiscover_BoundedConcurrency(t *testing.T) {
 	bc := &blockingLambdaClient{pages: pages, release: release, tags: tags}
 
 	d := &lambdaDiscoverer{
-		new:            func() lambdaClient { return bc },
+		new:            func(_ string) lambdaClient { return bc },
 		maxConcurrency: limit,
 	}
 	done := make(chan error, 1)
 	go func() {
-		_, err := d.Discover(context.Background(), "io-foo", "us-east-1", "123")
+		_, err := d.Discover(context.Background(), DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"})
 		done <- err
 	}()
 
@@ -380,13 +380,13 @@ func TestLambdaDiscover_ContextCancellationUnblocksSiblings(t *testing.T) {
 	bc := &blockingLambdaClient{pages: pages, release: release, tags: tags, starts: starts}
 
 	d := &lambdaDiscoverer{
-		new:            func() lambdaClient { return bc },
+		new:            func(_ string) lambdaClient { return bc },
 		maxConcurrency: total, // allow all to dispatch at once
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() {
-		_, err := d.Discover(ctx, "io-foo", "us-east-1", "123")
+		_, err := d.Discover(ctx, DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"})
 		done <- err
 	}()
 
@@ -418,7 +418,7 @@ func TestLambdaDiscover_ContextCancellationUnblocksSiblings(t *testing.T) {
 func TestLambdaDiscoverByID_AcceptsARN(t *testing.T) {
 	t.Parallel()
 	arn := "arn:aws:lambda:us-east-1:123:function:io-foo-handler"
-	d := &lambdaDiscoverer{new: func() lambdaClient {
+	d := &lambdaDiscoverer{new: func(_ string) lambdaClient {
 		return &fakeLambdaClient{getByName: map[string]*lambda.GetFunctionOutput{
 			"io-foo-handler": {Configuration: &lambdatypes.FunctionConfiguration{
 				FunctionName: aws.String("io-foo-handler"),
@@ -443,7 +443,7 @@ func TestLambdaDiscoverByID_AcceptsARN(t *testing.T) {
 
 func TestLambdaDiscoverByID_StripsVersionFromARN(t *testing.T) {
 	t.Parallel()
-	d := &lambdaDiscoverer{new: func() lambdaClient {
+	d := &lambdaDiscoverer{new: func(_ string) lambdaClient {
 		return &fakeLambdaClient{getByName: map[string]*lambda.GetFunctionOutput{
 			"io-foo-handler": {Configuration: &lambdatypes.FunctionConfiguration{
 				FunctionName: aws.String("io-foo-handler"),
@@ -462,7 +462,7 @@ func TestLambdaDiscoverByID_StripsVersionFromARN(t *testing.T) {
 
 func TestLambdaDiscoverByID_NotFound(t *testing.T) {
 	t.Parallel()
-	d := &lambdaDiscoverer{new: func() lambdaClient { return &fakeLambdaClient{} }}
+	d := &lambdaDiscoverer{new: func(_ string) lambdaClient { return &fakeLambdaClient{} }}
 	_, err := d.DiscoverByID(context.Background(), "missing", "us-east-1", "123")
 	if !errors.Is(err, ErrNotFound) {
 		t.Errorf("err=%v, want ErrNotFound", err)
@@ -471,7 +471,7 @@ func TestLambdaDiscoverByID_NotFound(t *testing.T) {
 
 func TestLambdaDiscoverByID_UnsupportedID(t *testing.T) {
 	t.Parallel()
-	d := &lambdaDiscoverer{new: func() lambdaClient { return &fakeLambdaClient{} }}
+	d := &lambdaDiscoverer{new: func(_ string) lambdaClient { return &fakeLambdaClient{} }}
 	cases := []string{
 		"",
 		"arn:aws:s3:::a-bucket",

@@ -16,9 +16,7 @@ type fakeDiscoverer struct {
 	out     []imported.ImportedResource
 	err     error
 	called  int
-	gotProj string
-	gotReg  string
-	gotAcct string
+	gotArgs DiscoverArgs
 
 	// DiscoverByID wiring (unused by the existing tests, populated by
 	// new tests that exercise the dep-chase aggregator path).
@@ -28,9 +26,9 @@ type fakeDiscoverer struct {
 }
 
 func (f *fakeDiscoverer) ResourceType() string { return f.t }
-func (f *fakeDiscoverer) Discover(_ context.Context, project, region, accountID string) ([]imported.ImportedResource, error) {
+func (f *fakeDiscoverer) Discover(_ context.Context, args DiscoverArgs) ([]imported.ImportedResource, error) {
 	f.called++
-	f.gotProj, f.gotReg, f.gotAcct = project, region, accountID
+	f.gotArgs = args
 	return f.out, f.err
 }
 
@@ -47,13 +45,17 @@ func ir(addr string) imported.ImportedResource {
 	}
 }
 
+func argsBasic() DiscoverArgs {
+	return DiscoverArgs{Project: "p", Regions: []string{"r"}, AccountID: "acc"}
+}
+
 func TestDiscoverTypes_DefaultsToAllSupported(t *testing.T) {
 	t.Parallel()
 	a := &fakeDiscoverer{t: "type_a", out: []imported.ImportedResource{ir("a1"), ir("a2")}}
 	b := &fakeDiscoverer{t: "type_b", out: []imported.ImportedResource{ir("b1")}}
 	agg := &AWSDiscoverer{byType: map[string]Discoverer{"type_a": a, "type_b": b}}
 
-	got, err := agg.DiscoverTypes(context.Background(), nil, "p", "r", "acc")
+	got, err := agg.DiscoverTypes(context.Background(), nil, argsBasic())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,8 +65,70 @@ func TestDiscoverTypes_DefaultsToAllSupported(t *testing.T) {
 	if a.called != 1 || b.called != 1 {
 		t.Errorf("each discoverer called once; got a=%d b=%d", a.called, b.called)
 	}
-	if a.gotProj != "p" || a.gotReg != "r" || a.gotAcct != "acc" {
-		t.Errorf("project/region/accountID not threaded; got %q/%q/%q", a.gotProj, a.gotReg, a.gotAcct)
+	if a.gotArgs.Project != "p" || a.gotArgs.AccountID != "acc" {
+		t.Errorf("project/accountID not threaded; got %+v", a.gotArgs)
+	}
+	if !reflect.DeepEqual(a.gotArgs.Regions, []string{"r"}) {
+		t.Errorf("regions not threaded; got %v, want [r]", a.gotArgs.Regions)
+	}
+}
+
+// TestDiscoverTypes_EmptyRegionsDefaultsToConfiguredRegion pins the
+// back-compat behavior introduced in #291: callers that pass no Regions
+// (today's pre-#291 single-region invocation, which sees an empty
+// Regions slice) get the AWSDiscoverer's stored defaultRegion threaded
+// through. Callers pre-migration to --regions still scan one region.
+func TestDiscoverTypes_EmptyRegionsDefaultsToConfiguredRegion(t *testing.T) {
+	t.Parallel()
+	a := &fakeDiscoverer{t: "type_a"}
+	agg := &AWSDiscoverer{
+		byType:        map[string]Discoverer{"type_a": a},
+		defaultRegion: "us-east-1",
+	}
+	if _, err := agg.DiscoverTypes(context.Background(), nil, DiscoverArgs{Project: "p", AccountID: "acc"}); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(a.gotArgs.Regions, []string{"us-east-1"}) {
+		t.Errorf("empty Regions should default to the configured region; got %v", a.gotArgs.Regions)
+	}
+}
+
+// TestDiscoverTypes_MultiRegionThreadsAllRegionsToEachDiscoverer pins
+// that multi-region inputs flow verbatim (no aggregator-side fan-out)
+// — per-service Discover loops Regions internally.
+func TestDiscoverTypes_MultiRegionThreadsAllRegionsToEachDiscoverer(t *testing.T) {
+	t.Parallel()
+	a := &fakeDiscoverer{t: "type_a"}
+	agg := &AWSDiscoverer{byType: map[string]Discoverer{"type_a": a}}
+	args := DiscoverArgs{Project: "p", Regions: []string{"us-east-1", "eu-west-1"}, AccountID: "acc"}
+	if _, err := agg.DiscoverTypes(context.Background(), nil, args); err != nil {
+		t.Fatal(err)
+	}
+	if a.called != 1 {
+		t.Errorf("aggregator must call each discoverer once; got %d", a.called)
+	}
+	if !reflect.DeepEqual(a.gotArgs.Regions, []string{"us-east-1", "eu-west-1"}) {
+		t.Errorf("regions not passed verbatim; got %v", a.gotArgs.Regions)
+	}
+}
+
+// TestDiscoverTypes_TagSelectorsThreadedToEachDiscoverer pins that
+// operator-supplied selectors flow through the aggregator unchanged.
+func TestDiscoverTypes_TagSelectorsThreadedToEachDiscoverer(t *testing.T) {
+	t.Parallel()
+	a := &fakeDiscoverer{t: "type_a"}
+	agg := &AWSDiscoverer{byType: map[string]Discoverer{"type_a": a}}
+	args := DiscoverArgs{
+		Project:      "p",
+		Regions:      []string{"r"},
+		AccountID:    "acc",
+		TagSelectors: []TagSelector{{Key: "env", Value: "prod"}, {Key: "team", Value: "growth"}},
+	}
+	if _, err := agg.DiscoverTypes(context.Background(), nil, args); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(a.gotArgs.TagSelectors, args.TagSelectors) {
+		t.Errorf("selectors not threaded; got %v, want %v", a.gotArgs.TagSelectors, args.TagSelectors)
 	}
 }
 
@@ -74,7 +138,7 @@ func TestDiscoverTypes_SelectiveOnlyCallsRequested(t *testing.T) {
 	b := &fakeDiscoverer{t: "type_b"}
 	agg := &AWSDiscoverer{byType: map[string]Discoverer{"type_a": a, "type_b": b}}
 
-	if _, err := agg.DiscoverTypes(context.Background(), []string{"type_b"}, "p", "r", "acc"); err != nil {
+	if _, err := agg.DiscoverTypes(context.Background(), []string{"type_b"}, argsBasic()); err != nil {
 		t.Fatal(err)
 	}
 	if a.called != 0 {
@@ -90,7 +154,7 @@ func TestDiscoverTypes_UnknownTypeAggregatesAllErrorsBeforeRunning(t *testing.T)
 	a := &fakeDiscoverer{t: "type_a"}
 	agg := &AWSDiscoverer{byType: map[string]Discoverer{"type_a": a}}
 
-	_, err := agg.DiscoverTypes(context.Background(), []string{"type_a", "bogus", "also_bogus"}, "p", "r", "acc")
+	_, err := agg.DiscoverTypes(context.Background(), []string{"type_a", "bogus", "also_bogus"}, argsBasic())
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -107,7 +171,7 @@ func TestDiscoverTypes_PropagatesPerDiscovererError(t *testing.T) {
 	a := &fakeDiscoverer{t: "type_a", err: errors.New("Throttling")}
 	agg := &AWSDiscoverer{byType: map[string]Discoverer{"type_a": a}}
 
-	_, err := agg.DiscoverTypes(context.Background(), nil, "p", "r", "acc")
+	_, err := agg.DiscoverTypes(context.Background(), nil, argsBasic())
 	if err == nil || !strings.Contains(err.Error(), "type_a") || !strings.Contains(err.Error(), "Throttling") {
 		t.Errorf("expected wrapped error mentioning resource type and underlying cause; got: %v", err)
 	}

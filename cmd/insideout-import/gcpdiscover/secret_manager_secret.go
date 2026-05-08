@@ -38,7 +38,7 @@ func (secretManagerSecretDiscoverer) FromAsset(book addressBook, a gcpAssetResul
 	importID := fmt.Sprintf("projects/%s/secrets/%s", projectID, name)
 	return makeImportedResource(book, secretManagerSecretTFType, name, importID, projectID, "", map[string]string{
 		"asset_name": a.Name,
-	})
+	}, a.Labels)
 }
 
 func (secretManagerSecretDiscoverer) DiscoverByID(_ context.Context, _ gcpAssetSearcher, id, projectID string) (imported.ImportedResource, error) {
@@ -49,7 +49,7 @@ func (secretManagerSecretDiscoverer) DiscoverByID(_ context.Context, _ gcpAssetS
 	importID := fmt.Sprintf("projects/%s/secrets/%s", projectID, name)
 	return makeImportedResource(addressBook{}, secretManagerSecretTFType, name, importID, projectID, "", map[string]string{
 		"asset_name": fmt.Sprintf("//%s/projects/%s/secrets/%s", secretManagerAssetHost, projectID, name),
-	}), nil
+	}, nil), nil
 }
 
 func secretManagerSecretNameFromID(id string) (string, error) {

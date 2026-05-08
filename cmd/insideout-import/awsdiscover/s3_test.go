@@ -18,6 +18,14 @@ type fakeS3Client struct {
 	headErr     error
 	headCalls   []string
 	notFoundTyp string // "NotFound" or "NoSuchBucket" to control which typed error is returned
+
+	// GetBucketTagging wiring (#291). tagsByName maps bucket name → tag
+	// pairs (S3 stores tags as TagSet entries). tagsErr is returned for
+	// every call when set; if it stringifies "NoSuchTagSet" the
+	// discoverer normalizes it into an empty map.
+	tagsByName map[string][]s3types.Tag
+	tagsErr    error
+	tagsCalls  []string
 }
 
 func (f *fakeS3Client) ListBuckets(_ context.Context, _ *s3.ListBucketsInput, _ ...func(*s3.Options)) (*s3.ListBucketsOutput, error) {
@@ -47,16 +55,28 @@ func (f *fakeS3Client) HeadBucket(_ context.Context, in *s3.HeadBucketInput, _ .
 	}
 }
 
+func (f *fakeS3Client) GetBucketTagging(_ context.Context, in *s3.GetBucketTaggingInput, _ ...func(*s3.Options)) (*s3.GetBucketTaggingOutput, error) {
+	name := aws.ToString(in.Bucket)
+	f.tagsCalls = append(f.tagsCalls, name)
+	if f.tagsErr != nil {
+		return nil, f.tagsErr
+	}
+	if t, ok := f.tagsByName[name]; ok {
+		return &s3.GetBucketTaggingOutput{TagSet: t}, nil
+	}
+	return &s3.GetBucketTaggingOutput{}, nil
+}
+
 func TestS3Discover_FiltersByPrefix(t *testing.T) {
 	t.Parallel()
-	d := &s3Discoverer{new: func() s3Client {
+	d := &s3Discoverer{new: func(_ string) s3Client {
 		return &fakeS3Client{listOut: &s3.ListBucketsOutput{Buckets: []s3types.Bucket{
 			{Name: aws.String("io-foo-uploads")},
 			{Name: aws.String("io-foo-archive")},
 			{Name: aws.String("legacy-data")},
 		}}}
 	}}
-	got, err := d.Discover(context.Background(), "io-foo", "us-east-1", "123")
+	got, err := d.Discover(context.Background(), DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,10 +93,10 @@ func TestS3Discover_FiltersByPrefix(t *testing.T) {
 
 func TestS3Discover_PropagatesError(t *testing.T) {
 	t.Parallel()
-	d := &s3Discoverer{new: func() s3Client {
+	d := &s3Discoverer{new: func(_ string) s3Client {
 		return &fakeS3Client{listErr: errors.New("AccessDenied")}
 	}}
-	_, err := d.Discover(context.Background(), "io-foo", "us-east-1", "123")
+	_, err := d.Discover(context.Background(), DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"})
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -84,7 +104,7 @@ func TestS3Discover_PropagatesError(t *testing.T) {
 
 func TestS3DiscoverByID_AcceptsARN(t *testing.T) {
 	t.Parallel()
-	d := &s3Discoverer{new: func() s3Client {
+	d := &s3Discoverer{new: func(_ string) s3Client {
 		return &fakeS3Client{headByName: map[string]bool{"io-foo-uploads": true}}
 	}}
 	got, err := d.DiscoverByID(context.Background(),
@@ -105,7 +125,7 @@ func TestS3DiscoverByID_AcceptsARN(t *testing.T) {
 
 func TestS3DiscoverByID_AcceptsBareName(t *testing.T) {
 	t.Parallel()
-	d := &s3Discoverer{new: func() s3Client {
+	d := &s3Discoverer{new: func(_ string) s3Client {
 		return &fakeS3Client{headByName: map[string]bool{"io-foo-uploads": true}}
 	}}
 	got, err := d.DiscoverByID(context.Background(), "io-foo-uploads", "us-east-1", "123")
@@ -123,7 +143,7 @@ func TestS3DiscoverByID_NotFoundTyped(t *testing.T) {
 		typ := typ
 		t.Run(typ, func(t *testing.T) {
 			t.Parallel()
-			d := &s3Discoverer{new: func() s3Client {
+			d := &s3Discoverer{new: func(_ string) s3Client {
 				return &fakeS3Client{notFoundTyp: typ}
 			}}
 			_, err := d.DiscoverByID(context.Background(), "missing-bucket", "us-east-1", "123")
@@ -136,7 +156,7 @@ func TestS3DiscoverByID_NotFoundTyped(t *testing.T) {
 
 func TestS3DiscoverByID_UnsupportedID(t *testing.T) {
 	t.Parallel()
-	d := &s3Discoverer{new: func() s3Client { return &fakeS3Client{} }}
+	d := &s3Discoverer{new: func(_ string) s3Client { return &fakeS3Client{} }}
 	cases := []string{
 		"",
 		"arn:aws:lambda:us-east-1:123:function:foo",

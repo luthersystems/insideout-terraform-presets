@@ -26,7 +26,7 @@ type lambdaClient interface {
 }
 
 type lambdaDiscoverer struct {
-	new            func() lambdaClient
+	new            func(region string) lambdaClient
 	maxConcurrency int
 }
 
@@ -35,53 +35,70 @@ func newLambdaDiscoverer(cfg aws.Config, maxConcurrency int) Discoverer {
 		maxConcurrency = DefaultMaxConcurrency
 	}
 	return &lambdaDiscoverer{
-		new:            func() lambdaClient { return lambda.NewFromConfig(cfg) },
+		new: func(region string) lambdaClient {
+			return lambda.NewFromConfig(cfg, func(o *lambda.Options) {
+				if region != "" {
+					o.Region = region
+				}
+			})
+		},
 		maxConcurrency: maxConcurrency,
 	}
 }
 
 func (d *lambdaDiscoverer) ResourceType() string { return "aws_lambda_function" }
 
-// Discover paginates ListFunctions then per-function ListTags fan-out to
-// keep functions tagged Project=<project>. Lambda has no server-side tag
-// filter, so this is the cheapest correct shape.
+// Discover paginates ListFunctions then fans out per-function ListTags to
+// fetch each function's tag map. Lambda has no server-side tag filter,
+// so this is the cheapest correct shape.
 //
 // Per-function ListTags calls run under a bounded errgroup so a thousand-
 // function account does not serialize into a multi-minute wall-time.
 // Per-item SDK errors are fail-closed (an unreachable ListTags is treated
-// as "no Project tag", not "include anyway") since the SDK retryer has
-// already exhausted its budget. Parent-context cancellation IS propagated:
-// gctx unblocks any in-flight goroutines and Discover returns ctx.Err()
-// rather than a silently-truncated set. ListFunctions errors abort.
+// as nil tags, which fails any selector that requires a key) since the
+// SDK retryer has already exhausted its budget. Parent-context
+// cancellation IS propagated: gctx unblocks any in-flight goroutines
+// and Discover returns ctx.Err() rather than a silently-truncated set.
+// ListFunctions errors abort.
+//
+// Multi-region (#291): outer loop walks args.Regions, building a per-
+// region SDK client. The legacy "Project=<project>" tag check is
+// preserved as a back-compat implicit filter when args.Project is
+// non-empty (composer-emitted stacks rely on it). Operator selectors
+// AND on top.
 //
 // Import ID for aws_lambda_function is the function name.
-func (d *lambdaDiscoverer) Discover(ctx context.Context, project, region, accountID string) ([]imported.ImportedResource, error) {
-	client := d.new()
+func (d *lambdaDiscoverer) Discover(ctx context.Context, args DiscoverArgs) ([]imported.ImportedResource, error) {
+	book := addressBook{}
+	var out []imported.ImportedResource
 
-	type fn struct {
-		name string
-		arn  string
-	}
-	var allFns []fn
+	for _, region := range args.Regions {
+		client := d.new(region)
 
-	paginator := lambda.NewListFunctionsPaginator(client, &lambda.ListFunctionsInput{})
-	for paginator.HasMorePages() {
-		page, err := paginator.NextPage(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("ListFunctions: %w", err)
+		type fn struct {
+			name string
+			arn  string
+			tags map[string]string
 		}
-		for _, f := range page.Functions {
-			allFns = append(allFns, fn{
-				name: aws.ToString(f.FunctionName),
-				arn:  aws.ToString(f.FunctionArn),
-			})
-		}
-	}
+		var allFns []fn
 
-	var matched []fn
-	if project == "" {
-		matched = allFns
-	} else {
+		paginator := lambda.NewListFunctionsPaginator(client, &lambda.ListFunctionsInput{})
+		for paginator.HasMorePages() {
+			page, err := paginator.NextPage(ctx)
+			if err != nil {
+				return nil, fmt.Errorf("ListFunctions (region=%s): %w", region, err)
+			}
+			for _, f := range page.Functions {
+				allFns = append(allFns, fn{
+					name: aws.ToString(f.FunctionName),
+					arn:  aws.ToString(f.FunctionArn),
+				})
+			}
+		}
+
+		// Per-function tag fetch fan-out. We always fetch (PR 2 #291)
+		// — the tag map is needed for selector matching AND for
+		// persistence onto Identity.Tags.
 		var (
 			mu sync.Mutex
 			ok []fn
@@ -103,36 +120,46 @@ func (d *lambdaDiscoverer) Discover(ctx context.Context, project, region, accoun
 					if cerr := gctx.Err(); cerr != nil {
 						return cerr
 					}
+					// Transient ListTags failure: skip the function.
+					// Pre-#291 dropped the row when the Project check
+					// could not run; we keep that posture for back-compat.
 					return nil
 				}
-				if tagsOut.Tags["Project"] == project {
-					mu.Lock()
-					ok = append(ok, f)
-					mu.Unlock()
+				tags := tagsOut.Tags
+				if tags == nil {
+					tags = map[string]string{}
 				}
+				mu.Lock()
+				ok = append(ok, fn{name: f.name, arn: f.arn, tags: tags})
+				mu.Unlock()
 				return nil
 			})
 		}
 		if err := g.Wait(); err != nil {
-			return nil, fmt.Errorf("ListTags: %w", err)
+			return nil, fmt.Errorf("ListTags (region=%s): %w", region, err)
 		}
-		matched = ok
-	}
 
-	sort.Slice(matched, func(i, j int) bool { return matched[i].name < matched[j].name })
+		sort.Slice(ok, func(i, j int) bool { return ok[i].name < ok[j].name })
 
-	book := addressBook{}
-	out := make([]imported.ImportedResource, 0, len(matched))
-	for _, f := range matched {
-		out = append(out, makeImportedResource(
-			book,
-			"aws_lambda_function",
-			f.name,
-			f.name,
-			region,
-			accountID,
-			map[string]string{"arn": f.arn},
-		))
+		for _, f := range ok {
+			// Legacy Project=<project> back-compat filter.
+			if args.Project != "" && f.tags["Project"] != args.Project {
+				continue
+			}
+			if !MatchesAll(f.tags, args.TagSelectors) {
+				continue
+			}
+			out = append(out, makeImportedResource(
+				book,
+				"aws_lambda_function",
+				f.name,
+				f.name,
+				region,
+				args.AccountID,
+				map[string]string{"arn": f.arn},
+				f.tags,
+			))
+		}
 	}
 	return out, nil
 }
@@ -145,7 +172,7 @@ func (d *lambdaDiscoverer) DiscoverByID(ctx context.Context, id, region, account
 	if err != nil {
 		return imported.ImportedResource{}, err
 	}
-	client := d.new()
+	client := d.new(region)
 	out, err := client.GetFunction(ctx, &lambda.GetFunctionInput{FunctionName: aws.String(name)})
 	if err != nil {
 		var notFound *lambdatypes.ResourceNotFoundException
@@ -166,6 +193,7 @@ func (d *lambdaDiscoverer) DiscoverByID(ctx context.Context, id, region, account
 		region,
 		accountID,
 		map[string]string{"arn": arn},
+		nil,
 	), nil
 }
 

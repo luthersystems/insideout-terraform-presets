@@ -30,8 +30,12 @@ func (b addressBook) add(addr string) { b[addr] = struct{}{} }
 // (arn, url) without mutating the merged map after construction.
 //
 // region and accountID are passed in by the aggregator (one STS call per
-// run); the discoverer does not re-derive them.
-func makeImportedResource(book addressBook, typ, name, importID, region, accountID string, nativeIDs map[string]string) imported.ImportedResource {
+// run); the discoverer does not re-derive them. tags is the cloud-side
+// tag map captured at discover time — pass nil if the discoverer did not
+// fetch tags, or an empty (non-nil) map for "fetched, but the resource
+// has no tags." The nil-vs-empty distinction is load-bearing for
+// downstream tag-selector and summary consumers (#291, #289 gap-#6).
+func makeImportedResource(book addressBook, typ, name, importID, region, accountID string, nativeIDs, tags map[string]string) imported.ImportedResource {
 	id := imported.ResourceIdentity{
 		Cloud:          "aws",
 		Type:           typ,
@@ -42,6 +46,7 @@ func makeImportedResource(book addressBook, typ, name, importID, region, account
 		Region:         region,
 		ImportID:       importID,
 		NativeIDs:      mergeNativeIDs(name, nativeIDs),
+		Tags:           tags,
 	}
 	addr := imported.GenerateAddress(id, book.exists)
 	id.Address = addr

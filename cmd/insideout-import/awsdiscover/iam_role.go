@@ -19,14 +19,21 @@ import (
 type iamRoleClient interface {
 	ListRoles(ctx context.Context, in *iam.ListRolesInput, opts ...func(*iam.Options)) (*iam.ListRolesOutput, error)
 	GetRole(ctx context.Context, in *iam.GetRoleInput, opts ...func(*iam.Options)) (*iam.GetRoleOutput, error)
+	ListRoleTags(ctx context.Context, in *iam.ListRoleTagsInput, opts ...func(*iam.Options)) (*iam.ListRoleTagsOutput, error)
 }
 
 type iamRoleDiscoverer struct {
-	new func() iamRoleClient
+	new func(region string) iamRoleClient
 }
 
 func newIAMRoleDiscoverer(cfg aws.Config) Discoverer {
-	return &iamRoleDiscoverer{new: func() iamRoleClient { return iam.NewFromConfig(cfg) }}
+	return &iamRoleDiscoverer{new: func(region string) iamRoleClient {
+		return iam.NewFromConfig(cfg, func(o *iam.Options) {
+			if region != "" {
+				o.Region = region
+			}
+		})
+	}}
 }
 
 func (d *iamRoleDiscoverer) ResourceType() string { return "aws_iam_role" }
@@ -37,9 +44,14 @@ func (d *iamRoleDiscoverer) ResourceType() string { return "aws_iam_role" }
 // so client-side prefix filtering matches the bounded-account
 // assumption already used by the DynamoDB discoverer.
 //
+// IAM is account-global — args.Regions is ignored. The Identity.Region
+// stamp is left empty for IAM resources to reflect that. Per-role
+// ListRoleTags fetches the tag map for tag-selector post-filtering and
+// tag persistence onto Identity.Tags.
+//
 // Import ID for aws_iam_role is the role name.
-func (d *iamRoleDiscoverer) Discover(ctx context.Context, project, region, accountID string) ([]imported.ImportedResource, error) {
-	client := d.new()
+func (d *iamRoleDiscoverer) Discover(ctx context.Context, args DiscoverArgs) ([]imported.ImportedResource, error) {
+	client := d.new("")
 
 	type role struct {
 		name string
@@ -55,7 +67,7 @@ func (d *iamRoleDiscoverer) Discover(ctx context.Context, project, region, accou
 		}
 		for _, r := range page.Roles {
 			name := aws.ToString(r.RoleName)
-			if project != "" && !strings.HasPrefix(name, project) {
+			if args.Project != "" && !strings.HasPrefix(name, args.Project) {
 				continue
 			}
 			roles = append(roles, role{name: name, arn: aws.ToString(r.Arn)})
@@ -67,17 +79,46 @@ func (d *iamRoleDiscoverer) Discover(ctx context.Context, project, region, accou
 	book := addressBook{}
 	imps := make([]imported.ImportedResource, 0, len(roles))
 	for _, r := range roles {
+		tags, err := fetchIAMRoleTags(ctx, client, r.name)
+		if err != nil {
+			return nil, fmt.Errorf("ListRoleTags (role=%s): %w", r.name, err)
+		}
+		if !MatchesAll(tags, args.TagSelectors) {
+			continue
+		}
 		imps = append(imps, makeImportedResource(
 			book,
 			"aws_iam_role",
 			r.name,
 			r.name,
-			region,
-			accountID,
+			"", // IAM is global; do not stamp a region.
+			args.AccountID,
 			map[string]string{"arn": r.arn},
+			tags,
 		))
 	}
 	return imps, nil
+}
+
+// fetchIAMRoleTags returns the role's tag map. ListRoleTags returns a
+// `Tags []iamtypes.Tag` we transcribe into a string-keyed map. Empty
+// (non-nil) map for "fetched, but the role has no tags."
+func fetchIAMRoleTags(ctx context.Context, client iamRoleClient, roleName string) (map[string]string, error) {
+	tags := map[string]string{}
+	input := &iam.ListRoleTagsInput{RoleName: aws.String(roleName)}
+	for {
+		out, err := client.ListRoleTags(ctx, input)
+		if err != nil {
+			return nil, err
+		}
+		for _, t := range out.Tags {
+			tags[aws.ToString(t.Key)] = aws.ToString(t.Value)
+		}
+		if !out.IsTruncated {
+			return tags, nil
+		}
+		input.Marker = out.Marker
+	}
 }
 
 // DiscoverByID resolves an IAM role by ARN
@@ -88,7 +129,7 @@ func (d *iamRoleDiscoverer) DiscoverByID(ctx context.Context, id, region, accoun
 	if err != nil {
 		return imported.ImportedResource{}, err
 	}
-	client := d.new()
+	client := d.new(region)
 	out, err := client.GetRole(ctx, &iam.GetRoleInput{RoleName: aws.String(name)})
 	if err != nil {
 		var notFound *iamtypes.NoSuchEntityException
@@ -109,6 +150,7 @@ func (d *iamRoleDiscoverer) DiscoverByID(ctx context.Context, id, region, accoun
 		region,
 		accountID,
 		map[string]string{"arn": arn},
+		nil,
 	), nil
 }
 

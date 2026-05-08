@@ -39,16 +39,76 @@ const (
 // 15-minute discoverTimeout can absorb.
 const discoverRetryMaxAttempts = 8
 
-// discoveryAggregator is the small subset of awsdiscover.AWSDiscoverer the
-// orchestrator needs. Defining the interface in main lets tests inject a
-// fake aggregator without standing up real AWS clients.
+// discoveryAggregator is the small subset of awsdiscover.AWSDiscoverer
+// (and gcpdiscover.GCPDiscoverer) the orchestrator needs. Defining the
+// interface in main lets tests inject a fake aggregator without standing
+// up real AWS / GCP clients.
 //
 // DiscoverByID is part of the contract since Stage 2c3 (#271): the
 // dep-chase loop calls into the aggregator to resolve unresolved ARNs
 // inside generated.tf to fresh ImportedResource entries.
+//
+// DiscoverTypes uses positional args (rather than a struct) so neither
+// cloud's package-local DiscoverArgs type (#291) leaks into the CLI's
+// shared interface — adapters in productionDiscoverDeps convert. Tag
+// selectors flow through as the CLI-package tagSelectorPair so the
+// interface stays decoupled from awsdiscover/gcpdiscover.
 type discoveryAggregator interface {
-	DiscoverTypes(ctx context.Context, types []string, project, region, accountID string) ([]imported.ImportedResource, error)
+	DiscoverTypes(ctx context.Context, types []string, project string, regions []string, tagSelectors []tagSelectorPair, accountID string) ([]imported.ImportedResource, error)
 	DiscoverByID(ctx context.Context, tfType, id, region, accountID string) (imported.ImportedResource, error)
+}
+
+// awsAggAdapter wraps *awsdiscover.AWSDiscoverer to satisfy
+// discoveryAggregator's positional DiscoverTypes signature, converting
+// the CLI's tagSelectorPair into awsdiscover.TagSelector at the
+// boundary. Mirrors gcpAggAdapter; both adapters are intentionally
+// thin so the cloud-specific type doesn't bleed into discover.go's
+// orchestrator code.
+type awsAggAdapter struct {
+	d *awsdiscover.AWSDiscoverer
+}
+
+func (a awsAggAdapter) DiscoverTypes(ctx context.Context, types []string, project string, regions []string, tagSelectors []tagSelectorPair, accountID string) ([]imported.ImportedResource, error) {
+	sel := make([]awsdiscover.TagSelector, 0, len(tagSelectors))
+	for _, p := range tagSelectors {
+		sel = append(sel, awsdiscover.TagSelector{Key: p.Key, Value: p.Value})
+	}
+	return a.d.DiscoverTypes(ctx, types, awsdiscover.DiscoverArgs{
+		Project:      project,
+		Regions:      regions,
+		TagSelectors: sel,
+		AccountID:    accountID,
+	})
+}
+
+func (a awsAggAdapter) DiscoverByID(ctx context.Context, tfType, id, region, accountID string) (imported.ImportedResource, error) {
+	return a.d.DiscoverByID(ctx, tfType, id, region, accountID)
+}
+
+// gcpAggAdapter wraps *gcpdiscover.GCPDiscoverer to satisfy
+// discoveryAggregator. Converts tagSelectorPair → gcpdiscover.TagSelector;
+// otherwise mirrors awsAggAdapter.
+type gcpAggAdapter struct {
+	d *gcpdiscover.GCPDiscoverer
+}
+
+func (a gcpAggAdapter) DiscoverTypes(ctx context.Context, types []string, project string, regions []string, tagSelectors []tagSelectorPair, accountID string) ([]imported.ImportedResource, error) {
+	sel := make([]gcpdiscover.TagSelector, 0, len(tagSelectors))
+	for _, p := range tagSelectors {
+		sel = append(sel, gcpdiscover.TagSelector{Key: p.Key, Value: p.Value})
+	}
+	// accountID is unused on GCP — the project ID lives on the
+	// *gcpdiscover.GCPDiscoverer struct (set at construction).
+	_ = accountID
+	return a.d.DiscoverTypes(ctx, types, gcpdiscover.DiscoverArgs{
+		Project:      project,
+		Regions:      regions,
+		TagSelectors: sel,
+	})
+}
+
+func (a gcpAggAdapter) DiscoverByID(ctx context.Context, tfType, id, region, accountID string) (imported.ImportedResource, error) {
+	return a.d.DiscoverByID(ctx, tfType, id, region, accountID)
 }
 
 // discoverDeps gathers the AWS- and GCP-side and terraform-side seams that
@@ -111,14 +171,14 @@ func productionDiscoverDeps() discoverDeps {
 			return *out.Account, nil
 		},
 		newDiscoverer: func(cfg aws.Config, maxConcurrency int) discoveryAggregator {
-			return awsdiscover.NewAWSDiscovererWithConcurrency(cfg, maxConcurrency)
+			return awsAggAdapter{d: awsdiscover.NewAWSDiscovererWithConcurrency(cfg, maxConcurrency)}
 		},
 		newGCPDiscoverer: func(ctx context.Context, gcpProjectID string) (discoveryAggregator, func() error, error) {
 			s, err := gcpdiscover.NewRealAssetSearcher(ctx)
 			if err != nil {
 				return nil, func() error { return nil }, err
 			}
-			return gcpdiscover.NewGCPDiscoverer(s, gcpProjectID), s.Close, nil
+			return gcpAggAdapter{d: gcpdiscover.NewGCPDiscoverer(s, gcpProjectID)}, s.Close, nil
 		},
 		runGenconfig: genconfig.Run,
 		runDriftfix:  driftfix.Run,
@@ -167,7 +227,9 @@ Exit codes:
 
 	provider := fs.String("provider", "", "cloud provider: aws or gcp (required)")
 	project := fs.String("project", "", "project name prefix used to filter resources (required)")
-	region := fs.String("region", "", "AWS region (required for --provider aws); GCP location filter (optional for --provider gcp)")
+	region := fs.String("region", "", "DEPRECATED (#291): use --regions instead. Single AWS region or GCP location filter; emits a deprecation warning when set.")
+	regions := fs.String("regions", "", "comma-separated AWS regions (or GCP locations) to scan in one invocation (required for --provider aws unless --region is set; optional for --provider gcp). Multi-region scans use the same per-service tag-selector filter across every region. Note: GCP project-global asset types (Pub/Sub, VPC networks, secrets) are excluded by any non-empty --regions; this is a known asset-API limitation.")
+	tagSelectors := fs.String("tag-selectors", "", "comma-separated tag/label selectors of the form key=value, AND-conjuncted across the list. AWS: applied client-side over each per-service tag fetch. GCP: appended as `labels.<k>:<v>` clauses to the Cloud Asset query (server-side AND).")
 	outputDir := fs.String("output-dir", "", "directory to write imported.json into (required)")
 	resourceTypes := fs.String("resource-types", "", "comma-separated subset of types to discover; default: all supported types for the chosen provider")
 	noHCL := fs.Bool("no-hcl", false, "skip Stage 2b HCL generation (terraform plan -generate-config-out + cleanup); leaves imported.json with empty Attributes")
@@ -202,9 +264,38 @@ Exit codes:
 		fmt.Fprintln(os.Stderr, "discover: --project is required")
 		return discoverExitFatal
 	}
-	if cloud == "aws" && strings.TrimSpace(*region) == "" {
-		fmt.Fprintln(os.Stderr, "discover: --region is required for --provider aws")
+	// Resolve --regions vs deprecated --region (#291).
+	regionsRaw := strings.TrimSpace(*regions)
+	regionRaw := strings.TrimSpace(*region)
+	if regionsRaw != "" && regionRaw != "" {
+		fmt.Fprintln(os.Stderr, "discover: --regions and --region are mutually exclusive; --region is deprecated, prefer --regions")
 		return discoverExitFatal
+	}
+	resolvedRegions := splitCSV(*regions)
+	if len(resolvedRegions) == 0 && regionRaw != "" {
+		fmt.Fprintln(os.Stderr, "discover: WARN: --region is deprecated; use --regions instead")
+		resolvedRegions = []string{regionRaw}
+	}
+	if cloud == "aws" && len(resolvedRegions) == 0 {
+		fmt.Fprintln(os.Stderr, "discover: --regions is required for --provider aws (or --region for back-compat)")
+		return discoverExitFatal
+	}
+	// Tag selectors apply equally to AWS and GCP.
+	parsedSelectors, err := parseTagSelectors(*tagSelectors)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "discover: %v\n", err)
+		return discoverExitFatal
+	}
+	// primaryRegion is the single region threaded into downstream Stage 2b
+	// (genconfig), Stage 2c1 (driftfix), and Stage 2c3 (depchase) — those
+	// stages operate on a single Terraform workspace per run. With a
+	// multi-region --regions, this is the first listed region; the
+	// remaining regions still feed the bulk DiscoverTypes scan, but the
+	// generated.tf stack is rooted in the primary. Multi-region stack
+	// emission is a follow-up — see PR description.
+	var primaryRegion string
+	if len(resolvedRegions) > 0 {
+		primaryRegion = resolvedRegions[0]
 	}
 	if cloud == "gcp" && strings.TrimSpace(*gcpProjectID) == "" {
 		fmt.Fprintln(os.Stderr, "discover: --gcp-project-id is required for --provider gcp (per #157, distinct from --project)")
@@ -234,7 +325,7 @@ Exit codes:
 	)
 	switch cloud {
 	case "aws":
-		cfg, err := deps.loadConfig(ctx, *region, *awsEndpointURL)
+		cfg, err := deps.loadConfig(ctx, primaryRegion, *awsEndpointURL)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "discover: load AWS config: %v\n", err)
 			return discoverExitFatal
@@ -266,7 +357,7 @@ Exit codes:
 		accountID = *gcpProjectID
 	}
 
-	resources, err := d.DiscoverTypes(ctx, types, *project, *region, accountID)
+	resources, err := d.DiscoverTypes(ctx, types, *project, resolvedRegions, parsedSelectors, accountID)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "discover: %v\n", err)
 		return discoverExitFatal
@@ -290,7 +381,7 @@ Exit codes:
 	gcOptsBase := genconfig.Options{
 		Workdir:        gcWorkdir,
 		Provider:       cloud,
-		Region:         *region,
+		Region:         primaryRegion,
 		GCPProjectID:   *gcpProjectID,
 		AWSEndpointURL: *awsEndpointURL,
 	}
@@ -367,7 +458,7 @@ Exit codes:
 	}
 	dcRes, err := deps.runDepChase(ctx, depchase.Options{
 		Workdir:       gcWorkdir,
-		Region:        *region,
+		Region:        primaryRegion,
 		AccountID:     accountID,
 		MaxIterations: *maxDepChaseIter,
 		Discoverer:    d,

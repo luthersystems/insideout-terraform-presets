@@ -39,7 +39,7 @@ func (storageBucketDiscoverer) FromAsset(book addressBook, a gcpAssetResult, pro
 	return makeImportedResource(book, storageBucketTFType, name, name, projectID, a.Location, map[string]string{
 		"asset_name": a.Name,
 		"self_link":  fmt.Sprintf("https://www.googleapis.com/storage/v1/b/%s", name),
-	})
+	}, a.Labels)
 }
 
 func (storageBucketDiscoverer) DiscoverByID(_ context.Context, _ gcpAssetSearcher, id, projectID string) (imported.ImportedResource, error) {
@@ -49,11 +49,12 @@ func (storageBucketDiscoverer) DiscoverByID(_ context.Context, _ gcpAssetSearche
 	}
 	// Location is unknown without a re-query; leave empty rather than
 	// guessing. The driftfix loop will surface it via terraform plan
-	// if downstream resources reference it.
+	// if downstream resources reference it. Tags are nil — DiscoverByID
+	// does not re-fetch labels from Cloud Asset.
 	return makeImportedResource(addressBook{}, storageBucketTFType, name, name, projectID, "", map[string]string{
 		"asset_name": fmt.Sprintf("//%s/%s", storageAssetHost, name),
 		"self_link":  fmt.Sprintf("https://www.googleapis.com/storage/v1/b/%s", name),
-	}), nil
+	}, nil), nil
 }
 
 // storageBucketNameFromID extracts the bucket name from one of three

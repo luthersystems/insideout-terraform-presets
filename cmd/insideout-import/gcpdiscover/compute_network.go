@@ -38,7 +38,7 @@ func (computeNetworkDiscoverer) FromAsset(book addressBook, a gcpAssetResult, pr
 	return makeImportedResource(book, computeNetworkTFType, name, importID, projectID, "", map[string]string{
 		"asset_name": a.Name,
 		"self_link":  fmt.Sprintf("https://www.googleapis.com/compute/v1/projects/%s/global/networks/%s", projectID, name),
-	})
+	}, a.Labels)
 }
 
 func (computeNetworkDiscoverer) DiscoverByID(_ context.Context, _ gcpAssetSearcher, id, projectID string) (imported.ImportedResource, error) {
@@ -50,7 +50,7 @@ func (computeNetworkDiscoverer) DiscoverByID(_ context.Context, _ gcpAssetSearch
 	return makeImportedResource(addressBook{}, computeNetworkTFType, name, importID, projectID, "", map[string]string{
 		"asset_name": fmt.Sprintf("//%s/projects/%s/global/networks/%s", computeAssetHost, projectID, name),
 		"self_link":  fmt.Sprintf("https://www.googleapis.com/compute/v1/projects/%s/global/networks/%s", projectID, name),
-	}), nil
+	}, nil), nil
 }
 
 // computeNetworkNameFromID extracts the network name from one of three

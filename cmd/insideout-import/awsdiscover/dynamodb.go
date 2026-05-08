@@ -25,7 +25,7 @@ type dynamoClient interface {
 }
 
 type dynamoDiscoverer struct {
-	new            func() dynamoClient
+	new            func(region string) dynamoClient
 	maxConcurrency int
 }
 
@@ -34,7 +34,13 @@ func newDynamoDBDiscoverer(cfg aws.Config, maxConcurrency int) Discoverer {
 		maxConcurrency = DefaultMaxConcurrency
 	}
 	return &dynamoDiscoverer{
-		new:            func() dynamoClient { return dynamodb.NewFromConfig(cfg) },
+		new: func(region string) dynamoClient {
+			return dynamodb.NewFromConfig(cfg, func(o *dynamodb.Options) {
+				if region != "" {
+					o.Region = region
+				}
+			})
+		},
 		maxConcurrency: maxConcurrency,
 	}
 }
@@ -43,9 +49,8 @@ func (d *dynamoDiscoverer) ResourceType() string { return "aws_dynamodb_table" }
 
 // Discover paginates ListTables and filters by name prefix (DynamoDB does
 // not expose server-side filters on ListTables) — then for each candidate
-// runs ListTagsOfResource to confirm the Project tag. The double check
-// (prefix + tag) defends against table names that share the project prefix
-// by accident.
+// runs ListTagsOfResource to fetch the table's tag map. The fetched map
+// is matched against args.TagSelectors and persisted onto Identity.Tags.
 //
 // Per-table tag lookups fan out under a bounded errgroup so a few-thousand
 // table account does not serialize into a multi-minute wall-time. Per-item
@@ -55,94 +60,122 @@ func (d *dynamoDiscoverer) ResourceType() string { return "aws_dynamodb_table" }
 // propagated: gctx unblocks any in-flight goroutines and Discover returns
 // ctx.Err() rather than a silently-truncated set.
 //
+// Multi-region (#291): outer loop walks args.Regions building a per-region
+// SDK client. The legacy "Project=<project>" tag check is preserved as a
+// back-compat implicit filter when args.Project is non-empty — operators
+// that scan composer-emitted stacks rely on this dual (name-prefix +
+// Project-tag) defense. Operator-supplied selectors are AND'd on top.
+//
 // Import ID for aws_dynamodb_table is the table name.
-func (d *dynamoDiscoverer) Discover(ctx context.Context, project, region, accountID string) ([]imported.ImportedResource, error) {
-	client := d.new()
+func (d *dynamoDiscoverer) Discover(ctx context.Context, args DiscoverArgs) ([]imported.ImportedResource, error) {
+	book := addressBook{}
+	var imps []imported.ImportedResource
+	for _, region := range args.Regions {
+		client := d.new(region)
 
-	var all []string
-	input := &dynamodb.ListTablesInput{}
-	for {
-		out, err := client.ListTables(ctx, input)
-		if err != nil {
-			return nil, fmt.Errorf("ListTables: %w", err)
-		}
-		for _, t := range out.TableNames {
-			if project == "" || hasPrefix(t, project) {
-				all = append(all, t)
+		var all []string
+		input := &dynamodb.ListTablesInput{}
+		for {
+			out, err := client.ListTables(ctx, input)
+			if err != nil {
+				return nil, fmt.Errorf("ListTables (region=%s): %w", region, err)
 			}
+			for _, t := range out.TableNames {
+				if args.Project == "" || hasPrefix(t, args.Project) {
+					all = append(all, t)
+				}
+			}
+			if out.LastEvaluatedTableName == nil || *out.LastEvaluatedTableName == "" {
+				break
+			}
+			input.ExclusiveStartTableName = out.LastEvaluatedTableName
 		}
-		if out.LastEvaluatedTableName == nil || *out.LastEvaluatedTableName == "" {
-			break
-		}
-		input.ExclusiveStartTableName = out.LastEvaluatedTableName
-	}
 
-	var matched []string
-	if project == "" || accountID == "" || region == "" {
-		// Without an account ID + region we cannot construct the ARN
-		// ListTagsOfResource needs. Fall back to prefix-only filtering and
-		// trust the operator-supplied scope.
-		matched = all
-	} else {
-		var (
-			mu sync.Mutex
-			ok []string
-		)
-		limit := d.maxConcurrency
-		if limit <= 0 {
-			limit = DefaultMaxConcurrency
+		// Per-table tag map fetched once, reused for selector match + persistence.
+		type tableEntry struct {
+			name string
+			tags map[string]string
+			arn  string
 		}
-		g, gctx := errgroup.WithContext(ctx)
-		g.SetLimit(limit)
-		for _, name := range all {
-			name := name
-			g.Go(func() error {
-				if err := gctx.Err(); err != nil {
-					return err
-				}
-				arn := fmt.Sprintf("arn:aws:dynamodb:%s:%s:table/%s", region, accountID, name)
-				tagsOut, err := client.ListTagsOfResource(gctx, &dynamodb.ListTagsOfResourceInput{ResourceArn: aws.String(arn)})
-				if err != nil {
-					if cerr := gctx.Err(); cerr != nil {
-						return cerr
+		entries := make([]tableEntry, 0, len(all))
+		canFetchTags := args.AccountID != "" && region != ""
+		if !canFetchTags {
+			// Without an account ID + region we cannot construct the ARN
+			// ListTagsOfResource needs. Fall back to prefix-only filtering and
+			// trust the operator-supplied scope; tags stay nil to signal
+			// "didn't fetch."
+			for _, name := range all {
+				entries = append(entries, tableEntry{name: name})
+			}
+		} else {
+			var mu sync.Mutex
+			ok := make([]tableEntry, 0, len(all))
+			limit := d.maxConcurrency
+			if limit <= 0 {
+				limit = DefaultMaxConcurrency
+			}
+			g, gctx := errgroup.WithContext(ctx)
+			g.SetLimit(limit)
+			for _, name := range all {
+				name := name
+				g.Go(func() error {
+					if err := gctx.Err(); err != nil {
+						return err
 					}
-					return nil
-				}
-				for _, tag := range tagsOut.Tags {
-					if aws.ToString(tag.Key) == "Project" && aws.ToString(tag.Value) == project {
-						mu.Lock()
-						ok = append(ok, name)
-						mu.Unlock()
+					arn := fmt.Sprintf("arn:aws:dynamodb:%s:%s:table/%s", region, args.AccountID, name)
+					tagsOut, err := client.ListTagsOfResource(gctx, &dynamodb.ListTagsOfResourceInput{ResourceArn: aws.String(arn)})
+					if err != nil {
+						if cerr := gctx.Err(); cerr != nil {
+							return cerr
+						}
 						return nil
 					}
-				}
-				return nil
-			})
+					tags := make(map[string]string, len(tagsOut.Tags))
+					for _, tag := range tagsOut.Tags {
+						tags[aws.ToString(tag.Key)] = aws.ToString(tag.Value)
+					}
+					mu.Lock()
+					ok = append(ok, tableEntry{name: name, tags: tags, arn: arn})
+					mu.Unlock()
+					return nil
+				})
+			}
+			if err := g.Wait(); err != nil {
+				return nil, fmt.Errorf("ListTagsOfResource (region=%s): %w", region, err)
+			}
+			entries = ok
 		}
-		if err := g.Wait(); err != nil {
-			return nil, fmt.Errorf("ListTagsOfResource: %w", err)
-		}
-		matched = ok
-	}
 
-	sort.Strings(matched)
+		sort.Slice(entries, func(i, j int) bool { return entries[i].name < entries[j].name })
 
-	book := addressBook{}
-	imps := make([]imported.ImportedResource, 0, len(matched))
-	for _, name := range matched {
-		var arn string
-		if accountID != "" && region != "" {
-			arn = fmt.Sprintf("arn:aws:dynamodb:%s:%s:table/%s", region, accountID, name)
+		for _, e := range entries {
+			// Legacy back-compat: when project is non-empty AND we
+			// successfully fetched tags, require the Project=<project>
+			// tag. Composer-emitted stacks rely on this dual-check; we
+			// skip it on the prefix-only fallback path (canFetchTags
+			// false) to preserve that path's existing behavior. Tags
+			// nil ⇒ "didn't fetch" ⇒ skip the Project check.
+			if canFetchTags && args.Project != "" && e.tags != nil && e.tags["Project"] != args.Project {
+				continue
+			}
+			if !MatchesAll(e.tags, args.TagSelectors) {
+				continue
+			}
+			arn := e.arn
+			if arn == "" && args.AccountID != "" && region != "" {
+				arn = fmt.Sprintf("arn:aws:dynamodb:%s:%s:table/%s", region, args.AccountID, e.name)
+			}
+			imps = append(imps, makeImportedResource(
+				book,
+				"aws_dynamodb_table",
+				e.name,
+				e.name,
+				region,
+				args.AccountID,
+				map[string]string{"arn": arn},
+				e.tags,
+			))
 		}
-		imps = append(imps, makeImportedResource(
-			book,
-			"aws_dynamodb_table",
-			name,
-			name,
-			region,
-			accountID,
-			map[string]string{"arn": arn},
-		))
 	}
 	return imps, nil
 }
@@ -161,7 +194,7 @@ func (d *dynamoDiscoverer) DiscoverByID(ctx context.Context, id, region, account
 	if err != nil {
 		return imported.ImportedResource{}, err
 	}
-	client := d.new()
+	client := d.new(region)
 	out, err := client.DescribeTable(ctx, &dynamodb.DescribeTableInput{TableName: aws.String(name)})
 	if err != nil {
 		var notFound *dynamotypes.ResourceNotFoundException
@@ -177,6 +210,8 @@ func (d *dynamoDiscoverer) DiscoverByID(ctx context.Context, id, region, account
 	if arn == "" && accountID != "" && region != "" {
 		arn = fmt.Sprintf("arn:aws:dynamodb:%s:%s:table/%s", region, accountID, name)
 	}
+	// DiscoverByID does not fetch tags — dep-chase only needs the
+	// resource's address/import-ID resolution, not its tag map.
 	return makeImportedResource(
 		addressBook{},
 		"aws_dynamodb_table",
@@ -185,6 +220,7 @@ func (d *dynamoDiscoverer) DiscoverByID(ctx context.Context, id, region, account
 		region,
 		accountID,
 		map[string]string{"arn": arn},
+		nil,
 	), nil
 }
 

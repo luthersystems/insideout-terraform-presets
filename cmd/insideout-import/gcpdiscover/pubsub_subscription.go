@@ -31,7 +31,7 @@ func (pubsubSubscriptionDiscoverer) FromAsset(book addressBook, a gcpAssetResult
 	importID := fmt.Sprintf("projects/%s/subscriptions/%s", projectID, name)
 	return makeImportedResource(book, pubsubSubscriptionTFType, name, importID, projectID, "", map[string]string{
 		"asset_name": a.Name,
-	})
+	}, a.Labels)
 }
 
 func (pubsubSubscriptionDiscoverer) DiscoverByID(_ context.Context, _ gcpAssetSearcher, id, projectID string) (imported.ImportedResource, error) {
@@ -42,7 +42,7 @@ func (pubsubSubscriptionDiscoverer) DiscoverByID(_ context.Context, _ gcpAssetSe
 	importID := fmt.Sprintf("projects/%s/subscriptions/%s", projectID, name)
 	return makeImportedResource(addressBook{}, pubsubSubscriptionTFType, name, importID, projectID, "", map[string]string{
 		"asset_name": fmt.Sprintf("//%s/projects/%s/subscriptions/%s", pubsubAssetHost, projectID, name),
-	}), nil
+	}, nil), nil
 }
 
 func pubsubSubscriptionNameFromID(id string) (string, error) {
