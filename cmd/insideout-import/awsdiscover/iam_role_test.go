@@ -18,6 +18,11 @@ type fakeIAMRoleClient struct {
 	getByName map[string]*iamtypes.Role
 	getErr    error
 	getCalls  []string
+
+	// ListRoleTags wiring (#291).
+	tagsByRole map[string][]iamtypes.Tag
+	tagsErr    error
+	tagsCalls  []string
 }
 
 func (f *fakeIAMRoleClient) ListRoles(_ context.Context, in *iam.ListRolesInput, _ ...func(*iam.Options)) (*iam.ListRolesOutput, error) {
@@ -44,9 +49,21 @@ func (f *fakeIAMRoleClient) GetRole(_ context.Context, in *iam.GetRoleInput, _ .
 	return nil, &iamtypes.NoSuchEntityException{}
 }
 
+func (f *fakeIAMRoleClient) ListRoleTags(_ context.Context, in *iam.ListRoleTagsInput, _ ...func(*iam.Options)) (*iam.ListRoleTagsOutput, error) {
+	name := aws.ToString(in.RoleName)
+	f.tagsCalls = append(f.tagsCalls, name)
+	if f.tagsErr != nil {
+		return nil, f.tagsErr
+	}
+	if t, ok := f.tagsByRole[name]; ok {
+		return &iam.ListRoleTagsOutput{Tags: t}, nil
+	}
+	return &iam.ListRoleTagsOutput{}, nil
+}
+
 func TestIAMRoleDiscover_FiltersByPrefix(t *testing.T) {
 	t.Parallel()
-	d := &iamRoleDiscoverer{new: func() iamRoleClient {
+	d := &iamRoleDiscoverer{new: func(_ string) iamRoleClient {
 		return &fakeIAMRoleClient{pages: []iam.ListRolesOutput{
 			{Roles: []iamtypes.Role{
 				{RoleName: aws.String("io-foo-handler"), Arn: aws.String("arn:aws:iam::123:role/io-foo-handler")},
@@ -55,7 +72,7 @@ func TestIAMRoleDiscover_FiltersByPrefix(t *testing.T) {
 			}},
 		}}
 	}}
-	got, err := d.Discover(context.Background(), "io-foo", "us-east-1", "123")
+	got, err := d.Discover(context.Background(), DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,7 +86,7 @@ func TestIAMRoleDiscover_FiltersByPrefix(t *testing.T) {
 
 func TestIAMRoleDiscover_EmptyProjectReturnsAll(t *testing.T) {
 	t.Parallel()
-	d := &iamRoleDiscoverer{new: func() iamRoleClient {
+	d := &iamRoleDiscoverer{new: func(_ string) iamRoleClient {
 		return &fakeIAMRoleClient{pages: []iam.ListRolesOutput{
 			{Roles: []iamtypes.Role{
 				{RoleName: aws.String("a"), Arn: aws.String("arn:test:a")},
@@ -77,7 +94,7 @@ func TestIAMRoleDiscover_EmptyProjectReturnsAll(t *testing.T) {
 			}},
 		}}
 	}}
-	got, err := d.Discover(context.Background(), "", "us-east-1", "123")
+	got, err := d.Discover(context.Background(), DiscoverArgs{Project: "", Regions: []string{"us-east-1"}, AccountID: "123"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,10 +105,10 @@ func TestIAMRoleDiscover_EmptyProjectReturnsAll(t *testing.T) {
 
 func TestIAMRoleDiscover_PropagatesError(t *testing.T) {
 	t.Parallel()
-	d := &iamRoleDiscoverer{new: func() iamRoleClient {
+	d := &iamRoleDiscoverer{new: func(_ string) iamRoleClient {
 		return &fakeIAMRoleClient{err: errors.New("AccessDenied")}
 	}}
-	_, err := d.Discover(context.Background(), "io-foo", "us-east-1", "123")
+	_, err := d.Discover(context.Background(), DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"})
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -100,7 +117,7 @@ func TestIAMRoleDiscover_PropagatesError(t *testing.T) {
 func TestIAMRoleDiscoverByID_AcceptsARN(t *testing.T) {
 	t.Parallel()
 	arn := "arn:aws:iam::123:role/io-foo-handler"
-	d := &iamRoleDiscoverer{new: func() iamRoleClient {
+	d := &iamRoleDiscoverer{new: func(_ string) iamRoleClient {
 		return &fakeIAMRoleClient{getByName: map[string]*iamtypes.Role{
 			"io-foo-handler": {RoleName: aws.String("io-foo-handler"), Arn: aws.String(arn)},
 		}}
@@ -122,7 +139,7 @@ func TestIAMRoleDiscoverByID_AcceptsARN(t *testing.T) {
 
 func TestIAMRoleDiscoverByID_StripsPathFromARN(t *testing.T) {
 	t.Parallel()
-	d := &iamRoleDiscoverer{new: func() iamRoleClient {
+	d := &iamRoleDiscoverer{new: func(_ string) iamRoleClient {
 		return &fakeIAMRoleClient{getByName: map[string]*iamtypes.Role{
 			"my-role": {RoleName: aws.String("my-role"), Arn: aws.String("arn:test")},
 		}}
@@ -137,7 +154,7 @@ func TestIAMRoleDiscoverByID_StripsPathFromARN(t *testing.T) {
 
 func TestIAMRoleDiscoverByID_AcceptsBareName(t *testing.T) {
 	t.Parallel()
-	d := &iamRoleDiscoverer{new: func() iamRoleClient {
+	d := &iamRoleDiscoverer{new: func(_ string) iamRoleClient {
 		return &fakeIAMRoleClient{getByName: map[string]*iamtypes.Role{
 			"io-foo-handler": {RoleName: aws.String("io-foo-handler"), Arn: aws.String("arn:test")},
 		}}
@@ -153,7 +170,7 @@ func TestIAMRoleDiscoverByID_AcceptsBareName(t *testing.T) {
 
 func TestIAMRoleDiscoverByID_NotFound(t *testing.T) {
 	t.Parallel()
-	d := &iamRoleDiscoverer{new: func() iamRoleClient { return &fakeIAMRoleClient{} }}
+	d := &iamRoleDiscoverer{new: func(_ string) iamRoleClient { return &fakeIAMRoleClient{} }}
 	_, err := d.DiscoverByID(context.Background(), "missing", "us-east-1", "123")
 	if !errors.Is(err, ErrNotFound) {
 		t.Errorf("err=%v, want ErrNotFound", err)
@@ -162,7 +179,7 @@ func TestIAMRoleDiscoverByID_NotFound(t *testing.T) {
 
 func TestIAMRoleDiscoverByID_UnsupportedID(t *testing.T) {
 	t.Parallel()
-	d := &iamRoleDiscoverer{new: func() iamRoleClient { return &fakeIAMRoleClient{} }}
+	d := &iamRoleDiscoverer{new: func(_ string) iamRoleClient { return &fakeIAMRoleClient{} }}
 	cases := []string{
 		"",
 		"arn:aws:s3:::a-bucket",

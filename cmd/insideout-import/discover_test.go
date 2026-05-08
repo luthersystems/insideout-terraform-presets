@@ -80,16 +80,203 @@ func TestRunDiscover_MissingOutputDir(t *testing.T) {
 	}
 }
 
+// TestRunDiscover_RegionAndRegionsConflictIsFatal pins the #291
+// migration ergonomics: passing both --region (deprecated) and
+// --regions in the same invocation is an error rather than silently
+// ignoring one. The deprecation pathway prefers an explicit-failure
+// shape so operators don't get surprised by which value won.
+//
+// The stderr substring pin guarantees the operator-facing guidance
+// stays specific. A regression that swaps the message for a generic
+// "bad flags" error would survive a `rc != discoverExitFatal` check
+// but fail this assertion.
+func TestRunDiscover_RegionAndRegionsConflictIsFatal(t *testing.T) {
+	dir := t.TempDir()
+	var rc int
+	stderr := captureStderr(t, func() {
+		rc = runDiscover([]string{
+			"--provider", "aws",
+			"--project", "p",
+			"--region", "us-east-1",
+			"--regions", "us-east-1,eu-west-1",
+			"--output-dir", dir,
+		})
+	})
+	if rc != discoverExitFatal {
+		t.Errorf("rc=%d, want fatal", rc)
+	}
+	if !strings.Contains(stderr, "mutually exclusive") {
+		t.Errorf("stderr=%q, want substring %q", stderr, "mutually exclusive")
+	}
+}
+
+// TestRunDiscover_MissingRegionsForAWSIsFatal pins that AWS still
+// requires at least one region (--regions or the deprecated --region).
+// The "back-compat" hint in the message points operators that haven't
+// migrated to --regions yet at the legacy alias; pinning it keeps the
+// hint from rotting.
+func TestRunDiscover_MissingRegionsForAWSIsFatal(t *testing.T) {
+	dir := t.TempDir()
+	var rc int
+	stderr := captureStderr(t, func() {
+		rc = runDiscover([]string{"--provider", "aws", "--project", "p", "--output-dir", dir})
+	})
+	if rc != discoverExitFatal {
+		t.Errorf("rc=%d, want fatal", rc)
+	}
+	if !strings.Contains(stderr, "--regions is required") || !strings.Contains(stderr, "back-compat") {
+		t.Errorf("stderr=%q, want substrings %q and %q", stderr, "--regions is required", "back-compat")
+	}
+}
+
+// TestRunDiscoverWithDeps_MultiRegionThreadsAllRegionsToAggregator pins
+// that --regions r1,r2 surfaces as a 2-element slice on the aggregator
+// (not an aggregator-side fan-out — the per-service Discover loops
+// internally). Plus, primaryRegion (the first listed) is what
+// load-config receives so Stage 2b/2c1 still operate on a single TF
+// workspace.
+func TestRunDiscoverWithDeps_MultiRegionThreadsAllRegionsToAggregator(t *testing.T) {
+	t.Parallel()
+	agg := &fakeAggregator{}
+	deps := okDeps(agg)
+	loadCalls := 0
+	var lastLoadRegion string
+	deps.loadConfig = func(_ context.Context, region, _ string) (aws.Config, error) {
+		loadCalls++
+		lastLoadRegion = region
+		return aws.Config{}, nil
+	}
+	dir := t.TempDir()
+	rc := runDiscoverWithDeps([]string{
+		"--provider", "aws",
+		"--project", "io-foo",
+		"--regions", "us-east-1,eu-west-1",
+		"--output-dir", dir,
+		"--no-hcl",
+	}, deps)
+	if rc != discoverExitOK {
+		t.Fatalf("rc=%d, want ok", rc)
+	}
+	if loadCalls != 1 {
+		t.Errorf("loadConfig called %d times, want 1", loadCalls)
+	}
+	if lastLoadRegion != "us-east-1" {
+		t.Errorf("loadConfig got region=%q, want us-east-1 (primaryRegion = first --regions value)", lastLoadRegion)
+	}
+	if got, want := agg.gotRegions, []string{"us-east-1", "eu-west-1"}; !equalSlices(got, want) {
+		t.Errorf("Regions threaded = %v, want %v", got, want)
+	}
+}
+
+// TestRunDiscoverWithDeps_DeprecatedRegionStillThreadsAsRegions pins
+// the back-compat alias: --region us-east-1 (no --regions) populates
+// the aggregator's Regions slice with [us-east-1] and emits a stderr
+// deprecation warning. We assert the warning substring "deprecated"
+// (not the full message) so the migration signal stays loud while
+// leaving the exact phrasing free to evolve.
+func TestRunDiscoverWithDeps_DeprecatedRegionStillThreadsAsRegions(t *testing.T) {
+	agg := &fakeAggregator{}
+	deps := okDeps(agg)
+	dir := t.TempDir()
+	var rc int
+	stderr := captureStderr(t, func() {
+		rc = runDiscoverWithDeps([]string{
+			"--provider", "aws",
+			"--project", "io-foo",
+			"--region", "us-east-1",
+			"--output-dir", dir,
+			"--no-hcl",
+		}, deps)
+	})
+	if rc != discoverExitOK {
+		t.Fatalf("rc=%d, want ok", rc)
+	}
+	if got, want := agg.gotRegions, []string{"us-east-1"}; !equalSlices(got, want) {
+		t.Errorf("Regions threaded = %v, want [us-east-1] (deprecated --region alias)", got)
+	}
+	if !strings.Contains(stderr, "deprecated") {
+		t.Errorf("stderr=%q, want substring %q (deprecation warning must be loud)", stderr, "deprecated")
+	}
+}
+
+// TestRunDiscoverWithDeps_TagSelectorsThreadedToAggregator pins that
+// --tag-selectors flow through the parser into the aggregator's
+// observed gotSelectors slice. The CLI parser produces tagSelectorPair
+// entries; the aggregator adapter converts them per-cloud.
+func TestRunDiscoverWithDeps_TagSelectorsThreadedToAggregator(t *testing.T) {
+	t.Parallel()
+	agg := &fakeAggregator{}
+	deps := okDeps(agg)
+	dir := t.TempDir()
+	rc := runDiscoverWithDeps([]string{
+		"--provider", "aws",
+		"--project", "io-foo",
+		"--regions", "us-east-1",
+		"--tag-selectors", "env=prod,team=growth",
+		"--output-dir", dir,
+		"--no-hcl",
+	}, deps)
+	if rc != discoverExitOK {
+		t.Fatalf("rc=%d, want ok", rc)
+	}
+	want := []tagSelectorPair{{Key: "env", Value: "prod"}, {Key: "team", Value: "growth"}}
+	if len(agg.gotSelectors) != len(want) {
+		t.Fatalf("selectors len=%d, want %d", len(agg.gotSelectors), len(want))
+	}
+	for i, w := range want {
+		if agg.gotSelectors[i] != w {
+			t.Errorf("selector[%d]=%+v, want %+v", i, agg.gotSelectors[i], w)
+		}
+	}
+}
+
+// TestRunDiscoverWithDeps_MalformedTagSelectorIsFatal pins that the
+// parser's error surface (missing '=', empty key, duplicate keys)
+// translates to exit-fatal at the orchestrator level — operators
+// don't get a partial scan with quietly-dropped selectors.
+func TestRunDiscoverWithDeps_MalformedTagSelectorIsFatal(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	rc := runDiscoverWithDeps([]string{
+		"--provider", "aws",
+		"--project", "io-foo",
+		"--regions", "us-east-1",
+		"--tag-selectors", "missing-equals",
+		"--output-dir", dir,
+		"--no-hcl",
+	}, okDeps(&fakeAggregator{}))
+	if rc != discoverExitFatal {
+		t.Errorf("rc=%d, want fatal (malformed selector)", rc)
+	}
+}
+
+func equalSlices(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
 // fakeAggregator is a lightweight stand-in for awsdiscover.AWSDiscoverer that
 // captures the inputs DiscoverTypes was called with and returns canned output.
 type fakeAggregator struct {
 	out        []imported.ImportedResource
 	err        error
 	gotProject string
-	gotRegion  string
-	gotAccount string
-	gotTypes   []string
-	called     int
+	// gotRegions captures the full Regions slice (#291). gotRegion is
+	// the legacy single-region accessor, kept as the first element of
+	// Regions so existing test assertions continue to match for the
+	// pre-#291 single-region happy path.
+	gotRegions   []string
+	gotSelectors []tagSelectorPair
+	gotAccount   string
+	gotTypes     []string
+	called       int
 
 	// DiscoverByID wiring for Stage 2c3 dep-chase tests. byID is keyed
 	// on tfType|id; missing entries return ErrNotFound.
@@ -98,9 +285,18 @@ type fakeAggregator struct {
 	byIDCalls []string
 }
 
-func (f *fakeAggregator) DiscoverTypes(_ context.Context, types []string, project, region, accountID string) ([]imported.ImportedResource, error) {
+// gotRegion returns the first captured region for back-compat with
+// pre-#291 single-region test assertions.
+func (f *fakeAggregator) gotRegion() string {
+	if len(f.gotRegions) == 0 {
+		return ""
+	}
+	return f.gotRegions[0]
+}
+
+func (f *fakeAggregator) DiscoverTypes(_ context.Context, types []string, project string, regions []string, selectors []tagSelectorPair, accountID string) ([]imported.ImportedResource, error) {
 	f.called++
-	f.gotProject, f.gotRegion, f.gotAccount, f.gotTypes = project, region, accountID, types
+	f.gotProject, f.gotRegions, f.gotSelectors, f.gotAccount, f.gotTypes = project, regions, selectors, accountID, types
 	return f.out, f.err
 }
 
@@ -278,8 +474,8 @@ func TestRunDiscoverWithDeps_HappyPathWritesManifest(t *testing.T) {
 	if agg.called != 1 {
 		t.Errorf("DiscoverTypes called %d times, want 1", agg.called)
 	}
-	if agg.gotProject != "io-foo" || agg.gotRegion != "us-east-1" || agg.gotAccount != "1234567890" {
-		t.Errorf("dispatch args = (%q,%q,%q), want (io-foo,us-east-1,1234567890)", agg.gotProject, agg.gotRegion, agg.gotAccount)
+	if agg.gotProject != "io-foo" || agg.gotRegion() != "us-east-1" || agg.gotAccount != "1234567890" {
+		t.Errorf("dispatch args = (%q,%q,%q), want (io-foo,us-east-1,1234567890)", agg.gotProject, agg.gotRegion(), agg.gotAccount)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "imported.json")); err != nil {
 		t.Errorf("imported.json not written: %v", err)
@@ -1173,7 +1369,7 @@ func TestRunDiscoverWithDeps_GCPHappyPathWritesManifest(t *testing.T) {
 		t.Errorf("DiscoverTypes called %d times, want 1", agg.called)
 	}
 	if agg.gotProject != "io-foo" || agg.gotAccount != "real-proj" {
-		t.Errorf("dispatch args = (%q,%q,%q), want (io-foo, *, real-proj)", agg.gotProject, agg.gotRegion, agg.gotAccount)
+		t.Errorf("dispatch args = (%q,%q,%q), want (io-foo, *, real-proj)", agg.gotProject, agg.gotRegion(), agg.gotAccount)
 	}
 	body, err := os.ReadFile(filepath.Join(dir, "imported.json"))
 	if err != nil {
@@ -1205,8 +1401,8 @@ func TestRunDiscoverWithDeps_GCPRegionThreadsToAggregator(t *testing.T) {
 	if rc != discoverExitOK {
 		t.Fatalf("rc=%d, want OK", rc)
 	}
-	if agg.gotRegion != "us-central1" {
-		t.Errorf("region threaded = %q, want us-central1", agg.gotRegion)
+	if agg.gotRegion() != "us-central1" {
+		t.Errorf("region threaded = %q, want us-central1", agg.gotRegion())
 	}
 }
 

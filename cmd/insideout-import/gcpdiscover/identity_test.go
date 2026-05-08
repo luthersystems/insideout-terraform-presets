@@ -10,9 +10,20 @@ import (
 func TestMakeImportedResource_PopulatesRequiredFields(t *testing.T) {
 	t.Parallel()
 	book := addressBook{}
+	wantTags := map[string]string{"project": "io-foo", "env": "prod"}
 	got := makeImportedResource(book, "google_pubsub_topic", "io-foo-events",
 		"projects/real-proj/topics/io-foo-events", "real-proj", "",
-		map[string]string{"asset_name": "//pubsub.googleapis.com/projects/real-proj/topics/io-foo-events"})
+		map[string]string{"asset_name": "//pubsub.googleapis.com/projects/real-proj/topics/io-foo-events"},
+		wantTags)
+
+	// Tags carrier (#291) — pin both presence and shape. Mirrors the
+	// AWS-side pin so a regression on either side is caught here.
+	if got.Identity.Tags == nil {
+		t.Error("Tags must be populated when discoverer fetched a label map")
+	}
+	if got.Identity.Tags["project"] != "io-foo" || got.Identity.Tags["env"] != "prod" {
+		t.Errorf("Tags=%v, want %v", got.Identity.Tags, wantTags)
+	}
 
 	if got.Identity.Cloud != "gcp" {
 		t.Errorf("Cloud=%q, want gcp", got.Identity.Cloud)
@@ -60,9 +71,9 @@ func TestMakeImportedResource_ResolvesAddressCollisionsWithinBatch(t *testing.T)
 	t.Parallel()
 	book := addressBook{}
 	a := makeImportedResource(book, "google_pubsub_topic", "events",
-		"projects/p1/topics/events", "p1", "", nil)
+		"projects/p1/topics/events", "p1", "", nil, nil)
 	b := makeImportedResource(book, "google_pubsub_topic", "events",
-		"projects/p1/topics/events-also", "p1", "", nil)
+		"projects/p1/topics/events-also", "p1", "", nil, nil)
 
 	if a.Identity.Address == b.Identity.Address {
 		t.Errorf("expected distinct addresses for distinct identities; got %q twice", a.Identity.Address)
@@ -79,7 +90,7 @@ func TestMakeImportedResource_ResolvesAddressCollisionsWithinBatch(t *testing.T)
 func TestMakeImportedResource_EmptyLocationLeftEmpty(t *testing.T) {
 	t.Parallel()
 	got := makeImportedResource(addressBook{}, "google_pubsub_topic", "events",
-		"projects/p/topics/events", "p", "", nil)
+		"projects/p/topics/events", "p", "", nil, nil)
 	if got.Identity.Location != "" {
 		t.Errorf("Location=%q, want empty for project-global resource", got.Identity.Location)
 	}
@@ -88,7 +99,7 @@ func TestMakeImportedResource_EmptyLocationLeftEmpty(t *testing.T) {
 func TestMakeImportedResource_PropagatesLocationForRegionalResource(t *testing.T) {
 	t.Parallel()
 	got := makeImportedResource(addressBook{}, "google_storage_bucket", "io-bucket",
-		"io-bucket", "real-proj", "us-central1", nil)
+		"io-bucket", "real-proj", "us-central1", nil, nil)
 	if got.Identity.Location != "us-central1" {
 		t.Errorf("Location=%q, want us-central1", got.Identity.Location)
 	}

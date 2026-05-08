@@ -18,6 +18,11 @@ type fakeIAMPolicyClient struct {
 	getByARN map[string]*iamtypes.Policy
 	getErr   error
 	getCalls []string
+
+	// ListPolicyTags wiring (#291).
+	tagsByARN map[string][]iamtypes.Tag
+	tagsErr   error
+	tagsCalls []string
 }
 
 func (f *fakeIAMPolicyClient) ListPolicies(_ context.Context, in *iam.ListPoliciesInput, _ ...func(*iam.Options)) (*iam.ListPoliciesOutput, error) {
@@ -44,6 +49,18 @@ func (f *fakeIAMPolicyClient) GetPolicy(_ context.Context, in *iam.GetPolicyInpu
 	return nil, &iamtypes.NoSuchEntityException{}
 }
 
+func (f *fakeIAMPolicyClient) ListPolicyTags(_ context.Context, in *iam.ListPolicyTagsInput, _ ...func(*iam.Options)) (*iam.ListPolicyTagsOutput, error) {
+	arn := aws.ToString(in.PolicyArn)
+	f.tagsCalls = append(f.tagsCalls, arn)
+	if f.tagsErr != nil {
+		return nil, f.tagsErr
+	}
+	if t, ok := f.tagsByARN[arn]; ok {
+		return &iam.ListPolicyTagsOutput{Tags: t}, nil
+	}
+	return &iam.ListPolicyTagsOutput{}, nil
+}
+
 func TestIAMPolicyDiscover_FiltersByPrefixAndScope(t *testing.T) {
 	t.Parallel()
 	fake := &fakeIAMPolicyClient{pages: []iam.ListPoliciesOutput{
@@ -52,8 +69,8 @@ func TestIAMPolicyDiscover_FiltersByPrefixAndScope(t *testing.T) {
 			{PolicyName: aws.String("LegacyPolicy"), Arn: aws.String("arn:aws:iam::123:policy/LegacyPolicy")},
 		}},
 	}}
-	d := &iamPolicyDiscoverer{new: func() iamPolicyClient { return fake }}
-	got, err := d.Discover(context.Background(), "io-foo", "us-east-1", "123")
+	d := &iamPolicyDiscoverer{new: func(_ string) iamPolicyClient { return fake }}
+	got, err := d.Discover(context.Background(), DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,10 +87,10 @@ func TestIAMPolicyDiscover_FiltersByPrefixAndScope(t *testing.T) {
 
 func TestIAMPolicyDiscover_PropagatesError(t *testing.T) {
 	t.Parallel()
-	d := &iamPolicyDiscoverer{new: func() iamPolicyClient {
+	d := &iamPolicyDiscoverer{new: func(_ string) iamPolicyClient {
 		return &fakeIAMPolicyClient{err: errors.New("AccessDenied")}
 	}}
-	_, err := d.Discover(context.Background(), "io-foo", "us-east-1", "123")
+	_, err := d.Discover(context.Background(), DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"})
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -82,7 +99,7 @@ func TestIAMPolicyDiscover_PropagatesError(t *testing.T) {
 func TestIAMPolicyDiscoverByID_AcceptsARN(t *testing.T) {
 	t.Parallel()
 	arn := "arn:aws:iam::123:policy/io-foo-readonly"
-	d := &iamPolicyDiscoverer{new: func() iamPolicyClient {
+	d := &iamPolicyDiscoverer{new: func(_ string) iamPolicyClient {
 		return &fakeIAMPolicyClient{getByARN: map[string]*iamtypes.Policy{
 			arn: {PolicyName: aws.String("io-foo-readonly"), Arn: aws.String(arn)},
 		}}
@@ -104,7 +121,7 @@ func TestIAMPolicyDiscoverByID_AcceptsARN(t *testing.T) {
 
 func TestIAMPolicyDiscoverByID_NotFound(t *testing.T) {
 	t.Parallel()
-	d := &iamPolicyDiscoverer{new: func() iamPolicyClient { return &fakeIAMPolicyClient{} }}
+	d := &iamPolicyDiscoverer{new: func(_ string) iamPolicyClient { return &fakeIAMPolicyClient{} }}
 	_, err := d.DiscoverByID(context.Background(),
 		"arn:aws:iam::123:policy/missing", "us-east-1", "123")
 	if !errors.Is(err, ErrNotFound) {
@@ -114,7 +131,7 @@ func TestIAMPolicyDiscoverByID_NotFound(t *testing.T) {
 
 func TestIAMPolicyDiscoverByID_RejectsBareName(t *testing.T) {
 	t.Parallel()
-	d := &iamPolicyDiscoverer{new: func() iamPolicyClient { return &fakeIAMPolicyClient{} }}
+	d := &iamPolicyDiscoverer{new: func(_ string) iamPolicyClient { return &fakeIAMPolicyClient{} }}
 	_, err := d.DiscoverByID(context.Background(), "io-foo-readonly", "us-east-1", "123")
 	if !errors.Is(err, ErrNotSupported) {
 		t.Errorf("err=%v, want ErrNotSupported (bare names not allowed for policies)", err)
@@ -123,7 +140,7 @@ func TestIAMPolicyDiscoverByID_RejectsBareName(t *testing.T) {
 
 func TestIAMPolicyDiscoverByID_UnsupportedID(t *testing.T) {
 	t.Parallel()
-	d := &iamPolicyDiscoverer{new: func() iamPolicyClient { return &fakeIAMPolicyClient{} }}
+	d := &iamPolicyDiscoverer{new: func(_ string) iamPolicyClient { return &fakeIAMPolicyClient{} }}
 	cases := []string{
 		"",
 		"arn:aws:s3:::a-bucket",

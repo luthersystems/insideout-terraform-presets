@@ -51,7 +51,7 @@ func TestDiscoverTypes_ScopesToProjectAndPassesAssetTypes(t *testing.T) {
 	fake := &fakeAssetSearcher{}
 	g := NewGCPDiscoverer(fake, "real-proj")
 
-	if _, err := g.DiscoverTypes(context.Background(), []string{"google_pubsub_topic"}, "io-foo", "us-central1", ""); err != nil {
+	if _, err := g.DiscoverTypes(context.Background(), []string{"google_pubsub_topic"}, DiscoverArgs{Project: "io-foo", Regions: []string{"us-central1"}}); err != nil {
 		t.Fatal(err)
 	}
 	if len(fake.calls) != 1 {
@@ -76,7 +76,7 @@ func TestDiscoverTypes_DefaultsToAllSupported(t *testing.T) {
 	t.Parallel()
 	fake := &fakeAssetSearcher{}
 	g := NewGCPDiscoverer(fake, "real-proj")
-	if _, err := g.DiscoverTypes(context.Background(), nil, "io-foo", "", ""); err != nil {
+	if _, err := g.DiscoverTypes(context.Background(), nil, DiscoverArgs{Project: "io-foo", Regions: []string{""}}); err != nil {
 		t.Fatal(err)
 	}
 	if len(fake.calls) != 1 {
@@ -92,7 +92,7 @@ func TestDiscoverTypes_EmptyProjectAndRegionEmptyQuery(t *testing.T) {
 	t.Parallel()
 	fake := &fakeAssetSearcher{}
 	g := NewGCPDiscoverer(fake, "real-proj")
-	if _, err := g.DiscoverTypes(context.Background(), []string{"google_storage_bucket"}, "", "", ""); err != nil {
+	if _, err := g.DiscoverTypes(context.Background(), []string{"google_storage_bucket"}, DiscoverArgs{Project: "", Regions: []string{""}}); err != nil {
 		t.Fatal(err)
 	}
 	if fake.calls[0].query != "" {
@@ -103,7 +103,7 @@ func TestDiscoverTypes_EmptyProjectAndRegionEmptyQuery(t *testing.T) {
 func TestDiscoverTypes_UnknownTypeAggregatesError(t *testing.T) {
 	t.Parallel()
 	g := NewGCPDiscoverer(&fakeAssetSearcher{}, "p")
-	_, err := g.DiscoverTypes(context.Background(), []string{"google_pubsub_topic", "bogus", "also_bogus"}, "io-foo", "", "")
+	_, err := g.DiscoverTypes(context.Background(), []string{"google_pubsub_topic", "bogus", "also_bogus"}, DiscoverArgs{Project: "io-foo"})
 	if err == nil {
 		t.Fatal("expected error for unknown types")
 	}
@@ -115,7 +115,7 @@ func TestDiscoverTypes_UnknownTypeAggregatesError(t *testing.T) {
 func TestDiscoverTypes_PropagatesSearcherError(t *testing.T) {
 	t.Parallel()
 	g := NewGCPDiscoverer(&fakeAssetSearcher{err: errors.New("PermissionDenied")}, "p")
-	_, err := g.DiscoverTypes(context.Background(), []string{"google_pubsub_topic"}, "io-foo", "", "")
+	_, err := g.DiscoverTypes(context.Background(), []string{"google_pubsub_topic"}, DiscoverArgs{Project: "io-foo", Regions: []string{""}})
 	if err == nil || !strings.Contains(err.Error(), "PermissionDenied") {
 		t.Errorf("err=%v, want wrap of PermissionDenied", err)
 	}
@@ -131,7 +131,7 @@ func TestDiscoverTypes_TranslatesAndSortsByName(t *testing.T) {
 		},
 	}
 	g := NewGCPDiscoverer(fake, "real-proj")
-	got, err := g.DiscoverTypes(context.Background(), []string{"google_pubsub_topic", "google_storage_bucket"}, "io-foo", "", "")
+	got, err := g.DiscoverTypes(context.Background(), []string{"google_pubsub_topic", "google_storage_bucket"}, DiscoverArgs{Project: "io-foo"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -188,7 +188,7 @@ func TestDiscoverTypes_SkipsAssetsForUnsupportedTypes(t *testing.T) {
 		},
 	}
 	g := NewGCPDiscoverer(fake, "real-proj")
-	got, err := g.DiscoverTypes(context.Background(), []string{"google_pubsub_topic"}, "io-foo", "", "")
+	got, err := g.DiscoverTypes(context.Background(), []string{"google_pubsub_topic"}, DiscoverArgs{Project: "io-foo", Regions: []string{""}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -291,24 +291,86 @@ func TestFromAsset_ProjectIDArgWinsOverAssetField(t *testing.T) {
 	}
 }
 
-// TestBuildSearchQuery_Composition pins the AND-join and the kept-empty
-// branches. A mutation that emitted `labels.project = io-foo` (with `=`
-// instead of `:`) or that included the empty terms anyway would produce
-// invalid Cloud Asset queries; this test catches both shapes.
+// TestBuildSearchQuery_Composition pins the AND-join, the kept-empty
+// branches, the multi-region OR-clause shape (#291), and operator-
+// supplied tag-selector clauses. A mutation that emitted
+// `labels.project = io-foo` (with `=` instead of `:`) or that
+// included the empty terms anyway would produce invalid Cloud Asset
+// queries; the literal-string assertions catch both shapes.
 func TestBuildSearchQuery_Composition(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
-		name, project, region, want string
+		name      string
+		project   string
+		locations []string
+		selectors []TagSelector
+		want      string
 	}{
-		{name: "both", project: "io-foo", region: "us-east1", want: "labels.project:io-foo AND location:us-east1"},
-		{name: "project only", project: "io-foo", region: "", want: "labels.project:io-foo"},
-		{name: "region only", project: "", region: "us-east1", want: "location:us-east1"},
-		{name: "neither", project: "", region: "", want: ""},
+		// Pre-#291 baseline cases (no selectors, single or zero region).
+		{name: "both project and single region", project: "io-foo", locations: []string{"us-east1"}, want: "labels.project:io-foo AND location:us-east1"},
+		{name: "project only", project: "io-foo", want: "labels.project:io-foo"},
+		{name: "single region only", locations: []string{"us-east1"}, want: "location:us-east1"},
+		{name: "neither", want: ""},
+
+		// Empty-string-filtering cases (#291). The natural shape from
+		// a no-default GCP path is a single-element slice containing
+		// the empty string; that must NOT produce the invalid
+		// "location:" clause. Mixed empty + non-empty must fall
+		// through to the single-region branch (one cleaned location).
+		{name: "single empty location stripped", locations: []string{""}, want: ""},
+		{name: "mixed empty + valid falls through to single", locations: []string{"", "us-east1"}, want: "location:us-east1"},
+
+		// #291 multi-region cases. Two-or-more locations emit a
+		// parenthesized `(location:l1 OR location:l2 OR ...)` clause —
+		// parens are non-optional because Cloud Asset's implicit `AND`
+		// binds tighter than `OR`.
+		{
+			name:      "multi-region only",
+			locations: []string{"us-east1", "us-central1"},
+			want:      "(location:us-east1 OR location:us-central1)",
+		},
+		{
+			name:      "project and multi-region",
+			project:   "io-foo",
+			locations: []string{"us-east1", "eu-west1"},
+			want:      "labels.project:io-foo AND (location:us-east1 OR location:eu-west1)",
+		},
+		{
+			name:      "multi-region OR ordering pin",
+			locations: []string{"a", "b", "c"},
+			want:      "(location:a OR location:b OR location:c)",
+		},
+
+		// #291 selector cases.
+		{
+			name:      "selector only",
+			selectors: []TagSelector{{Key: "env", Value: "prod"}},
+			want:      "labels.env:prod",
+		},
+		{
+			name:      "project and selector",
+			project:   "io-foo",
+			selectors: []TagSelector{{Key: "env", Value: "prod"}},
+			want:      "labels.project:io-foo AND labels.env:prod",
+		},
+		{
+			name:      "multi-region and selector",
+			project:   "io-foo",
+			locations: []string{"us-east1", "us-central1"},
+			selectors: []TagSelector{{Key: "env", Value: "prod"}},
+			want:      "labels.project:io-foo AND (location:us-east1 OR location:us-central1) AND labels.env:prod",
+		},
+		{
+			name:      "multi-selector ordering pin",
+			project:   "io-foo",
+			selectors: []TagSelector{{Key: "env", Value: "prod"}, {Key: "team", Value: "growth"}},
+			want:      "labels.project:io-foo AND labels.env:prod AND labels.team:growth",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			if got := buildSearchQuery(tc.project, tc.region); got != tc.want {
+			if got := buildSearchQuery(tc.project, tc.locations, tc.selectors); got != tc.want {
 				t.Errorf("got %q, want %q", got, tc.want)
 			}
 		})

@@ -21,14 +21,21 @@ import (
 type kmsClient interface {
 	ListAliases(ctx context.Context, in *kms.ListAliasesInput, opts ...func(*kms.Options)) (*kms.ListAliasesOutput, error)
 	DescribeKey(ctx context.Context, in *kms.DescribeKeyInput, opts ...func(*kms.Options)) (*kms.DescribeKeyOutput, error)
+	ListResourceTags(ctx context.Context, in *kms.ListResourceTagsInput, opts ...func(*kms.Options)) (*kms.ListResourceTagsOutput, error)
 }
 
 type kmsDiscoverer struct {
-	new func() kmsClient
+	new func(region string) kmsClient
 }
 
 func newKMSDiscoverer(cfg aws.Config) Discoverer {
-	return &kmsDiscoverer{new: func() kmsClient { return kms.NewFromConfig(cfg) }}
+	return &kmsDiscoverer{new: func(region string) kmsClient {
+		return kms.NewFromConfig(cfg, func(o *kms.Options) {
+			if region != "" {
+				o.Region = region
+			}
+		})
+	}}
 }
 
 func (d *kmsDiscoverer) ResourceType() string { return "aws_kms_key" }
@@ -44,73 +51,105 @@ func (d *kmsDiscoverer) ResourceType() string { return "aws_kms_key" }
 // project name are skipped. Operators with "naked" keys (no alias)
 // must hand the key UUID to discover via the --resource-types path.
 //
+// Multi-region (#291): outer loop walks args.Regions, building a per-
+// region SDK client. Per-key ListResourceTags fetches the key tag map
+// for tag-selector post-filtering and tag persistence onto Identity.Tags.
+//
 // Import ID for aws_kms_key is the key UUID (from the alias's
 // TargetKeyId).
-func (d *kmsDiscoverer) Discover(ctx context.Context, project, region, accountID string) ([]imported.ImportedResource, error) {
-	client := d.new()
-
-	type key struct {
-		uuid  string
-		alias string
-	}
-	var keys []key
-
-	paginator := kms.NewListAliasesPaginator(client, &kms.ListAliasesInput{})
-	for paginator.HasMorePages() {
-		page, err := paginator.NextPage(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("ListAliases: %w", err)
-		}
-		for _, a := range page.Aliases {
-			alias := aws.ToString(a.AliasName)
-			target := aws.ToString(a.TargetKeyId)
-			if target == "" {
-				// AWS-managed alias with no customer-managed key behind
-				// it; skip — cannot import.
-				continue
-			}
-			if project != "" && !strings.Contains(alias, project) {
-				continue
-			}
-			// Skip AWS-managed aliases (e.g. "alias/aws/...") that may
-			// happen to contain the project name as a substring.
-			if strings.HasPrefix(alias, "alias/aws/") {
-				continue
-			}
-			// Note: a.AliasArn is the *alias* ARN, not the key ARN we
-			// want for NativeIDs[arn]. The key ARN is synthesized
-			// below from region + accountID + target UUID; alias arn
-			// is intentionally NOT carried into NativeIDs.
-			keys = append(keys, key{
-				uuid:  target,
-				alias: alias,
-			})
-		}
-	}
-
-	sort.Slice(keys, func(i, j int) bool { return keys[i].alias < keys[j].alias })
-
+func (d *kmsDiscoverer) Discover(ctx context.Context, args DiscoverArgs) ([]imported.ImportedResource, error) {
 	book := addressBook{}
-	imps := make([]imported.ImportedResource, 0, len(keys))
-	for _, k := range keys {
-		var arn string
-		if accountID != "" && region != "" {
-			arn = fmt.Sprintf("arn:aws:kms:%s:%s:key/%s", region, accountID, k.uuid)
+	var imps []imported.ImportedResource
+
+	for _, region := range args.Regions {
+		client := d.new(region)
+
+		type key struct {
+			uuid  string
+			alias string
 		}
-		// NameHint is the alias (without "alias/" prefix) to keep the
-		// generated Terraform address human-readable.
-		nameHint := strings.TrimPrefix(k.alias, "alias/")
-		imps = append(imps, makeImportedResource(
-			book,
-			"aws_kms_key",
-			nameHint,
-			k.uuid,
-			region,
-			accountID,
-			map[string]string{"arn": arn, "alias": k.alias},
-		))
+		var keys []key
+
+		paginator := kms.NewListAliasesPaginator(client, &kms.ListAliasesInput{})
+		for paginator.HasMorePages() {
+			page, err := paginator.NextPage(ctx)
+			if err != nil {
+				return nil, fmt.Errorf("ListAliases (region=%s): %w", region, err)
+			}
+			for _, a := range page.Aliases {
+				alias := aws.ToString(a.AliasName)
+				target := aws.ToString(a.TargetKeyId)
+				if target == "" {
+					// AWS-managed alias with no customer-managed key behind
+					// it; skip — cannot import.
+					continue
+				}
+				if args.Project != "" && !strings.Contains(alias, args.Project) {
+					continue
+				}
+				// Skip AWS-managed aliases (e.g. "alias/aws/...") that may
+				// happen to contain the project name as a substring.
+				if strings.HasPrefix(alias, "alias/aws/") {
+					continue
+				}
+				keys = append(keys, key{
+					uuid:  target,
+					alias: alias,
+				})
+			}
+		}
+
+		sort.Slice(keys, func(i, j int) bool { return keys[i].alias < keys[j].alias })
+
+		for _, k := range keys {
+			tags, err := fetchKMSTags(ctx, client, k.uuid)
+			if err != nil {
+				return nil, fmt.Errorf("ListResourceTags (region=%s, key=%s): %w", region, k.uuid, err)
+			}
+			if !MatchesAll(tags, args.TagSelectors) {
+				continue
+			}
+			var arn string
+			if args.AccountID != "" && region != "" {
+				arn = fmt.Sprintf("arn:aws:kms:%s:%s:key/%s", region, args.AccountID, k.uuid)
+			}
+			// NameHint is the alias (without "alias/" prefix) to keep the
+			// generated Terraform address human-readable.
+			nameHint := strings.TrimPrefix(k.alias, "alias/")
+			imps = append(imps, makeImportedResource(
+				book,
+				"aws_kms_key",
+				nameHint,
+				k.uuid,
+				region,
+				args.AccountID,
+				map[string]string{"arn": arn, "alias": k.alias},
+				tags,
+			))
+		}
 	}
 	return imps, nil
+}
+
+// fetchKMSTags returns the key's tag map. KMS's ListResourceTags
+// returns `Tags []TagListEntry` (TagKey + TagValue). Empty (non-nil)
+// map for "fetched, but the key has no tags."
+func fetchKMSTags(ctx context.Context, client kmsClient, keyID string) (map[string]string, error) {
+	tags := map[string]string{}
+	input := &kms.ListResourceTagsInput{KeyId: aws.String(keyID)}
+	for {
+		out, err := client.ListResourceTags(ctx, input)
+		if err != nil {
+			return nil, err
+		}
+		for _, t := range out.Tags {
+			tags[aws.ToString(t.TagKey)] = aws.ToString(t.TagValue)
+		}
+		if !out.Truncated {
+			return tags, nil
+		}
+		input.Marker = out.NextMarker
+	}
 }
 
 // DiscoverByID resolves a KMS key by ARN
@@ -122,7 +161,7 @@ func (d *kmsDiscoverer) DiscoverByID(ctx context.Context, id, region, accountID 
 	if err != nil {
 		return imported.ImportedResource{}, err
 	}
-	client := d.new()
+	client := d.new(region)
 	out, err := client.DescribeKey(ctx, &kms.DescribeKeyInput{KeyId: aws.String(probe)})
 	if err != nil {
 		var notFound *kmstypes.NotFoundException
@@ -147,6 +186,7 @@ func (d *kmsDiscoverer) DiscoverByID(ctx context.Context, id, region, accountID 
 		region,
 		accountID,
 		map[string]string{"arn": arn},
+		nil,
 	), nil
 }
 

@@ -37,10 +37,13 @@ func (b addressBook) add(addr string) { b[addr] = struct{}{} }
 // hint precedence matches the AWS path), importID is the per-type
 // terraform-side import ID (see each discoverer file for the shape),
 // projectID is the real GCP project ID, location is the GCP location
-// (empty for project-global types), and nativeIDs lets a discoverer
-// attach extra cloud-side IDs (self-link, asset name) without mutating
-// the merged map after construction.
-func makeImportedResource(book addressBook, typ, name, importID, projectID, location string, nativeIDs map[string]string) imported.ImportedResource {
+// (empty for project-global types), nativeIDs lets a discoverer attach
+// extra cloud-side IDs (self-link, asset name) without mutating the
+// merged map after construction, and tags is the asset's labels map
+// captured at discover time. Pass nil for tags if the asset had no
+// labels field; the nil-vs-empty distinction is load-bearing for the
+// downstream tag-selector and summary consumers (#291, #289 gap-#6).
+func makeImportedResource(book addressBook, typ, name, importID, projectID, location string, nativeIDs, tags map[string]string) imported.ImportedResource {
 	id := imported.ResourceIdentity{
 		Cloud:          "gcp",
 		Type:           typ,
@@ -51,6 +54,7 @@ func makeImportedResource(book addressBook, typ, name, importID, projectID, loca
 		Location:       location,
 		ImportID:       importID,
 		NativeIDs:      mergeNativeIDs(name, nativeIDs),
+		Tags:           tags,
 	}
 	addr := imported.GenerateAddress(id, book.exists)
 	id.Address = addr

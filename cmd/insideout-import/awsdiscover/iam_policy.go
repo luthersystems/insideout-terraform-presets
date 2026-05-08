@@ -23,14 +23,21 @@ import (
 type iamPolicyClient interface {
 	ListPolicies(ctx context.Context, in *iam.ListPoliciesInput, opts ...func(*iam.Options)) (*iam.ListPoliciesOutput, error)
 	GetPolicy(ctx context.Context, in *iam.GetPolicyInput, opts ...func(*iam.Options)) (*iam.GetPolicyOutput, error)
+	ListPolicyTags(ctx context.Context, in *iam.ListPolicyTagsInput, opts ...func(*iam.Options)) (*iam.ListPolicyTagsOutput, error)
 }
 
 type iamPolicyDiscoverer struct {
-	new func() iamPolicyClient
+	new func(region string) iamPolicyClient
 }
 
 func newIAMPolicyDiscoverer(cfg aws.Config) Discoverer {
-	return &iamPolicyDiscoverer{new: func() iamPolicyClient { return iam.NewFromConfig(cfg) }}
+	return &iamPolicyDiscoverer{new: func(region string) iamPolicyClient {
+		return iam.NewFromConfig(cfg, func(o *iam.Options) {
+			if region != "" {
+				o.Region = region
+			}
+		})
+	}}
 }
 
 func (d *iamPolicyDiscoverer) ResourceType() string { return "aws_iam_policy" }
@@ -40,9 +47,13 @@ func (d *iamPolicyDiscoverer) ResourceType() string { return "aws_iam_policy" }
 // customer-managed policies (the only kind aws_iam_policy creates) and
 // excludes the thousands of AWS-managed policies.
 //
+// IAM is account-global — args.Regions is ignored; Identity.Region is
+// stamped empty. Per-policy ListPolicyTags fetches the tag map for
+// tag-selector post-filtering and tag persistence onto Identity.Tags.
+//
 // Import ID for aws_iam_policy is the policy ARN.
-func (d *iamPolicyDiscoverer) Discover(ctx context.Context, project, region, accountID string) ([]imported.ImportedResource, error) {
-	client := d.new()
+func (d *iamPolicyDiscoverer) Discover(ctx context.Context, args DiscoverArgs) ([]imported.ImportedResource, error) {
+	client := d.new("")
 
 	type policy struct {
 		name string
@@ -60,7 +71,7 @@ func (d *iamPolicyDiscoverer) Discover(ctx context.Context, project, region, acc
 		}
 		for _, p := range page.Policies {
 			name := aws.ToString(p.PolicyName)
-			if project != "" && !strings.HasPrefix(name, project) {
+			if args.Project != "" && !strings.HasPrefix(name, args.Project) {
 				continue
 			}
 			policies = append(policies, policy{name: name, arn: aws.ToString(p.Arn)})
@@ -72,17 +83,46 @@ func (d *iamPolicyDiscoverer) Discover(ctx context.Context, project, region, acc
 	book := addressBook{}
 	imps := make([]imported.ImportedResource, 0, len(policies))
 	for _, p := range policies {
+		tags, err := fetchIAMPolicyTags(ctx, client, p.arn)
+		if err != nil {
+			return nil, fmt.Errorf("ListPolicyTags (policy=%s): %w", p.name, err)
+		}
+		if !MatchesAll(tags, args.TagSelectors) {
+			continue
+		}
 		imps = append(imps, makeImportedResource(
 			book,
 			"aws_iam_policy",
 			p.name,
 			p.arn,
-			region,
-			accountID,
+			"", // IAM is global; do not stamp a region.
+			args.AccountID,
 			map[string]string{"arn": p.arn},
+			tags,
 		))
 	}
 	return imps, nil
+}
+
+// fetchIAMPolicyTags returns the policy's tag map. ListPolicyTags
+// returns a `Tags []iamtypes.Tag` we transcribe into a string-keyed
+// map. Empty (non-nil) map for "fetched, but the policy has no tags."
+func fetchIAMPolicyTags(ctx context.Context, client iamPolicyClient, policyArn string) (map[string]string, error) {
+	tags := map[string]string{}
+	input := &iam.ListPolicyTagsInput{PolicyArn: aws.String(policyArn)}
+	for {
+		out, err := client.ListPolicyTags(ctx, input)
+		if err != nil {
+			return nil, err
+		}
+		for _, t := range out.Tags {
+			tags[aws.ToString(t.Key)] = aws.ToString(t.Value)
+		}
+		if !out.IsTruncated {
+			return tags, nil
+		}
+		input.Marker = out.Marker
+	}
 }
 
 // DiscoverByID resolves an IAM policy by ARN. Bare names are NOT
@@ -107,7 +147,7 @@ func (d *iamPolicyDiscoverer) DiscoverByID(ctx context.Context, id, region, acco
 		return imported.ImportedResource{}, fmt.Errorf("iam: arn resource %q is not policy/<name>: %w", parsed.Resource, ErrNotSupported)
 	}
 
-	client := d.new()
+	client := d.new(region)
 	out, err := client.GetPolicy(ctx, &iam.GetPolicyInput{PolicyArn: aws.String(id)})
 	if err != nil {
 		var notFound *iamtypes.NoSuchEntityException
@@ -133,5 +173,6 @@ func (d *iamPolicyDiscoverer) DiscoverByID(ctx context.Context, id, region, acco
 		region,
 		accountID,
 		map[string]string{"arn": id},
+		nil,
 	), nil
 }
