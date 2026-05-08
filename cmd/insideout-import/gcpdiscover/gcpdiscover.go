@@ -29,9 +29,20 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
+	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/progress"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
+
+// gcpServiceSlug is the progress-event service slug used for the
+// single Cloud Asset Inventory call that powers GCP discovery (#295).
+// One CAI SearchAllResources covers every requested asset type for a
+// project, so we emit one (service_start/service_finish) pair around
+// it rather than per-asset-type. The slug name matches the Cloud
+// Asset API's product naming so consumers know what the events
+// represent.
+const gcpServiceSlug = "cloud_asset_inventory"
 
 // ErrNotSupported signals that a discoverer cannot resolve a given ID
 // (e.g. a Terraform type for which no discoverer is registered, or a GCP
@@ -151,6 +162,11 @@ func (g *GCPDiscoverer) DiscoverTypes(ctx context.Context, types []string, args 
 	if len(types) == 0 {
 		types = g.SupportedTypes()
 	}
+	// Resolve a nil Emitter once here so per-asset translation can call
+	// args.Emitter.* unconditionally (#295).
+	if args.Emitter == nil {
+		args.Emitter = progress.NopEmitter{}
+	}
 
 	var unknown []string
 	selected := make([]Discoverer, 0, len(types))
@@ -171,8 +187,11 @@ func (g *GCPDiscoverer) DiscoverTypes(ctx context.Context, types []string, args 
 	scope := fmt.Sprintf("projects/%s", g.projectID)
 	query := buildSearchQuery(args.Project, args.Regions, args.TagSelectors)
 
+	stageStart := time.Now()
+	args.Emitter.ServiceStart(gcpServiceSlug, "")
 	results, err := g.searcher.SearchAll(ctx, scope, assetTypes, query)
 	if err != nil {
+		args.Emitter.ServiceFinish(gcpServiceSlug, "", 0, time.Since(stageStart))
 		return nil, fmt.Errorf("cloud asset SearchAllResources: %w", err)
 	}
 
@@ -190,9 +209,13 @@ func (g *GCPDiscoverer) DiscoverTypes(ctx context.Context, types []string, args 
 		bucket := byAsset[d.AssetType()]
 		sort.SliceStable(bucket, func(i, j int) bool { return bucket[i].Name < bucket[j].Name })
 		for _, r := range bucket {
-			out = append(out, d.FromAsset(book, r, g.projectID))
+			imp := d.FromAsset(book, r, g.projectID)
+			args.Emitter.ItemFound(gcpServiceSlug, r.Location, imp.Identity.Type, imp.Identity.ImportID)
+			out = append(out, imp)
 		}
 	}
+	args.Emitter.ServiceFinish(gcpServiceSlug, "", len(out), time.Since(stageStart))
+	args.Emitter.StageFinish("discover", len(out), time.Since(stageStart))
 	return out, nil
 }
 

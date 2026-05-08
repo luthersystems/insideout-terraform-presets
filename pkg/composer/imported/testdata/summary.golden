@@ -1,0 +1,34 @@
+{
+  "total": 8,
+  "importable": 4,
+  "unsupported": 4,
+  "by_type": {
+    "aws_lambda_function": 1,
+    "aws_s3_bucket": 1,
+    "aws_sqs_queue": 2
+  },
+  "by_region": {
+    "eu-west-1": 1,
+    "us-east-1": 3
+  },
+  "by_tag": {
+    "env=prod": 2,
+    "team=growth": 1
+  },
+  "by_group": {
+    "Data Storage": 1,
+    "Events": 2,
+    "Virtual Machines": 1
+  },
+  "scan_summary": {
+    "duration_ms": 12345,
+    "regions_scanned": [
+      "us-east-1",
+      "eu-west-1"
+    ],
+    "tag_selectors": [
+      "env=prod"
+    ],
+    "cloud": "aws"
+  }
+}

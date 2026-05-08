@@ -21,9 +21,11 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 
+	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/progress"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
 
@@ -135,6 +137,39 @@ func NewAWSDiscovererWithConcurrency(cfg aws.Config, maxConcurrency int) *AWSDis
 	}
 }
 
+// serviceSlugByTFType maps a Terraform resource type to the short,
+// stable progress-event service slug (#295). The slug appears in the
+// `service` field of every progress.Event emitted by the per-service
+// discoverer; downstream consumers (reliable agent-API SSE translator)
+// pivot UI rows on these strings, so they're locked here as a single
+// source of truth. The names match the package directory / file
+// convention already used in this package (sqs.go, dynamodb.go,
+// cloudwatchlogs.go, etc.) so a regression that switches a per-service
+// file's slug will diverge from the file name and be obvious in review.
+var serviceSlugByTFType = map[string]string{
+	"aws_sqs_queue":             "sqs",
+	"aws_dynamodb_table":        "dynamodb",
+	"aws_cloudwatch_log_group":  "cloudwatchlogs",
+	"aws_secretsmanager_secret": "secretsmanager",
+	"aws_lambda_function":       "lambda",
+	"aws_iam_role":              "iam_role",
+	"aws_iam_policy":            "iam_policy",
+	"aws_kms_key":               "kms",
+	"aws_s3_bucket":             "s3",
+}
+
+// ServiceSlug returns the progress-event slug for a Terraform resource
+// type, falling back to the type itself when no slug is registered.
+// Falling back (rather than panicking) keeps the Emitter safe to call
+// from any Discoverer, including test-only ones a future contributor
+// might register without updating the slug map.
+func ServiceSlug(tfType string) string {
+	if s, ok := serviceSlugByTFType[tfType]; ok {
+		return s
+	}
+	return tfType
+}
+
 // SupportedTypes returns the registered Terraform types in lexicographic
 // order. Used by the CLI for default --resource-types and validation.
 func (a *AWSDiscoverer) SupportedTypes() []string {
@@ -184,6 +219,12 @@ func (a *AWSDiscoverer) DiscoverTypes(ctx context.Context, types []string, args 
 	if len(args.Regions) == 0 {
 		args.Regions = []string{a.defaultRegion}
 	}
+	// Resolve a nil Emitter once here so per-service Discover bodies
+	// can call args.Emitter.* unconditionally. The progress package's
+	// NopEmitter is zero-overhead.
+	if args.Emitter == nil {
+		args.Emitter = progress.NopEmitter{}
+	}
 
 	var unknown []string
 	selected := make([]Discoverer, 0, len(types))
@@ -199,6 +240,7 @@ func (a *AWSDiscoverer) DiscoverTypes(ctx context.Context, types []string, args 
 		return nil, fmt.Errorf("unknown resource type(s): %v (supported: %v)", unknown, a.SupportedTypes())
 	}
 
+	stageStart := time.Now()
 	var all []imported.ImportedResource
 	for _, d := range selected {
 		entries, err := d.Discover(ctx, args)
@@ -207,5 +249,6 @@ func (a *AWSDiscoverer) DiscoverTypes(ctx context.Context, types []string, args 
 		}
 		all = append(all, entries...)
 	}
+	args.Emitter.StageFinish("discover", len(all), time.Since(stageStart))
 	return all, nil
 }

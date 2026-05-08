@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsarn "github.com/aws/aws-sdk-go-v2/aws/arn"
@@ -68,9 +70,14 @@ func (d *dynamoDiscoverer) ResourceType() string { return "aws_dynamodb_table" }
 //
 // Import ID for aws_dynamodb_table is the table name.
 func (d *dynamoDiscoverer) Discover(ctx context.Context, args DiscoverArgs) ([]imported.ImportedResource, error) {
+	args.Emitter = emitterOrNop(args.Emitter)
 	book := addressBook{}
+	const slug = "dynamodb"
 	var imps []imported.ImportedResource
 	for _, region := range args.Regions {
+		regionStart := time.Now()
+		args.Emitter.ServiceStart(slug, region)
+		regionCount := 0
 		client := d.new(region)
 
 		var all []string
@@ -78,6 +85,7 @@ func (d *dynamoDiscoverer) Discover(ctx context.Context, args DiscoverArgs) ([]i
 		for {
 			out, err := client.ListTables(ctx, input)
 			if err != nil {
+				args.Emitter.ServiceFinish(slug, region, regionCount, time.Since(regionStart))
 				return nil, fmt.Errorf("ListTables (region=%s): %w", region, err)
 			}
 			for _, t := range out.TableNames {
@@ -128,6 +136,12 @@ func (d *dynamoDiscoverer) Discover(ctx context.Context, args DiscoverArgs) ([]i
 						if cerr := gctx.Err(); cerr != nil {
 							return cerr
 						}
+						// Surface a stderr WARN per failure so a silent
+						// drop between ListTables count and the
+						// discovered row count is at least visible. The
+						// per-table failure does not abort the run; we
+						// continue dropping the row (see #289 P1-19).
+						fmt.Fprintf(os.Stderr, "discover: WARN: dynamodb %s: list tags (region=%s): %v\n", name, region, err)
 						return nil
 					}
 					tags := make(map[string]string, len(tagsOut.Tags))
@@ -141,6 +155,7 @@ func (d *dynamoDiscoverer) Discover(ctx context.Context, args DiscoverArgs) ([]i
 				})
 			}
 			if err := g.Wait(); err != nil {
+				args.Emitter.ServiceFinish(slug, region, regionCount, time.Since(regionStart))
 				return nil, fmt.Errorf("ListTagsOfResource (region=%s): %w", region, err)
 			}
 			entries = ok
@@ -175,7 +190,10 @@ func (d *dynamoDiscoverer) Discover(ctx context.Context, args DiscoverArgs) ([]i
 				map[string]string{"arn": arn},
 				e.tags,
 			))
+			args.Emitter.ItemFound(slug, region, "aws_dynamodb_table", e.name)
+			regionCount++
 		}
+		args.Emitter.ServiceFinish(slug, region, regionCount, time.Since(regionStart))
 	}
 	return imps, nil
 }

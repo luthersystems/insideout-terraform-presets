@@ -7,6 +7,7 @@ import (
 	"path"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsarn "github.com/aws/aws-sdk-go-v2/aws/arn"
@@ -51,9 +52,14 @@ func (d *sqsDiscoverer) ResourceType() string { return "aws_sqs_queue" }
 //
 // Import ID for aws_sqs_queue is the queue URL itself.
 func (d *sqsDiscoverer) Discover(ctx context.Context, args DiscoverArgs) ([]imported.ImportedResource, error) {
+	args.Emitter = emitterOrNop(args.Emitter)
 	book := addressBook{}
+	const slug = "sqs"
 	var out []imported.ImportedResource
 	for _, region := range args.Regions {
+		regionStart := time.Now()
+		args.Emitter.ServiceStart(slug, region)
+		regionCount := 0
 		client := d.new(region)
 		input := &sqs.ListQueuesInput{}
 		if args.Project != "" {
@@ -63,6 +69,7 @@ func (d *sqsDiscoverer) Discover(ctx context.Context, args DiscoverArgs) ([]impo
 
 		urls, err := paginateListQueues(ctx, client, input)
 		if err != nil {
+			args.Emitter.ServiceFinish(slug, region, regionCount, time.Since(regionStart))
 			return nil, fmt.Errorf("ListQueues (region=%s): %w", region, err)
 		}
 
@@ -75,6 +82,7 @@ func (d *sqsDiscoverer) Discover(ctx context.Context, args DiscoverArgs) ([]impo
 			name := path.Base(url)
 			tags, err := fetchSQSTags(ctx, client, url)
 			if err != nil {
+				args.Emitter.ServiceFinish(slug, region, regionCount, time.Since(regionStart))
 				return nil, fmt.Errorf("ListQueueTags (region=%s, queue=%s): %w", region, name, err)
 			}
 			if !MatchesAll(tags, args.TagSelectors) {
@@ -90,7 +98,10 @@ func (d *sqsDiscoverer) Discover(ctx context.Context, args DiscoverArgs) ([]impo
 				map[string]string{"url": url},
 				tags,
 			))
+			args.Emitter.ItemFound(slug, region, "aws_sqs_queue", url)
+			regionCount++
 		}
+		args.Emitter.ServiceFinish(slug, region, regionCount, time.Since(regionStart))
 	}
 	return out, nil
 }

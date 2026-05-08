@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsarn "github.com/aws/aws-sdk-go-v2/aws/arn"
@@ -58,10 +59,15 @@ func (d *kmsDiscoverer) ResourceType() string { return "aws_kms_key" }
 // Import ID for aws_kms_key is the key UUID (from the alias's
 // TargetKeyId).
 func (d *kmsDiscoverer) Discover(ctx context.Context, args DiscoverArgs) ([]imported.ImportedResource, error) {
+	args.Emitter = emitterOrNop(args.Emitter)
 	book := addressBook{}
+	const slug = "kms"
 	var imps []imported.ImportedResource
 
 	for _, region := range args.Regions {
+		regionStart := time.Now()
+		args.Emitter.ServiceStart(slug, region)
+		regionCount := 0
 		client := d.new(region)
 
 		type key struct {
@@ -74,6 +80,7 @@ func (d *kmsDiscoverer) Discover(ctx context.Context, args DiscoverArgs) ([]impo
 		for paginator.HasMorePages() {
 			page, err := paginator.NextPage(ctx)
 			if err != nil {
+				args.Emitter.ServiceFinish(slug, region, regionCount, time.Since(regionStart))
 				return nil, fmt.Errorf("ListAliases (region=%s): %w", region, err)
 			}
 			for _, a := range page.Aliases {
@@ -104,6 +111,7 @@ func (d *kmsDiscoverer) Discover(ctx context.Context, args DiscoverArgs) ([]impo
 		for _, k := range keys {
 			tags, err := fetchKMSTags(ctx, client, k.uuid)
 			if err != nil {
+				args.Emitter.ServiceFinish(slug, region, regionCount, time.Since(regionStart))
 				return nil, fmt.Errorf("ListResourceTags (region=%s, key=%s): %w", region, k.uuid, err)
 			}
 			if !MatchesAll(tags, args.TagSelectors) {
@@ -126,7 +134,10 @@ func (d *kmsDiscoverer) Discover(ctx context.Context, args DiscoverArgs) ([]impo
 				map[string]string{"arn": arn, "alias": k.alias},
 				tags,
 			))
+			args.Emitter.ItemFound(slug, region, "aws_kms_key", k.uuid)
+			regionCount++
 		}
+		args.Emitter.ServiceFinish(slug, region, regionCount, time.Since(regionStart))
 	}
 	return imps, nil
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsarn "github.com/aws/aws-sdk-go-v2/aws/arn"
@@ -51,6 +52,14 @@ func (d *iamRoleDiscoverer) ResourceType() string { return "aws_iam_role" }
 //
 // Import ID for aws_iam_role is the role name.
 func (d *iamRoleDiscoverer) Discover(ctx context.Context, args DiscoverArgs) ([]imported.ImportedResource, error) {
+	args.Emitter = emitterOrNop(args.Emitter)
+	const slug = "iam_role"
+	// IAM is account-global; emit a single (svc,"") scope per run. Empty
+	// region in the event matches the empty Identity.Region the per-role
+	// stamp uses.
+	regionStart := time.Now()
+	args.Emitter.ServiceStart(slug, "")
+	regionCount := 0
 	client := d.new("")
 
 	type role struct {
@@ -63,6 +72,7 @@ func (d *iamRoleDiscoverer) Discover(ctx context.Context, args DiscoverArgs) ([]
 	for paginator.HasMorePages() {
 		page, err := paginator.NextPage(ctx)
 		if err != nil {
+			args.Emitter.ServiceFinish(slug, "", regionCount, time.Since(regionStart))
 			return nil, fmt.Errorf("ListRoles: %w", err)
 		}
 		for _, r := range page.Roles {
@@ -81,6 +91,7 @@ func (d *iamRoleDiscoverer) Discover(ctx context.Context, args DiscoverArgs) ([]
 	for _, r := range roles {
 		tags, err := fetchIAMRoleTags(ctx, client, r.name)
 		if err != nil {
+			args.Emitter.ServiceFinish(slug, "", regionCount, time.Since(regionStart))
 			return nil, fmt.Errorf("ListRoleTags (role=%s): %w", r.name, err)
 		}
 		if !MatchesAll(tags, args.TagSelectors) {
@@ -96,7 +107,10 @@ func (d *iamRoleDiscoverer) Discover(ctx context.Context, args DiscoverArgs) ([]
 			map[string]string{"arn": r.arn},
 			tags,
 		))
+		args.Emitter.ItemFound(slug, "", "aws_iam_role", r.name)
+		regionCount++
 	}
+	args.Emitter.ServiceFinish(slug, "", regionCount, time.Since(regionStart))
 	return imps, nil
 }
 

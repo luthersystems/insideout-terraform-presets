@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsarn "github.com/aws/aws-sdk-go-v2/aws/arn"
@@ -49,10 +50,15 @@ func (d *cwlDiscoverer) ResourceType() string { return "aws_cloudwatch_log_group
 //
 // Import ID for aws_cloudwatch_log_group is the log group name.
 func (d *cwlDiscoverer) Discover(ctx context.Context, args DiscoverArgs) ([]imported.ImportedResource, error) {
+	args.Emitter = emitterOrNop(args.Emitter)
 	book := addressBook{}
+	const slug = "cloudwatchlogs"
 	var imps []imported.ImportedResource
 
 	for _, region := range args.Regions {
+		regionStart := time.Now()
+		args.Emitter.ServiceStart(slug, region)
+		regionCount := 0
 		client := d.new(region)
 		input := &cloudwatchlogs.DescribeLogGroupsInput{}
 		if args.Project != "" {
@@ -69,6 +75,7 @@ func (d *cwlDiscoverer) Discover(ctx context.Context, args DiscoverArgs) ([]impo
 		for {
 			out, err := client.DescribeLogGroups(ctx, input)
 			if err != nil {
+				args.Emitter.ServiceFinish(slug, region, regionCount, time.Since(regionStart))
 				return nil, fmt.Errorf("DescribeLogGroups (region=%s): %w", region, err)
 			}
 			for _, lg := range out.LogGroups {
@@ -92,6 +99,7 @@ func (d *cwlDiscoverer) Discover(ctx context.Context, args DiscoverArgs) ([]impo
 			tagARN := strings.TrimSuffix(g.arn, ":*")
 			tags, err := fetchCWLTags(ctx, client, tagARN)
 			if err != nil {
+				args.Emitter.ServiceFinish(slug, region, regionCount, time.Since(regionStart))
 				return nil, fmt.Errorf("ListTagsForResource (region=%s, log_group=%s): %w", region, g.name, err)
 			}
 			if !MatchesAll(tags, args.TagSelectors) {
@@ -107,7 +115,10 @@ func (d *cwlDiscoverer) Discover(ctx context.Context, args DiscoverArgs) ([]impo
 				map[string]string{"arn": g.arn},
 				tags,
 			))
+			args.Emitter.ItemFound(slug, region, "aws_cloudwatch_log_group", g.name)
+			regionCount++
 		}
+		args.Emitter.ServiceFinish(slug, region, regionCount, time.Since(regionStart))
 	}
 	return imps, nil
 }
@@ -116,9 +127,11 @@ func (d *cwlDiscoverer) Discover(ctx context.Context, args DiscoverArgs) ([]impo
 // ListTagsForResource returns a `Tags map[string]string` directly; we
 // normalize the SDK's nil-on-empty into an empty map so the
 // nil-vs-empty distinction is preserved (nil ⇒ "didn't fetch", empty
-// ⇒ "no tags").
-func fetchCWLTags(ctx context.Context, client cwlClient, logGroupName string) (map[string]string, error) {
-	out, err := client.ListTagsForResource(ctx, &cloudwatchlogs.ListTagsForResourceInput{ResourceArn: aws.String(logGroupName)})
+// ⇒ "no tags"). The parameter is the trimmed log-group ARN (call
+// site at line ~100 strips the trailing ":*" wildcard); the rename
+// from `logGroupName` to `resourceARN` makes that contract obvious.
+func fetchCWLTags(ctx context.Context, client cwlClient, resourceARN string) (map[string]string, error) {
+	out, err := client.ListTagsForResource(ctx, &cloudwatchlogs.ListTagsForResourceInput{ResourceArn: aws.String(resourceARN)})
 	if err != nil {
 		return nil, err
 	}

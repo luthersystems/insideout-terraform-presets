@@ -142,6 +142,8 @@ github.com/aws/aws-sdk-go-v2/service/opensearchserverless v1.30.3 h1:47FPswEE4RK
 github.com/aws/aws-sdk-go-v2/service/opensearchserverless v1.30.3/go.mod h1:w/kwwh/dzVFrXLKUCj3M73lYUl+LrVn9gQ7RyiPNkZU=
 github.com/aws/aws-sdk-go-v2/service/rds v1.118.2 h1:pkEeQneYFpTAnGhyqSbyp/DlCPPJTGt0GkWahlLYzMA=
 github.com/aws/aws-sdk-go-v2/service/rds v1.118.2/go.mod h1:7gS+cGrKF0mH253QHFlStmx79ws+DlNk+04ZRfmw3U0=
+github.com/aws/aws-sdk-go-v2/service/resourceexplorer2 v1.23.6 h1:v4Gii9Pxx4bvvNmV5Se1pmx0ag5+Eb3/wZkT03iyCCI=
+github.com/aws/aws-sdk-go-v2/service/resourceexplorer2 v1.23.6/go.mod h1:W/WhNWo1nbW+wVQTw8681WzAj6yTOvGLl8GLWNEWC2I=
 github.com/aws/aws-sdk-go-v2/service/s3 v1.100.1 h1:mxuT1xE+dI54NW3RkNjP8DUT5HXqbkiAFvfdyDFwE5c=
 github.com/aws/aws-sdk-go-v2/service/s3 v1.100.1/go.mod h1:L2dcoOgS2VSgbPLvpak2NyUPsO1TBN7M45Z4H7DlRc4=
 github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.41.7 h1:JUGKqUnJHbXpS8uyuICP/zpQ+vXUIXW2zTEqjMLCqrY=

@@ -9,6 +9,13 @@ import (
 	sqstypes "github.com/aws/aws-sdk-go-v2/service/sqs/types"
 )
 
+// errSQSSeed is the package-level sentinel returned by the fake SQS
+// client in tests that want to assert error propagation. Tests should
+// use errors.Is(err, errSQSSeed) rather than asserting only on
+// `err != nil` — the latter masks regressions where the discover layer
+// silently swallows the SDK error and returns a different one.
+var errSQSSeed = errors.New("AccessDenied")
+
 type fakeSQSClient struct {
 	pages []sqs.ListQueuesOutput
 	calls []sqs.ListQueuesInput
@@ -160,11 +167,14 @@ func TestSQSDiscover_EmptyProjectPassesNoPrefix(t *testing.T) {
 func TestSQSDiscover_PropagatesError(t *testing.T) {
 	t.Parallel()
 	d := &sqsDiscoverer{new: func(_ string) sqsClient {
-		return &fakeSQSClient{err: errors.New("AccessDenied")}
+		return &fakeSQSClient{err: errSQSSeed}
 	}}
 	_, err := d.Discover(context.Background(), DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"})
 	if err == nil {
 		t.Fatal("expected error")
+	}
+	if !errors.Is(err, errSQSSeed) {
+		t.Errorf("err=%v, want errors.Is(err, errSQSSeed) — discover swallowed the SDK error", err)
 	}
 }
 
@@ -317,6 +327,124 @@ func TestSQSDiscover_TagSelectorAppliedAsFilter(t *testing.T) {
 	}
 	if got[0].Identity.Tags["env"] != "prod" {
 		t.Errorf("Tags[env]=%q, want prod (filter+persist contract)", got[0].Identity.Tags["env"])
+	}
+}
+
+// TestSQSDiscover_EmitsServiceStartFinish_PerRegion (#295) pins the
+// per-service progress contract: each region in args.Regions gets one
+// service_start + one service_finish event, in that order, with the
+// correct slug ("sqs") and region. A regression that emits at the
+// aggregator level instead of per-region — or skips Regions[1] — would
+// surface here as a missing or misordered event.
+func TestSQSDiscover_EmitsServiceStartFinish_PerRegion(t *testing.T) {
+	t.Parallel()
+	fakes := map[string]*fakeSQSClient{
+		"us-east-1": {
+			pages: []sqs.ListQueuesOutput{{QueueUrls: []string{"https://sqs.us-east-1.amazonaws.com/123/io-foo-east"}}},
+		},
+		"eu-west-1": {
+			pages: []sqs.ListQueuesOutput{{QueueUrls: []string{"https://sqs.eu-west-1.amazonaws.com/123/io-foo-west"}}},
+		},
+	}
+	d := &sqsDiscoverer{new: func(region string) sqsClient { return fakes[region] }}
+	rec := &recordingEmitter{}
+	if _, err := d.Discover(context.Background(), DiscoverArgs{
+		Project:   "io-foo",
+		Regions:   []string{"us-east-1", "eu-west-1"},
+		AccountID: "123",
+		Emitter:   rec,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	events := rec.snapshot()
+
+	// Pull out the service-scope brackets only.
+	type bracket struct{ start, finish int }
+	got := map[string]bracket{}
+	for i, e := range events {
+		switch e.Kind {
+		case "service_start":
+			b := got[e.Region]
+			b.start = i + 1 // +1 so zero-value disambiguates "not seen"
+			got[e.Region] = b
+		case "service_finish":
+			b := got[e.Region]
+			b.finish = i + 1
+			got[e.Region] = b
+		}
+		if e.Kind == "service_start" || e.Kind == "service_finish" {
+			if e.Service != "sqs" {
+				t.Errorf("event %d: service=%q, want sqs", i, e.Service)
+			}
+		}
+	}
+	if got["us-east-1"].start == 0 || got["us-east-1"].finish == 0 {
+		t.Errorf("us-east-1: missing service_start or service_finish: %+v", got["us-east-1"])
+	}
+	if got["eu-west-1"].start == 0 || got["eu-west-1"].finish == 0 {
+		t.Errorf("eu-west-1: missing service_start or service_finish: %+v", got["eu-west-1"])
+	}
+	if got["us-east-1"].start >= got["us-east-1"].finish {
+		t.Errorf("us-east-1: start at index %d >= finish at index %d", got["us-east-1"].start, got["us-east-1"].finish)
+	}
+}
+
+// TestSQSDiscover_EmitsItemFound_PerQueue (#295) pins that one
+// item_found event is emitted per emitted ImportedResource, carrying the
+// resource's TF type and import ID. A regression that emits one event
+// per ListQueues page (rather than per resolved queue) would surface
+// here as a count mismatch.
+func TestSQSDiscover_EmitsItemFound_PerQueue(t *testing.T) {
+	t.Parallel()
+	urls := []string{
+		"https://sqs.us-east-1.amazonaws.com/123/io-foo-a",
+		"https://sqs.us-east-1.amazonaws.com/123/io-foo-b",
+		"https://sqs.us-east-1.amazonaws.com/123/io-foo-c",
+	}
+	fake := &fakeSQSClient{
+		pages: []sqs.ListQueuesOutput{{QueueUrls: urls}},
+	}
+	d := &sqsDiscoverer{new: func(_ string) sqsClient { return fake }}
+	rec := &recordingEmitter{}
+	got, err := d.Discover(context.Background(), DiscoverArgs{
+		Project:   "io-foo",
+		Regions:   []string{"us-east-1"},
+		AccountID: "123",
+		Emitter:   rec,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var items []recordedEvent
+	for _, e := range rec.snapshot() {
+		if e.Kind == "item_found" {
+			items = append(items, e)
+		}
+	}
+	if len(items) != len(got) {
+		t.Errorf("item_found count = %d, want %d (one per emitted resource)", len(items), len(got))
+	}
+	wantIDs := map[string]bool{urls[0]: true, urls[1]: true, urls[2]: true}
+	for i, it := range items {
+		if it.Service != "sqs" {
+			t.Errorf("item %d: service=%q, want sqs", i, it.Service)
+		}
+		if it.Region != "us-east-1" {
+			t.Errorf("item %d: region=%q, want us-east-1", i, it.Region)
+		}
+		if it.TFType != "aws_sqs_queue" {
+			t.Errorf("item %d: tf_type=%q, want aws_sqs_queue", i, it.TFType)
+		}
+		if !wantIDs[it.ImportID] {
+			t.Errorf("item %d: import_id=%q not in expected URLs", i, it.ImportID)
+		}
+	}
+	// service_finish.count should match the number of items emitted.
+	for _, e := range rec.snapshot() {
+		if e.Kind == "service_finish" && e.Count != len(got) {
+			t.Errorf("service_finish.count=%d, want %d", e.Count, len(got))
+		}
 	}
 }
 

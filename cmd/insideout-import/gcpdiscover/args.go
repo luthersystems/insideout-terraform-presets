@@ -1,5 +1,7 @@
 package gcpdiscover
 
+import "github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/progress"
+
 // DiscoverArgs is the per-call input shape consumed by the aggregator's
 // DiscoverTypes. Mirrors awsdiscover.DiscoverArgs minus AccountID
 // (GCP uses the projectID stored on the *GCPDiscoverer; the GCP path
@@ -13,10 +15,15 @@ package gcpdiscover
 // the asset query language the `:` operator is substring-match, not
 // strict equality — same caveat as the existing labels.project:<v>
 // filter the aggregator already emits.
+//
+// Emitter (#295) carries the streaming-progress sink. The aggregator
+// resolves a nil Emitter to progress.NopEmitter{} once at the top of
+// DiscoverTypes so per-asset translation never has to nil-check.
 type DiscoverArgs struct {
 	Project      string
 	Regions      []string
 	TagSelectors []TagSelector
+	Emitter      progress.Emitter
 }
 
 // TagSelector is a single operator-supplied label-equality clause. See

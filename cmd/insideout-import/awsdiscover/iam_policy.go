@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsarn "github.com/aws/aws-sdk-go-v2/aws/arn"
@@ -53,6 +54,11 @@ func (d *iamPolicyDiscoverer) ResourceType() string { return "aws_iam_policy" }
 //
 // Import ID for aws_iam_policy is the policy ARN.
 func (d *iamPolicyDiscoverer) Discover(ctx context.Context, args DiscoverArgs) ([]imported.ImportedResource, error) {
+	args.Emitter = emitterOrNop(args.Emitter)
+	const slug = "iam_policy"
+	regionStart := time.Now()
+	args.Emitter.ServiceStart(slug, "")
+	regionCount := 0
 	client := d.new("")
 
 	type policy struct {
@@ -67,6 +73,7 @@ func (d *iamPolicyDiscoverer) Discover(ctx context.Context, args DiscoverArgs) (
 	for paginator.HasMorePages() {
 		page, err := paginator.NextPage(ctx)
 		if err != nil {
+			args.Emitter.ServiceFinish(slug, "", regionCount, time.Since(regionStart))
 			return nil, fmt.Errorf("ListPolicies: %w", err)
 		}
 		for _, p := range page.Policies {
@@ -85,6 +92,7 @@ func (d *iamPolicyDiscoverer) Discover(ctx context.Context, args DiscoverArgs) (
 	for _, p := range policies {
 		tags, err := fetchIAMPolicyTags(ctx, client, p.arn)
 		if err != nil {
+			args.Emitter.ServiceFinish(slug, "", regionCount, time.Since(regionStart))
 			return nil, fmt.Errorf("ListPolicyTags (policy=%s): %w", p.name, err)
 		}
 		if !MatchesAll(tags, args.TagSelectors) {
@@ -100,7 +108,10 @@ func (d *iamPolicyDiscoverer) Discover(ctx context.Context, args DiscoverArgs) (
 			map[string]string{"arn": p.arn},
 			tags,
 		))
+		args.Emitter.ItemFound(slug, "", "aws_iam_policy", p.arn)
+		regionCount++
 	}
+	args.Emitter.ServiceFinish(slug, "", regionCount, time.Since(regionStart))
 	return imps, nil
 }
 

@@ -1,5 +1,7 @@
 package awsdiscover
 
+import "github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/progress"
+
 // DiscoverArgs is the per-call input shape consumed by the aggregator's
 // DiscoverTypes and every per-service Discoverer.Discover. Bundling the
 // inputs into a struct (instead of positional args) keeps the per-service
@@ -14,6 +16,11 @@ package awsdiscover
 // AccountID (one STS GetCallerIdentity per run, threaded through so
 // per-service code can stamp Identity.AccountID without re-deriving).
 //
+// Emitter (#295) carries the streaming-progress sink. Per-service code
+// always calls methods on a non-nil Emitter; the aggregator resolves a
+// nil Emitter to progress.NopEmitter{} once at the top of DiscoverTypes
+// so per-service code never has to nil-check.
+//
 // DiscoverArgs is intentionally NOT exported via pkg/insideout-import/...
 // — it lives in the cloud-specific aggregator package so the public
 // registry surface stays dep-free for downstream consumers (reliable
@@ -23,6 +30,7 @@ type DiscoverArgs struct {
 	Regions      []string
 	TagSelectors []TagSelector
 	AccountID    string
+	Emitter      progress.Emitter
 }
 
 // TagSelector is a single operator-supplied tag-equality clause. The
@@ -62,4 +70,18 @@ func MatchesAll(tags map[string]string, selectors []TagSelector) bool {
 		}
 	}
 	return true
+}
+
+// emitterOrNop returns args.Emitter when non-nil, otherwise a NopEmitter
+// (#295). Per-service Discover bodies call this once at the top to avoid
+// nil-checking in every emit call site. The aggregator
+// (AWSDiscoverer.DiscoverTypes) already defaults a nil Emitter to NopEmitter
+// before fanning out, but per-service unit tests construct DiscoverArgs
+// directly and won't go through the aggregator — without this fallback
+// every existing test would have to set Emitter explicitly.
+func emitterOrNop(e progress.Emitter) progress.Emitter {
+	if e == nil {
+		return progress.NopEmitter{}
+	}
+	return e
 }

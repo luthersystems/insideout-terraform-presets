@@ -8,8 +8,10 @@ import (
 	"path/filepath"
 	"slices"
 	"sort"
+	"strings"
 
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/awsdiscover"
+	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/gcpdiscover"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
 
@@ -102,13 +104,40 @@ type Options struct {
 // Iterations counts how many times the loop ran the regenerate +
 // re-driftfix cycle (0 means "no unresolved refs on the original
 // stack — nothing to do"). Warnings lists unresolvable / unsupported
-// references the loop chose to surface rather than fail on.
+// references the loop chose to surface rather than fail on. Edges
+// records the dependency graph of each successful add (#297) so the
+// CLI can persist it as graph.json next to imported.json.
 type Result struct {
 	GeneratedPath string
 	Iterations    int
 	Resources     []imported.ImportedResource
 	Added         []imported.ImportedResource
 	Warnings      []string
+
+	// Edges is the dependency graph the loop built during chase: one
+	// entry per (consumer → producer) Terraform-address pair where the
+	// consumer's HCL referenced an ARN literal pointing at a resource
+	// the loop pulled in via DiscoverByID. The picker uses Edges to
+	// close the auto-include loop in the wizard UI: when the operator
+	// selects a row, the wizard auto-includes every transitive
+	// `dependsOn` target. The CLI persists this slice as graph.json
+	// (#297). Empty when nothing was added; nil-safe (writeGraphManifest
+	// substitutes []GraphEdge{} so the on-disk file is `[]`, never
+	// `null`).
+	Edges []GraphEdge
+}
+
+// GraphEdge is a single (from, to) Terraform-address pair representing
+// "the resource at `from` references the resource at `to`." Addresses
+// are used (rather than ImportIDs) because addresses are the canonical
+// identifier the composer uses when wiring HCL in the generated stack;
+// ImportIDs are not always stable across providers (e.g. AWS IAM uses
+// the role name; GCP IAM uses the project + member tuple). The reliable
+// wizard's picker reads (from, to) addresses verbatim into its
+// dependsOn graph.
+type GraphEdge struct {
+	From string `json:"from"`
+	To   string `json:"to"`
 }
 
 // Run is the Stage 2c3 dependency-chase loop:
@@ -156,21 +185,27 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 	opts.Workdir = abs
 	generatedPath := filepath.Join(opts.Workdir, generatedFile)
 
-	res := &Result{Resources: append([]imported.ImportedResource(nil), resources...)}
+	res := &Result{Resources: slices.Clone(resources)}
 	seenWarning := make(map[string]struct{})
 	var prevUnresolved []string
+
+	// seenEdges deduplicates Edges across iterations: the same
+	// (consumer → discovered) pair can re-surface if the regenerate
+	// step rewrites the consumer's HCL without changing the reference.
+	seenEdges := make(map[string]struct{})
 
 	for iter := 1; iter <= opts.MaxIterations; iter++ {
 		raw, err := os.ReadFile(generatedPath)
 		if err != nil {
 			return nil, fmt.Errorf("depchase: read generated.tf: %w", err)
 		}
-		unresolved, err := FindUnresolved(raw, res.Resources)
+		unresolved, consumersByARN, err := findUnresolvedWithConsumers(raw, res.Resources)
 		if err != nil {
 			return nil, err
 		}
 		if len(unresolved) == 0 {
 			res.GeneratedPath = generatedPath
+			sortEdges(res)
 			return res, nil
 		}
 
@@ -189,10 +224,12 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 			// stabilized at iteration 2, we've simply warned about
 			// every ref — that's a clean exit.
 			if len(res.Added) == 0 {
+				sortEdges(res)
 				return res, nil
 			}
 			// Otherwise the loop has added resources but the
 			// unresolved set didn't shrink — that's a cycle.
+			sortEdges(res)
 			return res, fmt.Errorf("%w: %d unresolved refs remain after %d iteration(s) (warnings recorded)",
 				ErrCyclicDependency, len(unresolved), res.Iterations)
 		}
@@ -221,17 +258,38 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 		for _, s := range newSeeds {
 			ir, err := opts.Discoverer.DiscoverByID(ctx, s.ref.TFType, s.ref.ImportID, opts.Region, opts.AccountID)
 			if err != nil {
+				// Check both AWS and GCP sentinels so the GCP path
+				// surfaces the same warn-and-continue UX as AWS. The two
+				// `errors.New("...")` instances live in different
+				// packages, so a single `errors.Is(err, awsdiscover.X)`
+				// would fall through to the fatal default branch on a
+				// genuine GCP not-found / not-supported and abort the
+				// whole run — wrong outcome for a per-ARN issue.
 				switch {
-				case errors.Is(err, awsdiscover.ErrNotFound):
+				case errors.Is(err, awsdiscover.ErrNotFound), errors.Is(err, gcpdiscover.ErrNotFound):
 					addWarning(res, seenWarning,
 						fmt.Sprintf("ARN %q (%s): %v", s.arn, s.ref.TFType, err))
-				case errors.Is(err, awsdiscover.ErrNotSupported):
+				case errors.Is(err, awsdiscover.ErrNotSupported), errors.Is(err, gcpdiscover.ErrNotSupported):
 					addWarning(res, seenWarning,
 						fmt.Sprintf("ARN %q: %s discoverer rejected ID: %v", s.arn, s.ref.TFType, err))
 				default:
+					sortEdges(res)
 					return res, fmt.Errorf("DiscoverByID(%s, %s): %w", s.ref.TFType, s.ref.ImportID, err)
 				}
 				continue
+			}
+			// Record one edge per (consumer, discovered) pair (#297).
+			// consumersByARN was filled from the same generated.tf
+			// pass that produced unresolved; every unresolved literal
+			// that successfully discovered MUST appear in that map.
+			// A defensively-empty consumer slice (e.g. the literal
+			// surfaced from a body the walker doesn't handle) just
+			// drops the edge — better than panicking on a missing key.
+			toAddr := ir.Identity.Address
+			if toAddr != "" {
+				for _, fromAddr := range consumersByARN[s.arn] {
+					recordEdge(res, seenEdges, fromAddr, toAddr)
+				}
 			}
 			added = append(added, ir)
 		}
@@ -240,6 +298,7 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 			// No new resources — every unresolved ref turned into a
 			// warning. No point regenerating; return clean.
 			res.GeneratedPath = generatedPath
+			sortEdges(res)
 			return res, nil
 		}
 
@@ -248,6 +307,7 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 
 		gcRes, err := opts.Pipeline.RunGenconfig(ctx, res.Resources)
 		if err != nil {
+			sortEdges(res)
 			return res, fmt.Errorf("depchase iter %d: regenerate: %w", iter, err)
 		}
 		// Pick up the populated Attributes the regenerate pass wrote
@@ -258,6 +318,7 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 		}
 
 		if _, err := opts.Pipeline.RunDriftfix(ctx); err != nil {
+			sortEdges(res)
 			return res, fmt.Errorf("depchase iter %d: driftfix: %w", iter, err)
 		}
 		// Increment only after both pipeline calls succeed so a partial
@@ -266,12 +327,23 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 		res.Iterations = iter
 	}
 
-	// Loop bound exceeded. Surface the residual unresolved set.
+	// Loop bound exceeded. Surface the residual unresolved set so the
+	// operator can see exactly which references failed to converge.
+	// Capture and surface FindUnresolved's error if the residual
+	// enumeration itself failed: dropping it on the floor produced a
+	// misleading "0 unresolved ref(s) remain" message even when the
+	// residual could not actually be enumerated.
 	raw, _ := os.ReadFile(generatedPath)
-	residual, _ := FindUnresolved(raw, res.Resources)
+	residual, residualErr := FindUnresolved(raw, res.Resources)
 	res.GeneratedPath = generatedPath
-	return res, fmt.Errorf("%w (%d): %d unresolved ref(s) remain: %v",
-		ErrMaxIterations, opts.MaxIterations, len(residual), residual)
+	residualStr := strings.Join(residual, ", ")
+	sortEdges(res)
+	if residualErr != nil {
+		return res, fmt.Errorf("%w (%d): %d unresolved ref(s) remain: %s; (residual enumeration error: %v)",
+			ErrMaxIterations, opts.MaxIterations, len(residual), residualStr, residualErr)
+	}
+	return res, fmt.Errorf("%w (%d): %d unresolved ref(s) remain: %s",
+		ErrMaxIterations, opts.MaxIterations, len(residual), residualStr)
 }
 
 // seed pairs an unresolved ARN string with the parsed Ref so the
@@ -279,6 +351,43 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 type seed struct {
 	arn string
 	ref Ref
+}
+
+// recordEdge appends a (from, to) GraphEdge to res.Edges if the same
+// pair hasn't been recorded before in this run. Dedup is per-pair so
+// a consumer that references the same target twice (or that
+// resurfaces across iterations because the regenerate stage rewrote
+// the HCL) only contributes one edge to graph.json.
+//
+// The Edges slice is appended unsorted; Run calls sortEdges once at
+// each return point so the on-disk graph.json is byte-identical
+// across runs for the same input, even though insertion order is
+// non-deterministic in findUnresolvedWithConsumers's map iteration.
+// (The previous shape sorted on every insertion — O(n^2 log n) over
+// the loop. Deferring the sort to the result-finalization step is
+// equivalent for callers that read res.Edges only after Run returns.)
+func recordEdge(res *Result, seen map[string]struct{}, from, to string) {
+	key := from + "\x00" + to
+	if _, ok := seen[key]; ok {
+		return
+	}
+	seen[key] = struct{}{}
+	res.Edges = append(res.Edges, GraphEdge{From: from, To: to})
+}
+
+// sortEdges sorts res.Edges in (From, To) order. Called once per
+// successful Run exit so the visible (post-Run) shape is the same as
+// the previous per-insertion-sort behavior. A regression that adds a
+// new return path without a sortEdges call would surface as a
+// flaky-graph.json test failure; the writeGraphManifest re-sort is a
+// belt-and-braces guard against that.
+func sortEdges(res *Result) {
+	sort.Slice(res.Edges, func(i, j int) bool {
+		if res.Edges[i].From != res.Edges[j].From {
+			return res.Edges[i].From < res.Edges[j].From
+		}
+		return res.Edges[i].To < res.Edges[j].To
+	})
 }
 
 // addWarning appends to Warnings if the same message hasn't been
