@@ -92,11 +92,12 @@ func (s *RealAssetSearcher) SearchAll(ctx context.Context, scope string, assetTy
 	}
 	it := s.client.SearchAllResources(ctx, req)
 
-	// TODO(#309): bound result accumulation. The iterator is unbounded
-	// — a project with 10k+ assets accumulates the entire result set
-	// before unsupported.json is written. Plumb a MaxResults knob
-	// through UnsupportedArgs and emit a "truncated" warning when the
-	// bound trips.
+	// #309: this iterator is intentionally unbounded — SearchAll is
+	// shared between the importable scan (DiscoverTypes path) and the
+	// unsupported scan (EnumerateUnsupported), and capping here would
+	// silently truncate the importable manifest. The MaxResults bound
+	// for unsupported lives at the EnumerateUnsupported wrapper, so
+	// the importable path keeps its full-coverage guarantee.
 	var out []gcpAssetResult
 	for {
 		r, err := it.Next()

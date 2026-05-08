@@ -333,7 +333,7 @@ func TestWriteUnsupportedManifest_HappyPath(t *testing.T) {
 		{Type: "aws_vpc", ID: "arn:aws:ec2:us-east-1:1:vpc/b", Name: "b", Region: "us-east-1"},
 		{Type: "aws_vpc", ID: "arn:aws:ec2:us-east-1:1:vpc/a", Name: "a", Region: "us-east-1"},
 	}
-	path, n, err := writeUnsupportedManifest(dir, rows)
+	path, n, err := writeUnsupportedManifest(dir, rows, false, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -347,28 +347,32 @@ func TestWriteUnsupportedManifest_HappyPath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var got []UnsupportedResource
+	// #309 wire-format: the on-disk body is a wrapper object, not a
+	// bare array. Decode into UnsupportedManifest and assert on the
+	// inner Resources slice.
+	var got UnsupportedManifest
 	if err := json.Unmarshal(body, &got); err != nil {
 		t.Fatalf("unsupported.json is not valid JSON: %v", err)
 	}
-	if len(got) != 2 {
-		t.Fatalf("decoded len=%d, want 2", len(got))
+	if len(got.Resources) != 2 {
+		t.Fatalf("decoded len=%d, want 2", len(got.Resources))
 	}
 	// Sort key is (Type, Region, ID) — both rows share Type+Region, so
 	// the ID-tiebreak puts the .../vpc/a row first.
-	if got[0].Name != "a" {
-		t.Errorf("first Name=%q, want %q (sorted by (Type, Region, ID))", got[0].Name, "a")
+	if got.Resources[0].Name != "a" {
+		t.Errorf("first Name=%q, want %q (sorted by (Type, Region, ID))", got.Resources[0].Name, "a")
 	}
 }
 
 // TestWriteUnsupportedManifest_EmptyInputWritesArrayNotNull pins the
 // no-null contract: a nil/empty input still produces a `[]` on disk
-// (the wizard picker cannot range over null).
+// (the wizard picker cannot range over null) inside the wrapper-object
+// shape introduced in #309.
 func TestWriteUnsupportedManifest_EmptyInputWritesArrayNotNull(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	for _, in := range [][]UnsupportedResource{nil, {}} {
-		path, n, err := writeUnsupportedManifest(dir, in)
+		path, n, err := writeUnsupportedManifest(dir, in, false, 0)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -380,10 +384,25 @@ func TestWriteUnsupportedManifest_EmptyInputWritesArrayNotNull(t *testing.T) {
 			t.Fatal(err)
 		}
 		if strings.TrimSpace(string(body)) == "null" {
-			t.Errorf("must emit `[]` not `null`; got: %s", body)
+			t.Errorf("must NOT emit `null`; got: %s", body)
 		}
-		if !bytes.HasPrefix(bytes.TrimSpace(body), []byte("[")) {
-			t.Errorf("must start with `[`; got: %s", body)
+		// Wrapper-object shape (#309): the body must START with `{`,
+		// not `[`. The inner resources slice still gets the `[]`-not-
+		// `null` contract — assert that the field is `[]` literally.
+		if !bytes.HasPrefix(bytes.TrimSpace(body), []byte("{")) {
+			t.Errorf("must start with `{` (wrapper-object shape); got: %s", body)
+		}
+		if !bytes.Contains(body, []byte(`"resources": []`)) {
+			t.Errorf("must contain `\"resources\": []` for empty input; got: %s", body)
+		}
+		// Verify the wrapper marshals into UnsupportedManifest with
+		// Resources != nil.
+		var got UnsupportedManifest
+		if err := json.Unmarshal(body, &got); err != nil {
+			t.Fatalf("decode wrapper: %v", err)
+		}
+		if got.Resources == nil {
+			t.Errorf("decoded Resources=nil, want non-nil empty slice")
 		}
 	}
 }
@@ -400,14 +419,14 @@ func TestWriteUnsupportedManifest_DeterministicAcrossRuns(t *testing.T) {
 		{Type: "", ID: "asset-b", Name: "b"},
 	}
 	dir1, dir2 := t.TempDir(), t.TempDir()
-	if _, _, err := writeUnsupportedManifest(dir1, rows); err != nil {
+	if _, _, err := writeUnsupportedManifest(dir1, rows, false, 0); err != nil {
 		t.Fatal(err)
 	}
 	rev := make([]UnsupportedResource, len(rows))
 	for i := range rows {
 		rev[len(rows)-1-i] = rows[i]
 	}
-	if _, _, err := writeUnsupportedManifest(dir2, rev); err != nil {
+	if _, _, err := writeUnsupportedManifest(dir2, rev, false, 0); err != nil {
 		t.Fatal(err)
 	}
 	a, err := os.ReadFile(filepath.Join(dir1, "unsupported.json"))
@@ -435,17 +454,18 @@ func TestWriteUnsupportedManifest_SortOrder(t *testing.T) {
 		{Type: "aws_vpc", ID: "arn-a", Region: "us-east-1"},
 		{Type: "aws_vpc", ID: "arn-b", Region: "eu-west-1"},
 	}
-	if _, _, err := writeUnsupportedManifest(dir, rows); err != nil {
+	if _, _, err := writeUnsupportedManifest(dir, rows, false, 0); err != nil {
 		t.Fatal(err)
 	}
 	body, err := os.ReadFile(filepath.Join(dir, "unsupported.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	var got []UnsupportedResource
-	if err := json.Unmarshal(body, &got); err != nil {
+	var manifest UnsupportedManifest
+	if err := json.Unmarshal(body, &manifest); err != nil {
 		t.Fatal(err)
 	}
+	got := manifest.Resources
 	want := []struct {
 		typ, region, id string
 	}{
@@ -479,7 +499,7 @@ func TestWriteUnsupportedManifest_OmitemptyOptionalFields(t *testing.T) {
 		ID:   "arn-only",
 		Name: "only",
 	}
-	if _, _, err := writeUnsupportedManifest(dir, []UnsupportedResource{row}); err != nil {
+	if _, _, err := writeUnsupportedManifest(dir, []UnsupportedResource{row}, false, 0); err != nil {
 		t.Fatal(err)
 	}
 	body, err := os.ReadFile(filepath.Join(dir, "unsupported.json"))
@@ -491,6 +511,98 @@ func TestWriteUnsupportedManifest_OmitemptyOptionalFields(t *testing.T) {
 		if bytes.Contains(body, []byte(key)) {
 			t.Errorf("manifest carries %s for omitempty-zero value; got: %s", key, body)
 		}
+	}
+}
+
+// --- #309 wrapper-shape tests ---
+
+// TestWriteUnsupportedManifest_WrapperShape pins the on-disk shape
+// introduced in #309: unsupported.json is a wrapper object
+// {"resources":[…],"truncated":bool,"max_results":int}, NOT a bare
+// JSON array. The reliable wizard's consumer reads the wrapper to
+// surface a "showing first N of many" banner; a regression to the
+// bare-array shape would break the consumer's decode.
+func TestWriteUnsupportedManifest_WrapperShape(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	rows := []UnsupportedResource{
+		{Type: "aws_vpc", ID: "arn-a", Name: "a", Region: "us-east-1"},
+	}
+	if _, _, err := writeUnsupportedManifest(dir, rows, false, 10000); err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(filepath.Join(dir, "unsupported.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Top-level must be a JSON object, not a bare array.
+	trimmed := bytes.TrimSpace(body)
+	if !bytes.HasPrefix(trimmed, []byte("{")) {
+		t.Errorf("on-disk top-level shape must be an object (start with `{`); got: %s", body)
+	}
+	if bytes.HasPrefix(trimmed, []byte("[")) {
+		t.Errorf("on-disk top-level shape regressed to a bare array; got: %s", body)
+	}
+	// Decode into UnsupportedManifest and assert every field.
+	var got UnsupportedManifest
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatalf("decode wrapper: %v", err)
+	}
+	if len(got.Resources) != 1 {
+		t.Errorf("Resources len=%d, want 1", len(got.Resources))
+	}
+	if got.Truncated {
+		t.Errorf("Truncated=true, want false (writer was called with truncated=false)")
+	}
+	if got.MaxResults != 10000 {
+		t.Errorf("MaxResults=%d, want 10000", got.MaxResults)
+	}
+	// Field-name pins: assert the JSON tags match the contract.
+	for _, want := range []string{`"resources":`, `"truncated":`, `"max_results":`} {
+		if !bytes.Contains(body, []byte(want)) {
+			t.Errorf("body missing required wrapper field %s; got: %s", want, body)
+		}
+	}
+}
+
+// TestWriteUnsupportedManifest_TruncatedTrueOnDisk pins that the
+// truncated=true bool round-trips through writeUnsupportedManifest into
+// the on-disk JSON. A regression that hard-coded `false` (or that
+// dropped the parameter) would silently mask cap-firing runs from the
+// reliable wizard's banner.
+func TestWriteUnsupportedManifest_TruncatedTrueOnDisk(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	rows := []UnsupportedResource{
+		{Type: "aws_vpc", ID: "arn-a", Region: "us-east-1"},
+	}
+	if _, _, err := writeUnsupportedManifest(dir, rows, true, 5); err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(filepath.Join(dir, "unsupported.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Direct substring assertion — the JSON encoder writes booleans
+	// as the literal `true` / `false` tokens, so a regression that
+	// emitted `0` / `1` (or omitted the field via omitempty) would
+	// fail this pin.
+	if !bytes.Contains(body, []byte(`"truncated": true`)) {
+		t.Errorf("body missing `\"truncated\": true`; got: %s", body)
+	}
+	if !bytes.Contains(body, []byte(`"max_results": 5`)) {
+		t.Errorf("body missing `\"max_results\": 5`; got: %s", body)
+	}
+	// Decode-side cross-check.
+	var got UnsupportedManifest
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatalf("decode wrapper: %v", err)
+	}
+	if !got.Truncated {
+		t.Errorf("Truncated=false, want true")
+	}
+	if got.MaxResults != 5 {
+		t.Errorf("MaxResults=%d, want 5", got.MaxResults)
 	}
 }
 

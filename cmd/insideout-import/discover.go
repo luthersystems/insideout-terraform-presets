@@ -155,12 +155,17 @@ func (a gcpAggAdapter) DiscoverByID(ctx context.Context, tfType, id, region, acc
 // runDiscoverWithDeps to call into awsdiscover.EnumerateUnsupported
 // when --include-unsupported is set. Tests inject a fake to exercise
 // the soft-failure branch without standing up Resource Explorer.
-type unsupportedAWSEnumerator func(ctx context.Context, cfg aws.Config, args awsdiscover.UnsupportedArgs) ([]awsdiscover.UnsupportedResource, error)
+//
+// Returns (rows, truncated, err): truncated reflects whether the
+// MaxResults bound (#309) fired during enumeration. The orchestrator
+// surfaces it as a stderr WARN and pins it on unsupported.json's
+// wrapper-object truncated marker.
+type unsupportedAWSEnumerator func(ctx context.Context, cfg aws.Config, args awsdiscover.UnsupportedArgs) ([]awsdiscover.UnsupportedResource, bool, error)
 
 // unsupportedGCPEnumerator is the GCP analogue of
 // unsupportedAWSEnumerator. Production wires it to the
 // *gcpdiscover.GCPDiscoverer's EnumerateUnsupported method.
-type unsupportedGCPEnumerator func(ctx context.Context, args gcpdiscover.UnsupportedArgs) ([]gcpdiscover.UnsupportedResource, error)
+type unsupportedGCPEnumerator func(ctx context.Context, args gcpdiscover.UnsupportedArgs) ([]gcpdiscover.UnsupportedResource, bool, error)
 
 // discoverDeps gathers the AWS- and GCP-side and terraform-side seams that
 // runDiscover would otherwise hit directly. Production code passes
@@ -242,7 +247,7 @@ func productionDiscoverDeps() discoverDeps {
 		runGenconfig: genconfig.Run,
 		runDriftfix:  driftfix.Run,
 		runDepChase:  depchase.Run,
-		enumerateUnsupportedAWS: func(ctx context.Context, cfg aws.Config, args awsdiscover.UnsupportedArgs) ([]awsdiscover.UnsupportedResource, error) {
+		enumerateUnsupportedAWS: func(ctx context.Context, cfg aws.Config, args awsdiscover.UnsupportedArgs) ([]awsdiscover.UnsupportedResource, bool, error) {
 			if args.Searcher == nil {
 				args.Searcher = awsdiscover.NewRealResourceExplorerSearcher(cfg)
 			}
@@ -252,7 +257,7 @@ func productionDiscoverDeps() discoverDeps {
 			// Searcher.
 			return awsdiscover.NewAWSDiscoverer(cfg).EnumerateUnsupported(ctx, args)
 		},
-		enumerateUnsupportedGCP: func(ctx context.Context, args gcpdiscover.UnsupportedArgs) ([]gcpdiscover.UnsupportedResource, error) {
+		enumerateUnsupportedGCP: func(ctx context.Context, args gcpdiscover.UnsupportedArgs) ([]gcpdiscover.UnsupportedResource, bool, error) {
 			// Production callers must already hold a valid
 			// *gcpdiscover.GCPDiscoverer via newGCPDiscoverer; this
 			// closure is overridden in runDiscoverWithDeps below to
@@ -262,7 +267,7 @@ func productionDiscoverDeps() discoverDeps {
 			// rebinding) surfaces loudly.
 			_ = ctx
 			_ = args
-			return nil, fmt.Errorf("enumerateUnsupportedGCP: production deps need re-binding inside runDiscoverWithDeps after newGCPDiscoverer succeeds")
+			return nil, false, fmt.Errorf("enumerateUnsupportedGCP: production deps need re-binding inside runDiscoverWithDeps after newGCPDiscoverer succeeds")
 		},
 	}
 }
@@ -324,6 +329,9 @@ Exit codes:
 	resourceIDs := fs.String("resource-ids", "", "comma-separated subset of Identity.ImportID values to retain when loading --from-manifest; unknown IDs are fatal. Empty = use the entire manifest. Requires --from-manifest.")
 	progressFmt := fs.String("progress", "", "progress event format. Empty (default) emits human-readable summary lines on stdout. `json` emits one newline-delimited JSON event per service-start, service-finish, item-found, stage-finish on stdout; the human-readable summary moves to stderr so machine consumers see only events on stdout. (#295)")
 	includeUnsupported := fs.Bool("include-unsupported", false, "broad-enumerate cloud resources of types NOT yet imported by per-service discoverers, emitting them in a parallel unsupported.json sibling of imported.json (#296). AWS uses Resource Explorer's Search API (one call per region); GCP uses Cloud Asset Inventory's SearchAllResources with a broader assetTypes filter. The wizard picker reads unsupported.json to render greyed-out rows so operators see what's in their account vs. what's importable. Mutually exclusive with --from-manifest (no live scan to enumerate). Soft-fails when the underlying API isn't configured (Resource Explorer not set up in some regions, Cloud Asset API disabled): imported.json still writes and the run exits 0 with a stderr WARN.")
+	maxUnsupportedResults := fs.Int("max-unsupported-results", 10000,
+		"max number of unsupported resources enumerated per cloud when --include-unsupported is set; 0 disables the cap. "+
+			"When the cap fires, a stderr WARN is logged and unsupported.json carries truncated:true at the wrapper level. (#309)")
 
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -423,6 +431,10 @@ Exit codes:
 	}
 	if *maxDepChaseIter <= 0 {
 		fmt.Fprintf(os.Stderr, "discover: --max-depchase-iterations must be positive (got %d)\n", *maxDepChaseIter)
+		return discoverExitFatal
+	}
+	if *maxUnsupportedResults < 0 {
+		fmt.Fprintf(os.Stderr, "discover: --max-unsupported-results must be >= 0 (got %d)\n", *maxUnsupportedResults)
 		return discoverExitFatal
 	}
 
@@ -672,7 +684,7 @@ Exit codes:
 		// closure (productionDiscoverDeps) is intentionally an error
 		// stub that this branch overwrites.
 		if gca, ok := gd.(gcpAggAdapter); ok {
-			deps.enumerateUnsupportedGCP = func(ctx context.Context, args gcpdiscover.UnsupportedArgs) ([]gcpdiscover.UnsupportedResource, error) {
+			deps.enumerateUnsupportedGCP = func(ctx context.Context, args gcpdiscover.UnsupportedArgs) ([]gcpdiscover.UnsupportedResource, bool, error) {
 				return gca.d.EnumerateUnsupported(ctx, args)
 			}
 		}
@@ -732,11 +744,22 @@ Exit codes:
 	// The mutual-exclusion gate above (--from-manifest is incompatible)
 	// has already returned discoverExitFatal if both are set.
 	if *includeUnsupported {
-		unsupported, uerr := enumerateUnsupportedForCloud(ctx, cloud, awsCfg, *project, resolvedRegions, parsedSelectors, emitter, deps)
+		unsupported, truncated, uerr := enumerateUnsupportedForCloud(ctx, cloud, awsCfg, *project, resolvedRegions, parsedSelectors, *maxUnsupportedResults, emitter, deps)
 		if uerr != nil {
 			fmt.Fprintf(os.Stderr, "discover: WARN: --include-unsupported: %v; imported.json was written; continuing without unsupported.json\n", uerr)
 		} else {
-			uout, un, werr := writeUnsupportedManifest(*outputDir, unsupported)
+			if truncated {
+				// #309: emit a one-shot stderr WARN so the
+				// operator (and the wizard's UI parser) can
+				// route to the truncation banner. The same
+				// signal is persisted on the wrapper-object
+				// shape, so consumers that miss the WARN still
+				// see truncated:true in unsupported.json.
+				fmt.Fprintf(os.Stderr,
+					"discover: WARN: --include-unsupported: cap fired (max_results=%d); unsupported.json contains the first %d resources sorted by (Type, Region, ID); truncated=true marker set.\n",
+					*maxUnsupportedResults, len(unsupported))
+			}
+			uout, un, werr := writeUnsupportedManifest(*outputDir, unsupported, truncated, *maxUnsupportedResults)
 			if werr != nil {
 				fmt.Fprintf(os.Stderr, "discover: WARN: --include-unsupported: write manifest: %v; imported.json was written; continuing without unsupported.json\n", werr)
 			} else {
@@ -903,26 +926,28 @@ func enumerateUnsupportedForCloud(
 	project string,
 	regions []string,
 	selectors []tagSelectorPair,
+	maxResults int,
 	emitter progress.Emitter,
 	deps discoverDeps,
-) ([]UnsupportedResource, error) {
+) ([]UnsupportedResource, bool, error) {
 	switch cloud {
 	case "aws":
 		if deps.enumerateUnsupportedAWS == nil {
-			return nil, fmt.Errorf("aws enumerator not configured")
+			return nil, false, fmt.Errorf("aws enumerator not configured")
 		}
 		sels := make([]awsdiscover.TagSelector, 0, len(selectors))
 		for _, s := range selectors {
 			sels = append(sels, awsdiscover.TagSelector{Key: s.Key, Value: s.Value})
 		}
-		raws, err := deps.enumerateUnsupportedAWS(ctx, awsCfg, awsdiscover.UnsupportedArgs{
+		raws, truncated, err := deps.enumerateUnsupportedAWS(ctx, awsCfg, awsdiscover.UnsupportedArgs{
 			Project:      project,
 			Regions:      regions,
 			TagSelectors: sels,
 			Emitter:      emitter,
+			MaxResults:   maxResults,
 		})
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		out := make([]UnsupportedResource, 0, len(raws))
 		for _, r := range raws {
@@ -936,23 +961,24 @@ func enumerateUnsupportedForCloud(
 				Group:    r.Group,
 			})
 		}
-		return out, nil
+		return out, truncated, nil
 	case "gcp":
 		if deps.enumerateUnsupportedGCP == nil {
-			return nil, fmt.Errorf("gcp enumerator not configured")
+			return nil, false, fmt.Errorf("gcp enumerator not configured")
 		}
 		sels := make([]gcpdiscover.TagSelector, 0, len(selectors))
 		for _, s := range selectors {
 			sels = append(sels, gcpdiscover.TagSelector{Key: s.Key, Value: s.Value})
 		}
-		raws, err := deps.enumerateUnsupportedGCP(ctx, gcpdiscover.UnsupportedArgs{
+		raws, truncated, err := deps.enumerateUnsupportedGCP(ctx, gcpdiscover.UnsupportedArgs{
 			Project:      project,
 			Regions:      regions,
 			TagSelectors: sels,
 			Emitter:      emitter,
+			MaxResults:   maxResults,
 		})
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		out := make([]UnsupportedResource, 0, len(raws))
 		for _, r := range raws {
@@ -966,9 +992,9 @@ func enumerateUnsupportedForCloud(
 				Group:    r.Group,
 			})
 		}
-		return out, nil
+		return out, truncated, nil
 	default:
-		return nil, fmt.Errorf("unknown cloud %q", cloud)
+		return nil, false, fmt.Errorf("unknown cloud %q", cloud)
 	}
 }
 

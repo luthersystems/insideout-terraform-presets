@@ -2273,11 +2273,11 @@ func TestRunDiscoverWithDeps_IncludeUnsupportedWritesUnsupportedJSON(t *testing.
 	outDir := t.TempDir()
 	agg := &fakeAggregator{}
 	deps := okDeps(agg)
-	deps.enumerateUnsupportedAWS = func(_ context.Context, _ aws.Config, _ awsdiscover.UnsupportedArgs) ([]awsdiscover.UnsupportedResource, error) {
+	deps.enumerateUnsupportedAWS = func(_ context.Context, _ aws.Config, _ awsdiscover.UnsupportedArgs) ([]awsdiscover.UnsupportedResource, bool, error) {
 		return []awsdiscover.UnsupportedResource{
 			{Type: "aws_vpc", ID: "arn:aws:ec2:us-east-1:1:vpc/v1", Name: "v1", Region: "us-east-1"},
 			{Type: "aws_rds_cluster", ID: "arn:aws:rds:us-east-1:1:cluster:c1", Name: "c1", Region: "us-east-1"},
-		}, nil
+		}, false, nil
 	}
 	rc := runDiscoverWithDeps([]string{
 		"--provider", "aws",
@@ -2292,12 +2292,17 @@ func TestRunDiscoverWithDeps_IncludeUnsupportedWritesUnsupportedJSON(t *testing.
 	}
 	body, err := os.ReadFile(filepath.Join(outDir, "unsupported.json"))
 	require.NoError(t, err)
-	var got []UnsupportedResource
-	require.NoError(t, json.Unmarshal(body, &got))
+	// #309 wire-format: decode the wrapper-object shape, assert on Resources.
+	var manifest UnsupportedManifest
+	require.NoError(t, json.Unmarshal(body, &manifest))
+	got := manifest.Resources
 	require.Len(t, got, 2)
 	gotTypes := []string{got[0].Type, got[1].Type}
 	if !slices.Contains(gotTypes, "aws_vpc") || !slices.Contains(gotTypes, "aws_rds_cluster") {
 		t.Errorf("emitted types=%v, want both aws_vpc and aws_rds_cluster", gotTypes)
+	}
+	if manifest.Truncated {
+		t.Errorf("Truncated=true, want false on uncapped happy-path run")
 	}
 }
 
@@ -2341,8 +2346,8 @@ func TestRunDiscoverWithDeps_IncludeUnsupportedSoftFailureKeepsImportedJSON(t *t
 	outDir := t.TempDir()
 	agg := &fakeAggregator{out: []imported.ImportedResource{validResource("aws_sqs_queue.alpha")}}
 	deps := okDeps(agg)
-	deps.enumerateUnsupportedAWS = func(_ context.Context, _ aws.Config, _ awsdiscover.UnsupportedArgs) ([]awsdiscover.UnsupportedResource, error) {
-		return nil, errors.New("simulated: Resource Explorer not configured")
+	deps.enumerateUnsupportedAWS = func(_ context.Context, _ aws.Config, _ awsdiscover.UnsupportedArgs) ([]awsdiscover.UnsupportedResource, bool, error) {
+		return nil, false, errors.New("simulated: Resource Explorer not configured")
 	}
 	var rc int
 	stderr := captureStderr(t, func() {
@@ -2388,9 +2393,9 @@ func TestRunDiscoverWithDeps_IncludeUnsupportedNotSetSkipsEmission(t *testing.T)
 	outDir := t.TempDir()
 	called := 0
 	deps := okDeps(&fakeAggregator{})
-	deps.enumerateUnsupportedAWS = func(_ context.Context, _ aws.Config, _ awsdiscover.UnsupportedArgs) ([]awsdiscover.UnsupportedResource, error) {
+	deps.enumerateUnsupportedAWS = func(_ context.Context, _ aws.Config, _ awsdiscover.UnsupportedArgs) ([]awsdiscover.UnsupportedResource, bool, error) {
 		called++
-		return nil, nil
+		return nil, false, nil
 	}
 	rc := runDiscoverWithDeps([]string{
 		"--provider", "aws",
@@ -2421,10 +2426,10 @@ func TestRunDiscoverWithDeps_IncludeUnsupportedGCP(t *testing.T) {
 	outDir := t.TempDir()
 	agg := &fakeAggregator{}
 	deps, _ := okGCPDeps(t, agg)
-	deps.enumerateUnsupportedGCP = func(_ context.Context, _ gcpdiscover.UnsupportedArgs) ([]gcpdiscover.UnsupportedResource, error) {
+	deps.enumerateUnsupportedGCP = func(_ context.Context, _ gcpdiscover.UnsupportedArgs) ([]gcpdiscover.UnsupportedResource, bool, error) {
 		return []gcpdiscover.UnsupportedResource{
 			{Type: "google_compute_instance", ID: "//compute.googleapis.com/projects/p/zones/us/instances/vm", Name: "vm", Location: "us"},
-		}, nil
+		}, false, nil
 	}
 	rc := runDiscoverWithDeps([]string{
 		"--provider", "gcp",
@@ -2439,14 +2444,160 @@ func TestRunDiscoverWithDeps_IncludeUnsupportedGCP(t *testing.T) {
 	}
 	body, err := os.ReadFile(filepath.Join(outDir, "unsupported.json"))
 	require.NoError(t, err)
-	var got []UnsupportedResource
-	require.NoError(t, json.Unmarshal(body, &got))
+	// #309 wire-format: decode wrapper-object shape and assert on Resources.
+	var manifest UnsupportedManifest
+	require.NoError(t, json.Unmarshal(body, &manifest))
+	got := manifest.Resources
 	require.Len(t, got, 1)
 	if got[0].Type != "google_compute_instance" {
 		t.Errorf("Type=%q, want google_compute_instance", got[0].Type)
 	}
 	if got[0].Location != "us" {
 		t.Errorf("Location=%q, want us", got[0].Location)
+	}
+}
+
+// --- #309 --max-unsupported-results tests ---
+
+// TestRunDiscoverWithDeps_MaxUnsupportedResults_FlagThreadsCap pins
+// that the --max-unsupported-results flag value reaches both the AWS
+// and the GCP enumerator paths. Two sibling sub-tests run the same
+// assertion against each cloud — a regression that wired the flag to
+// only one path would flag here.
+func TestRunDiscoverWithDeps_MaxUnsupportedResults_FlagThreadsCap(t *testing.T) {
+	t.Parallel()
+	t.Run("aws", func(t *testing.T) {
+		t.Parallel()
+		outDir := t.TempDir()
+		var gotMax int
+		deps := okDeps(&fakeAggregator{})
+		deps.enumerateUnsupportedAWS = func(_ context.Context, _ aws.Config, args awsdiscover.UnsupportedArgs) ([]awsdiscover.UnsupportedResource, bool, error) {
+			gotMax = args.MaxResults
+			return nil, false, nil
+		}
+		rc := runDiscoverWithDeps([]string{
+			"--provider", "aws",
+			"--project", "io-foo",
+			"--regions", "us-east-1",
+			"--output-dir", outDir,
+			"--include-unsupported",
+			"--max-unsupported-results", "42",
+			"--no-hcl",
+		}, deps)
+		if rc != discoverExitOK {
+			t.Fatalf("rc=%d, want OK", rc)
+		}
+		if gotMax != 42 {
+			t.Errorf("AWS enumerator received MaxResults=%d, want 42", gotMax)
+		}
+	})
+	t.Run("gcp", func(t *testing.T) {
+		t.Parallel()
+		outDir := t.TempDir()
+		var gotMax int
+		deps, _ := okGCPDeps(t, &fakeAggregator{})
+		deps.enumerateUnsupportedGCP = func(_ context.Context, args gcpdiscover.UnsupportedArgs) ([]gcpdiscover.UnsupportedResource, bool, error) {
+			gotMax = args.MaxResults
+			return nil, false, nil
+		}
+		rc := runDiscoverWithDeps([]string{
+			"--provider", "gcp",
+			"--project", "io-foo",
+			"--gcp-project-id", "real-proj",
+			"--output-dir", outDir,
+			"--include-unsupported",
+			"--max-unsupported-results", "42",
+			"--no-hcl",
+		}, deps)
+		if rc != discoverExitOK {
+			t.Fatalf("rc=%d, want OK", rc)
+		}
+		if gotMax != 42 {
+			t.Errorf("GCP enumerator received MaxResults=%d, want 42", gotMax)
+		}
+	})
+}
+
+// TestRunDiscoverWithDeps_MaxUnsupportedResults_NegativeIsFatal pins
+// the validation rule: --max-unsupported-results must be >= 0. A
+// negative value is a programming error (the cap is "0 = unbounded";
+// negative has no meaning) and must abort before touching the cloud.
+//
+// NOT t.Parallel(): captures global os.Stderr.
+func TestRunDiscoverWithDeps_MaxUnsupportedResults_NegativeIsFatal(t *testing.T) {
+	outDir := t.TempDir()
+	var rc int
+	stderr := captureStderr(t, func() {
+		rc = runDiscoverWithDeps([]string{
+			"--provider", "aws",
+			"--project", "io-foo",
+			"--regions", "us-east-1",
+			"--output-dir", outDir,
+			"--max-unsupported-results", "-1",
+		}, okDeps(&fakeAggregator{}))
+	})
+	if rc != discoverExitFatal {
+		t.Errorf("rc=%d, want fatal", rc)
+	}
+	if !strings.Contains(stderr, "max-unsupported-results") || !strings.Contains(stderr, ">= 0") {
+		t.Errorf("stderr should explain the >= 0 rule; got: %s", stderr)
+	}
+}
+
+// TestRunDiscoverWithDeps_TruncatedFlagSurfacesInUnsupportedJSON pins
+// the end-to-end #309 contract: when the enumerator returns
+// truncated=true, unsupported.json carries the marker at the wrapper
+// level AND a stderr WARN is emitted naming the cap. This is the
+// load-bearing claim of the cap-and-warn design — both signals must
+// fire, because the wizard's UI parser routes off the WARN while
+// non-streaming consumers read the on-disk marker.
+//
+// NOT t.Parallel(): captures global os.Stderr.
+func TestRunDiscoverWithDeps_TruncatedFlagSurfacesInUnsupportedJSON(t *testing.T) {
+	outDir := t.TempDir()
+	deps := okDeps(&fakeAggregator{})
+	deps.enumerateUnsupportedAWS = func(_ context.Context, _ aws.Config, args awsdiscover.UnsupportedArgs) ([]awsdiscover.UnsupportedResource, bool, error) {
+		return []awsdiscover.UnsupportedResource{
+			{Type: "aws_vpc", ID: "arn:aws:ec2:us-east-1:1:vpc/v1", Region: "us-east-1"},
+		}, true, nil
+	}
+	var rc int
+	stderr := captureStderr(t, func() {
+		rc = runDiscoverWithDeps([]string{
+			"--provider", "aws",
+			"--project", "io-foo",
+			"--regions", "us-east-1",
+			"--output-dir", outDir,
+			"--include-unsupported",
+			"--max-unsupported-results", "1",
+			"--no-hcl",
+		}, deps)
+	})
+	if rc != discoverExitOK {
+		t.Fatalf("rc=%d, want OK", rc)
+	}
+	// On-disk wrapper-shape marker.
+	body, err := os.ReadFile(filepath.Join(outDir, "unsupported.json"))
+	require.NoError(t, err)
+	var manifest UnsupportedManifest
+	require.NoError(t, json.Unmarshal(body, &manifest))
+	if !manifest.Truncated {
+		t.Errorf("manifest.Truncated=false, want true")
+	}
+	if manifest.MaxResults != 1 {
+		t.Errorf("manifest.MaxResults=%d, want 1", manifest.MaxResults)
+	}
+	// Stderr WARN: the wizard's UI parser routes on the literal
+	// "WARN" + the substring "cap fired" + "max_results=" so the
+	// cap-firing event is unambiguous.
+	if !strings.Contains(stderr, "WARN") {
+		t.Errorf("stderr missing WARN prefix; got: %s", stderr)
+	}
+	if !strings.Contains(stderr, "cap fired") {
+		t.Errorf("stderr missing `cap fired`; got: %s", stderr)
+	}
+	if !strings.Contains(stderr, "max_results=1") {
+		t.Errorf("stderr missing `max_results=1`; got: %s", stderr)
 	}
 }
 
@@ -2531,12 +2682,12 @@ func TestRunDiscoverWithDeps_SummaryIncludeUnsupportedReflectsCount(t *testing.T
 		validResource("aws_sqs_queue.alpha"),
 	}}
 	deps := okDeps(agg)
-	deps.enumerateUnsupportedAWS = func(_ context.Context, _ aws.Config, _ awsdiscover.UnsupportedArgs) ([]awsdiscover.UnsupportedResource, error) {
+	deps.enumerateUnsupportedAWS = func(_ context.Context, _ aws.Config, _ awsdiscover.UnsupportedArgs) ([]awsdiscover.UnsupportedResource, bool, error) {
 		return []awsdiscover.UnsupportedResource{
 			{Type: "aws_vpc", ID: "arn:aws:ec2:us-east-1:1:vpc/v1", Region: "us-east-1"},
 			{Type: "aws_rds_cluster", ID: "arn:aws:rds:us-east-1:1:cluster:c1", Region: "us-east-1"},
 			{Type: "aws_iam_role", ID: "arn:aws:iam::1:role/r1"},
-		}, nil
+		}, false, nil
 	}
 	rc := runDiscoverWithDeps([]string{
 		"--provider", "aws",
@@ -2567,8 +2718,8 @@ func TestRunDiscoverWithDeps_SummaryIncludeUnsupportedSoftFailureZeroCount(t *te
 	outDir := t.TempDir()
 	agg := &fakeAggregator{out: []imported.ImportedResource{validResource("aws_sqs_queue.alpha")}}
 	deps := okDeps(agg)
-	deps.enumerateUnsupportedAWS = func(_ context.Context, _ aws.Config, _ awsdiscover.UnsupportedArgs) ([]awsdiscover.UnsupportedResource, error) {
-		return nil, errors.New("simulated: Resource Explorer not configured")
+	deps.enumerateUnsupportedAWS = func(_ context.Context, _ aws.Config, _ awsdiscover.UnsupportedArgs) ([]awsdiscover.UnsupportedResource, bool, error) {
+		return nil, false, errors.New("simulated: Resource Explorer not configured")
 	}
 	var rc int
 	captureStderr(t, func() {
