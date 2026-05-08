@@ -64,14 +64,10 @@ type UnsupportedResource struct {
 	Tags map[string]string `json:"tags,omitempty"`
 
 	// Group is the high-level UI category ("Events", "Data Storage",
-	// "Network Security", ...) the wizard groups picker rows under. This
-	// PR (#296) leaves Group empty intentionally — the Category map that
-	// translates Type → Group lands in the parallel #297 (Bundle 2 / PR 3)
-	// PR, which iterates this slice and stamps Group post-emit. Until
-	// then the picker uses an "Other" fallback bucket.
-	//
-	// TODO(#297): populate Group from the imported.Category map once it
-	// lands; this PR ships the field on the wire so #297 is a pure
-	// composer change without an unsupported.json schema bump.
+	// "Network Security", ...) the wizard groups picker rows under. The
+	// per-cloud unsupported emitters stamp this from imported.Category
+	// at construction (awsdiscover/unsupported.go and
+	// gcpdiscover/unsupported.go). The picker falls back to "Other" when
+	// Category returns the empty string for an unknown type.
 	Group string `json:"group,omitempty"`
 }

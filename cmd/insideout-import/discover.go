@@ -50,43 +50,85 @@ const discoverRetryMaxAttempts = 8
 // dep-chase loop calls into the aggregator to resolve unresolved ARNs
 // inside generated.tf to fresh ImportedResource entries.
 //
-// DiscoverTypes uses positional args (rather than a struct) so neither
-// cloud's package-local DiscoverArgs type (#291) leaks into the CLI's
-// shared interface — adapters in productionDiscoverDeps convert. Tag
-// selectors flow through as the CLI-package tagSelectorPair so the
-// interface stays decoupled from awsdiscover/gcpdiscover.
-//
-// TODO(#310): refactor to AggArgs struct. The 7-arg signature is hard
-// to extend — adding a per-stage timeout or a budget knob requires
-// touching three signatures + every test fake. A struct-shaped
-// AggArgs would shrink each fake's capture to a single gotArgs field.
+// DiscoverTypes takes a single AggArgs struct (#310). The CLI-package
+// tagSelectorPair flows through as-is so the interface stays decoupled
+// from awsdiscover/gcpdiscover; adapters in productionDiscoverDeps
+// convert into per-cloud DiscoverArgs at the boundary. Future fields
+// (per-stage timeout #311, budget knobs, etc.) are additive on AggArgs
+// without rippling through the interface or every test fake.
 type discoveryAggregator interface {
-	DiscoverTypes(ctx context.Context, types []string, project string, regions []string, tagSelectors []tagSelectorPair, accountID string, emitter progress.Emitter) ([]imported.ImportedResource, error)
+	DiscoverTypes(ctx context.Context, args AggArgs) ([]imported.ImportedResource, error)
 	DiscoverByID(ctx context.Context, tfType, id, region, accountID string) (imported.ImportedResource, error)
 }
 
+// AggArgs are the orchestrator-level inputs to
+// discoveryAggregator.DiscoverTypes. Mirrors the per-cloud DiscoverArgs
+// structs at awsdiscover/args.go and gcpdiscover/args.go but supersets
+// both: AccountID lives here even though GCP doesn't use it — the
+// aggregator interface is cloud-agnostic and the adapters convert.
+// Future fields (per-stage timeout #311, etc.) are additive without
+// rippling through the interface.
+type AggArgs struct {
+	Types        []string
+	Project      string
+	Regions      []string
+	TagSelectors []tagSelectorPair
+	AccountID    string
+	Emitter      progress.Emitter
+}
+
+// aggArgsToAWS translates an orchestrator-level AggArgs into the
+// per-cloud awsdiscover.DiscoverArgs the *AWSDiscoverer consumes. The
+// only non-trivial work is converting tagSelectorPair (CLI-package) →
+// awsdiscover.TagSelector (per-cloud) so the cloud-specific type doesn't
+// bleed into discover.go's orchestrator code. Extracted from
+// awsAggAdapter.DiscoverTypes so the AggArgs round-trip test (#310) can
+// pin field-by-field translation without standing up a real
+// *AWSDiscoverer.
+func aggArgsToAWS(args AggArgs) (types []string, awsArgs awsdiscover.DiscoverArgs) {
+	sel := make([]awsdiscover.TagSelector, 0, len(args.TagSelectors))
+	for _, p := range args.TagSelectors {
+		sel = append(sel, awsdiscover.TagSelector{Key: p.Key, Value: p.Value})
+	}
+	return args.Types, awsdiscover.DiscoverArgs{
+		Project:      args.Project,
+		Regions:      args.Regions,
+		TagSelectors: sel,
+		AccountID:    args.AccountID,
+		Emitter:      args.Emitter,
+	}
+}
+
+// aggArgsToGCP is the GCP analogue of aggArgsToAWS. AggArgs.AccountID is
+// intentionally dropped on GCP — the project ID lives on the
+// *gcpdiscover.GCPDiscoverer struct (set at construction), and GCP has
+// no STS-equivalent caller-identity round-trip whose result needs
+// threading through.
+func aggArgsToGCP(args AggArgs) (types []string, gcpArgs gcpdiscover.DiscoverArgs) {
+	sel := make([]gcpdiscover.TagSelector, 0, len(args.TagSelectors))
+	for _, p := range args.TagSelectors {
+		sel = append(sel, gcpdiscover.TagSelector{Key: p.Key, Value: p.Value})
+	}
+	return args.Types, gcpdiscover.DiscoverArgs{
+		Project:      args.Project,
+		Regions:      args.Regions,
+		TagSelectors: sel,
+		Emitter:      args.Emitter,
+	}
+}
+
 // awsAggAdapter wraps *awsdiscover.AWSDiscoverer to satisfy
-// discoveryAggregator's positional DiscoverTypes signature, converting
-// the CLI's tagSelectorPair into awsdiscover.TagSelector at the
-// boundary. Mirrors gcpAggAdapter; both adapters are intentionally
-// thin so the cloud-specific type doesn't bleed into discover.go's
-// orchestrator code.
+// discoveryAggregator, translating AggArgs into awsdiscover.DiscoverArgs
+// at the boundary via aggArgsToAWS. Mirrors gcpAggAdapter; both
+// adapters are intentionally thin so the cloud-specific type doesn't
+// bleed into discover.go's orchestrator code.
 type awsAggAdapter struct {
 	d *awsdiscover.AWSDiscoverer
 }
 
-func (a awsAggAdapter) DiscoverTypes(ctx context.Context, types []string, project string, regions []string, tagSelectors []tagSelectorPair, accountID string, emitter progress.Emitter) ([]imported.ImportedResource, error) {
-	sel := make([]awsdiscover.TagSelector, 0, len(tagSelectors))
-	for _, p := range tagSelectors {
-		sel = append(sel, awsdiscover.TagSelector{Key: p.Key, Value: p.Value})
-	}
-	return a.d.DiscoverTypes(ctx, types, awsdiscover.DiscoverArgs{
-		Project:      project,
-		Regions:      regions,
-		TagSelectors: sel,
-		AccountID:    accountID,
-		Emitter:      emitter,
-	})
+func (a awsAggAdapter) DiscoverTypes(ctx context.Context, args AggArgs) ([]imported.ImportedResource, error) {
+	types, awsArgs := aggArgsToAWS(args)
+	return a.d.DiscoverTypes(ctx, types, awsArgs)
 }
 
 func (a awsAggAdapter) DiscoverByID(ctx context.Context, tfType, id, region, accountID string) (imported.ImportedResource, error) {
@@ -94,26 +136,15 @@ func (a awsAggAdapter) DiscoverByID(ctx context.Context, tfType, id, region, acc
 }
 
 // gcpAggAdapter wraps *gcpdiscover.GCPDiscoverer to satisfy
-// discoveryAggregator. Converts tagSelectorPair → gcpdiscover.TagSelector;
-// otherwise mirrors awsAggAdapter.
+// discoveryAggregator. Converts AggArgs into gcpdiscover.DiscoverArgs via
+// aggArgsToGCP; otherwise mirrors awsAggAdapter.
 type gcpAggAdapter struct {
 	d *gcpdiscover.GCPDiscoverer
 }
 
-func (a gcpAggAdapter) DiscoverTypes(ctx context.Context, types []string, project string, regions []string, tagSelectors []tagSelectorPair, accountID string, emitter progress.Emitter) ([]imported.ImportedResource, error) {
-	sel := make([]gcpdiscover.TagSelector, 0, len(tagSelectors))
-	for _, p := range tagSelectors {
-		sel = append(sel, gcpdiscover.TagSelector{Key: p.Key, Value: p.Value})
-	}
-	// accountID is unused on GCP — the project ID lives on the
-	// *gcpdiscover.GCPDiscoverer struct (set at construction).
-	_ = accountID
-	return a.d.DiscoverTypes(ctx, types, gcpdiscover.DiscoverArgs{
-		Project:      project,
-		Regions:      regions,
-		TagSelectors: sel,
-		Emitter:      emitter,
-	})
+func (a gcpAggAdapter) DiscoverTypes(ctx context.Context, args AggArgs) ([]imported.ImportedResource, error) {
+	types, gcpArgs := aggArgsToGCP(args)
+	return a.d.DiscoverTypes(ctx, types, gcpArgs)
 }
 
 func (a gcpAggAdapter) DiscoverByID(ctx context.Context, tfType, id, region, accountID string) (imported.ImportedResource, error) {
@@ -655,7 +686,14 @@ Exit codes:
 		resources = preloaded
 	} else {
 		var err error
-		resources, err = d.DiscoverTypes(ctx, types, *project, resolvedRegions, parsedSelectors, accountID, emitter)
+		resources, err = d.DiscoverTypes(ctx, AggArgs{
+			Types:        types,
+			Project:      *project,
+			Regions:      resolvedRegions,
+			TagSelectors: parsedSelectors,
+			AccountID:    accountID,
+			Emitter:      emitter,
+		})
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "discover: %v\n", err)
 			return discoverExitFatal

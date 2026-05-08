@@ -204,7 +204,7 @@ func TestRunDiscoverWithDeps_MultiRegionThreadsAllRegionsToAggregator(t *testing
 	if lastLoadRegion != "us-east-1" {
 		t.Errorf("loadConfig got region=%q, want us-east-1 (primaryRegion = first --regions value)", lastLoadRegion)
 	}
-	if got, want := agg.gotRegions, []string{"us-east-1", "eu-west-1"}; !equalSlices(got, want) {
+	if got, want := agg.gotArgs.Regions, []string{"us-east-1", "eu-west-1"}; !equalSlices(got, want) {
 		t.Errorf("Regions threaded = %v, want %v", got, want)
 	}
 }
@@ -232,7 +232,7 @@ func TestRunDiscoverWithDeps_DeprecatedRegionStillThreadsAsRegions(t *testing.T)
 	if rc != discoverExitOK {
 		t.Fatalf("rc=%d, want ok", rc)
 	}
-	if got, want := agg.gotRegions, []string{"us-east-1"}; !equalSlices(got, want) {
+	if got, want := agg.gotArgs.Regions, []string{"us-east-1"}; !equalSlices(got, want) {
 		t.Errorf("Regions threaded = %v, want [us-east-1] (deprecated --region alias)", got)
 	}
 	if !strings.Contains(stderr, "deprecated") {
@@ -242,8 +242,10 @@ func TestRunDiscoverWithDeps_DeprecatedRegionStillThreadsAsRegions(t *testing.T)
 
 // TestRunDiscoverWithDeps_TagSelectorsThreadedToAggregator pins that
 // --tag-selectors flow through the parser into the aggregator's
-// observed gotSelectors slice. The CLI parser produces tagSelectorPair
-// entries; the aggregator adapter converts them per-cloud.
+// captured AggArgs.TagSelectors slice. The CLI parser produces
+// tagSelectorPair entries; the aggregator adapter converts them
+// per-cloud (see TestAggArgs_RoundTripsThroughAdapters for the
+// boundary translation pin).
 func TestRunDiscoverWithDeps_TagSelectorsThreadedToAggregator(t *testing.T) {
 	t.Parallel()
 	agg := &fakeAggregator{}
@@ -261,12 +263,12 @@ func TestRunDiscoverWithDeps_TagSelectorsThreadedToAggregator(t *testing.T) {
 		t.Fatalf("rc=%d, want ok", rc)
 	}
 	want := []tagSelectorPair{{Key: "env", Value: "prod"}, {Key: "team", Value: "growth"}}
-	if len(agg.gotSelectors) != len(want) {
-		t.Fatalf("selectors len=%d, want %d", len(agg.gotSelectors), len(want))
+	if len(agg.gotArgs.TagSelectors) != len(want) {
+		t.Fatalf("selectors len=%d, want %d", len(agg.gotArgs.TagSelectors), len(want))
 	}
 	for i, w := range want {
-		if agg.gotSelectors[i] != w {
-			t.Errorf("selector[%d]=%+v, want %+v", i, agg.gotSelectors[i], w)
+		if agg.gotArgs.TagSelectors[i] != w {
+			t.Errorf("selector[%d]=%+v, want %+v", i, agg.gotArgs.TagSelectors[i], w)
 		}
 	}
 }
@@ -305,20 +307,15 @@ func equalSlices(a, b []string) bool {
 
 // fakeAggregator is a lightweight stand-in for awsdiscover.AWSDiscoverer that
 // captures the inputs DiscoverTypes was called with and returns canned output.
+//
+// Per #310 the per-field capture slots collapsed to a single gotArgs
+// AggArgs; assertions throughout this file read agg.gotArgs.Project /
+// .Regions / .TagSelectors / etc. directly.
 type fakeAggregator struct {
-	out        []imported.ImportedResource
-	err        error
-	gotProject string
-	// gotRegions captures the full Regions slice (#291). gotRegion is
-	// the legacy single-region accessor, kept as the first element of
-	// Regions so existing test assertions continue to match for the
-	// pre-#291 single-region happy path.
-	gotRegions   []string
-	gotSelectors []tagSelectorPair
-	gotAccount   string
-	gotTypes     []string
-	gotEmitter   progress.Emitter
-	called       int
+	out     []imported.ImportedResource
+	err     error
+	gotArgs AggArgs
+	called  int
 
 	// DiscoverByID wiring for Stage 2c3 dep-chase tests. byID is keyed
 	// on tfType|id; missing entries return ErrNotFound.
@@ -330,16 +327,15 @@ type fakeAggregator struct {
 // gotRegion returns the first captured region for back-compat with
 // pre-#291 single-region test assertions.
 func (f *fakeAggregator) gotRegion() string {
-	if len(f.gotRegions) == 0 {
+	if len(f.gotArgs.Regions) == 0 {
 		return ""
 	}
-	return f.gotRegions[0]
+	return f.gotArgs.Regions[0]
 }
 
-func (f *fakeAggregator) DiscoverTypes(_ context.Context, types []string, project string, regions []string, selectors []tagSelectorPair, accountID string, emitter progress.Emitter) ([]imported.ImportedResource, error) {
+func (f *fakeAggregator) DiscoverTypes(_ context.Context, args AggArgs) ([]imported.ImportedResource, error) {
 	f.called++
-	f.gotProject, f.gotRegions, f.gotSelectors, f.gotAccount, f.gotTypes = project, regions, selectors, accountID, types
-	f.gotEmitter = emitter
+	f.gotArgs = args
 	return f.out, f.err
 }
 
@@ -517,8 +513,8 @@ func TestRunDiscoverWithDeps_HappyPathWritesManifest(t *testing.T) {
 	if agg.called != 1 {
 		t.Errorf("DiscoverTypes called %d times, want 1", agg.called)
 	}
-	if agg.gotProject != "io-foo" || agg.gotRegion() != "us-east-1" || agg.gotAccount != "1234567890" {
-		t.Errorf("dispatch args = (%q,%q,%q), want (io-foo,us-east-1,1234567890)", agg.gotProject, agg.gotRegion(), agg.gotAccount)
+	if agg.gotArgs.Project != "io-foo" || agg.gotRegion() != "us-east-1" || agg.gotArgs.AccountID != "1234567890" {
+		t.Errorf("dispatch args = (%q,%q,%q), want (io-foo,us-east-1,1234567890)", agg.gotArgs.Project, agg.gotRegion(), agg.gotArgs.AccountID)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "imported.json")); err != nil {
 		t.Errorf("imported.json not written: %v", err)
@@ -587,8 +583,8 @@ func TestRunDiscoverWithDeps_EmptySTSAccountThreadsEmpty(t *testing.T) {
 	if rc != discoverExitOK {
 		t.Errorf("rc=%d, want OK (empty Account is not fatal)", rc)
 	}
-	if agg.gotAccount != "" {
-		t.Errorf("accountID threaded = %q, want empty", agg.gotAccount)
+	if agg.gotArgs.AccountID != "" {
+		t.Errorf("accountID threaded = %q, want empty", agg.gotArgs.AccountID)
 	}
 }
 
@@ -1594,8 +1590,8 @@ func TestRunDiscoverWithDeps_GCPHappyPathWritesManifest(t *testing.T) {
 	if agg.called != 1 {
 		t.Errorf("DiscoverTypes called %d times, want 1", agg.called)
 	}
-	if agg.gotProject != "io-foo" || agg.gotAccount != "real-proj" {
-		t.Errorf("dispatch args = (%q,%q,%q), want (io-foo, *, real-proj)", agg.gotProject, agg.gotRegion(), agg.gotAccount)
+	if agg.gotArgs.Project != "io-foo" || agg.gotArgs.AccountID != "real-proj" {
+		t.Errorf("dispatch args = (%q,%q,%q), want (io-foo, *, real-proj)", agg.gotArgs.Project, agg.gotRegion(), agg.gotArgs.AccountID)
 	}
 	body, err := os.ReadFile(filepath.Join(dir, "imported.json"))
 	if err != nil {
@@ -2203,10 +2199,10 @@ type emittingFakeAggregator struct {
 	fakeAggregator
 }
 
-func (f *emittingFakeAggregator) DiscoverTypes(ctx context.Context, types []string, project string, regions []string, selectors []tagSelectorPair, accountID string, emitter progress.Emitter) ([]imported.ImportedResource, error) {
-	out, err := f.fakeAggregator.DiscoverTypes(ctx, types, project, regions, selectors, accountID, emitter)
-	if emitter != nil {
-		emitter.StageFinish("discover", len(out), 0)
+func (f *emittingFakeAggregator) DiscoverTypes(ctx context.Context, args AggArgs) ([]imported.ImportedResource, error) {
+	out, err := f.fakeAggregator.DiscoverTypes(ctx, args)
+	if args.Emitter != nil {
+		args.Emitter.StageFinish("discover", len(out), 0)
 	}
 	return out, err
 }
@@ -2712,4 +2708,92 @@ func readSummaryWithoutDuration(t *testing.T, path string) string {
 	out, err := json.MarshalIndent(s, "", "  ")
 	require.NoError(t, err)
 	return string(out)
+}
+
+// TestAggArgs_RoundTripsThroughAdapters (#310) pins that aggArgsToAWS
+// and aggArgsToGCP — the AggArgs → per-cloud DiscoverArgs translation
+// helpers used by awsAggAdapter and gcpAggAdapter — copy every field
+// across the boundary. A regression that drops a field (e.g. a future
+// PR that adds AggArgs.Timeout but forgets the AWS adapter) would
+// surface here as a zero-value on the per-cloud side.
+//
+// AccountID is asserted only on the AWS path: GCP intentionally drops
+// it because the project ID lives on the *gcpdiscover.GCPDiscoverer
+// struct (see gcpAggAdapter doc comment). TagSelector translation
+// (CLI tagSelectorPair → per-cloud TagSelector) is exercised on both
+// paths since the cloud-specific type wrappers differ.
+func TestAggArgs_RoundTripsThroughAdapters(t *testing.T) {
+	t.Parallel()
+
+	emitter := progress.NopEmitter{}
+	args := AggArgs{
+		Types:        []string{"aws_sqs_queue", "aws_dynamodb_table"},
+		Project:      "io-foo",
+		Regions:      []string{"us-east-1", "eu-west-1"},
+		TagSelectors: []tagSelectorPair{{Key: "env", Value: "prod"}, {Key: "team", Value: "growth"}},
+		AccountID:    "123456789012",
+		Emitter:      emitter,
+	}
+
+	t.Run("aws", func(t *testing.T) {
+		t.Parallel()
+		gotTypes, gotArgs := aggArgsToAWS(args)
+
+		assert.Equal(t, args.Types, gotTypes, "Types")
+		assert.Equal(t, args.Project, gotArgs.Project, "Project")
+		assert.Equal(t, args.Regions, gotArgs.Regions, "Regions")
+		assert.Equal(t, args.AccountID, gotArgs.AccountID, "AccountID")
+		assert.Equal(t, args.Emitter, gotArgs.Emitter, "Emitter")
+
+		wantSel := []awsdiscover.TagSelector{
+			{Key: "env", Value: "prod"},
+			{Key: "team", Value: "growth"},
+		}
+		assert.Equal(t, wantSel, gotArgs.TagSelectors, "TagSelectors")
+	})
+
+	t.Run("gcp", func(t *testing.T) {
+		t.Parallel()
+		gotTypes, gotArgs := aggArgsToGCP(args)
+
+		assert.Equal(t, args.Types, gotTypes, "Types")
+		assert.Equal(t, args.Project, gotArgs.Project, "Project")
+		assert.Equal(t, args.Regions, gotArgs.Regions, "Regions")
+		assert.Equal(t, args.Emitter, gotArgs.Emitter, "Emitter")
+
+		wantSel := []gcpdiscover.TagSelector{
+			{Key: "env", Value: "prod"},
+			{Key: "team", Value: "growth"},
+		}
+		assert.Equal(t, wantSel, gotArgs.TagSelectors, "TagSelectors")
+
+		// AccountID is intentionally dropped — gcpdiscover.DiscoverArgs
+		// has no such field. The pin: the GCP DiscoverArgs struct still
+		// has exactly the four fields its package declares, so a
+		// regression that smuggles AccountID into the GCP path would
+		// fail to compile against this test's struct comparison.
+		assert.Equal(t, gcpdiscover.DiscoverArgs{
+			Project:      args.Project,
+			Regions:      args.Regions,
+			TagSelectors: wantSel,
+			Emitter:      args.Emitter,
+		}, gotArgs, "full GCP DiscoverArgs (no AccountID)")
+	})
+
+	t.Run("empty_selectors_yield_empty_not_nil", func(t *testing.T) {
+		t.Parallel()
+		// Both helpers eagerly allocate the slice (make with len=0). A
+		// regression that switched to `var sel []TagSelector` would
+		// emit JSON `null` on the wire vs. `[]`, which the wizard
+		// historically struggles with (see #255). This is a thinner
+		// pin than the discovery inspector test contract, but it
+		// catches the same accidental nil-slice path at the boundary.
+		empty := AggArgs{}
+		_, awsArgs := aggArgsToAWS(empty)
+		_, gcpArgs := aggArgsToGCP(empty)
+		require.NotNil(t, awsArgs.TagSelectors, "AWS TagSelectors must be empty slice, not nil")
+		require.NotNil(t, gcpArgs.TagSelectors, "GCP TagSelectors must be empty slice, not nil")
+		assert.Empty(t, awsArgs.TagSelectors)
+		assert.Empty(t, gcpArgs.TagSelectors)
+	})
 }
