@@ -419,6 +419,56 @@ Exit codes:
 	ctx, cancel := context.WithTimeout(context.Background(), discoverTimeout)
 	defer cancel()
 
+	// summaryStart is the wall-clock anchor for ScanSummary.duration_ms
+	// in summary.json (#298). We capture it here — after argument
+	// parsing, before any cloud config / STS / discovery — so the
+	// duration measures the discovery + HCL pipeline scope, not the
+	// CLI argv parse latency. Used by writeSummary at every success
+	// exit below.
+	summaryStart := time.Now()
+	// summaryResources holds the final resource set the summary should
+	// reflect. It evolves as the pipeline progresses (Stage 2a output
+	// → Stage 2b enriched → Stage 2c3 expanded). We re-assign it after
+	// each writeManifest so the on-disk imported.json and the
+	// in-memory summary stay aligned. The deferred summary writer
+	// reads this slice last, after every other exit-path mutation.
+	var summaryResources []imported.ImportedResource
+	// summaryUnsupportedCount is set when --include-unsupported runs
+	// to completion (soft-failures leave it at 0 — the WARN'd
+	// unsupported.json was never written, so the summary's
+	// `unsupported` count must not lie about its existence).
+	summaryUnsupportedCount := 0
+	// summaryShouldEmit gates the deferred writer. Argument-validation
+	// fatals exit before the function gets far enough to be useful;
+	// we flip this to true once we've established a valid output dir
+	// + cloud + scope so the summary is only attempted on runs that
+	// would have produced an imported.json. The defer re-reads this
+	// flag at exit to decide whether to emit.
+	summaryShouldEmit := false
+	defer func() {
+		if !summaryShouldEmit {
+			return
+		}
+		summary := imported.SummarizeResources(summaryResources, imported.SummaryOpts{
+			Cloud:            cloud,
+			UnsupportedCount: summaryUnsupportedCount,
+			Duration:         time.Since(summaryStart),
+			Regions:          resolvedRegions,
+			TagSelectors:     toSummaryTagSelectors(parsedSelectors),
+		})
+		if path, err := writeSummary(*outputDir, summary); err != nil {
+			// Best-effort: a write failure must not flip an
+			// otherwise-OK run to fatal — imported.json is the
+			// source of truth. Log to stderr (not summaryOut, so
+			// a JSON-progress consumer doesn't see this on
+			// stdout) and continue.
+			fmt.Fprintf(os.Stderr, "discover: write summary.json: %v (continuing)\n", err)
+		} else {
+			fmt.Fprintf(summaryOut, "wrote %s (%d importable + %d unsupported = %d total)\n",
+				path, summary.Importable, summary.Unsupported, summary.Total)
+		}
+	}()
+
 	// --from-manifest pre-load (#292): when set, replace Stage 2a
 	// (DiscoverTypes) with a manifest-driven resource set. We still build
 	// the cloud config + discoverer below — Stage 2c3 dep-chase calls
@@ -579,6 +629,12 @@ Exit codes:
 		fmt.Fprintf(os.Stderr, "discover: %v\n", err)
 		return discoverExitFatal
 	}
+	// First successful imported.json write — flip the summary deferred
+	// emitter on. From here every successful exit (including soft
+	// failures of optional stages) lands in the deferred writer with
+	// a coherent summary.
+	summaryShouldEmit = true
+	summaryResources = resources
 	fmt.Fprintf(summaryOut, "wrote %s (%d resource(s) discovered)\n", out, n)
 
 	// --include-unsupported (#296): broad-enumerate types NOT yet wired
@@ -598,6 +654,10 @@ Exit codes:
 			if werr != nil {
 				fmt.Fprintf(os.Stderr, "discover: WARN: --include-unsupported: write manifest: %v; imported.json was written; continuing without unsupported.json\n", werr)
 			} else {
+				// Update the summary's unsupported count to
+				// match unsupported.json on disk; soft-failures
+				// above leave it at 0.
+				summaryUnsupportedCount = un
 				fmt.Fprintf(summaryOut, "wrote %s (%d unsupported resource(s) enumerated)\n", uout, un)
 			}
 		}
@@ -633,6 +693,7 @@ Exit codes:
 		fmt.Fprintf(os.Stderr, "discover: %v\n", err)
 		return discoverExitFatal
 	}
+	summaryResources = res.Resources
 	fmt.Fprintf(summaryOut, "wrote %s (%d resource(s) with Attributes); generated HCL at %s\n", out, n, res.GeneratedPath)
 
 	if *noDriftFix {
@@ -721,6 +782,7 @@ Exit codes:
 			fmt.Fprintf(os.Stderr, "discover: write manifest after depchase: %v\n", err)
 			return discoverExitFatal
 		}
+		summaryResources = dcRes.Resources
 	}
 	// Persist the dependency-graph edges next to imported.json (#297).
 	// Best-effort: a write failure does NOT abort the run — imported.json
@@ -822,6 +884,20 @@ func enumerateUnsupportedForCloud(
 	default:
 		return nil, fmt.Errorf("unknown cloud %q", cloud)
 	}
+}
+
+// toSummaryTagSelectors converts the CLI-package tagSelectorPair slice
+// into the cloud-agnostic imported.SummaryTagSelector slice that
+// SummarizeResources accepts. Keeps pkg/composer/imported decoupled
+// from the CLI package's parser shape. One-for-one copy; nil in →
+// empty slice out so the downstream Summary's TagSelectors field is
+// always a valid (non-nil) slice.
+func toSummaryTagSelectors(in []tagSelectorPair) []imported.SummaryTagSelector {
+	out := make([]imported.SummaryTagSelector, 0, len(in))
+	for _, p := range in {
+		out = append(out, imported.SummaryTagSelector{Key: p.Key, Value: p.Value})
+	}
+	return out
 }
 
 // splitCSV splits a comma-separated flag value, trims whitespace, and drops

@@ -604,3 +604,136 @@ func TestWriteGraphManifest_SortOrder(t *testing.T) {
 		}
 	}
 }
+
+// --- #298 writeSummary tests ---
+
+// TestWriteSummary_HappyPath pins the round-trip: a populated
+// DiscoverySummary is written to <dir>/summary.json and decodes back
+// to an equal value.
+func TestWriteSummary_HappyPath(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	resources := []imported.ImportedResource{
+		validIR("aws_sqs_queue", "aws_sqs_queue.alpha", "id-alpha"),
+		validIR("aws_lambda_function", "aws_lambda_function.beta", "id-beta"),
+	}
+	summary := imported.SummarizeResources(resources, imported.SummaryOpts{
+		Cloud:   "aws",
+		Regions: []string{"us-east-1"},
+	})
+	path, err := writeSummary(dir, summary)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if filepath.Base(path) != "summary.json" {
+		t.Errorf("path=%q, want ends in summary.json", path)
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got imported.DiscoverySummary
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatalf("summary.json is not valid JSON: %v", err)
+	}
+	if got.Total != 2 {
+		t.Errorf("Total=%d, want 2", got.Total)
+	}
+	if got.Importable != 2 {
+		t.Errorf("Importable=%d, want 2", got.Importable)
+	}
+	if got.ByType["aws_sqs_queue"] != 1 || got.ByType["aws_lambda_function"] != 1 {
+		t.Errorf("ByType=%v, want one of each type", got.ByType)
+	}
+	if got.ScanSummary.Cloud != "aws" {
+		t.Errorf("Cloud=%q, want aws", got.ScanSummary.Cloud)
+	}
+}
+
+// TestWriteSummary_EmptyInputWritesValidShape pins the no-null
+// contract for the on-disk summary. The discovery-review screen reads
+// summary.json on every load and cannot distinguish "no resources"
+// from "missing/unparseable file" if the maps are `null`. Empty
+// resources must still produce well-shaped JSON.
+func TestWriteSummary_EmptyInputWritesValidShape(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	summary := imported.SummarizeResources(nil, imported.SummaryOpts{Cloud: "aws"})
+	path, err := writeSummary(dir, summary)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A regression that emitted nil maps would surface as `"by_type":null`
+	// here. Spot-check every map and slice.
+	for _, want := range []string{
+		`"total": 0`,
+		`"by_type": {}`,
+		`"by_region": {}`,
+		`"by_tag": {}`,
+		`"by_group": {}`,
+		`"regions_scanned": []`,
+		`"tag_selectors": []`,
+	} {
+		if !bytes.Contains(body, []byte(want)) {
+			t.Errorf("summary.json missing %q\nbody=%s", want, body)
+		}
+	}
+	// Round-trip: the body must decode back into a valid struct with
+	// non-nil maps.
+	var got imported.DiscoverySummary
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatalf("summary.json is not valid JSON: %v", err)
+	}
+	if got.ByType == nil || got.ByRegion == nil || got.ByTag == nil || got.ByGroup == nil {
+		t.Errorf("decoded summary has nil map(s); ByType=%v ByRegion=%v ByTag=%v ByGroup=%v",
+			got.ByType, got.ByRegion, got.ByTag, got.ByGroup)
+	}
+}
+
+// TestWriteSummary_DeterministicAcrossRuns pins byte-identical output
+// across two writes of the same summary input. The discovery-review
+// screen hashes summary.json contents to invalidate cached panel
+// renders; non-deterministic byte output would invalidate the cache
+// on every idempotent re-run.
+func TestWriteSummary_DeterministicAcrossRuns(t *testing.T) {
+	t.Parallel()
+	resources := []imported.ImportedResource{
+		validIR("aws_sqs_queue", "aws_sqs_queue.delta", "d"),
+		validIR("aws_sqs_queue", "aws_sqs_queue.alpha", "a"),
+		validIR("aws_lambda_function", "aws_lambda_function.charlie", "c"),
+		validIR("aws_lambda_function", "aws_lambda_function.bravo", "b"),
+	}
+	opts := imported.SummaryOpts{
+		Cloud:   "aws",
+		Regions: []string{"us-east-1", "eu-west-1"},
+	}
+	dir1, dir2 := t.TempDir(), t.TempDir()
+	if _, err := writeSummary(dir1, imported.SummarizeResources(resources, opts)); err != nil {
+		t.Fatal(err)
+	}
+	// Reverse the input order on the second pass — Go's map iteration
+	// is unordered, so a regression that pulled the buckets through
+	// without a sort would flake here.
+	rev := make([]imported.ImportedResource, len(resources))
+	for i := range resources {
+		rev[len(resources)-1-i] = resources[i]
+	}
+	if _, err := writeSummary(dir2, imported.SummarizeResources(rev, opts)); err != nil {
+		t.Fatal(err)
+	}
+	a, err := os.ReadFile(filepath.Join(dir1, "summary.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(filepath.Join(dir2, "summary.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(a, b) {
+		t.Errorf("summary.json differs across runs with permuted input:\nrun1=%s\nrun2=%s", a, b)
+	}
+}

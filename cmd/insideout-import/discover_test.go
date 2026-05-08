@@ -2392,3 +2392,250 @@ func TestRunDiscoverWithDeps_IncludeUnsupportedGCP(t *testing.T) {
 		t.Errorf("Location=%q, want us", got[0].Location)
 	}
 }
+
+// --- #298 summary.json emission tests ---
+
+// TestRunDiscoverWithDeps_WritesSummaryJSON pins the always-on emission
+// contract: summary.json sits next to imported.json on every successful
+// discover run. The discovery-review screen reads summary.json directly;
+// a regression that gated emission on a flag would silently break the
+// wizard's review panel.
+func TestRunDiscoverWithDeps_WritesSummaryJSON(t *testing.T) {
+	t.Parallel()
+	outDir := t.TempDir()
+	agg := &fakeAggregator{out: []imported.ImportedResource{
+		validResource("aws_sqs_queue.alpha"),
+		validResource("aws_sqs_queue.bravo"),
+	}}
+	rc := runDiscoverWithDeps([]string{
+		"--provider", "aws",
+		"--project", "io-foo",
+		"--regions", "us-east-1",
+		"--output-dir", outDir,
+		"--no-hcl",
+	}, okDeps(agg))
+	if rc != discoverExitOK {
+		t.Fatalf("rc=%d, want OK", rc)
+	}
+	path := filepath.Join(outDir, "summary.json")
+	body, err := os.ReadFile(path)
+	require.NoError(t, err, "summary.json must exist next to imported.json")
+	var got imported.DiscoverySummary
+	require.NoError(t, json.Unmarshal(body, &got))
+	assert.Equal(t, 2, got.Total, "Total")
+	assert.Equal(t, 2, got.Importable, "Importable")
+	assert.Equal(t, 0, got.Unsupported, "Unsupported (no --include-unsupported)")
+	assert.Equal(t, 2, got.ByType["aws_sqs_queue"], "ByType bucket count")
+	assert.Equal(t, "aws", got.ScanSummary.Cloud)
+	assert.Equal(t, []string{"us-east-1"}, got.ScanSummary.RegionsScanned)
+}
+
+// TestRunDiscoverWithDeps_SummaryFromManifestStillEmitted pins that
+// the --from-manifest re-import path also emits summary.json — the
+// wizard's review panel must not lose its data source when an
+// operator replays a previously-discovered set.
+func TestRunDiscoverWithDeps_SummaryFromManifestStillEmitted(t *testing.T) {
+	t.Parallel()
+	manifestDir := t.TempDir()
+	loaded := []imported.ImportedResource{
+		validResourceWithRegion("aws_sqs_queue.alpha", "us-east-1", "1234567890"),
+		validResourceWithRegion("aws_sqs_queue.bravo", "us-east-1", "1234567890"),
+	}
+	manifestPath := writeFixtureManifest(t, manifestDir, "aws", loaded)
+
+	outDir := t.TempDir()
+	rc := runDiscoverWithDeps([]string{
+		"--provider", "aws",
+		"--project", "io-foo",
+		"--regions", "us-east-1",
+		"--from-manifest", manifestPath,
+		"--output-dir", outDir,
+		"--no-hcl",
+	}, okDepsWithGC(&fakeAggregator{}, &fakeGenconfig{}))
+	if rc != discoverExitOK {
+		t.Fatalf("rc=%d, want OK", rc)
+	}
+	body, err := os.ReadFile(filepath.Join(outDir, "summary.json"))
+	require.NoError(t, err, "summary.json must be emitted on --from-manifest path")
+	var got imported.DiscoverySummary
+	require.NoError(t, json.Unmarshal(body, &got))
+	assert.Equal(t, 2, got.Importable, "Importable mirrors loaded manifest size")
+}
+
+// TestRunDiscoverWithDeps_SummaryIncludeUnsupportedReflectsCount pins
+// that the unsupported count from --include-unsupported propagates into
+// summary.json's `unsupported` and `total` fields. A regression that
+// computed Total from len(resources) only would diverge from the wire
+// shape the discovery-review screen expects.
+func TestRunDiscoverWithDeps_SummaryIncludeUnsupportedReflectsCount(t *testing.T) {
+	t.Parallel()
+	outDir := t.TempDir()
+	agg := &fakeAggregator{out: []imported.ImportedResource{
+		validResource("aws_sqs_queue.alpha"),
+	}}
+	deps := okDeps(agg)
+	deps.enumerateUnsupportedAWS = func(_ context.Context, _ aws.Config, _ awsdiscover.UnsupportedArgs) ([]awsdiscover.UnsupportedResource, error) {
+		return []awsdiscover.UnsupportedResource{
+			{Type: "aws_vpc", ID: "arn:aws:ec2:us-east-1:1:vpc/v1", Region: "us-east-1"},
+			{Type: "aws_rds_cluster", ID: "arn:aws:rds:us-east-1:1:cluster:c1", Region: "us-east-1"},
+			{Type: "aws_iam_role", ID: "arn:aws:iam::1:role/r1"},
+		}, nil
+	}
+	rc := runDiscoverWithDeps([]string{
+		"--provider", "aws",
+		"--project", "io-foo",
+		"--regions", "us-east-1",
+		"--output-dir", outDir,
+		"--include-unsupported",
+		"--no-hcl",
+	}, deps)
+	if rc != discoverExitOK {
+		t.Fatalf("rc=%d, want OK", rc)
+	}
+	body, err := os.ReadFile(filepath.Join(outDir, "summary.json"))
+	require.NoError(t, err)
+	var got imported.DiscoverySummary
+	require.NoError(t, json.Unmarshal(body, &got))
+	assert.Equal(t, 1, got.Importable, "Importable (1 fake aggregator row)")
+	assert.Equal(t, 3, got.Unsupported, "Unsupported count from unsupported.json")
+	assert.Equal(t, 4, got.Total, "Total = Importable + Unsupported")
+}
+
+// TestRunDiscoverWithDeps_SummaryIncludeUnsupportedSoftFailureZeroCount
+// pins the soft-failure invariant: when the unsupported enumerator
+// errors and unsupported.json is NOT written, summary.json's
+// `unsupported` count must remain 0 — the summary cannot lie about
+// rows that aren't on disk.
+func TestRunDiscoverWithDeps_SummaryIncludeUnsupportedSoftFailureZeroCount(t *testing.T) {
+	outDir := t.TempDir()
+	agg := &fakeAggregator{out: []imported.ImportedResource{validResource("aws_sqs_queue.alpha")}}
+	deps := okDeps(agg)
+	deps.enumerateUnsupportedAWS = func(_ context.Context, _ aws.Config, _ awsdiscover.UnsupportedArgs) ([]awsdiscover.UnsupportedResource, error) {
+		return nil, errors.New("simulated: Resource Explorer not configured")
+	}
+	var rc int
+	captureStderr(t, func() {
+		rc = runDiscoverWithDeps([]string{
+			"--provider", "aws",
+			"--project", "io-foo",
+			"--regions", "us-east-1",
+			"--output-dir", outDir,
+			"--include-unsupported",
+			"--no-hcl",
+		}, deps)
+	})
+	if rc != discoverExitOK {
+		t.Fatalf("rc=%d, want OK", rc)
+	}
+	body, err := os.ReadFile(filepath.Join(outDir, "summary.json"))
+	require.NoError(t, err)
+	var got imported.DiscoverySummary
+	require.NoError(t, json.Unmarshal(body, &got))
+	assert.Equal(t, 0, got.Unsupported, "soft-failure must leave Unsupported at 0")
+	assert.Equal(t, 1, got.Total, "Total mirrors Importable when no unsupported.json was written")
+}
+
+// TestRunDiscoverWithDeps_SummaryRegionsAndTagSelectorsReflectInputs
+// pins that the operator-supplied scope round-trips into ScanSummary.
+// Multi-region + multi-selector inputs must surface verbatim; a
+// regression that dropped the deprecated --region alias resolution
+// would surface as a missing region in summary.json.
+func TestRunDiscoverWithDeps_SummaryRegionsAndTagSelectorsReflectInputs(t *testing.T) {
+	t.Parallel()
+	outDir := t.TempDir()
+	agg := &fakeAggregator{out: []imported.ImportedResource{validResource("aws_sqs_queue.alpha")}}
+	rc := runDiscoverWithDeps([]string{
+		"--provider", "aws",
+		"--project", "io-foo",
+		"--regions", "us-east-1,eu-west-1",
+		"--tag-selectors", "env=prod,team=growth",
+		"--output-dir", outDir,
+		"--no-hcl",
+	}, okDeps(agg))
+	if rc != discoverExitOK {
+		t.Fatalf("rc=%d, want OK", rc)
+	}
+	body, err := os.ReadFile(filepath.Join(outDir, "summary.json"))
+	require.NoError(t, err)
+	var got imported.DiscoverySummary
+	require.NoError(t, json.Unmarshal(body, &got))
+	assert.Equal(t, []string{"us-east-1", "eu-west-1"}, got.ScanSummary.RegionsScanned)
+	// TagSelectors are sorted in the summary's wire shape.
+	assert.Equal(t, []string{"env=prod", "team=growth"}, got.ScanSummary.TagSelectors)
+}
+
+// TestRunDiscoverWithDeps_SummaryNotEmittedOnEarlyValidationFailure
+// pins that argument-validation fatals (which exit before any
+// imported.json could be written) do not produce a stray summary.json.
+// A regression that emitted summary.json on every defer-fired exit —
+// even the bad-argv ones — would leave behind a "ghost" file the
+// wizard could mistake for a successful run.
+//
+// NOT t.Parallel(): some early-validation paths capture stderr; this
+// test doesn't, but co-locating with the rest of the summary tests
+// keeps the suite cohesive.
+func TestRunDiscoverWithDeps_SummaryNotEmittedOnEarlyValidationFailure(t *testing.T) {
+	t.Parallel()
+	outDir := t.TempDir()
+	rc := runDiscoverWithDeps([]string{
+		"--provider", "aws",
+		"--project", "p",
+		// no --regions — fatal pre-discovery
+		"--output-dir", outDir,
+	}, okDeps(&fakeAggregator{}))
+	if rc != discoverExitFatal {
+		t.Fatalf("rc=%d, want fatal", rc)
+	}
+	if _, err := os.Stat(filepath.Join(outDir, "summary.json")); err == nil {
+		t.Errorf("summary.json was emitted on early-validation failure")
+	}
+}
+
+// TestRunDiscoverWithDeps_SummaryDeterministicAcrossRuns pins that two
+// discover invocations with the same input produce byte-identical
+// summary.json. The discovery-review screen hashes summary.json bytes
+// to invalidate cached panel renders; non-deterministic output would
+// invalidate the cache on every idempotent re-run.
+func TestRunDiscoverWithDeps_SummaryDeterministicAcrossRuns(t *testing.T) {
+	t.Parallel()
+	rs := []imported.ImportedResource{
+		validResource("aws_sqs_queue.alpha"),
+		validResource("aws_sqs_queue.bravo"),
+		validResource("aws_sqs_queue.charlie"),
+	}
+	dirA, dirB := t.TempDir(), t.TempDir()
+	for _, dir := range []string{dirA, dirB} {
+		agg := &fakeAggregator{out: rs}
+		rc := runDiscoverWithDeps([]string{
+			"--provider", "aws",
+			"--project", "io-foo",
+			"--regions", "us-east-1",
+			"--output-dir", dir,
+			"--no-hcl",
+		}, okDeps(agg))
+		if rc != discoverExitOK {
+			t.Fatalf("rc=%d (dir=%s), want OK", rc, dir)
+		}
+	}
+	// We compare body bytes minus the duration_ms field, which is
+	// the only legitimately-non-deterministic value in the summary
+	// (wall-time of the run varies). Every other byte must match.
+	a := readSummaryWithoutDuration(t, filepath.Join(dirA, "summary.json"))
+	b := readSummaryWithoutDuration(t, filepath.Join(dirB, "summary.json"))
+	assert.Equal(t, a, b, "summary.json (modulo duration_ms) must be byte-identical across runs")
+}
+
+// readSummaryWithoutDuration loads a summary.json and zeros out
+// ScanSummary.duration_ms before re-marshalling so the deterministic
+// comparison ignores wall-time jitter.
+func readSummaryWithoutDuration(t *testing.T, path string) string {
+	t.Helper()
+	body, err := os.ReadFile(path)
+	require.NoError(t, err)
+	var s imported.DiscoverySummary
+	require.NoError(t, json.Unmarshal(body, &s))
+	s.ScanSummary.DurationMs = 0
+	out, err := json.MarshalIndent(s, "", "  ")
+	require.NoError(t, err)
+	return string(out)
+}

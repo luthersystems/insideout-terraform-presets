@@ -32,6 +32,14 @@ const unsupportedManifestFile = "unsupported.json"
 // never has to special-case missing/empty file.
 const graphManifestFile = "graph.json"
 
+// summaryManifestFile is the on-disk file name for the DiscoverySummary
+// aggregate written by writeSummary at the end of every discover run
+// (#298). The reliable wizard's discovery-review screen reads this file
+// directly rather than recomputing the buckets client-side over a
+// potentially large imported.json. Always emitted (no flag); empty
+// input still produces a valid `{ total: 0, by_type: {}, ... }` body.
+const summaryManifestFile = "summary.json"
+
 // writeManifest validates the resource set with composer.ValidateImportedResources
 // and writes the JSON array of ImportedResource into <dir>/imported.json.
 // Validation runs BEFORE the file is written so a failing validator never
@@ -217,6 +225,44 @@ func writeGraphManifest(dir string, edges []depchase.GraphEdge) (string, int, er
 		return "", 0, fmt.Errorf("write %s: %w", out, err)
 	}
 	return out, len(edges), nil
+}
+
+// writeSummary writes the DiscoverySummary aggregate into
+// <dir>/summary.json (#298). Mirrors writeGraphManifest's invariants:
+// nil/empty input still produces a structurally valid body (Total=0,
+// every map serialized as `{}` not `null`, every slice serialized as
+// `[]` not `null`); the file is written via WriteFile (no temp+rename);
+// determinism comes from Go's encoding/json marshalling map keys in
+// sorted order plus the SummarizeResources caller's deterministic
+// inputs.
+//
+// Returns (path, error). The CLI treats summary.json as best-effort UI
+// metadata: a write failure surfaces as a stderr WARN and does not
+// abort the run (imported.json is the source of truth). The discovery-
+// review screen falls back to client-side computation over
+// imported.json if summary.json is missing.
+//
+// Why summary.json is a sibling of imported.json (rather than embedded):
+// the aggregate's wire shape evolves independently of the per-resource
+// IR — adding a new aggregate bucket (e.g. byCloud) shouldn't require
+// every imported.json reader (composer, validators, riley) to know the
+// summary schema. Keeping it as a sibling matches the same rationale
+// behind unsupported.json (#296) and graph.json (#297).
+func writeSummary(dir string, summary imported.DiscoverySummary) (string, error) {
+	body, err := json.MarshalIndent(summary, "", "  ")
+	if err != nil {
+		return "", fmt.Errorf("marshal summary: %w", err)
+	}
+	body = append(body, '\n')
+
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", fmt.Errorf("mkdir %s: %w", dir, err)
+	}
+	out := filepath.Join(dir, summaryManifestFile)
+	if err := os.WriteFile(out, body, 0o644); err != nil {
+		return "", fmt.Errorf("write %s: %w", out, err)
+	}
+	return out, nil
 }
 
 // formatIssues turns a slice of validation issues into a multi-line string
