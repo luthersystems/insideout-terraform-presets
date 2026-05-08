@@ -47,6 +47,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/opensearchserverless v1.30.3
 	github.com/aws/aws-sdk-go-v2/service/rds v1.118.2
 	github.com/aws/aws-sdk-go-v2/service/resourceexplorer2 v1.23.6
+	github.com/aws/aws-sdk-go-v2/service/route53 v1.62.7
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.100.1
 	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.41.7
 	github.com/aws/aws-sdk-go-v2/service/sqs v1.42.27

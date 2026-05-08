@@ -18,6 +18,7 @@ import (
 func TestSupportedDiscoverTypes_AWS_ReturnsCanonicalSortedList(t *testing.T) {
 	t.Parallel()
 	want := []string{
+		"aws_cloudfront_distribution",
 		"aws_cloudwatch_log_group",
 		"aws_dynamodb_table",
 		"aws_eip",
@@ -29,6 +30,7 @@ func TestSupportedDiscoverTypes_AWS_ReturnsCanonicalSortedList(t *testing.T) {
 		"aws_nat_gateway",
 		"aws_network_acl",
 		"aws_network_interface",
+		"aws_route53_zone",
 		"aws_route_table",
 		"aws_s3_bucket",
 		"aws_secretsmanager_secret",
@@ -101,7 +103,7 @@ func TestSupportedDiscoverTypes_ReturnsCopy_PackageStateUnchanged(t *testing.T) 
 		// [0] no longer matches.
 		firstLiteral string
 	}{
-		{provider: ProviderAWS, firstLiteral: "aws_cloudwatch_log_group"},
+		{provider: ProviderAWS, firstLiteral: "aws_cloudfront_distribution"},
 		{provider: ProviderGCP, firstLiteral: "google_compute_network"},
 	}
 	for _, tc := range cases {
