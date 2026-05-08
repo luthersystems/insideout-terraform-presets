@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -239,6 +240,8 @@ Exit codes:
 	maxConcurrency := fs.Int("max-concurrency", awsdiscover.DefaultMaxConcurrency, "max in-flight per-resource AWS API calls inside the DynamoDB and Lambda discoverers; raise on accounts with thousands of resources, lower if the SDK retryer keeps tripping. Ignored for --provider gcp (Cloud Asset is a single-call surface).")
 	awsEndpointURL := fs.String("aws-endpoint-url", "", "override the AWS endpoint URL for both SDK and terraform provider; intended for the Stage 2c4 LocalStack-backed CI gate (#272) — pass http://localhost:4566 to retarget every service at LocalStack. Empty (default) uses real AWS. Ignored for --provider gcp.")
 	gcpProjectID := fs.String("gcp-project-id", "", "real GCP project ID (per #157, distinct from --project); required for --provider gcp. The Cloud Asset Inventory scope is `projects/<gcp-project-id>` and Identity.ProjectID on every emitted resource is set to this value.")
+	fromManifest := fs.String("from-manifest", "", "load resource set from a prior imported.json instead of running Stage 2a (discovery). Use to re-emit HCL for a previously-discovered set without re-walking the cloud. Mutually exclusive with --resource-types.")
+	resourceIDs := fs.String("resource-ids", "", "comma-separated subset of Identity.ImportID values to retain when loading --from-manifest; unknown IDs are fatal. Empty = use the entire manifest. Requires --from-manifest.")
 
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -264,6 +267,20 @@ Exit codes:
 		fmt.Fprintln(os.Stderr, "discover: --project is required")
 		return discoverExitFatal
 	}
+	// --from-manifest / --resource-ids mutual-exclusion + dependency
+	// validation (#292). These checks run before the AWS-region requirement
+	// so that --from-manifest can satisfy the region requirement from the
+	// loaded manifest's Identity.Region rather than the CLI flags.
+	fromManifestPath := strings.TrimSpace(*fromManifest)
+	resourceIDsRaw := strings.TrimSpace(*resourceIDs)
+	if resourceIDsRaw != "" && fromManifestPath == "" {
+		fmt.Fprintln(os.Stderr, "discover: --resource-ids requires --from-manifest")
+		return discoverExitFatal
+	}
+	if fromManifestPath != "" && strings.TrimSpace(*resourceTypes) != "" {
+		fmt.Fprintln(os.Stderr, "discover: --resource-types is incompatible with --from-manifest (the manifest is already type-filtered)")
+		return discoverExitFatal
+	}
 	// Resolve --regions vs deprecated --region (#291).
 	regionsRaw := strings.TrimSpace(*regions)
 	regionRaw := strings.TrimSpace(*region)
@@ -276,7 +293,11 @@ Exit codes:
 		fmt.Fprintln(os.Stderr, "discover: WARN: --region is deprecated; use --regions instead")
 		resolvedRegions = []string{regionRaw}
 	}
-	if cloud == "aws" && len(resolvedRegions) == 0 {
+	// --from-manifest defers the AWS-region requirement: the primary region
+	// is derived from the loaded manifest's first resource's Identity.Region
+	// inside runDiscoverWithDeps. When --from-manifest is empty the legacy
+	// rule applies.
+	if cloud == "aws" && len(resolvedRegions) == 0 && fromManifestPath == "" {
 		fmt.Fprintln(os.Stderr, "discover: --regions is required for --provider aws (or --region for back-compat)")
 		return discoverExitFatal
 	}
@@ -319,6 +340,65 @@ Exit codes:
 	ctx, cancel := context.WithTimeout(context.Background(), discoverTimeout)
 	defer cancel()
 
+	// --from-manifest pre-load (#292): when set, replace Stage 2a
+	// (DiscoverTypes) with a manifest-driven resource set. We still build
+	// the cloud config + discoverer below — Stage 2c3 dep-chase calls
+	// d.DiscoverByID, and Stage 2b/2c1 invoke the terraform binary which
+	// consumes the same provider credentials — but we skip the bulk
+	// DiscoverTypes call.
+	var preloaded []imported.ImportedResource
+	if fromManifestPath != "" {
+		var err error
+		preloaded, err = readManifest(fromManifestPath, cloud)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "discover: load manifest: %v\n", err)
+			return discoverExitFatal
+		}
+		if resourceIDsRaw != "" {
+			wanted := splitCSV(*resourceIDs)
+			wantSet := make(map[string]struct{}, len(wanted))
+			for _, id := range wanted {
+				wantSet[id] = struct{}{}
+			}
+			seen := make(map[string]struct{}, len(preloaded))
+			kept := make([]imported.ImportedResource, 0, len(wanted))
+			for _, r := range preloaded {
+				if _, ok := wantSet[r.Identity.ImportID]; ok {
+					kept = append(kept, r)
+					seen[r.Identity.ImportID] = struct{}{}
+				}
+			}
+			var missing []string
+			for id := range wantSet {
+				if _, ok := seen[id]; !ok {
+					missing = append(missing, id)
+				}
+			}
+			if len(missing) > 0 {
+				sort.Strings(missing)
+				fmt.Fprintf(os.Stderr, "discover: --resource-ids: %d unknown id(s) not present in manifest %s: %s\n",
+					len(missing), fromManifestPath, strings.Join(missing, ", "))
+				return discoverExitFatal
+			}
+			preloaded = kept
+		}
+		// Derive primaryRegion from the loaded manifest when the CLI
+		// flag is empty (the AWS-region-required gate above is bypassed
+		// in this branch). Walk for the first non-empty Region.
+		if cloud == "aws" && primaryRegion == "" {
+			for _, r := range preloaded {
+				if rr := strings.TrimSpace(r.Identity.Region); rr != "" {
+					primaryRegion = rr
+					break
+				}
+			}
+			if primaryRegion == "" {
+				fmt.Fprintf(os.Stderr, "discover: --from-manifest %s: no Identity.Region populated on any resource and --regions is empty; cannot derive primary region for Stage 2b\n", fromManifestPath)
+				return discoverExitFatal
+			}
+		}
+	}
+
 	var (
 		d         discoveryAggregator
 		accountID string // AWS account ID, or real GCP project ID for the cloud-agnostic interface slot
@@ -330,16 +410,45 @@ Exit codes:
 			fmt.Fprintf(os.Stderr, "discover: load AWS config: %v\n", err)
 			return discoverExitFatal
 		}
-		// One STS GetCallerIdentity call per run; the result is threaded into
-		// every per-type discoverer so they don't each re-hit STS. We require
-		// the account ID for ARN construction (DynamoDB) and provenance, so a
-		// failure here is fatal. A nil Account on the STS response is treated
-		// as accountID="" — the DynamoDB discoverer's prefix-only fallback
-		// handles that case (see TestDynamoDBDiscover_PrefixOnlyFallback).
-		accountID, err = deps.getAccount(ctx, cfg)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "discover: STS GetCallerIdentity: %v\n", err)
-			return discoverExitFatal
+		// --from-manifest STS optimization (#292): if every loaded
+		// resource already carries a non-empty Identity.AccountID we
+		// can skip the STS round-trip. Otherwise (any resource missing
+		// AccountID, or no manifest at all) call STS for the
+		// authoritative answer. We also warn-but-don't-fail when the
+		// loaded manifest mixes account IDs — the import path proceeds
+		// with the first one observed.
+		skipSTS := false
+		if fromManifestPath != "" && len(preloaded) > 0 {
+			first := strings.TrimSpace(preloaded[0].Identity.AccountID)
+			if first != "" {
+				skipSTS = true
+				accountID = first
+				for _, r := range preloaded[1:] {
+					rid := strings.TrimSpace(r.Identity.AccountID)
+					if rid == "" {
+						skipSTS = false
+						break
+					}
+					if rid != first {
+						fmt.Fprintf(os.Stderr, "discover: WARN: --from-manifest %s contains mixed Identity.AccountID values (%s vs %s); proceeding with %s from the first record\n",
+							fromManifestPath, first, rid, first)
+					}
+				}
+			}
+		}
+		if !skipSTS {
+			// One STS GetCallerIdentity call per run; the result is threaded
+			// into every per-type discoverer so they don't each re-hit STS.
+			// We require the account ID for ARN construction (DynamoDB) and
+			// provenance, so a failure here is fatal. A nil Account on the
+			// STS response is treated as accountID="" — the DynamoDB
+			// discoverer's prefix-only fallback handles that case (see
+			// TestDynamoDBDiscover_PrefixOnlyFallback).
+			accountID, err = deps.getAccount(ctx, cfg)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "discover: STS GetCallerIdentity: %v\n", err)
+				return discoverExitFatal
+			}
 		}
 		d = deps.newDiscoverer(cfg, *maxConcurrency)
 	case "gcp":
@@ -357,10 +466,19 @@ Exit codes:
 		accountID = *gcpProjectID
 	}
 
-	resources, err := d.DiscoverTypes(ctx, types, *project, resolvedRegions, parsedSelectors, accountID)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "discover: %v\n", err)
-		return discoverExitFatal
+	var resources []imported.ImportedResource
+	if fromManifestPath != "" {
+		// Skip Stage 2a entirely — the manifest is the source of truth.
+		// The first writeManifest below still runs; it re-validates the
+		// loaded set and re-emits a deterministic file (sorted, []-not-null).
+		resources = preloaded
+	} else {
+		var err error
+		resources, err = d.DiscoverTypes(ctx, types, *project, resolvedRegions, parsedSelectors, accountID)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "discover: %v\n", err)
+			return discoverExitFatal
+		}
 	}
 
 	out, n, err := writeManifest(*outputDir, cloud, resources)

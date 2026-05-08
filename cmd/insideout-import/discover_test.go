@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -1527,6 +1528,322 @@ func TestRunDiscoverWithDeps_GCPDepChaseConvergesTrivially(t *testing.T) {
 	}, deps)
 	if rc != discoverExitOK {
 		t.Errorf("rc=%d, want OK", rc)
+	}
+}
+
+// --- #292 --from-manifest re-import path ---
+
+// validResourceWithRegion returns a validResource()-shape AWS record with
+// Identity.Region populated. The from-manifest tests assert Stage 2b
+// (genconfig) gets the right Region, and that primaryRegion derives from
+// the loaded manifest when --regions is empty.
+func validResourceWithRegion(addr, region, accountID string) imported.ImportedResource {
+	r := validResource(addr)
+	r.Identity.Region = region
+	r.Identity.AccountID = accountID
+	return r
+}
+
+// writeFixtureManifest is a tiny helper that exercises the production
+// writeManifest in tests so the on-disk fixture matches what a prior
+// discover run would have written. Returns the path to the manifest.
+func writeFixtureManifest(t *testing.T, dir, cloud string, rs []imported.ImportedResource) string {
+	t.Helper()
+	path, _, err := writeManifest(dir, cloud, rs)
+	if err != nil {
+		t.Fatalf("writeManifest fixture: %v", err)
+	}
+	return path
+}
+
+// TestRunDiscoverWithDeps_FromManifestSkipsDiscoverTypes pins the
+// re-import contract: --from-manifest replaces Stage 2a so the
+// aggregator's DiscoverTypes is not called. The downstream Stage 2b
+// (genconfig) must still receive the loaded resources verbatim — a
+// regression that fed an empty slice into genconfig would silently emit
+// an empty generated.tf.
+func TestRunDiscoverWithDeps_FromManifestSkipsDiscoverTypes(t *testing.T) {
+	t.Parallel()
+	manifestDir := t.TempDir()
+	loaded := []imported.ImportedResource{
+		validResourceWithRegion("aws_sqs_queue.alpha", "us-east-1", "1234567890"),
+		validResourceWithRegion("aws_sqs_queue.bravo", "us-east-1", "1234567890"),
+	}
+	manifestPath := writeFixtureManifest(t, manifestDir, "aws", loaded)
+
+	outDir := t.TempDir()
+	gc := &fakeGenconfig{}
+	agg := &fakeAggregator{}
+	rc := runDiscoverWithDeps([]string{
+		"--provider", "aws",
+		"--project", "io-foo",
+		"--regions", "us-east-1",
+		"--from-manifest", manifestPath,
+		"--output-dir", outDir,
+	}, okDepsWithGC(agg, gc))
+	if rc != discoverExitOK {
+		t.Fatalf("rc=%d, want OK", rc)
+	}
+	if agg.called != 0 {
+		t.Errorf("DiscoverTypes called %d times with --from-manifest, want 0", agg.called)
+	}
+	if gc.called != 1 {
+		t.Errorf("runGenconfig called %d times, want 1 (Stage 2b must still run)", gc.called)
+	}
+	if gc.gotCount != 2 {
+		t.Errorf("genconfig got %d resources, want 2 (loaded manifest size)", gc.gotCount)
+	}
+}
+
+// TestRunDiscoverWithDeps_FromManifestResourceIDsFiltersToSubset pins the
+// targeted-subset wizard flow: a 3-resource manifest + --resource-ids
+// listing 2 of them yields only those 2 resources downstream.
+func TestRunDiscoverWithDeps_FromManifestResourceIDsFiltersToSubset(t *testing.T) {
+	t.Parallel()
+	manifestDir := t.TempDir()
+	r1 := validResourceWithRegion("aws_sqs_queue.alpha", "us-east-1", "1234567890")
+	r1.Identity.ImportID = "id-alpha"
+	r2 := validResourceWithRegion("aws_sqs_queue.bravo", "us-east-1", "1234567890")
+	r2.Identity.ImportID = "id-bravo"
+	r3 := validResourceWithRegion("aws_sqs_queue.charlie", "us-east-1", "1234567890")
+	r3.Identity.ImportID = "id-charlie"
+	manifestPath := writeFixtureManifest(t, manifestDir, "aws",
+		[]imported.ImportedResource{r1, r2, r3})
+
+	outDir := t.TempDir()
+	gc := &fakeGenconfig{}
+	agg := &fakeAggregator{}
+	rc := runDiscoverWithDeps([]string{
+		"--provider", "aws",
+		"--project", "io-foo",
+		"--regions", "us-east-1",
+		"--from-manifest", manifestPath,
+		"--resource-ids", "id-alpha,id-charlie",
+		"--output-dir", outDir,
+	}, okDepsWithGC(agg, gc))
+	if rc != discoverExitOK {
+		t.Fatalf("rc=%d, want OK", rc)
+	}
+	if gc.gotCount != 2 {
+		t.Errorf("genconfig got %d resources, want 2 (subset of 3)", gc.gotCount)
+	}
+	// Re-read on-disk imported.json to confirm only the picked subset
+	// landed (the writeManifest re-emit must not silently include the
+	// dropped resource).
+	body, err := os.ReadFile(filepath.Join(outDir, "imported.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []imported.ImportedResource
+	require.NoError(t, json.Unmarshal(body, &got))
+	require.Len(t, got, 2)
+	gotIDs := []string{got[0].Identity.ImportID, got[1].Identity.ImportID}
+	if !slices.Contains(gotIDs, "id-alpha") || !slices.Contains(gotIDs, "id-charlie") {
+		t.Errorf("emitted manifest IDs=%v, want id-alpha,id-charlie subset", gotIDs)
+	}
+	if slices.Contains(gotIDs, "id-bravo") {
+		t.Errorf("dropped resource id-bravo leaked into emitted manifest: %v", gotIDs)
+	}
+}
+
+// TestRunDiscoverWithDeps_FromManifestUnknownResourceIDIsFatal pins the
+// fail-loud contract: an unknown id in --resource-ids is fatal (no silent
+// drop) and the stderr message names the offending id literal so the
+// wizard's error UX can surface it back to the operator unchanged.
+//
+// NOT t.Parallel(): captures global os.Stderr.
+func TestRunDiscoverWithDeps_FromManifestUnknownResourceIDIsFatal(t *testing.T) {
+	manifestDir := t.TempDir()
+	r1 := validResourceWithRegion("aws_sqs_queue.alpha", "us-east-1", "1234567890")
+	r1.Identity.ImportID = "id-alpha"
+	manifestPath := writeFixtureManifest(t, manifestDir, "aws",
+		[]imported.ImportedResource{r1})
+
+	outDir := t.TempDir()
+	var rc int
+	stderr := captureStderr(t, func() {
+		rc = runDiscoverWithDeps([]string{
+			"--provider", "aws",
+			"--project", "io-foo",
+			"--regions", "us-east-1",
+			"--from-manifest", manifestPath,
+			"--resource-ids", "id-alpha,id-ghost",
+			"--output-dir", outDir,
+		}, okDeps(&fakeAggregator{}))
+	})
+	if rc != discoverExitFatal {
+		t.Errorf("rc=%d, want fatal", rc)
+	}
+	if !strings.Contains(stderr, "id-ghost") {
+		t.Errorf("stderr must literal-quote the unknown id; got: %s", stderr)
+	}
+	if !strings.Contains(stderr, "unknown") {
+		t.Errorf("stderr must label the failure as unknown id; got: %s", stderr)
+	}
+}
+
+// TestRunDiscoverWithDeps_FromManifestPopulatedAccountIDSkipsSTS pins the
+// STS optimization (#292): every loaded resource has Identity.AccountID
+// populated, so we don't waste an API call. A regression that always
+// hit STS would still produce a correct manifest but burn the round-trip
+// — the test fails fast on STS being called at all.
+func TestRunDiscoverWithDeps_FromManifestPopulatedAccountIDSkipsSTS(t *testing.T) {
+	t.Parallel()
+	manifestDir := t.TempDir()
+	manifestPath := writeFixtureManifest(t, manifestDir, "aws", []imported.ImportedResource{
+		validResourceWithRegion("aws_sqs_queue.alpha", "us-east-1", "1234567890"),
+		validResourceWithRegion("aws_sqs_queue.bravo", "us-east-1", "1234567890"),
+	})
+
+	outDir := t.TempDir()
+	agg := &fakeAggregator{}
+	stsCalls := 0
+	deps := okDeps(agg)
+	deps.getAccount = func(_ context.Context, _ aws.Config) (string, error) {
+		stsCalls++
+		return "1234567890", nil
+	}
+	rc := runDiscoverWithDeps([]string{
+		"--provider", "aws",
+		"--project", "io-foo",
+		"--regions", "us-east-1",
+		"--from-manifest", manifestPath,
+		"--output-dir", outDir,
+	}, deps)
+	if rc != discoverExitOK {
+		t.Fatalf("rc=%d, want OK", rc)
+	}
+	if stsCalls != 0 {
+		t.Errorf("getAccount called %d times; --from-manifest with populated AccountID must skip STS", stsCalls)
+	}
+}
+
+// TestRunDiscoverWithDeps_FromManifestEmptyAccountIDStillCallsSTS pins
+// the optimization's correctness fallback: any resource missing
+// Identity.AccountID forces the STS call so the downstream depchase
+// loop has a non-empty account ID for ARN reconstruction.
+func TestRunDiscoverWithDeps_FromManifestEmptyAccountIDStillCallsSTS(t *testing.T) {
+	t.Parallel()
+	manifestDir := t.TempDir()
+	r := validResourceWithRegion("aws_sqs_queue.alpha", "us-east-1", "")
+	manifestPath := writeFixtureManifest(t, manifestDir, "aws",
+		[]imported.ImportedResource{r})
+
+	outDir := t.TempDir()
+	agg := &fakeAggregator{}
+	stsCalls := 0
+	deps := okDeps(agg)
+	deps.getAccount = func(_ context.Context, _ aws.Config) (string, error) {
+		stsCalls++
+		return "1234567890", nil
+	}
+	rc := runDiscoverWithDeps([]string{
+		"--provider", "aws",
+		"--project", "io-foo",
+		"--regions", "us-east-1",
+		"--from-manifest", manifestPath,
+		"--output-dir", outDir,
+	}, deps)
+	if rc != discoverExitOK {
+		t.Fatalf("rc=%d, want OK", rc)
+	}
+	if stsCalls != 1 {
+		t.Errorf("getAccount called %d times; missing AccountID must force exactly 1 STS call", stsCalls)
+	}
+}
+
+// TestRunDiscoverWithDeps_FromManifestWithResourceTypesIsFatal pins the
+// mutual-exclusion gate: --from-manifest is incompatible with
+// --resource-types because the manifest is already type-filtered.
+// The stderr substring keeps the operator-facing guidance specific.
+//
+// NOT t.Parallel(): captures global os.Stderr.
+func TestRunDiscoverWithDeps_FromManifestWithResourceTypesIsFatal(t *testing.T) {
+	manifestDir := t.TempDir()
+	manifestPath := writeFixtureManifest(t, manifestDir, "aws",
+		[]imported.ImportedResource{validResourceWithRegion("aws_sqs_queue.alpha", "us-east-1", "1234567890")})
+
+	outDir := t.TempDir()
+	var rc int
+	stderr := captureStderr(t, func() {
+		rc = runDiscoverWithDeps([]string{
+			"--provider", "aws",
+			"--project", "io-foo",
+			"--regions", "us-east-1",
+			"--from-manifest", manifestPath,
+			"--resource-types", "aws_sqs_queue",
+			"--output-dir", outDir,
+		}, okDeps(&fakeAggregator{}))
+	})
+	if rc != discoverExitFatal {
+		t.Errorf("rc=%d, want fatal", rc)
+	}
+	if !strings.Contains(stderr, "--resource-types") || !strings.Contains(stderr, "--from-manifest") {
+		t.Errorf("stderr must name both flags in the conflict message; got: %s", stderr)
+	}
+}
+
+// TestRunDiscoverWithDeps_ResourceIDsWithoutFromManifestIsFatal pins the
+// dependency direction: --resource-ids only makes sense in the
+// --from-manifest context (a fresh discover run lists every matching
+// resource by definition). Set without the parent and the CLI exits
+// fatal rather than silently ignoring the filter.
+//
+// NOT t.Parallel(): captures global os.Stderr.
+func TestRunDiscoverWithDeps_ResourceIDsWithoutFromManifestIsFatal(t *testing.T) {
+	outDir := t.TempDir()
+	var rc int
+	stderr := captureStderr(t, func() {
+		rc = runDiscoverWithDeps([]string{
+			"--provider", "aws",
+			"--project", "io-foo",
+			"--regions", "us-east-1",
+			"--resource-ids", "id-alpha",
+			"--output-dir", outDir,
+		}, okDeps(&fakeAggregator{}))
+	})
+	if rc != discoverExitFatal {
+		t.Errorf("rc=%d, want fatal", rc)
+	}
+	if !strings.Contains(stderr, "--resource-ids") || !strings.Contains(stderr, "--from-manifest") {
+		t.Errorf("stderr must name both flags in the requirement message; got: %s", stderr)
+	}
+}
+
+// TestRunDiscoverWithDeps_FromManifestDerivesPrimaryRegionFromManifest
+// pins that --from-manifest can satisfy the AWS-region requirement on
+// its own: when --regions is empty, primaryRegion is taken from the
+// loaded manifest's first resource's Identity.Region. Threaded into
+// loadConfig + genconfig so Stage 2b operates on the same region the
+// resources were originally discovered in.
+func TestRunDiscoverWithDeps_FromManifestDerivesPrimaryRegionFromManifest(t *testing.T) {
+	t.Parallel()
+	manifestDir := t.TempDir()
+	manifestPath := writeFixtureManifest(t, manifestDir, "aws",
+		[]imported.ImportedResource{validResourceWithRegion("aws_sqs_queue.alpha", "eu-west-1", "1234567890")})
+
+	outDir := t.TempDir()
+	gc := &fakeGenconfig{}
+	var loadRegion string
+	deps := okDepsWithGC(&fakeAggregator{}, gc)
+	deps.loadConfig = func(_ context.Context, region, _ string) (aws.Config, error) {
+		loadRegion = region
+		return aws.Config{}, nil
+	}
+	rc := runDiscoverWithDeps([]string{
+		"--provider", "aws",
+		"--project", "io-foo",
+		"--from-manifest", manifestPath,
+		"--output-dir", outDir,
+	}, deps)
+	if rc != discoverExitOK {
+		t.Fatalf("rc=%d, want OK", rc)
+	}
+	if loadRegion != "eu-west-1" {
+		t.Errorf("loadConfig region=%q, want eu-west-1 (derived from manifest Identity.Region)", loadRegion)
+	}
+	if gc.gotOpts.Region != "eu-west-1" {
+		t.Errorf("genconfig Region=%q, want eu-west-1 (threaded primaryRegion)", gc.gotOpts.Region)
 	}
 }
 
