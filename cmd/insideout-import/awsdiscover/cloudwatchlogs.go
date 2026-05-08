@@ -127,9 +127,11 @@ func (d *cwlDiscoverer) Discover(ctx context.Context, args DiscoverArgs) ([]impo
 // ListTagsForResource returns a `Tags map[string]string` directly; we
 // normalize the SDK's nil-on-empty into an empty map so the
 // nil-vs-empty distinction is preserved (nil ⇒ "didn't fetch", empty
-// ⇒ "no tags").
-func fetchCWLTags(ctx context.Context, client cwlClient, logGroupName string) (map[string]string, error) {
-	out, err := client.ListTagsForResource(ctx, &cloudwatchlogs.ListTagsForResourceInput{ResourceArn: aws.String(logGroupName)})
+// ⇒ "no tags"). The parameter is the trimmed log-group ARN (call
+// site at line ~100 strips the trailing ":*" wildcard); the rename
+// from `logGroupName` to `resourceARN` makes that contract obvious.
+func fetchCWLTags(ctx context.Context, client cwlClient, resourceARN string) (map[string]string, error) {
+	out, err := client.ListTagsForResource(ctx, &cloudwatchlogs.ListTagsForResourceInput{ResourceArn: aws.String(resourceARN)})
 	if err != nil {
 		return nil, err
 	}

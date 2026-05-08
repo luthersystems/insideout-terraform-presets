@@ -33,8 +33,8 @@ func TestCategory_KnownTypeReturnsExpected(t *testing.T) {
 		{"aws_vpc", "Network Security"},
 		{"aws_subnet", "Network Security"},
 		{"aws_security_group", "Network Security"},
+		{"aws_db_instance", "Data Storage"},
 		{"aws_rds_cluster", "Data Storage"},
-		{"aws_rds_instance", "Data Storage"},
 		{"aws_eks_cluster", "Virtual Machines"},
 		{"aws_lb", "Network Security"},
 		{"aws_elb", "Network Security"},
@@ -154,6 +154,39 @@ func TestCategory_StableValuesPinWireFormat(t *testing.T) {
 	require.Equal(t, "Observability", CategoryObservability)
 	require.Equal(t, "Security", CategorySecurity)
 	require.Equal(t, "Virtual Machines", CategoryVirtualMachines)
+}
+
+// TestCategoryConstants_LiteralStrings pins each constant against its
+// expected literal string in a table-driven shape. This duplicates
+// TestCategory_StableValuesPinWireFormat above on purpose: when the
+// wire-format constants drift, the table-driven shape produces a
+// per-constant test failure naming exactly which symbol moved, while
+// the require.Equal sequence above stops at the first mismatch. Both
+// are kept so a CI failure surfaces both the panic-stop pin AND the
+// per-constant diagnostic.
+func TestCategoryConstants_LiteralStrings(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		got  string
+		want string
+	}{
+		{"CategoryEvents", CategoryEvents, "Events"},
+		{"CategoryDataStorage", CategoryDataStorage, "Data Storage"},
+		{"CategoryNetworkSecurity", CategoryNetworkSecurity, "Network Security"},
+		{"CategoryObservability", CategoryObservability, "Observability"},
+		{"CategorySecurity", CategorySecurity, "Security"},
+		{"CategoryVirtualMachines", CategoryVirtualMachines, "Virtual Machines"},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if tc.got != tc.want {
+				t.Errorf("%s = %q, want %q (wire-format break)", tc.name, tc.got, tc.want)
+			}
+		})
+	}
 }
 
 // TestCategoriesReturnsCopy_PackageStateUnchanged pins that the public

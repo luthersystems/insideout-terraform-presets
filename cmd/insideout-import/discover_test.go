@@ -27,12 +27,25 @@ import (
 // is exercised by the live smoke against the io-buqiks112yag test account
 // (see PR description / acceptance criteria) — not in CI.
 
+// Flag-validation tests below capture stderr (so they cannot use
+// t.Parallel — the captureStderr helper swaps os.Stderr globally) and
+// pin a unique substring of the validator's error message. Asserting
+// only `rc != discoverExitOK` would let a regression that triggers a
+// different validator (e.g. "--provider is required" instead of
+// "--region is required") still pass; the substring assertion narrows
+// the test to exactly one validator.
+
 func TestRunDiscover_MissingProvider(t *testing.T) {
-	t.Parallel()
 	dir := t.TempDir()
-	rc := runDiscover([]string{"--project", "p", "--region", "us-east-1", "--output-dir", dir})
+	var rc int
+	stderr := captureStderr(t, func() {
+		rc = runDiscover([]string{"--project", "p", "--region", "us-east-1", "--output-dir", dir})
+	})
 	if rc != discoverExitFatal {
 		t.Errorf("rc=%d, want fatal", rc)
+	}
+	if !strings.Contains(stderr, "--provider is required") {
+		t.Errorf("stderr=%q, want substring %q", stderr, "--provider is required")
 	}
 }
 
@@ -40,46 +53,71 @@ func TestRunDiscover_MissingProvider(t *testing.T) {
 // must still fail fatally (per #157, the real GCP project ID is distinct
 // from the stack --project name and the orchestrator can't fall back).
 func TestRunDiscover_GCPMissingProjectIDIsFatal(t *testing.T) {
-	t.Parallel()
 	dir := t.TempDir()
-	rc := runDiscover([]string{"--provider", "gcp", "--project", "p", "--output-dir", dir})
+	var rc int
+	stderr := captureStderr(t, func() {
+		rc = runDiscover([]string{"--provider", "gcp", "--project", "p", "--output-dir", dir})
+	})
 	if rc != discoverExitFatal {
 		t.Errorf("rc=%d, want fatal", rc)
+	}
+	if !strings.Contains(stderr, "--gcp-project-id is required") {
+		t.Errorf("stderr=%q, want substring %q", stderr, "--gcp-project-id is required")
 	}
 }
 
 func TestRunDiscover_UnknownProvider(t *testing.T) {
-	t.Parallel()
 	dir := t.TempDir()
-	rc := runDiscover([]string{"--provider", "azure", "--project", "p", "--region", "us-east-1", "--output-dir", dir})
+	var rc int
+	stderr := captureStderr(t, func() {
+		rc = runDiscover([]string{"--provider", "azure", "--project", "p", "--region", "us-east-1", "--output-dir", dir})
+	})
 	if rc != discoverExitFatal {
 		t.Errorf("rc=%d, want fatal", rc)
+	}
+	if !strings.Contains(stderr, "unknown --provider") {
+		t.Errorf("stderr=%q, want substring %q", stderr, "unknown --provider")
 	}
 }
 
 func TestRunDiscover_MissingProject(t *testing.T) {
-	t.Parallel()
 	dir := t.TempDir()
-	rc := runDiscover([]string{"--provider", "aws", "--region", "us-east-1", "--output-dir", dir})
+	var rc int
+	stderr := captureStderr(t, func() {
+		rc = runDiscover([]string{"--provider", "aws", "--region", "us-east-1", "--output-dir", dir})
+	})
 	if rc != discoverExitFatal {
 		t.Errorf("rc=%d, want fatal", rc)
+	}
+	if !strings.Contains(stderr, "--project is required") {
+		t.Errorf("stderr=%q, want substring %q", stderr, "--project is required")
 	}
 }
 
 func TestRunDiscover_MissingRegion(t *testing.T) {
-	t.Parallel()
 	dir := t.TempDir()
-	rc := runDiscover([]string{"--provider", "aws", "--project", "p", "--output-dir", dir})
+	var rc int
+	stderr := captureStderr(t, func() {
+		rc = runDiscover([]string{"--provider", "aws", "--project", "p", "--output-dir", dir})
+	})
 	if rc != discoverExitFatal {
 		t.Errorf("rc=%d, want fatal", rc)
+	}
+	if !strings.Contains(stderr, "--regions is required") {
+		t.Errorf("stderr=%q, want substring %q", stderr, "--regions is required")
 	}
 }
 
 func TestRunDiscover_MissingOutputDir(t *testing.T) {
-	t.Parallel()
-	rc := runDiscover([]string{"--provider", "aws", "--project", "p", "--region", "us-east-1"})
+	var rc int
+	stderr := captureStderr(t, func() {
+		rc = runDiscover([]string{"--provider", "aws", "--project", "p", "--region", "us-east-1"})
+	})
 	if rc != discoverExitFatal {
 		t.Errorf("rc=%d, want fatal", rc)
+	}
+	if !strings.Contains(stderr, "--output-dir is required") {
+		t.Errorf("stderr=%q, want substring %q", stderr, "--output-dir is required")
 	}
 }
 
@@ -524,12 +562,17 @@ func TestRunDiscoverWithDeps_STSFails(t *testing.T) {
 	}
 }
 
-// TestRunDiscoverWithDeps_NilSTSAccountThreadsEmpty pins the documented
-// behavior: an STS response with Account=nil is treated as accountID="" and
-// the run continues — the DynamoDB discoverer's prefix-only fallback covers
-// the case downstream. A mutation that hard-fails on empty accountID would
-// silently break STS responses with missing Account fields.
-func TestRunDiscoverWithDeps_NilSTSAccountThreadsEmpty(t *testing.T) {
+// TestRunDiscoverWithDeps_EmptySTSAccountThreadsEmpty pins the
+// documented behavior: an STS response that succeeds but yields an
+// empty accountID is threaded through as accountID="" and the run
+// continues — the DynamoDB discoverer's prefix-only fallback covers the
+// case downstream. A mutation that hard-fails on empty accountID would
+// silently break STS responses with missing/empty Account fields.
+//
+// (The function returns (string, error), so a literal nil Account is
+// unrepresentable at this layer — the caller already coerced to ""
+// before the dep boundary.)
+func TestRunDiscoverWithDeps_EmptySTSAccountThreadsEmpty(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	agg := &fakeAggregator{}
@@ -542,7 +585,7 @@ func TestRunDiscoverWithDeps_NilSTSAccountThreadsEmpty(t *testing.T) {
 		"--provider", "aws", "--project", "p", "--region", "us-east-1", "--output-dir", dir,
 	}, deps)
 	if rc != discoverExitOK {
-		t.Errorf("rc=%d, want OK (nil Account is not fatal)", rc)
+		t.Errorf("rc=%d, want OK (empty Account is not fatal)", rc)
 	}
 	if agg.gotAccount != "" {
 		t.Errorf("accountID threaded = %q, want empty", agg.gotAccount)
@@ -1701,8 +1744,21 @@ func TestRunDiscoverWithDeps_GCPManifestRejectsAWSCloudArg(t *testing.T) {
 func TestRunDiscoverWithDeps_GCPDepChaseConvergesTrivially(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	agg := &fakeAggregator{out: []imported.ImportedResource{validGCPResource("alpha")}}
+	in := []imported.ImportedResource{validGCPResource("alpha")}
+	agg := &fakeAggregator{out: in}
 	deps, _ := okGCPDeps(t, agg)
+	// Inject a fakeDepChase pre-loaded with the trivial-convergence
+	// shape: input resources echoed back, no Added, exactly one
+	// iteration. We then assert these on the captured result so a
+	// regression that re-walked or mis-counted iterations is visible.
+	dcRes := &depchase.Result{
+		GeneratedPath: filepath.Join(dir, "genconfig", "generated.tf"),
+		Iterations:    1,
+		Resources:     in,
+		Added:         nil,
+	}
+	dc := &fakeDepChase{out: dcRes}
+	deps.runDepChase = dc.Run
 	rc := runDiscoverWithDeps([]string{
 		"--provider", "gcp", "--project", "p",
 		"--gcp-project-id", "real-proj",
@@ -1710,6 +1766,15 @@ func TestRunDiscoverWithDeps_GCPDepChaseConvergesTrivially(t *testing.T) {
 	}, deps)
 	if rc != discoverExitOK {
 		t.Errorf("rc=%d, want OK", rc)
+	}
+	if dc.called != 1 {
+		t.Errorf("runDepChase called %d times, want 1", dc.called)
+	}
+	if got := len(dcRes.Added); got != 0 {
+		t.Errorf("dcRes.Added len=%d, want 0 (trivial GCP convergence)", got)
+	}
+	if dcRes.Iterations != 1 {
+		t.Errorf("dcRes.Iterations=%d, want 1 (single pass, no unresolved refs)", dcRes.Iterations)
 	}
 }
 
@@ -1903,7 +1968,11 @@ func TestRunDiscoverWithDeps_FromManifestPopulatedAccountIDSkipsSTS(t *testing.T
 // TestRunDiscoverWithDeps_FromManifestEmptyAccountIDStillCallsSTS pins
 // the optimization's correctness fallback: any resource missing
 // Identity.AccountID forces the STS call so the downstream depchase
-// loop has a non-empty account ID for ARN reconstruction.
+// loop has a non-empty account ID for ARN reconstruction. The
+// AccountID assertion on dc.gotOpts pins that the STS-returned ID is
+// actually threaded to depchase — a regression that called STS but
+// dropped the result on the floor would still exit cleanly without
+// this check.
 func TestRunDiscoverWithDeps_FromManifestEmptyAccountIDStillCallsSTS(t *testing.T) {
 	t.Parallel()
 	manifestDir := t.TempDir()
@@ -1914,11 +1983,13 @@ func TestRunDiscoverWithDeps_FromManifestEmptyAccountIDStillCallsSTS(t *testing.
 	outDir := t.TempDir()
 	agg := &fakeAggregator{}
 	stsCalls := 0
+	dc := &fakeDepChase{}
 	deps := okDeps(agg)
 	deps.getAccount = func(_ context.Context, _ aws.Config) (string, error) {
 		stsCalls++
 		return "1234567890", nil
 	}
+	deps.runDepChase = dc.Run
 	rc := runDiscoverWithDeps([]string{
 		"--provider", "aws",
 		"--project", "io-foo",
@@ -1931,6 +2002,10 @@ func TestRunDiscoverWithDeps_FromManifestEmptyAccountIDStillCallsSTS(t *testing.
 	}
 	if stsCalls != 1 {
 		t.Errorf("getAccount called %d times; missing AccountID must force exactly 1 STS call", stsCalls)
+	}
+	if dc.gotOpts.AccountID != "1234567890" {
+		t.Errorf("dc.gotOpts.AccountID=%q, want %q (STS-returned account must be threaded to depchase)",
+			dc.gotOpts.AccountID, "1234567890")
 	}
 }
 
@@ -2068,24 +2143,33 @@ func TestSplitCSV(t *testing.T) {
 // must own them for its run.
 func TestRunDiscoverWithDeps_ProgressJSONMovesSummaryToStderr(t *testing.T) {
 	dir := t.TempDir()
-	agg := &fakeAggregator{out: []imported.ImportedResource{
-		validResource("aws_sqs_queue.alpha"),
-	}}
+	// Use the emitting variant of fakeAggregator so DiscoverTypes
+	// actually fires a stage_finish event through the threaded
+	// emitter — without that, stdout would be empty and the positive
+	// "at least one event was written" assertion below would only
+	// vacuously pass.
+	agg := &emittingFakeAggregator{
+		fakeAggregator: fakeAggregator{out: []imported.ImportedResource{
+			validResource("aws_sqs_queue.alpha"),
+		}},
+	}
+	deps := okDeps(&agg.fakeAggregator)
+	deps.newDiscoverer = func(_ aws.Config, _ int) discoveryAggregator { return agg }
 	stdout, stderr := captureStdoutStderr(t, func() {
 		rc := runDiscoverWithDeps([]string{
 			"--provider", "aws", "--project", "io-foo", "--region", "us-east-1",
 			"--output-dir", dir, "--no-hcl", "--progress", "json",
-		}, okDeps(agg))
+		}, deps)
 		if rc != discoverExitOK {
 			t.Errorf("rc=%d, want %d", rc, discoverExitOK)
 		}
 	})
 
-	// stdout: every non-empty line must parse as a JSON Event. The
-	// fakeAggregator does not actually emit events (it bypasses the
-	// per-service code), but the orchestrator passes the JSONEmitter
-	// through; if the summary "wrote ..." line bled onto stdout the
-	// JSON parse would fail.
+	// Positive pin: stdout must carry at least one parseable Event
+	// from the per-service code path. A regression that wired stdout
+	// to a NopEmitter (so events vanish) would survive the negative
+	// "summary doesn't bleed" check below; this gate catches it.
+	sawEvent := false
 	for i, line := range strings.Split(strings.TrimRight(stdout, "\n"), "\n") {
 		if line == "" {
 			continue
@@ -2093,7 +2177,14 @@ func TestRunDiscoverWithDeps_ProgressJSONMovesSummaryToStderr(t *testing.T) {
 		var evt map[string]any
 		if err := json.Unmarshal([]byte(line), &evt); err != nil {
 			t.Errorf("stdout line %d not JSON: %v\n  raw: %q", i, err, line)
+			continue
 		}
+		if e, _ := evt["event"].(string); e == "stage_finish" || e == "service_start" || e == "item_found" {
+			sawEvent = true
+		}
+	}
+	if !sawEvent {
+		t.Errorf("--progress=json wrote no parseable events to stdout; stdout=%q", stdout)
 	}
 	// stderr: the post-discovery summary line must land here.
 	if !strings.Contains(stderr, "wrote ") || !strings.Contains(stderr, "imported.json") {
@@ -2102,6 +2193,22 @@ func TestRunDiscoverWithDeps_ProgressJSONMovesSummaryToStderr(t *testing.T) {
 	if strings.Contains(stdout, "wrote ") {
 		t.Errorf("summary line bled onto stdout; got stdout=%q", stdout)
 	}
+}
+
+// emittingFakeAggregator is a fakeAggregator variant whose
+// DiscoverTypes fires a stage_finish event on the threaded emitter
+// before returning. Used by the --progress=json positive-shape test;
+// the bare fakeAggregator skips emission so most tests stay quiet.
+type emittingFakeAggregator struct {
+	fakeAggregator
+}
+
+func (f *emittingFakeAggregator) DiscoverTypes(ctx context.Context, types []string, project string, regions []string, selectors []tagSelectorPair, accountID string, emitter progress.Emitter) ([]imported.ImportedResource, error) {
+	out, err := f.fakeAggregator.DiscoverTypes(ctx, types, project, regions, selectors, accountID, emitter)
+	if emitter != nil {
+		emitter.StageFinish("discover", len(out), 0)
+	}
+	return out, err
 }
 
 // TestRunDiscoverWithDeps_ProgressUnknownFormatIsFatal (#295) pins the
@@ -2270,57 +2377,11 @@ func TestRunDiscoverWithDeps_IncludeUnsupportedSoftFailureKeepsImportedJSON(t *t
 	}
 }
 
-// TestRunDiscoverWithDeps_IncludeUnsupportedDeterministicOrder pins
-// the byte-identical output invariant across runs of the same input.
-// A regression that switched the sort key (or dropped sorting) would
-// surface as a flaky picker UI in the wizard.
-func TestRunDiscoverWithDeps_IncludeUnsupportedDeterministicOrder(t *testing.T) {
-	t.Parallel()
-	rows := []awsdiscover.UnsupportedResource{
-		{Type: "aws_vpc", ID: "arn-z", Region: "us-east-1"},
-		{Type: "aws_subnet", ID: "arn-a", Region: "us-east-1"},
-		{Type: "aws_vpc", ID: "arn-a", Region: "us-east-1"},
-	}
-	enum := func(_ context.Context, _ aws.Config, _ awsdiscover.UnsupportedArgs) ([]awsdiscover.UnsupportedResource, error) {
-		// Return the same input in a permuted order — the writer's
-		// sort must produce identical files in both runs.
-		return rows, nil
-	}
-	enumRev := func(_ context.Context, _ aws.Config, _ awsdiscover.UnsupportedArgs) ([]awsdiscover.UnsupportedResource, error) {
-		rev := make([]awsdiscover.UnsupportedResource, len(rows))
-		for i := range rows {
-			rev[len(rows)-1-i] = rows[i]
-		}
-		return rev, nil
-	}
-
-	dir1, dir2 := t.TempDir(), t.TempDir()
-	d1 := okDeps(&fakeAggregator{})
-	d1.enumerateUnsupportedAWS = enum
-	d2 := okDeps(&fakeAggregator{})
-	d2.enumerateUnsupportedAWS = enumRev
-	for _, dt := range []struct {
-		dir  string
-		deps discoverDeps
-	}{{dir1, d1}, {dir2, d2}} {
-		rc := runDiscoverWithDeps([]string{
-			"--provider", "aws",
-			"--project", "io-foo",
-			"--regions", "us-east-1",
-			"--output-dir", dt.dir,
-			"--include-unsupported",
-			"--no-hcl",
-		}, dt.deps)
-		if rc != discoverExitOK {
-			t.Fatalf("rc=%d, want OK", rc)
-		}
-	}
-	a, err := os.ReadFile(filepath.Join(dir1, "unsupported.json"))
-	require.NoError(t, err)
-	b, err := os.ReadFile(filepath.Join(dir2, "unsupported.json"))
-	require.NoError(t, err)
-	assert.Equal(t, a, b, "unsupported.json must be byte-identical across permuted-input runs")
-}
+// (TestRunDiscoverWithDeps_IncludeUnsupportedDeterministicOrder was
+// removed: TestWriteUnsupportedManifest_DeterministicAcrossRuns
+// already pins the byte-identical-output invariant at the writer
+// level, where the sort runs. Re-asserting it through the orchestrator
+// just duplicates the contract without exercising new code paths.)
 
 // TestRunDiscoverWithDeps_IncludeUnsupportedNotSetSkipsEmission pins
 // the back-compat invariant: without --include-unsupported, no
@@ -2543,7 +2604,17 @@ func TestRunDiscoverWithDeps_SummaryIncludeUnsupportedSoftFailureZeroCount(t *te
 func TestRunDiscoverWithDeps_SummaryRegionsAndTagSelectorsReflectInputs(t *testing.T) {
 	t.Parallel()
 	outDir := t.TempDir()
-	agg := &fakeAggregator{out: []imported.ImportedResource{validResource("aws_sqs_queue.alpha")}}
+	// Seed a resource in eu-west-1 with the env=prod tag so the
+	// ByRegion / ByTag aggregations have something to count.
+	// Asserting only RegionsScanned + TagSelectors leaves the
+	// per-region / per-tag bucket population uncovered — a
+	// regression that nil'd out the per-resource increments would
+	// still hand back the operator's input lists verbatim and
+	// pass the original test.
+	r := validResource("aws_sqs_queue.alpha")
+	r.Identity.Region = "eu-west-1"
+	r.Identity.Tags = map[string]string{"env": "prod"}
+	agg := &fakeAggregator{out: []imported.ImportedResource{r}}
 	rc := runDiscoverWithDeps([]string{
 		"--provider", "aws",
 		"--project", "io-foo",
@@ -2562,6 +2633,10 @@ func TestRunDiscoverWithDeps_SummaryRegionsAndTagSelectorsReflectInputs(t *testi
 	assert.Equal(t, []string{"us-east-1", "eu-west-1"}, got.ScanSummary.RegionsScanned)
 	// TagSelectors are sorted in the summary's wire shape.
 	assert.Equal(t, []string{"env=prod", "team=growth"}, got.ScanSummary.TagSelectors)
+	// Per-resource aggregations: the seeded resource lands in the
+	// eu-west-1 bucket and contributes one env=prod tag count.
+	assert.Equal(t, 1, got.ByRegion["eu-west-1"], "ByRegion eu-west-1 must be 1; got=%+v", got.ByRegion)
+	assert.Equal(t, 1, got.ByTag["env=prod"], "ByTag env=prod must be 1; got=%+v", got.ByTag)
 }
 
 // TestRunDiscoverWithDeps_SummaryNotEmittedOnEarlyValidationFailure
@@ -2575,7 +2650,6 @@ func TestRunDiscoverWithDeps_SummaryRegionsAndTagSelectorsReflectInputs(t *testi
 // test doesn't, but co-locating with the rest of the summary tests
 // keeps the suite cohesive.
 func TestRunDiscoverWithDeps_SummaryNotEmittedOnEarlyValidationFailure(t *testing.T) {
-	t.Parallel()
 	outDir := t.TempDir()
 	rc := runDiscoverWithDeps([]string{
 		"--provider", "aws",

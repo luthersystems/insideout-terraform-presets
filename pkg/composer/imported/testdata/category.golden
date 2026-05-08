@@ -1,5 +1,6 @@
 aws_cloudfront_distribution	Network Security
 aws_cloudwatch_log_group	Observability
+aws_db_instance	Data Storage
 aws_dynamodb_table	Data Storage
 aws_ecr_repository	Data Storage
 aws_ecs_cluster	Virtual Machines
@@ -11,7 +12,6 @@ aws_kms_key	Security
 aws_lambda_function	Virtual Machines
 aws_lb	Network Security
 aws_rds_cluster	Data Storage
-aws_rds_instance	Data Storage
 aws_route53_zone	Network Security
 aws_s3_bucket	Data Storage
 aws_secretsmanager_secret	Security

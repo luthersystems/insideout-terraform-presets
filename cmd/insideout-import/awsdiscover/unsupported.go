@@ -69,18 +69,19 @@ func (r *realResourceExplorerSearcher) Search(ctx context.Context, region, query
 	client := resourceexplorer2.NewFromConfig(r.cfg, func(o *resourceexplorer2.Options) {
 		o.Region = region
 	})
+	// TODO(#309): bound result accumulation. The page loop currently
+	// appends every Resource Explorer hit into a single slice with no
+	// upper bound; large accounts can spike memory + wall-time before
+	// unsupported.json is written. Plumb a MaxResults knob through
+	// UnsupportedArgs and emit a "truncated" warning when the bound trips.
 	var out []retypes.Resource
 	var token *string
 	for {
-		// QueryString must be non-empty per the SDK validator; an empty
-		// string is rejected client-side, so we substitute "*" to mean
-		// "all resources Resource Explorer has indexed in this view".
-		qs := queryString
-		if qs == "" {
-			qs = "*"
-		}
+		// QueryString must be non-empty per the SDK validator. The
+		// only caller passes "*", so we trust the input: the dead
+		// `if qs == ""` substitution was removed in #289 P2-2.
 		resp, err := client.Search(ctx, &resourceexplorer2.SearchInput{
-			QueryString: aws.String(qs),
+			QueryString: aws.String(queryString),
 			NextToken:   token,
 		})
 		if err != nil {
@@ -162,20 +163,35 @@ func IsResourceExplorerNotConfigured(err error) bool {
 // looksLikeResourceExplorerNotConfigured pattern-matches on the error
 // body for the SDK errors we want to soft-fail on. Resource Explorer's
 // "no default view" surfaces as one of:
-//   - "ResourceNotFoundException" with "default view"
+//   - "ResourceNotFoundException" with "default view" or "index"
 //   - "ValidationException" with "no default view"
 //   - "AccessDeniedException" with "resource-explorer-2:GetDefaultView"
 //
 // We accept any of these as the same operator-action ("set up Resource
-// Explorer in this region").
+// Explorer in this region"). The "ResourceNotFoundException" name is
+// only treated as a Resource-Explorer-not-configured signal when it
+// co-occurs with a Resource-Explorer-specific phrase ("default view"
+// or "index") — bare ResourceNotFoundException is too broad: many AWS
+// services emit that exception for unrelated 404s, and a regression
+// that swapped the Search call for a non-RE one would silently soft-
+// fail on every 404 instead of surfacing the real error.
 func looksLikeResourceExplorerNotConfigured(err error) bool {
 	if err == nil {
 		return false
 	}
 	msg := err.Error()
-	return strings.Contains(msg, "default view") ||
-		strings.Contains(msg, "resource-explorer-2") ||
-		strings.Contains(msg, "ResourceNotFoundException")
+	if strings.Contains(msg, "default view") {
+		return true
+	}
+	if strings.Contains(msg, "resource-explorer-2") {
+		return true
+	}
+	// Narrow ResourceNotFoundException to RE-specific phrasing.
+	if strings.Contains(msg, "ResourceNotFoundException") &&
+		(strings.Contains(msg, "default view") || strings.Contains(msg, "index")) {
+		return true
+	}
+	return false
 }
 
 const unsupportedServiceSlug = "unsupported"
@@ -225,7 +241,14 @@ func enumerateUnsupportedAWS(ctx context.Context, args UnsupportedArgs, defaultR
 		supportedSet[t] = struct{}{}
 	}
 
-	var out []UnsupportedResource
+	// out is initialized as a non-nil composite literal so the
+	// public function's wire shape is `[]` (not Go's `null`-marshalling
+	// `var out []UnsupportedResource`) when no regions yield rows. The
+	// downstream JSON writer also coerces nil → `[]`, but pinning the
+	// invariant at the construction site keeps the rule local —
+	// future readers see immediately why `make` is used here. See
+	// #255 for the broader "JSON arrays are never null" contract.
+	out := make([]UnsupportedResource, 0)
 	for _, region := range regions {
 		regionStart := time.Now()
 		args.Emitter.ServiceStart(unsupportedServiceSlug, region)

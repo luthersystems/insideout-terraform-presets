@@ -7,6 +7,8 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	retypes "github.com/aws/aws-sdk-go-v2/service/resourceexplorer2/types"
+
+	"github.com/luthersystems/insideout-terraform-presets/pkg/insideout-import/registry"
 )
 
 // fakeResourceExplorerSearcher is the unit-test seam for the AWS
@@ -47,26 +49,58 @@ func rxResource(arn, resourceType, region string) retypes.Resource {
 // so this test exercises the live registry — a regression that drops
 // the subtract step would surface every importable row in
 // unsupported.json (the picker would then duplicate).
+//
+// The expected count is computed from the registry rather than
+// hard-coded: that way adding a new importable AWS type to the
+// registry (without touching this test's fixture) doesn't require a
+// numeric edit here. The fixture intentionally seeds rows of every
+// shape — fixtureRows lists each ARN/type pair, and we count how many
+// fixture rows map to a TF type currently in
+// registry.SupportedDiscoverTypes("aws"). The remainder is the
+// expected unsupported count.
 func TestEnumerateUnsupported_FiltersSupportedTypes(t *testing.T) {
 	t.Parallel()
-	// 5 results: 2 are importable (aws_sqs_queue, aws_iam_role), 3 are
-	// not (aws_vpc, aws_rds_cluster, aws_eks_cluster).
-	fake := &fakeResourceExplorerSearcher{
-		byRegion: map[string][]retypes.Resource{
-			"us-east-1": {
-				rxResource("arn:aws:sqs:us-east-1:123:io-queue", "sqs:queue", "us-east-1"),
-				rxResource("arn:aws:iam::123:role/io-role", "iam:role", "us-east-1"),
-				rxResource("arn:aws:ec2:us-east-1:123:vpc/vpc-abc", "ec2:vpc", "us-east-1"),
-				rxResource("arn:aws:rds:us-east-1:123:cluster:my-clu", "rds:cluster", "us-east-1"),
-				rxResource("arn:aws:eks:us-east-1:123:cluster/my-eks", "eks:cluster", "us-east-1"),
-			},
-		},
+	type fixtureRow struct {
+		arn      string
+		rxType   string
+		tfType   string // the Terraform type the rx slug maps to
+		region   string
+		expected bool // whether this row should appear in unsupported.json
 	}
-	// Note: the importable types depend on the registry. Per the
-	// current registry sqs:queue → aws_sqs_queue is importable;
-	// iam:role → aws_iam_role is importable. ec2:vpc, rds:cluster,
-	// eks:cluster are not (and they're in the lookup map). So 3 rows
-	// expected.
+	fixtureRows := []fixtureRow{
+		{"arn:aws:sqs:us-east-1:123:io-queue", "sqs:queue", "aws_sqs_queue", "us-east-1", false},          // importable
+		{"arn:aws:iam::123:role/io-role", "iam:role", "aws_iam_role", "us-east-1", false},                 // importable
+		{"arn:aws:ec2:us-east-1:123:vpc/vpc-abc", "ec2:vpc", "aws_vpc", "us-east-1", true},                // unsupported
+		{"arn:aws:rds:us-east-1:123:cluster:my-clu", "rds:cluster", "aws_rds_cluster", "us-east-1", true}, // unsupported
+		{"arn:aws:eks:us-east-1:123:cluster/my-eks", "eks:cluster", "aws_eks_cluster", "us-east-1", true}, // unsupported
+	}
+	// supportedSet is the live registry — if a fixture row's tfType
+	// joins the registry in the future, the row's `expected` flag must
+	// flip too. We sanity-check that here instead of trusting the
+	// hand-written `expected` column.
+	supportedSet := make(map[string]struct{})
+	for _, t := range registry.SupportedDiscoverTypes("aws") {
+		supportedSet[t] = struct{}{}
+	}
+	expectedUnsupported := 0
+	expectedTypes := map[string]bool{}
+	resources := make([]retypes.Resource, 0, len(fixtureRows))
+	for _, row := range fixtureRows {
+		_, isSupported := supportedSet[row.tfType]
+		want := !isSupported
+		if want != row.expected {
+			t.Fatalf("fixture drift: row %q (tfType=%q) annotated expected=%v but registry says supported=%v — update the fixture's expected column",
+				row.arn, row.tfType, row.expected, isSupported)
+		}
+		if want {
+			expectedUnsupported++
+			expectedTypes[row.tfType] = true
+		}
+		resources = append(resources, rxResource(row.arn, row.rxType, row.region))
+	}
+	fake := &fakeResourceExplorerSearcher{
+		byRegion: map[string][]retypes.Resource{"us-east-1": resources},
+	}
 	got, err := enumerateUnsupportedAWS(context.Background(), UnsupportedArgs{
 		Regions:  []string{"us-east-1"},
 		Searcher: fake,
@@ -74,13 +108,13 @@ func TestEnumerateUnsupported_FiltersSupportedTypes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 3 {
-		t.Fatalf("got %d unsupported rows, want 3 (5 results minus 2 importable). rows=%+v", len(got), got)
+	if len(got) != expectedUnsupported {
+		t.Fatalf("got %d unsupported rows, want %d (computed from registry). rows=%+v",
+			len(got), expectedUnsupported, got)
 	}
-	wantTypes := map[string]bool{"aws_vpc": true, "aws_rds_cluster": true, "aws_eks_cluster": true}
 	for _, r := range got {
-		if !wantTypes[r.Type] {
-			t.Errorf("row Type=%q not in expected unsupported set %v", r.Type, wantTypes)
+		if !expectedTypes[r.Type] {
+			t.Errorf("row Type=%q not in expected unsupported set %v", r.Type, expectedTypes)
 		}
 	}
 }
@@ -144,15 +178,23 @@ func TestEnumerateUnsupported_TagsPassThrough(t *testing.T) {
 	}
 }
 
-// TestEnumerateUnsupported_TFTypeMappedFromResourceType walks the
-// awsUnsupportedTFTypeByResourceType map and asserts each entry round-
-// trips through enumerateUnsupportedAWS to its mapped Terraform type
-// in UnsupportedResource.Type. A regression that transposed two
-// columns of the map (e.g. mapping ec2:vpc → aws_subnet) would surface
-// here.
-func TestEnumerateUnsupported_TFTypeMappedFromResourceType(t *testing.T) {
+// TestEnumerateUnsupported_ImportableRowsAreFiltered pins the
+// registry-subtraction contract for each row in
+// awsUnsupportedTFTypeByResourceType whose mapped TF type is in the
+// live registry: the row produces zero entries in unsupported.json
+// (the picker reads it from imported.json instead). A regression
+// that dropped the registry-subtract step would surface every
+// importable row here as a non-empty `got`.
+func TestEnumerateUnsupported_ImportableRowsAreFiltered(t *testing.T) {
 	t.Parallel()
+	supportedSet := make(map[string]struct{})
+	for _, t := range registry.SupportedDiscoverTypes("aws") {
+		supportedSet[t] = struct{}{}
+	}
 	for resourceType, wantTF := range awsTFTypeByResourceType {
+		if _, importable := supportedSet[wantTF]; !importable {
+			continue
+		}
 		resourceType := resourceType
 		wantTF := wantTF
 		t.Run(resourceType, func(t *testing.T) {
@@ -169,10 +211,49 @@ func TestEnumerateUnsupported_TFTypeMappedFromResourceType(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			// Some rows in the map MAY map to importable types; in that case
-			// the row is filtered out. Skip those rather than fail.
-			if len(got) == 0 {
-				t.Skipf("resource type %s maps to importable TF type %s; filtered out by registry-subtraction", resourceType, wantTF)
+			if len(got) != 0 {
+				t.Errorf("ResourceType=%q maps to importable TF type %q; want 0 rows, got %d (registry-subtract dropped)",
+					resourceType, wantTF, len(got))
+			}
+		})
+	}
+}
+
+// TestEnumerateUnsupported_UnimportableRowsThreadTFType walks the
+// awsUnsupportedTFTypeByResourceType map for entries whose mapped TF
+// type is NOT in the live registry — i.e. the rows that legitimately
+// land in unsupported.json — and asserts each round-trips through
+// enumerateUnsupportedAWS to its mapped Terraform type in
+// UnsupportedResource.Type. A regression that transposed two columns
+// of the map (e.g. mapping ec2:vpc → aws_subnet) would surface here.
+func TestEnumerateUnsupported_UnimportableRowsThreadTFType(t *testing.T) {
+	t.Parallel()
+	supportedSet := make(map[string]struct{})
+	for _, t := range registry.SupportedDiscoverTypes("aws") {
+		supportedSet[t] = struct{}{}
+	}
+	for resourceType, wantTF := range awsTFTypeByResourceType {
+		if _, importable := supportedSet[wantTF]; importable {
+			continue
+		}
+		resourceType := resourceType
+		wantTF := wantTF
+		t.Run(resourceType, func(t *testing.T) {
+			t.Parallel()
+			fake := &fakeResourceExplorerSearcher{
+				byRegion: map[string][]retypes.Resource{
+					"us-east-1": {rxResource("arn:aws:test:us-east-1:123:thing/x", resourceType, "us-east-1")},
+				},
+			}
+			got, err := enumerateUnsupportedAWS(context.Background(), UnsupportedArgs{
+				Regions:  []string{"us-east-1"},
+				Searcher: fake,
+			}, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(got) != 1 {
+				t.Fatalf("ResourceType=%q (TF=%q): got %d rows, want exactly 1", resourceType, wantTF, len(got))
 			}
 			if got[0].Type != wantTF {
 				t.Errorf("Type=%q, want %q for ResourceType=%q", got[0].Type, wantTF, resourceType)
@@ -357,22 +438,48 @@ func TestEnumerateUnsupported_PopulatesGroup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	groupByType := make(map[string]string)
-	for _, r := range got {
-		groupByType[r.Type] = r.Group
-	}
+	// Walk the slice directly: the previous map-keyed assertion folded
+	// every Type=="" row onto a single key, hiding any case where two
+	// unmapped slugs collided. Find each expected row by Type and
+	// assert Group on the matching entry; for the unmapped row, walk
+	// for the Type=="" entry and assert Group=="".
 	wantGroup := map[string]string{
 		"aws_vpc":         "Network Security",
 		"aws_eks_cluster": "Virtual Machines",
 		"aws_rds_cluster": "Data Storage",
-		"":                "", // unmapped slug → no Type → no Group
 	}
 	for typ, want := range wantGroup {
-		if got, ok := groupByType[typ]; !ok {
-			t.Errorf("type %q not in emitted set %v", typ, groupByType)
-		} else if got != want {
-			t.Errorf("Group for %q = %q, want %q", typ, got, want)
+		var found *UnsupportedResource
+		for i := range got {
+			if got[i].Type == typ {
+				found = &got[i]
+				break
+			}
 		}
+		if found == nil {
+			t.Errorf("type %q not found in emitted rows %+v", typ, got)
+			continue
+		}
+		if found.Group != want {
+			t.Errorf("Group for %q = %q, want %q", typ, found.Group, want)
+		}
+	}
+	// Unmapped slug: there must be a row with Type=="" whose Group is
+	// also "" (Category("") returns ""). Asserting on the slice
+	// directly defends against the previous map-keyed shape, which
+	// silently passed if the Type=="" row was missing entirely.
+	var unmapped *UnsupportedResource
+	for i := range got {
+		if got[i].Type == "" {
+			unmapped = &got[i]
+			break
+		}
+	}
+	if unmapped == nil {
+		t.Fatalf("no row with Type==\"\" emitted; unmapped Resource Explorer slug must still surface (rows=%+v)", got)
+	}
+	if unmapped.Group != "" {
+		t.Errorf("Group for Type==\"\" = %q, want \"\" (unmapped slug → no category)", unmapped.Group)
 	}
 }
 

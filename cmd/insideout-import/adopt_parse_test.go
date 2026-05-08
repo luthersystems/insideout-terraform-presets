@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -59,9 +60,13 @@ func TestParseAddresses_HCLSyntaxErrorReturnedAsError(t *testing.T) {
 	if !strings.Contains(msg, "broken.tf") {
 		t.Errorf("error message %q does not contain filename %q", msg, "broken.tf")
 	}
-	// Standard hcl diagnostic format: filename:line:col:.
-	if !strings.Contains(msg, ":") {
-		t.Errorf("error message %q is missing :line:col context", msg)
+	// Standard hcl diagnostic format: filename:line:col: <text>.
+	// Asserting only on a literal ":" is tautological — every Go error
+	// string contains a colon. This regex pins the exact shape (the
+	// filename followed by two numeric segments) so a regression that
+	// dropped the diagnostic position fails here.
+	if !regexp.MustCompile(`broken\.tf:\d+:\d+:`).MatchString(msg) {
+		t.Errorf("error message %q does not match `broken.tf:LINE:COL:` shape", msg)
 	}
 	if !strings.Contains(msg, "adopt.ParseAddresses") {
 		t.Errorf("error message %q is missing adopt.ParseAddresses prefix", msg)

@@ -286,22 +286,48 @@ func TestEnumerateUnsupportedGCP_PopulatesGroup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	groupByType := make(map[string]string)
-	for _, r := range got {
-		groupByType[r.Type] = r.Group
-	}
+	// Walk the slice directly: the previous map-keyed assertion folded
+	// every Type=="" row onto a single key, hiding any case where two
+	// unmapped slugs collided. Find each expected row by Type and
+	// assert Group on the matching entry; for the unmapped row, walk
+	// for the Type=="" entry and assert Group=="".
 	wantGroup := map[string]string{
 		"google_compute_instance":      "Virtual Machines",
 		"google_container_cluster":     "Virtual Machines",
 		"google_sql_database_instance": "Data Storage",
-		"":                             "", // unmapped slug → no Type → no Group
 	}
 	for typ, want := range wantGroup {
-		if got, ok := groupByType[typ]; !ok {
-			t.Errorf("type %q not in emitted set %v", typ, groupByType)
-		} else if got != want {
-			t.Errorf("Group for %q = %q, want %q", typ, got, want)
+		var found *UnsupportedResource
+		for i := range got {
+			if got[i].Type == typ {
+				found = &got[i]
+				break
+			}
 		}
+		if found == nil {
+			t.Errorf("type %q not found in emitted rows %+v", typ, got)
+			continue
+		}
+		if found.Group != want {
+			t.Errorf("Group for %q = %q, want %q", typ, found.Group, want)
+		}
+	}
+	// Unmapped slug: there must be a row with Type=="" whose Group is
+	// also "" (Category("") returns ""). Asserting on the slice
+	// directly defends against the previous map-keyed shape, which
+	// silently passed if the Type=="" row was missing entirely.
+	var unmapped *UnsupportedResource
+	for i := range got {
+		if got[i].Type == "" {
+			unmapped = &got[i]
+			break
+		}
+	}
+	if unmapped == nil {
+		t.Fatalf("no row with Type==\"\" emitted; unmapped Cloud Asset slug must still surface (rows=%+v)", got)
+	}
+	if unmapped.Group != "" {
+		t.Errorf("Group for Type==\"\" = %q, want \"\" (unmapped slug → no category)", unmapped.Group)
 	}
 }
 

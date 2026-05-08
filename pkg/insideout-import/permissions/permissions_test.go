@@ -5,16 +5,17 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/awsdiscover"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/insideout-import/registry"
 )
 
-// awsTFTypeToServiceSlug mirrors awsdiscover.serviceSlugByTFType. We
-// duplicate it here (rather than import the cmd-side map) so this
-// pkg-level test stays free of cmd/ imports — the registry package
-// follows the same posture for its parity tests. Drift between this
-// table and the awsdiscover slug map will surface as a coverage-test
-// failure: any TF type from the registry whose slug isn't keyed here
-// (or whose slug isn't represented in aws.json) trips the assertion.
+// awsTFTypeToServiceSlug mirrors awsdiscover.serviceSlugByTFType for
+// use in the manifest-coverage test. Drift between this table and the
+// awsdiscover slug map would otherwise surface only via aws.json
+// coverage gaps — this map's per-TF-type-slug correspondence is
+// independently pinned by TestSlugMap_MatchesAwsdiscover below, which
+// uses the exported awsdiscover.ServiceSlug to fence the table off
+// against the production source of truth.
 var awsTFTypeToServiceSlug = map[string]string{
 	"aws_cloudwatch_log_group":  "cloudwatchlogs",
 	"aws_dynamodb_table":        "dynamodb",
@@ -25,6 +26,28 @@ var awsTFTypeToServiceSlug = map[string]string{
 	"aws_s3_bucket":             "s3",
 	"aws_secretsmanager_secret": "secretsmanager",
 	"aws_sqs_queue":             "sqs",
+}
+
+// TestSlugMap_MatchesAwsdiscover pins the test-local slug table
+// against the production awsdiscover.ServiceSlug map. Any TF type the
+// registry exposes must round-trip identically via both. A drift
+// (e.g. someone renames "iam_role" to "iam-role" in awsdiscover
+// without updating this test or aws.json) surfaces here as a
+// per-type per-table failure pair.
+func TestSlugMap_MatchesAwsdiscover(t *testing.T) {
+	t.Parallel()
+	for _, tfType := range registry.SupportedDiscoverTypes(registry.ProviderAWS) {
+		want := awsdiscover.ServiceSlug(tfType)
+		got, ok := awsTFTypeToServiceSlug[tfType]
+		if !ok {
+			t.Errorf("awsTFTypeToServiceSlug missing entry for registry type %q (production says slug=%q); add it",
+				tfType, want)
+			continue
+		}
+		if got != want {
+			t.Errorf("slug drift for %q: test-local map says %q, awsdiscover.ServiceSlug says %q", tfType, got, want)
+		}
+	}
 }
 
 func TestLoadAWSManifest_ParsesAndIsNonEmpty(t *testing.T) {

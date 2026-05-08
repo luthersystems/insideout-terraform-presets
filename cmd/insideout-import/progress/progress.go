@@ -40,6 +40,14 @@ import (
 // fields that apply to it — service_start has no Count/DurationMs, etc.
 // The Timestamp field is always present; tests inject a fixed clock via
 // JSONEmitter.WithNow so golden output is deterministic.
+//
+// TODO(#312): typed sub-events or MarshalJSON. The omitempty Count
+// field drops `count` from service_finish/stage_finish events whose
+// scope yielded zero items; the SSE consumer renders that as "count
+// missing" rather than "count = 0". Either split into typed
+// sub-events or add a custom MarshalJSON that always emits count for
+// service_finish + stage_finish (and never for service_start +
+// item_found).
 type Event struct {
 	Event      string    `json:"event"`                 // service_start | service_finish | item_found | stage_finish
 	Service    string    `json:"service,omitempty"`     // AWS service slug (sqs, dynamodb, ...) or GCP asset_type slug (cloud_asset_inventory)

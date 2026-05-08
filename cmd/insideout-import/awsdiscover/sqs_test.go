@@ -9,6 +9,13 @@ import (
 	sqstypes "github.com/aws/aws-sdk-go-v2/service/sqs/types"
 )
 
+// errSQSSeed is the package-level sentinel returned by the fake SQS
+// client in tests that want to assert error propagation. Tests should
+// use errors.Is(err, errSQSSeed) rather than asserting only on
+// `err != nil` — the latter masks regressions where the discover layer
+// silently swallows the SDK error and returns a different one.
+var errSQSSeed = errors.New("AccessDenied")
+
 type fakeSQSClient struct {
 	pages []sqs.ListQueuesOutput
 	calls []sqs.ListQueuesInput
@@ -160,11 +167,14 @@ func TestSQSDiscover_EmptyProjectPassesNoPrefix(t *testing.T) {
 func TestSQSDiscover_PropagatesError(t *testing.T) {
 	t.Parallel()
 	d := &sqsDiscoverer{new: func(_ string) sqsClient {
-		return &fakeSQSClient{err: errors.New("AccessDenied")}
+		return &fakeSQSClient{err: errSQSSeed}
 	}}
 	_, err := d.Discover(context.Background(), DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"})
 	if err == nil {
 		t.Fatal("expected error")
+	}
+	if !errors.Is(err, errSQSSeed) {
+		t.Errorf("err=%v, want errors.Is(err, errSQSSeed) — discover swallowed the SDK error", err)
 	}
 }
 

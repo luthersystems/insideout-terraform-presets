@@ -13,6 +13,14 @@ import (
 	dynamotypes "github.com/aws/aws-sdk-go-v2/service/dynamodb/types"
 )
 
+// errSeedListTables is the package-level sentinel returned by the fake
+// DynamoDB client in tests that want to assert ListTables error
+// propagation. Tests should use errors.Is(err, errSeedListTables)
+// rather than asserting only on `err != nil` — the latter masks
+// regressions where the discover layer silently swallows the SDK
+// error and returns a different one.
+var errSeedListTables = errors.New("AccessDenied")
+
 type fakeDynamoClient struct {
 	pages    []dynamodb.ListTablesOutput
 	tagsByID map[string][]dynamotypes.Tag
@@ -201,11 +209,14 @@ func TestDynamoDBDiscover_PrefixOnlyFallback(t *testing.T) {
 func TestDynamoDBDiscover_PropagatesListTablesError(t *testing.T) {
 	t.Parallel()
 	d := &dynamoDiscoverer{new: func(_ string) dynamoClient {
-		return &fakeDynamoClient{listErr: errors.New("AccessDenied")}
+		return &fakeDynamoClient{listErr: errSeedListTables}
 	}}
 	_, err := d.Discover(context.Background(), DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"})
 	if err == nil {
 		t.Fatal("expected error")
+	}
+	if !errors.Is(err, errSeedListTables) {
+		t.Errorf("err=%v, want errors.Is(err, errSeedListTables) — discover swallowed the SDK error", err)
 	}
 }
 

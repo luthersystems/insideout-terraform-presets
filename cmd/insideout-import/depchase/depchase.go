@@ -8,8 +8,10 @@ import (
 	"path/filepath"
 	"slices"
 	"sort"
+	"strings"
 
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/awsdiscover"
+	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/gcpdiscover"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
 
@@ -183,7 +185,7 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 	opts.Workdir = abs
 	generatedPath := filepath.Join(opts.Workdir, generatedFile)
 
-	res := &Result{Resources: append([]imported.ImportedResource(nil), resources...)}
+	res := &Result{Resources: slices.Clone(resources)}
 	seenWarning := make(map[string]struct{})
 	var prevUnresolved []string
 
@@ -203,6 +205,7 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 		}
 		if len(unresolved) == 0 {
 			res.GeneratedPath = generatedPath
+			sortEdges(res)
 			return res, nil
 		}
 
@@ -221,10 +224,12 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 			// stabilized at iteration 2, we've simply warned about
 			// every ref — that's a clean exit.
 			if len(res.Added) == 0 {
+				sortEdges(res)
 				return res, nil
 			}
 			// Otherwise the loop has added resources but the
 			// unresolved set didn't shrink — that's a cycle.
+			sortEdges(res)
 			return res, fmt.Errorf("%w: %d unresolved refs remain after %d iteration(s) (warnings recorded)",
 				ErrCyclicDependency, len(unresolved), res.Iterations)
 		}
@@ -253,14 +258,22 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 		for _, s := range newSeeds {
 			ir, err := opts.Discoverer.DiscoverByID(ctx, s.ref.TFType, s.ref.ImportID, opts.Region, opts.AccountID)
 			if err != nil {
+				// Check both AWS and GCP sentinels so the GCP path
+				// surfaces the same warn-and-continue UX as AWS. The two
+				// `errors.New("...")` instances live in different
+				// packages, so a single `errors.Is(err, awsdiscover.X)`
+				// would fall through to the fatal default branch on a
+				// genuine GCP not-found / not-supported and abort the
+				// whole run — wrong outcome for a per-ARN issue.
 				switch {
-				case errors.Is(err, awsdiscover.ErrNotFound):
+				case errors.Is(err, awsdiscover.ErrNotFound), errors.Is(err, gcpdiscover.ErrNotFound):
 					addWarning(res, seenWarning,
 						fmt.Sprintf("ARN %q (%s): %v", s.arn, s.ref.TFType, err))
-				case errors.Is(err, awsdiscover.ErrNotSupported):
+				case errors.Is(err, awsdiscover.ErrNotSupported), errors.Is(err, gcpdiscover.ErrNotSupported):
 					addWarning(res, seenWarning,
 						fmt.Sprintf("ARN %q: %s discoverer rejected ID: %v", s.arn, s.ref.TFType, err))
 				default:
+					sortEdges(res)
 					return res, fmt.Errorf("DiscoverByID(%s, %s): %w", s.ref.TFType, s.ref.ImportID, err)
 				}
 				continue
@@ -285,6 +298,7 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 			// No new resources — every unresolved ref turned into a
 			// warning. No point regenerating; return clean.
 			res.GeneratedPath = generatedPath
+			sortEdges(res)
 			return res, nil
 		}
 
@@ -293,6 +307,7 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 
 		gcRes, err := opts.Pipeline.RunGenconfig(ctx, res.Resources)
 		if err != nil {
+			sortEdges(res)
 			return res, fmt.Errorf("depchase iter %d: regenerate: %w", iter, err)
 		}
 		// Pick up the populated Attributes the regenerate pass wrote
@@ -303,6 +318,7 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 		}
 
 		if _, err := opts.Pipeline.RunDriftfix(ctx); err != nil {
+			sortEdges(res)
 			return res, fmt.Errorf("depchase iter %d: driftfix: %w", iter, err)
 		}
 		// Increment only after both pipeline calls succeed so a partial
@@ -311,12 +327,23 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 		res.Iterations = iter
 	}
 
-	// Loop bound exceeded. Surface the residual unresolved set.
+	// Loop bound exceeded. Surface the residual unresolved set so the
+	// operator can see exactly which references failed to converge.
+	// Capture and surface FindUnresolved's error if the residual
+	// enumeration itself failed: dropping it on the floor produced a
+	// misleading "0 unresolved ref(s) remain" message even when the
+	// residual could not actually be enumerated.
 	raw, _ := os.ReadFile(generatedPath)
-	residual, _ := FindUnresolved(raw, res.Resources)
+	residual, residualErr := FindUnresolved(raw, res.Resources)
 	res.GeneratedPath = generatedPath
-	return res, fmt.Errorf("%w (%d): %d unresolved ref(s) remain: %v",
-		ErrMaxIterations, opts.MaxIterations, len(residual), residual)
+	residualStr := strings.Join(residual, ", ")
+	sortEdges(res)
+	if residualErr != nil {
+		return res, fmt.Errorf("%w (%d): %d unresolved ref(s) remain: %s; (residual enumeration error: %v)",
+			ErrMaxIterations, opts.MaxIterations, len(residual), residualStr, residualErr)
+	}
+	return res, fmt.Errorf("%w (%d): %d unresolved ref(s) remain: %s",
+		ErrMaxIterations, opts.MaxIterations, len(residual), residualStr)
 }
 
 // seed pairs an unresolved ARN string with the parsed Ref so the
@@ -332,12 +359,13 @@ type seed struct {
 // resurfaces across iterations because the regenerate stage rewrote
 // the HCL) only contributes one edge to graph.json.
 //
-// The Edges slice is kept in sorted (From, To) order so the on-disk
-// graph.json is byte-identical across runs for the same input, even
-// though insertion order is non-deterministic in
-// findUnresolvedWithConsumers's map iteration. We sort on insertion
-// rather than at write-time so any future caller that reads
-// res.Edges directly sees the same stable order.
+// The Edges slice is appended unsorted; Run calls sortEdges once at
+// each return point so the on-disk graph.json is byte-identical
+// across runs for the same input, even though insertion order is
+// non-deterministic in findUnresolvedWithConsumers's map iteration.
+// (The previous shape sorted on every insertion — O(n^2 log n) over
+// the loop. Deferring the sort to the result-finalization step is
+// equivalent for callers that read res.Edges only after Run returns.)
 func recordEdge(res *Result, seen map[string]struct{}, from, to string) {
 	key := from + "\x00" + to
 	if _, ok := seen[key]; ok {
@@ -345,6 +373,15 @@ func recordEdge(res *Result, seen map[string]struct{}, from, to string) {
 	}
 	seen[key] = struct{}{}
 	res.Edges = append(res.Edges, GraphEdge{From: from, To: to})
+}
+
+// sortEdges sorts res.Edges in (From, To) order. Called once per
+// successful Run exit so the visible (post-Run) shape is the same as
+// the previous per-insertion-sort behavior. A regression that adds a
+// new return path without a sortEdges call would surface as a
+// flaky-graph.json test failure; the writeGraphManifest re-sort is a
+// belt-and-braces guard against that.
+func sortEdges(res *Result) {
 	sort.Slice(res.Edges, func(i, j int) bool {
 		if res.Edges[i].From != res.Edges[j].From {
 			return res.Edges[i].From < res.Edges[j].From

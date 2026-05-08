@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -135,6 +136,12 @@ func (d *dynamoDiscoverer) Discover(ctx context.Context, args DiscoverArgs) ([]i
 						if cerr := gctx.Err(); cerr != nil {
 							return cerr
 						}
+						// Surface a stderr WARN per failure so a silent
+						// drop between ListTables count and the
+						// discovered row count is at least visible. The
+						// per-table failure does not abort the run; we
+						// continue dropping the row (see #289 P1-19).
+						fmt.Fprintf(os.Stderr, "discover: WARN: dynamodb %s: list tags (region=%s): %v\n", name, region, err)
 						return nil
 					}
 					tags := make(map[string]string, len(tagsOut.Tags))

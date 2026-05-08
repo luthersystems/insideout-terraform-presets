@@ -92,6 +92,11 @@ func (s *RealAssetSearcher) SearchAll(ctx context.Context, scope string, assetTy
 	}
 	it := s.client.SearchAllResources(ctx, req)
 
+	// TODO(#309): bound result accumulation. The iterator is unbounded
+	// — a project with 10k+ assets accumulates the entire result set
+	// before unsupported.json is written. Plumb a MaxResults knob
+	// through UnsupportedArgs and emit a "truncated" warning when the
+	// bound trips.
 	var out []gcpAssetResult
 	for {
 		r, err := it.Next()

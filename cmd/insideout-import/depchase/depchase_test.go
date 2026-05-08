@@ -220,6 +220,20 @@ resource "aws_iam_policy" "io_foo_readonly" {
 	if len(got.Added) != 2 {
 		t.Errorf("len(Added)=%d, want 2", len(got.Added))
 	}
+	// Element-wise pin: each iteration's discoverer fan-out must add a
+	// resource of the expected Terraform type, in chase order.
+	// Asserting only count would let a regression that double-added
+	// the role (and missed the policy) still pass.
+	if len(got.Added) >= 1 {
+		if got.Added[0].Identity.Type != "aws_iam_role" {
+			t.Errorf("Added[0].Identity.Type=%q, want aws_iam_role", got.Added[0].Identity.Type)
+		}
+	}
+	if len(got.Added) >= 2 {
+		if got.Added[1].Identity.Type != "aws_iam_policy" {
+			t.Errorf("Added[1].Identity.Type=%q, want aws_iam_policy", got.Added[1].Identity.Type)
+		}
+	}
 }
 
 // TestRun_UnsupportedARNTypeBecomesWarning pins the AC: a generated
@@ -473,8 +487,16 @@ resource "aws_lambda_function" "h` + suffix + `" {
 	if len(res.Added) != 5 {
 		t.Errorf("len(Added)=%d, want 5 (one resource added per iteration)", len(res.Added))
 	}
-	if len(disc.calls) < 5 {
-		t.Errorf("DiscoverByID calls=%d, want >= 5 (one lookup per iteration's unresolved ref)", len(disc.calls))
+	// Exactly one DiscoverByID call per iteration: each iteration's
+	// regenerate produces exactly one fresh unresolved ARN, the
+	// walker resolves it (cache hit on prior iters' adds), and the
+	// loop calls DiscoverByID exactly once for the new ARN. With
+	// MaxIterations=5 that's 5 calls — a `>=` check passed even for
+	// regressions that fanned out per attribute. Pinning equality
+	// catches both "too few" (terminated early) and "too many"
+	// (re-discovered an already-resolved ARN).
+	if len(disc.calls) != 5 {
+		t.Errorf("DiscoverByID calls=%d, want exactly 5 (one lookup per iteration's unresolved ref, MaxIterations=5)", len(disc.calls))
 	}
 }
 
@@ -629,61 +651,13 @@ func TestRun_NoEdgesWhenNothingAdded(t *testing.T) {
 	}
 }
 
-// TestRun_DedupesEdgesWithinIteration pins the dedup contract: when a
-// single iteration's walker finds the same (consumer → target) pair
-// from two different attribute literals on the same consumer body
-// (e.g. the consumer references the role via both `role` and an
-// alias attribute), Result.Edges still contains exactly one
-// (consumer → target) row.
-//
-// This protects the recordEdge dedup branch — a regression that
-// dropped the seenEdges check would emit duplicate rows. Within a
-// single block findUnresolvedWithConsumers de-dupes identical
-// literals via the body-level `seen` map, but two distinct literal
-// strings that map to the same target via NativeIDs aliases would
-// still surface twice without recordEdge's check.
-func TestRun_DedupesEdgesWithinIteration(t *testing.T) {
-	t.Parallel()
-	// Single role with two alias ARNs (e.g. cross-account vs canonical).
-	// The lambda references one explicitly; gen1 introduces the role
-	// resource. The role's NativeIDs covers BOTH arns so iter2's
-	// walker resolves the literal — but if we set up the role to NOT
-	// cover one alias, iter2 still has it unresolved. To exercise
-	// recordEdge dedup specifically, the simplest construction is to
-	// have a single iteration where the seed list contains the same
-	// arn twice (depchase's per-iteration seed-sort dedups by arn so
-	// we cannot fabricate that here). Instead, this test pins the
-	// happy-path "exactly one edge per (consumer, target)" invariant
-	// — a structural check on recordEdge.
-	roleARN := "arn:aws:iam::123:role/io-foo-handler-role"
-	gen0 := `
-resource "aws_lambda_function" "h" {
-  role        = "` + roleARN + `"
-  alias_role  = "` + roleARN + `"
-}`
-	gen1 := gen0 + `
-resource "aws_iam_role" "io_foo_handler_role" {
-  name = "io-foo-handler-role"
-}`
-	dir := writeGen(t, gen0)
-	role := newRes("aws_iam_role.io_foo_handler_role", "io-foo-handler-role", roleARN, "aws_iam_role")
-	disc := &fakeDiscoverer{byID: map[string]imported.ImportedResource{
-		"aws_iam_role|" + roleARN: role,
-	}}
-	p := &scriptedPipeline{t: t, workdir: dir, generatedTF: []string{gen1}}
-
-	got, err := Run(context.Background(), Options{
-		Workdir: dir, Discoverer: disc, Pipeline: p.fns(),
-	}, nil)
-	if err != nil {
-		t.Fatalf("err=%v", err)
-	}
-	// Want exactly one edge: (lambda → role). A regression that
-	// re-recorded the edge per attribute literal would produce 2.
-	if len(got.Edges) != 1 {
-		t.Fatalf("Edges=%v, want exactly 1 (deduped per (From, To))", got.Edges)
-	}
-}
+// (TestRun_DedupesEdgesWithinIteration was removed: the body-level
+// `seen` map in findUnresolvedWithConsumers and depchase's per-
+// iteration seed-sort+dedup conspired so the test could not actually
+// construct the dedup-collision scenario it claimed to cover. The
+// (From, To) uniqueness invariant is already pinned by the happy-path
+// edges assertion in TestRun_RecordsEdges, which exercises the same
+// recordEdge code path.)
 
 // TestRun_EdgesOmittedWhenDiscoveryFails pins that warnings (NotFound
 // or NotSupported) do not produce edges — the picker only shows

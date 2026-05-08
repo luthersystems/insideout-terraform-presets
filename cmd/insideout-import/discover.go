@@ -55,6 +55,11 @@ const discoverRetryMaxAttempts = 8
 // shared interface — adapters in productionDiscoverDeps convert. Tag
 // selectors flow through as the CLI-package tagSelectorPair so the
 // interface stays decoupled from awsdiscover/gcpdiscover.
+//
+// TODO(#310): refactor to AggArgs struct. The 7-arg signature is hard
+// to extend — adding a per-stage timeout or a budget knob requires
+// touching three signatures + every test fake. A struct-shaped
+// AggArgs would shrink each fake's capture to a single gotArgs field.
 type discoveryAggregator interface {
 	DiscoverTypes(ctx context.Context, types []string, project string, regions []string, tagSelectors []tagSelectorPair, accountID string, emitter progress.Emitter) ([]imported.ImportedResource, error)
 	DiscoverByID(ctx context.Context, tfType, id, region, accountID string) (imported.ImportedResource, error)
@@ -416,6 +421,11 @@ Exit codes:
 
 	types := splitCSV(*resourceTypes)
 
+	// TODO(#311): per-stage context timeouts. A single discoverTimeout
+	// covers Stage 2a (DiscoverTypes), Stage 2b (genconfig), Stage 2c1
+	// (driftfix), and Stage 2c3 (depchase). When Stage 2a or 2c3 burns
+	// most of the budget, Stage 2b can be context-cancelled mid-binary
+	// without ever surfacing which stage actually took too long.
 	ctx, cancel := context.WithTimeout(context.Background(), discoverTimeout)
 	defer cancel()
 
@@ -438,6 +448,20 @@ Exit codes:
 	// unsupported.json was never written, so the summary's
 	// `unsupported` count must not lie about its existence).
 	summaryUnsupportedCount := 0
+	// summarySnap captures the inputs the deferred writer needs at the
+	// moment summaryShouldEmit flips from false to true. Snapshotting
+	// up-front means the deferred function only reads the snapshot —
+	// not five separately-mutating closure variables — so a
+	// post-flip mutation (e.g. a future change that re-resolves
+	// regions) cannot drift the summary's wire shape.
+	type summarySnapshot struct {
+		cloud        string
+		regions      []string
+		tagSelectors []tagSelectorPair
+		summaryStart time.Time
+		outputDir    string
+	}
+	var summarySnap summarySnapshot
 	// summaryShouldEmit gates the deferred writer. Argument-validation
 	// fatals exit before the function gets far enough to be useful;
 	// we flip this to true once we've established a valid output dir
@@ -450,13 +474,13 @@ Exit codes:
 			return
 		}
 		summary := imported.SummarizeResources(summaryResources, imported.SummaryOpts{
-			Cloud:            cloud,
+			Cloud:            summarySnap.cloud,
 			UnsupportedCount: summaryUnsupportedCount,
-			Duration:         time.Since(summaryStart),
-			Regions:          resolvedRegions,
-			TagSelectors:     toSummaryTagSelectors(parsedSelectors),
+			Duration:         time.Since(summarySnap.summaryStart),
+			Regions:          summarySnap.regions,
+			TagSelectors:     toSummaryTagSelectors(summarySnap.tagSelectors),
 		})
-		if path, err := writeSummary(*outputDir, summary); err != nil {
+		if path, err := writeSummary(summarySnap.outputDir, summary); err != nil {
 			// Best-effort: a write failure must not flip an
 			// otherwise-OK run to fatal — imported.json is the
 			// source of truth. Log to stderr (not summaryOut, so
@@ -544,25 +568,39 @@ Exit codes:
 		// resource already carries a non-empty Identity.AccountID we
 		// can skip the STS round-trip. Otherwise (any resource missing
 		// AccountID, or no manifest at all) call STS for the
-		// authoritative answer. We also warn-but-don't-fail when the
-		// loaded manifest mixes account IDs — the import path proceeds
-		// with the first one observed.
+		// authoritative answer.
+		//
+		// Mixed Identity.AccountID values across the loaded manifest
+		// are a fatal: a single discover run is single-account, so a
+		// manifest carrying two accounts would silently miscompute
+		// downstream ARN reconstruction. Cross-account import is a
+		// future feature; until then we error out so the operator
+		// sees the problem before deploy time. See P1-18 in PR #308.
 		skipSTS := false
 		if fromManifestPath != "" && len(preloaded) > 0 {
 			first := strings.TrimSpace(preloaded[0].Identity.AccountID)
 			if first != "" {
 				skipSTS = true
 				accountID = first
+				// Collect every distinct AccountID for the error message.
+				distinct := []string{first}
+				distinctSet := map[string]struct{}{first: {}}
 				for _, r := range preloaded[1:] {
 					rid := strings.TrimSpace(r.Identity.AccountID)
 					if rid == "" {
 						skipSTS = false
 						break
 					}
-					if rid != first {
-						fmt.Fprintf(os.Stderr, "discover: WARN: --from-manifest %s contains mixed Identity.AccountID values (%s vs %s); proceeding with %s from the first record\n",
-							fromManifestPath, first, rid, first)
+					if _, ok := distinctSet[rid]; !ok {
+						distinctSet[rid] = struct{}{}
+						distinct = append(distinct, rid)
 					}
+				}
+				if len(distinct) > 1 {
+					sort.Strings(distinct)
+					fmt.Fprintf(os.Stderr, "discover: --from-manifest %s: manifest contains multiple AccountID values (%s); single-account is required\n",
+						fromManifestPath, strings.Join(distinct, ", "))
+					return discoverExitFatal
 				}
 			}
 		}
@@ -632,7 +670,17 @@ Exit codes:
 	// First successful imported.json write — flip the summary deferred
 	// emitter on. From here every successful exit (including soft
 	// failures of optional stages) lands in the deferred writer with
-	// a coherent summary.
+	// a coherent summary. Snapshot the inputs the deferred writer
+	// needs at this exact moment (rather than reading them via
+	// closure) so a post-flip mutation cannot drift the summary's
+	// wire shape.
+	summarySnap = summarySnapshot{
+		cloud:        cloud,
+		regions:      resolvedRegions,
+		tagSelectors: parsedSelectors,
+		summaryStart: summaryStart,
+		outputDir:    *outputDir,
+	}
 	summaryShouldEmit = true
 	summaryResources = resources
 	fmt.Fprintf(summaryOut, "wrote %s (%d resource(s) discovered)\n", out, n)

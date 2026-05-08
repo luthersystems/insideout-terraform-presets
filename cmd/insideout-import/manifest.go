@@ -40,6 +40,48 @@ const graphManifestFile = "graph.json"
 // input still produces a valid `{ total: 0, by_type: {}, ... }` body.
 const summaryManifestFile = "summary.json"
 
+// writeFileAtomic writes body to path via a same-directory <path>.tmp
+// temp file, fsyncs the temp's fd, and renames into place. The rename
+// is atomic on POSIX filesystems within the same directory — partial
+// writes (process crash, disk full mid-write, SIGKILL) leave at most
+// the .tmp file behind, never a half-written destination. All four
+// sibling-manifest writers (writeManifest, writeUnsupportedManifest,
+// writeGraphManifest, writeSummary) share this helper so the
+// crash-safety guarantee is uniform across imported.json + the three
+// sibling files. A regression that bypassed this helper for one of
+// the four would re-introduce the race.
+//
+// On any error the temp file is removed (best-effort) so a failed
+// write does not leave dangling .tmp artifacts cluttering the output
+// directory across retries.
+func writeFileAtomic(path string, body []byte, perm os.FileMode) (rerr error) {
+	tmp := path + ".tmp"
+	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, perm)
+	if err != nil {
+		return fmt.Errorf("open temp %s: %w", tmp, err)
+	}
+	defer func() {
+		if rerr != nil {
+			_ = os.Remove(tmp)
+		}
+	}()
+	if _, err := f.Write(body); err != nil {
+		_ = f.Close()
+		return fmt.Errorf("write temp %s: %w", tmp, err)
+	}
+	if err := f.Sync(); err != nil {
+		_ = f.Close()
+		return fmt.Errorf("fsync temp %s: %w", tmp, err)
+	}
+	if err := f.Close(); err != nil {
+		return fmt.Errorf("close temp %s: %w", tmp, err)
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		return fmt.Errorf("rename %s -> %s: %w", tmp, path, err)
+	}
+	return nil
+}
+
 // writeManifest validates the resource set with composer.ValidateImportedResources
 // and writes the JSON array of ImportedResource into <dir>/imported.json.
 // Validation runs BEFORE the file is written so a failing validator never
@@ -76,7 +118,7 @@ func writeManifest(dir, cloud string, resources []imported.ImportedResource) (st
 		return "", 0, fmt.Errorf("mkdir %s: %w", dir, err)
 	}
 	out := filepath.Join(dir, manifestFile)
-	if err := os.WriteFile(out, body, 0o644); err != nil {
+	if err := writeFileAtomic(out, body, 0o644); err != nil {
 		return "", 0, fmt.Errorf("write %s: %w", out, err)
 	}
 	return out, len(resources), nil
@@ -173,7 +215,7 @@ func writeUnsupportedManifest(dir string, resources []UnsupportedResource) (stri
 		return "", 0, fmt.Errorf("mkdir %s: %w", dir, err)
 	}
 	out := filepath.Join(dir, unsupportedManifestFile)
-	if err := os.WriteFile(out, body, 0o644); err != nil {
+	if err := writeFileAtomic(out, body, 0o644); err != nil {
 		return "", 0, fmt.Errorf("write %s: %w", out, err)
 	}
 	return out, len(resources), nil
@@ -221,7 +263,7 @@ func writeGraphManifest(dir string, edges []depchase.GraphEdge) (string, int, er
 		return "", 0, fmt.Errorf("mkdir %s: %w", dir, err)
 	}
 	out := filepath.Join(dir, graphManifestFile)
-	if err := os.WriteFile(out, body, 0o644); err != nil {
+	if err := writeFileAtomic(out, body, 0o644); err != nil {
 		return "", 0, fmt.Errorf("write %s: %w", out, err)
 	}
 	return out, len(edges), nil
@@ -259,7 +301,7 @@ func writeSummary(dir string, summary imported.DiscoverySummary) (string, error)
 		return "", fmt.Errorf("mkdir %s: %w", dir, err)
 	}
 	out := filepath.Join(dir, summaryManifestFile)
-	if err := os.WriteFile(out, body, 0o644); err != nil {
+	if err := writeFileAtomic(out, body, 0o644); err != nil {
 		return "", fmt.Errorf("write %s: %w", out, err)
 	}
 	return out, nil

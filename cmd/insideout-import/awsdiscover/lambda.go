@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -130,6 +131,12 @@ func (d *lambdaDiscoverer) Discover(ctx context.Context, args DiscoverArgs) ([]i
 					// Transient ListTags failure: skip the function.
 					// Pre-#291 dropped the row when the Project check
 					// could not run; we keep that posture for back-compat.
+					// Surface a stderr WARN so an operator running with
+					// `--include-unsupported` doesn't see a silent gap
+					// between Lambda's `aws lambda list-functions` count
+					// and the discovered row count — silent swallow was
+					// invisible in the field.
+					fmt.Fprintf(os.Stderr, "discover: WARN: lambda %s: list tags (region=%s): %v\n", f.name, region, err)
 					return nil
 				}
 				tags := tagsOut.Tags

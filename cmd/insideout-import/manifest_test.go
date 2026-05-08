@@ -187,13 +187,14 @@ func TestReadManifest_MalformedJSONIncludesOffset(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected decode error")
 	}
-	// Either "offset" or "position" — the assertion is loose to permit a
-	// future swap to wrap a different error type as long as the position
-	// pointer survives. Asserting an offset substring keeps the contract
-	// human-debuggable without pinning the literal phrasing.
+	// readManifest formats syntax errors as `... JSON syntax error at
+	// byte offset N: ...`. Pin the literal "byte offset" substring so a
+	// regression that drops the offset from the message (or replaces
+	// it with a generic decode wrap) fails here instead of silently
+	// degrading the operator-debuggable phrasing.
 	msg := err.Error()
-	if !strings.Contains(msg, "offset") && !strings.Contains(msg, "position") {
-		t.Errorf("error must include byte-offset/position hint; got: %v", err)
+	if !strings.Contains(msg, "byte offset") {
+		t.Errorf("error must include `byte offset` hint; got: %v", err)
 	}
 }
 
@@ -229,6 +230,36 @@ func TestReadManifest_NullTopLevelRejected(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "null") {
 		t.Errorf("error must reference the null contract; got: %v", err)
+	}
+}
+
+// TestReadManifest_RejectsTopLevelObject pins the wire-shape contract
+// from the other end: writeManifest emits a JSON array — never an
+// object — so a top-level `{}` in imported.json must surface as a
+// type-mismatch error rather than silently decoding into an empty
+// slice. (json.Unmarshal of `{}` into a *[]T returns
+// json.UnmarshalTypeError; readManifest formats that with a
+// byte-offset hint.)
+func TestReadManifest_RejectsTopLevelObject(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "imported.json")
+	if err := os.WriteFile(path, []byte("{}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := readManifest(path, "aws")
+	if err == nil {
+		t.Fatal("expected type-mismatch error; readManifest must not silently treat object as empty")
+	}
+	msg := err.Error()
+	// Pin the same `byte offset` substring as
+	// TestReadManifest_MalformedJSONIncludesOffset so both code paths
+	// keep the operator-debuggable position pointer.
+	if !strings.Contains(msg, "byte offset") {
+		t.Errorf("error must include `byte offset` hint; got: %v", err)
+	}
+	if !strings.Contains(msg, "type mismatch") && !strings.Contains(msg, "cannot unmarshal") {
+		t.Errorf("error must reference the type mismatch; got: %v", err)
 	}
 }
 
