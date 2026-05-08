@@ -3,10 +3,12 @@ package gcpdiscover
 import (
 	"context"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
+	"github.com/luthersystems/insideout-terraform-presets/pkg/insideout-import/registry"
 )
 
 func TestNewGCPDiscoverer_RegistersPhase1Types(t *testing.T) {
@@ -310,5 +312,19 @@ func TestBuildSearchQuery_Composition(t *testing.T) {
 				t.Errorf("got %q, want %q", got, tc.want)
 			}
 		})
+	}
+}
+
+// TestRegistryParity_GCP guards against drift between this package's live
+// constructor map and the public list in pkg/insideout-import/registry. If a
+// new type is registered here without updating the registry (or vice versa),
+// the reliable-side wizard will silently disagree with what the CLI actually
+// supports — this test fails first instead.
+func TestRegistryParity_GCP(t *testing.T) {
+	t.Parallel()
+	live := NewGCPDiscoverer(&fakeAssetSearcher{}, "p").SupportedTypes()
+	pub := registry.SupportedDiscoverTypes(registry.ProviderGCP)
+	if !reflect.DeepEqual(live, pub) {
+		t.Errorf("registry drift: gcpdiscover=%v, registry=%v", live, pub)
 	}
 }

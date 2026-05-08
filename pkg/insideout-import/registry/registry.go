@@ -1,0 +1,73 @@
+// Package registry exposes the public, dependency-free list of Terraform
+// resource types that `insideout-import discover` supports for each cloud
+// provider.
+//
+// The reliable repo's importer wizard imports this package to render picker
+// and address-mapping rows without referencing CLI source lines. Consumers
+// must treat the returned slices as opaque, sorted lists keyed by provider.
+//
+// Drift between this registry and the live discoverer constructor maps in
+// cmd/insideout-import/awsdiscover and cmd/insideout-import/gcpdiscover is
+// guarded by parity tests in those packages — see TestRegistryParity_AWS /
+// TestRegistryParity_GCP.
+package registry
+
+const (
+	ProviderAWS = "aws"
+	ProviderGCP = "gcp"
+)
+
+// awsTypes is the canonical, sorted list of AWS Terraform resource types the
+// discover pipeline emits clean HCL for. Keep sorted lexicographically; the
+// awsdiscover parity test will fail if this drifts from the live constructor.
+var awsTypes = []string{
+	"aws_cloudwatch_log_group",
+	"aws_dynamodb_table",
+	"aws_iam_policy",
+	"aws_iam_role",
+	"aws_kms_key",
+	"aws_lambda_function",
+	"aws_s3_bucket",
+	"aws_secretsmanager_secret",
+	"aws_sqs_queue",
+}
+
+// gcpTypes is the canonical, sorted list of GCP Terraform resource types the
+// discover pipeline emits clean HCL for. Keep sorted lexicographically; the
+// gcpdiscover parity test will fail if this drifts from the live constructor.
+var gcpTypes = []string{
+	"google_compute_network",
+	"google_pubsub_subscription",
+	"google_pubsub_topic",
+	"google_secret_manager_secret",
+	"google_storage_bucket",
+}
+
+// SupportedDiscoverTypes returns the sorted, deterministic list of Terraform
+// resource types that the discover pipeline can emit clean HCL for, for the
+// given provider. Returns nil for unrecognized provider strings.
+//
+// The returned slice is a fresh copy; callers may mutate it freely.
+func SupportedDiscoverTypes(provider string) []string {
+	switch provider {
+	case ProviderAWS:
+		return cloneStrings(awsTypes)
+	case ProviderGCP:
+		return cloneStrings(gcpTypes)
+	default:
+		return nil
+	}
+}
+
+// SupportedProviders returns the sorted list of provider keys recognized by
+// SupportedDiscoverTypes. Useful for UIs enumerating providers without
+// hardcoding the set.
+func SupportedProviders() []string {
+	return []string{ProviderAWS, ProviderGCP}
+}
+
+func cloneStrings(in []string) []string {
+	out := make([]string, len(in))
+	copy(out, in)
+	return out
+}
