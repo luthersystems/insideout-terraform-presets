@@ -27,8 +27,37 @@ import (
 const (
 	discoverExitOK    = 0
 	discoverExitFatal = 1
+)
 
-	discoverTimeout = 15 * time.Minute
+// Per-stage discovery budgets (#311).
+//
+// Each stage's call site wraps the parent ctx in
+// context.WithTimeout(parentCtx, perStageTimeout) so an optional or
+// misbehaving stage cannot starve mandatory ones — historically a
+// single 15-minute outer cap meant a slow Stage 2a could leave Stage
+// 2b with seconds-of-budget and surface as a confusing "context
+// deadline exceeded" mid-binary. Operators can't tune these today;
+// expose CLI flags in a follow-up if real-world budgets demand it.
+//
+// Declared as `var` (not `const`) so tests can swap the budget down to
+// a few milliseconds via withTestStageTimeout(); production code paths
+// never mutate these. The runtime cost of a package-level var read vs
+// a const read is negligible — picking testability over the marginal
+// safety of a const is the right trade-off here.
+var (
+	stageTimeoutAWSConfig   = 1 * time.Minute // loadConfig + GetCallerIdentity
+	stageTimeoutGCPConnect  = 1 * time.Minute // newGCPDiscoverer (gRPC dial + ADC)
+	stageTimeoutDiscover    = 5 * time.Minute // Stage 2a: DiscoverTypes
+	stageTimeoutUnsupported = 2 * time.Minute // Stage 1.5: optional --include-unsupported
+	stageTimeoutGenconfig   = 5 * time.Minute // Stage 2b: terraform plan -generate-config-out
+	stageTimeoutDriftfix    = 3 * time.Minute // Stage 2c1: drift fix loop
+	stageTimeoutDepchase    = 5 * time.Minute // Stage 2c3: dep chase loop (already iteration-bounded)
+
+	// discoverTimeoutOverall is the outer cap. Defense-in-depth: the
+	// sum of per-stage budgets plus headroom. Stages skipped via
+	// --no-hcl / --no-driftfix / --no-depchase don't claim their
+	// per-stage budget, but the outer cap is unchanged.
+	discoverTimeoutOverall = 25 * time.Minute
 )
 
 // discoverRetryMaxAttempts raises the SDK retryer's attempt budget above
@@ -38,7 +67,7 @@ const (
 // ListTagsOfResource fanout on a few-hundred-table account. With v2's
 // adaptive backoff (jitter + exponential) attempt 8 lands ~30s after
 // attempt 1, which matches the per-call budget the operator-facing
-// 15-minute discoverTimeout can absorb.
+// stage budgets above can absorb.
 const discoverRetryMaxAttempts = 8
 
 // discoveryAggregator is the small subset of awsdiscover.AWSDiscoverer
@@ -464,12 +493,14 @@ Exit codes:
 
 	types := splitCSV(*resourceTypes)
 
-	// TODO(#311): per-stage context timeouts. A single discoverTimeout
-	// covers Stage 2a (DiscoverTypes), Stage 2b (genconfig), Stage 2c1
-	// (driftfix), and Stage 2c3 (depchase). When Stage 2a or 2c3 burns
-	// most of the budget, Stage 2b can be context-cancelled mid-binary
-	// without ever surfacing which stage actually took too long.
-	ctx, cancel := context.WithTimeout(context.Background(), discoverTimeout)
+	// Outer cap (#311). Each stage call site below derives a per-stage
+	// child via context.WithTimeout(ctx, stageTimeoutXxx) so a slow
+	// optional Stage 1.5 (--include-unsupported) or a runaway Stage
+	// 2c3 dep-chase iteration cannot starve mandatory stages. The
+	// outer cap is defense-in-depth — the sum of the per-stage budgets
+	// plus headroom — and surfaces the same `context.DeadlineExceeded`
+	// when the entire run drags on too long.
+	ctx, cancel := context.WithTimeout(context.Background(), discoverTimeoutOverall)
 	defer cancel()
 
 	// summaryStart is the wall-clock anchor for ScanSummary.duration_ms
@@ -602,8 +633,22 @@ Exit codes:
 	)
 	switch cloud {
 	case "aws":
-		cfg, err := deps.loadConfig(ctx, primaryRegion, *awsEndpointURL)
+		// Stage: AWS config load + STS GetCallerIdentity. Both calls
+		// share a single per-stage budget — they're a tight pair (config
+		// resolution feeds STS) and a stuck IMDS / endpoint-discovery
+		// hop should fail fast rather than gnaw the outer cap. The
+		// deferred cancel guarantees the timer is freed on every exit
+		// path (success, mid-block error, multi-account fatal) — the
+		// stage budget only constrains loadConfig + getAccount, but
+		// holding the cancel until the function returns is harmless
+		// since the timer fires once and then becomes a no-op.
+		awsCfgCtx, awsCfgCancel := context.WithTimeout(ctx, stageTimeoutAWSConfig)
+		defer awsCfgCancel()
+		cfg, err := deps.loadConfig(awsCfgCtx, primaryRegion, *awsEndpointURL)
 		if err != nil {
+			if errors.Is(err, context.DeadlineExceeded) {
+				fmt.Fprintf(os.Stderr, "discover: stage %q exceeded budget of %v: %v\n", "aws-config", stageTimeoutAWSConfig, err)
+			}
 			fmt.Fprintf(os.Stderr, "discover: load AWS config: %v\n", err)
 			return discoverExitFatal
 		}
@@ -655,8 +700,14 @@ Exit codes:
 			// STS response is treated as accountID="" — the DynamoDB
 			// discoverer's prefix-only fallback handles that case (see
 			// TestDynamoDBDiscover_PrefixOnlyFallback).
-			accountID, err = deps.getAccount(ctx, cfg)
+			//
+			// Reuses the loadConfig stage budget — both calls live under
+			// the same `aws-config` stage.
+			accountID, err = deps.getAccount(awsCfgCtx, cfg)
 			if err != nil {
+				if errors.Is(err, context.DeadlineExceeded) {
+					fmt.Fprintf(os.Stderr, "discover: stage %q exceeded budget of %v: %v\n", "aws-config", stageTimeoutAWSConfig, err)
+				}
 				fmt.Fprintf(os.Stderr, "discover: STS GetCallerIdentity: %v\n", err)
 				return discoverExitFatal
 			}
@@ -664,8 +715,16 @@ Exit codes:
 		d = deps.newDiscoverer(cfg, *maxConcurrency)
 		awsCfg = cfg
 	case "gcp":
-		gd, closeFn, err := deps.newGCPDiscoverer(ctx, *gcpProjectID)
+		// Stage: GCP discoverer construction (gRPC dial + ADC resolution).
+		// A stuck ADC fetch or unreachable Cloud Asset endpoint should
+		// fail fast rather than burn the outer cap.
+		gcpCtx, gcpCancel := context.WithTimeout(ctx, stageTimeoutGCPConnect)
+		gd, closeFn, err := deps.newGCPDiscoverer(gcpCtx, *gcpProjectID)
+		gcpCancel()
 		if err != nil {
+			if errors.Is(err, context.DeadlineExceeded) {
+				fmt.Fprintf(os.Stderr, "discover: stage %q exceeded budget of %v: %v\n", "gcp-connect", stageTimeoutGCPConnect, err)
+			}
 			fmt.Fprintf(os.Stderr, "discover: build GCP discoverer: %v\n", err)
 			return discoverExitFatal
 		}
@@ -697,8 +756,12 @@ Exit codes:
 		// loaded set and re-emits a deterministic file (sorted, []-not-null).
 		resources = preloaded
 	} else {
+		// Stage 2a: bulk DiscoverTypes (#311). Per-region fanout +
+		// per-service enumerators; the dominant wall-clock cost on a
+		// typical run.
+		discCtx, discCancel := context.WithTimeout(ctx, stageTimeoutDiscover)
 		var err error
-		resources, err = d.DiscoverTypes(ctx, AggArgs{
+		resources, err = d.DiscoverTypes(discCtx, AggArgs{
 			Types:        types,
 			Project:      *project,
 			Regions:      resolvedRegions,
@@ -706,7 +769,11 @@ Exit codes:
 			AccountID:    accountID,
 			Emitter:      emitter,
 		})
+		discCancel()
 		if err != nil {
+			if errors.Is(err, context.DeadlineExceeded) {
+				fmt.Fprintf(os.Stderr, "discover: stage %q exceeded budget of %v: %v\n", "discover", stageTimeoutDiscover, err)
+			}
 			fmt.Fprintf(os.Stderr, "discover: %v\n", err)
 			return discoverExitFatal
 		}
@@ -744,8 +811,17 @@ Exit codes:
 	// The mutual-exclusion gate above (--from-manifest is incompatible)
 	// has already returned discoverExitFatal if both are set.
 	if *includeUnsupported {
-		unsupported, truncated, uerr := enumerateUnsupportedForCloud(ctx, cloud, awsCfg, *project, resolvedRegions, parsedSelectors, *maxUnsupportedResults, emitter, deps)
+		// Stage 1.5 (#311): wrap the optional unsupported enumeration
+		// in its own per-stage budget so a Resource-Explorer-stuck or
+		// Cloud-Asset-throttled enumerator cannot starve mandatory
+		// downstream stages (Stage 2b/2c1/2c3). Soft-fails as before.
+		unsupCtx, unsupCancel := context.WithTimeout(ctx, stageTimeoutUnsupported)
+		unsupported, truncated, uerr := enumerateUnsupportedForCloud(unsupCtx, cloud, awsCfg, *project, resolvedRegions, parsedSelectors, *maxUnsupportedResults, emitter, deps)
+		unsupCancel()
 		if uerr != nil {
+			if errors.Is(uerr, context.DeadlineExceeded) {
+				fmt.Fprintf(os.Stderr, "discover: stage %q exceeded budget of %v: %v\n", "unsupported", stageTimeoutUnsupported, uerr)
+			}
 			fmt.Fprintf(os.Stderr, "discover: WARN: --include-unsupported: %v; imported.json was written; continuing without unsupported.json\n", uerr)
 		} else {
 			if truncated {
@@ -787,8 +863,18 @@ Exit codes:
 		GCPProjectID:   *gcpProjectID,
 		AWSEndpointURL: *awsEndpointURL,
 	}
-	res, err := deps.runGenconfig(ctx, gcOptsBase, resources)
+	// Stage 2b (#311): bound the genconfig terraform-exec call so a
+	// hung subprocess doesn't drag the whole run out to the outer
+	// cap. The depchase pipeline closures below also wrap their inner
+	// genconfig calls in stageTimeoutGenconfig — see comment there for
+	// the budget-within-a-budget semantics.
+	gcCtx, gcCancel := context.WithTimeout(ctx, stageTimeoutGenconfig)
+	res, err := deps.runGenconfig(gcCtx, gcOptsBase, resources)
+	gcCancel()
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			fmt.Fprintf(os.Stderr, "discover: stage %q exceeded budget of %v: %v\n", "genconfig", stageTimeoutGenconfig, err)
+		}
 		fmt.Fprintf(os.Stderr, "discover: HCL generation: %v\n", err)
 		fmt.Fprintln(os.Stderr, "discover: imported.json was written, but Attributes are empty. Re-run with --no-hcl to skip Stage 2b explicitly.")
 		return discoverExitFatal
@@ -812,8 +898,18 @@ Exit codes:
 	// Stage 2c1: loop terraform plan against the generated stack and
 	// patch drifting attributes until the plan is empty. Same workdir as
 	// genconfig (re-uses the .terraform dir).
-	dfRes, err := deps.runDriftfix(ctx, driftfix.Options{Workdir: gcWorkdir})
+	//
+	// Per-stage budget (#311): bounds the entire driftfix loop. Inner
+	// driftfix calls fired by the depchase pipeline below get their own
+	// fresh stageTimeoutDriftfix budget on each iteration — see the
+	// pipeline closure for budget-within-a-budget semantics.
+	dfCtx, dfCancel := context.WithTimeout(ctx, stageTimeoutDriftfix)
+	dfRes, err := deps.runDriftfix(dfCtx, driftfix.Options{Workdir: gcWorkdir})
+	dfCancel()
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			fmt.Fprintf(os.Stderr, "discover: stage %q exceeded budget of %v: %v\n", "driftfix", stageTimeoutDriftfix, err)
+		}
 		fmt.Fprintf(os.Stderr, "discover: drift fix: %v\n", err)
 		fmt.Fprintln(os.Stderr, "discover: imported.json + generated.tf are on disk. Re-run with --no-driftfix to skip Stage 2c1 explicitly, or inspect the workdir to fix manually.")
 		return discoverExitFatal
@@ -834,10 +930,24 @@ Exit codes:
 	// iteration without taking a dep on either subpackage. After
 	// each successful iteration we rewrite imported.json so the
 	// manifest stays consistent with the on-disk generated.tf.
+	//
+	// Budget-within-a-budget (#311): the depchase orchestrator runs
+	// under stageTimeoutDepchase (set up below). Each pipeline
+	// iteration fires runGenconfig + runDriftfix; we wrap each inner
+	// call in its own stageTimeoutGenconfig / stageTimeoutDriftfix
+	// child of the iteration ctx. The inner budget is bounded by
+	// `min(stageTimeoutInner, time.Until(parentDeadline))`, so a
+	// late-iteration call still surfaces a clean DeadlineExceeded
+	// rather than hanging waiting for the outer dep-chase deadline.
 	pipeline := depchase.PipelineFns{
 		RunGenconfig: func(ictx context.Context, expanded []imported.ImportedResource) (*depchase.GenconfigResult, error) {
-			r, err := deps.runGenconfig(ictx, gcOptsBase, expanded)
+			innerCtx, innerCancel := context.WithTimeout(ictx, stageTimeoutGenconfig)
+			defer innerCancel()
+			r, err := deps.runGenconfig(innerCtx, gcOptsBase, expanded)
 			if err != nil {
+				if errors.Is(err, context.DeadlineExceeded) {
+					fmt.Fprintf(os.Stderr, "discover: stage %q (depchase iteration) exceeded budget of %v: %v\n", "genconfig", stageTimeoutGenconfig, err)
+				}
 				return nil, err
 			}
 			if _, _, err := writeManifest(*outputDir, cloud, r.Resources); err != nil {
@@ -849,8 +959,13 @@ Exit codes:
 			}, nil
 		},
 		RunDriftfix: func(ictx context.Context) (*depchase.DriftfixResult, error) {
-			r, err := deps.runDriftfix(ictx, driftfix.Options{Workdir: gcWorkdir})
+			innerCtx, innerCancel := context.WithTimeout(ictx, stageTimeoutDriftfix)
+			defer innerCancel()
+			r, err := deps.runDriftfix(innerCtx, driftfix.Options{Workdir: gcWorkdir})
 			if err != nil {
+				if errors.Is(err, context.DeadlineExceeded) {
+					fmt.Fprintf(os.Stderr, "discover: stage %q (depchase iteration) exceeded budget of %v: %v\n", "driftfix", stageTimeoutDriftfix, err)
+				}
 				return nil, err
 			}
 			return &depchase.DriftfixResult{
@@ -859,7 +974,12 @@ Exit codes:
 			}, nil
 		},
 	}
-	dcRes, err := deps.runDepChase(ctx, depchase.Options{
+	// Stage 2c3 (#311): bounds the entire dep-chase loop. The inner
+	// genconfig + driftfix iteration calls share this parent ctx via
+	// their own per-call WithTimeout above.
+	dcCtx, dcCancel := context.WithTimeout(ctx, stageTimeoutDepchase)
+	defer dcCancel()
+	dcRes, err := deps.runDepChase(dcCtx, depchase.Options{
 		Workdir:       gcWorkdir,
 		Region:        primaryRegion,
 		AccountID:     accountID,
@@ -873,6 +993,9 @@ Exit codes:
 		}
 	}
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			fmt.Fprintf(os.Stderr, "discover: stage %q exceeded budget of %v: %v\n", "depchase", stageTimeoutDepchase, err)
+		}
 		fmt.Fprintf(os.Stderr, "discover: dependency chase: %v\n", err)
 		fmt.Fprintln(os.Stderr, "discover: imported.json + generated.tf are on disk. Re-run with --no-depchase to skip Stage 2c3 explicitly, or raise --max-depchase-iterations and rerun.")
 		return discoverExitFatal

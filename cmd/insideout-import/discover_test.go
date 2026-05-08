@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/stretchr/testify/assert"
@@ -2947,4 +2948,202 @@ func TestAggArgs_RoundTripsThroughAdapters(t *testing.T) {
 		assert.Empty(t, awsArgs.TagSelectors)
 		assert.Empty(t, gcpArgs.TagSelectors)
 	})
+}
+
+// --- #311 per-stage timeout tests ---
+
+// withTestStageTimeout temporarily lowers a per-stage timeout var so a
+// timeout-fires test can run in tens of milliseconds rather than the
+// production multi-minute budget. The timeout vars at the top of
+// discover.go are package-level vars (not consts) precisely so tests
+// can swap them; production code paths never mutate them. Cleanup
+// restores the original on test exit.
+func withTestStageTimeout(t *testing.T, p *time.Duration, d time.Duration) {
+	t.Helper()
+	orig := *p
+	*p = d
+	t.Cleanup(func() { *p = orig })
+}
+
+// blockingAggregator's DiscoverTypes blocks on <-ctx.Done() so the test
+// can exercise the Stage 2a per-stage timeout deterministically. We use
+// ctx.Done() (not time.Sleep) so the goroutine returns as soon as the
+// stage's WithTimeout cancels — keeping the test fast and race-free.
+type blockingAggregator struct {
+	called int
+}
+
+func (f *blockingAggregator) DiscoverTypes(ctx context.Context, _ AggArgs) ([]imported.ImportedResource, error) {
+	f.called++
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func (f *blockingAggregator) DiscoverByID(_ context.Context, _, _, _, _ string) (imported.ImportedResource, error) {
+	return imported.ImportedResource{}, awsdiscover.ErrNotFound
+}
+
+// TestRunDiscoverWithDeps_StageTimeoutFiresOnSlowDiscoverTypes pins the
+// Stage 2a (#311) per-stage timeout: a hung DiscoverTypes surfaces as a
+// fatal exit with a stderr line that names the stage and the budget.
+//
+// NOT t.Parallel(): captures global os.Stderr.
+func TestRunDiscoverWithDeps_StageTimeoutFiresOnSlowDiscoverTypes(t *testing.T) {
+	withTestStageTimeout(t, &stageTimeoutDiscover, 50*time.Millisecond)
+	dir := t.TempDir()
+	agg := &blockingAggregator{}
+	deps := discoverDeps{
+		loadConfig:    func(_ context.Context, _, _ string) (aws.Config, error) { return aws.Config{}, nil },
+		getAccount:    func(_ context.Context, _ aws.Config) (string, error) { return "1", nil },
+		newDiscoverer: func(_ aws.Config, _ int) discoveryAggregator { return agg },
+		runGenconfig: func(_ context.Context, _ genconfig.Options, _ []imported.ImportedResource) (*genconfig.Result, error) {
+			t.Fatal("runGenconfig must not be called when Stage 2a deadline-exceeds")
+			return nil, nil
+		},
+		runDriftfix: func(_ context.Context, _ driftfix.Options) (*driftfix.Result, error) {
+			t.Fatal("runDriftfix must not be called when Stage 2a deadline-exceeds")
+			return nil, nil
+		},
+		runDepChase: noopDepChase,
+	}
+	var rc int
+	stderr := captureStderr(t, func() {
+		rc = runDiscoverWithDeps([]string{
+			"--provider", "aws", "--project", "p", "--region", "us-east-1", "--output-dir", dir,
+		}, deps)
+	})
+	if rc != discoverExitFatal {
+		t.Fatalf("rc=%d, want fatal (Stage 2a should exceed its budget)", rc)
+	}
+	if agg.called != 1 {
+		t.Errorf("DiscoverTypes called %d times, want 1", agg.called)
+	}
+	if !strings.Contains(stderr, `stage "discover"`) || !strings.Contains(stderr, "exceeded budget") {
+		t.Errorf("stderr should name the stage and budget; got: %s", stderr)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "imported.json")); !os.IsNotExist(err) {
+		t.Errorf("imported.json must not be written when Stage 2a deadline-exceeds")
+	}
+}
+
+// TestRunDiscoverWithDeps_UnsupportedStageTimeoutDoesNotStarveStage2b
+// pins the headline #311 invariant: a slow optional Stage 1.5
+// (--include-unsupported) cannot starve mandatory Stage 2b. We block
+// the unsupported enumerator until ctx.Done() (deadline exceeds), then
+// assert that runGenconfig was still invoked with a context whose
+// remaining budget is at least Stage 2b's full per-stage budget minus a
+// tolerance. Pre-#311, the genconfig ctx was the same one Stage 1.5
+// was about to expire — it would have inherited an exhausted deadline.
+//
+// NOT t.Parallel(): captures global os.Stderr.
+func TestRunDiscoverWithDeps_UnsupportedStageTimeoutDoesNotStarveStage2b(t *testing.T) {
+	withTestStageTimeout(t, &stageTimeoutUnsupported, 30*time.Millisecond)
+	withTestStageTimeout(t, &stageTimeoutGenconfig, 5*time.Second)
+	dir := t.TempDir()
+	agg := &fakeAggregator{out: []imported.ImportedResource{validResource("aws_sqs_queue.alpha")}}
+
+	gcCalled := 0
+	var gcRemaining time.Duration
+	deps := okDeps(agg)
+	deps.runGenconfig = func(ctx context.Context, opts genconfig.Options, resources []imported.ImportedResource) (*genconfig.Result, error) {
+		gcCalled++
+		if dl, ok := ctx.Deadline(); ok {
+			gcRemaining = time.Until(dl)
+		}
+		return &genconfig.Result{
+			GeneratedPath: filepath.Join(opts.Workdir, "generated.tf"),
+			Resources:     resources,
+		}, nil
+	}
+	deps.enumerateUnsupportedAWS = func(ctx context.Context, _ aws.Config, _ awsdiscover.UnsupportedArgs) ([]awsdiscover.UnsupportedResource, bool, error) {
+		<-ctx.Done()
+		return nil, false, ctx.Err()
+	}
+
+	var rc int
+	stderr := captureStderr(t, func() {
+		rc = runDiscoverWithDeps([]string{
+			"--provider", "aws", "--project", "p", "--region", "us-east-1", "--output-dir", dir,
+			"--include-unsupported",
+		}, deps)
+	})
+	if rc != discoverExitOK {
+		t.Fatalf("rc=%d, want OK (unsupported soft-fails; mandatory stages must continue)", rc)
+	}
+	if gcCalled != 1 {
+		t.Errorf("runGenconfig called %d times, want 1 (Stage 2b must run after Stage 1.5 deadline-exceeds)", gcCalled)
+	}
+	// Tolerance: the parent (overall) ctx ticks down between Stage 1.5
+	// expiry and the WithTimeout call at Stage 2b. We assert the
+	// remaining budget is within ~200ms of stageTimeoutGenconfig — well
+	// above the ~30ms Stage 1.5 burned, which would have been the
+	// pre-#311 budget.
+	wantMin := stageTimeoutGenconfig - 200*time.Millisecond
+	if gcRemaining < wantMin {
+		t.Errorf("Stage 2b ctx remaining=%v, want >= %v (pre-#311 regression: Stage 1.5 starved Stage 2b)", gcRemaining, wantMin)
+	}
+	if !strings.Contains(stderr, `stage "unsupported"`) || !strings.Contains(stderr, "exceeded budget") {
+		t.Errorf("stderr should name the unsupported stage and budget; got: %s", stderr)
+	}
+}
+
+// TestRunDiscoverWithDeps_GenconfigTimeoutFiresIndependentlyOfDriftfix
+// pins the symmetric #311 invariant: when Stage 2b deadline-exceeds,
+// the run is fatal and downstream stages (driftfix, depchase) must NOT
+// run. The stderr surfaces the genconfig stage name + budget.
+//
+// NOT t.Parallel(): captures global os.Stderr.
+func TestRunDiscoverWithDeps_GenconfigTimeoutFiresIndependentlyOfDriftfix(t *testing.T) {
+	withTestStageTimeout(t, &stageTimeoutGenconfig, 50*time.Millisecond)
+	dir := t.TempDir()
+	agg := &fakeAggregator{out: []imported.ImportedResource{validResource("aws_sqs_queue.alpha")}}
+	deps := okDeps(agg)
+	deps.runGenconfig = func(ctx context.Context, _ genconfig.Options, _ []imported.ImportedResource) (*genconfig.Result, error) {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
+	deps.runDriftfix = func(_ context.Context, _ driftfix.Options) (*driftfix.Result, error) {
+		t.Fatal("runDriftfix must not be called when Stage 2b deadline-exceeds")
+		return nil, nil
+	}
+	deps.runDepChase = func(_ context.Context, _ depchase.Options, _ []imported.ImportedResource) (*depchase.Result, error) {
+		t.Fatal("runDepChase must not be called when Stage 2b deadline-exceeds")
+		return nil, nil
+	}
+
+	var rc int
+	stderr := captureStderr(t, func() {
+		rc = runDiscoverWithDeps([]string{
+			"--provider", "aws", "--project", "p", "--region", "us-east-1", "--output-dir", dir,
+		}, deps)
+	})
+	if rc != discoverExitFatal {
+		t.Fatalf("rc=%d, want fatal (Stage 2b should exceed its budget)", rc)
+	}
+	if !strings.Contains(stderr, `stage "genconfig"`) || !strings.Contains(stderr, "exceeded budget") {
+		t.Errorf("stderr should name the genconfig stage and budget; got: %s", stderr)
+	}
+}
+
+// TestStageTimeoutsDoNotExceedOverallCap is a sanity pin: every
+// per-stage budget must fit inside discoverTimeoutOverall, otherwise
+// the outer cap silently truncates the per-stage one and the named-
+// stage stderr never surfaces. A mutation that bumps any per-stage
+// budget without bumping the outer cap fails this test.
+func TestStageTimeoutsDoNotExceedOverallCap(t *testing.T) {
+	t.Parallel()
+	stages := map[string]time.Duration{
+		"aws-config":  stageTimeoutAWSConfig,
+		"gcp-connect": stageTimeoutGCPConnect,
+		"discover":    stageTimeoutDiscover,
+		"unsupported": stageTimeoutUnsupported,
+		"genconfig":   stageTimeoutGenconfig,
+		"driftfix":    stageTimeoutDriftfix,
+		"depchase":    stageTimeoutDepchase,
+	}
+	for name, d := range stages {
+		if d >= discoverTimeoutOverall {
+			t.Errorf("stage %q budget=%v >= discoverTimeoutOverall=%v (the outer cap would mask the per-stage signal)", name, d, discoverTimeoutOverall)
+		}
+	}
 }
