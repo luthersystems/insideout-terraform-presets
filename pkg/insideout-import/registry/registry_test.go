@@ -26,7 +26,10 @@ func TestSupportedDiscoverTypes_AWS_ReturnsCanonicalSortedList(t *testing.T) {
 		"aws_lambda_function",
 		"aws_s3_bucket",
 		"aws_secretsmanager_secret",
+		"aws_security_group",
 		"aws_sqs_queue",
+		"aws_subnet",
+		"aws_vpc",
 	}
 	got := SupportedDiscoverTypes(ProviderAWS)
 	if !reflect.DeepEqual(got, want) {

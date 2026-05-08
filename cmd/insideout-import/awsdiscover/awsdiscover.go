@@ -133,6 +133,9 @@ func NewAWSDiscovererWithConcurrency(cfg aws.Config, maxConcurrency int) *AWSDis
 			"aws_iam_policy":            newIAMPolicyDiscoverer(cfg),
 			"aws_kms_key":               newKMSDiscoverer(cfg),
 			"aws_s3_bucket":             newS3Discoverer(cfg),
+			"aws_vpc":                   newVPCDiscoverer(cfg),
+			"aws_subnet":                newSubnetDiscoverer(cfg),
+			"aws_security_group":        newSecurityGroupDiscoverer(cfg),
 		},
 	}
 }
@@ -156,6 +159,9 @@ var serviceSlugByTFType = map[string]string{
 	"aws_iam_policy":            "iam_policy",
 	"aws_kms_key":               "kms",
 	"aws_s3_bucket":             "s3",
+	"aws_vpc":                   "vpc",
+	"aws_subnet":                "subnet",
+	"aws_security_group":        "security_group",
 }
 
 // ServiceSlug returns the progress-event slug for a Terraform resource

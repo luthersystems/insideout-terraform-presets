@@ -25,9 +25,12 @@
     {"service": "s3", "iam_action": "s3:ListAllMyBuckets", "purpose": "list buckets account-globally (ListBuckets)"},
     {"service": "secretsmanager", "iam_action": "secretsmanager:DescribeSecret", "purpose": "resolve a single secret by name/ARN in DiscoverByID"},
     {"service": "secretsmanager", "iam_action": "secretsmanager:ListSecrets", "purpose": "list per-region secrets (server-side TagKey/TagValue filter when project is set)"},
+    {"service": "security_group", "iam_action": "ec2:DescribeSecurityGroups", "purpose": "list per-region security groups (server-side tag:Project filter when project is set; tags inline)"},
     {"service": "sqs", "iam_action": "sqs:GetQueueUrl", "purpose": "resolve a queue URL by name in DiscoverByID"},
     {"service": "sqs", "iam_action": "sqs:ListQueueTags", "purpose": "fetch queue tags for tag selectors and Identity.Tags"},
     {"service": "sqs", "iam_action": "sqs:ListQueues", "purpose": "list per-region queues (server-side QueueNamePrefix filter when project is set)"},
-    {"service": "sts", "iam_action": "sts:GetCallerIdentity", "purpose": "stamp the AccountID on every discovered resource (one call per run)"}
+    {"service": "sts", "iam_action": "sts:GetCallerIdentity", "purpose": "stamp the AccountID on every discovered resource (one call per run)"},
+    {"service": "subnet", "iam_action": "ec2:DescribeSubnets", "purpose": "list per-region subnets (server-side tag:Project filter when project is set; tags inline)"},
+    {"service": "vpc", "iam_action": "ec2:DescribeVpcs", "purpose": "list per-region VPCs (server-side tag:Project filter when project is set; tags inline)"}
   ]
 }

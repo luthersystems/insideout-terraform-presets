@@ -25,7 +25,10 @@ var awsTFTypeToServiceSlug = map[string]string{
 	"aws_lambda_function":       "lambda",
 	"aws_s3_bucket":             "s3",
 	"aws_secretsmanager_secret": "secretsmanager",
+	"aws_security_group":        "security_group",
 	"aws_sqs_queue":             "sqs",
+	"aws_subnet":                "subnet",
+	"aws_vpc":                   "vpc",
 }
 
 // TestSlugMap_MatchesAwsdiscover pins the test-local slug table
