@@ -12,6 +12,8 @@
 // TestRegistryParity_GCP.
 package registry
 
+import "slices"
+
 const (
 	ProviderAWS = "aws"
 	ProviderGCP = "gcp"
@@ -45,15 +47,19 @@ var gcpTypes = []string{
 
 // SupportedDiscoverTypes returns the sorted, deterministic list of Terraform
 // resource types that the discover pipeline can emit clean HCL for, for the
-// given provider. Returns nil for unrecognized provider strings.
+// given provider. Returns nil (not an empty slice) for unrecognized provider
+// strings — downstream consumers may distinguish "unknown provider" from
+// "known provider with zero supported types" via that nil-vs-non-nil signal,
+// and JSON marshaling renders them differently (`null` vs `[]`).
 //
-// The returned slice is a fresh copy; callers may mutate it freely.
+// The returned slice is a fresh copy; callers may mutate it freely without
+// affecting subsequent calls or the package's internal state.
 func SupportedDiscoverTypes(provider string) []string {
 	switch provider {
 	case ProviderAWS:
-		return cloneStrings(awsTypes)
+		return slices.Clone(awsTypes)
 	case ProviderGCP:
-		return cloneStrings(gcpTypes)
+		return slices.Clone(gcpTypes)
 	default:
 		return nil
 	}
@@ -61,13 +67,9 @@ func SupportedDiscoverTypes(provider string) []string {
 
 // SupportedProviders returns the sorted list of provider keys recognized by
 // SupportedDiscoverTypes. Useful for UIs enumerating providers without
-// hardcoding the set.
+// hardcoding the set. Every entry returned here is guaranteed to map to a
+// non-empty SupportedDiscoverTypes result; the round-trip invariant is
+// pinned by TestSupportedProviders_RoundTripsThroughSupportedDiscoverTypes.
 func SupportedProviders() []string {
 	return []string{ProviderAWS, ProviderGCP}
-}
-
-func cloneStrings(in []string) []string {
-	out := make([]string, len(in))
-	copy(out, in)
-	return out
 }
