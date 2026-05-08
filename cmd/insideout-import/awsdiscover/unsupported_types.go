@@ -49,6 +49,11 @@ var awsTFTypeByResourceType = map[string]string{
 	"ec2:internet-gateway":  "aws_internet_gateway",
 	"ec2:natgateway":        "aws_nat_gateway",
 	"ec2:elastic-ip":        "aws_eip",
+	"ec2:route-table":       "aws_route_table",
+	"ec2:network-acl":       "aws_network_acl",
+	"ec2:vpc-endpoint":      "aws_vpc_endpoint",
+	"ec2:dhcp-options":      "aws_vpc_dhcp_options",
+	"ec2:network-interface": "aws_network_interface",
 	// --- Unimportable types — the picker greys these out ---
 	// Data Storage
 	"rds:cluster": "aws_rds_cluster",

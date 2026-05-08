@@ -26,12 +26,17 @@ var awsTFTypeToServiceSlug = map[string]string{
 	"aws_kms_key":               "kms",
 	"aws_lambda_function":       "lambda",
 	"aws_nat_gateway":           "nat_gateway",
+	"aws_network_acl":           "network_acl",
+	"aws_network_interface":     "network_interface",
+	"aws_route_table":           "route_table",
 	"aws_s3_bucket":             "s3",
 	"aws_secretsmanager_secret": "secretsmanager",
 	"aws_security_group":        "security_group",
 	"aws_sqs_queue":             "sqs",
 	"aws_subnet":                "subnet",
 	"aws_vpc":                   "vpc",
+	"aws_vpc_dhcp_options":      "vpc_dhcp_options",
+	"aws_vpc_endpoint":          "vpc_endpoint",
 }
 
 // TestSlugMap_MatchesAwsdiscover pins the test-local slug table

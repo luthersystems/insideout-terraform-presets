@@ -139,6 +139,11 @@ func NewAWSDiscovererWithConcurrency(cfg aws.Config, maxConcurrency int) *AWSDis
 			"aws_internet_gateway":      newInternetGatewayDiscoverer(cfg),
 			"aws_nat_gateway":           newNatGatewayDiscoverer(cfg),
 			"aws_eip":                   newEIPDiscoverer(cfg),
+			"aws_route_table":           newRouteTableDiscoverer(cfg),
+			"aws_network_acl":           newNetworkACLDiscoverer(cfg),
+			"aws_vpc_endpoint":          newVPCEndpointDiscoverer(cfg),
+			"aws_vpc_dhcp_options":      newVPCDHCPOptionsDiscoverer(cfg),
+			"aws_network_interface":     newNetworkInterfaceDiscoverer(cfg),
 		},
 	}
 }
@@ -168,6 +173,11 @@ var serviceSlugByTFType = map[string]string{
 	"aws_internet_gateway":      "internet_gateway",
 	"aws_nat_gateway":           "nat_gateway",
 	"aws_eip":                   "eip",
+	"aws_route_table":           "route_table",
+	"aws_network_acl":           "network_acl",
+	"aws_vpc_endpoint":          "vpc_endpoint",
+	"aws_vpc_dhcp_options":      "vpc_dhcp_options",
+	"aws_network_interface":     "network_interface",
 }
 
 // ServiceSlug returns the progress-event slug for a Terraform resource

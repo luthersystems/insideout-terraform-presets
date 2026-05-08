@@ -27,12 +27,17 @@ func TestSupportedDiscoverTypes_AWS_ReturnsCanonicalSortedList(t *testing.T) {
 		"aws_kms_key",
 		"aws_lambda_function",
 		"aws_nat_gateway",
+		"aws_network_acl",
+		"aws_network_interface",
+		"aws_route_table",
 		"aws_s3_bucket",
 		"aws_secretsmanager_secret",
 		"aws_security_group",
 		"aws_sqs_queue",
 		"aws_subnet",
 		"aws_vpc",
+		"aws_vpc_dhcp_options",
+		"aws_vpc_endpoint",
 	}
 	got := SupportedDiscoverTypes(ProviderAWS)
 	if !reflect.DeepEqual(got, want) {
