@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "provider": "gcp",
+  "permissions": [
+    {"service": "cloud_asset_inventory", "gcp_role": "roles/cloudasset.viewer", "iam_permission": "cloudasset.assets.searchAllResources", "purpose": "single Cloud Asset SearchAllResources call enumerates every supported and unsupported resource type"}
+  ]
+}
