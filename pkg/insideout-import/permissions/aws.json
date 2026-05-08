@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "provider": "aws",
+  "permissions": [
+    {"service": "cloudwatchlogs", "iam_action": "logs:DescribeLogGroups", "purpose": "list log groups (server-side LogGroupNamePattern filter)"},
+    {"service": "cloudwatchlogs", "iam_action": "logs:ListTagsForResource", "purpose": "fetch log-group tags for tag selectors and Identity.Tags"},
+    {"service": "dynamodb", "iam_action": "dynamodb:DescribeTable", "purpose": "resolve a single table by name in DiscoverByID"},
+    {"service": "dynamodb", "iam_action": "dynamodb:ListTables", "purpose": "list per-region tables (paginated)"},
+    {"service": "dynamodb", "iam_action": "dynamodb:ListTagsOfResource", "purpose": "fetch table tags for tag selectors and Identity.Tags"},
+    {"service": "iam_policy", "iam_action": "iam:GetPolicy", "purpose": "resolve a single managed policy by ARN in DiscoverByID"},
+    {"service": "iam_policy", "iam_action": "iam:ListPolicies", "purpose": "list customer-managed (Scope=Local) IAM policies"},
+    {"service": "iam_policy", "iam_action": "iam:ListPolicyTags", "purpose": "fetch policy tags for tag selectors and Identity.Tags"},
+    {"service": "iam_role", "iam_action": "iam:GetRole", "purpose": "resolve a single role by name in DiscoverByID"},
+    {"service": "iam_role", "iam_action": "iam:ListRoleTags", "purpose": "fetch role tags for tag selectors and Identity.Tags"},
+    {"service": "iam_role", "iam_action": "iam:ListRoles", "purpose": "list IAM roles (paginated)"},
+    {"service": "kms", "iam_action": "kms:DescribeKey", "purpose": "resolve a single key by UUID/alias in DiscoverByID"},
+    {"service": "kms", "iam_action": "kms:ListAliases", "purpose": "list KMS aliases for the project (account/region scoped)"},
+    {"service": "kms", "iam_action": "kms:ListResourceTags", "purpose": "fetch key tags for tag selectors and Identity.Tags"},
+    {"service": "lambda", "iam_action": "lambda:GetFunction", "purpose": "resolve a single function by name/ARN in DiscoverByID"},
+    {"service": "lambda", "iam_action": "lambda:ListFunctions", "purpose": "list per-region Lambda functions (paginated)"},
+    {"service": "lambda", "iam_action": "lambda:ListTags", "purpose": "fetch function tags for tag selectors and Identity.Tags"},
+    {"service": "resource_explorer_2", "iam_action": "resource-explorer-2:Search", "purpose": "broad enumeration of unsupported resource types (--include-unsupported, gap #6)"},
+    {"service": "s3", "iam_action": "s3:GetBucketTagging", "purpose": "fetch bucket tags for tag selectors and Identity.Tags"},
+    {"service": "s3", "iam_action": "s3:HeadBucket", "purpose": "verify bucket existence in DiscoverByID"},
+    {"service": "s3", "iam_action": "s3:ListAllMyBuckets", "purpose": "list buckets account-globally (ListBuckets)"},
+    {"service": "secretsmanager", "iam_action": "secretsmanager:DescribeSecret", "purpose": "resolve a single secret by name/ARN in DiscoverByID"},
+    {"service": "secretsmanager", "iam_action": "secretsmanager:ListSecrets", "purpose": "list per-region secrets (server-side TagKey/TagValue filter when project is set)"},
+    {"service": "sqs", "iam_action": "sqs:GetQueueUrl", "purpose": "resolve a queue URL by name in DiscoverByID"},
+    {"service": "sqs", "iam_action": "sqs:ListQueueTags", "purpose": "fetch queue tags for tag selectors and Identity.Tags"},
+    {"service": "sqs", "iam_action": "sqs:ListQueues", "purpose": "list per-region queues (server-side QueueNamePrefix filter when project is set)"},
+    {"service": "sts", "iam_action": "sts:GetCallerIdentity", "purpose": "stamp the AccountID on every discovered resource (one call per run)"}
+  ]
+}
