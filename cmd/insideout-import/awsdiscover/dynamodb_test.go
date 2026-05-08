@@ -441,6 +441,117 @@ func TestDynamoDBDiscoverByID_NotFound(t *testing.T) {
 	}
 }
 
+// TestDynamoDBDiscover_EmitsServiceStartFinish_PerRegion (#295) is the
+// dynamodb mirror of TestSQSDiscover_EmitsServiceStartFinish_PerRegion.
+// DynamoDB is the most operationally significant per-service emitter test
+// because the discoverer fans out per-table tag fetches under an
+// errgroup — concurrent ItemFound emits race with one another, and the
+// progress.JSONEmitter mutex is the only thing keeping the on-the-wire
+// output line-safe. Asserting the per-region brackets here keeps that
+// path covered by a unit test (the live race-detector run on
+// progress.JSONEmitter covers the line-safety side).
+func TestDynamoDBDiscover_EmitsServiceStartFinish_PerRegion(t *testing.T) {
+	t.Parallel()
+	fakes := map[string]*fakeDynamoClient{
+		"us-east-1": {
+			pages: []dynamodb.ListTablesOutput{{TableNames: []string{"io-foo-east"}}},
+			tagsByID: map[string][]dynamotypes.Tag{
+				"arn:aws:dynamodb:us-east-1:123:table/io-foo-east": {tagPair("Project", "io-foo")},
+			},
+		},
+		"eu-west-1": {
+			pages: []dynamodb.ListTablesOutput{{TableNames: []string{"io-foo-west"}}},
+			tagsByID: map[string][]dynamotypes.Tag{
+				"arn:aws:dynamodb:eu-west-1:123:table/io-foo-west": {tagPair("Project", "io-foo")},
+			},
+		},
+	}
+	d := &dynamoDiscoverer{new: func(region string) dynamoClient { return fakes[region] }, maxConcurrency: 4}
+	rec := &recordingEmitter{}
+	if _, err := d.Discover(context.Background(), DiscoverArgs{
+		Project:   "io-foo",
+		Regions:   []string{"us-east-1", "eu-west-1"},
+		AccountID: "123",
+		Emitter:   rec,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	starts := map[string]int{}
+	finishes := map[string]int{}
+	for _, e := range rec.snapshot() {
+		switch e.Kind {
+		case "service_start":
+			if e.Service != "dynamodb" {
+				t.Errorf("service_start.service=%q, want dynamodb", e.Service)
+			}
+			starts[e.Region]++
+		case "service_finish":
+			if e.Service != "dynamodb" {
+				t.Errorf("service_finish.service=%q, want dynamodb", e.Service)
+			}
+			finishes[e.Region]++
+		}
+	}
+	for _, region := range []string{"us-east-1", "eu-west-1"} {
+		if starts[region] != 1 {
+			t.Errorf("region=%s: service_start count=%d, want 1", region, starts[region])
+		}
+		if finishes[region] != 1 {
+			t.Errorf("region=%s: service_finish count=%d, want 1", region, finishes[region])
+		}
+	}
+}
+
+// TestDynamoDBDiscover_EmitsItemFound_PerTable (#295) pins one
+// item_found per emitted ImportedResource. Tables that fail the
+// Project=<project> back-compat tag check (TestDynamoDBDiscover_PrefixThenTagFilter
+// pattern) must not emit item_found.
+func TestDynamoDBDiscover_EmitsItemFound_PerTable(t *testing.T) {
+	t.Parallel()
+	fake := &fakeDynamoClient{
+		pages: []dynamodb.ListTablesOutput{
+			{TableNames: []string{"io-foo-a", "io-foo-b", "io-foo-untagged"}},
+		},
+		tagsByID: map[string][]dynamotypes.Tag{
+			"arn:aws:dynamodb:us-east-1:123:table/io-foo-a":        {tagPair("Project", "io-foo")},
+			"arn:aws:dynamodb:us-east-1:123:table/io-foo-b":        {tagPair("Project", "io-foo")},
+			"arn:aws:dynamodb:us-east-1:123:table/io-foo-untagged": {tagPair("Owner", "team")},
+		},
+	}
+	d := &dynamoDiscoverer{new: func(_ string) dynamoClient { return fake }, maxConcurrency: 4}
+	rec := &recordingEmitter{}
+	got, err := d.Discover(context.Background(), DiscoverArgs{
+		Project:   "io-foo",
+		Regions:   []string{"us-east-1"},
+		AccountID: "123",
+		Emitter:   rec,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var items []recordedEvent
+	for _, e := range rec.snapshot() {
+		if e.Kind == "item_found" {
+			items = append(items, e)
+		}
+	}
+	if len(items) != len(got) {
+		t.Errorf("item_found count=%d, want %d (one per emitted resource)", len(items), len(got))
+	}
+	wantNames := map[string]bool{"io-foo-a": true, "io-foo-b": true}
+	for _, it := range items {
+		if it.Service != "dynamodb" {
+			t.Errorf("item.service=%q, want dynamodb", it.Service)
+		}
+		if it.TFType != "aws_dynamodb_table" {
+			t.Errorf("item.tf_type=%q, want aws_dynamodb_table", it.TFType)
+		}
+		if !wantNames[it.ImportID] {
+			t.Errorf("item.import_id=%q not in expected set", it.ImportID)
+		}
+	}
+}
+
 func TestDynamoDBDiscoverByID_UnsupportedID(t *testing.T) {
 	t.Parallel()
 	d := &dynamoDiscoverer{new: func(_ string) dynamoClient { return &fakeDynamoClient{} }}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsarn "github.com/aws/aws-sdk-go-v2/aws/arn"
@@ -48,10 +49,15 @@ func (d *secretsManagerDiscoverer) ResourceType() string { return "aws_secretsma
 //
 // Import ID for aws_secretsmanager_secret is the secret ARN.
 func (d *secretsManagerDiscoverer) Discover(ctx context.Context, args DiscoverArgs) ([]imported.ImportedResource, error) {
+	args.Emitter = emitterOrNop(args.Emitter)
 	book := addressBook{}
+	const slug = "secretsmanager"
 	var imps []imported.ImportedResource
 
 	for _, region := range args.Regions {
+		regionStart := time.Now()
+		args.Emitter.ServiceStart(slug, region)
+		regionCount := 0
 		client := d.new(region)
 		input := &secretsmanager.ListSecretsInput{}
 		if args.Project != "" {
@@ -77,6 +83,7 @@ func (d *secretsManagerDiscoverer) Discover(ctx context.Context, args DiscoverAr
 		for {
 			out, err := client.ListSecrets(ctx, input)
 			if err != nil {
+				args.Emitter.ServiceFinish(slug, region, regionCount, time.Since(regionStart))
 				return nil, fmt.Errorf("ListSecrets (region=%s): %w", region, err)
 			}
 			for _, s := range out.SecretList {
@@ -112,7 +119,10 @@ func (d *secretsManagerDiscoverer) Discover(ctx context.Context, args DiscoverAr
 				map[string]string{"arn": s.arn},
 				s.tags,
 			))
+			args.Emitter.ItemFound(slug, region, "aws_secretsmanager_secret", s.arn)
+			regionCount++
 		}
+		args.Emitter.ServiceFinish(slug, region, regionCount, time.Since(regionStart))
 	}
 	return imps, nil
 }

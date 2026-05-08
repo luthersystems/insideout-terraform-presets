@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsarn "github.com/aws/aws-sdk-go-v2/aws/arn"
@@ -56,13 +57,19 @@ func (d *s3Discoverer) ResourceType() string { return "aws_s3_bucket" }
 //
 // Import ID for aws_s3_bucket is the bucket name.
 func (d *s3Discoverer) Discover(ctx context.Context, args DiscoverArgs) ([]imported.ImportedResource, error) {
+	args.Emitter = emitterOrNop(args.Emitter)
+	const slug = "s3"
 	stampRegion := ""
 	if len(args.Regions) > 0 {
 		stampRegion = args.Regions[0]
 	}
+	regionStart := time.Now()
+	args.Emitter.ServiceStart(slug, stampRegion)
+	regionCount := 0
 	client := d.new(stampRegion)
 	out, err := client.ListBuckets(ctx, &s3.ListBucketsInput{})
 	if err != nil {
+		args.Emitter.ServiceFinish(slug, stampRegion, regionCount, time.Since(regionStart))
 		return nil, fmt.Errorf("ListBuckets: %w", err)
 	}
 
@@ -81,6 +88,7 @@ func (d *s3Discoverer) Discover(ctx context.Context, args DiscoverArgs) ([]impor
 	for _, name := range names {
 		tags, err := fetchS3BucketTags(ctx, client, name)
 		if err != nil {
+			args.Emitter.ServiceFinish(slug, stampRegion, regionCount, time.Since(regionStart))
 			return nil, fmt.Errorf("GetBucketTagging (bucket=%s): %w", name, err)
 		}
 		if !MatchesAll(tags, args.TagSelectors) {
@@ -97,7 +105,10 @@ func (d *s3Discoverer) Discover(ctx context.Context, args DiscoverArgs) ([]impor
 			map[string]string{"arn": arn},
 			tags,
 		))
+		args.Emitter.ItemFound(slug, stampRegion, "aws_s3_bucket", name)
+		regionCount++
 	}
+	args.Emitter.ServiceFinish(slug, stampRegion, regionCount, time.Since(regionStart))
 	return imps, nil
 }
 

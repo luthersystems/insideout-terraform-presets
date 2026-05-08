@@ -20,6 +20,7 @@ import (
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/driftfix"
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/gcpdiscover"
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/genconfig"
+	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/progress"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
 
@@ -55,7 +56,7 @@ const discoverRetryMaxAttempts = 8
 // selectors flow through as the CLI-package tagSelectorPair so the
 // interface stays decoupled from awsdiscover/gcpdiscover.
 type discoveryAggregator interface {
-	DiscoverTypes(ctx context.Context, types []string, project string, regions []string, tagSelectors []tagSelectorPair, accountID string) ([]imported.ImportedResource, error)
+	DiscoverTypes(ctx context.Context, types []string, project string, regions []string, tagSelectors []tagSelectorPair, accountID string, emitter progress.Emitter) ([]imported.ImportedResource, error)
 	DiscoverByID(ctx context.Context, tfType, id, region, accountID string) (imported.ImportedResource, error)
 }
 
@@ -69,7 +70,7 @@ type awsAggAdapter struct {
 	d *awsdiscover.AWSDiscoverer
 }
 
-func (a awsAggAdapter) DiscoverTypes(ctx context.Context, types []string, project string, regions []string, tagSelectors []tagSelectorPair, accountID string) ([]imported.ImportedResource, error) {
+func (a awsAggAdapter) DiscoverTypes(ctx context.Context, types []string, project string, regions []string, tagSelectors []tagSelectorPair, accountID string, emitter progress.Emitter) ([]imported.ImportedResource, error) {
 	sel := make([]awsdiscover.TagSelector, 0, len(tagSelectors))
 	for _, p := range tagSelectors {
 		sel = append(sel, awsdiscover.TagSelector{Key: p.Key, Value: p.Value})
@@ -79,6 +80,7 @@ func (a awsAggAdapter) DiscoverTypes(ctx context.Context, types []string, projec
 		Regions:      regions,
 		TagSelectors: sel,
 		AccountID:    accountID,
+		Emitter:      emitter,
 	})
 }
 
@@ -93,7 +95,7 @@ type gcpAggAdapter struct {
 	d *gcpdiscover.GCPDiscoverer
 }
 
-func (a gcpAggAdapter) DiscoverTypes(ctx context.Context, types []string, project string, regions []string, tagSelectors []tagSelectorPair, accountID string) ([]imported.ImportedResource, error) {
+func (a gcpAggAdapter) DiscoverTypes(ctx context.Context, types []string, project string, regions []string, tagSelectors []tagSelectorPair, accountID string, emitter progress.Emitter) ([]imported.ImportedResource, error) {
 	sel := make([]gcpdiscover.TagSelector, 0, len(tagSelectors))
 	for _, p := range tagSelectors {
 		sel = append(sel, gcpdiscover.TagSelector{Key: p.Key, Value: p.Value})
@@ -105,6 +107,7 @@ func (a gcpAggAdapter) DiscoverTypes(ctx context.Context, types []string, projec
 		Project:      project,
 		Regions:      regions,
 		TagSelectors: sel,
+		Emitter:      emitter,
 	})
 }
 
@@ -242,6 +245,7 @@ Exit codes:
 	gcpProjectID := fs.String("gcp-project-id", "", "real GCP project ID (per #157, distinct from --project); required for --provider gcp. The Cloud Asset Inventory scope is `projects/<gcp-project-id>` and Identity.ProjectID on every emitted resource is set to this value.")
 	fromManifest := fs.String("from-manifest", "", "load resource set from a prior imported.json instead of running Stage 2a (discovery). Use to re-emit HCL for a previously-discovered set without re-walking the cloud. Mutually exclusive with --resource-types.")
 	resourceIDs := fs.String("resource-ids", "", "comma-separated subset of Identity.ImportID values to retain when loading --from-manifest; unknown IDs are fatal. Empty = use the entire manifest. Requires --from-manifest.")
+	progressFmt := fs.String("progress", "", "progress event format. Empty (default) emits human-readable summary lines on stdout. `json` emits one newline-delimited JSON event per service-start, service-finish, item-found, stage-finish on stdout; the human-readable summary moves to stderr so machine consumers see only events on stdout. (#295)")
 
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -332,6 +336,30 @@ Exit codes:
 	}
 	if *maxDepChaseIter <= 0 {
 		fmt.Fprintf(os.Stderr, "discover: --max-depchase-iterations must be positive (got %d)\n", *maxDepChaseIter)
+		return discoverExitFatal
+	}
+
+	// --progress=<fmt> validation + emitter wiring (#295).
+	//
+	// Empty   ⇒ NopEmitter; the existing fmt.Printf summary lines stay on stdout.
+	// "json"  ⇒ JSONEmitter writing newline-delimited Events to stdout; the
+	//           summary lines move to stderr so machine consumers see only
+	//           events on stdout (the SSE-translator-friendly contract).
+	//
+	// summaryOut is the writer the post-discovery summary lines target. We
+	// derive it from the chosen format here so the rest of runDiscoverWithDeps
+	// can use a single fmt.Fprintf(summaryOut, ...) without re-checking the
+	// flag at every call site.
+	var emitter progress.Emitter
+	summaryOut := os.Stdout
+	switch *progressFmt {
+	case "":
+		emitter = progress.NopEmitter{}
+	case "json":
+		emitter = progress.NewJSONEmitter(os.Stdout)
+		summaryOut = os.Stderr
+	default:
+		fmt.Fprintf(os.Stderr, "discover: --progress: unknown format %q (one of: json)\n", *progressFmt)
 		return discoverExitFatal
 	}
 
@@ -474,7 +502,7 @@ Exit codes:
 		resources = preloaded
 	} else {
 		var err error
-		resources, err = d.DiscoverTypes(ctx, types, *project, resolvedRegions, parsedSelectors, accountID)
+		resources, err = d.DiscoverTypes(ctx, types, *project, resolvedRegions, parsedSelectors, accountID, emitter)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "discover: %v\n", err)
 			return discoverExitFatal
@@ -486,7 +514,7 @@ Exit codes:
 		fmt.Fprintf(os.Stderr, "discover: %v\n", err)
 		return discoverExitFatal
 	}
-	fmt.Printf("wrote %s (%d resource(s) discovered)\n", out, n)
+	fmt.Fprintf(summaryOut, "wrote %s (%d resource(s) discovered)\n", out, n)
 
 	if *noHCL || n == 0 {
 		return discoverExitOK
@@ -518,7 +546,7 @@ Exit codes:
 		fmt.Fprintf(os.Stderr, "discover: %v\n", err)
 		return discoverExitFatal
 	}
-	fmt.Printf("wrote %s (%d resource(s) with Attributes); generated HCL at %s\n", out, n, res.GeneratedPath)
+	fmt.Fprintf(summaryOut, "wrote %s (%d resource(s) with Attributes); generated HCL at %s\n", out, n, res.GeneratedPath)
 
 	if *noDriftFix {
 		return discoverExitOK
@@ -533,7 +561,7 @@ Exit codes:
 		fmt.Fprintln(os.Stderr, "discover: imported.json + generated.tf are on disk. Re-run with --no-driftfix to skip Stage 2c1 explicitly, or inspect the workdir to fix manually.")
 		return discoverExitFatal
 	}
-	fmt.Printf("drift fix converged after %d iteration(s); generated HCL at %s\n", dfRes.Iterations, dfRes.GeneratedPath)
+	fmt.Fprintf(summaryOut, "drift fix converged after %d iteration(s); generated HCL at %s\n", dfRes.Iterations, dfRes.GeneratedPath)
 
 	if *noDepChase {
 		return discoverExitOK
@@ -607,7 +635,7 @@ Exit codes:
 			return discoverExitFatal
 		}
 	}
-	fmt.Printf("dep chase converged after %d iteration(s); added %d dependency resource(s); generated HCL at %s\n",
+	fmt.Fprintf(summaryOut, "dep chase converged after %d iteration(s); added %d dependency resource(s); generated HCL at %s\n",
 		dcRes.Iterations, len(dcRes.Added), dcRes.GeneratedPath)
 	return discoverExitOK
 }

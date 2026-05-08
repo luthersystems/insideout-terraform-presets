@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awsarn "github.com/aws/aws-sdk-go-v2/aws/arn"
@@ -69,10 +70,15 @@ func (d *lambdaDiscoverer) ResourceType() string { return "aws_lambda_function" 
 //
 // Import ID for aws_lambda_function is the function name.
 func (d *lambdaDiscoverer) Discover(ctx context.Context, args DiscoverArgs) ([]imported.ImportedResource, error) {
+	args.Emitter = emitterOrNop(args.Emitter)
 	book := addressBook{}
+	const slug = "lambda"
 	var out []imported.ImportedResource
 
 	for _, region := range args.Regions {
+		regionStart := time.Now()
+		args.Emitter.ServiceStart(slug, region)
+		regionCount := 0
 		client := d.new(region)
 
 		type fn struct {
@@ -86,6 +92,7 @@ func (d *lambdaDiscoverer) Discover(ctx context.Context, args DiscoverArgs) ([]i
 		for paginator.HasMorePages() {
 			page, err := paginator.NextPage(ctx)
 			if err != nil {
+				args.Emitter.ServiceFinish(slug, region, regionCount, time.Since(regionStart))
 				return nil, fmt.Errorf("ListFunctions (region=%s): %w", region, err)
 			}
 			for _, f := range page.Functions {
@@ -136,6 +143,7 @@ func (d *lambdaDiscoverer) Discover(ctx context.Context, args DiscoverArgs) ([]i
 			})
 		}
 		if err := g.Wait(); err != nil {
+			args.Emitter.ServiceFinish(slug, region, regionCount, time.Since(regionStart))
 			return nil, fmt.Errorf("ListTags (region=%s): %w", region, err)
 		}
 
@@ -159,7 +167,10 @@ func (d *lambdaDiscoverer) Discover(ctx context.Context, args DiscoverArgs) ([]i
 				map[string]string{"arn": f.arn},
 				f.tags,
 			))
+			args.Emitter.ItemFound(slug, region, "aws_lambda_function", f.name)
+			regionCount++
 		}
+		args.Emitter.ServiceFinish(slug, region, regionCount, time.Since(regionStart))
 	}
 	return out, nil
 }

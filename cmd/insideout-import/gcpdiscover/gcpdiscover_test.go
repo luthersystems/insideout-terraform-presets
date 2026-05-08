@@ -399,3 +399,144 @@ func TestRegistryParity_GCP_LiveMatchesRegistry(t *testing.T) {
 		t.Errorf("registry drift: gcpdiscover=%v, registry=%v", live, pub)
 	}
 }
+
+// TestGCPDiscoverTypes_EmitsServiceStartFinish_OnceForCloudAssetInventory
+// (#295) pins the GCP-side contract: Cloud Asset is a single discovery
+// surface (one SearchAllResources call covers every asset type for a
+// project) so we emit one service_start + one service_finish per run,
+// regardless of how many resource types or regions were requested. The
+// service slug is "cloud_asset_inventory" — the API's product name —
+// and matches what the reliable agent-API SSE translator routes on.
+func TestGCPDiscoverTypes_EmitsServiceStartFinish_OnceForCloudAssetInventory(t *testing.T) {
+	t.Parallel()
+	fake := &fakeAssetSearcher{
+		results: []gcpAssetResult{
+			{Name: "//pubsub.googleapis.com/projects/real-proj/topics/alpha", AssetType: "pubsub.googleapis.com/Topic", Project: "real-proj"},
+		},
+	}
+	g := NewGCPDiscoverer(fake, "real-proj")
+	rec := &recordingEmitter{}
+	if _, err := g.DiscoverTypes(context.Background(), []string{"google_pubsub_topic", "google_storage_bucket"}, DiscoverArgs{
+		Project: "io-foo",
+		Regions: []string{"us-central1", "europe-west1"},
+		Emitter: rec,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	starts := 0
+	finishes := 0
+	for _, e := range rec.snapshot() {
+		switch e.Kind {
+		case "service_start":
+			starts++
+			if e.Service != "cloud_asset_inventory" {
+				t.Errorf("service_start.service=%q, want cloud_asset_inventory", e.Service)
+			}
+		case "service_finish":
+			finishes++
+			if e.Service != "cloud_asset_inventory" {
+				t.Errorf("service_finish.service=%q, want cloud_asset_inventory", e.Service)
+			}
+		}
+	}
+	if starts != 1 {
+		t.Errorf("service_start count=%d, want 1 (Cloud Asset is single-call)", starts)
+	}
+	if finishes != 1 {
+		t.Errorf("service_finish count=%d, want 1", finishes)
+	}
+}
+
+// TestGCPDiscoverTypes_EmitsItemFound_PerAsset (#295) pins one
+// item_found per emitted ImportedResource, with the asset's Location
+// stamped into the event so consumers can attribute multi-region
+// scans correctly. The TF type matches the per-discoverer
+// ResourceType().
+func TestGCPDiscoverTypes_EmitsItemFound_PerAsset(t *testing.T) {
+	t.Parallel()
+	fake := &fakeAssetSearcher{
+		results: []gcpAssetResult{
+			{Name: "//pubsub.googleapis.com/projects/real-proj/topics/alpha", AssetType: "pubsub.googleapis.com/Topic", Project: "real-proj"},
+			{Name: "//pubsub.googleapis.com/projects/real-proj/topics/zeta", AssetType: "pubsub.googleapis.com/Topic", Project: "real-proj"},
+			{Name: "//storage.googleapis.com/io-foo-bucket", AssetType: "storage.googleapis.com/Bucket", Project: "real-proj", Location: "us-central1"},
+		},
+	}
+	g := NewGCPDiscoverer(fake, "real-proj")
+	rec := &recordingEmitter{}
+	got, err := g.DiscoverTypes(context.Background(), []string{"google_pubsub_topic", "google_storage_bucket"}, DiscoverArgs{
+		Project: "io-foo",
+		Emitter: rec,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var items []recordedEvent
+	for _, e := range rec.snapshot() {
+		if e.Kind == "item_found" {
+			items = append(items, e)
+		}
+	}
+	if len(items) != len(got) {
+		t.Errorf("item_found count=%d, want %d (one per emitted resource)", len(items), len(got))
+	}
+	// At least one item should carry a non-empty Location (the storage
+	// bucket); pubsub topics are project-global and may have empty
+	// Location on the asset.
+	sawLoc := false
+	for _, it := range items {
+		if it.Service != "cloud_asset_inventory" {
+			t.Errorf("item.service=%q, want cloud_asset_inventory", it.Service)
+		}
+		if it.TFType == "" {
+			t.Errorf("item.tf_type empty: %+v", it)
+		}
+		if it.ImportID == "" {
+			t.Errorf("item.import_id empty: %+v", it)
+		}
+		if it.Region == "us-central1" {
+			sawLoc = true
+		}
+	}
+	if !sawLoc {
+		t.Errorf("expected at least one item_found with region=us-central1; got %d items", len(items))
+	}
+}
+
+// TestGCPDiscoverTypes_EmitsStageFinish (#295) pins that DiscoverTypes
+// closes the stage with one stage_finish event whose total matches the
+// emitted resource count. The orchestrator-level test in the main
+// package asserts the same property at the runDiscoverWithDeps boundary;
+// this test pins it inside the aggregator so a regression that moves
+// the StageFinish out of DiscoverTypes (e.g. into the per-type loop)
+// surfaces here first.
+func TestGCPDiscoverTypes_EmitsStageFinish(t *testing.T) {
+	t.Parallel()
+	fake := &fakeAssetSearcher{
+		results: []gcpAssetResult{
+			{Name: "//pubsub.googleapis.com/projects/real-proj/topics/a", AssetType: "pubsub.googleapis.com/Topic", Project: "real-proj"},
+		},
+	}
+	g := NewGCPDiscoverer(fake, "real-proj")
+	rec := &recordingEmitter{}
+	if _, err := g.DiscoverTypes(context.Background(), []string{"google_pubsub_topic"}, DiscoverArgs{
+		Project: "io-foo",
+		Emitter: rec,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	stageEvents := 0
+	for _, e := range rec.snapshot() {
+		if e.Kind == "stage_finish" {
+			stageEvents++
+			if e.Stage != "discover" {
+				t.Errorf("stage_finish.stage=%q, want discover", e.Stage)
+			}
+			if e.Total != 1 {
+				t.Errorf("stage_finish.total=%d, want 1", e.Total)
+			}
+		}
+	}
+	if stageEvents != 1 {
+		t.Errorf("stage_finish count=%d, want 1", stageEvents)
+	}
+}

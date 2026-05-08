@@ -18,6 +18,7 @@ import (
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/depchase"
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/driftfix"
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/genconfig"
+	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/progress"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
 
@@ -277,6 +278,7 @@ type fakeAggregator struct {
 	gotSelectors []tagSelectorPair
 	gotAccount   string
 	gotTypes     []string
+	gotEmitter   progress.Emitter
 	called       int
 
 	// DiscoverByID wiring for Stage 2c3 dep-chase tests. byID is keyed
@@ -295,9 +297,10 @@ func (f *fakeAggregator) gotRegion() string {
 	return f.gotRegions[0]
 }
 
-func (f *fakeAggregator) DiscoverTypes(_ context.Context, types []string, project string, regions []string, selectors []tagSelectorPair, accountID string) ([]imported.ImportedResource, error) {
+func (f *fakeAggregator) DiscoverTypes(_ context.Context, types []string, project string, regions []string, selectors []tagSelectorPair, accountID string, emitter progress.Emitter) ([]imported.ImportedResource, error) {
 	f.called++
 	f.gotProject, f.gotRegions, f.gotSelectors, f.gotAccount, f.gotTypes = project, regions, selectors, accountID, types
+	f.gotEmitter = emitter
 	return f.out, f.err
 }
 
@@ -1040,6 +1043,67 @@ func TestRunDiscoverWithDeps_DriftfixFailureExitsFatal(t *testing.T) {
 	if !strings.Contains(stderr, "drift fix") {
 		t.Errorf("stderr must include the failing-stage label; got:\n%s", stderr)
 	}
+}
+
+// captureStdoutStderr swaps both os.Stdout and os.Stderr for pipes,
+// runs fn, and returns the captured (stdout, stderr) output. Used by
+// the --progress=json tests (#295) where the contract is "events on
+// stdout, summary on stderr" — asserting one without the other would
+// miss half the regression. Callers must NOT mark the test parallel —
+// os.Stdout / os.Stderr are global state.
+func captureStdoutStderr(t *testing.T, fn func()) (string, string) {
+	t.Helper()
+	rOut, wOut, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe stdout: %v", err)
+	}
+	rErr, wErr, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("os.Pipe stderr: %v", err)
+	}
+	origOut, origErr := os.Stdout, os.Stderr
+	os.Stdout, os.Stderr = wOut, wErr
+	t.Cleanup(func() { os.Stdout, os.Stderr = origOut, origErr })
+
+	doneOut := make(chan string, 1)
+	doneErr := make(chan string, 1)
+	go func() {
+		buf := make([]byte, 0, 4096)
+		tmp := make([]byte, 1024)
+		for {
+			n, err := rOut.Read(tmp)
+			if n > 0 {
+				buf = append(buf, tmp[:n]...)
+			}
+			if err != nil {
+				break
+			}
+		}
+		doneOut <- string(buf)
+	}()
+	go func() {
+		buf := make([]byte, 0, 4096)
+		tmp := make([]byte, 1024)
+		for {
+			n, err := rErr.Read(tmp)
+			if n > 0 {
+				buf = append(buf, tmp[:n]...)
+			}
+			if err != nil {
+				break
+			}
+		}
+		doneErr <- string(buf)
+	}()
+
+	func() {
+		defer func() {
+			_ = wOut.Close()
+			_ = wErr.Close()
+		}()
+		fn()
+	}()
+	return <-doneOut, <-doneErr
 }
 
 // captureStderr swaps os.Stderr for a pipe, runs fn, and returns the
@@ -1873,5 +1937,106 @@ func TestSplitCSV(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestRunDiscoverWithDeps_ProgressJSONMovesSummaryToStderr (#295) is
+// the canonical contract pin for --progress=json: stdout carries only
+// JSON event lines, stderr carries the human-readable "wrote …"
+// summary. The reliable agent-API will Reader-tail stdout; non-event
+// lines on stdout would corrupt the SSE stream.
+//
+// Not t.Parallel(): the test rebinds os.Stdout / os.Stderr globally and
+// must own them for its run.
+func TestRunDiscoverWithDeps_ProgressJSONMovesSummaryToStderr(t *testing.T) {
+	dir := t.TempDir()
+	agg := &fakeAggregator{out: []imported.ImportedResource{
+		validResource("aws_sqs_queue.alpha"),
+	}}
+	stdout, stderr := captureStdoutStderr(t, func() {
+		rc := runDiscoverWithDeps([]string{
+			"--provider", "aws", "--project", "io-foo", "--region", "us-east-1",
+			"--output-dir", dir, "--no-hcl", "--progress", "json",
+		}, okDeps(agg))
+		if rc != discoverExitOK {
+			t.Errorf("rc=%d, want %d", rc, discoverExitOK)
+		}
+	})
+
+	// stdout: every non-empty line must parse as a JSON Event. The
+	// fakeAggregator does not actually emit events (it bypasses the
+	// per-service code), but the orchestrator passes the JSONEmitter
+	// through; if the summary "wrote ..." line bled onto stdout the
+	// JSON parse would fail.
+	for i, line := range strings.Split(strings.TrimRight(stdout, "\n"), "\n") {
+		if line == "" {
+			continue
+		}
+		var evt map[string]any
+		if err := json.Unmarshal([]byte(line), &evt); err != nil {
+			t.Errorf("stdout line %d not JSON: %v\n  raw: %q", i, err, line)
+		}
+	}
+	// stderr: the post-discovery summary line must land here.
+	if !strings.Contains(stderr, "wrote ") || !strings.Contains(stderr, "imported.json") {
+		t.Errorf("expected summary 'wrote ... imported.json' on stderr; got stderr=%q", stderr)
+	}
+	if strings.Contains(stdout, "wrote ") {
+		t.Errorf("summary line bled onto stdout; got stdout=%q", stdout)
+	}
+}
+
+// TestRunDiscoverWithDeps_ProgressUnknownFormatIsFatal (#295) pins the
+// validation error message exactly so the operator-facing string is
+// covered (a reliable wizard surfaces this verbatim if the user
+// misconfigures the agent-API call).
+func TestRunDiscoverWithDeps_ProgressUnknownFormatIsFatal(t *testing.T) {
+	dir := t.TempDir()
+	stderr := captureStderr(t, func() {
+		rc := runDiscoverWithDeps([]string{
+			"--provider", "aws", "--project", "io-foo", "--region", "us-east-1",
+			"--output-dir", dir, "--progress", "yaml",
+		}, okDeps(&fakeAggregator{}))
+		if rc != discoverExitFatal {
+			t.Errorf("rc=%d, want fatal", rc)
+		}
+	})
+	if !strings.Contains(stderr, "--progress: unknown format \"yaml\"") {
+		t.Errorf("stderr=%q, want it to mention `--progress: unknown format \"yaml\"`", stderr)
+	}
+	if !strings.Contains(stderr, "(one of: json)") {
+		t.Errorf("stderr=%q, want it to enumerate the supported formats", stderr)
+	}
+}
+
+// TestRunDiscoverWithDeps_ProgressEmptyKeepsLegacyOutput (#295) is the
+// back-compat pin: when --progress is unset the existing stdout summary
+// stays exactly as it was, and stderr stays empty for the happy path.
+// A regression that defaults --progress=json (or otherwise reroutes
+// the summary) would surface here as a stdout-empty / stderr-non-empty
+// flip.
+//
+// We pass --regions (not the deprecated --region) so the deprecation
+// warning #291 emits to stderr does NOT pollute the stderr-empty
+// assertion below.
+func TestRunDiscoverWithDeps_ProgressEmptyKeepsLegacyOutput(t *testing.T) {
+	dir := t.TempDir()
+	agg := &fakeAggregator{out: []imported.ImportedResource{
+		validResource("aws_sqs_queue.alpha"),
+	}}
+	stdout, stderr := captureStdoutStderr(t, func() {
+		rc := runDiscoverWithDeps([]string{
+			"--provider", "aws", "--project", "io-foo", "--regions", "us-east-1",
+			"--output-dir", dir, "--no-hcl",
+		}, okDeps(agg))
+		if rc != discoverExitOK {
+			t.Errorf("rc=%d, want %d", rc, discoverExitOK)
+		}
+	})
+	if !strings.Contains(stdout, "wrote ") || !strings.Contains(stdout, "imported.json") {
+		t.Errorf("expected legacy summary on stdout; got stdout=%q", stdout)
+	}
+	if stderr != "" {
+		t.Errorf("expected empty stderr on happy path; got %q", stderr)
 	}
 }
