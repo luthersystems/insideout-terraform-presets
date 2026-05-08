@@ -39,8 +39,15 @@ type UnsupportedResource struct {
 // real SDK client. The signature mirrors the real Search call's input
 // shape — minus pagination plumbing, which the real implementation
 // loops internally.
+//
+// maxResults caps the accumulated result set so very large accounts
+// (#309) don't spike memory or wall-time. When maxResults > 0 and the
+// in-loop accumulator hits the cap, the implementation must STOP
+// fetching subsequent pages (saving API budget on top of the memory
+// cap) and return truncated=true. When maxResults == 0 the cap is
+// disabled and the searcher walks the entire NextToken chain.
 type resourceExplorerSearcher interface {
-	Search(ctx context.Context, region, queryString string) ([]retypes.Resource, error)
+	Search(ctx context.Context, region, queryString string, maxResults int) (results []retypes.Resource, truncated bool, err error)
 }
 
 // realResourceExplorerSearcher constructs one Resource Explorer client
@@ -65,16 +72,17 @@ func NewRealResourceExplorerSearcher(cfg aws.Config) resourceExplorerSearcher {
 	return &realResourceExplorerSearcher{cfg: cfg}
 }
 
-func (r *realResourceExplorerSearcher) Search(ctx context.Context, region, queryString string) ([]retypes.Resource, error) {
+func (r *realResourceExplorerSearcher) Search(ctx context.Context, region, queryString string, maxResults int) ([]retypes.Resource, bool, error) {
 	client := resourceexplorer2.NewFromConfig(r.cfg, func(o *resourceexplorer2.Options) {
 		o.Region = region
 	})
-	// TODO(#309): bound result accumulation. The page loop currently
-	// appends every Resource Explorer hit into a single slice with no
-	// upper bound; large accounts can spike memory + wall-time before
-	// unsupported.json is written. Plumb a MaxResults knob through
-	// UnsupportedArgs and emit a "truncated" warning when the bound trips.
-	var out []retypes.Resource
+	// #309: when maxResults > 0 we cap the accumulator AND stop
+	// fetching the next page as soon as the cap fires. Stopping the
+	// page loop is the load-bearing part — the API budget would
+	// otherwise still be spent on every NextToken round-trip even
+	// when the caller has no use for the extra rows. maxResults == 0
+	// disables the cap.
+	out := make([]retypes.Resource, 0)
 	var token *string
 	for {
 		// QueryString must be non-empty per the SDK validator. The
@@ -85,11 +93,23 @@ func (r *realResourceExplorerSearcher) Search(ctx context.Context, region, query
 			NextToken:   token,
 		})
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
-		out = append(out, resp.Resources...)
+		for _, r := range resp.Resources {
+			if maxResults > 0 && len(out) >= maxResults {
+				// Cap fired mid-page; stop fetching subsequent
+				// pages so we don't burn API calls on rows we
+				// will never return.
+				return out, true, nil
+			}
+			out = append(out, r)
+		}
+		if maxResults > 0 && len(out) >= maxResults {
+			// Reached the cap exactly at page boundary.
+			return out, true, nil
+		}
 		if resp.NextToken == nil || *resp.NextToken == "" {
-			return out, nil
+			return out, false, nil
 		}
 		token = resp.NextToken
 	}
@@ -126,6 +146,19 @@ type UnsupportedArgs struct {
 	// Emitter is the streaming-progress sink. Resolved to NopEmitter at
 	// the top of EnumerateUnsupported when nil.
 	Emitter progress.Emitter
+
+	// MaxResults caps the total number of unsupported resources
+	// accumulated across every region's Resource Explorer Search.
+	// Zero disables the cap; positive values bound memory + API
+	// spend on accounts with very large unsupported sets (#309).
+	// When the cap fires the searcher stops fetching subsequent
+	// pages AND EnumerateUnsupported stops walking subsequent
+	// regions — both are necessary to honor the bound. The caller
+	// receives truncated=true and is responsible for surfacing the
+	// truncation to the operator (the CLI emits a stderr WARN and
+	// records truncated=true in unsupported.json's wrapper-object
+	// shape).
+	MaxResults int
 }
 
 // errResourceExplorerNotConfigured wraps an underlying SDK error and
@@ -217,16 +250,22 @@ const unsupportedServiceSlug = "unsupported"
 // improve throughput on multi-region scans but trade off the simplicity
 // of per-region-attributable error messages. Deferred to a follow-up
 // once we see real-world latency profiles.
-func (a *AWSDiscoverer) EnumerateUnsupported(ctx context.Context, args UnsupportedArgs) ([]UnsupportedResource, error) {
+func (a *AWSDiscoverer) EnumerateUnsupported(ctx context.Context, args UnsupportedArgs) ([]UnsupportedResource, bool, error) {
 	return enumerateUnsupportedAWS(ctx, args, a.defaultRegion)
 }
 
 // enumerateUnsupportedAWS is the testable form of EnumerateUnsupported
 // that takes an explicit defaultRegion (so unit tests can construct
 // UnsupportedArgs without going through *AWSDiscoverer).
-func enumerateUnsupportedAWS(ctx context.Context, args UnsupportedArgs, defaultRegion string) ([]UnsupportedResource, error) {
+//
+// Returns (rows, truncated, err): truncated is true when args.MaxResults
+// > 0 and the accumulator hit the cap (either inside a single region's
+// Search page-loop or across regions). The caller (the CLI orchestrator)
+// surfaces the bool as a stderr WARN and as the wrapper-object
+// truncated marker in unsupported.json.
+func enumerateUnsupportedAWS(ctx context.Context, args UnsupportedArgs, defaultRegion string) ([]UnsupportedResource, bool, error) {
 	if args.Searcher == nil {
-		return nil, errors.New("EnumerateUnsupported: Searcher is required (production callers wire NewRealResourceExplorerSearcher; tests inject a fake)")
+		return nil, false, errors.New("EnumerateUnsupported: Searcher is required (production callers wire NewRealResourceExplorerSearcher; tests inject a fake)")
 	}
 	if args.Emitter == nil {
 		args.Emitter = progress.NopEmitter{}
@@ -249,17 +288,37 @@ func enumerateUnsupportedAWS(ctx context.Context, args UnsupportedArgs, defaultR
 	// future readers see immediately why `make` is used here. See
 	// #255 for the broader "JSON arrays are never null" contract.
 	out := make([]UnsupportedResource, 0)
+	truncated := false
 	for _, region := range regions {
 		regionStart := time.Now()
 		args.Emitter.ServiceStart(unsupportedServiceSlug, region)
 
-		results, err := args.Searcher.Search(ctx, region, "*")
+		// Compute the per-region cap. With a cross-region MaxResults
+		// budget we want the searcher to stop early in subsequent
+		// regions too — pass the remaining budget as the per-call
+		// cap. When MaxResults == 0 the cap is disabled (passing
+		// 0 through preserves "unbounded").
+		regionCap := 0
+		if args.MaxResults > 0 {
+			regionCap = args.MaxResults - len(out)
+			if regionCap <= 0 {
+				// Already at the global cap before issuing this
+				// region's Search; skip the round-trip entirely
+				// and emit a 0-count service_finish so the
+				// progress stream stays well-formed.
+				args.Emitter.ServiceFinish(unsupportedServiceSlug, region, 0, time.Since(regionStart))
+				truncated = true
+				continue
+			}
+		}
+
+		results, regionTrunc, err := args.Searcher.Search(ctx, region, "*", regionCap)
 		if err != nil {
 			args.Emitter.ServiceFinish(unsupportedServiceSlug, region, 0, time.Since(regionStart))
 			if looksLikeResourceExplorerNotConfigured(err) {
-				return nil, &errResourceExplorerNotConfigured{region: region, cause: err}
+				return nil, false, &errResourceExplorerNotConfigured{region: region, cause: err}
 			}
-			return nil, fmt.Errorf("resource explorer Search (region=%s): %w", region, err)
+			return nil, false, fmt.Errorf("resource explorer Search (region=%s): %w", region, err)
 		}
 
 		regionCount := 0
@@ -271,10 +330,21 @@ func enumerateUnsupportedAWS(ctx context.Context, args UnsupportedArgs, defaultR
 			args.Emitter.ItemFound(unsupportedServiceSlug, region, row.Type, row.ID)
 			out = append(out, row)
 			regionCount++
+			if args.MaxResults > 0 && len(out) >= args.MaxResults {
+				// Cross-region cap fired mid-region: include
+				// every row we've already counted for this
+				// region in service_finish, but stop walking
+				// further regions.
+				args.Emitter.ServiceFinish(unsupportedServiceSlug, region, regionCount, time.Since(regionStart))
+				return out, true, nil
+			}
+		}
+		if regionTrunc {
+			truncated = true
 		}
 		args.Emitter.ServiceFinish(unsupportedServiceSlug, region, regionCount, time.Since(regionStart))
 	}
-	return out, nil
+	return out, truncated, nil
 }
 
 // awsResourceToUnsupported translates a single Resource Explorer hit

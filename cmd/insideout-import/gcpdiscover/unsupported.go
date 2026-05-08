@@ -59,6 +59,20 @@ type UnsupportedArgs struct {
 	// Emitter is the streaming-progress sink. Resolved to NopEmitter at
 	// the top of EnumerateUnsupported when nil.
 	Emitter progress.Emitter
+
+	// MaxResults caps the number of unsupported resources returned by
+	// EnumerateUnsupported. Zero disables the cap (#309). The cap is
+	// applied at the wrapper level — AFTER SearchAll has walked every
+	// page — because SearchAll is shared between the importable and
+	// the unsupported scans and capping inside the searcher would
+	// silently truncate the importable manifest. The trade-off is
+	// that MaxResults bounds memory + the size of unsupported.json
+	// but does NOT bound the Cloud Asset API budget; an account with
+	// 100k+ assets still walks the full SearchAllResources iterator.
+	// When the cap fires the caller receives truncated=true and
+	// surfaces it as a stderr WARN + the truncated marker on
+	// unsupported.json's wrapper-object shape.
+	MaxResults int
 }
 
 // EnumerateUnsupported runs one Cloud Asset SearchAllResources call
@@ -77,12 +91,12 @@ type UnsupportedArgs struct {
 // or FailedPrecondition that the wizard's UI translates into the same
 // "operator action required" toast as the AWS Resource-Explorer-not-
 // configured path.
-func (g *GCPDiscoverer) EnumerateUnsupported(ctx context.Context, args UnsupportedArgs) ([]UnsupportedResource, error) {
+func (g *GCPDiscoverer) EnumerateUnsupported(ctx context.Context, args UnsupportedArgs) ([]UnsupportedResource, bool, error) {
 	if args.Searcher == nil {
 		args.Searcher = g.searcher
 	}
 	if args.Searcher == nil {
-		return nil, fmt.Errorf("EnumerateUnsupported: no searcher configured (production callers wire NewRealAssetSearcher; tests inject a fake)")
+		return nil, false, fmt.Errorf("EnumerateUnsupported: no searcher configured (production callers wire NewRealAssetSearcher; tests inject a fake)")
 	}
 	if args.Emitter == nil {
 		args.Emitter = progress.NopEmitter{}
@@ -100,7 +114,7 @@ func (g *GCPDiscoverer) EnumerateUnsupported(ctx context.Context, args Unsupport
 		// is in the supported set — a programming error rather than a
 		// runtime branch worth exercising. Return an empty slice (not
 		// nil) so the caller's writeUnsupportedManifest emits `[]`.
-		return []UnsupportedResource{}, nil
+		return []UnsupportedResource{}, false, nil
 	}
 
 	scope := fmt.Sprintf("projects/%s", g.projectID)
@@ -112,7 +126,19 @@ func (g *GCPDiscoverer) EnumerateUnsupported(ctx context.Context, args Unsupport
 	results, err := args.Searcher.SearchAll(ctx, scope, assetTypes, query)
 	if err != nil {
 		args.Emitter.ServiceFinish(unsupportedGCPServiceSlug, "", 0, time.Since(stageStart))
-		return nil, fmt.Errorf("cloud asset SearchAllResources (unsupported): %w", err)
+		return nil, false, fmt.Errorf("cloud asset SearchAllResources (unsupported): %w", err)
+	}
+
+	// #309: cap is applied at the wrapper level (AFTER SearchAll has
+	// walked the full iterator). SearchAll is shared with the
+	// importable-types scan; capping there would silently truncate
+	// imported.json. The trade-off is documented on
+	// UnsupportedArgs.MaxResults: this bounds memory + the size of
+	// unsupported.json but not the Cloud Asset API budget.
+	truncated := false
+	if args.MaxResults > 0 && len(results) > args.MaxResults {
+		results = results[:args.MaxResults]
+		truncated = true
 	}
 
 	out := make([]UnsupportedResource, 0, len(results))
@@ -122,7 +148,7 @@ func (g *GCPDiscoverer) EnumerateUnsupported(ctx context.Context, args Unsupport
 		out = append(out, row)
 	}
 	args.Emitter.ServiceFinish(unsupportedGCPServiceSlug, "", len(out), time.Since(stageStart))
-	return out, nil
+	return out, truncated, nil
 }
 
 // gcpAssetToUnsupported translates one Cloud Asset hit into an

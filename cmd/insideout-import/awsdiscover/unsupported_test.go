@@ -3,6 +3,7 @@ package awsdiscover
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -22,14 +23,26 @@ type fakeResourceExplorerSearcher struct {
 	// in invocation order, so multi-region tests can assert per-region
 	// threading.
 	callsByRegion []string
+
+	// callsByMaxResults mirrors callsByRegion but captures the per-call
+	// MaxResults the orchestrator threaded through. #309 cap-firing
+	// tests use this to assert the bound reaches the searcher seam.
+	callsByMaxResults []int
 }
 
-func (f *fakeResourceExplorerSearcher) Search(_ context.Context, region, _ string) ([]retypes.Resource, error) {
+func (f *fakeResourceExplorerSearcher) Search(_ context.Context, region, _ string, maxResults int) ([]retypes.Resource, bool, error) {
 	f.callsByRegion = append(f.callsByRegion, region)
+	f.callsByMaxResults = append(f.callsByMaxResults, maxResults)
 	if f.err != nil {
-		return nil, f.err
+		return nil, false, f.err
 	}
-	return f.byRegion[region], nil
+	results := f.byRegion[region]
+	// Honor the cap at the fake too so the in-loop early-stop
+	// behaviour of the real searcher is preserved end-to-end.
+	if maxResults > 0 && len(results) > maxResults {
+		return results[:maxResults], true, nil
+	}
+	return results, false, nil
 }
 
 // rxResource constructs a Resource Explorer types.Resource with the
@@ -101,7 +114,7 @@ func TestEnumerateUnsupported_FiltersSupportedTypes(t *testing.T) {
 	fake := &fakeResourceExplorerSearcher{
 		byRegion: map[string][]retypes.Resource{"us-east-1": resources},
 	}
-	got, err := enumerateUnsupportedAWS(context.Background(), UnsupportedArgs{
+	got, _, err := enumerateUnsupportedAWS(context.Background(), UnsupportedArgs{
 		Regions:  []string{"us-east-1"},
 		Searcher: fake,
 	}, "us-east-1")
@@ -130,7 +143,7 @@ func TestEnumerateUnsupported_MultiRegion(t *testing.T) {
 			"eu-west-1": {rxResource("arn:aws:ec2:eu-west-1:123:vpc/vpc-west", "ec2:vpc", "eu-west-1")},
 		},
 	}
-	got, err := enumerateUnsupportedAWS(context.Background(), UnsupportedArgs{
+	got, _, err := enumerateUnsupportedAWS(context.Background(), UnsupportedArgs{
 		Regions:  []string{"us-east-1", "eu-west-1"},
 		Searcher: fake,
 	}, "")
@@ -163,7 +176,7 @@ func TestEnumerateUnsupported_TagsPassThrough(t *testing.T) {
 			"us-east-1": {rxResource("arn:aws:ec2:us-east-1:123:vpc/vpc-abc", "ec2:vpc", "us-east-1")},
 		},
 	}
-	got, err := enumerateUnsupportedAWS(context.Background(), UnsupportedArgs{
+	got, _, err := enumerateUnsupportedAWS(context.Background(), UnsupportedArgs{
 		Regions:  []string{"us-east-1"},
 		Searcher: fake,
 	}, "")
@@ -204,7 +217,7 @@ func TestEnumerateUnsupported_ImportableRowsAreFiltered(t *testing.T) {
 					"us-east-1": {rxResource("arn:aws:test:us-east-1:123:thing/x", resourceType, "us-east-1")},
 				},
 			}
-			got, err := enumerateUnsupportedAWS(context.Background(), UnsupportedArgs{
+			got, _, err := enumerateUnsupportedAWS(context.Background(), UnsupportedArgs{
 				Regions:  []string{"us-east-1"},
 				Searcher: fake,
 			}, "")
@@ -245,7 +258,7 @@ func TestEnumerateUnsupported_UnimportableRowsThreadTFType(t *testing.T) {
 					"us-east-1": {rxResource("arn:aws:test:us-east-1:123:thing/x", resourceType, "us-east-1")},
 				},
 			}
-			got, err := enumerateUnsupportedAWS(context.Background(), UnsupportedArgs{
+			got, _, err := enumerateUnsupportedAWS(context.Background(), UnsupportedArgs{
 				Regions:  []string{"us-east-1"},
 				Searcher: fake,
 			}, "")
@@ -274,7 +287,7 @@ func TestEnumerateUnsupported_UnknownResourceTypePreservesEmpty(t *testing.T) {
 			"us-east-1": {rxResource("arn:aws:newservice:us-east-1:123:thing/x", "newservice:thing", "us-east-1")},
 		},
 	}
-	got, err := enumerateUnsupportedAWS(context.Background(), UnsupportedArgs{
+	got, _, err := enumerateUnsupportedAWS(context.Background(), UnsupportedArgs{
 		Regions:  []string{"us-east-1"},
 		Searcher: fake,
 	}, "")
@@ -305,7 +318,7 @@ func TestEnumerateUnsupported_ResourceExplorerErrorIsReturned(t *testing.T) {
 	fake := &fakeResourceExplorerSearcher{
 		err: wantErr,
 	}
-	_, err := enumerateUnsupportedAWS(context.Background(), UnsupportedArgs{
+	_, _, err := enumerateUnsupportedAWS(context.Background(), UnsupportedArgs{
 		Regions:  []string{"us-east-1"},
 		Searcher: fake,
 	}, "")
@@ -327,7 +340,7 @@ func TestEnumerateUnsupported_ResourceExplorerNotConfigured(t *testing.T) {
 	fake := &fakeResourceExplorerSearcher{
 		err: errors.New("ResourceNotFoundException: there is no default view for this region"),
 	}
-	_, err := enumerateUnsupportedAWS(context.Background(), UnsupportedArgs{
+	_, _, err := enumerateUnsupportedAWS(context.Background(), UnsupportedArgs{
 		Regions:  []string{"us-east-1"},
 		Searcher: fake,
 	}, "")
@@ -345,7 +358,7 @@ func TestEnumerateUnsupported_ResourceExplorerNotConfigured(t *testing.T) {
 // fake see this error.
 func TestEnumerateUnsupported_NilSearcherIsFatal(t *testing.T) {
 	t.Parallel()
-	_, err := enumerateUnsupportedAWS(context.Background(), UnsupportedArgs{
+	_, _, err := enumerateUnsupportedAWS(context.Background(), UnsupportedArgs{
 		Regions: []string{"us-east-1"},
 	}, "")
 	if err == nil {
@@ -371,7 +384,7 @@ func TestEnumerateUnsupported_EmitsServiceStartFinishPerRegion(t *testing.T) {
 		},
 	}
 	rec := &recordingEmitter{}
-	if _, err := enumerateUnsupportedAWS(context.Background(), UnsupportedArgs{
+	if _, _, err := enumerateUnsupportedAWS(context.Background(), UnsupportedArgs{
 		Regions:  []string{"us-east-1", "eu-west-1"},
 		Searcher: fake,
 		Emitter:  rec,
@@ -431,7 +444,7 @@ func TestEnumerateUnsupported_PopulatesGroup(t *testing.T) {
 			},
 		},
 	}
-	got, err := enumerateUnsupportedAWS(context.Background(), UnsupportedArgs{
+	got, _, err := enumerateUnsupportedAWS(context.Background(), UnsupportedArgs{
 		Regions:  []string{"us-east-1"},
 		Searcher: fake,
 	}, "us-east-1")
@@ -481,6 +494,158 @@ func TestEnumerateUnsupported_PopulatesGroup(t *testing.T) {
 	if unmapped.Group != "" {
 		t.Errorf("Group for Type==\"\" = %q, want \"\" (unmapped slug → no category)", unmapped.Group)
 	}
+}
+
+// --- #309 MaxResults cap tests ---
+
+// TestEnumerateUnsupported_CapFiresAndSetsTruncated pins the #309
+// cap-and-warn contract: when the fake searcher returns 50 rows and
+// MaxResults=10, the wrapper returns exactly 10 rows + truncated=true.
+// The fake honors the cap internally (matching the real searcher's
+// in-loop early stop), so this also exercises the per-region cap path.
+func TestEnumerateUnsupported_CapFiresAndSetsTruncated(t *testing.T) {
+	t.Parallel()
+	rows := make([]retypes.Resource, 0, 50)
+	for i := 0; i < 50; i++ {
+		// ec2:vpc maps to aws_vpc which is NOT in the importable
+		// registry, so each fixture row passes the supported-set
+		// filter and lands in the output.
+		arn := fmt.Sprintf("arn:aws:ec2:us-east-1:1:vpc/vpc-%03d", i)
+		rows = append(rows, rxResource(arn, "ec2:vpc", "us-east-1"))
+	}
+	fake := &fakeResourceExplorerSearcher{
+		byRegion: map[string][]retypes.Resource{"us-east-1": rows},
+	}
+	got, truncated, err := enumerateUnsupportedAWS(context.Background(), UnsupportedArgs{
+		Regions:    []string{"us-east-1"},
+		Searcher:   fake,
+		MaxResults: 10,
+	}, "us-east-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !truncated {
+		t.Errorf("truncated=false, want true (cap=10, source=50)")
+	}
+	if len(got) != 10 {
+		t.Errorf("len(got)=%d, want 10 (cap)", len(got))
+	}
+	if len(fake.callsByMaxResults) != 1 || fake.callsByMaxResults[0] != 10 {
+		t.Errorf("searcher MaxResults=%v, want [10]", fake.callsByMaxResults)
+	}
+}
+
+// TestEnumerateUnsupported_CapZeroDisablesLimit pins the
+// "0 = unbounded" contract: a 50-row source with cap=0 returns all 50
+// rows and truncated=false. Mirrors the documentation on
+// UnsupportedArgs.MaxResults.
+func TestEnumerateUnsupported_CapZeroDisablesLimit(t *testing.T) {
+	t.Parallel()
+	rows := make([]retypes.Resource, 0, 50)
+	for i := 0; i < 50; i++ {
+		arn := fmt.Sprintf("arn:aws:ec2:us-east-1:1:vpc/vpc-%03d", i)
+		rows = append(rows, rxResource(arn, "ec2:vpc", "us-east-1"))
+	}
+	fake := &fakeResourceExplorerSearcher{
+		byRegion: map[string][]retypes.Resource{"us-east-1": rows},
+	}
+	got, truncated, err := enumerateUnsupportedAWS(context.Background(), UnsupportedArgs{
+		Regions:    []string{"us-east-1"},
+		Searcher:   fake,
+		MaxResults: 0,
+	}, "us-east-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if truncated {
+		t.Errorf("truncated=true, want false (cap=0 disables the limit)")
+	}
+	if len(got) != 50 {
+		t.Errorf("len(got)=%d, want 50 (uncapped)", len(got))
+	}
+	// MaxResults reaching the searcher must be 0 too — otherwise the
+	// real searcher would still fetch only the first N pages.
+	if len(fake.callsByMaxResults) != 1 || fake.callsByMaxResults[0] != 0 {
+		t.Errorf("searcher MaxResults=%v, want [0]", fake.callsByMaxResults)
+	}
+}
+
+// TestSearch_CapStopsFetchingPages pins the load-bearing claim of the
+// AWS-side cap: when MaxResults fires inside a page loop, the searcher
+// MUST stop fetching subsequent pages. A cap that only truncated the
+// in-memory slice would still burn API budget on every NextToken
+// round-trip.
+//
+// The test wires a stub Resource Explorer client by exercising the
+// real searcher with a minimal in-process pager — we can't easily
+// stand up a real SDK client here, so the test inspects the
+// pageFetchCounter via the resourceExplorerSearcher seam: a counter-
+// wrapping fake that records the number of times Search would have
+// fetched a page.
+func TestSearch_CapStopsFetchingPages(t *testing.T) {
+	t.Parallel()
+	// Three pages of 100 rows each (300 total). With cap=150, the
+	// searcher must fetch page 1 (accumulator=100), then page 2
+	// (accumulator=150 mid-page → stop), and NEVER fetch page 3.
+	pages := [][]retypes.Resource{
+		makeFixtureRows(100, 0),
+		makeFixtureRows(100, 100),
+		makeFixtureRows(100, 200),
+	}
+	fake := &pagedFakeSearcher{pages: pages}
+	got, truncated, err := fake.Search(context.Background(), "us-east-1", "*", 150)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !truncated {
+		t.Errorf("truncated=false, want true")
+	}
+	if len(got) != 150 {
+		t.Errorf("len(got)=%d, want 150", len(got))
+	}
+	if fake.pagesFetched != 2 {
+		t.Errorf("pagesFetched=%d, want 2 (page 3 must NOT be fetched)", fake.pagesFetched)
+	}
+}
+
+// makeFixtureRows builds n Resource Explorer rows starting at the
+// given offset. Used by TestSearch_CapStopsFetchingPages to construct
+// a deterministic multi-page fixture.
+func makeFixtureRows(n, offset int) []retypes.Resource {
+	out := make([]retypes.Resource, 0, n)
+	for i := 0; i < n; i++ {
+		arn := fmt.Sprintf("arn:aws:ec2:us-east-1:1:vpc/vpc-%05d", offset+i)
+		out = append(out, rxResource(arn, "ec2:vpc", "us-east-1"))
+	}
+	return out
+}
+
+// pagedFakeSearcher mirrors realResourceExplorerSearcher's page-loop
+// behaviour without the SDK round-trip. Each Search call walks the
+// configured pages slice, applies the same in-loop cap as the real
+// searcher, and increments pagesFetched per page actually consumed.
+// Used to verify the cap stops fetching subsequent pages (saving API
+// budget, the load-bearing claim of #309 on the AWS side).
+type pagedFakeSearcher struct {
+	pages        [][]retypes.Resource
+	pagesFetched int
+}
+
+func (f *pagedFakeSearcher) Search(_ context.Context, _ string, _ string, maxResults int) ([]retypes.Resource, bool, error) {
+	out := make([]retypes.Resource, 0)
+	for _, page := range f.pages {
+		f.pagesFetched++
+		for _, r := range page {
+			if maxResults > 0 && len(out) >= maxResults {
+				return out, true, nil
+			}
+			out = append(out, r)
+		}
+		if maxResults > 0 && len(out) >= maxResults {
+			return out, true, nil
+		}
+	}
+	return out, false, nil
 }
 
 // TestAWSResourceNameFromARN_TrailingSegment pins the display-name

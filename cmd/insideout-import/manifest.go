@@ -174,24 +174,29 @@ func readManifest(path, cloud string) ([]imported.ImportedResource, error) {
 	return resources, nil
 }
 
-// writeUnsupportedManifest writes the JSON array of UnsupportedResource
-// rows into <dir>/unsupported.json (#296). Mirrors writeManifest's
-// invariants: nil → []-not-null, deterministic sort, file written
-// atomically via WriteFile.
+// writeUnsupportedManifest writes the wrapper-object form of
+// unsupported.json (#309 wire-format break) into <dir>/unsupported.json.
+// The pre-#309 shape was a bare JSON array; the cap-and-warn contract
+// (--max-unsupported-results) needs metadata at the top level so the
+// reliable wizard can render the "Showing first N of many" banner.
 //
-// Sort key is (Type, Region, ID) so byte-identical output across runs
-// for the same input. Type-first keeps the picker's "all aws_vpc rows"
-// runs together visually; Region tie-breaks within a type (multi-
-// region scans); ID is the final tiebreaker for rows that match on
-// both. Unlike writeManifest, no validator runs here — the unsupported
-// carrier has no IR-side schema to enforce: the wire shape is checked
-// by the field tags on UnsupportedResource and the test suite below.
+// Wire shape (with truncated=true, max_results=10):
 //
-// Returns (path, count, error). On marshal/write failure no file is
-// written so the caller's stderr surface is the only side-effect of a
-// soft-failure path (#296 contract: imported.json must complete even
-// when unsupported emission fails).
-func writeUnsupportedManifest(dir string, resources []UnsupportedResource) (string, int, error) {
+//	{"resources":[…sorted rows…],"truncated":true,"max_results":10}
+//
+// Mirrors writeManifest's invariants on the inner Resources slice:
+// nil → []-not-null, deterministic sort, file written atomically via
+// writeFileAtomic. Sort key is (Type, Region, ID) — byte-identical
+// output across runs for the same input. Unlike writeManifest no
+// validator runs here; the carrier has no IR-side schema to enforce.
+//
+// Returns (path, count, error). count is the post-truncation row count
+// (the size of resources passed in — the searcher already truncated
+// before this is called). On marshal/write failure no file is written
+// so the caller's stderr surface is the only side-effect of a soft-
+// failure path (#296 contract: imported.json must complete even when
+// unsupported emission fails).
+func writeUnsupportedManifest(dir string, resources []UnsupportedResource, truncated bool, maxResults int) (string, int, error) {
 	if resources == nil {
 		resources = []UnsupportedResource{}
 	}
@@ -205,7 +210,12 @@ func writeUnsupportedManifest(dir string, resources []UnsupportedResource) (stri
 		return resources[i].ID < resources[j].ID
 	})
 
-	body, err := json.MarshalIndent(resources, "", "  ")
+	manifest := UnsupportedManifest{
+		Resources:  resources,
+		Truncated:  truncated,
+		MaxResults: maxResults,
+	}
+	body, err := json.MarshalIndent(manifest, "", "  ")
 	if err != nil {
 		return "", 0, fmt.Errorf("marshal unsupported manifest: %w", err)
 	}

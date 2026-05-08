@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/stretchr/testify/assert"
@@ -204,7 +205,7 @@ func TestRunDiscoverWithDeps_MultiRegionThreadsAllRegionsToAggregator(t *testing
 	if lastLoadRegion != "us-east-1" {
 		t.Errorf("loadConfig got region=%q, want us-east-1 (primaryRegion = first --regions value)", lastLoadRegion)
 	}
-	if got, want := agg.gotRegions, []string{"us-east-1", "eu-west-1"}; !equalSlices(got, want) {
+	if got, want := agg.gotArgs.Regions, []string{"us-east-1", "eu-west-1"}; !equalSlices(got, want) {
 		t.Errorf("Regions threaded = %v, want %v", got, want)
 	}
 }
@@ -232,7 +233,7 @@ func TestRunDiscoverWithDeps_DeprecatedRegionStillThreadsAsRegions(t *testing.T)
 	if rc != discoverExitOK {
 		t.Fatalf("rc=%d, want ok", rc)
 	}
-	if got, want := agg.gotRegions, []string{"us-east-1"}; !equalSlices(got, want) {
+	if got, want := agg.gotArgs.Regions, []string{"us-east-1"}; !equalSlices(got, want) {
 		t.Errorf("Regions threaded = %v, want [us-east-1] (deprecated --region alias)", got)
 	}
 	if !strings.Contains(stderr, "deprecated") {
@@ -242,8 +243,10 @@ func TestRunDiscoverWithDeps_DeprecatedRegionStillThreadsAsRegions(t *testing.T)
 
 // TestRunDiscoverWithDeps_TagSelectorsThreadedToAggregator pins that
 // --tag-selectors flow through the parser into the aggregator's
-// observed gotSelectors slice. The CLI parser produces tagSelectorPair
-// entries; the aggregator adapter converts them per-cloud.
+// captured AggArgs.TagSelectors slice. The CLI parser produces
+// tagSelectorPair entries; the aggregator adapter converts them
+// per-cloud (see TestAggArgs_RoundTripsThroughAdapters for the
+// boundary translation pin).
 func TestRunDiscoverWithDeps_TagSelectorsThreadedToAggregator(t *testing.T) {
 	t.Parallel()
 	agg := &fakeAggregator{}
@@ -261,12 +264,12 @@ func TestRunDiscoverWithDeps_TagSelectorsThreadedToAggregator(t *testing.T) {
 		t.Fatalf("rc=%d, want ok", rc)
 	}
 	want := []tagSelectorPair{{Key: "env", Value: "prod"}, {Key: "team", Value: "growth"}}
-	if len(agg.gotSelectors) != len(want) {
-		t.Fatalf("selectors len=%d, want %d", len(agg.gotSelectors), len(want))
+	if len(agg.gotArgs.TagSelectors) != len(want) {
+		t.Fatalf("selectors len=%d, want %d", len(agg.gotArgs.TagSelectors), len(want))
 	}
 	for i, w := range want {
-		if agg.gotSelectors[i] != w {
-			t.Errorf("selector[%d]=%+v, want %+v", i, agg.gotSelectors[i], w)
+		if agg.gotArgs.TagSelectors[i] != w {
+			t.Errorf("selector[%d]=%+v, want %+v", i, agg.gotArgs.TagSelectors[i], w)
 		}
 	}
 }
@@ -305,20 +308,15 @@ func equalSlices(a, b []string) bool {
 
 // fakeAggregator is a lightweight stand-in for awsdiscover.AWSDiscoverer that
 // captures the inputs DiscoverTypes was called with and returns canned output.
+//
+// Per #310 the per-field capture slots collapsed to a single gotArgs
+// AggArgs; assertions throughout this file read agg.gotArgs.Project /
+// .Regions / .TagSelectors / etc. directly.
 type fakeAggregator struct {
-	out        []imported.ImportedResource
-	err        error
-	gotProject string
-	// gotRegions captures the full Regions slice (#291). gotRegion is
-	// the legacy single-region accessor, kept as the first element of
-	// Regions so existing test assertions continue to match for the
-	// pre-#291 single-region happy path.
-	gotRegions   []string
-	gotSelectors []tagSelectorPair
-	gotAccount   string
-	gotTypes     []string
-	gotEmitter   progress.Emitter
-	called       int
+	out     []imported.ImportedResource
+	err     error
+	gotArgs AggArgs
+	called  int
 
 	// DiscoverByID wiring for Stage 2c3 dep-chase tests. byID is keyed
 	// on tfType|id; missing entries return ErrNotFound.
@@ -330,16 +328,15 @@ type fakeAggregator struct {
 // gotRegion returns the first captured region for back-compat with
 // pre-#291 single-region test assertions.
 func (f *fakeAggregator) gotRegion() string {
-	if len(f.gotRegions) == 0 {
+	if len(f.gotArgs.Regions) == 0 {
 		return ""
 	}
-	return f.gotRegions[0]
+	return f.gotArgs.Regions[0]
 }
 
-func (f *fakeAggregator) DiscoverTypes(_ context.Context, types []string, project string, regions []string, selectors []tagSelectorPair, accountID string, emitter progress.Emitter) ([]imported.ImportedResource, error) {
+func (f *fakeAggregator) DiscoverTypes(_ context.Context, args AggArgs) ([]imported.ImportedResource, error) {
 	f.called++
-	f.gotProject, f.gotRegions, f.gotSelectors, f.gotAccount, f.gotTypes = project, regions, selectors, accountID, types
-	f.gotEmitter = emitter
+	f.gotArgs = args
 	return f.out, f.err
 }
 
@@ -517,8 +514,8 @@ func TestRunDiscoverWithDeps_HappyPathWritesManifest(t *testing.T) {
 	if agg.called != 1 {
 		t.Errorf("DiscoverTypes called %d times, want 1", agg.called)
 	}
-	if agg.gotProject != "io-foo" || agg.gotRegion() != "us-east-1" || agg.gotAccount != "1234567890" {
-		t.Errorf("dispatch args = (%q,%q,%q), want (io-foo,us-east-1,1234567890)", agg.gotProject, agg.gotRegion(), agg.gotAccount)
+	if agg.gotArgs.Project != "io-foo" || agg.gotRegion() != "us-east-1" || agg.gotArgs.AccountID != "1234567890" {
+		t.Errorf("dispatch args = (%q,%q,%q), want (io-foo,us-east-1,1234567890)", agg.gotArgs.Project, agg.gotRegion(), agg.gotArgs.AccountID)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "imported.json")); err != nil {
 		t.Errorf("imported.json not written: %v", err)
@@ -587,8 +584,8 @@ func TestRunDiscoverWithDeps_EmptySTSAccountThreadsEmpty(t *testing.T) {
 	if rc != discoverExitOK {
 		t.Errorf("rc=%d, want OK (empty Account is not fatal)", rc)
 	}
-	if agg.gotAccount != "" {
-		t.Errorf("accountID threaded = %q, want empty", agg.gotAccount)
+	if agg.gotArgs.AccountID != "" {
+		t.Errorf("accountID threaded = %q, want empty", agg.gotArgs.AccountID)
 	}
 }
 
@@ -1594,8 +1591,8 @@ func TestRunDiscoverWithDeps_GCPHappyPathWritesManifest(t *testing.T) {
 	if agg.called != 1 {
 		t.Errorf("DiscoverTypes called %d times, want 1", agg.called)
 	}
-	if agg.gotProject != "io-foo" || agg.gotAccount != "real-proj" {
-		t.Errorf("dispatch args = (%q,%q,%q), want (io-foo, *, real-proj)", agg.gotProject, agg.gotRegion(), agg.gotAccount)
+	if agg.gotArgs.Project != "io-foo" || agg.gotArgs.AccountID != "real-proj" {
+		t.Errorf("dispatch args = (%q,%q,%q), want (io-foo, *, real-proj)", agg.gotArgs.Project, agg.gotRegion(), agg.gotArgs.AccountID)
 	}
 	body, err := os.ReadFile(filepath.Join(dir, "imported.json"))
 	if err != nil {
@@ -2203,10 +2200,10 @@ type emittingFakeAggregator struct {
 	fakeAggregator
 }
 
-func (f *emittingFakeAggregator) DiscoverTypes(ctx context.Context, types []string, project string, regions []string, selectors []tagSelectorPair, accountID string, emitter progress.Emitter) ([]imported.ImportedResource, error) {
-	out, err := f.fakeAggregator.DiscoverTypes(ctx, types, project, regions, selectors, accountID, emitter)
-	if emitter != nil {
-		emitter.StageFinish("discover", len(out), 0)
+func (f *emittingFakeAggregator) DiscoverTypes(ctx context.Context, args AggArgs) ([]imported.ImportedResource, error) {
+	out, err := f.fakeAggregator.DiscoverTypes(ctx, args)
+	if args.Emitter != nil {
+		args.Emitter.StageFinish("discover", len(out), 0)
 	}
 	return out, err
 }
@@ -2277,11 +2274,11 @@ func TestRunDiscoverWithDeps_IncludeUnsupportedWritesUnsupportedJSON(t *testing.
 	outDir := t.TempDir()
 	agg := &fakeAggregator{}
 	deps := okDeps(agg)
-	deps.enumerateUnsupportedAWS = func(_ context.Context, _ aws.Config, _ awsdiscover.UnsupportedArgs) ([]awsdiscover.UnsupportedResource, error) {
+	deps.enumerateUnsupportedAWS = func(_ context.Context, _ aws.Config, _ awsdiscover.UnsupportedArgs) ([]awsdiscover.UnsupportedResource, bool, error) {
 		return []awsdiscover.UnsupportedResource{
 			{Type: "aws_vpc", ID: "arn:aws:ec2:us-east-1:1:vpc/v1", Name: "v1", Region: "us-east-1"},
 			{Type: "aws_rds_cluster", ID: "arn:aws:rds:us-east-1:1:cluster:c1", Name: "c1", Region: "us-east-1"},
-		}, nil
+		}, false, nil
 	}
 	rc := runDiscoverWithDeps([]string{
 		"--provider", "aws",
@@ -2296,12 +2293,17 @@ func TestRunDiscoverWithDeps_IncludeUnsupportedWritesUnsupportedJSON(t *testing.
 	}
 	body, err := os.ReadFile(filepath.Join(outDir, "unsupported.json"))
 	require.NoError(t, err)
-	var got []UnsupportedResource
-	require.NoError(t, json.Unmarshal(body, &got))
+	// #309 wire-format: decode the wrapper-object shape, assert on Resources.
+	var manifest UnsupportedManifest
+	require.NoError(t, json.Unmarshal(body, &manifest))
+	got := manifest.Resources
 	require.Len(t, got, 2)
 	gotTypes := []string{got[0].Type, got[1].Type}
 	if !slices.Contains(gotTypes, "aws_vpc") || !slices.Contains(gotTypes, "aws_rds_cluster") {
 		t.Errorf("emitted types=%v, want both aws_vpc and aws_rds_cluster", gotTypes)
+	}
+	if manifest.Truncated {
+		t.Errorf("Truncated=true, want false on uncapped happy-path run")
 	}
 }
 
@@ -2345,8 +2347,8 @@ func TestRunDiscoverWithDeps_IncludeUnsupportedSoftFailureKeepsImportedJSON(t *t
 	outDir := t.TempDir()
 	agg := &fakeAggregator{out: []imported.ImportedResource{validResource("aws_sqs_queue.alpha")}}
 	deps := okDeps(agg)
-	deps.enumerateUnsupportedAWS = func(_ context.Context, _ aws.Config, _ awsdiscover.UnsupportedArgs) ([]awsdiscover.UnsupportedResource, error) {
-		return nil, errors.New("simulated: Resource Explorer not configured")
+	deps.enumerateUnsupportedAWS = func(_ context.Context, _ aws.Config, _ awsdiscover.UnsupportedArgs) ([]awsdiscover.UnsupportedResource, bool, error) {
+		return nil, false, errors.New("simulated: Resource Explorer not configured")
 	}
 	var rc int
 	stderr := captureStderr(t, func() {
@@ -2392,9 +2394,9 @@ func TestRunDiscoverWithDeps_IncludeUnsupportedNotSetSkipsEmission(t *testing.T)
 	outDir := t.TempDir()
 	called := 0
 	deps := okDeps(&fakeAggregator{})
-	deps.enumerateUnsupportedAWS = func(_ context.Context, _ aws.Config, _ awsdiscover.UnsupportedArgs) ([]awsdiscover.UnsupportedResource, error) {
+	deps.enumerateUnsupportedAWS = func(_ context.Context, _ aws.Config, _ awsdiscover.UnsupportedArgs) ([]awsdiscover.UnsupportedResource, bool, error) {
 		called++
-		return nil, nil
+		return nil, false, nil
 	}
 	rc := runDiscoverWithDeps([]string{
 		"--provider", "aws",
@@ -2425,10 +2427,10 @@ func TestRunDiscoverWithDeps_IncludeUnsupportedGCP(t *testing.T) {
 	outDir := t.TempDir()
 	agg := &fakeAggregator{}
 	deps, _ := okGCPDeps(t, agg)
-	deps.enumerateUnsupportedGCP = func(_ context.Context, _ gcpdiscover.UnsupportedArgs) ([]gcpdiscover.UnsupportedResource, error) {
+	deps.enumerateUnsupportedGCP = func(_ context.Context, _ gcpdiscover.UnsupportedArgs) ([]gcpdiscover.UnsupportedResource, bool, error) {
 		return []gcpdiscover.UnsupportedResource{
 			{Type: "google_compute_instance", ID: "//compute.googleapis.com/projects/p/zones/us/instances/vm", Name: "vm", Location: "us"},
-		}, nil
+		}, false, nil
 	}
 	rc := runDiscoverWithDeps([]string{
 		"--provider", "gcp",
@@ -2443,14 +2445,160 @@ func TestRunDiscoverWithDeps_IncludeUnsupportedGCP(t *testing.T) {
 	}
 	body, err := os.ReadFile(filepath.Join(outDir, "unsupported.json"))
 	require.NoError(t, err)
-	var got []UnsupportedResource
-	require.NoError(t, json.Unmarshal(body, &got))
+	// #309 wire-format: decode wrapper-object shape and assert on Resources.
+	var manifest UnsupportedManifest
+	require.NoError(t, json.Unmarshal(body, &manifest))
+	got := manifest.Resources
 	require.Len(t, got, 1)
 	if got[0].Type != "google_compute_instance" {
 		t.Errorf("Type=%q, want google_compute_instance", got[0].Type)
 	}
 	if got[0].Location != "us" {
 		t.Errorf("Location=%q, want us", got[0].Location)
+	}
+}
+
+// --- #309 --max-unsupported-results tests ---
+
+// TestRunDiscoverWithDeps_MaxUnsupportedResults_FlagThreadsCap pins
+// that the --max-unsupported-results flag value reaches both the AWS
+// and the GCP enumerator paths. Two sibling sub-tests run the same
+// assertion against each cloud — a regression that wired the flag to
+// only one path would flag here.
+func TestRunDiscoverWithDeps_MaxUnsupportedResults_FlagThreadsCap(t *testing.T) {
+	t.Parallel()
+	t.Run("aws", func(t *testing.T) {
+		t.Parallel()
+		outDir := t.TempDir()
+		var gotMax int
+		deps := okDeps(&fakeAggregator{})
+		deps.enumerateUnsupportedAWS = func(_ context.Context, _ aws.Config, args awsdiscover.UnsupportedArgs) ([]awsdiscover.UnsupportedResource, bool, error) {
+			gotMax = args.MaxResults
+			return nil, false, nil
+		}
+		rc := runDiscoverWithDeps([]string{
+			"--provider", "aws",
+			"--project", "io-foo",
+			"--regions", "us-east-1",
+			"--output-dir", outDir,
+			"--include-unsupported",
+			"--max-unsupported-results", "42",
+			"--no-hcl",
+		}, deps)
+		if rc != discoverExitOK {
+			t.Fatalf("rc=%d, want OK", rc)
+		}
+		if gotMax != 42 {
+			t.Errorf("AWS enumerator received MaxResults=%d, want 42", gotMax)
+		}
+	})
+	t.Run("gcp", func(t *testing.T) {
+		t.Parallel()
+		outDir := t.TempDir()
+		var gotMax int
+		deps, _ := okGCPDeps(t, &fakeAggregator{})
+		deps.enumerateUnsupportedGCP = func(_ context.Context, args gcpdiscover.UnsupportedArgs) ([]gcpdiscover.UnsupportedResource, bool, error) {
+			gotMax = args.MaxResults
+			return nil, false, nil
+		}
+		rc := runDiscoverWithDeps([]string{
+			"--provider", "gcp",
+			"--project", "io-foo",
+			"--gcp-project-id", "real-proj",
+			"--output-dir", outDir,
+			"--include-unsupported",
+			"--max-unsupported-results", "42",
+			"--no-hcl",
+		}, deps)
+		if rc != discoverExitOK {
+			t.Fatalf("rc=%d, want OK", rc)
+		}
+		if gotMax != 42 {
+			t.Errorf("GCP enumerator received MaxResults=%d, want 42", gotMax)
+		}
+	})
+}
+
+// TestRunDiscoverWithDeps_MaxUnsupportedResults_NegativeIsFatal pins
+// the validation rule: --max-unsupported-results must be >= 0. A
+// negative value is a programming error (the cap is "0 = unbounded";
+// negative has no meaning) and must abort before touching the cloud.
+//
+// NOT t.Parallel(): captures global os.Stderr.
+func TestRunDiscoverWithDeps_MaxUnsupportedResults_NegativeIsFatal(t *testing.T) {
+	outDir := t.TempDir()
+	var rc int
+	stderr := captureStderr(t, func() {
+		rc = runDiscoverWithDeps([]string{
+			"--provider", "aws",
+			"--project", "io-foo",
+			"--regions", "us-east-1",
+			"--output-dir", outDir,
+			"--max-unsupported-results", "-1",
+		}, okDeps(&fakeAggregator{}))
+	})
+	if rc != discoverExitFatal {
+		t.Errorf("rc=%d, want fatal", rc)
+	}
+	if !strings.Contains(stderr, "max-unsupported-results") || !strings.Contains(stderr, ">= 0") {
+		t.Errorf("stderr should explain the >= 0 rule; got: %s", stderr)
+	}
+}
+
+// TestRunDiscoverWithDeps_TruncatedFlagSurfacesInUnsupportedJSON pins
+// the end-to-end #309 contract: when the enumerator returns
+// truncated=true, unsupported.json carries the marker at the wrapper
+// level AND a stderr WARN is emitted naming the cap. This is the
+// load-bearing claim of the cap-and-warn design — both signals must
+// fire, because the wizard's UI parser routes off the WARN while
+// non-streaming consumers read the on-disk marker.
+//
+// NOT t.Parallel(): captures global os.Stderr.
+func TestRunDiscoverWithDeps_TruncatedFlagSurfacesInUnsupportedJSON(t *testing.T) {
+	outDir := t.TempDir()
+	deps := okDeps(&fakeAggregator{})
+	deps.enumerateUnsupportedAWS = func(_ context.Context, _ aws.Config, args awsdiscover.UnsupportedArgs) ([]awsdiscover.UnsupportedResource, bool, error) {
+		return []awsdiscover.UnsupportedResource{
+			{Type: "aws_vpc", ID: "arn:aws:ec2:us-east-1:1:vpc/v1", Region: "us-east-1"},
+		}, true, nil
+	}
+	var rc int
+	stderr := captureStderr(t, func() {
+		rc = runDiscoverWithDeps([]string{
+			"--provider", "aws",
+			"--project", "io-foo",
+			"--regions", "us-east-1",
+			"--output-dir", outDir,
+			"--include-unsupported",
+			"--max-unsupported-results", "1",
+			"--no-hcl",
+		}, deps)
+	})
+	if rc != discoverExitOK {
+		t.Fatalf("rc=%d, want OK", rc)
+	}
+	// On-disk wrapper-shape marker.
+	body, err := os.ReadFile(filepath.Join(outDir, "unsupported.json"))
+	require.NoError(t, err)
+	var manifest UnsupportedManifest
+	require.NoError(t, json.Unmarshal(body, &manifest))
+	if !manifest.Truncated {
+		t.Errorf("manifest.Truncated=false, want true")
+	}
+	if manifest.MaxResults != 1 {
+		t.Errorf("manifest.MaxResults=%d, want 1", manifest.MaxResults)
+	}
+	// Stderr WARN: the wizard's UI parser routes on the literal
+	// "WARN" + the substring "cap fired" + "max_results=" so the
+	// cap-firing event is unambiguous.
+	if !strings.Contains(stderr, "WARN") {
+		t.Errorf("stderr missing WARN prefix; got: %s", stderr)
+	}
+	if !strings.Contains(stderr, "cap fired") {
+		t.Errorf("stderr missing `cap fired`; got: %s", stderr)
+	}
+	if !strings.Contains(stderr, "max_results=1") {
+		t.Errorf("stderr missing `max_results=1`; got: %s", stderr)
 	}
 }
 
@@ -2535,12 +2683,12 @@ func TestRunDiscoverWithDeps_SummaryIncludeUnsupportedReflectsCount(t *testing.T
 		validResource("aws_sqs_queue.alpha"),
 	}}
 	deps := okDeps(agg)
-	deps.enumerateUnsupportedAWS = func(_ context.Context, _ aws.Config, _ awsdiscover.UnsupportedArgs) ([]awsdiscover.UnsupportedResource, error) {
+	deps.enumerateUnsupportedAWS = func(_ context.Context, _ aws.Config, _ awsdiscover.UnsupportedArgs) ([]awsdiscover.UnsupportedResource, bool, error) {
 		return []awsdiscover.UnsupportedResource{
 			{Type: "aws_vpc", ID: "arn:aws:ec2:us-east-1:1:vpc/v1", Region: "us-east-1"},
 			{Type: "aws_rds_cluster", ID: "arn:aws:rds:us-east-1:1:cluster:c1", Region: "us-east-1"},
 			{Type: "aws_iam_role", ID: "arn:aws:iam::1:role/r1"},
-		}, nil
+		}, false, nil
 	}
 	rc := runDiscoverWithDeps([]string{
 		"--provider", "aws",
@@ -2571,8 +2719,8 @@ func TestRunDiscoverWithDeps_SummaryIncludeUnsupportedSoftFailureZeroCount(t *te
 	outDir := t.TempDir()
 	agg := &fakeAggregator{out: []imported.ImportedResource{validResource("aws_sqs_queue.alpha")}}
 	deps := okDeps(agg)
-	deps.enumerateUnsupportedAWS = func(_ context.Context, _ aws.Config, _ awsdiscover.UnsupportedArgs) ([]awsdiscover.UnsupportedResource, error) {
-		return nil, errors.New("simulated: Resource Explorer not configured")
+	deps.enumerateUnsupportedAWS = func(_ context.Context, _ aws.Config, _ awsdiscover.UnsupportedArgs) ([]awsdiscover.UnsupportedResource, bool, error) {
+		return nil, false, errors.New("simulated: Resource Explorer not configured")
 	}
 	var rc int
 	captureStderr(t, func() {
@@ -2712,4 +2860,290 @@ func readSummaryWithoutDuration(t *testing.T, path string) string {
 	out, err := json.MarshalIndent(s, "", "  ")
 	require.NoError(t, err)
 	return string(out)
+}
+
+// TestAggArgs_RoundTripsThroughAdapters (#310) pins that aggArgsToAWS
+// and aggArgsToGCP — the AggArgs → per-cloud DiscoverArgs translation
+// helpers used by awsAggAdapter and gcpAggAdapter — copy every field
+// across the boundary. A regression that drops a field (e.g. a future
+// PR that adds AggArgs.Timeout but forgets the AWS adapter) would
+// surface here as a zero-value on the per-cloud side.
+//
+// AccountID is asserted only on the AWS path: GCP intentionally drops
+// it because the project ID lives on the *gcpdiscover.GCPDiscoverer
+// struct (see gcpAggAdapter doc comment). TagSelector translation
+// (CLI tagSelectorPair → per-cloud TagSelector) is exercised on both
+// paths since the cloud-specific type wrappers differ.
+func TestAggArgs_RoundTripsThroughAdapters(t *testing.T) {
+	t.Parallel()
+
+	emitter := progress.NopEmitter{}
+	args := AggArgs{
+		Types:        []string{"aws_sqs_queue", "aws_dynamodb_table"},
+		Project:      "io-foo",
+		Regions:      []string{"us-east-1", "eu-west-1"},
+		TagSelectors: []tagSelectorPair{{Key: "env", Value: "prod"}, {Key: "team", Value: "growth"}},
+		AccountID:    "123456789012",
+		Emitter:      emitter,
+	}
+
+	t.Run("aws", func(t *testing.T) {
+		t.Parallel()
+		gotTypes, gotArgs := aggArgsToAWS(args)
+
+		assert.Equal(t, args.Types, gotTypes, "Types")
+		assert.Equal(t, args.Project, gotArgs.Project, "Project")
+		assert.Equal(t, args.Regions, gotArgs.Regions, "Regions")
+		assert.Equal(t, args.AccountID, gotArgs.AccountID, "AccountID")
+		assert.Equal(t, args.Emitter, gotArgs.Emitter, "Emitter")
+
+		wantSel := []awsdiscover.TagSelector{
+			{Key: "env", Value: "prod"},
+			{Key: "team", Value: "growth"},
+		}
+		assert.Equal(t, wantSel, gotArgs.TagSelectors, "TagSelectors")
+	})
+
+	t.Run("gcp", func(t *testing.T) {
+		t.Parallel()
+		gotTypes, gotArgs := aggArgsToGCP(args)
+
+		assert.Equal(t, args.Types, gotTypes, "Types")
+		assert.Equal(t, args.Project, gotArgs.Project, "Project")
+		assert.Equal(t, args.Regions, gotArgs.Regions, "Regions")
+		assert.Equal(t, args.Emitter, gotArgs.Emitter, "Emitter")
+
+		wantSel := []gcpdiscover.TagSelector{
+			{Key: "env", Value: "prod"},
+			{Key: "team", Value: "growth"},
+		}
+		assert.Equal(t, wantSel, gotArgs.TagSelectors, "TagSelectors")
+
+		// AccountID is intentionally dropped — gcpdiscover.DiscoverArgs
+		// has no such field. The pin: the GCP DiscoverArgs struct still
+		// has exactly the four fields its package declares, so a
+		// regression that smuggles AccountID into the GCP path would
+		// fail to compile against this test's struct comparison.
+		assert.Equal(t, gcpdiscover.DiscoverArgs{
+			Project:      args.Project,
+			Regions:      args.Regions,
+			TagSelectors: wantSel,
+			Emitter:      args.Emitter,
+		}, gotArgs, "full GCP DiscoverArgs (no AccountID)")
+	})
+
+	t.Run("empty_selectors_yield_empty_not_nil", func(t *testing.T) {
+		t.Parallel()
+		// Both helpers eagerly allocate the slice (make with len=0). A
+		// regression that switched to `var sel []TagSelector` would
+		// emit JSON `null` on the wire vs. `[]`, which the wizard
+		// historically struggles with (see #255). This is a thinner
+		// pin than the discovery inspector test contract, but it
+		// catches the same accidental nil-slice path at the boundary.
+		empty := AggArgs{}
+		_, awsArgs := aggArgsToAWS(empty)
+		_, gcpArgs := aggArgsToGCP(empty)
+		require.NotNil(t, awsArgs.TagSelectors, "AWS TagSelectors must be empty slice, not nil")
+		require.NotNil(t, gcpArgs.TagSelectors, "GCP TagSelectors must be empty slice, not nil")
+		assert.Empty(t, awsArgs.TagSelectors)
+		assert.Empty(t, gcpArgs.TagSelectors)
+	})
+}
+
+// --- #311 per-stage timeout tests ---
+
+// withTestStageTimeout temporarily lowers a per-stage timeout var so a
+// timeout-fires test can run in tens of milliseconds rather than the
+// production multi-minute budget. The timeout vars at the top of
+// discover.go are package-level vars (not consts) precisely so tests
+// can swap them; production code paths never mutate them. Cleanup
+// restores the original on test exit.
+func withTestStageTimeout(t *testing.T, p *time.Duration, d time.Duration) {
+	t.Helper()
+	orig := *p
+	*p = d
+	t.Cleanup(func() { *p = orig })
+}
+
+// blockingAggregator's DiscoverTypes blocks on <-ctx.Done() so the test
+// can exercise the Stage 2a per-stage timeout deterministically. We use
+// ctx.Done() (not time.Sleep) so the goroutine returns as soon as the
+// stage's WithTimeout cancels — keeping the test fast and race-free.
+type blockingAggregator struct {
+	called int
+}
+
+func (f *blockingAggregator) DiscoverTypes(ctx context.Context, _ AggArgs) ([]imported.ImportedResource, error) {
+	f.called++
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func (f *blockingAggregator) DiscoverByID(_ context.Context, _, _, _, _ string) (imported.ImportedResource, error) {
+	return imported.ImportedResource{}, awsdiscover.ErrNotFound
+}
+
+// TestRunDiscoverWithDeps_StageTimeoutFiresOnSlowDiscoverTypes pins the
+// Stage 2a (#311) per-stage timeout: a hung DiscoverTypes surfaces as a
+// fatal exit with a stderr line that names the stage and the budget.
+//
+// NOT t.Parallel(): captures global os.Stderr.
+func TestRunDiscoverWithDeps_StageTimeoutFiresOnSlowDiscoverTypes(t *testing.T) {
+	withTestStageTimeout(t, &stageTimeoutDiscover, 50*time.Millisecond)
+	dir := t.TempDir()
+	agg := &blockingAggregator{}
+	deps := discoverDeps{
+		loadConfig:    func(_ context.Context, _, _ string) (aws.Config, error) { return aws.Config{}, nil },
+		getAccount:    func(_ context.Context, _ aws.Config) (string, error) { return "1", nil },
+		newDiscoverer: func(_ aws.Config, _ int) discoveryAggregator { return agg },
+		runGenconfig: func(_ context.Context, _ genconfig.Options, _ []imported.ImportedResource) (*genconfig.Result, error) {
+			t.Fatal("runGenconfig must not be called when Stage 2a deadline-exceeds")
+			return nil, nil
+		},
+		runDriftfix: func(_ context.Context, _ driftfix.Options) (*driftfix.Result, error) {
+			t.Fatal("runDriftfix must not be called when Stage 2a deadline-exceeds")
+			return nil, nil
+		},
+		runDepChase: noopDepChase,
+	}
+	var rc int
+	stderr := captureStderr(t, func() {
+		rc = runDiscoverWithDeps([]string{
+			"--provider", "aws", "--project", "p", "--region", "us-east-1", "--output-dir", dir,
+		}, deps)
+	})
+	if rc != discoverExitFatal {
+		t.Fatalf("rc=%d, want fatal (Stage 2a should exceed its budget)", rc)
+	}
+	if agg.called != 1 {
+		t.Errorf("DiscoverTypes called %d times, want 1", agg.called)
+	}
+	if !strings.Contains(stderr, `stage "discover"`) || !strings.Contains(stderr, "exceeded budget") {
+		t.Errorf("stderr should name the stage and budget; got: %s", stderr)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "imported.json")); !os.IsNotExist(err) {
+		t.Errorf("imported.json must not be written when Stage 2a deadline-exceeds")
+	}
+}
+
+// TestRunDiscoverWithDeps_UnsupportedStageTimeoutDoesNotStarveStage2b
+// pins the headline #311 invariant: a slow optional Stage 1.5
+// (--include-unsupported) cannot starve mandatory Stage 2b. We block
+// the unsupported enumerator until ctx.Done() (deadline exceeds), then
+// assert that runGenconfig was still invoked with a context whose
+// remaining budget is at least Stage 2b's full per-stage budget minus a
+// tolerance. Pre-#311, the genconfig ctx was the same one Stage 1.5
+// was about to expire — it would have inherited an exhausted deadline.
+//
+// NOT t.Parallel(): captures global os.Stderr.
+func TestRunDiscoverWithDeps_UnsupportedStageTimeoutDoesNotStarveStage2b(t *testing.T) {
+	withTestStageTimeout(t, &stageTimeoutUnsupported, 30*time.Millisecond)
+	withTestStageTimeout(t, &stageTimeoutGenconfig, 5*time.Second)
+	dir := t.TempDir()
+	agg := &fakeAggregator{out: []imported.ImportedResource{validResource("aws_sqs_queue.alpha")}}
+
+	gcCalled := 0
+	var gcRemaining time.Duration
+	deps := okDeps(agg)
+	deps.runGenconfig = func(ctx context.Context, opts genconfig.Options, resources []imported.ImportedResource) (*genconfig.Result, error) {
+		gcCalled++
+		if dl, ok := ctx.Deadline(); ok {
+			gcRemaining = time.Until(dl)
+		}
+		return &genconfig.Result{
+			GeneratedPath: filepath.Join(opts.Workdir, "generated.tf"),
+			Resources:     resources,
+		}, nil
+	}
+	deps.enumerateUnsupportedAWS = func(ctx context.Context, _ aws.Config, _ awsdiscover.UnsupportedArgs) ([]awsdiscover.UnsupportedResource, bool, error) {
+		<-ctx.Done()
+		return nil, false, ctx.Err()
+	}
+
+	var rc int
+	stderr := captureStderr(t, func() {
+		rc = runDiscoverWithDeps([]string{
+			"--provider", "aws", "--project", "p", "--region", "us-east-1", "--output-dir", dir,
+			"--include-unsupported",
+		}, deps)
+	})
+	if rc != discoverExitOK {
+		t.Fatalf("rc=%d, want OK (unsupported soft-fails; mandatory stages must continue)", rc)
+	}
+	if gcCalled != 1 {
+		t.Errorf("runGenconfig called %d times, want 1 (Stage 2b must run after Stage 1.5 deadline-exceeds)", gcCalled)
+	}
+	// Tolerance: the parent (overall) ctx ticks down between Stage 1.5
+	// expiry and the WithTimeout call at Stage 2b. We assert the
+	// remaining budget is within ~200ms of stageTimeoutGenconfig — well
+	// above the ~30ms Stage 1.5 burned, which would have been the
+	// pre-#311 budget.
+	wantMin := stageTimeoutGenconfig - 200*time.Millisecond
+	if gcRemaining < wantMin {
+		t.Errorf("Stage 2b ctx remaining=%v, want >= %v (pre-#311 regression: Stage 1.5 starved Stage 2b)", gcRemaining, wantMin)
+	}
+	if !strings.Contains(stderr, `stage "unsupported"`) || !strings.Contains(stderr, "exceeded budget") {
+		t.Errorf("stderr should name the unsupported stage and budget; got: %s", stderr)
+	}
+}
+
+// TestRunDiscoverWithDeps_GenconfigTimeoutFiresIndependentlyOfDriftfix
+// pins the symmetric #311 invariant: when Stage 2b deadline-exceeds,
+// the run is fatal and downstream stages (driftfix, depchase) must NOT
+// run. The stderr surfaces the genconfig stage name + budget.
+//
+// NOT t.Parallel(): captures global os.Stderr.
+func TestRunDiscoverWithDeps_GenconfigTimeoutFiresIndependentlyOfDriftfix(t *testing.T) {
+	withTestStageTimeout(t, &stageTimeoutGenconfig, 50*time.Millisecond)
+	dir := t.TempDir()
+	agg := &fakeAggregator{out: []imported.ImportedResource{validResource("aws_sqs_queue.alpha")}}
+	deps := okDeps(agg)
+	deps.runGenconfig = func(ctx context.Context, _ genconfig.Options, _ []imported.ImportedResource) (*genconfig.Result, error) {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
+	deps.runDriftfix = func(_ context.Context, _ driftfix.Options) (*driftfix.Result, error) {
+		t.Fatal("runDriftfix must not be called when Stage 2b deadline-exceeds")
+		return nil, nil
+	}
+	deps.runDepChase = func(_ context.Context, _ depchase.Options, _ []imported.ImportedResource) (*depchase.Result, error) {
+		t.Fatal("runDepChase must not be called when Stage 2b deadline-exceeds")
+		return nil, nil
+	}
+
+	var rc int
+	stderr := captureStderr(t, func() {
+		rc = runDiscoverWithDeps([]string{
+			"--provider", "aws", "--project", "p", "--region", "us-east-1", "--output-dir", dir,
+		}, deps)
+	})
+	if rc != discoverExitFatal {
+		t.Fatalf("rc=%d, want fatal (Stage 2b should exceed its budget)", rc)
+	}
+	if !strings.Contains(stderr, `stage "genconfig"`) || !strings.Contains(stderr, "exceeded budget") {
+		t.Errorf("stderr should name the genconfig stage and budget; got: %s", stderr)
+	}
+}
+
+// TestStageTimeoutsDoNotExceedOverallCap is a sanity pin: every
+// per-stage budget must fit inside discoverTimeoutOverall, otherwise
+// the outer cap silently truncates the per-stage one and the named-
+// stage stderr never surfaces. A mutation that bumps any per-stage
+// budget without bumping the outer cap fails this test.
+func TestStageTimeoutsDoNotExceedOverallCap(t *testing.T) {
+	t.Parallel()
+	stages := map[string]time.Duration{
+		"aws-config":  stageTimeoutAWSConfig,
+		"gcp-connect": stageTimeoutGCPConnect,
+		"discover":    stageTimeoutDiscover,
+		"unsupported": stageTimeoutUnsupported,
+		"genconfig":   stageTimeoutGenconfig,
+		"driftfix":    stageTimeoutDriftfix,
+		"depchase":    stageTimeoutDepchase,
+	}
+	for name, d := range stages {
+		if d >= discoverTimeoutOverall {
+			t.Errorf("stage %q budget=%v >= discoverTimeoutOverall=%v (the outer cap would mask the per-stage signal)", name, d, discoverTimeoutOverall)
+		}
+	}
 }

@@ -19,7 +19,9 @@ package main
 // and GCP enumerators apply.
 //
 // JSON wire-format invariants enforced by writeUnsupportedManifest:
-//   - top-level is always a JSON array, never `null` (empty input writes `[]`)
+//   - top-level is always the wrapper object {"resources":[…],"truncated":bool,"max_results":int}
+//     never a bare array (#309 wire-format break — see UnsupportedManifest).
+//     Resources is always a JSON array, never `null` (empty input writes `[]`)
 //   - rows sorted deterministically by (Type, Region, ID) so byte-identical
 //     output across runs for the same input
 //   - omitempty on the four optional fields — a row with no Region/Location/
@@ -64,14 +66,47 @@ type UnsupportedResource struct {
 	Tags map[string]string `json:"tags,omitempty"`
 
 	// Group is the high-level UI category ("Events", "Data Storage",
-	// "Network Security", ...) the wizard groups picker rows under. This
-	// PR (#296) leaves Group empty intentionally — the Category map that
-	// translates Type → Group lands in the parallel #297 (Bundle 2 / PR 3)
-	// PR, which iterates this slice and stamps Group post-emit. Until
-	// then the picker uses an "Other" fallback bucket.
-	//
-	// TODO(#297): populate Group from the imported.Category map once it
-	// lands; this PR ships the field on the wire so #297 is a pure
-	// composer change without an unsupported.json schema bump.
+	// "Network Security", ...) the wizard groups picker rows under. The
+	// per-cloud unsupported emitters stamp this from imported.Category
+	// at construction (awsdiscover/unsupported.go and
+	// gcpdiscover/unsupported.go). The picker falls back to "Other" when
+	// Category returns the empty string for an unknown type.
 	Group string `json:"group,omitempty"`
+}
+
+// UnsupportedManifest is the on-disk wrapper-object shape of
+// unsupported.json (#309). Prior to #309 the file was a bare JSON
+// array of UnsupportedResource; the cap-and-warn contract requires
+// stamping the top-level body with truncation metadata so downstream
+// readers know whether a missing row reflects a true zero-result run
+// or the cap firing on a too-large account.
+//
+// Wire-format break: this is incompatible with the v0.7-era bare-array
+// shape. The reliable wizard's consumer hasn't shipped yet, so the
+// break is contained to this repo. A version field is intentionally
+// NOT carried — adding `truncated` / `max_results` to a wrapper is a
+// one-shot break, not a versioned schema dance, and a future schema
+// change would warrant a new sibling file rather than versioning this
+// one.
+//
+// JSON wire-format invariants:
+//   - Resources is always a JSON array, never `null` (writeUnsupportedManifest
+//     coerces nil → []).
+//   - Truncated is true iff the per-cloud enumerator's MaxResults bound
+//     fired during this run.
+//   - MaxResults echoes the cap that was in effect (0 means "cap disabled"
+//     — see --max-unsupported-results=0).
+type UnsupportedManifest struct {
+	// Resources is the deterministically-sorted slice of unsupported
+	// rows. Sort key: (Type, Region, ID). Empty input writes [].
+	Resources []UnsupportedResource `json:"resources"`
+
+	// Truncated is true when the run hit the MaxResults cap and stopped
+	// enumerating early. The reliable wizard surfaces this as a banner
+	// over the picker: "Showing first N of many — re-run with a larger
+	// --max-unsupported-results to enumerate the rest."
+	Truncated bool `json:"truncated"`
+
+	// MaxResults echoes the per-run cap. 0 = no cap was set.
+	MaxResults int `json:"max_results"`
 }

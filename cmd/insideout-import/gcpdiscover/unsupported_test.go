@@ -3,6 +3,7 @@ package gcpdiscover
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -28,7 +29,7 @@ func TestEnumerateUnsupportedGCP_BuildsAssetTypesClauseFromUnsupportedSet(t *tes
 	t.Parallel()
 	fake := &fakeAssetSearcher{}
 	g := &GCPDiscoverer{searcher: fake, projectID: "real-proj"}
-	if _, err := g.EnumerateUnsupported(context.Background(), UnsupportedArgs{
+	if _, _, err := g.EnumerateUnsupported(context.Background(), UnsupportedArgs{
 		Project: "io-foo",
 	}); err != nil {
 		t.Fatal(err)
@@ -91,7 +92,7 @@ func TestEnumerateUnsupportedGCP_TFTypeMappedFromAssetType(t *testing.T) {
 				)},
 			}
 			g := &GCPDiscoverer{searcher: fake, projectID: "real-proj"}
-			got, err := g.EnumerateUnsupported(context.Background(), UnsupportedArgs{})
+			got, _, err := g.EnumerateUnsupported(context.Background(), UnsupportedArgs{})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -119,7 +120,7 @@ func TestEnumerateUnsupportedGCP_UnknownAssetTypePreservesEmpty(t *testing.T) {
 		)},
 	}
 	g := &GCPDiscoverer{searcher: fake, projectID: "real-proj"}
-	got, err := g.EnumerateUnsupported(context.Background(), UnsupportedArgs{})
+	got, _, err := g.EnumerateUnsupported(context.Background(), UnsupportedArgs{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +151,7 @@ func TestEnumerateUnsupportedGCP_LabelsPassThrough(t *testing.T) {
 		)},
 	}
 	g := &GCPDiscoverer{searcher: fake, projectID: "real-proj"}
-	got, err := g.EnumerateUnsupported(context.Background(), UnsupportedArgs{})
+	got, _, err := g.EnumerateUnsupported(context.Background(), UnsupportedArgs{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -171,7 +172,7 @@ func TestEnumerateUnsupportedGCP_SearcherErrorIsReturned(t *testing.T) {
 	wantErr := errors.New("permission denied: cloudasset.assets.searchAllResources")
 	fake := &fakeAssetSearcher{err: wantErr}
 	g := &GCPDiscoverer{searcher: fake, projectID: "real-proj"}
-	_, err := g.EnumerateUnsupported(context.Background(), UnsupportedArgs{})
+	_, _, err := g.EnumerateUnsupported(context.Background(), UnsupportedArgs{})
 	if err == nil {
 		t.Fatal("err=nil, want error")
 	}
@@ -184,7 +185,7 @@ func TestEnumerateUnsupportedGCP_SearcherErrorIsReturned(t *testing.T) {
 func TestEnumerateUnsupportedGCP_NilSearcherIsFatal(t *testing.T) {
 	t.Parallel()
 	g := &GCPDiscoverer{projectID: "real-proj"}
-	_, err := g.EnumerateUnsupported(context.Background(), UnsupportedArgs{})
+	_, _, err := g.EnumerateUnsupported(context.Background(), UnsupportedArgs{})
 	if err == nil {
 		t.Fatal("err=nil, want explicit error when no searcher configured")
 	}
@@ -203,7 +204,7 @@ func TestEnumerateUnsupportedGCP_EmitsServiceStartFinish(t *testing.T) {
 	}
 	rec := &recordingEmitter{}
 	g := &GCPDiscoverer{searcher: fake, projectID: "real-proj"}
-	if _, err := g.EnumerateUnsupported(context.Background(), UnsupportedArgs{Emitter: rec}); err != nil {
+	if _, _, err := g.EnumerateUnsupported(context.Background(), UnsupportedArgs{Emitter: rec}); err != nil {
 		t.Fatal(err)
 	}
 	starts, finishes, items := 0, 0, 0
@@ -240,7 +241,7 @@ func TestEnumerateUnsupportedGCP_QueryShapeFromArgs(t *testing.T) {
 	t.Parallel()
 	fake := &fakeAssetSearcher{}
 	g := &GCPDiscoverer{searcher: fake, projectID: "real-proj"}
-	if _, err := g.EnumerateUnsupported(context.Background(), UnsupportedArgs{
+	if _, _, err := g.EnumerateUnsupported(context.Background(), UnsupportedArgs{
 		Project:      "io-foo",
 		Regions:      []string{"us-central1"},
 		TagSelectors: []TagSelector{{Key: "env", Value: "prod"}},
@@ -282,7 +283,7 @@ func TestEnumerateUnsupportedGCP_PopulatesGroup(t *testing.T) {
 		},
 	}
 	g := &GCPDiscoverer{searcher: fake, projectID: "real-proj"}
-	got, err := g.EnumerateUnsupported(context.Background(), UnsupportedArgs{})
+	got, _, err := g.EnumerateUnsupported(context.Background(), UnsupportedArgs{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -328,6 +329,76 @@ func TestEnumerateUnsupportedGCP_PopulatesGroup(t *testing.T) {
 	}
 	if unmapped.Group != "" {
 		t.Errorf("Group for Type==\"\" = %q, want \"\" (unmapped slug → no category)", unmapped.Group)
+	}
+}
+
+// --- #309 MaxResults cap tests ---
+
+// TestEnumerateUnsupportedGCP_CapFiresAndSetsTruncated pins the
+// wrapper-level cap (#309): a 50-asset fake response with cap=10
+// returns exactly 10 rows and truncated=true.
+//
+// IMPORTANT: unlike the AWS path, the GCP cap is at the
+// EnumerateUnsupported wrapper, not inside SearchAll. SearchAll is
+// shared between the importable and unsupported scans; capping there
+// would silently truncate the importable manifest. The trade-off is
+// that the cap bounds memory + on-disk size, but does NOT bound the
+// Cloud Asset API budget — SearchAll still walks the full iterator.
+func TestEnumerateUnsupportedGCP_CapFiresAndSetsTruncated(t *testing.T) {
+	t.Parallel()
+	results := make([]gcpAssetResult, 0, 50)
+	for i := 0; i < 50; i++ {
+		// compute.googleapis.com/Instance maps to google_compute_instance
+		// which is currently NOT in the GCP importable registry, so
+		// each fixture row passes through to the output.
+		name := fmt.Sprintf("//compute.googleapis.com/projects/p/zones/us/instances/vm-%03d", i)
+		results = append(results, gcpAsset(name, "compute.googleapis.com/Instance", "us", nil))
+	}
+	fake := &fakeAssetSearcher{results: results}
+	g := &GCPDiscoverer{searcher: fake, projectID: "real-proj"}
+	got, truncated, err := g.EnumerateUnsupported(context.Background(), UnsupportedArgs{
+		MaxResults: 10,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !truncated {
+		t.Errorf("truncated=false, want true (cap=10, source=50)")
+	}
+	if len(got) != 10 {
+		t.Errorf("len(got)=%d, want 10 (cap)", len(got))
+	}
+	// Wrapper-level cap means SearchAll DID see all 50 results — it
+	// emits one call as usual; the truncation happens after the
+	// iterator returns. Pin the call count to defend against a
+	// future regression that "optimizes" the cap into SearchAll.
+	if len(fake.calls) != 1 {
+		t.Errorf("SearchAll calls=%d, want 1 (cap is wrapper-level, not per-call)", len(fake.calls))
+	}
+}
+
+// TestEnumerateUnsupportedGCP_CapZeroDisablesLimit pins the
+// "0 = unbounded" contract on the GCP path. Mirrors the AWS-side test.
+func TestEnumerateUnsupportedGCP_CapZeroDisablesLimit(t *testing.T) {
+	t.Parallel()
+	results := make([]gcpAssetResult, 0, 50)
+	for i := 0; i < 50; i++ {
+		name := fmt.Sprintf("//compute.googleapis.com/projects/p/zones/us/instances/vm-%03d", i)
+		results = append(results, gcpAsset(name, "compute.googleapis.com/Instance", "us", nil))
+	}
+	fake := &fakeAssetSearcher{results: results}
+	g := &GCPDiscoverer{searcher: fake, projectID: "real-proj"}
+	got, truncated, err := g.EnumerateUnsupported(context.Background(), UnsupportedArgs{
+		MaxResults: 0,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if truncated {
+		t.Errorf("truncated=true, want false (cap=0 disables the limit)")
+	}
+	if len(got) != 50 {
+		t.Errorf("len(got)=%d, want 50 (uncapped)", len(got))
 	}
 }
 

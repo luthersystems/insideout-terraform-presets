@@ -27,8 +27,37 @@ import (
 const (
 	discoverExitOK    = 0
 	discoverExitFatal = 1
+)
 
-	discoverTimeout = 15 * time.Minute
+// Per-stage discovery budgets (#311).
+//
+// Each stage's call site wraps the parent ctx in
+// context.WithTimeout(parentCtx, perStageTimeout) so an optional or
+// misbehaving stage cannot starve mandatory ones — historically a
+// single 15-minute outer cap meant a slow Stage 2a could leave Stage
+// 2b with seconds-of-budget and surface as a confusing "context
+// deadline exceeded" mid-binary. Operators can't tune these today;
+// expose CLI flags in a follow-up if real-world budgets demand it.
+//
+// Declared as `var` (not `const`) so tests can swap the budget down to
+// a few milliseconds via withTestStageTimeout(); production code paths
+// never mutate these. The runtime cost of a package-level var read vs
+// a const read is negligible — picking testability over the marginal
+// safety of a const is the right trade-off here.
+var (
+	stageTimeoutAWSConfig   = 1 * time.Minute // loadConfig + GetCallerIdentity
+	stageTimeoutGCPConnect  = 1 * time.Minute // newGCPDiscoverer (gRPC dial + ADC)
+	stageTimeoutDiscover    = 5 * time.Minute // Stage 2a: DiscoverTypes
+	stageTimeoutUnsupported = 2 * time.Minute // Stage 1.5: optional --include-unsupported
+	stageTimeoutGenconfig   = 5 * time.Minute // Stage 2b: terraform plan -generate-config-out
+	stageTimeoutDriftfix    = 3 * time.Minute // Stage 2c1: drift fix loop
+	stageTimeoutDepchase    = 5 * time.Minute // Stage 2c3: dep chase loop (already iteration-bounded)
+
+	// discoverTimeoutOverall is the outer cap. Defense-in-depth: the
+	// sum of per-stage budgets plus headroom. Stages skipped via
+	// --no-hcl / --no-driftfix / --no-depchase don't claim their
+	// per-stage budget, but the outer cap is unchanged.
+	discoverTimeoutOverall = 25 * time.Minute
 )
 
 // discoverRetryMaxAttempts raises the SDK retryer's attempt budget above
@@ -38,7 +67,7 @@ const (
 // ListTagsOfResource fanout on a few-hundred-table account. With v2's
 // adaptive backoff (jitter + exponential) attempt 8 lands ~30s after
 // attempt 1, which matches the per-call budget the operator-facing
-// 15-minute discoverTimeout can absorb.
+// stage budgets above can absorb.
 const discoverRetryMaxAttempts = 8
 
 // discoveryAggregator is the small subset of awsdiscover.AWSDiscoverer
@@ -50,43 +79,85 @@ const discoverRetryMaxAttempts = 8
 // dep-chase loop calls into the aggregator to resolve unresolved ARNs
 // inside generated.tf to fresh ImportedResource entries.
 //
-// DiscoverTypes uses positional args (rather than a struct) so neither
-// cloud's package-local DiscoverArgs type (#291) leaks into the CLI's
-// shared interface — adapters in productionDiscoverDeps convert. Tag
-// selectors flow through as the CLI-package tagSelectorPair so the
-// interface stays decoupled from awsdiscover/gcpdiscover.
-//
-// TODO(#310): refactor to AggArgs struct. The 7-arg signature is hard
-// to extend — adding a per-stage timeout or a budget knob requires
-// touching three signatures + every test fake. A struct-shaped
-// AggArgs would shrink each fake's capture to a single gotArgs field.
+// DiscoverTypes takes a single AggArgs struct (#310). The CLI-package
+// tagSelectorPair flows through as-is so the interface stays decoupled
+// from awsdiscover/gcpdiscover; adapters in productionDiscoverDeps
+// convert into per-cloud DiscoverArgs at the boundary. Future fields
+// (per-stage timeout #311, budget knobs, etc.) are additive on AggArgs
+// without rippling through the interface or every test fake.
 type discoveryAggregator interface {
-	DiscoverTypes(ctx context.Context, types []string, project string, regions []string, tagSelectors []tagSelectorPair, accountID string, emitter progress.Emitter) ([]imported.ImportedResource, error)
+	DiscoverTypes(ctx context.Context, args AggArgs) ([]imported.ImportedResource, error)
 	DiscoverByID(ctx context.Context, tfType, id, region, accountID string) (imported.ImportedResource, error)
 }
 
+// AggArgs are the orchestrator-level inputs to
+// discoveryAggregator.DiscoverTypes. Mirrors the per-cloud DiscoverArgs
+// structs at awsdiscover/args.go and gcpdiscover/args.go but supersets
+// both: AccountID lives here even though GCP doesn't use it — the
+// aggregator interface is cloud-agnostic and the adapters convert.
+// Future fields (per-stage timeout #311, etc.) are additive without
+// rippling through the interface.
+type AggArgs struct {
+	Types        []string
+	Project      string
+	Regions      []string
+	TagSelectors []tagSelectorPair
+	AccountID    string
+	Emitter      progress.Emitter
+}
+
+// aggArgsToAWS translates an orchestrator-level AggArgs into the
+// per-cloud awsdiscover.DiscoverArgs the *AWSDiscoverer consumes. The
+// only non-trivial work is converting tagSelectorPair (CLI-package) →
+// awsdiscover.TagSelector (per-cloud) so the cloud-specific type doesn't
+// bleed into discover.go's orchestrator code. Extracted from
+// awsAggAdapter.DiscoverTypes so the AggArgs round-trip test (#310) can
+// pin field-by-field translation without standing up a real
+// *AWSDiscoverer.
+func aggArgsToAWS(args AggArgs) (types []string, awsArgs awsdiscover.DiscoverArgs) {
+	sel := make([]awsdiscover.TagSelector, 0, len(args.TagSelectors))
+	for _, p := range args.TagSelectors {
+		sel = append(sel, awsdiscover.TagSelector{Key: p.Key, Value: p.Value})
+	}
+	return args.Types, awsdiscover.DiscoverArgs{
+		Project:      args.Project,
+		Regions:      args.Regions,
+		TagSelectors: sel,
+		AccountID:    args.AccountID,
+		Emitter:      args.Emitter,
+	}
+}
+
+// aggArgsToGCP is the GCP analogue of aggArgsToAWS. AggArgs.AccountID is
+// intentionally dropped on GCP — the project ID lives on the
+// *gcpdiscover.GCPDiscoverer struct (set at construction), and GCP has
+// no STS-equivalent caller-identity round-trip whose result needs
+// threading through.
+func aggArgsToGCP(args AggArgs) (types []string, gcpArgs gcpdiscover.DiscoverArgs) {
+	sel := make([]gcpdiscover.TagSelector, 0, len(args.TagSelectors))
+	for _, p := range args.TagSelectors {
+		sel = append(sel, gcpdiscover.TagSelector{Key: p.Key, Value: p.Value})
+	}
+	return args.Types, gcpdiscover.DiscoverArgs{
+		Project:      args.Project,
+		Regions:      args.Regions,
+		TagSelectors: sel,
+		Emitter:      args.Emitter,
+	}
+}
+
 // awsAggAdapter wraps *awsdiscover.AWSDiscoverer to satisfy
-// discoveryAggregator's positional DiscoverTypes signature, converting
-// the CLI's tagSelectorPair into awsdiscover.TagSelector at the
-// boundary. Mirrors gcpAggAdapter; both adapters are intentionally
-// thin so the cloud-specific type doesn't bleed into discover.go's
-// orchestrator code.
+// discoveryAggregator, translating AggArgs into awsdiscover.DiscoverArgs
+// at the boundary via aggArgsToAWS. Mirrors gcpAggAdapter; both
+// adapters are intentionally thin so the cloud-specific type doesn't
+// bleed into discover.go's orchestrator code.
 type awsAggAdapter struct {
 	d *awsdiscover.AWSDiscoverer
 }
 
-func (a awsAggAdapter) DiscoverTypes(ctx context.Context, types []string, project string, regions []string, tagSelectors []tagSelectorPair, accountID string, emitter progress.Emitter) ([]imported.ImportedResource, error) {
-	sel := make([]awsdiscover.TagSelector, 0, len(tagSelectors))
-	for _, p := range tagSelectors {
-		sel = append(sel, awsdiscover.TagSelector{Key: p.Key, Value: p.Value})
-	}
-	return a.d.DiscoverTypes(ctx, types, awsdiscover.DiscoverArgs{
-		Project:      project,
-		Regions:      regions,
-		TagSelectors: sel,
-		AccountID:    accountID,
-		Emitter:      emitter,
-	})
+func (a awsAggAdapter) DiscoverTypes(ctx context.Context, args AggArgs) ([]imported.ImportedResource, error) {
+	types, awsArgs := aggArgsToAWS(args)
+	return a.d.DiscoverTypes(ctx, types, awsArgs)
 }
 
 func (a awsAggAdapter) DiscoverByID(ctx context.Context, tfType, id, region, accountID string) (imported.ImportedResource, error) {
@@ -94,26 +165,15 @@ func (a awsAggAdapter) DiscoverByID(ctx context.Context, tfType, id, region, acc
 }
 
 // gcpAggAdapter wraps *gcpdiscover.GCPDiscoverer to satisfy
-// discoveryAggregator. Converts tagSelectorPair → gcpdiscover.TagSelector;
-// otherwise mirrors awsAggAdapter.
+// discoveryAggregator. Converts AggArgs into gcpdiscover.DiscoverArgs via
+// aggArgsToGCP; otherwise mirrors awsAggAdapter.
 type gcpAggAdapter struct {
 	d *gcpdiscover.GCPDiscoverer
 }
 
-func (a gcpAggAdapter) DiscoverTypes(ctx context.Context, types []string, project string, regions []string, tagSelectors []tagSelectorPair, accountID string, emitter progress.Emitter) ([]imported.ImportedResource, error) {
-	sel := make([]gcpdiscover.TagSelector, 0, len(tagSelectors))
-	for _, p := range tagSelectors {
-		sel = append(sel, gcpdiscover.TagSelector{Key: p.Key, Value: p.Value})
-	}
-	// accountID is unused on GCP — the project ID lives on the
-	// *gcpdiscover.GCPDiscoverer struct (set at construction).
-	_ = accountID
-	return a.d.DiscoverTypes(ctx, types, gcpdiscover.DiscoverArgs{
-		Project:      project,
-		Regions:      regions,
-		TagSelectors: sel,
-		Emitter:      emitter,
-	})
+func (a gcpAggAdapter) DiscoverTypes(ctx context.Context, args AggArgs) ([]imported.ImportedResource, error) {
+	types, gcpArgs := aggArgsToGCP(args)
+	return a.d.DiscoverTypes(ctx, types, gcpArgs)
 }
 
 func (a gcpAggAdapter) DiscoverByID(ctx context.Context, tfType, id, region, accountID string) (imported.ImportedResource, error) {
@@ -124,12 +184,17 @@ func (a gcpAggAdapter) DiscoverByID(ctx context.Context, tfType, id, region, acc
 // runDiscoverWithDeps to call into awsdiscover.EnumerateUnsupported
 // when --include-unsupported is set. Tests inject a fake to exercise
 // the soft-failure branch without standing up Resource Explorer.
-type unsupportedAWSEnumerator func(ctx context.Context, cfg aws.Config, args awsdiscover.UnsupportedArgs) ([]awsdiscover.UnsupportedResource, error)
+//
+// Returns (rows, truncated, err): truncated reflects whether the
+// MaxResults bound (#309) fired during enumeration. The orchestrator
+// surfaces it as a stderr WARN and pins it on unsupported.json's
+// wrapper-object truncated marker.
+type unsupportedAWSEnumerator func(ctx context.Context, cfg aws.Config, args awsdiscover.UnsupportedArgs) ([]awsdiscover.UnsupportedResource, bool, error)
 
 // unsupportedGCPEnumerator is the GCP analogue of
 // unsupportedAWSEnumerator. Production wires it to the
 // *gcpdiscover.GCPDiscoverer's EnumerateUnsupported method.
-type unsupportedGCPEnumerator func(ctx context.Context, args gcpdiscover.UnsupportedArgs) ([]gcpdiscover.UnsupportedResource, error)
+type unsupportedGCPEnumerator func(ctx context.Context, args gcpdiscover.UnsupportedArgs) ([]gcpdiscover.UnsupportedResource, bool, error)
 
 // discoverDeps gathers the AWS- and GCP-side and terraform-side seams that
 // runDiscover would otherwise hit directly. Production code passes
@@ -211,7 +276,7 @@ func productionDiscoverDeps() discoverDeps {
 		runGenconfig: genconfig.Run,
 		runDriftfix:  driftfix.Run,
 		runDepChase:  depchase.Run,
-		enumerateUnsupportedAWS: func(ctx context.Context, cfg aws.Config, args awsdiscover.UnsupportedArgs) ([]awsdiscover.UnsupportedResource, error) {
+		enumerateUnsupportedAWS: func(ctx context.Context, cfg aws.Config, args awsdiscover.UnsupportedArgs) ([]awsdiscover.UnsupportedResource, bool, error) {
 			if args.Searcher == nil {
 				args.Searcher = awsdiscover.NewRealResourceExplorerSearcher(cfg)
 			}
@@ -221,7 +286,7 @@ func productionDiscoverDeps() discoverDeps {
 			// Searcher.
 			return awsdiscover.NewAWSDiscoverer(cfg).EnumerateUnsupported(ctx, args)
 		},
-		enumerateUnsupportedGCP: func(ctx context.Context, args gcpdiscover.UnsupportedArgs) ([]gcpdiscover.UnsupportedResource, error) {
+		enumerateUnsupportedGCP: func(ctx context.Context, args gcpdiscover.UnsupportedArgs) ([]gcpdiscover.UnsupportedResource, bool, error) {
 			// Production callers must already hold a valid
 			// *gcpdiscover.GCPDiscoverer via newGCPDiscoverer; this
 			// closure is overridden in runDiscoverWithDeps below to
@@ -231,7 +296,7 @@ func productionDiscoverDeps() discoverDeps {
 			// rebinding) surfaces loudly.
 			_ = ctx
 			_ = args
-			return nil, fmt.Errorf("enumerateUnsupportedGCP: production deps need re-binding inside runDiscoverWithDeps after newGCPDiscoverer succeeds")
+			return nil, false, fmt.Errorf("enumerateUnsupportedGCP: production deps need re-binding inside runDiscoverWithDeps after newGCPDiscoverer succeeds")
 		},
 	}
 }
@@ -293,6 +358,9 @@ Exit codes:
 	resourceIDs := fs.String("resource-ids", "", "comma-separated subset of Identity.ImportID values to retain when loading --from-manifest; unknown IDs are fatal. Empty = use the entire manifest. Requires --from-manifest.")
 	progressFmt := fs.String("progress", "", "progress event format. Empty (default) emits human-readable summary lines on stdout. `json` emits one newline-delimited JSON event per service-start, service-finish, item-found, stage-finish on stdout; the human-readable summary moves to stderr so machine consumers see only events on stdout. (#295)")
 	includeUnsupported := fs.Bool("include-unsupported", false, "broad-enumerate cloud resources of types NOT yet imported by per-service discoverers, emitting them in a parallel unsupported.json sibling of imported.json (#296). AWS uses Resource Explorer's Search API (one call per region); GCP uses Cloud Asset Inventory's SearchAllResources with a broader assetTypes filter. The wizard picker reads unsupported.json to render greyed-out rows so operators see what's in their account vs. what's importable. Mutually exclusive with --from-manifest (no live scan to enumerate). Soft-fails when the underlying API isn't configured (Resource Explorer not set up in some regions, Cloud Asset API disabled): imported.json still writes and the run exits 0 with a stderr WARN.")
+	maxUnsupportedResults := fs.Int("max-unsupported-results", 10000,
+		"max number of unsupported resources enumerated per cloud when --include-unsupported is set; 0 disables the cap. "+
+			"When the cap fires, a stderr WARN is logged and unsupported.json carries truncated:true at the wrapper level. (#309)")
 
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -394,6 +462,10 @@ Exit codes:
 		fmt.Fprintf(os.Stderr, "discover: --max-depchase-iterations must be positive (got %d)\n", *maxDepChaseIter)
 		return discoverExitFatal
 	}
+	if *maxUnsupportedResults < 0 {
+		fmt.Fprintf(os.Stderr, "discover: --max-unsupported-results must be >= 0 (got %d)\n", *maxUnsupportedResults)
+		return discoverExitFatal
+	}
 
 	// --progress=<fmt> validation + emitter wiring (#295).
 	//
@@ -421,12 +493,14 @@ Exit codes:
 
 	types := splitCSV(*resourceTypes)
 
-	// TODO(#311): per-stage context timeouts. A single discoverTimeout
-	// covers Stage 2a (DiscoverTypes), Stage 2b (genconfig), Stage 2c1
-	// (driftfix), and Stage 2c3 (depchase). When Stage 2a or 2c3 burns
-	// most of the budget, Stage 2b can be context-cancelled mid-binary
-	// without ever surfacing which stage actually took too long.
-	ctx, cancel := context.WithTimeout(context.Background(), discoverTimeout)
+	// Outer cap (#311). Each stage call site below derives a per-stage
+	// child via context.WithTimeout(ctx, stageTimeoutXxx) so a slow
+	// optional Stage 1.5 (--include-unsupported) or a runaway Stage
+	// 2c3 dep-chase iteration cannot starve mandatory stages. The
+	// outer cap is defense-in-depth — the sum of the per-stage budgets
+	// plus headroom — and surfaces the same `context.DeadlineExceeded`
+	// when the entire run drags on too long.
+	ctx, cancel := context.WithTimeout(context.Background(), discoverTimeoutOverall)
 	defer cancel()
 
 	// summaryStart is the wall-clock anchor for ScanSummary.duration_ms
@@ -559,8 +633,22 @@ Exit codes:
 	)
 	switch cloud {
 	case "aws":
-		cfg, err := deps.loadConfig(ctx, primaryRegion, *awsEndpointURL)
+		// Stage: AWS config load + STS GetCallerIdentity. Both calls
+		// share a single per-stage budget — they're a tight pair (config
+		// resolution feeds STS) and a stuck IMDS / endpoint-discovery
+		// hop should fail fast rather than gnaw the outer cap. The
+		// deferred cancel guarantees the timer is freed on every exit
+		// path (success, mid-block error, multi-account fatal) — the
+		// stage budget only constrains loadConfig + getAccount, but
+		// holding the cancel until the function returns is harmless
+		// since the timer fires once and then becomes a no-op.
+		awsCfgCtx, awsCfgCancel := context.WithTimeout(ctx, stageTimeoutAWSConfig)
+		defer awsCfgCancel()
+		cfg, err := deps.loadConfig(awsCfgCtx, primaryRegion, *awsEndpointURL)
 		if err != nil {
+			if errors.Is(err, context.DeadlineExceeded) {
+				fmt.Fprintf(os.Stderr, "discover: stage %q exceeded budget of %v: %v\n", "aws-config", stageTimeoutAWSConfig, err)
+			}
 			fmt.Fprintf(os.Stderr, "discover: load AWS config: %v\n", err)
 			return discoverExitFatal
 		}
@@ -612,8 +700,14 @@ Exit codes:
 			// STS response is treated as accountID="" — the DynamoDB
 			// discoverer's prefix-only fallback handles that case (see
 			// TestDynamoDBDiscover_PrefixOnlyFallback).
-			accountID, err = deps.getAccount(ctx, cfg)
+			//
+			// Reuses the loadConfig stage budget — both calls live under
+			// the same `aws-config` stage.
+			accountID, err = deps.getAccount(awsCfgCtx, cfg)
 			if err != nil {
+				if errors.Is(err, context.DeadlineExceeded) {
+					fmt.Fprintf(os.Stderr, "discover: stage %q exceeded budget of %v: %v\n", "aws-config", stageTimeoutAWSConfig, err)
+				}
 				fmt.Fprintf(os.Stderr, "discover: STS GetCallerIdentity: %v\n", err)
 				return discoverExitFatal
 			}
@@ -621,8 +715,16 @@ Exit codes:
 		d = deps.newDiscoverer(cfg, *maxConcurrency)
 		awsCfg = cfg
 	case "gcp":
-		gd, closeFn, err := deps.newGCPDiscoverer(ctx, *gcpProjectID)
+		// Stage: GCP discoverer construction (gRPC dial + ADC resolution).
+		// A stuck ADC fetch or unreachable Cloud Asset endpoint should
+		// fail fast rather than burn the outer cap.
+		gcpCtx, gcpCancel := context.WithTimeout(ctx, stageTimeoutGCPConnect)
+		gd, closeFn, err := deps.newGCPDiscoverer(gcpCtx, *gcpProjectID)
+		gcpCancel()
 		if err != nil {
+			if errors.Is(err, context.DeadlineExceeded) {
+				fmt.Fprintf(os.Stderr, "discover: stage %q exceeded budget of %v: %v\n", "gcp-connect", stageTimeoutGCPConnect, err)
+			}
 			fmt.Fprintf(os.Stderr, "discover: build GCP discoverer: %v\n", err)
 			return discoverExitFatal
 		}
@@ -641,7 +743,7 @@ Exit codes:
 		// closure (productionDiscoverDeps) is intentionally an error
 		// stub that this branch overwrites.
 		if gca, ok := gd.(gcpAggAdapter); ok {
-			deps.enumerateUnsupportedGCP = func(ctx context.Context, args gcpdiscover.UnsupportedArgs) ([]gcpdiscover.UnsupportedResource, error) {
+			deps.enumerateUnsupportedGCP = func(ctx context.Context, args gcpdiscover.UnsupportedArgs) ([]gcpdiscover.UnsupportedResource, bool, error) {
 				return gca.d.EnumerateUnsupported(ctx, args)
 			}
 		}
@@ -654,9 +756,24 @@ Exit codes:
 		// loaded set and re-emits a deterministic file (sorted, []-not-null).
 		resources = preloaded
 	} else {
+		// Stage 2a: bulk DiscoverTypes (#311). Per-region fanout +
+		// per-service enumerators; the dominant wall-clock cost on a
+		// typical run.
+		discCtx, discCancel := context.WithTimeout(ctx, stageTimeoutDiscover)
 		var err error
-		resources, err = d.DiscoverTypes(ctx, types, *project, resolvedRegions, parsedSelectors, accountID, emitter)
+		resources, err = d.DiscoverTypes(discCtx, AggArgs{
+			Types:        types,
+			Project:      *project,
+			Regions:      resolvedRegions,
+			TagSelectors: parsedSelectors,
+			AccountID:    accountID,
+			Emitter:      emitter,
+		})
+		discCancel()
 		if err != nil {
+			if errors.Is(err, context.DeadlineExceeded) {
+				fmt.Fprintf(os.Stderr, "discover: stage %q exceeded budget of %v: %v\n", "discover", stageTimeoutDiscover, err)
+			}
 			fmt.Fprintf(os.Stderr, "discover: %v\n", err)
 			return discoverExitFatal
 		}
@@ -694,11 +811,31 @@ Exit codes:
 	// The mutual-exclusion gate above (--from-manifest is incompatible)
 	// has already returned discoverExitFatal if both are set.
 	if *includeUnsupported {
-		unsupported, uerr := enumerateUnsupportedForCloud(ctx, cloud, awsCfg, *project, resolvedRegions, parsedSelectors, emitter, deps)
+		// Stage 1.5 (#311): wrap the optional unsupported enumeration
+		// in its own per-stage budget so a Resource-Explorer-stuck or
+		// Cloud-Asset-throttled enumerator cannot starve mandatory
+		// downstream stages (Stage 2b/2c1/2c3). Soft-fails as before.
+		unsupCtx, unsupCancel := context.WithTimeout(ctx, stageTimeoutUnsupported)
+		unsupported, truncated, uerr := enumerateUnsupportedForCloud(unsupCtx, cloud, awsCfg, *project, resolvedRegions, parsedSelectors, *maxUnsupportedResults, emitter, deps)
+		unsupCancel()
 		if uerr != nil {
+			if errors.Is(uerr, context.DeadlineExceeded) {
+				fmt.Fprintf(os.Stderr, "discover: stage %q exceeded budget of %v: %v\n", "unsupported", stageTimeoutUnsupported, uerr)
+			}
 			fmt.Fprintf(os.Stderr, "discover: WARN: --include-unsupported: %v; imported.json was written; continuing without unsupported.json\n", uerr)
 		} else {
-			uout, un, werr := writeUnsupportedManifest(*outputDir, unsupported)
+			if truncated {
+				// #309: emit a one-shot stderr WARN so the
+				// operator (and the wizard's UI parser) can
+				// route to the truncation banner. The same
+				// signal is persisted on the wrapper-object
+				// shape, so consumers that miss the WARN still
+				// see truncated:true in unsupported.json.
+				fmt.Fprintf(os.Stderr,
+					"discover: WARN: --include-unsupported: cap fired (max_results=%d); unsupported.json contains the first %d resources sorted by (Type, Region, ID); truncated=true marker set.\n",
+					*maxUnsupportedResults, len(unsupported))
+			}
+			uout, un, werr := writeUnsupportedManifest(*outputDir, unsupported, truncated, *maxUnsupportedResults)
 			if werr != nil {
 				fmt.Fprintf(os.Stderr, "discover: WARN: --include-unsupported: write manifest: %v; imported.json was written; continuing without unsupported.json\n", werr)
 			} else {
@@ -726,8 +863,18 @@ Exit codes:
 		GCPProjectID:   *gcpProjectID,
 		AWSEndpointURL: *awsEndpointURL,
 	}
-	res, err := deps.runGenconfig(ctx, gcOptsBase, resources)
+	// Stage 2b (#311): bound the genconfig terraform-exec call so a
+	// hung subprocess doesn't drag the whole run out to the outer
+	// cap. The depchase pipeline closures below also wrap their inner
+	// genconfig calls in stageTimeoutGenconfig — see comment there for
+	// the budget-within-a-budget semantics.
+	gcCtx, gcCancel := context.WithTimeout(ctx, stageTimeoutGenconfig)
+	res, err := deps.runGenconfig(gcCtx, gcOptsBase, resources)
+	gcCancel()
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			fmt.Fprintf(os.Stderr, "discover: stage %q exceeded budget of %v: %v\n", "genconfig", stageTimeoutGenconfig, err)
+		}
 		fmt.Fprintf(os.Stderr, "discover: HCL generation: %v\n", err)
 		fmt.Fprintln(os.Stderr, "discover: imported.json was written, but Attributes are empty. Re-run with --no-hcl to skip Stage 2b explicitly.")
 		return discoverExitFatal
@@ -751,8 +898,18 @@ Exit codes:
 	// Stage 2c1: loop terraform plan against the generated stack and
 	// patch drifting attributes until the plan is empty. Same workdir as
 	// genconfig (re-uses the .terraform dir).
-	dfRes, err := deps.runDriftfix(ctx, driftfix.Options{Workdir: gcWorkdir})
+	//
+	// Per-stage budget (#311): bounds the entire driftfix loop. Inner
+	// driftfix calls fired by the depchase pipeline below get their own
+	// fresh stageTimeoutDriftfix budget on each iteration — see the
+	// pipeline closure for budget-within-a-budget semantics.
+	dfCtx, dfCancel := context.WithTimeout(ctx, stageTimeoutDriftfix)
+	dfRes, err := deps.runDriftfix(dfCtx, driftfix.Options{Workdir: gcWorkdir})
+	dfCancel()
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			fmt.Fprintf(os.Stderr, "discover: stage %q exceeded budget of %v: %v\n", "driftfix", stageTimeoutDriftfix, err)
+		}
 		fmt.Fprintf(os.Stderr, "discover: drift fix: %v\n", err)
 		fmt.Fprintln(os.Stderr, "discover: imported.json + generated.tf are on disk. Re-run with --no-driftfix to skip Stage 2c1 explicitly, or inspect the workdir to fix manually.")
 		return discoverExitFatal
@@ -773,10 +930,24 @@ Exit codes:
 	// iteration without taking a dep on either subpackage. After
 	// each successful iteration we rewrite imported.json so the
 	// manifest stays consistent with the on-disk generated.tf.
+	//
+	// Budget-within-a-budget (#311): the depchase orchestrator runs
+	// under stageTimeoutDepchase (set up below). Each pipeline
+	// iteration fires runGenconfig + runDriftfix; we wrap each inner
+	// call in its own stageTimeoutGenconfig / stageTimeoutDriftfix
+	// child of the iteration ctx. The inner budget is bounded by
+	// `min(stageTimeoutInner, time.Until(parentDeadline))`, so a
+	// late-iteration call still surfaces a clean DeadlineExceeded
+	// rather than hanging waiting for the outer dep-chase deadline.
 	pipeline := depchase.PipelineFns{
 		RunGenconfig: func(ictx context.Context, expanded []imported.ImportedResource) (*depchase.GenconfigResult, error) {
-			r, err := deps.runGenconfig(ictx, gcOptsBase, expanded)
+			innerCtx, innerCancel := context.WithTimeout(ictx, stageTimeoutGenconfig)
+			defer innerCancel()
+			r, err := deps.runGenconfig(innerCtx, gcOptsBase, expanded)
 			if err != nil {
+				if errors.Is(err, context.DeadlineExceeded) {
+					fmt.Fprintf(os.Stderr, "discover: stage %q (depchase iteration) exceeded budget of %v: %v\n", "genconfig", stageTimeoutGenconfig, err)
+				}
 				return nil, err
 			}
 			if _, _, err := writeManifest(*outputDir, cloud, r.Resources); err != nil {
@@ -788,8 +959,13 @@ Exit codes:
 			}, nil
 		},
 		RunDriftfix: func(ictx context.Context) (*depchase.DriftfixResult, error) {
-			r, err := deps.runDriftfix(ictx, driftfix.Options{Workdir: gcWorkdir})
+			innerCtx, innerCancel := context.WithTimeout(ictx, stageTimeoutDriftfix)
+			defer innerCancel()
+			r, err := deps.runDriftfix(innerCtx, driftfix.Options{Workdir: gcWorkdir})
 			if err != nil {
+				if errors.Is(err, context.DeadlineExceeded) {
+					fmt.Fprintf(os.Stderr, "discover: stage %q (depchase iteration) exceeded budget of %v: %v\n", "driftfix", stageTimeoutDriftfix, err)
+				}
 				return nil, err
 			}
 			return &depchase.DriftfixResult{
@@ -798,7 +974,12 @@ Exit codes:
 			}, nil
 		},
 	}
-	dcRes, err := deps.runDepChase(ctx, depchase.Options{
+	// Stage 2c3 (#311): bounds the entire dep-chase loop. The inner
+	// genconfig + driftfix iteration calls share this parent ctx via
+	// their own per-call WithTimeout above.
+	dcCtx, dcCancel := context.WithTimeout(ctx, stageTimeoutDepchase)
+	defer dcCancel()
+	dcRes, err := deps.runDepChase(dcCtx, depchase.Options{
 		Workdir:       gcWorkdir,
 		Region:        primaryRegion,
 		AccountID:     accountID,
@@ -812,6 +993,9 @@ Exit codes:
 		}
 	}
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			fmt.Fprintf(os.Stderr, "discover: stage %q exceeded budget of %v: %v\n", "depchase", stageTimeoutDepchase, err)
+		}
 		fmt.Fprintf(os.Stderr, "discover: dependency chase: %v\n", err)
 		fmt.Fprintln(os.Stderr, "discover: imported.json + generated.tf are on disk. Re-run with --no-depchase to skip Stage 2c3 explicitly, or raise --max-depchase-iterations and rerun.")
 		return discoverExitFatal
@@ -865,26 +1049,28 @@ func enumerateUnsupportedForCloud(
 	project string,
 	regions []string,
 	selectors []tagSelectorPair,
+	maxResults int,
 	emitter progress.Emitter,
 	deps discoverDeps,
-) ([]UnsupportedResource, error) {
+) ([]UnsupportedResource, bool, error) {
 	switch cloud {
 	case "aws":
 		if deps.enumerateUnsupportedAWS == nil {
-			return nil, fmt.Errorf("aws enumerator not configured")
+			return nil, false, fmt.Errorf("aws enumerator not configured")
 		}
 		sels := make([]awsdiscover.TagSelector, 0, len(selectors))
 		for _, s := range selectors {
 			sels = append(sels, awsdiscover.TagSelector{Key: s.Key, Value: s.Value})
 		}
-		raws, err := deps.enumerateUnsupportedAWS(ctx, awsCfg, awsdiscover.UnsupportedArgs{
+		raws, truncated, err := deps.enumerateUnsupportedAWS(ctx, awsCfg, awsdiscover.UnsupportedArgs{
 			Project:      project,
 			Regions:      regions,
 			TagSelectors: sels,
 			Emitter:      emitter,
+			MaxResults:   maxResults,
 		})
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		out := make([]UnsupportedResource, 0, len(raws))
 		for _, r := range raws {
@@ -898,23 +1084,24 @@ func enumerateUnsupportedForCloud(
 				Group:    r.Group,
 			})
 		}
-		return out, nil
+		return out, truncated, nil
 	case "gcp":
 		if deps.enumerateUnsupportedGCP == nil {
-			return nil, fmt.Errorf("gcp enumerator not configured")
+			return nil, false, fmt.Errorf("gcp enumerator not configured")
 		}
 		sels := make([]gcpdiscover.TagSelector, 0, len(selectors))
 		for _, s := range selectors {
 			sels = append(sels, gcpdiscover.TagSelector{Key: s.Key, Value: s.Value})
 		}
-		raws, err := deps.enumerateUnsupportedGCP(ctx, gcpdiscover.UnsupportedArgs{
+		raws, truncated, err := deps.enumerateUnsupportedGCP(ctx, gcpdiscover.UnsupportedArgs{
 			Project:      project,
 			Regions:      regions,
 			TagSelectors: sels,
 			Emitter:      emitter,
+			MaxResults:   maxResults,
 		})
 		if err != nil {
-			return nil, err
+			return nil, false, err
 		}
 		out := make([]UnsupportedResource, 0, len(raws))
 		for _, r := range raws {
@@ -928,9 +1115,9 @@ func enumerateUnsupportedForCloud(
 				Group:    r.Group,
 			})
 		}
-		return out, nil
+		return out, truncated, nil
 	default:
-		return nil, fmt.Errorf("unknown cloud %q", cloud)
+		return nil, false, fmt.Errorf("unknown cloud %q", cloud)
 	}
 }
 
