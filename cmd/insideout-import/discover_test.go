@@ -994,6 +994,123 @@ func TestRunDiscoverWithDeps_DepChaseAddedResourcesRewriteManifest(t *testing.T)
 	}
 }
 
+// TestRunDiscoverWithDeps_GraphJSONWrittenAfterDepChase pins (#297):
+// after the depchase loop converges, the (from, to) edge slice on
+// Result.Edges is persisted as <output>/graph.json. The picker reads
+// graph.json to close its auto-include loop.
+func TestRunDiscoverWithDeps_GraphJSONWrittenAfterDepChase(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	gc := &fakeGenconfig{}
+	df := &fakeDriftfix{}
+	addedRole := imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Cloud:    "aws",
+			Type:     "aws_iam_role",
+			Address:  "aws_iam_role.dep_role",
+			ImportID: "dep-role",
+			NameHint: "dep-role",
+			NativeIDs: map[string]string{
+				"name": "dep-role",
+				"arn":  "arn:aws:iam::1234567890:role/dep-role",
+			},
+		},
+		Tier:   imported.TierImportedFlat,
+		Source: imported.SourceImporter,
+	}
+	dc := &fakeDepChase{out: &depchase.Result{
+		GeneratedPath: filepath.Join(dir, "genconfig", "generated.tf"),
+		Iterations:    1,
+		Resources:     []imported.ImportedResource{validResource("aws_sqs_queue.alpha"), addedRole},
+		Added:         []imported.ImportedResource{addedRole},
+		Edges: []depchase.GraphEdge{
+			{From: "aws_sqs_queue.alpha", To: "aws_iam_role.dep_role"},
+		},
+	}}
+	agg := &fakeAggregator{out: []imported.ImportedResource{validResource("aws_sqs_queue.alpha")}}
+	rc := runDiscoverWithDeps([]string{
+		"--provider", "aws", "--project", "p", "--region", "us-east-1", "--output-dir", dir,
+	}, okDepsWithDC(agg, gc, df, dc))
+	if rc != discoverExitOK {
+		t.Fatalf("rc=%d, want OK", rc)
+	}
+	body, err := os.ReadFile(filepath.Join(dir, "graph.json"))
+	if err != nil {
+		t.Fatalf("graph.json must be written next to imported.json: %v", err)
+	}
+	var got []depchase.GraphEdge
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatalf("graph.json must decode as []GraphEdge: %v\nbody=%s", err, body)
+	}
+	if len(got) != 1 {
+		t.Fatalf("got %d edges, want 1", len(got))
+	}
+	if got[0].From != "aws_sqs_queue.alpha" || got[0].To != "aws_iam_role.dep_role" {
+		t.Errorf("edge=%+v, want (aws_sqs_queue.alpha → aws_iam_role.dep_role)", got[0])
+	}
+}
+
+// TestRunDiscoverWithDeps_GraphJSONEmptyArrayWhenNoEdges pins the
+// no-null contract end-to-end: a converged depchase that pulled in
+// nothing still produces graph.json containing `[]` so the picker
+// never sees a missing/null body.
+func TestRunDiscoverWithDeps_GraphJSONEmptyArrayWhenNoEdges(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	gc := &fakeGenconfig{}
+	df := &fakeDriftfix{}
+	dc := &fakeDepChase{out: &depchase.Result{
+		GeneratedPath: filepath.Join(dir, "genconfig", "generated.tf"),
+		Iterations:    0,
+		Resources:     []imported.ImportedResource{validResource("aws_sqs_queue.alpha")},
+		Added:         nil,
+		Edges:         nil,
+	}}
+	agg := &fakeAggregator{out: []imported.ImportedResource{validResource("aws_sqs_queue.alpha")}}
+	rc := runDiscoverWithDeps([]string{
+		"--provider", "aws", "--project", "p", "--region", "us-east-1", "--output-dir", dir,
+	}, okDepsWithDC(agg, gc, df, dc))
+	if rc != discoverExitOK {
+		t.Fatalf("rc=%d, want OK", rc)
+	}
+	body, err := os.ReadFile(filepath.Join(dir, "graph.json"))
+	if err != nil {
+		t.Fatalf("graph.json must be written even when no edges were recorded: %v", err)
+	}
+	if strings.TrimSpace(string(body)) == "null" {
+		t.Errorf("graph.json must serialize empty Edges as `[]`, not `null`; got:\n%s", body)
+	}
+	var got []depchase.GraphEdge
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 0 {
+		t.Errorf("got %d edges, want 0", len(got))
+	}
+}
+
+// TestRunDiscoverWithDeps_GraphJSONNotWrittenWhenDepChaseSkipped pins
+// the no-side-effect contract: --no-depchase skips Stage 2c3 entirely,
+// so no graph.json is produced (the picker treats a missing file as
+// "no dep graph available", which is the truthful state).
+func TestRunDiscoverWithDeps_GraphJSONNotWrittenWhenDepChaseSkipped(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	gc := &fakeGenconfig{}
+	df := &fakeDriftfix{}
+	dc := &fakeDepChase{}
+	agg := &fakeAggregator{out: []imported.ImportedResource{validResource("aws_sqs_queue.alpha")}}
+	rc := runDiscoverWithDeps([]string{
+		"--provider", "aws", "--project", "p", "--region", "us-east-1", "--output-dir", dir, "--no-depchase",
+	}, okDepsWithDC(agg, gc, df, dc))
+	if rc != discoverExitOK {
+		t.Fatalf("rc=%d, want OK", rc)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "graph.json")); !os.IsNotExist(err) {
+		t.Errorf("graph.json must NOT exist when --no-depchase skipped Stage 2c3; stat err=%v", err)
+	}
+}
+
 // TestRunDiscoverWithDeps_NoHCLSkipsBothStages pins that --no-hcl skips
 // Stage 2b AND its downstream Stage 2c1 — running drift fix without
 // Stage 2b's generated.tf would error confusingly.

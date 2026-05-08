@@ -35,13 +35,26 @@ const generatedFile = "generated.tf"
 // ImportID. A literal that matches any of those is considered
 // in-batch and therefore not unresolved.
 func FindUnresolved(raw []byte, resources []imported.ImportedResource) ([]string, error) {
+	out, _, err := findUnresolvedWithConsumers(raw, resources)
+	return out, err
+}
+
+// findUnresolvedWithConsumers is the testable form of FindUnresolved
+// that additionally returns a map from each unresolved ARN literal to
+// the deterministic set of Terraform-address consumer blocks that
+// referenced it. The Run loop uses the consumer map to record
+// (consumer → discovered) graph edges (#297). Two distinct callers
+// (the public FindUnresolved and the Run loop) share the parser pass
+// rather than walking generated.tf twice per iteration.
+func findUnresolvedWithConsumers(raw []byte, resources []imported.ImportedResource) ([]string, map[string][]string, error) {
 	resolved := buildResolvedSet(resources)
 	f, diags := hclwrite.ParseConfig(raw, generatedFile, hcl.Pos{Line: 1, Column: 1})
 	if diags.HasErrors() {
-		return nil, fmt.Errorf("depchase: parse generated.tf: %s", diags.Error())
+		return nil, nil, fmt.Errorf("depchase: parse generated.tf: %s", diags.Error())
 	}
 
 	seen := make(map[string]struct{})
+	consumers := make(map[string]map[string]struct{}) // arn → set of addresses
 	for _, blk := range f.Body().Blocks() {
 		if blk.Type() != "resource" {
 			continue
@@ -49,7 +62,17 @@ func FindUnresolved(raw []byte, resources []imported.ImportedResource) ([]string
 		if len(blk.Labels()) != 2 {
 			continue
 		}
-		collectFromBody(blk.Body(), resolved, seen)
+		addr := blk.Labels()[0] + "." + blk.Labels()[1]
+		hits := collectFromBodyWithHits(blk.Body(), resolved)
+		for _, lit := range hits {
+			seen[lit] = struct{}{}
+			set, ok := consumers[lit]
+			if !ok {
+				set = make(map[string]struct{})
+				consumers[lit] = set
+			}
+			set[addr] = struct{}{}
+		}
 	}
 
 	out := make([]string, 0, len(seen))
@@ -57,17 +80,32 @@ func FindUnresolved(raw []byte, resources []imported.ImportedResource) ([]string
 		out = append(out, k)
 	}
 	sort.Strings(out)
-	return out, nil
+
+	// Flatten consumers map into deterministic-sorted slices so callers
+	// (and tests) see byte-stable output.
+	flat := make(map[string][]string, len(consumers))
+	for arn, set := range consumers {
+		addrs := make([]string, 0, len(set))
+		for a := range set {
+			addrs = append(addrs, a)
+		}
+		sort.Strings(addrs)
+		flat[arn] = addrs
+	}
+	return out, flat, nil
 }
 
-// collectFromBody scans every top-level attribute on a body for ARN
-// literals not in the resolved set. Nested blocks (e.g.
+// collectFromBodyWithHits scans every top-level attribute on a body
+// for ARN literals not in the resolved set, returning the
+// deduplicated-within-this-body list of hits. Nested blocks (e.g.
 // `environment { variables = {...} }`) are NOT walked: HCL maps and
 // lists of objects rarely contain bare ARN literals at the leaf, and
 // walking them would explode the surface this conservative pass needs
 // to maintain. If a real-world stack lands ARN refs in nested
 // attributes the behavior can be widened in a follow-up.
-func collectFromBody(body *hclwrite.Body, resolved map[string]struct{}, out map[string]struct{}) {
+func collectFromBodyWithHits(body *hclwrite.Body, resolved map[string]struct{}) []string {
+	var hits []string
+	seen := make(map[string]struct{})
 	for _, attr := range body.Attributes() {
 		lit, ok := stringLiteralValue(attr)
 		if !ok {
@@ -79,8 +117,13 @@ func collectFromBody(body *hclwrite.Body, resolved map[string]struct{}, out map[
 		if _, ok := resolved[lit]; ok {
 			continue
 		}
-		out[lit] = struct{}{}
+		if _, dup := seen[lit]; dup {
+			continue
+		}
+		seen[lit] = struct{}{}
+		hits = append(hits, lit)
 	}
+	return hits
 }
 
 // isARNLiteral is the cheap "is this value worth feeding to ParseRef"

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/progress"
+	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/insideout-import/registry"
 )
 
@@ -146,6 +147,12 @@ func gcpAssetToUnsupported(r gcpAssetResult) UnsupportedResource {
 		Name:     name,
 		Location: r.Location,
 		Tags:     r.Labels,
+		// Group is the high-level UI category from imported.Category
+		// (#297). Empty for unknown asset types (the asset type slug
+		// had no Terraform mapping) and for mapped-but-uncategorized
+		// rows; in either case omitempty drops the field on the wire
+		// and the picker uses an "Other" fallback bucket.
+		Group: imported.Category(tfType),
 	}
 }
 

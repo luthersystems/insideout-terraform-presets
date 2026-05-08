@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/depchase"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
 
@@ -458,6 +459,148 @@ func TestWriteUnsupportedManifest_OmitemptyOptionalFields(t *testing.T) {
 	for _, key := range []string{`"region":`, `"location":`, `"tags":`, `"group":`} {
 		if bytes.Contains(body, []byte(key)) {
 			t.Errorf("manifest carries %s for omitempty-zero value; got: %s", key, body)
+		}
+	}
+}
+
+// TestWriteGraphManifest_HappyPath pins the basic invariant: 2 edges
+// in, 2 edges out, file named graph.json, valid JSON. Mirrors the
+// shape of TestWriteUnsupportedManifest_HappyPath so a reader of one
+// can predict the other.
+func TestWriteGraphManifest_HappyPath(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	edges := []depchase.GraphEdge{
+		{From: "aws_lambda_function.b", To: "aws_iam_role.r"},
+		{From: "aws_lambda_function.a", To: "aws_iam_role.r"},
+	}
+	path, n, err := writeGraphManifest(dir, edges)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 2 {
+		t.Errorf("count=%d, want 2", n)
+	}
+	if filepath.Base(path) != "graph.json" {
+		t.Errorf("path=%q, want ends in graph.json", path)
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []depchase.GraphEdge
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatalf("graph.json is not valid JSON: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("decoded len=%d, want 2", len(got))
+	}
+	// Sort key is (From, To); the two rows share To, so the From
+	// tiebreak puts the .a row first.
+	if got[0].From != "aws_lambda_function.a" {
+		t.Errorf("got[0].From=%q, want %q (sorted by (From, To))", got[0].From, "aws_lambda_function.a")
+	}
+}
+
+// TestWriteGraphManifest_EmptyInputWritesArrayNotNull pins the no-null
+// contract: the wizard picker reads graph.json on every load and
+// cannot distinguish "no edges" from "missing file" if the body is
+// `null`. An empty input must serialize as `[]`.
+func TestWriteGraphManifest_EmptyInputWritesArrayNotNull(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	for _, in := range [][]depchase.GraphEdge{nil, {}} {
+		path, n, err := writeGraphManifest(dir, in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if n != 0 {
+			t.Errorf("count=%d, want 0 for empty input", n)
+		}
+		body, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.TrimSpace(string(body)) == "null" {
+			t.Errorf("must emit `[]` not `null`; got: %s", body)
+		}
+		if !bytes.HasPrefix(bytes.TrimSpace(body), []byte("[")) {
+			t.Errorf("must start with `[`; got: %s", body)
+		}
+	}
+}
+
+// TestWriteGraphManifest_DeterministicAcrossRuns pins byte-identical
+// output across runs with the same input, modulo the input order.
+// The picker hashes graph.json contents to invalidate cached views;
+// non-deterministic byte output would invalidate the cache on every
+// idempotent re-run.
+func TestWriteGraphManifest_DeterministicAcrossRuns(t *testing.T) {
+	t.Parallel()
+	edges := []depchase.GraphEdge{
+		{From: "aws_lambda_function.x", To: "aws_iam_role.r"},
+		{From: "aws_iam_role.r", To: "aws_iam_policy.p"},
+		{From: "aws_lambda_function.y", To: "aws_kms_key.k"},
+	}
+	dir1, dir2 := t.TempDir(), t.TempDir()
+	if _, _, err := writeGraphManifest(dir1, edges); err != nil {
+		t.Fatal(err)
+	}
+	rev := make([]depchase.GraphEdge, len(edges))
+	for i := range edges {
+		rev[len(edges)-1-i] = edges[i]
+	}
+	if _, _, err := writeGraphManifest(dir2, rev); err != nil {
+		t.Fatal(err)
+	}
+	a, err := os.ReadFile(filepath.Join(dir1, "graph.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(filepath.Join(dir2, "graph.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(a, b) {
+		t.Errorf("graph.json differs across runs with permuted input:\nrun1=%s\nrun2=%s", a, b)
+	}
+}
+
+// TestWriteGraphManifest_SortOrder pins the (From, To) sort. A
+// regression that switched key order (e.g. (To, From)) would
+// reorder the picker's auto-include traversal in surprising ways.
+func TestWriteGraphManifest_SortOrder(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	edges := []depchase.GraphEdge{
+		{From: "z", To: "a"},
+		{From: "a", To: "z"},
+		{From: "a", To: "b"},
+		{From: "m", To: "a"},
+	}
+	if _, _, err := writeGraphManifest(dir, edges); err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(filepath.Join(dir, "graph.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []depchase.GraphEdge
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatal(err)
+	}
+	want := []depchase.GraphEdge{
+		{From: "a", To: "b"},
+		{From: "a", To: "z"},
+		{From: "m", To: "a"},
+		{From: "z", To: "a"},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("got %d edges, want %d", len(got), len(want))
+	}
+	for i := range got {
+		if got[i] != want[i] {
+			t.Errorf("edge[%d]=%+v, want %+v", i, got[i], want[i])
 		}
 	}
 }

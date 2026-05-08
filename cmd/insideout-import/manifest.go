@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/depchase"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
@@ -21,6 +22,15 @@ const manifestFile = "imported.json"
 // enumeration sibling manifest written by writeUnsupportedManifest
 // when --include-unsupported is set (#296).
 const unsupportedManifestFile = "unsupported.json"
+
+// graphManifestFile is the on-disk file name for the dependency-graph
+// sibling manifest written by writeGraphManifest after the depchase
+// loop converges (#297). The reliable wizard's resource picker reads
+// graph.json to close the auto-include loop: when an operator selects
+// a resource, the wizard auto-includes every transitive `dependsOn`
+// target. Empty edge list still emits `[]` (never null) so the picker
+// never has to special-case missing/empty file.
+const graphManifestFile = "graph.json"
 
 // writeManifest validates the resource set with composer.ValidateImportedResources
 // and writes the JSON array of ImportedResource into <dir>/imported.json.
@@ -159,6 +169,54 @@ func writeUnsupportedManifest(dir string, resources []UnsupportedResource) (stri
 		return "", 0, fmt.Errorf("write %s: %w", out, err)
 	}
 	return out, len(resources), nil
+}
+
+// writeGraphManifest writes the JSON array of (from, to) GraphEdge
+// rows into <dir>/graph.json (#297). Mirrors writeUnsupportedManifest's
+// invariants: nil → `[]` (never `null`), deterministic sort by
+// (From, To), file written via WriteFile (no temp+rename).
+//
+// Sort key is (From, To) — the same key the depchase Run loop sorts
+// Edges with on insertion. We re-sort here so a caller that
+// constructs a GraphEdge slice by hand and writes it through this
+// function still produces byte-identical output across runs.
+//
+// Returns (path, count, error). The CLI treats graph.json as
+// best-effort UI metadata: a write failure surfaces as a stderr WARN
+// and does not abort the run (imported.json is the source of truth).
+//
+// Why graph.json is a sibling of imported.json (rather than
+// embedded): the wizard picker reads them separately on different
+// stages of the import flow, and an embedded edges slice would force
+// every imported.json reader (composer, validators, riley, etc.) to
+// know the dependency-graph schema. Persisting as a sibling keeps
+// imported.json's wire shape unchanged and lets graph.json evolve
+// independently.
+func writeGraphManifest(dir string, edges []depchase.GraphEdge) (string, int, error) {
+	if edges == nil {
+		edges = []depchase.GraphEdge{}
+	}
+	sort.Slice(edges, func(i, j int) bool {
+		if edges[i].From != edges[j].From {
+			return edges[i].From < edges[j].From
+		}
+		return edges[i].To < edges[j].To
+	})
+
+	body, err := json.MarshalIndent(edges, "", "  ")
+	if err != nil {
+		return "", 0, fmt.Errorf("marshal graph manifest: %w", err)
+	}
+	body = append(body, '\n')
+
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", 0, fmt.Errorf("mkdir %s: %w", dir, err)
+	}
+	out := filepath.Join(dir, graphManifestFile)
+	if err := os.WriteFile(out, body, 0o644); err != nil {
+		return "", 0, fmt.Errorf("write %s: %w", out, err)
+	}
+	return out, len(edges), nil
 }
 
 // formatIssues turns a slice of validation issues into a multi-line string

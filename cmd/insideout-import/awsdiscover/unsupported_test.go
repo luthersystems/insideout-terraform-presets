@@ -327,6 +327,55 @@ func TestEnumerateUnsupported_EmitsServiceStartFinishPerRegion(t *testing.T) {
 	}
 }
 
+// TestEnumerateUnsupported_PopulatesGroup pins the (#297) Category
+// wire-through: every emitted UnsupportedResource carries a non-empty
+// Group when its Type is in the categorized set, and an empty Group
+// for unmapped Resource Explorer slugs (so the picker's "Other"
+// fallback fires).
+//
+// We sample three categorized rows (one per main category cluster the
+// AWS lookup table covers — Network Security, Compute, Data Storage)
+// plus one unmapped slug. A regression that wired the wrong
+// category map (or forgot to call imported.Category at all) surfaces
+// here.
+func TestEnumerateUnsupported_PopulatesGroup(t *testing.T) {
+	t.Parallel()
+	fake := &fakeResourceExplorerSearcher{
+		byRegion: map[string][]retypes.Resource{
+			"us-east-1": {
+				rxResource("arn:aws:ec2:us-east-1:123:vpc/vpc-abc", "ec2:vpc", "us-east-1"),
+				rxResource("arn:aws:eks:us-east-1:123:cluster/c", "eks:cluster", "us-east-1"),
+				rxResource("arn:aws:rds:us-east-1:123:cluster:rds-c", "rds:cluster", "us-east-1"),
+				rxResource("arn:aws:newservice:us-east-1:123:thing/x", "newservice:thing", "us-east-1"),
+			},
+		},
+	}
+	got, err := enumerateUnsupportedAWS(context.Background(), UnsupportedArgs{
+		Regions:  []string{"us-east-1"},
+		Searcher: fake,
+	}, "us-east-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	groupByType := make(map[string]string)
+	for _, r := range got {
+		groupByType[r.Type] = r.Group
+	}
+	wantGroup := map[string]string{
+		"aws_vpc":         "Network Security",
+		"aws_eks_cluster": "Virtual Machines",
+		"aws_rds_cluster": "Data Storage",
+		"":                "", // unmapped slug → no Type → no Group
+	}
+	for typ, want := range wantGroup {
+		if got, ok := groupByType[typ]; !ok {
+			t.Errorf("type %q not in emitted set %v", typ, groupByType)
+		} else if got != want {
+			t.Errorf("Group for %q = %q, want %q", typ, got, want)
+		}
+	}
+}
+
 // TestAWSResourceNameFromARN_TrailingSegment pins the display-name
 // extraction across ARN shape variants Resource Explorer hands back.
 func TestAWSResourceNameFromARN_TrailingSegment(t *testing.T) {

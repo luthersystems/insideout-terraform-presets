@@ -1,0 +1,36 @@
+aws_cloudfront_distribution	Network Security
+aws_cloudwatch_log_group	Observability
+aws_dynamodb_table	Data Storage
+aws_ecr_repository	Data Storage
+aws_ecs_cluster	Virtual Machines
+aws_eks_cluster	Virtual Machines
+aws_elb	Network Security
+aws_iam_policy	Security
+aws_iam_role	Security
+aws_kms_key	Security
+aws_lambda_function	Virtual Machines
+aws_lb	Network Security
+aws_rds_cluster	Data Storage
+aws_rds_instance	Data Storage
+aws_route53_zone	Network Security
+aws_s3_bucket	Data Storage
+aws_secretsmanager_secret	Security
+aws_security_group	Network Security
+aws_sqs_queue	Events
+aws_subnet	Network Security
+aws_vpc	Network Security
+google_bigquery_dataset	Data Storage
+google_cloud_run_service	Virtual Machines
+google_cloudfunctions_function	Virtual Machines
+google_compute_disk	Data Storage
+google_compute_firewall	Network Security
+google_compute_instance	Virtual Machines
+google_compute_network	Network Security
+google_compute_subnetwork	Network Security
+google_container_cluster	Virtual Machines
+google_pubsub_subscription	Events
+google_pubsub_topic	Events
+google_secret_manager_secret	Security
+google_service_account	Security
+google_sql_database_instance	Data Storage
+google_storage_bucket	Data Storage

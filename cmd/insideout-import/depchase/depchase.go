@@ -102,13 +102,40 @@ type Options struct {
 // Iterations counts how many times the loop ran the regenerate +
 // re-driftfix cycle (0 means "no unresolved refs on the original
 // stack — nothing to do"). Warnings lists unresolvable / unsupported
-// references the loop chose to surface rather than fail on.
+// references the loop chose to surface rather than fail on. Edges
+// records the dependency graph of each successful add (#297) so the
+// CLI can persist it as graph.json next to imported.json.
 type Result struct {
 	GeneratedPath string
 	Iterations    int
 	Resources     []imported.ImportedResource
 	Added         []imported.ImportedResource
 	Warnings      []string
+
+	// Edges is the dependency graph the loop built during chase: one
+	// entry per (consumer → producer) Terraform-address pair where the
+	// consumer's HCL referenced an ARN literal pointing at a resource
+	// the loop pulled in via DiscoverByID. The picker uses Edges to
+	// close the auto-include loop in the wizard UI: when the operator
+	// selects a row, the wizard auto-includes every transitive
+	// `dependsOn` target. The CLI persists this slice as graph.json
+	// (#297). Empty when nothing was added; nil-safe (writeGraphManifest
+	// substitutes []GraphEdge{} so the on-disk file is `[]`, never
+	// `null`).
+	Edges []GraphEdge
+}
+
+// GraphEdge is a single (from, to) Terraform-address pair representing
+// "the resource at `from` references the resource at `to`." Addresses
+// are used (rather than ImportIDs) because addresses are the canonical
+// identifier the composer uses when wiring HCL in the generated stack;
+// ImportIDs are not always stable across providers (e.g. AWS IAM uses
+// the role name; GCP IAM uses the project + member tuple). The reliable
+// wizard's picker reads (from, to) addresses verbatim into its
+// dependsOn graph.
+type GraphEdge struct {
+	From string `json:"from"`
+	To   string `json:"to"`
 }
 
 // Run is the Stage 2c3 dependency-chase loop:
@@ -160,12 +187,17 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 	seenWarning := make(map[string]struct{})
 	var prevUnresolved []string
 
+	// seenEdges deduplicates Edges across iterations: the same
+	// (consumer → discovered) pair can re-surface if the regenerate
+	// step rewrites the consumer's HCL without changing the reference.
+	seenEdges := make(map[string]struct{})
+
 	for iter := 1; iter <= opts.MaxIterations; iter++ {
 		raw, err := os.ReadFile(generatedPath)
 		if err != nil {
 			return nil, fmt.Errorf("depchase: read generated.tf: %w", err)
 		}
-		unresolved, err := FindUnresolved(raw, res.Resources)
+		unresolved, consumersByARN, err := findUnresolvedWithConsumers(raw, res.Resources)
 		if err != nil {
 			return nil, err
 		}
@@ -233,6 +265,19 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 				}
 				continue
 			}
+			// Record one edge per (consumer, discovered) pair (#297).
+			// consumersByARN was filled from the same generated.tf
+			// pass that produced unresolved; every unresolved literal
+			// that successfully discovered MUST appear in that map.
+			// A defensively-empty consumer slice (e.g. the literal
+			// surfaced from a body the walker doesn't handle) just
+			// drops the edge — better than panicking on a missing key.
+			toAddr := ir.Identity.Address
+			if toAddr != "" {
+				for _, fromAddr := range consumersByARN[s.arn] {
+					recordEdge(res, seenEdges, fromAddr, toAddr)
+				}
+			}
 			added = append(added, ir)
 		}
 
@@ -279,6 +324,33 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 type seed struct {
 	arn string
 	ref Ref
+}
+
+// recordEdge appends a (from, to) GraphEdge to res.Edges if the same
+// pair hasn't been recorded before in this run. Dedup is per-pair so
+// a consumer that references the same target twice (or that
+// resurfaces across iterations because the regenerate stage rewrote
+// the HCL) only contributes one edge to graph.json.
+//
+// The Edges slice is kept in sorted (From, To) order so the on-disk
+// graph.json is byte-identical across runs for the same input, even
+// though insertion order is non-deterministic in
+// findUnresolvedWithConsumers's map iteration. We sort on insertion
+// rather than at write-time so any future caller that reads
+// res.Edges directly sees the same stable order.
+func recordEdge(res *Result, seen map[string]struct{}, from, to string) {
+	key := from + "\x00" + to
+	if _, ok := seen[key]; ok {
+		return
+	}
+	seen[key] = struct{}{}
+	res.Edges = append(res.Edges, GraphEdge{From: from, To: to})
+	sort.Slice(res.Edges, func(i, j int) bool {
+		if res.Edges[i].From != res.Edges[j].From {
+			return res.Edges[i].From < res.Edges[j].From
+		}
+		return res.Edges[i].To < res.Edges[j].To
+	})
 }
 
 // addWarning appends to Warnings if the same message hasn't been

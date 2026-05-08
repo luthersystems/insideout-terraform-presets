@@ -14,6 +14,7 @@ import (
 	retypes "github.com/aws/aws-sdk-go-v2/service/resourceexplorer2/types"
 
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/progress"
+	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/insideout-import/registry"
 )
 
@@ -292,6 +293,12 @@ func awsResourceToUnsupported(r retypes.Resource, supportedSet map[string]struct
 		ID:     id,
 		Name:   name,
 		Region: region,
+		// Group is the high-level UI category from imported.Category
+		// (#297). When tfType is empty (Resource Explorer slug had no
+		// Terraform mapping) Category("") returns "" so the omitempty
+		// tag drops the field. Mapped-but-uncategorized rows also
+		// return "" — the picker falls back to "Other" in that case.
+		Group: imported.Category(tfType),
 	}, true
 }
 

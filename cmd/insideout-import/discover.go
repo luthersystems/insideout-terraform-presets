@@ -722,6 +722,18 @@ Exit codes:
 			return discoverExitFatal
 		}
 	}
+	// Persist the dependency-graph edges next to imported.json (#297).
+	// Best-effort: a write failure does NOT abort the run — imported.json
+	// is the source of truth and the picker tolerates a missing
+	// graph.json. We still log to stderr so an operator can spot the
+	// gap. Always write (even when Edges is empty) so the wizard's UI
+	// has a stable file to read; writeGraphManifest emits `[]` for
+	// the empty case.
+	if gpath, gn, gerr := writeGraphManifest(*outputDir, dcRes.Edges); gerr != nil {
+		fmt.Fprintf(os.Stderr, "discover: write graph.json: %v (continuing)\n", gerr)
+	} else {
+		fmt.Fprintf(summaryOut, "wrote %s (%d dependency edge(s))\n", gpath, gn)
+	}
 	fmt.Fprintf(summaryOut, "dep chase converged after %d iteration(s); added %d dependency resource(s); generated HCL at %s\n",
 		dcRes.Iterations, len(dcRes.Added), dcRes.GeneratedPath)
 	return discoverExitOK

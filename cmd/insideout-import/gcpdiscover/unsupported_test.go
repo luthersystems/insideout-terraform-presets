@@ -262,6 +262,49 @@ func TestEnumerateUnsupportedGCP_QueryShapeFromArgs(t *testing.T) {
 	}
 }
 
+// TestEnumerateUnsupportedGCP_PopulatesGroup pins the (#297) Category
+// wire-through for the GCP path: every emitted UnsupportedResource
+// carries a non-empty Group when its Type is in the categorized set,
+// and an empty Group for unmapped Cloud Asset slugs.
+//
+// Mirrors TestEnumerateUnsupported_PopulatesGroup on the AWS side. A
+// regression that wired the wrong category map (or forgot to call
+// imported.Category) surfaces here.
+func TestEnumerateUnsupportedGCP_PopulatesGroup(t *testing.T) {
+	t.Parallel()
+	fake := &fakeAssetSearcher{
+		results: []gcpAssetResult{
+			gcpAsset("//compute.googleapis.com/projects/p/zones/us-central1-a/instances/vm-x", "compute.googleapis.com/Instance", "us-central1", nil),
+			gcpAsset("//container.googleapis.com/projects/p/locations/us-central1/clusters/c", "container.googleapis.com/Cluster", "us-central1", nil),
+			gcpAsset("//sqladmin.googleapis.com/projects/p/instances/db", "sqladmin.googleapis.com/Instance", "us-central1", nil),
+			// Unmapped slug — must pass through with empty Type and Group.
+			gcpAsset("//newservice.googleapis.com/projects/p/things/x", "newservice.googleapis.com/Thing", "us-central1", nil),
+		},
+	}
+	g := &GCPDiscoverer{searcher: fake, projectID: "real-proj"}
+	got, err := g.EnumerateUnsupported(context.Background(), UnsupportedArgs{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	groupByType := make(map[string]string)
+	for _, r := range got {
+		groupByType[r.Type] = r.Group
+	}
+	wantGroup := map[string]string{
+		"google_compute_instance":      "Virtual Machines",
+		"google_container_cluster":     "Virtual Machines",
+		"google_sql_database_instance": "Data Storage",
+		"":                             "", // unmapped slug → no Type → no Group
+	}
+	for typ, want := range wantGroup {
+		if got, ok := groupByType[typ]; !ok {
+			t.Errorf("type %q not in emitted set %v", typ, groupByType)
+		} else if got != want {
+			t.Errorf("Group for %q = %q, want %q", typ, got, want)
+		}
+	}
+}
+
 // TestGCPResourceNameFromAssetName_TrailingSegment pins the display-
 // name extraction across asset-name shapes Cloud Asset hands back.
 func TestGCPResourceNameFromAssetName_TrailingSegment(t *testing.T) {
