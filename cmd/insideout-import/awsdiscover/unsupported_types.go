@@ -11,15 +11,14 @@ package awsdiscover
 // surface them under "Other".
 //
 // The initial mapping covers:
-//   - the 9 importable AWS types the discover pipeline already emits
+//   - the importable AWS types the discover pipeline already emits
 //     (mirrors registry.SupportedDiscoverTypes("aws") so the subtract
 //     step actually fires; missing entries here would let importable
 //     rows leak into unsupported.json)
 //   - the high-traffic unimportable types the wizard's mockup calls
-//     out as greyed-out picker rows: VPC + subnets + security groups
-//     (Network Security), RDS cluster + DB instance (Data Storage),
-//     EKS / ECS / ECR / EC2 instances (Compute), ALB / ELB / Route53 /
-//     CloudFront (Networking).
+//     out as greyed-out picker rows: RDS cluster + DB instance (Data
+//     Storage), EKS / ECS / ECR / EC2 instances (Compute), ALB / ELB /
+//     Route53 / CloudFront (Networking).
 //
 // Extending this map is a one-line change per row; #297 is the
 // parallel PR that owns the Category-side mapping.
@@ -44,11 +43,13 @@ var awsTFTypeByResourceType = map[string]string{
 	"iam:policy":            "aws_iam_policy",
 	"kms:key":               "aws_kms_key",
 	"s3:bucket":             "aws_s3_bucket",
+	"ec2:vpc":               "aws_vpc",
+	"ec2:subnet":            "aws_subnet",
+	"ec2:security-group":    "aws_security_group",
+	"ec2:internet-gateway":  "aws_internet_gateway",
+	"ec2:natgateway":        "aws_nat_gateway",
+	"ec2:elastic-ip":        "aws_eip",
 	// --- Unimportable types — the picker greys these out ---
-	// Network Security
-	"ec2:vpc":            "aws_vpc",
-	"ec2:subnet":         "aws_subnet",
-	"ec2:security-group": "aws_security_group",
 	// Data Storage
 	"rds:cluster": "aws_rds_cluster",
 	"rds:db":      "aws_db_instance",

@@ -136,6 +136,9 @@ func NewAWSDiscovererWithConcurrency(cfg aws.Config, maxConcurrency int) *AWSDis
 			"aws_vpc":                   newVPCDiscoverer(cfg),
 			"aws_subnet":                newSubnetDiscoverer(cfg),
 			"aws_security_group":        newSecurityGroupDiscoverer(cfg),
+			"aws_internet_gateway":      newInternetGatewayDiscoverer(cfg),
+			"aws_nat_gateway":           newNatGatewayDiscoverer(cfg),
+			"aws_eip":                   newEIPDiscoverer(cfg),
 		},
 	}
 }
@@ -162,6 +165,9 @@ var serviceSlugByTFType = map[string]string{
 	"aws_vpc":                   "vpc",
 	"aws_subnet":                "subnet",
 	"aws_security_group":        "security_group",
+	"aws_internet_gateway":      "internet_gateway",
+	"aws_nat_gateway":           "nat_gateway",
+	"aws_eip":                   "eip",
 }
 
 // ServiceSlug returns the progress-event slug for a Terraform resource

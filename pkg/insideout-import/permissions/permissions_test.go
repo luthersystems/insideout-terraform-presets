@@ -19,10 +19,13 @@ import (
 var awsTFTypeToServiceSlug = map[string]string{
 	"aws_cloudwatch_log_group":  "cloudwatchlogs",
 	"aws_dynamodb_table":        "dynamodb",
+	"aws_eip":                   "eip",
 	"aws_iam_policy":            "iam_policy",
 	"aws_iam_role":              "iam_role",
+	"aws_internet_gateway":      "internet_gateway",
 	"aws_kms_key":               "kms",
 	"aws_lambda_function":       "lambda",
+	"aws_nat_gateway":           "nat_gateway",
 	"aws_s3_bucket":             "s3",
 	"aws_secretsmanager_secret": "secretsmanager",
 	"aws_security_group":        "security_group",
