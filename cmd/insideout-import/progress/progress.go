@@ -30,36 +30,151 @@ import (
 	"time"
 )
 
-// Event is the on-the-wire shape produced by JSONEmitter. Field order in
-// the JSON output is determined by the struct layout (Go's encoding/json
-// emits in declaration order); we keep the most-discriminating fields
-// first so a streaming consumer can route on `event` without reading the
-// rest of the line.
+// Event is the on-the-wire shape produced by JSONEmitter. Each event
+// type carries a specific, fixed field set defined by the
+// MarshalJSON dispatch below; the on-the-wire field order follows the
+// per-event branch in MarshalJSON, with `event` always first and `ts`
+// always last so a streaming consumer can route on `event` without
+// reading the rest of the line.
 //
-// Optional fields use `omitempty` so each event type carries only the
-// fields that apply to it — service_start has no Count/DurationMs, etc.
-// The Timestamp field is always present; tests inject a fixed clock via
-// JSONEmitter.WithNow so golden output is deterministic.
+// The struct tags carry no `omitempty` on the numeric fields
+// (Count/Total/DurationMs) because MarshalJSON elides absent fields
+// per event type rather than relying on Go's zero-value-elision.
+// This is the fix for #312: a service_finish or stage_finish whose
+// scope yielded zero items must still emit `"count":0` so SSE
+// consumers don't have to special-case "count missing" vs
+// "count == 0". The Timestamp field is always present; tests inject
+// a fixed clock via JSONEmitter.WithNow so golden output is
+// deterministic.
 //
-// TODO(#312): typed sub-events or MarshalJSON. The omitempty Count
-// field drops `count` from service_finish/stage_finish events whose
-// scope yielded zero items; the SSE consumer renders that as "count
-// missing" rather than "count = 0". Either split into typed
-// sub-events or add a custom MarshalJSON that always emits count for
-// service_finish + stage_finish (and never for service_start +
-// item_found).
+// Region vs Location: today AWS discoverers populate Region and GCP
+// discoverers populate Location (the public Emitter API takes a
+// `region` parameter that GCP overloads with location values, but
+// the Event struct keeps them distinct for downstream consumers).
+// MarshalJSON emits exactly one of `region` or `location` on
+// service_*/item_found events: Location wins if both are set
+// (defensive), Region is emitted otherwise. If both are empty
+// (e.g. global services like IAM that pass region=""), MarshalJSON
+// emits `"region":""` — preserving the previous omitempty-absent
+// shape would require a third branch and the empty string is
+// already semantically "no region scope", which downstream parses
+// the same way.
 type Event struct {
-	Event      string    `json:"event"`                 // service_start | service_finish | item_found | stage_finish
-	Service    string    `json:"service,omitempty"`     // AWS service slug (sqs, dynamodb, ...) or GCP asset_type slug (cloud_asset_inventory)
-	Region     string    `json:"region,omitempty"`      // AWS region; empty for global services (IAM, S3) and GCP
-	Location   string    `json:"location,omitempty"`    // GCP location; empty for project-global types and AWS
-	TFType     string    `json:"tf_type,omitempty"`     // Terraform resource type for item_found
-	ImportID   string    `json:"import_id,omitempty"`   // Terraform import ID for item_found
-	Stage      string    `json:"stage,omitempty"`       // discover for stage_finish (room for future stages: hcl_gen, drift_fix, dep_chase)
-	Count      int       `json:"count,omitempty"`       // service_finish, stage_finish — items emitted in scope
-	Total      int       `json:"total,omitempty"`       // stage_finish — total items across the stage (==Count today, separate field for future fan-in)
-	DurationMs int64     `json:"duration_ms,omitempty"` // service_finish, stage_finish — wall-time spent in the scope
-	Timestamp  time.Time `json:"ts"`                    // every event; injectable for deterministic tests via WithNow
+	Event      string    `json:"event"`               // service_start | service_finish | item_found | stage_finish
+	Service    string    `json:"service,omitempty"`   // AWS service slug (sqs, dynamodb, ...) or GCP asset_type slug (cloud_asset_inventory)
+	Region     string    `json:"region,omitempty"`    // AWS region; empty for global services (IAM, S3) and GCP
+	Location   string    `json:"location,omitempty"`  // GCP location; empty for project-global types and AWS
+	TFType     string    `json:"tf_type,omitempty"`   // Terraform resource type for item_found
+	ImportID   string    `json:"import_id,omitempty"` // Terraform import ID for item_found
+	Stage      string    `json:"stage,omitempty"`     // discover for stage_finish (room for future stages: hcl_gen, drift_fix, dep_chase)
+	Count      int       `json:"count"`               // service_finish, stage_finish — items emitted in scope; always emitted on those events even when zero (#312)
+	Total      int       `json:"total"`               // stage_finish — total items across the stage (==Count today, separate field for future fan-in); always emitted on stage_finish even when zero (#312)
+	DurationMs int64     `json:"duration_ms"`         // service_finish, stage_finish — wall-time spent in the scope; always emitted on those events even when zero (#312)
+	Timestamp  time.Time `json:"ts"`                  // every event; injectable for deterministic tests via WithNow
+}
+
+// MarshalJSON implements per-event-type field dispatch so each event
+// carries exactly the field set its type requires (#312). The
+// per-event branches build typed structs (rather than a
+// map[string]any) so output preserves declaration order — every
+// emit starts with `event` and ends with `ts`, with the
+// type-specific fields between in the order documented in the
+// issue body. This is purely a readability concern; JSON consumers
+// parse objects unordered.
+//
+// The fix for #312 is structural: the typed event structs declare
+// Count/Total/DurationMs WITHOUT `omitempty`, so a service_finish
+// or stage_finish whose scope yielded zero items still emits
+// `"count":0`. The previous shared-struct + omitempty approach
+// dropped those fields and forced SSE consumers to special-case
+// "count missing" vs "count == 0".
+//
+// Field-set contract by event type:
+//
+//	service_start:  event, service, (region|location), ts
+//	service_finish: event, service, (region|location), count, duration_ms, ts
+//	item_found:     event, service, (region|location), tf_type, import_id, ts
+//	stage_finish:   event, stage, count, total, duration_ms, ts
+//
+// Region/Location selection: prefer Location when set (GCP
+// emitters), otherwise emit Region (AWS emitters and global
+// services). Empty Region for global AWS services produces
+// `"region":""`, matching the existing IAM emit shape. An unknown
+// Event value falls back to a struct-alias marshal so we don't
+// silently drop fields if the contract grows.
+func (e Event) MarshalJSON() ([]byte, error) {
+	switch e.Event {
+	case "service_start":
+		if e.Location != "" {
+			return json.Marshal(struct {
+				Event     string    `json:"event"`
+				Service   string    `json:"service"`
+				Location  string    `json:"location"`
+				Timestamp time.Time `json:"ts"`
+			}{e.Event, e.Service, e.Location, e.Timestamp})
+		}
+		return json.Marshal(struct {
+			Event     string    `json:"event"`
+			Service   string    `json:"service"`
+			Region    string    `json:"region"`
+			Timestamp time.Time `json:"ts"`
+		}{e.Event, e.Service, e.Region, e.Timestamp})
+	case "service_finish":
+		if e.Location != "" {
+			return json.Marshal(struct {
+				Event      string    `json:"event"`
+				Service    string    `json:"service"`
+				Location   string    `json:"location"`
+				Count      int       `json:"count"`
+				DurationMs int64     `json:"duration_ms"`
+				Timestamp  time.Time `json:"ts"`
+			}{e.Event, e.Service, e.Location, e.Count, e.DurationMs, e.Timestamp})
+		}
+		return json.Marshal(struct {
+			Event      string    `json:"event"`
+			Service    string    `json:"service"`
+			Region     string    `json:"region"`
+			Count      int       `json:"count"`
+			DurationMs int64     `json:"duration_ms"`
+			Timestamp  time.Time `json:"ts"`
+		}{e.Event, e.Service, e.Region, e.Count, e.DurationMs, e.Timestamp})
+	case "item_found":
+		if e.Location != "" {
+			return json.Marshal(struct {
+				Event     string    `json:"event"`
+				Service   string    `json:"service"`
+				Location  string    `json:"location"`
+				TFType    string    `json:"tf_type"`
+				ImportID  string    `json:"import_id"`
+				Timestamp time.Time `json:"ts"`
+			}{e.Event, e.Service, e.Location, e.TFType, e.ImportID, e.Timestamp})
+		}
+		return json.Marshal(struct {
+			Event     string    `json:"event"`
+			Service   string    `json:"service"`
+			Region    string    `json:"region"`
+			TFType    string    `json:"tf_type"`
+			ImportID  string    `json:"import_id"`
+			Timestamp time.Time `json:"ts"`
+		}{e.Event, e.Service, e.Region, e.TFType, e.ImportID, e.Timestamp})
+	case "stage_finish":
+		return json.Marshal(struct {
+			Event      string    `json:"event"`
+			Stage      string    `json:"stage"`
+			Count      int       `json:"count"`
+			Total      int       `json:"total"`
+			DurationMs int64     `json:"duration_ms"`
+			Timestamp  time.Time `json:"ts"`
+		}{e.Event, e.Stage, e.Count, e.Total, e.DurationMs, e.Timestamp})
+	default:
+		// Unknown event type — defensive fallback. Marshal the
+		// struct verbatim via an alias to avoid recursing back
+		// into this method. The struct-tag omitempty on the
+		// optional fields suppresses zero-value noise for unknown
+		// shapes (where we have no per-event contract to honor).
+		type alias Event
+		return json.Marshal(alias(e))
+	}
 }
 
 // Emitter is the per-service progress contract. Default implementation
