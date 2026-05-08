@@ -289,3 +289,175 @@ func TestWriteManifest_EmptyInputWritesJSONArrayNotNull(t *testing.T) {
 		t.Errorf("manifest must end with a trailing newline; got: %q", body)
 	}
 }
+
+// --- #296: writeUnsupportedManifest tests ---
+
+// TestWriteUnsupportedManifest_HappyPath pins the basic invariant: 2
+// rows in, 2 rows out, deterministic file name, valid JSON.
+func TestWriteUnsupportedManifest_HappyPath(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	rows := []UnsupportedResource{
+		{Type: "aws_vpc", ID: "arn:aws:ec2:us-east-1:1:vpc/b", Name: "b", Region: "us-east-1"},
+		{Type: "aws_vpc", ID: "arn:aws:ec2:us-east-1:1:vpc/a", Name: "a", Region: "us-east-1"},
+	}
+	path, n, err := writeUnsupportedManifest(dir, rows)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n != 2 {
+		t.Errorf("count=%d, want 2", n)
+	}
+	if filepath.Base(path) != "unsupported.json" {
+		t.Errorf("path=%q, want ends in unsupported.json", path)
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []UnsupportedResource
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatalf("unsupported.json is not valid JSON: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("decoded len=%d, want 2", len(got))
+	}
+	// Sort key is (Type, Region, ID) — both rows share Type+Region, so
+	// the ID-tiebreak puts the .../vpc/a row first.
+	if got[0].Name != "a" {
+		t.Errorf("first Name=%q, want %q (sorted by (Type, Region, ID))", got[0].Name, "a")
+	}
+}
+
+// TestWriteUnsupportedManifest_EmptyInputWritesArrayNotNull pins the
+// no-null contract: a nil/empty input still produces a `[]` on disk
+// (the wizard picker cannot range over null).
+func TestWriteUnsupportedManifest_EmptyInputWritesArrayNotNull(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	for _, in := range [][]UnsupportedResource{nil, {}} {
+		path, n, err := writeUnsupportedManifest(dir, in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if n != 0 {
+			t.Errorf("count=%d, want 0 for empty input", n)
+		}
+		body, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.TrimSpace(string(body)) == "null" {
+			t.Errorf("must emit `[]` not `null`; got: %s", body)
+		}
+		if !bytes.HasPrefix(bytes.TrimSpace(body), []byte("[")) {
+			t.Errorf("must start with `[`; got: %s", body)
+		}
+	}
+}
+
+// TestWriteUnsupportedManifest_DeterministicAcrossRuns pins the byte-
+// identical output invariant: two runs with the same input produce
+// the same file (modulo input-order permutations the sort drops).
+func TestWriteUnsupportedManifest_DeterministicAcrossRuns(t *testing.T) {
+	t.Parallel()
+	rows := []UnsupportedResource{
+		{Type: "aws_vpc", ID: "arn-d", Name: "d", Region: "us-east-1"},
+		{Type: "google_compute_instance", ID: "asset-a", Name: "a", Location: "us"},
+		{Type: "aws_subnet", ID: "arn-c", Name: "c", Region: "eu-west-1"},
+		{Type: "", ID: "asset-b", Name: "b"},
+	}
+	dir1, dir2 := t.TempDir(), t.TempDir()
+	if _, _, err := writeUnsupportedManifest(dir1, rows); err != nil {
+		t.Fatal(err)
+	}
+	rev := make([]UnsupportedResource, len(rows))
+	for i := range rows {
+		rev[len(rows)-1-i] = rows[i]
+	}
+	if _, _, err := writeUnsupportedManifest(dir2, rev); err != nil {
+		t.Fatal(err)
+	}
+	a, err := os.ReadFile(filepath.Join(dir1, "unsupported.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(filepath.Join(dir2, "unsupported.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(a, b) {
+		t.Errorf("unsupported.json differs across runs with permuted input:\nrun1=%s\nrun2=%s", a, b)
+	}
+}
+
+// TestWriteUnsupportedManifest_SortOrder pins the (Type, Region, ID)
+// sort. A regression that switched to a different key (e.g. Name)
+// would visibly reorder picker rows in the wizard UI.
+func TestWriteUnsupportedManifest_SortOrder(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	rows := []UnsupportedResource{
+		{Type: "aws_vpc", ID: "arn-z", Region: "us-east-1"},
+		{Type: "aws_subnet", ID: "arn-a", Region: "us-east-1"},
+		{Type: "aws_vpc", ID: "arn-a", Region: "us-east-1"},
+		{Type: "aws_vpc", ID: "arn-b", Region: "eu-west-1"},
+	}
+	if _, _, err := writeUnsupportedManifest(dir, rows); err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(filepath.Join(dir, "unsupported.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []UnsupportedResource
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatal(err)
+	}
+	want := []struct {
+		typ, region, id string
+	}{
+		{"aws_subnet", "us-east-1", "arn-a"},
+		{"aws_vpc", "eu-west-1", "arn-b"},
+		{"aws_vpc", "us-east-1", "arn-a"},
+		{"aws_vpc", "us-east-1", "arn-z"},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("got %d rows, want %d", len(got), len(want))
+	}
+	for i := range got {
+		if got[i].Type != want[i].typ || got[i].Region != want[i].region || got[i].ID != want[i].id {
+			t.Errorf("row[%d]=(%s,%s,%s), want (%s,%s,%s)",
+				i, got[i].Type, got[i].Region, got[i].ID,
+				want[i].typ, want[i].region, want[i].id)
+		}
+	}
+}
+
+// TestWriteUnsupportedManifest_OmitemptyOptionalFields pins the JSON
+// wire shape: rows with no Region/Location/Tags/Group emit only the
+// three required keys (type, id, name). The picker reads these fields
+// optionally; preserving the omitempty contract keeps the serialized
+// shape stable across runs.
+func TestWriteUnsupportedManifest_OmitemptyOptionalFields(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	row := UnsupportedResource{
+		Type: "aws_vpc",
+		ID:   "arn-only",
+		Name: "only",
+	}
+	if _, _, err := writeUnsupportedManifest(dir, []UnsupportedResource{row}); err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(filepath.Join(dir, "unsupported.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Negative assertions: the optional keys must NOT be present.
+	for _, key := range []string{`"region":`, `"location":`, `"tags":`, `"group":`} {
+		if bytes.Contains(body, []byte(key)) {
+			t.Errorf("manifest carries %s for omitempty-zero value; got: %s", key, body)
+		}
+	}
+}

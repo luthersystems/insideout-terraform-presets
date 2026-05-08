@@ -17,6 +17,11 @@ import (
 // manifestFile is the on-disk file name written into --output-dir.
 const manifestFile = "imported.json"
 
+// unsupportedManifestFile is the on-disk file name for the broad-
+// enumeration sibling manifest written by writeUnsupportedManifest
+// when --include-unsupported is set (#296).
+const unsupportedManifestFile = "unsupported.json"
+
 // writeManifest validates the resource set with composer.ValidateImportedResources
 // and writes the JSON array of ImportedResource into <dir>/imported.json.
 // Validation runs BEFORE the file is written so a failing validator never
@@ -107,6 +112,53 @@ func readManifest(path, cloud string) ([]imported.ImportedResource, error) {
 		return nil, fmt.Errorf("manifest validation failed (%d issue(s)): %s", len(issues), formatIssues(issues))
 	}
 	return resources, nil
+}
+
+// writeUnsupportedManifest writes the JSON array of UnsupportedResource
+// rows into <dir>/unsupported.json (#296). Mirrors writeManifest's
+// invariants: nil → []-not-null, deterministic sort, file written
+// atomically via WriteFile.
+//
+// Sort key is (Type, Region, ID) so byte-identical output across runs
+// for the same input. Type-first keeps the picker's "all aws_vpc rows"
+// runs together visually; Region tie-breaks within a type (multi-
+// region scans); ID is the final tiebreaker for rows that match on
+// both. Unlike writeManifest, no validator runs here — the unsupported
+// carrier has no IR-side schema to enforce: the wire shape is checked
+// by the field tags on UnsupportedResource and the test suite below.
+//
+// Returns (path, count, error). On marshal/write failure no file is
+// written so the caller's stderr surface is the only side-effect of a
+// soft-failure path (#296 contract: imported.json must complete even
+// when unsupported emission fails).
+func writeUnsupportedManifest(dir string, resources []UnsupportedResource) (string, int, error) {
+	if resources == nil {
+		resources = []UnsupportedResource{}
+	}
+	sort.Slice(resources, func(i, j int) bool {
+		if resources[i].Type != resources[j].Type {
+			return resources[i].Type < resources[j].Type
+		}
+		if resources[i].Region != resources[j].Region {
+			return resources[i].Region < resources[j].Region
+		}
+		return resources[i].ID < resources[j].ID
+	})
+
+	body, err := json.MarshalIndent(resources, "", "  ")
+	if err != nil {
+		return "", 0, fmt.Errorf("marshal unsupported manifest: %w", err)
+	}
+	body = append(body, '\n')
+
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", 0, fmt.Errorf("mkdir %s: %w", dir, err)
+	}
+	out := filepath.Join(dir, unsupportedManifestFile)
+	if err := os.WriteFile(out, body, 0o644); err != nil {
+		return "", 0, fmt.Errorf("write %s: %w", out, err)
+	}
+	return out, len(resources), nil
 }
 
 // formatIssues turns a slice of validation issues into a multi-line string

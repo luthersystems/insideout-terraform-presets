@@ -17,6 +17,7 @@ import (
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/awsdiscover"
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/depchase"
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/driftfix"
+	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/gcpdiscover"
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/genconfig"
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/progress"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
@@ -2038,5 +2039,239 @@ func TestRunDiscoverWithDeps_ProgressEmptyKeepsLegacyOutput(t *testing.T) {
 	}
 	if stderr != "" {
 		t.Errorf("expected empty stderr on happy path; got %q", stderr)
+	}
+}
+
+// --- #296 --include-unsupported tests ---
+
+// TestRunDiscoverWithDeps_IncludeUnsupportedWritesUnsupportedJSON pins
+// the on-disk emission contract: --include-unsupported produces
+// unsupported.json next to imported.json with the rows the AWS
+// enumerator returned.
+func TestRunDiscoverWithDeps_IncludeUnsupportedWritesUnsupportedJSON(t *testing.T) {
+	t.Parallel()
+	outDir := t.TempDir()
+	agg := &fakeAggregator{}
+	deps := okDeps(agg)
+	deps.enumerateUnsupportedAWS = func(_ context.Context, _ aws.Config, _ awsdiscover.UnsupportedArgs) ([]awsdiscover.UnsupportedResource, error) {
+		return []awsdiscover.UnsupportedResource{
+			{Type: "aws_vpc", ID: "arn:aws:ec2:us-east-1:1:vpc/v1", Name: "v1", Region: "us-east-1"},
+			{Type: "aws_rds_cluster", ID: "arn:aws:rds:us-east-1:1:cluster:c1", Name: "c1", Region: "us-east-1"},
+		}, nil
+	}
+	rc := runDiscoverWithDeps([]string{
+		"--provider", "aws",
+		"--project", "io-foo",
+		"--regions", "us-east-1",
+		"--output-dir", outDir,
+		"--include-unsupported",
+		"--no-hcl",
+	}, deps)
+	if rc != discoverExitOK {
+		t.Fatalf("rc=%d, want OK", rc)
+	}
+	body, err := os.ReadFile(filepath.Join(outDir, "unsupported.json"))
+	require.NoError(t, err)
+	var got []UnsupportedResource
+	require.NoError(t, json.Unmarshal(body, &got))
+	require.Len(t, got, 2)
+	gotTypes := []string{got[0].Type, got[1].Type}
+	if !slices.Contains(gotTypes, "aws_vpc") || !slices.Contains(gotTypes, "aws_rds_cluster") {
+		t.Errorf("emitted types=%v, want both aws_vpc and aws_rds_cluster", gotTypes)
+	}
+}
+
+// TestRunDiscoverWithDeps_IncludeUnsupportedFromManifestIsFatal pins
+// the mutual-exclusion gate: --include-unsupported needs a live scan
+// so it can't combine with --from-manifest.
+//
+// NOT t.Parallel(): captures global os.Stderr.
+func TestRunDiscoverWithDeps_IncludeUnsupportedFromManifestIsFatal(t *testing.T) {
+	manifestDir := t.TempDir()
+	manifestPath := writeFixtureManifest(t, manifestDir, "aws", []imported.ImportedResource{
+		validResourceWithRegion("aws_sqs_queue.alpha", "us-east-1", "1234567890"),
+	})
+	outDir := t.TempDir()
+	var rc int
+	stderr := captureStderr(t, func() {
+		rc = runDiscoverWithDeps([]string{
+			"--provider", "aws",
+			"--project", "io-foo",
+			"--regions", "us-east-1",
+			"--from-manifest", manifestPath,
+			"--include-unsupported",
+			"--output-dir", outDir,
+		}, okDeps(&fakeAggregator{}))
+	})
+	if rc != discoverExitFatal {
+		t.Errorf("rc=%d, want fatal", rc)
+	}
+	if !strings.Contains(stderr, "include-unsupported") || !strings.Contains(stderr, "from-manifest") {
+		t.Errorf("stderr should name both flags in the mutex error; got: %s", stderr)
+	}
+}
+
+// TestRunDiscoverWithDeps_IncludeUnsupportedSoftFailureKeepsImportedJSON
+// pins the soft-failure invariant: an enumerator error does NOT abort
+// the run. imported.json is still written, the run exits 0, and a
+// stderr WARN is emitted.
+//
+// NOT t.Parallel(): captures global os.Stderr.
+func TestRunDiscoverWithDeps_IncludeUnsupportedSoftFailureKeepsImportedJSON(t *testing.T) {
+	outDir := t.TempDir()
+	agg := &fakeAggregator{out: []imported.ImportedResource{validResource("aws_sqs_queue.alpha")}}
+	deps := okDeps(agg)
+	deps.enumerateUnsupportedAWS = func(_ context.Context, _ aws.Config, _ awsdiscover.UnsupportedArgs) ([]awsdiscover.UnsupportedResource, error) {
+		return nil, errors.New("simulated: Resource Explorer not configured")
+	}
+	var rc int
+	stderr := captureStderr(t, func() {
+		rc = runDiscoverWithDeps([]string{
+			"--provider", "aws",
+			"--project", "io-foo",
+			"--regions", "us-east-1",
+			"--output-dir", outDir,
+			"--include-unsupported",
+			"--no-hcl",
+		}, deps)
+	})
+	if rc != discoverExitOK {
+		t.Errorf("rc=%d, want OK (soft-failure must not abort)", rc)
+	}
+	// imported.json must exist on disk.
+	if _, err := os.Stat(filepath.Join(outDir, "imported.json")); err != nil {
+		t.Errorf("imported.json missing on soft-failure path: %v", err)
+	}
+	// unsupported.json must NOT exist.
+	if _, err := os.Stat(filepath.Join(outDir, "unsupported.json")); err == nil {
+		t.Errorf("unsupported.json was written despite enumerator error")
+	}
+	// Stderr WARN with the literal "WARN" so the wizard's UI parser
+	// can route it to the soft-failure toast.
+	if !strings.Contains(stderr, "WARN") || !strings.Contains(stderr, "include-unsupported") {
+		t.Errorf("stderr WARN missing expected substrings; got: %s", stderr)
+	}
+}
+
+// TestRunDiscoverWithDeps_IncludeUnsupportedDeterministicOrder pins
+// the byte-identical output invariant across runs of the same input.
+// A regression that switched the sort key (or dropped sorting) would
+// surface as a flaky picker UI in the wizard.
+func TestRunDiscoverWithDeps_IncludeUnsupportedDeterministicOrder(t *testing.T) {
+	t.Parallel()
+	rows := []awsdiscover.UnsupportedResource{
+		{Type: "aws_vpc", ID: "arn-z", Region: "us-east-1"},
+		{Type: "aws_subnet", ID: "arn-a", Region: "us-east-1"},
+		{Type: "aws_vpc", ID: "arn-a", Region: "us-east-1"},
+	}
+	enum := func(_ context.Context, _ aws.Config, _ awsdiscover.UnsupportedArgs) ([]awsdiscover.UnsupportedResource, error) {
+		// Return the same input in a permuted order — the writer's
+		// sort must produce identical files in both runs.
+		return rows, nil
+	}
+	enumRev := func(_ context.Context, _ aws.Config, _ awsdiscover.UnsupportedArgs) ([]awsdiscover.UnsupportedResource, error) {
+		rev := make([]awsdiscover.UnsupportedResource, len(rows))
+		for i := range rows {
+			rev[len(rows)-1-i] = rows[i]
+		}
+		return rev, nil
+	}
+
+	dir1, dir2 := t.TempDir(), t.TempDir()
+	d1 := okDeps(&fakeAggregator{})
+	d1.enumerateUnsupportedAWS = enum
+	d2 := okDeps(&fakeAggregator{})
+	d2.enumerateUnsupportedAWS = enumRev
+	for _, dt := range []struct {
+		dir  string
+		deps discoverDeps
+	}{{dir1, d1}, {dir2, d2}} {
+		rc := runDiscoverWithDeps([]string{
+			"--provider", "aws",
+			"--project", "io-foo",
+			"--regions", "us-east-1",
+			"--output-dir", dt.dir,
+			"--include-unsupported",
+			"--no-hcl",
+		}, dt.deps)
+		if rc != discoverExitOK {
+			t.Fatalf("rc=%d, want OK", rc)
+		}
+	}
+	a, err := os.ReadFile(filepath.Join(dir1, "unsupported.json"))
+	require.NoError(t, err)
+	b, err := os.ReadFile(filepath.Join(dir2, "unsupported.json"))
+	require.NoError(t, err)
+	assert.Equal(t, a, b, "unsupported.json must be byte-identical across permuted-input runs")
+}
+
+// TestRunDiscoverWithDeps_IncludeUnsupportedNotSetSkipsEmission pins
+// the back-compat invariant: without --include-unsupported, no
+// unsupported.json file is written, and the AWS enumerator is not
+// called.
+func TestRunDiscoverWithDeps_IncludeUnsupportedNotSetSkipsEmission(t *testing.T) {
+	t.Parallel()
+	outDir := t.TempDir()
+	called := 0
+	deps := okDeps(&fakeAggregator{})
+	deps.enumerateUnsupportedAWS = func(_ context.Context, _ aws.Config, _ awsdiscover.UnsupportedArgs) ([]awsdiscover.UnsupportedResource, error) {
+		called++
+		return nil, nil
+	}
+	rc := runDiscoverWithDeps([]string{
+		"--provider", "aws",
+		"--project", "io-foo",
+		"--regions", "us-east-1",
+		"--output-dir", outDir,
+		"--no-hcl",
+	}, deps)
+	if rc != discoverExitOK {
+		t.Fatalf("rc=%d, want OK", rc)
+	}
+	if called != 0 {
+		t.Errorf("enumerateUnsupportedAWS called %d times without --include-unsupported, want 0", called)
+	}
+	if _, err := os.Stat(filepath.Join(outDir, "unsupported.json")); err == nil {
+		t.Errorf("unsupported.json was written without --include-unsupported")
+	}
+}
+
+// TestRunDiscoverWithDeps_IncludeUnsupportedGCP pins the GCP-side
+// emission contract: --provider gcp + --include-unsupported produces
+// unsupported.json with the GCP enumerator's rows. The
+// enumerateUnsupportedGCP seam is injected explicitly because the GCP
+// branch's production rebind is gated on the gcpAggAdapter type
+// assertion, which the fake aggregator doesn't satisfy.
+func TestRunDiscoverWithDeps_IncludeUnsupportedGCP(t *testing.T) {
+	t.Parallel()
+	outDir := t.TempDir()
+	agg := &fakeAggregator{}
+	deps, _ := okGCPDeps(t, agg)
+	deps.enumerateUnsupportedGCP = func(_ context.Context, _ gcpdiscover.UnsupportedArgs) ([]gcpdiscover.UnsupportedResource, error) {
+		return []gcpdiscover.UnsupportedResource{
+			{Type: "google_compute_instance", ID: "//compute.googleapis.com/projects/p/zones/us/instances/vm", Name: "vm", Location: "us"},
+		}, nil
+	}
+	rc := runDiscoverWithDeps([]string{
+		"--provider", "gcp",
+		"--project", "io-foo",
+		"--gcp-project-id", "real-proj",
+		"--output-dir", outDir,
+		"--include-unsupported",
+		"--no-hcl",
+	}, deps)
+	if rc != discoverExitOK {
+		t.Fatalf("rc=%d, want OK", rc)
+	}
+	body, err := os.ReadFile(filepath.Join(outDir, "unsupported.json"))
+	require.NoError(t, err)
+	var got []UnsupportedResource
+	require.NoError(t, json.Unmarshal(body, &got))
+	require.Len(t, got, 1)
+	if got[0].Type != "google_compute_instance" {
+		t.Errorf("Type=%q, want google_compute_instance", got[0].Type)
+	}
+	if got[0].Location != "us" {
+		t.Errorf("Location=%q, want us", got[0].Location)
 	}
 }
