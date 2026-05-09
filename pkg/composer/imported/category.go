@@ -89,6 +89,8 @@ var categoryByTFType = map[string]string{
 	"aws_lambda_function":         CategoryVirtualMachines,
 	"aws_lb":                      CategoryNetworkSecurity,
 	"aws_db_instance":             CategoryDataStorage,
+	"aws_db_parameter_group":      CategoryDataStorage,
+	"aws_db_subnet_group":         CategoryDataStorage,
 	"aws_eip":                     CategoryNetworkSecurity,
 	"aws_internet_gateway":        CategoryNetworkSecurity,
 	"aws_nat_gateway":             CategoryNetworkSecurity,

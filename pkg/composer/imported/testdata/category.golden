@@ -1,6 +1,8 @@
 aws_cloudfront_distribution	Network Security
 aws_cloudwatch_log_group	Observability
 aws_db_instance	Data Storage
+aws_db_parameter_group	Data Storage
+aws_db_subnet_group	Data Storage
 aws_dynamodb_table	Data Storage
 aws_ecr_repository	Data Storage
 aws_ecs_cluster	Virtual Machines
