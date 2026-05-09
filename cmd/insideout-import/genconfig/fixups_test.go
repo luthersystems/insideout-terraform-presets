@@ -360,6 +360,294 @@ func TestFixupDynamoDB_MultiplePITRBlocksAllZerosDropped(t *testing.T) {
 	}
 }
 
+// TestFixupVPC_IPv6NetmaskOrphanRemoved pins the canonical orphan shape:
+// generate-config-out emits both attrs (pool=null, netmask=0) for a
+// non-IPAM VPC. The fixup must drop the orphan netmask so the provider's
+// `all of ...` validator stops failing. Issue #337.
+func TestFixupVPC_IPv6NetmaskOrphanRemoved(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_vpc" "main" {
+  cidr_block          = "10.0.0.0/16"
+  ipv6_ipam_pool_id   = null
+  ipv6_netmask_length = 0
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if strings.Contains(got, "ipv6_netmask_length") {
+		t.Errorf("orphan ipv6_netmask_length must be dropped\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupVPC_IPv6NetmaskPreservedWhenPoolSet pins conservative scope:
+// a real IPAM-pinned VPC carrying both `ipv6_ipam_pool_id` and a non-zero
+// `ipv6_netmask_length` must be left untouched. The fixup only fires on
+// the orphan (no pool + zero netmask) shape.
+func TestFixupVPC_IPv6NetmaskPreservedWhenPoolSet(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_vpc" "main" {
+  cidr_block          = "10.0.0.0/16"
+  ipv6_ipam_pool_id   = "ipam-pool-0123456789abcdef0"
+  ipv6_netmask_length = 64
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if !regexp.MustCompile(`ipv6_ipam_pool_id\s*=\s*"ipam-pool-0123456789abcdef0"`).MatchString(got) {
+		t.Errorf("ipv6_ipam_pool_id must be preserved when set\n--- got ---\n%s", got)
+	}
+	if !regexp.MustCompile(`ipv6_netmask_length\s*=\s*64`).MatchString(got) {
+		t.Errorf("ipv6_netmask_length=64 must be preserved when pool is set\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupVPC_NoOpWhenNeitherSet pins that a VPC block emitted without
+// either ipv6_* attribute (the older provider behaviour, or operator-
+// hand-edited HCL) is a pure no-op. A mutation that always wrote a stub
+// would fail this.
+func TestFixupVPC_NoOpWhenNeitherSet(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_vpc" "main" {
+  cidr_block = "10.0.0.0/16"
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(out) != string(in) {
+		t.Errorf("no ipv6_* attrs must yield identical output\n--- in ---\n%s\n--- out ---\n%s", in, out)
+	}
+}
+
+// TestFixupVPC_OtherAttrsUntouched pins isolation within the VPC block:
+// the fixup only touches the orphan netmask attribute. Other attrs
+// (cidr_block, instance_tenancy, enable_dns_hostnames) flow through
+// untouched.
+func TestFixupVPC_OtherAttrsUntouched(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_vpc" "main" {
+  cidr_block           = "10.0.0.0/16"
+  instance_tenancy     = "default"
+  enable_dns_hostnames = true
+  ipv6_ipam_pool_id    = null
+  ipv6_netmask_length  = 0
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if !regexp.MustCompile(`cidr_block\s*=\s*"10\.0\.0\.0/16"`).MatchString(got) {
+		t.Errorf("cidr_block must be preserved\n--- got ---\n%s", got)
+	}
+	if !regexp.MustCompile(`instance_tenancy\s*=\s*"default"`).MatchString(got) {
+		t.Errorf("instance_tenancy must be preserved\n--- got ---\n%s", got)
+	}
+	if !regexp.MustCompile(`enable_dns_hostnames\s*=\s*true`).MatchString(got) {
+		t.Errorf("enable_dns_hostnames must be preserved\n--- got ---\n%s", got)
+	}
+	if strings.Contains(got, "ipv6_netmask_length") {
+		t.Errorf("orphan ipv6_netmask_length must still be dropped\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupVPC_OnlyAffectsAWSVPCBlocks pins resource-type isolation: a
+// sibling aws_subnet block carrying its own (unrelated) ipv6_*
+// attributes must NOT be touched by the VPC fixup. The fixup table is
+// keyed by resource type, so a mutation broadening it to "any resource
+// with these attrs" would corrupt the subnet block.
+func TestFixupVPC_OnlyAffectsAWSVPCBlocks(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_vpc" "main" {
+  cidr_block          = "10.0.0.0/16"
+  ipv6_ipam_pool_id   = null
+  ipv6_netmask_length = 0
+}
+
+resource "aws_subnet" "sub" {
+  vpc_id              = "vpc-123"
+  cidr_block          = "10.0.1.0/24"
+  ipv6_netmask_length = 0
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	// VPC's orphan should be dropped...
+	if strings.Count(got, "ipv6_netmask_length") != 1 {
+		t.Errorf("expected exactly one ipv6_netmask_length remaining (the subnet's), got %d\n--- got ---\n%s",
+			strings.Count(got, "ipv6_netmask_length"), got)
+	}
+	// ...but the subnet block must keep its own ipv6_netmask_length.
+	if !regexp.MustCompile(`(?s)resource "aws_subnet"[^}]*ipv6_netmask_length`).MatchString(got) {
+		t.Errorf("aws_subnet's ipv6_netmask_length must be preserved (fixup is keyed by aws_vpc)\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupLB_DropsSubnetMappingWhenNoIPPinned pins the common ALB
+// shape: generate-config-out emits both subnet_mapping (one block per
+// subnet) and subnets (the canonical list). When no sub-block carries a
+// static IP pin, drop the subnet_mapping blocks. Issue #338.
+func TestFixupLB_DropsSubnetMappingWhenNoIPPinned(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_lb" "main" {
+  name     = "alpha"
+  internal = false
+  subnets  = ["subnet-aaa", "subnet-bbb"]
+  subnet_mapping {
+    subnet_id = "subnet-aaa"
+  }
+  subnet_mapping {
+    subnet_id = "subnet-bbb"
+  }
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if strings.Contains(got, "subnet_mapping") {
+		t.Errorf("subnet_mapping blocks must be dropped when no static IP pin present\n--- got ---\n%s", got)
+	}
+	if !regexp.MustCompile(`subnets\s*=\s*\["subnet-aaa",\s*"subnet-bbb"\]`).MatchString(got) {
+		t.Errorf("subnets list must be preserved\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupLB_PreservesSubnetMappingWhenAllocationIDSet pins the NLB-EIP
+// case: an operator pinning an Elastic IP via allocation_id is
+// expressing static-IP intent that subnet_mapping carries and `subnets`
+// does not. Drop `subnets`, keep the mapping blocks.
+func TestFixupLB_PreservesSubnetMappingWhenAllocationIDSet(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_lb" "main" {
+  name               = "nlb"
+  load_balancer_type = "network"
+  subnets            = ["subnet-aaa", "subnet-bbb"]
+  subnet_mapping {
+    subnet_id     = "subnet-aaa"
+    allocation_id = "eipalloc-0123456789abcdef0"
+  }
+  subnet_mapping {
+    subnet_id = "subnet-bbb"
+  }
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if regexp.MustCompile(`(?m)^\s*subnets\s*=`).MatchString(got) {
+		t.Errorf("subnets attribute must be dropped when subnet_mapping carries allocation_id\n--- got ---\n%s", got)
+	}
+	if !strings.Contains(got, "subnet_mapping") {
+		t.Errorf("subnet_mapping blocks must be preserved when allocation_id present\n--- got ---\n%s", got)
+	}
+	if !strings.Contains(got, `allocation_id = "eipalloc-0123456789abcdef0"`) {
+		t.Errorf("allocation_id value must be preserved\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupLB_PreservesSubnetMappingWhenPrivateIPv4Set pins the
+// internal-LB private-IP case: a sub-block carrying private_ipv4_address
+// also expresses static-IP intent. Same outcome as the allocation_id
+// case — drop `subnets`, keep mappings.
+func TestFixupLB_PreservesSubnetMappingWhenPrivateIPv4Set(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_lb" "main" {
+  name     = "internal"
+  internal = true
+  subnets  = ["subnet-aaa"]
+  subnet_mapping {
+    subnet_id            = "subnet-aaa"
+    private_ipv4_address = "10.0.1.42"
+  }
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if regexp.MustCompile(`(?m)^\s*subnets\s*=`).MatchString(got) {
+		t.Errorf("subnets attribute must be dropped when subnet_mapping carries private_ipv4_address\n--- got ---\n%s", got)
+	}
+	if !strings.Contains(got, `private_ipv4_address = "10.0.1.42"`) {
+		t.Errorf("private_ipv4_address value must be preserved\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupLB_NoOpWhenNeitherPresent pins the operator-hand-edited /
+// minimal-LB case: no subnets attribute and no subnet_mapping blocks.
+// The fixup must not invent either, and other attrs flow through.
+func TestFixupLB_NoOpWhenNeitherPresent(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_lb" "main" {
+  name     = "alpha"
+  internal = true
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(out) != string(in) {
+		t.Errorf("no subnets/subnet_mapping must yield identical output\n--- in ---\n%s\n--- out ---\n%s", in, out)
+	}
+}
+
+// TestFixupLB_OnlyAffectsAWSLBBlocks pins resource-type isolation: a
+// sibling aws_lb_target_group block (which has no subnet_mapping/subnets
+// schema) must not be perturbed by the LB fixup. The fixup table is
+// keyed by aws_lb so any block with a different resource type passes
+// through untouched.
+func TestFixupLB_OnlyAffectsAWSLBBlocks(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_lb" "main" {
+  name    = "alpha"
+  subnets = ["subnet-aaa"]
+  subnet_mapping {
+    subnet_id = "subnet-aaa"
+  }
+}
+
+resource "aws_lb_target_group" "tg" {
+  name     = "alpha-tg"
+  port     = 80
+  protocol = "HTTP"
+  vpc_id   = "vpc-123"
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	// LB had no IP pin → subnet_mapping dropped; subnets kept.
+	if strings.Contains(got, "subnet_mapping") {
+		t.Errorf("aws_lb's subnet_mapping must be dropped\n--- got ---\n%s", got)
+	}
+	// Target group block must remain intact.
+	if !regexp.MustCompile(`(?s)resource "aws_lb_target_group" "tg" \{[^}]*name\s*=\s*"alpha-tg"`).MatchString(got) {
+		t.Errorf("aws_lb_target_group must pass through untouched\n--- got ---\n%s", got)
+	}
+	if !regexp.MustCompile(`(?s)resource "aws_lb_target_group" "tg" \{[^}]*port\s*=\s*80`).MatchString(got) {
+		t.Errorf("aws_lb_target_group port must be preserved\n--- got ---\n%s", got)
+	}
+}
+
 // TestFixupLambda_MultipleLambdasBothFixed pins iteration: two Lambda
 // blocks in input order both get the placeholder + ignore_changes
 // treatment. A mutation that exited after the first block would survive

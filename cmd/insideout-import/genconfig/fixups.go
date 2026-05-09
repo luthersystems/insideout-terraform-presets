@@ -53,6 +53,8 @@ var resourceTypeFixups = map[string]func(*hclwrite.Block){
 	"aws_lambda_function": fixupLambdaSource,
 	"aws_kms_key":         fixupKMSRotationPeriodZero,
 	"aws_dynamodb_table":  fixupDynamoDBPITRRecoveryPeriodZero,
+	"aws_vpc":             fixupVPCIPv6NetmaskOrphan,
+	"aws_lb":              fixupLBSubnetMappingConflict,
 }
 
 // lambdaPlaceholderFile is what we set `filename` to so the block
@@ -131,6 +133,89 @@ func fixupDynamoDBPITRRecoveryPeriodZero(blk *hclwrite.Block) {
 		if isAttrLiteralZero(sub.Body(), "recovery_period_in_days") {
 			sub.Body().RemoveAttribute("recovery_period_in_days")
 		}
+	}
+}
+
+// fixupVPCIPv6NetmaskOrphan drops aws_vpc.ipv6_netmask_length when its
+// emitted value is the literal `0` AND ipv6_ipam_pool_id has no usable
+// value. The provider schema marks the pair as mutually-required: if one
+// is specified, the other must be too. `terraform plan
+// -generate-config-out` always emits both attributes regardless of
+// whether the running VPC was provisioned from an IPAM pool, so for the
+// common non-IPAM case generate-config-out produces
+// `ipv6_ipam_pool_id = null` + `ipv6_netmask_length = 0`, which fails
+// `terraform validate` with `"ipv6_netmask_length": all of
+// `ipv6_ipam_pool_id,ipv6_netmask_length` must be specified`.
+//
+// Conservative shape: only the orphan pairing (no pool + literal 0
+// netmask) triggers the drop. A real IPAM-pinned VPC carrying both
+// values is preserved untouched. Issue #337.
+func fixupVPCIPv6NetmaskOrphan(blk *hclwrite.Block) {
+	body := blk.Body()
+	if hasUsableValue(body, "ipv6_ipam_pool_id") {
+		return
+	}
+	if !isAttrLiteralZero(body, "ipv6_netmask_length") {
+		return
+	}
+	body.RemoveAttribute("ipv6_netmask_length")
+}
+
+// fixupLBSubnetMappingConflict resolves the aws_lb subnet_mapping vs
+// subnets mutual-exclusion conflict. The provider schema marks the pair
+// as mutually exclusive (`only one of `subnet_mapping,subnets` can be
+// specified`), but `terraform plan -generate-config-out` always emits
+// both: `subnets` as a string list and `subnet_mapping` as one block per
+// subnet attachment.
+//
+// Heuristic: subnet_mapping is only meaningful when the operator has
+// pinned static IPs on a load-balancer interface (Network LB EIP
+// allocation, private IPv4 pin, or IPv6 pin). If any sub-block carries
+// `allocation_id`, `private_ipv4_address`, or `ipv6_address` with a
+// usable value, drop `subnets` and keep the subnet_mapping blocks.
+// Otherwise the subnet_mapping blocks contribute no information beyond
+// what `subnets` already conveys, so drop them all and keep `subnets`
+// (the canonical ALB shape). Issue #338.
+func fixupLBSubnetMappingConflict(blk *hclwrite.Block) {
+	body := blk.Body()
+
+	// Find the subnet_mapping sub-blocks (may be zero, one, or many).
+	var mappings []*hclwrite.Block
+	for _, sub := range body.Blocks() {
+		if sub.Type() == "subnet_mapping" {
+			mappings = append(mappings, sub)
+		}
+	}
+	hasSubnets := body.GetAttribute("subnets") != nil
+
+	// If neither side is present, nothing to reconcile.
+	if len(mappings) == 0 && !hasSubnets {
+		return
+	}
+	// If only one side is present, no conflict to resolve.
+	if len(mappings) == 0 || !hasSubnets {
+		return
+	}
+
+	// Both sides present. Decide which to keep based on whether any
+	// sub-block carries an operator-supplied static IP pin.
+	pinned := false
+	for _, m := range mappings {
+		mb := m.Body()
+		if hasUsableValue(mb, "allocation_id") ||
+			hasUsableValue(mb, "private_ipv4_address") ||
+			hasUsableValue(mb, "ipv6_address") {
+			pinned = true
+			break
+		}
+	}
+
+	if pinned {
+		body.RemoveAttribute("subnets")
+		return
+	}
+	for _, m := range mappings {
+		body.RemoveBlock(m)
 	}
 }
 
