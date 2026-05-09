@@ -55,6 +55,7 @@ var resourceTypeFixups = map[string]func(*hclwrite.Block){
 	"aws_dynamodb_table":  fixupDynamoDBPITRRecoveryPeriodZero,
 	"aws_vpc":             fixupVPCIPv6NetmaskOrphan,
 	"aws_lb":              fixupLBSubnetMappingConflict,
+	"aws_subnet":          fixupSubnetProviderQuirks,
 }
 
 // lambdaPlaceholderFile is what we set `filename` to so the block
@@ -216,6 +217,44 @@ func fixupLBSubnetMappingConflict(blk *hclwrite.Block) {
 	}
 	for _, m := range mappings {
 		body.RemoveBlock(m)
+	}
+}
+
+// fixupSubnetProviderQuirks resolves three terraform-provider-aws schema
+// constraints that `terraform plan -generate-config-out` emits in
+// violation of:
+//
+//   - availability_zone vs availability_zone_id (mutually exclusive). The
+//     provider rejects both being specified. generate-config-out always
+//     emits both for any subnet that has an AZ assignment. Drop the ID
+//     in favor of the human-readable AZ. Issue #343.
+//   - enable_lni_at_device_index = 0 (provider rejects literal 0; the
+//     attribute's documented domain starts at 1). generate-config-out
+//     emits 0 for any subnet not configured for Local Network Interfaces.
+//     Issue #344.
+//   - map_customer_owned_ip_on_launch orphan (mutually-required trio with
+//     customer_owned_ipv4_pool and outpost_arn). generate-config-out emits
+//     `map_customer_owned_ip_on_launch = false` standalone for every
+//     non-Outpost subnet, breaking the all-of constraint. Drop the orphan
+//     when neither sibling carries a usable value. Issue #344.
+//
+// Conservative shape: each transform fires only on its specific orphan
+// pattern. A real Outpost-pinned subnet (outpost_arn set) preserves the
+// trio; a real LNI-configured subnet (index >=1) preserves the index; an
+// AZ-id-only subnet preserves the ID.
+func fixupSubnetProviderQuirks(blk *hclwrite.Block) {
+	body := blk.Body()
+	// #343 — AZ vs AZ-ID mutual exclusion.
+	if hasUsableValue(body, "availability_zone") && hasUsableValue(body, "availability_zone_id") {
+		body.RemoveAttribute("availability_zone_id")
+	}
+	// #344a — enable_lni_at_device_index = 0 (provider rejects literal 0).
+	if isAttrLiteralZero(body, "enable_lni_at_device_index") {
+		body.RemoveAttribute("enable_lni_at_device_index")
+	}
+	// #344b — map_customer_owned_ip_on_launch orphan trio.
+	if !hasUsableValue(body, "customer_owned_ipv4_pool") && !hasUsableValue(body, "outpost_arn") {
+		body.RemoveAttribute("map_customer_owned_ip_on_launch")
 	}
 }
 

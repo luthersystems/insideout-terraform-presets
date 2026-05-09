@@ -750,3 +750,223 @@ func TestFixupLB_PreservesSubnetMappingWhenIPv6AddressSet(t *testing.T) {
 		t.Errorf("ipv6_address value must be preserved\n--- got ---\n%s", got)
 	}
 }
+
+// TestFixupSubnet_AZIdDroppedWhenAZSet pins #343: when both
+// availability_zone and availability_zone_id are present (the
+// generate-config-out default), drop the ID and keep the human-readable
+// AZ.
+func TestFixupSubnet_AZIdDroppedWhenAZSet(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_subnet" "main" {
+  vpc_id               = "vpc-123"
+  cidr_block           = "10.0.1.0/24"
+  availability_zone    = "us-east-1a"
+  availability_zone_id = "use1-az6"
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if regexp.MustCompile(`(?m)^\s*availability_zone_id\s*=`).MatchString(got) {
+		t.Errorf("availability_zone_id must be dropped when availability_zone is set\n--- got ---\n%s", got)
+	}
+	if !regexp.MustCompile(`(?m)^\s*availability_zone\s*=\s*"us-east-1a"`).MatchString(got) {
+		t.Errorf("availability_zone must be preserved\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupSubnet_AZAttrsPreservedWhenOnlyOneSet pins the carve-out:
+// the fixup only fires when BOTH AZ attrs are present. A subnet with
+// only availability_zone (or only availability_zone_id) flows through
+// untouched.
+func TestFixupSubnet_AZAttrsPreservedWhenOnlyOneSet(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"only_az", `availability_zone = "us-east-1a"`, `availability_zone\s*=\s*"us-east-1a"`},
+		{"only_az_id", `availability_zone_id = "use1-az6"`, `availability_zone_id\s*=\s*"use1-az6"`},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			in := []byte(`resource "aws_subnet" "main" {
+  vpc_id     = "vpc-123"
+  cidr_block = "10.0.1.0/24"
+  ` + tc.in + `
+}
+`)
+			out, err := applyResourceTypeFixups(in)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := string(out)
+			if !regexp.MustCompile(tc.want).MatchString(got) {
+				t.Errorf("expected %q to match %q\n--- got ---\n%s", got, tc.want, got)
+			}
+		})
+	}
+}
+
+// TestFixupSubnet_LniAtDeviceIndexZeroDropped pins #344a: literal 0
+// fails provider validation (`enable_lni_at_device_index must not be
+// zero, got 0`). Drop the attribute.
+func TestFixupSubnet_LniAtDeviceIndexZeroDropped(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_subnet" "main" {
+  vpc_id                     = "vpc-123"
+  cidr_block                 = "10.0.1.0/24"
+  enable_lni_at_device_index = 0
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if strings.Contains(got, "enable_lni_at_device_index") {
+		t.Errorf("enable_lni_at_device_index = 0 must be dropped\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupSubnet_LniAtDeviceIndexNonZeroPreserved pins the carve-out:
+// non-zero values are valid (provider domain starts at 1) and must be
+// preserved. Table-driven over realistic values.
+func TestFixupSubnet_LniAtDeviceIndexNonZeroPreserved(t *testing.T) {
+	t.Parallel()
+	cases := []string{"1", "2", "7"}
+	for _, v := range cases {
+		v := v
+		t.Run("idx_"+v, func(t *testing.T) {
+			t.Parallel()
+			in := []byte(`resource "aws_subnet" "main" {
+  vpc_id                     = "vpc-123"
+  cidr_block                 = "10.0.1.0/24"
+  enable_lni_at_device_index = ` + v + `
+}
+`)
+			out, err := applyResourceTypeFixups(in)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := string(out)
+			if !regexp.MustCompile(`enable_lni_at_device_index\s*=\s*` + v).MatchString(got) {
+				t.Errorf("non-zero enable_lni_at_device_index=%s must be preserved\n--- got ---\n%s", v, got)
+			}
+		})
+	}
+}
+
+// TestFixupSubnet_CustomerOwnedIPOrphanDropped pins #344b: drop
+// map_customer_owned_ip_on_launch when both customer_owned_ipv4_pool
+// AND outpost_arn are absent. The trio is mutually-required by the
+// provider schema; orphan presence fails validate.
+func TestFixupSubnet_CustomerOwnedIPOrphanDropped(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_subnet" "main" {
+  vpc_id                          = "vpc-123"
+  cidr_block                      = "10.0.1.0/24"
+  map_customer_owned_ip_on_launch = false
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if strings.Contains(got, "map_customer_owned_ip_on_launch") {
+		t.Errorf("orphan map_customer_owned_ip_on_launch must be dropped\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupSubnet_CustomerOwnedIPPreservedWhenOutpostSet pins the
+// carve-out: a real Outpost subnet carrying outpost_arn (or
+// customer_owned_ipv4_pool) preserves the full trio. Table-driven over
+// each sibling.
+func TestFixupSubnet_CustomerOwnedIPPreservedWhenOutpostSet(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		in   string
+	}{
+		{"outpost_arn", `outpost_arn = "arn:aws:outposts:us-east-1:123:outpost/op-abc"`},
+		{"customer_owned_ipv4_pool", `customer_owned_ipv4_pool = "ipv4pool-coip-0123456789abcdef0"`},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			in := []byte(`resource "aws_subnet" "main" {
+  vpc_id                          = "vpc-123"
+  cidr_block                      = "10.0.1.0/24"
+  map_customer_owned_ip_on_launch = true
+  ` + tc.in + `
+}
+`)
+			out, err := applyResourceTypeFixups(in)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := string(out)
+			if !strings.Contains(got, "map_customer_owned_ip_on_launch") {
+				t.Errorf("map_customer_owned_ip_on_launch must be preserved when %s is set\n--- got ---\n%s", tc.name, got)
+			}
+		})
+	}
+}
+
+// TestFixupSubnet_OnlyAffectsAWSSubnetBlocks pins resource-type
+// isolation: a sibling aws_vpc block carrying its own (unrelated)
+// availability_zone_id and map_customer_owned_ip_on_launch flows
+// through untouched. The fixup table is keyed by aws_subnet, so a
+// mutation broadening it to "any resource with these attrs" would
+// corrupt the VPC block.
+func TestFixupSubnet_OnlyAffectsAWSSubnetBlocks(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_subnet" "sub" {
+  vpc_id                          = "vpc-123"
+  cidr_block                      = "10.0.1.0/24"
+  availability_zone               = "us-east-1a"
+  availability_zone_id            = "use1-az6"
+  enable_lni_at_device_index      = 0
+  map_customer_owned_ip_on_launch = false
+}
+
+resource "aws_vpc" "vpc" {
+  cidr_block                      = "10.0.0.0/16"
+  availability_zone_id            = "use1-az6"
+  enable_lni_at_device_index      = 0
+  map_customer_owned_ip_on_launch = false
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	// VPC block must keep its (unrelated, non-schema) attributes.
+	if !regexp.MustCompile(`(?s)resource "aws_vpc" "vpc"[^}]*availability_zone_id\s*=\s*"use1-az6"`).MatchString(got) {
+		t.Errorf("aws_vpc.availability_zone_id must be preserved (fixup keyed by aws_subnet only)\n--- got ---\n%s", got)
+	}
+	if !regexp.MustCompile(`(?s)resource "aws_vpc" "vpc"[^}]*enable_lni_at_device_index\s*=\s*0`).MatchString(got) {
+		t.Errorf("aws_vpc.enable_lni_at_device_index must be preserved\n--- got ---\n%s", got)
+	}
+	if !regexp.MustCompile(`(?s)resource "aws_vpc" "vpc"[^}]*map_customer_owned_ip_on_launch\s*=\s*false`).MatchString(got) {
+		t.Errorf("aws_vpc.map_customer_owned_ip_on_launch must be preserved\n--- got ---\n%s", got)
+	}
+	// Subnet block must have all three transforms applied.
+	if regexp.MustCompile(`(?s)resource "aws_subnet" "sub"[^}]*availability_zone_id\s*=`).MatchString(got) {
+		t.Errorf("aws_subnet.availability_zone_id must be dropped\n--- got ---\n%s", got)
+	}
+	if regexp.MustCompile(`(?s)resource "aws_subnet" "sub"[^}]*enable_lni_at_device_index\s*=`).MatchString(got) {
+		t.Errorf("aws_subnet.enable_lni_at_device_index = 0 must be dropped\n--- got ---\n%s", got)
+	}
+	if regexp.MustCompile(`(?s)resource "aws_subnet" "sub"[^}]*map_customer_owned_ip_on_launch\s*=`).MatchString(got) {
+		t.Errorf("aws_subnet.map_customer_owned_ip_on_launch must be dropped\n--- got ---\n%s", got)
+	}
+}
