@@ -88,6 +88,8 @@ var categoryByTFType = map[string]string{
 	"aws_kms_key":                 CategorySecurity,
 	"aws_lambda_function":         CategoryVirtualMachines,
 	"aws_lb":                      CategoryNetworkSecurity,
+	"aws_lb_listener":             CategoryNetworkSecurity,
+	"aws_lb_target_group":         CategoryNetworkSecurity,
 	"aws_db_instance":             CategoryDataStorage,
 	"aws_eip":                     CategoryNetworkSecurity,
 	"aws_internet_gateway":        CategoryNetworkSecurity,

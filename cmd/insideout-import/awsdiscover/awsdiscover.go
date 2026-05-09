@@ -146,6 +146,9 @@ func NewAWSDiscovererWithConcurrency(cfg aws.Config, maxConcurrency int) *AWSDis
 			"aws_network_interface":       newNetworkInterfaceDiscoverer(cfg),
 			"aws_route53_zone":            newRoute53ZoneDiscoverer(cfg),
 			"aws_cloudfront_distribution": newCloudFrontDistributionDiscoverer(cfg),
+			"aws_lb":                      newLBDiscoverer(cfg, maxConcurrency),
+			"aws_lb_listener":             newLBListenerDiscoverer(cfg, maxConcurrency),
+			"aws_lb_target_group":         newLBTargetGroupDiscoverer(cfg, maxConcurrency),
 		},
 	}
 }
@@ -182,6 +185,9 @@ var serviceSlugByTFType = map[string]string{
 	"aws_network_interface":       "network_interface",
 	"aws_route53_zone":            "route53_zone",
 	"aws_cloudfront_distribution": "cloudfront_distribution",
+	"aws_lb":                      "lb",
+	"aws_lb_listener":             "lb_listener",
+	"aws_lb_target_group":         "lb_target_group",
 }
 
 // ServiceSlug returns the progress-event slug for a Terraform resource
