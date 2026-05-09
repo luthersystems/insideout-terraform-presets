@@ -750,3 +750,1113 @@ func TestFixupLB_PreservesSubnetMappingWhenIPv6AddressSet(t *testing.T) {
 		t.Errorf("ipv6_address value must be preserved\n--- got ---\n%s", got)
 	}
 }
+
+// TestFixupSubnet_AZIdDroppedWhenAZSet pins #343: when both
+// availability_zone and availability_zone_id are present (the
+// generate-config-out default), drop the ID and keep the human-readable
+// AZ.
+func TestFixupSubnet_AZIdDroppedWhenAZSet(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_subnet" "main" {
+  vpc_id               = "vpc-123"
+  cidr_block           = "10.0.1.0/24"
+  availability_zone    = "us-east-1a"
+  availability_zone_id = "use1-az6"
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if regexp.MustCompile(`(?m)^\s*availability_zone_id\s*=`).MatchString(got) {
+		t.Errorf("availability_zone_id must be dropped when availability_zone is set\n--- got ---\n%s", got)
+	}
+	if !regexp.MustCompile(`(?m)^\s*availability_zone\s*=\s*"us-east-1a"`).MatchString(got) {
+		t.Errorf("availability_zone must be preserved\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupSubnet_AZAttrsPreservedWhenOnlyOneSet pins the carve-out:
+// the fixup only fires when BOTH AZ attrs are present. A subnet with
+// only availability_zone (or only availability_zone_id) flows through
+// untouched.
+func TestFixupSubnet_AZAttrsPreservedWhenOnlyOneSet(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name        string
+		in          string
+		wantPresent string
+		wantAbsent  string
+	}{
+		{"only_az", `availability_zone = "us-east-1a"`, `availability_zone\s*=\s*"us-east-1a"`, `(?m)^\s*availability_zone_id\s*=`},
+		{"only_az_id", `availability_zone_id = "use1-az6"`, `availability_zone_id\s*=\s*"use1-az6"`, `(?m)^\s*availability_zone\s*=`},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			in := []byte(`resource "aws_subnet" "main" {
+  vpc_id     = "vpc-123"
+  cidr_block = "10.0.1.0/24"
+  ` + tc.in + `
+}
+`)
+			out, err := applyResourceTypeFixups(in)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := string(out)
+			if !regexp.MustCompile(tc.wantPresent).MatchString(got) {
+				t.Errorf("expected %q to match\n--- got ---\n%s", tc.wantPresent, got)
+			}
+			// Negative assertion: the fixup must not inject the absent
+			// sibling. Pins against a mutation that always emits a
+			// default AZ when only one of the pair is present.
+			if regexp.MustCompile(tc.wantAbsent).MatchString(got) {
+				t.Errorf("fixup must not inject %q when only one AZ attr is present\n--- got ---\n%s", tc.wantAbsent, got)
+			}
+		})
+	}
+}
+
+// TestFixupSubnet_NullLiteralAZIDPreserved pins the null-literal branch
+// of hasUsableValue: generate-config-out emits availability_zone = null
+// for any subnet whose AZ string is null at read time. The fixup must
+// recognize null-literal as "no usable value" and preserve the ID. A
+// mutation that replaced hasUsableValue with `GetAttribute(name) != nil`
+// would survive the existing "only one set" carve-out (which tested
+// attribute absence) but fail here.
+func TestFixupSubnet_NullLiteralAZIDPreserved(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_subnet" "main" {
+  vpc_id               = "vpc-123"
+  cidr_block           = "10.0.1.0/24"
+  availability_zone    = null
+  availability_zone_id = "use1-az6"
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if !regexp.MustCompile(`(?m)^\s*availability_zone_id\s*=\s*"use1-az6"`).MatchString(got) {
+		t.Errorf("availability_zone_id must be preserved when availability_zone is null\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupSubnet_NullLiteralOutpostTrioStillDropsOrphan pins the
+// null-literal branch on the trio: generate-config-out emits both
+// customer_owned_ipv4_pool = null and outpost_arn = null for any
+// non-Outpost subnet. The fixup must still drop the orphan
+// map_customer_owned_ip_on_launch. A mutation that treated null as
+// "present" would survive the existing absent-sibling test but fail
+// here.
+func TestFixupSubnet_NullLiteralOutpostTrioStillDropsOrphan(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_subnet" "main" {
+  vpc_id                          = "vpc-123"
+  cidr_block                      = "10.0.1.0/24"
+  customer_owned_ipv4_pool        = null
+  outpost_arn                     = null
+  map_customer_owned_ip_on_launch = false
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if regexp.MustCompile(`(?m)^\s*map_customer_owned_ip_on_launch\s*=`).MatchString(got) {
+		t.Errorf("orphan map_customer_owned_ip_on_launch must be dropped when both siblings are null\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupSubnet_LniAtDeviceIndexZeroDropped pins #344a: literal 0
+// fails provider validation (`enable_lni_at_device_index must not be
+// zero, got 0`). Drop the attribute.
+func TestFixupSubnet_LniAtDeviceIndexZeroDropped(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_subnet" "main" {
+  vpc_id                     = "vpc-123"
+  cidr_block                 = "10.0.1.0/24"
+  enable_lni_at_device_index = 0
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if strings.Contains(got, "enable_lni_at_device_index") {
+		t.Errorf("enable_lni_at_device_index = 0 must be dropped\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupSubnet_LniAtDeviceIndexNonZeroPreserved pins the carve-out:
+// non-zero values are valid (provider domain starts at 1) and must be
+// preserved. Table-driven over realistic values.
+func TestFixupSubnet_LniAtDeviceIndexNonZeroPreserved(t *testing.T) {
+	t.Parallel()
+	cases := []string{"1", "2", "7"}
+	for _, v := range cases {
+		v := v
+		t.Run("idx_"+v, func(t *testing.T) {
+			t.Parallel()
+			in := []byte(`resource "aws_subnet" "main" {
+  vpc_id                     = "vpc-123"
+  cidr_block                 = "10.0.1.0/24"
+  enable_lni_at_device_index = ` + v + `
+}
+`)
+			out, err := applyResourceTypeFixups(in)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := string(out)
+			if !regexp.MustCompile(`enable_lni_at_device_index\s*=\s*` + v).MatchString(got) {
+				t.Errorf("non-zero enable_lni_at_device_index=%s must be preserved\n--- got ---\n%s", v, got)
+			}
+		})
+	}
+}
+
+// TestFixupSubnet_CustomerOwnedIPOrphanDropped pins #344b: drop
+// map_customer_owned_ip_on_launch when both customer_owned_ipv4_pool
+// AND outpost_arn are absent. The trio is mutually-required by the
+// provider schema; orphan presence fails validate.
+func TestFixupSubnet_CustomerOwnedIPOrphanDropped(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_subnet" "main" {
+  vpc_id                          = "vpc-123"
+  cidr_block                      = "10.0.1.0/24"
+  map_customer_owned_ip_on_launch = false
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if strings.Contains(got, "map_customer_owned_ip_on_launch") {
+		t.Errorf("orphan map_customer_owned_ip_on_launch must be dropped\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupSubnet_CustomerOwnedIPPreservedWhenOutpostSet pins the
+// carve-out: a real Outpost subnet carrying outpost_arn (or
+// customer_owned_ipv4_pool) preserves the full trio. Table-driven over
+// each sibling.
+func TestFixupSubnet_CustomerOwnedIPPreservedWhenOutpostSet(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		in   string
+	}{
+		{"outpost_arn", `outpost_arn = "arn:aws:outposts:us-east-1:123:outpost/op-abc"`},
+		{"customer_owned_ipv4_pool", `customer_owned_ipv4_pool = "ipv4pool-coip-0123456789abcdef0"`},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			in := []byte(`resource "aws_subnet" "main" {
+  vpc_id                          = "vpc-123"
+  cidr_block                      = "10.0.1.0/24"
+  map_customer_owned_ip_on_launch = true
+  ` + tc.in + `
+}
+`)
+			out, err := applyResourceTypeFixups(in)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := string(out)
+			if !strings.Contains(got, "map_customer_owned_ip_on_launch") {
+				t.Errorf("map_customer_owned_ip_on_launch must be preserved when %s is set\n--- got ---\n%s", tc.name, got)
+			}
+		})
+	}
+}
+
+// TestFixupSubnet_OnlyAffectsAWSSubnetBlocks pins resource-type
+// isolation: a sibling aws_vpc block carrying its own (unrelated)
+// availability_zone_id and map_customer_owned_ip_on_launch flows
+// through untouched. The fixup table is keyed by aws_subnet, so a
+// mutation broadening it to "any resource with these attrs" would
+// corrupt the VPC block.
+func TestFixupSubnet_OnlyAffectsAWSSubnetBlocks(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_subnet" "sub" {
+  vpc_id                          = "vpc-123"
+  cidr_block                      = "10.0.1.0/24"
+  availability_zone               = "us-east-1a"
+  availability_zone_id            = "use1-az6"
+  enable_lni_at_device_index      = 0
+  map_customer_owned_ip_on_launch = false
+}
+
+resource "aws_vpc" "vpc" {
+  cidr_block                      = "10.0.0.0/16"
+  availability_zone_id            = "use1-az6"
+  enable_lni_at_device_index      = 0
+  map_customer_owned_ip_on_launch = false
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	// VPC block must keep its (unrelated, non-schema) attributes.
+	if !regexp.MustCompile(`(?s)resource "aws_vpc" "vpc"[^}]*availability_zone_id\s*=\s*"use1-az6"`).MatchString(got) {
+		t.Errorf("aws_vpc.availability_zone_id must be preserved (fixup keyed by aws_subnet only)\n--- got ---\n%s", got)
+	}
+	if !regexp.MustCompile(`(?s)resource "aws_vpc" "vpc"[^}]*enable_lni_at_device_index\s*=\s*0`).MatchString(got) {
+		t.Errorf("aws_vpc.enable_lni_at_device_index must be preserved\n--- got ---\n%s", got)
+	}
+	if !regexp.MustCompile(`(?s)resource "aws_vpc" "vpc"[^}]*map_customer_owned_ip_on_launch\s*=\s*false`).MatchString(got) {
+		t.Errorf("aws_vpc.map_customer_owned_ip_on_launch must be preserved\n--- got ---\n%s", got)
+	}
+	// Subnet block must have all three transforms applied.
+	if regexp.MustCompile(`(?s)resource "aws_subnet" "sub"[^}]*availability_zone_id\s*=`).MatchString(got) {
+		t.Errorf("aws_subnet.availability_zone_id must be dropped\n--- got ---\n%s", got)
+	}
+	if regexp.MustCompile(`(?s)resource "aws_subnet" "sub"[^}]*enable_lni_at_device_index\s*=`).MatchString(got) {
+		t.Errorf("aws_subnet.enable_lni_at_device_index = 0 must be dropped\n--- got ---\n%s", got)
+	}
+	if regexp.MustCompile(`(?s)resource "aws_subnet" "sub"[^}]*map_customer_owned_ip_on_launch\s*=`).MatchString(got) {
+		t.Errorf("aws_subnet.map_customer_owned_ip_on_launch must be dropped\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupRouteTable_EmptyIPv6CIDRReplacedWithNull pins #345: the
+// actual bug shape from live CUST3 smoke. ipv6_cidr_block = "" inside
+// a route object literal fails provider validation with `"" is not a
+// valid CIDR block`. The fixup must rewrite "" to null so the per-field
+// CIDR validator skips it. (Earlier drop-the-field approach failed
+// because route is schema-typed as an object with all 12 fields
+// required-present — dropping fields produced a different "Incorrect
+// attribute value type" failure.)
+func TestFixupRouteTable_EmptyIPv6CIDRReplacedWithNull(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_route_table" "rt" {
+  vpc_id = "vpc-123"
+  route = [{
+    cidr_block      = "0.0.0.0/0"
+    gateway_id      = "igw-abc"
+    ipv6_cidr_block = ""
+  }]
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	// ipv6_cidr_block must remain in the output (preserves object type)
+	// but now as null instead of "".
+	if !regexp.MustCompile(`(?m)^\s*ipv6_cidr_block\s*=\s*null`).MatchString(got) {
+		t.Errorf("empty ipv6_cidr_block must be rewritten to null (preserve field for object type)\n--- got ---\n%s", got)
+	}
+	if regexp.MustCompile(`(?m)^\s*ipv6_cidr_block\s*=\s*""`).MatchString(got) {
+		t.Errorf("ipv6_cidr_block=\"\" must not survive (validator rejects empty literal)\n--- got ---\n%s", got)
+	}
+	if !regexp.MustCompile(`cidr_block\s*=\s*"0.0.0.0/0"`).MatchString(got) {
+		t.Errorf("non-empty cidr_block must be preserved\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupRouteTable_AllEmptyStringFieldsNulled pins broad-strip
+// semantics with the null-replacement contract: every field whose
+// value is the literal "" gets rewritten to null. The fixture mirrors
+// the CUST3 smoke output shape (12 absent fields emitted as ""). After
+// fixup, all field names survive (object type preserved) but empty
+// values become null.
+func TestFixupRouteTable_AllEmptyStringFieldsNulled(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_route_table" "rt" {
+  vpc_id = "vpc-123"
+  route = [{
+    carrier_gateway_id         = ""
+    cidr_block                 = "0.0.0.0/0"
+    core_network_arn           = ""
+    destination_prefix_list_id = ""
+    egress_only_gateway_id     = ""
+    gateway_id                 = ""
+    ipv6_cidr_block            = ""
+    local_gateway_id           = ""
+    nat_gateway_id             = "nat-0bf36e3c90fe23bf5"
+    network_interface_id       = ""
+    transit_gateway_id         = ""
+    vpc_endpoint_id            = ""
+    vpc_peering_connection_id  = ""
+  }]
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	emptyFields := []string{
+		"carrier_gateway_id",
+		"core_network_arn",
+		"destination_prefix_list_id",
+		"egress_only_gateway_id",
+		"gateway_id",
+		"ipv6_cidr_block",
+		"local_gateway_id",
+		"network_interface_id",
+		"transit_gateway_id",
+		"vpc_endpoint_id",
+		"vpc_peering_connection_id",
+	}
+	for _, f := range emptyFields {
+		// Each previously-empty field must now be `<f> = null`. Anchor
+		// on `<f> =` to avoid false positives (e.g. "gateway_id" is a
+		// substring of "nat_gateway_id" — anchored regex skips that).
+		nullPat := `(?m)^\s*` + regexp.QuoteMeta(f) + `\s*=\s*null`
+		if !regexp.MustCompile(nullPat).MatchString(got) {
+			t.Errorf("empty %s must be rewritten to null\n--- got ---\n%s", f, got)
+		}
+		emptyPat := `(?m)^\s*` + regexp.QuoteMeta(f) + `\s*=\s*""`
+		if regexp.MustCompile(emptyPat).MatchString(got) {
+			t.Errorf("empty literal %s=\"\" must not survive\n--- got ---\n%s", f, got)
+		}
+	}
+	// Non-empty fields must survive untouched.
+	if !regexp.MustCompile(`cidr_block\s*=\s*"0.0.0.0/0"`).MatchString(got) {
+		t.Errorf("cidr_block=\"0.0.0.0/0\" must be preserved\n--- got ---\n%s", got)
+	}
+	if !regexp.MustCompile(`nat_gateway_id\s*=\s*"nat-0bf36e3c90fe23bf5"`).MatchString(got) {
+		t.Errorf("nat_gateway_id must be preserved\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupRouteTable_NonEmptyFieldsPreserved pins isolation: a route
+// object with no empty-string fields flows through untouched. A
+// mutation that broadened the filter to non-empty values would fail
+// this test.
+func TestFixupRouteTable_NonEmptyFieldsPreserved(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_route_table" "rt" {
+  vpc_id = "vpc-123"
+  route = [{
+    cidr_block     = "10.0.0.0/8"
+    gateway_id     = "igw-abc"
+    nat_gateway_id = "nat-xyz"
+  }]
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	for _, want := range []string{"cidr_block", "gateway_id", "nat_gateway_id"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("non-empty %s must be preserved\n--- got ---\n%s", want, got)
+		}
+	}
+	// Negative: no field should have been rewritten to null.
+	if regexp.MustCompile(`(?m)^\s*\w+\s*=\s*null`).MatchString(got) {
+		t.Errorf("no field should be rewritten to null when none were empty\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupRouteTable_NoRouteAttrUntouched pins the no-op branch: a
+// route_table without a route attribute (or with `route = []`) is a
+// pure pass-through. A mutation that emitted a stub would fail.
+func TestFixupRouteTable_NoRouteAttrUntouched(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		body string
+	}{
+		{"no_route_attr", `vpc_id = "vpc-123"`},
+		{"empty_route_list", `vpc_id = "vpc-123"
+  route  = []`},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			in := []byte(`resource "aws_route_table" "rt" {
+  ` + tc.body + `
+}
+`)
+			out, err := applyResourceTypeFixups(in)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(out) != string(in) {
+				t.Errorf("no-op case must yield identical output\n--- in ---\n%s\n--- out ---\n%s", in, out)
+			}
+		})
+	}
+}
+
+// TestFixupRouteTable_OnlyAffectsAWSRouteTableBlocks pins resource-type
+// isolation: a sibling aws_route block carrying its own ipv6_cidr_block
+// = "" must NOT be touched. The fixup table is keyed by aws_route_table
+// only.
+func TestFixupRouteTable_OnlyAffectsAWSRouteTableBlocks(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_route_table" "rt" {
+  vpc_id = "vpc-123"
+  route = [{
+    cidr_block      = "0.0.0.0/0"
+    ipv6_cidr_block = ""
+  }]
+}
+
+resource "aws_route" "extra" {
+  route_table_id      = "rtb-123"
+  destination_cidr_block = "10.0.0.0/16"
+  ipv6_cidr_block     = ""
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	// The route_table's nested ipv6_cidr_block is rewritten to null;
+	// the aws_route block's top-level ipv6_cidr_block keeps its "".
+	// So we expect exactly 1 ipv6_cidr_block="" remaining.
+	emptyMatches := regexp.MustCompile(`(?m)^\s*ipv6_cidr_block\s*=\s*""`).FindAllString(got, -1)
+	if len(emptyMatches) != 1 {
+		t.Errorf("expected exactly 1 ipv6_cidr_block=\"\" remaining (the aws_route's), got %d\n--- got ---\n%s", len(emptyMatches), got)
+	}
+	// And exactly 1 ipv6_cidr_block=null (the route_table's nested rewrite).
+	nullMatches := regexp.MustCompile(`(?m)^\s*ipv6_cidr_block\s*=\s*null`).FindAllString(got, -1)
+	if len(nullMatches) != 1 {
+		t.Errorf("expected exactly 1 ipv6_cidr_block=null (the route_table's nested rewrite), got %d\n--- got ---\n%s", len(nullMatches), got)
+	}
+	if !regexp.MustCompile(`(?s)resource "aws_route" "extra"[^}]*ipv6_cidr_block\s*=\s*""`).MatchString(got) {
+		t.Errorf("aws_route.ipv6_cidr_block=\"\" must be preserved (fixup keyed by aws_route_table only)\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupRouteTable_MultipleRouteObjectsAllNulled pins the
+// multi-element-tuple branch. A route_table can carry any number of
+// route entries; the fixup must clean each one independently. A
+// mutation that returned only the first cleaned element would survive
+// the single-route fixtures but fail this one.
+func TestFixupRouteTable_MultipleRouteObjectsAllNulled(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_route_table" "rt" {
+  vpc_id = "vpc-123"
+  route = [{
+    cidr_block      = "0.0.0.0/0"
+    gateway_id      = "igw-abc"
+    ipv6_cidr_block = ""
+  }, {
+    cidr_block      = "10.0.0.0/8"
+    nat_gateway_id  = "nat-xyz"
+    ipv6_cidr_block = ""
+  }]
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	// Both routes' empty ipv6_cidr_block must be rewritten to null.
+	nullMatches := regexp.MustCompile(`(?m)^\s*ipv6_cidr_block\s*=\s*null`).FindAllString(got, -1)
+	if len(nullMatches) != 2 {
+		t.Errorf("expected 2 ipv6_cidr_block=null (one per route), got %d\n--- got ---\n%s", len(nullMatches), got)
+	}
+	// No empty literal should survive.
+	if regexp.MustCompile(`(?m)^\s*ipv6_cidr_block\s*=\s*""`).MatchString(got) {
+		t.Errorf("no ipv6_cidr_block=\"\" should survive\n--- got ---\n%s", got)
+	}
+	// Both routes' destination + target survive.
+	if !regexp.MustCompile(`cidr_block\s*=\s*"0.0.0.0/0"`).MatchString(got) {
+		t.Errorf("first route's cidr_block must be preserved\n--- got ---\n%s", got)
+	}
+	if !regexp.MustCompile(`gateway_id\s*=\s*"igw-abc"`).MatchString(got) {
+		t.Errorf("first route's gateway_id must be preserved\n--- got ---\n%s", got)
+	}
+	if !regexp.MustCompile(`cidr_block\s*=\s*"10.0.0.0/8"`).MatchString(got) {
+		t.Errorf("second route's cidr_block must be preserved\n--- got ---\n%s", got)
+	}
+	if !regexp.MustCompile(`nat_gateway_id\s*=\s*"nat-xyz"`).MatchString(got) {
+		t.Errorf("second route's nat_gateway_id must be preserved\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupNATGateway_BothNoInfoDropped pins #348 positive: when
+// generate-config-out emits both `secondary_private_ip_address_count = 0`
+// AND `secondary_private_ip_addresses = []`, drop both — neither
+// carries information, and the provider rejects co-presence.
+func TestFixupNATGateway_BothNoInfoDropped(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_nat_gateway" "ngw" {
+  subnet_id                          = "subnet-abc"
+  secondary_private_ip_address_count = 0
+  secondary_private_ip_addresses     = []
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if regexp.MustCompile(`(?m)^\s*secondary_private_ip_address_count\s*=`).MatchString(got) {
+		t.Errorf("secondary_private_ip_address_count must be dropped when both no-info\n--- got ---\n%s", got)
+	}
+	if regexp.MustCompile(`(?m)^\s*secondary_private_ip_addresses\s*=`).MatchString(got) {
+		t.Errorf("secondary_private_ip_addresses must be dropped when both no-info\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupNATGateway_CountWithEmptyAddrsDropsAddrs pins the
+// count-pinned carve-out: operator set count > 0; the empty addresses
+// list is redundant + conflicts. Drop the addresses list, keep the count.
+func TestFixupNATGateway_CountWithEmptyAddrsDropsAddrs(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_nat_gateway" "ngw" {
+  subnet_id                          = "subnet-abc"
+  secondary_private_ip_address_count = 2
+  secondary_private_ip_addresses     = []
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if !regexp.MustCompile(`(?m)^\s*secondary_private_ip_address_count\s*=\s*2`).MatchString(got) {
+		t.Errorf("secondary_private_ip_address_count = 2 must be preserved\n--- got ---\n%s", got)
+	}
+	if regexp.MustCompile(`(?m)^\s*secondary_private_ip_addresses\s*=`).MatchString(got) {
+		t.Errorf("empty secondary_private_ip_addresses must be dropped when count is set\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupNATGateway_AddrsWithZeroCountDropsCount pins the
+// addresses-pinned carve-out: operator set explicit addresses; the
+// count = 0 is redundant + conflicts. Drop the count, keep addresses.
+func TestFixupNATGateway_AddrsWithZeroCountDropsCount(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_nat_gateway" "ngw" {
+  subnet_id                          = "subnet-abc"
+  secondary_private_ip_address_count = 0
+  secondary_private_ip_addresses     = ["10.0.0.1"]
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if regexp.MustCompile(`(?m)^\s*secondary_private_ip_address_count\s*=`).MatchString(got) {
+		t.Errorf("secondary_private_ip_address_count = 0 must be dropped when addresses are set\n--- got ---\n%s", got)
+	}
+	if !regexp.MustCompile(`secondary_private_ip_addresses\s*=\s*\["10\.0\.0\.1"\]`).MatchString(got) {
+		t.Errorf("secondary_private_ip_addresses must be preserved\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupNATGateway_OnlyOneAttrPresentNoOp pins the no-op carve-out:
+// when only one of the conflict pair is present, the fixup must do
+// nothing.
+func TestFixupNATGateway_OnlyOneAttrPresentNoOp(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_nat_gateway" "ngw" {
+  subnet_id                          = "subnet-abc"
+  secondary_private_ip_address_count = 0
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(out) != string(in) {
+		t.Errorf("only-one-attr-present must be a no-op\n--- in ---\n%s\n--- out ---\n%s", in, out)
+	}
+}
+
+// TestFixupLBListener_DisabledStickinessBlockDropped pins #349 positive:
+// drop the entire stickiness sub-block from default_action.forward
+// when enabled = false. Schema cleanup drops duration = 0 before this
+// fixup runs, leaving `stickiness { enabled = false }` which the
+// provider rejects with "duration is required".
+func TestFixupLBListener_DisabledStickinessBlockDropped(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_lb_listener" "listener" {
+  load_balancer_arn = "arn:..."
+  port              = 80
+  protocol          = "HTTP"
+  default_action {
+    type             = "forward"
+    target_group_arn = "arn:..."
+    forward {
+      stickiness {
+        enabled = false
+      }
+      target_group {
+        arn    = "arn:..."
+        weight = 1
+      }
+    }
+  }
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if strings.Contains(got, "stickiness") {
+		t.Errorf("disabled stickiness block must be dropped\n--- got ---\n%s", got)
+	}
+	// The forward block (and target_group, default_action) must survive.
+	if !strings.Contains(got, "target_group") {
+		t.Errorf("forward.target_group must be preserved\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupLBListener_EnabledStickinessBlockPreserved pins the
+// carve-out: a real stickiness configuration carrying enabled = true
+// with a duration is preserved untouched.
+func TestFixupLBListener_EnabledStickinessBlockPreserved(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_lb_listener" "listener" {
+  load_balancer_arn = "arn:..."
+  port              = 80
+  protocol          = "HTTP"
+  default_action {
+    type             = "forward"
+    target_group_arn = "arn:..."
+    forward {
+      stickiness {
+        enabled  = true
+        duration = 3600
+      }
+      target_group {
+        arn    = "arn:..."
+        weight = 1
+      }
+    }
+  }
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if !strings.Contains(got, "stickiness") {
+		t.Errorf("enabled stickiness must be preserved\n--- got ---\n%s", got)
+	}
+	if !regexp.MustCompile(`duration\s*=\s*3600`).MatchString(got) {
+		t.Errorf("non-zero duration must be preserved\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupLBTargetGroup_TargetControlPortZeroDropped pins #350a:
+// drop the literal-zero target_control_port (range 1-65535).
+func TestFixupLBTargetGroup_TargetControlPortZeroDropped(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_lb_target_group" "tg" {
+  name                = "tg"
+  port                = 80
+  protocol            = "HTTP"
+  target_control_port = 0
+  vpc_id              = "vpc-123"
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if regexp.MustCompile(`(?m)^\s*target_control_port\s*=`).MatchString(got) {
+		t.Errorf("target_control_port = 0 must be dropped\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupLBTargetGroup_TargetControlPortNonZeroPreserved pins the
+// carve-out: a real target_control_port (e.g. 443) is preserved.
+func TestFixupLBTargetGroup_TargetControlPortNonZeroPreserved(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_lb_target_group" "tg" {
+  name                = "tg"
+  port                = 80
+  protocol            = "HTTP"
+  target_control_port = 443
+  vpc_id              = "vpc-123"
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if !regexp.MustCompile(`(?m)^\s*target_control_port\s*=\s*443`).MatchString(got) {
+		t.Errorf("non-zero target_control_port must be preserved\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupLBTargetGroup_NullTargetFailoverBlockDropped pins #350b:
+// drop the entire target_failover block when both required fields are
+// null. Generate-config-out emits the block with null required fields
+// for any target_group not configured for failover.
+func TestFixupLBTargetGroup_NullTargetFailoverBlockDropped(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_lb_target_group" "tg" {
+  name     = "tg"
+  port     = 80
+  protocol = "HTTP"
+  vpc_id   = "vpc-123"
+  target_failover {
+    on_deregistration = null
+    on_unhealthy      = null
+  }
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if strings.Contains(got, "target_failover") {
+		t.Errorf("target_failover block with null required fields must be dropped\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupLBTargetGroup_PopulatedTargetFailoverPreserved pins the
+// carve-out: a real target_failover with non-null fields survives.
+func TestFixupLBTargetGroup_PopulatedTargetFailoverPreserved(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_lb_target_group" "tg" {
+  name     = "tg"
+  port     = 80
+  protocol = "HTTP"
+  vpc_id   = "vpc-123"
+  target_failover {
+    on_deregistration = "rebalance"
+    on_unhealthy      = "rebalance"
+  }
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if !strings.Contains(got, "target_failover") {
+		t.Errorf("populated target_failover block must be preserved\n--- got ---\n%s", got)
+	}
+	if !regexp.MustCompile(`on_deregistration\s*=\s*"rebalance"`).MatchString(got) {
+		t.Errorf("on_deregistration value must be preserved\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupLBTargetGroup_NullTargetHealthStateBlockDropped pins #350c:
+// drop the entire target_health_state block when its required field
+// (enable_unhealthy_connection_termination) is null.
+func TestFixupLBTargetGroup_NullTargetHealthStateBlockDropped(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_lb_target_group" "tg" {
+  name     = "tg"
+  port     = 80
+  protocol = "HTTP"
+  vpc_id   = "vpc-123"
+  target_health_state {
+    enable_unhealthy_connection_termination = null
+    unhealthy_draining_interval             = null
+  }
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if strings.Contains(got, "target_health_state") {
+		t.Errorf("target_health_state block with null required field must be dropped\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupVPCEndpoint_EmptyDNSDomainsDropped pins #351 positive: drop
+// the empty private_dns_specified_domains list inside dns_options.
+// Provider marks the list MinItems=1 — empty list fails validate.
+func TestFixupVPCEndpoint_EmptyDNSDomainsDropped(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_vpc_endpoint" "ep" {
+  vpc_id            = "vpc-123"
+  service_name      = "com.amazonaws.us-east-1.s3"
+  vpc_endpoint_type = "Gateway"
+  dns_options {
+    dns_record_ip_type            = "service-defined"
+    private_dns_specified_domains = []
+  }
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if regexp.MustCompile(`(?m)^\s*private_dns_specified_domains\s*=`).MatchString(got) {
+		t.Errorf("empty private_dns_specified_domains must be dropped\n--- got ---\n%s", got)
+	}
+	// dns_options block survives (we only dropped the inner attribute).
+	if !strings.Contains(got, "dns_options") {
+		t.Errorf("dns_options block must be preserved\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupVPCEndpoint_PopulatedDNSDomainsPreserved pins the carve-out:
+// a non-empty list is preserved.
+func TestFixupVPCEndpoint_PopulatedDNSDomainsPreserved(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_vpc_endpoint" "ep" {
+  vpc_id            = "vpc-123"
+  service_name      = "com.amazonaws.us-east-1.s3"
+  vpc_endpoint_type = "Interface"
+  dns_options {
+    private_dns_specified_domains = ["example.com", "internal.example.com"]
+  }
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if !regexp.MustCompile(`private_dns_specified_domains\s*=\s*\["example.com",\s*"internal.example.com"\]`).MatchString(got) {
+		t.Errorf("populated private_dns_specified_domains must be preserved\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupLBTargetGroup_PartiallyNullTargetFailoverPreserved pins
+// mutation-resistance on the && in fixupLBTargetGroupProviderQuirks's
+// target_failover guard. Both required fields must be null for the
+// block to be dropped — partial null (one set, one null) preserves
+// the block. A mutation that swapped && for || would always-drop and
+// fail this test.
+func TestFixupLBTargetGroup_PartiallyNullTargetFailoverPreserved(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		body string
+	}{
+		{"deregistration_set", `on_deregistration = "rebalance"
+    on_unhealthy      = null`},
+		{"unhealthy_set", `on_deregistration = null
+    on_unhealthy      = "no_rebalance"`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			in := []byte(`resource "aws_lb_target_group" "tg" {
+  name     = "tg"
+  port     = 80
+  protocol = "HTTP"
+  vpc_id   = "vpc-123"
+  target_failover {
+    ` + tc.body + `
+  }
+}
+`)
+			out, err := applyResourceTypeFixups(in)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := string(out)
+			if !regexp.MustCompile(`(?m)^\s*target_failover\s*\{`).MatchString(got) {
+				t.Errorf("partially-null target_failover must be preserved\n--- got ---\n%s", got)
+			}
+		})
+	}
+}
+
+// TestFixupLBTargetGroup_PopulatedTargetHealthStatePreserved pins the
+// preserve-when-meaningful carve-out for the third target_group
+// transform: a real target_health_state with a non-null required
+// field survives. A mutation that always-dropped target_health_state
+// (or removed the isAttrLiteralNull guard) would fail this.
+func TestFixupLBTargetGroup_PopulatedTargetHealthStatePreserved(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_lb_target_group" "tg" {
+  name     = "tg"
+  port     = 80
+  protocol = "HTTP"
+  vpc_id   = "vpc-123"
+  target_health_state {
+    enable_unhealthy_connection_termination = true
+    unhealthy_draining_interval             = 60
+  }
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if !regexp.MustCompile(`(?m)^\s*target_health_state\s*\{`).MatchString(got) {
+		t.Errorf("populated target_health_state block must be preserved\n--- got ---\n%s", got)
+	}
+	if !regexp.MustCompile(`enable_unhealthy_connection_termination\s*=\s*true`).MatchString(got) {
+		t.Errorf("non-null enable_unhealthy_connection_termination must be preserved\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupNATGateway_OnlyAffectsAWSNATGatewayBlocks pins resource-type
+// isolation: a sibling aws_eip carrying the same secondary_private_ip
+// attribute names must NOT be touched. The fixup table is keyed by
+// aws_nat_gateway only.
+func TestFixupNATGateway_OnlyAffectsAWSNATGatewayBlocks(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_nat_gateway" "ngw" {
+  subnet_id                          = "subnet-abc"
+  secondary_private_ip_address_count = 0
+  secondary_private_ip_addresses     = []
+}
+
+resource "aws_eip" "extra" {
+  domain                             = "vpc"
+  secondary_private_ip_address_count = 0
+  secondary_private_ip_addresses     = []
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if !regexp.MustCompile(`(?s)resource "aws_eip" "extra"[^}]*secondary_private_ip_address_count\s*=\s*0`).MatchString(got) {
+		t.Errorf("aws_eip.secondary_private_ip_address_count must be preserved (fixup keyed by aws_nat_gateway)\n--- got ---\n%s", got)
+	}
+	if !regexp.MustCompile(`(?s)resource "aws_eip" "extra"[^}]*secondary_private_ip_addresses\s*=\s*\[\]`).MatchString(got) {
+		t.Errorf("aws_eip.secondary_private_ip_addresses=[] must be preserved\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupLBListener_OnlyAffectsAWSLBListenerBlocks pins resource-type
+// isolation: a sibling aws_lb block carrying its own (hypothetical)
+// stickiness sub-block must not be touched. Fixup table keyed by
+// aws_lb_listener only.
+func TestFixupLBListener_OnlyAffectsAWSLBListenerBlocks(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_lb_listener" "listener" {
+  load_balancer_arn = "arn:..."
+  port              = 80
+  protocol          = "HTTP"
+  default_action {
+    type             = "forward"
+    target_group_arn = "arn:..."
+    forward {
+      stickiness {
+        enabled = false
+      }
+      target_group {
+        arn    = "arn:..."
+        weight = 1
+      }
+    }
+  }
+}
+
+resource "aws_lb" "extra" {
+  name = "alb"
+  default_action {
+    forward {
+      stickiness {
+        enabled = false
+      }
+    }
+  }
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	// aws_lb's stickiness must survive untouched (fixup keyed by aws_lb_listener).
+	count := len(regexp.MustCompile(`(?m)^\s*stickiness\s*\{`).FindAllString(got, -1))
+	if count != 1 {
+		t.Errorf("expected exactly 1 stickiness block remaining (the aws_lb's), got %d\n--- got ---\n%s", count, got)
+	}
+}
+
+// TestFixupLBTargetGroup_OnlyAffectsAWSLBTargetGroupBlocks pins
+// resource-type isolation: a sibling aws_lb block carrying the same
+// attribute names (target_control_port, target_failover) must not be
+// touched.
+func TestFixupLBTargetGroup_OnlyAffectsAWSLBTargetGroupBlocks(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_lb_target_group" "tg" {
+  name                = "tg"
+  target_control_port = 0
+  target_failover {
+    on_deregistration = null
+    on_unhealthy      = null
+  }
+}
+
+resource "aws_lb" "extra" {
+  name                = "alb"
+  target_control_port = 0
+  target_failover {
+    on_deregistration = null
+    on_unhealthy      = null
+  }
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	// aws_lb's target_control_port=0 must be preserved.
+	if !regexp.MustCompile(`(?s)resource "aws_lb" "extra"[^}]*target_control_port\s*=\s*0`).MatchString(got) {
+		t.Errorf("aws_lb.target_control_port=0 must be preserved (fixup keyed by aws_lb_target_group)\n--- got ---\n%s", got)
+	}
+	// Exactly 1 target_failover block remains (the aws_lb's).
+	count := len(regexp.MustCompile(`(?m)^\s*target_failover\s*\{`).FindAllString(got, -1))
+	if count != 1 {
+		t.Errorf("expected exactly 1 target_failover block remaining (the aws_lb's), got %d\n--- got ---\n%s", count, got)
+	}
+}
+
+// TestFixupVPCEndpoint_OnlyAffectsAWSVPCEndpointBlocks pins
+// resource-type isolation: a sibling aws_vpc carrying its own
+// (hypothetical) dns_options block with empty
+// private_dns_specified_domains must not be touched.
+func TestFixupVPCEndpoint_OnlyAffectsAWSVPCEndpointBlocks(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_vpc_endpoint" "ep" {
+  vpc_id            = "vpc-123"
+  service_name      = "com.amazonaws.us-east-1.s3"
+  vpc_endpoint_type = "Gateway"
+  dns_options {
+    private_dns_specified_domains = []
+  }
+}
+
+resource "aws_iam_policy" "extra" {
+  name = "p"
+  dns_options {
+    private_dns_specified_domains = []
+  }
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	// aws_iam_policy's dns_options.private_dns_specified_domains=[] must be preserved.
+	if !regexp.MustCompile(`(?s)resource "aws_iam_policy" "extra"[^}]*\{[^}]*dns_options[^}]*\{[^}]*private_dns_specified_domains\s*=\s*\[\]`).MatchString(got) {
+		t.Errorf("aws_iam_policy's empty private_dns_specified_domains must be preserved (fixup keyed by aws_vpc_endpoint)\n--- got ---\n%s", got)
+	}
+}

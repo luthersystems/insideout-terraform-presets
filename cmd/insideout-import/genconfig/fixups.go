@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/hashicorp/hcl/v2"
+	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/hashicorp/hcl/v2/hclwrite"
 	"github.com/zclconf/go-cty/cty"
 )
@@ -55,6 +56,12 @@ var resourceTypeFixups = map[string]func(*hclwrite.Block){
 	"aws_dynamodb_table":  fixupDynamoDBPITRRecoveryPeriodZero,
 	"aws_vpc":             fixupVPCIPv6NetmaskOrphan,
 	"aws_lb":              fixupLBSubnetMappingConflict,
+	"aws_subnet":          fixupSubnetProviderQuirks,
+	"aws_route_table":     fixupRouteTableEmptyRouteFields,
+	"aws_nat_gateway":     fixupNATGatewaySecondaryIPConflict,
+	"aws_lb_listener":     fixupLBListenerStickinessDurationZero,
+	"aws_lb_target_group": fixupLBTargetGroupProviderQuirks,
+	"aws_vpc_endpoint":    fixupVPCEndpointEmptyDNSDomains,
 }
 
 // lambdaPlaceholderFile is what we set `filename` to so the block
@@ -219,6 +226,271 @@ func fixupLBSubnetMappingConflict(blk *hclwrite.Block) {
 	}
 }
 
+// fixupSubnetProviderQuirks resolves three terraform-provider-aws schema
+// constraints that `terraform plan -generate-config-out` emits in
+// violation of:
+//
+//   - availability_zone vs availability_zone_id (mutually exclusive). The
+//     provider rejects both being specified. generate-config-out always
+//     emits both for any subnet that has an AZ assignment. Drop the ID
+//     in favor of the human-readable AZ. Issue #343.
+//   - enable_lni_at_device_index = 0 (provider rejects literal 0; the
+//     attribute's documented domain starts at 1). generate-config-out
+//     emits 0 for any subnet not configured for Local Network Interfaces.
+//     Issue #344.
+//   - map_customer_owned_ip_on_launch orphan (mutually-required trio with
+//     customer_owned_ipv4_pool and outpost_arn). generate-config-out emits
+//     `map_customer_owned_ip_on_launch = false` standalone for every
+//     non-Outpost subnet, breaking the all-of constraint. Drop the orphan
+//     when neither sibling carries a usable value. Issue #344.
+//
+// Conservative shape: each transform fires only on its specific orphan
+// pattern. A real Outpost-pinned subnet (outpost_arn set) preserves the
+// trio; a real LNI-configured subnet (index >=1) preserves the index; an
+// AZ-id-only subnet preserves the ID.
+func fixupSubnetProviderQuirks(blk *hclwrite.Block) {
+	body := blk.Body()
+	// #343 — AZ vs AZ-ID mutual exclusion.
+	if hasUsableValue(body, "availability_zone") && hasUsableValue(body, "availability_zone_id") {
+		body.RemoveAttribute("availability_zone_id")
+	}
+	// #344a — enable_lni_at_device_index = 0 (provider rejects literal 0).
+	if isAttrLiteralZero(body, "enable_lni_at_device_index") {
+		body.RemoveAttribute("enable_lni_at_device_index")
+	}
+	// #344b — map_customer_owned_ip_on_launch orphan trio.
+	if !hasUsableValue(body, "customer_owned_ipv4_pool") && !hasUsableValue(body, "outpost_arn") {
+		body.RemoveAttribute("map_customer_owned_ip_on_launch")
+	}
+}
+
+// fixupRouteTableEmptyRouteFields replaces empty-string fields with
+// null in each route object literal emitted in aws_route_table.route.
+// The provider's per-field validators (CIDR check on ipv6_cidr_block,
+// resource-id format on gateway_id, etc.) reject literal "" but skip
+// null. terraform plan -generate-config-out emits "" for every absent
+// field in the route object; null-replacement satisfies the validators
+// while preserving the object type's field set (the route attribute is
+// schema-typed as an object with all 12 fields required to be present
+// — DROPPING fields breaks the object type and produces a different
+// "Incorrect attribute value type" failure).
+//
+// Shape note: generate-config-out emits route as an attribute carrying
+// a list-of-objects expression (route = [{...}, ...]), NOT as nested
+// route { ... } blocks. Mutation goes through cty round-trip rather
+// than block iteration: parse the attribute's expression bytes,
+// evaluate to a static cty value, replace "" string fields with
+// null per object, re-emit via SetAttributeValue. Issue #345.
+func fixupRouteTableEmptyRouteFields(blk *hclwrite.Block) {
+	body := blk.Body()
+	attr := body.GetAttribute("route")
+	if attr == nil {
+		return
+	}
+	exprBytes := attr.Expr().BuildTokens(nil).Bytes()
+	expr, diags := hclsyntax.ParseExpression(exprBytes, "route", hcl.Pos{Line: 1, Column: 1})
+	if diags.HasErrors() {
+		return
+	}
+	// expr.Value(nil) fails on any variable / function reference. That's
+	// the intended bail-out — generate-config-out emits literals only,
+	// and we'd rather no-op than silently drop a reference. Future
+	// templating that mixes refs into route would need an EvalContext.
+	val, diags := expr.Value(nil)
+	if diags.HasErrors() {
+		return
+	}
+	filtered, changed := nullEmptyStringFieldsInTuple(val)
+	if !changed {
+		return
+	}
+	body.SetAttributeValue("route", filtered)
+}
+
+// nullEmptyStringFieldsInTuple walks a tuple/list of object values and
+// returns a new tuple with each object's empty-string fields replaced
+// by null (preserving field set, just blanking the value). The boolean
+// reports whether any field was rewritten, so callers can short-circuit
+// a no-op back to the original tokens. Non-tuple/non-list inputs and
+// unknown/null values pass through unchanged.
+func nullEmptyStringFieldsInTuple(v cty.Value) (cty.Value, bool) {
+	if v.IsNull() || !v.IsKnown() {
+		return v, false
+	}
+	t := v.Type()
+	if !t.IsTupleType() && !t.IsListType() {
+		return v, false
+	}
+	if v.LengthInt() == 0 {
+		return v, false
+	}
+	out := make([]cty.Value, 0, v.LengthInt())
+	changed := false
+	it := v.ElementIterator()
+	for it.Next() {
+		_, elem := it.Element()
+		cleaned, c := nullEmptyStringFieldsInObject(elem)
+		if c {
+			changed = true
+		}
+		out = append(out, cleaned)
+	}
+	if !changed {
+		return v, false
+	}
+	return cty.TupleVal(out), true
+}
+
+// nullEmptyStringFieldsInObject returns a new object value with
+// empty-string string fields replaced by null. Non-object inputs pass
+// through unchanged. The field set is preserved (object type unchanged)
+// — this is the difference between "satisfies the schema's type
+// requirement that all 12 route fields be present" and "fails with
+// Incorrect attribute value type because we dropped fields the type
+// declared."
+func nullEmptyStringFieldsInObject(v cty.Value) (cty.Value, bool) {
+	if v.IsNull() || !v.IsKnown() {
+		return v, false
+	}
+	if !v.Type().IsObjectType() {
+		return v, false
+	}
+	fields := map[string]cty.Value{}
+	changed := false
+	for k, fv := range v.AsValueMap() {
+		if fv.Type() == cty.String && !fv.IsNull() && fv.IsKnown() && fv.AsString() == "" {
+			fields[k] = cty.NullVal(cty.String)
+			changed = true
+			continue
+		}
+		fields[k] = fv
+	}
+	if !changed {
+		return v, false
+	}
+	return cty.ObjectVal(fields), true
+}
+
+// fixupNATGatewaySecondaryIPConflict resolves the
+// secondary_private_ip_address_count vs secondary_private_ip_addresses
+// mutual-exclusion. terraform plan -generate-config-out emits both
+// (count = 0, addresses = []) for every NAT gateway not configured
+// with secondary IPs. The provider rejects co-presence even when both
+// carry the no-info shape.
+//
+// Heuristic: when both attrs carry the no-info shape (count = 0 AND
+// addresses = []), drop both — neither carries information. When
+// either side carries a meaningful value, keep it and drop the other.
+// Issue #348.
+func fixupNATGatewaySecondaryIPConflict(blk *hclwrite.Block) {
+	body := blk.Body()
+	hasCount := body.GetAttribute("secondary_private_ip_address_count") != nil
+	hasAddrs := body.GetAttribute("secondary_private_ip_addresses") != nil
+	if !hasCount || !hasAddrs {
+		return
+	}
+	countZero := isAttrLiteralZero(body, "secondary_private_ip_address_count")
+	addrsEmpty := isAttrLiteralEmptyList(body, "secondary_private_ip_addresses")
+	switch {
+	case countZero && addrsEmpty:
+		// Both no-info — drop both.
+		body.RemoveAttribute("secondary_private_ip_address_count")
+		body.RemoveAttribute("secondary_private_ip_addresses")
+	case countZero:
+		// Operator pinned addresses; the count is redundant + conflicts.
+		body.RemoveAttribute("secondary_private_ip_address_count")
+	case addrsEmpty:
+		// Operator pinned count; the empty list is redundant + conflicts.
+		body.RemoveAttribute("secondary_private_ip_addresses")
+	}
+}
+
+// fixupLBListenerStickinessDisabledDropped drops the entire stickiness
+// sub-block from default_action.forward when its enabled = false.
+// terraform plan -generate-config-out emits a stickiness block
+// carrying `enabled = false` (and `duration = 0`, which schema cleanup
+// drops as Computed-default before this fixup runs) for any forward
+// target group not configured for stickiness. The provider treats
+// `duration` as a required argument whenever the stickiness block is
+// present — so leaving an empty `stickiness { enabled = false }`
+// block fails validate with "Missing required argument". Drop the
+// entire stickiness block when disabled; the provider treats
+// stickiness as optional and accepts its absence. Issue #349.
+func fixupLBListenerStickinessDurationZero(blk *hclwrite.Block) {
+	for _, da := range blk.Body().Blocks() {
+		if da.Type() != "default_action" {
+			continue
+		}
+		for _, fwd := range da.Body().Blocks() {
+			if fwd.Type() != "forward" {
+				continue
+			}
+			for _, st := range fwd.Body().Blocks() {
+				if st.Type() != "stickiness" {
+					continue
+				}
+				// Drop the whole block when stickiness is disabled.
+				// A real stickiness configuration carrying duration is
+				// preserved (enabled = true with duration set).
+				if isAttrLiteralFalse(st.Body(), "enabled") {
+					fwd.Body().RemoveBlock(st)
+				}
+			}
+		}
+	}
+}
+
+// fixupLBTargetGroupProviderQuirks resolves three terraform-provider-aws
+// schema constraints terraform plan -generate-config-out emits in
+// violation of:
+//
+//   - target_control_port = 0 (provider rejects literal 0; range
+//     1-65535). Drop the literal-zero attribute.
+//   - target_failover block with on_deregistration = null AND
+//     on_unhealthy = null (both required by schema; null fails the
+//     required check). Drop the entire block.
+//   - target_health_state block with
+//     enable_unhealthy_connection_termination = null (required by
+//     schema). Drop the entire block.
+//
+// Conservative: each block-drop fires only when the required field is
+// the null literal. A real configuration carrying meaningful values
+// preserves the block. Issue #350.
+func fixupLBTargetGroupProviderQuirks(blk *hclwrite.Block) {
+	body := blk.Body()
+	if isAttrLiteralZero(body, "target_control_port") {
+		body.RemoveAttribute("target_control_port")
+	}
+	for _, sub := range body.Blocks() {
+		switch sub.Type() {
+		case "target_failover":
+			if isAttrLiteralNull(sub.Body(), "on_deregistration") && isAttrLiteralNull(sub.Body(), "on_unhealthy") {
+				body.RemoveBlock(sub)
+			}
+		case "target_health_state":
+			if isAttrLiteralNull(sub.Body(), "enable_unhealthy_connection_termination") {
+				body.RemoveBlock(sub)
+			}
+		}
+	}
+}
+
+// fixupVPCEndpointEmptyDNSDomains drops the empty
+// private_dns_specified_domains list inside the dns_options nested
+// block. The provider's schema marks the list as MinItems=1 — empty
+// list violates the constraint. The dns_options block accepts the
+// field's absence as "default to nil". Issue #351.
+func fixupVPCEndpointEmptyDNSDomains(blk *hclwrite.Block) {
+	for _, sub := range blk.Body().Blocks() {
+		if sub.Type() != "dns_options" {
+			continue
+		}
+		if isAttrLiteralEmptyList(sub.Body(), "private_dns_specified_domains") {
+			sub.Body().RemoveAttribute("private_dns_specified_domains")
+		}
+	}
+}
+
 // isAttrLiteralZero reports whether the named attribute exists and its
 // expression is exactly the literal `0` (after whitespace trimming).
 // It does NOT match `0.0`, `00`, or any computed expression that
@@ -254,4 +526,59 @@ func hasUsableValue(body *hclwrite.Body, name string) bool {
 		sb.Write(t.Bytes)
 	}
 	return strings.TrimSpace(sb.String()) != "null"
+}
+
+// isAttrLiteralNull reports whether the named attribute exists and its
+// expression is exactly the literal `null` (after whitespace trimming).
+// Mirrors isAttrLiteralZero — only the raw literal terraform plan
+// -generate-config-out would emit for a Required-but-unset attribute,
+// not any computed expression that evaluates to null.
+func isAttrLiteralNull(body *hclwrite.Body, name string) bool {
+	attr := body.GetAttribute(name)
+	if attr == nil {
+		return false
+	}
+	tokens := attr.Expr().BuildTokens(nil)
+	var sb strings.Builder
+	for _, t := range tokens {
+		sb.Write(t.Bytes)
+	}
+	return strings.TrimSpace(sb.String()) == "null"
+}
+
+// isAttrLiteralEmptyList reports whether the named attribute exists and
+// its expression is exactly the literal `[]` (after whitespace
+// trimming). Mirrors isAttrLiteralZero — only the raw literal
+// terraform plan -generate-config-out would emit for an empty
+// list-shaped field, not any computed expression that evaluates to
+// an empty list.
+func isAttrLiteralEmptyList(body *hclwrite.Body, name string) bool {
+	attr := body.GetAttribute(name)
+	if attr == nil {
+		return false
+	}
+	tokens := attr.Expr().BuildTokens(nil)
+	var sb strings.Builder
+	for _, t := range tokens {
+		sb.Write(t.Bytes)
+	}
+	return strings.TrimSpace(sb.String()) == "[]"
+}
+
+// isAttrLiteralFalse reports whether the named attribute exists and its
+// expression is exactly the literal `false` (after whitespace
+// trimming). Mirrors isAttrLiteralZero / isAttrLiteralNull — only the
+// raw literal terraform plan -generate-config-out would emit, not any
+// computed expression evaluating to false.
+func isAttrLiteralFalse(body *hclwrite.Body, name string) bool {
+	attr := body.GetAttribute(name)
+	if attr == nil {
+		return false
+	}
+	tokens := attr.Expr().BuildTokens(nil)
+	var sb strings.Builder
+	for _, t := range tokens {
+		sb.Write(t.Bytes)
+	}
+	return strings.TrimSpace(sb.String()) == "false"
 }
