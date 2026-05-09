@@ -39,6 +39,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/eks v1.83.0
 	github.com/aws/aws-sdk-go-v2/service/elasticache v1.52.2
 	github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2 v1.54.12
+	github.com/aws/aws-sdk-go-v2/service/eventbridge v1.45.25
 	github.com/aws/aws-sdk-go-v2/service/iam v1.53.10
 	github.com/aws/aws-sdk-go-v2/service/kafka v1.51.0
 	github.com/aws/aws-sdk-go-v2/service/kms v1.51.1

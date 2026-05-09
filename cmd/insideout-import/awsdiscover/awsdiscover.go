@@ -156,6 +156,10 @@ func NewAWSDiscovererWithConcurrency(cfg aws.Config, maxConcurrency int) *AWSDis
 			"aws_opensearchserverless_collection": newOpenSearchServerlessCollectionDiscoverer(cfg, maxConcurrency),
 			"aws_apigatewayv2_api":                newAPIGatewayV2APIDiscoverer(cfg, maxConcurrency),
 			"aws_apigatewayv2_stage":              newAPIGatewayV2StageDiscoverer(cfg, maxConcurrency),
+			"aws_eks_pod_identity_association":    newEKSPodIdentityDiscoverer(cfg, maxConcurrency),
+			"aws_cloudwatch_event_rule":           newCloudWatchEventRuleDiscoverer(cfg, maxConcurrency),
+			"aws_resourceexplorer2_index":         newResourceExplorer2IndexDiscoverer(cfg, maxConcurrency),
+			"aws_resourceexplorer2_view":          newResourceExplorer2ViewDiscoverer(cfg, maxConcurrency),
 		},
 	}
 }
@@ -202,6 +206,10 @@ var serviceSlugByTFType = map[string]string{
 	"aws_opensearchserverless_collection": "opensearchserverless_collection",
 	"aws_apigatewayv2_api":                "apigatewayv2_api",
 	"aws_apigatewayv2_stage":              "apigatewayv2_stage",
+	"aws_eks_pod_identity_association":    "eks_pod_identity",
+	"aws_cloudwatch_event_rule":           "cloudwatch_event_rule",
+	"aws_resourceexplorer2_index":         "resourceexplorer2_index",
+	"aws_resourceexplorer2_view":          "resourceexplorer2_view",
 }
 
 // ServiceSlug returns the progress-event slug for a Terraform resource
