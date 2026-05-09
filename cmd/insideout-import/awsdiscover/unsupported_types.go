@@ -68,6 +68,8 @@ var awsTFTypeByResourceType = map[string]string{
 	// Networking
 	"elasticloadbalancing:loadbalancer":    "aws_lb",
 	"elasticloadbalancing:loadbalancer-v1": "aws_elb",
+	"elasticloadbalancing:targetgroup":     "aws_lb_target_group",
+	"elasticloadbalancing:listener":        "aws_lb_listener",
 	"route53:hostedzone":                   "aws_route53_zone",
 	"cloudfront:distribution":              "aws_cloudfront_distribution",
 }

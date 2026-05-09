@@ -437,7 +437,9 @@ func TestEnumerateUnsupported_PopulatesGroup(t *testing.T) {
 	fake := &fakeResourceExplorerSearcher{
 		byRegion: map[string][]retypes.Resource{
 			"us-east-1": {
-				rxResource("arn:aws:elasticloadbalancing:us-east-1:123:loadbalancer/app/n/x", "elasticloadbalancing:loadbalancer", "us-east-1"),
+				// aws_elb (classic ELB) — still in the unsupported set; the
+				// ELBv2 ALB type aws_lb landed as importable in #328.
+				rxResource("arn:aws:elasticloadbalancing:us-east-1:123:loadbalancer/n", "elasticloadbalancing:loadbalancer-v1", "us-east-1"),
 				rxResource("arn:aws:eks:us-east-1:123:cluster/c", "eks:cluster", "us-east-1"),
 				rxResource("arn:aws:rds:us-east-1:123:cluster:rds-c", "rds:cluster", "us-east-1"),
 				rxResource("arn:aws:newservice:us-east-1:123:thing/x", "newservice:thing", "us-east-1"),
@@ -457,7 +459,7 @@ func TestEnumerateUnsupported_PopulatesGroup(t *testing.T) {
 	// assert Group on the matching entry; for the unmapped row, walk
 	// for the Type=="" entry and assert Group=="".
 	wantGroup := map[string]string{
-		"aws_lb":          "Network Security",
+		"aws_elb":         "Network Security",
 		"aws_eks_cluster": "Virtual Machines",
 		"aws_rds_cluster": "Data Storage",
 	}

@@ -149,6 +149,9 @@ func NewAWSDiscovererWithConcurrency(cfg aws.Config, maxConcurrency int) *AWSDis
 			"aws_db_instance":             newDBInstanceDiscoverer(cfg),
 			"aws_db_subnet_group":         newDBSubnetGroupDiscoverer(cfg, maxConcurrency),
 			"aws_db_parameter_group":      newDBParameterGroupDiscoverer(cfg, maxConcurrency),
+			"aws_lb":                      newLBDiscoverer(cfg, maxConcurrency),
+			"aws_lb_listener":             newLBListenerDiscoverer(cfg, maxConcurrency),
+			"aws_lb_target_group":         newLBTargetGroupDiscoverer(cfg, maxConcurrency),
 		},
 	}
 }
@@ -188,6 +191,9 @@ var serviceSlugByTFType = map[string]string{
 	"aws_db_instance":             "db_instance",
 	"aws_db_subnet_group":         "db_subnet_group",
 	"aws_db_parameter_group":      "db_parameter_group",
+	"aws_lb":                      "lb",
+	"aws_lb_listener":             "lb_listener",
+	"aws_lb_target_group":         "lb_target_group",
 }
 
 // ServiceSlug returns the progress-event slug for a Terraform resource

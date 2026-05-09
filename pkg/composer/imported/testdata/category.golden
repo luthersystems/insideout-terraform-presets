@@ -15,6 +15,8 @@ aws_internet_gateway	Network Security
 aws_kms_key	Security
 aws_lambda_function	Virtual Machines
 aws_lb	Network Security
+aws_lb_listener	Network Security
+aws_lb_target_group	Network Security
 aws_nat_gateway	Network Security
 aws_network_acl	Network Security
 aws_network_interface	Network Security
