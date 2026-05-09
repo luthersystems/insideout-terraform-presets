@@ -133,6 +133,10 @@ func (d *dbParameterGroupDiscoverer) Discover(ctx context.Context, args Discover
 					return err
 				}
 				if c.arn == "" {
+					// No ARN to key tags on; emit with empty (non-nil) tag
+					// map so the nil-vs-empty contract holds.
+					fmt.Fprintf(os.Stderr, "discover: WARN: db_parameter_group %s: empty ARN; emitting with empty tag map (region=%s)\n", c.name, region)
+					c.tags = map[string]string{}
 					mu.Lock()
 					fetched = append(fetched, c)
 					mu.Unlock()

@@ -75,9 +75,10 @@ func (d *cloudwatchEventRuleDiscoverer) ResourceType() string { return cloudwatc
 // errors skip the rule with a stderr WARN); ListRules errors abort
 // the region. Parent-context cancellation is propagated via gctx.
 //
-// Import ID for aws_cloudwatch_event_rule on the default bus is the
-// bare rule name. Custom event buses use "<bus>/<name>" but this
-// discoverer scans only the default bus today.
+// Import ID for aws_cloudwatch_event_rule per terraform-provider-aws is
+// "<event_bus_name>/<rule_name>". The bus name defaults to "default"
+// when the row's EventBusName is unset (this discoverer scans only the
+// default bus today).
 func (d *cloudwatchEventRuleDiscoverer) Discover(ctx context.Context, args DiscoverArgs) ([]imported.ImportedResource, error) {
 	args.Emitter = emitterOrNop(args.Emitter)
 	const slug = "cloudwatch_event_rule"
@@ -179,22 +180,27 @@ func (d *cloudwatchEventRuleDiscoverer) Discover(ctx context.Context, args Disco
 			if !MatchesAll(r.tags, args.TagSelectors) {
 				continue
 			}
+			bus := r.bus
+			if bus == "" {
+				bus = defaultEventBusName
+			}
+			importID := bus + "/" + r.name
 			native := map[string]string{
 				"rule_name":      r.name,
 				"arn":            r.arn,
-				"event_bus_name": r.bus,
+				"event_bus_name": bus,
 			}
 			imps = append(imps, makeImportedResource(
 				book,
 				cloudwatchEventRuleTFType,
 				r.name,
-				r.name,
+				importID,
 				region,
 				args.AccountID,
 				native,
 				r.tags,
 			))
-			args.Emitter.ItemFound(slug, region, cloudwatchEventRuleTFType, r.name)
+			args.Emitter.ItemFound(slug, region, cloudwatchEventRuleTFType, importID)
 			regionCount++
 		}
 		args.Emitter.ServiceFinish(slug, region, regionCount, time.Since(regionStart))
@@ -202,10 +208,12 @@ func (d *cloudwatchEventRuleDiscoverer) Discover(ctx context.Context, args Disco
 	return imps, nil
 }
 
-// DiscoverByID resolves an EventBridge rule by name on the default bus.
-// Issues a single DescribeRule call to verify existence.
+// DiscoverByID resolves an EventBridge rule by name. Accepts a bare rule
+// name (assumed to live on the default bus) or the canonical
+// "<bus>/<name>" terraform import shape. Issues a single DescribeRule
+// call to verify existence.
 func (d *cloudwatchEventRuleDiscoverer) DiscoverByID(ctx context.Context, id, region, accountID string) (imported.ImportedResource, error) {
-	name, err := cloudwatchEventRuleNameFromID(id)
+	bus, name, err := cloudwatchEventRuleNameFromID(id)
 	if err != nil {
 		return imported.ImportedResource{}, err
 	}
@@ -218,10 +226,14 @@ func (d *cloudwatchEventRuleDiscoverer) DiscoverByID(ctx context.Context, id, re
 		}
 		return imported.ImportedResource{}, fmt.Errorf("DescribeRule: %w", err)
 	}
-	bus := aws.ToString(out.EventBusName)
+	// Live response wins over caller-supplied bus.
+	if liveBus := aws.ToString(out.EventBusName); liveBus != "" {
+		bus = liveBus
+	}
 	if bus == "" {
 		bus = defaultEventBusName
 	}
+	importID := bus + "/" + name
 	native := map[string]string{
 		"rule_name":      name,
 		"arn":            aws.ToString(out.Arn),
@@ -231,7 +243,7 @@ func (d *cloudwatchEventRuleDiscoverer) DiscoverByID(ctx context.Context, id, re
 		addressBook{},
 		cloudwatchEventRuleTFType,
 		name,
-		name,
+		importID,
 		region,
 		accountID,
 		native,
@@ -239,31 +251,31 @@ func (d *cloudwatchEventRuleDiscoverer) DiscoverByID(ctx context.Context, id, re
 	), nil
 }
 
-// cloudwatchEventRuleNameFromID extracts a rule name from an import ID.
-// Accepts a bare rule name (default bus) or "<bus>/<name>" (custom bus,
-// where the rule name is the part after the slash). ARN shapes,
-// multi-segment paths, and whitespace return ErrNotSupported.
-func cloudwatchEventRuleNameFromID(id string) (string, error) {
+// cloudwatchEventRuleNameFromID extracts (bus, name) from an import ID.
+// Accepts a bare rule name (defaults bus to "default") or the canonical
+// "<bus>/<name>" shape. ARN shapes, multi-segment paths, and whitespace
+// return ErrNotSupported.
+func cloudwatchEventRuleNameFromID(id string) (string, string, error) {
 	id = strings.TrimSpace(id)
 	if id == "" {
-		return "", fmt.Errorf("cloudwatch_event_rule: empty id: %w", ErrNotSupported)
+		return "", "", fmt.Errorf("cloudwatch_event_rule: empty id: %w", ErrNotSupported)
 	}
 	// Reject ARN-shaped strings up front. EventBridge ARNs are
 	// arn:aws:events:<region>:<account>:rule/<name> (or with a bus
 	// segment) — accepting them via the "/<name>" branch below would
 	// silently succeed on the wrong shape.
 	if strings.HasPrefix(id, "arn:") {
-		return "", fmt.Errorf("cloudwatch_event_rule: ARN-shaped id %q not supported: %w", id, ErrNotSupported)
+		return "", "", fmt.Errorf("cloudwatch_event_rule: ARN-shaped id %q not supported: %w", id, ErrNotSupported)
 	}
 	if strings.Contains(id, "/") {
 		parts := strings.Split(id, "/")
 		if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
-			return "", fmt.Errorf("cloudwatch_event_rule: id %q is not <bus>/<name>: %w", id, ErrNotSupported)
+			return "", "", fmt.Errorf("cloudwatch_event_rule: id %q is not <bus>/<name>: %w", id, ErrNotSupported)
 		}
-		return parts[1], nil
+		return parts[0], parts[1], nil
 	}
 	if strings.ContainsAny(id, " :") {
-		return "", fmt.Errorf("cloudwatch_event_rule: unrecognized id %q: %w", id, ErrNotSupported)
+		return "", "", fmt.Errorf("cloudwatch_event_rule: unrecognized id %q: %w", id, ErrNotSupported)
 	}
-	return id, nil
+	return defaultEventBusName, id, nil
 }

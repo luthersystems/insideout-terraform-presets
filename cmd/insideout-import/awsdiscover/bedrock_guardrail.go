@@ -67,8 +67,9 @@ func (d *bedrockGuardrailDiscoverer) ResourceType() string { return bedrockGuard
 // back-compat implicit filter when args.Project is non-empty (composer-
 // emitted stacks rely on it). Operator selectors AND on top.
 //
-// Import ID for aws_bedrock_guardrail is the guardrail ID (the GuardrailId
-// from CreateGuardrail / GetGuardrail), per terraform-provider-aws.
+// Import ID for aws_bedrock_guardrail per terraform-provider-aws is the
+// comma-delimited form "<guardrail_id>,<version>" (version defaults to
+// "DRAFT" when the source row has no Version set).
 func (d *bedrockGuardrailDiscoverer) Discover(ctx context.Context, args DiscoverArgs) ([]imported.ImportedResource, error) {
 	args.Emitter = emitterOrNop(args.Emitter)
 	book := addressBook{}
@@ -172,24 +173,27 @@ func (d *bedrockGuardrailDiscoverer) Discover(ctx context.Context, args Discover
 			if !MatchesAll(e.tags, args.TagSelectors) {
 				continue
 			}
+			version := e.version
+			if version == "" {
+				version = "DRAFT"
+			}
+			importID := e.id + "," + version
 			native := map[string]string{
 				"guardrail_id": e.id,
 				"arn":          e.arn,
-			}
-			if e.version != "" {
-				native["version"] = e.version
+				"version":      version,
 			}
 			imps = append(imps, makeImportedResource(
 				book,
 				bedrockGuardrailTFType,
 				e.name,
-				e.id,
+				importID,
 				region,
 				args.AccountID,
 				native,
 				e.tags,
 			))
-			args.Emitter.ItemFound(slug, region, bedrockGuardrailTFType, e.id)
+			args.Emitter.ItemFound(slug, region, bedrockGuardrailTFType, importID)
 			regionCount++
 		}
 		args.Emitter.ServiceFinish(slug, region, regionCount, time.Since(regionStart))
@@ -198,11 +202,14 @@ func (d *bedrockGuardrailDiscoverer) Discover(ctx context.Context, args Discover
 }
 
 // DiscoverByID resolves a Bedrock guardrail by ID (e.g.
-// "abcdef123456") or ARN
+// "abcdef123456"), comma-delimited "<id>,<version>", or ARN
 // (arn:aws:bedrock:<region>:<account>:guardrail/<id>). Issues a single
-// GetGuardrail call to verify existence.
+// GetGuardrail call to verify existence. The terraform import ID is
+// "<guardrail_id>,<version>" — when the caller passes a bare id (or an
+// ARN with no version) we default version to "DRAFT" so the emitted
+// ImportID matches the provider's expected shape.
 func (d *bedrockGuardrailDiscoverer) DiscoverByID(ctx context.Context, id, region, accountID string) (imported.ImportedResource, error) {
-	guardrailID, err := bedrockGuardrailIDFromID(id)
+	guardrailID, version, err := bedrockGuardrailIDFromID(id)
 	if err != nil {
 		return imported.ImportedResource{}, err
 	}
@@ -217,19 +224,24 @@ func (d *bedrockGuardrailDiscoverer) DiscoverByID(ctx context.Context, id, regio
 	}
 	name := aws.ToString(out.Name)
 	arn := aws.ToString(out.GuardrailArn)
-	version := aws.ToString(out.Version)
+	if v := aws.ToString(out.Version); v != "" {
+		// Live response always wins over caller-supplied default.
+		version = v
+	}
+	if version == "" {
+		version = "DRAFT"
+	}
+	importID := guardrailID + "," + version
 	native := map[string]string{
 		"guardrail_id": guardrailID,
 		"arn":          arn,
-	}
-	if version != "" {
-		native["version"] = version
+		"version":      version,
 	}
 	return makeImportedResource(
 		addressBook{},
 		bedrockGuardrailTFType,
 		name,
-		guardrailID,
+		importID,
 		region,
 		accountID,
 		native,
@@ -237,32 +249,49 @@ func (d *bedrockGuardrailDiscoverer) DiscoverByID(ctx context.Context, id, regio
 	), nil
 }
 
-// bedrockGuardrailIDFromID extracts a bare guardrail ID from one of the
-// accepted shapes: a bare ID, or an ARN of the form
-// arn:aws:bedrock:<region>:<account>:guardrail/<id>. Anything else returns
-// ErrNotSupported so dep-chase routes it to its unresolvable bucket.
-func bedrockGuardrailIDFromID(id string) (string, error) {
+// bedrockGuardrailIDFromID extracts a (guardrail-id, version) pair from
+// one of the accepted import-ID shapes:
+//   - Bare id (e.g. "abcdef123456") → returns (id, "") so the caller can
+//     default version to "DRAFT".
+//   - "<id>,<version>" — the canonical terraform-provider-aws shape.
+//   - ARN of the form arn:aws:bedrock:<region>:<account>:guardrail/<id>
+//     → returns (id, "") (ARNs do not encode the version).
+//
+// Anything else returns ErrNotSupported so dep-chase routes it to its
+// unresolvable bucket.
+func bedrockGuardrailIDFromID(id string) (string, string, error) {
 	id = strings.TrimSpace(id)
 	if id == "" {
-		return "", fmt.Errorf("bedrock_guardrail: empty id: %w", ErrNotSupported)
+		return "", "", fmt.Errorf("bedrock_guardrail: empty id: %w", ErrNotSupported)
+	}
+	// Comma form takes priority — it's the canonical terraform import ID.
+	if strings.Contains(id, ",") {
+		parts := strings.SplitN(id, ",", 2)
+		if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+			return "", "", fmt.Errorf("bedrock_guardrail: id %q is not <guardrail_id>,<version>: %w", id, ErrNotSupported)
+		}
+		if strings.ContainsAny(parts[0], " :/") || strings.ContainsAny(parts[1], " :/") {
+			return "", "", fmt.Errorf("bedrock_guardrail: unrecognized id %q: %w", id, ErrNotSupported)
+		}
+		return parts[0], parts[1], nil
 	}
 	if awsarn.IsARN(id) {
 		parsed, err := awsarn.Parse(id)
 		if err != nil {
-			return "", fmt.Errorf("bedrock_guardrail: parse arn: %w", err)
+			return "", "", fmt.Errorf("bedrock_guardrail: parse arn: %w", err)
 		}
 		if parsed.Service != "bedrock" {
-			return "", fmt.Errorf("bedrock_guardrail: not a bedrock arn (service=%q): %w", parsed.Service, ErrNotSupported)
+			return "", "", fmt.Errorf("bedrock_guardrail: not a bedrock arn (service=%q): %w", parsed.Service, ErrNotSupported)
 		}
 		// Resource is "guardrail/<id>".
 		parts := strings.SplitN(parsed.Resource, "/", 2)
 		if len(parts) != 2 || parts[0] != "guardrail" || parts[1] == "" {
-			return "", fmt.Errorf("bedrock_guardrail: arn resource %q is not guardrail/<id>: %w", parsed.Resource, ErrNotSupported)
+			return "", "", fmt.Errorf("bedrock_guardrail: arn resource %q is not guardrail/<id>: %w", parsed.Resource, ErrNotSupported)
 		}
-		return parts[1], nil
+		return parts[1], "", nil
 	}
 	if strings.ContainsAny(id, " :/") {
-		return "", fmt.Errorf("bedrock_guardrail: unrecognized id %q: %w", id, ErrNotSupported)
+		return "", "", fmt.Errorf("bedrock_guardrail: unrecognized id %q: %w", id, ErrNotSupported)
 	}
-	return id, nil
+	return id, "", nil
 }

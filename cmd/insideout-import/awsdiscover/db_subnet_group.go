@@ -131,7 +131,11 @@ func (d *dbSubnetGroupDiscoverer) Discover(ctx context.Context, args DiscoverArg
 					return err
 				}
 				if c.arn == "" {
-					// No ARN to key tags on; emit with empty tag map.
+					// No ARN to key tags on; emit with empty (non-nil) tag
+					// map so the nil-vs-empty contract holds for downstream
+					// consumers (#291, #289 gap-#6).
+					fmt.Fprintf(os.Stderr, "discover: WARN: db_subnet_group %s: empty ARN; emitting with empty tag map (region=%s)\n", c.name, region)
+					c.tags = map[string]string{}
 					mu.Lock()
 					fetched = append(fetched, c)
 					mu.Unlock()

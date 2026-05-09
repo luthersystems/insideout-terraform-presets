@@ -540,7 +540,7 @@ func TestBedrockGuardrailDiscover_EmitsItemFound_PerGuardrail(t *testing.T) {
 	if len(items) != len(got) {
 		t.Errorf("item_found count=%d, want %d (one per emitted resource)", len(items), len(got))
 	}
-	wantIDs := map[string]bool{"g1": true, "g2": true}
+	wantIDs := map[string]bool{"g1,DRAFT": true, "g2,DRAFT": true}
 	for _, it := range items {
 		if it.Service != "bedrock_guardrail" {
 			t.Errorf("item.service=%q, want bedrock_guardrail", it.Service)
