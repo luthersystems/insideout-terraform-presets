@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	awsarn "github.com/aws/aws-sdk-go-v2/aws/arn"
 	"github.com/aws/aws-sdk-go-v2/service/resourceexplorer2"
 	re2types "github.com/aws/aws-sdk-go-v2/service/resourceexplorer2/types"
 	"golang.org/x/sync/errgroup"
@@ -129,6 +130,18 @@ func (d *resourceExplorer2ViewDiscoverer) Discover(ctx context.Context, args Dis
 					mu.Lock()
 					ok = append(ok, v)
 					mu.Unlock()
+					return nil
+				}
+				// Issue #336: ListViews returns ARNs from every region
+				// in the account regardless of the SDK client's region.
+				// Per-region clients can't tag-fetch foreign ARNs (the
+				// API rejects with BadRequestException "expected region
+				// X"), and addressBook dedup keys on the outer-loop
+				// region — emitting an off-region ARN here would also
+				// produce a duplicate ImportedResource when the operator
+				// listed the home region. Drop both the tag-fetch and
+				// the emission for ARNs whose region != outer-loop.
+				if parsed, perr := awsarn.Parse(v.arn); perr == nil && parsed.Region != "" && parsed.Region != region {
 					return nil
 				}
 				tagsOut, err := client.ListTagsForResource(gctx, &resourceexplorer2.ListTagsForResourceInput{ResourceArn: aws.String(v.arn)})
