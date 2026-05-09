@@ -348,6 +348,53 @@ func TestResourceExplorer2ViewDiscover_MultiRegionTriggersOneSDKCallPerRegion(t 
 	}
 }
 
+// TestResourceExplorer2ViewDiscover_SkipsCrossRegionARNs pins the
+// fix for issue #336: ListViews returns ARNs from every region in
+// the account regardless of the SDK client's region. Per-region
+// clients can't tag-fetch foreign ARNs (BadRequestException), and
+// emitting them would produce duplicates because addressBook keys
+// on the outer-loop region. ARNs whose ARN-region != outer-loop
+// region must be dropped before the tag-fetch and before emission.
+func TestResourceExplorer2ViewDiscover_SkipsCrossRegionARNs(t *testing.T) {
+	t.Parallel()
+	const homeARN = "arn:aws:resource-explorer-2:us-east-1:123:view/home/home-uuid"
+	const foreignARN = "arn:aws:resource-explorer-2:eu-central-1:123:view/foreign/foreign-uuid"
+	fake := &fakeRE2ViewClient{
+		pages: []resourceexplorer2.ListViewsOutput{{
+			Views: []string{homeARN, foreignARN},
+		}},
+		tagsByID: map[string]map[string]string{
+			homeARN:    {},
+			foreignARN: {},
+		},
+	}
+	d := &resourceExplorer2ViewDiscoverer{
+		new:            func(_ string) resourceExplorer2ViewClient { return fake },
+		maxConcurrency: 4,
+	}
+	got, err := d.Discover(context.Background(), DiscoverArgs{
+		Regions:   []string{"us-east-1"},
+		AccountID: "123",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Tag-fetch must happen for the home-region ARN only.
+	if len(fake.tagCalls) != 1 {
+		t.Fatalf("ListTagsForResource called %d times, want 1 (cross-region must be skipped): %v", len(fake.tagCalls), fake.tagCalls)
+	}
+	if fake.tagCalls[0] != homeARN {
+		t.Errorf("tag-fetch ARN=%q, want %q", fake.tagCalls[0], homeARN)
+	}
+	// Emission must include the home-region ARN only.
+	if len(got) != 1 {
+		t.Fatalf("len=%d, want 1 (cross-region must not be emitted)", len(got))
+	}
+	if got[0].Identity.ImportID != homeARN {
+		t.Errorf("ImportID=%q, want %q", got[0].Identity.ImportID, homeARN)
+	}
+}
+
 // blockingRE2ViewClient mirrors blockingDynamoClient — used for the
 // bounded-concurrency test below.
 type blockingRE2ViewClient struct {

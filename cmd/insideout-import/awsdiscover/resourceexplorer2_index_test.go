@@ -373,6 +373,56 @@ func TestResourceExplorer2IndexDiscover_MultiRegionTriggersOneSDKCallPerRegion(t
 	}
 }
 
+// TestResourceExplorer2IndexDiscover_SkipsCrossRegionARNs pins the
+// fix for issue #336: ListIndexes returns ARNs from every region in
+// the account regardless of the SDK client's region. Per-region
+// clients can't tag-fetch foreign ARNs (BadRequestException), and
+// emitting them would produce duplicates because addressBook keys
+// on the outer-loop region. ARNs whose ARN-region != outer-loop
+// region must be dropped before the tag-fetch and before emission.
+func TestResourceExplorer2IndexDiscover_SkipsCrossRegionARNs(t *testing.T) {
+	t.Parallel()
+	const homeARN = "arn:aws:resource-explorer-2:us-east-1:123:index/home-uuid"
+	const foreignARN = "arn:aws:resource-explorer-2:eu-central-1:123:index/foreign-uuid"
+	fake := &fakeRE2IndexClient{
+		pages: []resourceexplorer2.ListIndexesOutput{{
+			Indexes: []re2types.Index{
+				re2Index(homeARN, "us-east-1", re2types.IndexTypeAggregator),
+				re2Index(foreignARN, "eu-central-1", re2types.IndexTypeLocal),
+			},
+		}},
+		tagsByID: map[string]map[string]string{
+			homeARN:    {},
+			foreignARN: {},
+		},
+	}
+	d := &resourceExplorer2IndexDiscoverer{
+		new:            func(_ string) resourceExplorer2IndexClient { return fake },
+		maxConcurrency: 4,
+	}
+	got, err := d.Discover(context.Background(), DiscoverArgs{
+		Regions:   []string{"us-east-1"},
+		AccountID: "123",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Tag-fetch must happen for the home-region ARN only.
+	if len(fake.tagCalls) != 1 {
+		t.Fatalf("ListTagsForResource called %d times, want 1 (cross-region must be skipped): %v", len(fake.tagCalls), fake.tagCalls)
+	}
+	if fake.tagCalls[0] != homeARN {
+		t.Errorf("tag-fetch ARN=%q, want %q", fake.tagCalls[0], homeARN)
+	}
+	// Emission must include the home-region ARN only.
+	if len(got) != 1 {
+		t.Fatalf("len=%d, want 1 (cross-region must not be emitted)", len(got))
+	}
+	if got[0].Identity.ImportID != homeARN {
+		t.Errorf("ImportID=%q, want %q", got[0].Identity.ImportID, homeARN)
+	}
+}
+
 // blockingRE2IndexClient mirrors blockingDynamoClient — used for the
 // bounded-concurrency test below.
 type blockingRE2IndexClient struct {
