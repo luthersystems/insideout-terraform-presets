@@ -260,21 +260,23 @@ func fixupSubnetProviderQuirks(blk *hclwrite.Block) {
 	}
 }
 
-// fixupRouteTableEmptyRouteFields drops empty-string fields from each
-// route object literal emitted in aws_route_table.route. The provider
-// validates fields like ipv6_cidr_block as a CIDR when present (even
-// as ""), and rejects the empty literal with `"" is not a valid CIDR
-// block`. terraform plan -generate-config-out emits "" for every
-// absent string field in the route object; broad-strip is safer than
-// targeted because future provider validation tightening on other
-// fields surfaces the same way.
+// fixupRouteTableEmptyRouteFields replaces empty-string fields with
+// null in each route object literal emitted in aws_route_table.route.
+// The provider's per-field validators (CIDR check on ipv6_cidr_block,
+// resource-id format on gateway_id, etc.) reject literal "" but skip
+// null. terraform plan -generate-config-out emits "" for every absent
+// field in the route object; null-replacement satisfies the validators
+// while preserving the object type's field set (the route attribute is
+// schema-typed as an object with all 12 fields required to be present
+// — DROPPING fields breaks the object type and produces a different
+// "Incorrect attribute value type" failure).
 //
 // Shape note: generate-config-out emits route as an attribute carrying
 // a list-of-objects expression (route = [{...}, ...]), NOT as nested
 // route { ... } blocks. Mutation goes through cty round-trip rather
 // than block iteration: parse the attribute's expression bytes,
-// evaluate to a static cty value, filter empty-string fields per
-// object, re-emit via SetAttributeValue. Issue #345.
+// evaluate to a static cty value, replace "" string fields with
+// null per object, re-emit via SetAttributeValue. Issue #345.
 func fixupRouteTableEmptyRouteFields(blk *hclwrite.Block) {
 	body := blk.Body()
 	attr := body.GetAttribute("route")
@@ -294,31 +296,20 @@ func fixupRouteTableEmptyRouteFields(blk *hclwrite.Block) {
 	if diags.HasErrors() {
 		return
 	}
-	filtered, changed := dropEmptyStringFieldsFromTuple(val)
+	filtered, changed := nullEmptyStringFieldsInTuple(val)
 	if !changed {
 		return
-	}
-	// Defensive: if any element became an empty object (every field was
-	// "" — degenerate but not impossible), bail rather than emit
-	// `route = [{}]`, which would convert the existing CIDR-validation
-	// error into a different missing-required-arg failure.
-	it := filtered.ElementIterator()
-	for it.Next() {
-		_, elem := it.Element()
-		if elem.Type().IsObjectType() && len(elem.AsValueMap()) == 0 {
-			return
-		}
 	}
 	body.SetAttributeValue("route", filtered)
 }
 
-// dropEmptyStringFieldsFromTuple walks a tuple/list of object values and
-// returns a new tuple with each object's empty-string fields removed.
-// The boolean reports whether any field was dropped, so callers can
-// short-circuit a no-op back to the original tokens (avoids reformatting
-// unchanged HCL). Non-tuple/non-list inputs and unknown/null values pass
-// through unchanged.
-func dropEmptyStringFieldsFromTuple(v cty.Value) (cty.Value, bool) {
+// nullEmptyStringFieldsInTuple walks a tuple/list of object values and
+// returns a new tuple with each object's empty-string fields replaced
+// by null (preserving field set, just blanking the value). The boolean
+// reports whether any field was rewritten, so callers can short-circuit
+// a no-op back to the original tokens. Non-tuple/non-list inputs and
+// unknown/null values pass through unchanged.
+func nullEmptyStringFieldsInTuple(v cty.Value) (cty.Value, bool) {
 	if v.IsNull() || !v.IsKnown() {
 		return v, false
 	}
@@ -334,7 +325,7 @@ func dropEmptyStringFieldsFromTuple(v cty.Value) (cty.Value, bool) {
 	it := v.ElementIterator()
 	for it.Next() {
 		_, elem := it.Element()
-		cleaned, c := dropEmptyStringFieldsFromObject(elem)
+		cleaned, c := nullEmptyStringFieldsInObject(elem)
 		if c {
 			changed = true
 		}
@@ -346,11 +337,14 @@ func dropEmptyStringFieldsFromTuple(v cty.Value) (cty.Value, bool) {
 	return cty.TupleVal(out), true
 }
 
-// dropEmptyStringFieldsFromObject returns a new object value with
-// empty-string string fields removed. Non-object inputs pass through
-// unchanged. If every field is dropped the result is an empty object
-// (cty.EmptyObjectVal); the caller decides whether to keep that.
-func dropEmptyStringFieldsFromObject(v cty.Value) (cty.Value, bool) {
+// nullEmptyStringFieldsInObject returns a new object value with
+// empty-string string fields replaced by null. Non-object inputs pass
+// through unchanged. The field set is preserved (object type unchanged)
+// — this is the difference between "satisfies the schema's type
+// requirement that all 12 route fields be present" and "fails with
+// Incorrect attribute value type because we dropped fields the type
+// declared."
+func nullEmptyStringFieldsInObject(v cty.Value) (cty.Value, bool) {
 	if v.IsNull() || !v.IsKnown() {
 		return v, false
 	}
@@ -361,6 +355,7 @@ func dropEmptyStringFieldsFromObject(v cty.Value) (cty.Value, bool) {
 	changed := false
 	for k, fv := range v.AsValueMap() {
 		if fv.Type() == cty.String && !fv.IsNull() && fv.IsKnown() && fv.AsString() == "" {
+			fields[k] = cty.NullVal(cty.String)
 			changed = true
 			continue
 		}
@@ -368,9 +363,6 @@ func dropEmptyStringFieldsFromObject(v cty.Value) (cty.Value, bool) {
 	}
 	if !changed {
 		return v, false
-	}
-	if len(fields) == 0 {
-		return cty.EmptyObjectVal, true
 	}
 	return cty.ObjectVal(fields), true
 }
