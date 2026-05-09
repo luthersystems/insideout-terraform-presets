@@ -5,7 +5,17 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	smithy "github.com/aws/smithy-go"
 )
+
+// ec2APIError builds a smithy.APIError that mimics what the EC2 SDK
+// returns for "Invalid<X>.NotFound"-shaped responses. The discover code
+// inspects err via errors.As(&smithy.APIError) + ErrorCode(), so tests
+// must construct a real smithy error rather than wrapping a plain
+// errors.New() that happens to contain the code as substring.
+func ec2APIError(code, message string) error {
+	return &smithy.GenericAPIError{Code: code, Message: message, Fault: smithy.FaultClient}
+}
 
 // awsDummyConfig returns an aws.Config with no real credentials. Tests
 // that build the production AWSDiscoverer just to inspect its registry

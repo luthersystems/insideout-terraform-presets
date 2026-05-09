@@ -18,15 +18,42 @@ import (
 func TestSupportedDiscoverTypes_AWS_ReturnsCanonicalSortedList(t *testing.T) {
 	t.Parallel()
 	want := []string{
+		"aws_apigatewayv2_api",
+		"aws_apigatewayv2_stage",
+		"aws_bedrock_guardrail",
+		"aws_cloudfront_distribution",
+		"aws_cloudwatch_event_rule",
 		"aws_cloudwatch_log_group",
+		"aws_db_instance",
+		"aws_db_parameter_group",
+		"aws_db_subnet_group",
 		"aws_dynamodb_table",
+		"aws_eip",
+		"aws_eks_pod_identity_association",
 		"aws_iam_policy",
 		"aws_iam_role",
+		"aws_internet_gateway",
 		"aws_kms_key",
 		"aws_lambda_function",
+		"aws_lb",
+		"aws_lb_listener",
+		"aws_lb_target_group",
+		"aws_nat_gateway",
+		"aws_network_acl",
+		"aws_network_interface",
+		"aws_opensearchserverless_collection",
+		"aws_resourceexplorer2_index",
+		"aws_resourceexplorer2_view",
+		"aws_route53_zone",
+		"aws_route_table",
 		"aws_s3_bucket",
 		"aws_secretsmanager_secret",
+		"aws_security_group",
 		"aws_sqs_queue",
+		"aws_subnet",
+		"aws_vpc",
+		"aws_vpc_dhcp_options",
+		"aws_vpc_endpoint",
 	}
 	got := SupportedDiscoverTypes(ProviderAWS)
 	if !reflect.DeepEqual(got, want) {
@@ -90,7 +117,7 @@ func TestSupportedDiscoverTypes_ReturnsCopy_PackageStateUnchanged(t *testing.T) 
 		// [0] no longer matches.
 		firstLiteral string
 	}{
-		{provider: ProviderAWS, firstLiteral: "aws_cloudwatch_log_group"},
+		{provider: ProviderAWS, firstLiteral: "aws_apigatewayv2_api"},
 		{provider: ProviderGCP, firstLiteral: "google_compute_network"},
 	}
 	for _, tc := range cases {

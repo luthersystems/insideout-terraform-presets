@@ -86,11 +86,20 @@ mkdir -p "${OUT_DIR}"
 rm -rf "${OUT_DIR:?}"/*
 
 log "Running insideout-import discover against ${LOCALSTACK_URL}"
+# --resource-types pins the discovery to the 8 types this test seeds.
+# LocalStack Community's `SERVICES` env var only enables a fixed
+# allowlist (lambda,dynamodb,logs,secretsmanager,sqs,iam,kms,s3,sts), so
+# adding new discoverers (e.g. EC2 vpc/subnet/sg in #319) without an
+# explicit type filter would 501 here. Update this list when adding a
+# discoverer that LocalStack Community supports — and when a new type
+# isn't supported by LocalStack, leave it out of the seed and out of
+# this list.
 ( cd "${REPO_ROOT}" && go run ./cmd/insideout-import discover \
     --provider aws \
     --project "${PROJECT}" \
     --region "${REGION}" \
     --output-dir "${OUT_DIR}" \
+    --resource-types aws_cloudwatch_log_group,aws_dynamodb_table,aws_iam_policy,aws_iam_role,aws_kms_key,aws_lambda_function,aws_s3_bucket,aws_secretsmanager_secret \
     --aws-endpoint-url "${LOCALSTACK_URL}" )
 
 # ---------------------------------------------------------------------------

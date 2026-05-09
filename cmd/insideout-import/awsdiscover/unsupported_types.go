@@ -11,15 +11,14 @@ package awsdiscover
 // surface them under "Other".
 //
 // The initial mapping covers:
-//   - the 9 importable AWS types the discover pipeline already emits
+//   - the importable AWS types the discover pipeline already emits
 //     (mirrors registry.SupportedDiscoverTypes("aws") so the subtract
 //     step actually fires; missing entries here would let importable
 //     rows leak into unsupported.json)
 //   - the high-traffic unimportable types the wizard's mockup calls
-//     out as greyed-out picker rows: VPC + subnets + security groups
-//     (Network Security), RDS cluster + DB instance (Data Storage),
-//     EKS / ECS / ECR / EC2 instances (Compute), ALB / ELB / Route53 /
-//     CloudFront (Networking).
+//     out as greyed-out picker rows: RDS cluster + DB instance (Data
+//     Storage), EKS / ECS / ECR / EC2 instances (Compute), ALB / ELB /
+//     Route53 / CloudFront (Networking).
 //
 // Extending this map is a one-line change per row; #297 is the
 // parallel PR that owns the Category-side mapping.
@@ -35,23 +34,39 @@ var awsTFTypeByResourceType = map[string]string{
 	// --- Importable types (registry.SupportedDiscoverTypes("aws")) ---
 	// Filter targets: rows matching these mappings are dropped from
 	// unsupported.json by enumerateUnsupportedAWS.
-	"sqs:queue":             "aws_sqs_queue",
-	"dynamodb:table":        "aws_dynamodb_table",
-	"logs:log-group":        "aws_cloudwatch_log_group",
-	"secretsmanager:secret": "aws_secretsmanager_secret",
-	"lambda:function":       "aws_lambda_function",
-	"iam:role":              "aws_iam_role",
-	"iam:policy":            "aws_iam_policy",
-	"kms:key":               "aws_kms_key",
-	"s3:bucket":             "aws_s3_bucket",
+	"sqs:queue":                  "aws_sqs_queue",
+	"dynamodb:table":             "aws_dynamodb_table",
+	"logs:log-group":             "aws_cloudwatch_log_group",
+	"secretsmanager:secret":      "aws_secretsmanager_secret",
+	"lambda:function":            "aws_lambda_function",
+	"iam:role":                   "aws_iam_role",
+	"iam:policy":                 "aws_iam_policy",
+	"kms:key":                    "aws_kms_key",
+	"s3:bucket":                  "aws_s3_bucket",
+	"ec2:vpc":                    "aws_vpc",
+	"ec2:subnet":                 "aws_subnet",
+	"ec2:security-group":         "aws_security_group",
+	"ec2:internet-gateway":       "aws_internet_gateway",
+	"ec2:natgateway":             "aws_nat_gateway",
+	"ec2:elastic-ip":             "aws_eip",
+	"ec2:route-table":            "aws_route_table",
+	"ec2:network-acl":            "aws_network_acl",
+	"ec2:vpc-endpoint":           "aws_vpc_endpoint",
+	"ec2:dhcp-options":           "aws_vpc_dhcp_options",
+	"ec2:network-interface":      "aws_network_interface",
+	"bedrock:guardrail":          "aws_bedrock_guardrail",
+	"aoss:collection":            "aws_opensearchserverless_collection",
+	"apigateway:apis":            "aws_apigatewayv2_api",
+	"eks:podidentityassociation": "aws_eks_pod_identity_association",
+	"events:rule":                "aws_cloudwatch_event_rule",
+	"resource-explorer-2:index":  "aws_resourceexplorer2_index",
+	"resource-explorer-2:view":   "aws_resourceexplorer2_view",
 	// --- Unimportable types — the picker greys these out ---
-	// Network Security
-	"ec2:vpc":            "aws_vpc",
-	"ec2:subnet":         "aws_subnet",
-	"ec2:security-group": "aws_security_group",
 	// Data Storage
 	"rds:cluster": "aws_rds_cluster",
 	"rds:db":      "aws_db_instance",
+	"rds:subgrp":  "aws_db_subnet_group",
+	"rds:pg":      "aws_db_parameter_group",
 	// Compute
 	"eks:cluster":    "aws_eks_cluster",
 	"ecs:cluster":    "aws_ecs_cluster",
@@ -60,6 +75,8 @@ var awsTFTypeByResourceType = map[string]string{
 	// Networking
 	"elasticloadbalancing:loadbalancer":    "aws_lb",
 	"elasticloadbalancing:loadbalancer-v1": "aws_elb",
+	"elasticloadbalancing:targetgroup":     "aws_lb_target_group",
+	"elasticloadbalancing:listener":        "aws_lb_listener",
 	"route53:hostedzone":                   "aws_route53_zone",
 	"cloudfront:distribution":              "aws_cloudfront_distribution",
 }

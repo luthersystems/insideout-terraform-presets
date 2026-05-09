@@ -83,7 +83,7 @@ func TestEnumerateUnsupported_FiltersSupportedTypes(t *testing.T) {
 	fixtureRows := []fixtureRow{
 		{"arn:aws:sqs:us-east-1:123:io-queue", "sqs:queue", "aws_sqs_queue", "us-east-1", false},          // importable
 		{"arn:aws:iam::123:role/io-role", "iam:role", "aws_iam_role", "us-east-1", false},                 // importable
-		{"arn:aws:ec2:us-east-1:123:vpc/vpc-abc", "ec2:vpc", "aws_vpc", "us-east-1", true},                // unsupported
+		{"arn:aws:ec2:us-east-1:123:vpc/vpc-abc", "ec2:vpc", "aws_vpc", "us-east-1", false},               // importable (Bundle 4 PR 1)
 		{"arn:aws:rds:us-east-1:123:cluster:my-clu", "rds:cluster", "aws_rds_cluster", "us-east-1", true}, // unsupported
 		{"arn:aws:eks:us-east-1:123:cluster/my-eks", "eks:cluster", "aws_eks_cluster", "us-east-1", true}, // unsupported
 	}
@@ -139,8 +139,8 @@ func TestEnumerateUnsupported_MultiRegion(t *testing.T) {
 	t.Parallel()
 	fake := &fakeResourceExplorerSearcher{
 		byRegion: map[string][]retypes.Resource{
-			"us-east-1": {rxResource("arn:aws:ec2:us-east-1:123:vpc/vpc-east", "ec2:vpc", "us-east-1")},
-			"eu-west-1": {rxResource("arn:aws:ec2:eu-west-1:123:vpc/vpc-west", "ec2:vpc", "eu-west-1")},
+			"us-east-1": {rxResource("arn:aws:rds:us-east-1:123:cluster:c-east", "rds:cluster", "us-east-1")},
+			"eu-west-1": {rxResource("arn:aws:rds:eu-west-1:123:cluster:c-west", "rds:cluster", "eu-west-1")},
 		},
 	}
 	got, _, err := enumerateUnsupportedAWS(context.Background(), UnsupportedArgs{
@@ -173,7 +173,7 @@ func TestEnumerateUnsupported_TagsPassThrough(t *testing.T) {
 	t.Parallel()
 	fake := &fakeResourceExplorerSearcher{
 		byRegion: map[string][]retypes.Resource{
-			"us-east-1": {rxResource("arn:aws:ec2:us-east-1:123:vpc/vpc-abc", "ec2:vpc", "us-east-1")},
+			"us-east-1": {rxResource("arn:aws:rds:us-east-1:123:cluster:c-abc", "rds:cluster", "us-east-1")},
 		},
 	}
 	got, _, err := enumerateUnsupportedAWS(context.Background(), UnsupportedArgs{
@@ -201,8 +201,8 @@ func TestEnumerateUnsupported_TagsPassThrough(t *testing.T) {
 func TestEnumerateUnsupported_ImportableRowsAreFiltered(t *testing.T) {
 	t.Parallel()
 	supportedSet := make(map[string]struct{})
-	for _, t := range registry.SupportedDiscoverTypes("aws") {
-		supportedSet[t] = struct{}{}
+	for _, tfType := range registry.SupportedDiscoverTypes("aws") {
+		supportedSet[tfType] = struct{}{}
 	}
 	for resourceType, wantTF := range awsTFTypeByResourceType {
 		if _, importable := supportedSet[wantTF]; !importable {
@@ -242,8 +242,8 @@ func TestEnumerateUnsupported_ImportableRowsAreFiltered(t *testing.T) {
 func TestEnumerateUnsupported_UnimportableRowsThreadTFType(t *testing.T) {
 	t.Parallel()
 	supportedSet := make(map[string]struct{})
-	for _, t := range registry.SupportedDiscoverTypes("aws") {
-		supportedSet[t] = struct{}{}
+	for _, tfType := range registry.SupportedDiscoverTypes("aws") {
+		supportedSet[tfType] = struct{}{}
 	}
 	for resourceType, wantTF := range awsTFTypeByResourceType {
 		if _, importable := supportedSet[wantTF]; importable {
@@ -375,11 +375,11 @@ func TestEnumerateUnsupported_EmitsServiceStartFinishPerRegion(t *testing.T) {
 	fake := &fakeResourceExplorerSearcher{
 		byRegion: map[string][]retypes.Resource{
 			"us-east-1": {
-				rxResource("arn:aws:ec2:us-east-1:123:vpc/vpc-east-1", "ec2:vpc", "us-east-1"),
-				rxResource("arn:aws:ec2:us-east-1:123:vpc/vpc-east-2", "ec2:vpc", "us-east-1"),
+				rxResource("arn:aws:rds:us-east-1:123:cluster:c-east-1", "rds:cluster", "us-east-1"),
+				rxResource("arn:aws:rds:us-east-1:123:cluster:c-east-2", "rds:cluster", "us-east-1"),
 			},
 			"eu-west-1": {
-				rxResource("arn:aws:ec2:eu-west-1:123:vpc/vpc-west-1", "ec2:vpc", "eu-west-1"),
+				rxResource("arn:aws:rds:eu-west-1:123:cluster:c-west-1", "rds:cluster", "eu-west-1"),
 			},
 		},
 	}
@@ -437,7 +437,9 @@ func TestEnumerateUnsupported_PopulatesGroup(t *testing.T) {
 	fake := &fakeResourceExplorerSearcher{
 		byRegion: map[string][]retypes.Resource{
 			"us-east-1": {
-				rxResource("arn:aws:ec2:us-east-1:123:vpc/vpc-abc", "ec2:vpc", "us-east-1"),
+				// aws_elb (classic ELB) — still in the unsupported set; the
+				// ELBv2 ALB type aws_lb landed as importable in #328.
+				rxResource("arn:aws:elasticloadbalancing:us-east-1:123:loadbalancer/n", "elasticloadbalancing:loadbalancer-v1", "us-east-1"),
 				rxResource("arn:aws:eks:us-east-1:123:cluster/c", "eks:cluster", "us-east-1"),
 				rxResource("arn:aws:rds:us-east-1:123:cluster:rds-c", "rds:cluster", "us-east-1"),
 				rxResource("arn:aws:newservice:us-east-1:123:thing/x", "newservice:thing", "us-east-1"),
@@ -457,7 +459,7 @@ func TestEnumerateUnsupported_PopulatesGroup(t *testing.T) {
 	// assert Group on the matching entry; for the unmapped row, walk
 	// for the Type=="" entry and assert Group=="".
 	wantGroup := map[string]string{
-		"aws_vpc":         "Network Security",
+		"aws_elb":         "Network Security",
 		"aws_eks_cluster": "Virtual Machines",
 		"aws_rds_cluster": "Data Storage",
 	}
@@ -507,11 +509,11 @@ func TestEnumerateUnsupported_CapFiresAndSetsTruncated(t *testing.T) {
 	t.Parallel()
 	rows := make([]retypes.Resource, 0, 50)
 	for i := 0; i < 50; i++ {
-		// ec2:vpc maps to aws_vpc which is NOT in the importable
-		// registry, so each fixture row passes the supported-set
-		// filter and lands in the output.
-		arn := fmt.Sprintf("arn:aws:ec2:us-east-1:1:vpc/vpc-%03d", i)
-		rows = append(rows, rxResource(arn, "ec2:vpc", "us-east-1"))
+		// rds:cluster maps to aws_rds_cluster which is NOT in the
+		// importable registry, so each fixture row passes the
+		// supported-set filter and lands in the output.
+		arn := fmt.Sprintf("arn:aws:rds:us-east-1:1:cluster:c-%03d", i)
+		rows = append(rows, rxResource(arn, "rds:cluster", "us-east-1"))
 	}
 	fake := &fakeResourceExplorerSearcher{
 		byRegion: map[string][]retypes.Resource{"us-east-1": rows},
@@ -543,8 +545,8 @@ func TestEnumerateUnsupported_CapZeroDisablesLimit(t *testing.T) {
 	t.Parallel()
 	rows := make([]retypes.Resource, 0, 50)
 	for i := 0; i < 50; i++ {
-		arn := fmt.Sprintf("arn:aws:ec2:us-east-1:1:vpc/vpc-%03d", i)
-		rows = append(rows, rxResource(arn, "ec2:vpc", "us-east-1"))
+		arn := fmt.Sprintf("arn:aws:rds:us-east-1:1:cluster:c-%03d", i)
+		rows = append(rows, rxResource(arn, "rds:cluster", "us-east-1"))
 	}
 	fake := &fakeResourceExplorerSearcher{
 		byRegion: map[string][]retypes.Resource{"us-east-1": rows},
@@ -614,8 +616,8 @@ func TestSearch_CapStopsFetchingPages(t *testing.T) {
 func makeFixtureRows(n, offset int) []retypes.Resource {
 	out := make([]retypes.Resource, 0, n)
 	for i := 0; i < n; i++ {
-		arn := fmt.Sprintf("arn:aws:ec2:us-east-1:1:vpc/vpc-%05d", offset+i)
-		out = append(out, rxResource(arn, "ec2:vpc", "us-east-1"))
+		arn := fmt.Sprintf("arn:aws:rds:us-east-1:1:cluster:c-%05d", offset+i)
+		out = append(out, rxResource(arn, "rds:cluster", "us-east-1"))
 	}
 	return out
 }
