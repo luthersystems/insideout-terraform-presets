@@ -1030,3 +1030,191 @@ resource "aws_vpc" "vpc" {
 		t.Errorf("aws_subnet.map_customer_owned_ip_on_launch must be dropped\n--- got ---\n%s", got)
 	}
 }
+
+// TestFixupRouteTable_EmptyIPv6CIDRDropped pins #345: the actual bug
+// shape from live CUST3 smoke. ipv6_cidr_block = "" inside a route
+// object literal fails provider validation with `"" is not a valid
+// CIDR block`. The fixup must drop the empty-string field.
+func TestFixupRouteTable_EmptyIPv6CIDRDropped(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_route_table" "rt" {
+  vpc_id = "vpc-123"
+  route = [{
+    cidr_block      = "0.0.0.0/0"
+    gateway_id      = "igw-abc"
+    ipv6_cidr_block = ""
+  }]
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if strings.Contains(got, "ipv6_cidr_block") {
+		t.Errorf("empty ipv6_cidr_block must be dropped\n--- got ---\n%s", got)
+	}
+	if !strings.Contains(got, `cidr_block      = "0.0.0.0/0"`) && !regexp.MustCompile(`cidr_block\s*=\s*"0.0.0.0/0"`).MatchString(got) {
+		t.Errorf("non-empty cidr_block must be preserved\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupRouteTable_AllEmptyStringFieldsDropped pins broad-strip
+// semantics: every field whose value is the literal "" must be removed
+// from each route object. The fixture mirrors the CUST3 smoke output
+// shape (12 absent fields emitted as ""). After fixup, only the
+// non-empty fields remain.
+func TestFixupRouteTable_AllEmptyStringFieldsDropped(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_route_table" "rt" {
+  vpc_id = "vpc-123"
+  route = [{
+    carrier_gateway_id         = ""
+    cidr_block                 = "0.0.0.0/0"
+    core_network_arn           = ""
+    destination_prefix_list_id = ""
+    egress_only_gateway_id     = ""
+    gateway_id                 = ""
+    ipv6_cidr_block            = ""
+    local_gateway_id           = ""
+    nat_gateway_id             = "nat-0bf36e3c90fe23bf5"
+    network_interface_id       = ""
+    transit_gateway_id         = ""
+    vpc_endpoint_id            = ""
+    vpc_peering_connection_id  = ""
+  }]
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	emptyFields := []string{
+		"carrier_gateway_id",
+		"core_network_arn",
+		"destination_prefix_list_id",
+		"egress_only_gateway_id",
+		"gateway_id",
+		"ipv6_cidr_block",
+		"local_gateway_id",
+		"network_interface_id",
+		"transit_gateway_id",
+		"vpc_endpoint_id",
+		"vpc_peering_connection_id",
+	}
+	for _, f := range emptyFields {
+		// Anchor on `<field> =` (with leading whitespace) to avoid false
+		// positives — e.g. "gateway_id" is a substring of "nat_gateway_id".
+		if regexp.MustCompile(`(?m)^\s*` + regexp.QuoteMeta(f) + `\s*=`).MatchString(got) {
+			t.Errorf("empty %s field must be dropped\n--- got ---\n%s", f, got)
+		}
+	}
+	// Non-empty fields must survive.
+	if !regexp.MustCompile(`cidr_block\s*=\s*"0.0.0.0/0"`).MatchString(got) {
+		t.Errorf("cidr_block=\"0.0.0.0/0\" must be preserved\n--- got ---\n%s", got)
+	}
+	if !regexp.MustCompile(`nat_gateway_id\s*=\s*"nat-0bf36e3c90fe23bf5"`).MatchString(got) {
+		t.Errorf("nat_gateway_id must be preserved\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupRouteTable_NonEmptyFieldsPreserved pins isolation: a route
+// object with no empty-string fields flows through untouched. A
+// mutation that broadened the filter to non-empty values would fail
+// this test.
+func TestFixupRouteTable_NonEmptyFieldsPreserved(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_route_table" "rt" {
+  vpc_id = "vpc-123"
+  route = [{
+    cidr_block     = "10.0.0.0/8"
+    gateway_id     = "igw-abc"
+    nat_gateway_id = "nat-xyz"
+  }]
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	for _, want := range []string{"cidr_block", "gateway_id", "nat_gateway_id"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("non-empty %s must be preserved\n--- got ---\n%s", want, got)
+		}
+	}
+}
+
+// TestFixupRouteTable_NoRouteAttrUntouched pins the no-op branch: a
+// route_table without a route attribute (or with `route = []`) is a
+// pure pass-through. A mutation that emitted a stub would fail.
+func TestFixupRouteTable_NoRouteAttrUntouched(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		body string
+	}{
+		{"no_route_attr", `vpc_id = "vpc-123"`},
+		{"empty_route_list", `vpc_id = "vpc-123"
+  route  = []`},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			in := []byte(`resource "aws_route_table" "rt" {
+  ` + tc.body + `
+}
+`)
+			out, err := applyResourceTypeFixups(in)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(out) != string(in) {
+				t.Errorf("no-op case must yield identical output\n--- in ---\n%s\n--- out ---\n%s", in, out)
+			}
+		})
+	}
+}
+
+// TestFixupRouteTable_OnlyAffectsAWSRouteTableBlocks pins resource-type
+// isolation: a sibling aws_subnet block carrying its own route attribute
+// (hypothetical — not a real schema field) must NOT be touched. The
+// fixup table is keyed by aws_route_table only.
+func TestFixupRouteTable_OnlyAffectsAWSRouteTableBlocks(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_route_table" "rt" {
+  vpc_id = "vpc-123"
+  route = [{
+    cidr_block      = "0.0.0.0/0"
+    ipv6_cidr_block = ""
+  }]
+}
+
+resource "aws_route" "extra" {
+  route_table_id      = "rtb-123"
+  destination_cidr_block = "10.0.0.0/16"
+  ipv6_cidr_block     = ""
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	// Count occurrences. Pre-fixup the input has 2 ipv6_cidr_block = ""
+	// (one in the route_table's nested route, one at the aws_route top
+	// level). The fixup should drop the route_table's, leaving exactly 1
+	// in the aws_route block. Use a whitespace-tolerant regex because the
+	// route_table block's cty-rendered formatting differs from the
+	// hclwrite-untouched aws_route block's alignment.
+	matches := regexp.MustCompile(`(?m)^\s*ipv6_cidr_block\s*=\s*""`).FindAllString(got, -1)
+	if len(matches) != 1 {
+		t.Errorf("expected exactly 1 ipv6_cidr_block=\"\" remaining (the aws_route's), got %d\n--- got ---\n%s", len(matches), got)
+	}
+	// The aws_route block must keep its top-level ipv6_cidr_block="".
+	if !regexp.MustCompile(`(?s)resource "aws_route" "extra"[^}]*ipv6_cidr_block\s*=\s*""`).MatchString(got) {
+		t.Errorf("aws_route.ipv6_cidr_block=\"\" must be preserved (fixup keyed by aws_route_table only)\n--- got ---\n%s", got)
+	}
+}

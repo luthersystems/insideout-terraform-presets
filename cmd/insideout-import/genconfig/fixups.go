@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/hashicorp/hcl/v2"
+	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/hashicorp/hcl/v2/hclwrite"
 	"github.com/zclconf/go-cty/cty"
 )
@@ -56,6 +57,7 @@ var resourceTypeFixups = map[string]func(*hclwrite.Block){
 	"aws_vpc":             fixupVPCIPv6NetmaskOrphan,
 	"aws_lb":              fixupLBSubnetMappingConflict,
 	"aws_subnet":          fixupSubnetProviderQuirks,
+	"aws_route_table":     fixupRouteTableEmptyRouteFields,
 }
 
 // lambdaPlaceholderFile is what we set `filename` to so the block
@@ -256,6 +258,106 @@ func fixupSubnetProviderQuirks(blk *hclwrite.Block) {
 	if !hasUsableValue(body, "customer_owned_ipv4_pool") && !hasUsableValue(body, "outpost_arn") {
 		body.RemoveAttribute("map_customer_owned_ip_on_launch")
 	}
+}
+
+// fixupRouteTableEmptyRouteFields drops empty-string fields from each
+// route object literal emitted in aws_route_table.route. The provider
+// validates fields like ipv6_cidr_block as a CIDR when present (even
+// as ""), and rejects the empty literal with `"" is not a valid CIDR
+// block`. terraform plan -generate-config-out emits "" for every
+// absent string field in the route object; broad-strip is safer than
+// targeted because future provider validation tightening on other
+// fields surfaces the same way.
+//
+// Shape note: generate-config-out emits route as an attribute carrying
+// a list-of-objects expression (route = [{...}, ...]), NOT as nested
+// route { ... } blocks. Mutation goes through cty round-trip rather
+// than block iteration: parse the attribute's expression bytes,
+// evaluate to a static cty value, filter empty-string fields per
+// object, re-emit via SetAttributeValue. Issue #345.
+func fixupRouteTableEmptyRouteFields(blk *hclwrite.Block) {
+	body := blk.Body()
+	attr := body.GetAttribute("route")
+	if attr == nil {
+		return
+	}
+	exprBytes := attr.Expr().BuildTokens(nil).Bytes()
+	expr, diags := hclsyntax.ParseExpression(exprBytes, "route", hcl.Pos{Line: 1, Column: 1})
+	if diags.HasErrors() {
+		return
+	}
+	val, diags := expr.Value(nil)
+	if diags.HasErrors() {
+		return
+	}
+	filtered, changed := dropEmptyStringFieldsFromTuple(val)
+	if !changed {
+		return
+	}
+	body.SetAttributeValue("route", filtered)
+}
+
+// dropEmptyStringFieldsFromTuple walks a tuple/list of object values and
+// returns a new tuple with each object's empty-string fields removed.
+// The boolean reports whether any field was dropped, so callers can
+// short-circuit a no-op back to the original tokens (avoids reformatting
+// unchanged HCL). Non-tuple/non-list inputs and unknown/null values pass
+// through unchanged.
+func dropEmptyStringFieldsFromTuple(v cty.Value) (cty.Value, bool) {
+	if v.IsNull() || !v.IsKnown() {
+		return v, false
+	}
+	t := v.Type()
+	if !t.IsTupleType() && !t.IsListType() {
+		return v, false
+	}
+	if v.LengthInt() == 0 {
+		return v, false
+	}
+	out := make([]cty.Value, 0, v.LengthInt())
+	changed := false
+	it := v.ElementIterator()
+	for it.Next() {
+		_, elem := it.Element()
+		cleaned, c := dropEmptyStringFieldsFromObject(elem)
+		if c {
+			changed = true
+		}
+		out = append(out, cleaned)
+	}
+	if !changed {
+		return v, false
+	}
+	return cty.TupleVal(out), true
+}
+
+// dropEmptyStringFieldsFromObject returns a new object value with
+// empty-string string fields removed. Non-object inputs pass through
+// unchanged. If every field is dropped the result is an empty object
+// (cty.EmptyObjectVal); the caller decides whether to keep that.
+func dropEmptyStringFieldsFromObject(v cty.Value) (cty.Value, bool) {
+	if v.IsNull() || !v.IsKnown() {
+		return v, false
+	}
+	if !v.Type().IsObjectType() {
+		return v, false
+	}
+	fields := map[string]cty.Value{}
+	changed := false
+	for k, fv := range v.AsValueMap() {
+		if fv.Type() == cty.String && !fv.IsNull() && fv.IsKnown() && fv.AsString() == "" {
+			changed = true
+			continue
+		}
+		fields[k] = fv
+	}
+	if !changed {
+		return v, false
+	}
+	if len(fields) == 0 {
+		return cty.EmptyObjectVal, true
+	}
+	return cty.ObjectVal(fields), true
 }
 
 // isAttrLiteralZero reports whether the named attribute exists and its
