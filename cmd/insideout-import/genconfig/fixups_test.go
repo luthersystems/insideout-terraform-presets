@@ -784,12 +784,13 @@ func TestFixupSubnet_AZIdDroppedWhenAZSet(t *testing.T) {
 func TestFixupSubnet_AZAttrsPreservedWhenOnlyOneSet(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
-		name string
-		in   string
-		want string
+		name        string
+		in          string
+		wantPresent string
+		wantAbsent  string
 	}{
-		{"only_az", `availability_zone = "us-east-1a"`, `availability_zone\s*=\s*"us-east-1a"`},
-		{"only_az_id", `availability_zone_id = "use1-az6"`, `availability_zone_id\s*=\s*"use1-az6"`},
+		{"only_az", `availability_zone = "us-east-1a"`, `availability_zone\s*=\s*"us-east-1a"`, `(?m)^\s*availability_zone_id\s*=`},
+		{"only_az_id", `availability_zone_id = "use1-az6"`, `availability_zone_id\s*=\s*"use1-az6"`, `(?m)^\s*availability_zone\s*=`},
 	}
 	for _, tc := range cases {
 		tc := tc
@@ -806,10 +807,69 @@ func TestFixupSubnet_AZAttrsPreservedWhenOnlyOneSet(t *testing.T) {
 				t.Fatal(err)
 			}
 			got := string(out)
-			if !regexp.MustCompile(tc.want).MatchString(got) {
-				t.Errorf("expected %q to match %q\n--- got ---\n%s", got, tc.want, got)
+			if !regexp.MustCompile(tc.wantPresent).MatchString(got) {
+				t.Errorf("expected %q to match\n--- got ---\n%s", tc.wantPresent, got)
+			}
+			// Negative assertion: the fixup must not inject the absent
+			// sibling. Pins against a mutation that always emits a
+			// default AZ when only one of the pair is present.
+			if regexp.MustCompile(tc.wantAbsent).MatchString(got) {
+				t.Errorf("fixup must not inject %q when only one AZ attr is present\n--- got ---\n%s", tc.wantAbsent, got)
 			}
 		})
+	}
+}
+
+// TestFixupSubnet_NullLiteralAZIDPreserved pins the null-literal branch
+// of hasUsableValue: generate-config-out emits availability_zone = null
+// for any subnet whose AZ string is null at read time. The fixup must
+// recognize null-literal as "no usable value" and preserve the ID. A
+// mutation that replaced hasUsableValue with `GetAttribute(name) != nil`
+// would survive the existing "only one set" carve-out (which tested
+// attribute absence) but fail here.
+func TestFixupSubnet_NullLiteralAZIDPreserved(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_subnet" "main" {
+  vpc_id               = "vpc-123"
+  cidr_block           = "10.0.1.0/24"
+  availability_zone    = null
+  availability_zone_id = "use1-az6"
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if !regexp.MustCompile(`(?m)^\s*availability_zone_id\s*=\s*"use1-az6"`).MatchString(got) {
+		t.Errorf("availability_zone_id must be preserved when availability_zone is null\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupSubnet_NullLiteralOutpostTrioStillDropsOrphan pins the
+// null-literal branch on the trio: generate-config-out emits both
+// customer_owned_ipv4_pool = null and outpost_arn = null for any
+// non-Outpost subnet. The fixup must still drop the orphan
+// map_customer_owned_ip_on_launch. A mutation that treated null as
+// "present" would survive the existing absent-sibling test but fail
+// here.
+func TestFixupSubnet_NullLiteralOutpostTrioStillDropsOrphan(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_subnet" "main" {
+  vpc_id                          = "vpc-123"
+  cidr_block                      = "10.0.1.0/24"
+  customer_owned_ipv4_pool        = null
+  outpost_arn                     = null
+  map_customer_owned_ip_on_launch = false
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if regexp.MustCompile(`(?m)^\s*map_customer_owned_ip_on_launch\s*=`).MatchString(got) {
+		t.Errorf("orphan map_customer_owned_ip_on_launch must be dropped when both siblings are null\n--- got ---\n%s", got)
 	}
 }
 
