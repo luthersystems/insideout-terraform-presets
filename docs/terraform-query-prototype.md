@@ -301,6 +301,28 @@ reference. The export shim
 preserved alongside it and should be deleted in the same PR that
 deletes the prototype, if/when we abandon the approach formally.
 
+## Alternatives considered (no public Go SDK exists)
+
+A natural follow-up question: rather than shelling out to the
+`terraform` binary (finding #8), can we invoke `terraform query`
+in-process via a Go library? Short answer: **no**, and the
+architectures that *would* avoid the binary don't change the
+verdict.
+
+| Option | Runtime dep | License | Why it's not a fix |
+|---|---|---|---|
+| `github.com/hashicorp/terraform-exec/tfexec` (already in `go.mod`) | `terraform` binary | MPL-2.0 | Just a typed Go wrapper around the CLI — still requires the binary at runtime. The prototype could be migrated to this for ergonomics without changing the rejection. |
+| Embed `github.com/hashicorp/terraform` (CLI source) | none | **BUSL-1.1** since Aug 2023 | Internals are `internal/`-scoped (not exported as a stable API), and BUSL is non-OSS. Embedding into our backend is legally fraught. |
+| Speak provider gRPC directly via `github.com/hashicorp/terraform-plugin-go/tfprotov6` (skip `terraform`, talk to the AWS provider plugin yourself) | `terraform-provider-aws` binary (~80 MB) | MPL-2.0 | Technically possible. Trades one binary dep for a bigger one, plus ~250–500 LOC of plugin-handshake / protocol-version-negotiation / state-encoding scaffolding we'd own forever. **Critically, it does NOT change finding #2 — `ListResource` payloads are identity-only by spec, so the tag-fetch round-trip stays.** That's the architectural ceiling, not a binary-vs-library issue. |
+| `github.com/hashicorp/terraform-provider-aws` as a library | none extra | MPL-2.0 | >95 % of the provider lives under `internal/` and is not importable. Not a viable path. |
+| `github.com/aws/aws-sdk-go-v2` directly | none extra | Apache-2.0 | **What production already does.** |
+
+The "binary as runtime dep" was one of five rejection reasons.
+Eliminating it via gRPC-to-provider would still leave the
+identity-only payload ceiling (the LOC argument), the stringly-typed
+errors, the default-VPC filter divergence, and the zero-GCP-coverage
+gap. None of those are fixed by changing the transport.
+
 ## How to re-run the smoke
 
 ```sh
