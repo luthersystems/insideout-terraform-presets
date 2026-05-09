@@ -1,4 +1,5 @@
 aws_cloudfront_distribution	Network Security
+aws_cloudwatch_event_rule	Events
 aws_cloudwatch_log_group	Observability
 aws_db_instance	Data Storage
 aws_dynamodb_table	Data Storage
@@ -6,6 +7,7 @@ aws_ecr_repository	Data Storage
 aws_ecs_cluster	Virtual Machines
 aws_eip	Network Security
 aws_eks_cluster	Virtual Machines
+aws_eks_pod_identity_association	Security
 aws_elb	Network Security
 aws_iam_policy	Security
 aws_iam_role	Security
@@ -17,6 +19,8 @@ aws_nat_gateway	Network Security
 aws_network_acl	Network Security
 aws_network_interface	Network Security
 aws_rds_cluster	Data Storage
+aws_resourceexplorer2_index	Observability
+aws_resourceexplorer2_view	Observability
 aws_route53_zone	Network Security
 aws_route_table	Network Security
 aws_s3_bucket	Data Storage

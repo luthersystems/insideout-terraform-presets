@@ -19,9 +19,11 @@ func TestSupportedDiscoverTypes_AWS_ReturnsCanonicalSortedList(t *testing.T) {
 	t.Parallel()
 	want := []string{
 		"aws_cloudfront_distribution",
+		"aws_cloudwatch_event_rule",
 		"aws_cloudwatch_log_group",
 		"aws_dynamodb_table",
 		"aws_eip",
+		"aws_eks_pod_identity_association",
 		"aws_iam_policy",
 		"aws_iam_role",
 		"aws_internet_gateway",
@@ -30,6 +32,8 @@ func TestSupportedDiscoverTypes_AWS_ReturnsCanonicalSortedList(t *testing.T) {
 		"aws_nat_gateway",
 		"aws_network_acl",
 		"aws_network_interface",
+		"aws_resourceexplorer2_index",
+		"aws_resourceexplorer2_view",
 		"aws_route53_zone",
 		"aws_route_table",
 		"aws_s3_bucket",
