@@ -161,8 +161,15 @@ func (d *resourceExplorer2ViewDiscoverer) Discover(ctx context.Context, args Dis
 			if !MatchesAll(v.tags, args.TagSelectors) {
 				continue
 			}
-			name := re2NameFromArn(v.arn)
 			parsedRegion, parsedName := re2ViewArnRegionAndName(v.arn)
+			// Prefer the human-readable view name parsed from the ARN
+			// (arn:.../view/<name>/<uuid>) over the UUID-suffix
+			// re2NameFromArn returns. The UUID is unstable across
+			// recreate cycles and useless for the address picker.
+			name := parsedName
+			if name == "" {
+				name = re2NameFromArn(v.arn)
+			}
 			native := map[string]string{
 				"arn": v.arn,
 			}
@@ -212,8 +219,11 @@ func (d *resourceExplorer2ViewDiscoverer) DiscoverByID(ctx context.Context, id, 
 	if arn == "" {
 		arn = id
 	}
-	name := re2NameFromArn(arn)
 	parsedRegion, parsedName := re2ViewArnRegionAndName(arn)
+	name := parsedName
+	if name == "" {
+		name = re2NameFromArn(arn)
+	}
 	native := map[string]string{"arn": arn}
 	if parsedRegion != "" {
 		native["region"] = parsedRegion

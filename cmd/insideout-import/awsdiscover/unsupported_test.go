@@ -201,8 +201,8 @@ func TestEnumerateUnsupported_TagsPassThrough(t *testing.T) {
 func TestEnumerateUnsupported_ImportableRowsAreFiltered(t *testing.T) {
 	t.Parallel()
 	supportedSet := make(map[string]struct{})
-	for _, t := range registry.SupportedDiscoverTypes("aws") {
-		supportedSet[t] = struct{}{}
+	for _, tfType := range registry.SupportedDiscoverTypes("aws") {
+		supportedSet[tfType] = struct{}{}
 	}
 	for resourceType, wantTF := range awsTFTypeByResourceType {
 		if _, importable := supportedSet[wantTF]; !importable {
@@ -242,8 +242,8 @@ func TestEnumerateUnsupported_ImportableRowsAreFiltered(t *testing.T) {
 func TestEnumerateUnsupported_UnimportableRowsThreadTFType(t *testing.T) {
 	t.Parallel()
 	supportedSet := make(map[string]struct{})
-	for _, t := range registry.SupportedDiscoverTypes("aws") {
-		supportedSet[t] = struct{}{}
+	for _, tfType := range registry.SupportedDiscoverTypes("aws") {
+		supportedSet[tfType] = struct{}{}
 	}
 	for resourceType, wantTF := range awsTFTypeByResourceType {
 		if _, importable := supportedSet[wantTF]; importable {

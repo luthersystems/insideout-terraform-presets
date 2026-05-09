@@ -130,9 +130,9 @@ func (d *securityGroupDiscoverer) DiscoverByID(ctx context.Context, id, region, 
 	client := d.new(region)
 	out, err := client.DescribeSecurityGroups(ctx, &ec2.DescribeSecurityGroupsInput{GroupIds: []string{groupID}})
 	if err != nil {
-		// EC2 surfaces "InvalidGroup.NotFound" as a generic API error,
-		// not a typed exception. Match by code substring (mirror s3.go).
-		if strings.Contains(err.Error(), "InvalidGroup.NotFound") {
+		// EC2 surfaces SG-not-found as a smithy.APIError. AWS uses two
+		// related codes depending on the lookup variant — accept both.
+		if isEC2APIErrorCode(err, "InvalidGroup.NotFound", "InvalidGroupId.NotFound") {
 			return imported.ImportedResource{}, fmt.Errorf("aws_security_group %q: %w", groupID, ErrNotFound)
 		}
 		return imported.ImportedResource{}, fmt.Errorf("DescribeSecurityGroups: %w", err)

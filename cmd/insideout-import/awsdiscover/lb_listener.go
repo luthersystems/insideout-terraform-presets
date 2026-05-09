@@ -137,6 +137,9 @@ func (d *lbListenerDiscoverer) Discover(ctx context.Context, args DiscoverArgs) 
 				for {
 					out, err := client.DescribeListeners(gctx1, lnInput)
 					if err != nil {
+						if cerr := gctx1.Err(); cerr != nil {
+							return cerr
+						}
 						return fmt.Errorf("DescribeListeners (lb=%s): %w", h.name, err)
 					}
 					mu1.Lock()

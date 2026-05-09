@@ -247,7 +247,7 @@ func TestEIPDiscoverByID_NotFound(t *testing.T) {
 func TestEIPDiscoverByID_NotFound_FromAPIErrorCode(t *testing.T) {
 	t.Parallel()
 	d := &eipDiscoverer{new: func(_ string) eipClient {
-		return &fakeEIPClient{err: errors.New("api error InvalidAllocationID.NotFound: The allocation ID 'eipalloc-deadbeef' does not exist")}
+		return &fakeEIPClient{err: ec2APIError("InvalidAllocationID.NotFound", "The allocation ID 'eipalloc-deadbeef' does not exist")}
 	}}
 	_, err := d.DiscoverByID(context.Background(), "eipalloc-deadbeef00000000", "us-east-1", "123")
 	if !errors.Is(err, ErrNotFound) {
@@ -282,8 +282,8 @@ func TestEIPDiscover_MultiRegionTriggersOneSDKCallPerRegion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(seenRegions) != 2 {
-		t.Errorf("region closure invocations = %v, want 2 entries", seenRegions)
+	if len(seenRegions) != 2 || seenRegions[0] != "us-east-1" || seenRegions[1] != "eu-west-1" {
+		t.Errorf("region closure invocations = %v, want [us-east-1 eu-west-1]", seenRegions)
 	}
 	if len(fakes["us-east-1"].calls) != 1 || len(fakes["eu-west-1"].calls) != 1 {
 		t.Errorf("expected exactly one DescribeAddresses call per region; us-east-1=%d eu-west-1=%d",
@@ -409,6 +409,14 @@ func TestEIPDiscover_EmitsItemFound_PerResource(t *testing.T) {
 		}
 		if it.TFType != "aws_eip" {
 			t.Errorf("item %d: tf_type=%q, want aws_eip", i, it.TFType)
+		}
+		if it.Region != "us-east-1" {
+			t.Errorf("item %d: region=%q, want us-east-1", i, it.Region)
+		}
+	}
+	for _, e := range rec.snapshot() {
+		if e.Kind == "service_finish" && e.Count != len(got) {
+			t.Errorf("service_finish.count=%d, want %d", e.Count, len(got))
 		}
 	}
 }

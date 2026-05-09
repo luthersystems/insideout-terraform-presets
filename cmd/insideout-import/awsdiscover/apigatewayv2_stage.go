@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -17,10 +18,12 @@ import (
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
 
-const (
-	apigwV2StageTFType    = "aws_apigatewayv2_stage"
-	apigwV2StageAssetType = "apigateway:apis/.../stages"
-)
+// Stage discovery is gated on a parent API match: there is no
+// Resource Explorer asset slug for stages independent of their API
+// ("apigateway:apis/.../stages" was a placeholder, not a real RE2 type).
+// We enumerate via apigatewayv2.GetApis → GetStages instead, scoped to
+// project-prefix-matching APIs.
+const apigwV2StageTFType = "aws_apigatewayv2_stage"
 
 // apigwV2StageClient is the narrow subset of the apigatewayv2 SDK the
 // stage discoverer uses. Stages are scoped to an API: the discoverer
@@ -185,14 +188,9 @@ func (d *apigwV2StageDiscoverer) Discover(ctx context.Context, args DiscoverArgs
 			}
 			importID := s.apiID + "/" + s.stageName
 			native := map[string]string{
-				"api_id":     s.apiID,
-				"stage_name": s.stageName,
-				"auto_deploy": func() string {
-					if s.autoDeploy {
-						return "true"
-					}
-					return "false"
-				}(),
+				"api_id":      s.apiID,
+				"stage_name":  s.stageName,
+				"auto_deploy": strconv.FormatBool(s.autoDeploy),
 			}
 			if s.deploymentID != "" {
 				native["deployment_id"] = s.deploymentID
@@ -240,14 +238,9 @@ func (d *apigwV2StageDiscoverer) DiscoverByID(ctx context.Context, id, region, a
 	}
 	importID := apiID + "/" + stageName
 	native := map[string]string{
-		"api_id":     apiID,
-		"stage_name": stageName,
-		"auto_deploy": func() string {
-			if aws.ToBool(out.AutoDeploy) {
-				return "true"
-			}
-			return "false"
-		}(),
+		"api_id":      apiID,
+		"stage_name":  stageName,
+		"auto_deploy": strconv.FormatBool(aws.ToBool(out.AutoDeploy)),
 	}
 	if depID := aws.ToString(out.DeploymentId); depID != "" {
 		native["deployment_id"] = depID

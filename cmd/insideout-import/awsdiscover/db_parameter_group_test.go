@@ -109,16 +109,15 @@ func TestDBParameterGroupDiscover_HappyPath(t *testing.T) {
 
 func TestDBParameterGroupDiscover_PaginatesUntilNoMarker(t *testing.T) {
 	t.Parallel()
-	d := &dbParameterGroupDiscoverer{
-		new: func(_ string) dbParameterGroupClient {
-			return &fakeDBParameterGroupClient{
-				pages: []rds.DescribeDBParameterGroupsOutput{
-					{DBParameterGroups: []rdstypes.DBParameterGroup{dbParameterGroupFixture("io-foo-a-pg", "arn-a", "postgres15")}, Marker: aws.String("m1")},
-					{DBParameterGroups: []rdstypes.DBParameterGroup{dbParameterGroupFixture("io-foo-b-pg", "arn-b", "postgres15")}, Marker: aws.String("m2")},
-					{DBParameterGroups: []rdstypes.DBParameterGroup{dbParameterGroupFixture("io-foo-c-pg", "arn-c", "postgres15")}}, // terminal
-				},
-			}
+	fake := &fakeDBParameterGroupClient{
+		pages: []rds.DescribeDBParameterGroupsOutput{
+			{DBParameterGroups: []rdstypes.DBParameterGroup{dbParameterGroupFixture("io-foo-a-pg", "arn-a", "postgres15")}, Marker: aws.String("m1")},
+			{DBParameterGroups: []rdstypes.DBParameterGroup{dbParameterGroupFixture("io-foo-b-pg", "arn-b", "postgres15")}, Marker: aws.String("m2")},
+			{DBParameterGroups: []rdstypes.DBParameterGroup{dbParameterGroupFixture("io-foo-c-pg", "arn-c", "postgres15")}}, // terminal
 		},
+	}
+	d := &dbParameterGroupDiscoverer{
+		new:            func(_ string) dbParameterGroupClient { return fake },
 		maxConcurrency: 4,
 	}
 	got, err := d.Discover(context.Background(), DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"})
@@ -127,6 +126,15 @@ func TestDBParameterGroupDiscover_PaginatesUntilNoMarker(t *testing.T) {
 	}
 	if len(got) != 3 {
 		t.Fatalf("len=%d, want 3 (paginated)", len(got))
+	}
+	if len(fake.calls) < 3 {
+		t.Fatalf("DescribeDBParameterGroups calls=%d, want >=3", len(fake.calls))
+	}
+	if aws.ToString(fake.calls[1].Marker) != "m1" {
+		t.Errorf("call[1].Marker=%q, want m1", aws.ToString(fake.calls[1].Marker))
+	}
+	if aws.ToString(fake.calls[2].Marker) != "m2" {
+		t.Errorf("call[2].Marker=%q, want m2", aws.ToString(fake.calls[2].Marker))
 	}
 }
 
@@ -239,8 +247,8 @@ func TestDBParameterGroupDiscover_MultiRegionTriggersOneSDKCallPerRegion(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(seenRegions) != 2 {
-		t.Errorf("region closure invocations=%v, want 2", seenRegions)
+	if len(seenRegions) != 2 || seenRegions[0] != "us-east-1" || seenRegions[1] != "eu-west-1" {
+		t.Errorf("region closure invocations=%v, want [us-east-1 eu-west-1]", seenRegions)
 	}
 	if len(fakes["us-east-1"].calls) == 0 || len(fakes["eu-west-1"].calls) == 0 {
 		t.Error("expected one DescribeDBParameterGroups call per region")

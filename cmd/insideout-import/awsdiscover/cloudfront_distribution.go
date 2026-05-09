@@ -111,7 +111,7 @@ func (d *cloudfrontDistributionDiscoverer) Discover(ctx context.Context, args Di
 			}
 			dists = append(dists, x)
 		}
-		if dl.IsTruncated != nil && *dl.IsTruncated {
+		if aws.ToBool(dl.IsTruncated) {
 			input.Marker = dl.NextMarker
 			continue
 		}

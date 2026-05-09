@@ -3,8 +3,10 @@ package awsdiscover
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2"
@@ -126,27 +128,38 @@ func TestLBTargetGroupDiscover_PaginatesUntilNoMarker(t *testing.T) {
 	t.Parallel()
 	tg1 := tgFixture("io-foo-a", "arn:aws:elasticloadbalancing:us-east-1:123:targetgroup/io-foo-a/aaa", "vpc-1", 80, elbv2types.ProtocolEnumHttp)
 	tg2 := tgFixture("io-foo-b", "arn:aws:elasticloadbalancing:us-east-1:123:targetgroup/io-foo-b/bbb", "vpc-1", 81, elbv2types.ProtocolEnumHttp)
-	d := &lbTargetGroupDiscoverer{
-		new: func(_ string) lbTargetGroupClient {
-			return &fakeLBTGClient{
-				pages: []elasticloadbalancingv2.DescribeTargetGroupsOutput{
-					{TargetGroups: []elbv2types.TargetGroup{tg1}, NextMarker: aws.String("p2")},
-					{TargetGroups: []elbv2types.TargetGroup{tg2}},
-				},
-				tagsByID: map[string][]elbv2types.Tag{
-					aws.ToString(tg1.TargetGroupArn): {elbv2Tag("Project", "io-foo")},
-					aws.ToString(tg2.TargetGroupArn): {elbv2Tag("Project", "io-foo")},
-				},
-			}
+	tg3 := tgFixture("io-foo-c", "arn:aws:elasticloadbalancing:us-east-1:123:targetgroup/io-foo-c/ccc", "vpc-1", 82, elbv2types.ProtocolEnumHttp)
+	fake := &fakeLBTGClient{
+		pages: []elasticloadbalancingv2.DescribeTargetGroupsOutput{
+			{TargetGroups: []elbv2types.TargetGroup{tg1}, NextMarker: aws.String("p2")},
+			{TargetGroups: []elbv2types.TargetGroup{tg2}, NextMarker: aws.String("p3")},
+			{TargetGroups: []elbv2types.TargetGroup{tg3}},
 		},
+		tagsByID: map[string][]elbv2types.Tag{
+			aws.ToString(tg1.TargetGroupArn): {elbv2Tag("Project", "io-foo")},
+			aws.ToString(tg2.TargetGroupArn): {elbv2Tag("Project", "io-foo")},
+			aws.ToString(tg3.TargetGroupArn): {elbv2Tag("Project", "io-foo")},
+		},
+	}
+	d := &lbTargetGroupDiscoverer{
+		new:            func(_ string) lbTargetGroupClient { return fake },
 		maxConcurrency: 4,
 	}
 	got, err := d.Discover(context.Background(), DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 2 {
-		t.Fatalf("len=%d, want 2 (paginated)", len(got))
+	if len(got) != 3 {
+		t.Fatalf("len=%d, want 3 (paginated)", len(got))
+	}
+	if len(fake.listCalls) < 3 {
+		t.Fatalf("DescribeTargetGroups calls=%d, want >=3", len(fake.listCalls))
+	}
+	if aws.ToString(fake.listCalls[1].Marker) != "p2" {
+		t.Errorf("call[1].Marker=%q, want p2", aws.ToString(fake.listCalls[1].Marker))
+	}
+	if aws.ToString(fake.listCalls[2].Marker) != "p3" {
+		t.Errorf("call[2].Marker=%q, want p3", aws.ToString(fake.listCalls[2].Marker))
 	}
 }
 
@@ -256,17 +269,24 @@ func TestLBTargetGroupDiscover_MultiRegionTriggersOneSDKCallPerRegion(t *testing
 			},
 		},
 	}
-	d := &lbTargetGroupDiscoverer{new: func(region string) lbTargetGroupClient { return clients[region] }, maxConcurrency: 4}
+	var seenRegions []string
+	d := &lbTargetGroupDiscoverer{new: func(region string) lbTargetGroupClient {
+		seenRegions = append(seenRegions, region)
+		return clients[region]
+	}, maxConcurrency: 4}
 	got, err := d.Discover(context.Background(), DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1", "eu-west-1"}, AccountID: "123"})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if len(seenRegions) != 2 || seenRegions[0] != "us-east-1" || seenRegions[1] != "eu-west-1" {
+		t.Errorf("region closure invocations = %v, want [us-east-1 eu-west-1]", seenRegions)
 	}
 	if len(got) != 2 {
 		t.Fatalf("len=%d, want 2", len(got))
 	}
 	for region, fake := range clients {
 		if len(fake.listCalls) < 1 {
-			t.Errorf("region=%s: expected ≥1 DescribeTargetGroups call; got %d", region, len(fake.listCalls))
+			t.Errorf("region=%s: expected >=1 DescribeTargetGroups call; got %d", region, len(fake.listCalls))
 		}
 	}
 }
@@ -406,6 +426,14 @@ func TestLBTargetGroupDiscover_EmitsItemFound_PerResource(t *testing.T) {
 		if it.TFType != lbTargetGroupTFType {
 			t.Errorf("item.tf_type=%q, want %q", it.TFType, lbTargetGroupTFType)
 		}
+		if it.Region != "us-east-1" {
+			t.Errorf("item.region=%q, want us-east-1", it.Region)
+		}
+	}
+	for _, e := range rec.snapshot() {
+		if e.Kind == "service_finish" && e.Count != len(got) {
+			t.Errorf("service_finish.count=%d, want %d", e.Count, len(got))
+		}
 	}
 }
 
@@ -423,5 +451,129 @@ func TestLBTargetGroupDiscoverByID_UnsupportedID(t *testing.T) {
 		if !errors.Is(err, ErrNotSupported) {
 			t.Errorf("id=%q: err=%v, want ErrNotSupported", id, err)
 		}
+	}
+}
+
+// TestLBTargetGroupDiscover_EmptyProjectReturnsAll pins that an empty
+// Project disables the prefix filter.
+func TestLBTargetGroupDiscover_EmptyProjectReturnsAll(t *testing.T) {
+	t.Parallel()
+	tg1 := tgFixture("io-foo-a", "arn:aws:elasticloadbalancing:us-east-1:123:targetgroup/io-foo-a/aaa", "vpc", 80, elbv2types.ProtocolEnumHttp)
+	tg2 := tgFixture("other-tg", "arn:aws:elasticloadbalancing:us-east-1:123:targetgroup/other-tg/bbb", "vpc", 80, elbv2types.ProtocolEnumHttp)
+	fake := &fakeLBTGClient{
+		pages: []elasticloadbalancingv2.DescribeTargetGroupsOutput{{TargetGroups: []elbv2types.TargetGroup{tg1, tg2}}},
+		tagsByID: map[string][]elbv2types.Tag{
+			aws.ToString(tg1.TargetGroupArn): {},
+			aws.ToString(tg2.TargetGroupArn): {},
+		},
+	}
+	d := &lbTargetGroupDiscoverer{new: func(_ string) lbTargetGroupClient { return fake }, maxConcurrency: 4}
+	got, err := d.Discover(context.Background(), DiscoverArgs{Project: "", Regions: []string{"us-east-1"}, AccountID: "123"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("len=%d, want 2 (no prefix filter)", len(got))
+	}
+}
+
+// blockingLBTGClient mirrors blockingDynamoClient — used for the
+// bounded-concurrency test below.
+type blockingLBTGClient struct {
+	pages []elasticloadbalancingv2.DescribeTargetGroupsOutput
+	tags  map[string][]elbv2types.Tag
+
+	release chan struct{}
+
+	mu          sync.Mutex
+	inflight    int
+	maxInflight int
+
+	listIdx int
+}
+
+func (c *blockingLBTGClient) DescribeTargetGroups(_ context.Context, _ *elasticloadbalancingv2.DescribeTargetGroupsInput, _ ...func(*elasticloadbalancingv2.Options)) (*elasticloadbalancingv2.DescribeTargetGroupsOutput, error) {
+	if c.listIdx >= len(c.pages) {
+		return &elasticloadbalancingv2.DescribeTargetGroupsOutput{}, nil
+	}
+	out := c.pages[c.listIdx]
+	c.listIdx++
+	return &out, nil
+}
+
+func (c *blockingLBTGClient) DescribeTags(ctx context.Context, in *elasticloadbalancingv2.DescribeTagsInput, _ ...func(*elasticloadbalancingv2.Options)) (*elasticloadbalancingv2.DescribeTagsOutput, error) {
+	c.mu.Lock()
+	c.inflight++
+	if c.inflight > c.maxInflight {
+		c.maxInflight = c.inflight
+	}
+	c.mu.Unlock()
+	defer func() {
+		c.mu.Lock()
+		c.inflight--
+		c.mu.Unlock()
+	}()
+	select {
+	case <-c.release:
+		out := &elasticloadbalancingv2.DescribeTagsOutput{}
+		for _, arn := range in.ResourceArns {
+			td := elbv2types.TagDescription{ResourceArn: aws.String(arn), Tags: c.tags[arn]}
+			out.TagDescriptions = append(out.TagDescriptions, td)
+		}
+		return out, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+// TestLBTargetGroupDiscover_BoundedConcurrency mirrors dynamodb_test.go:
+// per-TG DescribeTags fan-out must respect the configured limit.
+func TestLBTargetGroupDiscover_BoundedConcurrency(t *testing.T) {
+	t.Parallel()
+	const total = 30
+	const limit = 4
+	tgs := make([]elbv2types.TargetGroup, total)
+	tags := make(map[string][]elbv2types.Tag, total)
+	for i := 0; i < total; i++ {
+		arn := fmt.Sprintf("arn:aws:elasticloadbalancing:us-east-1:123:targetgroup/io-foo-%d/abc-%d", i, i)
+		tgs[i] = tgFixture(fmt.Sprintf("io-foo-%d", i), arn, "vpc", 80, elbv2types.ProtocolEnumHttp)
+		tags[arn] = []elbv2types.Tag{elbv2Tag("Project", "io-foo")}
+	}
+	release := make(chan struct{})
+	bc := &blockingLBTGClient{
+		pages:   []elasticloadbalancingv2.DescribeTargetGroupsOutput{{TargetGroups: tgs}},
+		tags:    tags,
+		release: release,
+	}
+	d := &lbTargetGroupDiscoverer{new: func(_ string) lbTargetGroupClient { return bc }, maxConcurrency: limit}
+	done := make(chan error, 1)
+	go func() {
+		_, err := d.Discover(context.Background(), DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"})
+		done <- err
+	}()
+	deadline := time.After(2 * time.Second)
+	for {
+		bc.mu.Lock()
+		got := bc.inflight
+		bc.mu.Unlock()
+		if got >= limit {
+			break
+		}
+		select {
+		case <-deadline:
+			t.Fatalf("never reached %d in-flight; saw %d", limit, got)
+		case <-time.After(5 * time.Millisecond):
+		}
+	}
+	time.Sleep(50 * time.Millisecond)
+	bc.mu.Lock()
+	peak := bc.maxInflight
+	bc.mu.Unlock()
+	if peak > limit {
+		t.Errorf("peak in-flight=%d exceeded limit=%d", peak, limit)
+	}
+	close(release)
+	if err := <-done; err != nil {
+		t.Fatalf("Discover returned error: %v", err)
 	}
 }

@@ -165,19 +165,29 @@ func TestRoute53ZoneDiscover_TrimsHostedZonePrefix(t *testing.T) {
 func TestRoute53ZoneDiscover_PaginatesUntilNoToken(t *testing.T) {
 	t.Parallel()
 	truthy := true
-	d := &route53ZoneDiscoverer{new: func(_ string) route53ZoneClient {
-		return &fakeRoute53ZoneClient{pages: []route53.ListHostedZonesOutput{
-			{HostedZones: []route53types.HostedZone{hostedZone("Z00AAAAAA1111111111AAA", "io-foo-a.example.com", false)}, IsTruncated: truthy, NextMarker: aws.String("Z00BBBBBB1111111111BBB")},
-			{HostedZones: []route53types.HostedZone{hostedZone("Z00BBBBBB1111111111BBB", "io-foo-b.example.com", false)}, IsTruncated: truthy, NextMarker: aws.String("Z00CCCCCC1111111111CCC")},
-			{HostedZones: []route53types.HostedZone{hostedZone("Z00CCCCCC1111111111CCC", "io-foo-c.example.com", false)}}, // terminal: IsTruncated=false zero value
-		}}
+	fake := &fakeRoute53ZoneClient{pages: []route53.ListHostedZonesOutput{
+		{HostedZones: []route53types.HostedZone{hostedZone("Z00AAAAAA1111111111AAA", "io-foo-a.example.com", false)}, IsTruncated: truthy, NextMarker: aws.String("Z00BBBBBB1111111111BBB")},
+		{HostedZones: []route53types.HostedZone{hostedZone("Z00BBBBBB1111111111BBB", "io-foo-b.example.com", false)}, IsTruncated: truthy, NextMarker: aws.String("Z00CCCCCC1111111111CCC")},
+		{HostedZones: []route53types.HostedZone{hostedZone("Z00CCCCCC1111111111CCC", "io-foo-c.example.com", false)}}, // terminal: IsTruncated=false zero value
 	}}
+	d := &route53ZoneDiscoverer{new: func(_ string) route53ZoneClient { return fake }}
 	got, err := d.Discover(context.Background(), DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(got) != 3 {
 		t.Fatalf("len=%d, want 3 (paginated)", len(got))
+	}
+	if len(fake.calls) < 3 {
+		t.Fatalf("ListHostedZones calls=%d, want >=3", len(fake.calls))
+	}
+	// Route53 pagination uses Marker (set on the request) threaded from
+	// NextMarker (returned on the response).
+	if aws.ToString(fake.calls[1].Marker) != "Z00BBBBBB1111111111BBB" {
+		t.Errorf("call[1].Marker=%q, want Z00BBBBBB1111111111BBB", aws.ToString(fake.calls[1].Marker))
+	}
+	if aws.ToString(fake.calls[2].Marker) != "Z00CCCCCC1111111111CCC" {
+		t.Errorf("call[2].Marker=%q, want Z00CCCCCC1111111111CCC", aws.ToString(fake.calls[2].Marker))
 	}
 }
 

@@ -13,7 +13,10 @@ import (
 	ebtypes "github.com/aws/aws-sdk-go-v2/service/eventbridge/types"
 )
 
-var errSeedListRules = errors.New("AccessDenied")
+// errCloudWatchEventRuleSeed is the package-level sentinel for
+// ListRules error-propagation assertions (canonical err<Service>Seed
+// naming).
+var errCloudWatchEventRuleSeed = errors.New("AccessDenied")
 
 type fakeEventBridgeClient struct {
 	pages    []eventbridge.ListRulesOutput
@@ -144,7 +147,8 @@ func TestCloudWatchEventRuleDiscover_PaginatesUntilNoToken(t *testing.T) {
 	fake := &fakeEventBridgeClient{
 		pages: []eventbridge.ListRulesOutput{
 			{Rules: []ebtypes.Rule{ebRule("io-foo-a", "arn-a")}, NextToken: aws.String("nt1")},
-			{Rules: []ebtypes.Rule{ebRule("io-foo-b", "arn-b")}}, // terminal
+			{Rules: []ebtypes.Rule{ebRule("io-foo-b", "arn-b")}, NextToken: aws.String("nt2")},
+			{Rules: []ebtypes.Rule{ebRule("io-foo-c", "arn-c")}}, // terminal
 		},
 	}
 	d := &cloudwatchEventRuleDiscoverer{new: func(_ string) cloudwatchEventRuleClient { return fake }}
@@ -152,27 +156,30 @@ func TestCloudWatchEventRuleDiscover_PaginatesUntilNoToken(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 2 {
-		t.Fatalf("len=%d, want 2", len(got))
+	if len(got) != 3 {
+		t.Fatalf("len=%d, want 3", len(got))
 	}
-	if len(fake.listCalls) != 2 {
-		t.Fatalf("ListRules called %d time(s); want 2", len(fake.listCalls))
+	if len(fake.listCalls) < 3 {
+		t.Fatalf("ListRules called %d time(s); want >=3", len(fake.listCalls))
 	}
 	if aws.ToString(fake.listCalls[1].NextToken) != "nt1" {
-		t.Errorf("second ListRules call NextToken=%q, want nt1", aws.ToString(fake.listCalls[1].NextToken))
+		t.Errorf("call[1].NextToken=%q, want nt1", aws.ToString(fake.listCalls[1].NextToken))
+	}
+	if aws.ToString(fake.listCalls[2].NextToken) != "nt2" {
+		t.Errorf("call[2].NextToken=%q, want nt2", aws.ToString(fake.listCalls[2].NextToken))
 	}
 }
 
-func TestCloudWatchEventRuleDiscover_PropagatesListRulesError(t *testing.T) {
+func TestCloudWatchEventRuleDiscover_PropagatesError(t *testing.T) {
 	t.Parallel()
-	fake := &fakeEventBridgeClient{listErr: errSeedListRules}
+	fake := &fakeEventBridgeClient{listErr: errCloudWatchEventRuleSeed}
 	d := &cloudwatchEventRuleDiscoverer{new: func(_ string) cloudwatchEventRuleClient { return fake }}
 	_, err := d.Discover(context.Background(), DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"})
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	if !errors.Is(err, errSeedListRules) {
-		t.Errorf("err=%v, want errors.Is(err, errSeedListRules)", err)
+	if !errors.Is(err, errCloudWatchEventRuleSeed) {
+		t.Errorf("err=%v, want errors.Is(err, errCloudWatchEventRuleSeed)", err)
 	}
 }
 
@@ -446,5 +453,96 @@ func TestCloudWatchEventRuleDiscoverByID_UnsupportedID(t *testing.T) {
 		if !errors.Is(err, ErrNotSupported) {
 			t.Errorf("id=%q: err=%v, want ErrNotSupported", id, err)
 		}
+	}
+}
+
+// TestCloudWatchEventRuleDiscover_MultiRegionTriggersOneSDKCallPerRegion
+// pins the per-region loop. See sqs_test.go for the canonical contract.
+func TestCloudWatchEventRuleDiscover_MultiRegionTriggersOneSDKCallPerRegion(t *testing.T) {
+	t.Parallel()
+	fakes := map[string]*fakeEventBridgeClient{
+		"us-east-1": {pages: []eventbridge.ListRulesOutput{{Rules: []ebtypes.Rule{ebRule("io-foo-east", "arn-east")}}}},
+		"eu-west-1": {pages: []eventbridge.ListRulesOutput{{Rules: []ebtypes.Rule{ebRule("io-foo-west", "arn-west")}}}},
+	}
+	var seenRegions []string
+	d := &cloudwatchEventRuleDiscoverer{new: func(region string) cloudwatchEventRuleClient {
+		seenRegions = append(seenRegions, region)
+		f, ok := fakes[region]
+		if !ok {
+			t.Fatalf("closure called with unexpected region %q", region)
+		}
+		return f
+	}}
+	got, err := d.Discover(context.Background(), DiscoverArgs{
+		Project: "io-foo", Regions: []string{"us-east-1", "eu-west-1"}, AccountID: "123",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(seenRegions) != 2 || seenRegions[0] != "us-east-1" || seenRegions[1] != "eu-west-1" {
+		t.Errorf("region closure invocations = %v, want [us-east-1 eu-west-1]", seenRegions)
+	}
+	if len(fakes["us-east-1"].listCalls) == 0 {
+		t.Error("us-east-1 fake never received ListRules")
+	}
+	if len(fakes["eu-west-1"].listCalls) == 0 {
+		t.Error("eu-west-1 fake never received ListRules")
+	}
+	if len(got) != 2 {
+		t.Fatalf("len=%d, want 2 (one per region)", len(got))
+	}
+}
+
+// TestCloudWatchEventRuleDiscover_ContextCancellationUnblocksSiblings
+// mirrors the dynamodb canonical: ctx-cancel must unblock the per-rule
+// tag fetches in flight.
+func TestCloudWatchEventRuleDiscover_ContextCancellationUnblocksSiblings(t *testing.T) {
+	t.Parallel()
+	const total = 5
+	rules := make([]ebtypes.Rule, total)
+	tags := make(map[string][]ebtypes.Tag, total)
+	for i := 0; i < total; i++ {
+		name := fmt.Sprintf("io-foo-%d", i)
+		arn := fmt.Sprintf("arn-%d", i)
+		rules[i] = ebRule(name, arn)
+		tags[arn] = []ebtypes.Tag{ebTagPair("Project", "io-foo")}
+	}
+	release := make(chan struct{})
+	starts := make(chan string, total)
+	bc := &blockingEventBridgeClient{
+		pages:   []eventbridge.ListRulesOutput{{Rules: rules}},
+		tags:    tags,
+		release: release,
+		starts:  starts,
+	}
+	d := &cloudwatchEventRuleDiscoverer{
+		new:            func(_ string) cloudwatchEventRuleClient { return bc },
+		maxConcurrency: total,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		_, err := d.Discover(ctx, DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"})
+		done <- err
+	}()
+	for i := 0; i < total; i++ {
+		select {
+		case <-starts:
+		case <-time.After(2 * time.Second):
+			t.Fatalf("only %d goroutines entered ListTagsForResource before timeout", i)
+		}
+	}
+	cancel()
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("expected cancelled-context error; got nil")
+		}
+		if !errors.Is(err, context.Canceled) {
+			t.Errorf("err=%v, want context.Canceled (wrapped is OK)", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Discover did not return after parent ctx cancelled")
 	}
 }

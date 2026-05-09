@@ -104,21 +104,29 @@ func TestVPCDiscover_HappyPath(t *testing.T) {
 
 func TestVPCDiscover_PaginatesUntilNoToken(t *testing.T) {
 	t.Parallel()
-	d := &vpcDiscoverer{new: func(_ string) vpcClient {
-		return &fakeVPCClient{
-			pages: []ec2.DescribeVpcsOutput{
-				{Vpcs: []ec2types.Vpc{vpcWithTags("vpc-aaa00000000000001", "10.0.0.0/16", nil)}, NextToken: aws.String("tok1")},
-				{Vpcs: []ec2types.Vpc{vpcWithTags("vpc-bbb00000000000002", "10.1.0.0/16", nil)}, NextToken: aws.String("tok2")},
-				{Vpcs: []ec2types.Vpc{vpcWithTags("vpc-ccc00000000000003", "10.2.0.0/16", nil)}}, // terminal
-			},
-		}
-	}}
+	fake := &fakeVPCClient{
+		pages: []ec2.DescribeVpcsOutput{
+			{Vpcs: []ec2types.Vpc{vpcWithTags("vpc-aaa00000000000001", "10.0.0.0/16", nil)}, NextToken: aws.String("tok1")},
+			{Vpcs: []ec2types.Vpc{vpcWithTags("vpc-bbb00000000000002", "10.1.0.0/16", nil)}, NextToken: aws.String("tok2")},
+			{Vpcs: []ec2types.Vpc{vpcWithTags("vpc-ccc00000000000003", "10.2.0.0/16", nil)}}, // terminal
+		},
+	}
+	d := &vpcDiscoverer{new: func(_ string) vpcClient { return fake }}
 	got, err := d.Discover(context.Background(), DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(got) != 3 {
 		t.Fatalf("len=%d, want 3 (paginated)", len(got))
+	}
+	if len(fake.calls) < 3 {
+		t.Fatalf("DescribeVpcs calls=%d, want >=3", len(fake.calls))
+	}
+	if aws.ToString(fake.calls[1].NextToken) != "tok1" {
+		t.Errorf("call[1].NextToken=%q, want tok1 (paginators must thread NextToken)", aws.ToString(fake.calls[1].NextToken))
+	}
+	if aws.ToString(fake.calls[2].NextToken) != "tok2" {
+		t.Errorf("call[2].NextToken=%q, want tok2", aws.ToString(fake.calls[2].NextToken))
 	}
 }
 
@@ -235,10 +243,10 @@ func TestVPCDiscoverByID_NotFound(t *testing.T) {
 
 func TestVPCDiscoverByID_NotFound_FromAPIErrorCode(t *testing.T) {
 	t.Parallel()
-	// Real AWS responses for an unknown VPC ID return a smithy error
-	// containing "InvalidVpcID.NotFound" — match the substring path.
+	// Real AWS responses for an unknown VPC ID return a smithy.APIError
+	// with code "InvalidVpcID.NotFound" — match via errors.As.
 	d := &vpcDiscoverer{new: func(_ string) vpcClient {
-		return &fakeVPCClient{err: errors.New("api error InvalidVpcID.NotFound: The vpc ID 'vpc-deadbeef00000000' does not exist")}
+		return &fakeVPCClient{err: ec2APIError("InvalidVpcID.NotFound", "The vpc ID 'vpc-deadbeef00000000' does not exist")}
 	}}
 	_, err := d.DiscoverByID(context.Background(), "vpc-deadbeef00000000", "us-east-1", "123")
 	if !errors.Is(err, ErrNotFound) {

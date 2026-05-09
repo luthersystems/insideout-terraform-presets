@@ -13,11 +13,12 @@ import (
 	ekstypes "github.com/aws/aws-sdk-go-v2/service/eks/types"
 )
 
-// errSeedListClusters is the package-level sentinel for ListClusters
-// error-propagation assertions. errors.Is is the right tool — asserting
-// only that err != nil masks regressions where the discover layer
-// silently wraps or replaces the underlying SDK error.
-var errSeedListClusters = errors.New("AccessDenied")
+// errEKSPodIdentitySeed is the package-level sentinel for ListClusters
+// error-propagation assertions (canonical err<Service>Seed naming).
+// errors.Is is the right tool — asserting only that err != nil masks
+// regressions where the discover layer silently wraps or replaces the
+// underlying SDK error.
+var errEKSPodIdentitySeed = errors.New("AccessDenied")
 
 type fakeEKSPodIdentityClient struct {
 	clustersPages          []eks.ListClustersOutput
@@ -211,16 +212,16 @@ func TestEKSPodIdentityDiscover_PaginatesClusters(t *testing.T) {
 	}
 }
 
-func TestEKSPodIdentityDiscover_PropagatesListClustersError(t *testing.T) {
+func TestEKSPodIdentityDiscover_PropagatesError(t *testing.T) {
 	t.Parallel()
-	fake := &fakeEKSPodIdentityClient{listClustersErr: errSeedListClusters}
+	fake := &fakeEKSPodIdentityClient{listClustersErr: errEKSPodIdentitySeed}
 	d := &eksPodIdentityDiscoverer{new: func(_ string) eksPodIdentityClient { return fake }}
 	_, err := d.Discover(context.Background(), DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"})
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	if !errors.Is(err, errSeedListClusters) {
-		t.Errorf("err=%v, want errors.Is(err, errSeedListClusters)", err)
+	if !errors.Is(err, errEKSPodIdentitySeed) {
+		t.Errorf("err=%v, want errors.Is(err, errEKSPodIdentitySeed)", err)
 	}
 }
 
@@ -572,5 +573,54 @@ func TestEKSPodIdentityDiscoverByID_UnsupportedID(t *testing.T) {
 		if !errors.Is(err, ErrNotSupported) {
 			t.Errorf("id=%q: err=%v, want ErrNotSupported", id, err)
 		}
+	}
+}
+
+// TestEKSPodIdentityDiscover_MultiRegionTriggersOneSDKCallPerRegion (#291)
+// pins the per-region loop. See sqs_test.go for the canonical contract.
+func TestEKSPodIdentityDiscover_MultiRegionTriggersOneSDKCallPerRegion(t *testing.T) {
+	t.Parallel()
+	fakes := map[string]*fakeEKSPodIdentityClient{
+		"us-east-1": {
+			clustersPages: []eks.ListClustersOutput{{Clusters: []string{"io-foo-east"}}},
+			assocsByCluster: map[string][]ekstypes.PodIdentityAssociationSummary{
+				"io-foo-east": {assoc("io-foo-east", "a-east", "arn-east", "default", "sa")},
+			},
+			tagsByARN: map[string]map[string]string{"arn-east": {}},
+		},
+		"eu-west-1": {
+			clustersPages: []eks.ListClustersOutput{{Clusters: []string{"io-foo-west"}}},
+			assocsByCluster: map[string][]ekstypes.PodIdentityAssociationSummary{
+				"io-foo-west": {assoc("io-foo-west", "a-west", "arn-west", "default", "sa")},
+			},
+			tagsByARN: map[string]map[string]string{"arn-west": {}},
+		},
+	}
+	var seenRegions []string
+	d := &eksPodIdentityDiscoverer{new: func(region string) eksPodIdentityClient {
+		seenRegions = append(seenRegions, region)
+		f, ok := fakes[region]
+		if !ok {
+			t.Fatalf("closure called with unexpected region %q", region)
+		}
+		return f
+	}}
+	got, err := d.Discover(context.Background(), DiscoverArgs{
+		Project: "io-foo", Regions: []string{"us-east-1", "eu-west-1"}, AccountID: "123",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(seenRegions) != 2 || seenRegions[0] != "us-east-1" || seenRegions[1] != "eu-west-1" {
+		t.Errorf("region closure invocations = %v, want [us-east-1 eu-west-1]", seenRegions)
+	}
+	if len(fakes["us-east-1"].listClustersCalls) == 0 {
+		t.Error("us-east-1 fake never received ListClusters")
+	}
+	if len(fakes["eu-west-1"].listClustersCalls) == 0 {
+		t.Error("eu-west-1 fake never received ListClusters")
+	}
+	if len(got) != 2 {
+		t.Fatalf("len=%d, want 2 (one per region)", len(got))
 	}
 }

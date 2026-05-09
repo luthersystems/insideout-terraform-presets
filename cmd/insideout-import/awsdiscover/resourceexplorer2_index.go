@@ -168,7 +168,11 @@ func (d *resourceExplorer2IndexDiscoverer) Discover(ctx context.Context, args Di
 			if !MatchesAll(ix.tags, args.TagSelectors) {
 				continue
 			}
-			name := re2NameFromArn(ix.arn)
+			// At most one index per region per account. The ARN's
+			// trailing UUID is unstable across recreate cycles and
+			// provides no value as a NameHint, so derive a stable
+			// region-scoped hint instead.
+			name := "index-" + region
 			native := map[string]string{
 				"arn":    ix.arn,
 				"type":   ix.indexType,
@@ -214,7 +218,8 @@ func (d *resourceExplorer2IndexDiscoverer) DiscoverByID(ctx context.Context, id,
 	if arn == "" {
 		return imported.ImportedResource{}, fmt.Errorf("aws_resourceexplorer2_index %q: %w", id, ErrNotFound)
 	}
-	name := re2NameFromArn(arn)
+	// Stable region-scoped NameHint; see Discover for rationale.
+	name := "index-" + region
 	native := map[string]string{
 		"arn":    arn,
 		"type":   string(out.Type),

@@ -135,8 +135,8 @@ func (d *vpcEndpointDiscoverer) DiscoverByID(ctx context.Context, id, region, ac
 	out, err := client.DescribeVpcEndpoints(ctx, &ec2.DescribeVpcEndpointsInput{VpcEndpointIds: []string{vpceID}})
 	if err != nil {
 		// EC2 surfaces "InvalidVpcEndpointId.NotFound" / "InvalidVpcEndpoint.NotFound"
-		// as generic API errors. Match by code substring.
-		if strings.Contains(err.Error(), "InvalidVpcEndpointId.NotFound") || strings.Contains(err.Error(), "InvalidVpcEndpoint.NotFound") {
+		// as smithy.APIError values; inspect via errors.As.
+		if isEC2APIErrorCode(err, "InvalidVpcEndpointId.NotFound", "InvalidVpcEndpoint.NotFound") {
 			return imported.ImportedResource{}, fmt.Errorf("aws_vpc_endpoint %q: %w", vpceID, ErrNotFound)
 		}
 		return imported.ImportedResource{}, fmt.Errorf("DescribeVpcEndpoints: %w", err)

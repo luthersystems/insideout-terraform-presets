@@ -114,21 +114,29 @@ func TestDBInstanceDiscover_HappyPath(t *testing.T) {
 
 func TestDBInstanceDiscover_PaginatesUntilNoMarker(t *testing.T) {
 	t.Parallel()
-	d := &dbInstanceDiscoverer{new: func(_ string) dbInstanceClient {
-		return &fakeDBInstanceClient{
-			pages: []rds.DescribeDBInstancesOutput{
-				{DBInstances: []rdstypes.DBInstance{dbInstanceWithStatus("io-foo-rds0", "arn1", "postgres", "available", "", "")}, Marker: aws.String("m1")},
-				{DBInstances: []rdstypes.DBInstance{dbInstanceWithStatus("io-foo-rds1", "arn2", "postgres", "available", "", "")}, Marker: aws.String("m2")},
-				{DBInstances: []rdstypes.DBInstance{dbInstanceWithStatus("io-foo-rds2", "arn3", "postgres", "available", "", "")}}, // terminal
-			},
-		}
-	}}
+	fake := &fakeDBInstanceClient{
+		pages: []rds.DescribeDBInstancesOutput{
+			{DBInstances: []rdstypes.DBInstance{dbInstanceWithStatus("io-foo-rds0", "arn1", "postgres", "available", "", "")}, Marker: aws.String("m1")},
+			{DBInstances: []rdstypes.DBInstance{dbInstanceWithStatus("io-foo-rds1", "arn2", "postgres", "available", "", "")}, Marker: aws.String("m2")},
+			{DBInstances: []rdstypes.DBInstance{dbInstanceWithStatus("io-foo-rds2", "arn3", "postgres", "available", "", "")}}, // terminal
+		},
+	}
+	d := &dbInstanceDiscoverer{new: func(_ string) dbInstanceClient { return fake }}
 	got, err := d.Discover(context.Background(), DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(got) != 3 {
 		t.Fatalf("len=%d, want 3 (paginated)", len(got))
+	}
+	if len(fake.calls) < 3 {
+		t.Fatalf("DescribeDBInstances calls=%d, want >=3", len(fake.calls))
+	}
+	if aws.ToString(fake.calls[1].Marker) != "m1" {
+		t.Errorf("call[1].Marker=%q, want m1", aws.ToString(fake.calls[1].Marker))
+	}
+	if aws.ToString(fake.calls[2].Marker) != "m2" {
+		t.Errorf("call[2].Marker=%q, want m2", aws.ToString(fake.calls[2].Marker))
 	}
 }
 
@@ -235,8 +243,8 @@ func TestDBInstanceDiscover_MultiRegionTriggersOneSDKCallPerRegion(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(seenRegions) != 2 {
-		t.Errorf("region closure invocations=%v, want 2", seenRegions)
+	if len(seenRegions) != 2 || seenRegions[0] != "us-east-1" || seenRegions[1] != "eu-west-1" {
+		t.Errorf("region closure invocations=%v, want [us-east-1 eu-west-1]", seenRegions)
 	}
 	if len(fakes["us-east-1"].calls) == 0 || len(fakes["eu-west-1"].calls) == 0 {
 		t.Error("expected one DescribeDBInstances call per region")

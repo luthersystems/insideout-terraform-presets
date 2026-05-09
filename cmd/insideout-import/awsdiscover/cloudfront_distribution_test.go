@@ -165,30 +165,40 @@ func TestCloudFrontDistributionDiscover_PaginatesUntilNoToken(t *testing.T) {
 	t.Parallel()
 	truthy := true
 	falsy := false
-	d := &cloudfrontDistributionDiscoverer{new: func(_ string) cloudfrontDistributionClient {
-		return &fakeCloudFrontDistributionClient{pages: []cloudfront.ListDistributionsOutput{
-			{DistributionList: &cftypes.DistributionList{
-				Items:       []cftypes.DistributionSummary{distributionSummary("E1AAAA0000000001", "io-foo a", nil)},
-				IsTruncated: &truthy,
-				NextMarker:  aws.String("E1BBBB0000000002"),
-			}},
-			{DistributionList: &cftypes.DistributionList{
-				Items:       []cftypes.DistributionSummary{distributionSummary("E1BBBB0000000002", "io-foo b", nil)},
-				IsTruncated: &truthy,
-				NextMarker:  aws.String("E1CCCC0000000003"),
-			}},
-			{DistributionList: &cftypes.DistributionList{
-				Items:       []cftypes.DistributionSummary{distributionSummary("E1CCCC0000000003", "io-foo c", nil)},
-				IsTruncated: &falsy,
-			}},
-		}}
+	fake := &fakeCloudFrontDistributionClient{pages: []cloudfront.ListDistributionsOutput{
+		{DistributionList: &cftypes.DistributionList{
+			Items:       []cftypes.DistributionSummary{distributionSummary("E1AAAA0000000001", "io-foo a", nil)},
+			IsTruncated: &truthy,
+			NextMarker:  aws.String("E1BBBB0000000002"),
+		}},
+		{DistributionList: &cftypes.DistributionList{
+			Items:       []cftypes.DistributionSummary{distributionSummary("E1BBBB0000000002", "io-foo b", nil)},
+			IsTruncated: &truthy,
+			NextMarker:  aws.String("E1CCCC0000000003"),
+		}},
+		{DistributionList: &cftypes.DistributionList{
+			Items:       []cftypes.DistributionSummary{distributionSummary("E1CCCC0000000003", "io-foo c", nil)},
+			IsTruncated: &falsy,
+		}},
 	}}
+	d := &cloudfrontDistributionDiscoverer{new: func(_ string) cloudfrontDistributionClient { return fake }}
 	got, err := d.Discover(context.Background(), DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(got) != 3 {
 		t.Fatalf("len=%d, want 3 (paginated)", len(got))
+	}
+	if len(fake.calls) < 3 {
+		t.Fatalf("ListDistributions calls=%d, want >=3", len(fake.calls))
+	}
+	// CloudFront pagination uses Marker (set on the request) threaded
+	// from NextMarker (returned on the response).
+	if aws.ToString(fake.calls[1].Marker) != "E1BBBB0000000002" {
+		t.Errorf("call[1].Marker=%q, want E1BBBB0000000002", aws.ToString(fake.calls[1].Marker))
+	}
+	if aws.ToString(fake.calls[2].Marker) != "E1CCCC0000000003" {
+		t.Errorf("call[2].Marker=%q, want E1CCCC0000000003", aws.ToString(fake.calls[2].Marker))
 	}
 }
 

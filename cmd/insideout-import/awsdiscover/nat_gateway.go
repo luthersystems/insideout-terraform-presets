@@ -144,9 +144,9 @@ func (d *natGatewayDiscoverer) DiscoverByID(ctx context.Context, id, region, acc
 	client := d.new(region)
 	out, err := client.DescribeNatGateways(ctx, &ec2.DescribeNatGatewaysInput{NatGatewayIds: []string{natID}})
 	if err != nil {
-		// EC2 surfaces "NatGatewayNotFound" as a generic API error, not a
-		// typed exception. Match by code substring.
-		if strings.Contains(err.Error(), "NatGatewayNotFound") {
+		// EC2 surfaces "NatGatewayNotFound" as a smithy.APIError;
+		// inspect via errors.As.
+		if isEC2APIErrorCode(err, "NatGatewayNotFound") {
 			return imported.ImportedResource{}, fmt.Errorf("aws_nat_gateway %q: %w", natID, ErrNotFound)
 		}
 		return imported.ImportedResource{}, fmt.Errorf("DescribeNatGateways: %w", err)

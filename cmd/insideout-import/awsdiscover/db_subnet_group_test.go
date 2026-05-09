@@ -110,16 +110,15 @@ func TestDBSubnetGroupDiscover_HappyPath(t *testing.T) {
 
 func TestDBSubnetGroupDiscover_PaginatesUntilNoMarker(t *testing.T) {
 	t.Parallel()
-	d := &dbSubnetGroupDiscoverer{
-		new: func(_ string) dbSubnetGroupClient {
-			return &fakeDBSubnetGroupClient{
-				pages: []rds.DescribeDBSubnetGroupsOutput{
-					{DBSubnetGroups: []rdstypes.DBSubnetGroup{dbSubnetGroupFixture("io-foo-a", "arn-a", "vpc-1")}, Marker: aws.String("m1")},
-					{DBSubnetGroups: []rdstypes.DBSubnetGroup{dbSubnetGroupFixture("io-foo-b", "arn-b", "vpc-1")}, Marker: aws.String("m2")},
-					{DBSubnetGroups: []rdstypes.DBSubnetGroup{dbSubnetGroupFixture("io-foo-c", "arn-c", "vpc-1")}}, // terminal
-				},
-			}
+	fake := &fakeDBSubnetGroupClient{
+		pages: []rds.DescribeDBSubnetGroupsOutput{
+			{DBSubnetGroups: []rdstypes.DBSubnetGroup{dbSubnetGroupFixture("io-foo-a", "arn-a", "vpc-1")}, Marker: aws.String("m1")},
+			{DBSubnetGroups: []rdstypes.DBSubnetGroup{dbSubnetGroupFixture("io-foo-b", "arn-b", "vpc-1")}, Marker: aws.String("m2")},
+			{DBSubnetGroups: []rdstypes.DBSubnetGroup{dbSubnetGroupFixture("io-foo-c", "arn-c", "vpc-1")}}, // terminal
 		},
+	}
+	d := &dbSubnetGroupDiscoverer{
+		new:            func(_ string) dbSubnetGroupClient { return fake },
 		maxConcurrency: 4,
 	}
 	got, err := d.Discover(context.Background(), DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"})
@@ -128,6 +127,15 @@ func TestDBSubnetGroupDiscover_PaginatesUntilNoMarker(t *testing.T) {
 	}
 	if len(got) != 3 {
 		t.Fatalf("len=%d, want 3 (paginated)", len(got))
+	}
+	if len(fake.calls) < 3 {
+		t.Fatalf("DescribeDBSubnetGroups calls=%d, want >=3", len(fake.calls))
+	}
+	if aws.ToString(fake.calls[1].Marker) != "m1" {
+		t.Errorf("call[1].Marker=%q, want m1", aws.ToString(fake.calls[1].Marker))
+	}
+	if aws.ToString(fake.calls[2].Marker) != "m2" {
+		t.Errorf("call[2].Marker=%q, want m2", aws.ToString(fake.calls[2].Marker))
 	}
 }
 
@@ -242,8 +250,8 @@ func TestDBSubnetGroupDiscover_MultiRegionTriggersOneSDKCallPerRegion(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(seenRegions) != 2 {
-		t.Errorf("region closure invocations=%v, want 2", seenRegions)
+	if len(seenRegions) != 2 || seenRegions[0] != "us-east-1" || seenRegions[1] != "eu-west-1" {
+		t.Errorf("region closure invocations=%v, want [us-east-1 eu-west-1]", seenRegions)
 	}
 	if len(fakes["us-east-1"].calls) == 0 || len(fakes["eu-west-1"].calls) == 0 {
 		t.Error("expected one DescribeDBSubnetGroups call per region")

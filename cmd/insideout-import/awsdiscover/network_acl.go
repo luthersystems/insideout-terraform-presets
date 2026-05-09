@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -98,7 +99,7 @@ func (d *networkACLDiscoverer) Discover(ctx context.Context, args DiscoverArgs) 
 				"vpc_id":         aws.ToString(nacl.VpcId),
 				// is_default is coerced to a string because NativeIDs is
 				// map[string]string. The picker reads "true"/"false".
-				"is_default": fmt.Sprintf("%v", aws.ToBool(nacl.IsDefault)),
+				"is_default": strconv.FormatBool(aws.ToBool(nacl.IsDefault)),
 			}
 			out = append(out, makeImportedResource(
 				book,
@@ -130,9 +131,9 @@ func (d *networkACLDiscoverer) DiscoverByID(ctx context.Context, id, region, acc
 	client := d.new(region)
 	out, err := client.DescribeNetworkAcls(ctx, &ec2.DescribeNetworkAclsInput{NetworkAclIds: []string{naclID}})
 	if err != nil {
-		// EC2 surfaces "InvalidNetworkAclID.NotFound" as a generic API
-		// error, not a typed exception. Match by code substring.
-		if strings.Contains(err.Error(), "InvalidNetworkAclID.NotFound") {
+		// EC2 surfaces "InvalidNetworkAclID.NotFound" as a
+		// smithy.APIError; inspect via errors.As.
+		if isEC2APIErrorCode(err, "InvalidNetworkAclID.NotFound") {
 			return imported.ImportedResource{}, fmt.Errorf("aws_network_acl %q: %w", naclID, ErrNotFound)
 		}
 		return imported.ImportedResource{}, fmt.Errorf("DescribeNetworkAcls: %w", err)
@@ -145,7 +146,7 @@ func (d *networkACLDiscoverer) DiscoverByID(ctx context.Context, id, region, acc
 	native := map[string]string{
 		"network_acl_id": naclID,
 		"vpc_id":         aws.ToString(nacl.VpcId),
-		"is_default":     fmt.Sprintf("%v", aws.ToBool(nacl.IsDefault)),
+		"is_default":     strconv.FormatBool(aws.ToBool(nacl.IsDefault)),
 	}
 	return makeImportedResource(
 		addressBook{},

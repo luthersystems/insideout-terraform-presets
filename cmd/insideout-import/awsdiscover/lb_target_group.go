@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -159,7 +160,7 @@ func (d *lbTargetGroupDiscoverer) Discover(ctx context.Context, args DiscoverArg
 				"target_group_name": name,
 				"vpc_id":            aws.ToString(e.tg.VpcId),
 				"protocol":          string(e.tg.Protocol),
-				"port":              fmt.Sprintf("%d", aws.ToInt32(e.tg.Port)),
+				"port":              strconv.Itoa(int(aws.ToInt32(e.tg.Port))),
 			}
 			imps = append(imps, makeImportedResource(
 				book,

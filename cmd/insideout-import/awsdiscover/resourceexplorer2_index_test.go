@@ -3,15 +3,20 @@ package awsdiscover
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/resourceexplorer2"
 	re2types "github.com/aws/aws-sdk-go-v2/service/resourceexplorer2/types"
 )
 
-var errSeedListIndexes = errors.New("AccessDenied")
+// errResourceExplorer2IndexSeed is the package-level sentinel for
+// ListIndexes error-propagation assertions (canonical err<Service>Seed
+// naming).
+var errResourceExplorer2IndexSeed = errors.New("AccessDenied")
 
 type fakeRE2IndexClient struct {
 	pages    []resourceexplorer2.ListIndexesOutput
@@ -101,8 +106,9 @@ func TestResourceExplorer2IndexDiscover_AdminPathNoFilter(t *testing.T) {
 	if got[0].Identity.ImportID != arn {
 		t.Errorf("ImportID=%q, want %q", got[0].Identity.ImportID, arn)
 	}
-	if got[0].Identity.NameHint == "" {
-		t.Error("NameHint empty (last ARN segment)")
+	// NameHint is region-derived ("index-<region>"); see #335 P1-IMPL-4.
+	if got[0].Identity.NameHint != "index-us-east-1" {
+		t.Errorf("NameHint=%q, want index-us-east-1", got[0].Identity.NameHint)
 	}
 }
 
@@ -110,10 +116,12 @@ func TestResourceExplorer2IndexDiscover_PaginatesUntilNoToken(t *testing.T) {
 	t.Parallel()
 	a1 := "arn:aws:resource-explorer-2:us-east-1:123:index/idx-1"
 	a2 := "arn:aws:resource-explorer-2:us-east-1:123:index/idx-2"
+	a3 := "arn:aws:resource-explorer-2:us-east-1:123:index/idx-3"
 	fake := &fakeRE2IndexClient{
 		pages: []resourceexplorer2.ListIndexesOutput{
 			{Indexes: []re2types.Index{re2Index(a1, "us-east-1", re2types.IndexTypeLocal)}, NextToken: aws.String("nt1")},
-			{Indexes: []re2types.Index{re2Index(a2, "us-east-1", re2types.IndexTypeLocal)}},
+			{Indexes: []re2types.Index{re2Index(a2, "us-east-1", re2types.IndexTypeLocal)}, NextToken: aws.String("nt2")},
+			{Indexes: []re2types.Index{re2Index(a3, "us-east-1", re2types.IndexTypeLocal)}},
 		},
 	}
 	d := &resourceExplorer2IndexDiscoverer{new: func(_ string) resourceExplorer2IndexClient { return fake }}
@@ -121,27 +129,30 @@ func TestResourceExplorer2IndexDiscover_PaginatesUntilNoToken(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 2 {
-		t.Fatalf("len=%d, want 2", len(got))
+	if len(got) != 3 {
+		t.Fatalf("len=%d, want 3", len(got))
 	}
-	if len(fake.listCalls) != 2 {
-		t.Errorf("ListIndexes called %d, want 2", len(fake.listCalls))
+	if len(fake.listCalls) < 3 {
+		t.Errorf("ListIndexes called %d, want >=3", len(fake.listCalls))
 	}
 	if aws.ToString(fake.listCalls[1].NextToken) != "nt1" {
-		t.Errorf("second call NextToken=%q, want nt1", aws.ToString(fake.listCalls[1].NextToken))
+		t.Errorf("call[1].NextToken=%q, want nt1", aws.ToString(fake.listCalls[1].NextToken))
+	}
+	if aws.ToString(fake.listCalls[2].NextToken) != "nt2" {
+		t.Errorf("call[2].NextToken=%q, want nt2", aws.ToString(fake.listCalls[2].NextToken))
 	}
 }
 
-func TestResourceExplorer2IndexDiscover_PropagatesListIndexesError(t *testing.T) {
+func TestResourceExplorer2IndexDiscover_PropagatesError(t *testing.T) {
 	t.Parallel()
-	fake := &fakeRE2IndexClient{listErr: errSeedListIndexes}
+	fake := &fakeRE2IndexClient{listErr: errResourceExplorer2IndexSeed}
 	d := &resourceExplorer2IndexDiscoverer{new: func(_ string) resourceExplorer2IndexClient { return fake }}
 	_, err := d.Discover(context.Background(), DiscoverArgs{Regions: []string{"us-east-1"}, AccountID: "123"})
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	if !errors.Is(err, errSeedListIndexes) {
-		t.Errorf("err=%v, want errors.Is(err, errSeedListIndexes)", err)
+	if !errors.Is(err, errResourceExplorer2IndexSeed) {
+		t.Errorf("err=%v, want errors.Is(err, errResourceExplorer2IndexSeed)", err)
 	}
 }
 
@@ -320,5 +331,149 @@ func TestResourceExplorer2IndexDiscoverByID_UnsupportedID(t *testing.T) {
 		if !errors.Is(err, ErrNotSupported) {
 			t.Errorf("id=%q: err=%v, want ErrNotSupported", id, err)
 		}
+	}
+}
+
+// TestResourceExplorer2IndexDiscover_MultiRegionTriggersOneSDKCallPerRegion
+// pins the per-region loop. See sqs_test.go for the canonical contract.
+func TestResourceExplorer2IndexDiscover_MultiRegionTriggersOneSDKCallPerRegion(t *testing.T) {
+	t.Parallel()
+	a1 := "arn:aws:resource-explorer-2:us-east-1:123:index/east"
+	a2 := "arn:aws:resource-explorer-2:eu-west-1:123:index/west"
+	fakes := map[string]*fakeRE2IndexClient{
+		"us-east-1": {pages: []resourceexplorer2.ListIndexesOutput{{Indexes: []re2types.Index{re2Index(a1, "us-east-1", re2types.IndexTypeLocal)}}}},
+		"eu-west-1": {pages: []resourceexplorer2.ListIndexesOutput{{Indexes: []re2types.Index{re2Index(a2, "eu-west-1", re2types.IndexTypeAggregator)}}}},
+	}
+	var seenRegions []string
+	d := &resourceExplorer2IndexDiscoverer{new: func(region string) resourceExplorer2IndexClient {
+		seenRegions = append(seenRegions, region)
+		f, ok := fakes[region]
+		if !ok {
+			t.Fatalf("closure called with unexpected region %q", region)
+		}
+		return f
+	}, maxConcurrency: 4}
+	got, err := d.Discover(context.Background(), DiscoverArgs{
+		Regions: []string{"us-east-1", "eu-west-1"}, AccountID: "123",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(seenRegions) != 2 || seenRegions[0] != "us-east-1" || seenRegions[1] != "eu-west-1" {
+		t.Errorf("region closure invocations = %v, want [us-east-1 eu-west-1]", seenRegions)
+	}
+	if len(fakes["us-east-1"].listCalls) == 0 {
+		t.Error("us-east-1 fake never received ListIndexes")
+	}
+	if len(fakes["eu-west-1"].listCalls) == 0 {
+		t.Error("eu-west-1 fake never received ListIndexes")
+	}
+	if len(got) != 2 {
+		t.Fatalf("len=%d, want 2 (one per region)", len(got))
+	}
+}
+
+// blockingRE2IndexClient mirrors blockingDynamoClient — used for the
+// bounded-concurrency test below.
+type blockingRE2IndexClient struct {
+	pages []resourceexplorer2.ListIndexesOutput
+	tags  map[string]map[string]string
+
+	release chan struct{}
+
+	mu          sync.Mutex
+	inflight    int
+	maxInflight int
+
+	listIdx int
+}
+
+func (c *blockingRE2IndexClient) ListIndexes(_ context.Context, _ *resourceexplorer2.ListIndexesInput, _ ...func(*resourceexplorer2.Options)) (*resourceexplorer2.ListIndexesOutput, error) {
+	if c.listIdx >= len(c.pages) {
+		return &resourceexplorer2.ListIndexesOutput{}, nil
+	}
+	out := c.pages[c.listIdx]
+	c.listIdx++
+	return &out, nil
+}
+
+func (c *blockingRE2IndexClient) GetIndex(_ context.Context, _ *resourceexplorer2.GetIndexInput, _ ...func(*resourceexplorer2.Options)) (*resourceexplorer2.GetIndexOutput, error) {
+	return nil, errors.New("blockingRE2IndexClient.GetIndex: unused")
+}
+
+func (c *blockingRE2IndexClient) ListTagsForResource(ctx context.Context, in *resourceexplorer2.ListTagsForResourceInput, _ ...func(*resourceexplorer2.Options)) (*resourceexplorer2.ListTagsForResourceOutput, error) {
+	arn := aws.ToString(in.ResourceArn)
+	c.mu.Lock()
+	c.inflight++
+	if c.inflight > c.maxInflight {
+		c.maxInflight = c.inflight
+	}
+	c.mu.Unlock()
+	defer func() {
+		c.mu.Lock()
+		c.inflight--
+		c.mu.Unlock()
+	}()
+	select {
+	case <-c.release:
+		return &resourceexplorer2.ListTagsForResourceOutput{Tags: c.tags[arn]}, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+// TestResourceExplorer2IndexDiscover_BoundedConcurrency mirrors the
+// dynamodb canonical: per-item tag fetches must respect the concurrency
+// limit configured on the discoverer.
+func TestResourceExplorer2IndexDiscover_BoundedConcurrency(t *testing.T) {
+	t.Parallel()
+	const total = 30
+	const limit = 4
+	idxs := make([]re2types.Index, total)
+	tags := make(map[string]map[string]string, total)
+	for i := 0; i < total; i++ {
+		arn := fmt.Sprintf("arn:aws:resource-explorer-2:us-east-1:123:index/i-%d", i)
+		idxs[i] = re2Index(arn, "us-east-1", re2types.IndexTypeLocal)
+		tags[arn] = map[string]string{}
+	}
+	release := make(chan struct{})
+	bc := &blockingRE2IndexClient{
+		pages:   []resourceexplorer2.ListIndexesOutput{{Indexes: idxs}},
+		tags:    tags,
+		release: release,
+	}
+	d := &resourceExplorer2IndexDiscoverer{
+		new:            func(_ string) resourceExplorer2IndexClient { return bc },
+		maxConcurrency: limit,
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, err := d.Discover(context.Background(), DiscoverArgs{Regions: []string{"us-east-1"}, AccountID: "123"})
+		done <- err
+	}()
+	deadline := time.After(2 * time.Second)
+	for {
+		bc.mu.Lock()
+		got := bc.inflight
+		bc.mu.Unlock()
+		if got >= limit {
+			break
+		}
+		select {
+		case <-deadline:
+			t.Fatalf("never reached %d in-flight; saw %d", limit, got)
+		case <-time.After(5 * time.Millisecond):
+		}
+	}
+	time.Sleep(50 * time.Millisecond)
+	bc.mu.Lock()
+	peak := bc.maxInflight
+	bc.mu.Unlock()
+	if peak > limit {
+		t.Errorf("peak in-flight=%d exceeded limit=%d", peak, limit)
+	}
+	close(release)
+	if err := <-done; err != nil {
+		t.Fatalf("Discover returned error: %v", err)
 	}
 }

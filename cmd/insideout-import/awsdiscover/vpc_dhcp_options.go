@@ -129,9 +129,9 @@ func (d *vpcDHCPOptionsDiscoverer) DiscoverByID(ctx context.Context, id, region,
 	client := d.new(region)
 	out, err := client.DescribeDhcpOptions(ctx, &ec2.DescribeDhcpOptionsInput{DhcpOptionsIds: []string{doptID}})
 	if err != nil {
-		// EC2 surfaces "InvalidDhcpOptionID.NotFound" as a generic API
-		// error, not a typed exception. Match by code substring.
-		if strings.Contains(err.Error(), "InvalidDhcpOptionID.NotFound") {
+		// EC2 surfaces "InvalidDhcpOptionID.NotFound" as a
+		// smithy.APIError; inspect via errors.As.
+		if isEC2APIErrorCode(err, "InvalidDhcpOptionID.NotFound") {
 			return imported.ImportedResource{}, fmt.Errorf("aws_vpc_dhcp_options %q: %w", doptID, ErrNotFound)
 		}
 		return imported.ImportedResource{}, fmt.Errorf("DescribeDhcpOptions: %w", err)

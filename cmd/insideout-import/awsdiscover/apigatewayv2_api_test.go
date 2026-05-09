@@ -100,8 +100,14 @@ func TestAPIGWv2APIDiscover_PaginatesUntilNoToken(t *testing.T) {
 				},
 				NextToken: aws.String("tok1"),
 			},
+			{
+				Items: []apigwv2types.Api{
+					apiWithTags("a2", "io-foo-b", "https://a2.execute-api.us-east-1.amazonaws.com", "HTTP", map[string]string{"Project": "io-foo"}),
+				},
+				NextToken: aws.String("tok2"),
+			},
 			{Items: []apigwv2types.Api{
-				apiWithTags("a2", "io-foo-b", "https://a2.execute-api.us-east-1.amazonaws.com", "HTTP", map[string]string{"Project": "io-foo"}),
+				apiWithTags("a3", "io-foo-c", "https://a3.execute-api.us-east-1.amazonaws.com", "HTTP", map[string]string{"Project": "io-foo"}),
 			}}, // terminal
 		},
 	}
@@ -110,8 +116,17 @@ func TestAPIGWv2APIDiscover_PaginatesUntilNoToken(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 2 {
-		t.Fatalf("len=%d, want 2 (paginated)", len(got))
+	if len(got) != 3 {
+		t.Fatalf("len=%d, want 3 (paginated)", len(got))
+	}
+	if len(fake.listCalls) < 3 {
+		t.Fatalf("GetApis calls=%d, want >=3", len(fake.listCalls))
+	}
+	if aws.ToString(fake.listCalls[1].NextToken) != "tok1" {
+		t.Errorf("call[1].NextToken=%q, want tok1", aws.ToString(fake.listCalls[1].NextToken))
+	}
+	if aws.ToString(fake.listCalls[2].NextToken) != "tok2" {
+		t.Errorf("call[2].NextToken=%q, want tok2", aws.ToString(fake.listCalls[2].NextToken))
 	}
 }
 
@@ -343,5 +358,25 @@ func TestAPIGWv2APIDiscoverByID_UnsupportedID(t *testing.T) {
 		if !errors.Is(err, ErrNotSupported) {
 			t.Errorf("id=%q: err=%v, want ErrNotSupported", id, err)
 		}
+	}
+}
+
+// TestAPIGWv2APIDiscover_EmptyProjectReturnsAll pins that an empty
+// Project disables the prefix filter — every API surfaces.
+func TestAPIGWv2APIDiscover_EmptyProjectReturnsAll(t *testing.T) {
+	t.Parallel()
+	fake := &fakeAPIGWv2APIClient{
+		pages: []apigatewayv2.GetApisOutput{{Items: []apigwv2types.Api{
+			apiWithTags("a1", "io-foo-a", "https://a1.execute-api.us-east-1.amazonaws.com", "HTTP", nil),
+			apiWithTags("a2", "other-b", "https://a2.execute-api.us-east-1.amazonaws.com", "HTTP", nil),
+		}}},
+	}
+	d := &apigwV2APIDiscoverer{new: func(_ string) apigwV2APIClient { return fake }}
+	got, err := d.Discover(context.Background(), DiscoverArgs{Project: "", Regions: []string{"us-east-1"}, AccountID: "123"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("len=%d, want 2 (no prefix filter)", len(got))
 	}
 }

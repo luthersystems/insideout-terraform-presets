@@ -95,21 +95,29 @@ func TestSecurityGroupDiscover_HappyPath(t *testing.T) {
 
 func TestSecurityGroupDiscover_PaginatesUntilNoToken(t *testing.T) {
 	t.Parallel()
-	d := &securityGroupDiscoverer{new: func(_ string) securityGroupClient {
-		return &fakeSecurityGroupClient{
-			pages: []ec2.DescribeSecurityGroupsOutput{
-				{SecurityGroups: []ec2types.SecurityGroup{sgWithTags("sg-aaa00000000000001", "a", "vpc-1", nil)}, NextToken: aws.String("tok1")},
-				{SecurityGroups: []ec2types.SecurityGroup{sgWithTags("sg-bbb00000000000002", "b", "vpc-1", nil)}, NextToken: aws.String("tok2")},
-				{SecurityGroups: []ec2types.SecurityGroup{sgWithTags("sg-ccc00000000000003", "c", "vpc-1", nil)}}, // terminal
-			},
-		}
-	}}
+	fake := &fakeSecurityGroupClient{
+		pages: []ec2.DescribeSecurityGroupsOutput{
+			{SecurityGroups: []ec2types.SecurityGroup{sgWithTags("sg-aaa00000000000001", "a", "vpc-1", nil)}, NextToken: aws.String("tok1")},
+			{SecurityGroups: []ec2types.SecurityGroup{sgWithTags("sg-bbb00000000000002", "b", "vpc-1", nil)}, NextToken: aws.String("tok2")},
+			{SecurityGroups: []ec2types.SecurityGroup{sgWithTags("sg-ccc00000000000003", "c", "vpc-1", nil)}}, // terminal
+		},
+	}
+	d := &securityGroupDiscoverer{new: func(_ string) securityGroupClient { return fake }}
 	got, err := d.Discover(context.Background(), DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(got) != 3 {
 		t.Fatalf("len=%d, want 3 (paginated)", len(got))
+	}
+	if len(fake.calls) < 3 {
+		t.Fatalf("DescribeSecurityGroups calls=%d, want >=3", len(fake.calls))
+	}
+	if aws.ToString(fake.calls[1].NextToken) != "tok1" {
+		t.Errorf("call[1].NextToken=%q, want tok1", aws.ToString(fake.calls[1].NextToken))
+	}
+	if aws.ToString(fake.calls[2].NextToken) != "tok2" {
+		t.Errorf("call[2].NextToken=%q, want tok2", aws.ToString(fake.calls[2].NextToken))
 	}
 }
 
@@ -221,7 +229,7 @@ func TestSecurityGroupDiscoverByID_NotFound(t *testing.T) {
 func TestSecurityGroupDiscoverByID_NotFound_FromAPIErrorCode(t *testing.T) {
 	t.Parallel()
 	d := &securityGroupDiscoverer{new: func(_ string) securityGroupClient {
-		return &fakeSecurityGroupClient{err: errors.New("api error InvalidGroup.NotFound: The security group 'sg-deadbeef' does not exist")}
+		return &fakeSecurityGroupClient{err: ec2APIError("InvalidGroup.NotFound", "The security group 'sg-deadbeef' does not exist")}
 	}}
 	_, err := d.DiscoverByID(context.Background(), "sg-deadbeef00000000", "us-east-1", "123")
 	if !errors.Is(err, ErrNotFound) {
@@ -257,8 +265,8 @@ func TestSecurityGroupDiscover_MultiRegionTriggersOneSDKCallPerRegion(t *testing
 		t.Fatal(err)
 	}
 
-	if len(seenRegions) != 2 {
-		t.Errorf("region closure invocations = %v, want 2 entries", seenRegions)
+	if len(seenRegions) != 2 || seenRegions[0] != "us-east-1" || seenRegions[1] != "eu-west-1" {
+		t.Errorf("region closure invocations = %v, want [us-east-1 eu-west-1]", seenRegions)
 	}
 	if len(fakes["us-east-1"].calls) == 0 || len(fakes["eu-west-1"].calls) == 0 {
 		t.Error("expected one DescribeSecurityGroups call per region")
@@ -383,6 +391,14 @@ func TestSecurityGroupDiscover_EmitsItemFound_PerSecurityGroup(t *testing.T) {
 		}
 		if it.TFType != "aws_security_group" {
 			t.Errorf("item %d: tf_type=%q, want aws_security_group", i, it.TFType)
+		}
+		if it.Region != "us-east-1" {
+			t.Errorf("item %d: region=%q, want us-east-1", i, it.Region)
+		}
+	}
+	for _, e := range rec.snapshot() {
+		if e.Kind == "service_finish" && e.Count != len(got) {
+			t.Errorf("service_finish.count=%d, want %d", e.Count, len(got))
 		}
 	}
 }

@@ -128,9 +128,9 @@ func (d *routeTableDiscoverer) DiscoverByID(ctx context.Context, id, region, acc
 	client := d.new(region)
 	out, err := client.DescribeRouteTables(ctx, &ec2.DescribeRouteTablesInput{RouteTableIds: []string{rtbID}})
 	if err != nil {
-		// EC2 surfaces "InvalidRouteTableID.NotFound" as a generic API
-		// error, not a typed exception. Match by code substring.
-		if strings.Contains(err.Error(), "InvalidRouteTableID.NotFound") {
+		// EC2 surfaces "InvalidRouteTableID.NotFound" as a
+		// smithy.APIError; inspect via errors.As.
+		if isEC2APIErrorCode(err, "InvalidRouteTableID.NotFound") {
 			return imported.ImportedResource{}, fmt.Errorf("aws_route_table %q: %w", rtbID, ErrNotFound)
 		}
 		return imported.ImportedResource{}, fmt.Errorf("DescribeRouteTables: %w", err)

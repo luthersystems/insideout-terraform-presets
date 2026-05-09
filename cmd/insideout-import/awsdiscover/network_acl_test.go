@@ -108,21 +108,29 @@ func TestNetworkACLDiscover_HappyPath(t *testing.T) {
 
 func TestNetworkACLDiscover_PaginatesUntilNoToken(t *testing.T) {
 	t.Parallel()
-	d := &networkACLDiscoverer{new: func(_ string) networkACLClient {
-		return &fakeNetworkACLClient{
-			pages: []ec2.DescribeNetworkAclsOutput{
-				{NetworkAcls: []ec2types.NetworkAcl{networkACLWithTags("acl-aaa00000000000001", "vpc-1", false, nil)}, NextToken: aws.String("tok1")},
-				{NetworkAcls: []ec2types.NetworkAcl{networkACLWithTags("acl-bbb00000000000002", "vpc-1", false, nil)}, NextToken: aws.String("tok2")},
-				{NetworkAcls: []ec2types.NetworkAcl{networkACLWithTags("acl-ccc00000000000003", "vpc-1", false, nil)}}, // terminal
-			},
-		}
-	}}
+	fake := &fakeNetworkACLClient{
+		pages: []ec2.DescribeNetworkAclsOutput{
+			{NetworkAcls: []ec2types.NetworkAcl{networkACLWithTags("acl-aaa00000000000001", "vpc-1", false, nil)}, NextToken: aws.String("tok1")},
+			{NetworkAcls: []ec2types.NetworkAcl{networkACLWithTags("acl-bbb00000000000002", "vpc-1", false, nil)}, NextToken: aws.String("tok2")},
+			{NetworkAcls: []ec2types.NetworkAcl{networkACLWithTags("acl-ccc00000000000003", "vpc-1", false, nil)}}, // terminal
+		},
+	}
+	d := &networkACLDiscoverer{new: func(_ string) networkACLClient { return fake }}
 	got, err := d.Discover(context.Background(), DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(got) != 3 {
 		t.Fatalf("len=%d, want 3 (paginated)", len(got))
+	}
+	if len(fake.calls) < 3 {
+		t.Fatalf("DescribeNetworkAcls calls=%d, want >=3", len(fake.calls))
+	}
+	if aws.ToString(fake.calls[1].NextToken) != "tok1" {
+		t.Errorf("call[1].NextToken=%q, want tok1", aws.ToString(fake.calls[1].NextToken))
+	}
+	if aws.ToString(fake.calls[2].NextToken) != "tok2" {
+		t.Errorf("call[2].NextToken=%q, want tok2", aws.ToString(fake.calls[2].NextToken))
 	}
 }
 
@@ -239,7 +247,7 @@ func TestNetworkACLDiscoverByID_NotFound(t *testing.T) {
 func TestNetworkACLDiscoverByID_NotFound_FromAPIErrorCode(t *testing.T) {
 	t.Parallel()
 	d := &networkACLDiscoverer{new: func(_ string) networkACLClient {
-		return &fakeNetworkACLClient{err: errors.New("api error InvalidNetworkAclID.NotFound: The network ACL 'acl-deadbeef' does not exist")}
+		return &fakeNetworkACLClient{err: ec2APIError("InvalidNetworkAclID.NotFound", "The network ACL 'acl-deadbeef' does not exist")}
 	}}
 	_, err := d.DiscoverByID(context.Background(), "acl-deadbeef00000000", "us-east-1", "123")
 	if !errors.Is(err, ErrNotFound) {
@@ -274,8 +282,8 @@ func TestNetworkACLDiscover_MultiRegionTriggersOneSDKCallPerRegion(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(seenRegions) != 2 {
-		t.Errorf("region closure invocations = %v, want 2", seenRegions)
+	if len(seenRegions) != 2 || seenRegions[0] != "us-east-1" || seenRegions[1] != "eu-west-1" {
+		t.Errorf("region closure invocations = %v, want [us-east-1 eu-west-1]", seenRegions)
 	}
 	if len(fakes["us-east-1"].calls) == 0 || len(fakes["eu-west-1"].calls) == 0 {
 		t.Error("expected one DescribeNetworkAcls call per region")
@@ -400,6 +408,14 @@ func TestNetworkACLDiscover_EmitsItemFound_PerResource(t *testing.T) {
 		}
 		if it.TFType != "aws_network_acl" {
 			t.Errorf("item %d: tf_type=%q, want aws_network_acl", i, it.TFType)
+		}
+		if it.Region != "us-east-1" {
+			t.Errorf("item %d: region=%q, want us-east-1", i, it.Region)
+		}
+	}
+	for _, e := range rec.snapshot() {
+		if e.Kind == "service_finish" && e.Count != len(got) {
+			t.Errorf("service_finish.count=%d, want %d", e.Count, len(got))
 		}
 	}
 }

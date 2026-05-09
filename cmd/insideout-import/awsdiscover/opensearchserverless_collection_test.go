@@ -132,11 +132,16 @@ func TestOASCollectionDiscover_PaginatesUntilNoToken(t *testing.T) {
 				CollectionSummaries: []aosstypes.CollectionSummary{aossSummary("c1", "io-foo-a", "arn:aws:aoss:us-east-1:123:collection/c1")},
 				NextToken:           aws.String("tok1"),
 			},
-			{CollectionSummaries: []aosstypes.CollectionSummary{aossSummary("c2", "io-foo-b", "arn:aws:aoss:us-east-1:123:collection/c2")}}, // terminal
+			{
+				CollectionSummaries: []aosstypes.CollectionSummary{aossSummary("c2", "io-foo-b", "arn:aws:aoss:us-east-1:123:collection/c2")},
+				NextToken:           aws.String("tok2"),
+			},
+			{CollectionSummaries: []aosstypes.CollectionSummary{aossSummary("c3", "io-foo-c", "arn:aws:aoss:us-east-1:123:collection/c3")}}, // terminal
 		},
 		tagsByID: map[string][]aosstypes.Tag{
 			"arn:aws:aoss:us-east-1:123:collection/c1": {aossTagPair("Project", "io-foo")},
 			"arn:aws:aoss:us-east-1:123:collection/c2": {aossTagPair("Project", "io-foo")},
+			"arn:aws:aoss:us-east-1:123:collection/c3": {aossTagPair("Project", "io-foo")},
 		},
 	}
 	d := &oasCollectionDiscoverer{new: func(_ string) oasCollectionClient { return fake }, maxConcurrency: 4}
@@ -144,8 +149,17 @@ func TestOASCollectionDiscover_PaginatesUntilNoToken(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 2 {
-		t.Fatalf("len=%d, want 2 (paginated)", len(got))
+	if len(got) != 3 {
+		t.Fatalf("len=%d, want 3 (paginated)", len(got))
+	}
+	if len(fake.listCalls) < 3 {
+		t.Fatalf("ListCollections called %d time(s); want >=3", len(fake.listCalls))
+	}
+	if fake.listCalls[1].NextToken == nil || *fake.listCalls[1].NextToken != "tok1" {
+		t.Errorf("call[1].NextToken=%v, want tok1", fake.listCalls[1].NextToken)
+	}
+	if fake.listCalls[2].NextToken == nil || *fake.listCalls[2].NextToken != "tok2" {
+		t.Errorf("call[2].NextToken=%v, want tok2", fake.listCalls[2].NextToken)
 	}
 }
 
@@ -178,7 +192,7 @@ func TestOASCollectionDiscover_FailClosedOnTagsError(t *testing.T) {
 	}
 }
 
-func TestOASCollectionDiscover_PropagatesListError(t *testing.T) {
+func TestOASCollectionDiscover_PropagatesError(t *testing.T) {
 	t.Parallel()
 	d := &oasCollectionDiscoverer{new: func(_ string) oasCollectionClient {
 		return &fakeOASCollectionClient{listErr: errOASCollectionSeed}
@@ -524,5 +538,85 @@ func TestOASCollectionDiscover_EmitsItemFound_PerCollection(t *testing.T) {
 		if !wantIDs[it.ImportID] {
 			t.Errorf("item.import_id=%q not in expected set", it.ImportID)
 		}
+	}
+}
+
+// TestOASCollectionDiscover_MultiRegionTriggersOneSDKCallPerRegion (#291)
+// pins the per-region loop. See sqs_test.go for the canonical contract.
+func TestOASCollectionDiscover_MultiRegionTriggersOneSDKCallPerRegion(t *testing.T) {
+	t.Parallel()
+	fakes := map[string]*fakeOASCollectionClient{
+		"us-east-1": {
+			pages: []opensearchserverless.ListCollectionsOutput{{CollectionSummaries: []aosstypes.CollectionSummary{
+				aossSummary("c1", "io-foo-east", "arn:aws:aoss:us-east-1:123:collection/c1"),
+			}}},
+			tagsByID: map[string][]aosstypes.Tag{
+				"arn:aws:aoss:us-east-1:123:collection/c1": {aossTagPair("Project", "io-foo")},
+			},
+		},
+		"eu-west-1": {
+			pages: []opensearchserverless.ListCollectionsOutput{{CollectionSummaries: []aosstypes.CollectionSummary{
+				aossSummary("c2", "io-foo-west", "arn:aws:aoss:eu-west-1:123:collection/c2"),
+			}}},
+			tagsByID: map[string][]aosstypes.Tag{
+				"arn:aws:aoss:eu-west-1:123:collection/c2": {aossTagPair("Project", "io-foo")},
+			},
+		},
+	}
+	var seenRegions []string
+	d := &oasCollectionDiscoverer{new: func(region string) oasCollectionClient {
+		seenRegions = append(seenRegions, region)
+		f, ok := fakes[region]
+		if !ok {
+			t.Fatalf("closure called with unexpected region %q", region)
+		}
+		return f
+	}, maxConcurrency: 4}
+	got, err := d.Discover(context.Background(), DiscoverArgs{
+		Project:   "io-foo",
+		Regions:   []string{"us-east-1", "eu-west-1"},
+		AccountID: "123",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(seenRegions) != 2 || seenRegions[0] != "us-east-1" || seenRegions[1] != "eu-west-1" {
+		t.Errorf("region closure invocations = %v, want [us-east-1 eu-west-1]", seenRegions)
+	}
+	if len(fakes["us-east-1"].listCalls) == 0 {
+		t.Error("us-east-1 fake never received ListCollections")
+	}
+	if len(fakes["eu-west-1"].listCalls) == 0 {
+		t.Error("eu-west-1 fake never received ListCollections")
+	}
+	if len(got) != 2 {
+		t.Fatalf("len=%d, want 2 (one per region)", len(got))
+	}
+}
+
+// TestOASCollectionDiscover_EmptyProjectReturnsAll pins that an empty
+// Project disables the prefix gate.
+func TestOASCollectionDiscover_EmptyProjectReturnsAll(t *testing.T) {
+	t.Parallel()
+	fake := &fakeOASCollectionClient{
+		pages: []opensearchserverless.ListCollectionsOutput{{CollectionSummaries: []aosstypes.CollectionSummary{
+			aossSummary("c1", "io-foo-a", "arn:aws:aoss:us-east-1:123:collection/c1"),
+			aossSummary("c2", "other-b", "arn:aws:aoss:us-east-1:123:collection/c2"),
+		}}},
+		tagsByID: map[string][]aosstypes.Tag{
+			"arn:aws:aoss:us-east-1:123:collection/c1": {},
+			"arn:aws:aoss:us-east-1:123:collection/c2": {},
+		},
+	}
+	d := &oasCollectionDiscoverer{new: func(_ string) oasCollectionClient { return fake }, maxConcurrency: 4}
+	got, err := d.Discover(context.Background(), DiscoverArgs{Project: "", Regions: []string{"us-east-1"}, AccountID: "123"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("len=%d, want 2 (no prefix filter)", len(got))
+	}
+	if len(fake.tagCalls) != 2 {
+		t.Errorf("ListTagsForResource calls=%d, want 2 (no prefix gate)", len(fake.tagCalls))
 	}
 }

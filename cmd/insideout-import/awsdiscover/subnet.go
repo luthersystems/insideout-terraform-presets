@@ -121,9 +121,9 @@ func (d *subnetDiscoverer) DiscoverByID(ctx context.Context, id, region, account
 	client := d.new(region)
 	out, err := client.DescribeSubnets(ctx, &ec2.DescribeSubnetsInput{SubnetIds: []string{subnetID}})
 	if err != nil {
-		// EC2 surfaces "InvalidSubnetID.NotFound" as a generic API error,
-		// not a typed exception. Match by code substring (mirror s3.go).
-		if strings.Contains(err.Error(), "InvalidSubnetID.NotFound") {
+		// EC2 surfaces "InvalidSubnetID.NotFound" as a smithy.APIError;
+		// inspect the code via errors.As (see vpc.go::isEC2APIErrorCode).
+		if isEC2APIErrorCode(err, "InvalidSubnetID.NotFound") {
 			return imported.ImportedResource{}, fmt.Errorf("aws_subnet %q: %w", subnetID, ErrNotFound)
 		}
 		return imported.ImportedResource{}, fmt.Errorf("DescribeSubnets: %w", err)

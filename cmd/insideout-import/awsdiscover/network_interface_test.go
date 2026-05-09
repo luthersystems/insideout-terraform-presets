@@ -111,21 +111,29 @@ func TestNetworkInterfaceDiscover_HappyPath(t *testing.T) {
 
 func TestNetworkInterfaceDiscover_PaginatesUntilNoToken(t *testing.T) {
 	t.Parallel()
-	d := &networkInterfaceDiscoverer{new: func(_ string) networkInterfaceClient {
-		return &fakeNetworkInterfaceClient{
-			pages: []ec2.DescribeNetworkInterfacesOutput{
-				{NetworkInterfaces: []ec2types.NetworkInterface{networkInterfaceWithTags("eni-aaa00000000000001", "vpc-1", "subnet-1", "interface", nil)}, NextToken: aws.String("tok1")},
-				{NetworkInterfaces: []ec2types.NetworkInterface{networkInterfaceWithTags("eni-bbb00000000000002", "vpc-1", "subnet-1", "interface", nil)}, NextToken: aws.String("tok2")},
-				{NetworkInterfaces: []ec2types.NetworkInterface{networkInterfaceWithTags("eni-ccc00000000000003", "vpc-1", "subnet-1", "interface", nil)}}, // terminal
-			},
-		}
-	}}
+	fake := &fakeNetworkInterfaceClient{
+		pages: []ec2.DescribeNetworkInterfacesOutput{
+			{NetworkInterfaces: []ec2types.NetworkInterface{networkInterfaceWithTags("eni-aaa00000000000001", "vpc-1", "subnet-1", "interface", nil)}, NextToken: aws.String("tok1")},
+			{NetworkInterfaces: []ec2types.NetworkInterface{networkInterfaceWithTags("eni-bbb00000000000002", "vpc-1", "subnet-1", "interface", nil)}, NextToken: aws.String("tok2")},
+			{NetworkInterfaces: []ec2types.NetworkInterface{networkInterfaceWithTags("eni-ccc00000000000003", "vpc-1", "subnet-1", "interface", nil)}}, // terminal
+		},
+	}
+	d := &networkInterfaceDiscoverer{new: func(_ string) networkInterfaceClient { return fake }}
 	got, err := d.Discover(context.Background(), DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(got) != 3 {
 		t.Fatalf("len=%d, want 3 (paginated)", len(got))
+	}
+	if len(fake.calls) < 3 {
+		t.Fatalf("DescribeNetworkInterfaces calls=%d, want >=3", len(fake.calls))
+	}
+	if aws.ToString(fake.calls[1].NextToken) != "tok1" {
+		t.Errorf("call[1].NextToken=%q, want tok1", aws.ToString(fake.calls[1].NextToken))
+	}
+	if aws.ToString(fake.calls[2].NextToken) != "tok2" {
+		t.Errorf("call[2].NextToken=%q, want tok2", aws.ToString(fake.calls[2].NextToken))
 	}
 }
 
@@ -242,7 +250,7 @@ func TestNetworkInterfaceDiscoverByID_NotFound(t *testing.T) {
 func TestNetworkInterfaceDiscoverByID_NotFound_FromAPIErrorCode(t *testing.T) {
 	t.Parallel()
 	d := &networkInterfaceDiscoverer{new: func(_ string) networkInterfaceClient {
-		return &fakeNetworkInterfaceClient{err: errors.New("api error InvalidNetworkInterfaceID.NotFound: The network interface 'eni-deadbeef' does not exist")}
+		return &fakeNetworkInterfaceClient{err: ec2APIError("InvalidNetworkInterfaceID.NotFound", "The network interface 'eni-deadbeef' does not exist")}
 	}}
 	_, err := d.DiscoverByID(context.Background(), "eni-deadbeef00000000", "us-east-1", "123")
 	if !errors.Is(err, ErrNotFound) {
@@ -277,8 +285,8 @@ func TestNetworkInterfaceDiscover_MultiRegionTriggersOneSDKCallPerRegion(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(seenRegions) != 2 {
-		t.Errorf("region closure invocations = %v, want 2", seenRegions)
+	if len(seenRegions) != 2 || seenRegions[0] != "us-east-1" || seenRegions[1] != "eu-west-1" {
+		t.Errorf("region closure invocations = %v, want [us-east-1 eu-west-1]", seenRegions)
 	}
 	if len(fakes["us-east-1"].calls) == 0 || len(fakes["eu-west-1"].calls) == 0 {
 		t.Error("expected one DescribeNetworkInterfaces call per region")

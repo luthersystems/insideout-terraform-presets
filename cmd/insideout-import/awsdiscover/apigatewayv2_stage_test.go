@@ -3,8 +3,10 @@ package awsdiscover
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/apigatewayv2"
@@ -14,7 +16,12 @@ import (
 var errAPIGWv2StageSeed = errors.New("AccessDenied")
 
 type fakeAPIGWv2StageClient struct {
+	// apis is the legacy single-page convenience slice. When apiPages is
+	// also non-nil it takes precedence so tests can pin pagination
+	// behavior. The single-page apis field is kept for back-compat with
+	// tests that don't care about pagination.
 	apis        []apigwv2types.Api
+	apiPages    []apigatewayv2.GetApisOutput
 	stagesByAPI map[string][]apigwv2types.Stage
 	stagesByKey map[string]*apigatewayv2.GetStageOutput // "api/stage" -> output
 
@@ -35,6 +42,15 @@ func (f *fakeAPIGWv2StageClient) GetApis(_ context.Context, in *apigatewayv2.Get
 	f.mu.Unlock()
 	if f.apisErr != nil {
 		return nil, f.apisErr
+	}
+	// When apiPages is configured, walk it like every other paginating
+	// fake — return one page per call, terminate when out of pages.
+	if len(f.apiPages) > 0 {
+		if idx >= len(f.apiPages) {
+			return &apigatewayv2.GetApisOutput{}, nil
+		}
+		out := f.apiPages[idx]
+		return &out, nil
 	}
 	if idx > 0 {
 		return &apigatewayv2.GetApisOutput{}, nil
@@ -413,5 +429,171 @@ func TestAPIGWv2StageDiscoverByID_UnsupportedID(t *testing.T) {
 		if !errors.Is(err, ErrNotSupported) {
 			t.Errorf("id=%q: err=%v, want ErrNotSupported", id, err)
 		}
+	}
+}
+
+// TestAPIGWv2StageDiscover_PaginatesUntilNoToken pins that the GetApis
+// loop walks NextToken-shaped pagination. The fake's GetApis was
+// historically hard-coded to a single page; this test exercises the
+// (apiPages, NextToken) wiring.
+func TestAPIGWv2StageDiscover_PaginatesUntilNoToken(t *testing.T) {
+	t.Parallel()
+	fake := &fakeAPIGWv2StageClient{
+		apiPages: []apigatewayv2.GetApisOutput{
+			{
+				Items:     []apigwv2types.Api{apiWithTags("a1", "io-foo-a", "https://a1.execute-api.us-east-1.amazonaws.com", "HTTP", nil)},
+				NextToken: aws.String("tok1"),
+			},
+			{
+				Items:     []apigwv2types.Api{apiWithTags("a2", "io-foo-b", "https://a2.execute-api.us-east-1.amazonaws.com", "HTTP", nil)},
+				NextToken: aws.String("tok2"),
+			},
+			{Items: []apigwv2types.Api{apiWithTags("a3", "io-foo-c", "https://a3.execute-api.us-east-1.amazonaws.com", "HTTP", nil)}}, // terminal
+		},
+		stagesByAPI: map[string][]apigwv2types.Stage{
+			"a1": {stageWithTags("prod", false, "dep1", map[string]string{"Project": "io-foo"})},
+			"a2": {stageWithTags("prod", false, "dep2", map[string]string{"Project": "io-foo"})},
+			"a3": {stageWithTags("prod", false, "dep3", map[string]string{"Project": "io-foo"})},
+		},
+	}
+	d := &apigwV2StageDiscoverer{new: func(_ string) apigwV2StageClient { return fake }, maxConcurrency: 4}
+	got, err := d.Discover(context.Background(), DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("len=%d, want 3 (paginated)", len(got))
+	}
+	if len(fake.getApisCalls) < 3 {
+		t.Fatalf("GetApis calls=%d, want >=3", len(fake.getApisCalls))
+	}
+	if aws.ToString(fake.getApisCalls[1].NextToken) != "tok1" {
+		t.Errorf("call[1].NextToken=%q, want tok1", aws.ToString(fake.getApisCalls[1].NextToken))
+	}
+	if aws.ToString(fake.getApisCalls[2].NextToken) != "tok2" {
+		t.Errorf("call[2].NextToken=%q, want tok2", aws.ToString(fake.getApisCalls[2].NextToken))
+	}
+}
+
+// TestAPIGWv2StageDiscover_EmptyProjectReturnsAll pins that an empty
+// Project disables the API name-prefix gate.
+func TestAPIGWv2StageDiscover_EmptyProjectReturnsAll(t *testing.T) {
+	t.Parallel()
+	fake := &fakeAPIGWv2StageClient{
+		apis: []apigwv2types.Api{
+			apiWithTags("a1", "io-foo-orders", "https://a1.execute-api.us-east-1.amazonaws.com", "HTTP", nil),
+			apiWithTags("a2", "other-api", "https://a2.execute-api.us-east-1.amazonaws.com", "HTTP", nil),
+		},
+		stagesByAPI: map[string][]apigwv2types.Stage{
+			"a1": {stageWithTags("prod", false, "dep1", nil)},
+			"a2": {stageWithTags("prod", false, "dep2", nil)},
+		},
+	}
+	d := &apigwV2StageDiscoverer{new: func(_ string) apigwV2StageClient { return fake }, maxConcurrency: 4}
+	got, err := d.Discover(context.Background(), DiscoverArgs{Project: "", Regions: []string{"us-east-1"}, AccountID: "123"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("len=%d, want 2 (no prefix filter)", len(got))
+	}
+}
+
+// blockingAPIGWv2StageClient drives the per-API GetStages fan-out under
+// an errgroup. Used for the bounded-concurrency test below.
+type blockingAPIGWv2StageClient struct {
+	apis        []apigwv2types.Api
+	stagesByAPI map[string][]apigwv2types.Stage
+
+	release chan struct{}
+
+	mu          sync.Mutex
+	inflight    int
+	maxInflight int
+
+	apisIdx int
+}
+
+func (c *blockingAPIGWv2StageClient) GetApis(_ context.Context, _ *apigatewayv2.GetApisInput, _ ...func(*apigatewayv2.Options)) (*apigatewayv2.GetApisOutput, error) {
+	if c.apisIdx == 0 {
+		c.apisIdx++
+		return &apigatewayv2.GetApisOutput{Items: c.apis}, nil
+	}
+	return &apigatewayv2.GetApisOutput{}, nil
+}
+
+func (c *blockingAPIGWv2StageClient) GetStages(ctx context.Context, in *apigatewayv2.GetStagesInput, _ ...func(*apigatewayv2.Options)) (*apigatewayv2.GetStagesOutput, error) {
+	c.mu.Lock()
+	c.inflight++
+	if c.inflight > c.maxInflight {
+		c.maxInflight = c.inflight
+	}
+	c.mu.Unlock()
+	defer func() {
+		c.mu.Lock()
+		c.inflight--
+		c.mu.Unlock()
+	}()
+	select {
+	case <-c.release:
+		return &apigatewayv2.GetStagesOutput{Items: c.stagesByAPI[aws.ToString(in.ApiId)]}, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+func (c *blockingAPIGWv2StageClient) GetStage(_ context.Context, _ *apigatewayv2.GetStageInput, _ ...func(*apigatewayv2.Options)) (*apigatewayv2.GetStageOutput, error) {
+	return nil, errors.New("blockingAPIGWv2StageClient.GetStage: unused")
+}
+
+// TestAPIGWv2StageDiscover_BoundedConcurrency pins the per-API GetStages
+// fan-out under the configured concurrency limit.
+func TestAPIGWv2StageDiscover_BoundedConcurrency(t *testing.T) {
+	t.Parallel()
+	const total = 30
+	const limit = 4
+	apis := make([]apigwv2types.Api, total)
+	stagesByAPI := make(map[string][]apigwv2types.Stage, total)
+	for i := 0; i < total; i++ {
+		apiID := fmt.Sprintf("a-%d", i)
+		apis[i] = apiWithTags(apiID, fmt.Sprintf("io-foo-%d", i), "https://x.example", "HTTP", nil)
+		stagesByAPI[apiID] = []apigwv2types.Stage{stageWithTags("prod", false, fmt.Sprintf("dep-%d", i), map[string]string{"Project": "io-foo"})}
+	}
+	release := make(chan struct{})
+	bc := &blockingAPIGWv2StageClient{
+		apis:        apis,
+		stagesByAPI: stagesByAPI,
+		release:     release,
+	}
+	d := &apigwV2StageDiscoverer{new: func(_ string) apigwV2StageClient { return bc }, maxConcurrency: limit}
+	done := make(chan error, 1)
+	go func() {
+		_, err := d.Discover(context.Background(), DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"})
+		done <- err
+	}()
+	deadline := time.After(2 * time.Second)
+	for {
+		bc.mu.Lock()
+		got := bc.inflight
+		bc.mu.Unlock()
+		if got >= limit {
+			break
+		}
+		select {
+		case <-deadline:
+			t.Fatalf("never reached %d in-flight; saw %d", limit, got)
+		case <-time.After(5 * time.Millisecond):
+		}
+	}
+	time.Sleep(50 * time.Millisecond)
+	bc.mu.Lock()
+	peak := bc.maxInflight
+	bc.mu.Unlock()
+	if peak > limit {
+		t.Errorf("peak in-flight=%d exceeded limit=%d", peak, limit)
+	}
+	close(release)
+	if err := <-done; err != nil {
+		t.Fatalf("Discover returned error: %v", err)
 	}
 }

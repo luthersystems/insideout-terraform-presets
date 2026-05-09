@@ -2,6 +2,7 @@ package awsdiscover
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	awsarn "github.com/aws/aws-sdk-go-v2/aws/arn"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
+	smithy "github.com/aws/smithy-go"
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
@@ -116,9 +118,9 @@ func (d *vpcDiscoverer) DiscoverByID(ctx context.Context, id, region, accountID 
 	client := d.new(region)
 	out, err := client.DescribeVpcs(ctx, &ec2.DescribeVpcsInput{VpcIds: []string{vpcID}})
 	if err != nil {
-		// EC2 surfaces "InvalidVpcID.NotFound" as a generic API error,
-		// not a typed exception. Match by code substring (mirror s3.go).
-		if strings.Contains(err.Error(), "InvalidVpcID.NotFound") {
+		// EC2 surfaces "InvalidVpcID.NotFound" as a smithy.GenericAPIError,
+		// not a typed exception. Inspect the API code via errors.As.
+		if isEC2APIErrorCode(err, "InvalidVpcID.NotFound") {
 			return imported.ImportedResource{}, fmt.Errorf("aws_vpc %q: %w", vpcID, ErrNotFound)
 		}
 		return imported.ImportedResource{}, fmt.Errorf("DescribeVpcs: %w", err)
@@ -212,4 +214,27 @@ func vpcName(tags []ec2types.Tag, fallback string) string {
 		}
 	}
 	return fallback
+}
+
+// isEC2APIErrorCode reports whether err is a smithy.APIError whose
+// ErrorCode matches one of the supplied codes. EC2 surfaces "Invalid…
+// .NotFound"-shaped errors as smithy.GenericAPIError values rather than
+// typed exceptions, so callers must inspect the API code rather than
+// substring-match on err.Error() (which is locale-/SDK-version-fragile
+// and rejects wrap chains that hide the smithy error behind layers).
+func isEC2APIErrorCode(err error, codes ...string) bool {
+	if err == nil {
+		return false
+	}
+	var apiErr smithy.APIError
+	if !errors.As(err, &apiErr) {
+		return false
+	}
+	got := apiErr.ErrorCode()
+	for _, want := range codes {
+		if got == want {
+			return true
+		}
+	}
+	return false
 }

@@ -104,21 +104,29 @@ func TestInternetGatewayDiscover_HappyPath(t *testing.T) {
 
 func TestInternetGatewayDiscover_PaginatesUntilNoToken(t *testing.T) {
 	t.Parallel()
-	d := &internetGatewayDiscoverer{new: func(_ string) internetGatewayClient {
-		return &fakeInternetGatewayClient{
-			pages: []ec2.DescribeInternetGatewaysOutput{
-				{InternetGateways: []ec2types.InternetGateway{igwWithTags("igw-aaa00000000000001", "vpc-1", nil)}, NextToken: aws.String("tok1")},
-				{InternetGateways: []ec2types.InternetGateway{igwWithTags("igw-bbb00000000000002", "vpc-1", nil)}, NextToken: aws.String("tok2")},
-				{InternetGateways: []ec2types.InternetGateway{igwWithTags("igw-ccc00000000000003", "vpc-1", nil)}}, // terminal
-			},
-		}
-	}}
+	fake := &fakeInternetGatewayClient{
+		pages: []ec2.DescribeInternetGatewaysOutput{
+			{InternetGateways: []ec2types.InternetGateway{igwWithTags("igw-aaa00000000000001", "vpc-1", nil)}, NextToken: aws.String("tok1")},
+			{InternetGateways: []ec2types.InternetGateway{igwWithTags("igw-bbb00000000000002", "vpc-1", nil)}, NextToken: aws.String("tok2")},
+			{InternetGateways: []ec2types.InternetGateway{igwWithTags("igw-ccc00000000000003", "vpc-1", nil)}}, // terminal
+		},
+	}
+	d := &internetGatewayDiscoverer{new: func(_ string) internetGatewayClient { return fake }}
 	got, err := d.Discover(context.Background(), DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(got) != 3 {
 		t.Fatalf("len=%d, want 3 (paginated)", len(got))
+	}
+	if len(fake.calls) < 3 {
+		t.Fatalf("DescribeInternetGateways calls=%d, want >=3", len(fake.calls))
+	}
+	if aws.ToString(fake.calls[1].NextToken) != "tok1" {
+		t.Errorf("call[1].NextToken=%q, want tok1", aws.ToString(fake.calls[1].NextToken))
+	}
+	if aws.ToString(fake.calls[2].NextToken) != "tok2" {
+		t.Errorf("call[2].NextToken=%q, want tok2", aws.ToString(fake.calls[2].NextToken))
 	}
 }
 
@@ -230,7 +238,7 @@ func TestInternetGatewayDiscoverByID_NotFound(t *testing.T) {
 func TestInternetGatewayDiscoverByID_NotFound_FromAPIErrorCode(t *testing.T) {
 	t.Parallel()
 	d := &internetGatewayDiscoverer{new: func(_ string) internetGatewayClient {
-		return &fakeInternetGatewayClient{err: errors.New("api error InvalidInternetGatewayID.NotFound: The internet gateway 'igw-deadbeef' does not exist")}
+		return &fakeInternetGatewayClient{err: ec2APIError("InvalidInternetGatewayID.NotFound", "The internet gateway 'igw-deadbeef' does not exist")}
 	}}
 	_, err := d.DiscoverByID(context.Background(), "igw-deadbeef00000000", "us-east-1", "123")
 	if !errors.Is(err, ErrNotFound) {
@@ -266,8 +274,8 @@ func TestInternetGatewayDiscover_MultiRegionTriggersOneSDKCallPerRegion(t *testi
 		t.Fatal(err)
 	}
 
-	if len(seenRegions) != 2 {
-		t.Errorf("region closure invocations = %v, want 2 entries", seenRegions)
+	if len(seenRegions) != 2 || seenRegions[0] != "us-east-1" || seenRegions[1] != "eu-west-1" {
+		t.Errorf("region closure invocations = %v, want [us-east-1 eu-west-1]", seenRegions)
 	}
 	if len(fakes["us-east-1"].calls) == 0 || len(fakes["eu-west-1"].calls) == 0 {
 		t.Error("expected one DescribeInternetGateways call per region")
@@ -392,6 +400,14 @@ func TestInternetGatewayDiscover_EmitsItemFound_PerResource(t *testing.T) {
 		}
 		if it.TFType != "aws_internet_gateway" {
 			t.Errorf("item %d: tf_type=%q, want aws_internet_gateway", i, it.TFType)
+		}
+		if it.Region != "us-east-1" {
+			t.Errorf("item %d: region=%q, want us-east-1", i, it.Region)
+		}
+	}
+	for _, e := range rec.snapshot() {
+		if e.Kind == "service_finish" && e.Count != len(got) {
+			t.Errorf("service_finish.count=%d, want %d", e.Count, len(got))
 		}
 	}
 }

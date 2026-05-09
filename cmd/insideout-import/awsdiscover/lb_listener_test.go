@@ -3,8 +3,10 @@ package awsdiscover
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2"
@@ -297,17 +299,24 @@ func TestLBListenerDiscover_MultiRegionTriggersOneSDKCallPerRegion(t *testing.T)
 		"us-east-1": mkClient("us-east-1"),
 		"eu-west-1": mkClient("eu-west-1"),
 	}
-	d := &lbListenerDiscoverer{new: func(region string) lbListenerClient { return clients[region] }, maxConcurrency: 4}
+	var seenRegions []string
+	d := &lbListenerDiscoverer{new: func(region string) lbListenerClient {
+		seenRegions = append(seenRegions, region)
+		return clients[region]
+	}, maxConcurrency: 4}
 	got, err := d.Discover(context.Background(), DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1", "eu-west-1"}, AccountID: "123"})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if len(seenRegions) != 2 || seenRegions[0] != "us-east-1" || seenRegions[1] != "eu-west-1" {
+		t.Errorf("region closure invocations = %v, want [us-east-1 eu-west-1]", seenRegions)
 	}
 	if len(got) != 2 {
 		t.Fatalf("len=%d, want 2 (one listener per region)", len(got))
 	}
 	for region, fake := range clients {
 		if len(fake.lbCalls) < 1 {
-			t.Errorf("region=%s: expected ≥1 DescribeLoadBalancers call; got %d", region, len(fake.lbCalls))
+			t.Errorf("region=%s: expected >=1 DescribeLoadBalancers call; got %d", region, len(fake.lbCalls))
 		}
 	}
 }
@@ -439,6 +448,14 @@ func TestLBListenerDiscover_EmitsItemFound_PerResource(t *testing.T) {
 		if it.TFType != lbListenerTFType {
 			t.Errorf("item.tf_type=%q", it.TFType)
 		}
+		if it.Region != "us-east-1" {
+			t.Errorf("item.region=%q, want us-east-1", it.Region)
+		}
+	}
+	for _, e := range rec.snapshot() {
+		if e.Kind == "service_finish" && e.Count != len(got) {
+			t.Errorf("service_finish.count=%d, want %d", e.Count, len(got))
+		}
 	}
 }
 
@@ -510,5 +527,199 @@ func TestLBListenerDiscover_IteratesPerLoadBalancer(t *testing.T) {
 	}
 	if calls[skipArn] != 0 {
 		t.Errorf("DescribeListeners called %d times for non-matching LB %q (want 0)", calls[skipArn], skipArn)
+	}
+}
+
+// TestLBListenerDiscover_EmptyProjectReturnsAll pins that an empty
+// Project disables the prefix gate.
+func TestLBListenerDiscover_EmptyProjectReturnsAll(t *testing.T) {
+	t.Parallel()
+	lb1Arn := "arn:aws:elasticloadbalancing:us-east-1:123:loadbalancer/app/io-foo-a/aaa"
+	lb2Arn := "arn:aws:elasticloadbalancing:us-east-1:123:loadbalancer/app/other-team/bbb"
+	lb1 := lbFixture("io-foo-a", lb1Arn, "a", "vpc", elbv2types.LoadBalancerTypeEnumApplication)
+	lb2 := lbFixture("other-team", lb2Arn, "b", "vpc", elbv2types.LoadBalancerTypeEnumApplication)
+	ln1 := listenerFixture("arn:aws:elasticloadbalancing:us-east-1:123:listener/app/io-foo-a/aaa/ln-80", lb1Arn, 80, elbv2types.ProtocolEnumHttp)
+	ln2 := listenerFixture("arn:aws:elasticloadbalancing:us-east-1:123:listener/app/other-team/bbb/ln-80", lb2Arn, 80, elbv2types.ProtocolEnumHttp)
+	fake := &fakeLBListenerClient{
+		lbPages: []elasticloadbalancingv2.DescribeLoadBalancersOutput{{LoadBalancers: []elbv2types.LoadBalancer{lb1, lb2}}},
+		listenersByLBArn: map[string][]elbv2types.Listener{
+			lb1Arn: {ln1},
+			lb2Arn: {ln2},
+		},
+		tagsByArn: map[string][]elbv2types.Tag{
+			aws.ToString(ln1.ListenerArn): {},
+			aws.ToString(ln2.ListenerArn): {},
+		},
+	}
+	d := &lbListenerDiscoverer{new: func(_ string) lbListenerClient { return fake }, maxConcurrency: 4}
+	got, err := d.Discover(context.Background(), DiscoverArgs{Project: "", Regions: []string{"us-east-1"}, AccountID: "123"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("len=%d, want 2 (no prefix filter — both LB listeners returned)", len(got))
+	}
+}
+
+// blockingLBListenerClient drives both stages of the listener discoverer:
+// stage 1 is DescribeListeners fan-out (per-LB), stage 2 is DescribeTags
+// fan-out (per-listener). Each stage shares the inflight counter so the
+// test can assert the limit holds across both errgroups.
+type blockingLBListenerClient struct {
+	lbs              []elbv2types.LoadBalancer
+	listenersByLBArn map[string][]elbv2types.Listener
+	tags             map[string][]elbv2types.Tag
+
+	releaseStage1 chan struct{}
+	releaseStage2 chan struct{}
+
+	mu                sync.Mutex
+	stage1Inflight    int
+	stage1MaxInflight int
+	stage2Inflight    int
+	stage2MaxInflight int
+
+	listIdx int
+}
+
+func (c *blockingLBListenerClient) DescribeLoadBalancers(_ context.Context, _ *elasticloadbalancingv2.DescribeLoadBalancersInput, _ ...func(*elasticloadbalancingv2.Options)) (*elasticloadbalancingv2.DescribeLoadBalancersOutput, error) {
+	if c.listIdx == 0 {
+		c.listIdx++
+		return &elasticloadbalancingv2.DescribeLoadBalancersOutput{LoadBalancers: c.lbs}, nil
+	}
+	return &elasticloadbalancingv2.DescribeLoadBalancersOutput{}, nil
+}
+
+func (c *blockingLBListenerClient) DescribeListeners(ctx context.Context, in *elasticloadbalancingv2.DescribeListenersInput, _ ...func(*elasticloadbalancingv2.Options)) (*elasticloadbalancingv2.DescribeListenersOutput, error) {
+	c.mu.Lock()
+	c.stage1Inflight++
+	if c.stage1Inflight > c.stage1MaxInflight {
+		c.stage1MaxInflight = c.stage1Inflight
+	}
+	c.mu.Unlock()
+	defer func() {
+		c.mu.Lock()
+		c.stage1Inflight--
+		c.mu.Unlock()
+	}()
+	select {
+	case <-c.releaseStage1:
+		return &elasticloadbalancingv2.DescribeListenersOutput{Listeners: c.listenersByLBArn[aws.ToString(in.LoadBalancerArn)]}, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+func (c *blockingLBListenerClient) DescribeTags(ctx context.Context, in *elasticloadbalancingv2.DescribeTagsInput, _ ...func(*elasticloadbalancingv2.Options)) (*elasticloadbalancingv2.DescribeTagsOutput, error) {
+	c.mu.Lock()
+	c.stage2Inflight++
+	if c.stage2Inflight > c.stage2MaxInflight {
+		c.stage2MaxInflight = c.stage2Inflight
+	}
+	c.mu.Unlock()
+	defer func() {
+		c.mu.Lock()
+		c.stage2Inflight--
+		c.mu.Unlock()
+	}()
+	select {
+	case <-c.releaseStage2:
+		out := &elasticloadbalancingv2.DescribeTagsOutput{}
+		for _, arn := range in.ResourceArns {
+			td := elbv2types.TagDescription{ResourceArn: aws.String(arn), Tags: c.tags[arn]}
+			out.TagDescriptions = append(out.TagDescriptions, td)
+		}
+		return out, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+// TestLBListenerDiscover_BoundedConcurrency pins both fan-out stages.
+// The listener discoverer has TWO errgroups (DescribeListeners per LB
+// then DescribeTags per listener) — both must respect the limit.
+func TestLBListenerDiscover_BoundedConcurrency(t *testing.T) {
+	t.Parallel()
+	const lbCount = 30
+	const listenersPerLB = 1
+	const limit = 4
+
+	lbs := make([]elbv2types.LoadBalancer, lbCount)
+	listenersByLBArn := make(map[string][]elbv2types.Listener, lbCount)
+	tags := make(map[string][]elbv2types.Tag, lbCount*listenersPerLB)
+	for i := 0; i < lbCount; i++ {
+		lbArn := fmt.Sprintf("arn:aws:elasticloadbalancing:us-east-1:123:loadbalancer/app/io-foo-%d/abc-%d", i, i)
+		lbs[i] = lbFixture(fmt.Sprintf("io-foo-%d", i), lbArn, "x", "vpc", elbv2types.LoadBalancerTypeEnumApplication)
+		var lns []elbv2types.Listener
+		for j := 0; j < listenersPerLB; j++ {
+			lnArn := fmt.Sprintf("%s/ln-%d", lbArn, 80+j)
+			lns = append(lns, listenerFixture(lnArn, lbArn, int32(80+j), elbv2types.ProtocolEnumHttp))
+			tags[lnArn] = []elbv2types.Tag{elbv2Tag("Project", "io-foo")}
+		}
+		listenersByLBArn[lbArn] = lns
+	}
+	releaseStage1 := make(chan struct{})
+	releaseStage2 := make(chan struct{})
+	bc := &blockingLBListenerClient{
+		lbs:              lbs,
+		listenersByLBArn: listenersByLBArn,
+		tags:             tags,
+		releaseStage1:    releaseStage1,
+		releaseStage2:    releaseStage2,
+	}
+	d := &lbListenerDiscoverer{new: func(_ string) lbListenerClient { return bc }, maxConcurrency: limit}
+	done := make(chan error, 1)
+	go func() {
+		_, err := d.Discover(context.Background(), DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"})
+		done <- err
+	}()
+	// Stage 1: DescribeListeners ramps up.
+	deadline := time.After(2 * time.Second)
+	for {
+		bc.mu.Lock()
+		got := bc.stage1Inflight
+		bc.mu.Unlock()
+		if got >= limit {
+			break
+		}
+		select {
+		case <-deadline:
+			t.Fatalf("stage1 never reached %d in-flight; saw %d", limit, got)
+		case <-time.After(5 * time.Millisecond):
+		}
+	}
+	time.Sleep(50 * time.Millisecond)
+	bc.mu.Lock()
+	stage1Peak := bc.stage1MaxInflight
+	bc.mu.Unlock()
+	if stage1Peak > limit {
+		t.Errorf("stage1 peak in-flight=%d exceeded limit=%d", stage1Peak, limit)
+	}
+	close(releaseStage1)
+
+	// Stage 2: DescribeTags ramps up.
+	for {
+		bc.mu.Lock()
+		got := bc.stage2Inflight
+		bc.mu.Unlock()
+		if got >= limit {
+			break
+		}
+		select {
+		case <-deadline:
+			t.Fatalf("stage2 never reached %d in-flight; saw %d", limit, got)
+		case <-time.After(5 * time.Millisecond):
+		}
+	}
+	time.Sleep(50 * time.Millisecond)
+	bc.mu.Lock()
+	stage2Peak := bc.stage2MaxInflight
+	bc.mu.Unlock()
+	if stage2Peak > limit {
+		t.Errorf("stage2 peak in-flight=%d exceeded limit=%d", stage2Peak, limit)
+	}
+	close(releaseStage2)
+	if err := <-done; err != nil {
+		t.Fatalf("Discover returned error: %v", err)
 	}
 }

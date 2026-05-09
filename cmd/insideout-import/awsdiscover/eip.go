@@ -141,9 +141,9 @@ func (d *eipDiscoverer) DiscoverByID(ctx context.Context, id, region, accountID 
 	client := d.new(region)
 	out, err := client.DescribeAddresses(ctx, &ec2.DescribeAddressesInput{AllocationIds: []string{allocID}})
 	if err != nil {
-		// EC2 surfaces "InvalidAllocationID.NotFound" as a generic API
-		// error, not a typed exception. Match by code substring.
-		if strings.Contains(err.Error(), "InvalidAllocationID.NotFound") {
+		// EC2 surfaces "InvalidAllocationID.NotFound" as a
+		// smithy.APIError; inspect via errors.As.
+		if isEC2APIErrorCode(err, "InvalidAllocationID.NotFound") {
 			return imported.ImportedResource{}, fmt.Errorf("aws_eip %q: %w", allocID, ErrNotFound)
 		}
 		return imported.ImportedResource{}, fmt.Errorf("DescribeAddresses: %w", err)

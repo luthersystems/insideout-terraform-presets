@@ -146,11 +146,16 @@ func TestBedrockGuardrailDiscover_PaginatesUntilNoToken(t *testing.T) {
 				Guardrails: []bedrocktypes.GuardrailSummary{bedrockGuardrailSummary("g1", "io-foo-a", "arn:aws:bedrock:us-east-1:123:guardrail/g1", "")},
 				NextToken:  aws.String("tok1"),
 			},
-			{Guardrails: []bedrocktypes.GuardrailSummary{bedrockGuardrailSummary("g2", "io-foo-b", "arn:aws:bedrock:us-east-1:123:guardrail/g2", "")}}, // terminal
+			{
+				Guardrails: []bedrocktypes.GuardrailSummary{bedrockGuardrailSummary("g2", "io-foo-b", "arn:aws:bedrock:us-east-1:123:guardrail/g2", "")},
+				NextToken:  aws.String("tok2"),
+			},
+			{Guardrails: []bedrocktypes.GuardrailSummary{bedrockGuardrailSummary("g3", "io-foo-c", "arn:aws:bedrock:us-east-1:123:guardrail/g3", "")}}, // terminal
 		},
 		tagsByID: map[string][]bedrocktypes.Tag{
 			"arn:aws:bedrock:us-east-1:123:guardrail/g1": {bedrockTagPair("Project", "io-foo")},
 			"arn:aws:bedrock:us-east-1:123:guardrail/g2": {bedrockTagPair("Project", "io-foo")},
+			"arn:aws:bedrock:us-east-1:123:guardrail/g3": {bedrockTagPair("Project", "io-foo")},
 		},
 	}
 	d := &bedrockGuardrailDiscoverer{new: func(_ string) bedrockGuardrailClient { return fake }, maxConcurrency: 4}
@@ -158,8 +163,18 @@ func TestBedrockGuardrailDiscover_PaginatesUntilNoToken(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 2 {
-		t.Fatalf("len=%d, want 2 (paginated)", len(got))
+	if len(got) != 3 {
+		t.Fatalf("len=%d, want 3 (paginated)", len(got))
+	}
+	// Pin: page-N+1 must thread the NextToken returned by page N.
+	if len(fake.listCalls) < 2 {
+		t.Fatalf("expected at least 2 ListGuardrails calls; got %d", len(fake.listCalls))
+	}
+	if fake.listCalls[1].NextToken == nil || *fake.listCalls[1].NextToken != "tok1" {
+		t.Errorf("call[1].NextToken=%v, want tok1 (page-N+1 must thread page-N's token)", fake.listCalls[1].NextToken)
+	}
+	if fake.listCalls[2].NextToken == nil || *fake.listCalls[2].NextToken != "tok2" {
+		t.Errorf("call[2].NextToken=%v, want tok2", fake.listCalls[2].NextToken)
 	}
 }
 
@@ -192,7 +207,7 @@ func TestBedrockGuardrailDiscover_FailClosedOnTagsError(t *testing.T) {
 	}
 }
 
-func TestBedrockGuardrailDiscover_PropagatesListError(t *testing.T) {
+func TestBedrockGuardrailDiscover_PropagatesError(t *testing.T) {
 	t.Parallel()
 	d := &bedrockGuardrailDiscoverer{new: func(_ string) bedrockGuardrailClient {
 		return &fakeBedrockGuardrailClient{listErr: errBedrockGuardrailSeed}
@@ -551,5 +566,100 @@ func TestBedrockGuardrailDiscover_EmitsItemFound_PerGuardrail(t *testing.T) {
 		if !wantIDs[it.ImportID] {
 			t.Errorf("item.import_id=%q not in expected set", it.ImportID)
 		}
+		if it.Region != "us-east-1" {
+			t.Errorf("item.region=%q, want us-east-1", it.Region)
+		}
+	}
+	// service_finish.count should match the number of items emitted.
+	for _, e := range rec.snapshot() {
+		if e.Kind == "service_finish" && e.Count != len(got) {
+			t.Errorf("service_finish.count=%d, want %d", e.Count, len(got))
+		}
+	}
+}
+
+// TestBedrockGuardrailDiscover_MultiRegionTriggersOneSDKCallPerRegion (#291)
+// pins the per-service Discover's `for _, region := range args.Regions`
+// loop. See sqs_test.go::TestSQSDiscover_MultiRegionTriggersOneSDKCallPerRegion
+// for the canonical contract.
+func TestBedrockGuardrailDiscover_MultiRegionTriggersOneSDKCallPerRegion(t *testing.T) {
+	t.Parallel()
+	fakes := map[string]*fakeBedrockGuardrailClient{
+		"us-east-1": {
+			pages: []bedrock.ListGuardrailsOutput{{Guardrails: []bedrocktypes.GuardrailSummary{
+				bedrockGuardrailSummary("g1", "io-foo-east", "arn:aws:bedrock:us-east-1:123:guardrail/g1", ""),
+			}}},
+			tagsByID: map[string][]bedrocktypes.Tag{
+				"arn:aws:bedrock:us-east-1:123:guardrail/g1": {bedrockTagPair("Project", "io-foo")},
+			},
+		},
+		"eu-west-1": {
+			pages: []bedrock.ListGuardrailsOutput{{Guardrails: []bedrocktypes.GuardrailSummary{
+				bedrockGuardrailSummary("g2", "io-foo-west", "arn:aws:bedrock:eu-west-1:123:guardrail/g2", ""),
+			}}},
+			tagsByID: map[string][]bedrocktypes.Tag{
+				"arn:aws:bedrock:eu-west-1:123:guardrail/g2": {bedrockTagPair("Project", "io-foo")},
+			},
+		},
+	}
+	var seenRegions []string
+	d := &bedrockGuardrailDiscoverer{new: func(region string) bedrockGuardrailClient {
+		seenRegions = append(seenRegions, region)
+		f, ok := fakes[region]
+		if !ok {
+			t.Fatalf("closure called with unexpected region %q", region)
+		}
+		return f
+	}, maxConcurrency: 4}
+	got, err := d.Discover(context.Background(), DiscoverArgs{
+		Project:   "io-foo",
+		Regions:   []string{"us-east-1", "eu-west-1"},
+		AccountID: "123",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(seenRegions) != 2 || seenRegions[0] != "us-east-1" || seenRegions[1] != "eu-west-1" {
+		t.Errorf("region closure invocations = %v, want [us-east-1 eu-west-1]", seenRegions)
+	}
+	if len(fakes["us-east-1"].listCalls) == 0 {
+		t.Error("us-east-1 fake never received ListGuardrails")
+	}
+	if len(fakes["eu-west-1"].listCalls) == 0 {
+		t.Error("eu-west-1 fake never received ListGuardrails")
+	}
+	if len(got) != 2 {
+		t.Fatalf("len=%d, want 2 (one per region)", len(got))
+	}
+}
+
+// TestBedrockGuardrailDiscover_EmptyProjectReturnsAll pins that an empty
+// Project disables the prefix filter — every guardrail returned by
+// ListGuardrails surfaces, and ListTagsForResource is fanned out to all
+// of them rather than gated by name prefix.
+func TestBedrockGuardrailDiscover_EmptyProjectReturnsAll(t *testing.T) {
+	t.Parallel()
+	fake := &fakeBedrockGuardrailClient{
+		pages: []bedrock.ListGuardrailsOutput{{
+			Guardrails: []bedrocktypes.GuardrailSummary{
+				bedrockGuardrailSummary("g1", "io-foo-a", "arn:aws:bedrock:us-east-1:123:guardrail/g1", ""),
+				bedrockGuardrailSummary("g2", "other-b", "arn:aws:bedrock:us-east-1:123:guardrail/g2", ""),
+			},
+		}},
+		tagsByID: map[string][]bedrocktypes.Tag{
+			"arn:aws:bedrock:us-east-1:123:guardrail/g1": {},
+			"arn:aws:bedrock:us-east-1:123:guardrail/g2": {},
+		},
+	}
+	d := &bedrockGuardrailDiscoverer{new: func(_ string) bedrockGuardrailClient { return fake }, maxConcurrency: 4}
+	got, err := d.Discover(context.Background(), DiscoverArgs{Project: "", Regions: []string{"us-east-1"}, AccountID: "123"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("len=%d, want 2 (no prefix filter)", len(got))
+	}
+	if len(fake.tagCalls) != 2 {
+		t.Errorf("ListTagsForResource calls=%d, want 2 (no prefix gate)", len(fake.tagCalls))
 	}
 }

@@ -137,9 +137,9 @@ func (d *networkInterfaceDiscoverer) DiscoverByID(ctx context.Context, id, regio
 	client := d.new(region)
 	out, err := client.DescribeNetworkInterfaces(ctx, &ec2.DescribeNetworkInterfacesInput{NetworkInterfaceIds: []string{eniID}})
 	if err != nil {
-		// EC2 surfaces "InvalidNetworkInterfaceID.NotFound" as a generic
-		// API error, not a typed exception. Match by code substring.
-		if strings.Contains(err.Error(), "InvalidNetworkInterfaceID.NotFound") {
+		// EC2 surfaces "InvalidNetworkInterfaceID.NotFound" as a
+		// smithy.APIError; inspect via errors.As.
+		if isEC2APIErrorCode(err, "InvalidNetworkInterfaceID.NotFound") {
 			return imported.ImportedResource{}, fmt.Errorf("aws_network_interface %q: %w", eniID, ErrNotFound)
 		}
 		return imported.ImportedResource{}, fmt.Errorf("DescribeNetworkInterfaces: %w", err)

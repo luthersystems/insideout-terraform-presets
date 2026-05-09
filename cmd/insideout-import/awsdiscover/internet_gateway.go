@@ -123,9 +123,9 @@ func (d *internetGatewayDiscoverer) DiscoverByID(ctx context.Context, id, region
 	client := d.new(region)
 	out, err := client.DescribeInternetGateways(ctx, &ec2.DescribeInternetGatewaysInput{InternetGatewayIds: []string{igwID}})
 	if err != nil {
-		// EC2 surfaces "InvalidInternetGatewayID.NotFound" as a generic API
-		// error, not a typed exception. Match by code substring.
-		if strings.Contains(err.Error(), "InvalidInternetGatewayID.NotFound") {
+		// EC2 surfaces "InvalidInternetGatewayID.NotFound" as a
+		// smithy.APIError; inspect via errors.As.
+		if isEC2APIErrorCode(err, "InvalidInternetGatewayID.NotFound") {
 			return imported.ImportedResource{}, fmt.Errorf("aws_internet_gateway %q: %w", igwID, ErrNotFound)
 		}
 		return imported.ImportedResource{}, fmt.Errorf("DescribeInternetGateways: %w", err)
