@@ -58,6 +58,10 @@ var resourceTypeFixups = map[string]func(*hclwrite.Block){
 	"aws_lb":              fixupLBSubnetMappingConflict,
 	"aws_subnet":          fixupSubnetProviderQuirks,
 	"aws_route_table":     fixupRouteTableEmptyRouteFields,
+	"aws_nat_gateway":     fixupNATGatewaySecondaryIPConflict,
+	"aws_lb_listener":     fixupLBListenerStickinessDurationZero,
+	"aws_lb_target_group": fixupLBTargetGroupProviderQuirks,
+	"aws_vpc_endpoint":    fixupVPCEndpointEmptyDNSDomains,
 }
 
 // lambdaPlaceholderFile is what we set `filename` to so the block
@@ -367,6 +371,126 @@ func nullEmptyStringFieldsInObject(v cty.Value) (cty.Value, bool) {
 	return cty.ObjectVal(fields), true
 }
 
+// fixupNATGatewaySecondaryIPConflict resolves the
+// secondary_private_ip_address_count vs secondary_private_ip_addresses
+// mutual-exclusion. terraform plan -generate-config-out emits both
+// (count = 0, addresses = []) for every NAT gateway not configured
+// with secondary IPs. The provider rejects co-presence even when both
+// carry the no-info shape.
+//
+// Heuristic: when both attrs carry the no-info shape (count = 0 AND
+// addresses = []), drop both — neither carries information. When
+// either side carries a meaningful value, keep it and drop the other.
+// Issue #348.
+func fixupNATGatewaySecondaryIPConflict(blk *hclwrite.Block) {
+	body := blk.Body()
+	hasCount := body.GetAttribute("secondary_private_ip_address_count") != nil
+	hasAddrs := body.GetAttribute("secondary_private_ip_addresses") != nil
+	if !hasCount || !hasAddrs {
+		return
+	}
+	countZero := isAttrLiteralZero(body, "secondary_private_ip_address_count")
+	addrsEmpty := isAttrLiteralEmptyList(body, "secondary_private_ip_addresses")
+	switch {
+	case countZero && addrsEmpty:
+		// Both no-info — drop both.
+		body.RemoveAttribute("secondary_private_ip_address_count")
+		body.RemoveAttribute("secondary_private_ip_addresses")
+	case countZero:
+		// Operator pinned addresses; the count is redundant + conflicts.
+		body.RemoveAttribute("secondary_private_ip_address_count")
+	case addrsEmpty:
+		// Operator pinned count; the empty list is redundant + conflicts.
+		body.RemoveAttribute("secondary_private_ip_addresses")
+	}
+}
+
+// fixupLBListenerStickinessDisabledDropped drops the entire stickiness
+// sub-block from default_action.forward when its enabled = false.
+// terraform plan -generate-config-out emits a stickiness block
+// carrying `enabled = false` (and `duration = 0`, which schema cleanup
+// drops as Computed-default before this fixup runs) for any forward
+// target group not configured for stickiness. The provider treats
+// `duration` as a required argument whenever the stickiness block is
+// present — so leaving an empty `stickiness { enabled = false }`
+// block fails validate with "Missing required argument". Drop the
+// entire stickiness block when disabled; the provider treats
+// stickiness as optional and accepts its absence. Issue #349.
+func fixupLBListenerStickinessDurationZero(blk *hclwrite.Block) {
+	for _, da := range blk.Body().Blocks() {
+		if da.Type() != "default_action" {
+			continue
+		}
+		for _, fwd := range da.Body().Blocks() {
+			if fwd.Type() != "forward" {
+				continue
+			}
+			for _, st := range fwd.Body().Blocks() {
+				if st.Type() != "stickiness" {
+					continue
+				}
+				// Drop the whole block when stickiness is disabled.
+				// A real stickiness configuration carrying duration is
+				// preserved (enabled = true with duration set).
+				if isAttrLiteralFalse(st.Body(), "enabled") {
+					fwd.Body().RemoveBlock(st)
+				}
+			}
+		}
+	}
+}
+
+// fixupLBTargetGroupProviderQuirks resolves three terraform-provider-aws
+// schema constraints terraform plan -generate-config-out emits in
+// violation of:
+//
+//   - target_control_port = 0 (provider rejects literal 0; range
+//     1-65535). Drop the literal-zero attribute.
+//   - target_failover block with on_deregistration = null AND
+//     on_unhealthy = null (both required by schema; null fails the
+//     required check). Drop the entire block.
+//   - target_health_state block with
+//     enable_unhealthy_connection_termination = null (required by
+//     schema). Drop the entire block.
+//
+// Conservative: each block-drop fires only when the required field is
+// the null literal. A real configuration carrying meaningful values
+// preserves the block. Issue #350.
+func fixupLBTargetGroupProviderQuirks(blk *hclwrite.Block) {
+	body := blk.Body()
+	if isAttrLiteralZero(body, "target_control_port") {
+		body.RemoveAttribute("target_control_port")
+	}
+	for _, sub := range body.Blocks() {
+		switch sub.Type() {
+		case "target_failover":
+			if isAttrLiteralNull(sub.Body(), "on_deregistration") && isAttrLiteralNull(sub.Body(), "on_unhealthy") {
+				body.RemoveBlock(sub)
+			}
+		case "target_health_state":
+			if isAttrLiteralNull(sub.Body(), "enable_unhealthy_connection_termination") {
+				body.RemoveBlock(sub)
+			}
+		}
+	}
+}
+
+// fixupVPCEndpointEmptyDNSDomains drops the empty
+// private_dns_specified_domains list inside the dns_options nested
+// block. The provider's schema marks the list as MinItems=1 — empty
+// list violates the constraint. The dns_options block accepts the
+// field's absence as "default to nil". Issue #351.
+func fixupVPCEndpointEmptyDNSDomains(blk *hclwrite.Block) {
+	for _, sub := range blk.Body().Blocks() {
+		if sub.Type() != "dns_options" {
+			continue
+		}
+		if isAttrLiteralEmptyList(sub.Body(), "private_dns_specified_domains") {
+			sub.Body().RemoveAttribute("private_dns_specified_domains")
+		}
+	}
+}
+
 // isAttrLiteralZero reports whether the named attribute exists and its
 // expression is exactly the literal `0` (after whitespace trimming).
 // It does NOT match `0.0`, `00`, or any computed expression that
@@ -402,4 +526,59 @@ func hasUsableValue(body *hclwrite.Body, name string) bool {
 		sb.Write(t.Bytes)
 	}
 	return strings.TrimSpace(sb.String()) != "null"
+}
+
+// isAttrLiteralNull reports whether the named attribute exists and its
+// expression is exactly the literal `null` (after whitespace trimming).
+// Mirrors isAttrLiteralZero — only the raw literal terraform plan
+// -generate-config-out would emit for a Required-but-unset attribute,
+// not any computed expression that evaluates to null.
+func isAttrLiteralNull(body *hclwrite.Body, name string) bool {
+	attr := body.GetAttribute(name)
+	if attr == nil {
+		return false
+	}
+	tokens := attr.Expr().BuildTokens(nil)
+	var sb strings.Builder
+	for _, t := range tokens {
+		sb.Write(t.Bytes)
+	}
+	return strings.TrimSpace(sb.String()) == "null"
+}
+
+// isAttrLiteralEmptyList reports whether the named attribute exists and
+// its expression is exactly the literal `[]` (after whitespace
+// trimming). Mirrors isAttrLiteralZero — only the raw literal
+// terraform plan -generate-config-out would emit for an empty
+// list-shaped field, not any computed expression that evaluates to
+// an empty list.
+func isAttrLiteralEmptyList(body *hclwrite.Body, name string) bool {
+	attr := body.GetAttribute(name)
+	if attr == nil {
+		return false
+	}
+	tokens := attr.Expr().BuildTokens(nil)
+	var sb strings.Builder
+	for _, t := range tokens {
+		sb.Write(t.Bytes)
+	}
+	return strings.TrimSpace(sb.String()) == "[]"
+}
+
+// isAttrLiteralFalse reports whether the named attribute exists and its
+// expression is exactly the literal `false` (after whitespace
+// trimming). Mirrors isAttrLiteralZero / isAttrLiteralNull — only the
+// raw literal terraform plan -generate-config-out would emit, not any
+// computed expression evaluating to false.
+func isAttrLiteralFalse(body *hclwrite.Body, name string) bool {
+	attr := body.GetAttribute(name)
+	if attr == nil {
+		return false
+	}
+	tokens := attr.Expr().BuildTokens(nil)
+	var sb strings.Builder
+	for _, t := range tokens {
+		sb.Write(t.Bytes)
+	}
+	return strings.TrimSpace(sb.String()) == "false"
 }
