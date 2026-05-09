@@ -54,6 +54,9 @@ var awsTFTypeByResourceType = map[string]string{
 	"ec2:vpc-endpoint":      "aws_vpc_endpoint",
 	"ec2:dhcp-options":      "aws_vpc_dhcp_options",
 	"ec2:network-interface": "aws_network_interface",
+	"bedrock:guardrail":     "aws_bedrock_guardrail",
+	"aoss:collection":       "aws_opensearchserverless_collection",
+	"apigateway:apis":       "aws_apigatewayv2_api",
 	// --- Unimportable types — the picker greys these out ---
 	// Data Storage
 	"rds:cluster": "aws_rds_cluster",

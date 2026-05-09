@@ -23,6 +23,9 @@ const (
 // discover pipeline emits clean HCL for. Keep sorted lexicographically; the
 // awsdiscover parity test will fail if this drifts from the live constructor.
 var awsTypes = []string{
+	"aws_apigatewayv2_api",
+	"aws_apigatewayv2_stage",
+	"aws_bedrock_guardrail",
 	"aws_cloudfront_distribution",
 	"aws_cloudwatch_log_group",
 	"aws_dynamodb_table",
@@ -35,6 +38,7 @@ var awsTypes = []string{
 	"aws_nat_gateway",
 	"aws_network_acl",
 	"aws_network_interface",
+	"aws_opensearchserverless_collection",
 	"aws_route53_zone",
 	"aws_route_table",
 	"aws_s3_bucket",

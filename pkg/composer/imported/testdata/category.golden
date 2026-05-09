@@ -1,3 +1,6 @@
+aws_apigatewayv2_api	Network Security
+aws_apigatewayv2_stage	Network Security
+aws_bedrock_guardrail	Security
 aws_cloudfront_distribution	Network Security
 aws_cloudwatch_log_group	Observability
 aws_db_instance	Data Storage
@@ -16,6 +19,7 @@ aws_lb	Network Security
 aws_nat_gateway	Network Security
 aws_network_acl	Network Security
 aws_network_interface	Network Security
+aws_opensearchserverless_collection	Data Storage
 aws_rds_cluster	Data Storage
 aws_route53_zone	Network Security
 aws_route_table	Network Security
