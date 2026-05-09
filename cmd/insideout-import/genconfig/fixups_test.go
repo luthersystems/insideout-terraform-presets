@@ -517,7 +517,7 @@ func TestFixupLB_DropsSubnetMappingWhenNoIPPinned(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := string(out)
-	if strings.Contains(got, "subnet_mapping") {
+	if regexp.MustCompile(`(?m)^\s*subnet_mapping\s*\{`).MatchString(got) {
 		t.Errorf("subnet_mapping blocks must be dropped when no static IP pin present\n--- got ---\n%s", got)
 	}
 	if !regexp.MustCompile(`subnets\s*=\s*\["subnet-aaa",\s*"subnet-bbb"\]`).MatchString(got) {
@@ -678,5 +678,75 @@ resource "aws_lambda_function" "bravo" {
 	}
 	if strings.Count(got, "ignore_changes") != 2 {
 		t.Errorf("expected 2 ignore_changes injections, got %d", strings.Count(got, "ignore_changes"))
+	}
+}
+
+// TestFixupVPC_IPv6NetmaskNonLiteralZeroPreserved pins isAttrLiteralZero's
+// carve-out spec: only the literal `0` triggers the orphan drop. Variants
+// like `00`, `0.0`, or any computed expression are preserved untouched. A
+// mutation that loosened the trim to numeric coercion would survive the
+// canonical-orphan test but fail this one.
+func TestFixupVPC_IPv6NetmaskNonLiteralZeroPreserved(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		val  string
+	}{
+		{"double_zero", `00`},
+		{"zero_dot_zero", `0.0`},
+		{"computed_var", `var.netmask`},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			in := []byte(`resource "aws_vpc" "main" {
+  cidr_block          = "10.0.0.0/16"
+  ipv6_ipam_pool_id   = null
+  ipv6_netmask_length = ` + tc.val + `
+}
+`)
+			out, err := applyResourceTypeFixups(in)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := string(out)
+			if !strings.Contains(got, "ipv6_netmask_length") {
+				t.Errorf("ipv6_netmask_length=%s must NOT be dropped (only literal 0 triggers the fixup)\n--- got ---\n%s", tc.val, got)
+			}
+		})
+	}
+}
+
+// TestFixupLB_PreservesSubnetMappingWhenIPv6AddressSet pins the third
+// static-IP-pin attribute (ipv6_address) — the production code checks
+// allocation_id, private_ipv4_address, AND ipv6_address. A mutation that
+// dropped the third disjunct or replaced || with && would survive the
+// other LB pin tests but fail this one.
+func TestFixupLB_PreservesSubnetMappingWhenIPv6AddressSet(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_lb" "main" {
+  name               = "dual-stack-nlb"
+  load_balancer_type = "network"
+  subnets            = ["subnet-aaa"]
+  subnet_mapping {
+    subnet_id    = "subnet-aaa"
+    ipv6_address = "2001:db8::1"
+  }
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if regexp.MustCompile(`(?m)^\s*subnets\s*=`).MatchString(got) {
+		t.Errorf("subnets attribute must be dropped when subnet_mapping carries ipv6_address\n--- got ---\n%s", got)
+	}
+	if !regexp.MustCompile(`(?m)^\s*subnet_mapping\s*\{`).MatchString(got) {
+		t.Errorf("subnet_mapping blocks must be preserved when ipv6_address present\n--- got ---\n%s", got)
+	}
+	if !strings.Contains(got, `ipv6_address = "2001:db8::1"`) {
+		t.Errorf("ipv6_address value must be preserved\n--- got ---\n%s", got)
 	}
 }
