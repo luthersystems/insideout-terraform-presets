@@ -286,6 +286,10 @@ func fixupRouteTableEmptyRouteFields(blk *hclwrite.Block) {
 	if diags.HasErrors() {
 		return
 	}
+	// expr.Value(nil) fails on any variable / function reference. That's
+	// the intended bail-out — generate-config-out emits literals only,
+	// and we'd rather no-op than silently drop a reference. Future
+	// templating that mixes refs into route would need an EvalContext.
 	val, diags := expr.Value(nil)
 	if diags.HasErrors() {
 		return
@@ -293,6 +297,17 @@ func fixupRouteTableEmptyRouteFields(blk *hclwrite.Block) {
 	filtered, changed := dropEmptyStringFieldsFromTuple(val)
 	if !changed {
 		return
+	}
+	// Defensive: if any element became an empty object (every field was
+	// "" — degenerate but not impossible), bail rather than emit
+	// `route = [{}]`, which would convert the existing CIDR-validation
+	// error into a different missing-required-arg failure.
+	it := filtered.ElementIterator()
+	for it.Next() {
+		_, elem := it.Element()
+		if elem.Type().IsObjectType() && len(elem.AsValueMap()) == 0 {
+			return
+		}
 	}
 	body.SetAttributeValue("route", filtered)
 }

@@ -1218,3 +1218,73 @@ resource "aws_route" "extra" {
 		t.Errorf("aws_route.ipv6_cidr_block=\"\" must be preserved (fixup keyed by aws_route_table only)\n--- got ---\n%s", got)
 	}
 }
+
+// TestFixupRouteTable_FullyEmptiedObjectBailsOut pins the defensive
+// guard against degenerate input. If a route object contains only
+// empty-string fields (no destination, no target — a shape
+// generate-config-out shouldn't produce but we don't gate on its
+// behavior), the cty round-trip would yield {} which renders as
+// `route = [{}]` and converts the original CIDR-validation error into
+// a different missing-required-arg failure. The fixup must bail out
+// (leave original tokens) rather than mutate to a worse state.
+func TestFixupRouteTable_FullyEmptiedObjectBailsOut(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_route_table" "rt" {
+  vpc_id = "vpc-123"
+  route = [{
+    cidr_block      = ""
+    ipv6_cidr_block = ""
+  }]
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(out) != string(in) {
+		t.Errorf("fully-emptied route object must trigger bail-out (leave tokens untouched)\n--- in ---\n%s\n--- out ---\n%s", in, out)
+	}
+}
+
+// TestFixupRouteTable_MultipleRouteObjectsAllStripped pins the
+// multi-element-tuple branch. A route_table can carry any number of
+// route entries; the fixup must clean each one independently. A
+// mutation that returned only the first cleaned element would survive
+// the single-route fixtures but fail this one.
+func TestFixupRouteTable_MultipleRouteObjectsAllStripped(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_route_table" "rt" {
+  vpc_id = "vpc-123"
+  route = [{
+    cidr_block      = "0.0.0.0/0"
+    gateway_id      = "igw-abc"
+    ipv6_cidr_block = ""
+  }, {
+    cidr_block      = "10.0.0.0/8"
+    nat_gateway_id  = "nat-xyz"
+    ipv6_cidr_block = ""
+  }]
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if strings.Contains(got, "ipv6_cidr_block") {
+		t.Errorf("ipv6_cidr_block must be dropped from BOTH route objects\n--- got ---\n%s", got)
+	}
+	// Both routes' destination + target survive.
+	if !regexp.MustCompile(`cidr_block\s*=\s*"0.0.0.0/0"`).MatchString(got) {
+		t.Errorf("first route's cidr_block must be preserved\n--- got ---\n%s", got)
+	}
+	if !regexp.MustCompile(`gateway_id\s*=\s*"igw-abc"`).MatchString(got) {
+		t.Errorf("first route's gateway_id must be preserved\n--- got ---\n%s", got)
+	}
+	if !regexp.MustCompile(`cidr_block\s*=\s*"10.0.0.0/8"`).MatchString(got) {
+		t.Errorf("second route's cidr_block must be preserved\n--- got ---\n%s", got)
+	}
+	if !regexp.MustCompile(`nat_gateway_id\s*=\s*"nat-xyz"`).MatchString(got) {
+		t.Errorf("second route's nat_gateway_id must be preserved\n--- got ---\n%s", got)
+	}
+}
