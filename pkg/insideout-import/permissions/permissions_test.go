@@ -19,6 +19,9 @@ import (
 var awsTFTypeToServiceSlug = map[string]string{
 	"aws_cloudfront_distribution": "cloudfront_distribution",
 	"aws_cloudwatch_log_group":    "cloudwatchlogs",
+	"aws_db_instance":             "db_instance",
+	"aws_db_parameter_group":      "db_parameter_group",
+	"aws_db_subnet_group":         "db_subnet_group",
 	"aws_dynamodb_table":          "dynamodb",
 	"aws_eip":                     "eip",
 	"aws_iam_policy":              "iam_policy",

@@ -58,6 +58,8 @@ var awsTFTypeByResourceType = map[string]string{
 	// Data Storage
 	"rds:cluster": "aws_rds_cluster",
 	"rds:db":      "aws_db_instance",
+	"rds:subgrp":  "aws_db_subnet_group",
+	"rds:pg":      "aws_db_parameter_group",
 	// Compute
 	"eks:cluster":    "aws_eks_cluster",
 	"ecs:cluster":    "aws_ecs_cluster",

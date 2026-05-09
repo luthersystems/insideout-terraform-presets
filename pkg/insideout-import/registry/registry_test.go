@@ -20,6 +20,9 @@ func TestSupportedDiscoverTypes_AWS_ReturnsCanonicalSortedList(t *testing.T) {
 	want := []string{
 		"aws_cloudfront_distribution",
 		"aws_cloudwatch_log_group",
+		"aws_db_instance",
+		"aws_db_parameter_group",
+		"aws_db_subnet_group",
 		"aws_dynamodb_table",
 		"aws_eip",
 		"aws_iam_policy",
