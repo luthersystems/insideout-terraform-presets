@@ -1635,3 +1635,228 @@ func TestFixupVPCEndpoint_PopulatedDNSDomainsPreserved(t *testing.T) {
 		t.Errorf("populated private_dns_specified_domains must be preserved\n--- got ---\n%s", got)
 	}
 }
+
+// TestFixupLBTargetGroup_PartiallyNullTargetFailoverPreserved pins
+// mutation-resistance on the && in fixupLBTargetGroupProviderQuirks's
+// target_failover guard. Both required fields must be null for the
+// block to be dropped — partial null (one set, one null) preserves
+// the block. A mutation that swapped && for || would always-drop and
+// fail this test.
+func TestFixupLBTargetGroup_PartiallyNullTargetFailoverPreserved(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		body string
+	}{
+		{"deregistration_set", `on_deregistration = "rebalance"
+    on_unhealthy      = null`},
+		{"unhealthy_set", `on_deregistration = null
+    on_unhealthy      = "no_rebalance"`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			in := []byte(`resource "aws_lb_target_group" "tg" {
+  name     = "tg"
+  port     = 80
+  protocol = "HTTP"
+  vpc_id   = "vpc-123"
+  target_failover {
+    ` + tc.body + `
+  }
+}
+`)
+			out, err := applyResourceTypeFixups(in)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := string(out)
+			if !regexp.MustCompile(`(?m)^\s*target_failover\s*\{`).MatchString(got) {
+				t.Errorf("partially-null target_failover must be preserved\n--- got ---\n%s", got)
+			}
+		})
+	}
+}
+
+// TestFixupLBTargetGroup_PopulatedTargetHealthStatePreserved pins the
+// preserve-when-meaningful carve-out for the third target_group
+// transform: a real target_health_state with a non-null required
+// field survives. A mutation that always-dropped target_health_state
+// (or removed the isAttrLiteralNull guard) would fail this.
+func TestFixupLBTargetGroup_PopulatedTargetHealthStatePreserved(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_lb_target_group" "tg" {
+  name     = "tg"
+  port     = 80
+  protocol = "HTTP"
+  vpc_id   = "vpc-123"
+  target_health_state {
+    enable_unhealthy_connection_termination = true
+    unhealthy_draining_interval             = 60
+  }
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if !regexp.MustCompile(`(?m)^\s*target_health_state\s*\{`).MatchString(got) {
+		t.Errorf("populated target_health_state block must be preserved\n--- got ---\n%s", got)
+	}
+	if !regexp.MustCompile(`enable_unhealthy_connection_termination\s*=\s*true`).MatchString(got) {
+		t.Errorf("non-null enable_unhealthy_connection_termination must be preserved\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupNATGateway_OnlyAffectsAWSNATGatewayBlocks pins resource-type
+// isolation: a sibling aws_eip carrying the same secondary_private_ip
+// attribute names must NOT be touched. The fixup table is keyed by
+// aws_nat_gateway only.
+func TestFixupNATGateway_OnlyAffectsAWSNATGatewayBlocks(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_nat_gateway" "ngw" {
+  subnet_id                          = "subnet-abc"
+  secondary_private_ip_address_count = 0
+  secondary_private_ip_addresses     = []
+}
+
+resource "aws_eip" "extra" {
+  domain                             = "vpc"
+  secondary_private_ip_address_count = 0
+  secondary_private_ip_addresses     = []
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if !regexp.MustCompile(`(?s)resource "aws_eip" "extra"[^}]*secondary_private_ip_address_count\s*=\s*0`).MatchString(got) {
+		t.Errorf("aws_eip.secondary_private_ip_address_count must be preserved (fixup keyed by aws_nat_gateway)\n--- got ---\n%s", got)
+	}
+	if !regexp.MustCompile(`(?s)resource "aws_eip" "extra"[^}]*secondary_private_ip_addresses\s*=\s*\[\]`).MatchString(got) {
+		t.Errorf("aws_eip.secondary_private_ip_addresses=[] must be preserved\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupLBListener_OnlyAffectsAWSLBListenerBlocks pins resource-type
+// isolation: a sibling aws_lb block carrying its own (hypothetical)
+// stickiness sub-block must not be touched. Fixup table keyed by
+// aws_lb_listener only.
+func TestFixupLBListener_OnlyAffectsAWSLBListenerBlocks(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_lb_listener" "listener" {
+  load_balancer_arn = "arn:..."
+  port              = 80
+  protocol          = "HTTP"
+  default_action {
+    type             = "forward"
+    target_group_arn = "arn:..."
+    forward {
+      stickiness {
+        enabled = false
+      }
+      target_group {
+        arn    = "arn:..."
+        weight = 1
+      }
+    }
+  }
+}
+
+resource "aws_lb" "extra" {
+  name = "alb"
+  default_action {
+    forward {
+      stickiness {
+        enabled = false
+      }
+    }
+  }
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	// aws_lb's stickiness must survive untouched (fixup keyed by aws_lb_listener).
+	count := len(regexp.MustCompile(`(?m)^\s*stickiness\s*\{`).FindAllString(got, -1))
+	if count != 1 {
+		t.Errorf("expected exactly 1 stickiness block remaining (the aws_lb's), got %d\n--- got ---\n%s", count, got)
+	}
+}
+
+// TestFixupLBTargetGroup_OnlyAffectsAWSLBTargetGroupBlocks pins
+// resource-type isolation: a sibling aws_lb block carrying the same
+// attribute names (target_control_port, target_failover) must not be
+// touched.
+func TestFixupLBTargetGroup_OnlyAffectsAWSLBTargetGroupBlocks(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_lb_target_group" "tg" {
+  name                = "tg"
+  target_control_port = 0
+  target_failover {
+    on_deregistration = null
+    on_unhealthy      = null
+  }
+}
+
+resource "aws_lb" "extra" {
+  name                = "alb"
+  target_control_port = 0
+  target_failover {
+    on_deregistration = null
+    on_unhealthy      = null
+  }
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	// aws_lb's target_control_port=0 must be preserved.
+	if !regexp.MustCompile(`(?s)resource "aws_lb" "extra"[^}]*target_control_port\s*=\s*0`).MatchString(got) {
+		t.Errorf("aws_lb.target_control_port=0 must be preserved (fixup keyed by aws_lb_target_group)\n--- got ---\n%s", got)
+	}
+	// Exactly 1 target_failover block remains (the aws_lb's).
+	count := len(regexp.MustCompile(`(?m)^\s*target_failover\s*\{`).FindAllString(got, -1))
+	if count != 1 {
+		t.Errorf("expected exactly 1 target_failover block remaining (the aws_lb's), got %d\n--- got ---\n%s", count, got)
+	}
+}
+
+// TestFixupVPCEndpoint_OnlyAffectsAWSVPCEndpointBlocks pins
+// resource-type isolation: a sibling aws_vpc carrying its own
+// (hypothetical) dns_options block with empty
+// private_dns_specified_domains must not be touched.
+func TestFixupVPCEndpoint_OnlyAffectsAWSVPCEndpointBlocks(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_vpc_endpoint" "ep" {
+  vpc_id            = "vpc-123"
+  service_name      = "com.amazonaws.us-east-1.s3"
+  vpc_endpoint_type = "Gateway"
+  dns_options {
+    private_dns_specified_domains = []
+  }
+}
+
+resource "aws_iam_policy" "extra" {
+  name = "p"
+  dns_options {
+    private_dns_specified_domains = []
+  }
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	// aws_iam_policy's dns_options.private_dns_specified_domains=[] must be preserved.
+	if !regexp.MustCompile(`(?s)resource "aws_iam_policy" "extra"[^}]*\{[^}]*dns_options[^}]*\{[^}]*private_dns_specified_domains\s*=\s*\[\]`).MatchString(got) {
+		t.Errorf("aws_iam_policy's empty private_dns_specified_domains must be preserved (fixup keyed by aws_vpc_endpoint)\n--- got ---\n%s", got)
+	}
+}
