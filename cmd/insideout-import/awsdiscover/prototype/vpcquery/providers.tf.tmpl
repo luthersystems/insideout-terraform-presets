@@ -1,0 +1,20 @@
+// providers.tf.tmpl is the minimal terraform/provider config rendered into
+// the scratch workdir alongside vpc.tfquery.hcl. We pin AWS provider >= 6.0
+// (matches the version constraint every preset main.tf already declares —
+// list resources require provider 6.x). The {{.Region}} placeholder is
+// substituted at runtime so each per-region query targets the right
+// regional endpoint without depending on operator AWS_REGION env state.
+
+terraform {
+  required_version = ">= 1.14"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = ">= 6.0"
+    }
+  }
+}
+
+provider "aws" {
+  region = "{{.Region}}"
+}
