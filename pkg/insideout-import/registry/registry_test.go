@@ -64,6 +64,9 @@ func TestSupportedDiscoverTypes_AWS_ReturnsCanonicalSortedList(t *testing.T) {
 func TestSupportedDiscoverTypes_GCP_ReturnsCanonicalSortedList(t *testing.T) {
 	t.Parallel()
 	want := []string{
+		"google_api_gateway_api",
+		"google_api_gateway_api_config",
+		"google_api_gateway_gateway",
 		"google_cloud_run_v2_service",
 		"google_cloudfunctions2_function",
 		"google_compute_address",
@@ -134,7 +137,7 @@ func TestSupportedDiscoverTypes_ReturnsCopy_PackageStateUnchanged(t *testing.T) 
 		firstLiteral string
 	}{
 		{provider: ProviderAWS, firstLiteral: "aws_apigatewayv2_api"},
-		{provider: ProviderGCP, firstLiteral: "google_cloud_run_v2_service"},
+		{provider: ProviderGCP, firstLiteral: "google_api_gateway_api"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.provider, func(t *testing.T) {

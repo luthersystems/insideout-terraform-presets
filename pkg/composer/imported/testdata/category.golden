@@ -39,6 +39,9 @@ aws_subnet	Network Security
 aws_vpc	Network Security
 aws_vpc_dhcp_options	Network Security
 aws_vpc_endpoint	Network Security
+google_api_gateway_api	Network Security
+google_api_gateway_api_config	Network Security
+google_api_gateway_gateway	Network Security
 google_bigquery_dataset	Data Storage
 google_cloud_run_service	Virtual Machines
 google_cloud_run_v2_service	Virtual Machines

@@ -174,6 +174,9 @@ func NewGCPDiscoverer(searcher gcpAssetSearcher, projectID string) *GCPDiscovere
 			"google_compute_forwarding_rule":    newComputeForwardingRuleDiscoverer(),
 			"google_compute_target_https_proxy": newComputeTargetHTTPSProxyDiscoverer(),
 			"google_compute_url_map":            newComputeURLMapDiscoverer(),
+			"google_api_gateway_api":            newAPIGatewayAPIDiscoverer(),
+			"google_api_gateway_api_config":     newAPIGatewayAPIConfigDiscoverer(),
+			"google_api_gateway_gateway":        newAPIGatewayGatewayDiscoverer(),
 		},
 	}
 }

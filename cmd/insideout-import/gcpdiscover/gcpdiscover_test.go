@@ -43,6 +43,9 @@ var expectedRegisteredTypes = map[string]bool{
 	"google_compute_forwarding_rule":    false,
 	"google_compute_target_https_proxy": false,
 	"google_compute_url_map":            false,
+	"google_api_gateway_api":            false,
+	"google_api_gateway_api_config":     false,
+	"google_api_gateway_gateway":        false,
 }
 
 func TestNewGCPDiscoverer_RegistersExpectedTypes(t *testing.T) {
@@ -650,6 +653,9 @@ var expectedScopeStyle = map[string]ScopeStyle{
 	"google_compute_forwarding_rule":    ScopeStyleLabels,     // forwarding rules carry labels (#375)
 	"google_compute_target_https_proxy": ScopeStyleNamePrefix, // target HTTPS proxies have no labels (#375)
 	"google_compute_url_map":            ScopeStyleNamePrefix, // URL maps have no labels (#375)
+	"google_api_gateway_api":            ScopeStyleLabels,     // API Gateway APIs carry labels (#376)
+	"google_api_gateway_api_config":     ScopeStyleLabels,     // API Gateway API configs carry labels (#376)
+	"google_api_gateway_gateway":        ScopeStyleLabels,     // API Gateway gateways carry labels (#376)
 }
 
 // TestScopeStyle_PinsPerTypeContract is the regression guard (#366).

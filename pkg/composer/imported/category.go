@@ -119,6 +119,9 @@ var categoryByTFType = map[string]string{
 	"aws_vpc_endpoint":                    CategoryNetworkSecurity,
 
 	// --- GCP ---
+	"google_api_gateway_api":            CategoryNetworkSecurity,
+	"google_api_gateway_api_config":     CategoryNetworkSecurity,
+	"google_api_gateway_gateway":        CategoryNetworkSecurity,
 	"google_bigquery_dataset":           CategoryDataStorage,
 	"google_cloud_run_service":          CategoryVirtualMachines,
 	"google_cloud_run_v2_service":       CategoryVirtualMachines,

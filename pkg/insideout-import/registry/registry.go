@@ -65,6 +65,9 @@ var awsTypes = []string{
 // discover pipeline emits clean HCL for. Keep sorted lexicographically; the
 // gcpdiscover parity test will fail if this drifts from the live constructor.
 var gcpTypes = []string{
+	"google_api_gateway_api",
+	"google_api_gateway_api_config",
+	"google_api_gateway_gateway",
 	"google_cloud_run_v2_service",
 	"google_cloudfunctions2_function",
 	"google_compute_address",
