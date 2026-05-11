@@ -51,17 +51,17 @@ func applyResourceTypeFixups(raw []byte) ([]byte, error) {
 // They must NOT depend on schema metadata — that's already been applied
 // by cleanGenerated.
 var resourceTypeFixups = map[string]func(*hclwrite.Block){
-	"aws_lambda_function": fixupLambdaSource,
-	"aws_kms_key":         fixupKMSRotationPeriodZero,
-	"aws_dynamodb_table":  fixupDynamoDBPITRRecoveryPeriodZero,
-	"aws_vpc":             fixupVPCIPv6NetmaskOrphan,
-	"aws_lb":              fixupLBSubnetMappingConflict,
-	"aws_subnet":          fixupSubnetProviderQuirks,
-	"aws_route_table":     fixupRouteTableEmptyRouteFields,
-	"aws_nat_gateway":     fixupNATGatewaySecondaryIPConflict,
-	"aws_lb_listener":     fixupLBListenerStickinessDurationZero,
-	"aws_lb_target_group": fixupLBTargetGroupProviderQuirks,
-	"aws_vpc_endpoint":    fixupVPCEndpointEmptyDNSDomains,
+	"aws_lambda_function":       fixupLambdaSource,
+	"aws_kms_key":               fixupKMSRotationPeriodZero,
+	"aws_dynamodb_table":        fixupDynamoDBPITRRecoveryPeriodZero,
+	"aws_vpc":                   fixupVPCIPv6NetmaskOrphan,
+	"aws_lb":                    fixupLBSubnetMappingConflict,
+	"aws_subnet":                fixupSubnetProviderQuirks,
+	"aws_route_table":           fixupRouteTableEmptyRouteFields,
+	"aws_nat_gateway":           fixupNATGatewaySecondaryIPConflict,
+	"aws_lb_listener":           fixupLBListenerStickinessDurationZero,
+	"aws_lb_target_group":       fixupLBTargetGroupProviderQuirks,
+	"aws_vpc_endpoint":          fixupVPCEndpointEmptyDNSDomains,
 	"aws_db_instance":           fixupDBInstanceProviderQuirks,
 	"aws_secretsmanager_secret": fixupSecretsManagerSecretDefaults,
 	"google_compute_firewall":   fixupComputeFirewallEmptySourceTargetArrays,
@@ -551,10 +551,10 @@ func fixupSecretsManagerSecretDefaults(blk *hclwrite.Block) {
 // emits all four source/target arrays as literal `[]` even when only
 // one of the source pairs is configured:
 //
-//   source_service_accounts = []
-//   source_tags             = []
-//   target_service_accounts = []
-//   target_tags             = []
+//	source_service_accounts = []
+//	source_tags             = []
+//	target_service_accounts = []
+//	target_tags             = []
 //
 // The Google provider rejects the combination — source_service_accounts
 // is mutually-exclusive with source_tags, and target_service_accounts
