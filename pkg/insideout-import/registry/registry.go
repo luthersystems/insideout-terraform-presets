@@ -69,6 +69,7 @@ var gcpTypes = []string{
 	"google_pubsub_subscription",
 	"google_pubsub_topic",
 	"google_secret_manager_secret",
+	"google_service_account",
 	"google_storage_bucket",
 }
 

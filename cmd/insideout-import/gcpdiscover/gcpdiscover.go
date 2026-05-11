@@ -158,6 +158,7 @@ func NewGCPDiscoverer(searcher gcpAssetSearcher, projectID string) *GCPDiscovere
 			"google_storage_bucket":        newStorageBucketDiscoverer(),
 			"google_secret_manager_secret": newSecretManagerSecretDiscoverer(),
 			"google_compute_network":       newComputeNetworkDiscoverer(),
+			"google_service_account":       newServiceAccountDiscoverer(),
 		},
 	}
 }

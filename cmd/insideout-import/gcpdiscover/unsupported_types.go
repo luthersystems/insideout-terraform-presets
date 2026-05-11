@@ -35,8 +35,6 @@ var gcpUnsupportedTFTypeByAssetType = map[string]string{
 	"container.googleapis.com/Cluster":       "google_container_cluster",
 	"cloudfunctions.googleapis.com/Function": "google_cloudfunctions_function",
 	"run.googleapis.com/Service":             "google_cloud_run_service",
-	// IAM
-	"iam.googleapis.com/ServiceAccount": "google_service_account",
 }
 
 // mapGCPAssetTypeToTF resolves a Cloud Asset asset type to its
