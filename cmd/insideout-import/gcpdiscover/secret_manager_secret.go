@@ -30,8 +30,9 @@ type secretManagerSecretDiscoverer struct{}
 
 func newSecretManagerSecretDiscoverer() Discoverer { return &secretManagerSecretDiscoverer{} }
 
-func (secretManagerSecretDiscoverer) ResourceType() string { return secretManagerSecretTFType }
-func (secretManagerSecretDiscoverer) AssetType() string    { return secretManagerSecretAssetType }
+func (secretManagerSecretDiscoverer) ResourceType() string   { return secretManagerSecretTFType }
+func (secretManagerSecretDiscoverer) AssetType() string      { return secretManagerSecretAssetType }
+func (secretManagerSecretDiscoverer) ScopeStyle() ScopeStyle { return ScopeStyleLabels }
 
 func (secretManagerSecretDiscoverer) FromAsset(book addressBook, a gcpAssetResult, projectID string) imported.ImportedResource {
 	name := shortName(a.Name)

@@ -31,8 +31,9 @@ type storageBucketDiscoverer struct{}
 
 func newStorageBucketDiscoverer() Discoverer { return &storageBucketDiscoverer{} }
 
-func (storageBucketDiscoverer) ResourceType() string { return storageBucketTFType }
-func (storageBucketDiscoverer) AssetType() string    { return storageBucketAssetType }
+func (storageBucketDiscoverer) ResourceType() string   { return storageBucketTFType }
+func (storageBucketDiscoverer) AssetType() string      { return storageBucketAssetType }
+func (storageBucketDiscoverer) ScopeStyle() ScopeStyle { return ScopeStyleLabels }
 
 func (storageBucketDiscoverer) FromAsset(book addressBook, a gcpAssetResult, projectID string) imported.ImportedResource {
 	name := shortName(a.Name)

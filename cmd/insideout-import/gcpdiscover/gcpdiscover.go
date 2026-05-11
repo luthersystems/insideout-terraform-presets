@@ -36,13 +36,36 @@ import (
 )
 
 // gcpServiceSlug is the progress-event service slug used for the
-// single Cloud Asset Inventory call that powers GCP discovery (#295).
-// One CAI SearchAllResources covers every requested asset type for a
-// project, so we emit one (service_start/service_finish) pair around
-// it rather than per-asset-type. The slug name matches the Cloud
-// Asset API's product naming so consumers know what the events
+// Cloud Asset Inventory calls that power GCP discovery (#295). One or
+// two CAI SearchAllResources calls cover every requested asset type
+// for a project (one per ScopeStyle bucket, see #366), so we emit one
+// (service_start/service_finish) pair around the combined operation
+// rather than per-call or per-asset-type. The slug name matches the
+// Cloud Asset API's product naming so consumers know what the events
 // represent.
 const gcpServiceSlug = "cloud_asset_inventory"
+
+// ScopeStyle identifies how an asset-type is scoped to the operator's
+// stack project inside Cloud Asset Inventory queries. The aggregator
+// groups discoverers by ScopeStyle and issues one SearchAllResources
+// call per non-empty group; results from the name-prefix group are
+// then post-filtered against args.Project on the client.
+type ScopeStyle int
+
+const (
+	// ScopeStyleLabels (default) uses the server-side
+	// `labels.project:<stack>` clause. Applies to every Phase-1 GCP
+	// type — all five are labelable.
+	ScopeStyleLabels ScopeStyle = iota
+	// ScopeStyleNamePrefix is for resource types that don't carry GCP
+	// labels (IAM service accounts, KMS keyrings/keys, compute
+	// firewalls, etc.). The CLAUDE.md "label-less GCP resources"
+	// convention says the resource name contains the stack project as
+	// a substring. The aggregator drops the labels.project clause
+	// from the server query and applies the name-substring filter
+	// client-side.
+	ScopeStyleNamePrefix
+)
 
 // ErrNotSupported signals that a discoverer cannot resolve a given ID
 // (e.g. a Terraform type for which no discoverer is registered, or a GCP
@@ -81,6 +104,11 @@ type Discoverer interface {
 	// "pubsub.googleapis.com/Topic". Used by the aggregator to build the
 	// SearchAllResources asset-type filter.
 	AssetType() string
+	// ScopeStyle reports how the orchestrator filters asset results
+	// down to the operator's stack project (#366). Most types return
+	// ScopeStyleLabels; label-less types (per CLAUDE.md's label-less
+	// GCP resource convention) return ScopeStyleNamePrefix.
+	ScopeStyle() ScopeStyle
 	// FromAsset translates a single Cloud Asset SearchAllResources result
 	// (already filtered to this discoverer's AssetType) into an
 	// ImportedResource. Implementations populate Identity (Cloud, Type,
@@ -145,11 +173,11 @@ func (g *GCPDiscoverer) SupportedTypes() []string {
 	return out
 }
 
-// DiscoverTypes runs a single SearchAllResources call covering every named
-// Terraform type, then fans out per-asset translation across the registered
-// discoverers. Unknown type names are reported as a single error containing
-// all invalid names so the operator sees the full set of misspellings in
-// one shot.
+// DiscoverTypes runs one SearchAllResources call per ScopeStyle bucket
+// covering every named Terraform type, then fans out per-asset translation
+// across the registered discoverers. Unknown type names are reported as a
+// single error containing all invalid names so the operator sees the full
+// set of misspellings in one shot.
 //
 // args.Regions populates the Cloud Asset query's `location:` filter. Zero
 // regions ⇒ no location clause (asset-API "all locations"). One ⇒
@@ -157,7 +185,10 @@ func (g *GCPDiscoverer) SupportedTypes() []string {
 // args.TagSelectors append `labels.<k>:<v>` clauses to the asset query
 // (server-side AND-conjunction). The legacy implicit
 // `labels.project:<project>` clause is preserved when args.Project is
-// non-empty.
+// non-empty for the ScopeStyleLabels bucket. For the ScopeStyleNamePrefix
+// bucket the labels clause is dropped and a client-side substring filter
+// on asset.Name takes its place (#366 — required for label-less GCP
+// resource types).
 func (g *GCPDiscoverer) DiscoverTypes(ctx context.Context, types []string, args DiscoverArgs) ([]imported.ImportedResource, error) {
 	if len(types) == 0 {
 		types = g.SupportedTypes()
@@ -170,7 +201,6 @@ func (g *GCPDiscoverer) DiscoverTypes(ctx context.Context, types []string, args 
 
 	var unknown []string
 	selected := make([]Discoverer, 0, len(types))
-	assetTypes := make([]string, 0, len(types))
 	for _, t := range types {
 		d, ok := g.byType[t]
 		if !ok {
@@ -178,21 +208,40 @@ func (g *GCPDiscoverer) DiscoverTypes(ctx context.Context, types []string, args 
 			continue
 		}
 		selected = append(selected, d)
-		assetTypes = append(assetTypes, d.AssetType())
 	}
 	if len(unknown) > 0 {
 		return nil, fmt.Errorf("unknown resource type(s): %v (supported: %v)", unknown, g.SupportedTypes())
 	}
 
+	// Group discoverers by ScopeStyle (#366). The two buckets are
+	// dispatched as independent SearchAllResources calls because the
+	// labels.project clause is required for labelable types and counter-
+	// productive (returns zero results) for label-less types.
+	//
+	// The switch is exhaustive on purpose — an unknown ScopeStyle
+	// should fail loudly rather than silently routing to the
+	// labels-bucket (where the labels.project clause would return
+	// zero results for a type the discoverer marked as label-less).
+	var labelsBucket, namePrefixBucket []Discoverer
+	for _, d := range selected {
+		switch d.ScopeStyle() {
+		case ScopeStyleLabels:
+			labelsBucket = append(labelsBucket, d)
+		case ScopeStyleNamePrefix:
+			namePrefixBucket = append(namePrefixBucket, d)
+		default:
+			return nil, fmt.Errorf("discoverer %q reported unknown ScopeStyle %v", d.ResourceType(), d.ScopeStyle())
+		}
+	}
+
 	scope := fmt.Sprintf("projects/%s", g.projectID)
-	query := buildSearchQuery(args.Project, args.Regions, args.TagSelectors)
 
 	stageStart := time.Now()
 	args.Emitter.ServiceStart(gcpServiceSlug, "")
-	results, err := g.searcher.SearchAll(ctx, scope, assetTypes, query)
+	results, err := g.searchBuckets(ctx, scope, args, labelsBucket, namePrefixBucket)
 	if err != nil {
 		args.Emitter.ServiceFinish(gcpServiceSlug, "", 0, time.Since(stageStart))
-		return nil, fmt.Errorf("cloud asset SearchAllResources: %w", err)
+		return nil, err
 	}
 
 	// Group by asset type so each per-type discoverer sees a deterministic
@@ -296,4 +345,85 @@ func buildSearchQuery(stackProject string, locations []string, selectors []TagSe
 		clauses = append(clauses, "labels."+s.Key+":"+s.Value)
 	}
 	return strings.Join(clauses, " AND ")
+}
+
+// searchBuckets issues one SearchAllResources call per non-empty
+// ScopeStyle bucket and concatenates the results (#366). The
+// labels-style bucket gets the legacy query with the
+// `labels.project:<stack>` clause; the name-prefix-style bucket gets
+// the same query with the labels.project clause omitted, plus a
+// client-side substring filter on asset.Name. Empty buckets are
+// skipped, so the all-labels-style path (today's only path) remains
+// one round-trip — not two.
+func (g *GCPDiscoverer) searchBuckets(ctx context.Context, scope string, args DiscoverArgs, labelsBucket, namePrefixBucket []Discoverer) ([]gcpAssetResult, error) {
+	var out []gcpAssetResult
+
+	if len(labelsBucket) > 0 {
+		query := buildSearchQuery(args.Project, args.Regions, args.TagSelectors)
+		rs, err := g.searcher.SearchAll(ctx, scope, assetTypesOf(labelsBucket), query)
+		if err != nil {
+			return nil, fmt.Errorf("cloud asset SearchAllResources (labels scope): %w", err)
+		}
+		out = append(out, rs...)
+	}
+
+	if len(namePrefixBucket) > 0 {
+		// args.Project is intentionally omitted from the query — the
+		// server-side labels.project clause is N/A for label-less
+		// types. We apply the equivalent filter client-side below.
+		query := buildSearchQuery("", args.Regions, args.TagSelectors)
+		rs, err := g.searcher.SearchAll(ctx, scope, assetTypesOf(namePrefixBucket), query)
+		if err != nil {
+			return nil, fmt.Errorf("cloud asset SearchAllResources (name-prefix scope): %w", err)
+		}
+		if args.Project != "" {
+			// Allocate a fresh slice rather than reslicing `rs` in
+			// place — the searcher owns the backing array, and a
+			// test fake that returns its own field directly would
+			// observe a corrupted slice on a second call. Production
+			// gRPC clients build a fresh slice per call so the
+			// aliasing path is harmless there, but the explicit
+			// allocation makes the contract robust under either
+			// caller.
+			kept := make([]gcpAssetResult, 0, len(rs))
+			for _, r := range rs {
+				if matchesNamePrefix(r.Name, args.Project) {
+					kept = append(kept, r)
+				}
+			}
+			rs = kept
+		}
+		out = append(out, rs...)
+	}
+	return out, nil
+}
+
+// assetTypesOf collects the Cloud Asset asset-type strings from a slice
+// of discoverers, preserving order so unit tests can pin per-bucket
+// asset-type partitioning.
+func assetTypesOf(ds []Discoverer) []string {
+	out := make([]string, 0, len(ds))
+	for _, d := range ds {
+		out = append(out, d.AssetType())
+	}
+	return out
+}
+
+// matchesNamePrefix reports whether the trailing resource-name segment
+// of a Cloud Asset full resource name contains stackProject as a
+// substring. Implements the CLAUDE.md label-less-resource scoping
+// convention: when a GCP resource type doesn't carry labels, callers
+// are required to name resources with the stack project as a prefix or
+// substring so the InsideOut inspector can attribute them. The trailing
+// segment (split on '/') is the right scope to check — the leading
+// `//service/projects/<gcp-project-id>/...` segments contain the real
+// GCP project ID, which we never want to match against the stack name.
+//
+// Empty stackProject is a programmer error — callers must skip this
+// filter when args.Project is empty. Go's strings.Contains returns
+// true for an empty needle, so an empty stackProject would match
+// every asset and produce the opposite of the intended scoping; the
+// caller-side guard in searchBuckets defends against that.
+func matchesNamePrefix(assetName, stackProject string) bool {
+	return strings.Contains(shortName(assetName), stackProject)
 }

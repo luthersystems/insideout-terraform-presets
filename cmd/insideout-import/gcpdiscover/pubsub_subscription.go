@@ -23,8 +23,9 @@ type pubsubSubscriptionDiscoverer struct{}
 
 func newPubsubSubscriptionDiscoverer() Discoverer { return &pubsubSubscriptionDiscoverer{} }
 
-func (pubsubSubscriptionDiscoverer) ResourceType() string { return pubsubSubscriptionTFType }
-func (pubsubSubscriptionDiscoverer) AssetType() string    { return pubsubSubscriptionAssetType }
+func (pubsubSubscriptionDiscoverer) ResourceType() string   { return pubsubSubscriptionTFType }
+func (pubsubSubscriptionDiscoverer) AssetType() string      { return pubsubSubscriptionAssetType }
+func (pubsubSubscriptionDiscoverer) ScopeStyle() ScopeStyle { return ScopeStyleLabels }
 
 func (pubsubSubscriptionDiscoverer) FromAsset(book addressBook, a gcpAssetResult, projectID string) imported.ImportedResource {
 	name := shortName(a.Name)
