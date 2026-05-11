@@ -198,12 +198,15 @@ func TestApplyCrossRefs_DBInstanceReplicateSourceUsesARN(t *testing.T) {
 	if !strings.Contains(got, "replicate_source_db  = aws_db_instance.io_foo_rds0.arn") {
 		t.Errorf("replicate_source_db must resolve to .arn (per crossRefAttrOverrides), not .id\n--- got ---\n%s", got)
 	}
-	if strings.Contains(got, `"io-foo-rds0"`) && !strings.Contains(got, `identifier           = "io-foo-rds0-replica-1"`) {
-		// The literal "io-foo-rds0" should be gone from
-		// replicate_source_db (replaced by the traversal). It can stay
-		// in identifier — that's the replica's own identifier, not
-		// the source's.
-		// Sanity-check: only the consumer attribute is rewritten.
+	// Sanity: only the consumer attribute is rewritten. The replica's
+	// own `identifier` literal must survive intact, and the
+	// replicate_source_db literal must be gone (replaced by the
+	// traversal).
+	if !strings.Contains(got, `identifier           = "io-foo-rds0-replica-1"`) {
+		t.Errorf("identifier literal must remain intact (only replicate_source_db is rewritten)\n--- got ---\n%s", got)
+	}
+	if strings.Contains(got, `replicate_source_db  = "io-foo-rds0"`) {
+		t.Errorf("replicate_source_db literal must have been replaced by a traversal\n--- got ---\n%s", got)
 	}
 }
 

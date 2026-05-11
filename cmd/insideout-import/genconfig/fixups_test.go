@@ -1905,8 +1905,34 @@ func TestFixupDBInstance_PopulatedDomainDNSIPsPreserved(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := string(out)
-	if !regexp.MustCompile(`domain_dns_ips\s*=\s*\["10.0.0.10",\s*"10.0.0.11"\]`).MatchString(got) {
+	if !regexp.MustCompile(`domain_dns_ips\s*=\s*\["10\.0\.0\.10",\s*"10\.0\.0\.11"\]`).MatchString(got) {
 		t.Errorf("populated domain_dns_ips must be preserved\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupDBInstance_SingleElementDomainDNSIPsPreserved pins the
+// boundary case: the provider's MinItems=2 constraint rejects 0 AND
+// 1 elements equally, but the fixup is targeted at `[]` only — a
+// 1-element list, while invalid at validate time, isn't the kind of
+// thing -generate-config-out emits (it would emit 0 or N≥2 from the
+// actual AWS state). The fixup must NOT silently rewrite a 1-element
+// list out from under the operator; if a future provider relaxes
+// MinItems to 1 the fixup remains correct. This test pins the
+// "fixup is `==[]`, not `len<2`" semantics.
+func TestFixupDBInstance_SingleElementDomainDNSIPsPreserved(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_db_instance" "rds" {
+  identifier     = "io-foo-rds0"
+  domain_dns_ips = ["10.0.0.10"]
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if !regexp.MustCompile(`domain_dns_ips\s*=\s*\["10\.0\.0\.10"\]`).MatchString(got) {
+		t.Errorf("single-element domain_dns_ips must be preserved (fixup targets `[]` only)\n--- got ---\n%s", got)
 	}
 }
 
@@ -2026,8 +2052,8 @@ func TestFixupSecretsManagerSecret_ReplacesNullWithSchemaDefault(t *testing.T) {
 	if !regexp.MustCompile(`force_overwrite_replica_secret\s*=\s*false`).MatchString(got) {
 		t.Errorf("force_overwrite_replica_secret must be replaced with false\n--- got ---\n%s", got)
 	}
-	if !regexp.MustCompile(`recovery_window_in_days\s*=\s*30`).MatchString(got) {
-		t.Errorf("recovery_window_in_days must be replaced with 30\n--- got ---\n%s", got)
+	if !regexp.MustCompile(`recovery_window_in_days\s*=\s*30\b`).MatchString(got) {
+		t.Errorf("recovery_window_in_days must be replaced with literal 30 (word-boundary; 300 would not satisfy the contract)\n--- got ---\n%s", got)
 	}
 	// Other attrs survive.
 	if !regexp.MustCompile(`name\s*=\s*"io-foo-sm"`).MatchString(got) {
@@ -2081,7 +2107,7 @@ func TestFixupSecretsManagerSecret_PartialNullPreservesOther(t *testing.T) {
 			name: "only_recovery_window_null",
 			body: `force_overwrite_replica_secret = true
   recovery_window_in_days        = null`,
-			want: []string{`force_overwrite_replica_secret\s*=\s*true`, `recovery_window_in_days\s*=\s*30`},
+			want: []string{`force_overwrite_replica_secret\s*=\s*true`, `recovery_window_in_days\s*=\s*30\b`},
 		},
 	}
 	for _, tc := range cases {
@@ -2189,10 +2215,10 @@ func TestFixupComputeFirewall_PreservesPopulatedServiceAccounts(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := string(out)
-	if !regexp.MustCompile(`source_service_accounts\s*=\s*\["worker@io-foo.iam.gserviceaccount.com"\]`).MatchString(got) {
+	if !regexp.MustCompile(`source_service_accounts\s*=\s*\["worker@io-foo\.iam\.gserviceaccount\.com"\]`).MatchString(got) {
 		t.Errorf("populated source_service_accounts must be preserved\n--- got ---\n%s", got)
 	}
-	if !regexp.MustCompile(`target_service_accounts\s*=\s*\["app@io-foo.iam.gserviceaccount.com"\]`).MatchString(got) {
+	if !regexp.MustCompile(`target_service_accounts\s*=\s*\["app@io-foo\.iam\.gserviceaccount\.com"\]`).MatchString(got) {
 		t.Errorf("populated target_service_accounts must be preserved\n--- got ---\n%s", got)
 	}
 	for _, name := range []string{"source_tags", "target_tags"} {
@@ -2204,15 +2230,23 @@ func TestFixupComputeFirewall_PreservesPopulatedServiceAccounts(t *testing.T) {
 
 // TestFixupComputeFirewall_OnlyAffectsGoogleComputeFirewallBlocks pins
 // resourceTypeFixups keying: a sibling resource type carrying the
-// same empty arrays is left untouched.
+// same empty arrays is left untouched. Iterates all four attributes
+// the fixup mutates so a partial-rekey regression (e.g. one of the
+// four still applies to sibling types) is caught.
 func TestFixupComputeFirewall_OnlyAffectsGoogleComputeFirewallBlocks(t *testing.T) {
 	t.Parallel()
 	in := []byte(`resource "google_compute_firewall" "fw" {
-  source_tags = []
+  source_service_accounts = []
+  source_tags             = []
+  target_service_accounts = []
+  target_tags             = []
 }
 
 resource "google_other_resource" "extra" {
-  source_tags = []
+  source_service_accounts = []
+  source_tags             = []
+  target_service_accounts = []
+  target_tags             = []
 }
 `)
 	out, err := applyResourceTypeFixups(in)
@@ -2220,13 +2254,15 @@ resource "google_other_resource" "extra" {
 		t.Fatal(err)
 	}
 	got := string(out)
-	// google_compute_firewall got the fixup.
-	if regexp.MustCompile(`(?s)resource "google_compute_firewall" "fw"[^}]*\{[^}]*source_tags\s*=\s*\[\]`).MatchString(got) {
-		t.Errorf("google_compute_firewall's empty source_tags must be dropped\n--- got ---\n%s", got)
-	}
-	// google_other_resource left alone.
-	if !regexp.MustCompile(`(?s)resource "google_other_resource" "extra"[^}]*\{[^}]*source_tags\s*=\s*\[\]`).MatchString(got) {
-		t.Errorf("google_other_resource's empty source_tags must be preserved (fixup keyed by google_compute_firewall)\n--- got ---\n%s", got)
+	for _, name := range []string{"source_service_accounts", "source_tags", "target_service_accounts", "target_tags"} {
+		// google_compute_firewall got the fixup for each attr.
+		if regexp.MustCompile(`(?s)resource "google_compute_firewall" "fw"[^}]*\{[^}]*` + name + `\s*=\s*\[\]`).MatchString(got) {
+			t.Errorf("google_compute_firewall's empty %s must be dropped\n--- got ---\n%s", name, got)
+		}
+		// google_other_resource left alone for each attr.
+		if !regexp.MustCompile(`(?s)resource "google_other_resource" "extra"[^}]*\{[^}]*` + name + `\s*=\s*\[\]`).MatchString(got) {
+			t.Errorf("google_other_resource's empty %s must be preserved (fixup keyed by google_compute_firewall)\n--- got ---\n%s", name, got)
+		}
 	}
 }
 
@@ -2250,8 +2286,8 @@ resource "aws_other_resource" "extra" {
 	}
 	got := string(out)
 	// aws_secretsmanager_secret got the fixup.
-	if !regexp.MustCompile(`(?s)resource "aws_secretsmanager_secret" "sm"[^}]*\{[^}]*recovery_window_in_days\s*=\s*30`).MatchString(got) {
-		t.Errorf("aws_secretsmanager_secret's null must be replaced with 30\n--- got ---\n%s", got)
+	if !regexp.MustCompile(`(?s)resource "aws_secretsmanager_secret" "sm"[^}]*\{[^}]*recovery_window_in_days\s*=\s*30\b`).MatchString(got) {
+		t.Errorf("aws_secretsmanager_secret's null must be replaced with literal 30 (word-boundary)\n--- got ---\n%s", got)
 	}
 	// aws_other_resource left alone.
 	if !regexp.MustCompile(`(?s)resource "aws_other_resource" "extra"[^}]*\{[^}]*recovery_window_in_days\s*=\s*null`).MatchString(got) {

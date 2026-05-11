@@ -103,33 +103,98 @@ func TestPruneOrphanImports_AllNonOrphanLeavesFileUntouched(t *testing.T) {
 // contract documented in OrphanImport. Empty result must be the
 // empty slice so the JSON wrapper marshals as `{"imports":[]}` not
 // `{"imports":null}` — same contract as #255 inspector returns.
+//
+// Exercises the non-trivial early-return path: a non-empty imports.tf
+// with all imports having matching resource bodies. A mutation that
+// changed the `skipped := []OrphanImport{}` declaration at the top of
+// pruneOrphanImports to `var skipped []OrphanImport` would make the
+// early return at len==0 yield a nil slice (still len==0 but nil)
+// and break the JSON contract. The empty-input version of this test
+// would not catch that — both branches of the regression produce
+// length 0 — but a non-empty-input version forces the code through
+// the loop AND the early return, pinning the slice declaration.
 func TestPruneOrphanImports_ReturnsEmptySliceNotNil(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, importsFile), []byte(``), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, importsFile), []byte(`import {
+  to = aws_vpc.main
+  id = "vpc-123"
+}
+`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	skipped, err := pruneOrphanImports(dir, []byte(``))
+	generated := []byte(`resource "aws_vpc" "main" {
+  cidr_block = "10.0.0.0/16"
+}
+`)
+	skipped, err := pruneOrphanImports(dir, generated)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if skipped == nil {
-		t.Fatal("skipped is nil; want empty slice")
+		t.Fatal("skipped is nil; want empty slice (the JSON wrapper relies on non-nil for `[]` not `null`)")
 	}
 	if len(skipped) != 0 {
 		t.Fatalf("len(skipped)=%d, want 0", len(skipped))
 	}
 }
 
+// TestPruneOrphanImports_OrphanWithMissingIDEmitsEmptyImportID pins
+// the production-code contract that an orphan import block with no
+// `id = "..."` attribute is dropped but emits ImportID="". A
+// regression making stringLitFromAttr panic on a nil attribute would
+// be caught here — the orphan import has a `to` (so it gets
+// classified as orphan) but no `id` (so stringLitFromAttr returns "").
+func TestPruneOrphanImports_OrphanWithMissingIDEmitsEmptyImportID(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, importsFile), []byte(`import {
+  to = aws_network_acl.default_nacl
+}
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	skipped, err := pruneOrphanImports(dir, []byte(``))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(skipped) != 1 {
+		t.Fatalf("len(skipped)=%d, want 1", len(skipped))
+	}
+	if skipped[0].Address != "aws_network_acl.default_nacl" {
+		t.Errorf("Address=%q", skipped[0].Address)
+	}
+	if skipped[0].ImportID != "" {
+		t.Errorf("ImportID=%q, want \"\" (missing id attribute)", skipped[0].ImportID)
+	}
+	if skipped[0].Reason != "no_generated_config" {
+		t.Errorf("Reason=%q", skipped[0].Reason)
+	}
+}
+
 // TestPruneOrphanImports_MultipleOrphansSortedDeterministically pins
 // the byte-stable wire shape of imports-skipped.json — the slice is
 // sorted by (Address, ImportID) so consumers can diff successive runs.
+//
+// Runs the same orphan set twice with input ordering reversed,
+// verifying the output is identical. This proves determinism, not
+// just one example of correct sorting.
 func TestPruneOrphanImports_MultipleOrphansSortedDeterministically(t *testing.T) {
 	t.Parallel()
-	dir := t.TempDir()
-	// Intentional unsorted order in imports.tf — the prune should
-	// re-sort.
-	if err := os.WriteFile(filepath.Join(dir, importsFile), []byte(`import {
+	// Sort key: (Address, ImportID). aws_a_resource.first/a-1 sorts
+	// before aws_a_resource.first/a-2 sorts before aws_z_resource.last.
+	wants := []struct{ addr, id string }{
+		{"aws_a_resource.first", "a-1"},
+		{"aws_a_resource.first", "a-2"},
+		{"aws_z_resource.last", "z-1"},
+	}
+	cases := []struct {
+		name    string
+		imports string
+	}{
+		{
+			name: "unsorted_z_first",
+			imports: `import {
   to = aws_z_resource.last
   id = "z-1"
 }
@@ -143,28 +208,48 @@ import {
   to = aws_a_resource.first
   id = "a-1"
 }
-`), 0o644); err != nil {
-		t.Fatal(err)
+`,
+		},
+		{
+			name: "reverse_unsorted_a_first",
+			imports: `import {
+  to = aws_a_resource.first
+  id = "a-1"
+}
+
+import {
+  to = aws_a_resource.first
+  id = "a-2"
+}
+
+import {
+  to = aws_z_resource.last
+  id = "z-1"
+}
+`,
+		},
 	}
-	skipped, err := pruneOrphanImports(dir, []byte(``))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(skipped) != 3 {
-		t.Fatalf("len(skipped)=%d, want 3", len(skipped))
-	}
-	// Sort key: (Address, ImportID). aws_a_resource.first/a-1 sorts
-	// before aws_a_resource.first/a-2 sorts before aws_z_resource.last.
-	wants := []struct{ addr, id string }{
-		{"aws_a_resource.first", "a-1"},
-		{"aws_a_resource.first", "a-2"},
-		{"aws_z_resource.last", "z-1"},
-	}
-	for i, w := range wants {
-		if skipped[i].Address != w.addr || skipped[i].ImportID != w.id {
-			t.Errorf("skipped[%d]=(%q, %q), want (%q, %q)",
-				i, skipped[i].Address, skipped[i].ImportID, w.addr, w.id)
-		}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			dir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(dir, importsFile), []byte(tc.imports), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			skipped, err := pruneOrphanImports(dir, []byte(``))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(skipped) != len(wants) {
+				t.Fatalf("len(skipped)=%d, want %d", len(skipped), len(wants))
+			}
+			for i, w := range wants {
+				if skipped[i].Address != w.addr || skipped[i].ImportID != w.id {
+					t.Errorf("skipped[%d]=(%q, %q), want (%q, %q)",
+						i, skipped[i].Address, skipped[i].ImportID, w.addr, w.id)
+				}
+			}
+		})
 	}
 }
 

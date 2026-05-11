@@ -149,10 +149,54 @@ func TestNetworkACLDiscover_DefaultNACLSkippedAmongMixedSet(t *testing.T) {
 	if len(got) != 2 {
 		t.Fatalf("len=%d, want 2 (only 2 non-default NACLs survive)", len(got))
 	}
+	// Pin which IDs survive — a mutation that inverted the filter (dropped
+	// non-defaults and kept defaults) would still produce len==2 with
+	// is_default="false" if it happened to leave a coincidental pair.
+	// Asserting the actual IDs catches that class of regression.
+	gotIDs := map[string]bool{}
 	for _, ir := range got {
+		gotIDs[ir.Identity.ImportID] = true
 		if ir.Identity.NativeIDs["is_default"] != "false" {
 			t.Errorf("ImportID=%q is_default=%q; expected only is_default=false NACLs", ir.Identity.ImportID, ir.Identity.NativeIDs["is_default"])
 		}
+	}
+	if !gotIDs["acl-nondefault0001"] || !gotIDs["acl-nondefault0002"] {
+		t.Errorf("expected both non-default NACLs to survive; got %v", gotIDs)
+	}
+	if gotIDs["acl-default0000001"] || gotIDs["acl-default0000002"] {
+		t.Errorf("expected NO default NACLs to survive; got %v", gotIDs)
+	}
+}
+
+// TestNetworkACLDiscoverByID_AcceptsDefaultNACL (#357) pins that
+// DiscoverByID — the dep-chase per-ID lookup path — does NOT apply
+// the IsDefault filter that Discover does. The Discover-side filter
+// is about avoiding orphan import blocks in batch flow; ByID is
+// called for explicit-ID lookups where the caller has already
+// decided to fetch this specific NACL. A future refactor that
+// copy-pasted the `if aws.ToBool(nacl.IsDefault) { continue }`
+// guard into DiscoverByID would break dep-chase for any default NACL
+// that needs to be resolved as a dependency (e.g. attribute reference
+// from a sibling resource). This test pins the contract: ByID
+// surfaces defaults; Discover does not.
+func TestNetworkACLDiscoverByID_AcceptsDefaultNACL(t *testing.T) {
+	t.Parallel()
+	d := &networkACLDiscoverer{new: func(_ string) networkACLClient {
+		return &fakeNetworkACLClient{pages: []ec2.DescribeNetworkAclsOutput{
+			{NetworkAcls: []ec2types.NetworkAcl{
+				networkACLWithTags("acl-default0000001", "vpc-1", true, nil),
+			}},
+		}}
+	}}
+	got, err := d.DiscoverByID(context.Background(), "acl-default0000001", "us-east-1", "123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Identity.ImportID != "acl-default0000001" {
+		t.Errorf("ImportID=%q, want acl-default0000001 (ByID must accept defaults)", got.Identity.ImportID)
+	}
+	if got.Identity.NativeIDs["is_default"] != "true" {
+		t.Errorf("is_default=%q, want \"true\"", got.Identity.NativeIDs["is_default"])
 	}
 }
 

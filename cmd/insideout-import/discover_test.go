@@ -568,7 +568,10 @@ func TestRunDiscoverWithDeps_NonEmptyResultsSuppressesWARN(t *testing.T) {
 	if rc != discoverExitOK {
 		t.Fatalf("rc=%d, want %d", rc, discoverExitOK)
 	}
-	if strings.Contains(stderr, "matched zero resources") {
+	// "double-check the stack prefix" is distinctive to this WARN
+	// (less collision-prone than the generic "matched zero resources"
+	// substring, which could appear in future unrelated WARN lines).
+	if strings.Contains(stderr, "double-check the stack prefix") {
 		t.Errorf("non-empty result must NOT emit the empty-filter WARN\n--- got ---\n%s", stderr)
 	}
 }

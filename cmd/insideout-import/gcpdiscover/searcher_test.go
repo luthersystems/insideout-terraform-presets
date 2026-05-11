@@ -40,16 +40,32 @@ func TestAssetResultFromProto_FieldMapping(t *testing.T) {
 	}
 }
 
-// TestAssetResultFromProto_NilProtoSafeFields pins the GetX accessor
-// idioms — every proto getter on a nil/zero ResourceSearchResult
-// returns the zero value of its field type. A future refactor that
-// replaced `r.GetName()` with `r.Name` would panic on a nil proto;
-// asserting on a zero-valued proto guards that.
-func TestAssetResultFromProto_NilProtoSafeFields(t *testing.T) {
+// TestAssetResultFromProto_ZeroValueProtoYieldsZeroFields pins the
+// GetX accessor idioms against a zero-valued (non-nil) proto. Every
+// proto getter returns the zero value of its field type, so the
+// flattened gcpAssetResult is zero across the board. A future
+// refactor that replaced `r.GetName()` with `r.Name` would still pass
+// this test (both return "" on a zero-valued proto); the nil-receiver
+// case is covered by TestAssetResultFromProto_NilProtoIsSafe below.
+func TestAssetResultFromProto_ZeroValueProtoYieldsZeroFields(t *testing.T) {
 	t.Parallel()
 	got := assetResultFromProto(&assetpb.ResourceSearchResult{})
 	if got.Name != "" || got.AssetType != "" || got.Project != "" || got.Location != "" || got.Labels != nil {
 		t.Errorf("zero-proto must produce zero result; got %+v", got)
+	}
+}
+
+// TestAssetResultFromProto_NilProtoIsSafe pins the contract that
+// protoc-generated GetX accessors handle a nil receiver — a refactor
+// from `r.GetName()` to `r.Name` would panic here and break dep-chase
+// any time SearchAllResources surfaced a nil row (rare but possible
+// on transient gRPC errors that the iterator surfaces alongside the
+// stream).
+func TestAssetResultFromProto_NilProtoIsSafe(t *testing.T) {
+	t.Parallel()
+	got := assetResultFromProto(nil)
+	if got.Name != "" || got.AssetType != "" || got.Project != "" || got.Location != "" || got.Labels != nil {
+		t.Errorf("nil-proto must produce zero result; got %+v", got)
 	}
 }
 
@@ -122,19 +138,36 @@ func TestWrapSearchAllError_PermissionDeniedIAMPassThrough(t *testing.T) {
 
 // TestWrapSearchAllError_OtherCodesPassThrough pins the
 // default-pass-through path. Any non-Unauthenticated /
-// non-PermissionDenied gRPC code (e.g. ResourceExhausted, Internal)
-// gets the original error verbatim — we don't have actionable advice
-// for those, and a wrong wrap would mask real bugs.
+// non-PermissionDenied gRPC code (Internal, ResourceExhausted,
+// DeadlineExceeded, Unavailable) gets the original error verbatim —
+// we don't have actionable advice for those, and a wrong wrap would
+// mask real bugs. Table-driven so a regression that special-cased
+// (say) ResourceExhausted is caught.
 func TestWrapSearchAllError_OtherCodesPassThrough(t *testing.T) {
 	t.Parallel()
-	raw := status.Error(codes.Internal, "internal server error")
-	wrapped := wrapSearchAllError(raw)
-	got := wrapped.Error()
-	if !strings.Contains(got, "internal server error") {
-		t.Errorf("non-auth errors must pass through verbatim\n--- got ---\n%s", got)
+	cases := []struct {
+		name string
+		code codes.Code
+		msg  string
+	}{
+		{"Internal", codes.Internal, "internal server error"},
+		{"ResourceExhausted", codes.ResourceExhausted, "quota exceeded"},
+		{"DeadlineExceeded", codes.DeadlineExceeded, "context deadline exceeded"},
+		{"Unavailable", codes.Unavailable, "service unavailable"},
 	}
-	if strings.Contains(got, "gcloud auth") || strings.Contains(got, "ADC quota project") {
-		t.Errorf("non-auth errors must NOT trigger auth-wraps\n--- got ---\n%s", got)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			raw := status.Error(tc.code, tc.msg)
+			wrapped := wrapSearchAllError(raw)
+			got := wrapped.Error()
+			if !strings.Contains(got, tc.msg) {
+				t.Errorf("non-auth errors must pass through verbatim\n--- got ---\n%s", got)
+			}
+			if strings.Contains(got, "gcloud auth") || strings.Contains(got, "ADC quota project") {
+				t.Errorf("non-auth errors must NOT trigger auth-wraps\n--- got ---\n%s", got)
+			}
+		})
 	}
 }
 
