@@ -62,6 +62,7 @@ var resourceTypeFixups = map[string]func(*hclwrite.Block){
 	"aws_lb_listener":     fixupLBListenerStickinessDurationZero,
 	"aws_lb_target_group": fixupLBTargetGroupProviderQuirks,
 	"aws_vpc_endpoint":    fixupVPCEndpointEmptyDNSDomains,
+	"aws_db_instance":     fixupDBInstanceProviderQuirks,
 }
 
 // lambdaPlaceholderFile is what we set `filename` to so the block
@@ -472,6 +473,41 @@ func fixupLBTargetGroupProviderQuirks(blk *hclwrite.Block) {
 				body.RemoveBlock(sub)
 			}
 		}
+	}
+}
+
+// fixupDBInstanceProviderQuirks resolves two terraform-provider-aws
+// schema constraints that `terraform plan -generate-config-out` emits
+// in violation of:
+//
+//   - domain_dns_ips = [] (provider rejects empty literal; the schema's
+//     MinItems=2 list requires either 0 or 2+ items, and 0 must mean
+//     "attribute absent", not "empty list"). generate-config-out emits
+//     `[]` for every aws_db_instance that has no AD-domain auth
+//     configured. Drop the empty literal. Issue #358.
+//   - db_name and username set on a read replica (replicate_source_db
+//     has a usable value). Both attrs are source-inherited on a replica
+//     and the provider marks them mutually-exclusive with
+//     replicate_source_db. generate-config-out doesn't honor that
+//     constraint when emitting the replica's body. Drop both attrs
+//     when the row is a replica. Issue #359.
+//
+// Conservative: each transform fires only on its specific orphan
+// pattern. A real Domain-auth DB carrying a populated domain_dns_ips
+// is preserved; a standalone (non-replica) DB carrying db_name and
+// username is preserved.
+func fixupDBInstanceProviderQuirks(blk *hclwrite.Block) {
+	body := blk.Body()
+	// #358 — domain_dns_ips=[] violates MinItems=2 list constraint.
+	if isAttrLiteralEmptyList(body, "domain_dns_ips") {
+		body.RemoveAttribute("domain_dns_ips")
+	}
+	// #359 — db_name and username conflict with replicate_source_db on
+	// read replicas. Source-inherited attributes that the provider
+	// rejects when both sides are set.
+	if hasUsableValue(body, "replicate_source_db") {
+		body.RemoveAttribute("db_name")
+		body.RemoveAttribute("username")
 	}
 }
 

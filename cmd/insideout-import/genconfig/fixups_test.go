@@ -1860,3 +1860,173 @@ resource "aws_iam_policy" "extra" {
 		t.Errorf("aws_iam_policy's empty private_dns_specified_domains must be preserved (fixup keyed by aws_vpc_endpoint)\n--- got ---\n%s", got)
 	}
 }
+
+// TestFixupDBInstance_DropsEmptyDomainDNSIPs covers #358: the
+// MinItems=2 list constraint on domain_dns_ips rejects the literal
+// empty list that generate-config-out emits for every DB instance
+// without AD-domain auth.
+func TestFixupDBInstance_DropsEmptyDomainDNSIPs(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_db_instance" "rds" {
+  identifier     = "io-foo-rds0"
+  engine         = "postgres"
+  instance_class = "db.t3.medium"
+  domain_dns_ips = []
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if regexp.MustCompile(`(?m)^\s*domain_dns_ips\s*=`).MatchString(got) {
+		t.Errorf("empty domain_dns_ips must be dropped\n--- got ---\n%s", got)
+	}
+	// Other attrs survive.
+	if !regexp.MustCompile(`identifier\s*=\s*"io-foo-rds0"`).MatchString(got) {
+		t.Errorf("identifier must be preserved\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupDBInstance_PopulatedDomainDNSIPsPreserved pins the carve-out:
+// a real AD-domain-auth DB carrying domain_dns_ips with two or more
+// entries is preserved untouched.
+func TestFixupDBInstance_PopulatedDomainDNSIPsPreserved(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_db_instance" "rds" {
+  identifier     = "io-foo-rds0"
+  engine         = "sqlserver-se"
+  domain         = "d-1234567890"
+  domain_dns_ips = ["10.0.0.10", "10.0.0.11"]
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if !regexp.MustCompile(`domain_dns_ips\s*=\s*\["10.0.0.10",\s*"10.0.0.11"\]`).MatchString(got) {
+		t.Errorf("populated domain_dns_ips must be preserved\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupDBInstance_DropsReplicaConflictingAttrs covers #359: when
+// replicate_source_db has a usable (non-null) value, db_name and
+// username are source-inherited and the provider rejects both being
+// set alongside replicate_source_db.
+func TestFixupDBInstance_DropsReplicaConflictingAttrs(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_db_instance" "replica" {
+  identifier          = "io-foo-rds0-replica-1"
+  engine              = "postgres"
+  db_name             = "appdb"
+  username            = "app"
+  replicate_source_db = aws_db_instance.io_foo_rds0.id
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if regexp.MustCompile(`(?m)^\s*db_name\s*=`).MatchString(got) {
+		t.Errorf("db_name must be dropped on a replica\n--- got ---\n%s", got)
+	}
+	if regexp.MustCompile(`(?m)^\s*username\s*=`).MatchString(got) {
+		t.Errorf("username must be dropped on a replica\n--- got ---\n%s", got)
+	}
+	// replicate_source_db survives — it's the marker that identified
+	// this row as a replica.
+	if !strings.Contains(got, "replicate_source_db") {
+		t.Errorf("replicate_source_db must be preserved\n--- got ---\n%s", got)
+	}
+	// Other attrs survive.
+	if !regexp.MustCompile(`identifier\s*=\s*"io-foo-rds0-replica-1"`).MatchString(got) {
+		t.Errorf("identifier must be preserved\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupDBInstance_PrimaryPreservesNameAndUsername pins the
+// carve-out: a primary (non-replica) DB carrying db_name and username
+// is left untouched. Without this guard a mutation that swapped
+// "replicate_source_db usable" for "always" would silently strip
+// db_name/username from every primary.
+func TestFixupDBInstance_PrimaryPreservesNameAndUsername(t *testing.T) {
+	t.Parallel()
+	// replicate_source_db deliberately absent — this body is a primary.
+	in := []byte(`resource "aws_db_instance" "rds" {
+  identifier = "io-foo-rds0"
+  engine     = "postgres"
+  db_name    = "appdb"
+  username   = "app"
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if !regexp.MustCompile(`db_name\s*=\s*"appdb"`).MatchString(got) {
+		t.Errorf("db_name must be preserved on a primary\n--- got ---\n%s", got)
+	}
+	if !regexp.MustCompile(`username\s*=\s*"app"`).MatchString(got) {
+		t.Errorf("username must be preserved on a primary\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupDBInstance_NullReplicateSourcePreservesAttrs pins the
+// null-vs-usable boundary: terraform plan -generate-config-out emits
+// `replicate_source_db = null` on every primary, and hasUsableValue
+// treats null as "not set" — so db_name / username must be preserved
+// in that case. Without this carve-out an over-eager rewrite would
+// match the null-shaped attr and over-strip primaries.
+func TestFixupDBInstance_NullReplicateSourcePreservesAttrs(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_db_instance" "rds" {
+  identifier          = "io-foo-rds0"
+  engine              = "postgres"
+  db_name             = "appdb"
+  username            = "app"
+  replicate_source_db = null
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if !regexp.MustCompile(`db_name\s*=\s*"appdb"`).MatchString(got) {
+		t.Errorf("db_name must be preserved when replicate_source_db is null\n--- got ---\n%s", got)
+	}
+	if !regexp.MustCompile(`username\s*=\s*"app"`).MatchString(got) {
+		t.Errorf("username must be preserved when replicate_source_db is null\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupDBInstance_OnlyAffectsAWSDBInstanceBlocks pins
+// resourceTypeFixups keying: a sibling resource type carrying the
+// same attribute names is left untouched.
+func TestFixupDBInstance_OnlyAffectsAWSDBInstanceBlocks(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_db_instance" "rds" {
+  domain_dns_ips = []
+}
+
+resource "aws_other_resource" "extra" {
+  domain_dns_ips = []
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	// aws_db_instance got the fixup.
+	if regexp.MustCompile(`(?s)resource "aws_db_instance" "rds"[^}]*\{[^}]*domain_dns_ips\s*=\s*\[\]`).MatchString(got) {
+		t.Errorf("aws_db_instance's empty domain_dns_ips must be dropped\n--- got ---\n%s", got)
+	}
+	// aws_other_resource left alone.
+	if !regexp.MustCompile(`(?s)resource "aws_other_resource" "extra"[^}]*\{[^}]*domain_dns_ips\s*=\s*\[\]`).MatchString(got) {
+		t.Errorf("aws_other_resource's empty domain_dns_ips must be preserved (fixup keyed by aws_db_instance)\n--- got ---\n%s", got)
+	}
+}
