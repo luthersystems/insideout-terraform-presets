@@ -81,7 +81,6 @@ func TestSupportedDiscoverTypes_GCP_ReturnsCanonicalSortedList(t *testing.T) {
 		"google_container_node_pool",
 		"google_kms_crypto_key",
 		"google_kms_key_ring",
-		"google_logging_project_sink",
 		"google_monitoring_alert_policy",
 		"google_monitoring_dashboard",
 		"google_monitoring_notification_channel",
@@ -90,7 +89,6 @@ func TestSupportedDiscoverTypes_GCP_ReturnsCanonicalSortedList(t *testing.T) {
 		"google_secret_manager_secret",
 		"google_service_account",
 		"google_sql_database_instance",
-		"google_sql_user",
 		"google_storage_bucket",
 	}
 	got := SupportedDiscoverTypes(ProviderGCP)

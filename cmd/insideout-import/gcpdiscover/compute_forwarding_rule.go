@@ -32,6 +32,13 @@ func (computeForwardingRuleDiscoverer) AssetType() string      { return computeF
 func (computeForwardingRuleDiscoverer) ScopeStyle() ScopeStyle { return ScopeStyleLabels }
 
 func (computeForwardingRuleDiscoverer) FromAsset(book addressBook, a gcpAssetResult, projectID string) imported.ImportedResource {
+	// Global forwarding rules belong to google_compute_global_forwarding_rule,
+	// a separate TF type not in Bundle 8 — skip by returning a zero
+	// ImportedResource. The orchestrator filters out empty Identity.Type
+	// rows before emitting.
+	if isGlobalComputeAsset(a) {
+		return imported.ImportedResource{}
+	}
 	name := shortName(a.Name)
 	region := a.Location
 	if region == "" {

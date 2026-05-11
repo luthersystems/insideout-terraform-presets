@@ -47,14 +47,6 @@ func TestObservabilityDiscoverers_TableDriven(t *testing.T) {
 			wantName:     "io-foo-chan",
 			wantImportID: "projects/real-proj/notificationChannels/io-foo-chan",
 		},
-		{
-			name:         "logging_project_sink",
-			discoverer:   newLoggingProjectSinkDiscoverer(),
-			assetName:    "//logging.googleapis.com/projects/real-proj/sinks/io-foo-sink",
-			wantTFType:   "google_logging_project_sink",
-			wantName:     "io-foo-sink",
-			wantImportID: "projects/real-proj/sinks/io-foo-sink",
-		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

@@ -29,7 +29,15 @@ func TestComputeAddressFromAsset_Regional(t *testing.T) {
 	}
 }
 
-func TestComputeAddressFromAsset_Global(t *testing.T) {
+// TestComputeAddressFromAsset_Global_IsSkipped pins the post-#375
+// behavior: global addresses belong to google_compute_global_address
+// (a separate TF type, not in Bundle 8). The regional-address
+// discoverer must skip them — returning a zero ImportedResource so
+// the orchestrator drops the row instead of emitting an invalid
+// `projects/<p>/regions/global/...` import-id. Without this skip,
+// the live smoke against diagramtest2025-09-14 produced a malformed
+// import-id for the stack's global LB IP.
+func TestComputeAddressFromAsset_Global_IsSkipped(t *testing.T) {
 	t.Parallel()
 	d := newComputeAddressDiscoverer()
 	got := d.FromAsset(addressBook{},
@@ -37,15 +45,14 @@ func TestComputeAddressFromAsset_Global(t *testing.T) {
 			Name:      "//compute.googleapis.com/projects/real-proj/global/addresses/io-foo-lb-ip",
 			AssetType: "compute.googleapis.com/Address",
 			Project:   "real-proj",
-			// Global addresses have no Location.
+			Location:  "global",
 		},
 		"real-proj")
-	wantImport := "projects/real-proj/global/addresses/io-foo-lb-ip"
-	if got.Identity.ImportID != wantImport {
-		t.Errorf("ImportID=%q, want %q", got.Identity.ImportID, wantImport)
+	if got.Identity.Type != "" {
+		t.Errorf("Identity.Type=%q, want empty (global address must be skipped — orchestrator filters out zero-Type rows)", got.Identity.Type)
 	}
-	if got.Identity.Location != "" {
-		t.Errorf("Location=%q, want empty (global address)", got.Identity.Location)
+	if got.Identity.ImportID != "" {
+		t.Errorf("Identity.ImportID=%q, want empty", got.Identity.ImportID)
 	}
 }
 

@@ -24,6 +24,15 @@ import (
 // composed addresses set `labels = merge({ project = var.project },
 // var.labels)`, which means the server-side labels.project clause
 // reliably attributes them.
+//
+// Global vs regional split: CAI returns global addresses under the
+// same compute.googleapis.com/Address slug with Location="global", but
+// Terraform's `google_compute_address` type is regional-only —
+// `google_compute_global_address` is a separate type, not part of
+// Bundle 8. This discoverer's FromAsset filters out the global rows
+// so they don't get an invalid `projects/<p>/regions/global/...`
+// ImportID; they're skipped silently and surface in the unsupported
+// stream when --include-unsupported is set.
 
 const (
 	computeAddressTFType    = "google_compute_address"
@@ -39,6 +48,13 @@ func (computeAddressDiscoverer) AssetType() string      { return computeAddressA
 func (computeAddressDiscoverer) ScopeStyle() ScopeStyle { return ScopeStyleLabels }
 
 func (computeAddressDiscoverer) FromAsset(book addressBook, a gcpAssetResult, projectID string) imported.ImportedResource {
+	// Global rows must be skipped — they belong to google_compute_global_address,
+	// a separate TF type not in Bundle 8. Returning a zero
+	// ImportedResource signals the orchestrator to drop the row (it
+	// filters on empty Identity.Type before emitting).
+	if isGlobalComputeAsset(a) {
+		return imported.ImportedResource{}
+	}
 	name := shortName(a.Name)
 	region := a.Location
 	if region == "" {
@@ -50,6 +66,14 @@ func (computeAddressDiscoverer) FromAsset(book addressBook, a gcpAssetResult, pr
 		"asset_name": a.Name,
 		"self_link":  selfLink,
 	}, a.Labels)
+}
+
+// isGlobalComputeAsset reports whether a CAI compute asset is a global
+// resource. The path's `/global/` marker is the source of truth — the
+// Location field is also "global" for these but checking the path
+// matches what the asset name encodes.
+func isGlobalComputeAsset(a gcpAssetResult) bool {
+	return strings.Contains(a.Name, "/global/") || a.Location == "global"
 }
 
 func (computeAddressDiscoverer) DiscoverByID(_ context.Context, _ gcpAssetSearcher, id, projectID string) (imported.ImportedResource, error) {

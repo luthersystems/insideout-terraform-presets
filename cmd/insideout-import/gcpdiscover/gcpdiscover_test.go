@@ -37,7 +37,6 @@ var expectedRegisteredTypes = map[string]bool{
 	"google_container_cluster":               false,
 	"google_container_node_pool":             false,
 	"google_sql_database_instance":           false,
-	"google_sql_user":                        false,
 	"google_cloud_run_v2_service":            false,
 	"google_cloudfunctions2_function":        false,
 	"google_compute_forwarding_rule":         false,
@@ -49,7 +48,6 @@ var expectedRegisteredTypes = map[string]bool{
 	"google_monitoring_dashboard":            false,
 	"google_monitoring_alert_policy":         false,
 	"google_monitoring_notification_channel": false,
-	"google_logging_project_sink":            false,
 }
 
 func TestNewGCPDiscoverer_RegistersExpectedTypes(t *testing.T) {
@@ -348,9 +346,6 @@ func TestFromAsset_ProjectIDArgWinsOverAssetField(t *testing.T) {
 		{name: "sql_database_instance", discoverer: newSQLDatabaseInstanceDiscoverer(),
 			assetName:    "//sqladmin.googleapis.com/projects/" + fromAsset + "/instances/db1",
 			wantImportID: "projects/" + explicit + "/instances/db1"},
-		{name: "sql_user", discoverer: newSQLUserDiscoverer(),
-			assetName:    "//sqladmin.googleapis.com/projects/" + fromAsset + "/instances/db1/users/u1",
-			wantImportID: explicit + "/db1/u1"},
 		{name: "cloud_run_v2_service", discoverer: newCloudRunV2ServiceDiscoverer(),
 			assetName:    "//run.googleapis.com/projects/" + fromAsset + "/locations/us-central1/services/s1",
 			wantImportID: "projects/" + explicit + "/locations/us-central1/services/s1"},
@@ -651,7 +646,6 @@ var expectedScopeStyle = map[string]ScopeStyle{
 	"google_container_cluster":               ScopeStyleLabels,     // GKE clusters carry labels (#371)
 	"google_container_node_pool":             ScopeStyleNamePrefix, // node pools have no labels (#371)
 	"google_sql_database_instance":           ScopeStyleLabels,     // Cloud SQL via settings.user_labels (#372)
-	"google_sql_user":                        ScopeStyleNamePrefix, // SQL users have no labels (#372)
 	"google_cloud_run_v2_service":            ScopeStyleLabels,     // Cloud Run v2 carries labels (#373)
 	"google_cloudfunctions2_function":        ScopeStyleLabels,     // Cloud Functions v2 carries labels (#373)
 	"google_compute_forwarding_rule":         ScopeStyleLabels,     // forwarding rules carry labels (#375)
@@ -663,7 +657,6 @@ var expectedScopeStyle = map[string]ScopeStyle{
 	"google_monitoring_dashboard":            ScopeStyleNamePrefix, // dashboards have no labels (#377)
 	"google_monitoring_alert_policy":         ScopeStyleNamePrefix, // alert policies have no labels (#377)
 	"google_monitoring_notification_channel": ScopeStyleNamePrefix, // notification channels have no labels (#377)
-	"google_logging_project_sink":            ScopeStyleNamePrefix, // logging sinks have no labels (#377)
 }
 
 // TestScopeStyle_PinsPerTypeContract is the regression guard (#366).

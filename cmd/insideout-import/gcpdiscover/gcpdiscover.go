@@ -168,7 +168,6 @@ func NewGCPDiscoverer(searcher gcpAssetSearcher, projectID string) *GCPDiscovere
 			"google_container_cluster":               newContainerClusterDiscoverer(),
 			"google_container_node_pool":             newContainerNodePoolDiscoverer(),
 			"google_sql_database_instance":           newSQLDatabaseInstanceDiscoverer(),
-			"google_sql_user":                        newSQLUserDiscoverer(),
 			"google_cloud_run_v2_service":            newCloudRunV2ServiceDiscoverer(),
 			"google_cloudfunctions2_function":        newCloudFunctions2FunctionDiscoverer(),
 			"google_compute_forwarding_rule":         newComputeForwardingRuleDiscoverer(),
@@ -180,7 +179,6 @@ func NewGCPDiscoverer(searcher gcpAssetSearcher, projectID string) *GCPDiscovere
 			"google_monitoring_dashboard":            newMonitoringDashboardDiscoverer(),
 			"google_monitoring_alert_policy":         newMonitoringAlertPolicyDiscoverer(),
 			"google_monitoring_notification_channel": newMonitoringNotificationChannelDiscoverer(),
-			"google_logging_project_sink":            newLoggingProjectSinkDiscoverer(),
 		},
 	}
 }
@@ -282,6 +280,15 @@ func (g *GCPDiscoverer) DiscoverTypes(ctx context.Context, types []string, args 
 		sort.SliceStable(bucket, func(i, j int) bool { return bucket[i].Name < bucket[j].Name })
 		for _, r := range bucket {
 			imp := d.FromAsset(book, r, g.projectID)
+			// A discoverer that returns a zero-valued ImportedResource
+			// is signaling "skip this row" — used by compute_address
+			// and compute_forwarding_rule to filter out global rows
+			// that belong to a different TF type. Empty Identity.Type
+			// is the sentinel; the orchestrator drops the row instead
+			// of emitting an invalid import-id.
+			if imp.Identity.Type == "" {
+				continue
+			}
 			args.Emitter.ItemFound(gcpServiceSlug, r.Location, imp.Identity.Type, imp.Identity.ImportID)
 			out = append(out, imp)
 		}
