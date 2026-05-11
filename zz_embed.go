@@ -5,9 +5,10 @@ import "embed"
 // Include all files the composer consumes: .tf, .tmpl, and binary assets (.zip).
 // DO NOT include provider caches, .terraform/*, or lockfiles.
 // Structure:
-//   aws/<module>/*.tf, gcp/<module>/*.tf — top-level cloud presets
-//   aws/_shared/<name>/*.tf, gcp/_shared/<name>/*.tf — per-cloud helpers (issue #203)
-//   _shared/<name>/*.tf — cross-cloud helpers (issue #203)
+//
+//	aws/<module>/*.tf, gcp/<module>/*.tf — top-level cloud presets
+//	aws/_shared/<name>/*.tf, gcp/_shared/<name>/*.tf — per-cloud helpers (issue #203)
+//	_shared/<name>/*.tf — cross-cloud helpers (issue #203)
 //
 // Note: Go embed requires at least one file to match each pattern.
 // AWS has .tmpl files (bastion/user_data.sh.tmpl), GCP does not yet.

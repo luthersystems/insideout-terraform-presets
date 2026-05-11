@@ -130,6 +130,7 @@ var categoryByTFType = map[string]string{
 	"google_compute_router":          CategoryNetworkSecurity,
 	"google_compute_subnetwork":      CategoryNetworkSecurity,
 	"google_container_cluster":       CategoryVirtualMachines,
+	"google_container_node_pool":     CategoryVirtualMachines,
 	"google_kms_crypto_key":          CategorySecurity,
 	"google_kms_key_ring":            CategorySecurity,
 	"google_pubsub_subscription":     CategoryEvents,

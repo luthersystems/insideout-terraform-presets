@@ -34,6 +34,8 @@ var expectedRegisteredTypes = map[string]bool{
 	"google_compute_router":        false,
 	"google_compute_address":       false,
 	"google_compute_instance":      false,
+	"google_container_cluster":     false,
+	"google_container_node_pool":   false,
 }
 
 func TestNewGCPDiscoverer_RegistersExpectedTypes(t *testing.T) {
@@ -323,6 +325,12 @@ func TestFromAsset_ProjectIDArgWinsOverAssetField(t *testing.T) {
 		{name: "compute_instance", discoverer: newComputeInstanceDiscoverer(),
 			assetName:    "//compute.googleapis.com/projects/" + fromAsset + "/zones/us-central1-a/instances/vm1",
 			wantImportID: "projects/" + explicit + "/zones/us-central1-a/instances/vm1"},
+		{name: "container_cluster", discoverer: newContainerClusterDiscoverer(),
+			assetName:    "//container.googleapis.com/projects/" + fromAsset + "/locations/us-central1/clusters/c1",
+			wantImportID: "projects/" + explicit + "/locations/us-central1/clusters/c1"},
+		{name: "container_node_pool", discoverer: newContainerNodePoolDiscoverer(),
+			assetName:    "//container.googleapis.com/projects/" + fromAsset + "/locations/us-central1/clusters/c1/nodePools/np1",
+			wantImportID: "projects/" + explicit + "/locations/us-central1/clusters/c1/nodePools/np1"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -614,6 +622,8 @@ var expectedScopeStyle = map[string]ScopeStyle{
 	"google_compute_router":        ScopeStyleNamePrefix, // routers have no labels (#369)
 	"google_compute_address":       ScopeStyleLabels,     // addresses carry labels (#369)
 	"google_compute_instance":      ScopeStyleLabels,     // VMs carry labels (#370)
+	"google_container_cluster":     ScopeStyleLabels,     // GKE clusters carry labels (#371)
+	"google_container_node_pool":   ScopeStyleNamePrefix, // node pools have no labels (#371)
 }
 
 // TestScopeStyle_PinsPerTypeContract is the regression guard (#366).

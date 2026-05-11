@@ -69,6 +69,8 @@ func TestSupportedDiscoverTypes_GCP_ReturnsCanonicalSortedList(t *testing.T) {
 		"google_compute_instance",
 		"google_compute_network",
 		"google_compute_router",
+		"google_container_cluster",
+		"google_container_node_pool",
 		"google_kms_crypto_key",
 		"google_kms_key_ring",
 		"google_pubsub_subscription",
