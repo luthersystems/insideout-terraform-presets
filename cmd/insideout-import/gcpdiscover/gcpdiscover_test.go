@@ -22,22 +22,24 @@ import (
 // accidental registration in NewGCPDiscoverer surfaces as a test
 // failure, not silent behavior change.
 var expectedRegisteredTypes = map[string]bool{
-	"google_pubsub_topic":          false,
-	"google_pubsub_subscription":   false,
-	"google_storage_bucket":        false,
-	"google_secret_manager_secret": false,
-	"google_compute_network":       false,
-	"google_service_account":       false,
-	"google_kms_key_ring":          false,
-	"google_kms_crypto_key":        false,
-	"google_compute_firewall":      false,
-	"google_compute_router":        false,
-	"google_compute_address":       false,
-	"google_compute_instance":      false,
-	"google_container_cluster":     false,
-	"google_container_node_pool":   false,
-	"google_sql_database_instance": false,
-	"google_sql_user":              false,
+	"google_pubsub_topic":             false,
+	"google_pubsub_subscription":      false,
+	"google_storage_bucket":           false,
+	"google_secret_manager_secret":    false,
+	"google_compute_network":          false,
+	"google_service_account":          false,
+	"google_kms_key_ring":             false,
+	"google_kms_crypto_key":           false,
+	"google_compute_firewall":         false,
+	"google_compute_router":           false,
+	"google_compute_address":          false,
+	"google_compute_instance":         false,
+	"google_container_cluster":        false,
+	"google_container_node_pool":      false,
+	"google_sql_database_instance":    false,
+	"google_sql_user":                 false,
+	"google_cloud_run_v2_service":     false,
+	"google_cloudfunctions2_function": false,
 }
 
 func TestNewGCPDiscoverer_RegistersExpectedTypes(t *testing.T) {
@@ -339,6 +341,12 @@ func TestFromAsset_ProjectIDArgWinsOverAssetField(t *testing.T) {
 		{name: "sql_user", discoverer: newSQLUserDiscoverer(),
 			assetName:    "//sqladmin.googleapis.com/projects/" + fromAsset + "/instances/db1/users/u1",
 			wantImportID: explicit + "/db1/u1"},
+		{name: "cloud_run_v2_service", discoverer: newCloudRunV2ServiceDiscoverer(),
+			assetName:    "//run.googleapis.com/projects/" + fromAsset + "/locations/us-central1/services/s1",
+			wantImportID: "projects/" + explicit + "/locations/us-central1/services/s1"},
+		{name: "cloudfunctions2_function", discoverer: newCloudFunctions2FunctionDiscoverer(),
+			assetName:    "//cloudfunctions.googleapis.com/projects/" + fromAsset + "/locations/us-central1/functions/fn1",
+			wantImportID: "projects/" + explicit + "/locations/us-central1/functions/fn1"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -618,22 +626,24 @@ func TestGCPDiscoverTypes_EmitsStageFinish(t *testing.T) {
 // type that carries GCP labels should be ScopeStyleLabels; a label-
 // less type (CLAUDE.md L84 convention) should be ScopeStyleNamePrefix.
 var expectedScopeStyle = map[string]ScopeStyle{
-	"google_pubsub_topic":          ScopeStyleLabels,
-	"google_pubsub_subscription":   ScopeStyleLabels,
-	"google_storage_bucket":        ScopeStyleLabels,
-	"google_secret_manager_secret": ScopeStyleLabels,
-	"google_compute_network":       ScopeStyleLabels,
-	"google_service_account":       ScopeStyleNamePrefix, // IAM SAs have no labels (#367)
-	"google_kms_key_ring":          ScopeStyleNamePrefix, // KMS keyrings have no labels (#368)
-	"google_kms_crypto_key":        ScopeStyleNamePrefix, // KMS cryptokeys have no labels (#368)
-	"google_compute_firewall":      ScopeStyleNamePrefix, // firewalls have no labels (#369)
-	"google_compute_router":        ScopeStyleNamePrefix, // routers have no labels (#369)
-	"google_compute_address":       ScopeStyleLabels,     // addresses carry labels (#369)
-	"google_compute_instance":      ScopeStyleLabels,     // VMs carry labels (#370)
-	"google_container_cluster":     ScopeStyleLabels,     // GKE clusters carry labels (#371)
-	"google_container_node_pool":   ScopeStyleNamePrefix, // node pools have no labels (#371)
-	"google_sql_database_instance": ScopeStyleLabels,     // Cloud SQL via settings.user_labels (#372)
-	"google_sql_user":              ScopeStyleNamePrefix, // SQL users have no labels (#372)
+	"google_pubsub_topic":             ScopeStyleLabels,
+	"google_pubsub_subscription":      ScopeStyleLabels,
+	"google_storage_bucket":           ScopeStyleLabels,
+	"google_secret_manager_secret":    ScopeStyleLabels,
+	"google_compute_network":          ScopeStyleLabels,
+	"google_service_account":          ScopeStyleNamePrefix, // IAM SAs have no labels (#367)
+	"google_kms_key_ring":             ScopeStyleNamePrefix, // KMS keyrings have no labels (#368)
+	"google_kms_crypto_key":           ScopeStyleNamePrefix, // KMS cryptokeys have no labels (#368)
+	"google_compute_firewall":         ScopeStyleNamePrefix, // firewalls have no labels (#369)
+	"google_compute_router":           ScopeStyleNamePrefix, // routers have no labels (#369)
+	"google_compute_address":          ScopeStyleLabels,     // addresses carry labels (#369)
+	"google_compute_instance":         ScopeStyleLabels,     // VMs carry labels (#370)
+	"google_container_cluster":        ScopeStyleLabels,     // GKE clusters carry labels (#371)
+	"google_container_node_pool":      ScopeStyleNamePrefix, // node pools have no labels (#371)
+	"google_sql_database_instance":    ScopeStyleLabels,     // Cloud SQL via settings.user_labels (#372)
+	"google_sql_user":                 ScopeStyleNamePrefix, // SQL users have no labels (#372)
+	"google_cloud_run_v2_service":     ScopeStyleLabels,     // Cloud Run v2 carries labels (#373)
+	"google_cloudfunctions2_function": ScopeStyleLabels,     // Cloud Functions v2 carries labels (#373)
 }
 
 // TestScopeStyle_PinsPerTypeContract is the regression guard (#366).

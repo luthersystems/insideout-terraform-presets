@@ -41,6 +41,8 @@ aws_vpc_dhcp_options	Network Security
 aws_vpc_endpoint	Network Security
 google_bigquery_dataset	Data Storage
 google_cloud_run_service	Virtual Machines
+google_cloud_run_v2_service	Virtual Machines
+google_cloudfunctions2_function	Virtual Machines
 google_cloudfunctions_function	Virtual Machines
 google_compute_address	Network Security
 google_compute_disk	Data Storage

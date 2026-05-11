@@ -29,8 +29,11 @@ var gcpUnsupportedTFTypeByAssetType = map[string]string{
 	// Data
 	"bigquery.googleapis.com/Dataset": "google_bigquery_dataset",
 	// Containers / Serverless
-	"cloudfunctions.googleapis.com/Function": "google_cloudfunctions_function",
-	"run.googleapis.com/Service":             "google_cloud_run_service",
+	// Note: cloudfunctions.googleapis.com/Function and
+	// run.googleapis.com/Service moved to supported (Bundle 8 PR 8,
+	// #373) — see cloud_run_v2_service.go and
+	// cloudfunctions2_function.go. The Gen-2 Terraform types share
+	// the Gen-1 Cloud Asset slugs.
 }
 
 // mapGCPAssetTypeToTF resolves a Cloud Asset asset type to its
