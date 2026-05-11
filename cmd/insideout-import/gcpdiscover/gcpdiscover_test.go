@@ -30,6 +30,9 @@ var expectedRegisteredTypes = map[string]bool{
 	"google_service_account":       false,
 	"google_kms_key_ring":          false,
 	"google_kms_crypto_key":        false,
+	"google_compute_firewall":      false,
+	"google_compute_router":        false,
+	"google_compute_address":       false,
 }
 
 func TestNewGCPDiscoverer_RegistersExpectedTypes(t *testing.T) {
@@ -307,6 +310,15 @@ func TestFromAsset_ProjectIDArgWinsOverAssetField(t *testing.T) {
 		{name: "kms_crypto_key", discoverer: newKMSCryptoKeyDiscoverer(),
 			assetName:    "//cloudkms.googleapis.com/projects/" + fromAsset + "/locations/global/keyRings/ring1/cryptoKeys/key1",
 			wantImportID: "projects/" + explicit + "/locations/global/keyRings/ring1/cryptoKeys/key1"},
+		{name: "compute_firewall", discoverer: newComputeFirewallDiscoverer(),
+			assetName:    "//compute.googleapis.com/projects/" + fromAsset + "/global/firewalls/fw1",
+			wantImportID: "projects/" + explicit + "/global/firewalls/fw1"},
+		{name: "compute_router", discoverer: newComputeRouterDiscoverer(),
+			assetName:    "//compute.googleapis.com/projects/" + fromAsset + "/regions/us-central1/routers/r1",
+			wantImportID: "projects/" + explicit + "/regions/us-central1/routers/r1"},
+		{name: "compute_address_regional", discoverer: newComputeAddressDiscoverer(),
+			assetName:    "//compute.googleapis.com/projects/" + fromAsset + "/regions/us-central1/addresses/ip1",
+			wantImportID: "projects/" + explicit + "/regions/us-central1/addresses/ip1"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -594,6 +606,9 @@ var expectedScopeStyle = map[string]ScopeStyle{
 	"google_service_account":       ScopeStyleNamePrefix, // IAM SAs have no labels (#367)
 	"google_kms_key_ring":          ScopeStyleNamePrefix, // KMS keyrings have no labels (#368)
 	"google_kms_crypto_key":        ScopeStyleNamePrefix, // KMS cryptokeys have no labels (#368)
+	"google_compute_firewall":      ScopeStyleNamePrefix, // firewalls have no labels (#369)
+	"google_compute_router":        ScopeStyleNamePrefix, // routers have no labels (#369)
+	"google_compute_address":       ScopeStyleLabels,     // addresses carry labels (#369)
 }
 
 // TestScopeStyle_PinsPerTypeContract is the regression guard (#366).

@@ -65,7 +65,10 @@ var awsTypes = []string{
 // discover pipeline emits clean HCL for. Keep sorted lexicographically; the
 // gcpdiscover parity test will fail if this drifts from the live constructor.
 var gcpTypes = []string{
+	"google_compute_address",
+	"google_compute_firewall",
 	"google_compute_network",
+	"google_compute_router",
 	"google_kms_crypto_key",
 	"google_kms_key_ring",
 	"google_pubsub_subscription",

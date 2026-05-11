@@ -161,6 +161,9 @@ func NewGCPDiscoverer(searcher gcpAssetSearcher, projectID string) *GCPDiscovere
 			"google_service_account":       newServiceAccountDiscoverer(),
 			"google_kms_key_ring":          newKMSKeyRingDiscoverer(),
 			"google_kms_crypto_key":        newKMSCryptoKeyDiscoverer(),
+			"google_compute_firewall":      newComputeFirewallDiscoverer(),
+			"google_compute_router":        newComputeRouterDiscoverer(),
+			"google_compute_address":       newComputeAddressDiscoverer(),
 		},
 	}
 }
