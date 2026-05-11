@@ -2003,6 +2003,138 @@ func TestFixupDBInstance_NullReplicateSourcePreservesAttrs(t *testing.T) {
 	}
 }
 
+// TestFixupSecretsManagerSecret_ReplacesNullWithSchemaDefault covers
+// #361: terraform plan -generate-config-out emits
+// force_overwrite_replica_secret=null and recovery_window_in_days=null
+// for every aws_secretsmanager_secret, and the next plan after import
+// shows them as "+ false" and "+ 30" — spurious 1-to-change drift.
+// Replacing the nulls with the provider's schema defaults in
+// generated.tf eliminates the diff.
+func TestFixupSecretsManagerSecret_ReplacesNullWithSchemaDefault(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_secretsmanager_secret" "sm" {
+  name                           = "io-foo-sm"
+  force_overwrite_replica_secret = null
+  recovery_window_in_days        = null
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if !regexp.MustCompile(`force_overwrite_replica_secret\s*=\s*false`).MatchString(got) {
+		t.Errorf("force_overwrite_replica_secret must be replaced with false\n--- got ---\n%s", got)
+	}
+	if !regexp.MustCompile(`recovery_window_in_days\s*=\s*30`).MatchString(got) {
+		t.Errorf("recovery_window_in_days must be replaced with 30\n--- got ---\n%s", got)
+	}
+	// Other attrs survive.
+	if !regexp.MustCompile(`name\s*=\s*"io-foo-sm"`).MatchString(got) {
+		t.Errorf("name must be preserved\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupSecretsManagerSecret_PreservesNonNullValues pins the
+// carve-out: a secret deliberately configured with a different
+// recovery_window (e.g. 7 days for a faster purge cycle) preserves
+// the operator-supplied value. Without this guard a mutation that
+// always-rewrote would corrupt deliberate non-default configurations.
+func TestFixupSecretsManagerSecret_PreservesNonNullValues(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_secretsmanager_secret" "sm" {
+  name                           = "io-foo-sm"
+  force_overwrite_replica_secret = true
+  recovery_window_in_days        = 7
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if !regexp.MustCompile(`force_overwrite_replica_secret\s*=\s*true`).MatchString(got) {
+		t.Errorf("force_overwrite_replica_secret=true must be preserved\n--- got ---\n%s", got)
+	}
+	if !regexp.MustCompile(`recovery_window_in_days\s*=\s*7`).MatchString(got) {
+		t.Errorf("recovery_window_in_days=7 must be preserved\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupSecretsManagerSecret_PartialNullPreservesOther pins
+// independence of the two transforms: one attribute being null while
+// the other is operator-set must replace only the null half.
+func TestFixupSecretsManagerSecret_PartialNullPreservesOther(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		body string
+		want []string
+	}{
+		{
+			name: "only_force_overwrite_null",
+			body: `force_overwrite_replica_secret = null
+  recovery_window_in_days        = 7`,
+			want: []string{`force_overwrite_replica_secret\s*=\s*false`, `recovery_window_in_days\s*=\s*7`},
+		},
+		{
+			name: "only_recovery_window_null",
+			body: `force_overwrite_replica_secret = true
+  recovery_window_in_days        = null`,
+			want: []string{`force_overwrite_replica_secret\s*=\s*true`, `recovery_window_in_days\s*=\s*30`},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			in := []byte(`resource "aws_secretsmanager_secret" "sm" {
+  name                           = "io-foo-sm"
+  ` + tc.body + `
+}
+`)
+			out, err := applyResourceTypeFixups(in)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := string(out)
+			for _, w := range tc.want {
+				if !regexp.MustCompile(w).MatchString(got) {
+					t.Errorf("missing %q\n--- got ---\n%s", w, got)
+				}
+			}
+		})
+	}
+}
+
+// TestFixupSecretsManagerSecret_OnlyAffectsAWSSecretsManagerSecretBlocks
+// pins resourceTypeFixups keying: a sibling resource type carrying
+// the same attribute names (e.g. a hypothetical type with the same
+// schema shape) is left untouched.
+func TestFixupSecretsManagerSecret_OnlyAffectsAWSSecretsManagerSecretBlocks(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_secretsmanager_secret" "sm" {
+  recovery_window_in_days = null
+}
+
+resource "aws_other_resource" "extra" {
+  recovery_window_in_days = null
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	// aws_secretsmanager_secret got the fixup.
+	if !regexp.MustCompile(`(?s)resource "aws_secretsmanager_secret" "sm"[^}]*\{[^}]*recovery_window_in_days\s*=\s*30`).MatchString(got) {
+		t.Errorf("aws_secretsmanager_secret's null must be replaced with 30\n--- got ---\n%s", got)
+	}
+	// aws_other_resource left alone.
+	if !regexp.MustCompile(`(?s)resource "aws_other_resource" "extra"[^}]*\{[^}]*recovery_window_in_days\s*=\s*null`).MatchString(got) {
+		t.Errorf("aws_other_resource's null must be preserved (fixup keyed by aws_secretsmanager_secret)\n--- got ---\n%s", got)
+	}
+}
+
 // TestFixupDBInstance_OnlyAffectsAWSDBInstanceBlocks pins
 // resourceTypeFixups keying: a sibling resource type carrying the
 // same attribute names is left untouched.

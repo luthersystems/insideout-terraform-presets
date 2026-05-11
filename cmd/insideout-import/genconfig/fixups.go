@@ -63,6 +63,7 @@ var resourceTypeFixups = map[string]func(*hclwrite.Block){
 	"aws_lb_target_group": fixupLBTargetGroupProviderQuirks,
 	"aws_vpc_endpoint":    fixupVPCEndpointEmptyDNSDomains,
 	"aws_db_instance":     fixupDBInstanceProviderQuirks,
+	"aws_secretsmanager_secret": fixupSecretsManagerSecretDefaults,
 }
 
 // lambdaPlaceholderFile is what we set `filename` to so the block
@@ -508,6 +509,39 @@ func fixupDBInstanceProviderQuirks(blk *hclwrite.Block) {
 	if hasUsableValue(body, "replicate_source_db") {
 		body.RemoveAttribute("db_name")
 		body.RemoveAttribute("username")
+	}
+}
+
+// fixupSecretsManagerSecretDefaults replaces the literal `null`
+// emitted by `terraform plan -generate-config-out` for two
+// default-rich Optional+Computed attributes with their schema
+// defaults, so the next plan after import is no-op rather than
+// "1 to change":
+//
+//   - force_overwrite_replica_secret = null → false. The provider
+//     marks this write-only; -generate-config-out can't read a real
+//     value back from AWS, so it emits null. The provider's
+//     schema default is false, and on the next plan the diff
+//     "null → false" shows as an in-place update. Pinning false in
+//     generated.tf eliminates the spurious diff.
+//   - recovery_window_in_days = null → 30. AWS API leaves the field
+//     unset on a non-pending-deletion secret, so the provider Reads
+//     nil. The schema default is 30 days, and on the next plan the
+//     diff "null → 30" shows as an in-place update. Pinning 30 in
+//     generated.tf eliminates the spurious diff.
+//
+// Conservative shape: each transform fires only on the literal
+// `null`. A secret deliberately configured with a different
+// recovery_window (e.g. 7 days) preserves -generate-config-out's
+// emitted value because the literal won't be `null`. Same shape as
+// fixupKMSRotationPeriodZero. Issue #361.
+func fixupSecretsManagerSecretDefaults(blk *hclwrite.Block) {
+	body := blk.Body()
+	if isAttrLiteralNull(body, "force_overwrite_replica_secret") {
+		body.SetAttributeValue("force_overwrite_replica_secret", cty.False)
+	}
+	if isAttrLiteralNull(body, "recovery_window_in_days") {
+		body.SetAttributeValue("recovery_window_in_days", cty.NumberIntVal(30))
 	}
 }
 
