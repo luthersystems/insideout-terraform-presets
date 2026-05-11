@@ -71,10 +71,12 @@ func TestWrapSearchAllError_UnauthenticatedSuggestsADCRefresh(t *testing.T) {
 	if !strings.Contains(got, "invalid_rapt") {
 		t.Errorf("original error must be preserved for log search\n--- got ---\n%s", got)
 	}
-	// The wrap is fmt.Errorf with %v — errors.Is should match neither
-	// codes nor the underlying error directly, but the underlying
-	// status error is preserved via the message body.
-	_ = errors.Is // imported to keep the test surface aware of error chains
+	// %w wrap preserves the gRPC status in the chain: errors.Is
+	// against the original status error returns true. A regression to
+	// %v would break this.
+	if !errors.Is(wrapped, raw) {
+		t.Errorf("errors.Is must reach the wrapped gRPC status error (broken by %%v regression?)")
+	}
 }
 
 // TestWrapSearchAllError_PermissionDeniedNotEnabledSuggestsQuotaProject

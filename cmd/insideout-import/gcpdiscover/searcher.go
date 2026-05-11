@@ -134,10 +134,14 @@ func wrapSearchAllError(err error) error {
 	if s, ok := status.FromError(err); ok {
 		switch s.Code() {
 		case codes.Unauthenticated:
+			// %w preserves the gRPC status in the error chain so a
+			// future caller can errors.As(err, &grpcStatus) or
+			// errors.Is against the original. The rendered Error()
+			// output is byte-identical to %v.
 			return fmt.Errorf("search all resources: GCP authentication failed.\n"+
 				"  Application Default Credentials need to be refreshed.\n"+
 				"  Run: gcloud auth application-default login\n"+
-				"  (underlying error: %v)", err)
+				"  (underlying error: %w)", err)
 		case codes.PermissionDenied:
 			// "API … not enabled" is the documented marker the
 			// service-usage service emits when the Cloud Asset API
@@ -148,7 +152,7 @@ func wrapSearchAllError(err error) error {
 				return fmt.Errorf("search all resources: Cloud Asset API is not enabled on the ADC quota project.\n"+
 					"  The Cloud Asset API needs to be enabled on the project that owns the ADC credentials (the ADC quota project), NOT necessarily on the scope project you're searching.\n"+
 					"  Check `gcloud auth application-default print-access-token` and enable cloudasset.googleapis.com on the project the token bills against.\n"+
-					"  (underlying error: %v)", err)
+					"  (underlying error: %w)", err)
 			}
 		}
 	}
