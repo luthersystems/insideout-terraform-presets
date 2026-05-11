@@ -33,6 +33,7 @@ var expectedRegisteredTypes = map[string]bool{
 	"google_compute_firewall":      false,
 	"google_compute_router":        false,
 	"google_compute_address":       false,
+	"google_compute_instance":      false,
 }
 
 func TestNewGCPDiscoverer_RegistersExpectedTypes(t *testing.T) {
@@ -319,6 +320,9 @@ func TestFromAsset_ProjectIDArgWinsOverAssetField(t *testing.T) {
 		{name: "compute_address_regional", discoverer: newComputeAddressDiscoverer(),
 			assetName:    "//compute.googleapis.com/projects/" + fromAsset + "/regions/us-central1/addresses/ip1",
 			wantImportID: "projects/" + explicit + "/regions/us-central1/addresses/ip1"},
+		{name: "compute_instance", discoverer: newComputeInstanceDiscoverer(),
+			assetName:    "//compute.googleapis.com/projects/" + fromAsset + "/zones/us-central1-a/instances/vm1",
+			wantImportID: "projects/" + explicit + "/zones/us-central1-a/instances/vm1"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -609,6 +613,7 @@ var expectedScopeStyle = map[string]ScopeStyle{
 	"google_compute_firewall":      ScopeStyleNamePrefix, // firewalls have no labels (#369)
 	"google_compute_router":        ScopeStyleNamePrefix, // routers have no labels (#369)
 	"google_compute_address":       ScopeStyleLabels,     // addresses carry labels (#369)
+	"google_compute_instance":      ScopeStyleLabels,     // VMs carry labels (#370)
 }
 
 // TestScopeStyle_PinsPerTypeContract is the regression guard (#366).

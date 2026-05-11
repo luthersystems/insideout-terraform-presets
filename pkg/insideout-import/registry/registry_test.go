@@ -66,6 +66,7 @@ func TestSupportedDiscoverTypes_GCP_ReturnsCanonicalSortedList(t *testing.T) {
 	want := []string{
 		"google_compute_address",
 		"google_compute_firewall",
+		"google_compute_instance",
 		"google_compute_network",
 		"google_compute_router",
 		"google_kms_crypto_key",

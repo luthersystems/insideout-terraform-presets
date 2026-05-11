@@ -275,9 +275,15 @@ func TestEnumerateUnsupportedGCP_PopulatesGroup(t *testing.T) {
 	t.Parallel()
 	fake := &fakeAssetSearcher{
 		results: []gcpAssetResult{
-			gcpAsset("//compute.googleapis.com/projects/p/zones/us-central1-a/instances/vm-x", "compute.googleapis.com/Instance", "us-central1", nil),
-			gcpAsset("//container.googleapis.com/projects/p/locations/us-central1/clusters/c", "container.googleapis.com/Cluster", "us-central1", nil),
-			gcpAsset("//sqladmin.googleapis.com/projects/p/instances/db", "sqladmin.googleapis.com/Instance", "us-central1", nil),
+			// Cover one row per still-unsupported category. Bundle 8
+			// continues to move types from unsupported → supported, so
+			// pin against types that are NOT in the live registry: as
+			// of #370 that includes compute_disk (Data Storage),
+			// compute_subnetwork (Network Security). Once Bundle 8
+			// PR 6 (#371) ships container_cluster will also move and
+			// this fixture will need re-targeting.
+			gcpAsset("//compute.googleapis.com/projects/p/zones/us-central1-a/disks/d", "compute.googleapis.com/Disk", "us-central1", nil),
+			gcpAsset("//compute.googleapis.com/projects/p/regions/us-central1/subnetworks/s", "compute.googleapis.com/Subnetwork", "us-central1", nil),
 			// Unmapped slug — must pass through with empty Type and Group.
 			gcpAsset("//newservice.googleapis.com/projects/p/things/x", "newservice.googleapis.com/Thing", "us-central1", nil),
 		},
@@ -293,9 +299,8 @@ func TestEnumerateUnsupportedGCP_PopulatesGroup(t *testing.T) {
 	// assert Group on the matching entry; for the unmapped row, walk
 	// for the Type=="" entry and assert Group=="".
 	wantGroup := map[string]string{
-		"google_compute_instance":      "Virtual Machines",
-		"google_container_cluster":     "Virtual Machines",
-		"google_sql_database_instance": "Data Storage",
+		"google_compute_disk":       "Data Storage",
+		"google_compute_subnetwork": "Network Security",
 	}
 	for typ, want := range wantGroup {
 		var found *UnsupportedResource

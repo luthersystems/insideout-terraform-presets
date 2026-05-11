@@ -24,7 +24,6 @@ import "sort"
 // reliable shape.
 var gcpUnsupportedTFTypeByAssetType = map[string]string{
 	// Compute
-	"compute.googleapis.com/Instance":   "google_compute_instance",
 	"compute.googleapis.com/Disk":       "google_compute_disk",
 	"compute.googleapis.com/Subnetwork": "google_compute_subnetwork",
 	// Data
