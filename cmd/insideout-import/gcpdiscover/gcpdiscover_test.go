@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -539,4 +540,413 @@ func TestGCPDiscoverTypes_EmitsStageFinish(t *testing.T) {
 	if stageEvents != 1 {
 		t.Errorf("stage_finish count=%d, want 1", stageEvents)
 	}
+}
+
+// TestScopeStyle_AllPhase1DiscoverersUseLabels is a regression guard
+// (#366). All five currently-registered discoverers cover labelable GCP
+// resource types — every type's preset attaches the `project` label —
+// so each one must report ScopeStyleLabels. A mutation that flipped
+// any of them to ScopeStyleNamePrefix would silently drop the
+// labels.project clause from its server-side query, returning the
+// project's full inventory instead of just the stack's assets.
+//
+// Test source-of-truth is the live registration map produced by
+// NewGCPDiscoverer, not hand-listed constructors — that way the test
+// stays a regression guard for production behavior. A future PR that
+// forgot to register a constructor in byType (or that registered a
+// new ScopeStyleNamePrefix discoverer alongside the labels-style set)
+// surfaces here.
+func TestScopeStyle_AllPhase1DiscoverersUseLabels(t *testing.T) {
+	t.Parallel()
+	g := NewGCPDiscoverer(&fakeAssetSearcher{}, "p")
+	if len(g.byType) == 0 {
+		t.Fatal("no discoverers registered; ScopeStyle parity test would be vacuous")
+	}
+	for tfType, d := range g.byType {
+		t.Run(tfType, func(t *testing.T) {
+			t.Parallel()
+			if got := d.ScopeStyle(); got != ScopeStyleLabels {
+				t.Errorf("%s.ScopeStyle()=%v, want ScopeStyleLabels (%v) — every Phase-1 GCP type carries the project label",
+					tfType, got, ScopeStyleLabels)
+			}
+		})
+	}
+}
+
+// TestDiscoverTypes_LabelsBucketOnly_SingleSearchCall pins today's
+// labels-only path (#366) — when every selected discoverer reports
+// ScopeStyleLabels, the orchestrator issues exactly one
+// SearchAllResources call and its query carries the legacy
+// `labels.project:<stack>` clause. Regression guard against the
+// two-bucket refactor accidentally splitting the all-labels path into
+// two round-trips.
+func TestDiscoverTypes_LabelsBucketOnly_SingleSearchCall(t *testing.T) {
+	t.Parallel()
+	fake := &fakeAssetSearcher{}
+	g := NewGCPDiscoverer(fake, "real-proj")
+	if _, err := g.DiscoverTypes(context.Background(), []string{"google_pubsub_topic", "google_storage_bucket"}, DiscoverArgs{
+		Project: "io-foo",
+		Regions: []string{""},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(fake.calls) != 1 {
+		t.Fatalf("SearchAll calls=%d, want 1 (all selected types are ScopeStyleLabels)", len(fake.calls))
+	}
+	if !strings.Contains(fake.calls[0].query, "labels.project:io-foo") {
+		t.Errorf("labels-bucket query=%q, want it to include labels.project:io-foo", fake.calls[0].query)
+	}
+}
+
+// TestDiscoverTypes_NamePrefixBucketOnly_OneCallWithoutLabelsClause
+// pins the name-prefix-only path (#366): one SearchAllResources call,
+// and its query MUST NOT include `labels.project:` — label-less GCP
+// resource types don't carry the label, so the server-side clause
+// would unconditionally exclude every result.
+func TestDiscoverTypes_NamePrefixBucketOnly_OneCallWithoutLabelsClause(t *testing.T) {
+	t.Parallel()
+	fake := &fakeAssetSearcher{}
+	g := &GCPDiscoverer{
+		searcher:  fake,
+		projectID: "real-proj",
+		byType: map[string]Discoverer{
+			"google_fake_namepref": &fakeNamePrefixDiscoverer{
+				resourceType: "google_fake_namepref",
+				assetType:    "test.googleapis.com/NamePrefixed",
+			},
+		},
+	}
+	if _, err := g.DiscoverTypes(context.Background(), []string{"google_fake_namepref"}, DiscoverArgs{
+		Project: "io-foo",
+		Regions: []string{"us-central1"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(fake.calls) != 1 {
+		t.Fatalf("SearchAll calls=%d, want 1 (one bucket, one round-trip)", len(fake.calls))
+	}
+	if strings.Contains(fake.calls[0].query, "labels.project:") {
+		t.Errorf("name-prefix-bucket query=%q, want NO labels.project clause", fake.calls[0].query)
+	}
+	// Sanity: the other clauses still propagate (location, selectors).
+	if !strings.Contains(fake.calls[0].query, "location:us-central1") {
+		t.Errorf("name-prefix-bucket query=%q, want location:us-central1 to still propagate", fake.calls[0].query)
+	}
+}
+
+// TestDiscoverTypes_MixedBuckets_TwoSearchCallsWithDifferentQueries
+// pins the two-call dispatch (#366) when both ScopeStyle buckets are
+// non-empty: each bucket gets its own SearchAllResources, partitioned
+// by asset type. The labels-bucket call carries `labels.project:`; the
+// name-prefix-bucket call doesn't.
+func TestDiscoverTypes_MixedBuckets_TwoSearchCallsWithDifferentQueries(t *testing.T) {
+	t.Parallel()
+	fake := &bucketedFakeSearcher{
+		resultsByAssetType: map[string][]gcpAssetResult{
+			"pubsub.googleapis.com/Topic": {
+				{Name: "//pubsub.googleapis.com/projects/real-proj/topics/io-foo-events", AssetType: "pubsub.googleapis.com/Topic", Project: "real-proj"},
+			},
+			"test.googleapis.com/NamePrefixed": {
+				{Name: "//test.googleapis.com/projects/real-proj/widgets/io-foo-widget", AssetType: "test.googleapis.com/NamePrefixed", Project: "real-proj"},
+			},
+		},
+	}
+	g := &GCPDiscoverer{
+		searcher:  fake,
+		projectID: "real-proj",
+		byType: map[string]Discoverer{
+			"google_pubsub_topic": newPubsubTopicDiscoverer(),
+			"google_fake_namepref": &fakeNamePrefixDiscoverer{
+				resourceType: "google_fake_namepref",
+				assetType:    "test.googleapis.com/NamePrefixed",
+			},
+		},
+	}
+	got, err := g.DiscoverTypes(context.Background(), []string{"google_pubsub_topic", "google_fake_namepref"}, DiscoverArgs{
+		Project: "io-foo",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fake.calls) != 2 {
+		t.Fatalf("SearchAll calls=%d, want 2 (one per ScopeStyle bucket)", len(fake.calls))
+	}
+
+	// Find the calls by their asset-type partition; the orchestrator
+	// iterates labels-bucket before name-prefix-bucket, but pinning the
+	// order is brittle — pin the contents instead.
+	var labelsCall, nameCall *searchAllCall
+	for i := range fake.calls {
+		c := &fake.calls[i]
+		switch {
+		case slices.Contains(c.assetTypes, "pubsub.googleapis.com/Topic"):
+			labelsCall = c
+		case slices.Contains(c.assetTypes, "test.googleapis.com/NamePrefixed"):
+			nameCall = c
+		}
+	}
+	if labelsCall == nil {
+		t.Fatal("no SearchAll call carried the labels-bucket asset type pubsub.googleapis.com/Topic")
+	}
+	if nameCall == nil {
+		t.Fatal("no SearchAll call carried the name-prefix-bucket asset type test.googleapis.com/NamePrefixed")
+	}
+
+	if !strings.Contains(labelsCall.query, "labels.project:io-foo") {
+		t.Errorf("labels-bucket call query=%q, want labels.project:io-foo", labelsCall.query)
+	}
+	// Belt-and-braces: the labels-bucket query carries exactly one
+	// labels.project clause. A regression that double-emitted the
+	// clause (e.g. labels.project:io-foo AND labels.project:io-foo)
+	// or that merged in tag selectors as labels.project would still
+	// satisfy the Contains() check above.
+	if c := strings.Count(labelsCall.query, "labels.project:"); c != 1 {
+		t.Errorf("labels-bucket labels.project count=%d, want 1; query=%q", c, labelsCall.query)
+	}
+	if strings.Contains(nameCall.query, "labels.project:") {
+		t.Errorf("name-prefix-bucket call query=%q, want NO labels.project clause", nameCall.query)
+	}
+
+	// Asset-type partition is strict: neither call carries the other
+	// bucket's type. A regression that issued one combined call would
+	// fail here.
+	if slices.Contains(labelsCall.assetTypes, "test.googleapis.com/NamePrefixed") {
+		t.Errorf("labels-bucket call asset types=%v, must not include name-prefix-bucket types", labelsCall.assetTypes)
+	}
+	if slices.Contains(nameCall.assetTypes, "pubsub.googleapis.com/Topic") {
+		t.Errorf("name-prefix-bucket call asset types=%v, must not include labels-bucket types", nameCall.assetTypes)
+	}
+
+	// Both buckets contribute to the returned resource set.
+	if len(got) != 2 {
+		t.Fatalf("ImportedResources=%d, want 2 (one per bucket)", len(got))
+	}
+}
+
+// TestDiscoverTypes_NamePrefixFiltersAssetNameClientSide pins the
+// client-side filter (#366): when the name-prefix bucket returns
+// assets whose short name doesn't contain args.Project, the
+// orchestrator drops them. The server has no `labels.project:` clause
+// for this bucket — so the filter must apply on the client, otherwise
+// label-less GCP resources from other stacks would leak into the
+// import set.
+func TestDiscoverTypes_NamePrefixFiltersAssetNameClientSide(t *testing.T) {
+	t.Parallel()
+	fake := &fakeAssetSearcher{
+		results: []gcpAssetResult{
+			// Matches "io-foo" via substring on the short name.
+			{Name: "//test.googleapis.com/projects/real-proj/widgets/io-foo-widget-a", AssetType: "test.googleapis.com/NamePrefixed"},
+			// Does NOT contain "io-foo" — must be dropped.
+			{Name: "//test.googleapis.com/projects/real-proj/widgets/other-stack-widget", AssetType: "test.googleapis.com/NamePrefixed"},
+			// Matches via substring at the end.
+			{Name: "//test.googleapis.com/projects/real-proj/widgets/widget-io-foo", AssetType: "test.googleapis.com/NamePrefixed"},
+		},
+	}
+	g := &GCPDiscoverer{
+		searcher:  fake,
+		projectID: "real-proj",
+		byType: map[string]Discoverer{
+			"google_fake_namepref": &fakeNamePrefixDiscoverer{
+				resourceType: "google_fake_namepref",
+				assetType:    "test.googleapis.com/NamePrefixed",
+			},
+		},
+	}
+	got, err := g.DiscoverTypes(context.Background(), []string{"google_fake_namepref"}, DiscoverArgs{
+		Project: "io-foo",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Pin both the partition (exactly which assets survived) and the
+	// order (DiscoverTypes stable-sorts per-asset-type by Cloud Asset
+	// Name). A mutation that kept one asset twice or that swapped
+	// asset[0]/asset[2] would survive a count-only check; deep-equal
+	// against the sorted-by-short-name expected slice pins it.
+	wantNames := []string{"io-foo-widget-a", "widget-io-foo"}
+	gotNames := namesOf(got)
+	if !reflect.DeepEqual(gotNames, wantNames) {
+		t.Errorf("kept names = %v, want %v (filter must keep the io-foo-tagged assets in stable order, drop other-stack-widget)", gotNames, wantNames)
+	}
+}
+
+// TestDiscoverTypes_NamePrefixEmptyProjectPassesThrough pins the
+// no-filter case (#366): when args.Project is empty, the name-prefix
+// bucket's client-side filter is skipped so every asset passes
+// through. Symmetric with the labels bucket, where an empty stack
+// project also omits the labels.project clause and returns the
+// project's full inventory.
+//
+// Mutation-resistance: strings.Contains(s, "") is always true in Go,
+// so a regression that removed the `if args.Project != ""` guard
+// would still produce a 2-result happy-path under any reasonable
+// fixture — the count-only assertion is tautological. To pin the
+// behavior, this test feeds three assets whose short names share
+// nothing in common (no substring overlap) and asserts the returned
+// slice exactly equals the input by name AND order. The labels-style
+// `len == in` shape and unordered membership would not catch a
+// stable-sort regression on the name-prefix path; deep-equal pins it.
+func TestDiscoverTypes_NamePrefixEmptyProjectPassesThrough(t *testing.T) {
+	t.Parallel()
+	// Three assets whose short names form an antichain under
+	// strings.Contains — no name is a substring of another, so any
+	// substring filter run against a non-empty needle would drop at
+	// least one. The skip-the-filter branch must keep all three.
+	fake := &fakeAssetSearcher{
+		results: []gcpAssetResult{
+			{Name: "//test.googleapis.com/projects/real-proj/widgets/alpha", AssetType: "test.googleapis.com/NamePrefixed"},
+			{Name: "//test.googleapis.com/projects/real-proj/widgets/zeta", AssetType: "test.googleapis.com/NamePrefixed"},
+			{Name: "//test.googleapis.com/projects/real-proj/widgets/mid", AssetType: "test.googleapis.com/NamePrefixed"},
+		},
+	}
+	g := &GCPDiscoverer{
+		searcher:  fake,
+		projectID: "real-proj",
+		byType: map[string]Discoverer{
+			"google_fake_namepref": &fakeNamePrefixDiscoverer{
+				resourceType: "google_fake_namepref",
+				assetType:    "test.googleapis.com/NamePrefixed",
+			},
+		},
+	}
+	got, err := g.DiscoverTypes(context.Background(), []string{"google_fake_namepref"}, DiscoverArgs{
+		Project: "",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// DiscoverTypes sorts each per-asset-type bucket by Cloud Asset
+	// Name (gcpdiscover.go's stable-sort), so the expected order is
+	// the alphabetical sort of short names: alpha, mid, zeta.
+	wantNames := []string{"alpha", "mid", "zeta"}
+	gotNames := namesOf(got)
+	if !reflect.DeepEqual(gotNames, wantNames) {
+		t.Errorf("kept names = %v, want %v (every input must pass through unchanged when args.Project is empty)", gotNames, wantNames)
+	}
+}
+
+// TestMatchesNamePrefix pins the helper's contract (#366): substring
+// match against the trailing path segment of a Cloud Asset name, with
+// the rest of the path explicitly excluded from the match. The
+// adversarial cases (5-8) are load-bearing: they pin the property
+// that earlier path segments — including the GCP project ID, the
+// location, and the resource-collection name — cannot trigger a
+// false-positive match. A mutation that replaced
+// `strings.Contains(shortName(assetName), stackProject)` with
+// `strings.Contains(assetName, stackProject)` would silently widen
+// the scope to the entire stack's project, returning resources
+// belonging to other stacks. The adversarial rows fail loudly.
+func TestMatchesNamePrefix(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name      string
+		assetName string
+		project   string
+		want      bool
+	}{
+		// Happy paths — substring at every position of the short name.
+		{"prefix match in short name", "//iam.googleapis.com/projects/p/serviceAccounts/io-foo-sa@p.iam.gserviceaccount.com", "io-foo", true},
+		{"infix match in short name", "//compute.googleapis.com/projects/p/global/firewalls/fw-io-foo-allow", "io-foo", true},
+		{"suffix match in short name", "//cloudkms.googleapis.com/projects/p/locations/global/keyRings/ring-io-foo", "io-foo", true},
+		{"no match anywhere", "//compute.googleapis.com/projects/p/global/firewalls/other-stack-fw", "io-foo", false},
+
+		// Adversarial: the stack project appears in earlier segments
+		// (the GCP project ID, an intermediate path segment, or both)
+		// while the trailing short name is OWNED BY A DIFFERENT STACK.
+		// Each must return false — only short-name matches count.
+		{"stack project in GCP project ID segment", "//iam.googleapis.com/projects/io-foo-real-proj/serviceAccounts/other-stack-sa@x.iam.gserviceaccount.com", "io-foo", false},
+		{"stack project equals GCP project ID", "//compute.googleapis.com/projects/io-foo/global/firewalls/different-stack-fw", "io-foo", false},
+		{"stack project is substring of GCP project ID", "//compute.googleapis.com/projects/my-io-foo-prod/global/firewalls/different-stack-fw", "io-foo", false},
+		{"stack project in intermediate location segment", "//cloudkms.googleapis.com/projects/p/locations/io-foo-zone/keyRings/other-stack-ring", "io-foo", false},
+
+		// Edge cases.
+		{"bare name (no slashes)", "io-foo-widget", "io-foo", true},
+		{"empty asset name", "", "io-foo", false},
+
+		// Trailing slash is malformed Cloud Asset input — production
+		// names never end in '/'. shortName's defensive fallback
+		// returns the entire asset name; the substring match then
+		// sees earlier segments and may produce false positives.
+		// Pinning current behavior so a refactor that silently
+		// strengthened the trailing-slash branch (e.g. returning ""
+		// instead of the full name) surfaces here.
+		{"trailing slash falls back to full asset name (documented surface)", "//svc.googleapis.com/projects/io-foo-real/widgets/", "io-foo", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := matchesNamePrefix(tc.assetName, tc.project); got != tc.want {
+				t.Errorf("matchesNamePrefix(%q, %q) = %v, want %v", tc.assetName, tc.project, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestDiscoverTypes_TwoBucketsEmitOneServiceStartFinishPair extends
+// the #295 contract to the two-bucket path (#366): even when both
+// ScopeStyle buckets issue independent SearchAllResources calls, the
+// orchestrator emits exactly one (service_start, service_finish) pair
+// around the combined operation. A regression that moved the pair
+// inside searchBuckets would double the events.
+func TestDiscoverTypes_TwoBucketsEmitOneServiceStartFinishPair(t *testing.T) {
+	t.Parallel()
+	fake := &bucketedFakeSearcher{
+		resultsByAssetType: map[string][]gcpAssetResult{
+			"pubsub.googleapis.com/Topic": {
+				{Name: "//pubsub.googleapis.com/projects/real-proj/topics/io-foo-events", AssetType: "pubsub.googleapis.com/Topic"},
+			},
+			"test.googleapis.com/NamePrefixed": {
+				{Name: "//test.googleapis.com/projects/real-proj/widgets/io-foo-widget", AssetType: "test.googleapis.com/NamePrefixed"},
+			},
+		},
+	}
+	g := &GCPDiscoverer{
+		searcher:  fake,
+		projectID: "real-proj",
+		byType: map[string]Discoverer{
+			"google_pubsub_topic": newPubsubTopicDiscoverer(),
+			"google_fake_namepref": &fakeNamePrefixDiscoverer{
+				resourceType: "google_fake_namepref",
+				assetType:    "test.googleapis.com/NamePrefixed",
+			},
+		},
+	}
+	rec := &recordingEmitter{}
+	if _, err := g.DiscoverTypes(context.Background(), []string{"google_pubsub_topic", "google_fake_namepref"}, DiscoverArgs{
+		Project: "io-foo",
+		Emitter: rec,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	starts, finishes := 0, 0
+	for _, e := range rec.snapshot() {
+		switch e.Kind {
+		case "service_start":
+			starts++
+			if e.Service != "cloud_asset_inventory" {
+				t.Errorf("service_start.service=%q, want cloud_asset_inventory", e.Service)
+			}
+		case "service_finish":
+			finishes++
+			if e.Service != "cloud_asset_inventory" {
+				t.Errorf("service_finish.service=%q, want cloud_asset_inventory", e.Service)
+			}
+		}
+	}
+	if starts != 1 {
+		t.Errorf("service_start count=%d, want 1 (one pair across both ScopeStyle buckets)", starts)
+	}
+	if finishes != 1 {
+		t.Errorf("service_finish count=%d, want 1 (one pair across both ScopeStyle buckets)", finishes)
+	}
+}
+
+// namesOf collects NameHints from a discover result for failure-message
+// readability — `got 1 names: [alpha]` beats `got 1 items`.
+func namesOf(rs []imported.ImportedResource) []string {
+	out := make([]string, 0, len(rs))
+	for _, r := range rs {
+		out = append(out, r.Identity.NameHint)
+	}
+	return out
 }

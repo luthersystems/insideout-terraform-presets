@@ -30,8 +30,9 @@ type pubsubTopicDiscoverer struct{}
 
 func newPubsubTopicDiscoverer() Discoverer { return &pubsubTopicDiscoverer{} }
 
-func (pubsubTopicDiscoverer) ResourceType() string { return pubsubTopicTFType }
-func (pubsubTopicDiscoverer) AssetType() string    { return pubsubTopicAssetType }
+func (pubsubTopicDiscoverer) ResourceType() string   { return pubsubTopicTFType }
+func (pubsubTopicDiscoverer) AssetType() string      { return pubsubTopicAssetType }
+func (pubsubTopicDiscoverer) ScopeStyle() ScopeStyle { return ScopeStyleLabels }
 
 func (pubsubTopicDiscoverer) FromAsset(book addressBook, a gcpAssetResult, projectID string) imported.ImportedResource {
 	name := shortName(a.Name)

@@ -29,8 +29,9 @@ type computeNetworkDiscoverer struct{}
 
 func newComputeNetworkDiscoverer() Discoverer { return &computeNetworkDiscoverer{} }
 
-func (computeNetworkDiscoverer) ResourceType() string { return computeNetworkTFType }
-func (computeNetworkDiscoverer) AssetType() string    { return computeNetworkAssetType }
+func (computeNetworkDiscoverer) ResourceType() string   { return computeNetworkTFType }
+func (computeNetworkDiscoverer) AssetType() string      { return computeNetworkAssetType }
+func (computeNetworkDiscoverer) ScopeStyle() ScopeStyle { return ScopeStyleLabels }
 
 func (computeNetworkDiscoverer) FromAsset(book addressBook, a gcpAssetResult, projectID string) imported.ImportedResource {
 	name := shortName(a.Name)
