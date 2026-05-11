@@ -4,10 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	asset "cloud.google.com/go/asset/apiv1"
 	"cloud.google.com/go/asset/apiv1/assetpb"
 	"google.golang.org/api/iterator"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // gcpAssetResult is a flattened view of a Cloud Asset SearchAllResources
@@ -105,10 +108,55 @@ func (s *RealAssetSearcher) SearchAll(ctx context.Context, scope string, assetTy
 			return out, nil
 		}
 		if err != nil {
-			return nil, fmt.Errorf("search all resources: %w", err)
+			return nil, wrapSearchAllError(err)
 		}
 		out = append(out, assetResultFromProto(r))
 	}
+}
+
+// wrapSearchAllError annotates a Cloud Asset SearchAllResources error
+// with operator-actionable hints (#365). Default gRPC error messages
+// for the two common auth-failure modes are unactionable to operators
+// unfamiliar with Google auth internals:
+//
+//   - codes.Unauthenticated (typical body: "invalid_grant / invalid_rapt"
+//     for stale ADC; "could not refresh access token" for an expired
+//     short-lived token). The fix is `gcloud auth application-default
+//     login`.
+//   - codes.PermissionDenied with a "API … not enabled" body. The fix
+//     is to enable Cloud Asset API on the ADC quota project (NOT the
+//     scope project — a subtle gotcha; see GCP smoke notes 2026-05-10).
+//
+// Other error codes pass through with the original message wrapped in
+// the "search all resources" prefix, preserving the existing contract
+// for log-search-based debugging.
+func wrapSearchAllError(err error) error {
+	if s, ok := status.FromError(err); ok {
+		switch s.Code() {
+		case codes.Unauthenticated:
+			// %w preserves the gRPC status in the error chain so a
+			// future caller can errors.As(err, &grpcStatus) or
+			// errors.Is against the original. The rendered Error()
+			// output is byte-identical to %v.
+			return fmt.Errorf("search all resources: GCP authentication failed.\n"+
+				"  Application Default Credentials need to be refreshed.\n"+
+				"  Run: gcloud auth application-default login\n"+
+				"  (underlying error: %w)", err)
+		case codes.PermissionDenied:
+			// "API … not enabled" is the documented marker the
+			// service-usage service emits when the Cloud Asset API
+			// isn't enabled. Match on the substring so we don't
+			// over-claim on every PermissionDenied (which could also
+			// be a missing IAM role on the principal).
+			if strings.Contains(s.Message(), "not enabled") || strings.Contains(s.Message(), "API not enabled") {
+				return fmt.Errorf("search all resources: Cloud Asset API is not enabled on the ADC quota project.\n"+
+					"  The Cloud Asset API needs to be enabled on the project that owns the ADC credentials (the ADC quota project), NOT necessarily on the scope project you're searching.\n"+
+					"  Check `gcloud auth application-default print-access-token` and enable cloudasset.googleapis.com on the project the token bills against.\n"+
+					"  (underlying error: %w)", err)
+			}
+		}
+	}
+	return fmt.Errorf("search all resources: %w", err)
 }
 
 // assetResultFromProto projects a single Cloud Asset SearchAllResources

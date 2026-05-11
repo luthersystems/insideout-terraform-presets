@@ -1,10 +1,14 @@
 package gcpdiscover
 
 import (
+	"errors"
 	"reflect"
+	"strings"
 	"testing"
 
 	"cloud.google.com/go/asset/apiv1/assetpb"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // TestAssetResultFromProto_FieldMapping pins the proto→gcpAssetResult
@@ -36,15 +40,150 @@ func TestAssetResultFromProto_FieldMapping(t *testing.T) {
 	}
 }
 
-// TestAssetResultFromProto_NilProtoSafeFields pins the GetX accessor
-// idioms — every proto getter on a nil/zero ResourceSearchResult
-// returns the zero value of its field type. A future refactor that
-// replaced `r.GetName()` with `r.Name` would panic on a nil proto;
-// asserting on a zero-valued proto guards that.
-func TestAssetResultFromProto_NilProtoSafeFields(t *testing.T) {
+// TestAssetResultFromProto_ZeroValueProtoYieldsZeroFields pins the
+// GetX accessor idioms against a zero-valued (non-nil) proto. Every
+// proto getter returns the zero value of its field type, so the
+// flattened gcpAssetResult is zero across the board. A future
+// refactor that replaced `r.GetName()` with `r.Name` would still pass
+// this test (both return "" on a zero-valued proto); the nil-receiver
+// case is covered by TestAssetResultFromProto_NilProtoIsSafe below.
+func TestAssetResultFromProto_ZeroValueProtoYieldsZeroFields(t *testing.T) {
 	t.Parallel()
 	got := assetResultFromProto(&assetpb.ResourceSearchResult{})
 	if got.Name != "" || got.AssetType != "" || got.Project != "" || got.Location != "" || got.Labels != nil {
 		t.Errorf("zero-proto must produce zero result; got %+v", got)
+	}
+}
+
+// TestAssetResultFromProto_NilProtoIsSafe pins the contract that
+// protoc-generated GetX accessors handle a nil receiver — a refactor
+// from `r.GetName()` to `r.Name` would panic here and break dep-chase
+// any time SearchAllResources surfaced a nil row (rare but possible
+// on transient gRPC errors that the iterator surfaces alongside the
+// stream).
+func TestAssetResultFromProto_NilProtoIsSafe(t *testing.T) {
+	t.Parallel()
+	got := assetResultFromProto(nil)
+	if got.Name != "" || got.AssetType != "" || got.Project != "" || got.Location != "" || got.Labels != nil {
+		t.Errorf("nil-proto must produce zero result; got %+v", got)
+	}
+}
+
+// TestWrapSearchAllError_UnauthenticatedSuggestsADCRefresh covers
+// #365: the raw gRPC Unauthenticated message ("invalid_grant /
+// invalid_rapt") is unactionable to operators not fluent in Google
+// auth internals. The wrap replaces it with a concrete command to
+// run, preserving the original error in parentheses so log-search
+// still works.
+func TestWrapSearchAllError_UnauthenticatedSuggestsADCRefresh(t *testing.T) {
+	t.Parallel()
+	raw := status.Error(codes.Unauthenticated, `transport: per-RPC creds failed due to error: auth: "invalid_grant" "reauth related error (invalid_rapt)"`)
+	wrapped := wrapSearchAllError(raw)
+	got := wrapped.Error()
+	if !strings.Contains(got, "gcloud auth application-default login") {
+		t.Errorf("wrapped error must contain the ADC-refresh command\n--- got ---\n%s", got)
+	}
+	// Original error message preserved for log search.
+	if !strings.Contains(got, "invalid_rapt") {
+		t.Errorf("original error must be preserved for log search\n--- got ---\n%s", got)
+	}
+	// %w wrap preserves the gRPC status in the chain: errors.Is
+	// against the original status error returns true. A regression to
+	// %v would break this.
+	if !errors.Is(wrapped, raw) {
+		t.Errorf("errors.Is must reach the wrapped gRPC status error (broken by %%v regression?)")
+	}
+}
+
+// TestWrapSearchAllError_PermissionDeniedNotEnabledSuggestsQuotaProject
+// covers the second auth-failure mode: Cloud Asset API not enabled on
+// the ADC quota project. The 2026-05-10 smoke surfaced this as a
+// confusing failure because the user assumed the API needs to be
+// enabled on the scope project (the one they're searching), not the
+// quota project (the one that owns their ADC credentials).
+func TestWrapSearchAllError_PermissionDeniedNotEnabledSuggestsQuotaProject(t *testing.T) {
+	t.Parallel()
+	raw := status.Error(codes.PermissionDenied, "Cloud Asset API has not been used in project foo or it is disabled. API not enabled.")
+	wrapped := wrapSearchAllError(raw)
+	got := wrapped.Error()
+	if !strings.Contains(got, "ADC quota project") {
+		t.Errorf("wrapped error must reference the ADC quota project\n--- got ---\n%s", got)
+	}
+	if !strings.Contains(got, "cloudasset.googleapis.com") {
+		t.Errorf("wrapped error must name the API to enable\n--- got ---\n%s", got)
+	}
+	if !strings.Contains(got, "API not enabled") {
+		t.Errorf("original error must be preserved\n--- got ---\n%s", got)
+	}
+}
+
+// TestWrapSearchAllError_PermissionDeniedIAMPassThrough pins the
+// narrowness of the not-enabled wrap: a generic PermissionDenied
+// (e.g. principal lacks cloudasset.assets.searchAllResources) is NOT
+// transformed because the "enable the API" message would be wrong.
+// The original error is wrapped in the default "search all resources"
+// prefix.
+func TestWrapSearchAllError_PermissionDeniedIAMPassThrough(t *testing.T) {
+	t.Parallel()
+	raw := status.Error(codes.PermissionDenied, "User 'sam@example.com' does not have cloudasset.assets.searchAllResources permission on projects/foo.")
+	wrapped := wrapSearchAllError(raw)
+	got := wrapped.Error()
+	if strings.Contains(got, "ADC quota project") {
+		t.Errorf("generic PermissionDenied must NOT trigger the not-enabled wrap\n--- got ---\n%s", got)
+	}
+	if !strings.HasPrefix(got, "search all resources: ") {
+		t.Errorf("default prefix must apply\n--- got ---\n%s", got)
+	}
+}
+
+// TestWrapSearchAllError_OtherCodesPassThrough pins the
+// default-pass-through path. Any non-Unauthenticated /
+// non-PermissionDenied gRPC code (Internal, ResourceExhausted,
+// DeadlineExceeded, Unavailable) gets the original error verbatim —
+// we don't have actionable advice for those, and a wrong wrap would
+// mask real bugs. Table-driven so a regression that special-cased
+// (say) ResourceExhausted is caught.
+func TestWrapSearchAllError_OtherCodesPassThrough(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		code codes.Code
+		msg  string
+	}{
+		{"Internal", codes.Internal, "internal server error"},
+		{"ResourceExhausted", codes.ResourceExhausted, "quota exceeded"},
+		{"DeadlineExceeded", codes.DeadlineExceeded, "context deadline exceeded"},
+		{"Unavailable", codes.Unavailable, "service unavailable"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			raw := status.Error(tc.code, tc.msg)
+			wrapped := wrapSearchAllError(raw)
+			got := wrapped.Error()
+			if !strings.Contains(got, tc.msg) {
+				t.Errorf("non-auth errors must pass through verbatim\n--- got ---\n%s", got)
+			}
+			if strings.Contains(got, "gcloud auth") || strings.Contains(got, "ADC quota project") {
+				t.Errorf("non-auth errors must NOT trigger auth-wraps\n--- got ---\n%s", got)
+			}
+		})
+	}
+}
+
+// TestWrapSearchAllError_NonStatusErrorPassThrough pins the
+// non-gRPC-error path. A plain `errors.New("oops")` (not wrapped via
+// status.Error) is not a status, so the type-switch lookup fails and
+// we fall through to the default wrap.
+func TestWrapSearchAllError_NonStatusErrorPassThrough(t *testing.T) {
+	t.Parallel()
+	raw := errors.New("connection refused")
+	wrapped := wrapSearchAllError(raw)
+	got := wrapped.Error()
+	if !strings.Contains(got, "connection refused") {
+		t.Errorf("non-status errors must pass through verbatim\n--- got ---\n%s", got)
+	}
+	if !strings.HasPrefix(got, "search all resources: ") {
+		t.Errorf("default prefix must apply\n--- got ---\n%s", got)
 	}
 }

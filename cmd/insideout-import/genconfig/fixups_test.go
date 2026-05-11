@@ -1860,3 +1860,465 @@ resource "aws_iam_policy" "extra" {
 		t.Errorf("aws_iam_policy's empty private_dns_specified_domains must be preserved (fixup keyed by aws_vpc_endpoint)\n--- got ---\n%s", got)
 	}
 }
+
+// TestFixupDBInstance_DropsEmptyDomainDNSIPs covers #358: the
+// MinItems=2 list constraint on domain_dns_ips rejects the literal
+// empty list that generate-config-out emits for every DB instance
+// without AD-domain auth.
+func TestFixupDBInstance_DropsEmptyDomainDNSIPs(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_db_instance" "rds" {
+  identifier     = "io-foo-rds0"
+  engine         = "postgres"
+  instance_class = "db.t3.medium"
+  domain_dns_ips = []
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if regexp.MustCompile(`(?m)^\s*domain_dns_ips\s*=`).MatchString(got) {
+		t.Errorf("empty domain_dns_ips must be dropped\n--- got ---\n%s", got)
+	}
+	// Other attrs survive.
+	if !regexp.MustCompile(`identifier\s*=\s*"io-foo-rds0"`).MatchString(got) {
+		t.Errorf("identifier must be preserved\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupDBInstance_PopulatedDomainDNSIPsPreserved pins the carve-out:
+// a real AD-domain-auth DB carrying domain_dns_ips with two or more
+// entries is preserved untouched.
+func TestFixupDBInstance_PopulatedDomainDNSIPsPreserved(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_db_instance" "rds" {
+  identifier     = "io-foo-rds0"
+  engine         = "sqlserver-se"
+  domain         = "d-1234567890"
+  domain_dns_ips = ["10.0.0.10", "10.0.0.11"]
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if !regexp.MustCompile(`domain_dns_ips\s*=\s*\["10\.0\.0\.10",\s*"10\.0\.0\.11"\]`).MatchString(got) {
+		t.Errorf("populated domain_dns_ips must be preserved\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupDBInstance_SingleElementDomainDNSIPsPreserved pins the
+// boundary case: the provider's MinItems=2 constraint rejects 0 AND
+// 1 elements equally, but the fixup is targeted at `[]` only — a
+// 1-element list, while invalid at validate time, isn't the kind of
+// thing -generate-config-out emits (it would emit 0 or N≥2 from the
+// actual AWS state). The fixup must NOT silently rewrite a 1-element
+// list out from under the operator; if a future provider relaxes
+// MinItems to 1 the fixup remains correct. This test pins the
+// "fixup is `==[]`, not `len<2`" semantics.
+func TestFixupDBInstance_SingleElementDomainDNSIPsPreserved(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_db_instance" "rds" {
+  identifier     = "io-foo-rds0"
+  domain_dns_ips = ["10.0.0.10"]
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if !regexp.MustCompile(`domain_dns_ips\s*=\s*\["10\.0\.0\.10"\]`).MatchString(got) {
+		t.Errorf("single-element domain_dns_ips must be preserved (fixup targets `[]` only)\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupDBInstance_DropsReplicaConflictingAttrs covers #359: when
+// replicate_source_db has a usable (non-null) value, db_name and
+// username are source-inherited and the provider rejects both being
+// set alongside replicate_source_db.
+func TestFixupDBInstance_DropsReplicaConflictingAttrs(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_db_instance" "replica" {
+  identifier          = "io-foo-rds0-replica-1"
+  engine              = "postgres"
+  db_name             = "appdb"
+  username            = "app"
+  replicate_source_db = aws_db_instance.io_foo_rds0.id
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if regexp.MustCompile(`(?m)^\s*db_name\s*=`).MatchString(got) {
+		t.Errorf("db_name must be dropped on a replica\n--- got ---\n%s", got)
+	}
+	if regexp.MustCompile(`(?m)^\s*username\s*=`).MatchString(got) {
+		t.Errorf("username must be dropped on a replica\n--- got ---\n%s", got)
+	}
+	// replicate_source_db survives — it's the marker that identified
+	// this row as a replica.
+	if !strings.Contains(got, "replicate_source_db") {
+		t.Errorf("replicate_source_db must be preserved\n--- got ---\n%s", got)
+	}
+	// Other attrs survive.
+	if !regexp.MustCompile(`identifier\s*=\s*"io-foo-rds0-replica-1"`).MatchString(got) {
+		t.Errorf("identifier must be preserved\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupDBInstance_PrimaryPreservesNameAndUsername pins the
+// carve-out: a primary (non-replica) DB carrying db_name and username
+// is left untouched. Without this guard a mutation that swapped
+// "replicate_source_db usable" for "always" would silently strip
+// db_name/username from every primary.
+func TestFixupDBInstance_PrimaryPreservesNameAndUsername(t *testing.T) {
+	t.Parallel()
+	// replicate_source_db deliberately absent — this body is a primary.
+	in := []byte(`resource "aws_db_instance" "rds" {
+  identifier = "io-foo-rds0"
+  engine     = "postgres"
+  db_name    = "appdb"
+  username   = "app"
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if !regexp.MustCompile(`db_name\s*=\s*"appdb"`).MatchString(got) {
+		t.Errorf("db_name must be preserved on a primary\n--- got ---\n%s", got)
+	}
+	if !regexp.MustCompile(`username\s*=\s*"app"`).MatchString(got) {
+		t.Errorf("username must be preserved on a primary\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupDBInstance_NullReplicateSourcePreservesAttrs pins the
+// null-vs-usable boundary: terraform plan -generate-config-out emits
+// `replicate_source_db = null` on every primary, and hasUsableValue
+// treats null as "not set" — so db_name / username must be preserved
+// in that case. Without this carve-out an over-eager rewrite would
+// match the null-shaped attr and over-strip primaries.
+func TestFixupDBInstance_NullReplicateSourcePreservesAttrs(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_db_instance" "rds" {
+  identifier          = "io-foo-rds0"
+  engine              = "postgres"
+  db_name             = "appdb"
+  username            = "app"
+  replicate_source_db = null
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if !regexp.MustCompile(`db_name\s*=\s*"appdb"`).MatchString(got) {
+		t.Errorf("db_name must be preserved when replicate_source_db is null\n--- got ---\n%s", got)
+	}
+	if !regexp.MustCompile(`username\s*=\s*"app"`).MatchString(got) {
+		t.Errorf("username must be preserved when replicate_source_db is null\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupSecretsManagerSecret_ReplacesNullWithSchemaDefault covers
+// #361: terraform plan -generate-config-out emits
+// force_overwrite_replica_secret=null and recovery_window_in_days=null
+// for every aws_secretsmanager_secret, and the next plan after import
+// shows them as "+ false" and "+ 30" — spurious 1-to-change drift.
+// Replacing the nulls with the provider's schema defaults in
+// generated.tf eliminates the diff.
+func TestFixupSecretsManagerSecret_ReplacesNullWithSchemaDefault(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_secretsmanager_secret" "sm" {
+  name                           = "io-foo-sm"
+  force_overwrite_replica_secret = null
+  recovery_window_in_days        = null
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if !regexp.MustCompile(`force_overwrite_replica_secret\s*=\s*false`).MatchString(got) {
+		t.Errorf("force_overwrite_replica_secret must be replaced with false\n--- got ---\n%s", got)
+	}
+	if !regexp.MustCompile(`recovery_window_in_days\s*=\s*30\b`).MatchString(got) {
+		t.Errorf("recovery_window_in_days must be replaced with literal 30 (word-boundary; 300 would not satisfy the contract)\n--- got ---\n%s", got)
+	}
+	// Other attrs survive.
+	if !regexp.MustCompile(`name\s*=\s*"io-foo-sm"`).MatchString(got) {
+		t.Errorf("name must be preserved\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupSecretsManagerSecret_PreservesNonNullValues pins the
+// carve-out: a secret deliberately configured with a different
+// recovery_window (e.g. 7 days for a faster purge cycle) preserves
+// the operator-supplied value. Without this guard a mutation that
+// always-rewrote would corrupt deliberate non-default configurations.
+func TestFixupSecretsManagerSecret_PreservesNonNullValues(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_secretsmanager_secret" "sm" {
+  name                           = "io-foo-sm"
+  force_overwrite_replica_secret = true
+  recovery_window_in_days        = 7
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if !regexp.MustCompile(`force_overwrite_replica_secret\s*=\s*true`).MatchString(got) {
+		t.Errorf("force_overwrite_replica_secret=true must be preserved\n--- got ---\n%s", got)
+	}
+	if !regexp.MustCompile(`recovery_window_in_days\s*=\s*7`).MatchString(got) {
+		t.Errorf("recovery_window_in_days=7 must be preserved\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupSecretsManagerSecret_PartialNullPreservesOther pins
+// independence of the two transforms: one attribute being null while
+// the other is operator-set must replace only the null half.
+func TestFixupSecretsManagerSecret_PartialNullPreservesOther(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		body string
+		want []string
+	}{
+		{
+			name: "only_force_overwrite_null",
+			body: `force_overwrite_replica_secret = null
+  recovery_window_in_days        = 7`,
+			want: []string{`force_overwrite_replica_secret\s*=\s*false`, `recovery_window_in_days\s*=\s*7`},
+		},
+		{
+			name: "only_recovery_window_null",
+			body: `force_overwrite_replica_secret = true
+  recovery_window_in_days        = null`,
+			want: []string{`force_overwrite_replica_secret\s*=\s*true`, `recovery_window_in_days\s*=\s*30\b`},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			in := []byte(`resource "aws_secretsmanager_secret" "sm" {
+  name                           = "io-foo-sm"
+  ` + tc.body + `
+}
+`)
+			out, err := applyResourceTypeFixups(in)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := string(out)
+			for _, w := range tc.want {
+				if !regexp.MustCompile(w).MatchString(got) {
+					t.Errorf("missing %q\n--- got ---\n%s", w, got)
+				}
+			}
+		})
+	}
+}
+
+// TestFixupComputeFirewall_DropsAllEmptySourceTargetArrays covers
+// #363: every google_compute_firewall produced by `terraform plan
+// -generate-config-out` carries
+// source_service_accounts/source_tags/target_service_accounts/target_tags
+// as literal [], and the Google provider rejects the combination
+// (mutually-exclusive cross-validators). Drop any of the four whose
+// value is [].
+func TestFixupComputeFirewall_DropsAllEmptySourceTargetArrays(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "google_compute_firewall" "fw" {
+  name                    = "io-foo-allow-ssh"
+  network                 = "io-foo-vpc"
+  direction               = "INGRESS"
+  source_ranges           = ["35.235.240.0/20"]
+  source_service_accounts = []
+  source_tags             = []
+  target_service_accounts = []
+  target_tags             = []
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	for _, name := range []string{"source_service_accounts", "source_tags", "target_service_accounts", "target_tags"} {
+		if regexp.MustCompile(`(?m)^\s*` + name + `\s*=`).MatchString(got) {
+			t.Errorf("empty %s must be dropped\n--- got ---\n%s", name, got)
+		}
+	}
+	// source_ranges (non-empty list) survives.
+	if !regexp.MustCompile(`source_ranges\s*=\s*\["35.235.240.0/20"\]`).MatchString(got) {
+		t.Errorf("source_ranges must be preserved\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupComputeFirewall_PreservesPopulatedSourceTagsAndDropsEmptyServiceAccounts
+// pins the asymmetric carve-out: an operator-configured tag-based
+// firewall preserves source_tags but still drops the unused-and-empty
+// source_service_accounts (which would conflict at validate time).
+func TestFixupComputeFirewall_PreservesPopulatedSourceTagsAndDropsEmptyServiceAccounts(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "google_compute_firewall" "fw" {
+  name                    = "io-foo-allow-ssh"
+  source_tags             = ["bastion"]
+  source_service_accounts = []
+  target_service_accounts = []
+  target_tags             = []
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if !regexp.MustCompile(`source_tags\s*=\s*\["bastion"\]`).MatchString(got) {
+		t.Errorf("populated source_tags must be preserved\n--- got ---\n%s", got)
+	}
+	for _, name := range []string{"source_service_accounts", "target_service_accounts", "target_tags"} {
+		if regexp.MustCompile(`(?m)^\s*` + name + `\s*=`).MatchString(got) {
+			t.Errorf("empty %s must be dropped\n--- got ---\n%s", name, got)
+		}
+	}
+}
+
+// TestFixupComputeFirewall_PreservesPopulatedServiceAccounts pins the
+// reverse case: a service-account-based firewall preserves the
+// service-account attribute and drops the unused-and-empty tag side.
+func TestFixupComputeFirewall_PreservesPopulatedServiceAccounts(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "google_compute_firewall" "fw" {
+  name                    = "io-foo-allow-ssh"
+  source_service_accounts = ["worker@io-foo.iam.gserviceaccount.com"]
+  source_tags             = []
+  target_service_accounts = ["app@io-foo.iam.gserviceaccount.com"]
+  target_tags             = []
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if !regexp.MustCompile(`source_service_accounts\s*=\s*\["worker@io-foo\.iam\.gserviceaccount\.com"\]`).MatchString(got) {
+		t.Errorf("populated source_service_accounts must be preserved\n--- got ---\n%s", got)
+	}
+	if !regexp.MustCompile(`target_service_accounts\s*=\s*\["app@io-foo\.iam\.gserviceaccount\.com"\]`).MatchString(got) {
+		t.Errorf("populated target_service_accounts must be preserved\n--- got ---\n%s", got)
+	}
+	for _, name := range []string{"source_tags", "target_tags"} {
+		if regexp.MustCompile(`(?m)^\s*` + name + `\s*=`).MatchString(got) {
+			t.Errorf("empty %s must be dropped\n--- got ---\n%s", name, got)
+		}
+	}
+}
+
+// TestFixupComputeFirewall_OnlyAffectsGoogleComputeFirewallBlocks pins
+// resourceTypeFixups keying: a sibling resource type carrying the
+// same empty arrays is left untouched. Iterates all four attributes
+// the fixup mutates so a partial-rekey regression (e.g. one of the
+// four still applies to sibling types) is caught.
+func TestFixupComputeFirewall_OnlyAffectsGoogleComputeFirewallBlocks(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "google_compute_firewall" "fw" {
+  source_service_accounts = []
+  source_tags             = []
+  target_service_accounts = []
+  target_tags             = []
+}
+
+resource "google_other_resource" "extra" {
+  source_service_accounts = []
+  source_tags             = []
+  target_service_accounts = []
+  target_tags             = []
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	for _, name := range []string{"source_service_accounts", "source_tags", "target_service_accounts", "target_tags"} {
+		// google_compute_firewall got the fixup for each attr.
+		if regexp.MustCompile(`(?s)resource "google_compute_firewall" "fw"[^}]*\{[^}]*` + name + `\s*=\s*\[\]`).MatchString(got) {
+			t.Errorf("google_compute_firewall's empty %s must be dropped\n--- got ---\n%s", name, got)
+		}
+		// google_other_resource left alone for each attr.
+		if !regexp.MustCompile(`(?s)resource "google_other_resource" "extra"[^}]*\{[^}]*` + name + `\s*=\s*\[\]`).MatchString(got) {
+			t.Errorf("google_other_resource's empty %s must be preserved (fixup keyed by google_compute_firewall)\n--- got ---\n%s", name, got)
+		}
+	}
+}
+
+// TestFixupSecretsManagerSecret_OnlyAffectsAWSSecretsManagerSecretBlocks
+// pins resourceTypeFixups keying: a sibling resource type carrying
+// the same attribute names (e.g. a hypothetical type with the same
+// schema shape) is left untouched.
+func TestFixupSecretsManagerSecret_OnlyAffectsAWSSecretsManagerSecretBlocks(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_secretsmanager_secret" "sm" {
+  recovery_window_in_days = null
+}
+
+resource "aws_other_resource" "extra" {
+  recovery_window_in_days = null
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	// aws_secretsmanager_secret got the fixup.
+	if !regexp.MustCompile(`(?s)resource "aws_secretsmanager_secret" "sm"[^}]*\{[^}]*recovery_window_in_days\s*=\s*30\b`).MatchString(got) {
+		t.Errorf("aws_secretsmanager_secret's null must be replaced with literal 30 (word-boundary)\n--- got ---\n%s", got)
+	}
+	// aws_other_resource left alone.
+	if !regexp.MustCompile(`(?s)resource "aws_other_resource" "extra"[^}]*\{[^}]*recovery_window_in_days\s*=\s*null`).MatchString(got) {
+		t.Errorf("aws_other_resource's null must be preserved (fixup keyed by aws_secretsmanager_secret)\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupDBInstance_OnlyAffectsAWSDBInstanceBlocks pins
+// resourceTypeFixups keying: a sibling resource type carrying the
+// same attribute names is left untouched.
+func TestFixupDBInstance_OnlyAffectsAWSDBInstanceBlocks(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_db_instance" "rds" {
+  domain_dns_ips = []
+}
+
+resource "aws_other_resource" "extra" {
+  domain_dns_ips = []
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	// aws_db_instance got the fixup.
+	if regexp.MustCompile(`(?s)resource "aws_db_instance" "rds"[^}]*\{[^}]*domain_dns_ips\s*=\s*\[\]`).MatchString(got) {
+		t.Errorf("aws_db_instance's empty domain_dns_ips must be dropped\n--- got ---\n%s", got)
+	}
+	// aws_other_resource left alone.
+	if !regexp.MustCompile(`(?s)resource "aws_other_resource" "extra"[^}]*\{[^}]*domain_dns_ips\s*=\s*\[\]`).MatchString(got) {
+		t.Errorf("aws_other_resource's empty domain_dns_ips must be preserved (fixup keyed by aws_db_instance)\n--- got ---\n%s", got)
+	}
+}

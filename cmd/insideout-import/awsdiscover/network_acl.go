@@ -49,12 +49,21 @@ func (d *networkACLDiscoverer) ResourceType() string { return "aws_network_acl" 
 // client. Tags are inline on each ec2types.NetworkAcl — no per-resource
 // DescribeTags fetch is needed.
 //
-// Note: each VPC carries one auto-created default NACL (IsDefault=true).
-// Untagged defaults are dropped by the server-side `tag:Project` filter,
-// which is correct: a default NACL cannot be imported standalone — the
-// operator imports rules onto it via aws_network_acl_rule. Project-tagged
-// defaults still come through so the picker surfaces them; the operator
-// can then choose whether to import them.
+// Default NACLs (#357): each VPC carries one auto-created default NACL
+// (IsDefault=true) whose rule set is inherited from the VPC. The AWS
+// provider models these via aws_default_network_acl, NOT
+// aws_network_acl — `terraform plan -generate-config-out` for an
+// aws_network_acl import block targeting a default NACL produces no
+// resource body, which then breaks Stage 2c1 with "Configuration for
+// import target does not exist". InsideOut presets propagate the
+// Project tag to default NACLs via merge(module.x.tags, var.tags),
+// so the server-side tag:Project filter is NOT enough to skip them.
+// We filter IsDefault=true client-side after the describe call.
+//
+// Re-typing defaults as aws_default_network_acl is the "fully correct"
+// alternative but adds a new typed discoverer and a separate import
+// path; deferred until a customer needs default-NACL rule management
+// (today the inherited rule set is the operating contract).
 //
 // Import ID for aws_network_acl is the network-ACL ID (acl-XXXXXXXX).
 func (d *networkACLDiscoverer) Discover(ctx context.Context, args DiscoverArgs) ([]imported.ImportedResource, error) {
@@ -91,6 +100,11 @@ func (d *networkACLDiscoverer) Discover(ctx context.Context, args DiscoverArgs) 
 			id := aws.ToString(nacl.NetworkAclId)
 			tags := ec2TagsToMap(nacl.Tags)
 			if !MatchesAll(tags, args.TagSelectors) {
+				continue
+			}
+			// Default NACLs (#357) cannot be modeled as aws_network_acl;
+			// emitting an import block for them breaks Stage 2c1.
+			if aws.ToBool(nacl.IsDefault) {
 				continue
 			}
 			name := vpcName(nacl.Tags, id)

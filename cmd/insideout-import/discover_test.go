@@ -522,6 +522,60 @@ func TestRunDiscoverWithDeps_HappyPathWritesManifest(t *testing.T) {
 	}
 }
 
+// TestRunDiscoverWithDeps_EmptyResultsWithProjectFilterEmitsWARN covers
+// #364: when --project is set and zero resources come through, the
+// operator almost always typo'd the stack prefix. Surface a stderr
+// WARN with a concrete "check the stack prefix" hint. The run still
+// exits 0 (the empty manifest is a valid outcome).
+//
+// Not t.Parallel: captureStderr swaps the package-global os.Stderr,
+// which races against other parallel users of stderr.
+func TestRunDiscoverWithDeps_EmptyResultsWithProjectFilterEmitsWARN(t *testing.T) {
+	dir := t.TempDir()
+	agg := &fakeAggregator{out: nil} // zero results
+	var rc int
+	stderr := captureStderr(t, func() {
+		rc = runDiscoverWithDeps([]string{
+			"--provider", "aws", "--project", "io-typoed", "--region", "us-east-1",
+			"--output-dir", dir, "--no-hcl",
+		}, okDeps(agg))
+	})
+	if rc != discoverExitOK {
+		t.Fatalf("rc=%d, want %d (empty manifest is a valid outcome)", rc, discoverExitOK)
+	}
+	if !strings.Contains(stderr, "WARN") || !strings.Contains(stderr, `--project filter "io-typoed"`) {
+		t.Errorf("stderr must contain a WARN naming the project filter\n--- got ---\n%s", stderr)
+	}
+	if !strings.Contains(stderr, "stack prefix") {
+		t.Errorf("stderr must hint at the stack-prefix concept\n--- got ---\n%s", stderr)
+	}
+}
+
+// TestRunDiscoverWithDeps_NonEmptyResultsSuppressesWARN pins the
+// narrowness of the empty-filter WARN. A non-empty result (the
+// happy path) must NOT emit the WARN. A regression that always-warned
+// would noise up every run.
+func TestRunDiscoverWithDeps_NonEmptyResultsSuppressesWARN(t *testing.T) {
+	dir := t.TempDir()
+	agg := &fakeAggregator{out: []imported.ImportedResource{validResource("aws_sqs_queue.alpha")}}
+	var rc int
+	stderr := captureStderr(t, func() {
+		rc = runDiscoverWithDeps([]string{
+			"--provider", "aws", "--project", "io-foo", "--region", "us-east-1",
+			"--output-dir", dir, "--no-hcl",
+		}, okDeps(agg))
+	})
+	if rc != discoverExitOK {
+		t.Fatalf("rc=%d, want %d", rc, discoverExitOK)
+	}
+	// "double-check the stack prefix" is distinctive to this WARN
+	// (less collision-prone than the generic "matched zero resources"
+	// substring, which could appear in future unrelated WARN lines).
+	if strings.Contains(stderr, "double-check the stack prefix") {
+		t.Errorf("non-empty result must NOT emit the empty-filter WARN\n--- got ---\n%s", stderr)
+	}
+}
+
 func TestRunDiscoverWithDeps_LoadConfigFails(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()

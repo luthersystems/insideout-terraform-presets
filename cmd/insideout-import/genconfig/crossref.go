@@ -104,13 +104,68 @@ func addIfNew(m map[string]crossRefTarget, k string, v crossRefTarget) {
 	m[k] = v
 }
 
+// crossRefAttrKey identifies a specific (consumer-resource-type,
+// consumer-attribute) pair on which the default crossref reference
+// shape (.id for non-ARN ImportIDs, .arn for ARN-shaped ones, etc.)
+// must be overridden because the provider rejects the default at the
+// schema layer.
+//
+// Example: aws_db_instance.replicate_source_db resolves by default to
+// aws_db_instance.X.id (the source DB's identifier), but the AWS
+// provider enforces "replicate_source_db must be an ARN when
+// db_subnet_group_name is set" — so we force the reference to .arn
+// when this attribute is the consumer. Issue #360.
+type crossRefAttrKey struct {
+	ResourceType string
+	Attribute    string
+}
+
+// crossRefAttrOverrides maps consumer (resource-type, attribute) pairs
+// to the target attribute name (.arn, .url, .self_link, etc.) to use
+// instead of the index's default.
+//
+// The override applies AFTER the literal-match lookup — only attributes
+// whose value already matches a known in-batch identity are rewritten.
+// Existing crossref invariants stand: self-references, non-string
+// literals, and unmatched literals are left untouched.
+//
+// Extending the map: add an entry for any (consumer resource type,
+// attribute) pair whose provider-side validator rejects the default
+// reference shape, and verify the target resource type actually
+// exposes the overridden attribute (every AWS resource exposes .arn).
+var crossRefAttrOverrides = map[crossRefAttrKey]string{
+	// aws_db_instance.replicate_source_db: when db_subnet_group_name is
+	// set on the consumer (the replica), the provider rejects an
+	// identifier-form reference with "replicate_source_db must be an
+	// ARN when db_subnet_group_name is set." The default crossref maps
+	// the source DB's literal identifier to .id; we override to .arn.
+	{ResourceType: "aws_db_instance", Attribute: "replicate_source_db"}: "arn",
+}
+
+// resourceTypeFromAddr returns the TYPE half of a TYPE.NAME resource
+// address, or "" when the address is malformed. Used by crossRefAttrOverrides
+// lookups to key on the consumer resource type.
+func resourceTypeFromAddr(addr string) string {
+	if i := strings.IndexByte(addr, '.'); i > 0 {
+		return addr[:i]
+	}
+	return ""
+}
+
 // rewriteBlockAttrs walks every attribute on the given resource block and,
 // for each one whose expression is a single string literal matching the
 // crossref index, replaces it with a traversal to (Address.Attr). selfAddr
 // is the block's own address — a resource is not allowed to reference
 // itself, so any literal that maps back to selfAddr is left untouched.
+//
+// Per-attribute override (#360): when (selfAddr's resource type, name)
+// has an entry in crossRefAttrOverrides, the index's default Attr is
+// replaced with the override (e.g. .id → .arn) before constructing the
+// traversal. Only fires on already-matched literals — unmatched ones
+// pass through unchanged.
 func rewriteBlockAttrs(blk *hclwrite.Block, idx map[string]crossRefTarget, selfAddr string) {
 	body := blk.Body()
+	selfType := resourceTypeFromAddr(selfAddr)
 	for name, attr := range body.Attributes() {
 		lit, ok := stringLiteralValue(attr)
 		if !ok {
@@ -122,6 +177,12 @@ func rewriteBlockAttrs(blk *hclwrite.Block, idx map[string]crossRefTarget, selfA
 		}
 		if target.Address == selfAddr {
 			continue
+		}
+		// Per-(consumer-type, attribute) override of the default
+		// reference shape. Applies after match, so non-matching
+		// literals are unaffected.
+		if override, ok := crossRefAttrOverrides[crossRefAttrKey{ResourceType: selfType, Attribute: name}]; ok {
+			target.Attr = override
 		}
 		traversal := traversalForRef(target)
 		body.SetAttributeTraversal(name, traversal)

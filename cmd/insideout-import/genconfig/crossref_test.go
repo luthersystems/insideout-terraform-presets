@@ -173,6 +173,99 @@ func TestApplyCrossRefs_NoResourcesNoChange(t *testing.T) {
 	}
 }
 
+// TestApplyCrossRefs_DBInstanceReplicateSourceUsesARN pins the
+// per-attribute ARN override (#360). When the consumer's attribute is
+// aws_db_instance.replicate_source_db, the index's default .id target
+// is overridden to .arn — the AWS provider rejects an identifier-form
+// reference with "replicate_source_db must be an ARN when
+// db_subnet_group_name is set."
+func TestApplyCrossRefs_DBInstanceReplicateSourceUsesARN(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_db_instance" "replica" {
+  identifier           = "io-foo-rds0-replica-1"
+  replicate_source_db  = "io-foo-rds0"
+  db_subnet_group_name = "io-foo-rds-subnets"
+}
+`)
+	resources := []imported.ImportedResource{
+		ir("aws_db_instance.io_foo_rds0", "io-foo-rds0", nil),
+	}
+	out, err := applyCrossRefs(in, resources, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if !strings.Contains(got, "replicate_source_db  = aws_db_instance.io_foo_rds0.arn") {
+		t.Errorf("replicate_source_db must resolve to .arn (per crossRefAttrOverrides), not .id\n--- got ---\n%s", got)
+	}
+	// Sanity: only the consumer attribute is rewritten. The replica's
+	// own `identifier` literal must survive intact, and the
+	// replicate_source_db literal must be gone (replaced by the
+	// traversal).
+	if !strings.Contains(got, `identifier           = "io-foo-rds0-replica-1"`) {
+		t.Errorf("identifier literal must remain intact (only replicate_source_db is rewritten)\n--- got ---\n%s", got)
+	}
+	if strings.Contains(got, `replicate_source_db  = "io-foo-rds0"`) {
+		t.Errorf("replicate_source_db literal must have been replaced by a traversal\n--- got ---\n%s", got)
+	}
+}
+
+// TestApplyCrossRefs_DBInstanceOtherAttrsUseDefault pins the
+// narrowness of the override: only replicate_source_db is escalated to
+// .arn. Other aws_db_instance attributes that match an in-batch
+// identity should resolve to the default .id form.
+func TestApplyCrossRefs_DBInstanceOtherAttrsUseDefault(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_db_instance" "primary" {
+  identifier           = "io-foo-rds0"
+  db_subnet_group_name = "io-foo-rds-subnets"
+}
+`)
+	// A hypothetical case where db_subnet_group_name happens to match
+	// some other in-batch identifier. Synthetic — the real composer
+	// emits db_subnet_group_name = aws_db_subnet_group.X.id via
+	// crossref against a literal string, so this test exercises the
+	// "no override" path.
+	resources := []imported.ImportedResource{
+		ir("aws_db_subnet_group.subnets", "io-foo-rds-subnets", nil),
+	}
+	out, err := applyCrossRefs(in, resources, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if !strings.Contains(got, "db_subnet_group_name = aws_db_subnet_group.subnets.id") {
+		t.Errorf("db_subnet_group_name must resolve to .id (default), not .arn\n--- got ---\n%s", got)
+	}
+}
+
+// TestApplyCrossRefs_DBInstanceSelfReferenceUntouched pins that the
+// override does not regress the self-reference guard — a replica's
+// replicate_source_db pointing to its OWN identifier (which shouldn't
+// happen in practice, but a misconfigured stack could produce it) is
+// left as a literal.
+func TestApplyCrossRefs_DBInstanceSelfReferenceUntouched(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_db_instance" "rds" {
+  identifier          = "io-foo-rds0"
+  replicate_source_db = "io-foo-rds0"
+}
+`)
+	resources := []imported.ImportedResource{
+		ir("aws_db_instance.rds", "io-foo-rds0", nil),
+	}
+	out, err := applyCrossRefs(in, resources, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	// Self-reference guard fires before the override, so the literal
+	// stays as a string.
+	if !strings.Contains(got, `replicate_source_db = "io-foo-rds0"`) {
+		t.Errorf("self-reference must remain a literal\n--- got ---\n%s", got)
+	}
+}
+
 // TestApplyCrossRefs_GCPIsNoOp pins the documented GCP scope: the
 // AWS-shaped ARN/URL crossref rewriter would silently mishandle GCP
 // self-link literals if it ran against google_* resources. ProviderGCP

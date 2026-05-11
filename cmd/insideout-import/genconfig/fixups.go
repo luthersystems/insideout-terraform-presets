@@ -51,17 +51,20 @@ func applyResourceTypeFixups(raw []byte) ([]byte, error) {
 // They must NOT depend on schema metadata — that's already been applied
 // by cleanGenerated.
 var resourceTypeFixups = map[string]func(*hclwrite.Block){
-	"aws_lambda_function": fixupLambdaSource,
-	"aws_kms_key":         fixupKMSRotationPeriodZero,
-	"aws_dynamodb_table":  fixupDynamoDBPITRRecoveryPeriodZero,
-	"aws_vpc":             fixupVPCIPv6NetmaskOrphan,
-	"aws_lb":              fixupLBSubnetMappingConflict,
-	"aws_subnet":          fixupSubnetProviderQuirks,
-	"aws_route_table":     fixupRouteTableEmptyRouteFields,
-	"aws_nat_gateway":     fixupNATGatewaySecondaryIPConflict,
-	"aws_lb_listener":     fixupLBListenerStickinessDurationZero,
-	"aws_lb_target_group": fixupLBTargetGroupProviderQuirks,
-	"aws_vpc_endpoint":    fixupVPCEndpointEmptyDNSDomains,
+	"aws_lambda_function":       fixupLambdaSource,
+	"aws_kms_key":               fixupKMSRotationPeriodZero,
+	"aws_dynamodb_table":        fixupDynamoDBPITRRecoveryPeriodZero,
+	"aws_vpc":                   fixupVPCIPv6NetmaskOrphan,
+	"aws_lb":                    fixupLBSubnetMappingConflict,
+	"aws_subnet":                fixupSubnetProviderQuirks,
+	"aws_route_table":           fixupRouteTableEmptyRouteFields,
+	"aws_nat_gateway":           fixupNATGatewaySecondaryIPConflict,
+	"aws_lb_listener":           fixupLBListenerStickinessDurationZero,
+	"aws_lb_target_group":       fixupLBTargetGroupProviderQuirks,
+	"aws_vpc_endpoint":          fixupVPCEndpointEmptyDNSDomains,
+	"aws_db_instance":           fixupDBInstanceProviderQuirks,
+	"aws_secretsmanager_secret": fixupSecretsManagerSecretDefaults,
+	"google_compute_firewall":   fixupComputeFirewallEmptySourceTargetArrays,
 }
 
 // lambdaPlaceholderFile is what we set `filename` to so the block
@@ -471,6 +474,106 @@ func fixupLBTargetGroupProviderQuirks(blk *hclwrite.Block) {
 			if isAttrLiteralNull(sub.Body(), "enable_unhealthy_connection_termination") {
 				body.RemoveBlock(sub)
 			}
+		}
+	}
+}
+
+// fixupDBInstanceProviderQuirks resolves two terraform-provider-aws
+// schema constraints that `terraform plan -generate-config-out` emits
+// in violation of:
+//
+//   - domain_dns_ips = [] (provider rejects empty literal; the schema's
+//     MinItems=2 list requires either 0 or 2+ items, and 0 must mean
+//     "attribute absent", not "empty list"). generate-config-out emits
+//     `[]` for every aws_db_instance that has no AD-domain auth
+//     configured. Drop the empty literal. Issue #358.
+//   - db_name and username set on a read replica (replicate_source_db
+//     has a usable value). Both attrs are source-inherited on a replica
+//     and the provider marks them mutually-exclusive with
+//     replicate_source_db. generate-config-out doesn't honor that
+//     constraint when emitting the replica's body. Drop both attrs
+//     when the row is a replica. Issue #359.
+//
+// Conservative: each transform fires only on its specific orphan
+// pattern. A real Domain-auth DB carrying a populated domain_dns_ips
+// is preserved; a standalone (non-replica) DB carrying db_name and
+// username is preserved.
+func fixupDBInstanceProviderQuirks(blk *hclwrite.Block) {
+	body := blk.Body()
+	// #358 — domain_dns_ips=[] violates MinItems=2 list constraint.
+	if isAttrLiteralEmptyList(body, "domain_dns_ips") {
+		body.RemoveAttribute("domain_dns_ips")
+	}
+	// #359 — db_name and username conflict with replicate_source_db on
+	// read replicas. Source-inherited attributes that the provider
+	// rejects when both sides are set.
+	if hasUsableValue(body, "replicate_source_db") {
+		body.RemoveAttribute("db_name")
+		body.RemoveAttribute("username")
+	}
+}
+
+// fixupSecretsManagerSecretDefaults replaces the literal `null`
+// emitted by `terraform plan -generate-config-out` for two
+// default-rich Optional+Computed attributes with their schema
+// defaults, so the next plan after import is no-op rather than
+// "1 to change":
+//
+//   - force_overwrite_replica_secret = null → false. The provider
+//     marks this write-only; -generate-config-out can't read a real
+//     value back from AWS, so it emits null. The provider's
+//     schema default is false, and on the next plan the diff
+//     "null → false" shows as an in-place update. Pinning false in
+//     generated.tf eliminates the spurious diff.
+//   - recovery_window_in_days = null → 30. AWS API leaves the field
+//     unset on a non-pending-deletion secret, so the provider Reads
+//     nil. The schema default is 30 days, and on the next plan the
+//     diff "null → 30" shows as an in-place update. Pinning 30 in
+//     generated.tf eliminates the spurious diff.
+//
+// Conservative shape: each transform fires only on the literal
+// `null`. A secret deliberately configured with a different
+// recovery_window (e.g. 7 days) preserves -generate-config-out's
+// emitted value because the literal won't be `null`. Same shape as
+// fixupKMSRotationPeriodZero. Issue #361.
+func fixupSecretsManagerSecretDefaults(blk *hclwrite.Block) {
+	body := blk.Body()
+	if isAttrLiteralNull(body, "force_overwrite_replica_secret") {
+		body.SetAttributeValue("force_overwrite_replica_secret", cty.False)
+	}
+	if isAttrLiteralNull(body, "recovery_window_in_days") {
+		body.SetAttributeValue("recovery_window_in_days", cty.NumberIntVal(30))
+	}
+}
+
+// fixupComputeFirewallEmptySourceTargetArrays is the first GCP-side
+// entry in resourceTypeFixups. terraform plan -generate-config-out
+// emits all four source/target arrays as literal `[]` even when only
+// one of the source pairs is configured:
+//
+//	source_service_accounts = []
+//	source_tags             = []
+//	target_service_accounts = []
+//	target_tags             = []
+//
+// The Google provider rejects the combination — source_service_accounts
+// is mutually-exclusive with source_tags, and target_service_accounts
+// is mutually-exclusive with source_tags (asymmetric on the target
+// side — target_tags is also caught by the cross-validator).
+//
+// Drop any of the four whose emitted value is the empty literal `[]`.
+// Non-empty values (the operator did configure one side of the pair)
+// are preserved. Same family as AWS #338/#343/#348/#351. Issue #363.
+func fixupComputeFirewallEmptySourceTargetArrays(blk *hclwrite.Block) {
+	body := blk.Body()
+	for _, name := range []string{
+		"source_service_accounts",
+		"source_tags",
+		"target_service_accounts",
+		"target_tags",
+	} {
+		if isAttrLiteralEmptyList(body, name) {
+			body.RemoveAttribute(name)
 		}
 	}
 }
