@@ -22,30 +22,34 @@ import (
 // accidental registration in NewGCPDiscoverer surfaces as a test
 // failure, not silent behavior change.
 var expectedRegisteredTypes = map[string]bool{
-	"google_pubsub_topic":               false,
-	"google_pubsub_subscription":        false,
-	"google_storage_bucket":             false,
-	"google_secret_manager_secret":      false,
-	"google_compute_network":            false,
-	"google_service_account":            false,
-	"google_kms_key_ring":               false,
-	"google_kms_crypto_key":             false,
-	"google_compute_firewall":           false,
-	"google_compute_router":             false,
-	"google_compute_address":            false,
-	"google_compute_instance":           false,
-	"google_container_cluster":          false,
-	"google_container_node_pool":        false,
-	"google_sql_database_instance":      false,
-	"google_sql_user":                   false,
-	"google_cloud_run_v2_service":       false,
-	"google_cloudfunctions2_function":   false,
-	"google_compute_forwarding_rule":    false,
-	"google_compute_target_https_proxy": false,
-	"google_compute_url_map":            false,
-	"google_api_gateway_api":            false,
-	"google_api_gateway_api_config":     false,
-	"google_api_gateway_gateway":        false,
+	"google_pubsub_topic":                    false,
+	"google_pubsub_subscription":             false,
+	"google_storage_bucket":                  false,
+	"google_secret_manager_secret":           false,
+	"google_compute_network":                 false,
+	"google_service_account":                 false,
+	"google_kms_key_ring":                    false,
+	"google_kms_crypto_key":                  false,
+	"google_compute_firewall":                false,
+	"google_compute_router":                  false,
+	"google_compute_address":                 false,
+	"google_compute_instance":                false,
+	"google_container_cluster":               false,
+	"google_container_node_pool":             false,
+	"google_sql_database_instance":           false,
+	"google_sql_user":                        false,
+	"google_cloud_run_v2_service":            false,
+	"google_cloudfunctions2_function":        false,
+	"google_compute_forwarding_rule":         false,
+	"google_compute_target_https_proxy":      false,
+	"google_compute_url_map":                 false,
+	"google_api_gateway_api":                 false,
+	"google_api_gateway_api_config":          false,
+	"google_api_gateway_gateway":             false,
+	"google_monitoring_dashboard":            false,
+	"google_monitoring_alert_policy":         false,
+	"google_monitoring_notification_channel": false,
+	"google_logging_project_sink":            false,
 }
 
 func TestNewGCPDiscoverer_RegistersExpectedTypes(t *testing.T) {
@@ -632,30 +636,34 @@ func TestGCPDiscoverTypes_EmitsStageFinish(t *testing.T) {
 // type that carries GCP labels should be ScopeStyleLabels; a label-
 // less type (CLAUDE.md L84 convention) should be ScopeStyleNamePrefix.
 var expectedScopeStyle = map[string]ScopeStyle{
-	"google_pubsub_topic":               ScopeStyleLabels,
-	"google_pubsub_subscription":        ScopeStyleLabels,
-	"google_storage_bucket":             ScopeStyleLabels,
-	"google_secret_manager_secret":      ScopeStyleLabels,
-	"google_compute_network":            ScopeStyleLabels,
-	"google_service_account":            ScopeStyleNamePrefix, // IAM SAs have no labels (#367)
-	"google_kms_key_ring":               ScopeStyleNamePrefix, // KMS keyrings have no labels (#368)
-	"google_kms_crypto_key":             ScopeStyleNamePrefix, // KMS cryptokeys have no labels (#368)
-	"google_compute_firewall":           ScopeStyleNamePrefix, // firewalls have no labels (#369)
-	"google_compute_router":             ScopeStyleNamePrefix, // routers have no labels (#369)
-	"google_compute_address":            ScopeStyleLabels,     // addresses carry labels (#369)
-	"google_compute_instance":           ScopeStyleLabels,     // VMs carry labels (#370)
-	"google_container_cluster":          ScopeStyleLabels,     // GKE clusters carry labels (#371)
-	"google_container_node_pool":        ScopeStyleNamePrefix, // node pools have no labels (#371)
-	"google_sql_database_instance":      ScopeStyleLabels,     // Cloud SQL via settings.user_labels (#372)
-	"google_sql_user":                   ScopeStyleNamePrefix, // SQL users have no labels (#372)
-	"google_cloud_run_v2_service":       ScopeStyleLabels,     // Cloud Run v2 carries labels (#373)
-	"google_cloudfunctions2_function":   ScopeStyleLabels,     // Cloud Functions v2 carries labels (#373)
-	"google_compute_forwarding_rule":    ScopeStyleLabels,     // forwarding rules carry labels (#375)
-	"google_compute_target_https_proxy": ScopeStyleNamePrefix, // target HTTPS proxies have no labels (#375)
-	"google_compute_url_map":            ScopeStyleNamePrefix, // URL maps have no labels (#375)
-	"google_api_gateway_api":            ScopeStyleLabels,     // API Gateway APIs carry labels (#376)
-	"google_api_gateway_api_config":     ScopeStyleLabels,     // API Gateway API configs carry labels (#376)
-	"google_api_gateway_gateway":        ScopeStyleLabels,     // API Gateway gateways carry labels (#376)
+	"google_pubsub_topic":                    ScopeStyleLabels,
+	"google_pubsub_subscription":             ScopeStyleLabels,
+	"google_storage_bucket":                  ScopeStyleLabels,
+	"google_secret_manager_secret":           ScopeStyleLabels,
+	"google_compute_network":                 ScopeStyleLabels,
+	"google_service_account":                 ScopeStyleNamePrefix, // IAM SAs have no labels (#367)
+	"google_kms_key_ring":                    ScopeStyleNamePrefix, // KMS keyrings have no labels (#368)
+	"google_kms_crypto_key":                  ScopeStyleNamePrefix, // KMS cryptokeys have no labels (#368)
+	"google_compute_firewall":                ScopeStyleNamePrefix, // firewalls have no labels (#369)
+	"google_compute_router":                  ScopeStyleNamePrefix, // routers have no labels (#369)
+	"google_compute_address":                 ScopeStyleLabels,     // addresses carry labels (#369)
+	"google_compute_instance":                ScopeStyleLabels,     // VMs carry labels (#370)
+	"google_container_cluster":               ScopeStyleLabels,     // GKE clusters carry labels (#371)
+	"google_container_node_pool":             ScopeStyleNamePrefix, // node pools have no labels (#371)
+	"google_sql_database_instance":           ScopeStyleLabels,     // Cloud SQL via settings.user_labels (#372)
+	"google_sql_user":                        ScopeStyleNamePrefix, // SQL users have no labels (#372)
+	"google_cloud_run_v2_service":            ScopeStyleLabels,     // Cloud Run v2 carries labels (#373)
+	"google_cloudfunctions2_function":        ScopeStyleLabels,     // Cloud Functions v2 carries labels (#373)
+	"google_compute_forwarding_rule":         ScopeStyleLabels,     // forwarding rules carry labels (#375)
+	"google_compute_target_https_proxy":      ScopeStyleNamePrefix, // target HTTPS proxies have no labels (#375)
+	"google_compute_url_map":                 ScopeStyleNamePrefix, // URL maps have no labels (#375)
+	"google_api_gateway_api":                 ScopeStyleLabels,     // API Gateway APIs carry labels (#376)
+	"google_api_gateway_api_config":          ScopeStyleLabels,     // API Gateway API configs carry labels (#376)
+	"google_api_gateway_gateway":             ScopeStyleLabels,     // API Gateway gateways carry labels (#376)
+	"google_monitoring_dashboard":            ScopeStyleNamePrefix, // dashboards have no labels (#377)
+	"google_monitoring_alert_policy":         ScopeStyleNamePrefix, // alert policies have no labels (#377)
+	"google_monitoring_notification_channel": ScopeStyleNamePrefix, // notification channels have no labels (#377)
+	"google_logging_project_sink":            ScopeStyleNamePrefix, // logging sinks have no labels (#377)
 }
 
 // TestScopeStyle_PinsPerTypeContract is the regression guard (#366).

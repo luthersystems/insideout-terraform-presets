@@ -61,6 +61,10 @@ google_container_cluster	Virtual Machines
 google_container_node_pool	Virtual Machines
 google_kms_crypto_key	Security
 google_kms_key_ring	Security
+google_logging_project_sink	Observability
+google_monitoring_alert_policy	Observability
+google_monitoring_dashboard	Observability
+google_monitoring_notification_channel	Observability
 google_pubsub_subscription	Events
 google_pubsub_topic	Events
 google_secret_manager_secret	Security
