@@ -802,6 +802,27 @@ Exit codes:
 	summaryResources = resources
 	fmt.Fprintf(summaryOut, "wrote %s (%d resource(s) discovered)\n", out, n)
 
+	// Empty-filter-match WARN (#364): if the operator passed a label/
+	// tag filter and zero resources came through, it's almost always a
+	// typo in --project (e.g. "io-foo" instead of "io-fo0") rather than
+	// a genuinely empty scope. Surface it as a hint — the run still
+	// exits 0 (the manifest is on-disk and downstream stages no-op
+	// cleanly on len(resources)==0). Heuristic is intentionally simple:
+	// any --project value with zero discovered resources triggers the
+	// hint. A genuinely empty scope wears the same hint as a typo'd
+	// filter; the cost is one extra line of stderr, which is cheaper
+	// than the ~3 minutes of triage operators spent figuring this out
+	// during the 2026-05-10 smoke. The same UX pattern applies to AWS
+	// (per-service describe with tag:Project=<typo> returns zero).
+	if n == 0 && strings.TrimSpace(*project) != "" {
+		fmt.Fprintf(os.Stderr,
+			"discover: WARN: --project filter %q matched zero resources in the configured scope. "+
+				"If you expected resources to be discovered, double-check the stack prefix "+
+				"(this is the InsideOut --project label/tag value, e.g. \"io-abc1234567\", "+
+				"NOT the cloud account or GCP project ID).\n",
+			*project)
+	}
+
 	// --include-unsupported (#296): broad-enumerate types NOT yet wired
 	// into per-service discoverers and emit them in a parallel
 	// unsupported.json. Soft-fails so a Resource-Explorer-not-configured
