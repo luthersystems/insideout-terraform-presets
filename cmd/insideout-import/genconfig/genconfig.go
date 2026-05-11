@@ -196,6 +196,32 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 		return nil, fmt.Errorf("rewrite generated.tf: %w", err)
 	}
 
+	// Orphan-import safety net (#362): drop any import { to = X.Y }
+	// whose target resource has no body in generated.tf. terraform
+	// plan -generate-config-out occasionally produces no body for a
+	// type it can't render (default singletons modeled by sibling
+	// types, provider gaps, etc.). The orphan would fail Stage 2c1
+	// with "Configuration for import target does not exist"; dropping
+	// it here keeps the rest of the import set running. Captured
+	// orphans are written to imports-skipped.json for traceability
+	// plus a stderr WARN per drop so the operator sees the soft-fail.
+	skipped, err := pruneOrphanImports(opts.Workdir, cleaned)
+	if err != nil {
+		return nil, fmt.Errorf("orphan-import safety net: %w", err)
+	}
+	if len(skipped) > 0 {
+		if _, werr := writeOrphanImportsManifest(opts.Workdir, skipped); werr != nil {
+			// Soft-fail: we already pruned imports.tf successfully;
+			// failure to write the sibling manifest shouldn't block
+			// downstream stages.
+			fmt.Fprintf(os.Stderr, "genconfig: WARN: imports-skipped.json: %v (imports.tf was pruned; continuing)\n", werr)
+		}
+		for _, s := range skipped {
+			fmt.Fprintf(os.Stderr, "genconfig: WARN: dropped orphan import %s (id=%q, reason=%s) — terraform plan -generate-config-out produced no resource body\n",
+				s.Address, s.ImportID, s.Reason)
+		}
+	}
+
 	if err := runner.Validate(ctx); err != nil {
 		return nil, fmt.Errorf("terraform validate: %w", err)
 	}
