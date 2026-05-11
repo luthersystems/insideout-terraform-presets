@@ -138,5 +138,6 @@ var categoryByTFType = map[string]string{
 	"google_secret_manager_secret":   CategorySecurity,
 	"google_service_account":         CategorySecurity,
 	"google_sql_database_instance":   CategoryDataStorage,
+	"google_sql_user":                CategorySecurity,
 	"google_storage_bucket":          CategoryDataStorage,
 }

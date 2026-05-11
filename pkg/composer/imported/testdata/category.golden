@@ -58,4 +58,5 @@ google_pubsub_topic	Events
 google_secret_manager_secret	Security
 google_service_account	Security
 google_sql_database_instance	Data Storage
+google_sql_user	Security
 google_storage_bucket	Data Storage

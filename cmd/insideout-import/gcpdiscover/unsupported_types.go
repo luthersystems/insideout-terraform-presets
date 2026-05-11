@@ -27,8 +27,7 @@ var gcpUnsupportedTFTypeByAssetType = map[string]string{
 	"compute.googleapis.com/Disk":       "google_compute_disk",
 	"compute.googleapis.com/Subnetwork": "google_compute_subnetwork",
 	// Data
-	"sqladmin.googleapis.com/Instance": "google_sql_database_instance",
-	"bigquery.googleapis.com/Dataset":  "google_bigquery_dataset",
+	"bigquery.googleapis.com/Dataset": "google_bigquery_dataset",
 	// Containers / Serverless
 	"cloudfunctions.googleapis.com/Function": "google_cloudfunctions_function",
 	"run.googleapis.com/Service":             "google_cloud_run_service",

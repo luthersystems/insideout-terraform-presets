@@ -167,6 +167,8 @@ func NewGCPDiscoverer(searcher gcpAssetSearcher, projectID string) *GCPDiscovere
 			"google_compute_instance":      newComputeInstanceDiscoverer(),
 			"google_container_cluster":     newContainerClusterDiscoverer(),
 			"google_container_node_pool":   newContainerNodePoolDiscoverer(),
+			"google_sql_database_instance": newSQLDatabaseInstanceDiscoverer(),
+			"google_sql_user":              newSQLUserDiscoverer(),
 		},
 	}
 }

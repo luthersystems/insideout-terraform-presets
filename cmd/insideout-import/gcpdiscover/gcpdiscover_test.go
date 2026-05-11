@@ -36,6 +36,8 @@ var expectedRegisteredTypes = map[string]bool{
 	"google_compute_instance":      false,
 	"google_container_cluster":     false,
 	"google_container_node_pool":   false,
+	"google_sql_database_instance": false,
+	"google_sql_user":              false,
 }
 
 func TestNewGCPDiscoverer_RegistersExpectedTypes(t *testing.T) {
@@ -331,6 +333,12 @@ func TestFromAsset_ProjectIDArgWinsOverAssetField(t *testing.T) {
 		{name: "container_node_pool", discoverer: newContainerNodePoolDiscoverer(),
 			assetName:    "//container.googleapis.com/projects/" + fromAsset + "/locations/us-central1/clusters/c1/nodePools/np1",
 			wantImportID: "projects/" + explicit + "/locations/us-central1/clusters/c1/nodePools/np1"},
+		{name: "sql_database_instance", discoverer: newSQLDatabaseInstanceDiscoverer(),
+			assetName:    "//sqladmin.googleapis.com/projects/" + fromAsset + "/instances/db1",
+			wantImportID: "projects/" + explicit + "/instances/db1"},
+		{name: "sql_user", discoverer: newSQLUserDiscoverer(),
+			assetName:    "//sqladmin.googleapis.com/projects/" + fromAsset + "/instances/db1/users/u1",
+			wantImportID: explicit + "/db1/u1"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -624,6 +632,8 @@ var expectedScopeStyle = map[string]ScopeStyle{
 	"google_compute_instance":      ScopeStyleLabels,     // VMs carry labels (#370)
 	"google_container_cluster":     ScopeStyleLabels,     // GKE clusters carry labels (#371)
 	"google_container_node_pool":   ScopeStyleNamePrefix, // node pools have no labels (#371)
+	"google_sql_database_instance": ScopeStyleLabels,     // Cloud SQL via settings.user_labels (#372)
+	"google_sql_user":              ScopeStyleNamePrefix, // SQL users have no labels (#372)
 }
 
 // TestScopeStyle_PinsPerTypeContract is the regression guard (#366).
