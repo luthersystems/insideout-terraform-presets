@@ -28,6 +28,8 @@ var expectedRegisteredTypes = map[string]bool{
 	"google_secret_manager_secret": false,
 	"google_compute_network":       false,
 	"google_service_account":       false,
+	"google_kms_key_ring":          false,
+	"google_kms_crypto_key":        false,
 }
 
 func TestNewGCPDiscoverer_RegistersExpectedTypes(t *testing.T) {
@@ -299,6 +301,12 @@ func TestFromAsset_ProjectIDArgWinsOverAssetField(t *testing.T) {
 		{name: "service_account", discoverer: newServiceAccountDiscoverer(),
 			assetName:    "//iam.googleapis.com/projects/" + fromAsset + "/serviceAccounts/sa@x.iam.gserviceaccount.com",
 			wantImportID: "projects/" + explicit + "/serviceAccounts/sa@x.iam.gserviceaccount.com"},
+		{name: "kms_key_ring", discoverer: newKMSKeyRingDiscoverer(),
+			assetName:    "//cloudkms.googleapis.com/projects/" + fromAsset + "/locations/global/keyRings/ring1",
+			wantImportID: "projects/" + explicit + "/locations/global/keyRings/ring1"},
+		{name: "kms_crypto_key", discoverer: newKMSCryptoKeyDiscoverer(),
+			assetName:    "//cloudkms.googleapis.com/projects/" + fromAsset + "/locations/global/keyRings/ring1/cryptoKeys/key1",
+			wantImportID: "projects/" + explicit + "/locations/global/keyRings/ring1/cryptoKeys/key1"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -584,6 +592,8 @@ var expectedScopeStyle = map[string]ScopeStyle{
 	"google_secret_manager_secret": ScopeStyleLabels,
 	"google_compute_network":       ScopeStyleLabels,
 	"google_service_account":       ScopeStyleNamePrefix, // IAM SAs have no labels (#367)
+	"google_kms_key_ring":          ScopeStyleNamePrefix, // KMS keyrings have no labels (#368)
+	"google_kms_crypto_key":        ScopeStyleNamePrefix, // KMS cryptokeys have no labels (#368)
 }
 
 // TestScopeStyle_PinsPerTypeContract is the regression guard (#366).

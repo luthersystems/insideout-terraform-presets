@@ -66,6 +66,8 @@ var awsTypes = []string{
 // gcpdiscover parity test will fail if this drifts from the live constructor.
 var gcpTypes = []string{
 	"google_compute_network",
+	"google_kms_crypto_key",
+	"google_kms_key_ring",
 	"google_pubsub_subscription",
 	"google_pubsub_topic",
 	"google_secret_manager_secret",

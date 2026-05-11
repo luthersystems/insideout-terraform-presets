@@ -65,6 +65,8 @@ func TestSupportedDiscoverTypes_GCP_ReturnsCanonicalSortedList(t *testing.T) {
 	t.Parallel()
 	want := []string{
 		"google_compute_network",
+		"google_kms_crypto_key",
+		"google_kms_key_ring",
 		"google_pubsub_subscription",
 		"google_pubsub_topic",
 		"google_secret_manager_secret",
