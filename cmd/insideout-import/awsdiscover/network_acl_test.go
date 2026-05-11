@@ -52,6 +52,9 @@ func TestNetworkACLDiscover_HappyPath(t *testing.T) {
 				{
 					NetworkAcls: []ec2types.NetworkAcl{
 						networkACLWithTags("acl-09fd2b515b8886254", "vpc-052c72972a11f8677", false, map[string]string{"Name": "io-foo-public-nacl", "Project": "io-foo"}),
+						// Project-tagged default NACL — must be filtered
+						// out (#357) because aws_network_acl cannot model
+						// it. See discoverer doc.
 						networkACLWithTags("acl-0a1b2c3d4e5f60718", "vpc-052c72972a11f8677", true, map[string]string{"Project": "io-foo"}),
 					},
 				},
@@ -62,47 +65,94 @@ func TestNetworkACLDiscover_HappyPath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if len(got) != 1 {
+		t.Fatalf("len=%d, want 1 (the project-tagged default NACL must be filtered)", len(got))
+	}
+	ir := got[0]
+	if ir.Identity.Type != "aws_network_acl" {
+		t.Errorf("Type=%q, want aws_network_acl", ir.Identity.Type)
+	}
+	if ir.Identity.ImportID != "acl-09fd2b515b8886254" {
+		t.Errorf("ImportID=%q, want acl-09fd2b515b8886254", ir.Identity.ImportID)
+	}
+	if ir.Identity.NameHint != "io-foo-public-nacl" {
+		t.Errorf("NameHint=%q, want io-foo-public-nacl (Name tag)", ir.Identity.NameHint)
+	}
+	if ir.Identity.NativeIDs["network_acl_id"] != "acl-09fd2b515b8886254" {
+		t.Errorf("NativeIDs[network_acl_id]=%q", ir.Identity.NativeIDs["network_acl_id"])
+	}
+	if ir.Identity.NativeIDs["vpc_id"] != "vpc-052c72972a11f8677" {
+		t.Errorf("NativeIDs[vpc_id]=%q", ir.Identity.NativeIDs["vpc_id"])
+	}
+	if ir.Identity.NativeIDs["is_default"] != "false" {
+		t.Errorf("is_default=%q, want \"false\"", ir.Identity.NativeIDs["is_default"])
+	}
+	if ir.Identity.Tags["Project"] != "io-foo" {
+		t.Errorf("Tags[Project]=%q, want io-foo", ir.Identity.Tags["Project"])
+	}
+}
+
+// TestNetworkACLDiscover_SkipsDefaultNACL (#357) covers the
+// project-tagged-default-NACL case in isolation: a default NACL whose
+// Project tag matches the stack must still be filtered out, otherwise
+// Stage 2c1 dies with "Configuration for import target does not exist"
+// because terraform plan -generate-config-out can't emit a body for
+// aws_network_acl on a default NACL (provider models it via
+// aws_default_network_acl).
+func TestNetworkACLDiscover_SkipsDefaultNACL(t *testing.T) {
+	t.Parallel()
+	d := &networkACLDiscoverer{new: func(_ string) networkACLClient {
+		return &fakeNetworkACLClient{
+			pages: []ec2.DescribeNetworkAclsOutput{{
+				NetworkAcls: []ec2types.NetworkAcl{
+					// Only the default NACL is present. It carries the
+					// project tag (InsideOut VPC preset propagates it via
+					// merge(module.x.tags, var.tags)), so the server-side
+					// tag:Project filter would let it through — we rely on
+					// the client-side IsDefault check.
+					networkACLWithTags("acl-default0000001", "vpc-1", true, map[string]string{"Project": "io-foo"}),
+				},
+			}},
+		}
+	}}
+	got, err := d.Discover(context.Background(), DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("len=%d, want 0 (default NACL must be skipped)", len(got))
+	}
+}
+
+// TestNetworkACLDiscover_DefaultNACLSkippedAmongMixedSet pins the
+// ordering invariant: when both default and non-default NACLs come back
+// from the describe call, only the non-defaults survive — regardless of
+// the order the API returns them in.
+func TestNetworkACLDiscover_DefaultNACLSkippedAmongMixedSet(t *testing.T) {
+	t.Parallel()
+	d := &networkACLDiscoverer{new: func(_ string) networkACLClient {
+		return &fakeNetworkACLClient{
+			pages: []ec2.DescribeNetworkAclsOutput{{
+				NetworkAcls: []ec2types.NetworkAcl{
+					networkACLWithTags("acl-default0000001", "vpc-1", true, map[string]string{"Project": "io-foo"}),
+					networkACLWithTags("acl-nondefault0001", "vpc-1", false, map[string]string{"Project": "io-foo"}),
+					networkACLWithTags("acl-default0000002", "vpc-1", true, map[string]string{"Project": "io-foo"}),
+					networkACLWithTags("acl-nondefault0002", "vpc-1", false, map[string]string{"Project": "io-foo"}),
+				},
+			}},
+		}
+	}}
+	got, err := d.Discover(context.Background(), DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if len(got) != 2 {
-		t.Fatalf("len=%d, want 2", len(got))
+		t.Fatalf("len=%d, want 2 (only 2 non-default NACLs survive)", len(got))
 	}
 	for _, ir := range got {
-		if ir.Identity.Type != "aws_network_acl" {
-			t.Errorf("Type=%q, want aws_network_acl", ir.Identity.Type)
+		if ir.Identity.NativeIDs["is_default"] != "false" {
+			t.Errorf("ImportID=%q is_default=%q; expected only is_default=false NACLs", ir.Identity.ImportID, ir.Identity.NativeIDs["is_default"])
 		}
-		if ir.Identity.ImportID == "" {
-			t.Error("ImportID empty")
-		}
-		if ir.Identity.NativeIDs["network_acl_id"] == "" {
-			t.Error("NativeIDs[network_acl_id] empty")
-		}
-		if ir.Identity.NativeIDs["vpc_id"] == "" {
-			t.Error("NativeIDs[vpc_id] empty")
-		}
-		if ir.Identity.NativeIDs["is_default"] == "" {
-			t.Error("NativeIDs[is_default] empty (must be 'true' or 'false')")
-		}
-	}
-	// Sorted by NACL ID; acl-0a1b... sorts before acl-09fd...
-	if got[0].Identity.ImportID != "acl-09fd2b515b8886254" {
-		t.Errorf("first ImportID=%q, want acl-09fd2b515b8886254 (sorted)", got[0].Identity.ImportID)
-	}
-	// Name tag wins over the bare NACL ID for NameHint.
-	if got[0].Identity.NameHint != "io-foo-public-nacl" {
-		t.Errorf("first NameHint=%q, want io-foo-public-nacl (Name tag)", got[0].Identity.NameHint)
-	}
-	// Fallback to NACL ID when no Name tag.
-	if got[1].Identity.NameHint != "acl-0a1b2c3d4e5f60718" {
-		t.Errorf("second NameHint=%q, want fallback to NACL ID", got[1].Identity.NameHint)
-	}
-	// is_default round-trips as a string.
-	if got[0].Identity.NativeIDs["is_default"] != "false" {
-		t.Errorf("first is_default=%q, want \"false\"", got[0].Identity.NativeIDs["is_default"])
-	}
-	if got[1].Identity.NativeIDs["is_default"] != "true" {
-		t.Errorf("second is_default=%q, want \"true\"", got[1].Identity.NativeIDs["is_default"])
-	}
-	if got[0].Identity.Tags["Project"] != "io-foo" {
-		t.Errorf("Tags[Project]=%q, want io-foo", got[0].Identity.Tags["Project"])
 	}
 }
 
