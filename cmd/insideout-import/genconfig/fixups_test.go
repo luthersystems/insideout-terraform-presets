@@ -2106,6 +2106,130 @@ func TestFixupSecretsManagerSecret_PartialNullPreservesOther(t *testing.T) {
 	}
 }
 
+// TestFixupComputeFirewall_DropsAllEmptySourceTargetArrays covers
+// #363: every google_compute_firewall produced by `terraform plan
+// -generate-config-out` carries
+// source_service_accounts/source_tags/target_service_accounts/target_tags
+// as literal [], and the Google provider rejects the combination
+// (mutually-exclusive cross-validators). Drop any of the four whose
+// value is [].
+func TestFixupComputeFirewall_DropsAllEmptySourceTargetArrays(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "google_compute_firewall" "fw" {
+  name                    = "io-foo-allow-ssh"
+  network                 = "io-foo-vpc"
+  direction               = "INGRESS"
+  source_ranges           = ["35.235.240.0/20"]
+  source_service_accounts = []
+  source_tags             = []
+  target_service_accounts = []
+  target_tags             = []
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	for _, name := range []string{"source_service_accounts", "source_tags", "target_service_accounts", "target_tags"} {
+		if regexp.MustCompile(`(?m)^\s*` + name + `\s*=`).MatchString(got) {
+			t.Errorf("empty %s must be dropped\n--- got ---\n%s", name, got)
+		}
+	}
+	// source_ranges (non-empty list) survives.
+	if !regexp.MustCompile(`source_ranges\s*=\s*\["35.235.240.0/20"\]`).MatchString(got) {
+		t.Errorf("source_ranges must be preserved\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupComputeFirewall_PreservesPopulatedSourceTagsAndDropsEmptyServiceAccounts
+// pins the asymmetric carve-out: an operator-configured tag-based
+// firewall preserves source_tags but still drops the unused-and-empty
+// source_service_accounts (which would conflict at validate time).
+func TestFixupComputeFirewall_PreservesPopulatedSourceTagsAndDropsEmptyServiceAccounts(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "google_compute_firewall" "fw" {
+  name                    = "io-foo-allow-ssh"
+  source_tags             = ["bastion"]
+  source_service_accounts = []
+  target_service_accounts = []
+  target_tags             = []
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if !regexp.MustCompile(`source_tags\s*=\s*\["bastion"\]`).MatchString(got) {
+		t.Errorf("populated source_tags must be preserved\n--- got ---\n%s", got)
+	}
+	for _, name := range []string{"source_service_accounts", "target_service_accounts", "target_tags"} {
+		if regexp.MustCompile(`(?m)^\s*` + name + `\s*=`).MatchString(got) {
+			t.Errorf("empty %s must be dropped\n--- got ---\n%s", name, got)
+		}
+	}
+}
+
+// TestFixupComputeFirewall_PreservesPopulatedServiceAccounts pins the
+// reverse case: a service-account-based firewall preserves the
+// service-account attribute and drops the unused-and-empty tag side.
+func TestFixupComputeFirewall_PreservesPopulatedServiceAccounts(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "google_compute_firewall" "fw" {
+  name                    = "io-foo-allow-ssh"
+  source_service_accounts = ["worker@io-foo.iam.gserviceaccount.com"]
+  source_tags             = []
+  target_service_accounts = ["app@io-foo.iam.gserviceaccount.com"]
+  target_tags             = []
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if !regexp.MustCompile(`source_service_accounts\s*=\s*\["worker@io-foo.iam.gserviceaccount.com"\]`).MatchString(got) {
+		t.Errorf("populated source_service_accounts must be preserved\n--- got ---\n%s", got)
+	}
+	if !regexp.MustCompile(`target_service_accounts\s*=\s*\["app@io-foo.iam.gserviceaccount.com"\]`).MatchString(got) {
+		t.Errorf("populated target_service_accounts must be preserved\n--- got ---\n%s", got)
+	}
+	for _, name := range []string{"source_tags", "target_tags"} {
+		if regexp.MustCompile(`(?m)^\s*` + name + `\s*=`).MatchString(got) {
+			t.Errorf("empty %s must be dropped\n--- got ---\n%s", name, got)
+		}
+	}
+}
+
+// TestFixupComputeFirewall_OnlyAffectsGoogleComputeFirewallBlocks pins
+// resourceTypeFixups keying: a sibling resource type carrying the
+// same empty arrays is left untouched.
+func TestFixupComputeFirewall_OnlyAffectsGoogleComputeFirewallBlocks(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "google_compute_firewall" "fw" {
+  source_tags = []
+}
+
+resource "google_other_resource" "extra" {
+  source_tags = []
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	// google_compute_firewall got the fixup.
+	if regexp.MustCompile(`(?s)resource "google_compute_firewall" "fw"[^}]*\{[^}]*source_tags\s*=\s*\[\]`).MatchString(got) {
+		t.Errorf("google_compute_firewall's empty source_tags must be dropped\n--- got ---\n%s", got)
+	}
+	// google_other_resource left alone.
+	if !regexp.MustCompile(`(?s)resource "google_other_resource" "extra"[^}]*\{[^}]*source_tags\s*=\s*\[\]`).MatchString(got) {
+		t.Errorf("google_other_resource's empty source_tags must be preserved (fixup keyed by google_compute_firewall)\n--- got ---\n%s", got)
+	}
+}
+
 // TestFixupSecretsManagerSecret_OnlyAffectsAWSSecretsManagerSecretBlocks
 // pins resourceTypeFixups keying: a sibling resource type carrying
 // the same attribute names (e.g. a hypothetical type with the same

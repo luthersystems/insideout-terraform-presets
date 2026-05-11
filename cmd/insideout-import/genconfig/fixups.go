@@ -62,8 +62,9 @@ var resourceTypeFixups = map[string]func(*hclwrite.Block){
 	"aws_lb_listener":     fixupLBListenerStickinessDurationZero,
 	"aws_lb_target_group": fixupLBTargetGroupProviderQuirks,
 	"aws_vpc_endpoint":    fixupVPCEndpointEmptyDNSDomains,
-	"aws_db_instance":     fixupDBInstanceProviderQuirks,
+	"aws_db_instance":           fixupDBInstanceProviderQuirks,
 	"aws_secretsmanager_secret": fixupSecretsManagerSecretDefaults,
+	"google_compute_firewall":   fixupComputeFirewallEmptySourceTargetArrays,
 }
 
 // lambdaPlaceholderFile is what we set `filename` to so the block
@@ -542,6 +543,38 @@ func fixupSecretsManagerSecretDefaults(blk *hclwrite.Block) {
 	}
 	if isAttrLiteralNull(body, "recovery_window_in_days") {
 		body.SetAttributeValue("recovery_window_in_days", cty.NumberIntVal(30))
+	}
+}
+
+// fixupComputeFirewallEmptySourceTargetArrays is the first GCP-side
+// entry in resourceTypeFixups. terraform plan -generate-config-out
+// emits all four source/target arrays as literal `[]` even when only
+// one of the source pairs is configured:
+//
+//   source_service_accounts = []
+//   source_tags             = []
+//   target_service_accounts = []
+//   target_tags             = []
+//
+// The Google provider rejects the combination — source_service_accounts
+// is mutually-exclusive with source_tags, and target_service_accounts
+// is mutually-exclusive with source_tags (asymmetric on the target
+// side — target_tags is also caught by the cross-validator).
+//
+// Drop any of the four whose emitted value is the empty literal `[]`.
+// Non-empty values (the operator did configure one side of the pair)
+// are preserved. Same family as AWS #338/#343/#348/#351. Issue #363.
+func fixupComputeFirewallEmptySourceTargetArrays(blk *hclwrite.Block) {
+	body := blk.Body()
+	for _, name := range []string{
+		"source_service_accounts",
+		"source_tags",
+		"target_service_accounts",
+		"target_tags",
+	} {
+		if isAttrLiteralEmptyList(body, name) {
+			body.RemoveAttribute(name)
+		}
 	}
 }
 
