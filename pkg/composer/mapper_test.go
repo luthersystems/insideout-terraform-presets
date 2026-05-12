@@ -240,12 +240,35 @@ func TestBuildModuleValues_VPC_AWSVPCConfig(t *testing.T) {
 		assert.False(t, vals["single_nat_gateway"].(bool), "user config still applies")
 	})
 
-	t.Run("user EnableNATGateway=true overrides Public-VPC-derived false", func(t *testing.T) {
+	t.Run("stale EnableNATGateway=true is coerced to false on a Public VPC with no private-subnet components (#389)", func(t *testing.T) {
+		// Reproduces the #389 bug shape: caller's saved cfg has
+		// EnableNATGateway=true left over from a prior config (e.g. when
+		// OpenSearch was selected). After OpenSearch is removed the stack
+		// is Public-VPC + no private-subnet consumers; the upstream VPC
+		// module would otherwise plan aws_route.private_nat_gateway against
+		// an empty private route table and fail apply. The mapper coerces
+		// enable_nat_gateway=false to keep the deploy correct; the
+		// composer surfaces aws_vpc_stale_nat_gateway as a ValidationIssue
+		// so the upstream caller can clear the stale field.
 		comps := &Components{AWSVPC: "Public VPC"}
 		cfg := cfgWithAWSVPC(nil, boolPtr(true), nil)
 		vals, err := m.BuildModuleValues(KeyAWSVPC, comps, cfg, "test", "us-east-1")
 		require.NoError(t, err)
-		assert.True(t, vals["enable_nat_gateway"].(bool), "user override wins over Public VPC default")
+		assert.Equal(t, false, vals["enable_private_subnets"], "Public VPC with no consumers still disables private subnets")
+		assert.Equal(t, false, vals["enable_nat_gateway"], "stale cfg EnableNATGateway=true must be coerced to false (#389)")
+	})
+
+	t.Run("legitimate EnableNATGateway=true is preserved when a private-subnet component is present", func(t *testing.T) {
+		// Sanity: when the user has an EKS/RDS/etc. consumer, private
+		// subnets stay enabled so cfg.AWSVPC.EnableNATGateway=true is a
+		// legitimate setting and must survive the coercion path.
+		comps := &Components{AWSVPC: "Public VPC", AWSEKS: boolPtr(true)}
+		cfg := cfgWithAWSVPC(nil, boolPtr(true), nil)
+		vals, err := m.BuildModuleValues(KeyAWSVPC, comps, cfg, "test", "us-east-1")
+		require.NoError(t, err)
+		_, hasPrivate := vals["enable_private_subnets"]
+		assert.False(t, hasPrivate, "preset default (true) takes effect; mapper does not override")
+		assert.True(t, vals["enable_nat_gateway"].(bool), "legitimate EnableNATGateway=true survives when private subnets remain enabled")
 	})
 }
 

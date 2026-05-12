@@ -2444,6 +2444,252 @@ func TestComposeStack_GCPRouterAndConnectorOutputs_TerraformValidate(t *testing.
 	}
 }
 
+// TestComposeStack_AWS_PublicVPC_TerraformValidate is the AWS analogue of
+// the GCP issue-#178 closure (TestComposeStack_GCPRouterAndConnectorOutputs_TerraformValidate
+// above). It composes representative AWS stacks and runs `terraform init &&
+// terraform validate` on the composed root. Closes the parity gap with the
+// GCP-only existing gate: prior to this test, AWS-side composer output was
+// only HCL-parsed (compose_stack_test.go:780), never validated.
+//
+// SCOPE — what this gate catches and what it does NOT catch.
+//
+// validate exercises HCL syntax, type conformance, and attribute existence
+// across the whole composed root including child modules. It does NOT
+// evaluate expressions like element() / slice() — so the specific #389
+// failure mode (element() against an empty private route table at apply)
+// is NOT what this gate catches. That class of failure needs `terraform
+// plan` to surface, which is what TestComposeStack_GCPCloudKMS_TerraformPlan
+// uses for the sibling #182 slice() bug. For #389 specifically, the
+// behaviour-level gate is the mapper coercion (verified by
+// TestComposeStackWithIssues_AWSVPCStaleNATGateway_Issue389 in
+// validate_aws_vpc_test.go) plus the preset-level output precondition
+// (verified by TestAWSVPCPresetPrecondition_RejectsBadPair below).
+//
+// What THIS test does catch: a future composer regression that emits a
+// composed root with broken cross-module wiring, missing/extra attributes
+// on AWS provider-versioned resources, or HCL syntax issues. Closes the
+// validate-side parity gap for #389-class incidents going forward.
+//
+// Behavior on init failure mirrors the GCP test: hard-fail in CI, skip
+// locally so offline `go test ./...` still runs.
+func TestComposeStack_AWS_PublicVPC_TerraformValidate(t *testing.T) {
+	if testing.Short() {
+		t.Skip("-short skips multi-second terraform init+validate")
+	}
+	if _, err := exec.LookPath("terraform"); err != nil {
+		t.Skip("terraform binary not on PATH; skipping integration validate")
+	}
+
+	inCI := os.Getenv("CI") == "true"
+	boolPtr := func(v bool) *bool { return &v }
+	// Use the shared cfgWithAWSVPC helper (mapper_test.go:182) to avoid
+	// re-declaring the anonymous Config.AWSVPC struct in multiple places.
+	awsVPCCfg := func(enable *bool) *Config {
+		c := cfgWithAWSVPC(nil, enable, nil)
+		c.Region = "us-east-1"
+		return c
+	}
+
+	combos := []struct {
+		name  string
+		keys  []ComponentKey
+		comps *Components
+		cfg   *Config
+	}{
+		{
+			// Post-coercion shape from the #389 bug stack: composer emits
+			// enable_nat_gateway=false (Layer 1a mapper coercion already
+			// fired) — this combo proves the resulting composed root is
+			// well-formed terraform. It does NOT prove the bug would be
+			// caught if the coercion regressed (see docstring SCOPE).
+			name: "Public VPC, no private-subnet consumers (post-coercion shape)",
+			keys: []ComponentKey{KeyAWSVPC, KeyAWSS3, KeyAWSKMS, KeyAWSLambda, KeyAWSSecretsManager, KeyAWSCloudWatchLogs},
+			comps: &Components{
+				Cloud:             "AWS",
+				AWSS3:             boolPtr(true),
+				AWSKMS:            boolPtr(true),
+				AWSVPC:            "Public VPC",
+				AWSLambda:         boolPtr(true),
+				Architecture:      "Serverless",
+				AWSSecretsManager: boolPtr(true),
+				AWSCloudWatchLogs: boolPtr(true),
+			},
+			cfg: awsVPCCfg(boolPtr(true)),
+		},
+		{
+			// Symmetry: Public VPC with EKS (private subnets still needed)
+			// must validate clean — the override stays legitimate.
+			name: "Public VPC + EKS keeps private subnets + NAT",
+			keys: []ComponentKey{KeyAWSVPC, KeyAWSEKS},
+			comps: &Components{
+				Cloud:        "AWS",
+				AWSVPC:       "Public VPC",
+				AWSEKS:       boolPtr(true),
+				Architecture: "Kubernetes",
+			},
+			cfg: awsVPCCfg(boolPtr(true)),
+		},
+		{
+			// Baseline: Private VPC with defaults (the "happy path" any
+			// future regression would also have to keep passing).
+			name: "Private VPC with defaults",
+			keys: []ComponentKey{KeyAWSVPC, KeyAWSS3, KeyAWSLambda},
+			comps: &Components{
+				Cloud:        "AWS",
+				AWSVPC:       "Private VPC",
+				AWSS3:        boolPtr(true),
+				AWSLambda:    boolPtr(true),
+				Architecture: "Serverless",
+			},
+			cfg: &Config{Region: "us-east-1"},
+		},
+	}
+
+	for _, combo := range combos {
+		t.Run(combo.name, func(t *testing.T) {
+			c := newTestClient()
+			out, err := c.ComposeStack(ComposeStackOpts{
+				Cloud:        "aws",
+				SelectedKeys: combo.keys,
+				Comps:        combo.comps,
+				Cfg:          combo.cfg,
+				Project:      "test-389",
+				Region:       "us-east-1",
+			})
+			require.NoError(t, err)
+
+			dir := t.TempDir()
+			writeOutputs(t, out, dir)
+
+			initCmd := exec.Command("terraform", "init", "-backend=false", "-input=false", "-no-color")
+			initCmd.Dir = dir
+			initOut, err := initCmd.CombinedOutput()
+			if err != nil {
+				if inCI {
+					require.NoError(t, err,
+						"terraform init must succeed in CI; this gate is the AWS analogue of issue #178/closure for #389 and must not silently skip on transient registry failures:\n%s", initOut)
+				}
+				t.Skipf("terraform init unavailable (network/cache) in local dev: %s\n%s", err, initOut)
+			}
+			validateCmd := exec.Command("terraform", "validate", "-no-color")
+			validateCmd.Dir = dir
+			validateOut, err := validateCmd.CombinedOutput()
+			require.NoError(t, err, "terraform validate must succeed on composed AWS stack:\n%s", validateOut)
+		})
+	}
+}
+
+// TestAWSVPCPresetPrecondition_RejectsBadPair is the honest Layer 2
+// behaviour gate for #389 at the preset level. It runs `terraform plan`
+// against the aws/vpc preset standalone with the inconsistent
+// (enable_nat_gateway=true, enable_private_subnets=false) pair and asserts
+// the output precondition added in aws/vpc/outputs.tf fires with the
+// #389 reference.
+//
+// Why preset-standalone and not the composed root: the precondition is
+// a property of the preset itself, the composed-root case is already
+// covered by the unit tests above (mapper coercion + ValidationIssue),
+// and standalone plan avoids needing to model every consumer of the
+// composed stack. Why plan and not validate: validate does not evaluate
+// preconditions (verified empirically — they only fire during plan).
+//
+// AWS credentials are stubbed via env vars so the provider initializes
+// in CI; data sources (aws_availability_zones, aws_region) will fail
+// their API calls but the precondition is evaluated regardless and its
+// error string is what we assert on. Mirrors the GCP fake-OAuth-token
+// pattern in TestComposeStack_GCPCloudKMS_TerraformPlan above.
+//
+// CI vs local skip rules match the sibling tests: CI=true → init failure
+// is fatal; local dev → skip on init failure so offline `go test ./...`
+// works.
+func TestAWSVPCPresetPrecondition_RejectsBadPair(t *testing.T) {
+	if testing.Short() {
+		t.Skip("-short skips multi-second terraform init+plan")
+	}
+	if _, err := exec.LookPath("terraform"); err != nil {
+		t.Skip("terraform binary not on PATH; skipping integration plan")
+	}
+
+	inCI := os.Getenv("CI") == "true"
+
+	// Locate aws/vpc relative to this test package. The embedded preset
+	// FS is read-only; for `terraform init` we need a real-filesystem
+	// directory, so copy the preset out to a tempdir.
+	presetSrc := filepath.Join("..", "..", "aws", "vpc")
+	dir := t.TempDir()
+	entries, err := os.ReadDir(presetSrc)
+	require.NoError(t, err, "read aws/vpc directory")
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		b, err := os.ReadFile(filepath.Join(presetSrc, e.Name()))
+		require.NoError(t, err, "read %s", e.Name())
+		require.NoError(t,
+			os.WriteFile(filepath.Join(dir, e.Name()), b, 0o600),
+			"write %s to tempdir", e.Name())
+	}
+
+	// Provider override: AWS provider would otherwise call STS to
+	// validate the bogus credentials before reaching plan. With
+	// skip_credentials_validation + skip_requesting_account_id +
+	// skip_metadata_api_check, the provider initializes offline and
+	// plan proceeds to evaluate the output precondition. Data sources
+	// (aws_availability_zones, aws_region) will still fail their API
+	// calls, but terraform reports the precondition error alongside
+	// in the same plan run — which is what we assert on.
+	providerOverride := []byte(`provider "aws" {
+  region                      = "us-east-1"
+  access_key                  = "AKIATESTNOTREAL"
+  secret_key                  = "test-secret-not-real"
+  skip_credentials_validation = true
+  skip_metadata_api_check     = true
+  skip_requesting_account_id  = true
+}
+`)
+	require.NoError(t,
+		os.WriteFile(filepath.Join(dir, "provider_test_override.tf"), providerOverride, 0o600),
+		"write provider override")
+
+	initCmd := exec.Command("terraform", "init", "-backend=false", "-input=false", "-no-color")
+	initCmd.Dir = dir
+	initOut, err := initCmd.CombinedOutput()
+	if err != nil {
+		if inCI {
+			require.NoError(t, err,
+				"terraform init must succeed in CI; this gate is the Layer 2 backstop closure for #389 and must not silently skip on transient registry failures:\n%s", initOut)
+		}
+		t.Skipf("terraform init unavailable (network/cache) in local dev: %s\n%s", err, initOut)
+	}
+
+	planCmd := exec.Command(
+		"terraform", "plan",
+		"-refresh=false", "-input=false", "-no-color",
+		"-var=enable_nat_gateway=true",
+		"-var=enable_private_subnets=false",
+		"-var=environment=test",
+	)
+	planCmd.Dir = dir
+	// Stub AWS credentials so the provider initializes; the test never
+	// hits a real AWS call, and even though data sources will fail their
+	// API calls, terraform still evaluates the output precondition and
+	// reports its error in the same plan run.
+	planCmd.Env = append(os.Environ(),
+		"AWS_ACCESS_KEY_ID=AKIATESTNOTREAL",
+		"AWS_SECRET_ACCESS_KEY=test-secret-not-real",
+		"AWS_DEFAULT_REGION=us-east-1",
+		"AWS_REGION=us-east-1",
+	)
+	planOut, _ := planCmd.CombinedOutput()
+	// Plan is expected to FAIL (the precondition aborts it). Don't
+	// require.NoError; assert on the failure substring.
+	out := string(planOut)
+	require.Contains(t, out, "precondition failed",
+		"expected output precondition to fail plan for the bad-pair vars (issue #389 Layer 2 backstop):\n%s", out)
+	require.Contains(t, out, "#389",
+		"precondition error must cite #389 so future readers can locate context:\n%s", out)
+}
+
 // TestComposeStack_GCPCloudKMS_TerraformPlan is the formal closure
 // for issue #182's acceptance criterion: a fresh GCP session that
 // selects gcp/kms with default config (and with non-default

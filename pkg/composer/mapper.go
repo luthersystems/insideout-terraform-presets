@@ -143,6 +143,20 @@ func (m DefaultMapper) BuildModuleValues(
 			}
 		}
 
+		// NAT-vs-private-subnets coercion (#389). If private subnets were
+		// disabled above (Public VPC with no downstream consumers), NAT must
+		// be off too — the upstream terraform-aws-modules/vpc/aws plans
+		// aws_route.private_nat_gateway against the now-empty
+		// aws_route_table.private and apply fails with "element() on empty
+		// list". This rule overrides cfg.AWSVPC.EnableNATGateway when the
+		// caller's saved config is stale (e.g. OpenSearch was removed from
+		// the stack but EnableNATGateway=true persisted). A parallel
+		// ValidationIssue ("aws_vpc_stale_nat_gateway") surfaces the
+		// coercion to upstream callers so the stale field can be cleared.
+		if pSubn, ok := vals["enable_private_subnets"].(bool); ok && !pSubn {
+			vals["enable_nat_gateway"] = false
+		}
+
 	case KeyCloud:
 		// Example: cloud/provider selection
 		if comps != nil && comps.Cloud != "" {

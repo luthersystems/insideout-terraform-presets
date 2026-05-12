@@ -133,6 +133,19 @@ func ValidateAll(
 		all = append(all, ValidateImportedResources(opts[0].Cloud, opts[0].Imported)...)
 		all = append(all, ValidateImportedResourceAuthorization(opts[0].Cloud, opts[0].Imported)...)
 	}
+	// AWS-VPC cross-field check runs regardless of whether opts were supplied:
+	// dry-run callers (per ValidateAll's docstring) may pass no opts but still
+	// have a cloud-bearing Comps. Mirror ValidateOpts's cloud-resolution
+	// (explicit opts.Cloud → Comps.Cloud) so external callers of ValidateAll
+	// get the same coverage as ComposeStack/Single.
+	cloud := ""
+	if len(opts) > 0 {
+		cloud = opts[0].Cloud
+	}
+	if cloud == "" && comps != nil {
+		cloud = comps.Cloud
+	}
+	all = append(all, ValidateAWSVPCNATConsistency(cloud, comps, cfg)...)
 	return dedupeAndSortIssues(all)
 }
 
