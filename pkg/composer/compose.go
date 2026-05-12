@@ -280,6 +280,7 @@ func (c *Client) composeSingleImpl(opts ComposeSingleOpts) (*ComposeSingleResult
 
 	issues = append(issues, validateRequiredIssues(vars, wired, vals, string(opts.Key))...)
 	issues = append(issues, ValidateGCPProjectID(cloud, opts.GCPProjectID)...)
+	issues = append(issues, ValidateAWSVPCNATConsistency(cloud, opts.Comps, opts.Cfg)...)
 
 	var tfvars []VarEntry
 	for _, v := range vars {
@@ -703,6 +704,7 @@ func (c *Client) composeStackImpl(opts ComposeStackOpts) (*ComposeStackResult, e
 	issues = append(issues, ValidateSensitivePropagation(blocks, presetPaths)...)
 	issues = append(issues, ValidateComposedRoot(files)...)
 	issues = append(issues, ValidateGCPProjectID(cloud, opts.GCPProjectID)...)
+	issues = append(issues, ValidateAWSVPCNATConsistency(cloud, opts.Comps, opts.Cfg)...)
 
 	return &ComposeStackResult{Files: files, Issues: issues}, nil
 }

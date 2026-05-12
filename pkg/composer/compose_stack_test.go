@@ -2444,6 +2444,139 @@ func TestComposeStack_GCPRouterAndConnectorOutputs_TerraformValidate(t *testing.
 	}
 }
 
+// TestComposeStack_AWS_PublicVPC_TerraformValidate is the AWS analogue of
+// the GCP issue-#178 closure above. It composes representative AWS stacks
+// — including the #389 bug shape (Public VPC + no private-subnet consumers
+// + stale cfg.AWSVPC.EnableNATGateway=true) — and runs `terraform init &&
+// terraform validate` on the composed root. Closes the parity gap that
+// let #389 reach apply time: prior to this test, AWS-side composer output
+// was only HCL-parsed by compose_stack_test.go:780, never validated.
+//
+// The bug shape's expected behavior here is "validates clean": Layer 1a
+// in the mapper coerces enable_nat_gateway=false in the emitted tfvars,
+// so even though the caller's cfg is stale, the validate gate sees the
+// coerced inputs and passes. To reproduce the #389 apply failure in
+// validate, revert just the mapper coercion (validate will surface the
+// "element() on empty list" / precondition error).
+//
+// Behavior on init failure mirrors the GCP test: hard-fail in CI, skip
+// locally so offline `go test ./...` still runs.
+func TestComposeStack_AWS_PublicVPC_TerraformValidate(t *testing.T) {
+	if testing.Short() {
+		t.Skip("-short skips multi-second terraform init+validate")
+	}
+	if _, err := exec.LookPath("terraform"); err != nil {
+		t.Skip("terraform binary not on PATH; skipping integration validate")
+	}
+
+	inCI := os.Getenv("CI") == "true"
+	boolPtr := func(v bool) *bool { return &v }
+	awsVPCCfg := func(enable *bool) *Config {
+		c := &Config{Region: "us-east-1"}
+		c.AWSVPC = &struct {
+			SingleNATGateway *bool `json:"singleNatGateway,omitempty"`
+			EnableNATGateway *bool `json:"enableNatGateway,omitempty"`
+			AZCount          *int  `json:"azCount,omitempty"`
+		}{EnableNATGateway: enable}
+		return c
+	}
+
+	combos := []struct {
+		name  string
+		keys  []ComponentKey
+		comps *Components
+		cfg   *Config
+	}{
+		{
+			// The #389 minimal repro. Without the Layer 1a mapper coercion,
+			// `terraform validate` would surface either the precondition
+			// fail (Layer 2 backstop) or the upstream's empty-tuple error.
+			name: "Public VPC with stale EnableNATGateway=true (#389 bug shape)",
+			keys: []ComponentKey{KeyAWSVPC, KeyAWSS3, KeyAWSKMS, KeyAWSLambda, KeyAWSSecretsManager, KeyAWSCloudWatchLogs},
+			comps: &Components{
+				Cloud:             "AWS",
+				AWSS3:             boolPtr(true),
+				AWSKMS:            boolPtr(true),
+				AWSVPC:            "Public VPC",
+				AWSLambda:         boolPtr(true),
+				Architecture:      "Serverless",
+				AWSSecretsManager: boolPtr(true),
+				AWSCloudWatchLogs: boolPtr(true),
+			},
+			cfg: awsVPCCfg(boolPtr(true)),
+		},
+		{
+			// Symmetry: Public VPC with EKS (private subnets still needed)
+			// must validate clean — the override stays legitimate.
+			name: "Public VPC + EKS keeps private subnets + NAT",
+			keys: []ComponentKey{KeyAWSVPC, KeyAWSEKS},
+			comps: &Components{
+				Cloud:        "AWS",
+				AWSVPC:       "Public VPC",
+				AWSEKS:       boolPtr(true),
+				Architecture: "Kubernetes",
+			},
+			cfg: awsVPCCfg(boolPtr(true)),
+		},
+		{
+			// Baseline: Private VPC with defaults (the "happy path" any
+			// future regression would also have to keep passing).
+			name: "Private VPC with defaults",
+			keys: []ComponentKey{KeyAWSVPC, KeyAWSS3, KeyAWSLambda},
+			comps: &Components{
+				Cloud:        "AWS",
+				AWSVPC:       "Private VPC",
+				AWSS3:        boolPtr(true),
+				AWSLambda:    boolPtr(true),
+				Architecture: "Serverless",
+			},
+			cfg: &Config{Region: "us-east-1"},
+		},
+	}
+
+	for _, combo := range combos {
+		t.Run(combo.name, func(t *testing.T) {
+			c := newTestClient()
+			out, err := c.ComposeStack(ComposeStackOpts{
+				Cloud:        "aws",
+				SelectedKeys: combo.keys,
+				Comps:        combo.comps,
+				Cfg:          combo.cfg,
+				Project:      "test-389",
+				Region:       "us-east-1",
+			})
+			require.NoError(t, err)
+
+			dir := t.TempDir()
+			writeOutputs(t, out, dir)
+
+			initCmd := exec.Command("terraform", "init", "-backend=false", "-input=false", "-no-color")
+			initCmd.Dir = dir
+			initOut, err := initCmd.CombinedOutput()
+			if err != nil {
+				if inCI {
+					require.NoError(t, err,
+						"terraform init must succeed in CI; this gate is the AWS analogue of issue #178/closure for #389 and must not silently skip on transient registry failures:\n%s", initOut)
+				}
+				t.Skipf("terraform init unavailable (network/cache) in local dev: %s\n%s", err, initOut)
+			}
+			validateCmd := exec.Command("terraform", "validate", "-no-color")
+			validateCmd.Dir = dir
+			validateOut, err := validateCmd.CombinedOutput()
+			require.NoError(t, err, "terraform validate must succeed on composed stack (issue #389):\n%s", validateOut)
+			// The #389 deploy-time symptom — surface here so a future
+			// mapper regression that drops the coercion is named
+			// precisely instead of just "validate failed".
+			require.NotContains(t, string(validateOut), "empty tuple",
+				"terraform validate surfaced 'empty tuple' — #389 regression: composer emitted enable_nat_gateway=true with private subnets disabled")
+			require.NotContains(t, string(validateOut), "element function",
+				"terraform validate surfaced 'element function' — #389 regression: NAT route attached to empty private route table")
+			require.NotContains(t, string(validateOut), "Resource precondition failed",
+				"terraform validate surfaced a precondition failure — Layer 2 backstop fired, meaning the Layer 1a mapper coercion regressed")
+		})
+	}
+}
+
 // TestComposeStack_GCPCloudKMS_TerraformPlan is the formal closure
 // for issue #182's acceptance criterion: a fresh GCP session that
 // selects gcp/kms with default config (and with non-default

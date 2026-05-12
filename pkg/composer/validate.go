@@ -132,6 +132,7 @@ func ValidateAll(
 		all = append(all, ValidateOpts(opts[0])...)
 		all = append(all, ValidateImportedResources(opts[0].Cloud, opts[0].Imported)...)
 		all = append(all, ValidateImportedResourceAuthorization(opts[0].Cloud, opts[0].Imported)...)
+		all = append(all, ValidateAWSVPCNATConsistency(opts[0].Cloud, comps, cfg)...)
 	}
 	return dedupeAndSortIssues(all)
 }
