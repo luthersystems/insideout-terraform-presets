@@ -16,7 +16,9 @@ import (
 //
 // Regional forwarding rules carry labels per the provider schema →
 // ScopeStyleLabels. Global forwarding rules use the parallel TF type
-// google_compute_global_forwarding_rule — not a Bundle 8 target.
+// google_compute_global_forwarding_rule (#384), processed by the
+// companion discoverer via the inverse filter against the same shared
+// compute.googleapis.com/ForwardingRule asset bucket.
 
 const (
 	computeForwardingRuleTFType    = "google_compute_forwarding_rule"
@@ -32,10 +34,9 @@ func (computeForwardingRuleDiscoverer) AssetType() string      { return computeF
 func (computeForwardingRuleDiscoverer) ScopeStyle() ScopeStyle { return ScopeStyleLabels }
 
 func (computeForwardingRuleDiscoverer) FromAsset(book addressBook, a gcpAssetResult, projectID string) imported.ImportedResource {
-	// Global forwarding rules belong to google_compute_global_forwarding_rule,
-	// a separate TF type not in Bundle 8 — skip by returning a zero
-	// ImportedResource. The orchestrator filters out empty Identity.Type
-	// rows before emitting.
+	// Global rows are processed by computeGlobalForwardingRuleDiscoverer
+	// (#384) via the same shared compute.googleapis.com/ForwardingRule
+	// asset bucket.
 	if isGlobalAddressOrForwardingRule(a) {
 		return imported.ImportedResource{}
 	}

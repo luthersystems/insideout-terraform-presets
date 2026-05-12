@@ -51,6 +51,8 @@ google_compute_address	Network Security
 google_compute_disk	Data Storage
 google_compute_firewall	Network Security
 google_compute_forwarding_rule	Network Security
+google_compute_global_address	Network Security
+google_compute_global_forwarding_rule	Network Security
 google_compute_instance	Virtual Machines
 google_compute_network	Network Security
 google_compute_router	Network Security
