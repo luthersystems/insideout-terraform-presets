@@ -35,13 +35,13 @@ func (vertexAIDatasetDiscoverer) AssetType() string      { return vertexAIDatase
 func (vertexAIDatasetDiscoverer) ScopeStyle() ScopeStyle { return ScopeStyleLabels }
 
 func (vertexAIDatasetDiscoverer) FromAsset(book addressBook, a gcpAssetResult, projectID string) imported.ImportedResource {
-	id := shortName(a.Name)
+	datasetID := shortName(a.Name)
 	loc := a.Location
 	if loc == "" {
 		loc = locationFromKMSAssetName(a.Name)
 	}
-	importID := fmt.Sprintf("projects/%s/locations/%s/datasets/%s", projectID, loc, id)
-	return makeImportedResource(book, vertexAIDatasetTFType, id, importID, projectID, loc, map[string]string{
+	importID := fmt.Sprintf("projects/%s/locations/%s/datasets/%s", projectID, loc, datasetID)
+	return makeImportedResource(book, vertexAIDatasetTFType, datasetID, importID, projectID, loc, map[string]string{
 		"asset_name": a.Name,
 	}, a.Labels)
 }

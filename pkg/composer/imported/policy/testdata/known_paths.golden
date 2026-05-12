@@ -155,7 +155,7 @@ google_cloudbuild_trigger	project	Identity		UIVisible	Never		AlwaysReplace
 google_cloudbuild_trigger	pubsub_config.service_account_email	Wiring	Security	RileyVisible	RelationshipOnly		
 google_cloudbuild_trigger	pubsub_config.topic	Wiring		RileyVisible	RelationshipOnly		
 google_cloudbuild_trigger	service_account	Wiring	Security	UIVisible	RelationshipOnly		
-google_cloudbuild_trigger	substitutions	Tuning		Hidden	SystemOnly	Redacted	
+google_cloudbuild_trigger	substitutions	Tuning		RileyVisible	RequiresApproval	Redacted	
 google_cloudbuild_trigger	timeouts	Tuning		Hidden	SystemOnly		
 google_cloudbuild_trigger	trigger_id	Identity		RileyVisible	Never		
 google_cloudbuild_trigger	webhook_config.secret	Wiring	Security	RileyVisible	RelationshipOnly	Redacted	
@@ -612,7 +612,7 @@ google_redis_instance	persistence_config.persistence_mode	Tuning	Reliability	UIV
 google_redis_instance	persistence_config.rdb_snapshot_period	Tuning	Reliability	RileyVisible	ChatSafe		
 google_redis_instance	project	Identity		UIVisible	Never		AlwaysReplace
 google_redis_instance	read_replicas_mode	Tuning	Reliability	RileyVisible	RequiresApproval		
-google_redis_instance	redis_configs	Tuning		Hidden	SystemOnly	Redacted	
+google_redis_instance	redis_configs	Tuning	Performance	RileyVisible	RequiresApproval		
 google_redis_instance	redis_version	Tuning	Reliability	UIVisible	RequiresApproval		
 google_redis_instance	region	Identity		UIVisible	Never		AlwaysReplace
 google_redis_instance	replica_count	Tuning	Reliability	UIVisible	RequiresApproval		

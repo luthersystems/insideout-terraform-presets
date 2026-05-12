@@ -52,7 +52,15 @@ var googleCloudbuildTriggerPolicy = Map{
 	// trips CodeTagFieldNotSystemOnly. Intentionally uncurated until
 	// the lint exemption lands (paired with the compute_instance
 	// follow-up).
-	"substitutions": tagPolicy(),
+	// Substitutions are user-supplied build variables — operator-
+	// controlled config, not labels. Values may carry secrets, so
+	// SensitivityRedacted keeps them out of raw diffs while leaving
+	// the keys visible. EditRequiresApproval because changes affect
+	// downstream build behavior.
+	"substitutions": {
+		Role: RoleTuning, Visibility: VisibilityRileyVisible,
+		Edit: EditRequiresApproval, Sensitivity: SensitivityRedacted,
+	},
 
 	// GitHub trigger source.
 	"github.owner": {

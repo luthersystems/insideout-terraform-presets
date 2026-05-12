@@ -36,12 +36,12 @@ func TestComputeSecurityPolicyDiscoverByID(t *testing.T) {
 	t.Parallel()
 	d := newComputeSecurityPolicyDiscoverer()
 	cases := []struct {
-		name, in, wantName string
-		wantErr            error
+		name, in, wantName, wantImportID string
+		wantErr                          error
 	}{
-		{name: "asset name", in: "//compute.googleapis.com/projects/p/global/securityPolicies/policy1", wantName: "policy1"},
-		{name: "import id", in: "projects/p/global/securityPolicies/policy1", wantName: "policy1"},
-		{name: "bare name", in: "policy1", wantName: "policy1"},
+		{name: "asset name", in: "//compute.googleapis.com/projects/p/global/securityPolicies/policy1", wantName: "policy1", wantImportID: "projects/real-proj/global/securityPolicies/policy1"},
+		{name: "import id", in: "projects/p/global/securityPolicies/policy1", wantName: "policy1", wantImportID: "projects/real-proj/global/securityPolicies/policy1"},
+		{name: "bare name", in: "policy1", wantName: "policy1", wantImportID: "projects/real-proj/global/securityPolicies/policy1"},
 		{name: "empty", in: "", wantErr: ErrNotSupported},
 		{name: "malformed slashed input without marker", in: "garbage/path", wantErr: ErrNotSupported},
 	}
@@ -60,6 +60,9 @@ func TestComputeSecurityPolicyDiscoverByID(t *testing.T) {
 			}
 			if got.Identity.NameHint != tc.wantName {
 				t.Errorf("NameHint=%q, want %q", got.Identity.NameHint, tc.wantName)
+			}
+			if got.Identity.ImportID != tc.wantImportID {
+				t.Errorf("ImportID=%q, want %q", got.Identity.ImportID, tc.wantImportID)
 			}
 		})
 	}

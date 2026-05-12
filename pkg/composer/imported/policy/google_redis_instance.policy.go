@@ -83,10 +83,20 @@ var googleRedisInstancePolicy = Map{
 		Edit: EditSystemOnly, Sensitivity: SensitivitySensitive,
 	},
 
-	// Operational knobs.
-	"redis_configs":           tagPolicy(),
-	"maintenance_version":     {Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible, Edit: EditChatSafe},
-	"maintenance_policy.weekly_maintenance_window.day": {Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible, Edit: EditChatSafe},
+	// Operational knobs. redis_configs is a kv map of Redis server
+	// tuning parameters (maxmemory-policy, notify-keyspace-events,
+	// etc.) — operator-controlled, not labels. RoleTuning with
+	// EditRequiresApproval (changes affect runtime behavior).
+	"redis_configs": {
+		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible,
+		Edit: EditRequiresApproval,
+	},
+	"maintenance_version": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+	},
+	"maintenance_policy.weekly_maintenance_window.day": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+	},
 	"persistence_config.persistence_mode": {
 		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityUIVisible, Edit: EditChatSafe,
 	},
