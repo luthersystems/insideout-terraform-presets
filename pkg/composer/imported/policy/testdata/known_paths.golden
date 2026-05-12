@@ -97,6 +97,219 @@ aws_sqs_queue	sqs_managed_sse_enabled	Tuning	Security	RileyVisible	RequiresAppro
 aws_sqs_queue	tags	Tuning		Hidden	SystemOnly	Redacted	
 aws_sqs_queue	tags_all	Tuning		Hidden	SystemOnly	Redacted	
 aws_sqs_queue	visibility_timeout_seconds	Tuning	Reliability	RileyVisible	ChatSafe		
+google_cloud_run_v2_service	annotations	Tuning		Hidden	SystemOnly	Redacted	
+google_cloud_run_v2_service	binary_authorization.policy	Wiring	Security	RileyVisible	RelationshipOnly		
+google_cloud_run_v2_service	binary_authorization.use_default	Tuning	Security	RileyVisible	ChatSafe		
+google_cloud_run_v2_service	custom_audiences	Tuning	Security	RileyVisible	RequiresApproval		
+google_cloud_run_v2_service	deletion_protection	Tuning	Reliability	UIVisible	RequiresApproval		
+google_cloud_run_v2_service	description	Tuning		RileyVisible	ChatSafe		
+google_cloud_run_v2_service	effective_annotations	Tuning		Hidden	SystemOnly	Redacted	
+google_cloud_run_v2_service	effective_labels	Tuning		Hidden	SystemOnly	Redacted	
+google_cloud_run_v2_service	id	Identity		RileyVisible	Never		
+google_cloud_run_v2_service	ingress	Tuning	Security	UIVisible	RequiresApproval		
+google_cloud_run_v2_service	invoker_iam_disabled	Tuning	Security	UIVisible	RequiresApproval		
+google_cloud_run_v2_service	labels	Tuning		Hidden	SystemOnly	Redacted	
+google_cloud_run_v2_service	launch_stage	Tuning		RileyVisible	ChatSafe		
+google_cloud_run_v2_service	location	Identity		UIVisible	Never		AlwaysReplace
+google_cloud_run_v2_service	name	Identity		UIVisible	Never		
+google_cloud_run_v2_service	project	Identity		UIVisible	Never		AlwaysReplace
+google_cloud_run_v2_service	template.containers.args	Tuning		RileyVisible	ChatSafe		
+google_cloud_run_v2_service	template.containers.command	Tuning		RileyVisible	ChatSafe		
+google_cloud_run_v2_service	template.containers.env.name	Tuning		RileyVisible	ChatSafe		
+google_cloud_run_v2_service	template.containers.env.value	Tuning		RileyVisible	RequiresApproval	Redacted	
+google_cloud_run_v2_service	template.containers.image	Tuning	Reliability	UIVisible	RequiresApproval		
+google_cloud_run_v2_service	template.containers.name	Identity		RileyVisible	Never		
+google_cloud_run_v2_service	template.containers.ports.container_port	Tuning		RileyVisible	ChatSafe		
+google_cloud_run_v2_service	template.containers.resources.limits	Tuning	Performance	RileyVisible	ChatSafe		
+google_cloud_run_v2_service	template.execution_environment	Tuning	Reliability	RileyVisible	ChatSafe		
+google_cloud_run_v2_service	template.max_instance_request_concurrency	Tuning	Performance	RileyVisible	ChatSafe		
+google_cloud_run_v2_service	template.revision	Identity		RileyVisible	Never		
+google_cloud_run_v2_service	template.scaling.max_instance_count	Tuning	Performance	UIVisible	ChatSafe		
+google_cloud_run_v2_service	template.scaling.min_instance_count	Tuning	Performance	UIVisible	ChatSafe		
+google_cloud_run_v2_service	template.service_account	Wiring	Security	UIVisible	RelationshipOnly		
+google_cloud_run_v2_service	template.timeout	Tuning	Reliability	RileyVisible	ChatSafe		
+google_cloud_run_v2_service	template.vpc_access.connector	Wiring	Reliability	RileyVisible	RelationshipOnly		
+google_cloud_run_v2_service	template.vpc_access.egress	Tuning	Security	RileyVisible	ChatSafe		
+google_cloud_run_v2_service	terraform_labels	Tuning		Hidden	SystemOnly	Redacted	
+google_cloud_run_v2_service	timeouts	Tuning		Hidden	SystemOnly		
+google_cloud_run_v2_service	traffic.percent	Tuning	Reliability	UIVisible	ChatSafe		
+google_cloud_run_v2_service	traffic.revision	Wiring	Reliability	RileyVisible	RelationshipOnly		
+google_cloud_run_v2_service	traffic.type	Tuning	Reliability	UIVisible	ChatSafe		
+google_cloudfunctions2_function	build_config.docker_repository	Wiring	Reliability	RileyVisible	RelationshipOnly		
+google_cloudfunctions2_function	build_config.entry_point	Tuning	Reliability	UIVisible	RequiresApproval		
+google_cloudfunctions2_function	build_config.environment_variables	Tuning		Hidden	SystemOnly	Redacted	
+google_cloudfunctions2_function	build_config.runtime	Tuning	Reliability	UIVisible	RequiresApproval		
+google_cloudfunctions2_function	build_config.service_account	Wiring	Security	RileyVisible	RelationshipOnly		
+google_cloudfunctions2_function	build_config.source.storage_source.bucket	Wiring		RileyVisible	RelationshipOnly		
+google_cloudfunctions2_function	build_config.source.storage_source.object	Tuning		RileyVisible	RequiresApproval		
+google_cloudfunctions2_function	description	Tuning		RileyVisible	ChatSafe		
+google_cloudfunctions2_function	effective_labels	Tuning		Hidden	SystemOnly	Redacted	
+google_cloudfunctions2_function	environment	Tuning		RileyVisible	Never		AlwaysReplace
+google_cloudfunctions2_function	event_trigger.event_type	Tuning		UIVisible	RequiresApproval		
+google_cloudfunctions2_function	event_trigger.pubsub_topic	Wiring		RileyVisible	RelationshipOnly		
+google_cloudfunctions2_function	event_trigger.retry_policy	Tuning	Reliability	RileyVisible	ChatSafe		
+google_cloudfunctions2_function	event_trigger.service_account_email	Wiring	Security	RileyVisible	RelationshipOnly		
+google_cloudfunctions2_function	event_trigger.trigger_region	Tuning		RileyVisible	ChatSafe		
+google_cloudfunctions2_function	id	Identity		RileyVisible	Never		
+google_cloudfunctions2_function	kms_key_name	Wiring	Security	RileyVisible	RelationshipOnly		AlwaysReplace
+google_cloudfunctions2_function	labels	Tuning		Hidden	SystemOnly	Redacted	
+google_cloudfunctions2_function	location	Identity		UIVisible	Never		AlwaysReplace
+google_cloudfunctions2_function	name	Identity		UIVisible	Never		
+google_cloudfunctions2_function	project	Identity		UIVisible	Never		AlwaysReplace
+google_cloudfunctions2_function	service_config.all_traffic_on_latest_revision	Tuning	Reliability	RileyVisible	ChatSafe		
+google_cloudfunctions2_function	service_config.available_cpu	Tuning	Performance	RileyVisible	ChatSafe		
+google_cloudfunctions2_function	service_config.available_memory	Tuning	Performance	RileyVisible	ChatSafe		
+google_cloudfunctions2_function	service_config.environment_variables	Tuning		Hidden	SystemOnly	Redacted	
+google_cloudfunctions2_function	service_config.ingress_settings	Tuning	Security	UIVisible	RequiresApproval		
+google_cloudfunctions2_function	service_config.max_instance_count	Tuning	Performance	UIVisible	ChatSafe		
+google_cloudfunctions2_function	service_config.max_instance_request_concurrency	Tuning	Performance	RileyVisible	ChatSafe		
+google_cloudfunctions2_function	service_config.min_instance_count	Tuning	Performance	UIVisible	ChatSafe		
+google_cloudfunctions2_function	service_config.service_account_email	Wiring	Security	UIVisible	RelationshipOnly		
+google_cloudfunctions2_function	service_config.timeout_seconds	Tuning	Reliability	RileyVisible	ChatSafe		
+google_cloudfunctions2_function	service_config.vpc_connector	Wiring	Reliability	RileyVisible	RelationshipOnly		
+google_cloudfunctions2_function	service_config.vpc_connector_egress_settings	Tuning	Security	RileyVisible	ChatSafe		
+google_cloudfunctions2_function	terraform_labels	Tuning		Hidden	SystemOnly	Redacted	
+google_cloudfunctions2_function	timeouts	Tuning		Hidden	SystemOnly		
+google_compute_address	address	Tuning		UIVisible	Never		AlwaysReplace
+google_compute_address	address_type	Tuning		RileyVisible	Never		AlwaysReplace
+google_compute_address	description	Tuning		RileyVisible	ChatSafe		
+google_compute_address	effective_labels	Tuning		Hidden	SystemOnly	Redacted	
+google_compute_address	id	Identity		RileyVisible	Never		
+google_compute_address	ip_version	Tuning		RileyVisible	Never		AlwaysReplace
+google_compute_address	labels	Tuning		Hidden	SystemOnly	Redacted	
+google_compute_address	name	Identity		UIVisible	Never		
+google_compute_address	network	Wiring	Reliability	RileyVisible	RelationshipOnly		AlwaysReplace
+google_compute_address	network_tier	Tuning	Performance	RileyVisible	RequiresApproval		MayReplace
+google_compute_address	prefix_length	Tuning		RileyVisible	Never		AlwaysReplace
+google_compute_address	project	Identity		UIVisible	Never		AlwaysReplace
+google_compute_address	purpose	Tuning		RileyVisible	Never		AlwaysReplace
+google_compute_address	region	Identity		UIVisible	Never		AlwaysReplace
+google_compute_address	self_link	Identity		RileyVisible	Never		
+google_compute_address	subnetwork	Wiring	Reliability	RileyVisible	RelationshipOnly		AlwaysReplace
+google_compute_address	terraform_labels	Tuning		Hidden	SystemOnly	Redacted	
+google_compute_address	timeouts	Tuning		Hidden	SystemOnly		
+google_compute_firewall	allow.ports	Tuning	Security	RileyVisible	RequiresApproval		
+google_compute_firewall	allow.protocol	Tuning	Security	RileyVisible	RequiresApproval		
+google_compute_firewall	deny.ports	Tuning	Security	RileyVisible	RequiresApproval		
+google_compute_firewall	deny.protocol	Tuning	Security	RileyVisible	RequiresApproval		
+google_compute_firewall	description	Tuning		RileyVisible	ChatSafe		
+google_compute_firewall	destination_ranges	Tuning	Security	RileyVisible	RequiresApproval		
+google_compute_firewall	direction	Tuning	Security	UIVisible	RequiresApproval		AlwaysReplace
+google_compute_firewall	disabled	Tuning	Security	RileyVisible	RequiresApproval		
+google_compute_firewall	enable_logging	Tuning	Security	RileyVisible	ChatSafe		
+google_compute_firewall	id	Identity		RileyVisible	Never		
+google_compute_firewall	log_config.metadata	Tuning	Security	RileyVisible	ChatSafe		
+google_compute_firewall	name	Identity		UIVisible	Never		
+google_compute_firewall	network	Wiring	Security	UIVisible	RelationshipOnly		AlwaysReplace
+google_compute_firewall	priority	Tuning	Security	RileyVisible	RequiresApproval		
+google_compute_firewall	project	Identity		UIVisible	Never		AlwaysReplace
+google_compute_firewall	self_link	Identity		RileyVisible	Never		
+google_compute_firewall	source_ranges	Tuning	Security	RileyVisible	RequiresApproval		
+google_compute_firewall	source_service_accounts	Wiring	Security	RileyVisible	RelationshipOnly		
+google_compute_firewall	source_tags	Tuning	Security	RileyVisible	RequiresApproval		
+google_compute_firewall	target_service_accounts	Wiring	Security	RileyVisible	RelationshipOnly		
+google_compute_firewall	target_tags	Tuning	Security	RileyVisible	RequiresApproval		
+google_compute_firewall	timeouts	Tuning		Hidden	SystemOnly		
+google_compute_forwarding_rule	all_ports	Tuning		RileyVisible	Never		AlwaysReplace
+google_compute_forwarding_rule	allow_global_access	Tuning	Reliability	RileyVisible	ChatSafe		
+google_compute_forwarding_rule	allow_psc_global_access	Tuning		RileyVisible	ChatSafe		
+google_compute_forwarding_rule	backend_service	Wiring	Reliability	UIVisible	RelationshipOnly		
+google_compute_forwarding_rule	description	Tuning		RileyVisible	ChatSafe		
+google_compute_forwarding_rule	effective_labels	Tuning		Hidden	SystemOnly	Redacted	
+google_compute_forwarding_rule	id	Identity		RileyVisible	Never		
+google_compute_forwarding_rule	ip_address	Tuning		UIVisible	Never		AlwaysReplace
+google_compute_forwarding_rule	ip_protocol	Tuning		RileyVisible	Never		AlwaysReplace
+google_compute_forwarding_rule	ip_version	Tuning		RileyVisible	Never		AlwaysReplace
+google_compute_forwarding_rule	labels	Tuning		Hidden	SystemOnly	Redacted	
+google_compute_forwarding_rule	load_balancing_scheme	Tuning	Reliability	UIVisible	Never		AlwaysReplace
+google_compute_forwarding_rule	name	Identity		UIVisible	Never		
+google_compute_forwarding_rule	network	Wiring	Reliability	RileyVisible	RelationshipOnly		AlwaysReplace
+google_compute_forwarding_rule	network_tier	Tuning	Performance	RileyVisible	RequiresApproval		MayReplace
+google_compute_forwarding_rule	port_range	Tuning		RileyVisible	RequiresApproval		MayReplace
+google_compute_forwarding_rule	ports	Tuning		RileyVisible	RequiresApproval		MayReplace
+google_compute_forwarding_rule	project	Identity		UIVisible	Never		AlwaysReplace
+google_compute_forwarding_rule	region	Identity		UIVisible	Never		AlwaysReplace
+google_compute_forwarding_rule	self_link	Identity		RileyVisible	Never		
+google_compute_forwarding_rule	service_label	Tuning		RileyVisible	RequiresApproval		
+google_compute_forwarding_rule	subnetwork	Wiring	Reliability	RileyVisible	RelationshipOnly		AlwaysReplace
+google_compute_forwarding_rule	target	Wiring	Reliability	UIVisible	RelationshipOnly		
+google_compute_forwarding_rule	terraform_labels	Tuning		Hidden	SystemOnly	Redacted	
+google_compute_forwarding_rule	timeouts	Tuning		Hidden	SystemOnly		
+google_compute_global_address	address	Tuning		UIVisible	Never		AlwaysReplace
+google_compute_global_address	address_type	Tuning		RileyVisible	Never		AlwaysReplace
+google_compute_global_address	description	Tuning		RileyVisible	ChatSafe		
+google_compute_global_address	effective_labels	Tuning		Hidden	SystemOnly	Redacted	
+google_compute_global_address	id	Identity		RileyVisible	Never		
+google_compute_global_address	ip_version	Tuning		RileyVisible	Never		AlwaysReplace
+google_compute_global_address	labels	Tuning		Hidden	SystemOnly	Redacted	
+google_compute_global_address	name	Identity		UIVisible	Never		
+google_compute_global_address	network	Wiring	Reliability	RileyVisible	RelationshipOnly		AlwaysReplace
+google_compute_global_address	prefix_length	Tuning		RileyVisible	Never		AlwaysReplace
+google_compute_global_address	project	Identity		UIVisible	Never		AlwaysReplace
+google_compute_global_address	purpose	Tuning		RileyVisible	Never		AlwaysReplace
+google_compute_global_address	self_link	Identity		RileyVisible	Never		
+google_compute_global_address	terraform_labels	Tuning		Hidden	SystemOnly	Redacted	
+google_compute_global_address	timeouts	Tuning		Hidden	SystemOnly		
+google_compute_global_forwarding_rule	description	Tuning		RileyVisible	ChatSafe		
+google_compute_global_forwarding_rule	effective_labels	Tuning		Hidden	SystemOnly	Redacted	
+google_compute_global_forwarding_rule	id	Identity		RileyVisible	Never		
+google_compute_global_forwarding_rule	ip_address	Tuning		UIVisible	Never		AlwaysReplace
+google_compute_global_forwarding_rule	ip_protocol	Tuning		RileyVisible	Never		AlwaysReplace
+google_compute_global_forwarding_rule	ip_version	Tuning		RileyVisible	Never		AlwaysReplace
+google_compute_global_forwarding_rule	labels	Tuning		Hidden	SystemOnly	Redacted	
+google_compute_global_forwarding_rule	load_balancing_scheme	Tuning	Reliability	UIVisible	Never		AlwaysReplace
+google_compute_global_forwarding_rule	name	Identity		UIVisible	Never		
+google_compute_global_forwarding_rule	network	Wiring	Reliability	RileyVisible	RelationshipOnly		AlwaysReplace
+google_compute_global_forwarding_rule	port_range	Tuning		RileyVisible	RequiresApproval		MayReplace
+google_compute_global_forwarding_rule	project	Identity		UIVisible	Never		AlwaysReplace
+google_compute_global_forwarding_rule	self_link	Identity		RileyVisible	Never		
+google_compute_global_forwarding_rule	subnetwork	Wiring	Reliability	RileyVisible	RelationshipOnly		AlwaysReplace
+google_compute_global_forwarding_rule	target	Wiring	Reliability	UIVisible	RelationshipOnly		
+google_compute_global_forwarding_rule	terraform_labels	Tuning		Hidden	SystemOnly	Redacted	
+google_compute_global_forwarding_rule	timeouts	Tuning		Hidden	SystemOnly		
+google_compute_instance	allow_stopping_for_update	Tuning		RileyVisible	ChatSafe		
+google_compute_instance	boot_disk.auto_delete	Tuning	Reliability	RileyVisible	ChatSafe		
+google_compute_instance	boot_disk.device_name	Identity		RileyVisible	Never		
+google_compute_instance	boot_disk.initialize_params.image	Tuning	Reliability	UIVisible	RequiresApproval		AlwaysReplace
+google_compute_instance	boot_disk.initialize_params.size	Tuning	Performance	RileyVisible	RequiresApproval		MayReplace
+google_compute_instance	boot_disk.initialize_params.type	Tuning	Performance	RileyVisible	RequiresApproval		MayReplace
+google_compute_instance	boot_disk.kms_key_self_link	Wiring	Security	RileyVisible	RelationshipOnly		AlwaysReplace
+google_compute_instance	boot_disk.source	Wiring	Reliability	RileyVisible	RelationshipOnly		AlwaysReplace
+google_compute_instance	can_ip_forward	Tuning	Security	RileyVisible	ChatSafe		
+google_compute_instance	deletion_protection	Tuning	Reliability	UIVisible	RequiresApproval		
+google_compute_instance	description	Tuning		RileyVisible	ChatSafe		
+google_compute_instance	desired_status	Tuning		UIVisible	RequiresApproval		
+google_compute_instance	effective_labels	Tuning		Hidden	SystemOnly	Redacted	
+google_compute_instance	enable_display	Tuning		RileyVisible	ChatSafe		
+google_compute_instance	hostname	Identity		RileyVisible	Never		AlwaysReplace
+google_compute_instance	id	Identity		RileyVisible	Never		
+google_compute_instance	labels	Tuning		Hidden	SystemOnly	Redacted	
+google_compute_instance	machine_type	Tuning	Performance	UIVisible	RequiresApproval		MayReplace
+google_compute_instance	metadata	Tuning	Security	RileyVisible	RequiresApproval	Redacted	
+google_compute_instance	metadata_startup_script	Tuning	Reliability	RileyVisible	RequiresApproval	Redacted	
+google_compute_instance	min_cpu_platform	Tuning	Performance	RileyVisible	ChatSafe		
+google_compute_instance	name	Identity		UIVisible	Never		
+google_compute_instance	network_interface.access_config.nat_ip	Tuning		RileyVisible	RequiresApproval		MayReplace
+google_compute_instance	network_interface.access_config.network_tier	Tuning	Performance	RileyVisible	RequiresApproval		MayReplace
+google_compute_instance	network_interface.network	Wiring	Reliability	UIVisible	RelationshipOnly		AlwaysReplace
+google_compute_instance	network_interface.network_ip	Tuning		RileyVisible	Never		AlwaysReplace
+google_compute_instance	network_interface.nic_type	Tuning	Performance	RileyVisible	Never		AlwaysReplace
+google_compute_instance	network_interface.subnetwork	Wiring	Reliability	UIVisible	RelationshipOnly		AlwaysReplace
+google_compute_instance	project	Identity		UIVisible	Never		AlwaysReplace
+google_compute_instance	resource_policies	Wiring		RileyVisible	RelationshipOnly		
+google_compute_instance	scheduling.automatic_restart	Tuning	Reliability	RileyVisible	ChatSafe		
+google_compute_instance	scheduling.on_host_maintenance	Tuning	Reliability	RileyVisible	ChatSafe		
+google_compute_instance	scheduling.preemptible	Tuning	Reliability	UIVisible	RequiresApproval		AlwaysReplace
+google_compute_instance	scheduling.provisioning_model	Tuning	Reliability	RileyVisible	RequiresApproval		AlwaysReplace
+google_compute_instance	self_link	Identity		RileyVisible	Never		
+google_compute_instance	service_account.email	Wiring	Security	UIVisible	RelationshipOnly		
+google_compute_instance	service_account.scopes	Tuning	Security	RileyVisible	RequiresApproval		
+google_compute_instance	shielded_instance_config.enable_integrity_monitoring	Tuning	Security	RileyVisible	RequiresApproval		
+google_compute_instance	shielded_instance_config.enable_secure_boot	Tuning	Security	RileyVisible	RequiresApproval		
+google_compute_instance	shielded_instance_config.enable_vtpm	Tuning	Security	RileyVisible	RequiresApproval		
+google_compute_instance	terraform_labels	Tuning		Hidden	SystemOnly	Redacted	
+google_compute_instance	timeouts	Tuning		Hidden	SystemOnly		
+google_compute_instance	zone	Identity		UIVisible	Never		AlwaysReplace
 google_compute_network	auto_create_subnetworks	Tuning	Reliability	RileyVisible	RequiresApproval		MayReplace
 google_compute_network	delete_default_routes_on_create	Tuning	Security	RileyVisible	Never		AlwaysReplace
 google_compute_network	description	Tuning		RileyVisible	ChatSafe		
@@ -111,6 +324,173 @@ google_compute_network	project	Identity		UIVisible	Never		AlwaysReplace
 google_compute_network	routing_mode	Tuning	Performance	RileyVisible	ChatSafe		
 google_compute_network	self_link	Identity		RileyVisible	Never		
 google_compute_network	timeouts	Tuning		Hidden	SystemOnly		
+google_compute_router	bgp.advertise_mode	Tuning	Reliability	RileyVisible	ChatSafe		
+google_compute_router	bgp.advertised_groups	Tuning	Reliability	RileyVisible	ChatSafe		
+google_compute_router	bgp.asn	Tuning	Reliability	RileyVisible	RequiresApproval		AlwaysReplace
+google_compute_router	bgp.keepalive_interval	Tuning	Reliability	RileyVisible	ChatSafe		
+google_compute_router	description	Tuning		RileyVisible	ChatSafe		
+google_compute_router	encrypted_interconnect_router	Tuning	Security	RileyVisible	Never		AlwaysReplace
+google_compute_router	id	Identity		RileyVisible	Never		
+google_compute_router	name	Identity		UIVisible	Never		
+google_compute_router	network	Wiring	Reliability	UIVisible	RelationshipOnly		AlwaysReplace
+google_compute_router	project	Identity		UIVisible	Never		AlwaysReplace
+google_compute_router	region	Identity		UIVisible	Never		AlwaysReplace
+google_compute_router	self_link	Identity		RileyVisible	Never		
+google_compute_router	timeouts	Tuning		Hidden	SystemOnly		
+google_compute_target_https_proxy	certificate_manager_certificates	Wiring	Security	UIVisible	RelationshipOnly		
+google_compute_target_https_proxy	certificate_map	Wiring	Security	RileyVisible	RelationshipOnly		
+google_compute_target_https_proxy	description	Tuning		RileyVisible	ChatSafe		
+google_compute_target_https_proxy	http_keep_alive_timeout_sec	Tuning	Performance	RileyVisible	ChatSafe		
+google_compute_target_https_proxy	id	Identity		RileyVisible	Never		
+google_compute_target_https_proxy	name	Identity		UIVisible	Never		
+google_compute_target_https_proxy	project	Identity		UIVisible	Never		AlwaysReplace
+google_compute_target_https_proxy	proxy_bind	Tuning		RileyVisible	Never		AlwaysReplace
+google_compute_target_https_proxy	quic_override	Tuning	Performance	RileyVisible	ChatSafe		
+google_compute_target_https_proxy	self_link	Identity		RileyVisible	Never		
+google_compute_target_https_proxy	server_tls_policy	Wiring	Security	RileyVisible	RelationshipOnly		
+google_compute_target_https_proxy	ssl_certificates	Wiring	Security	UIVisible	RelationshipOnly		
+google_compute_target_https_proxy	ssl_policy	Wiring	Security	RileyVisible	RelationshipOnly		
+google_compute_target_https_proxy	timeouts	Tuning		Hidden	SystemOnly		
+google_compute_target_https_proxy	tls_early_data	Tuning	Security	RileyVisible	RequiresApproval		
+google_compute_target_https_proxy	url_map	Wiring	Reliability	UIVisible	RelationshipOnly		
+google_compute_url_map	default_service	Wiring	Reliability	UIVisible	RelationshipOnly		
+google_compute_url_map	description	Tuning		RileyVisible	ChatSafe		
+google_compute_url_map	host_rule.hosts	Tuning	Reliability	UIVisible	RequiresApproval		
+google_compute_url_map	host_rule.path_matcher	Tuning	Reliability	RileyVisible	RequiresApproval		
+google_compute_url_map	id	Identity		RileyVisible	Never		
+google_compute_url_map	name	Identity		UIVisible	Never		
+google_compute_url_map	path_matcher.default_service	Wiring	Reliability	RileyVisible	RelationshipOnly		
+google_compute_url_map	path_matcher.name	Identity		RileyVisible	Never		
+google_compute_url_map	path_matcher.path_rule.paths	Tuning	Reliability	RileyVisible	RequiresApproval		
+google_compute_url_map	path_matcher.path_rule.service	Wiring	Reliability	RileyVisible	RelationshipOnly		
+google_compute_url_map	project	Identity		UIVisible	Never		AlwaysReplace
+google_compute_url_map	self_link	Identity		RileyVisible	Never		
+google_compute_url_map	timeouts	Tuning		Hidden	SystemOnly		
+google_container_cluster	database_encryption.key_name	Wiring	Security	RileyVisible	RelationshipOnly		
+google_container_cluster	database_encryption.state	Tuning	Security	UIVisible	RequiresApproval		
+google_container_cluster	datapath_provider	Tuning	Reliability	RileyVisible	Never		AlwaysReplace
+google_container_cluster	default_max_pods_per_node	Tuning	Performance	RileyVisible	Never		AlwaysReplace
+google_container_cluster	deletion_protection	Tuning	Reliability	UIVisible	RequiresApproval		
+google_container_cluster	description	Tuning		RileyVisible	ChatSafe		
+google_container_cluster	effective_labels	Tuning		Hidden	SystemOnly	Redacted	
+google_container_cluster	enable_autopilot	Tuning	Performance	UIVisible	Never		AlwaysReplace
+google_container_cluster	enable_intranode_visibility	Tuning	Security	RileyVisible	RequiresApproval		
+google_container_cluster	enable_legacy_abac	Tuning	Security	RileyVisible	RequiresApproval		
+google_container_cluster	enable_shielded_nodes	Tuning	Security	UIVisible	RequiresApproval		
+google_container_cluster	id	Identity		RileyVisible	Never		
+google_container_cluster	initial_node_count	Tuning	Performance	RileyVisible	Never		AlwaysReplace
+google_container_cluster	ip_allocation_policy.cluster_ipv4_cidr_block	Tuning	Reliability	RileyVisible	Never		AlwaysReplace
+google_container_cluster	ip_allocation_policy.cluster_secondary_range_name	Wiring		RileyVisible	Never		AlwaysReplace
+google_container_cluster	ip_allocation_policy.services_ipv4_cidr_block	Tuning	Reliability	RileyVisible	Never		AlwaysReplace
+google_container_cluster	ip_allocation_policy.services_secondary_range_name	Wiring		RileyVisible	Never		AlwaysReplace
+google_container_cluster	location	Identity		UIVisible	Never		AlwaysReplace
+google_container_cluster	master_auth.client_certificate_config.issue_client_certificate	Tuning	Security	RileyVisible	Never		AlwaysReplace
+google_container_cluster	min_master_version	Tuning	Reliability	UIVisible	RequiresApproval		
+google_container_cluster	name	Identity		UIVisible	Never		
+google_container_cluster	network	Wiring	Reliability	UIVisible	RelationshipOnly		AlwaysReplace
+google_container_cluster	networking_mode	Tuning	Reliability	UIVisible	Never		AlwaysReplace
+google_container_cluster	node_config.disk_size_gb	Tuning	Performance	RileyVisible	Never		AlwaysReplace
+google_container_cluster	node_config.disk_type	Tuning	Performance	RileyVisible	Never		AlwaysReplace
+google_container_cluster	node_config.machine_type	Tuning	Performance	UIVisible	Never		AlwaysReplace
+google_container_cluster	node_config.oauth_scopes	Tuning	Security	RileyVisible	Never		AlwaysReplace
+google_container_cluster	node_config.service_account	Wiring	Security	UIVisible	RelationshipOnly		AlwaysReplace
+google_container_cluster	node_version	Tuning	Reliability	UIVisible	RequiresApproval		
+google_container_cluster	private_cluster_config.enable_private_endpoint	Tuning	Security	UIVisible	RequiresApproval		
+google_container_cluster	private_cluster_config.enable_private_nodes	Tuning	Security	UIVisible	RequiresApproval		
+google_container_cluster	private_cluster_config.master_ipv4_cidr_block	Tuning		RileyVisible	Never		AlwaysReplace
+google_container_cluster	project	Identity		UIVisible	Never		AlwaysReplace
+google_container_cluster	release_channel.channel	Tuning	Reliability	UIVisible	RequiresApproval		
+google_container_cluster	remove_default_node_pool	Tuning		RileyVisible	Never		AlwaysReplace
+google_container_cluster	resource_labels	Tuning		Hidden	SystemOnly	Redacted	
+google_container_cluster	self_link	Identity		RileyVisible	Never		
+google_container_cluster	subnetwork	Wiring	Reliability	UIVisible	RelationshipOnly		AlwaysReplace
+google_container_cluster	terraform_labels	Tuning		Hidden	SystemOnly	Redacted	
+google_container_cluster	timeouts	Tuning		Hidden	SystemOnly		
+google_container_cluster	workload_identity_config.workload_pool	Wiring	Security	UIVisible	RelationshipOnly		
+google_container_node_pool	autoscaling.location_policy	Tuning		RileyVisible	ChatSafe		
+google_container_node_pool	autoscaling.max_node_count	Tuning	Performance	UIVisible	ChatSafe		
+google_container_node_pool	autoscaling.min_node_count	Tuning	Performance	UIVisible	ChatSafe		
+google_container_node_pool	autoscaling.total_max_node_count	Tuning	Performance	RileyVisible	ChatSafe		
+google_container_node_pool	autoscaling.total_min_node_count	Tuning	Performance	RileyVisible	ChatSafe		
+google_container_node_pool	cluster	Wiring	Reliability	UIVisible	RelationshipOnly		AlwaysReplace
+google_container_node_pool	id	Identity		RileyVisible	Never		
+google_container_node_pool	initial_node_count	Tuning	Performance	RileyVisible	Never		AlwaysReplace
+google_container_node_pool	location	Identity		UIVisible	Never		AlwaysReplace
+google_container_node_pool	management.auto_repair	Tuning	Reliability	UIVisible	ChatSafe		
+google_container_node_pool	management.auto_upgrade	Tuning	Reliability	UIVisible	ChatSafe		
+google_container_node_pool	max_pods_per_node	Tuning	Performance	RileyVisible	Never		AlwaysReplace
+google_container_node_pool	name	Identity		UIVisible	Never		
+google_container_node_pool	name_prefix	Identity		RileyVisible	Never		AlwaysReplace
+google_container_node_pool	node_config.disk_size_gb	Tuning	Performance	RileyVisible	Never		AlwaysReplace
+google_container_node_pool	node_config.disk_type	Tuning	Performance	RileyVisible	Never		AlwaysReplace
+google_container_node_pool	node_config.machine_type	Tuning	Performance	UIVisible	Never		AlwaysReplace
+google_container_node_pool	node_config.preemptible	Tuning	Reliability	RileyVisible	Never		AlwaysReplace
+google_container_node_pool	node_config.service_account	Wiring	Security	UIVisible	RelationshipOnly		AlwaysReplace
+google_container_node_pool	node_config.spot	Tuning	Reliability	RileyVisible	Never		AlwaysReplace
+google_container_node_pool	node_count	Tuning	Performance	UIVisible	ChatSafe		
+google_container_node_pool	node_locations	Tuning	Reliability	RileyVisible	RequiresApproval		
+google_container_node_pool	project	Identity		UIVisible	Never		AlwaysReplace
+google_container_node_pool	timeouts	Tuning		Hidden	SystemOnly		
+google_container_node_pool	upgrade_settings.max_surge	Tuning	Reliability	RileyVisible	ChatSafe		
+google_container_node_pool	upgrade_settings.max_unavailable	Tuning	Reliability	RileyVisible	ChatSafe		
+google_container_node_pool	upgrade_settings.strategy	Tuning	Reliability	RileyVisible	ChatSafe		
+google_container_node_pool	version	Tuning	Reliability	UIVisible	RequiresApproval		
+google_kms_crypto_key	crypto_key_backend	Wiring	Security	RileyVisible	RelationshipOnly		AlwaysReplace
+google_kms_crypto_key	destroy_scheduled_duration	Tuning	Reliability	RileyVisible	RequiresApproval		
+google_kms_crypto_key	effective_labels	Tuning		Hidden	SystemOnly	Redacted	
+google_kms_crypto_key	id	Identity		RileyVisible	Never		
+google_kms_crypto_key	import_only	Tuning	Security	RileyVisible	Never		AlwaysReplace
+google_kms_crypto_key	key_ring	Wiring	Security	UIVisible	RelationshipOnly		AlwaysReplace
+google_kms_crypto_key	labels	Tuning		Hidden	SystemOnly	Redacted	
+google_kms_crypto_key	name	Identity		UIVisible	Never		
+google_kms_crypto_key	purpose	Tuning	Security	UIVisible	Never		AlwaysReplace
+google_kms_crypto_key	rotation_period	Tuning	Security	RileyVisible	RequiresApproval		
+google_kms_crypto_key	skip_initial_version_creation	Tuning		RileyVisible	Never		AlwaysReplace
+google_kms_crypto_key	terraform_labels	Tuning		Hidden	SystemOnly	Redacted	
+google_kms_crypto_key	timeouts	Tuning		Hidden	SystemOnly		
+google_kms_crypto_key	version_template.algorithm	Tuning	Security	UIVisible	RequiresApproval		
+google_kms_crypto_key	version_template.protection_level	Tuning	Security	UIVisible	Never		AlwaysReplace
+google_kms_key_ring	id	Identity		RileyVisible	Never		
+google_kms_key_ring	location	Identity		UIVisible	Never		AlwaysReplace
+google_kms_key_ring	name	Identity		UIVisible	Never		
+google_kms_key_ring	project	Identity		UIVisible	Never		AlwaysReplace
+google_kms_key_ring	timeouts	Tuning		Hidden	SystemOnly		
+google_monitoring_alert_policy	alert_strategy.auto_close	Tuning	Reliability	RileyVisible	ChatSafe		
+google_monitoring_alert_policy	alert_strategy.notification_rate_limit.period	Tuning	Reliability	RileyVisible	ChatSafe		
+google_monitoring_alert_policy	combiner	Tuning	Reliability	UIVisible	RequiresApproval		
+google_monitoring_alert_policy	conditions.condition_threshold.comparison	Tuning	Reliability	RileyVisible	ChatSafe		
+google_monitoring_alert_policy	conditions.condition_threshold.duration	Tuning	Reliability	RileyVisible	ChatSafe		
+google_monitoring_alert_policy	conditions.condition_threshold.filter	Tuning	Reliability	RileyVisible	RequiresApproval		
+google_monitoring_alert_policy	conditions.condition_threshold.threshold_value	Tuning	Reliability	RileyVisible	RequiresApproval		
+google_monitoring_alert_policy	conditions.display_name	Identity		RileyVisible	ChatSafe		
+google_monitoring_alert_policy	display_name	Tuning		UIVisible	ChatSafe		
+google_monitoring_alert_policy	documentation.content	Tuning		RileyVisible	ChatSafe		
+google_monitoring_alert_policy	documentation.mime_type	Tuning		RileyVisible	ChatSafe		
+google_monitoring_alert_policy	documentation.subject	Tuning		RileyVisible	ChatSafe		
+google_monitoring_alert_policy	enabled	Tuning	Reliability	UIVisible	ChatSafe		
+google_monitoring_alert_policy	id	Identity		RileyVisible	Never		
+google_monitoring_alert_policy	name	Identity		UIVisible	Never		
+google_monitoring_alert_policy	notification_channels	Wiring	Reliability	UIVisible	RelationshipOnly		
+google_monitoring_alert_policy	project	Identity		UIVisible	Never		AlwaysReplace
+google_monitoring_alert_policy	severity	Tuning	Reliability	RileyVisible	ChatSafe		
+google_monitoring_alert_policy	timeouts	Tuning		Hidden	SystemOnly		
+google_monitoring_alert_policy	user_labels	Tuning		Hidden	SystemOnly	Redacted	
+google_monitoring_dashboard	dashboard_json	Tuning	Reliability	RileyVisible	ChatSafe		
+google_monitoring_dashboard	id	Identity		RileyVisible	Never		
+google_monitoring_dashboard	project	Identity		UIVisible	Never		AlwaysReplace
+google_monitoring_dashboard	timeouts	Tuning		Hidden	SystemOnly		
+google_monitoring_notification_channel	description	Tuning		RileyVisible	ChatSafe		
+google_monitoring_notification_channel	display_name	Tuning		UIVisible	ChatSafe		
+google_monitoring_notification_channel	enabled	Tuning	Reliability	UIVisible	ChatSafe		
+google_monitoring_notification_channel	force_delete	Tuning		RileyVisible	RequiresApproval		
+google_monitoring_notification_channel	id	Identity		RileyVisible	Never		
+google_monitoring_notification_channel	labels	Tuning		Hidden	SystemOnly	Redacted	
+google_monitoring_notification_channel	name	Identity		UIVisible	Never		
+google_monitoring_notification_channel	project	Identity		UIVisible	Never		AlwaysReplace
+google_monitoring_notification_channel	sensitive_labels	Tuning		Hidden	SystemOnly	Redacted	
+google_monitoring_notification_channel	timeouts	Tuning		Hidden	SystemOnly		
+google_monitoring_notification_channel	type	Identity		UIVisible	Never		AlwaysReplace
+google_monitoring_notification_channel	user_labels	Tuning		Hidden	SystemOnly	Redacted	
 google_pubsub_subscription	ack_deadline_seconds	Tuning	Reliability	RileyVisible	ChatSafe		
 google_pubsub_subscription	bigquery_config.drop_unknown_fields	Tuning		RileyVisible	ChatSafe		
 google_pubsub_subscription	bigquery_config.service_account_email	Wiring	Security	RileyVisible	RelationshipOnly		
@@ -190,6 +570,59 @@ google_secret_manager_secret	timeouts	Tuning		Hidden	SystemOnly
 google_secret_manager_secret	topics.name	Wiring	Reliability	RileyVisible	RelationshipOnly		
 google_secret_manager_secret	ttl	Tuning	Reliability	RileyVisible	ChatSafe		
 google_secret_manager_secret	version_destroy_ttl	Tuning	Reliability	RileyVisible	ChatSafe		
+google_service_account	account_id	Identity		UIVisible	Never		AlwaysReplace
+google_service_account	create_ignore_already_exists	Tuning		RileyVisible	RequiresApproval		
+google_service_account	description	Tuning		RileyVisible	ChatSafe		
+google_service_account	disabled	Tuning	Security	UIVisible	RequiresApproval		
+google_service_account	display_name	Tuning		UIVisible	ChatSafe		
+google_service_account	email	Identity		UIVisible	Never		
+google_service_account	id	Identity		RileyVisible	Never		
+google_service_account	member	Identity		RileyVisible	Never		
+google_service_account	name	Identity		UIVisible	Never		
+google_service_account	project	Identity		UIVisible	Never		AlwaysReplace
+google_service_account	timeouts	Tuning		Hidden	SystemOnly		
+google_service_account	unique_id	Identity		RileyVisible	Never		
+google_sql_database_instance	database_version	Identity		UIVisible	RequiresApproval		
+google_sql_database_instance	deletion_protection	Tuning	Reliability	UIVisible	RequiresApproval		
+google_sql_database_instance	encryption_key_name	Wiring	Security	UIVisible	RelationshipOnly		AlwaysReplace
+google_sql_database_instance	id	Identity		RileyVisible	Never		
+google_sql_database_instance	instance_type	Tuning		RileyVisible	Never		AlwaysReplace
+google_sql_database_instance	maintenance_version	Tuning	Reliability	RileyVisible	ChatSafe		
+google_sql_database_instance	master_instance_name	Wiring	Reliability	RileyVisible	RelationshipOnly		AlwaysReplace
+google_sql_database_instance	name	Identity		UIVisible	Never		
+google_sql_database_instance	project	Identity		UIVisible	Never		AlwaysReplace
+google_sql_database_instance	region	Identity		UIVisible	Never		AlwaysReplace
+google_sql_database_instance	root_password	Tuning	Security	Hidden	SystemOnly	Sensitive	
+google_sql_database_instance	self_link	Identity		RileyVisible	Never		
+google_sql_database_instance	settings.activation_policy	Tuning	Reliability	RileyVisible	ChatSafe		
+google_sql_database_instance	settings.availability_type	Tuning	Reliability	UIVisible	RequiresApproval		
+google_sql_database_instance	settings.backup_configuration.backup_retention_settings.retained_backups	Tuning	Reliability	RileyVisible	ChatSafe		
+google_sql_database_instance	settings.backup_configuration.enabled	Tuning	Reliability	UIVisible	ChatSafe		
+google_sql_database_instance	settings.backup_configuration.point_in_time_recovery_enabled	Tuning	Reliability	UIVisible	ChatSafe		
+google_sql_database_instance	settings.backup_configuration.start_time	Tuning	Reliability	RileyVisible	ChatSafe		
+google_sql_database_instance	settings.backup_configuration.transaction_log_retention_days	Tuning	Reliability	RileyVisible	ChatSafe		
+google_sql_database_instance	settings.database_flags.name	Tuning		RileyVisible	ChatSafe		
+google_sql_database_instance	settings.database_flags.value	Tuning		RileyVisible	RequiresApproval		
+google_sql_database_instance	settings.deletion_protection_enabled	Tuning	Reliability	UIVisible	RequiresApproval		
+google_sql_database_instance	settings.disk_autoresize	Tuning	Reliability	RileyVisible	ChatSafe		
+google_sql_database_instance	settings.disk_autoresize_limit	Tuning	Reliability	RileyVisible	ChatSafe		
+google_sql_database_instance	settings.disk_size	Tuning	Performance	UIVisible	RequiresApproval		
+google_sql_database_instance	settings.disk_type	Tuning	Performance	RileyVisible	Never		AlwaysReplace
+google_sql_database_instance	settings.edition	Tuning	Reliability	UIVisible	RequiresApproval		
+google_sql_database_instance	settings.insights_config.query_insights_enabled	Tuning	Reliability	RileyVisible	ChatSafe		
+google_sql_database_instance	settings.ip_configuration.allocated_ip_range	Wiring		RileyVisible	RelationshipOnly		
+google_sql_database_instance	settings.ip_configuration.authorized_networks.name	Tuning		RileyVisible	ChatSafe		
+google_sql_database_instance	settings.ip_configuration.authorized_networks.value	Tuning	Security	RileyVisible	RequiresApproval		
+google_sql_database_instance	settings.ip_configuration.ipv4_enabled	Tuning	Security	UIVisible	RequiresApproval		
+google_sql_database_instance	settings.ip_configuration.private_network	Wiring	Security	UIVisible	RelationshipOnly		
+google_sql_database_instance	settings.ip_configuration.ssl_mode	Tuning	Security	UIVisible	RequiresApproval		
+google_sql_database_instance	settings.maintenance_window.day	Tuning	Reliability	RileyVisible	ChatSafe		
+google_sql_database_instance	settings.maintenance_window.hour	Tuning	Reliability	RileyVisible	ChatSafe		
+google_sql_database_instance	settings.maintenance_window.update_track	Tuning	Reliability	RileyVisible	ChatSafe		
+google_sql_database_instance	settings.pricing_plan	Tuning		RileyVisible	RequiresApproval		
+google_sql_database_instance	settings.tier	Tuning	Performance	UIVisible	RequiresApproval		
+google_sql_database_instance	settings.user_labels	Tuning		Hidden	SystemOnly	Redacted	
+google_sql_database_instance	timeouts	Tuning		Hidden	SystemOnly		
 google_storage_bucket	autoclass.enabled	Tuning	Performance	RileyVisible	ChatSafe		
 google_storage_bucket	cors.max_age_seconds	Tuning		RileyVisible	ChatSafe		
 google_storage_bucket	cors.method	Tuning		RileyVisible	ChatSafe		
