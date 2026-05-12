@@ -8,18 +8,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// awsVPCNATCfg builds the minimal *Config needed for the validator's input
-// shape — only AWSVPC.EnableNATGateway matters here. Kept inline so the
-// tests don't reach into the cfgWithAWSVPC helper from mapper_test.go and
-// stay self-contained.
+// awsVPCNATCfg is a thin shim over cfgWithAWSVPC (mapper_test.go:182) that
+// only sets EnableNATGateway — the only field this validator inspects.
+// Reuse keeps the test refactor-resilient: any future field added to
+// Config.AWSVPC only needs to touch the shared helper.
 func awsVPCNATCfg(enable *bool) *Config {
-	c := &Config{}
-	c.AWSVPC = &struct {
-		SingleNATGateway *bool `json:"singleNatGateway,omitempty"`
-		EnableNATGateway *bool `json:"enableNatGateway,omitempty"`
-		AZCount          *int  `json:"azCount,omitempty"`
-	}{EnableNATGateway: enable}
-	return c
+	return cfgWithAWSVPC(nil, enable, nil)
 }
 
 // TestValidateAWSVPCNATConsistency pins every branch of the #389 validator.
@@ -82,13 +76,17 @@ func TestValidateAWSVPCNATConsistency(t *testing.T) {
 				require.Empty(t, got, "expected no issues, got %#v", got)
 				return
 			}
+			// require gates the indexing into got[0]; the per-field checks
+			// below are the assertions under test and use assert so a
+			// single mismatch surfaces every other field-level discrepancy
+			// in one run (per golang-guidance §13).
 			require.Len(t, got, 1, "expected exactly one issue")
-			require.Equal(t, "aws_vpc_stale_nat_gateway", got[0].Code)
-			require.Equal(t, "cfg.aws_vpc.enable_nat_gateway", got[0].Field)
-			require.Equal(t, "true", got[0].Value)
-			require.NotEmpty(t, got[0].Reason)
-			require.NotEmpty(t, got[0].Suggestion)
-			require.Contains(t, got[0].Reason, "#389", "reason should reference the issue so downstream callers can find context")
+			assert.Equal(t, "aws_vpc_stale_nat_gateway", got[0].Code)
+			assert.Equal(t, "cfg.aws_vpc.enable_nat_gateway", got[0].Field)
+			assert.Equal(t, "true", got[0].Value)
+			assert.NotEmpty(t, got[0].Reason)
+			assert.NotEmpty(t, got[0].Suggestion)
+			assert.Contains(t, got[0].Reason, "#389", "reason should reference the issue so downstream callers can find context")
 		})
 	}
 }
@@ -172,6 +170,64 @@ func TestComposeStackWithIssues_AWSVPCStaleNATGateway_Issue389(t *testing.T) {
 			"error should name the failing field so callers can route on it; got: %v", err)
 		assert.Contains(t, err.Error(), "#389",
 			"error should carry the issue reference; got: %v", err)
+	})
+}
+
+// findIssue returns the first issue with the given code, or nil. Used to
+// keep the cloud-resolution subtests below readable without growing a full
+// suite-level helper.
+func findIssue(issues []ValidationIssue, code string) *ValidationIssue {
+	for i := range issues {
+		if issues[i].Code == code {
+			return &issues[i]
+		}
+	}
+	return nil
+}
+
+// TestValidateAll_AWSVPCStaleNATGateway_CloudResolution locks in BOTH halves
+// of the cloud-resolution contract that ValidateAll uses to gate the AWS-VPC
+// cross-field check:
+//
+//  1. No-opts fallback (the original gap): dry-run callers (per
+//     ValidateAll's docstring) pass no ComposeStackOpts; the validator
+//     must still run when Comps.Cloud carries the cloud identity.
+//  2. Explicit-opts precedence: when both opts.Cloud and Comps.Cloud are
+//     present, opts.Cloud wins. Mirrors ValidateOpts's behaviour
+//     (validate_gcp_project.go:30-32); a regression that read Comps.Cloud
+//     unconditionally would slip past test 1 alone.
+func TestValidateAll_AWSVPCStaleNATGateway_CloudResolution(t *testing.T) {
+	t.Parallel()
+	boolPtr := func(v bool) *bool { return &v }
+
+	t.Run("no opts: fallback to Comps.Cloud (AWS-shaped bug fires)", func(t *testing.T) {
+		t.Parallel()
+		comps := &Components{Cloud: "AWS", AWSVPC: "Public VPC"}
+		cfg := awsVPCNATCfg(boolPtr(true))
+
+		issues := ValidateAll(comps, cfg, nil, nil, nil, nil)
+
+		got := findIssue(issues, "aws_vpc_stale_nat_gateway")
+		require.NotNil(t, got, "ValidateAll(no opts) must emit aws_vpc_stale_nat_gateway when Comps.Cloud=AWS; got: %#v", issues)
+		assert.Equal(t, "cfg.aws_vpc.enable_nat_gateway", got.Field)
+	})
+
+	t.Run("explicit opts.Cloud=gcp wins over Comps.Cloud=AWS (no AWS issue emitted)", func(t *testing.T) {
+		t.Parallel()
+		// Mismatch case: opts.Cloud must override Comps.Cloud. The
+		// composer's chat-preview path can deliberately pass an opts.Cloud
+		// that differs from leftover Comps.Cloud (see ValidateOpts test
+		// TestValidateOpts/"opts.Cloud=aws is a no-op even when
+		// Comps.Cloud=GCP" at validate_gcp_project_test.go:81-92). A
+		// regression that read Comps.Cloud unconditionally for the AWS
+		// check would emit a spurious aws_vpc_stale_nat_gateway here.
+		comps := &Components{Cloud: "AWS", AWSVPC: "Public VPC"}
+		cfg := awsVPCNATCfg(boolPtr(true))
+
+		issues := ValidateAll(comps, cfg, nil, nil, nil, nil, ComposeStackOpts{Cloud: "gcp"})
+
+		got := findIssue(issues, "aws_vpc_stale_nat_gateway")
+		assert.Nil(t, got, "explicit opts.Cloud=gcp must suppress the AWS-side check even when Comps.Cloud=AWS; got: %#v", issues)
 	})
 }
 
