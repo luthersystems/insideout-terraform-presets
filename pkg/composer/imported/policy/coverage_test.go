@@ -22,20 +22,41 @@ import (
 // runs don't observe each other through RegisteredTypes() or LintAll().
 const syntheticTypePrefix = "policy_test_"
 
-// phase1Types pins the exact set of Phase 1 import resource types that
-// must have a Layer 2 policy registered. Adding or removing a type
-// requires updating this list — the diff makes the surface change
-// explicit. Mirrors generated/registry_test.go:TestRegistry_AllTenPhase1Registered.
+// phase1Types pins the exact set of import resource types that must
+// have a Layer 2 policy registered. Adding or removing a type requires
+// updating this list — the diff makes the surface change explicit. The
+// name "phase1" predates Bundle 9 (#385) which expanded GCP coverage
+// from 5 to 25 types; rename to coveredTypes is a future follow-up.
 var phase1Types = []string{
 	"aws_cloudwatch_log_group",
 	"aws_dynamodb_table",
 	"aws_lambda_function",
 	"aws_secretsmanager_secret",
 	"aws_sqs_queue",
+	"google_cloud_run_v2_service",
+	"google_cloudfunctions2_function",
+	"google_compute_address",
+	"google_compute_firewall",
+	"google_compute_forwarding_rule",
+	"google_compute_global_address",
+	"google_compute_global_forwarding_rule",
+	"google_compute_instance",
 	"google_compute_network",
+	"google_compute_router",
+	"google_compute_target_https_proxy",
+	"google_compute_url_map",
+	"google_container_cluster",
+	"google_container_node_pool",
+	"google_kms_crypto_key",
+	"google_kms_key_ring",
+	"google_monitoring_alert_policy",
+	"google_monitoring_dashboard",
+	"google_monitoring_notification_channel",
 	"google_pubsub_subscription",
 	"google_pubsub_topic",
 	"google_secret_manager_secret",
+	"google_service_account",
+	"google_sql_database_instance",
 	"google_storage_bucket",
 }
 

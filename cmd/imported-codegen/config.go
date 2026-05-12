@@ -10,13 +10,46 @@ var WantedAWS = []string{
 	"aws_lambda_function",
 }
 
-// WantedGoogle lists the Phase 1 GCP resource types.
+// WantedGoogle lists the GCP resource types we generate Layer 1 structs
+// for. Bundle 9 (#385) expanded coverage from 5 Phase-1 types to 25 so
+// the composer's typed-Attrs path (imported_emit.go), cross-tier
+// validator (validate_cross_tier.go), and policy lint
+// (pkg/composer/imported/policy) treat them as first-class instead of
+// falling through to the opaque-emit branch.
+//
+// API Gateway types (google_api_gateway_api, _api_config, _gateway) are
+// intentionally omitted: they live in the hashicorp/google-beta
+// provider, not hashicorp/google, and the codegen filter is keyed on a
+// single provider source today. Adding them is a follow-up (track as
+// #385's google-beta-provider note) — until then they continue
+// emitting via the opaque-attr fallback in imported_emit.go and remain
+// in the labelableGCP static allowlist for taggable().
 var WantedGoogle = []string{
-	"google_storage_bucket",
+	"google_cloud_run_v2_service",
+	"google_cloudfunctions2_function",
+	"google_compute_address",
+	"google_compute_firewall",
+	"google_compute_forwarding_rule",
+	"google_compute_global_address",
+	"google_compute_global_forwarding_rule",
+	"google_compute_instance",
 	"google_compute_network",
-	"google_secret_manager_secret",
-	"google_pubsub_topic",
+	"google_compute_router",
+	"google_compute_target_https_proxy",
+	"google_compute_url_map",
+	"google_container_cluster",
+	"google_container_node_pool",
+	"google_kms_crypto_key",
+	"google_kms_key_ring",
+	"google_monitoring_alert_policy",
+	"google_monitoring_dashboard",
+	"google_monitoring_notification_channel",
 	"google_pubsub_subscription",
+	"google_pubsub_topic",
+	"google_secret_manager_secret",
+	"google_service_account",
+	"google_sql_database_instance",
+	"google_storage_bucket",
 }
 
 // AWSProviderSource is the Terraform Registry source string for the AWS
