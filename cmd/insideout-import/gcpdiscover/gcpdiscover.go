@@ -33,6 +33,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -50,6 +51,14 @@ import (
 // Cloud Asset API's product naming so consumers know what the events
 // represent.
 const gcpServiceSlug = "cloud_asset_inventory"
+
+// nonCAIServiceSlug is the progress-event service slug for the
+// post-CAI phase that calls Logging / SQL Admin / Identity Toolkit
+// APIs (#382, #383, #392). Separate slug so progress consumers can
+// attribute service_start / service_finish events correctly even when
+// non-CAI types are interleaved with CAI ones in the same DiscoverTypes
+// call.
+const nonCAIServiceSlug = "gcp_non_cai"
 
 // ScopeStyle identifies how an asset-type is scoped to the operator's
 // stack project inside Cloud Asset Inventory queries. The aggregator
@@ -406,6 +415,16 @@ func (g *GCPDiscoverer) DiscoverTypes(ctx context.Context, types []string, args 
 				args.Emitter.ServiceFinish(nonCAIServiceSlug, "", 0, time.Since(nonCAIStart))
 				return nil, fmt.Errorf("discoverer %q reports ScopeStyleNonCAI but does not implement nonCAIDiscoverer", d.ResourceType())
 			}
+			// Surface nil-lister silent-skip per /review P1 — the
+			// per-discoverer ListNonCAI tolerates a nil lister (lets
+			// unit tests skip wiring), but in production this means
+			// the type's resources are silently absent from the
+			// output. Warn so a misconfigured Real* constructor at
+			// main.go construction doesn't quietly drop a type the
+			// user selected.
+			if !nonCAIDiscovererHasLister(d) {
+				fmt.Fprintf(os.Stderr, "WARN: %s: non-CAI lister unavailable; type will be silently skipped (check Real* lister construction at startup)\n", d.ResourceType())
+			}
 			rs, err := nd.ListNonCAI(ctx, g.projectID, args.Project, out)
 			if err != nil {
 				args.Emitter.ServiceFinish(nonCAIServiceSlug, "", len(nonCAIResults), time.Since(nonCAIStart))
@@ -432,13 +451,30 @@ func (g *GCPDiscoverer) DiscoverTypes(ctx context.Context, types []string, args 
 	return out, nil
 }
 
-// nonCAIServiceSlug is the progress-event service slug for the
-// post-CAI phase that calls Logging / SQL Admin / Identity Toolkit
-// APIs (#382, #383, #392). Separate slug so progress consumers can
-// attribute service_start / service_finish events correctly even when
-// non-CAI types are interleaved with CAI ones in the same DiscoverTypes
-// call.
-const nonCAIServiceSlug = "gcp_non_cai"
+// nonCAIDiscovererHasLister checks each non-CAI discoverer's
+// per-type lister field via a type-switch. Used by DiscoverTypes to
+// surface a startup warning when a Real* lister was constructed nil
+// (transient auth failure) but the discoverer still got registered.
+//
+// Adding a new non-CAI type requires extending this switch — the
+// default-case warning ("no lister-check wired") fires loudly so the
+// gap is caught before live smoke. The sqlUserDiscoverer's nil-lister
+// branch is the load-bearing case: sql_user is the only non-CAI type
+// that depends on CAI priorResults, so a silent skip there would
+// puzzle operators ("I have SQL instances but no users discovered").
+func nonCAIDiscovererHasLister(d Discoverer) bool {
+	switch v := d.(type) {
+	case *loggingProjectSinkDiscoverer:
+		return v.lister != nil
+	case *sqlUserDiscoverer:
+		return v.lister != nil
+	case *identityPlatformConfigDiscoverer:
+		return v.lister != nil
+	default:
+		fmt.Fprintf(os.Stderr, "WARN: %s: no lister-check wired in nonCAIDiscovererHasLister — extend the switch when adding a non-CAI type\n", d.ResourceType())
+		return true // assume lister exists; the per-discoverer nil-check will catch it downstream
+	}
+}
 
 // DiscoverByID dispatches a per-ID lookup to the discoverer registered for
 // the given Terraform type. The orchestrator's dep-chase loop calls this

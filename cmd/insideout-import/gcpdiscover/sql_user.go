@@ -3,6 +3,7 @@ package gcpdiscover
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
@@ -72,9 +73,11 @@ func (d *sqlUserDiscoverer) ListNonCAI(ctx context.Context, projectID, _ string,
 		instance := prior.Identity.NameHint
 		users, err := d.lister.ListSQLUsers(ctx, projectID, instance)
 		if err != nil {
-			// Soft-fail: skip this instance and continue. The
-			// per-instance error is structural noise unless every
-			// instance fails (caught by the systemic auth path).
+			// Soft-fail per #383: skip this instance and continue,
+			// but log so a 5-of-5 systemic failure mode surfaces
+			// (e.g. quota / auth on the sqladmin API). The
+			// per-instance error is otherwise structural noise.
+			fmt.Fprintf(os.Stderr, "WARN: sql_user: list failed for instance %q in project %q (continuing): %v\n", instance, projectID, err)
 			continue
 		}
 		for _, u := range users {

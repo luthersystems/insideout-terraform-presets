@@ -3,7 +3,6 @@ package gcpdiscover
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
@@ -74,7 +73,12 @@ func (d *loggingProjectSinkDiscoverer) ListNonCAI(ctx context.Context, projectID
 		if isBuiltinLoggingSink(s.Name) {
 			continue
 		}
-		if stackProject != "" && !strings.Contains(s.Name, stackProject) {
+		// Re-use the same trailing-segment name-prefix matcher the
+		// CAI orchestrator's name-prefix bucket uses (#380). Loose
+		// substring matching would let a sink named
+		// `other-stack-io-foo-bar` slip through when stackProject is
+		// `io-foo` even though the leading prefix shouldn't claim it.
+		if stackProject != "" && !matchesNamePrefix(s.FullName, stackProject) {
 			continue
 		}
 		importID := s.Name

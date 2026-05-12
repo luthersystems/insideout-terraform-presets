@@ -43,23 +43,26 @@ type gcpLoggingSinkLister interface {
 	ListSinks(ctx context.Context, projectID string) ([]gcpLoggingSink, error)
 }
 
-// realLoggingSinkLister wraps the google.golang.org/api/logging/v2 client.
-type realLoggingSinkLister struct {
+// RealLoggingSinkLister wraps the google.golang.org/api/logging/v2 client.
+type RealLoggingSinkLister struct {
 	svc *logging.Service
 }
 
 // NewRealLoggingSinkLister constructs a sink lister backed by ADC.
 // Returns nil + wrapped error on auth setup failure so the orchestrator
-// can surface an actionable message (#365 pattern).
-func NewRealLoggingSinkLister(ctx context.Context) (*realLoggingSinkLister, error) {
+// can surface an actionable message (#365 pattern). Mirrors the
+// *RealAssetSearcher export pattern in searcher.go so callers in
+// cmd/insideout-import can store the concrete type if they want
+// lifecycle control.
+func NewRealLoggingSinkLister(ctx context.Context) (*RealLoggingSinkLister, error) {
 	svc, err := logging.NewService(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("create logging client: %w", err)
 	}
-	return &realLoggingSinkLister{svc: svc}, nil
+	return &RealLoggingSinkLister{svc: svc}, nil
 }
 
-func (l *realLoggingSinkLister) ListSinks(ctx context.Context, projectID string) ([]gcpLoggingSink, error) {
+func (l *RealLoggingSinkLister) ListSinks(ctx context.Context, projectID string) ([]gcpLoggingSink, error) {
 	if l.svc == nil {
 		return nil, errors.New("logging client closed")
 	}
@@ -106,19 +109,19 @@ type gcpSQLUserLister interface {
 	ListSQLUsers(ctx context.Context, projectID, instance string) ([]gcpSQLUser, error)
 }
 
-type realSQLUserLister struct {
+type RealSQLUserLister struct {
 	svc *sqladmin.Service
 }
 
-func NewRealSQLUserLister(ctx context.Context) (*realSQLUserLister, error) {
+func NewRealSQLUserLister(ctx context.Context) (*RealSQLUserLister, error) {
 	svc, err := sqladmin.NewService(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("create sqladmin client: %w", err)
 	}
-	return &realSQLUserLister{svc: svc}, nil
+	return &RealSQLUserLister{svc: svc}, nil
 }
 
-func (l *realSQLUserLister) ListSQLUsers(ctx context.Context, projectID, instance string) ([]gcpSQLUser, error) {
+func (l *RealSQLUserLister) ListSQLUsers(ctx context.Context, projectID, instance string) ([]gcpSQLUser, error) {
 	if l.svc == nil {
 		return nil, errors.New("sqladmin client closed")
 	}
@@ -159,19 +162,19 @@ type gcpIdentityPlatformConfigLister interface {
 	GetIdentityPlatformConfig(ctx context.Context, projectID string) (*gcpIdentityPlatformConfig, error)
 }
 
-type realIdentityPlatformConfigLister struct {
+type RealIdentityPlatformConfigLister struct {
 	svc *identitytoolkit.Service
 }
 
-func NewRealIdentityPlatformConfigLister(ctx context.Context) (*realIdentityPlatformConfigLister, error) {
+func NewRealIdentityPlatformConfigLister(ctx context.Context) (*RealIdentityPlatformConfigLister, error) {
 	svc, err := identitytoolkit.NewService(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("create identitytoolkit client: %w", err)
 	}
-	return &realIdentityPlatformConfigLister{svc: svc}, nil
+	return &RealIdentityPlatformConfigLister{svc: svc}, nil
 }
 
-func (l *realIdentityPlatformConfigLister) GetIdentityPlatformConfig(ctx context.Context, projectID string) (*gcpIdentityPlatformConfig, error) {
+func (l *RealIdentityPlatformConfigLister) GetIdentityPlatformConfig(ctx context.Context, projectID string) (*gcpIdentityPlatformConfig, error) {
 	if l.svc == nil {
 		return nil, errors.New("identitytoolkit client closed")
 	}

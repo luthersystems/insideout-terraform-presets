@@ -37,6 +37,32 @@ func TestLoggingProjectSinkListNonCAI_FiltersBuiltinsAndProject(t *testing.T) {
 	}
 }
 
+// TestLoggingProjectSinkListNonCAI_RejectsLeadingProjectsSegmentSpuriousMatch
+// pins the /review fix that swapped strings.Contains for the
+// trailing-segment matchesNamePrefix helper. The leading
+// "projects/<gcp-project-id>/sinks/..." path segment could otherwise
+// match a sink whose own short name doesn't actually carry the stack
+// project — if the gcp-project-id happened to contain "io-foo" as a
+// substring, the sink would be incorrectly attributed.
+func TestLoggingProjectSinkListNonCAI_RejectsLeadingProjectsSegmentSpuriousMatch(t *testing.T) {
+	t.Parallel()
+	fake := &fakeLoggingSinkLister{
+		sinks: []gcpLoggingSink{
+			// FullName's leading projects/ segment contains "io-foo"
+			// but the trailing sink name does NOT — must be filtered.
+			{Name: "audit-sink", FullName: "projects/io-foo-prod/sinks/audit-sink"},
+		},
+	}
+	d := newLoggingProjectSinkDiscoverer(fake).(*loggingProjectSinkDiscoverer)
+	got, err := d.ListNonCAI(context.Background(), "io-foo-prod", "io-foo", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 0 {
+		t.Errorf("got %d sinks, want 0 — leading projects/ segment must not falsely attribute", len(got))
+	}
+}
+
 func TestLoggingProjectSinkListNonCAI_NilListerTolerated(t *testing.T) {
 	t.Parallel()
 	d := newLoggingProjectSinkDiscoverer(nil).(*loggingProjectSinkDiscoverer)
