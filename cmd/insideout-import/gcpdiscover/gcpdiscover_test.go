@@ -50,6 +50,11 @@ var expectedRegisteredTypes = map[string]bool{
 	"google_monitoring_dashboard":            false,
 	"google_monitoring_alert_policy":         false,
 	"google_monitoring_notification_channel": false,
+	// Bundle 10 — preset gap closers (#390).
+	"google_compute_security_policy": false,
+	"google_redis_instance":          false,
+	"google_vertex_ai_dataset":       false,
+	"google_cloudbuild_trigger":      false,
 }
 
 func TestNewGCPDiscoverer_RegistersExpectedTypes(t *testing.T) {
@@ -685,6 +690,11 @@ var expectedScopeStyle = map[string]ScopeStyle{
 	"google_monitoring_dashboard":            ScopeStyleNamePrefix, // dashboards have no labels (#377)
 	"google_monitoring_alert_policy":         ScopeStyleNamePrefix, // alert policies have no labels (#377)
 	"google_monitoring_notification_channel": ScopeStyleNamePrefix, // notification channels have no labels (#377)
+	// Bundle 10 — preset gap closers (#390).
+	"google_compute_security_policy": ScopeStyleNamePrefix, // Cloud Armor policies have no labels (#390)
+	"google_redis_instance":          ScopeStyleLabels,     // Memorystore Redis carries labels (#390)
+	"google_vertex_ai_dataset":       ScopeStyleLabels,     // Vertex AI datasets carry labels (#390)
+	"google_cloudbuild_trigger":      ScopeStyleNamePrefix, // Cloud Build triggers have no labels (#390)
 }
 
 // TestScopeStyle_PinsPerTypeContract is the regression guard (#366).

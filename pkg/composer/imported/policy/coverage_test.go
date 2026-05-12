@@ -32,6 +32,7 @@ var phase1Types = []string{
 	"aws_secretsmanager_secret",
 	"aws_sqs_queue",
 	"google_cloud_run_v2_service",
+	"google_cloudbuild_trigger",
 	"google_cloudfunctions2_function",
 	"google_compute_address",
 	"google_compute_firewall",
@@ -41,6 +42,7 @@ var phase1Types = []string{
 	"google_compute_instance",
 	"google_compute_network",
 	"google_compute_router",
+	"google_compute_security_policy",
 	"google_compute_target_https_proxy",
 	"google_compute_url_map",
 	"google_container_cluster",
@@ -52,10 +54,12 @@ var phase1Types = []string{
 	"google_monitoring_notification_channel",
 	"google_pubsub_subscription",
 	"google_pubsub_topic",
+	"google_redis_instance",
 	"google_secret_manager_secret",
 	"google_service_account",
 	"google_sql_database_instance",
 	"google_storage_bucket",
+	"google_vertex_ai_dataset",
 }
 
 func TestPhase1Coverage(t *testing.T) {
@@ -120,24 +124,36 @@ func TestPolicyRegistry_CoversGeneratedRegistry(t *testing.T) {
 			"extend phase1Types.")
 }
 
-// TestGoogleComputeInstance_TagsIntentionallyUncurated pins the
-// deliberate gap documented in google_compute_instance.policy.go:
-// GCE network tags are NOT labels (they drive firewall source_tags /
-// target_tags) but lint.go's tagAttrSuffixes hardcodes "tags" as
-// label-shaped. Curating "tags": tagPolicy() would silently hide
-// operator-meaningful network selectors; curating with any non-
-// SystemOnly Edit trips CodeTagFieldNotSystemOnly. Until lint.go can
-// exempt this case, the attr stays uncurated.
+// TestTagsIntentionallyUncurated pins the deliberate gap documented in
+// google_compute_instance.policy.go and google_cloudbuild_trigger.policy.go.
+// Neither type's `tags` attribute is a label:
+//
+//   - compute_instance.tags drives firewall source_tags / target_tags
+//     (operationally meaningful network selectors)
+//   - cloudbuild_trigger.tags is a free-text set of operator annotations
+//
+// But lint.go's `tagAttrSuffixes` hardcodes `"tags"` as label-shaped, so
+// any non-SystemOnly curation trips CodeTagFieldNotSystemOnly while
+// tagPolicy() (SystemOnly+Hidden+Redacted) is semantically wrong for both.
+// Until the lint exemption lands, the attrs stay uncurated.
 //
 // This test fires if a well-meaning curator adds the entry back.
-func TestGoogleComputeInstance_TagsIntentionallyUncurated(t *testing.T) {
+func TestTagsIntentionallyUncurated(t *testing.T) {
 	t.Parallel()
-	m, ok := Lookup("google_compute_instance")
-	require.True(t, ok, "google_compute_instance policy must be registered")
-	_, present := m["tags"]
-	assert.False(t, present,
-		"google_compute_instance.tags must remain uncurated — see policy "+
-			"file header comment for the lint.go::tagAttrSuffixes follow-up.")
+	cases := []string{
+		"google_compute_instance",
+		"google_cloudbuild_trigger",
+	}
+	for _, tfType := range cases {
+		t.Run(tfType, func(t *testing.T) {
+			t.Parallel()
+			m, ok := Lookup(tfType)
+			require.True(t, ok, "%s policy must be registered", tfType)
+			_, present := m["tags"]
+			assert.False(t, present,
+				"%s.tags must remain uncurated — see policy file header for the lint.go::tagAttrSuffixes follow-up", tfType)
+		})
+	}
 }
 
 func TestLintAll_Clean(t *testing.T) {

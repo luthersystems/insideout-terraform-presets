@@ -1920,6 +1920,1208 @@
             "description_kind": "plain"
           }
         },
+        "google_cloudbuild_trigger": {
+          "version": 2,
+          "block": {
+            "attributes": {
+              "create_time": {
+                "type": "string",
+                "description": "Time when the trigger was created.",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "description": {
+                "type": "string",
+                "description": "Human-readable description of the trigger.",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "disabled": {
+                "type": "bool",
+                "description": "Whether the trigger is disabled or not. If true, the trigger will never result in a build.",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "filename": {
+                "type": "string",
+                "description": "Path, from the source root, to a file whose contents is used for the template.\nEither a filename or build template must be provided. Set this only when using trigger_template or github.\nWhen using Pub/Sub, Webhook or Manual set the file name using git_file_source instead.",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "filter": {
+                "type": "string",
+                "description": "A Common Expression Language string. Used only with Pub/Sub and Webhook.",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "ignored_files": {
+                "type": [
+                  "list",
+                  "string"
+                ],
+                "description": "ignoredFiles and includedFiles are file glob matches using https://golang.org/pkg/path/filepath/#Match\nextended with support for '**'.\n\nIf ignoredFiles and changed files are both empty, then they are not\nused to determine whether or not to trigger a build.\n\nIf ignoredFiles is not empty, then we ignore any files that match any\nof the ignored_file globs. If the change has no files that are outside\nof the ignoredFiles globs, then we do not trigger a build.",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "include_build_logs": {
+                "type": "string",
+                "description": "Build logs will be sent back to GitHub as part of the checkrun\nresult.  Values can be INCLUDE_BUILD_LOGS_UNSPECIFIED or\nINCLUDE_BUILD_LOGS_WITH_STATUS Possible values: [\"INCLUDE_BUILD_LOGS_UNSPECIFIED\", \"INCLUDE_BUILD_LOGS_WITH_STATUS\"]",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "included_files": {
+                "type": [
+                  "list",
+                  "string"
+                ],
+                "description": "ignoredFiles and includedFiles are file glob matches using https://golang.org/pkg/path/filepath/#Match\nextended with support for '**'.\n\nIf any of the files altered in the commit pass the ignoredFiles filter\nand includedFiles is empty, then as far as this filter is concerned, we\nshould trigger the build.\n\nIf any of the files altered in the commit pass the ignoredFiles filter\nand includedFiles is not empty, then we make sure that at least one of\nthose files matches a includedFiles glob. If not, then we do not trigger\na build.",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "location": {
+                "type": "string",
+                "description": "The [Cloud Build location](https://cloud.google.com/build/docs/locations) for the trigger.\nIf not specified, \"global\" is used.",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "name": {
+                "type": "string",
+                "description": "Name of the trigger. Must be unique within the project.",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "project": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "service_account": {
+                "type": "string",
+                "description": "The service account used for all user-controlled operations including\ntriggers.patch, triggers.run, builds.create, and builds.cancel.\n\nIf no service account is set, then the standard Cloud Build service account\n([PROJECT_NUM]@system.gserviceaccount.com) will be used instead.\n\nFormat: projects/{PROJECT_ID}/serviceAccounts/{ACCOUNT_ID_OR_EMAIL}",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "substitutions": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description": "Substitutions data for Build resource.",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "tags": {
+                "type": [
+                  "list",
+                  "string"
+                ],
+                "description": "Tags for annotation of a BuildTrigger",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "trigger_id": {
+                "type": "string",
+                "description": "The unique identifier for the trigger.",
+                "description_kind": "plain",
+                "computed": true
+              }
+            },
+            "block_types": {
+              "approval_config": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "approval_required": {
+                      "type": "bool",
+                      "description": "Whether or not approval is needed. If this is set on a build, it will become pending when run,\nand will need to be explicitly approved to start.",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "description": "Configuration for manual approval to start a build invocation of this BuildTrigger.\nBuilds created by this trigger will require approval before they execute.\nAny user with a Cloud Build Approver role for the project can approve a build.",
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "bitbucket_server_trigger_config": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "bitbucket_server_config_resource": {
+                      "type": "string",
+                      "description": "The Bitbucket server config resource that this trigger config maps to.",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "project_key": {
+                      "type": "string",
+                      "description": "Key of the project that the repo is in. For example: The key for https://mybitbucket.server/projects/TEST/repos/test-repo is \"TEST\".",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "repo_slug": {
+                      "type": "string",
+                      "description": "Slug of the repository. A repository slug is a URL-friendly version of a repository name, automatically generated by Bitbucket for use in the URL.\nFor example, if the repository name is 'test repo', in the URL it would become 'test-repo' as in https://mybitbucket.server/projects/TEST/repos/test-repo.",
+                      "description_kind": "plain",
+                      "required": true
+                    }
+                  },
+                  "block_types": {
+                    "pull_request": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "branch": {
+                            "type": "string",
+                            "description": "Regex of branches to match.\nThe syntax of the regular expressions accepted is the syntax accepted by RE2 and described at https://github.com/google/re2/wiki/Syntax",
+                            "description_kind": "plain",
+                            "required": true
+                          },
+                          "comment_control": {
+                            "type": "string",
+                            "description": "Configure builds to run whether a repository owner or collaborator need to comment /gcbrun. Possible values: [\"COMMENTS_DISABLED\", \"COMMENTS_ENABLED\", \"COMMENTS_ENABLED_FOR_EXTERNAL_CONTRIBUTORS_ONLY\"]",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "invert_regex": {
+                            "type": "bool",
+                            "description": "If true, branches that do NOT match the git_ref will trigger a build.",
+                            "description_kind": "plain",
+                            "optional": true
+                          }
+                        },
+                        "description": "Filter to match changes in pull requests.",
+                        "description_kind": "plain"
+                      },
+                      "max_items": 1
+                    },
+                    "push": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "branch": {
+                            "type": "string",
+                            "description": "Regex of branches to match.  Specify only one of branch or tag.",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "invert_regex": {
+                            "type": "bool",
+                            "description": "When true, only trigger a build if the revision regex does NOT match the gitRef regex.",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "tag": {
+                            "type": "string",
+                            "description": "Regex of tags to match.  Specify only one of branch or tag.",
+                            "description_kind": "plain",
+                            "optional": true
+                          }
+                        },
+                        "description": "Filter to match changes in refs like branches, tags.",
+                        "description_kind": "plain"
+                      },
+                      "max_items": 1
+                    }
+                  },
+                  "description": "BitbucketServerTriggerConfig describes the configuration of a trigger that creates a build whenever a Bitbucket Server event is received.",
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "build": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "images": {
+                      "type": [
+                        "list",
+                        "string"
+                      ],
+                      "description": "A list of images to be pushed upon the successful completion of all build steps.\nThe images are pushed using the builder service account's credentials.\nThe digests of the pushed images will be stored in the Build resource's results field.\nIf any of the images fail to be pushed, the build status is marked FAILURE.",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "logs_bucket": {
+                      "type": "string",
+                      "description": "Google Cloud Storage bucket where logs should be written.\nLogs file names will be of the format ${logsBucket}/log-${build_id}.txt.",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "queue_ttl": {
+                      "type": "string",
+                      "description": "TTL in queue for this build. If provided and the build is enqueued longer than this value,\nthe build will expire and the build status will be EXPIRED.\nThe TTL starts ticking from createTime.\nA duration in seconds with up to nine fractional digits, terminated by 's'. Example: \"3.5s\".",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "substitutions": {
+                      "type": [
+                        "map",
+                        "string"
+                      ],
+                      "description": "Substitutions data for Build resource.",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "tags": {
+                      "type": [
+                        "list",
+                        "string"
+                      ],
+                      "description": "Tags for annotation of a Build. These are not docker tags.",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "timeout": {
+                      "type": "string",
+                      "description": "Amount of time that this build should be allowed to run, to second granularity.\nIf this amount of time elapses, work on the build will cease and the build status will be TIMEOUT.\nThis timeout must be equal to or greater than the sum of the timeouts for build steps within the build.\nThe expected format is the number of seconds followed by s.\nDefault time is ten minutes (600s).",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "block_types": {
+                    "artifacts": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "images": {
+                            "type": [
+                              "list",
+                              "string"
+                            ],
+                            "description": "A list of images to be pushed upon the successful completion of all build steps.\n\nThe images will be pushed using the builder service account's credentials.\n\nThe digests of the pushed images will be stored in the Build resource's results field.\n\nIf any of the images fail to be pushed, the build is marked FAILURE.",
+                            "description_kind": "plain",
+                            "optional": true
+                          }
+                        },
+                        "block_types": {
+                          "maven_artifacts": {
+                            "nesting_mode": "list",
+                            "block": {
+                              "attributes": {
+                                "artifact_id": {
+                                  "type": "string",
+                                  "description": "Maven artifactId value used when uploading the artifact to Artifact Registry.",
+                                  "description_kind": "plain",
+                                  "optional": true
+                                },
+                                "group_id": {
+                                  "type": "string",
+                                  "description": "Maven groupId value used when uploading the artifact to Artifact Registry.",
+                                  "description_kind": "plain",
+                                  "optional": true
+                                },
+                                "path": {
+                                  "type": "string",
+                                  "description": "Path to an artifact in the build's workspace to be uploaded to Artifact Registry. This can be either an absolute path, e.g. /workspace/my-app/target/my-app-1.0.SNAPSHOT.jar or a relative path from /workspace, e.g. my-app/target/my-app-1.0.SNAPSHOT.jar.",
+                                  "description_kind": "plain",
+                                  "optional": true
+                                },
+                                "repository": {
+                                  "type": "string",
+                                  "description": "Artifact Registry repository, in the form \"https://$REGION-maven.pkg.dev/$PROJECT/$REPOSITORY\"\n\nArtifact in the workspace specified by path will be uploaded to Artifact Registry with this location as a prefix.",
+                                  "description_kind": "plain",
+                                  "optional": true
+                                },
+                                "version": {
+                                  "type": "string",
+                                  "description": "Maven version value used when uploading the artifact to Artifact Registry.",
+                                  "description_kind": "plain",
+                                  "optional": true
+                                }
+                              },
+                              "description": "A Maven artifact to upload to Artifact Registry upon successful completion of all build steps.\n\nThe location and generation of the uploaded objects will be stored in the Build resource's results field.\n\nIf any objects fail to be pushed, the build is marked FAILURE.",
+                              "description_kind": "plain"
+                            }
+                          },
+                          "npm_packages": {
+                            "nesting_mode": "list",
+                            "block": {
+                              "attributes": {
+                                "package_path": {
+                                  "type": "string",
+                                  "description": "Path to the package.json. e.g. workspace/path/to/package",
+                                  "description_kind": "plain",
+                                  "optional": true
+                                },
+                                "repository": {
+                                  "type": "string",
+                                  "description": "Artifact Registry repository, in the form \"https://$REGION-npm.pkg.dev/$PROJECT/$REPOSITORY\"\n\nNpm package in the workspace specified by path will be zipped and uploaded to Artifact Registry with this location as a prefix.",
+                                  "description_kind": "plain",
+                                  "optional": true
+                                }
+                              },
+                              "description": "Npm package to upload to Artifact Registry upon successful completion of all build steps.\n\nThe location and generation of the uploaded objects will be stored in the Build resource's results field.\n\nIf any objects fail to be pushed, the build is marked FAILURE.",
+                              "description_kind": "plain"
+                            }
+                          },
+                          "objects": {
+                            "nesting_mode": "list",
+                            "block": {
+                              "attributes": {
+                                "location": {
+                                  "type": "string",
+                                  "description": "Cloud Storage bucket and optional object path, in the form \"gs://bucket/path/to/somewhere/\".\n\nFiles in the workspace matching any path pattern will be uploaded to Cloud Storage with\nthis location as a prefix.",
+                                  "description_kind": "plain",
+                                  "optional": true
+                                },
+                                "paths": {
+                                  "type": [
+                                    "list",
+                                    "string"
+                                  ],
+                                  "description": "Path globs used to match files in the build's workspace.",
+                                  "description_kind": "plain",
+                                  "optional": true
+                                },
+                                "timing": {
+                                  "type": [
+                                    "list",
+                                    [
+                                      "object",
+                                      {
+                                        "end_time": "string",
+                                        "start_time": "string"
+                                      }
+                                    ]
+                                  ],
+                                  "description": "Output only. Stores timing information for pushing all artifact objects.",
+                                  "description_kind": "plain",
+                                  "computed": true
+                                }
+                              },
+                              "description": "A list of objects to be uploaded to Cloud Storage upon successful completion of all build steps.\n\nFiles in the workspace matching specified paths globs will be uploaded to the\nCloud Storage location using the builder service account's credentials.\n\nThe location and generation of the uploaded objects will be stored in the Build resource's results field.\n\nIf any objects fail to be pushed, the build is marked FAILURE.",
+                              "description_kind": "plain"
+                            },
+                            "max_items": 1
+                          },
+                          "python_packages": {
+                            "nesting_mode": "list",
+                            "block": {
+                              "attributes": {
+                                "paths": {
+                                  "type": [
+                                    "list",
+                                    "string"
+                                  ],
+                                  "description": "Path globs used to match files in the build's workspace. For Python/ Twine, this is usually dist/*, and sometimes additionally an .asc file.",
+                                  "description_kind": "plain",
+                                  "optional": true
+                                },
+                                "repository": {
+                                  "type": "string",
+                                  "description": "Artifact Registry repository, in the form \"https://$REGION-python.pkg.dev/$PROJECT/$REPOSITORY\"\n\nFiles in the workspace matching any path pattern will be uploaded to Artifact Registry with this location as a prefix.",
+                                  "description_kind": "plain",
+                                  "optional": true
+                                }
+                              },
+                              "description": "Python package to upload to Artifact Registry upon successful completion of all build steps. A package can encapsulate multiple objects to be uploaded to a single repository.\n\nThe location and generation of the uploaded objects will be stored in the Build resource's results field.\n\nIf any objects fail to be pushed, the build is marked FAILURE.",
+                              "description_kind": "plain"
+                            }
+                          }
+                        },
+                        "description": "Artifacts produced by the build that should be uploaded upon successful completion of all build steps.",
+                        "description_kind": "plain"
+                      },
+                      "max_items": 1
+                    },
+                    "available_secrets": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "block_types": {
+                          "secret_manager": {
+                            "nesting_mode": "list",
+                            "block": {
+                              "attributes": {
+                                "env": {
+                                  "type": "string",
+                                  "description": "Environment variable name to associate with the secret. Secret environment\nvariables must be unique across all of a build's secrets, and must be used\nby at least one build step.",
+                                  "description_kind": "plain",
+                                  "required": true
+                                },
+                                "version_name": {
+                                  "type": "string",
+                                  "description": "Resource name of the SecretVersion. In format: projects/*/secrets/*/versions/*",
+                                  "description_kind": "plain",
+                                  "required": true
+                                }
+                              },
+                              "description": "Pairs a secret environment variable with a SecretVersion in Secret Manager.",
+                              "description_kind": "plain"
+                            },
+                            "min_items": 1
+                          }
+                        },
+                        "description": "Secrets and secret environment variables.",
+                        "description_kind": "plain"
+                      },
+                      "max_items": 1
+                    },
+                    "options": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "disk_size_gb": {
+                            "type": "number",
+                            "description": "Requested disk size for the VM that runs the build. Note that this is NOT \"disk free\";\nsome of the space will be used by the operating system and build utilities.\nAlso note that this is the minimum disk size that will be allocated for the build --\nthe build may run with a larger disk than requested. At present, the maximum disk size\nis 1000GB; builds that request more than the maximum are rejected with an error.",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "dynamic_substitutions": {
+                            "type": "bool",
+                            "description": "Option to specify whether or not to apply bash style string operations to the substitutions.\n\nNOTE this is always enabled for triggered builds and cannot be overridden in the build configuration file.",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "env": {
+                            "type": [
+                              "list",
+                              "string"
+                            ],
+                            "description": "A list of global environment variable definitions that will exist for all build steps\nin this build. If a variable is defined in both globally and in a build step,\nthe variable will use the build step value.\n\nThe elements are of the form \"KEY=VALUE\" for the environment variable \"KEY\" being given the value \"VALUE\".",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "log_streaming_option": {
+                            "type": "string",
+                            "description": "Option to define build log streaming behavior to Google Cloud Storage. Possible values: [\"STREAM_DEFAULT\", \"STREAM_ON\", \"STREAM_OFF\"]",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "logging": {
+                            "type": "string",
+                            "description": "Option to specify the logging mode, which determines if and where build logs are stored. Possible values: [\"LOGGING_UNSPECIFIED\", \"LEGACY\", \"GCS_ONLY\", \"STACKDRIVER_ONLY\", \"CLOUD_LOGGING_ONLY\", \"NONE\"]",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "machine_type": {
+                            "type": "string",
+                            "description": "Compute Engine machine type on which to run the build.",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "requested_verify_option": {
+                            "type": "string",
+                            "description": "Requested verifiability options. Possible values: [\"NOT_VERIFIED\", \"VERIFIED\"]",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "secret_env": {
+                            "type": [
+                              "list",
+                              "string"
+                            ],
+                            "description": "A list of global environment variables, which are encrypted using a Cloud Key Management\nService crypto key. These values must be specified in the build's Secret. These variables\nwill be available to all build steps in this build.",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "source_provenance_hash": {
+                            "type": [
+                              "list",
+                              "string"
+                            ],
+                            "description": "Requested hash for SourceProvenance. Possible values: [\"NONE\", \"SHA256\", \"MD5\"]",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "substitution_option": {
+                            "type": "string",
+                            "description": "Option to specify behavior when there is an error in the substitution checks.\n\nNOTE this is always set to ALLOW_LOOSE for triggered builds and cannot be overridden\nin the build configuration file. Possible values: [\"MUST_MATCH\", \"ALLOW_LOOSE\"]",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "worker_pool": {
+                            "type": "string",
+                            "description": "Option to specify a WorkerPool for the build. Format projects/{project}/workerPools/{workerPool}\n\nThis field is experimental.",
+                            "description_kind": "plain",
+                            "optional": true
+                          }
+                        },
+                        "block_types": {
+                          "volumes": {
+                            "nesting_mode": "list",
+                            "block": {
+                              "attributes": {
+                                "name": {
+                                  "type": "string",
+                                  "description": "Name of the volume to mount.\n\nVolume names must be unique per build step and must be valid names for Docker volumes.\nEach named volume must be used by at least two build steps.",
+                                  "description_kind": "plain",
+                                  "optional": true
+                                },
+                                "path": {
+                                  "type": "string",
+                                  "description": "Path at which to mount the volume.\n\nPaths must be absolute and cannot conflict with other volume paths on the same\nbuild step or with certain reserved volume paths.",
+                                  "description_kind": "plain",
+                                  "optional": true
+                                }
+                              },
+                              "description": "Global list of volumes to mount for ALL build steps\n\nEach volume is created as an empty volume prior to starting the build process.\nUpon completion of the build, volumes and their contents are discarded. Global\nvolume names and paths cannot conflict with the volumes defined a build step.\n\nUsing a global volume in a build with only one step is not valid as it is indicative\nof a build request with an incorrect configuration.",
+                              "description_kind": "plain"
+                            }
+                          }
+                        },
+                        "description": "Special options for this build.",
+                        "description_kind": "plain"
+                      },
+                      "max_items": 1
+                    },
+                    "secret": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "kms_key_name": {
+                            "type": "string",
+                            "description": "Cloud KMS key name to use to decrypt these envs.",
+                            "description_kind": "plain",
+                            "required": true
+                          },
+                          "secret_env": {
+                            "type": [
+                              "map",
+                              "string"
+                            ],
+                            "description": "Map of environment variable name to its encrypted value.\nSecret environment variables must be unique across all of a build's secrets,\nand must be used by at least one build step. Values can be at most 64 KB in size.\nThere can be at most 100 secret values across all of a build's secrets.",
+                            "description_kind": "plain",
+                            "optional": true
+                          }
+                        },
+                        "description": "Secrets to decrypt using Cloud Key Management Service.",
+                        "description_kind": "plain"
+                      }
+                    },
+                    "source": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "block_types": {
+                          "repo_source": {
+                            "nesting_mode": "list",
+                            "block": {
+                              "attributes": {
+                                "branch_name": {
+                                  "type": "string",
+                                  "description": "Regex matching branches to build. Exactly one a of branch name, tag, or commit SHA must be provided.\nThe syntax of the regular expressions accepted is the syntax accepted by RE2 and\ndescribed at https://github.com/google/re2/wiki/Syntax",
+                                  "description_kind": "plain",
+                                  "optional": true
+                                },
+                                "commit_sha": {
+                                  "type": "string",
+                                  "description": "Explicit commit SHA to build. Exactly one a of branch name, tag, or commit SHA must be provided.",
+                                  "description_kind": "plain",
+                                  "optional": true
+                                },
+                                "dir": {
+                                  "type": "string",
+                                  "description": "Directory, relative to the source root, in which to run the build.\nThis must be a relative path. If a step's dir is specified and is an absolute path,\nthis value is ignored for that step's execution.",
+                                  "description_kind": "plain",
+                                  "optional": true
+                                },
+                                "invert_regex": {
+                                  "type": "bool",
+                                  "description": "Only trigger a build if the revision regex does NOT match the revision regex.",
+                                  "description_kind": "plain",
+                                  "optional": true
+                                },
+                                "project_id": {
+                                  "type": "string",
+                                  "description": "ID of the project that owns the Cloud Source Repository.\nIf omitted, the project ID requesting the build is assumed.",
+                                  "description_kind": "plain",
+                                  "optional": true
+                                },
+                                "repo_name": {
+                                  "type": "string",
+                                  "description": "Name of the Cloud Source Repository.",
+                                  "description_kind": "plain",
+                                  "required": true
+                                },
+                                "substitutions": {
+                                  "type": [
+                                    "map",
+                                    "string"
+                                  ],
+                                  "description": "Substitutions to use in a triggered build. Should only be used with triggers.run",
+                                  "description_kind": "plain",
+                                  "optional": true
+                                },
+                                "tag_name": {
+                                  "type": "string",
+                                  "description": "Regex matching tags to build. Exactly one a of branch name, tag, or commit SHA must be provided.\nThe syntax of the regular expressions accepted is the syntax accepted by RE2 and\ndescribed at https://github.com/google/re2/wiki/Syntax",
+                                  "description_kind": "plain",
+                                  "optional": true
+                                }
+                              },
+                              "description": "Location of the source in a Google Cloud Source Repository.",
+                              "description_kind": "plain"
+                            },
+                            "max_items": 1
+                          },
+                          "storage_source": {
+                            "nesting_mode": "list",
+                            "block": {
+                              "attributes": {
+                                "bucket": {
+                                  "type": "string",
+                                  "description": "Google Cloud Storage bucket containing the source.",
+                                  "description_kind": "plain",
+                                  "required": true
+                                },
+                                "generation": {
+                                  "type": "string",
+                                  "description": "Google Cloud Storage generation for the object.\nIf the generation is omitted, the latest generation will be used",
+                                  "description_kind": "plain",
+                                  "optional": true
+                                },
+                                "object": {
+                                  "type": "string",
+                                  "description": "Google Cloud Storage object containing the source.\nThis object must be a gzipped archive file (.tar.gz) containing source to build.",
+                                  "description_kind": "plain",
+                                  "required": true
+                                }
+                              },
+                              "description": "Location of the source in an archive file in Google Cloud Storage.",
+                              "description_kind": "plain"
+                            },
+                            "max_items": 1
+                          }
+                        },
+                        "description": "The location of the source files to build.\n\nOne of 'storageSource' or 'repoSource' must be provided.",
+                        "description_kind": "plain"
+                      },
+                      "max_items": 1
+                    },
+                    "step": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "allow_exit_codes": {
+                            "type": [
+                              "list",
+                              "number"
+                            ],
+                            "description": "Allow this build step to fail without failing the entire build if and\nonly if the exit code is one of the specified codes.\n\nIf 'allowFailure' is also specified, this field will take precedence.",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "allow_failure": {
+                            "type": "bool",
+                            "description": "Allow this build step to fail without failing the entire build.\nIf false, the entire build will fail if this step fails. Otherwise, the\nbuild will succeed, but this step will still have a failure status.\nError information will be reported in the 'failureDetail' field.\n\n'allowExitCodes' takes precedence over this field.",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "args": {
+                            "type": [
+                              "list",
+                              "string"
+                            ],
+                            "description": "A list of arguments that will be presented to the step when it is started.\n\nIf the image used to run the step's container has an entrypoint, the args\nare used as arguments to that entrypoint. If the image does not define an\nentrypoint, the first element in args is used as the entrypoint, and the\nremainder will be used as arguments.",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "dir": {
+                            "type": "string",
+                            "description": "Working directory to use when running this step's container.\n\nIf this value is a relative path, it is relative to the build's working\ndirectory. If this value is absolute, it may be outside the build's working\ndirectory, in which case the contents of the path may not be persisted\nacross build step executions, unless a 'volume' for that path is specified.\n\nIf the build specifies a 'RepoSource' with 'dir' and a step with a\n'dir',\nwhich specifies an absolute path, the 'RepoSource' 'dir' is ignored\nfor the step's execution.",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "entrypoint": {
+                            "type": "string",
+                            "description": "Entrypoint to be used instead of the build step image's\ndefault entrypoint.\nIf unset, the image's default entrypoint is used",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "env": {
+                            "type": [
+                              "list",
+                              "string"
+                            ],
+                            "description": "A list of environment variable definitions to be used when\nrunning a step.\n\nThe elements are of the form \"KEY=VALUE\" for the environment variable\n\"KEY\" being given the value \"VALUE\".",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "id": {
+                            "type": "string",
+                            "description": "Unique identifier for this build step, used in 'wait_for' to\nreference this build step as a dependency.",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "name": {
+                            "type": "string",
+                            "description": "The name of the container image that will run this particular build step.\n\nIf the image is available in the host's Docker daemon's cache, it will be\nrun directly. If not, the host will attempt to pull the image first, using\nthe builder service account's credentials if necessary.\n\nThe Docker daemon's cache will already have the latest versions of all of\nthe officially supported build steps (see https://github.com/GoogleCloudPlatform/cloud-builders\nfor images and examples).\nThe Docker daemon will also have cached many of the layers for some popular\nimages, like \"ubuntu\", \"debian\", but they will be refreshed at the time\nyou attempt to use them.\n\nIf you built an image in a previous build step, it will be stored in the\nhost's Docker daemon's cache and is available to use as the name for a\nlater build step.",
+                            "description_kind": "plain",
+                            "required": true
+                          },
+                          "script": {
+                            "type": "string",
+                            "description": "A shell script to be executed in the step.\nWhen script is provided, the user cannot specify the entrypoint or args.",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "secret_env": {
+                            "type": [
+                              "list",
+                              "string"
+                            ],
+                            "description": "A list of environment variables which are encrypted using\na Cloud Key\nManagement Service crypto key. These values must be specified in\nthe build's 'Secret'.",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "timeout": {
+                            "type": "string",
+                            "description": "Time limit for executing this build step. If not defined,\nthe step has no\ntime limit and will be allowed to continue to run until either it\ncompletes or the build itself times out.",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "timing": {
+                            "type": "string",
+                            "description": "Output only. Stores timing information for executing this\nbuild step.",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "wait_for": {
+                            "type": [
+                              "list",
+                              "string"
+                            ],
+                            "description": "The ID(s) of the step(s) that this build step depends on.\n\nThis build step will not start until all the build steps in 'wait_for'\nhave completed successfully. If 'wait_for' is empty, this build step\nwill start when all previous build steps in the 'Build.Steps' list\nhave completed successfully.",
+                            "description_kind": "plain",
+                            "optional": true
+                          }
+                        },
+                        "block_types": {
+                          "volumes": {
+                            "nesting_mode": "list",
+                            "block": {
+                              "attributes": {
+                                "name": {
+                                  "type": "string",
+                                  "description": "Name of the volume to mount.\n\nVolume names must be unique per build step and must be valid names for\nDocker volumes. Each named volume must be used by at least two build steps.",
+                                  "description_kind": "plain",
+                                  "required": true
+                                },
+                                "path": {
+                                  "type": "string",
+                                  "description": "Path at which to mount the volume.\n\nPaths must be absolute and cannot conflict with other volume paths on\nthe same build step or with certain reserved volume paths.",
+                                  "description_kind": "plain",
+                                  "required": true
+                                }
+                              },
+                              "description": "List of volumes to mount into the build step.\n\nEach volume is created as an empty volume prior to execution of the\nbuild step. Upon completion of the build, volumes and their contents\nare discarded.\n\nUsing a named volume in only one step is not valid as it is\nindicative of a build request with an incorrect configuration.",
+                              "description_kind": "plain"
+                            }
+                          }
+                        },
+                        "description": "The operations to be performed on the workspace.",
+                        "description_kind": "plain"
+                      },
+                      "min_items": 1
+                    }
+                  },
+                  "description": "Contents of the build template. Either a filename or build template must be provided.",
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "git_file_source": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "bitbucket_server_config": {
+                      "type": "string",
+                      "description": "The full resource name of the bitbucket server config.\nFormat: projects/{project}/locations/{location}/bitbucketServerConfigs/{id}.",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "github_enterprise_config": {
+                      "type": "string",
+                      "description": "The full resource name of the github enterprise config.\nFormat: projects/{project}/locations/{location}/githubEnterpriseConfigs/{id}. projects/{project}/githubEnterpriseConfigs/{id}.",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "path": {
+                      "type": "string",
+                      "description": "The path of the file, with the repo root as the root of the path.",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "repo_type": {
+                      "type": "string",
+                      "description": "The type of the repo, since it may not be explicit from the repo field (e.g from a URL).\nValues can be UNKNOWN, CLOUD_SOURCE_REPOSITORIES, GITHUB, BITBUCKET_SERVER Possible values: [\"UNKNOWN\", \"CLOUD_SOURCE_REPOSITORIES\", \"GITHUB\", \"BITBUCKET_SERVER\"]",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "repository": {
+                      "type": "string",
+                      "description": "The fully qualified resource name of the Repo API repository. The fully qualified resource name of the Repo API repository.\nIf unspecified, the repo from which the trigger invocation originated is assumed to be the repo from which to read the specified path.",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "revision": {
+                      "type": "string",
+                      "description": "The branch, tag, arbitrary ref, or SHA version of the repo to use when resolving the\nfilename (optional). This field respects the same syntax/resolution as described here: https://git-scm.com/docs/gitrevisions\nIf unspecified, the revision from which the trigger invocation originated is assumed to be the revision from which to read the specified path.",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "uri": {
+                      "type": "string",
+                      "description": "The URI of the repo (optional). If unspecified, the repo from which the trigger\ninvocation originated is assumed to be the repo from which to read the specified path.",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "description": "The file source describing the local or remote Build template.",
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "github": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "enterprise_config_resource_name": {
+                      "type": "string",
+                      "description": "The resource name of the github enterprise config that should be applied to this installation.\nFor example: \"projects/{$projectId}/locations/{$locationId}/githubEnterpriseConfigs/{$configId}\"",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "name": {
+                      "type": "string",
+                      "description": "Name of the repository. For example: The name for\nhttps://github.com/googlecloudplatform/cloud-builders is \"cloud-builders\".",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "owner": {
+                      "type": "string",
+                      "description": "Owner of the repository. For example: The owner for\nhttps://github.com/googlecloudplatform/cloud-builders is \"googlecloudplatform\".",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "block_types": {
+                    "pull_request": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "branch": {
+                            "type": "string",
+                            "description": "Regex of branches to match.",
+                            "description_kind": "plain",
+                            "required": true
+                          },
+                          "comment_control": {
+                            "type": "string",
+                            "description": "Whether to block builds on a \"/gcbrun\" comment from a repository owner or collaborator. Possible values: [\"COMMENTS_DISABLED\", \"COMMENTS_ENABLED\", \"COMMENTS_ENABLED_FOR_EXTERNAL_CONTRIBUTORS_ONLY\"]",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "invert_regex": {
+                            "type": "bool",
+                            "description": "If true, branches that do NOT match the git_ref will trigger a build.",
+                            "description_kind": "plain",
+                            "optional": true
+                          }
+                        },
+                        "description": "filter to match changes in pull requests. Specify only one of 'pull_request' or 'push'.",
+                        "description_kind": "plain"
+                      },
+                      "max_items": 1
+                    },
+                    "push": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "branch": {
+                            "type": "string",
+                            "description": "Regex of branches to match.  Specify only one of branch or tag.",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "invert_regex": {
+                            "type": "bool",
+                            "description": "When true, only trigger a build if the revision regex does NOT match the git_ref regex.",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "tag": {
+                            "type": "string",
+                            "description": "Regex of tags to match.  Specify only one of branch or tag.",
+                            "description_kind": "plain",
+                            "optional": true
+                          }
+                        },
+                        "description": "filter to match changes in refs, like branches or tags. Specify only one of 'pull_request' or 'push'.",
+                        "description_kind": "plain"
+                      },
+                      "max_items": 1
+                    }
+                  },
+                  "description": "Describes the configuration of a trigger that creates a build whenever a GitHub event is received.\n\nOne of 'trigger_template', 'github', 'pubsub_config' or 'webhook_config' must be provided.",
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "pubsub_config": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "service_account_email": {
+                      "type": "string",
+                      "description": "Service account that will make the push request.",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "state": {
+                      "type": "string",
+                      "description": "Potential issues with the underlying Pub/Sub subscription configuration.\nOnly populated on get requests.",
+                      "description_kind": "plain",
+                      "computed": true
+                    },
+                    "subscription": {
+                      "type": "string",
+                      "description": "Output only. Name of the subscription.",
+                      "description_kind": "plain",
+                      "computed": true
+                    },
+                    "topic": {
+                      "type": "string",
+                      "description": "The name of the topic from which this subscription is receiving messages.",
+                      "description_kind": "plain",
+                      "required": true
+                    }
+                  },
+                  "description": "PubsubConfig describes the configuration of a trigger that creates\na build whenever a Pub/Sub message is published.\n\nOne of 'trigger_template', 'github', 'pubsub_config' 'webhook_config' or 'source_to_build' must be provided.",
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "repository_event_config": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "repository": {
+                      "type": "string",
+                      "description": "The resource name of the Repo API resource.",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "block_types": {
+                    "pull_request": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "branch": {
+                            "type": "string",
+                            "description": "Regex of branches to match.\n\nThe syntax of the regular expressions accepted is the syntax accepted by\nRE2 and described at https://github.com/google/re2/wiki/Syntax",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "comment_control": {
+                            "type": "string",
+                            "description": "Configure builds to run whether a repository owner or collaborator need to comment '/gcbrun'. Possible values: [\"COMMENTS_DISABLED\", \"COMMENTS_ENABLED\", \"COMMENTS_ENABLED_FOR_EXTERNAL_CONTRIBUTORS_ONLY\"]",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "invert_regex": {
+                            "type": "bool",
+                            "description": "If true, branches that do NOT match the git_ref will trigger a build.",
+                            "description_kind": "plain",
+                            "optional": true
+                          }
+                        },
+                        "description": "Contains filter properties for matching Pull Requests.",
+                        "description_kind": "plain"
+                      },
+                      "max_items": 1
+                    },
+                    "push": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "branch": {
+                            "type": "string",
+                            "description": "Regex of branches to match.\n\nThe syntax of the regular expressions accepted is the syntax accepted by\nRE2 and described at https://github.com/google/re2/wiki/Syntax",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "invert_regex": {
+                            "type": "bool",
+                            "description": "If true, only trigger a build if the revision regex does NOT match the git_ref regex.",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "tag": {
+                            "type": "string",
+                            "description": "Regex of tags to match.\n\nThe syntax of the regular expressions accepted is the syntax accepted by\nRE2 and described at https://github.com/google/re2/wiki/Syntax",
+                            "description_kind": "plain",
+                            "optional": true
+                          }
+                        },
+                        "description": "Contains filter properties for matching git pushes.",
+                        "description_kind": "plain"
+                      },
+                      "max_items": 1
+                    }
+                  },
+                  "description": "The configuration of a trigger that creates a build whenever an event from Repo API is received.",
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "source_to_build": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "bitbucket_server_config": {
+                      "type": "string",
+                      "description": "The full resource name of the bitbucket server config.\nFormat: projects/{project}/locations/{location}/bitbucketServerConfigs/{id}.",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "github_enterprise_config": {
+                      "type": "string",
+                      "description": "The full resource name of the github enterprise config.\nFormat: projects/{project}/locations/{location}/githubEnterpriseConfigs/{id}. projects/{project}/githubEnterpriseConfigs/{id}.",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "ref": {
+                      "type": "string",
+                      "description": "The branch or tag to use. Must start with \"refs/\" (required).",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "repo_type": {
+                      "type": "string",
+                      "description": "The type of the repo, since it may not be explicit from the repo field (e.g from a URL).\nValues can be UNKNOWN, CLOUD_SOURCE_REPOSITORIES, GITHUB, BITBUCKET_SERVER Possible values: [\"UNKNOWN\", \"CLOUD_SOURCE_REPOSITORIES\", \"GITHUB\", \"BITBUCKET_SERVER\"]",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "repository": {
+                      "type": "string",
+                      "description": "The qualified resource name of the Repo API repository.\nEither uri or repository can be specified and is required.",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "uri": {
+                      "type": "string",
+                      "description": "The URI of the repo.",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "description": "The repo and ref of the repository from which to build.\nThis field is used only for those triggers that do not respond to SCM events.\nTriggers that respond to such events build source at whatever commit caused the event.\nThis field is currently only used by Webhook, Pub/Sub, Manual, and Cron triggers.\n\nOne of 'trigger_template', 'github', 'pubsub_config' 'webhook_config' or 'source_to_build' must be provided.",
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "timeouts": {
+                "nesting_mode": "single",
+                "block": {
+                  "attributes": {
+                    "create": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "delete": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "update": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "description_kind": "plain"
+                }
+              },
+              "trigger_template": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "branch_name": {
+                      "type": "string",
+                      "description": "Name of the branch to build. Exactly one a of branch name, tag, or commit SHA must be provided.\nThis field is a regular expression.",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "commit_sha": {
+                      "type": "string",
+                      "description": "Explicit commit SHA to build. Exactly one of a branch name, tag, or commit SHA must be provided.",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "dir": {
+                      "type": "string",
+                      "description": "Directory, relative to the source root, in which to run the build.\n\nThis must be a relative path. If a step's dir is specified and\nis an absolute path, this value is ignored for that step's\nexecution.",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "invert_regex": {
+                      "type": "bool",
+                      "description": "Only trigger a build if the revision regex does NOT match the revision regex.",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "project_id": {
+                      "type": "string",
+                      "description": "ID of the project that owns the Cloud Source Repository. If\nomitted, the project ID requesting the build is assumed.",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    },
+                    "repo_name": {
+                      "type": "string",
+                      "description": "Name of the Cloud Source Repository. If omitted, the name \"default\" is assumed.",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "tag_name": {
+                      "type": "string",
+                      "description": "Name of the tag to build. Exactly one of a branch name, tag, or commit SHA must be provided.\nThis field is a regular expression.",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "description": "Template describing the types of source changes to trigger a build.\n\nBranch and tag names in trigger templates are interpreted as regular\nexpressions. Any branch or tag change that matches that regular\nexpression will trigger a build.\n\nOne of 'trigger_template', 'github', 'pubsub_config', 'webhook_config' or 'source_to_build' must be provided.",
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "webhook_config": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "secret": {
+                      "type": "string",
+                      "description": "Resource name for the secret required as a URL parameter.",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "state": {
+                      "type": "string",
+                      "description": "Potential issues with the underlying Pub/Sub subscription configuration.\nOnly populated on get requests.",
+                      "description_kind": "plain",
+                      "computed": true
+                    }
+                  },
+                  "description": "WebhookConfig describes the configuration of a trigger that creates\na build whenever a webhook is sent to a trigger's webhook URL.\n\nOne of 'trigger_template', 'github', 'pubsub_config' 'webhook_config' or 'source_to_build' must be provided.",
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              }
+            },
+            "description_kind": "plain"
+          }
+        },
         "google_cloudfunctions2_function": {
           "version": 0,
           "block": {
@@ -4777,6 +5979,478 @@
                   "description_kind": "plain"
                 },
                 "max_items": 1
+              },
+              "timeouts": {
+                "nesting_mode": "single",
+                "block": {
+                  "attributes": {
+                    "create": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "delete": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "update": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "description_kind": "plain"
+                }
+              }
+            },
+            "description_kind": "plain"
+          }
+        },
+        "google_compute_security_policy": {
+          "version": 0,
+          "block": {
+            "attributes": {
+              "description": {
+                "type": "string",
+                "description": "An optional description of this security policy. Max size is 2048.",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "fingerprint": {
+                "type": "string",
+                "description": "Fingerprint of this resource.",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "name": {
+                "type": "string",
+                "description": "The name of the security policy.",
+                "description_kind": "plain",
+                "required": true
+              },
+              "project": {
+                "type": "string",
+                "description": "The project in which the resource belongs. If it is not provided, the provider project is used.",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "self_link": {
+                "type": "string",
+                "description": "The URI of the created resource.",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "type": {
+                "type": "string",
+                "description": "The type indicates the intended use of the security policy. CLOUD_ARMOR - Cloud Armor backend security policies can be configured to filter incoming HTTP requests targeting backend services. They filter requests before they hit the origin servers. CLOUD_ARMOR_EDGE - Cloud Armor edge security policies can be configured to filter incoming HTTP requests targeting backend services (including Cloud CDN-enabled) as well as backend buckets (Cloud Storage). They filter requests before the request is served from Google's cache.",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              }
+            },
+            "block_types": {
+              "adaptive_protection_config": {
+                "nesting_mode": "list",
+                "block": {
+                  "block_types": {
+                    "layer_7_ddos_defense_config": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "enable": {
+                            "type": "bool",
+                            "description": "If set to true, enables CAAP for L7 DDoS detection.",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "rule_visibility": {
+                            "type": "string",
+                            "description": "Rule visibility. Supported values include: \"STANDARD\", \"PREMIUM\".",
+                            "description_kind": "plain",
+                            "optional": true,
+                            "computed": true
+                          }
+                        },
+                        "description": "Layer 7 DDoS Defense Config of this security policy",
+                        "description_kind": "plain"
+                      },
+                      "max_items": 1
+                    }
+                  },
+                  "description": "Adaptive Protection Config of this security policy.",
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "advanced_options_config": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "json_parsing": {
+                      "type": "string",
+                      "description": "JSON body parsing. Supported values include: \"DISABLED\", \"STANDARD\".",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    },
+                    "log_level": {
+                      "type": "string",
+                      "description": "Logging level. Supported values include: \"NORMAL\", \"VERBOSE\".",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    },
+                    "user_ip_request_headers": {
+                      "type": [
+                        "set",
+                        "string"
+                      ],
+                      "description": "An optional list of case-insensitive request header names to use for resolving the callers client IP address.",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "block_types": {
+                    "json_custom_config": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "content_types": {
+                            "type": [
+                              "set",
+                              "string"
+                            ],
+                            "description": "A list of custom Content-Type header values to apply the JSON parsing.",
+                            "description_kind": "plain",
+                            "required": true
+                          }
+                        },
+                        "description": "Custom configuration to apply the JSON parsing. Only applicable when JSON parsing is set to STANDARD.",
+                        "description_kind": "plain"
+                      },
+                      "max_items": 1
+                    }
+                  },
+                  "description": "Advanced Options Config of this security policy.",
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "recaptcha_options_config": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "redirect_site_key": {
+                      "type": "string",
+                      "description": "A field to supply a reCAPTCHA site key to be used for all the rules using the redirect action with the type of GOOGLE_RECAPTCHA under the security policy. The specified site key needs to be created from the reCAPTCHA API. The user is responsible for the validity of the specified site key. If not specified, a Google-managed site key is used.",
+                      "description_kind": "plain",
+                      "required": true
+                    }
+                  },
+                  "description": "reCAPTCHA configuration options to be applied for the security policy.",
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "rule": {
+                "nesting_mode": "set",
+                "block": {
+                  "attributes": {
+                    "action": {
+                      "type": "string",
+                      "description": "Action to take when match matches the request.",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "description": {
+                      "type": "string",
+                      "description": "An optional description of this rule. Max size is 64.",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "preview": {
+                      "type": "bool",
+                      "description": "When set to true, the action specified above is not enforced. Stackdriver logs for requests that trigger a preview action are annotated as such.",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    },
+                    "priority": {
+                      "type": "number",
+                      "description": "An unique positive integer indicating the priority of evaluation for a rule. Rules are evaluated from highest priority (lowest numerically) to lowest priority (highest numerically) in order.",
+                      "description_kind": "plain",
+                      "required": true
+                    }
+                  },
+                  "block_types": {
+                    "header_action": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "block_types": {
+                          "request_headers_to_adds": {
+                            "nesting_mode": "list",
+                            "block": {
+                              "attributes": {
+                                "header_name": {
+                                  "type": "string",
+                                  "description": "The name of the header to set.",
+                                  "description_kind": "plain",
+                                  "required": true
+                                },
+                                "header_value": {
+                                  "type": "string",
+                                  "description": "The value to set the named header to.",
+                                  "description_kind": "plain",
+                                  "optional": true
+                                }
+                              },
+                              "description": "The list of request headers to add or overwrite if they're already present.",
+                              "description_kind": "plain"
+                            },
+                            "min_items": 1
+                          }
+                        },
+                        "description": "Additional actions that are performed on headers.",
+                        "description_kind": "plain"
+                      },
+                      "max_items": 1
+                    },
+                    "match": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "versioned_expr": {
+                            "type": "string",
+                            "description": "Predefined rule expression. If this field is specified, config must also be specified. Available options:   SRC_IPS_V1: Must specify the corresponding src_ip_ranges field in config.",
+                            "description_kind": "plain",
+                            "optional": true
+                          }
+                        },
+                        "block_types": {
+                          "config": {
+                            "nesting_mode": "list",
+                            "block": {
+                              "attributes": {
+                                "src_ip_ranges": {
+                                  "type": [
+                                    "set",
+                                    "string"
+                                  ],
+                                  "description": "Set of IP addresses or ranges (IPV4 or IPV6) in CIDR notation to match against inbound traffic. There is a limit of 10 IP ranges per rule. A value of '*' matches all IPs (can be used to override the default behavior).",
+                                  "description_kind": "plain",
+                                  "required": true
+                                }
+                              },
+                              "description": "The configuration options available when specifying versioned_expr. This field must be specified if versioned_expr is specified and cannot be specified if versioned_expr is not specified.",
+                              "description_kind": "plain"
+                            },
+                            "max_items": 1
+                          },
+                          "expr": {
+                            "nesting_mode": "list",
+                            "block": {
+                              "attributes": {
+                                "expression": {
+                                  "type": "string",
+                                  "description": "Textual representation of an expression in Common Expression Language syntax. The application context of the containing message determines which well-known feature set of CEL is supported.",
+                                  "description_kind": "plain",
+                                  "required": true
+                                }
+                              },
+                              "description": "User defined CEVAL expression. A CEVAL expression is used to specify match criteria such as origin.ip, source.region_code and contents in the request header.",
+                              "description_kind": "plain"
+                            },
+                            "max_items": 1
+                          },
+                          "expr_options": {
+                            "nesting_mode": "list",
+                            "block": {
+                              "block_types": {
+                                "recaptcha_options": {
+                                  "nesting_mode": "list",
+                                  "block": {
+                                    "attributes": {
+                                      "action_token_site_keys": {
+                                        "type": [
+                                          "list",
+                                          "string"
+                                        ],
+                                        "description": "A list of site keys to be used during the validation of reCAPTCHA action-tokens. The provided site keys need to be created from reCAPTCHA API under the same project where the security policy is created",
+                                        "description_kind": "plain",
+                                        "optional": true
+                                      },
+                                      "session_token_site_keys": {
+                                        "type": [
+                                          "list",
+                                          "string"
+                                        ],
+                                        "description": "A list of site keys to be used during the validation of reCAPTCHA session-tokens. The provided site keys need to be created from reCAPTCHA API under the same project where the security policy is created.",
+                                        "description_kind": "plain",
+                                        "optional": true
+                                      }
+                                    },
+                                    "description": "reCAPTCHA configuration options to be applied for the rule. If the rule does not evaluate reCAPTCHA tokens, this field has no effect.",
+                                    "description_kind": "plain"
+                                  },
+                                  "min_items": 1,
+                                  "max_items": 1
+                                }
+                              },
+                              "description": "The configuration options available when specifying a user defined CEVAL expression (i.e., 'expr').",
+                              "description_kind": "plain"
+                            },
+                            "max_items": 1
+                          }
+                        },
+                        "description": "A match condition that incoming traffic is evaluated against. If it evaluates to true, the corresponding action is enforced.",
+                        "description_kind": "plain"
+                      },
+                      "min_items": 1,
+                      "max_items": 1
+                    },
+                    "rate_limit_options": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "ban_duration_sec": {
+                            "type": "number",
+                            "description": "Can only be specified if the action for the rule is \"rate_based_ban\". If specified, determines the time (in seconds) the traffic will continue to be banned by the rate limit after the rate falls below the threshold.",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "conform_action": {
+                            "type": "string",
+                            "description": "Action to take for requests that are under the configured rate limit threshold. Valid option is \"allow\" only.",
+                            "description_kind": "plain",
+                            "required": true
+                          },
+                          "enforce_on_key": {
+                            "type": "string",
+                            "description": "Determines the key to enforce the rateLimitThreshold on",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "enforce_on_key_name": {
+                            "type": "string",
+                            "description": "Rate limit key name applicable only for the following key types: HTTP_HEADER -- Name of the HTTP header whose value is taken as the key value. HTTP_COOKIE -- Name of the HTTP cookie whose value is taken as the key value.",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "exceed_action": {
+                            "type": "string",
+                            "description": "Action to take for requests that are above the configured rate limit threshold, to either deny with a specified HTTP response code, or redirect to a different endpoint. Valid options are \"deny()\" where valid values for status are 403, 404, 429, and 502, and \"redirect\" where the redirect parameters come from exceedRedirectOptions below.",
+                            "description_kind": "plain",
+                            "required": true
+                          }
+                        },
+                        "block_types": {
+                          "ban_threshold": {
+                            "nesting_mode": "list",
+                            "block": {
+                              "attributes": {
+                                "count": {
+                                  "type": "number",
+                                  "description": "Number of HTTP(S) requests for calculating the threshold.",
+                                  "description_kind": "plain",
+                                  "required": true
+                                },
+                                "interval_sec": {
+                                  "type": "number",
+                                  "description": "Interval over which the threshold is computed.",
+                                  "description_kind": "plain",
+                                  "required": true
+                                }
+                              },
+                              "description": "Can only be specified if the action for the rule is \"rate_based_ban\". If specified, the key will be banned for the configured 'banDurationSec' when the number of requests that exceed the 'rateLimitThreshold' also exceed this 'banThreshold'.",
+                              "description_kind": "plain"
+                            },
+                            "max_items": 1
+                          },
+                          "exceed_redirect_options": {
+                            "nesting_mode": "list",
+                            "block": {
+                              "attributes": {
+                                "target": {
+                                  "type": "string",
+                                  "description": "Target for the redirect action. This is required if the type is EXTERNAL_302 and cannot be specified for GOOGLE_RECAPTCHA.",
+                                  "description_kind": "plain",
+                                  "optional": true
+                                },
+                                "type": {
+                                  "type": "string",
+                                  "description": "Type of the redirect action.",
+                                  "description_kind": "plain",
+                                  "required": true
+                                }
+                              },
+                              "description": "Parameters defining the redirect action that is used as the exceed action. Cannot be specified if the exceed action is not redirect.",
+                              "description_kind": "plain"
+                            },
+                            "max_items": 1
+                          },
+                          "rate_limit_threshold": {
+                            "nesting_mode": "list",
+                            "block": {
+                              "attributes": {
+                                "count": {
+                                  "type": "number",
+                                  "description": "Number of HTTP(S) requests for calculating the threshold.",
+                                  "description_kind": "plain",
+                                  "required": true
+                                },
+                                "interval_sec": {
+                                  "type": "number",
+                                  "description": "Interval over which the threshold is computed.",
+                                  "description_kind": "plain",
+                                  "required": true
+                                }
+                              },
+                              "description": "Threshold at which to begin ratelimiting.",
+                              "description_kind": "plain"
+                            },
+                            "min_items": 1,
+                            "max_items": 1
+                          }
+                        },
+                        "description": "Rate limit threshold for this security policy. Must be specified if the action is \"rate_based_ban\" or \"throttle\". Cannot be specified for any other actions.",
+                        "description_kind": "plain"
+                      },
+                      "max_items": 1
+                    },
+                    "redirect_options": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "target": {
+                            "type": "string",
+                            "description": "Target for the redirect action. This is required if the type is EXTERNAL_302 and cannot be specified for GOOGLE_RECAPTCHA.",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "type": {
+                            "type": "string",
+                            "description": "Type of the redirect action. Available options: EXTERNAL_302: Must specify the corresponding target field in config. GOOGLE_RECAPTCHA: Cannot specify target field in config.",
+                            "description_kind": "plain",
+                            "required": true
+                          }
+                        },
+                        "description": "Parameters defining the redirect action. Cannot be specified for any other actions.",
+                        "description_kind": "plain"
+                      },
+                      "max_items": 1
+                    }
+                  },
+                  "description": "The set of rules that belong to this policy. There must always be a default rule (rule with priority 2147483647 and match \"*\"). If no rules are provided when creating a security policy, a default rule with action \"allow\" will be added.",
+                  "description_kind": "plain"
+                }
               },
               "timeouts": {
                 "nesting_mode": "single",
@@ -13708,6 +15382,427 @@
             "description_kind": "plain"
           }
         },
+        "google_redis_instance": {
+          "version": 0,
+          "block": {
+            "attributes": {
+              "alternative_location_id": {
+                "type": "string",
+                "description": "Only applicable to STANDARD_HA tier which protects the instance\nagainst zonal failures by provisioning it across two zones.\nIf provided, it must be a different zone from the one provided in\n[locationId].",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "auth_enabled": {
+                "type": "bool",
+                "description": "Optional. Indicates whether OSS Redis AUTH is enabled for the\ninstance. If set to \"true\" AUTH is enabled on the instance.\nDefault value is \"false\" meaning AUTH is disabled.",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "auth_string": {
+                "type": "string",
+                "description": "AUTH String set on the instance. This field will only be populated if auth_enabled is true.",
+                "description_kind": "plain",
+                "computed": true,
+                "sensitive": true
+              },
+              "authorized_network": {
+                "type": "string",
+                "description": "The full name of the Google Compute Engine network to which the\ninstance is connected. If left unspecified, the default network\nwill be used.",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "connect_mode": {
+                "type": "string",
+                "description": "The connection mode of the Redis instance. Default value: \"DIRECT_PEERING\" Possible values: [\"DIRECT_PEERING\", \"PRIVATE_SERVICE_ACCESS\"]",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "create_time": {
+                "type": "string",
+                "description": "The time the instance was created in RFC3339 UTC \"Zulu\" format,\naccurate to nanoseconds.",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "current_location_id": {
+                "type": "string",
+                "description": "The current zone where the Redis endpoint is placed.\nFor Basic Tier instances, this will always be the same as the\n[locationId] provided by the user at creation time. For Standard Tier\ninstances, this can be either [locationId] or [alternativeLocationId]\nand can change after a failover event.",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "customer_managed_key": {
+                "type": "string",
+                "description": "Optional. The KMS key reference that you want to use to encrypt the data at rest for this Redis\ninstance. If this is provided, CMEK is enabled.",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "display_name": {
+                "type": "string",
+                "description": "An arbitrary and optional user-provided name for the instance.",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "effective_labels": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description": "All of labels (key/value pairs) present on the resource in GCP, including the labels configured through Terraform, other clients and services.",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "host": {
+                "type": "string",
+                "description": "Hostname or IP address of the exposed Redis endpoint used by clients\nto connect to the service.",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "labels": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description": "Resource labels to represent user provided metadata.\n\n**Note**: This field is non-authoritative, and will only manage the labels present in your configuration.\nPlease refer to the field 'effective_labels' for all of the labels present on the resource.",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "location_id": {
+                "type": "string",
+                "description": "The zone where the instance will be provisioned. If not provided,\nthe service will choose a zone for the instance. For STANDARD_HA tier,\ninstances will be created across two zones for protection against\nzonal failures. If [alternativeLocationId] is also provided, it must\nbe different from [locationId].",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "maintenance_schedule": {
+                "type": [
+                  "list",
+                  [
+                    "object",
+                    {
+                      "end_time": "string",
+                      "schedule_deadline_time": "string",
+                      "start_time": "string"
+                    }
+                  ]
+                ],
+                "description": "Upcoming maintenance schedule.",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "maintenance_version": {
+                "type": "string",
+                "description": "The self service update maintenance version.",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "memory_size_gb": {
+                "type": "number",
+                "description": "Redis memory size in GiB.",
+                "description_kind": "plain",
+                "required": true
+              },
+              "name": {
+                "type": "string",
+                "description": "The ID of the instance or a fully qualified identifier for the instance.",
+                "description_kind": "plain",
+                "required": true
+              },
+              "nodes": {
+                "type": [
+                  "list",
+                  [
+                    "object",
+                    {
+                      "id": "string",
+                      "zone": "string"
+                    }
+                  ]
+                ],
+                "description": "Output only. Info per node.",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "persistence_iam_identity": {
+                "type": "string",
+                "description": "Output only. Cloud IAM identity used by import / export operations\nto transfer data to/from Cloud Storage. Format is \"serviceAccount:\".\nThe value may change over time for a given instance so should be\nchecked before each import/export operation.",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "port": {
+                "type": "number",
+                "description": "The port number of the exposed Redis endpoint.",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "project": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "read_endpoint": {
+                "type": "string",
+                "description": "Output only. Hostname or IP address of the exposed readonly Redis endpoint. Standard tier only.\nTargets all healthy replica nodes in instance. Replication is asynchronous and replica nodes\nwill exhibit some lag behind the primary. Write requests must target 'host'.",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "read_endpoint_port": {
+                "type": "number",
+                "description": "Output only. The port number of the exposed readonly redis endpoint. Standard tier only.\nWrite requests should target 'port'.",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "read_replicas_mode": {
+                "type": "string",
+                "description": "Optional. Read replica mode. Can only be specified when trying to create the instance.\nIf not set, Memorystore Redis backend will default to READ_REPLICAS_DISABLED.\n- READ_REPLICAS_DISABLED: If disabled, read endpoint will not be provided and the\ninstance cannot scale up or down the number of replicas.\n- READ_REPLICAS_ENABLED: If enabled, read endpoint will be provided and the instance\ncan scale up and down the number of replicas. Possible values: [\"READ_REPLICAS_DISABLED\", \"READ_REPLICAS_ENABLED\"]",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "redis_configs": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description": "Redis configuration parameters, according to http://redis.io/topics/config.\nPlease check Memorystore documentation for the list of supported parameters:\nhttps://cloud.google.com/memorystore/docs/redis/reference/rest/v1/projects.locations.instances#Instance.FIELDS.redis_configs",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "redis_version": {
+                "type": "string",
+                "description": "The version of Redis software. If not provided, latest supported\nversion will be used. Please check the API documentation linked\nat the top for the latest valid values.",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "region": {
+                "type": "string",
+                "description": "The name of the Redis region of the instance.",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "replica_count": {
+                "type": "number",
+                "description": "Optional. The number of replica nodes. The valid range for the Standard Tier with\nread replicas enabled is [1-5] and defaults to 2. If read replicas are not enabled\nfor a Standard Tier instance, the only valid value is 1 and the default is 1.\nThe valid value for basic tier is 0 and the default is also 0.",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "reserved_ip_range": {
+                "type": "string",
+                "description": "The CIDR range of internal addresses that are reserved for this\ninstance. If not provided, the service will choose an unused /29\nblock, for example, 10.0.0.0/29 or 192.168.0.0/29. Ranges must be\nunique and non-overlapping with existing subnets in an authorized\nnetwork.",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "secondary_ip_range": {
+                "type": "string",
+                "description": "Optional. Additional IP range for node placement. Required when enabling read replicas on\nan existing instance. For DIRECT_PEERING mode value must be a CIDR range of size /28, or\n\"auto\". For PRIVATE_SERVICE_ACCESS mode value must be the name of an allocated address\nrange associated with the private service access connection, or \"auto\".",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "server_ca_certs": {
+                "type": [
+                  "list",
+                  [
+                    "object",
+                    {
+                      "cert": "string",
+                      "create_time": "string",
+                      "expire_time": "string",
+                      "serial_number": "string",
+                      "sha1_fingerprint": "string"
+                    }
+                  ]
+                ],
+                "description": "List of server CA certificates for the instance.",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "terraform_labels": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description": "The combination of labels configured directly on the resource\n and default labels configured on the provider.",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "tier": {
+                "type": "string",
+                "description": "The service tier of the instance. Must be one of these values:\n\n- BASIC: standalone instance\n- STANDARD_HA: highly available primary/replica instances Default value: \"BASIC\" Possible values: [\"BASIC\", \"STANDARD_HA\"]",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "transit_encryption_mode": {
+                "type": "string",
+                "description": "The TLS mode of the Redis instance, If not provided, TLS is disabled for the instance.\n\n- SERVER_AUTHENTICATION: Client to Server traffic encryption enabled with server authentication Default value: \"DISABLED\" Possible values: [\"SERVER_AUTHENTICATION\", \"DISABLED\"]",
+                "description_kind": "plain",
+                "optional": true
+              }
+            },
+            "block_types": {
+              "maintenance_policy": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "create_time": {
+                      "type": "string",
+                      "description": "Output only. The time when the policy was created.\nA timestamp in RFC3339 UTC \"Zulu\" format, with nanosecond\nresolution and up to nine fractional digits.",
+                      "description_kind": "plain",
+                      "computed": true
+                    },
+                    "description": {
+                      "type": "string",
+                      "description": "Optional. Description of what this policy is for.\nCreate/Update methods return INVALID_ARGUMENT if the\nlength is greater than 512.",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "update_time": {
+                      "type": "string",
+                      "description": "Output only. The time when the policy was last updated.\nA timestamp in RFC3339 UTC \"Zulu\" format, with nanosecond\nresolution and up to nine fractional digits.",
+                      "description_kind": "plain",
+                      "computed": true
+                    }
+                  },
+                  "block_types": {
+                    "weekly_maintenance_window": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "day": {
+                            "type": "string",
+                            "description": "Required. The day of week that maintenance updates occur.\n\n- DAY_OF_WEEK_UNSPECIFIED: The day of the week is unspecified.\n- MONDAY: Monday\n- TUESDAY: Tuesday\n- WEDNESDAY: Wednesday\n- THURSDAY: Thursday\n- FRIDAY: Friday\n- SATURDAY: Saturday\n- SUNDAY: Sunday Possible values: [\"DAY_OF_WEEK_UNSPECIFIED\", \"MONDAY\", \"TUESDAY\", \"WEDNESDAY\", \"THURSDAY\", \"FRIDAY\", \"SATURDAY\", \"SUNDAY\"]",
+                            "description_kind": "plain",
+                            "required": true
+                          },
+                          "duration": {
+                            "type": "string",
+                            "description": "Output only. Duration of the maintenance window.\nThe current window is fixed at 1 hour.\nA duration in seconds with up to nine fractional digits,\nterminated by 's'. Example: \"3.5s\".",
+                            "description_kind": "plain",
+                            "computed": true
+                          }
+                        },
+                        "block_types": {
+                          "start_time": {
+                            "nesting_mode": "list",
+                            "block": {
+                              "attributes": {
+                                "hours": {
+                                  "type": "number",
+                                  "description": "Hours of day in 24 hour format. Should be from 0 to 23.\nAn API may choose to allow the value \"24:00:00\" for scenarios like business closing time.",
+                                  "description_kind": "plain",
+                                  "optional": true
+                                },
+                                "minutes": {
+                                  "type": "number",
+                                  "description": "Minutes of hour of day. Must be from 0 to 59.",
+                                  "description_kind": "plain",
+                                  "optional": true
+                                },
+                                "nanos": {
+                                  "type": "number",
+                                  "description": "Fractions of seconds in nanoseconds. Must be from 0 to 999,999,999.",
+                                  "description_kind": "plain",
+                                  "optional": true
+                                },
+                                "seconds": {
+                                  "type": "number",
+                                  "description": "Seconds of minutes of the time. Must normally be from 0 to 59.\nAn API may allow the value 60 if it allows leap-seconds.",
+                                  "description_kind": "plain",
+                                  "optional": true
+                                }
+                              },
+                              "description": "Required. Start time of the window in UTC time.",
+                              "description_kind": "plain"
+                            },
+                            "min_items": 1,
+                            "max_items": 1
+                          }
+                        },
+                        "description": "Optional. Maintenance window that is applied to resources covered by this policy.\nMinimum 1. For the current version, the maximum number\nof weekly_window is expected to be one.",
+                        "description_kind": "plain"
+                      }
+                    }
+                  },
+                  "description": "Maintenance policy for an instance.",
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "persistence_config": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "persistence_mode": {
+                      "type": "string",
+                      "description": "Optional. Controls whether Persistence features are enabled. If not provided, the existing value will be used.\n\n- DISABLED: \tPersistence is disabled for the instance, and any existing snapshots are deleted.\n- RDB: RDB based Persistence is enabled. Possible values: [\"DISABLED\", \"RDB\"]",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    },
+                    "rdb_next_snapshot_time": {
+                      "type": "string",
+                      "description": "Output only. The next time that a snapshot attempt is scheduled to occur.\nA timestamp in RFC3339 UTC \"Zulu\" format, with nanosecond resolution and up\nto nine fractional digits.\nExamples: \"2014-10-02T15:01:23Z\" and \"2014-10-02T15:01:23.045123456Z\".",
+                      "description_kind": "plain",
+                      "computed": true
+                    },
+                    "rdb_snapshot_period": {
+                      "type": "string",
+                      "description": "Optional. Available snapshot periods for scheduling.\n\n- ONE_HOUR:\tSnapshot every 1 hour.\n- SIX_HOURS:\tSnapshot every 6 hours.\n- TWELVE_HOURS:\tSnapshot every 12 hours.\n- TWENTY_FOUR_HOURS:\tSnapshot every 24 hours. Possible values: [\"ONE_HOUR\", \"SIX_HOURS\", \"TWELVE_HOURS\", \"TWENTY_FOUR_HOURS\"]",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "rdb_snapshot_start_time": {
+                      "type": "string",
+                      "description": "Optional. Date and time that the first snapshot was/will be attempted,\nand to which future snapshots will be aligned. If not provided,\nthe current time will be used.\nA timestamp in RFC3339 UTC \"Zulu\" format, with nanosecond resolution\nand up to nine fractional digits.\nExamples: \"2014-10-02T15:01:23Z\" and \"2014-10-02T15:01:23.045123456Z\".",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    }
+                  },
+                  "description": "Persistence configuration for an instance.",
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "timeouts": {
+                "nesting_mode": "single",
+                "block": {
+                  "attributes": {
+                    "create": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "delete": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "update": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "description_kind": "plain"
+                }
+              }
+            },
+            "description_kind": "plain"
+          }
+        },
         "google_secret_manager_secret": {
           "version": 0,
           "block": {
@@ -15457,6 +17552,131 @@
                   "description_kind": "plain"
                 },
                 "max_items": 1
+              }
+            },
+            "description_kind": "plain"
+          }
+        },
+        "google_vertex_ai_dataset": {
+          "version": 0,
+          "block": {
+            "attributes": {
+              "create_time": {
+                "type": "string",
+                "description": "The timestamp of when the dataset was created in RFC3339 UTC \"Zulu\" format, with nanosecond resolution and up to nine fractional digits.",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "display_name": {
+                "type": "string",
+                "description": "The user-defined name of the Dataset. The name can be up to 128 characters long and can be consist of any UTF-8 characters.",
+                "description_kind": "plain",
+                "required": true
+              },
+              "effective_labels": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description": "All of labels (key/value pairs) present on the resource in GCP, including the labels configured through Terraform, other clients and services.",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "labels": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description": "A set of key/value label pairs to assign to this Workflow.\n\n\n**Note**: This field is non-authoritative, and will only manage the labels present in your configuration.\nPlease refer to the field 'effective_labels' for all of the labels present on the resource.",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "metadata_schema_uri": {
+                "type": "string",
+                "description": "Points to a YAML file stored on Google Cloud Storage describing additional information about the Dataset. The schema is defined as an OpenAPI 3.0.2 Schema Object. The schema files that can be used here are found in gs://google-cloud-aiplatform/schema/dataset/metadata/.",
+                "description_kind": "plain",
+                "required": true
+              },
+              "name": {
+                "type": "string",
+                "description": "The resource name of the Dataset. This value is set by Google.",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "project": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "region": {
+                "type": "string",
+                "description": "The region of the dataset. eg us-central1",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "terraform_labels": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description": "The combination of labels configured directly on the resource\n and default labels configured on the provider.",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "update_time": {
+                "type": "string",
+                "description": "The timestamp of when the dataset was last updated in RFC3339 UTC \"Zulu\" format, with nanosecond resolution and up to nine fractional digits.",
+                "description_kind": "plain",
+                "computed": true
+              }
+            },
+            "block_types": {
+              "encryption_spec": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "kms_key_name": {
+                      "type": "string",
+                      "description": "Required. The Cloud KMS resource identifier of the customer managed encryption key used to protect a resource.\nHas the form: projects/my-project/locations/my-region/keyRings/my-kr/cryptoKeys/my-key. The key needs to be in the same region as where the resource is created.",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "description": "Customer-managed encryption key spec for a Dataset. If set, this Dataset and all sub-resources of this Dataset will be secured by this key.",
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "timeouts": {
+                "nesting_mode": "single",
+                "block": {
+                  "attributes": {
+                    "create": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "delete": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "update": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "description_kind": "plain"
+                }
               }
             },
             "description_kind": "plain"

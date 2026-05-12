@@ -26,6 +26,7 @@ var WantedAWS = []string{
 // in the labelableGCP static allowlist for taggable().
 var WantedGoogle = []string{
 	"google_cloud_run_v2_service",
+	"google_cloudbuild_trigger",
 	"google_cloudfunctions2_function",
 	"google_compute_address",
 	"google_compute_firewall",
@@ -35,6 +36,7 @@ var WantedGoogle = []string{
 	"google_compute_instance",
 	"google_compute_network",
 	"google_compute_router",
+	"google_compute_security_policy",
 	"google_compute_target_https_proxy",
 	"google_compute_url_map",
 	"google_container_cluster",
@@ -46,10 +48,12 @@ var WantedGoogle = []string{
 	"google_monitoring_notification_channel",
 	"google_pubsub_subscription",
 	"google_pubsub_topic",
+	"google_redis_instance",
 	"google_secret_manager_secret",
 	"google_service_account",
 	"google_sql_database_instance",
 	"google_storage_bucket",
+	"google_vertex_ai_dataset",
 }
 
 // AWSProviderSource is the Terraform Registry source string for the AWS

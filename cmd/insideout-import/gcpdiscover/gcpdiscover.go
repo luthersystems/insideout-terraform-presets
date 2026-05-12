@@ -222,6 +222,11 @@ func NewGCPDiscoverer(searcher gcpAssetSearcher, projectID string) *GCPDiscovere
 			"google_monitoring_dashboard":            newMonitoringDashboardDiscoverer(),
 			"google_monitoring_alert_policy":         newMonitoringAlertPolicyDiscoverer(),
 			"google_monitoring_notification_channel": newMonitoringNotificationChannelDiscoverer(),
+			// Bundle 10 — preset gap closers (#390).
+			"google_compute_security_policy": newComputeSecurityPolicyDiscoverer(),
+			"google_redis_instance":          newRedisInstanceDiscoverer(),
+			"google_vertex_ai_dataset":       newVertexAIDatasetDiscoverer(),
+			"google_cloudbuild_trigger":      newCloudbuildTriggerDiscoverer(),
 		},
 	}
 }
