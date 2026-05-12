@@ -153,7 +153,7 @@ func TestDiscoverTypes_AddressRegionalAndGlobal_CoexistOnSharedSlug(t *testing.T
 			},
 		},
 	}
-	g := NewGCPDiscoverer(fake, "real-proj")
+	g := NewGCPDiscoverer(fake, "real-proj", GCPDiscovererOpts{})
 	got, err := g.DiscoverTypes(context.Background(),
 		[]string{"google_compute_address", "google_compute_global_address"},
 		DiscoverArgs{Project: "io-foo"})

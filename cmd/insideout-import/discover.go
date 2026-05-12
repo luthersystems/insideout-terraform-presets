@@ -271,7 +271,29 @@ func productionDiscoverDeps() discoverDeps {
 			if err != nil {
 				return nil, func() error { return nil }, err
 			}
-			return gcpAggAdapter{d: gcpdiscover.NewGCPDiscoverer(s, gcpProjectID)}, s.Close, nil
+			// Non-CAI listers for Bundle 11 types (#392). Each
+			// lister constructs independently; failures here are
+			// non-fatal (a misconfigured project may still benefit
+			// from CAI discovery), so we log and proceed with a nil
+			// lister — the per-type discoverer tolerates nil.
+			sinkLister, sinkErr := gcpdiscover.NewRealLoggingSinkLister(ctx)
+			if sinkErr != nil {
+				fmt.Fprintf(os.Stderr, "WARN: logging sink lister unavailable, sinks won't be discovered: %v\n", sinkErr)
+			}
+			sqlUserLister, sqlErr := gcpdiscover.NewRealSQLUserLister(ctx)
+			if sqlErr != nil {
+				fmt.Fprintf(os.Stderr, "WARN: sqladmin user lister unavailable, SQL users won't be discovered: %v\n", sqlErr)
+			}
+			identityLister, idErr := gcpdiscover.NewRealIdentityPlatformConfigLister(ctx)
+			if idErr != nil {
+				fmt.Fprintf(os.Stderr, "WARN: identitytoolkit lister unavailable, identity_platform_config won't be discovered: %v\n", idErr)
+			}
+			opts := gcpdiscover.GCPDiscovererOpts{
+				SinkLister:             sinkLister,
+				SQLUserLister:          sqlUserLister,
+				IdentityPlatformLister: identityLister,
+			}
+			return gcpAggAdapter{d: gcpdiscover.NewGCPDiscoverer(s, gcpProjectID, opts)}, s.Close, nil
 		},
 		runGenconfig: genconfig.Run,
 		runDriftfix:  driftfix.Run,

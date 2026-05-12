@@ -230,3 +230,59 @@ func (d *brokenParentScopeDiscoverer) FromAsset(_ addressBook, _ gcpAssetResult,
 func (d *brokenParentScopeDiscoverer) DiscoverByID(_ context.Context, _ gcpAssetSearcher, _ string, _ string) (imported.ImportedResource, error) {
 	return imported.ImportedResource{}, ErrNotSupported
 }
+
+// fakeLoggingSinkLister returns a canned set of sinks for the unit
+// tests of loggingProjectSinkDiscoverer. Each test sets `sinks` (the
+// canned response) and inspects `calls` after the discoverer runs.
+type fakeLoggingSinkLister struct {
+	sinks []gcpLoggingSink
+	err   error
+	calls []string
+}
+
+func (f *fakeLoggingSinkLister) ListSinks(_ context.Context, projectID string) ([]gcpLoggingSink, error) {
+	f.calls = append(f.calls, projectID)
+	if f.err != nil {
+		return nil, f.err
+	}
+	return f.sinks, nil
+}
+
+// fakeSQLUserLister returns canned users per-instance. usersByInstance
+// keys on the instance name; an instance not in the map yields zero
+// users (legitimate empty state).
+type fakeSQLUserLister struct {
+	usersByInstance map[string][]gcpSQLUser
+	errByInstance   map[string]error
+	calls           []struct {
+		projectID string
+		instance  string
+	}
+}
+
+func (f *fakeSQLUserLister) ListSQLUsers(_ context.Context, projectID, instance string) ([]gcpSQLUser, error) {
+	f.calls = append(f.calls, struct {
+		projectID string
+		instance  string
+	}{projectID, instance})
+	if err, ok := f.errByInstance[instance]; ok {
+		return nil, err
+	}
+	return f.usersByInstance[instance], nil
+}
+
+// fakeIdentityPlatformConfigLister returns either a canned config or
+// nil-without-error (the "Identity Platform not activated" state).
+type fakeIdentityPlatformConfigLister struct {
+	cfg   *gcpIdentityPlatformConfig
+	err   error
+	calls []string
+}
+
+func (f *fakeIdentityPlatformConfigLister) GetIdentityPlatformConfig(_ context.Context, projectID string) (*gcpIdentityPlatformConfig, error) {
+	f.calls = append(f.calls, projectID)
+	if f.err != nil {
+		return nil, f.err
+	}
+	return f.cfg, nil
+}

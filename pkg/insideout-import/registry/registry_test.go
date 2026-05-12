@@ -68,6 +68,7 @@ func TestSupportedDiscoverTypes_GCP_ReturnsCanonicalSortedList(t *testing.T) {
 		"google_api_gateway_api_config",
 		"google_api_gateway_gateway",
 		"google_cloud_run_v2_service",
+		"google_cloudbuild_trigger",
 		"google_cloudfunctions2_function",
 		"google_compute_address",
 		"google_compute_firewall",
@@ -77,21 +78,28 @@ func TestSupportedDiscoverTypes_GCP_ReturnsCanonicalSortedList(t *testing.T) {
 		"google_compute_instance",
 		"google_compute_network",
 		"google_compute_router",
+		"google_compute_security_policy",
 		"google_compute_target_https_proxy",
 		"google_compute_url_map",
 		"google_container_cluster",
 		"google_container_node_pool",
+		"google_firestore_database",
+		"google_identity_platform_config",
 		"google_kms_crypto_key",
 		"google_kms_key_ring",
+		"google_logging_project_sink",
 		"google_monitoring_alert_policy",
 		"google_monitoring_dashboard",
 		"google_monitoring_notification_channel",
 		"google_pubsub_subscription",
 		"google_pubsub_topic",
+		"google_redis_instance",
 		"google_secret_manager_secret",
 		"google_service_account",
 		"google_sql_database_instance",
+		"google_sql_user",
 		"google_storage_bucket",
+		"google_vertex_ai_dataset",
 	}
 	got := SupportedDiscoverTypes(ProviderGCP)
 	if !reflect.DeepEqual(got, want) {
@@ -141,7 +149,7 @@ func TestSupportedDiscoverTypes_ReturnsCopy_PackageStateUnchanged(t *testing.T) 
 		firstLiteral string
 	}{
 		{provider: ProviderAWS, firstLiteral: "aws_apigatewayv2_api"},
-		{provider: ProviderGCP, firstLiteral: "google_api_gateway_api"},
+		{provider: ProviderGCP, firstLiteral: "google_api_gateway_api"}, // first entry after Bundle 10
 	}
 	for _, tc := range cases {
 		t.Run(tc.provider, func(t *testing.T) {

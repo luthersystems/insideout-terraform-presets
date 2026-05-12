@@ -50,11 +50,21 @@ var expectedRegisteredTypes = map[string]bool{
 	"google_monitoring_dashboard":            false,
 	"google_monitoring_alert_policy":         false,
 	"google_monitoring_notification_channel": false,
+	// Bundle 10 — preset gap closers (#390).
+	"google_compute_security_policy": false,
+	"google_redis_instance":          false,
+	"google_vertex_ai_dataset":       false,
+	"google_cloudbuild_trigger":      false,
+	// Bundle 11 — complete GCP coverage (#392).
+	"google_firestore_database":       false,
+	"google_logging_project_sink":     false,
+	"google_sql_user":                 false,
+	"google_identity_platform_config": false,
 }
 
 func TestNewGCPDiscoverer_RegistersExpectedTypes(t *testing.T) {
 	t.Parallel()
-	g := NewGCPDiscoverer(&fakeAssetSearcher{}, "real-proj")
+	g := NewGCPDiscoverer(&fakeAssetSearcher{}, "real-proj", GCPDiscovererOpts{})
 	got := g.SupportedTypes()
 	want := make(map[string]bool, len(expectedRegisteredTypes))
 	for k, v := range expectedRegisteredTypes {
@@ -75,7 +85,7 @@ func TestNewGCPDiscoverer_RegistersExpectedTypes(t *testing.T) {
 
 func TestSupportedTypes_IsSorted(t *testing.T) {
 	t.Parallel()
-	g := NewGCPDiscoverer(&fakeAssetSearcher{}, "p")
+	g := NewGCPDiscoverer(&fakeAssetSearcher{}, "p", GCPDiscovererOpts{})
 	got := g.SupportedTypes()
 	for i := 1; i < len(got); i++ {
 		if got[i-1] > got[i] {
@@ -87,7 +97,7 @@ func TestSupportedTypes_IsSorted(t *testing.T) {
 func TestDiscoverTypes_ScopesToProjectAndPassesAssetTypes(t *testing.T) {
 	t.Parallel()
 	fake := &fakeAssetSearcher{}
-	g := NewGCPDiscoverer(fake, "real-proj")
+	g := NewGCPDiscoverer(fake, "real-proj", GCPDiscovererOpts{})
 
 	if _, err := g.DiscoverTypes(context.Background(), []string{"google_pubsub_topic"}, DiscoverArgs{Project: "io-foo", Regions: []string{"us-central1"}}); err != nil {
 		t.Fatal(err)
@@ -113,7 +123,7 @@ func TestDiscoverTypes_ScopesToProjectAndPassesAssetTypes(t *testing.T) {
 func TestDiscoverTypes_DefaultsToAllSupported(t *testing.T) {
 	t.Parallel()
 	fake := &fakeAssetSearcher{}
-	g := NewGCPDiscoverer(fake, "real-proj")
+	g := NewGCPDiscoverer(fake, "real-proj", GCPDiscovererOpts{})
 	if _, err := g.DiscoverTypes(context.Background(), nil, DiscoverArgs{Project: "io-foo", Regions: []string{""}}); err != nil {
 		t.Fatal(err)
 	}
@@ -131,14 +141,18 @@ func TestDiscoverTypes_DefaultsToAllSupported(t *testing.T) {
 		t.Fatalf("SearchAll called %d times, want %d (one per non-empty ScopeStyle bucket)", len(fake.calls), wantCalls)
 	}
 	// Collect the distinct Cloud Asset asset-types requested across
-	// all calls. The count must equal the number of DISTINCT asset
-	// types in the registry — strictly less than the number of
+	// all calls. The count must equal the number of DISTINCT CAI
+	// asset types in the registry — strictly less than the number of
 	// registered TF types when two discoverers share a CAI slug
 	// (regional + global address share compute.googleapis.com/Address,
 	// regional + global forwarding rule share
-	// compute.googleapis.com/ForwardingRule; see #384). Compute the
-	// expected from the registry itself rather than hardcoding so
-	// future shared-slug pairs don't drift this assertion.
+	// compute.googleapis.com/ForwardingRule; see #384). Non-CAI types
+	// (Bundle 11: sinks, SQL users, identity_platform_config) don't
+	// hit SearchAll at all — their AssetType() strings are
+	// descriptive only — so they're excluded from the expected set.
+	// Compute the expected from the registry itself rather than
+	// hardcoding so future shared-slug pairs don't drift this
+	// assertion.
 	covered := map[string]struct{}{}
 	for _, c := range fake.calls {
 		for _, at := range c.assetTypes {
@@ -147,10 +161,13 @@ func TestDiscoverTypes_DefaultsToAllSupported(t *testing.T) {
 	}
 	wantDistinctAssetTypes := map[string]struct{}{}
 	for _, d := range g.byType {
+		if d.ScopeStyle() == ScopeStyleNonCAI {
+			continue
+		}
 		wantDistinctAssetTypes[d.AssetType()] = struct{}{}
 	}
 	if len(covered) != len(wantDistinctAssetTypes) {
-		t.Errorf("covered asset-types=%d (across %d calls), want %d (one per DISTINCT asset type — shared-CAI-slug pairs count once)",
+		t.Errorf("covered asset-types=%d (across %d calls), want %d (one per DISTINCT CAI asset type — shared-CAI-slug pairs count once, non-CAI types excluded)",
 			len(covered), len(fake.calls), len(wantDistinctAssetTypes))
 	}
 }
@@ -158,7 +175,7 @@ func TestDiscoverTypes_DefaultsToAllSupported(t *testing.T) {
 func TestDiscoverTypes_EmptyProjectAndRegionEmptyQuery(t *testing.T) {
 	t.Parallel()
 	fake := &fakeAssetSearcher{}
-	g := NewGCPDiscoverer(fake, "real-proj")
+	g := NewGCPDiscoverer(fake, "real-proj", GCPDiscovererOpts{})
 	if _, err := g.DiscoverTypes(context.Background(), []string{"google_storage_bucket"}, DiscoverArgs{Project: "", Regions: []string{""}}); err != nil {
 		t.Fatal(err)
 	}
@@ -169,7 +186,7 @@ func TestDiscoverTypes_EmptyProjectAndRegionEmptyQuery(t *testing.T) {
 
 func TestDiscoverTypes_UnknownTypeAggregatesError(t *testing.T) {
 	t.Parallel()
-	g := NewGCPDiscoverer(&fakeAssetSearcher{}, "p")
+	g := NewGCPDiscoverer(&fakeAssetSearcher{}, "p", GCPDiscovererOpts{})
 	_, err := g.DiscoverTypes(context.Background(), []string{"google_pubsub_topic", "bogus", "also_bogus"}, DiscoverArgs{Project: "io-foo"})
 	if err == nil {
 		t.Fatal("expected error for unknown types")
@@ -181,7 +198,7 @@ func TestDiscoverTypes_UnknownTypeAggregatesError(t *testing.T) {
 
 func TestDiscoverTypes_PropagatesSearcherError(t *testing.T) {
 	t.Parallel()
-	g := NewGCPDiscoverer(&fakeAssetSearcher{err: errors.New("PermissionDenied")}, "p")
+	g := NewGCPDiscoverer(&fakeAssetSearcher{err: errors.New("PermissionDenied")}, "p", GCPDiscovererOpts{})
 	_, err := g.DiscoverTypes(context.Background(), []string{"google_pubsub_topic"}, DiscoverArgs{Project: "io-foo", Regions: []string{""}})
 	if err == nil || !strings.Contains(err.Error(), "PermissionDenied") {
 		t.Errorf("err=%v, want wrap of PermissionDenied", err)
@@ -197,7 +214,7 @@ func TestDiscoverTypes_TranslatesAndSortsByName(t *testing.T) {
 			{Name: "//storage.googleapis.com/io-foo-bucket", AssetType: "storage.googleapis.com/Bucket", Project: "real-proj", Location: "us-central1"},
 		},
 	}
-	g := NewGCPDiscoverer(fake, "real-proj")
+	g := NewGCPDiscoverer(fake, "real-proj", GCPDiscovererOpts{})
 	got, err := g.DiscoverTypes(context.Background(), []string{"google_pubsub_topic", "google_storage_bucket"}, DiscoverArgs{Project: "io-foo"})
 	if err != nil {
 		t.Fatal(err)
@@ -254,7 +271,7 @@ func TestDiscoverTypes_SkipsAssetsForUnsupportedTypes(t *testing.T) {
 			{Name: "//unsupported.googleapis.com/projects/real-proj/things/x", AssetType: "unsupported.googleapis.com/Thing"},
 		},
 	}
-	g := NewGCPDiscoverer(fake, "real-proj")
+	g := NewGCPDiscoverer(fake, "real-proj", GCPDiscovererOpts{})
 	got, err := g.DiscoverTypes(context.Background(), []string{"google_pubsub_topic"}, DiscoverArgs{Project: "io-foo", Regions: []string{""}})
 	if err != nil {
 		t.Fatal(err)
@@ -266,7 +283,7 @@ func TestDiscoverTypes_SkipsAssetsForUnsupportedTypes(t *testing.T) {
 
 func TestDiscoverByID_DispatchesAndPropagatesErrNotSupported(t *testing.T) {
 	t.Parallel()
-	g := NewGCPDiscoverer(&fakeAssetSearcher{}, "real-proj")
+	g := NewGCPDiscoverer(&fakeAssetSearcher{}, "real-proj", GCPDiscovererOpts{})
 
 	got, err := g.DiscoverByID(context.Background(), "google_pubsub_topic", "projects/real-proj/topics/alpha", "", "")
 	if err != nil {
@@ -291,7 +308,7 @@ func TestDiscoverByID_AccountIDOverridesConstructorProject(t *testing.T) {
 	// interface; for GCP the slot carries the real project ID. When an
 	// override is supplied, honor it rather than the constructor value
 	// — matches the AWS path where accountID flows through.
-	g := NewGCPDiscoverer(&fakeAssetSearcher{}, "ctor-proj")
+	g := NewGCPDiscoverer(&fakeAssetSearcher{}, "ctor-proj", GCPDiscovererOpts{})
 	got, err := g.DiscoverByID(context.Background(), "google_pubsub_topic", "alpha", "", "override-proj")
 	if err != nil {
 		t.Fatal(err)
@@ -493,7 +510,7 @@ func TestBuildSearchQuery_Composition(t *testing.T) {
 // it twice.
 func TestRegistryParity_GCP_LiveMatchesRegistry(t *testing.T) {
 	t.Parallel()
-	live := NewGCPDiscoverer(&fakeAssetSearcher{}, "p").SupportedTypes()
+	live := NewGCPDiscoverer(&fakeAssetSearcher{}, "p", GCPDiscovererOpts{}).SupportedTypes()
 	if len(live) == 0 {
 		t.Fatal("gcpdiscover registered no types — registry parity check would be tautologically empty")
 	}
@@ -517,7 +534,7 @@ func TestGCPDiscoverTypes_EmitsServiceStartFinish_OnceForCloudAssetInventory(t *
 			{Name: "//pubsub.googleapis.com/projects/real-proj/topics/alpha", AssetType: "pubsub.googleapis.com/Topic", Project: "real-proj"},
 		},
 	}
-	g := NewGCPDiscoverer(fake, "real-proj")
+	g := NewGCPDiscoverer(fake, "real-proj", GCPDiscovererOpts{})
 	rec := &recordingEmitter{}
 	if _, err := g.DiscoverTypes(context.Background(), []string{"google_pubsub_topic", "google_storage_bucket"}, DiscoverArgs{
 		Project: "io-foo",
@@ -564,7 +581,7 @@ func TestGCPDiscoverTypes_EmitsItemFound_PerAsset(t *testing.T) {
 			{Name: "//storage.googleapis.com/io-foo-bucket", AssetType: "storage.googleapis.com/Bucket", Project: "real-proj", Location: "us-central1"},
 		},
 	}
-	g := NewGCPDiscoverer(fake, "real-proj")
+	g := NewGCPDiscoverer(fake, "real-proj", GCPDiscovererOpts{})
 	rec := &recordingEmitter{}
 	got, err := g.DiscoverTypes(context.Background(), []string{"google_pubsub_topic", "google_storage_bucket"}, DiscoverArgs{
 		Project: "io-foo",
@@ -619,7 +636,7 @@ func TestGCPDiscoverTypes_EmitsStageFinish(t *testing.T) {
 			{Name: "//pubsub.googleapis.com/projects/real-proj/topics/a", AssetType: "pubsub.googleapis.com/Topic", Project: "real-proj"},
 		},
 	}
-	g := NewGCPDiscoverer(fake, "real-proj")
+	g := NewGCPDiscoverer(fake, "real-proj", GCPDiscovererOpts{})
 	rec := &recordingEmitter{}
 	if _, err := g.DiscoverTypes(context.Background(), []string{"google_pubsub_topic"}, DiscoverArgs{
 		Project: "io-foo",
@@ -685,6 +702,16 @@ var expectedScopeStyle = map[string]ScopeStyle{
 	"google_monitoring_dashboard":            ScopeStyleNamePrefix, // dashboards have no labels (#377)
 	"google_monitoring_alert_policy":         ScopeStyleNamePrefix, // alert policies have no labels (#377)
 	"google_monitoring_notification_channel": ScopeStyleNamePrefix, // notification channels have no labels (#377)
+	// Bundle 10 — preset gap closers (#390).
+	"google_compute_security_policy": ScopeStyleNamePrefix, // Cloud Armor policies have no labels (#390)
+	"google_redis_instance":          ScopeStyleLabels,     // Memorystore Redis carries labels (#390)
+	"google_vertex_ai_dataset":       ScopeStyleLabels,     // Vertex AI datasets carry labels (#390)
+	"google_cloudbuild_trigger":      ScopeStyleNamePrefix, // Cloud Build triggers have no labels (#390)
+	// Bundle 11 — complete GCP coverage (#392).
+	"google_firestore_database":       ScopeStyleNamePrefix, // Firestore databases have no labels (#374)
+	"google_logging_project_sink":     ScopeStyleNonCAI,     // Sinks not in CAI; Logging API list (#382)
+	"google_sql_user":                 ScopeStyleNonCAI,     // SQL users not in CAI; SQL Admin API list (#383)
+	"google_identity_platform_config": ScopeStyleNonCAI,     // Singleton not in CAI; identitytoolkit GetConfig (#392)
 }
 
 // TestScopeStyle_PinsPerTypeContract is the regression guard (#366).
@@ -701,7 +728,7 @@ var expectedScopeStyle = map[string]ScopeStyle{
 // also be added to the table — surfaces both forms of drift here.
 func TestScopeStyle_PinsPerTypeContract(t *testing.T) {
 	t.Parallel()
-	g := NewGCPDiscoverer(&fakeAssetSearcher{}, "p")
+	g := NewGCPDiscoverer(&fakeAssetSearcher{}, "p", GCPDiscovererOpts{})
 	if len(g.byType) == 0 {
 		t.Fatal("no discoverers registered; ScopeStyle parity test would be vacuous")
 	}
@@ -761,7 +788,7 @@ func TestAssetTypesOf_DedupsSharedSlug_PreservesFirstAppearanceOrder(t *testing.
 func TestDiscoverTypes_LabelsBucketOnly_SingleSearchCall(t *testing.T) {
 	t.Parallel()
 	fake := &fakeAssetSearcher{}
-	g := NewGCPDiscoverer(fake, "real-proj")
+	g := NewGCPDiscoverer(fake, "real-proj", GCPDiscovererOpts{})
 	if _, err := g.DiscoverTypes(context.Background(), []string{"google_pubsub_topic", "google_storage_bucket"}, DiscoverArgs{
 		Project: "io-foo",
 		Regions: []string{""},
@@ -1242,7 +1269,7 @@ func namesOf(rs []imported.ImportedResource) []string {
 //     dead-code is a maintenance trap.
 func TestParentScopedDiscoverer_ContractMatchesScopeStyle(t *testing.T) {
 	t.Parallel()
-	g := NewGCPDiscoverer(&fakeAssetSearcher{}, "p")
+	g := NewGCPDiscoverer(&fakeAssetSearcher{}, "p", GCPDiscovererOpts{})
 	if len(g.byType) == 0 {
 		t.Fatal("no discoverers registered; parent-scoped contract test would be vacuous")
 	}
