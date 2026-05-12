@@ -64,5 +64,5 @@ var GoogleKMSCryptoKeySchema = map[string]FieldSchema{
 }
 
 func init() {
-	Register("google_kms_crypto_key", reflect.TypeFor[GoogleKMSCryptoKey](), GoogleKMSCryptoKeySchema)
+	Register("google_kms_crypto_key", reflect.TypeFor[GoogleKMSCryptoKey](), GoogleKMSCryptoKeySchema, GoogleProviderSource)
 }

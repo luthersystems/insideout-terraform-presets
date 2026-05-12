@@ -744,6 +744,13 @@ type providersTFInput struct {
 	// project for GCP) but deliberately omits default_tags /
 	// default_labels — imported resources must not inherit the stack's
 	// Project tag because they may pre-date the InsideOut session.
+	//
+	// The synthetic key "gcp-beta" requests the additional
+	// `google-beta.imported` alias (and a corresponding `google-beta`
+	// entry in required_providers) — set when the imported resource set
+	// includes types whose schema lives in hashicorp/google-beta. The
+	// EmitImportedTF caller is responsible for populating this key based
+	// on per-type provider source lookups.
 	ImportedClouds map[string]bool
 }
 
@@ -771,6 +778,16 @@ func generateProvidersTF(in providersTFInput) []byte {
 		// minors. Hard-bumping to ">= 5.16" guarantees the safety net
 		// emitted below is always honored.
 		required["google"] = &tfconfig.ProviderRequirement{Source: "hashicorp/google", VersionConstraints: []string{">= 5.16"}}
+		// google-beta is pulled in either because a child module's
+		// required_providers declared it (already captured in
+		// `discovered`) or because the imported resource set carries
+		// google-beta types and we need the `google-beta.imported`
+		// alias. Declare it explicitly here so the alias block below
+		// doesn't fail required_providers resolution when the only
+		// google-beta consumer is the imported alias.
+		if importedClouds["gcp-beta"] {
+			required["google-beta"] = &tfconfig.ProviderRequirement{Source: "hashicorp/google-beta", VersionConstraints: []string{">= 5.16"}}
+		}
 		maps.Copy(required, discovered)
 
 		// default_labels is a safety net so every GCP resource in the
@@ -803,6 +820,18 @@ func generateProvidersTF(in providersTFInput) []byte {
 			// gcp_project_id_required ValidationIssue surfaces the real
 			// fix to the caller before apply.
 			fmt.Fprintf(&b, "provider \"google\" {\n  alias   = \"imported\"\n  region  = %q\n  project = %q\n}\n", region, gcpProjectID)
+		}
+		if importedClouds["gcp-beta"] {
+			b.WriteString("\n")
+			// google-beta.imported is the alias used by imported
+			// resources whose schema lives in hashicorp/google-beta —
+			// most notably the API Gateway family. Mirrors the
+			// google.imported alias above (no default_labels) so the
+			// imported resources don't inherit the session's
+			// project label. EmitImportedTF flips importedClouds
+			// ["gcp-beta"] to true whenever any rendered resource
+			// carries provider = google-beta.imported.
+			fmt.Fprintf(&b, "provider \"google-beta\" {\n  alias   = \"imported\"\n  region  = %q\n  project = %q\n}\n", region, gcpProjectID)
 		}
 		return []byte(b.String())
 

@@ -31,5 +31,5 @@ var GoogleKMSKeyRingSchema = map[string]FieldSchema{
 }
 
 func init() {
-	Register("google_kms_key_ring", reflect.TypeFor[GoogleKMSKeyRing](), GoogleKMSKeyRingSchema)
+	Register("google_kms_key_ring", reflect.TypeFor[GoogleKMSKeyRing](), GoogleKMSKeyRingSchema, GoogleProviderSource)
 }

@@ -20,17 +20,20 @@ import (
 // runs don't observe each other through RegisteredTypes() or LintAll().
 const syntheticTypePrefix = "policy_test_"
 
-// phase1Types pins the exact set of import resource types that must
+// coveredTypes pins the exact set of import resource types that must
 // have a Layer 2 policy registered. Adding or removing a type requires
-// updating this list — the diff makes the surface change explicit. The
-// name "phase1" predates Bundle 9 (#385) which expanded GCP coverage
-// from 5 to 25 types; rename to coveredTypes is a future follow-up.
-var phase1Types = []string{
+// updating this list — the diff makes the surface change explicit.
+// (Renamed from `coveredTypes` in #396 once Bundle 9+10+11 expanded
+// the set far beyond the original Phase 1 five.)
+var coveredTypes = []string{
 	"aws_cloudwatch_log_group",
 	"aws_dynamodb_table",
 	"aws_lambda_function",
 	"aws_secretsmanager_secret",
 	"aws_sqs_queue",
+	"google_api_gateway_api",
+	"google_api_gateway_api_config",
+	"google_api_gateway_gateway",
 	"google_cloud_run_v2_service",
 	"google_cloudbuild_trigger",
 	"google_cloudfunctions2_function",
@@ -66,9 +69,9 @@ var phase1Types = []string{
 	"google_vertex_ai_dataset",
 }
 
-func TestPhase1Coverage(t *testing.T) {
+func TestCoveredTypesHavePolicies(t *testing.T) {
 	t.Parallel()
-	for _, tfType := range phase1Types {
+	for _, tfType := range coveredTypes {
 		t.Run(tfType, func(t *testing.T) {
 			t.Parallel()
 			m, ok := Lookup(tfType)
@@ -78,12 +81,12 @@ func TestPhase1Coverage(t *testing.T) {
 	}
 }
 
-// TestRegisteredTypes_PhaseSetExact filters out synthetic test
+// TestRegisteredTypes_CoveredSetExact filters out synthetic test
 // registrations (the "policy_test_" prefix used by registry_test.go
 // and lint_test.go helpers) and asserts the remaining production
-// registrations match the Phase 1 set exactly. Adding or removing a
-// production tfType requires a deliberate edit to phase1Types.
-func TestRegisteredTypes_PhaseSetExact(t *testing.T) {
+// registrations match the covered set exactly. Adding or removing a
+// production tfType requires a deliberate edit to coveredTypes.
+func TestRegisteredTypes_CoveredSetExact(t *testing.T) {
 	t.Parallel()
 	got := RegisteredTypes()
 	production := got[:0:0]
@@ -92,10 +95,10 @@ func TestRegisteredTypes_PhaseSetExact(t *testing.T) {
 			production = append(production, tfType)
 		}
 	}
-	want := append([]string(nil), phase1Types...)
+	want := append([]string(nil), coveredTypes...)
 	sort.Strings(want)
 	assert.Equal(t, want, production,
-		"production policy registrations must equal phase1Types exactly")
+		"production policy registrations must equal coveredTypes exactly")
 }
 
 // TestPolicyRegistry_CoversGeneratedRegistry pins the invariant that
@@ -125,7 +128,7 @@ func TestPolicyRegistry_CoversGeneratedRegistry(t *testing.T) {
 		"every generated.RegisteredTypes() entry must have a Layer 2 policy "+
 			"registered (and vice versa). If you added a type to WantedGoogle "+
 			"or WantedAWS, also author a corresponding *.policy.go file and "+
-			"extend phase1Types.")
+			"extend coveredTypes.")
 }
 
 // TestTagsIntentionallyUncurated pins the deliberate gap documented in
@@ -162,7 +165,7 @@ func TestTagsIntentionallyUncurated(t *testing.T) {
 
 func TestLintAll_Clean(t *testing.T) {
 	t.Parallel()
-	for _, tfType := range phase1Types {
+	for _, tfType := range coveredTypes {
 		t.Run(tfType, func(t *testing.T) {
 			t.Parallel()
 			issues := Lint(tfType)
@@ -216,7 +219,7 @@ func snapshot() string {
 	var b strings.Builder
 	for _, t := range tfTypes {
 		// Skip synthetic types that may have leaked from earlier tests.
-		if !isPhase1(t) {
+		if !isCovered(t) {
 			continue
 		}
 		m, _ := Lookup(t)
@@ -248,6 +251,6 @@ func snapshot() string {
 	return b.String()
 }
 
-func isPhase1(tfType string) bool {
-	return slices.Contains(phase1Types, tfType)
+func isCovered(tfType string) bool {
+	return slices.Contains(coveredTypes, tfType)
 }

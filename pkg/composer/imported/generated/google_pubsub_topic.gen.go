@@ -100,5 +100,5 @@ var GooglePubsubTopicSchema = map[string]FieldSchema{
 }
 
 func init() {
-	Register("google_pubsub_topic", reflect.TypeFor[GooglePubsubTopic](), GooglePubsubTopicSchema)
+	Register("google_pubsub_topic", reflect.TypeFor[GooglePubsubTopic](), GooglePubsubTopicSchema, GoogleProviderSource)
 }

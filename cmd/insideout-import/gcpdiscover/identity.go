@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
+	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported/generated"
 )
 
 // gcpProviderSource is the canonical Terraform Registry source for the
@@ -12,11 +13,40 @@ import (
 // resolves the version from the providers.tf required_providers block.
 const gcpProviderSource = "registry.terraform.io/hashicorp/google"
 
+// gcpBetaProviderSource is the canonical Terraform Registry source for
+// the Google-Beta provider. A small set of GCP resource types — most
+// notably the API Gateway family — expose resources only under this
+// provider. The discoverer's makeImportedResource consults the typed-
+// resource registry (pkg/composer/imported/generated) to decide
+// per-type whether to emit this source vs the GA source.
+const gcpBetaProviderSource = "registry.terraform.io/hashicorp/google-beta"
+
 // gcpProviderConfigAlias is the provider alias the composer's emitted HCL
 // references for every imported google_* resource. Mirrors the AWS path's
 // "aws.imported"; lives in identity.go so a future composer-side rename
 // is a one-line change.
 const gcpProviderConfigAlias = "google.imported"
+
+// gcpBetaProviderConfigAlias is the alias used for imported resources
+// whose schema lives in the google-beta provider. Pairs with the
+// `google-beta.imported` block the composer emits in providers.tf
+// whenever any imported resource carries this alias.
+const gcpBetaProviderConfigAlias = "google-beta.imported"
+
+// providerSourceAndAliasFor returns the (provider source, provider
+// config alias) pair to stamp on an ImportedResource for a given
+// Terraform type. Types registered with GoogleBetaProviderSource in
+// pkg/composer/imported/generated route through the google-beta alias;
+// everything else (including types that haven't been codegen'd yet)
+// routes through the GA google alias. Treating "unregistered" as "GA"
+// preserves the historical default for the long tail of types that
+// emit via the opaque-attr fallback.
+func providerSourceAndAliasFor(tfType string) (source, alias string) {
+	if got, ok := generated.LookupProviderSource(tfType); ok && got == generated.GoogleBetaProviderSource {
+		return gcpBetaProviderSource, gcpBetaProviderConfigAlias
+	}
+	return gcpProviderSource, gcpProviderConfigAlias
+}
 
 // addressBook is the de-dup state passed to imported.GenerateAddress as
 // the `exists` predicate. Each discoverer's loop seeds the book with
@@ -44,12 +74,13 @@ func (b addressBook) add(addr string) { b[addr] = struct{}{} }
 // labels field; the nil-vs-empty distinction is load-bearing for the
 // downstream tag-selector and summary consumers (#291, #289 gap-#6).
 func makeImportedResource(book addressBook, typ, name, importID, projectID, location string, nativeIDs, tags map[string]string) imported.ImportedResource {
+	providerSource, providerAlias := providerSourceAndAliasFor(typ)
 	id := imported.ResourceIdentity{
 		Cloud:          "gcp",
 		Type:           typ,
 		NameHint:       name,
-		ProviderSource: gcpProviderSource,
-		ProviderConfig: gcpProviderConfigAlias,
+		ProviderSource: providerSource,
+		ProviderConfig: providerAlias,
 		ProjectID:      projectID,
 		Location:       location,
 		ImportID:       importID,

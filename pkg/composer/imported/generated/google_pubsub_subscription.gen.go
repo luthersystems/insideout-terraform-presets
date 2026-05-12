@@ -128,5 +128,5 @@ var GooglePubsubSubscriptionSchema = map[string]FieldSchema{
 }
 
 func init() {
-	Register("google_pubsub_subscription", reflect.TypeFor[GooglePubsubSubscription](), GooglePubsubSubscriptionSchema)
+	Register("google_pubsub_subscription", reflect.TypeFor[GooglePubsubSubscription](), GooglePubsubSubscriptionSchema, GoogleProviderSource)
 }

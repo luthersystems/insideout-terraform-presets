@@ -60,13 +60,14 @@ import (
 // already semantically "no region scope", which downstream parses
 // the same way.
 type Event struct {
-	Event      string    `json:"event"`               // service_start | service_finish | item_found | stage_finish
+	Event      string    `json:"event"`               // service_start | service_finish | item_found | stage_finish | service_warn
 	Service    string    `json:"service,omitempty"`   // AWS service slug (sqs, dynamodb, ...) or GCP asset_type slug (cloud_asset_inventory)
 	Region     string    `json:"region,omitempty"`    // AWS region; empty for global services (IAM, S3) and GCP
 	Location   string    `json:"location,omitempty"`  // GCP location; empty for project-global types and AWS
 	TFType     string    `json:"tf_type,omitempty"`   // Terraform resource type for item_found
 	ImportID   string    `json:"import_id,omitempty"` // Terraform import ID for item_found
 	Stage      string    `json:"stage,omitempty"`     // discover for stage_finish (room for future stages: hcl_gen, drift_fix, dep_chase)
+	Message    string    `json:"message,omitempty"`   // service_warn — operator-facing soft-fail description
 	Count      int       `json:"count"`               // service_finish, stage_finish — items emitted in scope; always emitted on those events even when zero (#312)
 	Total      int       `json:"total"`               // stage_finish — total items across the stage (==Count today, separate field for future fan-in); always emitted on stage_finish even when zero (#312)
 	DurationMs int64     `json:"duration_ms"`         // service_finish, stage_finish — wall-time spent in the scope; always emitted on those events even when zero (#312)
@@ -166,6 +167,23 @@ func (e Event) MarshalJSON() ([]byte, error) {
 			DurationMs int64     `json:"duration_ms"`
 			Timestamp  time.Time `json:"ts"`
 		}{e.Event, e.Stage, e.Count, e.Total, e.DurationMs, e.Timestamp})
+	case "service_warn":
+		if e.Location != "" {
+			return json.Marshal(struct {
+				Event     string    `json:"event"`
+				Service   string    `json:"service"`
+				Location  string    `json:"location"`
+				Message   string    `json:"message"`
+				Timestamp time.Time `json:"ts"`
+			}{e.Event, e.Service, e.Location, e.Message, e.Timestamp})
+		}
+		return json.Marshal(struct {
+			Event     string    `json:"event"`
+			Service   string    `json:"service"`
+			Region    string    `json:"region"`
+			Message   string    `json:"message"`
+			Timestamp time.Time `json:"ts"`
+		}{e.Event, e.Service, e.Region, e.Message, e.Timestamp})
 	default:
 		// Unknown event type — defensive fallback. Marshal the
 		// struct verbatim via an alias to avoid recursing back
@@ -189,6 +207,13 @@ type Emitter interface {
 	ServiceFinish(service, region string, count int, dur time.Duration)
 	ItemFound(service, region, tfType, importID string)
 	StageFinish(stage string, total int, dur time.Duration)
+	// ServiceWarn surfaces a non-fatal warning during a service's
+	// discovery scope (e.g. a per-instance soft-fail in the non-CAI
+	// SQL user fanout — see #396 / #383). The orchestrator's
+	// soft-fail paths used stderr-only logging before this method;
+	// routing through the Emitter ensures the UI's progress stream
+	// receives the same signal a JSON/SSE consumer would expect.
+	ServiceWarn(service, region, msg string)
 }
 
 // NopEmitter is a zero-overhead Emitter that swallows every call. The
@@ -208,6 +233,9 @@ func (NopEmitter) ItemFound(string, string, string, string) {}
 
 // StageFinish is a no-op.
 func (NopEmitter) StageFinish(string, int, time.Duration) {}
+
+// ServiceWarn is a no-op.
+func (NopEmitter) ServiceWarn(string, string, string) {}
 
 // JSONEmitter writes one newline-delimited JSON Event per call to an
 // io.Writer. Concurrent emissions are serialized through mu so each
@@ -277,6 +305,21 @@ func (e *JSONEmitter) ItemFound(service, region, tfType, importID string) {
 		Region:    region,
 		TFType:    tfType,
 		ImportID:  importID,
+		Timestamp: e.now(),
+	})
+}
+
+// ServiceWarn emits one service_warn event surfacing a non-fatal
+// soft-fail during a discoverer's scope. service/region match the
+// surrounding ServiceStart/ServiceFinish bracketing; msg is an
+// operator-facing description (e.g. "list failed for instance N3
+// in project P: ...."). Best-effort like the other emit methods.
+func (e *JSONEmitter) ServiceWarn(service, region, msg string) {
+	e.write(Event{
+		Event:     "service_warn",
+		Service:   service,
+		Region:    region,
+		Message:   msg,
 		Timestamp: e.now(),
 	})
 }

@@ -44,5 +44,5 @@ var GoogleServiceAccountSchema = map[string]FieldSchema{
 }
 
 func init() {
-	Register("google_service_account", reflect.TypeFor[GoogleServiceAccount](), GoogleServiceAccountSchema)
+	Register("google_service_account", reflect.TypeFor[GoogleServiceAccount](), GoogleServiceAccountSchema, GoogleProviderSource)
 }

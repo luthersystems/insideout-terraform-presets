@@ -30,5 +30,5 @@ var {{.GoName}}Schema = map[string]FieldSchema{
 }
 
 func init() {
-	Register("{{.TFType}}", reflect.TypeFor[{{.GoName}}](), {{.GoName}}Schema)
+	Register("{{.TFType}}", reflect.TypeFor[{{.GoName}}](), {{.GoName}}Schema, {{.ProviderSourceConst}})
 }

@@ -65,5 +65,5 @@ var GoogleSqlUserSchema = map[string]FieldSchema{
 }
 
 func init() {
-	Register("google_sql_user", reflect.TypeFor[GoogleSqlUser](), GoogleSqlUserSchema)
+	Register("google_sql_user", reflect.TypeFor[GoogleSqlUser](), GoogleSqlUserSchema, GoogleProviderSource)
 }

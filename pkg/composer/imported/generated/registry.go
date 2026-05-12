@@ -19,23 +19,29 @@ var (
 )
 
 type registration struct {
-	GoType reflect.Type
-	Schema map[string]FieldSchema
+	GoType         reflect.Type
+	Schema         map[string]FieldSchema
+	ProviderSource string
 }
 
 // Register records that tfType (e.g. "aws_sqs_queue") is implemented by the
 // Go type goType (e.g. reflect.TypeOf(AWSSQSQueue{})) and described by
-// schema. Generated init() functions are the only intended caller.
+// schema. providerSource is the Terraform Registry source string for the
+// provider that owns this resource type (e.g.
+// "registry.terraform.io/hashicorp/google" vs ".../google-beta"); the
+// composer's imported-resource emission uses it to pick the correct
+// provider alias on the rendered HCL. Generated init() functions are the
+// only intended caller.
 //
 // Re-registering the same tfType panics; this catches accidental duplicate
 // generation.
-func Register(tfType string, goType reflect.Type, schema map[string]FieldSchema) {
+func Register(tfType string, goType reflect.Type, schema map[string]FieldSchema, providerSource string) {
 	regMu.Lock()
 	defer regMu.Unlock()
 	if _, ok := reg[tfType]; ok {
 		panic(fmt.Sprintf("generated: duplicate Register for %q", tfType))
 	}
-	reg[tfType] = registration{GoType: goType, Schema: schema}
+	reg[tfType] = registration{GoType: goType, Schema: schema, ProviderSource: providerSource}
 }
 
 // Lookup returns the registered Go type and schema for tfType, or false if
@@ -50,6 +56,22 @@ func Lookup(tfType string) (goType reflect.Type, schema map[string]FieldSchema, 
 		return nil, nil, false
 	}
 	return r.GoType, r.Schema, true
+}
+
+// LookupProviderSource returns the Terraform Registry source string for
+// the provider that owns tfType (e.g.
+// "registry.terraform.io/hashicorp/google" or ".../google-beta"). Returns
+// "" and false if the type is not registered. Callers that emit HCL for
+// imported resources use this to pick the matching `provider = ...`
+// alias instead of always defaulting to the cloud's primary provider.
+func LookupProviderSource(tfType string) (providerSource string, ok bool) {
+	regMu.RLock()
+	defer regMu.RUnlock()
+	r, ok := reg[tfType]
+	if !ok {
+		return "", false
+	}
+	return r.ProviderSource, true
 }
 
 // RegisteredTypes returns the sorted list of all registered Terraform type

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/progress"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
 
@@ -42,7 +43,7 @@ func TestSQLUserListNonCAI_FansOutAcrossPriorInstances(t *testing.T) {
 		// A non-SQL resource: should be skipped.
 		{Identity: imported.ResourceIdentity{Type: "google_storage_bucket", NameHint: "io-foo-bucket"}},
 	}
-	got, err := d.ListNonCAI(context.Background(), "real-proj", "", prior)
+	got, err := d.ListNonCAI(context.Background(), "real-proj", "", prior, progress.NopEmitter{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,19 +82,52 @@ func TestSQLUserListNonCAI_PerInstanceErrorSoftFails(t *testing.T) {
 		makeSQLDBInstanceResult("db1"),
 		makeSQLDBInstanceResult("db2"),
 	}
-	got, err := d.ListNonCAI(context.Background(), "real-proj", "", prior)
+	rec := &recordingEmitter{}
+	got, err := d.ListNonCAI(context.Background(), "real-proj", "", prior, rec)
 	if err != nil {
 		t.Fatalf("expected soft-fail, got err=%v", err)
 	}
 	if len(got) != 1 || got[0].Identity.NameHint != "alice" {
 		t.Errorf("got=%v, want only alice", got)
 	}
+	// Per-instance soft-fail must surface as a ServiceWarn so the
+	// UI's progress stream sees the same signal stderr would
+	// (#396). The Emitter is the load-bearing contract; without
+	// this assertion a regression that silently drops the warn
+	// would compile and pass tests.
+	var warns []recordedEvent
+	for _, ev := range rec.snapshot() {
+		if ev.Kind == "service_warn" {
+			warns = append(warns, ev)
+		}
+	}
+	if len(warns) != 1 {
+		t.Fatalf("got %d service_warn events, want 1: %v", len(warns), warns)
+	}
+	if warns[0].Service != nonCAIServiceSlug {
+		t.Errorf("service=%q, want %q", warns[0].Service, nonCAIServiceSlug)
+	}
+	if !contains(warns[0].Message, "db2") || !contains(warns[0].Message, "instance not accessible") {
+		t.Errorf("warn message %q must mention the failing instance and the underlying error", warns[0].Message)
+	}
+}
+
+// contains is a tiny strings.Contains alias to keep the soft-fail
+// assertion self-documenting (the inline strings.Contains call
+// would visually swap arguments and confuse readers).
+func contains(s, substr string) bool {
+	for i := 0; i+len(substr) <= len(s); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
 }
 
 func TestSQLUserListNonCAI_NilListerTolerated(t *testing.T) {
 	t.Parallel()
 	d := newSQLUserDiscoverer(nil).(*sqlUserDiscoverer)
-	got, err := d.ListNonCAI(context.Background(), "real-proj", "", []imported.ImportedResource{makeSQLDBInstanceResult("db1")})
+	got, err := d.ListNonCAI(context.Background(), "real-proj", "", []imported.ImportedResource{makeSQLDBInstanceResult("db1")}, progress.NopEmitter{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,7 +140,7 @@ func TestSQLUserListNonCAI_NoPriorInstancesYieldsNoFanout(t *testing.T) {
 	t.Parallel()
 	fake := &fakeSQLUserLister{}
 	d := newSQLUserDiscoverer(fake).(*sqlUserDiscoverer)
-	got, err := d.ListNonCAI(context.Background(), "real-proj", "", nil)
+	got, err := d.ListNonCAI(context.Background(), "real-proj", "", nil, progress.NopEmitter{})
 	if err != nil {
 		t.Fatal(err)
 	}

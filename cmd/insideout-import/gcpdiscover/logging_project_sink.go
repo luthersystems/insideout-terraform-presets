@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/progress"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
 
@@ -56,7 +57,7 @@ func (loggingProjectSinkDiscoverer) DiscoverByID(_ context.Context, _ gcpAssetSe
 // translates each to an ImportedResource. Filters out the builtin
 // _Default / _Required sinks and applies the stack-project name-
 // prefix substring filter (label-less convention).
-func (d *loggingProjectSinkDiscoverer) ListNonCAI(ctx context.Context, projectID, stackProject string, _ []imported.ImportedResource) ([]imported.ImportedResource, error) {
+func (d *loggingProjectSinkDiscoverer) ListNonCAI(ctx context.Context, projectID, stackProject string, _ []imported.ImportedResource, _ progress.Emitter) ([]imported.ImportedResource, error) {
 	if d.lister == nil {
 		// Tolerant of nil — unit tests that don't exercise sinks
 		// don't have to mock the lister. The orchestrator-side

@@ -73,12 +73,14 @@ func TestTaggable_AllowlistFallback(t *testing.T) {
 	_, ok = taggable(awsBlocked)
 	assert.False(t, ok)
 
-	// GCP unregistered type defaults to NOT labelable unless in labelableGCP.
+	// Registered GCP type with `labels` in schema → labelable.
 	gcpAllowed := imported.ImportedResource{Identity: imported.ResourceIdentity{Cloud: "gcp", Type: "google_redis_instance"}}
 	attr, ok = taggable(gcpAllowed)
 	assert.True(t, ok)
 	assert.Equal(t, "labels", attr)
 
+	// Registered GCP type WITHOUT `labels` in schema (kms_key_ring's
+	// provider schema doesn't include labels) → not labelable.
 	gcpDisallowed := imported.ImportedResource{Identity: imported.ResourceIdentity{Cloud: "gcp", Type: "google_kms_key_ring"}}
 	_, ok = taggable(gcpDisallowed)
 	assert.False(t, ok)
@@ -171,17 +173,18 @@ func TestInjectProvenance_GCPTypedAttrsExisting(t *testing.T) {
 	assert.True(t, hasAttr(t, s, "team", `"docs"`), "user-supplied team label missing in:\n%s", s)
 }
 
-// TestInjectProvenance_GCPAllowlistFallback exercises the labelableGCP
-// allowlist fallback for resource types that are NOT in the Phase 1
-// generated registry. google_redis_instance is on the allowlist (in
-// labelableGCP) but has no .gen.go schema; google_kms_key_ring is neither
-// registered nor on the allowlist and should weak-lock. Both paths exist
-// in taggable() but were only covered at the predicate level by
-// TestTaggable_AllowlistFallback — this test pins the end-to-end emit.
-func TestInjectProvenance_GCPAllowlistFallback(t *testing.T) {
+// TestInjectProvenance_GCPLabelableViaRegistry exercises the
+// schema-driven taggable path for GCP resources after #396 dropped the
+// static labelableGCP allowlist. google_redis_instance is registered
+// AND its schema carries a `labels` key → labels emitted.
+// google_kms_key_ring is registered but its schema has NO `labels`
+// key → weak-lock with no labels emitted. The third path — an entirely
+// unregistered GCP type — also weak-locks (covered by
+// TestTaggable_AllowlistFallback at the predicate level).
+func TestInjectProvenance_GCPLabelableViaRegistry(t *testing.T) {
 	t.Parallel()
 
-	t.Run("allowlisted but unregistered → labels emitted", func(t *testing.T) {
+	t.Run("registered with labels in schema → labels emitted", func(t *testing.T) {
 		ir := imported.ImportedResource{
 			Identity: imported.ResourceIdentity{Cloud: "gcp", Type: "google_redis_instance", Address: "google_redis_instance.cache"},
 			Tier:     imported.TierImportedFlat,
@@ -194,13 +197,13 @@ func TestInjectProvenance_GCPAllowlistFallback(t *testing.T) {
 		got, err := injectProvenance(body, &ir, "io-stack-1", "sess-9", fixedTime())
 		require.NoError(t, err)
 		s := string(got)
-		assert.False(t, ir.WeakLocked, "allowlisted GCP type must not be weak-locked")
+		assert.False(t, ir.WeakLocked, "labelable GCP type must not be weak-locked")
 		assert.Contains(t, s, "labels = merge(")
 		assert.True(t, hasAttr(t, s, `"insideout-import-project"`, `"io-stack-1"`),
-			"missing insideout-import-project in fallback emit:\n%s", s)
+			"missing insideout-import-project in emit:\n%s", s)
 	})
 
-	t.Run("not allowlisted and not registered → weak-lock, no labels", func(t *testing.T) {
+	t.Run("registered without labels in schema → weak-lock, no labels", func(t *testing.T) {
 		ir := imported.ImportedResource{
 			Identity: imported.ResourceIdentity{Cloud: "gcp", Type: "google_kms_key_ring", Address: "google_kms_key_ring.r"},
 			Tier:     imported.TierImportedFlat,
@@ -212,7 +215,7 @@ func TestInjectProvenance_GCPAllowlistFallback(t *testing.T) {
 		require.NoError(t, err)
 		got, err := injectProvenance(body, &ir, "io-stack-1", "sess-9", fixedTime())
 		require.NoError(t, err)
-		assert.True(t, ir.WeakLocked, "non-allowlisted unregistered GCP type must weak-lock")
+		assert.True(t, ir.WeakLocked, "GCP type without labels in schema must weak-lock")
 		assert.Equal(t, string(body), string(got), "weak-lock body must be returned unchanged")
 		assert.NotContains(t, string(got), "labels = merge(")
 	})
@@ -505,12 +508,44 @@ func TestUntaggableAllowlistsMatchLintScripts(t *testing.T) {
 	require.NoError(t, err)
 
 	gotAWS := untaggableAWSSlice()
-	gotGCP := labelableGCPSlice()
+	regGCP := labelableGCPFromRegistry()
 	sort.Strings(awsLint)
 	sort.Strings(gcpLint)
 
 	assert.Equal(t, awsLint, gotAWS, "untaggableAWS drift vs lint-project-tag.sh")
-	assert.Equal(t, gcpLint, gotGCP, "labelableGCP drift vs lint-project-label.sh")
+
+	// GCP one-way subset check: every type in
+	// tests/lint-project-label.sh's LABEL_CAPABLE_GCP bash array must
+	// also be present in the typed registry with `labels` in its
+	// schema. The reverse is intentionally NOT required — the
+	// registry can include types whose `labels` field has special-
+	// purpose semantics (e.g.
+	// google_monitoring_notification_channel.labels carries channel-
+	// type-specific keys like `email_address`, not the free-form
+	// project label the preset convention enforces). Adding such
+	// types to the bash array would force `labels = merge({project =
+	// var.project}, ...)` on resources where that's semantically
+	// wrong, so the asymmetry is deliberate.
+	//
+	// If this fires, either:
+	//   1. Drop the offending entry from the bash array (the
+	//      provider no longer surfaces labels for that type), or
+	//   2. Add the missing type to WantedGoogle in
+	//      cmd/imported-codegen/config.go and regenerate.
+	regSet := make(map[string]struct{}, len(regGCP))
+	for _, t := range regGCP {
+		regSet[t] = struct{}{}
+	}
+	var missing []string
+	for _, t := range gcpLint {
+		if _, ok := regSet[t]; !ok {
+			missing = append(missing, t)
+		}
+	}
+	assert.Empty(t, missing,
+		"types listed in tests/lint-project-label.sh::LABEL_CAPABLE_GCP "+
+			"but not in the typed-registry's GCP-with-labels set: %v",
+		missing)
 }
 
 // findRepoRoot returns the repository root by walking up from this test

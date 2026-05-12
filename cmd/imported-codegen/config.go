@@ -11,19 +11,7 @@ var WantedAWS = []string{
 }
 
 // WantedGoogle lists the GCP resource types we generate Layer 1 structs
-// for. Bundle 9 (#385) expanded coverage from 5 Phase-1 types to 25 so
-// the composer's typed-Attrs path (imported_emit.go), cross-tier
-// validator (validate_cross_tier.go), and policy lint
-// (pkg/composer/imported/policy) treat them as first-class instead of
-// falling through to the opaque-emit branch.
-//
-// API Gateway types (google_api_gateway_api, _api_config, _gateway) are
-// intentionally omitted: they live in the hashicorp/google-beta
-// provider, not hashicorp/google, and the codegen filter is keyed on a
-// single provider source today. Adding them is a follow-up (track as
-// #385's google-beta-provider note) — until then they continue
-// emitting via the opaque-attr fallback in imported_emit.go and remain
-// in the labelableGCP static allowlist for taggable().
+// for from the hashicorp/google provider.
 var WantedGoogle = []string{
 	"google_cloud_run_v2_service",
 	"google_cloudbuild_trigger",
@@ -60,6 +48,21 @@ var WantedGoogle = []string{
 	"google_vertex_ai_dataset",
 }
 
+// WantedGoogleBeta lists the GCP resource types whose schema lives in
+// the hashicorp/google-beta provider rather than hashicorp/google. The
+// API Gateway resources are the canonical case — the GA provider exposes
+// the data sources but not the resources, so the api_gateway preset
+// declares `google-beta` and uses `provider = google-beta` on each
+// resource. The codegen processes these types against the beta schema
+// dump and the resulting registrations carry GoogleBetaProviderSource
+// so the composer's imported-resource emission routes them through the
+// `google-beta.imported` provider alias instead of `google.imported`.
+var WantedGoogleBeta = []string{
+	"google_api_gateway_api",
+	"google_api_gateway_api_config",
+	"google_api_gateway_gateway",
+}
+
 // AWSProviderSource is the Terraform Registry source string for the AWS
 // provider. Pinned in schemas/providers.tf and persisted via the generated
 // version.gen.go.
@@ -68,6 +71,12 @@ const AWSProviderSource = "registry.terraform.io/hashicorp/aws"
 // GoogleProviderSource is the Terraform Registry source string for the
 // Google provider.
 const GoogleProviderSource = "registry.terraform.io/hashicorp/google"
+
+// GoogleBetaProviderSource is the Terraform Registry source string for
+// the Google Beta provider. A small set of GCP resource types — most
+// notably the API Gateway family — exposes resources only under this
+// provider.
+const GoogleBetaProviderSource = "registry.terraform.io/hashicorp/google-beta"
 
 // SchemaCodegenVersion is bumped whenever the generator's output format
 // changes in a way that breaks readers of existing generated files.

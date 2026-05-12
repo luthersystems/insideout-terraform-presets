@@ -48,5 +48,5 @@ var AWSSecretsmanagerSecretSchema = map[string]FieldSchema{
 }
 
 func init() {
-	Register("aws_secretsmanager_secret", reflect.TypeFor[AWSSecretsmanagerSecret](), AWSSecretsmanagerSecretSchema)
+	Register("aws_secretsmanager_secret", reflect.TypeFor[AWSSecretsmanagerSecret](), AWSSecretsmanagerSecretSchema, AWSProviderSource)
 }

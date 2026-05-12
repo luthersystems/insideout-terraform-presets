@@ -59,5 +59,5 @@ var AWSSQSQueueSchema = map[string]FieldSchema{
 }
 
 func init() {
-	Register("aws_sqs_queue", reflect.TypeFor[AWSSQSQueue](), AWSSQSQueueSchema)
+	Register("aws_sqs_queue", reflect.TypeFor[AWSSQSQueue](), AWSSQSQueueSchema, AWSProviderSource)
 }

@@ -347,6 +347,66 @@ func TestProviderAliasFor(t *testing.T) {
 	assert.Equal(t, "aws.imported", providerAliasFor("unknown"))
 }
 
+// TestProviderAliasForResource pins the per-type routing decision for
+// imported GCP resources. The three API Gateway types live in
+// hashicorp/google-beta and must emit `provider = google-beta.imported`
+// so Stage 2b's terraform plan -generate-config-out and the
+// downstream import resolve through the same provider that originally
+// created them. Every other GCP type (registered or unregistered) falls
+// back to `google.imported`; AWS routes through `aws.imported`
+// regardless.
+func TestProviderAliasForResource(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name      string
+		cloud     string
+		tfType    string
+		wantAlias string
+	}{
+		{name: "GA gcp typed", cloud: "gcp", tfType: "google_pubsub_topic", wantAlias: "google.imported"},
+		{name: "beta gcp typed", cloud: "gcp", tfType: "google_api_gateway_api", wantAlias: "google-beta.imported"},
+		{name: "beta gcp typed api_config", cloud: "gcp", tfType: "google_api_gateway_api_config", wantAlias: "google-beta.imported"},
+		{name: "beta gcp typed gateway", cloud: "gcp", tfType: "google_api_gateway_gateway", wantAlias: "google-beta.imported"},
+		{name: "unregistered gcp falls back to GA", cloud: "gcp", tfType: "google_not_yet_codegened", wantAlias: "google.imported"},
+		{name: "AWS unaffected", cloud: "aws", tfType: "aws_sqs_queue", wantAlias: "aws.imported"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := providerAliasForResource(tc.cloud, imported.ResourceIdentity{Type: tc.tfType})
+			assert.Equal(t, tc.wantAlias, got)
+		})
+	}
+}
+
+// TestEmitImportedTF_GoogleBetaSetsProvidersUsedKey asserts that emitting
+// a google-beta-backed resource flips the synthetic "gcp-beta" key in
+// the providersUsed return map. The compose layer reads that key to
+// decide whether to emit the `google-beta.imported` block in
+// providers.tf — without the signal, the rendered `provider =
+// google-beta.imported` line would reference an undeclared provider
+// and `terraform init` would fail.
+func TestEmitImportedTF_GoogleBetaSetsProvidersUsedKey(t *testing.T) {
+	t.Parallel()
+	ir := imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Cloud:    "gcp",
+			Type:     "google_api_gateway_api",
+			Address:  "google_api_gateway_api.demo",
+			ImportID: "projects/p/locations/global/apis/demo",
+		},
+		Tier:  imported.TierImportedFlat,
+		Attrs: []byte(`{}`),
+	}
+	out, used := EmitImportedTF("gcp", []imported.ImportedResource{ir}, EmitImportedOpts{})
+	require.NotNil(t, out)
+	s := string(out)
+	assert.True(t, used["gcp"], "used[gcp] must be set: %v", used)
+	assert.True(t, used["gcp-beta"], "used[gcp-beta] must be set when google-beta type emitted: %v", used)
+	assert.True(t, hasAttr(t, s, "provider", "google-beta.imported"),
+		"provider attr must reference google-beta.imported in:\n%s", s)
+}
+
 func TestAddressLabel(t *testing.T) {
 	t.Parallel()
 	assert.Equal(t, "orders_dlq", addressLabel("aws_sqs_queue.orders_dlq"))

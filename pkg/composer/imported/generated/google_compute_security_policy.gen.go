@@ -163,5 +163,5 @@ var GoogleComputeSecurityPolicySchema = map[string]FieldSchema{
 }
 
 func init() {
-	Register("google_compute_security_policy", reflect.TypeFor[GoogleComputeSecurityPolicy](), GoogleComputeSecurityPolicySchema)
+	Register("google_compute_security_policy", reflect.TypeFor[GoogleComputeSecurityPolicy](), GoogleComputeSecurityPolicySchema, GoogleProviderSource)
 }

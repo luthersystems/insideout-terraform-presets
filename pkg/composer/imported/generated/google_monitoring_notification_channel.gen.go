@@ -55,5 +55,5 @@ var GoogleMonitoringNotificationChannelSchema = map[string]FieldSchema{
 }
 
 func init() {
-	Register("google_monitoring_notification_channel", reflect.TypeFor[GoogleMonitoringNotificationChannel](), GoogleMonitoringNotificationChannelSchema)
+	Register("google_monitoring_notification_channel", reflect.TypeFor[GoogleMonitoringNotificationChannel](), GoogleMonitoringNotificationChannelSchema, GoogleProviderSource)
 }
