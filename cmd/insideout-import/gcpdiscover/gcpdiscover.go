@@ -205,6 +205,7 @@ func NewGCPDiscoverer(searcher gcpAssetSearcher, projectID string) *GCPDiscovere
 			"google_compute_firewall":                newComputeFirewallDiscoverer(),
 			"google_compute_router":                  newComputeRouterDiscoverer(),
 			"google_compute_address":                 newComputeAddressDiscoverer(),
+			"google_compute_global_address":          newComputeGlobalAddressDiscoverer(),
 			"google_compute_instance":                newComputeInstanceDiscoverer(),
 			"google_container_cluster":               newContainerClusterDiscoverer(),
 			"google_container_node_pool":             newContainerNodePoolDiscoverer(),
@@ -212,6 +213,7 @@ func NewGCPDiscoverer(searcher gcpAssetSearcher, projectID string) *GCPDiscovere
 			"google_cloud_run_v2_service":            newCloudRunV2ServiceDiscoverer(),
 			"google_cloudfunctions2_function":        newCloudFunctions2FunctionDiscoverer(),
 			"google_compute_forwarding_rule":         newComputeForwardingRuleDiscoverer(),
+			"google_compute_global_forwarding_rule":  newComputeGlobalForwardingRuleDiscoverer(),
 			"google_compute_target_https_proxy":      newComputeTargetHTTPSProxyDiscoverer(),
 			"google_compute_url_map":                 newComputeURLMapDiscoverer(),
 			"google_api_gateway_api":                 newAPIGatewayAPIDiscoverer(),
@@ -511,13 +513,25 @@ func (g *GCPDiscoverer) searchBuckets(ctx context.Context, scope string, args Di
 	return out, nil
 }
 
-// assetTypesOf collects the Cloud Asset asset-type strings from a slice
-// of discoverers, preserving order so unit tests can pin per-bucket
-// asset-type partitioning.
+// assetTypesOf collects the Cloud Asset asset-type strings from a
+// slice of discoverers, deduped while preserving first-appearance
+// order. Order preservation lets unit tests pin per-bucket asset-type
+// partitioning; dedup is required when two discoverers share an asset
+// type (e.g. google_compute_address + google_compute_global_address
+// both register compute.googleapis.com/Address — #384). Without
+// dedup, Cloud Asset's SearchAllResources receives a duplicated
+// assetTypes list which is at best wasteful and at worst could
+// influence pagination/quota accounting.
 func assetTypesOf(ds []Discoverer) []string {
+	seen := make(map[string]struct{}, len(ds))
 	out := make([]string, 0, len(ds))
 	for _, d := range ds {
-		out = append(out, d.AssetType())
+		at := d.AssetType()
+		if _, dup := seen[at]; dup {
+			continue
+		}
+		seen[at] = struct{}{}
+		out = append(out, at)
 	}
 	return out
 }

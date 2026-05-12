@@ -72,6 +72,8 @@ func TestSupportedDiscoverTypes_GCP_ReturnsCanonicalSortedList(t *testing.T) {
 		"google_compute_address",
 		"google_compute_firewall",
 		"google_compute_forwarding_rule",
+		"google_compute_global_address",
+		"google_compute_global_forwarding_rule",
 		"google_compute_instance",
 		"google_compute_network",
 		"google_compute_router",

@@ -33,6 +33,7 @@ var expectedRegisteredTypes = map[string]bool{
 	"google_compute_firewall":                false,
 	"google_compute_router":                  false,
 	"google_compute_address":                 false,
+	"google_compute_global_address":          false,
 	"google_compute_instance":                false,
 	"google_container_cluster":               false,
 	"google_container_node_pool":             false,
@@ -40,6 +41,7 @@ var expectedRegisteredTypes = map[string]bool{
 	"google_cloud_run_v2_service":            false,
 	"google_cloudfunctions2_function":        false,
 	"google_compute_forwarding_rule":         false,
+	"google_compute_global_forwarding_rule":  false,
 	"google_compute_target_https_proxy":      false,
 	"google_compute_url_map":                 false,
 	"google_api_gateway_api":                 false,
@@ -128,15 +130,28 @@ func TestDiscoverTypes_DefaultsToAllSupported(t *testing.T) {
 	if len(fake.calls) != wantCalls {
 		t.Fatalf("SearchAll called %d times, want %d (one per non-empty ScopeStyle bucket)", len(fake.calls), wantCalls)
 	}
+	// Collect the distinct Cloud Asset asset-types requested across
+	// all calls. The count must equal the number of DISTINCT asset
+	// types in the registry — strictly less than the number of
+	// registered TF types when two discoverers share a CAI slug
+	// (regional + global address share compute.googleapis.com/Address,
+	// regional + global forwarding rule share
+	// compute.googleapis.com/ForwardingRule; see #384). Compute the
+	// expected from the registry itself rather than hardcoding so
+	// future shared-slug pairs don't drift this assertion.
 	covered := map[string]struct{}{}
 	for _, c := range fake.calls {
 		for _, at := range c.assetTypes {
 			covered[at] = struct{}{}
 		}
 	}
-	if len(covered) != len(g.SupportedTypes()) {
-		t.Errorf("covered asset-types=%d (across %d calls), want %d (one per registered type)",
-			len(covered), len(fake.calls), len(g.SupportedTypes()))
+	wantDistinctAssetTypes := map[string]struct{}{}
+	for _, d := range g.byType {
+		wantDistinctAssetTypes[d.AssetType()] = struct{}{}
+	}
+	if len(covered) != len(wantDistinctAssetTypes) {
+		t.Errorf("covered asset-types=%d (across %d calls), want %d (one per DISTINCT asset type — shared-CAI-slug pairs count once)",
+			len(covered), len(fake.calls), len(wantDistinctAssetTypes))
 	}
 }
 
@@ -653,6 +668,7 @@ var expectedScopeStyle = map[string]ScopeStyle{
 	"google_compute_firewall":                ScopeStyleNamePrefix,       // firewalls have no labels (#369)
 	"google_compute_router":                  ScopeStyleNamePrefix,       // routers have no labels (#369)
 	"google_compute_address":                 ScopeStyleLabels,           // addresses carry labels (#369)
+	"google_compute_global_address":          ScopeStyleLabels,           // global addresses carry labels (#384)
 	"google_compute_instance":                ScopeStyleLabels,           // VMs carry labels (#370)
 	"google_container_cluster":               ScopeStyleLabels,           // GKE clusters carry labels (#371)
 	"google_container_node_pool":             ScopeStyleParentNamePrefix, // child of cluster (#381)
@@ -660,6 +676,7 @@ var expectedScopeStyle = map[string]ScopeStyle{
 	"google_cloud_run_v2_service":            ScopeStyleLabels,     // Cloud Run v2 carries labels (#373)
 	"google_cloudfunctions2_function":        ScopeStyleLabels,     // Cloud Functions v2 carries labels (#373)
 	"google_compute_forwarding_rule":         ScopeStyleLabels,     // forwarding rules carry labels (#375)
+	"google_compute_global_forwarding_rule":  ScopeStyleLabels,     // global forwarding rules carry labels (#384)
 	"google_compute_target_https_proxy":      ScopeStyleNamePrefix, // target HTTPS proxies have no labels (#375)
 	"google_compute_url_map":                 ScopeStyleNamePrefix, // URL maps have no labels (#375)
 	"google_api_gateway_api":                 ScopeStyleLabels,     // API Gateway APIs carry labels (#376)
@@ -705,6 +722,32 @@ func TestScopeStyle_PinsPerTypeContract(t *testing.T) {
 		if _, ok := g.byType[tfType]; !ok {
 			t.Errorf("expectedScopeStyle row for %q has no live registration — remove the row or register the type", tfType)
 		}
+	}
+}
+
+// TestAssetTypesOf_DedupsSharedSlug_PreservesFirstAppearanceOrder
+// pins the dedup contract added in #384. Two discoverers register the
+// same compute.googleapis.com/Address slug; the helper must return a
+// single-entry slice in first-appearance order. Order is observable
+// downstream (unit tests pin per-bucket asset-type partitioning), so
+// the contract is "dedup AND preserve order", not just "dedup".
+func TestAssetTypesOf_DedupsSharedSlug_PreservesFirstAppearanceOrder(t *testing.T) {
+	t.Parallel()
+	ds := []Discoverer{
+		newComputeAddressDiscoverer(),
+		newComputeGlobalAddressDiscoverer(),
+		newPubsubTopicDiscoverer(),
+		newComputeForwardingRuleDiscoverer(),
+		newComputeGlobalForwardingRuleDiscoverer(),
+	}
+	got := assetTypesOf(ds)
+	want := []string{
+		"compute.googleapis.com/Address",        // from regional address (first appearance)
+		"pubsub.googleapis.com/Topic",           // distinct slug
+		"compute.googleapis.com/ForwardingRule", // from regional fwd rule (first appearance)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("assetTypesOf = %v, want %v (dedup + first-appearance order)", got, want)
 	}
 }
 

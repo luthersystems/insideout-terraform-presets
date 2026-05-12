@@ -28,11 +28,12 @@ import (
 // Global vs regional split: CAI returns global addresses under the
 // same compute.googleapis.com/Address slug with Location="global", but
 // Terraform's `google_compute_address` type is regional-only —
-// `google_compute_global_address` is a separate type, not part of
-// Bundle 8. This discoverer's FromAsset filters out the global rows
-// so they don't get an invalid `projects/<p>/regions/global/...`
-// ImportID; they're skipped silently and surface in the unsupported
-// stream when --include-unsupported is set.
+// `google_compute_global_address` is a separate type (#384). This
+// discoverer's FromAsset filters out the global rows; the companion
+// google_compute_global_address discoverer in compute_global_address.go
+// processes them via the inverse filter against the same shared CAI
+// bucket. The two discoverers always co-register (assetTypesOf dedups
+// the shared slug at search time).
 
 const (
 	computeAddressTFType    = "google_compute_address"
@@ -48,10 +49,11 @@ func (computeAddressDiscoverer) AssetType() string      { return computeAddressA
 func (computeAddressDiscoverer) ScopeStyle() ScopeStyle { return ScopeStyleLabels }
 
 func (computeAddressDiscoverer) FromAsset(book addressBook, a gcpAssetResult, projectID string) imported.ImportedResource {
-	// Global rows must be skipped — they belong to google_compute_global_address,
-	// a separate TF type not in Bundle 8. Returning a zero
-	// ImportedResource signals the orchestrator to drop the row (it
-	// filters on empty Identity.Type before emitting).
+	// Global rows are processed by computeGlobalAddressDiscoverer
+	// (#384) via the same shared compute.googleapis.com/Address asset
+	// bucket. Returning a zero ImportedResource signals the
+	// orchestrator to drop the row from THIS discoverer's emit set —
+	// the global discoverer's inverse filter then keeps it.
 	if isGlobalAddressOrForwardingRule(a) {
 		return imported.ImportedResource{}
 	}
@@ -103,14 +105,11 @@ func (computeAddressDiscoverer) DiscoverByID(_ context.Context, _ gcpAssetSearch
 	}, nil), nil
 }
 
-// computeAddressPartsFromID parses the regional shape only. Globals are
-// rejected with ErrNotSupported — they belong to google_compute_global_address,
-// a separate TF type not in Bundle 8 (and emitting them under
-// google_compute_address would produce an import-id Terraform's
-// regional-only schema rejects). Symmetric with FromAsset's
-// isGlobalAddressOrForwardingRule skip — keeps the dep-chase code path
-// from resurrecting the live-smoke bug that motivated the skip
-// sentinel in the first place.
+// computeAddressPartsFromID parses the regional shape only. Globals
+// are rejected with ErrNotSupported — they belong to
+// google_compute_global_address (#384). Symmetric with FromAsset's
+// filter; keeps the dep-chase code path from emitting a malformed
+// `projects/<p>/regions/global/...` import-id.
 func computeAddressPartsFromID(id string) (string, string, error) {
 	id = strings.TrimSpace(id)
 	if id == "" {

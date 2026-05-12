@@ -131,6 +131,8 @@ var categoryByTFType = map[string]string{
 	"google_compute_disk":                    CategoryDataStorage,
 	"google_compute_firewall":                CategoryNetworkSecurity,
 	"google_compute_forwarding_rule":         CategoryNetworkSecurity,
+	"google_compute_global_address":          CategoryNetworkSecurity,
+	"google_compute_global_forwarding_rule":  CategoryNetworkSecurity,
 	"google_compute_instance":                CategoryVirtualMachines,
 	"google_compute_network":                 CategoryNetworkSecurity,
 	"google_compute_router":                  CategoryNetworkSecurity,
