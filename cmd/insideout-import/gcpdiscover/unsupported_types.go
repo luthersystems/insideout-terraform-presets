@@ -24,19 +24,16 @@ import "sort"
 // reliable shape.
 var gcpUnsupportedTFTypeByAssetType = map[string]string{
 	// Compute
-	"compute.googleapis.com/Instance":   "google_compute_instance",
 	"compute.googleapis.com/Disk":       "google_compute_disk",
 	"compute.googleapis.com/Subnetwork": "google_compute_subnetwork",
-	"compute.googleapis.com/Firewall":   "google_compute_firewall",
 	// Data
-	"sqladmin.googleapis.com/Instance": "google_sql_database_instance",
-	"bigquery.googleapis.com/Dataset":  "google_bigquery_dataset",
+	"bigquery.googleapis.com/Dataset": "google_bigquery_dataset",
 	// Containers / Serverless
-	"container.googleapis.com/Cluster":       "google_container_cluster",
-	"cloudfunctions.googleapis.com/Function": "google_cloudfunctions_function",
-	"run.googleapis.com/Service":             "google_cloud_run_service",
-	// IAM
-	"iam.googleapis.com/ServiceAccount": "google_service_account",
+	// Note: cloudfunctions.googleapis.com/Function and
+	// run.googleapis.com/Service moved to supported (Bundle 8 PR 8,
+	// #373) — see cloud_run_v2_service.go and
+	// cloudfunctions2_function.go. The Gen-2 Terraform types share
+	// the Gen-1 Cloud Asset slugs.
 }
 
 // mapGCPAssetTypeToTF resolves a Cloud Asset asset type to its

@@ -12,16 +12,51 @@ import (
 	"github.com/luthersystems/insideout-terraform-presets/pkg/insideout-import/registry"
 )
 
-func TestNewGCPDiscoverer_RegistersPhase1Types(t *testing.T) {
+// expectedRegisteredTypes is the contract source-of-truth for which
+// Terraform types the live constructor map carries. Add a row when a
+// new discoverer ships (PR 2-12 of Bundle 8 grows this set); the
+// parity test below is what blocks unintended drift.
+//
+// Keeping a single allowlist is intentionally tedious: every new type
+// must be added here explicitly, which is the friction we want — an
+// accidental registration in NewGCPDiscoverer surfaces as a test
+// failure, not silent behavior change.
+var expectedRegisteredTypes = map[string]bool{
+	"google_pubsub_topic":                    false,
+	"google_pubsub_subscription":             false,
+	"google_storage_bucket":                  false,
+	"google_secret_manager_secret":           false,
+	"google_compute_network":                 false,
+	"google_service_account":                 false,
+	"google_kms_key_ring":                    false,
+	"google_kms_crypto_key":                  false,
+	"google_compute_firewall":                false,
+	"google_compute_router":                  false,
+	"google_compute_address":                 false,
+	"google_compute_instance":                false,
+	"google_container_cluster":               false,
+	"google_container_node_pool":             false,
+	"google_sql_database_instance":           false,
+	"google_cloud_run_v2_service":            false,
+	"google_cloudfunctions2_function":        false,
+	"google_compute_forwarding_rule":         false,
+	"google_compute_target_https_proxy":      false,
+	"google_compute_url_map":                 false,
+	"google_api_gateway_api":                 false,
+	"google_api_gateway_api_config":          false,
+	"google_api_gateway_gateway":             false,
+	"google_monitoring_dashboard":            false,
+	"google_monitoring_alert_policy":         false,
+	"google_monitoring_notification_channel": false,
+}
+
+func TestNewGCPDiscoverer_RegistersExpectedTypes(t *testing.T) {
 	t.Parallel()
 	g := NewGCPDiscoverer(&fakeAssetSearcher{}, "real-proj")
 	got := g.SupportedTypes()
-	want := map[string]bool{
-		"google_pubsub_topic":          false,
-		"google_pubsub_subscription":   false,
-		"google_storage_bucket":        false,
-		"google_secret_manager_secret": false,
-		"google_compute_network":       false,
+	want := make(map[string]bool, len(expectedRegisteredTypes))
+	for k, v := range expectedRegisteredTypes {
+		want[k] = v
 	}
 	for _, typ := range got {
 		if _, ok := want[typ]; !ok {
@@ -80,12 +115,22 @@ func TestDiscoverTypes_DefaultsToAllSupported(t *testing.T) {
 	if _, err := g.DiscoverTypes(context.Background(), nil, DiscoverArgs{Project: "io-foo", Regions: []string{""}}); err != nil {
 		t.Fatal(err)
 	}
-	if len(fake.calls) != 1 {
-		t.Fatalf("SearchAll called %d times, want 1", len(fake.calls))
+	// The two-bucket dispatch (#366) issues at most one SearchAll per
+	// non-empty ScopeStyle bucket. When the registry covers both
+	// buckets, the union of asset types across all calls must equal
+	// the supported set.
+	if len(fake.calls) < 1 || len(fake.calls) > 2 {
+		t.Fatalf("SearchAll called %d times, want 1 or 2 (one per non-empty ScopeStyle bucket)", len(fake.calls))
 	}
-	if len(fake.calls[0].assetTypes) != len(g.SupportedTypes()) {
-		t.Errorf("assetTypes len=%d, want %d (one per registered type)",
-			len(fake.calls[0].assetTypes), len(g.SupportedTypes()))
+	covered := map[string]struct{}{}
+	for _, c := range fake.calls {
+		for _, at := range c.assetTypes {
+			covered[at] = struct{}{}
+		}
+	}
+	if len(covered) != len(g.SupportedTypes()) {
+		t.Errorf("covered asset-types=%d (across %d calls), want %d (one per registered type)",
+			len(covered), len(fake.calls), len(g.SupportedTypes()))
 	}
 }
 
@@ -271,6 +316,42 @@ func TestFromAsset_ProjectIDArgWinsOverAssetField(t *testing.T) {
 		{name: "storage_bucket", discoverer: newStorageBucketDiscoverer(),
 			assetName:    "//storage.googleapis.com/io-bucket-" + fromAsset,
 			wantImportID: "io-bucket-" + fromAsset},
+		{name: "service_account", discoverer: newServiceAccountDiscoverer(),
+			assetName:    "//iam.googleapis.com/projects/" + fromAsset + "/serviceAccounts/sa@x.iam.gserviceaccount.com",
+			wantImportID: "projects/" + explicit + "/serviceAccounts/sa@x.iam.gserviceaccount.com"},
+		{name: "kms_key_ring", discoverer: newKMSKeyRingDiscoverer(),
+			assetName:    "//cloudkms.googleapis.com/projects/" + fromAsset + "/locations/global/keyRings/ring1",
+			wantImportID: "projects/" + explicit + "/locations/global/keyRings/ring1"},
+		{name: "kms_crypto_key", discoverer: newKMSCryptoKeyDiscoverer(),
+			assetName:    "//cloudkms.googleapis.com/projects/" + fromAsset + "/locations/global/keyRings/ring1/cryptoKeys/key1",
+			wantImportID: "projects/" + explicit + "/locations/global/keyRings/ring1/cryptoKeys/key1"},
+		{name: "compute_firewall", discoverer: newComputeFirewallDiscoverer(),
+			assetName:    "//compute.googleapis.com/projects/" + fromAsset + "/global/firewalls/fw1",
+			wantImportID: "projects/" + explicit + "/global/firewalls/fw1"},
+		{name: "compute_router", discoverer: newComputeRouterDiscoverer(),
+			assetName:    "//compute.googleapis.com/projects/" + fromAsset + "/regions/us-central1/routers/r1",
+			wantImportID: "projects/" + explicit + "/regions/us-central1/routers/r1"},
+		{name: "compute_address_regional", discoverer: newComputeAddressDiscoverer(),
+			assetName:    "//compute.googleapis.com/projects/" + fromAsset + "/regions/us-central1/addresses/ip1",
+			wantImportID: "projects/" + explicit + "/regions/us-central1/addresses/ip1"},
+		{name: "compute_instance", discoverer: newComputeInstanceDiscoverer(),
+			assetName:    "//compute.googleapis.com/projects/" + fromAsset + "/zones/us-central1-a/instances/vm1",
+			wantImportID: "projects/" + explicit + "/zones/us-central1-a/instances/vm1"},
+		{name: "container_cluster", discoverer: newContainerClusterDiscoverer(),
+			assetName:    "//container.googleapis.com/projects/" + fromAsset + "/locations/us-central1/clusters/c1",
+			wantImportID: "projects/" + explicit + "/locations/us-central1/clusters/c1"},
+		{name: "container_node_pool", discoverer: newContainerNodePoolDiscoverer(),
+			assetName:    "//container.googleapis.com/projects/" + fromAsset + "/locations/us-central1/clusters/c1/nodePools/np1",
+			wantImportID: "projects/" + explicit + "/locations/us-central1/clusters/c1/nodePools/np1"},
+		{name: "sql_database_instance", discoverer: newSQLDatabaseInstanceDiscoverer(),
+			assetName:    "//sqladmin.googleapis.com/projects/" + fromAsset + "/instances/db1",
+			wantImportID: "projects/" + explicit + "/instances/db1"},
+		{name: "cloud_run_v2_service", discoverer: newCloudRunV2ServiceDiscoverer(),
+			assetName:    "//run.googleapis.com/projects/" + fromAsset + "/locations/us-central1/services/s1",
+			wantImportID: "projects/" + explicit + "/locations/us-central1/services/s1"},
+		{name: "cloudfunctions2_function", discoverer: newCloudFunctions2FunctionDiscoverer(),
+			assetName:    "//cloudfunctions.googleapis.com/projects/" + fromAsset + "/locations/us-central1/functions/fn1",
+			wantImportID: "projects/" + explicit + "/locations/us-central1/functions/fn1"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -542,21 +623,55 @@ func TestGCPDiscoverTypes_EmitsStageFinish(t *testing.T) {
 	}
 }
 
-// TestScopeStyle_AllPhase1DiscoverersUseLabels is a regression guard
-// (#366). All five currently-registered discoverers cover labelable GCP
-// resource types — every type's preset attaches the `project` label —
-// so each one must report ScopeStyleLabels. A mutation that flipped
-// any of them to ScopeStyleNamePrefix would silently drop the
-// labels.project clause from its server-side query, returning the
-// project's full inventory instead of just the stack's assets.
+// expectedScopeStyle is the per-type ScopeStyle contract (#366) —
+// adding a new discoverer to NewGCPDiscoverer requires an explicit
+// row here, and TestScopeStyle_PinsPerTypeContract fails on drift in
+// either direction (unknown registered type, or known type with a
+// different ScopeStyle). Adding a row is an intentional decision: a
+// type that carries GCP labels should be ScopeStyleLabels; a label-
+// less type (CLAUDE.md L84 convention) should be ScopeStyleNamePrefix.
+var expectedScopeStyle = map[string]ScopeStyle{
+	"google_pubsub_topic":                    ScopeStyleLabels,
+	"google_pubsub_subscription":             ScopeStyleLabels,
+	"google_storage_bucket":                  ScopeStyleLabels,
+	"google_secret_manager_secret":           ScopeStyleLabels,
+	"google_compute_network":                 ScopeStyleLabels,
+	"google_service_account":                 ScopeStyleNamePrefix, // IAM SAs have no labels (#367)
+	"google_kms_key_ring":                    ScopeStyleNamePrefix, // KMS keyrings have no labels (#368)
+	"google_kms_crypto_key":                  ScopeStyleNamePrefix, // KMS cryptokeys have no labels (#368)
+	"google_compute_firewall":                ScopeStyleNamePrefix, // firewalls have no labels (#369)
+	"google_compute_router":                  ScopeStyleNamePrefix, // routers have no labels (#369)
+	"google_compute_address":                 ScopeStyleLabels,     // addresses carry labels (#369)
+	"google_compute_instance":                ScopeStyleLabels,     // VMs carry labels (#370)
+	"google_container_cluster":               ScopeStyleLabels,     // GKE clusters carry labels (#371)
+	"google_container_node_pool":             ScopeStyleNamePrefix, // node pools have no labels (#371)
+	"google_sql_database_instance":           ScopeStyleLabels,     // Cloud SQL via settings.user_labels (#372)
+	"google_cloud_run_v2_service":            ScopeStyleLabels,     // Cloud Run v2 carries labels (#373)
+	"google_cloudfunctions2_function":        ScopeStyleLabels,     // Cloud Functions v2 carries labels (#373)
+	"google_compute_forwarding_rule":         ScopeStyleLabels,     // forwarding rules carry labels (#375)
+	"google_compute_target_https_proxy":      ScopeStyleNamePrefix, // target HTTPS proxies have no labels (#375)
+	"google_compute_url_map":                 ScopeStyleNamePrefix, // URL maps have no labels (#375)
+	"google_api_gateway_api":                 ScopeStyleLabels,     // API Gateway APIs carry labels (#376)
+	"google_api_gateway_api_config":          ScopeStyleLabels,     // API Gateway API configs carry labels (#376)
+	"google_api_gateway_gateway":             ScopeStyleLabels,     // API Gateway gateways carry labels (#376)
+	"google_monitoring_dashboard":            ScopeStyleNamePrefix, // dashboards have no labels (#377)
+	"google_monitoring_alert_policy":         ScopeStyleNamePrefix, // alert policies have no labels (#377)
+	"google_monitoring_notification_channel": ScopeStyleNamePrefix, // notification channels have no labels (#377)
+}
+
+// TestScopeStyle_PinsPerTypeContract is the regression guard (#366).
+// Every registered discoverer must have a row in expectedScopeStyle
+// asserting the right scoping. A mutation that flipped a label-
+// carrying type to NamePrefix would silently widen its server-side
+// scope; a mutation that flipped a label-less type to Labels would
+// silently drop every result (the labels.project clause returns zero
+// rows for label-less resource types).
 //
 // Test source-of-truth is the live registration map produced by
-// NewGCPDiscoverer, not hand-listed constructors — that way the test
-// stays a regression guard for production behavior. A future PR that
-// forgot to register a constructor in byType (or that registered a
-// new ScopeStyleNamePrefix discoverer alongside the labels-style set)
-// surfaces here.
-func TestScopeStyle_AllPhase1DiscoverersUseLabels(t *testing.T) {
+// NewGCPDiscoverer, joined against the hand-maintained
+// expectedScopeStyle table. New types added to NewGCPDiscoverer must
+// also be added to the table — surfaces both forms of drift here.
+func TestScopeStyle_PinsPerTypeContract(t *testing.T) {
 	t.Parallel()
 	g := NewGCPDiscoverer(&fakeAssetSearcher{}, "p")
 	if len(g.byType) == 0 {
@@ -565,11 +680,20 @@ func TestScopeStyle_AllPhase1DiscoverersUseLabels(t *testing.T) {
 	for tfType, d := range g.byType {
 		t.Run(tfType, func(t *testing.T) {
 			t.Parallel()
-			if got := d.ScopeStyle(); got != ScopeStyleLabels {
-				t.Errorf("%s.ScopeStyle()=%v, want ScopeStyleLabels (%v) — every Phase-1 GCP type carries the project label",
-					tfType, got, ScopeStyleLabels)
+			want, ok := expectedScopeStyle[tfType]
+			if !ok {
+				t.Errorf("registered type %q has no expectedScopeStyle row — add an explicit entry to pin the ScopeStyle contract", tfType)
+				return
+			}
+			if got := d.ScopeStyle(); got != want {
+				t.Errorf("%s.ScopeStyle()=%v, want %v", tfType, got, want)
 			}
 		})
+	}
+	for tfType := range expectedScopeStyle {
+		if _, ok := g.byType[tfType]; !ok {
+			t.Errorf("expectedScopeStyle row for %q has no live registration — remove the row or register the type", tfType)
+		}
 	}
 }
 
@@ -939,6 +1063,100 @@ func TestDiscoverTypes_TwoBucketsEmitOneServiceStartFinishPair(t *testing.T) {
 	if finishes != 1 {
 		t.Errorf("service_finish count=%d, want 1 (one pair across both ScopeStyle buckets)", finishes)
 	}
+}
+
+// TestDiscoverTypes_OrchestratorSkipsZeroIdentityType pins the
+// orchestrator half of the skip-sentinel contract introduced by the
+// Bundle 8 live-smoke fixup: a discoverer that returns a zero
+// ImportedResource (empty Identity.Type) signals the orchestrator to
+// drop that row from the emitted slice.
+//
+// Without this test, the live-smoke bug (malformed
+// `projects/<p>/regions/global/addresses/<n>` ImportIDs for global
+// rows) regresses if anyone deletes the
+// `if imp.Identity.Type == "" { continue }` guard in
+// gcpdiscover.go::DiscoverTypes — the producer-side
+// TestComputeAddressFromAsset_Global_IsSkipped only proves
+// FromAsset returns zero; the orchestrator skip is what actually
+// drops the row.
+//
+// Uses a fake discoverer that returns zero for one specific asset
+// name. Avoids depending on compute_address's specific global-skip
+// logic so the test stays focused on the contract.
+func TestDiscoverTypes_OrchestratorSkipsZeroIdentityType(t *testing.T) {
+	t.Parallel()
+	const tfType = "google_test_zerosignal"
+	const assetType = "test.googleapis.com/ZeroSignal"
+	const skipMe = "//test.googleapis.com/projects/real-proj/things/skip-me"
+	const keepMe = "//test.googleapis.com/projects/real-proj/things/keep-me"
+
+	fake := &fakeAssetSearcher{
+		results: []gcpAssetResult{
+			{Name: skipMe, AssetType: assetType, Project: "real-proj"},
+			{Name: keepMe, AssetType: assetType, Project: "real-proj"},
+		},
+	}
+	g := &GCPDiscoverer{
+		searcher:  fake,
+		projectID: "real-proj",
+		byType: map[string]Discoverer{
+			tfType: &skipOnNameDiscoverer{
+				resourceType:  tfType,
+				assetType:     assetType,
+				skipAssetName: skipMe,
+			},
+		},
+	}
+	got, err := g.DiscoverTypes(context.Background(), []string{tfType}, DiscoverArgs{Project: ""})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Exactly one resource emitted (keep-me); the zero-Identity skip-me
+	// row was dropped by the orchestrator.
+	if len(got) != 1 {
+		t.Fatalf("len(got)=%d, want 1 (zero-Identity row must be dropped); got %v", len(got), namesOf(got))
+	}
+	if got[0].Identity.NameHint != "keep-me" {
+		t.Errorf("kept=%q, want keep-me — wrong row survived?", got[0].Identity.NameHint)
+	}
+}
+
+// skipOnNameDiscoverer is a test fake whose FromAsset returns a zero
+// ImportedResource when the asset.Name matches `skipAssetName`, and a
+// real ImportedResource otherwise. Used by the
+// TestDiscoverTypes_OrchestratorSkipsZeroIdentityType regression
+// guard above.
+type skipOnNameDiscoverer struct {
+	resourceType  string
+	assetType     string
+	skipAssetName string
+}
+
+func (d *skipOnNameDiscoverer) ResourceType() string   { return d.resourceType }
+func (d *skipOnNameDiscoverer) AssetType() string      { return d.assetType }
+func (d *skipOnNameDiscoverer) ScopeStyle() ScopeStyle { return ScopeStyleLabels }
+
+func (d *skipOnNameDiscoverer) FromAsset(_ addressBook, a gcpAssetResult, projectID string) imported.ImportedResource {
+	if a.Name == d.skipAssetName {
+		return imported.ImportedResource{}
+	}
+	name := shortName(a.Name)
+	return imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Cloud:     "gcp",
+			Type:      d.resourceType,
+			Address:   d.resourceType + "." + name,
+			ImportID:  name,
+			NameHint:  name,
+			ProjectID: projectID,
+		},
+		Tier:   imported.TierImportedFlat,
+		Source: imported.SourceImporter,
+	}
+}
+
+func (d *skipOnNameDiscoverer) DiscoverByID(_ context.Context, _ gcpAssetSearcher, _, _ string) (imported.ImportedResource, error) {
+	return imported.ImportedResource{}, ErrNotSupported
 }
 
 // namesOf collects NameHints from a discover result for failure-message

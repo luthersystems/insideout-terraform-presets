@@ -64,10 +64,31 @@ func TestSupportedDiscoverTypes_AWS_ReturnsCanonicalSortedList(t *testing.T) {
 func TestSupportedDiscoverTypes_GCP_ReturnsCanonicalSortedList(t *testing.T) {
 	t.Parallel()
 	want := []string{
+		"google_api_gateway_api",
+		"google_api_gateway_api_config",
+		"google_api_gateway_gateway",
+		"google_cloud_run_v2_service",
+		"google_cloudfunctions2_function",
+		"google_compute_address",
+		"google_compute_firewall",
+		"google_compute_forwarding_rule",
+		"google_compute_instance",
 		"google_compute_network",
+		"google_compute_router",
+		"google_compute_target_https_proxy",
+		"google_compute_url_map",
+		"google_container_cluster",
+		"google_container_node_pool",
+		"google_kms_crypto_key",
+		"google_kms_key_ring",
+		"google_monitoring_alert_policy",
+		"google_monitoring_dashboard",
+		"google_monitoring_notification_channel",
 		"google_pubsub_subscription",
 		"google_pubsub_topic",
 		"google_secret_manager_secret",
+		"google_service_account",
+		"google_sql_database_instance",
 		"google_storage_bucket",
 	}
 	got := SupportedDiscoverTypes(ProviderGCP)
@@ -118,7 +139,7 @@ func TestSupportedDiscoverTypes_ReturnsCopy_PackageStateUnchanged(t *testing.T) 
 		firstLiteral string
 	}{
 		{provider: ProviderAWS, firstLiteral: "aws_apigatewayv2_api"},
-		{provider: ProviderGCP, firstLiteral: "google_compute_network"},
+		{provider: ProviderGCP, firstLiteral: "google_api_gateway_api"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.provider, func(t *testing.T) {

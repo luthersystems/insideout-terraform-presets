@@ -17,10 +17,16 @@
 // project name (--project) and uses it for the labels.project=<stack>
 // server-side filter (mirroring the AWS path's QueueNamePrefix etc. filter).
 //
-// Stage 2d (#264) lands the 5 Phase-1 GCP types whose typed-Attrs codegen
+// Stage 2d (#264) landed the 5 Phase-1 GCP types whose typed-Attrs codegen
 // has already shipped under pkg/composer/imported/generated/google_*.gen.go:
 // google_pubsub_topic, google_pubsub_subscription, google_storage_bucket,
 // google_secret_manager_secret, and google_compute_network.
+//
+// Bundle 8 (#356) expanded coverage to 22 types — see byType in
+// NewGCPDiscoverer for the live list and pkg/insideout-import/registry
+// for the public contract. The discoverers don't reference the
+// typed-Attrs codegen at runtime (Identity-only); composer-side
+// codegen for the post-Phase-1 types is a separate workstream.
 package gcpdiscover
 
 import (
@@ -153,11 +159,32 @@ func NewGCPDiscoverer(searcher gcpAssetSearcher, projectID string) *GCPDiscovere
 		searcher:  searcher,
 		projectID: projectID,
 		byType: map[string]Discoverer{
-			"google_pubsub_topic":          newPubsubTopicDiscoverer(),
-			"google_pubsub_subscription":   newPubsubSubscriptionDiscoverer(),
-			"google_storage_bucket":        newStorageBucketDiscoverer(),
-			"google_secret_manager_secret": newSecretManagerSecretDiscoverer(),
-			"google_compute_network":       newComputeNetworkDiscoverer(),
+			"google_pubsub_topic":                    newPubsubTopicDiscoverer(),
+			"google_pubsub_subscription":             newPubsubSubscriptionDiscoverer(),
+			"google_storage_bucket":                  newStorageBucketDiscoverer(),
+			"google_secret_manager_secret":           newSecretManagerSecretDiscoverer(),
+			"google_compute_network":                 newComputeNetworkDiscoverer(),
+			"google_service_account":                 newServiceAccountDiscoverer(),
+			"google_kms_key_ring":                    newKMSKeyRingDiscoverer(),
+			"google_kms_crypto_key":                  newKMSCryptoKeyDiscoverer(),
+			"google_compute_firewall":                newComputeFirewallDiscoverer(),
+			"google_compute_router":                  newComputeRouterDiscoverer(),
+			"google_compute_address":                 newComputeAddressDiscoverer(),
+			"google_compute_instance":                newComputeInstanceDiscoverer(),
+			"google_container_cluster":               newContainerClusterDiscoverer(),
+			"google_container_node_pool":             newContainerNodePoolDiscoverer(),
+			"google_sql_database_instance":           newSQLDatabaseInstanceDiscoverer(),
+			"google_cloud_run_v2_service":            newCloudRunV2ServiceDiscoverer(),
+			"google_cloudfunctions2_function":        newCloudFunctions2FunctionDiscoverer(),
+			"google_compute_forwarding_rule":         newComputeForwardingRuleDiscoverer(),
+			"google_compute_target_https_proxy":      newComputeTargetHTTPSProxyDiscoverer(),
+			"google_compute_url_map":                 newComputeURLMapDiscoverer(),
+			"google_api_gateway_api":                 newAPIGatewayAPIDiscoverer(),
+			"google_api_gateway_api_config":          newAPIGatewayAPIConfigDiscoverer(),
+			"google_api_gateway_gateway":             newAPIGatewayGatewayDiscoverer(),
+			"google_monitoring_dashboard":            newMonitoringDashboardDiscoverer(),
+			"google_monitoring_alert_policy":         newMonitoringAlertPolicyDiscoverer(),
+			"google_monitoring_notification_channel": newMonitoringNotificationChannelDiscoverer(),
 		},
 	}
 }
@@ -259,6 +286,15 @@ func (g *GCPDiscoverer) DiscoverTypes(ctx context.Context, types []string, args 
 		sort.SliceStable(bucket, func(i, j int) bool { return bucket[i].Name < bucket[j].Name })
 		for _, r := range bucket {
 			imp := d.FromAsset(book, r, g.projectID)
+			// A discoverer that returns a zero-valued ImportedResource
+			// is signaling "skip this row" — used by compute_address
+			// and compute_forwarding_rule to filter out global rows
+			// that belong to a different TF type. Empty Identity.Type
+			// is the sentinel; the orchestrator drops the row instead
+			// of emitting an invalid import-id.
+			if imp.Identity.Type == "" {
+				continue
+			}
 			args.Emitter.ItemFound(gcpServiceSlug, r.Location, imp.Identity.Type, imp.Identity.ImportID)
 			out = append(out, imp)
 		}
