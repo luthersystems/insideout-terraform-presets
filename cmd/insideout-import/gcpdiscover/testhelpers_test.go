@@ -205,3 +205,28 @@ func (d *fakeParentNamePrefixDiscoverer) FromAsset(_ addressBook, a gcpAssetResu
 func (d *fakeParentNamePrefixDiscoverer) DiscoverByID(_ context.Context, _ gcpAssetSearcher, _ string, _ string) (imported.ImportedResource, error) {
 	return imported.ImportedResource{}, ErrNotSupported
 }
+
+// brokenParentScopeDiscoverer reports ScopeStyleParentNamePrefix but
+// does NOT implement the parentScopedDiscoverer side-interface (no
+// ParentMarker method). Used by
+// TestSearchBuckets_ParentMissingSideInterface_FailsLoud to pin the
+// programmer-error path at gcpdiscover.go::searchBuckets — without a
+// fault-injection fake, the live registry's contract test cannot
+// reach those error returns at runtime, so a refactor that demoted
+// them to a silent continue would ship green.
+type brokenParentScopeDiscoverer struct {
+	resourceType string
+	assetType    string
+}
+
+func (d *brokenParentScopeDiscoverer) ResourceType() string   { return d.resourceType }
+func (d *brokenParentScopeDiscoverer) AssetType() string      { return d.assetType }
+func (d *brokenParentScopeDiscoverer) ScopeStyle() ScopeStyle { return ScopeStyleParentNamePrefix }
+
+func (d *brokenParentScopeDiscoverer) FromAsset(_ addressBook, _ gcpAssetResult, _ string) imported.ImportedResource {
+	return imported.ImportedResource{}
+}
+
+func (d *brokenParentScopeDiscoverer) DiscoverByID(_ context.Context, _ gcpAssetSearcher, _ string, _ string) (imported.ImportedResource, error) {
+	return imported.ImportedResource{}, ErrNotSupported
+}

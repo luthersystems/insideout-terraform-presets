@@ -121,9 +121,16 @@ type Discoverer interface {
 	// SearchAllResources asset-type filter.
 	AssetType() string
 	// ScopeStyle reports how the orchestrator filters asset results
-	// down to the operator's stack project (#366). Most types return
-	// ScopeStyleLabels; label-less types (per CLAUDE.md's label-less
-	// GCP resource convention) return ScopeStyleNamePrefix.
+	// down to the operator's stack project (#366, #381). Three
+	// return values are recognized:
+	//
+	//   - ScopeStyleLabels — type carries GCP labels.
+	//   - ScopeStyleNamePrefix — type is label-less; the stack
+	//     project is embedded in the resource's own short name.
+	//   - ScopeStyleParentNamePrefix — type is label-less and child
+	//     to a parent whose name embeds the stack project (e.g. KMS
+	//     cryptokey under keyring). Such types must additionally
+	//     implement parentScopedDiscoverer.ParentMarker().
 	ScopeStyle() ScopeStyle
 	// FromAsset translates a single Cloud Asset SearchAllResources result
 	// (already filtered to this discoverer's AssetType) into an
@@ -155,7 +162,7 @@ type Discoverer interface {
 //
 // Keeping this on a side-interface (rather than extending Discoverer)
 // keeps the contract trivial for the ~20 discoverers that don't need
-// parent scoping; only the 2-3 child-of-parent types implement it. A
+// parent scoping; only the few child-of-parent types implement it. A
 // ScopeStyleParentNamePrefix discoverer that does NOT implement this
 // is a programmer error — the orchestrator fails loud at search time.
 type parentScopedDiscoverer interface {

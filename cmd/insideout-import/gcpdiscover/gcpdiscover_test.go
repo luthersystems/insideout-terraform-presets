@@ -115,12 +115,18 @@ func TestDiscoverTypes_DefaultsToAllSupported(t *testing.T) {
 	if _, err := g.DiscoverTypes(context.Background(), nil, DiscoverArgs{Project: "io-foo", Regions: []string{""}}); err != nil {
 		t.Fatal(err)
 	}
-	// The N-bucket dispatch (#366, #381) issues at most one SearchAll
-	// per non-empty ScopeStyle bucket. When the registry covers
-	// multiple ScopeStyles, the union of asset types across all calls
-	// must equal the supported set.
-	if len(fake.calls) < 1 || len(fake.calls) > 3 {
-		t.Fatalf("SearchAll called %d times, want 1-3 (one per non-empty ScopeStyle bucket)", len(fake.calls))
+	// The N-bucket dispatch (#366, #381) issues one SearchAll per
+	// non-empty ScopeStyle bucket. The production registry currently
+	// populates all three buckets (labels + name-prefix + parent-
+	// name-prefix), so the production call count is exactly 3. A
+	// regression that collapsed two buckets into one would silently
+	// pass a `1-3` range assertion, so pin the exact value. If a
+	// future change empties a ScopeStyle bucket out of the registry
+	// (e.g. flips the last NamePrefix type to Labels), update this
+	// expected count in lockstep.
+	const wantCalls = 3
+	if len(fake.calls) != wantCalls {
+		t.Fatalf("SearchAll called %d times, want %d (one per non-empty ScopeStyle bucket)", len(fake.calls), wantCalls)
 	}
 	covered := map[string]struct{}{}
 	for _, c := range fake.calls {
@@ -1263,33 +1269,53 @@ func TestDiscoverTypes_ParentBucketOnly_OneCallWithoutLabelsClause(t *testing.T)
 // TestDiscoverTypes_ParentNamePrefixFiltersOnParentSegment pins the
 // third-bucket client-side filter (#381). The filter must check the
 // parent path segment (between the discoverer's ParentMarker and the
-// next "/"), NOT the trailing short name and NOT earlier path segments
-// like /projects/<gcp-project-id>/. The three asset rows cover:
+// next "/"), NOT the trailing short name and NOT earlier path
+// segments like /projects/<gcp-project-id>/.
 //
-//  1. Parent contains the stack project → kept.
-//  2. Parent does NOT contain the stack project → dropped (the short
-//     name "default" alone is conventional for the parent-scoped types
-//     this lane serves).
-//  3. Stack project appears in /projects/<gcp-project-id>/ AND in the
-//     short name, but NOT in the parent segment → dropped. Pins that
-//     the filter is parent-segment-only — a regression that fell back
-//     to matchesNamePrefix or to a full-string strings.Contains would
-//     mistakenly keep this asset.
+// Four asset rows, ordered so that:
 //
-// Uses the live kms_crypto_key discoverer end-to-end so the registered
-// "/keyRings/" marker is exercised rather than a fake.
+//   - the orchestrator's stable-sort-by-asset-Name puts a DROPPED
+//     asset first (alphabetically before any survivor), so a mutation
+//     that replaces the filter with `rs[:N]` (keep first N) fails.
+//   - TWO assets survive (alpha-prefix and zeta-prefix rings, both
+//     embedding "io-foo"), so a mutation that keeps only one
+//     element fails.
+//   - TWO assets are dropped, both adversarial in different ways
+//     (project-in-gcp-id+short-name vs project-in-location).
+//
+// Uses the live kms_crypto_key discoverer end-to-end so the
+// registered "/keyRings/" marker is exercised rather than a fake.
 func TestDiscoverTypes_ParentNamePrefixFiltersOnParentSegment(t *testing.T) {
 	t.Parallel()
 	const tfType = "google_kms_crypto_key"
+	// Asset names are sorted in the Cloud Asset response by the
+	// orchestrator (gcpdiscover.go's stable-sort), and the sort key
+	// is the full asset Name. The four entries here sort as:
+	//
+	//   1. //cloudkms.../keyRings/aaa-other-stack-ring/...      DROPPED
+	//   2. //cloudkms.../keyRings/io-foo-alpha-ring/...         KEPT
+	//   3. //cloudkms.../keyRings/io-foo-zeta-ring/...          KEPT
+	//   4. //cloudkms.../keyRings/zzz-elsewhere/...             DROPPED
+	//
+	// The DROPPED entry at position 1 defeats the "keep first" mutation.
+	// The KEPT entry at position 4 (zzz parent, but actually io-foo-zeta
+	// — see below) — wait, no: the io-foo-* keys sort before zzz. Layout
+	// after the orchestrator's stable-sort is exactly the order above.
 	fake := &fakeAssetSearcher{
 		results: []gcpAssetResult{
-			// 1. Parent ring carries io-foo.
-			{Name: "//cloudkms.googleapis.com/projects/real-proj/locations/us-central1/keyRings/io-foo-main-ring-abc/cryptoKeys/default", AssetType: "cloudkms.googleapis.com/CryptoKey", Location: "us-central1"},
-			// 2. Parent ring does NOT carry io-foo.
-			{Name: "//cloudkms.googleapis.com/projects/real-proj/locations/us-central1/keyRings/other-stack-ring/cryptoKeys/default", AssetType: "cloudkms.googleapis.com/CryptoKey", Location: "us-central1"},
-			// 3. io-foo in leading GCP project ID AND in trailing short
-			//    name, but NOT in the parent. Must drop.
-			{Name: "//cloudkms.googleapis.com/projects/io-foo-real-proj/locations/us-central1/keyRings/elsewhere/cryptoKeys/io-foo-shaped-name", AssetType: "cloudkms.googleapis.com/CryptoKey", Location: "us-central1"},
+			// Adversarial: project-in-gcp-id AND in the trailing
+			// short name, but the parent ring is "zzz-elsewhere".
+			{Name: "//cloudkms.googleapis.com/projects/io-foo-real-proj/locations/us-central1/keyRings/zzz-elsewhere/cryptoKeys/io-foo-shaped-name", AssetType: "cloudkms.googleapis.com/CryptoKey", Location: "us-central1"},
+			// Adversarial: parent ring does NOT carry io-foo
+			// (alphabetically first — sort makes this the first
+			// element in the bucket).
+			{Name: "//cloudkms.googleapis.com/projects/real-proj/locations/us-central1/keyRings/aaa-other-stack-ring/cryptoKeys/default", AssetType: "cloudkms.googleapis.com/CryptoKey", Location: "us-central1"},
+			// KEPT: parent ring carries io-foo (alpha sort key
+			// puts it second after stable sort).
+			{Name: "//cloudkms.googleapis.com/projects/real-proj/locations/us-central1/keyRings/io-foo-alpha-ring/cryptoKeys/default", AssetType: "cloudkms.googleapis.com/CryptoKey", Location: "us-central1"},
+			// KEPT: a second io-foo-* ring; pins that the filter
+			// keeps MULTIPLE matches, not just the first.
+			{Name: "//cloudkms.googleapis.com/projects/real-proj/locations/us-central1/keyRings/io-foo-zeta-ring/cryptoKeys/default", AssetType: "cloudkms.googleapis.com/CryptoKey", Location: "us-central1"},
 		},
 	}
 	g := &GCPDiscoverer{
@@ -1305,20 +1331,21 @@ func TestDiscoverTypes_ParentNamePrefixFiltersOnParentSegment(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// All three assets are named "default" / "default" /
-	// "io-foo-shaped-name". The expected survivor has NameHint
-	// "default" but came from the ring that carries io-foo. That makes
-	// the NameHint alone an ambiguous assertion (#1 and #2 both produce
-	// "default"); pin on the parent ring extracted into
-	// NativeIDs["key_ring"] for unambiguous evidence.
-	if len(got) != 1 {
-		t.Fatalf("kept=%d, want 1 (only the io-foo-parent asset must survive); names=%v", len(got), namesOf(got))
+	// Three cryptokey names collide on "default" / "default" /
+	// "io-foo-shaped-name", and the trailing short name is "default"
+	// for the survivors — making NameHint a poor discriminator. Pin
+	// the parent ring via NativeIDs["key_ring"] (set by FromAsset
+	// from the parsed /keyRings/<name>/ segment).
+	if len(got) != 2 {
+		t.Fatalf("kept=%d, want 2 (the two io-foo-* parent rings must survive); names=%v", len(got), namesOf(got))
 	}
-	if got[0].Identity.NameHint != "default" {
-		t.Errorf("kept NameHint=%q, want default", got[0].Identity.NameHint)
+	gotRings := []string{
+		got[0].Identity.NativeIDs["key_ring"],
+		got[1].Identity.NativeIDs["key_ring"],
 	}
-	if ring := got[0].Identity.NativeIDs["key_ring"]; ring != "io-foo-main-ring-abc" {
-		t.Errorf("kept key_ring=%q, want io-foo-main-ring-abc — wrong asset survived?", ring)
+	wantRings := []string{"io-foo-alpha-ring", "io-foo-zeta-ring"}
+	if !reflect.DeepEqual(gotRings, wantRings) {
+		t.Errorf("kept rings=%v, want %v (filter must keep parent-ring matches and drop non-matches)", gotRings, wantRings)
 	}
 }
 
@@ -1617,6 +1644,37 @@ func TestMatchesParentNamePrefix(t *testing.T) {
 			assetName: "//cloudkms.googleapis.com/projects/real-proj/locations/us-central1/keyRings/io-foo-tail",
 			marker:    ringMarker, project: "io-foo", want: true,
 		},
+		// Programmer-error surface: empty marker is the caller's
+		// responsibility (searchBuckets rejects empty markers at the
+		// per-discoverer guard — pinned by
+		// TestSearchBuckets_ParentEmptyMarker_FailsLoud). Not exercised
+		// here because the helper's behavior with sep="" depends on
+		// where the first "/" lands in the asset string, which makes
+		// the result implementation-defined from the helper's point of
+		// view. The contract-pinning test sits at the caller layer.
+		//
+		// Programmer-error surface: empty project. strings.Contains
+		// with an empty needle returns true, so any non-empty parent
+		// segment "matches". Documented behavior — caller
+		// (searchBuckets's `if args.Project != ""` guard at
+		// gcpdiscover.go:472) MUST skip this filter for empty
+		// projects. Pin the behavior so a "harden the helper" change
+		// silently flipping it surfaces here.
+		{
+			name:      "empty project — caller responsibility (vacuous true match)",
+			assetName: "//cloudkms.googleapis.com/projects/real-proj/locations/us-central1/keyRings/anyring/cryptoKeys/default",
+			marker:    ringMarker, project: "", want: true,
+		},
+		// Marker appearing twice. strings.Cut splits on the first
+		// occurrence, so the parent is extracted from the FIRST
+		// /keyRings/ — the second is ignored as just another segment
+		// inside the child path. Pin the first-occurrence behavior
+		// against a refactor that swapped to LastIndex.
+		{
+			name:      "marker appears twice — first occurrence wins",
+			assetName: "//cloudkms.googleapis.com/projects/real-proj/locations/us-central1/keyRings/io-foo-ring/cryptoKeys/x/keyRings/decoy-not-io-foo",
+			marker:    ringMarker, project: "io-foo", want: true,
+		},
 
 		// Clusters marker — pin that the helper is marker-generic, not
 		// keyrings-specific.
@@ -1638,5 +1696,109 @@ func TestMatchesParentNamePrefix(t *testing.T) {
 				t.Errorf("matchesParentNamePrefix(%q, %q, %q) = %v, want %v", tc.assetName, tc.marker, tc.project, got, tc.want)
 			}
 		})
+	}
+}
+
+// TestSearchBuckets_ParentMissingSideInterface_FailsLoud pins one of
+// the two programmer-error returns in searchBuckets (#381). A
+// Discoverer that reports ScopeStyleParentNamePrefix but does NOT
+// implement parentScopedDiscoverer (no ParentMarker method) must
+// cause DiscoverTypes to fail with a descriptive error rather than
+// silently route around it. Without this test, a refactor that
+// demoted the error to a continue would ship green.
+//
+// TestParentScopedDiscoverer_ContractMatchesScopeStyle covers the
+// live-registry side of the contract; this covers the runtime
+// fault-injection side.
+func TestSearchBuckets_ParentMissingSideInterface_FailsLoud(t *testing.T) {
+	t.Parallel()
+	fake := &fakeAssetSearcher{}
+	g := &GCPDiscoverer{
+		searcher:  fake,
+		projectID: "real-proj",
+		byType: map[string]Discoverer{
+			"google_broken_parent": &brokenParentScopeDiscoverer{
+				resourceType: "google_broken_parent",
+				assetType:    "test.googleapis.com/BrokenParent",
+			},
+		},
+	}
+	_, err := g.DiscoverTypes(context.Background(), []string{"google_broken_parent"}, DiscoverArgs{
+		Project: "io-foo",
+	})
+	if err == nil {
+		t.Fatal("DiscoverTypes returned nil error; expected programmer-error return for missing parentScopedDiscoverer")
+	}
+	if !strings.Contains(err.Error(), "does not implement parentScopedDiscoverer") {
+		t.Errorf("err=%v, want error mentioning the missing-side-interface contract", err)
+	}
+	if !strings.Contains(err.Error(), "google_broken_parent") {
+		t.Errorf("err=%v, want error to name the offending type", err)
+	}
+}
+
+// TestSearchBuckets_ParentEmptyMarker_FailsLoud pins the second
+// programmer-error return in searchBuckets (#381): a parent-scoped
+// discoverer that DOES implement the side-interface but returns ""
+// from ParentMarker. Returning empty would short-circuit
+// matchesParentNamePrefix's match (defensive false), silently
+// dropping every asset of that type — far worse than a loud error
+// at search time.
+func TestSearchBuckets_ParentEmptyMarker_FailsLoud(t *testing.T) {
+	t.Parallel()
+	fake := &fakeAssetSearcher{}
+	g := &GCPDiscoverer{
+		searcher:  fake,
+		projectID: "real-proj",
+		byType: map[string]Discoverer{
+			"google_empty_marker": &fakeParentNamePrefixDiscoverer{
+				resourceType: "google_empty_marker",
+				assetType:    "test.googleapis.com/EmptyMarker",
+				parentMarker: "", // the programmer-error shape
+			},
+		},
+	}
+	_, err := g.DiscoverTypes(context.Background(), []string{"google_empty_marker"}, DiscoverArgs{
+		Project: "io-foo",
+	})
+	if err == nil {
+		t.Fatal("DiscoverTypes returned nil error; expected programmer-error return for empty ParentMarker")
+	}
+	if !strings.Contains(err.Error(), "ParentMarker() returned empty string") {
+		t.Errorf("err=%v, want error mentioning the empty-marker contract", err)
+	}
+	if !strings.Contains(err.Error(), "google_empty_marker") {
+		t.Errorf("err=%v, want error to name the offending type", err)
+	}
+}
+
+// TestSearchBuckets_ParentEmptyMarker_SkippedWhenEmptyProject pins
+// that the programmer-error checks fire from inside the
+// `if args.Project != ""` guard — when args.Project is empty the
+// filter is skipped and the broken marker never trips. Symmetric
+// with the empty-project pass-through tests for the other two
+// buckets. Pinning this surface so a regression that moved the
+// marker-validation outside the guard (e.g. to NewGCPDiscoverer)
+// surfaces here; conversely, if a future refactor *intentionally*
+// moves the validation to wiring time, this test must be updated
+// to expect the error at construction.
+func TestSearchBuckets_ParentEmptyMarker_SkippedWhenEmptyProject(t *testing.T) {
+	t.Parallel()
+	fake := &fakeAssetSearcher{}
+	g := &GCPDiscoverer{
+		searcher:  fake,
+		projectID: "real-proj",
+		byType: map[string]Discoverer{
+			"google_empty_marker": &fakeParentNamePrefixDiscoverer{
+				resourceType: "google_empty_marker",
+				assetType:    "test.googleapis.com/EmptyMarker",
+				parentMarker: "",
+			},
+		},
+	}
+	if _, err := g.DiscoverTypes(context.Background(), []string{"google_empty_marker"}, DiscoverArgs{
+		Project: "",
+	}); err != nil {
+		t.Errorf("DiscoverTypes(empty project)=%v, want nil — marker validation MUST be inside the args.Project guard", err)
 	}
 }
