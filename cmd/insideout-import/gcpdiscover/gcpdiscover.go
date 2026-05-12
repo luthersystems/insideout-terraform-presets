@@ -71,6 +71,16 @@ const (
 	// from the server query and applies the name-substring filter
 	// client-side.
 	ScopeStyleNamePrefix
+	// ScopeStyleParentNamePrefix is for child resources whose own
+	// short name doesn't carry the stack project — the project is
+	// embedded in a parent path segment instead. Examples: KMS
+	// cryptokey (parent = keyring), GKE node pool (parent = cluster).
+	// The aggregator drops the labels.project clause and applies a
+	// per-discoverer parent-segment substring filter client-side; the
+	// marker (e.g. "/keyRings/") is supplied via the parentScopedDiscoverer
+	// side-interface. See #381 for the live-smoke gap that motivated
+	// this scope style.
+	ScopeStyleParentNamePrefix
 )
 
 // ErrNotSupported signals that a discoverer cannot resolve a given ID
@@ -133,6 +143,24 @@ type Discoverer interface {
 	// the ID alone (the asset name encodes type + project + name) when
 	// re-querying the Cloud Asset API for a single resource is wasteful.
 	DiscoverByID(ctx context.Context, searcher gcpAssetSearcher, id, projectID string) (imported.ImportedResource, error)
+}
+
+// parentScopedDiscoverer is an optional contract implemented by
+// Discoverers whose ScopeStyle returns ScopeStyleParentNamePrefix.
+// ParentMarker returns the path-segment marker (e.g. "/keyRings/",
+// "/clusters/") whose enclosed value is the parent name to match
+// against args.Project. The matcher extracts the substring between
+// marker and the next "/" as the parent name and substring-matches
+// that against args.Project.
+//
+// Keeping this on a side-interface (rather than extending Discoverer)
+// keeps the contract trivial for the ~20 discoverers that don't need
+// parent scoping; only the 2-3 child-of-parent types implement it. A
+// ScopeStyleParentNamePrefix discoverer that does NOT implement this
+// is a programmer error — the orchestrator fails loud at search time.
+type parentScopedDiscoverer interface {
+	Discoverer
+	ParentMarker() string
 }
 
 // GCPDiscoverer aggregates the per-type discoverers and fans out a single
@@ -249,13 +277,15 @@ func (g *GCPDiscoverer) DiscoverTypes(ctx context.Context, types []string, args 
 	// should fail loudly rather than silently routing to the
 	// labels-bucket (where the labels.project clause would return
 	// zero results for a type the discoverer marked as label-less).
-	var labelsBucket, namePrefixBucket []Discoverer
+	var labelsBucket, namePrefixBucket, parentBucket []Discoverer
 	for _, d := range selected {
 		switch d.ScopeStyle() {
 		case ScopeStyleLabels:
 			labelsBucket = append(labelsBucket, d)
 		case ScopeStyleNamePrefix:
 			namePrefixBucket = append(namePrefixBucket, d)
+		case ScopeStyleParentNamePrefix:
+			parentBucket = append(parentBucket, d)
 		default:
 			return nil, fmt.Errorf("discoverer %q reported unknown ScopeStyle %v", d.ResourceType(), d.ScopeStyle())
 		}
@@ -265,7 +295,7 @@ func (g *GCPDiscoverer) DiscoverTypes(ctx context.Context, types []string, args 
 
 	stageStart := time.Now()
 	args.Emitter.ServiceStart(gcpServiceSlug, "")
-	results, err := g.searchBuckets(ctx, scope, args, labelsBucket, namePrefixBucket)
+	results, err := g.searchBuckets(ctx, scope, args, labelsBucket, namePrefixBucket, parentBucket)
 	if err != nil {
 		args.Emitter.ServiceFinish(gcpServiceSlug, "", 0, time.Since(stageStart))
 		return nil, err
@@ -384,14 +414,15 @@ func buildSearchQuery(stackProject string, locations []string, selectors []TagSe
 }
 
 // searchBuckets issues one SearchAllResources call per non-empty
-// ScopeStyle bucket and concatenates the results (#366). The
+// ScopeStyle bucket and concatenates the results (#366, #381). The
 // labels-style bucket gets the legacy query with the
-// `labels.project:<stack>` clause; the name-prefix-style bucket gets
-// the same query with the labels.project clause omitted, plus a
-// client-side substring filter on asset.Name. Empty buckets are
-// skipped, so the all-labels-style path (today's only path) remains
-// one round-trip — not two.
-func (g *GCPDiscoverer) searchBuckets(ctx context.Context, scope string, args DiscoverArgs, labelsBucket, namePrefixBucket []Discoverer) ([]gcpAssetResult, error) {
+// `labels.project:<stack>` clause; the name-prefix-style and
+// parent-name-prefix-style buckets get the same query with the
+// labels.project clause omitted, plus a client-side substring filter —
+// against the asset's short name and the asset's parent path segment
+// respectively. Empty buckets are skipped, so the all-labels-style
+// path remains one round-trip.
+func (g *GCPDiscoverer) searchBuckets(ctx context.Context, scope string, args DiscoverArgs, labelsBucket, namePrefixBucket, parentBucket []Discoverer) ([]gcpAssetResult, error) {
 	var out []gcpAssetResult
 
 	if len(labelsBucket) > 0 {
@@ -431,6 +462,45 @@ func (g *GCPDiscoverer) searchBuckets(ctx context.Context, scope string, args Di
 		}
 		out = append(out, rs...)
 	}
+
+	if len(parentBucket) > 0 {
+		query := buildSearchQuery("", args.Regions, args.TagSelectors)
+		rs, err := g.searcher.SearchAll(ctx, scope, assetTypesOf(parentBucket), query)
+		if err != nil {
+			return nil, fmt.Errorf("cloud asset SearchAllResources (parent-name-prefix scope): %w", err)
+		}
+		if args.Project != "" {
+			// Index discoverers by AssetType for per-result marker
+			// lookup. Each parent-scoped type has its own marker
+			// (e.g. /keyRings/ vs /clusters/), so unlike the
+			// labels/name-prefix buckets the filter is not uniform
+			// across the bucket.
+			markerByAsset := make(map[string]string, len(parentBucket))
+			for _, d := range parentBucket {
+				ps, ok := d.(parentScopedDiscoverer)
+				if !ok {
+					return nil, fmt.Errorf("discoverer %q reports ScopeStyleParentNamePrefix but does not implement parentScopedDiscoverer", d.ResourceType())
+				}
+				marker := ps.ParentMarker()
+				if marker == "" {
+					return nil, fmt.Errorf("discoverer %q ParentMarker() returned empty string", d.ResourceType())
+				}
+				markerByAsset[d.AssetType()] = marker
+			}
+			kept := make([]gcpAssetResult, 0, len(rs))
+			for _, r := range rs {
+				marker := markerByAsset[r.AssetType]
+				if marker == "" {
+					continue
+				}
+				if matchesParentNamePrefix(r.Name, marker, args.Project) {
+					kept = append(kept, r)
+				}
+			}
+			rs = kept
+		}
+		out = append(out, rs...)
+	}
 	return out, nil
 }
 
@@ -462,4 +532,40 @@ func assetTypesOf(ds []Discoverer) []string {
 // caller-side guard in searchBuckets defends against that.
 func matchesNamePrefix(assetName, stackProject string) bool {
 	return strings.Contains(shortName(assetName), stackProject)
+}
+
+// matchesParentNamePrefix reports whether the parent segment of a
+// Cloud Asset full resource name — the substring between `marker`
+// (e.g. "/keyRings/") and the next "/" — contains stackProject as a
+// substring. Implements the parent-name scoping convention for child
+// resources whose own short name doesn't carry the stack project (#381).
+//
+// Why the parent segment, not the short name: child resources like
+// KMS cryptokeys are conventionally named "default" / "primary" /
+// etc; the stack project lives in the parent (keyring) name. The
+// leading `//service/projects/<gcp-project-id>/...` segments must
+// NOT match — they hold the real GCP project ID, not the stack name.
+// The trailing short-name segment must also NOT match — see the
+// adversarial test rows in TestMatchesParentNamePrefix.
+//
+// Returns false when:
+//
+//   - marker is absent (defensive — Cloud Asset guarantees the shape
+//     for the asset types we register for ScopeStyleParentNamePrefix,
+//     but a future asset-shape change should fail closed rather than
+//     match every asset).
+//   - the parent segment is empty (e.g. "/keyRings//cryptoKeys/x").
+//
+// Empty stackProject is a programmer error — same caller-side guard
+// pattern as matchesNamePrefix.
+func matchesParentNamePrefix(assetName, marker, stackProject string) bool {
+	_, after, ok := strings.Cut(assetName, marker)
+	if !ok {
+		return false
+	}
+	parent, _, _ := strings.Cut(after, "/")
+	if parent == "" {
+		return false
+	}
+	return strings.Contains(parent, stackProject)
 }

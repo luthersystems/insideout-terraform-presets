@@ -161,3 +161,47 @@ func (d *fakeNamePrefixDiscoverer) FromAsset(_ addressBook, a gcpAssetResult, pr
 func (d *fakeNamePrefixDiscoverer) DiscoverByID(_ context.Context, _ gcpAssetSearcher, _ string, _ string) (imported.ImportedResource, error) {
 	return imported.ImportedResource{}, ErrNotSupported
 }
+
+// fakeParentNamePrefixDiscoverer is the unit-test counterpart to
+// fakeNamePrefixDiscoverer for the parent-name-prefix bucket (#381):
+// it returns ScopeStyleParentNamePrefix and implements
+// parentScopedDiscoverer.ParentMarker() so the orchestrator routes
+// its asset-type into the parent bucket and the third-bucket post-
+// filter is exercised end-to-end without registering a real
+// child-of-parent type.
+//
+// resourceType, assetType, and parentMarker are constructor params
+// so multiple fakes can co-register in one test with distinct
+// markers (e.g. "/parents1/" vs "/parents2/") to pin per-discoverer
+// marker dispatch.
+type fakeParentNamePrefixDiscoverer struct {
+	resourceType string
+	assetType    string
+	parentMarker string
+}
+
+func (d *fakeParentNamePrefixDiscoverer) ResourceType() string   { return d.resourceType }
+func (d *fakeParentNamePrefixDiscoverer) AssetType() string      { return d.assetType }
+func (d *fakeParentNamePrefixDiscoverer) ScopeStyle() ScopeStyle { return ScopeStyleParentNamePrefix }
+func (d *fakeParentNamePrefixDiscoverer) ParentMarker() string   { return d.parentMarker }
+
+func (d *fakeParentNamePrefixDiscoverer) FromAsset(_ addressBook, a gcpAssetResult, projectID string) imported.ImportedResource {
+	name := shortName(a.Name)
+	return imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Cloud:     "gcp",
+			Type:      d.resourceType,
+			Address:   fmt.Sprintf("%s.%s", d.resourceType, name),
+			ImportID:  name,
+			NameHint:  name,
+			ProjectID: projectID,
+			Location:  a.Location,
+		},
+		Tier:   imported.TierImportedFlat,
+		Source: imported.SourceImporter,
+	}
+}
+
+func (d *fakeParentNamePrefixDiscoverer) DiscoverByID(_ context.Context, _ gcpAssetSearcher, _ string, _ string) (imported.ImportedResource, error) {
+	return imported.ImportedResource{}, ErrNotSupported
+}
