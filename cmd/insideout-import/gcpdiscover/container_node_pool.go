@@ -15,9 +15,11 @@ import (
 // Terraform import ID:   projects/<proj>/locations/<loc>/clusters/<c>/nodePools/<name>
 //
 // Node pools have no labels of their own — labels live on the parent
-// cluster's resource_labels. Per the CLAUDE.md label-less convention,
-// node-pool names should embed the stack project; ScopeStyleNamePrefix
-// scopes them via name substring on the trailing pool name.
+// cluster's resource_labels. Node-pool names are conventionally short
+// (e.g. "default-pool"/"system-pool") with the stack project embedded
+// in the parent cluster name, so this discoverer is scoped via
+// ScopeStyleParentNamePrefix on the "/clusters/" segment (#381), not
+// ScopeStyleNamePrefix on the short pool name.
 
 const (
 	containerNodePoolTFType    = "google_container_node_pool"
@@ -30,7 +32,8 @@ func newContainerNodePoolDiscoverer() Discoverer { return &containerNodePoolDisc
 
 func (containerNodePoolDiscoverer) ResourceType() string   { return containerNodePoolTFType }
 func (containerNodePoolDiscoverer) AssetType() string      { return containerNodePoolAssetType }
-func (containerNodePoolDiscoverer) ScopeStyle() ScopeStyle { return ScopeStyleNamePrefix }
+func (containerNodePoolDiscoverer) ScopeStyle() ScopeStyle { return ScopeStyleParentNamePrefix }
+func (containerNodePoolDiscoverer) ParentMarker() string   { return "/clusters/" }
 
 func (containerNodePoolDiscoverer) FromAsset(book addressBook, a gcpAssetResult, projectID string) imported.ImportedResource {
 	loc, cluster, name := containerNodePoolAssetParts(a.Name)

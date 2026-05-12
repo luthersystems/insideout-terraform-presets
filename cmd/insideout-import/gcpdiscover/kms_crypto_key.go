@@ -19,7 +19,12 @@ import (
 // '/') is just the key name; the ring must be parsed separately from
 // the asset path.
 //
-// Label-less per the cloudkms provider schema → ScopeStyleNamePrefix.
+// Label-less per the cloudkms provider schema. Crypto keys are
+// conventionally named "default"/"primary"/etc; the stack project
+// lives in the parent keyring name, so this discoverer is scoped
+// via ScopeStyleParentNamePrefix on the "/keyRings/" segment (#381),
+// not ScopeStyleNamePrefix on the short key name (which would miss
+// every cryptokey in stacks following the convention).
 
 const (
 	kmsCryptoKeyTFType    = "google_kms_crypto_key"
@@ -32,7 +37,8 @@ func newKMSCryptoKeyDiscoverer() Discoverer { return &kmsCryptoKeyDiscoverer{} }
 
 func (kmsCryptoKeyDiscoverer) ResourceType() string   { return kmsCryptoKeyTFType }
 func (kmsCryptoKeyDiscoverer) AssetType() string      { return kmsCryptoKeyAssetType }
-func (kmsCryptoKeyDiscoverer) ScopeStyle() ScopeStyle { return ScopeStyleNamePrefix }
+func (kmsCryptoKeyDiscoverer) ScopeStyle() ScopeStyle { return ScopeStyleParentNamePrefix }
+func (kmsCryptoKeyDiscoverer) ParentMarker() string   { return "/keyRings/" }
 
 func (kmsCryptoKeyDiscoverer) FromAsset(book addressBook, a gcpAssetResult, projectID string) imported.ImportedResource {
 	loc, ring, name := kmsCryptoKeyAssetParts(a.Name)
