@@ -13737,6 +13737,643 @@
             "description_kind": "plain"
           }
         },
+        "google_firestore_database": {
+          "version": 0,
+          "block": {
+            "attributes": {
+              "app_engine_integration_mode": {
+                "type": "string",
+                "description": "The App Engine integration mode to use for this database. Possible values: [\"ENABLED\", \"DISABLED\"]",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "concurrency_mode": {
+                "type": "string",
+                "description": "The concurrency control mode to use for this database. Possible values: [\"OPTIMISTIC\", \"PESSIMISTIC\", \"OPTIMISTIC_WITH_ENTITY_GROUPS\"]",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "create_time": {
+                "type": "string",
+                "description": "Output only. The timestamp at which this database was created.",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "delete_protection_state": {
+                "type": "string",
+                "description": "State of delete protection for the database.\nWhen delete protection is enabled, this database cannot be deleted.\nThe default value is 'DELETE_PROTECTION_STATE_UNSPECIFIED', which is currently equivalent to 'DELETE_PROTECTION_DISABLED'.\n**Note:** Additionally, to delete this database using 'terraform destroy', 'deletion_policy' must be set to 'DELETE'. Possible values: [\"DELETE_PROTECTION_STATE_UNSPECIFIED\", \"DELETE_PROTECTION_ENABLED\", \"DELETE_PROTECTION_DISABLED\"]",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "deletion_policy": {
+                "type": "string",
+                "description": "Deletion behavior for this database.\nIf the deletion policy is 'ABANDON', the database will be removed from Terraform state but not deleted from Google Cloud upon destruction.\nIf the deletion policy is 'DELETE', the database will both be removed from Terraform state and deleted from Google Cloud upon destruction.\nThe default value is 'ABANDON'.\nSee also 'delete_protection'.",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "earliest_version_time": {
+                "type": "string",
+                "description": "Output only. The earliest timestamp at which older versions of the data can be read from the database. See versionRetentionPeriod above; this field is populated with now - versionRetentionPeriod.\nThis value is continuously updated, and becomes stale the moment it is queried. If you are using this value to recover data, make sure to account for the time from the moment when the value is queried to the moment when you initiate the recovery.\nA timestamp in RFC3339 UTC \"Zulu\" format, with nanosecond resolution and up to nine fractional digits. Examples: \"2014-10-02T15:01:23Z\" and \"2014-10-02T15:01:23.045123456Z\".",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "etag": {
+                "type": "string",
+                "description": "Output only. This checksum is computed by the server based on the value of other fields,\nand may be sent on update and delete requests to ensure the client has an\nup-to-date value before proceeding.",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "key_prefix": {
+                "type": "string",
+                "description": "Output only. The keyPrefix for this database.\nThis keyPrefix is used, in combination with the project id (\"~\") to construct the application id\nthat is returned from the Cloud Datastore APIs in Google App Engine first generation runtimes.\nThis value may be empty in which case the appid to use for URL-encoded keys is the project_id (eg: foo instead of v~foo).",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "location_id": {
+                "type": "string",
+                "description": "The location of the database. Available locations are listed at\nhttps://cloud.google.com/firestore/docs/locations.",
+                "description_kind": "plain",
+                "required": true
+              },
+              "name": {
+                "type": "string",
+                "description": "The ID to use for the database, which will become the final\ncomponent of the database's resource name. This value should be 4-63\ncharacters. Valid characters are /[a-z][0-9]-/ with first character\na letter and the last a letter or a number. Must not be\nUUID-like /[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}/.\n\"(default)\" database id is also valid.",
+                "description_kind": "plain",
+                "required": true
+              },
+              "point_in_time_recovery_enablement": {
+                "type": "string",
+                "description": "Whether to enable the PITR feature on this database.\nIf 'POINT_IN_TIME_RECOVERY_ENABLED' is selected, reads are supported on selected versions of the data from within the past 7 days.\nversionRetentionPeriod and earliestVersionTime can be used to determine the supported versions. These include reads against any timestamp within the past hour\nand reads against 1-minute snapshots beyond 1 hour and within 7 days.\nIf 'POINT_IN_TIME_RECOVERY_DISABLED' is selected, reads are supported on any version of the data from within the past 1 hour. Default value: \"POINT_IN_TIME_RECOVERY_DISABLED\" Possible values: [\"POINT_IN_TIME_RECOVERY_ENABLED\", \"POINT_IN_TIME_RECOVERY_DISABLED\"]",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "project": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "type": {
+                "type": "string",
+                "description": "The type of the database.\nSee https://cloud.google.com/datastore/docs/firestore-or-datastore\nfor information about how to choose. Possible values: [\"FIRESTORE_NATIVE\", \"DATASTORE_MODE\"]",
+                "description_kind": "plain",
+                "required": true
+              },
+              "uid": {
+                "type": "string",
+                "description": "Output only. The system-generated UUID4 for this Database.",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "update_time": {
+                "type": "string",
+                "description": "Output only. The timestamp at which this database was most recently updated.",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "version_retention_period": {
+                "type": "string",
+                "description": "Output only. The period during which past versions of data are retained in the database.\nAny read or query can specify a readTime within this window, and will read the state of the database at that time.\nIf the PITR feature is enabled, the retention period is 7 days. Otherwise, the retention period is 1 hour.\nA duration in seconds with up to nine fractional digits, ending with 's'. Example: \"3.5s\".",
+                "description_kind": "plain",
+                "computed": true
+              }
+            },
+            "block_types": {
+              "cmek_config": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "active_key_version": {
+                      "type": [
+                        "list",
+                        "string"
+                      ],
+                      "description": "Currently in-use KMS key versions (https://cloud.google.com/kms/docs/resource-hierarchy#key_versions).\nDuring key rotation (https://cloud.google.com/kms/docs/key-rotation), there can be\nmultiple in-use key versions.\n\nThe expected format is\n'projects/{project_id}/locations/{kms_location}/keyRings/{key_ring}/cryptoKeys/{crypto_key}/cryptoKeyVersions/{key_version}'.",
+                      "description_kind": "plain",
+                      "computed": true
+                    },
+                    "kms_key_name": {
+                      "type": "string",
+                      "description": "The resource ID of a Cloud KMS key. If set, the database created will\nbe a Customer-managed Encryption Key (CMEK) database encrypted with\nthis key. This feature is allowlist only in initial launch.\n\nOnly keys in the same location as this database are allowed to be used\nfor encryption. For Firestore's nam5 multi-region, this corresponds to Cloud KMS\nmulti-region us. For Firestore's eur3 multi-region, this corresponds to\nCloud KMS multi-region europe. See https://cloud.google.com/kms/docs/locations.\n\nThis value should be the KMS key resource ID in the format of\n'projects/{project_id}/locations/{kms_location}/keyRings/{key_ring}/cryptoKeys/{crypto_key}'.\nHow to retrive this resource ID is listed at\nhttps://cloud.google.com/kms/docs/getting-resource-ids#getting_the_id_for_a_key_and_version.",
+                      "description_kind": "plain",
+                      "required": true
+                    }
+                  },
+                  "description": "The CMEK (Customer Managed Encryption Key) configuration for a Firestore\ndatabase. If not present, the database is secured by the default Google\nencryption key.",
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "timeouts": {
+                "nesting_mode": "single",
+                "block": {
+                  "attributes": {
+                    "create": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "delete": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "update": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "description_kind": "plain"
+                }
+              }
+            },
+            "description_kind": "plain"
+          }
+        },
+        "google_identity_platform_config": {
+          "version": 0,
+          "block": {
+            "attributes": {
+              "authorized_domains": {
+                "type": [
+                  "list",
+                  "string"
+                ],
+                "description": "List of domains authorized for OAuth redirects.",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "autodelete_anonymous_users": {
+                "type": "bool",
+                "description": "Whether anonymous users will be auto-deleted after a period of 30 days",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "name": {
+                "type": "string",
+                "description": "The name of the Config resource",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "project": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              }
+            },
+            "block_types": {
+              "blocking_functions": {
+                "nesting_mode": "list",
+                "block": {
+                  "block_types": {
+                    "forward_inbound_credentials": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "access_token": {
+                            "type": "bool",
+                            "description": "Whether to pass the user's OAuth identity provider's access token.",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "id_token": {
+                            "type": "bool",
+                            "description": "Whether to pass the user's OIDC identity provider's ID token.",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "refresh_token": {
+                            "type": "bool",
+                            "description": "Whether to pass the user's OAuth identity provider's refresh token.",
+                            "description_kind": "plain",
+                            "optional": true
+                          }
+                        },
+                        "description": "The user credentials to include in the JWT payload that is sent to the registered Blocking Functions.",
+                        "description_kind": "plain"
+                      },
+                      "max_items": 1
+                    },
+                    "triggers": {
+                      "nesting_mode": "set",
+                      "block": {
+                        "attributes": {
+                          "event_type": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "required": true
+                          },
+                          "function_uri": {
+                            "type": "string",
+                            "description": "HTTP URI trigger for the Cloud Function.",
+                            "description_kind": "plain",
+                            "required": true
+                          },
+                          "update_time": {
+                            "type": "string",
+                            "description": "When the trigger was changed.",
+                            "description_kind": "plain",
+                            "computed": true
+                          }
+                        },
+                        "description": "Map of Trigger to event type. Key should be one of the supported event types: \"beforeCreate\", \"beforeSignIn\".",
+                        "description_kind": "plain"
+                      },
+                      "min_items": 1
+                    }
+                  },
+                  "description": "Configuration related to blocking functions.",
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "client": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "api_key": {
+                      "type": "string",
+                      "description": "API key that can be used when making requests for this project.",
+                      "description_kind": "plain",
+                      "computed": true,
+                      "sensitive": true
+                    },
+                    "firebase_subdomain": {
+                      "type": "string",
+                      "description": "Firebase subdomain.",
+                      "description_kind": "plain",
+                      "computed": true
+                    }
+                  },
+                  "block_types": {
+                    "permissions": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "disabled_user_deletion": {
+                            "type": "bool",
+                            "description": "When true, end users cannot delete their account on the associated project through any of our API methods",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "disabled_user_signup": {
+                            "type": "bool",
+                            "description": "When true, end users cannot sign up for a new account on the associated project through any of our API methods",
+                            "description_kind": "plain",
+                            "optional": true
+                          }
+                        },
+                        "description": "Configuration related to restricting a user's ability to affect their account.",
+                        "description_kind": "plain"
+                      },
+                      "max_items": 1
+                    }
+                  },
+                  "description": "Options related to how clients making requests on behalf of a project should be configured.",
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "mfa": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "enabled_providers": {
+                      "type": [
+                        "list",
+                        "string"
+                      ],
+                      "description": "A list of usable second factors for this project. Possible values: [\"PHONE_SMS\"]",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "state": {
+                      "type": "string",
+                      "description": "Whether MultiFactor Authentication has been enabled for this project. Possible values: [\"DISABLED\", \"ENABLED\", \"MANDATORY\"]",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    }
+                  },
+                  "block_types": {
+                    "provider_configs": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "state": {
+                            "type": "string",
+                            "description": "Whether MultiFactor Authentication has been enabled for this project. Possible values: [\"DISABLED\", \"ENABLED\", \"MANDATORY\"]",
+                            "description_kind": "plain",
+                            "optional": true,
+                            "computed": true
+                          }
+                        },
+                        "block_types": {
+                          "totp_provider_config": {
+                            "nesting_mode": "list",
+                            "block": {
+                              "attributes": {
+                                "adjacent_intervals": {
+                                  "type": "number",
+                                  "description": "The allowed number of adjacent intervals that will be used for verification to avoid clock skew.",
+                                  "description_kind": "plain",
+                                  "optional": true
+                                }
+                              },
+                              "description": "TOTP MFA provider config for this project.",
+                              "description_kind": "plain"
+                            },
+                            "max_items": 1
+                          }
+                        },
+                        "description": "A list of usable second factors for this project along with their configurations.\nThis field does not support phone based MFA, for that use the 'enabledProviders' field.",
+                        "description_kind": "plain"
+                      }
+                    }
+                  },
+                  "description": "Options related to how clients making requests on behalf of a project should be configured.",
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "monitoring": {
+                "nesting_mode": "list",
+                "block": {
+                  "block_types": {
+                    "request_logging": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "enabled": {
+                            "type": "bool",
+                            "description": "Whether logging is enabled for this project or not.",
+                            "description_kind": "plain",
+                            "optional": true
+                          }
+                        },
+                        "description": "Configuration for logging requests made to this project to Stackdriver Logging",
+                        "description_kind": "plain"
+                      },
+                      "max_items": 1
+                    }
+                  },
+                  "description": "Configuration related to monitoring project activity.",
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "multi_tenant": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "allow_tenants": {
+                      "type": "bool",
+                      "description": "Whether this project can have tenants or not.",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "default_tenant_location": {
+                      "type": "string",
+                      "description": "The default cloud parent org or folder that the tenant project should be created under.\nThe parent resource name should be in the format of \"/\", such as \"folders/123\" or \"organizations/456\".\nIf the value is not set, the tenant will be created under the same organization or folder as the agent project.",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "description": "Configuration related to multi-tenant functionality.",
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "quota": {
+                "nesting_mode": "list",
+                "block": {
+                  "block_types": {
+                    "sign_up_quota_config": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "quota": {
+                            "type": "number",
+                            "description": "A sign up APIs quota that customers can override temporarily.",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "quota_duration": {
+                            "type": "string",
+                            "description": "How long this quota will be active for. It is measurred in seconds, e.g., Example: \"9.615s\".",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "start_time": {
+                            "type": "string",
+                            "description": "When this quota will take affect.",
+                            "description_kind": "plain",
+                            "optional": true
+                          }
+                        },
+                        "description": "Quota for the Signup endpoint, if overwritten. Signup quota is measured in sign ups per project per hour per IP.",
+                        "description_kind": "plain"
+                      },
+                      "max_items": 1
+                    }
+                  },
+                  "description": "Configuration related to quotas.",
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "sign_in": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "allow_duplicate_emails": {
+                      "type": "bool",
+                      "description": "Whether to allow more than one account to have the same email.",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "hash_config": {
+                      "type": [
+                        "list",
+                        [
+                          "object",
+                          {
+                            "algorithm": "string",
+                            "memory_cost": "number",
+                            "rounds": "number",
+                            "salt_separator": "string",
+                            "signer_key": "string"
+                          }
+                        ]
+                      ],
+                      "description": "Output only. Hash config information.",
+                      "description_kind": "plain",
+                      "computed": true
+                    }
+                  },
+                  "block_types": {
+                    "anonymous": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "enabled": {
+                            "type": "bool",
+                            "description": "Whether anonymous user auth is enabled for the project or not.",
+                            "description_kind": "plain",
+                            "required": true
+                          }
+                        },
+                        "description": "Configuration options related to authenticating an anonymous user.",
+                        "description_kind": "plain"
+                      },
+                      "max_items": 1
+                    },
+                    "email": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "enabled": {
+                            "type": "bool",
+                            "description": "Whether email auth is enabled for the project or not.",
+                            "description_kind": "plain",
+                            "required": true
+                          },
+                          "password_required": {
+                            "type": "bool",
+                            "description": "Whether a password is required for email auth or not. If true, both an email and\npassword must be provided to sign in. If false, a user may sign in via either\nemail/password or email link.",
+                            "description_kind": "plain",
+                            "optional": true
+                          }
+                        },
+                        "description": "Configuration options related to authenticating a user by their email address.",
+                        "description_kind": "plain"
+                      },
+                      "max_items": 1
+                    },
+                    "phone_number": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "enabled": {
+                            "type": "bool",
+                            "description": "Whether phone number auth is enabled for the project or not.",
+                            "description_kind": "plain",
+                            "required": true
+                          },
+                          "test_phone_numbers": {
+                            "type": [
+                              "map",
+                              "string"
+                            ],
+                            "description": "A map of \u003ctest phone number, fake code\u003e that can be used for phone auth testing.",
+                            "description_kind": "plain",
+                            "optional": true
+                          }
+                        },
+                        "description": "Configuration options related to authenticated a user by their phone number.",
+                        "description_kind": "plain"
+                      },
+                      "max_items": 1
+                    }
+                  },
+                  "description": "Configuration related to local sign in methods.",
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "sms_region_config": {
+                "nesting_mode": "list",
+                "block": {
+                  "block_types": {
+                    "allow_by_default": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "disallowed_regions": {
+                            "type": [
+                              "list",
+                              "string"
+                            ],
+                            "description": "Two letter unicode region codes to disallow as defined by https://cldr.unicode.org/ The full list of these region codes is here: https://github.com/unicode-cldr/cldr-localenames-full/blob/master/main/en/territories.json",
+                            "description_kind": "plain",
+                            "optional": true
+                          }
+                        },
+                        "description": "A policy of allowing SMS to every region by default and adding disallowed regions to a disallow list.",
+                        "description_kind": "plain"
+                      },
+                      "max_items": 1
+                    },
+                    "allowlist_only": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "allowed_regions": {
+                            "type": [
+                              "list",
+                              "string"
+                            ],
+                            "description": "Two letter unicode region codes to allow as defined by https://cldr.unicode.org/ The full list of these region codes is here: https://github.com/unicode-cldr/cldr-localenames-full/blob/master/main/en/territories.json",
+                            "description_kind": "plain",
+                            "optional": true
+                          }
+                        },
+                        "description": "A policy of only allowing regions by explicitly adding them to an allowlist.",
+                        "description_kind": "plain"
+                      },
+                      "max_items": 1
+                    }
+                  },
+                  "description": "Configures the regions where users are allowed to send verification SMS for the project or tenant. This is based on the calling code of the destination phone number.",
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "timeouts": {
+                "nesting_mode": "single",
+                "block": {
+                  "attributes": {
+                    "create": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "delete": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "update": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "description_kind": "plain"
+                }
+              }
+            },
+            "description_kind": "plain"
+          }
+        },
         "google_kms_crypto_key": {
           "version": 1,
           "block": {
@@ -13936,6 +14573,126 @@
                       "optional": true
                     }
                   },
+                  "description_kind": "plain"
+                }
+              }
+            },
+            "description_kind": "plain"
+          }
+        },
+        "google_logging_project_sink": {
+          "version": 0,
+          "block": {
+            "attributes": {
+              "custom_writer_identity": {
+                "type": "string",
+                "description": "A service account provided by the caller that will be used to write the log entries. The format must be serviceAccount:some@email. This field can only be specified if you are routing logs to a destination outside this sink's project. If not specified, a Logging service account will automatically be generated.",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "description": {
+                "type": "string",
+                "description": "A description of this sink. The maximum length of the description is 8000 characters.",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "destination": {
+                "type": "string",
+                "description": "The destination of the sink (or, in other words, where logs are written to). Can be a Cloud Storage bucket, a PubSub topic, or a BigQuery dataset. Examples: \"storage.googleapis.com/[GCS_BUCKET]\" \"bigquery.googleapis.com/projects/[PROJECT_ID]/datasets/[DATASET]\" \"pubsub.googleapis.com/projects/[PROJECT_ID]/topics/[TOPIC_ID]\" The writer associated with the sink must have access to write to the above resource.",
+                "description_kind": "plain",
+                "required": true
+              },
+              "disabled": {
+                "type": "bool",
+                "description": "If set to True, then this sink is disabled and it does not export any log entries.",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "filter": {
+                "type": "string",
+                "description": "The filter to apply when exporting logs. Only log entries that match the filter are exported.",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "name": {
+                "type": "string",
+                "description": "The name of the logging sink.",
+                "description_kind": "plain",
+                "required": true
+              },
+              "project": {
+                "type": "string",
+                "description": "The ID of the project to create the sink in. If omitted, the project associated with the provider is used.",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "unique_writer_identity": {
+                "type": "bool",
+                "description": "Whether or not to create a unique identity associated with this sink. If false (the legacy behavior), then the writer_identity used is serviceAccount:cloud-logs@system.gserviceaccount.com. If true (default), then a unique service account is created and used for this sink. If you wish to publish logs across projects, you must set unique_writer_identity to true.",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "writer_identity": {
+                "type": "string",
+                "description": "The identity associated with this sink. This identity must be granted write access to the configured destination.",
+                "description_kind": "plain",
+                "computed": true
+              }
+            },
+            "block_types": {
+              "bigquery_options": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "use_partitioned_tables": {
+                      "type": "bool",
+                      "description": "Whether to use BigQuery's partition tables. By default, Logging creates dated tables based on the log entries' timestamps, e.g. syslog_20170523. With partitioned tables the date suffix is no longer present and special query syntax has to be used instead. In both cases, tables are sharded based on UTC timezone.",
+                      "description_kind": "plain",
+                      "required": true
+                    }
+                  },
+                  "description": "Options that affect sinks exporting data to BigQuery.",
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "exclusions": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "description": {
+                      "type": "string",
+                      "description": "A description of this exclusion.",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "disabled": {
+                      "type": "bool",
+                      "description": "If set to True, then this exclusion is disabled and it does not exclude any log entries",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "filter": {
+                      "type": "string",
+                      "description": "An advanced logs filter that matches the log entries to be excluded. By using the sample function, you can exclude less than 100% of the matching log entries",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "name": {
+                      "type": "string",
+                      "description": "A client-assigned identifier, such as \"load-balancer-exclusion\". Identifiers are limited to 100 characters and can include only letters, digits, underscores, hyphens, and periods. First character has to be alphanumeric.",
+                      "description_kind": "plain",
+                      "required": true
+                    }
+                  },
+                  "description": "Log entries that match any of the exclusion filters will not be exported. If a log entry is matched by both filter and one of exclusion's filters, it will not be exported.",
                   "description_kind": "plain"
                 }
               }
@@ -17007,6 +17764,154 @@
                     }
                   },
                   "description": "The settings to use for the database. The configuration is detailed below.",
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "timeouts": {
+                "nesting_mode": "single",
+                "block": {
+                  "attributes": {
+                    "create": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "delete": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "update": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "description_kind": "plain"
+                }
+              }
+            },
+            "description_kind": "plain"
+          }
+        },
+        "google_sql_user": {
+          "version": 1,
+          "block": {
+            "attributes": {
+              "deletion_policy": {
+                "type": "string",
+                "description": "The deletion policy for the user. Setting ABANDON allows the resource\n\t\t\t\tto be abandoned rather than deleted. This is useful for Postgres, where users cannot be deleted from the API if they\n\t\t\t\thave been granted SQL roles. Possible values are: \"ABANDON\".",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "host": {
+                "type": "string",
+                "description": "The host the user can connect from. This is only supported for MySQL instances. Don't set this field for PostgreSQL instances. Can be an IP address. Changing this forces a new resource to be created.",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "instance": {
+                "type": "string",
+                "description": "The name of the Cloud SQL instance. Changing this forces a new resource to be created.",
+                "description_kind": "plain",
+                "required": true
+              },
+              "name": {
+                "type": "string",
+                "description": "The name of the user. Changing this forces a new resource to be created.",
+                "description_kind": "plain",
+                "required": true
+              },
+              "password": {
+                "type": "string",
+                "description": "The password for the user. Can be updated. For Postgres instances this is a Required field, unless type is set to\n\t\t\t\teither CLOUD_IAM_USER or CLOUD_IAM_SERVICE_ACCOUNT.",
+                "description_kind": "plain",
+                "optional": true,
+                "sensitive": true
+              },
+              "project": {
+                "type": "string",
+                "description": "The ID of the project in which the resource belongs. If it is not provided, the provider project is used.",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "sql_server_user_details": {
+                "type": [
+                  "list",
+                  [
+                    "object",
+                    {
+                      "disabled": "bool",
+                      "server_roles": [
+                        "list",
+                        "string"
+                      ]
+                    }
+                  ]
+                ],
+                "description_kind": "plain",
+                "computed": true
+              },
+              "type": {
+                "type": "string",
+                "description": "The user type. It determines the method to authenticate the user during login.\n\t\t\t\tThe default is the database's built-in user type.",
+                "description_kind": "plain",
+                "optional": true
+              }
+            },
+            "block_types": {
+              "password_policy": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "allowed_failed_attempts": {
+                      "type": "number",
+                      "description": "Number of failed attempts allowed before the user get locked.",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "enable_failed_attempts_check": {
+                      "type": "bool",
+                      "description": "If true, the check that will lock user after too many failed login attempts will be enabled.",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "enable_password_verification": {
+                      "type": "bool",
+                      "description": "If true, the user must specify the current password before changing the password. This flag is supported only for MySQL.",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "password_expiration_duration": {
+                      "type": "string",
+                      "description": "Password expiration duration with one week grace period.",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "status": {
+                      "type": [
+                        "list",
+                        [
+                          "object",
+                          {
+                            "locked": "bool",
+                            "password_expiration_time": "string"
+                          }
+                        ]
+                      ],
+                      "description_kind": "plain",
+                      "computed": true
+                    }
+                  },
                   "description_kind": "plain"
                 },
                 "max_items": 1

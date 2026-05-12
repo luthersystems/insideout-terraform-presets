@@ -81,6 +81,15 @@ const (
 	// side-interface. See #381 for the live-smoke gap that motivated
 	// this scope style.
 	ScopeStyleParentNamePrefix
+	// ScopeStyleNonCAI is for resource types Cloud Asset Inventory
+	// doesn't surface — Logging sinks, SQL users, Identity Platform
+	// config (#382, #383, #392). These discoverers bypass the
+	// SearchAllResources fanout entirely and call their respective
+	// service APIs via the nonCAIDiscoverer.ListNonCAI side-interface.
+	// The orchestrator runs the non-CAI bucket as a separate post-CAI
+	// phase so types that depend on prior CAI results (e.g. sql_user
+	// needs sql_database_instance rows) can read them.
+	ScopeStyleNonCAI
 )
 
 // ErrNotSupported signals that a discoverer cannot resolve a given ID
@@ -170,6 +179,22 @@ type parentScopedDiscoverer interface {
 	ParentMarker() string
 }
 
+// nonCAIDiscoverer is an optional contract implemented by Discoverers
+// whose ScopeStyle returns ScopeStyleNonCAI. ListNonCAI fetches the
+// discoverer's resources via a non-CAI API call. priorResults carries
+// the resources discovered by the CAI fanout phase — sql_user reads
+// google_sql_database_instance rows from it to drive per-instance
+// fanout. ListNonCAI may return zero rows (no resources of this type
+// in the project); errors are propagated so the operator sees auth
+// failures, missing API enablement, etc.
+//
+// Kept as a side-interface so the ~25 CAI-amenable discoverers'
+// contract stays trivial.
+type nonCAIDiscoverer interface {
+	Discoverer
+	ListNonCAI(ctx context.Context, projectID, stackProject string, priorResults []imported.ImportedResource) ([]imported.ImportedResource, error)
+}
+
 // GCPDiscoverer aggregates the per-type discoverers and fans out a single
 // DiscoverTypes call across all of them via one SearchAllResources call.
 // Construct with NewGCPDiscoverer in production; tests can build it
@@ -181,15 +206,28 @@ type GCPDiscoverer struct {
 	byType map[string]Discoverer // keyed on Terraform type
 }
 
+// GCPDiscovererOpts bundles the non-CAI per-service listers injected
+// at construction time. Each lister implements one Real* type backed
+// by a Google SDK client and a test fake; the discoverers that need
+// them reach in via NewGCPDiscoverer's wiring. Nil listers are
+// tolerated — discoverers whose lister is nil silently skip the
+// non-CAI phase (helps unit tests that don't exercise these types).
+type GCPDiscovererOpts struct {
+	SinkLister             gcpLoggingSinkLister
+	SQLUserLister          gcpSQLUserLister
+	IdentityPlatformLister gcpIdentityPlatformConfigLister
+}
+
 // NewGCPDiscoverer wires up the production set of GCP discoverers. The
 // caller owns the searcher's lifecycle: pass a *RealAssetSearcher (which
 // holds an asset.Client gRPC connection) and call Close on it when the
 // discover run is done.
 //
-// The 5 registered types match pkg/composer/imported/generated/google_*.gen.go
-// 1:1 so the typed-Attrs decoder downstream works against discover output
-// without further codegen.
-func NewGCPDiscoverer(searcher gcpAssetSearcher, projectID string) *GCPDiscoverer {
+// opts.Sink / SQLUser / IdentityPlatform listers are required only when
+// the corresponding non-CAI discoverers are exercised — nil is
+// tolerated so unit tests that only walk CAI types don't have to wire
+// up mock listers.
+func NewGCPDiscoverer(searcher gcpAssetSearcher, projectID string, opts GCPDiscovererOpts) *GCPDiscoverer {
 	return &GCPDiscoverer{
 		searcher:  searcher,
 		projectID: projectID,
@@ -227,6 +265,11 @@ func NewGCPDiscoverer(searcher gcpAssetSearcher, projectID string) *GCPDiscovere
 			"google_redis_instance":          newRedisInstanceDiscoverer(),
 			"google_vertex_ai_dataset":       newVertexAIDatasetDiscoverer(),
 			"google_cloudbuild_trigger":      newCloudbuildTriggerDiscoverer(),
+			// Bundle 11 — complete GCP coverage (#392).
+			"google_firestore_database":       newFirestoreDatabaseDiscoverer(),
+			"google_logging_project_sink":     newLoggingProjectSinkDiscoverer(opts.SinkLister),
+			"google_sql_user":                 newSQLUserDiscoverer(opts.SQLUserLister),
+			"google_identity_platform_config": newIdentityPlatformConfigDiscoverer(opts.IdentityPlatformLister),
 		},
 	}
 }
@@ -282,16 +325,16 @@ func (g *GCPDiscoverer) DiscoverTypes(ctx context.Context, types []string, args 
 		return nil, fmt.Errorf("unknown resource type(s): %v (supported: %v)", unknown, g.SupportedTypes())
 	}
 
-	// Group discoverers by ScopeStyle (#366). The two buckets are
-	// dispatched as independent SearchAllResources calls because the
-	// labels.project clause is required for labelable types and counter-
-	// productive (returns zero results) for label-less types.
+	// Group discoverers by ScopeStyle (#366, #381, #392). Three CAI
+	// buckets (labels / name-prefix / parent-name-prefix) dispatch
+	// SearchAllResources calls; a fourth non-CAI bucket runs after the
+	// CAI fanout via per-type service-specific listers (sinks, SQL
+	// users, identity platform — #392).
 	//
 	// The switch is exhaustive on purpose — an unknown ScopeStyle
-	// should fail loudly rather than silently routing to the
-	// labels-bucket (where the labels.project clause would return
-	// zero results for a type the discoverer marked as label-less).
-	var labelsBucket, namePrefixBucket, parentBucket []Discoverer
+	// should fail loudly rather than silently routing to a default
+	// bucket where the wrong filter would mask the discoverer's bug.
+	var labelsBucket, namePrefixBucket, parentBucket, nonCAIBucket []Discoverer
 	for _, d := range selected {
 		switch d.ScopeStyle() {
 		case ScopeStyleLabels:
@@ -300,6 +343,8 @@ func (g *GCPDiscoverer) DiscoverTypes(ctx context.Context, types []string, args 
 			namePrefixBucket = append(namePrefixBucket, d)
 		case ScopeStyleParentNamePrefix:
 			parentBucket = append(parentBucket, d)
+		case ScopeStyleNonCAI:
+			nonCAIBucket = append(nonCAIBucket, d)
 		default:
 			return nil, fmt.Errorf("discoverer %q reported unknown ScopeStyle %v", d.ResourceType(), d.ScopeStyle())
 		}
@@ -344,9 +389,56 @@ func (g *GCPDiscoverer) DiscoverTypes(ctx context.Context, types []string, args 
 		}
 	}
 	args.Emitter.ServiceFinish(gcpServiceSlug, "", len(out), time.Since(stageStart))
+
+	// Non-CAI phase (#392): types whose resources aren't surfaced by
+	// Cloud Asset (Logging sinks, SQL users, Identity Platform config)
+	// run after the CAI fanout. Sequential by design — sql_user reads
+	// the CAI-discovered google_sql_database_instance rows from `out`
+	// to drive per-instance fanout, so this phase needs the CAI results
+	// already settled.
+	if len(nonCAIBucket) > 0 {
+		nonCAIStart := time.Now()
+		args.Emitter.ServiceStart(nonCAIServiceSlug, "")
+		var nonCAIResults []imported.ImportedResource
+		for _, d := range nonCAIBucket {
+			nd, ok := d.(nonCAIDiscoverer)
+			if !ok {
+				args.Emitter.ServiceFinish(nonCAIServiceSlug, "", 0, time.Since(nonCAIStart))
+				return nil, fmt.Errorf("discoverer %q reports ScopeStyleNonCAI but does not implement nonCAIDiscoverer", d.ResourceType())
+			}
+			rs, err := nd.ListNonCAI(ctx, g.projectID, args.Project, out)
+			if err != nil {
+				args.Emitter.ServiceFinish(nonCAIServiceSlug, "", len(nonCAIResults), time.Since(nonCAIStart))
+				return nil, fmt.Errorf("non-CAI list for %q: %w", d.ResourceType(), err)
+			}
+			for _, r := range rs {
+				if r.Identity.Type == "" {
+					continue
+				}
+				// Re-address through the same addressBook so cross-
+				// phase address collisions (extremely unlikely but
+				// not impossible) get suffixed correctly.
+				r.Identity.Address = imported.GenerateAddress(r.Identity, book.exists)
+				book.add(r.Identity.Address)
+				args.Emitter.ItemFound(nonCAIServiceSlug, r.Identity.Location, r.Identity.Type, r.Identity.ImportID)
+				nonCAIResults = append(nonCAIResults, r)
+			}
+		}
+		args.Emitter.ServiceFinish(nonCAIServiceSlug, "", len(nonCAIResults), time.Since(nonCAIStart))
+		out = append(out, nonCAIResults...)
+	}
+
 	args.Emitter.StageFinish("discover", len(out), time.Since(stageStart))
 	return out, nil
 }
+
+// nonCAIServiceSlug is the progress-event service slug for the
+// post-CAI phase that calls Logging / SQL Admin / Identity Toolkit
+// APIs (#382, #383, #392). Separate slug so progress consumers can
+// attribute service_start / service_finish events correctly even when
+// non-CAI types are interleaved with CAI ones in the same DiscoverTypes
+// call.
+const nonCAIServiceSlug = "gcp_non_cai"
 
 // DiscoverByID dispatches a per-ID lookup to the discoverer registered for
 // the given Terraform type. The orchestrator's dep-chase loop calls this

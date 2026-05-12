@@ -477,6 +477,24 @@ google_container_node_pool	upgrade_settings.max_surge	Tuning	Reliability	RileyVi
 google_container_node_pool	upgrade_settings.max_unavailable	Tuning	Reliability	RileyVisible	ChatSafe		
 google_container_node_pool	upgrade_settings.strategy	Tuning	Reliability	RileyVisible	ChatSafe		
 google_container_node_pool	version	Tuning	Reliability	UIVisible	RequiresApproval		
+google_firestore_database	app_engine_integration_mode	Tuning		RileyVisible	Never		AlwaysReplace
+google_firestore_database	concurrency_mode	Tuning	Reliability	RileyVisible	RequiresApproval		
+google_firestore_database	delete_protection_state	Tuning	Reliability	UIVisible	RequiresApproval		
+google_firestore_database	deletion_policy	Tuning	Reliability	RileyVisible	RequiresApproval		
+google_firestore_database	id	Identity		RileyVisible	Never		
+google_firestore_database	location_id	Identity		UIVisible	Never		AlwaysReplace
+google_firestore_database	name	Identity		UIVisible	Never		
+google_firestore_database	point_in_time_recovery_enablement	Tuning	Reliability	UIVisible	RequiresApproval		
+google_firestore_database	project	Identity		UIVisible	Never		AlwaysReplace
+google_firestore_database	timeouts	Tuning		Hidden	SystemOnly		
+google_firestore_database	type	Tuning	Reliability	UIVisible	Never		AlwaysReplace
+google_firestore_database	version_retention_period	Tuning	Reliability	RileyVisible	ChatSafe		
+google_identity_platform_config	authorized_domains	Tuning	Security	UIVisible	RequiresApproval		
+google_identity_platform_config	autodelete_anonymous_users	Tuning	Reliability	RileyVisible	ChatSafe		
+google_identity_platform_config	id	Identity		RileyVisible	Never		
+google_identity_platform_config	name	Identity		UIVisible	Never		
+google_identity_platform_config	project	Identity		UIVisible	Never		AlwaysReplace
+google_identity_platform_config	timeouts	Tuning		Hidden	SystemOnly		
 google_kms_crypto_key	crypto_key_backend	Wiring	Security	RileyVisible	RelationshipOnly		AlwaysReplace
 google_kms_crypto_key	destroy_scheduled_duration	Tuning	Reliability	RileyVisible	RequiresApproval		
 google_kms_crypto_key	effective_labels	Tuning		Hidden	SystemOnly	Redacted	
@@ -497,6 +515,16 @@ google_kms_key_ring	location	Identity		UIVisible	Never		AlwaysReplace
 google_kms_key_ring	name	Identity		UIVisible	Never		
 google_kms_key_ring	project	Identity		UIVisible	Never		AlwaysReplace
 google_kms_key_ring	timeouts	Tuning		Hidden	SystemOnly		
+google_logging_project_sink	custom_writer_identity	Wiring	Security	RileyVisible	RelationshipOnly		
+google_logging_project_sink	description	Tuning		RileyVisible	ChatSafe		
+google_logging_project_sink	destination	Wiring	Reliability	UIVisible	RelationshipOnly		
+google_logging_project_sink	disabled	Tuning	Reliability	UIVisible	ChatSafe		
+google_logging_project_sink	filter	Tuning	Reliability	RileyVisible	RequiresApproval		
+google_logging_project_sink	id	Identity		RileyVisible	Never		
+google_logging_project_sink	name	Identity		UIVisible	Never		
+google_logging_project_sink	project	Identity		UIVisible	Never		AlwaysReplace
+google_logging_project_sink	unique_writer_identity	Tuning	Security	UIVisible	RequiresApproval		AlwaysReplace
+google_logging_project_sink	writer_identity	Identity		RileyVisible	Never		
 google_monitoring_alert_policy	alert_strategy.auto_close	Tuning	Reliability	RileyVisible	ChatSafe		
 google_monitoring_alert_policy	alert_strategy.notification_rate_limit.period	Tuning	Reliability	RileyVisible	ChatSafe		
 google_monitoring_alert_policy	combiner	Tuning	Reliability	UIVisible	RequiresApproval		
@@ -694,6 +722,16 @@ google_sql_database_instance	settings.pricing_plan	Tuning		RileyVisible	Requires
 google_sql_database_instance	settings.tier	Tuning	Performance	UIVisible	RequiresApproval		
 google_sql_database_instance	settings.user_labels	Tuning		Hidden	SystemOnly	Redacted	
 google_sql_database_instance	timeouts	Tuning		Hidden	SystemOnly		
+google_sql_user	deletion_policy	Tuning	Reliability	RileyVisible	RequiresApproval		
+google_sql_user	host	Identity		UIVisible	Never		AlwaysReplace
+google_sql_user	id	Identity		RileyVisible	Never		
+google_sql_user	instance	Wiring	Reliability	UIVisible	RelationshipOnly		AlwaysReplace
+google_sql_user	name	Identity		UIVisible	Never		
+google_sql_user	password	Tuning	Security	Hidden	SystemOnly	Sensitive	
+google_sql_user	project	Identity		UIVisible	Never		AlwaysReplace
+google_sql_user	sql_server_user_details.disabled	Tuning	Security	UIVisible	RequiresApproval		
+google_sql_user	timeouts	Tuning		Hidden	SystemOnly		
+google_sql_user	type	Tuning	Security	UIVisible	Never		AlwaysReplace
 google_storage_bucket	autoclass.enabled	Tuning	Performance	RileyVisible	ChatSafe		
 google_storage_bucket	cors.max_age_seconds	Tuning		RileyVisible	ChatSafe		
 google_storage_bucket	cors.method	Tuning		RileyVisible	ChatSafe		

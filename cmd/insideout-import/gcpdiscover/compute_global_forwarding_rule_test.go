@@ -122,7 +122,7 @@ func TestDiscoverTypes_ForwardingRuleRegionalAndGlobal_CoexistOnSharedSlug(t *te
 			},
 		},
 	}
-	g := NewGCPDiscoverer(fake, "real-proj")
+	g := NewGCPDiscoverer(fake, "real-proj", GCPDiscovererOpts{})
 	got, err := g.DiscoverTypes(context.Background(),
 		[]string{"google_compute_forwarding_rule", "google_compute_global_forwarding_rule"},
 		DiscoverArgs{Project: "io-foo"})
