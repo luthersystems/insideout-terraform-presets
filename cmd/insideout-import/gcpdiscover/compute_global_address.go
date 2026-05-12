@@ -82,17 +82,36 @@ func (computeGlobalAddressDiscoverer) DiscoverByID(_ context.Context, _ gcpAsset
 // `projects/<p>/global/addresses/<n>` import-id for a row whose real
 // type is the regional one.
 func computeGlobalAddressNameFromID(id string) (string, error) {
+	return parseGlobalNameFromID(id, "/global/addresses/", "compute_global_address", "google_compute_address")
+}
+
+// parseGlobalNameFromID is the shared parser for the two global
+// compute discoverers (#384). The shape is:
+//
+//   - input may be a Cloud Asset full resource name or a Terraform
+//     import-id; either way the global path marker `/global/<collection>/`
+//     appears once.
+//   - `tfPrefix` (e.g. "compute_global_address") prefixes the error
+//     message so the test/log surface names the offending discoverer.
+//   - `siblingType` (e.g. "google_compute_address") is named in the
+//     unrecognized-id error so an operator who passed a regional
+//     shape sees the actionable cross-reference.
+//
+// Regional inputs surface as "unrecognized id" since the marker is
+// absent; the explicit "belongs to siblingType" hint surfaces the
+// migration path.
+func parseGlobalNameFromID(id, marker, tfPrefix, siblingType string) (string, error) {
 	id = strings.TrimSpace(id)
 	if id == "" {
-		return "", fmt.Errorf("compute_global_address: empty id: %w", ErrNotSupported)
+		return "", fmt.Errorf("%s: empty id: %w", tfPrefix, ErrNotSupported)
 	}
-	_, after, ok := strings.Cut(id, "/global/addresses/")
+	_, after, ok := strings.Cut(id, marker)
 	if !ok {
-		return "", fmt.Errorf("compute_global_address: unrecognized id %q (expected /global/addresses/ shape): %w", id, ErrNotSupported)
+		return "", fmt.Errorf("%s: unrecognized id %q (regional inputs belong to %s): %w", tfPrefix, id, siblingType, ErrNotSupported)
 	}
 	name, _, _ := strings.Cut(after, "/")
 	if name == "" {
-		return "", fmt.Errorf("compute_global_address: empty name in id %q: %w", id, ErrNotSupported)
+		return "", fmt.Errorf("%s: empty name in id %q: %w", tfPrefix, id, ErrNotSupported)
 	}
 	return name, nil
 }

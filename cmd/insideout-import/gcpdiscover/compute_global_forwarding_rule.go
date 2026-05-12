@@ -3,7 +3,6 @@ package gcpdiscover
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
@@ -71,19 +70,9 @@ func (computeGlobalForwardingRuleDiscoverer) DiscoverByID(_ context.Context, _ g
 
 // computeGlobalForwardingRuleNameFromID parses the global shape only.
 // Regional inputs are rejected with ErrNotSupported — they belong to
-// google_compute_forwarding_rule, the regional sibling.
+// google_compute_forwarding_rule, the regional sibling. See
+// parseGlobalNameFromID in compute_global_address.go for the shared
+// shape.
 func computeGlobalForwardingRuleNameFromID(id string) (string, error) {
-	id = strings.TrimSpace(id)
-	if id == "" {
-		return "", fmt.Errorf("compute_global_forwarding_rule: empty id: %w", ErrNotSupported)
-	}
-	_, after, ok := strings.Cut(id, "/global/forwardingRules/")
-	if !ok {
-		return "", fmt.Errorf("compute_global_forwarding_rule: unrecognized id %q (expected /global/forwardingRules/ shape): %w", id, ErrNotSupported)
-	}
-	name, _, _ := strings.Cut(after, "/")
-	if name == "" {
-		return "", fmt.Errorf("compute_global_forwarding_rule: empty name in id %q: %w", id, ErrNotSupported)
-	}
-	return name, nil
+	return parseGlobalNameFromID(id, "/global/forwardingRules/", "compute_global_forwarding_rule", "google_compute_forwarding_rule")
 }

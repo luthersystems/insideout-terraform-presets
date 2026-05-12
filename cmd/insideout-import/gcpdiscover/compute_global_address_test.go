@@ -3,8 +3,6 @@ package gcpdiscover
 import (
 	"context"
 	"errors"
-	"reflect"
-	"sort"
 	"testing"
 )
 
@@ -178,22 +176,27 @@ func TestDiscoverTypes_AddressRegionalAndGlobal_CoexistOnSharedSlug(t *testing.T
 	// loop iterates discoverers in their registration order; the
 	// global comes after the regional alphabetically, but pinning
 	// the set membership is more mutation-resistant than the order.
-	gotTypes := []string{got[0].Identity.Type, got[1].Identity.Type}
-	sort.Strings(gotTypes)
-	wantTypes := []string{"google_compute_address", "google_compute_global_address"}
-	if !reflect.DeepEqual(gotTypes, wantTypes) {
-		t.Errorf("emitted types=%v, want %v (one regional + one global)", gotTypes, wantTypes)
+	// Pin the type-to-import-id binding directly per resource, not via
+	// sorted-set membership. A mutation that inverted the per-discoverer
+	// filter would still produce {regional, global} type membership
+	// (both discoverers still iterate the bucket and emit one each) —
+	// but the regional discoverer processing a global asset would
+	// produce a malformed ImportID like
+	// `projects/real-proj/regions/global/addresses/...` (asset's
+	// Location="global" flows into the region slot). Pinning the
+	// type→import-id pair catches this directly rather than relying on
+	// the malformed import-id leaking into a sorted-slice assertion.
+	byType := make(map[string]string, len(got))
+	for _, r := range got {
+		if _, dup := byType[r.Identity.Type]; dup {
+			t.Errorf("duplicate emit for type %q (got: %+v)", r.Identity.Type, got)
+		}
+		byType[r.Identity.Type] = r.Identity.ImportID
 	}
-	// Both share NameHint=io-foo-shared but their ImportIDs MUST be
-	// distinct — the regional carries /regions/<r>/, the global
-	// carries /global/.
-	gotImports := []string{got[0].Identity.ImportID, got[1].Identity.ImportID}
-	sort.Strings(gotImports)
-	wantImports := []string{
-		"projects/real-proj/global/addresses/io-foo-shared",
-		"projects/real-proj/regions/us-central1/addresses/io-foo-shared",
+	if want, got := "projects/real-proj/regions/us-central1/addresses/io-foo-shared", byType["google_compute_address"]; got != want {
+		t.Errorf("google_compute_address.ImportID = %q, want %q (regional discoverer must process the /regions/<r>/ row)", got, want)
 	}
-	if !reflect.DeepEqual(gotImports, wantImports) {
-		t.Errorf("emitted ImportIDs=%v, want %v", gotImports, wantImports)
+	if want, got := "projects/real-proj/global/addresses/io-foo-shared", byType["google_compute_global_address"]; got != want {
+		t.Errorf("google_compute_global_address.ImportID = %q, want %q (global discoverer must process the /global/ row)", got, want)
 	}
 }

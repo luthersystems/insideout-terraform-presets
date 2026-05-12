@@ -93,3 +93,64 @@ func TestComputeGlobalForwardingRuleDiscoverByID(t *testing.T) {
 		})
 	}
 }
+
+// TestDiscoverTypes_ForwardingRuleRegionalAndGlobal_CoexistOnSharedSlug
+// is the ForwardingRule counterpart to the Address coexistence test
+// (#384). Pinning the same dispatch contract per shared-slug pair is
+// a defense-in-depth move — the Address and ForwardingRule discoverers
+// share isGlobalAddressOrForwardingRule today, but that's an
+// implementation accident. A future refactor that diverged the
+// per-type filters could break ForwardingRule's dispatch without
+// failing the Address-only coexist test.
+func TestDiscoverTypes_ForwardingRuleRegionalAndGlobal_CoexistOnSharedSlug(t *testing.T) {
+	t.Parallel()
+	fake := &fakeAssetSearcher{
+		results: []gcpAssetResult{
+			{
+				Name:      "//compute.googleapis.com/projects/real-proj/regions/us-central1/forwardingRules/io-foo-shared",
+				AssetType: "compute.googleapis.com/ForwardingRule",
+				Project:   "real-proj",
+				Location:  "us-central1",
+				Labels:    map[string]string{"project": "io-foo"},
+			},
+			{
+				Name:      "//compute.googleapis.com/projects/real-proj/global/forwardingRules/io-foo-shared",
+				AssetType: "compute.googleapis.com/ForwardingRule",
+				Project:   "real-proj",
+				Location:  "global",
+				Labels:    map[string]string{"project": "io-foo"},
+			},
+		},
+	}
+	g := NewGCPDiscoverer(fake, "real-proj")
+	got, err := g.DiscoverTypes(context.Background(),
+		[]string{"google_compute_forwarding_rule", "google_compute_global_forwarding_rule"},
+		DiscoverArgs{Project: "io-foo"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fake.calls) != 1 {
+		t.Fatalf("SearchAll calls=%d, want 1 — assetTypesOf must dedup shared CAI slugs", len(fake.calls))
+	}
+	if len(fake.calls[0].assetTypes) != 1 {
+		t.Errorf("call.assetTypes=%v, want exactly 1 entry (deduped)", fake.calls[0].assetTypes)
+	}
+	if len(got) != 2 {
+		t.Fatalf("got %d ImportedResources, want 2 (one regional + one global); got: %+v", len(got), got)
+	}
+	// Pin the type-to-import-id binding directly — see the Address
+	// coexist test's comment for the mutation-resistance rationale.
+	byType := make(map[string]string, len(got))
+	for _, r := range got {
+		if _, dup := byType[r.Identity.Type]; dup {
+			t.Errorf("duplicate emit for type %q (got: %+v)", r.Identity.Type, got)
+		}
+		byType[r.Identity.Type] = r.Identity.ImportID
+	}
+	if want, got := "projects/real-proj/regions/us-central1/forwardingRules/io-foo-shared", byType["google_compute_forwarding_rule"]; got != want {
+		t.Errorf("google_compute_forwarding_rule.ImportID = %q, want %q (regional discoverer must process the /regions/<r>/ row)", got, want)
+	}
+	if want, got := "projects/real-proj/global/forwardingRules/io-foo-shared", byType["google_compute_global_forwarding_rule"]; got != want {
+		t.Errorf("google_compute_global_forwarding_rule.ImportID = %q, want %q (global discoverer must process the /global/ row)", got, want)
+	}
+}
