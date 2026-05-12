@@ -52,7 +52,7 @@ func (computeAddressDiscoverer) FromAsset(book addressBook, a gcpAssetResult, pr
 	// a separate TF type not in Bundle 8. Returning a zero
 	// ImportedResource signals the orchestrator to drop the row (it
 	// filters on empty Identity.Type before emitting).
-	if isGlobalComputeAsset(a) {
+	if isGlobalAddressOrForwardingRule(a) {
 		return imported.ImportedResource{}
 	}
 	name := shortName(a.Name)
@@ -60,20 +60,33 @@ func (computeAddressDiscoverer) FromAsset(book addressBook, a gcpAssetResult, pr
 	if region == "" {
 		region = regionFromComputeRegionalAssetName(a.Name)
 	}
-	importID := computeAddressImportID(projectID, region, name)
-	selfLink := computeAddressSelfLink(projectID, region, name)
+	importID := fmt.Sprintf("projects/%s/regions/%s/addresses/%s", projectID, region, name)
+	selfLink := fmt.Sprintf("https://www.googleapis.com/compute/v1/projects/%s/regions/%s/addresses/%s", projectID, region, name)
 	return makeImportedResource(book, computeAddressTFType, name, importID, projectID, region, map[string]string{
 		"asset_name": a.Name,
 		"self_link":  selfLink,
 	}, a.Labels)
 }
 
-// isGlobalComputeAsset reports whether a CAI compute asset is a global
-// resource. The path's `/global/` marker is the source of truth — the
-// Location field is also "global" for these but checking the path
-// matches what the asset name encodes.
-func isGlobalComputeAsset(a gcpAssetResult) bool {
-	return strings.Contains(a.Name, "/global/") || a.Location == "global"
+// isGlobalAddressOrForwardingRule reports whether a CAI asset row is
+// a global Address/ForwardingRule — the two compute asset slugs whose
+// regional and global TF types share the same Cloud Asset type slug
+// and so must be split on the discover side.
+//
+// NOT a general "is this a global compute asset" predicate: many
+// compute types (firewalls, URL maps, target proxies) are
+// intrinsically global. Their asset paths also contain "/global/",
+// but the right behavior for those is to discover, not skip. This
+// helper is narrowed to the address+forwarding-rule callers — see
+// compute_address.go and compute_forwarding_rule.go.
+//
+// The asset path's `/global/` marker is authoritative; Cloud Asset's
+// Location field is `"global"` for the same rows but it's a
+// derivative signal (live-smoke confirmed). Checking the path keeps
+// the predicate consistent if a future CAI version stops surfacing
+// Location for global rows.
+func isGlobalAddressOrForwardingRule(a gcpAssetResult) bool {
+	return strings.Contains(a.Name, "/global/")
 }
 
 func (computeAddressDiscoverer) DiscoverByID(_ context.Context, _ gcpAssetSearcher, id, projectID string) (imported.ImportedResource, error) {
@@ -81,70 +94,34 @@ func (computeAddressDiscoverer) DiscoverByID(_ context.Context, _ gcpAssetSearch
 	if err != nil {
 		return imported.ImportedResource{}, err
 	}
-	importID := computeAddressImportID(projectID, region, name)
-	selfLink := computeAddressSelfLink(projectID, region, name)
-	assetName := fmt.Sprintf("//%s/projects/%s/global/addresses/%s", computeAssetHost, projectID, name)
-	if region != "" {
-		assetName = fmt.Sprintf("//%s/projects/%s/regions/%s/addresses/%s", computeAssetHost, projectID, region, name)
-	}
+	importID := fmt.Sprintf("projects/%s/regions/%s/addresses/%s", projectID, region, name)
+	selfLink := fmt.Sprintf("https://www.googleapis.com/compute/v1/projects/%s/regions/%s/addresses/%s", projectID, region, name)
+	assetName := fmt.Sprintf("//%s/projects/%s/regions/%s/addresses/%s", computeAssetHost, projectID, region, name)
 	return makeImportedResource(addressBook{}, computeAddressTFType, name, importID, projectID, region, map[string]string{
 		"asset_name": assetName,
 		"self_link":  selfLink,
 	}, nil), nil
 }
 
-// computeAddressImportID picks the regional vs global form based on
-// whether region is non-empty. Global addresses have no region
-// qualifier; the trailing `/regions//` shape produced by an empty
-// region would be invalid.
-func computeAddressImportID(projectID, region, name string) string {
-	if region == "" {
-		return fmt.Sprintf("projects/%s/global/addresses/%s", projectID, name)
-	}
-	return fmt.Sprintf("projects/%s/regions/%s/addresses/%s", projectID, region, name)
-}
-
-func computeAddressSelfLink(projectID, region, name string) string {
-	if region == "" {
-		return fmt.Sprintf("https://www.googleapis.com/compute/v1/projects/%s/global/addresses/%s", projectID, name)
-	}
-	return fmt.Sprintf("https://www.googleapis.com/compute/v1/projects/%s/regions/%s/addresses/%s", projectID, region, name)
-}
-
-// computeAddressPartsFromID accepts regional and global shapes. The
-// /global/ marker disambiguates the two; we check it first so a
-// global address whose region happens to be "" is parsed correctly.
+// computeAddressPartsFromID parses the regional shape only. Globals are
+// rejected with ErrNotSupported — they belong to google_compute_global_address,
+// a separate TF type not in Bundle 8 (and emitting them under
+// google_compute_address would produce an import-id Terraform's
+// regional-only schema rejects). Symmetric with FromAsset's
+// isGlobalAddressOrForwardingRule skip — keeps the dep-chase code path
+// from resurrecting the live-smoke bug that motivated the skip
+// sentinel in the first place.
 func computeAddressPartsFromID(id string) (string, string, error) {
 	id = strings.TrimSpace(id)
 	if id == "" {
 		return "", "", fmt.Errorf("compute_address: empty id: %w", ErrNotSupported)
 	}
 	if strings.Contains(id, "/global/addresses/") {
-		_, name := parseLocationOrGlobalTrailing(id, "/global/addresses/")
-		if name == "" {
-			return "", "", fmt.Errorf("compute_address: malformed global id %q: %w", id, ErrNotSupported)
-		}
-		return "", name, nil
+		return "", "", fmt.Errorf("compute_address: global address %q belongs to google_compute_global_address: %w", id, ErrNotSupported)
 	}
 	region, name := parseRegionAndTrailing(id, "/addresses/")
 	if region == "" || name == "" {
 		return "", "", fmt.Errorf("compute_address: unrecognized id %q: %w", id, ErrNotSupported)
 	}
 	return region, name, nil
-}
-
-// parseLocationOrGlobalTrailing pulls the segment after `tail` (a
-// /global/... marker). The location half is always "" by definition
-// — global resources have no region/zone. Symmetric helper to
-// parseRegionAndTrailing for the global case.
-func parseLocationOrGlobalTrailing(s, tail string) (string, string) {
-	idx := strings.Index(s, tail)
-	if idx < 0 {
-		return "", ""
-	}
-	rest := s[idx+len(tail):]
-	if i := strings.Index(rest, "/"); i >= 0 {
-		rest = rest[:i]
-	}
-	return "", rest
 }

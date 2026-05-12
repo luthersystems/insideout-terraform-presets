@@ -17,10 +17,16 @@
 // project name (--project) and uses it for the labels.project=<stack>
 // server-side filter (mirroring the AWS path's QueueNamePrefix etc. filter).
 //
-// Stage 2d (#264) lands the 5 Phase-1 GCP types whose typed-Attrs codegen
+// Stage 2d (#264) landed the 5 Phase-1 GCP types whose typed-Attrs codegen
 // has already shipped under pkg/composer/imported/generated/google_*.gen.go:
 // google_pubsub_topic, google_pubsub_subscription, google_storage_bucket,
 // google_secret_manager_secret, and google_compute_network.
+//
+// Bundle 8 (#356) expanded coverage to 22 types — see byType in
+// NewGCPDiscoverer for the live list and pkg/insideout-import/registry
+// for the public contract. The discoverers don't reference the
+// typed-Attrs codegen at runtime (Identity-only); composer-side
+// codegen for the post-Phase-1 types is a separate workstream.
 package gcpdiscover
 
 import (

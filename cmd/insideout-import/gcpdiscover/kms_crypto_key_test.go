@@ -48,6 +48,12 @@ func TestKMSCryptoKeyDiscoverByID(t *testing.T) {
 		{name: "bare name rejected", in: "k1", wantErr: ErrNotSupported},
 		{name: "missing keyring parent", in: "projects/p/locations/us-central1/cryptoKeys/k1", wantErr: ErrNotSupported},
 		{name: "missing cryptokey segment", in: "projects/p/locations/us-central1/keyRings/r1", wantErr: ErrNotSupported},
+		// Parent-collision adversarial row: ring name == cryptokey name.
+		// A parser that read the wrong slash-segment (e.g. greedy index
+		// confused by repeated names) would emit cluster as "" or the
+		// wrong half here. Pins that the markers — not segment index —
+		// disambiguate ring from cryptokey.
+		{name: "ring name equals cryptokey name", in: "projects/p/locations/us-central1/keyRings/shared/cryptoKeys/shared", wantName: "shared", wantRing: "shared", wantLoc: "us-central1"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

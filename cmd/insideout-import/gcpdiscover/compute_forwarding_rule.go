@@ -36,7 +36,7 @@ func (computeForwardingRuleDiscoverer) FromAsset(book addressBook, a gcpAssetRes
 	// a separate TF type not in Bundle 8 — skip by returning a zero
 	// ImportedResource. The orchestrator filters out empty Identity.Type
 	// rows before emitting.
-	if isGlobalComputeAsset(a) {
+	if isGlobalAddressOrForwardingRule(a) {
 		return imported.ImportedResource{}
 	}
 	name := shortName(a.Name)

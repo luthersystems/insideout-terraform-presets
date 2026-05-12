@@ -45,6 +45,10 @@ func TestContainerNodePoolDiscoverByID(t *testing.T) {
 		{name: "bare name rejected", in: "np1", wantErr: ErrNotSupported},
 		{name: "missing cluster parent", in: "projects/p/locations/us-central1/nodePools/np1", wantErr: ErrNotSupported},
 		{name: "missing nodePools segment", in: "projects/p/locations/us-central1/clusters/c1", wantErr: ErrNotSupported},
+		// Parent-collision adversarial row: cluster name == node pool name.
+		// Pins that markers (not segment index) disambiguate parent
+		// from child.
+		{name: "cluster name equals node pool name", in: "projects/p/locations/us-central1/clusters/shared/nodePools/shared", wantName: "shared", wantCluster: "shared", wantLoc: "us-central1"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

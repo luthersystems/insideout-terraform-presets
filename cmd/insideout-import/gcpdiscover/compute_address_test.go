@@ -65,10 +65,16 @@ func TestComputeAddressDiscoverByID(t *testing.T) {
 	}{
 		{name: "regional asset name", in: "//compute.googleapis.com/projects/p/regions/us-east1/addresses/ip1", wantName: "ip1", wantRegion: "us-east1"},
 		{name: "regional import id", in: "projects/p/regions/us-central1/addresses/ip1", wantName: "ip1", wantRegion: "us-central1"},
-		{name: "global asset name", in: "//compute.googleapis.com/projects/p/global/addresses/lb-ip", wantName: "lb-ip", wantRegion: ""},
-		{name: "global import id", in: "projects/p/global/addresses/lb-ip", wantName: "lb-ip", wantRegion: ""},
+		// Global rows are symmetrically rejected by DiscoverByID
+		// (mirroring the FromAsset skip): they belong to
+		// google_compute_global_address, not google_compute_address.
+		// Without this rejection the dep-chase code path would
+		// resurrect the live-smoke malformed-import-id bug for
+		// globals.
+		{name: "global asset name rejected (different TF type)", in: "//compute.googleapis.com/projects/p/global/addresses/lb-ip", wantErr: ErrNotSupported},
+		{name: "global import id rejected (different TF type)", in: "projects/p/global/addresses/lb-ip", wantErr: ErrNotSupported},
 		{name: "empty", in: "", wantErr: ErrNotSupported},
-		{name: "bare name rejected (region or global required)", in: "ip1", wantErr: ErrNotSupported},
+		{name: "bare name rejected (region required)", in: "ip1", wantErr: ErrNotSupported},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

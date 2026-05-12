@@ -1065,6 +1065,100 @@ func TestDiscoverTypes_TwoBucketsEmitOneServiceStartFinishPair(t *testing.T) {
 	}
 }
 
+// TestDiscoverTypes_OrchestratorSkipsZeroIdentityType pins the
+// orchestrator half of the skip-sentinel contract introduced by the
+// Bundle 8 live-smoke fixup: a discoverer that returns a zero
+// ImportedResource (empty Identity.Type) signals the orchestrator to
+// drop that row from the emitted slice.
+//
+// Without this test, the live-smoke bug (malformed
+// `projects/<p>/regions/global/addresses/<n>` ImportIDs for global
+// rows) regresses if anyone deletes the
+// `if imp.Identity.Type == "" { continue }` guard in
+// gcpdiscover.go::DiscoverTypes — the producer-side
+// TestComputeAddressFromAsset_Global_IsSkipped only proves
+// FromAsset returns zero; the orchestrator skip is what actually
+// drops the row.
+//
+// Uses a fake discoverer that returns zero for one specific asset
+// name. Avoids depending on compute_address's specific global-skip
+// logic so the test stays focused on the contract.
+func TestDiscoverTypes_OrchestratorSkipsZeroIdentityType(t *testing.T) {
+	t.Parallel()
+	const tfType = "google_test_zerosignal"
+	const assetType = "test.googleapis.com/ZeroSignal"
+	const skipMe = "//test.googleapis.com/projects/real-proj/things/skip-me"
+	const keepMe = "//test.googleapis.com/projects/real-proj/things/keep-me"
+
+	fake := &fakeAssetSearcher{
+		results: []gcpAssetResult{
+			{Name: skipMe, AssetType: assetType, Project: "real-proj"},
+			{Name: keepMe, AssetType: assetType, Project: "real-proj"},
+		},
+	}
+	g := &GCPDiscoverer{
+		searcher:  fake,
+		projectID: "real-proj",
+		byType: map[string]Discoverer{
+			tfType: &skipOnNameDiscoverer{
+				resourceType:  tfType,
+				assetType:     assetType,
+				skipAssetName: skipMe,
+			},
+		},
+	}
+	got, err := g.DiscoverTypes(context.Background(), []string{tfType}, DiscoverArgs{Project: ""})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Exactly one resource emitted (keep-me); the zero-Identity skip-me
+	// row was dropped by the orchestrator.
+	if len(got) != 1 {
+		t.Fatalf("len(got)=%d, want 1 (zero-Identity row must be dropped); got %v", len(got), namesOf(got))
+	}
+	if got[0].Identity.NameHint != "keep-me" {
+		t.Errorf("kept=%q, want keep-me — wrong row survived?", got[0].Identity.NameHint)
+	}
+}
+
+// skipOnNameDiscoverer is a test fake whose FromAsset returns a zero
+// ImportedResource when the asset.Name matches `skipAssetName`, and a
+// real ImportedResource otherwise. Used by the
+// TestDiscoverTypes_OrchestratorSkipsZeroIdentityType regression
+// guard above.
+type skipOnNameDiscoverer struct {
+	resourceType  string
+	assetType     string
+	skipAssetName string
+}
+
+func (d *skipOnNameDiscoverer) ResourceType() string   { return d.resourceType }
+func (d *skipOnNameDiscoverer) AssetType() string      { return d.assetType }
+func (d *skipOnNameDiscoverer) ScopeStyle() ScopeStyle { return ScopeStyleLabels }
+
+func (d *skipOnNameDiscoverer) FromAsset(_ addressBook, a gcpAssetResult, projectID string) imported.ImportedResource {
+	if a.Name == d.skipAssetName {
+		return imported.ImportedResource{}
+	}
+	name := shortName(a.Name)
+	return imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Cloud:     "gcp",
+			Type:      d.resourceType,
+			Address:   d.resourceType + "." + name,
+			ImportID:  name,
+			NameHint:  name,
+			ProjectID: projectID,
+		},
+		Tier:   imported.TierImportedFlat,
+		Source: imported.SourceImporter,
+	}
+}
+
+func (d *skipOnNameDiscoverer) DiscoverByID(_ context.Context, _ gcpAssetSearcher, _, _ string) (imported.ImportedResource, error) {
+	return imported.ImportedResource{}, ErrNotSupported
+}
+
 // namesOf collects NameHints from a discover result for failure-message
 // readability — `got 1 names: [alpha]` beats `got 1 items`.
 func namesOf(rs []imported.ImportedResource) []string {

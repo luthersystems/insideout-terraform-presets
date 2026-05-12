@@ -38,7 +38,15 @@ func TestSQLDatabaseInstanceDiscoverByID(t *testing.T) {
 	}{
 		{name: "asset name", in: "//sqladmin.googleapis.com/projects/p/instances/db1", wantName: "db1"},
 		{name: "import id", in: "projects/p/instances/db1", wantName: "db1"},
-		{name: "bare name", in: "db1", wantName: "db1"},
+		// Bare-name accepted intentionally: SQL instance names are
+		// globally unique within a project (CAI surfaces them as
+		// "projects/<p>/instances/<n>" with no region/zone
+		// qualifier), and the upstream provider's import handler
+		// accepts the bare name and resolves the project from
+		// provider config. Other Bundle 8 types reject bare names
+		// because they need a location/zone qualifier; SQL is the
+		// only project-scoped exception.
+		{name: "bare name accepted (project-singleton-y)", in: "db1", wantName: "db1"},
 		{name: "empty", in: "", wantErr: ErrNotSupported},
 		{name: "unrecognized shape", in: "arn:aws:rds:::db/x", wantErr: ErrNotSupported},
 	}

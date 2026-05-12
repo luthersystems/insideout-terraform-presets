@@ -94,6 +94,17 @@ func TestAPIGatewayAPIConfigFromAssetAndByID(t *testing.T) {
 	if !errors.Is(err, ErrNotSupported) {
 		t.Errorf("missing configs segment err=%v, want ErrNotSupported", err)
 	}
+
+	// Parent-collision adversarial row: api name == config name. Pins
+	// that /apis/ and /configs/ markers (not segment index)
+	// disambiguate parent from child.
+	r, err = d.DiscoverByID(context.Background(), nil, "projects/p/locations/global/apis/shared/configs/shared", "real-proj")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.Identity.NameHint != "shared" || r.Identity.NativeIDs["api"] != "shared" {
+		t.Errorf("parent-collision: got name=%q api=%q, want shared/shared", r.Identity.NameHint, r.Identity.NativeIDs["api"])
+	}
 }
 
 func TestAPIGatewayGatewayFromAssetAndByID(t *testing.T) {
@@ -113,11 +124,32 @@ func TestAPIGatewayGatewayFromAssetAndByID(t *testing.T) {
 	if got.Identity.ImportID != "projects/real-proj/locations/us-central1/gateways/io-foo-gw" {
 		t.Errorf("ImportID=%q", got.Identity.ImportID)
 	}
-	r, err := d.DiscoverByID(context.Background(), nil, "projects/p/locations/us-central1/gateways/g1", "real-proj")
-	if err != nil {
-		t.Fatal(err)
+	cases := []struct {
+		name, in, wantName string
+		wantErr            error
+	}{
+		{name: "asset name", in: "//apigateway.googleapis.com/projects/p/locations/us-central1/gateways/g1", wantName: "g1"},
+		{name: "import id", in: "projects/p/locations/us-central1/gateways/g1", wantName: "g1"},
+		{name: "empty", in: "", wantErr: ErrNotSupported},
+		{name: "bare name rejected (location required)", in: "g1", wantErr: ErrNotSupported},
+		{name: "missing locations segment", in: "projects/p/gateways/g1", wantErr: ErrNotSupported},
 	}
-	if r.Identity.NameHint != "g1" {
-		t.Errorf("NameHint=%q, want g1", r.Identity.NameHint)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			r, err := d.DiscoverByID(context.Background(), nil, tc.in, "real-proj")
+			if tc.wantErr != nil {
+				if !errors.Is(err, tc.wantErr) {
+					t.Errorf("err=%v, want %v", err, tc.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if r.Identity.NameHint != tc.wantName {
+				t.Errorf("NameHint=%q, want %q", r.Identity.NameHint, tc.wantName)
+			}
+		})
 	}
 }
