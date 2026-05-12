@@ -9,7 +9,7 @@ var googleMonitoringNotificationChannelPolicy = Map{
 		ChangeRisk: ChangeAlwaysReplace,
 	},
 	"display_name": {
-		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditChatSafe,
+		Role: RoleTuning, Visibility: VisibilityUIVisible, Edit: EditChatSafe,
 	},
 	"type": {
 		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,

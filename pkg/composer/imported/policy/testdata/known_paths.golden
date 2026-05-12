@@ -285,8 +285,8 @@ google_compute_instance	hostname	Identity		RileyVisible	Never		AlwaysReplace
 google_compute_instance	id	Identity		RileyVisible	Never		
 google_compute_instance	labels	Tuning		Hidden	SystemOnly	Redacted	
 google_compute_instance	machine_type	Tuning	Performance	UIVisible	RequiresApproval		MayReplace
-google_compute_instance	metadata	Tuning		Hidden	SystemOnly	Redacted	
-google_compute_instance	metadata_startup_script	Tuning		Hidden	SystemOnly	Redacted	
+google_compute_instance	metadata	Tuning	Security	RileyVisible	RequiresApproval	Redacted	
+google_compute_instance	metadata_startup_script	Tuning	Reliability	RileyVisible	RequiresApproval	Redacted	
 google_compute_instance	min_cpu_platform	Tuning	Performance	RileyVisible	ChatSafe		
 google_compute_instance	name	Identity		UIVisible	Never		
 google_compute_instance	network_interface.access_config.nat_ip	Tuning		RileyVisible	RequiresApproval		MayReplace
@@ -307,7 +307,6 @@ google_compute_instance	service_account.scopes	Tuning	Security	RileyVisible	Requ
 google_compute_instance	shielded_instance_config.enable_integrity_monitoring	Tuning	Security	RileyVisible	RequiresApproval		
 google_compute_instance	shielded_instance_config.enable_secure_boot	Tuning	Security	RileyVisible	RequiresApproval		
 google_compute_instance	shielded_instance_config.enable_vtpm	Tuning	Security	RileyVisible	RequiresApproval		
-google_compute_instance	tags	Tuning		Hidden	SystemOnly	Redacted	
 google_compute_instance	terraform_labels	Tuning		Hidden	SystemOnly	Redacted	
 google_compute_instance	timeouts	Tuning		Hidden	SystemOnly		
 google_compute_instance	zone	Identity		UIVisible	Never		AlwaysReplace
@@ -464,7 +463,7 @@ google_monitoring_alert_policy	conditions.condition_threshold.duration	Tuning	Re
 google_monitoring_alert_policy	conditions.condition_threshold.filter	Tuning	Reliability	RileyVisible	RequiresApproval		
 google_monitoring_alert_policy	conditions.condition_threshold.threshold_value	Tuning	Reliability	RileyVisible	RequiresApproval		
 google_monitoring_alert_policy	conditions.display_name	Identity		RileyVisible	ChatSafe		
-google_monitoring_alert_policy	display_name	Identity		UIVisible	ChatSafe		
+google_monitoring_alert_policy	display_name	Tuning		UIVisible	ChatSafe		
 google_monitoring_alert_policy	documentation.content	Tuning		RileyVisible	ChatSafe		
 google_monitoring_alert_policy	documentation.mime_type	Tuning		RileyVisible	ChatSafe		
 google_monitoring_alert_policy	documentation.subject	Tuning		RileyVisible	ChatSafe		
@@ -481,7 +480,7 @@ google_monitoring_dashboard	id	Identity		RileyVisible	Never
 google_monitoring_dashboard	project	Identity		UIVisible	Never		AlwaysReplace
 google_monitoring_dashboard	timeouts	Tuning		Hidden	SystemOnly		
 google_monitoring_notification_channel	description	Tuning		RileyVisible	ChatSafe		
-google_monitoring_notification_channel	display_name	Identity		UIVisible	ChatSafe		
+google_monitoring_notification_channel	display_name	Tuning		UIVisible	ChatSafe		
 google_monitoring_notification_channel	enabled	Tuning	Reliability	UIVisible	ChatSafe		
 google_monitoring_notification_channel	force_delete	Tuning		RileyVisible	RequiresApproval		
 google_monitoring_notification_channel	id	Identity		RileyVisible	Never		

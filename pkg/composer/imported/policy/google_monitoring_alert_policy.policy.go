@@ -9,7 +9,7 @@ var googleMonitoringAlertPolicyPolicy = Map{
 		ChangeRisk: ChangeAlwaysReplace,
 	},
 	"display_name": {
-		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditChatSafe,
+		Role: RoleTuning, Visibility: VisibilityUIVisible, Edit: EditChatSafe,
 	},
 
 	// Wiring — notification channels are managed resources.

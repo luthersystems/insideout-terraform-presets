@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
+	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported/generated"
 )
 
 // hasAttr checks for an HCL attribute named `name` with `value` while
@@ -80,6 +81,52 @@ func TestEmitImportedTF_TypedGCP(t *testing.T) {
 	assert.True(t, hasAttr(t, s, "provider", "google.imported"), "provider attr missing in:\n%s", s)
 	assert.True(t, hasAttr(t, s, "name", `"events"`), "name attr missing in:\n%s", s)
 	assert.Contains(t, s, "to = google_pubsub_topic.events")
+}
+
+// TestEmitImportedTF_TypedRoutingForAllGCPTypes pins that every type
+// registered in the typed-Attrs generated registry actually round-
+// trips through the typed emit branch (not the opaque fallback in
+// emitOpaqueAttrsBody). Drives an empty-but-valid Attrs payload
+// through the emitter and asserts the resource block appears in the
+// output — which is only possible if generated.UnmarshalAttrs +
+// MarshalHCL succeeded. If the type's struct registration were broken
+// or missing, UnmarshalAttrs would return an error and the record
+// would be silently dropped (TestEmitImportedTF_TypedDecodeFailureDropsRecord
+// pins that drop behavior).
+//
+// Without this gate, Bundle 9's stated purpose — promoting 20 GCP
+// types from opaque-emit to typed-emit — has no end-to-end assertion.
+func TestEmitImportedTF_TypedRoutingForAllGCPTypes(t *testing.T) {
+	t.Parallel()
+	for _, tfType := range generated.RegisteredTypes() {
+		if !strings.HasPrefix(tfType, "google_") {
+			continue
+		}
+		t.Run(tfType, func(t *testing.T) {
+			t.Parallel()
+			addr := tfType + ".smoke"
+			ir := imported.ImportedResource{
+				Identity: imported.ResourceIdentity{
+					Cloud:    "gcp",
+					Type:     tfType,
+					Address:  addr,
+					ImportID: "smoke",
+				},
+				Tier:  imported.TierImportedFlat,
+				Attrs: []byte(`{}`),
+			}
+			out, used := EmitImportedTF("gcp", []imported.ImportedResource{ir}, EmitImportedOpts{})
+			require.NotNil(t, out,
+				"typed emit produced nil output for %q — decode or marshal failed silently",
+				tfType)
+			require.True(t, used["gcp"], "used[gcp] must be true for %q", tfType)
+			s := string(out)
+			assert.Contains(t, s, `resource "`+tfType+`" "smoke"`,
+				"resource block missing for %q — record was dropped from output", tfType)
+			assert.Contains(t, s, "to = "+addr,
+				"import block missing for %q", tfType)
+		})
+	}
 }
 
 func TestEmitImportedTF_OpaqueAttributes(t *testing.T) {

@@ -47,7 +47,12 @@ var googleComputeInstancePolicy = Map{
 	"resource_policies": {
 		Role: RoleWiring, Visibility: VisibilityRileyVisible, Edit: EditRelationshipOnly,
 	},
-	"tags": tagPolicy(),
+	// NB: `tags` on compute_instance is NOT labels — it's the GCE network
+	// tags list that drives firewall source_tags / target_tags, so the
+	// wizard / Riley need to see them. Intentionally uncurated until
+	// lint.go's tagAttrSuffixes can exempt this case (separate follow-up);
+	// curating with tagPolicy() would mark it SystemOnly+Hidden, which is
+	// wrong, and any non-SystemOnly curation trips CodeTagFieldNotSystemOnly.
 
 	// Boot disk.
 	"boot_disk.source": {
@@ -143,9 +148,18 @@ var googleComputeInstancePolicy = Map{
 		Edit: EditRequiresApproval,
 	},
 
-	// Metadata — system-owned (startup scripts and tokens can live here).
-	"metadata":                tagPolicy(),
-	"metadata_startup_script": tagPolicy(),
+	// Metadata: kv map that legitimately carries SSH keys, env config, and
+	// user data scripts. Visible to Riley + UI (operators need to see it),
+	// edits require approval (instance-impacting), values redacted (may
+	// contain credentials).
+	"metadata": {
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Edit: EditRequiresApproval, Sensitivity: SensitivityRedacted,
+	},
+	"metadata_startup_script": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit: EditRequiresApproval, Sensitivity: SensitivityRedacted,
+	},
 
 	// Labels
 	"labels":           tagPolicy(),

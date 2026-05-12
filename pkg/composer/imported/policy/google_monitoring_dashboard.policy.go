@@ -1,8 +1,9 @@
 package policy
 
 var googleMonitoringDashboardPolicy = Map{
-	// Identity (dashboards are named via dashboard_json's displayName; the
-	// top-level `name` is the GCP resource name set by the provider on create.)
+	// Identity. Dashboards have no top-level `name` field in the schema —
+	// the dashboard's user-facing label lives inside dashboard_json's
+	// displayName property. `id` is the provider-assigned resource ID.
 	"id": {Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever},
 	"project": {
 		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
