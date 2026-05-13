@@ -163,7 +163,7 @@ Discovery on GCP issues a single `SearchAllResources` call covering every reques
 
 ### Smoke test (`--provider gcp`)
 
-The Cloud Asset Inventory API has **no first-party emulator** (LocalStack covers AWS only; Google does not publish a Cloud Asset emulator). The AWS path's LocalStack-driven CI gate at `tests/localstack-discover-gate.sh` therefore has no GCP equivalent that can run unattended in CI. Stage 2d ships an opt-in operator-driven smoke instead:
+The Cloud Asset Inventory API has **no first-party emulator** (LocalStack covers AWS only; Google does not publish a Cloud Asset emulator). The AWS path previously had a LocalStack-driven CI gate, removed in #406 once the AWS discoverer unified onto the Cloud Control API (which LocalStack Community does not include). Both clouds now ship opt-in operator-driven smokes instead:
 
 ```bash
 gcloud auth application-default login
