@@ -1298,22 +1298,22 @@ func TestCloudControlDiscover_UsesRGTCache_SkipsListResources(t *testing.T) {
 	}
 }
 
-// TestCloudControlDiscover_CacheMiss_FallsBackToListResources pins the
-// fallback behavior: when the orchestrator ran the prefetcher but found
-// no ARNs for our CloudFormation type (cache miss), the existing
-// ListResources path must drive AND the legacy args.Project tag filter
-// (skipped on the cache-hit path) must remain active. The fixture seeds
-// two vault items with different Project tags; only the matching one
-// emits.
-func TestCloudControlDiscover_CacheMiss_FallsBackToListResources(t *testing.T) {
+// TestCloudControlDiscover_NoCache_FallsBackToListResources pins the
+// fallback behavior: when no RGT cache exists for the region at all
+// (cache is nil — the typical no-tag-filters path, or the orchestrator
+// skipped RGT entirely), ListResources must drive AND the legacy
+// args.Project tag filter (skipped on the cache-hit path) must remain
+// active. The fixture seeds two vault items with different Project
+// tags; only the matching one emits.
+func TestCloudControlDiscover_NoCache_FallsBackToListResources(t *testing.T) {
 	t.Parallel()
 	fake := &fakeCloudControlClient{
 		listPages: []cloudcontrol.ListResourcesOutput{
 			listPage("", "vault-match", "vault-other-project"),
 		},
 		propsByIdentifier: map[string]map[string]any{
-			"vault-match":          {"BackupVaultName": "vault-match", "BackupVaultTags": map[string]any{"Project": "io-foo"}},
-			"vault-other-project":  {"BackupVaultName": "vault-other-project", "BackupVaultTags": map[string]any{"Project": "io-bar"}},
+			"vault-match":         {"BackupVaultName": "vault-match", "BackupVaultTags": map[string]any{"Project": "io-foo"}},
+			"vault-other-project": {"BackupVaultName": "vault-other-project", "BackupVaultTags": map[string]any{"Project": "io-bar"}},
 		},
 	}
 	cfg := testConfig()
@@ -1326,7 +1326,49 @@ func TestCloudControlDiscover_CacheMiss_FallsBackToListResources(t *testing.T) {
 		new:            func(_ string) cloudControlClient { return fake },
 		maxConcurrency: DefaultMaxConcurrency,
 	}
-	// Cache populated for a DIFFERENT cfnType so this type misses.
+	// No cache set on args — the prefetcher returned nil (e.g. no
+	// tag filters), so the discoverer must fall back to ListResources.
+	args := DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"}
+
+	got, err := d.Discover(context.Background(), args)
+	if err != nil {
+		t.Fatalf("Discover: %v", err)
+	}
+	if fake.listCalls == 0 {
+		t.Error("ListResources calls: got 0, want >=1 (no-cache should fall back to List)")
+	}
+	if len(got) != 1 {
+		t.Fatalf("emit count: got %d (%v), want 1 (Project filter must still run on cache-miss path)", len(got), got)
+	}
+	if got[0].Identity.ImportID != "vault-match" {
+		t.Errorf("emitted ImportID = %q, want vault-match (the Project=io-foo row); vault-other-project should have been filtered", got[0].Identity.ImportID)
+	}
+}
+
+// TestCloudControlDiscover_CacheRanRegionEmptyForCFN_AuthoritativeZero
+// pins the post-fix contract (#406 follow-up): when RGT ran
+// successfully for a region but found zero ARNs of our CloudFormation
+// type, the discoverer must emit zero items WITHOUT falling back to
+// ListResources. The fallback is invalid for parent-scoped CC types
+// (e.g. AWS::EKS::PodIdentityAssociation requires ClusterName in
+// ListResourcesInput.ResourceModel) and would return 400. Surfaced by
+// the live smoke against test account 141812438321 / project
+// io-f-v6e-hzw-zt (no pod identity associations existed → ListResources
+// 400 → discover exit 1).
+func TestCloudControlDiscover_CacheRanRegionEmptyForCFN_AuthoritativeZero(t *testing.T) {
+	t.Parallel()
+	// Fake's listPages is empty; if the discoverer tries to ListResources
+	// we count the call and assert it didn't happen.
+	fake := &fakeCloudControlClient{}
+	cfg := testConfig()
+	cfg.CloudFormationType = "AWS::EKS::PodIdentityAssociation"
+	d := &cloudControlDiscoverer{
+		cfg:            cfg,
+		new:            func(_ string) cloudControlClient { return fake },
+		maxConcurrency: DefaultMaxConcurrency,
+	}
+	// Cache has the region but NO bucket for our cfnType — RGT ran
+	// authoritatively and found zero EKS pod identity associations.
 	cache := &rgtCache{byRegionAndType: map[string]map[string][]arnInfo{
 		"us-east-1": {"AWS::SNS::Topic": {{ARN: "x", Identifier: "x"}}},
 	}}
@@ -1336,14 +1378,100 @@ func TestCloudControlDiscover_CacheMiss_FallsBackToListResources(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Discover: %v", err)
 	}
-	if fake.listCalls == 0 {
-		t.Error("ListResources calls: got 0, want >=1 (cache miss should fall back to List)")
+	if fake.listCalls != 0 {
+		t.Errorf("ListResources calls: got %d, want 0 (RGT empty must NOT fall back — parent-scoped types 400 on List without ResourceModel)", fake.listCalls)
+	}
+	if len(got) != 0 {
+		t.Errorf("emit count: got %d, want 0 (authoritative empty)", len(got))
+	}
+}
+
+// TestCloudControlDiscover_MixedRegionsKnownEmptyVsUnknownFallback pins
+// that within a single Discover invocation the authoritative-empty
+// short-circuit and the unknown-region fallback are orthogonal: a
+// region present in the cache (even with zero of our cfnType) must
+// NOT call ListResources, while a region absent from the cache (RGT
+// failed there, or wasn't run for that region) MUST fall back. The
+// pre-fix code conflated these and produced 400s for the first arm;
+// a future regression that collapses them again should fail here.
+func TestCloudControlDiscover_MixedRegionsKnownEmptyVsUnknownFallback(t *testing.T) {
+	t.Parallel()
+	fake := &fakeCloudControlClient{
+		// us-west-2 hits the fallback path and ListResources returns one row.
+		listPages: []cloudcontrol.ListResourcesOutput{listPage("", "match-west")},
+		propsByIdentifier: map[string]map[string]any{
+			"match-west": {"BackupVaultName": "match-west", "BackupVaultTags": map[string]any{"Project": "io-foo"}},
+		},
+	}
+	cfg := testConfig()
+	cfg.CloudFormationType = "AWS::Backup::BackupVault"
+	cfg.TagsFromProperties = func(props map[string]any) map[string]string {
+		return extractStringMap(props, "BackupVaultTags")
+	}
+	d := &cloudControlDiscoverer{
+		cfg:            cfg,
+		new:            func(_ string) cloudControlClient { return fake },
+		maxConcurrency: DefaultMaxConcurrency,
+	}
+	// Cache has us-east-1 (no bucket for our cfnType → authoritative
+	// zero) but not us-west-2 (must fall back to ListResources).
+	cache := &rgtCache{byRegionAndType: map[string]map[string][]arnInfo{
+		"us-east-1": {"AWS::SNS::Topic": {{ARN: "x", Identifier: "x"}}},
+	}}
+	args := DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1", "us-west-2"}, AccountID: "123"}.withRGTCache(cache)
+
+	got, err := d.Discover(context.Background(), args)
+	if err != nil {
+		t.Fatalf("Discover: %v", err)
+	}
+	// Exactly one ListResources call — for us-west-2 only.
+	if fake.listCalls != 1 {
+		t.Errorf("ListResources calls: got %d, want 1 (only us-west-2 should fall back; us-east-1 must short-circuit)", fake.listCalls)
 	}
 	if len(got) != 1 {
-		t.Fatalf("emit count: got %d (%v), want 1 (Project filter must still run on cache-miss path)", len(got), got)
+		t.Fatalf("emit count: got %d, want 1 (the us-west-2 fallback row)", len(got))
 	}
-	if got[0].Identity.ImportID != "vault-match" {
-		t.Errorf("emitted ImportID = %q, want vault-match (the Project=io-foo row); vault-other-project should have been filtered", got[0].Identity.ImportID)
+	if got[0].Identity.ImportID != "match-west" {
+		t.Errorf("emitted ImportID = %q, want match-west", got[0].Identity.ImportID)
+	}
+}
+
+// TestCloudControlDiscover_IsGlobal_CacheRanEmptyForCFN_AuthoritativeZero
+// is the IsGlobal-arm twin of CacheRanRegionEmptyForCFN_AuthoritativeZero.
+// The pre-fix bug in ForGlobalCFN ("len(out)==0 → ok=false") would
+// regress global parent-scoped types (e.g. hypothetical zero
+// AWS::IAM::Role in an org locked to a single SSO) to a ListResources
+// fallback. Pins both the dedicated IsGlobal code branch
+// (cloudcontrol_discoverer.go:183-189) AND ForGlobalCFN's
+// "any-region-ran ⇒ ok=true" contract end-to-end.
+func TestCloudControlDiscover_IsGlobal_CacheRanEmptyForCFN_AuthoritativeZero(t *testing.T) {
+	t.Parallel()
+	fake := &fakeCloudControlClient{}
+	cfg := testConfig()
+	cfg.CloudFormationType = "AWS::IAM::Role"
+	cfg.IsGlobal = true
+	d := &cloudControlDiscoverer{
+		cfg:            cfg,
+		new:            func(_ string) cloudControlClient { return fake },
+		maxConcurrency: DefaultMaxConcurrency,
+	}
+	// Cache has regions (RGT ran successfully in some region) but no
+	// AWS::IAM::Role anywhere — authoritative-zero for the global type.
+	cache := &rgtCache{byRegionAndType: map[string]map[string][]arnInfo{
+		"us-east-1": {"AWS::SNS::Topic": {{ARN: "x", Identifier: "x"}}},
+		"us-west-2": {"AWS::SNS::Topic": {{ARN: "y", Identifier: "y"}}},
+	}}
+	args := DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1", "us-west-2"}, AccountID: "123"}.withRGTCache(cache)
+
+	got, err := d.Discover(context.Background(), args)
+	if err != nil {
+		t.Fatalf("Discover: %v", err)
+	}
+	if fake.listCalls != 0 {
+		t.Errorf("ListResources calls: got %d, want 0 (global authoritative-zero must NOT fall back)", fake.listCalls)
+	}
+	if len(got) != 0 {
+		t.Errorf("emit count: got %d, want 0", len(got))
 	}
 }
 

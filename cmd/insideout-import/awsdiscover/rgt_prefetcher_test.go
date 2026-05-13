@@ -337,6 +337,87 @@ func TestRGTPrefetcher_UnmappableARN_WarnsOncePerPair(t *testing.T) {
 	}
 }
 
+// TestRGTPrefetcher_KnownSkipRule_NoWarnNoBucket pins that an ARN
+// matched by a rule with cfnType=="" (an explicit known-skip — e.g.
+// AWS::ApiGatewayV2::Stage which is hand-rolled because Cloud Control
+// READ is unsupported) is silently dropped: no entry in the cache, no
+// "no arnRule" warn. Without this, every project's stage ARNs floods
+// the warn stream on every discover run (surfaced during the Bundle
+// 13c live smoke). The fixture also includes a genuinely-unmapped ARN
+// (organizations/account) so the test pins INDEPENDENCE of the
+// known-skip path from the unmapped-aggregator path: the org warn
+// must still fire, and the stage ARN must not get swept into it.
+func TestRGTPrefetcher_KnownSkipRule_NoWarnNoBucket(t *testing.T) {
+	t.Parallel()
+	fake := &fakeRGTClient{
+		pages: [][]rgttypes.ResourceTagMapping{
+			{
+				// Stage ARN — matches the known-skip rule, cfnType="".
+				mapping("arn:aws:apigateway:us-east-1::/apis/abc/stages/$default", "proj-1"),
+				// Api ARN — matches the AWS::ApiGatewayV2::Api rule.
+				mapping("arn:aws:apigateway:us-east-1::/apis/abc", "proj-1"),
+				// Genuinely-unmapped ARN — pins that known-skip
+				// suppression doesn't accidentally muzzle the
+				// unmapped-pair aggregator (the two paths must
+				// remain independent).
+				mapping("arn:aws:organizations::111111111111:account/o-123/111111111111", "proj-1"),
+			},
+		},
+	}
+	p := buildPrefetcherWithClients(map[string]*fakeRGTClient{"us-east-1": fake})
+	rec := &recordingEmitter{}
+
+	cache, err := p.Prefetch(context.Background(), []string{"us-east-1"},
+		DiscoverArgs{Project: "proj-1", Emitter: rec})
+	if err != nil {
+		t.Fatalf("Prefetch: %v", err)
+	}
+	// Api should be cached.
+	if infos, ok := cache.ForCFN("us-east-1", "AWS::ApiGatewayV2::Api"); !ok || len(infos) != 1 {
+		t.Errorf("Api bucket missing; got ok=%v len=%d", ok, len(infos))
+	}
+	// Stage must NOT appear under its cfnType (known-skip drops it).
+	// ForCFN returns ok=true because the region was prefetched (the
+	// authoritative-zero contract), but the slice MUST be empty —
+	// the prefetcher must not have bucketed the Stage ARN.
+	if infos, _ := cache.ForCFN("us-east-1", "AWS::ApiGatewayV2::Stage"); len(infos) != 0 {
+		t.Errorf("Stage cached under its cfnType; len=%d, want 0 (known-skip)", len(infos))
+	}
+	// Belt-and-suspenders: walk the raw byType map and confirm no
+	// known-skip cfnType key ever got created. An empty-string key
+	// would be a different bug (rule.cfnType being used as a map
+	// key without the skip guard).
+	if _, exists := cache.byRegionAndType["us-east-1"][""]; exists {
+		t.Error("known-skip ARN got bucketed under cfnType=\"\" (skip guard missing)")
+	}
+	// Walk every rgt warn and partition into the three signals we care about.
+	var (
+		stageWarn, orgWarn int
+		messages           []string
+	)
+	for _, ev := range rec.snapshot() {
+		if ev.Kind != "service_warn" || ev.Service != "rgt" {
+			continue
+		}
+		messages = append(messages, ev.Message)
+		switch {
+		case strings.Contains(ev.Message, "apigateway/apis"):
+			stageWarn++
+		case strings.Contains(ev.Message, "organizations/account"):
+			orgWarn++
+		}
+	}
+	if stageWarn != 0 {
+		t.Errorf("known-skip emitted warn: %d (Stage should be silent); messages=%v", stageWarn, messages)
+	}
+	if orgWarn != 1 {
+		t.Errorf("unmapped organizations warn: got %d, want 1 (independence pin); messages=%v", orgWarn, messages)
+	}
+	if len(messages) != 1 {
+		t.Errorf("total rgt warns: got %d, want 1 (just the unmapped org pair); messages=%v", len(messages), messages)
+	}
+}
+
 func TestRGTCache_ForGlobalCFN_DedupesAcrossRegions(t *testing.T) {
 	t.Parallel()
 	// Simulate an IAM role appearing in three regions (RGT surfaces
@@ -369,17 +450,34 @@ func TestRGTCache_ForGlobalCFN_DedupesAcrossRegions(t *testing.T) {
 	}
 }
 
-func TestRGTCache_ForCFN_MissReturnsFalse(t *testing.T) {
+func TestRGTCache_ForCFN_UnknownRegionMisses(t *testing.T) {
 	t.Parallel()
 	cache := &rgtCache{byRegionAndType: map[string]map[string][]arnInfo{
 		"us-east-1": {"AWS::EC2::VPC": {{ARN: "arn:aws:ec2:us-east-1:111111111111:vpc/vpc-a"}}},
 	}}
 
 	if _, ok := cache.ForCFN("us-west-2", "AWS::EC2::VPC"); ok {
-		t.Error("unknown region: ok=true, want false")
+		t.Error("unknown region: ok=true, want false (RGT didn't run there, caller must fall back)")
 	}
-	if _, ok := cache.ForCFN("us-east-1", "AWS::EC2::Subnet"); ok {
-		t.Error("unknown cfnType in known region: ok=true, want false")
+}
+
+func TestRGTCache_ForCFN_KnownRegionEmptyForCFN_AuthoritativeZero(t *testing.T) {
+	t.Parallel()
+	// RGT ran for us-east-1 and saw one VPC but zero Subnets. The
+	// Subnet query must return ok=true with an empty slice — the
+	// caller treats that as "authoritatively zero of these," not as
+	// "miss, fall back to ListResources." Many CC types (e.g.
+	// AWS::EKS::PodIdentityAssociation) reject ListResources without
+	// a parent ResourceModel, so the fallback would 400.
+	cache := &rgtCache{byRegionAndType: map[string]map[string][]arnInfo{
+		"us-east-1": {"AWS::EC2::VPC": {{ARN: "arn:aws:ec2:us-east-1:111111111111:vpc/vpc-a"}}},
+	}}
+	infos, ok := cache.ForCFN("us-east-1", "AWS::EC2::Subnet")
+	if !ok {
+		t.Fatal("known region + unknown cfnType: ok=false, want true (authoritative zero)")
+	}
+	if len(infos) != 0 {
+		t.Errorf("infos=%v, want empty slice", infos)
 	}
 }
 
@@ -394,11 +492,15 @@ func TestRGTCache_NilReceiver_ReturnsFalse(t *testing.T) {
 	}
 }
 
-func TestRGTPrefetcher_EmptyResults_NoBucketsCreated(t *testing.T) {
+func TestRGTPrefetcher_EmptyRegion_RecordedAsAuthoritativeZero(t *testing.T) {
 	t.Parallel()
-	// One region returns zero resources — the prefetcher must NOT add
-	// an empty map for that region (downstream ForCFN expects "no
-	// entry" not "empty entry").
+	// A region whose RGT call succeeded with zero results MUST appear
+	// in the cache as an empty map. Downstream ForCFN returns (nil, true)
+	// for that region+any-cfnType, signalling "authoritative zero, do
+	// NOT fall back to ListResources." Stripping the key would make
+	// ForCFN return ok=false → caller falls back to ListResources →
+	// parent-scoped types like AWS::EKS::PodIdentityAssociation reject
+	// the call with InvalidRequestException 400.
 	east := &fakeRGTClient{pages: [][]rgttypes.ResourceTagMapping{
 		{mapping("arn:aws:ec2:us-east-1:111111111111:vpc/vpc-aaa", "p")},
 	}}
@@ -413,8 +515,56 @@ func TestRGTPrefetcher_EmptyResults_NoBucketsCreated(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Prefetch: %v", err)
 	}
-	if _, ok := cache.byRegionAndType["us-west-2"]; ok {
-		t.Error("empty region us-west-2 should not appear as a key in the cache")
+	byType, ok := cache.byRegionAndType["us-west-2"]
+	if !ok {
+		t.Fatal("empty region us-west-2 must appear in cache (authoritative zero signal)")
+	}
+	if len(byType) != 0 {
+		t.Errorf("us-west-2 byType=%v, want empty map", byType)
+	}
+	// ForCFN through the public path must agree.
+	infos, ok := cache.ForCFN("us-west-2", "AWS::EKS::PodIdentityAssociation")
+	if !ok {
+		t.Error("ForCFN on empty-but-succeeded region: ok=false, want true")
+	}
+	if len(infos) != 0 {
+		t.Errorf("ForCFN infos=%v, want empty slice", infos)
+	}
+}
+
+func TestRGTCache_ForGlobalCFN_NoRegions_ReturnsFalse(t *testing.T) {
+	t.Parallel()
+	// Empty-but-non-nil byRegionAndType means no region's RGT call
+	// succeeded (or none was attempted). ForGlobalCFN MUST return
+	// ok=false so the discoverer falls back to ListResources for
+	// global types. The post-fix code guards on len(byRegionAndType)==0
+	// at rgt_prefetcher.go; without this test, a regression that
+	// removes the guard would silently flip "no region succeeded" into
+	// "authoritative zero" and suppress the only viable enumeration
+	// path for global types.
+	cache := &rgtCache{byRegionAndType: map[string]map[string][]arnInfo{}}
+	if _, ok := cache.ForGlobalCFN("AWS::IAM::Role"); ok {
+		t.Error("empty-but-non-nil byRegionAndType: ok=true, want false (no region succeeded → fall back)")
+	}
+}
+
+func TestRGTCache_ForGlobalCFN_AuthoritativeEmptyWhenAnyRegionRan(t *testing.T) {
+	t.Parallel()
+	// At least one region's RGT call succeeded, but it found zero
+	// global resources of this type. ForGlobalCFN must return
+	// ok=true with an empty slice — same authoritative-zero contract
+	// as ForCFN. Otherwise global parent-scoped types would 400 on
+	// the ListResources fallback when the account legitimately has
+	// none of them.
+	cache := &rgtCache{byRegionAndType: map[string]map[string][]arnInfo{
+		"us-east-1": {"AWS::EC2::VPC": {{ARN: "arn:aws:ec2:us-east-1:111111111111:vpc/vpc-a"}}},
+	}}
+	infos, ok := cache.ForGlobalCFN("AWS::IAM::Role")
+	if !ok {
+		t.Fatal("at-least-one-region-ran + zero global hits: ok=false, want true")
+	}
+	if len(infos) != 0 {
+		t.Errorf("infos=%v, want empty slice", infos)
 	}
 }
 

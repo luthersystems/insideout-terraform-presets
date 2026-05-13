@@ -188,6 +188,15 @@ var arnRules = []arnRule{
 	{matchService: "apigateway", matchResourceType: "apis",
 		matchExtra: func(p parsedARN) bool { return !strings.Contains(p.resourceID, "/") },
 		cfnType:    "AWS::ApiGatewayV2::Api", identifierFn: identityResourceID},
+	// API Gateway v2 Stage — explicit known-skip so RGT doesn't emit a
+	// "no arnRule" warning for every stage ARN. Stages are discovered
+	// by the hand-rolled apigatewayv2_stage discoverer (per-API
+	// DescribeStage SDK loop) since Cloud Control READ is unsupported
+	// for this type. cfnType is intentionally blank — the prefetcher
+	// reads cfnType=="" as "matched-but-skipped, don't bucket and don't warn."
+	{matchService: "apigateway", matchResourceType: "apis",
+		matchExtra: func(p parsedARN) bool { return strings.Contains(p.resourceID, "/stages/") },
+		cfnType:    "", identifierFn: identityResourceID},
 
 	// Cognito
 	{matchService: "cognito-idp", matchResourceType: "userpool",

@@ -48,10 +48,16 @@ type rgtCache struct {
 	byRegionAndType map[string]map[string][]arnInfo
 }
 
-// ForCFN returns the ARNs prefetched for (region, cfnType), and ok=true
-// if the prefetcher saw at least one ARN for that bucket. A cache miss
-// (ok=false) signals the caller to fall back to its own per-type
-// ListResources. nil cache always returns ok=false.
+// ForCFN returns the ARNs prefetched for (region, cfnType). ok=true
+// signals "RGT ran successfully for this region, so the result is
+// authoritative" — including the empty case where RGT saw zero ARNs
+// of this cfnType. Callers must NOT fall back to ListResources on
+// ok=true: many Cloud Control types (e.g. AWS::EKS::PodIdentityAssociation)
+// reject ListResources without a parent ResourceModel, so the fallback
+// would 400 even when the truth is "the account has zero of these."
+// ok=false means RGT wasn't run for this region (nil cache, no tag
+// filters supplied, or the per-region RGT call failed and was
+// downgraded to a warn) — fall back to ListResources in that case.
 func (c *rgtCache) ForCFN(region, cfnType string) ([]arnInfo, bool) {
 	if c == nil || c.byRegionAndType == nil {
 		return nil, false
@@ -60,20 +66,20 @@ func (c *rgtCache) ForCFN(region, cfnType string) ([]arnInfo, bool) {
 	if !ok {
 		return nil, false
 	}
-	infos, ok := byType[cfnType]
-	if !ok {
-		return nil, false
-	}
-	return infos, true
+	return byType[cfnType], true
 }
 
 // ForGlobalCFN returns the de-duplicated union of ARNs across every
 // region bucket. Used by the discoverer for global CloudFormation types
 // (e.g. AWS::IAM::Role, AWS::CloudFront::Distribution) whose ARNs RGT
-// returns in every region's response. ok=true when at least one ARN
-// was found.
+// returns in every region's response. ok=true means RGT ran
+// successfully for at least one region — the union (which may be
+// empty) is authoritative. ok=false means no region's RGT call
+// succeeded; fall back to ListResources. The "authoritative empty"
+// signal matters for global types whose ListResources requires a
+// parent ResourceModel — see ForCFN doc for rationale.
 func (c *rgtCache) ForGlobalCFN(cfnType string) ([]arnInfo, bool) {
-	if c == nil || c.byRegionAndType == nil {
+	if c == nil || c.byRegionAndType == nil || len(c.byRegionAndType) == 0 {
 		return nil, false
 	}
 	seen := map[string]struct{}{}
@@ -91,9 +97,6 @@ func (c *rgtCache) ForGlobalCFN(cfnType string) ([]arnInfo, bool) {
 			seen[info.ARN] = struct{}{}
 			out = append(out, info)
 		}
-	}
-	if len(out) == 0 {
-		return nil, false
 	}
 	return out, true
 }
@@ -202,15 +205,21 @@ func (p *realRGTPrefetcher) Prefetch(ctx context.Context, regions []string, args
 
 	cache := &rgtCache{byRegionAndType: make(map[string]map[string][]arnInfo, len(results))}
 	for _, r := range results {
-		if len(r.byType) == 0 {
-			continue
-		}
+		// Record every region whose RGT call succeeded, even when
+		// byType is empty. The cache's presence-of-region key is the
+		// authoritative signal for ForCFN/ForGlobalCFN — see those
+		// methods' contract. Stripping empty regions here would
+		// regress to "0 results ⇒ fall back to ListResources," which
+		// 400s on parent-scoped types like AWS::EKS::PodIdentityAssociation.
 		// Sort each cfnType bucket by ARN for deterministic downstream
 		// emit order (the cloudControlDiscoverer downstream sorts by
 		// identifier — sorting by ARN here aligns the orderings since
 		// the ARN is the source-of-truth identity).
 		for _, infos := range r.byType {
 			sort.SliceStable(infos, func(i, j int) bool { return infos[i].ARN < infos[j].ARN })
+		}
+		if r.byType == nil {
+			r.byType = map[string][]arnInfo{}
 		}
 		cache.byRegionAndType[r.region] = r.byType
 	}
@@ -253,6 +262,15 @@ func (p *realRGTPrefetcher) fetchRegion(ctx context.Context, region string, filt
 			rule, ok := lookupRule(parsed)
 			if !ok {
 				unmapped[parsed.service+"/"+parsed.resourceType] = struct{}{}
+				continue
+			}
+			// A matched rule with an empty cfnType is an explicit
+			// "known-skip" — the ARN shape is recognized but its
+			// CloudFormation type is intentionally not discoverable
+			// via Cloud Control (e.g. AWS::ApiGatewayV2::Stage —
+			// hand-rolled discoverer owns it; CC READ is
+			// UnsupportedActionException). Drop without warning.
+			if rule.cfnType == "" {
 				continue
 			}
 			tags := make(map[string]string, len(m.Tags))
