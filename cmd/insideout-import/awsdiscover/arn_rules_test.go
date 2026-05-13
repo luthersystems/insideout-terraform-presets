@@ -312,7 +312,7 @@ func TestLookupRule(t *testing.T) {
 			wantCFN: "AWS::Backup::BackupVault", wantIdent: "my-vault"},
 		// Bare BackupPlan ARN (no `/selection/`) must still match the
 		// BackupPlan rule, NOT the BackupSelection rule added in
-		// Bundle 14. This is the matchExtra disambiguator regression
+		// after adding aws_backup_selection. This is the matchExtra disambiguator regression
 		// pin called out in the plan's Risk register.
 		{name: "backup_plan_bare", arn: "arn:aws:backup:us-east-1:111111111111:backup-plan:abc-123",
 			wantCFN: "AWS::Backup::BackupPlan", wantIdent: "abc-123"},

@@ -115,7 +115,7 @@ var arnRules = []arnRule{
 		cfnType: "AWS::Backup::BackupVault", identifierFn: identityResourceID},
 	// BackupPlan vs BackupSelection share (service=backup, resourceType=backup-plan).
 	// A bare plan ARN is `…:backup-plan:<planId>`; a selection ARN is
-	// `…:backup-plan:<planId>/selection/<selectionId>` (verified live, Bundle 14).
+	// `…:backup-plan:<planId>/selection/<selectionId>` (verified live).
 	// matchExtra disambiguates: BackupSelection requires `/selection/` in
 	// resourceID, BackupPlan requires its absence. Order matters — the
 	// BackupSelection rule must precede the BackupPlan rule so the

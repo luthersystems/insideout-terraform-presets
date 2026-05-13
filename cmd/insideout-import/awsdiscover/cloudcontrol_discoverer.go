@@ -65,7 +65,11 @@ type cloudControlClient interface {
 //   - TagsFromProperties: extracts the tag map from the properties
 //     payload. Returns nil (not empty) when the resource simply carries
 //     no tags — the nil-vs-empty distinction is load-bearing for
-//     downstream selector matching.
+//     downstream selector matching. Exception: genuinely-untaggable
+//     types (paired with SkipProjectTagFilter=true) use the
+//     emptyTagsExtractor helper which returns a non-nil empty map so
+//     in-memory consumers can iterate without nil-check. JSON output
+//     elides the field either way via `omitempty`.
 //   - ParentLister: optional. When set, the discoverer fans out one
 //     ListResources call per parent context (e.g. AWS::Cognito::UserPoolClient
 //     is parent-scoped on UserPoolId). The returned slice contains one
@@ -79,11 +83,19 @@ type cloudControlClient interface {
 //     AWS::IAM::InstanceProfile, AWS::Backup::BackupSelection) whose
 //     CFN schema has no Tags property and whose ARNs never surface via
 //     RGT. Without (a), the cache reports authoritative-empty for these
-//     types (RGT can't see them) and the discoverer emits zero. The
-//     trade-off: scoping a discover via --project on these types
-//     returns every instance in the account rather than only
-//     project-tagged ones; operators can use --resource-types to
-//     exclude them if needed. Documented in the Bundle 14 PR body.
+//     types (RGT can't see them) and the discoverer emits zero.
+//
+//     The flag does NOT bypass the args.TagSelectors filter: that
+//     filter is operator-explicit (the operator typed --tag-selector
+//     foo=bar) and the right behavior for untaggable types is "no
+//     match" because they carry no tags. Operators combining
+//     --tag-selector with untaggable types will get zero items; the
+//     CLI can be invoked with --resource-types to exclude untaggable
+//     types from such scans.
+//
+//     The other trade-off: scoping a discover via --project on these
+//     types returns every instance in the account rather than only
+//     project-tagged ones.
 type cloudControlConfig struct {
 	TFType                  string
 	CloudFormationType      string
@@ -338,8 +350,7 @@ func (d *cloudControlDiscoverer) Discover(ctx context.Context, args DiscoverArgs
 			// Tags property — their tag bag is always empty by design,
 			// so applying the Project filter would silently drop every
 			// item. Operators scoping a discover via --project get all
-			// instances of these types account-wide; documented in the
-			// Bundle 14 PR body.
+			// instances of these types account-wide.
 			cacheUsedForRef := cacheUsed
 			if !cacheUsedForRef && !d.cfg.SkipProjectTagFilter && args.Project != "" && f.tags["Project"] != args.Project {
 				continue

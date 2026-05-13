@@ -108,7 +108,12 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 		},
 		NativeIDsFromProperties: func(identifier string, _ map[string]any) map[string]string {
 			// Split `<SelectionId>_<BackupPlanId>` into structured IDs.
-			out := map[string]string{}
+			// Always stamp both keys so downstream readers indexing
+			// by `backup_plan_id` get an explicit empty string rather
+			// than a silent missing-key when the CC identifier is
+			// malformed (defensive — Cloud Control's primary
+			// identifier always contains the `_`).
+			out := map[string]string{"selection_id": "", "backup_plan_id": ""}
 			if idx := strings.Index(identifier, "_"); idx != -1 {
 				out["selection_id"] = identifier[:idx]
 				out["backup_plan_id"] = identifier[idx+1:]
@@ -543,7 +548,7 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 		// AWS::Cognito::UserPool surfaces tags as a flat string map
 		// under `UserPoolTags` (verified live), NOT the Key/Value
 		// list shape `Tags` uses for other types. Wrong extractor →
-		// silently empty tags. See Bundle 14 plan.
+		// silently empty tags.
 		TagsFromProperties: func(props map[string]any) map[string]string {
 			return extractStringMap(props, "UserPoolTags")
 		},
