@@ -96,6 +96,8 @@ github.com/aws/aws-sdk-go-v2/service/bedrock v1.59.2 h1:TdYgGWLuNqQGNNVHzMwBEkg1
 github.com/aws/aws-sdk-go-v2/service/bedrock v1.59.2/go.mod h1:v/+a2bHvfo04yQC/p2HOK1iJF6V59OwCfCSf4iYgob4=
 github.com/aws/aws-sdk-go-v2/service/bedrockagent v1.53.2 h1:5WfuuVf0Mie5g3ibps8fgYDrlTVMc7PQpdycZmI1R+k=
 github.com/aws/aws-sdk-go-v2/service/bedrockagent v1.53.2/go.mod h1:zue4MN4ji6nlKYQYwVLmaPXJ66wB9JnIePX1e1yg5MU=
+github.com/aws/aws-sdk-go-v2/service/cloudcontrol v1.29.15 h1:E3HjmGRKmA5R7YUzdidZWuxOSKqW95tZZlZ06wND9a0=
+github.com/aws/aws-sdk-go-v2/service/cloudcontrol v1.29.15/go.mod h1:qdsQO5+urrlkcsolFWgiNQ0lpFB0UCQbTKK9j79b1Wg=
 github.com/aws/aws-sdk-go-v2/service/cloudfront v1.62.0 h1:Vd4U87ecTyeQwOTezwqAYW9qcWdZpwicC96MlqXd67M=
 github.com/aws/aws-sdk-go-v2/service/cloudfront v1.62.0/go.mod h1:brhMG/gR2xEB5lezxL2Cx+hqsEzGUn4LhNUtu7+ePFE=
 github.com/aws/aws-sdk-go-v2/service/cloudwatch v1.57.0 h1:dlkFtYOrwOuM7IIBD6FPLtt0Xvnph+8hqmmbzyowkCk=
@@ -311,8 +313,6 @@ golang.org/x/tools v0.43.0 h1:12BdW9CeB3Z+J/I/wj34VMl8X+fEXBxVR90JeMX5E7s=
 golang.org/x/tools v0.43.0/go.mod h1:uHkMso649BX2cZK6+RpuIPXS3ho2hZo4FVwfoy1vIk0=
 gonum.org/v1/gonum v0.17.0 h1:VbpOemQlsSMrYmn7T2OUvQ4dqxQXU+ouZFQsZOx50z4=
 gonum.org/v1/gonum v0.17.0/go.mod h1:El3tOrEuMpv2UdMrbNlKEh9vd86bmQ6vqIcDwxEOc1E=
-google.golang.org/api v0.277.0 h1:HJfyJUiNeBBUMai7ez8u14wkp/gH/I4wpGbbO9o+cSk=
-google.golang.org/api v0.277.0/go.mod h1:B9TqLBwJqVjp1mtt7WeoQwWRwvu/400y5lETOql+giQ=
 google.golang.org/api v0.278.0 h1:W7jiRvRi53VYFfZ/HoZjQBtJk7gOFbHD8ot1RzVZU6E=
 google.golang.org/api v0.278.0/go.mod h1:B9TqLBwJqVjp1mtt7WeoQwWRwvu/400y5lETOql+giQ=
 google.golang.org/genproto v0.0.0-20260319201613-d00831a3d3e7 h1:XzmzkmB14QhVhgnawEVsOn6OFsnpyxNPRY9QV01dNB0=
