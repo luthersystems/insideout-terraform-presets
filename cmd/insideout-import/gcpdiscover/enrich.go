@@ -7,6 +7,7 @@ import (
 	"sort"
 	"time"
 
+	pubsubv1 "google.golang.org/api/pubsub/v1"
 	storagev1 "google.golang.org/api/storage/v1"
 
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/progress"
@@ -82,6 +83,7 @@ type AttributeEnricher interface {
 // project ID from here to populate the TF `project` attribute.
 type EnrichClients struct {
 	Storage   *storagev1.Service
+	Pubsub    *pubsubv1.Service
 	ProjectID string
 }
 
