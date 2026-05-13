@@ -177,14 +177,20 @@ func TestListCognitoUserPools_PropagatesListError(t *testing.T) {
 }
 
 // fakeLambdaFunctionsLister is a hand-rolled fake satisfying the
-// lambdaFunctionsLister interface.
+// lambdaFunctionsLister interface. markersSeen captures each in.Marker
+// the lister sends so tests can pin that the pagination cursor is
+// round-tripped between pages (added in #422 for the
+// listLambdaFunctionArns coverage — pre-existing callers that don't
+// read this field are unaffected since it's nil-initialized).
 type fakeLambdaFunctionsLister struct {
-	listPages []lambda.ListFunctionsOutput
-	listCalls int
-	listErr   error
+	listPages    []lambda.ListFunctionsOutput
+	listCalls    int
+	listErr      error
+	markersSeen  []*string
 }
 
-func (f *fakeLambdaFunctionsLister) ListFunctions(_ context.Context, _ *lambda.ListFunctionsInput, _ ...func(*lambda.Options)) (*lambda.ListFunctionsOutput, error) {
+func (f *fakeLambdaFunctionsLister) ListFunctions(_ context.Context, in *lambda.ListFunctionsInput, _ ...func(*lambda.Options)) (*lambda.ListFunctionsOutput, error) {
+	f.markersSeen = append(f.markersSeen, in.Marker)
 	if f.listErr != nil {
 		return nil, f.listErr
 	}
@@ -919,6 +925,22 @@ func TestListLambdaFunctionArns_PaginatesAndReturnsModels(t *testing.T) {
 	}
 	if fake.listCalls != 2 {
 		t.Errorf("listCalls=%d, want 2", fake.listCalls)
+	}
+	// Pin the Marker cursor round-trip: the lister must feed each
+	// page's NextMarker into the next request. A regression that
+	// passes `nil` on every call (e.g. dropping `marker =
+	// page.NextMarker`) would still produce 2 calls because the fake
+	// serves by call-count — only this assertion catches it.
+	if len(fake.markersSeen) != 2 {
+		t.Fatalf("markersSeen len=%d, want 2", len(fake.markersSeen))
+	}
+	if fake.markersSeen[0] != nil {
+		t.Errorf("markersSeen[0]=%q, want nil (first request must not send a Marker)",
+			aws.ToString(fake.markersSeen[0]))
+	}
+	if aws.ToString(fake.markersSeen[1]) != "m1" {
+		t.Errorf("markersSeen[1]=%q, want m1 (must round-trip page-1's NextMarker)",
+			aws.ToString(fake.markersSeen[1]))
 	}
 	// Each emitted model must round-trip as JSON with TargetFunctionArn
 	// set — a malformed string would crash the downstream CC
