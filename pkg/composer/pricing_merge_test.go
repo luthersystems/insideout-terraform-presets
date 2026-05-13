@@ -41,10 +41,8 @@ func pricingFromJSON(t *testing.T, payload string) *PricingData {
 	return &p
 }
 
-// boolPtrLocal — small wrapper that matches the reliable test fixture name
-// so the ported assertions read the same. `boolPtr` already exists in
-// types_test.go for package-level fixtures.
-func boolPtrLocal(b bool) *bool { return &b }
+// boolPtr is provided by types_test.go for the whole package; no local
+// re-declaration needed here.
 
 // TestMergePricing_Issue1434_RemovedComponentClearsPriorPrice pins the
 // carry-forward semantics for a removal: prior had aws_opensearch=$345.60;
@@ -56,6 +54,7 @@ func boolPtrLocal(b bool) *bool { return &b }
 // Today GREEN — locks the documented #921 invariant ("dropping a component
 // silently kept its stale price" was the bug fixed).
 func TestMergePricing_Issue1434_RemovedComponentClearsPriorPrice(t *testing.T) {
+	t.Parallel()
 	prior := pricingFromJSON(t, `{"_guidance_version":"v1","components":{
 		"aws_lambda":{"monthlyUSD":1.87},
 		"aws_s3":{"monthlyUSD":2.30},
@@ -79,6 +78,7 @@ func TestMergePricing_Issue1434_RemovedComponentClearsPriorPrice(t *testing.T) {
 // FRESH price for opensearch (the desired LLM behaviour). The merged result
 // must use the fresh price, not carry-forward any historical price.
 func TestMergePricing_Issue1434_ReAddRepricesNotCarries(t *testing.T) {
+	t.Parallel()
 	prior := pricingFromJSON(t, `{"_guidance_version":"v1","components":{
 		"aws_lambda":{"monthlyUSD":1.87},
 		"aws_opensearch":{"monthlyUSD":345.60}
@@ -105,6 +105,7 @@ func TestMergePricing_Issue1434_ReAddRepricesNotCarries(t *testing.T) {
 // true` and `freshF.IsNil()` and — with the witness — attaches a missing-
 // reprice sentinel so the gap is surfaced post-merge.
 func TestMergePricing_Issue1434_FreshOmitsRepriceComponent(t *testing.T) {
+	t.Parallel()
 	prior := pricingFromJSON(t, `{"_guidance_version":"v1","components":{
 		"aws_lambda":{"monthlyUSD":1.87},
 		"aws_s3":{"monthlyUSD":0.23}
@@ -122,9 +123,9 @@ func TestMergePricing_Issue1434_FreshOmitsRepriceComponent(t *testing.T) {
 	// reprice sentinel fires.
 	witness := Components{
 		Cloud:         "AWS",
-		AWSLambda:     boolPtrLocal(true),
-		AWSS3:         boolPtrLocal(true),
-		AWSOpenSearch: boolPtrLocal(true),
+		AWSLambda:     boolPtr(true),
+		AWSS3:         boolPtr(true),
+		AWSOpenSearch: boolPtr(true),
 	}
 
 	merged, stats := MergePricing(prior, fresh, repriceSet, witness)
@@ -143,6 +144,7 @@ func TestMergePricing_Issue1434_FreshOmitsRepriceComponent(t *testing.T) {
 // NOT in the components selection. With the witness, MergePricing strips
 // the phantom row so it can't survive into the merged snapshot.
 func TestMergePricing_Issue1434_PhantomFreshPriceForUnselectedComponent(t *testing.T) {
+	t.Parallel()
 	prior := pricingFromJSON(t, `{"_guidance_version":"v1","components":{
 		"aws_lambda":{"monthlyUSD":1.87},
 		"aws_opensearch":{"monthlyUSD":345.60}
@@ -159,7 +161,7 @@ func TestMergePricing_Issue1434_PhantomFreshPriceForUnselectedComponent(t *testi
 	// user's CURRENT selection (post-removal, opensearch is absent). The
 	// merge strips any fresh row whose component is not selected — the
 	// phantom doesn't survive.
-	witness := Components{Cloud: "AWS", AWSLambda: boolPtrLocal(true)}
+	witness := Components{Cloud: "AWS", AWSLambda: boolPtr(true)}
 
 	merged, stats := MergePricing(prior, fresh, repriceSet, witness)
 	require.NotNil(t, merged)
@@ -168,6 +170,11 @@ func TestMergePricing_Issue1434_PhantomFreshPriceForUnselectedComponent(t *testi
 		"#1434: a phantom pricing row for an unselected component must not survive into the merged result")
 	assert.GreaterOrEqual(t, stats.PhantomsDropped, 1,
 		"#1434: stats.PhantomsDropped must count the stripped phantom row")
+	// Positive control — a buggy stripPhantomPricing that over-strips (e.g.
+	// flipped predicate, nuking every fresh row) would still satisfy the
+	// two assertions above. Lock that the SELECTED component survived.
+	require.NotNil(t, merged.Components.AWSLambda,
+		"selected components must survive phantom-strip — over-stripping would also satisfy the AWSOpenSearch==nil assertion")
 }
 
 // TestMergePricing_Issue1434_ConfigChangeDoesNotCarry pins the documented
@@ -176,6 +183,7 @@ func TestMergePricing_Issue1434_PhantomFreshPriceForUnselectedComponent(t *testi
 // repriceSet and the fresh price wins. Original #921 mechanism, must keep
 // working.
 func TestMergePricing_Issue1434_ConfigChangeDoesNotCarry(t *testing.T) {
+	t.Parallel()
 	prior := pricingFromJSON(t, `{"_guidance_version":"v1","components":{
 		"aws_lambda":{"monthlyUSD":1.87},
 		"aws_s3":{"monthlyUSD":0.23}
@@ -205,6 +213,7 @@ func TestMergePricing_Issue1434_ConfigChangeDoesNotCarry(t *testing.T) {
 // other escape hatch: when the prior pricing was stamped under a different
 // guidance version, the carry-forward gate fails and all of fresh wins.
 func TestMergePricing_Issue1434_GuidanceVersionBustForcesFullReprice(t *testing.T) {
+	t.Parallel()
 	prior := pricingFromJSON(t, `{"_guidance_version":"v0","components":{
 		"aws_lambda":{"monthlyUSD":9.99}
 	}}`)
@@ -230,6 +239,7 @@ func TestMergePricing_Issue1434_GuidanceVersionBustForcesFullReprice(t *testing.
 // and GCP components coming on. Fresh has GCP-only rows. Expected merged:
 // no AWS rows.
 func TestMergePricing_Issue1434_CrossCloudCarryForward(t *testing.T) {
+	t.Parallel()
 	prior := pricingFromJSON(t, `{"_guidance_version":"v1","components":{
 		"aws_lambda":{"monthlyUSD":1.87},
 		"aws_s3":{"monthlyUSD":0.23}
@@ -265,6 +275,7 @@ func TestMergePricing_Issue1434_CrossCloudCarryForward(t *testing.T) {
 // the merged result's `subtotalMonthlyUSD` reflects the merged components,
 // not whatever subtotal happened to be on `prior` or `fresh`.
 func TestMergePricing_Issue1434_SubtotalRecomputedAfterCarryForward(t *testing.T) {
+	t.Parallel()
 	prior := pricingFromJSON(t, `{"_guidance_version":"v1","components":{
 		"aws_lambda":{"monthlyUSD":1.87},
 		"aws_opensearch":{"monthlyUSD":345.60}
@@ -283,11 +294,15 @@ func TestMergePricing_Issue1434_SubtotalRecomputedAfterCarryForward(t *testing.T
 			"not the stale prior subtotal ($347.47) or the fresh subtotal computed before merge")
 }
 
-// TestMergePricing_Issue1434_NoComponentsAtAllReturnsNilSubtotal pins the
+// TestMergePricing_Issue1434_NoComponentsAtAllReturnsZeroSubtotal pins the
 // empty-merge edge: fresh has no components, prior has none either, no
 // repriceSet. The merged result must be defined (not panic) and its
-// subtotal should reflect "no components priced" — zero.
-func TestMergePricing_Issue1434_NoComponentsAtAllReturnsNilSubtotal(t *testing.T) {
+// subtotal should reflect "no components priced" — a non-nil &0.0 (NOT
+// nil; recomputeSubtotal always allocates a fresh *float64). Renamed from
+// the original `…ReturnsNilSubtotal` after qa-professor flagged that the
+// name disagreed with the asserted value.
+func TestMergePricing_Issue1434_NoComponentsAtAllReturnsZeroSubtotal(t *testing.T) {
+	t.Parallel()
 	prior := pricingFromJSON(t, `{"_guidance_version":"v1","components":{}}`)
 	fresh := pricingFromJSON(t, `{"_guidance_version":"v1","components":{}}`)
 	repriceSet := RepriceSet(map[ComponentKey]bool{})
@@ -304,6 +319,7 @@ func TestMergePricing_Issue1434_NoComponentsAtAllReturnsNilSubtotal(t *testing.T
 // `monthlyUSD`. The LLM uses these for "Serverless architecture — Included"
 // rows and they must carry-forward correctly when nothing changed.
 func TestMergePricing_Issue1434_StatusOnlyItemSurvivesCarry(t *testing.T) {
+	t.Parallel()
 	prior := pricingFromJSON(t, `{"_guidance_version":"v1","components":{
 		"architecture":{"status":"Included","details":"Serverless"},
 		"aws_lambda":{"monthlyUSD":1.87}
@@ -335,6 +351,7 @@ func TestMergePricing_Issue1434_StatusOnlyItemSurvivesCarry(t *testing.T) {
 // zero-witness short-circuit would silently start stripping every fresh row
 // on every no-witness call.
 func TestMergePricing_ExplicitComponentsParam_NoWitnessUsesZero(t *testing.T) {
+	t.Parallel()
 	// fresh has a row that NO populated witness would say is selected — but
 	// no witness is supplied, so the strip MUST NOT fire.
 	prior := pricingFromJSON(t, `{"_guidance_version":"v1","components":{}}`)
@@ -361,6 +378,7 @@ func TestMergePricing_ExplicitComponentsParam_NoWitnessUsesZero(t *testing.T) {
 // phantom-strip behaviour on the bust path AND on the merge path — the
 // reliable variadic threaded both, and the upstream explicit param must too.
 func TestApplyCarryForward_ExplicitComponentsParam_FlowsToInner(t *testing.T) {
+	t.Parallel()
 	// Build a prior under the current guidance version (no bust), with the
 	// phantom row already cleared from prior — the strip is concerned with
 	// fresh's hallucinated rows.
@@ -374,7 +392,7 @@ func TestApplyCarryForward_ExplicitComponentsParam_FlowsToInner(t *testing.T) {
 	repriceSet := RepriceSet(map[ComponentKey]bool{KeyAWSLambda: true})
 
 	// Witness says only Lambda is selected; opensearch on fresh is a phantom.
-	witness := Components{Cloud: "AWS", AWSLambda: boolPtrLocal(true)}
+	witness := Components{Cloud: "AWS", AWSLambda: boolPtr(true)}
 
 	merged, stats := ApplyCarryForward(prior, fresh, repriceSet, witness)
 	require.NotNil(t, merged)

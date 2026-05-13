@@ -7,6 +7,8 @@ package composer
 
 import (
 	"encoding/json"
+	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -620,4 +622,149 @@ func TestCoherence_PipelineSurvivesUserSetFields(t *testing.T) {
 	require.NotNil(t, cfg.AWSLambda)
 	assert.Equal(t, userTimeout, cfg.AWSLambda.Timeout)
 	assert.Equal(t, userMem, cfg.AWSLambda.MemorySize)
+}
+
+// TestStripOrphanConfig_AWSAPIGateway_AliasedTag pins the specific drift
+// that the coverage test below discovered: Config.AWSAPIGateway has json
+// tag "aws_api_gateway" while KeyAWSAPIGateway = "aws_apigateway". Without
+// configTagToKey's alias the orphan-strip silently skips the field. Locks
+// the alias so a future cleanup of the alias map cannot regress the strip.
+func TestStripOrphanConfig_AWSAPIGateway_AliasedTag(t *testing.T) {
+	t.Parallel()
+
+	cfg := &Config{
+		AWSAPIGateway: &struct {
+			DomainName     string `json:"domainName,omitempty"`
+			CertificateArn string `json:"certificateArn,omitempty"`
+		}{DomainName: "api.example.com"},
+	}
+	// Components does NOT select API Gateway → cfg.AWSAPIGateway is orphan.
+	comps := &Components{Cloud: "AWS", AWSVPC: "Public VPC"}
+
+	StripOrphanConfig(comps, cfg)
+
+	assert.Nil(t, cfg.AWSAPIGateway,
+		"orphan cfg.AWSAPIGateway must be cleared even though its json tag "+
+			"(aws_api_gateway) differs from KeyAWSAPIGateway (aws_apigateway) — "+
+			"configTagToKey's alias bridges the gap")
+	// To verify this test still has teeth: remove the "aws_api_gateway"
+	// entry from configTagToKey in coherence.go — this assertion will flip
+	// to fail because the reflection-based strip falls back to the raw
+	// tag and finds no matching key.
+}
+
+// TestStripOrphanConfig_KeyCoverage_ConfigSubFieldsHaveKeysAndSwitches walks
+// every *struct sub-field on Config whose json tag begins with "aws_" or
+// "gcp_" and asserts the tag is recognised by BOTH ComponentSelected AND
+// isOrphanStrippableKey. Drift between the two switches (or between Config
+// fields and the ComponentKey enum) would silently break orphan-strip for
+// the new component — a class of bug that is otherwise invisible until a
+// production session leaks an orphan sub-block. This test is the cheap
+// drift detector. /review #1437 P2.
+func TestStripOrphanConfig_KeyCoverage_ConfigSubFieldsHaveKeysAndSwitches(t *testing.T) {
+	t.Parallel()
+
+	cfgType := reflect.TypeOf(Config{})
+	visited := 0
+	for i := 0; i < cfgType.NumField(); i++ {
+		ft := cfgType.Field(i)
+		if ft.Type.Kind() != reflect.Pointer || ft.Type.Elem().Kind() != reflect.Struct {
+			continue
+		}
+		tag := jsonTagName(ft.Tag.Get("json"))
+		if tag == "" {
+			continue
+		}
+		// Only check cloud-prefixed tags — Config has cloud-agnostic
+		// *struct fields too (none today, but the design allows them).
+		if !strings.HasPrefix(tag, "aws_") && !strings.HasPrefix(tag, "gcp_") {
+			continue
+		}
+		visited++
+		key := configTagToKey(tag)
+
+		// ComponentSelected must have a switch case for the key. The
+		// only way to verify reflectively is to construct a Components
+		// where the key SHOULD be selected and confirm ComponentSelected
+		// returns true. Build a fully-selecting Components and assert
+		// the key flips through.
+		comps := selectingComponentsFor(key)
+		assert.True(t, ComponentSelected(comps, key),
+			"ComponentSelected has no case for Config field with json tag %q (key %q) — "+
+				"add it to ComponentSelected's switch in coherence.go so orphan-strip recognises this component",
+			tag, key)
+
+		// isOrphanStrippableKey must include the key. The strip walks
+		// Config reflectively, so a key missing here is silently ignored
+		// even when ComponentSelected knows about it.
+		assert.True(t, isOrphanStrippableKey(key),
+			"isOrphanStrippableKey has no entry for Config field with json tag %q (key %q) — "+
+				"add it to the switch in coherence.go so orphan-strip clears this sub-block",
+			tag, key)
+	}
+	// Self-validation: ensure the loop actually exercised the matrix. A
+	// future Config refactor that flattens or renames every sub-field would
+	// otherwise pass this drift detector vacuously. 30 is a soft floor —
+	// AWS + GCP per-component config sub-blocks comfortably exceed it today.
+	require.GreaterOrEqual(t, visited, 30,
+		"drift detector exercised %d Config sub-fields — expected ≥30; Config layout may have changed", visited)
+}
+
+// selectingComponentsFor returns a Components value where ComponentSelected
+// (against the returned value, for the given key) should report true. It
+// returns nil if the key has no corresponding Components field — which
+// itself is a bug surfaced by the calling test. Helper for the coverage
+// test above.
+func selectingComponentsFor(key ComponentKey) *Components {
+	c := &Components{}
+	switch key {
+	case KeyAWSVPC:
+		c.AWSVPC = "Public VPC"
+	case KeyAWSEC2:
+		c.AWSEC2 = "Intel"
+	case KeyGCPCompute:
+		c.GCPCompute = "n2-standard-2"
+	case KeyAWSBackups:
+		c.AWSBackups = &struct {
+			EC2         *bool `json:"aws_ec2,omitempty"`
+			RDS         *bool `json:"aws_rds,omitempty"`
+			ElastiCache *bool `json:"aws_elasticache,omitempty"`
+			DynamoDB    *bool `json:"aws_dynamodb,omitempty"`
+			S3          *bool `json:"aws_s3,omitempty"`
+		}{}
+	case KeyGCPBackups:
+		c.GCPBackups = &struct {
+			Compute  *bool `json:"gcp_compute,omitempty"`
+			CloudSQL *bool `json:"gcp_cloudsql,omitempty"`
+			GCS      *bool `json:"gcp_gcs,omitempty"`
+		}{}
+	default:
+		// All remaining keys this coverage test exercises are pointer-
+		// to-bool selections on Components. Find the matching field by
+		// json tag and set it to a non-nil &true via reflection.
+		setPointerToBoolTrueByTag(c, string(key))
+	}
+	return c
+}
+
+// setPointerToBoolTrueByTag locates the field on *Components whose json tag
+// matches `tag` and, if that field is *bool, sets it to a non-nil &true.
+// Lets selectingComponentsFor handle the 30+ pointer-typed components
+// without a per-key switch — a typo in the test fixture would itself be a
+// drift-detector miss.
+func setPointerToBoolTrueByTag(c *Components, tag string) {
+	cv := reflect.ValueOf(c).Elem()
+	ct := cv.Type()
+	for i := 0; i < ct.NumField(); i++ {
+		ft := ct.Field(i)
+		if jsonTagName(ft.Tag.Get("json")) != tag {
+			continue
+		}
+		fv := cv.Field(i)
+		if fv.Kind() == reflect.Pointer && fv.Type().Elem().Kind() == reflect.Bool {
+			b := true
+			fv.Set(reflect.ValueOf(&b))
+		}
+		return
+	}
 }

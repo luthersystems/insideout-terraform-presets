@@ -20,6 +20,7 @@ package composer
 
 import (
 	"encoding/json"
+	"log"
 	"reflect"
 )
 
@@ -74,6 +75,12 @@ func ApplyCarryForward(prior, fresh *PricingData, repriceSet map[ComponentKey]bo
 // MergePricing applies carry-forward: for every per-component pricing item in
 // `fresh`, if the component is NOT in repriceSet, overwrite fresh's item with
 // prior's (when prior has one). Items in repriceSet keep their fresh value.
+//
+// **Mutation contract**: MergePricing mutates `fresh` in place (calls
+// fresh.Normalize(), strips phantom rows, overwrites per-component leaves)
+// and returns the same `*PricingData` pointer. Callers that need to preserve
+// their original payload must deep-copy before calling. `prior` is
+// JSON-deep-copied internally and is never mutated.
 //
 // This eliminates LLM-jitter on untouched components without discarding the
 // LLM's holistic view (the LLM still sees the full stack when it prices).
@@ -285,8 +292,8 @@ func setPricingSentinel(field reflect.Value, key ComponentKey) {
 		return
 	}
 	sentinel := PricingItem{
-		Status:  "missing",
-		Details: "fresh pricing omitted for " + string(key) + "; needs reprice (#1434)",
+		Status:  PricingItemStatusMissing,
+		Details: "fresh pricing omitted for " + string(key) + "; " + PricingItemMissingDetailsMarker,
 	}
 	field.Set(reflect.ValueOf(&sentinel))
 }
@@ -323,17 +330,23 @@ func countComponentItems(c any) int {
 }
 
 // deepCopyPricing returns an independent copy of a PricingData via a
-// JSON round-trip. Returns nil on marshal failure (caller treats as absent).
+// JSON round-trip. Returns nil on marshal/unmarshal failure (caller treats
+// as absent, degrading to a full reprice). Failures should not happen with
+// well-formed PricingData — every field is JSON-tagged — so the loud log
+// makes a genuine bug visible rather than silently swallowing it (the
+// "should never happen" path is exactly where logging matters).
 func deepCopyPricing(p *PricingData) *PricingData {
 	if p == nil {
 		return nil
 	}
 	data, err := json.Marshal(p)
 	if err != nil {
+		log.Printf("[composer/pricing] deepCopyPricing marshal failed; falling back to full reprice: %v", err)
 		return nil
 	}
 	out := &PricingData{}
 	if err := json.Unmarshal(data, out); err != nil {
+		log.Printf("[composer/pricing] deepCopyPricing unmarshal failed; falling back to full reprice: %v", err)
 		return nil
 	}
 	return out

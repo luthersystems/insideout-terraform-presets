@@ -123,6 +123,79 @@ func TestUnionConfig_AllocatesFreshInnerStruct(t *testing.T) {
 		"mutating result.AWSVPC.AZCount must not affect the part's AZCount")
 }
 
+// TestUnionConfig_ScalarPointersAreSharedAtLeaves locks the documented
+// "Scalar-pointer fields INSIDE the struct are still shallow-copied" rule
+// from union.go's docstring. Mutating the leaf value through the result's
+// *int (e.g. *result.AWSVPC.AZCount = 99) DOES propagate back to the part
+// — callers must not mutate parts after the call. If a future refactor
+// silently switches to deep-clone, this test catches it. /qa-professor P2-4.
+func TestUnionConfig_ScalarPointersAreSharedAtLeaves(t *testing.T) {
+	t.Parallel()
+
+	az := 3
+	part := *cfgWithVPCSubBlock(nil, boolPtr(true), &az)
+	got := UnionConfig([]Config{part})
+	require.NotNil(t, got.AWSVPC)
+	require.NotNil(t, got.AWSVPC.AZCount)
+
+	// Dereference-mutate via the result's pointer. The part's *int MUST
+	// see the change — that's the contract.
+	*got.AWSVPC.AZCount = 99
+	require.NotNil(t, part.AWSVPC.AZCount,
+		"part's AZCount pointer must still be set after the union call")
+	assert.Equal(t, 99, *part.AWSVPC.AZCount,
+		"scalar *int pointers are shallow-copied at the leaf — mutating through the result "+
+			"MUST propagate back to the part. Callers must not mutate parts post-call.")
+	// And the result reflects the same mutation, of course.
+	assert.Equal(t, 99, *got.AWSVPC.AZCount)
+}
+
+// TestUnionConfig_NonNilEmptySliceOverridesPopulated locks the documented
+// rule: a non-nil empty slice is non-zero per reflect.Value.IsZero, so it
+// overrides an earlier populated slice. The union.go docstring spells this
+// out at the field-rule level — without this test, a future "smart"
+// refactor that special-cases empty slices would silently change behaviour
+// and the doc would drift. /qa-professor P2-5.
+func TestUnionConfig_NonNilEmptySliceOverridesPopulated(t *testing.T) {
+	t.Parallel()
+
+	parts := []Config{
+		{
+			AWSEC2: &struct {
+				InstanceType          string `json:"instanceType,omitempty"`
+				NumServers            string `json:"numServers,omitempty"`
+				NumCoresPerServer     string `json:"numCoresPerServer,omitempty"`
+				DiskSizePerServer     string `json:"diskSizePerServer,omitempty"`
+				UserData              string `json:"userData,omitempty"`
+				UserDataURL           string `json:"userDataURL,omitempty"`
+				CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
+				SSHPublicKey          string `json:"sshPublicKey,omitempty"`
+				EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+			}{CustomIngressPorts: []int{22, 80, 443}},
+		},
+		{
+			AWSEC2: &struct {
+				InstanceType          string `json:"instanceType,omitempty"`
+				NumServers            string `json:"numServers,omitempty"`
+				NumCoresPerServer     string `json:"numCoresPerServer,omitempty"`
+				DiskSizePerServer     string `json:"diskSizePerServer,omitempty"`
+				UserData              string `json:"userData,omitempty"`
+				UserDataURL           string `json:"userDataURL,omitempty"`
+				CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
+				SSHPublicKey          string `json:"sshPublicKey,omitempty"`
+				EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+			}{CustomIngressPorts: []int{}}, // non-nil empty — IS zero-distinct
+		},
+	}
+	got := UnionConfig(parts)
+
+	require.NotNil(t, got.AWSEC2)
+	require.NotNil(t, got.AWSEC2.CustomIngressPorts,
+		"non-nil empty slice in later part must override and survive (slice is not nil even though len==0)")
+	assert.Equal(t, 0, len(got.AWSEC2.CustomIngressPorts),
+		"the override value is the later empty slice — locks the IsZero-driven rule")
+}
+
 func TestUnionConfig_NilSlice_NoOverride(t *testing.T) {
 	t.Parallel()
 
@@ -320,6 +393,42 @@ func TestUnionComponents_CrossCloud_LastCloudWins(t *testing.T) {
 	assert.Equal(t, "Intel", got.AWSEC2,
 		"AWS field from earlier part must survive — Union does not auto-strip")
 	require.NotNil(t, got.GCPVPC, "GCP field from later part must land")
+	assert.True(t, *got.GCPVPC)
+	assert.Equal(t, "n2-standard-2", got.GCPCompute)
+}
+
+// TestUnion_Then_Normalize_PipelineStripsOppositeCloud locks the documented
+// pipeline shape: UnionComponents intentionally keeps both clouds' fields,
+// and Components.Normalize (the next pipeline step) is what strips the
+// opposite-cloud residual. End-to-end test of the cross-file contract so a
+// future refactor that conflates the two responsibilities can't slip past.
+// /qa-professor P3-11.
+func TestUnion_Then_Normalize_PipelineStripsOppositeCloud(t *testing.T) {
+	t.Parallel()
+
+	parts := []Components{
+		{Cloud: "AWS", AWSVPC: "Public VPC", AWSEC2: "Intel", AWSLambda: boolPtr(true)},
+		{Cloud: "GCP", GCPVPC: boolPtr(true), GCPCompute: "n2-standard-2"},
+	}
+	got := UnionComponents(parts)
+
+	// Pre-Normalize: AWS residue survives (this is Union's intent).
+	require.Equal(t, "GCP", got.Cloud)
+	require.Equal(t, "Public VPC", got.AWSVPC,
+		"pre-Normalize: AWS field from earlier part survives the Union — Union does not strip")
+	require.Equal(t, "Intel", got.AWSEC2)
+
+	// Pipeline step: Normalize.
+	got.Normalize()
+
+	// Post-Normalize: AWS residue is gone, GCP survives.
+	assert.Equal(t, "", got.AWSVPC,
+		"post-Normalize: AWS VPC field must be cleared on a Cloud=GCP value")
+	assert.Equal(t, "", got.AWSEC2,
+		"post-Normalize: AWS EC2 field must be cleared on a Cloud=GCP value")
+	assert.Nil(t, got.AWSLambda,
+		"post-Normalize: AWS Lambda pointer must be cleared on a Cloud=GCP value")
+	require.NotNil(t, got.GCPVPC, "post-Normalize: GCP fields survive")
 	assert.True(t, *got.GCPVPC)
 	assert.Equal(t, "n2-standard-2", got.GCPCompute)
 }

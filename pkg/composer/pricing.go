@@ -1,5 +1,7 @@
 package composer
 
+import "strings"
+
 // pricing.go owns the canonical PricingData / PricingItem / *PricingBackups
 // type family for cost estimates produced by the cost-LLM and persisted by
 // reliable. Migrated from reliable per luthersystems/reliable#1437 PR-3 so the
@@ -25,8 +27,38 @@ type PricingItem struct {
 	UnitPriceUSD *float64 `json:"unitPriceUSD,omitempty"`
 	Quantity     *float64 `json:"quantity,omitempty"`
 	Unit         string   `json:"unit,omitempty"`
-	Status       string   `json:"status,omitempty"` // "Included", "Excluded", "N/A"
+	Status       string   `json:"status,omitempty"` // "Included", "Excluded", "N/A", PricingItemStatusMissing
 	Details      string   `json:"details,omitempty"`
+}
+
+// PricingItemStatusMissing is the Status value MergePricing attaches via
+// setPricingSentinel when a component is in the repriceSet AND the witness
+// confirms it is selected AND both prior and fresh pricing lacked a row for
+// it. The Details field of such a sentinel contains the marker
+// PricingItemMissingDetailsMarker so callers can distinguish a sentinel
+// MergePricing emitted from an LLM-emitted "missing" status — see
+// IsMissingSentinel.
+const PricingItemStatusMissing = "missing"
+
+// PricingItemMissingDetailsMarker is the substring embedded in a missing-
+// reprice sentinel's Details field. Exported so downstream callers can rely
+// on it instead of duplicating the literal.
+const PricingItemMissingDetailsMarker = "needs reprice (#1434)"
+
+// IsMissingSentinel reports whether p is the sentinel MergePricing attaches
+// to surface a missing reprice (#1434). Distinguishes a sentinel emitted by
+// the merge layer from an LLM-emitted PricingItem that happens to carry
+// Status="missing" by requiring BOTH the status AND the marker substring in
+// Details. Callers wanting to detect the gap should use this helper rather
+// than matching the status string directly.
+func (p *PricingItem) IsMissingSentinel() bool {
+	if p == nil {
+		return false
+	}
+	if p.Status != PricingItemStatusMissing {
+		return false
+	}
+	return strings.Contains(p.Details, PricingItemMissingDetailsMarker)
 }
 
 // PricingBackups represents AWS backup pricing
@@ -46,7 +78,7 @@ type GCPPricingBackups struct {
 }
 
 // PricingData represents the overall pricing structure, keyed by component.
-// Keys must strictly match the StackComponents structure.
+// Keys must strictly match the Components structure (see types.go).
 type PricingData struct {
 	Currency string `json:"currency,omitempty"`
 

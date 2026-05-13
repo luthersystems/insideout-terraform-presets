@@ -159,9 +159,9 @@ func StackNeedsPrivateSubnets(c *Components) bool {
 }
 
 // StripOrphanConfig clears every cfg.<component> sub-block whose
-// corresponding component is NOT selected in `comps`. Pure, idempotent. A
-// no-op when cfg is nil or comps is nil (an unknown components state cannot
-// safely conclude orphanhood).
+// corresponding component is NOT selected in `comps`. Idempotent in-place
+// mutation. A no-op when cfg is nil or comps is nil (an unknown components
+// state cannot safely conclude orphanhood).
 //
 // Treats "non-nil but empty" sub-structs as orphan when their component is
 // unselected — an empty &AWSOpenSearch{} conveys no actual configuration and
@@ -171,6 +171,13 @@ func StackNeedsPrivateSubnets(c *Components) bool {
 // field on Config whose json tag matches a known ComponentKey is in scope.
 // Adding a new component to Components + Config + KeyXxx requires no edit
 // here.
+//
+// **Granularity**: orphan-strip operates at the component-key level. The
+// sub-component selections inside cfg.AWSBackups / cfg.GCPBackups (per-store
+// frequency/retention entries) are NOT enforced — if comps.AWSBackups is
+// non-nil the whole cfg.AWSBackups sub-block survives, even if some inner
+// stores (e.g. cfg.AWSBackups.RDS) have no corresponding selection in
+// comps.AWSBackups.RDS. Sub-component coherence is a higher-layer concern.
 func StripOrphanConfig(comps *Components, cfg *Config) {
 	if comps == nil || cfg == nil {
 		return
@@ -186,7 +193,7 @@ func StripOrphanConfig(comps *Components, cfg *Config) {
 		if tag == "" {
 			continue
 		}
-		key := ComponentKey(tag)
+		key := configTagToKey(tag)
 		if !isOrphanStrippableKey(key) {
 			continue
 		}
@@ -197,6 +204,31 @@ func StripOrphanConfig(comps *Components, cfg *Config) {
 			}
 		}
 	}
+}
+
+// configTagToKey maps a json tag on a Config *struct sub-field to its
+// canonical ComponentKey. For most components the tag IS the key
+// (cloud-prefixed json tag == ComponentKey string), so the conversion is
+// a direct cast. A handful of historical inconsistencies between the
+// Config json schema and the ComponentKey enum need an explicit alias —
+// listed here so the reflection-based orphan strip recognises them.
+//
+// Known aliases:
+//   - Config.AWSAPIGateway uses json tag "aws_api_gateway" (underscore between
+//     "api" and "gateway") to preserve the on-the-wire schema users have
+//     persisted, while KeyAWSAPIGateway = "aws_apigateway" (no underscore).
+//     Without this alias the orphan-strip silently skips
+//     cfg.AWSAPIGateway and leaves stale config behind when API Gateway is
+//     removed from the stack.
+//
+// Add to this map (do NOT change the json tag, which would break persisted
+// snapshots) when a new drift is discovered.
+func configTagToKey(tag string) ComponentKey {
+	switch tag {
+	case "aws_api_gateway":
+		return KeyAWSAPIGateway
+	}
+	return ComponentKey(tag)
 }
 
 // DeriveCrossComponentFields re-derives cfg fields whose correct value is a
@@ -217,7 +249,9 @@ func StripOrphanConfig(comps *Components, cfg *Config) {
 // component derive is the rule that catches "VPC stays, but its NAT-related
 // sub-fields no longer have a justification."
 //
-// Pure, idempotent.
+// Idempotent in-place mutation. Not a pure function in the strict sense
+// (it writes through *cfg); calling it twice on the same inputs is a
+// no-op on the second call.
 func DeriveCrossComponentFields(comps *Components, cfg *Config) {
 	if comps == nil || cfg == nil || cfg.AWSVPC == nil {
 		return
