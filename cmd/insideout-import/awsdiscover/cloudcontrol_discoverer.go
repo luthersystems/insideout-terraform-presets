@@ -72,11 +72,24 @@ type cloudControlClient interface {
 //     ResourceModel JSON-string per parent; the discoverer threads it
 //     through ListResourcesInput.ResourceModel. Returns nil for non-
 //     parent-scoped types.
+//   - SkipProjectTagFilter: when true, the discoverer (a) bypasses the
+//     RGT-cache short-circuit and always drives through ListResources,
+//     and (b) bypasses the post-fetch `args.Project` Project-tag filter
+//     for this type. Set this for genuinely-untaggable types (e.g.
+//     AWS::IAM::InstanceProfile, AWS::Backup::BackupSelection) whose
+//     CFN schema has no Tags property and whose ARNs never surface via
+//     RGT. Without (a), the cache reports authoritative-empty for these
+//     types (RGT can't see them) and the discoverer emits zero. The
+//     trade-off: scoping a discover via --project on these types
+//     returns every instance in the account rather than only
+//     project-tagged ones; operators can use --resource-types to
+//     exclude them if needed. Documented in the Bundle 14 PR body.
 type cloudControlConfig struct {
 	TFType                  string
 	CloudFormationType      string
 	Slug                    string
 	IsGlobal                bool
+	SkipProjectTagFilter    bool
 	ImportIDFromIdentifier  func(identifier string, props map[string]any) string
 	NameHintFromProperties  func(identifier string, props map[string]any) string
 	NativeIDsFromProperties func(identifier string, props map[string]any) map[string]string
@@ -179,19 +192,29 @@ func (d *cloudControlDiscoverer) Discover(ctx context.Context, args DiscoverArgs
 		// and #406. The cache also bypasses the ParentLister branch —
 		// each cached ARN is a self-contained CC identifier, no
 		// parent context required.
+		//
+		// Untaggable types (SkipProjectTagFilter=true) bypass the cache
+		// entirely. RGT can only see tagged ARNs, so for genuinely
+		// untaggable types (AWS::IAM::InstanceProfile,
+		// AWS::Backup::BackupSelection, …) the cache is authoritatively
+		// empty — trusting it would emit zero. ListResources is the
+		// only path that can surface these; the legacy Project filter
+		// further down is already skipped for these types.
 		cacheUsed := false
-		if d.cfg.IsGlobal {
-			if cached, ok := args.RGTCacheForGlobalCFN(d.cfg.CloudFormationType); ok {
+		if !d.cfg.SkipProjectTagFilter {
+			if d.cfg.IsGlobal {
+				if cached, ok := args.RGTCacheForGlobalCFN(d.cfg.CloudFormationType); ok {
+					for _, info := range cached {
+						refs = append(refs, itemRef{identifier: info.Identifier, rgtTags: info.Tags})
+					}
+					cacheUsed = true
+				}
+			} else if cached, ok := args.RGTCacheForCFN(region, d.cfg.CloudFormationType); ok {
 				for _, info := range cached {
 					refs = append(refs, itemRef{identifier: info.Identifier, rgtTags: info.Tags})
 				}
 				cacheUsed = true
 			}
-		} else if cached, ok := args.RGTCacheForCFN(region, d.cfg.CloudFormationType); ok {
-			for _, info := range cached {
-				refs = append(refs, itemRef{identifier: info.Identifier, rgtTags: info.Tags})
-			}
-			cacheUsed = true
 		}
 
 		if !cacheUsed {
@@ -308,8 +331,17 @@ func (d *cloudControlDiscoverer) Discover(ctx context.Context, args DiscoverArgs
 			// hit path because the prefetcher already filtered
 			// server-side; running it again would force a redundant
 			// map lookup per resource.
+			//
+			// Additional skip: cfg.SkipProjectTagFilter is set for
+			// genuinely-untaggable types (e.g. AWS::IAM::InstanceProfile,
+			// AWS::Backup::BackupSelection) whose CFN schema has no
+			// Tags property — their tag bag is always empty by design,
+			// so applying the Project filter would silently drop every
+			// item. Operators scoping a discover via --project get all
+			// instances of these types account-wide; documented in the
+			// Bundle 14 PR body.
 			cacheUsedForRef := cacheUsed
-			if !cacheUsedForRef && args.Project != "" && f.tags["Project"] != args.Project {
+			if !cacheUsedForRef && !d.cfg.SkipProjectTagFilter && args.Project != "" && f.tags["Project"] != args.Project {
 				continue
 			}
 			if !MatchesAll(f.tags, args.TagSelectors) {

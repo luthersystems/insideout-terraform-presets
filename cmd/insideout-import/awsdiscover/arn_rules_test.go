@@ -203,6 +203,46 @@ func TestParseARN(t *testing.T) {
 			wantOK: true,
 		},
 		{
+			name: "backup_selection_compound",
+			arn:  "arn:aws:backup:us-east-1:111111111111:backup-plan:plan-abc/selection/sel-xyz",
+			want: parsedARN{
+				full: "arn:aws:backup:us-east-1:111111111111:backup-plan:plan-abc/selection/sel-xyz", partition: "aws",
+				service: "backup", region: "us-east-1", accountID: "111111111111",
+				resourceType: "backup-plan", resourceID: "plan-abc/selection/sel-xyz",
+			},
+			wantOK: true,
+		},
+		{
+			name: "iam_instance_profile_global",
+			arn:  "arn:aws:iam::111111111111:instance-profile/my-profile",
+			want: parsedARN{
+				full: "arn:aws:iam::111111111111:instance-profile/my-profile", partition: "aws",
+				service: "iam", region: "", accountID: "111111111111",
+				resourceType: "instance-profile", resourceID: "my-profile",
+			},
+			wantOK: true,
+		},
+		{
+			name: "lambda_event_source_mapping_uuid",
+			arn:  "arn:aws:lambda:us-east-1:111111111111:event-source-mapping:abc12345-6789-0abc-def0-123456789012",
+			want: parsedARN{
+				full: "arn:aws:lambda:us-east-1:111111111111:event-source-mapping:abc12345-6789-0abc-def0-123456789012", partition: "aws",
+				service: "lambda", region: "us-east-1", accountID: "111111111111",
+				resourceType: "event-source-mapping", resourceID: "abc12345-6789-0abc-def0-123456789012",
+			},
+			wantOK: true,
+		},
+		{
+			name: "ssm_parameter_multi_segment",
+			arn:  "arn:aws:ssm:us-east-1:111111111111:parameter/path/to/param",
+			want: parsedARN{
+				full: "arn:aws:ssm:us-east-1:111111111111:parameter/path/to/param", partition: "aws",
+				service: "ssm", region: "us-east-1", accountID: "111111111111",
+				resourceType: "parameter", resourceID: "path/to/param",
+			},
+			wantOK: true,
+		},
+		{
 			name:   "malformed_not_arn",
 			arn:    "not-an-arn",
 			wantOK: false,
@@ -270,8 +310,15 @@ func TestLookupRule(t *testing.T) {
 		// Backup
 		{name: "backup_vault", arn: "arn:aws:backup:us-east-1:111111111111:backup-vault:my-vault",
 			wantCFN: "AWS::Backup::BackupVault", wantIdent: "my-vault"},
-		{name: "backup_plan", arn: "arn:aws:backup:us-east-1:111111111111:backup-plan:abc-123",
+		// Bare BackupPlan ARN (no `/selection/`) must still match the
+		// BackupPlan rule, NOT the BackupSelection rule added in
+		// Bundle 14. This is the matchExtra disambiguator regression
+		// pin called out in the plan's Risk register.
+		{name: "backup_plan_bare", arn: "arn:aws:backup:us-east-1:111111111111:backup-plan:abc-123",
 			wantCFN: "AWS::Backup::BackupPlan", wantIdent: "abc-123"},
+		{name: "backup_selection_compound_id_rewrite",
+			arn:     "arn:aws:backup:us-east-1:111111111111:backup-plan:plan-abc/selection/sel-xyz",
+			wantCFN: "AWS::Backup::BackupSelection", wantIdent: "sel-xyz_plan-abc"},
 
 		// Messaging
 		{name: "sns_topic_full_arn", arn: "arn:aws:sns:us-east-1:111111111111:my-topic",
@@ -290,6 +337,9 @@ func TestLookupRule(t *testing.T) {
 			wantCFN: "AWS::Lambda::Function", wantIdent: "my-fn"},
 		{name: "lambda_with_qualifier_stripped", arn: "arn:aws:lambda:us-east-1:111111111111:function:my-fn:PROD",
 			wantCFN: "AWS::Lambda::Function", wantIdent: "my-fn"},
+		{name: "lambda_event_source_mapping",
+			arn:     "arn:aws:lambda:us-east-1:111111111111:event-source-mapping:abc12345-6789-0abc-def0-123456789012",
+			wantCFN: "AWS::Lambda::EventSourceMapping", wantIdent: "abc12345-6789-0abc-def0-123456789012"},
 
 		// Observability
 		{name: "cloudwatch_alarm", arn: "arn:aws:cloudwatch:us-east-1:111111111111:alarm:MyAlarm",
@@ -306,6 +356,8 @@ func TestLookupRule(t *testing.T) {
 			wantCFN: "AWS::IAM::Role", wantIdent: "my-role"},
 		{name: "iam_policy_full_arn", arn: "arn:aws:iam::111111111111:policy/my-policy",
 			wantCFN: "AWS::IAM::ManagedPolicy", wantIdent: "arn:aws:iam::111111111111:policy/my-policy"},
+		{name: "iam_instance_profile", arn: "arn:aws:iam::111111111111:instance-profile/my-profile",
+			wantCFN: "AWS::IAM::InstanceProfile", wantIdent: "my-profile"},
 
 		// Storage
 		{name: "dynamodb_table", arn: "arn:aws:dynamodb:us-east-1:111111111111:table/my-table",
@@ -349,6 +401,14 @@ func TestLookupRule(t *testing.T) {
 		// Cognito
 		{name: "cognito_userpool", arn: "arn:aws:cognito-idp:us-east-1:111111111111:userpool/us-east-1_AbCdE",
 			wantCFN: "AWS::Cognito::UserPool", wantIdent: "us-east-1_AbCdE"},
+
+		// SSM Parameter — leading `/` re-prepended onto resourceID
+		{name: "ssm_parameter_single_segment",
+			arn:     "arn:aws:ssm:us-east-1:111111111111:parameter/my-param",
+			wantCFN: "AWS::SSM::Parameter", wantIdent: "/my-param"},
+		{name: "ssm_parameter_multi_segment",
+			arn:     "arn:aws:ssm:us-east-1:111111111111:parameter/path/to/param",
+			wantCFN: "AWS::SSM::Parameter", wantIdent: "/path/to/param"},
 
 		// RDS
 		{name: "rds_db_instance", arn: "arn:aws:rds:us-east-1:111111111111:db:my-db",

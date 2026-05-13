@@ -113,8 +113,32 @@ var arnRules = []arnRule{
 	// Backup
 	{matchService: "backup", matchResourceType: "backup-vault",
 		cfnType: "AWS::Backup::BackupVault", identifierFn: identityResourceID},
+	// BackupPlan vs BackupSelection share (service=backup, resourceType=backup-plan).
+	// A bare plan ARN is `…:backup-plan:<planId>`; a selection ARN is
+	// `…:backup-plan:<planId>/selection/<selectionId>` (verified live, Bundle 14).
+	// matchExtra disambiguates: BackupSelection requires `/selection/` in
+	// resourceID, BackupPlan requires its absence. Order matters — the
+	// BackupSelection rule must precede the BackupPlan rule so the
+	// selection-suffix shape isn't swallowed by the plan rule.
 	{matchService: "backup", matchResourceType: "backup-plan",
-		cfnType: "AWS::Backup::BackupPlan", identifierFn: identityResourceID},
+		matchExtra: func(p parsedARN) bool { return strings.Contains(p.resourceID, "/selection/") },
+		cfnType:    "AWS::Backup::BackupSelection",
+		identifierFn: func(p parsedARN) string {
+			// resourceID format: `<planId>/selection/<selectionId>`.
+			// Cloud Control's compound primary identifier for
+			// AWS::Backup::BackupSelection is `<SelectionId>_<BackupPlanId>`
+			// (underscore-separated, verified live). Rewrite accordingly.
+			idx := strings.Index(p.resourceID, "/selection/")
+			if idx < 0 {
+				return p.resourceID
+			}
+			planID := p.resourceID[:idx]
+			selID := p.resourceID[idx+len("/selection/"):]
+			return selID + "_" + planID
+		}},
+	{matchService: "backup", matchResourceType: "backup-plan",
+		matchExtra: func(p parsedARN) bool { return !strings.Contains(p.resourceID, "/selection/") },
+		cfnType:    "AWS::Backup::BackupPlan", identifierFn: identityResourceID},
 
 	// Messaging — SNS and SQS ARNs have no resource-type prefix.
 	{matchService: "sns", matchResourceType: "",
@@ -140,6 +164,8 @@ var arnRules = []arnRule{
 			}
 			return p.resourceID
 		}},
+	{matchService: "lambda", matchResourceType: "event-source-mapping",
+		cfnType: "AWS::Lambda::EventSourceMapping", identifierFn: identityResourceID},
 
 	// Observability
 	{matchService: "cloudwatch", matchResourceType: "alarm",
@@ -159,6 +185,12 @@ var arnRules = []arnRule{
 		cfnType: "AWS::IAM::Role", identifierFn: identityResourceID},
 	{matchService: "iam", matchResourceType: "policy",
 		cfnType: "AWS::IAM::ManagedPolicy", identifierFn: identityFullARN},
+	// IAM Instance Profile — untaggable (no Tags property on the CFN
+	// schema and RGT doesn't surface them). The arnRule exists for
+	// completeness so a future tagging-API release routes correctly;
+	// today the cache-miss ListResources fallback handles discovery.
+	{matchService: "iam", matchResourceType: "instance-profile",
+		cfnType: "AWS::IAM::InstanceProfile", identifierFn: identityResourceID},
 
 	// Storage
 	{matchService: "dynamodb", matchResourceType: "table",
@@ -201,6 +233,16 @@ var arnRules = []arnRule{
 	// Cognito
 	{matchService: "cognito-idp", matchResourceType: "userpool",
 		cfnType: "AWS::Cognito::UserPool", identifierFn: identityResourceID},
+
+	// SSM Parameter — ARN form is `arn:aws:ssm:<region>:<account>:parameter/path/to/name`.
+	// Cloud Control's identifier is the full parameter name including the
+	// leading `/` (e.g. `/path/to/name`); parseARN strips the leading `/`
+	// off the resourceID, so we re-prepend it here.
+	{matchService: "ssm", matchResourceType: "parameter",
+		cfnType: "AWS::SSM::Parameter",
+		identifierFn: func(p parsedARN) string {
+			return "/" + p.resourceID
+		}},
 
 	// RDS
 	{matchService: "rds", matchResourceType: "db",

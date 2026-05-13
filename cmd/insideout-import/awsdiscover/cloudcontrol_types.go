@@ -75,6 +75,50 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 			return extractStringMap(props, "BackupPlanTags")
 		},
 	},
+	{
+		// AWS::Backup::BackupSelection — untaggable (CFN schema has no
+		// Tags property; selections inherit policies from their parent
+		// BackupPlan). RGT does not surface selection ARNs, so the
+		// cache-miss ListResources fallback path always runs for this
+		// type. SkipProjectTagFilter bypasses the legacy Project filter
+		// — without it the empty tag bag would cause every selection
+		// to be silently dropped on --project scans.
+		//
+		// Cloud Control's primary identifier is `<SelectionId>_<BackupPlanId>`
+		// (underscore-separated, verified live). Terraform's import
+		// format is `<SelectionId>|<BackupPlanId>` (pipe-separated).
+		TFType:               "aws_backup_selection",
+		CloudFormationType:   "AWS::Backup::BackupSelection",
+		Slug:                 "backup_selection",
+		SkipProjectTagFilter: true,
+		ImportIDFromIdentifier: func(identifier string, _ map[string]any) string {
+			return strings.Replace(identifier, "_", "|", 1)
+		},
+		NameHintFromProperties: func(identifier string, props map[string]any) string {
+			if sel, ok := props["BackupSelection"].(map[string]any); ok {
+				if name := extractString(sel, "SelectionName"); name != "" {
+					return name
+				}
+			}
+			// Fall back to the SelectionId tail of the compound id.
+			if idx := strings.Index(identifier, "_"); idx != -1 {
+				return identifier[:idx]
+			}
+			return identifier
+		},
+		NativeIDsFromProperties: func(identifier string, _ map[string]any) map[string]string {
+			// Split `<SelectionId>_<BackupPlanId>` into structured IDs.
+			out := map[string]string{}
+			if idx := strings.Index(identifier, "_"); idx != -1 {
+				out["selection_id"] = identifier[:idx]
+				out["backup_plan_id"] = identifier[idx+1:]
+			} else {
+				out["selection_id"] = identifier
+			}
+			return out
+		},
+		TagsFromProperties: emptyTagsExtractor,
+	},
 
 	// =====================================================================
 	// Messaging — SNS / SQS
@@ -487,6 +531,86 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 	},
 
 	// =====================================================================
+	// Cognito
+	// =====================================================================
+	{
+		TFType:                 "aws_cognito_user_pool",
+		CloudFormationType:     "AWS::Cognito::UserPool",
+		Slug:                   "cognito_user_pool",
+		ImportIDFromIdentifier: passthroughImportID,
+		NameHintFromProperties: nameOrIdentifier("UserPoolName"),
+		NativeIDsFromProperties: arnUnderKey("Arn"),
+		// AWS::Cognito::UserPool surfaces tags as a flat string map
+		// under `UserPoolTags` (verified live), NOT the Key/Value
+		// list shape `Tags` uses for other types. Wrong extractor →
+		// silently empty tags. See Bundle 14 plan.
+		TagsFromProperties: func(props map[string]any) map[string]string {
+			return extractStringMap(props, "UserPoolTags")
+		},
+	},
+
+	// =====================================================================
+	// IAM Instance Profile — global, untaggable
+	// =====================================================================
+	{
+		// AWS::IAM::InstanceProfile — untaggable (no Tags property on
+		// the CFN schema and RGT doesn't surface instance profiles).
+		// SkipProjectTagFilter bypasses the legacy Project filter for
+		// the same reason as aws_backup_selection: the tag bag is
+		// always empty by design.
+		TFType:               "aws_iam_instance_profile",
+		CloudFormationType:   "AWS::IAM::InstanceProfile",
+		Slug:                 "iam_instance_profile",
+		IsGlobal:             true,
+		SkipProjectTagFilter: true,
+		ImportIDFromIdentifier: passthroughImportID,
+		NameHintFromProperties: nameOrIdentifier("InstanceProfileName"),
+		NativeIDsFromProperties: arnUnderKey("Arn"),
+		TagsFromProperties:      emptyTagsExtractor,
+	},
+
+	// =====================================================================
+	// Lambda Event Source Mapping
+	// =====================================================================
+	{
+		TFType:                 "aws_lambda_event_source_mapping",
+		CloudFormationType:     "AWS::Lambda::EventSourceMapping",
+		Slug:                   "lambda_event_source_mapping",
+		ImportIDFromIdentifier: passthroughImportID,
+		// The CFN schema doesn't expose a stable "name" — fall back to
+		// FunctionName (the human-readable side) when present, then
+		// the UUID identifier.
+		NameHintFromProperties: func(identifier string, props map[string]any) string {
+			if name := extractString(props, "FunctionName"); name != "" {
+				return name
+			}
+			return identifier
+		},
+		NativeIDsFromProperties: arnUnderKey("EventSourceArn"),
+		TagsFromProperties:      tagsFromKey("Tags"),
+	},
+
+	// =====================================================================
+	// SSM Parameter
+	// =====================================================================
+	{
+		// Cloud Control identifier for AWS::SSM::Parameter is the full
+		// parameter name including the leading `/` (e.g. `/myapp/db`).
+		// Terraform import takes the same identifier — passthrough.
+		TFType:                 "aws_ssm_parameter",
+		CloudFormationType:     "AWS::SSM::Parameter",
+		Slug:                   "ssm_parameter",
+		ImportIDFromIdentifier: passthroughImportID,
+		NameHintFromProperties: nameOrIdentifier("Name"),
+		// The CFN schema doesn't expose an ARN for SSM parameters;
+		// the parameter name is the canonical native identifier.
+		NativeIDsFromProperties: func(identifier string, _ map[string]any) map[string]string {
+			return map[string]string{"name": identifier}
+		},
+		TagsFromProperties: tagsFromKey("Tags"),
+	},
+
+	// =====================================================================
 	// OpenSearch Serverless
 	// =====================================================================
 	{
@@ -580,4 +704,15 @@ func tagsFromKey(key string) func(props map[string]any) map[string]string {
 // see "tags not fetched" rather than "empty tags".
 func nilTagsExtractor(_ map[string]any) map[string]string {
 	return nil
+}
+
+// emptyTagsExtractor returns a non-nil empty map for genuinely
+// untaggable Cloud Control types (e.g. AWS::IAM::InstanceProfile,
+// AWS::Backup::BackupSelection) whose CFN schema has no Tags property
+// at all. Returning nil would break the #255 JSON-marshal contract
+// (empty slice/map, not null) — downstream UIs gate panel rendering
+// on that shape. Distinct from nilTagsExtractor, which is used for
+// types whose tags simply weren't fetched in this code path.
+func emptyTagsExtractor(_ map[string]any) map[string]string {
+	return map[string]string{}
 }
