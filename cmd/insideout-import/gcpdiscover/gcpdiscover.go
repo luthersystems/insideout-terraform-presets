@@ -297,8 +297,11 @@ func NewGCPDiscoverer(searcher gcpAssetSearcher, projectID string, opts GCPDisco
 		// silently skipped by EnrichAttributes — the full enricher rollout
 		// follows the existing per-type ordering one PR at a time.
 		byTypeEnricher: map[string]AttributeEnricher{
-			"google_storage_bucket": newStorageBucketEnricher(),
-			"google_pubsub_topic":   newPubsubTopicEnricher(),
+			"google_storage_bucket":        newStorageBucketEnricher(),
+			"google_pubsub_topic":          newPubsubTopicEnricher(),
+			"google_pubsub_subscription":   newPubsubSubscriptionEnricher(),
+			"google_secret_manager_secret": newSecretManagerSecretEnricher(),
+			"google_compute_network":       newComputeNetworkEnricher(),
 		},
 	}
 }

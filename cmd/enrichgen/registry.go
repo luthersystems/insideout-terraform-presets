@@ -100,4 +100,14 @@ type target struct {
 	// "Website"). Used to gate top-level block emission on richer
 	// conditions than the default nil/empty check.
 	blockGates map[string]blockGate
+
+	// aliasFields renames the API-side field lookup for a given
+	// (typed-struct + tf-tag) pair. Keyed the same as overrides,
+	// value is the exact CamelCase name of the API field to look up
+	// instead of the default snakeToCamel(tf-tag). Used when the TF
+	// schema names a block one way and the API names the equivalent
+	// data with a different word — e.g. TF's `replication.auto` ↔
+	// API's `Replication.Automatic`. The engine's normal block-
+	// walking + helper emission proceeds as usual after the rename.
+	aliasFields map[string]string
 }
