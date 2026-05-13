@@ -543,6 +543,12 @@ func TestLambdaAliasConfig(t *testing.T) {
 	if !reflect.DeepEqual(native, want) {
 		t.Errorf("NativeIDs: got %+v, want %+v (exact map equality)", native, want)
 	}
+	// Defensive: malformed identifier (no `|`) and no AliasArn —
+	// NativeIDs must return nil rather than half-stitched keys.
+	// Symmetric with TestCognitoUserPoolClientConfig's malformed-id pin.
+	if got := cfg.NativeIDsFromProperties("orphan", nil); got != nil {
+		t.Errorf("NativeIDs malformed-id: got %+v, want nil", got)
+	}
 
 	// Tags: always empty for the aliases type.
 	tags := cfg.TagsFromProperties(map[string]any{"AliasArn": "..."})
@@ -576,9 +582,16 @@ func TestWAFv2WebACLConfig(t *testing.T) {
 		t.Errorf("ImportID rewrite (Name|Id|Scope → Id/Name/Scope): got %q, want %q",
 			got, "abc-12345/my-acl/REGIONAL")
 	}
-	// Malformed identifier passthrough.
+	// Malformed identifier passthrough — both shapes (1-segment and
+	// 2-segment) hit the `len(parts) != 3` early-return. Including
+	// the 2-segment case prevents a regression that loosens the
+	// equality check to `>= 3` (which would silently consume extra
+	// fields).
 	if got := cfg.ImportIDFromIdentifier("malformed", nil); got != "malformed" {
-		t.Errorf("ImportID malformed passthrough: got %q, want malformed", got)
+		t.Errorf("ImportID malformed (1-seg) passthrough: got %q, want malformed", got)
+	}
+	if got := cfg.ImportIDFromIdentifier("a|b", nil); got != "a|b" {
+		t.Errorf("ImportID malformed (2-seg) passthrough: got %q, want a|b", got)
 	}
 
 	props := map[string]any{

@@ -1636,14 +1636,18 @@ func TestCloudControlDiscover_SDKListerBypassesListResources(t *testing.T) {
 	fake := &fakeCloudControlClient{
 		// listPages intentionally non-empty — if the discoverer
 		// erroneously fell through to ListResources, it'd pick this
-		// up and the assertion would catch it.
+		// up and surface as a 3rd emit. Project-matching tags on the
+		// stray ensure the post-fetch Project filter wouldn't mask
+		// the regression (double-pinning the bypass contract: the
+		// listCalls counter catches the round-trip, the emit count
+		// catches the data leak).
 		listPages: []cloudcontrol.ListResourcesOutput{
 			listPage("", "should-not-be-listed"),
 		},
 		propsByIdentifier: map[string]map[string]any{
-			"id-a":                {"Tags": map[string]any{"Project": "io-foo"}},
-			"id-b":                {"Tags": map[string]any{"Project": "io-foo"}},
-			"should-not-be-listed": {"Tags": map[string]any{}},
+			"id-a":                 {"Tags": map[string]any{"Project": "io-foo"}},
+			"id-b":                 {"Tags": map[string]any{"Project": "io-foo"}},
+			"should-not-be-listed": {"Tags": map[string]any{"Project": "io-foo"}},
 		},
 	}
 	cfg := testConfig()

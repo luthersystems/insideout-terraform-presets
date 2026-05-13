@@ -97,6 +97,9 @@ func listLambdaFunctionsWithClient(ctx context.Context, client lambdaFunctionsLi
 // AWS WAFv2 docs; from any other region we surface REGIONAL only.
 // Returning the CLOUDFRONT scope from non-us-east-1 would cause the
 // downstream CC ListResources call to return InvalidRequestException.
+//
+// Emit order is REGIONAL first, then CLOUDFRONT — the discoverer
+// preserves the order for emit determinism, so tests pin this.
 func wafv2ParentModels(_ context.Context, _ aws.Config, region string, _ DiscoverArgs) ([]string, error) {
 	if region == "us-east-1" {
 		return []string{

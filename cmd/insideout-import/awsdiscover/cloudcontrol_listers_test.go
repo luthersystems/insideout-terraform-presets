@@ -291,11 +291,10 @@ func TestListCognitoUserPoolDomains_EmitsDomainAndCustomDomain(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// Order is implementation-defined (pool walk × Domain-then-CustomDomain);
-	// sort both sides for comparison.
+	// Order is implementation-defined (pool walk × Domain-then-CustomDomain).
+	// `want` is already sorted; sort `got` to compare set-shaped.
 	sort.Strings(got)
 	want := []string{"alone.example", "auth.example", "co-hosted.example", "custom.example"}
-	sort.Strings(want)
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("domains drift:\n got %v\nwant %v", got, want)
 	}
@@ -325,12 +324,19 @@ func TestListCognitoUserPoolDomains_PropagatesDescribeError(t *testing.T) {
 		describeErr:    sentinel,
 		describeErrFor: "pool-b",
 	}
-	_, err := listCognitoUserPoolDomainsWithClient(context.Background(), fake)
+	got, err := listCognitoUserPoolDomainsWithClient(context.Background(), fake)
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
 	if !errors.Is(err, sentinel) {
 		t.Errorf("err does not wrap sentinel; got %v", err)
+	}
+	// Pin the no-partial-success contract: a mid-walk error must
+	// return nil, not a truncated slice containing pool-a's domain.
+	// Callers retrying on error expect to retry the whole walk; a
+	// partial slice combined with a retry would double-emit pool-a.
+	if got != nil {
+		t.Errorf("partial result leaked on error: got %v, want nil", got)
 	}
 }
 
