@@ -66,5 +66,5 @@ var GoogleFirestoreDatabaseSchema = map[string]FieldSchema{
 }
 
 func init() {
-	Register("google_firestore_database", reflect.TypeFor[GoogleFirestoreDatabase](), GoogleFirestoreDatabaseSchema)
+	Register("google_firestore_database", reflect.TypeFor[GoogleFirestoreDatabase](), GoogleFirestoreDatabaseSchema, GoogleProviderSource)
 }

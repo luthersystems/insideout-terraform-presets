@@ -102,5 +102,5 @@ var GoogleComputeForwardingRuleSchema = map[string]FieldSchema{
 }
 
 func init() {
-	Register("google_compute_forwarding_rule", reflect.TypeFor[GoogleComputeForwardingRule](), GoogleComputeForwardingRuleSchema)
+	Register("google_compute_forwarding_rule", reflect.TypeFor[GoogleComputeForwardingRule](), GoogleComputeForwardingRuleSchema, GoogleProviderSource)
 }

@@ -347,5 +347,5 @@ var GoogleContainerNodePoolSchema = map[string]FieldSchema{
 }
 
 func init() {
-	Register("google_container_node_pool", reflect.TypeFor[GoogleContainerNodePool](), GoogleContainerNodePoolSchema)
+	Register("google_container_node_pool", reflect.TypeFor[GoogleContainerNodePool](), GoogleContainerNodePoolSchema, GoogleProviderSource)
 }

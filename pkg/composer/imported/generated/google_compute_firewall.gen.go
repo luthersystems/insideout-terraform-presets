@@ -81,5 +81,5 @@ var GoogleComputeFirewallSchema = map[string]FieldSchema{
 }
 
 func init() {
-	Register("google_compute_firewall", reflect.TypeFor[GoogleComputeFirewall](), GoogleComputeFirewallSchema)
+	Register("google_compute_firewall", reflect.TypeFor[GoogleComputeFirewall](), GoogleComputeFirewallSchema, GoogleProviderSource)
 }

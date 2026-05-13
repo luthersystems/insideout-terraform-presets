@@ -56,5 +56,5 @@ var GoogleComputeGlobalAddressSchema = map[string]FieldSchema{
 }
 
 func init() {
-	Register("google_compute_global_address", reflect.TypeFor[GoogleComputeGlobalAddress](), GoogleComputeGlobalAddressSchema)
+	Register("google_compute_global_address", reflect.TypeFor[GoogleComputeGlobalAddress](), GoogleComputeGlobalAddressSchema, GoogleProviderSource)
 }

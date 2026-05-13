@@ -197,11 +197,19 @@ type parentScopedDiscoverer interface {
 // in the project); errors are propagated so the operator sees auth
 // failures, missing API enablement, etc.
 //
-// Kept as a side-interface so the ~25 CAI-amenable discoverers'
+// emitter is the same progress.Emitter the orchestrator threads
+// through DiscoverTypes. Discoverers use it to surface non-fatal
+// soft-fails (e.g. sql_user's per-instance list failure) via
+// ServiceWarn so the UI's progress stream receives the same signal
+// stderr does. Implementations may receive a NopEmitter when the
+// caller didn't configure --progress=json; ServiceWarn is then a
+// no-op, preserving the cost of unconfigured callers.
+//
+// Kept as a side-interface so the ~30 CAI-amenable discoverers'
 // contract stays trivial.
 type nonCAIDiscoverer interface {
 	Discoverer
-	ListNonCAI(ctx context.Context, projectID, stackProject string, priorResults []imported.ImportedResource) ([]imported.ImportedResource, error)
+	ListNonCAI(ctx context.Context, projectID, stackProject string, priorResults []imported.ImportedResource, emitter progress.Emitter) ([]imported.ImportedResource, error)
 }
 
 // GCPDiscoverer aggregates the per-type discoverers and fans out a single
@@ -425,7 +433,7 @@ func (g *GCPDiscoverer) DiscoverTypes(ctx context.Context, types []string, args 
 			if !nonCAIDiscovererHasLister(d) {
 				fmt.Fprintf(os.Stderr, "WARN: %s: non-CAI lister unavailable; type will be silently skipped (check Real* lister construction at startup)\n", d.ResourceType())
 			}
-			rs, err := nd.ListNonCAI(ctx, g.projectID, args.Project, out)
+			rs, err := nd.ListNonCAI(ctx, g.projectID, args.Project, out, args.Emitter)
 			if err != nil {
 				args.Emitter.ServiceFinish(nonCAIServiceSlug, "", len(nonCAIResults), time.Since(nonCAIStart))
 				return nil, fmt.Errorf("non-CAI list for %q: %w", d.ResourceType(), err)

@@ -90,5 +90,5 @@ var GoogleComputeGlobalForwardingRuleSchema = map[string]FieldSchema{
 }
 
 func init() {
-	Register("google_compute_global_forwarding_rule", reflect.TypeFor[GoogleComputeGlobalForwardingRule](), GoogleComputeGlobalForwardingRuleSchema)
+	Register("google_compute_global_forwarding_rule", reflect.TypeFor[GoogleComputeGlobalForwardingRule](), GoogleComputeGlobalForwardingRuleSchema, GoogleProviderSource)
 }

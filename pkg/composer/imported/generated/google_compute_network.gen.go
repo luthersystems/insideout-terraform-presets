@@ -52,5 +52,5 @@ var GoogleComputeNetworkSchema = map[string]FieldSchema{
 }
 
 func init() {
-	Register("google_compute_network", reflect.TypeFor[GoogleComputeNetwork](), GoogleComputeNetworkSchema)
+	Register("google_compute_network", reflect.TypeFor[GoogleComputeNetwork](), GoogleComputeNetworkSchema, GoogleProviderSource)
 }

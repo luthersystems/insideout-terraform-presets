@@ -290,6 +290,80 @@ func TestGenerateProvidersTF_DiscoveryUnion(t *testing.T) {
 		require.Equal(t, emptyOut, nilOut,
 			"nil and empty `selected` must produce identical providers.tf")
 	})
+
+	t.Run("gcp imported routes through google.imported alias", func(t *testing.T) {
+		got := string(generateProvidersTF(providersTFInput{
+			Cloud:          "gcp",
+			Region:         "us-central1",
+			GCPProjectID:   "demo-project-12345",
+			Selected:       map[ComponentKey]bool{},
+			Discovered:     map[string]*tfconfig.ProviderRequirement{},
+			ImportedClouds: map[string]bool{"gcp": true},
+		}))
+		require.Contains(t, got, `alias   = "imported"`,
+			"google.imported alias must be declared when ImportedClouds[gcp] is set")
+		require.Contains(t, got, `project = "demo-project-12345"`,
+			"google.imported alias must pin the real project id")
+		require.NotContains(t, got, "google-beta",
+			"google-beta provider must NOT appear when only `gcp` (not `gcp-beta`) is imported")
+	})
+
+	t.Run("gcp-beta imported emits google-beta.imported alias", func(t *testing.T) {
+		// The EmitImportedTF caller flips importedClouds["gcp-beta"]
+		// to true whenever any rendered resource carries
+		// `provider = google-beta.imported`. Verify the round-trip
+		// from that signal: providers.tf must declare both the
+		// google-beta provider in required_providers AND the
+		// google-beta.imported alias block.
+		got := string(generateProvidersTF(providersTFInput{
+			Cloud:        "gcp",
+			Region:       "us-central1",
+			GCPProjectID: "demo-project-12345",
+			Selected:     map[ComponentKey]bool{},
+			Discovered:   map[string]*tfconfig.ProviderRequirement{},
+			ImportedClouds: map[string]bool{
+				"gcp":      true,
+				"gcp-beta": true,
+			},
+		}))
+		require.Contains(t, got, `hashicorp/google-beta`,
+			"required_providers must declare hashicorp/google-beta when gcp-beta imports present")
+		require.Contains(t, got, `provider "google-beta" {`,
+			"google-beta provider alias block must be declared")
+		require.Contains(t, got, `alias   = "imported"`,
+			"both google and google-beta should declare imported aliases")
+		// Both google.imported and google-beta.imported pin the project
+		// id — operator surfaces are identical between the two beyond
+		// the provider source name.
+		require.Equal(t, 2, strings.Count(got, `project = "demo-project-12345"`),
+			"both google.imported and google-beta.imported must pin the project id")
+	})
+
+	t.Run("gcp without imports does not declare beta provider", func(t *testing.T) {
+		// Regression guard: a GCP stack whose imported set is empty
+		// must NOT pull in google-beta required_providers. This
+		// caught a pre-merge bug where the beta required-provider
+		// entry was unconditionally emitted, blocking
+		// `terraform init` for stacks that never used google-beta.
+		got := string(generateProvidersTF(providersTFInput{
+			Cloud:        "gcp",
+			Region:       "us-central1",
+			GCPProjectID: "demo-project-12345",
+			Selected:     map[ComponentKey]bool{},
+			Discovered:   map[string]*tfconfig.ProviderRequirement{},
+		}))
+		require.NotContains(t, got, "hashicorp/google-beta",
+			"google-beta must not appear in required_providers when no imports use it")
+		require.NotContains(t, got, `provider "google-beta"`,
+			"google-beta provider block must not be emitted when no imports use it")
+		// Positive anchor: the test is otherwise all negatives — a
+		// regression that dropped every provider block would still
+		// pass. Pin that the base google provider remains declared.
+		require.Contains(t, got, "hashicorp/google",
+			"base google provider must remain declared even without imports")
+		require.Contains(t, got, `provider "google" {`,
+			"base google provider block must remain emitted even without imports")
+	})
 }
 
 // TestEmitRootMainTF_DependsOn verifies that DependsOn renders correctly

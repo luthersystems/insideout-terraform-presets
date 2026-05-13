@@ -7,9 +7,11 @@ package generated
 // are set from these constants at import time so a re-import can detect
 // schema drift.
 const (
-	AWSProviderSource     = "registry.terraform.io/hashicorp/aws"
-	AWSProviderVersion    = ""
-	GoogleProviderSource  = "registry.terraform.io/hashicorp/google"
-	GoogleProviderVersion = ""
-	SchemaCodegenVersion  = "1"
+	AWSProviderSource         = "registry.terraform.io/hashicorp/aws"
+	AWSProviderVersion        = ""
+	GoogleProviderSource      = "registry.terraform.io/hashicorp/google"
+	GoogleProviderVersion     = ""
+	GoogleBetaProviderSource  = "registry.terraform.io/hashicorp/google-beta"
+	GoogleBetaProviderVersion = ""
+	SchemaCodegenVersion      = "1"
 )

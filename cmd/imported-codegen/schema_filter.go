@@ -17,6 +17,7 @@ func runFilter(args []string) int {
 	in := fs.String("in", "", "path to full ProviderSchemas JSON (required)")
 	awsOut := fs.String("aws-out", "schemas/aws.filtered.json", "output path for filtered AWS schema")
 	googleOut := fs.String("google-out", "schemas/google.filtered.json", "output path for filtered Google schema")
+	googleBetaOut := fs.String("google-beta-out", "schemas/google-beta.filtered.json", "output path for filtered Google-Beta schema")
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
@@ -48,6 +49,16 @@ func runFilter(args []string) int {
 	}
 	if err := writeJSON(*googleOut, googlePS); err != nil {
 		fmt.Fprintf(os.Stderr, "filter: write google: %v\n", err)
+		return 1
+	}
+
+	googleBetaPS, err := filterTo(full, GoogleBetaProviderSource, WantedGoogleBeta)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "filter: google-beta: %v\n", err)
+		return 1
+	}
+	if err := writeJSON(*googleBetaOut, googleBetaPS); err != nil {
+		fmt.Fprintf(os.Stderr, "filter: write google-beta: %v\n", err)
 		return 1
 	}
 	return 0

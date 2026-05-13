@@ -285,5 +285,5 @@ var GoogleComputeInstanceSchema = map[string]FieldSchema{
 }
 
 func init() {
-	Register("google_compute_instance", reflect.TypeFor[GoogleComputeInstance](), GoogleComputeInstanceSchema)
+	Register("google_compute_instance", reflect.TypeFor[GoogleComputeInstance](), GoogleComputeInstanceSchema, GoogleProviderSource)
 }

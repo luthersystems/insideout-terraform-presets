@@ -193,5 +193,5 @@ var GoogleMonitoringAlertPolicySchema = map[string]FieldSchema{
 }
 
 func init() {
-	Register("google_monitoring_alert_policy", reflect.TypeFor[GoogleMonitoringAlertPolicy](), GoogleMonitoringAlertPolicySchema)
+	Register("google_monitoring_alert_policy", reflect.TypeFor[GoogleMonitoringAlertPolicy](), GoogleMonitoringAlertPolicySchema, GoogleProviderSource)
 }

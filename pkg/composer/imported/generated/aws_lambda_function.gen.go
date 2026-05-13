@@ -169,5 +169,5 @@ var AWSLambdaFunctionSchema = map[string]FieldSchema{
 }
 
 func init() {
-	Register("aws_lambda_function", reflect.TypeFor[AWSLambdaFunction](), AWSLambdaFunctionSchema)
+	Register("aws_lambda_function", reflect.TypeFor[AWSLambdaFunction](), AWSLambdaFunctionSchema, AWSProviderSource)
 }

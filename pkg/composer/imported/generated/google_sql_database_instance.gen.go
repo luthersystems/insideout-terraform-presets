@@ -266,5 +266,5 @@ var GoogleSqlDatabaseInstanceSchema = map[string]FieldSchema{
 }
 
 func init() {
-	Register("google_sql_database_instance", reflect.TypeFor[GoogleSqlDatabaseInstance](), GoogleSqlDatabaseInstanceSchema)
+	Register("google_sql_database_instance", reflect.TypeFor[GoogleSqlDatabaseInstance](), GoogleSqlDatabaseInstanceSchema, GoogleProviderSource)
 }

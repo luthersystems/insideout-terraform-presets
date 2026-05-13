@@ -151,5 +151,5 @@ var GoogleRedisInstanceSchema = map[string]FieldSchema{
 }
 
 func init() {
-	Register("google_redis_instance", reflect.TypeFor[GoogleRedisInstance](), GoogleRedisInstanceSchema)
+	Register("google_redis_instance", reflect.TypeFor[GoogleRedisInstance](), GoogleRedisInstanceSchema, GoogleProviderSource)
 }

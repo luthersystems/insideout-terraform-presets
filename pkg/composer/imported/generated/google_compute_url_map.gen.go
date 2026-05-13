@@ -680,5 +680,5 @@ var GoogleComputeURLMapSchema = map[string]FieldSchema{
 }
 
 func init() {
-	Register("google_compute_url_map", reflect.TypeFor[GoogleComputeURLMap](), GoogleComputeURLMapSchema)
+	Register("google_compute_url_map", reflect.TypeFor[GoogleComputeURLMap](), GoogleComputeURLMapSchema, GoogleProviderSource)
 }

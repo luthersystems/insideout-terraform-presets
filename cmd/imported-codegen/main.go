@@ -4,11 +4,11 @@
 //
 // Subcommands:
 //
-//	filter  --in <full.json> --aws-out <path> --google-out <path>
+//	filter  --in <full.json> --aws-out <path> --google-out <path> --google-beta-out <path>
 //	        Strip a full ProviderSchemas dump down to just the wanted
 //	        types and emit one filtered file per cloud.
 //
-//	gen     --aws-schema <path> --google-schema <path> --out <dir>
+//	gen     --aws-schema <path> --google-schema <path> --google-beta-schema <path> --out <dir>
 //	        Generate <type>.gen.go for every wanted type plus
 //	        version.gen.go.
 //
@@ -52,6 +52,7 @@ func runGen(args []string) int {
 	fs := flag.NewFlagSet("gen", flag.ExitOnError)
 	awsSchema := fs.String("aws-schema", "schemas/aws.filtered.json", "path to filtered AWS provider schema JSON")
 	googleSchema := fs.String("google-schema", "schemas/google.filtered.json", "path to filtered Google provider schema JSON")
+	googleBetaSchema := fs.String("google-beta-schema", "schemas/google-beta.filtered.json", "path to filtered Google-Beta provider schema JSON")
 	outDir := fs.String("out", "pkg/composer/imported/generated", "directory to write generated *.gen.go files")
 	if err := fs.Parse(args); err != nil {
 		return 2
@@ -72,9 +73,15 @@ func runGen(args []string) int {
 		fmt.Fprintf(os.Stderr, "load google schema: %v\n", err)
 		return 1
 	}
+	googleBetaPS, err := LoadFiltered(*googleBetaSchema)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "load google-beta schema: %v\n", err)
+		return 1
+	}
 
 	awsVersion := providerVersion(awsPS, AWSProviderSource)
 	googleVersion := providerVersion(googlePS, GoogleProviderSource)
+	googleBetaVersion := providerVersion(googleBetaPS, GoogleBetaProviderSource)
 
 	for _, tfType := range WantedAWS {
 		res, _, err := FindResource(awsPS, AWSProviderSource, tfType)
@@ -102,8 +109,21 @@ func runGen(args []string) int {
 		}
 		fmt.Println(filepath.Base(path))
 	}
+	for _, tfType := range WantedGoogleBeta {
+		res, _, err := FindResource(googleBetaPS, GoogleBetaProviderSource, tfType)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%s: %v\n", tfType, err)
+			return 1
+		}
+		path, err := EmitTypeFile(*outDir, res, GoogleBetaProviderSource, tfType, googleBetaVersion)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%s: %v\n", tfType, err)
+			return 1
+		}
+		fmt.Println(filepath.Base(path))
+	}
 
-	if _, err := EmitVersionFile(*outDir, awsVersion, googleVersion); err != nil {
+	if _, err := EmitVersionFile(*outDir, awsVersion, googleVersion, googleBetaVersion); err != nil {
 		fmt.Fprintf(os.Stderr, "version.gen.go: %v\n", err)
 		return 1
 	}

@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"testing"
+
+	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/progress"
 )
 
 func TestIdentityPlatformConfigListNonCAI_ReturnsConfigWhenActivated(t *testing.T) {
@@ -16,7 +18,7 @@ func TestIdentityPlatformConfigListNonCAI_ReturnsConfigWhenActivated(t *testing.
 		},
 	}
 	d := newIdentityPlatformConfigDiscoverer(fake).(*identityPlatformConfigDiscoverer)
-	got, err := d.ListNonCAI(context.Background(), "real-proj", "", nil)
+	got, err := d.ListNonCAI(context.Background(), "real-proj", "", nil, progress.NopEmitter{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,7 +41,7 @@ func TestIdentityPlatformConfigListNonCAI_NotActivatedYieldsZero(t *testing.T) {
 	// state the lister returns when getConfig hits 404.
 	fake := &fakeIdentityPlatformConfigLister{cfg: nil, err: nil}
 	d := newIdentityPlatformConfigDiscoverer(fake).(*identityPlatformConfigDiscoverer)
-	got, err := d.ListNonCAI(context.Background(), "real-proj", "", nil)
+	got, err := d.ListNonCAI(context.Background(), "real-proj", "", nil, progress.NopEmitter{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,7 +55,7 @@ func TestIdentityPlatformConfigListNonCAI_ErrorPropagates(t *testing.T) {
 	want := errors.New("API not enabled")
 	fake := &fakeIdentityPlatformConfigLister{err: want}
 	d := newIdentityPlatformConfigDiscoverer(fake).(*identityPlatformConfigDiscoverer)
-	_, err := d.ListNonCAI(context.Background(), "real-proj", "", nil)
+	_, err := d.ListNonCAI(context.Background(), "real-proj", "", nil, progress.NopEmitter{})
 	if !errors.Is(err, want) {
 		t.Errorf("err=%v, want wrapping %v", err, want)
 	}
@@ -62,7 +64,7 @@ func TestIdentityPlatformConfigListNonCAI_ErrorPropagates(t *testing.T) {
 func TestIdentityPlatformConfigListNonCAI_NilListerTolerated(t *testing.T) {
 	t.Parallel()
 	d := newIdentityPlatformConfigDiscoverer(nil).(*identityPlatformConfigDiscoverer)
-	got, err := d.ListNonCAI(context.Background(), "real-proj", "", nil)
+	got, err := d.ListNonCAI(context.Background(), "real-proj", "", nil, progress.NopEmitter{})
 	if err != nil {
 		t.Fatal(err)
 	}

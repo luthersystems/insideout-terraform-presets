@@ -159,5 +159,5 @@ var AWSDynamodbTableSchema = map[string]FieldSchema{
 }
 
 func init() {
-	Register("aws_dynamodb_table", reflect.TypeFor[AWSDynamodbTable](), AWSDynamodbTableSchema)
+	Register("aws_dynamodb_table", reflect.TypeFor[AWSDynamodbTable](), AWSDynamodbTableSchema, AWSProviderSource)
 }

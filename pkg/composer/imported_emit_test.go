@@ -347,6 +347,110 @@ func TestProviderAliasFor(t *testing.T) {
 	assert.Equal(t, "aws.imported", providerAliasFor("unknown"))
 }
 
+// TestProviderAliasForResource pins the per-type routing decision for
+// imported GCP resources. The three API Gateway types live in
+// hashicorp/google-beta and must emit `provider = google-beta.imported`
+// so Stage 2b's terraform plan -generate-config-out and the
+// downstream import resolve through the same provider that originally
+// created them. Every other GCP type (registered or unregistered) falls
+// back to `google.imported`; AWS routes through `aws.imported`
+// regardless.
+func TestProviderAliasForResource(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name      string
+		cloud     string
+		idCloud   string // Identity.Cloud field; "" means leave zero
+		tfType    string
+		wantAlias string
+	}{
+		{name: "google_pubsub_topic routes to google.imported", cloud: "gcp", tfType: "google_pubsub_topic", wantAlias: "google.imported"},
+		{name: "google_api_gateway_api routes to google-beta.imported", cloud: "gcp", tfType: "google_api_gateway_api", wantAlias: "google-beta.imported"},
+		{name: "google_api_gateway_api_config routes to google-beta.imported", cloud: "gcp", tfType: "google_api_gateway_api_config", wantAlias: "google-beta.imported"},
+		{name: "google_api_gateway_gateway routes to google-beta.imported", cloud: "gcp", tfType: "google_api_gateway_gateway", wantAlias: "google-beta.imported"},
+		{name: "unregistered gcp falls back to google.imported", cloud: "gcp", tfType: "google_not_yet_codegened", wantAlias: "google.imported"},
+		{name: "AWS routes to aws.imported", cloud: "aws", tfType: "aws_sqs_queue", wantAlias: "aws.imported"},
+		// Pin that the `cloud` arg dominates over Identity.Cloud:
+		// a regression that switched to reading id.Cloud would
+		// silently re-route every typed resource since most callers
+		// set both fields to the same value. Force them to disagree.
+		{name: "cloud arg dominates over id.Cloud for AWS-typed in gcp scope", cloud: "gcp", idCloud: "aws", tfType: "aws_sqs_queue", wantAlias: "google.imported"},
+		{name: "cloud arg dominates over id.Cloud for GCP-typed in aws scope", cloud: "aws", idCloud: "gcp", tfType: "google_api_gateway_api", wantAlias: "aws.imported"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			id := imported.ResourceIdentity{Type: tc.tfType, Cloud: tc.idCloud}
+			got := providerAliasForResource(tc.cloud, id)
+			assert.Equal(t, tc.wantAlias, got)
+		})
+	}
+}
+
+// TestEmitImportedTF_GoogleBetaSetsProvidersUsedKey asserts that emitting
+// a google-beta-backed resource flips the synthetic "gcp-beta" key in
+// the providersUsed return map. The compose layer reads that key to
+// decide whether to emit the `google-beta.imported` block in
+// providers.tf — without the signal, the rendered `provider =
+// google-beta.imported` line would reference an undeclared provider
+// and `terraform init` would fail.
+func TestEmitImportedTF_GoogleBetaSetsProvidersUsedKey(t *testing.T) {
+	t.Parallel()
+	ir := imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Cloud:    "gcp",
+			Type:     "google_api_gateway_api",
+			Address:  "google_api_gateway_api.demo",
+			ImportID: "projects/p/locations/global/apis/demo",
+		},
+		Tier:  imported.TierImportedFlat,
+		Attrs: []byte(`{}`),
+	}
+	out, used := EmitImportedTF("gcp", []imported.ImportedResource{ir}, EmitImportedOpts{})
+	require.NotNil(t, out)
+	s := string(out)
+	assert.True(t, used[ProvidersUsedKeyGCP], "used[gcp] must be set: %v", used)
+	assert.True(t, used[ProvidersUsedKeyGCPBeta], "used[gcp-beta] must be set when google-beta type emitted: %v", used)
+	// Cross-cloud isolation: a GCP-only emit must not flip the AWS
+	// key. Without this, a regression that unconditionally flips
+	// every cloud key would pass the gcp/gcp-beta assertions but
+	// silently pollute providers.tf with stray alias blocks.
+	assert.False(t, used[ProvidersUsedKeyAWS], "used[aws] must NOT be set on a gcp-only emit: %v", used)
+	assert.True(t, hasAttr(t, s, "provider", "google-beta.imported"),
+		"provider attr must reference google-beta.imported in:\n%s", s)
+	// Anchor the test in a non-vacuous emit — without this, a
+	// regression that returned nil for empty Attrs would still
+	// satisfy the used[...] checks if those keys were set as a
+	// side effect of pre-emit cloud detection.
+	assert.Contains(t, s, `resource "google_api_gateway_api"`,
+		"emitter must produce a resource block for the typed API gateway type")
+}
+
+// TestEmitImportedTF_SkippedTierDoesNotFlipGCPBeta is the negative
+// counterpart to TestEmitImportedTF_GoogleBetaSetsProvidersUsedKey.
+// A google-beta-backed resource whose tier is `External` (not
+// emit-eligible) must NOT flip the gcp-beta key — otherwise the
+// composer emits an unused google-beta provider block in providers.tf,
+// triggering `terraform init` errors for stacks that have no
+// rendered resource needing the alias.
+func TestEmitImportedTF_SkippedTierDoesNotFlipGCPBeta(t *testing.T) {
+	t.Parallel()
+	ir := imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Cloud:    "gcp",
+			Type:     "google_api_gateway_api",
+			Address:  "google_api_gateway_api.skipped",
+			ImportID: "projects/p/locations/global/apis/skipped",
+		},
+		Tier:  imported.TierExternalByPolicy,
+		Attrs: []byte(`{}`),
+	}
+	out, used := EmitImportedTF("gcp", []imported.ImportedResource{ir}, EmitImportedOpts{})
+	assert.Nil(t, out, "skipped tier must produce no HCL output")
+	assert.False(t, used[ProvidersUsedKeyGCPBeta],
+		"used[gcp-beta] must NOT fire when the only beta resource is in a skipped tier: %v", used)
+}
+
 func TestAddressLabel(t *testing.T) {
 	t.Parallel()
 	assert.Equal(t, "orders_dlq", addressLabel("aws_sqs_queue.orders_dlq"))

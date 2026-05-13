@@ -1142,5 +1142,5 @@ var GoogleContainerClusterSchema = map[string]FieldSchema{
 }
 
 func init() {
-	Register("google_container_cluster", reflect.TypeFor[GoogleContainerCluster](), GoogleContainerClusterSchema)
+	Register("google_container_cluster", reflect.TypeFor[GoogleContainerCluster](), GoogleContainerClusterSchema, GoogleProviderSource)
 }

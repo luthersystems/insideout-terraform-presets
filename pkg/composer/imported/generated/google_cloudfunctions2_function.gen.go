@@ -164,5 +164,5 @@ var GoogleCloudfunctions2FunctionSchema = map[string]FieldSchema{
 }
 
 func init() {
-	Register("google_cloudfunctions2_function", reflect.TypeFor[GoogleCloudfunctions2Function](), GoogleCloudfunctions2FunctionSchema)
+	Register("google_cloudfunctions2_function", reflect.TypeFor[GoogleCloudfunctions2Function](), GoogleCloudfunctions2FunctionSchema, GoogleProviderSource)
 }

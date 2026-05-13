@@ -35,5 +35,5 @@ var AWSCloudwatchLogGroupSchema = map[string]FieldSchema{
 }
 
 func init() {
-	Register("aws_cloudwatch_log_group", reflect.TypeFor[AWSCloudwatchLogGroup](), AWSCloudwatchLogGroupSchema)
+	Register("aws_cloudwatch_log_group", reflect.TypeFor[AWSCloudwatchLogGroup](), AWSCloudwatchLogGroupSchema, AWSProviderSource)
 }

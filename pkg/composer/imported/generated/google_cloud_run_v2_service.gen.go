@@ -354,5 +354,5 @@ var GoogleCloudRunV2ServiceSchema = map[string]FieldSchema{
 }
 
 func init() {
-	Register("google_cloud_run_v2_service", reflect.TypeFor[GoogleCloudRunV2Service](), GoogleCloudRunV2ServiceSchema)
+	Register("google_cloud_run_v2_service", reflect.TypeFor[GoogleCloudRunV2Service](), GoogleCloudRunV2ServiceSchema, GoogleProviderSource)
 }

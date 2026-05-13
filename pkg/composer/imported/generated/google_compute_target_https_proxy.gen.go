@@ -58,5 +58,5 @@ var GoogleComputeTargetHTTPSProxySchema = map[string]FieldSchema{
 }
 
 func init() {
-	Register("google_compute_target_https_proxy", reflect.TypeFor[GoogleComputeTargetHTTPSProxy](), GoogleComputeTargetHTTPSProxySchema)
+	Register("google_compute_target_https_proxy", reflect.TypeFor[GoogleComputeTargetHTTPSProxy](), GoogleComputeTargetHTTPSProxySchema, GoogleProviderSource)
 }

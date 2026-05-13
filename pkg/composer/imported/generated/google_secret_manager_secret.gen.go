@@ -101,5 +101,5 @@ var GoogleSecretManagerSecretSchema = map[string]FieldSchema{
 }
 
 func init() {
-	Register("google_secret_manager_secret", reflect.TypeFor[GoogleSecretManagerSecret](), GoogleSecretManagerSecretSchema)
+	Register("google_secret_manager_secret", reflect.TypeFor[GoogleSecretManagerSecret](), GoogleSecretManagerSecretSchema, GoogleProviderSource)
 }

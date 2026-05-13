@@ -3,8 +3,8 @@ package gcpdiscover
 import (
 	"context"
 	"fmt"
-	"os"
 
+	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/progress"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
 
@@ -56,11 +56,14 @@ func (sqlUserDiscoverer) DiscoverByID(_ context.Context, _ gcpAssetSearcher, _ s
 // and queries each instance's users. The dependency is documented in
 // #383: SQL user discovery is sequential on the CAI fanout result.
 //
-// Per-instance failures soft-fail (warning surface is the caller's
-// responsibility) so one inaccessible instance doesn't block the
-// rest. Hard errors only when the lister itself is misconfigured or
-// the auth surface fails systemically.
-func (d *sqlUserDiscoverer) ListNonCAI(ctx context.Context, projectID, _ string, priorResults []imported.ImportedResource) ([]imported.ImportedResource, error) {
+// Per-instance failures soft-fail so one inaccessible instance doesn't
+// block the rest. The orchestrator's progress.Emitter receives a
+// ServiceWarn for each soft-fail so the UI stream sees the same
+// signal stderr would (#396) — a NopEmitter swallows it for callers
+// that didn't opt in to --progress=json. Hard errors only when the
+// lister itself is misconfigured or the auth surface fails
+// systemically.
+func (d *sqlUserDiscoverer) ListNonCAI(ctx context.Context, projectID, _ string, priorResults []imported.ImportedResource, emitter progress.Emitter) ([]imported.ImportedResource, error) {
 	if d.lister == nil {
 		return nil, nil
 	}
@@ -74,10 +77,11 @@ func (d *sqlUserDiscoverer) ListNonCAI(ctx context.Context, projectID, _ string,
 		users, err := d.lister.ListSQLUsers(ctx, projectID, instance)
 		if err != nil {
 			// Soft-fail per #383: skip this instance and continue,
-			// but log so a 5-of-5 systemic failure mode surfaces
-			// (e.g. quota / auth on the sqladmin API). The
-			// per-instance error is otherwise structural noise.
-			fmt.Fprintf(os.Stderr, "WARN: sql_user: list failed for instance %q in project %q (continuing): %v\n", instance, projectID, err)
+			// but emit a service_warn so a 5-of-5 systemic failure
+			// mode surfaces (e.g. quota / auth on the sqladmin API).
+			// The per-instance error is otherwise structural noise.
+			msg := fmt.Sprintf("sql_user: list failed for instance %q in project %q (continuing): %v", instance, projectID, err)
+			emitter.ServiceWarn(nonCAIServiceSlug, "", msg)
 			continue
 		}
 		for _, u := range users {

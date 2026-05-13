@@ -25,7 +25,7 @@ func TestRegister_LookupAndUnmarshal(t *testing.T) {
 	const tfType = "_test_registry_basic"
 
 	t.Cleanup(func() { unregisterForTest(tfType) })
-	Register(tfType, reflect.TypeFor[regTestType](), regTestTypeSchema)
+	Register(tfType, reflect.TypeFor[regTestType](), regTestTypeSchema, AWSProviderSource)
 
 	gotType, gotSchema, ok := Lookup(tfType)
 	require.True(t, ok)
@@ -46,9 +46,9 @@ func TestRegister_DuplicatePanics(t *testing.T) {
 	const tfType = "_test_registry_dup"
 	t.Cleanup(func() { unregisterForTest(tfType) })
 
-	Register(tfType, reflect.TypeFor[regTestType](), regTestTypeSchema)
+	Register(tfType, reflect.TypeFor[regTestType](), regTestTypeSchema, AWSProviderSource)
 	assert.Panics(t, func() {
-		Register(tfType, reflect.TypeFor[regTestType](), regTestTypeSchema)
+		Register(tfType, reflect.TypeFor[regTestType](), regTestTypeSchema, AWSProviderSource)
 	})
 }
 
@@ -59,11 +59,49 @@ func TestUnmarshalAttrs_UnknownTypeErrors(t *testing.T) {
 	assert.Contains(t, err.Error(), "no registered type")
 }
 
-// TestRegistry_AllTenPhase1Registered locks in the Phase 1 coverage:
-// every name in this list must appear in the registry, populated by the
-// generated init() side effects. Adding or removing a generated type
-// requires updating this list.
-func TestRegistry_AllTenPhase1Registered(t *testing.T) {
+// TestLookupProviderSource_RoutesGoogleBetaTypes asserts that the
+// imported-resource emission can distinguish hashicorp/google-beta types
+// from hashicorp/google types at registration time. This is the
+// composer's only signal for routing API Gateway resources through the
+// `google-beta.imported` alias instead of `google.imported`.
+func TestLookupProviderSource_RoutesGoogleBetaTypes(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		tfType     string
+		wantSource string
+	}{
+		{tfType: "aws_sqs_queue", wantSource: AWSProviderSource},
+		{tfType: "google_pubsub_topic", wantSource: GoogleProviderSource},
+		{tfType: "google_compute_network", wantSource: GoogleProviderSource},
+		{tfType: "google_api_gateway_api", wantSource: GoogleBetaProviderSource},
+		{tfType: "google_api_gateway_api_config", wantSource: GoogleBetaProviderSource},
+		{tfType: "google_api_gateway_gateway", wantSource: GoogleBetaProviderSource},
+	}
+	for _, tc := range cases {
+		t.Run(tc.tfType, func(t *testing.T) {
+			t.Parallel()
+			got, ok := LookupProviderSource(tc.tfType)
+			require.True(t, ok, "expected %q to be registered", tc.tfType)
+			assert.Equal(t, tc.wantSource, got)
+		})
+	}
+}
+
+func TestLookupProviderSource_UnknownTypeReturnsFalse(t *testing.T) {
+	t.Parallel()
+	got, ok := LookupProviderSource("_definitely_not_registered")
+	assert.False(t, ok)
+	assert.Equal(t, "", got)
+}
+
+// TestRegistry_BaselineTypesStillRegistered is a smoke regression
+// check: the original 10 types (5 AWS, 5 GCP) shipped in Phase 1
+// must remain registered as the codegen surface grows. The
+// authoritative coverage gate is now
+// TestRegisteredTypes_CoveredSetExact in the policy package — this
+// test exists to catch a regression that silently drops a baseline
+// type without flipping the broader gate.
+func TestRegistry_BaselineTypesStillRegistered(t *testing.T) {
 	t.Parallel()
 	want := []string{
 		"aws_cloudwatch_log_group",
@@ -87,8 +125,8 @@ func TestRegisteredTypes_SortedAndStable(t *testing.T) {
 	const a = "_test_registry_aaa"
 	const b = "_test_registry_bbb"
 	t.Cleanup(func() { unregisterForTest(a); unregisterForTest(b) })
-	Register(b, reflect.TypeFor[regTestType](), regTestTypeSchema)
-	Register(a, reflect.TypeFor[regTestType](), regTestTypeSchema)
+	Register(b, reflect.TypeFor[regTestType](), regTestTypeSchema, AWSProviderSource)
+	Register(a, reflect.TypeFor[regTestType](), regTestTypeSchema, GoogleProviderSource)
 
 	all := RegisteredTypes()
 	// Find our two — the slice may also contain real generated types

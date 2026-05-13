@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"testing"
+
+	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/progress"
 )
 
 func TestLoggingProjectSinkListNonCAI_FiltersBuiltinsAndProject(t *testing.T) {
@@ -17,7 +19,7 @@ func TestLoggingProjectSinkListNonCAI_FiltersBuiltinsAndProject(t *testing.T) {
 		},
 	}
 	d := newLoggingProjectSinkDiscoverer(fake).(*loggingProjectSinkDiscoverer)
-	got, err := d.ListNonCAI(context.Background(), "real-proj", "io-foo", nil)
+	got, err := d.ListNonCAI(context.Background(), "real-proj", "io-foo", nil, progress.NopEmitter{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +56,7 @@ func TestLoggingProjectSinkListNonCAI_RejectsLeadingProjectsSegmentSpuriousMatch
 		},
 	}
 	d := newLoggingProjectSinkDiscoverer(fake).(*loggingProjectSinkDiscoverer)
-	got, err := d.ListNonCAI(context.Background(), "io-foo-prod", "io-foo", nil)
+	got, err := d.ListNonCAI(context.Background(), "io-foo-prod", "io-foo", nil, progress.NopEmitter{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +68,7 @@ func TestLoggingProjectSinkListNonCAI_RejectsLeadingProjectsSegmentSpuriousMatch
 func TestLoggingProjectSinkListNonCAI_NilListerTolerated(t *testing.T) {
 	t.Parallel()
 	d := newLoggingProjectSinkDiscoverer(nil).(*loggingProjectSinkDiscoverer)
-	got, err := d.ListNonCAI(context.Background(), "real-proj", "io-foo", nil)
+	got, err := d.ListNonCAI(context.Background(), "real-proj", "io-foo", nil, progress.NopEmitter{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +82,7 @@ func TestLoggingProjectSinkListNonCAI_ListerErrorPropagates(t *testing.T) {
 	want := errors.New("logging API down")
 	fake := &fakeLoggingSinkLister{err: want}
 	d := newLoggingProjectSinkDiscoverer(fake).(*loggingProjectSinkDiscoverer)
-	_, err := d.ListNonCAI(context.Background(), "real-proj", "io-foo", nil)
+	_, err := d.ListNonCAI(context.Background(), "real-proj", "io-foo", nil, progress.NopEmitter{})
 	if !errors.Is(err, want) {
 		t.Errorf("err=%v, want wrapping %v", err, want)
 	}
@@ -95,7 +97,7 @@ func TestLoggingProjectSinkListNonCAI_EmptyStackProjectMatchesAll(t *testing.T) 
 		},
 	}
 	d := newLoggingProjectSinkDiscoverer(fake).(*loggingProjectSinkDiscoverer)
-	got, err := d.ListNonCAI(context.Background(), "real-proj", "", nil)
+	got, err := d.ListNonCAI(context.Background(), "real-proj", "", nil, progress.NopEmitter{})
 	if err != nil {
 		t.Fatal(err)
 	}

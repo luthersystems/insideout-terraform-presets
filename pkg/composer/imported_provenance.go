@@ -68,29 +68,6 @@ var untaggableAWS = map[string]struct{}{
 	"aws_wafv2_web_acl_association":                      {},
 }
 
-// labelableGCP mirrors the canonical LABEL_CAPABLE_GCP array in
-// tests/lint-project-label.sh. Unlike AWS where most resources accept tags,
-// GCP labelability is an allowlist: a type is labelable only if it appears
-// here. Types not in this list are weak-locked.
-var labelableGCP = map[string]struct{}{
-	"google_api_gateway_api":                {},
-	"google_api_gateway_api_config":         {},
-	"google_api_gateway_gateway":            {},
-	"google_cloud_run_v2_service":           {},
-	"google_cloudfunctions2_function":       {},
-	"google_compute_global_address":         {},
-	"google_compute_global_forwarding_rule": {},
-	"google_compute_instance":               {},
-	"google_compute_security_policy":        {},
-	"google_kms_crypto_key":                 {},
-	"google_pubsub_subscription":            {},
-	"google_pubsub_topic":                   {},
-	"google_redis_instance":                 {},
-	"google_secret_manager_secret":          {},
-	"google_storage_bucket":                 {},
-	"google_vertex_ai_dataset":              {},
-}
-
 // taggable returns the HCL attribute name ("tags" for AWS, "labels" for GCP)
 // to inject provenance into for ir, or ("", false) if the resource type does
 // not support tag/label-based mutual exclusion (weak lock).
@@ -98,9 +75,14 @@ var labelableGCP = map[string]struct{}{
 // Decision order:
 //  1. Layer 1 generated schema (authoritative when registered): the schema
 //     map indicates whether the type carries a "tags" or "labels" key.
-//  2. Static allowlists mirroring the lint scripts for types outside Phase 1.
-//  3. Default: AWS unknown types are taggable; GCP unknown types are NOT
-//     labelable (matches the lint script's allowlist semantics).
+//  2. AWS unregistered types: default to taggable unless explicitly listed
+//     in untaggableAWS (most AWS resources accept tags).
+//  3. GCP unregistered types: weak-lock (the long tail of GCP types lives
+//     in the typed registry now after Bundle 9–12; anything still
+//     unregistered is too unknown to label safely). The historical
+//     `labelableGCP` static allowlist was deleted in #396 once every
+//     entry it carried also lived in the typed registry — the schema
+//     branch above subsumes it.
 func taggable(ir imported.ImportedResource) (attr string, ok bool) {
 	cloud := strings.ToLower(strings.TrimSpace(ir.Identity.Cloud))
 	tfType := strings.TrimSpace(ir.Identity.Type)
@@ -130,9 +112,8 @@ func taggable(ir imported.ImportedResource) (attr string, ok bool) {
 		}
 		return "tags", true
 	case "gcp":
-		if _, allowed := labelableGCP[tfType]; allowed {
-			return "labels", true
-		}
+		// Unregistered GCP types weak-lock by design — see header
+		// comment for the rationale.
 		return "", false
 	}
 	return "", false
@@ -463,12 +444,27 @@ func untaggableAWSSlice() []string {
 	return out
 }
 
-// labelableGCPSlice returns the sorted labelable GCP resource type list for
-// cross-checking against the lint script.
-func labelableGCPSlice() []string {
-	out := make([]string, 0, len(labelableGCP))
-	for k := range labelableGCP {
-		out = append(out, k)
+// labelableGCPFromRegistry returns the sorted list of GCP types whose
+// generated schema declares a `labels` attribute. After #396 this is
+// the single source of truth for "GCP types that accept labels"; the
+// historical static `labelableGCP` allowlist was deleted because every
+// entry it carried also lived in the typed registry. Used by the
+// drift test that pins parity with tests/lint-project-label.sh's
+// LABEL_CAPABLE_GCP bash array.
+func labelableGCPFromRegistry() []string {
+	var out []string
+	for _, tfType := range generated.RegisteredTypes() {
+		if !strings.HasPrefix(tfType, "google_") {
+			continue
+		}
+		_, schema, ok := generated.Lookup(tfType)
+		if !ok {
+			continue
+		}
+		if _, has := schema["labels"]; !has {
+			continue
+		}
+		out = append(out, tfType)
 	}
 	sort.Strings(out)
 	return out

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/progress"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
 
@@ -54,7 +55,7 @@ func (identityPlatformConfigDiscoverer) DiscoverByID(_ context.Context, _ gcpAss
 // contract — a 404 from GetConfig isn't an error, it's an empty
 // state). stackProject is ignored: there's one Config per project and
 // it doesn't carry the stack-project name in its short name.
-func (d *identityPlatformConfigDiscoverer) ListNonCAI(ctx context.Context, projectID, _ string, _ []imported.ImportedResource) ([]imported.ImportedResource, error) {
+func (d *identityPlatformConfigDiscoverer) ListNonCAI(ctx context.Context, projectID, _ string, _ []imported.ImportedResource, _ progress.Emitter) ([]imported.ImportedResource, error) {
 	if d.lister == nil {
 		return nil, nil
 	}

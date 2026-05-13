@@ -53,5 +53,5 @@ var GoogleVertexAiDatasetSchema = map[string]FieldSchema{
 }
 
 func init() {
-	Register("google_vertex_ai_dataset", reflect.TypeFor[GoogleVertexAiDataset](), GoogleVertexAiDatasetSchema)
+	Register("google_vertex_ai_dataset", reflect.TypeFor[GoogleVertexAiDataset](), GoogleVertexAiDatasetSchema, GoogleProviderSource)
 }

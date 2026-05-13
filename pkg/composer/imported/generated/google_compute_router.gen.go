@@ -60,5 +60,5 @@ var GoogleComputeRouterSchema = map[string]FieldSchema{
 }
 
 func init() {
-	Register("google_compute_router", reflect.TypeFor[GoogleComputeRouter](), GoogleComputeRouterSchema)
+	Register("google_compute_router", reflect.TypeFor[GoogleComputeRouter](), GoogleComputeRouterSchema, GoogleProviderSource)
 }

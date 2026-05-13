@@ -39,7 +39,6 @@ LABEL_CAPABLE_GCP=(
   google_compute_global_address
   google_compute_global_forwarding_rule
   google_compute_instance
-  google_compute_security_policy
   google_kms_crypto_key
   google_pubsub_subscription
   google_pubsub_topic
@@ -48,6 +47,21 @@ LABEL_CAPABLE_GCP=(
   google_storage_bucket
   google_vertex_ai_dataset
 )
+# Note (#396): google_compute_security_policy was previously listed
+# here but the hashicorp/google v6.10 provider schema does not expose
+# a `labels` attribute on it. The drift test
+# TestUntaggableAllowlistsMatchLintScripts (one-way subset against
+# pkg/composer/imported/generated) flagged it. The cloud_armor preset
+# does not emit `labels = ...` on its policy, so removing the entry
+# is safe.
+#
+# google_monitoring_notification_channel is in the typed registry
+# with a `labels` attribute but the channel-type-specific semantic
+# (labels carry channel keys like `email_address`) makes
+# project-tagging via merge({project = var.project}, ...) wrong —
+# adding it here would force the cloud_monitoring preset into a
+# semantically incorrect merge. Tracked for a follow-up that
+# distinguishes "free-form labels" from "typed-content labels".
 
 allow_pattern="^($(IFS='|'; echo "${LABEL_CAPABLE_GCP[*]}"))$"
 

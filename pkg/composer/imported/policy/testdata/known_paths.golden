@@ -97,6 +97,48 @@ aws_sqs_queue	sqs_managed_sse_enabled	Tuning	Security	RileyVisible	RequiresAppro
 aws_sqs_queue	tags	Tuning		Hidden	SystemOnly	Redacted	
 aws_sqs_queue	tags_all	Tuning		Hidden	SystemOnly	Redacted	
 aws_sqs_queue	visibility_timeout_seconds	Tuning	Reliability	RileyVisible	ChatSafe		
+google_api_gateway_api	api_id	Identity		UIVisible	Never		AlwaysReplace
+google_api_gateway_api	create_time	Identity		RileyVisible	Never		
+google_api_gateway_api	display_name	Tuning		UIVisible	ChatSafe		
+google_api_gateway_api	effective_labels	Tuning		Hidden	SystemOnly	Redacted	
+google_api_gateway_api	id	Identity		RileyVisible	Never		
+google_api_gateway_api	labels	Tuning		Hidden	SystemOnly	Redacted	
+google_api_gateway_api	managed_service	Identity	Reliability	RileyVisible	Never		
+google_api_gateway_api	name	Identity		UIVisible	Never		
+google_api_gateway_api	project	Identity		UIVisible	Never		AlwaysReplace
+google_api_gateway_api	terraform_labels	Tuning		Hidden	SystemOnly	Redacted	
+google_api_gateway_api	timeouts	Tuning		Hidden	SystemOnly		
+google_api_gateway_api_config	api	Wiring	Reliability	UIVisible	RelationshipOnly		AlwaysReplace
+google_api_gateway_api_config	api_config_id	Identity		UIVisible	Never		AlwaysReplace
+google_api_gateway_api_config	api_config_id_prefix	Identity		RileyVisible	Never		AlwaysReplace
+google_api_gateway_api_config	display_name	Tuning		UIVisible	ChatSafe		
+google_api_gateway_api_config	effective_labels	Tuning		Hidden	SystemOnly	Redacted	
+google_api_gateway_api_config	gateway_config.backend_config.google_service_account	Wiring	Security	UIVisible	RelationshipOnly		MayReplace
+google_api_gateway_api_config	grpc_services.file_descriptor_set.contents	Tuning	Reliability	RileyVisible	RequiresApproval		
+google_api_gateway_api_config	grpc_services.source.contents	Tuning	Reliability	RileyVisible	RequiresApproval		
+google_api_gateway_api_config	id	Identity		RileyVisible	Never		
+google_api_gateway_api_config	labels	Tuning		Hidden	SystemOnly	Redacted	
+google_api_gateway_api_config	managed_service_configs.contents	Tuning	Reliability	RileyVisible	RequiresApproval		
+google_api_gateway_api_config	managed_service_configs.path	Tuning		RileyVisible	ChatSafe		
+google_api_gateway_api_config	name	Identity		UIVisible	Never		
+google_api_gateway_api_config	openapi_documents.document.contents	Tuning	Reliability	RileyVisible	RequiresApproval		AlwaysReplace
+google_api_gateway_api_config	openapi_documents.document.path	Tuning		RileyVisible	ChatSafe		
+google_api_gateway_api_config	project	Identity		UIVisible	Never		AlwaysReplace
+google_api_gateway_api_config	service_config_id	Identity	Reliability	RileyVisible	Never		
+google_api_gateway_api_config	terraform_labels	Tuning		Hidden	SystemOnly	Redacted	
+google_api_gateway_api_config	timeouts	Tuning		Hidden	SystemOnly		
+google_api_gateway_gateway	api_config	Wiring	Reliability	UIVisible	RelationshipOnly		AlwaysReplace
+google_api_gateway_gateway	default_hostname	Identity	Reliability	UIVisible	Never		
+google_api_gateway_gateway	display_name	Tuning		UIVisible	ChatSafe		
+google_api_gateway_gateway	effective_labels	Tuning		Hidden	SystemOnly	Redacted	
+google_api_gateway_gateway	gateway_id	Identity		UIVisible	Never		AlwaysReplace
+google_api_gateway_gateway	id	Identity		RileyVisible	Never		
+google_api_gateway_gateway	labels	Tuning		Hidden	SystemOnly	Redacted	
+google_api_gateway_gateway	name	Identity		UIVisible	Never		
+google_api_gateway_gateway	project	Identity		UIVisible	Never		AlwaysReplace
+google_api_gateway_gateway	region	Identity		UIVisible	Never		AlwaysReplace
+google_api_gateway_gateway	terraform_labels	Tuning		Hidden	SystemOnly	Redacted	
+google_api_gateway_gateway	timeouts	Tuning		Hidden	SystemOnly		
 google_cloud_run_v2_service	annotations	Tuning		Hidden	SystemOnly	Redacted	
 google_cloud_run_v2_service	binary_authorization.policy	Wiring	Security	RileyVisible	RelationshipOnly		
 google_cloud_run_v2_service	binary_authorization.use_default	Tuning	Security	RileyVisible	ChatSafe		

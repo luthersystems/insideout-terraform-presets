@@ -52,5 +52,5 @@ var GoogleLoggingProjectSinkSchema = map[string]FieldSchema{
 }
 
 func init() {
-	Register("google_logging_project_sink", reflect.TypeFor[GoogleLoggingProjectSink](), GoogleLoggingProjectSinkSchema)
+	Register("google_logging_project_sink", reflect.TypeFor[GoogleLoggingProjectSink](), GoogleLoggingProjectSinkSchema, GoogleProviderSource)
 }

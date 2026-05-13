@@ -51,18 +51,20 @@ func EmitTypeFile(outDir string, res *tfjson.Schema, providerSource, tfType, pro
 
 // EmitVersionFile writes the version.gen.go with provider source/version
 // pins.
-func EmitVersionFile(outDir, awsVersion, googleVersion string) (string, error) {
+func EmitVersionFile(outDir, awsVersion, googleVersion, googleBetaVersion string) (string, error) {
 	tmpl, err := template.New("version").Parse(versionTemplateSrc)
 	if err != nil {
 		return "", fmt.Errorf("parse version template: %w", err)
 	}
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, map[string]string{
-		"AWSProviderSource":     AWSProviderSource,
-		"AWSProviderVersion":    awsVersion,
-		"GoogleProviderSource":  GoogleProviderSource,
-		"GoogleProviderVersion": googleVersion,
-		"SchemaCodegenVersion":  SchemaCodegenVersion,
+		"AWSProviderSource":        AWSProviderSource,
+		"AWSProviderVersion":       awsVersion,
+		"GoogleProviderSource":     GoogleProviderSource,
+		"GoogleProviderVersion":    googleVersion,
+		"GoogleBetaProviderSource": GoogleBetaProviderSource,
+		"GoogleBetaProviderVersion": googleBetaVersion,
+		"SchemaCodegenVersion":     SchemaCodegenVersion,
 	}); err != nil {
 		return "", fmt.Errorf("execute version template: %w", err)
 	}
@@ -84,6 +86,14 @@ type TypeData struct {
 	Fields        []FieldData
 	NestedTypes   []NestedType
 	SchemaEntries []SchemaEntry
+	// ProviderSourceConst is the unquoted name of the provider source
+	// constant defined in version.gen.go (e.g. "GoogleProviderSource",
+	// "GoogleBetaProviderSource", "AWSProviderSource") for this type.
+	// The generator picks it per-type from the input slice
+	// (WantedAWS / WantedGoogle / WantedGoogleBeta) and passes it to
+	// Register() so consumers of the registry can route resources to
+	// the right provider alias on emitted HCL.
+	ProviderSourceConst string
 }
 
 // FieldData describes one Go struct field on the top-level type.
@@ -107,8 +117,9 @@ type SchemaEntry struct {
 func buildTypeData(res *tfjson.Schema, tfType, providerSource, providerVersion string) (*TypeData, error) {
 	typeName := GoName(tfType)
 	td := &TypeData{
-		TFType: tfType,
-		GoName: typeName,
+		TFType:              tfType,
+		GoName:              typeName,
+		ProviderSourceConst: providerSourceConstName(providerSource),
 	}
 
 	block := res.Block
@@ -252,4 +263,28 @@ func dedupNested(in []NestedType) []NestedType {
 var templateFuncs = template.FuncMap{
 	"backtick": func() string { return "`" },
 	"join":     strings.Join,
+}
+
+// providerSourceConstName maps a Terraform Registry provider source
+// string to the matching exported constant in the generated
+// version.gen.go file. The codegen emits the constant name (not the
+// literal source) into each <type>.gen.go's Register() call so a
+// provider source rename only touches version.gen.go.
+//
+// Panics on an unrecognized source. Adding a new provider source to
+// config.go without extending this switch would otherwise silently
+// route every generated type through the wrong constant and
+// miscategorize it at compose time — a fail-fast at codegen is the
+// load-bearing guard.
+func providerSourceConstName(providerSource string) string {
+	switch providerSource {
+	case AWSProviderSource:
+		return "AWSProviderSource"
+	case GoogleProviderSource:
+		return "GoogleProviderSource"
+	case GoogleBetaProviderSource:
+		return "GoogleBetaProviderSource"
+	default:
+		panic(fmt.Sprintf("imported-codegen: unknown provider source %q — extend providerSourceConstName when adding a new Wanted* slice", providerSource))
+	}
 }

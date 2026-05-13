@@ -341,5 +341,5 @@ var GoogleCloudbuildTriggerSchema = map[string]FieldSchema{
 }
 
 func init() {
-	Register("google_cloudbuild_trigger", reflect.TypeFor[GoogleCloudbuildTrigger](), GoogleCloudbuildTriggerSchema)
+	Register("google_cloudbuild_trigger", reflect.TypeFor[GoogleCloudbuildTrigger](), GoogleCloudbuildTriggerSchema, GoogleProviderSource)
 }

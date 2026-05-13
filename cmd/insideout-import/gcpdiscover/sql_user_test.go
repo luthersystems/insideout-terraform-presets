@@ -5,6 +5,9 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
+	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/progress"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
 
@@ -42,7 +45,7 @@ func TestSQLUserListNonCAI_FansOutAcrossPriorInstances(t *testing.T) {
 		// A non-SQL resource: should be skipped.
 		{Identity: imported.ResourceIdentity{Type: "google_storage_bucket", NameHint: "io-foo-bucket"}},
 	}
-	got, err := d.ListNonCAI(context.Background(), "real-proj", "", prior)
+	got, err := d.ListNonCAI(context.Background(), "real-proj", "", prior, progress.NopEmitter{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,19 +84,45 @@ func TestSQLUserListNonCAI_PerInstanceErrorSoftFails(t *testing.T) {
 		makeSQLDBInstanceResult("db1"),
 		makeSQLDBInstanceResult("db2"),
 	}
-	got, err := d.ListNonCAI(context.Background(), "real-proj", "", prior)
+	rec := &recordingEmitter{}
+	got, err := d.ListNonCAI(context.Background(), "real-proj", "", prior, rec)
 	if err != nil {
 		t.Fatalf("expected soft-fail, got err=%v", err)
 	}
 	if len(got) != 1 || got[0].Identity.NameHint != "alice" {
 		t.Errorf("got=%v, want only alice", got)
 	}
+	// Per-instance soft-fail must surface as a ServiceWarn so the
+	// UI's progress stream sees the same signal stderr would
+	// (#396). The Emitter is the load-bearing contract; without
+	// this assertion a regression that silently drops the warn
+	// would compile and pass tests.
+	var warns []recordedEvent
+	for _, ev := range rec.snapshot() {
+		if ev.Kind == "service_warn" {
+			warns = append(warns, ev)
+		}
+	}
+	if len(warns) != 1 {
+		t.Fatalf("got %d service_warn events, want 1: %v", len(warns), warns)
+	}
+	if warns[0].Service != nonCAIServiceSlug {
+		t.Errorf("service=%q, want %q", warns[0].Service, nonCAIServiceSlug)
+	}
+	// Two separate Contains checks so a failure pinpoints which
+	// fragment is missing (instance name vs underlying error
+	// description) rather than reporting a generic "missing
+	// either" message.
+	assert.Contains(t, warns[0].Message, "db2",
+		"warn message must name the failing instance")
+	assert.Contains(t, warns[0].Message, "instance not accessible",
+		"warn message must include the underlying error")
 }
 
 func TestSQLUserListNonCAI_NilListerTolerated(t *testing.T) {
 	t.Parallel()
 	d := newSQLUserDiscoverer(nil).(*sqlUserDiscoverer)
-	got, err := d.ListNonCAI(context.Background(), "real-proj", "", []imported.ImportedResource{makeSQLDBInstanceResult("db1")})
+	got, err := d.ListNonCAI(context.Background(), "real-proj", "", []imported.ImportedResource{makeSQLDBInstanceResult("db1")}, progress.NopEmitter{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,7 +135,7 @@ func TestSQLUserListNonCAI_NoPriorInstancesYieldsNoFanout(t *testing.T) {
 	t.Parallel()
 	fake := &fakeSQLUserLister{}
 	d := newSQLUserDiscoverer(fake).(*sqlUserDiscoverer)
-	got, err := d.ListNonCAI(context.Background(), "real-proj", "", nil)
+	got, err := d.ListNonCAI(context.Background(), "real-proj", "", nil, progress.NopEmitter{})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -30,5 +30,5 @@ var GoogleMonitoringDashboardSchema = map[string]FieldSchema{
 }
 
 func init() {
-	Register("google_monitoring_dashboard", reflect.TypeFor[GoogleMonitoringDashboard](), GoogleMonitoringDashboardSchema)
+	Register("google_monitoring_dashboard", reflect.TypeFor[GoogleMonitoringDashboard](), GoogleMonitoringDashboardSchema, GoogleProviderSource)
 }

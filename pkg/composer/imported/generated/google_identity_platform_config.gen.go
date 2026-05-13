@@ -180,5 +180,5 @@ var GoogleIdentityPlatformConfigSchema = map[string]FieldSchema{
 }
 
 func init() {
-	Register("google_identity_platform_config", reflect.TypeFor[GoogleIdentityPlatformConfig](), GoogleIdentityPlatformConfigSchema)
+	Register("google_identity_platform_config", reflect.TypeFor[GoogleIdentityPlatformConfig](), GoogleIdentityPlatformConfigSchema, GoogleProviderSource)
 }

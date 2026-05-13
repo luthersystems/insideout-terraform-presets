@@ -27,12 +27,13 @@ func awsDummyConfig() aws.Config { return aws.Config{Region: "us-east-1"} }
 // fields cover every progress.Emitter method's load-bearing arguments;
 // per-method tests pin the relevant subset.
 type recordedEvent struct {
-	Kind     string // "service_start" | "service_finish" | "item_found" | "stage_finish"
+	Kind     string // "service_start" | "service_finish" | "item_found" | "stage_finish" | "service_warn"
 	Service  string
 	Region   string
 	TFType   string
 	ImportID string
 	Stage    string
+	Message  string
 	Count    int
 	Total    int
 	Dur      time.Duration
@@ -74,6 +75,12 @@ func (r *recordingEmitter) StageFinish(stage string, total int, dur time.Duratio
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.events = append(r.events, recordedEvent{Kind: "stage_finish", Stage: stage, Total: total, Count: total, Dur: dur})
+}
+
+func (r *recordingEmitter) ServiceWarn(service, region, msg string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.events = append(r.events, recordedEvent{Kind: "service_warn", Service: service, Region: region, Message: msg})
 }
 
 // snapshot returns a copy of the event slice under lock so test

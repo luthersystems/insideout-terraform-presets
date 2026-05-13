@@ -96,6 +96,87 @@ func TestMakeImportedResource_EmptyLocationLeftEmpty(t *testing.T) {
 	}
 }
 
+// TestMakeImportedResource_RoutesGoogleBetaTypesThroughBetaAlias pins
+// that API Gateway resources — whose schema lives in google-beta — get
+// stamped with the google-beta provider source AND the
+// google-beta.imported alias. Without this, Stage 2c emits
+// `provider = google.imported` and Stage 2b's plan-generate-config-out
+// either fails on a missing resource type or rebinds the resource
+// through the wrong provider, breaking the import.
+func TestMakeImportedResource_RoutesGoogleBetaTypesThroughBetaAlias(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		tfType        string
+		wantSource    string
+		wantAlias     string
+		wantImportID  string
+		wantNameHint  string
+		wantProjectID string
+	}{
+		{
+			tfType:        "google_api_gateway_api",
+			wantSource:    gcpBetaProviderSource,
+			wantAlias:     gcpBetaProviderConfigAlias,
+			wantImportID:  "projects/p/locations/global/apis/demo",
+			wantNameHint:  "demo",
+			wantProjectID: "p",
+		},
+		{
+			tfType:        "google_api_gateway_api_config",
+			wantSource:    gcpBetaProviderSource,
+			wantAlias:     gcpBetaProviderConfigAlias,
+			wantImportID:  "projects/p/locations/global/apis/demo/configs/v1",
+			wantNameHint:  "v1",
+			wantProjectID: "p",
+		},
+		{
+			tfType:        "google_api_gateway_gateway",
+			wantSource:    gcpBetaProviderSource,
+			wantAlias:     gcpBetaProviderConfigAlias,
+			wantImportID:  "projects/p/locations/us-central1/gateways/demo-gw",
+			wantNameHint:  "demo-gw",
+			wantProjectID: "p",
+		},
+		{
+			// Sanity: a GA google_* type must still route through the
+			// google provider source + alias. This protects against a
+			// regression that flips every type into the beta path.
+			tfType:        "google_pubsub_topic",
+			wantSource:    gcpProviderSource,
+			wantAlias:     gcpProviderConfigAlias,
+			wantImportID:  "projects/p/topics/events",
+			wantNameHint:  "events",
+			wantProjectID: "p",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.tfType, func(t *testing.T) {
+			t.Parallel()
+			got := makeImportedResource(addressBook{}, tc.tfType,
+				tc.wantNameHint, tc.wantImportID, tc.wantProjectID, "",
+				nil, nil)
+			if got.Identity.ProviderSource != tc.wantSource {
+				t.Errorf("ProviderSource=%q, want %q", got.Identity.ProviderSource, tc.wantSource)
+			}
+			if got.Identity.ProviderConfig != tc.wantAlias {
+				t.Errorf("ProviderConfig=%q, want %q", got.Identity.ProviderConfig, tc.wantAlias)
+			}
+			// Pin the non-provider Identity fields too — a refactor
+			// that drops the input plumbing for ImportID/NameHint/
+			// ProjectID would otherwise pass this test silently.
+			if got.Identity.ImportID != tc.wantImportID {
+				t.Errorf("ImportID=%q, want %q", got.Identity.ImportID, tc.wantImportID)
+			}
+			if got.Identity.NameHint != tc.wantNameHint {
+				t.Errorf("NameHint=%q, want %q", got.Identity.NameHint, tc.wantNameHint)
+			}
+			if got.Identity.ProjectID != tc.wantProjectID {
+				t.Errorf("ProjectID=%q, want %q", got.Identity.ProjectID, tc.wantProjectID)
+			}
+		})
+	}
+}
+
 func TestMakeImportedResource_PropagatesLocationForRegionalResource(t *testing.T) {
 	t.Parallel()
 	got := makeImportedResource(addressBook{}, "google_storage_bucket", "io-bucket",

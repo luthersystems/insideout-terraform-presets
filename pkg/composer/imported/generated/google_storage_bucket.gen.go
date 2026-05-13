@@ -171,5 +171,5 @@ var GoogleStorageBucketSchema = map[string]FieldSchema{
 }
 
 func init() {
-	Register("google_storage_bucket", reflect.TypeFor[GoogleStorageBucket](), GoogleStorageBucketSchema)
+	Register("google_storage_bucket", reflect.TypeFor[GoogleStorageBucket](), GoogleStorageBucketSchema, GoogleProviderSource)
 }

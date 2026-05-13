@@ -345,6 +345,7 @@ func TestNopEmitter_AllMethodsAreNoOps(t *testing.T) {
 	e.ServiceFinish("sqs", "us-east-1", 5, time.Second)
 	e.ItemFound("sqs", "us-east-1", "aws_sqs_queue", "id")
 	e.StageFinish("discover", 5, time.Second)
+	e.ServiceWarn("sqs", "us-east-1", "throttled")
 
 	// Belt-and-suspenders: a counting writer wrapped around any future
 	// fields would catch a regression that introduces a hidden write.
