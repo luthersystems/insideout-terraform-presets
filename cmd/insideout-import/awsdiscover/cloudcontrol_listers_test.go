@@ -16,10 +16,18 @@ import (
 	apigwtypes "github.com/aws/aws-sdk-go-v2/service/apigateway/types"
 	"github.com/aws/aws-sdk-go-v2/service/apigatewayv2"
 	apigwv2types "github.com/aws/aws-sdk-go-v2/service/apigatewayv2/types"
+	"github.com/aws/aws-sdk-go-v2/service/cloudfront"
+	cftypes "github.com/aws/aws-sdk-go-v2/service/cloudfront/types"
 	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider"
 	cogniidptypes "github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider/types"
+	"github.com/aws/aws-sdk-go-v2/service/iam"
+	iamtypes "github.com/aws/aws-sdk-go-v2/service/iam/types"
+	"github.com/aws/aws-sdk-go-v2/service/kms"
+	kmstypes "github.com/aws/aws-sdk-go-v2/service/kms/types"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	lambdatypes "github.com/aws/aws-sdk-go-v2/service/lambda/types"
+	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
+	smtypes "github.com/aws/aws-sdk-go-v2/service/secretsmanager/types"
 )
 
 // This file holds unit tests for the SDK-backed listers in
@@ -1018,5 +1026,493 @@ func TestListLambdaFunctionArns_SkipsEmptyFunctionArn(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("empty-ARN skip drift:\n got %v\nwant %v", got, want)
+	}
+}
+
+// ===========================================================================
+// Bundle 14e (#430) — five new SDKLister-pattern types
+// ===========================================================================
+
+// fakeKMSAliasesLister is a hand-rolled fake satisfying the
+// kmsAliasesLister interface. markersSeen captures each in.Marker the
+// lister sends so tests can pin that the pagination cursor is
+// round-tripped.
+type fakeKMSAliasesLister struct {
+	listPages   []kms.ListAliasesOutput
+	listCalls   int
+	listErr     error
+	markersSeen []*string
+}
+
+func (f *fakeKMSAliasesLister) ListAliases(_ context.Context, in *kms.ListAliasesInput, _ ...func(*kms.Options)) (*kms.ListAliasesOutput, error) {
+	f.markersSeen = append(f.markersSeen, in.Marker)
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
+	if f.listCalls >= len(f.listPages) {
+		return &kms.ListAliasesOutput{}, nil
+	}
+	page := f.listPages[f.listCalls]
+	f.listCalls++
+	return &page, nil
+}
+
+func kmsAliasesPage(marker string, names ...string) kms.ListAliasesOutput {
+	entries := make([]kmstypes.AliasListEntry, 0, len(names))
+	for _, n := range names {
+		entries = append(entries, kmstypes.AliasListEntry{AliasName: aws.String(n)})
+	}
+	out := kms.ListAliasesOutput{Aliases: entries}
+	if marker != "" {
+		out.NextMarker = aws.String(marker)
+	}
+	return out
+}
+
+// TestListKMSAliases_PaginatesAndReturnsNames pins the KMS alias
+// enumeration: every alias across every page surfaces with AliasName
+// intact, and the Marker cursor is round-tripped between pages.
+func TestListKMSAliases_PaginatesAndReturnsNames(t *testing.T) {
+	t.Parallel()
+	fake := &fakeKMSAliasesLister{
+		listPages: []kms.ListAliasesOutput{
+			kmsAliasesPage("m1", "alias/aaa", "alias/bbb"),
+			kmsAliasesPage("m2", "alias/ccc"),
+			kmsAliasesPage("", "alias/ddd"),
+		},
+	}
+	got, err := listKMSAliasesWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"alias/aaa", "alias/bbb", "alias/ccc", "alias/ddd"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("names drift:\n got %v\nwant %v", got, want)
+	}
+	if fake.listCalls != 3 {
+		t.Errorf("listCalls=%d, want 3 (paginated)", fake.listCalls)
+	}
+	// Cursor round-trip pin: a regression that drops `marker = page.NextMarker`
+	// would still produce 3 calls because the fake serves by count — only
+	// this assertion catches it.
+	if len(fake.markersSeen) != 3 {
+		t.Fatalf("markersSeen len=%d, want 3", len(fake.markersSeen))
+	}
+	if fake.markersSeen[0] != nil {
+		t.Errorf("markersSeen[0]=%q, want nil", aws.ToString(fake.markersSeen[0]))
+	}
+	if aws.ToString(fake.markersSeen[1]) != "m1" {
+		t.Errorf("markersSeen[1]=%q, want m1", aws.ToString(fake.markersSeen[1]))
+	}
+	if aws.ToString(fake.markersSeen[2]) != "m2" {
+		t.Errorf("markersSeen[2]=%q, want m2", aws.ToString(fake.markersSeen[2]))
+	}
+}
+
+func TestListKMSAliases_EmptyAccountReturnsNonNilEmpty(t *testing.T) {
+	t.Parallel()
+	fake := &fakeKMSAliasesLister{listPages: []kms.ListAliasesOutput{kmsAliasesPage("")}}
+	got, err := listKMSAliasesWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got == nil {
+		t.Fatal("empty-account result must be non-nil empty slice")
+	}
+	if len(got) != 0 {
+		t.Errorf("len=%d, want 0", len(got))
+	}
+}
+
+func TestListKMSAliases_PropagatesListError(t *testing.T) {
+	t.Parallel()
+	sentinel := errors.New("AccessDenied: kms:ListAliases")
+	fake := &fakeKMSAliasesLister{listErr: sentinel}
+	_, err := listKMSAliasesWithClient(context.Background(), fake)
+	if !errors.Is(err, sentinel) {
+		t.Errorf("err does not wrap sentinel; got %v", err)
+	}
+}
+
+func TestListKMSAliases_SkipsEmptyAliasName(t *testing.T) {
+	t.Parallel()
+	fake := &fakeKMSAliasesLister{
+		listPages: []kms.ListAliasesOutput{{Aliases: []kmstypes.AliasListEntry{
+			{AliasName: aws.String("alias/good")},
+			{AliasName: nil},
+			{AliasName: aws.String("")},
+			{AliasName: aws.String("alias/also-good")},
+		}}},
+	}
+	got, err := listKMSAliasesWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"alias/good", "alias/also-good"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("empty-name skip drift:\n got %v\nwant %v", got, want)
+	}
+}
+
+// fakeIAMUsersLister is a hand-rolled fake for iam:ListUsers paginated
+// across multiple pages with IsTruncated semantics.
+type fakeIAMUsersLister struct {
+	listPages   []iam.ListUsersOutput
+	listCalls   int
+	listErr     error
+	markersSeen []*string
+}
+
+func (f *fakeIAMUsersLister) ListUsers(_ context.Context, in *iam.ListUsersInput, _ ...func(*iam.Options)) (*iam.ListUsersOutput, error) {
+	f.markersSeen = append(f.markersSeen, in.Marker)
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
+	if f.listCalls >= len(f.listPages) {
+		return &iam.ListUsersOutput{}, nil
+	}
+	page := f.listPages[f.listCalls]
+	f.listCalls++
+	return &page, nil
+}
+
+func iamUsersPage(marker string, names ...string) iam.ListUsersOutput {
+	users := make([]iamtypes.User, 0, len(names))
+	for _, n := range names {
+		users = append(users, iamtypes.User{UserName: aws.String(n)})
+	}
+	out := iam.ListUsersOutput{Users: users}
+	if marker != "" {
+		out.IsTruncated = true
+		out.Marker = aws.String(marker)
+	}
+	return out
+}
+
+func TestListIAMUsers_PaginatesAndReturnsNames(t *testing.T) {
+	t.Parallel()
+	fake := &fakeIAMUsersLister{
+		listPages: []iam.ListUsersOutput{
+			iamUsersPage("m1", "alice", "bob"),
+			iamUsersPage("", "carol"),
+		},
+	}
+	got, err := listIAMUsersWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"alice", "bob", "carol"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("names drift: got %v want %v", got, want)
+	}
+	if fake.listCalls != 2 {
+		t.Errorf("listCalls=%d, want 2", fake.listCalls)
+	}
+	// IsTruncated=false on the final page must terminate the loop —
+	// regression that ignored the flag would still work but the
+	// Marker round-trip pin catches the simpler missing-cursor regression.
+	if aws.ToString(fake.markersSeen[1]) != "m1" {
+		t.Errorf("markersSeen[1]=%q, want m1", aws.ToString(fake.markersSeen[1]))
+	}
+}
+
+func TestListIAMUsers_EmptyAccountReturnsNonNilEmpty(t *testing.T) {
+	t.Parallel()
+	fake := &fakeIAMUsersLister{listPages: []iam.ListUsersOutput{iamUsersPage("")}}
+	got, err := listIAMUsersWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got == nil || len(got) != 0 {
+		t.Errorf("got %v, want non-nil empty slice", got)
+	}
+}
+
+func TestListIAMUsers_PropagatesListError(t *testing.T) {
+	t.Parallel()
+	sentinel := errors.New("AccessDenied: iam:ListUsers")
+	fake := &fakeIAMUsersLister{listErr: sentinel}
+	_, err := listIAMUsersWithClient(context.Background(), fake)
+	if !errors.Is(err, sentinel) {
+		t.Errorf("err does not wrap sentinel; got %v", err)
+	}
+}
+
+// fakeIAMGroupsLister mirrors the iam_users fake for ListGroups.
+type fakeIAMGroupsLister struct {
+	listPages []iam.ListGroupsOutput
+	listCalls int
+	listErr   error
+}
+
+func (f *fakeIAMGroupsLister) ListGroups(_ context.Context, _ *iam.ListGroupsInput, _ ...func(*iam.Options)) (*iam.ListGroupsOutput, error) {
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
+	if f.listCalls >= len(f.listPages) {
+		return &iam.ListGroupsOutput{}, nil
+	}
+	page := f.listPages[f.listCalls]
+	f.listCalls++
+	return &page, nil
+}
+
+func iamGroupsPage(marker string, names ...string) iam.ListGroupsOutput {
+	groups := make([]iamtypes.Group, 0, len(names))
+	for _, n := range names {
+		groups = append(groups, iamtypes.Group{GroupName: aws.String(n)})
+	}
+	out := iam.ListGroupsOutput{Groups: groups}
+	if marker != "" {
+		out.IsTruncated = true
+		out.Marker = aws.String(marker)
+	}
+	return out
+}
+
+func TestListIAMGroups_PaginatesAndReturnsNames(t *testing.T) {
+	t.Parallel()
+	fake := &fakeIAMGroupsLister{
+		listPages: []iam.ListGroupsOutput{
+			iamGroupsPage("m1", "admins", "developers"),
+			iamGroupsPage("", "readonly"),
+		},
+	}
+	got, err := listIAMGroupsWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"admins", "developers", "readonly"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("names drift: got %v want %v", got, want)
+	}
+}
+
+func TestListIAMGroups_EmptyAccountReturnsNonNilEmpty(t *testing.T) {
+	t.Parallel()
+	fake := &fakeIAMGroupsLister{listPages: []iam.ListGroupsOutput{iamGroupsPage("")}}
+	got, err := listIAMGroupsWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got == nil || len(got) != 0 {
+		t.Errorf("got %v, want non-nil empty slice", got)
+	}
+}
+
+func TestListIAMGroups_PropagatesListError(t *testing.T) {
+	t.Parallel()
+	sentinel := errors.New("AccessDenied: iam:ListGroups")
+	fake := &fakeIAMGroupsLister{listErr: sentinel}
+	_, err := listIAMGroupsWithClient(context.Background(), fake)
+	if !errors.Is(err, sentinel) {
+		t.Errorf("err does not wrap sentinel; got %v", err)
+	}
+}
+
+// fakeCloudFrontFunctionsLister returns ListFunctionsOutput pages with
+// the FunctionList wrapper (the CloudFront API quirk where the items
+// + cursor live one level deep under FunctionList).
+type fakeCloudFrontFunctionsLister struct {
+	listPages []cloudfront.ListFunctionsOutput
+	listCalls int
+	listErr   error
+}
+
+func (f *fakeCloudFrontFunctionsLister) ListFunctions(_ context.Context, _ *cloudfront.ListFunctionsInput, _ ...func(*cloudfront.Options)) (*cloudfront.ListFunctionsOutput, error) {
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
+	if f.listCalls >= len(f.listPages) {
+		return &cloudfront.ListFunctionsOutput{}, nil
+	}
+	page := f.listPages[f.listCalls]
+	f.listCalls++
+	return &page, nil
+}
+
+func cloudfrontFunctionsPage(nextMarker string, arns ...string) cloudfront.ListFunctionsOutput {
+	items := make([]cftypes.FunctionSummary, 0, len(arns))
+	for _, a := range arns {
+		items = append(items, cftypes.FunctionSummary{
+			FunctionMetadata: &cftypes.FunctionMetadata{FunctionARN: aws.String(a)},
+		})
+	}
+	list := &cftypes.FunctionList{Items: items}
+	if nextMarker != "" {
+		list.NextMarker = aws.String(nextMarker)
+	}
+	return cloudfront.ListFunctionsOutput{FunctionList: list}
+}
+
+func TestListCloudFrontFunctions_PaginatesAndReturnsARNs(t *testing.T) {
+	t.Parallel()
+	fake := &fakeCloudFrontFunctionsLister{
+		listPages: []cloudfront.ListFunctionsOutput{
+			cloudfrontFunctionsPage("m1",
+				"arn:aws:cloudfront::111:function/foo",
+				"arn:aws:cloudfront::111:function/bar",
+			),
+			cloudfrontFunctionsPage("",
+				"arn:aws:cloudfront::111:function/baz",
+			),
+		},
+	}
+	got, err := listCloudFrontFunctionsWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{
+		"arn:aws:cloudfront::111:function/foo",
+		"arn:aws:cloudfront::111:function/bar",
+		"arn:aws:cloudfront::111:function/baz",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("ARNs drift: got %v want %v", got, want)
+	}
+	if fake.listCalls != 2 {
+		t.Errorf("listCalls=%d, want 2", fake.listCalls)
+	}
+}
+
+// TestListCloudFrontFunctions_NilFunctionListDoesNotPanic guards the
+// defensive `if page.FunctionList != nil` branch: a malformed SDK
+// response that returns nil wrappers must not crash the discoverer.
+func TestListCloudFrontFunctions_NilFunctionListDoesNotPanic(t *testing.T) {
+	t.Parallel()
+	fake := &fakeCloudFrontFunctionsLister{
+		listPages: []cloudfront.ListFunctionsOutput{{FunctionList: nil}},
+	}
+	got, err := listCloudFrontFunctionsWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got == nil || len(got) != 0 {
+		t.Errorf("got %v, want non-nil empty slice", got)
+	}
+}
+
+func TestListCloudFrontFunctions_PropagatesListError(t *testing.T) {
+	t.Parallel()
+	sentinel := errors.New("AccessDenied: cloudfront:ListFunctions")
+	fake := &fakeCloudFrontFunctionsLister{listErr: sentinel}
+	_, err := listCloudFrontFunctionsWithClient(context.Background(), fake)
+	if !errors.Is(err, sentinel) {
+		t.Errorf("err does not wrap sentinel; got %v", err)
+	}
+}
+
+// fakeSecretsManagerSecretsLister returns secrets with the
+// RotationEnabled flag set per-fixture so the rotation-only filter is
+// exercised.
+type fakeSecretsManagerSecretsLister struct {
+	listPages []secretsmanager.ListSecretsOutput
+	listCalls int
+	listErr   error
+}
+
+func (f *fakeSecretsManagerSecretsLister) ListSecrets(_ context.Context, _ *secretsmanager.ListSecretsInput, _ ...func(*secretsmanager.Options)) (*secretsmanager.ListSecretsOutput, error) {
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
+	if f.listCalls >= len(f.listPages) {
+		return &secretsmanager.ListSecretsOutput{}, nil
+	}
+	page := f.listPages[f.listCalls]
+	f.listCalls++
+	return &page, nil
+}
+
+// smSecretEntry builds a single SecretListEntry. rotation==true sets
+// RotationEnabled; rotation==false leaves it false-or-nil (the lister
+// must skip both shapes).
+func smSecretEntry(arn string, rotation bool) smtypes.SecretListEntry {
+	e := smtypes.SecretListEntry{ARN: aws.String(arn)}
+	if rotation {
+		e.RotationEnabled = aws.Bool(true)
+	}
+	return e
+}
+
+// TestListSecretsManagerSecretRotations_FiltersToRotationEnabled pins
+// the load-bearing filter: only secrets with RotationEnabled=true are
+// emitted. Without this filter the GetResource fan-out would emit
+// ResourceNotFoundException for every non-rotated secret.
+func TestListSecretsManagerSecretRotations_FiltersToRotationEnabled(t *testing.T) {
+	t.Parallel()
+	fake := &fakeSecretsManagerSecretsLister{
+		listPages: []secretsmanager.ListSecretsOutput{{
+			SecretList: []smtypes.SecretListEntry{
+				smSecretEntry("arn:aws:secretsmanager:us-east-1:111:secret:rotates-AbCdEf", true),
+				smSecretEntry("arn:aws:secretsmanager:us-east-1:111:secret:no-rotation-XyZ", false),
+				smSecretEntry("arn:aws:secretsmanager:us-east-1:111:secret:also-rotates-PqRs", true),
+			},
+		}},
+	}
+	got, err := listSecretsManagerSecretRotationsWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{
+		"arn:aws:secretsmanager:us-east-1:111:secret:rotates-AbCdEf",
+		"arn:aws:secretsmanager:us-east-1:111:secret:also-rotates-PqRs",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("rotation filter drift:\n got %v\nwant %v", got, want)
+	}
+}
+
+func TestListSecretsManagerSecretRotations_PaginatesAndPreservesOrder(t *testing.T) {
+	t.Parallel()
+	fake := &fakeSecretsManagerSecretsLister{
+		listPages: []secretsmanager.ListSecretsOutput{
+			{
+				NextToken: aws.String("tok1"),
+				SecretList: []smtypes.SecretListEntry{
+					smSecretEntry("arn:aws:secretsmanager:us-east-1:111:secret:a-aaa", true),
+				},
+			},
+			{
+				SecretList: []smtypes.SecretListEntry{
+					smSecretEntry("arn:aws:secretsmanager:us-east-1:111:secret:b-bbb", true),
+				},
+			},
+		},
+	}
+	got, err := listSecretsManagerSecretRotationsWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{
+		"arn:aws:secretsmanager:us-east-1:111:secret:a-aaa",
+		"arn:aws:secretsmanager:us-east-1:111:secret:b-bbb",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("paginated order drift: got %v want %v", got, want)
+	}
+	if fake.listCalls != 2 {
+		t.Errorf("listCalls=%d, want 2 (paginated)", fake.listCalls)
+	}
+}
+
+func TestListSecretsManagerSecretRotations_EmptyAccountReturnsNonNilEmpty(t *testing.T) {
+	t.Parallel()
+	fake := &fakeSecretsManagerSecretsLister{listPages: []secretsmanager.ListSecretsOutput{{}}}
+	got, err := listSecretsManagerSecretRotationsWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got == nil || len(got) != 0 {
+		t.Errorf("got %v, want non-nil empty slice", got)
+	}
+}
+
+func TestListSecretsManagerSecretRotations_PropagatesListError(t *testing.T) {
+	t.Parallel()
+	sentinel := errors.New("AccessDenied: secretsmanager:ListSecrets")
+	fake := &fakeSecretsManagerSecretsLister{listErr: sentinel}
+	_, err := listSecretsManagerSecretRotationsWithClient(context.Background(), fake)
+	if !errors.Is(err, sentinel) {
+		t.Errorf("err does not wrap sentinel; got %v", err)
 	}
 }

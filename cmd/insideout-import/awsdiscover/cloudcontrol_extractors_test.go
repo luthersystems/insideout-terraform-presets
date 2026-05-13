@@ -1450,3 +1450,265 @@ func TestEmptyTagsExtractor_NonNilEmptyMap(t *testing.T) {
 		t.Errorf("emptyTagsExtractor with populated props: got %v, want empty map (must ignore input)", got)
 	}
 }
+
+
+// ===========================================================================
+// Bundle 14e (#430) — five new SDKLister-pattern types
+// ===========================================================================
+
+// TestKMSAliasConfig pins aws_kms_alias: passthrough CC identifier
+// (alias name), name-as-NameHint, structured NativeIDs with optional
+// TargetKeyId, non-nil empty Tags, and SDKLister-only enumeration.
+func TestKMSAliasConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_kms_alias")
+	if !cfg.SkipProjectTagFilter {
+		t.Error("aws_kms_alias: SkipProjectTagFilter must be true (CFN declares taggable=false)")
+	}
+	if cfg.CloudFormationType != "AWS::KMS::Alias" {
+		t.Errorf("CloudFormationType=%q, want AWS::KMS::Alias", cfg.CloudFormationType)
+	}
+	if cfg.SDKLister == nil {
+		t.Fatal("SDKLister must be set")
+	}
+	if cfg.ParentLister != nil {
+		t.Error("ParentLister must be nil (mutually exclusive with SDKLister)")
+	}
+
+	id := "alias/my-key"
+	if got := cfg.ImportIDFromIdentifier(id, nil); got != id {
+		t.Errorf("ImportID passthrough: got %q, want %q", got, id)
+	}
+	if got := cfg.NameHintFromProperties(id, map[string]any{"AliasName": "alias/my-key"}); got != "alias/my-key" {
+		t.Errorf("NameHint: got %q, want %q", got, "alias/my-key")
+	}
+	if got := cfg.NameHintFromProperties(id, map[string]any{}); got != id {
+		t.Errorf("NameHint fallback: got %q, want %q", got, id)
+	}
+
+	native := cfg.NativeIDsFromProperties(id, map[string]any{"TargetKeyId": "k-1234"})
+	want := map[string]string{"name": id, "target_key_id": "k-1234"}
+	if !reflect.DeepEqual(native, want) {
+		t.Errorf("NativeIDs with TargetKeyId: got %+v, want %+v", native, want)
+	}
+	nativeNoKey := cfg.NativeIDsFromProperties(id, map[string]any{})
+	wantNoKey := map[string]string{"name": id}
+	if !reflect.DeepEqual(nativeNoKey, wantNoKey) {
+		t.Errorf("NativeIDs no-target-key: got %+v, want %+v", nativeNoKey, wantNoKey)
+	}
+
+	tags := cfg.TagsFromProperties(map[string]any{"Tags": []any{map[string]any{"Key": "env", "Value": "prod"}}})
+	if tags == nil {
+		t.Fatal("Tags must be non-nil empty map per #255")
+	}
+	if len(tags) != 0 {
+		t.Errorf("Tags: got %v, want empty (untaggable; emptyTagsExtractor ignores input)", tags)
+	}
+}
+
+// TestIAMUserConfig pins aws_iam_user: passthrough CC identifier
+// (UserName), UserName NameHint, Arn NativeID, Tags from list-of-objects,
+// IsGlobal=true, SkipProjectTagFilter=false (taggable).
+func TestIAMUserConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_iam_user")
+	if cfg.SkipProjectTagFilter {
+		t.Error("aws_iam_user: SkipProjectTagFilter must be false (IAM users ARE taggable)")
+	}
+	if !cfg.IsGlobal {
+		t.Error("aws_iam_user: IsGlobal must be true (IAM is a global service)")
+	}
+	if cfg.CloudFormationType != "AWS::IAM::User" {
+		t.Errorf("CloudFormationType=%q, want AWS::IAM::User", cfg.CloudFormationType)
+	}
+	if cfg.SDKLister == nil {
+		t.Fatal("SDKLister must be set")
+	}
+	if cfg.ParentLister != nil {
+		t.Error("ParentLister must be nil")
+	}
+
+	id := "swood"
+	if got := cfg.ImportIDFromIdentifier(id, nil); got != id {
+		t.Errorf("ImportID passthrough: got %q, want %q", got, id)
+	}
+
+	props := map[string]any{
+		"UserName": "swood",
+		"Arn":      "arn:aws:iam::111:user/swood",
+		"Tags":     []any{map[string]any{"Key": "env", "Value": "prod"}},
+	}
+	if got := cfg.NameHintFromProperties(id, props); got != "swood" {
+		t.Errorf("NameHint: got %q, want swood", got)
+	}
+	native := cfg.NativeIDsFromProperties(id, props)
+	wantNative := map[string]string{"arn": "arn:aws:iam::111:user/swood"}
+	if !reflect.DeepEqual(native, wantNative) {
+		t.Errorf("NativeIDs: got %+v, want %+v", native, wantNative)
+	}
+	tags := cfg.TagsFromProperties(props)
+	wantTags := map[string]string{"env": "prod"}
+	if !reflect.DeepEqual(tags, wantTags) {
+		t.Errorf("Tags: got %+v, want %+v", tags, wantTags)
+	}
+}
+
+// TestIAMGroupConfig pins aws_iam_group: passthrough CC identifier
+// (GroupName), GroupName NameHint, Arn NativeID, non-nil empty Tags
+// (untaggable per CFN schema).
+func TestIAMGroupConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_iam_group")
+	if !cfg.SkipProjectTagFilter {
+		t.Error("aws_iam_group: SkipProjectTagFilter must be true (CFN declares taggable=false)")
+	}
+	if !cfg.IsGlobal {
+		t.Error("aws_iam_group: IsGlobal must be true (IAM is a global service)")
+	}
+	if cfg.CloudFormationType != "AWS::IAM::Group" {
+		t.Errorf("CloudFormationType=%q, want AWS::IAM::Group", cfg.CloudFormationType)
+	}
+
+	id := "admins"
+	if got := cfg.ImportIDFromIdentifier(id, nil); got != id {
+		t.Errorf("ImportID passthrough: got %q, want %q", got, id)
+	}
+	if got := cfg.NameHintFromProperties(id, map[string]any{"GroupName": "admins"}); got != "admins" {
+		t.Errorf("NameHint: got %q, want admins", got)
+	}
+	native := cfg.NativeIDsFromProperties(id, map[string]any{"Arn": "arn:aws:iam::111:group/admins"})
+	wantNative := map[string]string{"arn": "arn:aws:iam::111:group/admins"}
+	if !reflect.DeepEqual(native, wantNative) {
+		t.Errorf("NativeIDs: got %+v, want %+v", native, wantNative)
+	}
+	tags := cfg.TagsFromProperties(map[string]any{"Tags": []any{map[string]any{"Key": "env", "Value": "prod"}}})
+	if tags == nil {
+		t.Fatal("Tags must be non-nil empty map")
+	}
+	if len(tags) != 0 {
+		t.Errorf("Tags: got %v, want empty (untaggable)", tags)
+	}
+}
+
+// TestCloudFrontFunctionConfig pins aws_cloudfront_function: CC vs TF
+// identifier divergence — CC identifier is the full ARN, TF import
+// format is the bare function name. ImportID strips the
+// "arn:aws:cloudfront::<acct>:function/" prefix. A regression to
+// passthrough would emit invalid `terraform import` commands.
+func TestCloudFrontFunctionConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_cloudfront_function")
+	if cfg.SkipProjectTagFilter {
+		t.Error("aws_cloudfront_function: SkipProjectTagFilter must be false (CFN declares taggable)")
+	}
+	if !cfg.IsGlobal {
+		t.Error("aws_cloudfront_function: IsGlobal must be true (CloudFront is global)")
+	}
+	if cfg.CloudFormationType != "AWS::CloudFront::Function" {
+		t.Errorf("CloudFormationType=%q, want AWS::CloudFront::Function", cfg.CloudFormationType)
+	}
+
+	arn := "arn:aws:cloudfront::111111111111:function/my-fn"
+	if got := cfg.ImportIDFromIdentifier(arn, nil); got != "my-fn" {
+		t.Errorf("ImportID ARN→bare name: got %q, want %q (divergence: CC identifier is ARN, TF import is name)", got, "my-fn")
+	}
+	// Malformed/non-ARN passthrough.
+	if got := cfg.ImportIDFromIdentifier("already-bare-fn", nil); got != "already-bare-fn" {
+		t.Errorf("ImportID non-ARN passthrough: got %q, want %q", got, "already-bare-fn")
+	}
+
+	// NameHint: Name property wins; ARN tail is fallback.
+	if got := cfg.NameHintFromProperties(arn, map[string]any{"Name": "my-fn"}); got != "my-fn" {
+		t.Errorf("NameHint (Name present): got %q, want my-fn", got)
+	}
+	if got := cfg.NameHintFromProperties(arn, map[string]any{}); got != "my-fn" {
+		t.Errorf("NameHint (ARN-tail fallback): got %q, want my-fn", got)
+	}
+	if got := cfg.NameHintFromProperties("bare-fn", map[string]any{}); got != "bare-fn" {
+		t.Errorf("NameHint (non-ARN fallback): got %q, want bare-fn", got)
+	}
+
+	native := cfg.NativeIDsFromProperties(arn, nil)
+	want := map[string]string{"arn": arn, "name": "my-fn"}
+	if !reflect.DeepEqual(native, want) {
+		t.Errorf("NativeIDs ARN-shaped: got %+v, want %+v", native, want)
+	}
+	// Non-ARN identifier: "arn" stamped to raw input; no "name" extraction.
+	nativeBare := cfg.NativeIDsFromProperties("bare-fn", nil)
+	wantBare := map[string]string{"arn": "bare-fn"}
+	if !reflect.DeepEqual(nativeBare, wantBare) {
+		t.Errorf("NativeIDs non-ARN: got %+v, want %+v", nativeBare, wantBare)
+	}
+
+	// Tags: tagsFromKey extracts Key/Value list shape.
+	tags := cfg.TagsFromProperties(map[string]any{"Tags": []any{
+		map[string]any{"Key": "env", "Value": "prod"},
+		map[string]any{"Key": "Project", "Value": "io-foo"},
+	}})
+	wantTags := map[string]string{"env": "prod", "Project": "io-foo"}
+	if !reflect.DeepEqual(tags, wantTags) {
+		t.Errorf("Tags: got %+v, want %+v", tags, wantTags)
+	}
+}
+
+// TestSecretsManagerSecretRotationConfig pins
+// aws_secretsmanager_secret_rotation: passthrough CC identifier (secret
+// ARN), secret-name NameHint extracted from ARN tail, NativeIDs with
+// arn + secret_id + optional rotation_lambda_arn, non-nil empty Tags
+// (rotation inherits from parent secret).
+func TestSecretsManagerSecretRotationConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_secretsmanager_secret_rotation")
+	if !cfg.SkipProjectTagFilter {
+		t.Error("aws_secretsmanager_secret_rotation: SkipProjectTagFilter must be true (rotation is tagless)")
+	}
+	if cfg.CloudFormationType != "AWS::SecretsManager::RotationSchedule" {
+		t.Errorf("CloudFormationType=%q, want AWS::SecretsManager::RotationSchedule", cfg.CloudFormationType)
+	}
+	if cfg.SDKLister == nil {
+		t.Fatal("SDKLister must be set")
+	}
+	if cfg.ParentLister != nil {
+		t.Error("ParentLister must be nil")
+	}
+
+	arn := "arn:aws:secretsmanager:us-east-1:111:secret:my-secret-AbCdEf"
+	if got := cfg.ImportIDFromIdentifier(arn, nil); got != arn {
+		t.Errorf("ImportID passthrough (ARN is also TF import format): got %q, want %q", got, arn)
+	}
+
+	// NameHint: extract secret name (everything after ":secret:") from ARN.
+	if got := cfg.NameHintFromProperties(arn, nil); got != "my-secret-AbCdEf" {
+		t.Errorf("NameHint (ARN tail): got %q, want %q", got, "my-secret-AbCdEf")
+	}
+	if got := cfg.NameHintFromProperties("non-arn-input", nil); got != "non-arn-input" {
+		t.Errorf("NameHint non-ARN passthrough: got %q, want non-arn-input", got)
+	}
+
+	// NativeIDs: stamp arn + secret_id always; rotation_lambda_arn when
+	// provided in props.
+	native := cfg.NativeIDsFromProperties(arn, map[string]any{
+		"RotationLambdaARN": "arn:aws:lambda:us-east-1:111:function:rotator",
+	})
+	want := map[string]string{
+		"arn":                 arn,
+		"secret_id":           arn,
+		"rotation_lambda_arn": "arn:aws:lambda:us-east-1:111:function:rotator",
+	}
+	if !reflect.DeepEqual(native, want) {
+		t.Errorf("NativeIDs with RotationLambdaARN: got %+v, want %+v", native, want)
+	}
+	nativeNoLambda := cfg.NativeIDsFromProperties(arn, map[string]any{})
+	wantNoLambda := map[string]string{"arn": arn, "secret_id": arn}
+	if !reflect.DeepEqual(nativeNoLambda, wantNoLambda) {
+		t.Errorf("NativeIDs no-lambda: got %+v, want %+v", nativeNoLambda, wantNoLambda)
+	}
+
+	tags := cfg.TagsFromProperties(map[string]any{"Tags": []any{map[string]any{"Key": "env", "Value": "prod"}}})
+	if tags == nil {
+		t.Fatal("Tags must be non-nil empty map")
+	}
+	if len(tags) != 0 {
+		t.Errorf("Tags: got %v, want empty (rotation is tagless)", tags)
+	}
+}
