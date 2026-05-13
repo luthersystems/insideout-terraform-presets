@@ -38,10 +38,9 @@ import (
 var targets = []target{
 	storageBucketTarget,
 	pubsubTopicTarget,
-	// Future:
-	//   pubsubSubscriptionTarget,
-	//   secretManagerSecretTarget,
-	//   computeNetworkTarget,
+	pubsubSubscriptionTarget,
+	secretManagerSecretTarget,
+	computeNetworkTarget,
 }
 
 func main() {

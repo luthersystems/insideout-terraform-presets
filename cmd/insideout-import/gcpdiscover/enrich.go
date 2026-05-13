@@ -7,7 +7,9 @@ import (
 	"sort"
 	"time"
 
+	computev1 "google.golang.org/api/compute/v1"
 	pubsubv1 "google.golang.org/api/pubsub/v1"
+	secretmanagerv1 "google.golang.org/api/secretmanager/v1"
 	storagev1 "google.golang.org/api/storage/v1"
 
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/progress"
@@ -82,9 +84,11 @@ type AttributeEnricher interface {
 // only ProjectNumber (uint64), so the enricher pulls the string
 // project ID from here to populate the TF `project` attribute.
 type EnrichClients struct {
-	Storage   *storagev1.Service
-	Pubsub    *pubsubv1.Service
-	ProjectID string
+	Storage       *storagev1.Service
+	Pubsub        *pubsubv1.Service
+	SecretManager *secretmanagerv1.Service
+	Compute       *computev1.Service
+	ProjectID     string
 }
 
 // ErrEnrichClientUnavailable signals that the SDK client an enricher
