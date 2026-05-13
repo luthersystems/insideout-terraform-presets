@@ -5,6 +5,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/progress"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
@@ -107,21 +109,14 @@ func TestSQLUserListNonCAI_PerInstanceErrorSoftFails(t *testing.T) {
 	if warns[0].Service != nonCAIServiceSlug {
 		t.Errorf("service=%q, want %q", warns[0].Service, nonCAIServiceSlug)
 	}
-	if !contains(warns[0].Message, "db2") || !contains(warns[0].Message, "instance not accessible") {
-		t.Errorf("warn message %q must mention the failing instance and the underlying error", warns[0].Message)
-	}
-}
-
-// contains is a tiny strings.Contains alias to keep the soft-fail
-// assertion self-documenting (the inline strings.Contains call
-// would visually swap arguments and confuse readers).
-func contains(s, substr string) bool {
-	for i := 0; i+len(substr) <= len(s); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
+	// Two separate Contains checks so a failure pinpoints which
+	// fragment is missing (instance name vs underlying error
+	// description) rather than reporting a generic "missing
+	// either" message.
+	assert.Contains(t, warns[0].Message, "db2",
+		"warn message must name the failing instance")
+	assert.Contains(t, warns[0].Message, "instance not accessible",
+		"warn message must include the underlying error")
 }
 
 func TestSQLUserListNonCAI_NilListerTolerated(t *testing.T) {

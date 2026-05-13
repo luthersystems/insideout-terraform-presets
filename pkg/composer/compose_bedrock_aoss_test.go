@@ -356,6 +356,13 @@ func TestGenerateProvidersTF_DiscoveryUnion(t *testing.T) {
 			"google-beta must not appear in required_providers when no imports use it")
 		require.NotContains(t, got, `provider "google-beta"`,
 			"google-beta provider block must not be emitted when no imports use it")
+		// Positive anchor: the test is otherwise all negatives — a
+		// regression that dropped every provider block would still
+		// pass. Pin that the base google provider remains declared.
+		require.Contains(t, got, "hashicorp/google",
+			"base google provider must remain declared even without imports")
+		require.Contains(t, got, `provider "google" {`,
+			"base google provider block must remain emitted even without imports")
 	})
 }
 

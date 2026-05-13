@@ -546,6 +546,28 @@ func TestUntaggableAllowlistsMatchLintScripts(t *testing.T) {
 		"types listed in tests/lint-project-label.sh::LABEL_CAPABLE_GCP "+
 			"but not in the typed-registry's GCP-with-labels set: %v",
 		missing)
+
+	// Surface the reverse gap (types in the typed registry but not
+	// in the lint script's enforcement list) as a t.Logf so
+	// reviewers see the divergence even when the subset check
+	// passes. Today's known omissions are documented in the
+	// lint-project-label.sh note block — they exist on purpose
+	// (e.g. monitoring_notification_channel.labels carries
+	// channel-content keys, not project labels). A surprise entry
+	// here is a signal to extend either the lint array or the note.
+	lintSet := make(map[string]struct{}, len(gcpLint))
+	for _, t := range gcpLint {
+		lintSet[t] = struct{}{}
+	}
+	var registryOnly []string
+	for _, t := range regGCP {
+		if _, ok := lintSet[t]; !ok {
+			registryOnly = append(registryOnly, t)
+		}
+	}
+	if len(registryOnly) > 0 {
+		t.Logf("typed registry has labels-capable GCP types not in LABEL_CAPABLE_GCP (intentional skips, audit periodically): %v", registryOnly)
+	}
 }
 
 // findRepoRoot returns the repository root by walking up from this test

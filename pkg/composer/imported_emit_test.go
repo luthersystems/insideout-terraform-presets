@@ -360,20 +360,28 @@ func TestProviderAliasForResource(t *testing.T) {
 	cases := []struct {
 		name      string
 		cloud     string
+		idCloud   string // Identity.Cloud field; "" means leave zero
 		tfType    string
 		wantAlias string
 	}{
-		{name: "GA gcp typed", cloud: "gcp", tfType: "google_pubsub_topic", wantAlias: "google.imported"},
-		{name: "beta gcp typed", cloud: "gcp", tfType: "google_api_gateway_api", wantAlias: "google-beta.imported"},
-		{name: "beta gcp typed api_config", cloud: "gcp", tfType: "google_api_gateway_api_config", wantAlias: "google-beta.imported"},
-		{name: "beta gcp typed gateway", cloud: "gcp", tfType: "google_api_gateway_gateway", wantAlias: "google-beta.imported"},
-		{name: "unregistered gcp falls back to GA", cloud: "gcp", tfType: "google_not_yet_codegened", wantAlias: "google.imported"},
-		{name: "AWS unaffected", cloud: "aws", tfType: "aws_sqs_queue", wantAlias: "aws.imported"},
+		{name: "google_pubsub_topic routes to google.imported", cloud: "gcp", tfType: "google_pubsub_topic", wantAlias: "google.imported"},
+		{name: "google_api_gateway_api routes to google-beta.imported", cloud: "gcp", tfType: "google_api_gateway_api", wantAlias: "google-beta.imported"},
+		{name: "google_api_gateway_api_config routes to google-beta.imported", cloud: "gcp", tfType: "google_api_gateway_api_config", wantAlias: "google-beta.imported"},
+		{name: "google_api_gateway_gateway routes to google-beta.imported", cloud: "gcp", tfType: "google_api_gateway_gateway", wantAlias: "google-beta.imported"},
+		{name: "unregistered gcp falls back to google.imported", cloud: "gcp", tfType: "google_not_yet_codegened", wantAlias: "google.imported"},
+		{name: "AWS routes to aws.imported", cloud: "aws", tfType: "aws_sqs_queue", wantAlias: "aws.imported"},
+		// Pin that the `cloud` arg dominates over Identity.Cloud:
+		// a regression that switched to reading id.Cloud would
+		// silently re-route every typed resource since most callers
+		// set both fields to the same value. Force them to disagree.
+		{name: "cloud arg dominates over id.Cloud for AWS-typed in gcp scope", cloud: "gcp", idCloud: "aws", tfType: "aws_sqs_queue", wantAlias: "google.imported"},
+		{name: "cloud arg dominates over id.Cloud for GCP-typed in aws scope", cloud: "aws", idCloud: "gcp", tfType: "google_api_gateway_api", wantAlias: "aws.imported"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			got := providerAliasForResource(tc.cloud, imported.ResourceIdentity{Type: tc.tfType})
+			id := imported.ResourceIdentity{Type: tc.tfType, Cloud: tc.idCloud}
+			got := providerAliasForResource(tc.cloud, id)
 			assert.Equal(t, tc.wantAlias, got)
 		})
 	}
@@ -403,8 +411,20 @@ func TestEmitImportedTF_GoogleBetaSetsProvidersUsedKey(t *testing.T) {
 	s := string(out)
 	assert.True(t, used["gcp"], "used[gcp] must be set: %v", used)
 	assert.True(t, used["gcp-beta"], "used[gcp-beta] must be set when google-beta type emitted: %v", used)
+	// Cross-cloud isolation: a GCP-only emit must not flip the AWS
+	// key. Without this, a regression that unconditionally flips
+	// every cloud key would pass the gcp/gcp-beta assertions but
+	// silently pollute providers.tf with stray alias blocks.
+	assert.False(t, used["aws"], "used[aws] must NOT be set on a gcp-only emit: %v", used)
+	assert.Len(t, used, 2, "exactly gcp + gcp-beta keys should fire: %v", used)
 	assert.True(t, hasAttr(t, s, "provider", "google-beta.imported"),
 		"provider attr must reference google-beta.imported in:\n%s", s)
+	// Anchor the test in a non-vacuous emit — without this, a
+	// regression that returned nil for empty Attrs would still
+	// satisfy the used[...] checks if those keys were set as a
+	// side effect of pre-emit cloud detection.
+	assert.Contains(t, s, `resource "google_api_gateway_api"`,
+		"emitter must produce a resource block for the typed API gateway type")
 }
 
 func TestAddressLabel(t *testing.T) {

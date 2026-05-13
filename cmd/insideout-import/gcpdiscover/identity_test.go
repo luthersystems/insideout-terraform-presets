@@ -161,6 +161,18 @@ func TestMakeImportedResource_RoutesGoogleBetaTypesThroughBetaAlias(t *testing.T
 			if got.Identity.ProviderConfig != tc.wantAlias {
 				t.Errorf("ProviderConfig=%q, want %q", got.Identity.ProviderConfig, tc.wantAlias)
 			}
+			// Pin the non-provider Identity fields too — a refactor
+			// that drops the input plumbing for ImportID/NameHint/
+			// ProjectID would otherwise pass this test silently.
+			if got.Identity.ImportID != tc.wantImportID {
+				t.Errorf("ImportID=%q, want %q", got.Identity.ImportID, tc.wantImportID)
+			}
+			if got.Identity.NameHint != tc.wantNameHint {
+				t.Errorf("NameHint=%q, want %q", got.Identity.NameHint, tc.wantNameHint)
+			}
+			if got.Identity.ProjectID != tc.wantProjectID {
+				t.Errorf("ProjectID=%q, want %q", got.Identity.ProjectID, tc.wantProjectID)
+			}
 		})
 	}
 }
