@@ -25,6 +25,7 @@ const (
 var awsTypes = []string{
 	"aws_apigatewayv2_api",
 	"aws_apigatewayv2_stage",
+	"aws_backup_vault",
 	"aws_bedrock_guardrail",
 	"aws_cloudfront_distribution",
 	"aws_cloudwatch_event_rule",

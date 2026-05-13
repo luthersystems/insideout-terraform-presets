@@ -4,6 +4,10 @@
   "permissions": [
     {"service": "apigatewayv2_api", "iam_action": "apigateway:GET", "purpose": "list HTTP APIs and fetch per-API metadata (GET /apis, GET /apis/*/stages)"},
     {"service": "apigatewayv2_stage", "iam_action": "apigateway:GET", "purpose": "list per-API stages (GET /apis/*/stages); shares apigateway:GET with apigatewayv2_api"},
+    {"service": "backup_vault", "iam_action": "backup:DescribeBackupVault", "purpose": "Cloud Control GetResource for aws_backup_vault delegates to backup:DescribeBackupVault under the hood"},
+    {"service": "backup_vault", "iam_action": "backup:ListTags", "purpose": "Cloud Control GetResource for aws_backup_vault delegates to backup:ListTags for the BackupVaultTags property"},
+    {"service": "backup_vault", "iam_action": "cloudcontrol:GetResource", "purpose": "fetch per-vault properties for tag extraction and Identity.NativeIDs population"},
+    {"service": "backup_vault", "iam_action": "cloudcontrol:ListResources", "purpose": "list per-region AWS::Backup::BackupVault resources (paginated; no server-side tag filter)"},
     {"service": "bedrock_guardrail", "iam_action": "bedrock:GetGuardrail", "purpose": "DiscoverByID: fetch a guardrail by id"},
     {"service": "bedrock_guardrail", "iam_action": "bedrock:ListGuardrails", "purpose": "list per-region Bedrock guardrails (client-side prefix filter)"},
     {"service": "bedrock_guardrail", "iam_action": "bedrock:ListTagsForResource", "purpose": "fetch tags per guardrail"},

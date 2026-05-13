@@ -78,6 +78,7 @@ var categoryByTFType = map[string]string{
 	// --- AWS ---
 	"aws_apigatewayv2_api":                CategoryNetworkSecurity,
 	"aws_apigatewayv2_stage":              CategoryNetworkSecurity,
+	"aws_backup_vault":                    CategoryDataStorage,
 	"aws_bedrock_guardrail":               CategorySecurity,
 	"aws_cloudfront_distribution":         CategoryNetworkSecurity,
 	"aws_cloudwatch_event_rule":           CategoryEvents,

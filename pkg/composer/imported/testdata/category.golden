@@ -1,5 +1,6 @@
 aws_apigatewayv2_api	Network Security
 aws_apigatewayv2_stage	Network Security
+aws_backup_vault	Data Storage
 aws_bedrock_guardrail	Security
 aws_cloudfront_distribution	Network Security
 aws_cloudwatch_event_rule	Events

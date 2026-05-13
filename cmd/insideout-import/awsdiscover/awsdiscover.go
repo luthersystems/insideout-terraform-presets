@@ -121,46 +121,56 @@ func NewAWSDiscovererWithConcurrency(cfg aws.Config, maxConcurrency int) *AWSDis
 	if maxConcurrency <= 0 {
 		maxConcurrency = DefaultMaxConcurrency
 	}
+	byType := map[string]Discoverer{
+		"aws_sqs_queue":                       newSQSDiscoverer(cfg),
+		"aws_dynamodb_table":                  newDynamoDBDiscoverer(cfg, maxConcurrency),
+		"aws_cloudwatch_log_group":            newCloudWatchLogsDiscoverer(cfg),
+		"aws_secretsmanager_secret":           newSecretsManagerDiscoverer(cfg),
+		"aws_lambda_function":                 newLambdaDiscoverer(cfg, maxConcurrency),
+		"aws_iam_role":                        newIAMRoleDiscoverer(cfg),
+		"aws_iam_policy":                      newIAMPolicyDiscoverer(cfg),
+		"aws_kms_key":                         newKMSDiscoverer(cfg),
+		"aws_s3_bucket":                       newS3Discoverer(cfg),
+		"aws_vpc":                             newVPCDiscoverer(cfg),
+		"aws_subnet":                          newSubnetDiscoverer(cfg),
+		"aws_security_group":                  newSecurityGroupDiscoverer(cfg),
+		"aws_internet_gateway":                newInternetGatewayDiscoverer(cfg),
+		"aws_nat_gateway":                     newNatGatewayDiscoverer(cfg),
+		"aws_eip":                             newEIPDiscoverer(cfg),
+		"aws_route_table":                     newRouteTableDiscoverer(cfg),
+		"aws_network_acl":                     newNetworkACLDiscoverer(cfg),
+		"aws_vpc_endpoint":                    newVPCEndpointDiscoverer(cfg),
+		"aws_vpc_dhcp_options":                newVPCDHCPOptionsDiscoverer(cfg),
+		"aws_network_interface":               newNetworkInterfaceDiscoverer(cfg),
+		"aws_route53_zone":                    newRoute53ZoneDiscoverer(cfg),
+		"aws_cloudfront_distribution":         newCloudFrontDistributionDiscoverer(cfg),
+		"aws_db_instance":                     newDBInstanceDiscoverer(cfg),
+		"aws_db_subnet_group":                 newDBSubnetGroupDiscoverer(cfg, maxConcurrency),
+		"aws_db_parameter_group":              newDBParameterGroupDiscoverer(cfg, maxConcurrency),
+		"aws_lb":                              newLBDiscoverer(cfg, maxConcurrency),
+		"aws_lb_listener":                     newLBListenerDiscoverer(cfg, maxConcurrency),
+		"aws_lb_target_group":                 newLBTargetGroupDiscoverer(cfg, maxConcurrency),
+		"aws_bedrock_guardrail":               newBedrockGuardrailDiscoverer(cfg, maxConcurrency),
+		"aws_opensearchserverless_collection": newOpenSearchServerlessCollectionDiscoverer(cfg, maxConcurrency),
+		"aws_apigatewayv2_api":                newAPIGatewayV2APIDiscoverer(cfg, maxConcurrency),
+		"aws_apigatewayv2_stage":              newAPIGatewayV2StageDiscoverer(cfg, maxConcurrency),
+		"aws_eks_pod_identity_association":    newEKSPodIdentityDiscoverer(cfg, maxConcurrency),
+		"aws_cloudwatch_event_rule":           newCloudWatchEventRuleDiscoverer(cfg, maxConcurrency),
+		"aws_resourceexplorer2_index":         newResourceExplorer2IndexDiscoverer(cfg, maxConcurrency),
+		"aws_resourceexplorer2_view":          newResourceExplorer2ViewDiscoverer(cfg, maxConcurrency),
+	}
+	// Cloud Control-routed types (Bundle 13): each entry in
+	// cloudControlTypeConfigs becomes one generic-discoverer registration.
+	// The genericdiscoverer carries the per-type TypeName + extractors in
+	// cfg so this loop is the only place new Cloud Control-covered types
+	// need wiring. See cloudcontrol_types.go for the registry and
+	// cloudcontrol_discoverer.go for the implementation.
+	for _, ccCfg := range cloudControlTypeConfigs {
+		byType[ccCfg.TFType] = newCloudControlDiscoverer(ccCfg, cfg, maxConcurrency)
+	}
 	return &AWSDiscoverer{
 		defaultRegion: cfg.Region,
-		byType: map[string]Discoverer{
-			"aws_sqs_queue":                       newSQSDiscoverer(cfg),
-			"aws_dynamodb_table":                  newDynamoDBDiscoverer(cfg, maxConcurrency),
-			"aws_cloudwatch_log_group":            newCloudWatchLogsDiscoverer(cfg),
-			"aws_secretsmanager_secret":           newSecretsManagerDiscoverer(cfg),
-			"aws_lambda_function":                 newLambdaDiscoverer(cfg, maxConcurrency),
-			"aws_iam_role":                        newIAMRoleDiscoverer(cfg),
-			"aws_iam_policy":                      newIAMPolicyDiscoverer(cfg),
-			"aws_kms_key":                         newKMSDiscoverer(cfg),
-			"aws_s3_bucket":                       newS3Discoverer(cfg),
-			"aws_vpc":                             newVPCDiscoverer(cfg),
-			"aws_subnet":                          newSubnetDiscoverer(cfg),
-			"aws_security_group":                  newSecurityGroupDiscoverer(cfg),
-			"aws_internet_gateway":                newInternetGatewayDiscoverer(cfg),
-			"aws_nat_gateway":                     newNatGatewayDiscoverer(cfg),
-			"aws_eip":                             newEIPDiscoverer(cfg),
-			"aws_route_table":                     newRouteTableDiscoverer(cfg),
-			"aws_network_acl":                     newNetworkACLDiscoverer(cfg),
-			"aws_vpc_endpoint":                    newVPCEndpointDiscoverer(cfg),
-			"aws_vpc_dhcp_options":                newVPCDHCPOptionsDiscoverer(cfg),
-			"aws_network_interface":               newNetworkInterfaceDiscoverer(cfg),
-			"aws_route53_zone":                    newRoute53ZoneDiscoverer(cfg),
-			"aws_cloudfront_distribution":         newCloudFrontDistributionDiscoverer(cfg),
-			"aws_db_instance":                     newDBInstanceDiscoverer(cfg),
-			"aws_db_subnet_group":                 newDBSubnetGroupDiscoverer(cfg, maxConcurrency),
-			"aws_db_parameter_group":              newDBParameterGroupDiscoverer(cfg, maxConcurrency),
-			"aws_lb":                              newLBDiscoverer(cfg, maxConcurrency),
-			"aws_lb_listener":                     newLBListenerDiscoverer(cfg, maxConcurrency),
-			"aws_lb_target_group":                 newLBTargetGroupDiscoverer(cfg, maxConcurrency),
-			"aws_bedrock_guardrail":               newBedrockGuardrailDiscoverer(cfg, maxConcurrency),
-			"aws_opensearchserverless_collection": newOpenSearchServerlessCollectionDiscoverer(cfg, maxConcurrency),
-			"aws_apigatewayv2_api":                newAPIGatewayV2APIDiscoverer(cfg, maxConcurrency),
-			"aws_apigatewayv2_stage":              newAPIGatewayV2StageDiscoverer(cfg, maxConcurrency),
-			"aws_eks_pod_identity_association":    newEKSPodIdentityDiscoverer(cfg, maxConcurrency),
-			"aws_cloudwatch_event_rule":           newCloudWatchEventRuleDiscoverer(cfg, maxConcurrency),
-			"aws_resourceexplorer2_index":         newResourceExplorer2IndexDiscoverer(cfg, maxConcurrency),
-			"aws_resourceexplorer2_view":          newResourceExplorer2ViewDiscoverer(cfg, maxConcurrency),
-		},
+		byType:        byType,
 	}
 }
 
@@ -210,6 +220,11 @@ var serviceSlugByTFType = map[string]string{
 	"aws_cloudwatch_event_rule":           "cloudwatch_event_rule",
 	"aws_resourceexplorer2_index":         "resourceexplorer2_index",
 	"aws_resourceexplorer2_view":          "resourceexplorer2_view",
+
+	// Cloud Control-routed types (Bundle 13). Slug matches the per-type
+	// Slug field in cloudControlTypeConfigs (cloudcontrol_types.go);
+	// keep both surfaces in sync.
+	"aws_backup_vault": "backup_vault",
 }
 
 // ServiceSlug returns the progress-event slug for a Terraform resource

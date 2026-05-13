@@ -19,6 +19,7 @@ import (
 var awsTFTypeToServiceSlug = map[string]string{
 	"aws_apigatewayv2_api":                "apigatewayv2_api",
 	"aws_apigatewayv2_stage":              "apigatewayv2_stage",
+	"aws_backup_vault":                    "backup_vault",
 	"aws_bedrock_guardrail":               "bedrock_guardrail",
 	"aws_cloudfront_distribution":         "cloudfront_distribution",
 	"aws_cloudwatch_event_rule":           "cloudwatch_event_rule",
