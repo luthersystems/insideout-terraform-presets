@@ -1218,6 +1218,186 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 	},
 
 	// =====================================================================
+	// KMS Alias — SDKLister-listed, untaggable (#430)
+	// =====================================================================
+	{
+		// AWS::KMS::Alias has CC list+read handlers but its CFN schema
+		// declares taggable=false (KMS aliases don't carry tags — only
+		// the underlying KMS keys do). Routing through SDKLister keeps
+		// the discoverer's enumeration logic consistent with the ACM
+		// certificate + cognito user pool domain precedents (#412) and
+		// avoids relying on CC ListResources, which returns
+		// per-account-AND-AWS-managed aliases mixed together; the
+		// native kms:ListAliases is the canonical enumeration. The CC
+		// primary identifier is the bare AliasName (e.g. "alias/foo")
+		// — Terraform's import format is identical, so the rewriter is
+		// a passthrough.
+		TFType:                 "aws_kms_alias",
+		CloudFormationType:     "AWS::KMS::Alias",
+		Slug:                   "kms_alias",
+		SkipProjectTagFilter:   true,
+		SDKLister:              listKMSAliases,
+		ImportIDFromIdentifier: passthroughImportID,
+		NameHintFromProperties: nameOrIdentifier("AliasName"),
+		// The CFN schema only exposes AliasName + TargetKeyId. There
+		// is no ARN property; the alias name itself is the native ID.
+		NativeIDsFromProperties: func(identifier string, props map[string]any) map[string]string {
+			out := map[string]string{"name": identifier}
+			if tk := extractString(props, "TargetKeyId"); tk != "" {
+				out["target_key_id"] = tk
+			}
+			return out
+		},
+		TagsFromProperties: emptyTagsExtractor,
+	},
+
+	// =====================================================================
+	// IAM User — SDKLister-listed, global, taggable (#430)
+	// =====================================================================
+	{
+		// AWS::IAM::User is global; SDKLister uses iam:ListUsers (one
+		// call, all users — IAM is a global service so the discoverer
+		// runs once with region="" per the IsGlobal flag). CC primary
+		// identifier = UserName; Terraform's import format for
+		// aws_iam_user is also UserName — passthrough. CFN exposes
+		// Tags as a list of {Key,Value} (the modern shape).
+		TFType:                  "aws_iam_user",
+		CloudFormationType:      "AWS::IAM::User",
+		Slug:                    "iam_user",
+		IsGlobal:                true,
+		SDKLister:               listIAMUsers,
+		ImportIDFromIdentifier:  passthroughImportID,
+		NameHintFromProperties:  nameOrIdentifier("UserName"),
+		NativeIDsFromProperties: arnUnderKey("Arn"),
+		TagsFromProperties:      tagsFromKey("Tags"),
+	},
+
+	// =====================================================================
+	// IAM Group — SDKLister-listed, global, untaggable (#430)
+	// =====================================================================
+	{
+		// AWS::IAM::Group is global and explicitly untaggable per the
+		// CFN schema (taggable=false; no Tags property at all). The CC
+		// primary identifier = GroupName and Terraform's import format
+		// matches — passthrough. SkipProjectTagFilter bypasses the
+		// legacy Project filter for the same reason as
+		// aws_iam_instance_profile / aws_backup_selection (the empty
+		// tag bag would silently drop every group on --project scans).
+		TFType:                  "aws_iam_group",
+		CloudFormationType:      "AWS::IAM::Group",
+		Slug:                    "iam_group",
+		IsGlobal:                true,
+		SkipProjectTagFilter:    true,
+		SDKLister:               listIAMGroups,
+		ImportIDFromIdentifier:  passthroughImportID,
+		NameHintFromProperties:  nameOrIdentifier("GroupName"),
+		NativeIDsFromProperties: arnUnderKey("Arn"),
+		TagsFromProperties:      emptyTagsExtractor,
+	},
+
+	// =====================================================================
+	// CloudFront Function — SDKLister-listed, global, CC vs TF id divergence (#430)
+	// =====================================================================
+	{
+		// AWS::CloudFront::Function is global; the CC primary
+		// identifier is the FUNCTION ARN
+		// (arn:aws:cloudfront::<account>:function/<name>) but
+		// Terraform's import format for aws_cloudfront_function is the
+		// bare function NAME — rewriter strips the
+		// "arn:aws:cloudfront::<acct>:function/" prefix.
+		//
+		// CFN declares the type taggable (Tags list of {Key,Value}),
+		// but CC GetResource does not always include the Tags property
+		// on AWS::CloudFront::Function in practice; downstream RGT
+		// tags continue to cover the gap for the Project filter on the
+		// taggable path. Mirrors the aws_acm_certificate shape (CC
+		// returns the lightweight properties; tag-rich payload comes
+		// from RGT).
+		TFType:             "aws_cloudfront_function",
+		CloudFormationType: "AWS::CloudFront::Function",
+		Slug:               "cloudfront_function",
+		IsGlobal:           true,
+		SDKLister:          listCloudFrontFunctions,
+		// CC identifier = "arn:aws:cloudfront::<acct>:function/<name>";
+		// TF import format = bare "<name>". Extract the final path
+		// segment; if the input isn't ARN-shaped fall through verbatim
+		// so a malformed identifier surfaces clearly downstream rather
+		// than getting silently mangled.
+		ImportIDFromIdentifier: func(identifier string, _ map[string]any) string {
+			const marker = ":function/"
+			if idx := strings.Index(identifier, marker); idx >= 0 {
+				return identifier[idx+len(marker):]
+			}
+			return identifier
+		},
+		NameHintFromProperties: func(identifier string, props map[string]any) string {
+			if name := extractString(props, "Name"); name != "" {
+				return name
+			}
+			// Fall back to the ARN tail (matches ImportIDFromIdentifier).
+			const marker = ":function/"
+			if idx := strings.Index(identifier, marker); idx >= 0 {
+				return identifier[idx+len(marker):]
+			}
+			return identifier
+		},
+		NativeIDsFromProperties: func(identifier string, _ map[string]any) map[string]string {
+			// Stamp the ARN under "arn" (the CC identifier IS the ARN)
+			// and pull out the bare function name for the by-name slot.
+			out := map[string]string{"arn": identifier}
+			const marker = ":function/"
+			if idx := strings.Index(identifier, marker); idx >= 0 {
+				out["name"] = identifier[idx+len(marker):]
+			}
+			return out
+		},
+		TagsFromProperties: tagsFromKey("Tags"),
+	},
+
+	// =====================================================================
+	// Secrets Manager Rotation Schedule — SDKLister-listed, untaggable (#430)
+	// =====================================================================
+	{
+		// AWS::SecretsManager::RotationSchedule is the CFN sub-resource
+		// modeling a secret's rotation configuration. Its CC primary
+		// identifier is the parent secret's ARN (the `Id` property is
+		// readOnly and equals the secret ARN) and Terraform's import
+		// format for aws_secretsmanager_secret_rotation is also the
+		// secret ARN — passthrough. CFN declares taggable=false
+		// (rotation inherits from the parent secret for tag purposes).
+		//
+		// SDKLister filters Secrets Manager's ListSecrets output to
+		// secrets with RotationEnabled=true so the GetResource fan-out
+		// doesn't emit ResourceNotFoundException for every non-rotated
+		// secret. SkipProjectTagFilter bypasses the Project filter
+		// since rotation schedules are inherently tagless.
+		TFType:                  "aws_secretsmanager_secret_rotation",
+		CloudFormationType:      "AWS::SecretsManager::RotationSchedule",
+		Slug:                    "secretsmanager_secret_rotation",
+		SkipProjectTagFilter:    true,
+		SDKLister:               listSecretsManagerSecretRotations,
+		ImportIDFromIdentifier:  passthroughImportID,
+		NameHintFromProperties: func(identifier string, props map[string]any) string {
+			// No "name" on the rotation schedule; pull the secret name
+			// from the ARN tail when parseable. ARN shape:
+			// arn:aws:secretsmanager:<region>:<account>:secret:<name>-<suffix>
+			const marker = ":secret:"
+			if idx := strings.Index(identifier, marker); idx >= 0 {
+				return identifier[idx+len(marker):]
+			}
+			return identifier
+		},
+		NativeIDsFromProperties: func(identifier string, props map[string]any) map[string]string {
+			out := map[string]string{"arn": identifier, "secret_id": identifier}
+			if rl := extractString(props, "RotationLambdaARN"); rl != "" {
+				out["rotation_lambda_arn"] = rl
+			}
+			return out
+		},
+		TagsFromProperties: emptyTagsExtractor,
+	},
+
+	// =====================================================================
 	// ApiGateway v1 Resource — parent-scoped on RestApiId, untaggable (#422)
 	// =====================================================================
 	{
