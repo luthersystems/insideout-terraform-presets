@@ -1247,6 +1247,222 @@ func TestParentLabelFromModel(t *testing.T) {
 	}
 }
 
+// TestCloudControlDiscover_UsesRGTCache_SkipsListResources pins the
+// optimization path added in #406: when the orchestrator's RGT pre-pass
+// surfaces ARNs for our CloudFormation type, the discoverer must skip
+// its own ListResources fan-out and feed cached identifiers straight
+// into the GetResource bounded errgroup. Verifies fake.listCalls == 0
+// and the expected GetResource targets fired.
+func TestCloudControlDiscover_UsesRGTCache_SkipsListResources(t *testing.T) {
+	t.Parallel()
+	fake := &fakeCloudControlClient{
+		propsByIdentifier: map[string]map[string]any{
+			"vault-a": {"BackupVaultName": "vault-a"},
+			"vault-b": {"BackupVaultName": "vault-b"},
+		},
+	}
+	cfg := testConfig()
+	cfg.CloudFormationType = "AWS::Backup::BackupVault"
+	d := &cloudControlDiscoverer{
+		cfg:            cfg,
+		new:            func(_ string) cloudControlClient { return fake },
+		maxConcurrency: DefaultMaxConcurrency,
+	}
+	cache := &rgtCache{byRegionAndType: map[string]map[string][]arnInfo{
+		"us-east-1": {
+			"AWS::Backup::BackupVault": {
+				{ARN: "arn:aws:backup:us-east-1:111:backup-vault:vault-a", Identifier: "vault-a", Tags: map[string]string{"Project": "io-foo"}},
+				{ARN: "arn:aws:backup:us-east-1:111:backup-vault:vault-b", Identifier: "vault-b", Tags: map[string]string{"Project": "io-foo"}},
+			},
+		},
+	}}
+	args := DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"}.withRGTCache(cache)
+
+	got, err := d.Discover(context.Background(), args)
+	if err != nil {
+		t.Fatalf("Discover: %v", err)
+	}
+	if fake.listCalls != 0 {
+		t.Errorf("ListResources calls: got %d, want 0 (cache should short-circuit)", fake.listCalls)
+	}
+	if len(got) != 2 {
+		t.Fatalf("emit count: got %d, want 2", len(got))
+	}
+	// Both cached identifiers must have driven a GetResource.
+	sort.Strings(fake.getResourceCalls)
+	want := []string{"vault-a", "vault-b"}
+	for i, w := range want {
+		if i >= len(fake.getResourceCalls) || fake.getResourceCalls[i] != w {
+			t.Errorf("GetResource[%d] = %q, want %q", i, fake.getResourceCalls[i], w)
+		}
+	}
+}
+
+// TestCloudControlDiscover_CacheMiss_FallsBackToListResources pins the
+// fallback behavior: when the orchestrator ran the prefetcher but found
+// no ARNs for our CloudFormation type (cache miss), the existing
+// ListResources path must drive AND the legacy args.Project tag filter
+// (skipped on the cache-hit path) must remain active. The fixture seeds
+// two vault items with different Project tags; only the matching one
+// emits.
+func TestCloudControlDiscover_CacheMiss_FallsBackToListResources(t *testing.T) {
+	t.Parallel()
+	fake := &fakeCloudControlClient{
+		listPages: []cloudcontrol.ListResourcesOutput{
+			listPage("", "vault-match", "vault-other-project"),
+		},
+		propsByIdentifier: map[string]map[string]any{
+			"vault-match":          {"BackupVaultName": "vault-match", "BackupVaultTags": map[string]any{"Project": "io-foo"}},
+			"vault-other-project":  {"BackupVaultName": "vault-other-project", "BackupVaultTags": map[string]any{"Project": "io-bar"}},
+		},
+	}
+	cfg := testConfig()
+	cfg.CloudFormationType = "AWS::Backup::BackupVault"
+	cfg.TagsFromProperties = func(props map[string]any) map[string]string {
+		return extractStringMap(props, "BackupVaultTags")
+	}
+	d := &cloudControlDiscoverer{
+		cfg:            cfg,
+		new:            func(_ string) cloudControlClient { return fake },
+		maxConcurrency: DefaultMaxConcurrency,
+	}
+	// Cache populated for a DIFFERENT cfnType so this type misses.
+	cache := &rgtCache{byRegionAndType: map[string]map[string][]arnInfo{
+		"us-east-1": {"AWS::SNS::Topic": {{ARN: "x", Identifier: "x"}}},
+	}}
+	args := DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"}.withRGTCache(cache)
+
+	got, err := d.Discover(context.Background(), args)
+	if err != nil {
+		t.Fatalf("Discover: %v", err)
+	}
+	if fake.listCalls == 0 {
+		t.Error("ListResources calls: got 0, want >=1 (cache miss should fall back to List)")
+	}
+	if len(got) != 1 {
+		t.Fatalf("emit count: got %d (%v), want 1 (Project filter must still run on cache-miss path)", len(got), got)
+	}
+	if got[0].Identity.ImportID != "vault-match" {
+		t.Errorf("emitted ImportID = %q, want vault-match (the Project=io-foo row); vault-other-project should have been filtered", got[0].Identity.ImportID)
+	}
+}
+
+// TestCloudControlDiscover_UsesRGTTagsNotPropertiesTags pins that
+// RGT-supplied tags (authoritative, pre-filtered server-side) take
+// precedence over TagsFromProperties when both are available. The
+// type-config's TagsFromProperties returns sentinel "fromProps" tags;
+// the RGT cache supplies "fromRGT" tags; the emitted Identity.Tags
+// must carry the RGT values.
+func TestCloudControlDiscover_UsesRGTTagsNotPropertiesTags(t *testing.T) {
+	t.Parallel()
+	fake := &fakeCloudControlClient{
+		propsByIdentifier: map[string]map[string]any{
+			"vault-a": {"BackupVaultName": "vault-a", "Tags": map[string]any{"Source": "props"}},
+		},
+	}
+	cfg := testConfig()
+	cfg.CloudFormationType = "AWS::Backup::BackupVault"
+	cfg.TagsFromProperties = func(props map[string]any) map[string]string {
+		return map[string]string{"Source": "props"}
+	}
+	d := &cloudControlDiscoverer{
+		cfg:            cfg,
+		new:            func(_ string) cloudControlClient { return fake },
+		maxConcurrency: DefaultMaxConcurrency,
+	}
+	cache := &rgtCache{byRegionAndType: map[string]map[string][]arnInfo{
+		"us-east-1": {
+			"AWS::Backup::BackupVault": {
+				{ARN: "x", Identifier: "vault-a", Tags: map[string]string{"Source": "rgt"}},
+			},
+		},
+	}}
+	args := DiscoverArgs{Regions: []string{"us-east-1"}, AccountID: "123"}.withRGTCache(cache)
+
+	got, err := d.Discover(context.Background(), args)
+	if err != nil {
+		t.Fatalf("Discover: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("emit count: got %d, want 1", len(got))
+	}
+	if v, ok := got[0].Identity.Tags["Source"]; !ok || v != "rgt" {
+		t.Errorf("Identity.Tags[Source] = %q (ok=%v), want %q (RGT must win)", v, ok, "rgt")
+	}
+}
+
+// TestCloudControlDiscover_GlobalType_UsesForGlobalCFN pins that global
+// CloudFormation types (IsGlobal=true) consult ForGlobalCFN instead of
+// per-region ForCFN. The fixture seeds:
+//   - my-role-dupe in BOTH us-east-1 and us-west-2 (must dedupe to 1)
+//   - my-role-only-west in us-west-2 only (must appear)
+//   - my-role-only-east in us-east-1 only (must appear)
+//
+// Total emitted resources = 3 (not 4) proves dedupe across regions; the
+// per-region-key absence of my-role-only-west / only-east proves the
+// "across all regions" union behavior — a regression that read only one
+// region's bucket would yield 2 or fewer.
+func TestCloudControlDiscover_GlobalType_UsesForGlobalCFN(t *testing.T) {
+	t.Parallel()
+	fake := &fakeCloudControlClient{
+		propsByIdentifier: map[string]map[string]any{
+			"my-role-dupe":      {"RoleName": "my-role-dupe"},
+			"my-role-only-west": {"RoleName": "my-role-only-west"},
+			"my-role-only-east": {"RoleName": "my-role-only-east"},
+		},
+	}
+	cfg := testConfig()
+	cfg.CloudFormationType = "AWS::IAM::Role"
+	cfg.IsGlobal = true
+	d := &cloudControlDiscoverer{
+		cfg:            cfg,
+		new:            func(_ string) cloudControlClient { return fake },
+		maxConcurrency: DefaultMaxConcurrency,
+	}
+	cache := &rgtCache{byRegionAndType: map[string]map[string][]arnInfo{
+		"us-east-1": {"AWS::IAM::Role": {
+			{ARN: "arn:aws:iam::111:role/my-role-dupe", Identifier: "my-role-dupe"},
+			{ARN: "arn:aws:iam::111:role/my-role-only-east", Identifier: "my-role-only-east"},
+		}},
+		"us-west-2": {"AWS::IAM::Role": {
+			{ARN: "arn:aws:iam::111:role/my-role-dupe", Identifier: "my-role-dupe"},
+			{ARN: "arn:aws:iam::111:role/my-role-only-west", Identifier: "my-role-only-west"},
+		}},
+	}}
+	args := DiscoverArgs{Regions: []string{"us-east-1", "us-west-2"}, AccountID: "123"}.withRGTCache(cache)
+
+	got, err := d.Discover(context.Background(), args)
+	if err != nil {
+		t.Fatalf("Discover: %v", err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("emit count: got %d, want 3 (1 deduped + 2 unique)", len(got))
+	}
+	seen := map[string]bool{}
+	for _, ir := range got {
+		seen[ir.Identity.ImportID] = true
+		if ir.Identity.Region != "" {
+			t.Errorf("global type %q Region: got %q, want \"\" (global convention)", ir.Identity.ImportID, ir.Identity.Region)
+		}
+	}
+	for _, want := range []string{"my-role-dupe", "my-role-only-east", "my-role-only-west"} {
+		if !seen[want] {
+			t.Errorf("missing %q from emitted set; got keys %v", want, mapKeysFromBool(seen))
+		}
+	}
+}
+
+// mapKeysFromBool returns the keys of a string→bool map sorted, for
+// diagnostic output when an assertion fails.
+func mapKeysFromBool(m map[string]bool) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}
+
 // mapKeys returns the keys of a map in sorted order. Used to produce
 // stable diagnostic output when an assertion fails.
 func mapKeys(m map[string]imported.ImportedResource) []string {

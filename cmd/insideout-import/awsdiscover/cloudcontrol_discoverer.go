@@ -153,54 +153,87 @@ func (d *cloudControlDiscoverer) Discover(ctx context.Context, args DiscoverArgs
 		// the pattern in sqs.go / lambda.go.
 		regionCount := 0
 
-		// Per-parent enumeration: ParentLister returns N parent-scoped
-		// resource-model JSON strings; for non-parent types it returns
-		// nil and we issue one ListResources without a ResourceModel.
-		parentModels := []string{""}
-		if d.cfg.ParentLister != nil {
-			models, err := d.cfg.ParentLister(ctx, client, args)
-			if err != nil {
-				args.Emitter.ServiceFinish(d.cfg.Slug, region, regionCount, time.Since(regionStart))
-				return nil, fmt.Errorf("%s parent enumeration (region=%s): %w", d.cfg.Slug, region, err)
-			}
-			parentModels = models
-			if len(parentModels) == 0 {
-				// No parents discovered — nothing to enumerate; close
-				// the scope cleanly.
-				args.Emitter.ServiceFinish(d.cfg.Slug, region, regionCount, time.Since(regionStart))
-				continue
-			}
-		}
-
-		// Aggregate identifiers across all parents before fanning out
-		// per-item GetResource so the bounded errgroup runs against
-		// the full work set.
+		// Aggregate identifiers across all parents (or via RGT
+		// prefetch — see below) before fanning out per-item
+		// GetResource so the bounded errgroup runs against the full
+		// work set.
 		type itemRef struct {
-			identifier   string
-			parentModel  string
-			parentLabel  string // for ServiceWarn context
+			identifier  string
+			parentModel string
+			parentLabel string // for ServiceWarn context
+			// rgtTags is the tag map returned by the RGT prefetcher
+			// when this ref came from the cache. Non-nil means the
+			// caller already filtered server-side by Project/TagSelectors
+			// so the post-fetch tag filter becomes belt-and-suspenders.
+			// Nil for refs sourced from ListResources.
+			rgtTags map[string]string
 		}
 		var refs []itemRef
-		for _, parentModel := range parentModels {
-			input := &cloudcontrol.ListResourcesInput{
-				TypeName: aws.String(d.cfg.CloudFormationType),
+
+		// RGT prefetch cache short-circuit: when the orchestrator's
+		// pre-pass found ARNs for our CloudFormation type, skip
+		// ListResources entirely. The cache is empty (or absent) for
+		// types whose ARNs don't carry tags, when the caller passed
+		// no TagSelectors/Project, or when the per-region RGT call
+		// failed (downgraded to warn, not error). See rgt_prefetcher.go
+		// and #406. The cache also bypasses the ParentLister branch —
+		// each cached ARN is a self-contained CC identifier, no
+		// parent context required.
+		cacheUsed := false
+		if d.cfg.IsGlobal {
+			if cached, ok := args.RGTCacheForGlobalCFN(d.cfg.CloudFormationType); ok {
+				for _, info := range cached {
+					refs = append(refs, itemRef{identifier: info.Identifier, rgtTags: info.Tags})
+				}
+				cacheUsed = true
 			}
-			if parentModel != "" {
-				input.ResourceModel = aws.String(parentModel)
+		} else if cached, ok := args.RGTCacheForCFN(region, d.cfg.CloudFormationType); ok {
+			for _, info := range cached {
+				refs = append(refs, itemRef{identifier: info.Identifier, rgtTags: info.Tags})
 			}
-			paginator := cloudcontrol.NewListResourcesPaginator(client, input)
-			for paginator.HasMorePages() {
-				page, err := paginator.NextPage(ctx)
+			cacheUsed = true
+		}
+
+		if !cacheUsed {
+			// Per-parent enumeration: ParentLister returns N
+			// parent-scoped resource-model JSON strings; for
+			// non-parent types it returns nil and we issue one
+			// ListResources without a ResourceModel.
+			parentModels := []string{""}
+			if d.cfg.ParentLister != nil {
+				models, err := d.cfg.ParentLister(ctx, client, args)
 				if err != nil {
 					args.Emitter.ServiceFinish(d.cfg.Slug, region, regionCount, time.Since(regionStart))
-					return nil, fmt.Errorf("ListResources %s (region=%s): %w", d.cfg.CloudFormationType, region, err)
+					return nil, fmt.Errorf("%s parent enumeration (region=%s): %w", d.cfg.Slug, region, err)
 				}
-				for _, desc := range page.ResourceDescriptions {
-					refs = append(refs, itemRef{
-						identifier:  aws.ToString(desc.Identifier),
-						parentModel: parentModel,
-						parentLabel: parentLabelFromModel(parentModel),
-					})
+				parentModels = models
+				if len(parentModels) == 0 {
+					args.Emitter.ServiceFinish(d.cfg.Slug, region, regionCount, time.Since(regionStart))
+					continue
+				}
+			}
+
+			for _, parentModel := range parentModels {
+				input := &cloudcontrol.ListResourcesInput{
+					TypeName: aws.String(d.cfg.CloudFormationType),
+				}
+				if parentModel != "" {
+					input.ResourceModel = aws.String(parentModel)
+				}
+				paginator := cloudcontrol.NewListResourcesPaginator(client, input)
+				for paginator.HasMorePages() {
+					page, err := paginator.NextPage(ctx)
+					if err != nil {
+						args.Emitter.ServiceFinish(d.cfg.Slug, region, regionCount, time.Since(regionStart))
+						return nil, fmt.Errorf("ListResources %s (region=%s): %w", d.cfg.CloudFormationType, region, err)
+					}
+					for _, desc := range page.ResourceDescriptions {
+						refs = append(refs, itemRef{
+							identifier:  aws.ToString(desc.Identifier),
+							parentModel: parentModel,
+							parentLabel: parentLabelFromModel(parentModel),
+						})
+					}
 				}
 			}
 		}
@@ -246,8 +279,15 @@ func (d *cloudControlDiscoverer) Discover(ctx context.Context, args DiscoverArgs
 						fmt.Sprintf("parse properties %s %q: %v", d.cfg.CloudFormationType, ref.identifier, err))
 					return nil
 				}
+				// Prefer the RGT-supplied tag map when present —
+				// RGT already filtered server-side and the tag map
+				// is authoritative. Falls back to
+				// TagsFromProperties for refs sourced via
+				// ListResources (RGT cache miss).
 				var tags map[string]string
-				if d.cfg.TagsFromProperties != nil {
+				if ref.rgtTags != nil {
+					tags = ref.rgtTags
+				} else if d.cfg.TagsFromProperties != nil {
 					tags = d.cfg.TagsFromProperties(props)
 				}
 				mu.Lock()
@@ -264,8 +304,12 @@ func (d *cloudControlDiscoverer) Discover(ctx context.Context, args DiscoverArgs
 		sort.Slice(done, func(i, j int) bool { return done[i].identifier < done[j].identifier })
 
 		for _, f := range done {
-			// Legacy Project tag back-compat (matches lambda.go:161).
-			if args.Project != "" && f.tags["Project"] != args.Project {
+			// Legacy Project tag back-compat. Skipped on the RGT-cache
+			// hit path because the prefetcher already filtered
+			// server-side; running it again would force a redundant
+			// map lookup per resource.
+			cacheUsedForRef := cacheUsed
+			if !cacheUsedForRef && args.Project != "" && f.tags["Project"] != args.Project {
 				continue
 			}
 			if !MatchesAll(f.tags, args.TagSelectors) {

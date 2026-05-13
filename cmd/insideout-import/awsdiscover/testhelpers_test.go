@@ -23,6 +23,12 @@ func ec2APIError(code, message string) error {
 // to call NewAWSDiscoverer; they do not perform any SDK calls.
 func awsDummyConfig() aws.Config { return aws.Config{Region: "us-east-1"} }
 
+// ptr returns a pointer to the given string. Common helper across
+// per-discoverer tests that need to build SDK-typed inputs with
+// *string fields. Lived in sqs_test.go before #406 deleted that
+// hand-rolled discoverer; consolidated here.
+func ptr(s string) *string { return &s }
+
 // recordedEvent is a single emit observed by recordingEmitter (#295). The
 // fields cover every progress.Emitter method's load-bearing arguments;
 // per-method tests pin the relevant subset.

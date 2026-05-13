@@ -1,0 +1,426 @@
+package awsdiscover
+
+import (
+	"testing"
+)
+
+func TestParseARN(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name   string
+		arn    string
+		want   parsedARN
+		wantOK bool
+	}{
+		{
+			name: "vpc",
+			arn:  "arn:aws:ec2:us-east-1:111111111111:vpc/vpc-0abc",
+			want: parsedARN{
+				full: "arn:aws:ec2:us-east-1:111111111111:vpc/vpc-0abc", partition: "aws",
+				service: "ec2", region: "us-east-1", accountID: "111111111111",
+				resourceType: "vpc", resourceID: "vpc-0abc",
+			},
+			wantOK: true,
+		},
+		{
+			name: "subnet",
+			arn:  "arn:aws:ec2:us-east-1:111111111111:subnet/subnet-abc",
+			want: parsedARN{
+				full: "arn:aws:ec2:us-east-1:111111111111:subnet/subnet-abc", partition: "aws",
+				service: "ec2", region: "us-east-1", accountID: "111111111111",
+				resourceType: "subnet", resourceID: "subnet-abc",
+			},
+			wantOK: true,
+		},
+		{
+			name: "internet_gateway",
+			arn:  "arn:aws:ec2:us-east-1:111111111111:internet-gateway/igw-abc",
+			want: parsedARN{
+				full: "arn:aws:ec2:us-east-1:111111111111:internet-gateway/igw-abc", partition: "aws",
+				service: "ec2", region: "us-east-1", accountID: "111111111111",
+				resourceType: "internet-gateway", resourceID: "igw-abc",
+			},
+			wantOK: true,
+		},
+		{
+			name: "nat_gateway",
+			arn:  "arn:aws:ec2:us-east-1:111111111111:natgateway/nat-abc",
+			want: parsedARN{
+				full: "arn:aws:ec2:us-east-1:111111111111:natgateway/nat-abc", partition: "aws",
+				service: "ec2", region: "us-east-1", accountID: "111111111111",
+				resourceType: "natgateway", resourceID: "nat-abc",
+			},
+			wantOK: true,
+		},
+		{
+			name: "eip",
+			arn:  "arn:aws:ec2:us-east-1:111111111111:elastic-ip/eipalloc-abc",
+			want: parsedARN{
+				full: "arn:aws:ec2:us-east-1:111111111111:elastic-ip/eipalloc-abc", partition: "aws",
+				service: "ec2", region: "us-east-1", accountID: "111111111111",
+				resourceType: "elastic-ip", resourceID: "eipalloc-abc",
+			},
+			wantOK: true,
+		},
+		{
+			name: "route_table",
+			arn:  "arn:aws:ec2:us-east-1:111111111111:route-table/rtb-abc",
+			want: parsedARN{
+				full: "arn:aws:ec2:us-east-1:111111111111:route-table/rtb-abc", partition: "aws",
+				service: "ec2", region: "us-east-1", accountID: "111111111111",
+				resourceType: "route-table", resourceID: "rtb-abc",
+			},
+			wantOK: true,
+		},
+		{
+			name: "network_acl",
+			arn:  "arn:aws:ec2:us-east-1:111111111111:network-acl/acl-abc",
+			want: parsedARN{
+				full: "arn:aws:ec2:us-east-1:111111111111:network-acl/acl-abc", partition: "aws",
+				service: "ec2", region: "us-east-1", accountID: "111111111111",
+				resourceType: "network-acl", resourceID: "acl-abc",
+			},
+			wantOK: true,
+		},
+		{
+			name: "vpc_endpoint",
+			arn:  "arn:aws:ec2:us-east-1:111111111111:vpc-endpoint/vpce-abc",
+			want: parsedARN{
+				full: "arn:aws:ec2:us-east-1:111111111111:vpc-endpoint/vpce-abc", partition: "aws",
+				service: "ec2", region: "us-east-1", accountID: "111111111111",
+				resourceType: "vpc-endpoint", resourceID: "vpce-abc",
+			},
+			wantOK: true,
+		},
+		{
+			name: "security_group",
+			arn:  "arn:aws:ec2:us-east-1:111111111111:security-group/sg-abc",
+			want: parsedARN{
+				full: "arn:aws:ec2:us-east-1:111111111111:security-group/sg-abc", partition: "aws",
+				service: "ec2", region: "us-east-1", accountID: "111111111111",
+				resourceType: "security-group", resourceID: "sg-abc",
+			},
+			wantOK: true,
+		},
+		{
+			name: "secretsmanager_secret",
+			arn:  "arn:aws:secretsmanager:us-east-1:111111111111:secret:foo-AbCdEf",
+			want: parsedARN{
+				full: "arn:aws:secretsmanager:us-east-1:111111111111:secret:foo-AbCdEf", partition: "aws",
+				service: "secretsmanager", region: "us-east-1", accountID: "111111111111",
+				resourceType: "secret", resourceID: "foo-AbCdEf",
+			},
+			wantOK: true,
+		},
+		{
+			name: "backup_vault",
+			arn:  "arn:aws:backup:us-east-1:111111111111:backup-vault:my-vault",
+			want: parsedARN{
+				full: "arn:aws:backup:us-east-1:111111111111:backup-vault:my-vault", partition: "aws",
+				service: "backup", region: "us-east-1", accountID: "111111111111",
+				resourceType: "backup-vault", resourceID: "my-vault",
+			},
+			wantOK: true,
+		},
+		{
+			name: "sns_topic_no_resource_type",
+			arn:  "arn:aws:sns:us-east-1:111111111111:my-topic",
+			want: parsedARN{
+				full: "arn:aws:sns:us-east-1:111111111111:my-topic", partition: "aws",
+				service: "sns", region: "us-east-1", accountID: "111111111111",
+				resourceType: "", resourceID: "my-topic",
+			},
+			wantOK: true,
+		},
+		{
+			name: "sqs_queue_no_resource_type",
+			arn:  "arn:aws:sqs:us-east-1:111111111111:my-queue",
+			want: parsedARN{
+				full: "arn:aws:sqs:us-east-1:111111111111:my-queue", partition: "aws",
+				service: "sqs", region: "us-east-1", accountID: "111111111111",
+				resourceType: "", resourceID: "my-queue",
+			},
+			wantOK: true,
+		},
+		{
+			name: "iam_role_empty_region",
+			arn:  "arn:aws:iam::111111111111:role/my-role",
+			want: parsedARN{
+				full: "arn:aws:iam::111111111111:role/my-role", partition: "aws",
+				service: "iam", region: "", accountID: "111111111111",
+				resourceType: "role", resourceID: "my-role",
+			},
+			wantOK: true,
+		},
+		{
+			name: "lambda_with_qualifier",
+			arn:  "arn:aws:lambda:us-east-1:111111111111:function:my-fn:PROD",
+			want: parsedARN{
+				full: "arn:aws:lambda:us-east-1:111111111111:function:my-fn:PROD", partition: "aws",
+				service: "lambda", region: "us-east-1", accountID: "111111111111",
+				resourceType: "function", resourceID: "my-fn:PROD",
+			},
+			wantOK: true,
+		},
+		{
+			name: "api_gateway_v2_api_url_path_style",
+			arn:  "arn:aws:apigateway:us-east-1::/apis/4hmoaslnr0",
+			want: parsedARN{
+				full: "arn:aws:apigateway:us-east-1::/apis/4hmoaslnr0", partition: "aws",
+				service: "apigateway", region: "us-east-1", accountID: "",
+				resourceType: "apis", resourceID: "4hmoaslnr0",
+			},
+			wantOK: true,
+		},
+		{
+			name: "api_gateway_v2_stage_url_path_style",
+			arn:  "arn:aws:apigateway:us-east-1::/apis/4hmoaslnr0/stages/$default",
+			want: parsedARN{
+				full: "arn:aws:apigateway:us-east-1::/apis/4hmoaslnr0/stages/$default", partition: "aws",
+				service: "apigateway", region: "us-east-1", accountID: "",
+				resourceType: "apis", resourceID: "4hmoaslnr0/stages/$default",
+			},
+			wantOK: true,
+		},
+		{
+			name: "eks_pod_identity_association",
+			arn:  "arn:aws:eks:us-east-1:111111111111:podidentityassociation/cluster-1/a-abc123",
+			want: parsedARN{
+				full: "arn:aws:eks:us-east-1:111111111111:podidentityassociation/cluster-1/a-abc123", partition: "aws",
+				service: "eks", region: "us-east-1", accountID: "111111111111",
+				resourceType: "podidentityassociation", resourceID: "cluster-1/a-abc123",
+			},
+			wantOK: true,
+		},
+		{
+			name: "logs_log_group_trailing_star",
+			arn:  "arn:aws:logs:us-east-1:111111111111:log-group:/aws/lambda/my-fn:*",
+			want: parsedARN{
+				full: "arn:aws:logs:us-east-1:111111111111:log-group:/aws/lambda/my-fn:*", partition: "aws",
+				service: "logs", region: "us-east-1", accountID: "111111111111",
+				resourceType: "log-group", resourceID: "/aws/lambda/my-fn:*",
+			},
+			wantOK: true,
+		},
+		{
+			name:   "malformed_not_arn",
+			arn:    "not-an-arn",
+			wantOK: false,
+		},
+		{
+			name:   "malformed_too_few_segments",
+			arn:    "arn:aws:s3",
+			wantOK: false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := parseARN(tc.arn)
+			if tc.wantOK {
+				if err != nil {
+					t.Fatalf("parseARN(%q) returned error: %v", tc.arn, err)
+				}
+				if got != tc.want {
+					t.Errorf("parseARN(%q):\n got=%+v\nwant=%+v", tc.arn, got, tc.want)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("parseARN(%q) expected error, got=%+v", tc.arn, got)
+			}
+		})
+	}
+}
+
+func TestLookupRule(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name        string
+		arn         string
+		wantCFN     string
+		wantIdent   string
+		wantNoMatch bool
+	}{
+		// EC2 family
+		{name: "vpc", arn: "arn:aws:ec2:us-east-1:111111111111:vpc/vpc-0abc",
+			wantCFN: "AWS::EC2::VPC", wantIdent: "vpc-0abc"},
+		{name: "subnet", arn: "arn:aws:ec2:us-east-1:111111111111:subnet/subnet-abc",
+			wantCFN: "AWS::EC2::Subnet", wantIdent: "subnet-abc"},
+		{name: "security_group", arn: "arn:aws:ec2:us-east-1:111111111111:security-group/sg-abc",
+			wantCFN: "AWS::EC2::SecurityGroup", wantIdent: "sg-abc"},
+		{name: "internet_gateway", arn: "arn:aws:ec2:us-east-1:111111111111:internet-gateway/igw-abc",
+			wantCFN: "AWS::EC2::InternetGateway", wantIdent: "igw-abc"},
+		{name: "nat_gateway", arn: "arn:aws:ec2:us-east-1:111111111111:natgateway/nat-abc",
+			wantCFN: "AWS::EC2::NatGateway", wantIdent: "nat-abc"},
+		{name: "eip_compound_id", arn: "arn:aws:ec2:us-east-1:111111111111:elastic-ip/eipalloc-abc",
+			wantCFN: "AWS::EC2::EIP", wantIdent: "|eipalloc-abc"},
+		{name: "route_table", arn: "arn:aws:ec2:us-east-1:111111111111:route-table/rtb-abc",
+			wantCFN: "AWS::EC2::RouteTable", wantIdent: "rtb-abc"},
+		{name: "network_acl", arn: "arn:aws:ec2:us-east-1:111111111111:network-acl/acl-abc",
+			wantCFN: "AWS::EC2::NetworkAcl", wantIdent: "acl-abc"},
+		{name: "vpc_endpoint", arn: "arn:aws:ec2:us-east-1:111111111111:vpc-endpoint/vpce-abc",
+			wantCFN: "AWS::EC2::VPCEndpoint", wantIdent: "vpce-abc"},
+		{name: "network_interface", arn: "arn:aws:ec2:us-east-1:111111111111:network-interface/eni-abc",
+			wantCFN: "AWS::EC2::NetworkInterface", wantIdent: "eni-abc"},
+		{name: "dhcp_options", arn: "arn:aws:ec2:us-east-1:111111111111:dhcp-options/dopt-abc",
+			wantCFN: "AWS::EC2::DHCPOptions", wantIdent: "dopt-abc"},
+
+		// Backup
+		{name: "backup_vault", arn: "arn:aws:backup:us-east-1:111111111111:backup-vault:my-vault",
+			wantCFN: "AWS::Backup::BackupVault", wantIdent: "my-vault"},
+		{name: "backup_plan", arn: "arn:aws:backup:us-east-1:111111111111:backup-plan:abc-123",
+			wantCFN: "AWS::Backup::BackupPlan", wantIdent: "abc-123"},
+
+		// Messaging
+		{name: "sns_topic_full_arn", arn: "arn:aws:sns:us-east-1:111111111111:my-topic",
+			wantCFN: "AWS::SNS::Topic", wantIdent: "arn:aws:sns:us-east-1:111111111111:my-topic"},
+		{name: "sqs_queue_url", arn: "arn:aws:sqs:us-east-1:111111111111:my-queue",
+			wantCFN: "AWS::SQS::Queue", wantIdent: "https://sqs.us-east-1.amazonaws.com/111111111111/my-queue"},
+
+		// Secrets / KMS
+		{name: "secretsmanager_secret_full_arn", arn: "arn:aws:secretsmanager:us-east-1:111111111111:secret:foo-AbCdEf",
+			wantCFN: "AWS::SecretsManager::Secret", wantIdent: "arn:aws:secretsmanager:us-east-1:111111111111:secret:foo-AbCdEf"},
+		{name: "kms_key_uuid", arn: "arn:aws:kms:us-east-1:111111111111:key/00000000-0000-0000-0000-000000000000",
+			wantCFN: "AWS::KMS::Key", wantIdent: "00000000-0000-0000-0000-000000000000"},
+
+		// Compute
+		{name: "lambda_no_qualifier", arn: "arn:aws:lambda:us-east-1:111111111111:function:my-fn",
+			wantCFN: "AWS::Lambda::Function", wantIdent: "my-fn"},
+		{name: "lambda_with_qualifier_stripped", arn: "arn:aws:lambda:us-east-1:111111111111:function:my-fn:PROD",
+			wantCFN: "AWS::Lambda::Function", wantIdent: "my-fn"},
+
+		// Observability
+		{name: "cloudwatch_alarm", arn: "arn:aws:cloudwatch:us-east-1:111111111111:alarm:MyAlarm",
+			wantCFN: "AWS::CloudWatch::Alarm", wantIdent: "MyAlarm"},
+		{name: "cloudwatch_dashboard", arn: "arn:aws:cloudwatch::111111111111:dashboard/MyDash",
+			wantCFN: "AWS::CloudWatch::Dashboard", wantIdent: "MyDash"},
+		{name: "logs_log_group_strips_star", arn: "arn:aws:logs:us-east-1:111111111111:log-group:/aws/lambda/my-fn:*",
+			wantCFN: "AWS::Logs::LogGroup", wantIdent: "/aws/lambda/my-fn"},
+		{name: "events_rule", arn: "arn:aws:events:us-east-1:111111111111:rule/my-rule",
+			wantCFN: "AWS::Events::Rule", wantIdent: "my-rule"},
+
+		// IAM
+		{name: "iam_role_name", arn: "arn:aws:iam::111111111111:role/my-role",
+			wantCFN: "AWS::IAM::Role", wantIdent: "my-role"},
+		{name: "iam_policy_full_arn", arn: "arn:aws:iam::111111111111:policy/my-policy",
+			wantCFN: "AWS::IAM::ManagedPolicy", wantIdent: "arn:aws:iam::111111111111:policy/my-policy"},
+
+		// Storage
+		{name: "dynamodb_table", arn: "arn:aws:dynamodb:us-east-1:111111111111:table/my-table",
+			wantCFN: "AWS::DynamoDB::Table", wantIdent: "my-table"},
+		{name: "s3_bucket_name", arn: "arn:aws:s3:::my-bucket",
+			wantCFN: "AWS::S3::Bucket", wantIdent: "my-bucket"},
+
+		// Load balancing v2
+		{name: "elbv2_lb_full_arn", arn: "arn:aws:elasticloadbalancing:us-east-1:111111111111:loadbalancer/app/my-alb/abc123",
+			wantCFN: "AWS::ElasticLoadBalancingV2::LoadBalancer",
+			wantIdent: "arn:aws:elasticloadbalancing:us-east-1:111111111111:loadbalancer/app/my-alb/abc123"},
+		{name: "elbv2_listener_full_arn", arn: "arn:aws:elasticloadbalancing:us-east-1:111111111111:listener/app/my-alb/abc/def",
+			wantCFN: "AWS::ElasticLoadBalancingV2::Listener",
+			wantIdent: "arn:aws:elasticloadbalancing:us-east-1:111111111111:listener/app/my-alb/abc/def"},
+		{name: "elbv2_target_group_full_arn", arn: "arn:aws:elasticloadbalancing:us-east-1:111111111111:targetgroup/my-tg/abc",
+			wantCFN: "AWS::ElasticLoadBalancingV2::TargetGroup",
+			wantIdent: "arn:aws:elasticloadbalancing:us-east-1:111111111111:targetgroup/my-tg/abc"},
+
+		// CDN / DNS
+		{name: "cloudfront_distribution", arn: "arn:aws:cloudfront::111111111111:distribution/E1ABCDEF",
+			wantCFN: "AWS::CloudFront::Distribution", wantIdent: "E1ABCDEF"},
+		{name: "route53_hostedzone", arn: "arn:aws:route53:::hostedzone/Z01234567ABCDEF",
+			wantCFN: "AWS::Route53::HostedZone", wantIdent: "Z01234567ABCDEF"},
+
+		// API Gateway v2 — Api (matchExtra disambiguates from Stage)
+		{name: "apigatewayv2_api", arn: "arn:aws:apigateway:us-east-1::/apis/4hmoaslnr0",
+			wantCFN: "AWS::ApiGatewayV2::Api", wantIdent: "4hmoaslnr0"},
+
+		// API Gateway v2 — Stage URL-path-style should NOT match the Api rule
+		// (matchExtra rejects resourceID containing "/"). No Stage rule
+		// declared today (Cloud Control READ-unsupported).
+		{name: "apigatewayv2_stage_unmapped", arn: "arn:aws:apigateway:us-east-1::/apis/4hmoaslnr0/stages/$default",
+			wantNoMatch: true},
+
+		// REST API v1 — explicitly unmapped (only v2 in table today)
+		{name: "apigateway_v1_restapi_unmapped", arn: "arn:aws:apigateway:us-east-1::/restapis/abc123",
+			wantNoMatch: true},
+
+		// Cognito
+		{name: "cognito_userpool", arn: "arn:aws:cognito-idp:us-east-1:111111111111:userpool/us-east-1_AbCdE",
+			wantCFN: "AWS::Cognito::UserPool", wantIdent: "us-east-1_AbCdE"},
+
+		// RDS
+		{name: "rds_db_instance", arn: "arn:aws:rds:us-east-1:111111111111:db:my-db",
+			wantCFN: "AWS::RDS::DBInstance", wantIdent: "my-db"},
+		{name: "rds_subnet_group", arn: "arn:aws:rds:us-east-1:111111111111:subgrp:my-subnet-grp",
+			wantCFN: "AWS::RDS::DBSubnetGroup", wantIdent: "my-subnet-grp"},
+		{name: "rds_parameter_group", arn: "arn:aws:rds:us-east-1:111111111111:pg:my-pg",
+			wantCFN: "AWS::RDS::DBParameterGroup", wantIdent: "my-pg"},
+
+		// OpenSearch Serverless
+		{name: "aoss_collection", arn: "arn:aws:aoss:us-east-1:111111111111:collection/abc123",
+			wantCFN: "AWS::OpenSearchServerless::Collection", wantIdent: "abc123"},
+
+		// EKS Pod Identity Association — compound ID rewrite
+		{name: "eks_pod_identity_compound", arn: "arn:aws:eks:us-east-1:111111111111:podidentityassociation/cluster-1/a-abc123",
+			wantCFN: "AWS::EKS::PodIdentityAssociation", wantIdent: "cluster-1|a-abc123"},
+
+		// Negative cases — explicitly unmapped (sanity checks for our
+		// "fall back to ListResources" path)
+		{name: "organizations_unmapped", arn: "arn:aws:organizations::111111111111:account/o-123/111111111111",
+			wantNoMatch: true},
+		{name: "stepfunctions_unmapped", arn: "arn:aws:states:us-east-1:111111111111:stateMachine:MySM",
+			wantNoMatch: true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			p, err := parseARN(tc.arn)
+			if err != nil {
+				t.Fatalf("parseARN(%q) unexpected error: %v", tc.arn, err)
+			}
+			r, ok := lookupRule(p)
+			if tc.wantNoMatch {
+				if ok {
+					t.Errorf("lookupRule(%q) matched %q (ident=%q), want no match",
+						tc.arn, r.cfnType, r.identifierFn(p))
+				}
+				return
+			}
+			if !ok {
+				t.Fatalf("lookupRule(%q) returned no match, want cfn=%q", tc.arn, tc.wantCFN)
+			}
+			if r.cfnType != tc.wantCFN {
+				t.Errorf("lookupRule(%q) cfnType=%q, want %q", tc.arn, r.cfnType, tc.wantCFN)
+			}
+			if got := r.identifierFn(p); got != tc.wantIdent {
+				t.Errorf("lookupRule(%q) identifier=%q, want %q", tc.arn, got, tc.wantIdent)
+			}
+		})
+	}
+}
+
+// TestLookupRule_ApiGatewayDisambiguation pins the matchExtra behavior
+// for the AWS::ApiGatewayV2::Api rule: a bare api ARN must match (no "/"
+// in resourceID), but a stage ARN under the same `apis` parent must NOT
+// match the Api rule. The Stage rule is intentionally absent from the
+// table today (Cloud Control returns UnsupportedActionException for
+// READ on AWS::ApiGatewayV2::Stage; see issue #406 and the hand-rolled
+// apigatewayv2_stage.go discoverer that continues to handle Stages via
+// the per-service SDK).
+func TestLookupRule_ApiGatewayDisambiguation(t *testing.T) {
+	t.Parallel()
+	bareAPI, _ := parseARN("arn:aws:apigateway:us-east-1::/apis/aaa")
+	r, ok := lookupRule(bareAPI)
+	if !ok {
+		t.Fatal("bare Api ARN should match the Api rule")
+	}
+	if r.cfnType != "AWS::ApiGatewayV2::Api" {
+		t.Errorf("bare Api ARN matched cfnType=%q, want AWS::ApiGatewayV2::Api", r.cfnType)
+	}
+
+	stage, _ := parseARN("arn:aws:apigateway:us-east-1::/apis/aaa/stages/$default")
+	if r, ok := lookupRule(stage); ok {
+		t.Errorf("stage ARN should NOT match the Api rule (matchExtra), but matched cfnType=%q", r.cfnType)
+	}
+}
