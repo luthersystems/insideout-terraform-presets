@@ -446,6 +446,278 @@ func TestCloudControlDiscover_SkipProjectTagFilter_BypassesRGTCache(t *testing.T
 	}
 }
 
+// TestCognitoUserPoolClientConfig pins the per-type extractors for
+// aws_cognito_user_pool_client: compound CC identifier
+// `<UserPoolId>|<ClientId>` rewrites to TF import format
+// `<UserPoolId>/<ClientId>`, NameHint reads ClientName, NativeIDs
+// split into a structured map, and Tags is the non-nil empty map per
+// the #255 contract (CFN schema has no Tags property on this type).
+func TestCognitoUserPoolClientConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_cognito_user_pool_client")
+	if !cfg.SkipProjectTagFilter {
+		t.Error("aws_cognito_user_pool_client: SkipProjectTagFilter must be true (CFN schema has no Tags property)")
+	}
+	if cfg.CloudFormationType != "AWS::Cognito::UserPoolClient" {
+		t.Errorf("CloudFormationType=%q, want AWS::Cognito::UserPoolClient", cfg.CloudFormationType)
+	}
+	if cfg.ParentLister == nil {
+		t.Fatal("ParentLister must be set; CC ListResources is parent-scoped on UserPoolId")
+	}
+	if cfg.SDKLister != nil {
+		t.Error("SDKLister must be nil (ParentLister-scoped, not SDK-scoped)")
+	}
+
+	id := "us-east-1_AbCdE|3ho4ek12345678909nh3fmhpko"
+	if got := cfg.ImportIDFromIdentifier(id, nil); got != "us-east-1_AbCdE/3ho4ek12345678909nh3fmhpko" {
+		t.Errorf("ImportID rewrite |→/: got %q, want %q", got, "us-east-1_AbCdE/3ho4ek12345678909nh3fmhpko")
+	}
+
+	props := map[string]any{"ClientName": "my-client"}
+	if got := cfg.NameHintFromProperties(id, props); got != "my-client" {
+		t.Errorf("NameHint: got %q, want my-client", got)
+	}
+	if got := cfg.NameHintFromProperties(id, map[string]any{}); got != id {
+		t.Errorf("NameHint fallback: got %q, want identifier", got)
+	}
+
+	native := cfg.NativeIDsFromProperties(id, nil)
+	want := map[string]string{"user_pool_id": "us-east-1_AbCdE", "client_id": "3ho4ek12345678909nh3fmhpko"}
+	if !reflect.DeepEqual(native, want) {
+		t.Errorf("NativeIDs: got %+v, want %+v (exact map equality)", native, want)
+	}
+	// Defensive: malformed identifier (no `|`) — NativeIDs must
+	// return nil so downstream doesn't render half-stitched keys.
+	if got := cfg.NativeIDsFromProperties("orphan", nil); got != nil {
+		t.Errorf("NativeIDs malformed-id: got %+v, want nil", got)
+	}
+
+	tags := cfg.TagsFromProperties(map[string]any{"Tags": []any{
+		map[string]any{"Key": "env", "Value": "prod"},
+	}})
+	if tags == nil {
+		t.Fatal("Tags must be non-nil empty map per #255 contract")
+	}
+	if len(tags) != 0 {
+		t.Errorf("Tags: got %v, want empty map (untaggable)", tags)
+	}
+}
+
+// TestLambdaAliasConfig pins the per-type extractors for
+// aws_lambda_alias: compound CC identifier `<FunctionName>|<AliasName>`
+// rewrites to TF import format `<FunctionName>/<AliasName>`, NameHint
+// reads Name, NativeIDs stamp function_name+name+arn, Tags is the
+// non-nil empty map.
+func TestLambdaAliasConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_lambda_alias")
+	if !cfg.SkipProjectTagFilter {
+		t.Error("aws_lambda_alias: SkipProjectTagFilter must be true (CFN schema has no Tags property)")
+	}
+	if cfg.ParentLister == nil {
+		t.Fatal("ParentLister must be set; CC ListResources is parent-scoped on FunctionName")
+	}
+	if cfg.SDKLister != nil {
+		t.Error("SDKLister must be nil")
+	}
+
+	id := "my-fn|PROD"
+	if got := cfg.ImportIDFromIdentifier(id, nil); got != "my-fn/PROD" {
+		t.Errorf("ImportID rewrite |→/: got %q, want my-fn/PROD", got)
+	}
+
+	props := map[string]any{
+		"Name":     "PROD",
+		"AliasArn": "arn:aws:lambda:us-east-1:111111111111:function:my-fn:PROD",
+	}
+	if got := cfg.NameHintFromProperties(id, props); got != "PROD" {
+		t.Errorf("NameHint: got %q, want PROD", got)
+	}
+
+	native := cfg.NativeIDsFromProperties(id, props)
+	want := map[string]string{
+		"function_name": "my-fn",
+		"name":          "PROD",
+		"arn":           "arn:aws:lambda:us-east-1:111111111111:function:my-fn:PROD",
+	}
+	if !reflect.DeepEqual(native, want) {
+		t.Errorf("NativeIDs: got %+v, want %+v (exact map equality)", native, want)
+	}
+	// Defensive: malformed identifier (no `|`) and no AliasArn —
+	// NativeIDs must return nil rather than half-stitched keys.
+	// Symmetric with TestCognitoUserPoolClientConfig's malformed-id pin.
+	if got := cfg.NativeIDsFromProperties("orphan", nil); got != nil {
+		t.Errorf("NativeIDs malformed-id: got %+v, want nil", got)
+	}
+
+	// Tags: always empty for the aliases type.
+	tags := cfg.TagsFromProperties(map[string]any{"AliasArn": "..."})
+	if tags == nil {
+		t.Fatal("Tags must be non-nil empty map")
+	}
+	if len(tags) != 0 {
+		t.Errorf("Tags: got %v, want empty", tags)
+	}
+}
+
+// TestWAFv2WebACLConfig pins the per-type extractors for
+// aws_wafv2_web_acl: compound CC identifier `<Name>|<Id>|<Scope>`
+// rewrites to TF import format `<Id>/<Name>/<Scope>` (note the field
+// reorder — Name and Id swap), NameHint reads Name, NativeIDs stamps
+// the Arn, Tags is the standard Key/Value list shape.
+func TestWAFv2WebACLConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_wafv2_web_acl")
+	if cfg.SkipProjectTagFilter {
+		t.Error("aws_wafv2_web_acl: SkipProjectTagFilter must be false (WAFv2 ACLs are taggable; --project must filter on them)")
+	}
+	if cfg.ParentLister == nil {
+		t.Fatal("ParentLister must be set; CC ListResources is parent-scoped on Scope")
+	}
+
+	// Identifier ordering: CC primary identifier puts Name first,
+	// then Id, then Scope. TF import format reorders to <Id>/<Name>/<Scope>.
+	id := "my-acl|abc-12345|REGIONAL"
+	if got := cfg.ImportIDFromIdentifier(id, nil); got != "abc-12345/my-acl/REGIONAL" {
+		t.Errorf("ImportID rewrite (Name|Id|Scope → Id/Name/Scope): got %q, want %q",
+			got, "abc-12345/my-acl/REGIONAL")
+	}
+	// Malformed identifier passthrough — both shapes (1-segment and
+	// 2-segment) hit the `len(parts) != 3` early-return. Including
+	// the 2-segment case prevents a regression that loosens the
+	// equality check to `>= 3` (which would silently consume extra
+	// fields).
+	if got := cfg.ImportIDFromIdentifier("malformed", nil); got != "malformed" {
+		t.Errorf("ImportID malformed (1-seg) passthrough: got %q, want malformed", got)
+	}
+	if got := cfg.ImportIDFromIdentifier("a|b", nil); got != "a|b" {
+		t.Errorf("ImportID malformed (2-seg) passthrough: got %q, want a|b", got)
+	}
+
+	props := map[string]any{
+		"Name": "my-acl",
+		"Arn":  "arn:aws:wafv2:us-east-1:111111111111:regional/webacl/my-acl/abc-12345",
+		"Tags": []any{
+			map[string]any{"Key": "env", "Value": "prod"},
+		},
+	}
+	if got := cfg.NameHintFromProperties(id, props); got != "my-acl" {
+		t.Errorf("NameHint: got %q, want my-acl", got)
+	}
+	native := cfg.NativeIDsFromProperties(id, props)
+	wantNative := map[string]string{"arn": "arn:aws:wafv2:us-east-1:111111111111:regional/webacl/my-acl/abc-12345"}
+	if !reflect.DeepEqual(native, wantNative) {
+		t.Errorf("NativeIDs: got %+v, want %+v", native, wantNative)
+	}
+	tags := cfg.TagsFromProperties(props)
+	wantTags := map[string]string{"env": "prod"}
+	if !reflect.DeepEqual(tags, wantTags) {
+		t.Errorf("Tags: got %+v, want %+v", tags, wantTags)
+	}
+}
+
+// TestCognitoUserPoolDomainConfig pins the per-type extractors for
+// aws_cognito_user_pool_domain: passthrough CC identifier (domain
+// string), domain-as-NameHint, structured NativeIDs with optional
+// UserPoolId, empty Tags, and SDKLister-only enumeration (CC
+// ListResources is unsupported).
+func TestCognitoUserPoolDomainConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_cognito_user_pool_domain")
+	if !cfg.SkipProjectTagFilter {
+		t.Error("aws_cognito_user_pool_domain: SkipProjectTagFilter must be true (CFN schema has no Tags property)")
+	}
+	if cfg.SDKLister == nil {
+		t.Fatal("SDKLister must be set; CC ListResources returns UnsupportedActionException for this type")
+	}
+	if cfg.ParentLister != nil {
+		t.Error("ParentLister must be nil (mutually exclusive with SDKLister)")
+	}
+
+	id := "my-app-auth"
+	if got := cfg.ImportIDFromIdentifier(id, nil); got != id {
+		t.Errorf("ImportID passthrough: got %q, want %q", got, id)
+	}
+	if got := cfg.NameHintFromProperties(id, nil); got != id {
+		t.Errorf("NameHint: got %q, want %q (domain string)", got, id)
+	}
+
+	native := cfg.NativeIDsFromProperties(id, map[string]any{"UserPoolId": "us-east-1_AbCdE"})
+	want := map[string]string{"domain": id, "user_pool_id": "us-east-1_AbCdE"}
+	if !reflect.DeepEqual(native, want) {
+		t.Errorf("NativeIDs: got %+v, want %+v", native, want)
+	}
+	// Defensive: NativeIDs still emits the domain key when UserPoolId
+	// is absent from the properties payload (so downstream readers
+	// always see the canonical domain string).
+	nativeNoPool := cfg.NativeIDsFromProperties(id, map[string]any{})
+	wantNoPool := map[string]string{"domain": id}
+	if !reflect.DeepEqual(nativeNoPool, wantNoPool) {
+		t.Errorf("NativeIDs no-pool: got %+v, want %+v", nativeNoPool, wantNoPool)
+	}
+
+	tags := cfg.TagsFromProperties(map[string]any{"Tags": []any{
+		map[string]any{"Key": "env", "Value": "prod"},
+	}})
+	if tags == nil {
+		t.Fatal("Tags must be non-nil empty map")
+	}
+	if len(tags) != 0 {
+		t.Errorf("Tags: got %v, want empty (untaggable)", tags)
+	}
+}
+
+// TestACMCertificateConfig pins the per-type extractors for
+// aws_acm_certificate: passthrough CC identifier (full ARN),
+// DomainName NameHint, Arn NativeID, Tags from the standard
+// Key/Value list, and SDKLister-only enumeration (CC ListResources is
+// unsupported for this type).
+func TestACMCertificateConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_acm_certificate")
+	if cfg.SkipProjectTagFilter {
+		t.Error("aws_acm_certificate: SkipProjectTagFilter must be false (ACM certs are taggable; --project must filter)")
+	}
+	if cfg.SDKLister == nil {
+		t.Fatal("SDKLister must be set; CC ListResources is unsupported for this type")
+	}
+	if cfg.ParentLister != nil {
+		t.Error("ParentLister must be nil (mutually exclusive with SDKLister)")
+	}
+
+	id := "arn:aws:acm:us-east-1:111111111111:certificate/abc-12345"
+	if got := cfg.ImportIDFromIdentifier(id, nil); got != id {
+		t.Errorf("ImportID passthrough: got %q, want %q", got, id)
+	}
+
+	props := map[string]any{
+		"DomainName": "example.com",
+		"Arn":        id,
+		"Tags": []any{
+			map[string]any{"Key": "env", "Value": "prod"},
+			map[string]any{"Key": "Project", "Value": "io-foo"},
+		},
+	}
+	if got := cfg.NameHintFromProperties(id, props); got != "example.com" {
+		t.Errorf("NameHint: got %q, want example.com", got)
+	}
+	if got := cfg.NameHintFromProperties(id, map[string]any{}); got != id {
+		t.Errorf("NameHint fallback: got %q, want %q", got, id)
+	}
+
+	native := cfg.NativeIDsFromProperties(id, props)
+	wantNative := map[string]string{"arn": id}
+	if !reflect.DeepEqual(native, wantNative) {
+		t.Errorf("NativeIDs: got %+v, want %+v", native, wantNative)
+	}
+
+	tags := cfg.TagsFromProperties(props)
+	wantTags := map[string]string{"env": "prod", "Project": "io-foo"}
+	if !reflect.DeepEqual(tags, wantTags) {
+		t.Errorf("Tags: got %+v, want %+v", tags, wantTags)
+	}
+}
+
 // TestEmptyTagsExtractor_NonNilEmptyMap pins the contract of the
 // helper used by genuinely-untaggable Cloud Control types: it must
 // always return a non-nil empty map. Per the #255 JSON-marshal

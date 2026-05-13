@@ -1,3 +1,4 @@
+aws_acm_certificate	Security
 aws_apigatewayv2_api	Network Security
 aws_apigatewayv2_stage	Network Security
 aws_backup_plan	Data Storage
@@ -10,6 +11,8 @@ aws_cloudwatch_event_rule	Events
 aws_cloudwatch_log_group	Observability
 aws_cloudwatch_metric_alarm	Observability
 aws_cognito_user_pool	Security
+aws_cognito_user_pool_client	Security
+aws_cognito_user_pool_domain	Security
 aws_db_instance	Data Storage
 aws_db_parameter_group	Data Storage
 aws_db_subnet_group	Data Storage
@@ -25,6 +28,7 @@ aws_iam_policy	Security
 aws_iam_role	Security
 aws_internet_gateway	Network Security
 aws_kms_key	Security
+aws_lambda_alias	Virtual Machines
 aws_lambda_event_source_mapping	Events
 aws_lambda_function	Virtual Machines
 aws_lb	Network Security
@@ -49,6 +53,7 @@ aws_subnet	Network Security
 aws_vpc	Network Security
 aws_vpc_dhcp_options	Network Security
 aws_vpc_endpoint	Network Security
+aws_wafv2_web_acl	Security
 google_api_gateway_api	Network Security
 google_api_gateway_api_config	Network Security
 google_api_gateway_gateway	Network Security

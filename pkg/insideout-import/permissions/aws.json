@@ -3,6 +3,26 @@
   "provider": "aws",
   "permissions": [
     {
+      "service": "acm_certificate",
+      "iam_action": "acm:DescribeCertificate",
+      "purpose": "Cloud Control GetResource for aws_acm_certificate delegates to acm:DescribeCertificate"
+    },
+    {
+      "service": "acm_certificate",
+      "iam_action": "acm:ListCertificates",
+      "purpose": "enumerate certificate ARNs via the ACM SDK (Cloud Control ListResources is unsupported for this type)"
+    },
+    {
+      "service": "acm_certificate",
+      "iam_action": "acm:ListTagsForCertificate",
+      "purpose": "Cloud Control GetResource delegate for the Tags property"
+    },
+    {
+      "service": "acm_certificate",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::CertificateManager::Certificate (#412 SDKLister branch)"
+    },
+    {
       "service": "apigatewayv2_api",
       "iam_action": "apigateway:GET",
       "purpose": "list HTTP APIs and fetch per-API metadata (GET /apis, GET /apis/*/stages)"
@@ -231,6 +251,46 @@
       "service": "cognito_user_pool",
       "iam_action": "cognito-idp:ListUserPools",
       "purpose": "Cloud Control ListResources for AWS::Cognito::UserPool delegates to cognito-idp:ListUserPools"
+    },
+    {
+      "service": "cognito_user_pool_client",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::Cognito::UserPoolClient (#412 ParentLister branch)"
+    },
+    {
+      "service": "cognito_user_pool_client",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::Cognito::UserPoolClient (per-UserPoolId fan-out)"
+    },
+    {
+      "service": "cognito_user_pool_client",
+      "iam_action": "cognito-idp:DescribeUserPoolClient",
+      "purpose": "Cloud Control GetResource for aws_cognito_user_pool_client delegates to cognito-idp:DescribeUserPoolClient"
+    },
+    {
+      "service": "cognito_user_pool_client",
+      "iam_action": "cognito-idp:ListUserPools",
+      "purpose": "parent enumeration: list UserPools to fan ListResources out per UserPoolId"
+    },
+    {
+      "service": "cognito_user_pool_domain",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::Cognito::UserPoolDomain (#412 SDKLister branch)"
+    },
+    {
+      "service": "cognito_user_pool_domain",
+      "iam_action": "cognito-idp:DescribeUserPool",
+      "purpose": "SDKLister enumeration: walk UserPools to read Domain/CustomDomain (Cloud Control ListResources unsupported)"
+    },
+    {
+      "service": "cognito_user_pool_domain",
+      "iam_action": "cognito-idp:DescribeUserPoolDomain",
+      "purpose": "Cloud Control GetResource for aws_cognito_user_pool_domain delegates to cognito-idp:DescribeUserPoolDomain"
+    },
+    {
+      "service": "cognito_user_pool_domain",
+      "iam_action": "cognito-idp:ListUserPools",
+      "purpose": "SDKLister enumeration: paginate UserPools to discover domains attached to each"
     },
     {
       "service": "db_instance",
@@ -491,6 +551,26 @@
       "service": "lambda",
       "iam_action": "lambda:ListTags",
       "purpose": "fetch function tags for tag selectors and Identity.Tags"
+    },
+    {
+      "service": "lambda_alias",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::Lambda::Alias (#412 ParentLister branch)"
+    },
+    {
+      "service": "lambda_alias",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::Lambda::Alias (per-FunctionName fan-out)"
+    },
+    {
+      "service": "lambda_alias",
+      "iam_action": "lambda:GetAlias",
+      "purpose": "Cloud Control GetResource for aws_lambda_alias delegates to lambda:GetAlias"
+    },
+    {
+      "service": "lambda_alias",
+      "iam_action": "lambda:ListFunctions",
+      "purpose": "parent enumeration: list Lambda functions to fan ListResources out per FunctionName"
     },
     {
       "service": "lambda_event_source_mapping",
@@ -926,6 +1006,26 @@
       "service": "vpc_endpoint",
       "iam_action": "ec2:DescribeVpcEndpoints",
       "purpose": "list per-region VPC endpoints; skip State=deleted/deleting tombstones (server-side tag:Project filter when project is set; tags inline)"
+    },
+    {
+      "service": "wafv2_web_acl",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::WAFv2::WebACL (#412 ParentLister branch)"
+    },
+    {
+      "service": "wafv2_web_acl",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::WAFv2::WebACL (per-Scope fan-out: REGIONAL + CLOUDFRONT in us-east-1)"
+    },
+    {
+      "service": "wafv2_web_acl",
+      "iam_action": "wafv2:GetWebACL",
+      "purpose": "Cloud Control GetResource for aws_wafv2_web_acl delegates to wafv2:GetWebACL"
+    },
+    {
+      "service": "wafv2_web_acl",
+      "iam_action": "wafv2:ListTagsForResource",
+      "purpose": "Cloud Control GetResource delegate for the Tags property"
     }
   ]
 }

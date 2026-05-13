@@ -23,6 +23,7 @@ const (
 // discover pipeline emits clean HCL for. Keep sorted lexicographically; the
 // awsdiscover parity test will fail if this drifts from the live constructor.
 var awsTypes = []string{
+	"aws_acm_certificate",
 	"aws_apigatewayv2_api",
 	"aws_apigatewayv2_stage",
 	"aws_backup_plan",
@@ -35,6 +36,8 @@ var awsTypes = []string{
 	"aws_cloudwatch_log_group",
 	"aws_cloudwatch_metric_alarm",
 	"aws_cognito_user_pool",
+	"aws_cognito_user_pool_client",
+	"aws_cognito_user_pool_domain",
 	"aws_db_instance",
 	"aws_db_parameter_group",
 	"aws_db_subnet_group",
@@ -46,6 +49,7 @@ var awsTypes = []string{
 	"aws_iam_role",
 	"aws_internet_gateway",
 	"aws_kms_key",
+	"aws_lambda_alias",
 	"aws_lambda_event_source_mapping",
 	"aws_lambda_function",
 	"aws_lb",
@@ -69,6 +73,7 @@ var awsTypes = []string{
 	"aws_vpc",
 	"aws_vpc_dhcp_options",
 	"aws_vpc_endpoint",
+	"aws_wafv2_web_acl",
 }
 
 // gcpTypes is the canonical, sorted list of GCP Terraform resource types the

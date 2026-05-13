@@ -17,6 +17,7 @@ import (
 // uses the exported awsdiscover.ServiceSlug to fence the table off
 // against the production source of truth.
 var awsTFTypeToServiceSlug = map[string]string{
+	"aws_acm_certificate":                 "acm_certificate",
 	"aws_apigatewayv2_api":                "apigatewayv2_api",
 	"aws_apigatewayv2_stage":              "apigatewayv2_stage",
 	"aws_backup_plan":                     "backup_plan",
@@ -29,6 +30,8 @@ var awsTFTypeToServiceSlug = map[string]string{
 	"aws_cloudwatch_log_group":            "cloudwatchlogs",
 	"aws_cloudwatch_metric_alarm":         "cloudwatch_metric_alarm",
 	"aws_cognito_user_pool":               "cognito_user_pool",
+	"aws_cognito_user_pool_client":        "cognito_user_pool_client",
+	"aws_cognito_user_pool_domain":        "cognito_user_pool_domain",
 	"aws_db_instance":                     "db_instance",
 	"aws_db_parameter_group":              "db_parameter_group",
 	"aws_db_subnet_group":                 "db_subnet_group",
@@ -40,6 +43,7 @@ var awsTFTypeToServiceSlug = map[string]string{
 	"aws_iam_role":                        "iam_role",
 	"aws_internet_gateway":                "internet_gateway",
 	"aws_kms_key":                         "kms",
+	"aws_lambda_alias":                    "lambda_alias",
 	"aws_lambda_event_source_mapping":     "lambda_event_source_mapping",
 	"aws_lambda_function":                 "lambda",
 	"aws_lb":                              "lb",
@@ -63,6 +67,7 @@ var awsTFTypeToServiceSlug = map[string]string{
 	"aws_vpc":                             "vpc",
 	"aws_vpc_dhcp_options":                "vpc_dhcp_options",
 	"aws_vpc_endpoint":                    "vpc_endpoint",
+	"aws_wafv2_web_acl":                   "wafv2_web_acl",
 }
 
 // TestSlugMap_MatchesAwsdiscover pins the test-local slug table

@@ -234,6 +234,25 @@ var arnRules = []arnRule{
 	{matchService: "cognito-idp", matchResourceType: "userpool",
 		cfnType: "AWS::Cognito::UserPool", identifierFn: identityResourceID},
 
+	// ACM Certificate — Cloud Control primary identifier is the full ARN.
+	{matchService: "acm", matchResourceType: "certificate",
+		cfnType: "AWS::CertificateManager::Certificate", identifierFn: identityFullARN},
+
+	// WAFv2 WebACL — ARN form is `arn:aws:wafv2:<region>:<acct>:<scope>/webacl/<name>/<id>`.
+	// parseARN sees resourceType=<scope> (lowercase: `regional` or `global`),
+	// resourceID=`webacl/<name>/<id>`. Cloud Control primary identifier is
+	// `<Name>|<Id>|<Scope>` with title-case Scope (`REGIONAL` or `CLOUDFRONT` —
+	// the ARN's `global` maps to CFN's `CLOUDFRONT`).
+	{matchService: "wafv2", matchResourceType: "regional",
+		cfnType: "AWS::WAFv2::WebACL", identifierFn: wafv2WebACLIdentifier("REGIONAL")},
+	{matchService: "wafv2", matchResourceType: "global",
+		cfnType: "AWS::WAFv2::WebACL", identifierFn: wafv2WebACLIdentifier("CLOUDFRONT")},
+
+	// Note: aws_cognito_user_pool_client and aws_lambda_alias are
+	// reached via ParentLister, not RGT. Both are untaggable
+	// (SkipProjectTagFilter=true) so the cache short-circuit is
+	// bypassed; adding ARN rules here would never fire.
+
 	// SSM Parameter — ARN form is `arn:aws:ssm:<region>:<account>:parameter/path/to/name`.
 	// Cloud Control's identifier is the full parameter name including the
 	// leading `/` (e.g. `/path/to/name`); parseARN strips the leading `/`
@@ -277,6 +296,21 @@ func identityResourceID(p parsedARN) string { return p.resourceID }
 // identityFullARN is the common identifierFn for types whose Cloud Control
 // primary identifier is the entire ARN string.
 func identityFullARN(p parsedARN) string { return p.full }
+
+// wafv2WebACLIdentifier builds the Cloud Control primary identifier
+// for AWS::WAFv2::WebACL from a parsed ARN. The CC identifier is
+// `<Name>|<Id>|<Scope>` (title-case Scope: REGIONAL or CLOUDFRONT) but
+// the ARN's resourceID is `webacl/<name>/<id>` (the scope lives in
+// resourceType, lowercase). Callers pass the title-case scope to map.
+func wafv2WebACLIdentifier(scope string) func(parsedARN) string {
+	return func(p parsedARN) string {
+		parts := strings.SplitN(p.resourceID, "/", 3)
+		if len(parts) != 3 {
+			return p.resourceID
+		}
+		return parts[1] + "|" + parts[2] + "|" + scope
+	}
+}
 
 // lookupRule returns the first arnRule that matches the parsed ARN, or
 // (zero, false) if no rule applies. Callers treat "no rule" as a soft

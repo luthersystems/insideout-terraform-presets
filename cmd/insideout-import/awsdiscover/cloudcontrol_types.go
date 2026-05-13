@@ -652,6 +652,147 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 		},
 		TagsFromProperties: tagsFromKey("Tags"),
 	},
+
+	// =====================================================================
+	// Cognito User Pool Client — parent-scoped on UserPoolId, untaggable
+	// =====================================================================
+	{
+		// AWS::Cognito::UserPoolClient is parent-scoped: CC ListResources
+		// requires ResourceModel={"UserPoolId":"..."}. The CFN schema has
+		// no Tags property, so SkipProjectTagFilter bypasses the legacy
+		// Project filter (matching the aws_iam_instance_profile precedent).
+		TFType:               "aws_cognito_user_pool_client",
+		CloudFormationType:   "AWS::Cognito::UserPoolClient",
+		Slug:                 "cognito_user_pool_client",
+		SkipProjectTagFilter: true,
+		ParentLister:         listCognitoUserPools,
+		// Cloud Control identifier = "<UserPoolId>|<ClientId>"; Terraform
+		// import format = "<UserPoolId>/<ClientId>" (forward-slash).
+		// Verified against terraform-provider-aws v6.x docs.
+		ImportIDFromIdentifier: func(identifier string, _ map[string]any) string {
+			return strings.Replace(identifier, "|", "/", 1)
+		},
+		NameHintFromProperties: nameOrIdentifier("ClientName"),
+		NativeIDsFromProperties: func(identifier string, _ map[string]any) map[string]string {
+			parts := strings.SplitN(identifier, "|", 2)
+			if len(parts) != 2 {
+				return nil
+			}
+			return map[string]string{
+				"user_pool_id": parts[0],
+				"client_id":    parts[1],
+			}
+		},
+		TagsFromProperties: emptyTagsExtractor,
+	},
+
+	// =====================================================================
+	// Lambda Alias — parent-scoped on FunctionName, untaggable
+	// =====================================================================
+	{
+		// AWS::Lambda::Alias is parent-scoped on FunctionName. The CFN
+		// schema has no Tags property; aliases inherit nothing from
+		// their parent function for tagging purposes.
+		TFType:               "aws_lambda_alias",
+		CloudFormationType:   "AWS::Lambda::Alias",
+		Slug:                 "lambda_alias",
+		SkipProjectTagFilter: true,
+		ParentLister:         listLambdaFunctions,
+		// Cloud Control identifier = "<FunctionName>|<AliasName>";
+		// Terraform import format = "<FunctionName>/<AliasName>".
+		ImportIDFromIdentifier: func(identifier string, _ map[string]any) string {
+			return strings.Replace(identifier, "|", "/", 1)
+		},
+		NameHintFromProperties: nameOrIdentifier("Name"),
+		NativeIDsFromProperties: func(identifier string, props map[string]any) map[string]string {
+			out := map[string]string{}
+			if parts := strings.SplitN(identifier, "|", 2); len(parts) == 2 {
+				out["function_name"] = parts[0]
+				out["name"] = parts[1]
+			}
+			if arn := extractString(props, "AliasArn"); arn != "" {
+				out["arn"] = arn
+			}
+			if len(out) == 0 {
+				return nil
+			}
+			return out
+		},
+		TagsFromProperties: emptyTagsExtractor,
+	},
+
+	// =====================================================================
+	// WAFv2 WebACL — parent-scoped on Scope (REGIONAL / CLOUDFRONT)
+	// =====================================================================
+	{
+		// AWS::WAFv2::WebACL is parent-scoped on Scope. CLOUDFRONT scope
+		// is only valid against the us-east-1 endpoint per AWS docs —
+		// wafv2ParentModels returns REGIONAL only from other regions to
+		// avoid InvalidRequestException.
+		TFType:             "aws_wafv2_web_acl",
+		CloudFormationType: "AWS::WAFv2::WebACL",
+		Slug:               "wafv2_web_acl",
+		ParentLister:       wafv2ParentModels,
+		// Cloud Control identifier = "<Name>|<Id>|<Scope>"; Terraform
+		// import format = "<Id>/<Name>/<Scope>" — different delimiter AND
+		// reordered (Name and Id are swapped). Verified against
+		// terraform-provider-aws v6.x docs.
+		ImportIDFromIdentifier: func(identifier string, _ map[string]any) string {
+			parts := strings.SplitN(identifier, "|", 3)
+			if len(parts) != 3 {
+				return identifier
+			}
+			return parts[1] + "/" + parts[0] + "/" + parts[2]
+		},
+		NameHintFromProperties:  nameOrIdentifier("Name"),
+		NativeIDsFromProperties: arnUnderKey("Arn"),
+		TagsFromProperties:      tagsFromKey("Tags"),
+	},
+
+	// =====================================================================
+	// Cognito User Pool Domain — SDKLister-listed, untaggable
+	// =====================================================================
+	{
+		// AWS::Cognito::UserPoolDomain's CC ListResources returns
+		// UnsupportedActionException even though GetResource works.
+		// SDKLister walks user pools and emits the Domain (and
+		// CustomDomain, when set) for each pool. Domain string itself
+		// is the CC primary identifier.
+		TFType:                 "aws_cognito_user_pool_domain",
+		CloudFormationType:     "AWS::Cognito::UserPoolDomain",
+		Slug:                   "cognito_user_pool_domain",
+		SkipProjectTagFilter:   true,
+		SDKLister:              listCognitoUserPoolDomains,
+		ImportIDFromIdentifier: passthroughImportID,
+		NameHintFromProperties: func(identifier string, _ map[string]any) string { return identifier },
+		NativeIDsFromProperties: func(identifier string, props map[string]any) map[string]string {
+			out := map[string]string{"domain": identifier}
+			if id := extractString(props, "UserPoolId"); id != "" {
+				out["user_pool_id"] = id
+			}
+			return out
+		},
+		TagsFromProperties: emptyTagsExtractor,
+	},
+
+	// =====================================================================
+	// ACM Certificate — SDKLister-listed (CC LIST unsupported), taggable
+	// =====================================================================
+	{
+		// AWS::CertificateManager::Certificate's CC ListResources
+		// returns UnsupportedActionException; SDKLister enumerates via
+		// acm:ListCertificates. CC GetResource is supported and is the
+		// authoritative source for the properties payload (including
+		// Tags as a Key/Value list).
+		TFType:                  "aws_acm_certificate",
+		CloudFormationType:      "AWS::CertificateManager::Certificate",
+		Slug:                    "acm_certificate",
+		SDKLister:               listACMCertificates,
+		ImportIDFromIdentifier:  passthroughImportID,
+		NameHintFromProperties:  nameOrIdentifier("DomainName"),
+		NativeIDsFromProperties: arnUnderKey("Arn"),
+		TagsFromProperties:      tagsFromKey("Tags"),
+	},
 }
 
 // passthroughImportID is the common ImportIDFromIdentifier used by every

@@ -75,7 +75,20 @@ type cloudControlClient interface {
 //     is parent-scoped on UserPoolId). The returned slice contains one
 //     ResourceModel JSON-string per parent; the discoverer threads it
 //     through ListResourcesInput.ResourceModel. Returns nil for non-
-//     parent-scoped types.
+//     parent-scoped types. Receives an aws.Config so the lister can
+//     construct typed SDK clients to enumerate parents
+//     (cognito-idp:ListUserPools, lambda:ListFunctions, …).
+//     Mutually exclusive with SDKLister; setting both panics at
+//     registration time.
+//   - SDKLister: optional. When set, the discoverer bypasses Cloud
+//     Control ListResources entirely and seeds the per-identifier
+//     GetResource fan-out with the identifiers this function returns.
+//     Use for types where CC GetResource is supported but CC
+//     ListResources returns UnsupportedActionException (e.g.
+//     AWS::Cognito::UserPoolDomain via cognito-idp:DescribeUserPool;
+//     AWS::CertificateManager::Certificate via acm:ListCertificates).
+//     Mutually exclusive with ParentLister; setting both panics at
+//     registration time.
 //   - SkipProjectTagFilter: when true, the discoverer (a) bypasses the
 //     RGT-cache short-circuit and always drives through ListResources,
 //     and (b) bypasses the post-fetch `args.Project` Project-tag filter
@@ -106,7 +119,8 @@ type cloudControlConfig struct {
 	NameHintFromProperties  func(identifier string, props map[string]any) string
 	NativeIDsFromProperties func(identifier string, props map[string]any) map[string]string
 	TagsFromProperties      func(props map[string]any) map[string]string
-	ParentLister            func(ctx context.Context, client cloudControlClient, args DiscoverArgs) ([]string, error)
+	ParentLister            func(ctx context.Context, awsCfg aws.Config, region string, args DiscoverArgs) ([]string, error)
+	SDKLister               func(ctx context.Context, awsCfg aws.Config, region string, args DiscoverArgs) ([]string, error)
 }
 
 // cloudControlDiscoverer is the generic per-type Discoverer that routes
@@ -122,16 +136,26 @@ type cloudControlConfig struct {
 // non-CAI fanout posture.
 type cloudControlDiscoverer struct {
 	cfg            cloudControlConfig
+	awsCfg         aws.Config
 	new            func(region string) cloudControlClient
 	maxConcurrency int
 }
 
 func newCloudControlDiscoverer(cfg cloudControlConfig, awsCfg aws.Config, maxConcurrency int) *cloudControlDiscoverer {
+	if cfg.SDKLister != nil && cfg.ParentLister != nil {
+		// Programming error at registration time, not a runtime
+		// failure: a registrant that wires both fields would silently
+		// pick one branch over the other and quietly skip the other's
+		// enumeration. Panic so the regression surfaces in any test
+		// run that constructs the discoverer.
+		panic(fmt.Sprintf("cloudControlConfig %s: SDKLister and ParentLister are mutually exclusive", cfg.TFType))
+	}
 	if maxConcurrency <= 0 {
 		maxConcurrency = DefaultMaxConcurrency
 	}
 	return &cloudControlDiscoverer{
-		cfg: cfg,
+		cfg:    cfg,
+		awsCfg: awsCfg,
 		new: func(region string) cloudControlClient {
 			return cloudcontrol.NewFromConfig(awsCfg, func(o *cloudcontrol.Options) {
 				if region != "" {
@@ -230,44 +254,68 @@ func (d *cloudControlDiscoverer) Discover(ctx context.Context, args DiscoverArgs
 		}
 
 		if !cacheUsed {
-			// Per-parent enumeration: ParentLister returns N
-			// parent-scoped resource-model JSON strings; for
-			// non-parent types it returns nil and we issue one
-			// ListResources without a ResourceModel.
-			parentModels := []string{""}
-			if d.cfg.ParentLister != nil {
-				models, err := d.cfg.ParentLister(ctx, client, args)
+			if d.cfg.SDKLister != nil {
+				// Native-SDK enumeration: types whose CC ListResources
+				// returns UnsupportedActionException despite CC
+				// GetResource being supported (e.g.
+				// AWS::Cognito::UserPoolDomain via
+				// cognito-idp:DescribeUserPool walking;
+				// AWS::CertificateManager::Certificate via
+				// acm:ListCertificates). SDKLister returns primary
+				// identifiers directly; the standard GetResource
+				// fan-out + extractor pipeline runs unchanged.
+				ids, err := d.cfg.SDKLister(ctx, d.awsCfg, region, args)
 				if err != nil {
 					args.Emitter.ServiceFinish(d.cfg.Slug, region, regionCount, time.Since(regionStart))
-					return nil, fmt.Errorf("%s parent enumeration (region=%s): %w", d.cfg.Slug, region, err)
+					return nil, fmt.Errorf("%s SDK enumeration (region=%s): %w", d.cfg.Slug, region, err)
 				}
-				parentModels = models
-				if len(parentModels) == 0 {
+				if len(ids) == 0 {
 					args.Emitter.ServiceFinish(d.cfg.Slug, region, regionCount, time.Since(regionStart))
 					continue
 				}
-			}
-
-			for _, parentModel := range parentModels {
-				input := &cloudcontrol.ListResourcesInput{
-					TypeName: aws.String(d.cfg.CloudFormationType),
+				for _, id := range ids {
+					refs = append(refs, itemRef{identifier: id})
 				}
-				if parentModel != "" {
-					input.ResourceModel = aws.String(parentModel)
-				}
-				paginator := cloudcontrol.NewListResourcesPaginator(client, input)
-				for paginator.HasMorePages() {
-					page, err := paginator.NextPage(ctx)
+			} else {
+				// Per-parent enumeration: ParentLister returns N
+				// parent-scoped resource-model JSON strings; for
+				// non-parent types it returns nil and we issue one
+				// ListResources without a ResourceModel.
+				parentModels := []string{""}
+				if d.cfg.ParentLister != nil {
+					models, err := d.cfg.ParentLister(ctx, d.awsCfg, region, args)
 					if err != nil {
 						args.Emitter.ServiceFinish(d.cfg.Slug, region, regionCount, time.Since(regionStart))
-						return nil, fmt.Errorf("ListResources %s (region=%s): %w", d.cfg.CloudFormationType, region, err)
+						return nil, fmt.Errorf("%s parent enumeration (region=%s): %w", d.cfg.Slug, region, err)
 					}
-					for _, desc := range page.ResourceDescriptions {
-						refs = append(refs, itemRef{
-							identifier:  aws.ToString(desc.Identifier),
-							parentModel: parentModel,
-							parentLabel: parentLabelFromModel(parentModel),
-						})
+					parentModels = models
+					if len(parentModels) == 0 {
+						args.Emitter.ServiceFinish(d.cfg.Slug, region, regionCount, time.Since(regionStart))
+						continue
+					}
+				}
+
+				for _, parentModel := range parentModels {
+					input := &cloudcontrol.ListResourcesInput{
+						TypeName: aws.String(d.cfg.CloudFormationType),
+					}
+					if parentModel != "" {
+						input.ResourceModel = aws.String(parentModel)
+					}
+					paginator := cloudcontrol.NewListResourcesPaginator(client, input)
+					for paginator.HasMorePages() {
+						page, err := paginator.NextPage(ctx)
+						if err != nil {
+							args.Emitter.ServiceFinish(d.cfg.Slug, region, regionCount, time.Since(regionStart))
+							return nil, fmt.Errorf("ListResources %s (region=%s): %w", d.cfg.CloudFormationType, region, err)
+						}
+						for _, desc := range page.ResourceDescriptions {
+							refs = append(refs, itemRef{
+								identifier:  aws.ToString(desc.Identifier),
+								parentModel: parentModel,
+								parentLabel: parentLabelFromModel(parentModel),
+							})
+						}
 					}
 				}
 			}
