@@ -19,6 +19,9 @@ func TestSupportedDiscoverTypes_AWS_ReturnsCanonicalSortedList(t *testing.T) {
 	t.Parallel()
 	want := []string{
 		"aws_acm_certificate",
+		"aws_api_gateway_deployment",
+		"aws_api_gateway_resource",
+		"aws_api_gateway_stage",
 		"aws_apigatewayv2_api",
 		"aws_apigatewayv2_authorizer",
 		"aws_apigatewayv2_integration",
@@ -52,6 +55,8 @@ func TestSupportedDiscoverTypes_AWS_ReturnsCanonicalSortedList(t *testing.T) {
 		"aws_lambda_alias",
 		"aws_lambda_event_source_mapping",
 		"aws_lambda_function",
+		"aws_lambda_function_url",
+		"aws_lambda_permission",
 		"aws_lb",
 		"aws_lb_listener",
 		"aws_lb_target_group",

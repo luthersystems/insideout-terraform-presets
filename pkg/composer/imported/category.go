@@ -77,6 +77,9 @@ const (
 var categoryByTFType = map[string]string{
 	// --- AWS ---
 	"aws_acm_certificate":                 CategorySecurity,
+	"aws_api_gateway_deployment":          CategoryNetworkSecurity,
+	"aws_api_gateway_resource":            CategoryNetworkSecurity,
+	"aws_api_gateway_stage":               CategoryNetworkSecurity,
 	"aws_apigatewayv2_api":                CategoryNetworkSecurity,
 	"aws_apigatewayv2_authorizer":         CategoryNetworkSecurity,
 	"aws_apigatewayv2_integration":        CategoryNetworkSecurity,
@@ -114,6 +117,8 @@ var categoryByTFType = map[string]string{
 	"aws_lambda_alias":                    CategoryVirtualMachines,
 	"aws_lambda_event_source_mapping":     CategoryEvents,
 	"aws_lambda_function":                 CategoryVirtualMachines,
+	"aws_lambda_function_url":             CategoryNetworkSecurity,
+	"aws_lambda_permission":               CategorySecurity,
 	"aws_lb":                              CategoryNetworkSecurity,
 	"aws_lb_listener":                     CategoryNetworkSecurity,
 	"aws_lb_target_group":                 CategoryNetworkSecurity,

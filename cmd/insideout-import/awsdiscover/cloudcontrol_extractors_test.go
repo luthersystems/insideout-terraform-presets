@@ -1064,6 +1064,364 @@ func TestCognitoResourceServerConfig(t *testing.T) {
 	}
 }
 
+// ===========================================================================
+// Bundle 14d (#422) — five new ParentLister-backed types
+// ===========================================================================
+
+// TestLambdaPermissionConfig pins the per-type extractors for
+// aws_lambda_permission: compound CC identifier `<FunctionName>|<Id>`
+// rewrites to TF import format `<FunctionName>/<Id>` (forward-slash,
+// first-pipe-only), NameHint extracts the StatementId tail, NativeIDs
+// split into a structured function_name/statement_id map, and Tags is
+// the non-nil empty map (CFN schema has no Tags property).
+func TestLambdaPermissionConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_lambda_permission")
+	if !cfg.SkipProjectTagFilter {
+		t.Error("aws_lambda_permission: SkipProjectTagFilter must be true (CFN schema has no Tags property)")
+	}
+	if cfg.CloudFormationType != "AWS::Lambda::Permission" {
+		t.Errorf("CloudFormationType=%q, want AWS::Lambda::Permission", cfg.CloudFormationType)
+	}
+	if cfg.ParentLister == nil {
+		t.Fatal("ParentLister must be set; CC ListResources is parent-scoped on FunctionName")
+	}
+	if cfg.SDKLister != nil {
+		t.Error("SDKLister must be nil (ParentLister-scoped, not SDK-scoped)")
+	}
+
+	id := "my-fn|AllowExecutionFromCloudWatch"
+	if got := cfg.ImportIDFromIdentifier(id, nil); got != "my-fn/AllowExecutionFromCloudWatch" {
+		t.Errorf("ImportID rewrite |→/: got %q, want %q", got, "my-fn/AllowExecutionFromCloudWatch")
+	}
+	// First-`|`-only rewrite: a hypothetical identifier with multiple
+	// pipes (illegal per the Lambda function name regex but defended
+	// for symmetry with SplitN-cap-2 NativeIDs) must preserve every
+	// `|` after the first. A regression to strings.ReplaceAll would
+	// fail loudly here.
+	if got := cfg.ImportIDFromIdentifier("fn|stmt|with|pipes", nil); got != "fn/stmt|with|pipes" {
+		t.Errorf("ImportID multi-pipe (first-only rewrite): got %q, want %q",
+			got, "fn/stmt|with|pipes")
+	}
+
+	// NameHint reads the StatementId tail from the identifier.
+	if got := cfg.NameHintFromProperties(id, nil); got != "AllowExecutionFromCloudWatch" {
+		t.Errorf("NameHint: got %q, want %q", got, "AllowExecutionFromCloudWatch")
+	}
+	// Malformed identifier (no `|`) — fall back to the identifier.
+	if got := cfg.NameHintFromProperties("orphan", nil); got != "orphan" {
+		t.Errorf("NameHint fallback: got %q, want %q", got, "orphan")
+	}
+	// Identifier with empty StatementId — fall back to the identifier
+	// (defensive: empty-StatementId would surface as `""` if we
+	// returned parts[1] directly without the truthy check).
+	if got := cfg.NameHintFromProperties("fn|", nil); got != "fn|" {
+		t.Errorf("NameHint empty-statement-id fallback: got %q, want %q", got, "fn|")
+	}
+
+	native := cfg.NativeIDsFromProperties(id, nil)
+	want := map[string]string{"function_name": "my-fn", "statement_id": "AllowExecutionFromCloudWatch"}
+	if !reflect.DeepEqual(native, want) {
+		t.Errorf("NativeIDs: got %+v, want %+v", native, want)
+	}
+	// Defensive: malformed identifier — NativeIDs must return nil so
+	// downstream doesn't render half-stitched keys.
+	if got := cfg.NativeIDsFromProperties("orphan", nil); got != nil {
+		t.Errorf("NativeIDs malformed-id: got %+v, want nil", got)
+	}
+
+	// Tags: emptyTagsExtractor returns the non-nil empty map per the
+	// #255 contract; populated Tags input must be discarded.
+	tags := cfg.TagsFromProperties(map[string]any{"Tags": []any{
+		map[string]any{"Key": "env", "Value": "prod"},
+	}})
+	if tags == nil {
+		t.Fatal("Tags must be non-nil empty map per #255 contract")
+	}
+	if len(tags) != 0 {
+		t.Errorf("Tags: got %v, want empty map (untaggable; emptyTagsExtractor ignores input)", tags)
+	}
+}
+
+// TestLambdaFunctionURLConfig pins the per-type extractors for
+// aws_lambda_function_url: CC primary identifier is the full
+// FunctionArn (single, not compound), Terraform import format is the
+// bare function NAME (or "<name>/<qualifier>"), so the extractor strips
+// the `arn:...:function:` prefix. NameHint reads TargetFunctionArn from
+// props (the parent key) and extracts the bare name. NativeIDs always
+// stamps "arn" and, when ARN-shaped, also "function_name". Tags is the
+// non-nil empty map.
+func TestLambdaFunctionURLConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_lambda_function_url")
+	if !cfg.SkipProjectTagFilter {
+		t.Error("aws_lambda_function_url: SkipProjectTagFilter must be true (CFN schema has no Tags property)")
+	}
+	if cfg.CloudFormationType != "AWS::Lambda::Url" {
+		t.Errorf("CloudFormationType=%q, want AWS::Lambda::Url", cfg.CloudFormationType)
+	}
+	if cfg.ParentLister == nil {
+		t.Fatal("ParentLister must be set; CC ListResources is parent-scoped on TargetFunctionArn")
+	}
+	if cfg.SDKLister != nil {
+		t.Error("SDKLister must be nil (ParentLister-scoped, not SDK-scoped)")
+	}
+
+	// ImportID: ARN → bare name.
+	arnPlain := "arn:aws:lambda:us-east-1:111:function:my-fn"
+	if got := cfg.ImportIDFromIdentifier(arnPlain, nil); got != "my-fn" {
+		t.Errorf("ImportID ARN→bare name: got %q, want %q", got, "my-fn")
+	}
+	// ARN with qualifier: "<name>:<qual>" → "<name>/<qual>" per TF docs.
+	arnQual := "arn:aws:lambda:us-east-1:111:function:my-fn:PROD"
+	if got := cfg.ImportIDFromIdentifier(arnQual, nil); got != "my-fn/PROD" {
+		t.Errorf("ImportID ARN+qualifier: got %q, want %q", got, "my-fn/PROD")
+	}
+	// Already-bare name (or unparseable) — passthrough.
+	if got := cfg.ImportIDFromIdentifier("bare-fn", nil); got != "bare-fn" {
+		t.Errorf("ImportID bare-name passthrough: got %q, want %q", got, "bare-fn")
+	}
+
+	// NameHint: extract the function name from TargetFunctionArn in props.
+	if got := cfg.NameHintFromProperties(arnPlain, map[string]any{
+		"TargetFunctionArn": arnPlain,
+	}); got != "my-fn" {
+		t.Errorf("NameHint: got %q, want %q", got, "my-fn")
+	}
+	// NameHint with qualifier: drop the qualifier (return only function name).
+	if got := cfg.NameHintFromProperties(arnQual, map[string]any{
+		"TargetFunctionArn": arnQual,
+	}); got != "my-fn" {
+		t.Errorf("NameHint qualifier-stripped: got %q, want %q", got, "my-fn")
+	}
+	// NameHint with non-ARN TargetFunctionArn — return the value as-is.
+	if got := cfg.NameHintFromProperties(arnPlain, map[string]any{
+		"TargetFunctionArn": "bare-name-in-props",
+	}); got != "bare-name-in-props" {
+		t.Errorf("NameHint non-ARN passthrough: got %q, want %q", got, "bare-name-in-props")
+	}
+	// NameHint with missing TargetFunctionArn — fall back to identifier.
+	if got := cfg.NameHintFromProperties(arnPlain, map[string]any{}); got != arnPlain {
+		t.Errorf("NameHint fallback: got %q, want %q", got, arnPlain)
+	}
+
+	// NativeIDs: always stamp "arn", and extract function_name when ARN-shaped.
+	native := cfg.NativeIDsFromProperties(arnPlain, nil)
+	wantPlain := map[string]string{"arn": arnPlain, "function_name": "my-fn"}
+	if !reflect.DeepEqual(native, wantPlain) {
+		t.Errorf("NativeIDs ARN-shaped: got %+v, want %+v", native, wantPlain)
+	}
+	// Qualified ARN: function_name is the part BEFORE the qualifier
+	// colon (qualifier is dropped from the by-name native-id slot).
+	nativeQ := cfg.NativeIDsFromProperties(arnQual, nil)
+	wantQ := map[string]string{"arn": arnQual, "function_name": "my-fn"}
+	if !reflect.DeepEqual(nativeQ, wantQ) {
+		t.Errorf("NativeIDs ARN+qual: got %+v, want %+v", nativeQ, wantQ)
+	}
+	// Non-ARN identifier: "arn" stamped to the raw identifier; no
+	// function_name (the ARN-extraction branch never fires). Must be
+	// non-nil so out["arn"] is always readable.
+	nativeBare := cfg.NativeIDsFromProperties("bare-fn", nil)
+	wantBare := map[string]string{"arn": "bare-fn"}
+	if !reflect.DeepEqual(nativeBare, wantBare) {
+		t.Errorf("NativeIDs non-ARN: got %+v, want %+v", nativeBare, wantBare)
+	}
+
+	tags := cfg.TagsFromProperties(map[string]any{})
+	if tags == nil {
+		t.Fatal("Tags must be non-nil empty map per #255 contract")
+	}
+	if len(tags) != 0 {
+		t.Errorf("Tags: got %v, want empty map (untaggable)", tags)
+	}
+}
+
+// TestApiGatewayStageConfig pins the per-type extractors for
+// aws_api_gateway_stage: compound CC identifier `<RestApiId>|<StageName>`
+// rewrites to `<RestApiId>/<StageName>` (forward-slash, first-pipe-only),
+// NameHint reads StageName, NativeIDs split into rest_api_id/stage_name,
+// and Tags is TAGGABLE — `tagsFromKey("Tags")` extracts the
+// `[]{Key,Value}` shape. UNLIKE the other four #422 types,
+// SkipProjectTagFilter is false.
+func TestApiGatewayStageConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_api_gateway_stage")
+	if cfg.SkipProjectTagFilter {
+		t.Error("aws_api_gateway_stage: SkipProjectTagFilter must be FALSE (CFN schema HAS a Tags property — taggable)")
+	}
+	if cfg.CloudFormationType != "AWS::ApiGateway::Stage" {
+		t.Errorf("CloudFormationType=%q, want AWS::ApiGateway::Stage", cfg.CloudFormationType)
+	}
+	if cfg.ParentLister == nil {
+		t.Fatal("ParentLister must be set; CC ListResources is parent-scoped on RestApiId")
+	}
+	if cfg.SDKLister != nil {
+		t.Error("SDKLister must be nil (ParentLister-scoped, not SDK-scoped)")
+	}
+
+	id := "12345abcde|prod"
+	if got := cfg.ImportIDFromIdentifier(id, nil); got != "12345abcde/prod" {
+		t.Errorf("ImportID rewrite |→/: got %q, want %q", got, "12345abcde/prod")
+	}
+	// First-`|`-only rewrite pin.
+	if got := cfg.ImportIDFromIdentifier("api|stage|with|pipes", nil); got != "api/stage|with|pipes" {
+		t.Errorf("ImportID multi-pipe (first-only rewrite): got %q, want %q",
+			got, "api/stage|with|pipes")
+	}
+
+	if got := cfg.NameHintFromProperties(id, map[string]any{"StageName": "prod"}); got != "prod" {
+		t.Errorf("NameHint: got %q, want %q", got, "prod")
+	}
+	if got := cfg.NameHintFromProperties(id, map[string]any{}); got != id {
+		t.Errorf("NameHint fallback: got %q, want identifier", got)
+	}
+
+	native := cfg.NativeIDsFromProperties(id, nil)
+	want := map[string]string{"rest_api_id": "12345abcde", "stage_name": "prod"}
+	if !reflect.DeepEqual(native, want) {
+		t.Errorf("NativeIDs: got %+v, want %+v", native, want)
+	}
+	if got := cfg.NativeIDsFromProperties("orphan", nil); got != nil {
+		t.Errorf("NativeIDs malformed-id: got %+v, want nil", got)
+	}
+
+	// Tags: `[]Tag` shape per the CFN schema. tagsFromKey extracts a
+	// flat map[string]string.
+	tags := cfg.TagsFromProperties(map[string]any{"Tags": []any{
+		map[string]any{"Key": "env", "Value": "prod"},
+		map[string]any{"Key": "owner", "Value": "team-a"},
+	}})
+	wantTags := map[string]string{"env": "prod", "owner": "team-a"}
+	if !reflect.DeepEqual(tags, wantTags) {
+		t.Errorf("Tags: got %+v, want %+v", tags, wantTags)
+	}
+}
+
+// TestApiGatewayDeploymentConfig pins the per-type extractors for
+// aws_api_gateway_deployment: CC identifier is
+// `<DeploymentId>|<RestApiId>` (note ORDER per the CC
+// primaryIdentifier: [DeploymentId, RestApiId]) but Terraform's import
+// format is `<RestApiId>/<DeploymentId>` — REVERSE order, not a naive
+// pipe→slash. The test explicitly pins this divergence; a regression to
+// `strings.Replace(id, "|", "/", 1)` would emit invalid imports.
+func TestApiGatewayDeploymentConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_api_gateway_deployment")
+	if !cfg.SkipProjectTagFilter {
+		t.Error("aws_api_gateway_deployment: SkipProjectTagFilter must be true (CFN schema has no Tags property)")
+	}
+	if cfg.CloudFormationType != "AWS::ApiGateway::Deployment" {
+		t.Errorf("CloudFormationType=%q, want AWS::ApiGateway::Deployment", cfg.CloudFormationType)
+	}
+	if cfg.ParentLister == nil {
+		t.Fatal("ParentLister must be set; CC ListResources is parent-scoped on RestApiId")
+	}
+	if cfg.SDKLister != nil {
+		t.Error("SDKLister must be nil")
+	}
+
+	// CC identifier order is DeploymentId|RestApiId; TF import is
+	// RestApiId/DeploymentId — REVERSE order pin. A naive pipe→slash
+	// here would emit `1122334/aabbccddee` (invalid).
+	id := "1122334|aabbccddee" // CC: <DeploymentId>|<RestApiId>
+	if got := cfg.ImportIDFromIdentifier(id, nil); got != "aabbccddee/1122334" {
+		t.Errorf("ImportID reverse-order rewrite: got %q, want %q (RestApiId first, DeploymentId second)",
+			got, "aabbccddee/1122334")
+	}
+	// Malformed identifier (no `|`) — passthrough rather than panic.
+	if got := cfg.ImportIDFromIdentifier("orphan", nil); got != "orphan" {
+		t.Errorf("ImportID malformed-id passthrough: got %q, want %q", got, "orphan")
+	}
+
+	// NameHint chain: Description wins, identifier fallback.
+	if got := cfg.NameHintFromProperties(id, map[string]any{
+		"Description": "v3 release",
+	}); got != "v3 release" {
+		t.Errorf("NameHint (Description present): got %q, want %q", got, "v3 release")
+	}
+	if got := cfg.NameHintFromProperties(id, map[string]any{}); got != id {
+		t.Errorf("NameHint fallback: got %q, want identifier", got)
+	}
+
+	// NativeIDs: keys reflect the CC identifier order (DeploymentId|RestApiId).
+	native := cfg.NativeIDsFromProperties(id, nil)
+	want := map[string]string{"deployment_id": "1122334", "rest_api_id": "aabbccddee"}
+	if !reflect.DeepEqual(native, want) {
+		t.Errorf("NativeIDs: got %+v, want %+v", native, want)
+	}
+	if got := cfg.NativeIDsFromProperties("orphan", nil); got != nil {
+		t.Errorf("NativeIDs malformed-id: got %+v, want nil", got)
+	}
+
+	tags := cfg.TagsFromProperties(map[string]any{})
+	if tags == nil {
+		t.Fatal("Tags must be non-nil empty map per #255 contract")
+	}
+	if len(tags) != 0 {
+		t.Errorf("Tags: got %v, want empty map (untaggable)", tags)
+	}
+}
+
+// TestApiGatewayResourceConfig pins the per-type extractors for
+// aws_api_gateway_resource: compound CC identifier
+// `<RestApiId>|<ResourceId>` rewrites to `<RestApiId>/<ResourceId>`
+// (forward-slash, first-pipe-only), NameHint reads PathPart,
+// NativeIDs split into rest_api_id/resource_id, and Tags is the
+// non-nil empty map.
+func TestApiGatewayResourceConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_api_gateway_resource")
+	if !cfg.SkipProjectTagFilter {
+		t.Error("aws_api_gateway_resource: SkipProjectTagFilter must be true (CFN schema has no Tags property)")
+	}
+	if cfg.CloudFormationType != "AWS::ApiGateway::Resource" {
+		t.Errorf("CloudFormationType=%q, want AWS::ApiGateway::Resource", cfg.CloudFormationType)
+	}
+	if cfg.ParentLister == nil {
+		t.Fatal("ParentLister must be set; CC ListResources is parent-scoped on RestApiId")
+	}
+	if cfg.SDKLister != nil {
+		t.Error("SDKLister must be nil")
+	}
+
+	id := "12345abcde|67890fghij"
+	if got := cfg.ImportIDFromIdentifier(id, nil); got != "12345abcde/67890fghij" {
+		t.Errorf("ImportID rewrite |→/: got %q, want %q", got, "12345abcde/67890fghij")
+	}
+	// First-`|`-only rewrite pin.
+	if got := cfg.ImportIDFromIdentifier("api|res|with|pipes", nil); got != "api/res|with|pipes" {
+		t.Errorf("ImportID multi-pipe (first-only rewrite): got %q, want %q",
+			got, "api/res|with|pipes")
+	}
+
+	// NameHint: PathPart wins (e.g. "users", "{userId}").
+	if got := cfg.NameHintFromProperties(id, map[string]any{"PathPart": "users"}); got != "users" {
+		t.Errorf("NameHint: got %q, want %q", got, "users")
+	}
+	if got := cfg.NameHintFromProperties(id, map[string]any{}); got != id {
+		t.Errorf("NameHint fallback: got %q, want identifier", got)
+	}
+
+	native := cfg.NativeIDsFromProperties(id, nil)
+	want := map[string]string{"rest_api_id": "12345abcde", "resource_id": "67890fghij"}
+	if !reflect.DeepEqual(native, want) {
+		t.Errorf("NativeIDs: got %+v, want %+v", native, want)
+	}
+	if got := cfg.NativeIDsFromProperties("orphan", nil); got != nil {
+		t.Errorf("NativeIDs malformed-id: got %+v, want nil", got)
+	}
+
+	tags := cfg.TagsFromProperties(map[string]any{"Tags": []any{
+		map[string]any{"Key": "env", "Value": "prod"},
+	}})
+	if tags == nil {
+		t.Fatal("Tags must be non-nil empty map per #255 contract")
+	}
+	if len(tags) != 0 {
+		t.Errorf("Tags: got %v, want empty map (untaggable; emptyTagsExtractor ignores input)", tags)
+	}
+}
+
 // TestEmptyTagsExtractor_NonNilEmptyMap pins the contract of the
 // helper used by genuinely-untaggable Cloud Control types: it must
 // always return a non-nil empty map. Per the #255 JSON-marshal

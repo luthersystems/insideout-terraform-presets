@@ -1,4 +1,7 @@
 aws_acm_certificate	Security
+aws_api_gateway_deployment	Network Security
+aws_api_gateway_resource	Network Security
+aws_api_gateway_stage	Network Security
 aws_apigatewayv2_api	Network Security
 aws_apigatewayv2_authorizer	Network Security
 aws_apigatewayv2_integration	Network Security
@@ -36,6 +39,8 @@ aws_kms_key	Security
 aws_lambda_alias	Virtual Machines
 aws_lambda_event_source_mapping	Events
 aws_lambda_function	Virtual Machines
+aws_lambda_function_url	Network Security
+aws_lambda_permission	Security
 aws_lb	Network Security
 aws_lb_listener	Network Security
 aws_lb_target_group	Network Security
