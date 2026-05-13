@@ -31,10 +31,11 @@ var computeNetworkTarget = target{
 	outputPath:   "cmd/insideout-import/gcpdiscover/compute_network_enrich.gen.go",
 
 	overrides: map[string]override{
-		// project: from projectID parameter. The compute API's
-		// Network response includes a SelfLink that embeds the
-		// project, but we already have the string project ID from
-		// the discover context — use that to avoid a second parse.
+		// project: caller supplies via the projectID parameter.
+		// The compute API's Network response includes a SelfLink
+		// that embeds the project, but we already have the string
+		// project ID from the discover context — use that to avoid
+		// a second parse.
 		"GoogleComputeNetwork.project": {
 			snippet: func(b, f string) string {
 				return `if projectID != "" {
@@ -43,10 +44,12 @@ var computeNetworkTarget = target{
 			},
 		},
 
-		// routing_mode: the typed schema puts this at the top
-		// level, the API tucks it under RoutingConfig. The
-		// engine's wrapperIndirection mechanism is slice-only; this
-		// is the scalar version, done inline.
+		// routing_mode: mirror the provider's flatten of
+		// RoutingConfig.RoutingMode onto the top-level TF
+		// attribute. The typed schema puts this at the top level;
+		// the API tucks it under RoutingConfig. The engine's
+		// wrapperIndirection mechanism is slice-only, so this
+		// scalar version is done inline here.
 		"GoogleComputeNetwork.routing_mode": {
 			snippet: func(b, f string) string {
 				return `if ` + b + `.RoutingConfig != nil && ` + b + `.RoutingConfig.RoutingMode != "" {

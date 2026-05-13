@@ -164,6 +164,9 @@ jobs:
       - name: Lint phantom-computed-fields denylist ↔ NOTE comments (#215)
         run: bash tests/lint-phantom-computed-fields.sh
 
+      - name: Lint enrichgen override citation comments (#415)
+        run: bash tests/lint-enrichgen-override-citations.sh
+
   # Validates phantom-computed-fields.txt against the live provider schema
   # pinned by schemas/providers.tf. Catches the failure mode where a
   # provider upgrade flips a field from pure-Computed to Optional+Computed

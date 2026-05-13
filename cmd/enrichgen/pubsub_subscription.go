@@ -43,16 +43,18 @@ func pubsubSubscriptionShortName(full string) string {
 `,
 
 	overrides: map[string]override{
-		// name: same shape as pubsub_topic — API returns the
-		// fully-qualified form, TF state stores the short name.
+		// name: mirror the provider's read-time short-name flatten
+		// (same shape as pubsub_topic) — API returns the fully-
+		// qualified form, TF state stores the short name.
 		"GooglePubsubSubscription.name": {
 			snippet: func(b, f string) string {
 				return "out." + f + " = generated.LiteralOf(pubsubSubscriptionShortName(" + b + ".Name))"
 			},
 		},
 
-		// project: API embeds project only in Name; populate from
-		// the projectID parameter.
+		// project: caller supplies via the projectID parameter. The
+		// API embeds the project only in Name, but we already have
+		// the string project ID from the discover context.
 		"GooglePubsubSubscription.project": {
 			snippet: func(b, f string) string {
 				return `if projectID != "" {
