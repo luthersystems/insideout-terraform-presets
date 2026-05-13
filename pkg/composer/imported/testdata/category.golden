@@ -12,6 +12,7 @@ aws_backup_selection	Data Storage
 aws_backup_vault	Data Storage
 aws_bedrock_guardrail	Security
 aws_cloudfront_distribution	Network Security
+aws_cloudfront_function	Network Security
 aws_cloudwatch_dashboard	Observability
 aws_cloudwatch_event_rule	Events
 aws_cloudwatch_log_group	Observability
@@ -31,10 +32,13 @@ aws_eip	Network Security
 aws_eks_cluster	Virtual Machines
 aws_eks_pod_identity_association	Security
 aws_elb	Network Security
+aws_iam_group	Security
 aws_iam_instance_profile	Security
 aws_iam_policy	Security
 aws_iam_role	Security
+aws_iam_user	Security
 aws_internet_gateway	Network Security
+aws_kms_alias	Security
 aws_kms_key	Security
 aws_lambda_alias	Virtual Machines
 aws_lambda_event_source_mapping	Events
@@ -55,6 +59,7 @@ aws_route53_zone	Network Security
 aws_route_table	Network Security
 aws_s3_bucket	Data Storage
 aws_secretsmanager_secret	Security
+aws_secretsmanager_secret_rotation	Security
 aws_security_group	Network Security
 aws_sns_topic	Events
 aws_sqs_queue	Events

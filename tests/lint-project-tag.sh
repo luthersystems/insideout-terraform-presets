@@ -43,6 +43,7 @@ NON_TAGGABLE_AWS=(
   aws_cognito_user_pool_domain
   aws_dynamodb_contributor_insights
   aws_ecs_cluster_capacity_providers
+  aws_iam_group
   aws_iam_instance_profile
   aws_iam_role_policy
   aws_iam_role_policy_attachment
@@ -60,6 +61,7 @@ NON_TAGGABLE_AWS=(
   aws_s3_bucket_public_access_block
   aws_s3_bucket_server_side_encryption_configuration
   aws_s3_bucket_versioning
+  aws_secretsmanager_secret_rotation
   aws_security_group_rule
   aws_sns_topic_subscription
   aws_wafv2_web_acl_association
