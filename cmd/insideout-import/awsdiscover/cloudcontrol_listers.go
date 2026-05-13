@@ -6,6 +6,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/acm"
+	"github.com/aws/aws-sdk-go-v2/service/apigatewayv2"
 	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 )
@@ -28,6 +29,15 @@ type lambdaFunctionsLister interface {
 // ACM certificate SDK enumerator.
 type acmCertificatesLister interface {
 	ListCertificates(ctx context.Context, in *acm.ListCertificatesInput, opts ...func(*acm.Options)) (*acm.ListCertificatesOutput, error)
+}
+
+// apigatewayv2APIsLister is the narrow subset of the API Gateway v2 SDK
+// used by the parent-API enumerator that seeds Route / Integration /
+// Authorizer fan-out. apigatewayv2_stage.go also lists APIs via its own
+// hand-rolled client interface; we intentionally keep these interfaces
+// separate so each call site can evolve independently.
+type apigatewayv2APIsLister interface {
+	GetApis(ctx context.Context, in *apigatewayv2.GetApisInput, opts ...func(*apigatewayv2.Options)) (*apigatewayv2.GetApisOutput, error)
 }
 
 // listCognitoUserPools enumerates all Cognito user pools in the region
@@ -211,5 +221,43 @@ func listACMCertificatesWithClient(ctx context.Context, client acmCertificatesLi
 		nextToken = page.NextToken
 	}
 	return arns, nil
+}
+
+// listApigatewayv2Apis enumerates ApiGatewayV2 APIs in the region and
+// returns one parent ResourceModel JSON string per API, suitable for
+// feeding into Cloud Control ListResources for child types scoped on
+// ApiId (Route / Integration / Authorizer). Returns an empty slice (not
+// nil) when no APIs exist, so the discoverer's `len(parentModels) == 0`
+// early-exit fires cleanly.
+func listApigatewayv2Apis(ctx context.Context, awsCfg aws.Config, region string, _ DiscoverArgs) ([]string, error) {
+	client := apigatewayv2.NewFromConfig(awsCfg, func(o *apigatewayv2.Options) {
+		if region != "" {
+			o.Region = region
+		}
+	})
+	return listApigatewayv2ApisWithClient(ctx, client)
+}
+
+func listApigatewayv2ApisWithClient(ctx context.Context, client apigatewayv2APIsLister) ([]string, error) {
+	models := []string{}
+	var nextToken *string
+	for {
+		page, err := client.GetApis(ctx, &apigatewayv2.GetApisInput{NextToken: nextToken})
+		if err != nil {
+			return nil, fmt.Errorf("apigatewayv2:GetApis: %w", err)
+		}
+		for _, api := range page.Items {
+			id := aws.ToString(api.ApiId)
+			if id == "" {
+				continue
+			}
+			models = append(models, fmt.Sprintf(`{"ApiId":%q}`, id))
+		}
+		if page.NextToken == nil || aws.ToString(page.NextToken) == "" {
+			break
+		}
+		nextToken = page.NextToken
+	}
+	return models, nil
 }
 

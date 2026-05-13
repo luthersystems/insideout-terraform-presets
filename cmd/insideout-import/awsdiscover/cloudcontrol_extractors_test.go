@@ -718,6 +718,291 @@ func TestACMCertificateConfig(t *testing.T) {
 	}
 }
 
+// TestApigatewayv2RouteConfig pins the per-type extractors for
+// aws_apigatewayv2_route: compound CC identifier `<ApiId>|<RouteId>`
+// rewrites to TF import format `<ApiId>/<RouteId>`, NameHint reads
+// RouteKey, NativeIDs split into a structured api_id/route_id map, and
+// Tags is the non-nil empty map per the #255 contract (CFN schema has
+// no Tags property on this type).
+func TestApigatewayv2RouteConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_apigatewayv2_route")
+	if !cfg.SkipProjectTagFilter {
+		t.Error("aws_apigatewayv2_route: SkipProjectTagFilter must be true (CFN schema has no Tags property)")
+	}
+	if cfg.CloudFormationType != "AWS::ApiGatewayV2::Route" {
+		t.Errorf("CloudFormationType=%q, want AWS::ApiGatewayV2::Route", cfg.CloudFormationType)
+	}
+	if cfg.ParentLister == nil {
+		t.Fatal("ParentLister must be set; CC ListResources is parent-scoped on ApiId")
+	}
+	if cfg.SDKLister != nil {
+		t.Error("SDKLister must be nil (ParentLister-scoped, not SDK-scoped)")
+	}
+
+	id := "aabbccddee|1122334"
+	if got := cfg.ImportIDFromIdentifier(id, nil); got != "aabbccddee/1122334" {
+		t.Errorf("ImportID rewrite |→/: got %q, want %q", got, "aabbccddee/1122334")
+	}
+
+	props := map[string]any{"RouteKey": "POST /signup"}
+	if got := cfg.NameHintFromProperties(id, props); got != "POST /signup" {
+		t.Errorf("NameHint: got %q, want %q", got, "POST /signup")
+	}
+	if got := cfg.NameHintFromProperties(id, map[string]any{}); got != id {
+		t.Errorf("NameHint fallback: got %q, want identifier", got)
+	}
+
+	native := cfg.NativeIDsFromProperties(id, nil)
+	want := map[string]string{"api_id": "aabbccddee", "route_id": "1122334"}
+	if !reflect.DeepEqual(native, want) {
+		t.Errorf("NativeIDs: got %+v, want %+v", native, want)
+	}
+	// Defensive: malformed identifier (no `|`) — NativeIDs must
+	// return nil so downstream doesn't render half-stitched keys.
+	if got := cfg.NativeIDsFromProperties("orphan", nil); got != nil {
+		t.Errorf("NativeIDs malformed-id: got %+v, want nil", got)
+	}
+
+	tags := cfg.TagsFromProperties(map[string]any{"Tags": []any{
+		map[string]any{"Key": "env", "Value": "prod"},
+	}})
+	if tags == nil {
+		t.Fatal("Tags must be non-nil empty map per #255 contract")
+	}
+	if len(tags) != 0 {
+		t.Errorf("Tags: got %v, want empty map (untaggable)", tags)
+	}
+}
+
+// TestApigatewayv2IntegrationConfig pins the per-type extractors for
+// aws_apigatewayv2_integration: compound CC identifier
+// `<ApiId>|<IntegrationId>` rewrites to TF import format
+// `<ApiId>/<IntegrationId>`, NameHint falls back through
+// Description → IntegrationType → identifier (no stable Name field on
+// this type), NativeIDs split into api_id/integration_id, and Tags is
+// the non-nil empty map.
+func TestApigatewayv2IntegrationConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_apigatewayv2_integration")
+	if !cfg.SkipProjectTagFilter {
+		t.Error("aws_apigatewayv2_integration: SkipProjectTagFilter must be true (CFN schema has no Tags property)")
+	}
+	if cfg.CloudFormationType != "AWS::ApiGatewayV2::Integration" {
+		t.Errorf("CloudFormationType=%q, want AWS::ApiGatewayV2::Integration", cfg.CloudFormationType)
+	}
+	if cfg.ParentLister == nil {
+		t.Fatal("ParentLister must be set; CC ListResources is parent-scoped on ApiId")
+	}
+
+	id := "aabbccddee|abc123xyz"
+	if got := cfg.ImportIDFromIdentifier(id, nil); got != "aabbccddee/abc123xyz" {
+		t.Errorf("ImportID rewrite |→/: got %q, want %q", got, "aabbccddee/abc123xyz")
+	}
+
+	// NameHint chain: Description wins.
+	if got := cfg.NameHintFromProperties(id, map[string]any{
+		"Description":     "user signup",
+		"IntegrationType": "AWS_PROXY",
+	}); got != "user signup" {
+		t.Errorf("NameHint (Description present): got %q, want %q", got, "user signup")
+	}
+	// Description absent: IntegrationType is the fallback.
+	if got := cfg.NameHintFromProperties(id, map[string]any{
+		"IntegrationType": "AWS_PROXY",
+	}); got != "AWS_PROXY" {
+		t.Errorf("NameHint (IntegrationType fallback): got %q, want AWS_PROXY", got)
+	}
+	// Neither set: identifier is the last resort.
+	if got := cfg.NameHintFromProperties(id, map[string]any{}); got != id {
+		t.Errorf("NameHint (identifier fallback): got %q, want %q", got, id)
+	}
+
+	native := cfg.NativeIDsFromProperties(id, nil)
+	want := map[string]string{"api_id": "aabbccddee", "integration_id": "abc123xyz"}
+	if !reflect.DeepEqual(native, want) {
+		t.Errorf("NativeIDs: got %+v, want %+v", native, want)
+	}
+	if got := cfg.NativeIDsFromProperties("orphan", nil); got != nil {
+		t.Errorf("NativeIDs malformed-id: got %+v, want nil", got)
+	}
+
+	tags := cfg.TagsFromProperties(map[string]any{})
+	if tags == nil {
+		t.Fatal("Tags must be non-nil empty map")
+	}
+	if len(tags) != 0 {
+		t.Errorf("Tags: got %v, want empty", tags)
+	}
+}
+
+// TestApigatewayv2AuthorizerConfig pins the per-type extractors for
+// aws_apigatewayv2_authorizer: compound CC identifier
+// `<ApiId>|<AuthorizerId>` rewrites to TF import format
+// `<ApiId>/<AuthorizerId>`, NameHint reads Name, NativeIDs split into
+// api_id/authorizer_id, and Tags is the non-nil empty map.
+func TestApigatewayv2AuthorizerConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_apigatewayv2_authorizer")
+	if !cfg.SkipProjectTagFilter {
+		t.Error("aws_apigatewayv2_authorizer: SkipProjectTagFilter must be true (CFN schema has no Tags property)")
+	}
+	if cfg.CloudFormationType != "AWS::ApiGatewayV2::Authorizer" {
+		t.Errorf("CloudFormationType=%q, want AWS::ApiGatewayV2::Authorizer", cfg.CloudFormationType)
+	}
+	if cfg.ParentLister == nil {
+		t.Fatal("ParentLister must be set; CC ListResources is parent-scoped on ApiId")
+	}
+
+	id := "aabbccddee|auth-001"
+	if got := cfg.ImportIDFromIdentifier(id, nil); got != "aabbccddee/auth-001" {
+		t.Errorf("ImportID rewrite |→/: got %q, want %q", got, "aabbccddee/auth-001")
+	}
+
+	props := map[string]any{"Name": "jwt-auth"}
+	if got := cfg.NameHintFromProperties(id, props); got != "jwt-auth" {
+		t.Errorf("NameHint: got %q, want jwt-auth", got)
+	}
+	if got := cfg.NameHintFromProperties(id, map[string]any{}); got != id {
+		t.Errorf("NameHint fallback: got %q, want identifier", got)
+	}
+
+	native := cfg.NativeIDsFromProperties(id, nil)
+	want := map[string]string{"api_id": "aabbccddee", "authorizer_id": "auth-001"}
+	if !reflect.DeepEqual(native, want) {
+		t.Errorf("NativeIDs: got %+v, want %+v", native, want)
+	}
+	if got := cfg.NativeIDsFromProperties("orphan", nil); got != nil {
+		t.Errorf("NativeIDs malformed-id: got %+v, want nil", got)
+	}
+
+	tags := cfg.TagsFromProperties(map[string]any{})
+	if tags == nil {
+		t.Fatal("Tags must be non-nil empty map")
+	}
+	if len(tags) != 0 {
+		t.Errorf("Tags: got %v, want empty", tags)
+	}
+}
+
+// TestCognitoIdentityProviderConfig pins the per-type extractors for
+// aws_cognito_identity_provider: compound CC identifier
+// `<UserPoolId>|<ProviderName>` rewrites to TF import format
+// `<UserPoolId>:<ProviderName>` — note the COLON delimiter, which
+// diverges from the slash used by every other compound-ID type in
+// cloudControlTypeConfigs. Verified against terraform-provider-aws v6.x
+// docs for this resource.
+func TestCognitoIdentityProviderConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_cognito_identity_provider")
+	if !cfg.SkipProjectTagFilter {
+		t.Error("aws_cognito_identity_provider: SkipProjectTagFilter must be true (CFN schema has no Tags property)")
+	}
+	if cfg.CloudFormationType != "AWS::Cognito::UserPoolIdentityProvider" {
+		t.Errorf("CloudFormationType=%q, want AWS::Cognito::UserPoolIdentityProvider", cfg.CloudFormationType)
+	}
+	if cfg.ParentLister == nil {
+		t.Fatal("ParentLister must be set; CC ListResources is parent-scoped on UserPoolId")
+	}
+
+	id := "us-east-1_AbCdE|CorpAD"
+	// Critical: TF import for this resource uses `:` not `/`. A naive
+	// `|`→`/` rewrite shared with apigatewayv2 children would emit an
+	// import statement Terraform rejects.
+	if got := cfg.ImportIDFromIdentifier(id, nil); got != "us-east-1_AbCdE:CorpAD" {
+		t.Errorf("ImportID rewrite |→: (colon, not slash): got %q, want %q",
+			got, "us-east-1_AbCdE:CorpAD")
+	}
+
+	props := map[string]any{"ProviderName": "CorpAD"}
+	if got := cfg.NameHintFromProperties(id, props); got != "CorpAD" {
+		t.Errorf("NameHint: got %q, want CorpAD", got)
+	}
+	if got := cfg.NameHintFromProperties(id, map[string]any{}); got != id {
+		t.Errorf("NameHint fallback: got %q, want identifier", got)
+	}
+
+	native := cfg.NativeIDsFromProperties(id, nil)
+	want := map[string]string{"user_pool_id": "us-east-1_AbCdE", "provider_name": "CorpAD"}
+	if !reflect.DeepEqual(native, want) {
+		t.Errorf("NativeIDs: got %+v, want %+v", native, want)
+	}
+	if got := cfg.NativeIDsFromProperties("orphan", nil); got != nil {
+		t.Errorf("NativeIDs malformed-id: got %+v, want nil", got)
+	}
+
+	tags := cfg.TagsFromProperties(map[string]any{})
+	if tags == nil {
+		t.Fatal("Tags must be non-nil empty map")
+	}
+	if len(tags) != 0 {
+		t.Errorf("Tags: got %v, want empty", tags)
+	}
+}
+
+// TestCognitoResourceServerConfig pins the per-type extractors for
+// aws_cognito_resource_server: compound CC identifier
+// `<UserPoolId>|<Identifier>` passes through to TF import format
+// unchanged (the pipe IS the delimiter Terraform expects). NameHint
+// falls back through Name → Identifier → resource identifier; NativeIDs
+// split into user_pool_id/identifier; Tags is the non-nil empty map.
+func TestCognitoResourceServerConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_cognito_resource_server")
+	if !cfg.SkipProjectTagFilter {
+		t.Error("aws_cognito_resource_server: SkipProjectTagFilter must be true (CFN schema has no Tags property)")
+	}
+	if cfg.CloudFormationType != "AWS::Cognito::UserPoolResourceServer" {
+		t.Errorf("CloudFormationType=%q, want AWS::Cognito::UserPoolResourceServer", cfg.CloudFormationType)
+	}
+	if cfg.ParentLister == nil {
+		t.Fatal("ParentLister must be set; CC ListResources is parent-scoped on UserPoolId")
+	}
+
+	id := "us-east-1_AbCdE|https://example.com"
+	// TF import for this resource preserves the `|` delimiter (unlike
+	// every other compound-ID Cognito child). Passthrough — any rewrite
+	// would break import.
+	if got := cfg.ImportIDFromIdentifier(id, nil); got != id {
+		t.Errorf("ImportID passthrough (preserves |): got %q, want %q", got, id)
+	}
+
+	// NameHint chain: Name wins.
+	if got := cfg.NameHintFromProperties(id, map[string]any{
+		"Name":       "Solar System Data",
+		"Identifier": "https://example.com",
+	}); got != "Solar System Data" {
+		t.Errorf("NameHint (Name wins): got %q, want %q", got, "Solar System Data")
+	}
+	// Name absent: Identifier wins.
+	if got := cfg.NameHintFromProperties(id, map[string]any{
+		"Identifier": "https://example.com",
+	}); got != "https://example.com" {
+		t.Errorf("NameHint (Identifier fallback): got %q, want %q", got, "https://example.com")
+	}
+	// Neither set: identifier is the last resort.
+	if got := cfg.NameHintFromProperties(id, map[string]any{}); got != id {
+		t.Errorf("NameHint (identifier fallback): got %q, want %q", got, id)
+	}
+
+	native := cfg.NativeIDsFromProperties(id, nil)
+	want := map[string]string{"user_pool_id": "us-east-1_AbCdE", "identifier": "https://example.com"}
+	if !reflect.DeepEqual(native, want) {
+		t.Errorf("NativeIDs: got %+v, want %+v", native, want)
+	}
+	if got := cfg.NativeIDsFromProperties("orphan", nil); got != nil {
+		t.Errorf("NativeIDs malformed-id: got %+v, want nil", got)
+	}
+
+	tags := cfg.TagsFromProperties(map[string]any{})
+	if tags == nil {
+		t.Fatal("Tags must be non-nil empty map")
+	}
+	if len(tags) != 0 {
+		t.Errorf("Tags: got %v, want empty", tags)
+	}
+}
+
 // TestEmptyTagsExtractor_NonNilEmptyMap pins the contract of the
 // helper used by genuinely-untaggable Cloud Control types: it must
 // always return a non-nil empty map. Per the #255 JSON-marshal

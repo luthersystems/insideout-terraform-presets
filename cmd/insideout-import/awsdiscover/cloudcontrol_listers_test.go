@@ -11,6 +11,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/acm"
 	acmtypes "github.com/aws/aws-sdk-go-v2/service/acm/types"
+	"github.com/aws/aws-sdk-go-v2/service/apigatewayv2"
+	apigwv2types "github.com/aws/aws-sdk-go-v2/service/apigatewayv2/types"
 	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider"
 	cogniidptypes "github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider/types"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
@@ -426,5 +428,153 @@ func TestListACMCertificates_EmptyReturnsNonNilEmpty(t *testing.T) {
 	}
 	if len(got) != 0 {
 		t.Errorf("len=%d, want 0", len(got))
+	}
+}
+
+// fakeAPIGWv2APIsLister is a hand-rolled fake for the ApiGatewayV2 SDK
+// subset used by listApigatewayv2Apis. Mirrors the fake-and-pagination
+// shape of the other listers in this file.
+type fakeAPIGWv2APIsLister struct {
+	listPages []apigatewayv2.GetApisOutput
+	listCalls int
+	listErr   error
+}
+
+func (f *fakeAPIGWv2APIsLister) GetApis(_ context.Context, _ *apigatewayv2.GetApisInput, _ ...func(*apigatewayv2.Options)) (*apigatewayv2.GetApisOutput, error) {
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
+	if f.listCalls >= len(f.listPages) {
+		return &apigatewayv2.GetApisOutput{}, nil
+	}
+	page := f.listPages[f.listCalls]
+	f.listCalls++
+	return &page, nil
+}
+
+func apigwv2APIsPage(token string, apiIDs ...string) apigatewayv2.GetApisOutput {
+	items := make([]apigwv2types.Api, 0, len(apiIDs))
+	for _, id := range apiIDs {
+		items = append(items, apigwv2types.Api{ApiId: aws.String(id)})
+	}
+	out := apigatewayv2.GetApisOutput{Items: items}
+	if token != "" {
+		out.NextToken = aws.String(token)
+	}
+	return out
+}
+
+// TestListApigatewayv2Apis_PaginatesAndReturnsModels pins the
+// API-enumeration helper used by aws_apigatewayv2_route /
+// _integration / _authorizer's ParentLister: every API across every
+// page must surface as a well-formed JSON ResourceModel string with
+// ApiId set. A regression that drops a page or emits malformed JSON
+// would silently produce zero child Route/Integration/Authorizer
+// emissions for any HTTP API after the first page.
+func TestListApigatewayv2Apis_PaginatesAndReturnsModels(t *testing.T) {
+	t.Parallel()
+	fake := &fakeAPIGWv2APIsLister{
+		listPages: []apigatewayv2.GetApisOutput{
+			apigwv2APIsPage("tok1", "api-aaa", "api-bbb"),
+			apigwv2APIsPage("tok2", "api-ccc"),
+			apigwv2APIsPage("", "api-ddd", "api-eee"),
+		},
+	}
+	got, err := listApigatewayv2ApisWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{
+		`{"ApiId":"api-aaa"}`,
+		`{"ApiId":"api-bbb"}`,
+		`{"ApiId":"api-ccc"}`,
+		`{"ApiId":"api-ddd"}`,
+		`{"ApiId":"api-eee"}`,
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("models drift:\n got %v\nwant %v", got, want)
+	}
+	if fake.listCalls != 3 {
+		t.Errorf("listCalls=%d, want 3 (paginated across three pages)", fake.listCalls)
+	}
+	// Each emitted model must round-trip as JSON with the ApiId key
+	// present — a malformed string would crash the downstream CC
+	// ListResources call.
+	for _, m := range got {
+		var parsed map[string]string
+		if err := json.Unmarshal([]byte(m), &parsed); err != nil {
+			t.Errorf("model %q is not valid JSON: %v", m, err)
+			continue
+		}
+		if parsed["ApiId"] == "" {
+			t.Errorf("model %q missing ApiId key", m)
+		}
+	}
+}
+
+// TestListApigatewayv2Apis_EmptyAccountReturnsNonNilEmpty pins the
+// non-nil empty contract: zero APIs returns []string{}, not nil. The
+// discoverer's `len(parentModels) == 0` early-exit branch needs the
+// slice to be non-nil for the empty-region path to fire cleanly.
+func TestListApigatewayv2Apis_EmptyAccountReturnsNonNilEmpty(t *testing.T) {
+	t.Parallel()
+	fake := &fakeAPIGWv2APIsLister{
+		listPages: []apigatewayv2.GetApisOutput{
+			apigwv2APIsPage(""),
+		},
+	}
+	got, err := listApigatewayv2ApisWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got == nil {
+		t.Fatal("empty-region result must be non-nil (else len-check early-exit misfires)")
+	}
+	if len(got) != 0 {
+		t.Errorf("len=%d, want 0", len(got))
+	}
+}
+
+// TestListApigatewayv2Apis_PropagatesListError pins error propagation:
+// an apigateway:GetApis failure must surface to the caller wrapped, not
+// silently swallowed. The discoverer's outer error path emits a
+// ServiceFinish + propagates — losing the error here would silently
+// skip the type for the whole region.
+func TestListApigatewayv2Apis_PropagatesListError(t *testing.T) {
+	t.Parallel()
+	sentinel := errors.New("apigateway:GetApis boom")
+	fake := &fakeAPIGWv2APIsLister{listErr: sentinel}
+	_, err := listApigatewayv2ApisWithClient(context.Background(), fake)
+	if !errors.Is(err, sentinel) {
+		t.Errorf("error chain: got %v, want chain containing %v", err, sentinel)
+	}
+}
+
+// TestListApigatewayv2Apis_SkipsEmptyApiID guards a defensive branch:
+// an Api whose ApiId is "" (defensively guarded in the lister) must be
+// dropped, never emitted as `{"ApiId":""}`. The downstream CC
+// ListResources call would reject the empty-ID parent model.
+func TestListApigatewayv2Apis_SkipsEmptyApiID(t *testing.T) {
+	t.Parallel()
+	fake := &fakeAPIGWv2APIsLister{
+		listPages: []apigatewayv2.GetApisOutput{
+			{Items: []apigwv2types.Api{
+				{ApiId: aws.String("api-good")},
+				{ApiId: nil},
+				{ApiId: aws.String("")},
+				{ApiId: aws.String("api-also-good")},
+			}},
+		},
+	}
+	got, err := listApigatewayv2ApisWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{
+		`{"ApiId":"api-good"}`,
+		`{"ApiId":"api-also-good"}`,
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("empty-ID skip drift:\n got %v\nwant %v", got, want)
 	}
 }

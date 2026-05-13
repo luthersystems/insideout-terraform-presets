@@ -19,6 +19,9 @@ import (
 var awsTFTypeToServiceSlug = map[string]string{
 	"aws_acm_certificate":                 "acm_certificate",
 	"aws_apigatewayv2_api":                "apigatewayv2_api",
+	"aws_apigatewayv2_authorizer":         "apigatewayv2_authorizer",
+	"aws_apigatewayv2_integration":        "apigatewayv2_integration",
+	"aws_apigatewayv2_route":              "apigatewayv2_route",
 	"aws_apigatewayv2_stage":              "apigatewayv2_stage",
 	"aws_backup_plan":                     "backup_plan",
 	"aws_backup_selection":                "backup_selection",
@@ -29,6 +32,8 @@ var awsTFTypeToServiceSlug = map[string]string{
 	"aws_cloudwatch_event_rule":           "cloudwatch_event_rule",
 	"aws_cloudwatch_log_group":            "cloudwatchlogs",
 	"aws_cloudwatch_metric_alarm":         "cloudwatch_metric_alarm",
+	"aws_cognito_identity_provider":       "cognito_identity_provider",
+	"aws_cognito_resource_server":         "cognito_resource_server",
 	"aws_cognito_user_pool":               "cognito_user_pool",
 	"aws_cognito_user_pool_client":        "cognito_user_pool_client",
 	"aws_cognito_user_pool_domain":        "cognito_user_pool_domain",
