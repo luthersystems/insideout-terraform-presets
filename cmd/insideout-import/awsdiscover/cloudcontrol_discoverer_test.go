@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -11,6 +12,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cloudcontrol"
 	cctypes "github.com/aws/aws-sdk-go-v2/service/cloudcontrol/types"
 	smithy "github.com/aws/smithy-go"
+
+	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
 
 // errCCSeed is the package-level sentinel returned by the fake Cloud
@@ -42,8 +45,8 @@ type fakeCloudControlClient struct {
 	listErr                error
 
 	// GetResource wiring. propsByIdentifier maps the per-resource
-	// identifier to a (JSON-serialized) properties map; tests usually
-	// populate via the propsFor() helper to avoid raw JSON in tests.
+	// identifier to a properties map; the fake JSON-encodes it on
+	// each call so tests can use plain Go map literals.
 	// getResourceErrByIdentifier returns a per-identifier error
 	// (overrides the success path for that identifier only).
 	// getResourceErr is a blanket error for every GetResource call.
@@ -131,8 +134,9 @@ func testConfig() cloudControlConfig {
 // TestCloudControlDiscover_HappyPath exercises the full read path:
 // ListResources → per-id GetResource fan-out → tag extraction →
 // MatchesAll filter (none here) → ImportedResource emission. Pins
-// that Identity.Type, Identity.ImportID, Identity.NativeIDs["name"],
-// and Identity.Tags propagate as expected.
+// every load-bearing field by exact value (not just non-emptiness)
+// per-identifier so a mutation that swaps ImportID/NameHint, or that
+// hard-codes a stub value, doesn't survive.
 func TestCloudControlDiscover_HappyPath(t *testing.T) {
 	t.Parallel()
 	fake := &fakeCloudControlClient{
@@ -160,18 +164,35 @@ func TestCloudControlDiscover_HappyPath(t *testing.T) {
 	if len(got) != 2 {
 		t.Fatalf("len=%d, want 2", len(got))
 	}
+	byID := map[string]imported.ImportedResource{}
 	for _, ir := range got {
+		byID[ir.Identity.ImportID] = ir
+	}
+	for _, want := range []string{"vault-a", "vault-b"} {
+		ir, ok := byID[want]
+		if !ok {
+			t.Fatalf("expected to find ImportID=%q in emitted set; got keys %v", want, mapKeys(byID))
+		}
 		if ir.Identity.Type != "aws_test_resource" {
-			t.Errorf("Type=%q", ir.Identity.Type)
+			t.Errorf("%s: Type=%q, want aws_test_resource", want, ir.Identity.Type)
 		}
-		if ir.Identity.ImportID == "" {
-			t.Error("ImportID empty")
+		if ir.Identity.ImportID != want {
+			t.Errorf("%s: ImportID=%q, want %s", want, ir.Identity.ImportID, want)
 		}
-		if ir.Identity.NativeIDs["name"] == "" {
-			t.Error("NativeIDs[name] empty")
+		if ir.Identity.NameHint != want {
+			t.Errorf("%s: NameHint=%q, want %s", want, ir.Identity.NameHint, want)
+		}
+		if ir.Identity.NativeIDs["name"] != want {
+			t.Errorf("%s: NativeIDs[name]=%q, want %s", want, ir.Identity.NativeIDs["name"], want)
+		}
+		if ir.Identity.Region != "us-east-1" {
+			t.Errorf("%s: Region=%q, want us-east-1", want, ir.Identity.Region)
+		}
+		if ir.Identity.AccountID != "123" {
+			t.Errorf("%s: AccountID=%q, want 123", want, ir.Identity.AccountID)
 		}
 		if ir.Identity.Tags["Project"] != "io-foo" {
-			t.Errorf("Tags[Project]=%q, want io-foo", ir.Identity.Tags["Project"])
+			t.Errorf("%s: Tags[Project]=%q, want io-foo", want, ir.Identity.Tags["Project"])
 		}
 	}
 	// Output sorted by identifier — deterministic order.
@@ -255,9 +276,7 @@ func TestCloudControlDiscover_PerItemGetResourceSoftFails(t *testing.T) {
 		propsByIdentifier: map[string]map[string]any{
 			"good":     {},
 			"alsogood": {},
-			// "bad" not present in propsByIdentifier and not in
-			// getResourceErrByIdentifier — but we route it to a
-			// permission error explicitly:
+			// "bad" routes through getResourceErrByIdentifier below.
 		},
 		getResourceErrByIdentifier: map[string]error{
 			"bad": errors.New("AccessDeniedException: not authorized"),
@@ -295,8 +314,15 @@ func TestCloudControlDiscover_PerItemGetResourceSoftFails(t *testing.T) {
 	if warns[0].Region != "us-east-1" {
 		t.Errorf("warn region=%q, want us-east-1", warns[0].Region)
 	}
+	// Identifier appears in the formatted message.
 	if !strings.Contains(warns[0].Message, "bad") {
 		t.Errorf("warn message=%q does not mention bad identifier", warns[0].Message)
+	}
+	// Underlying SDK error must also propagate — a regression that
+	// drops `err` from the format string would survive only the
+	// identifier-substring check.
+	if !strings.Contains(warns[0].Message, "AccessDenied") {
+		t.Errorf("warn message=%q does not include the underlying SDK error", warns[0].Message)
 	}
 }
 
@@ -351,6 +377,20 @@ func TestCloudControlDiscover_MultiRegionTriggersOneCallPerRegion(t *testing.T) 
 	}
 	if len(got) != 2 {
 		t.Fatalf("len=%d, want 2 (one per region)", len(got))
+	}
+	// Region threading: each emitted resource must carry the region
+	// it was discovered in. A regression that stamps every result with
+	// regions[0] (or the loop's last region) survives the count check
+	// but breaks the inspector's per-region drill-down.
+	regionByID := map[string]string{}
+	for _, ir := range got {
+		regionByID[ir.Identity.ImportID] = ir.Identity.Region
+	}
+	if regionByID["east-a"] != "us-east-1" {
+		t.Errorf("east-a Region=%q, want us-east-1", regionByID["east-a"])
+	}
+	if regionByID["west-b"] != "eu-west-1" {
+		t.Errorf("west-b Region=%q, want eu-west-1", regionByID["west-b"])
 	}
 }
 
@@ -490,8 +530,6 @@ func TestCloudControlDiscover_ParentListerFansOutPerParent(t *testing.T) {
 	// Instead, route through a per-parent-list page builder.
 	parentACalls := 0
 	parentBCalls := 0
-	originalListResources := fake.ListResources
-	_ = originalListResources
 	listMux := func(in *cloudcontrol.ListResourcesInput) (*cloudcontrol.ListResourcesOutput, error) {
 		if in.ResourceModel == nil {
 			return nil, errors.New("expected ResourceModel for parent-scoped list")
@@ -556,8 +594,10 @@ func (c *parentMuxClient) GetResource(ctx context.Context, in *cloudcontrol.GetR
 }
 
 // TestCloudControlDiscoverByID_HappyPath pins single-resource lookup:
-// one GetResource call, ImportedResource emitted with correct
-// Type/NameHint/ImportID/Tags.
+// one GetResource call, ImportedResource emitted with every load-bearing
+// Identity field set. DiscoverByID has a parallel-but-not-identical
+// extraction path to Discover (no fanout, no MatchesAll, no Project
+// filter), so each field deserves an independent pin.
 func TestCloudControlDiscoverByID_HappyPath(t *testing.T) {
 	t.Parallel()
 	fake := &fakeCloudControlClient{
@@ -575,10 +615,22 @@ func TestCloudControlDiscoverByID_HappyPath(t *testing.T) {
 		t.Fatal(err)
 	}
 	if got.Identity.Type != "aws_test_resource" {
-		t.Errorf("Type=%q", got.Identity.Type)
+		t.Errorf("Type=%q, want aws_test_resource", got.Identity.Type)
 	}
 	if got.Identity.ImportID != "vault-x" {
 		t.Errorf("ImportID=%q, want vault-x", got.Identity.ImportID)
+	}
+	if got.Identity.NameHint != "vault-x" {
+		t.Errorf("NameHint=%q, want vault-x", got.Identity.NameHint)
+	}
+	if got.Identity.NativeIDs["name"] != "vault-x" {
+		t.Errorf("NativeIDs[name]=%q, want vault-x", got.Identity.NativeIDs["name"])
+	}
+	if got.Identity.Region != "us-east-1" {
+		t.Errorf("Region=%q, want us-east-1", got.Identity.Region)
+	}
+	if got.Identity.AccountID != "123" {
+		t.Errorf("AccountID=%q, want 123", got.Identity.AccountID)
 	}
 	if got.Identity.Tags["env"] != "dev" {
 		t.Errorf("Tags[env]=%q, want dev", got.Identity.Tags["env"])
@@ -677,18 +729,25 @@ func TestCloudControlDiscover_EmitsServiceStartFinish_PerRegion(t *testing.T) {
 	}
 	events := rec.snapshot()
 
-	type bracket struct{ start, finish int }
+	type bracket struct {
+		startIdx, finishIdx int
+		finishCount         int
+	}
 	got := map[string]bracket{}
+	counts := map[[2]string]int{} // (kind, region) → count, for cardinality pin
 	for i, e := range events {
 		switch e.Kind {
 		case "service_start":
 			b := got[e.Region]
-			b.start = i + 1
+			b.startIdx = i + 1
 			got[e.Region] = b
+			counts[[2]string{"service_start", e.Region}]++
 		case "service_finish":
 			b := got[e.Region]
-			b.finish = i + 1
+			b.finishIdx = i + 1
+			b.finishCount = e.Count
 			got[e.Region] = b
+			counts[[2]string{"service_finish", e.Region}]++
 		}
 		if e.Kind == "service_start" || e.Kind == "service_finish" {
 			if e.Service != "testres" {
@@ -698,11 +757,28 @@ func TestCloudControlDiscover_EmitsServiceStartFinish_PerRegion(t *testing.T) {
 	}
 	for _, region := range []string{"us-east-1", "eu-west-1"} {
 		b := got[region]
-		if b.start == 0 || b.finish == 0 {
+		if b.startIdx == 0 || b.finishIdx == 0 {
 			t.Errorf("region %s: missing service_start or service_finish: %+v", region, b)
 		}
-		if b.start >= b.finish {
-			t.Errorf("region %s: start at index %d >= finish at index %d", region, b.start, b.finish)
+		if b.startIdx >= b.finishIdx {
+			t.Errorf("region %s: start at index %d >= finish at index %d", region, b.startIdx, b.finishIdx)
+		}
+		// Cardinality pin (#295): exactly one service_start and one
+		// service_finish per region. A regression that double-emits
+		// (e.g. ServiceStart at top-of-region AND inside ParentLister
+		// branch) would otherwise be silently masked by the
+		// last-write-wins index map.
+		if counts[[2]string{"service_start", region}] != 1 {
+			t.Errorf("region %s: service_start count=%d, want 1", region, counts[[2]string{"service_start", region}])
+		}
+		if counts[[2]string{"service_finish", region}] != 1 {
+			t.Errorf("region %s: service_finish count=%d, want 1", region, counts[[2]string{"service_finish", region}])
+		}
+		// Count field on service_finish must match the per-region
+		// emitted count (1 per region in this fixture). A regression
+		// dropping the regionCount++ would survive only here.
+		if b.finishCount != 1 {
+			t.Errorf("region %s: service_finish.Count=%d, want 1", region, b.finishCount)
 		}
 	}
 }
@@ -744,10 +820,25 @@ func TestCloudControlDiscover_EmitsItemFound_PerResource(t *testing.T) {
 	if len(items) != len(got) {
 		t.Errorf("item_found count=%d, want %d (one per emitted resource)", len(items), len(got))
 	}
+	// Each item_found event must carry the resource's actual ImportID,
+	// not "" or a stub. Build the expected ID set from `got` so the
+	// assertion can't drift from production behavior.
+	wantIDs := map[string]bool{}
+	for _, ir := range got {
+		wantIDs[ir.Identity.ImportID] = true
+	}
+	gotIDs := map[string]bool{}
 	for _, it := range items {
 		if it.TFType != "aws_test_resource" {
 			t.Errorf("item TFType=%q, want aws_test_resource", it.TFType)
 		}
+		if !wantIDs[it.ImportID] {
+			t.Errorf("item ImportID=%q not in expected set %v", it.ImportID, wantIDs)
+		}
+		gotIDs[it.ImportID] = true
+	}
+	if len(gotIDs) != len(wantIDs) {
+		t.Errorf("item_found unique ImportIDs=%d, want %d (duplicates or drops)", len(gotIDs), len(wantIDs))
 	}
 }
 
@@ -894,6 +985,277 @@ func TestExtractString(t *testing.T) {
 	if got := extractString(map[string]any{}, "missing"); got != "" {
 		t.Errorf("missing key: got %q, want \"\"", got)
 	}
+}
+
+// TestCloudControlDiscover_CtxCancellationPropagatesToFanout pins the
+// gctx.Err() checks inside the per-item GetResource fan-out. Without
+// these the production code would silently complete (or hang) after a
+// shutdown signal; a regression deleting both checks survives every
+// other test because they never cancel ctx.
+//
+// Strategy: pre-cancel the context, then run Discover with enough
+// identifiers to force the errgroup loop. Expect a context-error
+// return.
+func TestCloudControlDiscover_CtxCancellationPropagatesToFanout(t *testing.T) {
+	t.Parallel()
+	fake := &fakeCloudControlClient{
+		listPages: []cloudcontrol.ListResourcesOutput{
+			listPage("", "a", "b", "c"),
+		},
+		propsByIdentifier: map[string]map[string]any{
+			"a": {}, "b": {}, "c": {},
+		},
+	}
+	d := &cloudControlDiscoverer{
+		cfg:            testConfig(),
+		new:            func(_ string) cloudControlClient { return fake },
+		maxConcurrency: DefaultMaxConcurrency,
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // pre-cancel
+	_, err := d.Discover(ctx, DiscoverArgs{
+		Regions:   []string{"us-east-1"},
+		AccountID: "123",
+	})
+	// The discoverer either propagates ctx.Canceled (via the gctx.Err()
+	// check inside the goroutine) or surfaces it through the
+	// ListResources paginator (the SDK passes ctx through to net/http,
+	// which yields a context-cancelled error). Either path is correct;
+	// what matters is the error is recognizable as cancellation.
+	if err == nil {
+		t.Fatal("expected error, got nil — discoverer ignored ctx cancellation")
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("err=%v, want errors.Is(err, context.Canceled)", err)
+	}
+}
+
+// TestCloudControlDiscover_NativeIDsFromPropertiesPropagates pins the
+// optional NativeIDsFromProperties branch. The aws_backup_vault config
+// uses this to stamp the vault ARN under Identity.NativeIDs["arn"];
+// without this test a regression that drops the call (or assigns nil
+// to `native`) survives.
+func TestCloudControlDiscover_NativeIDsFromPropertiesPropagates(t *testing.T) {
+	t.Parallel()
+	fake := &fakeCloudControlClient{
+		listPages: []cloudcontrol.ListResourcesOutput{
+			listPage("", "vault-x"),
+		},
+		propsByIdentifier: map[string]map[string]any{
+			"vault-x": {
+				"BackupVaultName": "vault-x",
+				"BackupVaultArn":  "arn:aws:backup:us-east-1:123:backup-vault:vault-x",
+			},
+		},
+	}
+	cfg := testConfig()
+	cfg.NativeIDsFromProperties = func(_ string, props map[string]any) map[string]string {
+		arn := extractString(props, "BackupVaultArn")
+		if arn == "" {
+			return nil
+		}
+		return map[string]string{"arn": arn}
+	}
+	d := &cloudControlDiscoverer{
+		cfg:            cfg,
+		new:            func(_ string) cloudControlClient { return fake },
+		maxConcurrency: DefaultMaxConcurrency,
+	}
+	got, err := d.Discover(context.Background(), DiscoverArgs{
+		Regions:   []string{"us-east-1"},
+		AccountID: "123",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("len=%d, want 1", len(got))
+	}
+	if got[0].Identity.NativeIDs["arn"] != "arn:aws:backup:us-east-1:123:backup-vault:vault-x" {
+		t.Errorf("NativeIDs[arn]=%q, want the BackupVaultArn", got[0].Identity.NativeIDs["arn"])
+	}
+}
+
+// TestCloudControlDiscover_ParentListerReturnsEmptyEmitsCleanFinish
+// pins the early-exit branch when ParentLister returns an empty slice.
+// Expected behavior: emit one ServiceStart + one ServiceFinish per
+// region with Count=0 and continue (NOT abort with error). A
+// regression that converts the continue into a return-nil-error or a
+// hard-fail would survive only here.
+func TestCloudControlDiscover_ParentListerReturnsEmptyEmitsCleanFinish(t *testing.T) {
+	t.Parallel()
+	cfg := testConfig()
+	cfg.ParentLister = func(_ context.Context, _ cloudControlClient, _ DiscoverArgs) ([]string, error) {
+		return []string{}, nil
+	}
+	d := &cloudControlDiscoverer{
+		cfg:            cfg,
+		new:            func(_ string) cloudControlClient { return &fakeCloudControlClient{} },
+		maxConcurrency: DefaultMaxConcurrency,
+	}
+	rec := &recordingEmitter{}
+	got, err := d.Discover(context.Background(), DiscoverArgs{
+		Regions:   []string{"us-east-1"},
+		AccountID: "123",
+		Emitter:   rec,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("len=%d, want 0", len(got))
+	}
+	var starts, finishes int
+	for _, e := range rec.snapshot() {
+		switch e.Kind {
+		case "service_start":
+			starts++
+		case "service_finish":
+			finishes++
+			if e.Count != 0 {
+				t.Errorf("service_finish.Count=%d, want 0", e.Count)
+			}
+		}
+	}
+	if starts != 1 || finishes != 1 {
+		t.Errorf("starts=%d finishes=%d, want 1 each", starts, finishes)
+	}
+}
+
+// TestCloudControlDiscover_ParentListerErrorEmitsFinishAndPropagates
+// pins the parent-enumeration error path. Expected: emit
+// ServiceFinish(count=0) and propagate the error through %w so
+// errors.Is unwraps to the sentinel. A regression that swallows the
+// error or drops the ServiceFinish would survive only here.
+func TestCloudControlDiscover_ParentListerErrorEmitsFinishAndPropagates(t *testing.T) {
+	t.Parallel()
+	cfg := testConfig()
+	cfg.ParentLister = func(_ context.Context, _ cloudControlClient, _ DiscoverArgs) ([]string, error) {
+		return nil, errCCSeed
+	}
+	d := &cloudControlDiscoverer{
+		cfg:            cfg,
+		new:            func(_ string) cloudControlClient { return &fakeCloudControlClient{} },
+		maxConcurrency: DefaultMaxConcurrency,
+	}
+	rec := &recordingEmitter{}
+	_, err := d.Discover(context.Background(), DiscoverArgs{
+		Regions:   []string{"us-east-1"},
+		AccountID: "123",
+		Emitter:   rec,
+	})
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !errors.Is(err, errCCSeed) {
+		t.Errorf("err=%v, want errors.Is(err, errCCSeed)", err)
+	}
+	var finishes int
+	for _, e := range rec.snapshot() {
+		if e.Kind == "service_finish" {
+			finishes++
+			if e.Count != 0 {
+				t.Errorf("service_finish.Count=%d, want 0", e.Count)
+			}
+		}
+	}
+	if finishes != 1 {
+		t.Errorf("service_finish count=%d, want 1 (error path must still close the bracket)", finishes)
+	}
+}
+
+// TestCloudControlDiscover_PropagatesListError_AlsoEmitsServiceFinish
+// pins the ListResources-error path's ServiceFinish bracket close.
+// Existing TestCloudControlDiscover_PropagatesListError covers the
+// error propagation but uses no emitter; this companion verifies the
+// emitted brackets.
+func TestCloudControlDiscover_PropagatesListError_AlsoEmitsServiceFinish(t *testing.T) {
+	t.Parallel()
+	fake := &fakeCloudControlClient{listErr: errCCSeed}
+	d := &cloudControlDiscoverer{
+		cfg:            testConfig(),
+		new:            func(_ string) cloudControlClient { return fake },
+		maxConcurrency: DefaultMaxConcurrency,
+	}
+	rec := &recordingEmitter{}
+	_, err := d.Discover(context.Background(), DiscoverArgs{
+		Regions:   []string{"us-east-1"},
+		AccountID: "123",
+		Emitter:   rec,
+	})
+	if !errors.Is(err, errCCSeed) {
+		t.Fatalf("err=%v, want errors.Is(err, errCCSeed)", err)
+	}
+	var starts, finishes int
+	for _, e := range rec.snapshot() {
+		switch e.Kind {
+		case "service_start":
+			starts++
+		case "service_finish":
+			finishes++
+			if e.Count != 0 {
+				t.Errorf("service_finish.Count=%d, want 0 (no items emitted on error path)", e.Count)
+			}
+		}
+	}
+	if starts != 1 || finishes != 1 {
+		t.Errorf("starts=%d finishes=%d, want 1 each (error path must still close the bracket)", starts, finishes)
+	}
+}
+
+// TestCloudControlDiscoverByID_MalformedIdentifierMapsToErrNotSupported
+// pins the InvalidRequestException / ValidationException → ErrNotSupported
+// branch. Stage 2c3's dep-chase loop converts ErrNotSupported into a
+// "try another discoverer" signal, so misclassifying it as a hard
+// error breaks dep-chase. A regression that drops the malformed-id
+// branch would resurface garbage identifiers as fatal SDK errors.
+func TestCloudControlDiscoverByID_MalformedIdentifierMapsToErrNotSupported(t *testing.T) {
+	t.Parallel()
+	fake := &fakeCloudControlClient{
+		// Smithy APIError shape — what the real SDK returns for a
+		// validation failure on identifier shape.
+		getResourceErr: &smithy.GenericAPIError{
+			Code:    "ValidationException",
+			Message: "Identifier 'garbage' is not valid for AWS::Backup::BackupVault",
+			Fault:   smithy.FaultClient,
+		},
+	}
+	d := &cloudControlDiscoverer{
+		cfg:            testConfig(),
+		new:            func(_ string) cloudControlClient { return fake },
+		maxConcurrency: DefaultMaxConcurrency,
+	}
+	_, err := d.DiscoverByID(context.Background(), "garbage", "us-east-1", "123")
+	if !errors.Is(err, ErrNotSupported) {
+		t.Errorf("err=%v, want ErrNotSupported (via ValidationException ErrorCode)", err)
+	}
+}
+
+// TestParentLabelFromModel pins the formatting helper directly. The
+// parent-lister fan-out test exercises it indirectly only through
+// soft-fail messages; a regression that returns the wrong shape (e.g.
+// drops the leading space, or returns "parent=X" instead of
+// "(parent=X)") would survive otherwise.
+func TestParentLabelFromModel(t *testing.T) {
+	t.Parallel()
+	if got := parentLabelFromModel(""); got != "" {
+		t.Errorf("empty model: got %q, want \"\"", got)
+	}
+	want := ` (parent={"UserPoolId":"A"})`
+	if got := parentLabelFromModel(`{"UserPoolId":"A"}`); got != want {
+		t.Errorf("populated model: got %q, want %q", got, want)
+	}
+}
+
+// mapKeys returns the keys of a map in sorted order. Used to produce
+// stable diagnostic output when an assertion fails.
+func mapKeys(m map[string]imported.ImportedResource) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // mapEqual is a small helper to avoid pulling in reflect.DeepEqual /

@@ -147,6 +147,11 @@ func (d *cloudControlDiscoverer) Discover(ctx context.Context, args DiscoverArgs
 		regionStart := time.Now()
 		args.Emitter.ServiceStart(d.cfg.Slug, region)
 		client := d.new(region)
+		// regionCount tracks the per-region emit count so every
+		// ServiceFinish on every exit path attributes the right number
+		// to *this* region (not the cross-region accumulator). Matches
+		// the pattern in sqs.go / lambda.go.
+		regionCount := 0
 
 		// Per-parent enumeration: ParentLister returns N parent-scoped
 		// resource-model JSON strings; for non-parent types it returns
@@ -155,14 +160,14 @@ func (d *cloudControlDiscoverer) Discover(ctx context.Context, args DiscoverArgs
 		if d.cfg.ParentLister != nil {
 			models, err := d.cfg.ParentLister(ctx, client, args)
 			if err != nil {
-				args.Emitter.ServiceFinish(d.cfg.Slug, region, 0, time.Since(regionStart))
+				args.Emitter.ServiceFinish(d.cfg.Slug, region, regionCount, time.Since(regionStart))
 				return nil, fmt.Errorf("%s parent enumeration (region=%s): %w", d.cfg.Slug, region, err)
 			}
 			parentModels = models
 			if len(parentModels) == 0 {
 				// No parents discovered — nothing to enumerate; close
 				// the scope cleanly.
-				args.Emitter.ServiceFinish(d.cfg.Slug, region, 0, time.Since(regionStart))
+				args.Emitter.ServiceFinish(d.cfg.Slug, region, regionCount, time.Since(regionStart))
 				continue
 			}
 		}
@@ -187,7 +192,7 @@ func (d *cloudControlDiscoverer) Discover(ctx context.Context, args DiscoverArgs
 			for paginator.HasMorePages() {
 				page, err := paginator.NextPage(ctx)
 				if err != nil {
-					args.Emitter.ServiceFinish(d.cfg.Slug, region, len(out), time.Since(regionStart))
+					args.Emitter.ServiceFinish(d.cfg.Slug, region, regionCount, time.Since(regionStart))
 					return nil, fmt.Errorf("ListResources %s (region=%s): %w", d.cfg.CloudFormationType, region, err)
 				}
 				for _, desc := range page.ResourceDescriptions {
@@ -252,13 +257,12 @@ func (d *cloudControlDiscoverer) Discover(ctx context.Context, args DiscoverArgs
 			})
 		}
 		if err := g.Wait(); err != nil {
-			args.Emitter.ServiceFinish(d.cfg.Slug, region, len(out), time.Since(regionStart))
+			args.Emitter.ServiceFinish(d.cfg.Slug, region, regionCount, time.Since(regionStart))
 			return nil, fmt.Errorf("GetResource %s (region=%s): %w", d.cfg.CloudFormationType, region, err)
 		}
 
 		sort.Slice(done, func(i, j int) bool { return done[i].identifier < done[j].identifier })
 
-		regionCount := 0
 		for _, f := range done {
 			// Legacy Project tag back-compat (matches lambda.go:161).
 			if args.Project != "" && f.tags["Project"] != args.Project {
@@ -315,6 +319,12 @@ func (d *cloudControlDiscoverer) DiscoverByID(ctx context.Context, id, region, a
 	if err != nil {
 		if isCloudControlNotFound(err) {
 			return imported.ImportedResource{}, fmt.Errorf("%s %q: %w", d.cfg.TFType, id, ErrNotFound)
+		}
+		if isCloudControlMalformedIdentifier(err) {
+			// Cloud Control rejected the identifier shape — Stage 2c3's
+			// dep-chase loop treats this as "not parseable by this
+			// discoverer" so it can try a different one.
+			return imported.ImportedResource{}, fmt.Errorf("%s %q: %w", d.cfg.TFType, id, ErrNotSupported)
 		}
 		return imported.ImportedResource{}, fmt.Errorf("GetResource %s: %w", d.cfg.CloudFormationType, err)
 	}
@@ -394,10 +404,35 @@ func isCloudControlNotFound(err error) bool {
 	return false
 }
 
+// isCloudControlMalformedIdentifier returns true when the underlying SDK
+// error is Cloud Control's ValidationException or InvalidRequestException
+// — the codes the service returns when a primary-identifier string is
+// the wrong shape for the requested TypeName (e.g. an SQS queue URL
+// passed for AWS::Backup::BackupVault). Stage 2c3's dep-chase loop
+// treats this as "this discoverer cannot parse the id", letting it
+// fall through to a sibling discoverer rather than hard-failing.
+func isCloudControlMalformedIdentifier(err error) bool {
+	if err == nil {
+		return false
+	}
+	var validation *cctypes.InvalidRequestException
+	if errors.As(err, &validation) {
+		return true
+	}
+	var apiErr smithy.APIError
+	if errors.As(err, &apiErr) {
+		code := apiErr.ErrorCode()
+		return code == "ValidationException" || code == "InvalidRequestException"
+	}
+	return false
+}
+
 // parentLabelFromModel formats a parent-scoped resource-model JSON for
 // inclusion in a soft-fail ServiceWarn message. Returns "" when the
-// model is empty (non-parent-scoped scope). Used only to annotate
-// warnings — the discoverer does not parse the model itself.
+// model is empty (non-parent-scoped scope). The "(parent=…)" suffix
+// includes a leading space so call sites can use a bare "%s" concat
+// without their own separator; that placement is load-bearing because
+// the suffix is conditionally empty.
 func parentLabelFromModel(parentModel string) string {
 	if parentModel == "" {
 		return ""

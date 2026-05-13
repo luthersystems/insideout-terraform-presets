@@ -160,11 +160,11 @@ func NewAWSDiscovererWithConcurrency(cfg aws.Config, maxConcurrency int) *AWSDis
 		"aws_resourceexplorer2_view":          newResourceExplorer2ViewDiscoverer(cfg, maxConcurrency),
 	}
 	// Cloud Control-routed types (Bundle 13): each entry in
-	// cloudControlTypeConfigs becomes one generic-discoverer registration.
-	// The genericdiscoverer carries the per-type TypeName + extractors in
-	// cfg so this loop is the only place new Cloud Control-covered types
-	// need wiring. See cloudcontrol_types.go for the registry and
-	// cloudcontrol_discoverer.go for the implementation.
+	// cloudControlTypeConfigs becomes one cloudControlDiscoverer
+	// registration. The cloudControlDiscoverer carries the per-type
+	// TypeName + extractors in cfg so this loop is the only place new
+	// Cloud Control-covered types need wiring. See cloudcontrol_types.go
+	// for the registry and cloudcontrol_discoverer.go for the implementation.
 	for _, ccCfg := range cloudControlTypeConfigs {
 		byType[ccCfg.TFType] = newCloudControlDiscoverer(ccCfg, cfg, maxConcurrency)
 	}
