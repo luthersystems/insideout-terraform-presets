@@ -40,7 +40,7 @@
     {
       "service": "apigatewayv2_authorizer",
       "iam_action": "apigateway:GET",
-      "purpose": "Cloud Control GetResource for aws_apigatewayv2_authorizer delegates to apigateway:GET (GET /apis/*/authorizers/*)"
+      "purpose": "Cloud Control GetResource for aws_apigatewayv2_authorizer delegates to apigateway:GET (GET /apis/*/authorizers/*); also covers parent enumeration (GET /apis) to fan ListResources out per ApiId"
     },
     {
       "service": "apigatewayv2_authorizer",
@@ -55,7 +55,7 @@
     {
       "service": "apigatewayv2_integration",
       "iam_action": "apigateway:GET",
-      "purpose": "Cloud Control GetResource for aws_apigatewayv2_integration delegates to apigateway:GET (GET /apis/*/integrations/*)"
+      "purpose": "Cloud Control GetResource for aws_apigatewayv2_integration delegates to apigateway:GET (GET /apis/*/integrations/*); also covers parent enumeration (GET /apis) to fan ListResources out per ApiId"
     },
     {
       "service": "apigatewayv2_integration",
@@ -70,7 +70,7 @@
     {
       "service": "apigatewayv2_route",
       "iam_action": "apigateway:GET",
-      "purpose": "Cloud Control GetResource for aws_apigatewayv2_route delegates to apigateway:GET (GET /apis/*/routes/*)"
+      "purpose": "Cloud Control GetResource for aws_apigatewayv2_route delegates to apigateway:GET (GET /apis/*/routes/*); also covers parent enumeration (GET /apis) to fan ListResources out per ApiId"
     },
     {
       "service": "apigatewayv2_route",

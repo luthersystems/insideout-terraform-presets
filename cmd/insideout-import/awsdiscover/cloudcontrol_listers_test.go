@@ -433,14 +433,19 @@ func TestListACMCertificates_EmptyReturnsNonNilEmpty(t *testing.T) {
 
 // fakeAPIGWv2APIsLister is a hand-rolled fake for the ApiGatewayV2 SDK
 // subset used by listApigatewayv2Apis. Mirrors the fake-and-pagination
-// shape of the other listers in this file.
+// shape of the other listers in this file. tokensSeen captures each
+// in.NextToken value the lister sends so tests can pin that the
+// pagination cursor is actually round-tripped between pages (not just
+// "called 3 times").
 type fakeAPIGWv2APIsLister struct {
-	listPages []apigatewayv2.GetApisOutput
-	listCalls int
-	listErr   error
+	listPages   []apigatewayv2.GetApisOutput
+	listCalls   int
+	listErr     error
+	tokensSeen  []*string
 }
 
-func (f *fakeAPIGWv2APIsLister) GetApis(_ context.Context, _ *apigatewayv2.GetApisInput, _ ...func(*apigatewayv2.Options)) (*apigatewayv2.GetApisOutput, error) {
+func (f *fakeAPIGWv2APIsLister) GetApis(_ context.Context, in *apigatewayv2.GetApisInput, _ ...func(*apigatewayv2.Options)) (*apigatewayv2.GetApisOutput, error) {
+	f.tokensSeen = append(f.tokensSeen, in.NextToken)
 	if f.listErr != nil {
 		return nil, f.listErr
 	}
@@ -497,6 +502,26 @@ func TestListApigatewayv2Apis_PaginatesAndReturnsModels(t *testing.T) {
 	if fake.listCalls != 3 {
 		t.Errorf("listCalls=%d, want 3 (paginated across three pages)", fake.listCalls)
 	}
+	// Pin the pagination cursor round-trip: the lister must feed
+	// each page's NextToken into the next request. A regression that
+	// passes `nil` on every call (e.g. dropping `nextToken =
+	// page.NextToken`) would still produce 3 calls because the fake
+	// serves pages by call-count — only this assertion catches it.
+	if len(fake.tokensSeen) != 3 {
+		t.Fatalf("tokensSeen len=%d, want 3", len(fake.tokensSeen))
+	}
+	if fake.tokensSeen[0] != nil {
+		t.Errorf("tokensSeen[0]=%q, want nil (first request must not send a NextToken)",
+			aws.ToString(fake.tokensSeen[0]))
+	}
+	if aws.ToString(fake.tokensSeen[1]) != "tok1" {
+		t.Errorf("tokensSeen[1]=%q, want tok1 (must round-trip page-1's NextToken)",
+			aws.ToString(fake.tokensSeen[1]))
+	}
+	if aws.ToString(fake.tokensSeen[2]) != "tok2" {
+		t.Errorf("tokensSeen[2]=%q, want tok2 (must round-trip page-2's NextToken)",
+			aws.ToString(fake.tokensSeen[2]))
+	}
 	// Each emitted model must round-trip as JSON with the ApiId key
 	// present — a malformed string would crash the downstream CC
 	// ListResources call.
@@ -547,6 +572,37 @@ func TestListApigatewayv2Apis_PropagatesListError(t *testing.T) {
 	_, err := listApigatewayv2ApisWithClient(context.Background(), fake)
 	if !errors.Is(err, sentinel) {
 		t.Errorf("error chain: got %v, want chain containing %v", err, sentinel)
+	}
+}
+
+// TestListApigatewayv2Apis_EmptyStringNextTokenTerminates pins the
+// other half of the pagination terminator: the loop must also break
+// when GetApis returns NextToken=&"" (an empty pointer, not nil) on
+// the final page. The lister guards on both `nil` AND
+// `aws.ToString(*token) == ""`; without the empty-string branch we'd
+// loop forever passing an empty token to GetApis (which most likely
+// returns an error or silently restarts pagination).
+func TestListApigatewayv2Apis_EmptyStringNextTokenTerminates(t *testing.T) {
+	t.Parallel()
+	fake := &fakeAPIGWv2APIsLister{
+		listPages: []apigatewayv2.GetApisOutput{
+			// Final page deliberately has NextToken=&"" rather than nil.
+			{
+				Items:     []apigwv2types.Api{{ApiId: aws.String("api-final")}},
+				NextToken: aws.String(""),
+			},
+		},
+	}
+	got, err := listApigatewayv2ApisWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !reflect.DeepEqual(got, []string{`{"ApiId":"api-final"}`}) {
+		t.Errorf("models drift: got %v, want [api-final only]", got)
+	}
+	if fake.listCalls != 1 {
+		t.Errorf("listCalls=%d, want 1 (empty-string NextToken must terminate the loop, not trigger another GetApis)",
+			fake.listCalls)
 	}
 }
 

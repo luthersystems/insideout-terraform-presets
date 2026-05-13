@@ -744,6 +744,15 @@ func TestApigatewayv2RouteConfig(t *testing.T) {
 	if got := cfg.ImportIDFromIdentifier(id, nil); got != "aabbccddee/1122334" {
 		t.Errorf("ImportID rewrite |→/: got %q, want %q", got, "aabbccddee/1122334")
 	}
+	// First-`|`-only rewrite contract: a hypothetical identifier
+	// containing a literal `|` inside a segment (extremely unlikely
+	// for ApiGatewayV2 RouteIds but defended for symmetry with the
+	// SplitN-on-`|`-cap-2 NativeIDs branch) must preserve every
+	// `|` after the first.
+	if got := cfg.ImportIDFromIdentifier("api|route|with|pipes", nil); got != "api/route|with|pipes" {
+		t.Errorf("ImportID multi-pipe (first-only rewrite): got %q, want %q",
+			got, "api/route|with|pipes")
+	}
 
 	props := map[string]any{"RouteKey": "POST /signup"}
 	if got := cfg.NameHintFromProperties(id, props); got != "POST /signup" {
@@ -764,6 +773,9 @@ func TestApigatewayv2RouteConfig(t *testing.T) {
 		t.Errorf("NativeIDs malformed-id: got %+v, want nil", got)
 	}
 
+	// Even with a populated Tags input, emptyTagsExtractor must
+	// discard it and return the non-nil empty map — the input is a
+	// no-op for genuinely-untaggable types.
 	tags := cfg.TagsFromProperties(map[string]any{"Tags": []any{
 		map[string]any{"Key": "env", "Value": "prod"},
 	}})
@@ -771,7 +783,7 @@ func TestApigatewayv2RouteConfig(t *testing.T) {
 		t.Fatal("Tags must be non-nil empty map per #255 contract")
 	}
 	if len(tags) != 0 {
-		t.Errorf("Tags: got %v, want empty map (untaggable)", tags)
+		t.Errorf("Tags: got %v, want empty map (untaggable; emptyTagsExtractor ignores input)", tags)
 	}
 }
 
@@ -910,8 +922,15 @@ func TestCognitoIdentityProviderConfig(t *testing.T) {
 	// `|`→`/` rewrite shared with apigatewayv2 children would emit an
 	// import statement Terraform rejects.
 	if got := cfg.ImportIDFromIdentifier(id, nil); got != "us-east-1_AbCdE:CorpAD" {
-		t.Errorf("ImportID rewrite |→: (colon, not slash): got %q, want %q",
+		t.Errorf("ImportID rewrite |→COLON (not slash): got %q, want %q",
 			got, "us-east-1_AbCdE:CorpAD")
+	}
+	// First-`|`-only rewrite: defensive pin matching the
+	// SplitN-on-`|`-cap-2 NativeIDs branch — any `|` past the first
+	// must survive verbatim.
+	if got := cfg.ImportIDFromIdentifier("pool|name|with|pipes", nil); got != "pool:name|with|pipes" {
+		t.Errorf("ImportID multi-pipe (first-only rewrite): got %q, want %q",
+			got, "pool:name|with|pipes")
 	}
 
 	props := map[string]any{"ProviderName": "CorpAD"}
