@@ -334,11 +334,13 @@ func TestLookupRule(t *testing.T) {
 		{name: "apigatewayv2_api", arn: "arn:aws:apigateway:us-east-1::/apis/4hmoaslnr0",
 			wantCFN: "AWS::ApiGatewayV2::Api", wantIdent: "4hmoaslnr0"},
 
-		// API Gateway v2 — Stage URL-path-style should NOT match the Api rule
-		// (matchExtra rejects resourceID containing "/"). No Stage rule
-		// declared today (Cloud Control READ-unsupported).
-		{name: "apigatewayv2_stage_unmapped", arn: "arn:aws:apigateway:us-east-1::/apis/4hmoaslnr0/stages/$default",
-			wantNoMatch: true},
+		// API Gateway v2 — Stage URL-path-style matches an explicit
+		// known-skip rule (cfnType=="") so RGT silently drops it
+		// without a "no arnRule" warning. The hand-rolled
+		// apigatewayv2_stage discoverer owns this type (Cloud Control
+		// READ-unsupported).
+		{name: "apigatewayv2_stage_known_skip", arn: "arn:aws:apigateway:us-east-1::/apis/4hmoaslnr0/stages/$default",
+			wantCFN: "", wantIdent: "4hmoaslnr0/stages/$default"},
 
 		// REST API v1 — explicitly unmapped (only v2 in table today)
 		{name: "apigateway_v1_restapi_unmapped", arn: "arn:aws:apigateway:us-east-1::/restapis/abc123",
@@ -401,13 +403,13 @@ func TestLookupRule(t *testing.T) {
 }
 
 // TestLookupRule_ApiGatewayDisambiguation pins the matchExtra behavior
-// for the AWS::ApiGatewayV2::Api rule: a bare api ARN must match (no "/"
-// in resourceID), but a stage ARN under the same `apis` parent must NOT
-// match the Api rule. The Stage rule is intentionally absent from the
-// table today (Cloud Control returns UnsupportedActionException for
-// READ on AWS::ApiGatewayV2::Stage; see issue #406 and the hand-rolled
-// apigatewayv2_stage.go discoverer that continues to handle Stages via
-// the per-service SDK).
+// for the two ApiGatewayV2 rules: a bare api ARN matches the Api rule
+// (no "/" in resourceID), but a stage ARN under the same `apis` parent
+// matches the explicit known-skip rule (cfnType==""). The RGT
+// prefetcher reads cfnType=="" as "matched but intentionally not
+// bucketed — drop silently" (no warning, no fallback). The hand-rolled
+// apigatewayv2_stage discoverer owns Stages (Cloud Control READ
+// unsupported; see issue #406).
 func TestLookupRule_ApiGatewayDisambiguation(t *testing.T) {
 	t.Parallel()
 	bareAPI, _ := parseARN("arn:aws:apigateway:us-east-1::/apis/aaa")
@@ -420,7 +422,11 @@ func TestLookupRule_ApiGatewayDisambiguation(t *testing.T) {
 	}
 
 	stage, _ := parseARN("arn:aws:apigateway:us-east-1::/apis/aaa/stages/$default")
-	if r, ok := lookupRule(stage); ok {
-		t.Errorf("stage ARN should NOT match the Api rule (matchExtra), but matched cfnType=%q", r.cfnType)
+	r, ok = lookupRule(stage)
+	if !ok {
+		t.Fatal("stage ARN should match the known-skip rule (was previously falling through to 'no arnRule' warn)")
+	}
+	if r.cfnType != "" {
+		t.Errorf("stage ARN matched cfnType=%q, want \"\" (known-skip sentinel)", r.cfnType)
 	}
 }
