@@ -1,6 +1,7 @@
 aws_apigatewayv2_api	Network Security
 aws_apigatewayv2_stage	Network Security
 aws_backup_plan	Data Storage
+aws_backup_selection	Data Storage
 aws_backup_vault	Data Storage
 aws_bedrock_guardrail	Security
 aws_cloudfront_distribution	Network Security
@@ -8,6 +9,7 @@ aws_cloudwatch_dashboard	Observability
 aws_cloudwatch_event_rule	Events
 aws_cloudwatch_log_group	Observability
 aws_cloudwatch_metric_alarm	Observability
+aws_cognito_user_pool	Security
 aws_db_instance	Data Storage
 aws_db_parameter_group	Data Storage
 aws_db_subnet_group	Data Storage
@@ -18,10 +20,12 @@ aws_eip	Network Security
 aws_eks_cluster	Virtual Machines
 aws_eks_pod_identity_association	Security
 aws_elb	Network Security
+aws_iam_instance_profile	Security
 aws_iam_policy	Security
 aws_iam_role	Security
 aws_internet_gateway	Network Security
 aws_kms_key	Security
+aws_lambda_event_source_mapping	Events
 aws_lambda_function	Virtual Machines
 aws_lb	Network Security
 aws_lb_listener	Network Security
@@ -40,6 +44,7 @@ aws_secretsmanager_secret	Security
 aws_security_group	Network Security
 aws_sns_topic	Events
 aws_sqs_queue	Events
+aws_ssm_parameter	Security
 aws_subnet	Network Security
 aws_vpc	Network Security
 aws_vpc_dhcp_options	Network Security

@@ -48,6 +48,26 @@
       "purpose": "list per-region AWS::Backup::BackupPlan resources"
     },
     {
+      "service": "backup_selection",
+      "iam_action": "backup:GetBackupSelection",
+      "purpose": "Cloud Control GetResource for aws_backup_selection delegates to backup:GetBackupSelection"
+    },
+    {
+      "service": "backup_selection",
+      "iam_action": "backup:ListBackupSelections",
+      "purpose": "Cloud Control ListResources for AWS::Backup::BackupSelection"
+    },
+    {
+      "service": "backup_selection",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::Backup::BackupSelection (#406 unified discoverer)"
+    },
+    {
+      "service": "backup_selection",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::Backup::BackupSelection (untaggable; SkipProjectTagFilter bypasses the legacy Project filter)"
+    },
+    {
       "service": "backup_vault",
       "iam_action": "backup:DescribeBackupVault",
       "purpose": "Cloud Control GetResource for aws_backup_vault delegates to backup:DescribeBackupVault under the hood"
@@ -188,6 +208,31 @@
       "purpose": "fetch log-group tags for tag selectors and Identity.Tags"
     },
     {
+      "service": "cognito_user_pool",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::Cognito::UserPool (#406 unified discoverer)"
+    },
+    {
+      "service": "cognito_user_pool",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::Cognito::UserPool (cache-miss fallback when RGT prefetch is unavailable)"
+    },
+    {
+      "service": "cognito_user_pool",
+      "iam_action": "cognito-idp:DescribeUserPool",
+      "purpose": "Cloud Control GetResource for aws_cognito_user_pool delegates to cognito-idp:DescribeUserPool"
+    },
+    {
+      "service": "cognito_user_pool",
+      "iam_action": "cognito-idp:ListTagsForResource",
+      "purpose": "Cloud Control GetResource delegate for the UserPoolTags property"
+    },
+    {
+      "service": "cognito_user_pool",
+      "iam_action": "cognito-idp:ListUserPools",
+      "purpose": "Cloud Control ListResources for AWS::Cognito::UserPool delegates to cognito-idp:ListUserPools"
+    },
+    {
       "service": "db_instance",
       "iam_action": "cloudcontrol:GetResource",
       "purpose": "Cloud Control GetResource for AWS::RDS::DBInstance (#406 unified discoverer)"
@@ -313,6 +358,26 @@
       "purpose": "fetch association tags for tag selectors and Identity.Tags"
     },
     {
+      "service": "iam_instance_profile",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::IAM::InstanceProfile (#406 unified discoverer)"
+    },
+    {
+      "service": "iam_instance_profile",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::IAM::InstanceProfile (untaggable; SkipProjectTagFilter bypasses the legacy Project filter)"
+    },
+    {
+      "service": "iam_instance_profile",
+      "iam_action": "iam:GetInstanceProfile",
+      "purpose": "Cloud Control GetResource for aws_iam_instance_profile delegates to iam:GetInstanceProfile"
+    },
+    {
+      "service": "iam_instance_profile",
+      "iam_action": "iam:ListInstanceProfiles",
+      "purpose": "Cloud Control ListResources for AWS::IAM::InstanceProfile delegates to iam:ListInstanceProfiles"
+    },
+    {
       "service": "iam_policy",
       "iam_action": "cloudcontrol:GetResource",
       "purpose": "Cloud Control GetResource for AWS::IAM::ManagedPolicy (#406 unified discoverer)"
@@ -426,6 +491,31 @@
       "service": "lambda",
       "iam_action": "lambda:ListTags",
       "purpose": "fetch function tags for tag selectors and Identity.Tags"
+    },
+    {
+      "service": "lambda_event_source_mapping",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::Lambda::EventSourceMapping (#406 unified discoverer)"
+    },
+    {
+      "service": "lambda_event_source_mapping",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::Lambda::EventSourceMapping (cache-miss fallback when RGT prefetch is unavailable)"
+    },
+    {
+      "service": "lambda_event_source_mapping",
+      "iam_action": "lambda:GetEventSourceMapping",
+      "purpose": "Cloud Control GetResource for aws_lambda_event_source_mapping delegates to lambda:GetEventSourceMapping"
+    },
+    {
+      "service": "lambda_event_source_mapping",
+      "iam_action": "lambda:ListEventSourceMappings",
+      "purpose": "Cloud Control ListResources for AWS::Lambda::EventSourceMapping delegates to lambda:ListEventSourceMappings"
+    },
+    {
+      "service": "lambda_event_source_mapping",
+      "iam_action": "lambda:ListTags",
+      "purpose": "Cloud Control GetResource delegate for the Tags property"
     },
     {
       "service": "lb",
@@ -746,6 +836,31 @@
       "service": "sqs",
       "iam_action": "sqs:ListQueues",
       "purpose": "list per-region queues (server-side QueueNamePrefix filter when project is set)"
+    },
+    {
+      "service": "ssm_parameter",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::SSM::Parameter (#406 unified discoverer)"
+    },
+    {
+      "service": "ssm_parameter",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::SSM::Parameter (cache-miss fallback when RGT prefetch is unavailable)"
+    },
+    {
+      "service": "ssm_parameter",
+      "iam_action": "ssm:DescribeParameters",
+      "purpose": "Cloud Control ListResources for AWS::SSM::Parameter delegates to ssm:DescribeParameters"
+    },
+    {
+      "service": "ssm_parameter",
+      "iam_action": "ssm:GetParameter",
+      "purpose": "Cloud Control GetResource for aws_ssm_parameter delegates to ssm:GetParameter"
+    },
+    {
+      "service": "ssm_parameter",
+      "iam_action": "ssm:ListTagsForResource",
+      "purpose": "Cloud Control GetResource delegate for the Tags property"
     },
     {
       "service": "sts",
