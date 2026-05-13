@@ -243,43 +243,42 @@ func TestNewAWSDiscoverer_DiscoverByID_DispatchesAndPropagatesErrNotSupported(t 
 
 // TestNewAWSDiscoverer_AppliesDefaultMaxConcurrency pins that the legacy
 // single-arg constructor delegates with DefaultMaxConcurrency rather than
-// silently serializing (which would defeat the point of #270). The
-// literal-value pin guards the audit-grounded constant: a refactor that
-// re-points DefaultMaxConcurrency to 1 must fail this test.
+// silently serializing (which would defeat the point of #270). Post-#406
+// the per-item fan-out lives inside cloudControlDiscoverer; the assertion
+// targets that type via aws_dynamodb_table (one representative of the
+// unified path) and aws_lambda_function.
 func TestNewAWSDiscoverer_AppliesDefaultMaxConcurrency(t *testing.T) {
 	t.Parallel()
 	if DefaultMaxConcurrency != 10 {
 		t.Errorf("DefaultMaxConcurrency=%d, want 10 (audit-grounded sweet spot per #270 — change requires updating both the constant doc and this pin)", DefaultMaxConcurrency)
 	}
 	agg := NewAWSDiscoverer(awsDummyConfig())
-	dyn, ok := agg.byType["aws_dynamodb_table"].(*dynamoDiscoverer)
-	if !ok {
-		t.Fatalf("dynamodb discoverer is not *dynamoDiscoverer (got %T)", agg.byType["aws_dynamodb_table"])
-	}
-	if dyn.maxConcurrency != DefaultMaxConcurrency {
-		t.Errorf("dynamo maxConcurrency=%d, want %d", dyn.maxConcurrency, DefaultMaxConcurrency)
-	}
-	lam, ok := agg.byType["aws_lambda_function"].(*lambdaDiscoverer)
-	if !ok {
-		t.Fatalf("lambda discoverer is not *lambdaDiscoverer (got %T)", agg.byType["aws_lambda_function"])
-	}
-	if lam.maxConcurrency != DefaultMaxConcurrency {
-		t.Errorf("lambda maxConcurrency=%d, want %d", lam.maxConcurrency, DefaultMaxConcurrency)
+	for _, tfType := range []string{"aws_dynamodb_table", "aws_lambda_function"} {
+		d, ok := agg.byType[tfType].(*cloudControlDiscoverer)
+		if !ok {
+			t.Fatalf("%s discoverer is not *cloudControlDiscoverer (got %T)", tfType, agg.byType[tfType])
+		}
+		if d.maxConcurrency != DefaultMaxConcurrency {
+			t.Errorf("%s maxConcurrency=%d, want %d", tfType, d.maxConcurrency, DefaultMaxConcurrency)
+		}
 	}
 }
 
 // TestNewAWSDiscovererWithConcurrency_ThreadsValueToFanoutDiscoverers
-// pins that an explicit concurrency value reaches both per-item-fanout
-// discoverers (DynamoDB and Lambda). The single-call discoverers (SQS,
-// CloudWatch Logs, SecretsManager) ignore the value by design.
+// pins that an explicit concurrency value reaches the cloudControlDiscoverer's
+// per-resource GetResource fan-out. Post-#406 every Bucket A/B type
+// routes through cloudControlDiscoverer so the threading is uniform.
 func TestNewAWSDiscovererWithConcurrency_ThreadsValueToFanoutDiscoverers(t *testing.T) {
 	t.Parallel()
 	agg := NewAWSDiscovererWithConcurrency(awsDummyConfig(), 25)
-	if d := agg.byType["aws_dynamodb_table"].(*dynamoDiscoverer); d.maxConcurrency != 25 {
-		t.Errorf("dynamo maxConcurrency=%d, want 25", d.maxConcurrency)
-	}
-	if l := agg.byType["aws_lambda_function"].(*lambdaDiscoverer); l.maxConcurrency != 25 {
-		t.Errorf("lambda maxConcurrency=%d, want 25", l.maxConcurrency)
+	for _, tfType := range []string{"aws_dynamodb_table", "aws_lambda_function"} {
+		d, ok := agg.byType[tfType].(*cloudControlDiscoverer)
+		if !ok {
+			t.Fatalf("%s: not *cloudControlDiscoverer (got %T)", tfType, agg.byType[tfType])
+		}
+		if d.maxConcurrency != 25 {
+			t.Errorf("%s maxConcurrency=%d, want 25", tfType, d.maxConcurrency)
+		}
 	}
 }
 
@@ -292,11 +291,14 @@ func TestNewAWSDiscovererWithConcurrency_NonPositiveFallsBackToDefault(t *testin
 	t.Parallel()
 	for _, n := range []int{0, -1, -100} {
 		agg := NewAWSDiscovererWithConcurrency(awsDummyConfig(), n)
-		if d := agg.byType["aws_dynamodb_table"].(*dynamoDiscoverer); d.maxConcurrency != DefaultMaxConcurrency {
-			t.Errorf("n=%d: dynamo maxConcurrency=%d, want %d", n, d.maxConcurrency, DefaultMaxConcurrency)
-		}
-		if l := agg.byType["aws_lambda_function"].(*lambdaDiscoverer); l.maxConcurrency != DefaultMaxConcurrency {
-			t.Errorf("n=%d: lambda maxConcurrency=%d, want %d", n, l.maxConcurrency, DefaultMaxConcurrency)
+		for _, tfType := range []string{"aws_dynamodb_table", "aws_lambda_function"} {
+			d, ok := agg.byType[tfType].(*cloudControlDiscoverer)
+			if !ok {
+				t.Fatalf("n=%d %s: not *cloudControlDiscoverer (got %T)", n, tfType, agg.byType[tfType])
+			}
+			if d.maxConcurrency != DefaultMaxConcurrency {
+				t.Errorf("n=%d %s maxConcurrency=%d, want %d", n, tfType, d.maxConcurrency, DefaultMaxConcurrency)
+			}
 		}
 	}
 }

@@ -93,6 +93,14 @@ const DefaultMaxConcurrency = 10
 type AWSDiscoverer struct {
 	byType        map[string]Discoverer
 	defaultRegion string
+	// rgtPrefetcher is the optional RGT (Resource Groups Tagging API)
+	// pre-pass run once per DiscoverTypes call. Defaults to a real
+	// prefetcher constructed from the aws.Config; tests can swap in a
+	// fake or the noopRGTPrefetcher. Issued in DiscoverTypes before
+	// the per-type fan-out so opt-in discoverers
+	// (cloudControlDiscoverer) can skip their own per-type
+	// ListResources when Prefetch returns a cache hit. See #406.
+	rgtPrefetcher rgtPrefetcher
 }
 
 // NewAWSDiscoverer wires up the production set of AWS discoverers with the
@@ -121,56 +129,32 @@ func NewAWSDiscovererWithConcurrency(cfg aws.Config, maxConcurrency int) *AWSDis
 	if maxConcurrency <= 0 {
 		maxConcurrency = DefaultMaxConcurrency
 	}
+	// Bucket C (#406): the four AWS types that still use hand-rolled
+	// per-service SDK discoverers — Cloud Control either can't READ
+	// them (apigatewayv2_stage) or their listing semantics require a
+	// behavior the unified path can't model (bedrock_guardrail's
+	// per-version fan-out; resourceexplorer2_*'s cross-region dedup
+	// quirk, #336). Everything else is registered below via the
+	// cloudControlTypeConfigs loop.
 	byType := map[string]Discoverer{
-		"aws_sqs_queue":                       newSQSDiscoverer(cfg),
-		"aws_dynamodb_table":                  newDynamoDBDiscoverer(cfg, maxConcurrency),
-		"aws_cloudwatch_log_group":            newCloudWatchLogsDiscoverer(cfg),
-		"aws_secretsmanager_secret":           newSecretsManagerDiscoverer(cfg),
-		"aws_lambda_function":                 newLambdaDiscoverer(cfg, maxConcurrency),
-		"aws_iam_role":                        newIAMRoleDiscoverer(cfg),
-		"aws_iam_policy":                      newIAMPolicyDiscoverer(cfg),
-		"aws_kms_key":                         newKMSDiscoverer(cfg),
-		"aws_s3_bucket":                       newS3Discoverer(cfg),
-		"aws_vpc":                             newVPCDiscoverer(cfg),
-		"aws_subnet":                          newSubnetDiscoverer(cfg),
-		"aws_security_group":                  newSecurityGroupDiscoverer(cfg),
-		"aws_internet_gateway":                newInternetGatewayDiscoverer(cfg),
-		"aws_nat_gateway":                     newNatGatewayDiscoverer(cfg),
-		"aws_eip":                             newEIPDiscoverer(cfg),
-		"aws_route_table":                     newRouteTableDiscoverer(cfg),
-		"aws_network_acl":                     newNetworkACLDiscoverer(cfg),
-		"aws_vpc_endpoint":                    newVPCEndpointDiscoverer(cfg),
-		"aws_vpc_dhcp_options":                newVPCDHCPOptionsDiscoverer(cfg),
-		"aws_network_interface":               newNetworkInterfaceDiscoverer(cfg),
-		"aws_route53_zone":                    newRoute53ZoneDiscoverer(cfg),
-		"aws_cloudfront_distribution":         newCloudFrontDistributionDiscoverer(cfg),
-		"aws_db_instance":                     newDBInstanceDiscoverer(cfg),
-		"aws_db_subnet_group":                 newDBSubnetGroupDiscoverer(cfg, maxConcurrency),
-		"aws_db_parameter_group":              newDBParameterGroupDiscoverer(cfg, maxConcurrency),
-		"aws_lb":                              newLBDiscoverer(cfg, maxConcurrency),
-		"aws_lb_listener":                     newLBListenerDiscoverer(cfg, maxConcurrency),
-		"aws_lb_target_group":                 newLBTargetGroupDiscoverer(cfg, maxConcurrency),
-		"aws_bedrock_guardrail":               newBedrockGuardrailDiscoverer(cfg, maxConcurrency),
-		"aws_opensearchserverless_collection": newOpenSearchServerlessCollectionDiscoverer(cfg, maxConcurrency),
-		"aws_apigatewayv2_api":                newAPIGatewayV2APIDiscoverer(cfg, maxConcurrency),
-		"aws_apigatewayv2_stage":              newAPIGatewayV2StageDiscoverer(cfg, maxConcurrency),
-		"aws_eks_pod_identity_association":    newEKSPodIdentityDiscoverer(cfg, maxConcurrency),
-		"aws_cloudwatch_event_rule":           newCloudWatchEventRuleDiscoverer(cfg, maxConcurrency),
-		"aws_resourceexplorer2_index":         newResourceExplorer2IndexDiscoverer(cfg, maxConcurrency),
-		"aws_resourceexplorer2_view":          newResourceExplorer2ViewDiscoverer(cfg, maxConcurrency),
+		"aws_apigatewayv2_stage":      newAPIGatewayV2StageDiscoverer(cfg, maxConcurrency),
+		"aws_bedrock_guardrail":       newBedrockGuardrailDiscoverer(cfg, maxConcurrency),
+		"aws_resourceexplorer2_index": newResourceExplorer2IndexDiscoverer(cfg, maxConcurrency),
+		"aws_resourceexplorer2_view":  newResourceExplorer2ViewDiscoverer(cfg, maxConcurrency),
 	}
-	// Cloud Control-routed types (Bundle 13): each entry in
+	// Cloud Control-routed types (#406): each entry in
 	// cloudControlTypeConfigs becomes one cloudControlDiscoverer
-	// registration. The cloudControlDiscoverer carries the per-type
-	// TypeName + extractors in cfg so this loop is the only place new
-	// Cloud Control-covered types need wiring. See cloudcontrol_types.go
-	// for the registry and cloudcontrol_discoverer.go for the implementation.
+	// registration. Tag filtering rides on the RGT prefetcher (run
+	// once per DiscoverTypes call); per-type ListResources is only
+	// invoked on cache miss. See cloudcontrol_types.go and
+	// cloudcontrol_discoverer.go.
 	for _, ccCfg := range cloudControlTypeConfigs {
 		byType[ccCfg.TFType] = newCloudControlDiscoverer(ccCfg, cfg, maxConcurrency)
 	}
 	return &AWSDiscoverer{
 		defaultRegion: cfg.Region,
 		byType:        byType,
+		rgtPrefetcher: newRealRGTPrefetcher(cfg),
 	}
 }
 
@@ -184,61 +168,30 @@ func NewAWSDiscovererWithConcurrency(cfg aws.Config, maxConcurrency int) *AWSDis
 // cloudwatchlogs.go, etc.) so a regression that switches a per-service
 // file's slug will diverge from the file name and be obvious in review.
 var serviceSlugByTFType = map[string]string{
-	"aws_sqs_queue":                       "sqs",
-	"aws_dynamodb_table":                  "dynamodb",
-	"aws_cloudwatch_log_group":            "cloudwatchlogs",
-	"aws_secretsmanager_secret":           "secretsmanager",
-	"aws_lambda_function":                 "lambda",
-	"aws_iam_role":                        "iam_role",
-	"aws_iam_policy":                      "iam_policy",
-	"aws_kms_key":                         "kms",
-	"aws_s3_bucket":                       "s3",
-	"aws_vpc":                             "vpc",
-	"aws_subnet":                          "subnet",
-	"aws_security_group":                  "security_group",
-	"aws_internet_gateway":                "internet_gateway",
-	"aws_nat_gateway":                     "nat_gateway",
-	"aws_eip":                             "eip",
-	"aws_route_table":                     "route_table",
-	"aws_network_acl":                     "network_acl",
-	"aws_vpc_endpoint":                    "vpc_endpoint",
-	"aws_vpc_dhcp_options":                "vpc_dhcp_options",
-	"aws_network_interface":               "network_interface",
-	"aws_route53_zone":                    "route53_zone",
-	"aws_cloudfront_distribution":         "cloudfront_distribution",
-	"aws_db_instance":                     "db_instance",
-	"aws_db_subnet_group":                 "db_subnet_group",
-	"aws_db_parameter_group":              "db_parameter_group",
-	"aws_lb":                              "lb",
-	"aws_lb_listener":                     "lb_listener",
-	"aws_lb_target_group":                 "lb_target_group",
-	"aws_bedrock_guardrail":               "bedrock_guardrail",
-	"aws_opensearchserverless_collection": "opensearchserverless_collection",
-	"aws_apigatewayv2_api":                "apigatewayv2_api",
-	"aws_apigatewayv2_stage":              "apigatewayv2_stage",
-	"aws_eks_pod_identity_association":    "eks_pod_identity",
-	"aws_cloudwatch_event_rule":           "cloudwatch_event_rule",
-	"aws_resourceexplorer2_index":         "resourceexplorer2_index",
-	"aws_resourceexplorer2_view":          "resourceexplorer2_view",
-
-	// Cloud Control-routed types (Bundle 13). Slug matches the per-type
-	// Slug field in cloudControlTypeConfigs (cloudcontrol_types.go);
-	// keep both surfaces in sync.
-	"aws_backup_vault":             "backup_vault",
-	"aws_backup_plan":              "backup_plan",
-	"aws_sns_topic":                "sns_topic",
-	"aws_cloudwatch_metric_alarm":  "cloudwatch_metric_alarm",
-	"aws_cloudwatch_dashboard":     "cloudwatch_dashboard",
+	// Bucket C — hand-rolled. Slugs must match the per-discoverer
+	// ServiceStart/Finish strings inside each *.go file.
+	"aws_apigatewayv2_stage":      "apigatewayv2_stage",
+	"aws_bedrock_guardrail":       "bedrock_guardrail",
+	"aws_resourceexplorer2_index": "resourceexplorer2_index",
+	"aws_resourceexplorer2_view":  "resourceexplorer2_view",
 }
 
 // ServiceSlug returns the progress-event slug for a Terraform resource
-// type, falling back to the type itself when no slug is registered.
+// type, falling back to the type itself when no slug is registered. For
+// Cloud Control-routed types (the bulk of the registry post-#406),
+// ServiceSlug consults cloudControlTypeConfigs first so the slug stays
+// in lockstep with the Slug field on each cloudControlConfig entry.
 // Falling back (rather than panicking) keeps the Emitter safe to call
 // from any Discoverer, including test-only ones a future contributor
 // might register without updating the slug map.
 func ServiceSlug(tfType string) string {
 	if s, ok := serviceSlugByTFType[tfType]; ok {
 		return s
+	}
+	for _, cfg := range cloudControlTypeConfigs {
+		if cfg.TFType == tfType {
+			return cfg.Slug
+		}
 	}
 	return tfType
 }
@@ -311,6 +264,20 @@ func (a *AWSDiscoverer) DiscoverTypes(ctx context.Context, types []string, args 
 	}
 	if len(unknown) > 0 {
 		return nil, fmt.Errorf("unknown resource type(s): %v (supported: %v)", unknown, a.SupportedTypes())
+	}
+
+	// RGT pre-pass: one call per region returns every tag-filtered ARN
+	// across all services, bucketed by CloudFormation type. Per-type
+	// discoverers that opt in read this cache via
+	// args.RGTCacheForCFN/RGTCacheForGlobalCFN; per-type cache misses
+	// fall through to the existing ListResources path. Tests can set
+	// rgtPrefetcher to noopRGTPrefetcher{} to short-circuit. See #406.
+	if a.rgtPrefetcher != nil {
+		cache, err := a.rgtPrefetcher.Prefetch(ctx, args.Regions, args)
+		if err != nil {
+			return nil, fmt.Errorf("rgt prefetch: %w", err)
+		}
+		args = args.withRGTCache(cache)
 	}
 
 	stageStart := time.Now()

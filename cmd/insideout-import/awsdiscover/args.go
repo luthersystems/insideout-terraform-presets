@@ -31,6 +31,40 @@ type DiscoverArgs struct {
 	TagSelectors []TagSelector
 	AccountID    string
 	Emitter      progress.Emitter
+
+	// rgtCache is the package-internal RGT prefetch result threaded
+	// through DiscoverTypes (#406). Per-type discoverers that opt into
+	// the unified RGT path read this via the package-private accessor
+	// to skip their own ListResources fan-out. Stays unexported so the
+	// public DiscoverArgs surface is unchanged for external callers,
+	// and so tests that construct DiscoverArgs directly default to
+	// nil cache (per-type list fallback).
+	rgtCache *rgtCache
+}
+
+// withRGTCache returns a copy of args with rgtCache set. Used once at
+// the top of AWSDiscoverer.DiscoverTypes after Prefetch returns.
+func (a DiscoverArgs) withRGTCache(c *rgtCache) DiscoverArgs {
+	a.rgtCache = c
+	return a
+}
+
+// RGTCacheForCFN returns the prefetched ARNs for (region, cfnType), or
+// (nil, false) when no cache exists or this bucket missed. Per-type
+// discoverers (cloudControlDiscoverer) consult this before their own
+// ListResources path. A nil cache (no Prefetch ran, e.g. no
+// TagSelectors / Project set) always returns ok=false so callers fall
+// back gracefully.
+func (a DiscoverArgs) RGTCacheForCFN(region, cfnType string) ([]arnInfo, bool) {
+	return a.rgtCache.ForCFN(region, cfnType)
+}
+
+// RGTCacheForGlobalCFN returns the de-duplicated union of prefetched
+// ARNs for cfnType across every region bucket. Used by global-service
+// discoverers (IAM, CloudFront, Route53) whose ARNs RGT surfaces in
+// every region's response.
+func (a DiscoverArgs) RGTCacheForGlobalCFN(cfnType string) ([]arnInfo, bool) {
+	return a.rgtCache.ForGlobalCFN(cfnType)
 }
 
 // TagSelector is a single operator-supplied tag-equality clause. The

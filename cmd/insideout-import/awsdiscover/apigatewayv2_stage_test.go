@@ -98,6 +98,24 @@ func stageWithTags(name string, autoDeploy bool, deploymentID string, tags map[s
 	return s
 }
 
+// apiWithTags builds an apigwv2types.Api fixture. Lived in
+// apigatewayv2_api_test.go before #406 deleted that hand-rolled
+// discoverer; the Stage tests still need it for the per-API parent
+// enumeration fixtures.
+func apiWithTags(id, name, endpoint, protocol string, tags map[string]string) apigwv2types.Api {
+	api := apigwv2types.Api{
+		ApiId:                    aws.String(id),
+		Name:                     aws.String(name),
+		ApiEndpoint:              aws.String(endpoint),
+		ProtocolType:             apigwv2types.ProtocolType(protocol),
+		RouteSelectionExpression: aws.String("$request.method $request.path"),
+	}
+	if tags != nil {
+		api.Tags = tags
+	}
+	return api
+}
+
 func TestAPIGWv2StageDiscover_IteratesPerAPI(t *testing.T) {
 	t.Parallel()
 	apis := []apigwv2types.Api{

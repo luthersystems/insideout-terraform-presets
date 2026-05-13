@@ -2,102 +2,815 @@
   "version": 1,
   "provider": "aws",
   "permissions": [
-    {"service": "apigatewayv2_api", "iam_action": "apigateway:GET", "purpose": "list HTTP APIs and fetch per-API metadata (GET /apis, GET /apis/*/stages)"},
-    {"service": "apigatewayv2_stage", "iam_action": "apigateway:GET", "purpose": "list per-API stages (GET /apis/*/stages); shares apigateway:GET with apigatewayv2_api"},
-    {"service": "backup_plan", "iam_action": "backup:GetBackupPlan", "purpose": "Cloud Control GetResource for aws_backup_plan delegates to backup:GetBackupPlan"},
-    {"service": "backup_plan", "iam_action": "backup:ListBackupPlans", "purpose": "Cloud Control ListResources for AWS::Backup::BackupPlan"},
-    {"service": "backup_plan", "iam_action": "backup:ListTags", "purpose": "Cloud Control GetResource for aws_backup_plan delegates to backup:ListTags for BackupPlanTags"},
-    {"service": "backup_plan", "iam_action": "cloudcontrol:GetResource", "purpose": "fetch per-plan properties for tag extraction"},
-    {"service": "backup_plan", "iam_action": "cloudcontrol:ListResources", "purpose": "list per-region AWS::Backup::BackupPlan resources"},
-    {"service": "backup_vault", "iam_action": "backup:DescribeBackupVault", "purpose": "Cloud Control GetResource for aws_backup_vault delegates to backup:DescribeBackupVault under the hood"},
-    {"service": "backup_vault", "iam_action": "backup:ListTags", "purpose": "Cloud Control GetResource for aws_backup_vault delegates to backup:ListTags for the BackupVaultTags property"},
-    {"service": "backup_vault", "iam_action": "cloudcontrol:GetResource", "purpose": "fetch per-vault properties for tag extraction and Identity.NativeIDs population"},
-    {"service": "backup_vault", "iam_action": "cloudcontrol:ListResources", "purpose": "list per-region AWS::Backup::BackupVault resources (paginated; no server-side tag filter)"},
-    {"service": "bedrock_guardrail", "iam_action": "bedrock:GetGuardrail", "purpose": "DiscoverByID: fetch a guardrail by id"},
-    {"service": "bedrock_guardrail", "iam_action": "bedrock:ListGuardrails", "purpose": "list per-region Bedrock guardrails (client-side prefix filter)"},
-    {"service": "bedrock_guardrail", "iam_action": "bedrock:ListTagsForResource", "purpose": "fetch tags per guardrail"},
-    {"service": "cloudfront_distribution", "iam_action": "cloudfront:ListDistributions", "purpose": "list CloudFront distributions (global; client-side prefix filter)"},
-    {"service": "cloudfront_distribution", "iam_action": "cloudfront:ListTagsForResource", "purpose": "fetch tags per distribution for tag selectors and Identity.Tags"},
-    {"service": "cloudwatch_dashboard", "iam_action": "cloudcontrol:GetResource", "purpose": "fetch per-dashboard body for Identity.NativeIDs"},
-    {"service": "cloudwatch_dashboard", "iam_action": "cloudcontrol:ListResources", "purpose": "list per-region AWS::CloudWatch::Dashboard resources"},
-    {"service": "cloudwatch_dashboard", "iam_action": "cloudwatch:GetDashboard", "purpose": "Cloud Control GetResource for aws_cloudwatch_dashboard delegates to cloudwatch:GetDashboard"},
-    {"service": "cloudwatch_dashboard", "iam_action": "cloudwatch:ListDashboards", "purpose": "Cloud Control ListResources for AWS::CloudWatch::Dashboard"},
-    {"service": "cloudwatch_event_rule", "iam_action": "events:DescribeRule", "purpose": "resolve a single EventBridge rule by name in DiscoverByID"},
-    {"service": "cloudwatch_event_rule", "iam_action": "events:ListRules", "purpose": "list per-region EventBridge rules on the default event bus (paginated; client-side name-prefix filter)"},
-    {"service": "cloudwatch_event_rule", "iam_action": "events:ListTagsForResource", "purpose": "fetch rule tags for tag selectors and Identity.Tags"},
-    {"service": "cloudwatch_metric_alarm", "iam_action": "cloudcontrol:GetResource", "purpose": "fetch per-alarm properties for tag extraction"},
-    {"service": "cloudwatch_metric_alarm", "iam_action": "cloudcontrol:ListResources", "purpose": "list per-region AWS::CloudWatch::Alarm resources"},
-    {"service": "cloudwatch_metric_alarm", "iam_action": "cloudwatch:DescribeAlarms", "purpose": "Cloud Control delegate for ListResources / GetResource"},
-    {"service": "cloudwatch_metric_alarm", "iam_action": "cloudwatch:ListTagsForResource", "purpose": "Cloud Control GetResource delegate for the Tags property"},
-    {"service": "cloudwatchlogs", "iam_action": "logs:DescribeLogGroups", "purpose": "list log groups (server-side LogGroupNamePattern filter)"},
-    {"service": "cloudwatchlogs", "iam_action": "logs:ListTagsForResource", "purpose": "fetch log-group tags for tag selectors and Identity.Tags"},
-    {"service": "db_instance", "iam_action": "rds:DescribeDBInstances", "purpose": "list per-region RDS instances (client-side prefix filter; tags inline)"},
-    {"service": "db_parameter_group", "iam_action": "rds:DescribeDBParameterGroups", "purpose": "list per-region RDS parameter groups (skip default.* AWS-managed)"},
-    {"service": "db_parameter_group", "iam_action": "rds:ListTagsForResource", "purpose": "fetch tags per parameter group"},
-    {"service": "db_subnet_group", "iam_action": "rds:DescribeDBSubnetGroups", "purpose": "list per-region RDS subnet groups"},
-    {"service": "db_subnet_group", "iam_action": "rds:ListTagsForResource", "purpose": "fetch tags per subnet group"},
-    {"service": "dynamodb", "iam_action": "dynamodb:DescribeTable", "purpose": "resolve a single table by name in DiscoverByID"},
-    {"service": "dynamodb", "iam_action": "dynamodb:ListTables", "purpose": "list per-region tables (paginated)"},
-    {"service": "dynamodb", "iam_action": "dynamodb:ListTagsOfResource", "purpose": "fetch table tags for tag selectors and Identity.Tags"},
-    {"service": "eip", "iam_action": "ec2:DescribeAddresses", "purpose": "list per-region elastic IPs (server-side tag:Project filter when project is set; tags inline)"},
-    {"service": "eks_pod_identity", "iam_action": "eks:DescribePodIdentityAssociation", "purpose": "resolve a single EKS pod-identity association by <cluster>,<assoc_id> in DiscoverByID"},
-    {"service": "eks_pod_identity", "iam_action": "eks:ListClusters", "purpose": "list per-region EKS clusters (paginated; cluster-name prefix filter for project scoping)"},
-    {"service": "eks_pod_identity", "iam_action": "eks:ListPodIdentityAssociations", "purpose": "list pod-identity associations per cluster (paginated)"},
-    {"service": "eks_pod_identity", "iam_action": "eks:ListTagsForResource", "purpose": "fetch association tags for tag selectors and Identity.Tags"},
-    {"service": "iam_policy", "iam_action": "iam:GetPolicy", "purpose": "resolve a single managed policy by ARN in DiscoverByID"},
-    {"service": "iam_policy", "iam_action": "iam:ListPolicies", "purpose": "list customer-managed (Scope=Local) IAM policies"},
-    {"service": "iam_policy", "iam_action": "iam:ListPolicyTags", "purpose": "fetch policy tags for tag selectors and Identity.Tags"},
-    {"service": "iam_role", "iam_action": "iam:GetRole", "purpose": "resolve a single role by name in DiscoverByID"},
-    {"service": "iam_role", "iam_action": "iam:ListRoleTags", "purpose": "fetch role tags for tag selectors and Identity.Tags"},
-    {"service": "iam_role", "iam_action": "iam:ListRoles", "purpose": "list IAM roles (paginated)"},
-    {"service": "internet_gateway", "iam_action": "ec2:DescribeInternetGateways", "purpose": "list per-region internet gateways (server-side tag:Project filter when project is set; tags inline)"},
-    {"service": "kms", "iam_action": "kms:DescribeKey", "purpose": "resolve a single key by UUID/alias in DiscoverByID"},
-    {"service": "kms", "iam_action": "kms:ListAliases", "purpose": "list KMS aliases for the project (account/region scoped)"},
-    {"service": "kms", "iam_action": "kms:ListResourceTags", "purpose": "fetch key tags for tag selectors and Identity.Tags"},
-    {"service": "lambda", "iam_action": "lambda:GetFunction", "purpose": "resolve a single function by name/ARN in DiscoverByID"},
-    {"service": "lambda", "iam_action": "lambda:ListFunctions", "purpose": "list per-region Lambda functions (paginated)"},
-    {"service": "lambda", "iam_action": "lambda:ListTags", "purpose": "fetch function tags for tag selectors and Identity.Tags"},
-    {"service": "lb", "iam_action": "elasticloadbalancing:DescribeLoadBalancers", "purpose": "list per-region load balancers (client-side prefix filter)"},
-    {"service": "lb", "iam_action": "elasticloadbalancing:DescribeTags", "purpose": "fetch tags per load balancer / target group / listener (shared)"},
-    {"service": "lb_listener", "iam_action": "elasticloadbalancing:DescribeListeners", "purpose": "list listeners per load balancer"},
-    {"service": "lb_listener", "iam_action": "elasticloadbalancing:DescribeLoadBalancers", "purpose": "enumerate parent load balancers to walk listeners"},
-    {"service": "lb_listener", "iam_action": "elasticloadbalancing:DescribeTags", "purpose": "fetch tags per listener (per-listener fan-out)"},
-    {"service": "lb_target_group", "iam_action": "elasticloadbalancing:DescribeTags", "purpose": "fetch tags per target group"},
-    {"service": "lb_target_group", "iam_action": "elasticloadbalancing:DescribeTargetGroups", "purpose": "list per-region target groups"},
-    {"service": "nat_gateway", "iam_action": "ec2:DescribeNatGateways", "purpose": "list per-region NAT gateways; skip State=deleted/deleting tombstones (server-side tag:Project filter when project is set; tags inline)"},
-    {"service": "network_acl", "iam_action": "ec2:DescribeNetworkAcls", "purpose": "list per-region network ACLs (server-side tag:Project filter when project is set; tags inline)"},
-    {"service": "network_interface", "iam_action": "ec2:DescribeNetworkInterfaces", "purpose": "list per-region elastic network interfaces (server-side tag:Project filter when project is set; tags inline)"},
-    {"service": "opensearchserverless_collection", "iam_action": "aoss:BatchGetCollection", "purpose": "DiscoverByID: fetch collection details by id"},
-    {"service": "opensearchserverless_collection", "iam_action": "aoss:ListCollections", "purpose": "list per-region OpenSearch Serverless collections (client-side prefix filter)"},
-    {"service": "opensearchserverless_collection", "iam_action": "aoss:ListTagsForResource", "purpose": "fetch tags per collection"},
-    {"service": "resource_explorer_2", "iam_action": "resource-explorer-2:Search", "purpose": "broad enumeration of unsupported resource types (--include-unsupported, gap #6)"},
-    {"service": "resourceexplorer2_index", "iam_action": "resource-explorer-2:GetIndex", "purpose": "resolve the current region's Resource Explorer 2 index in DiscoverByID"},
-    {"service": "resourceexplorer2_index", "iam_action": "resource-explorer-2:ListIndexes", "purpose": "list per-region Resource Explorer 2 indexes (paginated; account-level setup, no project filter)"},
-    {"service": "resourceexplorer2_index", "iam_action": "resource-explorer-2:ListTagsForResource", "purpose": "fetch index tags for tag selectors and Identity.Tags"},
-    {"service": "resourceexplorer2_view", "iam_action": "resource-explorer-2:GetView", "purpose": "resolve a single Resource Explorer 2 view by ARN in DiscoverByID"},
-    {"service": "resourceexplorer2_view", "iam_action": "resource-explorer-2:ListTagsForResource", "purpose": "fetch view tags for tag selectors and Identity.Tags"},
-    {"service": "resourceexplorer2_view", "iam_action": "resource-explorer-2:ListViews", "purpose": "list per-region Resource Explorer 2 views (paginated; account-level setup, no project filter)"},
-    {"service": "route53_zone", "iam_action": "route53:ListHostedZones", "purpose": "list Route 53 hosted zones (global; client-side prefix filter)"},
-    {"service": "route53_zone", "iam_action": "route53:ListTagsForResource", "purpose": "fetch tags per zone for tag selectors and Identity.Tags"},
-    {"service": "route_table", "iam_action": "ec2:DescribeRouteTables", "purpose": "list per-region route tables (server-side tag:Project filter when project is set; tags inline)"},
-    {"service": "s3", "iam_action": "s3:GetBucketTagging", "purpose": "fetch bucket tags for tag selectors and Identity.Tags"},
-    {"service": "s3", "iam_action": "s3:HeadBucket", "purpose": "verify bucket existence in DiscoverByID"},
-    {"service": "s3", "iam_action": "s3:ListAllMyBuckets", "purpose": "list buckets account-globally (ListBuckets)"},
-    {"service": "secretsmanager", "iam_action": "secretsmanager:DescribeSecret", "purpose": "resolve a single secret by name/ARN in DiscoverByID"},
-    {"service": "secretsmanager", "iam_action": "secretsmanager:ListSecrets", "purpose": "list per-region secrets (server-side TagKey/TagValue filter when project is set)"},
-    {"service": "security_group", "iam_action": "ec2:DescribeSecurityGroups", "purpose": "list per-region security groups (server-side tag:Project filter when project is set; tags inline)"},
-    {"service": "sns_topic", "iam_action": "cloudcontrol:GetResource", "purpose": "fetch per-topic properties for tag extraction"},
-    {"service": "sns_topic", "iam_action": "cloudcontrol:ListResources", "purpose": "list per-region AWS::SNS::Topic resources"},
-    {"service": "sns_topic", "iam_action": "sns:GetTopicAttributes", "purpose": "Cloud Control delegate for GetResource"},
-    {"service": "sns_topic", "iam_action": "sns:ListTagsForResource", "purpose": "Cloud Control delegate for Tags property"},
-    {"service": "sns_topic", "iam_action": "sns:ListTopics", "purpose": "Cloud Control delegate for ListResources"},
-    {"service": "sqs", "iam_action": "sqs:GetQueueUrl", "purpose": "resolve a queue URL by name in DiscoverByID"},
-    {"service": "sqs", "iam_action": "sqs:ListQueueTags", "purpose": "fetch queue tags for tag selectors and Identity.Tags"},
-    {"service": "sqs", "iam_action": "sqs:ListQueues", "purpose": "list per-region queues (server-side QueueNamePrefix filter when project is set)"},
-    {"service": "sts", "iam_action": "sts:GetCallerIdentity", "purpose": "stamp the AccountID on every discovered resource (one call per run)"},
-    {"service": "subnet", "iam_action": "ec2:DescribeSubnets", "purpose": "list per-region subnets (server-side tag:Project filter when project is set; tags inline)"},
-    {"service": "vpc", "iam_action": "ec2:DescribeVpcs", "purpose": "list per-region VPCs (server-side tag:Project filter when project is set; tags inline)"},
-    {"service": "vpc_dhcp_options", "iam_action": "ec2:DescribeDhcpOptions", "purpose": "list per-region DHCP options sets (server-side tag:Project filter when project is set; tags inline)"},
-    {"service": "vpc_endpoint", "iam_action": "ec2:DescribeVpcEndpoints", "purpose": "list per-region VPC endpoints; skip State=deleted/deleting tombstones (server-side tag:Project filter when project is set; tags inline)"}
+    {
+      "service": "apigatewayv2_api",
+      "iam_action": "apigateway:GET",
+      "purpose": "list HTTP APIs and fetch per-API metadata (GET /apis, GET /apis/*/stages)"
+    },
+    {
+      "service": "apigatewayv2_api",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::ApiGatewayV2::Api (#406 unified discoverer)"
+    },
+    {
+      "service": "apigatewayv2_api",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::ApiGatewayV2::Api (cache-miss fallback when RGT prefetch is unavailable)"
+    },
+    {
+      "service": "apigatewayv2_stage",
+      "iam_action": "apigateway:GET",
+      "purpose": "list per-API stages (GET /apis/*/stages); shares apigateway:GET with apigatewayv2_api"
+    },
+    {
+      "service": "backup_plan",
+      "iam_action": "backup:GetBackupPlan",
+      "purpose": "Cloud Control GetResource for aws_backup_plan delegates to backup:GetBackupPlan"
+    },
+    {
+      "service": "backup_plan",
+      "iam_action": "backup:ListBackupPlans",
+      "purpose": "Cloud Control ListResources for AWS::Backup::BackupPlan"
+    },
+    {
+      "service": "backup_plan",
+      "iam_action": "backup:ListTags",
+      "purpose": "Cloud Control GetResource for aws_backup_plan delegates to backup:ListTags for BackupPlanTags"
+    },
+    {
+      "service": "backup_plan",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "fetch per-plan properties for tag extraction"
+    },
+    {
+      "service": "backup_plan",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "list per-region AWS::Backup::BackupPlan resources"
+    },
+    {
+      "service": "backup_vault",
+      "iam_action": "backup:DescribeBackupVault",
+      "purpose": "Cloud Control GetResource for aws_backup_vault delegates to backup:DescribeBackupVault under the hood"
+    },
+    {
+      "service": "backup_vault",
+      "iam_action": "backup:ListTags",
+      "purpose": "Cloud Control GetResource for aws_backup_vault delegates to backup:ListTags for the BackupVaultTags property"
+    },
+    {
+      "service": "backup_vault",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "fetch per-vault properties for tag extraction and Identity.NativeIDs population"
+    },
+    {
+      "service": "backup_vault",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "list per-region AWS::Backup::BackupVault resources (paginated; no server-side tag filter)"
+    },
+    {
+      "service": "bedrock_guardrail",
+      "iam_action": "bedrock:GetGuardrail",
+      "purpose": "DiscoverByID: fetch a guardrail by id"
+    },
+    {
+      "service": "bedrock_guardrail",
+      "iam_action": "bedrock:ListGuardrails",
+      "purpose": "list per-region Bedrock guardrails (client-side prefix filter)"
+    },
+    {
+      "service": "bedrock_guardrail",
+      "iam_action": "bedrock:ListTagsForResource",
+      "purpose": "fetch tags per guardrail"
+    },
+    {
+      "service": "cloudfront_distribution",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::CloudFront::Distribution (#406 unified discoverer)"
+    },
+    {
+      "service": "cloudfront_distribution",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::CloudFront::Distribution (cache-miss fallback when RGT prefetch is unavailable)"
+    },
+    {
+      "service": "cloudfront_distribution",
+      "iam_action": "cloudfront:ListDistributions",
+      "purpose": "list CloudFront distributions (global; client-side prefix filter)"
+    },
+    {
+      "service": "cloudfront_distribution",
+      "iam_action": "cloudfront:ListTagsForResource",
+      "purpose": "fetch tags per distribution for tag selectors and Identity.Tags"
+    },
+    {
+      "service": "cloudwatch_dashboard",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "fetch per-dashboard body for Identity.NativeIDs"
+    },
+    {
+      "service": "cloudwatch_dashboard",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "list per-region AWS::CloudWatch::Dashboard resources"
+    },
+    {
+      "service": "cloudwatch_dashboard",
+      "iam_action": "cloudwatch:GetDashboard",
+      "purpose": "Cloud Control GetResource for aws_cloudwatch_dashboard delegates to cloudwatch:GetDashboard"
+    },
+    {
+      "service": "cloudwatch_dashboard",
+      "iam_action": "cloudwatch:ListDashboards",
+      "purpose": "Cloud Control ListResources for AWS::CloudWatch::Dashboard"
+    },
+    {
+      "service": "cloudwatch_event_rule",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::Events::Rule (#406 unified discoverer)"
+    },
+    {
+      "service": "cloudwatch_event_rule",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::Events::Rule (cache-miss fallback when RGT prefetch is unavailable)"
+    },
+    {
+      "service": "cloudwatch_event_rule",
+      "iam_action": "events:DescribeRule",
+      "purpose": "resolve a single EventBridge rule by name in DiscoverByID"
+    },
+    {
+      "service": "cloudwatch_event_rule",
+      "iam_action": "events:ListRules",
+      "purpose": "list per-region EventBridge rules on the default event bus (paginated; client-side name-prefix filter)"
+    },
+    {
+      "service": "cloudwatch_event_rule",
+      "iam_action": "events:ListTagsForResource",
+      "purpose": "fetch rule tags for tag selectors and Identity.Tags"
+    },
+    {
+      "service": "cloudwatch_metric_alarm",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "fetch per-alarm properties for tag extraction"
+    },
+    {
+      "service": "cloudwatch_metric_alarm",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "list per-region AWS::CloudWatch::Alarm resources"
+    },
+    {
+      "service": "cloudwatch_metric_alarm",
+      "iam_action": "cloudwatch:DescribeAlarms",
+      "purpose": "Cloud Control delegate for ListResources / GetResource"
+    },
+    {
+      "service": "cloudwatch_metric_alarm",
+      "iam_action": "cloudwatch:ListTagsForResource",
+      "purpose": "Cloud Control GetResource delegate for the Tags property"
+    },
+    {
+      "service": "cloudwatchlogs",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::Logs::LogGroup (#406 unified discoverer)"
+    },
+    {
+      "service": "cloudwatchlogs",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::Logs::LogGroup (cache-miss fallback when RGT prefetch is unavailable)"
+    },
+    {
+      "service": "cloudwatchlogs",
+      "iam_action": "logs:DescribeLogGroups",
+      "purpose": "list log groups (server-side LogGroupNamePattern filter)"
+    },
+    {
+      "service": "cloudwatchlogs",
+      "iam_action": "logs:ListTagsForResource",
+      "purpose": "fetch log-group tags for tag selectors and Identity.Tags"
+    },
+    {
+      "service": "db_instance",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::RDS::DBInstance (#406 unified discoverer)"
+    },
+    {
+      "service": "db_instance",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::RDS::DBInstance (cache-miss fallback when RGT prefetch is unavailable)"
+    },
+    {
+      "service": "db_instance",
+      "iam_action": "rds:DescribeDBInstances",
+      "purpose": "list per-region RDS instances (client-side prefix filter; tags inline)"
+    },
+    {
+      "service": "db_parameter_group",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::RDS::DBParameterGroup (#406 unified discoverer)"
+    },
+    {
+      "service": "db_parameter_group",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::RDS::DBParameterGroup (cache-miss fallback when RGT prefetch is unavailable)"
+    },
+    {
+      "service": "db_parameter_group",
+      "iam_action": "rds:DescribeDBParameterGroups",
+      "purpose": "list per-region RDS parameter groups (skip default.* AWS-managed)"
+    },
+    {
+      "service": "db_parameter_group",
+      "iam_action": "rds:ListTagsForResource",
+      "purpose": "fetch tags per parameter group"
+    },
+    {
+      "service": "db_subnet_group",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::RDS::DBSubnetGroup (#406 unified discoverer)"
+    },
+    {
+      "service": "db_subnet_group",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::RDS::DBSubnetGroup (cache-miss fallback when RGT prefetch is unavailable)"
+    },
+    {
+      "service": "db_subnet_group",
+      "iam_action": "rds:DescribeDBSubnetGroups",
+      "purpose": "list per-region RDS subnet groups"
+    },
+    {
+      "service": "db_subnet_group",
+      "iam_action": "rds:ListTagsForResource",
+      "purpose": "fetch tags per subnet group"
+    },
+    {
+      "service": "dynamodb",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::DynamoDB::Table (#406 unified discoverer)"
+    },
+    {
+      "service": "dynamodb",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::DynamoDB::Table (cache-miss fallback when RGT prefetch is unavailable)"
+    },
+    {
+      "service": "dynamodb",
+      "iam_action": "dynamodb:DescribeTable",
+      "purpose": "resolve a single table by name in DiscoverByID"
+    },
+    {
+      "service": "dynamodb",
+      "iam_action": "dynamodb:ListTables",
+      "purpose": "list per-region tables (paginated)"
+    },
+    {
+      "service": "dynamodb",
+      "iam_action": "dynamodb:ListTagsOfResource",
+      "purpose": "fetch table tags for tag selectors and Identity.Tags"
+    },
+    {
+      "service": "eip",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::EC2::EIP (#406 unified discoverer)"
+    },
+    {
+      "service": "eip",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::EC2::EIP (cache-miss fallback when RGT prefetch is unavailable)"
+    },
+    {
+      "service": "eip",
+      "iam_action": "ec2:DescribeAddresses",
+      "purpose": "list per-region elastic IPs (server-side tag:Project filter when project is set; tags inline)"
+    },
+    {
+      "service": "eks_pod_identity",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::EKS::PodIdentityAssociation (#406 unified discoverer)"
+    },
+    {
+      "service": "eks_pod_identity",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::EKS::PodIdentityAssociation (cache-miss fallback when RGT prefetch is unavailable)"
+    },
+    {
+      "service": "eks_pod_identity",
+      "iam_action": "eks:DescribePodIdentityAssociation",
+      "purpose": "resolve a single EKS pod-identity association by <cluster>,<assoc_id> in DiscoverByID"
+    },
+    {
+      "service": "eks_pod_identity",
+      "iam_action": "eks:ListClusters",
+      "purpose": "list per-region EKS clusters (paginated; cluster-name prefix filter for project scoping)"
+    },
+    {
+      "service": "eks_pod_identity",
+      "iam_action": "eks:ListPodIdentityAssociations",
+      "purpose": "list pod-identity associations per cluster (paginated)"
+    },
+    {
+      "service": "eks_pod_identity",
+      "iam_action": "eks:ListTagsForResource",
+      "purpose": "fetch association tags for tag selectors and Identity.Tags"
+    },
+    {
+      "service": "iam_policy",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::IAM::ManagedPolicy (#406 unified discoverer)"
+    },
+    {
+      "service": "iam_policy",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::IAM::ManagedPolicy (cache-miss fallback when RGT prefetch is unavailable)"
+    },
+    {
+      "service": "iam_policy",
+      "iam_action": "iam:GetPolicy",
+      "purpose": "resolve a single managed policy by ARN in DiscoverByID"
+    },
+    {
+      "service": "iam_policy",
+      "iam_action": "iam:ListPolicies",
+      "purpose": "list customer-managed (Scope=Local) IAM policies"
+    },
+    {
+      "service": "iam_policy",
+      "iam_action": "iam:ListPolicyTags",
+      "purpose": "fetch policy tags for tag selectors and Identity.Tags"
+    },
+    {
+      "service": "iam_role",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::IAM::Role (#406 unified discoverer)"
+    },
+    {
+      "service": "iam_role",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::IAM::Role (cache-miss fallback when RGT prefetch is unavailable)"
+    },
+    {
+      "service": "iam_role",
+      "iam_action": "iam:GetRole",
+      "purpose": "resolve a single role by name in DiscoverByID"
+    },
+    {
+      "service": "iam_role",
+      "iam_action": "iam:ListRoleTags",
+      "purpose": "fetch role tags for tag selectors and Identity.Tags"
+    },
+    {
+      "service": "iam_role",
+      "iam_action": "iam:ListRoles",
+      "purpose": "list IAM roles (paginated)"
+    },
+    {
+      "service": "internet_gateway",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::EC2::InternetGateway (#406 unified discoverer)"
+    },
+    {
+      "service": "internet_gateway",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::EC2::InternetGateway (cache-miss fallback when RGT prefetch is unavailable)"
+    },
+    {
+      "service": "internet_gateway",
+      "iam_action": "ec2:DescribeInternetGateways",
+      "purpose": "list per-region internet gateways (server-side tag:Project filter when project is set; tags inline)"
+    },
+    {
+      "service": "kms",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::KMS::Key (#406 unified discoverer)"
+    },
+    {
+      "service": "kms",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::KMS::Key (cache-miss fallback when RGT prefetch is unavailable)"
+    },
+    {
+      "service": "kms",
+      "iam_action": "kms:DescribeKey",
+      "purpose": "resolve a single key by UUID/alias in DiscoverByID"
+    },
+    {
+      "service": "kms",
+      "iam_action": "kms:ListAliases",
+      "purpose": "list KMS aliases for the project (account/region scoped)"
+    },
+    {
+      "service": "kms",
+      "iam_action": "kms:ListResourceTags",
+      "purpose": "fetch key tags for tag selectors and Identity.Tags"
+    },
+    {
+      "service": "lambda",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::Lambda::Function (#406 unified discoverer)"
+    },
+    {
+      "service": "lambda",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::Lambda::Function (cache-miss fallback when RGT prefetch is unavailable)"
+    },
+    {
+      "service": "lambda",
+      "iam_action": "lambda:GetFunction",
+      "purpose": "resolve a single function by name/ARN in DiscoverByID"
+    },
+    {
+      "service": "lambda",
+      "iam_action": "lambda:ListFunctions",
+      "purpose": "list per-region Lambda functions (paginated)"
+    },
+    {
+      "service": "lambda",
+      "iam_action": "lambda:ListTags",
+      "purpose": "fetch function tags for tag selectors and Identity.Tags"
+    },
+    {
+      "service": "lb",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::ElasticLoadBalancingV2::LoadBalancer (#406 unified discoverer)"
+    },
+    {
+      "service": "lb",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::ElasticLoadBalancingV2::LoadBalancer (cache-miss fallback when RGT prefetch is unavailable)"
+    },
+    {
+      "service": "lb",
+      "iam_action": "elasticloadbalancing:DescribeLoadBalancers",
+      "purpose": "list per-region load balancers (client-side prefix filter)"
+    },
+    {
+      "service": "lb",
+      "iam_action": "elasticloadbalancing:DescribeTags",
+      "purpose": "fetch tags per load balancer / target group / listener (shared)"
+    },
+    {
+      "service": "lb_listener",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::ElasticLoadBalancingV2::Listener (#406 unified discoverer)"
+    },
+    {
+      "service": "lb_listener",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::ElasticLoadBalancingV2::Listener (cache-miss fallback when RGT prefetch is unavailable)"
+    },
+    {
+      "service": "lb_listener",
+      "iam_action": "elasticloadbalancing:DescribeListeners",
+      "purpose": "list listeners per load balancer"
+    },
+    {
+      "service": "lb_listener",
+      "iam_action": "elasticloadbalancing:DescribeLoadBalancers",
+      "purpose": "enumerate parent load balancers to walk listeners"
+    },
+    {
+      "service": "lb_listener",
+      "iam_action": "elasticloadbalancing:DescribeTags",
+      "purpose": "fetch tags per listener (per-listener fan-out)"
+    },
+    {
+      "service": "lb_target_group",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::ElasticLoadBalancingV2::TargetGroup (#406 unified discoverer)"
+    },
+    {
+      "service": "lb_target_group",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::ElasticLoadBalancingV2::TargetGroup (cache-miss fallback when RGT prefetch is unavailable)"
+    },
+    {
+      "service": "lb_target_group",
+      "iam_action": "elasticloadbalancing:DescribeTags",
+      "purpose": "fetch tags per target group"
+    },
+    {
+      "service": "lb_target_group",
+      "iam_action": "elasticloadbalancing:DescribeTargetGroups",
+      "purpose": "list per-region target groups"
+    },
+    {
+      "service": "nat_gateway",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::EC2::NatGateway (#406 unified discoverer)"
+    },
+    {
+      "service": "nat_gateway",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::EC2::NatGateway (cache-miss fallback when RGT prefetch is unavailable)"
+    },
+    {
+      "service": "nat_gateway",
+      "iam_action": "ec2:DescribeNatGateways",
+      "purpose": "list per-region NAT gateways; skip State=deleted/deleting tombstones (server-side tag:Project filter when project is set; tags inline)"
+    },
+    {
+      "service": "network_acl",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::EC2::NetworkAcl (#406 unified discoverer)"
+    },
+    {
+      "service": "network_acl",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::EC2::NetworkAcl (cache-miss fallback when RGT prefetch is unavailable)"
+    },
+    {
+      "service": "network_acl",
+      "iam_action": "ec2:DescribeNetworkAcls",
+      "purpose": "list per-region network ACLs (server-side tag:Project filter when project is set; tags inline)"
+    },
+    {
+      "service": "network_interface",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::EC2::NetworkInterface (#406 unified discoverer)"
+    },
+    {
+      "service": "network_interface",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::EC2::NetworkInterface (cache-miss fallback when RGT prefetch is unavailable)"
+    },
+    {
+      "service": "network_interface",
+      "iam_action": "ec2:DescribeNetworkInterfaces",
+      "purpose": "list per-region elastic network interfaces (server-side tag:Project filter when project is set; tags inline)"
+    },
+    {
+      "service": "opensearchserverless_collection",
+      "iam_action": "aoss:BatchGetCollection",
+      "purpose": "DiscoverByID: fetch collection details by id"
+    },
+    {
+      "service": "opensearchserverless_collection",
+      "iam_action": "aoss:ListCollections",
+      "purpose": "list per-region OpenSearch Serverless collections (client-side prefix filter)"
+    },
+    {
+      "service": "opensearchserverless_collection",
+      "iam_action": "aoss:ListTagsForResource",
+      "purpose": "fetch tags per collection"
+    },
+    {
+      "service": "opensearchserverless_collection",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::OpenSearchServerless::Collection (#406 unified discoverer)"
+    },
+    {
+      "service": "opensearchserverless_collection",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::OpenSearchServerless::Collection (cache-miss fallback when RGT prefetch is unavailable)"
+    },
+    {
+      "service": "resource_explorer_2",
+      "iam_action": "resource-explorer-2:Search",
+      "purpose": "broad enumeration of unsupported resource types (--include-unsupported, gap #6)"
+    },
+    {
+      "service": "resourceexplorer2_index",
+      "iam_action": "resource-explorer-2:GetIndex",
+      "purpose": "resolve the current region's Resource Explorer 2 index in DiscoverByID"
+    },
+    {
+      "service": "resourceexplorer2_index",
+      "iam_action": "resource-explorer-2:ListIndexes",
+      "purpose": "list per-region Resource Explorer 2 indexes (paginated; account-level setup, no project filter)"
+    },
+    {
+      "service": "resourceexplorer2_index",
+      "iam_action": "resource-explorer-2:ListTagsForResource",
+      "purpose": "fetch index tags for tag selectors and Identity.Tags"
+    },
+    {
+      "service": "resourceexplorer2_view",
+      "iam_action": "resource-explorer-2:GetView",
+      "purpose": "resolve a single Resource Explorer 2 view by ARN in DiscoverByID"
+    },
+    {
+      "service": "resourceexplorer2_view",
+      "iam_action": "resource-explorer-2:ListTagsForResource",
+      "purpose": "fetch view tags for tag selectors and Identity.Tags"
+    },
+    {
+      "service": "resourceexplorer2_view",
+      "iam_action": "resource-explorer-2:ListViews",
+      "purpose": "list per-region Resource Explorer 2 views (paginated; account-level setup, no project filter)"
+    },
+    {
+      "service": "rgt",
+      "iam_action": "tag:GetResources",
+      "purpose": "RGT prefetch: one server-side tag-filtered call per region returns all project-tagged ARNs across every service in one shot (#406 unified discoverer)."
+    },
+    {
+      "service": "route53_zone",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::Route53::HostedZone (#406 unified discoverer)"
+    },
+    {
+      "service": "route53_zone",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::Route53::HostedZone (cache-miss fallback when RGT prefetch is unavailable)"
+    },
+    {
+      "service": "route53_zone",
+      "iam_action": "route53:ListHostedZones",
+      "purpose": "list Route 53 hosted zones (global; client-side prefix filter)"
+    },
+    {
+      "service": "route53_zone",
+      "iam_action": "route53:ListTagsForResource",
+      "purpose": "fetch tags per zone for tag selectors and Identity.Tags"
+    },
+    {
+      "service": "route_table",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::EC2::RouteTable (#406 unified discoverer)"
+    },
+    {
+      "service": "route_table",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::EC2::RouteTable (cache-miss fallback when RGT prefetch is unavailable)"
+    },
+    {
+      "service": "route_table",
+      "iam_action": "ec2:DescribeRouteTables",
+      "purpose": "list per-region route tables (server-side tag:Project filter when project is set; tags inline)"
+    },
+    {
+      "service": "s3",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::S3::Bucket (#406 unified discoverer)"
+    },
+    {
+      "service": "s3",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::S3::Bucket (cache-miss fallback when RGT prefetch is unavailable)"
+    },
+    {
+      "service": "s3",
+      "iam_action": "s3:GetBucketTagging",
+      "purpose": "fetch bucket tags for tag selectors and Identity.Tags"
+    },
+    {
+      "service": "s3",
+      "iam_action": "s3:HeadBucket",
+      "purpose": "verify bucket existence in DiscoverByID"
+    },
+    {
+      "service": "s3",
+      "iam_action": "s3:ListAllMyBuckets",
+      "purpose": "list buckets account-globally (ListBuckets)"
+    },
+    {
+      "service": "secretsmanager",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::SecretsManager::Secret (#406 unified discoverer)"
+    },
+    {
+      "service": "secretsmanager",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::SecretsManager::Secret (cache-miss fallback when RGT prefetch is unavailable)"
+    },
+    {
+      "service": "secretsmanager",
+      "iam_action": "secretsmanager:DescribeSecret",
+      "purpose": "resolve a single secret by name/ARN in DiscoverByID"
+    },
+    {
+      "service": "secretsmanager",
+      "iam_action": "secretsmanager:ListSecrets",
+      "purpose": "list per-region secrets (server-side TagKey/TagValue filter when project is set)"
+    },
+    {
+      "service": "security_group",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::EC2::SecurityGroup (#406 unified discoverer)"
+    },
+    {
+      "service": "security_group",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::EC2::SecurityGroup (cache-miss fallback when RGT prefetch is unavailable)"
+    },
+    {
+      "service": "security_group",
+      "iam_action": "ec2:DescribeSecurityGroups",
+      "purpose": "list per-region security groups (server-side tag:Project filter when project is set; tags inline)"
+    },
+    {
+      "service": "sns_topic",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "fetch per-topic properties for tag extraction"
+    },
+    {
+      "service": "sns_topic",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "list per-region AWS::SNS::Topic resources"
+    },
+    {
+      "service": "sns_topic",
+      "iam_action": "sns:GetTopicAttributes",
+      "purpose": "Cloud Control delegate for GetResource"
+    },
+    {
+      "service": "sns_topic",
+      "iam_action": "sns:ListTagsForResource",
+      "purpose": "Cloud Control delegate for Tags property"
+    },
+    {
+      "service": "sns_topic",
+      "iam_action": "sns:ListTopics",
+      "purpose": "Cloud Control delegate for ListResources"
+    },
+    {
+      "service": "sqs",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::SQS::Queue (#406 unified discoverer)"
+    },
+    {
+      "service": "sqs",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::SQS::Queue (cache-miss fallback when RGT prefetch is unavailable)"
+    },
+    {
+      "service": "sqs",
+      "iam_action": "sqs:GetQueueUrl",
+      "purpose": "resolve a queue URL by name in DiscoverByID"
+    },
+    {
+      "service": "sqs",
+      "iam_action": "sqs:ListQueueTags",
+      "purpose": "fetch queue tags for tag selectors and Identity.Tags"
+    },
+    {
+      "service": "sqs",
+      "iam_action": "sqs:ListQueues",
+      "purpose": "list per-region queues (server-side QueueNamePrefix filter when project is set)"
+    },
+    {
+      "service": "sts",
+      "iam_action": "sts:GetCallerIdentity",
+      "purpose": "stamp the AccountID on every discovered resource (one call per run)"
+    },
+    {
+      "service": "subnet",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::EC2::Subnet (#406 unified discoverer)"
+    },
+    {
+      "service": "subnet",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::EC2::Subnet (cache-miss fallback when RGT prefetch is unavailable)"
+    },
+    {
+      "service": "subnet",
+      "iam_action": "ec2:DescribeSubnets",
+      "purpose": "list per-region subnets (server-side tag:Project filter when project is set; tags inline)"
+    },
+    {
+      "service": "vpc",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::EC2::VPC (#406 unified discoverer)"
+    },
+    {
+      "service": "vpc",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::EC2::VPC (cache-miss fallback when RGT prefetch is unavailable)"
+    },
+    {
+      "service": "vpc",
+      "iam_action": "ec2:DescribeVpcs",
+      "purpose": "list per-region VPCs (server-side tag:Project filter when project is set; tags inline)"
+    },
+    {
+      "service": "vpc_dhcp_options",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::EC2::DHCPOptions (#406 unified discoverer)"
+    },
+    {
+      "service": "vpc_dhcp_options",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::EC2::DHCPOptions (cache-miss fallback when RGT prefetch is unavailable)"
+    },
+    {
+      "service": "vpc_dhcp_options",
+      "iam_action": "ec2:DescribeDhcpOptions",
+      "purpose": "list per-region DHCP options sets (server-side tag:Project filter when project is set; tags inline)"
+    },
+    {
+      "service": "vpc_endpoint",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::EC2::VPCEndpoint (#406 unified discoverer)"
+    },
+    {
+      "service": "vpc_endpoint",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::EC2::VPCEndpoint (cache-miss fallback when RGT prefetch is unavailable)"
+    },
+    {
+      "service": "vpc_endpoint",
+      "iam_action": "ec2:DescribeVpcEndpoints",
+      "purpose": "list per-region VPC endpoints; skip State=deleted/deleting tombstones (server-side tag:Project filter when project is set; tags inline)"
+    }
   ]
 }
