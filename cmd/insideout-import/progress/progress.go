@@ -168,15 +168,10 @@ func (e Event) MarshalJSON() ([]byte, error) {
 			Timestamp  time.Time `json:"ts"`
 		}{e.Event, e.Stage, e.Count, e.Total, e.DurationMs, e.Timestamp})
 	case "service_warn":
-		if e.Location != "" {
-			return json.Marshal(struct {
-				Event     string    `json:"event"`
-				Service   string    `json:"service"`
-				Location  string    `json:"location"`
-				Message   string    `json:"message"`
-				Timestamp time.Time `json:"ts"`
-			}{e.Event, e.Service, e.Location, e.Message, e.Timestamp})
-		}
+		// service_warn carries only (service, region, message) — the
+		// Emitter interface does not surface a location form. If a
+		// future warn callsite needs a GCP location it should extend
+		// the Emitter contract first.
 		return json.Marshal(struct {
 			Event     string    `json:"event"`
 			Service   string    `json:"service"`

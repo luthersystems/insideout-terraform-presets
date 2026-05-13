@@ -23,8 +23,6 @@ const syntheticTypePrefix = "policy_test_"
 // coveredTypes pins the exact set of import resource types that must
 // have a Layer 2 policy registered. Adding or removing a type requires
 // updating this list — the diff makes the surface change explicit.
-// (Renamed from `coveredTypes` in #396 once Bundle 9+10+11 expanded
-// the set far beyond the original Phase 1 five.)
 var coveredTypes = []string{
 	"aws_cloudwatch_log_group",
 	"aws_dynamodb_table",

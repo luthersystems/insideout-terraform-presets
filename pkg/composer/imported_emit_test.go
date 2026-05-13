@@ -409,14 +409,13 @@ func TestEmitImportedTF_GoogleBetaSetsProvidersUsedKey(t *testing.T) {
 	out, used := EmitImportedTF("gcp", []imported.ImportedResource{ir}, EmitImportedOpts{})
 	require.NotNil(t, out)
 	s := string(out)
-	assert.True(t, used["gcp"], "used[gcp] must be set: %v", used)
-	assert.True(t, used["gcp-beta"], "used[gcp-beta] must be set when google-beta type emitted: %v", used)
+	assert.True(t, used[ProvidersUsedKeyGCP], "used[gcp] must be set: %v", used)
+	assert.True(t, used[ProvidersUsedKeyGCPBeta], "used[gcp-beta] must be set when google-beta type emitted: %v", used)
 	// Cross-cloud isolation: a GCP-only emit must not flip the AWS
 	// key. Without this, a regression that unconditionally flips
 	// every cloud key would pass the gcp/gcp-beta assertions but
 	// silently pollute providers.tf with stray alias blocks.
-	assert.False(t, used["aws"], "used[aws] must NOT be set on a gcp-only emit: %v", used)
-	assert.Len(t, used, 2, "exactly gcp + gcp-beta keys should fire: %v", used)
+	assert.False(t, used[ProvidersUsedKeyAWS], "used[aws] must NOT be set on a gcp-only emit: %v", used)
 	assert.True(t, hasAttr(t, s, "provider", "google-beta.imported"),
 		"provider attr must reference google-beta.imported in:\n%s", s)
 	// Anchor the test in a non-vacuous emit — without this, a
@@ -425,6 +424,31 @@ func TestEmitImportedTF_GoogleBetaSetsProvidersUsedKey(t *testing.T) {
 	// side effect of pre-emit cloud detection.
 	assert.Contains(t, s, `resource "google_api_gateway_api"`,
 		"emitter must produce a resource block for the typed API gateway type")
+}
+
+// TestEmitImportedTF_SkippedTierDoesNotFlipGCPBeta is the negative
+// counterpart to TestEmitImportedTF_GoogleBetaSetsProvidersUsedKey.
+// A google-beta-backed resource whose tier is `External` (not
+// emit-eligible) must NOT flip the gcp-beta key — otherwise the
+// composer emits an unused google-beta provider block in providers.tf,
+// triggering `terraform init` errors for stacks that have no
+// rendered resource needing the alias.
+func TestEmitImportedTF_SkippedTierDoesNotFlipGCPBeta(t *testing.T) {
+	t.Parallel()
+	ir := imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Cloud:    "gcp",
+			Type:     "google_api_gateway_api",
+			Address:  "google_api_gateway_api.skipped",
+			ImportID: "projects/p/locations/global/apis/skipped",
+		},
+		Tier:  imported.TierExternalByPolicy,
+		Attrs: []byte(`{}`),
+	}
+	out, used := EmitImportedTF("gcp", []imported.ImportedResource{ir}, EmitImportedOpts{})
+	assert.Nil(t, out, "skipped tier must produce no HCL output")
+	assert.False(t, used[ProvidersUsedKeyGCPBeta],
+		"used[gcp-beta] must NOT fire when the only beta resource is in a skipped tier: %v", used)
 }
 
 func TestAddressLabel(t *testing.T) {

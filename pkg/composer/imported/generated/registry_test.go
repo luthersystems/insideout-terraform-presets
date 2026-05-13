@@ -94,11 +94,14 @@ func TestLookupProviderSource_UnknownTypeReturnsFalse(t *testing.T) {
 	assert.Equal(t, "", got)
 }
 
-// TestRegistry_AllTenPhase1Registered locks in the Phase 1 coverage:
-// every name in this list must appear in the registry, populated by the
-// generated init() side effects. Adding or removing a generated type
-// requires updating this list.
-func TestRegistry_AllTenPhase1Registered(t *testing.T) {
+// TestRegistry_BaselineTypesStillRegistered is a smoke regression
+// check: the original 10 types (5 AWS, 5 GCP) shipped in Phase 1
+// must remain registered as the codegen surface grows. The
+// authoritative coverage gate is now
+// TestRegisteredTypes_CoveredSetExact in the policy package — this
+// test exists to catch a regression that silently drops a baseline
+// type without flipping the broader gate.
+func TestRegistry_BaselineTypesStillRegistered(t *testing.T) {
 	t.Parallel()
 	want := []string{
 		"aws_cloudwatch_log_group",

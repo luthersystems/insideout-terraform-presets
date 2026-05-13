@@ -27,7 +27,8 @@ refresh-schemas: ## Re-dump terraform provider schemas (requires `terraform` on 
 	$(GO) run ./cmd/imported-codegen filter \
 	    --in $(SCHEMAS_DIR)/.full.json \
 	    --aws-out $(SCHEMAS_DIR)/aws.filtered.json \
-	    --google-out $(SCHEMAS_DIR)/google.filtered.json
+	    --google-out $(SCHEMAS_DIR)/google.filtered.json \
+	    --google-beta-out $(SCHEMAS_DIR)/google-beta.filtered.json
 	rm $(SCHEMAS_DIR)/.full.json
 
 .PHONY: gen-imported
@@ -35,6 +36,7 @@ gen-imported: ## Regenerate typed resource files from filtered schemas.
 	$(GO) run ./cmd/imported-codegen gen \
 	    --aws-schema $(SCHEMAS_DIR)/aws.filtered.json \
 	    --google-schema $(SCHEMAS_DIR)/google.filtered.json \
+	    --google-beta-schema $(SCHEMAS_DIR)/google-beta.filtered.json \
 	    --out $(GEN_DIR)
 	$(GO) build ./...
 

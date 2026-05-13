@@ -270,6 +270,12 @@ var templateFuncs = template.FuncMap{
 // version.gen.go file. The codegen emits the constant name (not the
 // literal source) into each <type>.gen.go's Register() call so a
 // provider source rename only touches version.gen.go.
+//
+// Panics on an unrecognized source. Adding a new provider source to
+// config.go without extending this switch would otherwise silently
+// route every generated type through the wrong constant and
+// miscategorize it at compose time — a fail-fast at codegen is the
+// load-bearing guard.
 func providerSourceConstName(providerSource string) string {
 	switch providerSource {
 	case AWSProviderSource:
@@ -279,9 +285,6 @@ func providerSourceConstName(providerSource string) string {
 	case GoogleBetaProviderSource:
 		return "GoogleBetaProviderSource"
 	default:
-		// Fall back to the AWS constant for unknown sources; the
-		// downstream emit-time validation in TestRegisteredTypes_…
-		// catches drift before it lands in CI.
-		return "AWSProviderSource"
+		panic(fmt.Sprintf("imported-codegen: unknown provider source %q — extend providerSourceConstName when adding a new Wanted* slice", providerSource))
 	}
 }

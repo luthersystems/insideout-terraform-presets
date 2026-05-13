@@ -45,10 +45,36 @@ const (
 	emitModeRemovedBlock                   // `removed { from = ... lifecycle { destroy = false } }` only
 )
 
+// ProvidersUsedKey* are the keys EmitImportedTF flips in the
+// providersUsed map to signal which alias blocks generateProvidersTF
+// must emit. AWS and GCP map 1:1 to Identity.Cloud; GCPBeta is a
+// synthetic key set when at least one emitted resource carries
+// `provider = google-beta.imported` (the API Gateway family). Keep
+// these constants as the single source of truth for the EmitImportedTF
+// ↔ generateProvidersTF wire format — both sides reference them by
+// name so a rename ripples through the type checker rather than
+// silently failing.
+const (
+	ProvidersUsedKeyAWS     = "aws"
+	ProvidersUsedKeyGCP     = "gcp"
+	ProvidersUsedKeyGCPBeta = "gcp-beta"
+)
+
 // EmitImportedTF emits the contents of /imported.tf for the supplied imported
 // resources, restricted to those that match the compose cloud. The returned
-// providersUsed map carries "aws":true and/or "gcp":true to signal which
-// imported provider aliases the caller must declare in providers.tf.
+// providersUsed map signals which imported provider aliases the caller must
+// declare in providers.tf. Keys are:
+//
+//   - ProvidersUsedKeyAWS ("aws"): emit `aws.imported` alias
+//   - ProvidersUsedKeyGCP ("gcp"): emit `google.imported` alias
+//   - ProvidersUsedKeyGCPBeta ("gcp-beta"): emit `google-beta.imported`
+//     alias (set when at least one rendered resource carries
+//     `provider = google-beta.imported`, i.e. its typed registry
+//     entry recorded GoogleBetaProviderSource)
+//
+// generateProvidersTF in compose.go consumes the same constants — both
+// sides reference the package-level names so a rename ripples through
+// the type checker.
 //
 // Resources whose tier is not emit-eligible are silently skipped — the
 // validator (ValidateImportedResources) is responsible for reporting blocking
@@ -115,10 +141,10 @@ func EmitImportedTF(cloud string, irs []imported.ImportedResource, opts EmitImpo
 			providersUsed[got] = true
 			if alias == "google-beta.imported" {
 				// Signal the providers.tf generator to emit the google-beta
-				// alias by recording the synthetic "gcp-beta" key alongside
-				// the plain cloud key. generateProvidersTF consults this
-				// map via the ImportedClouds input.
-				providersUsed["gcp-beta"] = true
+				// alias by recording the synthetic ProvidersUsedKeyGCPBeta
+				// key alongside the plain cloud key. generateProvidersTF
+				// consults this map via the ImportedClouds input.
+				providersUsed[ProvidersUsedKeyGCPBeta] = true
 			}
 		case emitModeRemovedBlock:
 			e.removed = renderRemovedBlock(addr)

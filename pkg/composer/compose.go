@@ -785,7 +785,7 @@ func generateProvidersTF(in providersTFInput) []byte {
 		// alias. Declare it explicitly here so the alias block below
 		// doesn't fail required_providers resolution when the only
 		// google-beta consumer is the imported alias.
-		if importedClouds["gcp-beta"] {
+		if importedClouds[ProvidersUsedKeyGCPBeta] {
 			required["google-beta"] = &tfconfig.ProviderRequirement{Source: "hashicorp/google-beta", VersionConstraints: []string{">= 5.16"}}
 		}
 		maps.Copy(required, discovered)
@@ -821,7 +821,7 @@ func generateProvidersTF(in providersTFInput) []byte {
 			// fix to the caller before apply.
 			fmt.Fprintf(&b, "provider \"google\" {\n  alias   = \"imported\"\n  region  = %q\n  project = %q\n}\n", region, gcpProjectID)
 		}
-		if importedClouds["gcp-beta"] {
+		if importedClouds[ProvidersUsedKeyGCPBeta] {
 			b.WriteString("\n")
 			// google-beta.imported is the alias used by imported
 			// resources whose schema lives in hashicorp/google-beta —
