@@ -37,8 +37,9 @@ import (
 // adding a type is a single import + struct literal in one .go file.
 var targets = []target{
 	storageBucketTarget,
+	pubsubTopicTarget,
 	// Future:
-	//   pubsubTopicTarget,
+	//   pubsubSubscriptionTarget,
 	//   secretManagerSecretTarget,
 	//   computeNetworkTarget,
 }

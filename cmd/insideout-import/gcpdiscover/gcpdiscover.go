@@ -298,6 +298,7 @@ func NewGCPDiscoverer(searcher gcpAssetSearcher, projectID string, opts GCPDisco
 		// follows the existing per-type ordering one PR at a time.
 		byTypeEnricher: map[string]AttributeEnricher{
 			"google_storage_bucket": newStorageBucketEnricher(),
+			"google_pubsub_topic":   newPubsubTopicEnricher(),
 		},
 	}
 }
