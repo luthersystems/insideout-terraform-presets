@@ -24,6 +24,7 @@ require (
 	github.com/aws/aws-sdk-go-v2 v1.41.7
 	github.com/aws/aws-sdk-go-v2/config v1.32.17
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.16
+	github.com/aws/aws-sdk-go-v2/service/acm v1.38.3
 	github.com/aws/aws-sdk-go-v2/service/apigatewayv2 v1.34.3
 	github.com/aws/aws-sdk-go-v2/service/backup v1.55.2
 	github.com/aws/aws-sdk-go-v2/service/bedrock v1.59.2

@@ -76,6 +76,7 @@ const (
 // readable. The golden file enforces the same key order.
 var categoryByTFType = map[string]string{
 	// --- AWS ---
+	"aws_acm_certificate":                 CategorySecurity,
 	"aws_apigatewayv2_api":                CategoryNetworkSecurity,
 	"aws_apigatewayv2_stage":              CategoryNetworkSecurity,
 	"aws_backup_plan":                     CategoryDataStorage,
@@ -88,6 +89,8 @@ var categoryByTFType = map[string]string{
 	"aws_cloudwatch_log_group":            CategoryObservability,
 	"aws_cloudwatch_metric_alarm":         CategoryObservability,
 	"aws_cognito_user_pool":               CategorySecurity,
+	"aws_cognito_user_pool_client":        CategorySecurity,
+	"aws_cognito_user_pool_domain":        CategorySecurity,
 	"aws_db_instance":                     CategoryDataStorage,
 	"aws_db_parameter_group":              CategoryDataStorage,
 	"aws_db_subnet_group":                 CategoryDataStorage,
@@ -103,6 +106,7 @@ var categoryByTFType = map[string]string{
 	"aws_iam_role":                        CategorySecurity,
 	"aws_internet_gateway":                CategoryNetworkSecurity,
 	"aws_kms_key":                         CategorySecurity,
+	"aws_lambda_alias":                    CategoryVirtualMachines,
 	"aws_lambda_event_source_mapping":     CategoryEvents,
 	"aws_lambda_function":                 CategoryVirtualMachines,
 	"aws_lb":                              CategoryNetworkSecurity,
@@ -127,6 +131,7 @@ var categoryByTFType = map[string]string{
 	"aws_vpc":                             CategoryNetworkSecurity,
 	"aws_vpc_dhcp_options":                CategoryNetworkSecurity,
 	"aws_vpc_endpoint":                    CategoryNetworkSecurity,
+	"aws_wafv2_web_acl":                   CategorySecurity,
 
 	// --- GCP ---
 	"google_api_gateway_api":                 CategoryNetworkSecurity,

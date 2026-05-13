@@ -243,6 +243,39 @@ func TestParseARN(t *testing.T) {
 			wantOK: true,
 		},
 		{
+			name: "acm_certificate",
+			arn:  "arn:aws:acm:us-east-1:111111111111:certificate/abc-12345-6789-def0",
+			want: parsedARN{
+				full: "arn:aws:acm:us-east-1:111111111111:certificate/abc-12345-6789-def0", partition: "aws",
+				service: "acm", region: "us-east-1", accountID: "111111111111",
+				resourceType: "certificate", resourceID: "abc-12345-6789-def0",
+			},
+			wantOK: true,
+		},
+		{
+			// WAFv2 ARN encodes the scope (regional|global) as the first
+			// segment of the resource portion; parseARN sees it as
+			// resourceType=<scope>, resourceID=`webacl/<name>/<id>`.
+			name: "wafv2_webacl_regional",
+			arn:  "arn:aws:wafv2:us-east-1:111111111111:regional/webacl/my-acl/abc-12345",
+			want: parsedARN{
+				full: "arn:aws:wafv2:us-east-1:111111111111:regional/webacl/my-acl/abc-12345", partition: "aws",
+				service: "wafv2", region: "us-east-1", accountID: "111111111111",
+				resourceType: "regional", resourceID: "webacl/my-acl/abc-12345",
+			},
+			wantOK: true,
+		},
+		{
+			name: "wafv2_webacl_global",
+			arn:  "arn:aws:wafv2:us-east-1:111111111111:global/webacl/my-acl/abc-12345",
+			want: parsedARN{
+				full: "arn:aws:wafv2:us-east-1:111111111111:global/webacl/my-acl/abc-12345", partition: "aws",
+				service: "wafv2", region: "us-east-1", accountID: "111111111111",
+				resourceType: "global", resourceID: "webacl/my-acl/abc-12345",
+			},
+			wantOK: true,
+		},
+		{
 			name:   "malformed_not_arn",
 			arn:    "not-an-arn",
 			wantOK: false,
@@ -401,6 +434,24 @@ func TestLookupRule(t *testing.T) {
 		// Cognito
 		{name: "cognito_userpool", arn: "arn:aws:cognito-idp:us-east-1:111111111111:userpool/us-east-1_AbCdE",
 			wantCFN: "AWS::Cognito::UserPool", wantIdent: "us-east-1_AbCdE"},
+
+		// ACM — Cloud Control primary identifier is the full ARN.
+		{name: "acm_certificate_full_arn",
+			arn:     "arn:aws:acm:us-east-1:111111111111:certificate/abc-12345-6789-def0",
+			wantCFN: "AWS::CertificateManager::Certificate",
+			wantIdent: "arn:aws:acm:us-east-1:111111111111:certificate/abc-12345-6789-def0"},
+
+		// WAFv2 — ARN scope (regional/global) maps to CFN Scope
+		// (REGIONAL/CLOUDFRONT); identifier rebuilds as
+		// `<Name>|<Id>|<Scope>`.
+		{name: "wafv2_webacl_regional_compound_rewrite",
+			arn:       "arn:aws:wafv2:us-east-1:111111111111:regional/webacl/my-acl/abc-12345",
+			wantCFN:   "AWS::WAFv2::WebACL",
+			wantIdent: "my-acl|abc-12345|REGIONAL"},
+		{name: "wafv2_webacl_global_compound_rewrite",
+			arn:       "arn:aws:wafv2:us-east-1:111111111111:global/webacl/my-acl/abc-12345",
+			wantCFN:   "AWS::WAFv2::WebACL",
+			wantIdent: "my-acl|abc-12345|CLOUDFRONT"},
 
 		// SSM Parameter — leading `/` re-prepended onto resourceID
 		{name: "ssm_parameter_single_segment",

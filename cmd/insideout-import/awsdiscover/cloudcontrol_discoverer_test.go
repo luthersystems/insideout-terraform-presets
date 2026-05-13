@@ -9,6 +9,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/cloudcontrol"
 	cctypes "github.com/aws/aws-sdk-go-v2/service/cloudcontrol/types"
 	smithy "github.com/aws/smithy-go"
@@ -548,7 +549,7 @@ func TestCloudControlDiscover_ParentListerFansOutPerParent(t *testing.T) {
 		}
 	}
 	cfg := testConfig()
-	cfg.ParentLister = func(_ context.Context, _ cloudControlClient, _ DiscoverArgs) ([]string, error) {
+	cfg.ParentLister = func(_ context.Context, _ aws.Config, _ string, _ DiscoverArgs) ([]string, error) {
 		return []string{`{"UserPoolId":"A"}`, `{"UserPoolId":"B"}`}, nil
 	}
 	d := &cloudControlDiscoverer{
@@ -1085,7 +1086,7 @@ func TestCloudControlDiscover_NativeIDsFromPropertiesPropagates(t *testing.T) {
 func TestCloudControlDiscover_ParentListerReturnsEmptyEmitsCleanFinish(t *testing.T) {
 	t.Parallel()
 	cfg := testConfig()
-	cfg.ParentLister = func(_ context.Context, _ cloudControlClient, _ DiscoverArgs) ([]string, error) {
+	cfg.ParentLister = func(_ context.Context, _ aws.Config, _ string, _ DiscoverArgs) ([]string, error) {
 		return []string{}, nil
 	}
 	d := &cloudControlDiscoverer{
@@ -1130,7 +1131,7 @@ func TestCloudControlDiscover_ParentListerReturnsEmptyEmitsCleanFinish(t *testin
 func TestCloudControlDiscover_ParentListerErrorEmitsFinishAndPropagates(t *testing.T) {
 	t.Parallel()
 	cfg := testConfig()
-	cfg.ParentLister = func(_ context.Context, _ cloudControlClient, _ DiscoverArgs) ([]string, error) {
+	cfg.ParentLister = func(_ context.Context, _ aws.Config, _ string, _ DiscoverArgs) ([]string, error) {
 		return nil, errCCSeed
 	}
 	d := &cloudControlDiscoverer{
@@ -1622,4 +1623,184 @@ func mapEqual(a, b map[string]string) bool {
 		}
 	}
 	return true
+}
+
+// TestCloudControlDiscover_SDKListerBypassesListResources pins the
+// new SDKLister code path: when set, ListResources MUST NOT be called
+// and the per-identifier GetResource fan-out runs against the
+// SDKLister-emitted set. The discoverer must call SDKLister exactly
+// once per region (a regression that double-invokes it would do an
+// extra round-trip).
+func TestCloudControlDiscover_SDKListerBypassesListResources(t *testing.T) {
+	t.Parallel()
+	fake := &fakeCloudControlClient{
+		// listPages intentionally non-empty — if the discoverer
+		// erroneously fell through to ListResources, it'd pick this
+		// up and the assertion would catch it.
+		listPages: []cloudcontrol.ListResourcesOutput{
+			listPage("", "should-not-be-listed"),
+		},
+		propsByIdentifier: map[string]map[string]any{
+			"id-a":                {"Tags": map[string]any{"Project": "io-foo"}},
+			"id-b":                {"Tags": map[string]any{"Project": "io-foo"}},
+			"should-not-be-listed": {"Tags": map[string]any{}},
+		},
+	}
+	cfg := testConfig()
+	var sdkCalls int
+	cfg.SDKLister = func(_ context.Context, _ aws.Config, _ string, _ DiscoverArgs) ([]string, error) {
+		sdkCalls++
+		return []string{"id-a", "id-b"}, nil
+	}
+	d := &cloudControlDiscoverer{
+		cfg:            cfg,
+		new:            func(_ string) cloudControlClient { return fake },
+		maxConcurrency: DefaultMaxConcurrency,
+	}
+	got, err := d.Discover(context.Background(), DiscoverArgs{
+		Project:   "io-foo",
+		Regions:   []string{"us-east-1"},
+		AccountID: "123",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sdkCalls != 1 {
+		t.Errorf("SDKLister calls: got %d, want 1 (per-region invocation)", sdkCalls)
+	}
+	if fake.listCalls != 0 {
+		t.Errorf("ListResources calls: got %d, want 0 (SDKLister branch must bypass CC ListResources)", fake.listCalls)
+	}
+	if len(got) != 2 {
+		t.Fatalf("emit count: got %d, want 2 (both SDKLister-emitted IDs must surface)", len(got))
+	}
+	names := []string{got[0].Identity.ImportID, got[1].Identity.ImportID}
+	sort.Strings(names)
+	if names[0] != "id-a" || names[1] != "id-b" {
+		t.Errorf("ImportIDs: got %v, want [id-a id-b]", names)
+	}
+}
+
+// TestCloudControlDiscover_SDKListerErrorEmitsFinishAndPropagates is
+// the SDKLister twin of …ParentListerErrorEmitsFinishAndPropagates: an
+// SDKLister error must close the ServiceFinish bracket (Count=0) and
+// propagate via %w so errors.Is unwraps to the sentinel.
+func TestCloudControlDiscover_SDKListerErrorEmitsFinishAndPropagates(t *testing.T) {
+	t.Parallel()
+	cfg := testConfig()
+	cfg.SDKLister = func(_ context.Context, _ aws.Config, _ string, _ DiscoverArgs) ([]string, error) {
+		return nil, errCCSeed
+	}
+	d := &cloudControlDiscoverer{
+		cfg:            cfg,
+		new:            func(_ string) cloudControlClient { return &fakeCloudControlClient{} },
+		maxConcurrency: DefaultMaxConcurrency,
+	}
+	rec := &recordingEmitter{}
+	_, err := d.Discover(context.Background(), DiscoverArgs{
+		Regions:   []string{"us-east-1"},
+		AccountID: "123",
+		Emitter:   rec,
+	})
+	if err == nil {
+		t.Fatal("expected error from SDKLister failure")
+	}
+	if !errors.Is(err, errCCSeed) {
+		t.Errorf("err=%v, want errors.Is(err, errCCSeed) (error must wrap sentinel via %%w)", err)
+	}
+	var finishes int
+	for _, e := range rec.snapshot() {
+		if e.Kind == "service_finish" {
+			finishes++
+			if e.Count != 0 {
+				t.Errorf("service_finish.Count=%d, want 0 (error path must close bracket with zero emits)", e.Count)
+			}
+		}
+	}
+	if finishes != 1 {
+		t.Errorf("service_finish count=%d, want 1 (SDKLister error path must still close the bracket)", finishes)
+	}
+}
+
+// TestCloudControlDiscover_SDKListerEmptyResultEmitsCleanFinish pins
+// the empty-region early-exit branch on the SDKLister path: when
+// SDKLister returns []string{} (no identifiers in this region), the
+// discoverer emits ServiceFinish(Count=0) and continues to the next
+// region rather than falling through to the GetResource fan-out (which
+// would do nothing) or erroring.
+func TestCloudControlDiscover_SDKListerEmptyResultEmitsCleanFinish(t *testing.T) {
+	t.Parallel()
+	cfg := testConfig()
+	cfg.SDKLister = func(_ context.Context, _ aws.Config, _ string, _ DiscoverArgs) ([]string, error) {
+		return []string{}, nil
+	}
+	fake := &fakeCloudControlClient{}
+	d := &cloudControlDiscoverer{
+		cfg:            cfg,
+		new:            func(_ string) cloudControlClient { return fake },
+		maxConcurrency: DefaultMaxConcurrency,
+	}
+	rec := &recordingEmitter{}
+	got, err := d.Discover(context.Background(), DiscoverArgs{
+		Regions:   []string{"us-east-1"},
+		AccountID: "123",
+		Emitter:   rec,
+	})
+	if err != nil {
+		t.Fatalf("empty SDKLister result must succeed; got err=%v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("emit count: got %d, want 0", len(got))
+	}
+	if fake.listCalls != 0 {
+		t.Errorf("ListResources calls: got %d, want 0 (empty SDKLister result must not fall through to ListResources)", fake.listCalls)
+	}
+	var finishes int
+	for _, e := range rec.snapshot() {
+		if e.Kind == "service_finish" {
+			finishes++
+			if e.Count != 0 {
+				t.Errorf("service_finish.Count=%d, want 0", e.Count)
+			}
+		}
+	}
+	if finishes != 1 {
+		t.Errorf("service_finish count=%d, want 1", finishes)
+	}
+}
+
+// TestNewCloudControlDiscoverer_PanicsOnSDKListerAndParentListerBothSet
+// pins the mutual-exclusion guard. Setting both fields is a
+// registration-time programming error that would silently pick one
+// branch over the other in production. The panic at construction time
+// surfaces the regression in any test run that builds the discoverer.
+func TestNewCloudControlDiscoverer_PanicsOnSDKListerAndParentListerBothSet(t *testing.T) {
+	t.Parallel()
+	cfg := testConfig()
+	cfg.ParentLister = func(_ context.Context, _ aws.Config, _ string, _ DiscoverArgs) ([]string, error) {
+		return nil, nil
+	}
+	cfg.SDKLister = func(_ context.Context, _ aws.Config, _ string, _ DiscoverArgs) ([]string, error) {
+		return nil, nil
+	}
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Fatal("expected panic; got nil")
+		}
+		msg, ok := r.(string)
+		if !ok {
+			t.Fatalf("panic value is not string: %T %v", r, r)
+		}
+		// Pin the message contains the TFType + the contract keywords so
+		// a regression that swaps panic-vs-error or drops the type label
+		// is caught.
+		if !strings.Contains(msg, "aws_test_resource") {
+			t.Errorf("panic message missing TFType: %q", msg)
+		}
+		if !strings.Contains(msg, "mutually exclusive") {
+			t.Errorf("panic message missing 'mutually exclusive': %q", msg)
+		}
+	}()
+	_ = newCloudControlDiscoverer(cfg, aws.Config{}, DefaultMaxConcurrency)
 }

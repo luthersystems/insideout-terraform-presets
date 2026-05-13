@@ -55,6 +55,7 @@ var untaggableAWS = map[string]struct{}{
 	"aws_iam_role_policy_attachment":                     {},
 	"aws_iam_service_linked_role":                        {},
 	"aws_kms_alias":                                      {},
+	"aws_lambda_alias":                                   {},
 	"aws_msk_configuration":                              {},
 	"aws_opensearchserverless_access_policy":             {},
 	"aws_opensearchserverless_security_policy":           {},
