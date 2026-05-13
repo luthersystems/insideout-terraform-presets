@@ -84,12 +84,20 @@ func billingRequesterPays(b *storagev1.BucketBilling) bool {
 			},
 		},
 
-		// enable_object_retention: presence-as-bool — the API exposes
-		// ObjectRetention as a sub-struct (with Mode), TF as a flat
-		// bool. Non-nil sub-struct → true.
+		// enable_object_retention: the API exposes ObjectRetention as a
+		// sub-struct with a Mode string; TF as a flat bool. Earlier
+		// versions of this override treated non-nil presence as true,
+		// but terraform-provider-google's flattenBucketObjectRetention
+		// gates on Mode == "Enabled" — a bucket can carry a non-nil
+		// ObjectRetention with a non-Enabled mode (transitional /
+		// disabled states), so naive presence-as-bool produces a
+		// false-positive `enable_object_retention = true` that diffs
+		// against TF state on first import. Mirror the provider's
+		// gate. Found via the #405 Path-2 spike (issue tracking
+		// follow-up).
 		"GoogleStorageBucket.enable_object_retention": {
 			snippet: func(b, f string) string {
-				return "out." + f + " = generated.LiteralOf(" + b + ".ObjectRetention != nil)"
+				return "out." + f + ` = generated.LiteralOf(` + b + `.ObjectRetention != nil && ` + b + `.ObjectRetention.Mode == "Enabled")`
 			},
 		},
 

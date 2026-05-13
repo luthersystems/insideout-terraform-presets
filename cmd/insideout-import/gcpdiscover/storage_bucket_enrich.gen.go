@@ -29,7 +29,7 @@ func billingRequesterPays(b *storagev1.BucketBilling) bool {
 func mapStorageBucket(b *storagev1.Bucket, projectID string) *generated.GoogleStorageBucket {
 	out := &generated.GoogleStorageBucket{}
 	out.DefaultEventBasedHold = generated.LiteralOf(b.DefaultEventBasedHold)
-	out.EnableObjectRetention = generated.LiteralOf(b.ObjectRetention != nil)
+	out.EnableObjectRetention = generated.LiteralOf(b.ObjectRetention != nil && b.ObjectRetention.Mode == "Enabled")
 	out.ForceDestroy = generated.LiteralOf(false)
 	if len(b.Labels) > 0 {
 		labels := map[string]*generated.Value[string]{}
