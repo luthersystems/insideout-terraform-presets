@@ -324,9 +324,10 @@ func TestMapStorageBucket_CorsAndRetention(t *testing.T) {
 }
 
 // TestMapStorageBucket_ObjectRetentionEnabled pins the
-// objectRetention pointer → enable_object_retention bool conversion.
-// The raw API exposes ObjectRetention as a sub-struct (with Mode
-// string); presence-as-truth is the cleanest mapping to the TF bool.
+// objectRetention.Mode == "Enabled" → enable_object_retention=true
+// case. The raw API exposes ObjectRetention as a sub-struct with a
+// Mode string; the TF provider's flattenBucketObjectRetention emits
+// true only when Mode == "Enabled", so this mapping must match.
 func TestMapStorageBucket_ObjectRetentionEnabled(t *testing.T) {
 	t.Parallel()
 	src := &storagev1.Bucket{
@@ -337,7 +338,31 @@ func TestMapStorageBucket_ObjectRetentionEnabled(t *testing.T) {
 	got := mapStorageBucket(src, "")
 	require.NotNil(t, got.EnableObjectRetention)
 	assert.True(t, *got.EnableObjectRetention.Literal,
-		"objectRetention non-nil must map to enable_object_retention=true")
+		"objectRetention Mode=Enabled must map to enable_object_retention=true")
+}
+
+// TestMapStorageBucket_ObjectRetentionDisabledMode pins that a
+// non-nil ObjectRetention sub-struct with a non-Enabled mode (e.g.
+// transitional / disabled states the GCS API may surface) maps to
+// enable_object_retention=false. An earlier override used naive
+// presence-as-bool (b.ObjectRetention != nil) which produced a
+// false-positive `true` that diffed against TF state on first
+// import — issue tracking follow-up from the #405 Path-2 spike.
+func TestMapStorageBucket_ObjectRetentionDisabledMode(t *testing.T) {
+	t.Parallel()
+	for _, mode := range []string{"", "Disabled", "Unspecified"} {
+		t.Run("mode="+mode, func(t *testing.T) {
+			src := &storagev1.Bucket{
+				Name:            "b",
+				Location:        "US",
+				ObjectRetention: &storagev1.BucketObjectRetention{Mode: mode},
+			}
+			got := mapStorageBucket(src, "")
+			require.NotNil(t, got.EnableObjectRetention)
+			assert.False(t, *got.EnableObjectRetention.Literal,
+				"non-Enabled mode must map to enable_object_retention=false (got Mode=%q)", mode)
+		})
+	}
 }
 
 // TestEnrich_ClientUnavailable pins that a nil EnrichClients.Storage
