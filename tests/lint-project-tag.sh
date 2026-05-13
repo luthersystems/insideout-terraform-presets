@@ -25,6 +25,9 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # Keep sorted alphabetically.
 NON_TAGGABLE_AWS=(
   aws_apigatewayv2_api_mapping
+  aws_apigatewayv2_authorizer
+  aws_apigatewayv2_integration
+  aws_apigatewayv2_route
   aws_backup_selection
   aws_bedrock_model_invocation_logging_configuration
   aws_cloudfront_monitoring_subscription
@@ -33,6 +36,7 @@ NON_TAGGABLE_AWS=(
   aws_cloudwatch_log_resource_policy
   aws_cloudwatch_log_stream
   aws_cognito_identity_provider
+  aws_cognito_resource_server
   aws_cognito_user_pool_client
   aws_cognito_user_pool_domain
   aws_dynamodb_contributor_insights

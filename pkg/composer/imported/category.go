@@ -78,6 +78,9 @@ var categoryByTFType = map[string]string{
 	// --- AWS ---
 	"aws_acm_certificate":                 CategorySecurity,
 	"aws_apigatewayv2_api":                CategoryNetworkSecurity,
+	"aws_apigatewayv2_authorizer":         CategoryNetworkSecurity,
+	"aws_apigatewayv2_integration":        CategoryNetworkSecurity,
+	"aws_apigatewayv2_route":              CategoryNetworkSecurity,
 	"aws_apigatewayv2_stage":              CategoryNetworkSecurity,
 	"aws_backup_plan":                     CategoryDataStorage,
 	"aws_backup_selection":                CategoryDataStorage,
@@ -88,6 +91,8 @@ var categoryByTFType = map[string]string{
 	"aws_cloudwatch_event_rule":           CategoryEvents,
 	"aws_cloudwatch_log_group":            CategoryObservability,
 	"aws_cloudwatch_metric_alarm":         CategoryObservability,
+	"aws_cognito_identity_provider":       CategorySecurity,
+	"aws_cognito_resource_server":         CategorySecurity,
 	"aws_cognito_user_pool":               CategorySecurity,
 	"aws_cognito_user_pool_client":        CategorySecurity,
 	"aws_cognito_user_pool_domain":        CategorySecurity,

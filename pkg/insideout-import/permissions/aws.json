@@ -38,6 +38,51 @@
       "purpose": "Cloud Control ListResources for AWS::ApiGatewayV2::Api (cache-miss fallback when RGT prefetch is unavailable)"
     },
     {
+      "service": "apigatewayv2_authorizer",
+      "iam_action": "apigateway:GET",
+      "purpose": "Cloud Control GetResource for aws_apigatewayv2_authorizer delegates to apigateway:GET (GET /apis/*/authorizers/*); also covers parent enumeration (GET /apis) to fan ListResources out per ApiId"
+    },
+    {
+      "service": "apigatewayv2_authorizer",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::ApiGatewayV2::Authorizer (#416 ParentLister branch on ApiId)"
+    },
+    {
+      "service": "apigatewayv2_authorizer",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::ApiGatewayV2::Authorizer (per-ApiId fan-out)"
+    },
+    {
+      "service": "apigatewayv2_integration",
+      "iam_action": "apigateway:GET",
+      "purpose": "Cloud Control GetResource for aws_apigatewayv2_integration delegates to apigateway:GET (GET /apis/*/integrations/*); also covers parent enumeration (GET /apis) to fan ListResources out per ApiId"
+    },
+    {
+      "service": "apigatewayv2_integration",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::ApiGatewayV2::Integration (#416 ParentLister branch on ApiId)"
+    },
+    {
+      "service": "apigatewayv2_integration",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::ApiGatewayV2::Integration (per-ApiId fan-out)"
+    },
+    {
+      "service": "apigatewayv2_route",
+      "iam_action": "apigateway:GET",
+      "purpose": "Cloud Control GetResource for aws_apigatewayv2_route delegates to apigateway:GET (GET /apis/*/routes/*); also covers parent enumeration (GET /apis) to fan ListResources out per ApiId"
+    },
+    {
+      "service": "apigatewayv2_route",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::ApiGatewayV2::Route (#416 ParentLister branch on ApiId)"
+    },
+    {
+      "service": "apigatewayv2_route",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::ApiGatewayV2::Route (per-ApiId fan-out)"
+    },
+    {
       "service": "apigatewayv2_stage",
       "iam_action": "apigateway:GET",
       "purpose": "list per-API stages (GET /apis/*/stages); shares apigateway:GET with apigatewayv2_api"
@@ -226,6 +271,46 @@
       "service": "cloudwatchlogs",
       "iam_action": "logs:ListTagsForResource",
       "purpose": "fetch log-group tags for tag selectors and Identity.Tags"
+    },
+    {
+      "service": "cognito_identity_provider",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::Cognito::UserPoolIdentityProvider (#416 ParentLister branch on UserPoolId)"
+    },
+    {
+      "service": "cognito_identity_provider",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::Cognito::UserPoolIdentityProvider (per-UserPoolId fan-out)"
+    },
+    {
+      "service": "cognito_identity_provider",
+      "iam_action": "cognito-idp:DescribeIdentityProvider",
+      "purpose": "Cloud Control GetResource for aws_cognito_identity_provider delegates to cognito-idp:DescribeIdentityProvider"
+    },
+    {
+      "service": "cognito_identity_provider",
+      "iam_action": "cognito-idp:ListUserPools",
+      "purpose": "parent enumeration: list UserPools to fan ListResources out per UserPoolId"
+    },
+    {
+      "service": "cognito_resource_server",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::Cognito::UserPoolResourceServer (#416 ParentLister branch on UserPoolId)"
+    },
+    {
+      "service": "cognito_resource_server",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::Cognito::UserPoolResourceServer (per-UserPoolId fan-out)"
+    },
+    {
+      "service": "cognito_resource_server",
+      "iam_action": "cognito-idp:DescribeResourceServer",
+      "purpose": "Cloud Control GetResource for aws_cognito_resource_server delegates to cognito-idp:DescribeResourceServer"
+    },
+    {
+      "service": "cognito_resource_server",
+      "iam_action": "cognito-idp:ListUserPools",
+      "purpose": "parent enumeration: list UserPools to fan ListResources out per UserPoolId"
     },
     {
       "service": "cognito_user_pool",

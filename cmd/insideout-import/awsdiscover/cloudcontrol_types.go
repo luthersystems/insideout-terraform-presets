@@ -793,6 +793,186 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 		NativeIDsFromProperties: arnUnderKey("Arn"),
 		TagsFromProperties:      tagsFromKey("Tags"),
 	},
+
+	// =====================================================================
+	// ApiGatewayV2 Route — parent-scoped on ApiId, untaggable
+	// =====================================================================
+	{
+		// AWS::ApiGatewayV2::Route is parent-scoped: CC ListResources
+		// requires ResourceModel={"ApiId":"..."}. The CFN schema has no
+		// Tags property — SkipProjectTagFilter bypasses the Project
+		// filter (tagging happens on the parent Api).
+		TFType:               "aws_apigatewayv2_route",
+		CloudFormationType:   "AWS::ApiGatewayV2::Route",
+		Slug:                 "apigatewayv2_route",
+		SkipProjectTagFilter: true,
+		ParentLister:         listApigatewayv2Apis,
+		// Cloud Control identifier = "<ApiId>|<RouteId>"; Terraform
+		// import format = "<ApiId>/<RouteId>" (forward-slash).
+		ImportIDFromIdentifier: func(identifier string, _ map[string]any) string {
+			return strings.Replace(identifier, "|", "/", 1)
+		},
+		// RouteKey (e.g. "POST /signup") is the most human-readable
+		// hint; fall back to the identifier when absent.
+		NameHintFromProperties: nameOrIdentifier("RouteKey"),
+		NativeIDsFromProperties: func(identifier string, _ map[string]any) map[string]string {
+			parts := strings.SplitN(identifier, "|", 2)
+			if len(parts) != 2 {
+				return nil
+			}
+			return map[string]string{
+				"api_id":   parts[0],
+				"route_id": parts[1],
+			}
+		},
+		TagsFromProperties: emptyTagsExtractor,
+	},
+
+	// =====================================================================
+	// ApiGatewayV2 Integration — parent-scoped on ApiId, untaggable
+	// =====================================================================
+	{
+		// AWS::ApiGatewayV2::Integration is parent-scoped on ApiId. No
+		// Tags property in the CFN schema.
+		TFType:               "aws_apigatewayv2_integration",
+		CloudFormationType:   "AWS::ApiGatewayV2::Integration",
+		Slug:                 "apigatewayv2_integration",
+		SkipProjectTagFilter: true,
+		ParentLister:         listApigatewayv2Apis,
+		// Cloud Control identifier = "<ApiId>|<IntegrationId>";
+		// Terraform import format = "<ApiId>/<IntegrationId>".
+		ImportIDFromIdentifier: func(identifier string, _ map[string]any) string {
+			return strings.Replace(identifier, "|", "/", 1)
+		},
+		// No stable "name" on this type — Description when present,
+		// IntegrationType ("AWS_PROXY", "HTTP_PROXY", …) otherwise,
+		// then the identifier.
+		NameHintFromProperties: func(identifier string, props map[string]any) string {
+			if name := extractString(props, "Description"); name != "" {
+				return name
+			}
+			if name := extractString(props, "IntegrationType"); name != "" {
+				return name
+			}
+			return identifier
+		},
+		NativeIDsFromProperties: func(identifier string, _ map[string]any) map[string]string {
+			parts := strings.SplitN(identifier, "|", 2)
+			if len(parts) != 2 {
+				return nil
+			}
+			return map[string]string{
+				"api_id":         parts[0],
+				"integration_id": parts[1],
+			}
+		},
+		TagsFromProperties: emptyTagsExtractor,
+	},
+
+	// =====================================================================
+	// ApiGatewayV2 Authorizer — parent-scoped on ApiId, untaggable
+	// =====================================================================
+	{
+		// AWS::ApiGatewayV2::Authorizer is parent-scoped on ApiId. No
+		// Tags property in the CFN schema.
+		TFType:               "aws_apigatewayv2_authorizer",
+		CloudFormationType:   "AWS::ApiGatewayV2::Authorizer",
+		Slug:                 "apigatewayv2_authorizer",
+		SkipProjectTagFilter: true,
+		ParentLister:         listApigatewayv2Apis,
+		// Cloud Control identifier = "<ApiId>|<AuthorizerId>";
+		// Terraform import format = "<ApiId>/<AuthorizerId>".
+		ImportIDFromIdentifier: func(identifier string, _ map[string]any) string {
+			return strings.Replace(identifier, "|", "/", 1)
+		},
+		NameHintFromProperties: nameOrIdentifier("Name"),
+		NativeIDsFromProperties: func(identifier string, _ map[string]any) map[string]string {
+			parts := strings.SplitN(identifier, "|", 2)
+			if len(parts) != 2 {
+				return nil
+			}
+			return map[string]string{
+				"api_id":        parts[0],
+				"authorizer_id": parts[1],
+			}
+		},
+		TagsFromProperties: emptyTagsExtractor,
+	},
+
+	// =====================================================================
+	// Cognito Identity Provider — parent-scoped on UserPoolId, untaggable
+	// =====================================================================
+	{
+		// AWS::Cognito::UserPoolIdentityProvider is parent-scoped on
+		// UserPoolId. No Tags property in the CFN schema.
+		TFType:               "aws_cognito_identity_provider",
+		CloudFormationType:   "AWS::Cognito::UserPoolIdentityProvider",
+		Slug:                 "cognito_identity_provider",
+		SkipProjectTagFilter: true,
+		ParentLister:         listCognitoUserPools,
+		// Cloud Control identifier = "<UserPoolId>|<ProviderName>";
+		// Terraform import format = "<UserPoolId>:<ProviderName>"
+		// (colon, NOT forward-slash — divergent from the other
+		// compound-ID types in this file). Verified against
+		// terraform-provider-aws v6.x docs for
+		// aws_cognito_identity_provider.
+		ImportIDFromIdentifier: func(identifier string, _ map[string]any) string {
+			return strings.Replace(identifier, "|", ":", 1)
+		},
+		NameHintFromProperties: nameOrIdentifier("ProviderName"),
+		NativeIDsFromProperties: func(identifier string, _ map[string]any) map[string]string {
+			parts := strings.SplitN(identifier, "|", 2)
+			if len(parts) != 2 {
+				return nil
+			}
+			return map[string]string{
+				"user_pool_id":  parts[0],
+				"provider_name": parts[1],
+			}
+		},
+		TagsFromProperties: emptyTagsExtractor,
+	},
+
+	// =====================================================================
+	// Cognito Resource Server — parent-scoped on UserPoolId, untaggable
+	// =====================================================================
+	{
+		// AWS::Cognito::UserPoolResourceServer is parent-scoped on
+		// UserPoolId. No Tags property in the CFN schema.
+		TFType:               "aws_cognito_resource_server",
+		CloudFormationType:   "AWS::Cognito::UserPoolResourceServer",
+		Slug:                 "cognito_resource_server",
+		SkipProjectTagFilter: true,
+		ParentLister:         listCognitoUserPools,
+		// Cloud Control identifier = "<UserPoolId>|<Identifier>";
+		// Terraform import format is the same pipe-delimited shape
+		// (NOT rewritten to "/"). Verified against
+		// terraform-provider-aws v6.x docs for
+		// aws_cognito_resource_server.
+		ImportIDFromIdentifier: passthroughImportID,
+		// Resource Server "Name" is the human-readable display name;
+		// "Identifier" is the OAuth scope namespace (also useful).
+		NameHintFromProperties: func(identifier string, props map[string]any) string {
+			if name := extractString(props, "Name"); name != "" {
+				return name
+			}
+			if name := extractString(props, "Identifier"); name != "" {
+				return name
+			}
+			return identifier
+		},
+		NativeIDsFromProperties: func(identifier string, _ map[string]any) map[string]string {
+			parts := strings.SplitN(identifier, "|", 2)
+			if len(parts) != 2 {
+				return nil
+			}
+			return map[string]string{
+				"user_pool_id": parts[0],
+				"identifier":   parts[1],
+			}
+		},
+		TagsFromProperties: emptyTagsExtractor,
+	},
 }
 
 // passthroughImportID is the common ImportIDFromIdentifier used by every

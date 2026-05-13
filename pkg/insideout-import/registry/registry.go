@@ -25,6 +25,9 @@ const (
 var awsTypes = []string{
 	"aws_acm_certificate",
 	"aws_apigatewayv2_api",
+	"aws_apigatewayv2_authorizer",
+	"aws_apigatewayv2_integration",
+	"aws_apigatewayv2_route",
 	"aws_apigatewayv2_stage",
 	"aws_backup_plan",
 	"aws_backup_selection",
@@ -35,6 +38,8 @@ var awsTypes = []string{
 	"aws_cloudwatch_event_rule",
 	"aws_cloudwatch_log_group",
 	"aws_cloudwatch_metric_alarm",
+	"aws_cognito_identity_provider",
+	"aws_cognito_resource_server",
 	"aws_cognito_user_pool",
 	"aws_cognito_user_pool_client",
 	"aws_cognito_user_pool_domain",

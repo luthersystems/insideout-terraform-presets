@@ -11,6 +11,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/acm"
 	acmtypes "github.com/aws/aws-sdk-go-v2/service/acm/types"
+	"github.com/aws/aws-sdk-go-v2/service/apigatewayv2"
+	apigwv2types "github.com/aws/aws-sdk-go-v2/service/apigatewayv2/types"
 	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider"
 	cogniidptypes "github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider/types"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
@@ -426,5 +428,209 @@ func TestListACMCertificates_EmptyReturnsNonNilEmpty(t *testing.T) {
 	}
 	if len(got) != 0 {
 		t.Errorf("len=%d, want 0", len(got))
+	}
+}
+
+// fakeAPIGWv2APIsLister is a hand-rolled fake for the ApiGatewayV2 SDK
+// subset used by listApigatewayv2Apis. Mirrors the fake-and-pagination
+// shape of the other listers in this file. tokensSeen captures each
+// in.NextToken value the lister sends so tests can pin that the
+// pagination cursor is actually round-tripped between pages (not just
+// "called 3 times").
+type fakeAPIGWv2APIsLister struct {
+	listPages   []apigatewayv2.GetApisOutput
+	listCalls   int
+	listErr     error
+	tokensSeen  []*string
+}
+
+func (f *fakeAPIGWv2APIsLister) GetApis(_ context.Context, in *apigatewayv2.GetApisInput, _ ...func(*apigatewayv2.Options)) (*apigatewayv2.GetApisOutput, error) {
+	f.tokensSeen = append(f.tokensSeen, in.NextToken)
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
+	if f.listCalls >= len(f.listPages) {
+		return &apigatewayv2.GetApisOutput{}, nil
+	}
+	page := f.listPages[f.listCalls]
+	f.listCalls++
+	return &page, nil
+}
+
+func apigwv2APIsPage(token string, apiIDs ...string) apigatewayv2.GetApisOutput {
+	items := make([]apigwv2types.Api, 0, len(apiIDs))
+	for _, id := range apiIDs {
+		items = append(items, apigwv2types.Api{ApiId: aws.String(id)})
+	}
+	out := apigatewayv2.GetApisOutput{Items: items}
+	if token != "" {
+		out.NextToken = aws.String(token)
+	}
+	return out
+}
+
+// TestListApigatewayv2Apis_PaginatesAndReturnsModels pins the
+// API-enumeration helper used by aws_apigatewayv2_route /
+// _integration / _authorizer's ParentLister: every API across every
+// page must surface as a well-formed JSON ResourceModel string with
+// ApiId set. A regression that drops a page or emits malformed JSON
+// would silently produce zero child Route/Integration/Authorizer
+// emissions for any HTTP API after the first page.
+func TestListApigatewayv2Apis_PaginatesAndReturnsModels(t *testing.T) {
+	t.Parallel()
+	fake := &fakeAPIGWv2APIsLister{
+		listPages: []apigatewayv2.GetApisOutput{
+			apigwv2APIsPage("tok1", "api-aaa", "api-bbb"),
+			apigwv2APIsPage("tok2", "api-ccc"),
+			apigwv2APIsPage("", "api-ddd", "api-eee"),
+		},
+	}
+	got, err := listApigatewayv2ApisWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{
+		`{"ApiId":"api-aaa"}`,
+		`{"ApiId":"api-bbb"}`,
+		`{"ApiId":"api-ccc"}`,
+		`{"ApiId":"api-ddd"}`,
+		`{"ApiId":"api-eee"}`,
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("models drift:\n got %v\nwant %v", got, want)
+	}
+	if fake.listCalls != 3 {
+		t.Errorf("listCalls=%d, want 3 (paginated across three pages)", fake.listCalls)
+	}
+	// Pin the pagination cursor round-trip: the lister must feed
+	// each page's NextToken into the next request. A regression that
+	// passes `nil` on every call (e.g. dropping `nextToken =
+	// page.NextToken`) would still produce 3 calls because the fake
+	// serves pages by call-count — only this assertion catches it.
+	if len(fake.tokensSeen) != 3 {
+		t.Fatalf("tokensSeen len=%d, want 3", len(fake.tokensSeen))
+	}
+	if fake.tokensSeen[0] != nil {
+		t.Errorf("tokensSeen[0]=%q, want nil (first request must not send a NextToken)",
+			aws.ToString(fake.tokensSeen[0]))
+	}
+	if aws.ToString(fake.tokensSeen[1]) != "tok1" {
+		t.Errorf("tokensSeen[1]=%q, want tok1 (must round-trip page-1's NextToken)",
+			aws.ToString(fake.tokensSeen[1]))
+	}
+	if aws.ToString(fake.tokensSeen[2]) != "tok2" {
+		t.Errorf("tokensSeen[2]=%q, want tok2 (must round-trip page-2's NextToken)",
+			aws.ToString(fake.tokensSeen[2]))
+	}
+	// Each emitted model must round-trip as JSON with the ApiId key
+	// present — a malformed string would crash the downstream CC
+	// ListResources call.
+	for _, m := range got {
+		var parsed map[string]string
+		if err := json.Unmarshal([]byte(m), &parsed); err != nil {
+			t.Errorf("model %q is not valid JSON: %v", m, err)
+			continue
+		}
+		if parsed["ApiId"] == "" {
+			t.Errorf("model %q missing ApiId key", m)
+		}
+	}
+}
+
+// TestListApigatewayv2Apis_EmptyAccountReturnsNonNilEmpty pins the
+// non-nil empty contract: zero APIs returns []string{}, not nil. The
+// discoverer's `len(parentModels) == 0` early-exit branch needs the
+// slice to be non-nil for the empty-region path to fire cleanly.
+func TestListApigatewayv2Apis_EmptyAccountReturnsNonNilEmpty(t *testing.T) {
+	t.Parallel()
+	fake := &fakeAPIGWv2APIsLister{
+		listPages: []apigatewayv2.GetApisOutput{
+			apigwv2APIsPage(""),
+		},
+	}
+	got, err := listApigatewayv2ApisWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got == nil {
+		t.Fatal("empty-region result must be non-nil (else len-check early-exit misfires)")
+	}
+	if len(got) != 0 {
+		t.Errorf("len=%d, want 0", len(got))
+	}
+}
+
+// TestListApigatewayv2Apis_PropagatesListError pins error propagation:
+// an apigateway:GetApis failure must surface to the caller wrapped, not
+// silently swallowed. The discoverer's outer error path emits a
+// ServiceFinish + propagates — losing the error here would silently
+// skip the type for the whole region.
+func TestListApigatewayv2Apis_PropagatesListError(t *testing.T) {
+	t.Parallel()
+	sentinel := errors.New("apigateway:GetApis boom")
+	fake := &fakeAPIGWv2APIsLister{listErr: sentinel}
+	_, err := listApigatewayv2ApisWithClient(context.Background(), fake)
+	if !errors.Is(err, sentinel) {
+		t.Errorf("error chain: got %v, want chain containing %v", err, sentinel)
+	}
+}
+
+// TestListApigatewayv2Apis_EmptyStringNextTokenTerminates pins the
+// other half of the pagination terminator: the loop must also break
+// when GetApis returns NextToken=&"" (an empty pointer, not nil) on
+// the final page. The lister guards on both `nil` AND
+// `aws.ToString(*token) == ""`; without the empty-string branch we'd
+// loop forever passing an empty token to GetApis (which most likely
+// returns an error or silently restarts pagination).
+func TestListApigatewayv2Apis_EmptyStringNextTokenTerminates(t *testing.T) {
+	t.Parallel()
+	fake := &fakeAPIGWv2APIsLister{
+		listPages: []apigatewayv2.GetApisOutput{
+			// Final page deliberately has NextToken=&"" rather than nil.
+			{
+				Items:     []apigwv2types.Api{{ApiId: aws.String("api-final")}},
+				NextToken: aws.String(""),
+			},
+		},
+	}
+	got, err := listApigatewayv2ApisWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !reflect.DeepEqual(got, []string{`{"ApiId":"api-final"}`}) {
+		t.Errorf("models drift: got %v, want [api-final only]", got)
+	}
+	if fake.listCalls != 1 {
+		t.Errorf("listCalls=%d, want 1 (empty-string NextToken must terminate the loop, not trigger another GetApis)",
+			fake.listCalls)
+	}
+}
+
+// TestListApigatewayv2Apis_SkipsEmptyApiID guards a defensive branch:
+// an Api whose ApiId is "" (defensively guarded in the lister) must be
+// dropped, never emitted as `{"ApiId":""}`. The downstream CC
+// ListResources call would reject the empty-ID parent model.
+func TestListApigatewayv2Apis_SkipsEmptyApiID(t *testing.T) {
+	t.Parallel()
+	fake := &fakeAPIGWv2APIsLister{
+		listPages: []apigatewayv2.GetApisOutput{
+			{Items: []apigwv2types.Api{
+				{ApiId: aws.String("api-good")},
+				{ApiId: nil},
+				{ApiId: aws.String("")},
+				{ApiId: aws.String("api-also-good")},
+			}},
+		},
+	}
+	got, err := listApigatewayv2ApisWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{
+		`{"ApiId":"api-good"}`,
+		`{"ApiId":"api-also-good"}`,
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("empty-ID skip drift:\n got %v\nwant %v", got, want)
 	}
 }

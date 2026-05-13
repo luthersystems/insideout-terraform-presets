@@ -1,5 +1,8 @@
 aws_acm_certificate	Security
 aws_apigatewayv2_api	Network Security
+aws_apigatewayv2_authorizer	Network Security
+aws_apigatewayv2_integration	Network Security
+aws_apigatewayv2_route	Network Security
 aws_apigatewayv2_stage	Network Security
 aws_backup_plan	Data Storage
 aws_backup_selection	Data Storage
@@ -10,6 +13,8 @@ aws_cloudwatch_dashboard	Observability
 aws_cloudwatch_event_rule	Events
 aws_cloudwatch_log_group	Observability
 aws_cloudwatch_metric_alarm	Observability
+aws_cognito_identity_provider	Security
+aws_cognito_resource_server	Security
 aws_cognito_user_pool	Security
 aws_cognito_user_pool_client	Security
 aws_cognito_user_pool_domain	Security
