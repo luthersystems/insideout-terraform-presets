@@ -1006,6 +1006,250 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 		},
 		TagsFromProperties: emptyTagsExtractor,
 	},
+
+	// =====================================================================
+	// Lambda Permission — parent-scoped on FunctionName, untaggable (#422)
+	// =====================================================================
+	{
+		// AWS::Lambda::Permission is parent-scoped: CC ListResources
+		// requires ResourceModel={"FunctionName":"..."}. The CFN schema
+		// has no Tags property — SkipProjectTagFilter bypasses the
+		// Project filter (the parent Lambda function carries tags).
+		TFType:               "aws_lambda_permission",
+		CloudFormationType:   "AWS::Lambda::Permission",
+		Slug:                 "lambda_permission",
+		SkipProjectTagFilter: true,
+		ParentLister:         listLambdaFunctions,
+		// Cloud Control identifier = "<FunctionName>|<Id>" (compound,
+		// pipe-separated per the CC primaryIdentifier convention).
+		// Terraform import format = "<FunctionName>/<Id>"
+		// (forward-slash; verified against terraform-provider-aws v6.x
+		// docs for aws_lambda_permission). First-`|`-only rewrite so
+		// hypothetical pipes inside FunctionName (illegal per the
+		// Lambda name regex but defended for symmetry with SplitN-cap-2
+		// NativeIDs) survive verbatim past the first.
+		ImportIDFromIdentifier: func(identifier string, _ map[string]any) string {
+			return strings.Replace(identifier, "|", "/", 1)
+		},
+		// No "Name" on the Permission type — the StatementId (the
+		// second half of the identifier) is the most human-readable
+		// hint. We pull it out via the same SplitN that powers
+		// NativeIDs rather than re-parsing the identifier.
+		NameHintFromProperties: func(identifier string, _ map[string]any) string {
+			if parts := strings.SplitN(identifier, "|", 2); len(parts) == 2 && parts[1] != "" {
+				return parts[1]
+			}
+			return identifier
+		},
+		NativeIDsFromProperties: func(identifier string, _ map[string]any) map[string]string {
+			parts := strings.SplitN(identifier, "|", 2)
+			if len(parts) != 2 {
+				return nil
+			}
+			return map[string]string{
+				"function_name": parts[0],
+				"statement_id":  parts[1],
+			}
+		},
+		TagsFromProperties: emptyTagsExtractor,
+	},
+
+	// =====================================================================
+	// Lambda Function URL — parent-scoped on TargetFunctionArn, untaggable (#422)
+	// =====================================================================
+	{
+		// AWS::Lambda::Url is parent-scoped: CC ListResources requires
+		// ResourceModel={"TargetFunctionArn":"..."} (NB: not
+		// "FunctionName" — Lambda::Url uses the ARN where Permission /
+		// Alias use the name. The lister listLambdaFunctionArns emits
+		// the ARN-keyed model). CFN schema has no Tags property —
+		// SkipProjectTagFilter bypasses the Project filter.
+		TFType:               "aws_lambda_function_url",
+		CloudFormationType:   "AWS::Lambda::Url",
+		Slug:                 "lambda_function_url",
+		SkipProjectTagFilter: true,
+		ParentLister:         listLambdaFunctionArns,
+		// Cloud Control primary identifier = "<FunctionArn>" (full
+		// function ARN, single — the URL is uniquely keyed on the
+		// associated function). Terraform's import format is the bare
+		// function NAME (or "<name>/<qualifier>"), so the ARN must be
+		// rewritten to the bare name. Lambda ARN shape:
+		// arn:aws:lambda:<region>:<account>:function:<name>[:<qual>].
+		// We extract the segment after "function:" and preserve any
+		// qualifier as "<name>/<qualifier>" per the TF docs.
+		ImportIDFromIdentifier: func(identifier string, _ map[string]any) string {
+			const marker = "function:"
+			idx := strings.Index(identifier, marker)
+			if idx < 0 {
+				// Already a bare name (or unparseable) — pass through.
+				return identifier
+			}
+			rest := identifier[idx+len(marker):]
+			// Rest is "<name>" or "<name>:<qualifier>". TF expects
+			// "<name>" or "<name>/<qualifier>".
+			if colon := strings.Index(rest, ":"); colon != -1 {
+				return rest[:colon] + "/" + rest[colon+1:]
+			}
+			return rest
+		},
+		// Most readable name hint is the function name extracted from
+		// the TargetFunctionArn (or the ARN identifier itself). Fall
+		// back to the identifier when neither is parseable.
+		NameHintFromProperties: func(identifier string, props map[string]any) string {
+			if arn := extractString(props, "TargetFunctionArn"); arn != "" {
+				if idx := strings.Index(arn, "function:"); idx >= 0 {
+					rest := arn[idx+len("function:"):]
+					if colon := strings.Index(rest, ":"); colon != -1 {
+						return rest[:colon]
+					}
+					return rest
+				}
+				return arn
+			}
+			return identifier
+		},
+		NativeIDsFromProperties: func(identifier string, _ map[string]any) map[string]string {
+			// identifier is the full FunctionArn — stamp under "arn"
+			// for downstream callers indexing by ARN, and (when
+			// recognizably ARN-shaped) extract the function_name for
+			// the by-name native-id slot. Returning a non-nil empty
+			// map when we can't extract a name (rather than nil) lets
+			// callers always read out["arn"] safely; the bare-name
+			// passthrough above means identifier may legitimately be
+			// non-ARN-shaped on test/fixture inputs.
+			out := map[string]string{"arn": identifier}
+			if idx := strings.Index(identifier, "function:"); idx >= 0 {
+				rest := identifier[idx+len("function:"):]
+				if colon := strings.Index(rest, ":"); colon != -1 {
+					out["function_name"] = rest[:colon]
+				} else {
+					out["function_name"] = rest
+				}
+			}
+			return out
+		},
+		TagsFromProperties: emptyTagsExtractor,
+	},
+
+	// =====================================================================
+	// ApiGateway v1 Stage — parent-scoped on RestApiId, TAGGABLE (#422)
+	// =====================================================================
+	{
+		// AWS::ApiGateway::Stage is parent-scoped: CC ListResources
+		// requires ResourceModel={"RestApiId":"..."}. Unlike the other
+		// four #422 types, the CFN schema HAS a `Tags` property (array
+		// of {Key,Value}) — taggable, no SkipProjectTagFilter, real
+		// tagsFromKey extractor.
+		TFType:             "aws_api_gateway_stage",
+		CloudFormationType: "AWS::ApiGateway::Stage",
+		Slug:               "api_gateway_stage",
+		ParentLister:       listApigatewayRestAPIs,
+		// Cloud Control identifier = "<RestApiId>|<StageName>";
+		// Terraform import format = "<RestApiId>/<StageName>"
+		// (forward-slash; verified against terraform-provider-aws v6.x
+		// docs for aws_api_gateway_stage).
+		ImportIDFromIdentifier: func(identifier string, _ map[string]any) string {
+			return strings.Replace(identifier, "|", "/", 1)
+		},
+		NameHintFromProperties: nameOrIdentifier("StageName"),
+		NativeIDsFromProperties: func(identifier string, _ map[string]any) map[string]string {
+			parts := strings.SplitN(identifier, "|", 2)
+			if len(parts) != 2 {
+				return nil
+			}
+			return map[string]string{
+				"rest_api_id": parts[0],
+				"stage_name":  parts[1],
+			}
+		},
+		TagsFromProperties: tagsFromKey("Tags"),
+	},
+
+	// =====================================================================
+	// ApiGateway v1 Deployment — parent-scoped on RestApiId, untaggable (#422)
+	// =====================================================================
+	{
+		// AWS::ApiGateway::Deployment is parent-scoped on RestApiId.
+		// No Tags property in the CFN schema.
+		//
+		// IDENTIFIER ORDER DIVERGENCE: the CC primaryIdentifier is
+		// ["/properties/DeploymentId", "/properties/RestApiId"] (note
+		// order — DeploymentId FIRST, RestApiId second). That means
+		// the CC compound identifier comes in as
+		// "<DeploymentId>|<RestApiId>" but Terraform's import format
+		// is "<RestApiId>/<DeploymentId>" — REVERSE order, not a naive
+		// pipe→slash. Verified against terraform-provider-aws v6.x
+		// docs. The rewriter below splits and re-stitches; the
+		// extractor test pins this divergence to defend against a
+		// "looks like every other compound type" rewrite regression.
+		TFType:               "aws_api_gateway_deployment",
+		CloudFormationType:   "AWS::ApiGateway::Deployment",
+		Slug:                 "api_gateway_deployment",
+		SkipProjectTagFilter: true,
+		ParentLister:         listApigatewayRestAPIs,
+		ImportIDFromIdentifier: func(identifier string, _ map[string]any) string {
+			// CC: "<DeploymentId>|<RestApiId>" → TF: "<RestApiId>/<DeploymentId>".
+			parts := strings.SplitN(identifier, "|", 2)
+			if len(parts) != 2 {
+				return identifier
+			}
+			return parts[1] + "/" + parts[0]
+		},
+		// No "Name" on Deployment — Description when present,
+		// otherwise the identifier.
+		NameHintFromProperties: func(identifier string, props map[string]any) string {
+			if d := extractString(props, "Description"); d != "" {
+				return d
+			}
+			return identifier
+		},
+		NativeIDsFromProperties: func(identifier string, _ map[string]any) map[string]string {
+			parts := strings.SplitN(identifier, "|", 2)
+			if len(parts) != 2 {
+				return nil
+			}
+			// CC identifier order is DeploymentId|RestApiId.
+			return map[string]string{
+				"deployment_id": parts[0],
+				"rest_api_id":   parts[1],
+			}
+		},
+		TagsFromProperties: emptyTagsExtractor,
+	},
+
+	// =====================================================================
+	// ApiGateway v1 Resource — parent-scoped on RestApiId, untaggable (#422)
+	// =====================================================================
+	{
+		// AWS::ApiGateway::Resource is parent-scoped on RestApiId. No
+		// Tags property in the CFN schema.
+		TFType:               "aws_api_gateway_resource",
+		CloudFormationType:   "AWS::ApiGateway::Resource",
+		Slug:                 "api_gateway_resource",
+		SkipProjectTagFilter: true,
+		ParentLister:         listApigatewayRestAPIs,
+		// Cloud Control identifier = "<RestApiId>|<ResourceId>";
+		// Terraform import format = "<RestApiId>/<ResourceId>"
+		// (forward-slash). Verified against terraform-provider-aws
+		// v6.x docs for aws_api_gateway_resource.
+		ImportIDFromIdentifier: func(identifier string, _ map[string]any) string {
+			return strings.Replace(identifier, "|", "/", 1)
+		},
+		// PathPart (e.g. "users", "{userId}") is the human-readable
+		// hint; fall back to the identifier when absent.
+		NameHintFromProperties: nameOrIdentifier("PathPart"),
+		NativeIDsFromProperties: func(identifier string, _ map[string]any) map[string]string {
+			parts := strings.SplitN(identifier, "|", 2)
+			if len(parts) != 2 {
+				return nil
+			}
+			return map[string]string{
+				"rest_api_id": parts[0],
+				"resource_id": parts[1],
+			}
+		},
+		TagsFromProperties: emptyTagsExtractor,
+	},
 }
 
 // passthroughImportID is the common ImportIDFromIdentifier used by every

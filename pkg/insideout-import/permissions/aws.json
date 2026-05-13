@@ -23,6 +23,51 @@
       "purpose": "Cloud Control GetResource for AWS::CertificateManager::Certificate (#412 SDKLister branch)"
     },
     {
+      "service": "api_gateway_deployment",
+      "iam_action": "apigateway:GET",
+      "purpose": "Cloud Control GetResource for aws_api_gateway_deployment delegates to apigateway:GET (GET /restapis/*/deployments/*); also covers parent enumeration (GET /restapis) to fan ListResources out per RestApiId"
+    },
+    {
+      "service": "api_gateway_deployment",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::ApiGateway::Deployment (#422 ParentLister branch on RestApiId)"
+    },
+    {
+      "service": "api_gateway_deployment",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::ApiGateway::Deployment (per-RestApiId fan-out)"
+    },
+    {
+      "service": "api_gateway_resource",
+      "iam_action": "apigateway:GET",
+      "purpose": "Cloud Control GetResource for aws_api_gateway_resource delegates to apigateway:GET (GET /restapis/*/resources/*); also covers parent enumeration (GET /restapis) to fan ListResources out per RestApiId"
+    },
+    {
+      "service": "api_gateway_resource",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::ApiGateway::Resource (#422 ParentLister branch on RestApiId)"
+    },
+    {
+      "service": "api_gateway_resource",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::ApiGateway::Resource (per-RestApiId fan-out)"
+    },
+    {
+      "service": "api_gateway_stage",
+      "iam_action": "apigateway:GET",
+      "purpose": "Cloud Control GetResource for aws_api_gateway_stage delegates to apigateway:GET (GET /restapis/*/stages/*); also covers parent enumeration (GET /restapis) to fan ListResources out per RestApiId"
+    },
+    {
+      "service": "api_gateway_stage",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::ApiGateway::Stage (#422 ParentLister branch on RestApiId)"
+    },
+    {
+      "service": "api_gateway_stage",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::ApiGateway::Stage (per-RestApiId fan-out)"
+    },
+    {
       "service": "apigatewayv2_api",
       "iam_action": "apigateway:GET",
       "purpose": "list HTTP APIs and fetch per-API metadata (GET /apis, GET /apis/*/stages)"
@@ -681,6 +726,46 @@
       "service": "lambda_event_source_mapping",
       "iam_action": "lambda:ListTags",
       "purpose": "Cloud Control GetResource delegate for the Tags property"
+    },
+    {
+      "service": "lambda_function_url",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::Lambda::Url (#422 ParentLister branch on TargetFunctionArn)"
+    },
+    {
+      "service": "lambda_function_url",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::Lambda::Url (per-TargetFunctionArn fan-out)"
+    },
+    {
+      "service": "lambda_function_url",
+      "iam_action": "lambda:GetFunctionUrlConfig",
+      "purpose": "Cloud Control GetResource for aws_lambda_function_url delegates to lambda:GetFunctionUrlConfig"
+    },
+    {
+      "service": "lambda_function_url",
+      "iam_action": "lambda:ListFunctions",
+      "purpose": "parent enumeration: list Lambda functions to fan ListResources out per TargetFunctionArn"
+    },
+    {
+      "service": "lambda_permission",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::Lambda::Permission (#422 ParentLister branch on FunctionName)"
+    },
+    {
+      "service": "lambda_permission",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::Lambda::Permission (per-FunctionName fan-out)"
+    },
+    {
+      "service": "lambda_permission",
+      "iam_action": "lambda:GetPolicy",
+      "purpose": "Cloud Control GetResource for aws_lambda_permission delegates to lambda:GetPolicy"
+    },
+    {
+      "service": "lambda_permission",
+      "iam_action": "lambda:ListFunctions",
+      "purpose": "parent enumeration: list Lambda functions to fan ListResources out per FunctionName"
     },
     {
       "service": "lb",

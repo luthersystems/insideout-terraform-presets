@@ -6,6 +6,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/acm"
+	"github.com/aws/aws-sdk-go-v2/service/apigateway"
 	"github.com/aws/aws-sdk-go-v2/service/apigatewayv2"
 	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
@@ -38,6 +39,15 @@ type acmCertificatesLister interface {
 // separate so each call site can evolve independently.
 type apigatewayv2APIsLister interface {
 	GetApis(ctx context.Context, in *apigatewayv2.GetApisInput, opts ...func(*apigatewayv2.Options)) (*apigatewayv2.GetApisOutput, error)
+}
+
+// apigatewayRestAPIsLister is the narrow subset of the API Gateway v1
+// SDK used by the parent-RestApi enumerator that seeds Stage /
+// Deployment / Resource fan-out (#422). The v1 service uses `Position`
+// as the pagination cursor (not `NextToken`), so this interface lives
+// alongside but separate from apigatewayv2APIsLister.
+type apigatewayRestAPIsLister interface {
+	GetRestApis(ctx context.Context, in *apigateway.GetRestApisInput, opts ...func(*apigateway.Options)) (*apigateway.GetRestApisOutput, error)
 }
 
 // listCognitoUserPools enumerates all Cognito user pools in the region
@@ -271,6 +281,90 @@ func listApigatewayv2ApisWithClient(ctx context.Context, client apigatewayv2APIs
 			break
 		}
 		nextToken = page.NextToken
+	}
+	return models, nil
+}
+
+// listApigatewayRestAPIs enumerates API Gateway v1 (REST) APIs in the
+// region and returns one parent ResourceModel JSON string per API,
+// suitable for feeding into Cloud Control ListResources for child types
+// scoped on RestApiId (Stage / Deployment / Resource — #422). Returns
+// an empty slice (not nil) when no APIs exist, so the discoverer's
+// `len(parentModels) == 0` early-exit fires cleanly.
+//
+// API Gateway v1 paginates via `Position` (string cursor), not
+// `NextToken`, so the pagination loop here uses Position. The
+// terminator condition mirrors listApigatewayv2Apis: stop on both nil
+// AND empty-string cursors, since some SDK responses return `&""`
+// instead of nil on the final page.
+func listApigatewayRestAPIs(ctx context.Context, awsCfg aws.Config, region string, _ DiscoverArgs) ([]string, error) {
+	client := apigateway.NewFromConfig(awsCfg, func(o *apigateway.Options) {
+		if region != "" {
+			o.Region = region
+		}
+	})
+	return listApigatewayRestAPIsWithClient(ctx, client)
+}
+
+func listApigatewayRestAPIsWithClient(ctx context.Context, client apigatewayRestAPIsLister) ([]string, error) {
+	models := []string{}
+	var position *string
+	for {
+		page, err := client.GetRestApis(ctx, &apigateway.GetRestApisInput{Position: position})
+		if err != nil {
+			return nil, fmt.Errorf("apigateway:GetRestApis: %w", err)
+		}
+		for _, api := range page.Items {
+			id := aws.ToString(api.Id)
+			if id == "" {
+				continue
+			}
+			models = append(models, fmt.Sprintf(`{"RestApiId":%q}`, id))
+		}
+		if page.Position == nil || aws.ToString(page.Position) == "" {
+			break
+		}
+		position = page.Position
+	}
+	return models, nil
+}
+
+// listLambdaFunctionArns enumerates Lambda functions and returns one
+// parent ResourceModel JSON string per function, keyed under
+// `TargetFunctionArn` (the field name expected by
+// AWS::Lambda::Url's CC list-handler schema — #422). Distinct from
+// listLambdaFunctions, which emits `{"FunctionName":"..."}` for types
+// whose CC list-handler keys on FunctionName (e.g. AWS::Lambda::Alias,
+// AWS::Lambda::Permission). Reuses the lambdaFunctionsLister interface
+// (same SDK call, ListFunctions; different ResourceModel emission).
+func listLambdaFunctionArns(ctx context.Context, awsCfg aws.Config, region string, _ DiscoverArgs) ([]string, error) {
+	client := lambda.NewFromConfig(awsCfg, func(o *lambda.Options) {
+		if region != "" {
+			o.Region = region
+		}
+	})
+	return listLambdaFunctionArnsWithClient(ctx, client)
+}
+
+func listLambdaFunctionArnsWithClient(ctx context.Context, client lambdaFunctionsLister) ([]string, error) {
+	models := []string{}
+	var marker *string
+	for {
+		page, err := client.ListFunctions(ctx, &lambda.ListFunctionsInput{Marker: marker})
+		if err != nil {
+			return nil, fmt.Errorf("lambda:ListFunctions: %w", err)
+		}
+		for _, fn := range page.Functions {
+			arn := aws.ToString(fn.FunctionArn)
+			if arn == "" {
+				continue
+			}
+			models = append(models, fmt.Sprintf(`{"TargetFunctionArn":%q}`, arn))
+		}
+		if page.NextMarker == nil || aws.ToString(page.NextMarker) == "" {
+			break
+		}
+		marker = page.NextMarker
 	}
 	return models, nil
 }

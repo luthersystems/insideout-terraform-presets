@@ -12,6 +12,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/acm"
 	acmtypes "github.com/aws/aws-sdk-go-v2/service/acm/types"
+	"github.com/aws/aws-sdk-go-v2/service/apigateway"
+	apigwtypes "github.com/aws/aws-sdk-go-v2/service/apigateway/types"
 	"github.com/aws/aws-sdk-go-v2/service/apigatewayv2"
 	apigwv2types "github.com/aws/aws-sdk-go-v2/service/apigatewayv2/types"
 	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider"
@@ -175,14 +177,20 @@ func TestListCognitoUserPools_PropagatesListError(t *testing.T) {
 }
 
 // fakeLambdaFunctionsLister is a hand-rolled fake satisfying the
-// lambdaFunctionsLister interface.
+// lambdaFunctionsLister interface. markersSeen captures each in.Marker
+// the lister sends so tests can pin that the pagination cursor is
+// round-tripped between pages (added in #422 for the
+// listLambdaFunctionArns coverage — pre-existing callers that don't
+// read this field are unaffected since it's nil-initialized).
 type fakeLambdaFunctionsLister struct {
-	listPages []lambda.ListFunctionsOutput
-	listCalls int
-	listErr   error
+	listPages    []lambda.ListFunctionsOutput
+	listCalls    int
+	listErr      error
+	markersSeen  []*string
 }
 
-func (f *fakeLambdaFunctionsLister) ListFunctions(_ context.Context, _ *lambda.ListFunctionsInput, _ ...func(*lambda.Options)) (*lambda.ListFunctionsOutput, error) {
+func (f *fakeLambdaFunctionsLister) ListFunctions(_ context.Context, in *lambda.ListFunctionsInput, _ ...func(*lambda.Options)) (*lambda.ListFunctionsOutput, error) {
+	f.markersSeen = append(f.markersSeen, in.Marker)
 	if f.listErr != nil {
 		return nil, f.listErr
 	}
@@ -658,5 +666,357 @@ func TestListApigatewayv2Apis_SkipsEmptyApiID(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("empty-ID skip drift:\n got %v\nwant %v", got, want)
+	}
+}
+
+// ===========================================================================
+// API Gateway v1 (REST) APIs lister — #422
+// ===========================================================================
+
+// fakeAPIGWRestAPIsLister is a hand-rolled fake for the API Gateway v1
+// SDK subset used by listApigatewayRestAPIs. The v1 service paginates
+// via `Position` (not NextToken), so positionsSeen captures each
+// in.Position the lister sends to pin the round-trip cursor.
+type fakeAPIGWRestAPIsLister struct {
+	listPages     []apigateway.GetRestApisOutput
+	listCalls     int
+	listErr       error
+	positionsSeen []*string
+}
+
+func (f *fakeAPIGWRestAPIsLister) GetRestApis(_ context.Context, in *apigateway.GetRestApisInput, _ ...func(*apigateway.Options)) (*apigateway.GetRestApisOutput, error) {
+	f.positionsSeen = append(f.positionsSeen, in.Position)
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
+	if f.listCalls >= len(f.listPages) {
+		return &apigateway.GetRestApisOutput{}, nil
+	}
+	page := f.listPages[f.listCalls]
+	f.listCalls++
+	return &page, nil
+}
+
+func apigwRestAPIsPage(position string, restAPIIds ...string) apigateway.GetRestApisOutput {
+	items := make([]apigwtypes.RestApi, 0, len(restAPIIds))
+	for _, id := range restAPIIds {
+		items = append(items, apigwtypes.RestApi{Id: aws.String(id)})
+	}
+	out := apigateway.GetRestApisOutput{Items: items}
+	if position != "" {
+		out.Position = aws.String(position)
+	}
+	return out
+}
+
+// TestListApigatewayRestAPIs_PaginatesAndReturnsModels pins the
+// API-enumeration helper shared by aws_api_gateway_{stage,deployment,resource}'s
+// ParentLister: every REST API across every page must surface as a
+// well-formed JSON ResourceModel string with RestApiId set. A regression
+// that drops a page or emits malformed JSON would silently produce zero
+// child Stage/Deployment/Resource emissions after the first page.
+//
+// Also pins the Position cursor round-trip (positionsSeen) — without
+// this, a regression that drops `position = page.Position` would still
+// produce 3 calls because the fake serves by call-count.
+func TestListApigatewayRestAPIs_PaginatesAndReturnsModels(t *testing.T) {
+	t.Parallel()
+	fake := &fakeAPIGWRestAPIsLister{
+		listPages: []apigateway.GetRestApisOutput{
+			apigwRestAPIsPage("pos1", "rest-aaa", "rest-bbb"),
+			apigwRestAPIsPage("pos2", "rest-ccc"),
+			apigwRestAPIsPage("", "rest-ddd", "rest-eee"),
+		},
+	}
+	got, err := listApigatewayRestAPIsWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{
+		`{"RestApiId":"rest-aaa"}`,
+		`{"RestApiId":"rest-bbb"}`,
+		`{"RestApiId":"rest-ccc"}`,
+		`{"RestApiId":"rest-ddd"}`,
+		`{"RestApiId":"rest-eee"}`,
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("models drift:\n got %v\nwant %v", got, want)
+	}
+	if fake.listCalls != 3 {
+		t.Errorf("listCalls=%d, want 3 (paginated across three pages)", fake.listCalls)
+	}
+	if len(fake.positionsSeen) != 3 {
+		t.Fatalf("positionsSeen len=%d, want 3", len(fake.positionsSeen))
+	}
+	if fake.positionsSeen[0] != nil {
+		t.Errorf("positionsSeen[0]=%q, want nil (first request must not send a Position)",
+			aws.ToString(fake.positionsSeen[0]))
+	}
+	if aws.ToString(fake.positionsSeen[1]) != "pos1" {
+		t.Errorf("positionsSeen[1]=%q, want pos1 (must round-trip page-1's Position)",
+			aws.ToString(fake.positionsSeen[1]))
+	}
+	if aws.ToString(fake.positionsSeen[2]) != "pos2" {
+		t.Errorf("positionsSeen[2]=%q, want pos2 (must round-trip page-2's Position)",
+			aws.ToString(fake.positionsSeen[2]))
+	}
+	for _, m := range got {
+		var parsed map[string]string
+		if err := json.Unmarshal([]byte(m), &parsed); err != nil {
+			t.Errorf("model %q is not valid JSON: %v", m, err)
+			continue
+		}
+		if parsed["RestApiId"] == "" {
+			t.Errorf("model %q missing RestApiId key", m)
+		}
+	}
+}
+
+// TestListApigatewayRestAPIs_EmptyAccountReturnsNonNilEmpty pins the
+// non-nil empty contract: zero REST APIs returns []string{}, not nil.
+// The discoverer's `len(parentModels) == 0` early-exit branch needs the
+// slice to be non-nil for the empty-region path to fire cleanly.
+func TestListApigatewayRestAPIs_EmptyAccountReturnsNonNilEmpty(t *testing.T) {
+	t.Parallel()
+	fake := &fakeAPIGWRestAPIsLister{
+		listPages: []apigateway.GetRestApisOutput{
+			apigwRestAPIsPage(""),
+		},
+	}
+	got, err := listApigatewayRestAPIsWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got == nil {
+		t.Fatal("empty-region result must be non-nil (else len-check early-exit misfires)")
+	}
+	if len(got) != 0 {
+		t.Errorf("len=%d, want 0", len(got))
+	}
+}
+
+// TestListApigatewayRestAPIs_PropagatesListError pins error
+// propagation: an apigateway:GetRestApis failure must surface to the
+// caller wrapped, not silently swallowed. The discoverer's outer error
+// path emits a ServiceFinish + propagates — losing the error here
+// would silently skip the type for the whole region.
+func TestListApigatewayRestAPIs_PropagatesListError(t *testing.T) {
+	t.Parallel()
+	sentinel := errors.New("apigateway:GetRestApis boom")
+	fake := &fakeAPIGWRestAPIsLister{listErr: sentinel}
+	_, err := listApigatewayRestAPIsWithClient(context.Background(), fake)
+	if !errors.Is(err, sentinel) {
+		t.Errorf("error chain: got %v, want chain containing %v", err, sentinel)
+	}
+}
+
+// TestListApigatewayRestAPIs_EmptyStringPositionTerminates pins the
+// other half of the pagination terminator: the loop must also break
+// when GetRestApis returns Position=&"" (an empty pointer, not nil) on
+// the final page. The lister guards on both `nil` AND
+// `aws.ToString(*position)==""`; without the empty-string branch we'd
+// loop forever passing an empty Position to GetRestApis.
+func TestListApigatewayRestAPIs_EmptyStringPositionTerminates(t *testing.T) {
+	t.Parallel()
+	fake := &fakeAPIGWRestAPIsLister{
+		listPages: []apigateway.GetRestApisOutput{
+			// Final page deliberately has Position=&"" rather than nil.
+			{
+				Items:    []apigwtypes.RestApi{{Id: aws.String("rest-final")}},
+				Position: aws.String(""),
+			},
+		},
+	}
+	got, err := listApigatewayRestAPIsWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !reflect.DeepEqual(got, []string{`{"RestApiId":"rest-final"}`}) {
+		t.Errorf("models drift: got %v, want [rest-final only]", got)
+	}
+	if fake.listCalls != 1 {
+		t.Errorf("listCalls=%d, want 1 (empty-string Position must terminate the loop, not trigger another GetRestApis)",
+			fake.listCalls)
+	}
+}
+
+// TestListApigatewayRestAPIs_SkipsEmptyRestApiID guards the defensive
+// branch: a RestApi whose Id is "" or nil must be dropped, never
+// emitted as `{"RestApiId":""}`. The downstream CC ListResources call
+// would reject the empty-ID parent model.
+func TestListApigatewayRestAPIs_SkipsEmptyRestApiID(t *testing.T) {
+	t.Parallel()
+	fake := &fakeAPIGWRestAPIsLister{
+		listPages: []apigateway.GetRestApisOutput{
+			{Items: []apigwtypes.RestApi{
+				{Id: aws.String("rest-good")},
+				{Id: nil},
+				{Id: aws.String("")},
+				{Id: aws.String("rest-also-good")},
+			}},
+		},
+	}
+	got, err := listApigatewayRestAPIsWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{
+		`{"RestApiId":"rest-good"}`,
+		`{"RestApiId":"rest-also-good"}`,
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("empty-ID skip drift:\n got %v\nwant %v", got, want)
+	}
+}
+
+// ===========================================================================
+// Lambda function ARNs lister — #422 (parent for aws_lambda_function_url)
+// ===========================================================================
+
+// lambdaArnListPage builds a ListFunctionsOutput populated with both
+// FunctionName and FunctionArn for each function — the
+// listLambdaFunctionArns lister reads FunctionArn (not FunctionName).
+// Without populating FunctionArn, the lister would emit empty-key
+// models and the defensive skip would drop every function.
+func lambdaArnListPage(marker string, fnArns ...string) lambda.ListFunctionsOutput {
+	fns := make([]lambdatypes.FunctionConfiguration, 0, len(fnArns))
+	for _, a := range fnArns {
+		fns = append(fns, lambdatypes.FunctionConfiguration{FunctionArn: aws.String(a)})
+	}
+	out := lambda.ListFunctionsOutput{Functions: fns}
+	if marker != "" {
+		out.NextMarker = aws.String(marker)
+	}
+	return out
+}
+
+// TestListLambdaFunctionArns_PaginatesAndReturnsModels pins the
+// ARN-keyed Lambda-functions enumerator used by aws_lambda_function_url's
+// ParentLister: every function's ARN across every page surfaces as a
+// JSON ResourceModel with TargetFunctionArn set (NOT FunctionName — the
+// CC list-handler schema for AWS::Lambda::Url keys on TargetFunctionArn).
+// A regression that flipped to FunctionName here would silently emit
+// `{"TargetFunctionArn":""}` for every function (since fixtures populate
+// only FunctionArn) and the defensive skip would yield zero parents.
+func TestListLambdaFunctionArns_PaginatesAndReturnsModels(t *testing.T) {
+	t.Parallel()
+	fake := &fakeLambdaFunctionsLister{
+		listPages: []lambda.ListFunctionsOutput{
+			lambdaArnListPage("m1",
+				"arn:aws:lambda:us-east-1:111:function:fn-alpha",
+				"arn:aws:lambda:us-east-1:111:function:fn-beta",
+			),
+			lambdaArnListPage("",
+				"arn:aws:lambda:us-east-1:111:function:fn-gamma",
+			),
+		},
+	}
+	got, err := listLambdaFunctionArnsWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{
+		`{"TargetFunctionArn":"arn:aws:lambda:us-east-1:111:function:fn-alpha"}`,
+		`{"TargetFunctionArn":"arn:aws:lambda:us-east-1:111:function:fn-beta"}`,
+		`{"TargetFunctionArn":"arn:aws:lambda:us-east-1:111:function:fn-gamma"}`,
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("models drift:\n got %v\nwant %v", got, want)
+	}
+	if fake.listCalls != 2 {
+		t.Errorf("listCalls=%d, want 2", fake.listCalls)
+	}
+	// Pin the Marker cursor round-trip: the lister must feed each
+	// page's NextMarker into the next request. A regression that
+	// passes `nil` on every call (e.g. dropping `marker =
+	// page.NextMarker`) would still produce 2 calls because the fake
+	// serves by call-count — only this assertion catches it.
+	if len(fake.markersSeen) != 2 {
+		t.Fatalf("markersSeen len=%d, want 2", len(fake.markersSeen))
+	}
+	if fake.markersSeen[0] != nil {
+		t.Errorf("markersSeen[0]=%q, want nil (first request must not send a Marker)",
+			aws.ToString(fake.markersSeen[0]))
+	}
+	if aws.ToString(fake.markersSeen[1]) != "m1" {
+		t.Errorf("markersSeen[1]=%q, want m1 (must round-trip page-1's NextMarker)",
+			aws.ToString(fake.markersSeen[1]))
+	}
+	// Each emitted model must round-trip as JSON with TargetFunctionArn
+	// set — a malformed string would crash the downstream CC
+	// ListResources call.
+	for _, m := range got {
+		var parsed map[string]string
+		if err := json.Unmarshal([]byte(m), &parsed); err != nil {
+			t.Errorf("model %q is not valid JSON: %v", m, err)
+			continue
+		}
+		if parsed["TargetFunctionArn"] == "" {
+			t.Errorf("model %q missing TargetFunctionArn key", m)
+		}
+	}
+}
+
+// TestListLambdaFunctionArns_EmptyAccountReturnsNonNilEmpty pins the
+// non-nil empty contract for the ARN-keyed lister: zero functions
+// returns []string{}, not nil.
+func TestListLambdaFunctionArns_EmptyAccountReturnsNonNilEmpty(t *testing.T) {
+	t.Parallel()
+	fake := &fakeLambdaFunctionsLister{
+		listPages: []lambda.ListFunctionsOutput{lambdaArnListPage("")},
+	}
+	got, err := listLambdaFunctionArnsWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got == nil {
+		t.Fatal("empty-region result must be non-nil")
+	}
+	if len(got) != 0 {
+		t.Errorf("len=%d, want 0", len(got))
+	}
+}
+
+// TestListLambdaFunctionArns_PropagatesListError pins error
+// propagation: a lambda:ListFunctions failure surfaces wrapped to
+// the caller via errors.Is.
+func TestListLambdaFunctionArns_PropagatesListError(t *testing.T) {
+	t.Parallel()
+	sentinel := errors.New("lambda:ListFunctions boom")
+	fake := &fakeLambdaFunctionsLister{listErr: sentinel}
+	_, err := listLambdaFunctionArnsWithClient(context.Background(), fake)
+	if !errors.Is(err, sentinel) {
+		t.Errorf("error chain: got %v, want chain containing %v", err, sentinel)
+	}
+}
+
+// TestListLambdaFunctionArns_SkipsEmptyFunctionArn pins the defensive
+// skip: a function with FunctionArn nil or "" must be dropped rather
+// than emitted as `{"TargetFunctionArn":""}`. A regression that flipped
+// the field read from FunctionArn to FunctionName would also be caught
+// here (fixtures populate only FunctionArn, so the wrong-field read
+// would yield three empty-ARN drops).
+func TestListLambdaFunctionArns_SkipsEmptyFunctionArn(t *testing.T) {
+	t.Parallel()
+	fake := &fakeLambdaFunctionsLister{
+		listPages: []lambda.ListFunctionsOutput{
+			{Functions: []lambdatypes.FunctionConfiguration{
+				{FunctionArn: aws.String("arn:aws:lambda:us-east-1:111:function:fn-good")},
+				{FunctionArn: nil},
+				{FunctionArn: aws.String("")},
+				{FunctionArn: aws.String("arn:aws:lambda:us-east-1:111:function:fn-also-good")},
+			}},
+		},
+	}
+	got, err := listLambdaFunctionArnsWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{
+		`{"TargetFunctionArn":"arn:aws:lambda:us-east-1:111:function:fn-good"}`,
+		`{"TargetFunctionArn":"arn:aws:lambda:us-east-1:111:function:fn-also-good"}`,
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("empty-ARN skip drift:\n got %v\nwant %v", got, want)
 	}
 }

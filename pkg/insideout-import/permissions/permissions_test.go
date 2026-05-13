@@ -18,6 +18,9 @@ import (
 // against the production source of truth.
 var awsTFTypeToServiceSlug = map[string]string{
 	"aws_acm_certificate":                 "acm_certificate",
+	"aws_api_gateway_deployment":          "api_gateway_deployment",
+	"aws_api_gateway_resource":            "api_gateway_resource",
+	"aws_api_gateway_stage":               "api_gateway_stage",
 	"aws_apigatewayv2_api":                "apigatewayv2_api",
 	"aws_apigatewayv2_authorizer":         "apigatewayv2_authorizer",
 	"aws_apigatewayv2_integration":        "apigatewayv2_integration",
@@ -51,6 +54,8 @@ var awsTFTypeToServiceSlug = map[string]string{
 	"aws_lambda_alias":                    "lambda_alias",
 	"aws_lambda_event_source_mapping":     "lambda_event_source_mapping",
 	"aws_lambda_function":                 "lambda",
+	"aws_lambda_function_url":             "lambda_function_url",
+	"aws_lambda_permission":               "lambda_permission",
 	"aws_lb":                              "lb",
 	"aws_lb_listener":                     "lb_listener",
 	"aws_lb_target_group":                 "lb_target_group",
