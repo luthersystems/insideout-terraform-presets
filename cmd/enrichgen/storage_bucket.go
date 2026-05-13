@@ -131,10 +131,11 @@ func billingRequesterPays(b *storagev1.BucketBilling) bool {
 		"GoogleStorageBucket.terraform_labels": {snippet: skip},
 		"GoogleStorageBucket.timeouts":         {snippet: skip},
 
-		// LogBucket is TF-Required inside the logging block — emit
-		// unconditionally rather than guarding on != "" so a logging
-		// block with an empty bucket name (would be schema-invalid
-		// anyway) still emits the field for visibility on review.
+		// LogBucket: block-content for the logging block (TF-Required
+		// inside the gate). Emit unconditionally rather than guarding
+		// on != "" so a logging block with an empty bucket name (would
+		// be schema-invalid anyway) still emits the field for
+		// visibility on review.
 		"GoogleStorageBucketLogging.log_bucket": {
 			snippet: func(b, f string) string {
 				return "out." + f + " = generated.LiteralOf(" + b + ".LogBucket)"
@@ -150,9 +151,11 @@ func billingRequesterPays(b *storagev1.BucketBilling) bool {
 			},
 		},
 
-		// IsLive *bool tri-state → with_state enum mapping. nil means
-		// "ANY" which the provider expresses by omitting the field;
-		// true → "LIVE", false → "ARCHIVED".
+		// with_state: mirror terraform-provider-google's
+		// flattenBucketLifecycleRuleCondition mapping of the API's
+		// IsLive *bool tri-state onto the TF enum. nil → omit the
+		// field (the provider's "ANY" default); true → "LIVE";
+		// false → "ARCHIVED".
 		"GoogleStorageBucketLifecycleRuleCondition.with_state": {
 			snippet: func(b, f string) string {
 				return `if ` + b + `.IsLive != nil {
@@ -171,8 +174,9 @@ func billingRequesterPays(b *storagev1.BucketBilling) bool {
 		"GoogleStorageBucketLifecycleRuleCondition.send_days_since_noncurrent_time_if_zero": {snippet: skip},
 		"GoogleStorageBucketLifecycleRuleCondition.send_num_newer_versions_if_zero":         {snippet: skip},
 
-		// SoftDeletePolicy.effective_time is computed by the GCS API
-		// (it's the timestamp at which the policy took effect). Skip.
+		// SoftDeletePolicy.effective_time: computed-only (the GCS API
+		// returns the timestamp at which the policy took effect; TF
+		// schema marks it Computed per decision #5). Skip.
 		"GoogleStorageBucketSoftDeletePolicy.effective_time": {snippet: skip},
 	},
 

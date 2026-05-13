@@ -47,17 +47,17 @@ func secretShortID(full string) string {
 `,
 
 	overrides: map[string]override{
-		// secret_id: Required. Derived from API.Name's last segment
-		// — TF state stores the short ID, the API returns the full
-		// resource name.
+		// secret_id: Required. Mirror the provider's flatten of
+		// API.Name's last segment — TF state stores the short ID,
+		// the API returns the full resource name.
 		"GoogleSecretManagerSecret.secret_id": {
 			snippet: func(b, f string) string {
 				return "out." + f + " = generated.LiteralOf(secretShortID(" + b + ".Name))"
 			},
 		},
 
-		// project: from projectID parameter (same shape as the
-		// other Google services in this family).
+		// project: caller supplies via the projectID parameter
+		// (same shape as the other Google services in this family).
 		"GoogleSecretManagerSecret.project": {
 			snippet: func(b, f string) string {
 				return `if projectID != "" {
@@ -66,10 +66,12 @@ func secretShortID(full string) string {
 			},
 		},
 
-		// ttl: API field exists but is Input-only — the API never
-		// echoes it back on Get. The engine's default mapping would
-		// produce a no-op (the "" guard suppresses emission), but
-		// skip explicitly so the reader sees the intent.
+		// ttl: input-only API field — the API never echoes it back
+		// on Get, so it is effectively computed-only from the
+		// enricher's perspective (decision #5 territory). The
+		// engine's default mapping would produce a no-op (the ""
+		// guard suppresses emission), but skip explicitly so the
+		// reader sees the intent.
 		"GoogleSecretManagerSecret.ttl": {snippet: skip},
 
 		// Computed-only / TF-only sentinel fields per decision #5.
