@@ -220,7 +220,8 @@ type GCPDiscoverer struct {
 	searcher  gcpAssetSearcher
 	projectID string
 
-	byType map[string]Discoverer // keyed on Terraform type
+	byType         map[string]Discoverer        // keyed on Terraform type
+	byTypeEnricher map[string]AttributeEnricher // keyed on Terraform type; populated for types with an SDK enricher (#403)
 }
 
 // GCPDiscovererOpts bundles the non-CAI per-service listers injected
@@ -287,6 +288,16 @@ func NewGCPDiscoverer(searcher gcpAssetSearcher, projectID string, opts GCPDisco
 			"google_logging_project_sink":     newLoggingProjectSinkDiscoverer(opts.SinkLister),
 			"google_sql_user":                 newSQLUserDiscoverer(opts.SQLUserLister),
 			"google_identity_platform_config": newIdentityPlatformConfigDiscoverer(opts.IdentityPlatformLister),
+		},
+		// Per-type SDK attribute enrichers (#403). Each entry is a sibling
+		// to the byType discoverer of the same name and populates ir.Attrs
+		// (the typed Layer 1 payload) so callers can produce decision-#34-
+		// clean HCL via composer.EmitImportedTF without needing the
+		// terraform-driven Stage 2b path. Types without an entry here are
+		// silently skipped by EnrichAttributes — the full enricher rollout
+		// follows the existing per-type ordering one PR at a time.
+		byTypeEnricher: map[string]AttributeEnricher{
+			"google_storage_bucket": newStorageBucketEnricher(),
 		},
 	}
 }
