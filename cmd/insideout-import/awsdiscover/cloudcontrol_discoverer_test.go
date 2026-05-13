@@ -1165,6 +1165,122 @@ func TestCloudControlDiscover_ParentListerErrorEmitsFinishAndPropagates(t *testi
 	}
 }
 
+// TestCloudControlDiscover_ParentListerListNotFoundIsSoftEmpty pins
+// the #426 regression contract: when CC ListResources returns
+// ResourceNotFoundException for a parent in the fan-out (some CFN
+// handlers — AWS::Lambda::Permission notably — return NotFound when
+// a parent legitimately has zero children, rather than an empty
+// list), the discoverer must:
+//
+//  1. NOT propagate the error (no exit-1 abort on a type with mixed
+//     populated + empty parents);
+//  2. emit a ServiceWarn so the soft-fail is visible in the run log;
+//  3. continue to the next parent;
+//  4. STILL emit all children of OTHER parents that didn't return
+//     NotFound.
+//
+// This is parent-scope-only: when parentModel is "" (top-level list)
+// a NotFound still propagates — that's covered by
+// TestCloudControlDiscover_PropagatesListError_AlsoEmitsServiceFinish.
+func TestCloudControlDiscover_ParentListerListNotFoundIsSoftEmpty(t *testing.T) {
+	t.Parallel()
+	fake := &fakeCloudControlClient{
+		propsByIdentifier: map[string]map[string]any{
+			"aa": {"UserPoolId": "A", "ClientId": "aa"},
+			"ab": {"UserPoolId": "A", "ClientId": "ab"},
+		},
+	}
+	parentACalls := 0
+	parentBCalls := 0
+	listMux := func(in *cloudcontrol.ListResourcesInput) (*cloudcontrol.ListResourcesOutput, error) {
+		if in.ResourceModel == nil {
+			return nil, errors.New("expected ResourceModel for parent-scoped list")
+		}
+		switch *in.ResourceModel {
+		case `{"UserPoolId":"A"}`:
+			parentACalls++
+			page := listPage("", "aa", "ab")
+			return &page, nil
+		case `{"UserPoolId":"B"}`:
+			parentBCalls++
+			// Simulate the AWS::Lambda::Permission CFN-handler quirk:
+			// NotFound returned for a parent with zero children.
+			return nil, &cctypes.ResourceNotFoundException{Message: ptr("zero children for parent B")}
+		default:
+			return nil, errors.New("unexpected parent model: " + *in.ResourceModel)
+		}
+	}
+	cfg := testConfig()
+	cfg.ParentLister = func(_ context.Context, _ aws.Config, _ string, _ DiscoverArgs) ([]string, error) {
+		return []string{`{"UserPoolId":"A"}`, `{"UserPoolId":"B"}`}, nil
+	}
+	d := &cloudControlDiscoverer{
+		cfg: cfg,
+		new: func(_ string) cloudControlClient {
+			return &parentMuxClient{listFn: listMux, getFn: fake.GetResource}
+		},
+		maxConcurrency: DefaultMaxConcurrency,
+	}
+	rec := &recordingEmitter{}
+	got, err := d.Discover(context.Background(), DiscoverArgs{
+		Regions:   []string{"us-east-1"},
+		AccountID: "123",
+		Emitter:   rec,
+	})
+	if err != nil {
+		t.Fatalf("NotFound on a parent must be soft-handled, got hard error: %v", err)
+	}
+	// Both parents were attempted; A produced 2 emissions; B was
+	// soft-skipped on NotFound.
+	if parentACalls != 1 {
+		t.Errorf("parent A list calls=%d, want 1 (well-behaved parent must still be queried)", parentACalls)
+	}
+	if parentBCalls != 1 {
+		t.Errorf("parent B list calls=%d, want 1 (NotFound parent must still be attempted, not skipped pre-call)", parentBCalls)
+	}
+	if len(got) != 2 {
+		t.Fatalf("emit count=%d, want 2 (parent A's two children; parent B's NotFound must produce zero, not abort)", len(got))
+	}
+	// Pin the ServiceWarn surface: a #426 NotFound must produce
+	// exactly one warn that names the parent so an operator scanning
+	// the run log can map it back to a specific resource.
+	var warns int
+	var sawNotFoundWarn bool
+	for _, e := range rec.snapshot() {
+		if e.Kind == "service_warn" {
+			warns++
+			// Message must mention "NotFound" so log scanners can
+			// distinguish this from other soft-fails (RGT, GetResource
+			// failures). The "#426" reference is load-bearing for
+			// future readers debugging the same pattern.
+			if strings.Contains(e.Message, "NotFound") && strings.Contains(e.Message, `{"UserPoolId":"B"}`) {
+				sawNotFoundWarn = true
+			}
+		}
+	}
+	if warns != 1 {
+		t.Errorf("service_warn count=%d, want 1 (exactly one warn per soft-NotFound parent)", warns)
+	}
+	if !sawNotFoundWarn {
+		t.Error("ServiceWarn message must mention NotFound + the parent ResourceModel so operators can correlate it")
+	}
+	// ServiceFinish must close the bracket with count=2 (the
+	// soft-empty parent doesn't subtract from the count of other
+	// parents' successful emissions).
+	var finishes int
+	for _, e := range rec.snapshot() {
+		if e.Kind == "service_finish" {
+			finishes++
+			if e.Count != 2 {
+				t.Errorf("service_finish.Count=%d, want 2 (parent A's emissions, not affected by parent B's soft-empty)", e.Count)
+			}
+		}
+	}
+	if finishes != 1 {
+		t.Errorf("service_finish count=%d, want 1", finishes)
+	}
+}
+
 // TestCloudControlDiscover_PropagatesListError_AlsoEmitsServiceFinish
 // pins the ListResources-error path's ServiceFinish bracket close.
 // Existing TestCloudControlDiscover_PropagatesListError covers the

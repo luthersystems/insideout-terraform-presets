@@ -306,6 +306,27 @@ func (d *cloudControlDiscoverer) Discover(ctx context.Context, args DiscoverArgs
 					for paginator.HasMorePages() {
 						page, err := paginator.NextPage(ctx)
 						if err != nil {
+							// Per-parent ListResources fan-out: some
+							// CFN handlers (e.g. AWS::Lambda::Permission
+							// per #426) return ResourceNotFoundException
+							// when a parent legitimately has zero
+							// children of the queried type, instead of
+							// returning an empty list. Treat that as an
+							// empty result for this parent, emit a soft
+							// ServiceWarn for visibility, and continue
+							// to the next parent rather than aborting
+							// the whole type's discovery. Only applies
+							// to the parent-scoped path: when
+							// parentModel is "" we're doing the
+							// top-level type list and a NotFound there
+							// is a real failure (the type itself is
+							// missing or misconfigured).
+							if parentModel != "" && isCloudControlNotFound(err) {
+								args.Emitter.ServiceWarn(d.cfg.Slug, region,
+									fmt.Sprintf("ListResources %s%s: NotFound treated as empty (#426 — CFN handler returned NotFound for a parent with zero children of this type): %v",
+										d.cfg.CloudFormationType, parentLabelFromModel(parentModel), err))
+								break
+							}
 							args.Emitter.ServiceFinish(d.cfg.Slug, region, regionCount, time.Since(regionStart))
 							return nil, fmt.Errorf("ListResources %s (region=%s): %w", d.cfg.CloudFormationType, region, err)
 						}
