@@ -6,6 +6,7 @@ import (
 	"errors"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -264,12 +265,21 @@ func TestWAFv2ParentModels_CloudFrontOnlyInUSEast1(t *testing.T) {
 	}
 }
 
-// TestListCognitoUserPoolDomains_EmitsDomainAndCustomDomain pins the
-// rare-state behavior where a single user pool has BOTH Domain
-// (Cognito-hosted) and CustomDomain (customer DNS) configured. CFN
-// treats those as two distinct AWS::Cognito::UserPoolDomain resources
-// with separate primary identifiers, so the SDKLister must emit both.
-func TestListCognitoUserPoolDomains_EmitsDomainAndCustomDomain(t *testing.T) {
+// TestListCognitoUserPoolDomains_EmitsCompoundDomainAndCustomDomain
+// pins the rare-state behavior where a single user pool has BOTH
+// Domain (Cognito-hosted) and CustomDomain (customer DNS) configured.
+// CFN treats those as two distinct AWS::Cognito::UserPoolDomain
+// resources with separate primary identifiers, so the SDKLister must
+// emit both.
+//
+// CRITICAL (#421): the emitted identifier MUST be the compound
+// `<UserPoolId>|<Domain>` (or `<UserPoolId>|<CustomDomain>`), not the
+// bare Domain string. AWS::Cognito::UserPoolDomain's CC primary
+// identifier requires both properties (per CFN schema), and CC
+// GetResource returns ValidationException on a bare-domain
+// identifier. A regression that flips back to bare-domain would
+// re-trigger the #412 live-smoke failure mode.
+func TestListCognitoUserPoolDomains_EmitsCompoundDomainAndCustomDomain(t *testing.T) {
 	t.Parallel()
 	fake := &fakeCognitoUserPoolsLister{
 		listPages: []cognitoidentityprovider.ListUserPoolsOutput{
@@ -296,9 +306,24 @@ func TestListCognitoUserPoolDomains_EmitsDomainAndCustomDomain(t *testing.T) {
 	// Order is implementation-defined (pool walk × Domain-then-CustomDomain).
 	// `want` is already sorted; sort `got` to compare set-shaped.
 	sort.Strings(got)
-	want := []string{"alone.example", "auth.example", "co-hosted.example", "custom.example"}
+	want := []string{
+		"pool-with-both|co-hosted.example",
+		"pool-with-both|custom.example",
+		"pool-with-custom-only|alone.example",
+		"pool-with-domain|auth.example",
+	}
 	if !reflect.DeepEqual(got, want) {
-		t.Errorf("domains drift:\n got %v\nwant %v", got, want)
+		t.Errorf("identifiers drift (must be <UserPoolId>|<Domain> compound per #421):\n got %v\nwant %v", got, want)
+	}
+	// Defensive: each emitted ID is the compound shape. A regression
+	// that emits bare Domain would still produce 4 entries (and the
+	// drift check above catches it), but a contains-`|` shape check
+	// makes the failure message obvious — "missing pipe" is faster
+	// for a future reader than diffing two 4-element slices.
+	for _, id := range got {
+		if !strings.Contains(id, "|") {
+			t.Errorf("emitted identifier %q lacks `|` separator; #421 requires <UserPoolId>|<Domain> compound", id)
+		}
 	}
 	// Every pool was probed exactly once (no DescribeUserPool retry
 	// or skip — a regression that short-circuits on first-empty-pool
@@ -334,9 +359,10 @@ func TestListCognitoUserPoolDomains_PropagatesDescribeError(t *testing.T) {
 		t.Errorf("err does not wrap sentinel; got %v", err)
 	}
 	// Pin the no-partial-success contract: a mid-walk error must
-	// return nil, not a truncated slice containing pool-a's domain.
-	// Callers retrying on error expect to retry the whole walk; a
-	// partial slice combined with a retry would double-emit pool-a.
+	// return nil, not a truncated slice containing pool-a's compound
+	// ID. Callers retrying on error expect to retry the whole walk;
+	// a partial slice combined with a retry would double-emit
+	// pool-a|a.example.
 	if got != nil {
 		t.Errorf("partial result leaked on error: got %v, want nil", got)
 	}

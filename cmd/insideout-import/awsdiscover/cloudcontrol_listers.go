@@ -120,13 +120,27 @@ func wafv2ParentModels(_ context.Context, _ aws.Config, region string, _ Discove
 	return []string{`{"Scope":"REGIONAL"}`}, nil
 }
 
-// listCognitoUserPoolDomains walks user pools and emits the domain
-// string for each pool that has Domain (Cognito-hosted) or
-// CustomDomain (customer DNS) configured. CFN treats Domain and
-// CustomDomain as separate AWS::Cognito::UserPoolDomain resources so
-// both are emitted when both are present. Returns identifiers suitable
-// for direct GetResource calls (the domain string is the CC primary
-// identifier).
+// listCognitoUserPoolDomains walks user pools and emits the compound
+// `<UserPoolId>|<Domain>` Cloud Control primary identifier for each
+// pool that has Domain (Cognito-hosted) or CustomDomain (customer DNS)
+// configured. CFN treats Domain and CustomDomain as separate
+// AWS::Cognito::UserPoolDomain resources so both are emitted when both
+// are present.
+//
+// IMPORTANT: AWS::Cognito::UserPoolDomain's CC primary identifier is
+// the **compound** `<UserPoolId>|<Domain>` (per its CFN schema's
+// `primaryIdentifier: [/properties/UserPoolId, /properties/Domain]`),
+// NOT the bare Domain string. Emitting bare Domain causes CC
+// GetResource to return:
+//
+//	ValidationException: Identifier <X> is not valid for identifier
+//	[/properties/UserPoolId, /properties/Domain]
+//
+// This was the #421 regression — caught by the post-merge live smoke
+// of #412. The TF import format for aws_cognito_user_pool_domain is
+// the bare Domain, so the per-type ImportIDFromIdentifier strips the
+// `<UserPoolId>|` prefix before handing off to the Terraform
+// importer.
 func listCognitoUserPoolDomains(ctx context.Context, awsCfg aws.Config, region string, _ DiscoverArgs) ([]string, error) {
 	client := cognitoidentityprovider.NewFromConfig(awsCfg, func(o *cognitoidentityprovider.Options) {
 		if region != "" {
@@ -141,25 +155,25 @@ func listCognitoUserPoolDomainsWithClient(ctx context.Context, client cognitoUse
 	if err != nil {
 		return nil, err
 	}
-	domains := []string{}
-	for _, id := range pools {
+	ids := []string{}
+	for _, poolID := range pools {
 		out, err := client.DescribeUserPool(ctx, &cognitoidentityprovider.DescribeUserPoolInput{
-			UserPoolId: aws.String(id),
+			UserPoolId: aws.String(poolID),
 		})
 		if err != nil {
-			return nil, fmt.Errorf("cognito-idp:DescribeUserPool %s: %w", id, err)
+			return nil, fmt.Errorf("cognito-idp:DescribeUserPool %s: %w", poolID, err)
 		}
 		if out == nil || out.UserPool == nil {
 			continue
 		}
 		if d := aws.ToString(out.UserPool.Domain); d != "" {
-			domains = append(domains, d)
+			ids = append(ids, poolID+"|"+d)
 		}
 		if cd := aws.ToString(out.UserPool.CustomDomain); cd != "" {
-			domains = append(domains, cd)
+			ids = append(ids, poolID+"|"+cd)
 		}
 	}
-	return domains, nil
+	return ids, nil
 }
 
 // listCognitoUserPoolIDsWithClient is a small helper shared by the

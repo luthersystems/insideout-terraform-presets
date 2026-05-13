@@ -617,10 +617,18 @@ func TestWAFv2WebACLConfig(t *testing.T) {
 }
 
 // TestCognitoUserPoolDomainConfig pins the per-type extractors for
-// aws_cognito_user_pool_domain: passthrough CC identifier (domain
-// string), domain-as-NameHint, structured NativeIDs with optional
-// UserPoolId, empty Tags, and SDKLister-only enumeration (CC
-// ListResources is unsupported).
+// aws_cognito_user_pool_domain.
+//
+// CRITICAL (#421): AWS::Cognito::UserPoolDomain's CC primary
+// identifier is the compound `<UserPoolId>|<Domain>` (per the CFN
+// schema's `primaryIdentifier: [/properties/UserPoolId,
+// /properties/Domain]`), NOT the bare Domain string. The Terraform
+// import format is the bare Domain, so the per-type
+// ImportIDFromIdentifier strips the `<UserPoolId>|` prefix. Earlier
+// versions of this config (pre-#421) passthrough'd the bare Domain as
+// the CC identifier, which caused CC GetResource to fail with
+// ValidationException across every Cognito user pool that had a
+// domain configured. The asserts below pin both halves of the fix.
 func TestCognitoUserPoolDomainConfig(t *testing.T) {
 	t.Parallel()
 	cfg := configByTFType(t, "aws_cognito_user_pool_domain")
@@ -634,26 +642,60 @@ func TestCognitoUserPoolDomainConfig(t *testing.T) {
 		t.Error("ParentLister must be nil (mutually exclusive with SDKLister)")
 	}
 
-	id := "my-app-auth"
-	if got := cfg.ImportIDFromIdentifier(id, nil); got != id {
-		t.Errorf("ImportID passthrough: got %q, want %q", got, id)
+	// Compound CC identifier: <UserPoolId>|<Domain>.
+	const poolID = "us-east-1_AbCdE"
+	const domain = "my-app-auth"
+	id := poolID + "|" + domain
+
+	// ImportID: strip the <UserPoolId>| prefix — TF takes the bare
+	// Domain. A regression to passthrough (pre-#421 behavior) would
+	// emit a `terraform import` command that includes the UserPoolId
+	// prefix, which the AWS provider's importer would reject.
+	if got := cfg.ImportIDFromIdentifier(id, nil); got != domain {
+		t.Errorf("ImportID strip <UserPoolId>| prefix: got %q, want %q", got, domain)
 	}
-	if got := cfg.NameHintFromProperties(id, nil); got != id {
-		t.Errorf("NameHint: got %q, want %q (domain string)", got, id)
+	// Malformed identifier (no `|`) must passthrough unchanged so
+	// downstream still sees SOME importable string.
+	if got := cfg.ImportIDFromIdentifier("orphan-domain", nil); got != "orphan-domain" {
+		t.Errorf("ImportID malformed-id passthrough: got %q, want %q", got, "orphan-domain")
 	}
 
-	native := cfg.NativeIDsFromProperties(id, map[string]any{"UserPoolId": "us-east-1_AbCdE"})
-	want := map[string]string{"domain": id, "user_pool_id": "us-east-1_AbCdE"}
-	if !reflect.DeepEqual(native, want) {
-		t.Errorf("NativeIDs: got %+v, want %+v", native, want)
+	// NameHint is the Domain portion of the compound; malformed
+	// identifier falls back to the full identifier string.
+	if got := cfg.NameHintFromProperties(id, nil); got != domain {
+		t.Errorf("NameHint extracted from compound: got %q, want %q", got, domain)
 	}
-	// Defensive: NativeIDs still emits the domain key when UserPoolId
-	// is absent from the properties payload (so downstream readers
-	// always see the canonical domain string).
-	nativeNoPool := cfg.NativeIDsFromProperties(id, map[string]any{})
-	wantNoPool := map[string]string{"domain": id}
-	if !reflect.DeepEqual(nativeNoPool, wantNoPool) {
-		t.Errorf("NativeIDs no-pool: got %+v, want %+v", nativeNoPool, wantNoPool)
+	if got := cfg.NameHintFromProperties("orphan-domain", nil); got != "orphan-domain" {
+		t.Errorf("NameHint malformed-id fallback: got %q, want %q", got, "orphan-domain")
+	}
+
+	// NativeIDs: well-formed compound → both keys from the
+	// identifier (preferred source even when props also carry
+	// UserPoolId — keeps the two keys consistent).
+	native := cfg.NativeIDsFromProperties(id, map[string]any{"UserPoolId": poolID})
+	want := map[string]string{"user_pool_id": poolID, "domain": domain}
+	if !reflect.DeepEqual(native, want) {
+		t.Errorf("NativeIDs from compound id: got %+v, want %+v", native, want)
+	}
+
+	// Malformed identifier (no `|`) — NativeIDs falls back to
+	// emitting the domain key from the bare identifier and pulling
+	// UserPoolId from the properties payload when present, so
+	// downstream still sees both structured keys.
+	nativeMalformed := cfg.NativeIDsFromProperties("orphan-domain", map[string]any{"UserPoolId": poolID})
+	wantMalformed := map[string]string{"domain": "orphan-domain", "user_pool_id": poolID}
+	if !reflect.DeepEqual(nativeMalformed, wantMalformed) {
+		t.Errorf("NativeIDs malformed-id fallback (with props.UserPoolId): got %+v, want %+v",
+			nativeMalformed, wantMalformed)
+	}
+	// Malformed identifier AND no UserPoolId in props — fall back to
+	// the bare-domain-only map (matches pre-#421 minimum-info
+	// contract so downstream readers always see SOME identifier).
+	nativeBareDomain := cfg.NativeIDsFromProperties("orphan-domain", map[string]any{})
+	wantBareDomain := map[string]string{"domain": "orphan-domain"}
+	if !reflect.DeepEqual(nativeBareDomain, wantBareDomain) {
+		t.Errorf("NativeIDs malformed-id + empty-props: got %+v, want %+v",
+			nativeBareDomain, wantBareDomain)
 	}
 
 	tags := cfg.TagsFromProperties(map[string]any{"Tags": []any{

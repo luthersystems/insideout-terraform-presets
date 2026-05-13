@@ -755,17 +755,50 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 	{
 		// AWS::Cognito::UserPoolDomain's CC ListResources returns
 		// UnsupportedActionException even though GetResource works.
-		// SDKLister walks user pools and emits the Domain (and
-		// CustomDomain, when set) for each pool. Domain string itself
-		// is the CC primary identifier.
-		TFType:                 "aws_cognito_user_pool_domain",
-		CloudFormationType:     "AWS::Cognito::UserPoolDomain",
-		Slug:                   "cognito_user_pool_domain",
-		SkipProjectTagFilter:   true,
-		SDKLister:              listCognitoUserPoolDomains,
-		ImportIDFromIdentifier: passthroughImportID,
-		NameHintFromProperties: func(identifier string, _ map[string]any) string { return identifier },
+		// The CC primary identifier is the compound
+		// `<UserPoolId>|<Domain>` (per the CFN schema's
+		// `primaryIdentifier: [/properties/UserPoolId,
+		// /properties/Domain]`), NOT the bare Domain — emitting bare
+		// Domain causes GetResource to return ValidationException
+		// (see #421, post-merge live smoke of #412). The SDKLister
+		// emits the compound shape; this config translates it back
+		// down for Terraform's importer, which takes only the bare
+		// Domain.
+		TFType:               "aws_cognito_user_pool_domain",
+		CloudFormationType:   "AWS::Cognito::UserPoolDomain",
+		Slug:                 "cognito_user_pool_domain",
+		SkipProjectTagFilter: true,
+		SDKLister:            listCognitoUserPoolDomains,
+		// Cloud Control identifier = "<UserPoolId>|<Domain>";
+		// Terraform import format = "<Domain>" (bare). Strip the
+		// `<UserPoolId>|` prefix.
+		ImportIDFromIdentifier: func(identifier string, _ map[string]any) string {
+			if _, domain, ok := strings.Cut(identifier, "|"); ok {
+				return domain
+			}
+			return identifier
+		},
+		// NameHint is the Domain portion (the human-readable side
+		// of the compound) when the identifier is well-formed,
+		// falling back to the full identifier otherwise.
+		NameHintFromProperties: func(identifier string, _ map[string]any) string {
+			if _, domain, ok := strings.Cut(identifier, "|"); ok {
+				return domain
+			}
+			return identifier
+		},
+		// NativeIDs split the compound identifier into structured
+		// keys. Properties carry UserPoolId redundantly — prefer the
+		// identifier-derived split for consistency and fall back to
+		// the property only when the identifier is malformed (so
+		// downstream readers always see SOME user_pool_id key).
 		NativeIDsFromProperties: func(identifier string, props map[string]any) map[string]string {
+			if poolID, domain, ok := strings.Cut(identifier, "|"); ok {
+				return map[string]string{
+					"user_pool_id": poolID,
+					"domain":       domain,
+				}
+			}
 			out := map[string]string{"domain": identifier}
 			if id := extractString(props, "UserPoolId"); id != "" {
 				out["user_pool_id"] = id
