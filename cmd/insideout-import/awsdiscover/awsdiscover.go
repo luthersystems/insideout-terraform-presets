@@ -224,7 +224,11 @@ var serviceSlugByTFType = map[string]string{
 	// Cloud Control-routed types (Bundle 13). Slug matches the per-type
 	// Slug field in cloudControlTypeConfigs (cloudcontrol_types.go);
 	// keep both surfaces in sync.
-	"aws_backup_vault": "backup_vault",
+	"aws_backup_vault":             "backup_vault",
+	"aws_backup_plan":              "backup_plan",
+	"aws_sns_topic":                "sns_topic",
+	"aws_cloudwatch_metric_alarm":  "cloudwatch_metric_alarm",
+	"aws_cloudwatch_dashboard":     "cloudwatch_dashboard",
 }
 
 // ServiceSlug returns the progress-event slug for a Terraform resource

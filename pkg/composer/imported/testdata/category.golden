@@ -1,10 +1,13 @@
 aws_apigatewayv2_api	Network Security
 aws_apigatewayv2_stage	Network Security
+aws_backup_plan	Data Storage
 aws_backup_vault	Data Storage
 aws_bedrock_guardrail	Security
 aws_cloudfront_distribution	Network Security
+aws_cloudwatch_dashboard	Observability
 aws_cloudwatch_event_rule	Events
 aws_cloudwatch_log_group	Observability
+aws_cloudwatch_metric_alarm	Observability
 aws_db_instance	Data Storage
 aws_db_parameter_group	Data Storage
 aws_db_subnet_group	Data Storage
@@ -35,6 +38,7 @@ aws_route_table	Network Security
 aws_s3_bucket	Data Storage
 aws_secretsmanager_secret	Security
 aws_security_group	Network Security
+aws_sns_topic	Events
 aws_sqs_queue	Events
 aws_subnet	Network Security
 aws_vpc	Network Security

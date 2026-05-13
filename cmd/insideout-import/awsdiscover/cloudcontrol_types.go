@@ -1,5 +1,7 @@
 package awsdiscover
 
+import "strings"
+
 // cloudControlTypeConfigs is the registry of Terraform resource types
 // routed through the generic Cloud Control discoverer. Each entry maps
 // one TFType to a Cloud-Formation TypeName plus per-type extractors for
@@ -66,6 +68,116 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 		// https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/aws-resource-backup-backupvault.html
 		TagsFromProperties: func(props map[string]any) map[string]string {
 			return extractStringMap(props, "BackupVaultTags")
+		},
+	},
+	{
+		TFType:             "aws_backup_plan",
+		CloudFormationType: "AWS::Backup::BackupPlan",
+		Slug:               "backup_plan",
+		// Cloud Control primary identifier = BackupPlanId (UUID); also
+		// the Terraform import format — passthrough.
+		ImportIDFromIdentifier: func(identifier string, _ map[string]any) string {
+			return identifier
+		},
+		// Properties payload nests the plan name under BackupPlan.BackupPlanName.
+		// Fallback to the plan ID for the address hint if the name shape shifts.
+		NameHintFromProperties: func(identifier string, props map[string]any) string {
+			if planObj, ok := props["BackupPlan"].(map[string]any); ok {
+				if name := extractString(planObj, "BackupPlanName"); name != "" {
+					return name
+				}
+			}
+			return identifier
+		},
+		NativeIDsFromProperties: func(_ string, props map[string]any) map[string]string {
+			arn := extractString(props, "BackupPlanArn")
+			if arn == "" {
+				return nil
+			}
+			return map[string]string{"arn": arn}
+		},
+		TagsFromProperties: func(props map[string]any) map[string]string {
+			return extractStringMap(props, "BackupPlanTags")
+		},
+	},
+	{
+		TFType:             "aws_sns_topic",
+		CloudFormationType: "AWS::SNS::Topic",
+		Slug:               "sns_topic",
+		// Cloud Control primary identifier = TopicArn; Terraform import
+		// for aws_sns_topic also accepts the ARN — passthrough.
+		ImportIDFromIdentifier: func(identifier string, _ map[string]any) string {
+			return identifier
+		},
+		// Derive a human-readable name from the ARN's resource portion
+		// (everything after the last colon). Falls back to the full
+		// identifier when the shape is unexpected.
+		NameHintFromProperties: func(identifier string, props map[string]any) string {
+			if name := extractString(props, "TopicName"); name != "" {
+				return name
+			}
+			if idx := strings.LastIndex(identifier, ":"); idx != -1 && idx+1 < len(identifier) {
+				return identifier[idx+1:]
+			}
+			return identifier
+		},
+		NativeIDsFromProperties: func(identifier string, _ map[string]any) map[string]string {
+			return map[string]string{"arn": identifier}
+		},
+		// Tags shape: AWS::SNS::Topic.Tags is a list of {Key, Value}
+		// objects per the CloudFormation schema.
+		TagsFromProperties: func(props map[string]any) map[string]string {
+			return extractTagList(props, "Tags")
+		},
+	},
+	{
+		TFType:             "aws_cloudwatch_metric_alarm",
+		CloudFormationType: "AWS::CloudWatch::Alarm",
+		Slug:               "cloudwatch_metric_alarm",
+		// Cloud Control primary identifier = AlarmName; also the
+		// Terraform import format — passthrough.
+		ImportIDFromIdentifier: func(identifier string, _ map[string]any) string {
+			return identifier
+		},
+		NameHintFromProperties: func(identifier string, props map[string]any) string {
+			if name := extractString(props, "AlarmName"); name != "" {
+				return name
+			}
+			return identifier
+		},
+		NativeIDsFromProperties: func(_ string, props map[string]any) map[string]string {
+			arn := extractString(props, "Arn")
+			if arn == "" {
+				return nil
+			}
+			return map[string]string{"arn": arn}
+		},
+		// Tags shape: AWS::CloudWatch::Alarm.Tags is a list of
+		// {Key, Value} objects.
+		TagsFromProperties: func(props map[string]any) map[string]string {
+			return extractTagList(props, "Tags")
+		},
+	},
+	{
+		TFType:             "aws_cloudwatch_dashboard",
+		CloudFormationType: "AWS::CloudWatch::Dashboard",
+		Slug:               "cloudwatch_dashboard",
+		// Cloud Control primary identifier = DashboardName; also the
+		// Terraform import format — passthrough.
+		ImportIDFromIdentifier: func(identifier string, _ map[string]any) string {
+			return identifier
+		},
+		NameHintFromProperties: func(identifier string, props map[string]any) string {
+			if name := extractString(props, "DashboardName"); name != "" {
+				return name
+			}
+			return identifier
+		},
+		// CloudWatch dashboards have no tags in the CloudFormation
+		// schema (Tags is absent). Return nil so downstream selectors
+		// see "tags not fetched" rather than "no tags".
+		TagsFromProperties: func(_ map[string]any) map[string]string {
+			return nil
 		},
 	},
 }
