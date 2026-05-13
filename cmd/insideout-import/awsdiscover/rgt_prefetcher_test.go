@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -98,6 +99,11 @@ func TestRGTPrefetcher_HappyPath_BucketsByCFNType(t *testing.T) {
 	}
 }
 
+// TestRGTPrefetcher_ProjectTagFilter_WiredIntoRequest pins that every
+// piece of the TagFilter request is correct — both Key AND Value, AND
+// the single-element Values slice shape. A regression that swapped Value
+// for Key (or appended stray values) would survive a Key-only assertion;
+// the full triple-check (Key, len(Values)==1, Values[0]) blocks that.
 func TestRGTPrefetcher_ProjectTagFilter_WiredIntoRequest(t *testing.T) {
 	t.Parallel()
 	var capturedFilters []rgttypes.TagFilter
@@ -123,10 +129,23 @@ func TestRGTPrefetcher_ProjectTagFilter_WiredIntoRequest(t *testing.T) {
 	if len(capturedFilters) != 3 {
 		t.Fatalf("filters: got %d, want 3 (Project + 2 selectors)", len(capturedFilters))
 	}
-	wantKeys := []string{"Project", "Environment", "Owner"}
-	for i, want := range wantKeys {
-		if aws.ToString(capturedFilters[i].Key) != want {
-			t.Errorf("filter[%d].Key = %q, want %q", i, aws.ToString(capturedFilters[i].Key), want)
+	want := []struct {
+		key, value string
+	}{
+		{"Project", "proj-1"},
+		{"Environment", "prod"},
+		{"Owner", "team-x"},
+	}
+	for i, w := range want {
+		if aws.ToString(capturedFilters[i].Key) != w.key {
+			t.Errorf("filter[%d].Key = %q, want %q", i, aws.ToString(capturedFilters[i].Key), w.key)
+		}
+		if len(capturedFilters[i].Values) != 1 {
+			t.Errorf("filter[%d].Values len = %d, want 1 (one value per AND-conjunction filter)", i, len(capturedFilters[i].Values))
+			continue
+		}
+		if capturedFilters[i].Values[0] != w.value {
+			t.Errorf("filter[%d].Values[0] = %q, want %q", i, capturedFilters[i].Values[0], w.value)
 		}
 	}
 }
@@ -256,15 +275,25 @@ func TestRGTPrefetcher_PerRegionFailure_WarnsAndOmits(t *testing.T) {
 	}
 }
 
-func TestRGTPrefetcher_UnmappableARN_WarnsOnce(t *testing.T) {
+// TestRGTPrefetcher_UnmappableARN_WarnsOncePerPair pins the
+// "once per (service, resourceType) pair" warn semantics, not just
+// "deduped within a pair." Fixture has TWO distinct unmapped pairs
+// (organizations + fsx), each appearing twice — must produce exactly
+// 2 warns, with the warn messages containing the per-pair keys so a
+// regression that emits a generic "rgt: unmapped" placeholder also
+// fails.
+func TestRGTPrefetcher_UnmappableARN_WarnsOncePerPair(t *testing.T) {
 	t.Parallel()
 	fake := &fakeRGTClient{
 		pages: [][]rgttypes.ResourceTagMapping{
 			{
-				// Unmapped — no rule for organizations.
+				// Pair A: organizations/account (2 ARNs).
 				mapping("arn:aws:organizations::111111111111:account/o-123/111111111111", "proj-1"),
 				mapping("arn:aws:organizations::111111111111:account/o-123/222222222222", "proj-1"),
-				// Mapped.
+				// Pair B: fsx/file-system (2 ARNs).
+				mapping("arn:aws:fsx:us-east-1:111111111111:file-system/fs-aaaaa", "proj-1"),
+				mapping("arn:aws:fsx:us-east-1:111111111111:file-system/fs-bbbbb", "proj-1"),
+				// Mapped — should still survive.
 				mapping("arn:aws:ec2:us-east-1:111111111111:vpc/vpc-aaa", "proj-1"),
 			},
 		},
@@ -277,19 +306,34 @@ func TestRGTPrefetcher_UnmappableARN_WarnsOnce(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Prefetch: %v", err)
 	}
-	// Mapped survived.
 	if _, ok := cache.ForCFN("us-east-1", "AWS::EC2::VPC"); !ok {
 		t.Error("mapped VPC missing from cache")
 	}
-	// Unmapped warned exactly once (despite 2 unmapped ARNs of the same kind).
-	var warns int
+
+	var (
+		orgWarn, fsxWarn int
+		seenMessages     []string
+	)
 	for _, ev := range rec.snapshot() {
-		if ev.Kind == "service_warn" && ev.Service == "rgt" && ev.Region == "" {
-			warns++
+		if ev.Kind != "service_warn" || ev.Service != "rgt" || ev.Region != "" {
+			continue
+		}
+		seenMessages = append(seenMessages, ev.Message)
+		switch {
+		case strings.Contains(ev.Message, "organizations/account"):
+			orgWarn++
+		case strings.Contains(ev.Message, "fsx/file-system"):
+			fsxWarn++
 		}
 	}
-	if warns != 1 {
-		t.Errorf("unmapped warns: got %d, want 1 (one per service/resourceType pair)", warns)
+	if orgWarn != 1 {
+		t.Errorf("organizations/account warns: got %d, want 1 (messages: %v)", orgWarn, seenMessages)
+	}
+	if fsxWarn != 1 {
+		t.Errorf("fsx/file-system warns: got %d, want 1 (messages: %v)", fsxWarn, seenMessages)
+	}
+	if len(seenMessages) != 2 {
+		t.Errorf("total unmapped warns: got %d, want 2 (one per distinct pair); messages: %v", len(seenMessages), seenMessages)
 	}
 }
 

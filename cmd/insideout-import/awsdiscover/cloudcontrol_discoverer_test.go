@@ -1301,29 +1301,36 @@ func TestCloudControlDiscover_UsesRGTCache_SkipsListResources(t *testing.T) {
 // TestCloudControlDiscover_CacheMiss_FallsBackToListResources pins the
 // fallback behavior: when the orchestrator ran the prefetcher but found
 // no ARNs for our CloudFormation type (cache miss), the existing
-// ListResources path must drive.
+// ListResources path must drive AND the legacy args.Project tag filter
+// (skipped on the cache-hit path) must remain active. The fixture seeds
+// two vault items with different Project tags; only the matching one
+// emits.
 func TestCloudControlDiscover_CacheMiss_FallsBackToListResources(t *testing.T) {
 	t.Parallel()
 	fake := &fakeCloudControlClient{
 		listPages: []cloudcontrol.ListResourcesOutput{
-			listPage("", "vault-x"),
+			listPage("", "vault-match", "vault-other-project"),
 		},
 		propsByIdentifier: map[string]map[string]any{
-			"vault-x": {"BackupVaultName": "vault-x"},
+			"vault-match":          {"BackupVaultName": "vault-match", "BackupVaultTags": map[string]any{"Project": "io-foo"}},
+			"vault-other-project":  {"BackupVaultName": "vault-other-project", "BackupVaultTags": map[string]any{"Project": "io-bar"}},
 		},
 	}
 	cfg := testConfig()
 	cfg.CloudFormationType = "AWS::Backup::BackupVault"
+	cfg.TagsFromProperties = func(props map[string]any) map[string]string {
+		return extractStringMap(props, "BackupVaultTags")
+	}
 	d := &cloudControlDiscoverer{
 		cfg:            cfg,
 		new:            func(_ string) cloudControlClient { return fake },
 		maxConcurrency: DefaultMaxConcurrency,
 	}
-	// Cache populated for a DIFFERENT cfnType; our type misses.
+	// Cache populated for a DIFFERENT cfnType so this type misses.
 	cache := &rgtCache{byRegionAndType: map[string]map[string][]arnInfo{
 		"us-east-1": {"AWS::SNS::Topic": {{ARN: "x", Identifier: "x"}}},
 	}}
-	args := DiscoverArgs{Regions: []string{"us-east-1"}, AccountID: "123"}.withRGTCache(cache)
+	args := DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"}.withRGTCache(cache)
 
 	got, err := d.Discover(context.Background(), args)
 	if err != nil {
@@ -1333,7 +1340,10 @@ func TestCloudControlDiscover_CacheMiss_FallsBackToListResources(t *testing.T) {
 		t.Error("ListResources calls: got 0, want >=1 (cache miss should fall back to List)")
 	}
 	if len(got) != 1 {
-		t.Fatalf("emit count: got %d, want 1", len(got))
+		t.Fatalf("emit count: got %d (%v), want 1 (Project filter must still run on cache-miss path)", len(got), got)
+	}
+	if got[0].Identity.ImportID != "vault-match" {
+		t.Errorf("emitted ImportID = %q, want vault-match (the Project=io-foo row); vault-other-project should have been filtered", got[0].Identity.ImportID)
 	}
 }
 
@@ -1383,14 +1393,22 @@ func TestCloudControlDiscover_UsesRGTTagsNotPropertiesTags(t *testing.T) {
 
 // TestCloudControlDiscover_GlobalType_UsesForGlobalCFN pins that global
 // CloudFormation types (IsGlobal=true) consult ForGlobalCFN instead of
-// per-region ForCFN. The cache buckets the same IAM role ARN in
-// us-east-1 and us-west-2; the discoverer must emit ONE resource (after
-// de-dup) with region="" (the global convention).
+// per-region ForCFN. The fixture seeds:
+//   - my-role-dupe in BOTH us-east-1 and us-west-2 (must dedupe to 1)
+//   - my-role-only-west in us-west-2 only (must appear)
+//   - my-role-only-east in us-east-1 only (must appear)
+//
+// Total emitted resources = 3 (not 4) proves dedupe across regions; the
+// per-region-key absence of my-role-only-west / only-east proves the
+// "across all regions" union behavior — a regression that read only one
+// region's bucket would yield 2 or fewer.
 func TestCloudControlDiscover_GlobalType_UsesForGlobalCFN(t *testing.T) {
 	t.Parallel()
 	fake := &fakeCloudControlClient{
 		propsByIdentifier: map[string]map[string]any{
-			"my-role": {"RoleName": "my-role"},
+			"my-role-dupe":      {"RoleName": "my-role-dupe"},
+			"my-role-only-west": {"RoleName": "my-role-only-west"},
+			"my-role-only-east": {"RoleName": "my-role-only-east"},
 		},
 	}
 	cfg := testConfig()
@@ -1402,8 +1420,14 @@ func TestCloudControlDiscover_GlobalType_UsesForGlobalCFN(t *testing.T) {
 		maxConcurrency: DefaultMaxConcurrency,
 	}
 	cache := &rgtCache{byRegionAndType: map[string]map[string][]arnInfo{
-		"us-east-1": {"AWS::IAM::Role": {{ARN: "arn:aws:iam::111:role/my-role", Identifier: "my-role"}}},
-		"us-west-2": {"AWS::IAM::Role": {{ARN: "arn:aws:iam::111:role/my-role", Identifier: "my-role"}}},
+		"us-east-1": {"AWS::IAM::Role": {
+			{ARN: "arn:aws:iam::111:role/my-role-dupe", Identifier: "my-role-dupe"},
+			{ARN: "arn:aws:iam::111:role/my-role-only-east", Identifier: "my-role-only-east"},
+		}},
+		"us-west-2": {"AWS::IAM::Role": {
+			{ARN: "arn:aws:iam::111:role/my-role-dupe", Identifier: "my-role-dupe"},
+			{ARN: "arn:aws:iam::111:role/my-role-only-west", Identifier: "my-role-only-west"},
+		}},
 	}}
 	args := DiscoverArgs{Regions: []string{"us-east-1", "us-west-2"}, AccountID: "123"}.withRGTCache(cache)
 
@@ -1411,12 +1435,32 @@ func TestCloudControlDiscover_GlobalType_UsesForGlobalCFN(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Discover: %v", err)
 	}
-	if len(got) != 1 {
-		t.Errorf("emit count: got %d, want 1 (deduped across regions)", len(got))
+	if len(got) != 3 {
+		t.Fatalf("emit count: got %d, want 3 (1 deduped + 2 unique)", len(got))
 	}
-	if got[0].Identity.Region != "" {
-		t.Errorf("global type Region: got %q, want \"\" (global convention)", got[0].Identity.Region)
+	seen := map[string]bool{}
+	for _, ir := range got {
+		seen[ir.Identity.ImportID] = true
+		if ir.Identity.Region != "" {
+			t.Errorf("global type %q Region: got %q, want \"\" (global convention)", ir.Identity.ImportID, ir.Identity.Region)
+		}
 	}
+	for _, want := range []string{"my-role-dupe", "my-role-only-east", "my-role-only-west"} {
+		if !seen[want] {
+			t.Errorf("missing %q from emitted set; got keys %v", want, mapKeysFromBool(seen))
+		}
+	}
+}
+
+// mapKeysFromBool returns the keys of a string→bool map sorted, for
+// diagnostic output when an assertion fails.
+func mapKeysFromBool(m map[string]bool) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // mapKeys returns the keys of a map in sorted order. Used to produce

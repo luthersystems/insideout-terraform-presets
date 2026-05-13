@@ -227,7 +227,16 @@ func (p *realRGTPrefetcher) fetchRegion(ctx context.Context, region string, filt
 	byType := map[string][]arnInfo{}
 	unmapped := map[string]struct{}{}
 	var pageToken *string
-	for {
+	// rgtPaginationMaxPages caps the per-region pagination loop. RGT's
+	// default page size is 100 resources, so 100 pages covers up to
+	// 10,000 tagged resources per region — well above any realistic
+	// per-project footprint. Hitting the cap signals either an RGT
+	// server bug (replayed page tokens) or a misconfigured customer
+	// account; the prefetcher logs the cap and returns the partial
+	// result so the per-type ListResources fallback can complete the
+	// scan.
+	const rgtPaginationMaxPages = 100
+	for page := 0; page < rgtPaginationMaxPages; page++ {
 		out, err := client.GetResources(ctx, &resourcegroupstaggingapi.GetResourcesInput{
 			TagFilters:      filters,
 			PaginationToken: pageToken,
@@ -257,11 +266,11 @@ func (p *realRGTPrefetcher) fetchRegion(ctx context.Context, region string, filt
 			})
 		}
 		if aws.ToString(out.PaginationToken) == "" {
-			break
+			return byType, unmapped, nil
 		}
 		pageToken = out.PaginationToken
 	}
-	return byType, unmapped, nil
+	return byType, unmapped, fmt.Errorf("rgt pagination exceeded %d pages in region %q (partial result returned)", rgtPaginationMaxPages, region)
 }
 
 // buildTagFilters maps DiscoverArgs (Project + TagSelectors) onto the

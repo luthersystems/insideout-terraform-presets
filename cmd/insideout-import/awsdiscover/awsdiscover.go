@@ -185,16 +185,26 @@ var serviceSlugByTFType = map[string]string{
 // from any Discoverer, including test-only ones a future contributor
 // might register without updating the slug map.
 func ServiceSlug(tfType string) string {
-	if s, ok := serviceSlugByTFType[tfType]; ok {
+	if s, ok := serviceSlugCombined[tfType]; ok {
 		return s
-	}
-	for _, cfg := range cloudControlTypeConfigs {
-		if cfg.TFType == tfType {
-			return cfg.Slug
-		}
 	}
 	return tfType
 }
+
+// serviceSlugCombined merges serviceSlugByTFType (4 Bucket-C entries)
+// with cloudControlTypeConfigs slugs into one O(1) lookup table. Built
+// once at package init so ServiceSlug avoids the O(n) scan that would
+// otherwise repeat per Emitter event.
+var serviceSlugCombined = func() map[string]string {
+	out := make(map[string]string, len(serviceSlugByTFType)+len(cloudControlTypeConfigs))
+	for k, v := range serviceSlugByTFType {
+		out[k] = v
+	}
+	for _, cfg := range cloudControlTypeConfigs {
+		out[cfg.TFType] = cfg.Slug
+	}
+	return out
+}()
 
 // SupportedTypes returns the registered Terraform types in lexicographic
 // order. Used by the CLI for default --resource-types and validation.

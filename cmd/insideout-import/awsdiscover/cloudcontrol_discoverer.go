@@ -304,8 +304,12 @@ func (d *cloudControlDiscoverer) Discover(ctx context.Context, args DiscoverArgs
 		sort.Slice(done, func(i, j int) bool { return done[i].identifier < done[j].identifier })
 
 		for _, f := range done {
-			// Legacy Project tag back-compat (matches lambda.go:161).
-			if args.Project != "" && f.tags["Project"] != args.Project {
+			// Legacy Project tag back-compat. Skipped on the RGT-cache
+			// hit path because the prefetcher already filtered
+			// server-side; running it again would force a redundant
+			// map lookup per resource.
+			cacheUsedForRef := cacheUsed
+			if !cacheUsedForRef && args.Project != "" && f.tags["Project"] != args.Project {
 				continue
 			}
 			if !MatchesAll(f.tags, args.TagSelectors) {
