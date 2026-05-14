@@ -223,6 +223,21 @@
       "purpose": "fetch tags per guardrail"
     },
     {
+      "service": "bedrock_model_invocation_logging",
+      "iam_action": "bedrock:GetModelInvocationLoggingConfiguration",
+      "purpose": "Cloud Control GetResource for aws_bedrock_model_invocation_logging_configuration delegates to bedrock:GetModelInvocationLoggingConfiguration (account-scoped singleton)"
+    },
+    {
+      "service": "bedrock_model_invocation_logging",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::Bedrock::ModelInvocationLoggingConfiguration (#14i singleton)"
+    },
+    {
+      "service": "bedrock_model_invocation_logging",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::Bedrock::ModelInvocationLoggingConfiguration (returns 0 or 1 row per account+region)"
+    },
+    {
       "service": "cloudfront_distribution",
       "iam_action": "cloudcontrol:GetResource",
       "purpose": "Cloud Control GetResource for AWS::CloudFront::Distribution (#406 unified discoverer)"
@@ -918,6 +933,46 @@
       "purpose": "list IAM roles (paginated)"
     },
     {
+      "service": "iam_role_policy",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::IAM::RolePolicy (#14i parent-scoped on RoleName)"
+    },
+    {
+      "service": "iam_role_policy",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::IAM::RolePolicy (per-role fan-out via ResourceModel={RoleName})"
+    },
+    {
+      "service": "iam_role_policy",
+      "iam_action": "iam:GetRolePolicy",
+      "purpose": "Cloud Control GetResource for aws_iam_role_policy delegates to iam:GetRolePolicy (resolves inline policy document)"
+    },
+    {
+      "service": "iam_role_policy",
+      "iam_action": "iam:ListRolePolicies",
+      "purpose": "Cloud Control ListResources for AWS::IAM::RolePolicy delegates to iam:ListRolePolicies (per-role inline-policy names)"
+    },
+    {
+      "service": "iam_role_policy",
+      "iam_action": "iam:ListRoles",
+      "purpose": "ParentLister enumeration: list IAM roles to seed the per-role RolePolicy fan-out (#14i)"
+    },
+    {
+      "service": "iam_service_linked_role",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::IAM::ServiceLinkedRole (#14i SDKLister branch — global service)"
+    },
+    {
+      "service": "iam_service_linked_role",
+      "iam_action": "iam:GetRole",
+      "purpose": "Cloud Control GetResource for aws_iam_service_linked_role delegates to iam:GetRole"
+    },
+    {
+      "service": "iam_service_linked_role",
+      "iam_action": "iam:ListRoles",
+      "purpose": "SDKLister enumeration: walk IAM roles and filter by /aws-service-role/ path prefix (CC ListResources unsupported for SLRs)"
+    },
+    {
       "service": "iam_user",
       "iam_action": "cloudcontrol:GetResource",
       "purpose": "Cloud Control GetResource for AWS::IAM::User (#430 SDKLister branch — global service)"
@@ -1308,6 +1363,26 @@
       "purpose": "Cloud Control GetResource delegate for the Tags property"
     },
     {
+      "service": "opensearchserverless_access_policy",
+      "iam_action": "aoss:GetAccessPolicy",
+      "purpose": "Cloud Control GetResource for aws_opensearchserverless_access_policy delegates to aoss:GetAccessPolicy"
+    },
+    {
+      "service": "opensearchserverless_access_policy",
+      "iam_action": "aoss:ListAccessPolicies",
+      "purpose": "Cloud Control ListResources for AWS::OpenSearchServerless::AccessPolicy delegates to aoss:ListAccessPolicies (per-Type fan-out)"
+    },
+    {
+      "service": "opensearchserverless_access_policy",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::OpenSearchServerless::AccessPolicy (#14i ParentLister branch on Type)"
+    },
+    {
+      "service": "opensearchserverless_access_policy",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::OpenSearchServerless::AccessPolicy (per-Type fan-out via ResourceModel={Type})"
+    },
+    {
       "service": "opensearchserverless_collection",
       "iam_action": "aoss:BatchGetCollection",
       "purpose": "DiscoverByID: fetch collection details by id"
@@ -1331,6 +1406,26 @@
       "service": "opensearchserverless_collection",
       "iam_action": "cloudcontrol:ListResources",
       "purpose": "Cloud Control ListResources for AWS::OpenSearchServerless::Collection (cache-miss fallback when RGT prefetch is unavailable)"
+    },
+    {
+      "service": "opensearchserverless_security_policy",
+      "iam_action": "aoss:GetSecurityPolicy",
+      "purpose": "Cloud Control GetResource for aws_opensearchserverless_security_policy delegates to aoss:GetSecurityPolicy"
+    },
+    {
+      "service": "opensearchserverless_security_policy",
+      "iam_action": "aoss:ListSecurityPolicies",
+      "purpose": "Cloud Control ListResources for AWS::OpenSearchServerless::SecurityPolicy delegates to aoss:ListSecurityPolicies (per-Type fan-out: encryption + network)"
+    },
+    {
+      "service": "opensearchserverless_security_policy",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::OpenSearchServerless::SecurityPolicy (#14i ParentLister branch on Type)"
+    },
+    {
+      "service": "opensearchserverless_security_policy",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::OpenSearchServerless::SecurityPolicy (per-Type fan-out via ResourceModel={Type})"
     },
     {
       "service": "resource_explorer_2",

@@ -2070,6 +2070,271 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 		},
 		TagsFromProperties: emptyTagsExtractor,
 	},
+
+	// =====================================================================
+	// Bedrock Model Invocation Logging Configuration — account-scoped
+	// singleton, untaggable (#14i)
+	// =====================================================================
+	{
+		// AWS::Bedrock::ModelInvocationLoggingConfiguration is a per-
+		// region singleton (Bedrock keeps one logging configuration per
+		// account+region). CC ListResources is supported and returns
+		// either zero rows (no config exists) or exactly one row when
+		// configured. CC primary identifier is a constant sentinel —
+		// the configuration has no user-assigned name. Terraform's
+		// import format for
+		// aws_bedrock_model_invocation_logging_configuration is the
+		// region (matching the singleton's scope) per
+		// terraform-provider-aws v6.x docs — passthrough is safe because
+		// the standalone discover pipeline never carries a region into
+		// the per-type ImportID rewriter (region lives one level up at
+		// the orchestrator) and the downstream importer reads region
+		// from its own AWS config. Passthrough preserves the CC
+		// identifier shape verbatim.
+		//
+		// CFN schema has no Tags property — Bedrock logging configs are
+		// account-wide observability infrastructure, not customer-tagged
+		// resources. SkipProjectTagFilter bypasses the legacy Project
+		// filter so the singleton emit is not silently dropped on
+		// --project scans, mirroring aws_cloudwatch_log_resource_policy.
+		TFType:                 "aws_bedrock_model_invocation_logging_configuration",
+		CloudFormationType:     "AWS::Bedrock::ModelInvocationLoggingConfiguration",
+		Slug:                   "bedrock_model_invocation_logging",
+		SkipProjectTagFilter:   true,
+		ImportIDFromIdentifier: passthroughImportID,
+		NameHintFromProperties: passthroughIdentifierName,
+		NativeIDsFromProperties: func(identifier string, _ map[string]any) map[string]string {
+			// Singleton: stamp the identifier under "id" so downstream
+			// consumers have a non-nil NativeIDs map (#255 contract).
+			return map[string]string{"id": identifier}
+		},
+		TagsFromProperties: emptyTagsExtractor,
+	},
+
+	// =====================================================================
+	// IAM Role Policy — parent-scoped on RoleName, untaggable (#14i)
+	// =====================================================================
+	{
+		// AWS::IAM::RolePolicy is parent-scoped on RoleName: CC
+		// ListResources without a ResourceModel returns
+		// InvalidRequestException ("required key [RoleName] not
+		// found"). ParentLister enumerates IAM roles via iam:ListRoles
+		// and emits one ResourceModel={"RoleName":"…"} JSON-string per
+		// role; the discoverer fans ListResources out once per parent.
+		// IAM is global so IsGlobal=true causes the discoverer to run
+		// once with region="" per the cloudControlDiscoverer
+		// convention (matches aws_iam_user / aws_iam_group / etc.).
+		//
+		// CC primary identifier = "<RoleName>|<PolicyName>" (compound,
+		// pipe-separated per the CFN schema's primaryIdentifier of
+		// [/properties/RoleName, /properties/PolicyName]).
+		// Terraform's import format for aws_iam_role_policy is
+		// "<RoleName>:<PolicyName>" (colon-separated) per
+		// terraform-provider-aws v6.x docs — single-replace "|" -> ":"
+		// preserves any colons that might appear in a PolicyName (rare
+		// but legal: IAM PolicyName accepts the same character set as
+		// other IAM names, which is alphanumeric + "+=,.@_-"; colons
+		// are not in the IAM name regex, so the single-replace is
+		// belt-and-suspenders).
+		//
+		// Inline policies have no Tags property on the CFN schema —
+		// they're a sub-resource of the parent role and inherit no
+		// tagging surface. SkipProjectTagFilter + emptyTagsExtractor
+		// matches the untaggableAWS / NON_TAGGABLE_AWS allowlist entry
+		// and the legacy Project filter is bypassed so policies on
+		// project-tagged roles don't get silently dropped.
+		TFType:               "aws_iam_role_policy",
+		CloudFormationType:   "AWS::IAM::RolePolicy",
+		Slug:                 "iam_role_policy",
+		IsGlobal:             true,
+		SkipProjectTagFilter: true,
+		ParentLister:         listIAMRolesAsResourceModels,
+		ImportIDFromIdentifier: func(identifier string, _ map[string]any) string {
+			return strings.Replace(identifier, "|", ":", 1)
+		},
+		NameHintFromProperties: nameOrIdentifier("PolicyName"),
+		NativeIDsFromProperties: func(identifier string, _ map[string]any) map[string]string {
+			parts := strings.SplitN(identifier, "|", 2)
+			if len(parts) != 2 {
+				return nil
+			}
+			return map[string]string{
+				"role_name":   parts[0],
+				"policy_name": parts[1],
+			}
+		},
+		TagsFromProperties: emptyTagsExtractor,
+	},
+
+	// =====================================================================
+	// IAM Service-Linked Role — SDKLister-listed, global, untaggable (#14i)
+	// =====================================================================
+	{
+		// AWS::IAM::ServiceLinkedRole's CC ListResources returns
+		// UnsupportedActionException — service-linked roles are auto-
+		// created by AWS services on demand (e.g. ElastiCache,
+		// AutoScaling), so there's no LIST handler. CC GetResource IS
+		// supported and keyed by AWSServiceName (the canonical service
+		// principal hostname, e.g. "elasticache.amazonaws.com"). The
+		// SDKLister walks iam:ListRoles, filters by the
+		// "/aws-service-role/" path prefix that AWS stamps on every SLR,
+		// and emits the AWSServiceName extracted from the role's Path.
+		// IAM is global; IsGlobal=true mirrors aws_iam_user / _group.
+		//
+		// CC primary identifier = AWSServiceName (the service hostname,
+		// e.g. "elasticache.amazonaws.com"). Terraform's import format
+		// for aws_iam_service_linked_role is the role ARN per
+		// terraform-provider-aws v6.x docs. We use a CC->ARN rewrite
+		// inside ImportIDFromIdentifier using the role's Path +
+		// RoleName, sourced from the CC GetResource properties payload
+		// (the AWSServiceName alone isn't enough to reconstruct the
+		// full ARN since the actual role suffix varies by service).
+		// When properties are missing (defensive: malformed CC
+		// payload), fall through to the CC identifier verbatim — a
+		// downstream import will then surface a clear "wrong format"
+		// error rather than a silent mis-import.
+		//
+		// CFN declares the type as supporting Tags, but service-linked
+		// roles are AWS-managed: customers cannot attach tags via the
+		// IAM API (tag attempts return AccessDenied). SkipProjectTag
+		// matches that reality. We use emptyTagsExtractor for the same
+		// reason — surface a non-nil empty map per #255 contract.
+		TFType:               "aws_iam_service_linked_role",
+		CloudFormationType:   "AWS::IAM::ServiceLinkedRole",
+		Slug:                 "iam_service_linked_role",
+		IsGlobal:             true,
+		SkipProjectTagFilter: true,
+		SDKLister:            listIAMServiceLinkedRoleServiceNames,
+		// CC identifier = AWSServiceName (e.g. "elasticache.amazonaws.com");
+		// TF import format = role ARN
+		// (arn:aws:iam::<acct>:role/aws-service-role/<service>/<RoleName>).
+		// CC GetResource properties carry RoleName + Path; assemble
+		// the ARN when present, otherwise fall through verbatim so a
+		// malformed CC payload surfaces clearly downstream.
+		ImportIDFromIdentifier: func(identifier string, props map[string]any) string {
+			arn := extractString(props, "RoleArn")
+			if arn != "" {
+				return arn
+			}
+			return identifier
+		},
+		// NameHint: prefer the CFN-surfaced RoleName (it's the AWS-
+		// assigned role suffix, e.g. "AWSServiceRoleForElastiCache"),
+		// falling back to the AWSServiceName identifier.
+		NameHintFromProperties: nameOrIdentifier("RoleName"),
+		NativeIDsFromProperties: func(identifier string, props map[string]any) map[string]string {
+			out := map[string]string{"aws_service_name": identifier}
+			if arn := extractString(props, "RoleArn"); arn != "" {
+				out["arn"] = arn
+			}
+			if name := extractString(props, "RoleName"); name != "" {
+				out["role_name"] = name
+			}
+			return out
+		},
+		TagsFromProperties: emptyTagsExtractor,
+	},
+
+	// =====================================================================
+	// OpenSearch Serverless Access Policy — Type-scoped fan-out,
+	// untaggable (#14i)
+	// =====================================================================
+	{
+		// AWS::OpenSearchServerless::AccessPolicy's CC ListResources
+		// requires ResourceModel={"Type":"<value>"} — the policy
+		// taxonomy is keyed on Type. AWS today defines exactly one
+		// access-policy Type value ("data"). ParentLister returns the
+		// fixed Type fan-out (static slice, no SDK call) following the
+		// wafv2ParentModels precedent.
+		//
+		// CC primary identifier shape is "<Type>|<Name>" (compound,
+		// pipe-separated per the CFN schema's primaryIdentifier of
+		// [/properties/Type, /properties/Name]). Terraform's import
+		// format for aws_opensearchserverless_access_policy is
+		// "<Name>/<Type>" (slash-separated, Name-first) per
+		// terraform-provider-aws v6.x docs — rewrite "<Type>|<Name>"
+		// into "<Name>/<Type>".
+		//
+		// No Tags property on the CFN schema — OpenSearchServerless
+		// policies are governance metadata (statement + principal +
+		// action), not tag-bearing customer resources. SkipProjectTag
+		// + emptyTagsExtractor matches the untaggableAWS /
+		// NON_TAGGABLE_AWS allowlist entry.
+		TFType:               "aws_opensearchserverless_access_policy",
+		CloudFormationType:   "AWS::OpenSearchServerless::AccessPolicy",
+		Slug:                 "opensearchserverless_access_policy",
+		SkipProjectTagFilter: true,
+		ParentLister:         opensearchServerlessAccessPolicyTypeModels,
+		ImportIDFromIdentifier: func(identifier string, _ map[string]any) string {
+			// CC "<Type>|<Name>" -> TF "<Name>/<Type>". Split on the
+			// first "|" only so any "|" inside Name survives — Name is
+			// alphanumeric per the AWS policy-name regex so this is
+			// belt-and-suspenders.
+			parts := strings.SplitN(identifier, "|", 2)
+			if len(parts) != 2 {
+				return identifier
+			}
+			return parts[1] + "/" + parts[0]
+		},
+		NameHintFromProperties: nameOrIdentifier("Name"),
+		NativeIDsFromProperties: func(identifier string, _ map[string]any) map[string]string {
+			parts := strings.SplitN(identifier, "|", 2)
+			if len(parts) != 2 {
+				return nil
+			}
+			return map[string]string{
+				"type": parts[0],
+				"name": parts[1],
+			}
+		},
+		TagsFromProperties: emptyTagsExtractor,
+	},
+
+	// =====================================================================
+	// OpenSearch Serverless Security Policy — Type-scoped fan-out,
+	// untaggable (#14i)
+	// =====================================================================
+	{
+		// AWS::OpenSearchServerless::SecurityPolicy's CC ListResources
+		// also requires ResourceModel={"Type":"<value>"} — but the
+		// Type taxonomy here has TWO valid values: "encryption" and
+		// "network". ParentLister returns both as a static fan-out
+		// (mirroring wafv2ParentModels' static-slice precedent).
+		//
+		// CC primary identifier shape is "<Type>|<Name>" (compound,
+		// pipe-separated). Terraform's import format for
+		// aws_opensearchserverless_security_policy is
+		// "<Name>/<Type>" (slash-separated, Name-first) per
+		// terraform-provider-aws v6.x docs — same rewrite shape as
+		// access policies.
+		//
+		// No Tags property on the CFN schema. Same untaggable shape as
+		// the access-policy sibling above.
+		TFType:               "aws_opensearchserverless_security_policy",
+		CloudFormationType:   "AWS::OpenSearchServerless::SecurityPolicy",
+		Slug:                 "opensearchserverless_security_policy",
+		SkipProjectTagFilter: true,
+		ParentLister:         opensearchServerlessSecurityPolicyTypeModels,
+		ImportIDFromIdentifier: func(identifier string, _ map[string]any) string {
+			parts := strings.SplitN(identifier, "|", 2)
+			if len(parts) != 2 {
+				return identifier
+			}
+			return parts[1] + "/" + parts[0]
+		},
+		NameHintFromProperties: nameOrIdentifier("Name"),
+		NativeIDsFromProperties: func(identifier string, _ map[string]any) map[string]string {
+			parts := strings.SplitN(identifier, "|", 2)
+			if len(parts) != 2 {
+				return nil
+			}
+			return map[string]string{
+				"type": parts[0],
+				"name": parts[1],
+			}
+		},
+		TagsFromProperties: emptyTagsExtractor,
+	},
 }
 
 // passthroughImportID is the common ImportIDFromIdentifier used by every

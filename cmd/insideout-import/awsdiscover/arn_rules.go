@@ -206,6 +206,31 @@ var arnRules = []arnRule{
 		cfnType: "AWS::Events::Rule", identifierFn: identityResourceID},
 
 	// IAM (global, but appears in us-east-1 routing)
+	// Service-linked role ARNs share (service=iam, resourceType=role)
+	// with the generic IAM Role rule below, but embed
+	// "aws-service-role/<service>.amazonaws.com/<name>" in resourceID
+	// (#14i). matchExtra picks the SLR variant when resourceID begins
+	// with "aws-service-role/", and identifierFn rebuilds the CC
+	// primary identifier (AWSServiceName — the canonical service
+	// principal hostname, e.g. "elasticache.amazonaws.com") from the
+	// second path segment. The SLR rule MUST precede the generic IAM
+	// Role rule because both parse to (service=iam, resourceType=role);
+	// a regression that reorders them would route SLR ARNs to
+	// AWS::IAM::Role with identifier="aws-service-role/<service>/..."
+	// which is not a valid CC role identifier (CC would reject the
+	// downstream GetResource with ValidationException).
+	{matchService: "iam", matchResourceType: "role",
+		matchExtra: func(p parsedARN) bool {
+			return strings.HasPrefix(p.resourceID, "aws-service-role/")
+		},
+		cfnType: "AWS::IAM::ServiceLinkedRole", identifierFn: func(p parsedARN) string {
+			// resourceID format: "aws-service-role/<service>/<RoleName>".
+			rest := strings.TrimPrefix(p.resourceID, "aws-service-role/")
+			if idx := strings.Index(rest, "/"); idx >= 0 {
+				return rest[:idx]
+			}
+			return rest
+		}},
 	{matchService: "iam", matchResourceType: "role",
 		cfnType: "AWS::IAM::Role", identifierFn: identityResourceID},
 	{matchService: "iam", matchResourceType: "policy",
