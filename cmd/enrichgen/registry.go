@@ -110,4 +110,18 @@ type target struct {
 	// API's `Replication.Automatic`. The engine's normal block-
 	// walking + helper emission proceeds as usual after the rename.
 	aliasFields map[string]string
+
+	// extraParam controls the name of the second parameter on the
+	// emitted top-level mapXxx function. Default ("" → "projectID")
+	// matches the GCP convention where every enricher threads the
+	// caller-supplied project ID through. AWS targets override this
+	// to "accountID" (or "" if no caller-supplied scalar is needed)
+	// so the emitted signature reads naturally on both clouds:
+	//
+	//   GCP: mapStorageBucket(b *storagev1.Bucket, projectID string) *generated.GoogleStorageBucket
+	//   AWS: mapDynamodbTable(b *dynamodb.DescribeTableOutput, accountID string) *generated.AWSDynamodbTable
+	//
+	// Override snippets that reference the parameter must use this
+	// name; the engine does not rewrite override-snippet bodies.
+	extraParam string
 }

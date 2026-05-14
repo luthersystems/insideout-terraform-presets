@@ -172,6 +172,31 @@ var arnRules = []arnRule{
 		cfnType: "AWS::CloudWatch::Alarm", identifierFn: identityResourceID},
 	{matchService: "cloudwatch", matchResourceType: "dashboard",
 		cfnType: "AWS::CloudWatch::Dashboard", identifierFn: identityResourceID},
+	// CloudWatch Logs — log streams share the parent log-group ARN
+	// shape but embed `:log-stream:<stream>` in resourceID (#14h).
+	// This rule MUST precede the LogGroup rule because both parse to
+	// (service=logs, resourceType=log-group). matchExtra picks the
+	// stream variant when `resourceID` contains the `log-stream:`
+	// segment. Cloud Control identifier for AWS::Logs::LogStream is
+	// "<LogGroupName>|<LogStreamName>" so identifierFn rebuilds it
+	// from the parsed pieces. Log streams are untaggable and don't
+	// appear in RGT today, but the rule lives here for future-proofing
+	// and to keep the ARN-decoder fall-through unambiguous when the
+	// importer is invoked DiscoverByID-style with a log-stream ARN.
+	{matchService: "logs", matchResourceType: "log-group",
+		matchExtra: func(p parsedARN) bool {
+			return strings.Contains(p.resourceID, ":log-stream:")
+		},
+		cfnType: "AWS::Logs::LogStream", identifierFn: func(p parsedARN) string {
+			// resourceID format: "<group>:log-stream:<stream>".
+			idx := strings.Index(p.resourceID, ":log-stream:")
+			if idx < 0 {
+				return p.resourceID
+			}
+			group := p.resourceID[:idx]
+			stream := p.resourceID[idx+len(":log-stream:"):]
+			return group + "|" + stream
+		}},
 	{matchService: "logs", matchResourceType: "log-group",
 		// CloudWatch Logs ARNs sometimes carry a ":*" suffix; strip it.
 		cfnType: "AWS::Logs::LogGroup", identifierFn: func(p parsedARN) string {
@@ -181,6 +206,31 @@ var arnRules = []arnRule{
 		cfnType: "AWS::Events::Rule", identifierFn: identityResourceID},
 
 	// IAM (global, but appears in us-east-1 routing)
+	// Service-linked role ARNs share (service=iam, resourceType=role)
+	// with the generic IAM Role rule below, but embed
+	// "aws-service-role/<service>.amazonaws.com/<name>" in resourceID
+	// (#14i). matchExtra picks the SLR variant when resourceID begins
+	// with "aws-service-role/", and identifierFn rebuilds the CC
+	// primary identifier (AWSServiceName — the canonical service
+	// principal hostname, e.g. "elasticache.amazonaws.com") from the
+	// second path segment. The SLR rule MUST precede the generic IAM
+	// Role rule because both parse to (service=iam, resourceType=role);
+	// a regression that reorders them would route SLR ARNs to
+	// AWS::IAM::Role with identifier="aws-service-role/<service>/..."
+	// which is not a valid CC role identifier (CC would reject the
+	// downstream GetResource with ValidationException).
+	{matchService: "iam", matchResourceType: "role",
+		matchExtra: func(p parsedARN) bool {
+			return strings.HasPrefix(p.resourceID, "aws-service-role/")
+		},
+		cfnType: "AWS::IAM::ServiceLinkedRole", identifierFn: func(p parsedARN) string {
+			// resourceID format: "aws-service-role/<service>/<RoleName>".
+			rest := strings.TrimPrefix(p.resourceID, "aws-service-role/")
+			if idx := strings.Index(rest, "/"); idx >= 0 {
+				return rest[:idx]
+			}
+			return rest
+		}},
 	{matchService: "iam", matchResourceType: "role",
 		cfnType: "AWS::IAM::Role", identifierFn: identityResourceID},
 	{matchService: "iam", matchResourceType: "policy",
@@ -209,6 +259,14 @@ var arnRules = []arnRule{
 	// CDN / DNS
 	{matchService: "cloudfront", matchResourceType: "distribution",
 		cfnType: "AWS::CloudFront::Distribution", identifierFn: identityResourceID},
+	// CloudFront Origin Access Identity (#14h). ARN form is
+	// `arn:aws:cloudfront::<acct>:origin-access-identity/<OAID>`. CC
+	// primary identifier = Id (the bare OAID, e.g. "E2QWRUHAPOMQZL").
+	// OAIs are untaggable and don't surface in RGT today, but the rule
+	// keeps the ARN-decoder fall-through unambiguous when an OAI ARN
+	// arrives via DiscoverByID or a dep-chase reference.
+	{matchService: "cloudfront", matchResourceType: "origin-access-identity",
+		cfnType: "AWS::CloudFront::CloudFrontOriginAccessIdentity", identifierFn: identityResourceID},
 	{matchService: "route53", matchResourceType: "hostedzone",
 		cfnType: "AWS::Route53::HostedZone", identifierFn: identityResourceID},
 
@@ -229,6 +287,15 @@ var arnRules = []arnRule{
 	{matchService: "apigateway", matchResourceType: "apis",
 		matchExtra: func(p parsedARN) bool { return strings.Contains(p.resourceID, "/stages/") },
 		cfnType:    "", identifierFn: identityResourceID},
+
+	// API Gateway v2 DomainName (#14j). ARN form is
+	// `arn:aws:apigateway:<region>::/domainnames/<domain>`. parseARN
+	// strips the leading `/`, so resourceType=`domainnames` and
+	// resourceID=`<domain>`. Cloud Control primary identifier =
+	// DomainName (single-property primary identifier per the CFN
+	// schema's `primaryIdentifier: [/properties/DomainName]`).
+	{matchService: "apigateway", matchResourceType: "domainnames",
+		cfnType: "AWS::ApiGatewayV2::DomainName", identifierFn: identityResourceID},
 
 	// Cognito
 	{matchService: "cognito-idp", matchResourceType: "userpool",
@@ -287,6 +354,46 @@ var arnRules = []arnRule{
 			}
 			return p.resourceID[:idx] + "|" + p.resourceID[idx+1:]
 		}},
+
+	// ElastiCache — Replication / Parameter / Subnet groups (#14g). The
+	// service prefix is shared but resourceType disambiguates: ARN forms
+	// are `arn:aws:elasticache:<region>:<acct>:replicationgroup:<id>`,
+	// `…:parametergroup:<name>`, and `…:subnetgroup:<name>`. Cloud Control
+	// primary identifier is the bare id/name (resourceID) for all three —
+	// passthrough via identityResourceID.
+	{matchService: "elasticache", matchResourceType: "replicationgroup",
+		cfnType: "AWS::ElastiCache::ReplicationGroup", identifierFn: identityResourceID},
+	{matchService: "elasticache", matchResourceType: "parametergroup",
+		cfnType: "AWS::ElastiCache::ParameterGroup", identifierFn: identityResourceID},
+	{matchService: "elasticache", matchResourceType: "subnetgroup",
+		cfnType: "AWS::ElastiCache::SubnetGroup", identifierFn: identityResourceID},
+
+	// MSK — Cluster vs Configuration (#14g). ARN forms are
+	// `arn:aws:kafka:<region>:<acct>:cluster/<name>/<uuid>` and
+	// `…:configuration/<name>/<uuid>`. Cloud Control primary identifier
+	// IS the full ARN for both, so identityFullARN.
+	{matchService: "kafka", matchResourceType: "cluster",
+		cfnType: "AWS::MSK::Cluster", identifierFn: identityFullARN},
+	{matchService: "kafka", matchResourceType: "configuration",
+		cfnType: "AWS::MSK::Configuration", identifierFn: identityFullARN},
+
+	// OpenSearch (managed service) — Domain (#14g). ARN form is
+	// `arn:aws:es:<region>:<acct>:domain/<name>`. Cloud Control primary
+	// identifier is the bare DomainName (resourceID).
+	//
+	// Note: although CC ListResources is unsupported for this type
+	// (UnsupportedActionException — see SDKLister branch), this arnRule
+	// is wired for the RGT cache-hit path so a Resource Groups Tagging
+	// API response for an ES domain ARN buckets correctly and skips
+	// the SDK-enumeration fallback.
+	{matchService: "es", matchResourceType: "domain",
+		cfnType: "AWS::OpenSearchService::Domain", identifierFn: identityResourceID},
+
+	// EC2 — EBS Volume (#14g). ARN form is
+	// `arn:aws:ec2:<region>:<acct>:volume/vol-XXXXX`. Cloud Control
+	// primary identifier is the bare VolumeId (resourceID).
+	{matchService: "ec2", matchResourceType: "volume",
+		cfnType: "AWS::EC2::Volume", identifierFn: identityResourceID},
 }
 
 // identityResourceID is the common identifierFn — returns the parsed

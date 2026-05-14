@@ -3,19 +3,28 @@ aws_api_gateway_deployment	Network Security
 aws_api_gateway_resource	Network Security
 aws_api_gateway_stage	Network Security
 aws_apigatewayv2_api	Network Security
+aws_apigatewayv2_api_mapping	Network Security
 aws_apigatewayv2_authorizer	Network Security
+aws_apigatewayv2_domain_name	Network Security
 aws_apigatewayv2_integration	Network Security
 aws_apigatewayv2_route	Network Security
 aws_apigatewayv2_stage	Network Security
+aws_autoscaling_group	Virtual Machines
+aws_autoscaling_group_tag	Virtual Machines
 aws_backup_plan	Data Storage
 aws_backup_selection	Data Storage
 aws_backup_vault	Data Storage
 aws_bedrock_guardrail	Security
+aws_bedrock_model_invocation_logging_configuration	Observability
 aws_cloudfront_distribution	Network Security
 aws_cloudfront_function	Network Security
+aws_cloudfront_monitoring_subscription	Network Security
+aws_cloudfront_origin_access_identity	Network Security
 aws_cloudwatch_dashboard	Observability
 aws_cloudwatch_event_rule	Events
 aws_cloudwatch_log_group	Observability
+aws_cloudwatch_log_resource_policy	Observability
+aws_cloudwatch_log_stream	Observability
 aws_cloudwatch_metric_alarm	Observability
 aws_cognito_identity_provider	Security
 aws_cognito_resource_server	Security
@@ -25,19 +34,34 @@ aws_cognito_user_pool_domain	Security
 aws_db_instance	Data Storage
 aws_db_parameter_group	Data Storage
 aws_db_subnet_group	Data Storage
+aws_dynamodb_contributor_insights	Observability
 aws_dynamodb_table	Data Storage
+aws_ebs_volume	Data Storage
 aws_ecr_repository	Data Storage
 aws_ecs_cluster	Virtual Machines
+aws_ecs_cluster_capacity_providers	Virtual Machines
 aws_eip	Network Security
+aws_eks_access_entry	Security
+aws_eks_addon	Virtual Machines
 aws_eks_cluster	Virtual Machines
+aws_eks_fargate_profile	Virtual Machines
+aws_eks_node_group	Virtual Machines
 aws_eks_pod_identity_association	Security
+aws_elasticache_parameter_group	Data Storage
+aws_elasticache_replication_group	Data Storage
+aws_elasticache_subnet_group	Data Storage
 aws_elb	Network Security
 aws_iam_group	Security
 aws_iam_instance_profile	Security
 aws_iam_policy	Security
 aws_iam_role	Security
+aws_iam_role_policy	Security
+aws_iam_role_policy_attachment	Security
+aws_iam_service_linked_role	Security
 aws_iam_user	Security
+aws_instance	Virtual Machines
 aws_internet_gateway	Network Security
+aws_key_pair	Security
 aws_kms_alias	Security
 aws_kms_key	Security
 aws_lambda_alias	Virtual Machines
@@ -45,30 +69,47 @@ aws_lambda_event_source_mapping	Events
 aws_lambda_function	Virtual Machines
 aws_lambda_function_url	Network Security
 aws_lambda_permission	Security
+aws_launch_template	Virtual Machines
 aws_lb	Network Security
 aws_lb_listener	Network Security
 aws_lb_target_group	Network Security
+aws_msk_cluster	Data Storage
+aws_msk_configuration	Data Storage
 aws_nat_gateway	Network Security
 aws_network_acl	Network Security
 aws_network_interface	Network Security
+aws_opensearch_domain	Data Storage
+aws_opensearchserverless_access_policy	Security
 aws_opensearchserverless_collection	Data Storage
+aws_opensearchserverless_security_policy	Security
 aws_rds_cluster	Data Storage
 aws_resourceexplorer2_index	Observability
 aws_resourceexplorer2_view	Observability
 aws_route53_zone	Network Security
 aws_route_table	Network Security
 aws_s3_bucket	Data Storage
+aws_s3_bucket_lifecycle_configuration	Data Storage
+aws_s3_bucket_ownership_controls	Data Storage
+aws_s3_bucket_policy	Data Storage
+aws_s3_bucket_public_access_block	Data Storage
+aws_s3_bucket_server_side_encryption_configuration	Data Storage
+aws_s3_bucket_versioning	Data Storage
 aws_secretsmanager_secret	Security
 aws_secretsmanager_secret_rotation	Security
 aws_security_group	Network Security
+aws_service_discovery_private_dns_namespace	Network Security
 aws_sns_topic	Events
+aws_sns_topic_subscription	Events
 aws_sqs_queue	Events
 aws_ssm_parameter	Security
 aws_subnet	Network Security
 aws_vpc	Network Security
 aws_vpc_dhcp_options	Network Security
 aws_vpc_endpoint	Network Security
+aws_vpc_security_group_egress_rule	Network Security
+aws_vpc_security_group_ingress_rule	Network Security
 aws_wafv2_web_acl	Security
+aws_wafv2_web_acl_association	Security
 google_api_gateway_api	Network Security
 google_api_gateway_api_config	Network Security
 google_api_gateway_gateway	Network Security

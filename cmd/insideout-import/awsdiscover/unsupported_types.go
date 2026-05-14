@@ -57,21 +57,34 @@ var awsTFTypeByResourceType = map[string]string{
 	"bedrock:guardrail":          "aws_bedrock_guardrail",
 	"aoss:collection":            "aws_opensearchserverless_collection",
 	"apigateway:apis":            "aws_apigatewayv2_api",
+	// "apigateway:domainnames" routes to aws_apigatewayv2_domain_name
+	// (#14j). Resource Explorer's apigateway slugs lump v1 and v2
+	// resources under the same `apigateway` prefix; for InsideOut presets
+	// today the only domainnames consumers are v2.
+	"apigateway:domainnames": "aws_apigatewayv2_domain_name",
 	"eks:podidentityassociation": "aws_eks_pod_identity_association",
 	"events:rule":                "aws_cloudwatch_event_rule",
 	"resource-explorer-2:index":  "aws_resourceexplorer2_index",
 	"resource-explorer-2:view":   "aws_resourceexplorer2_view",
+	// Compute (importable as of #14f)
+	"eks:cluster":                  "aws_eks_cluster",
+	"ecs:cluster":                  "aws_ecs_cluster",
+	"ec2:instance":                 "aws_instance",
+	"ec2:keypair":                  "aws_key_pair",
+	"ec2:launchtemplate":           "aws_launch_template",
+	"autoscaling:autoscalinggroup": "aws_autoscaling_group",
+	"eks:nodegroup":                "aws_eks_node_group",
+	"eks:addon":                    "aws_eks_addon",
+	"eks:fargateprofile":           "aws_eks_fargate_profile",
+	"eks:accessentry":              "aws_eks_access_entry",
 	// --- Unimportable types — the picker greys these out ---
 	// Data Storage
 	"rds:cluster": "aws_rds_cluster",
 	"rds:db":      "aws_db_instance",
 	"rds:subgrp":  "aws_db_subnet_group",
 	"rds:pg":      "aws_db_parameter_group",
-	// Compute
-	"eks:cluster":    "aws_eks_cluster",
-	"ecs:cluster":    "aws_ecs_cluster",
+	// Compute (still unimportable)
 	"ecr:repository": "aws_ecr_repository",
-	"ec2:instance":   "aws_instance",
 	// Networking
 	"elasticloadbalancing:loadbalancer":    "aws_lb",
 	"elasticloadbalancing:loadbalancer-v1": "aws_elb",

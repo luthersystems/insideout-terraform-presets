@@ -7,28 +7,50 @@ aws_cloudwatch_log_group	skip_destroy	Tuning	Reliability	RileyVisible	RequiresAp
 aws_cloudwatch_log_group	tags	Tuning		Hidden	SystemOnly	Redacted	
 aws_cloudwatch_log_group	tags_all	Tuning		Hidden	SystemOnly	Redacted	
 aws_dynamodb_table	arn	Identity		UIVisible	Never		
+aws_dynamodb_table	attribute.name	Identity		UIVisible	Never		AlwaysReplace
+aws_dynamodb_table	attribute.type	Identity		UIVisible	Never		AlwaysReplace
 aws_dynamodb_table	billing_mode	Tuning	Performance	RileyVisible	ChatSafe		
-aws_dynamodb_table	deletion_protection_enabled	Tuning	Reliability	RileyVisible	RequiresApproval		
-aws_dynamodb_table	hash_key	Wiring		UIVisible	Never		AlwaysReplace
-aws_dynamodb_table	id	Identity		RileyVisible	Never		
-aws_dynamodb_table	name	Identity		UIVisible	Never		
+aws_dynamodb_table	deletion_protection_enabled	Tuning	Reliability	RileyVisible	ChatSafe		
+aws_dynamodb_table	global_secondary_index.hash_key	Wiring	Performance	RileyVisible	RelationshipOnly		MayReplace
+aws_dynamodb_table	global_secondary_index.name	Tuning	Performance	RileyVisible	RequiresApproval		MayReplace
+aws_dynamodb_table	global_secondary_index.non_key_attributes	Tuning	Performance	RileyVisible	RequiresApproval		MayReplace
+aws_dynamodb_table	global_secondary_index.projection_type	Tuning	Performance	RileyVisible	RequiresApproval		MayReplace
+aws_dynamodb_table	global_secondary_index.range_key	Wiring	Performance	RileyVisible	RelationshipOnly		MayReplace
+aws_dynamodb_table	global_secondary_index.read_capacity	Tuning	Performance	RileyVisible	ChatSafe		
+aws_dynamodb_table	global_secondary_index.write_capacity	Tuning	Performance	RileyVisible	ChatSafe		
+aws_dynamodb_table	hash_key	Identity		UIVisible	Never		AlwaysReplace
+aws_dynamodb_table	id	Identity		UIVisible	Never		
+aws_dynamodb_table	local_secondary_index.name	Tuning	Performance	RileyVisible	RequiresApproval		AlwaysReplace
+aws_dynamodb_table	local_secondary_index.non_key_attributes	Tuning	Performance	RileyVisible	RequiresApproval		MayReplace
+aws_dynamodb_table	local_secondary_index.projection_type	Tuning	Performance	RileyVisible	RequiresApproval		MayReplace
+aws_dynamodb_table	local_secondary_index.range_key	Wiring	Performance	RileyVisible	RelationshipOnly		AlwaysReplace
+aws_dynamodb_table	name	Identity		UIVisible	Never		AlwaysReplace
 aws_dynamodb_table	point_in_time_recovery.enabled	Tuning	Reliability	RileyVisible	ChatSafe		
-aws_dynamodb_table	range_key	Wiring		UIVisible	Never		AlwaysReplace
+aws_dynamodb_table	range_key	Identity		UIVisible	Never		AlwaysReplace
 aws_dynamodb_table	read_capacity	Tuning	Performance	RileyVisible	ChatSafe		
+aws_dynamodb_table	replica.arn	Identity		UIVisible	Never		
 aws_dynamodb_table	replica.kms_key_arn	Wiring	Security	RileyVisible	RelationshipOnly		
+aws_dynamodb_table	replica.point_in_time_recovery	Tuning	Reliability	RileyVisible	RequiresApproval		
+aws_dynamodb_table	replica.propagate_tags	Tuning		RileyVisible	RequiresApproval		
 aws_dynamodb_table	replica.region_name	Wiring	Reliability	RileyVisible	RelationshipOnly		
+aws_dynamodb_table	replica.stream_arn	Identity		UIVisible	Never		
+aws_dynamodb_table	replica.stream_label	Identity		UIVisible	Never		
+aws_dynamodb_table	restore_date_time	Tuning		UIVisible	Never		
+aws_dynamodb_table	restore_source_name	Tuning		UIVisible	Never		
 aws_dynamodb_table	restore_source_table_arn	Wiring	Reliability	RileyVisible	RelationshipOnly		
-aws_dynamodb_table	server_side_encryption.enabled	Tuning	Security	RileyVisible	RequiresApproval		
-aws_dynamodb_table	server_side_encryption.kms_key_arn	Wiring	Security	RileyVisible	RelationshipOnly		
-aws_dynamodb_table	stream_arn	Identity		RileyVisible	Never		
+aws_dynamodb_table	restore_to_latest_time	Tuning		UIVisible	Never		
+aws_dynamodb_table	server_side_encryption.enabled	Tuning	Security	RileyVisible	ChatSafe		
+aws_dynamodb_table	server_side_encryption.kms_key_arn	Wiring	Security	RileyVisible	RelationshipOnly		MayReplace
+aws_dynamodb_table	stream_arn	Identity		UIVisible	Never		
 aws_dynamodb_table	stream_enabled	Tuning	Reliability	RileyVisible	ChatSafe		
+aws_dynamodb_table	stream_label	Identity		UIVisible	Never		
 aws_dynamodb_table	stream_view_type	Tuning	Reliability	RileyVisible	ChatSafe		
 aws_dynamodb_table	table_class	Tuning	Performance	RileyVisible	ChatSafe		
 aws_dynamodb_table	tags	Tuning		Hidden	SystemOnly	Redacted	
 aws_dynamodb_table	tags_all	Tuning		Hidden	SystemOnly	Redacted	
 aws_dynamodb_table	timeouts	Tuning		Hidden	SystemOnly		
-aws_dynamodb_table	ttl.attribute_name	Tuning		RileyVisible	ChatSafe		
-aws_dynamodb_table	ttl.enabled	Tuning	Performance	RileyVisible	ChatSafe		
+aws_dynamodb_table	ttl.attribute_name	Wiring	Reliability	RileyVisible	RelationshipOnly		
+aws_dynamodb_table	ttl.enabled	Tuning	Reliability	RileyVisible	ChatSafe		
 aws_dynamodb_table	write_capacity	Tuning	Performance	RileyVisible	ChatSafe		
 aws_lambda_function	architectures	Tuning	Performance	RileyVisible	ChatSafe		MayReplace
 aws_lambda_function	arn	Identity		UIVisible	Never		
@@ -72,6 +94,33 @@ aws_lambda_function	version	Identity		RileyVisible	Never
 aws_lambda_function	vpc_config.security_group_ids	Wiring	Security	RileyVisible	RelationshipOnly		
 aws_lambda_function	vpc_config.subnet_ids	Wiring	Reliability	RileyVisible	RelationshipOnly		
 aws_lambda_function	vpc_config.vpc_id	Wiring		RileyVisible	RelationshipOnly		
+aws_s3_bucket	acceleration_status	Tuning	Performance	RileyVisible	ChatSafe		
+aws_s3_bucket	acl	Tuning	Security	RileyVisible	RequiresApproval		
+aws_s3_bucket	arn	Identity		UIVisible	Never		
+aws_s3_bucket	bucket	Identity		UIVisible	Never		AlwaysReplace
+aws_s3_bucket	bucket_domain_name	Identity		UIVisible	Never		
+aws_s3_bucket	bucket_prefix	Identity		UIVisible	Never		AlwaysReplace
+aws_s3_bucket	bucket_regional_domain_name	Identity		UIVisible	Never		
+aws_s3_bucket	force_destroy	Tuning		UIVisible	SystemOnly		
+aws_s3_bucket	hosted_zone_id	Identity		UIVisible	Never		
+aws_s3_bucket	id	Identity		UIVisible	Never		
+aws_s3_bucket	logging.target_bucket	Wiring	Security	RileyVisible	RelationshipOnly		
+aws_s3_bucket	logging.target_prefix	Tuning		RileyVisible	ChatSafe		
+aws_s3_bucket	object_lock_configuration.object_lock_enabled	Tuning	Security	RileyVisible	RequiresApproval		MayReplace
+aws_s3_bucket	object_lock_enabled	Tuning	Security	RileyVisible	Never		AlwaysReplace
+aws_s3_bucket	policy	Wiring	Security	RileyVisible	RequiresApproval		
+aws_s3_bucket	region	Identity		UIVisible	Never		
+aws_s3_bucket	replication_configuration.role	Wiring	Security	RileyVisible	RelationshipOnly		
+aws_s3_bucket	request_payer	Tuning		RileyVisible	ChatSafe		
+aws_s3_bucket	server_side_encryption_configuration.rule.apply_server_side_encryption_by_default.kms_master_key_id	Wiring	Security	RileyVisible	RelationshipOnly		MayReplace
+aws_s3_bucket	server_side_encryption_configuration.rule.apply_server_side_encryption_by_default.sse_algorithm	Tuning	Security	RileyVisible	ChatSafe		
+aws_s3_bucket	server_side_encryption_configuration.rule.bucket_key_enabled	Tuning	Security	RileyVisible	ChatSafe		
+aws_s3_bucket	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_s3_bucket	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_s3_bucket	versioning.enabled	Tuning	Reliability	RileyVisible	ChatSafe		
+aws_s3_bucket	versioning.mfa_delete	Tuning	Security	RileyVisible	RequiresApproval		
+aws_s3_bucket	website_domain	Identity		UIVisible	Never		
+aws_s3_bucket	website_endpoint	Identity		UIVisible	Never		
 aws_secretsmanager_secret	arn	Identity		UIVisible	Never		
 aws_secretsmanager_secret	description	Tuning		RileyVisible	ChatSafe		
 aws_secretsmanager_secret	kms_key_id	Wiring	Security	RileyVisible	RelationshipOnly		

@@ -101,6 +101,16 @@ type AWSDiscoverer struct {
 	// (cloudControlDiscoverer) can skip their own per-type
 	// ListResources when Prefetch returns a cache hit. See #406.
 	rgtPrefetcher rgtPrefetcher
+	// byTypeEnricher carries the per-Terraform-type SDK attribute
+	// enrichers (#457). Each entry is a sibling to the byType
+	// discoverer of the same name and populates ir.Attrs (the typed
+	// Layer 1 payload) so callers can produce decision-#34-clean HCL
+	// via composer.EmitImportedTF without needing the terraform-driven
+	// Stage 2b path. Types without an entry here are silently skipped
+	// by EnrichAttributes — the full enricher rollout follows the
+	// existing per-type ordering one PR at a time. Mirrors
+	// gcpdiscover.GCPDiscoverer.byTypeEnricher (presets#403).
+	byTypeEnricher map[string]AttributeEnricher
 }
 
 // NewAWSDiscoverer wires up the production set of AWS discoverers with the
@@ -137,10 +147,27 @@ func NewAWSDiscovererWithConcurrency(cfg aws.Config, maxConcurrency int) *AWSDis
 	// quirk, #336). Everything else is registered below via the
 	// cloudControlTypeConfigs loop.
 	byType := map[string]Discoverer{
-		"aws_apigatewayv2_stage":      newAPIGatewayV2StageDiscoverer(cfg, maxConcurrency),
-		"aws_bedrock_guardrail":       newBedrockGuardrailDiscoverer(cfg, maxConcurrency),
-		"aws_resourceexplorer2_index": newResourceExplorer2IndexDiscoverer(cfg, maxConcurrency),
-		"aws_resourceexplorer2_view":  newResourceExplorer2ViewDiscoverer(cfg, maxConcurrency),
+		"aws_apigatewayv2_stage": newAPIGatewayV2StageDiscoverer(cfg, maxConcurrency),
+		"aws_bedrock_guardrail":  newBedrockGuardrailDiscoverer(cfg, maxConcurrency),
+		// Bucket C non-CC (#466 follow-up): Cloud Control does not
+		// know the CFN type
+		// AWS::Bedrock::ModelInvocationLoggingConfiguration
+		// (TypeNotFoundException on `cloudcontrol get-resource`).
+		// Native bedrock SDK end-to-end is the only working path;
+		// the framework's per-item fan-out through CC GetResource
+		// cannot rescue it.
+		"aws_bedrock_model_invocation_logging_configuration": newBedrockModelInvocationLoggingConfigurationDiscoverer(cfg, maxConcurrency),
+		"aws_resourceexplorer2_index":                        newResourceExplorer2IndexDiscoverer(cfg, maxConcurrency),
+		"aws_resourceexplorer2_view":                         newResourceExplorer2ViewDiscoverer(cfg, maxConcurrency),
+		// Bucket C non-CC (#466 follow-up): Cloud Control returns
+		// UnsupportedActionException on READ for
+		// AWS::ServiceDiscovery::PrivateDnsNamespace; neither the
+		// unified cloudControlDiscoverer nor SDKLister can resolve
+		// the type. Native servicediscovery SDK end-to-end with a
+		// Route53 GetHostedZone hop to recover the VPC id (TF
+		// import format is "<namespace_id>:<vpc_id>"; the
+		// servicediscovery SDK never surfaces VpcId).
+		"aws_service_discovery_private_dns_namespace": newServiceDiscoveryPrivateDNSNamespaceDiscoverer(cfg, maxConcurrency),
 	}
 	// Cloud Control-routed types (#406): each entry in
 	// cloudControlTypeConfigs becomes one cloudControlDiscoverer
@@ -151,10 +178,37 @@ func NewAWSDiscovererWithConcurrency(cfg aws.Config, maxConcurrency int) *AWSDis
 	for _, ccCfg := range cloudControlTypeConfigs {
 		byType[ccCfg.TFType] = newCloudControlDiscoverer(ccCfg, cfg, maxConcurrency)
 	}
+	// SDK-only sub-resource types (Bundle 14k1, #452): for Terraform
+	// types that have no Cloud Control representation (e.g. S3 bucket
+	// sub-resources that CFN models as inline bucket properties rather
+	// than standalone resource types). Each entry in
+	// sdkOnlySubresourceTypeConfigs becomes one
+	// sdkOnlySubresourceDiscoverer registration. Parent enumeration
+	// reuses the parent's RGT cache when SkipProjectTagFilter is unset
+	// or falls back to a per-type ListParents SDK call. See
+	// sdkonly_subresource_discoverer.go and sdkonly_s3.go.
+	for _, soCfg := range sdkOnlySubresourceTypeConfigs {
+		byType[soCfg.TFType] = newSDKOnlySubresourceDiscoverer(soCfg, cfg, maxConcurrency)
+	}
 	return &AWSDiscoverer{
 		defaultRegion: cfg.Region,
 		byType:        byType,
 		rgtPrefetcher: newRealRGTPrefetcher(cfg),
+		// Per-type SDK attribute enrichers (#457). Each entry is a sibling
+		// to the byType discoverer of the same name and populates ir.Attrs
+		// (the typed Layer 1 payload). Types without an entry here are
+		// silently skipped by EnrichAttributes — the full enricher rollout
+		// follows the existing per-type ordering one PR at a time. Mirrors
+		// gcpdiscover.GCPDiscoverer (presets#403).
+		//
+		// aws_s3_bucket follows once presets bundle #461 lands the Layer
+		// 1 typed struct in pkg/composer/imported/generated. The S3
+		// enricher infrastructure (EnrichClients.S3 field, codegen
+		// support) is in place already so the wiring there is a one-line
+		// registration.
+		byTypeEnricher: map[string]AttributeEnricher{
+			"aws_dynamodb_table": newDynamoDBTableEnricher(),
+		},
 	}
 }
 
@@ -170,10 +224,12 @@ func NewAWSDiscovererWithConcurrency(cfg aws.Config, maxConcurrency int) *AWSDis
 var serviceSlugByTFType = map[string]string{
 	// Bucket C — hand-rolled. Slugs must match the per-discoverer
 	// ServiceStart/Finish strings inside each *.go file.
-	"aws_apigatewayv2_stage":      "apigatewayv2_stage",
-	"aws_bedrock_guardrail":       "bedrock_guardrail",
-	"aws_resourceexplorer2_index": "resourceexplorer2_index",
-	"aws_resourceexplorer2_view":  "resourceexplorer2_view",
+	"aws_apigatewayv2_stage": "apigatewayv2_stage",
+	"aws_bedrock_guardrail":  "bedrock_guardrail",
+	"aws_bedrock_model_invocation_logging_configuration": "bedrock_model_invocation_logging_configuration",
+	"aws_resourceexplorer2_index":                        "resourceexplorer2_index",
+	"aws_resourceexplorer2_view":                         "resourceexplorer2_view",
+	"aws_service_discovery_private_dns_namespace":        "service_discovery_private_dns_namespace",
 }
 
 // ServiceSlug returns the progress-event slug for a Terraform resource
@@ -192,15 +248,19 @@ func ServiceSlug(tfType string) string {
 }
 
 // serviceSlugCombined merges serviceSlugByTFType (4 Bucket-C entries)
-// with cloudControlTypeConfigs slugs into one O(1) lookup table. Built
-// once at package init so ServiceSlug avoids the O(n) scan that would
-// otherwise repeat per Emitter event.
+// with cloudControlTypeConfigs slugs and sdkOnlySubresourceTypeConfigs
+// slugs into one O(1) lookup table. Built once at package init so
+// ServiceSlug avoids the O(n) scan that would otherwise repeat per
+// Emitter event.
 var serviceSlugCombined = func() map[string]string {
-	out := make(map[string]string, len(serviceSlugByTFType)+len(cloudControlTypeConfigs))
+	out := make(map[string]string, len(serviceSlugByTFType)+len(cloudControlTypeConfigs)+len(sdkOnlySubresourceTypeConfigs))
 	for k, v := range serviceSlugByTFType {
 		out[k] = v
 	}
 	for _, cfg := range cloudControlTypeConfigs {
+		out[cfg.TFType] = cfg.Slug
+	}
+	for _, cfg := range sdkOnlySubresourceTypeConfigs {
 		out[cfg.TFType] = cfg.Slug
 	}
 	return out
