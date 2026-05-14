@@ -1,16 +1,20 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
+	"text/template"
 
+	tfjson "github.com/hashicorp/terraform-json"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported/generated"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/zclconf/go-cty/cty"
 )
 
 // repoRoot returns the repo root from the cmd/imported-codegen test
@@ -69,11 +73,195 @@ func TestEmitZod_AllWantedTypes(t *testing.T) {
 	assert.Contains(t, string(value), "export const expressionAware =")
 	assert.Contains(t, string(value), "export type FieldMeta =")
 
+	// Spot-check the Z<Name> object body for a real type. Sentinel-only
+	// checks above would still pass if buildZodTypeData emitted an
+	// empty z.object({}) (or replaced every field with z.never()) —
+	// asserting one known field expression catches that class of bug
+	// without coupling the test to schema churn.
+	sqs, err := os.ReadFile(filepath.Join(outDir, "aws_sqs_queue.ts"))
+	require.NoError(t, err)
+	assert.Contains(t, string(sqs), "name: expressionAware(z.string()).optional(),",
+		"ZAWSSQSQueue body must contain the canonical `name` field expression")
+	assert.Contains(t, string(sqs), "fifo_queue: expressionAware(z.boolean()).optional(),",
+		"ZAWSSQSQueue body must wrap booleans via expressionAware")
+
 	registry, err := os.ReadFile(filepath.Join(outDir, "_registry.ts"))
 	require.NoError(t, err)
 	for _, tfType := range want {
 		assert.Containsf(t, string(registry), fmt.Sprintf(`"%s":`, tfType), "_registry.ts missing entry for %s", tfType)
 	}
+}
+
+// TestParseTypesFilter pins the parser semantics: empty / whitespace
+// / commas-only collapses to "all"; a populated CSV becomes a
+// set-based filter; surrounding whitespace per-token is trimmed.
+func TestParseTypesFilter(t *testing.T) {
+	t.Parallel()
+
+	all := parseTypesFilter("")
+	assert.True(t, all.all, "empty input means all-pass")
+	assert.True(t, all.want("anything"))
+
+	whitespace := parseTypesFilter("   ")
+	assert.True(t, whitespace.all, "whitespace-only input means all-pass")
+
+	commasOnly := parseTypesFilter(",,, ,")
+	assert.False(t, commasOnly.all, "commas-with-no-tokens means empty set (not all)")
+	assert.False(t, commasOnly.want("aws_sqs_queue"), "empty set matches nothing")
+
+	csv := parseTypesFilter("aws_sqs_queue, google_storage_bucket ,google_pubsub_topic")
+	assert.False(t, csv.all)
+	assert.True(t, csv.want("aws_sqs_queue"))
+	assert.True(t, csv.want("google_storage_bucket"), "surrounding whitespace must be trimmed per-token")
+	assert.True(t, csv.want("google_pubsub_topic"))
+	assert.False(t, csv.want("aws_lambda_function"))
+}
+
+// TestTypesFilter_UnknownAgainst pins the validation gate: --types
+// entries not present in the union of Wanted* slices are returned
+// (sorted) so runZod can reject the run with an actionable message
+// instead of silently emitting a partial registry.
+func TestTypesFilter_UnknownAgainst(t *testing.T) {
+	t.Parallel()
+
+	allFilter := parseTypesFilter("")
+	assert.Nil(t, allFilter.unknownAgainst([]string{"aws_sqs_queue"}), "all-pass filter has no unknowns by definition")
+
+	// Three unknowns inserted out of sorted order so deleting the
+	// sort.Strings call in unknownAgainst surfaces as a deterministic
+	// failure (Go map iteration would otherwise produce sorted order
+	// only ~1/6 of the time, leading to CI flakes instead of clean
+	// failures).
+	mixed := parseTypesFilter("aws_sqs_queue,typo_zzz,typo_aaa,google_storage_bucket,typo_mmm")
+	unknown := mixed.unknownAgainst(
+		[]string{"aws_sqs_queue"},
+		[]string{"google_storage_bucket"},
+		[]string{},
+	)
+	assert.Equal(t, []string{"typo_aaa", "typo_mmm", "typo_zzz"}, unknown, "unknowns must be returned sorted")
+
+	allKnown := parseTypesFilter("aws_sqs_queue,google_storage_bucket")
+	assert.Empty(t, allKnown.unknownAgainst(
+		[]string{"aws_sqs_queue"},
+		[]string{"google_storage_bucket"},
+	))
+}
+
+// TestBuildBlockNestedZod_NilBlock pins the schema-edge case: a
+// nested block whose Block payload is nil emits a single empty
+// ZodNestedType (matches the Go-side buildBlockNested behavior at
+// emit.go:204).
+func TestBuildBlockNestedZod_NilBlock(t *testing.T) {
+	t.Parallel()
+	nb := &tfjson.SchemaBlockType{Block: nil, NestingMode: tfjson.SchemaNestingModeList}
+	got, err := buildBlockNestedZod("ParentChild", nb)
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	assert.Equal(t, "ParentChild", got[0].GoName)
+	assert.Empty(t, got[0].Fields, "nil-Block must produce an empty Fields slice")
+}
+
+// TestBuildBlockNestedZod_RecursiveBlocks pins the depth-first
+// declaration order and zod-expression shape for nested blocks across
+// the two nesting-mode branches (single → lazy, list/set → array of
+// lazy).
+func TestBuildBlockNestedZod_RecursiveBlocks(t *testing.T) {
+	t.Parallel()
+	leafSingle := &tfjson.SchemaBlockType{
+		NestingMode: tfjson.SchemaNestingModeSingle,
+		Block: &tfjson.SchemaBlock{
+			Attributes: map[string]*tfjson.SchemaAttribute{
+				"name": {AttributeType: cty.String, Required: true},
+			},
+		},
+	}
+	leafList := &tfjson.SchemaBlockType{
+		NestingMode: tfjson.SchemaNestingModeList,
+		Block: &tfjson.SchemaBlock{
+			Attributes: map[string]*tfjson.SchemaAttribute{
+				"port": {AttributeType: cty.Number, Optional: true},
+			},
+		},
+	}
+	parent := &tfjson.SchemaBlockType{
+		NestingMode: tfjson.SchemaNestingModeList,
+		Block: &tfjson.SchemaBlock{
+			Attributes: map[string]*tfjson.SchemaAttribute{
+				"enabled": {AttributeType: cty.Bool, Optional: true},
+			},
+			NestedBlocks: map[string]*tfjson.SchemaBlockType{
+				// Map key order is non-deterministic; SortedBlockTypeNames
+				// inside buildBlockNestedZod normalizes ("leaf" before "ports").
+				"leaf":  leafSingle,
+				"ports": leafList,
+			},
+		},
+	}
+
+	got, err := buildBlockNestedZod("FooParent", parent)
+	require.NoError(t, err)
+	require.Len(t, got, 3, "parent first, then children depth-first in sorted-name order")
+
+	assert.Equal(t, "FooParent", got[0].GoName)
+	require.Len(t, got[0].Fields, 3, "1 attr + 2 nested-block fields")
+	assert.Equal(t, "enabled", got[0].Fields[0].TFName)
+	assert.Equal(t, "expressionAware(z.boolean())", got[0].Fields[0].ZodType)
+	// Single nesting mode → lazy reference, no array wrapper.
+	assert.Equal(t, "leaf", got[0].Fields[1].TFName)
+	assert.Equal(t, "z.lazy(() => ZFooParentLeaf)", got[0].Fields[1].ZodType)
+	// List nesting mode → array of lazy reference.
+	assert.Equal(t, "ports", got[0].Fields[2].TFName)
+	assert.Equal(t, "z.array(z.lazy(() => ZFooParentPorts))", got[0].Fields[2].ZodType)
+
+	assert.Equal(t, "FooParentLeaf", got[1].GoName)
+	require.Len(t, got[1].Fields, 1)
+	assert.Equal(t, "name", got[1].Fields[0].TFName)
+	assert.Equal(t, "expressionAware(z.string())", got[1].Fields[0].ZodType)
+
+	assert.Equal(t, "FooParentPorts", got[2].GoName)
+	require.Len(t, got[2].Fields, 1)
+	assert.Equal(t, "port", got[2].Fields[0].TFName)
+	assert.Equal(t, "expressionAware(z.number())", got[2].Fields[0].ZodType)
+}
+
+// TestEmitZodTypeFile_TemplateHonorsReplacementWire renders the type
+// template directly (bypassing buildZodTypeData, which currently
+// always passes "Unknown") with hand-built ZodSchemaEntries to verify
+// that the template emits the wire string verbatim from the
+// ZodSchemaEntry.Replacement field. Catches a regression where someone
+// hardcodes `replacement: "unknown"` in the template or in
+// buildZodTypeData instead of plumbing the value through.
+func TestEmitZodTypeFile_TemplateHonorsReplacementWire(t *testing.T) {
+	t.Parallel()
+	outDir := t.TempDir()
+
+	tmpl, err := template.New("type.zod").Parse(zodTypeTemplateSrc)
+	require.NoError(t, err)
+
+	td := &ZodTypeData{
+		TFType:         "synthetic_force_new",
+		GoName:         "SyntheticForceNew",
+		ProviderSource: "registry.terraform.io/hashicorp/synthetic",
+		Fields: []ZodFieldData{
+			{TFName: "name", ZodType: "expressionAware(z.string())"},
+			{TFName: "size", ZodType: "expressionAware(z.number())"},
+		},
+		SchemaEntries: []ZodSchemaEntry{
+			{TFName: "name", Required: true, Replacement: "always_replace"},
+			{TFName: "size", Optional: true, Replacement: "never"},
+		},
+	}
+
+	var buf bytes.Buffer
+	require.NoError(t, tmpl.Execute(&buf, td))
+	out := buf.String()
+
+	require.NoError(t, os.WriteFile(filepath.Join(outDir, "synthetic.ts"), buf.Bytes(), 0o644))
+
+	assert.Contains(t, out, `"name": { required: true, replacement: "always_replace", },`,
+		"template must emit the wire string from SchemaEntry.Replacement, not a hardcoded constant")
+	assert.Contains(t, out, `"size": { optional: true, replacement: "never", },`,
+		"template must emit Never as never, not unknown")
 }
 
 // TestEmitZod_FilterFlag pins the --types subset behavior: only the
@@ -100,9 +288,9 @@ func TestEmitZod_FilterFlag(t *testing.T) {
 		got[e.Name()] = true
 	}
 	want := map[string]bool{
-		"_value.ts":               true,
-		"_registry.ts":            true,
-		"aws_sqs_queue.ts":        true,
+		"_value.ts":                true,
+		"_registry.ts":             true,
+		"aws_sqs_queue.ts":         true,
 		"google_storage_bucket.ts": true,
 	}
 	assert.Equal(t, want, got, "filtered emission should contain exactly the listed types + shared files")
@@ -141,15 +329,21 @@ func TestEmitZodMetadataMatchesGoSchema(t *testing.T) {
 	want = append(want, WantedGoogle...)
 	want = append(want, WantedGoogleBeta...)
 
+	// Aggregate Wanted-vs-registered drift across all types so one
+	// stale .gen.go shows up as a single actionable failure (with the
+	// full list of missing types) instead of N independent skips that
+	// hide the drift the test was added to catch.
+	var unregistered []string
 	for _, tfType := range want {
 		if !registered[tfType] {
-			// Nested-block fields appear in the schema map with no
-			// Required/Optional bits set if the Go side didn't emit
-			// one — skip types missing on the Go side rather than
-			// breaking parity over a deletion the codegen hasn't
-			// reflected yet.
-			continue
+			unregistered = append(unregistered, tfType)
 		}
+	}
+	require.Emptyf(t, unregistered,
+		"Wanted* slices include types missing from generated.RegisteredTypes(): %v — run `make gen-imported` and commit the new .gen.go files",
+		unregistered)
+
+	for _, tfType := range want {
 		_, schema, ok := generated.Lookup(tfType)
 		require.Truef(t, ok, "generated.Lookup(%q) should succeed for registered type", tfType)
 

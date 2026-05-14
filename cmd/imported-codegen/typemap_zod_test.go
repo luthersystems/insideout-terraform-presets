@@ -11,24 +11,41 @@ import (
 func TestTSZodType_Scalars(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
-		name string
-		ct   cty.Type
-		want string
+		name     string
+		ct       cty.Type
+		attrName string
+		want     string
 	}{
-		{"string", cty.String, "expressionAware(z.string())"},
-		// Integer-suffix attribute name does NOT switch the Zod
-		// expression — TS doesn't distinguish int/float at this layer.
-		{"number_int_suffix", cty.Number, "expressionAware(z.number())"},
-		{"number_float", cty.Number, "expressionAware(z.number())"},
-		{"bool", cty.Bool, "expressionAware(z.boolean())"},
+		{"string", cty.String, "name", "expressionAware(z.string())"},
+		{"bool", cty.Bool, "fifo_queue", "expressionAware(z.boolean())"},
+		{"number", cty.Number, "latitude", "expressionAware(z.number())"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			got, _, _, err := TSZodType(tc.ct, "visibility_timeout_seconds", "Parent")
+			got, _, _, err := TSZodType(tc.ct, tc.attrName, "Parent")
 			require.NoError(t, err)
 			assert.Equal(t, tc.want, got)
 		})
+	}
+}
+
+// TestTSZodType_NumberIgnoresIntegerHeuristic pins the intentional
+// divergence from the Go emitter: GoFieldType maps cty.Number to
+// int64 vs float64 based on isIntegerField(attrName); TSZodType always
+// maps to z.number() because TS has no native int/float distinction at
+// this layer.
+func TestTSZodType_NumberIgnoresIntegerHeuristic(t *testing.T) {
+	t.Parallel()
+	for _, attr := range []string{
+		"visibility_timeout_seconds", // suffix _seconds → Go emits int64
+		"memory_size",                // exact match → Go emits int64
+		"max_session_duration",       // prefix max_ → Go emits int64
+		"latitude",                   // not matched → Go emits float64
+	} {
+		got, _, _, err := TSZodType(cty.Number, attr, "Parent")
+		require.NoError(t, err)
+		assert.Equal(t, "expressionAware(z.number())", got, "TS must not honor Go int/float heuristic for %q", attr)
 	}
 }
 
@@ -81,13 +98,31 @@ func TestTSZodType_TupleFallback(t *testing.T) {
 func TestReplacementToWire(t *testing.T) {
 	t.Parallel()
 	cases := map[string]string{
-		"Unknown":        "unknown",
-		"Never":          "never",
-		"MayReplace":     "may_replace",
-		"AlwaysReplace":  "always_replace",
-		"NotAReal Value": "",
+		"Unknown":       "unknown",
+		"Never":         "never",
+		"MayReplace":    "may_replace",
+		"AlwaysReplace": "always_replace",
 	}
 	for in, want := range cases {
 		assert.Equal(t, want, replacementToWire(in), "replacementToWire(%q)", in)
 	}
+}
+
+// TestReplacementToWire_UnknownPanics pins the fail-fast guard: a
+// silent fallback would let a new ReplacementBehavior added to
+// generated/schema.go compile on the Go emitter but silently drop the
+// field on the TS emitter, breaking the issue #400 byte-for-byte
+// parity contract with no test signal.
+func TestReplacementToWire_UnknownPanics(t *testing.T) {
+	t.Parallel()
+	defer func() {
+		r := recover()
+		require.NotNil(t, r, "replacementToWire must panic on unknown suffix")
+		msg, ok := r.(string)
+		require.Truef(t, ok, "panic value should be string, got %T: %v", r, r)
+		for _, want := range []string{"Sometimes", "replacementToWire"} {
+			assert.Containsf(t, msg, want, "panic message %q must contain %q", msg, want)
+		}
+	}()
+	_ = replacementToWire("Sometimes")
 }

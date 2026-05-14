@@ -261,10 +261,15 @@ func dedupNestedZod(in []ZodNestedType) []ZodNestedType {
 // replacementToWire maps the Go identifier suffix used in SchemaEntry
 // ("Unknown", "Never", "AlwaysReplace", "MayReplace") to the JSON-tag
 // value declared on generated.ReplacementBehavior in
-// pkg/composer/imported/generated/schema.go. The mapping must stay in
-// sync with that file's constants — the byte-for-byte parity contract
-// from issue #400 says the TS metadata wire shape matches the Go
-// JSON-encoded shape.
+// pkg/composer/imported/generated/schema.go.
+//
+// Panics on an unrecognized suffix. The byte-for-byte parity contract
+// from issue #400 requires the TS metadata wire shape match the Go
+// JSON-encoded shape; a silent fallback (e.g. returning "") would let
+// a new ReplacementBehavior added to schema.go compile on the Go
+// emitter but silently drop the field on the TS emitter, breaking
+// parity with no test signal. Same fail-fast posture as
+// providerSourceConstName.
 func replacementToWire(suffix string) string {
 	switch suffix {
 	case "Unknown":
@@ -276,6 +281,6 @@ func replacementToWire(suffix string) string {
 	case "AlwaysReplace":
 		return "always_replace"
 	default:
-		return ""
+		panic(fmt.Sprintf("imported-codegen: unknown SchemaEntry.Replacement suffix %q — extend replacementToWire when adding a new ReplacementBehavior to pkg/composer/imported/generated/schema.go", suffix))
 	}
 }

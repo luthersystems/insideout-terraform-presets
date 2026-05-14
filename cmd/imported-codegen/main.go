@@ -28,6 +28,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	tfjson "github.com/hashicorp/terraform-json"
@@ -184,6 +185,11 @@ func runZod(args []string) int {
 	}
 
 	filter := parseTypesFilter(*typesFilter)
+	if unknown := filter.unknownAgainst(WantedAWS, WantedGoogle, WantedGoogleBeta); len(unknown) > 0 {
+		fmt.Fprintf(os.Stderr, "zod: --types contains unknown type(s): %s\n", strings.Join(unknown, ", "))
+		fmt.Fprintln(os.Stderr, "Valid types are listed in WantedAWS / WantedGoogle / WantedGoogleBeta in cmd/imported-codegen/config.go.")
+		return 2
+	}
 
 	if _, err := EmitZodValueFile(*outDir); err != nil {
 		fmt.Fprintf(os.Stderr, "_value.ts: %v\n", err)
@@ -262,6 +268,30 @@ func parseTypesFilter(raw string) typesFilter {
 		set[t] = struct{}{}
 	}
 	return typesFilter{set: set}
+}
+
+// unknownAgainst returns any --types entries that aren't in the union
+// of the supplied Wanted* slices, sorted for stable error messages.
+// Used to reject typos at flag-parse time instead of silently emitting
+// a registry that's missing the typo'd type.
+func (f typesFilter) unknownAgainst(wants ...[]string) []string {
+	if f.all {
+		return nil
+	}
+	known := map[string]struct{}{}
+	for _, w := range wants {
+		for _, t := range w {
+			known[t] = struct{}{}
+		}
+	}
+	var unknown []string
+	for t := range f.set {
+		if _, ok := known[t]; !ok {
+			unknown = append(unknown, t)
+		}
+	}
+	sort.Strings(unknown)
+	return unknown
 }
 
 // providerVersion reads the provider version recorded in a ProviderSchemas
