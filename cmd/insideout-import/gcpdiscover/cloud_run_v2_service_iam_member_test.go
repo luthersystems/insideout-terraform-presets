@@ -118,7 +118,6 @@ func TestCloudRunV2ServiceIAMMemberImportID(t *testing.T) {
 			want: "projects/p/locations/europe-west1/services/svc roles/run.invoker allUsers"},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			assert.Equal(t, tc.want, cloudRunV2ServiceIAMMemberImportID(tc.service, tc.role, tc.member))

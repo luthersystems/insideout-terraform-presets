@@ -110,7 +110,6 @@ func TestProjectIAMMemberImportID(t *testing.T) {
 		{name: "all users", project: "p", role: "roles/run.invoker", member: "allUsers", want: "p roles/run.invoker allUsers"},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			assert.Equal(t, tc.want, projectIAMMemberImportID(tc.project, tc.role, tc.member))

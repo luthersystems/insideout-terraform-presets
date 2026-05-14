@@ -107,7 +107,6 @@ func TestSecretManagerSecretIAMMemberImportID(t *testing.T) {
 			want: "projects/p/secrets/sec roles/secretmanager.viewer user:alice@example.com"},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			assert.Equal(t, tc.want, secretManagerSecretIAMMemberImportID(tc.secret, tc.role, tc.member))

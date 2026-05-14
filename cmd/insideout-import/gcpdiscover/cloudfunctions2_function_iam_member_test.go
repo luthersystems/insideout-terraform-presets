@@ -118,7 +118,6 @@ func TestCloudFunctions2FunctionIAMMemberImportID(t *testing.T) {
 			want: "projects/p/locations/europe-west1/functions/fn roles/cloudfunctions.invoker allUsers"},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			assert.Equal(t, tc.want, cloudFunctions2FunctionIAMMemberImportID(tc.fn, tc.role, tc.member))
