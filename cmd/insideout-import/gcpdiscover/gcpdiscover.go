@@ -244,6 +244,14 @@ type GCPDiscovererOpts struct {
 	// parent rows.
 	SecretVersionLister gcpSecretVersionLister
 	BucketObjectLister  gcpBucketObjectLister
+	// Bundle G4 (#478) — closes GCP discovery parity. Four non-CAI
+	// listers back the four non-CAI discoverers added by the bundle;
+	// the fifth type (google_compute_resource_policy) lives in CAI
+	// and needs no lister.
+	ProjectServiceLister              gcpProjectServiceLister
+	DefaultSupportedIdpConfigLister   gcpDefaultSupportedIdpConfigLister
+	ServiceNetworkingConnectionLister gcpServiceNetworkingConnectionLister
+	VPCAccessConnectorLister          gcpVPCAccessConnectorLister
 }
 
 // NewGCPDiscoverer wires up the production set of GCP discoverers. The
@@ -314,6 +322,16 @@ func NewGCPDiscoverer(searcher gcpAssetSearcher, projectID string, opts GCPDisco
 			// Bundle G3 — sub-resources (#475).
 			"google_secret_manager_secret_version": newSecretManagerSecretVersionDiscoverer(opts.SecretVersionLister),
 			"google_storage_bucket_object":         newStorageBucketObjectDiscoverer(opts.BucketObjectLister),
+			// Bundle G4 — final 5 (#478). Closes GCP discovery parity:
+			// project-wide service enablement, Identity Platform IDP
+			// child configs, Service Networking peering connections,
+			// Serverless VPC Access connectors, and Compute resource
+			// policies (snapshot schedules / placement policies).
+			"google_project_service": newProjectServiceDiscoverer(opts.ProjectServiceLister),
+			"google_identity_platform_default_supported_idp_config": newIdentityPlatformDefaultSupportedIdpConfigDiscoverer(opts.DefaultSupportedIdpConfigLister),
+			"google_service_networking_connection":                  newServiceNetworkingConnectionDiscoverer(opts.ServiceNetworkingConnectionLister),
+			"google_vpc_access_connector":                           newVPCAccessConnectorDiscoverer(opts.VPCAccessConnectorLister),
+			"google_compute_resource_policy":                        newComputeResourcePolicyDiscoverer(),
 		},
 		// Per-type SDK attribute enrichers (#403). Each entry is a sibling
 		// to the byType discoverer of the same name and populates ir.Attrs
@@ -542,6 +560,18 @@ func nonCAIDiscovererHasLister(d Discoverer) bool {
 	case *secretManagerSecretVersionDiscoverer:
 		return v.lister != nil
 	case *storageBucketObjectDiscoverer:
+		return v.lister != nil
+	// Bundle G4 — final 5 (#478). Four non-CAI discoverers each
+	// reach in through their own lister; the fifth Bundle G4 type
+	// (google_compute_resource_policy) is CAI-backed and doesn't
+	// transit this switch.
+	case *projectServiceDiscoverer:
+		return v.lister != nil
+	case *identityPlatformDefaultSupportedIdpConfigDiscoverer:
+		return v.lister != nil
+	case *serviceNetworkingConnectionDiscoverer:
+		return v.lister != nil
+	case *vpcAccessConnectorDiscoverer:
 		return v.lister != nil
 	default:
 		fmt.Fprintf(os.Stderr, "WARN: %s: no lister-check wired in nonCAIDiscovererHasLister — extend the switch when adding a non-CAI type\n", d.ResourceType())

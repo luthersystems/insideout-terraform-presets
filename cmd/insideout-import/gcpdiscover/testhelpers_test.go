@@ -429,3 +429,72 @@ func (f *fakeBucketObjectLister) ListBucketObjects(_ context.Context, bucketName
 	}
 	return f.objectsByBucket[bucketName], nil
 }
+
+// fakeProjectServiceLister returns a canned list of enabled services
+// for the project_service discoverer (Bundle G4, #478). Keyed by
+// project ID so a multi-project test (unused today, but cheap to
+// support) doesn't have to invent extra plumbing.
+type fakeProjectServiceLister struct {
+	servicesByProject map[string][]gcpEnabledService
+	errByProject      map[string]error
+	calls             []string
+}
+
+func (f *fakeProjectServiceLister) ListEnabledServices(_ context.Context, projectID string) ([]gcpEnabledService, error) {
+	f.calls = append(f.calls, projectID)
+	if err, ok := f.errByProject[projectID]; ok {
+		return nil, err
+	}
+	return f.servicesByProject[projectID], nil
+}
+
+// fakeDefaultSupportedIdpConfigLister returns canned IDP configs per
+// project. Mirrors the fakeProjectServiceLister shape — per-key
+// canned response, per-key error injection, and a call record.
+type fakeDefaultSupportedIdpConfigLister struct {
+	configsByProject map[string][]gcpDefaultSupportedIdpConfig
+	errByProject     map[string]error
+	calls            []string
+}
+
+func (f *fakeDefaultSupportedIdpConfigLister) ListDefaultSupportedIdpConfigs(_ context.Context, projectID string) ([]gcpDefaultSupportedIdpConfig, error) {
+	f.calls = append(f.calls, projectID)
+	if err, ok := f.errByProject[projectID]; ok {
+		return nil, err
+	}
+	return f.configsByProject[projectID], nil
+}
+
+// fakeServiceNetworkingConnectionLister returns canned peering
+// connections per network. Keyed on the full network path
+// "projects/<p>/global/networks/<n>".
+type fakeServiceNetworkingConnectionLister struct {
+	connectionsByNetwork map[string][]gcpServiceNetworkingConnection
+	errByNetwork         map[string]error
+	calls                []string
+}
+
+func (f *fakeServiceNetworkingConnectionLister) ListServiceNetworkingConnections(_ context.Context, network string) ([]gcpServiceNetworkingConnection, error) {
+	f.calls = append(f.calls, network)
+	if err, ok := f.errByNetwork[network]; ok {
+		return nil, err
+	}
+	return f.connectionsByNetwork[network], nil
+}
+
+// fakeVPCAccessConnectorLister returns canned connectors per project.
+// One round-trip lists every connector across every region, so the
+// fake only needs a flat slice per project.
+type fakeVPCAccessConnectorLister struct {
+	connectorsByProject map[string][]gcpVPCAccessConnector
+	errByProject        map[string]error
+	calls               []string
+}
+
+func (f *fakeVPCAccessConnectorLister) ListVPCAccessConnectors(_ context.Context, projectID string) ([]gcpVPCAccessConnector, error) {
+	f.calls = append(f.calls, projectID)
+	if err, ok := f.errByProject[projectID]; ok {
+		return nil, err
+	}
+	return f.connectorsByProject[projectID], nil
+}
