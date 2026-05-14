@@ -67,6 +67,7 @@ func runGen(args []string) int {
 	awsSchema := fs.String("aws-schema", "schemas/aws.filtered.json", "path to filtered AWS provider schema JSON")
 	googleSchema := fs.String("google-schema", "schemas/google.filtered.json", "path to filtered Google provider schema JSON")
 	googleBetaSchema := fs.String("google-beta-schema", "schemas/google-beta.filtered.json", "path to filtered Google-Beta provider schema JSON")
+	providersTF := fs.String("providers-tf", "schemas/providers.tf", "path to providers.tf pinning exact provider versions")
 	outDir := fs.String("out", "pkg/composer/imported/generated", "directory to write generated *.gen.go files")
 	if err := fs.Parse(args); err != nil {
 		return 2
@@ -93,9 +94,11 @@ func runGen(args []string) int {
 		return 1
 	}
 
-	awsVersion := providerVersion(awsPS, AWSProviderSource)
-	googleVersion := providerVersion(googlePS, GoogleProviderSource)
-	googleBetaVersion := providerVersion(googleBetaPS, GoogleBetaProviderSource)
+	pins, err := LoadProviderPins(*providersTF)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "load provider pins: %v\n", err)
+		return 1
+	}
 
 	for _, tfType := range WantedAWS {
 		res, _, err := FindResource(awsPS, AWSProviderSource, tfType)
@@ -103,7 +106,7 @@ func runGen(args []string) int {
 			fmt.Fprintf(os.Stderr, "%s: %v\n", tfType, err)
 			return 1
 		}
-		path, err := EmitTypeFile(*outDir, res, AWSProviderSource, tfType, awsVersion)
+		path, err := EmitTypeFile(*outDir, res, AWSProviderSource, tfType, pins.AWS)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%s: %v\n", tfType, err)
 			return 1
@@ -116,7 +119,7 @@ func runGen(args []string) int {
 			fmt.Fprintf(os.Stderr, "%s: %v\n", tfType, err)
 			return 1
 		}
-		path, err := EmitTypeFile(*outDir, res, GoogleProviderSource, tfType, googleVersion)
+		path, err := EmitTypeFile(*outDir, res, GoogleProviderSource, tfType, pins.Google)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%s: %v\n", tfType, err)
 			return 1
@@ -129,7 +132,7 @@ func runGen(args []string) int {
 			fmt.Fprintf(os.Stderr, "%s: %v\n", tfType, err)
 			return 1
 		}
-		path, err := EmitTypeFile(*outDir, res, GoogleBetaProviderSource, tfType, googleBetaVersion)
+		path, err := EmitTypeFile(*outDir, res, GoogleBetaProviderSource, tfType, pins.GoogleBeta)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%s: %v\n", tfType, err)
 			return 1
@@ -137,7 +140,7 @@ func runGen(args []string) int {
 		fmt.Println(filepath.Base(path))
 	}
 
-	if _, err := EmitVersionFile(*outDir, awsVersion, googleVersion, googleBetaVersion); err != nil {
+	if _, err := EmitVersionFile(*outDir, pins.AWS, pins.Google, pins.GoogleBeta); err != nil {
 		fmt.Fprintf(os.Stderr, "version.gen.go: %v\n", err)
 		return 1
 	}
@@ -157,6 +160,7 @@ func runZod(args []string) int {
 	awsSchema := fs.String("aws-schema", "schemas/aws.filtered.json", "path to filtered AWS provider schema JSON")
 	googleSchema := fs.String("google-schema", "schemas/google.filtered.json", "path to filtered Google provider schema JSON")
 	googleBetaSchema := fs.String("google-beta-schema", "schemas/google-beta.filtered.json", "path to filtered Google-Beta provider schema JSON")
+	providersTF := fs.String("providers-tf", "schemas/providers.tf", "path to providers.tf pinning exact provider versions")
 	outDir := fs.String("out", "out/zod", "directory to write generated *.ts files")
 	typesFilter := fs.String("types", "", "comma-separated subset of Terraform resource types to emit (default: all WantedAWS+WantedGoogle+WantedGoogleBeta)")
 	if err := fs.Parse(args); err != nil {
@@ -181,6 +185,12 @@ func runZod(args []string) int {
 	googleBetaPS, err := LoadFiltered(*googleBetaSchema)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "load google-beta schema: %v\n", err)
+		return 1
+	}
+
+	pins, err := LoadProviderPins(*providersTF)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "load provider pins: %v\n", err)
 		return 1
 	}
 
@@ -230,7 +240,7 @@ func runZod(args []string) int {
 		return 1
 	}
 
-	if _, err := EmitZodRegistryFile(*outDir, entries); err != nil {
+	if _, err := EmitZodRegistryFile(*outDir, entries, pins); err != nil {
 		fmt.Fprintf(os.Stderr, "_registry.ts: %v\n", err)
 		return 1
 	}
@@ -294,19 +304,3 @@ func (f typesFilter) unknownAgainst(wants ...[]string) []string {
 	return unknown
 }
 
-// providerVersion reads the provider version recorded in a ProviderSchemas
-// dump. terraform-json exposes this as ProviderSchema.ConfigSchema or via
-// the dump's `provider_versions` map; we use the top-level metadata map
-// when present and fall back to "" otherwise.
-func providerVersion(ps any, _ string) string {
-	// terraform-json's ProviderSchemas does not surface provider versions
-	// directly on the struct in older versions of the library. The
-	// version is captured at refresh time by `terraform providers schema`
-	// but the field name moves between releases. For now we leave this
-	// blank in code and rely on `make refresh-schemas` to record versions
-	// alongside the JSON in schemas/providers.tf — operators bumping a
-	// provider edit both. The runtime version constants come from
-	// version.gen.go's template substitution which is fed from CLI flags
-	// in a future enhancement (see TODO in EmitVersionFile callers).
-	return ""
-}

@@ -37,6 +37,7 @@ gen-imported: ## Regenerate typed resource files from filtered schemas.
 	    --aws-schema $(SCHEMAS_DIR)/aws.filtered.json \
 	    --google-schema $(SCHEMAS_DIR)/google.filtered.json \
 	    --google-beta-schema $(SCHEMAS_DIR)/google-beta.filtered.json \
+	    --providers-tf $(SCHEMAS_DIR)/providers.tf \
 	    --out $(GEN_DIR)
 	$(GO) build ./...
 
@@ -51,6 +52,7 @@ gen-zod: ## Emit TS Zod fragments to ZOD_OUT (default .tmp/zod-out).
 	    --aws-schema $(SCHEMAS_DIR)/aws.filtered.json \
 	    --google-schema $(SCHEMAS_DIR)/google.filtered.json \
 	    --google-beta-schema $(SCHEMAS_DIR)/google-beta.filtered.json \
+	    --providers-tf $(SCHEMAS_DIR)/providers.tf \
 	    --out $(ZOD_OUT)
 
 .PHONY: verify-gen

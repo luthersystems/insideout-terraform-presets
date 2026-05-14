@@ -14,3 +14,16 @@ export const registry = {
 } as const;
 
 export type RegistryKey = keyof typeof registry;
+
+// versions pins the exact Terraform provider version active when this
+// file was generated, keyed by provider source. Mirrors the
+// AWSProviderVersion / GoogleProviderVersion / GoogleBetaProviderVersion
+// constants in pkg/composer/imported/generated/version.gen.go on the
+// Go side. Consumers use it to stamp
+// ResourceIdentity.providerVersion at import time so a re-import
+// can detect schema drift.
+export const versions = {
+{{- range .Versions}}
+  "{{.Source}}": "{{.Version}}",
+{{- end}}
+} as const;
