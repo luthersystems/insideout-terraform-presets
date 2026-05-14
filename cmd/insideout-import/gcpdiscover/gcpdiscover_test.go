@@ -60,6 +60,14 @@ var expectedRegisteredTypes = map[string]bool{
 	"google_logging_project_sink":     false,
 	"google_sql_user":                 false,
 	"google_identity_platform_config": false,
+	// Bundle G1 — IAM cluster (#470).
+	"google_project_iam_member":                  false,
+	"google_storage_bucket_iam_member":           false,
+	"google_kms_crypto_key_iam_binding":          false,
+	"google_secret_manager_secret_iam_binding":   false,
+	"google_secret_manager_secret_iam_member":    false,
+	"google_cloud_run_v2_service_iam_member":     false,
+	"google_cloudfunctions2_function_iam_member": false,
 }
 
 func TestNewGCPDiscoverer_RegistersExpectedTypes(t *testing.T) {
@@ -689,19 +697,19 @@ var expectedScopeStyle = map[string]ScopeStyle{
 	"google_compute_instance":                ScopeStyleLabels,           // VMs carry labels (#370)
 	"google_container_cluster":               ScopeStyleLabels,           // GKE clusters carry labels (#371)
 	"google_container_node_pool":             ScopeStyleParentNamePrefix, // child of cluster (#381)
-	"google_sql_database_instance":           ScopeStyleLabels,     // Cloud SQL via settings.user_labels (#372)
-	"google_cloud_run_v2_service":            ScopeStyleLabels,     // Cloud Run v2 carries labels (#373)
-	"google_cloudfunctions2_function":        ScopeStyleLabels,     // Cloud Functions v2 carries labels (#373)
-	"google_compute_forwarding_rule":         ScopeStyleLabels,     // forwarding rules carry labels (#375)
-	"google_compute_global_forwarding_rule":  ScopeStyleLabels,     // global forwarding rules carry labels (#384)
-	"google_compute_target_https_proxy":      ScopeStyleNamePrefix, // target HTTPS proxies have no labels (#375)
-	"google_compute_url_map":                 ScopeStyleNamePrefix, // URL maps have no labels (#375)
-	"google_api_gateway_api":                 ScopeStyleLabels,     // API Gateway APIs carry labels (#376)
-	"google_api_gateway_api_config":          ScopeStyleLabels,     // API Gateway API configs carry labels (#376)
-	"google_api_gateway_gateway":             ScopeStyleLabels,     // API Gateway gateways carry labels (#376)
-	"google_monitoring_dashboard":            ScopeStyleNamePrefix, // dashboards have no labels (#377)
-	"google_monitoring_alert_policy":         ScopeStyleNamePrefix, // alert policies have no labels (#377)
-	"google_monitoring_notification_channel": ScopeStyleNamePrefix, // notification channels have no labels (#377)
+	"google_sql_database_instance":           ScopeStyleLabels,           // Cloud SQL via settings.user_labels (#372)
+	"google_cloud_run_v2_service":            ScopeStyleLabels,           // Cloud Run v2 carries labels (#373)
+	"google_cloudfunctions2_function":        ScopeStyleLabels,           // Cloud Functions v2 carries labels (#373)
+	"google_compute_forwarding_rule":         ScopeStyleLabels,           // forwarding rules carry labels (#375)
+	"google_compute_global_forwarding_rule":  ScopeStyleLabels,           // global forwarding rules carry labels (#384)
+	"google_compute_target_https_proxy":      ScopeStyleNamePrefix,       // target HTTPS proxies have no labels (#375)
+	"google_compute_url_map":                 ScopeStyleNamePrefix,       // URL maps have no labels (#375)
+	"google_api_gateway_api":                 ScopeStyleLabels,           // API Gateway APIs carry labels (#376)
+	"google_api_gateway_api_config":          ScopeStyleLabels,           // API Gateway API configs carry labels (#376)
+	"google_api_gateway_gateway":             ScopeStyleLabels,           // API Gateway gateways carry labels (#376)
+	"google_monitoring_dashboard":            ScopeStyleNamePrefix,       // dashboards have no labels (#377)
+	"google_monitoring_alert_policy":         ScopeStyleNamePrefix,       // alert policies have no labels (#377)
+	"google_monitoring_notification_channel": ScopeStyleNamePrefix,       // notification channels have no labels (#377)
 	// Bundle 10 — preset gap closers (#390).
 	"google_compute_security_policy": ScopeStyleNamePrefix, // Cloud Armor policies have no labels (#390)
 	"google_redis_instance":          ScopeStyleLabels,     // Memorystore Redis carries labels (#390)
@@ -712,6 +720,16 @@ var expectedScopeStyle = map[string]ScopeStyle{
 	"google_logging_project_sink":     ScopeStyleNonCAI,     // Sinks not in CAI; Logging API list (#382)
 	"google_sql_user":                 ScopeStyleNonCAI,     // SQL users not in CAI; SQL Admin API list (#383)
 	"google_identity_platform_config": ScopeStyleNonCAI,     // Singleton not in CAI; identitytoolkit GetConfig (#392)
+	// Bundle G1 — IAM cluster (#470). IAM bindings/members are not
+	// surfaced as standalone CAI assets; each discoverer issues a
+	// per-parent GetIamPolicy call after the CAI fanout settles.
+	"google_project_iam_member":                  ScopeStyleNonCAI,
+	"google_storage_bucket_iam_member":           ScopeStyleNonCAI,
+	"google_kms_crypto_key_iam_binding":          ScopeStyleNonCAI,
+	"google_secret_manager_secret_iam_binding":   ScopeStyleNonCAI,
+	"google_secret_manager_secret_iam_member":    ScopeStyleNonCAI,
+	"google_cloud_run_v2_service_iam_member":     ScopeStyleNonCAI,
+	"google_cloudfunctions2_function_iam_member": ScopeStyleNonCAI,
 }
 
 // TestScopeStyle_PinsPerTypeContract is the regression guard (#366).

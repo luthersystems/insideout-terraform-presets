@@ -288,10 +288,19 @@ func productionDiscoverDeps() discoverDeps {
 			if idErr != nil {
 				fmt.Fprintf(os.Stderr, "WARN: identitytoolkit lister unavailable, identity_platform_config won't be discovered: %v\n", idErr)
 			}
+			// Bundle G1 (#470): one unified IAM lister fronts six
+			// per-service GetIamPolicy clients. Same nil-tolerant
+			// pattern as the Bundle 11 listers above — a credential
+			// gap on the IAM probe doesn't break the rest of discover.
+			iamLister, iamErr := gcpdiscover.NewRealIAMPolicyLister(ctx)
+			if iamErr != nil {
+				fmt.Fprintf(os.Stderr, "WARN: IAM policy lister unavailable, IAM bindings/members won't be discovered: %v\n", iamErr)
+			}
 			opts := gcpdiscover.GCPDiscovererOpts{
 				SinkLister:             sinkLister,
 				SQLUserLister:          sqlUserLister,
 				IdentityPlatformLister: identityLister,
+				IAMPolicyLister:        iamLister,
 			}
 			return gcpAggAdapter{d: gcpdiscover.NewGCPDiscoverer(s, gcpProjectID, opts)}, s.Close, nil
 		},

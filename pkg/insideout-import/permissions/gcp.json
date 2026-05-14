@@ -2,6 +2,12 @@
   "version": 1,
   "provider": "gcp",
   "permissions": [
-    {"service": "cloud_asset_inventory", "gcp_role": "roles/cloudasset.viewer", "iam_permission": "cloudasset.assets.searchAllResources", "purpose": "single Cloud Asset SearchAllResources call enumerates every supported and unsupported resource type"}
+    {"service": "cloud_asset_inventory", "gcp_role": "roles/cloudasset.viewer", "iam_permission": "cloudasset.assets.searchAllResources", "purpose": "single Cloud Asset SearchAllResources call enumerates every supported and unsupported resource type"},
+    {"service": "cloudfunctions", "gcp_role": "roles/cloudfunctions.viewer", "iam_permission": "cloudfunctions.functions.getIamPolicy", "purpose": "Bundle G1 (#470): read per-function IAM bindings to materialize google_cloudfunctions2_function_iam_member rows"},
+    {"service": "cloudkms", "gcp_role": "roles/cloudkms.viewer", "iam_permission": "cloudkms.cryptoKeys.getIamPolicy", "purpose": "Bundle G1 (#470): read per-cryptoKey IAM bindings to materialize google_kms_crypto_key_iam_binding rows"},
+    {"service": "cloudresourcemanager", "gcp_role": "roles/iam.securityReviewer", "iam_permission": "resourcemanager.projects.getIamPolicy", "purpose": "Bundle G1 (#470): read project-level IAM policy to materialize google_project_iam_member rows"},
+    {"service": "run", "gcp_role": "roles/run.viewer", "iam_permission": "run.services.getIamPolicy", "purpose": "Bundle G1 (#470): read per-service IAM bindings to materialize google_cloud_run_v2_service_iam_member rows"},
+    {"service": "secretmanager", "gcp_role": "roles/secretmanager.viewer", "iam_permission": "secretmanager.secrets.getIamPolicy", "purpose": "Bundle G1 (#470): read per-secret IAM bindings to materialize google_secret_manager_secret_iam_binding and _iam_member rows"},
+    {"service": "storage", "gcp_role": "roles/storage.legacyBucketReader", "iam_permission": "storage.buckets.getIamPolicy", "purpose": "Bundle G1 (#470): read per-bucket IAM bindings to materialize google_storage_bucket_iam_member rows"}
   ]
 }
