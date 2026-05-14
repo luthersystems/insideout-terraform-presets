@@ -519,6 +519,39 @@ func TestLookupRule(t *testing.T) {
 			arn:     "arn:aws:ec2:us-east-1:111111111111:volume/vol-0abc123",
 			wantCFN: "AWS::EC2::Volume", wantIdent: "vol-0abc123"},
 
+		// CloudFront Origin Access Identity (#14h). ARN form is
+		// `arn:aws:cloudfront::<acct>:origin-access-identity/<OAID>`
+		// (note global service — empty region segment). The CC
+		// primary identifier is the bare OAID — passthrough via
+		// identityResourceID. Distinct from the cloudfront:distribution
+		// rule above; this exercises the sibling resourceType branch.
+		{name: "cloudfront_origin_access_identity",
+			arn:     "arn:aws:cloudfront::111111111111:origin-access-identity/E2QWRUHAPOMQZL",
+			wantCFN: "AWS::CloudFront::CloudFrontOriginAccessIdentity",
+			wantIdent: "E2QWRUHAPOMQZL"},
+
+		// CloudWatch Logs — LogStream vs LogGroup disambiguation (#14h).
+		// Both ARNs share (service=logs, resourceType=log-group); the
+		// stream variant embeds `:log-stream:<name>` in the
+		// resourceID portion and matchExtra picks it preferentially.
+		// The LogStream rule MUST be declared before the LogGroup rule
+		// so the linear scan in lookupRule sees the stream-specific
+		// matchExtra first; if a regression reorders them the LogGroup
+		// rule would swallow stream ARNs and silently rewrite them to
+		// "<group>:log-stream:<stream>" (the LogGroup identifierFn just
+		// strips trailing ":*"), pinning the wrong CFN type.
+		{name: "cloudwatch_log_stream",
+			arn:     "arn:aws:logs:us-east-1:111111111111:log-group:/aws/lambda/foo:log-stream:2026/01/01/[$LATEST]abc",
+			wantCFN: "AWS::Logs::LogStream",
+			wantIdent: "/aws/lambda/foo|2026/01/01/[$LATEST]abc"},
+		// Sanity: a bare log-group ARN (no log-stream segment) must
+		// still fall through to the LogGroup rule even though both
+		// rules share matchService+matchResourceType.
+		{name: "cloudwatch_log_group_still_routes_to_loggroup",
+			arn:     "arn:aws:logs:us-east-1:111111111111:log-group:/aws/lambda/foo:*",
+			wantCFN: "AWS::Logs::LogGroup",
+			wantIdent: "/aws/lambda/foo"},
+
 		// Negative cases — explicitly unmapped (sanity checks for our
 		// "fall back to ListResources" path)
 		{name: "organizations_unmapped", arn: "arn:aws:organizations::111111111111:account/o-123/111111111111",
