@@ -10,6 +10,7 @@ aws_apigatewayv2_integration	Network Security
 aws_apigatewayv2_route	Network Security
 aws_apigatewayv2_stage	Network Security
 aws_autoscaling_group	Virtual Machines
+aws_autoscaling_group_tag	Virtual Machines
 aws_backup_plan	Data Storage
 aws_backup_selection	Data Storage
 aws_backup_vault	Data Storage
@@ -33,6 +34,7 @@ aws_cognito_user_pool_domain	Security
 aws_db_instance	Data Storage
 aws_db_parameter_group	Data Storage
 aws_db_subnet_group	Data Storage
+aws_dynamodb_contributor_insights	Observability
 aws_dynamodb_table	Data Storage
 aws_ebs_volume	Data Storage
 aws_ecr_repository	Data Storage
@@ -54,6 +56,7 @@ aws_iam_instance_profile	Security
 aws_iam_policy	Security
 aws_iam_role	Security
 aws_iam_role_policy	Security
+aws_iam_role_policy_attachment	Security
 aws_iam_service_linked_role	Security
 aws_iam_user	Security
 aws_instance	Virtual Machines
@@ -104,6 +107,7 @@ aws_vpc	Network Security
 aws_vpc_dhcp_options	Network Security
 aws_vpc_endpoint	Network Security
 aws_wafv2_web_acl	Security
+aws_wafv2_web_acl_association	Security
 google_api_gateway_api	Network Security
 google_api_gateway_api_config	Network Security
 google_api_gateway_gateway	Network Security

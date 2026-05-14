@@ -202,6 +202,94 @@ var sdkOnlySubresourceTypeConfigs = []sdkOnlySubresourceConfig{
 		ImportIDFromParent:   func(parentID string, _ map[string]any) string { return parentID },
 		NameHintFromParent:   func(parentID string, _ map[string]any) string { return parentID + "-sse" },
 	},
+
+	// =====================================================================
+	// Bundle 14k2 — final 5 deferred AWS types via SDK-only pattern
+	// (issue #456). Four of the five emit N items per parent and use the
+	// 14k2-introduced FetchItems plural variant; one (DDB contributor
+	// insights) still uses the single-emission FetchItem because the
+	// underlying resource is one-per-table.
+	//
+	// `aws_security_group_rule` is intentionally NOT registered here.
+	// Terraform's legacy `aws_security_group_rule` uses a synthetic
+	// hash-based ID (`sgrule-<hash>`) computed from rule attributes that
+	// cannot be reliably reconstructed by the discoverer; emitting an
+	// import ID we cannot prove is correct would cause silent terraform
+	// import failures downstream. The replacement resources
+	// `aws_vpc_security_group_ingress_rule` /
+	// `aws_vpc_security_group_egress_rule` (which carry real-ARN-shape
+	// security_group_rule_id values returned by EC2) are the supported
+	// path forward for in-preset SG-rule discovery — tracked as a
+	// follow-up to #456.
+	// =====================================================================
+
+	{
+		// `aws_dynamodb_contributor_insights` — one per DDB table, exists
+		// iff ContributorInsightsStatus is ENABLED or ENABLING. Untaggable
+		// (the TF resource is a meta-binding on the table) so
+		// SkipProjectTagFilter=true and parent enumeration falls back to
+		// dynamodb:ListTables when the RGT cache for AWS::DynamoDB::Table
+		// is empty / cold. Import ID is the bare table name.
+		TFType:               "aws_dynamodb_contributor_insights",
+		Slug:                 "dynamodb_contributor_insights",
+		ParentCFNType:        "AWS::DynamoDB::Table",
+		SkipProjectTagFilter: true,
+		ListParents:          listDDBTables,
+		FetchItem:            fetchDDBContributorInsights,
+		ImportIDFromParent:   func(parentID string, _ map[string]any) string { return parentID },
+		NameHintFromParent:   func(parentID string, _ map[string]any) string { return parentID + "-contributor-insights" },
+	},
+	{
+		// `aws_iam_role_policy_attachment` — multi-emit. One IAM role
+		// yields one TF resource per attached managed policy. Import
+		// format is "<role_name>/<policy_arn>". IAM is a global service;
+		// IsGlobal=true ensures the discoverer issues one pass with
+		// region="" rather than fanning out per regional endpoint.
+		// Service-linked roles are filtered out at ListParents time
+		// (they cannot attach managed policies; see
+		// listIAMRoleNamesNonSLR).
+		TFType:               "aws_iam_role_policy_attachment",
+		Slug:                 "iam_role_policy_attachment",
+		ParentCFNType:        "AWS::IAM::Role",
+		IsGlobal:             true,
+		SkipProjectTagFilter: true,
+		ListParents:          listIAMRoleNamesNonSLR,
+		FetchItems:           fetchIAMRolePolicyAttachments,
+	},
+	{
+		// `aws_wafv2_web_acl_association` — multi-emit. One WAFv2 Web
+		// ACL yields one TF resource per associated resource ARN
+		// (ALB / API Gateway / AppSync / Cognito user pool / App Runner
+		// / Verified Access / Amplify). Import format is
+		// "<resource_arn>,<web_acl_arn>". ListParents enumerates both
+		// REGIONAL ACLs (in any region) and CLOUDFRONT-scoped ACLs (only
+		// in us-east-1 per the WAFv2 API docs); the framework loops the
+		// configured args.Regions and the per-region call only surfaces
+		// CLOUDFRONT when region=us-east-1.
+		TFType:               "aws_wafv2_web_acl_association",
+		Slug:                 "wafv2_web_acl_association",
+		ParentCFNType:        "AWS::WAFv2::WebACL",
+		SkipProjectTagFilter: true,
+		ListParents:          listWAFv2WebACLs,
+		FetchItems:           fetchWAFv2WebACLAssociations,
+	},
+	{
+		// `aws_autoscaling_group_tag` — multi-emit. One Auto Scaling
+		// Group yields one TF resource per (asg, tag_key) pair. Tags
+		// come back inline on DescribeAutoScalingGroups; no additional
+		// SDK call needed. Import format is "<asg_name>,<tag_key>".
+		// The TF resource exists alongside the inline `tag` blocks on
+		// `aws_autoscaling_group` for incremental tag management;
+		// presets that declare every tag inline will surface duplicate
+		// state for those tags here, which is the expected import-side
+		// behavior (the operator can choose which side owns each tag).
+		TFType:               "aws_autoscaling_group_tag",
+		Slug:                 "autoscaling_group_tag",
+		ParentCFNType:        "AWS::AutoScaling::AutoScalingGroup",
+		SkipProjectTagFilter: true,
+		ListParents:          listASGNames,
+		FetchItems:           fetchASGTags,
+	},
 }
 
 // fetchS3BucketVersioning implements FetchItem for aws_s3_bucket_versioning.
@@ -366,20 +454,31 @@ func s3SubresourceNativeIDs(bucket string) map[string]string {
 }
 
 // Compile-time sanity: every config in sdkOnlySubresourceTypeConfigs
-// must satisfy the minimal contract its discoverer asserts at runtime
-// (non-nil ListParents/FetchItem/ImportIDFromParent/NameHintFromParent).
-// Surfaces a registration regression at test-time rather than during a
-// live discover run.
+// must satisfy the minimal contract its discoverer asserts at runtime.
+// FetchItem (single-emission, Bundle 14k1) and FetchItems
+// (multi-emission, Bundle 14k2) are mutually exclusive — exactly one
+// must be set. When FetchItem is set, ImportIDFromParent and
+// NameHintFromParent are also required (the discoverer derives the
+// import ID from the parent identifier). When FetchItems is set, those
+// closures are ignored because each emission carries its own
+// addressing fields. Surfaces a registration regression at test-time
+// rather than during a live discover run.
 var _ = func() bool {
 	for _, cfg := range sdkOnlySubresourceTypeConfigs {
 		if cfg.TFType == "" || cfg.Slug == "" {
 			panic("sdkOnlySubresourceTypeConfigs entry missing TFType or Slug")
 		}
-		if cfg.ListParents == nil || cfg.FetchItem == nil {
-			panic("sdkOnlySubresourceTypeConfigs entry missing ListParents or FetchItem: " + cfg.TFType)
+		if cfg.ListParents == nil {
+			panic("sdkOnlySubresourceTypeConfigs entry missing ListParents: " + cfg.TFType)
 		}
-		if cfg.ImportIDFromParent == nil || cfg.NameHintFromParent == nil {
-			panic("sdkOnlySubresourceTypeConfigs entry missing ImportIDFromParent or NameHintFromParent: " + cfg.TFType)
+		if cfg.FetchItem == nil && cfg.FetchItems == nil {
+			panic("sdkOnlySubresourceTypeConfigs entry missing FetchItem or FetchItems: " + cfg.TFType)
+		}
+		if cfg.FetchItem != nil && cfg.FetchItems != nil {
+			panic("sdkOnlySubresourceTypeConfigs entry sets both FetchItem and FetchItems (mutually exclusive): " + cfg.TFType)
+		}
+		if cfg.FetchItem != nil && (cfg.ImportIDFromParent == nil || cfg.NameHintFromParent == nil) {
+			panic("sdkOnlySubresourceTypeConfigs entry missing ImportIDFromParent or NameHintFromParent (required when FetchItem is set): " + cfg.TFType)
 		}
 		if !strings.HasPrefix(cfg.TFType, "aws_") {
 			panic("sdkOnlySubresourceTypeConfigs entry TFType must start with aws_: " + cfg.TFType)
