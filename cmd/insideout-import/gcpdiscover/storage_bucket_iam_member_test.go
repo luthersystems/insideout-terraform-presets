@@ -114,7 +114,6 @@ func TestStorageBucketIAMMemberImportID(t *testing.T) {
 		{name: "service account", bucket: "my-bucket", role: "roles/storage.objectCreator", member: "serviceAccount:foo@p.iam.gserviceaccount.com", want: "b/my-bucket roles/storage.objectCreator serviceAccount:foo@p.iam.gserviceaccount.com"},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			assert.Equal(t, tc.want, storageBucketIAMMemberImportID(tc.bucket, tc.role, tc.member))

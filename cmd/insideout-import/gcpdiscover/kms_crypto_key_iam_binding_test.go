@@ -121,7 +121,6 @@ func TestKMSCryptoKeyIAMBindingImportID(t *testing.T) {
 			want: "p/global/r/k roles/cloudkms.cryptoKeyEncrypter"},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			assert.Equal(t, tc.want, kmsCryptoKeyIAMBindingImportID(tc.project, tc.loc, tc.ring, tc.key, tc.role))
