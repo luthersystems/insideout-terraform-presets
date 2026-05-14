@@ -2389,6 +2389,62 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 		},
 		TagsFromProperties: emptyTagsExtractor,
 	},
+
+	// =====================================================================
+	// OpenSearch Serverless SecurityPolicy — SDKLister-listed, untaggable (Phase A.4 / #466)
+	// =====================================================================
+	{
+		// AWS::OpenSearchServerless::SecurityPolicy mirrors the access-
+		// policy shape: CC ListResources returns
+		// UnsupportedActionException, CC GetResource works on the
+		// compound primary identifier [Type, Name] (verified against
+		// the public CFN schema:
+		//   https://schema.cloudformation.us-east-1.amazonaws.com/aws-opensearchserverless-securitypolicy.json
+		// `primaryIdentifier: [/properties/Type, /properties/Name]`).
+		//
+		// The SDKLister calls aoss:ListSecurityPolicies once per
+		// SecurityPolicyType ("encryption" and "network") and
+		// concatenates per-type Name + Type pairs. Emits
+		// "<Type>|<Name>" — framework joins compound primary-identifier
+		// parts with `|` in schema-declared order.
+		//
+		// Terraform's import format is `<name>/<type>` (verified
+		// against terraform-provider-aws main
+		// website/docs/r/opensearchserverless_security_policy.html.markdown
+		// per the Import section:
+		//   "% terraform import aws_opensearchserverless_security_policy.example
+		//    example/encryption"
+		// ). The rewrite SWAPS the CC `<Type>|<Name>` halves and joins
+		// them with `/` to produce `<Name>/<Type>`.
+		//
+		// Untaggable (CFN schema has no Tags property); existing
+		// untaggableAWS / NON_TAGGABLE_AWS allowlist entry remains in
+		// sync.
+		TFType:               "aws_opensearchserverless_security_policy",
+		CloudFormationType:   "AWS::OpenSearchServerless::SecurityPolicy",
+		Slug:                 "opensearchserverless_security_policy",
+		SkipProjectTagFilter: true,
+		SDKLister:            listOSSSecurityPolicyIdentifiers,
+		ImportIDFromIdentifier: func(identifier string, _ map[string]any) string {
+			parts := strings.SplitN(identifier, "|", 2)
+			if len(parts) != 2 {
+				return identifier
+			}
+			return parts[1] + "/" + parts[0]
+		},
+		NameHintFromProperties: nameOrIdentifier("Name"),
+		NativeIDsFromProperties: func(identifier string, _ map[string]any) map[string]string {
+			parts := strings.SplitN(identifier, "|", 2)
+			if len(parts) != 2 {
+				return map[string]string{"name": identifier}
+			}
+			return map[string]string{
+				"type": parts[0],
+				"name": parts[1],
+			}
+		},
+		TagsFromProperties: emptyTagsExtractor,
+	},
 }
 
 // passthroughImportID is the common ImportIDFromIdentifier used by every

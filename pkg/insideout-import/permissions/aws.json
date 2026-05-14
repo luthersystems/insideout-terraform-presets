@@ -1443,6 +1443,21 @@
       "purpose": "Cloud Control ListResources for AWS::OpenSearchServerless::Collection (cache-miss fallback when RGT prefetch is unavailable)"
     },
     {
+      "service": "opensearchserverless_security_policy",
+      "iam_action": "aoss:GetSecurityPolicy",
+      "purpose": "Cloud Control GetResource for aws_opensearchserverless_security_policy delegates to aoss:GetSecurityPolicy"
+    },
+    {
+      "service": "opensearchserverless_security_policy",
+      "iam_action": "aoss:ListSecurityPolicies",
+      "purpose": "SDKLister enumeration: walk OSS security policies per type (encryption / network) — CC ListResources unsupported for AWS::OpenSearchServerless::SecurityPolicy"
+    },
+    {
+      "service": "opensearchserverless_security_policy",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::OpenSearchServerless::SecurityPolicy (#466 SDKLister branch)"
+    },
+    {
       "service": "resource_explorer_2",
       "iam_action": "resource-explorer-2:Search",
       "purpose": "broad enumeration of unsupported resource types (--include-unsupported, gap #6)"

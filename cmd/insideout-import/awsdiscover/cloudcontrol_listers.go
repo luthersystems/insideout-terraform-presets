@@ -1335,3 +1335,96 @@ func listOSSAccessPolicyIdentifiersWithClient(ctx context.Context, client ossAcc
 	}
 	return ids, nil
 }
+
+// =====================================================================
+// Phase A.4 — OpenSearch Serverless SecurityPolicy SDKLister (#466)
+// =====================================================================
+
+// ossSecurityPoliciesLister is the narrow subset of the OpenSearch
+// Serverless SDK used by the aws_opensearchserverless_security_policy
+// SDKLister. Keeping it separate from ossAccessPoliciesLister means
+// each call site can evolve independently and test fakes stay focused.
+type ossSecurityPoliciesLister interface {
+	ListSecurityPolicies(ctx context.Context, in *opensearchserverless.ListSecurityPoliciesInput, opts ...func(*opensearchserverless.Options)) (*opensearchserverless.ListSecurityPoliciesOutput, error)
+}
+
+// ossSecurityPolicyTypes enumerates the SecurityPolicyType enum values
+// the OSS service accepts on ListSecurityPolicies. Both "encryption"
+// and "network" are valid (the two security-policy shapes OSS exposes).
+// We call ListSecurityPolicies once per type and concatenate.
+var ossSecurityPolicyTypes = []ossstypes.SecurityPolicyType{
+	ossstypes.SecurityPolicyTypeEncryption,
+	ossstypes.SecurityPolicyTypeNetwork,
+}
+
+// listOSSSecurityPolicyIdentifiers enumerates OpenSearch Serverless
+// security policies (region-scoped) and emits the CC compound primary
+// identifier for each. Used as the SDKLister for
+// AWS::OpenSearchServerless::SecurityPolicy (#466) — CC ListResources
+// returns UnsupportedActionException; CC GetResource is supported on
+// the compound primary identifier [Type, Name] per the public CFN
+// schema:
+//
+//	https://schema.cloudformation.us-east-1.amazonaws.com/aws-opensearchserverless-securitypolicy.json
+//
+// `primaryIdentifier: [/properties/Type, /properties/Name]`.
+//
+// Emits "<Type>|<Name>" — the framework joins compound identifier
+// parts with `|` in schema-declared order. ListSecurityPolicies
+// requires a Type filter (it's a required input), so we walk the
+// known type set and concatenate.
+//
+// Terraform's import format is `<name>/<type>` (verified against
+// terraform-provider-aws main website/docs/r/
+// opensearchserverless_security_policy.html.markdown — Import section).
+// The rewrite (in cloudcontrol_types.go) swaps halves and joins with
+// `/`.
+//
+// Returns a non-nil empty slice on accounts with zero security
+// policies (#255 contract).
+func listOSSSecurityPolicyIdentifiers(ctx context.Context, awsCfg aws.Config, region string, _ DiscoverArgs) ([]string, error) {
+	client := opensearchserverless.NewFromConfig(awsCfg, func(o *opensearchserverless.Options) {
+		if region != "" {
+			o.Region = region
+		}
+	})
+	return listOSSSecurityPolicyIdentifiersWithClient(ctx, client, ossSecurityPolicyTypes)
+}
+
+func listOSSSecurityPolicyIdentifiersWithClient(ctx context.Context, client ossSecurityPoliciesLister, types []ossstypes.SecurityPolicyType) ([]string, error) {
+	ids := []string{}
+	seen := map[string]bool{}
+	for _, t := range types {
+		var nextToken *string
+		for {
+			page, err := client.ListSecurityPolicies(ctx, &opensearchserverless.ListSecurityPoliciesInput{
+				Type:      t,
+				NextToken: nextToken,
+			})
+			if err != nil {
+				return nil, fmt.Errorf("aoss:ListSecurityPolicies(type=%q): %w", string(t), err)
+			}
+			for _, p := range page.SecurityPolicySummaries {
+				name := aws.ToString(p.Name)
+				if name == "" {
+					continue
+				}
+				policyType := string(p.Type)
+				if policyType == "" {
+					policyType = string(t)
+				}
+				id := policyType + "|" + name
+				if seen[id] {
+					continue
+				}
+				seen[id] = true
+				ids = append(ids, id)
+			}
+			if page.NextToken == nil || aws.ToString(page.NextToken) == "" {
+				break
+			}
+			nextToken = page.NextToken
+		}
+	}
+	return ids, nil
+}

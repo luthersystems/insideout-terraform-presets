@@ -3243,3 +3243,77 @@ func TestOSSAccessPolicyConfig(t *testing.T) {
 		t.Errorf("Tags: got %+v, want empty map", tags)
 	}
 }
+
+// =====================================================================
+// Phase A.4 — OpenSearch Serverless SecurityPolicy extractor pins (#466)
+// =====================================================================
+
+// TestOSSSecurityPolicyConfig pins aws_opensearchserverless_security_policy:
+// SDKLister-listed (CC ListResources unsupported), regional, compound CC
+// identifier `<Type>|<Name>` rewritten to TF import `<Name>/<Type>` via
+// halve-and-swap, NativeIDs split into type + name, untaggable.
+func TestOSSSecurityPolicyConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_opensearchserverless_security_policy")
+	if !cfg.SkipProjectTagFilter {
+		t.Error("aws_opensearchserverless_security_policy: SkipProjectTagFilter must be true (untaggable; CFN schema has no Tags property)")
+	}
+	if cfg.IsGlobal {
+		t.Error("aws_opensearchserverless_security_policy: IsGlobal must be false (regional service)")
+	}
+	if cfg.CloudFormationType != "AWS::OpenSearchServerless::SecurityPolicy" {
+		t.Errorf("CloudFormationType=%q, want AWS::OpenSearchServerless::SecurityPolicy", cfg.CloudFormationType)
+	}
+	if cfg.SDKLister == nil {
+		t.Error("SDKLister must be non-nil (CC ListResources unsupported for OSS security policies)")
+	}
+	if cfg.ParentLister != nil {
+		t.Error("ParentLister must be nil (SDKLister and ParentLister are mutually exclusive)")
+	}
+
+	// ImportID rewrite: CC `<Type>|<Name>` → TF `<Name>/<Type>`. Pin
+	// both supported policy types so a future enum addition forces a
+	// per-type review.
+	for _, tc := range []struct {
+		cc, tf string
+	}{
+		{"encryption|enc-1", "enc-1/encryption"},
+		{"network|net-1", "net-1/network"},
+	} {
+		if got := cfg.ImportIDFromIdentifier(tc.cc, nil); got != tc.tf {
+			t.Errorf("ImportID rewrite for %q: got %q, want %q", tc.cc, got, tc.tf)
+		}
+	}
+	// Malformed: passthrough.
+	if got := cfg.ImportIDFromIdentifier("malformed-no-pipe", nil); got != "malformed-no-pipe" {
+		t.Errorf("ImportID fallback (no pipe): got %q, want %q", got, "malformed-no-pipe")
+	}
+
+	// NameHint: prefer Name from properties.
+	if got := cfg.NameHintFromProperties("encryption|enc-1", map[string]any{"Name": "enc-1"}); got != "enc-1" {
+		t.Errorf("NameHint from Name: got %q, want %q", got, "enc-1")
+	}
+	if got := cfg.NameHintFromProperties("encryption|enc-1", map[string]any{}); got != "encryption|enc-1" {
+		t.Errorf("NameHint fallback: got %q, want identifier", got)
+	}
+
+	// NativeIDs: split into type + name.
+	native := cfg.NativeIDsFromProperties("network|net-1", nil)
+	want := map[string]string{"type": "network", "name": "net-1"}
+	if !reflect.DeepEqual(native, want) {
+		t.Errorf("NativeIDs: got %+v, want %+v", native, want)
+	}
+	nativeBare := cfg.NativeIDsFromProperties("malformed-no-pipe", nil)
+	if !reflect.DeepEqual(nativeBare, map[string]string{"name": "malformed-no-pipe"}) {
+		t.Errorf("NativeIDs (malformed): got %+v, want {name: malformed-no-pipe}", nativeBare)
+	}
+
+	// Untaggable.
+	tags := cfg.TagsFromProperties(map[string]any{})
+	if tags == nil {
+		t.Error("Tags: got nil, want non-nil empty map (#255 contract)")
+	}
+	if len(tags) != 0 {
+		t.Errorf("Tags: got %+v, want empty map", tags)
+	}
+}

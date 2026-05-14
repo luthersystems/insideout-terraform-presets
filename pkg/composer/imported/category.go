@@ -157,6 +157,7 @@ var categoryByTFType = map[string]string{
 	"aws_opensearch_domain":                              CategoryDataStorage,
 	"aws_opensearchserverless_access_policy":             CategorySecurity,
 	"aws_opensearchserverless_collection":                CategoryDataStorage,
+	"aws_opensearchserverless_security_policy":           CategorySecurity,
 	"aws_rds_cluster":                                    CategoryDataStorage,
 	"aws_resourceexplorer2_index":                        CategoryObservability,
 	"aws_resourceexplorer2_view":                         CategoryObservability,

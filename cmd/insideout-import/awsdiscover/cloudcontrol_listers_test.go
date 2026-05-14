@@ -3015,3 +3015,171 @@ func TestListOSSAccessPolicyIdentifiers_DefensiveTypeFallback(t *testing.T) {
 		t.Errorf("identifiers drift: got %v want %v", got, want)
 	}
 }
+
+// =====================================================================
+// Phase A.4 — OpenSearch Serverless SecurityPolicy SDKLister (#466)
+// =====================================================================
+
+// fakeOSSSecurityPoliciesLister drives ossSecurityPoliciesLister against
+// a scripted (Type → page-sequence) map. Records the input Type and
+// NextToken on each call so tests can pin pagination semantics.
+type fakeOSSSecurityPoliciesLister struct {
+	pagesByType    map[ossstypes.SecurityPolicyType][]opensearchserverless.ListSecurityPoliciesOutput
+	callsByType    map[ossstypes.SecurityPolicyType]int
+	errByType      map[ossstypes.SecurityPolicyType]error
+	tokenByCall    map[ossstypes.SecurityPolicyType][]*string
+	typesRequested []ossstypes.SecurityPolicyType
+}
+
+func (f *fakeOSSSecurityPoliciesLister) ListSecurityPolicies(_ context.Context, in *opensearchserverless.ListSecurityPoliciesInput, _ ...func(*opensearchserverless.Options)) (*opensearchserverless.ListSecurityPoliciesOutput, error) {
+	if f.tokenByCall == nil {
+		f.tokenByCall = map[ossstypes.SecurityPolicyType][]*string{}
+	}
+	f.tokenByCall[in.Type] = append(f.tokenByCall[in.Type], in.NextToken)
+	f.typesRequested = append(f.typesRequested, in.Type)
+	if err, ok := f.errByType[in.Type]; ok && err != nil {
+		return nil, err
+	}
+	if f.callsByType == nil {
+		f.callsByType = map[ossstypes.SecurityPolicyType]int{}
+	}
+	pages := f.pagesByType[in.Type]
+	idx := f.callsByType[in.Type]
+	if idx >= len(pages) {
+		return &opensearchserverless.ListSecurityPoliciesOutput{}, nil
+	}
+	page := pages[idx]
+	f.callsByType[in.Type] = idx + 1
+	return &page, nil
+}
+
+func ossSecurityPolicySummary(name string, t ossstypes.SecurityPolicyType) ossstypes.SecurityPolicySummary {
+	return ossstypes.SecurityPolicySummary{Name: aws.String(name), Type: t}
+}
+
+func ossSecurityPolicyPage(nextToken string, summaries ...ossstypes.SecurityPolicySummary) opensearchserverless.ListSecurityPoliciesOutput {
+	out := opensearchserverless.ListSecurityPoliciesOutput{SecurityPolicySummaries: summaries}
+	if nextToken != "" {
+		out.NextToken = aws.String(nextToken)
+	}
+	return out
+}
+
+// TestListOSSSecurityPolicyIdentifiers_HappyPath_BothTypesConcatenated
+// pins the canonical shape: encryption + network policies are
+// concatenated in the order ossSecurityPolicyTypes declares.
+func TestListOSSSecurityPolicyIdentifiers_HappyPath_BothTypesConcatenated(t *testing.T) {
+	t.Parallel()
+	fake := &fakeOSSSecurityPoliciesLister{
+		pagesByType: map[ossstypes.SecurityPolicyType][]opensearchserverless.ListSecurityPoliciesOutput{
+			ossstypes.SecurityPolicyTypeEncryption: {
+				ossSecurityPolicyPage("",
+					ossSecurityPolicySummary("enc-a", ossstypes.SecurityPolicyTypeEncryption),
+				),
+			},
+			ossstypes.SecurityPolicyTypeNetwork: {
+				ossSecurityPolicyPage("",
+					ossSecurityPolicySummary("net-a", ossstypes.SecurityPolicyTypeNetwork),
+					ossSecurityPolicySummary("net-b", ossstypes.SecurityPolicyTypeNetwork),
+				),
+			},
+		},
+	}
+	got, err := listOSSSecurityPolicyIdentifiersWithClient(context.Background(), fake,
+		[]ossstypes.SecurityPolicyType{
+			ossstypes.SecurityPolicyTypeEncryption,
+			ossstypes.SecurityPolicyTypeNetwork,
+		})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{
+		"encryption|enc-a",
+		"network|net-a",
+		"network|net-b",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("identifiers drift: got %v want %v", got, want)
+	}
+}
+
+// TestListOSSSecurityPolicyIdentifiers_PropagatesPagination pins
+// nextToken propagation for the per-type loop.
+func TestListOSSSecurityPolicyIdentifiers_PropagatesPagination(t *testing.T) {
+	t.Parallel()
+	fake := &fakeOSSSecurityPoliciesLister{
+		pagesByType: map[ossstypes.SecurityPolicyType][]opensearchserverless.ListSecurityPoliciesOutput{
+			ossstypes.SecurityPolicyTypeEncryption: {
+				ossSecurityPolicyPage("ENC-CURSOR",
+					ossSecurityPolicySummary("e1", ossstypes.SecurityPolicyTypeEncryption),
+				),
+				ossSecurityPolicyPage("",
+					ossSecurityPolicySummary("e2", ossstypes.SecurityPolicyTypeEncryption),
+				),
+			},
+		},
+	}
+	got, err := listOSSSecurityPolicyIdentifiersWithClient(context.Background(), fake,
+		[]ossstypes.SecurityPolicyType{ossstypes.SecurityPolicyTypeEncryption})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"encryption|e1", "encryption|e2"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("identifiers drift: got %v want %v", got, want)
+	}
+	tokens := fake.tokenByCall[ossstypes.SecurityPolicyTypeEncryption]
+	if len(tokens) != 2 {
+		t.Fatalf("expected 2 ListSecurityPolicies calls; got %d tokens=%v", len(tokens), tokens)
+	}
+	if tokens[0] != nil {
+		t.Errorf("first call should have nil NextToken; got %v", aws.ToString(tokens[0]))
+	}
+	if aws.ToString(tokens[1]) != "ENC-CURSOR" {
+		t.Errorf("second call should carry forward the cursor; got %q want %q",
+			aws.ToString(tokens[1]), "ENC-CURSOR")
+	}
+}
+
+// TestListOSSSecurityPolicyIdentifiers_EmptyAccountReturnsNonNilEmpty
+// guards the #255 contract.
+func TestListOSSSecurityPolicyIdentifiers_EmptyAccountReturnsNonNilEmpty(t *testing.T) {
+	t.Parallel()
+	fake := &fakeOSSSecurityPoliciesLister{
+		pagesByType: map[ossstypes.SecurityPolicyType][]opensearchserverless.ListSecurityPoliciesOutput{
+			ossstypes.SecurityPolicyTypeEncryption: {ossSecurityPolicyPage("")},
+			ossstypes.SecurityPolicyTypeNetwork:    {ossSecurityPolicyPage("")},
+		},
+	}
+	got, err := listOSSSecurityPolicyIdentifiersWithClient(context.Background(), fake,
+		[]ossstypes.SecurityPolicyType{
+			ossstypes.SecurityPolicyTypeEncryption,
+			ossstypes.SecurityPolicyTypeNetwork,
+		})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got == nil {
+		t.Fatal("got nil, want non-nil empty slice (#255 contract)")
+	}
+	if len(got) != 0 {
+		t.Errorf("got %v, want empty slice", got)
+	}
+}
+
+// TestListOSSSecurityPolicyIdentifiers_PropagatesListError pins the
+// error wrap chain.
+func TestListOSSSecurityPolicyIdentifiers_PropagatesListError(t *testing.T) {
+	t.Parallel()
+	sentinel := errors.New("AccessDenied: aoss:ListSecurityPolicies")
+	fake := &fakeOSSSecurityPoliciesLister{
+		errByType: map[ossstypes.SecurityPolicyType]error{
+			ossstypes.SecurityPolicyTypeEncryption: sentinel,
+		},
+	}
+	_, err := listOSSSecurityPolicyIdentifiersWithClient(context.Background(), fake,
+		[]ossstypes.SecurityPolicyType{ossstypes.SecurityPolicyTypeEncryption})
+	if !errors.Is(err, sentinel) {
+		t.Errorf("err does not wrap sentinel; got %v", err)
+	}
+}

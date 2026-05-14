@@ -96,6 +96,7 @@ var awsTFTypeToServiceSlug = map[string]string{
 	"aws_opensearch_domain":                              "opensearch_domain",
 	"aws_opensearchserverless_access_policy":             "opensearchserverless_access_policy",
 	"aws_opensearchserverless_collection":                "opensearchserverless_collection",
+	"aws_opensearchserverless_security_policy":           "opensearchserverless_security_policy",
 	"aws_resourceexplorer2_index":                        "resourceexplorer2_index",
 	"aws_resourceexplorer2_view":                         "resourceexplorer2_view",
 	"aws_route53_zone":                                   "route53_zone",

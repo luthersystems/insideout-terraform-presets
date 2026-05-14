@@ -79,6 +79,7 @@ aws_network_interface	Network Security
 aws_opensearch_domain	Data Storage
 aws_opensearchserverless_access_policy	Security
 aws_opensearchserverless_collection	Data Storage
+aws_opensearchserverless_security_policy	Security
 aws_rds_cluster	Data Storage
 aws_resourceexplorer2_index	Observability
 aws_resourceexplorer2_view	Observability
