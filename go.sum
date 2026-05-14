@@ -94,6 +94,8 @@ github.com/aws/aws-sdk-go-v2/service/apigateway v1.39.3 h1:7MJlB7KGFd+KNKtnPgoFW
 github.com/aws/aws-sdk-go-v2/service/apigateway v1.39.3/go.mod h1:MwilTAruv11x8EFjsk1R0VfjMdCxB6JHVtanCqsTR5o=
 github.com/aws/aws-sdk-go-v2/service/apigatewayv2 v1.34.3 h1:JqFmDekar5Ije9SKKBUAmvuqardAXgCoJV78dt2BQSI=
 github.com/aws/aws-sdk-go-v2/service/apigatewayv2 v1.34.3/go.mod h1:+ONaMzn4bVIQwVsamP28xDWWZuYO+6cWupJpZOSlUNE=
+github.com/aws/aws-sdk-go-v2/service/autoscaling v1.66.2 h1:pPd+/Ujqf2+DmPOdB47EN7ox1iC21lu2zlOccUlfHeo=
+github.com/aws/aws-sdk-go-v2/service/autoscaling v1.66.2/go.mod h1:b3XHAIEe5I9cmeZ9MLvUqj5DRWcBuh1/hpKDPb7T6KE=
 github.com/aws/aws-sdk-go-v2/service/backup v1.55.2 h1:WhdT1PwOjTjKLGuD9lJDyNMgYmVaZgTHK06ioJKMBYE=
 github.com/aws/aws-sdk-go-v2/service/backup v1.55.2/go.mod h1:uMh3ZDoLKhXldYL1qcBYy1HsNQfKgL/w8iF2onOyoKY=
 github.com/aws/aws-sdk-go-v2/service/bedrock v1.59.2 h1:TdYgGWLuNqQGNNVHzMwBEkg1fsyoaOfd+aP3xKfIeDM=

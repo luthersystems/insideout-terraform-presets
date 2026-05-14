@@ -81,11 +81,12 @@ func TestEnumerateUnsupported_FiltersSupportedTypes(t *testing.T) {
 		expected bool // whether this row should appear in unsupported.json
 	}
 	fixtureRows := []fixtureRow{
-		{"arn:aws:sqs:us-east-1:123:io-queue", "sqs:queue", "aws_sqs_queue", "us-east-1", false},          // importable
-		{"arn:aws:iam::123:role/io-role", "iam:role", "aws_iam_role", "us-east-1", false},                 // importable
-		{"arn:aws:ec2:us-east-1:123:vpc/vpc-abc", "ec2:vpc", "aws_vpc", "us-east-1", false},               // importable (Bundle 4 PR 1)
-		{"arn:aws:rds:us-east-1:123:cluster:my-clu", "rds:cluster", "aws_rds_cluster", "us-east-1", true}, // unsupported
-		{"arn:aws:eks:us-east-1:123:cluster/my-eks", "eks:cluster", "aws_eks_cluster", "us-east-1", true}, // unsupported
+		{"arn:aws:sqs:us-east-1:123:io-queue", "sqs:queue", "aws_sqs_queue", "us-east-1", false},                                              // importable
+		{"arn:aws:iam::123:role/io-role", "iam:role", "aws_iam_role", "us-east-1", false},                                                     // importable
+		{"arn:aws:ec2:us-east-1:123:vpc/vpc-abc", "ec2:vpc", "aws_vpc", "us-east-1", false},                                                   // importable (Bundle 4 PR 1)
+		{"arn:aws:rds:us-east-1:123:cluster:my-clu", "rds:cluster", "aws_rds_cluster", "us-east-1", true},                                     // unsupported
+		{"arn:aws:eks:us-east-1:123:cluster/my-eks", "eks:cluster", "aws_eks_cluster", "us-east-1", false},                                    // importable (#14f)
+		{"arn:aws:elasticloadbalancing:us-east-1:123:loadbalancer/clb", "elasticloadbalancing:loadbalancer-v1", "aws_elb", "us-east-1", true}, // unsupported (classic ELB; we cover ALB/NLB via aws_lb)
 	}
 	// supportedSet is the live registry — if a fixture row's tfType
 	// joins the registry in the future, the row's `expected` flag must
@@ -440,7 +441,11 @@ func TestEnumerateUnsupported_PopulatesGroup(t *testing.T) {
 				// aws_elb (classic ELB) — still in the unsupported set; the
 				// ELBv2 ALB type aws_lb landed as importable in #328.
 				rxResource("arn:aws:elasticloadbalancing:us-east-1:123:loadbalancer/n", "elasticloadbalancing:loadbalancer-v1", "us-east-1"),
-				rxResource("arn:aws:eks:us-east-1:123:cluster/c", "eks:cluster", "us-east-1"),
+				// aws_ecr_repository — still unsupported (#14f kept the
+				// importable scope to types InsideOut manages directly or
+				// transitively; the aws-ecr-repository sub-module isn't
+				// consumed by any preset).
+				rxResource("arn:aws:ecr:us-east-1:123:repository/c", "ecr:repository", "us-east-1"),
 				rxResource("arn:aws:rds:us-east-1:123:cluster:rds-c", "rds:cluster", "us-east-1"),
 				rxResource("arn:aws:newservice:us-east-1:123:thing/x", "newservice:thing", "us-east-1"),
 			},
@@ -459,9 +464,9 @@ func TestEnumerateUnsupported_PopulatesGroup(t *testing.T) {
 	// assert Group on the matching entry; for the unmapped row, walk
 	// for the Type=="" entry and assert Group=="".
 	wantGroup := map[string]string{
-		"aws_elb":         "Network Security",
-		"aws_eks_cluster": "Virtual Machines",
-		"aws_rds_cluster": "Data Storage",
+		"aws_elb":            "Network Security",
+		"aws_ecr_repository": "Data Storage",
+		"aws_rds_cluster":    "Data Storage",
 	}
 	for typ, want := range wantGroup {
 		var found *UnsupportedResource

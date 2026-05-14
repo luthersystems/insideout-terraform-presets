@@ -8,8 +8,12 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/acm"
 	"github.com/aws/aws-sdk-go-v2/service/apigateway"
 	"github.com/aws/aws-sdk-go-v2/service/apigatewayv2"
+	"github.com/aws/aws-sdk-go-v2/service/autoscaling"
 	"github.com/aws/aws-sdk-go-v2/service/cloudfront"
 	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider"
+	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
+	"github.com/aws/aws-sdk-go-v2/service/eks"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
@@ -625,3 +629,206 @@ func listSecretsManagerSecretRotationsWithClient(ctx context.Context, client sec
 	return arns, nil
 }
 
+// eksClustersLister is the narrow subset of the EKS SDK used by the
+// aws_eks_cluster SDKLister enumerator and the four EKS child types
+// (Nodegroup, Addon, FargateProfile, AccessEntry) whose ParentLister
+// fans out per ClusterName (#14f). The interface is package-private so
+// test fakes can satisfy it without depending on the full EKS client.
+type eksClustersLister interface {
+	ListClusters(ctx context.Context, in *eks.ListClustersInput, opts ...func(*eks.Options)) (*eks.ListClustersOutput, error)
+}
+
+// listEKSClusters enumerates EKS clusters in the region and returns
+// cluster Name for each. Name is the CC primary identifier for
+// AWS::EKS::Cluster (and Terraform's import format for
+// aws_eks_cluster — passthrough).
+//
+// EKS ListClusters paginates via NextToken. The terminator condition
+// mirrors the other listers: break on both nil AND empty-string cursors.
+func listEKSClusters(ctx context.Context, awsCfg aws.Config, region string, _ DiscoverArgs) ([]string, error) {
+	client := eks.NewFromConfig(awsCfg, func(o *eks.Options) {
+		if region != "" {
+			o.Region = region
+		}
+	})
+	return listEKSClustersWithClient(ctx, client)
+}
+
+func listEKSClustersWithClient(ctx context.Context, client eksClustersLister) ([]string, error) {
+	names := []string{}
+	var nextToken *string
+	for {
+		page, err := client.ListClusters(ctx, &eks.ListClustersInput{NextToken: nextToken})
+		if err != nil {
+			return nil, fmt.Errorf("eks:ListClusters: %w", err)
+		}
+		for _, name := range page.Clusters {
+			if name == "" {
+				continue
+			}
+			names = append(names, name)
+		}
+		if page.NextToken == nil || aws.ToString(page.NextToken) == "" {
+			break
+		}
+		nextToken = page.NextToken
+	}
+	return names, nil
+}
+
+// listEKSClustersAsResourceModels enumerates EKS clusters and wraps
+// each cluster name into a JSON ResourceModel `{"ClusterName":"..."}`
+// for feeding into Cloud Control ListResources for the four child
+// types scoped on ClusterName: Nodegroup, Addon, FargateProfile,
+// AccessEntry (#14f). Reuses `listEKSClusters` for the underlying SDK
+// call so pagination semantics are shared.
+func listEKSClustersAsResourceModels(ctx context.Context, awsCfg aws.Config, region string, args DiscoverArgs) ([]string, error) {
+	names, err := listEKSClusters(ctx, awsCfg, region, args)
+	if err != nil {
+		return nil, err
+	}
+	models := make([]string, 0, len(names))
+	for _, n := range names {
+		models = append(models, fmt.Sprintf(`{"ClusterName":%q}`, n))
+	}
+	return models, nil
+}
+
+// ec2InstancesLister is the narrow subset of the EC2 SDK used by the
+// aws_instance SDKLister enumerator (#14f).
+type ec2InstancesLister interface {
+	DescribeInstances(ctx context.Context, in *ec2.DescribeInstancesInput, opts ...func(*ec2.Options)) (*ec2.DescribeInstancesOutput, error)
+}
+
+// listEC2Instances enumerates EC2 instances in the region and returns
+// the InstanceId for each instance that is not in a terminated or
+// shutting-down state. Those tombstone states are skipped because the
+// downstream CC GetResource fan-out would surface
+// ResourceNotFoundException for every terminated instance, polluting
+// the soft-fail warn channel for what is effectively dead inventory.
+// InstanceId is the CC primary identifier for AWS::EC2::Instance and
+// Terraform's import format — passthrough.
+//
+// DescribeInstances paginates via NextToken and returns instances
+// grouped under Reservations.
+func listEC2Instances(ctx context.Context, awsCfg aws.Config, region string, _ DiscoverArgs) ([]string, error) {
+	client := ec2.NewFromConfig(awsCfg, func(o *ec2.Options) {
+		if region != "" {
+			o.Region = region
+		}
+	})
+	return listEC2InstancesWithClient(ctx, client)
+}
+
+func listEC2InstancesWithClient(ctx context.Context, client ec2InstancesLister) ([]string, error) {
+	ids := []string{}
+	var nextToken *string
+	for {
+		page, err := client.DescribeInstances(ctx, &ec2.DescribeInstancesInput{NextToken: nextToken})
+		if err != nil {
+			return nil, fmt.Errorf("ec2:DescribeInstances: %w", err)
+		}
+		for _, res := range page.Reservations {
+			for _, inst := range res.Instances {
+				if inst.State != nil {
+					switch inst.State.Name {
+					case ec2types.InstanceStateNameTerminated, ec2types.InstanceStateNameShuttingDown:
+						continue
+					}
+				}
+				id := aws.ToString(inst.InstanceId)
+				if id == "" {
+					continue
+				}
+				ids = append(ids, id)
+			}
+		}
+		if page.NextToken == nil || aws.ToString(page.NextToken) == "" {
+			break
+		}
+		nextToken = page.NextToken
+	}
+	return ids, nil
+}
+
+// ec2KeyPairsLister is the narrow subset of the EC2 SDK used by the
+// aws_key_pair SDKLister enumerator (#14f).
+type ec2KeyPairsLister interface {
+	DescribeKeyPairs(ctx context.Context, in *ec2.DescribeKeyPairsInput, opts ...func(*ec2.Options)) (*ec2.DescribeKeyPairsOutput, error)
+}
+
+// listEC2KeyPairs enumerates EC2 key pairs in the region and returns
+// the KeyName for each. KeyName is the CC primary identifier for
+// AWS::EC2::KeyPair and Terraform's import format — passthrough.
+//
+// DescribeKeyPairs does not paginate (per-account key-pair counts are
+// bounded by AWS service quotas and the SDK returns the full list in
+// a single response).
+func listEC2KeyPairs(ctx context.Context, awsCfg aws.Config, region string, _ DiscoverArgs) ([]string, error) {
+	client := ec2.NewFromConfig(awsCfg, func(o *ec2.Options) {
+		if region != "" {
+			o.Region = region
+		}
+	})
+	return listEC2KeyPairsWithClient(ctx, client)
+}
+
+func listEC2KeyPairsWithClient(ctx context.Context, client ec2KeyPairsLister) ([]string, error) {
+	names := []string{}
+	out, err := client.DescribeKeyPairs(ctx, &ec2.DescribeKeyPairsInput{})
+	if err != nil {
+		return nil, fmt.Errorf("ec2:DescribeKeyPairs: %w", err)
+	}
+	for _, kp := range out.KeyPairs {
+		n := aws.ToString(kp.KeyName)
+		if n == "" {
+			continue
+		}
+		names = append(names, n)
+	}
+	return names, nil
+}
+
+// autoScalingGroupsLister is the narrow subset of the AutoScaling SDK
+// used by the aws_autoscaling_group SDKLister enumerator (#14f).
+type autoScalingGroupsLister interface {
+	DescribeAutoScalingGroups(ctx context.Context, in *autoscaling.DescribeAutoScalingGroupsInput, opts ...func(*autoscaling.Options)) (*autoscaling.DescribeAutoScalingGroupsOutput, error)
+}
+
+// listAutoScalingGroups enumerates Auto Scaling groups in the region
+// and returns AutoScalingGroupName for each. The name is the CC
+// primary identifier for AWS::AutoScaling::AutoScalingGroup and
+// Terraform's import format — passthrough.
+//
+// DescribeAutoScalingGroups paginates via NextToken.
+func listAutoScalingGroups(ctx context.Context, awsCfg aws.Config, region string, _ DiscoverArgs) ([]string, error) {
+	client := autoscaling.NewFromConfig(awsCfg, func(o *autoscaling.Options) {
+		if region != "" {
+			o.Region = region
+		}
+	})
+	return listAutoScalingGroupsWithClient(ctx, client)
+}
+
+func listAutoScalingGroupsWithClient(ctx context.Context, client autoScalingGroupsLister) ([]string, error) {
+	names := []string{}
+	var nextToken *string
+	for {
+		page, err := client.DescribeAutoScalingGroups(ctx, &autoscaling.DescribeAutoScalingGroupsInput{NextToken: nextToken})
+		if err != nil {
+			return nil, fmt.Errorf("autoscaling:DescribeAutoScalingGroups: %w", err)
+		}
+		for _, g := range page.AutoScalingGroups {
+			n := aws.ToString(g.AutoScalingGroupName)
+			if n == "" {
+				continue
+			}
+			names = append(names, n)
+		}
+		if page.NextToken == nil || aws.ToString(page.NextToken) == "" {
+			break
+		}
+		nextToken = page.NextToken
+	}
+	return names, nil
+}

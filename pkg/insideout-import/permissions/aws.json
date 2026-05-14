@@ -133,6 +133,16 @@
       "purpose": "list per-API stages (GET /apis/*/stages); shares apigateway:GET with apigatewayv2_api"
     },
     {
+      "service": "autoscaling_group",
+      "iam_action": "autoscaling:DescribeAutoScalingGroups",
+      "purpose": "SDKLister enumeration: list Auto Scaling groups (Cloud Control ListResources bypassed; #14f)"
+    },
+    {
+      "service": "autoscaling_group",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::AutoScaling::AutoScalingGroup (#14f SDKLister branch)"
+    },
+    {
       "service": "backup_plan",
       "iam_action": "backup:GetBackupPlan",
       "purpose": "Cloud Control GetResource for aws_backup_plan delegates to backup:GetBackupPlan"
@@ -518,6 +528,26 @@
       "purpose": "fetch table tags for tag selectors and Identity.Tags"
     },
     {
+      "service": "ecs_cluster",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::ECS::Cluster (#14f unified discoverer)"
+    },
+    {
+      "service": "ecs_cluster",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::ECS::Cluster (cache-miss fallback when RGT prefetch is unavailable)"
+    },
+    {
+      "service": "ecs_cluster",
+      "iam_action": "ecs:DescribeClusters",
+      "purpose": "Cloud Control GetResource for aws_ecs_cluster delegates to ecs:DescribeClusters"
+    },
+    {
+      "service": "ecs_cluster",
+      "iam_action": "ecs:ListClusters",
+      "purpose": "Cloud Control ListResources for AWS::ECS::Cluster delegates to ecs:ListClusters"
+    },
+    {
       "service": "eip",
       "iam_action": "cloudcontrol:GetResource",
       "purpose": "Cloud Control GetResource for AWS::EC2::EIP (#406 unified discoverer)"
@@ -531,6 +561,101 @@
       "service": "eip",
       "iam_action": "ec2:DescribeAddresses",
       "purpose": "list per-region elastic IPs (server-side tag:Project filter when project is set; tags inline)"
+    },
+    {
+      "service": "eks_access_entry",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::EKS::AccessEntry (#14f ParentLister branch on ClusterName)"
+    },
+    {
+      "service": "eks_access_entry",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::EKS::AccessEntry (per-ClusterName fan-out)"
+    },
+    {
+      "service": "eks_access_entry",
+      "iam_action": "eks:DescribeAccessEntry",
+      "purpose": "Cloud Control GetResource for aws_eks_access_entry delegates to eks:DescribeAccessEntry"
+    },
+    {
+      "service": "eks_access_entry",
+      "iam_action": "eks:ListClusters",
+      "purpose": "parent enumeration: list EKS clusters to fan ListResources out per ClusterName"
+    },
+    {
+      "service": "eks_addon",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::EKS::Addon (#14f ParentLister branch on ClusterName)"
+    },
+    {
+      "service": "eks_addon",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::EKS::Addon (per-ClusterName fan-out)"
+    },
+    {
+      "service": "eks_addon",
+      "iam_action": "eks:DescribeAddon",
+      "purpose": "Cloud Control GetResource for aws_eks_addon delegates to eks:DescribeAddon"
+    },
+    {
+      "service": "eks_addon",
+      "iam_action": "eks:ListClusters",
+      "purpose": "parent enumeration: list EKS clusters to fan ListResources out per ClusterName"
+    },
+    {
+      "service": "eks_cluster",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::EKS::Cluster (#14f SDKLister branch)"
+    },
+    {
+      "service": "eks_cluster",
+      "iam_action": "eks:DescribeCluster",
+      "purpose": "Cloud Control GetResource for aws_eks_cluster delegates to eks:DescribeCluster"
+    },
+    {
+      "service": "eks_cluster",
+      "iam_action": "eks:ListClusters",
+      "purpose": "SDKLister enumeration: list EKS clusters (Cloud Control ListResources bypassed; same call also seeds parent enumeration for the four EKS child types)"
+    },
+    {
+      "service": "eks_fargate_profile",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::EKS::FargateProfile (#14f ParentLister branch on ClusterName)"
+    },
+    {
+      "service": "eks_fargate_profile",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::EKS::FargateProfile (per-ClusterName fan-out)"
+    },
+    {
+      "service": "eks_fargate_profile",
+      "iam_action": "eks:DescribeFargateProfile",
+      "purpose": "Cloud Control GetResource for aws_eks_fargate_profile delegates to eks:DescribeFargateProfile"
+    },
+    {
+      "service": "eks_fargate_profile",
+      "iam_action": "eks:ListClusters",
+      "purpose": "parent enumeration: list EKS clusters to fan ListResources out per ClusterName"
+    },
+    {
+      "service": "eks_node_group",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::EKS::Nodegroup (#14f ParentLister branch on ClusterName)"
+    },
+    {
+      "service": "eks_node_group",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::EKS::Nodegroup (per-ClusterName fan-out)"
+    },
+    {
+      "service": "eks_node_group",
+      "iam_action": "eks:DescribeNodegroup",
+      "purpose": "Cloud Control GetResource for aws_eks_node_group delegates to eks:DescribeNodegroup"
+    },
+    {
+      "service": "eks_node_group",
+      "iam_action": "eks:ListClusters",
+      "purpose": "parent enumeration: list EKS clusters to fan ListResources out per ClusterName"
     },
     {
       "service": "eks_pod_identity",
@@ -668,6 +793,16 @@
       "purpose": "SDKLister enumeration: list IAM users (global; Cloud Control ListResources bypassed)"
     },
     {
+      "service": "instance",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::EC2::Instance (#14f SDKLister branch)"
+    },
+    {
+      "service": "instance",
+      "iam_action": "ec2:DescribeInstances",
+      "purpose": "SDKLister enumeration: list per-region EC2 instances (skips terminated/shutting-down states; Cloud Control ListResources bypassed)"
+    },
+    {
       "service": "internet_gateway",
       "iam_action": "cloudcontrol:GetResource",
       "purpose": "Cloud Control GetResource for AWS::EC2::InternetGateway (#406 unified discoverer)"
@@ -681,6 +816,16 @@
       "service": "internet_gateway",
       "iam_action": "ec2:DescribeInternetGateways",
       "purpose": "list per-region internet gateways (server-side tag:Project filter when project is set; tags inline)"
+    },
+    {
+      "service": "key_pair",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::EC2::KeyPair (#14f SDKLister branch)"
+    },
+    {
+      "service": "key_pair",
+      "iam_action": "ec2:DescribeKeyPairs",
+      "purpose": "SDKLister enumeration: list per-region EC2 key pairs (Cloud Control ListResources bypassed)"
     },
     {
       "service": "kms",
@@ -826,6 +971,21 @@
       "service": "lambda_permission",
       "iam_action": "lambda:ListFunctions",
       "purpose": "parent enumeration: list Lambda functions to fan ListResources out per FunctionName"
+    },
+    {
+      "service": "launch_template",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::EC2::LaunchTemplate (#14f unified discoverer)"
+    },
+    {
+      "service": "launch_template",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::EC2::LaunchTemplate (cache-miss fallback when RGT prefetch is unavailable)"
+    },
+    {
+      "service": "launch_template",
+      "iam_action": "ec2:DescribeLaunchTemplates",
+      "purpose": "Cloud Control delegate for ListResources / GetResource"
     },
     {
       "service": "lb",

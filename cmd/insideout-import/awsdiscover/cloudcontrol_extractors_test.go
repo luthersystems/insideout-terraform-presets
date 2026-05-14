@@ -1451,7 +1451,6 @@ func TestEmptyTagsExtractor_NonNilEmptyMap(t *testing.T) {
 	}
 }
 
-
 // ===========================================================================
 // Bundle 14e (#430) — five new SDKLister-pattern types
 // ===========================================================================
@@ -1710,5 +1709,439 @@ func TestSecretsManagerSecretRotationConfig(t *testing.T) {
 	}
 	if len(tags) != 0 {
 		t.Errorf("Tags: got %v, want empty (rotation is tagless)", tags)
+	}
+}
+
+// =====================================================================
+// Bundle 14f — compute/container BYO extractor pins
+// =====================================================================
+
+// TestECSClusterConfig pins aws_ecs_cluster: CC default-list (no
+// SDKLister, no ParentLister), passthrough CC identifier (ClusterName),
+// ClusterName NameHint, Arn NativeID, taggable.
+func TestECSClusterConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_ecs_cluster")
+	if cfg.SkipProjectTagFilter {
+		t.Error("aws_ecs_cluster: SkipProjectTagFilter must be false (clusters are taggable)")
+	}
+	if cfg.CloudFormationType != "AWS::ECS::Cluster" {
+		t.Errorf("CloudFormationType=%q, want AWS::ECS::Cluster", cfg.CloudFormationType)
+	}
+	if cfg.SDKLister != nil {
+		t.Error("SDKLister must be nil (CC default-list)")
+	}
+	if cfg.ParentLister != nil {
+		t.Error("ParentLister must be nil")
+	}
+
+	id := "my-cluster"
+	if got := cfg.ImportIDFromIdentifier(id, nil); got != id {
+		t.Errorf("ImportID passthrough: got %q, want %q", got, id)
+	}
+	if got := cfg.NameHintFromProperties(id, map[string]any{"ClusterName": "my-cluster"}); got != "my-cluster" {
+		t.Errorf("NameHint: got %q, want my-cluster", got)
+	}
+	if got := cfg.NameHintFromProperties(id, map[string]any{}); got != id {
+		t.Errorf("NameHint fallback: got %q, want %q", got, id)
+	}
+	native := cfg.NativeIDsFromProperties(id, map[string]any{"Arn": "arn:aws:ecs:us-east-1:111:cluster/my-cluster"})
+	wantNative := map[string]string{"arn": "arn:aws:ecs:us-east-1:111:cluster/my-cluster"}
+	if !reflect.DeepEqual(native, wantNative) {
+		t.Errorf("NativeIDs: got %+v, want %+v", native, wantNative)
+	}
+	tags := cfg.TagsFromProperties(map[string]any{"Tags": []any{
+		map[string]any{"Key": "env", "Value": "prod"},
+	}})
+	wantTags := map[string]string{"env": "prod"}
+	if !reflect.DeepEqual(tags, wantTags) {
+		t.Errorf("Tags: got %+v, want %+v", tags, wantTags)
+	}
+}
+
+// TestEKSClusterConfig pins aws_eks_cluster: SDKLister, passthrough CC
+// identifier (Name), Name NameHint, Arn NativeID, taggable.
+func TestEKSClusterConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_eks_cluster")
+	if cfg.SkipProjectTagFilter {
+		t.Error("aws_eks_cluster: SkipProjectTagFilter must be false (clusters are taggable)")
+	}
+	if cfg.CloudFormationType != "AWS::EKS::Cluster" {
+		t.Errorf("CloudFormationType=%q, want AWS::EKS::Cluster", cfg.CloudFormationType)
+	}
+	if cfg.SDKLister == nil {
+		t.Fatal("SDKLister must be set (also seeds parent enumeration for EKS child types)")
+	}
+	if cfg.ParentLister != nil {
+		t.Error("ParentLister must be nil (mutex with SDKLister)")
+	}
+
+	id := "my-eks"
+	if got := cfg.ImportIDFromIdentifier(id, nil); got != id {
+		t.Errorf("ImportID passthrough: got %q, want %q", got, id)
+	}
+	if got := cfg.NameHintFromProperties(id, map[string]any{"Name": "my-eks"}); got != "my-eks" {
+		t.Errorf("NameHint: got %q, want my-eks", got)
+	}
+	native := cfg.NativeIDsFromProperties(id, map[string]any{"Arn": "arn:aws:eks:us-east-1:111:cluster/my-eks"})
+	wantNative := map[string]string{"arn": "arn:aws:eks:us-east-1:111:cluster/my-eks"}
+	if !reflect.DeepEqual(native, wantNative) {
+		t.Errorf("NativeIDs: got %+v, want %+v", native, wantNative)
+	}
+}
+
+// TestEKSNodeGroupConfig pins aws_eks_node_group: CC identifier
+// `<ClusterName>|<NodegroupName>`, TF import format
+// `<ClusterName>:<NodegroupName>` (colon — divergent from typical
+// pipe→slash). Pin first-`|`-only rewrite with a multi-pipe fixture so
+// a regression to `strings.ReplaceAll` (which would mangle node-group
+// names containing pipes) surfaces.
+func TestEKSNodeGroupConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_eks_node_group")
+	if cfg.SkipProjectTagFilter {
+		t.Error("aws_eks_node_group: SkipProjectTagFilter must be false")
+	}
+	if cfg.CloudFormationType != "AWS::EKS::Nodegroup" {
+		t.Errorf("CloudFormationType=%q, want AWS::EKS::Nodegroup", cfg.CloudFormationType)
+	}
+	if cfg.ParentLister == nil {
+		t.Fatal("ParentLister must be set (parent-scoped on ClusterName)")
+	}
+	if cfg.SDKLister != nil {
+		t.Error("SDKLister must be nil")
+	}
+
+	// Happy path: `cluster|ng` → `cluster:ng`.
+	id := "my-eks|my-ng"
+	if got := cfg.ImportIDFromIdentifier(id, nil); got != "my-eks:my-ng" {
+		t.Errorf("ImportID `|`→`:`: got %q, want %q", got, "my-eks:my-ng")
+	}
+	// Multi-pipe: only the FIRST `|` is rewritten; trailing pipes in the
+	// node-group name (hypothetical — EKS names don't actually permit
+	// pipes, but the contract is "first-only" for defense in depth)
+	// survive verbatim.
+	idMulti := "cluster-a|ng|with|pipes"
+	if got := cfg.ImportIDFromIdentifier(idMulti, nil); got != "cluster-a:ng|with|pipes" {
+		t.Errorf("ImportID first-`|`-only rewrite: got %q, want %q", got, "cluster-a:ng|with|pipes")
+	}
+
+	if got := cfg.NameHintFromProperties(id, map[string]any{"NodegroupName": "my-ng"}); got != "my-ng" {
+		t.Errorf("NameHint: got %q, want my-ng", got)
+	}
+	if got := cfg.NameHintFromProperties(id, map[string]any{}); got != id {
+		t.Errorf("NameHint fallback: got %q, want %q", got, id)
+	}
+
+	native := cfg.NativeIDsFromProperties(id, map[string]any{"Arn": "arn:aws:eks:us-east-1:111:nodegroup/my-eks/my-ng/abc"})
+	wantNative := map[string]string{
+		"cluster_name":    "my-eks",
+		"node_group_name": "my-ng",
+		"arn":             "arn:aws:eks:us-east-1:111:nodegroup/my-eks/my-ng/abc",
+	}
+	if !reflect.DeepEqual(native, wantNative) {
+		t.Errorf("NativeIDs: got %+v, want %+v", native, wantNative)
+	}
+	// Malformed identifier (no `|`) returns nil so downstream sees
+	// "no native IDs" rather than partial data.
+	if got := cfg.NativeIDsFromProperties("bare", nil); got != nil {
+		t.Errorf("NativeIDs malformed: got %+v, want nil", got)
+	}
+
+	tags := cfg.TagsFromProperties(map[string]any{"Tags": []any{
+		map[string]any{"Key": "env", "Value": "prod"},
+	}})
+	if tags["env"] != "prod" {
+		t.Errorf("Tags: got %+v, want env=prod", tags)
+	}
+}
+
+// TestEKSAddonConfig pins aws_eks_addon: same shape as node_group
+// (compound `|` CC id, `:` TF import format).
+func TestEKSAddonConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_eks_addon")
+	if cfg.CloudFormationType != "AWS::EKS::Addon" {
+		t.Errorf("CloudFormationType=%q, want AWS::EKS::Addon", cfg.CloudFormationType)
+	}
+	if cfg.ParentLister == nil {
+		t.Fatal("ParentLister must be set (parent-scoped on ClusterName)")
+	}
+
+	id := "my-eks|vpc-cni"
+	if got := cfg.ImportIDFromIdentifier(id, nil); got != "my-eks:vpc-cni" {
+		t.Errorf("ImportID `|`→`:`: got %q, want %q", got, "my-eks:vpc-cni")
+	}
+	// First-`|`-only rewrite pin.
+	if got := cfg.ImportIDFromIdentifier("c|a|b", nil); got != "c:a|b" {
+		t.Errorf("ImportID first-`|`-only: got %q, want %q", got, "c:a|b")
+	}
+
+	if got := cfg.NameHintFromProperties(id, map[string]any{"AddonName": "vpc-cni"}); got != "vpc-cni" {
+		t.Errorf("NameHint: got %q, want vpc-cni", got)
+	}
+	native := cfg.NativeIDsFromProperties(id, map[string]any{"Arn": "arn:aws:eks:us-east-1:111:addon/my-eks/vpc-cni/abc"})
+	wantNative := map[string]string{
+		"cluster_name": "my-eks",
+		"addon_name":   "vpc-cni",
+		"arn":          "arn:aws:eks:us-east-1:111:addon/my-eks/vpc-cni/abc",
+	}
+	if !reflect.DeepEqual(native, wantNative) {
+		t.Errorf("NativeIDs: got %+v, want %+v", native, wantNative)
+	}
+	if got := cfg.NativeIDsFromProperties("bare", nil); got != nil {
+		t.Errorf("NativeIDs malformed: got %+v, want nil", got)
+	}
+}
+
+// TestEKSFargateProfileConfig pins aws_eks_fargate_profile: divergent
+// from the sibling EKS types in that the rewrite is pipe→slash (NOT
+// pipe→colon). Multi-pipe rewrite pin defends the contract.
+func TestEKSFargateProfileConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_eks_fargate_profile")
+	if cfg.CloudFormationType != "AWS::EKS::FargateProfile" {
+		t.Errorf("CloudFormationType=%q, want AWS::EKS::FargateProfile", cfg.CloudFormationType)
+	}
+	if cfg.ParentLister == nil {
+		t.Fatal("ParentLister must be set")
+	}
+
+	id := "my-eks|my-fp"
+	if got := cfg.ImportIDFromIdentifier(id, nil); got != "my-eks/my-fp" {
+		t.Errorf("ImportID `|`→`/`: got %q, want %q", got, "my-eks/my-fp")
+	}
+	// First-`|`-only rewrite pin — distinguishes from a naive ReplaceAll.
+	if got := cfg.ImportIDFromIdentifier("c|a|b", nil); got != "c/a|b" {
+		t.Errorf("ImportID first-`|`-only: got %q, want %q", got, "c/a|b")
+	}
+
+	if got := cfg.NameHintFromProperties(id, map[string]any{"FargateProfileName": "my-fp"}); got != "my-fp" {
+		t.Errorf("NameHint: got %q, want my-fp", got)
+	}
+	native := cfg.NativeIDsFromProperties(id, map[string]any{"Arn": "arn:aws:eks:us-east-1:111:fargateprofile/my-eks/my-fp/abc"})
+	wantNative := map[string]string{
+		"cluster_name":         "my-eks",
+		"fargate_profile_name": "my-fp",
+		"arn":                  "arn:aws:eks:us-east-1:111:fargateprofile/my-eks/my-fp/abc",
+	}
+	if !reflect.DeepEqual(native, wantNative) {
+		t.Errorf("NativeIDs: got %+v, want %+v", native, wantNative)
+	}
+}
+
+// TestEKSAccessEntryConfig pins aws_eks_access_entry: CC identifier
+// `<ClusterName>|<PrincipalArn>` where PrincipalArn ITSELF contains
+// colons (`arn:aws:iam::...`); the first-`|`-only rewrite must
+// preserve every colon in the ARN portion.
+func TestEKSAccessEntryConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_eks_access_entry")
+	if cfg.CloudFormationType != "AWS::EKS::AccessEntry" {
+		t.Errorf("CloudFormationType=%q, want AWS::EKS::AccessEntry", cfg.CloudFormationType)
+	}
+	if cfg.ParentLister == nil {
+		t.Fatal("ParentLister must be set")
+	}
+
+	// Real-shape identifier with colons in PrincipalArn.
+	id := "my-eks|arn:aws:iam::111111111111:role/admin"
+	want := "my-eks:arn:aws:iam::111111111111:role/admin"
+	if got := cfg.ImportIDFromIdentifier(id, nil); got != want {
+		t.Errorf("ImportID `|`→`:` with colon-rich ARN: got %q, want %q", got, want)
+	}
+	// First-`|`-only rewrite pin.
+	if got := cfg.ImportIDFromIdentifier("c|a|b", nil); got != "c:a|b" {
+		t.Errorf("ImportID first-`|`-only: got %q, want %q", got, "c:a|b")
+	}
+
+	// NameHint prefers the PrincipalArn (the second half of the id).
+	if got := cfg.NameHintFromProperties(id, nil); got != "arn:aws:iam::111111111111:role/admin" {
+		t.Errorf("NameHint: got %q, want %q", got, "arn:aws:iam::111111111111:role/admin")
+	}
+	// Malformed identifier falls back to PrincipalArn property.
+	if got := cfg.NameHintFromProperties("bare", map[string]any{"PrincipalArn": "arn:aws:iam::111:role/x"}); got != "arn:aws:iam::111:role/x" {
+		t.Errorf("NameHint malformed fallback: got %q, want %q", got, "arn:aws:iam::111:role/x")
+	}
+	// Doubly malformed: no `|` and no property — fall through to identifier.
+	if got := cfg.NameHintFromProperties("bare", nil); got != "bare" {
+		t.Errorf("NameHint identifier fallback: got %q, want bare", got)
+	}
+
+	native := cfg.NativeIDsFromProperties(id, map[string]any{"AccessEntryArn": "arn:aws:eks:us-east-1:111:access-entry/my-eks/role/admin/abc"})
+	wantNative := map[string]string{
+		"cluster_name":  "my-eks",
+		"principal_arn": "arn:aws:iam::111111111111:role/admin",
+		"arn":           "arn:aws:eks:us-east-1:111:access-entry/my-eks/role/admin/abc",
+	}
+	if !reflect.DeepEqual(native, wantNative) {
+		t.Errorf("NativeIDs: got %+v, want %+v", native, wantNative)
+	}
+}
+
+// TestEC2InstanceConfig pins aws_instance: SDKLister, passthrough
+// InstanceId, Arn NativeID, taggable.
+func TestEC2InstanceConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_instance")
+	if cfg.SkipProjectTagFilter {
+		t.Error("aws_instance: SkipProjectTagFilter must be false (instances are taggable)")
+	}
+	if cfg.CloudFormationType != "AWS::EC2::Instance" {
+		t.Errorf("CloudFormationType=%q, want AWS::EC2::Instance", cfg.CloudFormationType)
+	}
+	if cfg.SDKLister == nil {
+		t.Fatal("SDKLister must be set")
+	}
+	if cfg.ParentLister != nil {
+		t.Error("ParentLister must be nil")
+	}
+
+	id := "i-abc123"
+	if got := cfg.ImportIDFromIdentifier(id, nil); got != id {
+		t.Errorf("ImportID passthrough: got %q, want %q", got, id)
+	}
+	if got := cfg.NameHintFromProperties(id, nil); got != id {
+		t.Errorf("NameHint passthrough: got %q, want %q", got, id)
+	}
+	native := cfg.NativeIDsFromProperties(id, map[string]any{"Arn": "arn:aws:ec2:us-east-1:111:instance/i-abc123"})
+	wantNative := map[string]string{"arn": "arn:aws:ec2:us-east-1:111:instance/i-abc123"}
+	if !reflect.DeepEqual(native, wantNative) {
+		t.Errorf("NativeIDs: got %+v, want %+v", native, wantNative)
+	}
+	tags := cfg.TagsFromProperties(map[string]any{"Tags": []any{map[string]any{"Key": "env", "Value": "prod"}}})
+	if tags["env"] != "prod" {
+		t.Errorf("Tags: got %+v, want env=prod", tags)
+	}
+}
+
+// TestLaunchTemplateConfig pins aws_launch_template: CC default-list,
+// passthrough LaunchTemplateId, custom NativeIDs (id + optional name +
+// fingerprint), taggable.
+func TestLaunchTemplateConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_launch_template")
+	if cfg.CloudFormationType != "AWS::EC2::LaunchTemplate" {
+		t.Errorf("CloudFormationType=%q, want AWS::EC2::LaunchTemplate", cfg.CloudFormationType)
+	}
+	if cfg.SDKLister != nil {
+		t.Error("SDKLister must be nil")
+	}
+	if cfg.ParentLister != nil {
+		t.Error("ParentLister must be nil")
+	}
+
+	id := "lt-abc123"
+	if got := cfg.ImportIDFromIdentifier(id, nil); got != id {
+		t.Errorf("ImportID passthrough: got %q, want %q", got, id)
+	}
+	if got := cfg.NameHintFromProperties(id, map[string]any{"LaunchTemplateName": "my-lt"}); got != "my-lt" {
+		t.Errorf("NameHint: got %q, want my-lt", got)
+	}
+	if got := cfg.NameHintFromProperties(id, nil); got != id {
+		t.Errorf("NameHint fallback: got %q, want %q", got, id)
+	}
+
+	native := cfg.NativeIDsFromProperties(id, map[string]any{"LaunchTemplateName": "my-lt"})
+	wantNative := map[string]string{"id": id, "name": "my-lt"}
+	if !reflect.DeepEqual(native, wantNative) {
+		t.Errorf("NativeIDs with name: got %+v, want %+v", native, wantNative)
+	}
+	nativeNoName := cfg.NativeIDsFromProperties(id, nil)
+	wantNoName := map[string]string{"id": id}
+	if !reflect.DeepEqual(nativeNoName, wantNoName) {
+		t.Errorf("NativeIDs without name: got %+v, want %+v", nativeNoName, wantNoName)
+	}
+
+	tags := cfg.TagsFromProperties(map[string]any{"Tags": []any{map[string]any{"Key": "env", "Value": "prod"}}})
+	if tags["env"] != "prod" {
+		t.Errorf("Tags: got %+v, want env=prod", tags)
+	}
+}
+
+// TestAutoScalingGroupConfig pins aws_autoscaling_group: SDKLister,
+// passthrough name, AutoScalingGroupARN NativeID, taggable.
+func TestAutoScalingGroupConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_autoscaling_group")
+	if cfg.CloudFormationType != "AWS::AutoScaling::AutoScalingGroup" {
+		t.Errorf("CloudFormationType=%q, want AWS::AutoScaling::AutoScalingGroup", cfg.CloudFormationType)
+	}
+	if cfg.SDKLister == nil {
+		t.Fatal("SDKLister must be set")
+	}
+	if cfg.ParentLister != nil {
+		t.Error("ParentLister must be nil")
+	}
+
+	id := "my-asg"
+	if got := cfg.ImportIDFromIdentifier(id, nil); got != id {
+		t.Errorf("ImportID passthrough: got %q, want %q", got, id)
+	}
+	if got := cfg.NameHintFromProperties(id, map[string]any{"AutoScalingGroupName": "my-asg"}); got != "my-asg" {
+		t.Errorf("NameHint: got %q, want my-asg", got)
+	}
+	native := cfg.NativeIDsFromProperties(id, map[string]any{
+		"AutoScalingGroupARN": "arn:aws:autoscaling:us-east-1:111:autoScalingGroup:abc:autoScalingGroupName/my-asg",
+	})
+	wantNative := map[string]string{"arn": "arn:aws:autoscaling:us-east-1:111:autoScalingGroup:abc:autoScalingGroupName/my-asg"}
+	if !reflect.DeepEqual(native, wantNative) {
+		t.Errorf("NativeIDs: got %+v, want %+v", native, wantNative)
+	}
+	tags := cfg.TagsFromProperties(map[string]any{"Tags": []any{map[string]any{"Key": "env", "Value": "prod"}}})
+	if tags["env"] != "prod" {
+		t.Errorf("Tags: got %+v, want env=prod", tags)
+	}
+}
+
+// TestEC2KeyPairConfig pins aws_key_pair: SDKLister, passthrough
+// KeyName, custom NativeIDs (name + optional id + fingerprint),
+// taggable.
+func TestEC2KeyPairConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_key_pair")
+	if cfg.SkipProjectTagFilter {
+		t.Error("aws_key_pair: SkipProjectTagFilter must be false (key pairs are taggable)")
+	}
+	if cfg.CloudFormationType != "AWS::EC2::KeyPair" {
+		t.Errorf("CloudFormationType=%q, want AWS::EC2::KeyPair", cfg.CloudFormationType)
+	}
+	if cfg.SDKLister == nil {
+		t.Fatal("SDKLister must be set")
+	}
+	if cfg.ParentLister != nil {
+		t.Error("ParentLister must be nil")
+	}
+
+	id := "my-key"
+	if got := cfg.ImportIDFromIdentifier(id, nil); got != id {
+		t.Errorf("ImportID passthrough: got %q, want %q", got, id)
+	}
+	if got := cfg.NameHintFromProperties(id, map[string]any{"KeyName": "my-key"}); got != "my-key" {
+		t.Errorf("NameHint: got %q, want my-key", got)
+	}
+
+	native := cfg.NativeIDsFromProperties(id, map[string]any{
+		"KeyPairId":      "key-abc123",
+		"KeyFingerprint": "ab:cd:ef",
+	})
+	wantNative := map[string]string{
+		"name":        id,
+		"id":          "key-abc123",
+		"fingerprint": "ab:cd:ef",
+	}
+	if !reflect.DeepEqual(native, wantNative) {
+		t.Errorf("NativeIDs full: got %+v, want %+v", native, wantNative)
+	}
+	nativeBare := cfg.NativeIDsFromProperties(id, nil)
+	wantBare := map[string]string{"name": id}
+	if !reflect.DeepEqual(nativeBare, wantBare) {
+		t.Errorf("NativeIDs bare: got %+v, want %+v", nativeBare, wantBare)
+	}
+
+	tags := cfg.TagsFromProperties(map[string]any{"Tags": []any{map[string]any{"Key": "env", "Value": "prod"}}})
+	if tags["env"] != "prod" {
+		t.Errorf("Tags: got %+v, want env=prod", tags)
 	}
 }
