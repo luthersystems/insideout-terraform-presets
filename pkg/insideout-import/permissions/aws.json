@@ -98,6 +98,21 @@
       "purpose": "Cloud Control ListResources for AWS::ApiGatewayV2::Authorizer (per-ApiId fan-out)"
     },
     {
+      "service": "apigatewayv2_domain_name",
+      "iam_action": "apigateway:GET",
+      "purpose": "Cloud Control GetResource + ListResources for aws_apigatewayv2_domain_name delegate to apigateway:GET (GET /domainnames, GET /domainnames/*)"
+    },
+    {
+      "service": "apigatewayv2_domain_name",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::ApiGatewayV2::DomainName (#14j unified discoverer)"
+    },
+    {
+      "service": "apigatewayv2_domain_name",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::ApiGatewayV2::DomainName (cache-miss fallback when RGT prefetch is unavailable)"
+    },
+    {
       "service": "apigatewayv2_integration",
       "iam_action": "apigateway:GET",
       "purpose": "Cloud Control GetResource for aws_apigatewayv2_integration delegates to apigateway:GET (GET /apis/*/integrations/*); also covers parent enumeration (GET /apis) to fan ListResources out per ApiId"
@@ -141,6 +156,11 @@
       "service": "autoscaling_group",
       "iam_action": "cloudcontrol:GetResource",
       "purpose": "Cloud Control GetResource for AWS::AutoScaling::AutoScalingGroup (#14f SDKLister branch)"
+    },
+    {
+      "service": "autoscaling_group_tag",
+      "iam_action": "autoscaling:DescribeAutoScalingGroups",
+      "purpose": "SDK-only sub-resource discoverer (#14k2 / #456): per-ASG DescribeAutoScalingGroups; tags are inline on the result so no separate SDK call is needed; one TF resource per (asg_name, tag_key) pair"
     },
     {
       "service": "backup_plan",
@@ -258,6 +278,41 @@
       "purpose": "SDKLister enumeration: list CloudFront functions (Cloud Control ListResources bypassed)"
     },
     {
+      "service": "cloudfront_monitoring_subscription",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::CloudFront::MonitoringSubscription (#14h SDKLister branch — CC ListResources is unsupported for this type, so enumeration goes through cloudfront:ListDistributions)"
+    },
+    {
+      "service": "cloudfront_monitoring_subscription",
+      "iam_action": "cloudfront:GetMonitoringSubscription",
+      "purpose": "Cloud Control GetResource for aws_cloudfront_monitoring_subscription delegates to cloudfront:GetMonitoringSubscription"
+    },
+    {
+      "service": "cloudfront_monitoring_subscription",
+      "iam_action": "cloudfront:ListDistributions",
+      "purpose": "SDKLister enumeration: list distributions to seed the per-DistributionId GetResource fan-out"
+    },
+    {
+      "service": "cloudfront_origin_access_identity",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::CloudFront::CloudFrontOriginAccessIdentity (#14h)"
+    },
+    {
+      "service": "cloudfront_origin_access_identity",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::CloudFront::CloudFrontOriginAccessIdentity (#14h)"
+    },
+    {
+      "service": "cloudfront_origin_access_identity",
+      "iam_action": "cloudfront:GetCloudFrontOriginAccessIdentity",
+      "purpose": "Cloud Control GetResource for aws_cloudfront_origin_access_identity delegates to cloudfront:GetCloudFrontOriginAccessIdentity"
+    },
+    {
+      "service": "cloudfront_origin_access_identity",
+      "iam_action": "cloudfront:ListCloudFrontOriginAccessIdentities",
+      "purpose": "Cloud Control ListResources for AWS::CloudFront::CloudFrontOriginAccessIdentity"
+    },
+    {
       "service": "cloudwatch_dashboard",
       "iam_action": "cloudcontrol:GetResource",
       "purpose": "fetch per-dashboard body for Identity.NativeIDs"
@@ -301,6 +356,41 @@
       "service": "cloudwatch_event_rule",
       "iam_action": "events:ListTagsForResource",
       "purpose": "fetch rule tags for tag selectors and Identity.Tags"
+    },
+    {
+      "service": "cloudwatch_log_resource_policy",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::Logs::ResourcePolicy (#14h)"
+    },
+    {
+      "service": "cloudwatch_log_resource_policy",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::Logs::ResourcePolicy (#14h)"
+    },
+    {
+      "service": "cloudwatch_log_resource_policy",
+      "iam_action": "logs:DescribeResourcePolicies",
+      "purpose": "Cloud Control ListResources / GetResource for aws_cloudwatch_log_resource_policy delegates to logs:DescribeResourcePolicies"
+    },
+    {
+      "service": "cloudwatch_log_stream",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::Logs::LogStream (#14h ParentLister branch on LogGroupName)"
+    },
+    {
+      "service": "cloudwatch_log_stream",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::Logs::LogStream (per-LogGroupName fan-out)"
+    },
+    {
+      "service": "cloudwatch_log_stream",
+      "iam_action": "logs:DescribeLogGroups",
+      "purpose": "parent enumeration: list log groups to fan ListResources out per LogGroupName"
+    },
+    {
+      "service": "cloudwatch_log_stream",
+      "iam_action": "logs:DescribeLogStreams",
+      "purpose": "Cloud Control ListResources / GetResource for aws_cloudwatch_log_stream delegates to logs:DescribeLogStreams"
     },
     {
       "service": "cloudwatch_metric_alarm",
@@ -528,6 +618,31 @@
       "purpose": "fetch table tags for tag selectors and Identity.Tags"
     },
     {
+      "service": "dynamodb_contributor_insights",
+      "iam_action": "dynamodb:DescribeContributorInsights",
+      "purpose": "SDK-only sub-resource discoverer (#14k2 / #456): per-table DescribeContributorInsights; ContributorInsightsStatus in {ENABLED, ENABLING} signals 'configured' and emits one TF resource per table; other statuses (DISABLED/DISABLING/FAILED) yield zero items"
+    },
+    {
+      "service": "dynamodb_contributor_insights",
+      "iam_action": "dynamodb:ListTables",
+      "purpose": "SDK-only sub-resource discoverer (#14k2): enumerate parent tables via ListTables when the RGT cache for AWS::DynamoDB::Table is empty; paginated via ExclusiveStartTableName / LastEvaluatedTableName"
+    },
+    {
+      "service": "ebs_volume",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::EC2::Volume (#14g unified discoverer)"
+    },
+    {
+      "service": "ebs_volume",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::EC2::Volume (cache-miss fallback when RGT prefetch is unavailable)"
+    },
+    {
+      "service": "ebs_volume",
+      "iam_action": "ec2:DescribeVolumes",
+      "purpose": "Cloud Control list+read handlers for AWS::EC2::Volume delegate to ec2:DescribeVolumes"
+    },
+    {
       "service": "ecs_cluster",
       "iam_action": "cloudcontrol:GetResource",
       "purpose": "Cloud Control GetResource for AWS::ECS::Cluster (#14f unified discoverer)"
@@ -546,6 +661,26 @@
       "service": "ecs_cluster",
       "iam_action": "ecs:ListClusters",
       "purpose": "Cloud Control ListResources for AWS::ECS::Cluster delegates to ecs:ListClusters"
+    },
+    {
+      "service": "ecs_cluster_capacity_providers",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::ECS::ClusterCapacityProviderAssociations (#14j unified discoverer)"
+    },
+    {
+      "service": "ecs_cluster_capacity_providers",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::ECS::ClusterCapacityProviderAssociations (cache-miss fallback when RGT prefetch is unavailable)"
+    },
+    {
+      "service": "ecs_cluster_capacity_providers",
+      "iam_action": "ecs:DescribeClusters",
+      "purpose": "Cloud Control GetResource for aws_ecs_cluster_capacity_providers delegates to ecs:DescribeClusters (reads CapacityProviders inline on the cluster)"
+    },
+    {
+      "service": "ecs_cluster_capacity_providers",
+      "iam_action": "ecs:ListClusters",
+      "purpose": "Cloud Control ListResources for AWS::ECS::ClusterCapacityProviderAssociations delegates to ecs:ListClusters (one association row per cluster)"
     },
     {
       "service": "eip",
@@ -688,6 +823,66 @@
       "purpose": "fetch association tags for tag selectors and Identity.Tags"
     },
     {
+      "service": "elasticache_parameter_group",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::ElastiCache::ParameterGroup (#14g unified discoverer)"
+    },
+    {
+      "service": "elasticache_parameter_group",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::ElastiCache::ParameterGroup (cache-miss fallback when RGT prefetch is unavailable)"
+    },
+    {
+      "service": "elasticache_parameter_group",
+      "iam_action": "elasticache:DescribeCacheParameterGroups",
+      "purpose": "Cloud Control list+read handlers for AWS::ElastiCache::ParameterGroup delegate to elasticache:DescribeCacheParameterGroups"
+    },
+    {
+      "service": "elasticache_parameter_group",
+      "iam_action": "elasticache:ListTagsForResource",
+      "purpose": "fetch cache parameter group tags for tag selectors and Identity.Tags"
+    },
+    {
+      "service": "elasticache_replication_group",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::ElastiCache::ReplicationGroup (#14g unified discoverer)"
+    },
+    {
+      "service": "elasticache_replication_group",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::ElastiCache::ReplicationGroup (cache-miss fallback when RGT prefetch is unavailable)"
+    },
+    {
+      "service": "elasticache_replication_group",
+      "iam_action": "elasticache:DescribeReplicationGroups",
+      "purpose": "Cloud Control list+read handlers for AWS::ElastiCache::ReplicationGroup delegate to elasticache:DescribeReplicationGroups"
+    },
+    {
+      "service": "elasticache_replication_group",
+      "iam_action": "elasticache:ListTagsForResource",
+      "purpose": "fetch replication group tags for tag selectors and Identity.Tags"
+    },
+    {
+      "service": "elasticache_subnet_group",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::ElastiCache::SubnetGroup (#14g unified discoverer)"
+    },
+    {
+      "service": "elasticache_subnet_group",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::ElastiCache::SubnetGroup (cache-miss fallback when RGT prefetch is unavailable)"
+    },
+    {
+      "service": "elasticache_subnet_group",
+      "iam_action": "elasticache:DescribeCacheSubnetGroups",
+      "purpose": "Cloud Control list+read handlers for AWS::ElastiCache::SubnetGroup delegate to elasticache:DescribeCacheSubnetGroups"
+    },
+    {
+      "service": "elasticache_subnet_group",
+      "iam_action": "elasticache:ListTagsForResource",
+      "purpose": "fetch cache subnet group tags for tag selectors and Identity.Tags"
+    },
+    {
       "service": "iam_group",
       "iam_action": "cloudcontrol:GetResource",
       "purpose": "Cloud Control GetResource for AWS::IAM::Group (#430 SDKLister branch — global service)"
@@ -771,6 +966,31 @@
       "service": "iam_role",
       "iam_action": "iam:ListRoles",
       "purpose": "list IAM roles (paginated)"
+    },
+    {
+      "service": "iam_role_policy_attachment",
+      "iam_action": "iam:ListAttachedRolePolicies",
+      "purpose": "SDK-only sub-resource discoverer (#14k2 / #456): per-role ListAttachedRolePolicies; one TF resource per (role_name, policy_arn) attached managed-policy pair; multi-emit FetchItems"
+    },
+    {
+      "service": "iam_role_policy_attachment",
+      "iam_action": "iam:ListRoles",
+      "purpose": "SDK-only sub-resource discoverer (#14k2): enumerate parent IAM roles to seed the per-role attachment fan-out; service-linked roles are filtered out at this layer (they reject AttachRolePolicy)"
+    },
+    {
+      "service": "iam_service_linked_role",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::IAM::ServiceLinkedRole (#14i SDKLister branch — global service)"
+    },
+    {
+      "service": "iam_service_linked_role",
+      "iam_action": "iam:GetRole",
+      "purpose": "Cloud Control GetResource for aws_iam_service_linked_role delegates to iam:GetRole"
+    },
+    {
+      "service": "iam_service_linked_role",
+      "iam_action": "iam:ListRoles",
+      "purpose": "SDKLister enumeration: walk IAM roles and filter by /aws-service-role/ path prefix (CC ListResources unsupported for SLRs)"
     },
     {
       "service": "iam_user",
@@ -1053,6 +1273,51 @@
       "purpose": "list per-region target groups"
     },
     {
+      "service": "msk_cluster",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::MSK::Cluster (#14g unified discoverer)"
+    },
+    {
+      "service": "msk_cluster",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::MSK::Cluster (cache-miss fallback when RGT prefetch is unavailable)"
+    },
+    {
+      "service": "msk_cluster",
+      "iam_action": "kafka:DescribeCluster",
+      "purpose": "Cloud Control GetResource for aws_msk_cluster delegates to kafka:DescribeCluster"
+    },
+    {
+      "service": "msk_cluster",
+      "iam_action": "kafka:ListClustersV2",
+      "purpose": "Cloud Control ListResources for AWS::MSK::Cluster delegates to kafka:ListClustersV2"
+    },
+    {
+      "service": "msk_cluster",
+      "iam_action": "kafka:ListTagsForResource",
+      "purpose": "fetch MSK cluster tags for tag selectors and Identity.Tags"
+    },
+    {
+      "service": "msk_configuration",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::MSK::Configuration (#14g unified discoverer; SkipProjectTagFilter — CFN schema declares no Tags)"
+    },
+    {
+      "service": "msk_configuration",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::MSK::Configuration (cache-miss fallback when RGT prefetch is unavailable)"
+    },
+    {
+      "service": "msk_configuration",
+      "iam_action": "kafka:DescribeConfiguration",
+      "purpose": "Cloud Control GetResource for aws_msk_configuration delegates to kafka:DescribeConfiguration"
+    },
+    {
+      "service": "msk_configuration",
+      "iam_action": "kafka:ListConfigurations",
+      "purpose": "Cloud Control ListResources for AWS::MSK::Configuration delegates to kafka:ListConfigurations"
+    },
+    {
       "service": "nat_gateway",
       "iam_action": "cloudcontrol:GetResource",
       "purpose": "Cloud Control GetResource for AWS::EC2::NatGateway (#406 unified discoverer)"
@@ -1096,6 +1361,26 @@
       "service": "network_interface",
       "iam_action": "ec2:DescribeNetworkInterfaces",
       "purpose": "list per-region elastic network interfaces (server-side tag:Project filter when project is set; tags inline)"
+    },
+    {
+      "service": "opensearch_domain",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::OpenSearchService::Domain (#14g SDKLister branch — CC ListResources is unsupported for this type)"
+    },
+    {
+      "service": "opensearch_domain",
+      "iam_action": "es:DescribeDomain",
+      "purpose": "Cloud Control GetResource for aws_opensearch_domain delegates to es:DescribeDomain"
+    },
+    {
+      "service": "opensearch_domain",
+      "iam_action": "es:ListDomainNames",
+      "purpose": "enumerate OpenSearch domain names via the OpenSearch SDK (Cloud Control ListResources is unsupported for this type)"
+    },
+    {
+      "service": "opensearch_domain",
+      "iam_action": "es:ListTags",
+      "purpose": "Cloud Control GetResource delegate for the Tags property"
     },
     {
       "service": "opensearchserverless_collection",
@@ -1223,6 +1508,76 @@
       "purpose": "list buckets account-globally (ListBuckets)"
     },
     {
+      "service": "s3_bucket_lifecycle_configuration",
+      "iam_action": "s3:GetLifecycleConfiguration",
+      "purpose": "SDK-only sub-resource discoverer (#14k1 / #452): per-bucket GetBucketLifecycleConfiguration; NoSuchLifecycleConfiguration signals 'not configured' and yields zero items for that bucket"
+    },
+    {
+      "service": "s3_bucket_lifecycle_configuration",
+      "iam_action": "s3:ListAllMyBuckets",
+      "purpose": "SDK-only sub-resource discoverer (#14k1): enumerate parent buckets via ListBuckets before fanning out per-bucket GetBucketLifecycleConfiguration"
+    },
+    {
+      "service": "s3_bucket_ownership_controls",
+      "iam_action": "s3:GetBucketOwnershipControls",
+      "purpose": "SDK-only sub-resource discoverer (#14k1 / #452): per-bucket GetBucketOwnershipControls; OwnershipControlsNotFoundError signals 'not configured' and yields zero items for that bucket"
+    },
+    {
+      "service": "s3_bucket_ownership_controls",
+      "iam_action": "s3:ListAllMyBuckets",
+      "purpose": "SDK-only sub-resource discoverer (#14k1): enumerate parent buckets via ListBuckets before fanning out per-bucket GetBucketOwnershipControls"
+    },
+    {
+      "service": "s3_bucket_policy",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::S3::BucketPolicy (#14h)"
+    },
+    {
+      "service": "s3_bucket_policy",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::S3::BucketPolicy (#14h)"
+    },
+    {
+      "service": "s3_bucket_policy",
+      "iam_action": "s3:GetBucketPolicy",
+      "purpose": "Cloud Control GetResource for aws_s3_bucket_policy delegates to s3:GetBucketPolicy"
+    },
+    {
+      "service": "s3_bucket_policy",
+      "iam_action": "s3:ListAllMyBuckets",
+      "purpose": "Cloud Control ListResources for AWS::S3::BucketPolicy enumerates buckets first; the per-bucket GetBucketPolicy returns NoSuchBucketPolicy for buckets without a policy (filtered server-side)"
+    },
+    {
+      "service": "s3_bucket_public_access_block",
+      "iam_action": "s3:GetBucketPublicAccessBlock",
+      "purpose": "SDK-only sub-resource discoverer (#14k1 / #452): per-bucket GetPublicAccessBlock; NoSuchPublicAccessBlockConfiguration signals 'not configured' and yields zero items for that bucket"
+    },
+    {
+      "service": "s3_bucket_public_access_block",
+      "iam_action": "s3:ListAllMyBuckets",
+      "purpose": "SDK-only sub-resource discoverer (#14k1): enumerate parent buckets via ListBuckets before fanning out per-bucket GetPublicAccessBlock"
+    },
+    {
+      "service": "s3_bucket_server_side_encryption_configuration",
+      "iam_action": "s3:GetEncryptionConfiguration",
+      "purpose": "SDK-only sub-resource discoverer (#14k1 / #452): per-bucket GetBucketEncryption; ServerSideEncryptionConfigurationNotFoundError signals 'not configured' and yields zero items for that bucket"
+    },
+    {
+      "service": "s3_bucket_server_side_encryption_configuration",
+      "iam_action": "s3:ListAllMyBuckets",
+      "purpose": "SDK-only sub-resource discoverer (#14k1): enumerate parent buckets via ListBuckets before fanning out per-bucket GetBucketEncryption"
+    },
+    {
+      "service": "s3_bucket_versioning",
+      "iam_action": "s3:GetBucketVersioning",
+      "purpose": "SDK-only sub-resource discoverer (#14k1 / #452): per-bucket GetBucketVersioning; empty Status and MFADelete signal 'never configured' and yield zero items for that bucket"
+    },
+    {
+      "service": "s3_bucket_versioning",
+      "iam_action": "s3:ListAllMyBuckets",
+      "purpose": "SDK-only sub-resource discoverer (#14k1): enumerate parent buckets via ListBuckets before fanning out per-bucket GetBucketVersioning"
+    },
+    {
       "service": "secretsmanager",
       "iam_action": "cloudcontrol:GetResource",
       "purpose": "Cloud Control GetResource for AWS::SecretsManager::Secret (#406 unified discoverer)"
@@ -1296,6 +1651,26 @@
       "service": "sns_topic",
       "iam_action": "sns:ListTopics",
       "purpose": "Cloud Control delegate for ListResources"
+    },
+    {
+      "service": "sns_topic_subscription",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::SNS::Subscription (#14j unified discoverer)"
+    },
+    {
+      "service": "sns_topic_subscription",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::SNS::Subscription (cache-miss fallback when RGT prefetch is unavailable)"
+    },
+    {
+      "service": "sns_topic_subscription",
+      "iam_action": "sns:GetSubscriptionAttributes",
+      "purpose": "Cloud Control GetResource for aws_sns_topic_subscription delegates to sns:GetSubscriptionAttributes"
+    },
+    {
+      "service": "sns_topic_subscription",
+      "iam_action": "sns:ListSubscriptions",
+      "purpose": "Cloud Control ListResources for AWS::SNS::Subscription delegates to sns:ListSubscriptions"
     },
     {
       "service": "sqs",
@@ -1431,6 +1806,16 @@
       "service": "wafv2_web_acl",
       "iam_action": "wafv2:ListTagsForResource",
       "purpose": "Cloud Control GetResource delegate for the Tags property"
+    },
+    {
+      "service": "wafv2_web_acl_association",
+      "iam_action": "wafv2:ListResourcesForWebACL",
+      "purpose": "SDK-only sub-resource discoverer (#14k2 / #456): per-WebACL ListResourcesForWebACL fan-out across resource types (ALB, API Gateway, AppSync, Cognito user pool, App Runner, Verified Access, Amplify); one TF resource per (resource_arn, web_acl_arn) pair; multi-emit FetchItems"
+    },
+    {
+      "service": "wafv2_web_acl_association",
+      "iam_action": "wafv2:ListWebACLs",
+      "purpose": "SDK-only sub-resource discoverer (#14k2): enumerate parent WebACLs in scope (REGIONAL in any region; CLOUDFRONT only in us-east-1) before fanning out per-ACL ListResourcesForWebACL"
     }
   ]
 }

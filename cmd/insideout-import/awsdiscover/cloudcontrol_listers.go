@@ -3,6 +3,7 @@ package awsdiscover
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/acm"
@@ -10,6 +11,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/apigatewayv2"
 	"github.com/aws/aws-sdk-go-v2/service/autoscaling"
 	"github.com/aws/aws-sdk-go-v2/service/cloudfront"
+	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
@@ -17,6 +19,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
+	"github.com/aws/aws-sdk-go-v2/service/opensearch"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 )
 
@@ -832,3 +835,293 @@ func listAutoScalingGroupsWithClient(ctx context.Context, client autoScalingGrou
 	}
 	return names, nil
 }
+
+// openSearchDomainsLister is the narrow subset of the OpenSearch SDK
+// used by the aws_opensearch_domain SDKLister enumerator (#14g).
+// AWS::OpenSearchService::Domain's CC ListResources returns
+// UnsupportedActionException even though CC GetResource works, so
+// enumeration goes through the native opensearch:ListDomainNames API.
+// The interface is package-private so test fakes can satisfy it without
+// depending on the full OpenSearch client.
+type openSearchDomainsLister interface {
+	ListDomainNames(ctx context.Context, in *opensearch.ListDomainNamesInput, opts ...func(*opensearch.Options)) (*opensearch.ListDomainNamesOutput, error)
+}
+
+// listOpenSearchDomains enumerates OpenSearch (and Elasticsearch
+// engine-type) domains in the region and returns the DomainName for
+// each. DomainName is the CC primary identifier for
+// AWS::OpenSearchService::Domain (and Terraform's import format for
+// aws_opensearch_domain — passthrough).
+//
+// opensearch:ListDomainNames is non-paginated (single response, all
+// domains in the region) so there is no NextToken loop.
+func listOpenSearchDomains(ctx context.Context, awsCfg aws.Config, region string, _ DiscoverArgs) ([]string, error) {
+	client := opensearch.NewFromConfig(awsCfg, func(o *opensearch.Options) {
+		if region != "" {
+			o.Region = region
+		}
+	})
+	return listOpenSearchDomainsWithClient(ctx, client)
+}
+
+func listOpenSearchDomainsWithClient(ctx context.Context, client openSearchDomainsLister) ([]string, error) {
+	out, err := client.ListDomainNames(ctx, &opensearch.ListDomainNamesInput{})
+	if err != nil {
+		return nil, fmt.Errorf("opensearch:ListDomainNames: %w", err)
+	}
+	names := []string{}
+	for _, d := range out.DomainNames {
+		n := aws.ToString(d.DomainName)
+		if n == "" {
+			continue
+		}
+		names = append(names, n)
+	}
+	return names, nil
+}
+
+// cloudFrontDistributionsLister is the narrow subset of the CloudFront
+// SDK used by the aws_cloudfront_monitoring_subscription SDKLister
+// enumerator (#14h). MonitoringSubscription is a per-distribution
+// sub-resource keyed on DistributionId; the lister enumerates
+// distributions via cloudfront:ListDistributions and feeds the
+// DistributionId list into the standard CC GetResource fan-out.
+// The interface is package-private so test fakes can satisfy it
+// without depending on the full CloudFront client.
+type cloudFrontDistributionsLister interface {
+	ListDistributions(ctx context.Context, in *cloudfront.ListDistributionsInput, opts ...func(*cloudfront.Options)) (*cloudfront.ListDistributionsOutput, error)
+}
+
+// listCloudFrontDistributionIDs enumerates CloudFront distributions
+// (global service) and returns the DistributionId for each. The CC
+// primary identifier for AWS::CloudFront::MonitoringSubscription is
+// DistributionId, and Terraform's import format for
+// aws_cloudfront_monitoring_subscription is also the bare
+// DistributionId — passthrough.
+//
+// Distributions without a monitoring subscription will surface
+// ResourceNotFoundException on the downstream CC GetResource call;
+// the discoverer's per-item soft-fail handles them via ServiceWarn
+// without aborting the region scan.
+//
+// CloudFront ListDistributions paginates via `Marker` (string cursor;
+// the next-page cursor field is `NextMarker` inside DistributionList).
+// The terminator condition mirrors listCloudFrontFunctions: break on
+// both nil AND empty-string cursors.
+func listCloudFrontDistributionIDs(ctx context.Context, awsCfg aws.Config, region string, _ DiscoverArgs) ([]string, error) {
+	client := cloudfront.NewFromConfig(awsCfg, func(o *cloudfront.Options) {
+		if region != "" {
+			o.Region = region
+		}
+	})
+	return listCloudFrontDistributionIDsWithClient(ctx, client)
+}
+
+func listCloudFrontDistributionIDsWithClient(ctx context.Context, client cloudFrontDistributionsLister) ([]string, error) {
+	ids := []string{}
+	var marker *string
+	for {
+		page, err := client.ListDistributions(ctx, &cloudfront.ListDistributionsInput{Marker: marker})
+		if err != nil {
+			return nil, fmt.Errorf("cloudfront:ListDistributions: %w", err)
+		}
+		if page.DistributionList != nil {
+			for _, d := range page.DistributionList.Items {
+				id := aws.ToString(d.Id)
+				if id == "" {
+					continue
+				}
+				ids = append(ids, id)
+			}
+		}
+		next := ""
+		if page.DistributionList != nil {
+			next = aws.ToString(page.DistributionList.NextMarker)
+		}
+		if next == "" {
+			break
+		}
+		marker = aws.String(next)
+	}
+	return ids, nil
+}
+
+// cloudWatchLogGroupsLister is the narrow subset of the CloudWatch
+// Logs SDK used by the aws_cloudwatch_log_stream ParentLister
+// enumerator (#14h). LogStream is parent-scoped on LogGroupName: CC
+// ListResources without a ResourceModel returns
+// InvalidRequestException ("Required property: [LogGroupName] not
+// found"); the parent lister enumerates log groups via
+// logs:DescribeLogGroups and wraps each name into a JSON
+// ResourceModel for the fan-out. The interface is package-private so
+// test fakes can satisfy it without depending on the full CWL
+// client.
+type cloudWatchLogGroupsLister interface {
+	DescribeLogGroups(ctx context.Context, in *cloudwatchlogs.DescribeLogGroupsInput, opts ...func(*cloudwatchlogs.Options)) (*cloudwatchlogs.DescribeLogGroupsOutput, error)
+}
+
+// listCloudWatchLogGroupsWithClient enumerates CloudWatch Logs log
+// groups via the injected client and returns the LogGroupName for
+// each. Used as the inner SDK call by
+// listCloudWatchLogGroupsAsResourceModelsWithClient.
+//
+// DescribeLogGroups paginates via NextToken (string cursor). The
+// terminator condition mirrors the other listers: break on both nil
+// AND empty-string cursors. Log groups with empty / missing names are
+// skipped defensively (the SDK contract permits the field to be nil).
+func listCloudWatchLogGroupsWithClient(ctx context.Context, client cloudWatchLogGroupsLister) ([]string, error) {
+	names := []string{}
+	var nextToken *string
+	for {
+		page, err := client.DescribeLogGroups(ctx, &cloudwatchlogs.DescribeLogGroupsInput{NextToken: nextToken})
+		if err != nil {
+			return nil, fmt.Errorf("logs:DescribeLogGroups: %w", err)
+		}
+		for _, lg := range page.LogGroups {
+			n := aws.ToString(lg.LogGroupName)
+			if n == "" {
+				continue
+			}
+			names = append(names, n)
+		}
+		if page.NextToken == nil || aws.ToString(page.NextToken) == "" {
+			break
+		}
+		nextToken = page.NextToken
+	}
+	return names, nil
+}
+
+// listCloudWatchLogGroupsAsResourceModels enumerates CloudWatch Logs
+// log groups in the region and wraps each name into a JSON
+// ResourceModel `{"LogGroupName":"…"}` for feeding into Cloud Control
+// ListResources for AWS::Logs::LogStream (#14h). The parent-scoped
+// LogStream type requires a non-empty ResourceModel — CC returns
+// InvalidRequestException when LogGroupName is missing. Reuses
+// listCloudWatchLogGroups for the underlying SDK call so pagination
+// semantics are shared.
+//
+// Returns a non-nil empty slice on accounts with zero log groups so
+// downstream consumers see "[]" not "null" through the JSON-marshal
+// pipeline (#255 contract).
+func listCloudWatchLogGroupsAsResourceModels(ctx context.Context, awsCfg aws.Config, region string, _ DiscoverArgs) ([]string, error) {
+	client := cloudwatchlogs.NewFromConfig(awsCfg, func(o *cloudwatchlogs.Options) {
+		if region != "" {
+			o.Region = region
+		}
+	})
+	return listCloudWatchLogGroupsAsResourceModelsWithClient(ctx, client)
+}
+
+// listCloudWatchLogGroupsAsResourceModelsWithClient is the test seam
+// for the wrap-shape contract. Production callers go through
+// listCloudWatchLogGroupsAsResourceModels which constructs the real
+// SDK client; tests drive the wrap logic via the cloudWatchLogGroupsLister
+// interface against a fake.
+func listCloudWatchLogGroupsAsResourceModelsWithClient(ctx context.Context, client cloudWatchLogGroupsLister) ([]string, error) {
+	names, err := listCloudWatchLogGroupsWithClient(ctx, client)
+	if err != nil {
+		return nil, err
+	}
+	models := make([]string, 0, len(names))
+	for _, n := range names {
+		models = append(models, fmt.Sprintf(`{"LogGroupName":%q}`, n))
+	}
+	return models, nil
+}
+
+// =====================================================================
+// Bundle 14i — IAM service-linked role SDKLister
+// =====================================================================
+
+// iamRolesLister is the narrow subset of the IAM SDK used by the
+// aws_iam_service_linked_role SDKLister enumerator (#14i). It consumes
+// iam:ListRoles output, filters to SLR roles (Path ==
+// "/aws-service-role/<service>.amazonaws.com/...") and emits one
+// AWSServiceName per role.
+//
+// The interface is package-private so test fakes can satisfy it without
+// depending on the full IAM client surface (already used by iamUsersLister
+// + iamGroupsLister with a different method set; declaring a fresh
+// interface keeps the per-call dependency surface minimal).
+type iamRolesLister interface {
+	ListRoles(ctx context.Context, in *iam.ListRolesInput, opts ...func(*iam.Options)) (*iam.ListRolesOutput, error)
+}
+
+// iamServiceRolePathPrefix is the path AWS stamps on every service-
+// linked role at creation time. Service-linked roles ALWAYS live under
+// "/aws-service-role/<service-hostname>/<...>" — both the IAM console
+// and CLI reject creates that don't match this shape, so the prefix
+// check is a sound discriminator without false positives.
+const iamServiceRolePathPrefix = "/aws-service-role/"
+
+// listIAMServiceLinkedRoleServiceNames enumerates IAM roles (global)
+// and emits the canonical AWSServiceName for each service-linked role.
+// Used as the SDKLister for AWS::IAM::ServiceLinkedRole (#14i) — CC
+// ListResources returns UnsupportedActionException for the type
+// because SLRs are AWS-managed and have no LIST handler.
+//
+// AWSServiceName is the canonical service principal hostname (e.g.
+// "elasticache.amazonaws.com"). For a service-linked role with Path
+// "/aws-service-role/elasticache.amazonaws.com/" the service name is
+// the SECOND path segment. We extract it deterministically by
+// trimming the well-known SLR path prefix and taking everything up to
+// the next "/".
+//
+// CC GetResource for AWS::IAM::ServiceLinkedRole is keyed on
+// AWSServiceName (verified against the CFN schema's primaryIdentifier
+// of [/properties/AWSServiceName]). Two SLRs for the same service is
+// impossible by construction — IAM rejects duplicate-service SLR
+// creates — so the AWSServiceName-as-identifier is unique per role.
+//
+// Returns a non-nil empty slice on accounts with zero SLRs (#255).
+func listIAMServiceLinkedRoleServiceNames(ctx context.Context, awsCfg aws.Config, region string, _ DiscoverArgs) ([]string, error) {
+	client := iam.NewFromConfig(awsCfg, func(o *iam.Options) {
+		if region != "" {
+			o.Region = region
+		}
+	})
+	return listIAMServiceLinkedRoleServiceNamesWithClient(ctx, client)
+}
+
+func listIAMServiceLinkedRoleServiceNamesWithClient(ctx context.Context, client iamRolesLister) ([]string, error) {
+	names := []string{}
+	seen := map[string]bool{}
+	var marker *string
+	for {
+		page, err := client.ListRoles(ctx, &iam.ListRolesInput{Marker: marker})
+		if err != nil {
+			return nil, fmt.Errorf("iam:ListRoles: %w", err)
+		}
+		for _, r := range page.Roles {
+			path := aws.ToString(r.Path)
+			if !strings.HasPrefix(path, iamServiceRolePathPrefix) {
+				continue
+			}
+			// Path is "/aws-service-role/<service>.amazonaws.com/..." —
+			// trim the prefix, then take everything up to the next "/".
+			rest := strings.TrimPrefix(path, iamServiceRolePathPrefix)
+			service := rest
+			if idx := strings.Index(rest, "/"); idx >= 0 {
+				service = rest[:idx]
+			}
+			if service == "" {
+				continue
+			}
+			// One SLR per service-principal by IAM construction;
+			// dedup defensively in case a malformed account state
+			// (e.g. stale ListRoles cursor) surfaces a duplicate.
+			if seen[service] {
+				continue
+			}
+			seen[service] = true
+			names = append(names, service)
+		}
+		if !page.IsTruncated || page.Marker == nil || aws.ToString(page.Marker) == "" {
+			break
+		}
+		marker = page.Marker
+	}
+	return names, nil
+}
+

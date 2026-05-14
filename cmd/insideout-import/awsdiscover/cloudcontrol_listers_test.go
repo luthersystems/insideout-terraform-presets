@@ -21,6 +21,8 @@ import (
 	asgtypes "github.com/aws/aws-sdk-go-v2/service/autoscaling/types"
 	"github.com/aws/aws-sdk-go-v2/service/cloudfront"
 	cftypes "github.com/aws/aws-sdk-go-v2/service/cloudfront/types"
+	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
+	cwltypes "github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs/types"
 	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider"
 	cogniidptypes "github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider/types"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
@@ -32,6 +34,8 @@ import (
 	kmstypes "github.com/aws/aws-sdk-go-v2/service/kms/types"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	lambdatypes "github.com/aws/aws-sdk-go-v2/service/lambda/types"
+	"github.com/aws/aws-sdk-go-v2/service/opensearch"
+	opensearchtypes "github.com/aws/aws-sdk-go-v2/service/opensearch/types"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	smtypes "github.com/aws/aws-sdk-go-v2/service/secretsmanager/types"
 )
@@ -1961,5 +1965,593 @@ func TestListAutoScalingGroups_SkipsEmptyName(t *testing.T) {
 	want := []string{"good", "also-good"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("empty-name skip drift: got %v want %v", got, want)
+	}
+}
+
+// =====================================================================
+// Bundle 14g — listOpenSearchDomains
+// =====================================================================
+
+// fakeOpenSearchDomainsLister is the per-test seam for
+// opensearch:ListDomainNames. The API is non-paginated (single call
+// returns every domain in the region) so a single `out` slot suffices
+// — no listPages / NextToken plumbing needed.
+type fakeOpenSearchDomainsLister struct {
+	out  *opensearch.ListDomainNamesOutput
+	err  error
+	call int
+}
+
+func (f *fakeOpenSearchDomainsLister) ListDomainNames(_ context.Context, _ *opensearch.ListDomainNamesInput, _ ...func(*opensearch.Options)) (*opensearch.ListDomainNamesOutput, error) {
+	f.call++
+	if f.err != nil {
+		return nil, f.err
+	}
+	if f.out == nil {
+		return &opensearch.ListDomainNamesOutput{}, nil
+	}
+	return f.out, nil
+}
+
+func TestListOpenSearchDomains_ReturnsNames(t *testing.T) {
+	t.Parallel()
+	fake := &fakeOpenSearchDomainsLister{
+		out: &opensearch.ListDomainNamesOutput{
+			DomainNames: []opensearchtypes.DomainInfo{
+				{DomainName: aws.String("alpha")},
+				{DomainName: aws.String("beta")},
+				{DomainName: aws.String("gamma")},
+			},
+		},
+	}
+	got, err := listOpenSearchDomainsWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"alpha", "beta", "gamma"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("names drift:\n got %v\nwant %v", got, want)
+	}
+	// Non-paginated API: exactly one ListDomainNames call per invocation.
+	if fake.call != 1 {
+		t.Errorf("call count=%d, want 1 (opensearch:ListDomainNames is non-paginated)", fake.call)
+	}
+}
+
+// TestListOpenSearchDomains_EmptyAccountReturnsNonNilEmpty pins the
+// #255 JSON-marshal contract at the lister boundary: an empty response
+// must surface as a non-nil empty slice so downstream consumers
+// (cloudControlDiscoverer's len(ids)==0 early-exit, then itemRef
+// accumulators that marshal through the JSON pipeline) see "[]" not
+// "null".
+func TestListOpenSearchDomains_EmptyAccountReturnsNonNilEmpty(t *testing.T) {
+	t.Parallel()
+	fake := &fakeOpenSearchDomainsLister{
+		out: &opensearch.ListDomainNamesOutput{DomainNames: nil},
+	}
+	got, err := listOpenSearchDomainsWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got == nil {
+		t.Fatal("got nil, want non-nil empty slice (#255 JSON marshal contract)")
+	}
+	if len(got) != 0 {
+		t.Errorf("got %v, want empty slice", got)
+	}
+}
+
+func TestListOpenSearchDomains_PropagatesListError(t *testing.T) {
+	t.Parallel()
+	sentinel := errors.New("AccessDenied: opensearch:ListDomainNames")
+	fake := &fakeOpenSearchDomainsLister{err: sentinel}
+	_, err := listOpenSearchDomainsWithClient(context.Background(), fake)
+	if !errors.Is(err, sentinel) {
+		t.Errorf("err does not wrap sentinel; got %v", err)
+	}
+}
+
+// TestListOpenSearchDomains_SkipsEmptyDomainName defends against an
+// SDK response that includes a domain row with a missing or empty
+// DomainName field (the API contract permits it; treat as a no-op so
+// downstream GetResource doesn't blow up on an empty identifier).
+func TestListOpenSearchDomains_SkipsEmptyDomainName(t *testing.T) {
+	t.Parallel()
+	fake := &fakeOpenSearchDomainsLister{
+		out: &opensearch.ListDomainNamesOutput{
+			DomainNames: []opensearchtypes.DomainInfo{
+				{DomainName: aws.String("good")},
+				{DomainName: nil},
+				{DomainName: aws.String("")},
+				{DomainName: aws.String("also-good")},
+			},
+		},
+	}
+	got, err := listOpenSearchDomainsWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"good", "also-good"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("empty-name skip drift: got %v want %v", got, want)
+	}
+}
+
+// =====================================================================
+// Bundle 14h — listCloudFrontDistributionIDs
+// =====================================================================
+
+// fakeCloudFrontDistributionsLister returns ListDistributionsOutput
+// pages with the DistributionList wrapper (CloudFront SDK quirk —
+// items + cursor live one level deep under DistributionList, mirrors
+// the FunctionList pattern). Paginated via Marker / NextMarker.
+type fakeCloudFrontDistributionsLister struct {
+	listPages []cloudfront.ListDistributionsOutput
+	listCalls int
+	listErr   error
+}
+
+func (f *fakeCloudFrontDistributionsLister) ListDistributions(_ context.Context, _ *cloudfront.ListDistributionsInput, _ ...func(*cloudfront.Options)) (*cloudfront.ListDistributionsOutput, error) {
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
+	if f.listCalls >= len(f.listPages) {
+		return &cloudfront.ListDistributionsOutput{}, nil
+	}
+	page := f.listPages[f.listCalls]
+	f.listCalls++
+	return &page, nil
+}
+
+func cloudfrontDistributionsPage(nextMarker string, ids ...string) cloudfront.ListDistributionsOutput {
+	items := make([]cftypes.DistributionSummary, 0, len(ids))
+	for _, id := range ids {
+		items = append(items, cftypes.DistributionSummary{Id: aws.String(id)})
+	}
+	list := &cftypes.DistributionList{Items: items}
+	if nextMarker != "" {
+		list.NextMarker = aws.String(nextMarker)
+	}
+	return cloudfront.ListDistributionsOutput{DistributionList: list}
+}
+
+func TestListCloudFrontDistributionIDs_PaginatesAndReturnsIDs(t *testing.T) {
+	t.Parallel()
+	fake := &fakeCloudFrontDistributionsLister{
+		listPages: []cloudfront.ListDistributionsOutput{
+			cloudfrontDistributionsPage("m1", "EAAA1", "EAAA2"),
+			cloudfrontDistributionsPage("", "EAAA3"),
+		},
+	}
+	got, err := listCloudFrontDistributionIDsWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"EAAA1", "EAAA2", "EAAA3"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("IDs drift: got %v want %v", got, want)
+	}
+	if fake.listCalls != 2 {
+		t.Errorf("listCalls=%d, want 2 (pagination via Marker/NextMarker)", fake.listCalls)
+	}
+}
+
+// TestListCloudFrontDistributionIDs_NilDistributionListDoesNotPanic
+// pins the defensive `if page.DistributionList != nil` branch — a
+// malformed SDK response with nil wrappers must not crash the
+// discoverer, and the returned slice must be non-nil empty per the
+// #255 JSON-marshal contract.
+func TestListCloudFrontDistributionIDs_NilDistributionListDoesNotPanic(t *testing.T) {
+	t.Parallel()
+	fake := &fakeCloudFrontDistributionsLister{
+		listPages: []cloudfront.ListDistributionsOutput{{DistributionList: nil}},
+	}
+	got, err := listCloudFrontDistributionIDsWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got == nil {
+		t.Fatal("got nil, want non-nil empty slice (#255 contract)")
+	}
+	if len(got) != 0 {
+		t.Errorf("got %v, want empty slice", got)
+	}
+}
+
+func TestListCloudFrontDistributionIDs_PropagatesListError(t *testing.T) {
+	t.Parallel()
+	sentinel := errors.New("AccessDenied: cloudfront:ListDistributions")
+	fake := &fakeCloudFrontDistributionsLister{listErr: sentinel}
+	_, err := listCloudFrontDistributionIDsWithClient(context.Background(), fake)
+	if !errors.Is(err, sentinel) {
+		t.Errorf("err does not wrap sentinel; got %v", err)
+	}
+}
+
+// TestListCloudFrontDistributionIDs_SkipsEmptyIDs defends against an
+// SDK response that includes a distribution row with a missing or
+// empty Id field. The downstream CC GetResource fan-out would surface
+// InvalidRequestException for an empty identifier; skip client-side.
+func TestListCloudFrontDistributionIDs_SkipsEmptyIDs(t *testing.T) {
+	t.Parallel()
+	fake := &fakeCloudFrontDistributionsLister{
+		listPages: []cloudfront.ListDistributionsOutput{
+			cloudfrontDistributionsPage("",
+				"good", "", "also-good",
+			),
+		},
+	}
+	// Also test a row with nil Id (separate fake to avoid the helper
+	// turning "" into aws.String("")).
+	fake.listPages[0].DistributionList.Items = append(
+		fake.listPages[0].DistributionList.Items,
+		cftypes.DistributionSummary{Id: nil},
+		cftypes.DistributionSummary{Id: aws.String("trailing-good")},
+	)
+	got, err := listCloudFrontDistributionIDsWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"good", "also-good", "trailing-good"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("empty-id skip drift: got %v want %v", got, want)
+	}
+}
+
+// =====================================================================
+// Bundle 14h — listCloudWatchLogGroups + listCloudWatchLogGroupsAsResourceModels
+// =====================================================================
+
+// fakeCloudWatchLogGroupsLister returns DescribeLogGroupsOutput pages
+// for the per-region log-group enumeration. DescribeLogGroups paginates
+// via NextToken (string cursor).
+type fakeCloudWatchLogGroupsLister struct {
+	pages []cloudwatchlogs.DescribeLogGroupsOutput
+	calls int
+	err   error
+}
+
+func (f *fakeCloudWatchLogGroupsLister) DescribeLogGroups(_ context.Context, _ *cloudwatchlogs.DescribeLogGroupsInput, _ ...func(*cloudwatchlogs.Options)) (*cloudwatchlogs.DescribeLogGroupsOutput, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	if f.calls >= len(f.pages) {
+		return &cloudwatchlogs.DescribeLogGroupsOutput{}, nil
+	}
+	p := f.pages[f.calls]
+	f.calls++
+	return &p, nil
+}
+
+func cwlLogGroupsPage(nextToken string, names ...string) cloudwatchlogs.DescribeLogGroupsOutput {
+	out := cloudwatchlogs.DescribeLogGroupsOutput{}
+	for _, n := range names {
+		out.LogGroups = append(out.LogGroups, cwltypes.LogGroup{LogGroupName: aws.String(n)})
+	}
+	if nextToken != "" {
+		out.NextToken = aws.String(nextToken)
+	}
+	return out
+}
+
+func TestListCloudWatchLogGroups_PaginatesAndReturnsNames(t *testing.T) {
+	t.Parallel()
+	fake := &fakeCloudWatchLogGroupsLister{
+		pages: []cloudwatchlogs.DescribeLogGroupsOutput{
+			cwlLogGroupsPage("tok1", "/aws/lambda/foo", "/aws/lambda/bar"),
+			cwlLogGroupsPage("", "/aws/lambda/baz"),
+		},
+	}
+	got, err := listCloudWatchLogGroupsWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"/aws/lambda/foo", "/aws/lambda/bar", "/aws/lambda/baz"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("names drift: got %v want %v", got, want)
+	}
+	if fake.calls != 2 {
+		t.Errorf("calls=%d, want 2 (pagination via NextToken)", fake.calls)
+	}
+}
+
+// TestListCloudWatchLogGroups_EmptyAccountReturnsNonNilEmpty pins the
+// #255 JSON-marshal contract: zero log groups must surface as a
+// non-nil empty slice so downstream consumers see "[]" not "null".
+func TestListCloudWatchLogGroups_EmptyAccountReturnsNonNilEmpty(t *testing.T) {
+	t.Parallel()
+	fake := &fakeCloudWatchLogGroupsLister{
+		pages: []cloudwatchlogs.DescribeLogGroupsOutput{{LogGroups: nil}},
+	}
+	got, err := listCloudWatchLogGroupsWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got == nil {
+		t.Fatal("got nil, want non-nil empty slice (#255 JSON marshal contract)")
+	}
+	if len(got) != 0 {
+		t.Errorf("got %v, want empty slice", got)
+	}
+}
+
+func TestListCloudWatchLogGroups_PropagatesListError(t *testing.T) {
+	t.Parallel()
+	sentinel := errors.New("AccessDenied: logs:DescribeLogGroups")
+	fake := &fakeCloudWatchLogGroupsLister{err: sentinel}
+	_, err := listCloudWatchLogGroupsWithClient(context.Background(), fake)
+	if !errors.Is(err, sentinel) {
+		t.Errorf("err does not wrap sentinel; got %v", err)
+	}
+}
+
+// TestListCloudWatchLogGroups_SkipsEmptyLogGroupName defends against
+// an SDK response that includes a log-group row with a missing or
+// empty LogGroupName field. The downstream CC GetResource fan-out
+// would surface InvalidRequestException for an empty identifier; skip
+// client-side.
+func TestListCloudWatchLogGroups_SkipsEmptyLogGroupName(t *testing.T) {
+	t.Parallel()
+	fake := &fakeCloudWatchLogGroupsLister{
+		pages: []cloudwatchlogs.DescribeLogGroupsOutput{
+			{LogGroups: []cwltypes.LogGroup{
+				{LogGroupName: aws.String("good")},
+				{LogGroupName: nil},
+				{LogGroupName: aws.String("")},
+				{LogGroupName: aws.String("also-good")},
+			}},
+		},
+	}
+	got, err := listCloudWatchLogGroupsWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"good", "also-good"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("empty-name skip drift: got %v want %v", got, want)
+	}
+}
+
+// TestListCloudWatchLogGroupsAsResourceModels_WrapsAndPreservesOrder
+// drives the production
+// listCloudWatchLogGroupsAsResourceModelsWithClient against a fake
+// SDK client and verifies it wraps each log group name as a JSON
+// `{"LogGroupName":"…"}` string in the same order, with JSON-escaped
+// contents so names containing quotes or backslashes round-trip
+// cleanly. A regression that changes the format string (e.g. drops %q
+// quoting) would surface here as a parseability failure on the
+// quote/backslash names.
+func TestListCloudWatchLogGroupsAsResourceModels_WrapsAndPreservesOrder(t *testing.T) {
+	t.Parallel()
+	fake := &fakeCloudWatchLogGroupsLister{
+		pages: []cloudwatchlogs.DescribeLogGroupsOutput{
+			cwlLogGroupsPage("",
+				"/aws/lambda/simple",
+				`/aws/lambda/with"quote`,
+				`/aws/lambda/with\backslash`,
+			),
+		},
+	}
+	got, err := listCloudWatchLogGroupsAsResourceModelsWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	wantNames := []string{
+		"/aws/lambda/simple",
+		`/aws/lambda/with"quote`,
+		`/aws/lambda/with\backslash`,
+	}
+	if len(got) != len(wantNames) {
+		t.Fatalf("len=%d, want %d", len(got), len(wantNames))
+	}
+	for i, s := range got {
+		var parsed map[string]string
+		if err := json.Unmarshal([]byte(s), &parsed); err != nil {
+			t.Fatalf("emitted ResourceModel %q failed to parse as JSON: %v", s, err)
+		}
+		if parsed["LogGroupName"] != wantNames[i] {
+			t.Errorf("emit[%d]: LogGroupName=%q via %s, want %q", i, parsed["LogGroupName"], s, wantNames[i])
+		}
+	}
+}
+
+// TestListCloudWatchLogGroupsAsResourceModels_EmptyReturnsNonNilEmpty
+// pins the #255 contract at the wrapper level too: zero log groups
+// must surface as a non-nil empty slice so the discoverer's len-zero
+// early exit fires cleanly instead of passing nil into the downstream
+// ListResources fan-out.
+func TestListCloudWatchLogGroupsAsResourceModels_EmptyReturnsNonNilEmpty(t *testing.T) {
+	t.Parallel()
+	fake := &fakeCloudWatchLogGroupsLister{
+		pages: []cloudwatchlogs.DescribeLogGroupsOutput{{LogGroups: nil}},
+	}
+	got, err := listCloudWatchLogGroupsAsResourceModelsWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got == nil {
+		t.Fatal("got nil, want non-nil empty slice (#255 JSON marshal contract)")
+	}
+	if len(got) != 0 {
+		t.Errorf("len=%d, want 0", len(got))
+	}
+}
+
+// TestListCloudWatchLogGroupsAsResourceModels_PropagatesListError pins
+// that SDK errors from the inner DescribeLogGroups call surface to
+// the caller (the discoverer treats this as a hard region-abort).
+func TestListCloudWatchLogGroupsAsResourceModels_PropagatesListError(t *testing.T) {
+	t.Parallel()
+	seedErr := errors.New("AccessDenied: logs:DescribeLogGroups")
+	fake := &fakeCloudWatchLogGroupsLister{err: seedErr}
+	_, err := listCloudWatchLogGroupsAsResourceModelsWithClient(context.Background(), fake)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !errors.Is(err, seedErr) {
+		t.Errorf("err does not wrap seedErr: got %v", err)
+	}
+}
+
+// =====================================================================
+// Bundle 14i — iam:ListRoles fan-out (ServiceLinkedRole)
+// =====================================================================
+
+// fakeIAMRolesLister mirrors the IAM Users/Groups fakes for the
+// listRoles operation. Supports the #14i SLR lister
+// (listIAMServiceLinkedRoleServiceNamesWithClient).
+type fakeIAMRolesLister struct {
+	listPages []iam.ListRolesOutput
+	listCalls int
+	listErr   error
+}
+
+func (f *fakeIAMRolesLister) ListRoles(_ context.Context, _ *iam.ListRolesInput, _ ...func(*iam.Options)) (*iam.ListRolesOutput, error) {
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
+	if f.listCalls >= len(f.listPages) {
+		return &iam.ListRolesOutput{}, nil
+	}
+	page := f.listPages[f.listCalls]
+	f.listCalls++
+	return &page, nil
+}
+
+// iamRolesPage constructs a ListRolesOutput from a marker + a list of
+// (path, name) pairs. Each pair becomes one Role with the supplied
+// Path (load-bearing for the SLR filter) and RoleName.
+func iamRolesPage(marker string, pairs ...[2]string) iam.ListRolesOutput {
+	roles := make([]iamtypes.Role, 0, len(pairs))
+	for _, p := range pairs {
+		roles = append(roles, iamtypes.Role{
+			Path:     aws.String(p[0]),
+			RoleName: aws.String(p[1]),
+		})
+	}
+	out := iam.ListRolesOutput{Roles: roles}
+	if marker != "" {
+		out.IsTruncated = true
+		out.Marker = aws.String(marker)
+	}
+	return out
+}
+
+// TestListIAMServiceLinkedRoleServiceNames_ExtractsServiceFromPath
+// pins the path-segment extraction: from a role with Path
+// "/aws-service-role/<service>.amazonaws.com/" the canonical
+// AWSServiceName (= "<service>.amazonaws.com") must be the SECOND
+// path segment. Non-SLR roles (Path != "/aws-service-role/...") must
+// be excluded.
+func TestListIAMServiceLinkedRoleServiceNames_ExtractsServiceFromPath(t *testing.T) {
+	t.Parallel()
+	fake := &fakeIAMRolesLister{
+		listPages: []iam.ListRolesOutput{
+			iamRolesPage("",
+				[2]string{"/", "my-app-role"}, // non-SLR; excluded
+				[2]string{"/aws-service-role/elasticache.amazonaws.com/", "AWSServiceRoleForElastiCache"},
+				[2]string{"/aws-service-role/autoscaling.amazonaws.com/", "AWSServiceRoleForAutoScaling"},
+				[2]string{"/custom-path/", "another-role"}, // non-SLR; excluded
+			),
+		},
+	}
+	got, err := listIAMServiceLinkedRoleServiceNamesWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{
+		"elasticache.amazonaws.com",
+		"autoscaling.amazonaws.com",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("AWSServiceNames drift: got %v want %v", got, want)
+	}
+}
+
+// TestListIAMServiceLinkedRoleServiceNames_DedupsDuplicateServices
+// defends against a malformed account state surfacing the same
+// service principal twice (e.g. stale ListRoles cursor). One SLR
+// per service-principal is the IAM construction invariant; the
+// defensive dedup keeps the downstream CC GetResource fan-out from
+// issuing a duplicate call.
+func TestListIAMServiceLinkedRoleServiceNames_DedupsDuplicateServices(t *testing.T) {
+	t.Parallel()
+	fake := &fakeIAMRolesLister{
+		listPages: []iam.ListRolesOutput{
+			iamRolesPage("",
+				[2]string{"/aws-service-role/elasticache.amazonaws.com/", "AWSServiceRoleForElastiCache"},
+				[2]string{"/aws-service-role/elasticache.amazonaws.com/extra/", "Duplicate"},
+			),
+		},
+	}
+	got, err := listIAMServiceLinkedRoleServiceNamesWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("got %v, want 1 entry after dedup", got)
+	}
+	if got[0] != "elasticache.amazonaws.com" {
+		t.Errorf("got %q, want %q", got[0], "elasticache.amazonaws.com")
+	}
+}
+
+// TestListIAMServiceLinkedRoleServiceNames_EmptyAccountReturnsNonNilEmpty
+// guards the #255 contract for accounts with zero SLRs (rare but
+// possible in newly-provisioned dev accounts).
+func TestListIAMServiceLinkedRoleServiceNames_EmptyAccountReturnsNonNilEmpty(t *testing.T) {
+	t.Parallel()
+	fake := &fakeIAMRolesLister{listPages: []iam.ListRolesOutput{iamRolesPage("")}}
+	got, err := listIAMServiceLinkedRoleServiceNamesWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got == nil {
+		t.Fatal("got nil, want non-nil empty slice (#255 contract)")
+	}
+	if len(got) != 0 {
+		t.Errorf("got %v, want empty slice", got)
+	}
+}
+
+// TestListIAMServiceLinkedRoleServiceNames_PropagatesListError pins
+// the error-wrap chain.
+func TestListIAMServiceLinkedRoleServiceNames_PropagatesListError(t *testing.T) {
+	t.Parallel()
+	sentinel := errors.New("AccessDenied: iam:ListRoles")
+	fake := &fakeIAMRolesLister{listErr: sentinel}
+	_, err := listIAMServiceLinkedRoleServiceNamesWithClient(context.Background(), fake)
+	if !errors.Is(err, sentinel) {
+		t.Errorf("err does not wrap sentinel; got %v", err)
+	}
+}
+
+// TestListIAMServiceLinkedRoleServiceNames_SkipsRolesWithMalformedPath
+// defends against a role under "/aws-service-role/" with NO trailing
+// "/<service>/" segment — extraction would emit an empty string which
+// the discoverer's downstream CC GetResource would reject with
+// InvalidRequestException. Skip client-side.
+func TestListIAMServiceLinkedRoleServiceNames_SkipsRolesWithMalformedPath(t *testing.T) {
+	t.Parallel()
+	fake := &fakeIAMRolesLister{
+		listPages: []iam.ListRolesOutput{
+			iamRolesPage("",
+				// Path == "/aws-service-role/" with NO trailing
+				// segment — TrimPrefix leaves empty, Index returns -1,
+				// the bare-rest fall-through emits the empty string,
+				// then the empty-string guard skips it.
+				[2]string{"/aws-service-role/", "AWSManaged"},
+				// Well-formed SLR for sanity.
+				[2]string{"/aws-service-role/foo.amazonaws.com/", "AWSServiceRoleForFoo"},
+			),
+		},
+	}
+	got, err := listIAMServiceLinkedRoleServiceNamesWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"foo.amazonaws.com"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v (malformed path must be skipped)", got, want)
 	}
 }

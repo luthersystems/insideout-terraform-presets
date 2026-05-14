@@ -15,6 +15,9 @@ tasks/
 /imported/
 /insideout-import
 
+# Built binaries — `go build -o bin/<name>` outputs land here during local smoke
+/bin/
+
 # Codegen scratch — full schema dumps are 30 MB and never committed.
 # .terraform/ already covered by the top-level rule. Filtered schemas
 # under schemas/<cloud>.filtered.json ARE committed; only the unfiltered
