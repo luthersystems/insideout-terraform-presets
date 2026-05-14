@@ -391,6 +391,24 @@ func TestLookupRule(t *testing.T) {
 			wantCFN: "AWS::IAM::ManagedPolicy", wantIdent: "arn:aws:iam::111111111111:policy/my-policy"},
 		{name: "iam_instance_profile", arn: "arn:aws:iam::111111111111:instance-profile/my-profile",
 			wantCFN: "AWS::IAM::InstanceProfile", wantIdent: "my-profile"},
+		// IAM Service-Linked Role (#14i). ARN shape:
+		// arn:aws:iam::<acct>:role/aws-service-role/<service>.amazonaws.com/<RoleName>.
+		// The SLR rule MUST precede the generic iam:role rule because
+		// both parse to (service=iam, resourceType=role); matchExtra
+		// picks the SLR variant when resourceID begins with
+		// "aws-service-role/". identifierFn returns the AWSServiceName
+		// (= second path segment, the canonical service principal
+		// hostname).
+		{name: "iam_service_linked_role",
+			arn:       "arn:aws:iam::111111111111:role/aws-service-role/elasticache.amazonaws.com/AWSServiceRoleForElastiCache",
+			wantCFN:   "AWS::IAM::ServiceLinkedRole",
+			wantIdent: "elasticache.amazonaws.com"},
+		// Sanity: a non-SLR role ARN (no aws-service-role/ prefix in
+		// resourceID) must still route to AWS::IAM::Role even though
+		// both rules share matchService+matchResourceType.
+		{name: "iam_role_still_routes_to_role",
+			arn:     "arn:aws:iam::111111111111:role/my-app-role",
+			wantCFN: "AWS::IAM::Role", wantIdent: "my-app-role"},
 
 		// Storage
 		{name: "dynamodb_table", arn: "arn:aws:dynamodb:us-east-1:111111111111:table/my-table",
@@ -400,13 +418,13 @@ func TestLookupRule(t *testing.T) {
 
 		// Load balancing v2
 		{name: "elbv2_lb_full_arn", arn: "arn:aws:elasticloadbalancing:us-east-1:111111111111:loadbalancer/app/my-alb/abc123",
-			wantCFN: "AWS::ElasticLoadBalancingV2::LoadBalancer",
+			wantCFN:   "AWS::ElasticLoadBalancingV2::LoadBalancer",
 			wantIdent: "arn:aws:elasticloadbalancing:us-east-1:111111111111:loadbalancer/app/my-alb/abc123"},
 		{name: "elbv2_listener_full_arn", arn: "arn:aws:elasticloadbalancing:us-east-1:111111111111:listener/app/my-alb/abc/def",
-			wantCFN: "AWS::ElasticLoadBalancingV2::Listener",
+			wantCFN:   "AWS::ElasticLoadBalancingV2::Listener",
 			wantIdent: "arn:aws:elasticloadbalancing:us-east-1:111111111111:listener/app/my-alb/abc/def"},
 		{name: "elbv2_target_group_full_arn", arn: "arn:aws:elasticloadbalancing:us-east-1:111111111111:targetgroup/my-tg/abc",
-			wantCFN: "AWS::ElasticLoadBalancingV2::TargetGroup",
+			wantCFN:   "AWS::ElasticLoadBalancingV2::TargetGroup",
 			wantIdent: "arn:aws:elasticloadbalancing:us-east-1:111111111111:targetgroup/my-tg/abc"},
 
 		// CDN / DNS
@@ -437,8 +455,8 @@ func TestLookupRule(t *testing.T) {
 
 		// ACM — Cloud Control primary identifier is the full ARN.
 		{name: "acm_certificate_full_arn",
-			arn:     "arn:aws:acm:us-east-1:111111111111:certificate/abc-12345-6789-def0",
-			wantCFN: "AWS::CertificateManager::Certificate",
+			arn:       "arn:aws:acm:us-east-1:111111111111:certificate/abc-12345-6789-def0",
+			wantCFN:   "AWS::CertificateManager::Certificate",
 			wantIdent: "arn:aws:acm:us-east-1:111111111111:certificate/abc-12345-6789-def0"},
 
 		// WAFv2 — ARN scope (regional/global) maps to CFN Scope
@@ -496,12 +514,12 @@ func TestLookupRule(t *testing.T) {
 		// disambiguators. The CC primary identifier is the full ARN for
 		// both — pin via identityFullARN.
 		{name: "msk_cluster_full_arn",
-			arn:     "arn:aws:kafka:us-east-1:111111111111:cluster/my-msk/abc-uuid",
-			wantCFN: "AWS::MSK::Cluster",
+			arn:       "arn:aws:kafka:us-east-1:111111111111:cluster/my-msk/abc-uuid",
+			wantCFN:   "AWS::MSK::Cluster",
 			wantIdent: "arn:aws:kafka:us-east-1:111111111111:cluster/my-msk/abc-uuid"},
 		{name: "msk_configuration_full_arn",
-			arn:     "arn:aws:kafka:us-east-1:111111111111:configuration/my-config/def-uuid",
-			wantCFN: "AWS::MSK::Configuration",
+			arn:       "arn:aws:kafka:us-east-1:111111111111:configuration/my-config/def-uuid",
+			wantCFN:   "AWS::MSK::Configuration",
 			wantIdent: "arn:aws:kafka:us-east-1:111111111111:configuration/my-config/def-uuid"},
 
 		// OpenSearch (managed service) — Domain (#14g). The ARN's `es`
@@ -526,8 +544,8 @@ func TestLookupRule(t *testing.T) {
 		// identityResourceID. Distinct from the cloudfront:distribution
 		// rule above; this exercises the sibling resourceType branch.
 		{name: "cloudfront_origin_access_identity",
-			arn:     "arn:aws:cloudfront::111111111111:origin-access-identity/E2QWRUHAPOMQZL",
-			wantCFN: "AWS::CloudFront::CloudFrontOriginAccessIdentity",
+			arn:       "arn:aws:cloudfront::111111111111:origin-access-identity/E2QWRUHAPOMQZL",
+			wantCFN:   "AWS::CloudFront::CloudFrontOriginAccessIdentity",
 			wantIdent: "E2QWRUHAPOMQZL"},
 
 		// CloudWatch Logs — LogStream vs LogGroup disambiguation (#14h).
@@ -541,15 +559,15 @@ func TestLookupRule(t *testing.T) {
 		// "<group>:log-stream:<stream>" (the LogGroup identifierFn just
 		// strips trailing ":*"), pinning the wrong CFN type.
 		{name: "cloudwatch_log_stream",
-			arn:     "arn:aws:logs:us-east-1:111111111111:log-group:/aws/lambda/foo:log-stream:2026/01/01/[$LATEST]abc",
-			wantCFN: "AWS::Logs::LogStream",
+			arn:       "arn:aws:logs:us-east-1:111111111111:log-group:/aws/lambda/foo:log-stream:2026/01/01/[$LATEST]abc",
+			wantCFN:   "AWS::Logs::LogStream",
 			wantIdent: "/aws/lambda/foo|2026/01/01/[$LATEST]abc"},
 		// Sanity: a bare log-group ARN (no log-stream segment) must
 		// still fall through to the LogGroup rule even though both
 		// rules share matchService+matchResourceType.
 		{name: "cloudwatch_log_group_still_routes_to_loggroup",
-			arn:     "arn:aws:logs:us-east-1:111111111111:log-group:/aws/lambda/foo:*",
-			wantCFN: "AWS::Logs::LogGroup",
+			arn:       "arn:aws:logs:us-east-1:111111111111:log-group:/aws/lambda/foo:*",
+			wantCFN:   "AWS::Logs::LogGroup",
 			wantIdent: "/aws/lambda/foo"},
 
 		// Negative cases — explicitly unmapped (sanity checks for our

@@ -2378,3 +2378,256 @@ func TestListCloudWatchLogGroupsAsResourceModels_EmptyReturnsNonNilEmpty(t *test
 		t.Errorf("got %v, want empty slice", models)
 	}
 }
+
+// =====================================================================
+// Bundle 14i — iam:ListRoles fan-outs (RolePolicy + ServiceLinkedRole)
+// =====================================================================
+
+// fakeIAMRolesLister mirrors the IAM Users/Groups fakes for the
+// listRoles operation. Single fake supports both #14i listers
+// (listIAMRolesAsResourceModelsWithClient + listIAMServiceLinkedRoleServiceNamesWithClient).
+type fakeIAMRolesLister struct {
+	listPages []iam.ListRolesOutput
+	listCalls int
+	listErr   error
+}
+
+func (f *fakeIAMRolesLister) ListRoles(_ context.Context, _ *iam.ListRolesInput, _ ...func(*iam.Options)) (*iam.ListRolesOutput, error) {
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
+	if f.listCalls >= len(f.listPages) {
+		return &iam.ListRolesOutput{}, nil
+	}
+	page := f.listPages[f.listCalls]
+	f.listCalls++
+	return &page, nil
+}
+
+// iamRolesPage constructs a ListRolesOutput from a marker + a list of
+// (path, name) pairs. Each pair becomes one Role with the supplied
+// Path (load-bearing for the SLR filter) and RoleName.
+func iamRolesPage(marker string, pairs ...[2]string) iam.ListRolesOutput {
+	roles := make([]iamtypes.Role, 0, len(pairs))
+	for _, p := range pairs {
+		roles = append(roles, iamtypes.Role{
+			Path:     aws.String(p[0]),
+			RoleName: aws.String(p[1]),
+		})
+	}
+	out := iam.ListRolesOutput{Roles: roles}
+	if marker != "" {
+		out.IsTruncated = true
+		out.Marker = aws.String(marker)
+	}
+	return out
+}
+
+// TestListIAMRolesAsResourceModels_SkipsServiceLinkedRoles pins the SLR
+// filter: roles under the canonical "/aws-service-role/..." path
+// prefix are excluded from the parent fan-out for AWS::IAM::RolePolicy
+// because they cannot host inline policies (PutRolePolicy on an SLR
+// returns AccessDenied). The filter is upfront-skip rather than relying
+// on the downstream per-parent ResourceNotFound soft-fail because the
+// upfront skip avoids N noisy ServiceWarn events on accounts with
+// many SLRs.
+func TestListIAMRolesAsResourceModels_SkipsServiceLinkedRoles(t *testing.T) {
+	t.Parallel()
+	fake := &fakeIAMRolesLister{
+		listPages: []iam.ListRolesOutput{
+			iamRolesPage("",
+				[2]string{"/", "my-app-role"},
+				[2]string{"/aws-service-role/elasticache.amazonaws.com/", "AWSServiceRoleForElastiCache"},
+				[2]string{"/", "another-app-role"},
+				[2]string{"/aws-service-role/autoscaling.amazonaws.com/", "AWSServiceRoleForAutoScaling"},
+			),
+		},
+	}
+	got, err := listIAMRolesAsResourceModelsWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{
+		`{"RoleName":"my-app-role"}`,
+		`{"RoleName":"another-app-role"}`,
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("ResourceModels drift: got %v want %v (SLRs MUST be filtered out)", got, want)
+	}
+}
+
+// TestListIAMRolesAsResourceModels_PaginatesAndReturnsModels pins
+// pagination via Marker/IsTruncated + the JSON wrap shape.
+func TestListIAMRolesAsResourceModels_PaginatesAndReturnsModels(t *testing.T) {
+	t.Parallel()
+	fake := &fakeIAMRolesLister{
+		listPages: []iam.ListRolesOutput{
+			iamRolesPage("m1", [2]string{"/", "role-a"}, [2]string{"/", "role-b"}),
+			iamRolesPage("", [2]string{"/", "role-c"}),
+		},
+	}
+	got, err := listIAMRolesAsResourceModelsWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{
+		`{"RoleName":"role-a"}`,
+		`{"RoleName":"role-b"}`,
+		`{"RoleName":"role-c"}`,
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("ResourceModels drift: got %v want %v", got, want)
+	}
+	if fake.listCalls != 2 {
+		t.Errorf("listCalls=%d, want 2 (pagination via Marker)", fake.listCalls)
+	}
+}
+
+// TestListIAMRolesAsResourceModels_EmptyAccountReturnsNonNilEmpty
+// guards the #255 JSON-marshal contract: zero-role accounts must
+// produce "[]" not "null" through the downstream pipeline.
+func TestListIAMRolesAsResourceModels_EmptyAccountReturnsNonNilEmpty(t *testing.T) {
+	t.Parallel()
+	fake := &fakeIAMRolesLister{listPages: []iam.ListRolesOutput{iamRolesPage("")}}
+	got, err := listIAMRolesAsResourceModelsWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got == nil {
+		t.Fatal("got nil, want non-nil empty slice (#255 contract)")
+	}
+	if len(got) != 0 {
+		t.Errorf("got %v, want empty slice", got)
+	}
+}
+
+// TestListIAMRolesAsResourceModels_PropagatesListError pins the
+// errors.Is unwrap chain so callers can match the sentinel.
+func TestListIAMRolesAsResourceModels_PropagatesListError(t *testing.T) {
+	t.Parallel()
+	sentinel := errors.New("AccessDenied: iam:ListRoles")
+	fake := &fakeIAMRolesLister{listErr: sentinel}
+	_, err := listIAMRolesAsResourceModelsWithClient(context.Background(), fake)
+	if !errors.Is(err, sentinel) {
+		t.Errorf("err does not wrap sentinel; got %v", err)
+	}
+}
+
+// TestListIAMServiceLinkedRoleServiceNames_ExtractsServiceFromPath
+// pins the path-segment extraction: from a role with Path
+// "/aws-service-role/<service>.amazonaws.com/" the canonical
+// AWSServiceName (= "<service>.amazonaws.com") must be the SECOND
+// path segment. Non-SLR roles (Path != "/aws-service-role/...") must
+// be excluded.
+func TestListIAMServiceLinkedRoleServiceNames_ExtractsServiceFromPath(t *testing.T) {
+	t.Parallel()
+	fake := &fakeIAMRolesLister{
+		listPages: []iam.ListRolesOutput{
+			iamRolesPage("",
+				[2]string{"/", "my-app-role"}, // non-SLR; excluded
+				[2]string{"/aws-service-role/elasticache.amazonaws.com/", "AWSServiceRoleForElastiCache"},
+				[2]string{"/aws-service-role/autoscaling.amazonaws.com/", "AWSServiceRoleForAutoScaling"},
+				[2]string{"/custom-path/", "another-role"}, // non-SLR; excluded
+			),
+		},
+	}
+	got, err := listIAMServiceLinkedRoleServiceNamesWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{
+		"elasticache.amazonaws.com",
+		"autoscaling.amazonaws.com",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("AWSServiceNames drift: got %v want %v", got, want)
+	}
+}
+
+// TestListIAMServiceLinkedRoleServiceNames_DedupsDuplicateServices
+// defends against a malformed account state surfacing the same
+// service principal twice (e.g. stale ListRoles cursor). One SLR
+// per service-principal is the IAM construction invariant; the
+// defensive dedup keeps the downstream CC GetResource fan-out from
+// issuing a duplicate call.
+func TestListIAMServiceLinkedRoleServiceNames_DedupsDuplicateServices(t *testing.T) {
+	t.Parallel()
+	fake := &fakeIAMRolesLister{
+		listPages: []iam.ListRolesOutput{
+			iamRolesPage("",
+				[2]string{"/aws-service-role/elasticache.amazonaws.com/", "AWSServiceRoleForElastiCache"},
+				[2]string{"/aws-service-role/elasticache.amazonaws.com/extra/", "Duplicate"},
+			),
+		},
+	}
+	got, err := listIAMServiceLinkedRoleServiceNamesWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("got %v, want 1 entry after dedup", got)
+	}
+	if got[0] != "elasticache.amazonaws.com" {
+		t.Errorf("got %q, want %q", got[0], "elasticache.amazonaws.com")
+	}
+}
+
+// TestListIAMServiceLinkedRoleServiceNames_EmptyAccountReturnsNonNilEmpty
+// guards the #255 contract for accounts with zero SLRs (rare but
+// possible in newly-provisioned dev accounts).
+func TestListIAMServiceLinkedRoleServiceNames_EmptyAccountReturnsNonNilEmpty(t *testing.T) {
+	t.Parallel()
+	fake := &fakeIAMRolesLister{listPages: []iam.ListRolesOutput{iamRolesPage("")}}
+	got, err := listIAMServiceLinkedRoleServiceNamesWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got == nil {
+		t.Fatal("got nil, want non-nil empty slice (#255 contract)")
+	}
+	if len(got) != 0 {
+		t.Errorf("got %v, want empty slice", got)
+	}
+}
+
+// TestListIAMServiceLinkedRoleServiceNames_PropagatesListError pins
+// the error-wrap chain.
+func TestListIAMServiceLinkedRoleServiceNames_PropagatesListError(t *testing.T) {
+	t.Parallel()
+	sentinel := errors.New("AccessDenied: iam:ListRoles")
+	fake := &fakeIAMRolesLister{listErr: sentinel}
+	_, err := listIAMServiceLinkedRoleServiceNamesWithClient(context.Background(), fake)
+	if !errors.Is(err, sentinel) {
+		t.Errorf("err does not wrap sentinel; got %v", err)
+	}
+}
+
+// TestListIAMServiceLinkedRoleServiceNames_SkipsRolesWithMalformedPath
+// defends against a role under "/aws-service-role/" with NO trailing
+// "/<service>/" segment — extraction would emit an empty string which
+// the discoverer's downstream CC GetResource would reject with
+// InvalidRequestException. Skip client-side.
+func TestListIAMServiceLinkedRoleServiceNames_SkipsRolesWithMalformedPath(t *testing.T) {
+	t.Parallel()
+	fake := &fakeIAMRolesLister{
+		listPages: []iam.ListRolesOutput{
+			iamRolesPage("",
+				// Path == "/aws-service-role/" with NO trailing
+				// segment — TrimPrefix leaves empty, Index returns -1,
+				// the bare-rest fall-through emits the empty string,
+				// then the empty-string guard skips it.
+				[2]string{"/aws-service-role/", "AWSManaged"},
+				// Well-formed SLR for sanity.
+				[2]string{"/aws-service-role/foo.amazonaws.com/", "AWSServiceRoleForFoo"},
+			),
+		},
+	}
+	got, err := listIAMServiceLinkedRoleServiceNamesWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"foo.amazonaws.com"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v (malformed path must be skipped)", got, want)
+	}
+}

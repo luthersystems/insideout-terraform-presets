@@ -6,6 +6,7 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/cloudcontrol"
 )
 
@@ -2777,5 +2778,361 @@ func TestCloudWatchLogStreamConfig(t *testing.T) {
 	}
 	if len(tags) != 0 {
 		t.Errorf("Tags: got %+v, want empty map", tags)
+	}
+}
+
+// =====================================================================
+// Bundle 14i — IAM + OpenSearchServerless + Bedrock sub-resource pins
+// =====================================================================
+
+// TestIAMRolePolicyConfig pins aws_iam_role_policy: parent-scoped on
+// RoleName, IsGlobal, ImportID rewrite "|" -> ":", structured NativeIDs
+// (role_name + policy_name), untaggable (inline policies have no Tags
+// property on the CFN schema — they're a sub-resource of the parent
+// role). SkipProjectTagFilter must be true so policies on
+// project-tagged roles don't get silently dropped.
+func TestIAMRolePolicyConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_iam_role_policy")
+	if !cfg.SkipProjectTagFilter {
+		t.Error("aws_iam_role_policy: SkipProjectTagFilter must be true (untaggable; the legacy Project filter would silently drop every policy)")
+	}
+	if !cfg.IsGlobal {
+		t.Error("aws_iam_role_policy: IsGlobal must be true (IAM is a global service; matches aws_iam_role / aws_iam_user)")
+	}
+	if cfg.CloudFormationType != "AWS::IAM::RolePolicy" {
+		t.Errorf("CloudFormationType=%q, want AWS::IAM::RolePolicy", cfg.CloudFormationType)
+	}
+	if cfg.SDKLister != nil {
+		t.Error("SDKLister must be nil (uses ParentLister)")
+	}
+	if cfg.ParentLister == nil {
+		t.Error("ParentLister must be non-nil (RolePolicy is parent-scoped on RoleName)")
+	}
+
+	// ImportID: CC "<RoleName>|<PolicyName>" -> TF "<RoleName>:<PolicyName>".
+	// Single-replace on first "|" so any "|" in PolicyName survives
+	// (rare but the strings.Replace count=1 is load-bearing for symmetry
+	// with the log_stream rewrite).
+	if got := cfg.ImportIDFromIdentifier("my-role|my-policy", nil); got != "my-role:my-policy" {
+		t.Errorf("ImportID rewrite: got %q, want %q", got, "my-role:my-policy")
+	}
+	// Defensive: a malformed identifier without "|" must pass through
+	// verbatim so a downstream import surfaces a clear error rather
+	// than silently mangling the identifier.
+	if got := cfg.ImportIDFromIdentifier("no-pipe", nil); got != "no-pipe" {
+		t.Errorf("ImportID passthrough on no-pipe: got %q, want %q", got, "no-pipe")
+	}
+
+	// NameHint: prefer the CFN-surfaced PolicyName.
+	props := map[string]any{"PolicyName": "inline-s3-read"}
+	if got := cfg.NameHintFromProperties("my-role|inline-s3-read", props); got != "inline-s3-read" {
+		t.Errorf("NameHint from PolicyName: got %q, want inline-s3-read", got)
+	}
+	// Fallback to identifier when PolicyName is absent.
+	if got := cfg.NameHintFromProperties("my-role|inline-s3-read", map[string]any{}); got != "my-role|inline-s3-read" {
+		t.Errorf("NameHint fallback: got %q, want %q", got, "my-role|inline-s3-read")
+	}
+
+	// NativeIDs: structured (role_name, policy_name).
+	native := cfg.NativeIDsFromProperties("my-role|inline-s3-read", nil)
+	want := map[string]string{"role_name": "my-role", "policy_name": "inline-s3-read"}
+	if !reflect.DeepEqual(native, want) {
+		t.Errorf("NativeIDs: got %+v, want %+v", native, want)
+	}
+	// Defensive: malformed identifier returns nil so downstream sees
+	// "no native IDs" rather than a half-populated map with empty
+	// strings.
+	if got := cfg.NativeIDsFromProperties("malformed-no-pipe", nil); got != nil {
+		t.Errorf("NativeIDs on malformed identifier: got %+v, want nil", got)
+	}
+
+	// Untaggable: must return a non-nil empty map (#255 contract).
+	tags := cfg.TagsFromProperties(map[string]any{})
+	if tags == nil {
+		t.Error("Tags: got nil, want non-nil empty map (#255 contract; inline policies are untaggable)")
+	}
+	if len(tags) != 0 {
+		t.Errorf("Tags: got %+v, want empty map", tags)
+	}
+}
+
+// TestIAMServiceLinkedRoleConfig pins aws_iam_service_linked_role:
+// SDKLister-listed (CC ListResources unsupported), IsGlobal, ImportID
+// rewrite from CC AWSServiceName to TF role-ARN sourced from properties
+// (RoleArn), NativeIDs preserve aws_service_name + arn + role_name,
+// untaggable (SLRs are AWS-managed; tag attempts return AccessDenied).
+func TestIAMServiceLinkedRoleConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_iam_service_linked_role")
+	if !cfg.SkipProjectTagFilter {
+		t.Error("aws_iam_service_linked_role: SkipProjectTagFilter must be true (AWS-managed; customers cannot tag SLRs via the IAM API)")
+	}
+	if !cfg.IsGlobal {
+		t.Error("aws_iam_service_linked_role: IsGlobal must be true (IAM is a global service)")
+	}
+	if cfg.CloudFormationType != "AWS::IAM::ServiceLinkedRole" {
+		t.Errorf("CloudFormationType=%q, want AWS::IAM::ServiceLinkedRole", cfg.CloudFormationType)
+	}
+	if cfg.SDKLister == nil {
+		t.Error("SDKLister must be non-nil (CC ListResources unsupported for SLRs)")
+	}
+	if cfg.ParentLister != nil {
+		t.Error("ParentLister must be nil (SDKLister and ParentLister are mutually exclusive)")
+	}
+
+	// ImportID: when properties carry RoleArn, return the ARN; the
+	// downstream Terraform importer for aws_iam_service_linked_role
+	// expects the full role ARN as its import format.
+	serviceName := "elasticache.amazonaws.com"
+	props := map[string]any{
+		"AWSServiceName": serviceName,
+		"RoleName":       "AWSServiceRoleForElastiCache",
+		"RoleArn":        "arn:aws:iam::111111111111:role/aws-service-role/elasticache.amazonaws.com/AWSServiceRoleForElastiCache",
+	}
+	if got := cfg.ImportIDFromIdentifier(serviceName, props); got != props["RoleArn"] {
+		t.Errorf("ImportID from RoleArn: got %q, want %q", got, props["RoleArn"])
+	}
+	// Fallback: when properties don't carry RoleArn (defensive — a
+	// malformed CC payload), passthrough the AWSServiceName identifier
+	// so a downstream import surfaces a clear "wrong format" error
+	// rather than a silent mis-import with an empty string.
+	if got := cfg.ImportIDFromIdentifier(serviceName, map[string]any{}); got != serviceName {
+		t.Errorf("ImportID fallback (no RoleArn): got %q, want %q", got, serviceName)
+	}
+
+	// NameHint: prefer RoleName (the AWS-assigned role suffix).
+	if got := cfg.NameHintFromProperties(serviceName, props); got != "AWSServiceRoleForElastiCache" {
+		t.Errorf("NameHint from RoleName: got %q, want %q", got, "AWSServiceRoleForElastiCache")
+	}
+	// Fallback to identifier when RoleName is absent.
+	if got := cfg.NameHintFromProperties(serviceName, map[string]any{}); got != serviceName {
+		t.Errorf("NameHint fallback: got %q, want %q", got, serviceName)
+	}
+
+	// NativeIDs: stamp aws_service_name unconditionally, then arn +
+	// role_name when surfaced by properties.
+	native := cfg.NativeIDsFromProperties(serviceName, props)
+	want := map[string]string{
+		"aws_service_name": serviceName,
+		"arn":              props["RoleArn"].(string),
+		"role_name":        "AWSServiceRoleForElastiCache",
+	}
+	if !reflect.DeepEqual(native, want) {
+		t.Errorf("NativeIDs (full props): got %+v, want %+v", native, want)
+	}
+	// Without props, only aws_service_name should be present.
+	nativeBare := cfg.NativeIDsFromProperties(serviceName, map[string]any{})
+	wantBare := map[string]string{"aws_service_name": serviceName}
+	if !reflect.DeepEqual(nativeBare, wantBare) {
+		t.Errorf("NativeIDs (bare): got %+v, want %+v", nativeBare, wantBare)
+	}
+
+	// Untaggable: non-nil empty map (#255 contract).
+	tags := cfg.TagsFromProperties(map[string]any{})
+	if tags == nil {
+		t.Error("Tags: got nil, want non-nil empty map (#255 contract; SLRs are AWS-managed and untaggable)")
+	}
+	if len(tags) != 0 {
+		t.Errorf("Tags: got %+v, want empty map", tags)
+	}
+}
+
+// TestOpenSearchServerlessAccessPolicyConfig pins
+// aws_opensearchserverless_access_policy: ParentLister returns the
+// fixed Type fan-out, ImportID rewrite "<Type>|<Name>" ->
+// "<Name>/<Type>" (Name-first slash-separated per
+// terraform-provider-aws v6.x), structured NativeIDs (type + name),
+// untaggable (policies are governance metadata, not tag-bearing).
+func TestOpenSearchServerlessAccessPolicyConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_opensearchserverless_access_policy")
+	if !cfg.SkipProjectTagFilter {
+		t.Error("aws_opensearchserverless_access_policy: SkipProjectTagFilter must be true (untaggable)")
+	}
+	if cfg.CloudFormationType != "AWS::OpenSearchServerless::AccessPolicy" {
+		t.Errorf("CloudFormationType=%q, want AWS::OpenSearchServerless::AccessPolicy", cfg.CloudFormationType)
+	}
+	if cfg.ParentLister == nil {
+		t.Error("ParentLister must be non-nil (Type fan-out required by CC schema)")
+	}
+	if cfg.SDKLister != nil {
+		t.Error("SDKLister must be nil (mutually exclusive with ParentLister)")
+	}
+
+	// ImportID: "<Type>|<Name>" -> "<Name>/<Type>". Note the inversion:
+	// CC puts Type first, TF puts Name first.
+	if got := cfg.ImportIDFromIdentifier("data|my-policy", nil); got != "my-policy/data" {
+		t.Errorf("ImportID rewrite: got %q, want %q", got, "my-policy/data")
+	}
+	// Defensive: missing "|" returns the identifier verbatim so a
+	// malformed CC payload surfaces clearly downstream.
+	if got := cfg.ImportIDFromIdentifier("no-pipe", nil); got != "no-pipe" {
+		t.Errorf("ImportID passthrough on no-pipe: got %q, want %q", got, "no-pipe")
+	}
+
+	// NameHint: prefer CFN-surfaced Name.
+	if got := cfg.NameHintFromProperties("data|my-policy", map[string]any{"Name": "my-policy"}); got != "my-policy" {
+		t.Errorf("NameHint from Name: got %q, want my-policy", got)
+	}
+	// Fallback to identifier.
+	if got := cfg.NameHintFromProperties("data|my-policy", map[string]any{}); got != "data|my-policy" {
+		t.Errorf("NameHint fallback: got %q, want %q", got, "data|my-policy")
+	}
+
+	// NativeIDs: structured (type, name).
+	native := cfg.NativeIDsFromProperties("data|my-policy", nil)
+	want := map[string]string{"type": "data", "name": "my-policy"}
+	if !reflect.DeepEqual(native, want) {
+		t.Errorf("NativeIDs: got %+v, want %+v", native, want)
+	}
+	if got := cfg.NativeIDsFromProperties("malformed", nil); got != nil {
+		t.Errorf("NativeIDs on malformed identifier: got %+v, want nil", got)
+	}
+
+	// Untaggable.
+	tags := cfg.TagsFromProperties(map[string]any{})
+	if tags == nil {
+		t.Error("Tags: got nil, want non-nil empty map (#255 contract)")
+	}
+	if len(tags) != 0 {
+		t.Errorf("Tags: got %+v, want empty map", tags)
+	}
+}
+
+// TestOpenSearchServerlessSecurityPolicyConfig pins
+// aws_opensearchserverless_security_policy: same shape as
+// access-policy sibling but two Type values (encryption + network)
+// from the ParentLister.
+func TestOpenSearchServerlessSecurityPolicyConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_opensearchserverless_security_policy")
+	if !cfg.SkipProjectTagFilter {
+		t.Error("aws_opensearchserverless_security_policy: SkipProjectTagFilter must be true (untaggable)")
+	}
+	if cfg.CloudFormationType != "AWS::OpenSearchServerless::SecurityPolicy" {
+		t.Errorf("CloudFormationType=%q, want AWS::OpenSearchServerless::SecurityPolicy", cfg.CloudFormationType)
+	}
+	if cfg.ParentLister == nil {
+		t.Error("ParentLister must be non-nil (Type fan-out: encryption + network)")
+	}
+
+	// ImportID rewrite shape mirrors the access-policy sibling.
+	if got := cfg.ImportIDFromIdentifier("encryption|my-policy", nil); got != "my-policy/encryption" {
+		t.Errorf("ImportID rewrite (encryption): got %q, want %q", got, "my-policy/encryption")
+	}
+	if got := cfg.ImportIDFromIdentifier("network|net-policy", nil); got != "net-policy/network" {
+		t.Errorf("ImportID rewrite (network): got %q, want %q", got, "net-policy/network")
+	}
+
+	// NativeIDs structured pin.
+	native := cfg.NativeIDsFromProperties("encryption|my-policy", nil)
+	want := map[string]string{"type": "encryption", "name": "my-policy"}
+	if !reflect.DeepEqual(native, want) {
+		t.Errorf("NativeIDs: got %+v, want %+v", native, want)
+	}
+
+	// Untaggable.
+	tags := cfg.TagsFromProperties(map[string]any{})
+	if tags == nil {
+		t.Error("Tags: got nil, want non-nil empty map (#255 contract)")
+	}
+	if len(tags) != 0 {
+		t.Errorf("Tags: got %+v, want empty map", tags)
+	}
+}
+
+// TestBedrockModelInvocationLoggingConfigurationConfig pins
+// aws_bedrock_model_invocation_logging_configuration: account-scoped
+// singleton, CC default-list (returns 0 or 1 row), passthrough
+// ImportID, untaggable (no Tags property on the CFN schema).
+func TestBedrockModelInvocationLoggingConfigurationConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_bedrock_model_invocation_logging_configuration")
+	if !cfg.SkipProjectTagFilter {
+		t.Error("aws_bedrock_model_invocation_logging_configuration: SkipProjectTagFilter must be true (untaggable; singleton)")
+	}
+	if cfg.CloudFormationType != "AWS::Bedrock::ModelInvocationLoggingConfiguration" {
+		t.Errorf("CloudFormationType=%q, want AWS::Bedrock::ModelInvocationLoggingConfiguration", cfg.CloudFormationType)
+	}
+	if cfg.SDKLister != nil {
+		t.Error("SDKLister must be nil (CC default-list — ListResources returns 0/1)")
+	}
+	if cfg.ParentLister != nil {
+		t.Error("ParentLister must be nil (no parent context — singleton)")
+	}
+	if cfg.IsGlobal {
+		t.Error("aws_bedrock_model_invocation_logging_configuration: IsGlobal must be false (Bedrock is regional; the singleton scope is per-account+region)")
+	}
+
+	// ImportID: passthrough (the CC identifier is the singleton
+	// sentinel; the downstream Terraform importer reads the actual
+	// region from its own AWS config).
+	id := "us-east-1"
+	if got := cfg.ImportIDFromIdentifier(id, nil); got != id {
+		t.Errorf("ImportID passthrough: got %q, want %q", got, id)
+	}
+
+	// NameHint: passthrough of identifier (no human-readable name on
+	// the singleton).
+	if got := cfg.NameHintFromProperties(id, map[string]any{}); got != id {
+		t.Errorf("NameHint: got %q, want %q", got, id)
+	}
+
+	// NativeIDs: singleton stamp under "id" so downstream consumers
+	// have a non-nil NativeIDs map (#255).
+	native := cfg.NativeIDsFromProperties(id, map[string]any{})
+	want := map[string]string{"id": id}
+	if !reflect.DeepEqual(native, want) {
+		t.Errorf("NativeIDs: got %+v, want %+v", native, want)
+	}
+
+	// Untaggable.
+	tags := cfg.TagsFromProperties(map[string]any{})
+	if tags == nil {
+		t.Error("Tags: got nil, want non-nil empty map (#255 contract)")
+	}
+	if len(tags) != 0 {
+		t.Errorf("Tags: got %+v, want empty map", tags)
+	}
+}
+
+// TestOpenSearchServerlessAccessPolicyTypeModels pins the static
+// Type fan-out for AWS::OpenSearchServerless::AccessPolicy: exactly
+// one Type value ("data") today. A regression that adds or drops a
+// Type value here must be intentional — the CC schema today defines
+// only "data" for access policies, so any drift indicates either an
+// AWS schema change (verify against the latest CloudFormation docs)
+// or a regression introducing an invalid Type that CC would reject
+// with InvalidRequestException.
+func TestOpenSearchServerlessAccessPolicyTypeModels(t *testing.T) {
+	t.Parallel()
+	got, err := opensearchServerlessAccessPolicyTypeModels(context.Background(), aws.Config{}, "us-east-1", DiscoverArgs{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{`{"Type":"data"}`}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Type fan-out: got %v, want %v", got, want)
+	}
+}
+
+// TestOpenSearchServerlessSecurityPolicyTypeModels pins the static
+// Type fan-out for AWS::OpenSearchServerless::SecurityPolicy: two
+// Type values, encryption first then network. Emit order is
+// load-bearing — downstream test pins depend on this deterministic
+// order.
+func TestOpenSearchServerlessSecurityPolicyTypeModels(t *testing.T) {
+	t.Parallel()
+	got, err := opensearchServerlessSecurityPolicyTypeModels(context.Background(), aws.Config{}, "us-east-1", DiscoverArgs{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{
+		`{"Type":"encryption"}`,
+		`{"Type":"network"}`,
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("Type fan-out: got %v, want %v", got, want)
 	}
 }

@@ -3,6 +3,7 @@ package awsdiscover
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/acm"
@@ -1023,4 +1024,197 @@ func listCloudWatchLogGroupsAsResourceModels(ctx context.Context, awsCfg aws.Con
 		models = append(models, fmt.Sprintf(`{"LogGroupName":%q}`, n))
 	}
 	return models, nil
+}
+
+// =====================================================================
+// Bundle 14i — IAM role fan-out + OpenSearchServerless Type fan-outs
+// =====================================================================
+
+// iamRolesLister is the narrow subset of the IAM SDK used by the
+// aws_iam_role_policy ParentLister and the aws_iam_service_linked_role
+// SDKLister enumerators (#14i). Both consume iam:ListRoles output but
+// transform it differently:
+//
+//   - listIAMRolesAsResourceModels filters to non-SLR roles (Path !=
+//     "/aws-service-role/...") and emits one
+//     ResourceModel={"RoleName":"…"} JSON-string per role for the
+//     AWS::IAM::RolePolicy parent-fan-out.
+//   - listIAMServiceLinkedRoleServiceNames filters to SLR roles (Path
+//     == "/aws-service-role/<service>.amazonaws.com/...") and emits
+//     one AWSServiceName per role for the AWS::IAM::ServiceLinkedRole
+//     SDKLister branch.
+//
+// The interface is package-private so test fakes can satisfy it without
+// depending on the full IAM client surface (already used by iamUsersLister
+// + iamGroupsLister with a different method set; declaring a fresh
+// interface keeps the per-call dependency surface minimal).
+type iamRolesLister interface {
+	ListRoles(ctx context.Context, in *iam.ListRolesInput, opts ...func(*iam.Options)) (*iam.ListRolesOutput, error)
+}
+
+// iamServiceRolePathPrefix is the path AWS stamps on every service-
+// linked role at creation time. Service-linked roles ALWAYS live under
+// "/aws-service-role/<service-hostname>/<...>" — both the IAM console
+// and CLI reject creates that don't match this shape, so the prefix
+// check is a sound discriminator without false positives.
+const iamServiceRolePathPrefix = "/aws-service-role/"
+
+// listIAMRolesAsResourceModels enumerates IAM roles (global service)
+// and wraps each non-service-linked role's RoleName into a JSON
+// ResourceModel `{"RoleName":"…"}` for feeding into Cloud Control
+// ListResources for AWS::IAM::RolePolicy (#14i). The parent-scoped
+// RolePolicy type requires a non-empty ResourceModel — CC returns
+// InvalidRequestException when RoleName is missing.
+//
+// SLRs are filtered out because they cannot have inline role policies
+// attached (IAM rejects PutRolePolicy on a service-linked role with
+// AccessDenied). Listing them would surface ResourceNotFoundException
+// per-parent on the downstream CC ListResources fan-out (the
+// per-parent NotFound soft-fail handles it cleanly, but skipping
+// upfront saves N noisy ServiceWarn events on accounts with many
+// SLRs).
+//
+// IAM ListRoles paginates via `Marker` (string cursor); IsTruncated
+// signals more pages. The terminator condition mirrors the other IAM
+// listers: break on either flag clear OR an empty/nil Marker, so a
+// well-formed final page without IsTruncated terminates cleanly even
+// if the SDK reuses the Marker field.
+//
+// Returns a non-nil empty slice on accounts with zero roles so
+// downstream consumers see "[]" not "null" through the JSON-marshal
+// pipeline (#255 contract).
+func listIAMRolesAsResourceModels(ctx context.Context, awsCfg aws.Config, region string, _ DiscoverArgs) ([]string, error) {
+	client := iam.NewFromConfig(awsCfg, func(o *iam.Options) {
+		if region != "" {
+			o.Region = region
+		}
+	})
+	return listIAMRolesAsResourceModelsWithClient(ctx, client)
+}
+
+func listIAMRolesAsResourceModelsWithClient(ctx context.Context, client iamRolesLister) ([]string, error) {
+	models := []string{}
+	var marker *string
+	for {
+		page, err := client.ListRoles(ctx, &iam.ListRolesInput{Marker: marker})
+		if err != nil {
+			return nil, fmt.Errorf("iam:ListRoles: %w", err)
+		}
+		for _, r := range page.Roles {
+			name := aws.ToString(r.RoleName)
+			if name == "" {
+				continue
+			}
+			// Skip service-linked roles — they cannot have inline
+			// policies and would produce N noisy per-parent
+			// ResourceNotFound warnings on the downstream CC fan-out.
+			if strings.HasPrefix(aws.ToString(r.Path), iamServiceRolePathPrefix) {
+				continue
+			}
+			models = append(models, fmt.Sprintf(`{"RoleName":%q}`, name))
+		}
+		if !page.IsTruncated || page.Marker == nil || aws.ToString(page.Marker) == "" {
+			break
+		}
+		marker = page.Marker
+	}
+	return models, nil
+}
+
+// listIAMServiceLinkedRoleServiceNames enumerates IAM roles (global)
+// and emits the canonical AWSServiceName for each service-linked role.
+// Used as the SDKLister for AWS::IAM::ServiceLinkedRole (#14i) — CC
+// ListResources returns UnsupportedActionException for the type
+// because SLRs are AWS-managed and have no LIST handler.
+//
+// AWSServiceName is the canonical service principal hostname (e.g.
+// "elasticache.amazonaws.com"). For a service-linked role with Path
+// "/aws-service-role/elasticache.amazonaws.com/" the service name is
+// the SECOND path segment. We extract it deterministically by
+// trimming the well-known SLR path prefix and taking everything up to
+// the next "/".
+//
+// CC GetResource for AWS::IAM::ServiceLinkedRole is keyed on
+// AWSServiceName (verified against the CFN schema's primaryIdentifier
+// of [/properties/AWSServiceName]). Two SLRs for the same service is
+// impossible by construction — IAM rejects duplicate-service SLR
+// creates — so the AWSServiceName-as-identifier is unique per role.
+//
+// Returns a non-nil empty slice on accounts with zero SLRs (#255).
+func listIAMServiceLinkedRoleServiceNames(ctx context.Context, awsCfg aws.Config, region string, _ DiscoverArgs) ([]string, error) {
+	client := iam.NewFromConfig(awsCfg, func(o *iam.Options) {
+		if region != "" {
+			o.Region = region
+		}
+	})
+	return listIAMServiceLinkedRoleServiceNamesWithClient(ctx, client)
+}
+
+func listIAMServiceLinkedRoleServiceNamesWithClient(ctx context.Context, client iamRolesLister) ([]string, error) {
+	names := []string{}
+	seen := map[string]bool{}
+	var marker *string
+	for {
+		page, err := client.ListRoles(ctx, &iam.ListRolesInput{Marker: marker})
+		if err != nil {
+			return nil, fmt.Errorf("iam:ListRoles: %w", err)
+		}
+		for _, r := range page.Roles {
+			path := aws.ToString(r.Path)
+			if !strings.HasPrefix(path, iamServiceRolePathPrefix) {
+				continue
+			}
+			// Path is "/aws-service-role/<service>.amazonaws.com/..." —
+			// trim the prefix, then take everything up to the next "/".
+			rest := strings.TrimPrefix(path, iamServiceRolePathPrefix)
+			service := rest
+			if idx := strings.Index(rest, "/"); idx >= 0 {
+				service = rest[:idx]
+			}
+			if service == "" {
+				continue
+			}
+			// One SLR per service-principal by IAM construction;
+			// dedup defensively in case a malformed account state
+			// (e.g. stale ListRoles cursor) surfaces a duplicate.
+			if seen[service] {
+				continue
+			}
+			seen[service] = true
+			names = append(names, service)
+		}
+		if !page.IsTruncated || page.Marker == nil || aws.ToString(page.Marker) == "" {
+			break
+		}
+		marker = page.Marker
+	}
+	return names, nil
+}
+
+// opensearchServerlessAccessPolicyTypeModels returns the static Type
+// fan-out for AWS::OpenSearchServerless::AccessPolicy (#14i). CC
+// ListResources requires ResourceModel={"Type":"<value>"} per the
+// CFN schema; AWS defines exactly one valid Type value for access
+// policies today ("data"). Static-slice precedent: wafv2ParentModels.
+//
+// Region is ignored — the Type taxonomy is global to the CFN schema
+// (not regional). The Discoverer still calls this per-region because
+// the upstream AccessPolicy resource itself is regional.
+func opensearchServerlessAccessPolicyTypeModels(_ context.Context, _ aws.Config, _ string, _ DiscoverArgs) ([]string, error) {
+	return []string{`{"Type":"data"}`}, nil
+}
+
+// opensearchServerlessSecurityPolicyTypeModels returns the static Type
+// fan-out for AWS::OpenSearchServerless::SecurityPolicy (#14i). Two
+// valid Type values per the CFN schema: "encryption" and "network".
+// Emit order is encryption first then network for deterministic test
+// pinning (consumers preserve emission order).
+//
+// Region is ignored for the same reason as the access-policy
+// counterpart above.
+func opensearchServerlessSecurityPolicyTypeModels(_ context.Context, _ aws.Config, _ string, _ DiscoverArgs) ([]string, error) {
+	return []string{
+		`{"Type":"encryption"}`,
+		`{"Type":"network"}`,
+	}, nil
 }
