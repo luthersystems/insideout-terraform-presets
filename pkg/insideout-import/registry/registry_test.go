@@ -155,6 +155,7 @@ func TestSupportedDiscoverTypes_GCP_ReturnsCanonicalSortedList(t *testing.T) {
 		"google_compute_instance",
 		"google_compute_managed_ssl_certificate",
 		"google_compute_network",
+		"google_compute_resource_policy",
 		"google_compute_router",
 		"google_compute_security_policy",
 		"google_compute_target_http_proxy",
@@ -164,6 +165,7 @@ func TestSupportedDiscoverTypes_GCP_ReturnsCanonicalSortedList(t *testing.T) {
 		"google_container_node_pool",
 		"google_firestore_database",
 		"google_identity_platform_config",
+		"google_identity_platform_default_supported_idp_config",
 		"google_kms_crypto_key",
 		"google_kms_crypto_key_iam_binding",
 		"google_kms_key_ring",
@@ -172,6 +174,7 @@ func TestSupportedDiscoverTypes_GCP_ReturnsCanonicalSortedList(t *testing.T) {
 		"google_monitoring_dashboard",
 		"google_monitoring_notification_channel",
 		"google_project_iam_member",
+		"google_project_service",
 		"google_pubsub_subscription",
 		"google_pubsub_topic",
 		"google_redis_instance",
@@ -180,12 +183,14 @@ func TestSupportedDiscoverTypes_GCP_ReturnsCanonicalSortedList(t *testing.T) {
 		"google_secret_manager_secret_iam_member",
 		"google_secret_manager_secret_version",
 		"google_service_account",
+		"google_service_networking_connection",
 		"google_sql_database_instance",
 		"google_sql_user",
 		"google_storage_bucket",
 		"google_storage_bucket_iam_member",
 		"google_storage_bucket_object",
 		"google_vertex_ai_dataset",
+		"google_vpc_access_connector",
 	}
 	got := SupportedDiscoverTypes(ProviderGCP)
 	if !reflect.DeepEqual(got, want) {

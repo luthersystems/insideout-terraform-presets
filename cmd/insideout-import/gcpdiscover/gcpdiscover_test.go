@@ -76,6 +76,12 @@ var expectedRegisteredTypes = map[string]bool{
 	// Bundle G3 — sub-resources (#475).
 	"google_secret_manager_secret_version": false,
 	"google_storage_bucket_object":         false,
+	// Bundle G4 — final 5 (#478). Closes GCP discovery parity.
+	"google_project_service":                                false,
+	"google_identity_platform_default_supported_idp_config": false,
+	"google_service_networking_connection":                  false,
+	"google_vpc_access_connector":                           false,
+	"google_compute_resource_policy":                        false,
 }
 
 func TestNewGCPDiscoverer_RegistersExpectedTypes(t *testing.T) {
@@ -749,6 +755,17 @@ var expectedScopeStyle = map[string]ScopeStyle{
 	// CAI; each fans out across its parent's CAI rows.
 	"google_secret_manager_secret_version": ScopeStyleNonCAI,
 	"google_storage_bucket_object":         ScopeStyleNonCAI,
+	// Bundle G4 — final 5 (#478). Four non-CAI types
+	// (project-wide service enablement, Identity Platform IDP child
+	// configs, Service Networking peering, Serverless VPC Access
+	// connectors) plus one CAI type (compute resource policies).
+	// Resource policies are regional + label-less per the provider
+	// schema → ScopeStyleNamePrefix.
+	"google_project_service":                                ScopeStyleNonCAI,
+	"google_identity_platform_default_supported_idp_config": ScopeStyleNonCAI,
+	"google_service_networking_connection":                  ScopeStyleNonCAI,
+	"google_vpc_access_connector":                           ScopeStyleNonCAI,
+	"google_compute_resource_policy":                        ScopeStyleNamePrefix,
 }
 
 // TestScopeStyle_PinsPerTypeContract is the regression guard (#366).

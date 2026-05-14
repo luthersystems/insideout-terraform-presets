@@ -132,6 +132,7 @@ google_compute_health_check	Network Security
 google_compute_instance	Virtual Machines
 google_compute_managed_ssl_certificate	Network Security
 google_compute_network	Network Security
+google_compute_resource_policy	Data Storage
 google_compute_router	Network Security
 google_compute_security_policy	Network Security
 google_compute_subnetwork	Network Security
@@ -142,6 +143,7 @@ google_container_cluster	Virtual Machines
 google_container_node_pool	Virtual Machines
 google_firestore_database	Data Storage
 google_identity_platform_config	Security
+google_identity_platform_default_supported_idp_config	Security
 google_kms_crypto_key	Security
 google_kms_crypto_key_iam_binding	Security
 google_kms_key_ring	Security
@@ -150,6 +152,7 @@ google_monitoring_alert_policy	Observability
 google_monitoring_dashboard	Observability
 google_monitoring_notification_channel	Observability
 google_project_iam_member	Security
+google_project_service	Security
 google_pubsub_subscription	Events
 google_pubsub_topic	Events
 google_redis_instance	Data Storage
@@ -158,9 +161,11 @@ google_secret_manager_secret_iam_binding	Security
 google_secret_manager_secret_iam_member	Security
 google_secret_manager_secret_version	Security
 google_service_account	Security
+google_service_networking_connection	Network Security
 google_sql_database_instance	Data Storage
 google_sql_user	Security
 google_storage_bucket	Data Storage
 google_storage_bucket_iam_member	Security
 google_storage_bucket_object	Data Storage
 google_vertex_ai_dataset	Data Storage
+google_vpc_access_connector	Network Security

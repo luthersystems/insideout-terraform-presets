@@ -13,8 +13,11 @@ import (
 	"google.golang.org/api/logging/v2"
 	"google.golang.org/api/run/v2"
 	"google.golang.org/api/secretmanager/v1"
+	"google.golang.org/api/servicenetworking/v1"
+	"google.golang.org/api/serviceusage/v1"
 	"google.golang.org/api/sqladmin/v1"
 	"google.golang.org/api/storage/v1"
+	"google.golang.org/api/vpcaccess/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -594,6 +597,277 @@ func (l *RealBucketObjectLister) ListBucketObjects(ctx context.Context, bucketNa
 			return out, errBucketObjectsTruncated
 		}
 		return nil, wrapGCPAPIError("list bucket objects", pageErr)
+	}
+	return out, nil
+}
+
+// ---- Bundle G4 (#478) listers -----------------------------------------
+
+// gcpEnabledService is the projected view of a Service Usage row used
+// by the project_service discoverer. We only carry the service host
+// string and its state — the rich service config (display name, docs
+// URL, etc.) the API returns is unused by the discoverer and uninvolved
+// in any downstream translation.
+type gcpEnabledService struct {
+	Service string // e.g. "secretmanager.googleapis.com"
+	State   string // "ENABLED" — discoverer filters server-side
+}
+
+// gcpProjectServiceLister is the seam the project_service discoverer
+// reaches in through. One round-trip lists every enabled service in
+// the project; no per-service fan-out.
+type gcpProjectServiceLister interface {
+	ListEnabledServices(ctx context.Context, projectID string) ([]gcpEnabledService, error)
+}
+
+// RealProjectServiceLister wraps google.golang.org/api/serviceusage/v1.
+type RealProjectServiceLister struct {
+	svc *serviceusage.Service
+}
+
+// NewRealProjectServiceLister constructs a Service Usage lister backed
+// by ADC. Same nil-tolerant export pattern as the other Real* listers.
+func NewRealProjectServiceLister(ctx context.Context) (*RealProjectServiceLister, error) {
+	svc, err := serviceusage.NewService(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("create serviceusage client: %w", err)
+	}
+	return &RealProjectServiceLister{svc: svc}, nil
+}
+
+func (l *RealProjectServiceLister) ListEnabledServices(ctx context.Context, projectID string) ([]gcpEnabledService, error) {
+	if l == nil || l.svc == nil {
+		return nil, errors.New("serviceusage client closed")
+	}
+	parent := "projects/" + projectID
+	var out []gcpEnabledService
+	call := l.svc.Services.List(parent).Filter("state:ENABLED").Context(ctx)
+	err := call.Pages(ctx, func(resp *serviceusage.ListServicesResponse) error {
+		for _, s := range resp.Services {
+			if s == nil {
+				continue
+			}
+			// s.Name is "projects/<p>/services/<host>"; the trailing
+			// path segment is the service-API-name string and IS the
+			// terraform resource identifier.
+			host := s.Name
+			if i := strings.LastIndex(host, "/"); i >= 0 {
+				host = host[i+1:]
+			}
+			if host == "" {
+				continue
+			}
+			out = append(out, gcpEnabledService{
+				Service: host,
+				State:   s.State,
+			})
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, wrapGCPAPIError("list enabled services", err)
+	}
+	return out, nil
+}
+
+// gcpDefaultSupportedIdpConfig is the projected view of an Identity
+// Platform default-supported IDP config row. The lister populates
+// IdpID from the trailing path segment of Name so the discoverer
+// doesn't have to re-parse it.
+type gcpDefaultSupportedIdpConfig struct {
+	Name    string // projects/<p>/defaultSupportedIdpConfigs/<id>
+	IdpID   string // last path segment, e.g. "google.com"
+	Enabled bool
+}
+
+type gcpDefaultSupportedIdpConfigLister interface {
+	// ListDefaultSupportedIdpConfigs returns the configured default-
+	// supported IDP configurations for an Identity Platform project.
+	// Implementations must surface ALL configs (enabled and disabled)
+	// because Terraform manages both states.
+	ListDefaultSupportedIdpConfigs(ctx context.Context, projectID string) ([]gcpDefaultSupportedIdpConfig, error)
+}
+
+// RealDefaultSupportedIdpConfigLister wraps
+// google.golang.org/api/identitytoolkit/v2.
+type RealDefaultSupportedIdpConfigLister struct {
+	svc *identitytoolkit.Service
+}
+
+// NewRealDefaultSupportedIdpConfigLister constructs an Identity Toolkit
+// default-supported-IDP-config lister backed by ADC.
+func NewRealDefaultSupportedIdpConfigLister(ctx context.Context) (*RealDefaultSupportedIdpConfigLister, error) {
+	svc, err := identitytoolkit.NewService(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("create identitytoolkit client: %w", err)
+	}
+	return &RealDefaultSupportedIdpConfigLister{svc: svc}, nil
+}
+
+func (l *RealDefaultSupportedIdpConfigLister) ListDefaultSupportedIdpConfigs(ctx context.Context, projectID string) ([]gcpDefaultSupportedIdpConfig, error) {
+	if l == nil || l.svc == nil {
+		return nil, errors.New("identitytoolkit client closed")
+	}
+	parent := "projects/" + projectID
+	var out []gcpDefaultSupportedIdpConfig
+	call := l.svc.Projects.DefaultSupportedIdpConfigs.List(parent).Context(ctx)
+	for {
+		resp, err := call.Do()
+		if err != nil {
+			// Project hasn't activated Identity Platform yields 404 /
+			// NotFound on every Identity Toolkit endpoint. The
+			// discoverer's prior-row gate filters this out upstream,
+			// but the API can still 404 if the singleton parent
+			// surfaced through some other path — handle it gracefully.
+			if isIdentityPlatformNotActivated(err) {
+				return nil, nil
+			}
+			return nil, wrapGCPAPIError("list default supported idp configs", err)
+		}
+		for _, c := range resp.DefaultSupportedIdpConfigs {
+			if c == nil {
+				continue
+			}
+			idpID := c.Name
+			if i := strings.LastIndex(idpID, "/"); i >= 0 {
+				idpID = idpID[i+1:]
+			}
+			out = append(out, gcpDefaultSupportedIdpConfig{
+				Name:    c.Name,
+				IdpID:   idpID,
+				Enabled: c.Enabled,
+			})
+		}
+		if resp.NextPageToken == "" {
+			break
+		}
+		call = call.PageToken(resp.NextPageToken)
+	}
+	return out, nil
+}
+
+// gcpServiceNetworkingConnection is the projected view of a Service
+// Networking peering-connection row. We surface Service, Peering and
+// the reserved-peering ranges; the rest of the upstream Connection
+// type is unused by the discoverer.
+type gcpServiceNetworkingConnection struct {
+	Network          string   // projects/<p>/global/networks/<name>
+	Service          string   // services/servicenetworking.googleapis.com
+	Peering          string   // peering connection name (output-only)
+	ReservedPeerings []string // names of allocated PEERING ranges
+}
+
+type gcpServiceNetworkingConnectionLister interface {
+	// ListServiceNetworkingConnections returns the peering connections
+	// associated with a single VPC network. The discoverer fans this
+	// out across the google_compute_network rows discovered by the
+	// CAI phase.
+	ListServiceNetworkingConnections(ctx context.Context, network string) ([]gcpServiceNetworkingConnection, error)
+}
+
+// RealServiceNetworkingConnectionLister wraps
+// google.golang.org/api/servicenetworking/v1.
+type RealServiceNetworkingConnectionLister struct {
+	svc *servicenetworking.APIService
+}
+
+// NewRealServiceNetworkingConnectionLister constructs a Service
+// Networking lister backed by ADC.
+func NewRealServiceNetworkingConnectionLister(ctx context.Context) (*RealServiceNetworkingConnectionLister, error) {
+	svc, err := servicenetworking.NewService(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("create servicenetworking client: %w", err)
+	}
+	return &RealServiceNetworkingConnectionLister{svc: svc}, nil
+}
+
+func (l *RealServiceNetworkingConnectionLister) ListServiceNetworkingConnections(ctx context.Context, network string) ([]gcpServiceNetworkingConnection, error) {
+	if l == nil || l.svc == nil {
+		return nil, errors.New("servicenetworking client closed")
+	}
+	// `services/-` wildcard scopes the list to every configured peering
+	// service on the network (typically just
+	// servicenetworking.googleapis.com, but the wildcard keeps the
+	// discoverer correct across edge cases).
+	resp, err := l.svc.Services.Connections.List("services/-").Network(network).Context(ctx).Do()
+	if err != nil {
+		return nil, wrapGCPAPIError("list service networking connections", err)
+	}
+	out := make([]gcpServiceNetworkingConnection, 0, len(resp.Connections))
+	for _, c := range resp.Connections {
+		if c == nil {
+			continue
+		}
+		ranges := make([]string, len(c.ReservedPeeringRanges))
+		copy(ranges, c.ReservedPeeringRanges)
+		out = append(out, gcpServiceNetworkingConnection{
+			Network:          c.Network,
+			Service:          c.Service,
+			Peering:          c.Peering,
+			ReservedPeerings: ranges,
+		})
+	}
+	return out, nil
+}
+
+// gcpVPCAccessConnector is the projected view of a Serverless VPC
+// Access connector row used by the vpc_access_connector discoverer.
+// The Full field carries the full resource path
+// "projects/<p>/locations/<r>/connectors/<n>" so the discoverer can
+// recover (region, name) without forcing the lister to pre-split.
+type gcpVPCAccessConnector struct {
+	Name   string // connector short name
+	Region string // location segment of Full
+	Full   string // projects/<p>/locations/<r>/connectors/<n>
+	State  string // READY / CREATING / DELETING / ERROR / UPDATING
+}
+
+type gcpVPCAccessConnectorLister interface {
+	// ListVPCAccessConnectors returns every Serverless VPC Access
+	// connector in the project across all locations. The `-` location
+	// wildcard makes a single API call cover the project.
+	ListVPCAccessConnectors(ctx context.Context, projectID string) ([]gcpVPCAccessConnector, error)
+}
+
+// RealVPCAccessConnectorLister wraps google.golang.org/api/vpcaccess/v1.
+type RealVPCAccessConnectorLister struct {
+	svc *vpcaccess.Service
+}
+
+// NewRealVPCAccessConnectorLister constructs a VPC Access connector
+// lister backed by ADC.
+func NewRealVPCAccessConnectorLister(ctx context.Context) (*RealVPCAccessConnectorLister, error) {
+	svc, err := vpcaccess.NewService(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("create vpcaccess client: %w", err)
+	}
+	return &RealVPCAccessConnectorLister{svc: svc}, nil
+}
+
+func (l *RealVPCAccessConnectorLister) ListVPCAccessConnectors(ctx context.Context, projectID string) ([]gcpVPCAccessConnector, error) {
+	if l == nil || l.svc == nil {
+		return nil, errors.New("vpcaccess client closed")
+	}
+	parent := "projects/" + projectID + "/locations/-"
+	var out []gcpVPCAccessConnector
+	call := l.svc.Projects.Locations.Connectors.List(parent).Context(ctx)
+	err := call.Pages(ctx, func(resp *vpcaccess.ListConnectorsResponse) error {
+		for _, c := range resp.Connectors {
+			if c == nil {
+				continue
+			}
+			region, name := parseVPCAccessConnectorPath(c.Name)
+			out = append(out, gcpVPCAccessConnector{
+				Name:   name,
+				Region: region,
+				Full:   c.Name,
+				State:  c.State,
+			})
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, wrapGCPAPIError("list vpc access connectors", err)
 	}
 	return out, nil
 }
