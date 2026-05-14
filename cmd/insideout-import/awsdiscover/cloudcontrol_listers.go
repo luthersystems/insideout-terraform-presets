@@ -20,6 +20,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/aws/aws-sdk-go-v2/service/opensearch"
+	"github.com/aws/aws-sdk-go-v2/service/opensearchserverless"
+	ossstypes "github.com/aws/aws-sdk-go-v2/service/opensearchserverless/types"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 )
 
@@ -1235,6 +1237,101 @@ func listIAMRolePolicyIdentifiersWithClient(ctx context.Context, client iamRoleP
 			break
 		}
 		roleMarker = rolesPage.Marker
+	}
+	return ids, nil
+}
+
+// =====================================================================
+// Phase A.3 — OpenSearch Serverless AccessPolicy SDKLister (#466)
+// =====================================================================
+
+// ossAccessPoliciesLister is the narrow subset of the OpenSearch
+// Serverless SDK used by the aws_opensearchserverless_access_policy
+// SDKLister. The interface is package-private so test fakes don't need
+// to implement the full client surface.
+type ossAccessPoliciesLister interface {
+	ListAccessPolicies(ctx context.Context, in *opensearchserverless.ListAccessPoliciesInput, opts ...func(*opensearchserverless.Options)) (*opensearchserverless.ListAccessPoliciesOutput, error)
+}
+
+// ossAccessPolicyTypes enumerates the AccessPolicyType enum values the
+// OSS service accepts on ListAccessPolicies. As of SDK v1.30.3 the only
+// type is "data". Listed explicitly so future enum additions (when AWS
+// adds a new access-policy kind) surface as a one-line entry.
+var ossAccessPolicyTypes = []ossstypes.AccessPolicyType{
+	ossstypes.AccessPolicyTypeData,
+}
+
+// listOSSAccessPolicyIdentifiers enumerates OpenSearch Serverless data-
+// access policies (region-scoped) and emits the CC compound primary
+// identifier for each. Used as the SDKLister for
+// AWS::OpenSearchServerless::AccessPolicy (#466) — CC ListResources
+// returns UnsupportedActionException for the type (CC has no LIST
+// handler), but CC GetResource is supported and keyed on the compound
+// primary identifier [Type, Name] per the public CFN schema:
+//
+//	https://schema.cloudformation.us-east-1.amazonaws.com/aws-opensearchserverless-accesspolicy.json
+//
+// `primaryIdentifier: [/properties/Type, /properties/Name]`.
+//
+// Emits "<Type>|<Name>" — the framework joins compound identifier
+// parts with `|` in schema-declared order. ListAccessPolicies requires
+// the Type filter (it's a required input parameter), so we walk the
+// known type set and concatenate results.
+//
+// Terraform's import format is `<name>/<type>` (verified against
+// terraform-provider-aws main website/docs/r/
+// opensearchserverless_access_policy.html.markdown — Import section).
+// The rewrite (in cloudcontrol_types.go) swaps halves and joins with
+// `/`.
+//
+// Returns a non-nil empty slice on accounts with zero access policies
+// (#255 contract).
+func listOSSAccessPolicyIdentifiers(ctx context.Context, awsCfg aws.Config, region string, _ DiscoverArgs) ([]string, error) {
+	client := opensearchserverless.NewFromConfig(awsCfg, func(o *opensearchserverless.Options) {
+		if region != "" {
+			o.Region = region
+		}
+	})
+	return listOSSAccessPolicyIdentifiersWithClient(ctx, client, ossAccessPolicyTypes)
+}
+
+func listOSSAccessPolicyIdentifiersWithClient(ctx context.Context, client ossAccessPoliciesLister, types []ossstypes.AccessPolicyType) ([]string, error) {
+	ids := []string{}
+	seen := map[string]bool{}
+	for _, t := range types {
+		var nextToken *string
+		for {
+			page, err := client.ListAccessPolicies(ctx, &opensearchserverless.ListAccessPoliciesInput{
+				Type:      t,
+				NextToken: nextToken,
+			})
+			if err != nil {
+				return nil, fmt.Errorf("aoss:ListAccessPolicies(type=%q): %w", string(t), err)
+			}
+			for _, p := range page.AccessPolicySummaries {
+				name := aws.ToString(p.Name)
+				if name == "" {
+					continue
+				}
+				policyType := string(p.Type)
+				if policyType == "" {
+					// Defensive: fall back to the requested type when
+					// the SDK summary omits Type (shouldn't happen, but
+					// the field is a *string in the API surface).
+					policyType = string(t)
+				}
+				id := policyType + "|" + name
+				if seen[id] {
+					continue
+				}
+				seen[id] = true
+				ids = append(ids, id)
+			}
+			if page.NextToken == nil || aws.ToString(page.NextToken) == "" {
+				break
+			}
+			nextToken = page.NextToken
+		}
 	}
 	return ids, nil
 }

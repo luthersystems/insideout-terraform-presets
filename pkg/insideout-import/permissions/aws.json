@@ -1403,6 +1403,21 @@
       "purpose": "Cloud Control GetResource delegate for the Tags property"
     },
     {
+      "service": "opensearchserverless_access_policy",
+      "iam_action": "aoss:GetAccessPolicy",
+      "purpose": "Cloud Control GetResource for aws_opensearchserverless_access_policy delegates to aoss:GetAccessPolicy"
+    },
+    {
+      "service": "opensearchserverless_access_policy",
+      "iam_action": "aoss:ListAccessPolicies",
+      "purpose": "SDKLister enumeration: walk OSS access policies per type (CC ListResources unsupported for AWS::OpenSearchServerless::AccessPolicy)"
+    },
+    {
+      "service": "opensearchserverless_access_policy",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::OpenSearchServerless::AccessPolicy (#466 SDKLister branch)"
+    },
+    {
       "service": "opensearchserverless_collection",
       "iam_action": "aoss:BatchGetCollection",
       "purpose": "DiscoverByID: fetch collection details by id"

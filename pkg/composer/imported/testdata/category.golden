@@ -77,6 +77,7 @@ aws_nat_gateway	Network Security
 aws_network_acl	Network Security
 aws_network_interface	Network Security
 aws_opensearch_domain	Data Storage
+aws_opensearchserverless_access_policy	Security
 aws_opensearchserverless_collection	Data Storage
 aws_rds_cluster	Data Storage
 aws_resourceexplorer2_index	Observability

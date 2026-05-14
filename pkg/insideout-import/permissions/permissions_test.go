@@ -94,6 +94,7 @@ var awsTFTypeToServiceSlug = map[string]string{
 	"aws_network_acl":                                    "network_acl",
 	"aws_network_interface":                              "network_interface",
 	"aws_opensearch_domain":                              "opensearch_domain",
+	"aws_opensearchserverless_access_policy":             "opensearchserverless_access_policy",
 	"aws_opensearchserverless_collection":                "opensearchserverless_collection",
 	"aws_resourceexplorer2_index":                        "resourceexplorer2_index",
 	"aws_resourceexplorer2_view":                         "resourceexplorer2_view",

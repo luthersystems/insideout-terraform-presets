@@ -95,6 +95,7 @@ func TestSupportedDiscoverTypes_AWS_ReturnsCanonicalSortedList(t *testing.T) {
 		"aws_network_acl",
 		"aws_network_interface",
 		"aws_opensearch_domain",
+		"aws_opensearchserverless_access_policy",
 		"aws_opensearchserverless_collection",
 		"aws_resourceexplorer2_index",
 		"aws_resourceexplorer2_view",

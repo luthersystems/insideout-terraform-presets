@@ -36,6 +36,8 @@ import (
 	lambdatypes "github.com/aws/aws-sdk-go-v2/service/lambda/types"
 	"github.com/aws/aws-sdk-go-v2/service/opensearch"
 	opensearchtypes "github.com/aws/aws-sdk-go-v2/service/opensearch/types"
+	"github.com/aws/aws-sdk-go-v2/service/opensearchserverless"
+	ossstypes "github.com/aws/aws-sdk-go-v2/service/opensearchserverless/types"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	smtypes "github.com/aws/aws-sdk-go-v2/service/secretsmanager/types"
 )
@@ -2825,5 +2827,191 @@ func TestListIAMRolePolicyIdentifiers_PropagatesListRolePoliciesError(t *testing
 	_, err := listIAMRolePolicyIdentifiersWithClient(context.Background(), fake)
 	if !errors.Is(err, sentinel) {
 		t.Errorf("err does not wrap sentinel; got %v", err)
+	}
+}
+
+// =====================================================================
+// Phase A.3 — OpenSearch Serverless AccessPolicy SDKLister (#466)
+// =====================================================================
+
+// fakeOSSAccessPoliciesLister drives ossAccessPoliciesLister against a
+// scripted (Type → page-sequence) map. Records the input Type and
+// NextToken on each call so tests can pin pagination semantics.
+type fakeOSSAccessPoliciesLister struct {
+	pagesByType    map[ossstypes.AccessPolicyType][]opensearchserverless.ListAccessPoliciesOutput
+	callsByType    map[ossstypes.AccessPolicyType]int
+	errByType      map[ossstypes.AccessPolicyType]error
+	tokenByCall    map[ossstypes.AccessPolicyType][]*string // observed NextToken inputs, in call order
+	typesRequested []ossstypes.AccessPolicyType
+}
+
+func (f *fakeOSSAccessPoliciesLister) ListAccessPolicies(_ context.Context, in *opensearchserverless.ListAccessPoliciesInput, _ ...func(*opensearchserverless.Options)) (*opensearchserverless.ListAccessPoliciesOutput, error) {
+	if f.tokenByCall == nil {
+		f.tokenByCall = map[ossstypes.AccessPolicyType][]*string{}
+	}
+	f.tokenByCall[in.Type] = append(f.tokenByCall[in.Type], in.NextToken)
+	f.typesRequested = append(f.typesRequested, in.Type)
+	if err, ok := f.errByType[in.Type]; ok && err != nil {
+		return nil, err
+	}
+	if f.callsByType == nil {
+		f.callsByType = map[ossstypes.AccessPolicyType]int{}
+	}
+	pages := f.pagesByType[in.Type]
+	idx := f.callsByType[in.Type]
+	if idx >= len(pages) {
+		return &opensearchserverless.ListAccessPoliciesOutput{}, nil
+	}
+	page := pages[idx]
+	f.callsByType[in.Type] = idx + 1
+	return &page, nil
+}
+
+// ossAccessPolicySummary is a tiny constructor for the AccessPolicySummary
+// type so tests don't repeat the &aws.String boilerplate.
+func ossAccessPolicySummary(name string, t ossstypes.AccessPolicyType) ossstypes.AccessPolicySummary {
+	return ossstypes.AccessPolicySummary{Name: aws.String(name), Type: t}
+}
+
+// ossAccessPolicyPage builds a single ListAccessPoliciesOutput page.
+// Pass `nextToken` to mark the page as truncated.
+func ossAccessPolicyPage(nextToken string, summaries ...ossstypes.AccessPolicySummary) opensearchserverless.ListAccessPoliciesOutput {
+	out := opensearchserverless.ListAccessPoliciesOutput{AccessPolicySummaries: summaries}
+	if nextToken != "" {
+		out.NextToken = aws.String(nextToken)
+	}
+	return out
+}
+
+// TestListOSSAccessPolicyIdentifiers_HappyPath_EmitsTypePipeName pins
+// the canonical shape: two access policies → two "<Type>|<Name>"
+// identifiers in API result order.
+func TestListOSSAccessPolicyIdentifiers_HappyPath_EmitsTypePipeName(t *testing.T) {
+	t.Parallel()
+	fake := &fakeOSSAccessPoliciesLister{
+		pagesByType: map[ossstypes.AccessPolicyType][]opensearchserverless.ListAccessPoliciesOutput{
+			ossstypes.AccessPolicyTypeData: {
+				ossAccessPolicyPage("",
+					ossAccessPolicySummary("policy-a", ossstypes.AccessPolicyTypeData),
+					ossAccessPolicySummary("policy-b", ossstypes.AccessPolicyTypeData),
+				),
+			},
+		},
+	}
+	got, err := listOSSAccessPolicyIdentifiersWithClient(context.Background(), fake,
+		[]ossstypes.AccessPolicyType{ossstypes.AccessPolicyTypeData})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"data|policy-a", "data|policy-b"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("identifiers drift: got %v want %v", got, want)
+	}
+}
+
+// TestListOSSAccessPolicyIdentifiers_PropagatesPagination pins the
+// nextToken contract: the token returned on page N must surface as
+// NextToken on page N+1, exactly once.
+func TestListOSSAccessPolicyIdentifiers_PropagatesPagination(t *testing.T) {
+	t.Parallel()
+	fake := &fakeOSSAccessPoliciesLister{
+		pagesByType: map[ossstypes.AccessPolicyType][]opensearchserverless.ListAccessPoliciesOutput{
+			ossstypes.AccessPolicyTypeData: {
+				ossAccessPolicyPage("CURSOR-1",
+					ossAccessPolicySummary("p1", ossstypes.AccessPolicyTypeData),
+				),
+				ossAccessPolicyPage("",
+					ossAccessPolicySummary("p2", ossstypes.AccessPolicyTypeData),
+				),
+			},
+		},
+	}
+	got, err := listOSSAccessPolicyIdentifiersWithClient(context.Background(), fake,
+		[]ossstypes.AccessPolicyType{ossstypes.AccessPolicyTypeData})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"data|p1", "data|p2"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("identifiers drift: got %v want %v", got, want)
+	}
+	tokens := fake.tokenByCall[ossstypes.AccessPolicyTypeData]
+	if len(tokens) != 2 {
+		t.Fatalf("expected 2 ListAccessPolicies calls; got %d tokens=%v", len(tokens), tokens)
+	}
+	if tokens[0] != nil {
+		t.Errorf("first call should have nil NextToken; got %v", aws.ToString(tokens[0]))
+	}
+	if aws.ToString(tokens[1]) != "CURSOR-1" {
+		t.Errorf("second call should carry forward the cursor; got %q want %q",
+			aws.ToString(tokens[1]), "CURSOR-1")
+	}
+}
+
+// TestListOSSAccessPolicyIdentifiers_EmptyAccountReturnsNonNilEmpty
+// guards the #255 contract.
+func TestListOSSAccessPolicyIdentifiers_EmptyAccountReturnsNonNilEmpty(t *testing.T) {
+	t.Parallel()
+	fake := &fakeOSSAccessPoliciesLister{
+		pagesByType: map[ossstypes.AccessPolicyType][]opensearchserverless.ListAccessPoliciesOutput{
+			ossstypes.AccessPolicyTypeData: {ossAccessPolicyPage("")},
+		},
+	}
+	got, err := listOSSAccessPolicyIdentifiersWithClient(context.Background(), fake,
+		[]ossstypes.AccessPolicyType{ossstypes.AccessPolicyTypeData})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got == nil {
+		t.Fatal("got nil, want non-nil empty slice (#255 contract)")
+	}
+	if len(got) != 0 {
+		t.Errorf("got %v, want empty slice", got)
+	}
+}
+
+// TestListOSSAccessPolicyIdentifiers_PropagatesListError pins the
+// error wrap chain.
+func TestListOSSAccessPolicyIdentifiers_PropagatesListError(t *testing.T) {
+	t.Parallel()
+	sentinel := errors.New("AccessDenied: aoss:ListAccessPolicies")
+	fake := &fakeOSSAccessPoliciesLister{
+		errByType: map[ossstypes.AccessPolicyType]error{
+			ossstypes.AccessPolicyTypeData: sentinel,
+		},
+	}
+	_, err := listOSSAccessPolicyIdentifiersWithClient(context.Background(), fake,
+		[]ossstypes.AccessPolicyType{ossstypes.AccessPolicyTypeData})
+	if !errors.Is(err, sentinel) {
+		t.Errorf("err does not wrap sentinel; got %v", err)
+	}
+}
+
+// TestListOSSAccessPolicyIdentifiers_DefensiveTypeFallback pins the
+// SDK-safety belt: if a SummaryType is empty (shouldn't happen, but
+// the API field is an enum that could in theory be zero-valued), fall
+// back to the requested Type so the identifier always has both halves.
+func TestListOSSAccessPolicyIdentifiers_DefensiveTypeFallback(t *testing.T) {
+	t.Parallel()
+	fake := &fakeOSSAccessPoliciesLister{
+		pagesByType: map[ossstypes.AccessPolicyType][]opensearchserverless.ListAccessPoliciesOutput{
+			ossstypes.AccessPolicyTypeData: {
+				ossAccessPolicyPage("",
+					// Empty Type — the lister must fill it from the
+					// requested AccessPolicyType so the emitted ID has
+					// both halves.
+					ossstypes.AccessPolicySummary{Name: aws.String("orphan")},
+				),
+			},
+		},
+	}
+	got, err := listOSSAccessPolicyIdentifiersWithClient(context.Background(), fake,
+		[]ossstypes.AccessPolicyType{ossstypes.AccessPolicyTypeData})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"data|orphan"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("identifiers drift: got %v want %v", got, want)
 	}
 }

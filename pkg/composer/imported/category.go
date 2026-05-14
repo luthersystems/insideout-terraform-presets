@@ -155,6 +155,7 @@ var categoryByTFType = map[string]string{
 	"aws_network_acl":                                    CategoryNetworkSecurity,
 	"aws_network_interface":                              CategoryNetworkSecurity,
 	"aws_opensearch_domain":                              CategoryDataStorage,
+	"aws_opensearchserverless_access_policy":             CategorySecurity,
 	"aws_opensearchserverless_collection":                CategoryDataStorage,
 	"aws_rds_cluster":                                    CategoryDataStorage,
 	"aws_resourceexplorer2_index":                        CategoryObservability,

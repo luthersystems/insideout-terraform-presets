@@ -2319,6 +2319,76 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 		},
 		TagsFromProperties: emptyTagsExtractor,
 	},
+
+	// =====================================================================
+	// OpenSearch Serverless AccessPolicy — SDKLister-listed, untaggable (Phase A.3 / #466)
+	// =====================================================================
+	{
+		// AWS::OpenSearchServerless::AccessPolicy's CC ListResources
+		// returns UnsupportedActionException — the service has no LIST
+		// handler exposed through CloudControl, but CC GetResource IS
+		// supported and keyed on the compound primary identifier [Type,
+		// Name] (verified against the public CFN schema:
+		//   https://schema.cloudformation.us-east-1.amazonaws.com/aws-opensearchserverless-accesspolicy.json
+		// `primaryIdentifier: [/properties/Type, /properties/Name]`).
+		//
+		// The SDKLister calls aoss:ListAccessPolicies once per
+		// AccessPolicyType (today only "data") and concatenates the
+		// per-type Name + Type pairs into "<Type>|<Name>" — the
+		// framework joins compound primary-identifier parts with `|` in
+		// schema-declared order.
+		//
+		// Terraform's import format is `<name>/<type>` (verified
+		// against terraform-provider-aws main
+		// website/docs/r/opensearchserverless_access_policy.html.markdown
+		// per the Import section:
+		//   "% terraform import aws_opensearchserverless_access_policy.example
+		//    example/data"
+		// ). The rewrite SWAPS the CC `<Type>|<Name>` halves and joins
+		// them with `/` to produce `<Name>/<Type>`. When the identifier
+		// is malformed (defensive — no `|`), fall through verbatim so a
+		// downstream `terraform import` surfaces a clear "wrong format"
+		// error.
+		//
+		// The CFN schema has no Tags property — OSS access policies are
+		// untaggable in AWS provider 6.x. SkipProjectTagFilter +
+		// emptyTagsExtractor matches the existing untaggableAWS /
+		// NON_TAGGABLE_AWS allowlist entry (which already lists this
+		// type — only the SDKLister wiring is new in #466).
+		//
+		// No ARN rule in arn_rules.go: OSS access policies are not
+		// surfaced via Resource Groups Tagging API today (the SDK has
+		// no ListTagsForResource for access policies), so RGT cache
+		// hits never apply; discovery is SDKLister-only.
+		TFType:               "aws_opensearchserverless_access_policy",
+		CloudFormationType:   "AWS::OpenSearchServerless::AccessPolicy",
+		Slug:                 "opensearchserverless_access_policy",
+		SkipProjectTagFilter: true,
+		SDKLister:            listOSSAccessPolicyIdentifiers,
+		// ImportID rewrite: CC `<Type>|<Name>` → TF `<Name>/<Type>`
+		// (swap halves, join with `/`).
+		ImportIDFromIdentifier: func(identifier string, _ map[string]any) string {
+			parts := strings.SplitN(identifier, "|", 2)
+			if len(parts) != 2 {
+				return identifier
+			}
+			return parts[1] + "/" + parts[0]
+		},
+		// NameHint: prefer the Name from properties (the customer-
+		// facing policy name); fall back to the identifier verbatim.
+		NameHintFromProperties: nameOrIdentifier("Name"),
+		NativeIDsFromProperties: func(identifier string, _ map[string]any) map[string]string {
+			parts := strings.SplitN(identifier, "|", 2)
+			if len(parts) != 2 {
+				return map[string]string{"name": identifier}
+			}
+			return map[string]string{
+				"type": parts[0],
+				"name": parts[1],
+			}
+		},
+		TagsFromProperties: emptyTagsExtractor,
+	},
 }
 
 // passthroughImportID is the common ImportIDFromIdentifier used by every
