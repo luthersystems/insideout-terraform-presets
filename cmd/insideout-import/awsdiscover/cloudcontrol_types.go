@@ -46,11 +46,11 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 	// Backup
 	// =====================================================================
 	{
-		TFType:                 "aws_backup_vault",
-		CloudFormationType:     "AWS::Backup::BackupVault",
-		Slug:                   "backup_vault",
-		ImportIDFromIdentifier: passthroughImportID,
-		NameHintFromProperties: nameOrIdentifier("BackupVaultName"),
+		TFType:                  "aws_backup_vault",
+		CloudFormationType:      "AWS::Backup::BackupVault",
+		Slug:                    "backup_vault",
+		ImportIDFromIdentifier:  passthroughImportID,
+		NameHintFromProperties:  nameOrIdentifier("BackupVaultName"),
 		NativeIDsFromProperties: arnUnderKey("BackupVaultArn"),
 		TagsFromProperties: func(props map[string]any) map[string]string {
 			return extractStringMap(props, "BackupVaultTags")
@@ -170,11 +170,11 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 	// Observability
 	// =====================================================================
 	{
-		TFType:                 "aws_cloudwatch_metric_alarm",
-		CloudFormationType:     "AWS::CloudWatch::Alarm",
-		Slug:                   "cloudwatch_metric_alarm",
-		ImportIDFromIdentifier: passthroughImportID,
-		NameHintFromProperties: nameOrIdentifier("AlarmName"),
+		TFType:                  "aws_cloudwatch_metric_alarm",
+		CloudFormationType:      "AWS::CloudWatch::Alarm",
+		Slug:                    "cloudwatch_metric_alarm",
+		ImportIDFromIdentifier:  passthroughImportID,
+		NameHintFromProperties:  nameOrIdentifier("AlarmName"),
 		NativeIDsFromProperties: arnUnderKey("Arn"),
 		TagsFromProperties:      tagsFromKey("Tags"),
 	},
@@ -193,17 +193,17 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 		Slug:               "cloudwatchlogs",
 		// Cloud Control identifier = LogGroupName. Terraform import
 		// also takes LogGroupName — passthrough.
-		ImportIDFromIdentifier: passthroughImportID,
-		NameHintFromProperties: nameOrIdentifier("LogGroupName"),
+		ImportIDFromIdentifier:  passthroughImportID,
+		NameHintFromProperties:  nameOrIdentifier("LogGroupName"),
 		NativeIDsFromProperties: arnUnderKey("Arn"),
 		TagsFromProperties:      tagsFromKey("Tags"),
 	},
 	{
-		TFType:                 "aws_cloudwatch_event_rule",
-		CloudFormationType:     "AWS::Events::Rule",
-		Slug:                   "cloudwatch_event_rule",
-		ImportIDFromIdentifier: passthroughImportID,
-		NameHintFromProperties: nameOrIdentifier("Name"),
+		TFType:                  "aws_cloudwatch_event_rule",
+		CloudFormationType:      "AWS::Events::Rule",
+		Slug:                    "cloudwatch_event_rule",
+		ImportIDFromIdentifier:  passthroughImportID,
+		NameHintFromProperties:  nameOrIdentifier("Name"),
 		NativeIDsFromProperties: arnUnderKey("Arn"),
 		TagsFromProperties:      tagsFromKey("Tags"),
 	},
@@ -212,20 +212,20 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 	// IAM — global types; ForGlobalCFN dedupes across regions
 	// =====================================================================
 	{
-		TFType:                 "aws_iam_role",
-		CloudFormationType:     "AWS::IAM::Role",
-		Slug:                   "iam_role",
-		IsGlobal:               true,
-		ImportIDFromIdentifier: passthroughImportID,
-		NameHintFromProperties: nameOrIdentifier("RoleName"),
+		TFType:                  "aws_iam_role",
+		CloudFormationType:      "AWS::IAM::Role",
+		Slug:                    "iam_role",
+		IsGlobal:                true,
+		ImportIDFromIdentifier:  passthroughImportID,
+		NameHintFromProperties:  nameOrIdentifier("RoleName"),
 		NativeIDsFromProperties: arnUnderKey("Arn"),
 		TagsFromProperties:      tagsFromKey("Tags"),
 	},
 	{
-		TFType:                 "aws_iam_policy",
-		CloudFormationType:     "AWS::IAM::ManagedPolicy",
-		Slug:                   "iam_policy",
-		IsGlobal:               true,
+		TFType:             "aws_iam_policy",
+		CloudFormationType: "AWS::IAM::ManagedPolicy",
+		Slug:               "iam_policy",
+		IsGlobal:           true,
 		// Identifier IS the full policy ARN (per arnRule.identityFullARN);
 		// Terraform aws_iam_policy import takes the ARN — passthrough.
 		ImportIDFromIdentifier: passthroughImportID,
@@ -240,11 +240,11 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 	// KMS — regional
 	// =====================================================================
 	{
-		TFType:                 "aws_kms_key",
-		CloudFormationType:     "AWS::KMS::Key",
-		Slug:                   "kms",
-		ImportIDFromIdentifier: passthroughImportID,
-		NameHintFromProperties: nameOrIdentifier("KeyId"),
+		TFType:                  "aws_kms_key",
+		CloudFormationType:      "AWS::KMS::Key",
+		Slug:                    "kms",
+		ImportIDFromIdentifier:  passthroughImportID,
+		NameHintFromProperties:  nameOrIdentifier("KeyId"),
 		NativeIDsFromProperties: arnUnderKey("Arn"),
 		TagsFromProperties:      tagsFromKey("Tags"),
 	},
@@ -253,11 +253,11 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 	// Compute — Lambda
 	// =====================================================================
 	{
-		TFType:                 "aws_lambda_function",
-		CloudFormationType:     "AWS::Lambda::Function",
-		Slug:                   "lambda",
-		ImportIDFromIdentifier: passthroughImportID,
-		NameHintFromProperties: nameOrIdentifier("FunctionName"),
+		TFType:                  "aws_lambda_function",
+		CloudFormationType:      "AWS::Lambda::Function",
+		Slug:                    "lambda",
+		ImportIDFromIdentifier:  passthroughImportID,
+		NameHintFromProperties:  nameOrIdentifier("FunctionName"),
 		NativeIDsFromProperties: arnUnderKey("Arn"),
 		TagsFromProperties:      tagsFromKey("Tags"),
 	},
@@ -272,17 +272,17 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 		// RGT returns per-region tagged buckets (the GetBucketLocation
 		// per-bucket regionalization that the hand-rolled discoverer
 		// did is now unnecessary). Identifier = bucket name.
-		ImportIDFromIdentifier: passthroughImportID,
-		NameHintFromProperties: nameOrIdentifier("BucketName"),
+		ImportIDFromIdentifier:  passthroughImportID,
+		NameHintFromProperties:  nameOrIdentifier("BucketName"),
 		NativeIDsFromProperties: arnUnderKey("Arn"),
 		TagsFromProperties:      tagsFromKey("Tags"),
 	},
 	{
-		TFType:                 "aws_dynamodb_table",
-		CloudFormationType:     "AWS::DynamoDB::Table",
-		Slug:                   "dynamodb",
-		ImportIDFromIdentifier: passthroughImportID,
-		NameHintFromProperties: nameOrIdentifier("TableName"),
+		TFType:                  "aws_dynamodb_table",
+		CloudFormationType:      "AWS::DynamoDB::Table",
+		Slug:                    "dynamodb",
+		ImportIDFromIdentifier:  passthroughImportID,
+		NameHintFromProperties:  nameOrIdentifier("TableName"),
 		NativeIDsFromProperties: arnUnderKey("Arn"),
 		TagsFromProperties:      tagsFromKey("Tags"),
 	},
@@ -423,9 +423,9 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 		TagsFromProperties: tagsFromKey("Tags"),
 	},
 	{
-		TFType:             "aws_lb_target_group",
-		CloudFormationType: "AWS::ElasticLoadBalancingV2::TargetGroup",
-		Slug:               "lb_target_group",
+		TFType:                 "aws_lb_target_group",
+		CloudFormationType:     "AWS::ElasticLoadBalancingV2::TargetGroup",
+		Slug:                   "lb_target_group",
 		ImportIDFromIdentifier: passthroughImportID,
 		NameHintFromProperties: nameOrIdentifier("Name"),
 		NativeIDsFromProperties: func(identifier string, _ map[string]any) map[string]string {
@@ -494,11 +494,11 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 	// RDS
 	// =====================================================================
 	{
-		TFType:                 "aws_db_instance",
-		CloudFormationType:     "AWS::RDS::DBInstance",
-		Slug:                   "db_instance",
-		ImportIDFromIdentifier: passthroughImportID,
-		NameHintFromProperties: nameOrIdentifier("DBInstanceIdentifier"),
+		TFType:                  "aws_db_instance",
+		CloudFormationType:      "AWS::RDS::DBInstance",
+		Slug:                    "db_instance",
+		ImportIDFromIdentifier:  passthroughImportID,
+		NameHintFromProperties:  nameOrIdentifier("DBInstanceIdentifier"),
 		NativeIDsFromProperties: arnUnderKey("DBInstanceArn"),
 		TagsFromProperties:      tagsFromKey("Tags"),
 	},
@@ -539,11 +539,11 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 	// Cognito
 	// =====================================================================
 	{
-		TFType:                 "aws_cognito_user_pool",
-		CloudFormationType:     "AWS::Cognito::UserPool",
-		Slug:                   "cognito_user_pool",
-		ImportIDFromIdentifier: passthroughImportID,
-		NameHintFromProperties: nameOrIdentifier("UserPoolName"),
+		TFType:                  "aws_cognito_user_pool",
+		CloudFormationType:      "AWS::Cognito::UserPool",
+		Slug:                    "cognito_user_pool",
+		ImportIDFromIdentifier:  passthroughImportID,
+		NameHintFromProperties:  nameOrIdentifier("UserPoolName"),
 		NativeIDsFromProperties: arnUnderKey("Arn"),
 		// AWS::Cognito::UserPool surfaces tags as a flat string map
 		// under `UserPoolTags` (verified live), NOT the Key/Value
@@ -563,13 +563,13 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 		// SkipProjectTagFilter bypasses the legacy Project filter for
 		// the same reason as aws_backup_selection: the tag bag is
 		// always empty by design.
-		TFType:               "aws_iam_instance_profile",
-		CloudFormationType:   "AWS::IAM::InstanceProfile",
-		Slug:                 "iam_instance_profile",
-		IsGlobal:             true,
-		SkipProjectTagFilter: true,
-		ImportIDFromIdentifier: passthroughImportID,
-		NameHintFromProperties: nameOrIdentifier("InstanceProfileName"),
+		TFType:                  "aws_iam_instance_profile",
+		CloudFormationType:      "AWS::IAM::InstanceProfile",
+		Slug:                    "iam_instance_profile",
+		IsGlobal:                true,
+		SkipProjectTagFilter:    true,
+		ImportIDFromIdentifier:  passthroughImportID,
+		NameHintFromProperties:  nameOrIdentifier("InstanceProfileName"),
 		NativeIDsFromProperties: arnUnderKey("Arn"),
 		TagsFromProperties:      emptyTagsExtractor,
 	},
@@ -619,11 +619,11 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 	// OpenSearch Serverless
 	// =====================================================================
 	{
-		TFType:                 "aws_opensearchserverless_collection",
-		CloudFormationType:     "AWS::OpenSearchServerless::Collection",
-		Slug:                   "opensearchserverless_collection",
-		ImportIDFromIdentifier: passthroughImportID,
-		NameHintFromProperties: nameOrIdentifier("Name"),
+		TFType:                  "aws_opensearchserverless_collection",
+		CloudFormationType:      "AWS::OpenSearchServerless::Collection",
+		Slug:                    "opensearchserverless_collection",
+		ImportIDFromIdentifier:  passthroughImportID,
+		NameHintFromProperties:  nameOrIdentifier("Name"),
 		NativeIDsFromProperties: arnUnderKey("Arn"),
 		TagsFromProperties:      tagsFromKey("Tags"),
 	},
@@ -1371,12 +1371,12 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 		// doesn't emit ResourceNotFoundException for every non-rotated
 		// secret. SkipProjectTagFilter bypasses the Project filter
 		// since rotation schedules are inherently tagless.
-		TFType:                  "aws_secretsmanager_secret_rotation",
-		CloudFormationType:      "AWS::SecretsManager::RotationSchedule",
-		Slug:                    "secretsmanager_secret_rotation",
-		SkipProjectTagFilter:    true,
-		SDKLister:               listSecretsManagerSecretRotations,
-		ImportIDFromIdentifier:  passthroughImportID,
+		TFType:                 "aws_secretsmanager_secret_rotation",
+		CloudFormationType:     "AWS::SecretsManager::RotationSchedule",
+		Slug:                   "secretsmanager_secret_rotation",
+		SkipProjectTagFilter:   true,
+		SDKLister:              listSecretsManagerSecretRotations,
+		ImportIDFromIdentifier: passthroughImportID,
 		NameHintFromProperties: func(identifier string, props map[string]any) string {
 			// No "name" on the rotation schedule; pull the secret name
 			// from the ARN tail when parseable. ARN shape:
@@ -1429,6 +1429,288 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 			}
 		},
 		TagsFromProperties: emptyTagsExtractor,
+	},
+
+	// =====================================================================
+	// ECS Cluster — CC default-list, taggable (#14f)
+	// =====================================================================
+	{
+		// AWS::ECS::Cluster has standard CC list+read handlers. CC
+		// primary identifier = ClusterName (the bare name) and
+		// Terraform's import format is the same — passthrough.
+		TFType:                  "aws_ecs_cluster",
+		CloudFormationType:      "AWS::ECS::Cluster",
+		Slug:                    "ecs_cluster",
+		ImportIDFromIdentifier:  passthroughImportID,
+		NameHintFromProperties:  nameOrIdentifier("ClusterName"),
+		NativeIDsFromProperties: arnUnderKey("Arn"),
+		TagsFromProperties:      tagsFromKey("Tags"),
+	},
+
+	// =====================================================================
+	// EKS Cluster — SDKLister, taggable (#14f). Also seeds parent enumeration
+	// for the four EKS child types.
+	// =====================================================================
+	{
+		// AWS::EKS::Cluster has CC list+read handlers, but the same
+		// SDK call (eks:ListClusters) seeds parent enumeration for
+		// the four EKS child types (Nodegroup, Addon, FargateProfile,
+		// AccessEntry). Routing the cluster type itself through
+		// SDKLister keeps the EKS family consistent — every EKS lookup
+		// in this bundle starts from a single eks:ListClusters call.
+		// CC primary identifier = cluster Name and Terraform's import
+		// format matches — passthrough.
+		TFType:                  "aws_eks_cluster",
+		CloudFormationType:      "AWS::EKS::Cluster",
+		Slug:                    "eks_cluster",
+		SDKLister:               listEKSClusters,
+		ImportIDFromIdentifier:  passthroughImportID,
+		NameHintFromProperties:  nameOrIdentifier("Name"),
+		NativeIDsFromProperties: arnUnderKey("Arn"),
+		TagsFromProperties:      tagsFromKey("Tags"),
+	},
+
+	// =====================================================================
+	// EKS Node Group — parent-scoped on ClusterName, taggable (#14f)
+	// =====================================================================
+	{
+		// AWS::EKS::Nodegroup is parent-scoped: CC ListResources
+		// requires ResourceModel={"ClusterName":"..."}.
+		//
+		// Cloud Control identifier = "<ClusterName>|<NodegroupName>";
+		// Terraform import format = "<ClusterName>:<NodegroupName>"
+		// (colon — divergent from the typical pipe→slash rewrite).
+		// Verified against terraform-provider-aws v6.x docs for
+		// aws_eks_node_group: `id` is `<cluster_name>:<node_group_name>`.
+		TFType:             "aws_eks_node_group",
+		CloudFormationType: "AWS::EKS::Nodegroup",
+		Slug:               "eks_node_group",
+		ParentLister:       listEKSClustersAsResourceModels,
+		ImportIDFromIdentifier: func(identifier string, _ map[string]any) string {
+			return strings.Replace(identifier, "|", ":", 1)
+		},
+		NameHintFromProperties: nameOrIdentifier("NodegroupName"),
+		NativeIDsFromProperties: func(identifier string, props map[string]any) map[string]string {
+			parts := strings.SplitN(identifier, "|", 2)
+			if len(parts) != 2 {
+				return nil
+			}
+			out := map[string]string{
+				"cluster_name":    parts[0],
+				"node_group_name": parts[1],
+			}
+			if arn := extractString(props, "Arn"); arn != "" {
+				out["arn"] = arn
+			}
+			return out
+		},
+		TagsFromProperties: tagsFromKey("Tags"),
+	},
+
+	// =====================================================================
+	// EKS Addon — parent-scoped on ClusterName, taggable (#14f)
+	// =====================================================================
+	{
+		// AWS::EKS::Addon is parent-scoped on ClusterName.
+		//
+		// Cloud Control identifier = "<ClusterName>|<AddonName>";
+		// Terraform import format = "<ClusterName>:<AddonName>"
+		// (colon). Verified against terraform-provider-aws v6.x docs
+		// for aws_eks_addon.
+		TFType:             "aws_eks_addon",
+		CloudFormationType: "AWS::EKS::Addon",
+		Slug:               "eks_addon",
+		ParentLister:       listEKSClustersAsResourceModels,
+		ImportIDFromIdentifier: func(identifier string, _ map[string]any) string {
+			return strings.Replace(identifier, "|", ":", 1)
+		},
+		NameHintFromProperties: nameOrIdentifier("AddonName"),
+		NativeIDsFromProperties: func(identifier string, props map[string]any) map[string]string {
+			parts := strings.SplitN(identifier, "|", 2)
+			if len(parts) != 2 {
+				return nil
+			}
+			out := map[string]string{
+				"cluster_name": parts[0],
+				"addon_name":   parts[1],
+			}
+			if arn := extractString(props, "Arn"); arn != "" {
+				out["arn"] = arn
+			}
+			return out
+		},
+		TagsFromProperties: tagsFromKey("Tags"),
+	},
+
+	// =====================================================================
+	// EKS Fargate Profile — parent-scoped on ClusterName, taggable (#14f)
+	// =====================================================================
+	{
+		// AWS::EKS::FargateProfile is parent-scoped on ClusterName.
+		//
+		// Cloud Control identifier = "<ClusterName>|<FargateProfileName>";
+		// Terraform import format = "<ClusterName>/<FargateProfileName>"
+		// (forward-slash — divergent from the sibling EKS child types
+		// that use colon). Verified against terraform-provider-aws
+		// v6.x docs for aws_eks_fargate_profile.
+		TFType:             "aws_eks_fargate_profile",
+		CloudFormationType: "AWS::EKS::FargateProfile",
+		Slug:               "eks_fargate_profile",
+		ParentLister:       listEKSClustersAsResourceModels,
+		ImportIDFromIdentifier: func(identifier string, _ map[string]any) string {
+			return strings.Replace(identifier, "|", "/", 1)
+		},
+		NameHintFromProperties: nameOrIdentifier("FargateProfileName"),
+		NativeIDsFromProperties: func(identifier string, props map[string]any) map[string]string {
+			parts := strings.SplitN(identifier, "|", 2)
+			if len(parts) != 2 {
+				return nil
+			}
+			out := map[string]string{
+				"cluster_name":         parts[0],
+				"fargate_profile_name": parts[1],
+			}
+			if arn := extractString(props, "Arn"); arn != "" {
+				out["arn"] = arn
+			}
+			return out
+		},
+		TagsFromProperties: tagsFromKey("Tags"),
+	},
+
+	// =====================================================================
+	// EKS Access Entry — parent-scoped on ClusterName, taggable (#14f)
+	// =====================================================================
+	{
+		// AWS::EKS::AccessEntry is parent-scoped on ClusterName.
+		//
+		// Cloud Control identifier = "<ClusterName>|<PrincipalArn>";
+		// Terraform import format = "<ClusterName>:<PrincipalArn>"
+		// (colon). Verified against terraform-provider-aws v6.x docs
+		// for aws_eks_access_entry. Note the PrincipalArn itself
+		// contains colons (`arn:aws:iam::...`); the first-`|`-only
+		// rewrite preserves them verbatim past the cluster boundary.
+		TFType:             "aws_eks_access_entry",
+		CloudFormationType: "AWS::EKS::AccessEntry",
+		Slug:               "eks_access_entry",
+		ParentLister:       listEKSClustersAsResourceModels,
+		ImportIDFromIdentifier: func(identifier string, _ map[string]any) string {
+			return strings.Replace(identifier, "|", ":", 1)
+		},
+		// No "name" on AccessEntry — PrincipalArn (the second half of
+		// the compound id) is the most human-readable hint. Fall back
+		// to the property when the identifier is malformed.
+		NameHintFromProperties: func(identifier string, props map[string]any) string {
+			if parts := strings.SplitN(identifier, "|", 2); len(parts) == 2 && parts[1] != "" {
+				return parts[1]
+			}
+			if p := extractString(props, "PrincipalArn"); p != "" {
+				return p
+			}
+			return identifier
+		},
+		NativeIDsFromProperties: func(identifier string, props map[string]any) map[string]string {
+			parts := strings.SplitN(identifier, "|", 2)
+			if len(parts) != 2 {
+				return nil
+			}
+			out := map[string]string{
+				"cluster_name":  parts[0],
+				"principal_arn": parts[1],
+			}
+			if arn := extractString(props, "AccessEntryArn"); arn != "" {
+				out["arn"] = arn
+			}
+			return out
+		},
+		TagsFromProperties: tagsFromKey("Tags"),
+	},
+
+	// =====================================================================
+	// EC2 Instance — SDKLister, taggable (#14f)
+	// =====================================================================
+	{
+		// AWS::EC2::Instance has CC list+read handlers, but typical
+		// accounts carry hundreds of instances; the SDKLister path
+		// uses ec2:DescribeInstances which filters out
+		// terminated/shutting-down tombstones client-side (those CC
+		// identifiers would surface ResourceNotFoundException on the
+		// GetResource fan-out). CC primary identifier = InstanceId
+		// and Terraform's import format matches — passthrough.
+		TFType:                  "aws_instance",
+		CloudFormationType:      "AWS::EC2::Instance",
+		Slug:                    "instance",
+		SDKLister:               listEC2Instances,
+		ImportIDFromIdentifier:  passthroughImportID,
+		NameHintFromProperties:  passthroughIdentifierName,
+		NativeIDsFromProperties: arnUnderKey("Arn"),
+		TagsFromProperties:      tagsFromKey("Tags"),
+	},
+
+	// =====================================================================
+	// EC2 Launch Template — CC default-list, taggable (#14f)
+	// =====================================================================
+	{
+		// AWS::EC2::LaunchTemplate has standard CC list+read handlers.
+		// CC primary identifier = LaunchTemplateId (e.g. "lt-abc...")
+		// and Terraform's import format matches — passthrough.
+		// CFN exposes Tags as a flat list-of-Key/Value at the top
+		// level (the resource also has a nested TagSpecifications
+		// field that propagates tags to launched instances; that is a
+		// distinct property and is not used here for resource-level
+		// tag selectors).
+		TFType:                  "aws_launch_template",
+		CloudFormationType:      "AWS::EC2::LaunchTemplate",
+		Slug:                    "launch_template",
+		ImportIDFromIdentifier:  passthroughImportID,
+		NameHintFromProperties:  nameOrIdentifier("LaunchTemplateName"),
+		NativeIDsFromProperties: passthroughLaunchTemplateNativeIDs,
+		TagsFromProperties:      tagsFromKey("Tags"),
+	},
+
+	// =====================================================================
+	// Auto Scaling Group — SDKLister, taggable (#14f)
+	// =====================================================================
+	{
+		// AWS::AutoScaling::AutoScalingGroup has CC list+read handlers
+		// but the native autoscaling:DescribeAutoScalingGroups call
+		// has clean pagination and the result naturally keys by
+		// AutoScalingGroupName — matching the CC primary identifier
+		// shape. Routing through SDKLister keeps the type aligned with
+		// the rest of the #14f BYO compute bundle.
+		//
+		// CC primary identifier = AutoScalingGroupName (bare name)
+		// and Terraform's import format matches — passthrough.
+		// Tags use the standard Key/Value list shape; the
+		// PropagateAtLaunch flag is ASG-specific and is not consumed
+		// here (tag selectors operate on Key/Value alone).
+		TFType:                  "aws_autoscaling_group",
+		CloudFormationType:      "AWS::AutoScaling::AutoScalingGroup",
+		Slug:                    "autoscaling_group",
+		SDKLister:               listAutoScalingGroups,
+		ImportIDFromIdentifier:  passthroughImportID,
+		NameHintFromProperties:  nameOrIdentifier("AutoScalingGroupName"),
+		NativeIDsFromProperties: arnUnderKey("AutoScalingGroupARN"),
+		TagsFromProperties:      tagsFromKey("Tags"),
+	},
+
+	// =====================================================================
+	// EC2 Key Pair — SDKLister, taggable (#14f)
+	// =====================================================================
+	{
+		// AWS::EC2::KeyPair has CC list+read handlers; the SDKLister
+		// path uses ec2:DescribeKeyPairs (one call, all key pairs in
+		// the region — per-account key-pair counts are bounded by AWS
+		// service quotas). CC primary identifier = KeyName and
+		// Terraform's import format matches — passthrough.
+		TFType:                  "aws_key_pair",
+		CloudFormationType:      "AWS::EC2::KeyPair",
+		Slug:                    "key_pair",
+		SDKLister:               listEC2KeyPairs,
+		ImportIDFromIdentifier:  passthroughImportID,
+		NameHintFromProperties:  nameOrIdentifier("KeyName"),
+		NativeIDsFromProperties: passthroughKeyPairNativeIDs,
+		TagsFromProperties:      tagsFromKey("Tags"),
 	},
 }
 
@@ -1498,4 +1780,34 @@ func nilTagsExtractor(_ map[string]any) map[string]string {
 // types whose tags simply weren't fetched in this code path.
 func emptyTagsExtractor(_ map[string]any) map[string]string {
 	return map[string]string{}
+}
+
+// passthroughLaunchTemplateNativeIDs builds the NativeIDs map for
+// AWS::EC2::LaunchTemplate. The CC identifier IS the LaunchTemplateId
+// (e.g. "lt-abc..."); the properties payload also surfaces
+// LaunchTemplateName when set. We stamp both keys when present so
+// downstream consumers can resolve a template by either handle. There
+// is no top-level ARN on AWS::EC2::LaunchTemplate's CFN schema.
+func passthroughLaunchTemplateNativeIDs(identifier string, props map[string]any) map[string]string {
+	out := map[string]string{"id": identifier}
+	if n := extractString(props, "LaunchTemplateName"); n != "" {
+		out["name"] = n
+	}
+	return out
+}
+
+// passthroughKeyPairNativeIDs builds the NativeIDs map for
+// AWS::EC2::KeyPair. The CC identifier IS the KeyName; the properties
+// payload also surfaces KeyPairId (e.g. "key-abc...") and
+// KeyFingerprint. We stamp the name + id pair so downstream consumers
+// can resolve a key pair by either handle; KeyPair has no ARN.
+func passthroughKeyPairNativeIDs(identifier string, props map[string]any) map[string]string {
+	out := map[string]string{"name": identifier}
+	if id := extractString(props, "KeyPairId"); id != "" {
+		out["id"] = id
+	}
+	if fp := extractString(props, "KeyFingerprint"); fp != "" {
+		out["fingerprint"] = fp
+	}
+	return out
 }

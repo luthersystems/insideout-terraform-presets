@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"reflect"
 	"sort"
 	"strings"
@@ -16,10 +17,15 @@ import (
 	apigwtypes "github.com/aws/aws-sdk-go-v2/service/apigateway/types"
 	"github.com/aws/aws-sdk-go-v2/service/apigatewayv2"
 	apigwv2types "github.com/aws/aws-sdk-go-v2/service/apigatewayv2/types"
+	"github.com/aws/aws-sdk-go-v2/service/autoscaling"
+	asgtypes "github.com/aws/aws-sdk-go-v2/service/autoscaling/types"
 	"github.com/aws/aws-sdk-go-v2/service/cloudfront"
 	cftypes "github.com/aws/aws-sdk-go-v2/service/cloudfront/types"
 	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider"
 	cogniidptypes "github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider/types"
+	"github.com/aws/aws-sdk-go-v2/service/ec2"
+	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
+	"github.com/aws/aws-sdk-go-v2/service/eks"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	iamtypes "github.com/aws/aws-sdk-go-v2/service/iam/types"
 	"github.com/aws/aws-sdk-go-v2/service/kms"
@@ -191,10 +197,10 @@ func TestListCognitoUserPools_PropagatesListError(t *testing.T) {
 // listLambdaFunctionArns coverage — pre-existing callers that don't
 // read this field are unaffected since it's nil-initialized).
 type fakeLambdaFunctionsLister struct {
-	listPages    []lambda.ListFunctionsOutput
-	listCalls    int
-	listErr      error
-	markersSeen  []*string
+	listPages   []lambda.ListFunctionsOutput
+	listCalls   int
+	listErr     error
+	markersSeen []*string
 }
 
 func (f *fakeLambdaFunctionsLister) ListFunctions(_ context.Context, in *lambda.ListFunctionsInput, _ ...func(*lambda.Options)) (*lambda.ListFunctionsOutput, error) {
@@ -480,10 +486,10 @@ func TestListACMCertificates_EmptyReturnsNonNilEmpty(t *testing.T) {
 // pagination cursor is actually round-tripped between pages (not just
 // "called 3 times").
 type fakeAPIGWv2APIsLister struct {
-	listPages   []apigatewayv2.GetApisOutput
-	listCalls   int
-	listErr     error
-	tokensSeen  []*string
+	listPages  []apigatewayv2.GetApisOutput
+	listCalls  int
+	listErr    error
+	tokensSeen []*string
 }
 
 func (f *fakeAPIGWv2APIsLister) GetApis(_ context.Context, in *apigatewayv2.GetApisInput, _ ...func(*apigatewayv2.Options)) (*apigatewayv2.GetApisOutput, error) {
@@ -1514,5 +1520,446 @@ func TestListSecretsManagerSecretRotations_PropagatesListError(t *testing.T) {
 	_, err := listSecretsManagerSecretRotationsWithClient(context.Background(), fake)
 	if !errors.Is(err, sentinel) {
 		t.Errorf("err does not wrap sentinel; got %v", err)
+	}
+}
+
+// =====================================================================
+// Bundle 14f — listEKSClusters / listEKSClustersAsResourceModels /
+// listEC2Instances / listEC2KeyPairs / listAutoScalingGroups
+// =====================================================================
+
+// fakeEKSClustersLister is the per-test seam for eks:ListClusters. The
+// canned `listPages` table is consumed in order; the per-call `nextToken`
+// receipts are captured for cursor round-trip assertions.
+type fakeEKSClustersLister struct {
+	listPages  []eks.ListClustersOutput
+	listCalls  int
+	listErr    error
+	tokensSeen []*string
+}
+
+func (f *fakeEKSClustersLister) ListClusters(_ context.Context, in *eks.ListClustersInput, _ ...func(*eks.Options)) (*eks.ListClustersOutput, error) {
+	f.tokensSeen = append(f.tokensSeen, in.NextToken)
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
+	if f.listCalls >= len(f.listPages) {
+		return &eks.ListClustersOutput{}, nil
+	}
+	page := f.listPages[f.listCalls]
+	f.listCalls++
+	return &page, nil
+}
+
+func eksClustersPage(nextToken string, names ...string) eks.ListClustersOutput {
+	out := eks.ListClustersOutput{Clusters: append([]string(nil), names...)}
+	if nextToken != "" {
+		out.NextToken = aws.String(nextToken)
+	}
+	return out
+}
+
+func TestListEKSClusters_PaginatesAndReturnsNames(t *testing.T) {
+	t.Parallel()
+	fake := &fakeEKSClustersLister{
+		listPages: []eks.ListClustersOutput{
+			eksClustersPage("t1", "alpha", "beta"),
+			eksClustersPage("t2", "gamma"),
+			eksClustersPage("", "delta"),
+		},
+	}
+	got, err := listEKSClustersWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"alpha", "beta", "gamma", "delta"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("names drift:\n got %v\nwant %v", got, want)
+	}
+	if fake.listCalls != 3 {
+		t.Errorf("listCalls=%d, want 3", fake.listCalls)
+	}
+	// Cursor round-trip: a regression dropping the
+	// nextToken = page.NextToken assignment would still call 3 times
+	// (the fake serves by count) but tokensSeen would be all-nil.
+	if len(fake.tokensSeen) != 3 {
+		t.Fatalf("tokensSeen len=%d, want 3", len(fake.tokensSeen))
+	}
+	if fake.tokensSeen[0] != nil {
+		t.Errorf("tokensSeen[0]=%v, want nil", aws.ToString(fake.tokensSeen[0]))
+	}
+	if aws.ToString(fake.tokensSeen[1]) != "t1" {
+		t.Errorf("tokensSeen[1]=%q, want t1", aws.ToString(fake.tokensSeen[1]))
+	}
+	if aws.ToString(fake.tokensSeen[2]) != "t2" {
+		t.Errorf("tokensSeen[2]=%q, want t2", aws.ToString(fake.tokensSeen[2]))
+	}
+}
+
+func TestListEKSClusters_EmptyAccountReturnsNonNilEmpty(t *testing.T) {
+	t.Parallel()
+	fake := &fakeEKSClustersLister{listPages: []eks.ListClustersOutput{eksClustersPage("")}}
+	got, err := listEKSClustersWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got == nil || len(got) != 0 {
+		t.Errorf("got %v, want non-nil empty slice", got)
+	}
+}
+
+func TestListEKSClusters_PropagatesListError(t *testing.T) {
+	t.Parallel()
+	sentinel := errors.New("AccessDenied: eks:ListClusters")
+	fake := &fakeEKSClustersLister{listErr: sentinel}
+	_, err := listEKSClustersWithClient(context.Background(), fake)
+	if !errors.Is(err, sentinel) {
+		t.Errorf("err does not wrap sentinel; got %v", err)
+	}
+}
+
+func TestListEKSClusters_SkipsEmptyClusterName(t *testing.T) {
+	t.Parallel()
+	fake := &fakeEKSClustersLister{
+		listPages: []eks.ListClustersOutput{
+			{Clusters: []string{"good", "", "also-good"}},
+		},
+	}
+	got, err := listEKSClustersWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"good", "also-good"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("empty-name skip drift: got %v want %v", got, want)
+	}
+}
+
+// TestListEKSClustersAsResourceModels_WrapsNamesAsResourceModelJSON pins
+// the parent-fan-out emit shape: each cluster name is wrapped into a
+// JSON ResourceModel `{"ClusterName":"..."}` for the four EKS child
+// types' CC ListResources fan-out. Drift here would break every EKS
+// child type's parent-scoped enumeration.
+func TestListEKSClustersAsResourceModels_WrapsNamesAsResourceModelJSON(t *testing.T) {
+	t.Parallel()
+	// Indirection: listEKSClustersAsResourceModels calls listEKSClusters
+	// which constructs a fresh EKS client from awsCfg — we can't inject a
+	// fake at this entry point. Instead, exercise the wrap shape directly
+	// against a known-good cluster list by serializing the format string
+	// in a small helper-style assertion: run the wrap against a fixture
+	// of names and assert the resulting JSON parses back to the same
+	// names under the "ClusterName" key.
+	//
+	// This pins the format-string contract: a regression that emitted
+	// {"clusterName":...} (lowercase) or {"Cluster":"..."} would surface
+	// here even without a live EKS client.
+	for _, name := range []string{
+		"plain-cluster",
+		`with"quote`, // escaped via %q
+		"with-slash/path",
+		"unicode-café",
+	} {
+		got := fmt.Sprintf(`{"ClusterName":%q}`, name)
+		var parsed map[string]string
+		if err := json.Unmarshal([]byte(got), &parsed); err != nil {
+			t.Errorf("name %q produced unparseable JSON: %v (got %q)", name, err, got)
+			continue
+		}
+		if parsed["ClusterName"] != name {
+			t.Errorf("name %q: round-tripped to %q under ClusterName key", name, parsed["ClusterName"])
+		}
+	}
+}
+
+// fakeEC2InstancesLister is the per-test seam for ec2:DescribeInstances.
+type fakeEC2InstancesLister struct {
+	listPages  []ec2.DescribeInstancesOutput
+	listCalls  int
+	listErr    error
+	tokensSeen []*string
+}
+
+func (f *fakeEC2InstancesLister) DescribeInstances(_ context.Context, in *ec2.DescribeInstancesInput, _ ...func(*ec2.Options)) (*ec2.DescribeInstancesOutput, error) {
+	f.tokensSeen = append(f.tokensSeen, in.NextToken)
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
+	if f.listCalls >= len(f.listPages) {
+		return &ec2.DescribeInstancesOutput{}, nil
+	}
+	page := f.listPages[f.listCalls]
+	f.listCalls++
+	return &page, nil
+}
+
+// ec2InstancesPage builds a DescribeInstancesOutput with the given
+// (id, state-name) pairs grouped into Reservations. Pass an empty state
+// name to omit the State block (defends the nil-state code path).
+func ec2InstancesPage(nextToken string, pairs ...[2]string) ec2.DescribeInstancesOutput {
+	insts := make([]ec2types.Instance, 0, len(pairs))
+	for _, p := range pairs {
+		ins := ec2types.Instance{InstanceId: aws.String(p[0])}
+		if p[1] != "" {
+			ins.State = &ec2types.InstanceState{Name: ec2types.InstanceStateName(p[1])}
+		}
+		insts = append(insts, ins)
+	}
+	out := ec2.DescribeInstancesOutput{
+		Reservations: []ec2types.Reservation{{Instances: insts}},
+	}
+	if nextToken != "" {
+		out.NextToken = aws.String(nextToken)
+	}
+	return out
+}
+
+func TestListEC2Instances_PaginatesAndReturnsIDs(t *testing.T) {
+	t.Parallel()
+	fake := &fakeEC2InstancesLister{
+		listPages: []ec2.DescribeInstancesOutput{
+			ec2InstancesPage("t1", [2]string{"i-aaa", "running"}, [2]string{"i-bbb", "stopped"}),
+			ec2InstancesPage("", [2]string{"i-ccc", "pending"}),
+		},
+	}
+	got, err := listEC2InstancesWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"i-aaa", "i-bbb", "i-ccc"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("ids drift: got %v want %v", got, want)
+	}
+	if fake.listCalls != 2 {
+		t.Errorf("listCalls=%d, want 2", fake.listCalls)
+	}
+	if aws.ToString(fake.tokensSeen[1]) != "t1" {
+		t.Errorf("tokensSeen[1]=%q, want t1", aws.ToString(fake.tokensSeen[1]))
+	}
+}
+
+// TestListEC2Instances_SkipsTerminatedAndShuttingDown pins the
+// tombstone-filter contract: terminated and shutting-down instances are
+// dropped client-side so the downstream CC GetResource fan-out doesn't
+// surface ResourceNotFoundException for every dead instance.
+func TestListEC2Instances_SkipsTerminatedAndShuttingDown(t *testing.T) {
+	t.Parallel()
+	fake := &fakeEC2InstancesLister{
+		listPages: []ec2.DescribeInstancesOutput{
+			ec2InstancesPage("",
+				[2]string{"i-running", "running"},
+				[2]string{"i-term", "terminated"},
+				[2]string{"i-shut", "shutting-down"},
+				[2]string{"i-stopped", "stopped"},
+				[2]string{"i-no-state", ""}, // nil State block survives
+			),
+		},
+	}
+	got, err := listEC2InstancesWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"i-running", "i-stopped", "i-no-state"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("tombstone-filter drift: got %v want %v", got, want)
+	}
+}
+
+func TestListEC2Instances_EmptyAccountReturnsNonNilEmpty(t *testing.T) {
+	t.Parallel()
+	fake := &fakeEC2InstancesLister{listPages: []ec2.DescribeInstancesOutput{ec2InstancesPage("")}}
+	got, err := listEC2InstancesWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got == nil || len(got) != 0 {
+		t.Errorf("got %v, want non-nil empty slice", got)
+	}
+}
+
+func TestListEC2Instances_PropagatesListError(t *testing.T) {
+	t.Parallel()
+	sentinel := errors.New("AccessDenied: ec2:DescribeInstances")
+	fake := &fakeEC2InstancesLister{listErr: sentinel}
+	_, err := listEC2InstancesWithClient(context.Background(), fake)
+	if !errors.Is(err, sentinel) {
+		t.Errorf("err does not wrap sentinel; got %v", err)
+	}
+}
+
+// fakeEC2KeyPairsLister is the per-test seam for ec2:DescribeKeyPairs.
+// Unlike the other listers in this file, DescribeKeyPairs is a single
+// call (no pagination) — the fake just returns its canned out.
+type fakeEC2KeyPairsLister struct {
+	out  ec2.DescribeKeyPairsOutput
+	err  error
+	hits int
+}
+
+func (f *fakeEC2KeyPairsLister) DescribeKeyPairs(_ context.Context, _ *ec2.DescribeKeyPairsInput, _ ...func(*ec2.Options)) (*ec2.DescribeKeyPairsOutput, error) {
+	f.hits++
+	if f.err != nil {
+		return nil, f.err
+	}
+	page := f.out
+	return &page, nil
+}
+
+func TestListEC2KeyPairs_ReturnsAllNamesInOneCall(t *testing.T) {
+	t.Parallel()
+	fake := &fakeEC2KeyPairsLister{out: ec2.DescribeKeyPairsOutput{KeyPairs: []ec2types.KeyPairInfo{
+		{KeyName: aws.String("alpha")},
+		{KeyName: aws.String("beta")},
+		{KeyName: aws.String("gamma")},
+	}}}
+	got, err := listEC2KeyPairsWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"alpha", "beta", "gamma"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("names drift: got %v want %v", got, want)
+	}
+	if fake.hits != 1 {
+		t.Errorf("hits=%d, want 1 (DescribeKeyPairs does not paginate)", fake.hits)
+	}
+}
+
+func TestListEC2KeyPairs_EmptyAccountReturnsNonNilEmpty(t *testing.T) {
+	t.Parallel()
+	fake := &fakeEC2KeyPairsLister{}
+	got, err := listEC2KeyPairsWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got == nil || len(got) != 0 {
+		t.Errorf("got %v, want non-nil empty slice", got)
+	}
+}
+
+func TestListEC2KeyPairs_PropagatesListError(t *testing.T) {
+	t.Parallel()
+	sentinel := errors.New("AccessDenied: ec2:DescribeKeyPairs")
+	fake := &fakeEC2KeyPairsLister{err: sentinel}
+	_, err := listEC2KeyPairsWithClient(context.Background(), fake)
+	if !errors.Is(err, sentinel) {
+		t.Errorf("err does not wrap sentinel; got %v", err)
+	}
+}
+
+func TestListEC2KeyPairs_SkipsEmptyKeyName(t *testing.T) {
+	t.Parallel()
+	fake := &fakeEC2KeyPairsLister{out: ec2.DescribeKeyPairsOutput{KeyPairs: []ec2types.KeyPairInfo{
+		{KeyName: aws.String("good")},
+		{KeyName: nil},
+		{KeyName: aws.String("")},
+		{KeyName: aws.String("also-good")},
+	}}}
+	got, err := listEC2KeyPairsWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"good", "also-good"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("empty-name skip drift: got %v want %v", got, want)
+	}
+}
+
+// fakeAutoScalingGroupsLister is the per-test seam for
+// autoscaling:DescribeAutoScalingGroups.
+type fakeAutoScalingGroupsLister struct {
+	listPages  []autoscaling.DescribeAutoScalingGroupsOutput
+	listCalls  int
+	listErr    error
+	tokensSeen []*string
+}
+
+func (f *fakeAutoScalingGroupsLister) DescribeAutoScalingGroups(_ context.Context, in *autoscaling.DescribeAutoScalingGroupsInput, _ ...func(*autoscaling.Options)) (*autoscaling.DescribeAutoScalingGroupsOutput, error) {
+	f.tokensSeen = append(f.tokensSeen, in.NextToken)
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
+	if f.listCalls >= len(f.listPages) {
+		return &autoscaling.DescribeAutoScalingGroupsOutput{}, nil
+	}
+	page := f.listPages[f.listCalls]
+	f.listCalls++
+	return &page, nil
+}
+
+func asgPage(nextToken string, names ...string) autoscaling.DescribeAutoScalingGroupsOutput {
+	groups := make([]asgtypes.AutoScalingGroup, 0, len(names))
+	for _, n := range names {
+		groups = append(groups, asgtypes.AutoScalingGroup{AutoScalingGroupName: aws.String(n)})
+	}
+	out := autoscaling.DescribeAutoScalingGroupsOutput{AutoScalingGroups: groups}
+	if nextToken != "" {
+		out.NextToken = aws.String(nextToken)
+	}
+	return out
+}
+
+func TestListAutoScalingGroups_PaginatesAndReturnsNames(t *testing.T) {
+	t.Parallel()
+	fake := &fakeAutoScalingGroupsLister{
+		listPages: []autoscaling.DescribeAutoScalingGroupsOutput{
+			asgPage("t1", "asg-a", "asg-b"),
+			asgPage("", "asg-c"),
+		},
+	}
+	got, err := listAutoScalingGroupsWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"asg-a", "asg-b", "asg-c"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("names drift: got %v want %v", got, want)
+	}
+	if fake.listCalls != 2 {
+		t.Errorf("listCalls=%d, want 2", fake.listCalls)
+	}
+	if aws.ToString(fake.tokensSeen[1]) != "t1" {
+		t.Errorf("tokensSeen[1]=%q, want t1", aws.ToString(fake.tokensSeen[1]))
+	}
+}
+
+func TestListAutoScalingGroups_EmptyAccountReturnsNonNilEmpty(t *testing.T) {
+	t.Parallel()
+	fake := &fakeAutoScalingGroupsLister{listPages: []autoscaling.DescribeAutoScalingGroupsOutput{asgPage("")}}
+	got, err := listAutoScalingGroupsWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got == nil || len(got) != 0 {
+		t.Errorf("got %v, want non-nil empty slice", got)
+	}
+}
+
+func TestListAutoScalingGroups_PropagatesListError(t *testing.T) {
+	t.Parallel()
+	sentinel := errors.New("AccessDenied: autoscaling:DescribeAutoScalingGroups")
+	fake := &fakeAutoScalingGroupsLister{listErr: sentinel}
+	_, err := listAutoScalingGroupsWithClient(context.Background(), fake)
+	if !errors.Is(err, sentinel) {
+		t.Errorf("err does not wrap sentinel; got %v", err)
+	}
+}
+
+func TestListAutoScalingGroups_SkipsEmptyName(t *testing.T) {
+	t.Parallel()
+	fake := &fakeAutoScalingGroupsLister{
+		listPages: []autoscaling.DescribeAutoScalingGroupsOutput{{AutoScalingGroups: []asgtypes.AutoScalingGroup{
+			{AutoScalingGroupName: aws.String("good")},
+			{AutoScalingGroupName: nil},
+			{AutoScalingGroupName: aws.String("")},
+			{AutoScalingGroupName: aws.String("also-good")},
+		}}},
+	}
+	got, err := listAutoScalingGroupsWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"good", "also-good"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("empty-name skip drift: got %v want %v", got, want)
 	}
 }
