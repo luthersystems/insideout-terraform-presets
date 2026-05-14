@@ -75,6 +75,9 @@ func TestStorageBucketIAMMemberListNonCAI_PerParentErrorSoftFails(t *testing.T) 
 	got, err := d.ListNonCAI(context.Background(), "real-proj", "", prior, rec)
 	require.NoError(t, err)
 	require.Len(t, got, 1)
+	// Pin which parent's row survived — a mutation that swapped which
+	// bucket the discoverer queries would otherwise pass green.
+	assert.Equal(t, "b/bucket-a roles/storage.objectViewer user:alice@example.com", got[0].Identity.ImportID)
 	var warns []recordedEvent
 	for _, ev := range rec.snapshot() {
 		if ev.Kind == "service_warn" {

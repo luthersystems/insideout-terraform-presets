@@ -93,6 +93,8 @@ func TestServiceNetworkingConnectionListNonCAI_PerNetworkErrorSoftFails(t *testi
 	got, err := d.ListNonCAI(context.Background(), "real-proj", "", prior, rec)
 	require.NoError(t, err)
 	require.Len(t, got, 1, "soft-fail should drop only the failing network, not all of them")
+	// Pin which network's connection row survived.
+	assert.Equal(t, netA+":services/servicenetworking.googleapis.com", got[0].Identity.ImportID)
 
 	var warns []recordedEvent
 	for _, ev := range rec.snapshot() {
@@ -132,6 +134,66 @@ func TestServiceNetworkingConnectionImportID(t *testing.T) {
 	assert.Equal(t,
 		"projects/p/global/networks/n:services/servicenetworking.googleapis.com",
 		serviceNetworkingConnectionImportID("projects/p/global/networks/n", "services/servicenetworking.googleapis.com"))
+}
+
+// TestServiceNetworkingConnectionNetworkPath pins the parent-row
+// translation helper. The function is defensive against the parent
+// google_compute_network discoverer's ImportID format evolving — without
+// direct cases here the ImportID-only branch (line 116-118) ships
+// untested and a regression that broke the "/networks/" detection
+// would surface only as silent zero-row emissions during the per-
+// parent fan-out.
+func TestServiceNetworkingConnectionNetworkPath(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name      string
+		nameHint  string
+		importID  string
+		projectID string
+		want      string
+	}{
+		{
+			name:      "NameHint set wins",
+			nameHint:  "io-foo-vpc",
+			importID:  "ignored",
+			projectID: "real-proj",
+			want:      "projects/real-proj/global/networks/io-foo-vpc",
+		},
+		{
+			name:      "ImportID fallback when NameHint empty",
+			nameHint:  "",
+			importID:  "projects/other-proj/global/networks/io-bar-vpc",
+			projectID: "real-proj",
+			want:      "projects/other-proj/global/networks/io-bar-vpc",
+		},
+		{
+			name:      "neither NameHint nor /networks/-shaped ImportID",
+			nameHint:  "",
+			importID:  "some-bare-id",
+			projectID: "real-proj",
+			want:      "",
+		},
+		{
+			name:      "everything empty",
+			nameHint:  "",
+			importID:  "",
+			projectID: "real-proj",
+			want:      "",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			prior := imported.ImportedResource{
+				Identity: imported.ResourceIdentity{
+					Type:     computeNetworkTFType,
+					NameHint: tc.nameHint,
+					ImportID: tc.importID,
+				},
+			}
+			assert.Equal(t, tc.want, serviceNetworkingConnectionNetworkPath(tc.projectID, prior))
+		})
+	}
 }
 
 func TestServiceNetworkingConnectionNameHint(t *testing.T) {

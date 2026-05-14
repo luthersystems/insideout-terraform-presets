@@ -180,3 +180,14 @@ func TestStorageBucketObjectImportID(t *testing.T) {
 		})
 	}
 }
+
+// TestDefaultMaxBucketObjects pins the per-bucket truncation cap.
+// Bumping or lowering the cap without updating this test is a contract
+// change — operator-visible behavior shifts (more or fewer object rows
+// surface per bucket on huge buckets) and the corresponding
+// "capped at 1000/bucket" note in gcp.json's purpose string drifts.
+// The test exists purely as a tripwire against silent cap bumps.
+func TestDefaultMaxBucketObjects(t *testing.T) {
+	t.Parallel()
+	assert.Equal(t, 1000, defaultMaxBucketObjects)
+}

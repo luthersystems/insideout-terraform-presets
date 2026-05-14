@@ -79,6 +79,8 @@ func TestSecretManagerSecretIAMBindingListNonCAI_PerParentErrorSoftFails(t *test
 	got, err := d.ListNonCAI(context.Background(), "p", "", prior, rec)
 	require.NoError(t, err)
 	require.Len(t, got, 1)
+	// Pin which parent's binding row survived.
+	assert.Equal(t, secretA+" roles/secretmanager.viewer", got[0].Identity.ImportID)
 	var warns []recordedEvent
 	for _, ev := range rec.snapshot() {
 		if ev.Kind == "service_warn" {

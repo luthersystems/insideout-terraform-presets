@@ -81,6 +81,10 @@ func TestKMSCryptoKeyIAMBindingListNonCAI_PerParentErrorSoftFails(t *testing.T) 
 	got, err := d.ListNonCAI(context.Background(), "p", "", prior, rec)
 	require.NoError(t, err)
 	require.Len(t, got, 1)
+	// Pin which parent's binding row survived. The KMS IAM binding's
+	// import format is the slash-compact `<p>/<loc>/<ring>/<key>` shape,
+	// not the parent's `projects/...` full path.
+	assert.Equal(t, "p/us-central1/r/k-a roles/cloudkms.viewer", got[0].Identity.ImportID)
 	var warns []recordedEvent
 	for _, ev := range rec.snapshot() {
 		if ev.Kind == "service_warn" {

@@ -78,6 +78,8 @@ func TestCloudRunV2ServiceIAMMemberListNonCAI_PerParentErrorSoftFails(t *testing
 	got, err := d.ListNonCAI(context.Background(), "p", "", prior, rec)
 	require.NoError(t, err)
 	require.Len(t, got, 1)
+	// Pin which parent's member row survived.
+	assert.Equal(t, svcA+" roles/run.invoker user:alice@example.com", got[0].Identity.ImportID)
 	var warns []recordedEvent
 	for _, ev := range rec.snapshot() {
 		if ev.Kind == "service_warn" {
