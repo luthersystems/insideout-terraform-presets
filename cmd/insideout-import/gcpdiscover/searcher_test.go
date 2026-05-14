@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"cloud.google.com/go/asset/apiv1/assetpb"
+	"golang.org/x/oauth2/google"
 	"google.golang.org/api/option"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -234,16 +235,20 @@ func TestNewRealAssetSearcher_AcceptsOptions(t *testing.T) {
 
 // TestNewRealAssetSearcher_NoOptsKeepsADCFallback pins that callers
 // passing no opts (the CLI use case) continue to get the ADC-backed
-// client construction. The constructor returns a usable searcher
-// without an explicit credential opt because the underlying
-// asset.NewClient defers credential resolution to first RPC — so
-// the constructor itself succeeds even in test processes without
-// ADC configured. The contract this test locks is "zero-opt call
-// site keeps working" so a future refactor that made opts required
-// (e.g. by introducing a non-variadic signature) breaks here.
+// client construction. Skipped on hosts without ADC configured
+// (e.g. CI without GOOGLE_APPLICATION_CREDENTIALS) — asset.NewClient
+// eagerly resolves credentials, so a constructor call without ADC fails
+// at construction time. The contract this test locks is "zero-opt call
+// site keeps working when ADC is available" so a future refactor that
+// made opts required (e.g. by introducing a non-variadic signature)
+// breaks here on dev machines + the GCP-credentialled CI lanes that
+// can run this path.
 func TestNewRealAssetSearcher_NoOptsKeepsADCFallback(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
+	if _, err := google.FindDefaultCredentials(ctx); err != nil {
+		t.Skipf("Application Default Credentials not configured; the zero-opt construction path can't be exercised here. ADC error: %v", err)
+	}
 	s, err := NewRealAssetSearcher(ctx)
 	if err != nil {
 		t.Fatalf("zero-opt NewRealAssetSearcher must construct (ADC fallback path): %v", err)
