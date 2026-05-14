@@ -32,6 +32,8 @@ import (
 	kmstypes "github.com/aws/aws-sdk-go-v2/service/kms/types"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	lambdatypes "github.com/aws/aws-sdk-go-v2/service/lambda/types"
+	"github.com/aws/aws-sdk-go-v2/service/opensearch"
+	opensearchtypes "github.com/aws/aws-sdk-go-v2/service/opensearch/types"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	smtypes "github.com/aws/aws-sdk-go-v2/service/secretsmanager/types"
 )
@@ -1955,6 +1957,115 @@ func TestListAutoScalingGroups_SkipsEmptyName(t *testing.T) {
 		}}},
 	}
 	got, err := listAutoScalingGroupsWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"good", "also-good"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("empty-name skip drift: got %v want %v", got, want)
+	}
+}
+
+// =====================================================================
+// Bundle 14g — listOpenSearchDomains
+// =====================================================================
+
+// fakeOpenSearchDomainsLister is the per-test seam for
+// opensearch:ListDomainNames. The API is non-paginated (single call
+// returns every domain in the region) so a single `out` slot suffices
+// — no listPages / NextToken plumbing needed.
+type fakeOpenSearchDomainsLister struct {
+	out  *opensearch.ListDomainNamesOutput
+	err  error
+	call int
+}
+
+func (f *fakeOpenSearchDomainsLister) ListDomainNames(_ context.Context, _ *opensearch.ListDomainNamesInput, _ ...func(*opensearch.Options)) (*opensearch.ListDomainNamesOutput, error) {
+	f.call++
+	if f.err != nil {
+		return nil, f.err
+	}
+	if f.out == nil {
+		return &opensearch.ListDomainNamesOutput{}, nil
+	}
+	return f.out, nil
+}
+
+func TestListOpenSearchDomains_ReturnsNames(t *testing.T) {
+	t.Parallel()
+	fake := &fakeOpenSearchDomainsLister{
+		out: &opensearch.ListDomainNamesOutput{
+			DomainNames: []opensearchtypes.DomainInfo{
+				{DomainName: aws.String("alpha")},
+				{DomainName: aws.String("beta")},
+				{DomainName: aws.String("gamma")},
+			},
+		},
+	}
+	got, err := listOpenSearchDomainsWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"alpha", "beta", "gamma"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("names drift:\n got %v\nwant %v", got, want)
+	}
+	// Non-paginated API: exactly one ListDomainNames call per invocation.
+	if fake.call != 1 {
+		t.Errorf("call count=%d, want 1 (opensearch:ListDomainNames is non-paginated)", fake.call)
+	}
+}
+
+// TestListOpenSearchDomains_EmptyAccountReturnsNonNilEmpty pins the
+// #255 JSON-marshal contract at the lister boundary: an empty response
+// must surface as a non-nil empty slice so downstream consumers
+// (cloudControlDiscoverer's len(ids)==0 early-exit, then itemRef
+// accumulators that marshal through the JSON pipeline) see "[]" not
+// "null".
+func TestListOpenSearchDomains_EmptyAccountReturnsNonNilEmpty(t *testing.T) {
+	t.Parallel()
+	fake := &fakeOpenSearchDomainsLister{
+		out: &opensearch.ListDomainNamesOutput{DomainNames: nil},
+	}
+	got, err := listOpenSearchDomainsWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got == nil {
+		t.Fatal("got nil, want non-nil empty slice (#255 JSON marshal contract)")
+	}
+	if len(got) != 0 {
+		t.Errorf("got %v, want empty slice", got)
+	}
+}
+
+func TestListOpenSearchDomains_PropagatesListError(t *testing.T) {
+	t.Parallel()
+	sentinel := errors.New("AccessDenied: opensearch:ListDomainNames")
+	fake := &fakeOpenSearchDomainsLister{err: sentinel}
+	_, err := listOpenSearchDomainsWithClient(context.Background(), fake)
+	if !errors.Is(err, sentinel) {
+		t.Errorf("err does not wrap sentinel; got %v", err)
+	}
+}
+
+// TestListOpenSearchDomains_SkipsEmptyDomainName defends against an
+// SDK response that includes a domain row with a missing or empty
+// DomainName field (the API contract permits it; treat as a no-op so
+// downstream GetResource doesn't blow up on an empty identifier).
+func TestListOpenSearchDomains_SkipsEmptyDomainName(t *testing.T) {
+	t.Parallel()
+	fake := &fakeOpenSearchDomainsLister{
+		out: &opensearch.ListDomainNamesOutput{
+			DomainNames: []opensearchtypes.DomainInfo{
+				{DomainName: aws.String("good")},
+				{DomainName: nil},
+				{DomainName: aws.String("")},
+				{DomainName: aws.String("also-good")},
+			},
+		},
+	}
+	got, err := listOpenSearchDomainsWithClient(context.Background(), fake)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

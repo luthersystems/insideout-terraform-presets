@@ -27,6 +27,7 @@ aws_db_instance	Data Storage
 aws_db_parameter_group	Data Storage
 aws_db_subnet_group	Data Storage
 aws_dynamodb_table	Data Storage
+aws_ebs_volume	Data Storage
 aws_ecr_repository	Data Storage
 aws_ecs_cluster	Virtual Machines
 aws_eip	Network Security
@@ -36,6 +37,9 @@ aws_eks_cluster	Virtual Machines
 aws_eks_fargate_profile	Virtual Machines
 aws_eks_node_group	Virtual Machines
 aws_eks_pod_identity_association	Security
+aws_elasticache_parameter_group	Data Storage
+aws_elasticache_replication_group	Data Storage
+aws_elasticache_subnet_group	Data Storage
 aws_elb	Network Security
 aws_iam_group	Security
 aws_iam_instance_profile	Security
@@ -56,9 +60,12 @@ aws_launch_template	Virtual Machines
 aws_lb	Network Security
 aws_lb_listener	Network Security
 aws_lb_target_group	Network Security
+aws_msk_cluster	Data Storage
+aws_msk_configuration	Data Storage
 aws_nat_gateway	Network Security
 aws_network_acl	Network Security
 aws_network_interface	Network Security
+aws_opensearch_domain	Data Storage
 aws_opensearchserverless_collection	Data Storage
 aws_rds_cluster	Data Storage
 aws_resourceexplorer2_index	Observability

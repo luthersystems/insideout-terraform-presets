@@ -2145,3 +2145,327 @@ func TestEC2KeyPairConfig(t *testing.T) {
 		t.Errorf("Tags: got %+v, want env=prod", tags)
 	}
 }
+
+// =====================================================================
+// Bundle 14g — stateful data BYO extractor pins
+// =====================================================================
+
+// TestElastiCacheReplicationGroupConfig pins
+// aws_elasticache_replication_group: CC default-list, passthrough CC
+// identifier (ReplicationGroupId), ReplicationGroupId NameHint, Arn
+// NativeID, taggable.
+func TestElastiCacheReplicationGroupConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_elasticache_replication_group")
+	if cfg.SkipProjectTagFilter {
+		t.Error("aws_elasticache_replication_group: SkipProjectTagFilter must be false (replication groups are taggable)")
+	}
+	if cfg.CloudFormationType != "AWS::ElastiCache::ReplicationGroup" {
+		t.Errorf("CloudFormationType=%q, want AWS::ElastiCache::ReplicationGroup", cfg.CloudFormationType)
+	}
+	if cfg.SDKLister != nil {
+		t.Error("SDKLister must be nil (CC default-list)")
+	}
+	if cfg.ParentLister != nil {
+		t.Error("ParentLister must be nil")
+	}
+
+	id := "my-redis"
+	if got := cfg.ImportIDFromIdentifier(id, nil); got != id {
+		t.Errorf("ImportID passthrough: got %q, want %q", got, id)
+	}
+	if got := cfg.NameHintFromProperties(id, map[string]any{"ReplicationGroupId": "my-redis"}); got != "my-redis" {
+		t.Errorf("NameHint: got %q, want my-redis", got)
+	}
+	if got := cfg.NameHintFromProperties(id, map[string]any{}); got != id {
+		t.Errorf("NameHint fallback: got %q, want %q", got, id)
+	}
+
+	native := cfg.NativeIDsFromProperties(id, map[string]any{"Arn": "arn:aws:elasticache:us-east-1:111:replicationgroup:my-redis"})
+	wantNative := map[string]string{"arn": "arn:aws:elasticache:us-east-1:111:replicationgroup:my-redis"}
+	if !reflect.DeepEqual(native, wantNative) {
+		t.Errorf("NativeIDs: got %+v, want %+v", native, wantNative)
+	}
+	// arnUnderKey returns nil when the Arn property is absent so
+	// downstream sees "no native IDs" rather than a partial map.
+	if got := cfg.NativeIDsFromProperties(id, map[string]any{}); got != nil {
+		t.Errorf("NativeIDs without Arn: got %+v, want nil", got)
+	}
+
+	tags := cfg.TagsFromProperties(map[string]any{"Tags": []any{map[string]any{"Key": "env", "Value": "prod"}}})
+	wantTags := map[string]string{"env": "prod"}
+	if !reflect.DeepEqual(tags, wantTags) {
+		t.Errorf("Tags: got %+v, want %+v", tags, wantTags)
+	}
+}
+
+// TestElastiCacheParameterGroupConfig pins
+// aws_elasticache_parameter_group: CC default-list, passthrough CC
+// identifier (CacheParameterGroupName), CacheParameterGroupName
+// NameHint, name-only NativeIDs (no ARN on CFN schema), taggable.
+func TestElastiCacheParameterGroupConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_elasticache_parameter_group")
+	if cfg.SkipProjectTagFilter {
+		t.Error("aws_elasticache_parameter_group: SkipProjectTagFilter must be false")
+	}
+	if cfg.CloudFormationType != "AWS::ElastiCache::ParameterGroup" {
+		t.Errorf("CloudFormationType=%q, want AWS::ElastiCache::ParameterGroup", cfg.CloudFormationType)
+	}
+	if cfg.SDKLister != nil {
+		t.Error("SDKLister must be nil")
+	}
+	if cfg.ParentLister != nil {
+		t.Error("ParentLister must be nil")
+	}
+
+	id := "default.redis7"
+	if got := cfg.ImportIDFromIdentifier(id, nil); got != id {
+		t.Errorf("ImportID passthrough: got %q, want %q", got, id)
+	}
+	if got := cfg.NameHintFromProperties(id, map[string]any{"CacheParameterGroupName": "default.redis7"}); got != "default.redis7" {
+		t.Errorf("NameHint: got %q, want default.redis7", got)
+	}
+
+	// No ARN on CFN schema — NativeIDs returns just the name-keyed
+	// identifier so downstream readers can resolve by name.
+	native := cfg.NativeIDsFromProperties(id, map[string]any{})
+	wantNative := map[string]string{"name": id}
+	if !reflect.DeepEqual(native, wantNative) {
+		t.Errorf("NativeIDs: got %+v, want %+v (exact map equality — extra keys would be a regression)", native, wantNative)
+	}
+
+	tags := cfg.TagsFromProperties(map[string]any{"Tags": []any{map[string]any{"Key": "env", "Value": "prod"}}})
+	if tags["env"] != "prod" {
+		t.Errorf("Tags: got %+v, want env=prod", tags)
+	}
+}
+
+// TestElastiCacheSubnetGroupConfig pins aws_elasticache_subnet_group:
+// CC default-list, passthrough CC identifier (CacheSubnetGroupName),
+// CacheSubnetGroupName NameHint, name-only NativeIDs, taggable.
+func TestElastiCacheSubnetGroupConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_elasticache_subnet_group")
+	if cfg.SkipProjectTagFilter {
+		t.Error("aws_elasticache_subnet_group: SkipProjectTagFilter must be false")
+	}
+	if cfg.CloudFormationType != "AWS::ElastiCache::SubnetGroup" {
+		t.Errorf("CloudFormationType=%q, want AWS::ElastiCache::SubnetGroup", cfg.CloudFormationType)
+	}
+	if cfg.SDKLister != nil {
+		t.Error("SDKLister must be nil")
+	}
+
+	id := "my-subnet-group"
+	if got := cfg.ImportIDFromIdentifier(id, nil); got != id {
+		t.Errorf("ImportID passthrough: got %q, want %q", got, id)
+	}
+	if got := cfg.NameHintFromProperties(id, map[string]any{"CacheSubnetGroupName": "my-subnet-group"}); got != "my-subnet-group" {
+		t.Errorf("NameHint: got %q, want my-subnet-group", got)
+	}
+	native := cfg.NativeIDsFromProperties(id, nil)
+	wantNative := map[string]string{"name": id}
+	if !reflect.DeepEqual(native, wantNative) {
+		t.Errorf("NativeIDs: got %+v, want %+v", native, wantNative)
+	}
+
+	tags := cfg.TagsFromProperties(map[string]any{"Tags": []any{map[string]any{"Key": "env", "Value": "prod"}}})
+	if tags["env"] != "prod" {
+		t.Errorf("Tags: got %+v, want env=prod", tags)
+	}
+}
+
+// TestMSKClusterConfig pins aws_msk_cluster: CC default-list,
+// passthrough CC identifier (full cluster ARN), ClusterName NameHint
+// (falls back to ARN identifier), arn NativeID, taggable.
+func TestMSKClusterConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_msk_cluster")
+	if cfg.SkipProjectTagFilter {
+		t.Error("aws_msk_cluster: SkipProjectTagFilter must be false (clusters are taggable)")
+	}
+	if cfg.CloudFormationType != "AWS::MSK::Cluster" {
+		t.Errorf("CloudFormationType=%q, want AWS::MSK::Cluster", cfg.CloudFormationType)
+	}
+	if cfg.SDKLister != nil {
+		t.Error("SDKLister must be nil")
+	}
+
+	id := "arn:aws:kafka:us-east-1:111:cluster/my-msk/abc-uuid"
+	if got := cfg.ImportIDFromIdentifier(id, nil); got != id {
+		t.Errorf("ImportID passthrough (CC id IS the ARN): got %q, want %q", got, id)
+	}
+	if got := cfg.NameHintFromProperties(id, map[string]any{"ClusterName": "my-msk"}); got != "my-msk" {
+		t.Errorf("NameHint: got %q, want my-msk", got)
+	}
+	// Fallback: when ClusterName is absent, the identifier (the ARN)
+	// is returned verbatim — pin the contract.
+	if got := cfg.NameHintFromProperties(id, map[string]any{}); got != id {
+		t.Errorf("NameHint fallback to identifier: got %q, want %q", got, id)
+	}
+
+	native := cfg.NativeIDsFromProperties(id, nil)
+	wantNative := map[string]string{"arn": id}
+	if !reflect.DeepEqual(native, wantNative) {
+		t.Errorf("NativeIDs: got %+v, want %+v", native, wantNative)
+	}
+
+	// TAGS SHAPE: AWS::MSK::Cluster.Tags is a flat map[string]string in
+	// the CFN schema (verified via cloudformation:DescribeType), NOT
+	// the Key/Value list shape most services use. Pin via the flat-map
+	// fixture; a regression to tagsFromKey would return nil/empty
+	// because extractTagList expects a `[]any` of `{Key, Value}` objs.
+	tags := cfg.TagsFromProperties(map[string]any{"Tags": map[string]any{"env": "prod"}})
+	wantTags := map[string]string{"env": "prod"}
+	if !reflect.DeepEqual(tags, wantTags) {
+		t.Errorf("Tags (flat map shape): got %+v, want %+v", tags, wantTags)
+	}
+	// Defense in depth: a Key/Value list payload (the WRONG shape for
+	// this type) must NOT silently parse as tags. extractStringMap
+	// returns nil when the value isn't a map[string]any.
+	if got := cfg.TagsFromProperties(map[string]any{"Tags": []any{map[string]any{"Key": "env", "Value": "prod"}}}); got != nil {
+		t.Errorf("Tags must read flat map, NOT Key/Value list: got %+v, want nil (regression: silent fallback to extractTagList)", got)
+	}
+}
+
+// TestMSKConfigurationConfig pins aws_msk_configuration: CC
+// default-list, passthrough CC identifier (full configuration ARN),
+// Name NameHint, arn NativeID, UNTAGGABLE (no Tags property on the
+// CFN schema → SkipProjectTagFilter=true, emptyTagsExtractor).
+func TestMSKConfigurationConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_msk_configuration")
+	if !cfg.SkipProjectTagFilter {
+		t.Error("aws_msk_configuration: SkipProjectTagFilter must be true (CFN schema declares no Tags property; the legacy Project filter would silently drop every configuration on --project scans)")
+	}
+	if cfg.CloudFormationType != "AWS::MSK::Configuration" {
+		t.Errorf("CloudFormationType=%q, want AWS::MSK::Configuration", cfg.CloudFormationType)
+	}
+
+	id := "arn:aws:kafka:us-east-1:111:configuration/my-config/def-uuid"
+	if got := cfg.ImportIDFromIdentifier(id, nil); got != id {
+		t.Errorf("ImportID passthrough (CC id IS the ARN): got %q, want %q", got, id)
+	}
+	if got := cfg.NameHintFromProperties(id, map[string]any{"Name": "my-config"}); got != "my-config" {
+		t.Errorf("NameHint: got %q, want my-config", got)
+	}
+
+	native := cfg.NativeIDsFromProperties(id, nil)
+	wantNative := map[string]string{"arn": id}
+	if !reflect.DeepEqual(native, wantNative) {
+		t.Errorf("NativeIDs: got %+v, want %+v", native, wantNative)
+	}
+
+	// emptyTagsExtractor: returns non-nil empty map per the #255 JSON
+	// marshal contract — even with a populated Tags shape on input
+	// the extractor must ignore it (the type is untaggable).
+	tags := cfg.TagsFromProperties(map[string]any{"Tags": []any{map[string]any{"Key": "env", "Value": "prod"}}})
+	if tags == nil {
+		t.Fatal("Tags must be non-nil empty map (#255 JSON contract)")
+	}
+	if len(tags) != 0 {
+		t.Errorf("Tags: got %v, want empty (msk_configuration is tagless)", tags)
+	}
+}
+
+// TestOpenSearchDomainConfig pins aws_opensearch_domain: SDKLister
+// branch (CC ListResources returns UnsupportedActionException for
+// AWS::OpenSearchService::Domain — verified via live probe), passthrough
+// CC identifier (DomainName), DomainName NameHint, DomainArn NativeID,
+// taggable.
+func TestOpenSearchDomainConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_opensearch_domain")
+	if cfg.SkipProjectTagFilter {
+		t.Error("aws_opensearch_domain: SkipProjectTagFilter must be false (domains are taggable)")
+	}
+	if cfg.CloudFormationType != "AWS::OpenSearchService::Domain" {
+		t.Errorf("CloudFormationType=%q, want AWS::OpenSearchService::Domain", cfg.CloudFormationType)
+	}
+	if cfg.SDKLister == nil {
+		t.Fatal("SDKLister must be set (CC ListResources is unsupported for this type — verified via live probe; the SDK path uses opensearch:ListDomainNames)")
+	}
+	if cfg.ParentLister != nil {
+		t.Error("ParentLister must be nil (mutex with SDKLister)")
+	}
+
+	id := "my-search"
+	if got := cfg.ImportIDFromIdentifier(id, nil); got != id {
+		t.Errorf("ImportID passthrough: got %q, want %q", got, id)
+	}
+	if got := cfg.NameHintFromProperties(id, map[string]any{"DomainName": "my-search"}); got != "my-search" {
+		t.Errorf("NameHint: got %q, want my-search", got)
+	}
+	if got := cfg.NameHintFromProperties(id, map[string]any{}); got != id {
+		t.Errorf("NameHint fallback: got %q, want %q", got, id)
+	}
+
+	// NativeIDs reads DomainArn (the CFN schema's ARN field for this
+	// type — NOT a generic "Arn" key). Pin that exact key so a
+	// regression to arnUnderKey("Arn") surfaces.
+	native := cfg.NativeIDsFromProperties(id, map[string]any{"DomainArn": "arn:aws:es:us-east-1:111:domain/my-search"})
+	wantNative := map[string]string{"arn": "arn:aws:es:us-east-1:111:domain/my-search"}
+	if !reflect.DeepEqual(native, wantNative) {
+		t.Errorf("NativeIDs: got %+v, want %+v", native, wantNative)
+	}
+	// Reading the wrong key ("Arn" instead of "DomainArn") would return
+	// nil — pin so a regression there is loud.
+	if got := cfg.NativeIDsFromProperties(id, map[string]any{"Arn": "arn:aws:es:us-east-1:111:domain/my-search"}); got != nil {
+		t.Errorf("NativeIDs must read DomainArn, NOT Arn: got %+v, want nil", got)
+	}
+
+	tags := cfg.TagsFromProperties(map[string]any{"Tags": []any{map[string]any{"Key": "env", "Value": "prod"}}})
+	wantTags := map[string]string{"env": "prod"}
+	if !reflect.DeepEqual(tags, wantTags) {
+		t.Errorf("Tags: got %+v, want %+v", tags, wantTags)
+	}
+}
+
+// TestEBSVolumeConfig pins aws_ebs_volume: CC default-list, passthrough
+// CC identifier (VolumeId), VolumeId passthrough NameHint (no name
+// field on CFN schema), volume_id NativeID (no ARN on the CFN schema),
+// taggable.
+func TestEBSVolumeConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_ebs_volume")
+	if cfg.SkipProjectTagFilter {
+		t.Error("aws_ebs_volume: SkipProjectTagFilter must be false (volumes are taggable)")
+	}
+	if cfg.CloudFormationType != "AWS::EC2::Volume" {
+		t.Errorf("CloudFormationType=%q, want AWS::EC2::Volume", cfg.CloudFormationType)
+	}
+	if cfg.SDKLister != nil {
+		t.Error("SDKLister must be nil (CC default-list)")
+	}
+	if cfg.ParentLister != nil {
+		t.Error("ParentLister must be nil")
+	}
+
+	id := "vol-abc123"
+	if got := cfg.ImportIDFromIdentifier(id, nil); got != id {
+		t.Errorf("ImportID passthrough: got %q, want %q", got, id)
+	}
+	// No name field on CFN schema; the VolumeId is the only hint.
+	if got := cfg.NameHintFromProperties(id, nil); got != id {
+		t.Errorf("NameHint passthrough: got %q, want %q", got, id)
+	}
+	// Even if a hypothetical Name property leaked in via a future
+	// CFN schema update, the passthroughIdentifierName extractor
+	// IGNORES properties — pin so the contract is loud.
+	if got := cfg.NameHintFromProperties(id, map[string]any{"Name": "should-be-ignored"}); got != id {
+		t.Errorf("NameHint must ignore Name property (uses identifier passthrough): got %q, want %q", got, id)
+	}
+
+	native := cfg.NativeIDsFromProperties(id, nil)
+	wantNative := map[string]string{"volume_id": id}
+	if !reflect.DeepEqual(native, wantNative) {
+		t.Errorf("NativeIDs: got %+v, want %+v (exact map equality — no ARN on CFN schema)", native, wantNative)
+	}
+
+	tags := cfg.TagsFromProperties(map[string]any{"Tags": []any{map[string]any{"Key": "env", "Value": "prod"}}})
+	wantTags := map[string]string{"env": "prod"}
+	if !reflect.DeepEqual(tags, wantTags) {
+		t.Errorf("Tags: got %+v, want %+v", tags, wantTags)
+	}
+}

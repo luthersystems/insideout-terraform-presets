@@ -1712,6 +1712,174 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 		NativeIDsFromProperties: passthroughKeyPairNativeIDs,
 		TagsFromProperties:      tagsFromKey("Tags"),
 	},
+
+	// =====================================================================
+	// ElastiCache Replication Group — CC default-list, taggable (#14g)
+	// =====================================================================
+	{
+		// AWS::ElastiCache::ReplicationGroup has standard CC list+read
+		// handlers. CC primary identifier = ReplicationGroupId (the bare
+		// name, e.g. "my-redis") and Terraform's import format for
+		// aws_elasticache_replication_group matches — passthrough.
+		// Verified against terraform-provider-aws v6.x docs and live
+		// CC probe.
+		TFType:                  "aws_elasticache_replication_group",
+		CloudFormationType:      "AWS::ElastiCache::ReplicationGroup",
+		Slug:                    "elasticache_replication_group",
+		ImportIDFromIdentifier:  passthroughImportID,
+		NameHintFromProperties:  nameOrIdentifier("ReplicationGroupId"),
+		NativeIDsFromProperties: arnUnderKey("Arn"),
+		TagsFromProperties:      tagsFromKey("Tags"),
+	},
+
+	// =====================================================================
+	// ElastiCache Parameter Group — CC default-list, taggable (#14g)
+	// =====================================================================
+	{
+		// AWS::ElastiCache::ParameterGroup has standard CC list+read
+		// handlers. CC primary identifier = CacheParameterGroupName
+		// (e.g. "default.redis7") and Terraform's import format for
+		// aws_elasticache_parameter_group matches — passthrough. There
+		// is no ARN on the CFN schema; the name itself is the canonical
+		// native identifier.
+		TFType:                 "aws_elasticache_parameter_group",
+		CloudFormationType:     "AWS::ElastiCache::ParameterGroup",
+		Slug:                   "elasticache_parameter_group",
+		ImportIDFromIdentifier: passthroughImportID,
+		NameHintFromProperties: nameOrIdentifier("CacheParameterGroupName"),
+		NativeIDsFromProperties: func(identifier string, _ map[string]any) map[string]string {
+			return map[string]string{"name": identifier}
+		},
+		TagsFromProperties: tagsFromKey("Tags"),
+	},
+
+	// =====================================================================
+	// ElastiCache Subnet Group — CC default-list, taggable (#14g)
+	// =====================================================================
+	{
+		// AWS::ElastiCache::SubnetGroup has standard CC list+read
+		// handlers. CC primary identifier = CacheSubnetGroupName and
+		// Terraform's import format for aws_elasticache_subnet_group
+		// matches — passthrough. No ARN on the CFN schema.
+		TFType:                 "aws_elasticache_subnet_group",
+		CloudFormationType:     "AWS::ElastiCache::SubnetGroup",
+		Slug:                   "elasticache_subnet_group",
+		ImportIDFromIdentifier: passthroughImportID,
+		NameHintFromProperties: nameOrIdentifier("CacheSubnetGroupName"),
+		NativeIDsFromProperties: func(identifier string, _ map[string]any) map[string]string {
+			return map[string]string{"name": identifier}
+		},
+		TagsFromProperties: tagsFromKey("Tags"),
+	},
+
+	// =====================================================================
+	// MSK Cluster — CC default-list, taggable (#14g)
+	// =====================================================================
+	{
+		// AWS::MSK::Cluster has standard CC list+read handlers. CC
+		// primary identifier IS the cluster ARN (full
+		// arn:aws:kafka:<region>:<acct>:cluster/<name>/<uuid>) and
+		// Terraform's import format for aws_msk_cluster is also the
+		// cluster ARN — passthrough.
+		//
+		// TAGS SHAPE DIVERGENCE: AWS::MSK::Cluster.Tags is a flat
+		// map[string]string in the CFN schema (verified via
+		// cloudformation:DescribeType — `type: object` with
+		// patternProperties), NOT the Key/Value list shape that most
+		// modern services use. extractStringMap is the right
+		// extractor; tagsFromKey/extractTagList would silently return
+		// nil/empty because it expects a `[]any` of `{Key, Value}`
+		// objects. Mirrors the AWS::Cognito::UserPool /
+		// AWS::ApiGatewayV2::Api precedent.
+		TFType:             "aws_msk_cluster",
+		CloudFormationType: "AWS::MSK::Cluster",
+		Slug:               "msk_cluster",
+		// Identifier = full cluster ARN.
+		ImportIDFromIdentifier: passthroughImportID,
+		// ClusterName is the human-readable hint; falls back to the
+		// identifier (the ARN) when absent.
+		NameHintFromProperties: nameOrIdentifier("ClusterName"),
+		NativeIDsFromProperties: func(identifier string, _ map[string]any) map[string]string {
+			return map[string]string{"arn": identifier}
+		},
+		TagsFromProperties: func(props map[string]any) map[string]string {
+			return extractStringMap(props, "Tags")
+		},
+	},
+
+	// =====================================================================
+	// MSK Configuration — CC default-list, untaggable (#14g)
+	// =====================================================================
+	{
+		// AWS::MSK::Configuration has standard CC list+read handlers
+		// but the CFN schema declares NO Tags property at all
+		// (configurations are tagless — the parent cluster carries the
+		// tags). SkipProjectTagFilter bypasses the legacy Project filter
+		// (the empty tag bag would silently drop every configuration on
+		// --project scans, matching the aws_msk_configuration entry
+		// already present in untaggableAWS / NON_TAGGABLE_AWS).
+		//
+		// CC primary identifier IS the configuration ARN (full
+		// arn:aws:kafka:<region>:<acct>:configuration/<name>/<uuid>)
+		// and Terraform's import format for aws_msk_configuration is
+		// also the configuration ARN — passthrough.
+		TFType:                 "aws_msk_configuration",
+		CloudFormationType:     "AWS::MSK::Configuration",
+		Slug:                   "msk_configuration",
+		SkipProjectTagFilter:   true,
+		ImportIDFromIdentifier: passthroughImportID,
+		NameHintFromProperties: nameOrIdentifier("Name"),
+		NativeIDsFromProperties: func(identifier string, _ map[string]any) map[string]string {
+			return map[string]string{"arn": identifier}
+		},
+		TagsFromProperties: emptyTagsExtractor,
+	},
+
+	// =====================================================================
+	// OpenSearch Domain — SDKLister-listed, taggable (#14g)
+	// =====================================================================
+	{
+		// AWS::OpenSearchService::Domain's CC ListResources returns
+		// UnsupportedActionException (verified via live probe). CC
+		// GetResource is supported, so we enumerate via the native
+		// opensearch:ListDomainNames SDK call and feed the resulting
+		// DomainName values into the standard GetResource extractor
+		// pipeline — mirrors the aws_acm_certificate / aws_kms_alias
+		// precedents from #412 / #430.
+		//
+		// CC primary identifier = DomainName (e.g. "my-search") and
+		// Terraform's import format for aws_opensearch_domain matches
+		// — passthrough.
+		TFType:                  "aws_opensearch_domain",
+		CloudFormationType:      "AWS::OpenSearchService::Domain",
+		Slug:                    "opensearch_domain",
+		SDKLister:               listOpenSearchDomains,
+		ImportIDFromIdentifier:  passthroughImportID,
+		NameHintFromProperties:  nameOrIdentifier("DomainName"),
+		NativeIDsFromProperties: arnUnderKey("DomainArn"),
+		TagsFromProperties:      tagsFromKey("Tags"),
+	},
+
+	// =====================================================================
+	// EBS Volume — CC default-list, taggable (#14g)
+	// =====================================================================
+	{
+		// AWS::EC2::Volume has standard CC list+read handlers. CC
+		// primary identifier = VolumeId (e.g. "vol-abc123") and
+		// Terraform's import format for aws_ebs_volume matches —
+		// passthrough. The CFN schema does not expose a top-level ARN
+		// for volumes; the VolumeId itself is the canonical native
+		// identifier.
+		TFType:                 "aws_ebs_volume",
+		CloudFormationType:     "AWS::EC2::Volume",
+		Slug:                   "ebs_volume",
+		ImportIDFromIdentifier: passthroughImportID,
+		NameHintFromProperties: passthroughIdentifierName,
+		NativeIDsFromProperties: func(identifier string, _ map[string]any) map[string]string {
+			return map[string]string{"volume_id": identifier}
+		},
+		TagsFromProperties: tagsFromKey("Tags"),
+	},
 }
 
 // passthroughImportID is the common ImportIDFromIdentifier used by every

@@ -528,6 +528,21 @@
       "purpose": "fetch table tags for tag selectors and Identity.Tags"
     },
     {
+      "service": "ebs_volume",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::EC2::Volume (#14g unified discoverer)"
+    },
+    {
+      "service": "ebs_volume",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::EC2::Volume (cache-miss fallback when RGT prefetch is unavailable)"
+    },
+    {
+      "service": "ebs_volume",
+      "iam_action": "ec2:DescribeVolumes",
+      "purpose": "Cloud Control list+read handlers for AWS::EC2::Volume delegate to ec2:DescribeVolumes"
+    },
+    {
       "service": "ecs_cluster",
       "iam_action": "cloudcontrol:GetResource",
       "purpose": "Cloud Control GetResource for AWS::ECS::Cluster (#14f unified discoverer)"
@@ -686,6 +701,66 @@
       "service": "eks_pod_identity",
       "iam_action": "eks:ListTagsForResource",
       "purpose": "fetch association tags for tag selectors and Identity.Tags"
+    },
+    {
+      "service": "elasticache_parameter_group",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::ElastiCache::ParameterGroup (#14g unified discoverer)"
+    },
+    {
+      "service": "elasticache_parameter_group",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::ElastiCache::ParameterGroup (cache-miss fallback when RGT prefetch is unavailable)"
+    },
+    {
+      "service": "elasticache_parameter_group",
+      "iam_action": "elasticache:DescribeCacheParameterGroups",
+      "purpose": "Cloud Control list+read handlers for AWS::ElastiCache::ParameterGroup delegate to elasticache:DescribeCacheParameterGroups"
+    },
+    {
+      "service": "elasticache_parameter_group",
+      "iam_action": "elasticache:ListTagsForResource",
+      "purpose": "fetch cache parameter group tags for tag selectors and Identity.Tags"
+    },
+    {
+      "service": "elasticache_replication_group",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::ElastiCache::ReplicationGroup (#14g unified discoverer)"
+    },
+    {
+      "service": "elasticache_replication_group",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::ElastiCache::ReplicationGroup (cache-miss fallback when RGT prefetch is unavailable)"
+    },
+    {
+      "service": "elasticache_replication_group",
+      "iam_action": "elasticache:DescribeReplicationGroups",
+      "purpose": "Cloud Control list+read handlers for AWS::ElastiCache::ReplicationGroup delegate to elasticache:DescribeReplicationGroups"
+    },
+    {
+      "service": "elasticache_replication_group",
+      "iam_action": "elasticache:ListTagsForResource",
+      "purpose": "fetch replication group tags for tag selectors and Identity.Tags"
+    },
+    {
+      "service": "elasticache_subnet_group",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::ElastiCache::SubnetGroup (#14g unified discoverer)"
+    },
+    {
+      "service": "elasticache_subnet_group",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::ElastiCache::SubnetGroup (cache-miss fallback when RGT prefetch is unavailable)"
+    },
+    {
+      "service": "elasticache_subnet_group",
+      "iam_action": "elasticache:DescribeCacheSubnetGroups",
+      "purpose": "Cloud Control list+read handlers for AWS::ElastiCache::SubnetGroup delegate to elasticache:DescribeCacheSubnetGroups"
+    },
+    {
+      "service": "elasticache_subnet_group",
+      "iam_action": "elasticache:ListTagsForResource",
+      "purpose": "fetch cache subnet group tags for tag selectors and Identity.Tags"
     },
     {
       "service": "iam_group",
@@ -1053,6 +1128,51 @@
       "purpose": "list per-region target groups"
     },
     {
+      "service": "msk_cluster",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::MSK::Cluster (#14g unified discoverer)"
+    },
+    {
+      "service": "msk_cluster",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::MSK::Cluster (cache-miss fallback when RGT prefetch is unavailable)"
+    },
+    {
+      "service": "msk_cluster",
+      "iam_action": "kafka:DescribeCluster",
+      "purpose": "Cloud Control GetResource for aws_msk_cluster delegates to kafka:DescribeCluster"
+    },
+    {
+      "service": "msk_cluster",
+      "iam_action": "kafka:ListClustersV2",
+      "purpose": "Cloud Control ListResources for AWS::MSK::Cluster delegates to kafka:ListClustersV2"
+    },
+    {
+      "service": "msk_cluster",
+      "iam_action": "kafka:ListTagsForResource",
+      "purpose": "fetch MSK cluster tags for tag selectors and Identity.Tags"
+    },
+    {
+      "service": "msk_configuration",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::MSK::Configuration (#14g unified discoverer; SkipProjectTagFilter — CFN schema declares no Tags)"
+    },
+    {
+      "service": "msk_configuration",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::MSK::Configuration (cache-miss fallback when RGT prefetch is unavailable)"
+    },
+    {
+      "service": "msk_configuration",
+      "iam_action": "kafka:DescribeConfiguration",
+      "purpose": "Cloud Control GetResource for aws_msk_configuration delegates to kafka:DescribeConfiguration"
+    },
+    {
+      "service": "msk_configuration",
+      "iam_action": "kafka:ListConfigurations",
+      "purpose": "Cloud Control ListResources for AWS::MSK::Configuration delegates to kafka:ListConfigurations"
+    },
+    {
       "service": "nat_gateway",
       "iam_action": "cloudcontrol:GetResource",
       "purpose": "Cloud Control GetResource for AWS::EC2::NatGateway (#406 unified discoverer)"
@@ -1096,6 +1216,26 @@
       "service": "network_interface",
       "iam_action": "ec2:DescribeNetworkInterfaces",
       "purpose": "list per-region elastic network interfaces (server-side tag:Project filter when project is set; tags inline)"
+    },
+    {
+      "service": "opensearch_domain",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::OpenSearchService::Domain (#14g SDKLister branch — CC ListResources is unsupported for this type)"
+    },
+    {
+      "service": "opensearch_domain",
+      "iam_action": "es:DescribeDomain",
+      "purpose": "Cloud Control GetResource for aws_opensearch_domain delegates to es:DescribeDomain"
+    },
+    {
+      "service": "opensearch_domain",
+      "iam_action": "es:ListDomainNames",
+      "purpose": "enumerate OpenSearch domain names via the OpenSearch SDK (Cloud Control ListResources is unsupported for this type)"
+    },
+    {
+      "service": "opensearch_domain",
+      "iam_action": "es:ListTags",
+      "purpose": "Cloud Control GetResource delegate for the Tags property"
     },
     {
       "service": "opensearchserverless_collection",
