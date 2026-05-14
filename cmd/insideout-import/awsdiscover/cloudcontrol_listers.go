@@ -52,18 +52,6 @@ type apigatewayv2APIsLister interface {
 	GetApis(ctx context.Context, in *apigatewayv2.GetApisInput, opts ...func(*apigatewayv2.Options)) (*apigatewayv2.GetApisOutput, error)
 }
 
-// apigatewayv2DomainNamesLister is the narrow subset of the API Gateway v2
-// SDK used by the parent-DomainName enumerator that seeds ApiMapping
-// fan-out (#14j). AWS::ApiGatewayV2::ApiMapping is parent-scoped on
-// DomainName: CC ListResources without ResourceModel={"DomainName":"..."}
-// returns InvalidRequestException. Kept separate from apigatewayv2APIsLister
-// because the upstream SDK calls differ (GetApis vs GetDomainNames) and
-// keeping the interfaces narrow lets test fakes mock only the method the
-// lister-under-test invokes.
-type apigatewayv2DomainNamesLister interface {
-	GetDomainNames(ctx context.Context, in *apigatewayv2.GetDomainNamesInput, opts ...func(*apigatewayv2.Options)) (*apigatewayv2.GetDomainNamesOutput, error)
-}
-
 // apigatewayRestAPIsLister is the narrow subset of the API Gateway v1
 // SDK used by the parent-RestApi enumerator that seeds Stage /
 // Deployment / Resource fan-out (#422). The v1 service uses `Position`
@@ -299,50 +287,6 @@ func listApigatewayv2ApisWithClient(ctx context.Context, client apigatewayv2APIs
 				continue
 			}
 			models = append(models, fmt.Sprintf(`{"ApiId":%q}`, id))
-		}
-		if page.NextToken == nil || aws.ToString(page.NextToken) == "" {
-			break
-		}
-		nextToken = page.NextToken
-	}
-	return models, nil
-}
-
-// listApigatewayv2DomainNames enumerates ApiGatewayV2 DomainNames in the
-// region and returns one parent ResourceModel JSON string per domain,
-// suitable for feeding into Cloud Control ListResources for the
-// parent-scoped AWS::ApiGatewayV2::ApiMapping (#14j). The CFN schema's
-// list-handler requires a non-empty DomainName in the ResourceModel — CC
-// returns InvalidRequestException without it.
-//
-// Pagination shape mirrors listApigatewayv2Apis: NextToken cursor, break
-// on nil OR empty-string terminator (some SDK responses return `&""`
-// instead of nil on the final page). Returns a non-nil empty slice on
-// accounts with zero domain names so the discoverer's
-// `len(parentModels) == 0` early-exit fires cleanly (#255 contract).
-func listApigatewayv2DomainNames(ctx context.Context, awsCfg aws.Config, region string, _ DiscoverArgs) ([]string, error) {
-	client := apigatewayv2.NewFromConfig(awsCfg, func(o *apigatewayv2.Options) {
-		if region != "" {
-			o.Region = region
-		}
-	})
-	return listApigatewayv2DomainNamesWithClient(ctx, client)
-}
-
-func listApigatewayv2DomainNamesWithClient(ctx context.Context, client apigatewayv2DomainNamesLister) ([]string, error) {
-	models := []string{}
-	var nextToken *string
-	for {
-		page, err := client.GetDomainNames(ctx, &apigatewayv2.GetDomainNamesInput{NextToken: nextToken})
-		if err != nil {
-			return nil, fmt.Errorf("apigatewayv2:GetDomainNames: %w", err)
-		}
-		for _, dn := range page.Items {
-			name := aws.ToString(dn.DomainName)
-			if name == "" {
-				continue
-			}
-			models = append(models, fmt.Sprintf(`{"DomainName":%q}`, name))
 		}
 		if page.NextToken == nil || aws.ToString(page.NextToken) == "" {
 			break
@@ -1083,22 +1027,14 @@ func listCloudWatchLogGroupsAsResourceModels(ctx context.Context, awsCfg aws.Con
 }
 
 // =====================================================================
-// Bundle 14i — IAM role fan-out + OpenSearchServerless Type fan-outs
+// Bundle 14i — IAM service-linked role SDKLister
 // =====================================================================
 
 // iamRolesLister is the narrow subset of the IAM SDK used by the
-// aws_iam_role_policy ParentLister and the aws_iam_service_linked_role
-// SDKLister enumerators (#14i). Both consume iam:ListRoles output but
-// transform it differently:
-//
-//   - listIAMRolesAsResourceModels filters to non-SLR roles (Path !=
-//     "/aws-service-role/...") and emits one
-//     ResourceModel={"RoleName":"…"} JSON-string per role for the
-//     AWS::IAM::RolePolicy parent-fan-out.
-//   - listIAMServiceLinkedRoleServiceNames filters to SLR roles (Path
-//     == "/aws-service-role/<service>.amazonaws.com/...") and emits
-//     one AWSServiceName per role for the AWS::IAM::ServiceLinkedRole
-//     SDKLister branch.
+// aws_iam_service_linked_role SDKLister enumerator (#14i). It consumes
+// iam:ListRoles output, filters to SLR roles (Path ==
+// "/aws-service-role/<service>.amazonaws.com/...") and emits one
+// AWSServiceName per role.
 //
 // The interface is package-private so test fakes can satisfy it without
 // depending on the full IAM client surface (already used by iamUsersLister
@@ -1114,68 +1050,6 @@ type iamRolesLister interface {
 // and CLI reject creates that don't match this shape, so the prefix
 // check is a sound discriminator without false positives.
 const iamServiceRolePathPrefix = "/aws-service-role/"
-
-// listIAMRolesAsResourceModels enumerates IAM roles (global service)
-// and wraps each non-service-linked role's RoleName into a JSON
-// ResourceModel `{"RoleName":"…"}` for feeding into Cloud Control
-// ListResources for AWS::IAM::RolePolicy (#14i). The parent-scoped
-// RolePolicy type requires a non-empty ResourceModel — CC returns
-// InvalidRequestException when RoleName is missing.
-//
-// SLRs are filtered out because they cannot have inline role policies
-// attached (IAM rejects PutRolePolicy on a service-linked role with
-// AccessDenied). Listing them would surface ResourceNotFoundException
-// per-parent on the downstream CC ListResources fan-out (the
-// per-parent NotFound soft-fail handles it cleanly, but skipping
-// upfront saves N noisy ServiceWarn events on accounts with many
-// SLRs).
-//
-// IAM ListRoles paginates via `Marker` (string cursor); IsTruncated
-// signals more pages. The terminator condition mirrors the other IAM
-// listers: break on either flag clear OR an empty/nil Marker, so a
-// well-formed final page without IsTruncated terminates cleanly even
-// if the SDK reuses the Marker field.
-//
-// Returns a non-nil empty slice on accounts with zero roles so
-// downstream consumers see "[]" not "null" through the JSON-marshal
-// pipeline (#255 contract).
-func listIAMRolesAsResourceModels(ctx context.Context, awsCfg aws.Config, region string, _ DiscoverArgs) ([]string, error) {
-	client := iam.NewFromConfig(awsCfg, func(o *iam.Options) {
-		if region != "" {
-			o.Region = region
-		}
-	})
-	return listIAMRolesAsResourceModelsWithClient(ctx, client)
-}
-
-func listIAMRolesAsResourceModelsWithClient(ctx context.Context, client iamRolesLister) ([]string, error) {
-	models := []string{}
-	var marker *string
-	for {
-		page, err := client.ListRoles(ctx, &iam.ListRolesInput{Marker: marker})
-		if err != nil {
-			return nil, fmt.Errorf("iam:ListRoles: %w", err)
-		}
-		for _, r := range page.Roles {
-			name := aws.ToString(r.RoleName)
-			if name == "" {
-				continue
-			}
-			// Skip service-linked roles — they cannot have inline
-			// policies and would produce N noisy per-parent
-			// ResourceNotFound warnings on the downstream CC fan-out.
-			if strings.HasPrefix(aws.ToString(r.Path), iamServiceRolePathPrefix) {
-				continue
-			}
-			models = append(models, fmt.Sprintf(`{"RoleName":%q}`, name))
-		}
-		if !page.IsTruncated || page.Marker == nil || aws.ToString(page.Marker) == "" {
-			break
-		}
-		marker = page.Marker
-	}
-	return models, nil
-}
 
 // listIAMServiceLinkedRoleServiceNames enumerates IAM roles (global)
 // and emits the canonical AWSServiceName for each service-linked role.
@@ -1247,30 +1121,3 @@ func listIAMServiceLinkedRoleServiceNamesWithClient(ctx context.Context, client 
 	return names, nil
 }
 
-// opensearchServerlessAccessPolicyTypeModels returns the static Type
-// fan-out for AWS::OpenSearchServerless::AccessPolicy (#14i). CC
-// ListResources requires ResourceModel={"Type":"<value>"} per the
-// CFN schema; AWS defines exactly one valid Type value for access
-// policies today ("data"). Static-slice precedent: wafv2ParentModels.
-//
-// Region is ignored — the Type taxonomy is global to the CFN schema
-// (not regional). The Discoverer still calls this per-region because
-// the upstream AccessPolicy resource itself is regional.
-func opensearchServerlessAccessPolicyTypeModels(_ context.Context, _ aws.Config, _ string, _ DiscoverArgs) ([]string, error) {
-	return []string{`{"Type":"data"}`}, nil
-}
-
-// opensearchServerlessSecurityPolicyTypeModels returns the static Type
-// fan-out for AWS::OpenSearchServerless::SecurityPolicy (#14i). Two
-// valid Type values per the CFN schema: "encryption" and "network".
-// Emit order is encryption first then network for deterministic test
-// pinning (consumers preserve emission order).
-//
-// Region is ignored for the same reason as the access-policy
-// counterpart above.
-func opensearchServerlessSecurityPolicyTypeModels(_ context.Context, _ aws.Config, _ string, _ DiscoverArgs) ([]string, error) {
-	return []string{
-		`{"Type":"encryption"}`,
-		`{"Type":"network"}`,
-	}, nil
-}

@@ -39,10 +39,10 @@ var newIAMRPAClient = func(awsCfg aws.Config, _ string) iamRolePolicyAttachmentC
 // produce N noisy per-parent ListAttachedRolePolicies failures on
 // the downstream FetchItems fan-out.
 //
-// Mirrors the SLR-skip semantics of listIAMRolesAsResourceModelsWithClient
-// in cloudcontrol_listers.go but emits bare role names instead of
-// CC ResourceModel JSON — the SDK-only sub-resource discoverer
-// fans out by parent identifier directly.
+// Mirrors the SLR-skip semantics of listIAMServiceLinkedRoleServiceNamesWithClient
+// in cloudcontrol_listers.go but inverts the filter (non-SLR roles)
+// and emits bare role names instead of service principals — the SDK-only
+// sub-resource discoverer fans out by parent identifier directly.
 //
 // Returns a non-nil empty slice on accounts with zero roles (#255).
 func listIAMRoleNamesNonSLR(ctx context.Context, awsCfg aws.Config, region string, _ DiscoverArgs) ([]string, error) {

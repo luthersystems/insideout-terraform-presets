@@ -294,52 +294,8 @@ var arnRules = []arnRule{
 	// resourceID=`<domain>`. Cloud Control primary identifier =
 	// DomainName (single-property primary identifier per the CFN
 	// schema's `primaryIdentifier: [/properties/DomainName]`).
-	// ApiMapping ARNs share (service=apigateway, resourceType=domainnames)
-	// because their ARN form is
-	// `arn:aws:apigateway:<region>::/domainnames/<domain>/apimappings/<id>`
-	// (resourceID contains "/apimappings/"). matchExtra picks the bare
-	// domain variant when resourceID has no "/apimappings/" segment;
-	// the DomainName rule MUST precede any future ApiMapping rule for
-	// the same reason the SLR rule precedes the IAM Role rule (both
-	// parse to the same matchService+matchResourceType; the more
-	// specific matchExtra must win).
-	//
-	// ApiMapping itself does not get an arnRule entry — like
-	// aws_iam_role_policy and the OpenSearch Serverless policy
-	// siblings, it's discovered via ParentLister exclusively and the
-	// untaggable SkipProjectTagFilter=true short-circuits the RGT
-	// cache, so an ARN rule here would never fire. The matchExtra
-	// guard below is defensive: an ApiMapping ARN that arrives via
-	// DiscoverByID (or any future dep-chase reference) must NOT be
-	// silently misrouted to AWS::ApiGatewayV2::DomainName with
-	// identifier "<domain>/apimappings/<id>" (which CC GetResource
-	// would reject with ValidationException).
 	{matchService: "apigateway", matchResourceType: "domainnames",
-		matchExtra: func(p parsedARN) bool {
-			return !strings.Contains(p.resourceID, "/apimappings/")
-		},
 		cfnType: "AWS::ApiGatewayV2::DomainName", identifierFn: identityResourceID},
-
-	// Service Discovery — Private DNS Namespace (#14j). ARN form is
-	// `arn:aws:servicediscovery:<region>:<acct>:namespace/<id>`.
-	// parseARN gives resourceType=`namespace`, resourceID=`<id>`. CC
-	// primary identifier = Id (single-property primary identifier per
-	// the CFN schema). Limitation: ServiceDiscovery has three namespace
-	// flavors (PrivateDnsNamespace, PublicDnsNamespace, HttpNamespace)
-	// sharing the same ARN shape — there's no resource-prefix
-	// disambiguator in the ARN itself. This rule routes every namespace
-	// ARN to PrivateDnsNamespace because (a) it's the only flavor
-	// declared in InsideOut presets today and (b) a public-namespace
-	// ARN arriving via the cache-hit path would route to a CC
-	// GetResource against AWS::ServiceDiscovery::PrivateDnsNamespace
-	// which returns NotFoundException — surfacing as a clear "no such
-	// resource" rather than silent mis-import. A follow-up bundle that
-	// adds Public / Http namespace presets will need a per-namespace-
-	// flavor disambiguator (probably via SDK probe of the namespace
-	// kind at parse time; expensive vs the current 1-CFN-type-per-ARN
-	// shape).
-	{matchService: "servicediscovery", matchResourceType: "namespace",
-		cfnType: "AWS::ServiceDiscovery::PrivateDnsNamespace", identifierFn: identityResourceID},
 
 	// Cognito
 	{matchService: "cognito-idp", matchResourceType: "userpool",
