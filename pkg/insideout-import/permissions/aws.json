@@ -1693,6 +1693,26 @@
       "purpose": "list per-region security groups (server-side tag:Project filter when project is set; tags inline)"
     },
     {
+      "service": "service_discovery_private_dns_namespace",
+      "iam_action": "route53:GetHostedZone",
+      "purpose": "recover the VPC id associated with a private DNS namespace's hosted zone (servicediscovery SDK does not surface VpcId; TF import id is <namespace_id>:<vpc_id>)"
+    },
+    {
+      "service": "service_discovery_private_dns_namespace",
+      "iam_action": "servicediscovery:GetNamespace",
+      "purpose": "fetch per-namespace properties (HostedZoneId) for downstream Route53 VPC resolution"
+    },
+    {
+      "service": "service_discovery_private_dns_namespace",
+      "iam_action": "servicediscovery:ListNamespaces",
+      "purpose": "list per-region private DNS namespaces (server-side TYPE=DNS_PRIVATE filter; Cloud Control READ is unsupported)"
+    },
+    {
+      "service": "service_discovery_private_dns_namespace",
+      "iam_action": "servicediscovery:ListTagsForResource",
+      "purpose": "fetch tags per namespace for tag selectors and Identity.Tags"
+    },
+    {
       "service": "sns_topic",
       "iam_action": "cloudcontrol:GetResource",
       "purpose": "fetch per-topic properties for tag extraction"

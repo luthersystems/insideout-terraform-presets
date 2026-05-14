@@ -113,6 +113,7 @@ var awsTFTypeToServiceSlug = map[string]string{
 	"aws_secretsmanager_secret":                          "secretsmanager",
 	"aws_secretsmanager_secret_rotation":                 "secretsmanager_secret_rotation",
 	"aws_security_group":                                 "security_group",
+	"aws_service_discovery_private_dns_namespace":        "service_discovery_private_dns_namespace",
 	"aws_sns_topic":                                      "sns_topic",
 	"aws_sns_topic_subscription":                         "sns_topic_subscription",
 	"aws_sqs_queue":                                      "sqs",

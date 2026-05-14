@@ -97,6 +97,7 @@ aws_s3_bucket_versioning	Data Storage
 aws_secretsmanager_secret	Security
 aws_secretsmanager_secret_rotation	Security
 aws_security_group	Network Security
+aws_service_discovery_private_dns_namespace	Network Security
 aws_sns_topic	Events
 aws_sns_topic_subscription	Events
 aws_sqs_queue	Events

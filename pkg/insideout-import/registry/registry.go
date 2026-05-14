@@ -119,6 +119,7 @@ var awsTypes = []string{
 	"aws_secretsmanager_secret",
 	"aws_secretsmanager_secret_rotation",
 	"aws_security_group",
+	"aws_service_discovery_private_dns_namespace",
 	"aws_sns_topic",
 	"aws_sns_topic_subscription",
 	"aws_sqs_queue",

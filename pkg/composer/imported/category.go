@@ -175,6 +175,7 @@ var categoryByTFType = map[string]string{
 	"aws_secretsmanager_secret":                          CategorySecurity,
 	"aws_secretsmanager_secret_rotation":                 CategorySecurity,
 	"aws_security_group":                                 CategoryNetworkSecurity,
+	"aws_service_discovery_private_dns_namespace":        CategoryNetworkSecurity,
 	"aws_sns_topic":                                      CategoryEvents,
 	"aws_sns_topic_subscription":                         CategoryEvents,
 	"aws_sqs_queue":                                      CategoryEvents,

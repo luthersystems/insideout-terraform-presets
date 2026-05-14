@@ -149,6 +149,15 @@ func NewAWSDiscovererWithConcurrency(cfg aws.Config, maxConcurrency int) *AWSDis
 		"aws_bedrock_model_invocation_logging_configuration": newBedrockModelInvocationLoggingConfigurationDiscoverer(cfg, maxConcurrency),
 		"aws_resourceexplorer2_index":                        newResourceExplorer2IndexDiscoverer(cfg, maxConcurrency),
 		"aws_resourceexplorer2_view":                         newResourceExplorer2ViewDiscoverer(cfg, maxConcurrency),
+		// Bucket C non-CC (#466 follow-up): Cloud Control returns
+		// UnsupportedActionException on READ for
+		// AWS::ServiceDiscovery::PrivateDnsNamespace; neither the
+		// unified cloudControlDiscoverer nor SDKLister can resolve
+		// the type. Native servicediscovery SDK end-to-end with a
+		// Route53 GetHostedZone hop to recover the VPC id (TF
+		// import format is "<namespace_id>:<vpc_id>"; the
+		// servicediscovery SDK never surfaces VpcId).
+		"aws_service_discovery_private_dns_namespace": newServiceDiscoveryPrivateDNSNamespaceDiscoverer(cfg, maxConcurrency),
 	}
 	// Cloud Control-routed types (#406): each entry in
 	// cloudControlTypeConfigs becomes one cloudControlDiscoverer
@@ -195,6 +204,7 @@ var serviceSlugByTFType = map[string]string{
 	"aws_bedrock_model_invocation_logging_configuration": "bedrock_model_invocation_logging_configuration",
 	"aws_resourceexplorer2_index":                        "resourceexplorer2_index",
 	"aws_resourceexplorer2_view":                         "resourceexplorer2_view",
+	"aws_service_discovery_private_dns_namespace":        "service_discovery_private_dns_namespace",
 }
 
 // ServiceSlug returns the progress-event slug for a Terraform resource
