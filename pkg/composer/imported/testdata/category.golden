@@ -3,7 +3,9 @@ aws_api_gateway_deployment	Network Security
 aws_api_gateway_resource	Network Security
 aws_api_gateway_stage	Network Security
 aws_apigatewayv2_api	Network Security
+aws_apigatewayv2_api_mapping	Network Security
 aws_apigatewayv2_authorizer	Network Security
+aws_apigatewayv2_domain_name	Network Security
 aws_apigatewayv2_integration	Network Security
 aws_apigatewayv2_route	Network Security
 aws_apigatewayv2_stage	Network Security
@@ -35,6 +37,7 @@ aws_dynamodb_table	Data Storage
 aws_ebs_volume	Data Storage
 aws_ecr_repository	Data Storage
 aws_ecs_cluster	Virtual Machines
+aws_ecs_cluster_capacity_providers	Virtual Machines
 aws_eip	Network Security
 aws_eks_access_entry	Security
 aws_eks_addon	Virtual Machines
@@ -86,7 +89,9 @@ aws_s3_bucket_policy	Data Storage
 aws_secretsmanager_secret	Security
 aws_secretsmanager_secret_rotation	Security
 aws_security_group	Network Security
+aws_service_discovery_private_dns_namespace	Network Security
 aws_sns_topic	Events
+aws_sns_topic_subscription	Events
 aws_sqs_queue	Events
 aws_ssm_parameter	Security
 aws_subnet	Network Security

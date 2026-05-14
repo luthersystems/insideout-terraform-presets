@@ -688,6 +688,209 @@ func TestListApigatewayv2Apis_SkipsEmptyApiID(t *testing.T) {
 }
 
 // ===========================================================================
+// API Gateway v2 DomainNames lister — #14j ApiMapping parent fan-out
+// ===========================================================================
+
+// fakeAPIGWv2DomainNamesLister is a hand-rolled fake for the API Gateway
+// v2 SDK subset used by listApigatewayv2DomainNames. Pagination shape
+// mirrors fakeAPIGWv2APIsLister: NextToken cursor + tokensSeen captures
+// each in.NextToken value the lister sends so tests can pin that the
+// cursor is actually round-tripped between pages.
+type fakeAPIGWv2DomainNamesLister struct {
+	listPages  []apigatewayv2.GetDomainNamesOutput
+	listCalls  int
+	listErr    error
+	tokensSeen []*string
+}
+
+func (f *fakeAPIGWv2DomainNamesLister) GetDomainNames(_ context.Context, in *apigatewayv2.GetDomainNamesInput, _ ...func(*apigatewayv2.Options)) (*apigatewayv2.GetDomainNamesOutput, error) {
+	f.tokensSeen = append(f.tokensSeen, in.NextToken)
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
+	if f.listCalls >= len(f.listPages) {
+		return &apigatewayv2.GetDomainNamesOutput{}, nil
+	}
+	page := f.listPages[f.listCalls]
+	f.listCalls++
+	return &page, nil
+}
+
+func apigwv2DomainNamesPage(token string, names ...string) apigatewayv2.GetDomainNamesOutput {
+	items := make([]apigwv2types.DomainName, 0, len(names))
+	for _, n := range names {
+		items = append(items, apigwv2types.DomainName{DomainName: aws.String(n)})
+	}
+	out := apigatewayv2.GetDomainNamesOutput{Items: items}
+	if token != "" {
+		out.NextToken = aws.String(token)
+	}
+	return out
+}
+
+// TestListApigatewayv2DomainNames_PaginatesAndReturnsModels pins the
+// domain-name enumeration helper used by
+// aws_apigatewayv2_api_mapping's ParentLister (#14j): every domain
+// across every page must surface as a well-formed JSON ResourceModel
+// string with DomainName set. A regression that drops a page or emits
+// malformed JSON would silently produce zero ApiMapping emissions for
+// any domain after the first page.
+func TestListApigatewayv2DomainNames_PaginatesAndReturnsModels(t *testing.T) {
+	t.Parallel()
+	fake := &fakeAPIGWv2DomainNamesLister{
+		listPages: []apigatewayv2.GetDomainNamesOutput{
+			apigwv2DomainNamesPage("tok1", "api.example.com", "api2.example.com"),
+			apigwv2DomainNamesPage("tok2", "internal.example.com"),
+			apigwv2DomainNamesPage("", "edge.example.com", "ops.example.com"),
+		},
+	}
+	got, err := listApigatewayv2DomainNamesWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{
+		`{"DomainName":"api.example.com"}`,
+		`{"DomainName":"api2.example.com"}`,
+		`{"DomainName":"internal.example.com"}`,
+		`{"DomainName":"edge.example.com"}`,
+		`{"DomainName":"ops.example.com"}`,
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("models drift:\n got %v\nwant %v", got, want)
+	}
+	if fake.listCalls != 3 {
+		t.Errorf("listCalls=%d, want 3 (paginated across three pages)", fake.listCalls)
+	}
+	// Pin the pagination cursor round-trip: the lister must feed
+	// each page's NextToken into the next request. A regression that
+	// passes `nil` on every call (e.g. dropping `nextToken =
+	// page.NextToken`) would still produce 3 calls because the fake
+	// serves pages by call-count — only this assertion catches it.
+	if len(fake.tokensSeen) != 3 {
+		t.Fatalf("tokensSeen len=%d, want 3", len(fake.tokensSeen))
+	}
+	if fake.tokensSeen[0] != nil {
+		t.Errorf("tokensSeen[0]=%q, want nil (first request must not send a NextToken)", aws.ToString(fake.tokensSeen[0]))
+	}
+	if aws.ToString(fake.tokensSeen[1]) != "tok1" {
+		t.Errorf("tokensSeen[1]=%q, want tok1", aws.ToString(fake.tokensSeen[1]))
+	}
+	if aws.ToString(fake.tokensSeen[2]) != "tok2" {
+		t.Errorf("tokensSeen[2]=%q, want tok2", aws.ToString(fake.tokensSeen[2]))
+	}
+	// Each emitted model must round-trip as JSON with the DomainName
+	// key present — a malformed string would crash the downstream CC
+	// ListResources call.
+	for _, m := range got {
+		var parsed map[string]string
+		if err := json.Unmarshal([]byte(m), &parsed); err != nil {
+			t.Errorf("model %q is not valid JSON: %v", m, err)
+			continue
+		}
+		if parsed["DomainName"] == "" {
+			t.Errorf("model %q missing DomainName key", m)
+		}
+	}
+}
+
+// TestListApigatewayv2DomainNames_EmptyAccountReturnsNonNilEmpty pins
+// the non-nil empty contract: zero domains returns []string{}, not nil.
+// The discoverer's `len(parentModels) == 0` early-exit branch needs the
+// slice to be non-nil for the empty-region path to fire cleanly (#255).
+func TestListApigatewayv2DomainNames_EmptyAccountReturnsNonNilEmpty(t *testing.T) {
+	t.Parallel()
+	fake := &fakeAPIGWv2DomainNamesLister{
+		listPages: []apigatewayv2.GetDomainNamesOutput{
+			apigwv2DomainNamesPage(""),
+		},
+	}
+	got, err := listApigatewayv2DomainNamesWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got == nil {
+		t.Fatal("empty-region result must be non-nil (else len-check early-exit misfires)")
+	}
+	if len(got) != 0 {
+		t.Errorf("len=%d, want 0", len(got))
+	}
+}
+
+// TestListApigatewayv2DomainNames_PropagatesListError pins error
+// propagation: an apigatewayv2:GetDomainNames failure must surface to
+// the caller wrapped, not silently swallowed. The discoverer's outer
+// error path emits a ServiceFinish + propagates — losing the error
+// here would silently skip the type for the whole region.
+func TestListApigatewayv2DomainNames_PropagatesListError(t *testing.T) {
+	t.Parallel()
+	sentinel := errors.New("apigatewayv2:GetDomainNames boom")
+	fake := &fakeAPIGWv2DomainNamesLister{listErr: sentinel}
+	_, err := listApigatewayv2DomainNamesWithClient(context.Background(), fake)
+	if !errors.Is(err, sentinel) {
+		t.Errorf("error chain: got %v, want chain containing %v", err, sentinel)
+	}
+}
+
+// TestListApigatewayv2DomainNames_EmptyStringNextTokenTerminates pins
+// the other half of the pagination terminator: the loop must also
+// break when GetDomainNames returns NextToken=&"" (an empty pointer,
+// not nil) on the final page. Without the empty-string branch we'd
+// loop forever passing an empty token to the SDK.
+func TestListApigatewayv2DomainNames_EmptyStringNextTokenTerminates(t *testing.T) {
+	t.Parallel()
+	fake := &fakeAPIGWv2DomainNamesLister{
+		listPages: []apigatewayv2.GetDomainNamesOutput{
+			// Final page deliberately has NextToken=&"" rather than nil.
+			{
+				Items:     []apigwv2types.DomainName{{DomainName: aws.String("api-final.example.com")}},
+				NextToken: aws.String(""),
+			},
+		},
+	}
+	got, err := listApigatewayv2DomainNamesWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !reflect.DeepEqual(got, []string{`{"DomainName":"api-final.example.com"}`}) {
+		t.Errorf("models drift: got %v, want [api-final.example.com only]", got)
+	}
+	if fake.listCalls != 1 {
+		t.Errorf("listCalls=%d, want 1 (empty-string NextToken must terminate the loop, not trigger another GetDomainNames)", fake.listCalls)
+	}
+}
+
+// TestListApigatewayv2DomainNames_SkipsEmptyDomainName guards a
+// defensive branch: a DomainName whose value is "" (defensively
+// guarded in the lister) must be dropped, never emitted as
+// `{"DomainName":""}`. The downstream CC ListResources call would
+// reject the empty-DomainName parent model with
+// InvalidRequestException.
+func TestListApigatewayv2DomainNames_SkipsEmptyDomainName(t *testing.T) {
+	t.Parallel()
+	fake := &fakeAPIGWv2DomainNamesLister{
+		listPages: []apigatewayv2.GetDomainNamesOutput{
+			{Items: []apigwv2types.DomainName{
+				{DomainName: aws.String("api-good.example.com")},
+				{DomainName: nil},
+				{DomainName: aws.String("")},
+				{DomainName: aws.String("api-also-good.example.com")},
+			}},
+		},
+	}
+	got, err := listApigatewayv2DomainNamesWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{
+		`{"DomainName":"api-good.example.com"}`,
+		`{"DomainName":"api-also-good.example.com"}`,
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("empty-DomainName skip drift:\n got %v\nwant %v", got, want)
+	}
+}
+
+// ===========================================================================
 // API Gateway v1 (REST) APIs lister — #422
 // ===========================================================================
 

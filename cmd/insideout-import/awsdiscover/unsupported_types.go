@@ -57,10 +57,23 @@ var awsTFTypeByResourceType = map[string]string{
 	"bedrock:guardrail":          "aws_bedrock_guardrail",
 	"aoss:collection":            "aws_opensearchserverless_collection",
 	"apigateway:apis":            "aws_apigatewayv2_api",
+	// "apigateway:domainnames" routes to aws_apigatewayv2_domain_name
+	// (#14j). Resource Explorer's apigateway slugs lump v1 and v2
+	// resources under the same `apigateway` prefix; for InsideOut presets
+	// today the only domainnames consumers are v2.
+	"apigateway:domainnames": "aws_apigatewayv2_domain_name",
 	"eks:podidentityassociation": "aws_eks_pod_identity_association",
 	"events:rule":                "aws_cloudwatch_event_rule",
 	"resource-explorer-2:index":  "aws_resourceexplorer2_index",
 	"resource-explorer-2:view":   "aws_resourceexplorer2_view",
+	// ServiceDiscovery namespace -> PrivateDnsNamespace (#14j).
+	// Resource Explorer's namespace slug shares the shape with public
+	// DNS / HTTP namespace flavors; the cache-hit routing here mirrors
+	// the arnRule fallback to PrivateDnsNamespace (the only flavor
+	// declared in InsideOut presets today). A public-namespace ARN
+	// would surface as a clear NotFound downstream rather than a
+	// silent mis-import.
+	"servicediscovery:namespace": "aws_service_discovery_private_dns_namespace",
 	// Compute (importable as of #14f)
 	"eks:cluster":                  "aws_eks_cluster",
 	"ecs:cluster":                  "aws_ecs_cluster",
