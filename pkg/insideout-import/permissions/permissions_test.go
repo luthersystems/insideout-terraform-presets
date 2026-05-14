@@ -22,6 +22,7 @@ var awsTFTypeToServiceSlug = map[string]string{
 	"aws_api_gateway_resource":                           "api_gateway_resource",
 	"aws_api_gateway_stage":                              "api_gateway_stage",
 	"aws_apigatewayv2_api":                               "apigatewayv2_api",
+	"aws_apigatewayv2_api_mapping":                       "apigatewayv2_api_mapping",
 	"aws_apigatewayv2_authorizer":                        "apigatewayv2_authorizer",
 	"aws_apigatewayv2_domain_name":                       "apigatewayv2_domain_name",
 	"aws_apigatewayv2_integration":                       "apigatewayv2_integration",

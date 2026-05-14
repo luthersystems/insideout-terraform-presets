@@ -28,6 +28,7 @@ var awsTypes = []string{
 	"aws_api_gateway_resource",
 	"aws_api_gateway_stage",
 	"aws_apigatewayv2_api",
+	"aws_apigatewayv2_api_mapping",
 	"aws_apigatewayv2_authorizer",
 	"aws_apigatewayv2_domain_name",
 	"aws_apigatewayv2_integration",

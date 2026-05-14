@@ -1337,6 +1337,110 @@ func listOSSAccessPolicyIdentifiersWithClient(ctx context.Context, client ossAcc
 }
 
 // =====================================================================
+// Phase A.5 — API Gateway V2 ApiMapping SDKLister (#466)
+// =====================================================================
+
+// apigatewayv2DomainAndMappingsLister is the narrow subset of the API
+// Gateway v2 SDK used by the aws_apigatewayv2_api_mapping SDKLister.
+// GetDomainNames enumerates the outer set (custom domain names);
+// GetApiMappings enumerates the inner set (mappings under each domain).
+// Keeping the interface separate from apigatewayv2APIsLister
+// (route/integration parent enumerator) lets each call site evolve
+// independently.
+type apigatewayv2DomainAndMappingsLister interface {
+	GetDomainNames(ctx context.Context, in *apigatewayv2.GetDomainNamesInput, opts ...func(*apigatewayv2.Options)) (*apigatewayv2.GetDomainNamesOutput, error)
+	GetApiMappings(ctx context.Context, in *apigatewayv2.GetApiMappingsInput, opts ...func(*apigatewayv2.Options)) (*apigatewayv2.GetApiMappingsOutput, error)
+}
+
+// listAPIGatewayV2ApiMappingIdentifiers enumerates API Gateway V2 API
+// mappings (region-scoped) and emits the CC compound primary
+// identifier for each. Used as the SDKLister for
+// AWS::ApiGatewayV2::ApiMapping (#466) — CC ListResources returns
+// UnsupportedActionException for the type (no LIST handler), but CC
+// GetResource works on the compound primary identifier
+// [ApiMappingId, DomainName] per the public CFN schema:
+//
+//	https://schema.cloudformation.us-east-1.amazonaws.com/aws-apigatewayv2-apimapping.json
+//
+// `primaryIdentifier: [/properties/ApiMappingId, /properties/DomainName]`.
+//
+// Outer loop: apigatewayv2:GetDomainNames paginated (NextToken). For
+// each domain, the inner apigatewayv2:GetApiMappings call (which
+// requires DomainName as input) enumerates the mappings under that
+// domain, also paginated.
+//
+// Emits "<ApiMappingId>|<DomainName>" — framework joins compound
+// primary-identifier parts with `|` in schema-declared order.
+//
+// Terraform's import format is `<api_mapping_id>/<domain_name>`
+// (verified against terraform-provider-aws main
+// website/docs/r/apigatewayv2_api_mapping.html.markdown — Import
+// section). Because the CC `|` separator already has the parts in the
+// right order, the rewrite is a single `|` → `/` replace — no swap.
+//
+// Returns a non-nil empty slice on regions with zero API mappings
+// (#255 contract).
+func listAPIGatewayV2ApiMappingIdentifiers(ctx context.Context, awsCfg aws.Config, region string, _ DiscoverArgs) ([]string, error) {
+	client := apigatewayv2.NewFromConfig(awsCfg, func(o *apigatewayv2.Options) {
+		if region != "" {
+			o.Region = region
+		}
+	})
+	return listAPIGatewayV2ApiMappingIdentifiersWithClient(ctx, client)
+}
+
+func listAPIGatewayV2ApiMappingIdentifiersWithClient(ctx context.Context, client apigatewayv2DomainAndMappingsLister) ([]string, error) {
+	ids := []string{}
+	seen := map[string]bool{}
+
+	var domainToken *string
+	for {
+		domains, err := client.GetDomainNames(ctx, &apigatewayv2.GetDomainNamesInput{NextToken: domainToken})
+		if err != nil {
+			return nil, fmt.Errorf("apigatewayv2:GetDomainNames: %w", err)
+		}
+		for _, d := range domains.Items {
+			domainName := aws.ToString(d.DomainName)
+			if domainName == "" {
+				continue
+			}
+
+			var mappingToken *string
+			for {
+				mappings, err := client.GetApiMappings(ctx, &apigatewayv2.GetApiMappingsInput{
+					DomainName: aws.String(domainName),
+					NextToken:  mappingToken,
+				})
+				if err != nil {
+					return nil, fmt.Errorf("apigatewayv2:GetApiMappings(domain=%q): %w", domainName, err)
+				}
+				for _, m := range mappings.Items {
+					mappingID := aws.ToString(m.ApiMappingId)
+					if mappingID == "" {
+						continue
+					}
+					id := mappingID + "|" + domainName
+					if seen[id] {
+						continue
+					}
+					seen[id] = true
+					ids = append(ids, id)
+				}
+				if mappings.NextToken == nil || aws.ToString(mappings.NextToken) == "" {
+					break
+				}
+				mappingToken = mappings.NextToken
+			}
+		}
+		if domains.NextToken == nil || aws.ToString(domains.NextToken) == "" {
+			break
+		}
+		domainToken = domains.NextToken
+	}
+	return ids, nil
+}
+
+// =====================================================================
 // Phase A.4 — OpenSearch Serverless SecurityPolicy SDKLister (#466)
 // =====================================================================
 

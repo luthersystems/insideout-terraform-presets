@@ -2445,6 +2445,68 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 		},
 		TagsFromProperties: emptyTagsExtractor,
 	},
+
+	// =====================================================================
+	// API Gateway V2 ApiMapping — SDKLister-listed, untaggable (Phase A.5 / #466)
+	// =====================================================================
+	{
+		// AWS::ApiGatewayV2::ApiMapping's CC ListResources returns
+		// UnsupportedActionException — API mappings are sub-resources of
+		// a parent custom domain name, so CC has no LIST handler. CC
+		// GetResource IS supported and keyed on the compound primary
+		// identifier [ApiMappingId, DomainName] (verified against the
+		// public CFN schema:
+		//   https://schema.cloudformation.us-east-1.amazonaws.com/aws-apigatewayv2-apimapping.json
+		// `primaryIdentifier: [/properties/ApiMappingId, /properties/DomainName]`).
+		//
+		// The SDKLister walks apigatewayv2:GetDomainNames (paginated)
+		// and for each domain calls apigatewayv2:GetApiMappings
+		// (paginated, requires DomainName). Emits
+		// "<ApiMappingId>|<DomainName>" — framework joins compound
+		// primary-identifier parts with `|` in schema-declared order.
+		//
+		// Terraform's import format is `<api_mapping_id>/<domain_name>`
+		// (verified against terraform-provider-aws v6.x docs
+		// website/docs/r/apigatewayv2_api_mapping.html.markdown — Import
+		// section example: "1122334/ws-api.example.com"). The rewrite
+		// is a single `|` → `/` swap because the CC identifier order
+		// already matches the TF identifier order.
+		//
+		// The CFN schema has no Tags property — API mappings are
+		// sub-resources of the parent domain (which carries the tags).
+		// SkipProjectTagFilter + emptyTagsExtractor matches the existing
+		// untaggableAWS / NON_TAGGABLE_AWS allowlist entry (which
+		// already lists this type — only the SDKLister wiring is new in
+		// #466).
+		TFType:               "aws_apigatewayv2_api_mapping",
+		CloudFormationType:   "AWS::ApiGatewayV2::ApiMapping",
+		Slug:                 "apigatewayv2_api_mapping",
+		SkipProjectTagFilter: true,
+		SDKLister:            listAPIGatewayV2ApiMappingIdentifiers,
+		// ImportID rewrite: CC `<ApiMappingId>|<DomainName>` → TF
+		// `<ApiMappingId>/<DomainName>` (same halves, swap `|` for `/`).
+		ImportIDFromIdentifier: func(identifier string, _ map[string]any) string {
+			return strings.Replace(identifier, "|", "/", 1)
+		},
+		// NameHint: prefer the CFN-surfaced ApiMappingKey (the
+		// human-facing URL prefix, e.g. "v1" or "" for the root
+		// mapping). Empty-string ApiMappingKey is a valid AWS state
+		// (root mapping), and nameOrIdentifier falls through to the
+		// compound identifier in that case so the UI never renders an
+		// empty NameHint.
+		NameHintFromProperties: nameOrIdentifier("ApiMappingKey"),
+		NativeIDsFromProperties: func(identifier string, _ map[string]any) map[string]string {
+			parts := strings.SplitN(identifier, "|", 2)
+			if len(parts) != 2 {
+				return map[string]string{"api_mapping_id": identifier}
+			}
+			return map[string]string{
+				"api_mapping_id": parts[0],
+				"domain_name":    parts[1],
+			}
+		},
+		TagsFromProperties: emptyTagsExtractor,
+	},
 }
 
 // passthroughImportID is the common ImportIDFromIdentifier used by every

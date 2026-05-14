@@ -81,6 +81,7 @@ var categoryByTFType = map[string]string{
 	"aws_api_gateway_resource":                           CategoryNetworkSecurity,
 	"aws_api_gateway_stage":                              CategoryNetworkSecurity,
 	"aws_apigatewayv2_api":                               CategoryNetworkSecurity,
+	"aws_apigatewayv2_api_mapping":                       CategoryNetworkSecurity,
 	"aws_apigatewayv2_authorizer":                        CategoryNetworkSecurity,
 	"aws_apigatewayv2_domain_name":                       CategoryNetworkSecurity,
 	"aws_apigatewayv2_integration":                       CategoryNetworkSecurity,

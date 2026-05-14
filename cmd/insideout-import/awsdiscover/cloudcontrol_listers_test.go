@@ -3183,3 +3183,242 @@ func TestListOSSSecurityPolicyIdentifiers_PropagatesListError(t *testing.T) {
 		t.Errorf("err does not wrap sentinel; got %v", err)
 	}
 }
+
+// =====================================================================
+// Phase A.5 — API Gateway V2 ApiMapping SDKLister (#466)
+// =====================================================================
+
+// fakeAPIGatewayV2DomainAndMappingsLister implements
+// apigatewayv2DomainAndMappingsLister against a scripted page sequence
+// (outer GetDomainNames and per-domain GetApiMappings). Records the
+// inputs on each call so tests can pin pagination semantics on BOTH
+// the outer and inner loops.
+type fakeAPIGatewayV2DomainAndMappingsLister struct {
+	// Outer enumeration: apigatewayv2:GetDomainNames pages.
+	getDomainNamesPages  []apigatewayv2.GetDomainNamesOutput
+	getDomainNamesCalls  int
+	getDomainNamesErr    error
+	getDomainNamesTokens []*string // observed NextToken inputs
+
+	// Inner enumeration: apigatewayv2:GetApiMappings pages, keyed by
+	// DomainName.
+	getApiMappingsPagesByDomain  map[string][]apigatewayv2.GetApiMappingsOutput
+	getApiMappingsCallsByDomain  map[string]int
+	getApiMappingsErrByDomain    map[string]error
+	getApiMappingsTokensByDomain map[string][]*string // observed NextToken inputs by domain
+	getApiMappingsDomains        []string             // sequence of DomainName values the SUT supplied
+}
+
+func (f *fakeAPIGatewayV2DomainAndMappingsLister) GetDomainNames(_ context.Context, in *apigatewayv2.GetDomainNamesInput, _ ...func(*apigatewayv2.Options)) (*apigatewayv2.GetDomainNamesOutput, error) {
+	f.getDomainNamesTokens = append(f.getDomainNamesTokens, in.NextToken)
+	if f.getDomainNamesErr != nil {
+		return nil, f.getDomainNamesErr
+	}
+	if f.getDomainNamesCalls >= len(f.getDomainNamesPages) {
+		return &apigatewayv2.GetDomainNamesOutput{}, nil
+	}
+	page := f.getDomainNamesPages[f.getDomainNamesCalls]
+	f.getDomainNamesCalls++
+	return &page, nil
+}
+
+func (f *fakeAPIGatewayV2DomainAndMappingsLister) GetApiMappings(_ context.Context, in *apigatewayv2.GetApiMappingsInput, _ ...func(*apigatewayv2.Options)) (*apigatewayv2.GetApiMappingsOutput, error) {
+	domain := aws.ToString(in.DomainName)
+	if f.getApiMappingsTokensByDomain == nil {
+		f.getApiMappingsTokensByDomain = map[string][]*string{}
+	}
+	f.getApiMappingsTokensByDomain[domain] = append(f.getApiMappingsTokensByDomain[domain], in.NextToken)
+	f.getApiMappingsDomains = append(f.getApiMappingsDomains, domain)
+	if err, ok := f.getApiMappingsErrByDomain[domain]; ok && err != nil {
+		return nil, err
+	}
+	if f.getApiMappingsCallsByDomain == nil {
+		f.getApiMappingsCallsByDomain = map[string]int{}
+	}
+	pages := f.getApiMappingsPagesByDomain[domain]
+	idx := f.getApiMappingsCallsByDomain[domain]
+	if idx >= len(pages) {
+		return &apigatewayv2.GetApiMappingsOutput{}, nil
+	}
+	page := pages[idx]
+	f.getApiMappingsCallsByDomain[domain] = idx + 1
+	return &page, nil
+}
+
+func apigwv2DomainNamesPage(nextToken string, names ...string) apigatewayv2.GetDomainNamesOutput {
+	items := make([]apigwv2types.DomainName, 0, len(names))
+	for _, n := range names {
+		items = append(items, apigwv2types.DomainName{DomainName: aws.String(n)})
+	}
+	out := apigatewayv2.GetDomainNamesOutput{Items: items}
+	if nextToken != "" {
+		out.NextToken = aws.String(nextToken)
+	}
+	return out
+}
+
+func apigwv2ApiMappingsPage(nextToken string, ids ...string) apigatewayv2.GetApiMappingsOutput {
+	items := make([]apigwv2types.ApiMapping, 0, len(ids))
+	for _, id := range ids {
+		items = append(items, apigwv2types.ApiMapping{
+			ApiMappingId: aws.String(id),
+			ApiId:        aws.String("api-" + id),
+			Stage:        aws.String("$default"),
+		})
+	}
+	out := apigatewayv2.GetApiMappingsOutput{Items: items}
+	if nextToken != "" {
+		out.NextToken = aws.String(nextToken)
+	}
+	return out
+}
+
+// TestListAPIGatewayV2ApiMappingIdentifiers_HappyPath_FansOutPerDomain
+// pins the canonical shape: 2 domains × per-domain mappings → CC
+// compound identifiers in domain-then-mapping order.
+func TestListAPIGatewayV2ApiMappingIdentifiers_HappyPath_FansOutPerDomain(t *testing.T) {
+	t.Parallel()
+	fake := &fakeAPIGatewayV2DomainAndMappingsLister{
+		getDomainNamesPages: []apigatewayv2.GetDomainNamesOutput{
+			apigwv2DomainNamesPage("", "api.example.com", "v1.example.com"),
+		},
+		getApiMappingsPagesByDomain: map[string][]apigatewayv2.GetApiMappingsOutput{
+			"api.example.com": {apigwv2ApiMappingsPage("", "mapping-a1", "mapping-a2")},
+			"v1.example.com":  {apigwv2ApiMappingsPage("", "mapping-b1")},
+		},
+	}
+	got, err := listAPIGatewayV2ApiMappingIdentifiersWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{
+		"mapping-a1|api.example.com",
+		"mapping-a2|api.example.com",
+		"mapping-b1|v1.example.com",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("identifiers drift: got %v want %v", got, want)
+	}
+}
+
+// TestListAPIGatewayV2ApiMappingIdentifiers_PropagatesOuterPagination
+// pins the outer apigatewayv2:GetDomainNames pagination contract.
+func TestListAPIGatewayV2ApiMappingIdentifiers_PropagatesOuterPagination(t *testing.T) {
+	t.Parallel()
+	fake := &fakeAPIGatewayV2DomainAndMappingsLister{
+		getDomainNamesPages: []apigatewayv2.GetDomainNamesOutput{
+			apigwv2DomainNamesPage("DOMAIN-CURSOR", "d1.example.com"),
+			apigwv2DomainNamesPage("", "d2.example.com"),
+		},
+		getApiMappingsPagesByDomain: map[string][]apigatewayv2.GetApiMappingsOutput{
+			"d1.example.com": {apigwv2ApiMappingsPage("", "m1")},
+			"d2.example.com": {apigwv2ApiMappingsPage("", "m2")},
+		},
+	}
+	got, err := listAPIGatewayV2ApiMappingIdentifiersWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"m1|d1.example.com", "m2|d2.example.com"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("identifiers drift: got %v want %v", got, want)
+	}
+	if len(fake.getDomainNamesTokens) != 2 {
+		t.Fatalf("expected 2 GetDomainNames calls; got %d tokens=%v", len(fake.getDomainNamesTokens), fake.getDomainNamesTokens)
+	}
+	if fake.getDomainNamesTokens[0] != nil {
+		t.Errorf("first GetDomainNames call should have nil NextToken; got %v", aws.ToString(fake.getDomainNamesTokens[0]))
+	}
+	if aws.ToString(fake.getDomainNamesTokens[1]) != "DOMAIN-CURSOR" {
+		t.Errorf("second GetDomainNames call should carry forward the cursor; got %q want %q",
+			aws.ToString(fake.getDomainNamesTokens[1]), "DOMAIN-CURSOR")
+	}
+}
+
+// TestListAPIGatewayV2ApiMappingIdentifiers_PropagatesInnerPagination
+// pins the inner per-domain apigatewayv2:GetApiMappings pagination
+// contract.
+func TestListAPIGatewayV2ApiMappingIdentifiers_PropagatesInnerPagination(t *testing.T) {
+	t.Parallel()
+	fake := &fakeAPIGatewayV2DomainAndMappingsLister{
+		getDomainNamesPages: []apigatewayv2.GetDomainNamesOutput{
+			apigwv2DomainNamesPage("", "single.example.com"),
+		},
+		getApiMappingsPagesByDomain: map[string][]apigatewayv2.GetApiMappingsOutput{
+			"single.example.com": {
+				apigwv2ApiMappingsPage("MAPPINGS-CURSOR", "m1"),
+				apigwv2ApiMappingsPage("", "m2"),
+			},
+		},
+	}
+	got, err := listAPIGatewayV2ApiMappingIdentifiersWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"m1|single.example.com", "m2|single.example.com"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("identifiers drift: got %v want %v", got, want)
+	}
+	tokens := fake.getApiMappingsTokensByDomain["single.example.com"]
+	if len(tokens) != 2 {
+		t.Fatalf("expected 2 inner GetApiMappings calls; got %d tokens=%v", len(tokens), tokens)
+	}
+	if tokens[0] != nil {
+		t.Errorf("first inner call should have nil NextToken; got %v", aws.ToString(tokens[0]))
+	}
+	if aws.ToString(tokens[1]) != "MAPPINGS-CURSOR" {
+		t.Errorf("second inner call should carry forward the cursor; got %q want %q",
+			aws.ToString(tokens[1]), "MAPPINGS-CURSOR")
+	}
+}
+
+// TestListAPIGatewayV2ApiMappingIdentifiers_EmptyAccountReturnsNonNilEmpty
+// guards the #255 contract.
+func TestListAPIGatewayV2ApiMappingIdentifiers_EmptyAccountReturnsNonNilEmpty(t *testing.T) {
+	t.Parallel()
+	fake := &fakeAPIGatewayV2DomainAndMappingsLister{
+		getDomainNamesPages: []apigatewayv2.GetDomainNamesOutput{apigwv2DomainNamesPage("")},
+	}
+	got, err := listAPIGatewayV2ApiMappingIdentifiersWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got == nil {
+		t.Fatal("got nil, want non-nil empty slice (#255 contract)")
+	}
+	if len(got) != 0 {
+		t.Errorf("got %v, want empty slice", got)
+	}
+}
+
+// TestListAPIGatewayV2ApiMappingIdentifiers_PropagatesGetDomainNamesError
+// pins the outer-loop error wrap chain.
+func TestListAPIGatewayV2ApiMappingIdentifiers_PropagatesGetDomainNamesError(t *testing.T) {
+	t.Parallel()
+	sentinel := errors.New("AccessDenied: apigatewayv2:GetDomainNames")
+	fake := &fakeAPIGatewayV2DomainAndMappingsLister{getDomainNamesErr: sentinel}
+	_, err := listAPIGatewayV2ApiMappingIdentifiersWithClient(context.Background(), fake)
+	if !errors.Is(err, sentinel) {
+		t.Errorf("err does not wrap sentinel; got %v", err)
+	}
+}
+
+// TestListAPIGatewayV2ApiMappingIdentifiers_PropagatesGetApiMappingsError
+// pins the inner-loop error wrap chain. Per the IAM RolePolicy
+// precedent, one domain's failure aborts the whole region.
+func TestListAPIGatewayV2ApiMappingIdentifiers_PropagatesGetApiMappingsError(t *testing.T) {
+	t.Parallel()
+	sentinel := errors.New("AccessDenied: apigatewayv2:GetApiMappings")
+	fake := &fakeAPIGatewayV2DomainAndMappingsLister{
+		getDomainNamesPages: []apigatewayv2.GetDomainNamesOutput{
+			apigwv2DomainNamesPage("", "bad.example.com"),
+		},
+		getApiMappingsErrByDomain: map[string]error{
+			"bad.example.com": sentinel,
+		},
+	}
+	_, err := listAPIGatewayV2ApiMappingIdentifiersWithClient(context.Background(), fake)
+	if !errors.Is(err, sentinel) {
+		t.Errorf("err does not wrap sentinel; got %v", err)
+	}
+}

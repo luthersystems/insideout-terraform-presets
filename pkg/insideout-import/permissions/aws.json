@@ -83,6 +83,16 @@
       "purpose": "Cloud Control ListResources for AWS::ApiGatewayV2::Api (cache-miss fallback when RGT prefetch is unavailable)"
     },
     {
+      "service": "apigatewayv2_api_mapping",
+      "iam_action": "apigateway:GET",
+      "purpose": "Cloud Control GetResource for aws_apigatewayv2_api_mapping delegates to apigateway:GET (GET /domainnames/*/apimappings/*); also covers SDKLister enumeration (GET /domainnames, GET /domainnames/*/apimappings) — CC ListResources unsupported for AWS::ApiGatewayV2::ApiMapping"
+    },
+    {
+      "service": "apigatewayv2_api_mapping",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::ApiGatewayV2::ApiMapping (#466 SDKLister branch)"
+    },
+    {
       "service": "apigatewayv2_authorizer",
       "iam_action": "apigateway:GET",
       "purpose": "Cloud Control GetResource for aws_apigatewayv2_authorizer delegates to apigateway:GET (GET /apis/*/authorizers/*); also covers parent enumeration (GET /apis) to fan ListResources out per ApiId"

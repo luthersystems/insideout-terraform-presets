@@ -3317,3 +3317,86 @@ func TestOSSSecurityPolicyConfig(t *testing.T) {
 		t.Errorf("Tags: got %+v, want empty map", tags)
 	}
 }
+
+// =====================================================================
+// Phase A.5 — API Gateway V2 ApiMapping extractor pins (#466)
+// =====================================================================
+
+// TestAPIGatewayV2ApiMappingConfig pins aws_apigatewayv2_api_mapping:
+// SDKLister-listed (CC ListResources unsupported), regional, compound
+// CC identifier `<ApiMappingId>|<DomainName>` rewritten to TF import
+// `<ApiMappingId>/<DomainName>` via single `|`→`/` replace (no swap),
+// NativeIDs split into api_mapping_id + domain_name, untaggable.
+func TestAPIGatewayV2ApiMappingConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_apigatewayv2_api_mapping")
+	if !cfg.SkipProjectTagFilter {
+		t.Error("aws_apigatewayv2_api_mapping: SkipProjectTagFilter must be true (untaggable; CFN schema has no Tags property)")
+	}
+	if cfg.IsGlobal {
+		t.Error("aws_apigatewayv2_api_mapping: IsGlobal must be false (regional)")
+	}
+	if cfg.CloudFormationType != "AWS::ApiGatewayV2::ApiMapping" {
+		t.Errorf("CloudFormationType=%q, want AWS::ApiGatewayV2::ApiMapping", cfg.CloudFormationType)
+	}
+	if cfg.SDKLister == nil {
+		t.Error("SDKLister must be non-nil (CC ListResources unsupported for API mappings)")
+	}
+	if cfg.ParentLister != nil {
+		t.Error("ParentLister must be nil (SDKLister and ParentLister are mutually exclusive)")
+	}
+
+	// ImportID rewrite: CC `<ApiMappingId>|<DomainName>` → TF
+	// `<ApiMappingId>/<DomainName>` (single `|`→`/` replace, no swap).
+	const cc = "1122334|ws-api.example.com"
+	const tf = "1122334/ws-api.example.com"
+	if got := cfg.ImportIDFromIdentifier(cc, nil); got != tf {
+		t.Errorf("ImportID rewrite: got %q, want %q", got, tf)
+	}
+	// First-pipe-only: subsequent `|` in the domain name (unlikely but
+	// defensive) must be preserved.
+	const ccDouble = "1122334|edge|case.example.com"
+	const tfDouble = "1122334/edge|case.example.com"
+	if got := cfg.ImportIDFromIdentifier(ccDouble, nil); got != tfDouble {
+		t.Errorf("ImportID first-pipe-only rewrite: got %q, want %q", got, tfDouble)
+	}
+
+	// NameHint: ApiMappingKey from properties wins.
+	if got := cfg.NameHintFromProperties(cc, map[string]any{"ApiMappingKey": "v1"}); got != "v1" {
+		t.Errorf("NameHint from ApiMappingKey: got %q, want %q", got, "v1")
+	}
+	// Empty ApiMappingKey (root mapping is a valid AWS state) falls
+	// through to the identifier so the UI sees a non-empty label.
+	if got := cfg.NameHintFromProperties(cc, map[string]any{"ApiMappingKey": ""}); got != cc {
+		t.Errorf("NameHint (empty key): got %q, want identifier", got)
+	}
+	// Properties absent: identifier fallback.
+	if got := cfg.NameHintFromProperties(cc, map[string]any{}); got != cc {
+		t.Errorf("NameHint fallback: got %q, want identifier", got)
+	}
+
+	// NativeIDs: split on FIRST `|` into api_mapping_id + domain_name.
+	native := cfg.NativeIDsFromProperties(cc, nil)
+	want := map[string]string{
+		"api_mapping_id": "1122334",
+		"domain_name":    "ws-api.example.com",
+	}
+	if !reflect.DeepEqual(native, want) {
+		t.Errorf("NativeIDs: got %+v, want %+v", native, want)
+	}
+	// Malformed identifier (no `|`): emit only api_mapping_id half so
+	// downstream readers can spot the drift.
+	nativeBare := cfg.NativeIDsFromProperties("malformed-no-pipe", nil)
+	if !reflect.DeepEqual(nativeBare, map[string]string{"api_mapping_id": "malformed-no-pipe"}) {
+		t.Errorf("NativeIDs (malformed): got %+v, want {api_mapping_id: malformed-no-pipe}", nativeBare)
+	}
+
+	// Untaggable.
+	tags := cfg.TagsFromProperties(map[string]any{})
+	if tags == nil {
+		t.Error("Tags: got nil, want non-nil empty map (#255 contract)")
+	}
+	if len(tags) != 0 {
+		t.Errorf("Tags: got %+v, want empty map", tags)
+	}
+}
