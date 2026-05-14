@@ -3096,3 +3096,450 @@ func TestSNSTopicSubscriptionConfig(t *testing.T) {
 		t.Errorf("Tags: got %+v, want empty map", tags)
 	}
 }
+
+// =====================================================================
+// Phase A.2 — IAM RolePolicy extractor pins (#466)
+// =====================================================================
+
+// TestIAMRolePolicyConfig pins aws_iam_role_policy: SDKLister-listed
+// (CC ListResources unsupported), IsGlobal, compound CC identifier
+// `<PolicyName>|<RoleName>` rewritten to TF import `<RoleName>:<PolicyName>`
+// via halve-and-swap, NativeIDs split into policy_name + role_name,
+// untaggable (CFN schema has no Tags property).
+func TestIAMRolePolicyConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_iam_role_policy")
+	if !cfg.SkipProjectTagFilter {
+		t.Error("aws_iam_role_policy: SkipProjectTagFilter must be true (untaggable; CFN schema has no Tags property)")
+	}
+	if !cfg.IsGlobal {
+		t.Error("aws_iam_role_policy: IsGlobal must be true (IAM is a global service)")
+	}
+	if cfg.CloudFormationType != "AWS::IAM::RolePolicy" {
+		t.Errorf("CloudFormationType=%q, want AWS::IAM::RolePolicy", cfg.CloudFormationType)
+	}
+	if cfg.SDKLister == nil {
+		t.Error("SDKLister must be non-nil (CC ListResources unsupported for inline role policies)")
+	}
+	if cfg.ParentLister != nil {
+		t.Error("ParentLister must be nil (SDKLister and ParentLister are mutually exclusive)")
+	}
+
+	// ImportID rewrite: CC `<PolicyName>|<RoleName>` → TF `<RoleName>:<PolicyName>`.
+	const cc = "my-policy|my-role"
+	const tf = "my-role:my-policy"
+	if got := cfg.ImportIDFromIdentifier(cc, nil); got != tf {
+		t.Errorf("ImportID rewrite: got %q, want %q", got, tf)
+	}
+	// Malformed identifier (no `|`): passthrough so a downstream import
+	// surfaces a clear "wrong format" error rather than a silent mis-
+	// import. Matches the iam_service_linked_role fallback shape.
+	if got := cfg.ImportIDFromIdentifier("malformed-no-pipe", nil); got != "malformed-no-pipe" {
+		t.Errorf("ImportID fallback (no pipe): got %q, want %q", got, "malformed-no-pipe")
+	}
+
+	// NameHint: prefer PolicyName from properties; fall back to
+	// identifier verbatim when properties are absent.
+	if got := cfg.NameHintFromProperties(cc, map[string]any{"PolicyName": "my-policy"}); got != "my-policy" {
+		t.Errorf("NameHint from PolicyName: got %q, want %q", got, "my-policy")
+	}
+	if got := cfg.NameHintFromProperties(cc, map[string]any{}); got != cc {
+		t.Errorf("NameHint fallback: got %q, want %q", got, cc)
+	}
+
+	// NativeIDs: split on `|` into policy_name + role_name.
+	native := cfg.NativeIDsFromProperties(cc, nil)
+	want := map[string]string{
+		"policy_name": "my-policy",
+		"role_name":   "my-role",
+	}
+	if !reflect.DeepEqual(native, want) {
+		t.Errorf("NativeIDs: got %+v, want %+v", native, want)
+	}
+	// Malformed identifier: defensive — stamp policy_name only so
+	// downstream readers can spot the drift rather than receive a
+	// half-populated map.
+	nativeBare := cfg.NativeIDsFromProperties("malformed-no-pipe", nil)
+	if !reflect.DeepEqual(nativeBare, map[string]string{"policy_name": "malformed-no-pipe"}) {
+		t.Errorf("NativeIDs (malformed): got %+v, want {policy_name: malformed-no-pipe}", nativeBare)
+	}
+
+	// Untaggable: non-nil empty map (#255 contract). emptyTagsExtractor
+	// must IGNORE any Tags payload — a regression that fell through to a
+	// real extractor would surface as a non-empty map here.
+	for _, tagsIn := range []map[string]any{
+		{},
+		{"Tags": []any{map[string]any{"Key": "Project", "Value": "io-x"}}},
+		{"Tags": map[string]any{"Project": "io-x"}},
+	} {
+		tags := cfg.TagsFromProperties(tagsIn)
+		if tags == nil {
+			t.Errorf("Tags: got nil, want non-nil empty map (#255 contract; input=%v)", tagsIn)
+		}
+		if len(tags) != 0 {
+			t.Errorf("Tags: got %+v, want empty map (input=%v)", tags, tagsIn)
+		}
+	}
+}
+
+// =====================================================================
+// Phase A.3 — OpenSearch Serverless AccessPolicy extractor pins (#466)
+// =====================================================================
+
+// TestOSSAccessPolicyConfig pins aws_opensearchserverless_access_policy:
+// SDKLister-listed (CC ListResources unsupported), regional, compound
+// CC identifier `<Type>|<Name>` rewritten to TF import `<Name>/<Type>`
+// via halve-and-swap, NativeIDs split into type + name, untaggable
+// (CFN schema has no Tags property).
+func TestOSSAccessPolicyConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_opensearchserverless_access_policy")
+	if !cfg.SkipProjectTagFilter {
+		t.Error("aws_opensearchserverless_access_policy: SkipProjectTagFilter must be true (untaggable; CFN schema has no Tags property)")
+	}
+	if cfg.IsGlobal {
+		t.Error("aws_opensearchserverless_access_policy: IsGlobal must be false (regional service)")
+	}
+	if cfg.CloudFormationType != "AWS::OpenSearchServerless::AccessPolicy" {
+		t.Errorf("CloudFormationType=%q, want AWS::OpenSearchServerless::AccessPolicy", cfg.CloudFormationType)
+	}
+	if cfg.SDKLister == nil {
+		t.Error("SDKLister must be non-nil (CC ListResources unsupported for OSS access policies)")
+	}
+	if cfg.ParentLister != nil {
+		t.Error("ParentLister must be nil (SDKLister and ParentLister are mutually exclusive)")
+	}
+
+	// ImportID rewrite: CC `<Type>|<Name>` → TF `<Name>/<Type>`.
+	const cc = "data|my-policy"
+	const tf = "my-policy/data"
+	if got := cfg.ImportIDFromIdentifier(cc, nil); got != tf {
+		t.Errorf("ImportID rewrite: got %q, want %q", got, tf)
+	}
+	// Malformed: passthrough so downstream surfaces a clear error.
+	if got := cfg.ImportIDFromIdentifier("malformed-no-pipe", nil); got != "malformed-no-pipe" {
+		t.Errorf("ImportID fallback (no pipe): got %q, want %q", got, "malformed-no-pipe")
+	}
+
+	// NameHint: prefer Name from properties; fall back to identifier.
+	if got := cfg.NameHintFromProperties(cc, map[string]any{"Name": "my-policy"}); got != "my-policy" {
+		t.Errorf("NameHint from Name: got %q, want %q", got, "my-policy")
+	}
+	if got := cfg.NameHintFromProperties(cc, map[string]any{}); got != cc {
+		t.Errorf("NameHint fallback: got %q, want %q", got, cc)
+	}
+
+	// NativeIDs: split on `|` into type + name.
+	native := cfg.NativeIDsFromProperties(cc, nil)
+	want := map[string]string{"type": "data", "name": "my-policy"}
+	if !reflect.DeepEqual(native, want) {
+		t.Errorf("NativeIDs: got %+v, want %+v", native, want)
+	}
+	// Malformed: defensive — stamp name only so downstream readers see
+	// the half-populated map and can spot the drift.
+	nativeBare := cfg.NativeIDsFromProperties("malformed-no-pipe", nil)
+	if !reflect.DeepEqual(nativeBare, map[string]string{"name": "malformed-no-pipe"}) {
+		t.Errorf("NativeIDs (malformed): got %+v, want {name: malformed-no-pipe}", nativeBare)
+	}
+
+	// Untaggable: non-nil empty map.
+	tags := cfg.TagsFromProperties(map[string]any{})
+	if tags == nil {
+		t.Error("Tags: got nil, want non-nil empty map (#255 contract; CFN schema has no Tags)")
+	}
+	if len(tags) != 0 {
+		t.Errorf("Tags: got %+v, want empty map", tags)
+	}
+}
+
+// =====================================================================
+// Phase A.4 — OpenSearch Serverless SecurityPolicy extractor pins (#466)
+// =====================================================================
+
+// TestOSSSecurityPolicyConfig pins aws_opensearchserverless_security_policy:
+// SDKLister-listed (CC ListResources unsupported), regional, compound CC
+// identifier `<Type>|<Name>` rewritten to TF import `<Name>/<Type>` via
+// halve-and-swap, NativeIDs split into type + name, untaggable.
+func TestOSSSecurityPolicyConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_opensearchserverless_security_policy")
+	if !cfg.SkipProjectTagFilter {
+		t.Error("aws_opensearchserverless_security_policy: SkipProjectTagFilter must be true (untaggable; CFN schema has no Tags property)")
+	}
+	if cfg.IsGlobal {
+		t.Error("aws_opensearchserverless_security_policy: IsGlobal must be false (regional service)")
+	}
+	if cfg.CloudFormationType != "AWS::OpenSearchServerless::SecurityPolicy" {
+		t.Errorf("CloudFormationType=%q, want AWS::OpenSearchServerless::SecurityPolicy", cfg.CloudFormationType)
+	}
+	if cfg.SDKLister == nil {
+		t.Error("SDKLister must be non-nil (CC ListResources unsupported for OSS security policies)")
+	}
+	if cfg.ParentLister != nil {
+		t.Error("ParentLister must be nil (SDKLister and ParentLister are mutually exclusive)")
+	}
+
+	// ImportID rewrite: CC `<Type>|<Name>` → TF `<Name>/<Type>`. Pin
+	// both supported policy types so a future enum addition forces a
+	// per-type review.
+	for _, tc := range []struct {
+		cc, tf string
+	}{
+		{"encryption|enc-1", "enc-1/encryption"},
+		{"network|net-1", "net-1/network"},
+	} {
+		if got := cfg.ImportIDFromIdentifier(tc.cc, nil); got != tc.tf {
+			t.Errorf("ImportID rewrite for %q: got %q, want %q", tc.cc, got, tc.tf)
+		}
+	}
+	// Malformed: passthrough.
+	if got := cfg.ImportIDFromIdentifier("malformed-no-pipe", nil); got != "malformed-no-pipe" {
+		t.Errorf("ImportID fallback (no pipe): got %q, want %q", got, "malformed-no-pipe")
+	}
+
+	// NameHint: prefer Name from properties.
+	if got := cfg.NameHintFromProperties("encryption|enc-1", map[string]any{"Name": "enc-1"}); got != "enc-1" {
+		t.Errorf("NameHint from Name: got %q, want %q", got, "enc-1")
+	}
+	if got := cfg.NameHintFromProperties("encryption|enc-1", map[string]any{}); got != "encryption|enc-1" {
+		t.Errorf("NameHint fallback: got %q, want identifier", got)
+	}
+
+	// NativeIDs: split into type + name.
+	native := cfg.NativeIDsFromProperties("network|net-1", nil)
+	want := map[string]string{"type": "network", "name": "net-1"}
+	if !reflect.DeepEqual(native, want) {
+		t.Errorf("NativeIDs: got %+v, want %+v", native, want)
+	}
+	nativeBare := cfg.NativeIDsFromProperties("malformed-no-pipe", nil)
+	if !reflect.DeepEqual(nativeBare, map[string]string{"name": "malformed-no-pipe"}) {
+		t.Errorf("NativeIDs (malformed): got %+v, want {name: malformed-no-pipe}", nativeBare)
+	}
+
+	// Untaggable.
+	tags := cfg.TagsFromProperties(map[string]any{})
+	if tags == nil {
+		t.Error("Tags: got nil, want non-nil empty map (#255 contract)")
+	}
+	if len(tags) != 0 {
+		t.Errorf("Tags: got %+v, want empty map", tags)
+	}
+}
+
+// =====================================================================
+// Phase A.5 — API Gateway V2 ApiMapping extractor pins (#466)
+// =====================================================================
+
+// TestAPIGatewayV2ApiMappingConfig pins aws_apigatewayv2_api_mapping:
+// SDKLister-listed (CC ListResources unsupported), regional, compound
+// CC identifier `<ApiMappingId>|<DomainName>` rewritten to TF import
+// `<ApiMappingId>/<DomainName>` via single `|`→`/` replace (no swap),
+// NativeIDs split into api_mapping_id + domain_name, untaggable.
+func TestAPIGatewayV2ApiMappingConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_apigatewayv2_api_mapping")
+	if !cfg.SkipProjectTagFilter {
+		t.Error("aws_apigatewayv2_api_mapping: SkipProjectTagFilter must be true (untaggable; CFN schema has no Tags property)")
+	}
+	if cfg.IsGlobal {
+		t.Error("aws_apigatewayv2_api_mapping: IsGlobal must be false (regional)")
+	}
+	if cfg.CloudFormationType != "AWS::ApiGatewayV2::ApiMapping" {
+		t.Errorf("CloudFormationType=%q, want AWS::ApiGatewayV2::ApiMapping", cfg.CloudFormationType)
+	}
+	if cfg.SDKLister == nil {
+		t.Error("SDKLister must be non-nil (CC ListResources unsupported for API mappings)")
+	}
+	if cfg.ParentLister != nil {
+		t.Error("ParentLister must be nil (SDKLister and ParentLister are mutually exclusive)")
+	}
+
+	// ImportID rewrite: CC `<ApiMappingId>|<DomainName>` → TF
+	// `<ApiMappingId>/<DomainName>` (single `|`→`/` replace, no swap).
+	const cc = "1122334|ws-api.example.com"
+	const tf = "1122334/ws-api.example.com"
+	if got := cfg.ImportIDFromIdentifier(cc, nil); got != tf {
+		t.Errorf("ImportID rewrite: got %q, want %q", got, tf)
+	}
+	// First-pipe-only: subsequent `|` in the domain name (unlikely but
+	// defensive) must be preserved.
+	const ccDouble = "1122334|edge|case.example.com"
+	const tfDouble = "1122334/edge|case.example.com"
+	if got := cfg.ImportIDFromIdentifier(ccDouble, nil); got != tfDouble {
+		t.Errorf("ImportID first-pipe-only rewrite: got %q, want %q", got, tfDouble)
+	}
+
+	// NameHint: ApiMappingKey from properties wins.
+	if got := cfg.NameHintFromProperties(cc, map[string]any{"ApiMappingKey": "v1"}); got != "v1" {
+		t.Errorf("NameHint from ApiMappingKey: got %q, want %q", got, "v1")
+	}
+	// Empty ApiMappingKey (root mapping is a valid AWS state) falls
+	// through to the identifier so the UI sees a non-empty label.
+	if got := cfg.NameHintFromProperties(cc, map[string]any{"ApiMappingKey": ""}); got != cc {
+		t.Errorf("NameHint (empty key): got %q, want identifier", got)
+	}
+	// Properties absent: identifier fallback.
+	if got := cfg.NameHintFromProperties(cc, map[string]any{}); got != cc {
+		t.Errorf("NameHint fallback: got %q, want identifier", got)
+	}
+
+	// NativeIDs: split on FIRST `|` into api_mapping_id + domain_name.
+	native := cfg.NativeIDsFromProperties(cc, nil)
+	want := map[string]string{
+		"api_mapping_id": "1122334",
+		"domain_name":    "ws-api.example.com",
+	}
+	if !reflect.DeepEqual(native, want) {
+		t.Errorf("NativeIDs: got %+v, want %+v", native, want)
+	}
+	// Malformed identifier (no `|`): emit only api_mapping_id half so
+	// downstream readers can spot the drift.
+	nativeBare := cfg.NativeIDsFromProperties("malformed-no-pipe", nil)
+	if !reflect.DeepEqual(nativeBare, map[string]string{"api_mapping_id": "malformed-no-pipe"}) {
+		t.Errorf("NativeIDs (malformed): got %+v, want {api_mapping_id: malformed-no-pipe}", nativeBare)
+	}
+	// NativeIDs must also split on FIRST `|` only — a regression that
+	// switched SplitN(s,"|",2) to Split(s,"|") would over-split and
+	// truncate the domain_name half. Pin the contract symmetrically with
+	// ImportID's double-pipe assertion above.
+	nativeDouble := cfg.NativeIDsFromProperties(ccDouble, nil)
+	wantDouble := map[string]string{
+		"api_mapping_id": "1122334",
+		"domain_name":    "edge|case.example.com",
+	}
+	if !reflect.DeepEqual(nativeDouble, wantDouble) {
+		t.Errorf("NativeIDs first-pipe-only split: got %+v, want %+v", nativeDouble, wantDouble)
+	}
+
+	// Untaggable.
+	tags := cfg.TagsFromProperties(map[string]any{})
+	if tags == nil {
+		t.Error("Tags: got nil, want non-nil empty map (#255 contract)")
+	}
+	if len(tags) != 0 {
+		t.Errorf("Tags: got %+v, want empty map", tags)
+	}
+}
+
+// TestVPCSecurityGroupIngressRuleConfig pins per-type extractors for
+// aws_vpc_security_group_ingress_rule (#460): CC default-list,
+// passthrough sgr-XXXXX identifier (Terraform import format matches
+// per provider docs), GroupId stamped under NativeIDs alongside the
+// rule ID, untaggable (CFN schema has no Tags property —
+// SkipProjectTagFilter must be true).
+func TestVPCSecurityGroupIngressRuleConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_vpc_security_group_ingress_rule")
+	if !cfg.SkipProjectTagFilter {
+		t.Error("aws_vpc_security_group_ingress_rule: SkipProjectTagFilter must be true (CFN schema has no Tags property)")
+	}
+	if cfg.IsGlobal {
+		t.Error("aws_vpc_security_group_ingress_rule: IsGlobal must be false (regional)")
+	}
+	if cfg.CloudFormationType != "AWS::EC2::SecurityGroupIngress" {
+		t.Errorf("CloudFormationType=%q, want AWS::EC2::SecurityGroupIngress", cfg.CloudFormationType)
+	}
+	if cfg.SDKLister != nil {
+		t.Error("SDKLister must be nil (CC ListResources is supported for this type — verified via live list)")
+	}
+	if cfg.ParentLister != nil {
+		t.Error("ParentLister must be nil (top-level, not parent-scoped)")
+	}
+
+	const ruleID = "sgr-0aa94a92e442faa91"
+	if got := cfg.ImportIDFromIdentifier(ruleID, nil); got != ruleID {
+		t.Errorf("ImportID passthrough: got %q, want %q (TF import format is the bare sgr-XXXXX per provider docs)", got, ruleID)
+	}
+	if got := cfg.NameHintFromProperties(ruleID, nil); got != ruleID {
+		t.Errorf("NameHint passthrough: got %q, want %q", got, ruleID)
+	}
+
+	// NativeIDs: rule ID always present; GroupId stamped when the
+	// properties payload carries it (CC GetResource always does).
+	native := cfg.NativeIDsFromProperties(ruleID, map[string]any{"GroupId": "sg-05b33367d0263c42d"})
+	want := map[string]string{
+		"security_group_rule_id": ruleID,
+		"security_group_id":      "sg-05b33367d0263c42d",
+	}
+	if !reflect.DeepEqual(native, want) {
+		t.Errorf("NativeIDs: got %+v, want %+v", native, want)
+	}
+	// Defensive: properties missing GroupId — only the rule ID
+	// surfaces. A future schema change that drops GroupId from the
+	// payload would fail loudly with the wrong-keys assertion below
+	// rather than silently emitting a degraded native map.
+	nativeBare := cfg.NativeIDsFromProperties(ruleID, map[string]any{})
+	if !reflect.DeepEqual(nativeBare, map[string]string{"security_group_rule_id": ruleID}) {
+		t.Errorf("NativeIDs (no GroupId): got %+v, want {security_group_rule_id: %s}", nativeBare, ruleID)
+	}
+
+	// Tags: emptyTagsExtractor returns the non-nil empty map per
+	// #255; populated Tags input is discarded (the CFN schema has no
+	// Tags property, so this defends against a future provider
+	// release injecting one).
+	tags := cfg.TagsFromProperties(map[string]any{"Tags": []any{
+		map[string]any{"Key": "env", "Value": "prod"},
+	}})
+	if tags == nil {
+		t.Fatal("Tags: got nil, want non-nil empty map (#255 contract)")
+	}
+	if len(tags) != 0 {
+		t.Errorf("Tags: got %+v, want empty map (untaggable; emptyTagsExtractor ignores input)", tags)
+	}
+}
+
+// TestVPCSecurityGroupEgressRuleConfig pins per-type extractors for
+// aws_vpc_security_group_egress_rule (#460): mirror of the ingress
+// rule pin above. Both share the EC2-API sgr-XXXXX identifier shape;
+// CFN models them as distinct types so the discoverer registers them
+// separately.
+func TestVPCSecurityGroupEgressRuleConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_vpc_security_group_egress_rule")
+	if !cfg.SkipProjectTagFilter {
+		t.Error("aws_vpc_security_group_egress_rule: SkipProjectTagFilter must be true (CFN schema has no Tags property)")
+	}
+	if cfg.IsGlobal {
+		t.Error("aws_vpc_security_group_egress_rule: IsGlobal must be false (regional)")
+	}
+	if cfg.CloudFormationType != "AWS::EC2::SecurityGroupEgress" {
+		t.Errorf("CloudFormationType=%q, want AWS::EC2::SecurityGroupEgress", cfg.CloudFormationType)
+	}
+	if cfg.SDKLister != nil {
+		t.Error("SDKLister must be nil (CC ListResources is supported)")
+	}
+	if cfg.ParentLister != nil {
+		t.Error("ParentLister must be nil (top-level)")
+	}
+
+	const ruleID = "sgr-0a56783c0655d17b5"
+	if got := cfg.ImportIDFromIdentifier(ruleID, nil); got != ruleID {
+		t.Errorf("ImportID passthrough: got %q, want %q", got, ruleID)
+	}
+	if got := cfg.NameHintFromProperties(ruleID, nil); got != ruleID {
+		t.Errorf("NameHint passthrough: got %q, want %q", got, ruleID)
+	}
+
+	native := cfg.NativeIDsFromProperties(ruleID, map[string]any{"GroupId": "sg-abc"})
+	want := map[string]string{
+		"security_group_rule_id": ruleID,
+		"security_group_id":      "sg-abc",
+	}
+	if !reflect.DeepEqual(native, want) {
+		t.Errorf("NativeIDs: got %+v, want %+v", native, want)
+	}
+	nativeBare := cfg.NativeIDsFromProperties(ruleID, map[string]any{})
+	if !reflect.DeepEqual(nativeBare, map[string]string{"security_group_rule_id": ruleID}) {
+		t.Errorf("NativeIDs (no GroupId): got %+v, want {security_group_rule_id: %s}", nativeBare, ruleID)
+	}
+
+	tags := cfg.TagsFromProperties(map[string]any{"Tags": []any{
+		map[string]any{"Key": "env", "Value": "prod"},
+	}})
+	if tags == nil {
+		t.Fatal("Tags: got nil, want non-nil empty map (#255 contract)")
+	}
+	if len(tags) != 0 {
+		t.Errorf("Tags: got %+v, want empty map (untaggable)", tags)
+	}
+}

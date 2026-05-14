@@ -77,9 +77,10 @@ resource "aws_security_group" "this" {
 
   tags = merge(module.name.tags, { Name = "${module.name.prefix}-sg" }, var.tags)
 
-  # ingress is managed entirely by aws_security_group_rule siblings below.
-  # Mixing inline egress + sibling ingress causes the provider to re-read both
-  # aggregates on refresh, which drift-check then flags.
+  # ingress is managed entirely by aws_vpc_security_group_ingress_rule
+  # siblings below. Mixing inline egress + sibling ingress causes the
+  # provider to re-read both aggregates on refresh, which drift-check
+  # then flags.
   lifecycle {
     ignore_changes = [ingress, egress]
   }
@@ -91,27 +92,48 @@ data "aws_ip_ranges" "ec2_instance_connect" {
   services = ["EC2_INSTANCE_CONNECT"]
 }
 
-resource "aws_security_group_rule" "instance_connect_ssh" {
-  count             = var.enable_instance_connect ? 1 : 0
-  type              = "ingress"
+# The legacy aws_security_group_rule resource carries a synthetic
+# `sgrule-<hash>` import ID that CloudFormation can't model. The
+# aws_vpc_security_group_ingress_rule replacement (TF provider v5+)
+# carries the real EC2-API security_group_rule_id (`sgr-XXXXX`) and is
+# CFN/CC-feasible — required for the InsideOut import/discovery pipeline
+# to round-trip these resources. See issue #460.
+#
+# Each replacement rule takes a single cidr_ipv4 (not a list), so the
+# previous one-rule-with-N-CIDRs semantics fan out into N rules via
+# for_each. Aggregate security posture is identical.
+resource "aws_vpc_security_group_ingress_rule" "instance_connect_ssh" {
+  for_each = var.enable_instance_connect ? toset(data.aws_ip_ranges.ec2_instance_connect[0].cidr_blocks) : toset([])
+
+  security_group_id = aws_security_group.this.id
+  ip_protocol       = "tcp"
   from_port         = 22
   to_port           = 22
-  protocol          = "tcp"
-  cidr_blocks       = data.aws_ip_ranges.ec2_instance_connect[0].cidr_blocks
-  security_group_id = aws_security_group.this.id
+  cidr_ipv4         = each.value
   description       = "SSH from EC2 Instance Connect service IPs"
+  tags              = merge(module.name.tags, var.tags)
 }
 
-resource "aws_security_group_rule" "custom_ingress" {
-  for_each = toset([for p in var.custom_ingress_ports : tostring(p)])
+resource "aws_vpc_security_group_ingress_rule" "custom_ingress" {
+  for_each = {
+    for tuple in flatten([
+      for port in var.custom_ingress_ports : [
+        for cidr in var.ingress_cidr_blocks : {
+          key  = "${port}-${cidr}"
+          port = port
+          cidr = cidr
+        }
+      ]
+    ]) : tuple.key => tuple
+  }
 
-  type              = "ingress"
-  from_port         = tonumber(each.value)
-  to_port           = tonumber(each.value)
-  protocol          = "tcp"
-  cidr_blocks       = var.ingress_cidr_blocks
   security_group_id = aws_security_group.this.id
-  description       = "Custom ingress on port ${each.value}"
+  ip_protocol       = "tcp"
+  from_port         = each.value.port
+  to_port           = each.value.port
+  cidr_ipv4         = each.value.cidr
+  description       = "Custom ingress on port ${each.value.port}"
+  tags              = merge(module.name.tags, var.tags)
 }
 
 # -------------------------------------------------------------

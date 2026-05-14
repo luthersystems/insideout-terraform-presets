@@ -20,6 +20,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/aws/aws-sdk-go-v2/service/opensearch"
+	"github.com/aws/aws-sdk-go-v2/service/opensearchserverless"
+	ossstypes "github.com/aws/aws-sdk-go-v2/service/opensearchserverless/types"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 )
 
@@ -1125,3 +1127,408 @@ func listIAMServiceLinkedRoleServiceNamesWithClient(ctx context.Context, client 
 	return names, nil
 }
 
+// =====================================================================
+// Phase A.2 — IAM RolePolicy SDKLister (#466)
+// =====================================================================
+
+// iamRolePoliciesLister is the narrow subset of the IAM SDK used by the
+// aws_iam_role_policy SDKLister. ListRoles enumerates the outer set;
+// ListRolePolicies enumerates the inner set (inline policies per role).
+// We keep the interface narrow on purpose so test fakes do not need to
+// implement the entire IAM client surface.
+type iamRolePoliciesLister interface {
+	ListRoles(ctx context.Context, in *iam.ListRolesInput, opts ...func(*iam.Options)) (*iam.ListRolesOutput, error)
+	ListRolePolicies(ctx context.Context, in *iam.ListRolePoliciesInput, opts ...func(*iam.Options)) (*iam.ListRolePoliciesOutput, error)
+}
+
+// listIAMRolePolicyIdentifiers enumerates IAM inline role policies
+// (global) and emits the CC compound primary identifier for each. Used
+// as the SDKLister for AWS::IAM::RolePolicy (#466) — CC ListResources
+// returns UnsupportedActionException for the type because inline
+// policies live under a parent role rather than as top-level IAM
+// resources.
+//
+// AWS::IAM::RolePolicy's CC primaryIdentifier is
+// [/properties/PolicyName, /properties/RoleName] (verified against the
+// public CFN schema:
+//
+//	https://schema.cloudformation.us-east-1.amazonaws.com/aws-iam-rolepolicy.json
+//
+// `primaryIdentifier: [/properties/PolicyName, /properties/RoleName]`).
+// The framework joins compound identifiers with `|` in the order
+// declared by the schema, so emitted identifiers are
+// "<PolicyName>|<RoleName>". The TF import rewrite (in
+// cloudcontrol_types.go) swaps the parts and joins them with `:` —
+// terraform-provider-aws v6.x docs:
+// "<role_name>:<role_policy_name>".
+//
+// We walk iam:ListRoles paginated → for each role, iam:ListRolePolicies
+// paginated. A single role can have many inline policies; the outer
+// loop is the parent enumerator and the inner loop is the per-role
+// fan-out. Service-linked roles (Path == "/aws-service-role/...") are
+// filtered out because they cannot hold inline policies (IAM rejects
+// PutRolePolicy on them), so issuing ListRolePolicies for them would
+// burn API budget on a guaranteed-empty result.
+//
+// Returns a non-nil empty slice on accounts with zero inline role
+// policies (#255 contract).
+func listIAMRolePolicyIdentifiers(ctx context.Context, awsCfg aws.Config, region string, _ DiscoverArgs) ([]string, error) {
+	client := iam.NewFromConfig(awsCfg, func(o *iam.Options) {
+		if region != "" {
+			o.Region = region
+		}
+	})
+	return listIAMRolePolicyIdentifiersWithClient(ctx, client)
+}
+
+func listIAMRolePolicyIdentifiersWithClient(ctx context.Context, client iamRolePoliciesLister) ([]string, error) {
+	ids := []string{}
+	seen := map[string]bool{}
+
+	// Outer loop: enumerate all IAM roles (paginated).
+	var roleMarker *string
+	for {
+		rolesPage, err := client.ListRoles(ctx, &iam.ListRolesInput{Marker: roleMarker})
+		if err != nil {
+			return nil, fmt.Errorf("iam:ListRoles: %w", err)
+		}
+		for _, r := range rolesPage.Roles {
+			roleName := aws.ToString(r.RoleName)
+			if roleName == "" {
+				continue
+			}
+			// Skip service-linked roles — they cannot hold inline policies
+			// (IAM rejects PutRolePolicy on /aws-service-role/ roles), so
+			// the per-role ListRolePolicies would always return zero.
+			if strings.HasPrefix(aws.ToString(r.Path), iamServiceRolePathPrefix) {
+				continue
+			}
+
+			// Inner loop: enumerate inline policies for this role.
+			var polMarker *string
+			for {
+				polPage, err := client.ListRolePolicies(ctx, &iam.ListRolePoliciesInput{
+					RoleName: aws.String(roleName),
+					Marker:   polMarker,
+				})
+				if err != nil {
+					return nil, fmt.Errorf("iam:ListRolePolicies(role=%q): %w", roleName, err)
+				}
+				for _, policyName := range polPage.PolicyNames {
+					if policyName == "" {
+						continue
+					}
+					// CC compound identifier order matches the schema's
+					// primaryIdentifier declaration: PolicyName first.
+					id := policyName + "|" + roleName
+					if seen[id] {
+						continue
+					}
+					seen[id] = true
+					ids = append(ids, id)
+				}
+				if !polPage.IsTruncated || polPage.Marker == nil || aws.ToString(polPage.Marker) == "" {
+					break
+				}
+				polMarker = polPage.Marker
+			}
+		}
+		if !rolesPage.IsTruncated || rolesPage.Marker == nil || aws.ToString(rolesPage.Marker) == "" {
+			break
+		}
+		roleMarker = rolesPage.Marker
+	}
+	return ids, nil
+}
+
+// =====================================================================
+// Phase A.3 — OpenSearch Serverless AccessPolicy SDKLister (#466)
+// =====================================================================
+
+// ossAccessPoliciesLister is the narrow subset of the OpenSearch
+// Serverless SDK used by the aws_opensearchserverless_access_policy
+// SDKLister. The interface is package-private so test fakes don't need
+// to implement the full client surface.
+type ossAccessPoliciesLister interface {
+	ListAccessPolicies(ctx context.Context, in *opensearchserverless.ListAccessPoliciesInput, opts ...func(*opensearchserverless.Options)) (*opensearchserverless.ListAccessPoliciesOutput, error)
+}
+
+// ossAccessPolicyTypes enumerates the AccessPolicyType enum values the
+// OSS service accepts on ListAccessPolicies. As of SDK v1.30.3 the only
+// type is "data". Listed explicitly so future enum additions (when AWS
+// adds a new access-policy kind) surface as a one-line entry.
+var ossAccessPolicyTypes = []ossstypes.AccessPolicyType{
+	ossstypes.AccessPolicyTypeData,
+}
+
+// listOSSAccessPolicyIdentifiers enumerates OpenSearch Serverless data-
+// access policies (region-scoped) and emits the CC compound primary
+// identifier for each. Used as the SDKLister for
+// AWS::OpenSearchServerless::AccessPolicy (#466) — CC ListResources
+// returns UnsupportedActionException for the type (CC has no LIST
+// handler), but CC GetResource is supported and keyed on the compound
+// primary identifier [Type, Name] per the public CFN schema:
+//
+//	https://schema.cloudformation.us-east-1.amazonaws.com/aws-opensearchserverless-accesspolicy.json
+//
+// `primaryIdentifier: [/properties/Type, /properties/Name]`.
+//
+// Emits "<Type>|<Name>" — the framework joins compound identifier
+// parts with `|` in schema-declared order. ListAccessPolicies requires
+// the Type filter (it's a required input parameter), so we walk the
+// known type set and concatenate results.
+//
+// Terraform's import format is `<name>/<type>` (verified against
+// terraform-provider-aws main website/docs/r/
+// opensearchserverless_access_policy.html.markdown — Import section).
+// The rewrite (in cloudcontrol_types.go) swaps halves and joins with
+// `/`.
+//
+// Returns a non-nil empty slice on accounts with zero access policies
+// (#255 contract).
+func listOSSAccessPolicyIdentifiers(ctx context.Context, awsCfg aws.Config, region string, _ DiscoverArgs) ([]string, error) {
+	client := opensearchserverless.NewFromConfig(awsCfg, func(o *opensearchserverless.Options) {
+		if region != "" {
+			o.Region = region
+		}
+	})
+	return listOSSAccessPolicyIdentifiersWithClient(ctx, client, ossAccessPolicyTypes)
+}
+
+func listOSSAccessPolicyIdentifiersWithClient(ctx context.Context, client ossAccessPoliciesLister, types []ossstypes.AccessPolicyType) ([]string, error) {
+	ids := []string{}
+	seen := map[string]bool{}
+	for _, t := range types {
+		var nextToken *string
+		for {
+			page, err := client.ListAccessPolicies(ctx, &opensearchserverless.ListAccessPoliciesInput{
+				Type:      t,
+				NextToken: nextToken,
+			})
+			if err != nil {
+				return nil, fmt.Errorf("aoss:ListAccessPolicies(type=%q): %w", string(t), err)
+			}
+			for _, p := range page.AccessPolicySummaries {
+				name := aws.ToString(p.Name)
+				if name == "" {
+					continue
+				}
+				policyType := string(p.Type)
+				if policyType == "" {
+					// Defensive: fall back to the requested type when
+					// the SDK summary omits Type (shouldn't happen, but
+					// the field is a *string in the API surface).
+					policyType = string(t)
+				}
+				id := policyType + "|" + name
+				if seen[id] {
+					continue
+				}
+				seen[id] = true
+				ids = append(ids, id)
+			}
+			if page.NextToken == nil || aws.ToString(page.NextToken) == "" {
+				break
+			}
+			nextToken = page.NextToken
+		}
+	}
+	return ids, nil
+}
+
+// =====================================================================
+// Phase A.5 — API Gateway V2 ApiMapping SDKLister (#466)
+// =====================================================================
+
+// apigatewayv2DomainAndMappingsLister is the narrow subset of the API
+// Gateway v2 SDK used by the aws_apigatewayv2_api_mapping SDKLister.
+// GetDomainNames enumerates the outer set (custom domain names);
+// GetApiMappings enumerates the inner set (mappings under each domain).
+// Keeping the interface separate from apigatewayv2APIsLister
+// (route/integration parent enumerator) lets each call site evolve
+// independently.
+type apigatewayv2DomainAndMappingsLister interface {
+	GetDomainNames(ctx context.Context, in *apigatewayv2.GetDomainNamesInput, opts ...func(*apigatewayv2.Options)) (*apigatewayv2.GetDomainNamesOutput, error)
+	GetApiMappings(ctx context.Context, in *apigatewayv2.GetApiMappingsInput, opts ...func(*apigatewayv2.Options)) (*apigatewayv2.GetApiMappingsOutput, error)
+}
+
+// listAPIGatewayV2ApiMappingIdentifiers enumerates API Gateway V2 API
+// mappings (region-scoped) and emits the CC compound primary
+// identifier for each. Used as the SDKLister for
+// AWS::ApiGatewayV2::ApiMapping (#466) — CC ListResources returns
+// UnsupportedActionException for the type (no LIST handler), but CC
+// GetResource works on the compound primary identifier
+// [ApiMappingId, DomainName] per the public CFN schema:
+//
+//	https://schema.cloudformation.us-east-1.amazonaws.com/aws-apigatewayv2-apimapping.json
+//
+// `primaryIdentifier: [/properties/ApiMappingId, /properties/DomainName]`.
+//
+// Outer loop: apigatewayv2:GetDomainNames paginated (NextToken). For
+// each domain, the inner apigatewayv2:GetApiMappings call (which
+// requires DomainName as input) enumerates the mappings under that
+// domain, also paginated.
+//
+// Emits "<ApiMappingId>|<DomainName>" — framework joins compound
+// primary-identifier parts with `|` in schema-declared order.
+//
+// Terraform's import format is `<api_mapping_id>/<domain_name>`
+// (verified against terraform-provider-aws main
+// website/docs/r/apigatewayv2_api_mapping.html.markdown — Import
+// section). Because the CC `|` separator already has the parts in the
+// right order, the rewrite is a single `|` → `/` replace — no swap.
+//
+// Returns a non-nil empty slice on regions with zero API mappings
+// (#255 contract).
+func listAPIGatewayV2ApiMappingIdentifiers(ctx context.Context, awsCfg aws.Config, region string, _ DiscoverArgs) ([]string, error) {
+	client := apigatewayv2.NewFromConfig(awsCfg, func(o *apigatewayv2.Options) {
+		if region != "" {
+			o.Region = region
+		}
+	})
+	return listAPIGatewayV2ApiMappingIdentifiersWithClient(ctx, client)
+}
+
+func listAPIGatewayV2ApiMappingIdentifiersWithClient(ctx context.Context, client apigatewayv2DomainAndMappingsLister) ([]string, error) {
+	ids := []string{}
+	seen := map[string]bool{}
+
+	var domainToken *string
+	for {
+		domains, err := client.GetDomainNames(ctx, &apigatewayv2.GetDomainNamesInput{NextToken: domainToken})
+		if err != nil {
+			return nil, fmt.Errorf("apigatewayv2:GetDomainNames: %w", err)
+		}
+		for _, d := range domains.Items {
+			domainName := aws.ToString(d.DomainName)
+			if domainName == "" {
+				continue
+			}
+
+			var mappingToken *string
+			for {
+				mappings, err := client.GetApiMappings(ctx, &apigatewayv2.GetApiMappingsInput{
+					DomainName: aws.String(domainName),
+					NextToken:  mappingToken,
+				})
+				if err != nil {
+					return nil, fmt.Errorf("apigatewayv2:GetApiMappings(domain=%q): %w", domainName, err)
+				}
+				for _, m := range mappings.Items {
+					mappingID := aws.ToString(m.ApiMappingId)
+					if mappingID == "" {
+						continue
+					}
+					id := mappingID + "|" + domainName
+					if seen[id] {
+						continue
+					}
+					seen[id] = true
+					ids = append(ids, id)
+				}
+				if mappings.NextToken == nil || aws.ToString(mappings.NextToken) == "" {
+					break
+				}
+				mappingToken = mappings.NextToken
+			}
+		}
+		if domains.NextToken == nil || aws.ToString(domains.NextToken) == "" {
+			break
+		}
+		domainToken = domains.NextToken
+	}
+	return ids, nil
+}
+
+// =====================================================================
+// Phase A.4 — OpenSearch Serverless SecurityPolicy SDKLister (#466)
+// =====================================================================
+
+// ossSecurityPoliciesLister is the narrow subset of the OpenSearch
+// Serverless SDK used by the aws_opensearchserverless_security_policy
+// SDKLister. Keeping it separate from ossAccessPoliciesLister means
+// each call site can evolve independently and test fakes stay focused.
+type ossSecurityPoliciesLister interface {
+	ListSecurityPolicies(ctx context.Context, in *opensearchserverless.ListSecurityPoliciesInput, opts ...func(*opensearchserverless.Options)) (*opensearchserverless.ListSecurityPoliciesOutput, error)
+}
+
+// ossSecurityPolicyTypes enumerates the SecurityPolicyType enum values
+// the OSS service accepts on ListSecurityPolicies. Both "encryption"
+// and "network" are valid (the two security-policy shapes OSS exposes).
+// We call ListSecurityPolicies once per type and concatenate.
+var ossSecurityPolicyTypes = []ossstypes.SecurityPolicyType{
+	ossstypes.SecurityPolicyTypeEncryption,
+	ossstypes.SecurityPolicyTypeNetwork,
+}
+
+// listOSSSecurityPolicyIdentifiers enumerates OpenSearch Serverless
+// security policies (region-scoped) and emits the CC compound primary
+// identifier for each. Used as the SDKLister for
+// AWS::OpenSearchServerless::SecurityPolicy (#466) — CC ListResources
+// returns UnsupportedActionException; CC GetResource is supported on
+// the compound primary identifier [Type, Name] per the public CFN
+// schema:
+//
+//	https://schema.cloudformation.us-east-1.amazonaws.com/aws-opensearchserverless-securitypolicy.json
+//
+// `primaryIdentifier: [/properties/Type, /properties/Name]`.
+//
+// Emits "<Type>|<Name>" — the framework joins compound identifier
+// parts with `|` in schema-declared order. ListSecurityPolicies
+// requires a Type filter (it's a required input), so we walk the
+// known type set and concatenate.
+//
+// Terraform's import format is `<name>/<type>` (verified against
+// terraform-provider-aws main website/docs/r/
+// opensearchserverless_security_policy.html.markdown — Import section).
+// The rewrite (in cloudcontrol_types.go) swaps halves and joins with
+// `/`.
+//
+// Returns a non-nil empty slice on accounts with zero security
+// policies (#255 contract).
+func listOSSSecurityPolicyIdentifiers(ctx context.Context, awsCfg aws.Config, region string, _ DiscoverArgs) ([]string, error) {
+	client := opensearchserverless.NewFromConfig(awsCfg, func(o *opensearchserverless.Options) {
+		if region != "" {
+			o.Region = region
+		}
+	})
+	return listOSSSecurityPolicyIdentifiersWithClient(ctx, client, ossSecurityPolicyTypes)
+}
+
+func listOSSSecurityPolicyIdentifiersWithClient(ctx context.Context, client ossSecurityPoliciesLister, types []ossstypes.SecurityPolicyType) ([]string, error) {
+	ids := []string{}
+	seen := map[string]bool{}
+	for _, t := range types {
+		var nextToken *string
+		for {
+			page, err := client.ListSecurityPolicies(ctx, &opensearchserverless.ListSecurityPoliciesInput{
+				Type:      t,
+				NextToken: nextToken,
+			})
+			if err != nil {
+				return nil, fmt.Errorf("aoss:ListSecurityPolicies(type=%q): %w", string(t), err)
+			}
+			for _, p := range page.SecurityPolicySummaries {
+				name := aws.ToString(p.Name)
+				if name == "" {
+					continue
+				}
+				policyType := string(p.Type)
+				if policyType == "" {
+					policyType = string(t)
+				}
+				id := policyType + "|" + name
+				if seen[id] {
+					continue
+				}
+				seen[id] = true
+				ids = append(ids, id)
+			}
+			if page.NextToken == nil || aws.ToString(page.NextToken) == "" {
+				break
+			}
+			nextToken = page.NextToken
+		}
+	}
+	return ids, nil
+}

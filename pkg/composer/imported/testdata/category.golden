@@ -3,6 +3,7 @@ aws_api_gateway_deployment	Network Security
 aws_api_gateway_resource	Network Security
 aws_api_gateway_stage	Network Security
 aws_apigatewayv2_api	Network Security
+aws_apigatewayv2_api_mapping	Network Security
 aws_apigatewayv2_authorizer	Network Security
 aws_apigatewayv2_domain_name	Network Security
 aws_apigatewayv2_integration	Network Security
@@ -53,6 +54,7 @@ aws_iam_group	Security
 aws_iam_instance_profile	Security
 aws_iam_policy	Security
 aws_iam_role	Security
+aws_iam_role_policy	Security
 aws_iam_role_policy_attachment	Security
 aws_iam_service_linked_role	Security
 aws_iam_user	Security
@@ -76,7 +78,9 @@ aws_nat_gateway	Network Security
 aws_network_acl	Network Security
 aws_network_interface	Network Security
 aws_opensearch_domain	Data Storage
+aws_opensearchserverless_access_policy	Security
 aws_opensearchserverless_collection	Data Storage
+aws_opensearchserverless_security_policy	Security
 aws_rds_cluster	Data Storage
 aws_resourceexplorer2_index	Observability
 aws_resourceexplorer2_view	Observability
@@ -100,6 +104,8 @@ aws_subnet	Network Security
 aws_vpc	Network Security
 aws_vpc_dhcp_options	Network Security
 aws_vpc_endpoint	Network Security
+aws_vpc_security_group_egress_rule	Network Security
+aws_vpc_security_group_ingress_rule	Network Security
 aws_wafv2_web_acl	Security
 aws_wafv2_web_acl_association	Security
 google_api_gateway_api	Network Security

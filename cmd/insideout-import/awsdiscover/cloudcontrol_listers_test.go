@@ -36,6 +36,8 @@ import (
 	lambdatypes "github.com/aws/aws-sdk-go-v2/service/lambda/types"
 	"github.com/aws/aws-sdk-go-v2/service/opensearch"
 	opensearchtypes "github.com/aws/aws-sdk-go-v2/service/opensearch/types"
+	"github.com/aws/aws-sdk-go-v2/service/opensearchserverless"
+	ossstypes "github.com/aws/aws-sdk-go-v2/service/opensearchserverless/types"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	smtypes "github.com/aws/aws-sdk-go-v2/service/secretsmanager/types"
 )
@@ -2553,5 +2555,962 @@ func TestListIAMServiceLinkedRoleServiceNames_SkipsRolesWithMalformedPath(t *tes
 	want := []string{"foo.amazonaws.com"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got %v, want %v (malformed path must be skipped)", got, want)
+	}
+}
+
+// =====================================================================
+// Phase A.2 — IAM RolePolicy SDKLister (#466)
+// =====================================================================
+
+// fakeIAMRolePoliciesLister implements iamRolePoliciesLister against a
+// scripted page sequence. listRolesPages drives the outer iam:ListRoles
+// loop; listPoliciesPagesByRole drives the inner per-role
+// iam:ListRolePolicies loop. Both record markers received from the
+// SUT so tests can assert pagination is propagated exactly once per
+// page transition.
+type fakeIAMRolePoliciesLister struct {
+	// Outer enumeration: iam:ListRoles paginated pages.
+	listRolesPages   []iam.ListRolesOutput
+	listRolesCalls   int
+	listRolesErr     error
+	listRolesMarkers []*string // markers sent on each call (incl. nil first call)
+
+	// Inner enumeration: iam:ListRolePolicies pages keyed by role name.
+	listPoliciesPagesByRole map[string][]iam.ListRolePoliciesOutput
+	listPoliciesCallsByRole map[string]int
+	listPoliciesErrByRole   map[string]error
+	// listPoliciesMarkersByRole records the marker the SUT supplied
+	// on each per-role call, in order. Pre-allocate the inner slice
+	// only when actually appending so a nil-vs-empty distinction
+	// survives reflect.DeepEqual checks in tests.
+	listPoliciesMarkersByRole map[string][]*string
+
+	// listPoliciesRoles records the role-name order the SUT requested
+	// inner pages for, so tests can assert filter behavior (e.g. SLRs
+	// must NOT trigger inner ListRolePolicies).
+	listPoliciesRoles []string
+}
+
+func (f *fakeIAMRolePoliciesLister) ListRoles(_ context.Context, in *iam.ListRolesInput, _ ...func(*iam.Options)) (*iam.ListRolesOutput, error) {
+	f.listRolesMarkers = append(f.listRolesMarkers, in.Marker)
+	if f.listRolesErr != nil {
+		return nil, f.listRolesErr
+	}
+	if f.listRolesCalls >= len(f.listRolesPages) {
+		return &iam.ListRolesOutput{}, nil
+	}
+	page := f.listRolesPages[f.listRolesCalls]
+	f.listRolesCalls++
+	return &page, nil
+}
+
+func (f *fakeIAMRolePoliciesLister) ListRolePolicies(_ context.Context, in *iam.ListRolePoliciesInput, _ ...func(*iam.Options)) (*iam.ListRolePoliciesOutput, error) {
+	role := aws.ToString(in.RoleName)
+	if f.listPoliciesMarkersByRole == nil {
+		f.listPoliciesMarkersByRole = map[string][]*string{}
+	}
+	f.listPoliciesMarkersByRole[role] = append(f.listPoliciesMarkersByRole[role], in.Marker)
+	f.listPoliciesRoles = append(f.listPoliciesRoles, role)
+	if err, ok := f.listPoliciesErrByRole[role]; ok && err != nil {
+		return nil, err
+	}
+	if f.listPoliciesCallsByRole == nil {
+		f.listPoliciesCallsByRole = map[string]int{}
+	}
+	pages := f.listPoliciesPagesByRole[role]
+	idx := f.listPoliciesCallsByRole[role]
+	if idx >= len(pages) {
+		return &iam.ListRolePoliciesOutput{}, nil
+	}
+	page := pages[idx]
+	f.listPoliciesCallsByRole[role] = idx + 1
+	return &page, nil
+}
+
+// iamRolePoliciesPage constructs a single ListRolePoliciesOutput from a
+// truncation marker plus a list of inline policy names.
+func iamRolePoliciesPage(marker string, names ...string) iam.ListRolePoliciesOutput {
+	out := iam.ListRolePoliciesOutput{PolicyNames: append([]string{}, names...)}
+	if marker != "" {
+		out.IsTruncated = true
+		out.Marker = aws.String(marker)
+	}
+	return out
+}
+
+// TestListIAMRolePolicyIdentifiers_HappyPath_FansOutPerRole pins the
+// canonical shape: two non-SLR roles × two inline policies each → four
+// emitted identifiers in CC compound form `<PolicyName>|<RoleName>`.
+// Order is preserved (role iteration order from the ListRoles page,
+// then policy order from each ListRolePolicies page).
+func TestListIAMRolePolicyIdentifiers_HappyPath_FansOutPerRole(t *testing.T) {
+	t.Parallel()
+	fake := &fakeIAMRolePoliciesLister{
+		listRolesPages: []iam.ListRolesOutput{
+			iamRolesPage("",
+				[2]string{"/", "role-a"},
+				[2]string{"/", "role-b"},
+			),
+		},
+		listPoliciesPagesByRole: map[string][]iam.ListRolePoliciesOutput{
+			"role-a": {iamRolePoliciesPage("", "policy-a1", "policy-a2")},
+			"role-b": {iamRolePoliciesPage("", "policy-b1", "policy-b2")},
+		},
+	}
+	got, err := listIAMRolePolicyIdentifiersWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{
+		"policy-a1|role-a",
+		"policy-a2|role-a",
+		"policy-b1|role-b",
+		"policy-b2|role-b",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("identifiers drift: got %v want %v", got, want)
+	}
+}
+
+// TestListIAMRolePolicyIdentifiers_SkipsServiceLinkedRoles pins the
+// SLR filter: roles whose Path starts with /aws-service-role/ must NOT
+// trigger an inner ListRolePolicies call (IAM rejects PutRolePolicy on
+// SLRs, so the inner result is guaranteed empty — the filter saves an
+// API call per SLR).
+func TestListIAMRolePolicyIdentifiers_SkipsServiceLinkedRoles(t *testing.T) {
+	t.Parallel()
+	fake := &fakeIAMRolePoliciesLister{
+		listRolesPages: []iam.ListRolesOutput{
+			iamRolesPage("",
+				[2]string{"/aws-service-role/elasticache.amazonaws.com/", "AWSServiceRoleForElastiCache"},
+				[2]string{"/", "real-role"},
+			),
+		},
+		listPoliciesPagesByRole: map[string][]iam.ListRolePoliciesOutput{
+			"real-role": {iamRolePoliciesPage("", "real-policy")},
+		},
+	}
+	got, err := listIAMRolePolicyIdentifiersWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"real-policy|real-role"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("identifiers drift: got %v want %v", got, want)
+	}
+	// SLR must NOT be queried for inline policies.
+	if got := fake.listPoliciesRoles; !reflect.DeepEqual(got, []string{"real-role"}) {
+		t.Errorf("inner ListRolePolicies should only be called for non-SLR roles; got call sequence %v", got)
+	}
+}
+
+// TestListIAMRolePolicyIdentifiers_PropagatesOuterPagination pins the
+// outer iam:ListRoles pagination contract: the marker returned on page
+// N must surface as the Marker input on page N+1, exactly once.
+func TestListIAMRolePolicyIdentifiers_PropagatesOuterPagination(t *testing.T) {
+	t.Parallel()
+	fake := &fakeIAMRolePoliciesLister{
+		listRolesPages: []iam.ListRolesOutput{
+			iamRolesPage("OUTER-CURSOR-1", [2]string{"/", "role-a"}),
+			iamRolesPage("", [2]string{"/", "role-b"}),
+		},
+		listPoliciesPagesByRole: map[string][]iam.ListRolePoliciesOutput{
+			"role-a": {iamRolePoliciesPage("", "pa")},
+			"role-b": {iamRolePoliciesPage("", "pb")},
+		},
+	}
+	got, err := listIAMRolePolicyIdentifiersWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"pa|role-a", "pb|role-b"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("identifiers drift: got %v want %v", got, want)
+	}
+	if len(fake.listRolesMarkers) != 2 {
+		t.Fatalf("expected 2 ListRoles calls; got %d markers=%v", len(fake.listRolesMarkers), fake.listRolesMarkers)
+	}
+	if fake.listRolesMarkers[0] != nil {
+		t.Errorf("first ListRoles call should have nil Marker; got %v", aws.ToString(fake.listRolesMarkers[0]))
+	}
+	if aws.ToString(fake.listRolesMarkers[1]) != "OUTER-CURSOR-1" {
+		t.Errorf("second ListRoles call should carry forward the cursor; got %q want %q",
+			aws.ToString(fake.listRolesMarkers[1]), "OUTER-CURSOR-1")
+	}
+	// Belt-and-suspenders: inner ListRolePolicies must have been called
+	// for both pages' roles. A regression that skipped the inner fan-out
+	// after the outer cursor advance would surface here.
+	if got := fake.listPoliciesRoles; !reflect.DeepEqual(got, []string{"role-a", "role-b"}) {
+		t.Errorf("inner ListRolePolicies call sequence: got %v, want [role-a role-b]", got)
+	}
+}
+
+// TestListIAMRolePolicyIdentifiers_PropagatesInnerPagination pins the
+// inner iam:ListRolePolicies pagination contract: the marker returned
+// on inner page N must surface as the Marker input on inner page N+1
+// for the SAME role, exactly once.
+func TestListIAMRolePolicyIdentifiers_PropagatesInnerPagination(t *testing.T) {
+	t.Parallel()
+	fake := &fakeIAMRolePoliciesLister{
+		listRolesPages: []iam.ListRolesOutput{
+			iamRolesPage("", [2]string{"/", "role-a"}),
+		},
+		listPoliciesPagesByRole: map[string][]iam.ListRolePoliciesOutput{
+			"role-a": {
+				iamRolePoliciesPage("INNER-CURSOR-A", "policy-1"),
+				iamRolePoliciesPage("", "policy-2"),
+			},
+		},
+	}
+	got, err := listIAMRolePolicyIdentifiersWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"policy-1|role-a", "policy-2|role-a"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("identifiers drift: got %v want %v", got, want)
+	}
+	markers := fake.listPoliciesMarkersByRole["role-a"]
+	if len(markers) != 2 {
+		t.Fatalf("expected 2 inner ListRolePolicies calls for role-a; got %d markers=%v", len(markers), markers)
+	}
+	if markers[0] != nil {
+		t.Errorf("first inner call should have nil Marker; got %v", aws.ToString(markers[0]))
+	}
+	if aws.ToString(markers[1]) != "INNER-CURSOR-A" {
+		t.Errorf("second inner call should carry forward the cursor; got %q want %q",
+			aws.ToString(markers[1]), "INNER-CURSOR-A")
+	}
+}
+
+// TestListIAMRolePolicyIdentifiers_InnerPaginationResetsBetweenRoles
+// pins that the inner ListRolePolicies cursor is fresh for each outer
+// role. A regression that re-used the previous role's cursor would
+// either skip pages or refetch them forever (and surface here as a
+// marker-sequence drift on role-b's inner calls).
+func TestListIAMRolePolicyIdentifiers_InnerPaginationResetsBetweenRoles(t *testing.T) {
+	t.Parallel()
+	fake := &fakeIAMRolePoliciesLister{
+		listRolesPages: []iam.ListRolesOutput{
+			iamRolesPage("", [2]string{"/", "role-a"}, [2]string{"/", "role-b"}),
+		},
+		listPoliciesPagesByRole: map[string][]iam.ListRolePoliciesOutput{
+			"role-a": {
+				iamRolePoliciesPage("CURSOR-A", "policy-a1"),
+				iamRolePoliciesPage("", "policy-a2"),
+			},
+			"role-b": {
+				iamRolePoliciesPage("CURSOR-B", "policy-b1"),
+				iamRolePoliciesPage("", "policy-b2"),
+			},
+		},
+	}
+	got, err := listIAMRolePolicyIdentifiersWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{
+		"policy-a1|role-a", "policy-a2|role-a",
+		"policy-b1|role-b", "policy-b2|role-b",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("identifiers drift: got %v want %v", got, want)
+	}
+	// Each role's inner cursor must start at nil (not carry over from
+	// the previous role) and advance independently.
+	for _, role := range []string{"role-a", "role-b"} {
+		markers := fake.listPoliciesMarkersByRole[role]
+		if len(markers) != 2 {
+			t.Errorf("role=%s: expected 2 inner ListRolePolicies calls; got %d markers=%v", role, len(markers), markers)
+			continue
+		}
+		if markers[0] != nil {
+			t.Errorf("role=%s: first inner call should have nil Marker; got %v", role, aws.ToString(markers[0]))
+		}
+	}
+}
+
+// TestListIAMRolePolicyIdentifiers_EmptyAccountReturnsNonNilEmpty
+// guards the #255 contract for accounts with zero IAM roles (or zero
+// non-SLR roles) — the result must marshal to "[]" not "null".
+func TestListIAMRolePolicyIdentifiers_EmptyAccountReturnsNonNilEmpty(t *testing.T) {
+	t.Parallel()
+	fake := &fakeIAMRolePoliciesLister{listRolesPages: []iam.ListRolesOutput{iamRolesPage("")}}
+	got, err := listIAMRolePolicyIdentifiersWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got == nil {
+		t.Fatal("got nil, want non-nil empty slice (#255 contract)")
+	}
+	if len(got) != 0 {
+		t.Errorf("got %v, want empty slice", got)
+	}
+}
+
+// TestListIAMRolePolicyIdentifiers_PropagatesListRolesError pins the
+// error wrap chain for the outer call.
+func TestListIAMRolePolicyIdentifiers_PropagatesListRolesError(t *testing.T) {
+	t.Parallel()
+	sentinel := errors.New("AccessDenied: iam:ListRoles")
+	fake := &fakeIAMRolePoliciesLister{listRolesErr: sentinel}
+	_, err := listIAMRolePolicyIdentifiersWithClient(context.Background(), fake)
+	if !errors.Is(err, sentinel) {
+		t.Errorf("err does not wrap sentinel; got %v", err)
+	}
+}
+
+// TestListIAMRolePolicyIdentifiers_PropagatesListRolePoliciesError
+// pins the error wrap chain for the inner per-role call. An error on
+// one role's inner ListRolePolicies aborts the whole region's
+// enumeration (the SDKLister returns nil + error, the discoverer's
+// per-region wrapper translates that into ServiceFinish + region
+// abort). Follow-up #466: a transient per-role AccessDenied should
+// soft-fail via ServiceWarn rather than kill the region — tracked
+// outside this PR because it changes the SDKLister contract.
+func TestListIAMRolePolicyIdentifiers_PropagatesListRolePoliciesError(t *testing.T) {
+	t.Parallel()
+	sentinel := errors.New("AccessDenied: iam:ListRolePolicies")
+	fake := &fakeIAMRolePoliciesLister{
+		listRolesPages: []iam.ListRolesOutput{
+			iamRolesPage("", [2]string{"/", "role-a"}),
+		},
+		listPoliciesErrByRole: map[string]error{
+			"role-a": sentinel,
+		},
+	}
+	_, err := listIAMRolePolicyIdentifiersWithClient(context.Background(), fake)
+	if !errors.Is(err, sentinel) {
+		t.Errorf("err does not wrap sentinel; got %v", err)
+	}
+}
+
+// =====================================================================
+// Phase A.3 — OpenSearch Serverless AccessPolicy SDKLister (#466)
+// =====================================================================
+
+// fakeOSSAccessPoliciesLister drives ossAccessPoliciesLister against a
+// scripted (Type → page-sequence) map. Records the input Type and
+// NextToken on each call so tests can pin pagination semantics.
+type fakeOSSAccessPoliciesLister struct {
+	pagesByType    map[ossstypes.AccessPolicyType][]opensearchserverless.ListAccessPoliciesOutput
+	callsByType    map[ossstypes.AccessPolicyType]int
+	errByType      map[ossstypes.AccessPolicyType]error
+	tokenByCall    map[ossstypes.AccessPolicyType][]*string // observed NextToken inputs, in call order
+	typesRequested []ossstypes.AccessPolicyType
+}
+
+func (f *fakeOSSAccessPoliciesLister) ListAccessPolicies(_ context.Context, in *opensearchserverless.ListAccessPoliciesInput, _ ...func(*opensearchserverless.Options)) (*opensearchserverless.ListAccessPoliciesOutput, error) {
+	if f.tokenByCall == nil {
+		f.tokenByCall = map[ossstypes.AccessPolicyType][]*string{}
+	}
+	f.tokenByCall[in.Type] = append(f.tokenByCall[in.Type], in.NextToken)
+	f.typesRequested = append(f.typesRequested, in.Type)
+	if err, ok := f.errByType[in.Type]; ok && err != nil {
+		return nil, err
+	}
+	if f.callsByType == nil {
+		f.callsByType = map[ossstypes.AccessPolicyType]int{}
+	}
+	pages := f.pagesByType[in.Type]
+	idx := f.callsByType[in.Type]
+	if idx >= len(pages) {
+		return &opensearchserverless.ListAccessPoliciesOutput{}, nil
+	}
+	page := pages[idx]
+	f.callsByType[in.Type] = idx + 1
+	return &page, nil
+}
+
+// ossAccessPolicySummary is a tiny constructor for the AccessPolicySummary
+// type so tests don't repeat the &aws.String boilerplate.
+func ossAccessPolicySummary(name string, t ossstypes.AccessPolicyType) ossstypes.AccessPolicySummary {
+	return ossstypes.AccessPolicySummary{Name: aws.String(name), Type: t}
+}
+
+// ossAccessPolicyPage builds a single ListAccessPoliciesOutput page.
+// Pass `nextToken` to mark the page as truncated.
+func ossAccessPolicyPage(nextToken string, summaries ...ossstypes.AccessPolicySummary) opensearchserverless.ListAccessPoliciesOutput {
+	out := opensearchserverless.ListAccessPoliciesOutput{AccessPolicySummaries: summaries}
+	if nextToken != "" {
+		out.NextToken = aws.String(nextToken)
+	}
+	return out
+}
+
+// TestListOSSAccessPolicyIdentifiers_HappyPath_EmitsTypePipeName pins
+// the canonical shape: two access policies → two "<Type>|<Name>"
+// identifiers in API result order.
+func TestListOSSAccessPolicyIdentifiers_HappyPath_EmitsTypePipeName(t *testing.T) {
+	t.Parallel()
+	fake := &fakeOSSAccessPoliciesLister{
+		pagesByType: map[ossstypes.AccessPolicyType][]opensearchserverless.ListAccessPoliciesOutput{
+			ossstypes.AccessPolicyTypeData: {
+				ossAccessPolicyPage("",
+					ossAccessPolicySummary("policy-a", ossstypes.AccessPolicyTypeData),
+					ossAccessPolicySummary("policy-b", ossstypes.AccessPolicyTypeData),
+				),
+			},
+		},
+	}
+	got, err := listOSSAccessPolicyIdentifiersWithClient(context.Background(), fake,
+		[]ossstypes.AccessPolicyType{ossstypes.AccessPolicyTypeData})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"data|policy-a", "data|policy-b"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("identifiers drift: got %v want %v", got, want)
+	}
+}
+
+// TestListOSSAccessPolicyIdentifiers_PropagatesPagination pins the
+// nextToken contract: the token returned on page N must surface as
+// NextToken on page N+1, exactly once.
+func TestListOSSAccessPolicyIdentifiers_PropagatesPagination(t *testing.T) {
+	t.Parallel()
+	fake := &fakeOSSAccessPoliciesLister{
+		pagesByType: map[ossstypes.AccessPolicyType][]opensearchserverless.ListAccessPoliciesOutput{
+			ossstypes.AccessPolicyTypeData: {
+				ossAccessPolicyPage("CURSOR-1",
+					ossAccessPolicySummary("p1", ossstypes.AccessPolicyTypeData),
+				),
+				ossAccessPolicyPage("",
+					ossAccessPolicySummary("p2", ossstypes.AccessPolicyTypeData),
+				),
+			},
+		},
+	}
+	got, err := listOSSAccessPolicyIdentifiersWithClient(context.Background(), fake,
+		[]ossstypes.AccessPolicyType{ossstypes.AccessPolicyTypeData})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"data|p1", "data|p2"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("identifiers drift: got %v want %v", got, want)
+	}
+	tokens := fake.tokenByCall[ossstypes.AccessPolicyTypeData]
+	if len(tokens) != 2 {
+		t.Fatalf("expected 2 ListAccessPolicies calls; got %d tokens=%v", len(tokens), tokens)
+	}
+	if tokens[0] != nil {
+		t.Errorf("first call should have nil NextToken; got %v", aws.ToString(tokens[0]))
+	}
+	if aws.ToString(tokens[1]) != "CURSOR-1" {
+		t.Errorf("second call should carry forward the cursor; got %q want %q",
+			aws.ToString(tokens[1]), "CURSOR-1")
+	}
+}
+
+// TestListOSSAccessPolicyIdentifiers_EmptyAccountReturnsNonNilEmpty
+// guards the #255 contract.
+func TestListOSSAccessPolicyIdentifiers_EmptyAccountReturnsNonNilEmpty(t *testing.T) {
+	t.Parallel()
+	fake := &fakeOSSAccessPoliciesLister{
+		pagesByType: map[ossstypes.AccessPolicyType][]opensearchserverless.ListAccessPoliciesOutput{
+			ossstypes.AccessPolicyTypeData: {ossAccessPolicyPage("")},
+		},
+	}
+	got, err := listOSSAccessPolicyIdentifiersWithClient(context.Background(), fake,
+		[]ossstypes.AccessPolicyType{ossstypes.AccessPolicyTypeData})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got == nil {
+		t.Fatal("got nil, want non-nil empty slice (#255 contract)")
+	}
+	if len(got) != 0 {
+		t.Errorf("got %v, want empty slice", got)
+	}
+}
+
+// TestListOSSAccessPolicyIdentifiers_PropagatesListError pins the
+// error wrap chain.
+func TestListOSSAccessPolicyIdentifiers_PropagatesListError(t *testing.T) {
+	t.Parallel()
+	sentinel := errors.New("AccessDenied: aoss:ListAccessPolicies")
+	fake := &fakeOSSAccessPoliciesLister{
+		errByType: map[ossstypes.AccessPolicyType]error{
+			ossstypes.AccessPolicyTypeData: sentinel,
+		},
+	}
+	_, err := listOSSAccessPolicyIdentifiersWithClient(context.Background(), fake,
+		[]ossstypes.AccessPolicyType{ossstypes.AccessPolicyTypeData})
+	if !errors.Is(err, sentinel) {
+		t.Errorf("err does not wrap sentinel; got %v", err)
+	}
+}
+
+// TestListOSSAccessPolicyIdentifiers_DefensiveTypeFallback pins the
+// SDK-safety belt: if a SummaryType is empty (shouldn't happen, but
+// the API field is an enum that could in theory be zero-valued), fall
+// back to the requested Type so the identifier always has both halves.
+func TestListOSSAccessPolicyIdentifiers_DefensiveTypeFallback(t *testing.T) {
+	t.Parallel()
+	fake := &fakeOSSAccessPoliciesLister{
+		pagesByType: map[ossstypes.AccessPolicyType][]opensearchserverless.ListAccessPoliciesOutput{
+			ossstypes.AccessPolicyTypeData: {
+				ossAccessPolicyPage("",
+					// Empty Type — the lister must fill it from the
+					// requested AccessPolicyType so the emitted ID has
+					// both halves.
+					ossstypes.AccessPolicySummary{Name: aws.String("orphan")},
+				),
+			},
+		},
+	}
+	got, err := listOSSAccessPolicyIdentifiersWithClient(context.Background(), fake,
+		[]ossstypes.AccessPolicyType{ossstypes.AccessPolicyTypeData})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"data|orphan"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("identifiers drift: got %v want %v", got, want)
+	}
+}
+
+// =====================================================================
+// Phase A.4 — OpenSearch Serverless SecurityPolicy SDKLister (#466)
+// =====================================================================
+
+// fakeOSSSecurityPoliciesLister drives ossSecurityPoliciesLister against
+// a scripted (Type → page-sequence) map. Records the input Type and
+// NextToken on each call so tests can pin pagination semantics.
+type fakeOSSSecurityPoliciesLister struct {
+	pagesByType    map[ossstypes.SecurityPolicyType][]opensearchserverless.ListSecurityPoliciesOutput
+	callsByType    map[ossstypes.SecurityPolicyType]int
+	errByType      map[ossstypes.SecurityPolicyType]error
+	tokenByCall    map[ossstypes.SecurityPolicyType][]*string
+	typesRequested []ossstypes.SecurityPolicyType
+}
+
+func (f *fakeOSSSecurityPoliciesLister) ListSecurityPolicies(_ context.Context, in *opensearchserverless.ListSecurityPoliciesInput, _ ...func(*opensearchserverless.Options)) (*opensearchserverless.ListSecurityPoliciesOutput, error) {
+	if f.tokenByCall == nil {
+		f.tokenByCall = map[ossstypes.SecurityPolicyType][]*string{}
+	}
+	f.tokenByCall[in.Type] = append(f.tokenByCall[in.Type], in.NextToken)
+	f.typesRequested = append(f.typesRequested, in.Type)
+	if err, ok := f.errByType[in.Type]; ok && err != nil {
+		return nil, err
+	}
+	if f.callsByType == nil {
+		f.callsByType = map[ossstypes.SecurityPolicyType]int{}
+	}
+	pages := f.pagesByType[in.Type]
+	idx := f.callsByType[in.Type]
+	if idx >= len(pages) {
+		return &opensearchserverless.ListSecurityPoliciesOutput{}, nil
+	}
+	page := pages[idx]
+	f.callsByType[in.Type] = idx + 1
+	return &page, nil
+}
+
+func ossSecurityPolicySummary(name string, t ossstypes.SecurityPolicyType) ossstypes.SecurityPolicySummary {
+	return ossstypes.SecurityPolicySummary{Name: aws.String(name), Type: t}
+}
+
+func ossSecurityPolicyPage(nextToken string, summaries ...ossstypes.SecurityPolicySummary) opensearchserverless.ListSecurityPoliciesOutput {
+	out := opensearchserverless.ListSecurityPoliciesOutput{SecurityPolicySummaries: summaries}
+	if nextToken != "" {
+		out.NextToken = aws.String(nextToken)
+	}
+	return out
+}
+
+// TestListOSSSecurityPolicyIdentifiers_HappyPath_BothTypesConcatenated
+// pins the canonical shape: encryption + network policies are
+// concatenated in the order ossSecurityPolicyTypes declares.
+func TestListOSSSecurityPolicyIdentifiers_HappyPath_BothTypesConcatenated(t *testing.T) {
+	t.Parallel()
+	fake := &fakeOSSSecurityPoliciesLister{
+		pagesByType: map[ossstypes.SecurityPolicyType][]opensearchserverless.ListSecurityPoliciesOutput{
+			ossstypes.SecurityPolicyTypeEncryption: {
+				ossSecurityPolicyPage("",
+					ossSecurityPolicySummary("enc-a", ossstypes.SecurityPolicyTypeEncryption),
+				),
+			},
+			ossstypes.SecurityPolicyTypeNetwork: {
+				ossSecurityPolicyPage("",
+					ossSecurityPolicySummary("net-a", ossstypes.SecurityPolicyTypeNetwork),
+					ossSecurityPolicySummary("net-b", ossstypes.SecurityPolicyTypeNetwork),
+				),
+			},
+		},
+	}
+	got, err := listOSSSecurityPolicyIdentifiersWithClient(context.Background(), fake,
+		[]ossstypes.SecurityPolicyType{
+			ossstypes.SecurityPolicyTypeEncryption,
+			ossstypes.SecurityPolicyTypeNetwork,
+		})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{
+		"encryption|enc-a",
+		"network|net-a",
+		"network|net-b",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("identifiers drift: got %v want %v", got, want)
+	}
+}
+
+// TestListOSSSecurityPolicyIdentifiers_PropagatesPagination pins
+// nextToken propagation for the per-type loop.
+func TestListOSSSecurityPolicyIdentifiers_PropagatesPagination(t *testing.T) {
+	t.Parallel()
+	fake := &fakeOSSSecurityPoliciesLister{
+		pagesByType: map[ossstypes.SecurityPolicyType][]opensearchserverless.ListSecurityPoliciesOutput{
+			ossstypes.SecurityPolicyTypeEncryption: {
+				ossSecurityPolicyPage("ENC-CURSOR",
+					ossSecurityPolicySummary("e1", ossstypes.SecurityPolicyTypeEncryption),
+				),
+				ossSecurityPolicyPage("",
+					ossSecurityPolicySummary("e2", ossstypes.SecurityPolicyTypeEncryption),
+				),
+			},
+		},
+	}
+	got, err := listOSSSecurityPolicyIdentifiersWithClient(context.Background(), fake,
+		[]ossstypes.SecurityPolicyType{ossstypes.SecurityPolicyTypeEncryption})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"encryption|e1", "encryption|e2"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("identifiers drift: got %v want %v", got, want)
+	}
+	tokens := fake.tokenByCall[ossstypes.SecurityPolicyTypeEncryption]
+	if len(tokens) != 2 {
+		t.Fatalf("expected 2 ListSecurityPolicies calls; got %d tokens=%v", len(tokens), tokens)
+	}
+	if tokens[0] != nil {
+		t.Errorf("first call should have nil NextToken; got %v", aws.ToString(tokens[0]))
+	}
+	if aws.ToString(tokens[1]) != "ENC-CURSOR" {
+		t.Errorf("second call should carry forward the cursor; got %q want %q",
+			aws.ToString(tokens[1]), "ENC-CURSOR")
+	}
+}
+
+// TestListOSSSecurityPolicyIdentifiers_EmptyAccountReturnsNonNilEmpty
+// guards the #255 contract AND pins that BOTH known SecurityPolicyTypes
+// were enumerated. A regression that skipped one type entirely would
+// surface as `len(typesRequested) < 2`.
+func TestListOSSSecurityPolicyIdentifiers_EmptyAccountReturnsNonNilEmpty(t *testing.T) {
+	t.Parallel()
+	fake := &fakeOSSSecurityPoliciesLister{
+		pagesByType: map[ossstypes.SecurityPolicyType][]opensearchserverless.ListSecurityPoliciesOutput{
+			ossstypes.SecurityPolicyTypeEncryption: {ossSecurityPolicyPage("")},
+			ossstypes.SecurityPolicyTypeNetwork:    {ossSecurityPolicyPage("")},
+		},
+	}
+	got, err := listOSSSecurityPolicyIdentifiersWithClient(context.Background(), fake,
+		[]ossstypes.SecurityPolicyType{
+			ossstypes.SecurityPolicyTypeEncryption,
+			ossstypes.SecurityPolicyTypeNetwork,
+		})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got == nil {
+		t.Fatal("got nil, want non-nil empty slice (#255 contract)")
+	}
+	if len(got) != 0 {
+		t.Errorf("got %v, want empty slice", got)
+	}
+	// Both types must have been requested, even though both return
+	// empty — a regression that only walked one type would surface here.
+	if len(fake.typesRequested) != 2 {
+		t.Errorf("typesRequested=%v, want 2 distinct ListSecurityPolicies calls", fake.typesRequested)
+	}
+}
+
+// TestListOSSSecurityPolicyIdentifiers_PropagatesListError pins the
+// error wrap chain.
+func TestListOSSSecurityPolicyIdentifiers_PropagatesListError(t *testing.T) {
+	t.Parallel()
+	sentinel := errors.New("AccessDenied: aoss:ListSecurityPolicies")
+	fake := &fakeOSSSecurityPoliciesLister{
+		errByType: map[ossstypes.SecurityPolicyType]error{
+			ossstypes.SecurityPolicyTypeEncryption: sentinel,
+		},
+	}
+	_, err := listOSSSecurityPolicyIdentifiersWithClient(context.Background(), fake,
+		[]ossstypes.SecurityPolicyType{ossstypes.SecurityPolicyTypeEncryption})
+	if !errors.Is(err, sentinel) {
+		t.Errorf("err does not wrap sentinel; got %v", err)
+	}
+}
+
+// TestListOSSSecurityPolicyIdentifiers_DefensiveTypeFallback mirrors the
+// AccessPolicy fallback pin. When the SDK summary's Type is the zero
+// value (defensive: the API field is an enum that could in theory be
+// zero-valued), the lister must fill it from the requested
+// SecurityPolicyType so the identifier always has both halves.
+func TestListOSSSecurityPolicyIdentifiers_DefensiveTypeFallback(t *testing.T) {
+	t.Parallel()
+	fake := &fakeOSSSecurityPoliciesLister{
+		pagesByType: map[ossstypes.SecurityPolicyType][]opensearchserverless.ListSecurityPoliciesOutput{
+			ossstypes.SecurityPolicyTypeEncryption: {
+				ossSecurityPolicyPage("",
+					// Empty Type — the lister must fill it from the
+					// requested SecurityPolicyType so the emitted ID has
+					// both halves.
+					ossstypes.SecurityPolicySummary{Name: aws.String("orphan")},
+				),
+			},
+		},
+	}
+	got, err := listOSSSecurityPolicyIdentifiersWithClient(context.Background(), fake,
+		[]ossstypes.SecurityPolicyType{ossstypes.SecurityPolicyTypeEncryption})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"encryption|orphan"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("identifiers drift: got %v want %v", got, want)
+	}
+}
+
+// =====================================================================
+// Phase A.5 — API Gateway V2 ApiMapping SDKLister (#466)
+// =====================================================================
+
+// fakeAPIGatewayV2DomainAndMappingsLister implements
+// apigatewayv2DomainAndMappingsLister against a scripted page sequence
+// (outer GetDomainNames and per-domain GetApiMappings). Records the
+// inputs on each call so tests can pin pagination semantics on BOTH
+// the outer and inner loops.
+type fakeAPIGatewayV2DomainAndMappingsLister struct {
+	// Outer enumeration: apigatewayv2:GetDomainNames pages.
+	getDomainNamesPages  []apigatewayv2.GetDomainNamesOutput
+	getDomainNamesCalls  int
+	getDomainNamesErr    error
+	getDomainNamesTokens []*string // observed NextToken inputs
+
+	// Inner enumeration: apigatewayv2:GetApiMappings pages, keyed by
+	// DomainName.
+	getApiMappingsPagesByDomain  map[string][]apigatewayv2.GetApiMappingsOutput
+	getApiMappingsCallsByDomain  map[string]int
+	getApiMappingsErrByDomain    map[string]error
+	getApiMappingsTokensByDomain map[string][]*string // observed NextToken inputs by domain
+	getApiMappingsDomains        []string             // sequence of DomainName values the SUT supplied
+}
+
+func (f *fakeAPIGatewayV2DomainAndMappingsLister) GetDomainNames(_ context.Context, in *apigatewayv2.GetDomainNamesInput, _ ...func(*apigatewayv2.Options)) (*apigatewayv2.GetDomainNamesOutput, error) {
+	f.getDomainNamesTokens = append(f.getDomainNamesTokens, in.NextToken)
+	if f.getDomainNamesErr != nil {
+		return nil, f.getDomainNamesErr
+	}
+	if f.getDomainNamesCalls >= len(f.getDomainNamesPages) {
+		return &apigatewayv2.GetDomainNamesOutput{}, nil
+	}
+	page := f.getDomainNamesPages[f.getDomainNamesCalls]
+	f.getDomainNamesCalls++
+	return &page, nil
+}
+
+func (f *fakeAPIGatewayV2DomainAndMappingsLister) GetApiMappings(_ context.Context, in *apigatewayv2.GetApiMappingsInput, _ ...func(*apigatewayv2.Options)) (*apigatewayv2.GetApiMappingsOutput, error) {
+	domain := aws.ToString(in.DomainName)
+	if f.getApiMappingsTokensByDomain == nil {
+		f.getApiMappingsTokensByDomain = map[string][]*string{}
+	}
+	f.getApiMappingsTokensByDomain[domain] = append(f.getApiMappingsTokensByDomain[domain], in.NextToken)
+	f.getApiMappingsDomains = append(f.getApiMappingsDomains, domain)
+	if err, ok := f.getApiMappingsErrByDomain[domain]; ok && err != nil {
+		return nil, err
+	}
+	if f.getApiMappingsCallsByDomain == nil {
+		f.getApiMappingsCallsByDomain = map[string]int{}
+	}
+	pages := f.getApiMappingsPagesByDomain[domain]
+	idx := f.getApiMappingsCallsByDomain[domain]
+	if idx >= len(pages) {
+		return &apigatewayv2.GetApiMappingsOutput{}, nil
+	}
+	page := pages[idx]
+	f.getApiMappingsCallsByDomain[domain] = idx + 1
+	return &page, nil
+}
+
+func apigwv2DomainNamesPage(nextToken string, names ...string) apigatewayv2.GetDomainNamesOutput {
+	items := make([]apigwv2types.DomainName, 0, len(names))
+	for _, n := range names {
+		items = append(items, apigwv2types.DomainName{DomainName: aws.String(n)})
+	}
+	out := apigatewayv2.GetDomainNamesOutput{Items: items}
+	if nextToken != "" {
+		out.NextToken = aws.String(nextToken)
+	}
+	return out
+}
+
+func apigwv2ApiMappingsPage(nextToken string, ids ...string) apigatewayv2.GetApiMappingsOutput {
+	items := make([]apigwv2types.ApiMapping, 0, len(ids))
+	for _, id := range ids {
+		items = append(items, apigwv2types.ApiMapping{
+			ApiMappingId: aws.String(id),
+			ApiId:        aws.String("api-" + id),
+			Stage:        aws.String("$default"),
+		})
+	}
+	out := apigatewayv2.GetApiMappingsOutput{Items: items}
+	if nextToken != "" {
+		out.NextToken = aws.String(nextToken)
+	}
+	return out
+}
+
+// TestListAPIGatewayV2ApiMappingIdentifiers_HappyPath_FansOutPerDomain
+// pins the canonical shape: 2 domains × per-domain mappings → CC
+// compound identifiers in domain-then-mapping order.
+func TestListAPIGatewayV2ApiMappingIdentifiers_HappyPath_FansOutPerDomain(t *testing.T) {
+	t.Parallel()
+	fake := &fakeAPIGatewayV2DomainAndMappingsLister{
+		getDomainNamesPages: []apigatewayv2.GetDomainNamesOutput{
+			apigwv2DomainNamesPage("", "api.example.com", "v1.example.com"),
+		},
+		getApiMappingsPagesByDomain: map[string][]apigatewayv2.GetApiMappingsOutput{
+			"api.example.com": {apigwv2ApiMappingsPage("", "mapping-a1", "mapping-a2")},
+			"v1.example.com":  {apigwv2ApiMappingsPage("", "mapping-b1")},
+		},
+	}
+	got, err := listAPIGatewayV2ApiMappingIdentifiersWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{
+		"mapping-a1|api.example.com",
+		"mapping-a2|api.example.com",
+		"mapping-b1|v1.example.com",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("identifiers drift: got %v want %v", got, want)
+	}
+}
+
+// TestListAPIGatewayV2ApiMappingIdentifiers_PropagatesOuterPagination
+// pins the outer apigatewayv2:GetDomainNames pagination contract.
+func TestListAPIGatewayV2ApiMappingIdentifiers_PropagatesOuterPagination(t *testing.T) {
+	t.Parallel()
+	fake := &fakeAPIGatewayV2DomainAndMappingsLister{
+		getDomainNamesPages: []apigatewayv2.GetDomainNamesOutput{
+			apigwv2DomainNamesPage("DOMAIN-CURSOR", "d1.example.com"),
+			apigwv2DomainNamesPage("", "d2.example.com"),
+		},
+		getApiMappingsPagesByDomain: map[string][]apigatewayv2.GetApiMappingsOutput{
+			"d1.example.com": {apigwv2ApiMappingsPage("", "m1")},
+			"d2.example.com": {apigwv2ApiMappingsPage("", "m2")},
+		},
+	}
+	got, err := listAPIGatewayV2ApiMappingIdentifiersWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"m1|d1.example.com", "m2|d2.example.com"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("identifiers drift: got %v want %v", got, want)
+	}
+	if len(fake.getDomainNamesTokens) != 2 {
+		t.Fatalf("expected 2 GetDomainNames calls; got %d tokens=%v", len(fake.getDomainNamesTokens), fake.getDomainNamesTokens)
+	}
+	if fake.getDomainNamesTokens[0] != nil {
+		t.Errorf("first GetDomainNames call should have nil NextToken; got %v", aws.ToString(fake.getDomainNamesTokens[0]))
+	}
+	if aws.ToString(fake.getDomainNamesTokens[1]) != "DOMAIN-CURSOR" {
+		t.Errorf("second GetDomainNames call should carry forward the cursor; got %q want %q",
+			aws.ToString(fake.getDomainNamesTokens[1]), "DOMAIN-CURSOR")
+	}
+}
+
+// TestListAPIGatewayV2ApiMappingIdentifiers_PropagatesInnerPagination
+// pins the inner per-domain apigatewayv2:GetApiMappings pagination
+// contract.
+func TestListAPIGatewayV2ApiMappingIdentifiers_PropagatesInnerPagination(t *testing.T) {
+	t.Parallel()
+	fake := &fakeAPIGatewayV2DomainAndMappingsLister{
+		getDomainNamesPages: []apigatewayv2.GetDomainNamesOutput{
+			apigwv2DomainNamesPage("", "single.example.com"),
+		},
+		getApiMappingsPagesByDomain: map[string][]apigatewayv2.GetApiMappingsOutput{
+			"single.example.com": {
+				apigwv2ApiMappingsPage("MAPPINGS-CURSOR", "m1"),
+				apigwv2ApiMappingsPage("", "m2"),
+			},
+		},
+	}
+	got, err := listAPIGatewayV2ApiMappingIdentifiersWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"m1|single.example.com", "m2|single.example.com"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("identifiers drift: got %v want %v", got, want)
+	}
+	tokens := fake.getApiMappingsTokensByDomain["single.example.com"]
+	if len(tokens) != 2 {
+		t.Fatalf("expected 2 inner GetApiMappings calls; got %d tokens=%v", len(tokens), tokens)
+	}
+	if tokens[0] != nil {
+		t.Errorf("first inner call should have nil NextToken; got %v", aws.ToString(tokens[0]))
+	}
+	if aws.ToString(tokens[1]) != "MAPPINGS-CURSOR" {
+		t.Errorf("second inner call should carry forward the cursor; got %q want %q",
+			aws.ToString(tokens[1]), "MAPPINGS-CURSOR")
+	}
+}
+
+// TestListAPIGatewayV2ApiMappingIdentifiers_EmptyAccountReturnsNonNilEmpty
+// guards the #255 contract.
+func TestListAPIGatewayV2ApiMappingIdentifiers_EmptyAccountReturnsNonNilEmpty(t *testing.T) {
+	t.Parallel()
+	fake := &fakeAPIGatewayV2DomainAndMappingsLister{
+		getDomainNamesPages: []apigatewayv2.GetDomainNamesOutput{apigwv2DomainNamesPage("")},
+	}
+	got, err := listAPIGatewayV2ApiMappingIdentifiersWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got == nil {
+		t.Fatal("got nil, want non-nil empty slice (#255 contract)")
+	}
+	if len(got) != 0 {
+		t.Errorf("got %v, want empty slice", got)
+	}
+}
+
+// TestListAPIGatewayV2ApiMappingIdentifiers_PropagatesGetDomainNamesError
+// pins the outer-loop error wrap chain.
+func TestListAPIGatewayV2ApiMappingIdentifiers_PropagatesGetDomainNamesError(t *testing.T) {
+	t.Parallel()
+	sentinel := errors.New("AccessDenied: apigatewayv2:GetDomainNames")
+	fake := &fakeAPIGatewayV2DomainAndMappingsLister{getDomainNamesErr: sentinel}
+	_, err := listAPIGatewayV2ApiMappingIdentifiersWithClient(context.Background(), fake)
+	if !errors.Is(err, sentinel) {
+		t.Errorf("err does not wrap sentinel; got %v", err)
+	}
+}
+
+// TestListAPIGatewayV2ApiMappingIdentifiers_PropagatesGetApiMappingsError
+// pins the inner-loop error wrap chain. Per the IAM RolePolicy
+// precedent, one domain's failure aborts the whole region.
+func TestListAPIGatewayV2ApiMappingIdentifiers_PropagatesGetApiMappingsError(t *testing.T) {
+	t.Parallel()
+	sentinel := errors.New("AccessDenied: apigatewayv2:GetApiMappings")
+	fake := &fakeAPIGatewayV2DomainAndMappingsLister{
+		getDomainNamesPages: []apigatewayv2.GetDomainNamesOutput{
+			apigwv2DomainNamesPage("", "bad.example.com"),
+		},
+		getApiMappingsErrByDomain: map[string]error{
+			"bad.example.com": sentinel,
+		},
+	}
+	_, err := listAPIGatewayV2ApiMappingIdentifiersWithClient(context.Background(), fake)
+	if !errors.Is(err, sentinel) {
+		t.Errorf("err does not wrap sentinel; got %v", err)
 	}
 }

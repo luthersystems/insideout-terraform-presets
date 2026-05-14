@@ -328,6 +328,72 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 		TagsFromProperties:     tagsFromKey("Tags"),
 	},
 	{
+		// AWS::EC2::SecurityGroupIngress — CFN schema has no Tags
+		// property (verified via describe-type us-east-1: properties
+		// = [Id, CidrIp, CidrIpv6, Description, FromPort, GroupId,
+		// GroupName, IpProtocol, SourcePrefixListId, …]; primary
+		// identifier = `/properties/Id` returning `sgr-XXXXX`).
+		// SkipProjectTagFilter bypasses both the RGT cache short-
+		// circuit (RGT may surface `ec2:security-group-rule/…` ARNs
+		// but can't disambiguate ingress vs egress — they share the
+		// `security-group-rule` ARN resource-type segment) and the
+		// post-fetch Project-tag filter.
+		//
+		// Terraform import format is the bare `sgr-XXXXX` ID
+		// (verified against terraform-provider-aws main:
+		// website/docs/r/vpc_security_group_ingress_rule.html.markdown
+		// — `terraform import aws_vpc_security_group_ingress_rule.example sgr-…`).
+		// Passthrough ImportIDFromIdentifier.
+		//
+		// No arnRule for `ec2:security-group-rule` — the ARN
+		// resource-type segment is identical for ingress and egress,
+		// so we'd misroute half the time. SkipProjectTagFilter=true
+		// makes the cache fallback path always run, so the missing
+		// arnRule is correct rather than a gap.
+		TFType:                 "aws_vpc_security_group_ingress_rule",
+		CloudFormationType:     "AWS::EC2::SecurityGroupIngress",
+		Slug:                   "vpc_security_group_ingress_rule",
+		SkipProjectTagFilter:   true,
+		ImportIDFromIdentifier: passthroughImportID,
+		NameHintFromProperties: passthroughIdentifierName,
+		NativeIDsFromProperties: func(identifier string, props map[string]any) map[string]string {
+			out := map[string]string{"security_group_rule_id": identifier}
+			if gid := extractString(props, "GroupId"); gid != "" {
+				out["security_group_id"] = gid
+			}
+			return out
+		},
+		TagsFromProperties: emptyTagsExtractor,
+	},
+	{
+		// AWS::EC2::SecurityGroupEgress — mirror of the ingress entry
+		// above. CFN schema has no Tags property (verified via
+		// describe-type us-east-1: properties = [CidrIp, CidrIpv6,
+		// Description, FromPort, ToPort, IpProtocol,
+		// DestinationSecurityGroupId, Id, DestinationPrefixListId,
+		// GroupId]; primary identifier = `/properties/Id` returning
+		// `sgr-XXXXX`).
+		//
+		// Terraform import format is the bare `sgr-XXXXX` ID
+		// (verified against terraform-provider-aws main:
+		// website/docs/r/vpc_security_group_egress_rule.html.markdown).
+		// Passthrough ImportIDFromIdentifier.
+		TFType:                 "aws_vpc_security_group_egress_rule",
+		CloudFormationType:     "AWS::EC2::SecurityGroupEgress",
+		Slug:                   "vpc_security_group_egress_rule",
+		SkipProjectTagFilter:   true,
+		ImportIDFromIdentifier: passthroughImportID,
+		NameHintFromProperties: passthroughIdentifierName,
+		NativeIDsFromProperties: func(identifier string, props map[string]any) map[string]string {
+			out := map[string]string{"security_group_rule_id": identifier}
+			if gid := extractString(props, "GroupId"); gid != "" {
+				out["security_group_id"] = gid
+			}
+			return out
+		},
+		TagsFromProperties: emptyTagsExtractor,
+	},
+	{
 		TFType:                 "aws_internet_gateway",
 		CloudFormationType:     "AWS::EC2::InternetGateway",
 		Slug:                   "internet_gateway",
@@ -2239,6 +2305,273 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 		NameHintFromProperties:  snsSubscriptionNameHint,
 		NativeIDsFromProperties: snsSubscriptionNativeIDs,
 		TagsFromProperties:      emptyTagsExtractor,
+	},
+
+	// =====================================================================
+	// IAM RolePolicy — SDKLister-listed, global, untaggable (Phase A.2 / #466)
+	// =====================================================================
+	{
+		// AWS::IAM::RolePolicy's CC ListResources returns
+		// UnsupportedActionException — inline role policies live under a
+		// parent IAM role rather than as top-level resources, so CC has
+		// no LIST handler. CC GetResource IS supported and keyed on the
+		// compound primary identifier [PolicyName, RoleName] (verified
+		// against the public CFN schema:
+		//   https://schema.cloudformation.us-east-1.amazonaws.com/aws-iam-rolepolicy.json
+		// `primaryIdentifier: [/properties/PolicyName, /properties/RoleName]`).
+		// IAM is global; IsGlobal=true mirrors aws_iam_service_linked_role
+		// and the rest of the IAM bucket.
+		//
+		// The SDKLister walks iam:ListRoles (paginated) and, for each
+		// non-SLR role, iam:ListRolePolicies (paginated). It emits the
+		// CC compound identifier "<PolicyName>|<RoleName>" — the
+		// framework joins compound primary-identifier parts with `|` in
+		// the order declared by the schema.
+		//
+		// Terraform's import format for aws_iam_role_policy is
+		// `<role_name>:<role_policy_name>` (verified against
+		// terraform-provider-aws main website/docs/r/iam_role_policy.html.markdown
+		// per the Import section:
+		//   "% terraform import aws_iam_role_policy.example
+		//    role_of_mypolicy_name:mypolicy_name"
+		// ). The rewrite SWAPS the CC `<PolicyName>|<RoleName>` to the
+		// TF `<RoleName>:<PolicyName>` form. When the identifier is
+		// malformed (defensive — no `|`), fall through verbatim so a
+		// downstream `terraform import` surfaces a clear "wrong format"
+		// error rather than a silent mis-import.
+		//
+		// The CFN schema has no Tags property — inline role policies are
+		// untaggable in AWS provider 6.x. SkipProjectTagFilter +
+		// emptyTagsExtractor matches the existing untaggableAWS /
+		// NON_TAGGABLE_AWS allowlist entry (which already lists this
+		// type — only the SDKLister wiring is new in #466).
+		//
+		// No ARN rule in arn_rules.go: inline IAM policies have no ARN
+		// of their own (only the parent role's ARN is reachable, and
+		// that routes to aws_iam_role). Discovery is SDKLister-only.
+		TFType:               "aws_iam_role_policy",
+		CloudFormationType:   "AWS::IAM::RolePolicy",
+		Slug:                 "iam_role_policy",
+		IsGlobal:             true,
+		SkipProjectTagFilter: true,
+		SDKLister:            listIAMRolePolicyIdentifiers,
+		// ImportID rewrite: CC `<PolicyName>|<RoleName>` → TF
+		// `<RoleName>:<PolicyName>` (swap halves, join with `:`).
+		ImportIDFromIdentifier: func(identifier string, _ map[string]any) string {
+			parts := strings.SplitN(identifier, "|", 2)
+			if len(parts) != 2 {
+				return identifier
+			}
+			return parts[1] + ":" + parts[0]
+		},
+		// NameHint: prefer the CFN-surfaced PolicyName (the human-
+		// meaningful inline-policy suffix), falling back to the compound
+		// identifier verbatim. The CC properties payload echoes
+		// PolicyName + RoleName on GetResource.
+		NameHintFromProperties: nameOrIdentifier("PolicyName"),
+		NativeIDsFromProperties: func(identifier string, _ map[string]any) map[string]string {
+			parts := strings.SplitN(identifier, "|", 2)
+			if len(parts) != 2 {
+				// Defensive: a malformed identifier (no `|`) almost
+				// certainly means an upstream bug — emit just the
+				// policy-name half so downstream readers can spot the
+				// drift rather than receive a half-populated map.
+				return map[string]string{"policy_name": identifier}
+			}
+			return map[string]string{
+				"policy_name": parts[0],
+				"role_name":   parts[1],
+			}
+		},
+		TagsFromProperties: emptyTagsExtractor,
+	},
+
+	// =====================================================================
+	// OpenSearch Serverless AccessPolicy — SDKLister-listed, untaggable (Phase A.3 / #466)
+	// =====================================================================
+	{
+		// AWS::OpenSearchServerless::AccessPolicy's CC ListResources
+		// returns UnsupportedActionException — the service has no LIST
+		// handler exposed through CloudControl, but CC GetResource IS
+		// supported and keyed on the compound primary identifier [Type,
+		// Name] (verified against the public CFN schema:
+		//   https://schema.cloudformation.us-east-1.amazonaws.com/aws-opensearchserverless-accesspolicy.json
+		// `primaryIdentifier: [/properties/Type, /properties/Name]`).
+		//
+		// The SDKLister calls aoss:ListAccessPolicies once per
+		// AccessPolicyType (today only "data") and concatenates the
+		// per-type Name + Type pairs into "<Type>|<Name>" — the
+		// framework joins compound primary-identifier parts with `|` in
+		// schema-declared order.
+		//
+		// Terraform's import format is `<name>/<type>` (verified
+		// against terraform-provider-aws main
+		// website/docs/r/opensearchserverless_access_policy.html.markdown
+		// per the Import section:
+		//   "% terraform import aws_opensearchserverless_access_policy.example
+		//    example/data"
+		// ). The rewrite SWAPS the CC `<Type>|<Name>` halves and joins
+		// them with `/` to produce `<Name>/<Type>`. When the identifier
+		// is malformed (defensive — no `|`), fall through verbatim so a
+		// downstream `terraform import` surfaces a clear "wrong format"
+		// error.
+		//
+		// The CFN schema has no Tags property — OSS access policies are
+		// untaggable in AWS provider 6.x. SkipProjectTagFilter +
+		// emptyTagsExtractor matches the existing untaggableAWS /
+		// NON_TAGGABLE_AWS allowlist entry (which already lists this
+		// type — only the SDKLister wiring is new in #466).
+		//
+		// No ARN rule in arn_rules.go: OSS access policies are not
+		// surfaced via Resource Groups Tagging API today (the SDK has
+		// no ListTagsForResource for access policies), so RGT cache
+		// hits never apply; discovery is SDKLister-only.
+		TFType:               "aws_opensearchserverless_access_policy",
+		CloudFormationType:   "AWS::OpenSearchServerless::AccessPolicy",
+		Slug:                 "opensearchserverless_access_policy",
+		SkipProjectTagFilter: true,
+		SDKLister:            listOSSAccessPolicyIdentifiers,
+		// ImportID rewrite: CC `<Type>|<Name>` → TF `<Name>/<Type>`
+		// (swap halves, join with `/`).
+		ImportIDFromIdentifier: func(identifier string, _ map[string]any) string {
+			parts := strings.SplitN(identifier, "|", 2)
+			if len(parts) != 2 {
+				return identifier
+			}
+			return parts[1] + "/" + parts[0]
+		},
+		// NameHint: prefer the Name from properties (the customer-
+		// facing policy name); fall back to the identifier verbatim.
+		NameHintFromProperties: nameOrIdentifier("Name"),
+		NativeIDsFromProperties: func(identifier string, _ map[string]any) map[string]string {
+			parts := strings.SplitN(identifier, "|", 2)
+			if len(parts) != 2 {
+				return map[string]string{"name": identifier}
+			}
+			return map[string]string{
+				"type": parts[0],
+				"name": parts[1],
+			}
+		},
+		TagsFromProperties: emptyTagsExtractor,
+	},
+
+	// =====================================================================
+	// OpenSearch Serverless SecurityPolicy — SDKLister-listed, untaggable (Phase A.4 / #466)
+	// =====================================================================
+	{
+		// AWS::OpenSearchServerless::SecurityPolicy mirrors the access-
+		// policy shape: CC ListResources returns
+		// UnsupportedActionException, CC GetResource works on the
+		// compound primary identifier [Type, Name] (verified against
+		// the public CFN schema:
+		//   https://schema.cloudformation.us-east-1.amazonaws.com/aws-opensearchserverless-securitypolicy.json
+		// `primaryIdentifier: [/properties/Type, /properties/Name]`).
+		//
+		// The SDKLister calls aoss:ListSecurityPolicies once per
+		// SecurityPolicyType ("encryption" and "network") and
+		// concatenates per-type Name + Type pairs. Emits
+		// "<Type>|<Name>" — framework joins compound primary-identifier
+		// parts with `|` in schema-declared order.
+		//
+		// Terraform's import format is `<name>/<type>` (verified
+		// against terraform-provider-aws main
+		// website/docs/r/opensearchserverless_security_policy.html.markdown
+		// per the Import section:
+		//   "% terraform import aws_opensearchserverless_security_policy.example
+		//    example/encryption"
+		// ). The rewrite SWAPS the CC `<Type>|<Name>` halves and joins
+		// them with `/` to produce `<Name>/<Type>`.
+		//
+		// Untaggable (CFN schema has no Tags property); existing
+		// untaggableAWS / NON_TAGGABLE_AWS allowlist entry remains in
+		// sync.
+		TFType:               "aws_opensearchserverless_security_policy",
+		CloudFormationType:   "AWS::OpenSearchServerless::SecurityPolicy",
+		Slug:                 "opensearchserverless_security_policy",
+		SkipProjectTagFilter: true,
+		SDKLister:            listOSSSecurityPolicyIdentifiers,
+		ImportIDFromIdentifier: func(identifier string, _ map[string]any) string {
+			parts := strings.SplitN(identifier, "|", 2)
+			if len(parts) != 2 {
+				return identifier
+			}
+			return parts[1] + "/" + parts[0]
+		},
+		NameHintFromProperties: nameOrIdentifier("Name"),
+		NativeIDsFromProperties: func(identifier string, _ map[string]any) map[string]string {
+			parts := strings.SplitN(identifier, "|", 2)
+			if len(parts) != 2 {
+				return map[string]string{"name": identifier}
+			}
+			return map[string]string{
+				"type": parts[0],
+				"name": parts[1],
+			}
+		},
+		TagsFromProperties: emptyTagsExtractor,
+	},
+
+	// =====================================================================
+	// API Gateway V2 ApiMapping — SDKLister-listed, untaggable (Phase A.5 / #466)
+	// =====================================================================
+	{
+		// AWS::ApiGatewayV2::ApiMapping's CC ListResources returns
+		// UnsupportedActionException — API mappings are sub-resources of
+		// a parent custom domain name, so CC has no LIST handler. CC
+		// GetResource IS supported and keyed on the compound primary
+		// identifier [ApiMappingId, DomainName] (verified against the
+		// public CFN schema:
+		//   https://schema.cloudformation.us-east-1.amazonaws.com/aws-apigatewayv2-apimapping.json
+		// `primaryIdentifier: [/properties/ApiMappingId, /properties/DomainName]`).
+		//
+		// The SDKLister walks apigatewayv2:GetDomainNames (paginated)
+		// and for each domain calls apigatewayv2:GetApiMappings
+		// (paginated, requires DomainName). Emits
+		// "<ApiMappingId>|<DomainName>" — framework joins compound
+		// primary-identifier parts with `|` in schema-declared order.
+		//
+		// Terraform's import format is `<api_mapping_id>/<domain_name>`
+		// (verified against terraform-provider-aws v6.x docs
+		// website/docs/r/apigatewayv2_api_mapping.html.markdown — Import
+		// section example: "1122334/ws-api.example.com"). The rewrite
+		// is a single `|` → `/` swap because the CC identifier order
+		// already matches the TF identifier order.
+		//
+		// The CFN schema has no Tags property — API mappings are
+		// sub-resources of the parent domain (which carries the tags).
+		// SkipProjectTagFilter + emptyTagsExtractor matches the existing
+		// untaggableAWS / NON_TAGGABLE_AWS allowlist entry (which
+		// already lists this type — only the SDKLister wiring is new in
+		// #466).
+		TFType:               "aws_apigatewayv2_api_mapping",
+		CloudFormationType:   "AWS::ApiGatewayV2::ApiMapping",
+		Slug:                 "apigatewayv2_api_mapping",
+		SkipProjectTagFilter: true,
+		SDKLister:            listAPIGatewayV2ApiMappingIdentifiers,
+		// ImportID rewrite: CC `<ApiMappingId>|<DomainName>` → TF
+		// `<ApiMappingId>/<DomainName>` (same halves, swap `|` for `/`).
+		ImportIDFromIdentifier: func(identifier string, _ map[string]any) string {
+			return strings.Replace(identifier, "|", "/", 1)
+		},
+		// NameHint: prefer the CFN-surfaced ApiMappingKey (the
+		// human-facing URL prefix, e.g. "v1" or "" for the root
+		// mapping). Empty-string ApiMappingKey is a valid AWS state
+		// (root mapping), and nameOrIdentifier falls through to the
+		// compound identifier in that case so the UI never renders an
+		// empty NameHint.
+		NameHintFromProperties: nameOrIdentifier("ApiMappingKey"),
+		NativeIDsFromProperties: func(identifier string, _ map[string]any) map[string]string {
+			parts := strings.SplitN(identifier, "|", 2)
+			if len(parts) != 2 {
+				return map[string]string{"api_mapping_id": identifier}
+			}
+			return map[string]string{
+				"api_mapping_id": parts[0],
+				"domain_name":    parts[1],
+			}
+		},
+		TagsFromProperties: emptyTagsExtractor,
 	},
 }
 
