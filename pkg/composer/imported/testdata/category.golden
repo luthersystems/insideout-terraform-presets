@@ -15,6 +15,7 @@ aws_backup_plan	Data Storage
 aws_backup_selection	Data Storage
 aws_backup_vault	Data Storage
 aws_bedrock_guardrail	Security
+aws_bedrock_model_invocation_logging_configuration	Observability
 aws_cloudfront_distribution	Network Security
 aws_cloudfront_function	Network Security
 aws_cloudfront_monitoring_subscription	Network Security
@@ -96,6 +97,7 @@ aws_s3_bucket_versioning	Data Storage
 aws_secretsmanager_secret	Security
 aws_secretsmanager_secret_rotation	Security
 aws_security_group	Network Security
+aws_service_discovery_private_dns_namespace	Network Security
 aws_sns_topic	Events
 aws_sns_topic_subscription	Events
 aws_sqs_queue	Events

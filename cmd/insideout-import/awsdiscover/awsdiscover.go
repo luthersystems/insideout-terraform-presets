@@ -137,10 +137,27 @@ func NewAWSDiscovererWithConcurrency(cfg aws.Config, maxConcurrency int) *AWSDis
 	// quirk, #336). Everything else is registered below via the
 	// cloudControlTypeConfigs loop.
 	byType := map[string]Discoverer{
-		"aws_apigatewayv2_stage":      newAPIGatewayV2StageDiscoverer(cfg, maxConcurrency),
-		"aws_bedrock_guardrail":       newBedrockGuardrailDiscoverer(cfg, maxConcurrency),
-		"aws_resourceexplorer2_index": newResourceExplorer2IndexDiscoverer(cfg, maxConcurrency),
-		"aws_resourceexplorer2_view":  newResourceExplorer2ViewDiscoverer(cfg, maxConcurrency),
+		"aws_apigatewayv2_stage": newAPIGatewayV2StageDiscoverer(cfg, maxConcurrency),
+		"aws_bedrock_guardrail":  newBedrockGuardrailDiscoverer(cfg, maxConcurrency),
+		// Bucket C non-CC (#466 follow-up): Cloud Control does not
+		// know the CFN type
+		// AWS::Bedrock::ModelInvocationLoggingConfiguration
+		// (TypeNotFoundException on `cloudcontrol get-resource`).
+		// Native bedrock SDK end-to-end is the only working path;
+		// the framework's per-item fan-out through CC GetResource
+		// cannot rescue it.
+		"aws_bedrock_model_invocation_logging_configuration": newBedrockModelInvocationLoggingConfigurationDiscoverer(cfg, maxConcurrency),
+		"aws_resourceexplorer2_index":                        newResourceExplorer2IndexDiscoverer(cfg, maxConcurrency),
+		"aws_resourceexplorer2_view":                         newResourceExplorer2ViewDiscoverer(cfg, maxConcurrency),
+		// Bucket C non-CC (#466 follow-up): Cloud Control returns
+		// UnsupportedActionException on READ for
+		// AWS::ServiceDiscovery::PrivateDnsNamespace; neither the
+		// unified cloudControlDiscoverer nor SDKLister can resolve
+		// the type. Native servicediscovery SDK end-to-end with a
+		// Route53 GetHostedZone hop to recover the VPC id (TF
+		// import format is "<namespace_id>:<vpc_id>"; the
+		// servicediscovery SDK never surfaces VpcId).
+		"aws_service_discovery_private_dns_namespace": newServiceDiscoveryPrivateDNSNamespaceDiscoverer(cfg, maxConcurrency),
 	}
 	// Cloud Control-routed types (#406): each entry in
 	// cloudControlTypeConfigs becomes one cloudControlDiscoverer
@@ -182,10 +199,12 @@ func NewAWSDiscovererWithConcurrency(cfg aws.Config, maxConcurrency int) *AWSDis
 var serviceSlugByTFType = map[string]string{
 	// Bucket C — hand-rolled. Slugs must match the per-discoverer
 	// ServiceStart/Finish strings inside each *.go file.
-	"aws_apigatewayv2_stage":      "apigatewayv2_stage",
-	"aws_bedrock_guardrail":       "bedrock_guardrail",
-	"aws_resourceexplorer2_index": "resourceexplorer2_index",
-	"aws_resourceexplorer2_view":  "resourceexplorer2_view",
+	"aws_apigatewayv2_stage": "apigatewayv2_stage",
+	"aws_bedrock_guardrail":  "bedrock_guardrail",
+	"aws_bedrock_model_invocation_logging_configuration": "bedrock_model_invocation_logging_configuration",
+	"aws_resourceexplorer2_index":                        "resourceexplorer2_index",
+	"aws_resourceexplorer2_view":                         "resourceexplorer2_view",
+	"aws_service_discovery_private_dns_namespace":        "service_discovery_private_dns_namespace",
 }
 
 // ServiceSlug returns the progress-event slug for a Terraform resource
