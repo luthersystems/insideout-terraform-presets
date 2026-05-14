@@ -35,6 +35,7 @@ var awsTypes = []string{
 	"aws_apigatewayv2_route",
 	"aws_apigatewayv2_stage",
 	"aws_autoscaling_group",
+	"aws_autoscaling_group_tag",
 	"aws_backup_plan",
 	"aws_backup_selection",
 	"aws_backup_vault",
@@ -58,6 +59,7 @@ var awsTypes = []string{
 	"aws_db_instance",
 	"aws_db_parameter_group",
 	"aws_db_subnet_group",
+	"aws_dynamodb_contributor_insights",
 	"aws_dynamodb_table",
 	"aws_ebs_volume",
 	"aws_ecs_cluster",
@@ -77,6 +79,7 @@ var awsTypes = []string{
 	"aws_iam_policy",
 	"aws_iam_role",
 	"aws_iam_role_policy",
+	"aws_iam_role_policy_attachment",
 	"aws_iam_service_linked_role",
 	"aws_iam_user",
 	"aws_instance",
@@ -126,6 +129,7 @@ var awsTypes = []string{
 	"aws_vpc_dhcp_options",
 	"aws_vpc_endpoint",
 	"aws_wafv2_web_acl",
+	"aws_wafv2_web_acl_association",
 }
 
 // gcpTypes is the canonical, sorted list of GCP Terraform resource types the

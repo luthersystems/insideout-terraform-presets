@@ -54,25 +54,40 @@ import (
 //     RGT-cache for ParentCFNType is empty / absent for the current
 //     region. Returns the parent identifiers (e.g. bucket names) used
 //     to drive the per-item FetchItem fan-out. Required.
-//   - FetchItem: per-parent SDK call that reads the sub-resource state.
-//     Returns (exists, props, nativeIDs, err). When the sub-resource is
-//     unset for this parent — typically signaled by a service-native
-//     NotFound error code (NoSuchVersioningConfiguration,
+//   - FetchItem: per-parent SDK call that reads the sub-resource state
+//     for the one-emission-per-parent case (Bundle 14k1 — all 5 S3 sub-
+//     resources). Returns (exists, props, nativeIDs, err). When the sub-
+//     resource is unset for this parent — typically signaled by a
+//     service-native NotFound error code (NoSuchVersioningConfiguration,
 //     NoSuchLifecycleConfiguration, OwnershipControlsNotFoundError,
 //     NoSuchPublicAccessBlockConfiguration,
 //     ServerSideEncryptionConfigurationNotFoundError) — FetchItem must
 //     return (false, nil, nil, nil) rather than an error so the parent
 //     is silently skipped. Any other error is propagated through a
 //     ServiceWarn and skips that parent (soft-fail symmetric with
-//     cloudControlDiscoverer's per-item GetResource posture). Required.
+//     cloudControlDiscoverer's per-item GetResource posture). Exactly
+//     one of FetchItem / FetchItems must be set.
+//   - FetchItems: per-parent SDK call that reads the sub-resource state
+//     for the N-emissions-per-parent case (Bundle 14k2 — IAM role-policy
+//     attachments, WAFv2 web-ACL associations, ASG tags). Returns a
+//     slice of subresourceEmission values plus an error. A nil/empty
+//     slice with nil error is equivalent to FetchItem returning
+//     exists=false: silently skipped. Each emission becomes one
+//     ImportedResource (with its own ImportID, NameHint, and NativeIDs).
+//     Soft-fail and ServiceWarn semantics match FetchItem. Exactly one
+//     of FetchItem / FetchItems must be set.
 //   - ImportIDFromParent: converts a parent identifier (and the
 //     FetchItem-returned properties) into the Terraform import ID format.
-//     For all 5 S3 sub-resources this is the bare bucket name. Required.
+//     For all 5 S3 sub-resources this is the bare bucket name. Required
+//     when FetchItem is set; ignored when FetchItems is set (each
+//     emission carries its own ImportID directly).
 //   - NameHintFromParent: produces a human-readable name hint suitable
 //     for Identity.NameHint and the address generator's hint precedence.
 //     Convention for sub-resources: "<parent-id>-<sub-resource-slug>"
 //     so downstream summaries distinguish a bucket's versioning from
-//     its lifecycle configuration. Required.
+//     its lifecycle configuration. Required when FetchItem is set;
+//     ignored when FetchItems is set (each emission carries its own
+//     NameHint directly).
 type sdkOnlySubresourceConfig struct {
 	TFType               string
 	Slug                 string
@@ -81,8 +96,29 @@ type sdkOnlySubresourceConfig struct {
 	SkipProjectTagFilter bool
 	ListParents          func(ctx context.Context, awsCfg aws.Config, region string, args DiscoverArgs) ([]string, error)
 	FetchItem            func(ctx context.Context, awsCfg aws.Config, region, parentID string) (exists bool, props map[string]any, nativeIDs map[string]string, err error)
+	FetchItems           func(ctx context.Context, awsCfg aws.Config, region, parentID string) ([]subresourceEmission, error)
 	ImportIDFromParent   func(parentID string, props map[string]any) string
 	NameHintFromParent   func(parentID string, props map[string]any) string
+}
+
+// subresourceEmission is one (importID, nameHint, nativeIDs, props)
+// tuple emitted by a FetchItems closure (Bundle 14k2 multi-emit
+// extension). Each emission becomes exactly one ImportedResource — the
+// discoverer does not consult ImportIDFromParent / NameHintFromParent
+// for emissions returned via FetchItems, because the parent identifier
+// alone is insufficient to address a per-attachment / per-association /
+// per-tag resource (e.g. one IAM role has N attached policies, each with
+// its own import ID `<role>/<policy_arn>`).
+//
+// Props is retained for parity with the FetchItem path even though it
+// is not consumed by the current discoverer — future extensions (e.g.
+// surfacing per-emission metadata in observability or HCL generation)
+// can read it without a framework change.
+type subresourceEmission struct {
+	ImportID  string
+	NameHint  string
+	NativeIDs map[string]string
+	Props     map[string]any
 }
 
 // sdkOnlySubresourceDiscoverer is the generic per-type Discoverer that
@@ -155,14 +191,21 @@ func (d *sdkOnlySubresourceDiscoverer) Discover(ctx context.Context, args Discov
 			continue
 		}
 
-		// Per-parent FetchItem fan-out under bounded errgroup. The
-		// emit slice is captured under mu and re-sorted by parentID
-		// after Wait so emit order is deterministic regardless of
-		// goroutine scheduling. Matches the cloudControlDiscoverer
-		// sort-by-identifier convention at cloudcontrol_discoverer.go:408.
+		// Per-parent FetchItem / FetchItems fan-out under bounded
+		// errgroup. The emit slice is captured under mu and re-sorted
+		// by (parentID, ImportID) after Wait so emit order is
+		// deterministic regardless of goroutine scheduling. Matches
+		// the cloudControlDiscoverer sort-by-identifier convention at
+		// cloudcontrol_discoverer.go:408.
+		//
+		// Each fetched entry already carries the final ImportID /
+		// NameHint / NativeIDs so the single-emission (FetchItem) and
+		// multi-emission (FetchItems) paths converge on a single
+		// emit-side loop below.
 		type fetched struct {
 			parentID  string
-			props     map[string]any
+			importID  string
+			nameHint  string
 			nativeIDs map[string]string
 		}
 		var (
@@ -180,7 +223,7 @@ func (d *sdkOnlySubresourceDiscoverer) Discover(ctx context.Context, args Discov
 				if err := gctx.Err(); err != nil {
 					return err
 				}
-				exists, props, native, ferr := d.cfg.FetchItem(gctx, d.awsCfg, region, parentID)
+				emissions, ferr := d.fetchOne(gctx, region, parentID)
 				if ferr != nil {
 					if cerr := gctx.Err(); cerr != nil {
 						return cerr
@@ -189,11 +232,18 @@ func (d *sdkOnlySubresourceDiscoverer) Discover(ctx context.Context, args Discov
 						fmt.Sprintf("FetchItem %s parent=%q: %v", d.cfg.TFType, parentID, ferr))
 					return nil
 				}
-				if !exists {
+				if len(emissions) == 0 {
 					return nil
 				}
 				mu.Lock()
-				done = append(done, fetched{parentID: parentID, props: props, nativeIDs: native})
+				for _, e := range emissions {
+					done = append(done, fetched{
+						parentID:  parentID,
+						importID:  e.ImportID,
+						nameHint:  e.NameHint,
+						nativeIDs: e.NativeIDs,
+					})
+				}
 				mu.Unlock()
 				return nil
 			})
@@ -203,7 +253,15 @@ func (d *sdkOnlySubresourceDiscoverer) Discover(ctx context.Context, args Discov
 			return nil, fmt.Errorf("%s FetchItem (region=%s): %w", d.cfg.Slug, region, err)
 		}
 
-		sort.Slice(done, func(i, j int) bool { return done[i].parentID < done[j].parentID })
+		// Sort by (parentID, importID) so per-parent multi-emit
+		// types (Bundle 14k2) get a deterministic intra-parent order
+		// in addition to the inter-parent order.
+		sort.Slice(done, func(i, j int) bool {
+			if done[i].parentID != done[j].parentID {
+				return done[i].parentID < done[j].parentID
+			}
+			return done[i].importID < done[j].importID
+		})
 
 		// args.TagSelectors evaluation is hoisted out of the per-item
 		// loop because the tag bag is invariant across parents (all
@@ -216,25 +274,17 @@ func (d *sdkOnlySubresourceDiscoverer) Discover(ctx context.Context, args Discov
 			continue
 		}
 		for _, f := range done {
-			importID := f.parentID
-			if d.cfg.ImportIDFromParent != nil {
-				importID = d.cfg.ImportIDFromParent(f.parentID, f.props)
-			}
-			name := f.parentID
-			if d.cfg.NameHintFromParent != nil {
-				name = d.cfg.NameHintFromParent(f.parentID, f.props)
-			}
 			out = append(out, makeImportedResource(
 				book,
 				d.cfg.TFType,
-				name,
-				importID,
+				f.nameHint,
+				f.importID,
 				region,
 				args.AccountID,
 				f.nativeIDs,
 				map[string]string{}, // untaggable: non-nil empty map per #289 gap-#6 nil-vs-empty contract
 			))
-			args.Emitter.ItemFound(d.cfg.Slug, region, d.cfg.TFType, importID)
+			args.Emitter.ItemFound(d.cfg.Slug, region, d.cfg.TFType, f.importID)
 			regionCount++
 		}
 		args.Emitter.ServiceFinish(d.cfg.Slug, region, regionCount, time.Since(regionStart))
@@ -288,45 +338,99 @@ func (d *sdkOnlySubresourceDiscoverer) enumerateParents(ctx context.Context, reg
 	return d.cfg.ListParents(ctx, d.awsCfg, region, args)
 }
 
+// fetchOne dispatches to FetchItem (single-emission) or FetchItems
+// (multi-emission) based on which is set on the config, normalizing
+// both into a uniform []subresourceEmission shape consumed by the
+// bulk Discover and DiscoverByID paths.
+//
+// For the single-emission path, exists=false / nil props yield an
+// empty slice (the parent is silently skipped). The
+// ImportIDFromParent / NameHintFromParent closures convert the parent
+// identifier into the address fields. For the multi-emission path,
+// FetchItems already returns the addressing fields directly per
+// emission and ImportIDFromParent / NameHintFromParent are ignored —
+// the parent ID alone is insufficient to address per-attachment /
+// per-association / per-tag resources.
+func (d *sdkOnlySubresourceDiscoverer) fetchOne(ctx context.Context, region, parentID string) ([]subresourceEmission, error) {
+	if d.cfg.FetchItems != nil {
+		return d.cfg.FetchItems(ctx, d.awsCfg, region, parentID)
+	}
+	if d.cfg.FetchItem == nil {
+		return nil, fmt.Errorf("%s: FetchItem or FetchItems must be set on sdkOnlySubresourceConfig", d.cfg.TFType)
+	}
+	exists, props, native, err := d.cfg.FetchItem(ctx, d.awsCfg, region, parentID)
+	if err != nil {
+		return nil, err
+	}
+	if !exists {
+		return nil, nil
+	}
+	importID := parentID
+	if d.cfg.ImportIDFromParent != nil {
+		importID = d.cfg.ImportIDFromParent(parentID, props)
+	}
+	name := parentID
+	if d.cfg.NameHintFromParent != nil {
+		name = d.cfg.NameHintFromParent(parentID, props)
+	}
+	return []subresourceEmission{{
+		ImportID:  importID,
+		NameHint:  name,
+		NativeIDs: native,
+		Props:     props,
+	}}, nil
+}
+
 // DiscoverByID resolves a single sub-resource by its parent identifier
 // (which equals its import ID for all 5 14k1 S3 sub-resources — the
 // bucket name is the only addressing dimension). Used by Stage 2c3's
 // dep-chase loop.
 //
-// FetchItem-returned exists=false maps to ErrNotFound. An empty id maps
-// to ErrNotSupported so dep-chase can route to a sibling discoverer.
-// Any other FetchItem error is propagated unwrapped — DiscoverByID
-// does not soft-fail (unlike the bulk Discover path) because the
-// caller asked for one specific resource and a transient error
-// shouldn't masquerade as "resource doesn't exist."
+// FetchItem-returned exists=false (or FetchItems returning an empty
+// slice) maps to ErrNotFound. An empty id maps to ErrNotSupported so
+// dep-chase can route to a sibling discoverer. Any other FetchItem
+// error is propagated unwrapped — DiscoverByID does not soft-fail
+// (unlike the bulk Discover path) because the caller asked for one
+// specific resource and a transient error shouldn't masquerade as
+// "resource doesn't exist."
+//
+// Multi-emit (FetchItems) types: DiscoverByID returns the first
+// emission whose ImportID exactly matches id, otherwise ErrNotFound.
+// This lets dep-chase resolve a sub-resource by its compound import
+// ID (e.g. "<role>/<policy_arn>") without re-deriving the parent
+// from the ID.
 func (d *sdkOnlySubresourceDiscoverer) DiscoverByID(ctx context.Context, id, region, accountID string) (imported.ImportedResource, error) {
 	id = strings.TrimSpace(id)
 	if id == "" {
 		return imported.ImportedResource{}, fmt.Errorf("%s: empty id: %w", d.cfg.TFType, ErrNotSupported)
 	}
-	exists, props, native, err := d.cfg.FetchItem(ctx, d.awsCfg, region, id)
+	emissions, err := d.fetchOne(ctx, region, id)
 	if err != nil {
 		return imported.ImportedResource{}, fmt.Errorf("FetchItem %s parent=%q: %w", d.cfg.TFType, id, err)
 	}
-	if !exists {
+	if len(emissions) == 0 {
 		return imported.ImportedResource{}, fmt.Errorf("%s parent=%q: %w", d.cfg.TFType, id, ErrNotFound)
 	}
-	importID := id
-	if d.cfg.ImportIDFromParent != nil {
-		importID = d.cfg.ImportIDFromParent(id, props)
-	}
-	name := id
-	if d.cfg.NameHintFromParent != nil {
-		name = d.cfg.NameHintFromParent(id, props)
+	// For multi-emit types, prefer the emission whose ImportID
+	// matches the caller-supplied id exactly (dep-chase passes the
+	// compound import ID, not the parent). For single-emit types
+	// there is only one emission and the parent ID is the natural
+	// match.
+	chosen := emissions[0]
+	for _, e := range emissions {
+		if e.ImportID == id {
+			chosen = e
+			break
+		}
 	}
 	return makeImportedResource(
 		addressBook{},
 		d.cfg.TFType,
-		name,
-		importID,
+		chosen.NameHint,
+		chosen.ImportID,
 		region,
 		accountID,
-		native,
+		chosen.NativeIDs,
 		map[string]string{},
 	), nil
 }

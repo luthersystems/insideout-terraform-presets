@@ -88,6 +88,7 @@ var categoryByTFType = map[string]string{
 	"aws_apigatewayv2_route":                             CategoryNetworkSecurity,
 	"aws_apigatewayv2_stage":                             CategoryNetworkSecurity,
 	"aws_autoscaling_group":                              CategoryVirtualMachines,
+	"aws_autoscaling_group_tag":                          CategoryVirtualMachines,
 	"aws_backup_plan":                                    CategoryDataStorage,
 	"aws_backup_selection":                               CategoryDataStorage,
 	"aws_backup_vault":                                   CategoryDataStorage,
@@ -111,6 +112,7 @@ var categoryByTFType = map[string]string{
 	"aws_db_instance":                                    CategoryDataStorage,
 	"aws_db_parameter_group":                             CategoryDataStorage,
 	"aws_db_subnet_group":                                CategoryDataStorage,
+	"aws_dynamodb_contributor_insights":                  CategoryObservability,
 	"aws_dynamodb_table":                                 CategoryDataStorage,
 	"aws_ebs_volume":                                     CategoryDataStorage,
 	"aws_ecr_repository":                                 CategoryDataStorage,
@@ -132,6 +134,7 @@ var categoryByTFType = map[string]string{
 	"aws_iam_policy":                                     CategorySecurity,
 	"aws_iam_role":                                       CategorySecurity,
 	"aws_iam_role_policy":                                CategorySecurity,
+	"aws_iam_role_policy_attachment":                     CategorySecurity,
 	"aws_iam_service_linked_role":                        CategorySecurity,
 	"aws_iam_user":                                       CategorySecurity,
 	"aws_instance":                                       CategoryVirtualMachines,
@@ -182,6 +185,7 @@ var categoryByTFType = map[string]string{
 	"aws_vpc_dhcp_options":                               CategoryNetworkSecurity,
 	"aws_vpc_endpoint":                                   CategoryNetworkSecurity,
 	"aws_wafv2_web_acl":                                  CategorySecurity,
+	"aws_wafv2_web_acl_association":                      CategorySecurity,
 
 	// --- GCP ---
 	"google_api_gateway_api":                 CategoryNetworkSecurity,

@@ -173,6 +173,11 @@
       "purpose": "Cloud Control GetResource for AWS::AutoScaling::AutoScalingGroup (#14f SDKLister branch)"
     },
     {
+      "service": "autoscaling_group_tag",
+      "iam_action": "autoscaling:DescribeAutoScalingGroups",
+      "purpose": "SDK-only sub-resource discoverer (#14k2 / #456): per-ASG DescribeAutoScalingGroups; tags are inline on the result so no separate SDK call is needed; one TF resource per (asg_name, tag_key) pair"
+    },
+    {
       "service": "backup_plan",
       "iam_action": "backup:GetBackupPlan",
       "purpose": "Cloud Control GetResource for aws_backup_plan delegates to backup:GetBackupPlan"
@@ -643,6 +648,16 @@
       "purpose": "fetch table tags for tag selectors and Identity.Tags"
     },
     {
+      "service": "dynamodb_contributor_insights",
+      "iam_action": "dynamodb:DescribeContributorInsights",
+      "purpose": "SDK-only sub-resource discoverer (#14k2 / #456): per-table DescribeContributorInsights; ContributorInsightsStatus in {ENABLED, ENABLING} signals 'configured' and emits one TF resource per table; other statuses (DISABLED/DISABLING/FAILED) yield zero items"
+    },
+    {
+      "service": "dynamodb_contributor_insights",
+      "iam_action": "dynamodb:ListTables",
+      "purpose": "SDK-only sub-resource discoverer (#14k2): enumerate parent tables via ListTables when the RGT cache for AWS::DynamoDB::Table is empty; paginated via ExclusiveStartTableName / LastEvaluatedTableName"
+    },
+    {
       "service": "ebs_volume",
       "iam_action": "cloudcontrol:GetResource",
       "purpose": "Cloud Control GetResource for AWS::EC2::Volume (#14g unified discoverer)"
@@ -1006,6 +1021,16 @@
       "service": "iam_role_policy",
       "iam_action": "iam:ListRoles",
       "purpose": "ParentLister enumeration: list IAM roles to seed the per-role RolePolicy fan-out (#14i)"
+    },
+    {
+      "service": "iam_role_policy_attachment",
+      "iam_action": "iam:ListAttachedRolePolicies",
+      "purpose": "SDK-only sub-resource discoverer (#14k2 / #456): per-role ListAttachedRolePolicies; one TF resource per (role_name, policy_arn) attached managed-policy pair; multi-emit FetchItems"
+    },
+    {
+      "service": "iam_role_policy_attachment",
+      "iam_action": "iam:ListRoles",
+      "purpose": "SDK-only sub-resource discoverer (#14k2): enumerate parent IAM roles to seed the per-role attachment fan-out; service-linked roles are filtered out at this layer (they reject AttachRolePolicy)"
     },
     {
       "service": "iam_service_linked_role",
@@ -1901,6 +1926,16 @@
       "service": "wafv2_web_acl",
       "iam_action": "wafv2:ListTagsForResource",
       "purpose": "Cloud Control GetResource delegate for the Tags property"
+    },
+    {
+      "service": "wafv2_web_acl_association",
+      "iam_action": "wafv2:ListResourcesForWebACL",
+      "purpose": "SDK-only sub-resource discoverer (#14k2 / #456): per-WebACL ListResourcesForWebACL fan-out across resource types (ALB, API Gateway, AppSync, Cognito user pool, App Runner, Verified Access, Amplify); one TF resource per (resource_arn, web_acl_arn) pair; multi-emit FetchItems"
+    },
+    {
+      "service": "wafv2_web_acl_association",
+      "iam_action": "wafv2:ListWebACLs",
+      "purpose": "SDK-only sub-resource discoverer (#14k2): enumerate parent WebACLs in scope (REGIONAL in any region; CLOUDFRONT only in us-east-1) before fanning out per-ACL ListResourcesForWebACL"
     }
   ]
 }

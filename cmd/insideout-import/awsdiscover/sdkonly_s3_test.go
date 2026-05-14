@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -418,18 +419,32 @@ func TestFetchS3BucketServerSideEncryption_NotFoundEmitsExistsFalse(t *testing.T
 	}
 }
 
-// TestSDKOnlySubresourceConfigs_RegistersFive14k1Types pins the
-// expected 5-type expansion of sdkOnlySubresourceTypeConfigs. A future
-// bundle adding 14k2/14k3 sub-resources must update both this test
-// and the registry/category/permissions plumbing.
-func TestSDKOnlySubresourceConfigs_RegistersFive14k1Types(t *testing.T) {
+// TestSDKOnlySubresourceConfigs_RegistersExpectedTypes pins the
+// expected expansion of sdkOnlySubresourceTypeConfigs.
+//
+//   - Bundle 14k1 (S3 sub-resources, single-emit via FetchItem): 5 types.
+//   - Bundle 14k2 (multi-emit via FetchItems): 4 types — DDB contributor
+//     insights (single-emit, parent=AWS::DynamoDB::Table), IAM role
+//     policy attachment (multi-emit, parent=AWS::IAM::Role), WAFv2 web
+//     ACL association (multi-emit, parent=AWS::WAFv2::WebACL), ASG tag
+//     (multi-emit, parent=AWS::AutoScaling::AutoScalingGroup).
+//
+// A future bundle adding sub-resources must update both this test and
+// the registry/category/permissions plumbing.
+func TestSDKOnlySubresourceConfigs_RegistersExpectedTypes(t *testing.T) {
 	t.Parallel()
 	want := map[string]bool{
+		// 14k1 — S3 sub-resources
 		"aws_s3_bucket_lifecycle_configuration":              false,
 		"aws_s3_bucket_ownership_controls":                   false,
 		"aws_s3_bucket_public_access_block":                  false,
 		"aws_s3_bucket_server_side_encryption_configuration": false,
 		"aws_s3_bucket_versioning":                           false,
+		// 14k2 — multi-emit + DDB
+		"aws_dynamodb_contributor_insights": false,
+		"aws_iam_role_policy_attachment":    false,
+		"aws_wafv2_web_acl_association":     false,
+		"aws_autoscaling_group_tag":         false,
 	}
 	for _, cfg := range sdkOnlySubresourceTypeConfigs {
 		if _, ok := want[cfg.TFType]; ok {
@@ -442,27 +457,64 @@ func TestSDKOnlySubresourceConfigs_RegistersFive14k1Types(t *testing.T) {
 		}
 	}
 	if len(sdkOnlySubresourceTypeConfigs) != len(want) {
-		t.Errorf("len(sdkOnlySubresourceTypeConfigs)=%d, want %d (the 5 14k1 S3 sub-resources). If 14k2 added new types, update this test alongside.",
+		t.Errorf("len(sdkOnlySubresourceTypeConfigs)=%d, want %d (5 from 14k1 + 4 from 14k2). If a future bundle added new types, update this test alongside.",
 			len(sdkOnlySubresourceTypeConfigs), len(want))
 	}
 }
 
-// TestSDKOnlySubresourceConfigs_AllShareS3BucketParent pins the shared
-// architectural constraint of Bundle 14k1: all 5 sub-resources parent
-// on AWS::S3::Bucket and set SkipProjectTagFilter=true (untaggable).
-// A future bundle adding sub-resources for a different parent would
-// fail this test as a signal to broaden it.
-func TestSDKOnlySubresourceConfigs_AllShareS3BucketParent(t *testing.T) {
+// TestSDKOnlySubresourceConfigs_S3SubsetShareS3BucketParent pins the
+// shared architectural constraint of Bundle 14k1's S3 subset: every S3
+// sub-resource parents on AWS::S3::Bucket and sets
+// SkipProjectTagFilter=true (untaggable). 14k2 introduced parents
+// other than S3 (DDB table, IAM role, ASG, WAFv2 WebACL), so this
+// test is now scoped to the S3 subset rather than the whole registry.
+func TestSDKOnlySubresourceConfigs_S3SubsetShareS3BucketParent(t *testing.T) {
 	t.Parallel()
 	for _, cfg := range sdkOnlySubresourceTypeConfigs {
+		if !strings.HasPrefix(cfg.TFType, "aws_s3_bucket_") {
+			continue
+		}
 		if cfg.ParentCFNType != "AWS::S3::Bucket" {
-			t.Errorf("%s: ParentCFNType=%q, want AWS::S3::Bucket (14k1 is S3-only; update test when 14k2 lands)", cfg.TFType, cfg.ParentCFNType)
+			t.Errorf("%s: ParentCFNType=%q, want AWS::S3::Bucket (S3 sub-resources only)", cfg.TFType, cfg.ParentCFNType)
 		}
 		if !cfg.SkipProjectTagFilter {
 			t.Errorf("%s: SkipProjectTagFilter=false, want true (all S3 sub-resources are untaggable)", cfg.TFType)
 		}
 		if cfg.Slug == "" {
 			t.Errorf("%s: empty Slug", cfg.TFType)
+		}
+	}
+}
+
+// TestSDKOnlySubresourceConfigs_AllUntaggable pins that every SDK-only
+// sub-resource registered today is untaggable (SkipProjectTagFilter=
+// true). The framework supports taggable consumers but no current type
+// uses that branch — when one lands, this test will need to be relaxed
+// to a per-type allowlist or schema lookup.
+func TestSDKOnlySubresourceConfigs_AllUntaggable(t *testing.T) {
+	t.Parallel()
+	for _, cfg := range sdkOnlySubresourceTypeConfigs {
+		if !cfg.SkipProjectTagFilter {
+			t.Errorf("%s: SkipProjectTagFilter=false, want true (all SDK-only sub-resources today are untaggable)", cfg.TFType)
+		}
+	}
+}
+
+// TestSDKOnlySubresourceConfigs_ExactlyOneFetchVariant pins the mutual
+// exclusion contract: every config must set FetchItem OR FetchItems,
+// never both, never neither. Mirrors the package-init panic in
+// sdkonly_s3.go's var anchor but surfaces a registration regression as
+// a test failure (with a useful diff) rather than a package-init crash.
+func TestSDKOnlySubresourceConfigs_ExactlyOneFetchVariant(t *testing.T) {
+	t.Parallel()
+	for _, cfg := range sdkOnlySubresourceTypeConfigs {
+		has1 := cfg.FetchItem != nil
+		hasN := cfg.FetchItems != nil
+		if !has1 && !hasN {
+			t.Errorf("%s: neither FetchItem nor FetchItems set", cfg.TFType)
+		}
+		if has1 && hasN {
+			t.Errorf("%s: both FetchItem and FetchItems set (mutually exclusive)", cfg.TFType)
 		}
 	}
 }

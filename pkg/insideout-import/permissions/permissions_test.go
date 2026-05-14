@@ -29,6 +29,7 @@ var awsTFTypeToServiceSlug = map[string]string{
 	"aws_apigatewayv2_route":                             "apigatewayv2_route",
 	"aws_apigatewayv2_stage":                             "apigatewayv2_stage",
 	"aws_autoscaling_group":                              "autoscaling_group",
+	"aws_autoscaling_group_tag":                          "autoscaling_group_tag",
 	"aws_backup_plan":                                    "backup_plan",
 	"aws_backup_selection":                               "backup_selection",
 	"aws_backup_vault":                                   "backup_vault",
@@ -52,6 +53,7 @@ var awsTFTypeToServiceSlug = map[string]string{
 	"aws_db_instance":                                    "db_instance",
 	"aws_db_parameter_group":                             "db_parameter_group",
 	"aws_db_subnet_group":                                "db_subnet_group",
+	"aws_dynamodb_contributor_insights":                  "dynamodb_contributor_insights",
 	"aws_dynamodb_table":                                 "dynamodb",
 	"aws_ebs_volume":                                     "ebs_volume",
 	"aws_ecs_cluster":                                    "ecs_cluster",
@@ -71,6 +73,7 @@ var awsTFTypeToServiceSlug = map[string]string{
 	"aws_iam_policy":                                     "iam_policy",
 	"aws_iam_role":                                       "iam_role",
 	"aws_iam_role_policy":                                "iam_role_policy",
+	"aws_iam_role_policy_attachment":                     "iam_role_policy_attachment",
 	"aws_iam_service_linked_role":                        "iam_service_linked_role",
 	"aws_iam_user":                                       "iam_user",
 	"aws_instance":                                       "instance",
@@ -120,6 +123,7 @@ var awsTFTypeToServiceSlug = map[string]string{
 	"aws_vpc_dhcp_options":                               "vpc_dhcp_options",
 	"aws_vpc_endpoint":                                   "vpc_endpoint",
 	"aws_wafv2_web_acl":                                  "wafv2_web_acl",
+	"aws_wafv2_web_acl_association":                      "wafv2_web_acl_association",
 }
 
 // TestSlugMap_MatchesAwsdiscover pins the test-local slug table
