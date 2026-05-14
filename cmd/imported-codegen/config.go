@@ -3,11 +3,12 @@ package main
 // WantedAWS lists the Phase 1 AWS resource types we generate Layer 1
 // structs for. Add new types here to expand coverage.
 var WantedAWS = []string{
-	"aws_sqs_queue",
-	"aws_dynamodb_table",
 	"aws_cloudwatch_log_group",
-	"aws_secretsmanager_secret",
+	"aws_dynamodb_table",
 	"aws_lambda_function",
+	"aws_s3_bucket",
+	"aws_secretsmanager_secret",
+	"aws_sqs_queue",
 }
 
 // WantedGoogle lists the GCP resource types we generate Layer 1 structs
