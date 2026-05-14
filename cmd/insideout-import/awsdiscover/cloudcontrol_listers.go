@@ -8,8 +8,12 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/acm"
 	"github.com/aws/aws-sdk-go-v2/service/apigateway"
 	"github.com/aws/aws-sdk-go-v2/service/apigatewayv2"
+	"github.com/aws/aws-sdk-go-v2/service/cloudfront"
 	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider"
+	"github.com/aws/aws-sdk-go-v2/service/iam"
+	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
+	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 )
 
 // cognitoUserPoolsLister is the narrow subset of the Cognito IDP SDK
@@ -367,5 +371,257 @@ func listLambdaFunctionArnsWithClient(ctx context.Context, client lambdaFunction
 		marker = page.NextMarker
 	}
 	return models, nil
+}
+
+// kmsAliasesLister is the narrow subset of the KMS SDK used by the
+// aws_kms_alias SDKLister enumerator (#430). The interface is
+// package-private so test fakes can satisfy it without depending on the
+// full KMS client surface.
+type kmsAliasesLister interface {
+	ListAliases(ctx context.Context, in *kms.ListAliasesInput, opts ...func(*kms.Options)) (*kms.ListAliasesOutput, error)
+}
+
+// listKMSAliases enumerates KMS aliases in the region and returns the
+// alias name (e.g. "alias/foo") for each. AliasName is the CC primary
+// identifier for AWS::KMS::Alias and is also Terraform's import format —
+// passthrough.
+//
+// KMS list paginates via `NextMarker` (string cursor; the input field is
+// `Marker`, not `NextToken`). Like the other listers in this file, we
+// stop the loop on both nil AND empty-string cursors so SDK responses
+// that return `&""` on the final page don't loop forever.
+func listKMSAliases(ctx context.Context, awsCfg aws.Config, region string, _ DiscoverArgs) ([]string, error) {
+	client := kms.NewFromConfig(awsCfg, func(o *kms.Options) {
+		if region != "" {
+			o.Region = region
+		}
+	})
+	return listKMSAliasesWithClient(ctx, client)
+}
+
+func listKMSAliasesWithClient(ctx context.Context, client kmsAliasesLister) ([]string, error) {
+	names := []string{}
+	var marker *string
+	for {
+		page, err := client.ListAliases(ctx, &kms.ListAliasesInput{Marker: marker})
+		if err != nil {
+			return nil, fmt.Errorf("kms:ListAliases: %w", err)
+		}
+		for _, a := range page.Aliases {
+			name := aws.ToString(a.AliasName)
+			if name == "" {
+				continue
+			}
+			names = append(names, name)
+		}
+		if page.NextMarker == nil || aws.ToString(page.NextMarker) == "" {
+			break
+		}
+		marker = page.NextMarker
+	}
+	return names, nil
+}
+
+// iamUsersLister is the narrow subset of the IAM SDK used by the
+// aws_iam_user SDKLister enumerator (#430).
+type iamUsersLister interface {
+	ListUsers(ctx context.Context, in *iam.ListUsersInput, opts ...func(*iam.Options)) (*iam.ListUsersOutput, error)
+}
+
+// listIAMUsers enumerates IAM users (global service — region is ignored
+// by the SDK for IAM) and returns the UserName of each. UserName is the
+// CC primary identifier for AWS::IAM::User and is also Terraform's
+// import format — passthrough.
+//
+// IAM list paginates via `Marker` (string cursor). The IsTruncated flag
+// signals more pages; we still defend the loop terminator by also
+// breaking when Marker is nil or empty (parity with the other listers).
+func listIAMUsers(ctx context.Context, awsCfg aws.Config, region string, _ DiscoverArgs) ([]string, error) {
+	client := iam.NewFromConfig(awsCfg, func(o *iam.Options) {
+		if region != "" {
+			o.Region = region
+		}
+	})
+	return listIAMUsersWithClient(ctx, client)
+}
+
+func listIAMUsersWithClient(ctx context.Context, client iamUsersLister) ([]string, error) {
+	names := []string{}
+	var marker *string
+	for {
+		page, err := client.ListUsers(ctx, &iam.ListUsersInput{Marker: marker})
+		if err != nil {
+			return nil, fmt.Errorf("iam:ListUsers: %w", err)
+		}
+		for _, u := range page.Users {
+			n := aws.ToString(u.UserName)
+			if n == "" {
+				continue
+			}
+			names = append(names, n)
+		}
+		if !page.IsTruncated || page.Marker == nil || aws.ToString(page.Marker) == "" {
+			break
+		}
+		marker = page.Marker
+	}
+	return names, nil
+}
+
+// iamGroupsLister is the narrow subset of the IAM SDK used by the
+// aws_iam_group SDKLister enumerator (#430).
+type iamGroupsLister interface {
+	ListGroups(ctx context.Context, in *iam.ListGroupsInput, opts ...func(*iam.Options)) (*iam.ListGroupsOutput, error)
+}
+
+// listIAMGroups enumerates IAM groups (global service) and returns the
+// GroupName of each. GroupName is the CC primary identifier for
+// AWS::IAM::Group and Terraform's import format — passthrough.
+func listIAMGroups(ctx context.Context, awsCfg aws.Config, region string, _ DiscoverArgs) ([]string, error) {
+	client := iam.NewFromConfig(awsCfg, func(o *iam.Options) {
+		if region != "" {
+			o.Region = region
+		}
+	})
+	return listIAMGroupsWithClient(ctx, client)
+}
+
+func listIAMGroupsWithClient(ctx context.Context, client iamGroupsLister) ([]string, error) {
+	names := []string{}
+	var marker *string
+	for {
+		page, err := client.ListGroups(ctx, &iam.ListGroupsInput{Marker: marker})
+		if err != nil {
+			return nil, fmt.Errorf("iam:ListGroups: %w", err)
+		}
+		for _, g := range page.Groups {
+			n := aws.ToString(g.GroupName)
+			if n == "" {
+				continue
+			}
+			names = append(names, n)
+		}
+		if !page.IsTruncated || page.Marker == nil || aws.ToString(page.Marker) == "" {
+			break
+		}
+		marker = page.Marker
+	}
+	return names, nil
+}
+
+// cloudfrontFunctionsLister is the narrow subset of the CloudFront SDK
+// used by the aws_cloudfront_function SDKLister enumerator (#430).
+type cloudfrontFunctionsLister interface {
+	ListFunctions(ctx context.Context, in *cloudfront.ListFunctionsInput, opts ...func(*cloudfront.Options)) (*cloudfront.ListFunctionsOutput, error)
+}
+
+// listCloudFrontFunctions enumerates CloudFront functions (global
+// service) and returns the FunctionARN for each. The CC primary
+// identifier for AWS::CloudFront::Function is FunctionARN; Terraform's
+// import format is the bare function NAME (CC vs TF divergence). The
+// per-type config's ImportIDFromIdentifier rewrites the ARN tail into a
+// name before handing to the importer.
+//
+// CloudFront list paginates via `Marker` (string cursor; the response
+// field is also `Marker` on the next-page-marker NextMarker). The
+// terminator condition mirrors the other listers: break on both nil and
+// empty-string cursors.
+func listCloudFrontFunctions(ctx context.Context, awsCfg aws.Config, region string, _ DiscoverArgs) ([]string, error) {
+	client := cloudfront.NewFromConfig(awsCfg, func(o *cloudfront.Options) {
+		if region != "" {
+			o.Region = region
+		}
+	})
+	return listCloudFrontFunctionsWithClient(ctx, client)
+}
+
+func listCloudFrontFunctionsWithClient(ctx context.Context, client cloudfrontFunctionsLister) ([]string, error) {
+	arns := []string{}
+	var marker *string
+	for {
+		page, err := client.ListFunctions(ctx, &cloudfront.ListFunctionsInput{Marker: marker})
+		if err != nil {
+			return nil, fmt.Errorf("cloudfront:ListFunctions: %w", err)
+		}
+		if page.FunctionList != nil {
+			for _, fn := range page.FunctionList.Items {
+				arn := ""
+				if fn.FunctionMetadata != nil {
+					arn = aws.ToString(fn.FunctionMetadata.FunctionARN)
+				}
+				if arn == "" {
+					continue
+				}
+				arns = append(arns, arn)
+			}
+		}
+		next := ""
+		if page.FunctionList != nil {
+			next = aws.ToString(page.FunctionList.NextMarker)
+		}
+		if next == "" {
+			break
+		}
+		marker = aws.String(next)
+	}
+	return arns, nil
+}
+
+// secretsManagerSecretsLister is the narrow subset of the Secrets
+// Manager SDK used by the aws_secretsmanager_secret_rotation SDKLister
+// enumerator (#430). The lister enumerates secrets and filters to those
+// with rotation enabled — rotation is a per-secret CFN sub-resource
+// (AWS::SecretsManager::RotationSchedule) whose primary identifier is
+// the parent secret's ARN.
+type secretsManagerSecretsLister interface {
+	ListSecrets(ctx context.Context, in *secretsmanager.ListSecretsInput, opts ...func(*secretsmanager.Options)) (*secretsmanager.ListSecretsOutput, error)
+}
+
+// listSecretsManagerSecretRotations enumerates Secrets Manager secrets
+// that have rotation enabled and returns the secret ARN for each. ARN
+// is the CC primary identifier (`Id` property) for
+// AWS::SecretsManager::RotationSchedule, and is also Terraform's import
+// format for aws_secretsmanager_secret_rotation — passthrough.
+//
+// Secrets without rotation enabled are skipped client-side: emitting
+// their ARNs would cause CC GetResource on the RotationSchedule sub-
+// resource to surface ResourceNotFoundException for every non-rotated
+// secret. ListSecrets.SecretList.RotationEnabled is server-populated so
+// no second SDK call is needed.
+//
+// ListSecrets paginates via `NextToken` (string cursor).
+func listSecretsManagerSecretRotations(ctx context.Context, awsCfg aws.Config, region string, _ DiscoverArgs) ([]string, error) {
+	client := secretsmanager.NewFromConfig(awsCfg, func(o *secretsmanager.Options) {
+		if region != "" {
+			o.Region = region
+		}
+	})
+	return listSecretsManagerSecretRotationsWithClient(ctx, client)
+}
+
+func listSecretsManagerSecretRotationsWithClient(ctx context.Context, client secretsManagerSecretsLister) ([]string, error) {
+	arns := []string{}
+	var nextToken *string
+	for {
+		page, err := client.ListSecrets(ctx, &secretsmanager.ListSecretsInput{NextToken: nextToken})
+		if err != nil {
+			return nil, fmt.Errorf("secretsmanager:ListSecrets: %w", err)
+		}
+		for _, s := range page.SecretList {
+			if !aws.ToBool(s.RotationEnabled) {
+				continue
+			}
+			arn := aws.ToString(s.ARN)
+			if arn == "" {
+				continue
+			}
+			arns = append(arns, arn)
+		}
+		if page.NextToken == nil || aws.ToString(page.NextToken) == "" {
+			break
+		}
+		nextToken = page.NextToken
+	}
+	return arns, nil
 }
 

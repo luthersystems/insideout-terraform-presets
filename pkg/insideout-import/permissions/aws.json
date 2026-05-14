@@ -233,6 +233,21 @@
       "purpose": "fetch tags per distribution for tag selectors and Identity.Tags"
     },
     {
+      "service": "cloudfront_function",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::CloudFront::Function (#430 SDKLister branch)"
+    },
+    {
+      "service": "cloudfront_function",
+      "iam_action": "cloudfront:DescribeFunction",
+      "purpose": "Cloud Control GetResource for aws_cloudfront_function delegates to cloudfront:DescribeFunction"
+    },
+    {
+      "service": "cloudfront_function",
+      "iam_action": "cloudfront:ListFunctions",
+      "purpose": "SDKLister enumeration: list CloudFront functions (Cloud Control ListResources bypassed)"
+    },
+    {
       "service": "cloudwatch_dashboard",
       "iam_action": "cloudcontrol:GetResource",
       "purpose": "fetch per-dashboard body for Identity.NativeIDs"
@@ -548,6 +563,21 @@
       "purpose": "fetch association tags for tag selectors and Identity.Tags"
     },
     {
+      "service": "iam_group",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::IAM::Group (#430 SDKLister branch — global service)"
+    },
+    {
+      "service": "iam_group",
+      "iam_action": "iam:GetGroup",
+      "purpose": "Cloud Control GetResource for aws_iam_group delegates to iam:GetGroup"
+    },
+    {
+      "service": "iam_group",
+      "iam_action": "iam:ListGroups",
+      "purpose": "SDKLister enumeration: list IAM groups (global; Cloud Control ListResources bypassed)"
+    },
+    {
       "service": "iam_instance_profile",
       "iam_action": "cloudcontrol:GetResource",
       "purpose": "Cloud Control GetResource for AWS::IAM::InstanceProfile (#406 unified discoverer)"
@@ -618,6 +648,26 @@
       "purpose": "list IAM roles (paginated)"
     },
     {
+      "service": "iam_user",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::IAM::User (#430 SDKLister branch — global service)"
+    },
+    {
+      "service": "iam_user",
+      "iam_action": "iam:GetUser",
+      "purpose": "Cloud Control GetResource for aws_iam_user delegates to iam:GetUser"
+    },
+    {
+      "service": "iam_user",
+      "iam_action": "iam:ListUserTags",
+      "purpose": "Cloud Control GetResource delegate for the Tags property"
+    },
+    {
+      "service": "iam_user",
+      "iam_action": "iam:ListUsers",
+      "purpose": "SDKLister enumeration: list IAM users (global; Cloud Control ListResources bypassed)"
+    },
+    {
       "service": "internet_gateway",
       "iam_action": "cloudcontrol:GetResource",
       "purpose": "Cloud Control GetResource for AWS::EC2::InternetGateway (#406 unified discoverer)"
@@ -656,6 +706,16 @@
       "service": "kms",
       "iam_action": "kms:ListResourceTags",
       "purpose": "fetch key tags for tag selectors and Identity.Tags"
+    },
+    {
+      "service": "kms_alias",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::KMS::Alias (#430 SDKLister branch)"
+    },
+    {
+      "service": "kms_alias",
+      "iam_action": "kms:ListAliases",
+      "purpose": "SDKLister enumeration: list KMS aliases (account-wide; Cloud Control ListResources bypassed because CC list mixes AWS-managed aliases with customer aliases)"
     },
     {
       "service": "lambda",
@@ -1021,6 +1081,21 @@
       "service": "secretsmanager",
       "iam_action": "secretsmanager:ListSecrets",
       "purpose": "list per-region secrets (server-side TagKey/TagValue filter when project is set)"
+    },
+    {
+      "service": "secretsmanager_secret_rotation",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::SecretsManager::RotationSchedule (#430 SDKLister branch)"
+    },
+    {
+      "service": "secretsmanager_secret_rotation",
+      "iam_action": "secretsmanager:DescribeSecret",
+      "purpose": "Cloud Control GetResource for aws_secretsmanager_secret_rotation delegates to secretsmanager:DescribeSecret"
+    },
+    {
+      "service": "secretsmanager_secret_rotation",
+      "iam_action": "secretsmanager:ListSecrets",
+      "purpose": "SDKLister enumeration: list secrets and filter to RotationEnabled=true (Cloud Control ListResources bypassed)"
     },
     {
       "service": "security_group",
