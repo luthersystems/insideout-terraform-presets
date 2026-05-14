@@ -288,10 +288,58 @@ func productionDiscoverDeps() discoverDeps {
 			if idErr != nil {
 				fmt.Fprintf(os.Stderr, "WARN: identitytoolkit lister unavailable, identity_platform_config won't be discovered: %v\n", idErr)
 			}
+			// Bundle G1 (#470): one unified IAM lister fronts six
+			// per-service GetIamPolicy clients. Same nil-tolerant
+			// pattern as the Bundle 11 listers above — a credential
+			// gap on the IAM probe doesn't break the rest of discover.
+			iamLister, iamErr := gcpdiscover.NewRealIAMPolicyLister(ctx)
+			if iamErr != nil {
+				fmt.Fprintf(os.Stderr, "WARN: IAM policy lister unavailable, IAM bindings/members won't be discovered: %v\n", iamErr)
+			}
+			// Bundle G3 (#475): per-parent sub-resource listers. Same
+			// nil-tolerant pattern — auth gaps surface as warnings
+			// rather than aborting discover.
+			secretVersionLister, svErr := gcpdiscover.NewRealSecretVersionLister(ctx)
+			if svErr != nil {
+				fmt.Fprintf(os.Stderr, "WARN: secret version lister unavailable, secret_manager_secret_version won't be discovered: %v\n", svErr)
+			}
+			bucketObjectLister, boErr := gcpdiscover.NewRealBucketObjectLister(ctx)
+			if boErr != nil {
+				fmt.Fprintf(os.Stderr, "WARN: bucket object lister unavailable, storage_bucket_object won't be discovered: %v\n", boErr)
+			}
+			// Bundle G4 (#478): closes GCP discovery parity. Four
+			// non-CAI listers back the four non-CAI Bundle G4 types;
+			// google_compute_resource_policy is CAI-backed and needs
+			// no lister. Same nil-tolerant pattern as the earlier
+			// bundles — credential gaps surface as warnings rather
+			// than aborting discover.
+			projectServiceLister, psErr := gcpdiscover.NewRealProjectServiceLister(ctx)
+			if psErr != nil {
+				fmt.Fprintf(os.Stderr, "WARN: serviceusage lister unavailable, project_service won't be discovered: %v\n", psErr)
+			}
+			defaultIdpConfigLister, didErr := gcpdiscover.NewRealDefaultSupportedIdpConfigLister(ctx)
+			if didErr != nil {
+				fmt.Fprintf(os.Stderr, "WARN: identitytoolkit default-IDP-config lister unavailable, identity_platform_default_supported_idp_config won't be discovered: %v\n", didErr)
+			}
+			serviceNetworkingLister, snErr := gcpdiscover.NewRealServiceNetworkingConnectionLister(ctx)
+			if snErr != nil {
+				fmt.Fprintf(os.Stderr, "WARN: servicenetworking lister unavailable, service_networking_connection won't be discovered: %v\n", snErr)
+			}
+			vpcAccessLister, vaErr := gcpdiscover.NewRealVPCAccessConnectorLister(ctx)
+			if vaErr != nil {
+				fmt.Fprintf(os.Stderr, "WARN: vpcaccess lister unavailable, vpc_access_connector won't be discovered: %v\n", vaErr)
+			}
 			opts := gcpdiscover.GCPDiscovererOpts{
-				SinkLister:             sinkLister,
-				SQLUserLister:          sqlUserLister,
-				IdentityPlatformLister: identityLister,
+				SinkLister:                        sinkLister,
+				SQLUserLister:                     sqlUserLister,
+				IdentityPlatformLister:            identityLister,
+				IAMPolicyLister:                   iamLister,
+				SecretVersionLister:               secretVersionLister,
+				BucketObjectLister:                bucketObjectLister,
+				ProjectServiceLister:              projectServiceLister,
+				DefaultSupportedIdpConfigLister:   defaultIdpConfigLister,
+				ServiceNetworkingConnectionLister: serviceNetworkingLister,
+				VPCAccessConnectorLister:          vpcAccessLister,
 			}
 			return gcpAggAdapter{d: gcpdiscover.NewGCPDiscoverer(s, gcpProjectID, opts)}, s.Close, nil
 		},

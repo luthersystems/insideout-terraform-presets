@@ -2,6 +2,18 @@
   "version": 1,
   "provider": "gcp",
   "permissions": [
-    {"service": "cloud_asset_inventory", "gcp_role": "roles/cloudasset.viewer", "iam_permission": "cloudasset.assets.searchAllResources", "purpose": "single Cloud Asset SearchAllResources call enumerates every supported and unsupported resource type"}
+    {"service": "cloud_asset_inventory", "gcp_role": "roles/cloudasset.viewer", "iam_permission": "cloudasset.assets.searchAllResources", "purpose": "single Cloud Asset SearchAllResources call enumerates every supported and unsupported resource type"},
+    {"service": "cloudfunctions", "gcp_role": "roles/cloudfunctions.viewer", "iam_permission": "cloudfunctions.functions.getIamPolicy", "purpose": "Bundle G1 (#470): read per-function IAM bindings to materialize google_cloudfunctions2_function_iam_member rows"},
+    {"service": "cloudkms", "gcp_role": "roles/cloudkms.viewer", "iam_permission": "cloudkms.cryptoKeys.getIamPolicy", "purpose": "Bundle G1 (#470): read per-cryptoKey IAM bindings to materialize google_kms_crypto_key_iam_binding rows"},
+    {"service": "cloudresourcemanager", "gcp_role": "roles/iam.securityReviewer", "iam_permission": "resourcemanager.projects.getIamPolicy", "purpose": "Bundle G1 (#470): read project-level IAM policy to materialize google_project_iam_member rows"},
+    {"service": "identitytoolkit", "gcp_role": "roles/identityplatform.viewer", "iam_permission": "identitytoolkit.defaultsupportedidpconfigs.list", "purpose": "Bundle G4 (#478): enumerate default-supported IDP configs to materialize google_identity_platform_default_supported_idp_config rows"},
+    {"service": "run", "gcp_role": "roles/run.viewer", "iam_permission": "run.services.getIamPolicy", "purpose": "Bundle G1 (#470): read per-service IAM bindings to materialize google_cloud_run_v2_service_iam_member rows"},
+    {"service": "secretmanager", "gcp_role": "roles/secretmanager.viewer", "iam_permission": "secretmanager.secrets.getIamPolicy", "purpose": "Bundle G1 (#470): read per-secret IAM bindings to materialize google_secret_manager_secret_iam_binding and _iam_member rows"},
+    {"service": "secretmanager", "gcp_role": "roles/secretmanager.viewer", "iam_permission": "secretmanager.versions.list", "purpose": "Bundle G3 (#475): enumerate per-secret versions to materialize google_secret_manager_secret_version rows"},
+    {"service": "servicenetworking", "gcp_role": "roles/servicenetworking.serviceAgent", "iam_permission": "servicenetworking.services.connections.list", "purpose": "Bundle G4 (#478): enumerate per-network peering connections to materialize google_service_networking_connection rows"},
+    {"service": "serviceusage", "gcp_role": "roles/serviceusage.serviceUsageViewer", "iam_permission": "serviceusage.services.list", "purpose": "Bundle G4 (#478): enumerate enabled project services to materialize google_project_service rows"},
+    {"service": "storage", "gcp_role": "roles/storage.legacyBucketReader", "iam_permission": "storage.buckets.getIamPolicy", "purpose": "Bundle G1 (#470): read per-bucket IAM bindings to materialize google_storage_bucket_iam_member rows"},
+    {"service": "storage", "gcp_role": "roles/storage.objectViewer", "iam_permission": "storage.objects.list", "purpose": "Bundle G3 (#475): enumerate per-bucket objects (capped at 1000/bucket) to materialize google_storage_bucket_object rows"},
+    {"service": "vpcaccess", "gcp_role": "roles/vpcaccess.viewer", "iam_permission": "vpcaccess.connectors.list", "purpose": "Bundle G4 (#478): enumerate Serverless VPC Access connectors to materialize google_vpc_access_connector rows"}
   ]
 }

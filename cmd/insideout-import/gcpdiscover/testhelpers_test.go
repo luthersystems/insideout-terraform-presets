@@ -293,3 +293,208 @@ func (f *fakeIdentityPlatformConfigLister) GetIdentityPlatformConfig(_ context.C
 	}
 	return f.cfg, nil
 }
+
+// fakeIAMPolicyLister fronts the Bundle G1 (#470) per-parent
+// GetIamPolicy probes. Per-method canned-response maps keyed on the
+// per-parent identifier (`bindingsBySecret["projects/p/secrets/s"]`)
+// keep tests compact, and per-method error-injection maps
+// (`errBySecret[...] = ...`) let a test pin the soft-fail path
+// without forcing all parents into the error branch. Each method
+// records its calls in a per-method slice so assertions can pin the
+// fan-out shape (one call per parent vs single project query).
+//
+// `errProject` is the singleton error knob for GetProjectIAMPolicy —
+// the project lister has no per-key dimension, so a single bool is
+// enough.
+type fakeIAMPolicyLister struct {
+	bindingsProject map[string][]gcpIAMBinding
+	errProject      map[string]error
+	callsProject    []string
+
+	bindingsBySecret map[string][]gcpIAMBinding
+	errBySecret      map[string]error
+	callsBySecret    []string
+
+	bindingsByKey map[string][]gcpIAMBinding
+	errByKey      map[string]error
+	callsByKey    []string
+
+	bindingsByService map[string][]gcpIAMBinding
+	errByService      map[string]error
+	callsByService    []string
+
+	bindingsByFunction map[string][]gcpIAMBinding
+	errByFunction      map[string]error
+	callsByFunction    []string
+
+	bindingsByBucket map[string][]gcpIAMBinding
+	errByBucket      map[string]error
+	callsByBucket    []string
+}
+
+func (f *fakeIAMPolicyLister) GetProjectIAMPolicy(_ context.Context, projectID string) ([]gcpIAMBinding, error) {
+	f.callsProject = append(f.callsProject, projectID)
+	if err, ok := f.errProject[projectID]; ok {
+		return nil, err
+	}
+	return f.bindingsProject[projectID], nil
+}
+
+func (f *fakeIAMPolicyLister) GetSecretIAMPolicy(_ context.Context, secretFullName string) ([]gcpIAMBinding, error) {
+	f.callsBySecret = append(f.callsBySecret, secretFullName)
+	if err, ok := f.errBySecret[secretFullName]; ok {
+		return nil, err
+	}
+	return f.bindingsBySecret[secretFullName], nil
+}
+
+func (f *fakeIAMPolicyLister) GetKMSCryptoKeyIAMPolicy(_ context.Context, keyFullName string) ([]gcpIAMBinding, error) {
+	f.callsByKey = append(f.callsByKey, keyFullName)
+	if err, ok := f.errByKey[keyFullName]; ok {
+		return nil, err
+	}
+	return f.bindingsByKey[keyFullName], nil
+}
+
+func (f *fakeIAMPolicyLister) GetCloudRunV2ServiceIAMPolicy(_ context.Context, serviceFullName string) ([]gcpIAMBinding, error) {
+	f.callsByService = append(f.callsByService, serviceFullName)
+	if err, ok := f.errByService[serviceFullName]; ok {
+		return nil, err
+	}
+	return f.bindingsByService[serviceFullName], nil
+}
+
+func (f *fakeIAMPolicyLister) GetCloudFunctions2FunctionIAMPolicy(_ context.Context, fnFullName string) ([]gcpIAMBinding, error) {
+	f.callsByFunction = append(f.callsByFunction, fnFullName)
+	if err, ok := f.errByFunction[fnFullName]; ok {
+		return nil, err
+	}
+	return f.bindingsByFunction[fnFullName], nil
+}
+
+func (f *fakeIAMPolicyLister) GetBucketIAMPolicy(_ context.Context, bucketName string) ([]gcpIAMBinding, error) {
+	f.callsByBucket = append(f.callsByBucket, bucketName)
+	if err, ok := f.errByBucket[bucketName]; ok {
+		return nil, err
+	}
+	return f.bindingsByBucket[bucketName], nil
+}
+
+// fakeSecretVersionLister returns canned versions per-parent. Keyed
+// on the secret's full name ("projects/<p>/secrets/<s>"); an unmapped
+// parent yields zero versions (legitimate empty state). Mirrors the
+// fakeSQLUserLister shape — per-key canned response, per-key error
+// injection, and a call record that pins the fanout.
+type fakeSecretVersionLister struct {
+	versionsBySecret map[string][]gcpSecretVersion
+	errBySecret      map[string]error
+	calls            []struct {
+		projectID      string
+		secretFullName string
+	}
+}
+
+func (f *fakeSecretVersionLister) ListSecretVersions(_ context.Context, projectID, secretFullName string) ([]gcpSecretVersion, error) {
+	f.calls = append(f.calls, struct {
+		projectID      string
+		secretFullName string
+	}{projectID, secretFullName})
+	if err, ok := f.errBySecret[secretFullName]; ok {
+		return nil, err
+	}
+	return f.versionsBySecret[secretFullName], nil
+}
+
+// fakeBucketObjectLister returns canned objects per-bucket. Keyed on
+// the bucket name; an unmapped parent yields zero objects. The
+// `truncateBucket` set lets a test pin the truncation path — a bucket
+// whose name is in the set returns errBucketObjectsTruncated alongside
+// its canned slice, regardless of slice length, so the discoverer's
+// warn path is exercisable without having to actually build 1000+
+// canned objects.
+type fakeBucketObjectLister struct {
+	objectsByBucket map[string][]gcpBucketObject
+	errByBucket     map[string]error
+	truncateBucket  map[string]bool
+	calls           []string
+}
+
+func (f *fakeBucketObjectLister) ListBucketObjects(_ context.Context, bucketName string) ([]gcpBucketObject, error) {
+	f.calls = append(f.calls, bucketName)
+	if err, ok := f.errByBucket[bucketName]; ok {
+		return nil, err
+	}
+	if f.truncateBucket[bucketName] {
+		return f.objectsByBucket[bucketName], errBucketObjectsTruncated
+	}
+	return f.objectsByBucket[bucketName], nil
+}
+
+// fakeProjectServiceLister returns a canned list of enabled services
+// for the project_service discoverer (Bundle G4, #478). Keyed by
+// project ID so a multi-project test (unused today, but cheap to
+// support) doesn't have to invent extra plumbing.
+type fakeProjectServiceLister struct {
+	servicesByProject map[string][]gcpEnabledService
+	errByProject      map[string]error
+	calls             []string
+}
+
+func (f *fakeProjectServiceLister) ListEnabledServices(_ context.Context, projectID string) ([]gcpEnabledService, error) {
+	f.calls = append(f.calls, projectID)
+	if err, ok := f.errByProject[projectID]; ok {
+		return nil, err
+	}
+	return f.servicesByProject[projectID], nil
+}
+
+// fakeDefaultSupportedIdpConfigLister returns canned IDP configs per
+// project. Mirrors the fakeProjectServiceLister shape — per-key
+// canned response, per-key error injection, and a call record.
+type fakeDefaultSupportedIdpConfigLister struct {
+	configsByProject map[string][]gcpDefaultSupportedIdpConfig
+	errByProject     map[string]error
+	calls            []string
+}
+
+func (f *fakeDefaultSupportedIdpConfigLister) ListDefaultSupportedIdpConfigs(_ context.Context, projectID string) ([]gcpDefaultSupportedIdpConfig, error) {
+	f.calls = append(f.calls, projectID)
+	if err, ok := f.errByProject[projectID]; ok {
+		return nil, err
+	}
+	return f.configsByProject[projectID], nil
+}
+
+// fakeServiceNetworkingConnectionLister returns canned peering
+// connections per network. Keyed on the full network path
+// "projects/<p>/global/networks/<n>".
+type fakeServiceNetworkingConnectionLister struct {
+	connectionsByNetwork map[string][]gcpServiceNetworkingConnection
+	errByNetwork         map[string]error
+	calls                []string
+}
+
+func (f *fakeServiceNetworkingConnectionLister) ListServiceNetworkingConnections(_ context.Context, network string) ([]gcpServiceNetworkingConnection, error) {
+	f.calls = append(f.calls, network)
+	if err, ok := f.errByNetwork[network]; ok {
+		return nil, err
+	}
+	return f.connectionsByNetwork[network], nil
+}
+
+// fakeVPCAccessConnectorLister returns canned connectors per project.
+// One round-trip lists every connector across every region, so the
+// fake only needs a flat slice per project.
+type fakeVPCAccessConnectorLister struct {
+	connectorsByProject map[string][]gcpVPCAccessConnector
+	errByProject        map[string]error
+	calls               []string
+}
+
+func (f *fakeVPCAccessConnectorLister) ListVPCAccessConnectors(_ context.Context, projectID string) ([]gcpVPCAccessConnector, error) {
+	f.calls = append(f.calls, projectID)
+	if err, ok := f.errByProject[projectID]; ok {
+		return nil, err
+	}
+	return f.connectorsByProject[projectID], nil
+}

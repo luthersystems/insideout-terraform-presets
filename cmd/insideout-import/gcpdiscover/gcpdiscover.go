@@ -234,6 +234,24 @@ type GCPDiscovererOpts struct {
 	SinkLister             gcpLoggingSinkLister
 	SQLUserLister          gcpSQLUserLister
 	IdentityPlatformLister gcpIdentityPlatformConfigLister
+	// IAMPolicyLister backs every Bundle G1 IAM discoverer (#470).
+	// One unified interface fronts six per-service GetIamPolicy
+	// SDK clients so the Opts surface doesn't grow per added IAM
+	// resource type.
+	IAMPolicyLister gcpIAMPolicyLister
+	// Bundle G3 (#475) — sub-resource listers. Each backs one
+	// discoverer that fans out across the relevant CAI-discovered
+	// parent rows.
+	SecretVersionLister gcpSecretVersionLister
+	BucketObjectLister  gcpBucketObjectLister
+	// Bundle G4 (#478) — closes GCP discovery parity. Four non-CAI
+	// listers back the four non-CAI discoverers added by the bundle;
+	// the fifth type (google_compute_resource_policy) lives in CAI
+	// and needs no lister.
+	ProjectServiceLister              gcpProjectServiceLister
+	DefaultSupportedIdpConfigLister   gcpDefaultSupportedIdpConfigLister
+	ServiceNetworkingConnectionLister gcpServiceNetworkingConnectionLister
+	VPCAccessConnectorLister          gcpVPCAccessConnectorLister
 }
 
 // NewGCPDiscoverer wires up the production set of GCP discoverers. The
@@ -288,6 +306,32 @@ func NewGCPDiscoverer(searcher gcpAssetSearcher, projectID string, opts GCPDisco
 			"google_logging_project_sink":     newLoggingProjectSinkDiscoverer(opts.SinkLister),
 			"google_sql_user":                 newSQLUserDiscoverer(opts.SQLUserLister),
 			"google_identity_platform_config": newIdentityPlatformConfigDiscoverer(opts.IdentityPlatformLister),
+			// Bundle G1 — IAM cluster (#470).
+			"google_project_iam_member":                  newProjectIAMMemberDiscoverer(opts.IAMPolicyLister),
+			"google_storage_bucket_iam_member":           newStorageBucketIAMMemberDiscoverer(opts.IAMPolicyLister),
+			"google_kms_crypto_key_iam_binding":          newKMSCryptoKeyIAMBindingDiscoverer(opts.IAMPolicyLister),
+			"google_secret_manager_secret_iam_binding":   newSecretManagerSecretIAMBindingDiscoverer(opts.IAMPolicyLister),
+			"google_secret_manager_secret_iam_member":    newSecretManagerSecretIAMMemberDiscoverer(opts.IAMPolicyLister),
+			"google_cloud_run_v2_service_iam_member":     newCloudRunV2ServiceIAMMemberDiscoverer(opts.IAMPolicyLister),
+			"google_cloudfunctions2_function_iam_member": newCloudFunctions2FunctionIAMMemberDiscoverer(opts.IAMPolicyLister),
+			// Bundle G2 — LoadBalancer sub-components (#473).
+			"google_compute_backend_service":         newComputeBackendServiceDiscoverer(),
+			"google_compute_health_check":            newComputeHealthCheckDiscoverer(),
+			"google_compute_managed_ssl_certificate": newComputeManagedSSLCertificateDiscoverer(),
+			"google_compute_target_http_proxy":       newComputeTargetHTTPProxyDiscoverer(),
+			// Bundle G3 — sub-resources (#475).
+			"google_secret_manager_secret_version": newSecretManagerSecretVersionDiscoverer(opts.SecretVersionLister),
+			"google_storage_bucket_object":         newStorageBucketObjectDiscoverer(opts.BucketObjectLister),
+			// Bundle G4 — final 5 (#478). Closes GCP discovery parity:
+			// project-wide service enablement, Identity Platform IDP
+			// child configs, Service Networking peering connections,
+			// Serverless VPC Access connectors, and Compute resource
+			// policies (snapshot schedules / placement policies).
+			"google_project_service": newProjectServiceDiscoverer(opts.ProjectServiceLister),
+			"google_identity_platform_default_supported_idp_config": newIdentityPlatformDefaultSupportedIdpConfigDiscoverer(opts.DefaultSupportedIdpConfigLister),
+			"google_service_networking_connection":                  newServiceNetworkingConnectionDiscoverer(opts.ServiceNetworkingConnectionLister),
+			"google_vpc_access_connector":                           newVPCAccessConnectorDiscoverer(opts.VPCAccessConnectorLister),
+			"google_compute_resource_policy":                        newComputeResourcePolicyDiscoverer(),
 		},
 		// Per-type SDK attribute enrichers (#403). Each entry is a sibling
 		// to the byType discoverer of the same name and populates ir.Attrs
@@ -492,6 +536,42 @@ func nonCAIDiscovererHasLister(d Discoverer) bool {
 	case *sqlUserDiscoverer:
 		return v.lister != nil
 	case *identityPlatformConfigDiscoverer:
+		return v.lister != nil
+	// Bundle G1 — IAM cluster (#470). All seven IAM discoverers
+	// share the same gcpIAMPolicyLister implementation, so the
+	// lister-presence check is identical per type.
+	case *projectIAMMemberDiscoverer:
+		return v.lister != nil
+	case *storageBucketIAMMemberDiscoverer:
+		return v.lister != nil
+	case *kmsCryptoKeyIAMBindingDiscoverer:
+		return v.lister != nil
+	case *secretManagerSecretIAMBindingDiscoverer:
+		return v.lister != nil
+	case *secretManagerSecretIAMMemberDiscoverer:
+		return v.lister != nil
+	case *cloudRunV2ServiceIAMMemberDiscoverer:
+		return v.lister != nil
+	case *cloudFunctions2FunctionIAMMemberDiscoverer:
+		return v.lister != nil
+	// Bundle G3 — sub-resources (#475). Each sub-resource discoverer
+	// reaches in through its own lister; identical nil-check shape
+	// since neither type uses the shared IAM lister.
+	case *secretManagerSecretVersionDiscoverer:
+		return v.lister != nil
+	case *storageBucketObjectDiscoverer:
+		return v.lister != nil
+	// Bundle G4 — final 5 (#478). Four non-CAI discoverers each
+	// reach in through their own lister; the fifth Bundle G4 type
+	// (google_compute_resource_policy) is CAI-backed and doesn't
+	// transit this switch.
+	case *projectServiceDiscoverer:
+		return v.lister != nil
+	case *identityPlatformDefaultSupportedIdpConfigDiscoverer:
+		return v.lister != nil
+	case *serviceNetworkingConnectionDiscoverer:
+		return v.lister != nil
+	case *vpcAccessConnectorDiscoverer:
 		return v.lister != nil
 	default:
 		fmt.Fprintf(os.Stderr, "WARN: %s: no lister-check wired in nonCAIDiscovererHasLister — extend the switch when adding a non-CAI type\n", d.ResourceType())
