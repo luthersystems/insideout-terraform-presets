@@ -101,6 +101,16 @@ type AWSDiscoverer struct {
 	// (cloudControlDiscoverer) can skip their own per-type
 	// ListResources when Prefetch returns a cache hit. See #406.
 	rgtPrefetcher rgtPrefetcher
+	// byTypeEnricher carries the per-Terraform-type SDK attribute
+	// enrichers (#457). Each entry is a sibling to the byType
+	// discoverer of the same name and populates ir.Attrs (the typed
+	// Layer 1 payload) so callers can produce decision-#34-clean HCL
+	// via composer.EmitImportedTF without needing the terraform-driven
+	// Stage 2b path. Types without an entry here are silently skipped
+	// by EnrichAttributes — the full enricher rollout follows the
+	// existing per-type ordering one PR at a time. Mirrors
+	// gcpdiscover.GCPDiscoverer.byTypeEnricher (presets#403).
+	byTypeEnricher map[string]AttributeEnricher
 }
 
 // NewAWSDiscoverer wires up the production set of AWS discoverers with the
@@ -155,6 +165,21 @@ func NewAWSDiscovererWithConcurrency(cfg aws.Config, maxConcurrency int) *AWSDis
 		defaultRegion: cfg.Region,
 		byType:        byType,
 		rgtPrefetcher: newRealRGTPrefetcher(cfg),
+		// Per-type SDK attribute enrichers (#457). Each entry is a sibling
+		// to the byType discoverer of the same name and populates ir.Attrs
+		// (the typed Layer 1 payload). Types without an entry here are
+		// silently skipped by EnrichAttributes — the full enricher rollout
+		// follows the existing per-type ordering one PR at a time. Mirrors
+		// gcpdiscover.GCPDiscoverer (presets#403).
+		//
+		// aws_s3_bucket follows once presets bundle #461 lands the Layer
+		// 1 typed struct in pkg/composer/imported/generated. The S3
+		// enricher infrastructure (EnrichClients.S3 field, codegen
+		// support) is in place already so the wiring there is a one-line
+		// registration.
+		byTypeEnricher: map[string]AttributeEnricher{
+			"aws_dynamodb_table": newDynamoDBTableEnricher(),
+		},
 	}
 }
 
