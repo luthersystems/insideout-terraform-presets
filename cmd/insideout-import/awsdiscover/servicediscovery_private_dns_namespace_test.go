@@ -3,6 +3,8 @@ package awsdiscover
 import (
 	"context"
 	"errors"
+	"io"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -274,6 +276,11 @@ func TestSDPrivateDNSNSDiscover_PaginatesUntilNoToken(t *testing.T) {
 	if len(sd.listCalls) < 3 {
 		t.Fatalf("expected at least 3 ListNamespaces calls; got %d", len(sd.listCalls))
 	}
+	// First call MUST start with nil NextToken — a regression that sent
+	// a stale token on the first call would refetch the wrong page.
+	if sd.listCalls[0].NextToken != nil {
+		t.Errorf("call[0].NextToken=%v, want nil (first call must start unpaginated)", aws.ToString(sd.listCalls[0].NextToken))
+	}
 	if sd.listCalls[1].NextToken == nil || *sd.listCalls[1].NextToken != "tok1" {
 		t.Errorf("call[1].NextToken=%v, want tok1", sd.listCalls[1].NextToken)
 	}
@@ -315,12 +322,29 @@ func TestSDPrivateDNSNSDiscover_TagsErrorSkipsNamespace(t *testing.T) {
 		newR53:         func() route53HostedZoneClient { return r53 },
 		maxConcurrency: 4,
 	}
+	// Capture stderr so we can pin that the tag-fetch failure surfaces
+	// as an operator-visible warn (the SUT writes to os.Stderr in the
+	// in-errgroup tag-error path; mutation that silently swallows the
+	// error would otherwise survive).
+	origStderr := os.Stderr
+	rPipe, wPipe, pipeErr := os.Pipe()
+	if pipeErr != nil {
+		t.Fatalf("os.Pipe: %v", pipeErr)
+	}
+	os.Stderr = wPipe
 	got, err := d.Discover(context.Background(), DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"})
+	wPipe.Close()
+	os.Stderr = origStderr
+	stderrBytes, _ := io.ReadAll(rPipe)
+	stderr := string(stderrBytes)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(got) != 1 || got[0].Identity.NameHint != "io-foo-good" {
 		t.Fatalf("got=%+v, want single io-foo-good", got)
+	}
+	if !strings.Contains(stderr, "io-foo-bad") || !strings.Contains(stderr, "ListTagsForResource") {
+		t.Errorf("stderr=%q, want warn naming the bad namespace + the failing SDK op", stderr)
 	}
 }
 
@@ -385,6 +409,113 @@ func TestSDPrivateDNSNSDiscover_NoVPCEmitsUnknownAndWarn(t *testing.T) {
 	if warns[0].Region != "us-east-1" || warns[0].Service != serviceDiscoveryPrivateDNSNamespaceSlug {
 		t.Errorf("warn=%+v, want region=us-east-1 service=%s", warns[0], serviceDiscoveryPrivateDNSNamespaceSlug)
 	}
+	if !strings.Contains(warns[0].Message, "Route53") || !strings.Contains(warns[0].Message, "Z-empty") {
+		t.Errorf("warn message=%q, want substrings: Route53, Z-empty", warns[0].Message)
+	}
+}
+
+// TestSDPrivateDNSNSDiscover_Route53ErrorEmitsUnknown pins the
+// Route53-failure branch (distinct from the empty-VPCs branch covered
+// above): a GetHostedZone error surfaces as vpc_id=UNKNOWN + ServiceWarn
+// rather than aborting the region or silently emitting a wrong import id.
+func TestSDPrivateDNSNSDiscover_Route53ErrorEmitsUnknown(t *testing.T) {
+	t.Parallel()
+	sd := &fakeSDClient{
+		pages: []servicediscovery.ListNamespacesOutput{{
+			Namespaces: []sdtypes.NamespaceSummary{
+				sdNamespaceSummary("ns-1", "arn:1", "io-foo-throttled"),
+			},
+		}},
+		nsByID: map[string]*servicediscovery.GetNamespaceOutput{
+			"ns-1": sdNamespaceWithHostedZone("ns-1", "arn:1", "io-foo-throttled", "Z-throttle"),
+		},
+		tagsByARN: map[string][]sdtypes.Tag{
+			"arn:1": {sdTag("Project", "io-foo")},
+		},
+	}
+	r53 := &fakeR53Client{errByZone: map[string]error{"Z-throttle": errors.New("Throttling: Route53")}}
+	d := &serviceDiscoveryPrivateDNSNamespaceDiscoverer{
+		newSD:          func(_ string) serviceDiscoveryPrivateDNSNamespaceClient { return sd },
+		newR53:         func() route53HostedZoneClient { return r53 },
+		maxConcurrency: 4,
+	}
+	rec := &recordingEmitter{}
+	got, err := d.Discover(context.Background(), DiscoverArgs{
+		Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123", Emitter: rec,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("len=%d, want 1 (emit with UNKNOWN VPC despite r53 failure)", len(got))
+	}
+	if got[0].Identity.NativeIDs["vpc_id"] != vpcIDPlaceholderUnknown {
+		t.Errorf("vpc_id=%q, want %q", got[0].Identity.NativeIDs["vpc_id"], vpcIDPlaceholderUnknown)
+	}
+	var warns []recordedEvent
+	for _, e := range rec.snapshot() {
+		if e.Kind == "service_warn" {
+			warns = append(warns, e)
+		}
+	}
+	if len(warns) != 1 {
+		t.Fatalf("warns=%d, want 1", len(warns))
+	}
+	if !strings.Contains(warns[0].Message, "Throttling") {
+		t.Errorf("warn=%q, want Route53 error detail preserved", warns[0].Message)
+	}
+}
+
+// TestSDPrivateDNSNSDiscover_SortsByNamespaceID pins the deterministic
+// output ordering: SUT sorts the post-fan-out result by namespace id
+// before emitting. errgroup completion order is non-deterministic; a
+// regression that drops the sort would surface as flaky CI assertions
+// downstream.
+func TestSDPrivateDNSNSDiscover_SortsByNamespaceID(t *testing.T) {
+	t.Parallel()
+	shuffled := []sdtypes.NamespaceSummary{
+		sdNamespaceSummary("ns-zzz", "arn:zzz", "io-foo-zzz"),
+		sdNamespaceSummary("ns-aaa", "arn:aaa", "io-foo-aaa"),
+		sdNamespaceSummary("ns-mmm", "arn:mmm", "io-foo-mmm"),
+	}
+	sd := &fakeSDClient{
+		pages: []servicediscovery.ListNamespacesOutput{{Namespaces: shuffled}},
+		nsByID: map[string]*servicediscovery.GetNamespaceOutput{
+			"ns-zzz": sdNamespaceWithHostedZone("ns-zzz", "arn:zzz", "io-foo-zzz", "Zzzz"),
+			"ns-aaa": sdNamespaceWithHostedZone("ns-aaa", "arn:aaa", "io-foo-aaa", "Zaaa"),
+			"ns-mmm": sdNamespaceWithHostedZone("ns-mmm", "arn:mmm", "io-foo-mmm", "Zmmm"),
+		},
+		tagsByARN: map[string][]sdtypes.Tag{
+			"arn:zzz": {sdTag("Project", "io-foo")},
+			"arn:aaa": {sdTag("Project", "io-foo")},
+			"arn:mmm": {sdTag("Project", "io-foo")},
+		},
+	}
+	r53 := &fakeR53Client{vpcsByZone: map[string][]r53types.VPC{
+		"Zzzz": {r53VPC("vpc-z")},
+		"Zaaa": {r53VPC("vpc-a")},
+		"Zmmm": {r53VPC("vpc-m")},
+	}}
+	d := &serviceDiscoveryPrivateDNSNamespaceDiscoverer{
+		newSD:          func(_ string) serviceDiscoveryPrivateDNSNamespaceClient { return sd },
+		newR53:         func() route53HostedZoneClient { return r53 },
+		maxConcurrency: 4,
+	}
+	got, err := d.Discover(context.Background(), DiscoverArgs{
+		Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 3 {
+		t.Fatalf("len=%d, want 3", len(got))
+	}
+	wantOrder := []string{"io-foo-aaa", "io-foo-mmm", "io-foo-zzz"}
+	for i, want := range wantOrder {
+		if got[i].Identity.NameHint != want {
+			t.Errorf("position %d: NameHint=%q, want %q (SUT must sort by namespace_id before emit)", i, got[i].Identity.NameHint, want)
+		}
+	}
 }
 
 // TestSDPrivateDNSNSDiscover_ListErrorAbortsRegion pins region-fatal
@@ -393,18 +524,34 @@ func TestSDPrivateDNSNSDiscover_NoVPCEmitsUnknownAndWarn(t *testing.T) {
 // apigatewayv2_stage shape.
 func TestSDPrivateDNSNSDiscover_ListErrorAbortsRegion(t *testing.T) {
 	t.Parallel()
-	sd := &fakeSDClient{listErr: errors.New("AccessDenied")}
+	sentinel := errors.New("AccessDenied: servicediscovery:ListNamespaces")
+	sd := &fakeSDClient{listErr: sentinel}
 	d := &serviceDiscoveryPrivateDNSNamespaceDiscoverer{
 		newSD:          func(_ string) serviceDiscoveryPrivateDNSNamespaceClient { return sd },
 		newR53:         func() route53HostedZoneClient { return &fakeR53Client{} },
 		maxConcurrency: 4,
 	}
-	_, err := d.Discover(context.Background(), DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"})
-	if err == nil {
-		t.Fatal("expected error")
+	rec := &recordingEmitter{}
+	_, err := d.Discover(context.Background(), DiscoverArgs{
+		Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123", Emitter: rec,
+	})
+	if !errors.Is(err, sentinel) {
+		t.Errorf("err does not wrap sentinel; got %v", err)
 	}
-	if !strings.Contains(err.Error(), "AccessDenied") {
-		t.Errorf("err=%v, want wrapped AccessDenied", err)
+	// ServiceFinish must still close the bracket on the abort path so
+	// timing telemetry isn't corrupted (cloudControlDiscoverer
+	// precedent).
+	var starts, finishes int
+	for _, e := range rec.snapshot() {
+		switch e.Kind {
+		case "service_start":
+			starts++
+		case "service_finish":
+			finishes++
+		}
+	}
+	if starts != 1 || finishes != 1 {
+		t.Errorf("abort path: starts=%d finishes=%d, want 1 each", starts, finishes)
 	}
 }
 
@@ -570,9 +717,16 @@ func TestSDPrivateDNSNSDiscoverByID_NotFound(t *testing.T) {
 		newSD:  func(_ string) serviceDiscoveryPrivateDNSNamespaceClient { return &fakeSDClient{} },
 		newR53: func() route53HostedZoneClient { return &fakeR53Client{} },
 	}
-	_, err := d.DiscoverByID(context.Background(), "ns-missing", "us-east-1", "123")
-	if !errors.Is(err, ErrNotFound) {
-		t.Errorf("err=%v, want ErrNotFound", err)
+	// Cover both shapes the caller can submit:
+	//   bare namespace-id (no colon) — triggers post-fetch r53 hop
+	//   "<ns>:<vpc>" — caller supplied vpc, no r53 hop
+	// Both must surface NamespaceNotFound as ErrNotFound so dep-chase
+	// can recognize the "resource gone" condition uniformly.
+	for _, id := range []string{"ns-missing", "ns-missing:vpc-stale"} {
+		_, err := d.DiscoverByID(context.Background(), id, "us-east-1", "123")
+		if !errors.Is(err, ErrNotFound) {
+			t.Errorf("id=%q: err=%v, want ErrNotFound", id, err)
+		}
 	}
 }
 

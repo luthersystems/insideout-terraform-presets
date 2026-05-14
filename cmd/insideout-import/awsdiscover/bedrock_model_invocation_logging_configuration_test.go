@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 
@@ -95,6 +96,13 @@ func TestBedrockMILCDiscover_ConfiguredEmitsOnePerRegion(t *testing.T) {
 		}
 		if ir.Identity.Tags == nil {
 			t.Error("Tags is nil; must be non-nil empty per #255 JSON-shape contract")
+		}
+		// NameHint format pin: a regression changing the synthesis
+		// (e.g. region alone, or a different suffix) would silently
+		// re-key every downstream consumer addressing this singleton.
+		wantName := ir.Identity.Region + "-bedrock-logging"
+		if ir.Identity.NameHint != wantName {
+			t.Errorf("NameHint=%q, want %q (synthesis pin)", ir.Identity.NameHint, wantName)
 		}
 		if ir.Identity.NativeIDs["region"] != ir.Identity.Region {
 			t.Errorf("NativeIDs[region]=%q, want %q", ir.Identity.NativeIDs["region"], ir.Identity.Region)
@@ -214,6 +222,58 @@ func TestBedrockMILCDiscover_OtherErrorWarnsAndContinues(t *testing.T) {
 	}
 	if warns[0].Service != bedrockModelInvocationLoggingConfigurationSlug {
 		t.Errorf("warn.service=%q, want %s", warns[0].Service, bedrockModelInvocationLoggingConfigurationSlug)
+	}
+	// Warn message must preserve the underlying SDK error detail —
+	// a regression that swallowed the cause in a generic message
+	// would survive a presence-only check.
+	if !strings.Contains(warns[0].Message, "AccessDenied") {
+		t.Errorf("warn message=%q, want underlying AccessDenied detail preserved", warns[0].Message)
+	}
+	// ServiceFinish must still close the bracket on the warn-and-continue
+	// path; otherwise per-region timing telemetry corrupts.
+	var finishes int
+	for _, e := range rec.snapshot() {
+		if e.Kind == "service_finish" && e.Region == "us-east-1" {
+			finishes++
+		}
+	}
+	if finishes != 1 {
+		t.Errorf("us-east-1 service_finish count=%d on warn path, want 1", finishes)
+	}
+}
+
+// TestBedrockMILCDiscover_ResourceNotFoundEmitsServiceFinish pins that
+// the typed RNF branch closes the per-region bracket (SUT line 109).
+// A regression that returned early without ServiceFinish would corrupt
+// timing telemetry; previously only the configured + nil-payload
+// paths were covered.
+func TestBedrockMILCDiscover_ResourceNotFoundEmitsServiceFinish(t *testing.T) {
+	t.Parallel()
+	fake := &fakeBedrockMILCClient{
+		err:      &bedrocktypes.ResourceNotFoundException{Message: aws.String("no config")},
+		regionID: "us-east-1",
+	}
+	d := &bedrockModelInvocationLoggingConfigurationDiscoverer{
+		new: func(_ string) bedrockModelInvocationLoggingConfigurationClient { return fake },
+	}
+	rec := &recordingEmitter{}
+	_, err := d.Discover(context.Background(), DiscoverArgs{
+		Regions: []string{"us-east-1"}, AccountID: "123", Emitter: rec,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var starts, finishes int
+	for _, e := range rec.snapshot() {
+		switch e.Kind {
+		case "service_start":
+			starts++
+		case "service_finish":
+			finishes++
+		}
+	}
+	if starts != 1 || finishes != 1 {
+		t.Errorf("RNF path: starts=%d finishes=%d, want 1 each", starts, finishes)
 	}
 }
 
@@ -336,6 +396,19 @@ func TestBedrockMILCDiscoverByID_AcceptsRegion(t *testing.T) {
 	if got.Identity.NativeIDs["s3_bucket_name"] != "b" {
 		t.Errorf("NativeIDs[s3_bucket_name]=%q", got.Identity.NativeIDs["s3_bucket_name"])
 	}
+	// #255 JSON-shape parity with Discover: DiscoverByID must also
+	// emit a non-nil empty Tags map for the dep-chase consumer (just
+	// fixed in this PR to be uniform with the Discover path).
+	if got.Identity.Tags == nil {
+		t.Fatal("Tags is nil on DiscoverByID; must be non-nil empty per #255 (parity with Discover)")
+	}
+	b, err := json.Marshal(got.Identity.Tags)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(b) != "{}" {
+		t.Errorf("json.Marshal(Tags)=%q, want %q", string(b), "{}")
+	}
 }
 
 func TestBedrockMILCDiscoverByID_NotFoundShapes(t *testing.T) {
@@ -348,7 +421,6 @@ func TestBedrockMILCDiscoverByID_NotFoundShapes(t *testing.T) {
 		{"nil_payload", &fakeBedrockMILCClient{out: &bedrock.GetModelInvocationLoggingConfigurationOutput{LoggingConfig: nil}}},
 	}
 	for _, tc := range cases {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			d := &bedrockModelInvocationLoggingConfigurationDiscoverer{

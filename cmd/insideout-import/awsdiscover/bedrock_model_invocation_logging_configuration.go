@@ -216,6 +216,8 @@ func (d *bedrockModelInvocationLoggingConfigurationDiscoverer) DiscoverByID(ctx 
 		}
 	}
 	nameHint := target + "-bedrock-logging"
+	// Tags: non-nil empty map mirrors the Discover path's #255 contract
+	// for the dep-chase consumer.
 	return makeImportedResource(
 		addressBook{},
 		bedrockModelInvocationLoggingConfigurationTFType,
@@ -224,6 +226,6 @@ func (d *bedrockModelInvocationLoggingConfigurationDiscoverer) DiscoverByID(ctx 
 		target,
 		accountID,
 		native,
-		nil,
+		map[string]string{},
 	), nil
 }

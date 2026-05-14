@@ -120,12 +120,15 @@ func (d *serviceDiscoveryPrivateDNSNamespaceDiscoverer) Discover(ctx context.Con
 	const slug = serviceDiscoveryPrivateDNSNamespaceSlug
 	var imps []imported.ImportedResource
 
+	// Route53 is global — one client serves every AWS region. Hoist
+	// outside the per-region loop so we don't rebuild it per iteration.
+	r53 := d.newR53()
+
 	for _, region := range args.Regions {
 		regionStart := time.Now()
 		args.Emitter.ServiceStart(slug, region)
 		regionCount := 0
 		client := d.newSD(region)
-		r53 := d.newR53()
 
 		type summary struct {
 			id   string
@@ -190,7 +193,6 @@ func (d *serviceDiscoveryPrivateDNSNamespaceDiscoverer) Discover(ctx context.Con
 		g, gctx := errgroup.WithContext(ctx)
 		g.SetLimit(limit)
 		for _, c := range candidates {
-			c := c
 			g.Go(func() error {
 				if err := gctx.Err(); err != nil {
 					return err
@@ -397,6 +399,9 @@ func (d *serviceDiscoveryPrivateDNSNamespaceDiscoverer) DiscoverByID(ctx context
 	if hostedZoneID != "" {
 		native["hosted_zone_id"] = hostedZoneID
 	}
+	// Tags: non-nil empty map mirrors the Discover path's #255 contract
+	// for the dep-chase consumer (Discover refetches tags; DiscoverByID
+	// skips that hop to stay lightweight).
 	return makeImportedResource(
 		addressBook{},
 		serviceDiscoveryPrivateDNSNamespaceTFType,
@@ -405,7 +410,7 @@ func (d *serviceDiscoveryPrivateDNSNamespaceDiscoverer) DiscoverByID(ctx context
 		region,
 		accountID,
 		native,
-		nil,
+		map[string]string{},
 	), nil
 }
 
