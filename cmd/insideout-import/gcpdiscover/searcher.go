@@ -9,6 +9,7 @@ import (
 	asset "cloud.google.com/go/asset/apiv1"
 	"cloud.google.com/go/asset/apiv1/assetpb"
 	"google.golang.org/api/iterator"
+	"google.golang.org/api/option"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -58,12 +59,26 @@ type RealAssetSearcher struct {
 	client *asset.Client
 }
 
-// NewRealAssetSearcher constructs a searcher backed by Application Default
-// Credentials. Returns an error wrapping the underlying NewClient failure
-// when ADC isn't configured (operator forgot `gcloud auth application-default
-// login`) or the project doesn't have the Cloud Asset API enabled.
-func NewRealAssetSearcher(ctx context.Context) (*RealAssetSearcher, error) {
-	c, err := asset.NewClient(ctx)
+// NewRealAssetSearcher constructs a searcher backed by a Cloud Asset
+// Inventory client. With no opts the underlying asset.NewClient falls
+// back to Application Default Credentials (the CLI use case — operator
+// has run `gcloud auth application-default login`). Returns an error
+// wrapping the underlying NewClient failure when ADC isn't configured
+// or the project doesn't have the Cloud Asset API enabled.
+//
+// Callers that need per-request credentials (multi-tenant server-side
+// consumers, e.g. reliable's /api/import/discover handler) pass an
+// option.ClientOption such as option.WithTokenSource(ts) so each
+// request can carry its own oauth2.TokenSource without touching
+// process-global state like GOOGLE_APPLICATION_CREDENTIALS, which
+// races between concurrent requests on the same warm function.
+//
+// Opts are forwarded verbatim to asset.NewClient — see the
+// google.golang.org/api/option package for the full set
+// (WithTokenSource, WithCredentialsJSON, WithEndpoint, WithUserAgent…).
+// See issue #445 for motivation.
+func NewRealAssetSearcher(ctx context.Context, opts ...option.ClientOption) (*RealAssetSearcher, error) {
+	c, err := asset.NewClient(ctx, opts...)
 	if err != nil {
 		return nil, fmt.Errorf("create cloud asset client: %w", err)
 	}

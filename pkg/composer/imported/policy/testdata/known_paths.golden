@@ -72,6 +72,33 @@ aws_lambda_function	version	Identity		RileyVisible	Never
 aws_lambda_function	vpc_config.security_group_ids	Wiring	Security	RileyVisible	RelationshipOnly		
 aws_lambda_function	vpc_config.subnet_ids	Wiring	Reliability	RileyVisible	RelationshipOnly		
 aws_lambda_function	vpc_config.vpc_id	Wiring		RileyVisible	RelationshipOnly		
+aws_s3_bucket	acceleration_status	Tuning	Performance	RileyVisible	ChatSafe		
+aws_s3_bucket	acl	Tuning	Security	RileyVisible	RequiresApproval		
+aws_s3_bucket	arn	Identity		UIVisible	Never		
+aws_s3_bucket	bucket	Identity		UIVisible	Never		AlwaysReplace
+aws_s3_bucket	bucket_domain_name	Identity		UIVisible	Never		
+aws_s3_bucket	bucket_prefix	Identity		UIVisible	Never		AlwaysReplace
+aws_s3_bucket	bucket_regional_domain_name	Identity		UIVisible	Never		
+aws_s3_bucket	force_destroy	Tuning		UIVisible	SystemOnly		
+aws_s3_bucket	hosted_zone_id	Identity		UIVisible	Never		
+aws_s3_bucket	id	Identity		UIVisible	Never		
+aws_s3_bucket	logging.target_bucket	Wiring	Security	RileyVisible	RelationshipOnly		
+aws_s3_bucket	logging.target_prefix	Tuning		RileyVisible	ChatSafe		
+aws_s3_bucket	object_lock_configuration.object_lock_enabled	Tuning	Security	RileyVisible	RequiresApproval		MayReplace
+aws_s3_bucket	object_lock_enabled	Tuning	Security	RileyVisible	Never		AlwaysReplace
+aws_s3_bucket	policy	Wiring	Security	RileyVisible	RequiresApproval		
+aws_s3_bucket	region	Identity		UIVisible	Never		
+aws_s3_bucket	replication_configuration.role	Wiring	Security	RileyVisible	RelationshipOnly		
+aws_s3_bucket	request_payer	Tuning		RileyVisible	ChatSafe		
+aws_s3_bucket	server_side_encryption_configuration.rule.apply_server_side_encryption_by_default.kms_master_key_id	Wiring	Security	RileyVisible	RelationshipOnly		MayReplace
+aws_s3_bucket	server_side_encryption_configuration.rule.apply_server_side_encryption_by_default.sse_algorithm	Tuning	Security	RileyVisible	ChatSafe		
+aws_s3_bucket	server_side_encryption_configuration.rule.bucket_key_enabled	Tuning	Security	RileyVisible	ChatSafe		
+aws_s3_bucket	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_s3_bucket	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_s3_bucket	versioning.enabled	Tuning	Reliability	RileyVisible	ChatSafe		
+aws_s3_bucket	versioning.mfa_delete	Tuning	Security	RileyVisible	RequiresApproval		
+aws_s3_bucket	website_domain	Identity		UIVisible	Never		
+aws_s3_bucket	website_endpoint	Identity		UIVisible	Never		
 aws_secretsmanager_secret	arn	Identity		UIVisible	Never		
 aws_secretsmanager_secret	description	Tuning		RileyVisible	ChatSafe		
 aws_secretsmanager_secret	kms_key_id	Wiring	Security	RileyVisible	RelationshipOnly		
