@@ -179,11 +179,13 @@ var gcpTypes = []string{
 	"google_secret_manager_secret",
 	"google_secret_manager_secret_iam_binding",
 	"google_secret_manager_secret_iam_member",
+	"google_secret_manager_secret_version",
 	"google_service_account",
 	"google_sql_database_instance",
 	"google_sql_user",
 	"google_storage_bucket",
 	"google_storage_bucket_iam_member",
+	"google_storage_bucket_object",
 	"google_vertex_ai_dataset",
 }
 

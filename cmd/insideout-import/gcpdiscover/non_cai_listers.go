@@ -439,6 +439,165 @@ func (l *RealIAMPolicyLister) GetBucketIAMPolicy(ctx context.Context, bucketName
 	return out, nil
 }
 
+// ---- Sub-resources (Bundle G3, #475) ----------------------------------
+
+// gcpSecretVersion is the projected view of a Secret Manager
+// version row used by the secret_manager_secret_version discoverer.
+// Mirrors the projection rationale on gcpLoggingSink — the per-version
+// fields the discoverer needs to compose the row, decoupled from the
+// upstream SDK type.
+type gcpSecretVersion struct {
+	Name       string // projects/<p>/secrets/<s>/versions/<v>
+	SecretFull string // projects/<p>/secrets/<s>
+	Version    string // the trailing path segment (numeric usually)
+	State      string // ENABLED / DISABLED / DESTROYED
+}
+
+type gcpSecretVersionLister interface {
+	// ListSecretVersions returns the versions on a single Secret
+	// Manager secret. The discoverer fans this out across the
+	// google_secret_manager_secret rows discovered by the CAI phase.
+	ListSecretVersions(ctx context.Context, projectID, secretFullName string) ([]gcpSecretVersion, error)
+}
+
+// RealSecretVersionLister wraps google.golang.org/api/secretmanager/v1.
+type RealSecretVersionLister struct {
+	svc *secretmanager.Service
+}
+
+// NewRealSecretVersionLister constructs a secret version lister backed
+// by ADC. Mirrors the *RealAssetSearcher / *RealSQLUserLister export
+// pattern so callers in cmd/insideout-import can store the concrete
+// type for lifecycle control. Returns a wrapped error on auth setup
+// failure.
+func NewRealSecretVersionLister(ctx context.Context) (*RealSecretVersionLister, error) {
+	svc, err := secretmanager.NewService(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("create secretmanager client: %w", err)
+	}
+	return &RealSecretVersionLister{svc: svc}, nil
+}
+
+func (l *RealSecretVersionLister) ListSecretVersions(ctx context.Context, projectID, secretFullName string) ([]gcpSecretVersion, error) {
+	if l == nil || l.svc == nil {
+		return nil, errors.New("secretmanager client closed")
+	}
+	var out []gcpSecretVersion
+	call := l.svc.Projects.Secrets.Versions.List(secretFullName).Context(ctx)
+	err := call.Pages(ctx, func(resp *secretmanager.ListSecretVersionsResponse) error {
+		for _, v := range resp.Versions {
+			if v == nil {
+				continue
+			}
+			// v.Name is "projects/<p>/secrets/<s>/versions/<n>"; the
+			// trailing path segment is the version's short ID. We
+			// surface it as Version so the discoverer composes the
+			// import ID without re-parsing.
+			out = append(out, gcpSecretVersion{
+				Name:       v.Name,
+				SecretFull: secretFullName,
+				Version:    shortName("/" + v.Name),
+				State:      v.State,
+			})
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, wrapGCPAPIError("list secret versions", err)
+	}
+	return out, nil
+}
+
+// gcpBucketObject is the projected view of a GCS object row used by
+// the storage_bucket_object discoverer. The Md5 field is opportunistic
+// — the API returns it for most objects but it can be absent for very
+// large or in-progress uploads; downstream rendering tolerates an empty
+// string.
+type gcpBucketObject struct {
+	Bucket string
+	Name   string // object name (may include slashes)
+	Md5    string // optional, may be empty
+}
+
+// defaultMaxBucketObjects caps the per-bucket object enumeration to
+// keep blast-radius small for buckets holding millions of objects.
+// The discoverer fires a ServiceWarn when truncation kicks in so
+// operators see they're hitting the cap rather than silently
+// under-reporting their state. The cap is a package-level constant
+// (not a parameter) on purpose: operators with huge buckets almost
+// never manage individual objects in Terraform, and the 1K ceiling
+// surfaces the realistic cases without overwhelming the import
+// workflow.
+const defaultMaxBucketObjects = 1000
+
+// errBucketObjectsTruncated is the sentinel the lister returns
+// alongside a populated result slice when it hits
+// defaultMaxBucketObjects. The discoverer recognizes this sentinel to
+// emit a ServiceWarn (vs treating it as a soft-fail that drops the
+// whole bucket's worth of rows). The slice is still returned — the
+// truncation is "stop early," not "discard."
+var errBucketObjectsTruncated = errors.New("bucket object list truncated at the per-bucket cap")
+
+type gcpBucketObjectLister interface {
+	// ListBucketObjects returns up to defaultMaxBucketObjects objects
+	// from a single bucket. When the bucket holds more than the cap,
+	// the implementation returns the first N objects along with
+	// errBucketObjectsTruncated so the caller can emit a truncation
+	// warning. Other errors are returned with a nil slice per the usual
+	// convention.
+	ListBucketObjects(ctx context.Context, bucketName string) ([]gcpBucketObject, error)
+}
+
+// RealBucketObjectLister wraps google.golang.org/api/storage/v1.
+type RealBucketObjectLister struct {
+	svc *storage.Service
+}
+
+// NewRealBucketObjectLister constructs a GCS object lister backed by
+// ADC. Same nil-tolerant export pattern as the other Real* listers.
+func NewRealBucketObjectLister(ctx context.Context) (*RealBucketObjectLister, error) {
+	svc, err := storage.NewService(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("create storage client: %w", err)
+	}
+	return &RealBucketObjectLister{svc: svc}, nil
+}
+
+func (l *RealBucketObjectLister) ListBucketObjects(ctx context.Context, bucketName string) ([]gcpBucketObject, error) {
+	if l == nil || l.svc == nil {
+		return nil, errors.New("storage client closed")
+	}
+	out := make([]gcpBucketObject, 0, defaultMaxBucketObjects)
+	call := l.svc.Objects.List(bucketName).Context(ctx)
+	// Bail early from the pagination loop once we hit the cap. The
+	// page callback returning a non-nil error tells the SDK to stop
+	// fetching subsequent pages; we re-distinguish "real" errors from
+	// the truncation sentinel in the caller below.
+	pageErr := call.Pages(ctx, func(resp *storage.Objects) error {
+		for _, o := range resp.Items {
+			if o == nil {
+				continue
+			}
+			out = append(out, gcpBucketObject{
+				Bucket: bucketName,
+				Name:   o.Name,
+				Md5:    o.Md5Hash,
+			})
+			if len(out) >= defaultMaxBucketObjects {
+				return errBucketObjectsTruncated
+			}
+		}
+		return nil
+	})
+	if pageErr != nil {
+		if errors.Is(pageErr, errBucketObjectsTruncated) {
+			return out, errBucketObjectsTruncated
+		}
+		return nil, wrapGCPAPIError("list bucket objects", pageErr)
+	}
+	return out, nil
+}
+
 // ---- shared error wrapping --------------------------------------------
 
 // wrapGCPAPIError annotates a Google API error with operator-actionable

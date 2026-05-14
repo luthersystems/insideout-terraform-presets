@@ -296,11 +296,24 @@ func productionDiscoverDeps() discoverDeps {
 			if iamErr != nil {
 				fmt.Fprintf(os.Stderr, "WARN: IAM policy lister unavailable, IAM bindings/members won't be discovered: %v\n", iamErr)
 			}
+			// Bundle G3 (#475): per-parent sub-resource listers. Same
+			// nil-tolerant pattern — auth gaps surface as warnings
+			// rather than aborting discover.
+			secretVersionLister, svErr := gcpdiscover.NewRealSecretVersionLister(ctx)
+			if svErr != nil {
+				fmt.Fprintf(os.Stderr, "WARN: secret version lister unavailable, secret_manager_secret_version won't be discovered: %v\n", svErr)
+			}
+			bucketObjectLister, boErr := gcpdiscover.NewRealBucketObjectLister(ctx)
+			if boErr != nil {
+				fmt.Fprintf(os.Stderr, "WARN: bucket object lister unavailable, storage_bucket_object won't be discovered: %v\n", boErr)
+			}
 			opts := gcpdiscover.GCPDiscovererOpts{
 				SinkLister:             sinkLister,
 				SQLUserLister:          sqlUserLister,
 				IdentityPlatformLister: identityLister,
 				IAMPolicyLister:        iamLister,
+				SecretVersionLister:    secretVersionLister,
+				BucketObjectLister:     bucketObjectLister,
 			}
 			return gcpAggAdapter{d: gcpdiscover.NewGCPDiscoverer(s, gcpProjectID, opts)}, s.Close, nil
 		},
