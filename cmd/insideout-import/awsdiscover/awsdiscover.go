@@ -151,6 +151,18 @@ func NewAWSDiscovererWithConcurrency(cfg aws.Config, maxConcurrency int) *AWSDis
 	for _, ccCfg := range cloudControlTypeConfigs {
 		byType[ccCfg.TFType] = newCloudControlDiscoverer(ccCfg, cfg, maxConcurrency)
 	}
+	// SDK-only sub-resource types (Bundle 14k1, #452): for Terraform
+	// types that have no Cloud Control representation (e.g. S3 bucket
+	// sub-resources that CFN models as inline bucket properties rather
+	// than standalone resource types). Each entry in
+	// sdkOnlySubresourceTypeConfigs becomes one
+	// sdkOnlySubresourceDiscoverer registration. Parent enumeration
+	// reuses the parent's RGT cache when SkipProjectTagFilter is unset
+	// or falls back to a per-type ListParents SDK call. See
+	// sdkonly_subresource_discoverer.go and sdkonly_s3.go.
+	for _, soCfg := range sdkOnlySubresourceTypeConfigs {
+		byType[soCfg.TFType] = newSDKOnlySubresourceDiscoverer(soCfg, cfg, maxConcurrency)
+	}
 	return &AWSDiscoverer{
 		defaultRegion: cfg.Region,
 		byType:        byType,
@@ -192,15 +204,19 @@ func ServiceSlug(tfType string) string {
 }
 
 // serviceSlugCombined merges serviceSlugByTFType (4 Bucket-C entries)
-// with cloudControlTypeConfigs slugs into one O(1) lookup table. Built
-// once at package init so ServiceSlug avoids the O(n) scan that would
-// otherwise repeat per Emitter event.
+// with cloudControlTypeConfigs slugs and sdkOnlySubresourceTypeConfigs
+// slugs into one O(1) lookup table. Built once at package init so
+// ServiceSlug avoids the O(n) scan that would otherwise repeat per
+// Emitter event.
 var serviceSlugCombined = func() map[string]string {
-	out := make(map[string]string, len(serviceSlugByTFType)+len(cloudControlTypeConfigs))
+	out := make(map[string]string, len(serviceSlugByTFType)+len(cloudControlTypeConfigs)+len(sdkOnlySubresourceTypeConfigs))
 	for k, v := range serviceSlugByTFType {
 		out[k] = v
 	}
 	for _, cfg := range cloudControlTypeConfigs {
+		out[cfg.TFType] = cfg.Slug
+	}
+	for _, cfg := range sdkOnlySubresourceTypeConfigs {
 		out[cfg.TFType] = cfg.Slug
 	}
 	return out
