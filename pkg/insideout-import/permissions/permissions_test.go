@@ -120,6 +120,8 @@ var awsTFTypeToServiceSlug = map[string]string{
 	"aws_vpc":                                            "vpc",
 	"aws_vpc_dhcp_options":                               "vpc_dhcp_options",
 	"aws_vpc_endpoint":                                   "vpc_endpoint",
+	"aws_vpc_security_group_egress_rule":                 "vpc_security_group_egress_rule",
+	"aws_vpc_security_group_ingress_rule":                "vpc_security_group_ingress_rule",
 	"aws_wafv2_web_acl":                                  "wafv2_web_acl",
 	"aws_wafv2_web_acl_association":                      "wafv2_web_acl_association",
 }

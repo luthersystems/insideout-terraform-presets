@@ -328,6 +328,72 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 		TagsFromProperties:     tagsFromKey("Tags"),
 	},
 	{
+		// AWS::EC2::SecurityGroupIngress — CFN schema has no Tags
+		// property (verified via describe-type us-east-1: properties
+		// = [Id, CidrIp, CidrIpv6, Description, FromPort, GroupId,
+		// GroupName, IpProtocol, SourcePrefixListId, …]; primary
+		// identifier = `/properties/Id` returning `sgr-XXXXX`).
+		// SkipProjectTagFilter bypasses both the RGT cache short-
+		// circuit (RGT may surface `ec2:security-group-rule/…` ARNs
+		// but can't disambiguate ingress vs egress — they share the
+		// `security-group-rule` ARN resource-type segment) and the
+		// post-fetch Project-tag filter.
+		//
+		// Terraform import format is the bare `sgr-XXXXX` ID
+		// (verified against terraform-provider-aws main:
+		// website/docs/r/vpc_security_group_ingress_rule.html.markdown
+		// — `terraform import aws_vpc_security_group_ingress_rule.example sgr-…`).
+		// Passthrough ImportIDFromIdentifier.
+		//
+		// No arnRule for `ec2:security-group-rule` — the ARN
+		// resource-type segment is identical for ingress and egress,
+		// so we'd misroute half the time. SkipProjectTagFilter=true
+		// makes the cache fallback path always run, so the missing
+		// arnRule is correct rather than a gap.
+		TFType:                 "aws_vpc_security_group_ingress_rule",
+		CloudFormationType:     "AWS::EC2::SecurityGroupIngress",
+		Slug:                   "vpc_security_group_ingress_rule",
+		SkipProjectTagFilter:   true,
+		ImportIDFromIdentifier: passthroughImportID,
+		NameHintFromProperties: passthroughIdentifierName,
+		NativeIDsFromProperties: func(identifier string, props map[string]any) map[string]string {
+			out := map[string]string{"security_group_rule_id": identifier}
+			if gid := extractString(props, "GroupId"); gid != "" {
+				out["security_group_id"] = gid
+			}
+			return out
+		},
+		TagsFromProperties: emptyTagsExtractor,
+	},
+	{
+		// AWS::EC2::SecurityGroupEgress — mirror of the ingress entry
+		// above. CFN schema has no Tags property (verified via
+		// describe-type us-east-1: properties = [CidrIp, CidrIpv6,
+		// Description, FromPort, ToPort, IpProtocol,
+		// DestinationSecurityGroupId, Id, DestinationPrefixListId,
+		// GroupId]; primary identifier = `/properties/Id` returning
+		// `sgr-XXXXX`).
+		//
+		// Terraform import format is the bare `sgr-XXXXX` ID
+		// (verified against terraform-provider-aws main:
+		// website/docs/r/vpc_security_group_egress_rule.html.markdown).
+		// Passthrough ImportIDFromIdentifier.
+		TFType:                 "aws_vpc_security_group_egress_rule",
+		CloudFormationType:     "AWS::EC2::SecurityGroupEgress",
+		Slug:                   "vpc_security_group_egress_rule",
+		SkipProjectTagFilter:   true,
+		ImportIDFromIdentifier: passthroughImportID,
+		NameHintFromProperties: passthroughIdentifierName,
+		NativeIDsFromProperties: func(identifier string, props map[string]any) map[string]string {
+			out := map[string]string{"security_group_rule_id": identifier}
+			if gid := extractString(props, "GroupId"); gid != "" {
+				out["security_group_id"] = gid
+			}
+			return out
+		},
+		TagsFromProperties: emptyTagsExtractor,
+	},
+	{
 		TFType:                 "aws_internet_gateway",
 		CloudFormationType:     "AWS::EC2::InternetGateway",
 		Slug:                   "internet_gateway",

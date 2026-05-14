@@ -104,6 +104,8 @@ aws_subnet	Network Security
 aws_vpc	Network Security
 aws_vpc_dhcp_options	Network Security
 aws_vpc_endpoint	Network Security
+aws_vpc_security_group_egress_rule	Network Security
+aws_vpc_security_group_ingress_rule	Network Security
 aws_wafv2_web_acl	Security
 aws_wafv2_web_acl_association	Security
 google_api_gateway_api	Network Security

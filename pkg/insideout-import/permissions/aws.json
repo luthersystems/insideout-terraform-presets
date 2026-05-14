@@ -1848,6 +1848,36 @@
       "purpose": "list per-region VPC endpoints; skip State=deleted/deleting tombstones (server-side tag:Project filter when project is set; tags inline)"
     },
     {
+      "service": "vpc_security_group_egress_rule",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::EC2::SecurityGroupEgress (#460 unified discoverer; primary identifier sgr-XXXXX)"
+    },
+    {
+      "service": "vpc_security_group_egress_rule",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::EC2::SecurityGroupEgress (SkipProjectTagFilter=true; CFN schema has no Tags property so the RGT cache short-circuit is bypassed)"
+    },
+    {
+      "service": "vpc_security_group_egress_rule",
+      "iam_action": "ec2:DescribeSecurityGroupRules",
+      "purpose": "Cloud Control delegate for GetResource / ListResources on AWS::EC2::SecurityGroupEgress"
+    },
+    {
+      "service": "vpc_security_group_ingress_rule",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::EC2::SecurityGroupIngress (#460 unified discoverer; primary identifier sgr-XXXXX)"
+    },
+    {
+      "service": "vpc_security_group_ingress_rule",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::EC2::SecurityGroupIngress (SkipProjectTagFilter=true; CFN schema has no Tags property so the RGT cache short-circuit is bypassed)"
+    },
+    {
+      "service": "vpc_security_group_ingress_rule",
+      "iam_action": "ec2:DescribeSecurityGroupRules",
+      "purpose": "Cloud Control delegate for GetResource / ListResources on AWS::EC2::SecurityGroupIngress"
+    },
+    {
       "service": "wafv2_web_acl",
       "iam_action": "cloudcontrol:GetResource",
       "purpose": "Cloud Control GetResource for AWS::WAFv2::WebACL (#412 ParentLister branch)"

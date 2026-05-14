@@ -3400,3 +3400,126 @@ func TestAPIGatewayV2ApiMappingConfig(t *testing.T) {
 		t.Errorf("Tags: got %+v, want empty map", tags)
 	}
 }
+
+// TestVPCSecurityGroupIngressRuleConfig pins per-type extractors for
+// aws_vpc_security_group_ingress_rule (#460): CC default-list,
+// passthrough sgr-XXXXX identifier (Terraform import format matches
+// per provider docs), GroupId stamped under NativeIDs alongside the
+// rule ID, untaggable (CFN schema has no Tags property —
+// SkipProjectTagFilter must be true).
+func TestVPCSecurityGroupIngressRuleConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_vpc_security_group_ingress_rule")
+	if !cfg.SkipProjectTagFilter {
+		t.Error("aws_vpc_security_group_ingress_rule: SkipProjectTagFilter must be true (CFN schema has no Tags property)")
+	}
+	if cfg.IsGlobal {
+		t.Error("aws_vpc_security_group_ingress_rule: IsGlobal must be false (regional)")
+	}
+	if cfg.CloudFormationType != "AWS::EC2::SecurityGroupIngress" {
+		t.Errorf("CloudFormationType=%q, want AWS::EC2::SecurityGroupIngress", cfg.CloudFormationType)
+	}
+	if cfg.SDKLister != nil {
+		t.Error("SDKLister must be nil (CC ListResources is supported for this type — verified via live list)")
+	}
+	if cfg.ParentLister != nil {
+		t.Error("ParentLister must be nil (top-level, not parent-scoped)")
+	}
+
+	const ruleID = "sgr-0aa94a92e442faa91"
+	if got := cfg.ImportIDFromIdentifier(ruleID, nil); got != ruleID {
+		t.Errorf("ImportID passthrough: got %q, want %q (TF import format is the bare sgr-XXXXX per provider docs)", got, ruleID)
+	}
+	if got := cfg.NameHintFromProperties(ruleID, nil); got != ruleID {
+		t.Errorf("NameHint passthrough: got %q, want %q", got, ruleID)
+	}
+
+	// NativeIDs: rule ID always present; GroupId stamped when the
+	// properties payload carries it (CC GetResource always does).
+	native := cfg.NativeIDsFromProperties(ruleID, map[string]any{"GroupId": "sg-05b33367d0263c42d"})
+	want := map[string]string{
+		"security_group_rule_id": ruleID,
+		"security_group_id":      "sg-05b33367d0263c42d",
+	}
+	if !reflect.DeepEqual(native, want) {
+		t.Errorf("NativeIDs: got %+v, want %+v", native, want)
+	}
+	// Defensive: properties missing GroupId — only the rule ID
+	// surfaces. A future schema change that drops GroupId from the
+	// payload would fail loudly with the wrong-keys assertion below
+	// rather than silently emitting a degraded native map.
+	nativeBare := cfg.NativeIDsFromProperties(ruleID, map[string]any{})
+	if !reflect.DeepEqual(nativeBare, map[string]string{"security_group_rule_id": ruleID}) {
+		t.Errorf("NativeIDs (no GroupId): got %+v, want {security_group_rule_id: %s}", nativeBare, ruleID)
+	}
+
+	// Tags: emptyTagsExtractor returns the non-nil empty map per
+	// #255; populated Tags input is discarded (the CFN schema has no
+	// Tags property, so this defends against a future provider
+	// release injecting one).
+	tags := cfg.TagsFromProperties(map[string]any{"Tags": []any{
+		map[string]any{"Key": "env", "Value": "prod"},
+	}})
+	if tags == nil {
+		t.Fatal("Tags: got nil, want non-nil empty map (#255 contract)")
+	}
+	if len(tags) != 0 {
+		t.Errorf("Tags: got %+v, want empty map (untaggable; emptyTagsExtractor ignores input)", tags)
+	}
+}
+
+// TestVPCSecurityGroupEgressRuleConfig pins per-type extractors for
+// aws_vpc_security_group_egress_rule (#460): mirror of the ingress
+// rule pin above. Both share the EC2-API sgr-XXXXX identifier shape;
+// CFN models them as distinct types so the discoverer registers them
+// separately.
+func TestVPCSecurityGroupEgressRuleConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_vpc_security_group_egress_rule")
+	if !cfg.SkipProjectTagFilter {
+		t.Error("aws_vpc_security_group_egress_rule: SkipProjectTagFilter must be true (CFN schema has no Tags property)")
+	}
+	if cfg.IsGlobal {
+		t.Error("aws_vpc_security_group_egress_rule: IsGlobal must be false (regional)")
+	}
+	if cfg.CloudFormationType != "AWS::EC2::SecurityGroupEgress" {
+		t.Errorf("CloudFormationType=%q, want AWS::EC2::SecurityGroupEgress", cfg.CloudFormationType)
+	}
+	if cfg.SDKLister != nil {
+		t.Error("SDKLister must be nil (CC ListResources is supported)")
+	}
+	if cfg.ParentLister != nil {
+		t.Error("ParentLister must be nil (top-level)")
+	}
+
+	const ruleID = "sgr-0a56783c0655d17b5"
+	if got := cfg.ImportIDFromIdentifier(ruleID, nil); got != ruleID {
+		t.Errorf("ImportID passthrough: got %q, want %q", got, ruleID)
+	}
+	if got := cfg.NameHintFromProperties(ruleID, nil); got != ruleID {
+		t.Errorf("NameHint passthrough: got %q, want %q", got, ruleID)
+	}
+
+	native := cfg.NativeIDsFromProperties(ruleID, map[string]any{"GroupId": "sg-abc"})
+	want := map[string]string{
+		"security_group_rule_id": ruleID,
+		"security_group_id":      "sg-abc",
+	}
+	if !reflect.DeepEqual(native, want) {
+		t.Errorf("NativeIDs: got %+v, want %+v", native, want)
+	}
+	nativeBare := cfg.NativeIDsFromProperties(ruleID, map[string]any{})
+	if !reflect.DeepEqual(nativeBare, map[string]string{"security_group_rule_id": ruleID}) {
+		t.Errorf("NativeIDs (no GroupId): got %+v, want {security_group_rule_id: %s}", nativeBare, ruleID)
+	}
+
+	tags := cfg.TagsFromProperties(map[string]any{"Tags": []any{
+		map[string]any{"Key": "env", "Value": "prod"},
+	}})
+	if tags == nil {
+		t.Fatal("Tags: got nil, want non-nil empty map (#255 contract)")
+	}
+	if len(tags) != 0 {
+		t.Errorf("Tags: got %+v, want empty map (untaggable)", tags)
+	}
+}

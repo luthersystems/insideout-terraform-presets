@@ -182,6 +182,8 @@ var categoryByTFType = map[string]string{
 	"aws_vpc":                                            CategoryNetworkSecurity,
 	"aws_vpc_dhcp_options":                               CategoryNetworkSecurity,
 	"aws_vpc_endpoint":                                   CategoryNetworkSecurity,
+	"aws_vpc_security_group_egress_rule":                 CategoryNetworkSecurity,
+	"aws_vpc_security_group_ingress_rule":                CategoryNetworkSecurity,
 	"aws_wafv2_web_acl":                                  CategorySecurity,
 	"aws_wafv2_web_acl_association":                      CategorySecurity,
 

@@ -217,10 +217,11 @@ var sdkOnlySubresourceTypeConfigs = []sdkOnlySubresourceConfig{
 	// import ID we cannot prove is correct would cause silent terraform
 	// import failures downstream. The replacement resources
 	// `aws_vpc_security_group_ingress_rule` /
-	// `aws_vpc_security_group_egress_rule` (which carry real-ARN-shape
-	// security_group_rule_id values returned by EC2) are the supported
-	// path forward for in-preset SG-rule discovery — tracked as a
-	// follow-up to #456.
+	// `aws_vpc_security_group_egress_rule` (which carry real
+	// security_group_rule_id (`sgr-XXXXX`) values returned by EC2) are
+	// the supported path forward, and they ride the unified Cloud
+	// Control discoverer (cloudControlTypeConfigs in
+	// cloudcontrol_types.go) — see #460.
 	// =====================================================================
 
 	{
