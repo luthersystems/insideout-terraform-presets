@@ -17,6 +17,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
+	"github.com/aws/aws-sdk-go-v2/service/opensearch"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 )
 
@@ -829,6 +830,50 @@ func listAutoScalingGroupsWithClient(ctx context.Context, client autoScalingGrou
 			break
 		}
 		nextToken = page.NextToken
+	}
+	return names, nil
+}
+
+// openSearchDomainsLister is the narrow subset of the OpenSearch SDK
+// used by the aws_opensearch_domain SDKLister enumerator (#14g).
+// AWS::OpenSearchService::Domain's CC ListResources returns
+// UnsupportedActionException even though CC GetResource works, so
+// enumeration goes through the native opensearch:ListDomainNames API.
+// The interface is package-private so test fakes can satisfy it without
+// depending on the full OpenSearch client.
+type openSearchDomainsLister interface {
+	ListDomainNames(ctx context.Context, in *opensearch.ListDomainNamesInput, opts ...func(*opensearch.Options)) (*opensearch.ListDomainNamesOutput, error)
+}
+
+// listOpenSearchDomains enumerates OpenSearch (and Elasticsearch
+// engine-type) domains in the region and returns the DomainName for
+// each. DomainName is the CC primary identifier for
+// AWS::OpenSearchService::Domain (and Terraform's import format for
+// aws_opensearch_domain — passthrough).
+//
+// opensearch:ListDomainNames is non-paginated (single response, all
+// domains in the region) so there is no NextToken loop.
+func listOpenSearchDomains(ctx context.Context, awsCfg aws.Config, region string, _ DiscoverArgs) ([]string, error) {
+	client := opensearch.NewFromConfig(awsCfg, func(o *opensearch.Options) {
+		if region != "" {
+			o.Region = region
+		}
+	})
+	return listOpenSearchDomainsWithClient(ctx, client)
+}
+
+func listOpenSearchDomainsWithClient(ctx context.Context, client openSearchDomainsLister) ([]string, error) {
+	out, err := client.ListDomainNames(ctx, &opensearch.ListDomainNamesInput{})
+	if err != nil {
+		return nil, fmt.Errorf("opensearch:ListDomainNames: %w", err)
+	}
+	names := []string{}
+	for _, d := range out.DomainNames {
+		n := aws.ToString(d.DomainName)
+		if n == "" {
+			continue
+		}
+		names = append(names, n)
 	}
 	return names, nil
 }

@@ -477,6 +477,48 @@ func TestLookupRule(t *testing.T) {
 		{name: "eks_pod_identity_compound", arn: "arn:aws:eks:us-east-1:111111111111:podidentityassociation/cluster-1/a-abc123",
 			wantCFN: "AWS::EKS::PodIdentityAssociation", wantIdent: "cluster-1|a-abc123"},
 
+		// ElastiCache — Replication / Parameter / Subnet groups (#14g).
+		// Pin each resource-type disambiguator on the shared elasticache
+		// service prefix: a `replicationgroup` rule must NOT swallow a
+		// `parametergroup` or `subnetgroup` ARN, and vice versa.
+		{name: "elasticache_replication_group",
+			arn:     "arn:aws:elasticache:us-east-1:111111111111:replicationgroup:my-redis",
+			wantCFN: "AWS::ElastiCache::ReplicationGroup", wantIdent: "my-redis"},
+		{name: "elasticache_parameter_group",
+			arn:     "arn:aws:elasticache:us-east-1:111111111111:parametergroup:default.redis7",
+			wantCFN: "AWS::ElastiCache::ParameterGroup", wantIdent: "default.redis7"},
+		{name: "elasticache_subnet_group",
+			arn:     "arn:aws:elasticache:us-east-1:111111111111:subnetgroup:my-subnet-grp",
+			wantCFN: "AWS::ElastiCache::SubnetGroup", wantIdent: "my-subnet-grp"},
+
+		// MSK — Cluster vs Configuration (#14g). Both use the `kafka`
+		// service prefix with `cluster` / `configuration` resourceType
+		// disambiguators. The CC primary identifier is the full ARN for
+		// both — pin via identityFullARN.
+		{name: "msk_cluster_full_arn",
+			arn:     "arn:aws:kafka:us-east-1:111111111111:cluster/my-msk/abc-uuid",
+			wantCFN: "AWS::MSK::Cluster",
+			wantIdent: "arn:aws:kafka:us-east-1:111111111111:cluster/my-msk/abc-uuid"},
+		{name: "msk_configuration_full_arn",
+			arn:     "arn:aws:kafka:us-east-1:111111111111:configuration/my-config/def-uuid",
+			wantCFN: "AWS::MSK::Configuration",
+			wantIdent: "arn:aws:kafka:us-east-1:111111111111:configuration/my-config/def-uuid"},
+
+		// OpenSearch (managed service) — Domain (#14g). The ARN's `es`
+		// service prefix is the canonical OpenSearch managed service
+		// prefix (legacy Elasticsearch alias also routes through `es`).
+		// Identifier is the bare DomainName.
+		{name: "opensearch_domain",
+			arn:     "arn:aws:es:us-east-1:111111111111:domain/my-search",
+			wantCFN: "AWS::OpenSearchService::Domain", wantIdent: "my-search"},
+
+		// EBS Volume (#14g). The `ec2:volume` ARN shape sits alongside
+		// 11 other ec2:<resourceType> rules — pin so the volume rule
+		// doesn't get swallowed by, or swallow, any sibling ec2 rule.
+		{name: "ec2_volume",
+			arn:     "arn:aws:ec2:us-east-1:111111111111:volume/vol-0abc123",
+			wantCFN: "AWS::EC2::Volume", wantIdent: "vol-0abc123"},
+
 		// Negative cases — explicitly unmapped (sanity checks for our
 		// "fall back to ListResources" path)
 		{name: "organizations_unmapped", arn: "arn:aws:organizations::111111111111:account/o-123/111111111111",

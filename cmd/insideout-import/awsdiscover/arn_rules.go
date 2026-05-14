@@ -287,6 +287,46 @@ var arnRules = []arnRule{
 			}
 			return p.resourceID[:idx] + "|" + p.resourceID[idx+1:]
 		}},
+
+	// ElastiCache — Replication / Parameter / Subnet groups (#14g). The
+	// service prefix is shared but resourceType disambiguates: ARN forms
+	// are `arn:aws:elasticache:<region>:<acct>:replicationgroup:<id>`,
+	// `…:parametergroup:<name>`, and `…:subnetgroup:<name>`. Cloud Control
+	// primary identifier is the bare id/name (resourceID) for all three —
+	// passthrough via identityResourceID.
+	{matchService: "elasticache", matchResourceType: "replicationgroup",
+		cfnType: "AWS::ElastiCache::ReplicationGroup", identifierFn: identityResourceID},
+	{matchService: "elasticache", matchResourceType: "parametergroup",
+		cfnType: "AWS::ElastiCache::ParameterGroup", identifierFn: identityResourceID},
+	{matchService: "elasticache", matchResourceType: "subnetgroup",
+		cfnType: "AWS::ElastiCache::SubnetGroup", identifierFn: identityResourceID},
+
+	// MSK — Cluster vs Configuration (#14g). ARN forms are
+	// `arn:aws:kafka:<region>:<acct>:cluster/<name>/<uuid>` and
+	// `…:configuration/<name>/<uuid>`. Cloud Control primary identifier
+	// IS the full ARN for both, so identityFullARN.
+	{matchService: "kafka", matchResourceType: "cluster",
+		cfnType: "AWS::MSK::Cluster", identifierFn: identityFullARN},
+	{matchService: "kafka", matchResourceType: "configuration",
+		cfnType: "AWS::MSK::Configuration", identifierFn: identityFullARN},
+
+	// OpenSearch (managed service) — Domain (#14g). ARN form is
+	// `arn:aws:es:<region>:<acct>:domain/<name>`. Cloud Control primary
+	// identifier is the bare DomainName (resourceID).
+	//
+	// Note: although CC ListResources is unsupported for this type
+	// (UnsupportedActionException — see SDKLister branch), this arnRule
+	// is wired for the RGT cache-hit path so a Resource Groups Tagging
+	// API response for an ES domain ARN buckets correctly and skips
+	// the SDK-enumeration fallback.
+	{matchService: "es", matchResourceType: "domain",
+		cfnType: "AWS::OpenSearchService::Domain", identifierFn: identityResourceID},
+
+	// EC2 — EBS Volume (#14g). ARN form is
+	// `arn:aws:ec2:<region>:<acct>:volume/vol-XXXXX`. Cloud Control
+	// primary identifier is the bare VolumeId (resourceID).
+	{matchService: "ec2", matchResourceType: "volume",
+		cfnType: "AWS::EC2::Volume", identifierFn: identityResourceID},
 }
 
 // identityResourceID is the common identifierFn — returns the parsed
