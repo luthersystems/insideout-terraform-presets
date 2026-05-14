@@ -102,25 +102,20 @@ func (d *serviceNetworkingConnectionDiscoverer) ListNonCAI(ctx context.Context, 
 }
 
 // serviceNetworkingConnectionNetworkPath returns the full network path
-// for a google_compute_network priorResults row. Prefers the network's
-// NameHint when set (the CAI discoverer populates it with the short
-// name), falling back to a path-parse of ImportID when the NameHint is
-// missing. Returns "" if neither is populated — defensive against
-// future regressions in the prior shape.
+// for a google_compute_network priorResults row. The CAI discoverer
+// populates Identity.NameHint with the network's short name; we
+// compose the full path from that. As a fallback, accept a full
+// `projects/.../networks/<n>` shape already present in ImportID
+// (defensive against the parent discoverer's ImportID format
+// evolving). Returns "" when neither shape is recognizable.
 func serviceNetworkingConnectionNetworkPath(projectID string, prior imported.ImportedResource) string {
 	if prior.Identity.NameHint != "" {
 		return "projects/" + projectID + "/global/networks/" + prior.Identity.NameHint
 	}
-	if prior.Identity.ImportID == "" {
-		return ""
-	}
-	// ImportID for google_compute_network is the short name per the
-	// composer convention — handle both `projects/.../networks/<n>`
-	// and bare-name shapes.
-	if idx := strings.Index(prior.Identity.ImportID, "/networks/"); idx >= 0 {
+	if strings.Contains(prior.Identity.ImportID, "/networks/") {
 		return prior.Identity.ImportID
 	}
-	return "projects/" + projectID + "/global/networks/" + prior.Identity.ImportID
+	return ""
 }
 
 // serviceNetworkingConnectionImportID composes the Terraform
