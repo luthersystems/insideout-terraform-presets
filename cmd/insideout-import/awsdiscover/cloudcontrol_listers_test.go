@@ -2313,69 +2313,83 @@ func TestListCloudWatchLogGroups_SkipsEmptyLogGroupName(t *testing.T) {
 }
 
 // TestListCloudWatchLogGroupsAsResourceModels_WrapsAndPreservesOrder
-// pins the parent-lister wrapper for AWS::Logs::LogStream: each log
-// group name from listCloudWatchLogGroups must be wrapped as a JSON
-// string `{"LogGroupName":"…"}` (the CC ResourceModel format) in the
-// same order, with JSON-escaped contents so log group names
-// containing quotes or backslashes round-trip cleanly. The discoverer
-// threads these into ListResourcesInput.ResourceModel.
+// drives the production
+// listCloudWatchLogGroupsAsResourceModelsWithClient against a fake
+// SDK client and verifies it wraps each log group name as a JSON
+// `{"LogGroupName":"…"}` string in the same order, with JSON-escaped
+// contents so names containing quotes or backslashes round-trip
+// cleanly. A regression that changes the format string (e.g. drops %q
+// quoting) would surface here as a parseability failure on the
+// quote/backslash names.
 func TestListCloudWatchLogGroupsAsResourceModels_WrapsAndPreservesOrder(t *testing.T) {
 	t.Parallel()
-	// Smoke the underlying call path: stage the production helper
-	// directly against the fake, mirroring how the discoverer wires
-	// it. listCloudWatchLogGroupsAsResourceModels is region-aware in
-	// production but the per-region client comes from awsCfg; here we
-	// dial it via the unexported helper.
-	//
-	// We can't drive listCloudWatchLogGroupsAsResourceModels through
-	// the fake (it constructs its own client). Instead, exercise the
-	// wrap-shape contract directly via the same fmt.Sprintf %q template
-	// the production code uses, and ensure JSON marshals decode cleanly.
-	names := []string{
+	fake := &fakeCloudWatchLogGroupsLister{
+		pages: []cloudwatchlogs.DescribeLogGroupsOutput{
+			cwlLogGroupsPage("",
+				"/aws/lambda/simple",
+				`/aws/lambda/with"quote`,
+				`/aws/lambda/with\backslash`,
+			),
+		},
+	}
+	got, err := listCloudWatchLogGroupsAsResourceModelsWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	wantNames := []string{
 		"/aws/lambda/simple",
 		`/aws/lambda/with"quote`,
 		`/aws/lambda/with\backslash`,
 	}
-	out := make([]string, 0, len(names))
-	for _, n := range names {
-		out = append(out, fmt.Sprintf(`{"LogGroupName":%q}`, n))
+	if len(got) != len(wantNames) {
+		t.Fatalf("len=%d, want %d", len(got), len(wantNames))
 	}
-	// JSON-parseability pin: every emitted model must round-trip
-	// through json.Unmarshal back into the original LogGroupName. A
-	// future "%s"-instead-of-"%q" regression that drops the quoting
-	// would fail here on the names with quote/backslash characters.
-	for i, s := range out {
-		var got map[string]string
-		if err := json.Unmarshal([]byte(s), &got); err != nil {
+	for i, s := range got {
+		var parsed map[string]string
+		if err := json.Unmarshal([]byte(s), &parsed); err != nil {
 			t.Fatalf("emitted ResourceModel %q failed to parse as JSON: %v", s, err)
 		}
-		if got["LogGroupName"] != names[i] {
-			t.Errorf("LogGroupName round-trip drift for %q: got %q via %s", names[i], got["LogGroupName"], s)
+		if parsed["LogGroupName"] != wantNames[i] {
+			t.Errorf("emit[%d]: LogGroupName=%q via %s, want %q", i, parsed["LogGroupName"], s, wantNames[i])
 		}
 	}
 }
 
 // TestListCloudWatchLogGroupsAsResourceModels_EmptyReturnsNonNilEmpty
-// pins the #255 contract at the wrapper level too: the parent lister
-// must return a non-nil empty slice on accounts with zero log groups
-// so the discoverer's len-zero early exit fires cleanly instead of
-// passing nil into the downstream ListResources fan-out.
+// pins the #255 contract at the wrapper level too: zero log groups
+// must surface as a non-nil empty slice so the discoverer's len-zero
+// early exit fires cleanly instead of passing nil into the downstream
+// ListResources fan-out.
 func TestListCloudWatchLogGroupsAsResourceModels_EmptyReturnsNonNilEmpty(t *testing.T) {
 	t.Parallel()
-	// We can't easily mock the production helper end-to-end because it
-	// constructs its own client; the contract is provable at the wrap
-	// step: the synthetic empty slice we wrap must be non-nil empty.
-	// Mirror the helper's make([]string, 0, 0) construction explicitly.
-	names := []string{}
-	models := make([]string, 0, len(names))
-	for _, n := range names {
-		models = append(models, fmt.Sprintf(`{"LogGroupName":%q}`, n))
+	fake := &fakeCloudWatchLogGroupsLister{
+		pages: []cloudwatchlogs.DescribeLogGroupsOutput{{LogGroups: nil}},
 	}
-	if models == nil {
-		t.Fatal("wrap produced nil slice; want non-nil empty (#255 contract)")
+	got, err := listCloudWatchLogGroupsAsResourceModelsWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(models) != 0 {
-		t.Errorf("got %v, want empty slice", models)
+	if got == nil {
+		t.Fatal("got nil, want non-nil empty slice (#255 JSON marshal contract)")
+	}
+	if len(got) != 0 {
+		t.Errorf("len=%d, want 0", len(got))
+	}
+}
+
+// TestListCloudWatchLogGroupsAsResourceModels_PropagatesListError pins
+// that SDK errors from the inner DescribeLogGroups call surface to
+// the caller (the discoverer treats this as a hard region-abort).
+func TestListCloudWatchLogGroupsAsResourceModels_PropagatesListError(t *testing.T) {
+	t.Parallel()
+	seedErr := errors.New("AccessDenied: logs:DescribeLogGroups")
+	fake := &fakeCloudWatchLogGroupsLister{err: seedErr}
+	_, err := listCloudWatchLogGroupsAsResourceModelsWithClient(context.Background(), fake)
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !errors.Is(err, seedErr) {
+		t.Errorf("err does not wrap seedErr: got %v", err)
 	}
 }
 

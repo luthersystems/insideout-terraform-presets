@@ -960,25 +960,15 @@ type cloudWatchLogGroupsLister interface {
 	DescribeLogGroups(ctx context.Context, in *cloudwatchlogs.DescribeLogGroupsInput, opts ...func(*cloudwatchlogs.Options)) (*cloudwatchlogs.DescribeLogGroupsOutput, error)
 }
 
-// listCloudWatchLogGroups enumerates CloudWatch Logs log groups in the
-// region and returns the LogGroupName for each. Used as the per-region
-// parent enumeration for aws_cloudwatch_log_stream — the names are
-// then wrapped as ResourceModel JSON strings by
-// listCloudWatchLogGroupsAsResourceModels (see below).
+// listCloudWatchLogGroupsWithClient enumerates CloudWatch Logs log
+// groups via the injected client and returns the LogGroupName for
+// each. Used as the inner SDK call by
+// listCloudWatchLogGroupsAsResourceModelsWithClient.
 //
 // DescribeLogGroups paginates via NextToken (string cursor). The
 // terminator condition mirrors the other listers: break on both nil
 // AND empty-string cursors. Log groups with empty / missing names are
 // skipped defensively (the SDK contract permits the field to be nil).
-func listCloudWatchLogGroups(ctx context.Context, awsCfg aws.Config, region string, _ DiscoverArgs) ([]string, error) {
-	client := cloudwatchlogs.NewFromConfig(awsCfg, func(o *cloudwatchlogs.Options) {
-		if region != "" {
-			o.Region = region
-		}
-	})
-	return listCloudWatchLogGroupsWithClient(ctx, client)
-}
-
 func listCloudWatchLogGroupsWithClient(ctx context.Context, client cloudWatchLogGroupsLister) ([]string, error) {
 	names := []string{}
 	var nextToken *string
@@ -1014,8 +1004,22 @@ func listCloudWatchLogGroupsWithClient(ctx context.Context, client cloudWatchLog
 // Returns a non-nil empty slice on accounts with zero log groups so
 // downstream consumers see "[]" not "null" through the JSON-marshal
 // pipeline (#255 contract).
-func listCloudWatchLogGroupsAsResourceModels(ctx context.Context, awsCfg aws.Config, region string, args DiscoverArgs) ([]string, error) {
-	names, err := listCloudWatchLogGroups(ctx, awsCfg, region, args)
+func listCloudWatchLogGroupsAsResourceModels(ctx context.Context, awsCfg aws.Config, region string, _ DiscoverArgs) ([]string, error) {
+	client := cloudwatchlogs.NewFromConfig(awsCfg, func(o *cloudwatchlogs.Options) {
+		if region != "" {
+			o.Region = region
+		}
+	})
+	return listCloudWatchLogGroupsAsResourceModelsWithClient(ctx, client)
+}
+
+// listCloudWatchLogGroupsAsResourceModelsWithClient is the test seam
+// for the wrap-shape contract. Production callers go through
+// listCloudWatchLogGroupsAsResourceModels which constructs the real
+// SDK client; tests drive the wrap logic via the cloudWatchLogGroupsLister
+// interface against a fake.
+func listCloudWatchLogGroupsAsResourceModelsWithClient(ctx context.Context, client cloudWatchLogGroupsLister) ([]string, error) {
+	names, err := listCloudWatchLogGroupsWithClient(ctx, client)
 	if err != nil {
 		return nil, err
 	}

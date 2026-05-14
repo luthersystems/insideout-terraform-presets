@@ -903,33 +903,57 @@ func TestSDKOnlySubresourceDiscoverByID_FetchItemsEmptyMapsToErrNotFound(t *test
 // the registration-bug-as-runtime-error path: a config with neither
 // FetchItem nor FetchItems set is itself a bug (the var anchor in
 // sdkonly_s3.go enforces this at package init), but the discoverer
-// fails-loud at runtime rather than silently emitting zero so a
+// must fail-loud at runtime rather than silently emitting zero so a
 // dynamically-constructed config still trips the contract.
+//
+// Exact runtime contract: fetchOne returns
+//
+//	"<TFType>: FetchItem or FetchItems must be set on sdkOnlySubresourceConfig"
+//
+// (sdkonly_subresource_discoverer.go:359), which the bulk Discover
+// fan-out converts to a ServiceWarn (one per parent) and returns
+// nil error + zero items. We assert this precise shape so a regression
+// that lets the discoverer emit a zero-NameHint stub or swallow the
+// warning would surface here.
 func TestSDKOnlySubresourceDiscover_NoFetchVariantSetReturnsError(t *testing.T) {
 	t.Parallel()
 	cfg := sdkOnlyTestConfig()
 	cfg.FetchItem = nil
 	cfg.FetchItems = nil
 	cfg.ListParents = func(_ context.Context, _ aws.Config, _ string, _ DiscoverArgs) ([]string, error) {
-		return []string{"p"}, nil
+		return []string{"p-1", "p-2"}, nil
 	}
 	d := newSDKOnlySubresourceDiscoverer(cfg, aws.Config{}, DefaultMaxConcurrency)
-	_, err := d.Discover(context.Background(), DiscoverArgs{
+	rec := &recordingEmitter{}
+	got, err := d.Discover(context.Background(), DiscoverArgs{
 		Regions:   []string{"us-east-1"},
 		AccountID: "123",
+		Emitter:   rec,
 	})
-	// FetchItem error path: the parent enumeration succeeds but each
-	// fetchOne call returns the "must be set" error; the discoverer
-	// emits a ServiceWarn per parent and returns nil (soft-fail).
-	// The empty-slice (no results) is the observable consequence; we
-	// don't assert on the warn message string because the bulk path
-	// converts the error to a warn via emitter, which the test does
-	// not enable in this case.
 	if err != nil {
-		// The framework may also choose to surface this as a hard
-		// error; either way, what matters is that the registry-level
-		// panic in sdkonly_s3.go's var anchor would have caught it
-		// first in production. Both behaviors are acceptable.
-		return
+		t.Fatalf("soft-fail: missing-fetch err must NOT propagate; got %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("got %d items, want 0 (no emission when neither FetchItem nor FetchItems set)", len(got))
+	}
+	// One ServiceWarn per parent. Each warn must mention the TFType
+	// and the "must be set" substring so the operator can locate the
+	// registration bug.
+	var warns []recordedEvent
+	for _, e := range rec.snapshot() {
+		if e.Kind == "service_warn" {
+			warns = append(warns, e)
+		}
+	}
+	if len(warns) != 2 {
+		t.Fatalf("got %d ServiceWarn events, want 2 (one per parent); events=%+v", len(warns), rec.snapshot())
+	}
+	for _, w := range warns {
+		if !strings.Contains(w.Message, "must be set") {
+			t.Errorf("warn=%q does not mention 'must be set'", w.Message)
+		}
+		if !strings.Contains(w.Message, cfg.TFType) {
+			t.Errorf("warn=%q does not mention TFType=%q", w.Message, cfg.TFType)
+		}
 	}
 }

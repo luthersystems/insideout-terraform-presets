@@ -225,17 +225,21 @@ func TestFetchS3BucketVersioning_NoSuchBucketSwallowed(t *testing.T) {
 
 // TestFetchS3BucketVersioning_PropagatesGenericError pins that errors
 // other than NoSuchBucket propagate up so the bulk Discover path can
-// emit a ServiceWarn.
+// emit a ServiceWarn. Asserts errors.Is on the seed so a regression
+// that wraps the SDK error as a different sentinel (or silently
+// swallows it) surfaces here rather than passing as "err != nil".
 func TestFetchS3BucketVersioning_PropagatesGenericError(t *testing.T) {
 	t.Parallel()
+	seedErr := fakeAPIErr("AccessDenied", "no perms")
 	fake := &fakeS3SubresourceClient{
-		versioningErrByBkt: map[string]error{
-			"bkt": fakeAPIErr("AccessDenied", "no perms"),
-		},
+		versioningErrByBkt: map[string]error{"bkt": seedErr},
 	}
 	_, _, _, err := fetchS3BucketVersioningWithClient(context.Background(), fake, "bkt")
 	if err == nil {
 		t.Fatal("expected error")
+	}
+	if !errors.Is(err, seedErr) {
+		t.Errorf("err does not wrap seedErr: got %v", err)
 	}
 }
 

@@ -238,7 +238,9 @@ func TestFetchASGTags_EmptyKeySkipped(t *testing.T) {
 
 // TestFetchASGTags_PropagatesError pins that an SDK error on the
 // per-ASG describe call surfaces so the bulk Discover path can
-// ServiceWarn it.
+// ServiceWarn it. errors.Is on the seed catches a regression that
+// wraps the SDK error as a different sentinel or silently swallows
+// it.
 func TestFetchASGTags_PropagatesError(t *testing.T) {
 	t.Parallel()
 	seedErr := errors.New("describe-by-name-seed")
@@ -248,6 +250,9 @@ func TestFetchASGTags_PropagatesError(t *testing.T) {
 	_, err := fetchASGTagsWithClient(context.Background(), fake, "asg-X")
 	if err == nil {
 		t.Fatal("expected error")
+	}
+	if !errors.Is(err, seedErr) {
+		t.Errorf("err does not wrap seedErr: got %v", err)
 	}
 }
 

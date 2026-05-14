@@ -180,17 +180,20 @@ func TestFetchDDBContributorInsights_NotFoundSwallowed(t *testing.T) {
 
 // TestFetchDDBContributorInsights_PropagatesGenericError pins that
 // errors other than ResourceNotFoundException propagate so the bulk
-// Discover path can emit a ServiceWarn.
+// Discover path can emit a ServiceWarn. errors.Is on the seed catches
+// a regression that wraps the SDK error as a different sentinel.
 func TestFetchDDBContributorInsights_PropagatesGenericError(t *testing.T) {
 	t.Parallel()
+	seedErr := fakeAPIErr("AccessDenied", "no perms")
 	fake := &fakeDDBSubresourceClient{
-		insightsErrT: map[string]error{
-			"users": fakeAPIErr("AccessDenied", "no perms"),
-		},
+		insightsErrT: map[string]error{"users": seedErr},
 	}
 	_, _, _, err := fetchDDBContributorInsightsWithClient(context.Background(), fake, "users")
 	if err == nil {
 		t.Fatal("expected error")
+	}
+	if !errors.Is(err, seedErr) {
+		t.Errorf("err does not wrap seedErr: got %v", err)
 	}
 }
 
