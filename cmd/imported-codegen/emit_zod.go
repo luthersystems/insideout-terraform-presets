@@ -112,14 +112,28 @@ func EmitZodValueFile(outDir string) (string, error) {
 }
 
 // EmitZodRegistryFile writes _registry.ts indexing every emitted type
-// by its Terraform resource type.
-func EmitZodRegistryFile(outDir string, entries []ZodRegistryEntry) (string, error) {
+// by its Terraform resource type and exposing a versions map keyed by
+// provider source.
+//
+// The versions map mirrors the per-provider constants in
+// pkg/composer/imported/generated/version.gen.go on the Go side:
+// downstream consumers do `versions[registry[tfType].providerSource]`
+// to recover the exact pinned version active at codegen time.
+func EmitZodRegistryFile(outDir string, entries []ZodRegistryEntry, pins ProviderPins) (string, error) {
 	tmpl, err := template.New("registry.zod").Parse(zodRegistryTemplateSrc)
 	if err != nil {
 		return "", fmt.Errorf("parse zod registry template: %w", err)
 	}
 	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, map[string]any{"Entries": entries}); err != nil {
+	data := map[string]any{
+		"Entries": entries,
+		"Versions": []zodRegistryVersion{
+			{Source: AWSProviderSource, Version: pins.AWS},
+			{Source: GoogleProviderSource, Version: pins.Google},
+			{Source: GoogleBetaProviderSource, Version: pins.GoogleBeta},
+		},
+	}
+	if err := tmpl.Execute(&buf, data); err != nil {
 		return "", fmt.Errorf("execute zod registry template: %w", err)
 	}
 	path := filepath.Join(outDir, "_registry.ts")
@@ -127,6 +141,14 @@ func EmitZodRegistryFile(outDir string, entries []ZodRegistryEntry) (string, err
 		return "", fmt.Errorf("write %s: %w", path, err)
 	}
 	return path, nil
+}
+
+// zodRegistryVersion is one row in the emitted versions map. Stable
+// per-source ordering matters for byte-for-byte parity across runs;
+// the slice is iterated in the order the template renders it.
+type zodRegistryVersion struct {
+	Source  string
+	Version string
 }
 
 func buildZodTypeData(res *tfjson.Schema, tfType, providerSource string) (*ZodTypeData, error) {

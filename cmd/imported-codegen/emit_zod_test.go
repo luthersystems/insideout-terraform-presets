@@ -41,6 +41,7 @@ func TestEmitZod_AllWantedTypes(t *testing.T) {
 		"--aws-schema", filepath.Join(root, "schemas", "aws.filtered.json"),
 		"--google-schema", filepath.Join(root, "schemas", "google.filtered.json"),
 		"--google-beta-schema", filepath.Join(root, "schemas", "google-beta.filtered.json"),
+		"--providers-tf", filepath.Join(root, "schemas", "providers.tf"),
 		"--out", outDir,
 	})
 	require.Equal(t, 0, rc, "runZod must exit 0")
@@ -90,6 +91,32 @@ func TestEmitZod_AllWantedTypes(t *testing.T) {
 	for _, tfType := range want {
 		assert.Containsf(t, string(registry), fmt.Sprintf(`"%s":`, tfType), "_registry.ts missing entry for %s", tfType)
 	}
+
+	// Versions map: load the same providers.tf the emitter consumed
+	// and assert the emitted block is byte-anchored against the
+	// expected source/version pairs in template-iteration order.
+	// This is the load-bearing TS-side drift signal — a downstream
+	// consumer reads versions[providerSource] to stamp
+	// ResourceIdentity.providerVersion at import time. A weaker
+	// Contains-per-pair check would pass if the pairs leaked into a
+	// comment or a second (corrupt) map; the block-anchored check +
+	// single-occurrence guard catches both regressions.
+	pins, err := LoadProviderPins(filepath.Join(root, "schemas", "providers.tf"))
+	require.NoError(t, err)
+	require.Equal(t, 1, strings.Count(string(registry), "export const versions = {"),
+		"_registry.ts must declare exactly one versions map")
+	wantBlock := fmt.Sprintf(
+		"export const versions = {\n"+
+			"  %q: %q,\n"+
+			"  %q: %q,\n"+
+			"  %q: %q,\n"+
+			"} as const;",
+		AWSProviderSource, pins.AWS,
+		GoogleProviderSource, pins.Google,
+		GoogleBetaProviderSource, pins.GoogleBeta,
+	)
+	assert.Contains(t, string(registry), wantBlock,
+		"_registry.ts versions block must match expected layout byte-for-byte")
 }
 
 // TestParseTypesFilter pins the parser semantics: empty / whitespace
@@ -276,6 +303,7 @@ func TestEmitZod_FilterFlag(t *testing.T) {
 		"--aws-schema", filepath.Join(root, "schemas", "aws.filtered.json"),
 		"--google-schema", filepath.Join(root, "schemas", "google.filtered.json"),
 		"--google-beta-schema", filepath.Join(root, "schemas", "google-beta.filtered.json"),
+		"--providers-tf", filepath.Join(root, "schemas", "providers.tf"),
 		"--out", outDir,
 		"--types", "aws_sqs_queue,google_storage_bucket",
 	})
@@ -316,6 +344,7 @@ func TestEmitZodMetadataMatchesGoSchema(t *testing.T) {
 		"--aws-schema", filepath.Join(root, "schemas", "aws.filtered.json"),
 		"--google-schema", filepath.Join(root, "schemas", "google.filtered.json"),
 		"--google-beta-schema", filepath.Join(root, "schemas", "google-beta.filtered.json"),
+		"--providers-tf", filepath.Join(root, "schemas", "providers.tf"),
 		"--out", outDir,
 	})
 	require.Equal(t, 0, rc)
