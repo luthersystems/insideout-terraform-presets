@@ -85,7 +85,12 @@ aws_resourceexplorer2_view	Observability
 aws_route53_zone	Network Security
 aws_route_table	Network Security
 aws_s3_bucket	Data Storage
+aws_s3_bucket_lifecycle_configuration	Data Storage
+aws_s3_bucket_ownership_controls	Data Storage
 aws_s3_bucket_policy	Data Storage
+aws_s3_bucket_public_access_block	Data Storage
+aws_s3_bucket_server_side_encryption_configuration	Data Storage
+aws_s3_bucket_versioning	Data Storage
 aws_secretsmanager_secret	Security
 aws_secretsmanager_secret_rotation	Security
 aws_security_group	Network Security

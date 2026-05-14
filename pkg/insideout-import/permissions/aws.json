@@ -1578,6 +1578,26 @@
       "purpose": "list buckets account-globally (ListBuckets)"
     },
     {
+      "service": "s3_bucket_lifecycle_configuration",
+      "iam_action": "s3:GetLifecycleConfiguration",
+      "purpose": "SDK-only sub-resource discoverer (#14k1 / #452): per-bucket GetBucketLifecycleConfiguration; NoSuchLifecycleConfiguration signals 'not configured' and yields zero items for that bucket"
+    },
+    {
+      "service": "s3_bucket_lifecycle_configuration",
+      "iam_action": "s3:ListAllMyBuckets",
+      "purpose": "SDK-only sub-resource discoverer (#14k1): enumerate parent buckets via ListBuckets before fanning out per-bucket GetBucketLifecycleConfiguration"
+    },
+    {
+      "service": "s3_bucket_ownership_controls",
+      "iam_action": "s3:GetBucketOwnershipControls",
+      "purpose": "SDK-only sub-resource discoverer (#14k1 / #452): per-bucket GetBucketOwnershipControls; OwnershipControlsNotFoundError signals 'not configured' and yields zero items for that bucket"
+    },
+    {
+      "service": "s3_bucket_ownership_controls",
+      "iam_action": "s3:ListAllMyBuckets",
+      "purpose": "SDK-only sub-resource discoverer (#14k1): enumerate parent buckets via ListBuckets before fanning out per-bucket GetBucketOwnershipControls"
+    },
+    {
       "service": "s3_bucket_policy",
       "iam_action": "cloudcontrol:GetResource",
       "purpose": "Cloud Control GetResource for AWS::S3::BucketPolicy (#14h)"
@@ -1596,6 +1616,36 @@
       "service": "s3_bucket_policy",
       "iam_action": "s3:ListAllMyBuckets",
       "purpose": "Cloud Control ListResources for AWS::S3::BucketPolicy enumerates buckets first; the per-bucket GetBucketPolicy returns NoSuchBucketPolicy for buckets without a policy (filtered server-side)"
+    },
+    {
+      "service": "s3_bucket_public_access_block",
+      "iam_action": "s3:GetBucketPublicAccessBlock",
+      "purpose": "SDK-only sub-resource discoverer (#14k1 / #452): per-bucket GetPublicAccessBlock; NoSuchPublicAccessBlockConfiguration signals 'not configured' and yields zero items for that bucket"
+    },
+    {
+      "service": "s3_bucket_public_access_block",
+      "iam_action": "s3:ListAllMyBuckets",
+      "purpose": "SDK-only sub-resource discoverer (#14k1): enumerate parent buckets via ListBuckets before fanning out per-bucket GetPublicAccessBlock"
+    },
+    {
+      "service": "s3_bucket_server_side_encryption_configuration",
+      "iam_action": "s3:GetEncryptionConfiguration",
+      "purpose": "SDK-only sub-resource discoverer (#14k1 / #452): per-bucket GetBucketEncryption; ServerSideEncryptionConfigurationNotFoundError signals 'not configured' and yields zero items for that bucket"
+    },
+    {
+      "service": "s3_bucket_server_side_encryption_configuration",
+      "iam_action": "s3:ListAllMyBuckets",
+      "purpose": "SDK-only sub-resource discoverer (#14k1): enumerate parent buckets via ListBuckets before fanning out per-bucket GetBucketEncryption"
+    },
+    {
+      "service": "s3_bucket_versioning",
+      "iam_action": "s3:GetBucketVersioning",
+      "purpose": "SDK-only sub-resource discoverer (#14k1 / #452): per-bucket GetBucketVersioning; empty Status and MFADelete signal 'never configured' and yield zero items for that bucket"
+    },
+    {
+      "service": "s3_bucket_versioning",
+      "iam_action": "s3:ListAllMyBuckets",
+      "purpose": "SDK-only sub-resource discoverer (#14k1): enumerate parent buckets via ListBuckets before fanning out per-bucket GetBucketVersioning"
     },
     {
       "service": "secretsmanager",
