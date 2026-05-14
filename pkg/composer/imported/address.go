@@ -30,6 +30,18 @@ const (
 // resource type. If id.Type is empty (after trimming whitespace), the
 // function returns "" so callers can detect the misuse.
 //
+// Address vs display name (issue #471): the returned `<label>` is the
+// Terraform-safe sanitized form of id.NameHint (or the next non-empty
+// source in the precedence list). Per normalizeLabel: lowercase ASCII,
+// `[^a-z0-9_]` collapsed to `_`, repeated `_` merged, prefixed with
+// `r_` if it doesn't start with a letter, capped to maxLabelLen. A
+// GCS bucket named `b9043cd2-tfstate` therefore round-trips to
+// `google_storage_bucket.b9043cd2_tfstate` here — same resource, two
+// strings. UI consumers that surface a user-visible name should keep
+// id.NameHint around for display (e.g. "Bucket b9043cd2-tfstate → TF:
+// google_storage_bucket.b9043cd2_tfstate") and use the address only
+// for the TF-state form and `import {}` blocks.
+//
 // Algorithm (per docs/managed-resource-tiers.md lines 528-544):
 //
 //  1. Pick the first non-empty name hint from id.NameHint, NativeIDs["name"],

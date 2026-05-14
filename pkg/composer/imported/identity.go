@@ -1,5 +1,39 @@
 package imported
 
+// EnrichmentStatus reports whether the per-type AttributeEnricher fully
+// populated a resource's Attrs payload. Empty string is the implicit
+// "unknown" state — used at pre-enrich call sites and for resource types
+// that have no registered enricher (Identity-only IRs). Downstream
+// consumers (the Reliable importer wizard, future Riley management views)
+// read this to surface partial-data warnings without grep-ing the
+// enricher's warn log; see issue #471 for the live-verification context
+// that motivated adding a typed signal.
+type EnrichmentStatus string
+
+const (
+	// EnrichmentStatusUnknown is the zero / not-yet-enriched state. The
+	// enricher orchestrator never writes this value — it represents
+	// "no enrich pass has touched this IR yet" (pre-enrich call sites,
+	// or resource types without a registered AttributeEnricher).
+	// Downstream consumers should treat it equivalently to a bare empty
+	// string per the JSON `omitempty` tag.
+	EnrichmentStatusUnknown EnrichmentStatus = ""
+	// EnrichmentStatusFull indicates the enricher populated every
+	// attribute it knows how to fetch. The IR's Attrs is authoritative.
+	EnrichmentStatusFull EnrichmentStatus = "full"
+	// EnrichmentStatusPartial indicates the enricher populated some
+	// attributes but at least one fetch failed. Reserved for future
+	// multi-call enrichers (e.g. bucket-ACL-plus-policy); current
+	// per-type enrichers marshal Attrs atomically and so never set
+	// Partial. TODO(#471): wire this when a multi-call enricher lands.
+	EnrichmentStatusPartial EnrichmentStatus = "partial"
+	// EnrichmentStatusFailed indicates no attributes could be populated
+	// (client unavailable, name underivable, fetch error, marshal
+	// error). The IR's Attrs is empty; consumers should treat it as
+	// Identity-only and surface the EnrichErrors strings for triage.
+	EnrichmentStatusFailed EnrichmentStatus = "failed"
+)
+
 // ResourceIdentity separates Terraform's stable address from cloud-side
 // correlation identifiers. Address is immutable after import; renaming is a
 // future explicit migration operation using `moved {}` blocks, not an ordinary
@@ -15,9 +49,22 @@ type ResourceIdentity struct {
 	Type string `json:"type,omitempty"`
 	// Address is the immutable Terraform resource address (e.g.
 	// "aws_sqs_queue.dlq"). Generated once via GenerateAddress and frozen.
+	//
+	// The label portion (after the dot) is the sanitized form of
+	// NameHint per address.go::normalizeLabel: lowercase ASCII,
+	// `[^a-z0-9_]` collapsed to `_`, repeated `_` merged, leading
+	// non-letter prefixed with `r_`, capped to maxLabelLen. A bucket
+	// named `b9043cd2-tfstate` therefore appears here as
+	// `google_storage_bucket.b9043cd2_tfstate`. UI consumers that
+	// surface a user-readable name should display NameHint alongside
+	// (or instead of) Address when the two differ, and use Address
+	// only for the TF-state/import-block form.
 	Address string `json:"address,omitempty"`
 	// NameHint is the original human-readable name source preserved for
-	// audit and display.
+	// audit and display. May contain characters that are illegal in a
+	// Terraform label (hyphens, uppercase, dots) — Address holds the
+	// sanitized form. See the Address field comment for the
+	// relationship.
 	NameHint string `json:"name_hint,omitempty"`
 	// ProviderConfig identifies the provider alias used by emitted HCL,
 	// e.g. "aws.imported" or "google.imported".
@@ -51,4 +98,20 @@ type ResourceIdentity struct {
 	// consumers (#291 tag selectors, #289 gap-#6 DiscoverySummary.byTag)
 	// rely on the nil-vs-empty distinction.
 	Tags map[string]string `json:"tags,omitempty"`
+
+	// EnrichmentStatus reports whether the per-type enricher fully
+	// populated this resource's Attrs. Empty == not-yet-enriched (the
+	// discoverer hasn't run the enrich pass, or no enricher is
+	// registered for this type — Identity-only IR). Set by the
+	// EnrichAttributes orchestrator; per-type enrichers do not write
+	// this directly. Downstream consumers (Reliable wizard, future
+	// management views) read this to surface partial-data warnings
+	// without grep-ing the enricher's warn log. Added for issue #471.
+	EnrichmentStatus EnrichmentStatus `json:"enrichment_status,omitempty"`
+	// EnrichErrors carries the per-attribute (or per-pass) error
+	// messages when EnrichmentStatus != Full. Nil when Full or Unknown.
+	// Verbose enough for triage but PII-free — error messages from the
+	// cloud SDK pass through verbatim (no auth tokens, no full URLs
+	// beyond the resource identifier).
+	EnrichErrors []string `json:"enrich_errors,omitempty"`
 }

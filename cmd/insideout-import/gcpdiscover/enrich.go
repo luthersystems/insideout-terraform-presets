@@ -147,14 +147,27 @@ func (g *GCPDiscoverer) EnrichAttributes(ctx context.Context, irs []imported.Imp
 		err := enr.Enrich(ctx, &irs[i], clients)
 		switch {
 		case err == nil:
+			// Per-type enrichers marshal Attrs atomically today, so
+			// a nil return means Full. The Partial state is reserved
+			// for a future multi-call enricher (see issue #471).
+			irs[i].Identity.EnrichmentStatus = imported.EnrichmentStatusFull
+			irs[i].Identity.EnrichErrors = nil
 			emitter.ItemFound(enrichServiceSlug, irs[i].Identity.Location, irs[i].Identity.Type, irs[i].Identity.ImportID)
 		case errors.Is(err, ErrEnrichClientUnavailable):
 			// Client-side configuration failure — surface as a
 			// warn but don't accumulate as an error. Mirrors the
-			// nonCAIDiscovererHasLister warn semantics.
+			// nonCAIDiscovererHasLister warn semantics. The typed
+			// signal on Identity lets downstream consumers
+			// distinguish this from a happy Identity-only IR
+			// (issue #471).
+			irs[i].Identity.EnrichmentStatus = imported.EnrichmentStatusFailed
+			irs[i].Identity.EnrichErrors = append(irs[i].Identity.EnrichErrors, err.Error())
 			emitter.ServiceWarn(enrichServiceSlug, "", fmt.Sprintf("%s/%s: %v", irs[i].Identity.Type, irs[i].Identity.Address, err))
 		default:
-			errs = append(errs, fmt.Errorf("enrich %s/%s: %w", irs[i].Identity.Type, irs[i].Identity.Address, err))
+			wrapped := fmt.Errorf("enrich %s/%s: %w", irs[i].Identity.Type, irs[i].Identity.Address, err)
+			irs[i].Identity.EnrichmentStatus = imported.EnrichmentStatusFailed
+			irs[i].Identity.EnrichErrors = append(irs[i].Identity.EnrichErrors, wrapped.Error())
+			errs = append(errs, wrapped)
 		}
 	}
 	if len(errs) > 0 {
