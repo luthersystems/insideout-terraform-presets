@@ -1880,6 +1880,196 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 		},
 		TagsFromProperties: tagsFromKey("Tags"),
 	},
+
+	// =====================================================================
+	// S3 Bucket Policy — CC default-list, untaggable (#14h)
+	// =====================================================================
+	{
+		// AWS::S3::BucketPolicy has standard CC list+read handlers (live
+		// probe in .tmp/14h-cc-probe.txt confirms ListResources returns
+		// results — one entry per bucket that has a policy attached).
+		// One policy per bucket: CC primary identifier = Bucket (the
+		// bucket name) and Terraform's import format for
+		// aws_s3_bucket_policy is also the bucket name — passthrough.
+		//
+		// Bucket policies have no Tags property on the CFN schema (the
+		// parent bucket carries the tags). SkipProjectTagFilter bypasses
+		// the legacy Project filter so policies on project-tagged
+		// buckets don't get silently dropped (matches the
+		// untaggableAWS / NON_TAGGABLE_AWS allowlist entry for
+		// aws_s3_bucket_policy).
+		TFType:                 "aws_s3_bucket_policy",
+		CloudFormationType:     "AWS::S3::BucketPolicy",
+		Slug:                   "s3_bucket_policy",
+		SkipProjectTagFilter:   true,
+		ImportIDFromIdentifier: passthroughImportID,
+		NameHintFromProperties: nameOrIdentifier("Bucket"),
+		NativeIDsFromProperties: func(identifier string, _ map[string]any) map[string]string {
+			return map[string]string{"bucket": identifier}
+		},
+		TagsFromProperties: emptyTagsExtractor,
+	},
+
+	// =====================================================================
+	// CloudFront Origin Access Identity — CC default-list, untaggable (#14h)
+	// =====================================================================
+	{
+		// AWS::CloudFront::CloudFrontOriginAccessIdentity has standard CC
+		// list+read handlers (probe confirmed — though the test account
+		// returned 0 OAIs, the type advertised LIST support without
+		// error). CC primary identifier = Id (the OAI ID, e.g.
+		// "E2QWRUHAPOMQZL") which is read-only / auto-assigned by
+		// CloudFront. Terraform's import format for
+		// aws_cloudfront_origin_access_identity is the bare OAI ID —
+		// passthrough.
+		//
+		// OAIs are a CloudFront-global resource and the CFN schema has
+		// no Tags property — they carry no tags at all. SkipProjectTag
+		// is true so the legacy Project filter doesn't drop them, and
+		// the Slug groups OAI events alongside other cloudfront types.
+		TFType:                 "aws_cloudfront_origin_access_identity",
+		CloudFormationType:     "AWS::CloudFront::CloudFrontOriginAccessIdentity",
+		Slug:                   "cloudfront_origin_access_identity",
+		IsGlobal:               true,
+		SkipProjectTagFilter:   true,
+		ImportIDFromIdentifier: passthroughImportID,
+		// The CFN schema's only human-readable hint is the optional
+		// Comment field on CloudFrontOriginAccessIdentityConfig; the
+		// flat properties view exposes it under that nested path. Fall
+		// back to the identifier (OAI ID) when absent.
+		NameHintFromProperties: func(identifier string, props map[string]any) string {
+			if cfg, ok := props["CloudFrontOriginAccessIdentityConfig"].(map[string]any); ok {
+				if c := extractString(cfg, "Comment"); c != "" {
+					return c
+				}
+			}
+			return identifier
+		},
+		NativeIDsFromProperties: func(identifier string, props map[string]any) map[string]string {
+			out := map[string]string{"id": identifier}
+			if s := extractString(props, "S3CanonicalUserId"); s != "" {
+				out["s3_canonical_user_id"] = s
+			}
+			return out
+		},
+		TagsFromProperties: emptyTagsExtractor,
+	},
+
+	// =====================================================================
+	// CloudFront Monitoring Subscription — SDKLister, untaggable (#14h)
+	// =====================================================================
+	{
+		// AWS::CloudFront::MonitoringSubscription's CC ListResources
+		// returns UnsupportedActionException (verified via live probe).
+		// CC GetResource IS supported and keyed by DistributionId — so
+		// we enumerate distributions via cloudfront:ListDistributions
+		// and feed the resulting DistributionId list into the standard
+		// CC GetResource fan-out. Mirrors the
+		// aws_secretsmanager_secret_rotation precedent from #430
+		// (parent-resource enumeration via the native SDK to seed a CC
+		// GetResource sub-resource lookup).
+		//
+		// Per-distribution: GetResource on a distribution that has no
+		// monitoring subscription returns ResourceNotFoundException;
+		// the discoverer's per-item soft-fail (ServiceWarn) handles it
+		// without aborting the region scan. Distributions are
+		// CloudFront-global, so this lister is region-agnostic.
+		//
+		// CC primary identifier = DistributionId (e.g. "E2QWRUHAPOMQZL")
+		// and Terraform's import format for
+		// aws_cloudfront_monitoring_subscription is also the bare
+		// DistributionId — passthrough.
+		//
+		// No Tags property on the CFN schema (config-only sub-resource);
+		// SkipProjectTagFilter + emptyTagsExtractor matches the
+		// untaggableAWS / NON_TAGGABLE_AWS entry.
+		TFType:                 "aws_cloudfront_monitoring_subscription",
+		CloudFormationType:     "AWS::CloudFront::MonitoringSubscription",
+		Slug:                   "cloudfront_monitoring_subscription",
+		IsGlobal:               true,
+		SkipProjectTagFilter:   true,
+		SDKLister:              listCloudFrontDistributionIDs,
+		ImportIDFromIdentifier: passthroughImportID,
+		NameHintFromProperties: nameOrIdentifier("DistributionId"),
+		NativeIDsFromProperties: func(identifier string, _ map[string]any) map[string]string {
+			return map[string]string{"distribution_id": identifier}
+		},
+		TagsFromProperties: emptyTagsExtractor,
+	},
+
+	// =====================================================================
+	// CloudWatch Logs Resource Policy — CC default-list, untaggable (#14h)
+	// =====================================================================
+	{
+		// AWS::Logs::ResourcePolicy has standard CC list+read handlers
+		// (probe confirmed — list returned [] on the test account but
+		// the type advertised LIST support without error). CC primary
+		// identifier = PolicyName and Terraform's import format for
+		// aws_cloudwatch_log_resource_policy is also the bare
+		// PolicyName — passthrough.
+		//
+		// Resource policies have no Tags property on the CFN schema —
+		// they're policy documents, not taggable resources.
+		// SkipProjectTagFilter + emptyTagsExtractor matches the
+		// untaggableAWS / NON_TAGGABLE_AWS allowlist entry.
+		TFType:                 "aws_cloudwatch_log_resource_policy",
+		CloudFormationType:     "AWS::Logs::ResourcePolicy",
+		Slug:                   "cloudwatch_log_resource_policy",
+		SkipProjectTagFilter:   true,
+		ImportIDFromIdentifier: passthroughImportID,
+		NameHintFromProperties: nameOrIdentifier("PolicyName"),
+		NativeIDsFromProperties: func(identifier string, _ map[string]any) map[string]string {
+			return map[string]string{"policy_name": identifier}
+		},
+		TagsFromProperties: emptyTagsExtractor,
+	},
+
+	// =====================================================================
+	// CloudWatch Logs Log Stream — ParentLister on LogGroupName, untaggable (#14h)
+	// =====================================================================
+	{
+		// AWS::Logs::LogStream is parent-scoped on LogGroupName: CC
+		// ListResources without a ResourceModel returns
+		// InvalidRequestException ("Missing or invalid ResourceModel
+		// property … Required property:  (#: required key
+		// [LogGroupName] not found)"). Verified via live probe.
+		// ParentLister enumerates log groups via
+		// logs:DescribeLogGroups and emits one
+		// ResourceModel={"LogGroupName":"…"} JSON-string per group; the
+		// discoverer fans ListResources out once per parent.
+		//
+		// Cloud Control identifier = "<LogGroupName>|<LogStreamName>"
+		// (compound, pipe-separated). Terraform's import format for
+		// aws_cloudwatch_log_stream is "<log_group_name>:<log_stream_name>"
+		// (colon-separated) per terraform-provider-aws v6.x docs — pin
+		// the rewrite via a single-replace "|" -> ":". The first-`|`-
+		// only rewrite preserves any pipe characters that might appear
+		// in a stream name (rare but legal in the CloudWatch Logs API).
+		//
+		// No Tags property on the CFN schema (the parent log group
+		// carries the tags); SkipProjectTagFilter + emptyTagsExtractor
+		// matches the untaggableAWS / NON_TAGGABLE_AWS allowlist entry.
+		TFType:               "aws_cloudwatch_log_stream",
+		CloudFormationType:   "AWS::Logs::LogStream",
+		Slug:                 "cloudwatch_log_stream",
+		SkipProjectTagFilter: true,
+		ParentLister:         listCloudWatchLogGroupsAsResourceModels,
+		ImportIDFromIdentifier: func(identifier string, _ map[string]any) string {
+			return strings.Replace(identifier, "|", ":", 1)
+		},
+		NameHintFromProperties: nameOrIdentifier("LogStreamName"),
+		NativeIDsFromProperties: func(identifier string, _ map[string]any) map[string]string {
+			parts := strings.SplitN(identifier, "|", 2)
+			if len(parts) != 2 {
+				return nil
+			}
+			return map[string]string{
+				"log_group_name":  parts[0],
+				"log_stream_name": parts[1],
+			}
+		},
+		TagsFromProperties: emptyTagsExtractor,
+	},
 }
 
 // passthroughImportID is the common ImportIDFromIdentifier used by every

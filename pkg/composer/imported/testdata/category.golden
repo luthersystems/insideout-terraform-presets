@@ -14,9 +14,13 @@ aws_backup_vault	Data Storage
 aws_bedrock_guardrail	Security
 aws_cloudfront_distribution	Network Security
 aws_cloudfront_function	Network Security
+aws_cloudfront_monitoring_subscription	Network Security
+aws_cloudfront_origin_access_identity	Network Security
 aws_cloudwatch_dashboard	Observability
 aws_cloudwatch_event_rule	Events
 aws_cloudwatch_log_group	Observability
+aws_cloudwatch_log_resource_policy	Observability
+aws_cloudwatch_log_stream	Observability
 aws_cloudwatch_metric_alarm	Observability
 aws_cognito_identity_provider	Security
 aws_cognito_resource_server	Security
@@ -73,6 +77,7 @@ aws_resourceexplorer2_view	Observability
 aws_route53_zone	Network Security
 aws_route_table	Network Security
 aws_s3_bucket	Data Storage
+aws_s3_bucket_policy	Data Storage
 aws_secretsmanager_secret	Security
 aws_secretsmanager_secret_rotation	Security
 aws_security_group	Network Security

@@ -10,6 +10,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/apigatewayv2"
 	"github.com/aws/aws-sdk-go-v2/service/autoscaling"
 	"github.com/aws/aws-sdk-go-v2/service/cloudfront"
+	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	"github.com/aws/aws-sdk-go-v2/service/cognitoidentityprovider"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
@@ -876,4 +877,150 @@ func listOpenSearchDomainsWithClient(ctx context.Context, client openSearchDomai
 		names = append(names, n)
 	}
 	return names, nil
+}
+
+// cloudFrontDistributionsLister is the narrow subset of the CloudFront
+// SDK used by the aws_cloudfront_monitoring_subscription SDKLister
+// enumerator (#14h). MonitoringSubscription is a per-distribution
+// sub-resource keyed on DistributionId; the lister enumerates
+// distributions via cloudfront:ListDistributions and feeds the
+// DistributionId list into the standard CC GetResource fan-out.
+// The interface is package-private so test fakes can satisfy it
+// without depending on the full CloudFront client.
+type cloudFrontDistributionsLister interface {
+	ListDistributions(ctx context.Context, in *cloudfront.ListDistributionsInput, opts ...func(*cloudfront.Options)) (*cloudfront.ListDistributionsOutput, error)
+}
+
+// listCloudFrontDistributionIDs enumerates CloudFront distributions
+// (global service) and returns the DistributionId for each. The CC
+// primary identifier for AWS::CloudFront::MonitoringSubscription is
+// DistributionId, and Terraform's import format for
+// aws_cloudfront_monitoring_subscription is also the bare
+// DistributionId — passthrough.
+//
+// Distributions without a monitoring subscription will surface
+// ResourceNotFoundException on the downstream CC GetResource call;
+// the discoverer's per-item soft-fail handles them via ServiceWarn
+// without aborting the region scan.
+//
+// CloudFront ListDistributions paginates via `Marker` (string cursor;
+// the next-page cursor field is `NextMarker` inside DistributionList).
+// The terminator condition mirrors listCloudFrontFunctions: break on
+// both nil AND empty-string cursors.
+func listCloudFrontDistributionIDs(ctx context.Context, awsCfg aws.Config, region string, _ DiscoverArgs) ([]string, error) {
+	client := cloudfront.NewFromConfig(awsCfg, func(o *cloudfront.Options) {
+		if region != "" {
+			o.Region = region
+		}
+	})
+	return listCloudFrontDistributionIDsWithClient(ctx, client)
+}
+
+func listCloudFrontDistributionIDsWithClient(ctx context.Context, client cloudFrontDistributionsLister) ([]string, error) {
+	ids := []string{}
+	var marker *string
+	for {
+		page, err := client.ListDistributions(ctx, &cloudfront.ListDistributionsInput{Marker: marker})
+		if err != nil {
+			return nil, fmt.Errorf("cloudfront:ListDistributions: %w", err)
+		}
+		if page.DistributionList != nil {
+			for _, d := range page.DistributionList.Items {
+				id := aws.ToString(d.Id)
+				if id == "" {
+					continue
+				}
+				ids = append(ids, id)
+			}
+		}
+		next := ""
+		if page.DistributionList != nil {
+			next = aws.ToString(page.DistributionList.NextMarker)
+		}
+		if next == "" {
+			break
+		}
+		marker = aws.String(next)
+	}
+	return ids, nil
+}
+
+// cloudWatchLogGroupsLister is the narrow subset of the CloudWatch
+// Logs SDK used by the aws_cloudwatch_log_stream ParentLister
+// enumerator (#14h). LogStream is parent-scoped on LogGroupName: CC
+// ListResources without a ResourceModel returns
+// InvalidRequestException ("Required property: [LogGroupName] not
+// found"); the parent lister enumerates log groups via
+// logs:DescribeLogGroups and wraps each name into a JSON
+// ResourceModel for the fan-out. The interface is package-private so
+// test fakes can satisfy it without depending on the full CWL
+// client.
+type cloudWatchLogGroupsLister interface {
+	DescribeLogGroups(ctx context.Context, in *cloudwatchlogs.DescribeLogGroupsInput, opts ...func(*cloudwatchlogs.Options)) (*cloudwatchlogs.DescribeLogGroupsOutput, error)
+}
+
+// listCloudWatchLogGroups enumerates CloudWatch Logs log groups in the
+// region and returns the LogGroupName for each. Used as the per-region
+// parent enumeration for aws_cloudwatch_log_stream — the names are
+// then wrapped as ResourceModel JSON strings by
+// listCloudWatchLogGroupsAsResourceModels (see below).
+//
+// DescribeLogGroups paginates via NextToken (string cursor). The
+// terminator condition mirrors the other listers: break on both nil
+// AND empty-string cursors. Log groups with empty / missing names are
+// skipped defensively (the SDK contract permits the field to be nil).
+func listCloudWatchLogGroups(ctx context.Context, awsCfg aws.Config, region string, _ DiscoverArgs) ([]string, error) {
+	client := cloudwatchlogs.NewFromConfig(awsCfg, func(o *cloudwatchlogs.Options) {
+		if region != "" {
+			o.Region = region
+		}
+	})
+	return listCloudWatchLogGroupsWithClient(ctx, client)
+}
+
+func listCloudWatchLogGroupsWithClient(ctx context.Context, client cloudWatchLogGroupsLister) ([]string, error) {
+	names := []string{}
+	var nextToken *string
+	for {
+		page, err := client.DescribeLogGroups(ctx, &cloudwatchlogs.DescribeLogGroupsInput{NextToken: nextToken})
+		if err != nil {
+			return nil, fmt.Errorf("logs:DescribeLogGroups: %w", err)
+		}
+		for _, lg := range page.LogGroups {
+			n := aws.ToString(lg.LogGroupName)
+			if n == "" {
+				continue
+			}
+			names = append(names, n)
+		}
+		if page.NextToken == nil || aws.ToString(page.NextToken) == "" {
+			break
+		}
+		nextToken = page.NextToken
+	}
+	return names, nil
+}
+
+// listCloudWatchLogGroupsAsResourceModels enumerates CloudWatch Logs
+// log groups in the region and wraps each name into a JSON
+// ResourceModel `{"LogGroupName":"…"}` for feeding into Cloud Control
+// ListResources for AWS::Logs::LogStream (#14h). The parent-scoped
+// LogStream type requires a non-empty ResourceModel — CC returns
+// InvalidRequestException when LogGroupName is missing. Reuses
+// listCloudWatchLogGroups for the underlying SDK call so pagination
+// semantics are shared.
+//
+// Returns a non-nil empty slice on accounts with zero log groups so
+// downstream consumers see "[]" not "null" through the JSON-marshal
+// pipeline (#255 contract).
+func listCloudWatchLogGroupsAsResourceModels(ctx context.Context, awsCfg aws.Config, region string, args DiscoverArgs) ([]string, error) {
+	names, err := listCloudWatchLogGroups(ctx, awsCfg, region, args)
+	if err != nil {
+		return nil, err
+	}
+	models := make([]string, 0, len(names))
+	for _, n := range names {
+		models = append(models, fmt.Sprintf(`{"LogGroupName":%q}`, n))
+	}
+	return models, nil
 }

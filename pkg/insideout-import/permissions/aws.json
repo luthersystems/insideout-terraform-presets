@@ -258,6 +258,41 @@
       "purpose": "SDKLister enumeration: list CloudFront functions (Cloud Control ListResources bypassed)"
     },
     {
+      "service": "cloudfront_monitoring_subscription",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::CloudFront::MonitoringSubscription (#14h SDKLister branch — CC ListResources is unsupported for this type, so enumeration goes through cloudfront:ListDistributions)"
+    },
+    {
+      "service": "cloudfront_monitoring_subscription",
+      "iam_action": "cloudfront:GetMonitoringSubscription",
+      "purpose": "Cloud Control GetResource for aws_cloudfront_monitoring_subscription delegates to cloudfront:GetMonitoringSubscription"
+    },
+    {
+      "service": "cloudfront_monitoring_subscription",
+      "iam_action": "cloudfront:ListDistributions",
+      "purpose": "SDKLister enumeration: list distributions to seed the per-DistributionId GetResource fan-out"
+    },
+    {
+      "service": "cloudfront_origin_access_identity",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::CloudFront::CloudFrontOriginAccessIdentity (#14h)"
+    },
+    {
+      "service": "cloudfront_origin_access_identity",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::CloudFront::CloudFrontOriginAccessIdentity (#14h)"
+    },
+    {
+      "service": "cloudfront_origin_access_identity",
+      "iam_action": "cloudfront:GetCloudFrontOriginAccessIdentity",
+      "purpose": "Cloud Control GetResource for aws_cloudfront_origin_access_identity delegates to cloudfront:GetCloudFrontOriginAccessIdentity"
+    },
+    {
+      "service": "cloudfront_origin_access_identity",
+      "iam_action": "cloudfront:ListCloudFrontOriginAccessIdentities",
+      "purpose": "Cloud Control ListResources for AWS::CloudFront::CloudFrontOriginAccessIdentity"
+    },
+    {
       "service": "cloudwatch_dashboard",
       "iam_action": "cloudcontrol:GetResource",
       "purpose": "fetch per-dashboard body for Identity.NativeIDs"
@@ -301,6 +336,41 @@
       "service": "cloudwatch_event_rule",
       "iam_action": "events:ListTagsForResource",
       "purpose": "fetch rule tags for tag selectors and Identity.Tags"
+    },
+    {
+      "service": "cloudwatch_log_resource_policy",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::Logs::ResourcePolicy (#14h)"
+    },
+    {
+      "service": "cloudwatch_log_resource_policy",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::Logs::ResourcePolicy (#14h)"
+    },
+    {
+      "service": "cloudwatch_log_resource_policy",
+      "iam_action": "logs:DescribeResourcePolicies",
+      "purpose": "Cloud Control ListResources / GetResource for aws_cloudwatch_log_resource_policy delegates to logs:DescribeResourcePolicies"
+    },
+    {
+      "service": "cloudwatch_log_stream",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::Logs::LogStream (#14h ParentLister branch on LogGroupName)"
+    },
+    {
+      "service": "cloudwatch_log_stream",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::Logs::LogStream (per-LogGroupName fan-out)"
+    },
+    {
+      "service": "cloudwatch_log_stream",
+      "iam_action": "logs:DescribeLogGroups",
+      "purpose": "parent enumeration: list log groups to fan ListResources out per LogGroupName"
+    },
+    {
+      "service": "cloudwatch_log_stream",
+      "iam_action": "logs:DescribeLogStreams",
+      "purpose": "Cloud Control ListResources / GetResource for aws_cloudwatch_log_stream delegates to logs:DescribeLogStreams"
     },
     {
       "service": "cloudwatch_metric_alarm",
@@ -1361,6 +1431,26 @@
       "service": "s3",
       "iam_action": "s3:ListAllMyBuckets",
       "purpose": "list buckets account-globally (ListBuckets)"
+    },
+    {
+      "service": "s3_bucket_policy",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::S3::BucketPolicy (#14h)"
+    },
+    {
+      "service": "s3_bucket_policy",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::S3::BucketPolicy (#14h)"
+    },
+    {
+      "service": "s3_bucket_policy",
+      "iam_action": "s3:GetBucketPolicy",
+      "purpose": "Cloud Control GetResource for aws_s3_bucket_policy delegates to s3:GetBucketPolicy"
+    },
+    {
+      "service": "s3_bucket_policy",
+      "iam_action": "s3:ListAllMyBuckets",
+      "purpose": "Cloud Control ListResources for AWS::S3::BucketPolicy enumerates buckets first; the per-bucket GetBucketPolicy returns NoSuchBucketPolicy for buckets without a policy (filtered server-side)"
     },
     {
       "service": "secretsmanager",

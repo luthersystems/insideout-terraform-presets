@@ -2469,3 +2469,313 @@ func TestEBSVolumeConfig(t *testing.T) {
 		t.Errorf("Tags: got %+v, want %+v", tags, wantTags)
 	}
 }
+
+// =====================================================================
+// Bundle 14h — S3 + CloudFront + CloudWatch Logs sub-resource pins
+// =====================================================================
+
+// TestS3BucketPolicyConfig pins aws_s3_bucket_policy: CC default-list,
+// passthrough CC identifier (Bucket name), Bucket NameHint, bucket-keyed
+// NativeIDs, untaggable (Tags property absent from CFN schema; the
+// parent bucket carries them — SkipProjectTagFilter must be true so the
+// legacy Project filter doesn't drop every policy).
+func TestS3BucketPolicyConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_s3_bucket_policy")
+	if !cfg.SkipProjectTagFilter {
+		t.Error("aws_s3_bucket_policy: SkipProjectTagFilter must be true (untaggable; the legacy Project filter would silently drop every policy)")
+	}
+	if cfg.CloudFormationType != "AWS::S3::BucketPolicy" {
+		t.Errorf("CloudFormationType=%q, want AWS::S3::BucketPolicy", cfg.CloudFormationType)
+	}
+	if cfg.SDKLister != nil {
+		t.Error("SDKLister must be nil (CC default-list)")
+	}
+	if cfg.ParentLister != nil {
+		t.Error("ParentLister must be nil")
+	}
+
+	id := "my-bucket-name"
+	if got := cfg.ImportIDFromIdentifier(id, nil); got != id {
+		t.Errorf("ImportID passthrough: got %q, want %q", got, id)
+	}
+	if got := cfg.NameHintFromProperties(id, map[string]any{"Bucket": "my-bucket-name"}); got != "my-bucket-name" {
+		t.Errorf("NameHint: got %q, want my-bucket-name", got)
+	}
+	if got := cfg.NameHintFromProperties(id, map[string]any{}); got != id {
+		t.Errorf("NameHint fallback: got %q, want %q", got, id)
+	}
+
+	native := cfg.NativeIDsFromProperties(id, map[string]any{})
+	wantNative := map[string]string{"bucket": id}
+	if !reflect.DeepEqual(native, wantNative) {
+		t.Errorf("NativeIDs: got %+v, want %+v (exact map equality — no ARN on CFN schema)", native, wantNative)
+	}
+
+	// Untaggable: must return a non-nil empty map (#255 contract).
+	tags := cfg.TagsFromProperties(map[string]any{})
+	if tags == nil {
+		t.Error("Tags: got nil, want non-nil empty map (#255 JSON-marshal contract; untaggable types use emptyTagsExtractor)")
+	}
+	if len(tags) != 0 {
+		t.Errorf("Tags: got %+v, want empty map (Bucket policies are untaggable)", tags)
+	}
+}
+
+// TestCloudFrontOriginAccessIdentityConfig pins
+// aws_cloudfront_origin_access_identity: CC default-list, passthrough
+// CC identifier (the OAID), nested Comment → NameHint with identifier
+// fallback, NativeIDs include id + s3_canonical_user_id when present,
+// untaggable (no Tags on CFN schema).
+func TestCloudFrontOriginAccessIdentityConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_cloudfront_origin_access_identity")
+	if !cfg.SkipProjectTagFilter {
+		t.Error("aws_cloudfront_origin_access_identity: SkipProjectTagFilter must be true (untaggable; no Tags on CFN schema)")
+	}
+	if !cfg.IsGlobal {
+		t.Error("aws_cloudfront_origin_access_identity: IsGlobal must be true (CloudFront is a global service; matches aws_cloudfront_distribution / aws_cloudfront_function)")
+	}
+	if cfg.CloudFormationType != "AWS::CloudFront::CloudFrontOriginAccessIdentity" {
+		t.Errorf("CloudFormationType=%q, want AWS::CloudFront::CloudFrontOriginAccessIdentity", cfg.CloudFormationType)
+	}
+	if cfg.SDKLister != nil {
+		t.Error("SDKLister must be nil (CC default-list)")
+	}
+	if cfg.ParentLister != nil {
+		t.Error("ParentLister must be nil")
+	}
+
+	id := "E2QWRUHAPOMQZL"
+	if got := cfg.ImportIDFromIdentifier(id, nil); got != id {
+		t.Errorf("ImportID passthrough: got %q, want %q", got, id)
+	}
+
+	// NameHint: nested at properties.CloudFrontOriginAccessIdentityConfig.Comment.
+	props := map[string]any{
+		"CloudFrontOriginAccessIdentityConfig": map[string]any{
+			"Comment": "OAI for my-bucket",
+		},
+	}
+	if got := cfg.NameHintFromProperties(id, props); got != "OAI for my-bucket" {
+		t.Errorf("NameHint (nested Comment): got %q, want %q", got, "OAI for my-bucket")
+	}
+	// Missing nested struct -> fallback to identifier.
+	if got := cfg.NameHintFromProperties(id, map[string]any{}); got != id {
+		t.Errorf("NameHint (no nested config): got %q, want %q", got, id)
+	}
+	// Empty nested Comment -> fallback to identifier (so we don't stamp
+	// an empty string as the human-readable hint).
+	emptyComment := map[string]any{
+		"CloudFrontOriginAccessIdentityConfig": map[string]any{"Comment": ""},
+	}
+	if got := cfg.NameHintFromProperties(id, emptyComment); got != id {
+		t.Errorf("NameHint (empty Comment): got %q, want %q (fallback)", got, id)
+	}
+	// Non-map nested value -> safe fallback.
+	bogusNested := map[string]any{
+		"CloudFrontOriginAccessIdentityConfig": "not-a-map",
+	}
+	if got := cfg.NameHintFromProperties(id, bogusNested); got != id {
+		t.Errorf("NameHint (non-map nested): got %q, want %q (defensive fallback)", got, id)
+	}
+
+	// NativeIDs: include S3CanonicalUserId when present.
+	withCanon := map[string]any{"S3CanonicalUserId": "abcdef0123456789"}
+	wantNative := map[string]string{"id": id, "s3_canonical_user_id": "abcdef0123456789"}
+	if got := cfg.NativeIDsFromProperties(id, withCanon); !reflect.DeepEqual(got, wantNative) {
+		t.Errorf("NativeIDs (with canonical user id): got %+v, want %+v", got, wantNative)
+	}
+	// NativeIDs without canonical user id: just the id (no partial key).
+	idOnly := map[string]string{"id": id}
+	if got := cfg.NativeIDsFromProperties(id, map[string]any{}); !reflect.DeepEqual(got, idOnly) {
+		t.Errorf("NativeIDs (no canonical): got %+v, want %+v", got, idOnly)
+	}
+
+	// Untaggable: non-nil empty map.
+	tags := cfg.TagsFromProperties(map[string]any{})
+	if tags == nil {
+		t.Error("Tags: got nil, want non-nil empty map (#255 contract)")
+	}
+	if len(tags) != 0 {
+		t.Errorf("Tags: got %+v, want empty map", tags)
+	}
+}
+
+// TestCloudFrontMonitoringSubscriptionConfig pins
+// aws_cloudfront_monitoring_subscription: SDKLister branch
+// (listCloudFrontDistributionIDs), passthrough CC identifier
+// (DistributionId), distribution_id-keyed NativeIDs, untaggable.
+func TestCloudFrontMonitoringSubscriptionConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_cloudfront_monitoring_subscription")
+	if !cfg.SkipProjectTagFilter {
+		t.Error("aws_cloudfront_monitoring_subscription: SkipProjectTagFilter must be true (untaggable; no Tags on CFN schema)")
+	}
+	if !cfg.IsGlobal {
+		t.Error("aws_cloudfront_monitoring_subscription: IsGlobal must be true (per-distribution, distributions are CloudFront-global)")
+	}
+	if cfg.CloudFormationType != "AWS::CloudFront::MonitoringSubscription" {
+		t.Errorf("CloudFormationType=%q, want AWS::CloudFront::MonitoringSubscription", cfg.CloudFormationType)
+	}
+	if cfg.SDKLister == nil {
+		t.Error("SDKLister must be non-nil (CC ListResources is UnsupportedActionException for this type)")
+	}
+	if cfg.ParentLister != nil {
+		t.Error("ParentLister must be nil (mutually exclusive with SDKLister)")
+	}
+
+	id := "E2QWRUHAPOMQZL"
+	if got := cfg.ImportIDFromIdentifier(id, nil); got != id {
+		t.Errorf("ImportID passthrough: got %q, want %q", got, id)
+	}
+	if got := cfg.NameHintFromProperties(id, map[string]any{"DistributionId": id}); got != id {
+		t.Errorf("NameHint: got %q, want %q", got, id)
+	}
+	// No DistributionId property -> fall back to identifier.
+	if got := cfg.NameHintFromProperties(id, map[string]any{}); got != id {
+		t.Errorf("NameHint fallback: got %q, want %q", got, id)
+	}
+
+	native := cfg.NativeIDsFromProperties(id, map[string]any{})
+	wantNative := map[string]string{"distribution_id": id}
+	if !reflect.DeepEqual(native, wantNative) {
+		t.Errorf("NativeIDs: got %+v, want %+v", native, wantNative)
+	}
+
+	tags := cfg.TagsFromProperties(map[string]any{})
+	if tags == nil {
+		t.Error("Tags: got nil, want non-nil empty map (#255 contract)")
+	}
+	if len(tags) != 0 {
+		t.Errorf("Tags: got %+v, want empty map", tags)
+	}
+}
+
+// TestCloudWatchLogResourcePolicyConfig pins
+// aws_cloudwatch_log_resource_policy: CC default-list, passthrough CC
+// identifier (PolicyName), PolicyName NameHint, policy_name-keyed
+// NativeIDs, untaggable.
+func TestCloudWatchLogResourcePolicyConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_cloudwatch_log_resource_policy")
+	if !cfg.SkipProjectTagFilter {
+		t.Error("aws_cloudwatch_log_resource_policy: SkipProjectTagFilter must be true (untaggable; no Tags on CFN schema)")
+	}
+	if cfg.CloudFormationType != "AWS::Logs::ResourcePolicy" {
+		t.Errorf("CloudFormationType=%q, want AWS::Logs::ResourcePolicy", cfg.CloudFormationType)
+	}
+	if cfg.SDKLister != nil {
+		t.Error("SDKLister must be nil (CC default-list)")
+	}
+	if cfg.ParentLister != nil {
+		t.Error("ParentLister must be nil")
+	}
+
+	id := "my-policy"
+	if got := cfg.ImportIDFromIdentifier(id, nil); got != id {
+		t.Errorf("ImportID passthrough: got %q, want %q", got, id)
+	}
+	if got := cfg.NameHintFromProperties(id, map[string]any{"PolicyName": "my-policy"}); got != "my-policy" {
+		t.Errorf("NameHint: got %q, want my-policy", got)
+	}
+	if got := cfg.NameHintFromProperties(id, map[string]any{}); got != id {
+		t.Errorf("NameHint fallback: got %q, want %q", got, id)
+	}
+
+	native := cfg.NativeIDsFromProperties(id, map[string]any{})
+	wantNative := map[string]string{"policy_name": id}
+	if !reflect.DeepEqual(native, wantNative) {
+		t.Errorf("NativeIDs: got %+v, want %+v", native, wantNative)
+	}
+
+	tags := cfg.TagsFromProperties(map[string]any{})
+	if tags == nil {
+		t.Error("Tags: got nil, want non-nil empty map (#255 contract)")
+	}
+	if len(tags) != 0 {
+		t.Errorf("Tags: got %+v, want empty map", tags)
+	}
+}
+
+// TestCloudWatchLogStreamConfig pins aws_cloudwatch_log_stream:
+// ParentLister branch (listCloudWatchLogGroupsAsResourceModels), CC
+// compound identifier "<LogGroupName>|<LogStreamName>" rewritten to TF
+// import format "<LogGroupName>:<LogStreamName>" via "|" → ":" replace
+// (first-pipe-only — preserves any literal pipe character in a stream
+// name), NativeIDs split into log_group_name + log_stream_name,
+// defensive nil return on malformed identifier, untaggable.
+func TestCloudWatchLogStreamConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_cloudwatch_log_stream")
+	if !cfg.SkipProjectTagFilter {
+		t.Error("aws_cloudwatch_log_stream: SkipProjectTagFilter must be true (untaggable; no Tags on CFN schema)")
+	}
+	if cfg.CloudFormationType != "AWS::Logs::LogStream" {
+		t.Errorf("CloudFormationType=%q, want AWS::Logs::LogStream", cfg.CloudFormationType)
+	}
+	if cfg.SDKLister != nil {
+		t.Error("SDKLister must be nil (mutually exclusive with ParentLister)")
+	}
+	if cfg.ParentLister == nil {
+		t.Error("ParentLister must be non-nil (CC ListResources requires LogGroupName ResourceModel)")
+	}
+
+	// ImportID rewrite: CC `<group>|<stream>` → TF `<group>:<stream>`.
+	const cc = "/aws/lambda/foo|2026/01/01/[$LATEST]abc123"
+	const tf = "/aws/lambda/foo:2026/01/01/[$LATEST]abc123"
+	if got := cfg.ImportIDFromIdentifier(cc, nil); got != tf {
+		t.Errorf("ImportID rewrite: got %q, want %q", got, tf)
+	}
+	// Pipe-in-stream-name preservation: first-pipe-only replace must
+	// keep any subsequent pipe characters intact (the stream name part).
+	const ccPipe = "/aws/lambda/foo|pipe|in|stream|name"
+	const tfPipe = "/aws/lambda/foo:pipe|in|stream|name"
+	if got := cfg.ImportIDFromIdentifier(ccPipe, nil); got != tfPipe {
+		t.Errorf("ImportID first-pipe-only rewrite: got %q, want %q (subsequent pipes preserved)", got, tfPipe)
+	}
+
+	// NameHint: LogStreamName property, fall back to identifier.
+	if got := cfg.NameHintFromProperties(cc, map[string]any{"LogStreamName": "2026/01/01/[$LATEST]abc123"}); got != "2026/01/01/[$LATEST]abc123" {
+		t.Errorf("NameHint: got %q, want stream name", got)
+	}
+	if got := cfg.NameHintFromProperties(cc, map[string]any{}); got != cc {
+		t.Errorf("NameHint fallback: got %q, want %q", got, cc)
+	}
+
+	// NativeIDs: split on FIRST `|` only.
+	native := cfg.NativeIDsFromProperties(cc, nil)
+	wantNative := map[string]string{
+		"log_group_name":  "/aws/lambda/foo",
+		"log_stream_name": "2026/01/01/[$LATEST]abc123",
+	}
+	if !reflect.DeepEqual(native, wantNative) {
+		t.Errorf("NativeIDs: got %+v, want %+v", native, wantNative)
+	}
+	// Pipe-in-stream-name on NativeIDs: split keeps the stream half
+	// (which itself contains pipes) intact.
+	nativePipe := cfg.NativeIDsFromProperties(ccPipe, nil)
+	wantPipe := map[string]string{
+		"log_group_name":  "/aws/lambda/foo",
+		"log_stream_name": "pipe|in|stream|name",
+	}
+	if !reflect.DeepEqual(nativePipe, wantPipe) {
+		t.Errorf("NativeIDs (pipe in stream): got %+v, want %+v", nativePipe, wantPipe)
+	}
+	// Malformed identifier (no `|` separator) must return nil so
+	// downstream readers see "no native IDs" rather than a half-populated
+	// map. Matches the defensive pattern used by aws_eks_node_group and
+	// aws_api_gateway_resource (verified in PR #422 / #14f).
+	if got := cfg.NativeIDsFromProperties("malformed-no-pipe", nil); got != nil {
+		t.Errorf("NativeIDs on malformed identifier: got %+v, want nil", got)
+	}
+
+	// Untaggable: non-nil empty map.
+	tags := cfg.TagsFromProperties(map[string]any{})
+	if tags == nil {
+		t.Error("Tags: got nil, want non-nil empty map (#255 contract)")
+	}
+	if len(tags) != 0 {
+		t.Errorf("Tags: got %+v, want empty map", tags)
+	}
+}

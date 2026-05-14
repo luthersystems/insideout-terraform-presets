@@ -172,6 +172,31 @@ var arnRules = []arnRule{
 		cfnType: "AWS::CloudWatch::Alarm", identifierFn: identityResourceID},
 	{matchService: "cloudwatch", matchResourceType: "dashboard",
 		cfnType: "AWS::CloudWatch::Dashboard", identifierFn: identityResourceID},
+	// CloudWatch Logs — log streams share the parent log-group ARN
+	// shape but embed `:log-stream:<stream>` in resourceID (#14h).
+	// This rule MUST precede the LogGroup rule because both parse to
+	// (service=logs, resourceType=log-group). matchExtra picks the
+	// stream variant when `resourceID` contains the `log-stream:`
+	// segment. Cloud Control identifier for AWS::Logs::LogStream is
+	// "<LogGroupName>|<LogStreamName>" so identifierFn rebuilds it
+	// from the parsed pieces. Log streams are untaggable and don't
+	// appear in RGT today, but the rule lives here for future-proofing
+	// and to keep the ARN-decoder fall-through unambiguous when the
+	// importer is invoked DiscoverByID-style with a log-stream ARN.
+	{matchService: "logs", matchResourceType: "log-group",
+		matchExtra: func(p parsedARN) bool {
+			return strings.Contains(p.resourceID, ":log-stream:")
+		},
+		cfnType: "AWS::Logs::LogStream", identifierFn: func(p parsedARN) string {
+			// resourceID format: "<group>:log-stream:<stream>".
+			idx := strings.Index(p.resourceID, ":log-stream:")
+			if idx < 0 {
+				return p.resourceID
+			}
+			group := p.resourceID[:idx]
+			stream := p.resourceID[idx+len(":log-stream:"):]
+			return group + "|" + stream
+		}},
 	{matchService: "logs", matchResourceType: "log-group",
 		// CloudWatch Logs ARNs sometimes carry a ":*" suffix; strip it.
 		cfnType: "AWS::Logs::LogGroup", identifierFn: func(p parsedARN) string {
@@ -209,6 +234,14 @@ var arnRules = []arnRule{
 	// CDN / DNS
 	{matchService: "cloudfront", matchResourceType: "distribution",
 		cfnType: "AWS::CloudFront::Distribution", identifierFn: identityResourceID},
+	// CloudFront Origin Access Identity (#14h). ARN form is
+	// `arn:aws:cloudfront::<acct>:origin-access-identity/<OAID>`. CC
+	// primary identifier = Id (the bare OAID, e.g. "E2QWRUHAPOMQZL").
+	// OAIs are untaggable and don't surface in RGT today, but the rule
+	// keeps the ARN-decoder fall-through unambiguous when an OAI ARN
+	// arrives via DiscoverByID or a dep-chase reference.
+	{matchService: "cloudfront", matchResourceType: "origin-access-identity",
+		cfnType: "AWS::CloudFront::CloudFrontOriginAccessIdentity", identifierFn: identityResourceID},
 	{matchService: "route53", matchResourceType: "hostedzone",
 		cfnType: "AWS::Route53::HostedZone", identifierFn: identityResourceID},
 
