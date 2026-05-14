@@ -68,6 +68,11 @@ var expectedRegisteredTypes = map[string]bool{
 	"google_secret_manager_secret_iam_member":    false,
 	"google_cloud_run_v2_service_iam_member":     false,
 	"google_cloudfunctions2_function_iam_member": false,
+	// Bundle G2 — LoadBalancer sub-components (#473).
+	"google_compute_backend_service":         false,
+	"google_compute_health_check":            false,
+	"google_compute_managed_ssl_certificate": false,
+	"google_compute_target_http_proxy":       false,
 }
 
 func TestNewGCPDiscoverer_RegistersExpectedTypes(t *testing.T) {
@@ -730,6 +735,13 @@ var expectedScopeStyle = map[string]ScopeStyle{
 	"google_secret_manager_secret_iam_member":    ScopeStyleNonCAI,
 	"google_cloud_run_v2_service_iam_member":     ScopeStyleNonCAI,
 	"google_cloudfunctions2_function_iam_member": ScopeStyleNonCAI,
+	// Bundle G2 — LoadBalancer sub-components (#473). All four are
+	// global compute resources without provider-schema labels, so
+	// scoping piggy-backs on the stack-project name prefix.
+	"google_compute_backend_service":         ScopeStyleNamePrefix,
+	"google_compute_health_check":            ScopeStyleNamePrefix,
+	"google_compute_managed_ssl_certificate": ScopeStyleNamePrefix,
+	"google_compute_target_http_proxy":       ScopeStyleNamePrefix,
 }
 
 // TestScopeStyle_PinsPerTypeContract is the regression guard (#366).

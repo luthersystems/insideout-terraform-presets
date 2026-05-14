@@ -301,6 +301,11 @@ func NewGCPDiscoverer(searcher gcpAssetSearcher, projectID string, opts GCPDisco
 			"google_secret_manager_secret_iam_member":    newSecretManagerSecretIAMMemberDiscoverer(opts.IAMPolicyLister),
 			"google_cloud_run_v2_service_iam_member":     newCloudRunV2ServiceIAMMemberDiscoverer(opts.IAMPolicyLister),
 			"google_cloudfunctions2_function_iam_member": newCloudFunctions2FunctionIAMMemberDiscoverer(opts.IAMPolicyLister),
+			// Bundle G2 — LoadBalancer sub-components (#473).
+			"google_compute_backend_service":         newComputeBackendServiceDiscoverer(),
+			"google_compute_health_check":            newComputeHealthCheckDiscoverer(),
+			"google_compute_managed_ssl_certificate": newComputeManagedSSLCertificateDiscoverer(),
+			"google_compute_target_http_proxy":       newComputeTargetHTTPProxyDiscoverer(),
 		},
 		// Per-type SDK attribute enrichers (#403). Each entry is a sibling
 		// to the byType discoverer of the same name and populates ir.Attrs
