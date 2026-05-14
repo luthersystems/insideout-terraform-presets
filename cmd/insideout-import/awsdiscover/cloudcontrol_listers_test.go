@@ -2737,6 +2737,12 @@ func TestListIAMRolePolicyIdentifiers_PropagatesOuterPagination(t *testing.T) {
 		t.Errorf("second ListRoles call should carry forward the cursor; got %q want %q",
 			aws.ToString(fake.listRolesMarkers[1]), "OUTER-CURSOR-1")
 	}
+	// Belt-and-suspenders: inner ListRolePolicies must have been called
+	// for both pages' roles. A regression that skipped the inner fan-out
+	// after the outer cursor advance would surface here.
+	if got := fake.listPoliciesRoles; !reflect.DeepEqual(got, []string{"role-a", "role-b"}) {
+		t.Errorf("inner ListRolePolicies call sequence: got %v, want [role-a role-b]", got)
+	}
 }
 
 // TestListIAMRolePolicyIdentifiers_PropagatesInnerPagination pins the
@@ -2777,6 +2783,53 @@ func TestListIAMRolePolicyIdentifiers_PropagatesInnerPagination(t *testing.T) {
 	}
 }
 
+// TestListIAMRolePolicyIdentifiers_InnerPaginationResetsBetweenRoles
+// pins that the inner ListRolePolicies cursor is fresh for each outer
+// role. A regression that re-used the previous role's cursor would
+// either skip pages or refetch them forever (and surface here as a
+// marker-sequence drift on role-b's inner calls).
+func TestListIAMRolePolicyIdentifiers_InnerPaginationResetsBetweenRoles(t *testing.T) {
+	t.Parallel()
+	fake := &fakeIAMRolePoliciesLister{
+		listRolesPages: []iam.ListRolesOutput{
+			iamRolesPage("", [2]string{"/", "role-a"}, [2]string{"/", "role-b"}),
+		},
+		listPoliciesPagesByRole: map[string][]iam.ListRolePoliciesOutput{
+			"role-a": {
+				iamRolePoliciesPage("CURSOR-A", "policy-a1"),
+				iamRolePoliciesPage("", "policy-a2"),
+			},
+			"role-b": {
+				iamRolePoliciesPage("CURSOR-B", "policy-b1"),
+				iamRolePoliciesPage("", "policy-b2"),
+			},
+		},
+	}
+	got, err := listIAMRolePolicyIdentifiersWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{
+		"policy-a1|role-a", "policy-a2|role-a",
+		"policy-b1|role-b", "policy-b2|role-b",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("identifiers drift: got %v want %v", got, want)
+	}
+	// Each role's inner cursor must start at nil (not carry over from
+	// the previous role) and advance independently.
+	for _, role := range []string{"role-a", "role-b"} {
+		markers := fake.listPoliciesMarkersByRole[role]
+		if len(markers) != 2 {
+			t.Errorf("role=%s: expected 2 inner ListRolePolicies calls; got %d markers=%v", role, len(markers), markers)
+			continue
+		}
+		if markers[0] != nil {
+			t.Errorf("role=%s: first inner call should have nil Marker; got %v", role, aws.ToString(markers[0]))
+		}
+	}
+}
+
 // TestListIAMRolePolicyIdentifiers_EmptyAccountReturnsNonNilEmpty
 // guards the #255 contract for accounts with zero IAM roles (or zero
 // non-SLR roles) — the result must marshal to "[]" not "null".
@@ -2809,10 +2862,12 @@ func TestListIAMRolePolicyIdentifiers_PropagatesListRolesError(t *testing.T) {
 
 // TestListIAMRolePolicyIdentifiers_PropagatesListRolePoliciesError
 // pins the error wrap chain for the inner per-role call. An error on
-// one role's inner ListRolePolicies aborts the whole enumeration —
-// matches the iam_service_linked_role posture (the SDKLister returns
-// nil + error; the discoverer's per-region wrapper handles partial
-// failure via ServiceWarn at the per-identifier GetResource layer).
+// one role's inner ListRolePolicies aborts the whole region's
+// enumeration (the SDKLister returns nil + error, the discoverer's
+// per-region wrapper translates that into ServiceFinish + region
+// abort). Follow-up #466: a transient per-role AccessDenied should
+// soft-fail via ServiceWarn rather than kill the region — tracked
+// outside this PR because it changes the SDKLister contract.
 func TestListIAMRolePolicyIdentifiers_PropagatesListRolePoliciesError(t *testing.T) {
 	t.Parallel()
 	sentinel := errors.New("AccessDenied: iam:ListRolePolicies")
@@ -3142,7 +3197,9 @@ func TestListOSSSecurityPolicyIdentifiers_PropagatesPagination(t *testing.T) {
 }
 
 // TestListOSSSecurityPolicyIdentifiers_EmptyAccountReturnsNonNilEmpty
-// guards the #255 contract.
+// guards the #255 contract AND pins that BOTH known SecurityPolicyTypes
+// were enumerated. A regression that skipped one type entirely would
+// surface as `len(typesRequested) < 2`.
 func TestListOSSSecurityPolicyIdentifiers_EmptyAccountReturnsNonNilEmpty(t *testing.T) {
 	t.Parallel()
 	fake := &fakeOSSSecurityPoliciesLister{
@@ -3165,6 +3222,11 @@ func TestListOSSSecurityPolicyIdentifiers_EmptyAccountReturnsNonNilEmpty(t *test
 	if len(got) != 0 {
 		t.Errorf("got %v, want empty slice", got)
 	}
+	// Both types must have been requested, even though both return
+	// empty — a regression that only walked one type would surface here.
+	if len(fake.typesRequested) != 2 {
+		t.Errorf("typesRequested=%v, want 2 distinct ListSecurityPolicies calls", fake.typesRequested)
+	}
 }
 
 // TestListOSSSecurityPolicyIdentifiers_PropagatesListError pins the
@@ -3181,6 +3243,36 @@ func TestListOSSSecurityPolicyIdentifiers_PropagatesListError(t *testing.T) {
 		[]ossstypes.SecurityPolicyType{ossstypes.SecurityPolicyTypeEncryption})
 	if !errors.Is(err, sentinel) {
 		t.Errorf("err does not wrap sentinel; got %v", err)
+	}
+}
+
+// TestListOSSSecurityPolicyIdentifiers_DefensiveTypeFallback mirrors the
+// AccessPolicy fallback pin. When the SDK summary's Type is the zero
+// value (defensive: the API field is an enum that could in theory be
+// zero-valued), the lister must fill it from the requested
+// SecurityPolicyType so the identifier always has both halves.
+func TestListOSSSecurityPolicyIdentifiers_DefensiveTypeFallback(t *testing.T) {
+	t.Parallel()
+	fake := &fakeOSSSecurityPoliciesLister{
+		pagesByType: map[ossstypes.SecurityPolicyType][]opensearchserverless.ListSecurityPoliciesOutput{
+			ossstypes.SecurityPolicyTypeEncryption: {
+				ossSecurityPolicyPage("",
+					// Empty Type — the lister must fill it from the
+					// requested SecurityPolicyType so the emitted ID has
+					// both halves.
+					ossstypes.SecurityPolicySummary{Name: aws.String("orphan")},
+				),
+			},
+		},
+	}
+	got, err := listOSSSecurityPolicyIdentifiersWithClient(context.Background(), fake,
+		[]ossstypes.SecurityPolicyType{ossstypes.SecurityPolicyTypeEncryption})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"encryption|orphan"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("identifiers drift: got %v want %v", got, want)
 	}
 }
 

@@ -3164,13 +3164,21 @@ func TestIAMRolePolicyConfig(t *testing.T) {
 		t.Errorf("NativeIDs (malformed): got %+v, want {policy_name: malformed-no-pipe}", nativeBare)
 	}
 
-	// Untaggable: non-nil empty map (#255 contract).
-	tags := cfg.TagsFromProperties(map[string]any{})
-	if tags == nil {
-		t.Error("Tags: got nil, want non-nil empty map (#255 contract; CFN schema has no Tags)")
-	}
-	if len(tags) != 0 {
-		t.Errorf("Tags: got %+v, want empty map", tags)
+	// Untaggable: non-nil empty map (#255 contract). emptyTagsExtractor
+	// must IGNORE any Tags payload — a regression that fell through to a
+	// real extractor would surface as a non-empty map here.
+	for _, tagsIn := range []map[string]any{
+		{},
+		{"Tags": []any{map[string]any{"Key": "Project", "Value": "io-x"}}},
+		{"Tags": map[string]any{"Project": "io-x"}},
+	} {
+		tags := cfg.TagsFromProperties(tagsIn)
+		if tags == nil {
+			t.Errorf("Tags: got nil, want non-nil empty map (#255 contract; input=%v)", tagsIn)
+		}
+		if len(tags) != 0 {
+			t.Errorf("Tags: got %+v, want empty map (input=%v)", tags, tagsIn)
+		}
 	}
 }
 
@@ -3389,6 +3397,18 @@ func TestAPIGatewayV2ApiMappingConfig(t *testing.T) {
 	nativeBare := cfg.NativeIDsFromProperties("malformed-no-pipe", nil)
 	if !reflect.DeepEqual(nativeBare, map[string]string{"api_mapping_id": "malformed-no-pipe"}) {
 		t.Errorf("NativeIDs (malformed): got %+v, want {api_mapping_id: malformed-no-pipe}", nativeBare)
+	}
+	// NativeIDs must also split on FIRST `|` only — a regression that
+	// switched SplitN(s,"|",2) to Split(s,"|") would over-split and
+	// truncate the domain_name half. Pin the contract symmetrically with
+	// ImportID's double-pipe assertion above.
+	nativeDouble := cfg.NativeIDsFromProperties(ccDouble, nil)
+	wantDouble := map[string]string{
+		"api_mapping_id": "1122334",
+		"domain_name":    "edge|case.example.com",
+	}
+	if !reflect.DeepEqual(nativeDouble, wantDouble) {
+		t.Errorf("NativeIDs first-pipe-only split: got %+v, want %+v", nativeDouble, wantDouble)
 	}
 
 	// Untaggable.
