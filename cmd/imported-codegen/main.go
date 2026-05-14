@@ -1,6 +1,7 @@
 // Command imported-codegen turns a filtered terraform providers schema -json
 // dump into Layer 1 typed Go structs and provider metadata maps under
-// pkg/composer/imported/generated.
+// pkg/composer/imported/generated, plus TypeScript Zod fragments for
+// downstream TS consumers.
 //
 // Subcommands:
 //
@@ -12,6 +13,12 @@
 //	        Generate <type>.gen.go for every wanted type plus
 //	        version.gen.go.
 //
+//	zod     --aws-schema <path> --google-schema <path> --google-beta-schema <path> --out <dir> [--types a,b,c]
+//	        Generate <type>.ts (Zod schema + metadata) for every wanted
+//	        type, plus shared _value.ts and _registry.ts. Output is
+//	        intended for consumer repos (e.g. luthersystems/reliable);
+//	        nothing in this repo is committed from --out.
+//
 // Default subcommand is `gen` so plain `imported-codegen --aws-schema=...`
 // works.
 package main
@@ -21,6 +28,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+
+	tfjson "github.com/hashicorp/terraform-json"
 )
 
 func main() {
@@ -30,6 +40,8 @@ func main() {
 			os.Exit(runFilter(os.Args[2:]))
 		case "gen":
 			os.Exit(runGen(os.Args[2:]))
+		case "zod":
+			os.Exit(runZod(os.Args[2:]))
 		case "-h", "--help":
 			usage()
 			return
@@ -44,6 +56,7 @@ func usage() {
 Subcommands:
   gen     (default) generate <type>.gen.go files
   filter  strip a full ProviderSchemas dump to wanted types only
+  zod     generate <type>.ts (Zod schema + metadata) for TS consumers
 
 Run 'imported-codegen <subcommand> --help' for subcommand flags.`)
 }
@@ -129,6 +142,126 @@ func runGen(args []string) int {
 	}
 	fmt.Println("version.gen.go")
 	return 0
+}
+
+// runZod is the `zod` subcommand: load filtered provider schemas and
+// emit a TypeScript Zod fragment per wanted resource type plus shared
+// _value.ts and _registry.ts files into --out.
+//
+// Output is consumer-driven: nothing in this repo's tree is touched.
+// Downstream consumers (e.g. luthersystems/reliable) run this command
+// against their own TS source tree pinned to a presets module version.
+func runZod(args []string) int {
+	fs := flag.NewFlagSet("zod", flag.ExitOnError)
+	awsSchema := fs.String("aws-schema", "schemas/aws.filtered.json", "path to filtered AWS provider schema JSON")
+	googleSchema := fs.String("google-schema", "schemas/google.filtered.json", "path to filtered Google provider schema JSON")
+	googleBetaSchema := fs.String("google-beta-schema", "schemas/google-beta.filtered.json", "path to filtered Google-Beta provider schema JSON")
+	outDir := fs.String("out", "out/zod", "directory to write generated *.ts files")
+	typesFilter := fs.String("types", "", "comma-separated subset of Terraform resource types to emit (default: all WantedAWS+WantedGoogle+WantedGoogleBeta)")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+
+	if err := os.MkdirAll(*outDir, 0o755); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+
+	awsPS, err := LoadFiltered(*awsSchema)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "load aws schema: %v\n", err)
+		return 1
+	}
+	googlePS, err := LoadFiltered(*googleSchema)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "load google schema: %v\n", err)
+		return 1
+	}
+	googleBetaPS, err := LoadFiltered(*googleBetaSchema)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "load google-beta schema: %v\n", err)
+		return 1
+	}
+
+	filter := parseTypesFilter(*typesFilter)
+
+	if _, err := EmitZodValueFile(*outDir); err != nil {
+		fmt.Fprintf(os.Stderr, "_value.ts: %v\n", err)
+		return 1
+	}
+	fmt.Println("_value.ts")
+
+	var entries []ZodRegistryEntry
+
+	emitOne := func(ps *tfjson.ProviderSchemas, source string, want []string) bool {
+		for _, tfType := range want {
+			if !filter.want(tfType) {
+				continue
+			}
+			res, _, err := FindResource(ps, source, tfType)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "%s: %v\n", tfType, err)
+				return false
+			}
+			path, err := EmitZodTypeFile(*outDir, res, source, tfType)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "%s: %v\n", tfType, err)
+				return false
+			}
+			entries = append(entries, ZodRegistryEntry{TFType: tfType, GoName: GoName(tfType)})
+			fmt.Println(filepath.Base(path))
+		}
+		return true
+	}
+
+	if !emitOne(awsPS, AWSProviderSource, WantedAWS) {
+		return 1
+	}
+	if !emitOne(googlePS, GoogleProviderSource, WantedGoogle) {
+		return 1
+	}
+	if !emitOne(googleBetaPS, GoogleBetaProviderSource, WantedGoogleBeta) {
+		return 1
+	}
+
+	if _, err := EmitZodRegistryFile(*outDir, entries); err != nil {
+		fmt.Fprintf(os.Stderr, "_registry.ts: %v\n", err)
+		return 1
+	}
+	fmt.Println("_registry.ts")
+	return 0
+}
+
+// typesFilter narrows the set of types emitted by `zod` when the
+// --types flag is supplied. Empty (the default) means emit every type
+// in the relevant Wanted* slice.
+type typesFilter struct {
+	all bool
+	set map[string]struct{}
+}
+
+func (f typesFilter) want(t string) bool {
+	if f.all {
+		return true
+	}
+	_, ok := f.set[t]
+	return ok
+}
+
+func parseTypesFilter(raw string) typesFilter {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return typesFilter{all: true}
+	}
+	set := map[string]struct{}{}
+	for _, t := range strings.Split(raw, ",") {
+		t = strings.TrimSpace(t)
+		if t == "" {
+			continue
+		}
+		set[t] = struct{}{}
+	}
+	return typesFilter{set: set}
 }
 
 // providerVersion reads the provider version recorded in a ProviderSchemas

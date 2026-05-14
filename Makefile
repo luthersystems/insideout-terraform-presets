@@ -40,6 +40,19 @@ gen-imported: ## Regenerate typed resource files from filtered schemas.
 	    --out $(GEN_DIR)
 	$(GO) build ./...
 
+# Output dir for the TS Zod emitter. Defaults to .tmp/zod-out (gitignored).
+# Downstream consumers point ZOD_OUT at their TS source tree, e.g.:
+#   make gen-zod ZOD_OUT=$$HOME/work/reliable/lib/stack/imported
+ZOD_OUT ?= .tmp/zod-out
+
+.PHONY: gen-zod
+gen-zod: ## Emit TS Zod fragments to ZOD_OUT (default .tmp/zod-out).
+	$(GO) run ./cmd/imported-codegen zod \
+	    --aws-schema $(SCHEMAS_DIR)/aws.filtered.json \
+	    --google-schema $(SCHEMAS_DIR)/google.filtered.json \
+	    --google-beta-schema $(SCHEMAS_DIR)/google-beta.filtered.json \
+	    --out $(ZOD_OUT)
+
 .PHONY: verify-gen
 verify-gen: gen-imported ## Fail if regenerating produces a diff (CI gate).
 	@if ! git diff --exit-code -- $(GEN_DIR) $(SCHEMAS_DIR); then \
