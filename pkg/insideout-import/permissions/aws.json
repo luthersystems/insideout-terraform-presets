@@ -253,6 +253,11 @@
       "purpose": "fetch tags per guardrail"
     },
     {
+      "service": "bedrock_model_invocation_logging_configuration",
+      "iam_action": "bedrock:GetModelInvocationLoggingConfiguration",
+      "purpose": "fetch the per-region model-invocation logging singleton (Cloud Control does not know AWS::Bedrock::ModelInvocationLoggingConfiguration; native SDK only)"
+    },
+    {
       "service": "cloudfront_distribution",
       "iam_action": "cloudcontrol:GetResource",
       "purpose": "Cloud Control GetResource for AWS::CloudFront::Distribution (#406 unified discoverer)"

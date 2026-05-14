@@ -34,6 +34,7 @@ var awsTFTypeToServiceSlug = map[string]string{
 	"aws_backup_selection":                               "backup_selection",
 	"aws_backup_vault":                                   "backup_vault",
 	"aws_bedrock_guardrail":                              "bedrock_guardrail",
+	"aws_bedrock_model_invocation_logging_configuration": "bedrock_model_invocation_logging_configuration",
 	"aws_cloudfront_distribution":                        "cloudfront_distribution",
 	"aws_cloudfront_function":                            "cloudfront_function",
 	"aws_cloudfront_monitoring_subscription":             "cloudfront_monitoring_subscription",

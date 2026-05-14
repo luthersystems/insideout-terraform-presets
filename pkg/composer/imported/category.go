@@ -93,6 +93,7 @@ var categoryByTFType = map[string]string{
 	"aws_backup_selection":                               CategoryDataStorage,
 	"aws_backup_vault":                                   CategoryDataStorage,
 	"aws_bedrock_guardrail":                              CategorySecurity,
+	"aws_bedrock_model_invocation_logging_configuration": CategoryObservability,
 	"aws_cloudfront_distribution":                        CategoryNetworkSecurity,
 	"aws_cloudfront_function":                            CategoryNetworkSecurity,
 	"aws_cloudfront_monitoring_subscription":             CategoryNetworkSecurity,

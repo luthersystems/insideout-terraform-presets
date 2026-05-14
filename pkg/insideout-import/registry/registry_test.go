@@ -35,6 +35,7 @@ func TestSupportedDiscoverTypes_AWS_ReturnsCanonicalSortedList(t *testing.T) {
 		"aws_backup_selection",
 		"aws_backup_vault",
 		"aws_bedrock_guardrail",
+		"aws_bedrock_model_invocation_logging_configuration",
 		"aws_cloudfront_distribution",
 		"aws_cloudfront_function",
 		"aws_cloudfront_monitoring_subscription",
