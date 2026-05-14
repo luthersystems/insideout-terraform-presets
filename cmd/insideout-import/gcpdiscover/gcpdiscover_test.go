@@ -73,6 +73,9 @@ var expectedRegisteredTypes = map[string]bool{
 	"google_compute_health_check":            false,
 	"google_compute_managed_ssl_certificate": false,
 	"google_compute_target_http_proxy":       false,
+	// Bundle G3 — sub-resources (#475).
+	"google_secret_manager_secret_version": false,
+	"google_storage_bucket_object":         false,
 }
 
 func TestNewGCPDiscoverer_RegistersExpectedTypes(t *testing.T) {
@@ -742,6 +745,10 @@ var expectedScopeStyle = map[string]ScopeStyle{
 	"google_compute_health_check":            ScopeStyleNamePrefix,
 	"google_compute_managed_ssl_certificate": ScopeStyleNamePrefix,
 	"google_compute_target_http_proxy":       ScopeStyleNamePrefix,
+	// Bundle G3 — sub-resources (#475). Versions/objects aren't in
+	// CAI; each fans out across its parent's CAI rows.
+	"google_secret_manager_secret_version": ScopeStyleNonCAI,
+	"google_storage_bucket_object":         ScopeStyleNonCAI,
 }
 
 // TestScopeStyle_PinsPerTypeContract is the regression guard (#366).

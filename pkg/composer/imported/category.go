@@ -236,10 +236,12 @@ var categoryByTFType = map[string]string{
 	"google_secret_manager_secret":               CategorySecurity,
 	"google_secret_manager_secret_iam_binding":   CategorySecurity,
 	"google_secret_manager_secret_iam_member":    CategorySecurity,
+	"google_secret_manager_secret_version":       CategorySecurity,
 	"google_service_account":                     CategorySecurity,
 	"google_sql_database_instance":               CategoryDataStorage,
 	"google_sql_user":                            CategorySecurity,
 	"google_storage_bucket":                      CategoryDataStorage,
 	"google_storage_bucket_iam_member":           CategorySecurity,
+	"google_storage_bucket_object":               CategoryDataStorage,
 	"google_vertex_ai_dataset":                   CategoryDataStorage,
 }

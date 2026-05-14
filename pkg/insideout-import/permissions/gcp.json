@@ -8,6 +8,8 @@
     {"service": "cloudresourcemanager", "gcp_role": "roles/iam.securityReviewer", "iam_permission": "resourcemanager.projects.getIamPolicy", "purpose": "Bundle G1 (#470): read project-level IAM policy to materialize google_project_iam_member rows"},
     {"service": "run", "gcp_role": "roles/run.viewer", "iam_permission": "run.services.getIamPolicy", "purpose": "Bundle G1 (#470): read per-service IAM bindings to materialize google_cloud_run_v2_service_iam_member rows"},
     {"service": "secretmanager", "gcp_role": "roles/secretmanager.viewer", "iam_permission": "secretmanager.secrets.getIamPolicy", "purpose": "Bundle G1 (#470): read per-secret IAM bindings to materialize google_secret_manager_secret_iam_binding and _iam_member rows"},
-    {"service": "storage", "gcp_role": "roles/storage.legacyBucketReader", "iam_permission": "storage.buckets.getIamPolicy", "purpose": "Bundle G1 (#470): read per-bucket IAM bindings to materialize google_storage_bucket_iam_member rows"}
+    {"service": "secretmanager", "gcp_role": "roles/secretmanager.viewer", "iam_permission": "secretmanager.versions.list", "purpose": "Bundle G3 (#475): enumerate per-secret versions to materialize google_secret_manager_secret_version rows"},
+    {"service": "storage", "gcp_role": "roles/storage.legacyBucketReader", "iam_permission": "storage.buckets.getIamPolicy", "purpose": "Bundle G1 (#470): read per-bucket IAM bindings to materialize google_storage_bucket_iam_member rows"},
+    {"service": "storage", "gcp_role": "roles/storage.objectViewer", "iam_permission": "storage.objects.list", "purpose": "Bundle G3 (#475): enumerate per-bucket objects (capped at 1000/bucket) to materialize google_storage_bucket_object rows"}
   ]
 }

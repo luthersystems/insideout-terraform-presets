@@ -156,9 +156,11 @@ google_redis_instance	Data Storage
 google_secret_manager_secret	Security
 google_secret_manager_secret_iam_binding	Security
 google_secret_manager_secret_iam_member	Security
+google_secret_manager_secret_version	Security
 google_service_account	Security
 google_sql_database_instance	Data Storage
 google_sql_user	Security
 google_storage_bucket	Data Storage
 google_storage_bucket_iam_member	Security
+google_storage_bucket_object	Data Storage
 google_vertex_ai_dataset	Data Storage

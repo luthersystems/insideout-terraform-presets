@@ -379,3 +379,53 @@ func (f *fakeIAMPolicyLister) GetBucketIAMPolicy(_ context.Context, bucketName s
 	}
 	return f.bindingsByBucket[bucketName], nil
 }
+
+// fakeSecretVersionLister returns canned versions per-parent. Keyed
+// on the secret's full name ("projects/<p>/secrets/<s>"); an unmapped
+// parent yields zero versions (legitimate empty state). Mirrors the
+// fakeSQLUserLister shape — per-key canned response, per-key error
+// injection, and a call record that pins the fanout.
+type fakeSecretVersionLister struct {
+	versionsBySecret map[string][]gcpSecretVersion
+	errBySecret      map[string]error
+	calls            []struct {
+		projectID      string
+		secretFullName string
+	}
+}
+
+func (f *fakeSecretVersionLister) ListSecretVersions(_ context.Context, projectID, secretFullName string) ([]gcpSecretVersion, error) {
+	f.calls = append(f.calls, struct {
+		projectID      string
+		secretFullName string
+	}{projectID, secretFullName})
+	if err, ok := f.errBySecret[secretFullName]; ok {
+		return nil, err
+	}
+	return f.versionsBySecret[secretFullName], nil
+}
+
+// fakeBucketObjectLister returns canned objects per-bucket. Keyed on
+// the bucket name; an unmapped parent yields zero objects. The
+// `truncateBucket` set lets a test pin the truncation path — a bucket
+// whose name is in the set returns errBucketObjectsTruncated alongside
+// its canned slice, regardless of slice length, so the discoverer's
+// warn path is exercisable without having to actually build 1000+
+// canned objects.
+type fakeBucketObjectLister struct {
+	objectsByBucket map[string][]gcpBucketObject
+	errByBucket     map[string]error
+	truncateBucket  map[string]bool
+	calls           []string
+}
+
+func (f *fakeBucketObjectLister) ListBucketObjects(_ context.Context, bucketName string) ([]gcpBucketObject, error) {
+	f.calls = append(f.calls, bucketName)
+	if err, ok := f.errByBucket[bucketName]; ok {
+		return nil, err
+	}
+	if f.truncateBucket[bucketName] {
+		return f.objectsByBucket[bucketName], errBucketObjectsTruncated
+	}
+	return f.objectsByBucket[bucketName], nil
+}

@@ -239,6 +239,11 @@ type GCPDiscovererOpts struct {
 	// SDK clients so the Opts surface doesn't grow per added IAM
 	// resource type.
 	IAMPolicyLister gcpIAMPolicyLister
+	// Bundle G3 (#475) — sub-resource listers. Each backs one
+	// discoverer that fans out across the relevant CAI-discovered
+	// parent rows.
+	SecretVersionLister gcpSecretVersionLister
+	BucketObjectLister  gcpBucketObjectLister
 }
 
 // NewGCPDiscoverer wires up the production set of GCP discoverers. The
@@ -306,6 +311,9 @@ func NewGCPDiscoverer(searcher gcpAssetSearcher, projectID string, opts GCPDisco
 			"google_compute_health_check":            newComputeHealthCheckDiscoverer(),
 			"google_compute_managed_ssl_certificate": newComputeManagedSSLCertificateDiscoverer(),
 			"google_compute_target_http_proxy":       newComputeTargetHTTPProxyDiscoverer(),
+			// Bundle G3 — sub-resources (#475).
+			"google_secret_manager_secret_version": newSecretManagerSecretVersionDiscoverer(opts.SecretVersionLister),
+			"google_storage_bucket_object":         newStorageBucketObjectDiscoverer(opts.BucketObjectLister),
 		},
 		// Per-type SDK attribute enrichers (#403). Each entry is a sibling
 		// to the byType discoverer of the same name and populates ir.Attrs
@@ -527,6 +535,13 @@ func nonCAIDiscovererHasLister(d Discoverer) bool {
 	case *cloudRunV2ServiceIAMMemberDiscoverer:
 		return v.lister != nil
 	case *cloudFunctions2FunctionIAMMemberDiscoverer:
+		return v.lister != nil
+	// Bundle G3 — sub-resources (#475). Each sub-resource discoverer
+	// reaches in through its own lister; identical nil-check shape
+	// since neither type uses the shared IAM lister.
+	case *secretManagerSecretVersionDiscoverer:
+		return v.lister != nil
+	case *storageBucketObjectDiscoverer:
 		return v.lister != nil
 	default:
 		fmt.Fprintf(os.Stderr, "WARN: %s: no lister-check wired in nonCAIDiscovererHasLister — extend the switch when adding a non-CAI type\n", d.ResourceType())
