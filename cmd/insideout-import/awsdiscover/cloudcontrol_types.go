@@ -2335,6 +2335,218 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 		},
 		TagsFromProperties: emptyTagsExtractor,
 	},
+
+	// =====================================================================
+	// API Gateway v2 — DomainName + ApiMapping (#14j)
+	// =====================================================================
+	{
+		// AWS::ApiGatewayV2::DomainName — top-level taggable type, CC
+		// ListResources supported (no ParentLister needed). CC primary
+		// identifier = DomainName (the customer-visible domain string),
+		// same as the Terraform import format — passthrough.
+		//
+		// AWS::ApiGatewayV2::DomainName.Tags is a flat map[string]string
+		// in the CFN schema (verified against the public CFN type schema
+		// endpoint:
+		//   https://schema.cloudformation.us-east-1.amazonaws.com/aws-apigatewayv2-domainname.json
+		// `properties.Tags.type = "object"` with `patternProperties[".*"]`).
+		// This matches the existing aws_apigatewayv2_api Tags shape — use
+		// extractStringMap, NOT extractTagList.
+		TFType:                  "aws_apigatewayv2_domain_name",
+		CloudFormationType:      "AWS::ApiGatewayV2::DomainName",
+		Slug:                    "apigatewayv2_domain_name",
+		ImportIDFromIdentifier:  passthroughImportID,
+		NameHintFromProperties:  nameOrIdentifier("DomainName"),
+		NativeIDsFromProperties: passthroughDomainNameNativeIDs,
+		TagsFromProperties: func(props map[string]any) map[string]string {
+			return extractStringMap(props, "Tags")
+		},
+	},
+	{
+		// AWS::ApiGatewayV2::ApiMapping is parent-scoped on DomainName:
+		// CC ListResources requires ResourceModel={"DomainName":"..."} —
+		// CC returns InvalidRequestException without it. ParentLister
+		// enumerates domain names via apigatewayv2:GetDomainNames and
+		// emits one ResourceModel={"DomainName":"…"} JSON-string per
+		// domain; the discoverer fans ListResources out once per parent.
+		//
+		// CC primary identifier shape is "<ApiMappingId>|<DomainName>"
+		// (compound, pipe-separated per the CFN schema's
+		// primaryIdentifier of
+		// [/properties/ApiMappingId, /properties/DomainName]; verified
+		// against the public CFN type schema endpoint:
+		//   https://schema.cloudformation.us-east-1.amazonaws.com/aws-apigatewayv2-apimapping.json
+		// ). Terraform's import format for aws_apigatewayv2_api_mapping
+		// is "<ApiMappingId>/<DomainName>" (slash-separated; verified
+		// against terraform-provider-aws main internal/service/
+		// apigatewayv2/api_mapping.go::resourceAPIMappingImport — error
+		// message: "use: 'api-mapping-id/domain-name'"). Rewrite the
+		// first "|" -> "/"; SplitN-on-"|"-cap-2 preserves any "|" inside
+		// DomainName (DNS labels cannot contain "|" so this is
+		// belt-and-suspenders, mirroring the apigatewayv2_route /
+		// _integration / _authorizer rewrite shape).
+		//
+		// No Tags property on the CFN schema — ApiMappings are stitching
+		// between an Api+Stage and a DomainName, not tag-bearing
+		// resources. SkipProjectTagFilter + emptyTagsExtractor matches
+		// the untaggableAWS / NON_TAGGABLE_AWS allowlist entry; without
+		// SkipProjectTagFilter the empty tag bag would cause every
+		// mapping to be silently dropped on --project scans.
+		TFType:               "aws_apigatewayv2_api_mapping",
+		CloudFormationType:   "AWS::ApiGatewayV2::ApiMapping",
+		Slug:                 "apigatewayv2_api_mapping",
+		SkipProjectTagFilter: true,
+		ParentLister:         listApigatewayv2DomainNames,
+		ImportIDFromIdentifier: func(identifier string, _ map[string]any) string {
+			return strings.Replace(identifier, "|", "/", 1)
+		},
+		// No stable human-readable name — ApiMappingKey ("v1", "" for
+		// root, etc.) is closest, then fall back to the identifier.
+		NameHintFromProperties: func(identifier string, props map[string]any) string {
+			if k := extractString(props, "ApiMappingKey"); k != "" {
+				return k
+			}
+			return identifier
+		},
+		NativeIDsFromProperties: func(identifier string, _ map[string]any) map[string]string {
+			parts := strings.SplitN(identifier, "|", 2)
+			if len(parts) != 2 {
+				return nil
+			}
+			return map[string]string{
+				"api_mapping_id": parts[0],
+				"domain_name":    parts[1],
+			}
+		},
+		TagsFromProperties: emptyTagsExtractor,
+	},
+
+	// =====================================================================
+	// ECS Cluster Capacity Providers — passthrough on cluster name, untaggable (#14j)
+	// =====================================================================
+	{
+		// AWS::ECS::ClusterCapacityProviderAssociations is the standalone
+		// CFN resource that manages capacity-provider associations on an
+		// existing ECS cluster — exactly mirrors the terraform-provider-aws
+		// resource aws_ecs_cluster_capacity_providers. CC primary
+		// identifier = Cluster (the cluster name, single-property primary
+		// identifier per the CFN schema:
+		//   https://schema.cloudformation.us-east-1.amazonaws.com/aws-ecs-clustercapacityproviderassociations.json
+		// `primaryIdentifier: [/properties/Cluster]`). Terraform's import
+		// format passes the cluster name through unchanged (verified
+		// against terraform-provider-aws main internal/service/ecs/
+		// cluster_capacity_providers.go — Importer uses
+		// schema.ImportStatePassthroughContext and d.SetId(clusterName)
+		// in the Create path). Passthrough.
+		//
+		// No Tags property on the CFN schema — capacity-provider
+		// associations are a sub-resource of the parent ECS cluster and
+		// inherit no tagging surface. SkipProjectTagFilter +
+		// emptyTagsExtractor matches the untaggableAWS / NON_TAGGABLE_AWS
+		// allowlist entry. No ARN rule: this resource has no ARN of its
+		// own (the parent cluster's ARN routes to aws_ecs_cluster); the
+		// cache-miss ListResources fallback handles discovery.
+		TFType:                 "aws_ecs_cluster_capacity_providers",
+		CloudFormationType:     "AWS::ECS::ClusterCapacityProviderAssociations",
+		Slug:                   "ecs_cluster_capacity_providers",
+		SkipProjectTagFilter:   true,
+		ImportIDFromIdentifier: passthroughImportID,
+		NameHintFromProperties: nameOrIdentifier("Cluster"),
+		NativeIDsFromProperties: func(identifier string, _ map[string]any) map[string]string {
+			return map[string]string{"cluster": identifier}
+		},
+		TagsFromProperties: emptyTagsExtractor,
+	},
+
+	// =====================================================================
+	// Service Discovery Private DNS Namespace — VPC-joined import ID (#14j)
+	// =====================================================================
+	{
+		// AWS::ServiceDiscovery::PrivateDnsNamespace — top-level taggable
+		// type, CC ListResources supported (no ParentLister needed). CC
+		// primary identifier = Id (the namespace ID, e.g. "ns-abc..."),
+		// per the CFN schema:
+		//   https://schema.cloudformation.us-east-1.amazonaws.com/aws-servicediscovery-privatednsnamespace.json
+		// `primaryIdentifier: [/properties/Id]`.
+		//
+		// Terraform's import format for
+		// aws_service_discovery_private_dns_namespace is
+		// "<NamespaceId>:<VpcId>" (colon-separated; verified against
+		// terraform-provider-aws main internal/service/servicediscovery/
+		// private_dns_namespace.go — Importer parses
+		// `idParts := strings.Split(d.Id(), ":")` requiring the two-part
+		// shape "NAMESPACE_ID:VPC_ID"). The CC GetResource properties
+		// payload exposes the VPC under the `Vpc` key (verified against
+		// the same CFN schema endpoint above — `.properties.Vpc.type =
+		// "string"`); ImportIDFromIdentifier joins the identifier
+		// with that Vpc value. When the Vpc property is missing
+		// (defensive: malformed CC payload), fall through to the bare
+		// identifier so a downstream import surfaces a clear "wrong
+		// format" error rather than a silent mis-import — mirrors the
+		// IAM ServiceLinkedRole RoleArn-fallthrough precedent from 14i.
+		//
+		// AWS::ServiceDiscovery::PrivateDnsNamespace.Tags is a
+		// Key/Value list (the CFN v2 convention). Tagged.
+		TFType:             "aws_service_discovery_private_dns_namespace",
+		CloudFormationType: "AWS::ServiceDiscovery::PrivateDnsNamespace",
+		Slug:               "service_discovery_private_dns_namespace",
+		ImportIDFromIdentifier: func(identifier string, props map[string]any) string {
+			vpc := extractString(props, "Vpc")
+			if vpc == "" {
+				return identifier
+			}
+			return identifier + ":" + vpc
+		},
+		NameHintFromProperties: nameOrIdentifier("Name"),
+		NativeIDsFromProperties: func(identifier string, props map[string]any) map[string]string {
+			out := map[string]string{"namespace_id": identifier}
+			if arn := extractString(props, "Arn"); arn != "" {
+				out["arn"] = arn
+			}
+			if vpc := extractString(props, "Vpc"); vpc != "" {
+				out["vpc_id"] = vpc
+			}
+			return out
+		},
+		TagsFromProperties: tagsFromKey("Tags"),
+	},
+
+	// =====================================================================
+	// SNS Topic Subscription — ARN-keyed, untaggable (#14j)
+	// =====================================================================
+	{
+		// AWS::SNS::Subscription — top-level untaggable type, CC
+		// ListResources supported. CC primary identifier = Arn (the
+		// SubscriptionArn, full ARN form
+		// "arn:aws:sns:<region>:<acct>:<topic-name>:<uuid>"), per the
+		// CFN schema:
+		//   https://schema.cloudformation.us-east-1.amazonaws.com/aws-sns-subscription.json
+		// `primaryIdentifier: [/properties/Arn]`. Terraform's import
+		// format also takes the SubscriptionArn (verified against
+		// terraform-provider-aws main internal/service/sns/
+		// topic_subscription.go — `@ArnIdentity` annotation, and the
+		// Create path does `d.SetId(aws.ToString(output.SubscriptionArn))`).
+		// Passthrough.
+		//
+		// No Tags property on the CFN schema — SNS Subscriptions inherit
+		// no tagging surface (tags live on the parent topic).
+		// SkipProjectTagFilter + emptyTagsExtractor matches the
+		// untaggableAWS / NON_TAGGABLE_AWS allowlist entry. No ARN rule
+		// in arn_rules.go because the SNS subscription ARN shape
+		// `<topic-name>:<uuid>` collides with the bare SNS topic ARN
+		// shape after parseARN splits — discriminating between them
+		// requires per-segment shape analysis that isn't worth wiring
+		// for a type that doesn't surface in RGT today; the cache-miss
+		// ListResources fallback handles discovery cleanly.
+		TFType:                  "aws_sns_topic_subscription",
+		CloudFormationType:      "AWS::SNS::Subscription",
+		Slug:                    "sns_topic_subscription",
+		SkipProjectTagFilter:    true,
+		ImportIDFromIdentifier:  passthroughImportID,
+		NameHintFromProperties:  snsSubscriptionNameHint,
+		NativeIDsFromProperties: snsSubscriptionNativeIDs,
+		TagsFromProperties:      emptyTagsExtractor,
+	},
 }
 
 // passthroughImportID is the common ImportIDFromIdentifier used by every
@@ -2431,6 +2643,64 @@ func passthroughKeyPairNativeIDs(identifier string, props map[string]any) map[st
 	}
 	if fp := extractString(props, "KeyFingerprint"); fp != "" {
 		out["fingerprint"] = fp
+	}
+	return out
+}
+
+// passthroughDomainNameNativeIDs builds the NativeIDs map for
+// AWS::ApiGatewayV2::DomainName (#14j). The CC identifier IS the
+// DomainName (the customer-visible domain string, also the primary
+// identifier per the CFN schema); RegionalDomainName +
+// DistributionDomainName are CloudFront / regional delivery-channel
+// fronts that downstream tooling sometimes needs to resolve back to
+// the parent domain. Stamp the canonical `domain_name` + the two
+// alternate handles when present.
+func passthroughDomainNameNativeIDs(identifier string, props map[string]any) map[string]string {
+	out := map[string]string{"domain_name": identifier}
+	if rd := extractString(props, "RegionalDomainName"); rd != "" {
+		out["regional_domain_name"] = rd
+	}
+	if dd := extractString(props, "DistributionDomainName"); dd != "" {
+		out["distribution_domain_name"] = dd
+	}
+	return out
+}
+
+// snsSubscriptionNameHint is the NameHintFromProperties for
+// AWS::SNS::Subscription (#14j). The CFN schema has no top-level Name
+// field — the most human-readable hint is Endpoint (e.g. an email
+// address or SQS ARN), falling back to Protocol ("email", "sqs",
+// "https", ...) and finally the SubscriptionArn identifier. The
+// fall-through order matches the apigatewayv2_integration precedent
+// (Description -> IntegrationType -> identifier).
+func snsSubscriptionNameHint(identifier string, props map[string]any) string {
+	if ep := extractString(props, "Endpoint"); ep != "" {
+		return ep
+	}
+	if p := extractString(props, "Protocol"); p != "" {
+		return p
+	}
+	return identifier
+}
+
+// snsSubscriptionNativeIDs builds the NativeIDs map for
+// AWS::SNS::Subscription (#14j). The identifier IS the SubscriptionArn;
+// the CC GetResource properties payload also surfaces TopicArn (the
+// parent topic ARN), Endpoint, and Protocol. Stamp `arn` (canonical
+// SubscriptionArn) + the three handles when present so downstream
+// consumers can resolve a subscription by any of its observable
+// identifiers — mirrors the IAM ServiceLinkedRole multi-handle native-
+// IDs precedent from 14i.
+func snsSubscriptionNativeIDs(identifier string, props map[string]any) map[string]string {
+	out := map[string]string{"arn": identifier}
+	if t := extractString(props, "TopicArn"); t != "" {
+		out["topic_arn"] = t
+	}
+	if e := extractString(props, "Endpoint"); e != "" {
+		out["endpoint"] = e
+	}
+	if p := extractString(props, "Protocol"); p != "" {
+		out["protocol"] = p
 	}
 	return out
 }

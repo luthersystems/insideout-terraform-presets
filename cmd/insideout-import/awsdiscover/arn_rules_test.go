@@ -445,9 +445,39 @@ func TestLookupRule(t *testing.T) {
 		{name: "apigatewayv2_stage_known_skip", arn: "arn:aws:apigateway:us-east-1::/apis/4hmoaslnr0/stages/$default",
 			wantCFN: "", wantIdent: "4hmoaslnr0/stages/$default"},
 
+		// API Gateway v2 — DomainName (#14j). ARN shape:
+		// `arn:aws:apigateway:<region>::/domainnames/<domain>`. parseARN
+		// strips the leading `/` so resourceType=`domainnames`,
+		// resourceID=`<domain>`. CC primary identifier = DomainName
+		// (passthrough on resourceID).
+		{name: "apigatewayv2_domain_name", arn: "arn:aws:apigateway:us-east-1::/domainnames/api.example.com",
+			wantCFN: "AWS::ApiGatewayV2::DomainName", wantIdent: "api.example.com"},
+		// Sanity: an ApiMapping ARN (no Cloud Control routing — handled
+		// by ParentLister) shares (apigateway, domainnames) with the
+		// DomainName rule but embeds `/apimappings/` in resourceID. The
+		// DomainName rule's matchExtra MUST reject this shape so the
+		// ARN isn't silently misrouted to AWS::ApiGatewayV2::DomainName
+		// with identifier "<domain>/apimappings/<id>" (which CC
+		// GetResource would reject with ValidationException).
+		{name: "apigatewayv2_api_mapping_no_match",
+			arn:         "arn:aws:apigateway:us-east-1::/domainnames/api.example.com/apimappings/abc123",
+			wantNoMatch: true},
+
 		// REST API v1 — explicitly unmapped (only v2 in table today)
 		{name: "apigateway_v1_restapi_unmapped", arn: "arn:aws:apigateway:us-east-1::/restapis/abc123",
 			wantNoMatch: true},
+
+		// Service Discovery — Private DNS Namespace (#14j). ARN shape:
+		// `arn:aws:servicediscovery:<region>:<acct>:namespace/<id>`. CC
+		// primary identifier = Id (single-property primary identifier).
+		// The arnRule routes every namespace ARN to PrivateDnsNamespace
+		// regardless of underlying flavor (Public / Http / Private) —
+		// the resource-type prefix is shared, and InsideOut presets only
+		// declare PrivateDnsNamespace today.
+		{name: "servicediscovery_private_dns_namespace",
+			arn:       "arn:aws:servicediscovery:us-east-1:111111111111:namespace/ns-abc123",
+			wantCFN:   "AWS::ServiceDiscovery::PrivateDnsNamespace",
+			wantIdent: "ns-abc123"},
 
 		// Cognito
 		{name: "cognito_userpool", arn: "arn:aws:cognito-idp:us-east-1:111111111111:userpool/us-east-1_AbCdE",
@@ -632,5 +662,36 @@ func TestLookupRule_ApiGatewayDisambiguation(t *testing.T) {
 	}
 	if r.cfnType != "" {
 		t.Errorf("stage ARN matched cfnType=%q, want \"\" (known-skip sentinel)", r.cfnType)
+	}
+}
+
+// TestLookupRule_ApiGatewayDomainNameDisambiguation pins the matchExtra
+// behavior for the DomainName rule (#14j): a bare domainnames ARN
+// matches the DomainName rule (no "/apimappings/" in resourceID), but
+// an ApiMapping ARN under the same `domainnames` parent returns no
+// match (the matchExtra explicitly rejects the apimappings shape).
+// ApiMapping itself is discovered via ParentLister exclusively — adding
+// an ARN rule here would never fire (the type's untaggable
+// SkipProjectTagFilter=true short-circuits the RGT cache); the
+// no-match assertion guards against accidental silent misrouting if a
+// future regression drops the matchExtra guard.
+func TestLookupRule_ApiGatewayDomainNameDisambiguation(t *testing.T) {
+	t.Parallel()
+	bareDomain, _ := parseARN("arn:aws:apigateway:us-east-1::/domainnames/api.example.com")
+	r, ok := lookupRule(bareDomain)
+	if !ok {
+		t.Fatal("bare DomainName ARN should match the DomainName rule")
+	}
+	if r.cfnType != "AWS::ApiGatewayV2::DomainName" {
+		t.Errorf("bare DomainName ARN matched cfnType=%q, want AWS::ApiGatewayV2::DomainName", r.cfnType)
+	}
+	if got := r.identifierFn(bareDomain); got != "api.example.com" {
+		t.Errorf("DomainName identifier: got %q, want api.example.com", got)
+	}
+
+	apiMapping, _ := parseARN("arn:aws:apigateway:us-east-1::/domainnames/api.example.com/apimappings/abc123")
+	_, ok = lookupRule(apiMapping)
+	if ok {
+		t.Error("ApiMapping ARN must NOT match the DomainName rule (matchExtra must reject the /apimappings/ shape)")
 	}
 }

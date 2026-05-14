@@ -3136,3 +3136,401 @@ func TestOpenSearchServerlessSecurityPolicyTypeModels(t *testing.T) {
 		t.Errorf("Type fan-out: got %v, want %v", got, want)
 	}
 }
+
+// =====================================================================
+// Bundle 14j — APIGW v2 + misc closeout extractor pins
+// =====================================================================
+
+// TestApigatewayv2DomainNameConfig pins aws_apigatewayv2_domain_name:
+// CC ListResources supported (no ParentLister), passthrough ImportID,
+// flat-map Tags shape (verified against the public CFN type schema —
+// matches the existing aws_apigatewayv2_api shape, NOT the Key/Value
+// list shape). NativeIDs stamps domain_name + the two regional /
+// CloudFront alternate handles when present.
+func TestApigatewayv2DomainNameConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_apigatewayv2_domain_name")
+	if cfg.SkipProjectTagFilter {
+		t.Error("aws_apigatewayv2_domain_name: SkipProjectTagFilter must be false (taggable type)")
+	}
+	if cfg.IsGlobal {
+		t.Error("aws_apigatewayv2_domain_name: IsGlobal must be false (regional service)")
+	}
+	if cfg.CloudFormationType != "AWS::ApiGatewayV2::DomainName" {
+		t.Errorf("CloudFormationType=%q, want AWS::ApiGatewayV2::DomainName", cfg.CloudFormationType)
+	}
+	if cfg.ParentLister != nil {
+		t.Error("ParentLister must be nil (top-level taggable type, CC ListResources is supported without ResourceModel)")
+	}
+	if cfg.SDKLister != nil {
+		t.Error("SDKLister must be nil (CC ListResources is supported)")
+	}
+
+	// Passthrough: CC identifier IS the DomainName, matches the TF
+	// import format byte-for-byte (verified against terraform-provider-
+	// aws main internal/service/apigatewayv2/domain_name.go — Importer
+	// uses schema.ImportStatePassthroughContext).
+	if got := cfg.ImportIDFromIdentifier("api.example.com", nil); got != "api.example.com" {
+		t.Errorf("ImportID passthrough: got %q, want %q", got, "api.example.com")
+	}
+
+	// NameHint: prefer the CFN-surfaced DomainName, fall back to
+	// identifier.
+	if got := cfg.NameHintFromProperties("api.example.com", map[string]any{"DomainName": "api.example.com"}); got != "api.example.com" {
+		t.Errorf("NameHint from DomainName: got %q, want api.example.com", got)
+	}
+	if got := cfg.NameHintFromProperties("api.example.com", map[string]any{}); got != "api.example.com" {
+		t.Errorf("NameHint fallback: got %q, want identifier", got)
+	}
+
+	// NativeIDs: domain_name canonical + regional / distribution
+	// handles when present.
+	native := cfg.NativeIDsFromProperties("api.example.com", map[string]any{
+		"RegionalDomainName":     "d-abc.execute-api.us-east-1.amazonaws.com",
+		"DistributionDomainName": "d123.cloudfront.net",
+	})
+	want := map[string]string{
+		"domain_name":              "api.example.com",
+		"regional_domain_name":     "d-abc.execute-api.us-east-1.amazonaws.com",
+		"distribution_domain_name": "d123.cloudfront.net",
+	}
+	if !reflect.DeepEqual(native, want) {
+		t.Errorf("NativeIDs (all handles): got %+v, want %+v", native, want)
+	}
+	// When optional handles are missing, only domain_name is stamped.
+	bare := cfg.NativeIDsFromProperties("api.example.com", map[string]any{})
+	if !reflect.DeepEqual(bare, map[string]string{"domain_name": "api.example.com"}) {
+		t.Errorf("NativeIDs (bare): got %+v, want only domain_name", bare)
+	}
+
+	// Tags: flat map[string]string shape (verified live; the
+	// patternProperties {".*": string} CFN-schema shape — wrong
+	// extractor would silently produce empty tags). The Key/Value list
+	// extractor would yield {} on this input.
+	tags := cfg.TagsFromProperties(map[string]any{"Tags": map[string]any{
+		"Project": "io-stack-abc",
+		"env":     "prod",
+	}})
+	if tags == nil {
+		t.Fatal("Tags must be non-nil (taggable type)")
+	}
+	if tags["Project"] != "io-stack-abc" || tags["env"] != "prod" {
+		t.Errorf("Tags: got %+v, want Project=io-stack-abc env=prod", tags)
+	}
+	// Defensive: the Key/Value list shape (the OTHER CFN convention)
+	// must NOT be silently accepted for this type — wrong extractor
+	// would fall back to the list path and yield {} on a flat map.
+	wrongShape := cfg.TagsFromProperties(map[string]any{"Tags": []any{
+		map[string]any{"Key": "Project", "Value": "io-stack-abc"},
+	}})
+	if len(wrongShape) != 0 {
+		t.Errorf("Tags with Key/Value list shape: got %+v, want empty (DomainName uses flat-map shape exclusively)", wrongShape)
+	}
+}
+
+// TestApigatewayv2ApiMappingConfig pins aws_apigatewayv2_api_mapping:
+// parent-scoped on DomainName, IsGlobal=false (regional), ImportID
+// rewrite "|" -> "/", structured NativeIDs (api_mapping_id +
+// domain_name), untaggable (CFN schema has no Tags property).
+// SkipProjectTagFilter must be true so mappings on project-tagged
+// domains don't get silently dropped.
+func TestApigatewayv2ApiMappingConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_apigatewayv2_api_mapping")
+	if !cfg.SkipProjectTagFilter {
+		t.Error("aws_apigatewayv2_api_mapping: SkipProjectTagFilter must be true (untaggable; the legacy Project filter would silently drop every mapping)")
+	}
+	if cfg.IsGlobal {
+		t.Error("aws_apigatewayv2_api_mapping: IsGlobal must be false (regional)")
+	}
+	if cfg.CloudFormationType != "AWS::ApiGatewayV2::ApiMapping" {
+		t.Errorf("CloudFormationType=%q, want AWS::ApiGatewayV2::ApiMapping", cfg.CloudFormationType)
+	}
+	if cfg.SDKLister != nil {
+		t.Error("SDKLister must be nil (uses ParentLister)")
+	}
+	if cfg.ParentLister == nil {
+		t.Fatal("ParentLister must be non-nil (ApiMapping is parent-scoped on DomainName)")
+	}
+
+	// ImportID: CC "<ApiMappingId>|<DomainName>" -> TF
+	// "<ApiMappingId>/<DomainName>" (slash-separated; verified against
+	// terraform-provider-aws main internal/service/apigatewayv2/
+	// api_mapping.go::resourceAPIMappingImport).
+	if got := cfg.ImportIDFromIdentifier("abc123|api.example.com", nil); got != "abc123/api.example.com" {
+		t.Errorf("ImportID rewrite |->/: got %q, want %q", got, "abc123/api.example.com")
+	}
+	// First-`|`-only rewrite contract: any "|" after the first must
+	// survive (DNS labels can't contain "|" so belt-and-suspenders;
+	// mirrors the apigatewayv2_route precedent).
+	if got := cfg.ImportIDFromIdentifier("a|b|c", nil); got != "a/b|c" {
+		t.Errorf("ImportID multi-pipe (first-only rewrite): got %q, want %q", got, "a/b|c")
+	}
+	// Defensive: a malformed identifier without "|" passes through.
+	if got := cfg.ImportIDFromIdentifier("orphan", nil); got != "orphan" {
+		t.Errorf("ImportID passthrough on no-pipe: got %q, want %q", got, "orphan")
+	}
+
+	// NameHint: prefer ApiMappingKey ("v1", "" for root path, etc.),
+	// fall back to identifier.
+	if got := cfg.NameHintFromProperties("abc123|api.example.com", map[string]any{"ApiMappingKey": "v1"}); got != "v1" {
+		t.Errorf("NameHint from ApiMappingKey: got %q, want v1", got)
+	}
+	if got := cfg.NameHintFromProperties("abc123|api.example.com", map[string]any{}); got != "abc123|api.example.com" {
+		t.Errorf("NameHint fallback: got %q, want identifier", got)
+	}
+	// Empty ApiMappingKey (the root-path mapping) must fall through to
+	// the identifier rather than emitting an empty name hint.
+	if got := cfg.NameHintFromProperties("abc123|api.example.com", map[string]any{"ApiMappingKey": ""}); got != "abc123|api.example.com" {
+		t.Errorf("NameHint with empty ApiMappingKey: got %q, want identifier (must not emit empty name)", got)
+	}
+
+	// NativeIDs: structured.
+	native := cfg.NativeIDsFromProperties("abc123|api.example.com", nil)
+	want := map[string]string{"api_mapping_id": "abc123", "domain_name": "api.example.com"}
+	if !reflect.DeepEqual(native, want) {
+		t.Errorf("NativeIDs: got %+v, want %+v", native, want)
+	}
+	if got := cfg.NativeIDsFromProperties("orphan", nil); got != nil {
+		t.Errorf("NativeIDs on malformed identifier: got %+v, want nil", got)
+	}
+
+	// Untaggable: emptyTagsExtractor returns non-nil empty map (#255).
+	tags := cfg.TagsFromProperties(map[string]any{"Tags": []any{
+		map[string]any{"Key": "env", "Value": "prod"},
+	}})
+	if tags == nil {
+		t.Fatal("Tags must be non-nil empty map per #255 contract")
+	}
+	if len(tags) != 0 {
+		t.Errorf("Tags: got %+v, want empty map (untaggable; emptyTagsExtractor ignores input)", tags)
+	}
+}
+
+// TestECSClusterCapacityProvidersConfig pins
+// aws_ecs_cluster_capacity_providers: passthrough on cluster name,
+// IsGlobal=false (regional), untaggable. CC primary identifier =
+// Cluster matches TF import format (passthrough; verified against
+// terraform-provider-aws main internal/service/ecs/
+// cluster_capacity_providers.go — Importer uses
+// schema.ImportStatePassthroughContext, Create sets d.SetId(clusterName)).
+func TestECSClusterCapacityProvidersConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_ecs_cluster_capacity_providers")
+	if !cfg.SkipProjectTagFilter {
+		t.Error("aws_ecs_cluster_capacity_providers: SkipProjectTagFilter must be true (untaggable)")
+	}
+	if cfg.IsGlobal {
+		t.Error("aws_ecs_cluster_capacity_providers: IsGlobal must be false (regional)")
+	}
+	if cfg.CloudFormationType != "AWS::ECS::ClusterCapacityProviderAssociations" {
+		t.Errorf("CloudFormationType=%q, want AWS::ECS::ClusterCapacityProviderAssociations", cfg.CloudFormationType)
+	}
+	if cfg.ParentLister != nil {
+		t.Error("ParentLister must be nil (CC ListResources is supported on the singleton-per-cluster shape)")
+	}
+	if cfg.SDKLister != nil {
+		t.Error("SDKLister must be nil")
+	}
+
+	// Passthrough.
+	if got := cfg.ImportIDFromIdentifier("my-cluster", nil); got != "my-cluster" {
+		t.Errorf("ImportID passthrough: got %q, want my-cluster", got)
+	}
+
+	// NameHint: prefer CFN-surfaced Cluster, fall back to identifier.
+	if got := cfg.NameHintFromProperties("my-cluster", map[string]any{"Cluster": "my-cluster"}); got != "my-cluster" {
+		t.Errorf("NameHint from Cluster: got %q, want my-cluster", got)
+	}
+	if got := cfg.NameHintFromProperties("my-cluster", map[string]any{}); got != "my-cluster" {
+		t.Errorf("NameHint fallback: got %q, want identifier", got)
+	}
+
+	// NativeIDs: single-key "cluster".
+	native := cfg.NativeIDsFromProperties("my-cluster", nil)
+	if !reflect.DeepEqual(native, map[string]string{"cluster": "my-cluster"}) {
+		t.Errorf("NativeIDs: got %+v, want {cluster: my-cluster}", native)
+	}
+
+	// Untaggable.
+	tags := cfg.TagsFromProperties(map[string]any{})
+	if tags == nil {
+		t.Fatal("Tags must be non-nil empty map per #255 contract")
+	}
+	if len(tags) != 0 {
+		t.Errorf("Tags: got %+v, want empty map", tags)
+	}
+}
+
+// TestServiceDiscoveryPrivateDnsNamespaceConfig pins
+// aws_service_discovery_private_dns_namespace: taggable (Key/Value
+// list shape), regional, ImportID joins identifier with the Vpc
+// property to form the TF "<NamespaceId>:<VpcId>" import format
+// (verified against terraform-provider-aws main internal/service/
+// servicediscovery/private_dns_namespace.go — Importer parses
+// `strings.Split(d.Id(), ":")` requiring two-part shape
+// "NAMESPACE_ID:VPC_ID").
+func TestServiceDiscoveryPrivateDnsNamespaceConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_service_discovery_private_dns_namespace")
+	if cfg.SkipProjectTagFilter {
+		t.Error("aws_service_discovery_private_dns_namespace: SkipProjectTagFilter must be false (taggable type)")
+	}
+	if cfg.IsGlobal {
+		t.Error("aws_service_discovery_private_dns_namespace: IsGlobal must be false (regional service)")
+	}
+	if cfg.CloudFormationType != "AWS::ServiceDiscovery::PrivateDnsNamespace" {
+		t.Errorf("CloudFormationType=%q, want AWS::ServiceDiscovery::PrivateDnsNamespace", cfg.CloudFormationType)
+	}
+	if cfg.ParentLister != nil {
+		t.Error("ParentLister must be nil (top-level taggable type)")
+	}
+	if cfg.SDKLister != nil {
+		t.Error("SDKLister must be nil")
+	}
+
+	// ImportID: join identifier with Vpc property. The TF importer
+	// requires "<NamespaceId>:<VpcId>" — the colon-separated two-part
+	// shape — or the import fails with "Unexpected format of ID".
+	if got := cfg.ImportIDFromIdentifier("ns-abc123", map[string]any{"Vpc": "vpc-def456"}); got != "ns-abc123:vpc-def456" {
+		t.Errorf("ImportID join with Vpc: got %q, want %q", got, "ns-abc123:vpc-def456")
+	}
+	// Defensive: missing Vpc property — fall through to bare
+	// identifier so a downstream import surfaces a clear "wrong
+	// format" error rather than emitting a colon-prefixed half-stitched
+	// shape. Mirrors the IAM ServiceLinkedRole RoleArn-fallthrough
+	// precedent from 14i.
+	if got := cfg.ImportIDFromIdentifier("ns-abc123", map[string]any{}); got != "ns-abc123" {
+		t.Errorf("ImportID fallthrough when Vpc missing: got %q, want %q", got, "ns-abc123")
+	}
+	if got := cfg.ImportIDFromIdentifier("ns-abc123", nil); got != "ns-abc123" {
+		t.Errorf("ImportID fallthrough when props nil: got %q, want %q", got, "ns-abc123")
+	}
+
+	// NameHint: prefer Name, fall back to identifier.
+	if got := cfg.NameHintFromProperties("ns-abc123", map[string]any{"Name": "internal.local"}); got != "internal.local" {
+		t.Errorf("NameHint from Name: got %q, want internal.local", got)
+	}
+	if got := cfg.NameHintFromProperties("ns-abc123", map[string]any{}); got != "ns-abc123" {
+		t.Errorf("NameHint fallback: got %q, want identifier", got)
+	}
+
+	// NativeIDs: namespace_id canonical + arn + vpc_id when present.
+	native := cfg.NativeIDsFromProperties("ns-abc123", map[string]any{
+		"Arn": "arn:aws:servicediscovery:us-east-1:111111111111:namespace/ns-abc123",
+		"Vpc": "vpc-def456",
+	})
+	want := map[string]string{
+		"namespace_id": "ns-abc123",
+		"arn":          "arn:aws:servicediscovery:us-east-1:111111111111:namespace/ns-abc123",
+		"vpc_id":       "vpc-def456",
+	}
+	if !reflect.DeepEqual(native, want) {
+		t.Errorf("NativeIDs (full): got %+v, want %+v", native, want)
+	}
+	// Bare: only namespace_id stamped when optional handles are missing.
+	bare := cfg.NativeIDsFromProperties("ns-abc123", map[string]any{})
+	if !reflect.DeepEqual(bare, map[string]string{"namespace_id": "ns-abc123"}) {
+		t.Errorf("NativeIDs (bare): got %+v, want only namespace_id", bare)
+	}
+
+	// Tags: Key/Value list shape (CFN v2 convention, verified against
+	// the public CFN type schema: `.properties.Tags.items.$ref =
+	// "#/definitions/Tag"` with Tag = {Key, Value}).
+	tags := cfg.TagsFromProperties(map[string]any{"Tags": []any{
+		map[string]any{"Key": "Project", "Value": "io-stack-abc"},
+		map[string]any{"Key": "env", "Value": "prod"},
+	}})
+	if tags == nil {
+		t.Fatal("Tags must be non-nil (taggable type)")
+	}
+	if tags["Project"] != "io-stack-abc" || tags["env"] != "prod" {
+		t.Errorf("Tags: got %+v, want Project=io-stack-abc env=prod", tags)
+	}
+}
+
+// TestSNSTopicSubscriptionConfig pins aws_sns_topic_subscription:
+// passthrough ImportID (SubscriptionArn round-trips between CC and
+// TF), untaggable, regional. NameHint chain Endpoint -> Protocol ->
+// identifier (no top-level Name field on the CFN schema).
+func TestSNSTopicSubscriptionConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_sns_topic_subscription")
+	if !cfg.SkipProjectTagFilter {
+		t.Error("aws_sns_topic_subscription: SkipProjectTagFilter must be true (untaggable; CFN schema has no Tags property)")
+	}
+	if cfg.IsGlobal {
+		t.Error("aws_sns_topic_subscription: IsGlobal must be false (regional)")
+	}
+	if cfg.CloudFormationType != "AWS::SNS::Subscription" {
+		t.Errorf("CloudFormationType=%q, want AWS::SNS::Subscription", cfg.CloudFormationType)
+	}
+	if cfg.ParentLister != nil {
+		t.Error("ParentLister must be nil (CC ListResources is supported without ResourceModel)")
+	}
+	if cfg.SDKLister != nil {
+		t.Error("SDKLister must be nil")
+	}
+
+	// Passthrough: CC identifier IS the SubscriptionArn (verified
+	// against the public CFN type schema:
+	// `primaryIdentifier: [/properties/Arn]`); TF import format also
+	// uses SubscriptionArn (verified against terraform-provider-aws
+	// main internal/service/sns/topic_subscription.go — `@ArnIdentity`
+	// annotation and `d.SetId(aws.ToString(output.SubscriptionArn))`).
+	subARN := "arn:aws:sns:us-east-1:111111111111:my-topic:abc-1234-5678-uuid"
+	if got := cfg.ImportIDFromIdentifier(subARN, nil); got != subARN {
+		t.Errorf("ImportID passthrough: got %q, want SubscriptionArn unchanged", got)
+	}
+
+	// NameHint chain: Endpoint wins.
+	if got := cfg.NameHintFromProperties(subARN, map[string]any{
+		"Endpoint": "ops@example.com",
+		"Protocol": "email",
+	}); got != "ops@example.com" {
+		t.Errorf("NameHint (Endpoint present): got %q, want %q", got, "ops@example.com")
+	}
+	// Endpoint absent: Protocol is the fallback.
+	if got := cfg.NameHintFromProperties(subARN, map[string]any{"Protocol": "email"}); got != "email" {
+		t.Errorf("NameHint (Protocol fallback): got %q, want email", got)
+	}
+	// Neither set: identifier is the last resort.
+	if got := cfg.NameHintFromProperties(subARN, map[string]any{}); got != subARN {
+		t.Errorf("NameHint (identifier fallback): got %q, want identifier", got)
+	}
+
+	// NativeIDs: arn canonical + topic_arn / endpoint / protocol
+	// handles when present. The CFN GetResource payload exposes all
+	// three, so downstream consumers can resolve a subscription by
+	// any observable handle.
+	native := cfg.NativeIDsFromProperties(subARN, map[string]any{
+		"TopicArn": "arn:aws:sns:us-east-1:111111111111:my-topic",
+		"Endpoint": "ops@example.com",
+		"Protocol": "email",
+	})
+	want := map[string]string{
+		"arn":       subARN,
+		"topic_arn": "arn:aws:sns:us-east-1:111111111111:my-topic",
+		"endpoint":  "ops@example.com",
+		"protocol":  "email",
+	}
+	if !reflect.DeepEqual(native, want) {
+		t.Errorf("NativeIDs (full): got %+v, want %+v", native, want)
+	}
+	// Bare: only arn stamped when optional handles are missing.
+	bare := cfg.NativeIDsFromProperties(subARN, map[string]any{})
+	if !reflect.DeepEqual(bare, map[string]string{"arn": subARN}) {
+		t.Errorf("NativeIDs (bare): got %+v, want only arn", bare)
+	}
+
+	// Untaggable.
+	tags := cfg.TagsFromProperties(map[string]any{"Tags": []any{
+		map[string]any{"Key": "env", "Value": "prod"},
+	}})
+	if tags == nil {
+		t.Fatal("Tags must be non-nil empty map per #255 contract")
+	}
+	if len(tags) != 0 {
+		t.Errorf("Tags: got %+v, want empty map", tags)
+	}
+}

@@ -52,6 +52,18 @@ type apigatewayv2APIsLister interface {
 	GetApis(ctx context.Context, in *apigatewayv2.GetApisInput, opts ...func(*apigatewayv2.Options)) (*apigatewayv2.GetApisOutput, error)
 }
 
+// apigatewayv2DomainNamesLister is the narrow subset of the API Gateway v2
+// SDK used by the parent-DomainName enumerator that seeds ApiMapping
+// fan-out (#14j). AWS::ApiGatewayV2::ApiMapping is parent-scoped on
+// DomainName: CC ListResources without ResourceModel={"DomainName":"..."}
+// returns InvalidRequestException. Kept separate from apigatewayv2APIsLister
+// because the upstream SDK calls differ (GetApis vs GetDomainNames) and
+// keeping the interfaces narrow lets test fakes mock only the method the
+// lister-under-test invokes.
+type apigatewayv2DomainNamesLister interface {
+	GetDomainNames(ctx context.Context, in *apigatewayv2.GetDomainNamesInput, opts ...func(*apigatewayv2.Options)) (*apigatewayv2.GetDomainNamesOutput, error)
+}
+
 // apigatewayRestAPIsLister is the narrow subset of the API Gateway v1
 // SDK used by the parent-RestApi enumerator that seeds Stage /
 // Deployment / Resource fan-out (#422). The v1 service uses `Position`
@@ -287,6 +299,50 @@ func listApigatewayv2ApisWithClient(ctx context.Context, client apigatewayv2APIs
 				continue
 			}
 			models = append(models, fmt.Sprintf(`{"ApiId":%q}`, id))
+		}
+		if page.NextToken == nil || aws.ToString(page.NextToken) == "" {
+			break
+		}
+		nextToken = page.NextToken
+	}
+	return models, nil
+}
+
+// listApigatewayv2DomainNames enumerates ApiGatewayV2 DomainNames in the
+// region and returns one parent ResourceModel JSON string per domain,
+// suitable for feeding into Cloud Control ListResources for the
+// parent-scoped AWS::ApiGatewayV2::ApiMapping (#14j). The CFN schema's
+// list-handler requires a non-empty DomainName in the ResourceModel — CC
+// returns InvalidRequestException without it.
+//
+// Pagination shape mirrors listApigatewayv2Apis: NextToken cursor, break
+// on nil OR empty-string terminator (some SDK responses return `&""`
+// instead of nil on the final page). Returns a non-nil empty slice on
+// accounts with zero domain names so the discoverer's
+// `len(parentModels) == 0` early-exit fires cleanly (#255 contract).
+func listApigatewayv2DomainNames(ctx context.Context, awsCfg aws.Config, region string, _ DiscoverArgs) ([]string, error) {
+	client := apigatewayv2.NewFromConfig(awsCfg, func(o *apigatewayv2.Options) {
+		if region != "" {
+			o.Region = region
+		}
+	})
+	return listApigatewayv2DomainNamesWithClient(ctx, client)
+}
+
+func listApigatewayv2DomainNamesWithClient(ctx context.Context, client apigatewayv2DomainNamesLister) ([]string, error) {
+	models := []string{}
+	var nextToken *string
+	for {
+		page, err := client.GetDomainNames(ctx, &apigatewayv2.GetDomainNamesInput{NextToken: nextToken})
+		if err != nil {
+			return nil, fmt.Errorf("apigatewayv2:GetDomainNames: %w", err)
+		}
+		for _, dn := range page.Items {
+			name := aws.ToString(dn.DomainName)
+			if name == "" {
+				continue
+			}
+			models = append(models, fmt.Sprintf(`{"DomainName":%q}`, name))
 		}
 		if page.NextToken == nil || aws.ToString(page.NextToken) == "" {
 			break

@@ -83,6 +83,21 @@
       "purpose": "Cloud Control ListResources for AWS::ApiGatewayV2::Api (cache-miss fallback when RGT prefetch is unavailable)"
     },
     {
+      "service": "apigatewayv2_api_mapping",
+      "iam_action": "apigateway:GET",
+      "purpose": "Cloud Control GetResource for aws_apigatewayv2_api_mapping delegates to apigateway:GET (GET /domainnames/*/apimappings/*); also covers parent enumeration (GET /domainnames) to fan ListResources out per DomainName"
+    },
+    {
+      "service": "apigatewayv2_api_mapping",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::ApiGatewayV2::ApiMapping (#14j ParentLister branch on DomainName)"
+    },
+    {
+      "service": "apigatewayv2_api_mapping",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::ApiGatewayV2::ApiMapping (per-DomainName fan-out)"
+    },
+    {
       "service": "apigatewayv2_authorizer",
       "iam_action": "apigateway:GET",
       "purpose": "Cloud Control GetResource for aws_apigatewayv2_authorizer delegates to apigateway:GET (GET /apis/*/authorizers/*); also covers parent enumeration (GET /apis) to fan ListResources out per ApiId"
@@ -96,6 +111,21 @@
       "service": "apigatewayv2_authorizer",
       "iam_action": "cloudcontrol:ListResources",
       "purpose": "Cloud Control ListResources for AWS::ApiGatewayV2::Authorizer (per-ApiId fan-out)"
+    },
+    {
+      "service": "apigatewayv2_domain_name",
+      "iam_action": "apigateway:GET",
+      "purpose": "Cloud Control GetResource + ListResources for aws_apigatewayv2_domain_name delegate to apigateway:GET (GET /domainnames, GET /domainnames/*)"
+    },
+    {
+      "service": "apigatewayv2_domain_name",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::ApiGatewayV2::DomainName (#14j unified discoverer)"
+    },
+    {
+      "service": "apigatewayv2_domain_name",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::ApiGatewayV2::DomainName (cache-miss fallback when RGT prefetch is unavailable)"
     },
     {
       "service": "apigatewayv2_integration",
@@ -646,6 +676,26 @@
       "service": "ecs_cluster",
       "iam_action": "ecs:ListClusters",
       "purpose": "Cloud Control ListResources for AWS::ECS::Cluster delegates to ecs:ListClusters"
+    },
+    {
+      "service": "ecs_cluster_capacity_providers",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::ECS::ClusterCapacityProviderAssociations (#14j unified discoverer)"
+    },
+    {
+      "service": "ecs_cluster_capacity_providers",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::ECS::ClusterCapacityProviderAssociations (cache-miss fallback when RGT prefetch is unavailable)"
+    },
+    {
+      "service": "ecs_cluster_capacity_providers",
+      "iam_action": "ecs:DescribeClusters",
+      "purpose": "Cloud Control GetResource for aws_ecs_cluster_capacity_providers delegates to ecs:DescribeClusters (reads CapacityProviders inline on the cluster)"
+    },
+    {
+      "service": "ecs_cluster_capacity_providers",
+      "iam_action": "ecs:ListClusters",
+      "purpose": "Cloud Control ListResources for AWS::ECS::ClusterCapacityProviderAssociations delegates to ecs:ListClusters (one association row per cluster)"
     },
     {
       "service": "eip",
@@ -1598,6 +1648,31 @@
       "purpose": "list per-region security groups (server-side tag:Project filter when project is set; tags inline)"
     },
     {
+      "service": "service_discovery_private_dns_namespace",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::ServiceDiscovery::PrivateDnsNamespace (#14j unified discoverer)"
+    },
+    {
+      "service": "service_discovery_private_dns_namespace",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::ServiceDiscovery::PrivateDnsNamespace (cache-miss fallback when RGT prefetch is unavailable)"
+    },
+    {
+      "service": "service_discovery_private_dns_namespace",
+      "iam_action": "servicediscovery:GetNamespace",
+      "purpose": "Cloud Control GetResource for aws_service_discovery_private_dns_namespace delegates to servicediscovery:GetNamespace"
+    },
+    {
+      "service": "service_discovery_private_dns_namespace",
+      "iam_action": "servicediscovery:ListNamespaces",
+      "purpose": "Cloud Control ListResources for AWS::ServiceDiscovery::PrivateDnsNamespace delegates to servicediscovery:ListNamespaces"
+    },
+    {
+      "service": "service_discovery_private_dns_namespace",
+      "iam_action": "servicediscovery:ListTagsForResource",
+      "purpose": "Cloud Control delegate for the Tags property"
+    },
+    {
       "service": "sns_topic",
       "iam_action": "cloudcontrol:GetResource",
       "purpose": "fetch per-topic properties for tag extraction"
@@ -1621,6 +1696,26 @@
       "service": "sns_topic",
       "iam_action": "sns:ListTopics",
       "purpose": "Cloud Control delegate for ListResources"
+    },
+    {
+      "service": "sns_topic_subscription",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::SNS::Subscription (#14j unified discoverer)"
+    },
+    {
+      "service": "sns_topic_subscription",
+      "iam_action": "cloudcontrol:ListResources",
+      "purpose": "Cloud Control ListResources for AWS::SNS::Subscription (cache-miss fallback when RGT prefetch is unavailable)"
+    },
+    {
+      "service": "sns_topic_subscription",
+      "iam_action": "sns:GetSubscriptionAttributes",
+      "purpose": "Cloud Control GetResource for aws_sns_topic_subscription delegates to sns:GetSubscriptionAttributes"
+    },
+    {
+      "service": "sns_topic_subscription",
+      "iam_action": "sns:ListSubscriptions",
+      "purpose": "Cloud Control ListResources for AWS::SNS::Subscription delegates to sns:ListSubscriptions"
     },
     {
       "service": "sqs",
