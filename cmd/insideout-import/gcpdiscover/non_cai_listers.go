@@ -6,9 +6,15 @@ import (
 	"fmt"
 	"strings"
 
+	"google.golang.org/api/cloudfunctions/v2"
+	"google.golang.org/api/cloudkms/v1"
+	"google.golang.org/api/cloudresourcemanager/v3"
 	"google.golang.org/api/identitytoolkit/v2"
 	"google.golang.org/api/logging/v2"
+	"google.golang.org/api/run/v2"
+	"google.golang.org/api/secretmanager/v1"
 	"google.golang.org/api/sqladmin/v1"
+	"google.golang.org/api/storage/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -149,9 +155,9 @@ func (l *RealSQLUserLister) ListSQLUsers(ctx context.Context, projectID, instanc
 // nil-without-error when the project hasn't activated Identity
 // Platform.
 type gcpIdentityPlatformConfig struct {
-	Name                       string // projects/<p>/config
-	AutodeleteAnonymousUsers   bool
-	AuthorizedDomains          []string
+	Name                     string // projects/<p>/config
+	AutodeleteAnonymousUsers bool
+	AuthorizedDomains        []string
 }
 
 type gcpIdentityPlatformConfigLister interface {
@@ -211,6 +217,226 @@ func isIdentityPlatformNotActivated(err error) bool {
 	return strings.Contains(msg, "Error 404") ||
 		strings.Contains(msg, "notFound") ||
 		strings.Contains(msg, "NOT_FOUND")
+}
+
+// ---- IAM policies (Bundle G1, #470) -----------------------------------
+
+// gcpIAMBinding is a projected view of the (role, members) pair every
+// GCP IAM Policy response carries. The structure is identical across
+// cloudresourcemanager, secretmanager, cloudkms, run, cloudfunctions,
+// and storage SDKs even though each generates its own Binding type —
+// projecting to a shared shape keeps the per-discoverer fan-out logic
+// uniform. Conditions are intentionally dropped because the seven IAM
+// discoverers Bundle G1 ships emit one row per (parent × role × member)
+// or (parent × role) and a conditional binding is best represented as a
+// separate row anyway; supporting conditions is a follow-up if the
+// product asks.
+type gcpIAMBinding struct {
+	Role    string   // e.g. "roles/secretmanager.secretAccessor"
+	Members []string // e.g. ["serviceAccount:foo@bar.iam.gserviceaccount.com", "user:alice@example.com"]
+}
+
+// gcpIAMPolicyLister is the seam every Bundle G1 discoverer reaches in
+// through. One unified interface (rather than six per-parent
+// interfaces) keeps the Opts surface small and the test fake compact.
+// Each method returns the bindings on a single parent resource;
+// callers fan-out across the list of CAI-discovered parents and
+// soft-fail per-parent errors through the progress emitter.
+type gcpIAMPolicyLister interface {
+	// GetProjectIAMPolicy returns the bindings on a GCP project. The
+	// project is a singleton per discovery run — google_project_iam_member
+	// queries this exactly once, not per priorResults fan-out.
+	GetProjectIAMPolicy(ctx context.Context, projectID string) ([]gcpIAMBinding, error)
+	// GetSecretIAMPolicy returns the bindings on a Secret Manager secret.
+	// secretFullName is the resource path "projects/<p>/secrets/<id>".
+	GetSecretIAMPolicy(ctx context.Context, secretFullName string) ([]gcpIAMBinding, error)
+	// GetKMSCryptoKeyIAMPolicy returns the bindings on a KMS crypto key.
+	// keyFullName is the resource path
+	// "projects/<p>/locations/<l>/keyRings/<r>/cryptoKeys/<n>".
+	GetKMSCryptoKeyIAMPolicy(ctx context.Context, keyFullName string) ([]gcpIAMBinding, error)
+	// GetCloudRunV2ServiceIAMPolicy returns the bindings on a Cloud Run
+	// v2 service. serviceFullName is
+	// "projects/<p>/locations/<l>/services/<n>".
+	GetCloudRunV2ServiceIAMPolicy(ctx context.Context, serviceFullName string) ([]gcpIAMBinding, error)
+	// GetCloudFunctions2FunctionIAMPolicy returns the bindings on a
+	// Cloud Functions Gen-2 function. fnFullName is
+	// "projects/<p>/locations/<l>/functions/<n>".
+	GetCloudFunctions2FunctionIAMPolicy(ctx context.Context, fnFullName string) ([]gcpIAMBinding, error)
+	// GetBucketIAMPolicy returns the bindings on a Cloud Storage bucket.
+	// bucketName is the short bucket name (no "b/" prefix).
+	GetBucketIAMPolicy(ctx context.Context, bucketName string) ([]gcpIAMBinding, error)
+}
+
+// RealIAMPolicyLister wraps the six Google API clients Bundle G1
+// needs. Every per-parent call is a single GetIamPolicy GET. The
+// constructor builds all six service clients eagerly so a credential
+// failure surfaces once at startup rather than per-resource.
+type RealIAMPolicyLister struct {
+	crm     *cloudresourcemanager.Service
+	sm      *secretmanager.Service
+	kms     *cloudkms.Service
+	run     *run.Service
+	cf      *cloudfunctions.Service
+	storage *storage.Service
+}
+
+// NewRealIAMPolicyLister constructs an IAM policy lister backed by
+// ADC. Failures during any sub-client construction return a wrapped
+// error so the caller can fall back to a nil lister (the seven Bundle
+// G1 discoverers tolerate nil — they skip rather than fail).
+func NewRealIAMPolicyLister(ctx context.Context) (*RealIAMPolicyLister, error) {
+	crm, err := cloudresourcemanager.NewService(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("create cloudresourcemanager client: %w", err)
+	}
+	sm, err := secretmanager.NewService(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("create secretmanager client: %w", err)
+	}
+	kms, err := cloudkms.NewService(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("create cloudkms client: %w", err)
+	}
+	rs, err := run.NewService(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("create run client: %w", err)
+	}
+	cf, err := cloudfunctions.NewService(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("create cloudfunctions client: %w", err)
+	}
+	st, err := storage.NewService(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("create storage client: %w", err)
+	}
+	return &RealIAMPolicyLister{
+		crm:     crm,
+		sm:      sm,
+		kms:     kms,
+		run:     rs,
+		cf:      cf,
+		storage: st,
+	}, nil
+}
+
+func (l *RealIAMPolicyLister) GetProjectIAMPolicy(ctx context.Context, projectID string) ([]gcpIAMBinding, error) {
+	if l == nil || l.crm == nil {
+		return nil, errors.New("cloudresourcemanager client closed")
+	}
+	resp, err := l.crm.Projects.GetIamPolicy("projects/"+projectID, &cloudresourcemanager.GetIamPolicyRequest{}).Context(ctx).Do()
+	if err != nil {
+		return nil, wrapGCPAPIError("get project iam", err)
+	}
+	out := make([]gcpIAMBinding, 0, len(resp.Bindings))
+	for _, b := range resp.Bindings {
+		if b == nil {
+			continue
+		}
+		members := make([]string, len(b.Members))
+		copy(members, b.Members)
+		out = append(out, gcpIAMBinding{Role: b.Role, Members: members})
+	}
+	return out, nil
+}
+
+func (l *RealIAMPolicyLister) GetSecretIAMPolicy(ctx context.Context, secretFullName string) ([]gcpIAMBinding, error) {
+	if l == nil || l.sm == nil {
+		return nil, errors.New("secretmanager client closed")
+	}
+	resp, err := l.sm.Projects.Secrets.GetIamPolicy(secretFullName).Context(ctx).Do()
+	if err != nil {
+		return nil, wrapGCPAPIError("get secret iam", err)
+	}
+	out := make([]gcpIAMBinding, 0, len(resp.Bindings))
+	for _, b := range resp.Bindings {
+		if b == nil {
+			continue
+		}
+		members := make([]string, len(b.Members))
+		copy(members, b.Members)
+		out = append(out, gcpIAMBinding{Role: b.Role, Members: members})
+	}
+	return out, nil
+}
+
+func (l *RealIAMPolicyLister) GetKMSCryptoKeyIAMPolicy(ctx context.Context, keyFullName string) ([]gcpIAMBinding, error) {
+	if l == nil || l.kms == nil {
+		return nil, errors.New("cloudkms client closed")
+	}
+	resp, err := l.kms.Projects.Locations.KeyRings.CryptoKeys.GetIamPolicy(keyFullName).Context(ctx).Do()
+	if err != nil {
+		return nil, wrapGCPAPIError("get kms crypto key iam", err)
+	}
+	out := make([]gcpIAMBinding, 0, len(resp.Bindings))
+	for _, b := range resp.Bindings {
+		if b == nil {
+			continue
+		}
+		members := make([]string, len(b.Members))
+		copy(members, b.Members)
+		out = append(out, gcpIAMBinding{Role: b.Role, Members: members})
+	}
+	return out, nil
+}
+
+func (l *RealIAMPolicyLister) GetCloudRunV2ServiceIAMPolicy(ctx context.Context, serviceFullName string) ([]gcpIAMBinding, error) {
+	if l == nil || l.run == nil {
+		return nil, errors.New("run client closed")
+	}
+	resp, err := l.run.Projects.Locations.Services.GetIamPolicy(serviceFullName).Context(ctx).Do()
+	if err != nil {
+		return nil, wrapGCPAPIError("get cloud run service iam", err)
+	}
+	out := make([]gcpIAMBinding, 0, len(resp.Bindings))
+	for _, b := range resp.Bindings {
+		if b == nil {
+			continue
+		}
+		members := make([]string, len(b.Members))
+		copy(members, b.Members)
+		out = append(out, gcpIAMBinding{Role: b.Role, Members: members})
+	}
+	return out, nil
+}
+
+func (l *RealIAMPolicyLister) GetCloudFunctions2FunctionIAMPolicy(ctx context.Context, fnFullName string) ([]gcpIAMBinding, error) {
+	if l == nil || l.cf == nil {
+		return nil, errors.New("cloudfunctions client closed")
+	}
+	resp, err := l.cf.Projects.Locations.Functions.GetIamPolicy(fnFullName).Context(ctx).Do()
+	if err != nil {
+		return nil, wrapGCPAPIError("get cloud function iam", err)
+	}
+	out := make([]gcpIAMBinding, 0, len(resp.Bindings))
+	for _, b := range resp.Bindings {
+		if b == nil {
+			continue
+		}
+		members := make([]string, len(b.Members))
+		copy(members, b.Members)
+		out = append(out, gcpIAMBinding{Role: b.Role, Members: members})
+	}
+	return out, nil
+}
+
+func (l *RealIAMPolicyLister) GetBucketIAMPolicy(ctx context.Context, bucketName string) ([]gcpIAMBinding, error) {
+	if l == nil || l.storage == nil {
+		return nil, errors.New("storage client closed")
+	}
+	resp, err := l.storage.Buckets.GetIamPolicy(bucketName).Context(ctx).Do()
+	if err != nil {
+		return nil, wrapGCPAPIError("get bucket iam", err)
+	}
+	out := make([]gcpIAMBinding, 0, len(resp.Bindings))
+	for _, b := range resp.Bindings {
+		if b == nil {
+			continue
+		}
+		members := make([]string, len(b.Members))
+		copy(members, b.Members)
+		out = append(out, gcpIAMBinding{Role: b.Role, Members: members})
+	}
+	return out, nil
 }
 
 // ---- shared error wrapping --------------------------------------------

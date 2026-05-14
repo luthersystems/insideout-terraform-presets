@@ -293,3 +293,89 @@ func (f *fakeIdentityPlatformConfigLister) GetIdentityPlatformConfig(_ context.C
 	}
 	return f.cfg, nil
 }
+
+// fakeIAMPolicyLister fronts the Bundle G1 (#470) per-parent
+// GetIamPolicy probes. Per-method canned-response maps keyed on the
+// per-parent identifier (`bindingsBySecret["projects/p/secrets/s"]`)
+// keep tests compact, and per-method error-injection maps
+// (`errBySecret[...] = ...`) let a test pin the soft-fail path
+// without forcing all parents into the error branch. Each method
+// records its calls in a per-method slice so assertions can pin the
+// fan-out shape (one call per parent vs single project query).
+//
+// `errProject` is the singleton error knob for GetProjectIAMPolicy —
+// the project lister has no per-key dimension, so a single bool is
+// enough.
+type fakeIAMPolicyLister struct {
+	bindingsProject map[string][]gcpIAMBinding
+	errProject      map[string]error
+	callsProject    []string
+
+	bindingsBySecret map[string][]gcpIAMBinding
+	errBySecret      map[string]error
+	callsBySecret    []string
+
+	bindingsByKey map[string][]gcpIAMBinding
+	errByKey      map[string]error
+	callsByKey    []string
+
+	bindingsByService map[string][]gcpIAMBinding
+	errByService      map[string]error
+	callsByService    []string
+
+	bindingsByFunction map[string][]gcpIAMBinding
+	errByFunction      map[string]error
+	callsByFunction    []string
+
+	bindingsByBucket map[string][]gcpIAMBinding
+	errByBucket      map[string]error
+	callsByBucket    []string
+}
+
+func (f *fakeIAMPolicyLister) GetProjectIAMPolicy(_ context.Context, projectID string) ([]gcpIAMBinding, error) {
+	f.callsProject = append(f.callsProject, projectID)
+	if err, ok := f.errProject[projectID]; ok {
+		return nil, err
+	}
+	return f.bindingsProject[projectID], nil
+}
+
+func (f *fakeIAMPolicyLister) GetSecretIAMPolicy(_ context.Context, secretFullName string) ([]gcpIAMBinding, error) {
+	f.callsBySecret = append(f.callsBySecret, secretFullName)
+	if err, ok := f.errBySecret[secretFullName]; ok {
+		return nil, err
+	}
+	return f.bindingsBySecret[secretFullName], nil
+}
+
+func (f *fakeIAMPolicyLister) GetKMSCryptoKeyIAMPolicy(_ context.Context, keyFullName string) ([]gcpIAMBinding, error) {
+	f.callsByKey = append(f.callsByKey, keyFullName)
+	if err, ok := f.errByKey[keyFullName]; ok {
+		return nil, err
+	}
+	return f.bindingsByKey[keyFullName], nil
+}
+
+func (f *fakeIAMPolicyLister) GetCloudRunV2ServiceIAMPolicy(_ context.Context, serviceFullName string) ([]gcpIAMBinding, error) {
+	f.callsByService = append(f.callsByService, serviceFullName)
+	if err, ok := f.errByService[serviceFullName]; ok {
+		return nil, err
+	}
+	return f.bindingsByService[serviceFullName], nil
+}
+
+func (f *fakeIAMPolicyLister) GetCloudFunctions2FunctionIAMPolicy(_ context.Context, fnFullName string) ([]gcpIAMBinding, error) {
+	f.callsByFunction = append(f.callsByFunction, fnFullName)
+	if err, ok := f.errByFunction[fnFullName]; ok {
+		return nil, err
+	}
+	return f.bindingsByFunction[fnFullName], nil
+}
+
+func (f *fakeIAMPolicyLister) GetBucketIAMPolicy(_ context.Context, bucketName string) ([]gcpIAMBinding, error) {
+	f.callsByBucket = append(f.callsByBucket, bucketName)
+	if err, ok := f.errByBucket[bucketName]; ok {
+		return nil, err
+	}
+	return f.bindingsByBucket[bucketName], nil
+}

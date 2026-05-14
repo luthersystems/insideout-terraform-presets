@@ -234,6 +234,11 @@ type GCPDiscovererOpts struct {
 	SinkLister             gcpLoggingSinkLister
 	SQLUserLister          gcpSQLUserLister
 	IdentityPlatformLister gcpIdentityPlatformConfigLister
+	// IAMPolicyLister backs every Bundle G1 IAM discoverer (#470).
+	// One unified interface fronts six per-service GetIamPolicy
+	// SDK clients so the Opts surface doesn't grow per added IAM
+	// resource type.
+	IAMPolicyLister gcpIAMPolicyLister
 }
 
 // NewGCPDiscoverer wires up the production set of GCP discoverers. The
@@ -288,6 +293,14 @@ func NewGCPDiscoverer(searcher gcpAssetSearcher, projectID string, opts GCPDisco
 			"google_logging_project_sink":     newLoggingProjectSinkDiscoverer(opts.SinkLister),
 			"google_sql_user":                 newSQLUserDiscoverer(opts.SQLUserLister),
 			"google_identity_platform_config": newIdentityPlatformConfigDiscoverer(opts.IdentityPlatformLister),
+			// Bundle G1 — IAM cluster (#470).
+			"google_project_iam_member":                  newProjectIAMMemberDiscoverer(opts.IAMPolicyLister),
+			"google_storage_bucket_iam_member":           newStorageBucketIAMMemberDiscoverer(opts.IAMPolicyLister),
+			"google_kms_crypto_key_iam_binding":          newKMSCryptoKeyIAMBindingDiscoverer(opts.IAMPolicyLister),
+			"google_secret_manager_secret_iam_binding":   newSecretManagerSecretIAMBindingDiscoverer(opts.IAMPolicyLister),
+			"google_secret_manager_secret_iam_member":    newSecretManagerSecretIAMMemberDiscoverer(opts.IAMPolicyLister),
+			"google_cloud_run_v2_service_iam_member":     newCloudRunV2ServiceIAMMemberDiscoverer(opts.IAMPolicyLister),
+			"google_cloudfunctions2_function_iam_member": newCloudFunctions2FunctionIAMMemberDiscoverer(opts.IAMPolicyLister),
 		},
 		// Per-type SDK attribute enrichers (#403). Each entry is a sibling
 		// to the byType discoverer of the same name and populates ir.Attrs
@@ -492,6 +505,23 @@ func nonCAIDiscovererHasLister(d Discoverer) bool {
 	case *sqlUserDiscoverer:
 		return v.lister != nil
 	case *identityPlatformConfigDiscoverer:
+		return v.lister != nil
+	// Bundle G1 — IAM cluster (#470). All seven IAM discoverers
+	// share the same gcpIAMPolicyLister implementation, so the
+	// lister-presence check is identical per type.
+	case *projectIAMMemberDiscoverer:
+		return v.lister != nil
+	case *storageBucketIAMMemberDiscoverer:
+		return v.lister != nil
+	case *kmsCryptoKeyIAMBindingDiscoverer:
+		return v.lister != nil
+	case *secretManagerSecretIAMBindingDiscoverer:
+		return v.lister != nil
+	case *secretManagerSecretIAMMemberDiscoverer:
+		return v.lister != nil
+	case *cloudRunV2ServiceIAMMemberDiscoverer:
+		return v.lister != nil
+	case *cloudFunctions2FunctionIAMMemberDiscoverer:
 		return v.lister != nil
 	default:
 		fmt.Fprintf(os.Stderr, "WARN: %s: no lister-check wired in nonCAIDiscovererHasLister — extend the switch when adding a non-CAI type\n", d.ResourceType())
