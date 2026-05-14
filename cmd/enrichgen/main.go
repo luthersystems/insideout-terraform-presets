@@ -36,11 +36,14 @@ import (
 // snippets can stay in Go (with full IDE / type-check support) and
 // adding a type is a single import + struct literal in one .go file.
 var targets = []target{
+	// GCP targets — see presets#403.
 	storageBucketTarget,
 	pubsubTopicTarget,
 	pubsubSubscriptionTarget,
 	secretManagerSecretTarget,
 	computeNetworkTarget,
+	// AWS targets — see presets#457.
+	dynamodbTableTarget,
 }
 
 func main() {

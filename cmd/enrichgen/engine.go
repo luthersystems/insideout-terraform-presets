@@ -42,8 +42,12 @@ func (e *engine) line(format string, args ...any) {
 // top-level mapXxx, and child enrichXxx helpers — and returns it
 // before gofmt. Callers (main.go) gofmt and write to disk.
 func (e *engine) generate() string {
-	e.line("func %s(b *%s.%s, projectID string) *generated.%s {",
-		e.t.funcName, e.t.apiPkgAlias, e.t.apiType.Name(), e.t.typedType.Name())
+	extra := e.t.extraParam
+	if extra == "" {
+		extra = "projectID"
+	}
+	e.line("func %s(b *%s.%s, %s string) *generated.%s {",
+		e.t.funcName, e.t.apiPkgAlias, e.t.apiType.Name(), extra, e.t.typedType.Name())
 	e.line("\tout := &generated.%s{}", e.t.typedType.Name())
 	e.emitFields(e.t.typedType, e.t.apiType, "b", e.t.typedType.Name())
 	e.line("\treturn out")
@@ -67,7 +71,7 @@ func (e *engine) generate() string {
 //
 // Source: typed Layer 1 struct generated.%s
 //         + raw API struct %s.%s
-// Run: go generate ./cmd/insideout-import/gcpdiscover/...
+// Run: go generate ./cmd/insideout-import/%s/...
 //      (or: go run ./cmd/enrichgen)
 
 package %s
@@ -80,6 +84,7 @@ import (
 
 %s`,
 		e.t.typedType.Name(), e.t.apiPkgAlias, e.t.apiType.Name(),
+		e.t.outputPkg,
 		e.t.outputPkg,
 		stringsImport,
 		e.t.apiPkgAlias, e.t.apiPkgImport,
@@ -283,6 +288,7 @@ func (e *engine) emitBlockField(f, af reflect.StructField, parentVar string) {
 
 	var childAPI reflect.Type
 	apiSliceShape := false
+	apiSliceElemIsPointer := false
 	switch af.Type.Kind() {
 	case reflect.Pointer:
 		childAPI = af.Type.Elem()
@@ -291,6 +297,7 @@ func (e *engine) emitBlockField(f, af reflect.StructField, parentVar string) {
 		elem := af.Type.Elem()
 		if elem.Kind() == reflect.Pointer {
 			childAPI = elem.Elem()
+			apiSliceElemIsPointer = true
 		} else {
 			childAPI = elem
 		}
@@ -314,7 +321,13 @@ func (e *engine) emitBlockField(f, af reflect.StructField, parentVar string) {
 	}
 
 	if apiSliceShape {
-		e.line(`	if %s {
+		// Two shapes: []*T (Google API style — nil-check on x) and
+		// []T (AWS SDK style — addr-of x before passing to the helper
+		// which takes a pointer). The helper signature is always
+		// `func enrichXxx(b *api.Y) generated.X` so the caller side
+		// adapts.
+		if apiSliceElemIsPointer {
+			e.line(`	if %s {
 		blocks := make([]generated.%s, 0, len(%s))
 		for _, x := range %s {
 			if x == nil {
@@ -326,6 +339,17 @@ func (e *engine) emitBlockField(f, af reflect.StructField, parentVar string) {
 			out.%s = blocks
 		}
 	}`, gate, childTyped.Name(), apiAccess, apiAccess, helperName, f.Name)
+		} else {
+			e.line(`	if %s {
+		blocks := make([]generated.%s, 0, len(%s))
+		for i := range %s {
+			blocks = append(blocks, %s(&%s[i]))
+		}
+		if len(blocks) > 0 {
+			out.%s = blocks
+		}
+	}`, gate, childTyped.Name(), apiAccess, apiAccess, helperName, apiAccess, f.Name)
+		}
 		e.mainBuf.WriteByte('\n')
 		return
 	}
