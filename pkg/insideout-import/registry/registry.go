@@ -76,6 +76,7 @@ var awsTypes = []string{
 	"aws_iam_instance_profile",
 	"aws_iam_policy",
 	"aws_iam_role",
+	"aws_iam_role_policy",
 	"aws_iam_role_policy_attachment",
 	"aws_iam_service_linked_role",
 	"aws_iam_user",

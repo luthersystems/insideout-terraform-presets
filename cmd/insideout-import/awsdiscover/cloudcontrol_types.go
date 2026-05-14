@@ -2240,6 +2240,85 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 		NativeIDsFromProperties: snsSubscriptionNativeIDs,
 		TagsFromProperties:      emptyTagsExtractor,
 	},
+
+	// =====================================================================
+	// IAM RolePolicy — SDKLister-listed, global, untaggable (Phase A.2 / #466)
+	// =====================================================================
+	{
+		// AWS::IAM::RolePolicy's CC ListResources returns
+		// UnsupportedActionException — inline role policies live under a
+		// parent IAM role rather than as top-level resources, so CC has
+		// no LIST handler. CC GetResource IS supported and keyed on the
+		// compound primary identifier [PolicyName, RoleName] (verified
+		// against the public CFN schema:
+		//   https://schema.cloudformation.us-east-1.amazonaws.com/aws-iam-rolepolicy.json
+		// `primaryIdentifier: [/properties/PolicyName, /properties/RoleName]`).
+		// IAM is global; IsGlobal=true mirrors aws_iam_service_linked_role
+		// and the rest of the IAM bucket.
+		//
+		// The SDKLister walks iam:ListRoles (paginated) and, for each
+		// non-SLR role, iam:ListRolePolicies (paginated). It emits the
+		// CC compound identifier "<PolicyName>|<RoleName>" — the
+		// framework joins compound primary-identifier parts with `|` in
+		// the order declared by the schema.
+		//
+		// Terraform's import format for aws_iam_role_policy is
+		// `<role_name>:<role_policy_name>` (verified against
+		// terraform-provider-aws main website/docs/r/iam_role_policy.html.markdown
+		// per the Import section:
+		//   "% terraform import aws_iam_role_policy.example
+		//    role_of_mypolicy_name:mypolicy_name"
+		// ). The rewrite SWAPS the CC `<PolicyName>|<RoleName>` to the
+		// TF `<RoleName>:<PolicyName>` form. When the identifier is
+		// malformed (defensive — no `|`), fall through verbatim so a
+		// downstream `terraform import` surfaces a clear "wrong format"
+		// error rather than a silent mis-import.
+		//
+		// The CFN schema has no Tags property — inline role policies are
+		// untaggable in AWS provider 6.x. SkipProjectTagFilter +
+		// emptyTagsExtractor matches the existing untaggableAWS /
+		// NON_TAGGABLE_AWS allowlist entry (which already lists this
+		// type — only the SDKLister wiring is new in #466).
+		//
+		// No ARN rule in arn_rules.go: inline IAM policies have no ARN
+		// of their own (only the parent role's ARN is reachable, and
+		// that routes to aws_iam_role). Discovery is SDKLister-only.
+		TFType:               "aws_iam_role_policy",
+		CloudFormationType:   "AWS::IAM::RolePolicy",
+		Slug:                 "iam_role_policy",
+		IsGlobal:             true,
+		SkipProjectTagFilter: true,
+		SDKLister:            listIAMRolePolicyIdentifiers,
+		// ImportID rewrite: CC `<PolicyName>|<RoleName>` → TF
+		// `<RoleName>:<PolicyName>` (swap halves, join with `:`).
+		ImportIDFromIdentifier: func(identifier string, _ map[string]any) string {
+			parts := strings.SplitN(identifier, "|", 2)
+			if len(parts) != 2 {
+				return identifier
+			}
+			return parts[1] + ":" + parts[0]
+		},
+		// NameHint: prefer the CFN-surfaced PolicyName (the human-
+		// meaningful inline-policy suffix), falling back to the compound
+		// identifier verbatim. The CC properties payload echoes
+		// PolicyName + RoleName on GetResource.
+		NameHintFromProperties: nameOrIdentifier("PolicyName"),
+		NativeIDsFromProperties: func(identifier string, _ map[string]any) map[string]string {
+			parts := strings.SplitN(identifier, "|", 2)
+			if len(parts) != 2 {
+				// Defensive: a malformed identifier (no `|`) almost
+				// certainly means an upstream bug — emit just the
+				// policy-name half so downstream readers can spot the
+				// drift rather than receive a half-populated map.
+				return map[string]string{"policy_name": identifier}
+			}
+			return map[string]string{
+				"policy_name": parts[0],
+				"role_name":   parts[1],
+			}
+		},
+		TagsFromProperties: emptyTagsExtractor,
+	},
 }
 
 // passthroughImportID is the common ImportIDFromIdentifier used by every

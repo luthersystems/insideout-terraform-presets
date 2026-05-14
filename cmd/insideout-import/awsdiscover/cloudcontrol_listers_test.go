@@ -2555,3 +2555,275 @@ func TestListIAMServiceLinkedRoleServiceNames_SkipsRolesWithMalformedPath(t *tes
 		t.Errorf("got %v, want %v (malformed path must be skipped)", got, want)
 	}
 }
+
+// =====================================================================
+// Phase A.2 — IAM RolePolicy SDKLister (#466)
+// =====================================================================
+
+// fakeIAMRolePoliciesLister implements iamRolePoliciesLister against a
+// scripted page sequence. listRolesPages drives the outer iam:ListRoles
+// loop; listPoliciesPagesByRole drives the inner per-role
+// iam:ListRolePolicies loop. Both record markers received from the
+// SUT so tests can assert pagination is propagated exactly once per
+// page transition.
+type fakeIAMRolePoliciesLister struct {
+	// Outer enumeration: iam:ListRoles paginated pages.
+	listRolesPages   []iam.ListRolesOutput
+	listRolesCalls   int
+	listRolesErr     error
+	listRolesMarkers []*string // markers sent on each call (incl. nil first call)
+
+	// Inner enumeration: iam:ListRolePolicies pages keyed by role name.
+	listPoliciesPagesByRole map[string][]iam.ListRolePoliciesOutput
+	listPoliciesCallsByRole map[string]int
+	listPoliciesErrByRole   map[string]error
+	// listPoliciesMarkersByRole records the marker the SUT supplied
+	// on each per-role call, in order. Pre-allocate the inner slice
+	// only when actually appending so a nil-vs-empty distinction
+	// survives reflect.DeepEqual checks in tests.
+	listPoliciesMarkersByRole map[string][]*string
+
+	// listPoliciesRoles records the role-name order the SUT requested
+	// inner pages for, so tests can assert filter behavior (e.g. SLRs
+	// must NOT trigger inner ListRolePolicies).
+	listPoliciesRoles []string
+}
+
+func (f *fakeIAMRolePoliciesLister) ListRoles(_ context.Context, in *iam.ListRolesInput, _ ...func(*iam.Options)) (*iam.ListRolesOutput, error) {
+	f.listRolesMarkers = append(f.listRolesMarkers, in.Marker)
+	if f.listRolesErr != nil {
+		return nil, f.listRolesErr
+	}
+	if f.listRolesCalls >= len(f.listRolesPages) {
+		return &iam.ListRolesOutput{}, nil
+	}
+	page := f.listRolesPages[f.listRolesCalls]
+	f.listRolesCalls++
+	return &page, nil
+}
+
+func (f *fakeIAMRolePoliciesLister) ListRolePolicies(_ context.Context, in *iam.ListRolePoliciesInput, _ ...func(*iam.Options)) (*iam.ListRolePoliciesOutput, error) {
+	role := aws.ToString(in.RoleName)
+	if f.listPoliciesMarkersByRole == nil {
+		f.listPoliciesMarkersByRole = map[string][]*string{}
+	}
+	f.listPoliciesMarkersByRole[role] = append(f.listPoliciesMarkersByRole[role], in.Marker)
+	f.listPoliciesRoles = append(f.listPoliciesRoles, role)
+	if err, ok := f.listPoliciesErrByRole[role]; ok && err != nil {
+		return nil, err
+	}
+	if f.listPoliciesCallsByRole == nil {
+		f.listPoliciesCallsByRole = map[string]int{}
+	}
+	pages := f.listPoliciesPagesByRole[role]
+	idx := f.listPoliciesCallsByRole[role]
+	if idx >= len(pages) {
+		return &iam.ListRolePoliciesOutput{}, nil
+	}
+	page := pages[idx]
+	f.listPoliciesCallsByRole[role] = idx + 1
+	return &page, nil
+}
+
+// iamRolePoliciesPage constructs a single ListRolePoliciesOutput from a
+// truncation marker plus a list of inline policy names.
+func iamRolePoliciesPage(marker string, names ...string) iam.ListRolePoliciesOutput {
+	out := iam.ListRolePoliciesOutput{PolicyNames: append([]string{}, names...)}
+	if marker != "" {
+		out.IsTruncated = true
+		out.Marker = aws.String(marker)
+	}
+	return out
+}
+
+// TestListIAMRolePolicyIdentifiers_HappyPath_FansOutPerRole pins the
+// canonical shape: two non-SLR roles × two inline policies each → four
+// emitted identifiers in CC compound form `<PolicyName>|<RoleName>`.
+// Order is preserved (role iteration order from the ListRoles page,
+// then policy order from each ListRolePolicies page).
+func TestListIAMRolePolicyIdentifiers_HappyPath_FansOutPerRole(t *testing.T) {
+	t.Parallel()
+	fake := &fakeIAMRolePoliciesLister{
+		listRolesPages: []iam.ListRolesOutput{
+			iamRolesPage("",
+				[2]string{"/", "role-a"},
+				[2]string{"/", "role-b"},
+			),
+		},
+		listPoliciesPagesByRole: map[string][]iam.ListRolePoliciesOutput{
+			"role-a": {iamRolePoliciesPage("", "policy-a1", "policy-a2")},
+			"role-b": {iamRolePoliciesPage("", "policy-b1", "policy-b2")},
+		},
+	}
+	got, err := listIAMRolePolicyIdentifiersWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{
+		"policy-a1|role-a",
+		"policy-a2|role-a",
+		"policy-b1|role-b",
+		"policy-b2|role-b",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("identifiers drift: got %v want %v", got, want)
+	}
+}
+
+// TestListIAMRolePolicyIdentifiers_SkipsServiceLinkedRoles pins the
+// SLR filter: roles whose Path starts with /aws-service-role/ must NOT
+// trigger an inner ListRolePolicies call (IAM rejects PutRolePolicy on
+// SLRs, so the inner result is guaranteed empty — the filter saves an
+// API call per SLR).
+func TestListIAMRolePolicyIdentifiers_SkipsServiceLinkedRoles(t *testing.T) {
+	t.Parallel()
+	fake := &fakeIAMRolePoliciesLister{
+		listRolesPages: []iam.ListRolesOutput{
+			iamRolesPage("",
+				[2]string{"/aws-service-role/elasticache.amazonaws.com/", "AWSServiceRoleForElastiCache"},
+				[2]string{"/", "real-role"},
+			),
+		},
+		listPoliciesPagesByRole: map[string][]iam.ListRolePoliciesOutput{
+			"real-role": {iamRolePoliciesPage("", "real-policy")},
+		},
+	}
+	got, err := listIAMRolePolicyIdentifiersWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"real-policy|real-role"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("identifiers drift: got %v want %v", got, want)
+	}
+	// SLR must NOT be queried for inline policies.
+	if got := fake.listPoliciesRoles; !reflect.DeepEqual(got, []string{"real-role"}) {
+		t.Errorf("inner ListRolePolicies should only be called for non-SLR roles; got call sequence %v", got)
+	}
+}
+
+// TestListIAMRolePolicyIdentifiers_PropagatesOuterPagination pins the
+// outer iam:ListRoles pagination contract: the marker returned on page
+// N must surface as the Marker input on page N+1, exactly once.
+func TestListIAMRolePolicyIdentifiers_PropagatesOuterPagination(t *testing.T) {
+	t.Parallel()
+	fake := &fakeIAMRolePoliciesLister{
+		listRolesPages: []iam.ListRolesOutput{
+			iamRolesPage("OUTER-CURSOR-1", [2]string{"/", "role-a"}),
+			iamRolesPage("", [2]string{"/", "role-b"}),
+		},
+		listPoliciesPagesByRole: map[string][]iam.ListRolePoliciesOutput{
+			"role-a": {iamRolePoliciesPage("", "pa")},
+			"role-b": {iamRolePoliciesPage("", "pb")},
+		},
+	}
+	got, err := listIAMRolePolicyIdentifiersWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"pa|role-a", "pb|role-b"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("identifiers drift: got %v want %v", got, want)
+	}
+	if len(fake.listRolesMarkers) != 2 {
+		t.Fatalf("expected 2 ListRoles calls; got %d markers=%v", len(fake.listRolesMarkers), fake.listRolesMarkers)
+	}
+	if fake.listRolesMarkers[0] != nil {
+		t.Errorf("first ListRoles call should have nil Marker; got %v", aws.ToString(fake.listRolesMarkers[0]))
+	}
+	if aws.ToString(fake.listRolesMarkers[1]) != "OUTER-CURSOR-1" {
+		t.Errorf("second ListRoles call should carry forward the cursor; got %q want %q",
+			aws.ToString(fake.listRolesMarkers[1]), "OUTER-CURSOR-1")
+	}
+}
+
+// TestListIAMRolePolicyIdentifiers_PropagatesInnerPagination pins the
+// inner iam:ListRolePolicies pagination contract: the marker returned
+// on inner page N must surface as the Marker input on inner page N+1
+// for the SAME role, exactly once.
+func TestListIAMRolePolicyIdentifiers_PropagatesInnerPagination(t *testing.T) {
+	t.Parallel()
+	fake := &fakeIAMRolePoliciesLister{
+		listRolesPages: []iam.ListRolesOutput{
+			iamRolesPage("", [2]string{"/", "role-a"}),
+		},
+		listPoliciesPagesByRole: map[string][]iam.ListRolePoliciesOutput{
+			"role-a": {
+				iamRolePoliciesPage("INNER-CURSOR-A", "policy-1"),
+				iamRolePoliciesPage("", "policy-2"),
+			},
+		},
+	}
+	got, err := listIAMRolePolicyIdentifiersWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"policy-1|role-a", "policy-2|role-a"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("identifiers drift: got %v want %v", got, want)
+	}
+	markers := fake.listPoliciesMarkersByRole["role-a"]
+	if len(markers) != 2 {
+		t.Fatalf("expected 2 inner ListRolePolicies calls for role-a; got %d markers=%v", len(markers), markers)
+	}
+	if markers[0] != nil {
+		t.Errorf("first inner call should have nil Marker; got %v", aws.ToString(markers[0]))
+	}
+	if aws.ToString(markers[1]) != "INNER-CURSOR-A" {
+		t.Errorf("second inner call should carry forward the cursor; got %q want %q",
+			aws.ToString(markers[1]), "INNER-CURSOR-A")
+	}
+}
+
+// TestListIAMRolePolicyIdentifiers_EmptyAccountReturnsNonNilEmpty
+// guards the #255 contract for accounts with zero IAM roles (or zero
+// non-SLR roles) — the result must marshal to "[]" not "null".
+func TestListIAMRolePolicyIdentifiers_EmptyAccountReturnsNonNilEmpty(t *testing.T) {
+	t.Parallel()
+	fake := &fakeIAMRolePoliciesLister{listRolesPages: []iam.ListRolesOutput{iamRolesPage("")}}
+	got, err := listIAMRolePolicyIdentifiersWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got == nil {
+		t.Fatal("got nil, want non-nil empty slice (#255 contract)")
+	}
+	if len(got) != 0 {
+		t.Errorf("got %v, want empty slice", got)
+	}
+}
+
+// TestListIAMRolePolicyIdentifiers_PropagatesListRolesError pins the
+// error wrap chain for the outer call.
+func TestListIAMRolePolicyIdentifiers_PropagatesListRolesError(t *testing.T) {
+	t.Parallel()
+	sentinel := errors.New("AccessDenied: iam:ListRoles")
+	fake := &fakeIAMRolePoliciesLister{listRolesErr: sentinel}
+	_, err := listIAMRolePolicyIdentifiersWithClient(context.Background(), fake)
+	if !errors.Is(err, sentinel) {
+		t.Errorf("err does not wrap sentinel; got %v", err)
+	}
+}
+
+// TestListIAMRolePolicyIdentifiers_PropagatesListRolePoliciesError
+// pins the error wrap chain for the inner per-role call. An error on
+// one role's inner ListRolePolicies aborts the whole enumeration —
+// matches the iam_service_linked_role posture (the SDKLister returns
+// nil + error; the discoverer's per-region wrapper handles partial
+// failure via ServiceWarn at the per-identifier GetResource layer).
+func TestListIAMRolePolicyIdentifiers_PropagatesListRolePoliciesError(t *testing.T) {
+	t.Parallel()
+	sentinel := errors.New("AccessDenied: iam:ListRolePolicies")
+	fake := &fakeIAMRolePoliciesLister{
+		listRolesPages: []iam.ListRolesOutput{
+			iamRolesPage("", [2]string{"/", "role-a"}),
+		},
+		listPoliciesErrByRole: map[string]error{
+			"role-a": sentinel,
+		},
+	}
+	_, err := listIAMRolePolicyIdentifiersWithClient(context.Background(), fake)
+	if !errors.Is(err, sentinel) {
+		t.Errorf("err does not wrap sentinel; got %v", err)
+	}
+}

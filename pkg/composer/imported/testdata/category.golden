@@ -53,6 +53,7 @@ aws_iam_group	Security
 aws_iam_instance_profile	Security
 aws_iam_policy	Security
 aws_iam_role	Security
+aws_iam_role_policy	Security
 aws_iam_role_policy_attachment	Security
 aws_iam_service_linked_role	Security
 aws_iam_user	Security

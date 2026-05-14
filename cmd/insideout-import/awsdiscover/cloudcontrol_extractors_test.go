@@ -3096,3 +3096,80 @@ func TestSNSTopicSubscriptionConfig(t *testing.T) {
 		t.Errorf("Tags: got %+v, want empty map", tags)
 	}
 }
+
+// =====================================================================
+// Phase A.2 — IAM RolePolicy extractor pins (#466)
+// =====================================================================
+
+// TestIAMRolePolicyConfig pins aws_iam_role_policy: SDKLister-listed
+// (CC ListResources unsupported), IsGlobal, compound CC identifier
+// `<PolicyName>|<RoleName>` rewritten to TF import `<RoleName>:<PolicyName>`
+// via halve-and-swap, NativeIDs split into policy_name + role_name,
+// untaggable (CFN schema has no Tags property).
+func TestIAMRolePolicyConfig(t *testing.T) {
+	t.Parallel()
+	cfg := configByTFType(t, "aws_iam_role_policy")
+	if !cfg.SkipProjectTagFilter {
+		t.Error("aws_iam_role_policy: SkipProjectTagFilter must be true (untaggable; CFN schema has no Tags property)")
+	}
+	if !cfg.IsGlobal {
+		t.Error("aws_iam_role_policy: IsGlobal must be true (IAM is a global service)")
+	}
+	if cfg.CloudFormationType != "AWS::IAM::RolePolicy" {
+		t.Errorf("CloudFormationType=%q, want AWS::IAM::RolePolicy", cfg.CloudFormationType)
+	}
+	if cfg.SDKLister == nil {
+		t.Error("SDKLister must be non-nil (CC ListResources unsupported for inline role policies)")
+	}
+	if cfg.ParentLister != nil {
+		t.Error("ParentLister must be nil (SDKLister and ParentLister are mutually exclusive)")
+	}
+
+	// ImportID rewrite: CC `<PolicyName>|<RoleName>` → TF `<RoleName>:<PolicyName>`.
+	const cc = "my-policy|my-role"
+	const tf = "my-role:my-policy"
+	if got := cfg.ImportIDFromIdentifier(cc, nil); got != tf {
+		t.Errorf("ImportID rewrite: got %q, want %q", got, tf)
+	}
+	// Malformed identifier (no `|`): passthrough so a downstream import
+	// surfaces a clear "wrong format" error rather than a silent mis-
+	// import. Matches the iam_service_linked_role fallback shape.
+	if got := cfg.ImportIDFromIdentifier("malformed-no-pipe", nil); got != "malformed-no-pipe" {
+		t.Errorf("ImportID fallback (no pipe): got %q, want %q", got, "malformed-no-pipe")
+	}
+
+	// NameHint: prefer PolicyName from properties; fall back to
+	// identifier verbatim when properties are absent.
+	if got := cfg.NameHintFromProperties(cc, map[string]any{"PolicyName": "my-policy"}); got != "my-policy" {
+		t.Errorf("NameHint from PolicyName: got %q, want %q", got, "my-policy")
+	}
+	if got := cfg.NameHintFromProperties(cc, map[string]any{}); got != cc {
+		t.Errorf("NameHint fallback: got %q, want %q", got, cc)
+	}
+
+	// NativeIDs: split on `|` into policy_name + role_name.
+	native := cfg.NativeIDsFromProperties(cc, nil)
+	want := map[string]string{
+		"policy_name": "my-policy",
+		"role_name":   "my-role",
+	}
+	if !reflect.DeepEqual(native, want) {
+		t.Errorf("NativeIDs: got %+v, want %+v", native, want)
+	}
+	// Malformed identifier: defensive — stamp policy_name only so
+	// downstream readers can spot the drift rather than receive a
+	// half-populated map.
+	nativeBare := cfg.NativeIDsFromProperties("malformed-no-pipe", nil)
+	if !reflect.DeepEqual(nativeBare, map[string]string{"policy_name": "malformed-no-pipe"}) {
+		t.Errorf("NativeIDs (malformed): got %+v, want {policy_name: malformed-no-pipe}", nativeBare)
+	}
+
+	// Untaggable: non-nil empty map (#255 contract).
+	tags := cfg.TagsFromProperties(map[string]any{})
+	if tags == nil {
+		t.Error("Tags: got nil, want non-nil empty map (#255 contract; CFN schema has no Tags)")
+	}
+	if len(tags) != 0 {
+		t.Errorf("Tags: got %+v, want empty map", tags)
+	}
+}

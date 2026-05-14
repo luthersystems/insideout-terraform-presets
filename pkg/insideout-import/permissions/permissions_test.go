@@ -70,6 +70,7 @@ var awsTFTypeToServiceSlug = map[string]string{
 	"aws_iam_instance_profile":                           "iam_instance_profile",
 	"aws_iam_policy":                                     "iam_policy",
 	"aws_iam_role":                                       "iam_role",
+	"aws_iam_role_policy":                                "iam_role_policy",
 	"aws_iam_role_policy_attachment":                     "iam_role_policy_attachment",
 	"aws_iam_service_linked_role":                        "iam_service_linked_role",
 	"aws_iam_user":                                       "iam_user",

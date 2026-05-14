@@ -131,6 +131,7 @@ var categoryByTFType = map[string]string{
 	"aws_iam_instance_profile":                           CategorySecurity,
 	"aws_iam_policy":                                     CategorySecurity,
 	"aws_iam_role":                                       CategorySecurity,
+	"aws_iam_role_policy":                                CategorySecurity,
 	"aws_iam_role_policy_attachment":                     CategorySecurity,
 	"aws_iam_service_linked_role":                        CategorySecurity,
 	"aws_iam_user":                                       CategorySecurity,

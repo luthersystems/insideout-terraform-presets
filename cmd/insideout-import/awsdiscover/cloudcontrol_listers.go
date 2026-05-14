@@ -1125,3 +1125,116 @@ func listIAMServiceLinkedRoleServiceNamesWithClient(ctx context.Context, client 
 	return names, nil
 }
 
+// =====================================================================
+// Phase A.2 — IAM RolePolicy SDKLister (#466)
+// =====================================================================
+
+// iamRolePoliciesLister is the narrow subset of the IAM SDK used by the
+// aws_iam_role_policy SDKLister. ListRoles enumerates the outer set;
+// ListRolePolicies enumerates the inner set (inline policies per role).
+// We keep the interface narrow on purpose so test fakes do not need to
+// implement the entire IAM client surface.
+type iamRolePoliciesLister interface {
+	ListRoles(ctx context.Context, in *iam.ListRolesInput, opts ...func(*iam.Options)) (*iam.ListRolesOutput, error)
+	ListRolePolicies(ctx context.Context, in *iam.ListRolePoliciesInput, opts ...func(*iam.Options)) (*iam.ListRolePoliciesOutput, error)
+}
+
+// listIAMRolePolicyIdentifiers enumerates IAM inline role policies
+// (global) and emits the CC compound primary identifier for each. Used
+// as the SDKLister for AWS::IAM::RolePolicy (#466) — CC ListResources
+// returns UnsupportedActionException for the type because inline
+// policies live under a parent role rather than as top-level IAM
+// resources.
+//
+// AWS::IAM::RolePolicy's CC primaryIdentifier is
+// [/properties/PolicyName, /properties/RoleName] (verified against the
+// public CFN schema:
+//
+//	https://schema.cloudformation.us-east-1.amazonaws.com/aws-iam-rolepolicy.json
+//
+// `primaryIdentifier: [/properties/PolicyName, /properties/RoleName]`).
+// The framework joins compound identifiers with `|` in the order
+// declared by the schema, so emitted identifiers are
+// "<PolicyName>|<RoleName>". The TF import rewrite (in
+// cloudcontrol_types.go) swaps the parts and joins them with `:` —
+// terraform-provider-aws v6.x docs:
+// "<role_name>:<role_policy_name>".
+//
+// We walk iam:ListRoles paginated → for each role, iam:ListRolePolicies
+// paginated. A single role can have many inline policies; the outer
+// loop is the parent enumerator and the inner loop is the per-role
+// fan-out. Service-linked roles (Path == "/aws-service-role/...") are
+// filtered out because they cannot hold inline policies (IAM rejects
+// PutRolePolicy on them), so issuing ListRolePolicies for them would
+// burn API budget on a guaranteed-empty result.
+//
+// Returns a non-nil empty slice on accounts with zero inline role
+// policies (#255 contract).
+func listIAMRolePolicyIdentifiers(ctx context.Context, awsCfg aws.Config, region string, _ DiscoverArgs) ([]string, error) {
+	client := iam.NewFromConfig(awsCfg, func(o *iam.Options) {
+		if region != "" {
+			o.Region = region
+		}
+	})
+	return listIAMRolePolicyIdentifiersWithClient(ctx, client)
+}
+
+func listIAMRolePolicyIdentifiersWithClient(ctx context.Context, client iamRolePoliciesLister) ([]string, error) {
+	ids := []string{}
+	seen := map[string]bool{}
+
+	// Outer loop: enumerate all IAM roles (paginated).
+	var roleMarker *string
+	for {
+		rolesPage, err := client.ListRoles(ctx, &iam.ListRolesInput{Marker: roleMarker})
+		if err != nil {
+			return nil, fmt.Errorf("iam:ListRoles: %w", err)
+		}
+		for _, r := range rolesPage.Roles {
+			roleName := aws.ToString(r.RoleName)
+			if roleName == "" {
+				continue
+			}
+			// Skip service-linked roles — they cannot hold inline policies
+			// (IAM rejects PutRolePolicy on /aws-service-role/ roles), so
+			// the per-role ListRolePolicies would always return zero.
+			if strings.HasPrefix(aws.ToString(r.Path), iamServiceRolePathPrefix) {
+				continue
+			}
+
+			// Inner loop: enumerate inline policies for this role.
+			var polMarker *string
+			for {
+				polPage, err := client.ListRolePolicies(ctx, &iam.ListRolePoliciesInput{
+					RoleName: aws.String(roleName),
+					Marker:   polMarker,
+				})
+				if err != nil {
+					return nil, fmt.Errorf("iam:ListRolePolicies(role=%q): %w", roleName, err)
+				}
+				for _, policyName := range polPage.PolicyNames {
+					if policyName == "" {
+						continue
+					}
+					// CC compound identifier order matches the schema's
+					// primaryIdentifier declaration: PolicyName first.
+					id := policyName + "|" + roleName
+					if seen[id] {
+						continue
+					}
+					seen[id] = true
+					ids = append(ids, id)
+				}
+				if !polPage.IsTruncated || polPage.Marker == nil || aws.ToString(polPage.Marker) == "" {
+					break
+				}
+				polMarker = polPage.Marker
+			}
+		}
+		if !rolesPage.IsTruncated || rolesPage.Marker == nil || aws.ToString(rolesPage.Marker) == "" {
+			break
+		}
+		roleMarker = rolesPage.Marker
+	}
+	return ids, nil
+}

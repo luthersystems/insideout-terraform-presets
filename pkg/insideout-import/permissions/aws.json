@@ -968,6 +968,26 @@
       "purpose": "list IAM roles (paginated)"
     },
     {
+      "service": "iam_role_policy",
+      "iam_action": "cloudcontrol:GetResource",
+      "purpose": "Cloud Control GetResource for AWS::IAM::RolePolicy (#466 SDKLister branch — global service)"
+    },
+    {
+      "service": "iam_role_policy",
+      "iam_action": "iam:GetRolePolicy",
+      "purpose": "Cloud Control GetResource for aws_iam_role_policy delegates to iam:GetRolePolicy"
+    },
+    {
+      "service": "iam_role_policy",
+      "iam_action": "iam:ListRolePolicies",
+      "purpose": "SDKLister enumeration: per-role inline-policy fan-out (CC ListResources unsupported for AWS::IAM::RolePolicy)"
+    },
+    {
+      "service": "iam_role_policy",
+      "iam_action": "iam:ListRoles",
+      "purpose": "SDKLister enumeration: walk IAM roles to seed the per-role inline-policy fan-out (CC ListResources unsupported)"
+    },
+    {
       "service": "iam_role_policy_attachment",
       "iam_action": "iam:ListAttachedRolePolicies",
       "purpose": "SDK-only sub-resource discoverer (#14k2 / #456): per-role ListAttachedRolePolicies; one TF resource per (role_name, policy_arn) attached managed-policy pair; multi-emit FetchItems"
