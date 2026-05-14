@@ -19,6 +19,14 @@
 //	        intended for consumer repos (e.g. luthersystems/reliable);
 //	        nothing in this repo is committed from --out.
 //
+//	policy-ts --out <dir> [--types a,b,c]
+//	        Generate <type>.policy.ts (Layer-2 policy projection) for
+//	        every type with a curated policy.Map, plus shared
+//	        _policy.ts (axis-enum types + projection runtime) and
+//	        _policy_registry.ts (cross-type lookup). Output is intended
+//	        for consumer repos and mirrors
+//	        pkg/composer/imported/policy/<type>.policy.go.
+//
 // Default subcommand is `gen` so plain `imported-codegen --aws-schema=...`
 // works.
 package main
@@ -32,6 +40,8 @@ import (
 	"strings"
 
 	tfjson "github.com/hashicorp/terraform-json"
+
+	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported/policy"
 )
 
 func main() {
@@ -43,6 +53,8 @@ func main() {
 			os.Exit(runGen(os.Args[2:]))
 		case "zod":
 			os.Exit(runZod(os.Args[2:]))
+		case "policy-ts":
+			os.Exit(runPolicyTS(os.Args[2:]))
 		case "-h", "--help":
 			usage()
 			return
@@ -55,9 +67,10 @@ func usage() {
 	fmt.Fprintln(os.Stderr, `imported-codegen: generate Layer 1 typed structs from terraform provider schemas.
 
 Subcommands:
-  gen     (default) generate <type>.gen.go files
-  filter  strip a full ProviderSchemas dump to wanted types only
-  zod     generate <type>.ts (Zod schema + metadata) for TS consumers
+  gen        (default) generate <type>.gen.go files
+  filter     strip a full ProviderSchemas dump to wanted types only
+  zod        generate <type>.ts (Zod schema + metadata) for TS consumers
+  policy-ts  generate <type>.policy.ts (Layer-2 policy projection) for TS consumers
 
 Run 'imported-codegen <subcommand> --help' for subcommand flags.`)
 }
@@ -235,6 +248,68 @@ func runZod(args []string) int {
 		return 1
 	}
 	fmt.Println("_registry.ts")
+	return 0
+}
+
+// runPolicyTS is the `policy-ts` subcommand: iterate
+// policy.RegisteredTypes() and emit a per-type <tfType>.policy.ts file
+// projecting the curated Layer-2 policy.Map into TS row form, plus the
+// shared _policy.ts (axis-enum types + projection runtime) and
+// _policy_registry.ts (cross-type lookup).
+//
+// Output is consumer-driven: nothing in this repo's tree is touched.
+// The emitted TS has no runtime dependency on presets — pure data plus
+// the helpers in _policy.ts. Mirrors the runZod convention.
+//
+// Filter rules mirror runZod's --types: empty = emit every registered
+// policy; populated = emit only the listed types and reject typos
+// against policy.RegisteredTypes() at flag-parse time.
+func runPolicyTS(args []string) int {
+	fs := flag.NewFlagSet("policy-ts", flag.ExitOnError)
+	outDir := fs.String("out", "out/policy", "directory to write generated *.policy.ts files")
+	typesFilter := fs.String("types", "", "comma-separated subset of Terraform resource types to emit (default: every type with a curated policy in pkg/composer/imported/policy)")
+	if err := fs.Parse(args); err != nil {
+		return 2
+	}
+
+	if err := os.MkdirAll(*outDir, 0o755); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+
+	registered := policy.RegisteredTypes()
+	filter := parseTypesFilter(*typesFilter)
+	if unknown := filter.unknownAgainst(registered); len(unknown) > 0 {
+		fmt.Fprintf(os.Stderr, "policy-ts: --types contains unknown type(s): %s\n", strings.Join(unknown, ", "))
+		fmt.Fprintln(os.Stderr, "Valid types are the registered set in pkg/composer/imported/policy (see RegisteredTypes()).")
+		return 2
+	}
+
+	if _, err := EmitPolicyValueFile(*outDir); err != nil {
+		fmt.Fprintf(os.Stderr, "_policy.ts: %v\n", err)
+		return 1
+	}
+	fmt.Println("_policy.ts")
+
+	var entries []PolicyRegistryEntry
+	for _, tfType := range registered {
+		if !filter.want(tfType) {
+			continue
+		}
+		path, err := EmitPolicyTypeFile(*outDir, tfType)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%s: %v\n", tfType, err)
+			return 1
+		}
+		entries = append(entries, PolicyRegistryEntry{TFType: tfType, GoName: GoName(tfType)})
+		fmt.Println(filepath.Base(path))
+	}
+
+	if _, err := EmitPolicyRegistryFile(*outDir, entries); err != nil {
+		fmt.Fprintf(os.Stderr, "_policy_registry.ts: %v\n", err)
+		return 1
+	}
+	fmt.Println("_policy_registry.ts")
 	return 0
 }
 
