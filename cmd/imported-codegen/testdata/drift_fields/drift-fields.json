@@ -1,0 +1,624 @@
+{
+  "aws_dynamodb_table": [
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "attribute.name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "attribute.type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "billing_mode",
+      "semantic": "Exact"
+    },
+    {
+      "path": "deletion_protection_enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "global_secondary_index.hash_key",
+      "semantic": "Exact"
+    },
+    {
+      "path": "global_secondary_index.name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "global_secondary_index.non_key_attributes",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "global_secondary_index.projection_type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "global_secondary_index.range_key",
+      "semantic": "Exact"
+    },
+    {
+      "path": "global_secondary_index.read_capacity",
+      "semantic": "Exact"
+    },
+    {
+      "path": "global_secondary_index.write_capacity",
+      "semantic": "Exact"
+    },
+    {
+      "path": "hash_key",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "local_secondary_index.name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "local_secondary_index.non_key_attributes",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "local_secondary_index.projection_type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "local_secondary_index.range_key",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "point_in_time_recovery.enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "range_key",
+      "semantic": "Exact"
+    },
+    {
+      "path": "read_capacity",
+      "semantic": "Exact"
+    },
+    {
+      "path": "replica.arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "replica.kms_key_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "replica.point_in_time_recovery",
+      "semantic": "Exact"
+    },
+    {
+      "path": "replica.propagate_tags",
+      "semantic": "Exact"
+    },
+    {
+      "path": "replica.region_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "replica.stream_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "replica.stream_label",
+      "semantic": "Exact"
+    },
+    {
+      "path": "restore_date_time",
+      "semantic": "Exact"
+    },
+    {
+      "path": "restore_source_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "restore_source_table_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "restore_to_latest_time",
+      "semantic": "Exact"
+    },
+    {
+      "path": "server_side_encryption.enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "server_side_encryption.kms_key_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "stream_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "stream_enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "stream_label",
+      "semantic": "Exact"
+    },
+    {
+      "path": "stream_view_type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "table_class",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ttl.attribute_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ttl.enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "write_capacity",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_lambda_function": [
+    {
+      "path": "architectures",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "code_signing_config_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "dead_letter_config.target_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ephemeral_storage.size",
+      "semantic": "Exact"
+    },
+    {
+      "path": "file_system_config.arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "file_system_config.local_mount_path",
+      "semantic": "Exact"
+    },
+    {
+      "path": "function_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "handler",
+      "semantic": "Exact"
+    },
+    {
+      "path": "image_config.command",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "image_config.entry_point",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "image_config.working_directory",
+      "semantic": "Exact"
+    },
+    {
+      "path": "invoke_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "kms_key_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "layers",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "logging_config.application_log_level",
+      "semantic": "Exact"
+    },
+    {
+      "path": "logging_config.log_format",
+      "semantic": "Exact"
+    },
+    {
+      "path": "logging_config.log_group",
+      "semantic": "Exact"
+    },
+    {
+      "path": "logging_config.system_log_level",
+      "semantic": "Exact"
+    },
+    {
+      "path": "memory_size",
+      "semantic": "Exact"
+    },
+    {
+      "path": "package_type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "publish",
+      "semantic": "Exact"
+    },
+    {
+      "path": "qualified_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "qualified_invoke_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "replacement_security_group_ids",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "reserved_concurrent_executions",
+      "semantic": "Exact"
+    },
+    {
+      "path": "role",
+      "semantic": "Exact"
+    },
+    {
+      "path": "runtime",
+      "semantic": "Exact"
+    },
+    {
+      "path": "s3_bucket",
+      "semantic": "Exact"
+    },
+    {
+      "path": "s3_key",
+      "semantic": "Exact"
+    },
+    {
+      "path": "s3_object_version",
+      "semantic": "Exact"
+    },
+    {
+      "path": "snap_start.apply_on",
+      "semantic": "Exact"
+    },
+    {
+      "path": "timeout",
+      "semantic": "Exact"
+    },
+    {
+      "path": "tracing_config.mode",
+      "semantic": "Exact"
+    },
+    {
+      "path": "version",
+      "semantic": "Exact"
+    },
+    {
+      "path": "vpc_config.security_group_ids",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "vpc_config.subnet_ids",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "vpc_config.vpc_id",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_s3_bucket": [
+    {
+      "path": "acceleration_status",
+      "semantic": "Exact"
+    },
+    {
+      "path": "acl",
+      "semantic": "Exact"
+    },
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "bucket",
+      "semantic": "Exact"
+    },
+    {
+      "path": "bucket_domain_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "bucket_prefix",
+      "semantic": "Exact"
+    },
+    {
+      "path": "bucket_regional_domain_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "force_destroy",
+      "semantic": "Exact"
+    },
+    {
+      "path": "hosted_zone_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "logging.target_bucket",
+      "semantic": "Exact"
+    },
+    {
+      "path": "logging.target_prefix",
+      "semantic": "Exact"
+    },
+    {
+      "path": "object_lock_configuration.object_lock_enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "object_lock_enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "policy",
+      "semantic": "Exact"
+    },
+    {
+      "path": "region",
+      "semantic": "Exact"
+    },
+    {
+      "path": "replication_configuration.role",
+      "semantic": "Exact"
+    },
+    {
+      "path": "request_payer",
+      "semantic": "Exact"
+    },
+    {
+      "path": "server_side_encryption_configuration.rule.apply_server_side_encryption_by_default.kms_master_key_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "server_side_encryption_configuration.rule.apply_server_side_encryption_by_default.sse_algorithm",
+      "semantic": "Exact"
+    },
+    {
+      "path": "server_side_encryption_configuration.rule.bucket_key_enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "versioning.enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "versioning.mfa_delete",
+      "semantic": "Exact"
+    },
+    {
+      "path": "website_domain",
+      "semantic": "Exact"
+    },
+    {
+      "path": "website_endpoint",
+      "semantic": "Exact"
+    }
+  ],
+  "google_pubsub_topic": [
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ingestion_data_source_settings.aws_kinesis.aws_role_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ingestion_data_source_settings.aws_kinesis.consumer_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ingestion_data_source_settings.aws_kinesis.gcp_service_account",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ingestion_data_source_settings.aws_kinesis.stream_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ingestion_data_source_settings.cloud_storage.bucket",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ingestion_data_source_settings.cloud_storage.match_glob",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ingestion_data_source_settings.cloud_storage.minimum_object_create_time",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ingestion_data_source_settings.cloud_storage.text_format.delimiter",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ingestion_data_source_settings.platform_logs_settings.severity",
+      "semantic": "Exact"
+    },
+    {
+      "path": "kms_key_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "message_retention_duration",
+      "semantic": "Exact"
+    },
+    {
+      "path": "message_storage_policy.allowed_persistence_regions",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "schema_settings.encoding",
+      "semantic": "Exact"
+    },
+    {
+      "path": "schema_settings.schema",
+      "semantic": "Exact"
+    }
+  ],
+  "google_storage_bucket": [
+    {
+      "path": "autoclass.enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "cors.max_age_seconds",
+      "semantic": "Exact"
+    },
+    {
+      "path": "cors.method",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "cors.origin",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "cors.response_header",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "encryption.default_kms_key_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "force_destroy",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "lifecycle_rule.action.storage_class",
+      "semantic": "Exact"
+    },
+    {
+      "path": "lifecycle_rule.action.type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "lifecycle_rule.condition.age",
+      "semantic": "Exact"
+    },
+    {
+      "path": "lifecycle_rule.condition.with_state",
+      "semantic": "Exact"
+    },
+    {
+      "path": "location",
+      "semantic": "Exact"
+    },
+    {
+      "path": "logging.log_bucket",
+      "semantic": "Exact"
+    },
+    {
+      "path": "logging.log_object_prefix",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "public_access_prevention",
+      "semantic": "Exact"
+    },
+    {
+      "path": "requester_pays",
+      "semantic": "Exact"
+    },
+    {
+      "path": "retention_policy.is_locked",
+      "semantic": "Exact"
+    },
+    {
+      "path": "retention_policy.retention_period",
+      "semantic": "Exact"
+    },
+    {
+      "path": "rpo",
+      "semantic": "Exact"
+    },
+    {
+      "path": "self_link",
+      "semantic": "Exact"
+    },
+    {
+      "path": "soft_delete_policy.retention_duration_seconds",
+      "semantic": "Exact"
+    },
+    {
+      "path": "storage_class",
+      "semantic": "Exact"
+    },
+    {
+      "path": "uniform_bucket_level_access",
+      "semantic": "Exact"
+    },
+    {
+      "path": "url",
+      "semantic": "Exact"
+    },
+    {
+      "path": "versioning.enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "website.main_page_suffix",
+      "semantic": "Exact"
+    },
+    {
+      "path": "website.not_found_page",
+      "semantic": "Exact"
+    }
+  ]
+}
