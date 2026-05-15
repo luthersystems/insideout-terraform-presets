@@ -71,14 +71,16 @@ func TestExistingEnrichersDoNotImplementByID(t *testing.T) {
 	// logging_project_sink, identity_platform_config,
 	// monitoring_alert_policy, monitoring_dashboard,
 	// monitoring_notification_channel) = 18. Plus 7 IAM-binding
-	// enrichers (#482 follow-up): project_iam_member,
-	// storage_bucket_iam_member, kms_crypto_key_iam_binding,
-	// secret_manager_secret_iam_member, secret_manager_secret_iam_binding,
-	// cloud_run_v2_service_iam_member, cloudfunctions2_function_iam_member.
-	// = 25. Plus 3 final-push enrichers (#482): project_service,
-	// service_networking_connection, vpc_access_connector. = 28.
-	// Plus secret_manager_secret_version (GCP 94→96% push, #482). = 29.
-	const handRolledCount = 29
+	// enrichers: project_iam_member, storage_bucket_iam_member,
+	// kms_crypto_key_iam_binding, secret_manager_secret_iam_member,
+	// secret_manager_secret_iam_binding, cloud_run_v2_service_iam_member,
+	// cloudfunctions2_function_iam_member. = 25. Plus 3 final-push
+	// enrichers: project_service, service_networking_connection,
+	// vpc_access_connector. = 28. Plus secret_manager_secret_version
+	// (GCP 94→96% push). = 29. Plus 2 fan-out enrichers
+	// (identity_platform_default_supported_idp_config,
+	// storage_bucket_object) = 31.
+	const handRolledCount = 31
 	caiNonOverlap := 0
 	for _, cfg := range cloudAssetTypeConfigs {
 		if cfg.Skip {

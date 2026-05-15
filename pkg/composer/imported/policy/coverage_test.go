@@ -67,6 +67,7 @@ var coveredTypes = []string{
 	"google_container_cluster",
 	"google_container_node_pool",
 	"google_identity_platform_config",
+	"google_identity_platform_default_supported_idp_config",
 	"google_kms_crypto_key",
 	"google_kms_key_ring",
 	"google_logging_project_sink",
@@ -84,6 +85,7 @@ var coveredTypes = []string{
 	"google_sql_database_instance",
 	"google_sql_user",
 	"google_storage_bucket",
+	"google_storage_bucket_object",
 	"google_vertex_ai_dataset",
 	"google_vpc_access_connector",
 	// IAM-binding types (#482 follow-up). Curated minimally — the (parent

@@ -1,29 +1,3 @@
-aws_apigatewayv2_stage	access_log_settings.destination_arn	Wiring	Reliability	RileyVisible	RelationshipOnly		
-aws_apigatewayv2_stage	access_log_settings.format	Tuning	Reliability	RileyVisible	RequiresApproval		
-aws_apigatewayv2_stage	api_id	Identity		UIVisible	Never		AlwaysReplace
-aws_apigatewayv2_stage	arn	Identity		UIVisible	Never		
-aws_apigatewayv2_stage	auto_deploy	Tuning	Reliability	RileyVisible	RequiresApproval		
-aws_apigatewayv2_stage	client_certificate_id	Wiring	Security	RileyVisible	RelationshipOnly		
-aws_apigatewayv2_stage	default_route_settings.data_trace_enabled	Tuning	Reliability	RileyVisible	ChatSafe		
-aws_apigatewayv2_stage	default_route_settings.detailed_metrics_enabled	Tuning	Performance	RileyVisible	ChatSafe		
-aws_apigatewayv2_stage	default_route_settings.logging_level	Tuning	Reliability	RileyVisible	ChatSafe		
-aws_apigatewayv2_stage	default_route_settings.throttling_burst_limit	Tuning	Performance	RileyVisible	RequiresApproval		
-aws_apigatewayv2_stage	default_route_settings.throttling_rate_limit	Tuning	Performance	RileyVisible	RequiresApproval		
-aws_apigatewayv2_stage	deployment_id	Wiring		RileyVisible	RelationshipOnly		
-aws_apigatewayv2_stage	description	Tuning		RileyVisible	ChatSafe		
-aws_apigatewayv2_stage	execution_arn	Identity		UIVisible	Never		
-aws_apigatewayv2_stage	id	Identity		UIVisible	Never		
-aws_apigatewayv2_stage	invoke_url	Identity		UIVisible	Never		
-aws_apigatewayv2_stage	name	Identity		UIVisible	Never		AlwaysReplace
-aws_apigatewayv2_stage	route_settings.data_trace_enabled	Tuning	Reliability	RileyVisible	ChatSafe		
-aws_apigatewayv2_stage	route_settings.detailed_metrics_enabled	Tuning	Performance	RileyVisible	ChatSafe		
-aws_apigatewayv2_stage	route_settings.logging_level	Tuning	Reliability	RileyVisible	ChatSafe		
-aws_apigatewayv2_stage	route_settings.route_key	Identity		UIVisible	Never		
-aws_apigatewayv2_stage	route_settings.throttling_burst_limit	Tuning	Performance	RileyVisible	RequiresApproval		
-aws_apigatewayv2_stage	route_settings.throttling_rate_limit	Tuning	Performance	RileyVisible	RequiresApproval		
-aws_apigatewayv2_stage	stage_variables	Tuning		RileyVisible	RequiresApproval		
-aws_apigatewayv2_stage	tags	Tuning		Hidden	SystemOnly	Redacted	
-aws_apigatewayv2_stage	tags_all	Tuning		Hidden	SystemOnly	Redacted	
 aws_cloudwatch_log_group	arn	Identity		UIVisible	Never		
 aws_cloudwatch_log_group	kms_key_id	Wiring	Security	RileyVisible	RelationshipOnly		
 aws_cloudwatch_log_group	log_group_class	Tuning	Performance	RileyVisible	ChatSafe		MayReplace
@@ -32,9 +6,6 @@ aws_cloudwatch_log_group	retention_in_days	Tuning	Reliability	RileyVisible	ChatS
 aws_cloudwatch_log_group	skip_destroy	Tuning	Reliability	RileyVisible	RequiresApproval		
 aws_cloudwatch_log_group	tags	Tuning		Hidden	SystemOnly	Redacted	
 aws_cloudwatch_log_group	tags_all	Tuning		Hidden	SystemOnly	Redacted	
-aws_dynamodb_contributor_insights	id	Identity		UIVisible	Never		
-aws_dynamodb_contributor_insights	index_name	Identity		UIVisible	Never		AlwaysReplace
-aws_dynamodb_contributor_insights	table_name	Identity		UIVisible	Never		AlwaysReplace
 aws_dynamodb_table	arn	Identity		UIVisible	Never		
 aws_dynamodb_table	attribute.name	Identity		UIVisible	Never		AlwaysReplace
 aws_dynamodb_table	attribute.type	Identity		UIVisible	Never		AlwaysReplace
@@ -81,9 +52,6 @@ aws_dynamodb_table	timeouts	Tuning		Hidden	SystemOnly
 aws_dynamodb_table	ttl.attribute_name	Wiring	Reliability	RileyVisible	RelationshipOnly		
 aws_dynamodb_table	ttl.enabled	Tuning	Reliability	RileyVisible	ChatSafe		
 aws_dynamodb_table	write_capacity	Tuning	Performance	RileyVisible	ChatSafe		
-aws_iam_role_policy_attachment	id	Identity		UIVisible	Never		
-aws_iam_role_policy_attachment	policy_arn	Wiring	Security	RileyVisible	RelationshipOnly		AlwaysReplace
-aws_iam_role_policy_attachment	role	Identity		UIVisible	Never		AlwaysReplace
 aws_lambda_function	architectures	Tuning	Performance	RileyVisible	ChatSafe		MayReplace
 aws_lambda_function	arn	Identity		UIVisible	Never		
 aws_lambda_function	code_signing_config_arn	Wiring	Security	RileyVisible	RelationshipOnly		
@@ -126,17 +94,6 @@ aws_lambda_function	version	Identity		RileyVisible	Never
 aws_lambda_function	vpc_config.security_group_ids	Wiring	Security	RileyVisible	RelationshipOnly		
 aws_lambda_function	vpc_config.subnet_ids	Wiring	Reliability	RileyVisible	RelationshipOnly		
 aws_lambda_function	vpc_config.vpc_id	Wiring		RileyVisible	RelationshipOnly		
-aws_resourceexplorer2_index	arn	Identity		UIVisible	Never		
-aws_resourceexplorer2_index	tags	Tuning		Hidden	SystemOnly	Redacted	
-aws_resourceexplorer2_index	tags_all	Tuning		Hidden	SystemOnly	Redacted	
-aws_resourceexplorer2_index	type	Tuning	Performance	RileyVisible	RequiresApproval		
-aws_resourceexplorer2_view	arn	Identity		UIVisible	Never		
-aws_resourceexplorer2_view	default_view	Tuning	Reliability	RileyVisible	RequiresApproval		
-aws_resourceexplorer2_view	filters.filter_string	Tuning	Security	RileyVisible	RequiresApproval		
-aws_resourceexplorer2_view	included_property.name	Tuning		RileyVisible	ChatSafe		
-aws_resourceexplorer2_view	name	Identity		UIVisible	Never		
-aws_resourceexplorer2_view	tags	Tuning		Hidden	SystemOnly	Redacted	
-aws_resourceexplorer2_view	tags_all	Tuning		Hidden	SystemOnly	Redacted	
 aws_s3_bucket	acceleration_status	Tuning	Performance	RileyVisible	ChatSafe		
 aws_s3_bucket	acl	Tuning	Security	RileyVisible	RequiresApproval		
 aws_s3_bucket	arn	Identity		UIVisible	Never		
@@ -164,42 +121,6 @@ aws_s3_bucket	versioning.enabled	Tuning	Reliability	RileyVisible	ChatSafe
 aws_s3_bucket	versioning.mfa_delete	Tuning	Security	RileyVisible	RequiresApproval		
 aws_s3_bucket	website_domain	Identity		UIVisible	Never		
 aws_s3_bucket	website_endpoint	Identity		UIVisible	Never		
-aws_s3_bucket_lifecycle_configuration	bucket	Identity		UIVisible	Never		AlwaysReplace
-aws_s3_bucket_lifecycle_configuration	expected_bucket_owner	Identity		UIVisible	Never		
-aws_s3_bucket_lifecycle_configuration	id	Identity		UIVisible	Never		
-aws_s3_bucket_lifecycle_configuration	rule.abort_incomplete_multipart_upload.days_after_initiation	Tuning	Performance	RileyVisible	ChatSafe		
-aws_s3_bucket_lifecycle_configuration	rule.expiration.date	Tuning	Performance	RileyVisible	RequiresApproval		
-aws_s3_bucket_lifecycle_configuration	rule.expiration.days	Tuning	Performance	RileyVisible	RequiresApproval		
-aws_s3_bucket_lifecycle_configuration	rule.id	Identity		UIVisible	Never		
-aws_s3_bucket_lifecycle_configuration	rule.noncurrent_version_expiration.noncurrent_days	Tuning	Performance	RileyVisible	RequiresApproval		
-aws_s3_bucket_lifecycle_configuration	rule.noncurrent_version_transition.noncurrent_days	Tuning	Performance	RileyVisible	RequiresApproval		
-aws_s3_bucket_lifecycle_configuration	rule.noncurrent_version_transition.storage_class	Tuning	Performance	RileyVisible	RequiresApproval		
-aws_s3_bucket_lifecycle_configuration	rule.prefix	Tuning		RileyVisible	ChatSafe		
-aws_s3_bucket_lifecycle_configuration	rule.status	Tuning	Reliability	RileyVisible	ChatSafe		
-aws_s3_bucket_lifecycle_configuration	rule.transition.days	Tuning	Performance	RileyVisible	RequiresApproval		
-aws_s3_bucket_lifecycle_configuration	rule.transition.storage_class	Tuning	Performance	RileyVisible	RequiresApproval		
-aws_s3_bucket_lifecycle_configuration	transition_default_minimum_object_size	Tuning	Performance	RileyVisible	ChatSafe		
-aws_s3_bucket_ownership_controls	bucket	Identity		UIVisible	Never		AlwaysReplace
-aws_s3_bucket_ownership_controls	id	Identity		UIVisible	Never		
-aws_s3_bucket_ownership_controls	rule.object_ownership	Tuning	Security	RileyVisible	RequiresApproval		
-aws_s3_bucket_public_access_block	block_public_acls	Tuning	Security	RileyVisible	RequiresApproval		
-aws_s3_bucket_public_access_block	block_public_policy	Tuning	Security	RileyVisible	RequiresApproval		
-aws_s3_bucket_public_access_block	bucket	Identity		UIVisible	Never		AlwaysReplace
-aws_s3_bucket_public_access_block	id	Identity		UIVisible	Never		
-aws_s3_bucket_public_access_block	ignore_public_acls	Tuning	Security	RileyVisible	RequiresApproval		
-aws_s3_bucket_public_access_block	restrict_public_buckets	Tuning	Security	RileyVisible	RequiresApproval		
-aws_s3_bucket_server_side_encryption_configuration	bucket	Identity		UIVisible	Never		AlwaysReplace
-aws_s3_bucket_server_side_encryption_configuration	expected_bucket_owner	Identity		UIVisible	Never		
-aws_s3_bucket_server_side_encryption_configuration	id	Identity		UIVisible	Never		
-aws_s3_bucket_server_side_encryption_configuration	rule.apply_server_side_encryption_by_default.kms_master_key_id	Wiring	Security	RileyVisible	RelationshipOnly		MayReplace
-aws_s3_bucket_server_side_encryption_configuration	rule.apply_server_side_encryption_by_default.sse_algorithm	Tuning	Security	RileyVisible	RequiresApproval		
-aws_s3_bucket_server_side_encryption_configuration	rule.bucket_key_enabled	Tuning	Security	RileyVisible	ChatSafe		
-aws_s3_bucket_versioning	bucket	Identity		UIVisible	Never		AlwaysReplace
-aws_s3_bucket_versioning	expected_bucket_owner	Identity		UIVisible	Never		
-aws_s3_bucket_versioning	id	Identity		UIVisible	Never		
-aws_s3_bucket_versioning	mfa	Tuning	Security	UIVisible	SystemOnly		
-aws_s3_bucket_versioning	versioning_configuration.mfa_delete	Tuning	Security	RileyVisible	RequiresApproval		
-aws_s3_bucket_versioning	versioning_configuration.status	Tuning	Reliability	RileyVisible	ChatSafe		
 aws_secretsmanager_secret	arn	Identity		UIVisible	Never		
 aws_secretsmanager_secret	description	Tuning		RileyVisible	ChatSafe		
 aws_secretsmanager_secret	kms_key_id	Wiring	Security	RileyVisible	RelationshipOnly		
@@ -305,13 +226,6 @@ google_cloud_run_v2_service	timeouts	Tuning		Hidden	SystemOnly
 google_cloud_run_v2_service	traffic.percent	Tuning	Reliability	UIVisible	ChatSafe		
 google_cloud_run_v2_service	traffic.revision	Wiring	Reliability	RileyVisible	RelationshipOnly		
 google_cloud_run_v2_service	traffic.type	Tuning	Reliability	UIVisible	ChatSafe		
-google_cloud_run_v2_service_iam_member	etag	Identity		RileyVisible	Never		
-google_cloud_run_v2_service_iam_member	id	Identity		RileyVisible	Never		
-google_cloud_run_v2_service_iam_member	location	Identity		UIVisible	Never		AlwaysReplace
-google_cloud_run_v2_service_iam_member	member	Identity		UIVisible	Never		AlwaysReplace
-google_cloud_run_v2_service_iam_member	name	Identity		UIVisible	Never		AlwaysReplace
-google_cloud_run_v2_service_iam_member	project	Identity		UIVisible	Never		AlwaysReplace
-google_cloud_run_v2_service_iam_member	role	Identity		UIVisible	Never		AlwaysReplace
 google_cloudbuild_trigger	approval_config.approval_required	Tuning	Reliability	UIVisible	RequiresApproval		
 google_cloudbuild_trigger	description	Tuning		RileyVisible	ChatSafe		
 google_cloudbuild_trigger	disabled	Tuning	Reliability	UIVisible	ChatSafe		
@@ -371,13 +285,6 @@ google_cloudfunctions2_function	service_config.vpc_connector	Wiring	Reliability	
 google_cloudfunctions2_function	service_config.vpc_connector_egress_settings	Tuning	Security	RileyVisible	ChatSafe		
 google_cloudfunctions2_function	terraform_labels	Tuning		Hidden	SystemOnly	Redacted	
 google_cloudfunctions2_function	timeouts	Tuning		Hidden	SystemOnly		
-google_cloudfunctions2_function_iam_member	cloud_function	Identity		UIVisible	Never		AlwaysReplace
-google_cloudfunctions2_function_iam_member	etag	Identity		RileyVisible	Never		
-google_cloudfunctions2_function_iam_member	id	Identity		RileyVisible	Never		
-google_cloudfunctions2_function_iam_member	location	Identity		UIVisible	Never		AlwaysReplace
-google_cloudfunctions2_function_iam_member	member	Identity		UIVisible	Never		AlwaysReplace
-google_cloudfunctions2_function_iam_member	project	Identity		UIVisible	Never		AlwaysReplace
-google_cloudfunctions2_function_iam_member	role	Identity		UIVisible	Never		AlwaysReplace
 google_compute_address	address	Tuning		UIVisible	Never		AlwaysReplace
 google_compute_address	address_type	Tuning		RileyVisible	Never		AlwaysReplace
 google_compute_address	description	Tuning		RileyVisible	ChatSafe		
@@ -747,6 +654,14 @@ google_identity_platform_config	id	Identity		RileyVisible	Never
 google_identity_platform_config	name	Identity		UIVisible	Never		
 google_identity_platform_config	project	Identity		UIVisible	Never		AlwaysReplace
 google_identity_platform_config	timeouts	Tuning		Hidden	SystemOnly		
+google_identity_platform_default_supported_idp_config	client_id	Tuning		Hidden	SystemOnly	Redacted	
+google_identity_platform_default_supported_idp_config	client_secret	Tuning		Hidden	SystemOnly	Redacted	
+google_identity_platform_default_supported_idp_config	enabled	Tuning	Security	UIVisible	ChatSafe		
+google_identity_platform_default_supported_idp_config	id	Identity		RileyVisible	Never		
+google_identity_platform_default_supported_idp_config	idp_id	Identity		UIVisible	Never		AlwaysReplace
+google_identity_platform_default_supported_idp_config	name	Identity		UIVisible	Never		
+google_identity_platform_default_supported_idp_config	project	Identity		UIVisible	Never		AlwaysReplace
+google_identity_platform_default_supported_idp_config	timeouts	Tuning		Hidden	SystemOnly		
 google_kms_crypto_key	crypto_key_backend	Wiring	Security	RileyVisible	RelationshipOnly		AlwaysReplace
 google_kms_crypto_key	destroy_scheduled_duration	Tuning	Reliability	RileyVisible	RequiresApproval		
 google_kms_crypto_key	effective_labels	Tuning		Hidden	SystemOnly	Redacted	
@@ -762,11 +677,6 @@ google_kms_crypto_key	terraform_labels	Tuning		Hidden	SystemOnly	Redacted
 google_kms_crypto_key	timeouts	Tuning		Hidden	SystemOnly		
 google_kms_crypto_key	version_template.algorithm	Tuning	Security	UIVisible	RequiresApproval		
 google_kms_crypto_key	version_template.protection_level	Tuning	Security	UIVisible	Never		AlwaysReplace
-google_kms_crypto_key_iam_binding	crypto_key_id	Identity		UIVisible	Never		AlwaysReplace
-google_kms_crypto_key_iam_binding	etag	Identity		RileyVisible	Never		
-google_kms_crypto_key_iam_binding	id	Identity		RileyVisible	Never		
-google_kms_crypto_key_iam_binding	members	Tuning	Security	UIVisible	RequiresApproval		InPlace
-google_kms_crypto_key_iam_binding	role	Identity		UIVisible	Never		AlwaysReplace
 google_kms_key_ring	id	Identity		RileyVisible	Never		
 google_kms_key_ring	location	Identity		UIVisible	Never		AlwaysReplace
 google_kms_key_ring	name	Identity		UIVisible	Never		
@@ -818,17 +728,6 @@ google_monitoring_notification_channel	sensitive_labels	Tuning		Hidden	SystemOnl
 google_monitoring_notification_channel	timeouts	Tuning		Hidden	SystemOnly		
 google_monitoring_notification_channel	type	Identity		UIVisible	Never		AlwaysReplace
 google_monitoring_notification_channel	user_labels	Tuning		Hidden	SystemOnly	Redacted	
-google_project_iam_member	etag	Identity		RileyVisible	Never		
-google_project_iam_member	id	Identity		RileyVisible	Never		
-google_project_iam_member	member	Identity		UIVisible	Never		AlwaysReplace
-google_project_iam_member	project	Identity		UIVisible	Never		AlwaysReplace
-google_project_iam_member	role	Identity		UIVisible	Never		AlwaysReplace
-google_project_service	disable_dependent_services	Tuning		RileyVisible	ChatSafe		
-google_project_service	disable_on_destroy	Tuning		RileyVisible	ChatSafe		
-google_project_service	id	Identity		RileyVisible	Never		
-google_project_service	project	Identity		UIVisible	Never		AlwaysReplace
-google_project_service	service	Identity		UIVisible	Never		AlwaysReplace
-google_project_service	timeouts	Tuning		Hidden	SystemOnly		
 google_pubsub_subscription	ack_deadline_seconds	Tuning	Reliability	RileyVisible	ChatSafe		
 google_pubsub_subscription	bigquery_config.drop_unknown_fields	Tuning		RileyVisible	ChatSafe		
 google_pubsub_subscription	bigquery_config.service_account_email	Wiring	Security	RileyVisible	RelationshipOnly		
@@ -937,29 +836,6 @@ google_secret_manager_secret	timeouts	Tuning		Hidden	SystemOnly
 google_secret_manager_secret	topics.name	Wiring	Reliability	RileyVisible	RelationshipOnly		
 google_secret_manager_secret	ttl	Tuning	Reliability	RileyVisible	ChatSafe		
 google_secret_manager_secret	version_destroy_ttl	Tuning	Reliability	RileyVisible	ChatSafe		
-google_secret_manager_secret_iam_binding	etag	Identity		RileyVisible	Never		
-google_secret_manager_secret_iam_binding	id	Identity		RileyVisible	Never		
-google_secret_manager_secret_iam_binding	members	Tuning	Security	UIVisible	RequiresApproval		InPlace
-google_secret_manager_secret_iam_binding	project	Identity		UIVisible	Never		AlwaysReplace
-google_secret_manager_secret_iam_binding	role	Identity		UIVisible	Never		AlwaysReplace
-google_secret_manager_secret_iam_binding	secret_id	Identity		UIVisible	Never		AlwaysReplace
-google_secret_manager_secret_iam_member	etag	Identity		RileyVisible	Never		
-google_secret_manager_secret_iam_member	id	Identity		RileyVisible	Never		
-google_secret_manager_secret_iam_member	member	Identity		UIVisible	Never		AlwaysReplace
-google_secret_manager_secret_iam_member	project	Identity		UIVisible	Never		AlwaysReplace
-google_secret_manager_secret_iam_member	role	Identity		UIVisible	Never		AlwaysReplace
-google_secret_manager_secret_iam_member	secret_id	Identity		UIVisible	Never		AlwaysReplace
-google_secret_manager_secret_version	create_time	Identity		RileyVisible	Never		
-google_secret_manager_secret_version	deletion_policy	Tuning	Reliability	RileyVisible	ChatSafe		
-google_secret_manager_secret_version	destroy_time	Identity		RileyVisible	Never		
-google_secret_manager_secret_version	enabled	Tuning	Security	UIVisible	ChatSafe		
-google_secret_manager_secret_version	id	Identity		RileyVisible	Never		
-google_secret_manager_secret_version	is_secret_data_base64	Tuning		Hidden	SystemOnly	Redacted	
-google_secret_manager_secret_version	name	Identity		UIVisible	Never		
-google_secret_manager_secret_version	secret	Wiring	Security	UIVisible	RelationshipOnly		AlwaysReplace
-google_secret_manager_secret_version	secret_data	Tuning		Hidden	SystemOnly	Redacted	
-google_secret_manager_secret_version	timeouts	Tuning		Hidden	SystemOnly		
-google_secret_manager_secret_version	version	Identity		UIVisible	Never		
 google_service_account	account_id	Identity		UIVisible	Never		AlwaysReplace
 google_service_account	create_ignore_already_exists	Tuning		RileyVisible	RequiresApproval		
 google_service_account	description	Tuning		RileyVisible	ChatSafe		
@@ -972,14 +848,6 @@ google_service_account	name	Identity		UIVisible	Never
 google_service_account	project	Identity		UIVisible	Never		AlwaysReplace
 google_service_account	timeouts	Tuning		Hidden	SystemOnly		
 google_service_account	unique_id	Identity		RileyVisible	Never		
-google_service_networking_connection	deletion_policy	Tuning		RileyVisible	ChatSafe		
-google_service_networking_connection	id	Identity		RileyVisible	Never		
-google_service_networking_connection	network	Identity		UIVisible	Never		AlwaysReplace
-google_service_networking_connection	peering	Identity		RileyVisible	Never		
-google_service_networking_connection	reserved_peering_ranges	Wiring	Reliability	UIVisible	RelationshipOnly		
-google_service_networking_connection	service	Identity		UIVisible	Never		AlwaysReplace
-google_service_networking_connection	timeouts	Tuning		Hidden	SystemOnly		
-google_service_networking_connection	update_on_creation_fail	Tuning		RileyVisible	ChatSafe		
 google_sql_database_instance	database_version	Identity		UIVisible	RequiresApproval		
 google_sql_database_instance	deletion_protection	Tuning	Reliability	UIVisible	RequiresApproval		
 google_sql_database_instance	encryption_key_name	Wiring	Security	UIVisible	RelationshipOnly		AlwaysReplace
@@ -1065,11 +933,33 @@ google_storage_bucket	url	Identity		RileyVisible	Never
 google_storage_bucket	versioning.enabled	Tuning	Reliability	RileyVisible	ChatSafe		
 google_storage_bucket	website.main_page_suffix	Tuning		RileyVisible	ChatSafe		
 google_storage_bucket	website.not_found_page	Tuning		RileyVisible	ChatSafe		
-google_storage_bucket_iam_member	bucket	Identity		UIVisible	Never		AlwaysReplace
-google_storage_bucket_iam_member	etag	Identity		RileyVisible	Never		
-google_storage_bucket_iam_member	id	Identity		RileyVisible	Never		
-google_storage_bucket_iam_member	member	Identity		UIVisible	Never		AlwaysReplace
-google_storage_bucket_iam_member	role	Identity		UIVisible	Never		AlwaysReplace
+google_storage_bucket_object	bucket	Wiring	Reliability	UIVisible	RelationshipOnly		AlwaysReplace
+google_storage_bucket_object	cache_control	Tuning	Performance	RileyVisible	ChatSafe		
+google_storage_bucket_object	content	Tuning		Hidden	SystemOnly	Redacted	
+google_storage_bucket_object	content_disposition	Tuning		RileyVisible	ChatSafe		
+google_storage_bucket_object	content_encoding	Tuning		RileyVisible	ChatSafe		
+google_storage_bucket_object	content_language	Tuning		RileyVisible	ChatSafe		
+google_storage_bucket_object	content_type	Tuning		UIVisible	ChatSafe		
+google_storage_bucket_object	crc32c	Identity		RileyVisible	Never		
+google_storage_bucket_object	customer_encryption.encryption_algorithm	Tuning		Hidden	SystemOnly	Redacted	
+google_storage_bucket_object	customer_encryption.encryption_key	Tuning		Hidden	SystemOnly	Redacted	
+google_storage_bucket_object	detect_md5hash	Tuning		RileyVisible	Never		
+google_storage_bucket_object	event_based_hold	Tuning	Reliability	RileyVisible	RequiresApproval		
+google_storage_bucket_object	generation	Identity		RileyVisible	Never		
+google_storage_bucket_object	id	Identity		RileyVisible	Never		
+google_storage_bucket_object	kms_key_name	Wiring	Security	RileyVisible	RelationshipOnly		
+google_storage_bucket_object	md5hash	Identity		RileyVisible	Never		
+google_storage_bucket_object	media_link	Identity		RileyVisible	Never		
+google_storage_bucket_object	metadata	Tuning		Hidden	SystemOnly	Redacted	
+google_storage_bucket_object	name	Identity		UIVisible	Never		AlwaysReplace
+google_storage_bucket_object	output_name	Identity		RileyVisible	Never		
+google_storage_bucket_object	retention.mode	Tuning	Reliability	RileyVisible	RequiresApproval		
+google_storage_bucket_object	retention.retain_until_time	Tuning	Reliability	RileyVisible	RequiresApproval		
+google_storage_bucket_object	self_link	Identity		RileyVisible	Never		
+google_storage_bucket_object	source	Tuning		Hidden	SystemOnly	Redacted	
+google_storage_bucket_object	storage_class	Tuning	Performance	RileyVisible	ChatSafe		
+google_storage_bucket_object	temporary_hold	Tuning	Reliability	RileyVisible	RequiresApproval		
+google_storage_bucket_object	timeouts	Tuning		Hidden	SystemOnly		
 google_vertex_ai_dataset	display_name	Tuning		UIVisible	ChatSafe		
 google_vertex_ai_dataset	effective_labels	Tuning		Hidden	SystemOnly	Redacted	
 google_vertex_ai_dataset	encryption_spec.kms_key_name	Wiring	Security	UIVisible	RelationshipOnly		AlwaysReplace
@@ -1081,20 +971,3 @@ google_vertex_ai_dataset	project	Identity		UIVisible	Never		AlwaysReplace
 google_vertex_ai_dataset	region	Identity		UIVisible	Never		AlwaysReplace
 google_vertex_ai_dataset	terraform_labels	Tuning		Hidden	SystemOnly	Redacted	
 google_vertex_ai_dataset	timeouts	Tuning		Hidden	SystemOnly		
-google_vpc_access_connector	connected_projects	Wiring	Reliability	RileyVisible	Never		
-google_vpc_access_connector	id	Identity		RileyVisible	Never		
-google_vpc_access_connector	ip_cidr_range	Wiring	Reliability	RileyVisible	RelationshipOnly		AlwaysReplace
-google_vpc_access_connector	machine_type	Tuning	Performance	RileyVisible	ChatSafe		
-google_vpc_access_connector	max_instances	Tuning	Performance	RileyVisible	ChatSafe		
-google_vpc_access_connector	max_throughput	Tuning	Performance	RileyVisible	ChatSafe		
-google_vpc_access_connector	min_instances	Tuning	Performance	RileyVisible	ChatSafe		
-google_vpc_access_connector	min_throughput	Tuning	Performance	RileyVisible	ChatSafe		
-google_vpc_access_connector	name	Identity		UIVisible	Never		AlwaysReplace
-google_vpc_access_connector	network	Wiring	Reliability	UIVisible	RelationshipOnly		AlwaysReplace
-google_vpc_access_connector	project	Identity		UIVisible	Never		AlwaysReplace
-google_vpc_access_connector	region	Identity		UIVisible	Never		AlwaysReplace
-google_vpc_access_connector	self_link	Identity		RileyVisible	Never		
-google_vpc_access_connector	state	Identity		RileyVisible	Never		
-google_vpc_access_connector	subnet.name	Wiring	Reliability	RileyVisible	RelationshipOnly		AlwaysReplace
-google_vpc_access_connector	subnet.project_id	Wiring	Reliability	RileyVisible	RelationshipOnly		
-google_vpc_access_connector	timeouts	Tuning		Hidden	SystemOnly		
