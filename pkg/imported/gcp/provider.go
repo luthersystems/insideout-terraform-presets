@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"sort"
 
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/gcpdiscover"
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/progress"
@@ -233,23 +232,13 @@ func (p *Provider) CompareDrift(tfType string, snapshot, live imp.Attrs) []imp.F
 	return p.comparer(tfType, snapshot, live)
 }
 
-// AgentContext returns a one-line-per-IR summary sorted by Address —
-// see aws.Provider.AgentContext for the contract; this is the
-// one-for-one mirror.
+// AgentContext returns the per-Terraform-type policy block + per-instance
+// value rows an interactive agent reads at chat-context build time —
+// see imp.RenderAgentContext for the output shape and ordering rules.
+// The GCP impl mirrors the AWS impl: both delegate to the shared
+// helper because the rendering is cloud-agnostic (#517).
 func (p *Provider) AgentContext(irs []imported.ImportedResource) []string {
-	if len(irs) == 0 {
-		return nil
-	}
-	sorted := make([]imported.ImportedResource, len(irs))
-	copy(sorted, irs)
-	sort.SliceStable(sorted, func(i, j int) bool {
-		return sorted[i].Identity.Address < sorted[j].Identity.Address
-	})
-	out := make([]string, 0, len(sorted))
-	for _, ir := range sorted {
-		out = append(out, fmt.Sprintf("%s (%s)", ir.Identity.Address, ir.Identity.Type))
-	}
-	return out
+	return imp.RenderAgentContext(irs)
 }
 
 // init registers the GCP Provider constructor with the top-level

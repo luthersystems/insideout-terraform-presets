@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"sort"
 
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/awsdiscover"
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/progress"
@@ -290,28 +289,14 @@ func (p *Provider) CompareDrift(tfType string, snapshot, live imp.Attrs) []imp.F
 	return p.comparer(tfType, snapshot, live)
 }
 
-// AgentContext returns a one-line-per-IR summary sorted by Address.
-// Conservative format: `<address> (<type>)`. The downstream interactive
-// agent layers richer formatting on top; this is the cross-cloud
-// baseline.
-//
-// Sort key is Identity.Address — sorting the formatted output strings
-// is equivalent today (since the format starts with the Address), but
-// pinning on the source field decouples the contract from the format.
+// AgentContext returns the per-Terraform-type policy block + per-instance
+// value rows an interactive agent reads at chat-context build time. The
+// rendering is cloud-agnostic — everything it touches (policy.Lookup,
+// VisibleFieldsFor, ir.Identity, ir.Attrs) is cross-cloud — so the
+// AWS impl delegates to the shared imp.RenderAgentContext helper.
+// See that helper's doc for the output shape and ordering rules (#517).
 func (p *Provider) AgentContext(irs []imported.ImportedResource) []string {
-	if len(irs) == 0 {
-		return nil
-	}
-	sorted := make([]imported.ImportedResource, len(irs))
-	copy(sorted, irs)
-	sort.SliceStable(sorted, func(i, j int) bool {
-		return sorted[i].Identity.Address < sorted[j].Identity.Address
-	})
-	out := make([]string, 0, len(sorted))
-	for _, ir := range sorted {
-		out = append(out, fmt.Sprintf("%s (%s)", ir.Identity.Address, ir.Identity.Type))
-	}
-	return out
+	return imp.RenderAgentContext(irs)
 }
 
 // init registers the AWS Provider constructor with the top-level

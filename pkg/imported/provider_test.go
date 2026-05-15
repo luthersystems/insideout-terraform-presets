@@ -7,6 +7,7 @@ import (
 	composerimported "github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported/policy"
 	imp "github.com/luthersystems/insideout-terraform-presets/pkg/imported"
+
 	// Side-effect imports populate the Provider registry.
 	_ "github.com/luthersystems/insideout-terraform-presets/pkg/imported/aws"
 	_ "github.com/luthersystems/insideout-terraform-presets/pkg/imported/gcp"
