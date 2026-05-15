@@ -144,6 +144,26 @@ func TestIdentityPlatformConfigEnricher_NilIdentity(t *testing.T) {
 	assert.Contains(t, err.Error(), "nil identity")
 }
 
+func TestIdentityPlatformConfigEnricher_ProjectMismatch_Surfaces(t *testing.T) {
+	t.Parallel()
+	// Identity.ImportID is the provider's import shape for this
+	// singleton — it must equal Clients.ProjectID. If they disagree we
+	// surface the mismatch instead of silently fetching the wrong
+	// project's config under this Identity.
+	e := &identityPlatformConfigEnricher{
+		fetch: func(_ context.Context, _ *identitytoolkitv2.Service, _ string) (*identitytoolkitv2.GoogleCloudIdentitytoolkitAdminV2Config, error) {
+			t.Fatal("fetch must not be called on a project mismatch")
+			return nil, nil
+		},
+	}
+	id := &imported.ResourceIdentity{Type: identityPlatformConfigTFType, ImportID: "wrong-project"}
+	_, err := e.EnrichByID(context.Background(), id, EnrichClients{IdentityToolkit: &identitytoolkitv2.Service{}, ProjectID: "right-project"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "project mismatch")
+	assert.Contains(t, err.Error(), "wrong-project")
+	assert.Contains(t, err.Error(), "right-project")
+}
+
 func TestMapIdentityPlatformConfig_NilSafe(t *testing.T) {
 	t.Parallel()
 	got := mapIdentityPlatformConfig(nil, "p")

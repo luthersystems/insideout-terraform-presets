@@ -63,12 +63,21 @@ func (e identityPlatformConfigEnricher) EnrichByID(ctx context.Context, identity
 	return e.fetchTyped(ctx, identity, c)
 }
 
-func (e identityPlatformConfigEnricher) fetchTyped(ctx context.Context, _ *imported.ResourceIdentity, c EnrichClients) (json.RawMessage, error) {
+func (e identityPlatformConfigEnricher) fetchTyped(ctx context.Context, id *imported.ResourceIdentity, c EnrichClients) (json.RawMessage, error) {
 	if c.IdentityToolkit == nil {
 		return nil, ErrEnrichClientUnavailable
 	}
 	if c.ProjectID == "" {
 		return nil, fmt.Errorf("identity_platform_config: EnrichClients.ProjectID required (singleton resource name is projects/<p>/config)")
+	}
+	// Identity Platform's Config is a project-scoped singleton: the
+	// provider's import shape is the project ID itself. When the caller
+	// supplies both an Identity.ImportID and a Clients.ProjectID they
+	// MUST agree — otherwise we'd silently fetch the wrong project's
+	// config and write it under this resource's identity. Surface the
+	// mismatch instead of guessing.
+	if id != nil && id.ImportID != "" && id.ImportID != c.ProjectID {
+		return nil, fmt.Errorf("identity_platform_config: project mismatch: Identity.ImportID=%q vs EnrichClients.ProjectID=%q", id.ImportID, c.ProjectID)
 	}
 	fullName := fmt.Sprintf("projects/%s/config", c.ProjectID)
 	cfg, err := e.fetch(ctx, c.IdentityToolkit, fullName)

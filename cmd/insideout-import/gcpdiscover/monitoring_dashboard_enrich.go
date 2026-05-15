@@ -121,9 +121,25 @@ func isMonitoringDashboardNotFound(err error) bool {
 // mapMonitoringDashboard converts a *monitoringv1.Dashboard into the
 // typed Layer-1 *generated.GoogleMonitoringDashboard. The dashboard
 // content is serialized to JSON and stored in the dashboard_json
-// attribute. Outer-schema fields (Name, Etag) are zeroed before
-// marshalling so the JSON shape matches what the provider's own read
-// produces.
+// attribute. Outer-schema fields (Name, Etag) are stripped from the
+// JSON payload so the shape matches what the provider's own read
+// produces — `name` is the resource's fully-qualified ID and `etag`
+// is provider-managed concurrency metadata, neither belongs inside
+// the inner dashboard_json blob. DisplayName is deliberately KEPT
+// because the provider's dashboard_json contract includes it as the
+// canonical display label.
+//
+// Implementation note: we deliberately go through a JSON round-trip
+// (Marshal → unmarshal into a map → delete outer-schema keys →
+// re-Marshal) instead of a `clone := *d` shallow copy. The SDK
+// Dashboard struct holds pointer fields for its layout variants
+// (GridLayout, MosaicLayout, RowLayout, ColumnLayout) and a slice of
+// pointer-valued labels; a shallow struct copy would share those
+// pointers with the caller, so any future code that mutated the
+// clone's nested layout fields would corrupt the upstream SDK
+// response. Marshalling through a map breaks that aliasing completely
+// at the cost of a single extra encode/decode pass per dashboard
+// (dashboards are small and rate-limited).
 func mapMonitoringDashboard(d *monitoringv1.Dashboard, projectID string) (*generated.GoogleMonitoringDashboard, error) {
 	out := &generated.GoogleMonitoringDashboard{}
 	if projectID != "" {
@@ -132,15 +148,27 @@ func mapMonitoringDashboard(d *monitoringv1.Dashboard, projectID string) (*gener
 	if d == nil {
 		return out, nil
 	}
-	// Clone the dashboard so we can strip TF-outer-schema fields
-	// without mutating the caller's copy.
-	clone := *d
-	clone.Name = ""
-	clone.Etag = ""
-	clone.ServerResponse = googleapi.ServerResponse{}
-	payload, err := json.Marshal(&clone)
+	rawIn, err := json.Marshal(d)
 	if err != nil {
-		return nil, fmt.Errorf("marshal dashboard payload: %w", err)
+		return nil, fmt.Errorf("marshal dashboard for round-trip: %w", err)
+	}
+	// Decode into a map so we can strip outer-schema keys without
+	// sharing any pointer state with the caller's *monitoringv1.Dashboard.
+	asMap := map[string]json.RawMessage{}
+	if err := json.Unmarshal(rawIn, &asMap); err != nil {
+		return nil, fmt.Errorf("unmarshal dashboard for round-trip: %w", err)
+	}
+	// TF provider's monitoring_dashboard resource hoists `name`
+	// (fully-qualified ID) out and never surfaces `etag`. Strip both
+	// so dashboard_json matches what the provider reads back.
+	// google.golang.org/api SDKs do NOT include the ServerResponse
+	// field in their JSON output (no JSON tag), so no explicit delete
+	// is required for it.
+	delete(asMap, "name")
+	delete(asMap, "etag")
+	payload, err := json.Marshal(asMap)
+	if err != nil {
+		return nil, fmt.Errorf("remarshal dashboard payload: %w", err)
 	}
 	if len(payload) > 0 && string(payload) != "{}" {
 		out.DashboardJSON = generated.LiteralOf(string(payload))
