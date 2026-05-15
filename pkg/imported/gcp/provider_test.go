@@ -216,10 +216,27 @@ func TestProvider_EnrichAttributes_WrongCloud(t *testing.T) {
 	}
 }
 
+// TestProvider_CapabilitiesParity — see aws/provider_test.go for the
+// full doc; the GCP enrichableNoByID exemption mirrors the 5 pre-Phase-2
+// GCP enrichers that satisfy AttributeEnricher but not ByIDEnricher
+// yet. Bundle 1's compute_address / compute_firewall implement both, so
+// they're NOT in the exemption list — the strong parity direction
+// guards them.
 func TestProvider_CapabilitiesParity(t *testing.T) {
 	t.Parallel()
 	d := gcpdiscover.NewGCPDiscoverer(nil, "test-project", gcpdiscover.GCPDiscovererOpts{})
 	p := gcpprov.NewProvider(d, nil)
+
+	// Types whose AttributeEnricher exists but doesn't satisfy
+	// ByIDEnricher yet. Mirrors notImplemented in
+	// cmd/insideout-import/gcpdiscover/byid_enricher_test.go.
+	enrichableNoByID := map[string]bool{
+		"google_storage_bucket":        true,
+		"google_pubsub_topic":          true,
+		"google_pubsub_subscription":   true,
+		"google_secret_manager_secret": true,
+		"google_compute_network":       true,
+	}
 
 	for _, tfType := range p.SupportedTypes() {
 		caps := p.Capabilities(tfType)
@@ -230,14 +247,12 @@ func TestProvider_CapabilitiesParity(t *testing.T) {
 		_, err := p.EnrichByID(context.Background(), id, imp.Clients{GCP: gcpprov.Clients{}})
 
 		notImpl := errors.Is(err, imp.ErrEnrichByIDNotImplemented)
-		if caps.Enrichable && notImpl {
-			// Same weaker parity as AWS — Enrichable=true with no
-			// ByIDEnricher is an allowed transitional state for
-			// types whose enricher hasn't yet been extended.
-			continue
-		}
-		if !caps.Enrichable && !notImpl {
+
+		switch {
+		case !caps.Enrichable && !notImpl:
 			t.Errorf("%s: Enrichable=false but EnrichByID returned %v; want ErrEnrichByIDNotImplemented", tfType, err)
+		case caps.Enrichable && notImpl && !enrichableNoByID[tfType]:
+			t.Errorf("%s: Enrichable=true but EnrichByID returned ErrEnrichByIDNotImplemented (add to enrichableNoByID exemption if intentional, else wire ByIDEnricher impl)", tfType)
 		}
 	}
 }

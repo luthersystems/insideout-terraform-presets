@@ -2,6 +2,8 @@ package imported
 
 import (
 	"fmt"
+	"sort"
+	"sync"
 )
 
 // ProviderConstructor builds a Provider for one cloud. Per-cloud
@@ -20,12 +22,20 @@ import (
 // the same downgrade-friendly contract used elsewhere.
 type ProviderConstructor func() Provider
 
-var providerRegistry = map[string]ProviderConstructor{}
+var (
+	registryMu       sync.RWMutex
+	providerRegistry = map[string]ProviderConstructor{}
+)
 
 // Register pins a ProviderConstructor for a cloud string. Called
 // from per-cloud package init() functions; callers outside the
 // per-cloud packages should not invoke this directly. Panics on
 // duplicate registration to surface accidental double-init.
+//
+// Concurrency: in production Register is called at init() time
+// before any ProviderFor calls — sequentially — so the mutex is a
+// defense-in-depth measure for the (currently hypothetical) case
+// where a runtime Register lands and races with ProviderFor.
 func Register(cloud string, ctor ProviderConstructor) {
 	if cloud == "" {
 		panic("imported.Register: empty cloud")
@@ -33,6 +43,8 @@ func Register(cloud string, ctor ProviderConstructor) {
 	if ctor == nil {
 		panic("imported.Register: nil constructor")
 	}
+	registryMu.Lock()
+	defer registryMu.Unlock()
 	if _, dup := providerRegistry[cloud]; dup {
 		panic(fmt.Sprintf("imported.Register: duplicate registration for %q", cloud))
 	}
@@ -49,7 +61,9 @@ func Register(cloud string, ctor ProviderConstructor) {
 // pkg/imported/gcp.NewProvider, passing the appropriate
 // AWSDiscoverer / GCPDiscoverer.
 func ProviderFor(cloud string) (Provider, error) {
+	registryMu.RLock()
 	ctor, ok := providerRegistry[cloud]
+	registryMu.RUnlock()
 	if !ok {
 		return nil, fmt.Errorf("%w: %q", ErrUnknownCloud, cloud)
 	}
@@ -60,17 +74,12 @@ func ProviderFor(cloud string) (Provider, error) {
 // registered Provider. Used by tests and by the eventual codegen
 // pipeline to enumerate the cloud surface.
 func RegisteredClouds() []string {
+	registryMu.RLock()
+	defer registryMu.RUnlock()
 	out := make([]string, 0, len(providerRegistry))
 	for k := range providerRegistry {
 		out = append(out, k)
 	}
-	// Sort to keep the surface deterministic without a sort import
-	// at the call site. Bubble-sort because the slice is tiny
-	// (2 entries today, never expected to exceed ~5).
-	for i := 1; i < len(out); i++ {
-		for j := i; j > 0 && out[j-1] > out[j]; j-- {
-			out[j-1], out[j] = out[j], out[j-1]
-		}
-	}
+	sort.Strings(out)
 	return out
 }

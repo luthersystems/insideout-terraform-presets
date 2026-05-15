@@ -83,9 +83,11 @@ func TestBuildDependenciesMap_KnownEdges(t *testing.T) {
 		want   []string
 	}{
 		// google_compute_address has both `network` and `subnetwork`
-		// fields (both point at google_compute_network per crossRefMap).
-		// The deduped edge list is one entry.
-		{tfType: "google_compute_address", want: []string{"google_compute_network"}},
+		// fields. The crossRefMap maps `network` → google_compute_network
+		// and `subnetwork` → google_compute_subnetwork (subnetworks are a
+		// distinct resource type from networks — qa-professor caught the
+		// earlier draft pinning both to the same target).
+		{tfType: "google_compute_address", want: []string{"google_compute_network", "google_compute_subnetwork"}},
 		// aws_lambda_function has a `role` field (IAM role) and a
 		// `kms_key_arn` field (KMS key).
 		{tfType: "aws_lambda_function", want: []string{"aws_iam_role", "aws_kms_key"}},

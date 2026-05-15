@@ -44,7 +44,7 @@ import (
 var crossRefMap = map[string]string{
 	// GCP — compute graph
 	"network":    "google_compute_network",
-	"subnetwork": "google_compute_network",
+	"subnetwork": "google_compute_subnetwork",
 	// GCP — KMS
 	"kms_key_name": "google_kms_crypto_key",
 	// AWS — IAM

@@ -90,7 +90,7 @@ func TestBuildCapabilitiesMap_KnownEntries(t *testing.T) {
 	// At least one curated policy on each cloud declares ChatSafe /
 	// RequiresApproval edits — pick one well-known type per cloud to
 	// pin the wiring. If a future curation pass downgrades every
-	// field on these types to non-Riley-editable, the test will fail
+	// field on these types to non-agent-editable, the test will fail
 	// loud; update the fixture to a different type that still
 	// carries editable fields.
 	for _, tfType := range []string{
@@ -104,6 +104,28 @@ func TestBuildCapabilitiesMap_KnownEntries(t *testing.T) {
 		}
 		if !row.AgentEditable {
 			t.Errorf("%s: AgentEditable = false, want true (curated policy has ChatSafe / RequiresApproval entries)", tfType)
+		}
+	}
+
+	// Pin Enrichable for the Bundle 1 enricher types so a regression
+	// that drops Enrichable from the row (e.g., a typo collapsing it
+	// to always-false) fails loud. These types have registered
+	// AttributeEnrichers in NewAWSDiscoverer / NewGCPDiscoverer.
+	for _, tfType := range []string{
+		"aws_cloudwatch_log_group",
+		"aws_secretsmanager_secret",
+		"aws_dynamodb_table",
+		"google_compute_address",
+		"google_compute_firewall",
+		"google_storage_bucket",
+	} {
+		row, ok := got[tfType]
+		if !ok {
+			t.Errorf("%s: missing from emitted capabilities map", tfType)
+			continue
+		}
+		if !row.Enrichable {
+			t.Errorf("%s: Enrichable = false, want true (type has registered AttributeEnricher)", tfType)
 		}
 	}
 }

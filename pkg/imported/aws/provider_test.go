@@ -2,7 +2,6 @@ package aws_test
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"testing"
 
@@ -302,15 +301,32 @@ func TestProvider_Discover_PassesThrough(t *testing.T) {
 	}
 }
 
-// TestProvider_CapabilitiesParity tests that for every registered type,
-// Capabilities(t).Enrichable agrees with what EnrichByID actually does.
-// Specifically: types with Enrichable=true should NOT return
-// ErrEnrichByIDNotImplemented (they may return other errors due to
-// nil SDK clients, but the enricher is present).
+// TestProvider_CapabilitiesParity pins bidirectional agreement between
+// Capabilities(t).Enrichable and the EnrichByID dispatch result:
+//
+//   - Enrichable=false ⇒ EnrichByID returns ErrEnrichByIDNotImplemented.
+//     If a type isn't enrichable, the by-ID path must NOT silently work.
+//   - Enrichable=true AND tfType not in enrichableNoByID ⇒ EnrichByID
+//     must NOT return ErrEnrichByIDNotImplemented (it may return other
+//     errors from nil SDK clients, but the by-ID dispatcher must
+//     resolve to a real impl).
+//
+// The enrichableNoByID exemption list pins the known state where a
+// type has an AttributeEnricher but not a ByIDEnricher today
+// (aws_dynamodb_table per byid_enricher_test.go's notImplemented
+// allowlist). When Phase 2 lands a real ByIDEnricher for dynamodb,
+// drop the entry — the test will then guard that direction too.
 func TestProvider_CapabilitiesParity(t *testing.T) {
 	t.Parallel()
 	d := awsdiscover.NewAWSDiscoverer(awssdk.Config{})
 	p := awsprov.NewProvider(d, nil)
+
+	// Types whose AttributeEnricher exists but doesn't satisfy
+	// ByIDEnricher yet. Mirrors notImplemented in
+	// cmd/insideout-import/awsdiscover/byid_enricher_test.go.
+	enrichableNoByID := map[string]bool{
+		"aws_dynamodb_table": true,
+	}
 
 	for _, tfType := range p.SupportedTypes() {
 		caps := p.Capabilities(tfType)
@@ -322,25 +338,12 @@ func TestProvider_CapabilitiesParity(t *testing.T) {
 		_, err := p.EnrichByID(context.Background(), id, imp.Clients{AWS: awsprov.Clients{}})
 
 		notImpl := errors.Is(err, imp.ErrEnrichByIDNotImplemented)
-		if caps.Enrichable && notImpl {
-			// Enrichable=true but no ByIDEnricher — that's an
-			// allowed state today (aws_dynamodb_table per
-			// byid_enricher_test.go). The parity contract we
-			// enforce is the WEAKER one: Enrichable=false MUST
-			// imply ErrEnrichByIDNotImplemented.
-			continue
-		}
-		if !caps.Enrichable && !notImpl {
-			t.Errorf("%s: Enrichable=false but EnrichByID returned %v; want ErrEnrichByIDNotImplemented", tfType, err)
-		}
-	}
-}
 
-func TestProvider_EnrichByID_RawMessageRoundtrip(t *testing.T) {
-	t.Parallel()
-	// Ensure Attrs is a json.RawMessage at the type level.
-	var a imp.Attrs = json.RawMessage(`{"k":1}`)
-	if string(a) != `{"k":1}` {
-		t.Errorf("Attrs round-trip: got %q", string(a))
+		switch {
+		case !caps.Enrichable && !notImpl:
+			t.Errorf("%s: Enrichable=false but EnrichByID returned %v; want ErrEnrichByIDNotImplemented", tfType, err)
+		case caps.Enrichable && notImpl && !enrichableNoByID[tfType]:
+			t.Errorf("%s: Enrichable=true but EnrichByID returned ErrEnrichByIDNotImplemented (add to enrichableNoByID exemption if intentional, else wire ByIDEnricher impl)", tfType)
+		}
 	}
 }
