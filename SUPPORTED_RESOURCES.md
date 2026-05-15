@@ -23,7 +23,7 @@ and is checked in lockstep with the runtime registries. See the
 ## Summary
 
 - **AWS:** 109 types · 100% Discoverable · 86% Enrichable · 3% DriftDetectable · 0% MetricsAvailable · 6% AgentEditable
-- **GCP:** 54 types · 100% Discoverable · 56% Enrichable · 4% DriftDetectable · 0% MetricsAvailable · 65% AgentEditable
+- **GCP:** 54 types · 100% Discoverable · 65% Enrichable · 4% DriftDetectable · 0% MetricsAvailable · 74% AgentEditable
 
 ## AWS
 
@@ -152,19 +152,19 @@ and is checked in lockstep with the runtime registries. See the
 | `google_cloudfunctions2_function` | ✓ | ✓ | – | – | ✓ |
 | `google_cloudfunctions2_function_iam_member` | ✓ | – | – | – | – |
 | `google_compute_address` | ✓ | ✓ | – | – | ✓ |
-| `google_compute_backend_service` | ✓ | – | – | – | – |
+| `google_compute_backend_service` | ✓ | ✓ | – | – | ✓ |
 | `google_compute_firewall` | ✓ | ✓ | – | – | ✓ |
 | `google_compute_forwarding_rule` | ✓ | ✓ | – | – | ✓ |
 | `google_compute_global_address` | ✓ | ✓ | – | – | ✓ |
 | `google_compute_global_forwarding_rule` | ✓ | ✓ | – | – | ✓ |
-| `google_compute_health_check` | ✓ | – | – | – | – |
+| `google_compute_health_check` | ✓ | ✓ | – | – | ✓ |
 | `google_compute_instance` | ✓ | ✓ | – | – | ✓ |
-| `google_compute_managed_ssl_certificate` | ✓ | – | – | – | – |
+| `google_compute_managed_ssl_certificate` | ✓ | ✓ | – | – | ✓ |
 | `google_compute_network` | ✓ | ✓ | – | – | ✓ |
-| `google_compute_resource_policy` | ✓ | – | – | – | – |
+| `google_compute_resource_policy` | ✓ | ✓ | – | – | ✓ |
 | `google_compute_router` | ✓ | ✓ | – | – | ✓ |
 | `google_compute_security_policy` | ✓ | ✓ | – | – | ✓ |
-| `google_compute_target_http_proxy` | ✓ | – | – | – | – |
+| `google_compute_target_http_proxy` | ✓ | ✓ | – | – | ✓ |
 | `google_compute_target_https_proxy` | ✓ | ✓ | – | – | ✓ |
 | `google_compute_url_map` | ✓ | ✓ | – | – | ✓ |
 | `google_container_cluster` | ✓ | ✓ | – | – | ✓ |
