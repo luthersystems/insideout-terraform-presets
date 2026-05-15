@@ -28,6 +28,14 @@ var seededTypes = []string{
 	"google_compute_instance",
 	"google_container_cluster",
 	"google_storage_bucket_object",
+	"aws_cloudfront_distribution",
+	"aws_msk_cluster",
+	"aws_elasticache_replication_group",
+	"aws_efs_file_system",
+	"aws_opensearch_domain",
+	"google_compute_backend_service",
+	"google_vertex_ai_dataset",
+	"google_logging_project_sink",
 }
 
 // seededBindings mirrors the registrations performed by init(). Used
@@ -201,6 +209,62 @@ var seededBindings = map[string]ComponentMetricsBinding{
 		DimensionKey:   "bucket_name",
 		DimensionFrom:  "name",
 		DefaultMetrics: []string{"storage.googleapis.com/storage/object_count"},
+	},
+	"aws_cloudfront_distribution": {
+		Service:        "cloudfront",
+		Action:         "get-metrics",
+		DimensionKey:   "DistributionId",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"Requests", "BytesDownloaded", "4xxErrorRate", "5xxErrorRate"},
+	},
+	"aws_msk_cluster": {
+		Service:        "kafka",
+		Action:         "get-metrics",
+		DimensionKey:   "ClusterName",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"BytesInPerSec", "BytesOutPerSec", "CpuIdle", "MemoryUsed"},
+	},
+	"aws_elasticache_replication_group": {
+		Service:        "elasticache",
+		Action:         "get-metrics",
+		DimensionKey:   "ReplicationGroupId",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"CPUUtilization", "DatabaseMemoryUsagePercentage", "CurrConnections"},
+	},
+	"aws_efs_file_system": {
+		Service:        "efs",
+		Action:         "get-metrics",
+		DimensionKey:   "FileSystemId",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"TotalIOBytes", "BurstCreditBalance", "PercentIOLimit"},
+	},
+	"aws_opensearch_domain": {
+		Service:        "es",
+		Action:         "get-metrics",
+		DimensionKey:   "DomainName",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"ClusterStatus.green", "SearchableDocuments", "CPUUtilization", "JVMMemoryPressure"},
+	},
+	"google_compute_backend_service": {
+		Service:        "loadbalancing",
+		Action:         "timeseries-list",
+		DimensionKey:   "backend_target_name",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"loadbalancing.googleapis.com/https/backend_request_count", "loadbalancing.googleapis.com/https/backend_latencies"},
+	},
+	"google_vertex_ai_dataset": {
+		Service:        "aiplatform",
+		Action:         "timeseries-list",
+		DimensionKey:   "dataset_id",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"aiplatform.googleapis.com/dataset/data_count"},
+	},
+	"google_logging_project_sink": {
+		Service:        "logging",
+		Action:         "timeseries-list",
+		DimensionKey:   "sink_name",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"logging.googleapis.com/exports/byte_count", "logging.googleapis.com/exports/log_entry_count"},
 	},
 }
 

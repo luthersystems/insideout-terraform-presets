@@ -24,8 +24,8 @@ func reseed(t *testing.T) {
 func TestSeededBindings(t *testing.T) {
 	reseed(t)
 
-	require.GreaterOrEqual(t, len(RegisteredTypes()), 24,
-		"expected at least 24 seeded types, got %d", len(RegisteredTypes()))
+	require.GreaterOrEqual(t, len(RegisteredTypes()), 32,
+		"expected at least 32 seeded types, got %d", len(RegisteredTypes()))
 
 	for _, tfType := range seededTypes {
 		tfType := tfType
