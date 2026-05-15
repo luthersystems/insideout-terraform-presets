@@ -7,16 +7,16 @@ import "reflect"
 // AWSCloudwatchLogGroup is the generated Layer 1 typed model for the
 // `aws_cloudwatch_log_group` Terraform resource.
 type AWSCloudwatchLogGroup struct {
-	ARN             *Value[string]            `tf:"arn"`
-	ID              *Value[string]            `tf:"id"`
-	KMSKeyID        *Value[string]            `tf:"kms_key_id"`
-	LogGroupClass   *Value[string]            `tf:"log_group_class"`
-	Name            *Value[string]            `tf:"name"`
-	NamePrefix      *Value[string]            `tf:"name_prefix"`
-	RetentionInDays *Value[int64]             `tf:"retention_in_days"`
-	SkipDestroy     *Value[bool]              `tf:"skip_destroy"`
-	Tags            map[string]*Value[string] `tf:"tags"`
-	TagsAll         map[string]*Value[string] `tf:"tags_all"`
+	ARN             *Value[string]            `tf:"arn" json:"arn,omitempty"`
+	ID              *Value[string]            `tf:"id" json:"id,omitempty"`
+	KMSKeyID        *Value[string]            `tf:"kms_key_id" json:"kms_key_id,omitempty"`
+	LogGroupClass   *Value[string]            `tf:"log_group_class" json:"log_group_class,omitempty"`
+	Name            *Value[string]            `tf:"name" json:"name,omitempty"`
+	NamePrefix      *Value[string]            `tf:"name_prefix" json:"name_prefix,omitempty"`
+	RetentionInDays *Value[int64]             `tf:"retention_in_days" json:"retention_in_days,omitempty"`
+	SkipDestroy     *Value[bool]              `tf:"skip_destroy" json:"skip_destroy,omitempty"`
+	Tags            map[string]*Value[string] `tf:"tags" json:"tags,omitempty"`
+	TagsAll         map[string]*Value[string] `tf:"tags_all" json:"tags_all,omitempty"`
 }
 
 // AWSCloudwatchLogGroupSchema describes provider metadata for each attribute / nested

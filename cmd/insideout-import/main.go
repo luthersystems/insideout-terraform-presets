@@ -4,7 +4,7 @@
 // Subcommands:
 //
 //	adopt     Emit `import {}` blocks against an already-known preset stack.
-//	          Customer/Riley supplies (target address, cloud import ID) pairs;
+//	          Customer / interactive agent supplies (target address, cloud import ID) pairs;
 //	          the CLI writes imports.tf next to the stack and (optionally)
 //	          runs `terraform plan -json` to verify the plan is import-only.
 //	          See cmd/insideout-import/README.md.

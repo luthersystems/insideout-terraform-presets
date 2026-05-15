@@ -30,7 +30,7 @@ const (
 	CodeWiringChatEditable          = "wiring_chat_editable"           // Wiring fields can't be ChatSafe (#33)
 	CodeTagFieldNotSystemOnly       = "tag_field_not_system_only"      // tags/labels/annotations must be SystemOnly
 	CodeIdentityEditable            = "identity_editable"              // top-level identity attrs must be Edit=Never
-	CodeHiddenChatEditable          = "hidden_chat_editable"           // Riley can't edit what it can't see
+	CodeHiddenChatEditable          = "hidden_chat_editable"           // the interactive agent can't edit what it can't see
 	CodeSensitiveChatEditable       = "sensitive_chat_editable"        // Sensitive values must not flow through chat
 	CodeIdentitySensitive           = "identity_sensitive"             // Identity fields are not sensitive values
 )
@@ -168,10 +168,10 @@ func lintEntry(tfType, path string, fp FieldPolicy) []Issue {
 			"Role=Wiring is incompatible with Edit=ChatSafe; use RelationshipOnly, RequiresApproval, or Never (decision #33)")
 	}
 
-	// Riley cannot edit what it cannot see.
+	// The interactive agent cannot edit what it cannot see.
 	if fp.Visibility == VisibilityHidden && fp.Edit == EditChatSafe {
 		add(CodeHiddenChatEditable,
-			"Visibility=Hidden is incompatible with Edit=ChatSafe; Riley cannot edit what it cannot see")
+			"Visibility=Hidden is incompatible with Edit=ChatSafe; the interactive agent cannot edit what it cannot see")
 	}
 
 	// Sensitive values must not flow through chat. RequiresApproval

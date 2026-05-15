@@ -7,31 +7,31 @@ import "reflect"
 // GoogleVertexAiDataset is the generated Layer 1 typed model for the
 // `google_vertex_ai_dataset` Terraform resource.
 type GoogleVertexAiDataset struct {
-	CreateTime        *Value[string]                        `tf:"create_time"`
-	DisplayName       *Value[string]                        `tf:"display_name"`
-	EffectiveLabels   map[string]*Value[string]             `tf:"effective_labels"`
-	ID                *Value[string]                        `tf:"id"`
-	Labels            map[string]*Value[string]             `tf:"labels"`
-	MetadataSchemaURI *Value[string]                        `tf:"metadata_schema_uri"`
-	Name              *Value[string]                        `tf:"name"`
-	Project           *Value[string]                        `tf:"project"`
-	Region            *Value[string]                        `tf:"region"`
-	TerraformLabels   map[string]*Value[string]             `tf:"terraform_labels"`
-	UpdateTime        *Value[string]                        `tf:"update_time"`
-	EncryptionSpec    []GoogleVertexAiDatasetEncryptionSpec `tf:"encryption_spec,blocks"`
-	Timeouts          *GoogleVertexAiDatasetTimeouts        `tf:"timeouts,block"`
+	CreateTime        *Value[string]                        `tf:"create_time" json:"create_time,omitempty"`
+	DisplayName       *Value[string]                        `tf:"display_name" json:"display_name,omitempty"`
+	EffectiveLabels   map[string]*Value[string]             `tf:"effective_labels" json:"effective_labels,omitempty"`
+	ID                *Value[string]                        `tf:"id" json:"id,omitempty"`
+	Labels            map[string]*Value[string]             `tf:"labels" json:"labels,omitempty"`
+	MetadataSchemaURI *Value[string]                        `tf:"metadata_schema_uri" json:"metadata_schema_uri,omitempty"`
+	Name              *Value[string]                        `tf:"name" json:"name,omitempty"`
+	Project           *Value[string]                        `tf:"project" json:"project,omitempty"`
+	Region            *Value[string]                        `tf:"region" json:"region,omitempty"`
+	TerraformLabels   map[string]*Value[string]             `tf:"terraform_labels" json:"terraform_labels,omitempty"`
+	UpdateTime        *Value[string]                        `tf:"update_time" json:"update_time,omitempty"`
+	EncryptionSpec    []GoogleVertexAiDatasetEncryptionSpec `tf:"encryption_spec,blocks" json:"encryption_spec,omitempty"`
+	Timeouts          *GoogleVertexAiDatasetTimeouts        `tf:"timeouts,block" json:"timeouts,omitempty"`
 }
 
 // GoogleVertexAiDatasetEncryptionSpec is a nested-block type used by the parent resource.
 type GoogleVertexAiDatasetEncryptionSpec struct {
-	KMSKeyName *Value[string] `tf:"kms_key_name"`
+	KMSKeyName *Value[string] `tf:"kms_key_name" json:"kms_key_name,omitempty"`
 }
 
 // GoogleVertexAiDatasetTimeouts is a nested-block type used by the parent resource.
 type GoogleVertexAiDatasetTimeouts struct {
-	Create *Value[string] `tf:"create"`
-	Delete *Value[string] `tf:"delete"`
-	Update *Value[string] `tf:"update"`
+	Create *Value[string] `tf:"create" json:"create,omitempty"`
+	Delete *Value[string] `tf:"delete" json:"delete,omitempty"`
+	Update *Value[string] `tf:"update" json:"update,omitempty"`
 }
 
 // GoogleVertexAiDatasetSchema describes provider metadata for each attribute / nested

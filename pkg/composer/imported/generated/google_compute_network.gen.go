@@ -7,28 +7,28 @@ import "reflect"
 // GoogleComputeNetwork is the generated Layer 1 typed model for the
 // `google_compute_network` Terraform resource.
 type GoogleComputeNetwork struct {
-	AutoCreateSubnetworks                 *Value[bool]                  `tf:"auto_create_subnetworks"`
-	DeleteDefaultRoutesOnCreate           *Value[bool]                  `tf:"delete_default_routes_on_create"`
-	Description                           *Value[string]                `tf:"description"`
-	EnableUlaInternalIPV6                 *Value[bool]                  `tf:"enable_ula_internal_ipv6"`
-	GatewayIPV4                           *Value[string]                `tf:"gateway_ipv4"`
-	ID                                    *Value[string]                `tf:"id"`
-	InternalIPV6Range                     *Value[string]                `tf:"internal_ipv6_range"`
-	Mtu                                   *Value[float64]               `tf:"mtu"`
-	Name                                  *Value[string]                `tf:"name"`
-	NetworkFirewallPolicyEnforcementOrder *Value[string]                `tf:"network_firewall_policy_enforcement_order"`
-	NumericID                             *Value[string]                `tf:"numeric_id"`
-	Project                               *Value[string]                `tf:"project"`
-	RoutingMode                           *Value[string]                `tf:"routing_mode"`
-	SelfLink                              *Value[string]                `tf:"self_link"`
-	Timeouts                              *GoogleComputeNetworkTimeouts `tf:"timeouts,block"`
+	AutoCreateSubnetworks                 *Value[bool]                  `tf:"auto_create_subnetworks" json:"auto_create_subnetworks,omitempty"`
+	DeleteDefaultRoutesOnCreate           *Value[bool]                  `tf:"delete_default_routes_on_create" json:"delete_default_routes_on_create,omitempty"`
+	Description                           *Value[string]                `tf:"description" json:"description,omitempty"`
+	EnableUlaInternalIPV6                 *Value[bool]                  `tf:"enable_ula_internal_ipv6" json:"enable_ula_internal_ipv6,omitempty"`
+	GatewayIPV4                           *Value[string]                `tf:"gateway_ipv4" json:"gateway_ipv4,omitempty"`
+	ID                                    *Value[string]                `tf:"id" json:"id,omitempty"`
+	InternalIPV6Range                     *Value[string]                `tf:"internal_ipv6_range" json:"internal_ipv6_range,omitempty"`
+	Mtu                                   *Value[float64]               `tf:"mtu" json:"mtu,omitempty"`
+	Name                                  *Value[string]                `tf:"name" json:"name,omitempty"`
+	NetworkFirewallPolicyEnforcementOrder *Value[string]                `tf:"network_firewall_policy_enforcement_order" json:"network_firewall_policy_enforcement_order,omitempty"`
+	NumericID                             *Value[string]                `tf:"numeric_id" json:"numeric_id,omitempty"`
+	Project                               *Value[string]                `tf:"project" json:"project,omitempty"`
+	RoutingMode                           *Value[string]                `tf:"routing_mode" json:"routing_mode,omitempty"`
+	SelfLink                              *Value[string]                `tf:"self_link" json:"self_link,omitempty"`
+	Timeouts                              *GoogleComputeNetworkTimeouts `tf:"timeouts,block" json:"timeouts,omitempty"`
 }
 
 // GoogleComputeNetworkTimeouts is a nested-block type used by the parent resource.
 type GoogleComputeNetworkTimeouts struct {
-	Create *Value[string] `tf:"create"`
-	Delete *Value[string] `tf:"delete"`
-	Update *Value[string] `tf:"update"`
+	Create *Value[string] `tf:"create" json:"create,omitempty"`
+	Delete *Value[string] `tf:"delete" json:"delete,omitempty"`
+	Update *Value[string] `tf:"update" json:"update,omitempty"`
 }
 
 // GoogleComputeNetworkSchema describes provider metadata for each attribute / nested

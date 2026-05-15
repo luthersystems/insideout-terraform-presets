@@ -28,8 +28,8 @@ var awsSecretsmanagerSecretPolicy = Map{
 		Edit: EditRequiresApproval,
 	},
 
-	// Resource policy is an IAM JSON document — visible to Riley but
-	// each change requires explicit confirmation against the plan.
+	// Resource policy is an IAM JSON document — visible to the interactive
+	// agent but each change requires explicit confirmation against the plan.
 	"policy": {
 		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
 		Edit: EditRequiresApproval,

@@ -40,7 +40,7 @@ func TestEmitImportedTF_TypedAWS(t *testing.T) {
 			ImportID: "https://sqs.us-east-1.amazonaws.com/123/orders-DLQ",
 		},
 		Tier:  imported.TierImportedFlat,
-		Attrs: []byte(`{"Name":{"Literal":"orders-DLQ"},"FIFOQueue":{"Literal":false}}`),
+		Attrs: []byte(`{"name":{"literal":"orders-DLQ"},"fifo_queue":{"literal":false}}`),
 	}
 	out, used := EmitImportedTF("aws", []imported.ImportedResource{ir}, EmitImportedOpts{})
 	require.NotNil(t, out)
@@ -70,7 +70,7 @@ func TestEmitImportedTF_TypedGCP(t *testing.T) {
 			ImportID: "projects/my-project/topics/events",
 		},
 		Tier:  imported.TierImportedFlat,
-		Attrs: []byte(`{"Name":{"Literal":"events"}}`),
+		Attrs: []byte(`{"name":{"literal":"events"}}`),
 	}
 	out, used := EmitImportedTF("gcp", []imported.ImportedResource{ir}, EmitImportedOpts{})
 	require.NotNil(t, out)
@@ -270,12 +270,12 @@ func TestEmitImportedTF_CloudFiltering(t *testing.T) {
 		{
 			Identity: imported.ResourceIdentity{Cloud: "aws", Type: "aws_sqs_queue", Address: "aws_sqs_queue.x", ImportID: "x"},
 			Tier:     imported.TierImportedFlat,
-			Attrs:    []byte(`{"Name":{"Literal":"x"}}`),
+			Attrs:    []byte(`{"name":{"literal":"x"}}`),
 		},
 		{
 			Identity: imported.ResourceIdentity{Cloud: "gcp", Type: "google_pubsub_topic", Address: "google_pubsub_topic.y", ImportID: "y"},
 			Tier:     imported.TierImportedFlat,
-			Attrs:    []byte(`{"Name":{"Literal":"y"}}`),
+			Attrs:    []byte(`{"name":{"literal":"y"}}`),
 		},
 	}
 	out, used := EmitImportedTF("aws", irs, EmitImportedOpts{})
@@ -292,7 +292,7 @@ func TestEmitImportedTF_DeterministicOrder(t *testing.T) {
 		return imported.ImportedResource{
 			Identity: imported.ResourceIdentity{Cloud: "aws", Type: "aws_sqs_queue", Address: addr, ImportID: importID},
 			Tier:     imported.TierImportedFlat,
-			Attrs:    []byte(`{"Name":{"Literal":"x"}}`),
+			Attrs:    []byte(`{"name":{"literal":"x"}}`),
 		}
 	}
 	// Adversarial set: prefix-overlapping addresses ("b", "b_1"),
@@ -470,7 +470,7 @@ func TestEmitImportedTF_TypedDecodeFailureDropsRecord(t *testing.T) {
 			Cloud: "aws", Type: "aws_sqs_queue", Address: "aws_sqs_queue.good", ImportID: "good",
 		},
 		Tier:  imported.TierImportedFlat,
-		Attrs: []byte(`{"Name":{"Literal":"good"}}`),
+		Attrs: []byte(`{"name":{"literal":"good"}}`),
 	}
 	bad := imported.ImportedResource{
 		Identity: imported.ResourceIdentity{
@@ -624,17 +624,17 @@ func TestEmitImportedTF_ProvenanceTags(t *testing.T) {
 	awsIR := imported.ImportedResource{
 		Identity: imported.ResourceIdentity{Cloud: "aws", Type: "aws_sqs_queue", Address: "aws_sqs_queue.q", ImportID: "x"},
 		Tier:     imported.TierImportedFlat,
-		Attrs:    []byte(`{"Name":{"Literal":"q"}}`),
+		Attrs:    []byte(`{"name":{"literal":"q"}}`),
 	}
 	gcpIR := imported.ImportedResource{
 		Identity: imported.ResourceIdentity{Cloud: "gcp", Type: "google_storage_bucket", Address: "google_storage_bucket.b", ImportID: "b"},
 		Tier:     imported.TierImportedFlat,
-		Attrs:    []byte(`{"Name":{"Literal":"b"}}`),
+		Attrs:    []byte(`{"name":{"literal":"b"}}`),
 	}
 	gcpVPC := imported.ImportedResource{
 		Identity: imported.ResourceIdentity{Cloud: "gcp", Type: "google_compute_network", Address: "google_compute_network.vpc", ImportID: "vpc"},
 		Tier:     imported.TierImportedFlat,
-		Attrs:    []byte(`{"Name":{"Literal":"vpc"}}`),
+		Attrs:    []byte(`{"name":{"literal":"vpc"}}`),
 	}
 
 	opts := EmitImportedOpts{
@@ -674,7 +674,7 @@ func TestEmitImportedTF_ProvenanceDisabled(t *testing.T) {
 	ir := imported.ImportedResource{
 		Identity: imported.ResourceIdentity{Cloud: "aws", Type: "aws_sqs_queue", Address: "aws_sqs_queue.q", ImportID: "x"},
 		Tier:     imported.TierImportedFlat,
-		Attrs:    []byte(`{"Name":{"Literal":"q"}}`),
+		Attrs:    []byte(`{"name":{"literal":"q"}}`),
 	}
 	out, _ := EmitImportedTF("aws", []imported.ImportedResource{ir}, EmitImportedOpts{})
 	s := string(out)

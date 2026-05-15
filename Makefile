@@ -63,6 +63,16 @@ verify-gen: gen-imported ## Fail if regenerating produces a diff (CI gate).
 	    exit 1; \
 	fi
 
+SUPPORTED_RESOURCES_MD := SUPPORTED_RESOURCES.md
+
+.PHONY: regen-supported-resources
+regen-supported-resources: ## Regenerate SUPPORTED_RESOURCES.md from the capabilities matrix.
+	$(GO) run ./cmd/imported-codegen supported-resources --output $(SUPPORTED_RESOURCES_MD)
+
+.PHONY: verify-supported-resources
+verify-supported-resources: ## Fail if SUPPORTED_RESOURCES.md is stale (CI gate, #492).
+	$(GO) run ./cmd/imported-codegen supported-resources --check --output $(SUPPORTED_RESOURCES_MD)
+
 .PHONY: test
 test: ## Run go test -race for the whole module.
 	$(GO) test -race ./...

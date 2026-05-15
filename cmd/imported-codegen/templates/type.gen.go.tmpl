@@ -8,7 +8,7 @@ import "reflect"
 // `{{.TFType}}` Terraform resource.
 type {{.GoName}} struct {
 {{- range .Fields}}
-	{{.GoName}} {{.GoType}} {{backtick}}tf:"{{.TFName}}{{if .BlockKind}},{{.BlockKind}}{{end}}"{{backtick}}
+	{{.GoName}} {{.GoType}} {{backtick}}tf:"{{.TFName}}{{if .BlockKind}},{{.BlockKind}}{{end}}" json:"{{.TFName}},omitempty"{{backtick}}
 {{- end}}
 }
 
@@ -16,7 +16,7 @@ type {{.GoName}} struct {
 // {{.GoName}} is a nested-block type used by the parent resource.
 type {{.GoName}} struct {
 {{- range .Fields}}
-	{{.GoName}} {{.GoType}} {{backtick}}tf:"{{.TFName}}{{if .BlockKind}},{{.BlockKind}}{{end}}"{{backtick}}
+	{{.GoName}} {{.GoType}} {{backtick}}tf:"{{.TFName}}{{if .BlockKind}},{{.BlockKind}}{{end}}" json:"{{.TFName}},omitempty"{{backtick}}
 {{- end}}
 }
 {{end}}

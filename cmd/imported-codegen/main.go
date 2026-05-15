@@ -35,7 +35,7 @@
 //	capabilities [--output <path>]
 //	        Emit a per-type Capabilities matrix JSON
 //	        ({discoverable, enrichable, driftDetectable,
-//	         metricsAvailable, rileyEditable}) computed from the
+//	         metricsAvailable, agentEditable}) computed from the
 //	        upstream registries (presets#482).
 //
 //	dependencies [--output <path>]
@@ -47,6 +47,12 @@
 //	        Emit a per-type list of (path, DriftSemantic) entries for
 //	        every curated policy.Map field with a non-empty drift axis
 //	        (presets#482).
+//
+//	supported-resources --output <path> [--check]
+//	        Render SUPPORTED_RESOURCES.md from the same capabilities map
+//	        the `capabilities` subcommand emits as JSON. --check
+//	        regenerates to memory and exits non-zero on diff for CI
+//	        gating (presets#492).
 //
 // Default subcommand is `gen` so plain `imported-codegen --aws-schema=...`
 // works.
@@ -84,6 +90,8 @@ func main() {
 			os.Exit(runDependencies(os.Args[2:]))
 		case "drift-fields":
 			os.Exit(runDriftFields(os.Args[2:]))
+		case "supported-resources":
+			os.Exit(runSupportedResources(os.Args[2:]))
 		case "-h", "--help":
 			usage()
 			return
@@ -104,6 +112,7 @@ Subcommands:
   capabilities  emit per-type Capabilities matrix JSON (presets#482)
   dependencies  emit per-type cross-resource ref edge-list JSON (presets#482)
   drift-fields  emit per-type DriftSemantic field list JSON (presets#482)
+  supported-resources  render SUPPORTED_RESOURCES.md from the capabilities matrix (presets#492)
 
 Run 'imported-codegen <subcommand> --help' for subcommand flags.`)
 }

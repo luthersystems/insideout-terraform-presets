@@ -7,114 +7,114 @@ import "reflect"
 // AWSLambdaFunction is the generated Layer 1 typed model for the
 // `aws_lambda_function` Terraform resource.
 type AWSLambdaFunction struct {
-	Architectures                  []*Value[string]                    `tf:"architectures"`
-	ARN                            *Value[string]                      `tf:"arn"`
-	CodeSHA256                     *Value[string]                      `tf:"code_sha256"`
-	CodeSigningConfigARN           *Value[string]                      `tf:"code_signing_config_arn"`
-	Description                    *Value[string]                      `tf:"description"`
-	Filename                       *Value[string]                      `tf:"filename"`
-	FunctionName                   *Value[string]                      `tf:"function_name"`
-	Handler                        *Value[string]                      `tf:"handler"`
-	ID                             *Value[string]                      `tf:"id"`
-	ImageURI                       *Value[string]                      `tf:"image_uri"`
-	InvokeARN                      *Value[string]                      `tf:"invoke_arn"`
-	KMSKeyARN                      *Value[string]                      `tf:"kms_key_arn"`
-	LastModified                   *Value[string]                      `tf:"last_modified"`
-	Layers                         []*Value[string]                    `tf:"layers"`
-	MemorySize                     *Value[int64]                       `tf:"memory_size"`
-	PackageType                    *Value[string]                      `tf:"package_type"`
-	Publish                        *Value[bool]                        `tf:"publish"`
-	QualifiedARN                   *Value[string]                      `tf:"qualified_arn"`
-	QualifiedInvokeARN             *Value[string]                      `tf:"qualified_invoke_arn"`
-	ReplaceSecurityGroupsOnDestroy *Value[bool]                        `tf:"replace_security_groups_on_destroy"`
-	ReplacementSecurityGroupIDS    []*Value[string]                    `tf:"replacement_security_group_ids"`
-	ReservedConcurrentExecutions   *Value[int64]                       `tf:"reserved_concurrent_executions"`
-	Role                           *Value[string]                      `tf:"role"`
-	Runtime                        *Value[string]                      `tf:"runtime"`
-	S3Bucket                       *Value[string]                      `tf:"s3_bucket"`
-	S3Key                          *Value[string]                      `tf:"s3_key"`
-	S3ObjectVersion                *Value[string]                      `tf:"s3_object_version"`
-	SigningJobARN                  *Value[string]                      `tf:"signing_job_arn"`
-	SigningProfileVersionARN       *Value[string]                      `tf:"signing_profile_version_arn"`
-	SkipDestroy                    *Value[bool]                        `tf:"skip_destroy"`
-	SourceCodeHash                 *Value[string]                      `tf:"source_code_hash"`
-	SourceCodeSize                 *Value[int64]                       `tf:"source_code_size"`
-	Tags                           map[string]*Value[string]           `tf:"tags"`
-	TagsAll                        map[string]*Value[string]           `tf:"tags_all"`
-	Timeout                        *Value[int64]                       `tf:"timeout"`
-	Version                        *Value[string]                      `tf:"version"`
-	DeadLetterConfig               []AWSLambdaFunctionDeadLetterConfig `tf:"dead_letter_config,blocks"`
-	Environment                    []AWSLambdaFunctionEnvironment      `tf:"environment,blocks"`
-	EphemeralStorage               []AWSLambdaFunctionEphemeralStorage `tf:"ephemeral_storage,blocks"`
-	FileSystemConfig               []AWSLambdaFunctionFileSystemConfig `tf:"file_system_config,blocks"`
-	ImageConfig                    []AWSLambdaFunctionImageConfig      `tf:"image_config,blocks"`
-	LoggingConfig                  []AWSLambdaFunctionLoggingConfig    `tf:"logging_config,blocks"`
-	SnapStart                      []AWSLambdaFunctionSnapStart        `tf:"snap_start,blocks"`
-	Timeouts                       *AWSLambdaFunctionTimeouts          `tf:"timeouts,block"`
-	TracingConfig                  []AWSLambdaFunctionTracingConfig    `tf:"tracing_config,blocks"`
-	VPCConfig                      []AWSLambdaFunctionVPCConfig        `tf:"vpc_config,blocks"`
+	Architectures                  []*Value[string]                    `tf:"architectures" json:"architectures,omitempty"`
+	ARN                            *Value[string]                      `tf:"arn" json:"arn,omitempty"`
+	CodeSHA256                     *Value[string]                      `tf:"code_sha256" json:"code_sha256,omitempty"`
+	CodeSigningConfigARN           *Value[string]                      `tf:"code_signing_config_arn" json:"code_signing_config_arn,omitempty"`
+	Description                    *Value[string]                      `tf:"description" json:"description,omitempty"`
+	Filename                       *Value[string]                      `tf:"filename" json:"filename,omitempty"`
+	FunctionName                   *Value[string]                      `tf:"function_name" json:"function_name,omitempty"`
+	Handler                        *Value[string]                      `tf:"handler" json:"handler,omitempty"`
+	ID                             *Value[string]                      `tf:"id" json:"id,omitempty"`
+	ImageURI                       *Value[string]                      `tf:"image_uri" json:"image_uri,omitempty"`
+	InvokeARN                      *Value[string]                      `tf:"invoke_arn" json:"invoke_arn,omitempty"`
+	KMSKeyARN                      *Value[string]                      `tf:"kms_key_arn" json:"kms_key_arn,omitempty"`
+	LastModified                   *Value[string]                      `tf:"last_modified" json:"last_modified,omitempty"`
+	Layers                         []*Value[string]                    `tf:"layers" json:"layers,omitempty"`
+	MemorySize                     *Value[int64]                       `tf:"memory_size" json:"memory_size,omitempty"`
+	PackageType                    *Value[string]                      `tf:"package_type" json:"package_type,omitempty"`
+	Publish                        *Value[bool]                        `tf:"publish" json:"publish,omitempty"`
+	QualifiedARN                   *Value[string]                      `tf:"qualified_arn" json:"qualified_arn,omitempty"`
+	QualifiedInvokeARN             *Value[string]                      `tf:"qualified_invoke_arn" json:"qualified_invoke_arn,omitempty"`
+	ReplaceSecurityGroupsOnDestroy *Value[bool]                        `tf:"replace_security_groups_on_destroy" json:"replace_security_groups_on_destroy,omitempty"`
+	ReplacementSecurityGroupIDS    []*Value[string]                    `tf:"replacement_security_group_ids" json:"replacement_security_group_ids,omitempty"`
+	ReservedConcurrentExecutions   *Value[int64]                       `tf:"reserved_concurrent_executions" json:"reserved_concurrent_executions,omitempty"`
+	Role                           *Value[string]                      `tf:"role" json:"role,omitempty"`
+	Runtime                        *Value[string]                      `tf:"runtime" json:"runtime,omitempty"`
+	S3Bucket                       *Value[string]                      `tf:"s3_bucket" json:"s3_bucket,omitempty"`
+	S3Key                          *Value[string]                      `tf:"s3_key" json:"s3_key,omitempty"`
+	S3ObjectVersion                *Value[string]                      `tf:"s3_object_version" json:"s3_object_version,omitempty"`
+	SigningJobARN                  *Value[string]                      `tf:"signing_job_arn" json:"signing_job_arn,omitempty"`
+	SigningProfileVersionARN       *Value[string]                      `tf:"signing_profile_version_arn" json:"signing_profile_version_arn,omitempty"`
+	SkipDestroy                    *Value[bool]                        `tf:"skip_destroy" json:"skip_destroy,omitempty"`
+	SourceCodeHash                 *Value[string]                      `tf:"source_code_hash" json:"source_code_hash,omitempty"`
+	SourceCodeSize                 *Value[int64]                       `tf:"source_code_size" json:"source_code_size,omitempty"`
+	Tags                           map[string]*Value[string]           `tf:"tags" json:"tags,omitempty"`
+	TagsAll                        map[string]*Value[string]           `tf:"tags_all" json:"tags_all,omitempty"`
+	Timeout                        *Value[int64]                       `tf:"timeout" json:"timeout,omitempty"`
+	Version                        *Value[string]                      `tf:"version" json:"version,omitempty"`
+	DeadLetterConfig               []AWSLambdaFunctionDeadLetterConfig `tf:"dead_letter_config,blocks" json:"dead_letter_config,omitempty"`
+	Environment                    []AWSLambdaFunctionEnvironment      `tf:"environment,blocks" json:"environment,omitempty"`
+	EphemeralStorage               []AWSLambdaFunctionEphemeralStorage `tf:"ephemeral_storage,blocks" json:"ephemeral_storage,omitempty"`
+	FileSystemConfig               []AWSLambdaFunctionFileSystemConfig `tf:"file_system_config,blocks" json:"file_system_config,omitempty"`
+	ImageConfig                    []AWSLambdaFunctionImageConfig      `tf:"image_config,blocks" json:"image_config,omitempty"`
+	LoggingConfig                  []AWSLambdaFunctionLoggingConfig    `tf:"logging_config,blocks" json:"logging_config,omitempty"`
+	SnapStart                      []AWSLambdaFunctionSnapStart        `tf:"snap_start,blocks" json:"snap_start,omitempty"`
+	Timeouts                       *AWSLambdaFunctionTimeouts          `tf:"timeouts,block" json:"timeouts,omitempty"`
+	TracingConfig                  []AWSLambdaFunctionTracingConfig    `tf:"tracing_config,blocks" json:"tracing_config,omitempty"`
+	VPCConfig                      []AWSLambdaFunctionVPCConfig        `tf:"vpc_config,blocks" json:"vpc_config,omitempty"`
 }
 
 // AWSLambdaFunctionDeadLetterConfig is a nested-block type used by the parent resource.
 type AWSLambdaFunctionDeadLetterConfig struct {
-	TargetARN *Value[string] `tf:"target_arn"`
+	TargetARN *Value[string] `tf:"target_arn" json:"target_arn,omitempty"`
 }
 
 // AWSLambdaFunctionEnvironment is a nested-block type used by the parent resource.
 type AWSLambdaFunctionEnvironment struct {
-	Variables map[string]*Value[string] `tf:"variables"`
+	Variables map[string]*Value[string] `tf:"variables" json:"variables,omitempty"`
 }
 
 // AWSLambdaFunctionEphemeralStorage is a nested-block type used by the parent resource.
 type AWSLambdaFunctionEphemeralStorage struct {
-	Size *Value[float64] `tf:"size"`
+	Size *Value[float64] `tf:"size" json:"size,omitempty"`
 }
 
 // AWSLambdaFunctionFileSystemConfig is a nested-block type used by the parent resource.
 type AWSLambdaFunctionFileSystemConfig struct {
-	ARN            *Value[string] `tf:"arn"`
-	LocalMountPath *Value[string] `tf:"local_mount_path"`
+	ARN            *Value[string] `tf:"arn" json:"arn,omitempty"`
+	LocalMountPath *Value[string] `tf:"local_mount_path" json:"local_mount_path,omitempty"`
 }
 
 // AWSLambdaFunctionImageConfig is a nested-block type used by the parent resource.
 type AWSLambdaFunctionImageConfig struct {
-	Command          []*Value[string] `tf:"command"`
-	EntryPoint       []*Value[string] `tf:"entry_point"`
-	WorkingDirectory *Value[string]   `tf:"working_directory"`
+	Command          []*Value[string] `tf:"command" json:"command,omitempty"`
+	EntryPoint       []*Value[string] `tf:"entry_point" json:"entry_point,omitempty"`
+	WorkingDirectory *Value[string]   `tf:"working_directory" json:"working_directory,omitempty"`
 }
 
 // AWSLambdaFunctionLoggingConfig is a nested-block type used by the parent resource.
 type AWSLambdaFunctionLoggingConfig struct {
-	ApplicationLogLevel *Value[string] `tf:"application_log_level"`
-	LogFormat           *Value[string] `tf:"log_format"`
-	LogGroup            *Value[string] `tf:"log_group"`
-	SystemLogLevel      *Value[string] `tf:"system_log_level"`
+	ApplicationLogLevel *Value[string] `tf:"application_log_level" json:"application_log_level,omitempty"`
+	LogFormat           *Value[string] `tf:"log_format" json:"log_format,omitempty"`
+	LogGroup            *Value[string] `tf:"log_group" json:"log_group,omitempty"`
+	SystemLogLevel      *Value[string] `tf:"system_log_level" json:"system_log_level,omitempty"`
 }
 
 // AWSLambdaFunctionSnapStart is a nested-block type used by the parent resource.
 type AWSLambdaFunctionSnapStart struct {
-	ApplyOn            *Value[string] `tf:"apply_on"`
-	OptimizationStatus *Value[string] `tf:"optimization_status"`
+	ApplyOn            *Value[string] `tf:"apply_on" json:"apply_on,omitempty"`
+	OptimizationStatus *Value[string] `tf:"optimization_status" json:"optimization_status,omitempty"`
 }
 
 // AWSLambdaFunctionTimeouts is a nested-block type used by the parent resource.
 type AWSLambdaFunctionTimeouts struct {
-	Create *Value[string] `tf:"create"`
-	Delete *Value[string] `tf:"delete"`
-	Update *Value[string] `tf:"update"`
+	Create *Value[string] `tf:"create" json:"create,omitempty"`
+	Delete *Value[string] `tf:"delete" json:"delete,omitempty"`
+	Update *Value[string] `tf:"update" json:"update,omitempty"`
 }
 
 // AWSLambdaFunctionTracingConfig is a nested-block type used by the parent resource.
 type AWSLambdaFunctionTracingConfig struct {
-	Mode *Value[string] `tf:"mode"`
+	Mode *Value[string] `tf:"mode" json:"mode,omitempty"`
 }
 
 // AWSLambdaFunctionVPCConfig is a nested-block type used by the parent resource.
 type AWSLambdaFunctionVPCConfig struct {
-	IPV6AllowedForDualStack *Value[bool]     `tf:"ipv6_allowed_for_dual_stack"`
-	SecurityGroupIDS        []*Value[string] `tf:"security_group_ids"`
-	SubnetIDS               []*Value[string] `tf:"subnet_ids"`
-	VPCID                   *Value[string]   `tf:"vpc_id"`
+	IPV6AllowedForDualStack *Value[bool]     `tf:"ipv6_allowed_for_dual_stack" json:"ipv6_allowed_for_dual_stack,omitempty"`
+	SecurityGroupIDS        []*Value[string] `tf:"security_group_ids" json:"security_group_ids,omitempty"`
+	SubnetIDS               []*Value[string] `tf:"subnet_ids" json:"subnet_ids,omitempty"`
+	VPCID                   *Value[string]   `tf:"vpc_id" json:"vpc_id,omitempty"`
 }
 
 // AWSLambdaFunctionSchema describes provider metadata for each attribute / nested

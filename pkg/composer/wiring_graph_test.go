@@ -89,7 +89,7 @@ func TestExtractImportedEdges_PlainScalarsIgnored(t *testing.T) {
 
 // TestExtractImportedEdges_MultiSegmentTraversals pins the Variables()
 // contract for non-bare traversals: index access, deep attribute chains,
-// and repeated references. Each shape is what Riley wiring is allowed
+// and repeated references. Each shape is what agent wiring is allowed
 // to emit through a RawExpr value — a regression in classifyTraversal's
 // `len(tr) < 3` early-return or in HCL's traversal classification would
 // silently drop edges otherwise.
@@ -338,7 +338,7 @@ func TestExtractModuleToResourceEdges_RealResourceRef(t *testing.T) {
 	t.Parallel()
 
 	// Direct resource references in a module input do produce edges.
-	// This case is rare today (Riley wiring uses module outputs), but
+	// This case is rare today (agent wiring uses module outputs), but
 	// the validator must not regress when typed-wiring edits land.
 	blocks := []ModuleBlock{
 		{

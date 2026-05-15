@@ -19,7 +19,7 @@
 // resource type, registered through init() side effects. Adding or
 // expanding a policy is a reviewed code change — never a runtime
 // configuration. New generated provider fields default hidden,
-// system-owned, and not Riley-editable until a reviewed policy PR
+// system-owned, and not agent-editable until a reviewed policy PR
 // explicitly adds them. See docs/managed-resource-tiers.md decision #43.
 //
 // Consumers (composer emission #148, server-side validateImportedResources

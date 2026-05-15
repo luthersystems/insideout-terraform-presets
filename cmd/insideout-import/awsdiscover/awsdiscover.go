@@ -190,27 +190,56 @@ func NewAWSDiscovererWithConcurrency(cfg aws.Config, maxConcurrency int) *AWSDis
 	for _, soCfg := range sdkOnlySubresourceTypeConfigs {
 		byType[soCfg.TFType] = newSDKOnlySubresourceDiscoverer(soCfg, cfg, maxConcurrency)
 	}
+	// Per-type SDK attribute enrichers (#457). Each entry is a sibling
+	// to the byType discoverer of the same name and populates ir.Attrs
+	// (the typed Layer 1 payload). Types without an entry here are
+	// silently skipped by EnrichAttributes — the full enricher rollout
+	// follows the existing per-type ordering one PR at a time. Mirrors
+	// gcpdiscover.GCPDiscoverer (presets#403).
+	//
+	// Hand-rolled enrichers win as overrides over the generic Cloud
+	// Control fallback below — they produce strictly more correct
+	// payloads today (primary-name field aliasing, ARN normalization,
+	// tag-overlay fetches), per the PoC report in
+	// .tmp/cloud-control-enricher-poc.md. The Cloud Control enricher
+	// fills in the long tail of CC-routed types that have no hand-rolled
+	// override.
+	//
+	// (#493) S3 enricher landed: aws_s3_bucket is wired below. The
+	// hand-rolled enricher is the reliable path; once the Cloud Control
+	// unified enricher (#490) proves out S3 coverage, this registration
+	// can flip to the unified path and s3_bucket_enrich.go can be
+	// retired (the framework preserves the override capability for any
+	// per-type quirk the unified path doesn't model).
+	byTypeEnricher := map[string]AttributeEnricher{
+		"aws_cloudwatch_log_group":  newCloudWatchLogGroupEnricher(),
+		"aws_dynamodb_table":        newDynamoDBTableEnricher(),
+		"aws_s3_bucket":             newS3BucketEnricher(),
+		"aws_secretsmanager_secret": newSecretsManagerSecretEnricher(),
+	}
+	// HYBRID Cloud Control fallback (#490 steps 1+2): register one
+	// cloudControlEnricher for every TF type in cloudControlTypeConfigs
+	// that doesn't already have a hand-rolled override above. Hand-rolled
+	// wins; the loop iterates the same config the discoverer uses so the
+	// enricher coverage stays in lockstep with the listing coverage.
+	//
+	// The enricher's GetResource callback defaults to nil and is
+	// resolved at Enrich time from EnrichClients.CloudControl. Callers
+	// constructing EnrichClients without a CloudControl client see a
+	// per-resource ErrEnrichClientUnavailable warning (not a batch-fatal
+	// error) so a partial-credentials run still produces useful output
+	// from the hand-rolled enrichers.
+	for _, ccCfg := range cloudControlTypeConfigs {
+		if _, has := byTypeEnricher[ccCfg.TFType]; has {
+			continue
+		}
+		byTypeEnricher[ccCfg.TFType] = newCloudControlEnricher(ccCfg.TFType, ccCfg.CloudFormationType, nil)
+	}
 	return &AWSDiscoverer{
-		defaultRegion: cfg.Region,
-		byType:        byType,
-		rgtPrefetcher: newRealRGTPrefetcher(cfg),
-		// Per-type SDK attribute enrichers (#457). Each entry is a sibling
-		// to the byType discoverer of the same name and populates ir.Attrs
-		// (the typed Layer 1 payload). Types without an entry here are
-		// silently skipped by EnrichAttributes — the full enricher rollout
-		// follows the existing per-type ordering one PR at a time. Mirrors
-		// gcpdiscover.GCPDiscoverer (presets#403).
-		//
-		// aws_s3_bucket follows once presets bundle #461 lands the Layer
-		// 1 typed struct in pkg/composer/imported/generated. The S3
-		// enricher infrastructure (EnrichClients.S3 field, codegen
-		// support) is in place already so the wiring there is a one-line
-		// registration.
-		byTypeEnricher: map[string]AttributeEnricher{
-			"aws_cloudwatch_log_group":  newCloudWatchLogGroupEnricher(),
-			"aws_dynamodb_table":        newDynamoDBTableEnricher(),
-			"aws_secretsmanager_secret": newSecretsManagerSecretEnricher(),
-		},
+		defaultRegion:  cfg.Region,
+		byType:         byType,
+		rgtPrefetcher:  newRealRGTPrefetcher(cfg),
+		byTypeEnricher: byTypeEnricher,
 	}
 }
 

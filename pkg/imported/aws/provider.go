@@ -292,8 +292,8 @@ func (p *Provider) CompareDrift(tfType string, snapshot, live imp.Attrs) []imp.F
 
 // AgentContext returns a one-line-per-IR summary sorted by Address.
 // Conservative format: `<address> (<type>)`. The downstream interactive
-// agent (Riley today) layers richer formatting on top; this is the
-// cross-cloud baseline.
+// agent layers richer formatting on top; this is the cross-cloud
+// baseline.
 //
 // Sort key is Identity.Address — sorting the formatted output strings
 // is equivalent today (since the format starts with the Address), but

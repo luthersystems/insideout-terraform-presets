@@ -7,99 +7,99 @@ import "reflect"
 // GooglePubsubSubscription is the generated Layer 1 typed model for the
 // `google_pubsub_subscription` Terraform resource.
 type GooglePubsubSubscription struct {
-	AckDeadlineSeconds        *Value[int64]                                `tf:"ack_deadline_seconds"`
-	EffectiveLabels           map[string]*Value[string]                    `tf:"effective_labels"`
-	EnableExactlyOnceDelivery *Value[bool]                                 `tf:"enable_exactly_once_delivery"`
-	EnableMessageOrdering     *Value[bool]                                 `tf:"enable_message_ordering"`
-	Filter                    *Value[string]                               `tf:"filter"`
-	ID                        *Value[string]                               `tf:"id"`
-	Labels                    map[string]*Value[string]                    `tf:"labels"`
-	MessageRetentionDuration  *Value[string]                               `tf:"message_retention_duration"`
-	Name                      *Value[string]                               `tf:"name"`
-	Project                   *Value[string]                               `tf:"project"`
-	RetainAckedMessages       *Value[bool]                                 `tf:"retain_acked_messages"`
-	TerraformLabels           map[string]*Value[string]                    `tf:"terraform_labels"`
-	Topic                     *Value[string]                               `tf:"topic"`
-	BigqueryConfig            []GooglePubsubSubscriptionBigqueryConfig     `tf:"bigquery_config,blocks"`
-	CloudStorageConfig        []GooglePubsubSubscriptionCloudStorageConfig `tf:"cloud_storage_config,blocks"`
-	DeadLetterPolicy          []GooglePubsubSubscriptionDeadLetterPolicy   `tf:"dead_letter_policy,blocks"`
-	ExpirationPolicy          []GooglePubsubSubscriptionExpirationPolicy   `tf:"expiration_policy,blocks"`
-	PushConfig                []GooglePubsubSubscriptionPushConfig         `tf:"push_config,blocks"`
-	RetryPolicy               []GooglePubsubSubscriptionRetryPolicy        `tf:"retry_policy,blocks"`
-	Timeouts                  *GooglePubsubSubscriptionTimeouts            `tf:"timeouts,block"`
+	AckDeadlineSeconds        *Value[int64]                                `tf:"ack_deadline_seconds" json:"ack_deadline_seconds,omitempty"`
+	EffectiveLabels           map[string]*Value[string]                    `tf:"effective_labels" json:"effective_labels,omitempty"`
+	EnableExactlyOnceDelivery *Value[bool]                                 `tf:"enable_exactly_once_delivery" json:"enable_exactly_once_delivery,omitempty"`
+	EnableMessageOrdering     *Value[bool]                                 `tf:"enable_message_ordering" json:"enable_message_ordering,omitempty"`
+	Filter                    *Value[string]                               `tf:"filter" json:"filter,omitempty"`
+	ID                        *Value[string]                               `tf:"id" json:"id,omitempty"`
+	Labels                    map[string]*Value[string]                    `tf:"labels" json:"labels,omitempty"`
+	MessageRetentionDuration  *Value[string]                               `tf:"message_retention_duration" json:"message_retention_duration,omitempty"`
+	Name                      *Value[string]                               `tf:"name" json:"name,omitempty"`
+	Project                   *Value[string]                               `tf:"project" json:"project,omitempty"`
+	RetainAckedMessages       *Value[bool]                                 `tf:"retain_acked_messages" json:"retain_acked_messages,omitempty"`
+	TerraformLabels           map[string]*Value[string]                    `tf:"terraform_labels" json:"terraform_labels,omitempty"`
+	Topic                     *Value[string]                               `tf:"topic" json:"topic,omitempty"`
+	BigqueryConfig            []GooglePubsubSubscriptionBigqueryConfig     `tf:"bigquery_config,blocks" json:"bigquery_config,omitempty"`
+	CloudStorageConfig        []GooglePubsubSubscriptionCloudStorageConfig `tf:"cloud_storage_config,blocks" json:"cloud_storage_config,omitempty"`
+	DeadLetterPolicy          []GooglePubsubSubscriptionDeadLetterPolicy   `tf:"dead_letter_policy,blocks" json:"dead_letter_policy,omitempty"`
+	ExpirationPolicy          []GooglePubsubSubscriptionExpirationPolicy   `tf:"expiration_policy,blocks" json:"expiration_policy,omitempty"`
+	PushConfig                []GooglePubsubSubscriptionPushConfig         `tf:"push_config,blocks" json:"push_config,omitempty"`
+	RetryPolicy               []GooglePubsubSubscriptionRetryPolicy        `tf:"retry_policy,blocks" json:"retry_policy,omitempty"`
+	Timeouts                  *GooglePubsubSubscriptionTimeouts            `tf:"timeouts,block" json:"timeouts,omitempty"`
 }
 
 // GooglePubsubSubscriptionBigqueryConfig is a nested-block type used by the parent resource.
 type GooglePubsubSubscriptionBigqueryConfig struct {
-	DropUnknownFields   *Value[bool]   `tf:"drop_unknown_fields"`
-	ServiceAccountEmail *Value[string] `tf:"service_account_email"`
-	Table               *Value[string] `tf:"table"`
-	UseTableSchema      *Value[bool]   `tf:"use_table_schema"`
-	UseTopicSchema      *Value[bool]   `tf:"use_topic_schema"`
-	WriteMetadata       *Value[bool]   `tf:"write_metadata"`
+	DropUnknownFields   *Value[bool]   `tf:"drop_unknown_fields" json:"drop_unknown_fields,omitempty"`
+	ServiceAccountEmail *Value[string] `tf:"service_account_email" json:"service_account_email,omitempty"`
+	Table               *Value[string] `tf:"table" json:"table,omitempty"`
+	UseTableSchema      *Value[bool]   `tf:"use_table_schema" json:"use_table_schema,omitempty"`
+	UseTopicSchema      *Value[bool]   `tf:"use_topic_schema" json:"use_topic_schema,omitempty"`
+	WriteMetadata       *Value[bool]   `tf:"write_metadata" json:"write_metadata,omitempty"`
 }
 
 // GooglePubsubSubscriptionCloudStorageConfig is a nested-block type used by the parent resource.
 type GooglePubsubSubscriptionCloudStorageConfig struct {
-	Bucket                 *Value[string]                                         `tf:"bucket"`
-	FilenameDatetimeFormat *Value[string]                                         `tf:"filename_datetime_format"`
-	FilenamePrefix         *Value[string]                                         `tf:"filename_prefix"`
-	FilenameSuffix         *Value[string]                                         `tf:"filename_suffix"`
-	MaxBytes               *Value[int64]                                          `tf:"max_bytes"`
-	MaxDuration            *Value[string]                                         `tf:"max_duration"`
-	MaxMessages            *Value[int64]                                          `tf:"max_messages"`
-	ServiceAccountEmail    *Value[string]                                         `tf:"service_account_email"`
-	State                  *Value[string]                                         `tf:"state"`
-	AvroConfig             []GooglePubsubSubscriptionCloudStorageConfigAvroConfig `tf:"avro_config,blocks"`
+	Bucket                 *Value[string]                                         `tf:"bucket" json:"bucket,omitempty"`
+	FilenameDatetimeFormat *Value[string]                                         `tf:"filename_datetime_format" json:"filename_datetime_format,omitempty"`
+	FilenamePrefix         *Value[string]                                         `tf:"filename_prefix" json:"filename_prefix,omitempty"`
+	FilenameSuffix         *Value[string]                                         `tf:"filename_suffix" json:"filename_suffix,omitempty"`
+	MaxBytes               *Value[int64]                                          `tf:"max_bytes" json:"max_bytes,omitempty"`
+	MaxDuration            *Value[string]                                         `tf:"max_duration" json:"max_duration,omitempty"`
+	MaxMessages            *Value[int64]                                          `tf:"max_messages" json:"max_messages,omitempty"`
+	ServiceAccountEmail    *Value[string]                                         `tf:"service_account_email" json:"service_account_email,omitempty"`
+	State                  *Value[string]                                         `tf:"state" json:"state,omitempty"`
+	AvroConfig             []GooglePubsubSubscriptionCloudStorageConfigAvroConfig `tf:"avro_config,blocks" json:"avro_config,omitempty"`
 }
 
 // GooglePubsubSubscriptionCloudStorageConfigAvroConfig is a nested-block type used by the parent resource.
 type GooglePubsubSubscriptionCloudStorageConfigAvroConfig struct {
-	UseTopicSchema *Value[bool] `tf:"use_topic_schema"`
-	WriteMetadata  *Value[bool] `tf:"write_metadata"`
+	UseTopicSchema *Value[bool] `tf:"use_topic_schema" json:"use_topic_schema,omitempty"`
+	WriteMetadata  *Value[bool] `tf:"write_metadata" json:"write_metadata,omitempty"`
 }
 
 // GooglePubsubSubscriptionDeadLetterPolicy is a nested-block type used by the parent resource.
 type GooglePubsubSubscriptionDeadLetterPolicy struct {
-	DeadLetterTopic     *Value[string] `tf:"dead_letter_topic"`
-	MaxDeliveryAttempts *Value[int64]  `tf:"max_delivery_attempts"`
+	DeadLetterTopic     *Value[string] `tf:"dead_letter_topic" json:"dead_letter_topic,omitempty"`
+	MaxDeliveryAttempts *Value[int64]  `tf:"max_delivery_attempts" json:"max_delivery_attempts,omitempty"`
 }
 
 // GooglePubsubSubscriptionExpirationPolicy is a nested-block type used by the parent resource.
 type GooglePubsubSubscriptionExpirationPolicy struct {
-	TTL *Value[string] `tf:"ttl"`
+	TTL *Value[string] `tf:"ttl" json:"ttl,omitempty"`
 }
 
 // GooglePubsubSubscriptionPushConfig is a nested-block type used by the parent resource.
 type GooglePubsubSubscriptionPushConfig struct {
-	Attributes   map[string]*Value[string]                     `tf:"attributes"`
-	PushEndpoint *Value[string]                                `tf:"push_endpoint"`
-	NoWrapper    []GooglePubsubSubscriptionPushConfigNoWrapper `tf:"no_wrapper,blocks"`
-	OIDCToken    []GooglePubsubSubscriptionPushConfigOIDCToken `tf:"oidc_token,blocks"`
+	Attributes   map[string]*Value[string]                     `tf:"attributes" json:"attributes,omitempty"`
+	PushEndpoint *Value[string]                                `tf:"push_endpoint" json:"push_endpoint,omitempty"`
+	NoWrapper    []GooglePubsubSubscriptionPushConfigNoWrapper `tf:"no_wrapper,blocks" json:"no_wrapper,omitempty"`
+	OIDCToken    []GooglePubsubSubscriptionPushConfigOIDCToken `tf:"oidc_token,blocks" json:"oidc_token,omitempty"`
 }
 
 // GooglePubsubSubscriptionPushConfigNoWrapper is a nested-block type used by the parent resource.
 type GooglePubsubSubscriptionPushConfigNoWrapper struct {
-	WriteMetadata *Value[bool] `tf:"write_metadata"`
+	WriteMetadata *Value[bool] `tf:"write_metadata" json:"write_metadata,omitempty"`
 }
 
 // GooglePubsubSubscriptionPushConfigOIDCToken is a nested-block type used by the parent resource.
 type GooglePubsubSubscriptionPushConfigOIDCToken struct {
-	Audience            *Value[string] `tf:"audience"`
-	ServiceAccountEmail *Value[string] `tf:"service_account_email"`
+	Audience            *Value[string] `tf:"audience" json:"audience,omitempty"`
+	ServiceAccountEmail *Value[string] `tf:"service_account_email" json:"service_account_email,omitempty"`
 }
 
 // GooglePubsubSubscriptionRetryPolicy is a nested-block type used by the parent resource.
 type GooglePubsubSubscriptionRetryPolicy struct {
-	MaximumBackoff *Value[string] `tf:"maximum_backoff"`
-	MinimumBackoff *Value[string] `tf:"minimum_backoff"`
+	MaximumBackoff *Value[string] `tf:"maximum_backoff" json:"maximum_backoff,omitempty"`
+	MinimumBackoff *Value[string] `tf:"minimum_backoff" json:"minimum_backoff,omitempty"`
 }
 
 // GooglePubsubSubscriptionTimeouts is a nested-block type used by the parent resource.
 type GooglePubsubSubscriptionTimeouts struct {
-	Create *Value[string] `tf:"create"`
-	Delete *Value[string] `tf:"delete"`
-	Update *Value[string] `tf:"update"`
+	Create *Value[string] `tf:"create" json:"create,omitempty"`
+	Delete *Value[string] `tf:"delete" json:"delete,omitempty"`
+	Update *Value[string] `tf:"update" json:"update,omitempty"`
 }
 
 // GooglePubsubSubscriptionSchema describes provider metadata for each attribute / nested

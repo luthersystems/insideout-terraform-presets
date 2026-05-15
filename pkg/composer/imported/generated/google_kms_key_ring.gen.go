@@ -7,17 +7,17 @@ import "reflect"
 // GoogleKMSKeyRing is the generated Layer 1 typed model for the
 // `google_kms_key_ring` Terraform resource.
 type GoogleKMSKeyRing struct {
-	ID       *Value[string]            `tf:"id"`
-	Location *Value[string]            `tf:"location"`
-	Name     *Value[string]            `tf:"name"`
-	Project  *Value[string]            `tf:"project"`
-	Timeouts *GoogleKMSKeyRingTimeouts `tf:"timeouts,block"`
+	ID       *Value[string]            `tf:"id" json:"id,omitempty"`
+	Location *Value[string]            `tf:"location" json:"location,omitempty"`
+	Name     *Value[string]            `tf:"name" json:"name,omitempty"`
+	Project  *Value[string]            `tf:"project" json:"project,omitempty"`
+	Timeouts *GoogleKMSKeyRingTimeouts `tf:"timeouts,block" json:"timeouts,omitempty"`
 }
 
 // GoogleKMSKeyRingTimeouts is a nested-block type used by the parent resource.
 type GoogleKMSKeyRingTimeouts struct {
-	Create *Value[string] `tf:"create"`
-	Delete *Value[string] `tf:"delete"`
+	Create *Value[string] `tf:"create" json:"create,omitempty"`
+	Delete *Value[string] `tf:"delete" json:"delete,omitempty"`
 }
 
 // GoogleKMSKeyRingSchema describes provider metadata for each attribute / nested

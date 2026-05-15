@@ -7,38 +7,38 @@ import "reflect"
 // GoogleFirestoreDatabase is the generated Layer 1 typed model for the
 // `google_firestore_database` Terraform resource.
 type GoogleFirestoreDatabase struct {
-	AppEngineIntegrationMode      *Value[string]                      `tf:"app_engine_integration_mode"`
-	ConcurrencyMode               *Value[string]                      `tf:"concurrency_mode"`
-	CreateTime                    *Value[string]                      `tf:"create_time"`
-	DeleteProtectionState         *Value[string]                      `tf:"delete_protection_state"`
-	DeletionPolicy                *Value[string]                      `tf:"deletion_policy"`
-	EarliestVersionTime           *Value[string]                      `tf:"earliest_version_time"`
-	Etag                          *Value[string]                      `tf:"etag"`
-	ID                            *Value[string]                      `tf:"id"`
-	KeyPrefix                     *Value[string]                      `tf:"key_prefix"`
-	LocationID                    *Value[string]                      `tf:"location_id"`
-	Name                          *Value[string]                      `tf:"name"`
-	PointInTimeRecoveryEnablement *Value[string]                      `tf:"point_in_time_recovery_enablement"`
-	Project                       *Value[string]                      `tf:"project"`
-	Type_                         *Value[string]                      `tf:"type"`
-	Uid                           *Value[string]                      `tf:"uid"`
-	UpdateTime                    *Value[string]                      `tf:"update_time"`
-	VersionRetentionPeriod        *Value[string]                      `tf:"version_retention_period"`
-	CmekConfig                    []GoogleFirestoreDatabaseCmekConfig `tf:"cmek_config,blocks"`
-	Timeouts                      *GoogleFirestoreDatabaseTimeouts    `tf:"timeouts,block"`
+	AppEngineIntegrationMode      *Value[string]                      `tf:"app_engine_integration_mode" json:"app_engine_integration_mode,omitempty"`
+	ConcurrencyMode               *Value[string]                      `tf:"concurrency_mode" json:"concurrency_mode,omitempty"`
+	CreateTime                    *Value[string]                      `tf:"create_time" json:"create_time,omitempty"`
+	DeleteProtectionState         *Value[string]                      `tf:"delete_protection_state" json:"delete_protection_state,omitempty"`
+	DeletionPolicy                *Value[string]                      `tf:"deletion_policy" json:"deletion_policy,omitempty"`
+	EarliestVersionTime           *Value[string]                      `tf:"earliest_version_time" json:"earliest_version_time,omitempty"`
+	Etag                          *Value[string]                      `tf:"etag" json:"etag,omitempty"`
+	ID                            *Value[string]                      `tf:"id" json:"id,omitempty"`
+	KeyPrefix                     *Value[string]                      `tf:"key_prefix" json:"key_prefix,omitempty"`
+	LocationID                    *Value[string]                      `tf:"location_id" json:"location_id,omitempty"`
+	Name                          *Value[string]                      `tf:"name" json:"name,omitempty"`
+	PointInTimeRecoveryEnablement *Value[string]                      `tf:"point_in_time_recovery_enablement" json:"point_in_time_recovery_enablement,omitempty"`
+	Project                       *Value[string]                      `tf:"project" json:"project,omitempty"`
+	Type_                         *Value[string]                      `tf:"type" json:"type,omitempty"`
+	Uid                           *Value[string]                      `tf:"uid" json:"uid,omitempty"`
+	UpdateTime                    *Value[string]                      `tf:"update_time" json:"update_time,omitempty"`
+	VersionRetentionPeriod        *Value[string]                      `tf:"version_retention_period" json:"version_retention_period,omitempty"`
+	CmekConfig                    []GoogleFirestoreDatabaseCmekConfig `tf:"cmek_config,blocks" json:"cmek_config,omitempty"`
+	Timeouts                      *GoogleFirestoreDatabaseTimeouts    `tf:"timeouts,block" json:"timeouts,omitempty"`
 }
 
 // GoogleFirestoreDatabaseCmekConfig is a nested-block type used by the parent resource.
 type GoogleFirestoreDatabaseCmekConfig struct {
-	ActiveKeyVersion []*Value[string] `tf:"active_key_version"`
-	KMSKeyName       *Value[string]   `tf:"kms_key_name"`
+	ActiveKeyVersion []*Value[string] `tf:"active_key_version" json:"active_key_version,omitempty"`
+	KMSKeyName       *Value[string]   `tf:"kms_key_name" json:"kms_key_name,omitempty"`
 }
 
 // GoogleFirestoreDatabaseTimeouts is a nested-block type used by the parent resource.
 type GoogleFirestoreDatabaseTimeouts struct {
-	Create *Value[string] `tf:"create"`
-	Delete *Value[string] `tf:"delete"`
-	Update *Value[string] `tf:"update"`
+	Create *Value[string] `tf:"create" json:"create,omitempty"`
+	Delete *Value[string] `tf:"delete" json:"delete,omitempty"`
+	Update *Value[string] `tf:"update" json:"update,omitempty"`
 }
 
 // GoogleFirestoreDatabaseSchema describes provider metadata for each attribute / nested

@@ -7,104 +7,104 @@ import "reflect"
 // GoogleRedisInstance is the generated Layer 1 typed model for the
 // `google_redis_instance` Terraform resource.
 type GoogleRedisInstance struct {
-	AlternativeLocationID  *Value[string]                           `tf:"alternative_location_id"`
-	AuthEnabled            *Value[bool]                             `tf:"auth_enabled"`
-	AuthString             *Value[string]                           `tf:"auth_string"`
-	AuthorizedNetwork      *Value[string]                           `tf:"authorized_network"`
-	ConnectMode            *Value[string]                           `tf:"connect_mode"`
-	CreateTime             *Value[string]                           `tf:"create_time"`
-	CurrentLocationID      *Value[string]                           `tf:"current_location_id"`
-	CustomerManagedKey     *Value[string]                           `tf:"customer_managed_key"`
-	DisplayName            *Value[string]                           `tf:"display_name"`
-	EffectiveLabels        map[string]*Value[string]                `tf:"effective_labels"`
-	Host                   *Value[string]                           `tf:"host"`
-	ID                     *Value[string]                           `tf:"id"`
-	Labels                 map[string]*Value[string]                `tf:"labels"`
-	LocationID             *Value[string]                           `tf:"location_id"`
-	MaintenanceSchedule    []GoogleRedisInstanceMaintenanceSchedule `tf:"maintenance_schedule"`
-	MaintenanceVersion     *Value[string]                           `tf:"maintenance_version"`
-	MemorySizeGb           *Value[float64]                          `tf:"memory_size_gb"`
-	Name                   *Value[string]                           `tf:"name"`
-	Nodes                  []GoogleRedisInstanceNodes               `tf:"nodes"`
-	PersistenceIAMIdentity *Value[string]                           `tf:"persistence_iam_identity"`
-	Port                   *Value[int64]                            `tf:"port"`
-	Project                *Value[string]                           `tf:"project"`
-	ReadEndpoint           *Value[string]                           `tf:"read_endpoint"`
-	ReadEndpointPort       *Value[float64]                          `tf:"read_endpoint_port"`
-	ReadReplicasMode       *Value[string]                           `tf:"read_replicas_mode"`
-	RedisConfigs           map[string]*Value[string]                `tf:"redis_configs"`
-	RedisVersion           *Value[string]                           `tf:"redis_version"`
-	Region                 *Value[string]                           `tf:"region"`
-	ReplicaCount           *Value[int64]                            `tf:"replica_count"`
-	ReservedIpRange        *Value[string]                           `tf:"reserved_ip_range"`
-	SecondaryIpRange       *Value[string]                           `tf:"secondary_ip_range"`
-	ServerCaCerts          []GoogleRedisInstanceServerCaCerts       `tf:"server_ca_certs"`
-	TerraformLabels        map[string]*Value[string]                `tf:"terraform_labels"`
-	Tier                   *Value[string]                           `tf:"tier"`
-	TransitEncryptionMode  *Value[string]                           `tf:"transit_encryption_mode"`
-	MaintenancePolicy      []GoogleRedisInstanceMaintenancePolicy   `tf:"maintenance_policy,blocks"`
-	PersistenceConfig      []GoogleRedisInstancePersistenceConfig   `tf:"persistence_config,blocks"`
-	Timeouts               *GoogleRedisInstanceTimeouts             `tf:"timeouts,block"`
+	AlternativeLocationID  *Value[string]                           `tf:"alternative_location_id" json:"alternative_location_id,omitempty"`
+	AuthEnabled            *Value[bool]                             `tf:"auth_enabled" json:"auth_enabled,omitempty"`
+	AuthString             *Value[string]                           `tf:"auth_string" json:"auth_string,omitempty"`
+	AuthorizedNetwork      *Value[string]                           `tf:"authorized_network" json:"authorized_network,omitempty"`
+	ConnectMode            *Value[string]                           `tf:"connect_mode" json:"connect_mode,omitempty"`
+	CreateTime             *Value[string]                           `tf:"create_time" json:"create_time,omitempty"`
+	CurrentLocationID      *Value[string]                           `tf:"current_location_id" json:"current_location_id,omitempty"`
+	CustomerManagedKey     *Value[string]                           `tf:"customer_managed_key" json:"customer_managed_key,omitempty"`
+	DisplayName            *Value[string]                           `tf:"display_name" json:"display_name,omitempty"`
+	EffectiveLabels        map[string]*Value[string]                `tf:"effective_labels" json:"effective_labels,omitempty"`
+	Host                   *Value[string]                           `tf:"host" json:"host,omitempty"`
+	ID                     *Value[string]                           `tf:"id" json:"id,omitempty"`
+	Labels                 map[string]*Value[string]                `tf:"labels" json:"labels,omitempty"`
+	LocationID             *Value[string]                           `tf:"location_id" json:"location_id,omitempty"`
+	MaintenanceSchedule    []GoogleRedisInstanceMaintenanceSchedule `tf:"maintenance_schedule" json:"maintenance_schedule,omitempty"`
+	MaintenanceVersion     *Value[string]                           `tf:"maintenance_version" json:"maintenance_version,omitempty"`
+	MemorySizeGb           *Value[float64]                          `tf:"memory_size_gb" json:"memory_size_gb,omitempty"`
+	Name                   *Value[string]                           `tf:"name" json:"name,omitempty"`
+	Nodes                  []GoogleRedisInstanceNodes               `tf:"nodes" json:"nodes,omitempty"`
+	PersistenceIAMIdentity *Value[string]                           `tf:"persistence_iam_identity" json:"persistence_iam_identity,omitempty"`
+	Port                   *Value[int64]                            `tf:"port" json:"port,omitempty"`
+	Project                *Value[string]                           `tf:"project" json:"project,omitempty"`
+	ReadEndpoint           *Value[string]                           `tf:"read_endpoint" json:"read_endpoint,omitempty"`
+	ReadEndpointPort       *Value[float64]                          `tf:"read_endpoint_port" json:"read_endpoint_port,omitempty"`
+	ReadReplicasMode       *Value[string]                           `tf:"read_replicas_mode" json:"read_replicas_mode,omitempty"`
+	RedisConfigs           map[string]*Value[string]                `tf:"redis_configs" json:"redis_configs,omitempty"`
+	RedisVersion           *Value[string]                           `tf:"redis_version" json:"redis_version,omitempty"`
+	Region                 *Value[string]                           `tf:"region" json:"region,omitempty"`
+	ReplicaCount           *Value[int64]                            `tf:"replica_count" json:"replica_count,omitempty"`
+	ReservedIpRange        *Value[string]                           `tf:"reserved_ip_range" json:"reserved_ip_range,omitempty"`
+	SecondaryIpRange       *Value[string]                           `tf:"secondary_ip_range" json:"secondary_ip_range,omitempty"`
+	ServerCaCerts          []GoogleRedisInstanceServerCaCerts       `tf:"server_ca_certs" json:"server_ca_certs,omitempty"`
+	TerraformLabels        map[string]*Value[string]                `tf:"terraform_labels" json:"terraform_labels,omitempty"`
+	Tier                   *Value[string]                           `tf:"tier" json:"tier,omitempty"`
+	TransitEncryptionMode  *Value[string]                           `tf:"transit_encryption_mode" json:"transit_encryption_mode,omitempty"`
+	MaintenancePolicy      []GoogleRedisInstanceMaintenancePolicy   `tf:"maintenance_policy,blocks" json:"maintenance_policy,omitempty"`
+	PersistenceConfig      []GoogleRedisInstancePersistenceConfig   `tf:"persistence_config,blocks" json:"persistence_config,omitempty"`
+	Timeouts               *GoogleRedisInstanceTimeouts             `tf:"timeouts,block" json:"timeouts,omitempty"`
 }
 
 // GoogleRedisInstanceMaintenancePolicy is a nested-block type used by the parent resource.
 type GoogleRedisInstanceMaintenancePolicy struct {
-	CreateTime              *Value[string]                                                `tf:"create_time"`
-	Description             *Value[string]                                                `tf:"description"`
-	UpdateTime              *Value[string]                                                `tf:"update_time"`
-	WeeklyMaintenanceWindow []GoogleRedisInstanceMaintenancePolicyWeeklyMaintenanceWindow `tf:"weekly_maintenance_window,blocks"`
+	CreateTime              *Value[string]                                                `tf:"create_time" json:"create_time,omitempty"`
+	Description             *Value[string]                                                `tf:"description" json:"description,omitempty"`
+	UpdateTime              *Value[string]                                                `tf:"update_time" json:"update_time,omitempty"`
+	WeeklyMaintenanceWindow []GoogleRedisInstanceMaintenancePolicyWeeklyMaintenanceWindow `tf:"weekly_maintenance_window,blocks" json:"weekly_maintenance_window,omitempty"`
 }
 
 // GoogleRedisInstanceMaintenancePolicyWeeklyMaintenanceWindow is a nested-block type used by the parent resource.
 type GoogleRedisInstanceMaintenancePolicyWeeklyMaintenanceWindow struct {
-	Day       *Value[string]                                                         `tf:"day"`
-	Duration  *Value[string]                                                         `tf:"duration"`
-	StartTime []GoogleRedisInstanceMaintenancePolicyWeeklyMaintenanceWindowStartTime `tf:"start_time,blocks"`
+	Day       *Value[string]                                                         `tf:"day" json:"day,omitempty"`
+	Duration  *Value[string]                                                         `tf:"duration" json:"duration,omitempty"`
+	StartTime []GoogleRedisInstanceMaintenancePolicyWeeklyMaintenanceWindowStartTime `tf:"start_time,blocks" json:"start_time,omitempty"`
 }
 
 // GoogleRedisInstanceMaintenancePolicyWeeklyMaintenanceWindowStartTime is a nested-block type used by the parent resource.
 type GoogleRedisInstanceMaintenancePolicyWeeklyMaintenanceWindowStartTime struct {
-	Hours   *Value[float64] `tf:"hours"`
-	Minutes *Value[float64] `tf:"minutes"`
-	Nanos   *Value[float64] `tf:"nanos"`
-	Seconds *Value[float64] `tf:"seconds"`
+	Hours   *Value[float64] `tf:"hours" json:"hours,omitempty"`
+	Minutes *Value[float64] `tf:"minutes" json:"minutes,omitempty"`
+	Nanos   *Value[float64] `tf:"nanos" json:"nanos,omitempty"`
+	Seconds *Value[float64] `tf:"seconds" json:"seconds,omitempty"`
 }
 
 // GoogleRedisInstanceMaintenanceSchedule is a nested-block type used by the parent resource.
 type GoogleRedisInstanceMaintenanceSchedule struct {
-	EndTime              *Value[string] `tf:"end_time"`
-	ScheduleDeadlineTime *Value[string] `tf:"schedule_deadline_time"`
-	StartTime            *Value[string] `tf:"start_time"`
+	EndTime              *Value[string] `tf:"end_time" json:"end_time,omitempty"`
+	ScheduleDeadlineTime *Value[string] `tf:"schedule_deadline_time" json:"schedule_deadline_time,omitempty"`
+	StartTime            *Value[string] `tf:"start_time" json:"start_time,omitempty"`
 }
 
 // GoogleRedisInstanceNodes is a nested-block type used by the parent resource.
 type GoogleRedisInstanceNodes struct {
-	ID   *Value[string] `tf:"id"`
-	Zone *Value[string] `tf:"zone"`
+	ID   *Value[string] `tf:"id" json:"id,omitempty"`
+	Zone *Value[string] `tf:"zone" json:"zone,omitempty"`
 }
 
 // GoogleRedisInstancePersistenceConfig is a nested-block type used by the parent resource.
 type GoogleRedisInstancePersistenceConfig struct {
-	PersistenceMode      *Value[string] `tf:"persistence_mode"`
-	RdbNextSnapshotTime  *Value[string] `tf:"rdb_next_snapshot_time"`
-	RdbSnapshotPeriod    *Value[string] `tf:"rdb_snapshot_period"`
-	RdbSnapshotStartTime *Value[string] `tf:"rdb_snapshot_start_time"`
+	PersistenceMode      *Value[string] `tf:"persistence_mode" json:"persistence_mode,omitempty"`
+	RdbNextSnapshotTime  *Value[string] `tf:"rdb_next_snapshot_time" json:"rdb_next_snapshot_time,omitempty"`
+	RdbSnapshotPeriod    *Value[string] `tf:"rdb_snapshot_period" json:"rdb_snapshot_period,omitempty"`
+	RdbSnapshotStartTime *Value[string] `tf:"rdb_snapshot_start_time" json:"rdb_snapshot_start_time,omitempty"`
 }
 
 // GoogleRedisInstanceServerCaCerts is a nested-block type used by the parent resource.
 type GoogleRedisInstanceServerCaCerts struct {
-	Cert            *Value[string] `tf:"cert"`
-	CreateTime      *Value[string] `tf:"create_time"`
-	ExpireTime      *Value[string] `tf:"expire_time"`
-	SerialNumber    *Value[string] `tf:"serial_number"`
-	SHA1Fingerprint *Value[string] `tf:"sha1_fingerprint"`
+	Cert            *Value[string] `tf:"cert" json:"cert,omitempty"`
+	CreateTime      *Value[string] `tf:"create_time" json:"create_time,omitempty"`
+	ExpireTime      *Value[string] `tf:"expire_time" json:"expire_time,omitempty"`
+	SerialNumber    *Value[string] `tf:"serial_number" json:"serial_number,omitempty"`
+	SHA1Fingerprint *Value[string] `tf:"sha1_fingerprint" json:"sha1_fingerprint,omitempty"`
 }
 
 // GoogleRedisInstanceTimeouts is a nested-block type used by the parent resource.
 type GoogleRedisInstanceTimeouts struct {
-	Create *Value[string] `tf:"create"`
-	Delete *Value[string] `tf:"delete"`
-	Update *Value[string] `tf:"update"`
+	Create *Value[string] `tf:"create" json:"create,omitempty"`
+	Delete *Value[string] `tf:"delete" json:"delete,omitempty"`
+	Update *Value[string] `tf:"update" json:"update,omitempty"`
 }
 
 // GoogleRedisInstanceSchema describes provider metadata for each attribute / nested

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -95,5 +96,43 @@ func TestBuildDriftFieldsMap_NoEmptySemanticEntries(t *testing.T) {
 				t.Errorf("%s: path %q has empty DriftSemantic (must be filtered out)", tfType, r.Path)
 			}
 		}
+	}
+}
+
+// TestRunDriftFields_GoldenFile pins the byte-for-byte contents of the
+// emitted drift-fields JSON against testdata/drift_fields/drift-fields.json.
+//
+// The golden is the canonical record of which curated fields participate
+// in drift detection — the downstream comparator + reliable UI both key
+// off this set. Adding or removing a DriftSemantic axis on any curated
+// FieldPolicy entry will fail this test; the right response is to
+// regenerate the golden and re-review:
+//
+//	go run ./cmd/imported-codegen drift-fields \
+//	    --output cmd/imported-codegen/testdata/drift_fields/drift-fields.json
+//
+// Bundle D1 (#491) seeded the golden with the first 5 curated types;
+// each follow-up bundle (D2..D9) will append entries and refresh the
+// golden via the command above.
+func TestRunDriftFields_GoldenFile(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	out := filepath.Join(dir, "drift-fields.json")
+
+	if code := runDriftFields([]string{"--output", out}); code != 0 {
+		t.Fatalf("runDriftFields exit code = %d, want 0", code)
+	}
+
+	got, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatalf("read emitted: %v", err)
+	}
+	goldenPath := filepath.Join("testdata", "drift_fields", "drift-fields.json")
+	want, err := os.ReadFile(goldenPath)
+	if err != nil {
+		t.Fatalf("read golden %s: %v — refresh via the doc-comment command above", goldenPath, err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatalf("emitted drift-fields.json drifts from %s — refresh the golden or fix the regression", goldenPath)
 	}
 }

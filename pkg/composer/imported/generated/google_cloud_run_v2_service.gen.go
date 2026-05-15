@@ -7,306 +7,306 @@ import "reflect"
 // GoogleCloudRunV2Service is the generated Layer 1 typed model for the
 // `google_cloud_run_v2_service` Terraform resource.
 type GoogleCloudRunV2Service struct {
-	Annotations           map[string]*Value[string]                    `tf:"annotations"`
-	Client                *Value[string]                               `tf:"client"`
-	ClientVersion         *Value[string]                               `tf:"client_version"`
-	Conditions            []GoogleCloudRunV2ServiceConditions          `tf:"conditions"`
-	CreateTime            *Value[string]                               `tf:"create_time"`
-	Creator               *Value[string]                               `tf:"creator"`
-	CustomAudiences       []*Value[string]                             `tf:"custom_audiences"`
-	DeleteTime            *Value[string]                               `tf:"delete_time"`
-	DeletionProtection    *Value[bool]                                 `tf:"deletion_protection"`
-	Description           *Value[string]                               `tf:"description"`
-	EffectiveAnnotations  map[string]*Value[string]                    `tf:"effective_annotations"`
-	EffectiveLabels       map[string]*Value[string]                    `tf:"effective_labels"`
-	Etag                  *Value[string]                               `tf:"etag"`
-	ExpireTime            *Value[string]                               `tf:"expire_time"`
-	Generation            *Value[string]                               `tf:"generation"`
-	ID                    *Value[string]                               `tf:"id"`
-	Ingress               *Value[string]                               `tf:"ingress"`
-	InvokerIAMDisabled    *Value[bool]                                 `tf:"invoker_iam_disabled"`
-	Labels                map[string]*Value[string]                    `tf:"labels"`
-	LastModifier          *Value[string]                               `tf:"last_modifier"`
-	LatestCreatedRevision *Value[string]                               `tf:"latest_created_revision"`
-	LatestReadyRevision   *Value[string]                               `tf:"latest_ready_revision"`
-	LaunchStage           *Value[string]                               `tf:"launch_stage"`
-	Location              *Value[string]                               `tf:"location"`
-	Name                  *Value[string]                               `tf:"name"`
-	ObservedGeneration    *Value[string]                               `tf:"observed_generation"`
-	Project               *Value[string]                               `tf:"project"`
-	Reconciling           *Value[bool]                                 `tf:"reconciling"`
-	TerminalCondition     []GoogleCloudRunV2ServiceTerminalCondition   `tf:"terminal_condition"`
-	TerraformLabels       map[string]*Value[string]                    `tf:"terraform_labels"`
-	TrafficStatuses       []GoogleCloudRunV2ServiceTrafficStatuses     `tf:"traffic_statuses"`
-	Uid                   *Value[string]                               `tf:"uid"`
-	UpdateTime            *Value[string]                               `tf:"update_time"`
-	URI                   *Value[string]                               `tf:"uri"`
-	BinaryAuthorization   []GoogleCloudRunV2ServiceBinaryAuthorization `tf:"binary_authorization,blocks"`
-	Scaling               []GoogleCloudRunV2ServiceScaling             `tf:"scaling,blocks"`
-	Template              []GoogleCloudRunV2ServiceTemplate            `tf:"template,blocks"`
-	Timeouts              *GoogleCloudRunV2ServiceTimeouts             `tf:"timeouts,block"`
-	Traffic               []GoogleCloudRunV2ServiceTraffic             `tf:"traffic,blocks"`
+	Annotations           map[string]*Value[string]                    `tf:"annotations" json:"annotations,omitempty"`
+	Client                *Value[string]                               `tf:"client" json:"client,omitempty"`
+	ClientVersion         *Value[string]                               `tf:"client_version" json:"client_version,omitempty"`
+	Conditions            []GoogleCloudRunV2ServiceConditions          `tf:"conditions" json:"conditions,omitempty"`
+	CreateTime            *Value[string]                               `tf:"create_time" json:"create_time,omitempty"`
+	Creator               *Value[string]                               `tf:"creator" json:"creator,omitempty"`
+	CustomAudiences       []*Value[string]                             `tf:"custom_audiences" json:"custom_audiences,omitempty"`
+	DeleteTime            *Value[string]                               `tf:"delete_time" json:"delete_time,omitempty"`
+	DeletionProtection    *Value[bool]                                 `tf:"deletion_protection" json:"deletion_protection,omitempty"`
+	Description           *Value[string]                               `tf:"description" json:"description,omitempty"`
+	EffectiveAnnotations  map[string]*Value[string]                    `tf:"effective_annotations" json:"effective_annotations,omitempty"`
+	EffectiveLabels       map[string]*Value[string]                    `tf:"effective_labels" json:"effective_labels,omitempty"`
+	Etag                  *Value[string]                               `tf:"etag" json:"etag,omitempty"`
+	ExpireTime            *Value[string]                               `tf:"expire_time" json:"expire_time,omitempty"`
+	Generation            *Value[string]                               `tf:"generation" json:"generation,omitempty"`
+	ID                    *Value[string]                               `tf:"id" json:"id,omitempty"`
+	Ingress               *Value[string]                               `tf:"ingress" json:"ingress,omitempty"`
+	InvokerIAMDisabled    *Value[bool]                                 `tf:"invoker_iam_disabled" json:"invoker_iam_disabled,omitempty"`
+	Labels                map[string]*Value[string]                    `tf:"labels" json:"labels,omitempty"`
+	LastModifier          *Value[string]                               `tf:"last_modifier" json:"last_modifier,omitempty"`
+	LatestCreatedRevision *Value[string]                               `tf:"latest_created_revision" json:"latest_created_revision,omitempty"`
+	LatestReadyRevision   *Value[string]                               `tf:"latest_ready_revision" json:"latest_ready_revision,omitempty"`
+	LaunchStage           *Value[string]                               `tf:"launch_stage" json:"launch_stage,omitempty"`
+	Location              *Value[string]                               `tf:"location" json:"location,omitempty"`
+	Name                  *Value[string]                               `tf:"name" json:"name,omitempty"`
+	ObservedGeneration    *Value[string]                               `tf:"observed_generation" json:"observed_generation,omitempty"`
+	Project               *Value[string]                               `tf:"project" json:"project,omitempty"`
+	Reconciling           *Value[bool]                                 `tf:"reconciling" json:"reconciling,omitempty"`
+	TerminalCondition     []GoogleCloudRunV2ServiceTerminalCondition   `tf:"terminal_condition" json:"terminal_condition,omitempty"`
+	TerraformLabels       map[string]*Value[string]                    `tf:"terraform_labels" json:"terraform_labels,omitempty"`
+	TrafficStatuses       []GoogleCloudRunV2ServiceTrafficStatuses     `tf:"traffic_statuses" json:"traffic_statuses,omitempty"`
+	Uid                   *Value[string]                               `tf:"uid" json:"uid,omitempty"`
+	UpdateTime            *Value[string]                               `tf:"update_time" json:"update_time,omitempty"`
+	URI                   *Value[string]                               `tf:"uri" json:"uri,omitempty"`
+	BinaryAuthorization   []GoogleCloudRunV2ServiceBinaryAuthorization `tf:"binary_authorization,blocks" json:"binary_authorization,omitempty"`
+	Scaling               []GoogleCloudRunV2ServiceScaling             `tf:"scaling,blocks" json:"scaling,omitempty"`
+	Template              []GoogleCloudRunV2ServiceTemplate            `tf:"template,blocks" json:"template,omitempty"`
+	Timeouts              *GoogleCloudRunV2ServiceTimeouts             `tf:"timeouts,block" json:"timeouts,omitempty"`
+	Traffic               []GoogleCloudRunV2ServiceTraffic             `tf:"traffic,blocks" json:"traffic,omitempty"`
 }
 
 // GoogleCloudRunV2ServiceBinaryAuthorization is a nested-block type used by the parent resource.
 type GoogleCloudRunV2ServiceBinaryAuthorization struct {
-	BreakglassJustification *Value[string] `tf:"breakglass_justification"`
-	Policy                  *Value[string] `tf:"policy"`
-	UseDefault              *Value[bool]   `tf:"use_default"`
+	BreakglassJustification *Value[string] `tf:"breakglass_justification" json:"breakglass_justification,omitempty"`
+	Policy                  *Value[string] `tf:"policy" json:"policy,omitempty"`
+	UseDefault              *Value[bool]   `tf:"use_default" json:"use_default,omitempty"`
 }
 
 // GoogleCloudRunV2ServiceConditions is a nested-block type used by the parent resource.
 type GoogleCloudRunV2ServiceConditions struct {
-	ExecutionReason    *Value[string] `tf:"execution_reason"`
-	LastTransitionTime *Value[string] `tf:"last_transition_time"`
-	Message            *Value[string] `tf:"message"`
-	Reason             *Value[string] `tf:"reason"`
-	RevisionReason     *Value[string] `tf:"revision_reason"`
-	Severity           *Value[string] `tf:"severity"`
-	State              *Value[string] `tf:"state"`
-	Type_              *Value[string] `tf:"type"`
+	ExecutionReason    *Value[string] `tf:"execution_reason" json:"execution_reason,omitempty"`
+	LastTransitionTime *Value[string] `tf:"last_transition_time" json:"last_transition_time,omitempty"`
+	Message            *Value[string] `tf:"message" json:"message,omitempty"`
+	Reason             *Value[string] `tf:"reason" json:"reason,omitempty"`
+	RevisionReason     *Value[string] `tf:"revision_reason" json:"revision_reason,omitempty"`
+	Severity           *Value[string] `tf:"severity" json:"severity,omitempty"`
+	State              *Value[string] `tf:"state" json:"state,omitempty"`
+	Type_              *Value[string] `tf:"type" json:"type,omitempty"`
 }
 
 // GoogleCloudRunV2ServiceScaling is a nested-block type used by the parent resource.
 type GoogleCloudRunV2ServiceScaling struct {
-	MinInstanceCount *Value[int64] `tf:"min_instance_count"`
+	MinInstanceCount *Value[int64] `tf:"min_instance_count" json:"min_instance_count,omitempty"`
 }
 
 // GoogleCloudRunV2ServiceTemplate is a nested-block type used by the parent resource.
 type GoogleCloudRunV2ServiceTemplate struct {
-	Annotations                   map[string]*Value[string]                   `tf:"annotations"`
-	EncryptionKey                 *Value[string]                              `tf:"encryption_key"`
-	ExecutionEnvironment          *Value[string]                              `tf:"execution_environment"`
-	Labels                        map[string]*Value[string]                   `tf:"labels"`
-	MaxInstanceRequestConcurrency *Value[int64]                               `tf:"max_instance_request_concurrency"`
-	Revision                      *Value[string]                              `tf:"revision"`
-	ServiceAccount                *Value[string]                              `tf:"service_account"`
-	SessionAffinity               *Value[bool]                                `tf:"session_affinity"`
-	Timeout                       *Value[string]                              `tf:"timeout"`
-	Containers                    []GoogleCloudRunV2ServiceTemplateContainers `tf:"containers,blocks"`
-	Scaling                       []GoogleCloudRunV2ServiceTemplateScaling    `tf:"scaling,blocks"`
-	Volumes                       []GoogleCloudRunV2ServiceTemplateVolumes    `tf:"volumes,blocks"`
-	VPCAccess                     []GoogleCloudRunV2ServiceTemplateVPCAccess  `tf:"vpc_access,blocks"`
+	Annotations                   map[string]*Value[string]                   `tf:"annotations" json:"annotations,omitempty"`
+	EncryptionKey                 *Value[string]                              `tf:"encryption_key" json:"encryption_key,omitempty"`
+	ExecutionEnvironment          *Value[string]                              `tf:"execution_environment" json:"execution_environment,omitempty"`
+	Labels                        map[string]*Value[string]                   `tf:"labels" json:"labels,omitempty"`
+	MaxInstanceRequestConcurrency *Value[int64]                               `tf:"max_instance_request_concurrency" json:"max_instance_request_concurrency,omitempty"`
+	Revision                      *Value[string]                              `tf:"revision" json:"revision,omitempty"`
+	ServiceAccount                *Value[string]                              `tf:"service_account" json:"service_account,omitempty"`
+	SessionAffinity               *Value[bool]                                `tf:"session_affinity" json:"session_affinity,omitempty"`
+	Timeout                       *Value[string]                              `tf:"timeout" json:"timeout,omitempty"`
+	Containers                    []GoogleCloudRunV2ServiceTemplateContainers `tf:"containers,blocks" json:"containers,omitempty"`
+	Scaling                       []GoogleCloudRunV2ServiceTemplateScaling    `tf:"scaling,blocks" json:"scaling,omitempty"`
+	Volumes                       []GoogleCloudRunV2ServiceTemplateVolumes    `tf:"volumes,blocks" json:"volumes,omitempty"`
+	VPCAccess                     []GoogleCloudRunV2ServiceTemplateVPCAccess  `tf:"vpc_access,blocks" json:"vpc_access,omitempty"`
 }
 
 // GoogleCloudRunV2ServiceTemplateContainers is a nested-block type used by the parent resource.
 type GoogleCloudRunV2ServiceTemplateContainers struct {
-	Args          []*Value[string]                                         `tf:"args"`
-	Command       []*Value[string]                                         `tf:"command"`
-	DependsOn     []*Value[string]                                         `tf:"depends_on"`
-	Image         *Value[string]                                           `tf:"image"`
-	Name          *Value[string]                                           `tf:"name"`
-	WorkingDir    *Value[string]                                           `tf:"working_dir"`
-	Env           []GoogleCloudRunV2ServiceTemplateContainersEnv           `tf:"env,blocks"`
-	LivenessProbe []GoogleCloudRunV2ServiceTemplateContainersLivenessProbe `tf:"liveness_probe,blocks"`
-	Ports         []GoogleCloudRunV2ServiceTemplateContainersPorts         `tf:"ports,blocks"`
-	Resources     []GoogleCloudRunV2ServiceTemplateContainersResources     `tf:"resources,blocks"`
-	StartupProbe  []GoogleCloudRunV2ServiceTemplateContainersStartupProbe  `tf:"startup_probe,blocks"`
-	VolumeMounts  []GoogleCloudRunV2ServiceTemplateContainersVolumeMounts  `tf:"volume_mounts,blocks"`
+	Args          []*Value[string]                                         `tf:"args" json:"args,omitempty"`
+	Command       []*Value[string]                                         `tf:"command" json:"command,omitempty"`
+	DependsOn     []*Value[string]                                         `tf:"depends_on" json:"depends_on,omitempty"`
+	Image         *Value[string]                                           `tf:"image" json:"image,omitempty"`
+	Name          *Value[string]                                           `tf:"name" json:"name,omitempty"`
+	WorkingDir    *Value[string]                                           `tf:"working_dir" json:"working_dir,omitempty"`
+	Env           []GoogleCloudRunV2ServiceTemplateContainersEnv           `tf:"env,blocks" json:"env,omitempty"`
+	LivenessProbe []GoogleCloudRunV2ServiceTemplateContainersLivenessProbe `tf:"liveness_probe,blocks" json:"liveness_probe,omitempty"`
+	Ports         []GoogleCloudRunV2ServiceTemplateContainersPorts         `tf:"ports,blocks" json:"ports,omitempty"`
+	Resources     []GoogleCloudRunV2ServiceTemplateContainersResources     `tf:"resources,blocks" json:"resources,omitempty"`
+	StartupProbe  []GoogleCloudRunV2ServiceTemplateContainersStartupProbe  `tf:"startup_probe,blocks" json:"startup_probe,omitempty"`
+	VolumeMounts  []GoogleCloudRunV2ServiceTemplateContainersVolumeMounts  `tf:"volume_mounts,blocks" json:"volume_mounts,omitempty"`
 }
 
 // GoogleCloudRunV2ServiceTemplateContainersEnv is a nested-block type used by the parent resource.
 type GoogleCloudRunV2ServiceTemplateContainersEnv struct {
-	Name        *Value[string]                                            `tf:"name"`
-	Value       *Value[string]                                            `tf:"value"`
-	ValueSource []GoogleCloudRunV2ServiceTemplateContainersEnvValueSource `tf:"value_source,blocks"`
+	Name        *Value[string]                                            `tf:"name" json:"name,omitempty"`
+	Value       *Value[string]                                            `tf:"value" json:"value,omitempty"`
+	ValueSource []GoogleCloudRunV2ServiceTemplateContainersEnvValueSource `tf:"value_source,blocks" json:"value_source,omitempty"`
 }
 
 // GoogleCloudRunV2ServiceTemplateContainersEnvValueSource is a nested-block type used by the parent resource.
 type GoogleCloudRunV2ServiceTemplateContainersEnvValueSource struct {
-	SecretKeyRef []GoogleCloudRunV2ServiceTemplateContainersEnvValueSourceSecretKeyRef `tf:"secret_key_ref,blocks"`
+	SecretKeyRef []GoogleCloudRunV2ServiceTemplateContainersEnvValueSourceSecretKeyRef `tf:"secret_key_ref,blocks" json:"secret_key_ref,omitempty"`
 }
 
 // GoogleCloudRunV2ServiceTemplateContainersEnvValueSourceSecretKeyRef is a nested-block type used by the parent resource.
 type GoogleCloudRunV2ServiceTemplateContainersEnvValueSourceSecretKeyRef struct {
-	Secret  *Value[string] `tf:"secret"`
-	Version *Value[string] `tf:"version"`
+	Secret  *Value[string] `tf:"secret" json:"secret,omitempty"`
+	Version *Value[string] `tf:"version" json:"version,omitempty"`
 }
 
 // GoogleCloudRunV2ServiceTemplateContainersLivenessProbe is a nested-block type used by the parent resource.
 type GoogleCloudRunV2ServiceTemplateContainersLivenessProbe struct {
-	FailureThreshold    *Value[float64]                                                   `tf:"failure_threshold"`
-	InitialDelaySeconds *Value[int64]                                                     `tf:"initial_delay_seconds"`
-	PeriodSeconds       *Value[int64]                                                     `tf:"period_seconds"`
-	TimeoutSeconds      *Value[int64]                                                     `tf:"timeout_seconds"`
-	GRPC                []GoogleCloudRunV2ServiceTemplateContainersLivenessProbeGRPC      `tf:"grpc,blocks"`
-	HTTPGet             []GoogleCloudRunV2ServiceTemplateContainersLivenessProbeHTTPGet   `tf:"http_get,blocks"`
-	TCPSocket           []GoogleCloudRunV2ServiceTemplateContainersLivenessProbeTCPSocket `tf:"tcp_socket,blocks"`
+	FailureThreshold    *Value[float64]                                                   `tf:"failure_threshold" json:"failure_threshold,omitempty"`
+	InitialDelaySeconds *Value[int64]                                                     `tf:"initial_delay_seconds" json:"initial_delay_seconds,omitempty"`
+	PeriodSeconds       *Value[int64]                                                     `tf:"period_seconds" json:"period_seconds,omitempty"`
+	TimeoutSeconds      *Value[int64]                                                     `tf:"timeout_seconds" json:"timeout_seconds,omitempty"`
+	GRPC                []GoogleCloudRunV2ServiceTemplateContainersLivenessProbeGRPC      `tf:"grpc,blocks" json:"grpc,omitempty"`
+	HTTPGet             []GoogleCloudRunV2ServiceTemplateContainersLivenessProbeHTTPGet   `tf:"http_get,blocks" json:"http_get,omitempty"`
+	TCPSocket           []GoogleCloudRunV2ServiceTemplateContainersLivenessProbeTCPSocket `tf:"tcp_socket,blocks" json:"tcp_socket,omitempty"`
 }
 
 // GoogleCloudRunV2ServiceTemplateContainersLivenessProbeGRPC is a nested-block type used by the parent resource.
 type GoogleCloudRunV2ServiceTemplateContainersLivenessProbeGRPC struct {
-	Port    *Value[int64]  `tf:"port"`
-	Service *Value[string] `tf:"service"`
+	Port    *Value[int64]  `tf:"port" json:"port,omitempty"`
+	Service *Value[string] `tf:"service" json:"service,omitempty"`
 }
 
 // GoogleCloudRunV2ServiceTemplateContainersLivenessProbeHTTPGet is a nested-block type used by the parent resource.
 type GoogleCloudRunV2ServiceTemplateContainersLivenessProbeHTTPGet struct {
-	Path        *Value[string]                                                             `tf:"path"`
-	Port        *Value[int64]                                                              `tf:"port"`
-	HTTPHeaders []GoogleCloudRunV2ServiceTemplateContainersLivenessProbeHTTPGetHTTPHeaders `tf:"http_headers,blocks"`
+	Path        *Value[string]                                                             `tf:"path" json:"path,omitempty"`
+	Port        *Value[int64]                                                              `tf:"port" json:"port,omitempty"`
+	HTTPHeaders []GoogleCloudRunV2ServiceTemplateContainersLivenessProbeHTTPGetHTTPHeaders `tf:"http_headers,blocks" json:"http_headers,omitempty"`
 }
 
 // GoogleCloudRunV2ServiceTemplateContainersLivenessProbeHTTPGetHTTPHeaders is a nested-block type used by the parent resource.
 type GoogleCloudRunV2ServiceTemplateContainersLivenessProbeHTTPGetHTTPHeaders struct {
-	Name  *Value[string] `tf:"name"`
-	Value *Value[string] `tf:"value"`
+	Name  *Value[string] `tf:"name" json:"name,omitempty"`
+	Value *Value[string] `tf:"value" json:"value,omitempty"`
 }
 
 // GoogleCloudRunV2ServiceTemplateContainersLivenessProbeTCPSocket is a nested-block type used by the parent resource.
 type GoogleCloudRunV2ServiceTemplateContainersLivenessProbeTCPSocket struct {
-	Port *Value[int64] `tf:"port"`
+	Port *Value[int64] `tf:"port" json:"port,omitempty"`
 }
 
 // GoogleCloudRunV2ServiceTemplateContainersPorts is a nested-block type used by the parent resource.
 type GoogleCloudRunV2ServiceTemplateContainersPorts struct {
-	ContainerPort *Value[float64] `tf:"container_port"`
-	Name          *Value[string]  `tf:"name"`
+	ContainerPort *Value[float64] `tf:"container_port" json:"container_port,omitempty"`
+	Name          *Value[string]  `tf:"name" json:"name,omitempty"`
 }
 
 // GoogleCloudRunV2ServiceTemplateContainersResources is a nested-block type used by the parent resource.
 type GoogleCloudRunV2ServiceTemplateContainersResources struct {
-	CPUIdle         *Value[bool]              `tf:"cpu_idle"`
-	Limits          map[string]*Value[string] `tf:"limits"`
-	StartupCPUBoost *Value[bool]              `tf:"startup_cpu_boost"`
+	CPUIdle         *Value[bool]              `tf:"cpu_idle" json:"cpu_idle,omitempty"`
+	Limits          map[string]*Value[string] `tf:"limits" json:"limits,omitempty"`
+	StartupCPUBoost *Value[bool]              `tf:"startup_cpu_boost" json:"startup_cpu_boost,omitempty"`
 }
 
 // GoogleCloudRunV2ServiceTemplateContainersStartupProbe is a nested-block type used by the parent resource.
 type GoogleCloudRunV2ServiceTemplateContainersStartupProbe struct {
-	FailureThreshold    *Value[float64]                                                  `tf:"failure_threshold"`
-	InitialDelaySeconds *Value[int64]                                                    `tf:"initial_delay_seconds"`
-	PeriodSeconds       *Value[int64]                                                    `tf:"period_seconds"`
-	TimeoutSeconds      *Value[int64]                                                    `tf:"timeout_seconds"`
-	GRPC                []GoogleCloudRunV2ServiceTemplateContainersStartupProbeGRPC      `tf:"grpc,blocks"`
-	HTTPGet             []GoogleCloudRunV2ServiceTemplateContainersStartupProbeHTTPGet   `tf:"http_get,blocks"`
-	TCPSocket           []GoogleCloudRunV2ServiceTemplateContainersStartupProbeTCPSocket `tf:"tcp_socket,blocks"`
+	FailureThreshold    *Value[float64]                                                  `tf:"failure_threshold" json:"failure_threshold,omitempty"`
+	InitialDelaySeconds *Value[int64]                                                    `tf:"initial_delay_seconds" json:"initial_delay_seconds,omitempty"`
+	PeriodSeconds       *Value[int64]                                                    `tf:"period_seconds" json:"period_seconds,omitempty"`
+	TimeoutSeconds      *Value[int64]                                                    `tf:"timeout_seconds" json:"timeout_seconds,omitempty"`
+	GRPC                []GoogleCloudRunV2ServiceTemplateContainersStartupProbeGRPC      `tf:"grpc,blocks" json:"grpc,omitempty"`
+	HTTPGet             []GoogleCloudRunV2ServiceTemplateContainersStartupProbeHTTPGet   `tf:"http_get,blocks" json:"http_get,omitempty"`
+	TCPSocket           []GoogleCloudRunV2ServiceTemplateContainersStartupProbeTCPSocket `tf:"tcp_socket,blocks" json:"tcp_socket,omitempty"`
 }
 
 // GoogleCloudRunV2ServiceTemplateContainersStartupProbeGRPC is a nested-block type used by the parent resource.
 type GoogleCloudRunV2ServiceTemplateContainersStartupProbeGRPC struct {
-	Port    *Value[int64]  `tf:"port"`
-	Service *Value[string] `tf:"service"`
+	Port    *Value[int64]  `tf:"port" json:"port,omitempty"`
+	Service *Value[string] `tf:"service" json:"service,omitempty"`
 }
 
 // GoogleCloudRunV2ServiceTemplateContainersStartupProbeHTTPGet is a nested-block type used by the parent resource.
 type GoogleCloudRunV2ServiceTemplateContainersStartupProbeHTTPGet struct {
-	Path        *Value[string]                                                            `tf:"path"`
-	Port        *Value[int64]                                                             `tf:"port"`
-	HTTPHeaders []GoogleCloudRunV2ServiceTemplateContainersStartupProbeHTTPGetHTTPHeaders `tf:"http_headers,blocks"`
+	Path        *Value[string]                                                            `tf:"path" json:"path,omitempty"`
+	Port        *Value[int64]                                                             `tf:"port" json:"port,omitempty"`
+	HTTPHeaders []GoogleCloudRunV2ServiceTemplateContainersStartupProbeHTTPGetHTTPHeaders `tf:"http_headers,blocks" json:"http_headers,omitempty"`
 }
 
 // GoogleCloudRunV2ServiceTemplateContainersStartupProbeHTTPGetHTTPHeaders is a nested-block type used by the parent resource.
 type GoogleCloudRunV2ServiceTemplateContainersStartupProbeHTTPGetHTTPHeaders struct {
-	Name  *Value[string] `tf:"name"`
-	Value *Value[string] `tf:"value"`
+	Name  *Value[string] `tf:"name" json:"name,omitempty"`
+	Value *Value[string] `tf:"value" json:"value,omitempty"`
 }
 
 // GoogleCloudRunV2ServiceTemplateContainersStartupProbeTCPSocket is a nested-block type used by the parent resource.
 type GoogleCloudRunV2ServiceTemplateContainersStartupProbeTCPSocket struct {
-	Port *Value[int64] `tf:"port"`
+	Port *Value[int64] `tf:"port" json:"port,omitempty"`
 }
 
 // GoogleCloudRunV2ServiceTemplateContainersVolumeMounts is a nested-block type used by the parent resource.
 type GoogleCloudRunV2ServiceTemplateContainersVolumeMounts struct {
-	MountPath *Value[string] `tf:"mount_path"`
-	Name      *Value[string] `tf:"name"`
+	MountPath *Value[string] `tf:"mount_path" json:"mount_path,omitempty"`
+	Name      *Value[string] `tf:"name" json:"name,omitempty"`
 }
 
 // GoogleCloudRunV2ServiceTemplateScaling is a nested-block type used by the parent resource.
 type GoogleCloudRunV2ServiceTemplateScaling struct {
-	MaxInstanceCount *Value[int64] `tf:"max_instance_count"`
-	MinInstanceCount *Value[int64] `tf:"min_instance_count"`
+	MaxInstanceCount *Value[int64] `tf:"max_instance_count" json:"max_instance_count,omitempty"`
+	MinInstanceCount *Value[int64] `tf:"min_instance_count" json:"min_instance_count,omitempty"`
 }
 
 // GoogleCloudRunV2ServiceTemplateVPCAccess is a nested-block type used by the parent resource.
 type GoogleCloudRunV2ServiceTemplateVPCAccess struct {
-	Connector         *Value[string]                                              `tf:"connector"`
-	Egress            *Value[string]                                              `tf:"egress"`
-	NetworkInterfaces []GoogleCloudRunV2ServiceTemplateVPCAccessNetworkInterfaces `tf:"network_interfaces,blocks"`
+	Connector         *Value[string]                                              `tf:"connector" json:"connector,omitempty"`
+	Egress            *Value[string]                                              `tf:"egress" json:"egress,omitempty"`
+	NetworkInterfaces []GoogleCloudRunV2ServiceTemplateVPCAccessNetworkInterfaces `tf:"network_interfaces,blocks" json:"network_interfaces,omitempty"`
 }
 
 // GoogleCloudRunV2ServiceTemplateVPCAccessNetworkInterfaces is a nested-block type used by the parent resource.
 type GoogleCloudRunV2ServiceTemplateVPCAccessNetworkInterfaces struct {
-	Network    *Value[string]   `tf:"network"`
-	Subnetwork *Value[string]   `tf:"subnetwork"`
-	Tags       []*Value[string] `tf:"tags"`
+	Network    *Value[string]   `tf:"network" json:"network,omitempty"`
+	Subnetwork *Value[string]   `tf:"subnetwork" json:"subnetwork,omitempty"`
+	Tags       []*Value[string] `tf:"tags" json:"tags,omitempty"`
 }
 
 // GoogleCloudRunV2ServiceTemplateVolumes is a nested-block type used by the parent resource.
 type GoogleCloudRunV2ServiceTemplateVolumes struct {
-	Name             *Value[string]                                           `tf:"name"`
-	CloudSqlInstance []GoogleCloudRunV2ServiceTemplateVolumesCloudSqlInstance `tf:"cloud_sql_instance,blocks"`
-	GCS              []GoogleCloudRunV2ServiceTemplateVolumesGCS              `tf:"gcs,blocks"`
-	Nfs              []GoogleCloudRunV2ServiceTemplateVolumesNfs              `tf:"nfs,blocks"`
-	Secret           []GoogleCloudRunV2ServiceTemplateVolumesSecret           `tf:"secret,blocks"`
+	Name             *Value[string]                                           `tf:"name" json:"name,omitempty"`
+	CloudSqlInstance []GoogleCloudRunV2ServiceTemplateVolumesCloudSqlInstance `tf:"cloud_sql_instance,blocks" json:"cloud_sql_instance,omitempty"`
+	GCS              []GoogleCloudRunV2ServiceTemplateVolumesGCS              `tf:"gcs,blocks" json:"gcs,omitempty"`
+	Nfs              []GoogleCloudRunV2ServiceTemplateVolumesNfs              `tf:"nfs,blocks" json:"nfs,omitempty"`
+	Secret           []GoogleCloudRunV2ServiceTemplateVolumesSecret           `tf:"secret,blocks" json:"secret,omitempty"`
 }
 
 // GoogleCloudRunV2ServiceTemplateVolumesCloudSqlInstance is a nested-block type used by the parent resource.
 type GoogleCloudRunV2ServiceTemplateVolumesCloudSqlInstance struct {
-	Instances []*Value[string] `tf:"instances"`
+	Instances []*Value[string] `tf:"instances" json:"instances,omitempty"`
 }
 
 // GoogleCloudRunV2ServiceTemplateVolumesGCS is a nested-block type used by the parent resource.
 type GoogleCloudRunV2ServiceTemplateVolumesGCS struct {
-	Bucket   *Value[string] `tf:"bucket"`
-	ReadOnly *Value[bool]   `tf:"read_only"`
+	Bucket   *Value[string] `tf:"bucket" json:"bucket,omitempty"`
+	ReadOnly *Value[bool]   `tf:"read_only" json:"read_only,omitempty"`
 }
 
 // GoogleCloudRunV2ServiceTemplateVolumesNfs is a nested-block type used by the parent resource.
 type GoogleCloudRunV2ServiceTemplateVolumesNfs struct {
-	Path     *Value[string] `tf:"path"`
-	ReadOnly *Value[bool]   `tf:"read_only"`
-	Server   *Value[string] `tf:"server"`
+	Path     *Value[string] `tf:"path" json:"path,omitempty"`
+	ReadOnly *Value[bool]   `tf:"read_only" json:"read_only,omitempty"`
+	Server   *Value[string] `tf:"server" json:"server,omitempty"`
 }
 
 // GoogleCloudRunV2ServiceTemplateVolumesSecret is a nested-block type used by the parent resource.
 type GoogleCloudRunV2ServiceTemplateVolumesSecret struct {
-	DefaultMode *Value[float64]                                     `tf:"default_mode"`
-	Secret      *Value[string]                                      `tf:"secret"`
-	Items       []GoogleCloudRunV2ServiceTemplateVolumesSecretItems `tf:"items,blocks"`
+	DefaultMode *Value[float64]                                     `tf:"default_mode" json:"default_mode,omitempty"`
+	Secret      *Value[string]                                      `tf:"secret" json:"secret,omitempty"`
+	Items       []GoogleCloudRunV2ServiceTemplateVolumesSecretItems `tf:"items,blocks" json:"items,omitempty"`
 }
 
 // GoogleCloudRunV2ServiceTemplateVolumesSecretItems is a nested-block type used by the parent resource.
 type GoogleCloudRunV2ServiceTemplateVolumesSecretItems struct {
-	Mode    *Value[float64] `tf:"mode"`
-	Path    *Value[string]  `tf:"path"`
-	Version *Value[string]  `tf:"version"`
+	Mode    *Value[float64] `tf:"mode" json:"mode,omitempty"`
+	Path    *Value[string]  `tf:"path" json:"path,omitempty"`
+	Version *Value[string]  `tf:"version" json:"version,omitempty"`
 }
 
 // GoogleCloudRunV2ServiceTerminalCondition is a nested-block type used by the parent resource.
 type GoogleCloudRunV2ServiceTerminalCondition struct {
-	ExecutionReason    *Value[string] `tf:"execution_reason"`
-	LastTransitionTime *Value[string] `tf:"last_transition_time"`
-	Message            *Value[string] `tf:"message"`
-	Reason             *Value[string] `tf:"reason"`
-	RevisionReason     *Value[string] `tf:"revision_reason"`
-	Severity           *Value[string] `tf:"severity"`
-	State              *Value[string] `tf:"state"`
-	Type_              *Value[string] `tf:"type"`
+	ExecutionReason    *Value[string] `tf:"execution_reason" json:"execution_reason,omitempty"`
+	LastTransitionTime *Value[string] `tf:"last_transition_time" json:"last_transition_time,omitempty"`
+	Message            *Value[string] `tf:"message" json:"message,omitempty"`
+	Reason             *Value[string] `tf:"reason" json:"reason,omitempty"`
+	RevisionReason     *Value[string] `tf:"revision_reason" json:"revision_reason,omitempty"`
+	Severity           *Value[string] `tf:"severity" json:"severity,omitempty"`
+	State              *Value[string] `tf:"state" json:"state,omitempty"`
+	Type_              *Value[string] `tf:"type" json:"type,omitempty"`
 }
 
 // GoogleCloudRunV2ServiceTimeouts is a nested-block type used by the parent resource.
 type GoogleCloudRunV2ServiceTimeouts struct {
-	Create *Value[string] `tf:"create"`
-	Delete *Value[string] `tf:"delete"`
-	Update *Value[string] `tf:"update"`
+	Create *Value[string] `tf:"create" json:"create,omitempty"`
+	Delete *Value[string] `tf:"delete" json:"delete,omitempty"`
+	Update *Value[string] `tf:"update" json:"update,omitempty"`
 }
 
 // GoogleCloudRunV2ServiceTraffic is a nested-block type used by the parent resource.
 type GoogleCloudRunV2ServiceTraffic struct {
-	Percent  *Value[float64] `tf:"percent"`
-	Revision *Value[string]  `tf:"revision"`
-	Tag      *Value[string]  `tf:"tag"`
-	Type_    *Value[string]  `tf:"type"`
+	Percent  *Value[float64] `tf:"percent" json:"percent,omitempty"`
+	Revision *Value[string]  `tf:"revision" json:"revision,omitempty"`
+	Tag      *Value[string]  `tf:"tag" json:"tag,omitempty"`
+	Type_    *Value[string]  `tf:"type" json:"type,omitempty"`
 }
 
 // GoogleCloudRunV2ServiceTrafficStatuses is a nested-block type used by the parent resource.
 type GoogleCloudRunV2ServiceTrafficStatuses struct {
-	Percent  *Value[float64] `tf:"percent"`
-	Revision *Value[string]  `tf:"revision"`
-	Tag      *Value[string]  `tf:"tag"`
-	Type_    *Value[string]  `tf:"type"`
-	URI      *Value[string]  `tf:"uri"`
+	Percent  *Value[float64] `tf:"percent" json:"percent,omitempty"`
+	Revision *Value[string]  `tf:"revision" json:"revision,omitempty"`
+	Tag      *Value[string]  `tf:"tag" json:"tag,omitempty"`
+	Type_    *Value[string]  `tf:"type" json:"type,omitempty"`
+	URI      *Value[string]  `tf:"uri" json:"uri,omitempty"`
 }
 
 // GoogleCloudRunV2ServiceSchema describes provider metadata for each attribute / nested

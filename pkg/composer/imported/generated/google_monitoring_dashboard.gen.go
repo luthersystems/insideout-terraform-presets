@@ -7,17 +7,17 @@ import "reflect"
 // GoogleMonitoringDashboard is the generated Layer 1 typed model for the
 // `google_monitoring_dashboard` Terraform resource.
 type GoogleMonitoringDashboard struct {
-	DashboardJSON *Value[string]                     `tf:"dashboard_json"`
-	ID            *Value[string]                     `tf:"id"`
-	Project       *Value[string]                     `tf:"project"`
-	Timeouts      *GoogleMonitoringDashboardTimeouts `tf:"timeouts,block"`
+	DashboardJSON *Value[string]                     `tf:"dashboard_json" json:"dashboard_json,omitempty"`
+	ID            *Value[string]                     `tf:"id" json:"id,omitempty"`
+	Project       *Value[string]                     `tf:"project" json:"project,omitempty"`
+	Timeouts      *GoogleMonitoringDashboardTimeouts `tf:"timeouts,block" json:"timeouts,omitempty"`
 }
 
 // GoogleMonitoringDashboardTimeouts is a nested-block type used by the parent resource.
 type GoogleMonitoringDashboardTimeouts struct {
-	Create *Value[string] `tf:"create"`
-	Delete *Value[string] `tf:"delete"`
-	Update *Value[string] `tf:"update"`
+	Create *Value[string] `tf:"create" json:"create,omitempty"`
+	Delete *Value[string] `tf:"delete" json:"delete,omitempty"`
+	Update *Value[string] `tf:"update" json:"update,omitempty"`
 }
 
 // GoogleMonitoringDashboardSchema describes provider metadata for each attribute / nested

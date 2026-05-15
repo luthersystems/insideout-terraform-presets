@@ -44,7 +44,7 @@ func TestComposeStackWithIssues_ProvenanceTags(t *testing.T) {
 					Address: "aws_sqs_queue.q", ImportID: "https://sqs/.../q",
 				},
 				Tier:  imported.TierImportedFlat,
-				Attrs: []byte(`{"Name":{"Literal":"q"}}`),
+				Attrs: []byte(`{"name":{"literal":"q"}}`),
 			},
 		},
 	})
@@ -222,7 +222,7 @@ func TestComposeStackWithIssues_ProvenanceSkippedAdvisory(t *testing.T) {
 					Address: "aws_sqs_queue.q1", ImportID: "1",
 				},
 				Tier:  imported.TierImportedFlat,
-				Attrs: []byte(`{"Name":{"Literal":"q1"}}`),
+				Attrs: []byte(`{"name":{"literal":"q1"}}`),
 			},
 			{
 				Identity: imported.ResourceIdentity{
@@ -230,7 +230,7 @@ func TestComposeStackWithIssues_ProvenanceSkippedAdvisory(t *testing.T) {
 					Address: "aws_sqs_queue.q2", ImportID: "2",
 				},
 				Tier:  imported.TierImportedFlat,
-				Attrs: []byte(`{"Name":{"Literal":"q2"}}`),
+				Attrs: []byte(`{"name":{"literal":"q2"}}`),
 			},
 			{
 				Identity: imported.ResourceIdentity{
@@ -278,7 +278,7 @@ func TestComposeStackWithIssues_Imported_AWS(t *testing.T) {
 					ImportID: "https://sqs.us-east-1.amazonaws.com/123/orders-DLQ",
 				},
 				Tier:  imported.TierImportedFlat,
-				Attrs: []byte(`{"Name":{"Literal":"orders-DLQ"}}`),
+				Attrs: []byte(`{"name":{"literal":"orders-DLQ"}}`),
 			},
 			{
 				Identity: imported.ResourceIdentity{
@@ -351,7 +351,7 @@ func TestComposeStackWithIssues_Imported_GCP(t *testing.T) {
 					ImportID: "projects/demo-project-12345/topics/events",
 				},
 				Tier:  imported.TierImportedFlat,
-				Attrs: []byte(`{"Name":{"Literal":"events"}}`),
+				Attrs: []byte(`{"name":{"literal":"events"}}`),
 			},
 		},
 	})

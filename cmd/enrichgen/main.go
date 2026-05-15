@@ -66,6 +66,28 @@ func main() {
 		}
 		fmt.Printf("wrote %s (%d bytes, %d lines)\n",
 			out, len(formatted), strings.Count(string(formatted), "\n"))
+
+		// Optional fetcher helpers. Targets without fetchers skip
+		// this block entirely so the mapping-only flow is unchanged.
+		if len(t.fetchers) > 0 {
+			if t.fetchersOutputPath == "" {
+				log.Fatalf("enrichgen: target %s has fetchers but no fetchersOutputPath", t.funcName)
+			}
+			fbody := newFetcherEngine(t).generate()
+			fformatted, ferr := format.Source([]byte(fbody))
+			if ferr != nil {
+				fmt.Fprintln(os.Stderr, "WARNING: gofmt failed for", t.fetchersOutputPath, ":", ferr)
+				fmt.Fprintln(os.Stderr, "--- raw output ---")
+				fmt.Fprintln(os.Stderr, fbody)
+				log.Fatal(ferr)
+			}
+			fout := filepath.Join(root, t.fetchersOutputPath)
+			if err := os.WriteFile(fout, fformatted, 0644); err != nil {
+				log.Fatal(err)
+			}
+			fmt.Printf("wrote %s (%d bytes, %d lines)\n",
+				fout, len(fformatted), strings.Count(string(fformatted), "\n"))
+		}
 	}
 }
 

@@ -110,7 +110,7 @@ type Provider interface {
 	// one line per IR of the form "<address> (<type>)". Stable
 	// ordering across calls — sorted by Identity.Address.
 	//
-	// Agent-name-agnostic on purpose: the per-product naming
-	// (Riley today) can rotate without flipping the interface.
+	// Agent-name-agnostic on purpose: the per-product naming can rotate
+	// without flipping the interface.
 	AgentContext(irs []composerimported.ImportedResource) []string
 }
