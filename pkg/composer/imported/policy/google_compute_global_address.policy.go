@@ -1,44 +1,59 @@
 package policy
 
+// googleComputeGlobalAddressPolicy curates Layer 2 for `google_compute_global_address`.
+//
+// Bundle D3 (#482): DriftSemantic axis added — all curated leaves are
+// scalar (IDs, network self-link, address, address_type, purpose,
+// ip_version, prefix_length, description) and use DriftSemanticExact.
+// No list-valued curated fields.
 var googleComputeGlobalAddressPolicy = Map{
 	// Identity
-	"name":      {Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever},
-	"id":        {Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever},
-	"self_link": {Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever},
+	"name":      {Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever, DriftSemantic: DriftSemanticExact},
+	"id":        {Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever, DriftSemantic: DriftSemanticExact},
+	"self_link": {Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever, DriftSemantic: DriftSemanticExact},
 	"project": {
 		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
-		ChangeRisk: ChangeAlwaysReplace,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
 	},
 
 	// Wiring — VPC association for INTERNAL purpose.
 	"network": {
 		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
-		Edit: EditRelationshipOnly, ChangeRisk: ChangeAlwaysReplace,
+		Edit:          EditRelationshipOnly,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
 	},
 
 	// Tuning
 	"address": {
 		Role: RoleTuning, Visibility: VisibilityUIVisible, Edit: EditNever,
-		ChangeRisk: ChangeAlwaysReplace,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"address_type": {
 		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditNever,
-		ChangeRisk: ChangeAlwaysReplace,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"purpose": {
 		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditNever,
-		ChangeRisk: ChangeAlwaysReplace,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"ip_version": {
 		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditNever,
-		ChangeRisk: ChangeAlwaysReplace,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"prefix_length": {
 		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditNever,
-		ChangeRisk: ChangeAlwaysReplace,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"description": {
 		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
 	},
 
 	// Labels

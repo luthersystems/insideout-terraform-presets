@@ -1,49 +1,68 @@
 package policy
 
+// googleCloudbuildTriggerPolicy curates Layer 2 for `google_cloudbuild_trigger`.
+//
+// Bundle D3 (#482): DriftSemantic axis added — scalar identity (name,
+// project, location, trigger_id) + scalar config (filename, disabled,
+// service_account, github wiring) use DriftSemanticExact. List-valued
+// path filters (ignored_files, included_files) use DriftSemanticWholeList
+// — order is irrelevant on the provider side but per-element diffs are
+// not independently actionable (a missing glob is a missing filter rule).
 var googleCloudbuildTriggerPolicy = Map{
 	// Identity
-	"name": {Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever},
-	"id":   {Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever},
+	"name": {Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever, DriftSemantic: DriftSemanticExact},
+	"id":   {Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever, DriftSemantic: DriftSemanticExact},
 	"project": {
 		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
-		ChangeRisk: ChangeAlwaysReplace,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"location": {
 		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
-		ChangeRisk: ChangeAlwaysReplace,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"trigger_id": {
 		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		DriftSemantic: DriftSemanticExact,
 	},
 
 	// Wiring — service account for build execution.
 	"service_account": {
 		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityUIVisible,
-		Edit: EditRelationshipOnly,
+		Edit:          EditRelationshipOnly,
+		DriftSemantic: DriftSemanticExact,
 	},
 
 	// Tuning — top-level.
 	"description": {
 		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"disabled": {
 		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityUIVisible, Edit: EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"filename": {
 		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityUIVisible,
-		Edit: EditRequiresApproval,
+		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"filter": {
 		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"include_build_logs": {
 		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"ignored_files": {
 		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		DriftSemantic: DriftSemanticWholeList,
 	},
 	"included_files": {
 		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		DriftSemantic: DriftSemanticWholeList,
 	},
 	// NB: `tags` on cloudbuild_trigger is NOT labels — it's a free-text
 	// set of operator annotations (per provider docs). Same lint
@@ -65,18 +84,23 @@ var googleCloudbuildTriggerPolicy = Map{
 	// GitHub trigger source.
 	"github.owner": {
 		Role: RoleWiring, Visibility: VisibilityUIVisible, Edit: EditRequiresApproval,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"github.name": {
 		Role: RoleWiring, Visibility: VisibilityUIVisible, Edit: EditRequiresApproval,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"github.push.branch": {
 		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"github.push.tag": {
 		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"github.pull_request.branch": {
 		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
 	},
 
 	// Webhook trigger source.

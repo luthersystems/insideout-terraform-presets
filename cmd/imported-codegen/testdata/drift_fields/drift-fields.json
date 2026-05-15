@@ -3745,6 +3745,74 @@
       "semantic": "Exact"
     }
   ],
+  "google_api_gateway_api_config": [
+    {
+      "path": "api",
+      "semantic": "Exact"
+    },
+    {
+      "path": "api_config_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "api_config_id_prefix",
+      "semantic": "Exact"
+    },
+    {
+      "path": "display_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "service_config_id",
+      "semantic": "Exact"
+    }
+  ],
+  "google_api_gateway_gateway": [
+    {
+      "path": "api_config",
+      "semantic": "Exact"
+    },
+    {
+      "path": "default_hostname",
+      "semantic": "Exact"
+    },
+    {
+      "path": "display_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "gateway_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "region",
+      "semantic": "Exact"
+    }
+  ],
   "google_cloud_run_v2_service": [
     {
       "path": "custom_audiences",
@@ -3764,6 +3832,80 @@
     },
     {
       "path": "project",
+      "semantic": "Exact"
+    }
+  ],
+  "google_cloudbuild_trigger": [
+    {
+      "path": "description",
+      "semantic": "Exact"
+    },
+    {
+      "path": "disabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "filename",
+      "semantic": "Exact"
+    },
+    {
+      "path": "filter",
+      "semantic": "Exact"
+    },
+    {
+      "path": "github.name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "github.owner",
+      "semantic": "Exact"
+    },
+    {
+      "path": "github.pull_request.branch",
+      "semantic": "Exact"
+    },
+    {
+      "path": "github.push.branch",
+      "semantic": "Exact"
+    },
+    {
+      "path": "github.push.tag",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ignored_files",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "include_build_logs",
+      "semantic": "Exact"
+    },
+    {
+      "path": "included_files",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "location",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "service_account",
+      "semantic": "Exact"
+    },
+    {
+      "path": "trigger_id",
       "semantic": "Exact"
     }
   ],
@@ -4034,6 +4176,106 @@
     },
     {
       "path": "service_label",
+      "semantic": "Exact"
+    },
+    {
+      "path": "subnetwork",
+      "semantic": "Exact"
+    },
+    {
+      "path": "target",
+      "semantic": "Exact"
+    }
+  ],
+  "google_compute_global_address": [
+    {
+      "path": "address",
+      "semantic": "Exact"
+    },
+    {
+      "path": "address_type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "description",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ip_version",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "network",
+      "semantic": "Exact"
+    },
+    {
+      "path": "prefix_length",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "purpose",
+      "semantic": "Exact"
+    },
+    {
+      "path": "self_link",
+      "semantic": "Exact"
+    }
+  ],
+  "google_compute_global_forwarding_rule": [
+    {
+      "path": "description",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ip_address",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ip_protocol",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ip_version",
+      "semantic": "Exact"
+    },
+    {
+      "path": "load_balancing_scheme",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "network",
+      "semantic": "Exact"
+    },
+    {
+      "path": "port_range",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "self_link",
       "semantic": "Exact"
     },
     {
@@ -4391,6 +4633,68 @@
       "semantic": "Exact"
     }
   ],
+  "google_compute_target_https_proxy": [
+    {
+      "path": "certificate_manager_certificates",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "certificate_map",
+      "semantic": "Exact"
+    },
+    {
+      "path": "description",
+      "semantic": "Exact"
+    },
+    {
+      "path": "http_keep_alive_timeout_sec",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "proxy_bind",
+      "semantic": "Exact"
+    },
+    {
+      "path": "quic_override",
+      "semantic": "Exact"
+    },
+    {
+      "path": "self_link",
+      "semantic": "Exact"
+    },
+    {
+      "path": "server_tls_policy",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ssl_certificates",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "ssl_policy",
+      "semantic": "Exact"
+    },
+    {
+      "path": "tls_early_data",
+      "semantic": "Exact"
+    },
+    {
+      "path": "url_map",
+      "semantic": "Exact"
+    }
+  ],
   "google_compute_url_map": [
     {
       "path": "default_service",
@@ -4478,6 +4782,52 @@
     },
     {
       "path": "project",
+      "semantic": "Exact"
+    }
+  ],
+  "google_firestore_database": [
+    {
+      "path": "app_engine_integration_mode",
+      "semantic": "Exact"
+    },
+    {
+      "path": "concurrency_mode",
+      "semantic": "Exact"
+    },
+    {
+      "path": "delete_protection_state",
+      "semantic": "Exact"
+    },
+    {
+      "path": "deletion_policy",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "location_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "point_in_time_recovery_enablement",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "version_retention_period",
       "semantic": "Exact"
     }
   ],
