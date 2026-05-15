@@ -16330,6 +16330,81 @@
             "description_kind": "plain"
           }
         },
+        "google_identity_platform_default_supported_idp_config": {
+          "version": 0,
+          "block": {
+            "attributes": {
+              "client_id": {
+                "type": "string",
+                "description": "OAuth client ID",
+                "description_kind": "plain",
+                "required": true
+              },
+              "client_secret": {
+                "type": "string",
+                "description": "OAuth client secret",
+                "description_kind": "plain",
+                "required": true
+              },
+              "enabled": {
+                "type": "bool",
+                "description": "If this IDP allows the user to sign in",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "idp_id": {
+                "type": "string",
+                "description": "ID of the IDP. Possible values include:\n\n* 'apple.com'\n\n* 'facebook.com'\n\n* 'gc.apple.com'\n\n* 'github.com'\n\n* 'google.com'\n\n* 'linkedin.com'\n\n* 'microsoft.com'\n\n* 'playgames.google.com'\n\n* 'twitter.com'\n\n* 'yahoo.com'",
+                "description_kind": "plain",
+                "required": true
+              },
+              "name": {
+                "type": "string",
+                "description": "The name of the DefaultSupportedIdpConfig resource",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "project": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              }
+            },
+            "block_types": {
+              "timeouts": {
+                "nesting_mode": "single",
+                "block": {
+                  "attributes": {
+                    "create": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "delete": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "update": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "description_kind": "plain"
+                }
+              }
+            },
+            "description_kind": "plain"
+          }
+        },
         "google_kms_crypto_key": {
           "version": 1,
           "block": {
@@ -20967,6 +21042,223 @@
                   "description_kind": "plain"
                 },
                 "max_items": 1
+              }
+            },
+            "description_kind": "plain"
+          }
+        },
+        "google_storage_bucket_object": {
+          "version": 0,
+          "block": {
+            "attributes": {
+              "bucket": {
+                "type": "string",
+                "description": "The name of the containing bucket.",
+                "description_kind": "plain",
+                "required": true
+              },
+              "cache_control": {
+                "type": "string",
+                "description": "Cache-Control directive to specify caching behavior of object data. If omitted and object is accessible to all anonymous users, the default will be public, max-age=3600",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "content": {
+                "type": "string",
+                "description": "Data as string to be uploaded. Must be defined if source is not. Note: The content field is marked as sensitive. To view the raw contents of the object, please define an output.",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true,
+                "sensitive": true
+              },
+              "content_disposition": {
+                "type": "string",
+                "description": "Content-Disposition of the object data.",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "content_encoding": {
+                "type": "string",
+                "description": "Content-Encoding of the object data.",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "content_language": {
+                "type": "string",
+                "description": "Content-Language of the object data.",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "content_type": {
+                "type": "string",
+                "description": "Content-Type of the object data. Defaults to \"application/octet-stream\" or \"text/plain; charset=utf-8\".",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "crc32c": {
+                "type": "string",
+                "description": "Base 64 CRC32 hash of the uploaded data.",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "detect_md5hash": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "event_based_hold": {
+                "type": "bool",
+                "description": "Whether an object is under event-based hold. Event-based hold is a way to retain objects until an event occurs, which is signified by the hold's release (i.e. this value is set to false). After being released (set to false), such objects will be subject to bucket-level retention (if any).",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "generation": {
+                "type": "number",
+                "description": "The content generation of this object. Used for object versioning and soft delete.",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "kms_key_name": {
+                "type": "string",
+                "description": "Resource name of the Cloud KMS key that will be used to encrypt the object. Overrides the object metadata's kmsKeyName value, if any.",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "md5hash": {
+                "type": "string",
+                "description": "Base 64 MD5 hash of the uploaded data.",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "media_link": {
+                "type": "string",
+                "description": "A url reference to download this object.",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "metadata": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description": "User-provided metadata, in key/value pairs.",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "name": {
+                "type": "string",
+                "description": "The name of the object. If you're interpolating the name of this object, see output_name instead.",
+                "description_kind": "plain",
+                "required": true
+              },
+              "output_name": {
+                "type": "string",
+                "description": "The name of the object. Use this field in interpolations with google_storage_object_acl to recreate google_storage_object_acl resources when your google_storage_bucket_object is recreated.",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "self_link": {
+                "type": "string",
+                "description": "A url reference to this object.",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "source": {
+                "type": "string",
+                "description": "A path to the data you want to upload. Must be defined if content is not.",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "storage_class": {
+                "type": "string",
+                "description": "The StorageClass of the new bucket object. Supported values include: MULTI_REGIONAL, REGIONAL, NEARLINE, COLDLINE, ARCHIVE. If not provided, this defaults to the bucket's default storage class or to a standard class.",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "temporary_hold": {
+                "type": "bool",
+                "description": "Whether an object is under temporary hold. While this flag is set to true, the object is protected against deletion and overwrites.",
+                "description_kind": "plain",
+                "optional": true
+              }
+            },
+            "block_types": {
+              "customer_encryption": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "encryption_algorithm": {
+                      "type": "string",
+                      "description": "The encryption algorithm. Default: AES256",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "encryption_key": {
+                      "type": "string",
+                      "description": "Base64 encoded customer supplied encryption key.",
+                      "description_kind": "plain",
+                      "required": true,
+                      "sensitive": true
+                    }
+                  },
+                  "description": "Encryption key; encoded using base64.",
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "retention": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "mode": {
+                      "type": "string",
+                      "description": "The object retention mode. Supported values include: \"Unlocked\", \"Locked\".",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "retain_until_time": {
+                      "type": "string",
+                      "description": "Time in RFC 3339 (e.g. 2030-01-01T02:03:04Z) until which object retention protects this object.",
+                      "description_kind": "plain",
+                      "required": true
+                    }
+                  },
+                  "description": "Object level retention configuration.",
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "timeouts": {
+                "nesting_mode": "single",
+                "block": {
+                  "attributes": {
+                    "create": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "delete": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "update": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "description_kind": "plain"
+                }
               }
             },
             "description_kind": "plain"

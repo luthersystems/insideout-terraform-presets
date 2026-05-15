@@ -4,13 +4,43 @@ package main
 // structs for. Add new types here to expand coverage.
 var WantedAWS = []string{
 	"aws_apigatewayv2_stage",
+	"aws_bedrock_guardrail",
+	"aws_bedrock_model_invocation_logging_configuration",
+	// Drift coverage bundle 2 (#482) — cloud-control-routed AWS types
+	// in the RDS / compute / monitoring family. Each was already
+	// cloud-control-enriched; adding the Layer 1 typed struct + Layer 2
+	// curated policy.Map flips them to DriftDetectable.
+	"aws_cloudfront_distribution",
 	"aws_cloudwatch_log_group",
+	"aws_db_instance",
 	"aws_dynamodb_contributor_insights",
 	"aws_dynamodb_table",
+	"aws_ecs_cluster",
+	"aws_eks_cluster",
+	"aws_elasticache_replication_group",
+	// Drift coverage bundle 1 (#482) — high-value cloud-control-routed
+	// AWS types. Each was already cloud-control-enriched but lacked a
+	// Layer 1 typed struct (and thus a curated Layer 2 policy.Map), so
+	// SUPPORTED_RESOURCES.md showed them as Enrichable but not
+	// DriftDetectable. Adding the Layer 1 struct + Layer 2 policy file
+	// is the minimal lift to flip each to DriftDetectable.
+	"aws_iam_policy",
+	"aws_iam_role",
 	"aws_iam_role_policy_attachment",
+	// `aws_instance` is the canonical TF name for EC2 instances
+	// (the resource was never renamed to `aws_ec2_instance` upstream).
+	"aws_instance",
+	"aws_kms_key",
 	"aws_lambda_function",
+	"aws_lb",
+	"aws_lb_listener",
+	"aws_lb_target_group",
+	// Bundle 2 (cont.) — managed-search / streaming / rotation types.
+	"aws_msk_cluster",
+	"aws_opensearch_domain",
 	"aws_resourceexplorer2_index",
 	"aws_resourceexplorer2_view",
+	"aws_route53_zone",
 	"aws_s3_bucket",
 	// S3 bucket sub-resources (#482 push to 95% coverage). Each maps
 	// to an SDK-only sub-resource discoverer already registered in
@@ -23,7 +53,13 @@ var WantedAWS = []string{
 	"aws_s3_bucket_server_side_encryption_configuration",
 	"aws_s3_bucket_versioning",
 	"aws_secretsmanager_secret",
+	"aws_secretsmanager_secret_rotation",
+	"aws_security_group",
+	"aws_service_discovery_private_dns_namespace",
+	"aws_sns_topic",
 	"aws_sqs_queue",
+	"aws_subnet",
+	"aws_vpc",
 }
 
 // WantedGoogle lists the GCP resource types we generate Layer 1 structs
@@ -52,6 +88,7 @@ var WantedGoogle = []string{
 	"google_container_cluster",
 	"google_container_node_pool",
 	"google_identity_platform_config",
+	"google_identity_platform_default_supported_idp_config",
 	"google_kms_crypto_key",
 	"google_kms_key_ring",
 	"google_logging_project_sink",
@@ -69,6 +106,7 @@ var WantedGoogle = []string{
 	"google_sql_database_instance",
 	"google_sql_user",
 	"google_storage_bucket",
+	"google_storage_bucket_object",
 	"google_vertex_ai_dataset",
 	"google_vpc_access_connector",
 	// IAM-binding types (#482 follow-up). Each maps to a discoverer

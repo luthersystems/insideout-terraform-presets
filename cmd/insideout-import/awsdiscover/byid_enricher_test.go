@@ -49,16 +49,18 @@ func TestExistingEnrichersDoNotImplementByID(t *testing.T) {
 
 	// Fail-fast: pin the expected total byTypeEnricher size so a
 	// silent drop (or duplicate-key squashing) in production fails the
-	// test. The expected total = 14 hand-rolled enrichers (see
+	// test. The expected total = hand-rolled enrichers (see
 	// handRolledTypes below) + every type in cloudControlTypeConfigs
 	// that doesn't have a hand-rolled override. The latter is computed
 	// at test time so an addition to cloudControlTypeConfigs doesn't
 	// silently flow into the production enricher coverage without a
 	// deliberate test update.
-	handRolled := 14
+	handRolled := 17
 	ccOverrides := 0
 	handRolledTypes := map[string]bool{
 		"aws_apigatewayv2_stage":                             true,
+		"aws_bedrock_guardrail":                              true,
+		"aws_bedrock_model_invocation_logging_configuration": true,
 		"aws_cloudwatch_log_group":                           true,
 		"aws_dynamodb_contributor_insights":                  true,
 		"aws_dynamodb_table":                                 true,
@@ -72,6 +74,7 @@ func TestExistingEnrichersDoNotImplementByID(t *testing.T) {
 		"aws_s3_bucket_server_side_encryption_configuration": true,
 		"aws_s3_bucket_versioning":                           true,
 		"aws_secretsmanager_secret":                          true,
+		"aws_service_discovery_private_dns_namespace":        true,
 	}
 	for _, ccCfg := range cloudControlTypeConfigs {
 		if handRolledTypes[ccCfg.TFType] {

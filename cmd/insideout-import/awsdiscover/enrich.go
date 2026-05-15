@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/apigatewayv2"
+	"github.com/aws/aws-sdk-go-v2/service/bedrock"
 	"github.com/aws/aws-sdk-go-v2/service/cloudcontrol"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
@@ -30,6 +31,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/resourceexplorer2"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
+	"github.com/aws/aws-sdk-go-v2/service/servicediscovery"
 
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/progress"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
@@ -141,6 +143,17 @@ type EnrichClients struct {
 	DynamoDB       *dynamodb.Client
 	CloudWatchLogs *cloudwatchlogs.Client
 	SecretsManager *secretsmanager.Client
+	// Bedrock is the shared client used by the bedrock_guardrail and
+	// bedrock_model_invocation_logging_configuration enrichers (#482
+	// Bucket-C push). The SDK client is stateless over an aws.Config so
+	// a single instance serves every Bedrock-routed enricher. Nil is
+	// tolerated and surfaces as ErrEnrichClientUnavailable at Enrich
+	// time; EnrichAttributes downgrades that to a per-resource ServiceWarn.
+	Bedrock *bedrock.Client
+	// ServiceDiscovery is the shared client used by the
+	// service_discovery_private_dns_namespace enricher (#482 Bucket-C
+	// push). Same nil-tolerated discipline as Bedrock.
+	ServiceDiscovery *servicediscovery.Client
 	// CloudControl is the shared client for the generic Cloud Control
 	// enricher (#490 HYBRID). One client is reused across every
 	// cloudControlEnricher registered in NewAWSDiscoverer.byTypeEnricher

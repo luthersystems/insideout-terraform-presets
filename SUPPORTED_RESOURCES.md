@@ -22,8 +22,8 @@ and is checked in lockstep with the runtime registries. See the
 
 ## Summary
 
-- **AWS:** 109 types · 100% Discoverable · 95% Enrichable · 15% DriftDetectable · 0% MetricsAvailable · 13% AgentEditable
-- **GCP:** 54 types · 100% Discoverable · 96% Enrichable · 33% DriftDetectable · 0% MetricsAvailable · 85% AgentEditable
+- **AWS:** 109 types · 100% Discoverable · 98% Enrichable · 36% DriftDetectable · 0% MetricsAvailable · 34% AgentEditable
+- **GCP:** 54 types · 100% Discoverable · 100% Enrichable · 37% DriftDetectable · 0% MetricsAvailable · 89% AgentEditable
 
 ## AWS
 
@@ -45,9 +45,9 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_backup_plan` | ✓ | ✓ | – | – | – |
 | `aws_backup_selection` | ✓ | ✓ | – | – | – |
 | `aws_backup_vault` | ✓ | ✓ | – | – | – |
-| `aws_bedrock_guardrail` | ✓ | – | – | – | – |
-| `aws_bedrock_model_invocation_logging_configuration` | ✓ | – | – | – | – |
-| `aws_cloudfront_distribution` | ✓ | ✓ | – | – | – |
+| `aws_bedrock_guardrail` | ✓ | ✓ | ✓ | – | ✓ |
+| `aws_bedrock_model_invocation_logging_configuration` | ✓ | ✓ | ✓ | – | ✓ |
+| `aws_cloudfront_distribution` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_cloudfront_function` | ✓ | ✓ | – | – | – |
 | `aws_cloudfront_monitoring_subscription` | ✓ | ✓ | – | – | – |
 | `aws_cloudfront_origin_access_identity` | ✓ | ✓ | – | – | – |
@@ -62,58 +62,58 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_cognito_user_pool` | ✓ | ✓ | – | – | – |
 | `aws_cognito_user_pool_client` | ✓ | ✓ | – | – | – |
 | `aws_cognito_user_pool_domain` | ✓ | ✓ | – | – | – |
-| `aws_db_instance` | ✓ | ✓ | – | – | – |
+| `aws_db_instance` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_db_parameter_group` | ✓ | ✓ | – | – | – |
 | `aws_db_subnet_group` | ✓ | ✓ | – | – | – |
 | `aws_dynamodb_contributor_insights` | ✓ | ✓ | ✓ | – | – |
 | `aws_dynamodb_table` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_ebs_volume` | ✓ | ✓ | – | – | – |
-| `aws_ecs_cluster` | ✓ | ✓ | – | – | – |
+| `aws_ecs_cluster` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_ecs_cluster_capacity_providers` | ✓ | ✓ | – | – | – |
 | `aws_eip` | ✓ | ✓ | – | – | – |
 | `aws_eks_access_entry` | ✓ | ✓ | – | – | – |
 | `aws_eks_addon` | ✓ | ✓ | – | – | – |
-| `aws_eks_cluster` | ✓ | ✓ | – | – | – |
+| `aws_eks_cluster` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_eks_fargate_profile` | ✓ | ✓ | – | – | – |
 | `aws_eks_node_group` | ✓ | ✓ | – | – | – |
 | `aws_eks_pod_identity_association` | ✓ | ✓ | – | – | – |
 | `aws_elasticache_parameter_group` | ✓ | ✓ | – | – | – |
-| `aws_elasticache_replication_group` | ✓ | ✓ | – | – | – |
+| `aws_elasticache_replication_group` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_elasticache_subnet_group` | ✓ | ✓ | – | – | – |
 | `aws_iam_group` | ✓ | ✓ | – | – | – |
 | `aws_iam_instance_profile` | ✓ | ✓ | – | – | – |
-| `aws_iam_policy` | ✓ | ✓ | – | – | – |
-| `aws_iam_role` | ✓ | ✓ | – | – | – |
+| `aws_iam_policy` | ✓ | ✓ | ✓ | – | ✓ |
+| `aws_iam_role` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_iam_role_policy` | ✓ | ✓ | – | – | – |
 | `aws_iam_role_policy_attachment` | ✓ | ✓ | ✓ | – | – |
 | `aws_iam_service_linked_role` | ✓ | ✓ | – | – | – |
 | `aws_iam_user` | ✓ | ✓ | – | – | – |
-| `aws_instance` | ✓ | ✓ | – | – | – |
+| `aws_instance` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_internet_gateway` | ✓ | ✓ | – | – | – |
 | `aws_key_pair` | ✓ | ✓ | – | – | – |
 | `aws_kms_alias` | ✓ | ✓ | – | – | – |
-| `aws_kms_key` | ✓ | ✓ | – | – | – |
+| `aws_kms_key` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_lambda_alias` | ✓ | ✓ | – | – | – |
 | `aws_lambda_event_source_mapping` | ✓ | ✓ | – | – | – |
 | `aws_lambda_function` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_lambda_function_url` | ✓ | ✓ | – | – | – |
 | `aws_lambda_permission` | ✓ | ✓ | – | – | – |
 | `aws_launch_template` | ✓ | ✓ | – | – | – |
-| `aws_lb` | ✓ | ✓ | – | – | – |
-| `aws_lb_listener` | ✓ | ✓ | – | – | – |
-| `aws_lb_target_group` | ✓ | ✓ | – | – | – |
-| `aws_msk_cluster` | ✓ | ✓ | – | – | – |
+| `aws_lb` | ✓ | ✓ | ✓ | – | ✓ |
+| `aws_lb_listener` | ✓ | ✓ | ✓ | – | ✓ |
+| `aws_lb_target_group` | ✓ | ✓ | ✓ | – | ✓ |
+| `aws_msk_cluster` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_msk_configuration` | ✓ | ✓ | – | – | – |
 | `aws_nat_gateway` | ✓ | ✓ | – | – | – |
 | `aws_network_acl` | ✓ | ✓ | – | – | – |
 | `aws_network_interface` | ✓ | ✓ | – | – | – |
-| `aws_opensearch_domain` | ✓ | ✓ | – | – | – |
+| `aws_opensearch_domain` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_opensearchserverless_access_policy` | ✓ | ✓ | – | – | – |
 | `aws_opensearchserverless_collection` | ✓ | ✓ | – | – | – |
 | `aws_opensearchserverless_security_policy` | ✓ | ✓ | – | – | – |
 | `aws_resourceexplorer2_index` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_resourceexplorer2_view` | ✓ | ✓ | ✓ | – | ✓ |
-| `aws_route53_zone` | ✓ | ✓ | – | – | – |
+| `aws_route53_zone` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_route_table` | ✓ | ✓ | – | – | – |
 | `aws_s3_bucket` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_s3_bucket_lifecycle_configuration` | ✓ | ✓ | ✓ | – | ✓ |
@@ -123,15 +123,15 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_s3_bucket_server_side_encryption_configuration` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_s3_bucket_versioning` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_secretsmanager_secret` | ✓ | ✓ | ✓ | – | ✓ |
-| `aws_secretsmanager_secret_rotation` | ✓ | ✓ | – | – | – |
-| `aws_security_group` | ✓ | ✓ | – | – | – |
-| `aws_service_discovery_private_dns_namespace` | ✓ | – | – | – | – |
-| `aws_sns_topic` | ✓ | ✓ | – | – | – |
+| `aws_secretsmanager_secret_rotation` | ✓ | ✓ | ✓ | – | ✓ |
+| `aws_security_group` | ✓ | ✓ | ✓ | – | ✓ |
+| `aws_service_discovery_private_dns_namespace` | ✓ | ✓ | ✓ | – | ✓ |
+| `aws_sns_topic` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_sns_topic_subscription` | ✓ | ✓ | – | – | – |
 | `aws_sqs_queue` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_ssm_parameter` | ✓ | ✓ | – | – | – |
-| `aws_subnet` | ✓ | ✓ | – | – | – |
-| `aws_vpc` | ✓ | ✓ | – | – | – |
+| `aws_subnet` | ✓ | ✓ | ✓ | – | ✓ |
+| `aws_vpc` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_vpc_dhcp_options` | ✓ | ✓ | – | – | – |
 | `aws_vpc_endpoint` | ✓ | ✓ | – | – | – |
 | `aws_vpc_security_group_egress_rule` | ✓ | ✓ | – | – | – |
@@ -171,7 +171,7 @@ and is checked in lockstep with the runtime registries. See the
 | `google_container_node_pool` | ✓ | ✓ | – | – | ✓ |
 | `google_firestore_database` | ✓ | ✓ | – | – | ✓ |
 | `google_identity_platform_config` | ✓ | ✓ | – | – | ✓ |
-| `google_identity_platform_default_supported_idp_config` | ✓ | – | – | – | – |
+| `google_identity_platform_default_supported_idp_config` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_kms_crypto_key` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_kms_crypto_key_iam_binding` | ✓ | ✓ | – | – | ✓ |
 | `google_kms_key_ring` | ✓ | ✓ | – | – | – |
@@ -194,7 +194,7 @@ and is checked in lockstep with the runtime registries. See the
 | `google_sql_user` | ✓ | ✓ | – | – | ✓ |
 | `google_storage_bucket` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_storage_bucket_iam_member` | ✓ | ✓ | – | – | – |
-| `google_storage_bucket_object` | ✓ | – | – | – | – |
+| `google_storage_bucket_object` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_vertex_ai_dataset` | ✓ | ✓ | – | – | ✓ |
 | `google_vpc_access_connector` | ✓ | ✓ | ✓ | – | ✓ |
 
