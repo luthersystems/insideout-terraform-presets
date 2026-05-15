@@ -3,7 +3,16 @@ package main
 // WantedAWS lists the Phase 1 AWS resource types we generate Layer 1
 // structs for. Add new types here to expand coverage.
 var WantedAWS = []string{
+	// Drift coverage bundle 3 (#482) — cloud-control-routed AWS types
+	// broadening to more API families (api gateway, codebuild,
+	// monitoring, autoscaling, codepipeline, sfn, athena, events,
+	// vpc endpoints, acm). Each was already cloud-control-enriched;
+	// adding the Layer 1 typed struct + Layer 2 curated policy.Map
+	// flips them to DriftDetectable.
+	"aws_acm_certificate",
 	"aws_apigatewayv2_stage",
+	"aws_athena_workgroup",
+	"aws_autoscaling_group",
 	// Final-2 enricher push (#482) — closes the last hand-rolled
 	// AWS discoverer types that had no Layer 1 typed struct yet,
 	// flipping AWS Enrichable coverage to 100%. Both are
@@ -18,7 +27,11 @@ var WantedAWS = []string{
 	// cloud-control-enriched; adding the Layer 1 typed struct + Layer 2
 	// curated policy.Map flips them to DriftDetectable.
 	"aws_cloudfront_distribution",
+	"aws_cloudwatch_event_rule",
 	"aws_cloudwatch_log_group",
+	"aws_cloudwatch_metric_alarm",
+	"aws_codebuild_project",
+	"aws_codepipeline",
 	"aws_db_instance",
 	"aws_dynamodb_contributor_insights",
 	"aws_dynamodb_table",
@@ -39,6 +52,9 @@ var WantedAWS = []string{
 	"aws_instance",
 	"aws_kms_key",
 	"aws_lambda_function",
+	// Substituted into bundle 3 for aws_apigateway_rest_api (not present
+	// in the pinned hashicorp/aws v5.70.0 filtered schema).
+	"aws_lambda_layer_version",
 	"aws_lb",
 	"aws_lb_listener",
 	"aws_lb_target_group",
@@ -63,10 +79,12 @@ var WantedAWS = []string{
 	"aws_secretsmanager_secret_rotation",
 	"aws_security_group",
 	"aws_service_discovery_private_dns_namespace",
+	"aws_sfn_state_machine",
 	"aws_sns_topic",
 	"aws_sqs_queue",
 	"aws_subnet",
 	"aws_vpc",
+	"aws_vpc_endpoint",
 	// Final-2 enricher push (#482), continued — wafv2_web_acl_association
 	// is the second of the two hand-rolled types being closed; alphabetical
 	// order placed it at the end of the AWS list.

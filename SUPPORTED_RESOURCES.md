@@ -22,14 +22,14 @@ and is checked in lockstep with the runtime registries. See the
 
 ## Summary
 
-- **AWS:** 109 types · 100% Discoverable · 100% Enrichable · 38% DriftDetectable · 5% MetricsAvailable · 35% AgentEditable
-- **GCP:** 54 types · 100% Discoverable · 100% Enrichable · 37% DriftDetectable · 6% MetricsAvailable · 89% AgentEditable
+- **AWS:** 109 types · 100% Discoverable · 100% Enrichable · 42% DriftDetectable · 0% MetricsAvailable · 39% AgentEditable
+- **GCP:** 54 types · 100% Discoverable · 100% Enrichable · 37% DriftDetectable · 0% MetricsAvailable · 89% AgentEditable
 
 ## AWS
 
 | TF Type | Discoverable | Enrichable | DriftDetectable | MetricsAvailable | AgentEditable |
 |---|---|---|---|---|---|
-| `aws_acm_certificate` | ✓ | ✓ | – | – | – |
+| `aws_acm_certificate` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_api_gateway_deployment` | ✓ | ✓ | – | – | – |
 | `aws_api_gateway_resource` | ✓ | ✓ | – | – | – |
 | `aws_api_gateway_stage` | ✓ | ✓ | – | – | – |
@@ -40,7 +40,7 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_apigatewayv2_integration` | ✓ | ✓ | – | – | – |
 | `aws_apigatewayv2_route` | ✓ | ✓ | – | – | – |
 | `aws_apigatewayv2_stage` | ✓ | ✓ | ✓ | – | ✓ |
-| `aws_autoscaling_group` | ✓ | ✓ | – | – | – |
+| `aws_autoscaling_group` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_autoscaling_group_tag` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_backup_plan` | ✓ | ✓ | – | – | – |
 | `aws_backup_selection` | ✓ | ✓ | – | – | – |
@@ -52,11 +52,11 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_cloudfront_monitoring_subscription` | ✓ | ✓ | – | – | – |
 | `aws_cloudfront_origin_access_identity` | ✓ | ✓ | – | – | – |
 | `aws_cloudwatch_dashboard` | ✓ | ✓ | – | – | – |
-| `aws_cloudwatch_event_rule` | ✓ | ✓ | – | – | – |
+| `aws_cloudwatch_event_rule` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_cloudwatch_log_group` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_cloudwatch_log_resource_policy` | ✓ | ✓ | – | – | – |
 | `aws_cloudwatch_log_stream` | ✓ | ✓ | – | – | – |
-| `aws_cloudwatch_metric_alarm` | ✓ | ✓ | – | – | – |
+| `aws_cloudwatch_metric_alarm` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_cognito_identity_provider` | ✓ | ✓ | – | – | – |
 | `aws_cognito_resource_server` | ✓ | ✓ | – | – | – |
 | `aws_cognito_user_pool` | ✓ | ✓ | – | – | – |
@@ -66,7 +66,7 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_db_parameter_group` | ✓ | ✓ | – | – | – |
 | `aws_db_subnet_group` | ✓ | ✓ | – | – | – |
 | `aws_dynamodb_contributor_insights` | ✓ | ✓ | ✓ | – | – |
-| `aws_dynamodb_table` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `aws_dynamodb_table` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_ebs_volume` | ✓ | ✓ | – | – | – |
 | `aws_ecs_cluster` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_ecs_cluster_capacity_providers` | ✓ | ✓ | – | – | – |
@@ -95,11 +95,11 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_kms_key` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_lambda_alias` | ✓ | ✓ | – | – | – |
 | `aws_lambda_event_source_mapping` | ✓ | ✓ | – | – | – |
-| `aws_lambda_function` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `aws_lambda_function` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_lambda_function_url` | ✓ | ✓ | – | – | – |
 | `aws_lambda_permission` | ✓ | ✓ | – | – | – |
 | `aws_launch_template` | ✓ | ✓ | – | – | – |
-| `aws_lb` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `aws_lb` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_lb_listener` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_lb_target_group` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_msk_cluster` | ✓ | ✓ | ✓ | – | ✓ |
@@ -115,7 +115,7 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_resourceexplorer2_view` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_route53_zone` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_route_table` | ✓ | ✓ | – | – | – |
-| `aws_s3_bucket` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `aws_s3_bucket` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_s3_bucket_lifecycle_configuration` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_s3_bucket_ownership_controls` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_s3_bucket_policy` | ✓ | ✓ | – | – | – |
@@ -128,12 +128,12 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_service_discovery_private_dns_namespace` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_sns_topic` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_sns_topic_subscription` | ✓ | ✓ | – | – | – |
-| `aws_sqs_queue` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `aws_sqs_queue` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_ssm_parameter` | ✓ | ✓ | – | – | – |
 | `aws_subnet` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_vpc` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_vpc_dhcp_options` | ✓ | ✓ | – | – | – |
-| `aws_vpc_endpoint` | ✓ | ✓ | – | – | – |
+| `aws_vpc_endpoint` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_vpc_security_group_egress_rule` | ✓ | ✓ | – | – | – |
 | `aws_vpc_security_group_ingress_rule` | ✓ | ✓ | – | – | – |
 | `aws_wafv2_web_acl` | ✓ | ✓ | – | – | – |
@@ -146,7 +146,7 @@ and is checked in lockstep with the runtime registries. See the
 | `google_api_gateway_api` | ✓ | ✓ | – | – | ✓ |
 | `google_api_gateway_api_config` | ✓ | ✓ | – | – | ✓ |
 | `google_api_gateway_gateway` | ✓ | ✓ | – | – | ✓ |
-| `google_cloud_run_v2_service` | ✓ | ✓ | – | ✓ | ✓ |
+| `google_cloud_run_v2_service` | ✓ | ✓ | – | – | ✓ |
 | `google_cloud_run_v2_service_iam_member` | ✓ | ✓ | – | – | – |
 | `google_cloudbuild_trigger` | ✓ | ✓ | – | – | ✓ |
 | `google_cloudfunctions2_function` | ✓ | ✓ | – | – | ✓ |
@@ -182,7 +182,7 @@ and is checked in lockstep with the runtime registries. See the
 | `google_project_iam_member` | ✓ | ✓ | – | – | – |
 | `google_project_service` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_pubsub_subscription` | ✓ | ✓ | ✓ | – | ✓ |
-| `google_pubsub_topic` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `google_pubsub_topic` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_redis_instance` | ✓ | ✓ | – | – | ✓ |
 | `google_secret_manager_secret` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_secret_manager_secret_iam_binding` | ✓ | ✓ | – | – | ✓ |
@@ -192,7 +192,7 @@ and is checked in lockstep with the runtime registries. See the
 | `google_service_networking_connection` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_sql_database_instance` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_sql_user` | ✓ | ✓ | – | – | ✓ |
-| `google_storage_bucket` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `google_storage_bucket` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_storage_bucket_iam_member` | ✓ | ✓ | – | – | – |
 | `google_storage_bucket_object` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_vertex_ai_dataset` | ✓ | ✓ | – | – | ✓ |
