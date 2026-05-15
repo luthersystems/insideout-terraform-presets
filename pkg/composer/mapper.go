@@ -143,6 +143,17 @@ func (m DefaultMapper) BuildModuleValues(
 			}
 		}
 
+		// Explicit NAT=true when private subnets are needed and the user
+		// hasn't authored AWSVPC.EnableNATGateway (#393). Without this, the
+		// HCL default (which #393 flips from true to false in
+		// aws/vpc/variables.tf so a stale-true backfill can no longer wedge a
+		// Public-VPC stack) would silently disable NAT on Private-VPC stacks
+		// that didn't set the field. Tfvars now record the mapper's
+		// decision rather than rely on the preset's HCL default.
+		if _, alreadySet := vals["enable_nat_gateway"]; !alreadySet && stackNeedsPrivateSubnets(comps) {
+			vals["enable_nat_gateway"] = true
+		}
+
 		// NAT-vs-private-subnets coercion (#389). If private subnets were
 		// disabled above (Public VPC with no downstream consumers), NAT must
 		// be off too — the upstream terraform-aws-modules/vpc/aws plans

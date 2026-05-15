@@ -169,8 +169,14 @@ func TestPresetDefaults_EmbeddedFS_KnownVPCSamples(t *testing.T) {
 	assert.Equal(t, "us-east-1", vpc["region"])
 	assert.Equal(t, "10.1.0.0/16", vpc["vpc_cidr"])
 	assert.Equal(t, int64(2), vpc["az_count"])
-	assert.Equal(t, true, vpc["enable_nat_gateway"])
-	assert.Equal(t, true, vpc["single_nat_gateway"])
+	// enable_nat_gateway and single_nat_gateway HCL defaults flipped
+	// true→false in #393 (aws/vpc/variables.tf). The InsideOut composer's
+	// mapper now sets enable_nat_gateway explicitly based on selected
+	// components, so the HCL default is a safe backstop rather than the
+	// source of truth. single_nat_gateway=false matches the upstream
+	// terraform-aws-modules/vpc/aws default.
+	assert.Equal(t, false, vpc["enable_nat_gateway"])
+	assert.Equal(t, false, vpc["single_nat_gateway"])
 	assert.Equal(t, true, vpc["enable_private_subnets"])
 
 	// `environment` has no default in aws/vpc — must be absent.
@@ -417,6 +423,254 @@ func TestApplyPresetDefaults_GCPRoute(t *testing.T) {
 	// the assertion is just that selecting a GCP key with cloud=gcp doesn't
 	// route to the AWS preset tree or panic.
 	_ = cfg
+}
+
+// TestComputePresetDefaults_ReturnsOverlayOnly pins the core contract of the
+// pure variant (#393): user-authored fields stay zero in the overlay; only
+// fields the legacy ApplyPresetDefaults would have backfilled are populated.
+// This is the invariant downstream callers rely on to distinguish "user-set"
+// from "default-backfilled" without comparing against a separate baseline.
+func TestComputePresetDefaults_ReturnsOverlayOnly(t *testing.T) {
+	c := New()
+	cfg := Config{
+		AWSEC2: &struct {
+			InstanceType          string `json:"instanceType,omitempty"`
+			NumServers            string `json:"numServers,omitempty"`
+			NumCoresPerServer     string `json:"numCoresPerServer,omitempty"`
+			DiskSizePerServer     string `json:"diskSizePerServer,omitempty"`
+			UserData              string `json:"userData,omitempty"`
+			UserDataURL           string `json:"userDataURL,omitempty"`
+			CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
+			SSHPublicKey          string `json:"sshPublicKey,omitempty"`
+			EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+		}{
+			InstanceType: "m6i.large", // user-set: must NOT echo into overlay
+		},
+	}
+
+	overlay, err := c.ComputePresetDefaults(cfg, &Components{Cloud: "aws"}, []ComponentKey{KeyAWSEC2})
+	require.NoError(t, err)
+	require.NotNil(t, overlay.AWSEC2, "selected component with at least one resolvable default must allocate the overlay sub-struct")
+
+	// User-authored field absent from overlay (zero in overlay).
+	assert.Empty(t, overlay.AWSEC2.InstanceType,
+		"user-authored field must NOT be echoed back through the overlay (#393 provenance contract)")
+
+	// Default-only fields present in overlay.
+	require.NotNil(t, overlay.AWSEC2.EnableInstanceConnect,
+		"*bool field with HCL default = false must be populated in the overlay")
+	assert.False(t, *overlay.AWSEC2.EnableInstanceConnect)
+	assert.NotNil(t, overlay.AWSEC2.CustomIngressPorts,
+		"list default of [] must produce a non-nil empty slice in the overlay")
+	assert.Equal(t, []int{}, overlay.AWSEC2.CustomIngressPorts)
+}
+
+// TestComputePresetDefaults_DoesNotMutateInput pins the non-mutating contract:
+// passing cfg by value must leave the caller's *struct sub-fields untouched.
+// Also verifies the wrapper ApplyPresetDefaults produces the same end state
+// as ComputePresetDefaults + MergeConfigs, so the back-compat surface holds.
+func TestComputePresetDefaults_DoesNotMutateInput(t *testing.T) {
+	c := New()
+	build := func() *Config {
+		return &Config{
+			AWSEC2: &struct {
+				InstanceType          string `json:"instanceType,omitempty"`
+				NumServers            string `json:"numServers,omitempty"`
+				NumCoresPerServer     string `json:"numCoresPerServer,omitempty"`
+				DiskSizePerServer     string `json:"diskSizePerServer,omitempty"`
+				UserData              string `json:"userData,omitempty"`
+				UserDataURL           string `json:"userDataURL,omitempty"`
+				CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
+				SSHPublicKey          string `json:"sshPublicKey,omitempty"`
+				EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+			}{
+				InstanceType: "m6i.large",
+			},
+		}
+	}
+	pureInput := build()
+	originalEnable := pureInput.AWSEC2.EnableInstanceConnect // captured before call (was nil)
+
+	overlay, err := c.ComputePresetDefaults(*pureInput, &Components{Cloud: "aws"}, []ComponentKey{KeyAWSEC2})
+	require.NoError(t, err)
+
+	// Caller's *Config sub-fields stay untouched.
+	assert.Equal(t, "m6i.large", pureInput.AWSEC2.InstanceType)
+	assert.Equal(t, originalEnable, pureInput.AWSEC2.EnableInstanceConnect,
+		"ComputePresetDefaults must not mutate the caller's nested *bool pointers")
+
+	// Compare against the wrapper end state.
+	wrappedInput := build()
+	require.NoError(t, c.ApplyPresetDefaults(wrappedInput, &Components{Cloud: "aws"}, []ComponentKey{KeyAWSEC2}))
+
+	// Manually apply the overlay to a fresh copy and confirm shape parity.
+	merged := build()
+	MergeConfigs(merged, &overlay)
+	assert.Equal(t, wrappedInput.AWSEC2.InstanceType, merged.AWSEC2.InstanceType)
+	require.NotNil(t, wrappedInput.AWSEC2.EnableInstanceConnect)
+	require.NotNil(t, merged.AWSEC2.EnableInstanceConnect)
+	assert.Equal(t, *wrappedInput.AWSEC2.EnableInstanceConnect, *merged.AWSEC2.EnableInstanceConnect,
+		"wrapper end state must match ComputePresetDefaults + MergeConfigs")
+}
+
+// TestComputePresetDefaults_NilNestedStructInInput_AllocatesInOverlay mirrors
+// the existing TestApplyPresetDefaults_AllocatesNilNestedStruct (defaults_test.go:290)
+// for the pure variant: a nil inner *struct on the input becomes an allocated,
+// populated inner *struct on the overlay.
+func TestComputePresetDefaults_NilNestedStructInInput_AllocatesInOverlay(t *testing.T) {
+	c := New()
+	overlay, err := c.ComputePresetDefaults(Config{}, &Components{Cloud: "aws"}, []ComponentKey{KeyAWSEC2})
+	require.NoError(t, err)
+	require.NotNil(t, overlay.AWSEC2,
+		"selected component with at least one resolvable default must allocate the inner struct on the overlay")
+	assert.Equal(t, "t3.medium", overlay.AWSEC2.InstanceType)
+}
+
+// TestComputePresetDefaults_UnselectedComponentsAbsentFromOverlay pins the
+// scope rule: only the selected components contribute to the overlay.
+func TestComputePresetDefaults_UnselectedComponentsAbsentFromOverlay(t *testing.T) {
+	c := New()
+	overlay, err := c.ComputePresetDefaults(Config{}, &Components{Cloud: "aws"}, []ComponentKey{KeyAWSEC2})
+	require.NoError(t, err)
+	assert.Nil(t, overlay.AWSRDS, "unselected component must stay nil in the overlay")
+}
+
+// TestComputePresetDefaults_NoPresetFS_Errors pins that a Client without an
+// embedded preset FS returns ErrNoPresetFS without panicking. Mirror of
+// TestApplyPresetDefaults_NoPresetFS (defaults_test.go:382).
+func TestComputePresetDefaults_NoPresetFS_Errors(t *testing.T) {
+	c := &Client{}
+	_, err := c.ComputePresetDefaults(Config{}, &Components{Cloud: "aws"}, []ComponentKey{KeyAWSEC2})
+	require.ErrorIs(t, err, ErrNoPresetFS)
+}
+
+// TestComputePresetDefaults_DegenerateInputs pins the corner-case input
+// shapes a caller can legitimately pass: empty selection (no work to do)
+// and nil Components (defaults cloud to "aws" per the function contract,
+// then processes the selection normally). None of these should panic.
+func TestComputePresetDefaults_DegenerateInputs(t *testing.T) {
+	c := New()
+
+	t.Run("empty selected slice → no inner structs populated", func(t *testing.T) {
+		overlay, err := c.ComputePresetDefaults(Config{}, &Components{Cloud: "aws"}, nil)
+		require.NoError(t, err)
+		assert.Nil(t, overlay.AWSEC2, "empty selection: selection loop ran zero iterations, no allocation should land")
+		assert.Nil(t, overlay.AWSRDS)
+	})
+
+	t.Run("nil comps + selected key → defaults cloud to aws and still processes", func(t *testing.T) {
+		// Per the documented contract: "every key in `selected` that has a
+		// preset module under the cloud indicated by comps.Cloud (defaulting
+		// to "aws")". nil comps must not panic; selection still runs.
+		overlay, err := c.ComputePresetDefaults(Config{}, nil, []ComponentKey{KeyAWSEC2})
+		require.NoError(t, err)
+		require.NotNil(t, overlay.AWSEC2, "nil comps must default cloud to aws and process the selected key normally")
+		assert.Equal(t, "t3.medium", overlay.AWSEC2.InstanceType)
+	})
+
+	t.Run("nil comps + empty selection → no-op clean return", func(t *testing.T) {
+		overlay, err := c.ComputePresetDefaults(Config{}, nil, nil)
+		require.NoError(t, err)
+		assert.Nil(t, overlay.AWSEC2)
+		assert.Nil(t, overlay.AWSRDS)
+	})
+}
+
+// TestComputePresetDefaults_NamingMismatch_LeavesNilAndZero mirrors the
+// allocated-but-empty revert for the pure variant: when a selected component's
+// preset has no fields that map to any Config tag, the overlay's inner struct
+// must stay nil (rather than ship an allocated empty struct that would leak
+// through json:",omitempty").
+func TestComputePresetDefaults_NamingMismatch_LeavesNilAndZero(t *testing.T) {
+	c := New()
+	overlay, err := c.ComputePresetDefaults(Config{}, &Components{Cloud: "aws"}, []ComponentKey{KeyAWSCloudWatchLogs})
+	require.NoError(t, err, "naming mismatch must not error")
+	assert.Nil(t, overlay.AWSCloudWatchLogs,
+		"selected component whose preset declares no fields matching any Config tag must leave the inner struct nil in the overlay")
+}
+
+// TestComputePresetDefaults_ProvenanceDistinguishesUserSetEqualToDefault is
+// the provenance witness called out in #393's design. The witness is a
+// two-call differential against the same caller intent split only by
+// whether the user explicitly authored the field equal to its HCL default:
+//
+//  1. cfg with EnableInstanceConnect = nil (user didn't author it) →
+//     overlay populates EnableInstanceConnect = &false.
+//  2. cfg with EnableInstanceConnect = &false (user authored equal-to-
+//     default) → overlay leaves EnableInstanceConnect = nil.
+//
+// The pair only differs at the witnessed leaf, so the overlay differing
+// at exactly that leaf demonstrates provenance: ComputePresetDefaults
+// distinguishes "would have been filled in" from "user authored equal-
+// to-default" without comparing values. A reconstructive PristineCopy
+// approach (the rejected alternative) would populate the same overlay in
+// both cases (because the post-state matches the default in both), and
+// the differential would collapse — that's the bug this test catches.
+func TestComputePresetDefaults_ProvenanceDistinguishesUserSetEqualToDefault(t *testing.T) {
+	c := New()
+	falseVal := false
+
+	mkCfg := func(enable *bool) Config {
+		return Config{
+			AWSEC2: &struct {
+				InstanceType          string `json:"instanceType,omitempty"`
+				NumServers            string `json:"numServers,omitempty"`
+				NumCoresPerServer     string `json:"numCoresPerServer,omitempty"`
+				DiskSizePerServer     string `json:"diskSizePerServer,omitempty"`
+				UserData              string `json:"userData,omitempty"`
+				UserDataURL           string `json:"userDataURL,omitempty"`
+				CustomIngressPorts    []int  `json:"customIngressPorts,omitempty"`
+				SSHPublicKey          string `json:"sshPublicKey,omitempty"`
+				EnableInstanceConnect *bool  `json:"enableInstanceConnect,omitempty"`
+			}{
+				EnableInstanceConnect: enable,
+			},
+		}
+	}
+
+	// Call 1: user did NOT author EnableInstanceConnect.
+	cfgUnset := mkCfg(nil)
+	overlayUnset, err := c.ComputePresetDefaults(cfgUnset, &Components{Cloud: "aws"}, []ComponentKey{KeyAWSEC2})
+	require.NoError(t, err)
+	require.NotNil(t, overlayUnset.AWSEC2, "default-only overlay must populate the inner *struct")
+	require.NotNil(t, overlayUnset.AWSEC2.EnableInstanceConnect,
+		"when user didn't author, overlay populates EnableInstanceConnect from the HCL default")
+	assert.False(t, *overlayUnset.AWSEC2.EnableInstanceConnect)
+
+	// Call 2: user explicitly authored EnableInstanceConnect = &false (equal
+	// to the HCL default). The whole point of the test is that this
+	// *contracted* state — overlay leaf nil — differs from Call 1 — overlay
+	// leaf &false. The differential is the provenance signal.
+	cfgEqualToDefault := mkCfg(&falseVal)
+	overlayEqualToDefault, err := c.ComputePresetDefaults(cfgEqualToDefault, &Components{Cloud: "aws"}, []ComponentKey{KeyAWSEC2})
+	require.NoError(t, err)
+	require.NotNil(t, overlayEqualToDefault.AWSEC2, "other AWSEC2 defaults still populate the overlay")
+	assert.Nil(t, overlayEqualToDefault.AWSEC2.EnableInstanceConnect,
+		"user-authored *bool (non-nil pointer) must NOT be populated in the overlay — that's the provenance signal that distinguishes user-set-equal-to-default from default-backfilled")
+
+	// Caller's cfg is untouched in both cases.
+	assert.Nil(t, cfgUnset.AWSEC2.EnableInstanceConnect, "cfg passed by value but inner *struct is shared; ComputePresetDefaults must not mutate it")
+	require.NotNil(t, cfgEqualToDefault.AWSEC2.EnableInstanceConnect)
+	assert.False(t, *cfgEqualToDefault.AWSEC2.EnableInstanceConnect)
+
+	// End-state via MergeConfigs: both overlays merged onto a fresh persisted
+	// shape produce the same EnableInstanceConnect value (&false), but for
+	// different reasons. The provenance distinction is preserved in the
+	// overlay shape — callers that want to know "did the user author this?"
+	// have it without value comparison.
+	mergedUnset := &Config{}
+	MergeConfigs(mergedUnset, &overlayUnset)
+	require.NotNil(t, mergedUnset.AWSEC2)
+	require.NotNil(t, mergedUnset.AWSEC2.EnableInstanceConnect)
+	assert.False(t, *mergedUnset.AWSEC2.EnableInstanceConnect)
+
+	// PristineCopy-regression guard: if a future change accidentally
+	// populated the overlay in Call 2 (because the default would have matched),
+	// the differential below collapses and this assertion fires.
+	assert.NotEqual(t,
+		overlayUnset.AWSEC2.EnableInstanceConnect == nil,
+		overlayEqualToDefault.AWSEC2.EnableInstanceConnect == nil,
+		"overlay leaf must differ between user-unset and user-set-equal-to-default — the differential is the provenance signal")
 }
 
 func TestMergeConfigs_NilGuards(t *testing.T) {

@@ -101,6 +101,96 @@ func (c *Client) PresetDefaults() (map[string]map[string]any, error) {
 	return out, nil
 }
 
+// ComputePresetDefaults returns the overlay of statically-resolvable HCL
+// defaults that would fill the zero/nil leaf fields of cfg, for every key in
+// `selected` that has a preset module under the cloud indicated by comps.Cloud
+// (defaulting to "aws"). It does NOT mutate cfg. The returned overlay is a
+// sparse Config — only fields that defaults would write are populated.
+//
+// Callers can:
+//   - Apply the overlay: MergeConfigs(&cfg, &overlay) — same effect as the
+//     legacy ApplyPresetDefaults.
+//   - Display the overlay as "preset defaults" without touching user state.
+//   - Persist `cfg` as the user's pristine intent and merge on read; never
+//     lose the user-vs-default distinction.
+//
+// Provenance is automatic — given the original cfg and the overlay:
+//   - A field zero in cfg, populated in overlay → default-derived.
+//   - A field non-zero in cfg → always user-authored (the overlay never echoes
+//     it back), including the case where the user explicitly set it equal to
+//     the default. A reconstructive `PristineCopy` approach would strip that
+//     case; this one preserves it because the overlay decision is per-field
+//     zero-check, not value-comparison.
+//
+// Backfill semantics, type coercion, and the silent-skip behavior on
+// unmappable types or HCL variables without a Config field are identical to
+// ApplyPresetDefaults — see that function's doc comment for the full table.
+//
+// Returns an error only on HCL-parse / FS failures; missing presets or
+// unmappable values are silently skipped.
+func (c *Client) ComputePresetDefaults(cfg Config, comps *Components, selected []ComponentKey) (Config, error) {
+	var out Config
+	if c.presets == nil {
+		return out, ErrNoPresetFS
+	}
+	cloud := "aws"
+	if comps != nil && comps.Cloud != "" {
+		cloud = strings.ToLower(comps.Cloud)
+	}
+
+	// Build a JSON-tag → struct-field-index map for Config's nested *struct
+	// fields, so we can look up which Config field matches a given
+	// ComponentKey (whose string form equals the JSON tag, e.g. "aws_ec2").
+	// cfg and out share the same Config type, so one index serves both.
+	cfgVal := reflect.ValueOf(&cfg).Elem()
+	outVal := reflect.ValueOf(&out).Elem()
+	cfgType := cfgVal.Type()
+	tagIndex := map[string]int{}
+	for i := 0; i < cfgType.NumField(); i++ {
+		ft := cfgType.Field(i)
+		if ft.Type.Kind() != reflect.Ptr || ft.Type.Elem().Kind() != reflect.Struct {
+			continue
+		}
+		tag := jsonTagName(ft.Tag.Get("json"))
+		if tag != "" {
+			tagIndex[tag] = i
+		}
+	}
+
+	for _, key := range selected {
+		fieldIdx, ok := tagIndex[string(key)]
+		if !ok {
+			continue
+		}
+		path := GetPresetPath(cloud, key, comps)
+		files, err := c.GetPresetFiles(path)
+		if err != nil {
+			// Missing preset module: not an error, just nothing to fill.
+			continue
+		}
+		defaults, err := ModuleDefaults(files)
+		if err != nil {
+			return out, fmt.Errorf("composer: reading defaults for %s: %w", path, err)
+		}
+		if len(defaults) == 0 {
+			continue
+		}
+
+		// Leaf zero-check reads cfg's inner struct (may be nil → all fields
+		// treated as zero); writes go into out's parallel inner struct,
+		// allocated on demand.
+		cfgInner := cfgVal.Field(fieldIdx)
+		outInner := outVal.Field(fieldIdx)
+		outInner.Set(reflect.New(outInner.Type().Elem()))
+		filled := overlayStructFromDefaults(cfgInner, outInner.Elem(), defaults)
+		if !filled {
+			// Nothing landed; revert to nil so the field stays omitempty.
+			outInner.Set(reflect.Zero(outInner.Type()))
+		}
+	}
+	return out, nil
+}
+
 // ApplyPresetDefaults backfills cfg with statically-resolvable HCL defaults
 // for every key in `selected` that has a preset module under the cloud
 // indicated by comps.Cloud (defaulting to "aws"). It is the typed-Config
@@ -108,6 +198,11 @@ func (c *Client) PresetDefaults() (map[string]map[string]any, error) {
 // "preset path → variable → value" map, this function lifts those values into
 // the matching nested *struct fields of Config, performing snake_case ↔
 // camelCase JSON-tag matching and per-field type coercion.
+//
+// New code should prefer ComputePresetDefaults, which returns the overlay
+// without mutating cfg — preserving the user-vs-default distinction the
+// in-place mutation otherwise loses. This wrapper is preserved for the
+// existing cross-repo consumer (luthersystems/reliable#1435).
 //
 // Backfill semantics — a Config field is filled ONLY when its current value
 // is the zero value for its type (per reflect.Value.IsZero):
@@ -142,66 +237,14 @@ func (c *Client) PresetDefaults() (map[string]map[string]any, error) {
 // Returns an error only on HCL-parse / FS failures; missing presets or
 // unmappable values are silently skipped.
 func (c *Client) ApplyPresetDefaults(cfg *Config, comps *Components, selected []ComponentKey) error {
-	if c.presets == nil {
-		return ErrNoPresetFS
-	}
 	if cfg == nil {
 		return fmt.Errorf("composer: ApplyPresetDefaults requires a non-nil *Config")
 	}
-	cloud := "aws"
-	if comps != nil && comps.Cloud != "" {
-		cloud = strings.ToLower(comps.Cloud)
+	overlay, err := c.ComputePresetDefaults(*cfg, comps, selected)
+	if err != nil {
+		return err
 	}
-
-	// Build a JSON-tag → struct-field-index map for Config's nested *struct
-	// fields, so we can look up which Config field matches a given
-	// ComponentKey (whose string form equals the JSON tag, e.g. "aws_ec2").
-	cfgVal := reflect.ValueOf(cfg).Elem()
-	cfgType := cfgVal.Type()
-	tagIndex := map[string]int{}
-	for i := 0; i < cfgType.NumField(); i++ {
-		ft := cfgType.Field(i)
-		if ft.Type.Kind() != reflect.Ptr || ft.Type.Elem().Kind() != reflect.Struct {
-			continue
-		}
-		tag := jsonTagName(ft.Tag.Get("json"))
-		if tag != "" {
-			tagIndex[tag] = i
-		}
-	}
-
-	for _, key := range selected {
-		fieldIdx, ok := tagIndex[string(key)]
-		if !ok {
-			continue
-		}
-		path := GetPresetPath(cloud, key, comps)
-		files, err := c.GetPresetFiles(path)
-		if err != nil {
-			// Missing preset module: not an error, just nothing to fill.
-			continue
-		}
-		defaults, err := ModuleDefaults(files)
-		if err != nil {
-			return fmt.Errorf("composer: reading defaults for %s: %w", path, err)
-		}
-		if len(defaults) == 0 {
-			continue
-		}
-
-		fieldVal := cfgVal.Field(fieldIdx)
-		// Allocate the inner struct on demand.
-		allocated := false
-		if fieldVal.IsNil() {
-			fieldVal.Set(reflect.New(fieldVal.Type().Elem()))
-			allocated = true
-		}
-		filled := backfillStruct(fieldVal.Elem(), defaults)
-		if allocated && !filled {
-			// Nothing landed; revert to nil so the field stays omitempty.
-			fieldVal.Set(reflect.Zero(fieldVal.Type()))
-		}
-	}
+	MergeConfigs(cfg, &overlay)
 	return nil
 }
 
@@ -287,16 +330,32 @@ func overlayZero(dst, src reflect.Value) bool {
 	return filled
 }
 
-// backfillStruct walks fields of dst (which must be a struct value) and for
-// each zero-valued field looks up the HCL default by snake_case-ified JSON
-// tag. Returns true if at least one field was successfully set.
-func backfillStruct(dst reflect.Value, defaults map[string]any) bool {
+// overlayStructFromDefaults walks fields of dst (a struct value) and for each
+// field that is zero-valued IN src, looks up the HCL default by snake_case-
+// ified JSON tag and sets it in dst.
+//
+// src is the *struct field on the original Config (may be nil); when nil,
+// every field is treated as zero — the overlay then carries every default the
+// preset emits. When non-nil, only fields zero in src are populated in dst, so
+// the overlay never echoes user-authored values back as if they were defaults.
+//
+// dst is the parallel *struct field on the output Config, already dereferenced
+// to its inner struct value. Returns true if at least one field landed.
+func overlayStructFromDefaults(src, dst reflect.Value, defaults map[string]any) bool {
+	srcNil := src.Kind() == reflect.Ptr && src.IsNil()
+	var srcStruct reflect.Value
+	if !srcNil {
+		srcStruct = src.Elem()
+	}
 	t := dst.Type()
 	filled := false
 	for i := 0; i < t.NumField(); i++ {
 		ft := t.Field(i)
-		fv := dst.Field(i)
-		if !fv.CanSet() || !fv.IsZero() {
+		dv := dst.Field(i)
+		if !dv.CanSet() {
+			continue
+		}
+		if !srcNil && !srcStruct.Field(i).IsZero() {
 			continue
 		}
 		tag := jsonTagName(ft.Tag.Get("json"))
@@ -312,7 +371,7 @@ func backfillStruct(dst reflect.Value, defaults map[string]any) bool {
 		if !ok {
 			continue
 		}
-		fv.Set(coerced)
+		dv.Set(coerced)
 		filled = true
 	}
 	return filled

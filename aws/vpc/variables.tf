@@ -45,25 +45,26 @@ variable "az_count" {
 }
 
 variable "enable_nat_gateway" {
-  description = "Enable NAT gateways so private subnets can reach the public internet. Set false only for public-only VPCs (no private workloads). Topology (one vs one-per-AZ) is controlled by single_nat_gateway."
+  description = "Enable NAT gateways so private subnets can reach the public internet. Required for stacks with private workloads (EKS/ECS/RDS/ElastiCache/OpenSearch/EC2 node groups); leave false for public-only VPCs. Topology (one vs one-per-AZ) is controlled by single_nat_gateway. The InsideOut composer's mapper sets this explicitly based on selected components (#393) — the HCL default here is a backstop, not the source of truth."
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "single_nat_gateway" {
   description = <<-EOT
     Provision exactly one NAT gateway (in the first public subnet / first AZ) shared by all private subnets,
-    instead of one NAT gateway per AZ. Defaults to true for cost.
+    instead of one NAT gateway per AZ. Defaults to false (one-per-AZ) for availability, matching the
+    upstream terraform-aws-modules/vpc/aws default.
 
-    - true (default): cheapest, ~1/N the NAT cost, but (a) single point of failure if that AZ goes down
-      and (b) every stack in the account lands its NAT in the first AZ — accounts running multiple stacks
-      can exhaust the per-AZ NAT gateway quota (default 5) before running out of the VPC quota.
-    - false: one NAT gateway per AZ (as bounded by az_count). ~N× cost, no per-AZ SPOF, spreads NAT
+    - false (default): one NAT gateway per AZ (as bounded by az_count). ~N× cost, no per-AZ SPOF, spreads NAT
       quota usage across AZs. Recommended once an account runs more than a handful of concurrent VPCs
       or whenever AZ-level availability is a requirement.
+    - true: cheapest, ~1/N the NAT cost, but (a) single point of failure if that AZ goes down
+      and (b) every stack in the account lands its NAT in the first AZ — accounts running multiple stacks
+      can exhaust the per-AZ NAT gateway quota (default 5) before running out of the VPC quota.
   EOT
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "enable_private_subnets" {

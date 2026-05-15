@@ -110,7 +110,11 @@ func TestBuildModuleValues_VPC_PublicPrivateMode(t *testing.T) {
 
 	// Each "keeps private subnets" test verifies that enable_private_subnets
 	// is NOT set to false (i.e. the key is absent, so the preset default of
-	// true takes effect). We also check that enable_nat_gateway is absent.
+	// true takes effect) AND that the mapper explicitly emits
+	// enable_nat_gateway=true. Pre-#393 the mapper left enable_nat_gateway
+	// unset and the HCL default (true) flowed through; post-#393 the HCL
+	// default is false (the trap that motivated #393), so the mapper records
+	// its decision in tfvars rather than relying on the preset's HCL value.
 	keepsCases := []struct {
 		name  string
 		comps *Components
@@ -129,21 +133,26 @@ func TestBuildModuleValues_VPC_PublicPrivateMode(t *testing.T) {
 			require.NoError(t, err)
 			assertVPCCaseRan(t, vals)
 			_, hasPrivate := vals["enable_private_subnets"]
-			_, hasNat := vals["enable_nat_gateway"]
 			assert.False(t, hasPrivate, "should not disable private subnets when %s needs them", tc.name)
-			assert.False(t, hasNat, "should not disable NAT when %s needs it", tc.name)
+			assert.Equal(t, true, vals["enable_nat_gateway"],
+				"#393: mapper must explicitly emit enable_nat_gateway=true when %s needs private subnets and no user override", tc.name)
 		})
 	}
 
 	t.Run("Private VPC uses preset defaults (no override)", func(t *testing.T) {
+		// A bare "Private VPC" with no downstream consumers doesn't actually
+		// need NAT (no compute or DB to give internet access to). The mapper
+		// leaves both keys unset and the HCL default (false post-#393)
+		// applies. Adding a consumer flips on the explicit NAT=true branch —
+		// covered by the keepsCases loop above.
 		comps := &Components{AWSVPC: "Private VPC"}
 		vals, err := m.BuildModuleValues(KeyAWSVPC, comps, nil, "test", "us-east-1")
 		require.NoError(t, err)
 		assertVPCCaseRan(t, vals)
 		_, hasPrivate := vals["enable_private_subnets"]
 		_, hasNat := vals["enable_nat_gateway"]
-		assert.False(t, hasPrivate, "Private VPC should not override enable_private_subnets (preset default is true)")
-		assert.False(t, hasNat, "Private VPC should not override enable_nat_gateway (preset default is true)")
+		assert.False(t, hasPrivate, "Private VPC should not override enable_private_subnets")
+		assert.False(t, hasNat, "Private VPC with no consumers should not emit enable_nat_gateway (HCL default applies)")
 	})
 
 	t.Run("empty AWSVPC uses preset defaults", func(t *testing.T) {
@@ -155,6 +164,37 @@ func TestBuildModuleValues_VPC_PublicPrivateMode(t *testing.T) {
 		_, hasNat := vals["enable_nat_gateway"]
 		assert.False(t, hasPrivate)
 		assert.False(t, hasNat)
+	})
+
+	t.Run("Private VPC + EKS with default cfg emits explicit NAT=true (#393)", func(t *testing.T) {
+		// Pre-#393 this case relied on the HCL default (true) flowing through;
+		// post-#393 the HCL default is false, so the mapper must explicitly
+		// emit enable_nat_gateway=true to keep the deploy from silently
+		// losing NAT. Direct symptom of the trap that motivated #393.
+		comps := &Components{AWSVPC: "Private VPC", AWSEKS: boolPtr(true)}
+		cfg := &Config{Region: "us-east-1"} // no AWSVPC sub-struct
+		vals, err := m.BuildModuleValues(KeyAWSVPC, comps, cfg, "test", "us-east-1")
+		require.NoError(t, err)
+		assertVPCCaseRan(t, vals)
+		assert.Equal(t, true, vals["enable_nat_gateway"],
+			"mapper must explicitly emit enable_nat_gateway=true when private subnets are needed and the user hasn't authored AWSVPC.EnableNATGateway (#393)")
+	})
+
+	t.Run("user-authored AWSVPC.EnableNATGateway=false wins over #393 explicit-true branch", func(t *testing.T) {
+		// Regression guard: the #393 explicit-true branch must NOT clobber a
+		// user who deliberately set EnableNATGateway=false. The fail-fast
+		// branch at mapper.go:120-127 catches the truly inconsistent
+		// "false + needs private subnets" combination and rejects with an
+		// error before vals is returned.
+		comps := &Components{AWSVPC: "Private VPC", AWSEKS: boolPtr(true)}
+		cfg := cfgWithAWSVPC(nil, boolPtr(false), nil)
+		_, err := m.BuildModuleValues(KeyAWSVPC, comps, cfg, "test", "us-east-1")
+		require.Error(t, err, "user-authored EnableNATGateway=false + EKS must fail-fast at the mapper, NOT be silently overridden to true by the #393 branch")
+		// Pin the specific fail-fast at mapper.go:120-127; a future
+		// refactor returning a different error from a different code path
+		// would still satisfy require.Error and silently weaken this gate.
+		assert.Contains(t, err.Error(), "AWSVPC.EnableNATGateway=false is incompatible",
+			"must surface the specific #389 fail-fast, not some other error path")
 	})
 }
 
