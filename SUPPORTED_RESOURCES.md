@@ -22,8 +22,8 @@ and is checked in lockstep with the runtime registries. See the
 
 ## Summary
 
-- **AWS:** 109 types · 100% Discoverable · 86% Enrichable · 6% DriftDetectable · 0% MetricsAvailable · 6% AgentEditable
-- **GCP:** 54 types · 100% Discoverable · 80% Enrichable · 20% DriftDetectable · 0% MetricsAvailable · 78% AgentEditable
+- **AWS:** 109 types · 100% Discoverable · 89% Enrichable · 8% DriftDetectable · 0% MetricsAvailable · 8% AgentEditable
+- **GCP:** 54 types · 100% Discoverable · 76% Enrichable · 17% DriftDetectable · 0% MetricsAvailable · 74% AgentEditable
 
 ## AWS
 
@@ -45,8 +45,8 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_backup_plan` | ✓ | ✓ | – | – | – |
 | `aws_backup_selection` | ✓ | ✓ | – | – | – |
 | `aws_backup_vault` | ✓ | ✓ | – | – | – |
-| `aws_bedrock_guardrail` | ✓ | – | – | – | – |
-| `aws_bedrock_model_invocation_logging_configuration` | ✓ | – | – | – | – |
+| `aws_bedrock_guardrail` | ✓ | ✓ | ✓ | – | ✓ |
+| `aws_bedrock_model_invocation_logging_configuration` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_cloudfront_distribution` | ✓ | ✓ | – | – | – |
 | `aws_cloudfront_function` | ✓ | ✓ | – | – | – |
 | `aws_cloudfront_monitoring_subscription` | ✓ | ✓ | – | – | – |
@@ -125,7 +125,7 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_secretsmanager_secret` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_secretsmanager_secret_rotation` | ✓ | ✓ | – | – | – |
 | `aws_security_group` | ✓ | ✓ | – | – | – |
-| `aws_service_discovery_private_dns_namespace` | ✓ | – | – | – | – |
+| `aws_service_discovery_private_dns_namespace` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_sns_topic` | ✓ | ✓ | – | – | – |
 | `aws_sns_topic_subscription` | ✓ | ✓ | – | – | – |
 | `aws_sqs_queue` | ✓ | ✓ | ✓ | – | ✓ |
@@ -171,7 +171,7 @@ and is checked in lockstep with the runtime registries. See the
 | `google_container_node_pool` | ✓ | ✓ | – | – | ✓ |
 | `google_firestore_database` | ✓ | ✓ | – | – | ✓ |
 | `google_identity_platform_config` | ✓ | ✓ | – | – | ✓ |
-| `google_identity_platform_default_supported_idp_config` | ✓ | ✓ | ✓ | – | ✓ |
+| `google_identity_platform_default_supported_idp_config` | ✓ | – | – | – | – |
 | `google_kms_crypto_key` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_kms_crypto_key_iam_binding` | ✓ | – | – | – | – |
 | `google_kms_key_ring` | ✓ | ✓ | – | – | – |
@@ -194,7 +194,7 @@ and is checked in lockstep with the runtime registries. See the
 | `google_sql_user` | ✓ | ✓ | – | – | ✓ |
 | `google_storage_bucket` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_storage_bucket_iam_member` | ✓ | – | – | – | – |
-| `google_storage_bucket_object` | ✓ | ✓ | ✓ | – | ✓ |
+| `google_storage_bucket_object` | ✓ | – | – | – | – |
 | `google_vertex_ai_dataset` | ✓ | ✓ | – | – | ✓ |
 | `google_vpc_access_connector` | ✓ | – | – | – | – |
 

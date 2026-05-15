@@ -1,4 +1,156 @@
 {
+  "aws_bedrock_guardrail": [
+    {
+      "path": "blocked_input_messaging",
+      "semantic": "Exact"
+    },
+    {
+      "path": "blocked_outputs_messaging",
+      "semantic": "Exact"
+    },
+    {
+      "path": "content_policy_config.filters_config.input_strength",
+      "semantic": "Exact"
+    },
+    {
+      "path": "content_policy_config.filters_config.output_strength",
+      "semantic": "Exact"
+    },
+    {
+      "path": "content_policy_config.filters_config.type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "contextual_grounding_policy_config.filters_config.threshold",
+      "semantic": "Exact"
+    },
+    {
+      "path": "contextual_grounding_policy_config.filters_config.type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "created_at",
+      "semantic": "Exact"
+    },
+    {
+      "path": "description",
+      "semantic": "Exact"
+    },
+    {
+      "path": "guardrail_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "guardrail_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "kms_key_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "sensitive_information_policy_config.pii_entities_config.action",
+      "semantic": "Exact"
+    },
+    {
+      "path": "sensitive_information_policy_config.pii_entities_config.type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "sensitive_information_policy_config.regexes_config.action",
+      "semantic": "Exact"
+    },
+    {
+      "path": "sensitive_information_policy_config.regexes_config.description",
+      "semantic": "Exact"
+    },
+    {
+      "path": "sensitive_information_policy_config.regexes_config.name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "sensitive_information_policy_config.regexes_config.pattern",
+      "semantic": "Exact"
+    },
+    {
+      "path": "status",
+      "semantic": "Exact"
+    },
+    {
+      "path": "topic_policy_config.topics_config.definition",
+      "semantic": "Exact"
+    },
+    {
+      "path": "topic_policy_config.topics_config.examples",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "topic_policy_config.topics_config.name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "topic_policy_config.topics_config.type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "version",
+      "semantic": "Exact"
+    },
+    {
+      "path": "word_policy_config.managed_word_lists_config.type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "word_policy_config.words_config.text",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_bedrock_model_invocation_logging_configuration": [
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "logging_config.cloudwatch_config.large_data_delivery_s3_config.bucket_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "logging_config.cloudwatch_config.large_data_delivery_s3_config.key_prefix",
+      "semantic": "Exact"
+    },
+    {
+      "path": "logging_config.cloudwatch_config.log_group_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "logging_config.cloudwatch_config.role_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "logging_config.embedding_data_delivery_enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "logging_config.image_data_delivery_enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "logging_config.s3_config.bucket_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "logging_config.s3_config.key_prefix",
+      "semantic": "Exact"
+    },
+    {
+      "path": "logging_config.text_data_delivery_enabled",
+      "semantic": "Exact"
+    }
+  ],
   "aws_cloudwatch_log_group": [
     {
       "path": "arn",
@@ -486,6 +638,32 @@
     },
     {
       "path": "replica.region",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_service_discovery_private_dns_namespace": [
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "description",
+      "semantic": "Exact"
+    },
+    {
+      "path": "hosted_zone",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "vpc",
       "semantic": "Exact"
     }
   ],

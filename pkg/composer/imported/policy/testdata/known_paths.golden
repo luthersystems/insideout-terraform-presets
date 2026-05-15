@@ -1,3 +1,43 @@
+aws_bedrock_guardrail	blocked_input_messaging	Tuning	Security	RileyVisible	ChatSafe		
+aws_bedrock_guardrail	blocked_outputs_messaging	Tuning	Security	RileyVisible	ChatSafe		
+aws_bedrock_guardrail	content_policy_config.filters_config.input_strength	Tuning	Security	RileyVisible	RequiresApproval		
+aws_bedrock_guardrail	content_policy_config.filters_config.output_strength	Tuning	Security	RileyVisible	RequiresApproval		
+aws_bedrock_guardrail	content_policy_config.filters_config.type	Identity		UIVisible	Never		
+aws_bedrock_guardrail	contextual_grounding_policy_config.filters_config.threshold	Tuning	Security	RileyVisible	RequiresApproval		
+aws_bedrock_guardrail	contextual_grounding_policy_config.filters_config.type	Identity		UIVisible	Never		
+aws_bedrock_guardrail	created_at	Identity		UIVisible	Never		
+aws_bedrock_guardrail	description	Tuning		RileyVisible	ChatSafe		
+aws_bedrock_guardrail	guardrail_arn	Identity		UIVisible	Never		
+aws_bedrock_guardrail	guardrail_id	Identity		UIVisible	Never		
+aws_bedrock_guardrail	kms_key_arn	Wiring	Security	RileyVisible	RelationshipOnly		
+aws_bedrock_guardrail	name	Identity		UIVisible	Never		AlwaysReplace
+aws_bedrock_guardrail	sensitive_information_policy_config.pii_entities_config.action	Tuning	Security	RileyVisible	RequiresApproval		
+aws_bedrock_guardrail	sensitive_information_policy_config.pii_entities_config.type	Identity		UIVisible	Never		
+aws_bedrock_guardrail	sensitive_information_policy_config.regexes_config.action	Tuning	Security	RileyVisible	RequiresApproval		
+aws_bedrock_guardrail	sensitive_information_policy_config.regexes_config.description	Tuning		RileyVisible	ChatSafe		
+aws_bedrock_guardrail	sensitive_information_policy_config.regexes_config.name	Identity		UIVisible	Never		
+aws_bedrock_guardrail	sensitive_information_policy_config.regexes_config.pattern	Tuning	Security	RileyVisible	RequiresApproval		
+aws_bedrock_guardrail	status	Identity		UIVisible	Never		
+aws_bedrock_guardrail	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_bedrock_guardrail	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_bedrock_guardrail	timeouts	Tuning		Hidden	SystemOnly		
+aws_bedrock_guardrail	topic_policy_config.topics_config.definition	Tuning	Security	RileyVisible	RequiresApproval		
+aws_bedrock_guardrail	topic_policy_config.topics_config.examples	Tuning	Security	RileyVisible	RequiresApproval		
+aws_bedrock_guardrail	topic_policy_config.topics_config.name	Identity		UIVisible	Never		
+aws_bedrock_guardrail	topic_policy_config.topics_config.type	Identity		UIVisible	Never		
+aws_bedrock_guardrail	version	Identity		UIVisible	Never		
+aws_bedrock_guardrail	word_policy_config.managed_word_lists_config.type	Tuning	Security	RileyVisible	RequiresApproval		
+aws_bedrock_guardrail	word_policy_config.words_config.text	Tuning	Security	RileyVisible	ChatSafe		
+aws_bedrock_model_invocation_logging_configuration	id	Identity		UIVisible	Never		
+aws_bedrock_model_invocation_logging_configuration	logging_config.cloudwatch_config.large_data_delivery_s3_config.bucket_name	Wiring	Reliability	RileyVisible	RelationshipOnly		
+aws_bedrock_model_invocation_logging_configuration	logging_config.cloudwatch_config.large_data_delivery_s3_config.key_prefix	Tuning	Reliability	RileyVisible	ChatSafe		
+aws_bedrock_model_invocation_logging_configuration	logging_config.cloudwatch_config.log_group_name	Wiring	Reliability	RileyVisible	RelationshipOnly		
+aws_bedrock_model_invocation_logging_configuration	logging_config.cloudwatch_config.role_arn	Wiring	Security	RileyVisible	RelationshipOnly		
+aws_bedrock_model_invocation_logging_configuration	logging_config.embedding_data_delivery_enabled	Tuning	Security	RileyVisible	ChatSafe		
+aws_bedrock_model_invocation_logging_configuration	logging_config.image_data_delivery_enabled	Tuning	Security	RileyVisible	ChatSafe		
+aws_bedrock_model_invocation_logging_configuration	logging_config.s3_config.bucket_name	Wiring	Reliability	RileyVisible	RelationshipOnly		
+aws_bedrock_model_invocation_logging_configuration	logging_config.s3_config.key_prefix	Tuning	Reliability	RileyVisible	ChatSafe		
+aws_bedrock_model_invocation_logging_configuration	logging_config.text_data_delivery_enabled	Tuning	Security	RileyVisible	ChatSafe		
 aws_cloudwatch_log_group	arn	Identity		UIVisible	Never		
 aws_cloudwatch_log_group	kms_key_id	Wiring	Security	RileyVisible	RelationshipOnly		
 aws_cloudwatch_log_group	log_group_class	Tuning	Performance	RileyVisible	ChatSafe		MayReplace
@@ -131,6 +171,14 @@ aws_secretsmanager_secret	replica.kms_key_id	Wiring	Security	RileyVisible	Relati
 aws_secretsmanager_secret	replica.region	Wiring	Reliability	RileyVisible	RelationshipOnly		
 aws_secretsmanager_secret	tags	Tuning		Hidden	SystemOnly	Redacted	
 aws_secretsmanager_secret	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_service_discovery_private_dns_namespace	arn	Identity		UIVisible	Never		
+aws_service_discovery_private_dns_namespace	description	Tuning		RileyVisible	ChatSafe		
+aws_service_discovery_private_dns_namespace	hosted_zone	Identity		UIVisible	Never		
+aws_service_discovery_private_dns_namespace	id	Identity		UIVisible	Never		
+aws_service_discovery_private_dns_namespace	name	Identity		UIVisible	Never		AlwaysReplace
+aws_service_discovery_private_dns_namespace	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_service_discovery_private_dns_namespace	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_service_discovery_private_dns_namespace	vpc	Wiring	Reliability	RileyVisible	RelationshipOnly		AlwaysReplace
 aws_sqs_queue	arn	Identity		UIVisible	Never		
 aws_sqs_queue	content_based_deduplication	Tuning		RileyVisible	ChatSafe		
 aws_sqs_queue	delay_seconds	Tuning		RileyVisible	ChatSafe		

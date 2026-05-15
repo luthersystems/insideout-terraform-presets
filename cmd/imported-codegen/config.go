@@ -4,6 +4,8 @@ package main
 // structs for. Add new types here to expand coverage.
 var WantedAWS = []string{
 	"aws_apigatewayv2_stage",
+	"aws_bedrock_guardrail",
+	"aws_bedrock_model_invocation_logging_configuration",
 	"aws_cloudwatch_log_group",
 	"aws_dynamodb_contributor_insights",
 	"aws_dynamodb_table",
@@ -23,6 +25,7 @@ var WantedAWS = []string{
 	"aws_s3_bucket_server_side_encryption_configuration",
 	"aws_s3_bucket_versioning",
 	"aws_secretsmanager_secret",
+	"aws_service_discovery_private_dns_namespace",
 	"aws_sqs_queue",
 }
 
