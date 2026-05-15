@@ -128,11 +128,22 @@ type ByIDEnricher interface {
 // string field — google.golang.org/api/storage/v1.Bucket reports
 // only ProjectNumber (uint64), so the enricher pulls the string
 // project ID from here to populate the TF `project` attribute.
+//
+// CloudAsset is the optional Cloud Asset Inventory getter that backs
+// the CAI HYBRID enricher (cloudasset_enricher.go, mirrors AWS #490 for
+// GCP). One unified getter fronts every TF type registered in
+// cloudAssetTypeConfigs whose Layer-1 codegen has shipped — far fewer
+// per-service SDK clients than the hand-rolled enrichment path needed
+// pre-HYBRID. Nil tolerated: types whose hand-rolled enricher wins as
+// an override don't need this client; types without a hand-rolled
+// override return ErrEnrichClientUnavailable when this is nil, which
+// the EnrichAttributes loop downgrades to a per-resource warning.
 type EnrichClients struct {
 	Storage       *storagev1.Service
 	Pubsub        *pubsubv1.Service
 	SecretManager *secretmanagerv1.Service
 	Compute       *computev1.Service
+	CloudAsset    gcpAssetGetter
 	ProjectID     string
 }
 

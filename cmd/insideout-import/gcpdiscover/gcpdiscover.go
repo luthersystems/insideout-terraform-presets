@@ -263,8 +263,16 @@ type GCPDiscovererOpts struct {
 // the corresponding non-CAI discoverers are exercised — nil is
 // tolerated so unit tests that only walk CAI types don't have to wire
 // up mock listers.
+//
+// byTypeEnricher is populated in two passes. The hand-rolled map below
+// is the first pass — per-type enrichers that own their resource type
+// outright and produce richer payloads than the generic CAI HYBRID
+// path can. The second pass iterates cloudAssetTypeConfigs and
+// registers a generic cloudAssetEnricher for every entry that ISN'T
+// already in the hand-rolled map (hand-rolled wins). Mirrors the AWS
+// Cloud Control HYBRID pattern from #490.
 func NewGCPDiscoverer(searcher gcpAssetSearcher, projectID string, opts GCPDiscovererOpts) *GCPDiscoverer {
-	return &GCPDiscoverer{
+	d := &GCPDiscoverer{
 		searcher:  searcher,
 		projectID: projectID,
 		byType: map[string]Discoverer{
@@ -350,6 +358,29 @@ func NewGCPDiscoverer(searcher gcpAssetSearcher, projectID string, opts GCPDisco
 			"google_storage_bucket":        newStorageBucketEnricher(),
 		},
 	}
+	// HYBRID Cloud Asset Inventory fallback (mirrors AWS #490 steps 1+2):
+	// register one cloudAssetEnricher for every TF type in
+	// cloudAssetTypeConfigs that doesn't already have a hand-rolled
+	// override above. Hand-rolled wins; the loop iterates the same
+	// config the CAI types registry uses so the enricher coverage stays
+	// in lockstep.
+	//
+	// The enricher's GetByName callback defaults to nil and is resolved
+	// at Enrich time from EnrichClients.CloudAsset. Callers constructing
+	// EnrichClients without a CloudAsset client see a per-resource
+	// ErrEnrichClientUnavailable warning (not a batch-fatal error) so a
+	// partial-credentials run still produces useful output from the
+	// hand-rolled enrichers.
+	for _, cfg := range cloudAssetTypeConfigs {
+		if cfg.Skip {
+			continue
+		}
+		if _, has := d.byTypeEnricher[cfg.TFType]; has {
+			continue
+		}
+		d.byTypeEnricher[cfg.TFType] = newCloudAssetEnricher(cfg.TFType, cfg.AssetType, nil)
+	}
+	return d
 }
 
 // SupportedTypes returns the registered Terraform types in lexicographic

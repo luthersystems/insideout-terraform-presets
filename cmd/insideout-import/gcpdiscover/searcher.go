@@ -12,6 +12,7 @@ import (
 	"google.golang.org/api/option"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/fieldmaskpb"
 )
 
 // gcpAssetResult is a flattened view of a Cloud Asset SearchAllResources
@@ -50,6 +51,39 @@ type gcpAssetResult struct {
 // uses *RealAssetSearcher; tests construct lightweight fakes.
 type gcpAssetSearcher interface {
 	SearchAll(ctx context.Context, scope string, assetTypes []string, query string) ([]gcpAssetResult, error)
+}
+
+// gcpAssetGetter is the optional side-interface implemented by searchers
+// that can fetch the full typed JSON representation of a single asset
+// by name (the Cloud Asset Inventory `versionedResources` field). The
+// CAI HYBRID enricher (cloudasset_enricher.go, mirrors AWS #490 for
+// GCP) depends on this side-interface; discoverers do NOT — they only
+// consume the flattened gcpAssetResult shape from SearchAll.
+//
+// Side-interface (not a method on gcpAssetSearcher) so the dozens of
+// pre-existing per-type unit-test fakes that implement
+// gcpAssetSearcher with the older SearchAll-only signature continue to
+// compile unchanged. Tests that need to exercise the enricher path
+// implement both interfaces on the same fake; tests that don't, don't.
+//
+// The fullName argument is the CAI full resource name, of the form
+// `//<service>/<path>/<segments>` (e.g.
+// `//compute.googleapis.com/projects/my-proj/zones/us-central1-a/instances/my-vm`).
+// It is the same string the per-type Discoverer writes into
+// Identity.NativeIDs["asset_name"] at discovery time.
+//
+// The returned map is the resource's JSON representation as defined by
+// the corresponding service-API (e.g. for compute, the Compute Engine
+// v1 REST API representation — `lowerCamelCase` keys, native types
+// for scalars, nested maps for objects). The enricher's CamelCase →
+// snake_case transform reshapes this into the canonical Layer-1 wire
+// format the generated.Google<Type> structs expect.
+//
+// Returns ErrNotFound when the search returns zero rows; any other
+// error reflects a real Cloud Asset API failure (auth, permission,
+// throttle, etc.).
+type gcpAssetGetter interface {
+	GetByName(ctx context.Context, scope, assetType, fullName string) (map[string]any, error)
 }
 
 // RealAssetSearcher wraps cloud.google.com/go/asset/apiv1.Client. The
@@ -127,6 +161,88 @@ func (s *RealAssetSearcher) SearchAll(ctx context.Context, scope string, assetTy
 		}
 		out = append(out, assetResultFromProto(r))
 	}
+}
+
+// GetByName fetches a single Cloud Asset resource by its full
+// resource name (//<service>/<path>/<segments>) and returns the
+// resource's typed JSON representation as a map[string]any (the
+// `versionedResources` payload). Used by the CAI HYBRID enricher to
+// route per-resource attribute lookups through one unified API surface
+// instead of one SDK client per service.
+//
+// scope follows the same form as SearchAll (projects/<id>,
+// folders/<num>, organizations/<num>). assetType is the CAI asset
+// type discriminator (e.g. compute.googleapis.com/Instance) used to
+// narrow the search; passing it explicitly rather than letting the
+// service infer it from the query keeps the call cheap on large
+// projects where the eq-by-name search would otherwise scan every
+// asset type.
+//
+// The function issues one SearchAllResources call with
+// `query = "name=<fullName>"` and `read_mask` including
+// `versionedResources`. The first matching row's most-recent
+// versioned-resource Data field is returned. Returns ErrNotFound when
+// the search returns no rows (the asset was deleted between discovery
+// and enrichment, or the operator's IAM principal lacks read
+// permission on this specific asset type).
+//
+// The single-row pattern is sound: name=<fullName> is an exact-match
+// query (vs the `:` contains operator), and CAI guarantees uniqueness
+// of fullName across the entire scope per
+// https://cloud.google.com/asset-inventory/docs/searching-resources.
+func (s *RealAssetSearcher) GetByName(ctx context.Context, scope, assetType, fullName string) (map[string]any, error) {
+	if s.client == nil {
+		return nil, errors.New("cloud asset client closed")
+	}
+	if fullName == "" {
+		return nil, errors.New("cloud asset getbyname: empty asset name")
+	}
+	req := &assetpb.SearchAllResourcesRequest{
+		Scope: scope,
+		// Exact-match on the full resource name. `=` (not `:`) is the
+		// equality operator per the SearchAllResources query syntax.
+		Query: fmt.Sprintf("name=%s", fullName),
+		// Narrowing by asset type keeps the server-side scan O(rows
+		// of that type) rather than O(all rows in the project),
+		// which matters on large multi-tenant projects.
+		AssetTypes: []string{assetType},
+		// versionedResources is NOT returned by default — it carries
+		// the full typed JSON representation of the asset (the body
+		// CAI mirrors from each service's REST API). The read_mask
+		// includes the default fields the iterator-row mapper reads
+		// (name, assetType) plus the versionedResources opt-in. See
+		// the SearchAllResourcesRequest doc for the full default-field
+		// list.
+		ReadMask: &fieldmaskpb.FieldMask{Paths: []string{"name", "assetType", "versionedResources"}},
+	}
+	it := s.client.SearchAllResources(ctx, req)
+	r, err := it.Next()
+	if errors.Is(err, iterator.Done) {
+		return nil, fmt.Errorf("cloud asset getbyname %s %q: %w", assetType, fullName, ErrNotFound)
+	}
+	if err != nil {
+		return nil, wrapSearchAllError(err)
+	}
+	versions := r.GetVersionedResources()
+	if len(versions) == 0 {
+		// Asset exists in CAI's index but the operator's read_mask
+		// scope is too narrow to surface its data (or the CAI
+		// service hasn't backfilled the versioned representation
+		// for this asset type). Surface as ErrNotFound so the
+		// EnrichAttributes loop downgrades it to a per-resource
+		// warning rather than aborting the whole batch.
+		return nil, fmt.Errorf("cloud asset getbyname %s %q: no versioned resources: %w", assetType, fullName, ErrNotFound)
+	}
+	// Cloud Asset returns versioned resources in chronological order
+	// (oldest first per the API contract); the most recent version is
+	// the last element, which is the one we want for current-state
+	// drift comparison.
+	latest := versions[len(versions)-1]
+	data := latest.GetResource()
+	if data == nil {
+		return nil, fmt.Errorf("cloud asset getbyname %s %q: nil resource data: %w", assetType, fullName, ErrNotFound)
+	}
+	return data.AsMap(), nil
 }
 
 // wrapSearchAllError annotates a Cloud Asset SearchAllResources error
