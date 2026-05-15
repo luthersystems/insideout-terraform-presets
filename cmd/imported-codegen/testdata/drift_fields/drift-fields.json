@@ -97,6 +97,28 @@
       "semantic": "Exact"
     }
   ],
+  "aws_autoscaling_group_tag": [
+    {
+      "path": "autoscaling_group_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "tag.key",
+      "semantic": "Exact"
+    },
+    {
+      "path": "tag.propagate_at_launch",
+      "semantic": "Exact"
+    },
+    {
+      "path": "tag.value",
+      "semantic": "Exact"
+    }
+  ],
   "aws_bedrock_guardrail": [
     {
       "path": "blocked_input_messaging",
@@ -2798,6 +2820,20 @@
     },
     {
       "path": "owner_id",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_wafv2_web_acl_association": [
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "resource_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "web_acl_arn",
       "semantic": "Exact"
     }
   ],

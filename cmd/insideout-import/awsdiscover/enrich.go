@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/apigatewayv2"
+	"github.com/aws/aws-sdk-go-v2/service/autoscaling"
 	"github.com/aws/aws-sdk-go-v2/service/bedrock"
 	"github.com/aws/aws-sdk-go-v2/service/cloudcontrol"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
@@ -32,6 +33,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 	"github.com/aws/aws-sdk-go-v2/service/servicediscovery"
+	"github.com/aws/aws-sdk-go-v2/service/wafv2"
 
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/progress"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
@@ -179,7 +181,21 @@ type EnrichClients struct {
 	// (aws_iam_role_policy_attachment). IAM is a global service, so
 	// no per-region override is needed. Nil is tolerated and surfaces
 	// as ErrEnrichClientUnavailable.
-	IAM       *iam.Client
+	IAM *iam.Client
+	// AutoScaling is the shared client for the
+	// aws_autoscaling_group_tag enricher (#482 final-2 push). Auto
+	// Scaling is regional, so the enricher's fetch closure pins the
+	// per-call region; one client serves every region in the run.
+	// Nil is tolerated and surfaces as ErrEnrichClientUnavailable.
+	AutoScaling *autoscaling.Client
+	// WAFv2 is the shared client for the
+	// aws_wafv2_web_acl_association enricher (#482 final-2 push).
+	// WAFv2 is regional (CLOUDFRONT scope is handled on the
+	// cloudfront_distribution side); the enricher applies its per-
+	// call region override via an Options closure so a single client
+	// serves every region in the run. Nil is tolerated and surfaces
+	// as ErrEnrichClientUnavailable.
+	WAFv2     *wafv2.Client
 	AccountID string
 }
 

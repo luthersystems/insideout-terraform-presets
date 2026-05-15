@@ -55,10 +55,11 @@ func TestExistingEnrichersDoNotImplementByID(t *testing.T) {
 	// at test time so an addition to cloudControlTypeConfigs doesn't
 	// silently flow into the production enricher coverage without a
 	// deliberate test update.
-	handRolled := 17
+	handRolled := 19
 	ccOverrides := 0
 	handRolledTypes := map[string]bool{
 		"aws_apigatewayv2_stage":                             true,
+		"aws_autoscaling_group_tag":                          true,
 		"aws_bedrock_guardrail":                              true,
 		"aws_bedrock_model_invocation_logging_configuration": true,
 		"aws_cloudwatch_log_group":                           true,
@@ -75,6 +76,7 @@ func TestExistingEnrichersDoNotImplementByID(t *testing.T) {
 		"aws_s3_bucket_versioning":                           true,
 		"aws_secretsmanager_secret":                          true,
 		"aws_service_discovery_private_dns_namespace":        true,
+		"aws_wafv2_web_acl_association":                      true,
 	}
 	for _, ccCfg := range cloudControlTypeConfigs {
 		if handRolledTypes[ccCfg.TFType] {

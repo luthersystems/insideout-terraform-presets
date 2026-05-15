@@ -25,6 +25,10 @@ const syntheticTypePrefix = "policy_test_"
 // updating this list — the diff makes the surface change explicit.
 var coveredTypes = []string{
 	"aws_apigatewayv2_stage",
+	// Final-2 push (#482) — closes the last hand-rolled enrichers
+	// (per-tag-on-ASG and resource-arn × web-acl-arn binding). Both
+	// have curated Layer 2 policy.Maps with Exact drift semantics.
+	"aws_autoscaling_group_tag",
 	"aws_bedrock_guardrail",
 	"aws_bedrock_model_invocation_logging_configuration",
 	// AWS drift coverage bundle 2 (#482) — cloud-control-routed types
@@ -71,6 +75,9 @@ var coveredTypes = []string{
 	"aws_sqs_queue",
 	"aws_subnet",
 	"aws_vpc",
+	// Final-2 push (#482), continued — wafv2_web_acl_association in
+	// alphabetical position at the end of the AWS block.
+	"aws_wafv2_web_acl_association",
 	"google_api_gateway_api",
 	"google_api_gateway_api_config",
 	"google_api_gateway_gateway",
