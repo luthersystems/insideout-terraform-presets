@@ -94,6 +94,17 @@ aws_lambda_function	version	Identity		RileyVisible	Never
 aws_lambda_function	vpc_config.security_group_ids	Wiring	Security	RileyVisible	RelationshipOnly		
 aws_lambda_function	vpc_config.subnet_ids	Wiring	Reliability	RileyVisible	RelationshipOnly		
 aws_lambda_function	vpc_config.vpc_id	Wiring		RileyVisible	RelationshipOnly		
+aws_resourceexplorer2_index	arn	Identity		UIVisible	Never		
+aws_resourceexplorer2_index	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_resourceexplorer2_index	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_resourceexplorer2_index	type	Tuning	Performance	RileyVisible	RequiresApproval		
+aws_resourceexplorer2_view	arn	Identity		UIVisible	Never		
+aws_resourceexplorer2_view	default_view	Tuning	Reliability	RileyVisible	RequiresApproval		
+aws_resourceexplorer2_view	filters.filter_string	Tuning	Security	RileyVisible	RequiresApproval		
+aws_resourceexplorer2_view	included_property.name	Tuning		RileyVisible	ChatSafe		
+aws_resourceexplorer2_view	name	Identity		UIVisible	Never		
+aws_resourceexplorer2_view	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_resourceexplorer2_view	tags_all	Tuning		Hidden	SystemOnly	Redacted	
 aws_s3_bucket	acceleration_status	Tuning	Performance	RileyVisible	ChatSafe		
 aws_s3_bucket	acl	Tuning	Security	RileyVisible	RequiresApproval		
 aws_s3_bucket	arn	Identity		UIVisible	Never		

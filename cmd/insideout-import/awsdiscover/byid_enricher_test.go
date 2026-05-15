@@ -49,21 +49,24 @@ func TestExistingEnrichersDoNotImplementByID(t *testing.T) {
 
 	// Fail-fast: pin the expected total byTypeEnricher size so a
 	// silent drop (or duplicate-key squashing) in production fails the
-	// test. The expected total = 4 hand-rolled enrichers
-	// (cloudwatch_log_group, dynamodb_table, s3_bucket,
-	// secretsmanager_secret) + every type in cloudControlTypeConfigs
-	// that doesn't have a hand-rolled override. The latter is computed
-	// at test time so an addition to cloudControlTypeConfigs doesn't
-	// silently flow into the production enricher coverage without a
-	// deliberate test update — the math below makes that change visible
-	// as a numeric diff in the test failure message.
-	handRolled := 4
+	// test. The expected total = 6 hand-rolled enrichers
+	// (cloudwatch_log_group, dynamodb_table, resourceexplorer2_index,
+	// resourceexplorer2_view, s3_bucket, secretsmanager_secret) + every
+	// type in cloudControlTypeConfigs that doesn't have a hand-rolled
+	// override. The latter is computed at test time so an addition to
+	// cloudControlTypeConfigs doesn't silently flow into the production
+	// enricher coverage without a deliberate test update — the math
+	// below makes that change visible as a numeric diff in the test
+	// failure message.
+	handRolled := 6
 	ccOverrides := 0
 	handRolledTypes := map[string]bool{
-		"aws_cloudwatch_log_group":  true,
-		"aws_dynamodb_table":        true,
-		"aws_s3_bucket":             true,
-		"aws_secretsmanager_secret": true,
+		"aws_cloudwatch_log_group":    true,
+		"aws_dynamodb_table":          true,
+		"aws_resourceexplorer2_index": true,
+		"aws_resourceexplorer2_view":  true,
+		"aws_s3_bucket":               true,
+		"aws_secretsmanager_secret":   true,
 	}
 	for _, ccCfg := range cloudControlTypeConfigs {
 		if handRolledTypes[ccCfg.TFType] {
@@ -121,6 +124,8 @@ func TestCloudControlEnricherSkipsHandRolledOverrides(t *testing.T) {
 	handRolled := []string{
 		"aws_cloudwatch_log_group",
 		"aws_dynamodb_table",
+		"aws_resourceexplorer2_index",
+		"aws_resourceexplorer2_view",
 		"aws_s3_bucket",
 		"aws_secretsmanager_secret",
 	}

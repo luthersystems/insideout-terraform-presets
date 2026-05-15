@@ -353,6 +353,38 @@
       "semantic": "Exact"
     }
   ],
+  "aws_resourceexplorer2_index": [
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "type",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_resourceexplorer2_view": [
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "default_view",
+      "semantic": "Exact"
+    },
+    {
+      "path": "filters.filter_string",
+      "semantic": "Exact"
+    },
+    {
+      "path": "included_property.name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    }
+  ],
   "aws_s3_bucket": [
     {
       "path": "acceleration_status",

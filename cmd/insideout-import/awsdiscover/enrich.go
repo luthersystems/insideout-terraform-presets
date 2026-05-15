@@ -25,6 +25,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cloudcontrol"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/resourceexplorer2"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 
@@ -146,7 +147,14 @@ type EnrichClients struct {
 	// ErrEnrichClientUnavailable at Enrich time; EnrichAttributes
 	// downgrades that to a per-resource ServiceWarn.
 	CloudControl *cloudcontrol.Client
-	AccountID    string
+	// ResourceExplorer2 is the shared client for the Resource Explorer 2
+	// hand-rolled enrichers (aws_resourceexplorer2_index,
+	// aws_resourceexplorer2_view). The SDK client carries an aws.Config
+	// across regions; each enricher applies its per-call region override
+	// via a Options closure so a single client serves every region in the
+	// run. Nil is tolerated and surfaces as ErrEnrichClientUnavailable.
+	ResourceExplorer2 *resourceexplorer2.Client
+	AccountID         string
 }
 
 // ErrEnrichClientUnavailable signals that the SDK client an enricher
