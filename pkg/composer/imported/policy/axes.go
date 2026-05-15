@@ -167,3 +167,52 @@ func (c ChangeRiskPolicy) Valid() bool {
 	}
 	return false
 }
+
+// DriftSemantic classifies how the comparator should interpret a
+// curated field when computing drift between a sealed snapshot and a
+// fresh live read. The skeleton ships the enum and an additive field
+// on FieldPolicy; the comparator that consumes the value lives in
+// the eventual pkg/drift/imported package (presets#482).
+//
+// The empty string is intentionally valid and means "no drift
+// comparison" — that is, the field is informational only for drift
+// purposes. Every existing policy file in pkg/composer/imported/policy
+// pre-dates this axis, so leaving it unset must not be a lint
+// failure.
+//
+// Form note: DriftSemanticLabelFilter eventually carries a key-prefix
+// parameter (e.g. ignore `goog-*` labels). The skeleton declares the
+// const but defers the wire format for the parameter to presets#482
+// — likely either a sibling DriftFilter string field on FieldPolicy
+// or an encoded suffix on the value, decided when the comparator
+// lands and the real use cases are concrete.
+type DriftSemantic string
+
+const (
+	// DriftSemanticNone — the comparator skips this field. Default
+	// for every uncurated field.
+	DriftSemanticNone DriftSemantic = ""
+	// DriftSemanticExact — exact equality between snapshot and live.
+	DriftSemanticExact DriftSemantic = "Exact"
+	// DriftSemanticWholeList — list-valued field compared as a whole
+	// (order-sensitive). Used for fields like GCS lifecycle_rule
+	// where per-element diffs are not meaningful.
+	DriftSemanticWholeList DriftSemantic = "WholeList"
+	// DriftSemanticLabelFilter — map-valued field compared after
+	// filtering out keys matching a prefix (e.g. `goog-*` labels
+	// the provider auto-populates). The prefix wire format is
+	// deferred to presets#482.
+	DriftSemanticLabelFilter DriftSemantic = "LabelFilter"
+)
+
+// Valid reports whether d is one of the known drift-semantic consts.
+// The empty string is valid and treated as DriftSemanticNone so that
+// existing policy files (all of which pre-date this axis) lint
+// cleanly without a sweep.
+func (d DriftSemantic) Valid() bool {
+	switch d {
+	case DriftSemanticNone, DriftSemanticExact, DriftSemanticWholeList, DriftSemanticLabelFilter:
+		return true
+	}
+	return false
+}

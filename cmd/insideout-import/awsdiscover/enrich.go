@@ -16,6 +16,7 @@ package awsdiscover
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
@@ -71,6 +72,45 @@ type AttributeEnricher interface {
 	// ErrEnrichClientUnavailable so callers can distinguish "not
 	// configured" from "real API error".
 	Enrich(ctx context.Context, ir *imported.ImportedResource, clients EnrichClients) error
+}
+
+// ByIDEnricher is an optional sibling to AttributeEnricher that fetches
+// a single resource's typed Layer 1 payload from its ResourceIdentity
+// alone — used by the per-IR drift refresh path that the eventual
+// pkg/imported.Provider.EnrichByID exposes (presets#482). Implementing
+// this interface is purely additive: enrichers that satisfy only
+// AttributeEnricher continue to work unchanged for the batch enrichment
+// flow; the by-ID dispatcher type-asserts at call time and downgrades
+// gracefully when the assertion fails.
+//
+// The shape diverges from Enrich for two reasons:
+//
+//   - The caller starts from an Identity that hasn't been produced by
+//     the corresponding Discoverer (e.g. a UI refresh on a single row),
+//     so there is no pre-existing *ImportedResource to mutate.
+//   - The caller wants only the raw typed payload (returned as the
+//     same json.RawMessage shape that lands in ImportedResource.Attrs),
+//     so it can drive its own comparator without going through the
+//     batch progress / aggregation machinery.
+//
+// Implementations must not mutate identity. They may issue the same
+// SDK calls as the AttributeEnricher implementation for the same type;
+// in the common case Enrich and EnrichByID share a private helper that
+// does the SDK call and emits the typed struct, and the two methods
+// differ only in how they package the result.
+type ByIDEnricher interface {
+	// ResourceType returns the Terraform type this enricher covers.
+	// Must match the registered Discoverer / AttributeEnricher of the
+	// same type.
+	ResourceType() string
+
+	// EnrichByID fetches the typed Layer 1 payload for the resource
+	// named by identity and returns it as the json.RawMessage that
+	// would land in ImportedResource.Attrs. A nil required client on
+	// clients is reported as ErrEnrichClientUnavailable so callers
+	// can distinguish "not configured" from "real API error". A
+	// not-found resource is reported as ErrNotFound.
+	EnrichByID(ctx context.Context, identity *imported.ResourceIdentity, clients EnrichClients) (json.RawMessage, error)
 }
 
 // EnrichClients bundles the AWS SDK clients per-type enrichers dispatch

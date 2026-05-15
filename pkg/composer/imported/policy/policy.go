@@ -9,13 +9,14 @@ package policy
 // Rationale is a human-readable note used by the lint to gate
 // visible-and-Sensitive entries. Most policies leave it empty.
 type FieldPolicy struct {
-	Role        FieldRole
-	Pillar      FieldPillar
-	Visibility  VisibilityPolicy
-	Edit        EditPolicy
-	Sensitivity SensitivityPolicy
-	ChangeRisk  ChangeRiskPolicy
-	Rationale   string
+	Role          FieldRole
+	Pillar        FieldPillar
+	Visibility    VisibilityPolicy
+	Edit          EditPolicy
+	Sensitivity   SensitivityPolicy
+	ChangeRisk    ChangeRiskPolicy
+	DriftSemantic DriftSemantic
+	Rationale     string
 }
 
 // Map is a curated field policy keyed by Terraform attribute path. See
