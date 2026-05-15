@@ -115,11 +115,12 @@ func (c *Client) PresetDefaults() (map[string]map[string]any, error) {
 //     lose the user-vs-default distinction.
 //
 // Provenance is automatic — given the original cfg and the overlay:
-//   - A field present in overlay but zero in cfg was default-derived.
-//   - A field non-zero in cfg but absent from overlay was user-authored.
-//   - A field non-zero in both is user-authored equal-to-default and is
-//     preserved (unlike a reconstructive `PristineCopy` approach which would
-//     strip it).
+//   - A field zero in cfg, populated in overlay → default-derived.
+//   - A field non-zero in cfg → always user-authored (the overlay never echoes
+//     it back), including the case where the user explicitly set it equal to
+//     the default. A reconstructive `PristineCopy` approach would strip that
+//     case; this one preserves it because the overlay decision is per-field
+//     zero-check, not value-comparison.
 //
 // Backfill semantics, type coercion, and the silent-skip behavior on
 // unmappable types or HCL variables without a Config field are identical to

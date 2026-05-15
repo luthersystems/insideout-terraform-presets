@@ -190,6 +190,11 @@ func TestBuildModuleValues_VPC_PublicPrivateMode(t *testing.T) {
 		cfg := cfgWithAWSVPC(nil, boolPtr(false), nil)
 		_, err := m.BuildModuleValues(KeyAWSVPC, comps, cfg, "test", "us-east-1")
 		require.Error(t, err, "user-authored EnableNATGateway=false + EKS must fail-fast at the mapper, NOT be silently overridden to true by the #393 branch")
+		// Pin the specific fail-fast at mapper.go:120-127; a future
+		// refactor returning a different error from a different code path
+		// would still satisfy require.Error and silently weaken this gate.
+		assert.Contains(t, err.Error(), "AWSVPC.EnableNATGateway=false is incompatible",
+			"must surface the specific #389 fail-fast, not some other error path")
 	})
 }
 
