@@ -65,7 +65,7 @@ func TestRunCapabilities_DeterministicOrdering(t *testing.T) {
 // checks against the runtime registries. Loose contracts so the test
 // stays stable as the per-type curation rolls out — assert
 // Discoverable==true for known-registered types and
-// RileyEditable==true for at least one curated AWS+GCP policy.
+// AgentEditable==true for at least one curated AWS+GCP policy.
 func TestBuildCapabilitiesMap_KnownEntries(t *testing.T) {
 	t.Parallel()
 	got := buildCapabilitiesMap()
@@ -102,8 +102,8 @@ func TestBuildCapabilitiesMap_KnownEntries(t *testing.T) {
 			t.Errorf("%s: missing from emitted capabilities map", tfType)
 			continue
 		}
-		if !row.RileyEditable {
-			t.Errorf("%s: RileyEditable = false, want true (curated policy has ChatSafe / RequiresApproval entries)", tfType)
+		if !row.AgentEditable {
+			t.Errorf("%s: AgentEditable = false, want true (curated policy has ChatSafe / RequiresApproval entries)", tfType)
 		}
 	}
 }

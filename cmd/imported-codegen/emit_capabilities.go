@@ -20,7 +20,7 @@ type capabilityRow struct {
 	Enrichable       bool `json:"enrichable"`
 	DriftDetectable  bool `json:"driftDetectable"`
 	MetricsAvailable bool `json:"metricsAvailable"`
-	RileyEditable    bool `json:"rileyEditable"`
+	AgentEditable    bool `json:"agentEditable"`
 }
 
 // runCapabilities is the `capabilities` subcommand: emit a per-type
@@ -72,7 +72,7 @@ func buildCapabilitiesMap() map[string]capabilityRow {
 			Enrichable:       contains(awsEnrichable, t) || contains(gcpEnrichable, t),
 			DriftDetectable:  hasDriftSemantic(t),
 			MetricsAvailable: hasMetricsBinding(t),
-			RileyEditable:    isRileyEditable(t),
+			AgentEditable:    isAgentEditable(t),
 		}
 		out[t] = row
 	}
@@ -107,12 +107,14 @@ func hasMetricsBinding(tfType string) bool {
 	return ok
 }
 
-// isRileyEditable reports whether at least one field in the curated
+// isAgentEditable reports whether at least one field in the curated
 // policy.Map for tfType has Edit == EditChatSafe or EditRequiresApproval.
-// These are the two Edit policies that route through Riley's write
-// path; the other three (Never, RelationshipOnly, SystemOnly) all
-// disallow direct Riley scalar edits.
-func isRileyEditable(tfType string) bool {
+// These are the two Edit policies that route through an interactive
+// agent's write path; the other three (Never, RelationshipOnly,
+// SystemOnly) disallow direct agent scalar edits. Agent-name-agnostic
+// so the per-product naming (Riley today) can rotate without
+// flipping the codegen output.
+func isAgentEditable(tfType string) bool {
 	m, ok := policy.Lookup(tfType)
 	if !ok {
 		return false

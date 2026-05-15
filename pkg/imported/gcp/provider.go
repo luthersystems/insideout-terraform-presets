@@ -53,10 +53,25 @@ func (p *Provider) Capabilities(tfType string) imp.Capabilities {
 	if p.d != nil {
 		c.Enrichable = p.d.HasEnricher(tfType)
 	}
-	_, hasPolicy := policy.Lookup(tfType)
+	pol, hasPolicy := policy.Lookup(tfType)
 	c.DriftDetectable = hasPolicy && p.comparer != nil
 	_, c.MetricsAvailable = bindings.Binding(tfType)
+	c.AgentEditable = hasAgentEditableField(pol)
 	return c
+}
+
+// hasAgentEditableField mirrors aws.hasAgentEditableField. See that
+// function's doc for the semantics; the two are identical so a future
+// follow-up could lift this into pkg/imported/policy as a shared
+// helper without affecting either Provider impl.
+func hasAgentEditableField(pol policy.Map) bool {
+	for _, fp := range pol {
+		switch fp.Edit {
+		case policy.EditChatSafe, policy.EditRequiresApproval:
+			return true
+		}
+	}
+	return false
 }
 
 func isDiscoverable(tfType string) bool {

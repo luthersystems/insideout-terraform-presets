@@ -47,16 +47,21 @@ type Attrs = json.RawMessage
 //     reports whether one is registered).
 //   - MetricsAvailable: a ComponentMetricsBinding is registered for
 //     this type in pkg/imported/bindings.
-//   - RileyEditable: at least one field policy for this type is
-//     editable through the Riley write path. False today for
-//     every type; populated once policy.FieldPolicy.Edit semantics
-//     are wired through.
+//   - AgentEditable: at least one field policy for this type is
+//     editable through an interactive-agent write path
+//     (EditChatSafe or EditRequiresApproval — the two EditPolicy
+//     values an agent can author through normal chat / proposal
+//     flows). Agent-name-agnostic: the field reflects the policy
+//     surface, not which agent product is wired up downstream.
+//     The long-standing "Riley" naming on policy.VisibilityPolicy /
+//     EditPolicy constants is wire-format-pinned and rotates via a
+//     coordinated cross-repo rename, tracked separately.
 type Capabilities struct {
 	Discoverable     bool
 	Enrichable       bool
 	DriftDetectable  bool
 	MetricsAvailable bool
-	RileyEditable    bool
+	AgentEditable    bool
 }
 
 // ComponentMetricsBinding is the per-type CloudWatch / Cloud

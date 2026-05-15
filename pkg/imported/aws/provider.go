@@ -70,7 +70,9 @@ func (p *Provider) SupportedTypes() []string {
 //	Enrichable       — discoverer has a registered AttributeEnricher
 //	DriftDetectable  — a policy.Map is registered AND a comparator is wired
 //	MetricsAvailable — bindings.Binding returns ok
-//	RileyEditable    — false today (no policy axis is wired through yet)
+//	AgentEditable    — at least one curated field is EditChatSafe or
+//	                   EditRequiresApproval (the EditPolicy values an
+//	                   interactive agent can author through)
 //
 // All flags are false for an unknown tfType.
 func (p *Provider) Capabilities(tfType string) imp.Capabilities {
@@ -80,10 +82,27 @@ func (p *Provider) Capabilities(tfType string) imp.Capabilities {
 	if p.d != nil {
 		c.Enrichable = p.d.HasEnricher(tfType)
 	}
-	_, hasPolicy := policy.Lookup(tfType)
+	pol, hasPolicy := policy.Lookup(tfType)
 	c.DriftDetectable = hasPolicy && p.comparer != nil
 	_, c.MetricsAvailable = bindings.Binding(tfType)
+	c.AgentEditable = hasAgentEditableField(pol)
 	return c
+}
+
+// hasAgentEditableField reports whether the curated policy carries at
+// least one entry an interactive agent can author through — i.e.
+// EditChatSafe (no human gate) or EditRequiresApproval (agent
+// proposes, human confirms). EditNever / EditRelationshipOnly /
+// EditSystemOnly do not count: those edits don't traverse an
+// agent-write path. An empty policy returns false.
+func hasAgentEditableField(pol policy.Map) bool {
+	for _, fp := range pol {
+		switch fp.Edit {
+		case policy.EditChatSafe, policy.EditRequiresApproval:
+			return true
+		}
+	}
+	return false
 }
 
 // isDiscoverable returns true when tfType appears in the canonical
