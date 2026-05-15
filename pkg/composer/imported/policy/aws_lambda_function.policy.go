@@ -122,7 +122,7 @@ var awsLambdaFunctionPolicy = Map{
 	},
 
 	// Sensitive: environment variables routinely contain credentials.
-	// Hidden from Riley; only system code reads/writes them.
+	// Hidden from the interactive agent; only system code reads/writes them.
 	"environment.variables": {
 		Role: RoleTuning, Pillar: PillarSecurity,
 		Visibility: VisibilityHidden, Edit: EditSystemOnly,

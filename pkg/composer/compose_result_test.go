@@ -38,7 +38,7 @@ func TestComposeStackWithIssues_GreenPath(t *testing.T) {
 // multiple selected modules are missing required inputs simultaneously and
 // asserts every miss surfaces as a structured issue (rather than the legacy
 // path's first-failure error). This is the same-turn-correction property
-// The InsideOut backend/Riley relies on.
+// The InsideOut backend/interactive-agent relies on.
 func TestComposeStackWithIssues_AggregatesAcrossModules(t *testing.T) {
 	t.Parallel()
 

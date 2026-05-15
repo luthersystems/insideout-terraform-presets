@@ -4,7 +4,7 @@ package imported
 // populated a resource's Attrs payload. Empty string is the implicit
 // "unknown" state — used at pre-enrich call sites and for resource types
 // that have no registered enricher (Identity-only IRs). Downstream
-// consumers (the Reliable importer wizard, future Riley management views)
+// consumers (the Reliable importer wizard, future interactive-agent management views)
 // read this to surface partial-data warnings without grep-ing the
 // enricher's warn log; see issue #471 for the live-verification context
 // that motivated adding a typed signal.

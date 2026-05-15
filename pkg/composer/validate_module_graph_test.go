@@ -145,8 +145,9 @@ func TestValidateValueTypes_FlagsStringForNumber(t *testing.T) {
 		if iss.Field == "gcp_gke.node_count" {
 			require.Equal(t, "invalid_type", iss.Code)
 			require.Contains(t, iss.Reason, "number")
-			// Lock the offending value into the issue payload so Riley
-			// has the diagnostic it needs without re-resolving the IR.
+			// Lock the offending value into the issue payload so the
+			// interactive agent has the diagnostic it needs without
+			// re-resolving the IR.
 			require.NotEmpty(t, iss.Value,
 				"invalid_type issues must carry the offending value via issueValue()")
 			require.Contains(t, iss.Value, "oops",

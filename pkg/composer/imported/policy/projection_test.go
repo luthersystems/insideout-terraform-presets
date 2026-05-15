@@ -65,7 +65,7 @@ func TestVisibleFieldsFor_StorageBucket_AcceptanceA(t *testing.T) {
 
 	set := pathSet(views)
 
-	// Curated UI/Riley-visible entries are present.
+	// Curated UI/agent-visible entries are present.
 	for _, p := range []string{
 		"name", "project", "location", "self_link", "url", "id",
 		"storage_class", "force_destroy", "encryption.default_kms_key_name",

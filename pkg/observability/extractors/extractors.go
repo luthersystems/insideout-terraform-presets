@@ -229,7 +229,7 @@ func getFloat64(m map[string]any, key string) (float64, bool) {
 // full resource name. The GCP SDK returns fields like Instance.MachineType
 // (`https://www.googleapis.com/compute/v1/projects/foo/zones/us-central1-a/machineTypes/e2-medium`)
 // and Instance.Zone (`https://www.googleapis.com/compute/v1/projects/foo/zones/us-central1-a`)
-// as full URLs; what the UI and Riley actually want is the basename.
+// as full URLs; what the UI and the interactive agent actually want is the basename.
 //
 // Also works for Cloud Run / Memorystore service names
 // (`projects/foo/locations/us-central1/services/bar` → `bar`).

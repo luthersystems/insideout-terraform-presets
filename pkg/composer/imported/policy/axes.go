@@ -8,15 +8,16 @@ type FieldRole string
 const (
 	// RoleIdentity is what makes a resource itself: arn, id, name, region.
 	// Identity fields are visible for context and diffs but never edited
-	// by Riley.
+	// by the interactive agent.
 	RoleIdentity FieldRole = "Identity"
 	// RoleWiring is a cross-reference to another managed resource:
 	// kms_key_id, subnet_ids, role_arn, redrive_policy. The composer's
-	// graph resolver owns these; Riley edits them through proposed graph
-	// changes, never as raw scalars.
+	// graph resolver owns these; the interactive agent edits them through
+	// proposed graph changes, never as raw scalars.
 	RoleWiring FieldRole = "Wiring"
-	// RoleTuning is everything else — knobs Riley can plausibly turn:
-	// visibility_timeout_seconds, retention_in_days, lifecycle rules.
+	// RoleTuning is everything else — knobs the interactive agent can
+	// plausibly turn: visibility_timeout_seconds, retention_in_days,
+	// lifecycle rules.
 	RoleTuning FieldRole = "Tuning"
 )
 
@@ -59,15 +60,19 @@ func (p FieldPillar) Valid() bool {
 type VisibilityPolicy string
 
 const (
-	// VisibilityHidden — invisible to Riley and the UI. The composer
-	// still round-trips the value because Layer 1 preserves it; only
-	// system code may inspect it.
+	// VisibilityHidden — invisible to the interactive agent and the UI.
+	// The composer still round-trips the value because Layer 1 preserves
+	// it; only system code may inspect it.
 	VisibilityHidden VisibilityPolicy = "Hidden"
-	// VisibilityRileyVisible — Riley can read the field in chat context
-	// and propose changes (subject to EditPolicy).
+	// VisibilityRileyVisible — the interactive agent can read the field
+	// in chat context and propose changes (subject to EditPolicy). The
+	// "Riley" naming on this const + wire-format string is pinned by
+	// downstream TypeScript consumers (luthersystems/reliable, etc.);
+	// renaming is a coordinated cross-repo change tracked separately
+	// from the in-repo doc-sweep in #489.
 	VisibilityRileyVisible VisibilityPolicy = "RileyVisible"
 	// VisibilityUIVisible — exposed in the product UI / diff screens for
-	// a human operator. Implies Riley-visible.
+	// a human operator. Implies agent-visible.
 	VisibilityUIVisible VisibilityPolicy = "UIVisible"
 )
 
@@ -87,11 +92,11 @@ func (v VisibilityPolicy) Valid() bool {
 // full matrix; in short:
 //
 //   - EditNever — readable but immutable from any flow.
-//   - EditChatSafe — Riley may change it through normal chat.
-//   - EditRequiresApproval — Riley proposes; user must confirm against
-//     the concrete plan.
-//   - EditRelationshipOnly — Riley cannot scalar-edit; the graph
-//     resolver / composer manages the value.
+//   - EditChatSafe — the interactive agent may change it through normal chat.
+//   - EditRequiresApproval — the interactive agent proposes; user must
+//     confirm against the concrete plan.
+//   - EditRelationshipOnly — the interactive agent cannot scalar-edit;
+//     the graph resolver / composer manages the value.
 //   - EditSystemOnly — only importer / composer system code writes here
 //     (tags, labels, provenance).
 type EditPolicy string
@@ -119,13 +124,13 @@ func (e EditPolicy) Valid() bool {
 type SensitivityPolicy string
 
 const (
-	// SensitivityPublic — safe to show in Riley context and diffs.
+	// SensitivityPublic — safe to show in agent context and diffs.
 	SensitivityPublic SensitivityPolicy = "Public"
 	// SensitivityRedacted — show existence and change metadata but not
 	// raw values.
 	SensitivityRedacted SensitivityPolicy = "Redacted"
-	// SensitivitySensitive — hidden from Riley and raw diffs; only
-	// system code may retain the value.
+	// SensitivitySensitive — hidden from the interactive agent and raw
+	// diffs; only system code may retain the value.
 	SensitivitySensitive SensitivityPolicy = "Sensitive"
 )
 

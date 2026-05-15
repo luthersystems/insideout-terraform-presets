@@ -35,7 +35,7 @@
 //	capabilities [--output <path>]
 //	        Emit a per-type Capabilities matrix JSON
 //	        ({discoverable, enrichable, driftDetectable,
-//	         metricsAvailable, rileyEditable}) computed from the
+//	         metricsAvailable, agentEditable}) computed from the
 //	        upstream registries (presets#482).
 //
 //	dependencies [--output <path>]

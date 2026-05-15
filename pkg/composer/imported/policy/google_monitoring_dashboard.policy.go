@@ -11,8 +11,8 @@ var googleMonitoringDashboardPolicy = Map{
 	},
 
 	// Tuning — entire payload is the JSON document. Treated as a single
-	// authored blob; Riley can edit via chat-safe JSON edits but the
-	// composer / wizard owns large refactors.
+	// authored blob; the interactive agent can edit via chat-safe JSON
+	// edits but the composer / wizard owns large refactors.
 	"dashboard_json": {
 		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
 	},

@@ -92,8 +92,8 @@ func writeFileAtomic(path string, body []byte, perm os.FileMode) (rerr error) {
 // running discover repeatedly.
 func writeManifest(dir, cloud string, resources []imported.ImportedResource) (string, int, error) {
 	// json.MarshalIndent of a nil slice writes "null"; downstream
-	// consumers (Reliable, Riley) cannot range over null. Force an empty
-	// slice so the on-disk manifest is always a JSON array.
+	// consumers (Reliable, the interactive agent) cannot range over null.
+	// Force an empty slice so the on-disk manifest is always a JSON array.
 	if resources == nil {
 		resources = []imported.ImportedResource{}
 	}
@@ -136,7 +136,7 @@ func writeManifest(dir, cloud string, resources []imported.ImportedResource) (st
 // file by hand can jump to the failing position. A literal `null` top-level
 // is rejected explicitly: writeManifest's invariant is that an empty
 // resource set serializes as `[]`, never `null`, and downstream consumers
-// (Reliable, Riley, the depchase loop) cannot range over null.
+// (Reliable, the interactive agent, the depchase loop) cannot range over null.
 //
 // Returns ([]ImportedResource, nil) on success — never a nil slice with no
 // error: an empty manifest decodes to a zero-length slice.
@@ -248,8 +248,8 @@ func writeUnsupportedManifest(dir string, resources []UnsupportedResource, trunc
 // Why graph.json is a sibling of imported.json (rather than
 // embedded): the wizard picker reads them separately on different
 // stages of the import flow, and an embedded edges slice would force
-// every imported.json reader (composer, validators, riley, etc.) to
-// know the dependency-graph schema. Persisting as a sibling keeps
+// every imported.json reader (composer, validators, the interactive
+// agent, etc.) to know the dependency-graph schema. Persisting as a sibling keeps
 // imported.json's wire shape unchanged and lets graph.json evolve
 // independently.
 func writeGraphManifest(dir string, edges []depchase.GraphEdge) (string, int, error) {
@@ -297,8 +297,8 @@ func writeGraphManifest(dir string, edges []depchase.GraphEdge) (string, int, er
 // Why summary.json is a sibling of imported.json (rather than embedded):
 // the aggregate's wire shape evolves independently of the per-resource
 // IR — adding a new aggregate bucket (e.g. byCloud) shouldn't require
-// every imported.json reader (composer, validators, riley) to know the
-// summary schema. Keeping it as a sibling matches the same rationale
+// every imported.json reader (composer, validators, the interactive
+// agent) to know the summary schema. Keeping it as a sibling matches the same rationale
 // behind unsupported.json (#296) and graph.json (#297).
 func writeSummary(dir string, summary imported.DiscoverySummary) (string, error) {
 	body, err := json.MarshalIndent(summary, "", "  ")
