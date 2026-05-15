@@ -275,4 +275,25 @@ func billingModeOrDefault(b *dynamotypes.BillingModeSummary) string {
 			return b + " != nil && (" + b + ".Status == dynamotypes.SSEStatusEnabled || " + b + ".Status == dynamotypes.SSEStatusEnabling)"
 		},
 	},
+
+	fetchers: []fetcherTarget{
+		{
+			funcName: "defaultDynamoDBTableFetchTags",
+			doc: `defaultDynamoDBTableFetchTags is the production tags fetch path.
+Returns the raw tag slice; the caller flattens it into the typed map.
+Pagination is not handled today — DynamoDB's tag-set is capped at 50 per
+table by the service, well below the per-page limit, so a single call
+covers every realistic case.`,
+			clientType:         "*dynamodb.Client",
+			paramArg:           "tableArn string",
+			sdkMethod:          "ListTagsOfResource",
+			inputType:          "ListTagsOfResourceInput",
+			inputAssign:        map[string]string{"ResourceArn": "aws.String(tableArn)"},
+			resultType:         "[]dynamotypes.Tag",
+			resultExpr:         "out.Tags",
+			sdkClientPkgImport: "github.com/aws/aws-sdk-go-v2/service/dynamodb",
+			sdkClientPkgAlias:  "dynamodb",
+		},
+	},
+	fetchersOutputPath: "cmd/insideout-import/awsdiscover/dynamodb_table_fetchers.gen.go",
 }

@@ -124,4 +124,120 @@ type target struct {
 	// Override snippets that reference the parameter must use this
 	// name; the engine does not rewrite override-snippet bodies.
 	extraParam string
+
+	// fetchers describes optional list / describe helper functions to
+	// emit into fetchersOutputPath. Each entry produces one helper
+	// function that runs a single SDK call (or paginator loop when
+	// fetcherTarget.Paginator is non-empty), nil-checks the response,
+	// and returns the result. See cmd/enrichgen/fetcher_engine.go and
+	// cmd/enrichgen/dynamodb_table.go for the canonical example.
+	//
+	// Hand-written helpers in the enricher package can be replaced by
+	// fetcher entries one-by-one; the generated function name is
+	// taken from fetcherTarget.FuncName and must match the consumer's
+	// existing call site for the swap to be a no-op refactor.
+	fetchers []fetcherTarget
+
+	// fetchersOutputPath is the repo-relative path the fetcher helpers
+	// land in, e.g.
+	// "cmd/insideout-import/awsdiscover/dynamodb_table_fetchers.gen.go".
+	// Required when fetchers is non-empty.
+	fetchersOutputPath string
+}
+
+// fetcherTarget describes one list / describe helper to emit alongside
+// the struct-mapping codegen. The emitted helper has the shape:
+//
+//	func <FuncName>(ctx context.Context, c <ClientType>, <ParamArg>) (<ResultType>, error) {
+//	    input := &<SDKPkgAlias>.<InputType>{<InputAssign...>}
+//	    out, err := c.<SDKMethod>(ctx, input)              // non-paginated
+//	    if err != nil { return <zero>, err }
+//	    if out == nil { return <zero>, nil }
+//	    return <ResultExpr>, nil
+//	}
+//
+// or for Paginator != "":
+//
+//	func <FuncName>(ctx context.Context, c <ClientType>, <ParamArg>) ([]<PageItemType>, error) {
+//	    input := &<SDKPkgAlias>.<InputType>{<InputAssign...>}
+//	    p := <SDKPkgAlias>.<Paginator>(c, input)
+//	    var out []<PageItemType>
+//	    for p.HasMorePages() {
+//	        page, err := p.NextPage(ctx)
+//	        if err != nil { return nil, err }
+//	        out = append(out, page.<AccumulatorField>...)
+//	    }
+//	    return out, nil
+//	}
+//
+// Adding a new entry: append it to target.fetchers in the per-type
+// registration file (e.g. dynamodb_table.go), set
+// target.fetchersOutputPath to the new gen.go path, and re-run the
+// generator.
+type fetcherTarget struct {
+	// FuncName is the emitted identifier — must match the consumer's
+	// call site exactly so the swap from hand-written to generated is
+	// a no-op refactor. Convention: prefixed with "default" plus the
+	// resource type plus an action, e.g. "defaultDynamoDBTableFetchTags".
+	funcName string
+
+	// Doc is an optional one-paragraph comment placed above the
+	// emitted function. Empty string emits no comment.
+	doc string
+
+	// ClientType is the SDK client Go type (with pointer + package
+	// qualifier), e.g. "*dynamodb.Client".
+	clientType string
+
+	// ParamArg is the comma-separated caller parameter list that
+	// follows ctx and c. The SDK client (c) and ctx are always
+	// emitted; ParamArg is any extra (e.g. "tableArn string").
+	paramArg string
+
+	// SDKMethod is the method on the client to invoke for the
+	// non-paginated form. Ignored when Paginator is non-empty.
+	sdkMethod string
+
+	// InputType is the SDK input struct name (without package
+	// qualifier), e.g. "ListTagsOfResourceInput".
+	inputType string
+
+	// InputAssign maps each input-struct field name to a Go expression
+	// evaluable in helper scope, e.g.
+	// {"ResourceArn": "aws.String(tableArn)"}.
+	inputAssign map[string]string
+
+	// ResultType is the Go type returned by the helper, e.g.
+	// "[]dynamotypes.Tag" or "*dynamotypes.TimeToLiveDescription".
+	// For Paginator != "", this should be the element type — the
+	// generator emits "[]" prefix internally.
+	resultType string
+
+	// ResultExpr is a Go expression reading the result from the SDK
+	// response variable named "out", e.g. "out.Tags". Ignored for the
+	// paginated form (the accumulator field drives that).
+	resultExpr string
+
+	// SDKClientPkgImport / SDKClientPkgAlias are the import path and
+	// alias for the SDK client package (defining ClientType + the
+	// paginator constructor when paginated). e.g.
+	// "github.com/aws/aws-sdk-go-v2/service/dynamodb" / "dynamodb".
+	sdkClientPkgImport string
+	sdkClientPkgAlias  string
+
+	// Paginator is the optional paginator-constructor name on the SDK
+	// client package, e.g. "NewListResourcesPaginator". Empty string
+	// = non-paginated single-call shape.
+	paginator string
+
+	// AccumulatorField is the response-page struct's slice field name
+	// to accumulate across pages, e.g. "ResourceDescriptions". Used
+	// only when Paginator is non-empty.
+	accumulatorField string
+
+	// AccumulatorElemType is the element Go type accumulated in the
+	// paginator form, e.g. "cctypes.ResourceDescription". Used only
+	// when Paginator is non-empty; the emitted return type is
+	// "[]<AccumulatorElemType>".
+	accumulatorElemType string
 }
