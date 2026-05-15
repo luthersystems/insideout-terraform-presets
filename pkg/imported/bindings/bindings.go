@@ -14,6 +14,7 @@ package bindings
 
 import (
 	"fmt"
+	"sort"
 	"sync"
 )
 
@@ -88,14 +89,6 @@ func RegisteredTypes() []string {
 	for t := range registry {
 		out = append(out, t)
 	}
-	// Insertion-sort to keep the package dependency-light (the
-	// registry is small — at most ~163 entries even at full preset
-	// coverage — so sort.Strings would be overkill and would pull a
-	// stdlib package the rest of the file doesn't need).
-	for i := 1; i < len(out); i++ {
-		for j := i; j > 0 && out[j-1] > out[j]; j-- {
-			out[j-1], out[j] = out[j], out[j-1]
-		}
-	}
+	sort.Strings(out)
 	return out
 }

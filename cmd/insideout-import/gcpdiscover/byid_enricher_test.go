@@ -9,8 +9,8 @@ import (
 )
 
 // fakeByIDEnricher is a minimal type that satisfies ByIDEnricher.
-// It exists only to assert that the interface compiles and is
-// satisfiable — no production code implements ByIDEnricher yet
+// It exists only to back the compile-time `var _ ByIDEnricher`
+// assertion below — no production code implements ByIDEnricher yet
 // (Phase 2 enricher rollout PRs add real impls one per type).
 type fakeByIDEnricher struct{}
 
@@ -21,40 +21,25 @@ func (fakeByIDEnricher) EnrichByID(ctx context.Context, identity *imported.Resou
 }
 
 // Compile-time assertion. If ByIDEnricher's shape drifts, this fails
-// at build time, not at runtime.
+// at build time. This is the load-bearing shape lock — no runtime
+// "fake calls itself" test is needed because there is nothing to
+// observe beyond the compile.
 var _ ByIDEnricher = (*fakeByIDEnricher)(nil)
-
-func TestByIDEnricher_FakeImplementation(t *testing.T) {
-	var e ByIDEnricher = fakeByIDEnricher{}
-	if got, want := e.ResourceType(), "google_test_fake"; got != want {
-		t.Errorf("ResourceType() = %q, want %q", got, want)
-	}
-	raw, err := e.EnrichByID(t.Context(), &imported.ResourceIdentity{Type: "google_test_fake"}, EnrichClients{})
-	if err != nil {
-		t.Fatalf("EnrichByID returned err: %v", err)
-	}
-	if string(raw) != "{}" {
-		t.Errorf("EnrichByID payload = %q, want %q", string(raw), "{}")
-	}
-}
 
 // TestExistingEnrichersDoNotImplementByID confirms the additive
 // nature of ByIDEnricher: the 5 existing enrichers today implement
-// only AttributeEnricher. When Phase 2 PRs land real EnrichByID
-// impls, this test's allowlist shrinks. The test fails loud if a
-// future PR claims to add EnrichByID but forgets to update the
-// allowlist — i.e. ByIDEnricher coverage is observable.
+// only AttributeEnricher. The test pins against the REAL production
+// registration in NewGCPDiscoverer — not a hand-rolled map — so when
+// Phase 2 PRs add real EnrichByID impls, the allowlist must shrink
+// in lockstep with the production registration. A production-only
+// change (add a ByIDEnricher impl, forget to update allowlist) fails
+// the test loud. A regression that drops the registration entirely
+// is caught by the size sanity check below.
 func TestExistingEnrichersDoNotImplementByID(t *testing.T) {
-	// Mirror the production registration (gcpdiscover.go:343-349) so
-	// the test exercises real enrichers without needing a full
-	// GCPDiscoverer construction.
-	enrichers := map[string]AttributeEnricher{
-		"google_storage_bucket":        newStorageBucketEnricher(),
-		"google_pubsub_topic":          newPubsubTopicEnricher(),
-		"google_pubsub_subscription":   newPubsubSubscriptionEnricher(),
-		"google_secret_manager_secret": newSecretManagerSecretEnricher(),
-		"google_compute_network":       newComputeNetworkEnricher(),
-	}
+	// Nil searcher is safe — the constructor only stores it; no
+	// SearchAll call fires here.
+	d := NewGCPDiscoverer(nil, "test-project", GCPDiscovererOpts{})
+
 	// Allowlist: types whose enrichers explicitly DO NOT implement
 	// ByIDEnricher yet. Shrink as Phase 2 rollout lands per-type impls.
 	notImplemented := map[string]bool{
@@ -64,7 +49,17 @@ func TestExistingEnrichersDoNotImplementByID(t *testing.T) {
 		"google_secret_manager_secret": true,
 		"google_compute_network":       true,
 	}
-	for tfType, enr := range enrichers {
+
+	// Fail-fast: if the constructor silently dropped the registration,
+	// the for-range below iterates zero times and reports a green
+	// non-test. Pin the expected size to the allowlist length so a
+	// "silent drop in production, allowlist untouched" regression
+	// fails loud.
+	if got, want := len(d.byTypeEnricher), len(notImplemented); got != want {
+		t.Errorf("byTypeEnricher size = %d, want %d (production registration and notImplemented allowlist drifted)", got, want)
+	}
+
+	for tfType, enr := range d.byTypeEnricher {
 		_, implementsByID := enr.(ByIDEnricher)
 		expectNot := notImplemented[tfType]
 		switch {

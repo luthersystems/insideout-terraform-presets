@@ -21,13 +21,14 @@ package labels
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 )
 
 var (
-	regMu  sync.RWMutex
-	labels = map[string]entry{}
+	regMu    sync.RWMutex
+	registry = map[string]entry{}
 )
 
 type entry struct {
@@ -47,10 +48,10 @@ func Register(tfType, label, iconKey string) {
 	}
 	regMu.Lock()
 	defer regMu.Unlock()
-	if _, ok := labels[tfType]; ok {
+	if _, ok := registry[tfType]; ok {
 		panic(fmt.Sprintf("labels.Register: duplicate registration for %q", tfType))
 	}
-	labels[tfType] = entry{Label: label, IconKey: iconKey}
+	registry[tfType] = entry{Label: label, IconKey: iconKey}
 }
 
 // Label returns the human-readable display label for tfType. Returns
@@ -58,7 +59,7 @@ func Register(tfType, label, iconKey string) {
 // applied to the type name (strip cloud prefix → humanize words).
 func Label(tfType string) string {
 	regMu.RLock()
-	e, ok := labels[tfType]
+	e, ok := registry[tfType]
 	regMu.RUnlock()
 	if ok && e.Label != "" {
 		return e.Label
@@ -71,7 +72,7 @@ func Label(tfType string) string {
 // cloud prefix ("aws_s3_bucket" → "s3_bucket").
 func IconKey(tfType string) string {
 	regMu.RLock()
-	e, ok := labels[tfType]
+	e, ok := registry[tfType]
 	regMu.RUnlock()
 	if ok && e.IconKey != "" {
 		return e.IconKey
@@ -85,17 +86,11 @@ func IconKey(tfType string) string {
 func RegisteredTypes() []string {
 	regMu.RLock()
 	defer regMu.RUnlock()
-	out := make([]string, 0, len(labels))
-	for t := range labels {
+	out := make([]string, 0, len(registry))
+	for t := range registry {
 		out = append(out, t)
 	}
-	// Sort in place — small slice, stdlib sort is fine but we avoid
-	// importing sort here to keep the skeleton dependency-light.
-	for i := 1; i < len(out); i++ {
-		for j := i; j > 0 && out[j-1] > out[j]; j-- {
-			out[j-1], out[j] = out[j], out[j-1]
-		}
-	}
+	sort.Strings(out)
 	return out
 }
 

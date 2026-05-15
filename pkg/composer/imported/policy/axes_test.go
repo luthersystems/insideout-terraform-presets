@@ -133,9 +133,9 @@ func TestDriftSemantic_Valid(t *testing.T) {
 		{DriftSemanticExact, true},
 		{DriftSemanticWholeList, true},
 		{DriftSemanticLabelFilter, true},
-		{"exact", false},             // case-sensitive
-		{"whole_list", false},        // snake-case rejected
-		{"LabelFilter:goog-", false}, // parameter wire format is deferred to presets#482; raw const-only for now
+		{"exact", false},        // case-sensitive
+		{"whole_list", false},   // snake-case rejected
+		{"LabelFilter ", false}, // trailing space (parallel to VisibilityPolicy's "Hidden " probe)
 		{"unknown", false},
 	}
 	for _, tc := range cases {
