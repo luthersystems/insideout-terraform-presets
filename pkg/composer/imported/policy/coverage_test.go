@@ -27,6 +27,8 @@ var coveredTypes = []string{
 	"aws_cloudwatch_log_group",
 	"aws_dynamodb_table",
 	"aws_lambda_function",
+	"aws_resourceexplorer2_index",
+	"aws_resourceexplorer2_view",
 	"aws_s3_bucket",
 	"aws_secretsmanager_secret",
 	"aws_sqs_queue",

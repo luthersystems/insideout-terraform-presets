@@ -212,10 +212,12 @@ func NewAWSDiscovererWithConcurrency(cfg aws.Config, maxConcurrency int) *AWSDis
 	// retired (the framework preserves the override capability for any
 	// per-type quirk the unified path doesn't model).
 	byTypeEnricher := map[string]AttributeEnricher{
-		"aws_cloudwatch_log_group":  newCloudWatchLogGroupEnricher(),
-		"aws_dynamodb_table":        newDynamoDBTableEnricher(),
-		"aws_s3_bucket":             newS3BucketEnricher(),
-		"aws_secretsmanager_secret": newSecretsManagerSecretEnricher(),
+		"aws_cloudwatch_log_group":    newCloudWatchLogGroupEnricher(),
+		"aws_dynamodb_table":          newDynamoDBTableEnricher(),
+		"aws_resourceexplorer2_index": newResourceExplorer2IndexEnricher(),
+		"aws_resourceexplorer2_view":  newResourceExplorer2ViewEnricher(),
+		"aws_s3_bucket":               newS3BucketEnricher(),
+		"aws_secretsmanager_secret":   newSecretsManagerSecretEnricher(),
 	}
 	// HYBRID Cloud Control fallback (#490 steps 1+2): register one
 	// cloudControlEnricher for every TF type in cloudControlTypeConfigs
