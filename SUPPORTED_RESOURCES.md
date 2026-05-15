@@ -23,7 +23,7 @@ and is checked in lockstep with the runtime registries. See the
 ## Summary
 
 - **AWS:** 109 types · 100% Discoverable · 86% Enrichable · 3% DriftDetectable · 0% MetricsAvailable · 6% AgentEditable
-- **GCP:** 54 types · 100% Discoverable · 13% Enrichable · 4% DriftDetectable · 0% MetricsAvailable · 65% AgentEditable
+- **GCP:** 54 types · 100% Discoverable · 22% Enrichable · 13% DriftDetectable · 0% MetricsAvailable · 65% AgentEditable
 
 ## AWS
 
@@ -158,11 +158,11 @@ and is checked in lockstep with the runtime registries. See the
 | `google_compute_global_address` | ✓ | – | – | – | ✓ |
 | `google_compute_global_forwarding_rule` | ✓ | – | – | – | ✓ |
 | `google_compute_health_check` | ✓ | – | – | – | – |
-| `google_compute_instance` | ✓ | – | – | – | ✓ |
+| `google_compute_instance` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_compute_managed_ssl_certificate` | ✓ | – | – | – | – |
 | `google_compute_network` | ✓ | ✓ | – | – | ✓ |
 | `google_compute_resource_policy` | ✓ | – | – | – | – |
-| `google_compute_router` | ✓ | – | – | – | ✓ |
+| `google_compute_router` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_compute_security_policy` | ✓ | – | – | – | ✓ |
 | `google_compute_target_http_proxy` | ✓ | – | – | – | – |
 | `google_compute_target_https_proxy` | ✓ | – | – | – | ✓ |
@@ -172,7 +172,7 @@ and is checked in lockstep with the runtime registries. See the
 | `google_firestore_database` | ✓ | – | – | – | ✓ |
 | `google_identity_platform_config` | ✓ | – | – | – | ✓ |
 | `google_identity_platform_default_supported_idp_config` | ✓ | – | – | – | – |
-| `google_kms_crypto_key` | ✓ | – | – | – | ✓ |
+| `google_kms_crypto_key` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_kms_crypto_key_iam_binding` | ✓ | – | – | – | – |
 | `google_kms_key_ring` | ✓ | – | – | – | – |
 | `google_logging_project_sink` | ✓ | – | – | – | ✓ |
@@ -188,9 +188,9 @@ and is checked in lockstep with the runtime registries. See the
 | `google_secret_manager_secret_iam_binding` | ✓ | – | – | – | – |
 | `google_secret_manager_secret_iam_member` | ✓ | – | – | – | – |
 | `google_secret_manager_secret_version` | ✓ | – | – | – | – |
-| `google_service_account` | ✓ | – | – | – | ✓ |
+| `google_service_account` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_service_networking_connection` | ✓ | – | – | – | – |
-| `google_sql_database_instance` | ✓ | – | – | – | ✓ |
+| `google_sql_database_instance` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_sql_user` | ✓ | – | – | – | ✓ |
 | `google_storage_bucket` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_storage_bucket_iam_member` | ✓ | – | – | – | – |

@@ -429,6 +429,256 @@
       "semantic": "Exact"
     }
   ],
+  "google_compute_instance": [
+    {
+      "path": "allow_stopping_for_update",
+      "semantic": "Exact"
+    },
+    {
+      "path": "boot_disk.auto_delete",
+      "semantic": "Exact"
+    },
+    {
+      "path": "boot_disk.device_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "boot_disk.initialize_params.image",
+      "semantic": "Exact"
+    },
+    {
+      "path": "boot_disk.initialize_params.size",
+      "semantic": "Exact"
+    },
+    {
+      "path": "boot_disk.initialize_params.type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "boot_disk.kms_key_self_link",
+      "semantic": "Exact"
+    },
+    {
+      "path": "boot_disk.source",
+      "semantic": "Exact"
+    },
+    {
+      "path": "can_ip_forward",
+      "semantic": "Exact"
+    },
+    {
+      "path": "deletion_protection",
+      "semantic": "Exact"
+    },
+    {
+      "path": "description",
+      "semantic": "Exact"
+    },
+    {
+      "path": "desired_status",
+      "semantic": "Exact"
+    },
+    {
+      "path": "enable_display",
+      "semantic": "Exact"
+    },
+    {
+      "path": "hostname",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "machine_type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "metadata_startup_script",
+      "semantic": "Exact"
+    },
+    {
+      "path": "min_cpu_platform",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "network_interface.access_config.nat_ip",
+      "semantic": "Exact"
+    },
+    {
+      "path": "network_interface.access_config.network_tier",
+      "semantic": "Exact"
+    },
+    {
+      "path": "network_interface.network",
+      "semantic": "Exact"
+    },
+    {
+      "path": "network_interface.network_ip",
+      "semantic": "Exact"
+    },
+    {
+      "path": "network_interface.nic_type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "network_interface.subnetwork",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "resource_policies",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "scheduling.automatic_restart",
+      "semantic": "Exact"
+    },
+    {
+      "path": "scheduling.on_host_maintenance",
+      "semantic": "Exact"
+    },
+    {
+      "path": "scheduling.preemptible",
+      "semantic": "Exact"
+    },
+    {
+      "path": "scheduling.provisioning_model",
+      "semantic": "Exact"
+    },
+    {
+      "path": "self_link",
+      "semantic": "Exact"
+    },
+    {
+      "path": "service_account.email",
+      "semantic": "Exact"
+    },
+    {
+      "path": "service_account.scopes",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "shielded_instance_config.enable_integrity_monitoring",
+      "semantic": "Exact"
+    },
+    {
+      "path": "shielded_instance_config.enable_secure_boot",
+      "semantic": "Exact"
+    },
+    {
+      "path": "shielded_instance_config.enable_vtpm",
+      "semantic": "Exact"
+    },
+    {
+      "path": "zone",
+      "semantic": "Exact"
+    }
+  ],
+  "google_compute_router": [
+    {
+      "path": "bgp.advertise_mode",
+      "semantic": "Exact"
+    },
+    {
+      "path": "bgp.advertised_groups",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "bgp.asn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "bgp.keepalive_interval",
+      "semantic": "Exact"
+    },
+    {
+      "path": "description",
+      "semantic": "Exact"
+    },
+    {
+      "path": "encrypted_interconnect_router",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "network",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "region",
+      "semantic": "Exact"
+    },
+    {
+      "path": "self_link",
+      "semantic": "Exact"
+    }
+  ],
+  "google_kms_crypto_key": [
+    {
+      "path": "crypto_key_backend",
+      "semantic": "Exact"
+    },
+    {
+      "path": "destroy_scheduled_duration",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "import_only",
+      "semantic": "Exact"
+    },
+    {
+      "path": "key_ring",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "purpose",
+      "semantic": "Exact"
+    },
+    {
+      "path": "rotation_period",
+      "semantic": "Exact"
+    },
+    {
+      "path": "skip_initial_version_creation",
+      "semantic": "Exact"
+    },
+    {
+      "path": "version_template.algorithm",
+      "semantic": "Exact"
+    },
+    {
+      "path": "version_template.protection_level",
+      "semantic": "Exact"
+    }
+  ],
   "google_pubsub_topic": [
     {
       "path": "id",
@@ -496,6 +746,206 @@
     },
     {
       "path": "schema_settings.schema",
+      "semantic": "Exact"
+    }
+  ],
+  "google_service_account": [
+    {
+      "path": "account_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "create_ignore_already_exists",
+      "semantic": "Exact"
+    },
+    {
+      "path": "description",
+      "semantic": "Exact"
+    },
+    {
+      "path": "disabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "display_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "email",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "member",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "unique_id",
+      "semantic": "Exact"
+    }
+  ],
+  "google_sql_database_instance": [
+    {
+      "path": "database_version",
+      "semantic": "Exact"
+    },
+    {
+      "path": "deletion_protection",
+      "semantic": "Exact"
+    },
+    {
+      "path": "encryption_key_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "instance_type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "maintenance_version",
+      "semantic": "Exact"
+    },
+    {
+      "path": "master_instance_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "region",
+      "semantic": "Exact"
+    },
+    {
+      "path": "self_link",
+      "semantic": "Exact"
+    },
+    {
+      "path": "settings.activation_policy",
+      "semantic": "Exact"
+    },
+    {
+      "path": "settings.availability_type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "settings.backup_configuration.backup_retention_settings.retained_backups",
+      "semantic": "Exact"
+    },
+    {
+      "path": "settings.backup_configuration.enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "settings.backup_configuration.point_in_time_recovery_enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "settings.backup_configuration.start_time",
+      "semantic": "Exact"
+    },
+    {
+      "path": "settings.backup_configuration.transaction_log_retention_days",
+      "semantic": "Exact"
+    },
+    {
+      "path": "settings.database_flags.name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "settings.database_flags.value",
+      "semantic": "Exact"
+    },
+    {
+      "path": "settings.deletion_protection_enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "settings.disk_autoresize",
+      "semantic": "Exact"
+    },
+    {
+      "path": "settings.disk_autoresize_limit",
+      "semantic": "Exact"
+    },
+    {
+      "path": "settings.disk_size",
+      "semantic": "Exact"
+    },
+    {
+      "path": "settings.disk_type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "settings.edition",
+      "semantic": "Exact"
+    },
+    {
+      "path": "settings.insights_config.query_insights_enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "settings.ip_configuration.allocated_ip_range",
+      "semantic": "Exact"
+    },
+    {
+      "path": "settings.ip_configuration.authorized_networks.name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "settings.ip_configuration.authorized_networks.value",
+      "semantic": "Exact"
+    },
+    {
+      "path": "settings.ip_configuration.ipv4_enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "settings.ip_configuration.private_network",
+      "semantic": "Exact"
+    },
+    {
+      "path": "settings.ip_configuration.ssl_mode",
+      "semantic": "Exact"
+    },
+    {
+      "path": "settings.maintenance_window.day",
+      "semantic": "Exact"
+    },
+    {
+      "path": "settings.maintenance_window.hour",
+      "semantic": "Exact"
+    },
+    {
+      "path": "settings.maintenance_window.update_track",
+      "semantic": "Exact"
+    },
+    {
+      "path": "settings.pricing_plan",
+      "semantic": "Exact"
+    },
+    {
+      "path": "settings.tier",
       "semantic": "Exact"
     }
   ],

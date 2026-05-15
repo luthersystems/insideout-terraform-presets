@@ -55,7 +55,7 @@ func TestExistingEnrichersDoNotImplementByID(t *testing.T) {
 	// implement ByIDEnricher. When adding a new enricher: bump
 	// wantTotal and either add to allowlist (no ByIDEnricher) or leave
 	// it off (implements ByIDEnricher).
-	const wantTotal = 7 // 5 pre-Phase-2 + compute_address + compute_firewall
+	const wantTotal = 12 // 5 pre-Phase-2 + compute_address + compute_firewall + Bundle G5 (compute_instance, compute_router, kms_crypto_key, service_account, sql_database_instance)
 	if got := len(d.byTypeEnricher); got != wantTotal {
 		t.Errorf("byTypeEnricher size = %d, want %d (production registration drifted from test)", got, wantTotal)
 	}

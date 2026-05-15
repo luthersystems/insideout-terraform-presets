@@ -8,9 +8,12 @@ import (
 	"sort"
 	"time"
 
+	"google.golang.org/api/cloudkms/v1"
 	computev1 "google.golang.org/api/compute/v1"
+	iamv1 "google.golang.org/api/iam/v1"
 	pubsubv1 "google.golang.org/api/pubsub/v1"
 	secretmanagerv1 "google.golang.org/api/secretmanager/v1"
+	sqladmin "google.golang.org/api/sqladmin/v1"
 	storagev1 "google.golang.org/api/storage/v1"
 
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/progress"
@@ -133,7 +136,15 @@ type EnrichClients struct {
 	Pubsub        *pubsubv1.Service
 	SecretManager *secretmanagerv1.Service
 	Compute       *computev1.Service
-	ProjectID     string
+	// Bundle G5 (#482) — added for KMS, SQL, and IAM enrichers.
+	// KMS backs google_kms_crypto_key; SQLAdmin backs
+	// google_sql_database_instance; IAM backs google_service_account.
+	// Nil tolerated per the same convention as the other clients:
+	// affected enrichers report ErrEnrichClientUnavailable.
+	KMS       *cloudkms.Service
+	SQLAdmin  *sqladmin.Service
+	IAM       *iamv1.Service
+	ProjectID string
 }
 
 // ErrEnrichClientUnavailable signals that the SDK client an enricher
