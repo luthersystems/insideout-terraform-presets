@@ -219,11 +219,11 @@ func TestPct(t *testing.T) {
 	cases := []struct {
 		num, den, want int
 	}{
-		{0, 0, 0},   // empty cloud branch
-		{0, 10, 0},  // nothing flagged
+		{0, 0, 0},  // empty cloud branch
+		{0, 10, 0}, // nothing flagged
 		{10, 10, 100},
-		{1, 3, 33},   // round down
-		{2, 3, 67},   // round up
+		{1, 3, 33}, // round down
+		{2, 3, 67}, // round up
 		{1, 2, 50},
 	}
 	for _, tc := range cases {

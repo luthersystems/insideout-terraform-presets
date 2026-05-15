@@ -90,7 +90,7 @@ func TestExistingEnrichersDoNotImplementByID(t *testing.T) {
 // TestCloudControlEnricherCoversEveryCCRoutedType asserts that every
 // TF type in cloudControlTypeConfigs has a registered AttributeEnricher
 // in NewAWSDiscoverer.byTypeEnricher — either a hand-rolled override
-// (3 types today) or a generic cloudControlEnricher. A regression that
+// (4 types today) or a generic cloudControlEnricher. A regression that
 // drops the cloudControlEnricher wiring loop in NewAWSDiscoverer would
 // silently strip Cloud Control coverage from ~91 types; this test
 // catches that as a per-type miss rather than waiting for a downstream
