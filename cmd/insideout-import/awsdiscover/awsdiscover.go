@@ -201,14 +201,17 @@ func NewAWSDiscovererWithConcurrency(cfg aws.Config, maxConcurrency int) *AWSDis
 		// follows the existing per-type ordering one PR at a time. Mirrors
 		// gcpdiscover.GCPDiscoverer (presets#403).
 		//
-		// aws_s3_bucket follows once presets bundle #461 lands the Layer
-		// 1 typed struct in pkg/composer/imported/generated. The S3
-		// enricher infrastructure (EnrichClients.S3 field, codegen
-		// support) is in place already so the wiring there is a one-line
-		// registration.
+		// (#493) S3 enricher landed: aws_s3_bucket is wired below via
+		// newS3BucketEnricher(). The hand-rolled enricher is the
+		// reliable path; once the Cloud Control unified enricher (#490)
+		// proves out S3 coverage, this registration can flip to the
+		// unified path and s3_bucket_enrich.go can be retired (the
+		// framework preserves the override capability for any per-type
+		// quirk the unified path doesn't model).
 		byTypeEnricher: map[string]AttributeEnricher{
 			"aws_cloudwatch_log_group":  newCloudWatchLogGroupEnricher(),
 			"aws_dynamodb_table":        newDynamoDBTableEnricher(),
+			"aws_s3_bucket":             newS3BucketEnricher(),
 			"aws_secretsmanager_secret": newSecretsManagerSecretEnricher(),
 		},
 	}

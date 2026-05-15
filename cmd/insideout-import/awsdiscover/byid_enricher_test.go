@@ -53,7 +53,7 @@ func TestExistingEnrichersDoNotImplementByID(t *testing.T) {
 	// implement ByIDEnricher. When adding a new enricher: bump
 	// wantTotal and either add to allowlist (no ByIDEnricher) or leave
 	// it off (implements ByIDEnricher).
-	const wantTotal = 3 // dynamodb_table + cloudwatch_log_group + secretsmanager_secret
+	const wantTotal = 4 // dynamodb_table + cloudwatch_log_group + secretsmanager_secret + s3_bucket
 	if got := len(d.byTypeEnricher); got != wantTotal {
 		t.Errorf("byTypeEnricher size = %d, want %d (production registration drifted from test)", got, wantTotal)
 	}
