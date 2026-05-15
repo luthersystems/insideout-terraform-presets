@@ -303,6 +303,32 @@ google_compute_address	self_link	Identity		RileyVisible	Never
 google_compute_address	subnetwork	Wiring	Reliability	RileyVisible	RelationshipOnly		AlwaysReplace
 google_compute_address	terraform_labels	Tuning		Hidden	SystemOnly	Redacted	
 google_compute_address	timeouts	Tuning		Hidden	SystemOnly		
+google_compute_backend_service	affinity_cookie_ttl_sec	Tuning	Reliability	RileyVisible	ChatSafe		
+google_compute_backend_service	compression_mode	Tuning	Performance	RileyVisible	ChatSafe		
+google_compute_backend_service	connection_draining_timeout_sec	Tuning	Reliability	RileyVisible	ChatSafe		
+google_compute_backend_service	creation_timestamp	Tuning		RileyVisible	Never		
+google_compute_backend_service	custom_request_headers	Tuning		RileyVisible	RequiresApproval		
+google_compute_backend_service	custom_response_headers	Tuning		RileyVisible	RequiresApproval		
+google_compute_backend_service	description	Tuning		RileyVisible	ChatSafe		
+google_compute_backend_service	edge_security_policy	Wiring	Security	RileyVisible	RelationshipOnly		
+google_compute_backend_service	enable_cdn	Tuning	Performance	UIVisible	RequiresApproval		
+google_compute_backend_service	fingerprint	Identity		RileyVisible	Never		
+google_compute_backend_service	generated_id	Identity		RileyVisible	Never		
+google_compute_backend_service	health_checks	Wiring	Reliability	UIVisible	RelationshipOnly		
+google_compute_backend_service	id	Identity		RileyVisible	Never		
+google_compute_backend_service	ip_address_selection_policy	Tuning	Reliability	RileyVisible	RequiresApproval		
+google_compute_backend_service	load_balancing_scheme	Tuning	Reliability	RileyVisible	Never		AlwaysReplace
+google_compute_backend_service	locality_lb_policy	Tuning	Reliability	RileyVisible	RequiresApproval		
+google_compute_backend_service	name	Identity		UIVisible	Never		
+google_compute_backend_service	port_name	Tuning	Reliability	RileyVisible	RequiresApproval		
+google_compute_backend_service	project	Identity		UIVisible	Never		AlwaysReplace
+google_compute_backend_service	protocol	Tuning	Reliability	UIVisible	RequiresApproval		
+google_compute_backend_service	security_policy	Wiring	Security	UIVisible	RelationshipOnly		
+google_compute_backend_service	self_link	Identity		RileyVisible	Never		
+google_compute_backend_service	service_lb_policy	Wiring	Reliability	RileyVisible	RelationshipOnly		
+google_compute_backend_service	session_affinity	Tuning	Reliability	RileyVisible	RequiresApproval		
+google_compute_backend_service	timeout_sec	Tuning	Performance	RileyVisible	ChatSafe		
+google_compute_backend_service	timeouts	Tuning		Hidden	SystemOnly		
 google_compute_firewall	allow.ports	Tuning	Security	RileyVisible	RequiresApproval		
 google_compute_firewall	allow.protocol	Tuning	Security	RileyVisible	RequiresApproval		
 google_compute_firewall	deny.ports	Tuning	Security	RileyVisible	RequiresApproval		
@@ -382,6 +408,19 @@ google_compute_global_forwarding_rule	subnetwork	Wiring	Reliability	RileyVisible
 google_compute_global_forwarding_rule	target	Wiring	Reliability	UIVisible	RelationshipOnly		
 google_compute_global_forwarding_rule	terraform_labels	Tuning		Hidden	SystemOnly	Redacted	
 google_compute_global_forwarding_rule	timeouts	Tuning		Hidden	SystemOnly		
+google_compute_health_check	check_interval_sec	Tuning	Reliability	RileyVisible	ChatSafe		
+google_compute_health_check	creation_timestamp	Tuning		RileyVisible	Never		
+google_compute_health_check	description	Tuning		RileyVisible	ChatSafe		
+google_compute_health_check	healthy_threshold	Tuning	Reliability	RileyVisible	ChatSafe		
+google_compute_health_check	id	Identity		RileyVisible	Never		
+google_compute_health_check	name	Identity		UIVisible	Never		
+google_compute_health_check	project	Identity		UIVisible	Never		AlwaysReplace
+google_compute_health_check	self_link	Identity		RileyVisible	Never		
+google_compute_health_check	source_regions	Tuning	Reliability	RileyVisible	RequiresApproval		
+google_compute_health_check	timeout_sec	Tuning	Reliability	RileyVisible	ChatSafe		
+google_compute_health_check	timeouts	Tuning		Hidden	SystemOnly		
+google_compute_health_check	type	Identity		UIVisible	Never		
+google_compute_health_check	unhealthy_threshold	Tuning	Reliability	RileyVisible	ChatSafe		
 google_compute_instance	allow_stopping_for_update	Tuning		RileyVisible	ChatSafe		
 google_compute_instance	boot_disk.auto_delete	Tuning	Reliability	RileyVisible	ChatSafe		
 google_compute_instance	boot_disk.device_name	Identity		RileyVisible	Never		
@@ -425,6 +464,18 @@ google_compute_instance	shielded_instance_config.enable_vtpm	Tuning	Security	Ril
 google_compute_instance	terraform_labels	Tuning		Hidden	SystemOnly	Redacted	
 google_compute_instance	timeouts	Tuning		Hidden	SystemOnly		
 google_compute_instance	zone	Identity		UIVisible	Never		AlwaysReplace
+google_compute_managed_ssl_certificate	certificate_id	Identity		RileyVisible	Never		
+google_compute_managed_ssl_certificate	creation_timestamp	Tuning		RileyVisible	Never		
+google_compute_managed_ssl_certificate	description	Tuning		RileyVisible	ChatSafe		
+google_compute_managed_ssl_certificate	expire_time	Tuning	Security	UIVisible	Never		
+google_compute_managed_ssl_certificate	id	Identity		RileyVisible	Never		
+google_compute_managed_ssl_certificate	managed.domains	Tuning	Security	UIVisible	Never		AlwaysReplace
+google_compute_managed_ssl_certificate	name	Identity		UIVisible	Never		
+google_compute_managed_ssl_certificate	project	Identity		UIVisible	Never		AlwaysReplace
+google_compute_managed_ssl_certificate	self_link	Identity		RileyVisible	Never		
+google_compute_managed_ssl_certificate	subject_alternative_names	Tuning	Security	UIVisible	Never		
+google_compute_managed_ssl_certificate	timeouts	Tuning		Hidden	SystemOnly		
+google_compute_managed_ssl_certificate	type	Identity		UIVisible	Never		AlwaysReplace
 google_compute_network	auto_create_subnetworks	Tuning	Reliability	RileyVisible	RequiresApproval		MayReplace
 google_compute_network	delete_default_routes_on_create	Tuning	Security	RileyVisible	Never		AlwaysReplace
 google_compute_network	description	Tuning		RileyVisible	ChatSafe		
@@ -439,6 +490,13 @@ google_compute_network	project	Identity		UIVisible	Never		AlwaysReplace
 google_compute_network	routing_mode	Tuning	Performance	RileyVisible	ChatSafe		
 google_compute_network	self_link	Identity		RileyVisible	Never		
 google_compute_network	timeouts	Tuning		Hidden	SystemOnly		
+google_compute_resource_policy	description	Tuning		RileyVisible	ChatSafe		
+google_compute_resource_policy	id	Identity		RileyVisible	Never		
+google_compute_resource_policy	name	Identity		UIVisible	Never		
+google_compute_resource_policy	project	Identity		UIVisible	Never		AlwaysReplace
+google_compute_resource_policy	region	Identity		UIVisible	Never		AlwaysReplace
+google_compute_resource_policy	self_link	Identity		RileyVisible	Never		
+google_compute_resource_policy	timeouts	Tuning		Hidden	SystemOnly		
 google_compute_router	bgp.advertise_mode	Tuning	Reliability	RileyVisible	ChatSafe		
 google_compute_router	bgp.advertised_groups	Tuning	Reliability	RileyVisible	ChatSafe		
 google_compute_router	bgp.asn	Tuning	Reliability	RileyVisible	RequiresApproval		AlwaysReplace
@@ -470,6 +528,16 @@ google_compute_security_policy	rule.priority	Tuning	Security	RileyVisible	Requir
 google_compute_security_policy	self_link	Identity		RileyVisible	Never		
 google_compute_security_policy	timeouts	Tuning		Hidden	SystemOnly		
 google_compute_security_policy	type	Tuning	Security	UIVisible	Never		AlwaysReplace
+google_compute_target_http_proxy	description	Tuning		RileyVisible	ChatSafe		
+google_compute_target_http_proxy	http_keep_alive_timeout_sec	Tuning	Performance	RileyVisible	ChatSafe		
+google_compute_target_http_proxy	id	Identity		RileyVisible	Never		
+google_compute_target_http_proxy	name	Identity		UIVisible	Never		
+google_compute_target_http_proxy	project	Identity		UIVisible	Never		AlwaysReplace
+google_compute_target_http_proxy	proxy_bind	Tuning		RileyVisible	Never		AlwaysReplace
+google_compute_target_http_proxy	proxy_id	Identity		RileyVisible	Never		
+google_compute_target_http_proxy	self_link	Identity		RileyVisible	Never		
+google_compute_target_http_proxy	timeouts	Tuning		Hidden	SystemOnly		
+google_compute_target_http_proxy	url_map	Wiring	Reliability	UIVisible	RelationshipOnly		
 google_compute_target_https_proxy	certificate_manager_certificates	Wiring	Security	UIVisible	RelationshipOnly		
 google_compute_target_https_proxy	certificate_map	Wiring	Security	RileyVisible	RelationshipOnly		
 google_compute_target_https_proxy	description	Tuning		RileyVisible	ChatSafe		
