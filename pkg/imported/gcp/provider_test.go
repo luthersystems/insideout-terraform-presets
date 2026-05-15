@@ -3,6 +3,7 @@ package gcp_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/gcpdiscover"
@@ -143,21 +144,34 @@ func TestProvider_CanonicalAddress(t *testing.T) {
 func TestProvider_AgentContext(t *testing.T) {
 	t.Parallel()
 	p := gcpprov.NewProvider(nil, nil)
+	imp.ResetAgentContextCacheForTest()
 
 	if got := p.AgentContext(nil); got != nil {
 		t.Errorf("AgentContext(nil) = %v, want nil", got)
 	}
 
+	// Two registered GCP types, given in reverse alphabetical type
+	// order. The shared renderer (see pkg/imported/agentcontext.go)
+	// emits per-type blocks in stable Terraform-type-name order, so
+	// the pubsub block must come before the storage_bucket block in
+	// the output.
 	irs := []composerimported.ImportedResource{
 		{Identity: composerimported.ResourceIdentity{Type: "google_storage_bucket", Address: "google_storage_bucket.z"}},
 		{Identity: composerimported.ResourceIdentity{Type: "google_pubsub_topic", Address: "google_pubsub_topic.a"}},
 	}
 	got := p.AgentContext(irs)
-	if len(got) != 2 {
-		t.Fatalf("expected 2 lines, got %d", len(got))
+	if len(got) == 0 {
+		t.Fatal("AgentContext returned no lines for registered types")
 	}
-	if got[0] >= got[1] {
-		t.Errorf("AgentContext not sorted: %v", got)
+	joined := strings.Join(got, "\n")
+
+	pubIdx := strings.Index(joined, "== Imported.google_pubsub_topic ==")
+	bucketIdx := strings.Index(joined, "== Imported.google_storage_bucket ==")
+	if pubIdx < 0 || bucketIdx < 0 {
+		t.Fatalf("AgentContext missing expected type headers:\n%s", joined)
+	}
+	if pubIdx >= bucketIdx {
+		t.Errorf("type blocks must render in alphabetical order; pubIdx=%d bucketIdx=%d", pubIdx, bucketIdx)
 	}
 }
 

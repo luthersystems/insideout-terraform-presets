@@ -104,11 +104,33 @@ type Provider interface {
 	// DriftSemantic tags.
 	CompareDrift(tfType string, snapshot, live Attrs) []FieldMismatch
 
-	// AgentContext returns a short, human-readable summary line
-	// per imported resource, suitable for inclusion in an
-	// interactive-agent chat-context prompt. Conservative format:
-	// one line per IR of the form "<address> (<type>)". Stable
-	// ordering across calls — sorted by Identity.Address.
+	// AgentContext returns the per-Terraform-type policy block +
+	// per-instance value rows for inclusion in an interactive-agent
+	// chat-context prompt. Per registered type, in stable type-name
+	// order, the renderer emits:
+	//
+	//   == Imported.<type> ==
+	//   editable_chat_safe: [<paths>]
+	//   editable_with_approval: [<paths>]
+	//   read_only: [<paths>]
+	//   system_owned: [<paths>]
+	//   # sensitive fields omitted entirely
+	//   instances:
+	//     <address>:
+	//       project: <project>           // GCP identity slot
+	//       location: <location>         // identity slot
+	//       <path>: <current-value>      // per VisibleFieldsFor
+	//   == End ==
+	//
+	// Instances within each type sort by Identity.Address. Types
+	// without a registered policy in pkg/composer/imported/policy
+	// are skipped entirely — emitting a half-rendered block with
+	// no policy summary would teach the agent nothing while burning
+	// context tokens.
+	//
+	// Both per-cloud Provider impls delegate to the shared
+	// RenderAgentContext helper because the rendering is
+	// cloud-agnostic.
 	//
 	// Agent-name-agnostic on purpose: the per-product naming can rotate
 	// without flipping the interface.

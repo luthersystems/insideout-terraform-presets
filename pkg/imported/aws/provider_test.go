@@ -3,6 +3,7 @@ package aws_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	awssdk "github.com/aws/aws-sdk-go-v2/aws"
@@ -173,22 +174,33 @@ func TestProvider_CanonicalAddress(t *testing.T) {
 func TestProvider_AgentContext(t *testing.T) {
 	t.Parallel()
 	p := awsprov.NewProvider(nil, nil)
+	imp.ResetAgentContextCacheForTest()
 
 	if got := p.AgentContext(nil); got != nil {
 		t.Errorf("AgentContext(nil) = %v, want nil", got)
 	}
 
+	// Two registered AWS types, given in reverse alphabetical type
+	// order. The shared renderer (see pkg/imported/agentcontext.go)
+	// emits per-type blocks in stable Terraform-type-name order, so
+	// the dynamodb block must come before the s3 block in the output.
 	irs := []composerimported.ImportedResource{
 		{Identity: composerimported.ResourceIdentity{Type: "aws_s3_bucket", Address: "aws_s3_bucket.z"}},
-		{Identity: composerimported.ResourceIdentity{Type: "aws_iam_role", Address: "aws_iam_role.a"}},
+		{Identity: composerimported.ResourceIdentity{Type: "aws_dynamodb_table", Address: "aws_dynamodb_table.a"}},
 	}
 	got := p.AgentContext(irs)
-	if len(got) != 2 {
-		t.Fatalf("expected 2 lines, got %d", len(got))
+	if len(got) == 0 {
+		t.Fatal("AgentContext returned no lines for registered types")
 	}
-	// Sorted by line — aws_iam_role.a (...) sorts before aws_s3_bucket.z (...)
-	if got[0] >= got[1] {
-		t.Errorf("AgentContext not sorted: %v", got)
+	joined := strings.Join(got, "\n")
+
+	dynIdx := strings.Index(joined, "== Imported.aws_dynamodb_table ==")
+	s3Idx := strings.Index(joined, "== Imported.aws_s3_bucket ==")
+	if dynIdx < 0 || s3Idx < 0 {
+		t.Fatalf("AgentContext missing expected type headers:\n%s", joined)
+	}
+	if dynIdx >= s3Idx {
+		t.Errorf("type blocks must render in alphabetical order; dynIdx=%d s3Idx=%d", dynIdx, s3Idx)
 	}
 }
 
