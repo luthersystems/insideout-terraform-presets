@@ -22,8 +22,8 @@ and is checked in lockstep with the runtime registries. See the
 
 ## Summary
 
-- **AWS:** 109 types · 100% Discoverable · 88% Enrichable · 7% DriftDetectable · 0% MetricsAvailable · 7% AgentEditable
-- **GCP:** 54 types · 100% Discoverable · 76% Enrichable · 17% DriftDetectable · 0% MetricsAvailable · 74% AgentEditable
+- **AWS:** 109 types · 100% Discoverable · 86% Enrichable · 6% DriftDetectable · 0% MetricsAvailable · 6% AgentEditable
+- **GCP:** 54 types · 100% Discoverable · 94% Enrichable · 22% DriftDetectable · 0% MetricsAvailable · 83% AgentEditable
 
 ## AWS
 
@@ -111,8 +111,8 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_opensearchserverless_access_policy` | ✓ | ✓ | – | – | – |
 | `aws_opensearchserverless_collection` | ✓ | ✓ | – | – | – |
 | `aws_opensearchserverless_security_policy` | ✓ | ✓ | – | – | – |
-| `aws_resourceexplorer2_index` | ✓ | ✓ | ✓ | – | ✓ |
-| `aws_resourceexplorer2_view` | ✓ | ✓ | ✓ | – | ✓ |
+| `aws_resourceexplorer2_index` | ✓ | – | – | – | – |
+| `aws_resourceexplorer2_view` | ✓ | – | – | – | – |
 | `aws_route53_zone` | ✓ | ✓ | – | – | – |
 | `aws_route_table` | ✓ | ✓ | – | – | – |
 | `aws_s3_bucket` | ✓ | ✓ | ✓ | – | ✓ |
@@ -147,10 +147,10 @@ and is checked in lockstep with the runtime registries. See the
 | `google_api_gateway_api_config` | ✓ | ✓ | – | – | ✓ |
 | `google_api_gateway_gateway` | ✓ | ✓ | – | – | ✓ |
 | `google_cloud_run_v2_service` | ✓ | ✓ | – | – | ✓ |
-| `google_cloud_run_v2_service_iam_member` | ✓ | – | – | – | – |
+| `google_cloud_run_v2_service_iam_member` | ✓ | ✓ | – | – | – |
 | `google_cloudbuild_trigger` | ✓ | ✓ | – | – | ✓ |
 | `google_cloudfunctions2_function` | ✓ | ✓ | – | – | ✓ |
-| `google_cloudfunctions2_function_iam_member` | ✓ | – | – | – | – |
+| `google_cloudfunctions2_function_iam_member` | ✓ | ✓ | – | – | – |
 | `google_compute_address` | ✓ | ✓ | – | – | ✓ |
 | `google_compute_backend_service` | ✓ | ✓ | – | – | ✓ |
 | `google_compute_firewall` | ✓ | ✓ | – | – | ✓ |
@@ -173,30 +173,30 @@ and is checked in lockstep with the runtime registries. See the
 | `google_identity_platform_config` | ✓ | ✓ | – | – | ✓ |
 | `google_identity_platform_default_supported_idp_config` | ✓ | – | – | – | – |
 | `google_kms_crypto_key` | ✓ | ✓ | ✓ | – | ✓ |
-| `google_kms_crypto_key_iam_binding` | ✓ | – | – | – | – |
+| `google_kms_crypto_key_iam_binding` | ✓ | ✓ | – | – | ✓ |
 | `google_kms_key_ring` | ✓ | ✓ | – | – | – |
 | `google_logging_project_sink` | ✓ | ✓ | – | – | ✓ |
 | `google_monitoring_alert_policy` | ✓ | ✓ | – | – | ✓ |
 | `google_monitoring_dashboard` | ✓ | ✓ | – | – | ✓ |
 | `google_monitoring_notification_channel` | ✓ | ✓ | – | – | ✓ |
-| `google_project_iam_member` | ✓ | – | – | – | – |
-| `google_project_service` | ✓ | – | – | – | – |
+| `google_project_iam_member` | ✓ | ✓ | – | – | – |
+| `google_project_service` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_pubsub_subscription` | ✓ | ✓ | – | – | ✓ |
 | `google_pubsub_topic` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_redis_instance` | ✓ | ✓ | – | – | ✓ |
 | `google_secret_manager_secret` | ✓ | ✓ | ✓ | – | ✓ |
-| `google_secret_manager_secret_iam_binding` | ✓ | – | – | – | – |
-| `google_secret_manager_secret_iam_member` | ✓ | – | – | – | – |
+| `google_secret_manager_secret_iam_binding` | ✓ | ✓ | – | – | ✓ |
+| `google_secret_manager_secret_iam_member` | ✓ | ✓ | – | – | – |
 | `google_secret_manager_secret_version` | ✓ | – | – | – | – |
 | `google_service_account` | ✓ | ✓ | ✓ | – | ✓ |
-| `google_service_networking_connection` | ✓ | – | – | – | – |
+| `google_service_networking_connection` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_sql_database_instance` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_sql_user` | ✓ | ✓ | – | – | ✓ |
 | `google_storage_bucket` | ✓ | ✓ | ✓ | – | ✓ |
-| `google_storage_bucket_iam_member` | ✓ | – | – | – | – |
+| `google_storage_bucket_iam_member` | ✓ | ✓ | – | – | – |
 | `google_storage_bucket_object` | ✓ | – | – | – | – |
 | `google_vertex_ai_dataset` | ✓ | ✓ | – | – | ✓ |
-| `google_vpc_access_connector` | ✓ | – | – | – | – |
+| `google_vpc_access_connector` | ✓ | ✓ | ✓ | – | ✓ |
 
 ## How to regenerate
 

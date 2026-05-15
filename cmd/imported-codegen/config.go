@@ -45,15 +45,30 @@ var WantedGoogle = []string{
 	"google_monitoring_alert_policy",
 	"google_monitoring_dashboard",
 	"google_monitoring_notification_channel",
+	"google_project_service",
 	"google_pubsub_subscription",
 	"google_pubsub_topic",
 	"google_redis_instance",
 	"google_secret_manager_secret",
 	"google_service_account",
+	"google_service_networking_connection",
 	"google_sql_database_instance",
 	"google_sql_user",
 	"google_storage_bucket",
 	"google_vertex_ai_dataset",
+	"google_vpc_access_connector",
+	// IAM-binding types (#482 follow-up). Each maps to a discoverer
+	// already registered in NewGCPDiscoverer.byType, but lacked a
+	// Layer-1 typed struct (and thus an enricher) until now. The
+	// per-service GetIamPolicy SDK calls produce the binding rows
+	// the enrichers fan into ImportedResource.Attrs.
+	"google_cloud_run_v2_service_iam_member",
+	"google_cloudfunctions2_function_iam_member",
+	"google_kms_crypto_key_iam_binding",
+	"google_project_iam_member",
+	"google_secret_manager_secret_iam_binding",
+	"google_secret_manager_secret_iam_member",
+	"google_storage_bucket_iam_member",
 }
 
 // WantedGoogleBeta lists the GCP resource types whose schema lives in
