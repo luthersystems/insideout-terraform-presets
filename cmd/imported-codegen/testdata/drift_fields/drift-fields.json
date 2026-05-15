@@ -463,6 +463,106 @@
       "semantic": "Exact"
     }
   ],
+  "aws_iam_policy": [
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "attachment_count",
+      "semantic": "Exact"
+    },
+    {
+      "path": "description",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name_prefix",
+      "semantic": "Exact"
+    },
+    {
+      "path": "path",
+      "semantic": "Exact"
+    },
+    {
+      "path": "policy",
+      "semantic": "Exact"
+    },
+    {
+      "path": "policy_id",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_iam_role": [
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "assume_role_policy",
+      "semantic": "Exact"
+    },
+    {
+      "path": "create_date",
+      "semantic": "Exact"
+    },
+    {
+      "path": "description",
+      "semantic": "Exact"
+    },
+    {
+      "path": "force_detach_policies",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "inline_policy.name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "inline_policy.policy",
+      "semantic": "Exact"
+    },
+    {
+      "path": "managed_policy_arns",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "max_session_duration",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name_prefix",
+      "semantic": "Exact"
+    },
+    {
+      "path": "path",
+      "semantic": "Exact"
+    },
+    {
+      "path": "permissions_boundary",
+      "semantic": "Exact"
+    },
+    {
+      "path": "unique_id",
+      "semantic": "Exact"
+    }
+  ],
   "aws_iam_role_policy_attachment": [
     {
       "path": "id",
@@ -474,6 +574,68 @@
     },
     {
       "path": "role",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_kms_key": [
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "bypass_policy_lockout_safety_check",
+      "semantic": "Exact"
+    },
+    {
+      "path": "custom_key_store_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "customer_master_key_spec",
+      "semantic": "Exact"
+    },
+    {
+      "path": "deletion_window_in_days",
+      "semantic": "Exact"
+    },
+    {
+      "path": "description",
+      "semantic": "Exact"
+    },
+    {
+      "path": "enable_key_rotation",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "is_enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "key_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "key_usage",
+      "semantic": "Exact"
+    },
+    {
+      "path": "multi_region",
+      "semantic": "Exact"
+    },
+    {
+      "path": "policy",
+      "semantic": "Exact"
+    },
+    {
+      "path": "rotation_period_in_days",
+      "semantic": "Exact"
+    },
+    {
+      "path": "xks_key_id",
       "semantic": "Exact"
     }
   ],
@@ -631,6 +793,276 @@
       "semantic": "Exact"
     }
   ],
+  "aws_lb": [
+    {
+      "path": "access_logs.bucket",
+      "semantic": "Exact"
+    },
+    {
+      "path": "access_logs.enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "access_logs.prefix",
+      "semantic": "Exact"
+    },
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "arn_suffix",
+      "semantic": "Exact"
+    },
+    {
+      "path": "desync_mitigation_mode",
+      "semantic": "Exact"
+    },
+    {
+      "path": "dns_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "drop_invalid_header_fields",
+      "semantic": "Exact"
+    },
+    {
+      "path": "enable_cross_zone_load_balancing",
+      "semantic": "Exact"
+    },
+    {
+      "path": "enable_deletion_protection",
+      "semantic": "Exact"
+    },
+    {
+      "path": "enable_http2",
+      "semantic": "Exact"
+    },
+    {
+      "path": "enable_waf_fail_open",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "idle_timeout",
+      "semantic": "Exact"
+    },
+    {
+      "path": "internal",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ip_address_type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "load_balancer_type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name_prefix",
+      "semantic": "Exact"
+    },
+    {
+      "path": "preserve_host_header",
+      "semantic": "Exact"
+    },
+    {
+      "path": "security_groups",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "subnets",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "vpc_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "zone_id",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_lb_listener": [
+    {
+      "path": "alpn_policy",
+      "semantic": "Exact"
+    },
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "certificate_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "default_action",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "load_balancer_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "mutual_authentication.ignore_client_certificate_expiry",
+      "semantic": "Exact"
+    },
+    {
+      "path": "mutual_authentication.mode",
+      "semantic": "Exact"
+    },
+    {
+      "path": "mutual_authentication.trust_store_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "port",
+      "semantic": "Exact"
+    },
+    {
+      "path": "protocol",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ssl_policy",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_lb_target_group": [
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "arn_suffix",
+      "semantic": "Exact"
+    },
+    {
+      "path": "connection_termination",
+      "semantic": "Exact"
+    },
+    {
+      "path": "deregistration_delay",
+      "semantic": "Exact"
+    },
+    {
+      "path": "health_check.enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "health_check.healthy_threshold",
+      "semantic": "Exact"
+    },
+    {
+      "path": "health_check.interval",
+      "semantic": "Exact"
+    },
+    {
+      "path": "health_check.matcher",
+      "semantic": "Exact"
+    },
+    {
+      "path": "health_check.path",
+      "semantic": "Exact"
+    },
+    {
+      "path": "health_check.port",
+      "semantic": "Exact"
+    },
+    {
+      "path": "health_check.protocol",
+      "semantic": "Exact"
+    },
+    {
+      "path": "health_check.timeout",
+      "semantic": "Exact"
+    },
+    {
+      "path": "health_check.unhealthy_threshold",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ip_address_type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "load_balancing_algorithm_type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "load_balancing_cross_zone_enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name_prefix",
+      "semantic": "Exact"
+    },
+    {
+      "path": "port",
+      "semantic": "Exact"
+    },
+    {
+      "path": "preserve_client_ip",
+      "semantic": "Exact"
+    },
+    {
+      "path": "protocol",
+      "semantic": "Exact"
+    },
+    {
+      "path": "protocol_version",
+      "semantic": "Exact"
+    },
+    {
+      "path": "proxy_protocol_v2",
+      "semantic": "Exact"
+    },
+    {
+      "path": "slow_start",
+      "semantic": "Exact"
+    },
+    {
+      "path": "stickiness.cookie_duration",
+      "semantic": "Exact"
+    },
+    {
+      "path": "stickiness.enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "stickiness.type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "target_type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "vpc_id",
+      "semantic": "Exact"
+    }
+  ],
   "aws_resourceexplorer2_index": [
     {
       "path": "arn",
@@ -660,6 +1092,52 @@
     },
     {
       "path": "name",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_route53_zone": [
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "comment",
+      "semantic": "Exact"
+    },
+    {
+      "path": "delegation_set_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "force_destroy",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name_servers",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "primary_name_server",
+      "semantic": "Exact"
+    },
+    {
+      "path": "vpc.vpc_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "vpc.vpc_region",
+      "semantic": "Exact"
+    },
+    {
+      "path": "zone_id",
       "semantic": "Exact"
     }
   ],
@@ -953,6 +1431,48 @@
       "semantic": "Exact"
     }
   ],
+  "aws_security_group": [
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "description",
+      "semantic": "Exact"
+    },
+    {
+      "path": "egress",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ingress",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name_prefix",
+      "semantic": "Exact"
+    },
+    {
+      "path": "owner_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "revoke_rules_on_delete",
+      "semantic": "Exact"
+    },
+    {
+      "path": "vpc_id",
+      "semantic": "Exact"
+    }
+  ],
   "aws_service_discovery_private_dns_namespace": [
     {
       "path": "arn",
@@ -1030,6 +1550,154 @@
     },
     {
       "path": "visibility_timeout_seconds",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_subnet": [
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "assign_ipv6_address_on_creation",
+      "semantic": "Exact"
+    },
+    {
+      "path": "availability_zone",
+      "semantic": "Exact"
+    },
+    {
+      "path": "availability_zone_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "cidr_block",
+      "semantic": "Exact"
+    },
+    {
+      "path": "enable_dns64",
+      "semantic": "Exact"
+    },
+    {
+      "path": "enable_resource_name_dns_a_record_on_launch",
+      "semantic": "Exact"
+    },
+    {
+      "path": "enable_resource_name_dns_aaaa_record_on_launch",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ipv6_cidr_block",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ipv6_cidr_block_association_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ipv6_native",
+      "semantic": "Exact"
+    },
+    {
+      "path": "map_customer_owned_ip_on_launch",
+      "semantic": "Exact"
+    },
+    {
+      "path": "map_public_ip_on_launch",
+      "semantic": "Exact"
+    },
+    {
+      "path": "outpost_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "owner_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "private_dns_hostname_type_on_launch",
+      "semantic": "Exact"
+    },
+    {
+      "path": "vpc_id",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_vpc": [
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "assign_generated_ipv6_cidr_block",
+      "semantic": "Exact"
+    },
+    {
+      "path": "cidr_block",
+      "semantic": "Exact"
+    },
+    {
+      "path": "default_network_acl_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "default_route_table_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "default_security_group_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "dhcp_options_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "enable_dns_hostnames",
+      "semantic": "Exact"
+    },
+    {
+      "path": "enable_dns_support",
+      "semantic": "Exact"
+    },
+    {
+      "path": "enable_network_address_usage_metrics",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "instance_tenancy",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ipv4_ipam_pool_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ipv6_association_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ipv6_cidr_block",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ipv6_ipam_pool_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "main_route_table_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "owner_id",
       "semantic": "Exact"
     }
   ],

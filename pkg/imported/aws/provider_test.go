@@ -95,9 +95,11 @@ func TestProvider_Capabilities_DriftDetectable(t *testing.T) {
 	if got := pWithCmp.Capabilities("aws_dynamodb_table"); !got.DriftDetectable {
 		t.Errorf("With comparator + policy, DriftDetectable should be true; got %+v", got)
 	}
-	// aws_vpc has no policy registered today.
-	if got := pWithCmp.Capabilities("aws_vpc"); got.DriftDetectable {
-		t.Errorf("aws_vpc has no policy; DriftDetectable should be false; got %+v", got)
+	// aws_acm_certificate has no policy registered today (used as a
+	// stable "uncovered" negative example — previously aws_vpc, which
+	// gained a curated policy in the #482 AWS drift bundle).
+	if got := pWithCmp.Capabilities("aws_acm_certificate"); got.DriftDetectable {
+		t.Errorf("aws_acm_certificate has no policy; DriftDetectable should be false; got %+v", got)
 	}
 }
 

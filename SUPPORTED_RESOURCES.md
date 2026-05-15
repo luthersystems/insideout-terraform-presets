@@ -22,7 +22,7 @@ and is checked in lockstep with the runtime registries. See the
 
 ## Summary
 
-- **AWS:** 109 types · 100% Discoverable · 98% Enrichable · 17% DriftDetectable · 0% MetricsAvailable · 16% AgentEditable
+- **AWS:** 109 types · 100% Discoverable · 98% Enrichable · 27% DriftDetectable · 0% MetricsAvailable · 25% AgentEditable
 - **GCP:** 54 types · 100% Discoverable · 100% Enrichable · 37% DriftDetectable · 0% MetricsAvailable · 89% AgentEditable
 
 ## AWS
@@ -82,8 +82,8 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_elasticache_subnet_group` | ✓ | ✓ | – | – | – |
 | `aws_iam_group` | ✓ | ✓ | – | – | – |
 | `aws_iam_instance_profile` | ✓ | ✓ | – | – | – |
-| `aws_iam_policy` | ✓ | ✓ | – | – | – |
-| `aws_iam_role` | ✓ | ✓ | – | – | – |
+| `aws_iam_policy` | ✓ | ✓ | ✓ | – | ✓ |
+| `aws_iam_role` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_iam_role_policy` | ✓ | ✓ | – | – | – |
 | `aws_iam_role_policy_attachment` | ✓ | ✓ | ✓ | – | – |
 | `aws_iam_service_linked_role` | ✓ | ✓ | – | – | – |
@@ -92,16 +92,16 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_internet_gateway` | ✓ | ✓ | – | – | – |
 | `aws_key_pair` | ✓ | ✓ | – | – | – |
 | `aws_kms_alias` | ✓ | ✓ | – | – | – |
-| `aws_kms_key` | ✓ | ✓ | – | – | – |
+| `aws_kms_key` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_lambda_alias` | ✓ | ✓ | – | – | – |
 | `aws_lambda_event_source_mapping` | ✓ | ✓ | – | – | – |
 | `aws_lambda_function` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_lambda_function_url` | ✓ | ✓ | – | – | – |
 | `aws_lambda_permission` | ✓ | ✓ | – | – | – |
 | `aws_launch_template` | ✓ | ✓ | – | – | – |
-| `aws_lb` | ✓ | ✓ | – | – | – |
-| `aws_lb_listener` | ✓ | ✓ | – | – | – |
-| `aws_lb_target_group` | ✓ | ✓ | – | – | – |
+| `aws_lb` | ✓ | ✓ | ✓ | – | ✓ |
+| `aws_lb_listener` | ✓ | ✓ | ✓ | – | ✓ |
+| `aws_lb_target_group` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_msk_cluster` | ✓ | ✓ | – | – | – |
 | `aws_msk_configuration` | ✓ | ✓ | – | – | – |
 | `aws_nat_gateway` | ✓ | ✓ | – | – | – |
@@ -113,7 +113,7 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_opensearchserverless_security_policy` | ✓ | ✓ | – | – | – |
 | `aws_resourceexplorer2_index` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_resourceexplorer2_view` | ✓ | ✓ | ✓ | – | ✓ |
-| `aws_route53_zone` | ✓ | ✓ | – | – | – |
+| `aws_route53_zone` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_route_table` | ✓ | ✓ | – | – | – |
 | `aws_s3_bucket` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_s3_bucket_lifecycle_configuration` | ✓ | ✓ | ✓ | – | ✓ |
@@ -124,14 +124,14 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_s3_bucket_versioning` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_secretsmanager_secret` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_secretsmanager_secret_rotation` | ✓ | ✓ | – | – | – |
-| `aws_security_group` | ✓ | ✓ | – | – | – |
+| `aws_security_group` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_service_discovery_private_dns_namespace` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_sns_topic` | ✓ | ✓ | – | – | – |
 | `aws_sns_topic_subscription` | ✓ | ✓ | – | – | – |
 | `aws_sqs_queue` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_ssm_parameter` | ✓ | ✓ | – | – | – |
-| `aws_subnet` | ✓ | ✓ | – | – | – |
-| `aws_vpc` | ✓ | ✓ | – | – | – |
+| `aws_subnet` | ✓ | ✓ | ✓ | – | ✓ |
+| `aws_vpc` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_vpc_dhcp_options` | ✓ | ✓ | – | – | – |
 | `aws_vpc_endpoint` | ✓ | ✓ | – | – | – |
 | `aws_vpc_security_group_egress_rule` | ✓ | ✓ | – | – | – |
