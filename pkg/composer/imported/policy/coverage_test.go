@@ -24,17 +24,24 @@ const syntheticTypePrefix = "policy_test_"
 // have a Layer 2 policy registered. Adding or removing a type requires
 // updating this list — the diff makes the surface change explicit.
 var coveredTypes = []string{
+	"aws_acm_certificate",
 	"aws_apigatewayv2_stage",
+	"aws_athena_workgroup",
 	// Final-2 push (#482) — closes the last hand-rolled enrichers
 	// (per-tag-on-ASG and resource-arn × web-acl-arn binding). Both
 	// have curated Layer 2 policy.Maps with Exact drift semantics.
+	"aws_autoscaling_group",
 	"aws_autoscaling_group_tag",
 	"aws_bedrock_guardrail",
 	"aws_bedrock_model_invocation_logging_configuration",
 	// AWS drift coverage bundle 2 (#482) — cloud-control-routed types
 	// in the RDS / compute / monitoring / managed-search family.
 	"aws_cloudfront_distribution",
+	"aws_cloudwatch_event_rule",
 	"aws_cloudwatch_log_group",
+	"aws_cloudwatch_metric_alarm",
+	"aws_codebuild_project",
+	"aws_codepipeline",
 	"aws_db_instance",
 	"aws_dynamodb_contributor_insights",
 	"aws_dynamodb_table",
@@ -51,6 +58,7 @@ var coveredTypes = []string{
 	"aws_instance",
 	"aws_kms_key",
 	"aws_lambda_function",
+	"aws_lambda_layer_version",
 	"aws_lb",
 	"aws_lb_listener",
 	"aws_lb_target_group",
@@ -71,10 +79,12 @@ var coveredTypes = []string{
 	"aws_secretsmanager_secret_rotation",
 	"aws_security_group",
 	"aws_service_discovery_private_dns_namespace",
+	"aws_sfn_state_machine",
 	"aws_sns_topic",
 	"aws_sqs_queue",
 	"aws_subnet",
 	"aws_vpc",
+	"aws_vpc_endpoint",
 	// Final-2 push (#482), continued — wafv2_web_acl_association in
 	// alphabetical position at the end of the AWS block.
 	"aws_wafv2_web_acl_association",

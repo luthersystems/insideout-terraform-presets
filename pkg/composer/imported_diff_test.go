@@ -506,14 +506,14 @@ func TestDiffImportedResources_NoPolicyForType(t *testing.T) {
 	t.Parallel()
 	old := imported.ImportedResource{
 		Identity: imported.ResourceIdentity{
-			Cloud: "aws", Type: "aws_iam_role", Address: "aws_iam_role.r", ImportID: "r",
+			Cloud: "aws", Type: "aws_cloudtrail", Address: "aws_cloudtrail.t", ImportID: "t",
 		},
 		Tier:       imported.TierImportedFlat,
 		Attributes: map[string]any{"description": "old"},
 	}
 	new := old
 	new.Attributes = map[string]any{"description": "new"}
-	require.False(t, hasPolicy("aws_iam_role"), "test premise: aws_iam_role uncurated")
+	require.False(t, hasPolicy("aws_cloudtrail"), "test premise: aws_cloudtrail uncurated")
 
 	diffs := DiffImportedResources([]imported.ImportedResource{old}, []imported.ImportedResource{new})
 	require.Len(t, diffs, 1)

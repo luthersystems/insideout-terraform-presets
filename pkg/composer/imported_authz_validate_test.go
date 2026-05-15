@@ -258,15 +258,15 @@ func TestValidateImportedResourceAuthorization_EditPolicyGates(t *testing.T) {
 
 func TestValidateImportedResourceAuthorization_NoPolicyForType(t *testing.T) {
 	t.Parallel()
-	// aws_iam_role isn't in the Phase 1 ten — no policy registered, so any
+	// aws_cloudtrail isn't in the Phase 1 ten — no policy registered, so any
 	// FieldEdit defaults to deny.
-	require.False(t, hasPolicyRegistered("aws_iam_role"),
-		"test premise: aws_iam_role should not be in the curated Phase 1 set")
+	require.False(t, hasPolicyRegistered("aws_cloudtrail"),
+		"test premise: aws_cloudtrail should not be in the curated Phase 1 set")
 	irs := []imported.ImportedResource{{
 		Identity: imported.ResourceIdentity{
 			Cloud:    "aws",
-			Type:     "aws_iam_role",
-			Address:  "aws_iam_role.r",
+			Type:     "aws_cloudtrail",
+			Address:  "aws_cloudtrail.r",
 			ImportID: "r",
 		},
 		Tier: imported.TierImportedFlat,
@@ -277,7 +277,7 @@ func TestValidateImportedResourceAuthorization_NoPolicyForType(t *testing.T) {
 	issues := ValidateImportedResourceAuthorization("aws", irs)
 	require.Len(t, issues, 1)
 	assert.Equal(t, "imported_resource_field_edit_no_policy", issues[0].Code)
-	assert.Equal(t, "imported.aws_iam_role.r.description", issues[0].Field)
+	assert.Equal(t, "imported.aws_cloudtrail.r.description", issues[0].Field)
 }
 
 func TestValidateImportedResourceAuthorization_UnknownPath(t *testing.T) {
