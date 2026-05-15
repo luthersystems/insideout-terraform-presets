@@ -9,9 +9,17 @@ var seededTypes = []string{
 	"aws_lambda_function",
 	"aws_sqs_queue",
 	"aws_lb",
+	"aws_rds_cluster",
+	"aws_db_instance",
+	"aws_sns_topic",
+	"aws_cloudwatch_log_group",
+	"aws_secretsmanager_secret",
 	"google_storage_bucket",
 	"google_pubsub_topic",
 	"google_cloud_run_v2_service",
+	"google_sql_database_instance",
+	"google_redis_instance",
+	"google_pubsub_subscription",
 }
 
 // seededBindings mirrors the registrations performed by init(). Used
@@ -53,6 +61,41 @@ var seededBindings = map[string]ComponentMetricsBinding{
 		DimensionFrom:  "name",
 		DefaultMetrics: []string{"RequestCount", "TargetResponseTime", "HTTPCode_Target_5XX_Count"},
 	},
+	"aws_rds_cluster": {
+		Service:        "rds",
+		Action:         "get-metrics",
+		DimensionKey:   "DBClusterIdentifier",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"CPUUtilization", "DatabaseConnections", "FreeableMemory"},
+	},
+	"aws_db_instance": {
+		Service:        "rds",
+		Action:         "get-metrics",
+		DimensionKey:   "DBInstanceIdentifier",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"CPUUtilization", "DatabaseConnections", "FreeableMemory", "FreeStorageSpace"},
+	},
+	"aws_sns_topic": {
+		Service:        "sns",
+		Action:         "get-metrics",
+		DimensionKey:   "TopicName",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"NumberOfMessagesPublished", "NumberOfNotificationsDelivered", "NumberOfNotificationsFailed"},
+	},
+	"aws_cloudwatch_log_group": {
+		Service:        "logs",
+		Action:         "get-metrics",
+		DimensionKey:   "LogGroupName",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"IncomingBytes", "IncomingLogEvents"},
+	},
+	"aws_secretsmanager_secret": {
+		Service:        "secretsmanager",
+		Action:         "get-metrics",
+		DimensionKey:   "SecretName",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"Errors"},
+	},
 	"google_storage_bucket": {
 		Service:        "storage",
 		Action:         "timeseries-list",
@@ -73,6 +116,27 @@ var seededBindings = map[string]ComponentMetricsBinding{
 		DimensionKey:   "service_name",
 		DimensionFrom:  "name",
 		DefaultMetrics: []string{"run.googleapis.com/request_count", "run.googleapis.com/request_latencies"},
+	},
+	"google_sql_database_instance": {
+		Service:        "cloudsql",
+		Action:         "timeseries-list",
+		DimensionKey:   "database_id",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"cloudsql.googleapis.com/database/cpu/utilization", "cloudsql.googleapis.com/database/memory/utilization", "cloudsql.googleapis.com/database/disk/utilization"},
+	},
+	"google_redis_instance": {
+		Service:        "redis",
+		Action:         "timeseries-list",
+		DimensionKey:   "instance_id",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"redis.googleapis.com/clients/connected", "redis.googleapis.com/memory/usage_ratio"},
+	},
+	"google_pubsub_subscription": {
+		Service:        "pubsub",
+		Action:         "timeseries-list",
+		DimensionKey:   "subscription_id",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"pubsub.googleapis.com/subscription/num_undelivered_messages", "pubsub.googleapis.com/subscription/oldest_unacked_message_age"},
 	},
 }
 
