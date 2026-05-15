@@ -22,8 +22,8 @@ and is checked in lockstep with the runtime registries. See the
 
 ## Summary
 
-- **AWS:** 109 types · 100% Discoverable · 86% Enrichable · 3% DriftDetectable · 0% MetricsAvailable · 6% AgentEditable
-- **GCP:** 54 types · 100% Discoverable · 13% Enrichable · 4% DriftDetectable · 0% MetricsAvailable · 65% AgentEditable
+- **AWS:** 109 types · 100% Discoverable · 86% Enrichable · 6% DriftDetectable · 0% MetricsAvailable · 6% AgentEditable
+- **GCP:** 54 types · 100% Discoverable · 13% Enrichable · 7% DriftDetectable · 0% MetricsAvailable · 65% AgentEditable
 
 ## AWS
 
@@ -53,7 +53,7 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_cloudfront_origin_access_identity` | ✓ | ✓ | – | – | – |
 | `aws_cloudwatch_dashboard` | ✓ | ✓ | – | – | – |
 | `aws_cloudwatch_event_rule` | ✓ | ✓ | – | – | – |
-| `aws_cloudwatch_log_group` | ✓ | ✓ | – | – | ✓ |
+| `aws_cloudwatch_log_group` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_cloudwatch_log_resource_policy` | ✓ | ✓ | – | – | – |
 | `aws_cloudwatch_log_stream` | ✓ | ✓ | – | – | – |
 | `aws_cloudwatch_metric_alarm` | ✓ | ✓ | – | – | – |
@@ -122,13 +122,13 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_s3_bucket_public_access_block` | ✓ | – | – | – | – |
 | `aws_s3_bucket_server_side_encryption_configuration` | ✓ | – | – | – | – |
 | `aws_s3_bucket_versioning` | ✓ | – | – | – | – |
-| `aws_secretsmanager_secret` | ✓ | ✓ | – | – | ✓ |
+| `aws_secretsmanager_secret` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_secretsmanager_secret_rotation` | ✓ | ✓ | – | – | – |
 | `aws_security_group` | ✓ | ✓ | – | – | – |
 | `aws_service_discovery_private_dns_namespace` | ✓ | – | – | – | – |
 | `aws_sns_topic` | ✓ | ✓ | – | – | – |
 | `aws_sns_topic_subscription` | ✓ | ✓ | – | – | – |
-| `aws_sqs_queue` | ✓ | ✓ | – | – | ✓ |
+| `aws_sqs_queue` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_ssm_parameter` | ✓ | ✓ | – | – | – |
 | `aws_subnet` | ✓ | ✓ | – | – | – |
 | `aws_vpc` | ✓ | ✓ | – | – | – |
@@ -160,7 +160,7 @@ and is checked in lockstep with the runtime registries. See the
 | `google_compute_health_check` | ✓ | – | – | – | – |
 | `google_compute_instance` | ✓ | – | – | – | ✓ |
 | `google_compute_managed_ssl_certificate` | ✓ | – | – | – | – |
-| `google_compute_network` | ✓ | ✓ | – | – | ✓ |
+| `google_compute_network` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_compute_resource_policy` | ✓ | – | – | – | – |
 | `google_compute_router` | ✓ | – | – | – | ✓ |
 | `google_compute_security_policy` | ✓ | – | – | – | ✓ |
@@ -184,7 +184,7 @@ and is checked in lockstep with the runtime registries. See the
 | `google_pubsub_subscription` | ✓ | ✓ | – | – | ✓ |
 | `google_pubsub_topic` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_redis_instance` | ✓ | – | – | – | ✓ |
-| `google_secret_manager_secret` | ✓ | ✓ | – | – | ✓ |
+| `google_secret_manager_secret` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_secret_manager_secret_iam_binding` | ✓ | – | – | – | – |
 | `google_secret_manager_secret_iam_member` | ✓ | – | – | – | – |
 | `google_secret_manager_secret_version` | ✓ | – | – | – | – |
