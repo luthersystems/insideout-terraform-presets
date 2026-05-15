@@ -77,7 +77,8 @@ func TestExistingEnrichersDoNotImplementByID(t *testing.T) {
 	// cloud_run_v2_service_iam_member, cloudfunctions2_function_iam_member.
 	// = 25. Plus 3 final-push enrichers (#482): project_service,
 	// service_networking_connection, vpc_access_connector. = 28.
-	const handRolledCount = 28
+	// Plus secret_manager_secret_version (GCP 94→96% push, #482). = 29.
+	const handRolledCount = 29
 	caiNonOverlap := 0
 	for _, cfg := range cloudAssetTypeConfigs {
 		if cfg.Skip {

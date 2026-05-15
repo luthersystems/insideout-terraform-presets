@@ -24,12 +24,21 @@ const syntheticTypePrefix = "policy_test_"
 // have a Layer 2 policy registered. Adding or removing a type requires
 // updating this list — the diff makes the surface change explicit.
 var coveredTypes = []string{
+	"aws_apigatewayv2_stage",
 	"aws_cloudwatch_log_group",
+	"aws_dynamodb_contributor_insights",
 	"aws_dynamodb_table",
+	"aws_iam_role_policy_attachment",
 	"aws_lambda_function",
 	"aws_resourceexplorer2_index",
 	"aws_resourceexplorer2_view",
 	"aws_s3_bucket",
+	// S3 bucket sub-resources (#482 enricher push to 95%).
+	"aws_s3_bucket_lifecycle_configuration",
+	"aws_s3_bucket_ownership_controls",
+	"aws_s3_bucket_public_access_block",
+	"aws_s3_bucket_server_side_encryption_configuration",
+	"aws_s3_bucket_versioning",
 	"aws_secretsmanager_secret",
 	"aws_sqs_queue",
 	"google_api_gateway_api",
@@ -69,6 +78,7 @@ var coveredTypes = []string{
 	"google_pubsub_topic",
 	"google_redis_instance",
 	"google_secret_manager_secret",
+	"google_secret_manager_secret_version",
 	"google_service_account",
 	"google_service_networking_connection",
 	"google_sql_database_instance",

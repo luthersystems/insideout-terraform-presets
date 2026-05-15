@@ -19093,6 +19093,100 @@
             "description_kind": "plain"
           }
         },
+        "google_secret_manager_secret_version": {
+          "version": 0,
+          "block": {
+            "attributes": {
+              "create_time": {
+                "type": "string",
+                "description": "The time at which the Secret was created.",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "deletion_policy": {
+                "type": "string",
+                "description": "The deletion policy for the secret version. Setting 'ABANDON' allows the resource\nto be abandoned rather than deleted. Setting 'DISABLE' allows the resource to be\ndisabled rather than deleted. Default is 'DELETE'. Possible values are:\n  * DELETE\n  * DISABLE\n  * ABANDON",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "destroy_time": {
+                "type": "string",
+                "description": "The time at which the Secret was destroyed. Only present if state is DESTROYED.",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "enabled": {
+                "type": "bool",
+                "description": "The current state of the SecretVersion.",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "is_secret_data_base64": {
+                "type": "bool",
+                "description": "If set to 'true', the secret data is expected to be base64-encoded string and would be sent as is.",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "name": {
+                "type": "string",
+                "description": "The resource name of the SecretVersion. Format:\n'projects/{{project}}/secrets/{{secret_id}}/versions/{{version}}'",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "secret": {
+                "type": "string",
+                "description": "Secret Manager secret resource",
+                "description_kind": "plain",
+                "required": true
+              },
+              "secret_data": {
+                "type": "string",
+                "description": "The secret data. Must be no larger than 64KiB.",
+                "description_kind": "plain",
+                "required": true,
+                "sensitive": true
+              },
+              "version": {
+                "type": "string",
+                "description": "The version of the Secret.",
+                "description_kind": "plain",
+                "computed": true
+              }
+            },
+            "block_types": {
+              "timeouts": {
+                "nesting_mode": "single",
+                "block": {
+                  "attributes": {
+                    "create": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "delete": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "update": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "description_kind": "plain"
+                }
+              }
+            },
+            "description_kind": "plain"
+          }
+        },
         "google_service_account": {
           "version": 0,
           "block": {

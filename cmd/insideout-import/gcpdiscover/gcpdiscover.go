@@ -354,7 +354,8 @@ func NewGCPDiscoverer(searcher gcpAssetSearcher, projectID string, opts GCPDisco
 			"google_compute_network":       newComputeNetworkEnricher(),
 			"google_pubsub_subscription":   newPubsubSubscriptionEnricher(),
 			"google_pubsub_topic":          newPubsubTopicEnricher(),
-			"google_secret_manager_secret": newSecretManagerSecretEnricher(),
+			"google_secret_manager_secret":         newSecretManagerSecretEnricher(),
+			"google_secret_manager_secret_version": newSecretManagerSecretVersionEnricher(),
 			"google_storage_bucket":        newStorageBucketEnricher(),
 			// Bundle G5 (#482) — five new GCP enrichers, all
 			// implementing ByIDEnricher in addition to AttributeEnricher.
