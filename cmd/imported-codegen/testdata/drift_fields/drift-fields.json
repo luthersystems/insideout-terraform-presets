@@ -1711,6 +1711,32 @@
       "semantic": "Exact"
     }
   ],
+  "google_secret_manager_secret_version": [
+    {
+      "path": "deletion_policy",
+      "semantic": "Exact"
+    },
+    {
+      "path": "enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "secret",
+      "semantic": "Exact"
+    },
+    {
+      "path": "version",
+      "semantic": "Exact"
+    }
+  ],
   "google_service_account": [
     {
       "path": "account_id",

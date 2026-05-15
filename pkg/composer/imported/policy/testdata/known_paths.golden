@@ -949,6 +949,17 @@ google_secret_manager_secret_iam_member	member	Identity		UIVisible	Never		Always
 google_secret_manager_secret_iam_member	project	Identity		UIVisible	Never		AlwaysReplace
 google_secret_manager_secret_iam_member	role	Identity		UIVisible	Never		AlwaysReplace
 google_secret_manager_secret_iam_member	secret_id	Identity		UIVisible	Never		AlwaysReplace
+google_secret_manager_secret_version	create_time	Identity		RileyVisible	Never		
+google_secret_manager_secret_version	deletion_policy	Tuning	Reliability	RileyVisible	ChatSafe		
+google_secret_manager_secret_version	destroy_time	Identity		RileyVisible	Never		
+google_secret_manager_secret_version	enabled	Tuning	Security	UIVisible	ChatSafe		
+google_secret_manager_secret_version	id	Identity		RileyVisible	Never		
+google_secret_manager_secret_version	is_secret_data_base64	Tuning		Hidden	SystemOnly	Redacted	
+google_secret_manager_secret_version	name	Identity		UIVisible	Never		
+google_secret_manager_secret_version	secret	Wiring	Security	UIVisible	RelationshipOnly		AlwaysReplace
+google_secret_manager_secret_version	secret_data	Tuning		Hidden	SystemOnly	Redacted	
+google_secret_manager_secret_version	timeouts	Tuning		Hidden	SystemOnly		
+google_secret_manager_secret_version	version	Identity		UIVisible	Never		
 google_service_account	account_id	Identity		UIVisible	Never		AlwaysReplace
 google_service_account	create_ignore_already_exists	Tuning		RileyVisible	RequiresApproval		
 google_service_account	description	Tuning		RileyVisible	ChatSafe		

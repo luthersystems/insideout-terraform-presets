@@ -23,7 +23,7 @@ and is checked in lockstep with the runtime registries. See the
 ## Summary
 
 - **AWS:** 109 types · 100% Discoverable · 95% Enrichable · 15% DriftDetectable · 0% MetricsAvailable · 13% AgentEditable
-- **GCP:** 54 types · 100% Discoverable · 94% Enrichable · 31% DriftDetectable · 0% MetricsAvailable · 83% AgentEditable
+- **GCP:** 54 types · 100% Discoverable · 96% Enrichable · 33% DriftDetectable · 0% MetricsAvailable · 85% AgentEditable
 
 ## AWS
 
@@ -187,7 +187,7 @@ and is checked in lockstep with the runtime registries. See the
 | `google_secret_manager_secret` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_secret_manager_secret_iam_binding` | ✓ | ✓ | – | – | ✓ |
 | `google_secret_manager_secret_iam_member` | ✓ | ✓ | – | – | – |
-| `google_secret_manager_secret_version` | ✓ | – | – | – | – |
+| `google_secret_manager_secret_version` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_service_account` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_service_networking_connection` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_sql_database_instance` | ✓ | ✓ | ✓ | – | ✓ |

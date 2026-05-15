@@ -63,6 +63,7 @@ var WantedGoogle = []string{
 	"google_pubsub_topic",
 	"google_redis_instance",
 	"google_secret_manager_secret",
+	"google_secret_manager_secret_version",
 	"google_service_account",
 	"google_service_networking_connection",
 	"google_sql_database_instance",
