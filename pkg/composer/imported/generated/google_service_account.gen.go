@@ -7,23 +7,23 @@ import "reflect"
 // GoogleServiceAccount is the generated Layer 1 typed model for the
 // `google_service_account` Terraform resource.
 type GoogleServiceAccount struct {
-	AccountID                 *Value[string]                `tf:"account_id"`
-	CreateIgnoreAlreadyExists *Value[bool]                  `tf:"create_ignore_already_exists"`
-	Description               *Value[string]                `tf:"description"`
-	Disabled                  *Value[bool]                  `tf:"disabled"`
-	DisplayName               *Value[string]                `tf:"display_name"`
-	Email                     *Value[string]                `tf:"email"`
-	ID                        *Value[string]                `tf:"id"`
-	Member                    *Value[string]                `tf:"member"`
-	Name                      *Value[string]                `tf:"name"`
-	Project                   *Value[string]                `tf:"project"`
-	UniqueID                  *Value[string]                `tf:"unique_id"`
-	Timeouts                  *GoogleServiceAccountTimeouts `tf:"timeouts,block"`
+	AccountID                 *Value[string]                `tf:"account_id" json:"account_id,omitempty"`
+	CreateIgnoreAlreadyExists *Value[bool]                  `tf:"create_ignore_already_exists" json:"create_ignore_already_exists,omitempty"`
+	Description               *Value[string]                `tf:"description" json:"description,omitempty"`
+	Disabled                  *Value[bool]                  `tf:"disabled" json:"disabled,omitempty"`
+	DisplayName               *Value[string]                `tf:"display_name" json:"display_name,omitempty"`
+	Email                     *Value[string]                `tf:"email" json:"email,omitempty"`
+	ID                        *Value[string]                `tf:"id" json:"id,omitempty"`
+	Member                    *Value[string]                `tf:"member" json:"member,omitempty"`
+	Name                      *Value[string]                `tf:"name" json:"name,omitempty"`
+	Project                   *Value[string]                `tf:"project" json:"project,omitempty"`
+	UniqueID                  *Value[string]                `tf:"unique_id" json:"unique_id,omitempty"`
+	Timeouts                  *GoogleServiceAccountTimeouts `tf:"timeouts,block" json:"timeouts,omitempty"`
 }
 
 // GoogleServiceAccountTimeouts is a nested-block type used by the parent resource.
 type GoogleServiceAccountTimeouts struct {
-	Create *Value[string] `tf:"create"`
+	Create *Value[string] `tf:"create" json:"create,omitempty"`
 }
 
 // GoogleServiceAccountSchema describes provider metadata for each attribute / nested

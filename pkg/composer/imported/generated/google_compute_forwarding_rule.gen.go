@@ -7,56 +7,56 @@ import "reflect"
 // GoogleComputeForwardingRule is the generated Layer 1 typed model for the
 // `google_compute_forwarding_rule` Terraform resource.
 type GoogleComputeForwardingRule struct {
-	AllPorts                      *Value[bool]                                               `tf:"all_ports"`
-	AllowGlobalAccess             *Value[bool]                                               `tf:"allow_global_access"`
-	AllowPscGlobalAccess          *Value[bool]                                               `tf:"allow_psc_global_access"`
-	BackendService                *Value[string]                                             `tf:"backend_service"`
-	BaseForwardingRule            *Value[string]                                             `tf:"base_forwarding_rule"`
-	CreationTimestamp             *Value[string]                                             `tf:"creation_timestamp"`
-	Description                   *Value[string]                                             `tf:"description"`
-	EffectiveLabels               map[string]*Value[string]                                  `tf:"effective_labels"`
-	ForwardingRuleID              *Value[float64]                                            `tf:"forwarding_rule_id"`
-	ID                            *Value[string]                                             `tf:"id"`
-	IpAddress                     *Value[string]                                             `tf:"ip_address"`
-	IpProtocol                    *Value[string]                                             `tf:"ip_protocol"`
-	IpVersion                     *Value[string]                                             `tf:"ip_version"`
-	IsMirroringCollector          *Value[bool]                                               `tf:"is_mirroring_collector"`
-	LabelFingerprint              *Value[string]                                             `tf:"label_fingerprint"`
-	Labels                        map[string]*Value[string]                                  `tf:"labels"`
-	LoadBalancingScheme           *Value[string]                                             `tf:"load_balancing_scheme"`
-	Name                          *Value[string]                                             `tf:"name"`
-	Network                       *Value[string]                                             `tf:"network"`
-	NetworkTier                   *Value[string]                                             `tf:"network_tier"`
-	NoAutomateDNSZone             *Value[bool]                                               `tf:"no_automate_dns_zone"`
-	PortRange                     *Value[string]                                             `tf:"port_range"`
-	Ports                         []*Value[string]                                           `tf:"ports"`
-	Project                       *Value[string]                                             `tf:"project"`
-	PscConnectionID               *Value[string]                                             `tf:"psc_connection_id"`
-	PscConnectionStatus           *Value[string]                                             `tf:"psc_connection_status"`
-	RecreateClosedPsc             *Value[bool]                                               `tf:"recreate_closed_psc"`
-	Region                        *Value[string]                                             `tf:"region"`
-	SelfLink                      *Value[string]                                             `tf:"self_link"`
-	ServiceLabel                  *Value[string]                                             `tf:"service_label"`
-	ServiceName                   *Value[string]                                             `tf:"service_name"`
-	SourceIpRanges                []*Value[string]                                           `tf:"source_ip_ranges"`
-	Subnetwork                    *Value[string]                                             `tf:"subnetwork"`
-	Target                        *Value[string]                                             `tf:"target"`
-	TerraformLabels               map[string]*Value[string]                                  `tf:"terraform_labels"`
-	ServiceDirectoryRegistrations []GoogleComputeForwardingRuleServiceDirectoryRegistrations `tf:"service_directory_registrations,blocks"`
-	Timeouts                      *GoogleComputeForwardingRuleTimeouts                       `tf:"timeouts,block"`
+	AllPorts                      *Value[bool]                                               `tf:"all_ports" json:"all_ports,omitempty"`
+	AllowGlobalAccess             *Value[bool]                                               `tf:"allow_global_access" json:"allow_global_access,omitempty"`
+	AllowPscGlobalAccess          *Value[bool]                                               `tf:"allow_psc_global_access" json:"allow_psc_global_access,omitempty"`
+	BackendService                *Value[string]                                             `tf:"backend_service" json:"backend_service,omitempty"`
+	BaseForwardingRule            *Value[string]                                             `tf:"base_forwarding_rule" json:"base_forwarding_rule,omitempty"`
+	CreationTimestamp             *Value[string]                                             `tf:"creation_timestamp" json:"creation_timestamp,omitempty"`
+	Description                   *Value[string]                                             `tf:"description" json:"description,omitempty"`
+	EffectiveLabels               map[string]*Value[string]                                  `tf:"effective_labels" json:"effective_labels,omitempty"`
+	ForwardingRuleID              *Value[float64]                                            `tf:"forwarding_rule_id" json:"forwarding_rule_id,omitempty"`
+	ID                            *Value[string]                                             `tf:"id" json:"id,omitempty"`
+	IpAddress                     *Value[string]                                             `tf:"ip_address" json:"ip_address,omitempty"`
+	IpProtocol                    *Value[string]                                             `tf:"ip_protocol" json:"ip_protocol,omitempty"`
+	IpVersion                     *Value[string]                                             `tf:"ip_version" json:"ip_version,omitempty"`
+	IsMirroringCollector          *Value[bool]                                               `tf:"is_mirroring_collector" json:"is_mirroring_collector,omitempty"`
+	LabelFingerprint              *Value[string]                                             `tf:"label_fingerprint" json:"label_fingerprint,omitempty"`
+	Labels                        map[string]*Value[string]                                  `tf:"labels" json:"labels,omitempty"`
+	LoadBalancingScheme           *Value[string]                                             `tf:"load_balancing_scheme" json:"load_balancing_scheme,omitempty"`
+	Name                          *Value[string]                                             `tf:"name" json:"name,omitempty"`
+	Network                       *Value[string]                                             `tf:"network" json:"network,omitempty"`
+	NetworkTier                   *Value[string]                                             `tf:"network_tier" json:"network_tier,omitempty"`
+	NoAutomateDNSZone             *Value[bool]                                               `tf:"no_automate_dns_zone" json:"no_automate_dns_zone,omitempty"`
+	PortRange                     *Value[string]                                             `tf:"port_range" json:"port_range,omitempty"`
+	Ports                         []*Value[string]                                           `tf:"ports" json:"ports,omitempty"`
+	Project                       *Value[string]                                             `tf:"project" json:"project,omitempty"`
+	PscConnectionID               *Value[string]                                             `tf:"psc_connection_id" json:"psc_connection_id,omitempty"`
+	PscConnectionStatus           *Value[string]                                             `tf:"psc_connection_status" json:"psc_connection_status,omitempty"`
+	RecreateClosedPsc             *Value[bool]                                               `tf:"recreate_closed_psc" json:"recreate_closed_psc,omitempty"`
+	Region                        *Value[string]                                             `tf:"region" json:"region,omitempty"`
+	SelfLink                      *Value[string]                                             `tf:"self_link" json:"self_link,omitempty"`
+	ServiceLabel                  *Value[string]                                             `tf:"service_label" json:"service_label,omitempty"`
+	ServiceName                   *Value[string]                                             `tf:"service_name" json:"service_name,omitempty"`
+	SourceIpRanges                []*Value[string]                                           `tf:"source_ip_ranges" json:"source_ip_ranges,omitempty"`
+	Subnetwork                    *Value[string]                                             `tf:"subnetwork" json:"subnetwork,omitempty"`
+	Target                        *Value[string]                                             `tf:"target" json:"target,omitempty"`
+	TerraformLabels               map[string]*Value[string]                                  `tf:"terraform_labels" json:"terraform_labels,omitempty"`
+	ServiceDirectoryRegistrations []GoogleComputeForwardingRuleServiceDirectoryRegistrations `tf:"service_directory_registrations,blocks" json:"service_directory_registrations,omitempty"`
+	Timeouts                      *GoogleComputeForwardingRuleTimeouts                       `tf:"timeouts,block" json:"timeouts,omitempty"`
 }
 
 // GoogleComputeForwardingRuleServiceDirectoryRegistrations is a nested-block type used by the parent resource.
 type GoogleComputeForwardingRuleServiceDirectoryRegistrations struct {
-	Namespace *Value[string] `tf:"namespace"`
-	Service   *Value[string] `tf:"service"`
+	Namespace *Value[string] `tf:"namespace" json:"namespace,omitempty"`
+	Service   *Value[string] `tf:"service" json:"service,omitempty"`
 }
 
 // GoogleComputeForwardingRuleTimeouts is a nested-block type used by the parent resource.
 type GoogleComputeForwardingRuleTimeouts struct {
-	Create *Value[string] `tf:"create"`
-	Delete *Value[string] `tf:"delete"`
-	Update *Value[string] `tf:"update"`
+	Create *Value[string] `tf:"create" json:"create,omitempty"`
+	Delete *Value[string] `tf:"delete" json:"delete,omitempty"`
+	Update *Value[string] `tf:"update" json:"update,omitempty"`
 }
 
 // GoogleComputeForwardingRuleSchema describes provider metadata for each attribute / nested

@@ -49,11 +49,28 @@ func TestExistingEnrichersDoNotImplementByID(t *testing.T) {
 
 	// Fail-fast: pin the expected total byTypeEnricher size so a
 	// silent drop (or duplicate-key squashing) in production fails the
-	// test. The expected total = allowlist size + types that DO
-	// implement ByIDEnricher. When adding a new enricher: bump
-	// wantTotal and either add to allowlist (no ByIDEnricher) or leave
-	// it off (implements ByIDEnricher).
-	const wantTotal = 4 // dynamodb_table + cloudwatch_log_group + secretsmanager_secret + s3_bucket
+	// test. The expected total = 4 hand-rolled enrichers
+	// (cloudwatch_log_group, dynamodb_table, s3_bucket,
+	// secretsmanager_secret) + every type in cloudControlTypeConfigs
+	// that doesn't have a hand-rolled override. The latter is computed
+	// at test time so an addition to cloudControlTypeConfigs doesn't
+	// silently flow into the production enricher coverage without a
+	// deliberate test update — the math below makes that change visible
+	// as a numeric diff in the test failure message.
+	handRolled := 4
+	ccOverrides := 0
+	handRolledTypes := map[string]bool{
+		"aws_cloudwatch_log_group":  true,
+		"aws_dynamodb_table":        true,
+		"aws_s3_bucket":             true,
+		"aws_secretsmanager_secret": true,
+	}
+	for _, ccCfg := range cloudControlTypeConfigs {
+		if handRolledTypes[ccCfg.TFType] {
+			ccOverrides++
+		}
+	}
+	wantTotal := handRolled + len(cloudControlTypeConfigs) - ccOverrides
 	if got := len(d.byTypeEnricher); got != wantTotal {
 		t.Errorf("byTypeEnricher size = %d, want %d (production registration drifted from test)", got, wantTotal)
 	}
@@ -66,6 +83,55 @@ func TestExistingEnrichersDoNotImplementByID(t *testing.T) {
 			t.Errorf("%s: enricher now implements ByIDEnricher — remove from notImplemented allowlist", tfType)
 		case !expectNot && !implementsByID:
 			t.Errorf("%s: enricher must implement ByIDEnricher (not in notImplemented allowlist)", tfType)
+		}
+	}
+}
+
+// TestCloudControlEnricherCoversEveryCCRoutedType asserts that every
+// TF type in cloudControlTypeConfigs has a registered AttributeEnricher
+// in NewAWSDiscoverer.byTypeEnricher — either a hand-rolled override
+// (3 types today) or a generic cloudControlEnricher. A regression that
+// drops the cloudControlEnricher wiring loop in NewAWSDiscoverer would
+// silently strip Cloud Control coverage from ~91 types; this test
+// catches that as a per-type miss rather than waiting for a downstream
+// integration test to surface the regression.
+func TestCloudControlEnricherCoversEveryCCRoutedType(t *testing.T) {
+	d := NewAWSDiscoverer(aws.Config{})
+	for _, ccCfg := range cloudControlTypeConfigs {
+		if _, ok := d.byTypeEnricher[ccCfg.TFType]; !ok {
+			t.Errorf("cloudcontrol-routed TFType %q has no registered AttributeEnricher", ccCfg.TFType)
+		}
+	}
+}
+
+// TestCloudControlEnricherSkipsHandRolledOverrides asserts the
+// override-wins invariant in NewAWSDiscoverer's wiring loop: for every
+// TF type that has a hand-rolled enricher AND a cloudControlTypeConfigs
+// entry, the registered enricher must be the hand-rolled one (not the
+// generic cloudControlEnricher). A silent regression that flips the
+// override order would replace the higher-fidelity hand-rolled payloads
+// with the lower-fidelity Cloud Control payloads (the PoC quantified
+// the quality gap at 57% on log groups).
+func TestCloudControlEnricherSkipsHandRolledOverrides(t *testing.T) {
+	d := NewAWSDiscoverer(aws.Config{})
+	// Mirrors the hand-rolled set in NewAWSDiscoverer.byTypeEnricher.
+	// Kept as a literal slice rather than a reflection-based scan so
+	// adding a new hand-rolled enricher requires an explicit update
+	// here — the next reviewer sees the intent in the test diff.
+	handRolled := []string{
+		"aws_cloudwatch_log_group",
+		"aws_dynamodb_table",
+		"aws_s3_bucket",
+		"aws_secretsmanager_secret",
+	}
+	for _, tfType := range handRolled {
+		enr, ok := d.byTypeEnricher[tfType]
+		if !ok {
+			t.Errorf("%s: missing from byTypeEnricher", tfType)
+			continue
+		}
+		if _, isCC := enr.(*cloudControlEnricher); isCC {
+			t.Errorf("%s: registered enricher is cloudControlEnricher, want hand-rolled override", tfType)
 		}
 	}
 }

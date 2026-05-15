@@ -7,1058 +7,1058 @@ import "reflect"
 // GoogleContainerCluster is the generated Layer 1 typed model for the
 // `google_container_cluster` Terraform resource.
 type GoogleContainerCluster struct {
-	AllowNetAdmin                        *Value[bool]                                           `tf:"allow_net_admin"`
-	ClusterIPV4CIDR                      *Value[string]                                         `tf:"cluster_ipv4_cidr"`
-	DatapathProvider                     *Value[string]                                         `tf:"datapath_provider"`
-	DefaultMaxPodsPerNode                *Value[float64]                                        `tf:"default_max_pods_per_node"`
-	DeletionProtection                   *Value[bool]                                           `tf:"deletion_protection"`
-	Description                          *Value[string]                                         `tf:"description"`
-	EffectiveLabels                      map[string]*Value[string]                              `tf:"effective_labels"`
-	EnableAutopilot                      *Value[bool]                                           `tf:"enable_autopilot"`
-	EnableCiliumClusterwideNetworkPolicy *Value[bool]                                           `tf:"enable_cilium_clusterwide_network_policy"`
-	EnableIntranodeVisibility            *Value[bool]                                           `tf:"enable_intranode_visibility"`
-	EnableKubernetesAlpha                *Value[bool]                                           `tf:"enable_kubernetes_alpha"`
-	EnableL4IlbSubsetting                *Value[bool]                                           `tf:"enable_l4_ilb_subsetting"`
-	EnableLegacyAbac                     *Value[bool]                                           `tf:"enable_legacy_abac"`
-	EnableMultiNetworking                *Value[bool]                                           `tf:"enable_multi_networking"`
-	EnableShieldedNodes                  *Value[bool]                                           `tf:"enable_shielded_nodes"`
-	EnableTpu                            *Value[bool]                                           `tf:"enable_tpu"`
-	Endpoint                             *Value[string]                                         `tf:"endpoint"`
-	ID                                   *Value[string]                                         `tf:"id"`
-	InitialNodeCount                     *Value[int64]                                          `tf:"initial_node_count"`
-	LabelFingerprint                     *Value[string]                                         `tf:"label_fingerprint"`
-	Location                             *Value[string]                                         `tf:"location"`
-	LoggingService                       *Value[string]                                         `tf:"logging_service"`
-	MasterVersion                        *Value[string]                                         `tf:"master_version"`
-	MinMasterVersion                     *Value[string]                                         `tf:"min_master_version"`
-	MonitoringService                    *Value[string]                                         `tf:"monitoring_service"`
-	Name                                 *Value[string]                                         `tf:"name"`
-	Network                              *Value[string]                                         `tf:"network"`
-	NetworkingMode                       *Value[string]                                         `tf:"networking_mode"`
-	NodeLocations                        []*Value[string]                                       `tf:"node_locations"`
-	NodeVersion                          *Value[string]                                         `tf:"node_version"`
-	Operation                            *Value[string]                                         `tf:"operation"`
-	PrivateIPV6GoogleAccess              *Value[string]                                         `tf:"private_ipv6_google_access"`
-	Project                              *Value[string]                                         `tf:"project"`
-	RemoveDefaultNodePool                *Value[bool]                                           `tf:"remove_default_node_pool"`
-	ResourceLabels                       map[string]*Value[string]                              `tf:"resource_labels"`
-	SelfLink                             *Value[string]                                         `tf:"self_link"`
-	ServicesIPV4CIDR                     *Value[string]                                         `tf:"services_ipv4_cidr"`
-	Subnetwork                           *Value[string]                                         `tf:"subnetwork"`
-	TerraformLabels                      map[string]*Value[string]                              `tf:"terraform_labels"`
-	TpuIPV4CIDRBlock                     *Value[string]                                         `tf:"tpu_ipv4_cidr_block"`
-	AddonsConfig                         []GoogleContainerClusterAddonsConfig                   `tf:"addons_config,blocks"`
-	AuthenticatorGroupsConfig            []GoogleContainerClusterAuthenticatorGroupsConfig      `tf:"authenticator_groups_config,blocks"`
-	BinaryAuthorization                  []GoogleContainerClusterBinaryAuthorization            `tf:"binary_authorization,blocks"`
-	ClusterAutoscaling                   []GoogleContainerClusterClusterAutoscaling             `tf:"cluster_autoscaling,blocks"`
-	ConfidentialNodes                    []GoogleContainerClusterConfidentialNodes              `tf:"confidential_nodes,blocks"`
-	CostManagementConfig                 []GoogleContainerClusterCostManagementConfig           `tf:"cost_management_config,blocks"`
-	DatabaseEncryption                   []GoogleContainerClusterDatabaseEncryption             `tf:"database_encryption,blocks"`
-	DefaultSnatStatus                    []GoogleContainerClusterDefaultSnatStatus              `tf:"default_snat_status,blocks"`
-	DNSConfig                            []GoogleContainerClusterDNSConfig                      `tf:"dns_config,blocks"`
-	EnableK8sBetaApis                    []GoogleContainerClusterEnableK8sBetaApis              `tf:"enable_k8s_beta_apis,blocks"`
-	Fleet                                []GoogleContainerClusterFleet                          `tf:"fleet,blocks"`
-	GatewayAPIConfig                     []GoogleContainerClusterGatewayAPIConfig               `tf:"gateway_api_config,blocks"`
-	IdentityServiceConfig                []GoogleContainerClusterIdentityServiceConfig          `tf:"identity_service_config,blocks"`
-	IpAllocationPolicy                   []GoogleContainerClusterIpAllocationPolicy             `tf:"ip_allocation_policy,blocks"`
-	LoggingConfig                        []GoogleContainerClusterLoggingConfig                  `tf:"logging_config,blocks"`
-	MaintenancePolicy                    []GoogleContainerClusterMaintenancePolicy              `tf:"maintenance_policy,blocks"`
-	MasterAuth                           []GoogleContainerClusterMasterAuth                     `tf:"master_auth,blocks"`
-	MasterAuthorizedNetworksConfig       []GoogleContainerClusterMasterAuthorizedNetworksConfig `tf:"master_authorized_networks_config,blocks"`
-	MeshCertificates                     []GoogleContainerClusterMeshCertificates               `tf:"mesh_certificates,blocks"`
-	MonitoringConfig                     []GoogleContainerClusterMonitoringConfig               `tf:"monitoring_config,blocks"`
-	NetworkPolicy                        []GoogleContainerClusterNetworkPolicy                  `tf:"network_policy,blocks"`
-	NodeConfig                           []GoogleContainerClusterNodeConfig                     `tf:"node_config,blocks"`
-	NodePool                             []GoogleContainerClusterNodePool                       `tf:"node_pool,blocks"`
-	NodePoolAutoConfig                   []GoogleContainerClusterNodePoolAutoConfig             `tf:"node_pool_auto_config,blocks"`
-	NodePoolDefaults                     []GoogleContainerClusterNodePoolDefaults               `tf:"node_pool_defaults,blocks"`
-	NotificationConfig                   []GoogleContainerClusterNotificationConfig             `tf:"notification_config,blocks"`
-	PrivateClusterConfig                 []GoogleContainerClusterPrivateClusterConfig           `tf:"private_cluster_config,blocks"`
-	ReleaseChannel                       []GoogleContainerClusterReleaseChannel                 `tf:"release_channel,blocks"`
-	ResourceUsageExportConfig            []GoogleContainerClusterResourceUsageExportConfig      `tf:"resource_usage_export_config,blocks"`
-	SecretManagerConfig                  []GoogleContainerClusterSecretManagerConfig            `tf:"secret_manager_config,blocks"`
-	SecurityPostureConfig                []GoogleContainerClusterSecurityPostureConfig          `tf:"security_posture_config,blocks"`
-	ServiceExternalIpsConfig             []GoogleContainerClusterServiceExternalIpsConfig       `tf:"service_external_ips_config,blocks"`
-	Timeouts                             *GoogleContainerClusterTimeouts                        `tf:"timeouts,block"`
-	VerticalPodAutoscaling               []GoogleContainerClusterVerticalPodAutoscaling         `tf:"vertical_pod_autoscaling,blocks"`
-	WorkloadIdentityConfig               []GoogleContainerClusterWorkloadIdentityConfig         `tf:"workload_identity_config,blocks"`
+	AllowNetAdmin                        *Value[bool]                                           `tf:"allow_net_admin" json:"allow_net_admin,omitempty"`
+	ClusterIPV4CIDR                      *Value[string]                                         `tf:"cluster_ipv4_cidr" json:"cluster_ipv4_cidr,omitempty"`
+	DatapathProvider                     *Value[string]                                         `tf:"datapath_provider" json:"datapath_provider,omitempty"`
+	DefaultMaxPodsPerNode                *Value[float64]                                        `tf:"default_max_pods_per_node" json:"default_max_pods_per_node,omitempty"`
+	DeletionProtection                   *Value[bool]                                           `tf:"deletion_protection" json:"deletion_protection,omitempty"`
+	Description                          *Value[string]                                         `tf:"description" json:"description,omitempty"`
+	EffectiveLabels                      map[string]*Value[string]                              `tf:"effective_labels" json:"effective_labels,omitempty"`
+	EnableAutopilot                      *Value[bool]                                           `tf:"enable_autopilot" json:"enable_autopilot,omitempty"`
+	EnableCiliumClusterwideNetworkPolicy *Value[bool]                                           `tf:"enable_cilium_clusterwide_network_policy" json:"enable_cilium_clusterwide_network_policy,omitempty"`
+	EnableIntranodeVisibility            *Value[bool]                                           `tf:"enable_intranode_visibility" json:"enable_intranode_visibility,omitempty"`
+	EnableKubernetesAlpha                *Value[bool]                                           `tf:"enable_kubernetes_alpha" json:"enable_kubernetes_alpha,omitempty"`
+	EnableL4IlbSubsetting                *Value[bool]                                           `tf:"enable_l4_ilb_subsetting" json:"enable_l4_ilb_subsetting,omitempty"`
+	EnableLegacyAbac                     *Value[bool]                                           `tf:"enable_legacy_abac" json:"enable_legacy_abac,omitempty"`
+	EnableMultiNetworking                *Value[bool]                                           `tf:"enable_multi_networking" json:"enable_multi_networking,omitempty"`
+	EnableShieldedNodes                  *Value[bool]                                           `tf:"enable_shielded_nodes" json:"enable_shielded_nodes,omitempty"`
+	EnableTpu                            *Value[bool]                                           `tf:"enable_tpu" json:"enable_tpu,omitempty"`
+	Endpoint                             *Value[string]                                         `tf:"endpoint" json:"endpoint,omitempty"`
+	ID                                   *Value[string]                                         `tf:"id" json:"id,omitempty"`
+	InitialNodeCount                     *Value[int64]                                          `tf:"initial_node_count" json:"initial_node_count,omitempty"`
+	LabelFingerprint                     *Value[string]                                         `tf:"label_fingerprint" json:"label_fingerprint,omitempty"`
+	Location                             *Value[string]                                         `tf:"location" json:"location,omitempty"`
+	LoggingService                       *Value[string]                                         `tf:"logging_service" json:"logging_service,omitempty"`
+	MasterVersion                        *Value[string]                                         `tf:"master_version" json:"master_version,omitempty"`
+	MinMasterVersion                     *Value[string]                                         `tf:"min_master_version" json:"min_master_version,omitempty"`
+	MonitoringService                    *Value[string]                                         `tf:"monitoring_service" json:"monitoring_service,omitempty"`
+	Name                                 *Value[string]                                         `tf:"name" json:"name,omitempty"`
+	Network                              *Value[string]                                         `tf:"network" json:"network,omitempty"`
+	NetworkingMode                       *Value[string]                                         `tf:"networking_mode" json:"networking_mode,omitempty"`
+	NodeLocations                        []*Value[string]                                       `tf:"node_locations" json:"node_locations,omitempty"`
+	NodeVersion                          *Value[string]                                         `tf:"node_version" json:"node_version,omitempty"`
+	Operation                            *Value[string]                                         `tf:"operation" json:"operation,omitempty"`
+	PrivateIPV6GoogleAccess              *Value[string]                                         `tf:"private_ipv6_google_access" json:"private_ipv6_google_access,omitempty"`
+	Project                              *Value[string]                                         `tf:"project" json:"project,omitempty"`
+	RemoveDefaultNodePool                *Value[bool]                                           `tf:"remove_default_node_pool" json:"remove_default_node_pool,omitempty"`
+	ResourceLabels                       map[string]*Value[string]                              `tf:"resource_labels" json:"resource_labels,omitempty"`
+	SelfLink                             *Value[string]                                         `tf:"self_link" json:"self_link,omitempty"`
+	ServicesIPV4CIDR                     *Value[string]                                         `tf:"services_ipv4_cidr" json:"services_ipv4_cidr,omitempty"`
+	Subnetwork                           *Value[string]                                         `tf:"subnetwork" json:"subnetwork,omitempty"`
+	TerraformLabels                      map[string]*Value[string]                              `tf:"terraform_labels" json:"terraform_labels,omitempty"`
+	TpuIPV4CIDRBlock                     *Value[string]                                         `tf:"tpu_ipv4_cidr_block" json:"tpu_ipv4_cidr_block,omitempty"`
+	AddonsConfig                         []GoogleContainerClusterAddonsConfig                   `tf:"addons_config,blocks" json:"addons_config,omitempty"`
+	AuthenticatorGroupsConfig            []GoogleContainerClusterAuthenticatorGroupsConfig      `tf:"authenticator_groups_config,blocks" json:"authenticator_groups_config,omitempty"`
+	BinaryAuthorization                  []GoogleContainerClusterBinaryAuthorization            `tf:"binary_authorization,blocks" json:"binary_authorization,omitempty"`
+	ClusterAutoscaling                   []GoogleContainerClusterClusterAutoscaling             `tf:"cluster_autoscaling,blocks" json:"cluster_autoscaling,omitempty"`
+	ConfidentialNodes                    []GoogleContainerClusterConfidentialNodes              `tf:"confidential_nodes,blocks" json:"confidential_nodes,omitempty"`
+	CostManagementConfig                 []GoogleContainerClusterCostManagementConfig           `tf:"cost_management_config,blocks" json:"cost_management_config,omitempty"`
+	DatabaseEncryption                   []GoogleContainerClusterDatabaseEncryption             `tf:"database_encryption,blocks" json:"database_encryption,omitempty"`
+	DefaultSnatStatus                    []GoogleContainerClusterDefaultSnatStatus              `tf:"default_snat_status,blocks" json:"default_snat_status,omitempty"`
+	DNSConfig                            []GoogleContainerClusterDNSConfig                      `tf:"dns_config,blocks" json:"dns_config,omitempty"`
+	EnableK8sBetaApis                    []GoogleContainerClusterEnableK8sBetaApis              `tf:"enable_k8s_beta_apis,blocks" json:"enable_k8s_beta_apis,omitempty"`
+	Fleet                                []GoogleContainerClusterFleet                          `tf:"fleet,blocks" json:"fleet,omitempty"`
+	GatewayAPIConfig                     []GoogleContainerClusterGatewayAPIConfig               `tf:"gateway_api_config,blocks" json:"gateway_api_config,omitempty"`
+	IdentityServiceConfig                []GoogleContainerClusterIdentityServiceConfig          `tf:"identity_service_config,blocks" json:"identity_service_config,omitempty"`
+	IpAllocationPolicy                   []GoogleContainerClusterIpAllocationPolicy             `tf:"ip_allocation_policy,blocks" json:"ip_allocation_policy,omitempty"`
+	LoggingConfig                        []GoogleContainerClusterLoggingConfig                  `tf:"logging_config,blocks" json:"logging_config,omitempty"`
+	MaintenancePolicy                    []GoogleContainerClusterMaintenancePolicy              `tf:"maintenance_policy,blocks" json:"maintenance_policy,omitempty"`
+	MasterAuth                           []GoogleContainerClusterMasterAuth                     `tf:"master_auth,blocks" json:"master_auth,omitempty"`
+	MasterAuthorizedNetworksConfig       []GoogleContainerClusterMasterAuthorizedNetworksConfig `tf:"master_authorized_networks_config,blocks" json:"master_authorized_networks_config,omitempty"`
+	MeshCertificates                     []GoogleContainerClusterMeshCertificates               `tf:"mesh_certificates,blocks" json:"mesh_certificates,omitempty"`
+	MonitoringConfig                     []GoogleContainerClusterMonitoringConfig               `tf:"monitoring_config,blocks" json:"monitoring_config,omitempty"`
+	NetworkPolicy                        []GoogleContainerClusterNetworkPolicy                  `tf:"network_policy,blocks" json:"network_policy,omitempty"`
+	NodeConfig                           []GoogleContainerClusterNodeConfig                     `tf:"node_config,blocks" json:"node_config,omitempty"`
+	NodePool                             []GoogleContainerClusterNodePool                       `tf:"node_pool,blocks" json:"node_pool,omitempty"`
+	NodePoolAutoConfig                   []GoogleContainerClusterNodePoolAutoConfig             `tf:"node_pool_auto_config,blocks" json:"node_pool_auto_config,omitempty"`
+	NodePoolDefaults                     []GoogleContainerClusterNodePoolDefaults               `tf:"node_pool_defaults,blocks" json:"node_pool_defaults,omitempty"`
+	NotificationConfig                   []GoogleContainerClusterNotificationConfig             `tf:"notification_config,blocks" json:"notification_config,omitempty"`
+	PrivateClusterConfig                 []GoogleContainerClusterPrivateClusterConfig           `tf:"private_cluster_config,blocks" json:"private_cluster_config,omitempty"`
+	ReleaseChannel                       []GoogleContainerClusterReleaseChannel                 `tf:"release_channel,blocks" json:"release_channel,omitempty"`
+	ResourceUsageExportConfig            []GoogleContainerClusterResourceUsageExportConfig      `tf:"resource_usage_export_config,blocks" json:"resource_usage_export_config,omitempty"`
+	SecretManagerConfig                  []GoogleContainerClusterSecretManagerConfig            `tf:"secret_manager_config,blocks" json:"secret_manager_config,omitempty"`
+	SecurityPostureConfig                []GoogleContainerClusterSecurityPostureConfig          `tf:"security_posture_config,blocks" json:"security_posture_config,omitempty"`
+	ServiceExternalIpsConfig             []GoogleContainerClusterServiceExternalIpsConfig       `tf:"service_external_ips_config,blocks" json:"service_external_ips_config,omitempty"`
+	Timeouts                             *GoogleContainerClusterTimeouts                        `tf:"timeouts,block" json:"timeouts,omitempty"`
+	VerticalPodAutoscaling               []GoogleContainerClusterVerticalPodAutoscaling         `tf:"vertical_pod_autoscaling,blocks" json:"vertical_pod_autoscaling,omitempty"`
+	WorkloadIdentityConfig               []GoogleContainerClusterWorkloadIdentityConfig         `tf:"workload_identity_config,blocks" json:"workload_identity_config,omitempty"`
 }
 
 // GoogleContainerClusterAddonsConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterAddonsConfig struct {
-	CloudrunConfig                   []GoogleContainerClusterAddonsConfigCloudrunConfig                   `tf:"cloudrun_config,blocks"`
-	ConfigConnectorConfig            []GoogleContainerClusterAddonsConfigConfigConnectorConfig            `tf:"config_connector_config,blocks"`
-	DNSCacheConfig                   []GoogleContainerClusterAddonsConfigDNSCacheConfig                   `tf:"dns_cache_config,blocks"`
-	GcePersistentDiskCsiDriverConfig []GoogleContainerClusterAddonsConfigGcePersistentDiskCsiDriverConfig `tf:"gce_persistent_disk_csi_driver_config,blocks"`
-	GCPFilestoreCsiDriverConfig      []GoogleContainerClusterAddonsConfigGCPFilestoreCsiDriverConfig      `tf:"gcp_filestore_csi_driver_config,blocks"`
-	GCSFuseCsiDriverConfig           []GoogleContainerClusterAddonsConfigGCSFuseCsiDriverConfig           `tf:"gcs_fuse_csi_driver_config,blocks"`
-	GKEBackupAgentConfig             []GoogleContainerClusterAddonsConfigGKEBackupAgentConfig             `tf:"gke_backup_agent_config,blocks"`
-	HorizontalPodAutoscaling         []GoogleContainerClusterAddonsConfigHorizontalPodAutoscaling         `tf:"horizontal_pod_autoscaling,blocks"`
-	HTTPLoadBalancing                []GoogleContainerClusterAddonsConfigHTTPLoadBalancing                `tf:"http_load_balancing,blocks"`
-	NetworkPolicyConfig              []GoogleContainerClusterAddonsConfigNetworkPolicyConfig              `tf:"network_policy_config,blocks"`
-	RayOperatorConfig                []GoogleContainerClusterAddonsConfigRayOperatorConfig                `tf:"ray_operator_config,blocks"`
-	StatefulHaConfig                 []GoogleContainerClusterAddonsConfigStatefulHaConfig                 `tf:"stateful_ha_config,blocks"`
+	CloudrunConfig                   []GoogleContainerClusterAddonsConfigCloudrunConfig                   `tf:"cloudrun_config,blocks" json:"cloudrun_config,omitempty"`
+	ConfigConnectorConfig            []GoogleContainerClusterAddonsConfigConfigConnectorConfig            `tf:"config_connector_config,blocks" json:"config_connector_config,omitempty"`
+	DNSCacheConfig                   []GoogleContainerClusterAddonsConfigDNSCacheConfig                   `tf:"dns_cache_config,blocks" json:"dns_cache_config,omitempty"`
+	GcePersistentDiskCsiDriverConfig []GoogleContainerClusterAddonsConfigGcePersistentDiskCsiDriverConfig `tf:"gce_persistent_disk_csi_driver_config,blocks" json:"gce_persistent_disk_csi_driver_config,omitempty"`
+	GCPFilestoreCsiDriverConfig      []GoogleContainerClusterAddonsConfigGCPFilestoreCsiDriverConfig      `tf:"gcp_filestore_csi_driver_config,blocks" json:"gcp_filestore_csi_driver_config,omitempty"`
+	GCSFuseCsiDriverConfig           []GoogleContainerClusterAddonsConfigGCSFuseCsiDriverConfig           `tf:"gcs_fuse_csi_driver_config,blocks" json:"gcs_fuse_csi_driver_config,omitempty"`
+	GKEBackupAgentConfig             []GoogleContainerClusterAddonsConfigGKEBackupAgentConfig             `tf:"gke_backup_agent_config,blocks" json:"gke_backup_agent_config,omitempty"`
+	HorizontalPodAutoscaling         []GoogleContainerClusterAddonsConfigHorizontalPodAutoscaling         `tf:"horizontal_pod_autoscaling,blocks" json:"horizontal_pod_autoscaling,omitempty"`
+	HTTPLoadBalancing                []GoogleContainerClusterAddonsConfigHTTPLoadBalancing                `tf:"http_load_balancing,blocks" json:"http_load_balancing,omitempty"`
+	NetworkPolicyConfig              []GoogleContainerClusterAddonsConfigNetworkPolicyConfig              `tf:"network_policy_config,blocks" json:"network_policy_config,omitempty"`
+	RayOperatorConfig                []GoogleContainerClusterAddonsConfigRayOperatorConfig                `tf:"ray_operator_config,blocks" json:"ray_operator_config,omitempty"`
+	StatefulHaConfig                 []GoogleContainerClusterAddonsConfigStatefulHaConfig                 `tf:"stateful_ha_config,blocks" json:"stateful_ha_config,omitempty"`
 }
 
 // GoogleContainerClusterAddonsConfigCloudrunConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterAddonsConfigCloudrunConfig struct {
-	Disabled         *Value[bool]   `tf:"disabled"`
-	LoadBalancerType *Value[string] `tf:"load_balancer_type"`
+	Disabled         *Value[bool]   `tf:"disabled" json:"disabled,omitempty"`
+	LoadBalancerType *Value[string] `tf:"load_balancer_type" json:"load_balancer_type,omitempty"`
 }
 
 // GoogleContainerClusterAddonsConfigConfigConnectorConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterAddonsConfigConfigConnectorConfig struct {
-	Enabled *Value[bool] `tf:"enabled"`
+	Enabled *Value[bool] `tf:"enabled" json:"enabled,omitempty"`
 }
 
 // GoogleContainerClusterAddonsConfigDNSCacheConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterAddonsConfigDNSCacheConfig struct {
-	Enabled *Value[bool] `tf:"enabled"`
+	Enabled *Value[bool] `tf:"enabled" json:"enabled,omitempty"`
 }
 
 // GoogleContainerClusterAddonsConfigGCPFilestoreCsiDriverConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterAddonsConfigGCPFilestoreCsiDriverConfig struct {
-	Enabled *Value[bool] `tf:"enabled"`
+	Enabled *Value[bool] `tf:"enabled" json:"enabled,omitempty"`
 }
 
 // GoogleContainerClusterAddonsConfigGCSFuseCsiDriverConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterAddonsConfigGCSFuseCsiDriverConfig struct {
-	Enabled *Value[bool] `tf:"enabled"`
+	Enabled *Value[bool] `tf:"enabled" json:"enabled,omitempty"`
 }
 
 // GoogleContainerClusterAddonsConfigGKEBackupAgentConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterAddonsConfigGKEBackupAgentConfig struct {
-	Enabled *Value[bool] `tf:"enabled"`
+	Enabled *Value[bool] `tf:"enabled" json:"enabled,omitempty"`
 }
 
 // GoogleContainerClusterAddonsConfigGcePersistentDiskCsiDriverConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterAddonsConfigGcePersistentDiskCsiDriverConfig struct {
-	Enabled *Value[bool] `tf:"enabled"`
+	Enabled *Value[bool] `tf:"enabled" json:"enabled,omitempty"`
 }
 
 // GoogleContainerClusterAddonsConfigHTTPLoadBalancing is a nested-block type used by the parent resource.
 type GoogleContainerClusterAddonsConfigHTTPLoadBalancing struct {
-	Disabled *Value[bool] `tf:"disabled"`
+	Disabled *Value[bool] `tf:"disabled" json:"disabled,omitempty"`
 }
 
 // GoogleContainerClusterAddonsConfigHorizontalPodAutoscaling is a nested-block type used by the parent resource.
 type GoogleContainerClusterAddonsConfigHorizontalPodAutoscaling struct {
-	Disabled *Value[bool] `tf:"disabled"`
+	Disabled *Value[bool] `tf:"disabled" json:"disabled,omitempty"`
 }
 
 // GoogleContainerClusterAddonsConfigNetworkPolicyConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterAddonsConfigNetworkPolicyConfig struct {
-	Disabled *Value[bool] `tf:"disabled"`
+	Disabled *Value[bool] `tf:"disabled" json:"disabled,omitempty"`
 }
 
 // GoogleContainerClusterAddonsConfigRayOperatorConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterAddonsConfigRayOperatorConfig struct {
-	Enabled                    *Value[bool]                                                                    `tf:"enabled"`
-	RayClusterLoggingConfig    []GoogleContainerClusterAddonsConfigRayOperatorConfigRayClusterLoggingConfig    `tf:"ray_cluster_logging_config,blocks"`
-	RayClusterMonitoringConfig []GoogleContainerClusterAddonsConfigRayOperatorConfigRayClusterMonitoringConfig `tf:"ray_cluster_monitoring_config,blocks"`
+	Enabled                    *Value[bool]                                                                    `tf:"enabled" json:"enabled,omitempty"`
+	RayClusterLoggingConfig    []GoogleContainerClusterAddonsConfigRayOperatorConfigRayClusterLoggingConfig    `tf:"ray_cluster_logging_config,blocks" json:"ray_cluster_logging_config,omitempty"`
+	RayClusterMonitoringConfig []GoogleContainerClusterAddonsConfigRayOperatorConfigRayClusterMonitoringConfig `tf:"ray_cluster_monitoring_config,blocks" json:"ray_cluster_monitoring_config,omitempty"`
 }
 
 // GoogleContainerClusterAddonsConfigRayOperatorConfigRayClusterLoggingConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterAddonsConfigRayOperatorConfigRayClusterLoggingConfig struct {
-	Enabled *Value[bool] `tf:"enabled"`
+	Enabled *Value[bool] `tf:"enabled" json:"enabled,omitempty"`
 }
 
 // GoogleContainerClusterAddonsConfigRayOperatorConfigRayClusterMonitoringConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterAddonsConfigRayOperatorConfigRayClusterMonitoringConfig struct {
-	Enabled *Value[bool] `tf:"enabled"`
+	Enabled *Value[bool] `tf:"enabled" json:"enabled,omitempty"`
 }
 
 // GoogleContainerClusterAddonsConfigStatefulHaConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterAddonsConfigStatefulHaConfig struct {
-	Enabled *Value[bool] `tf:"enabled"`
+	Enabled *Value[bool] `tf:"enabled" json:"enabled,omitempty"`
 }
 
 // GoogleContainerClusterAuthenticatorGroupsConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterAuthenticatorGroupsConfig struct {
-	SecurityGroup *Value[string] `tf:"security_group"`
+	SecurityGroup *Value[string] `tf:"security_group" json:"security_group,omitempty"`
 }
 
 // GoogleContainerClusterBinaryAuthorization is a nested-block type used by the parent resource.
 type GoogleContainerClusterBinaryAuthorization struct {
-	Enabled        *Value[bool]   `tf:"enabled"`
-	EvaluationMode *Value[string] `tf:"evaluation_mode"`
+	Enabled        *Value[bool]   `tf:"enabled" json:"enabled,omitempty"`
+	EvaluationMode *Value[string] `tf:"evaluation_mode" json:"evaluation_mode,omitempty"`
 }
 
 // GoogleContainerClusterClusterAutoscaling is a nested-block type used by the parent resource.
 type GoogleContainerClusterClusterAutoscaling struct {
-	AutoProvisioningLocations []*Value[string]                                                   `tf:"auto_provisioning_locations"`
-	AutoscalingProfile        *Value[string]                                                     `tf:"autoscaling_profile"`
-	Enabled                   *Value[bool]                                                       `tf:"enabled"`
-	AutoProvisioningDefaults  []GoogleContainerClusterClusterAutoscalingAutoProvisioningDefaults `tf:"auto_provisioning_defaults,blocks"`
-	ResourceLimits            []GoogleContainerClusterClusterAutoscalingResourceLimits           `tf:"resource_limits,blocks"`
+	AutoProvisioningLocations []*Value[string]                                                   `tf:"auto_provisioning_locations" json:"auto_provisioning_locations,omitempty"`
+	AutoscalingProfile        *Value[string]                                                     `tf:"autoscaling_profile" json:"autoscaling_profile,omitempty"`
+	Enabled                   *Value[bool]                                                       `tf:"enabled" json:"enabled,omitempty"`
+	AutoProvisioningDefaults  []GoogleContainerClusterClusterAutoscalingAutoProvisioningDefaults `tf:"auto_provisioning_defaults,blocks" json:"auto_provisioning_defaults,omitempty"`
+	ResourceLimits            []GoogleContainerClusterClusterAutoscalingResourceLimits           `tf:"resource_limits,blocks" json:"resource_limits,omitempty"`
 }
 
 // GoogleContainerClusterClusterAutoscalingAutoProvisioningDefaults is a nested-block type used by the parent resource.
 type GoogleContainerClusterClusterAutoscalingAutoProvisioningDefaults struct {
-	BootDiskKMSKey         *Value[string]                                                                           `tf:"boot_disk_kms_key"`
-	DiskSize               *Value[int64]                                                                            `tf:"disk_size"`
-	DiskType               *Value[string]                                                                           `tf:"disk_type"`
-	ImageType              *Value[string]                                                                           `tf:"image_type"`
-	MinCPUPlatform         *Value[string]                                                                           `tf:"min_cpu_platform"`
-	OauthScopes            []*Value[string]                                                                         `tf:"oauth_scopes"`
-	ServiceAccount         *Value[string]                                                                           `tf:"service_account"`
-	Management             []GoogleContainerClusterClusterAutoscalingAutoProvisioningDefaultsManagement             `tf:"management,blocks"`
-	ShieldedInstanceConfig []GoogleContainerClusterClusterAutoscalingAutoProvisioningDefaultsShieldedInstanceConfig `tf:"shielded_instance_config,blocks"`
-	UpgradeSettings        []GoogleContainerClusterClusterAutoscalingAutoProvisioningDefaultsUpgradeSettings        `tf:"upgrade_settings,blocks"`
+	BootDiskKMSKey         *Value[string]                                                                           `tf:"boot_disk_kms_key" json:"boot_disk_kms_key,omitempty"`
+	DiskSize               *Value[int64]                                                                            `tf:"disk_size" json:"disk_size,omitempty"`
+	DiskType               *Value[string]                                                                           `tf:"disk_type" json:"disk_type,omitempty"`
+	ImageType              *Value[string]                                                                           `tf:"image_type" json:"image_type,omitempty"`
+	MinCPUPlatform         *Value[string]                                                                           `tf:"min_cpu_platform" json:"min_cpu_platform,omitempty"`
+	OauthScopes            []*Value[string]                                                                         `tf:"oauth_scopes" json:"oauth_scopes,omitempty"`
+	ServiceAccount         *Value[string]                                                                           `tf:"service_account" json:"service_account,omitempty"`
+	Management             []GoogleContainerClusterClusterAutoscalingAutoProvisioningDefaultsManagement             `tf:"management,blocks" json:"management,omitempty"`
+	ShieldedInstanceConfig []GoogleContainerClusterClusterAutoscalingAutoProvisioningDefaultsShieldedInstanceConfig `tf:"shielded_instance_config,blocks" json:"shielded_instance_config,omitempty"`
+	UpgradeSettings        []GoogleContainerClusterClusterAutoscalingAutoProvisioningDefaultsUpgradeSettings        `tf:"upgrade_settings,blocks" json:"upgrade_settings,omitempty"`
 }
 
 // GoogleContainerClusterClusterAutoscalingAutoProvisioningDefaultsManagement is a nested-block type used by the parent resource.
 type GoogleContainerClusterClusterAutoscalingAutoProvisioningDefaultsManagement struct {
-	AutoRepair     *Value[bool]                                                                               `tf:"auto_repair"`
-	AutoUpgrade    *Value[bool]                                                                               `tf:"auto_upgrade"`
-	UpgradeOptions []GoogleContainerClusterClusterAutoscalingAutoProvisioningDefaultsManagementUpgradeOptions `tf:"upgrade_options"`
+	AutoRepair     *Value[bool]                                                                               `tf:"auto_repair" json:"auto_repair,omitempty"`
+	AutoUpgrade    *Value[bool]                                                                               `tf:"auto_upgrade" json:"auto_upgrade,omitempty"`
+	UpgradeOptions []GoogleContainerClusterClusterAutoscalingAutoProvisioningDefaultsManagementUpgradeOptions `tf:"upgrade_options" json:"upgrade_options,omitempty"`
 }
 
 // GoogleContainerClusterClusterAutoscalingAutoProvisioningDefaultsManagementUpgradeOptions is a nested-block type used by the parent resource.
 type GoogleContainerClusterClusterAutoscalingAutoProvisioningDefaultsManagementUpgradeOptions struct {
-	AutoUpgradeStartTime *Value[string] `tf:"auto_upgrade_start_time"`
-	Description          *Value[string] `tf:"description"`
+	AutoUpgradeStartTime *Value[string] `tf:"auto_upgrade_start_time" json:"auto_upgrade_start_time,omitempty"`
+	Description          *Value[string] `tf:"description" json:"description,omitempty"`
 }
 
 // GoogleContainerClusterClusterAutoscalingAutoProvisioningDefaultsShieldedInstanceConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterClusterAutoscalingAutoProvisioningDefaultsShieldedInstanceConfig struct {
-	EnableIntegrityMonitoring *Value[bool] `tf:"enable_integrity_monitoring"`
-	EnableSecureBoot          *Value[bool] `tf:"enable_secure_boot"`
+	EnableIntegrityMonitoring *Value[bool] `tf:"enable_integrity_monitoring" json:"enable_integrity_monitoring,omitempty"`
+	EnableSecureBoot          *Value[bool] `tf:"enable_secure_boot" json:"enable_secure_boot,omitempty"`
 }
 
 // GoogleContainerClusterClusterAutoscalingAutoProvisioningDefaultsUpgradeSettings is a nested-block type used by the parent resource.
 type GoogleContainerClusterClusterAutoscalingAutoProvisioningDefaultsUpgradeSettings struct {
-	MaxSurge          *Value[int64]                                                                                      `tf:"max_surge"`
-	MaxUnavailable    *Value[int64]                                                                                      `tf:"max_unavailable"`
-	Strategy          *Value[string]                                                                                     `tf:"strategy"`
-	BlueGreenSettings []GoogleContainerClusterClusterAutoscalingAutoProvisioningDefaultsUpgradeSettingsBlueGreenSettings `tf:"blue_green_settings,blocks"`
+	MaxSurge          *Value[int64]                                                                                      `tf:"max_surge" json:"max_surge,omitempty"`
+	MaxUnavailable    *Value[int64]                                                                                      `tf:"max_unavailable" json:"max_unavailable,omitempty"`
+	Strategy          *Value[string]                                                                                     `tf:"strategy" json:"strategy,omitempty"`
+	BlueGreenSettings []GoogleContainerClusterClusterAutoscalingAutoProvisioningDefaultsUpgradeSettingsBlueGreenSettings `tf:"blue_green_settings,blocks" json:"blue_green_settings,omitempty"`
 }
 
 // GoogleContainerClusterClusterAutoscalingAutoProvisioningDefaultsUpgradeSettingsBlueGreenSettings is a nested-block type used by the parent resource.
 type GoogleContainerClusterClusterAutoscalingAutoProvisioningDefaultsUpgradeSettingsBlueGreenSettings struct {
-	NodePoolSoakDuration  *Value[string]                                                                                                          `tf:"node_pool_soak_duration"`
-	StandardRolloutPolicy []GoogleContainerClusterClusterAutoscalingAutoProvisioningDefaultsUpgradeSettingsBlueGreenSettingsStandardRolloutPolicy `tf:"standard_rollout_policy,blocks"`
+	NodePoolSoakDuration  *Value[string]                                                                                                          `tf:"node_pool_soak_duration" json:"node_pool_soak_duration,omitempty"`
+	StandardRolloutPolicy []GoogleContainerClusterClusterAutoscalingAutoProvisioningDefaultsUpgradeSettingsBlueGreenSettingsStandardRolloutPolicy `tf:"standard_rollout_policy,blocks" json:"standard_rollout_policy,omitempty"`
 }
 
 // GoogleContainerClusterClusterAutoscalingAutoProvisioningDefaultsUpgradeSettingsBlueGreenSettingsStandardRolloutPolicy is a nested-block type used by the parent resource.
 type GoogleContainerClusterClusterAutoscalingAutoProvisioningDefaultsUpgradeSettingsBlueGreenSettingsStandardRolloutPolicy struct {
-	BatchNodeCount    *Value[int64]   `tf:"batch_node_count"`
-	BatchPercentage   *Value[float64] `tf:"batch_percentage"`
-	BatchSoakDuration *Value[string]  `tf:"batch_soak_duration"`
+	BatchNodeCount    *Value[int64]   `tf:"batch_node_count" json:"batch_node_count,omitempty"`
+	BatchPercentage   *Value[float64] `tf:"batch_percentage" json:"batch_percentage,omitempty"`
+	BatchSoakDuration *Value[string]  `tf:"batch_soak_duration" json:"batch_soak_duration,omitempty"`
 }
 
 // GoogleContainerClusterClusterAutoscalingResourceLimits is a nested-block type used by the parent resource.
 type GoogleContainerClusterClusterAutoscalingResourceLimits struct {
-	Maximum      *Value[float64] `tf:"maximum"`
-	Minimum      *Value[float64] `tf:"minimum"`
-	ResourceType *Value[string]  `tf:"resource_type"`
+	Maximum      *Value[float64] `tf:"maximum" json:"maximum,omitempty"`
+	Minimum      *Value[float64] `tf:"minimum" json:"minimum,omitempty"`
+	ResourceType *Value[string]  `tf:"resource_type" json:"resource_type,omitempty"`
 }
 
 // GoogleContainerClusterConfidentialNodes is a nested-block type used by the parent resource.
 type GoogleContainerClusterConfidentialNodes struct {
-	Enabled *Value[bool] `tf:"enabled"`
+	Enabled *Value[bool] `tf:"enabled" json:"enabled,omitempty"`
 }
 
 // GoogleContainerClusterCostManagementConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterCostManagementConfig struct {
-	Enabled *Value[bool] `tf:"enabled"`
+	Enabled *Value[bool] `tf:"enabled" json:"enabled,omitempty"`
 }
 
 // GoogleContainerClusterDNSConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterDNSConfig struct {
-	AdditiveVPCScopeDNSDomain *Value[string] `tf:"additive_vpc_scope_dns_domain"`
-	ClusterDNS                *Value[string] `tf:"cluster_dns"`
-	ClusterDNSDomain          *Value[string] `tf:"cluster_dns_domain"`
-	ClusterDNSScope           *Value[string] `tf:"cluster_dns_scope"`
+	AdditiveVPCScopeDNSDomain *Value[string] `tf:"additive_vpc_scope_dns_domain" json:"additive_vpc_scope_dns_domain,omitempty"`
+	ClusterDNS                *Value[string] `tf:"cluster_dns" json:"cluster_dns,omitempty"`
+	ClusterDNSDomain          *Value[string] `tf:"cluster_dns_domain" json:"cluster_dns_domain,omitempty"`
+	ClusterDNSScope           *Value[string] `tf:"cluster_dns_scope" json:"cluster_dns_scope,omitempty"`
 }
 
 // GoogleContainerClusterDatabaseEncryption is a nested-block type used by the parent resource.
 type GoogleContainerClusterDatabaseEncryption struct {
-	KeyName *Value[string] `tf:"key_name"`
-	State   *Value[string] `tf:"state"`
+	KeyName *Value[string] `tf:"key_name" json:"key_name,omitempty"`
+	State   *Value[string] `tf:"state" json:"state,omitempty"`
 }
 
 // GoogleContainerClusterDefaultSnatStatus is a nested-block type used by the parent resource.
 type GoogleContainerClusterDefaultSnatStatus struct {
-	Disabled *Value[bool] `tf:"disabled"`
+	Disabled *Value[bool] `tf:"disabled" json:"disabled,omitempty"`
 }
 
 // GoogleContainerClusterEnableK8sBetaApis is a nested-block type used by the parent resource.
 type GoogleContainerClusterEnableK8sBetaApis struct {
-	EnabledApis []*Value[string] `tf:"enabled_apis"`
+	EnabledApis []*Value[string] `tf:"enabled_apis" json:"enabled_apis,omitempty"`
 }
 
 // GoogleContainerClusterFleet is a nested-block type used by the parent resource.
 type GoogleContainerClusterFleet struct {
-	Membership         *Value[string] `tf:"membership"`
-	MembershipID       *Value[string] `tf:"membership_id"`
-	MembershipLocation *Value[string] `tf:"membership_location"`
-	PreRegistered      *Value[bool]   `tf:"pre_registered"`
-	Project            *Value[string] `tf:"project"`
+	Membership         *Value[string] `tf:"membership" json:"membership,omitempty"`
+	MembershipID       *Value[string] `tf:"membership_id" json:"membership_id,omitempty"`
+	MembershipLocation *Value[string] `tf:"membership_location" json:"membership_location,omitempty"`
+	PreRegistered      *Value[bool]   `tf:"pre_registered" json:"pre_registered,omitempty"`
+	Project            *Value[string] `tf:"project" json:"project,omitempty"`
 }
 
 // GoogleContainerClusterGatewayAPIConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterGatewayAPIConfig struct {
-	Channel *Value[string] `tf:"channel"`
+	Channel *Value[string] `tf:"channel" json:"channel,omitempty"`
 }
 
 // GoogleContainerClusterIdentityServiceConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterIdentityServiceConfig struct {
-	Enabled *Value[bool] `tf:"enabled"`
+	Enabled *Value[bool] `tf:"enabled" json:"enabled,omitempty"`
 }
 
 // GoogleContainerClusterIpAllocationPolicy is a nested-block type used by the parent resource.
 type GoogleContainerClusterIpAllocationPolicy struct {
-	ClusterIPV4CIDRBlock       *Value[string]                                                       `tf:"cluster_ipv4_cidr_block"`
-	ClusterSecondaryRangeName  *Value[string]                                                       `tf:"cluster_secondary_range_name"`
-	ServicesIPV4CIDRBlock      *Value[string]                                                       `tf:"services_ipv4_cidr_block"`
-	ServicesSecondaryRangeName *Value[string]                                                       `tf:"services_secondary_range_name"`
-	StackType                  *Value[string]                                                       `tf:"stack_type"`
-	AdditionalPodRangesConfig  []GoogleContainerClusterIpAllocationPolicyAdditionalPodRangesConfig  `tf:"additional_pod_ranges_config,blocks"`
-	PodCIDROverprovisionConfig []GoogleContainerClusterIpAllocationPolicyPodCIDROverprovisionConfig `tf:"pod_cidr_overprovision_config,blocks"`
+	ClusterIPV4CIDRBlock       *Value[string]                                                       `tf:"cluster_ipv4_cidr_block" json:"cluster_ipv4_cidr_block,omitempty"`
+	ClusterSecondaryRangeName  *Value[string]                                                       `tf:"cluster_secondary_range_name" json:"cluster_secondary_range_name,omitempty"`
+	ServicesIPV4CIDRBlock      *Value[string]                                                       `tf:"services_ipv4_cidr_block" json:"services_ipv4_cidr_block,omitempty"`
+	ServicesSecondaryRangeName *Value[string]                                                       `tf:"services_secondary_range_name" json:"services_secondary_range_name,omitempty"`
+	StackType                  *Value[string]                                                       `tf:"stack_type" json:"stack_type,omitempty"`
+	AdditionalPodRangesConfig  []GoogleContainerClusterIpAllocationPolicyAdditionalPodRangesConfig  `tf:"additional_pod_ranges_config,blocks" json:"additional_pod_ranges_config,omitempty"`
+	PodCIDROverprovisionConfig []GoogleContainerClusterIpAllocationPolicyPodCIDROverprovisionConfig `tf:"pod_cidr_overprovision_config,blocks" json:"pod_cidr_overprovision_config,omitempty"`
 }
 
 // GoogleContainerClusterIpAllocationPolicyAdditionalPodRangesConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterIpAllocationPolicyAdditionalPodRangesConfig struct {
-	PodRangeNames []*Value[string] `tf:"pod_range_names"`
+	PodRangeNames []*Value[string] `tf:"pod_range_names" json:"pod_range_names,omitempty"`
 }
 
 // GoogleContainerClusterIpAllocationPolicyPodCIDROverprovisionConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterIpAllocationPolicyPodCIDROverprovisionConfig struct {
-	Disabled *Value[bool] `tf:"disabled"`
+	Disabled *Value[bool] `tf:"disabled" json:"disabled,omitempty"`
 }
 
 // GoogleContainerClusterLoggingConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterLoggingConfig struct {
-	EnableComponents []*Value[string] `tf:"enable_components"`
+	EnableComponents []*Value[string] `tf:"enable_components" json:"enable_components,omitempty"`
 }
 
 // GoogleContainerClusterMaintenancePolicy is a nested-block type used by the parent resource.
 type GoogleContainerClusterMaintenancePolicy struct {
-	DailyMaintenanceWindow []GoogleContainerClusterMaintenancePolicyDailyMaintenanceWindow `tf:"daily_maintenance_window,blocks"`
-	MaintenanceExclusion   []GoogleContainerClusterMaintenancePolicyMaintenanceExclusion   `tf:"maintenance_exclusion,blocks"`
-	RecurringWindow        []GoogleContainerClusterMaintenancePolicyRecurringWindow        `tf:"recurring_window,blocks"`
+	DailyMaintenanceWindow []GoogleContainerClusterMaintenancePolicyDailyMaintenanceWindow `tf:"daily_maintenance_window,blocks" json:"daily_maintenance_window,omitempty"`
+	MaintenanceExclusion   []GoogleContainerClusterMaintenancePolicyMaintenanceExclusion   `tf:"maintenance_exclusion,blocks" json:"maintenance_exclusion,omitempty"`
+	RecurringWindow        []GoogleContainerClusterMaintenancePolicyRecurringWindow        `tf:"recurring_window,blocks" json:"recurring_window,omitempty"`
 }
 
 // GoogleContainerClusterMaintenancePolicyDailyMaintenanceWindow is a nested-block type used by the parent resource.
 type GoogleContainerClusterMaintenancePolicyDailyMaintenanceWindow struct {
-	Duration  *Value[string] `tf:"duration"`
-	StartTime *Value[string] `tf:"start_time"`
+	Duration  *Value[string] `tf:"duration" json:"duration,omitempty"`
+	StartTime *Value[string] `tf:"start_time" json:"start_time,omitempty"`
 }
 
 // GoogleContainerClusterMaintenancePolicyMaintenanceExclusion is a nested-block type used by the parent resource.
 type GoogleContainerClusterMaintenancePolicyMaintenanceExclusion struct {
-	EndTime          *Value[string]                                                                `tf:"end_time"`
-	ExclusionName    *Value[string]                                                                `tf:"exclusion_name"`
-	StartTime        *Value[string]                                                                `tf:"start_time"`
-	ExclusionOptions []GoogleContainerClusterMaintenancePolicyMaintenanceExclusionExclusionOptions `tf:"exclusion_options,blocks"`
+	EndTime          *Value[string]                                                                `tf:"end_time" json:"end_time,omitempty"`
+	ExclusionName    *Value[string]                                                                `tf:"exclusion_name" json:"exclusion_name,omitempty"`
+	StartTime        *Value[string]                                                                `tf:"start_time" json:"start_time,omitempty"`
+	ExclusionOptions []GoogleContainerClusterMaintenancePolicyMaintenanceExclusionExclusionOptions `tf:"exclusion_options,blocks" json:"exclusion_options,omitempty"`
 }
 
 // GoogleContainerClusterMaintenancePolicyMaintenanceExclusionExclusionOptions is a nested-block type used by the parent resource.
 type GoogleContainerClusterMaintenancePolicyMaintenanceExclusionExclusionOptions struct {
-	Scope *Value[string] `tf:"scope"`
+	Scope *Value[string] `tf:"scope" json:"scope,omitempty"`
 }
 
 // GoogleContainerClusterMaintenancePolicyRecurringWindow is a nested-block type used by the parent resource.
 type GoogleContainerClusterMaintenancePolicyRecurringWindow struct {
-	EndTime    *Value[string] `tf:"end_time"`
-	Recurrence *Value[string] `tf:"recurrence"`
-	StartTime  *Value[string] `tf:"start_time"`
+	EndTime    *Value[string] `tf:"end_time" json:"end_time,omitempty"`
+	Recurrence *Value[string] `tf:"recurrence" json:"recurrence,omitempty"`
+	StartTime  *Value[string] `tf:"start_time" json:"start_time,omitempty"`
 }
 
 // GoogleContainerClusterMasterAuth is a nested-block type used by the parent resource.
 type GoogleContainerClusterMasterAuth struct {
-	ClientCertificate       *Value[string]                                            `tf:"client_certificate"`
-	ClientKey               *Value[string]                                            `tf:"client_key"`
-	ClusterCaCertificate    *Value[string]                                            `tf:"cluster_ca_certificate"`
-	ClientCertificateConfig []GoogleContainerClusterMasterAuthClientCertificateConfig `tf:"client_certificate_config,blocks"`
+	ClientCertificate       *Value[string]                                            `tf:"client_certificate" json:"client_certificate,omitempty"`
+	ClientKey               *Value[string]                                            `tf:"client_key" json:"client_key,omitempty"`
+	ClusterCaCertificate    *Value[string]                                            `tf:"cluster_ca_certificate" json:"cluster_ca_certificate,omitempty"`
+	ClientCertificateConfig []GoogleContainerClusterMasterAuthClientCertificateConfig `tf:"client_certificate_config,blocks" json:"client_certificate_config,omitempty"`
 }
 
 // GoogleContainerClusterMasterAuthClientCertificateConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterMasterAuthClientCertificateConfig struct {
-	IssueClientCertificate *Value[bool] `tf:"issue_client_certificate"`
+	IssueClientCertificate *Value[bool] `tf:"issue_client_certificate" json:"issue_client_certificate,omitempty"`
 }
 
 // GoogleContainerClusterMasterAuthorizedNetworksConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterMasterAuthorizedNetworksConfig struct {
-	GCPPublicCidrsAccessEnabled *Value[bool]                                                     `tf:"gcp_public_cidrs_access_enabled"`
-	CIDRBlocks                  []GoogleContainerClusterMasterAuthorizedNetworksConfigCIDRBlocks `tf:"cidr_blocks,blocks"`
+	GCPPublicCidrsAccessEnabled *Value[bool]                                                     `tf:"gcp_public_cidrs_access_enabled" json:"gcp_public_cidrs_access_enabled,omitempty"`
+	CIDRBlocks                  []GoogleContainerClusterMasterAuthorizedNetworksConfigCIDRBlocks `tf:"cidr_blocks,blocks" json:"cidr_blocks,omitempty"`
 }
 
 // GoogleContainerClusterMasterAuthorizedNetworksConfigCIDRBlocks is a nested-block type used by the parent resource.
 type GoogleContainerClusterMasterAuthorizedNetworksConfigCIDRBlocks struct {
-	CIDRBlock   *Value[string] `tf:"cidr_block"`
-	DisplayName *Value[string] `tf:"display_name"`
+	CIDRBlock   *Value[string] `tf:"cidr_block" json:"cidr_block,omitempty"`
+	DisplayName *Value[string] `tf:"display_name" json:"display_name,omitempty"`
 }
 
 // GoogleContainerClusterMeshCertificates is a nested-block type used by the parent resource.
 type GoogleContainerClusterMeshCertificates struct {
-	EnableCertificates *Value[bool] `tf:"enable_certificates"`
+	EnableCertificates *Value[bool] `tf:"enable_certificates" json:"enable_certificates,omitempty"`
 }
 
 // GoogleContainerClusterMonitoringConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterMonitoringConfig struct {
-	EnableComponents                    []*Value[string]                                                            `tf:"enable_components"`
-	AdvancedDatapathObservabilityConfig []GoogleContainerClusterMonitoringConfigAdvancedDatapathObservabilityConfig `tf:"advanced_datapath_observability_config,blocks"`
-	ManagedPrometheus                   []GoogleContainerClusterMonitoringConfigManagedPrometheus                   `tf:"managed_prometheus,blocks"`
+	EnableComponents                    []*Value[string]                                                            `tf:"enable_components" json:"enable_components,omitempty"`
+	AdvancedDatapathObservabilityConfig []GoogleContainerClusterMonitoringConfigAdvancedDatapathObservabilityConfig `tf:"advanced_datapath_observability_config,blocks" json:"advanced_datapath_observability_config,omitempty"`
+	ManagedPrometheus                   []GoogleContainerClusterMonitoringConfigManagedPrometheus                   `tf:"managed_prometheus,blocks" json:"managed_prometheus,omitempty"`
 }
 
 // GoogleContainerClusterMonitoringConfigAdvancedDatapathObservabilityConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterMonitoringConfigAdvancedDatapathObservabilityConfig struct {
-	EnableMetrics *Value[bool] `tf:"enable_metrics"`
-	EnableRelay   *Value[bool] `tf:"enable_relay"`
+	EnableMetrics *Value[bool] `tf:"enable_metrics" json:"enable_metrics,omitempty"`
+	EnableRelay   *Value[bool] `tf:"enable_relay" json:"enable_relay,omitempty"`
 }
 
 // GoogleContainerClusterMonitoringConfigManagedPrometheus is a nested-block type used by the parent resource.
 type GoogleContainerClusterMonitoringConfigManagedPrometheus struct {
-	Enabled *Value[bool] `tf:"enabled"`
+	Enabled *Value[bool] `tf:"enabled" json:"enabled,omitempty"`
 }
 
 // GoogleContainerClusterNetworkPolicy is a nested-block type used by the parent resource.
 type GoogleContainerClusterNetworkPolicy struct {
-	Enabled  *Value[bool]   `tf:"enabled"`
-	Provider *Value[string] `tf:"provider"`
+	Enabled  *Value[bool]   `tf:"enabled" json:"enabled,omitempty"`
+	Provider *Value[string] `tf:"provider" json:"provider,omitempty"`
 }
 
 // GoogleContainerClusterNodeConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodeConfig struct {
-	BootDiskKMSKey                 *Value[string]                                                   `tf:"boot_disk_kms_key"`
-	DiskSizeGb                     *Value[float64]                                                  `tf:"disk_size_gb"`
-	DiskType                       *Value[string]                                                   `tf:"disk_type"`
-	EffectiveTaints                []GoogleContainerClusterNodeConfigEffectiveTaints                `tf:"effective_taints"`
-	EnableConfidentialStorage      *Value[bool]                                                     `tf:"enable_confidential_storage"`
-	ImageType                      *Value[string]                                                   `tf:"image_type"`
-	Labels                         map[string]*Value[string]                                        `tf:"labels"`
-	LocalSsdCount                  *Value[int64]                                                    `tf:"local_ssd_count"`
-	LoggingVariant                 *Value[string]                                                   `tf:"logging_variant"`
-	MachineType                    *Value[string]                                                   `tf:"machine_type"`
-	Metadata                       map[string]*Value[string]                                        `tf:"metadata"`
-	MinCPUPlatform                 *Value[string]                                                   `tf:"min_cpu_platform"`
-	NodeGroup                      *Value[string]                                                   `tf:"node_group"`
-	OauthScopes                    []*Value[string]                                                 `tf:"oauth_scopes"`
-	Preemptible                    *Value[bool]                                                     `tf:"preemptible"`
-	ResourceLabels                 map[string]*Value[string]                                        `tf:"resource_labels"`
-	ResourceManagerTags            map[string]*Value[string]                                        `tf:"resource_manager_tags"`
-	ServiceAccount                 *Value[string]                                                   `tf:"service_account"`
-	Spot                           *Value[bool]                                                     `tf:"spot"`
-	StoragePools                   []*Value[string]                                                 `tf:"storage_pools"`
-	Tags                           []*Value[string]                                                 `tf:"tags"`
-	AdvancedMachineFeatures        []GoogleContainerClusterNodeConfigAdvancedMachineFeatures        `tf:"advanced_machine_features,blocks"`
-	ConfidentialNodes              []GoogleContainerClusterNodeConfigConfidentialNodes              `tf:"confidential_nodes,blocks"`
-	ContainerdConfig               []GoogleContainerClusterNodeConfigContainerdConfig               `tf:"containerd_config,blocks"`
-	EphemeralStorageLocalSsdConfig []GoogleContainerClusterNodeConfigEphemeralStorageLocalSsdConfig `tf:"ephemeral_storage_local_ssd_config,blocks"`
-	FastSocket                     []GoogleContainerClusterNodeConfigFastSocket                     `tf:"fast_socket,blocks"`
-	GcfsConfig                     []GoogleContainerClusterNodeConfigGcfsConfig                     `tf:"gcfs_config,blocks"`
-	GuestAccelerator               []GoogleContainerClusterNodeConfigGuestAccelerator               `tf:"guest_accelerator,blocks"`
-	Gvnic                          []GoogleContainerClusterNodeConfigGvnic                          `tf:"gvnic,blocks"`
-	HostMaintenancePolicy          []GoogleContainerClusterNodeConfigHostMaintenancePolicy          `tf:"host_maintenance_policy,blocks"`
-	KubeletConfig                  []GoogleContainerClusterNodeConfigKubeletConfig                  `tf:"kubelet_config,blocks"`
-	LinuxNodeConfig                []GoogleContainerClusterNodeConfigLinuxNodeConfig                `tf:"linux_node_config,blocks"`
-	LocalNvmeSsdBlockConfig        []GoogleContainerClusterNodeConfigLocalNvmeSsdBlockConfig        `tf:"local_nvme_ssd_block_config,blocks"`
-	ReservationAffinity            []GoogleContainerClusterNodeConfigReservationAffinity            `tf:"reservation_affinity,blocks"`
-	SecondaryBootDisks             []GoogleContainerClusterNodeConfigSecondaryBootDisks             `tf:"secondary_boot_disks,blocks"`
-	ShieldedInstanceConfig         []GoogleContainerClusterNodeConfigShieldedInstanceConfig         `tf:"shielded_instance_config,blocks"`
-	SoleTenantConfig               []GoogleContainerClusterNodeConfigSoleTenantConfig               `tf:"sole_tenant_config,blocks"`
-	Taint                          []GoogleContainerClusterNodeConfigTaint                          `tf:"taint,blocks"`
-	WorkloadMetadataConfig         []GoogleContainerClusterNodeConfigWorkloadMetadataConfig         `tf:"workload_metadata_config,blocks"`
+	BootDiskKMSKey                 *Value[string]                                                   `tf:"boot_disk_kms_key" json:"boot_disk_kms_key,omitempty"`
+	DiskSizeGb                     *Value[float64]                                                  `tf:"disk_size_gb" json:"disk_size_gb,omitempty"`
+	DiskType                       *Value[string]                                                   `tf:"disk_type" json:"disk_type,omitempty"`
+	EffectiveTaints                []GoogleContainerClusterNodeConfigEffectiveTaints                `tf:"effective_taints" json:"effective_taints,omitempty"`
+	EnableConfidentialStorage      *Value[bool]                                                     `tf:"enable_confidential_storage" json:"enable_confidential_storage,omitempty"`
+	ImageType                      *Value[string]                                                   `tf:"image_type" json:"image_type,omitempty"`
+	Labels                         map[string]*Value[string]                                        `tf:"labels" json:"labels,omitempty"`
+	LocalSsdCount                  *Value[int64]                                                    `tf:"local_ssd_count" json:"local_ssd_count,omitempty"`
+	LoggingVariant                 *Value[string]                                                   `tf:"logging_variant" json:"logging_variant,omitempty"`
+	MachineType                    *Value[string]                                                   `tf:"machine_type" json:"machine_type,omitempty"`
+	Metadata                       map[string]*Value[string]                                        `tf:"metadata" json:"metadata,omitempty"`
+	MinCPUPlatform                 *Value[string]                                                   `tf:"min_cpu_platform" json:"min_cpu_platform,omitempty"`
+	NodeGroup                      *Value[string]                                                   `tf:"node_group" json:"node_group,omitempty"`
+	OauthScopes                    []*Value[string]                                                 `tf:"oauth_scopes" json:"oauth_scopes,omitempty"`
+	Preemptible                    *Value[bool]                                                     `tf:"preemptible" json:"preemptible,omitempty"`
+	ResourceLabels                 map[string]*Value[string]                                        `tf:"resource_labels" json:"resource_labels,omitempty"`
+	ResourceManagerTags            map[string]*Value[string]                                        `tf:"resource_manager_tags" json:"resource_manager_tags,omitempty"`
+	ServiceAccount                 *Value[string]                                                   `tf:"service_account" json:"service_account,omitempty"`
+	Spot                           *Value[bool]                                                     `tf:"spot" json:"spot,omitempty"`
+	StoragePools                   []*Value[string]                                                 `tf:"storage_pools" json:"storage_pools,omitempty"`
+	Tags                           []*Value[string]                                                 `tf:"tags" json:"tags,omitempty"`
+	AdvancedMachineFeatures        []GoogleContainerClusterNodeConfigAdvancedMachineFeatures        `tf:"advanced_machine_features,blocks" json:"advanced_machine_features,omitempty"`
+	ConfidentialNodes              []GoogleContainerClusterNodeConfigConfidentialNodes              `tf:"confidential_nodes,blocks" json:"confidential_nodes,omitempty"`
+	ContainerdConfig               []GoogleContainerClusterNodeConfigContainerdConfig               `tf:"containerd_config,blocks" json:"containerd_config,omitempty"`
+	EphemeralStorageLocalSsdConfig []GoogleContainerClusterNodeConfigEphemeralStorageLocalSsdConfig `tf:"ephemeral_storage_local_ssd_config,blocks" json:"ephemeral_storage_local_ssd_config,omitempty"`
+	FastSocket                     []GoogleContainerClusterNodeConfigFastSocket                     `tf:"fast_socket,blocks" json:"fast_socket,omitempty"`
+	GcfsConfig                     []GoogleContainerClusterNodeConfigGcfsConfig                     `tf:"gcfs_config,blocks" json:"gcfs_config,omitempty"`
+	GuestAccelerator               []GoogleContainerClusterNodeConfigGuestAccelerator               `tf:"guest_accelerator,blocks" json:"guest_accelerator,omitempty"`
+	Gvnic                          []GoogleContainerClusterNodeConfigGvnic                          `tf:"gvnic,blocks" json:"gvnic,omitempty"`
+	HostMaintenancePolicy          []GoogleContainerClusterNodeConfigHostMaintenancePolicy          `tf:"host_maintenance_policy,blocks" json:"host_maintenance_policy,omitempty"`
+	KubeletConfig                  []GoogleContainerClusterNodeConfigKubeletConfig                  `tf:"kubelet_config,blocks" json:"kubelet_config,omitempty"`
+	LinuxNodeConfig                []GoogleContainerClusterNodeConfigLinuxNodeConfig                `tf:"linux_node_config,blocks" json:"linux_node_config,omitempty"`
+	LocalNvmeSsdBlockConfig        []GoogleContainerClusterNodeConfigLocalNvmeSsdBlockConfig        `tf:"local_nvme_ssd_block_config,blocks" json:"local_nvme_ssd_block_config,omitempty"`
+	ReservationAffinity            []GoogleContainerClusterNodeConfigReservationAffinity            `tf:"reservation_affinity,blocks" json:"reservation_affinity,omitempty"`
+	SecondaryBootDisks             []GoogleContainerClusterNodeConfigSecondaryBootDisks             `tf:"secondary_boot_disks,blocks" json:"secondary_boot_disks,omitempty"`
+	ShieldedInstanceConfig         []GoogleContainerClusterNodeConfigShieldedInstanceConfig         `tf:"shielded_instance_config,blocks" json:"shielded_instance_config,omitempty"`
+	SoleTenantConfig               []GoogleContainerClusterNodeConfigSoleTenantConfig               `tf:"sole_tenant_config,blocks" json:"sole_tenant_config,omitempty"`
+	Taint                          []GoogleContainerClusterNodeConfigTaint                          `tf:"taint,blocks" json:"taint,omitempty"`
+	WorkloadMetadataConfig         []GoogleContainerClusterNodeConfigWorkloadMetadataConfig         `tf:"workload_metadata_config,blocks" json:"workload_metadata_config,omitempty"`
 }
 
 // GoogleContainerClusterNodeConfigAdvancedMachineFeatures is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodeConfigAdvancedMachineFeatures struct {
-	EnableNestedVirtualization *Value[bool]    `tf:"enable_nested_virtualization"`
-	ThreadsPerCore             *Value[float64] `tf:"threads_per_core"`
+	EnableNestedVirtualization *Value[bool]    `tf:"enable_nested_virtualization" json:"enable_nested_virtualization,omitempty"`
+	ThreadsPerCore             *Value[float64] `tf:"threads_per_core" json:"threads_per_core,omitempty"`
 }
 
 // GoogleContainerClusterNodeConfigConfidentialNodes is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodeConfigConfidentialNodes struct {
-	Enabled *Value[bool] `tf:"enabled"`
+	Enabled *Value[bool] `tf:"enabled" json:"enabled,omitempty"`
 }
 
 // GoogleContainerClusterNodeConfigContainerdConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodeConfigContainerdConfig struct {
-	PrivateRegistryAccessConfig []GoogleContainerClusterNodeConfigContainerdConfigPrivateRegistryAccessConfig `tf:"private_registry_access_config,blocks"`
+	PrivateRegistryAccessConfig []GoogleContainerClusterNodeConfigContainerdConfigPrivateRegistryAccessConfig `tf:"private_registry_access_config,blocks" json:"private_registry_access_config,omitempty"`
 }
 
 // GoogleContainerClusterNodeConfigContainerdConfigPrivateRegistryAccessConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodeConfigContainerdConfigPrivateRegistryAccessConfig struct {
-	Enabled                          *Value[bool]                                                                                                  `tf:"enabled"`
-	CertificateAuthorityDomainConfig []GoogleContainerClusterNodeConfigContainerdConfigPrivateRegistryAccessConfigCertificateAuthorityDomainConfig `tf:"certificate_authority_domain_config,blocks"`
+	Enabled                          *Value[bool]                                                                                                  `tf:"enabled" json:"enabled,omitempty"`
+	CertificateAuthorityDomainConfig []GoogleContainerClusterNodeConfigContainerdConfigPrivateRegistryAccessConfigCertificateAuthorityDomainConfig `tf:"certificate_authority_domain_config,blocks" json:"certificate_authority_domain_config,omitempty"`
 }
 
 // GoogleContainerClusterNodeConfigContainerdConfigPrivateRegistryAccessConfigCertificateAuthorityDomainConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodeConfigContainerdConfigPrivateRegistryAccessConfigCertificateAuthorityDomainConfig struct {
-	Fqdns                             []*Value[string]                                                                                                                               `tf:"fqdns"`
-	GCPSecretManagerCertificateConfig []GoogleContainerClusterNodeConfigContainerdConfigPrivateRegistryAccessConfigCertificateAuthorityDomainConfigGCPSecretManagerCertificateConfig `tf:"gcp_secret_manager_certificate_config,blocks"`
+	Fqdns                             []*Value[string]                                                                                                                               `tf:"fqdns" json:"fqdns,omitempty"`
+	GCPSecretManagerCertificateConfig []GoogleContainerClusterNodeConfigContainerdConfigPrivateRegistryAccessConfigCertificateAuthorityDomainConfigGCPSecretManagerCertificateConfig `tf:"gcp_secret_manager_certificate_config,blocks" json:"gcp_secret_manager_certificate_config,omitempty"`
 }
 
 // GoogleContainerClusterNodeConfigContainerdConfigPrivateRegistryAccessConfigCertificateAuthorityDomainConfigGCPSecretManagerCertificateConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodeConfigContainerdConfigPrivateRegistryAccessConfigCertificateAuthorityDomainConfigGCPSecretManagerCertificateConfig struct {
-	SecretURI *Value[string] `tf:"secret_uri"`
+	SecretURI *Value[string] `tf:"secret_uri" json:"secret_uri,omitempty"`
 }
 
 // GoogleContainerClusterNodeConfigEffectiveTaints is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodeConfigEffectiveTaints struct {
-	Effect *Value[string] `tf:"effect"`
-	Key    *Value[string] `tf:"key"`
-	Value  *Value[string] `tf:"value"`
+	Effect *Value[string] `tf:"effect" json:"effect,omitempty"`
+	Key    *Value[string] `tf:"key" json:"key,omitempty"`
+	Value  *Value[string] `tf:"value" json:"value,omitempty"`
 }
 
 // GoogleContainerClusterNodeConfigEphemeralStorageLocalSsdConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodeConfigEphemeralStorageLocalSsdConfig struct {
-	LocalSsdCount *Value[int64] `tf:"local_ssd_count"`
+	LocalSsdCount *Value[int64] `tf:"local_ssd_count" json:"local_ssd_count,omitempty"`
 }
 
 // GoogleContainerClusterNodeConfigFastSocket is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodeConfigFastSocket struct {
-	Enabled *Value[bool] `tf:"enabled"`
+	Enabled *Value[bool] `tf:"enabled" json:"enabled,omitempty"`
 }
 
 // GoogleContainerClusterNodeConfigGcfsConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodeConfigGcfsConfig struct {
-	Enabled *Value[bool] `tf:"enabled"`
+	Enabled *Value[bool] `tf:"enabled" json:"enabled,omitempty"`
 }
 
 // GoogleContainerClusterNodeConfigGuestAccelerator is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodeConfigGuestAccelerator struct {
-	Count                       *Value[float64]                                                               `tf:"count"`
-	GpuPartitionSize            *Value[string]                                                                `tf:"gpu_partition_size"`
-	Type_                       *Value[string]                                                                `tf:"type"`
-	GpuDriverInstallationConfig []GoogleContainerClusterNodeConfigGuestAcceleratorGpuDriverInstallationConfig `tf:"gpu_driver_installation_config,blocks"`
-	GpuSharingConfig            []GoogleContainerClusterNodeConfigGuestAcceleratorGpuSharingConfig            `tf:"gpu_sharing_config,blocks"`
+	Count                       *Value[float64]                                                               `tf:"count" json:"count,omitempty"`
+	GpuPartitionSize            *Value[string]                                                                `tf:"gpu_partition_size" json:"gpu_partition_size,omitempty"`
+	Type_                       *Value[string]                                                                `tf:"type" json:"type,omitempty"`
+	GpuDriverInstallationConfig []GoogleContainerClusterNodeConfigGuestAcceleratorGpuDriverInstallationConfig `tf:"gpu_driver_installation_config,blocks" json:"gpu_driver_installation_config,omitempty"`
+	GpuSharingConfig            []GoogleContainerClusterNodeConfigGuestAcceleratorGpuSharingConfig            `tf:"gpu_sharing_config,blocks" json:"gpu_sharing_config,omitempty"`
 }
 
 // GoogleContainerClusterNodeConfigGuestAcceleratorGpuDriverInstallationConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodeConfigGuestAcceleratorGpuDriverInstallationConfig struct {
-	GpuDriverVersion *Value[string] `tf:"gpu_driver_version"`
+	GpuDriverVersion *Value[string] `tf:"gpu_driver_version" json:"gpu_driver_version,omitempty"`
 }
 
 // GoogleContainerClusterNodeConfigGuestAcceleratorGpuSharingConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodeConfigGuestAcceleratorGpuSharingConfig struct {
-	GpuSharingStrategy     *Value[string] `tf:"gpu_sharing_strategy"`
-	MaxSharedClientsPerGpu *Value[int64]  `tf:"max_shared_clients_per_gpu"`
+	GpuSharingStrategy     *Value[string] `tf:"gpu_sharing_strategy" json:"gpu_sharing_strategy,omitempty"`
+	MaxSharedClientsPerGpu *Value[int64]  `tf:"max_shared_clients_per_gpu" json:"max_shared_clients_per_gpu,omitempty"`
 }
 
 // GoogleContainerClusterNodeConfigGvnic is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodeConfigGvnic struct {
-	Enabled *Value[bool] `tf:"enabled"`
+	Enabled *Value[bool] `tf:"enabled" json:"enabled,omitempty"`
 }
 
 // GoogleContainerClusterNodeConfigHostMaintenancePolicy is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodeConfigHostMaintenancePolicy struct {
-	MaintenanceInterval *Value[string] `tf:"maintenance_interval"`
+	MaintenanceInterval *Value[string] `tf:"maintenance_interval" json:"maintenance_interval,omitempty"`
 }
 
 // GoogleContainerClusterNodeConfigKubeletConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodeConfigKubeletConfig struct {
-	CPUCfsQuota                        *Value[bool]    `tf:"cpu_cfs_quota"`
-	CPUCfsQuotaPeriod                  *Value[string]  `tf:"cpu_cfs_quota_period"`
-	CPUManagerPolicy                   *Value[string]  `tf:"cpu_manager_policy"`
-	InsecureKubeletReadonlyPortEnabled *Value[string]  `tf:"insecure_kubelet_readonly_port_enabled"`
-	PodPidsLimit                       *Value[float64] `tf:"pod_pids_limit"`
+	CPUCfsQuota                        *Value[bool]    `tf:"cpu_cfs_quota" json:"cpu_cfs_quota,omitempty"`
+	CPUCfsQuotaPeriod                  *Value[string]  `tf:"cpu_cfs_quota_period" json:"cpu_cfs_quota_period,omitempty"`
+	CPUManagerPolicy                   *Value[string]  `tf:"cpu_manager_policy" json:"cpu_manager_policy,omitempty"`
+	InsecureKubeletReadonlyPortEnabled *Value[string]  `tf:"insecure_kubelet_readonly_port_enabled" json:"insecure_kubelet_readonly_port_enabled,omitempty"`
+	PodPidsLimit                       *Value[float64] `tf:"pod_pids_limit" json:"pod_pids_limit,omitempty"`
 }
 
 // GoogleContainerClusterNodeConfigLinuxNodeConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodeConfigLinuxNodeConfig struct {
-	CgroupMode      *Value[string]                                                   `tf:"cgroup_mode"`
-	Sysctls         map[string]*Value[string]                                        `tf:"sysctls"`
-	HugepagesConfig []GoogleContainerClusterNodeConfigLinuxNodeConfigHugepagesConfig `tf:"hugepages_config,blocks"`
+	CgroupMode      *Value[string]                                                   `tf:"cgroup_mode" json:"cgroup_mode,omitempty"`
+	Sysctls         map[string]*Value[string]                                        `tf:"sysctls" json:"sysctls,omitempty"`
+	HugepagesConfig []GoogleContainerClusterNodeConfigLinuxNodeConfigHugepagesConfig `tf:"hugepages_config,blocks" json:"hugepages_config,omitempty"`
 }
 
 // GoogleContainerClusterNodeConfigLinuxNodeConfigHugepagesConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodeConfigLinuxNodeConfigHugepagesConfig struct {
-	HugepageSize1g *Value[float64] `tf:"hugepage_size_1g"`
-	HugepageSize2m *Value[float64] `tf:"hugepage_size_2m"`
+	HugepageSize1g *Value[float64] `tf:"hugepage_size_1g" json:"hugepage_size_1g,omitempty"`
+	HugepageSize2m *Value[float64] `tf:"hugepage_size_2m" json:"hugepage_size_2m,omitempty"`
 }
 
 // GoogleContainerClusterNodeConfigLocalNvmeSsdBlockConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodeConfigLocalNvmeSsdBlockConfig struct {
-	LocalSsdCount *Value[int64] `tf:"local_ssd_count"`
+	LocalSsdCount *Value[int64] `tf:"local_ssd_count" json:"local_ssd_count,omitempty"`
 }
 
 // GoogleContainerClusterNodeConfigReservationAffinity is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodeConfigReservationAffinity struct {
-	ConsumeReservationType *Value[string]   `tf:"consume_reservation_type"`
-	Key                    *Value[string]   `tf:"key"`
-	Values                 []*Value[string] `tf:"values"`
+	ConsumeReservationType *Value[string]   `tf:"consume_reservation_type" json:"consume_reservation_type,omitempty"`
+	Key                    *Value[string]   `tf:"key" json:"key,omitempty"`
+	Values                 []*Value[string] `tf:"values" json:"values,omitempty"`
 }
 
 // GoogleContainerClusterNodeConfigSecondaryBootDisks is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodeConfigSecondaryBootDisks struct {
-	DiskImage *Value[string] `tf:"disk_image"`
-	Mode      *Value[string] `tf:"mode"`
+	DiskImage *Value[string] `tf:"disk_image" json:"disk_image,omitempty"`
+	Mode      *Value[string] `tf:"mode" json:"mode,omitempty"`
 }
 
 // GoogleContainerClusterNodeConfigShieldedInstanceConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodeConfigShieldedInstanceConfig struct {
-	EnableIntegrityMonitoring *Value[bool] `tf:"enable_integrity_monitoring"`
-	EnableSecureBoot          *Value[bool] `tf:"enable_secure_boot"`
+	EnableIntegrityMonitoring *Value[bool] `tf:"enable_integrity_monitoring" json:"enable_integrity_monitoring,omitempty"`
+	EnableSecureBoot          *Value[bool] `tf:"enable_secure_boot" json:"enable_secure_boot,omitempty"`
 }
 
 // GoogleContainerClusterNodeConfigSoleTenantConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodeConfigSoleTenantConfig struct {
-	NodeAffinity []GoogleContainerClusterNodeConfigSoleTenantConfigNodeAffinity `tf:"node_affinity,blocks"`
+	NodeAffinity []GoogleContainerClusterNodeConfigSoleTenantConfigNodeAffinity `tf:"node_affinity,blocks" json:"node_affinity,omitempty"`
 }
 
 // GoogleContainerClusterNodeConfigSoleTenantConfigNodeAffinity is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodeConfigSoleTenantConfigNodeAffinity struct {
-	Key      *Value[string]   `tf:"key"`
-	Operator *Value[string]   `tf:"operator"`
-	Values   []*Value[string] `tf:"values"`
+	Key      *Value[string]   `tf:"key" json:"key,omitempty"`
+	Operator *Value[string]   `tf:"operator" json:"operator,omitempty"`
+	Values   []*Value[string] `tf:"values" json:"values,omitempty"`
 }
 
 // GoogleContainerClusterNodeConfigTaint is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodeConfigTaint struct {
-	Effect *Value[string] `tf:"effect"`
-	Key    *Value[string] `tf:"key"`
-	Value  *Value[string] `tf:"value"`
+	Effect *Value[string] `tf:"effect" json:"effect,omitempty"`
+	Key    *Value[string] `tf:"key" json:"key,omitempty"`
+	Value  *Value[string] `tf:"value" json:"value,omitempty"`
 }
 
 // GoogleContainerClusterNodeConfigWorkloadMetadataConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodeConfigWorkloadMetadataConfig struct {
-	Mode *Value[string] `tf:"mode"`
+	Mode *Value[string] `tf:"mode" json:"mode,omitempty"`
 }
 
 // GoogleContainerClusterNodePool is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodePool struct {
-	InitialNodeCount         *Value[int64]                                      `tf:"initial_node_count"`
-	InstanceGroupUrls        []*Value[string]                                   `tf:"instance_group_urls"`
-	ManagedInstanceGroupUrls []*Value[string]                                   `tf:"managed_instance_group_urls"`
-	MaxPodsPerNode           *Value[int64]                                      `tf:"max_pods_per_node"`
-	Name                     *Value[string]                                     `tf:"name"`
-	NamePrefix               *Value[string]                                     `tf:"name_prefix"`
-	NodeCount                *Value[int64]                                      `tf:"node_count"`
-	NodeLocations            []*Value[string]                                   `tf:"node_locations"`
-	Version                  *Value[string]                                     `tf:"version"`
-	Autoscaling              []GoogleContainerClusterNodePoolAutoscaling        `tf:"autoscaling,blocks"`
-	Management               []GoogleContainerClusterNodePoolManagement         `tf:"management,blocks"`
-	NetworkConfig            []GoogleContainerClusterNodePoolNetworkConfig      `tf:"network_config,blocks"`
-	NodeConfig               []GoogleContainerClusterNodePoolNodeConfig         `tf:"node_config,blocks"`
-	PlacementPolicy          []GoogleContainerClusterNodePoolPlacementPolicy    `tf:"placement_policy,blocks"`
-	QueuedProvisioning       []GoogleContainerClusterNodePoolQueuedProvisioning `tf:"queued_provisioning,blocks"`
-	UpgradeSettings          []GoogleContainerClusterNodePoolUpgradeSettings    `tf:"upgrade_settings,blocks"`
+	InitialNodeCount         *Value[int64]                                      `tf:"initial_node_count" json:"initial_node_count,omitempty"`
+	InstanceGroupUrls        []*Value[string]                                   `tf:"instance_group_urls" json:"instance_group_urls,omitempty"`
+	ManagedInstanceGroupUrls []*Value[string]                                   `tf:"managed_instance_group_urls" json:"managed_instance_group_urls,omitempty"`
+	MaxPodsPerNode           *Value[int64]                                      `tf:"max_pods_per_node" json:"max_pods_per_node,omitempty"`
+	Name                     *Value[string]                                     `tf:"name" json:"name,omitempty"`
+	NamePrefix               *Value[string]                                     `tf:"name_prefix" json:"name_prefix,omitempty"`
+	NodeCount                *Value[int64]                                      `tf:"node_count" json:"node_count,omitempty"`
+	NodeLocations            []*Value[string]                                   `tf:"node_locations" json:"node_locations,omitempty"`
+	Version                  *Value[string]                                     `tf:"version" json:"version,omitempty"`
+	Autoscaling              []GoogleContainerClusterNodePoolAutoscaling        `tf:"autoscaling,blocks" json:"autoscaling,omitempty"`
+	Management               []GoogleContainerClusterNodePoolManagement         `tf:"management,blocks" json:"management,omitempty"`
+	NetworkConfig            []GoogleContainerClusterNodePoolNetworkConfig      `tf:"network_config,blocks" json:"network_config,omitempty"`
+	NodeConfig               []GoogleContainerClusterNodePoolNodeConfig         `tf:"node_config,blocks" json:"node_config,omitempty"`
+	PlacementPolicy          []GoogleContainerClusterNodePoolPlacementPolicy    `tf:"placement_policy,blocks" json:"placement_policy,omitempty"`
+	QueuedProvisioning       []GoogleContainerClusterNodePoolQueuedProvisioning `tf:"queued_provisioning,blocks" json:"queued_provisioning,omitempty"`
+	UpgradeSettings          []GoogleContainerClusterNodePoolUpgradeSettings    `tf:"upgrade_settings,blocks" json:"upgrade_settings,omitempty"`
 }
 
 // GoogleContainerClusterNodePoolAutoConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodePoolAutoConfig struct {
-	ResourceManagerTags map[string]*Value[string]                                   `tf:"resource_manager_tags"`
-	NetworkTags         []GoogleContainerClusterNodePoolAutoConfigNetworkTags       `tf:"network_tags,blocks"`
-	NodeKubeletConfig   []GoogleContainerClusterNodePoolAutoConfigNodeKubeletConfig `tf:"node_kubelet_config,blocks"`
+	ResourceManagerTags map[string]*Value[string]                                   `tf:"resource_manager_tags" json:"resource_manager_tags,omitempty"`
+	NetworkTags         []GoogleContainerClusterNodePoolAutoConfigNetworkTags       `tf:"network_tags,blocks" json:"network_tags,omitempty"`
+	NodeKubeletConfig   []GoogleContainerClusterNodePoolAutoConfigNodeKubeletConfig `tf:"node_kubelet_config,blocks" json:"node_kubelet_config,omitempty"`
 }
 
 // GoogleContainerClusterNodePoolAutoConfigNetworkTags is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodePoolAutoConfigNetworkTags struct {
-	Tags []*Value[string] `tf:"tags"`
+	Tags []*Value[string] `tf:"tags" json:"tags,omitempty"`
 }
 
 // GoogleContainerClusterNodePoolAutoConfigNodeKubeletConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodePoolAutoConfigNodeKubeletConfig struct {
-	InsecureKubeletReadonlyPortEnabled *Value[string] `tf:"insecure_kubelet_readonly_port_enabled"`
+	InsecureKubeletReadonlyPortEnabled *Value[string] `tf:"insecure_kubelet_readonly_port_enabled" json:"insecure_kubelet_readonly_port_enabled,omitempty"`
 }
 
 // GoogleContainerClusterNodePoolAutoscaling is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodePoolAutoscaling struct {
-	LocationPolicy    *Value[string] `tf:"location_policy"`
-	MaxNodeCount      *Value[int64]  `tf:"max_node_count"`
-	MinNodeCount      *Value[int64]  `tf:"min_node_count"`
-	TotalMaxNodeCount *Value[int64]  `tf:"total_max_node_count"`
-	TotalMinNodeCount *Value[int64]  `tf:"total_min_node_count"`
+	LocationPolicy    *Value[string] `tf:"location_policy" json:"location_policy,omitempty"`
+	MaxNodeCount      *Value[int64]  `tf:"max_node_count" json:"max_node_count,omitempty"`
+	MinNodeCount      *Value[int64]  `tf:"min_node_count" json:"min_node_count,omitempty"`
+	TotalMaxNodeCount *Value[int64]  `tf:"total_max_node_count" json:"total_max_node_count,omitempty"`
+	TotalMinNodeCount *Value[int64]  `tf:"total_min_node_count" json:"total_min_node_count,omitempty"`
 }
 
 // GoogleContainerClusterNodePoolDefaults is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodePoolDefaults struct {
-	NodeConfigDefaults []GoogleContainerClusterNodePoolDefaultsNodeConfigDefaults `tf:"node_config_defaults,blocks"`
+	NodeConfigDefaults []GoogleContainerClusterNodePoolDefaultsNodeConfigDefaults `tf:"node_config_defaults,blocks" json:"node_config_defaults,omitempty"`
 }
 
 // GoogleContainerClusterNodePoolDefaultsNodeConfigDefaults is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodePoolDefaultsNodeConfigDefaults struct {
-	InsecureKubeletReadonlyPortEnabled *Value[string]                                                             `tf:"insecure_kubelet_readonly_port_enabled"`
-	LoggingVariant                     *Value[string]                                                             `tf:"logging_variant"`
-	ContainerdConfig                   []GoogleContainerClusterNodePoolDefaultsNodeConfigDefaultsContainerdConfig `tf:"containerd_config,blocks"`
-	GcfsConfig                         []GoogleContainerClusterNodePoolDefaultsNodeConfigDefaultsGcfsConfig       `tf:"gcfs_config,blocks"`
+	InsecureKubeletReadonlyPortEnabled *Value[string]                                                             `tf:"insecure_kubelet_readonly_port_enabled" json:"insecure_kubelet_readonly_port_enabled,omitempty"`
+	LoggingVariant                     *Value[string]                                                             `tf:"logging_variant" json:"logging_variant,omitempty"`
+	ContainerdConfig                   []GoogleContainerClusterNodePoolDefaultsNodeConfigDefaultsContainerdConfig `tf:"containerd_config,blocks" json:"containerd_config,omitempty"`
+	GcfsConfig                         []GoogleContainerClusterNodePoolDefaultsNodeConfigDefaultsGcfsConfig       `tf:"gcfs_config,blocks" json:"gcfs_config,omitempty"`
 }
 
 // GoogleContainerClusterNodePoolDefaultsNodeConfigDefaultsContainerdConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodePoolDefaultsNodeConfigDefaultsContainerdConfig struct {
-	PrivateRegistryAccessConfig []GoogleContainerClusterNodePoolDefaultsNodeConfigDefaultsContainerdConfigPrivateRegistryAccessConfig `tf:"private_registry_access_config,blocks"`
+	PrivateRegistryAccessConfig []GoogleContainerClusterNodePoolDefaultsNodeConfigDefaultsContainerdConfigPrivateRegistryAccessConfig `tf:"private_registry_access_config,blocks" json:"private_registry_access_config,omitempty"`
 }
 
 // GoogleContainerClusterNodePoolDefaultsNodeConfigDefaultsContainerdConfigPrivateRegistryAccessConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodePoolDefaultsNodeConfigDefaultsContainerdConfigPrivateRegistryAccessConfig struct {
-	Enabled                          *Value[bool]                                                                                                                          `tf:"enabled"`
-	CertificateAuthorityDomainConfig []GoogleContainerClusterNodePoolDefaultsNodeConfigDefaultsContainerdConfigPrivateRegistryAccessConfigCertificateAuthorityDomainConfig `tf:"certificate_authority_domain_config,blocks"`
+	Enabled                          *Value[bool]                                                                                                                          `tf:"enabled" json:"enabled,omitempty"`
+	CertificateAuthorityDomainConfig []GoogleContainerClusterNodePoolDefaultsNodeConfigDefaultsContainerdConfigPrivateRegistryAccessConfigCertificateAuthorityDomainConfig `tf:"certificate_authority_domain_config,blocks" json:"certificate_authority_domain_config,omitempty"`
 }
 
 // GoogleContainerClusterNodePoolDefaultsNodeConfigDefaultsContainerdConfigPrivateRegistryAccessConfigCertificateAuthorityDomainConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodePoolDefaultsNodeConfigDefaultsContainerdConfigPrivateRegistryAccessConfigCertificateAuthorityDomainConfig struct {
-	Fqdns                             []*Value[string]                                                                                                                                                       `tf:"fqdns"`
-	GCPSecretManagerCertificateConfig []GoogleContainerClusterNodePoolDefaultsNodeConfigDefaultsContainerdConfigPrivateRegistryAccessConfigCertificateAuthorityDomainConfigGCPSecretManagerCertificateConfig `tf:"gcp_secret_manager_certificate_config,blocks"`
+	Fqdns                             []*Value[string]                                                                                                                                                       `tf:"fqdns" json:"fqdns,omitempty"`
+	GCPSecretManagerCertificateConfig []GoogleContainerClusterNodePoolDefaultsNodeConfigDefaultsContainerdConfigPrivateRegistryAccessConfigCertificateAuthorityDomainConfigGCPSecretManagerCertificateConfig `tf:"gcp_secret_manager_certificate_config,blocks" json:"gcp_secret_manager_certificate_config,omitempty"`
 }
 
 // GoogleContainerClusterNodePoolDefaultsNodeConfigDefaultsContainerdConfigPrivateRegistryAccessConfigCertificateAuthorityDomainConfigGCPSecretManagerCertificateConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodePoolDefaultsNodeConfigDefaultsContainerdConfigPrivateRegistryAccessConfigCertificateAuthorityDomainConfigGCPSecretManagerCertificateConfig struct {
-	SecretURI *Value[string] `tf:"secret_uri"`
+	SecretURI *Value[string] `tf:"secret_uri" json:"secret_uri,omitempty"`
 }
 
 // GoogleContainerClusterNodePoolDefaultsNodeConfigDefaultsGcfsConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodePoolDefaultsNodeConfigDefaultsGcfsConfig struct {
-	Enabled *Value[bool] `tf:"enabled"`
+	Enabled *Value[bool] `tf:"enabled" json:"enabled,omitempty"`
 }
 
 // GoogleContainerClusterNodePoolManagement is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodePoolManagement struct {
-	AutoRepair  *Value[bool] `tf:"auto_repair"`
-	AutoUpgrade *Value[bool] `tf:"auto_upgrade"`
+	AutoRepair  *Value[bool] `tf:"auto_repair" json:"auto_repair,omitempty"`
+	AutoUpgrade *Value[bool] `tf:"auto_upgrade" json:"auto_upgrade,omitempty"`
 }
 
 // GoogleContainerClusterNodePoolNetworkConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodePoolNetworkConfig struct {
-	CreatePodRange               *Value[bool]                                                              `tf:"create_pod_range"`
-	EnablePrivateNodes           *Value[bool]                                                              `tf:"enable_private_nodes"`
-	PodIPV4CIDRBlock             *Value[string]                                                            `tf:"pod_ipv4_cidr_block"`
-	PodRange                     *Value[string]                                                            `tf:"pod_range"`
-	AdditionalNodeNetworkConfigs []GoogleContainerClusterNodePoolNetworkConfigAdditionalNodeNetworkConfigs `tf:"additional_node_network_configs,blocks"`
-	AdditionalPodNetworkConfigs  []GoogleContainerClusterNodePoolNetworkConfigAdditionalPodNetworkConfigs  `tf:"additional_pod_network_configs,blocks"`
-	NetworkPerformanceConfig     []GoogleContainerClusterNodePoolNetworkConfigNetworkPerformanceConfig     `tf:"network_performance_config,blocks"`
-	PodCIDROverprovisionConfig   []GoogleContainerClusterNodePoolNetworkConfigPodCIDROverprovisionConfig   `tf:"pod_cidr_overprovision_config,blocks"`
+	CreatePodRange               *Value[bool]                                                              `tf:"create_pod_range" json:"create_pod_range,omitempty"`
+	EnablePrivateNodes           *Value[bool]                                                              `tf:"enable_private_nodes" json:"enable_private_nodes,omitempty"`
+	PodIPV4CIDRBlock             *Value[string]                                                            `tf:"pod_ipv4_cidr_block" json:"pod_ipv4_cidr_block,omitempty"`
+	PodRange                     *Value[string]                                                            `tf:"pod_range" json:"pod_range,omitempty"`
+	AdditionalNodeNetworkConfigs []GoogleContainerClusterNodePoolNetworkConfigAdditionalNodeNetworkConfigs `tf:"additional_node_network_configs,blocks" json:"additional_node_network_configs,omitempty"`
+	AdditionalPodNetworkConfigs  []GoogleContainerClusterNodePoolNetworkConfigAdditionalPodNetworkConfigs  `tf:"additional_pod_network_configs,blocks" json:"additional_pod_network_configs,omitempty"`
+	NetworkPerformanceConfig     []GoogleContainerClusterNodePoolNetworkConfigNetworkPerformanceConfig     `tf:"network_performance_config,blocks" json:"network_performance_config,omitempty"`
+	PodCIDROverprovisionConfig   []GoogleContainerClusterNodePoolNetworkConfigPodCIDROverprovisionConfig   `tf:"pod_cidr_overprovision_config,blocks" json:"pod_cidr_overprovision_config,omitempty"`
 }
 
 // GoogleContainerClusterNodePoolNetworkConfigAdditionalNodeNetworkConfigs is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodePoolNetworkConfigAdditionalNodeNetworkConfigs struct {
-	Network    *Value[string] `tf:"network"`
-	Subnetwork *Value[string] `tf:"subnetwork"`
+	Network    *Value[string] `tf:"network" json:"network,omitempty"`
+	Subnetwork *Value[string] `tf:"subnetwork" json:"subnetwork,omitempty"`
 }
 
 // GoogleContainerClusterNodePoolNetworkConfigAdditionalPodNetworkConfigs is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodePoolNetworkConfigAdditionalPodNetworkConfigs struct {
-	MaxPodsPerNode    *Value[int64]  `tf:"max_pods_per_node"`
-	SecondaryPodRange *Value[string] `tf:"secondary_pod_range"`
-	Subnetwork        *Value[string] `tf:"subnetwork"`
+	MaxPodsPerNode    *Value[int64]  `tf:"max_pods_per_node" json:"max_pods_per_node,omitempty"`
+	SecondaryPodRange *Value[string] `tf:"secondary_pod_range" json:"secondary_pod_range,omitempty"`
+	Subnetwork        *Value[string] `tf:"subnetwork" json:"subnetwork,omitempty"`
 }
 
 // GoogleContainerClusterNodePoolNetworkConfigNetworkPerformanceConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodePoolNetworkConfigNetworkPerformanceConfig struct {
-	TotalEgressBandwidthTier *Value[string] `tf:"total_egress_bandwidth_tier"`
+	TotalEgressBandwidthTier *Value[string] `tf:"total_egress_bandwidth_tier" json:"total_egress_bandwidth_tier,omitempty"`
 }
 
 // GoogleContainerClusterNodePoolNetworkConfigPodCIDROverprovisionConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodePoolNetworkConfigPodCIDROverprovisionConfig struct {
-	Disabled *Value[bool] `tf:"disabled"`
+	Disabled *Value[bool] `tf:"disabled" json:"disabled,omitempty"`
 }
 
 // GoogleContainerClusterNodePoolNodeConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodePoolNodeConfig struct {
-	BootDiskKMSKey                 *Value[string]                                                           `tf:"boot_disk_kms_key"`
-	DiskSizeGb                     *Value[float64]                                                          `tf:"disk_size_gb"`
-	DiskType                       *Value[string]                                                           `tf:"disk_type"`
-	EffectiveTaints                []GoogleContainerClusterNodePoolNodeConfigEffectiveTaints                `tf:"effective_taints"`
-	EnableConfidentialStorage      *Value[bool]                                                             `tf:"enable_confidential_storage"`
-	ImageType                      *Value[string]                                                           `tf:"image_type"`
-	Labels                         map[string]*Value[string]                                                `tf:"labels"`
-	LocalSsdCount                  *Value[int64]                                                            `tf:"local_ssd_count"`
-	LoggingVariant                 *Value[string]                                                           `tf:"logging_variant"`
-	MachineType                    *Value[string]                                                           `tf:"machine_type"`
-	Metadata                       map[string]*Value[string]                                                `tf:"metadata"`
-	MinCPUPlatform                 *Value[string]                                                           `tf:"min_cpu_platform"`
-	NodeGroup                      *Value[string]                                                           `tf:"node_group"`
-	OauthScopes                    []*Value[string]                                                         `tf:"oauth_scopes"`
-	Preemptible                    *Value[bool]                                                             `tf:"preemptible"`
-	ResourceLabels                 map[string]*Value[string]                                                `tf:"resource_labels"`
-	ResourceManagerTags            map[string]*Value[string]                                                `tf:"resource_manager_tags"`
-	ServiceAccount                 *Value[string]                                                           `tf:"service_account"`
-	Spot                           *Value[bool]                                                             `tf:"spot"`
-	StoragePools                   []*Value[string]                                                         `tf:"storage_pools"`
-	Tags                           []*Value[string]                                                         `tf:"tags"`
-	AdvancedMachineFeatures        []GoogleContainerClusterNodePoolNodeConfigAdvancedMachineFeatures        `tf:"advanced_machine_features,blocks"`
-	ConfidentialNodes              []GoogleContainerClusterNodePoolNodeConfigConfidentialNodes              `tf:"confidential_nodes,blocks"`
-	ContainerdConfig               []GoogleContainerClusterNodePoolNodeConfigContainerdConfig               `tf:"containerd_config,blocks"`
-	EphemeralStorageLocalSsdConfig []GoogleContainerClusterNodePoolNodeConfigEphemeralStorageLocalSsdConfig `tf:"ephemeral_storage_local_ssd_config,blocks"`
-	FastSocket                     []GoogleContainerClusterNodePoolNodeConfigFastSocket                     `tf:"fast_socket,blocks"`
-	GcfsConfig                     []GoogleContainerClusterNodePoolNodeConfigGcfsConfig                     `tf:"gcfs_config,blocks"`
-	GuestAccelerator               []GoogleContainerClusterNodePoolNodeConfigGuestAccelerator               `tf:"guest_accelerator,blocks"`
-	Gvnic                          []GoogleContainerClusterNodePoolNodeConfigGvnic                          `tf:"gvnic,blocks"`
-	HostMaintenancePolicy          []GoogleContainerClusterNodePoolNodeConfigHostMaintenancePolicy          `tf:"host_maintenance_policy,blocks"`
-	KubeletConfig                  []GoogleContainerClusterNodePoolNodeConfigKubeletConfig                  `tf:"kubelet_config,blocks"`
-	LinuxNodeConfig                []GoogleContainerClusterNodePoolNodeConfigLinuxNodeConfig                `tf:"linux_node_config,blocks"`
-	LocalNvmeSsdBlockConfig        []GoogleContainerClusterNodePoolNodeConfigLocalNvmeSsdBlockConfig        `tf:"local_nvme_ssd_block_config,blocks"`
-	ReservationAffinity            []GoogleContainerClusterNodePoolNodeConfigReservationAffinity            `tf:"reservation_affinity,blocks"`
-	SecondaryBootDisks             []GoogleContainerClusterNodePoolNodeConfigSecondaryBootDisks             `tf:"secondary_boot_disks,blocks"`
-	ShieldedInstanceConfig         []GoogleContainerClusterNodePoolNodeConfigShieldedInstanceConfig         `tf:"shielded_instance_config,blocks"`
-	SoleTenantConfig               []GoogleContainerClusterNodePoolNodeConfigSoleTenantConfig               `tf:"sole_tenant_config,blocks"`
-	Taint                          []GoogleContainerClusterNodePoolNodeConfigTaint                          `tf:"taint,blocks"`
-	WorkloadMetadataConfig         []GoogleContainerClusterNodePoolNodeConfigWorkloadMetadataConfig         `tf:"workload_metadata_config,blocks"`
+	BootDiskKMSKey                 *Value[string]                                                           `tf:"boot_disk_kms_key" json:"boot_disk_kms_key,omitempty"`
+	DiskSizeGb                     *Value[float64]                                                          `tf:"disk_size_gb" json:"disk_size_gb,omitempty"`
+	DiskType                       *Value[string]                                                           `tf:"disk_type" json:"disk_type,omitempty"`
+	EffectiveTaints                []GoogleContainerClusterNodePoolNodeConfigEffectiveTaints                `tf:"effective_taints" json:"effective_taints,omitempty"`
+	EnableConfidentialStorage      *Value[bool]                                                             `tf:"enable_confidential_storage" json:"enable_confidential_storage,omitempty"`
+	ImageType                      *Value[string]                                                           `tf:"image_type" json:"image_type,omitempty"`
+	Labels                         map[string]*Value[string]                                                `tf:"labels" json:"labels,omitempty"`
+	LocalSsdCount                  *Value[int64]                                                            `tf:"local_ssd_count" json:"local_ssd_count,omitempty"`
+	LoggingVariant                 *Value[string]                                                           `tf:"logging_variant" json:"logging_variant,omitempty"`
+	MachineType                    *Value[string]                                                           `tf:"machine_type" json:"machine_type,omitempty"`
+	Metadata                       map[string]*Value[string]                                                `tf:"metadata" json:"metadata,omitempty"`
+	MinCPUPlatform                 *Value[string]                                                           `tf:"min_cpu_platform" json:"min_cpu_platform,omitempty"`
+	NodeGroup                      *Value[string]                                                           `tf:"node_group" json:"node_group,omitempty"`
+	OauthScopes                    []*Value[string]                                                         `tf:"oauth_scopes" json:"oauth_scopes,omitempty"`
+	Preemptible                    *Value[bool]                                                             `tf:"preemptible" json:"preemptible,omitempty"`
+	ResourceLabels                 map[string]*Value[string]                                                `tf:"resource_labels" json:"resource_labels,omitempty"`
+	ResourceManagerTags            map[string]*Value[string]                                                `tf:"resource_manager_tags" json:"resource_manager_tags,omitempty"`
+	ServiceAccount                 *Value[string]                                                           `tf:"service_account" json:"service_account,omitempty"`
+	Spot                           *Value[bool]                                                             `tf:"spot" json:"spot,omitempty"`
+	StoragePools                   []*Value[string]                                                         `tf:"storage_pools" json:"storage_pools,omitempty"`
+	Tags                           []*Value[string]                                                         `tf:"tags" json:"tags,omitempty"`
+	AdvancedMachineFeatures        []GoogleContainerClusterNodePoolNodeConfigAdvancedMachineFeatures        `tf:"advanced_machine_features,blocks" json:"advanced_machine_features,omitempty"`
+	ConfidentialNodes              []GoogleContainerClusterNodePoolNodeConfigConfidentialNodes              `tf:"confidential_nodes,blocks" json:"confidential_nodes,omitempty"`
+	ContainerdConfig               []GoogleContainerClusterNodePoolNodeConfigContainerdConfig               `tf:"containerd_config,blocks" json:"containerd_config,omitempty"`
+	EphemeralStorageLocalSsdConfig []GoogleContainerClusterNodePoolNodeConfigEphemeralStorageLocalSsdConfig `tf:"ephemeral_storage_local_ssd_config,blocks" json:"ephemeral_storage_local_ssd_config,omitempty"`
+	FastSocket                     []GoogleContainerClusterNodePoolNodeConfigFastSocket                     `tf:"fast_socket,blocks" json:"fast_socket,omitempty"`
+	GcfsConfig                     []GoogleContainerClusterNodePoolNodeConfigGcfsConfig                     `tf:"gcfs_config,blocks" json:"gcfs_config,omitempty"`
+	GuestAccelerator               []GoogleContainerClusterNodePoolNodeConfigGuestAccelerator               `tf:"guest_accelerator,blocks" json:"guest_accelerator,omitempty"`
+	Gvnic                          []GoogleContainerClusterNodePoolNodeConfigGvnic                          `tf:"gvnic,blocks" json:"gvnic,omitempty"`
+	HostMaintenancePolicy          []GoogleContainerClusterNodePoolNodeConfigHostMaintenancePolicy          `tf:"host_maintenance_policy,blocks" json:"host_maintenance_policy,omitempty"`
+	KubeletConfig                  []GoogleContainerClusterNodePoolNodeConfigKubeletConfig                  `tf:"kubelet_config,blocks" json:"kubelet_config,omitempty"`
+	LinuxNodeConfig                []GoogleContainerClusterNodePoolNodeConfigLinuxNodeConfig                `tf:"linux_node_config,blocks" json:"linux_node_config,omitempty"`
+	LocalNvmeSsdBlockConfig        []GoogleContainerClusterNodePoolNodeConfigLocalNvmeSsdBlockConfig        `tf:"local_nvme_ssd_block_config,blocks" json:"local_nvme_ssd_block_config,omitempty"`
+	ReservationAffinity            []GoogleContainerClusterNodePoolNodeConfigReservationAffinity            `tf:"reservation_affinity,blocks" json:"reservation_affinity,omitempty"`
+	SecondaryBootDisks             []GoogleContainerClusterNodePoolNodeConfigSecondaryBootDisks             `tf:"secondary_boot_disks,blocks" json:"secondary_boot_disks,omitempty"`
+	ShieldedInstanceConfig         []GoogleContainerClusterNodePoolNodeConfigShieldedInstanceConfig         `tf:"shielded_instance_config,blocks" json:"shielded_instance_config,omitempty"`
+	SoleTenantConfig               []GoogleContainerClusterNodePoolNodeConfigSoleTenantConfig               `tf:"sole_tenant_config,blocks" json:"sole_tenant_config,omitempty"`
+	Taint                          []GoogleContainerClusterNodePoolNodeConfigTaint                          `tf:"taint,blocks" json:"taint,omitempty"`
+	WorkloadMetadataConfig         []GoogleContainerClusterNodePoolNodeConfigWorkloadMetadataConfig         `tf:"workload_metadata_config,blocks" json:"workload_metadata_config,omitempty"`
 }
 
 // GoogleContainerClusterNodePoolNodeConfigAdvancedMachineFeatures is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodePoolNodeConfigAdvancedMachineFeatures struct {
-	EnableNestedVirtualization *Value[bool]    `tf:"enable_nested_virtualization"`
-	ThreadsPerCore             *Value[float64] `tf:"threads_per_core"`
+	EnableNestedVirtualization *Value[bool]    `tf:"enable_nested_virtualization" json:"enable_nested_virtualization,omitempty"`
+	ThreadsPerCore             *Value[float64] `tf:"threads_per_core" json:"threads_per_core,omitempty"`
 }
 
 // GoogleContainerClusterNodePoolNodeConfigConfidentialNodes is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodePoolNodeConfigConfidentialNodes struct {
-	Enabled *Value[bool] `tf:"enabled"`
+	Enabled *Value[bool] `tf:"enabled" json:"enabled,omitempty"`
 }
 
 // GoogleContainerClusterNodePoolNodeConfigContainerdConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodePoolNodeConfigContainerdConfig struct {
-	PrivateRegistryAccessConfig []GoogleContainerClusterNodePoolNodeConfigContainerdConfigPrivateRegistryAccessConfig `tf:"private_registry_access_config,blocks"`
+	PrivateRegistryAccessConfig []GoogleContainerClusterNodePoolNodeConfigContainerdConfigPrivateRegistryAccessConfig `tf:"private_registry_access_config,blocks" json:"private_registry_access_config,omitempty"`
 }
 
 // GoogleContainerClusterNodePoolNodeConfigContainerdConfigPrivateRegistryAccessConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodePoolNodeConfigContainerdConfigPrivateRegistryAccessConfig struct {
-	Enabled                          *Value[bool]                                                                                                          `tf:"enabled"`
-	CertificateAuthorityDomainConfig []GoogleContainerClusterNodePoolNodeConfigContainerdConfigPrivateRegistryAccessConfigCertificateAuthorityDomainConfig `tf:"certificate_authority_domain_config,blocks"`
+	Enabled                          *Value[bool]                                                                                                          `tf:"enabled" json:"enabled,omitempty"`
+	CertificateAuthorityDomainConfig []GoogleContainerClusterNodePoolNodeConfigContainerdConfigPrivateRegistryAccessConfigCertificateAuthorityDomainConfig `tf:"certificate_authority_domain_config,blocks" json:"certificate_authority_domain_config,omitempty"`
 }
 
 // GoogleContainerClusterNodePoolNodeConfigContainerdConfigPrivateRegistryAccessConfigCertificateAuthorityDomainConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodePoolNodeConfigContainerdConfigPrivateRegistryAccessConfigCertificateAuthorityDomainConfig struct {
-	Fqdns                             []*Value[string]                                                                                                                                       `tf:"fqdns"`
-	GCPSecretManagerCertificateConfig []GoogleContainerClusterNodePoolNodeConfigContainerdConfigPrivateRegistryAccessConfigCertificateAuthorityDomainConfigGCPSecretManagerCertificateConfig `tf:"gcp_secret_manager_certificate_config,blocks"`
+	Fqdns                             []*Value[string]                                                                                                                                       `tf:"fqdns" json:"fqdns,omitempty"`
+	GCPSecretManagerCertificateConfig []GoogleContainerClusterNodePoolNodeConfigContainerdConfigPrivateRegistryAccessConfigCertificateAuthorityDomainConfigGCPSecretManagerCertificateConfig `tf:"gcp_secret_manager_certificate_config,blocks" json:"gcp_secret_manager_certificate_config,omitempty"`
 }
 
 // GoogleContainerClusterNodePoolNodeConfigContainerdConfigPrivateRegistryAccessConfigCertificateAuthorityDomainConfigGCPSecretManagerCertificateConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodePoolNodeConfigContainerdConfigPrivateRegistryAccessConfigCertificateAuthorityDomainConfigGCPSecretManagerCertificateConfig struct {
-	SecretURI *Value[string] `tf:"secret_uri"`
+	SecretURI *Value[string] `tf:"secret_uri" json:"secret_uri,omitempty"`
 }
 
 // GoogleContainerClusterNodePoolNodeConfigEffectiveTaints is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodePoolNodeConfigEffectiveTaints struct {
-	Effect *Value[string] `tf:"effect"`
-	Key    *Value[string] `tf:"key"`
-	Value  *Value[string] `tf:"value"`
+	Effect *Value[string] `tf:"effect" json:"effect,omitempty"`
+	Key    *Value[string] `tf:"key" json:"key,omitempty"`
+	Value  *Value[string] `tf:"value" json:"value,omitempty"`
 }
 
 // GoogleContainerClusterNodePoolNodeConfigEphemeralStorageLocalSsdConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodePoolNodeConfigEphemeralStorageLocalSsdConfig struct {
-	LocalSsdCount *Value[int64] `tf:"local_ssd_count"`
+	LocalSsdCount *Value[int64] `tf:"local_ssd_count" json:"local_ssd_count,omitempty"`
 }
 
 // GoogleContainerClusterNodePoolNodeConfigFastSocket is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodePoolNodeConfigFastSocket struct {
-	Enabled *Value[bool] `tf:"enabled"`
+	Enabled *Value[bool] `tf:"enabled" json:"enabled,omitempty"`
 }
 
 // GoogleContainerClusterNodePoolNodeConfigGcfsConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodePoolNodeConfigGcfsConfig struct {
-	Enabled *Value[bool] `tf:"enabled"`
+	Enabled *Value[bool] `tf:"enabled" json:"enabled,omitempty"`
 }
 
 // GoogleContainerClusterNodePoolNodeConfigGuestAccelerator is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodePoolNodeConfigGuestAccelerator struct {
-	Count                       *Value[float64]                                                                       `tf:"count"`
-	GpuPartitionSize            *Value[string]                                                                        `tf:"gpu_partition_size"`
-	Type_                       *Value[string]                                                                        `tf:"type"`
-	GpuDriverInstallationConfig []GoogleContainerClusterNodePoolNodeConfigGuestAcceleratorGpuDriverInstallationConfig `tf:"gpu_driver_installation_config,blocks"`
-	GpuSharingConfig            []GoogleContainerClusterNodePoolNodeConfigGuestAcceleratorGpuSharingConfig            `tf:"gpu_sharing_config,blocks"`
+	Count                       *Value[float64]                                                                       `tf:"count" json:"count,omitempty"`
+	GpuPartitionSize            *Value[string]                                                                        `tf:"gpu_partition_size" json:"gpu_partition_size,omitempty"`
+	Type_                       *Value[string]                                                                        `tf:"type" json:"type,omitempty"`
+	GpuDriverInstallationConfig []GoogleContainerClusterNodePoolNodeConfigGuestAcceleratorGpuDriverInstallationConfig `tf:"gpu_driver_installation_config,blocks" json:"gpu_driver_installation_config,omitempty"`
+	GpuSharingConfig            []GoogleContainerClusterNodePoolNodeConfigGuestAcceleratorGpuSharingConfig            `tf:"gpu_sharing_config,blocks" json:"gpu_sharing_config,omitempty"`
 }
 
 // GoogleContainerClusterNodePoolNodeConfigGuestAcceleratorGpuDriverInstallationConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodePoolNodeConfigGuestAcceleratorGpuDriverInstallationConfig struct {
-	GpuDriverVersion *Value[string] `tf:"gpu_driver_version"`
+	GpuDriverVersion *Value[string] `tf:"gpu_driver_version" json:"gpu_driver_version,omitempty"`
 }
 
 // GoogleContainerClusterNodePoolNodeConfigGuestAcceleratorGpuSharingConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodePoolNodeConfigGuestAcceleratorGpuSharingConfig struct {
-	GpuSharingStrategy     *Value[string] `tf:"gpu_sharing_strategy"`
-	MaxSharedClientsPerGpu *Value[int64]  `tf:"max_shared_clients_per_gpu"`
+	GpuSharingStrategy     *Value[string] `tf:"gpu_sharing_strategy" json:"gpu_sharing_strategy,omitempty"`
+	MaxSharedClientsPerGpu *Value[int64]  `tf:"max_shared_clients_per_gpu" json:"max_shared_clients_per_gpu,omitempty"`
 }
 
 // GoogleContainerClusterNodePoolNodeConfigGvnic is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodePoolNodeConfigGvnic struct {
-	Enabled *Value[bool] `tf:"enabled"`
+	Enabled *Value[bool] `tf:"enabled" json:"enabled,omitempty"`
 }
 
 // GoogleContainerClusterNodePoolNodeConfigHostMaintenancePolicy is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodePoolNodeConfigHostMaintenancePolicy struct {
-	MaintenanceInterval *Value[string] `tf:"maintenance_interval"`
+	MaintenanceInterval *Value[string] `tf:"maintenance_interval" json:"maintenance_interval,omitempty"`
 }
 
 // GoogleContainerClusterNodePoolNodeConfigKubeletConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodePoolNodeConfigKubeletConfig struct {
-	CPUCfsQuota                        *Value[bool]    `tf:"cpu_cfs_quota"`
-	CPUCfsQuotaPeriod                  *Value[string]  `tf:"cpu_cfs_quota_period"`
-	CPUManagerPolicy                   *Value[string]  `tf:"cpu_manager_policy"`
-	InsecureKubeletReadonlyPortEnabled *Value[string]  `tf:"insecure_kubelet_readonly_port_enabled"`
-	PodPidsLimit                       *Value[float64] `tf:"pod_pids_limit"`
+	CPUCfsQuota                        *Value[bool]    `tf:"cpu_cfs_quota" json:"cpu_cfs_quota,omitempty"`
+	CPUCfsQuotaPeriod                  *Value[string]  `tf:"cpu_cfs_quota_period" json:"cpu_cfs_quota_period,omitempty"`
+	CPUManagerPolicy                   *Value[string]  `tf:"cpu_manager_policy" json:"cpu_manager_policy,omitempty"`
+	InsecureKubeletReadonlyPortEnabled *Value[string]  `tf:"insecure_kubelet_readonly_port_enabled" json:"insecure_kubelet_readonly_port_enabled,omitempty"`
+	PodPidsLimit                       *Value[float64] `tf:"pod_pids_limit" json:"pod_pids_limit,omitempty"`
 }
 
 // GoogleContainerClusterNodePoolNodeConfigLinuxNodeConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodePoolNodeConfigLinuxNodeConfig struct {
-	CgroupMode      *Value[string]                                                           `tf:"cgroup_mode"`
-	Sysctls         map[string]*Value[string]                                                `tf:"sysctls"`
-	HugepagesConfig []GoogleContainerClusterNodePoolNodeConfigLinuxNodeConfigHugepagesConfig `tf:"hugepages_config,blocks"`
+	CgroupMode      *Value[string]                                                           `tf:"cgroup_mode" json:"cgroup_mode,omitempty"`
+	Sysctls         map[string]*Value[string]                                                `tf:"sysctls" json:"sysctls,omitempty"`
+	HugepagesConfig []GoogleContainerClusterNodePoolNodeConfigLinuxNodeConfigHugepagesConfig `tf:"hugepages_config,blocks" json:"hugepages_config,omitempty"`
 }
 
 // GoogleContainerClusterNodePoolNodeConfigLinuxNodeConfigHugepagesConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodePoolNodeConfigLinuxNodeConfigHugepagesConfig struct {
-	HugepageSize1g *Value[float64] `tf:"hugepage_size_1g"`
-	HugepageSize2m *Value[float64] `tf:"hugepage_size_2m"`
+	HugepageSize1g *Value[float64] `tf:"hugepage_size_1g" json:"hugepage_size_1g,omitempty"`
+	HugepageSize2m *Value[float64] `tf:"hugepage_size_2m" json:"hugepage_size_2m,omitempty"`
 }
 
 // GoogleContainerClusterNodePoolNodeConfigLocalNvmeSsdBlockConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodePoolNodeConfigLocalNvmeSsdBlockConfig struct {
-	LocalSsdCount *Value[int64] `tf:"local_ssd_count"`
+	LocalSsdCount *Value[int64] `tf:"local_ssd_count" json:"local_ssd_count,omitempty"`
 }
 
 // GoogleContainerClusterNodePoolNodeConfigReservationAffinity is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodePoolNodeConfigReservationAffinity struct {
-	ConsumeReservationType *Value[string]   `tf:"consume_reservation_type"`
-	Key                    *Value[string]   `tf:"key"`
-	Values                 []*Value[string] `tf:"values"`
+	ConsumeReservationType *Value[string]   `tf:"consume_reservation_type" json:"consume_reservation_type,omitempty"`
+	Key                    *Value[string]   `tf:"key" json:"key,omitempty"`
+	Values                 []*Value[string] `tf:"values" json:"values,omitempty"`
 }
 
 // GoogleContainerClusterNodePoolNodeConfigSecondaryBootDisks is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodePoolNodeConfigSecondaryBootDisks struct {
-	DiskImage *Value[string] `tf:"disk_image"`
-	Mode      *Value[string] `tf:"mode"`
+	DiskImage *Value[string] `tf:"disk_image" json:"disk_image,omitempty"`
+	Mode      *Value[string] `tf:"mode" json:"mode,omitempty"`
 }
 
 // GoogleContainerClusterNodePoolNodeConfigShieldedInstanceConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodePoolNodeConfigShieldedInstanceConfig struct {
-	EnableIntegrityMonitoring *Value[bool] `tf:"enable_integrity_monitoring"`
-	EnableSecureBoot          *Value[bool] `tf:"enable_secure_boot"`
+	EnableIntegrityMonitoring *Value[bool] `tf:"enable_integrity_monitoring" json:"enable_integrity_monitoring,omitempty"`
+	EnableSecureBoot          *Value[bool] `tf:"enable_secure_boot" json:"enable_secure_boot,omitempty"`
 }
 
 // GoogleContainerClusterNodePoolNodeConfigSoleTenantConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodePoolNodeConfigSoleTenantConfig struct {
-	NodeAffinity []GoogleContainerClusterNodePoolNodeConfigSoleTenantConfigNodeAffinity `tf:"node_affinity,blocks"`
+	NodeAffinity []GoogleContainerClusterNodePoolNodeConfigSoleTenantConfigNodeAffinity `tf:"node_affinity,blocks" json:"node_affinity,omitempty"`
 }
 
 // GoogleContainerClusterNodePoolNodeConfigSoleTenantConfigNodeAffinity is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodePoolNodeConfigSoleTenantConfigNodeAffinity struct {
-	Key      *Value[string]   `tf:"key"`
-	Operator *Value[string]   `tf:"operator"`
-	Values   []*Value[string] `tf:"values"`
+	Key      *Value[string]   `tf:"key" json:"key,omitempty"`
+	Operator *Value[string]   `tf:"operator" json:"operator,omitempty"`
+	Values   []*Value[string] `tf:"values" json:"values,omitempty"`
 }
 
 // GoogleContainerClusterNodePoolNodeConfigTaint is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodePoolNodeConfigTaint struct {
-	Effect *Value[string] `tf:"effect"`
-	Key    *Value[string] `tf:"key"`
-	Value  *Value[string] `tf:"value"`
+	Effect *Value[string] `tf:"effect" json:"effect,omitempty"`
+	Key    *Value[string] `tf:"key" json:"key,omitempty"`
+	Value  *Value[string] `tf:"value" json:"value,omitempty"`
 }
 
 // GoogleContainerClusterNodePoolNodeConfigWorkloadMetadataConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodePoolNodeConfigWorkloadMetadataConfig struct {
-	Mode *Value[string] `tf:"mode"`
+	Mode *Value[string] `tf:"mode" json:"mode,omitempty"`
 }
 
 // GoogleContainerClusterNodePoolPlacementPolicy is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodePoolPlacementPolicy struct {
-	PolicyName  *Value[string] `tf:"policy_name"`
-	TpuTopology *Value[string] `tf:"tpu_topology"`
-	Type_       *Value[string] `tf:"type"`
+	PolicyName  *Value[string] `tf:"policy_name" json:"policy_name,omitempty"`
+	TpuTopology *Value[string] `tf:"tpu_topology" json:"tpu_topology,omitempty"`
+	Type_       *Value[string] `tf:"type" json:"type,omitempty"`
 }
 
 // GoogleContainerClusterNodePoolQueuedProvisioning is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodePoolQueuedProvisioning struct {
-	Enabled *Value[bool] `tf:"enabled"`
+	Enabled *Value[bool] `tf:"enabled" json:"enabled,omitempty"`
 }
 
 // GoogleContainerClusterNodePoolUpgradeSettings is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodePoolUpgradeSettings struct {
-	MaxSurge          *Value[int64]                                                    `tf:"max_surge"`
-	MaxUnavailable    *Value[int64]                                                    `tf:"max_unavailable"`
-	Strategy          *Value[string]                                                   `tf:"strategy"`
-	BlueGreenSettings []GoogleContainerClusterNodePoolUpgradeSettingsBlueGreenSettings `tf:"blue_green_settings,blocks"`
+	MaxSurge          *Value[int64]                                                    `tf:"max_surge" json:"max_surge,omitempty"`
+	MaxUnavailable    *Value[int64]                                                    `tf:"max_unavailable" json:"max_unavailable,omitempty"`
+	Strategy          *Value[string]                                                   `tf:"strategy" json:"strategy,omitempty"`
+	BlueGreenSettings []GoogleContainerClusterNodePoolUpgradeSettingsBlueGreenSettings `tf:"blue_green_settings,blocks" json:"blue_green_settings,omitempty"`
 }
 
 // GoogleContainerClusterNodePoolUpgradeSettingsBlueGreenSettings is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodePoolUpgradeSettingsBlueGreenSettings struct {
-	NodePoolSoakDuration  *Value[string]                                                                        `tf:"node_pool_soak_duration"`
-	StandardRolloutPolicy []GoogleContainerClusterNodePoolUpgradeSettingsBlueGreenSettingsStandardRolloutPolicy `tf:"standard_rollout_policy,blocks"`
+	NodePoolSoakDuration  *Value[string]                                                                        `tf:"node_pool_soak_duration" json:"node_pool_soak_duration,omitempty"`
+	StandardRolloutPolicy []GoogleContainerClusterNodePoolUpgradeSettingsBlueGreenSettingsStandardRolloutPolicy `tf:"standard_rollout_policy,blocks" json:"standard_rollout_policy,omitempty"`
 }
 
 // GoogleContainerClusterNodePoolUpgradeSettingsBlueGreenSettingsStandardRolloutPolicy is a nested-block type used by the parent resource.
 type GoogleContainerClusterNodePoolUpgradeSettingsBlueGreenSettingsStandardRolloutPolicy struct {
-	BatchNodeCount    *Value[int64]   `tf:"batch_node_count"`
-	BatchPercentage   *Value[float64] `tf:"batch_percentage"`
-	BatchSoakDuration *Value[string]  `tf:"batch_soak_duration"`
+	BatchNodeCount    *Value[int64]   `tf:"batch_node_count" json:"batch_node_count,omitempty"`
+	BatchPercentage   *Value[float64] `tf:"batch_percentage" json:"batch_percentage,omitempty"`
+	BatchSoakDuration *Value[string]  `tf:"batch_soak_duration" json:"batch_soak_duration,omitempty"`
 }
 
 // GoogleContainerClusterNotificationConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterNotificationConfig struct {
-	Pubsub []GoogleContainerClusterNotificationConfigPubsub `tf:"pubsub,blocks"`
+	Pubsub []GoogleContainerClusterNotificationConfigPubsub `tf:"pubsub,blocks" json:"pubsub,omitempty"`
 }
 
 // GoogleContainerClusterNotificationConfigPubsub is a nested-block type used by the parent resource.
 type GoogleContainerClusterNotificationConfigPubsub struct {
-	Enabled *Value[bool]                                           `tf:"enabled"`
-	Topic   *Value[string]                                         `tf:"topic"`
-	Filter  []GoogleContainerClusterNotificationConfigPubsubFilter `tf:"filter,blocks"`
+	Enabled *Value[bool]                                           `tf:"enabled" json:"enabled,omitempty"`
+	Topic   *Value[string]                                         `tf:"topic" json:"topic,omitempty"`
+	Filter  []GoogleContainerClusterNotificationConfigPubsubFilter `tf:"filter,blocks" json:"filter,omitempty"`
 }
 
 // GoogleContainerClusterNotificationConfigPubsubFilter is a nested-block type used by the parent resource.
 type GoogleContainerClusterNotificationConfigPubsubFilter struct {
-	EventType []*Value[string] `tf:"event_type"`
+	EventType []*Value[string] `tf:"event_type" json:"event_type,omitempty"`
 }
 
 // GoogleContainerClusterPrivateClusterConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterPrivateClusterConfig struct {
-	EnablePrivateEndpoint     *Value[bool]                                                         `tf:"enable_private_endpoint"`
-	EnablePrivateNodes        *Value[bool]                                                         `tf:"enable_private_nodes"`
-	MasterIPV4CIDRBlock       *Value[string]                                                       `tf:"master_ipv4_cidr_block"`
-	PeeringName               *Value[string]                                                       `tf:"peering_name"`
-	PrivateEndpoint           *Value[string]                                                       `tf:"private_endpoint"`
-	PrivateEndpointSubnetwork *Value[string]                                                       `tf:"private_endpoint_subnetwork"`
-	PublicEndpoint            *Value[string]                                                       `tf:"public_endpoint"`
-	MasterGlobalAccessConfig  []GoogleContainerClusterPrivateClusterConfigMasterGlobalAccessConfig `tf:"master_global_access_config,blocks"`
+	EnablePrivateEndpoint     *Value[bool]                                                         `tf:"enable_private_endpoint" json:"enable_private_endpoint,omitempty"`
+	EnablePrivateNodes        *Value[bool]                                                         `tf:"enable_private_nodes" json:"enable_private_nodes,omitempty"`
+	MasterIPV4CIDRBlock       *Value[string]                                                       `tf:"master_ipv4_cidr_block" json:"master_ipv4_cidr_block,omitempty"`
+	PeeringName               *Value[string]                                                       `tf:"peering_name" json:"peering_name,omitempty"`
+	PrivateEndpoint           *Value[string]                                                       `tf:"private_endpoint" json:"private_endpoint,omitempty"`
+	PrivateEndpointSubnetwork *Value[string]                                                       `tf:"private_endpoint_subnetwork" json:"private_endpoint_subnetwork,omitempty"`
+	PublicEndpoint            *Value[string]                                                       `tf:"public_endpoint" json:"public_endpoint,omitempty"`
+	MasterGlobalAccessConfig  []GoogleContainerClusterPrivateClusterConfigMasterGlobalAccessConfig `tf:"master_global_access_config,blocks" json:"master_global_access_config,omitempty"`
 }
 
 // GoogleContainerClusterPrivateClusterConfigMasterGlobalAccessConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterPrivateClusterConfigMasterGlobalAccessConfig struct {
-	Enabled *Value[bool] `tf:"enabled"`
+	Enabled *Value[bool] `tf:"enabled" json:"enabled,omitempty"`
 }
 
 // GoogleContainerClusterReleaseChannel is a nested-block type used by the parent resource.
 type GoogleContainerClusterReleaseChannel struct {
-	Channel *Value[string] `tf:"channel"`
+	Channel *Value[string] `tf:"channel" json:"channel,omitempty"`
 }
 
 // GoogleContainerClusterResourceUsageExportConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterResourceUsageExportConfig struct {
-	EnableNetworkEgressMetering       *Value[bool]                                                         `tf:"enable_network_egress_metering"`
-	EnableResourceConsumptionMetering *Value[bool]                                                         `tf:"enable_resource_consumption_metering"`
-	BigqueryDestination               []GoogleContainerClusterResourceUsageExportConfigBigqueryDestination `tf:"bigquery_destination,blocks"`
+	EnableNetworkEgressMetering       *Value[bool]                                                         `tf:"enable_network_egress_metering" json:"enable_network_egress_metering,omitempty"`
+	EnableResourceConsumptionMetering *Value[bool]                                                         `tf:"enable_resource_consumption_metering" json:"enable_resource_consumption_metering,omitempty"`
+	BigqueryDestination               []GoogleContainerClusterResourceUsageExportConfigBigqueryDestination `tf:"bigquery_destination,blocks" json:"bigquery_destination,omitempty"`
 }
 
 // GoogleContainerClusterResourceUsageExportConfigBigqueryDestination is a nested-block type used by the parent resource.
 type GoogleContainerClusterResourceUsageExportConfigBigqueryDestination struct {
-	DatasetID *Value[string] `tf:"dataset_id"`
+	DatasetID *Value[string] `tf:"dataset_id" json:"dataset_id,omitempty"`
 }
 
 // GoogleContainerClusterSecretManagerConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterSecretManagerConfig struct {
-	Enabled *Value[bool] `tf:"enabled"`
+	Enabled *Value[bool] `tf:"enabled" json:"enabled,omitempty"`
 }
 
 // GoogleContainerClusterSecurityPostureConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterSecurityPostureConfig struct {
-	Mode              *Value[string] `tf:"mode"`
-	VulnerabilityMode *Value[string] `tf:"vulnerability_mode"`
+	Mode              *Value[string] `tf:"mode" json:"mode,omitempty"`
+	VulnerabilityMode *Value[string] `tf:"vulnerability_mode" json:"vulnerability_mode,omitempty"`
 }
 
 // GoogleContainerClusterServiceExternalIpsConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterServiceExternalIpsConfig struct {
-	Enabled *Value[bool] `tf:"enabled"`
+	Enabled *Value[bool] `tf:"enabled" json:"enabled,omitempty"`
 }
 
 // GoogleContainerClusterTimeouts is a nested-block type used by the parent resource.
 type GoogleContainerClusterTimeouts struct {
-	Create *Value[string] `tf:"create"`
-	Delete *Value[string] `tf:"delete"`
-	Read   *Value[string] `tf:"read"`
-	Update *Value[string] `tf:"update"`
+	Create *Value[string] `tf:"create" json:"create,omitempty"`
+	Delete *Value[string] `tf:"delete" json:"delete,omitempty"`
+	Read   *Value[string] `tf:"read" json:"read,omitempty"`
+	Update *Value[string] `tf:"update" json:"update,omitempty"`
 }
 
 // GoogleContainerClusterVerticalPodAutoscaling is a nested-block type used by the parent resource.
 type GoogleContainerClusterVerticalPodAutoscaling struct {
-	Enabled *Value[bool] `tf:"enabled"`
+	Enabled *Value[bool] `tf:"enabled" json:"enabled,omitempty"`
 }
 
 // GoogleContainerClusterWorkloadIdentityConfig is a nested-block type used by the parent resource.
 type GoogleContainerClusterWorkloadIdentityConfig struct {
-	WorkloadPool *Value[string] `tf:"workload_pool"`
+	WorkloadPool *Value[string] `tf:"workload_pool" json:"workload_pool,omitempty"`
 }
 
 // GoogleContainerClusterSchema describes provider metadata for each attribute / nested

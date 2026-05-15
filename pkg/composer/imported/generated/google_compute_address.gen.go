@@ -7,35 +7,35 @@ import "reflect"
 // GoogleComputeAddress is the generated Layer 1 typed model for the
 // `google_compute_address` Terraform resource.
 type GoogleComputeAddress struct {
-	Address           *Value[string]                `tf:"address"`
-	AddressType       *Value[string]                `tf:"address_type"`
-	CreationTimestamp *Value[string]                `tf:"creation_timestamp"`
-	Description       *Value[string]                `tf:"description"`
-	EffectiveLabels   map[string]*Value[string]     `tf:"effective_labels"`
-	ID                *Value[string]                `tf:"id"`
-	IpVersion         *Value[string]                `tf:"ip_version"`
-	IPV6EndpointType  *Value[string]                `tf:"ipv6_endpoint_type"`
-	LabelFingerprint  *Value[string]                `tf:"label_fingerprint"`
-	Labels            map[string]*Value[string]     `tf:"labels"`
-	Name              *Value[string]                `tf:"name"`
-	Network           *Value[string]                `tf:"network"`
-	NetworkTier       *Value[string]                `tf:"network_tier"`
-	PrefixLength      *Value[float64]               `tf:"prefix_length"`
-	Project           *Value[string]                `tf:"project"`
-	Purpose           *Value[string]                `tf:"purpose"`
-	Region            *Value[string]                `tf:"region"`
-	SelfLink          *Value[string]                `tf:"self_link"`
-	Subnetwork        *Value[string]                `tf:"subnetwork"`
-	TerraformLabels   map[string]*Value[string]     `tf:"terraform_labels"`
-	Users             []*Value[string]              `tf:"users"`
-	Timeouts          *GoogleComputeAddressTimeouts `tf:"timeouts,block"`
+	Address           *Value[string]                `tf:"address" json:"address,omitempty"`
+	AddressType       *Value[string]                `tf:"address_type" json:"address_type,omitempty"`
+	CreationTimestamp *Value[string]                `tf:"creation_timestamp" json:"creation_timestamp,omitempty"`
+	Description       *Value[string]                `tf:"description" json:"description,omitempty"`
+	EffectiveLabels   map[string]*Value[string]     `tf:"effective_labels" json:"effective_labels,omitempty"`
+	ID                *Value[string]                `tf:"id" json:"id,omitempty"`
+	IpVersion         *Value[string]                `tf:"ip_version" json:"ip_version,omitempty"`
+	IPV6EndpointType  *Value[string]                `tf:"ipv6_endpoint_type" json:"ipv6_endpoint_type,omitempty"`
+	LabelFingerprint  *Value[string]                `tf:"label_fingerprint" json:"label_fingerprint,omitempty"`
+	Labels            map[string]*Value[string]     `tf:"labels" json:"labels,omitempty"`
+	Name              *Value[string]                `tf:"name" json:"name,omitempty"`
+	Network           *Value[string]                `tf:"network" json:"network,omitempty"`
+	NetworkTier       *Value[string]                `tf:"network_tier" json:"network_tier,omitempty"`
+	PrefixLength      *Value[float64]               `tf:"prefix_length" json:"prefix_length,omitempty"`
+	Project           *Value[string]                `tf:"project" json:"project,omitempty"`
+	Purpose           *Value[string]                `tf:"purpose" json:"purpose,omitempty"`
+	Region            *Value[string]                `tf:"region" json:"region,omitempty"`
+	SelfLink          *Value[string]                `tf:"self_link" json:"self_link,omitempty"`
+	Subnetwork        *Value[string]                `tf:"subnetwork" json:"subnetwork,omitempty"`
+	TerraformLabels   map[string]*Value[string]     `tf:"terraform_labels" json:"terraform_labels,omitempty"`
+	Users             []*Value[string]              `tf:"users" json:"users,omitempty"`
+	Timeouts          *GoogleComputeAddressTimeouts `tf:"timeouts,block" json:"timeouts,omitempty"`
 }
 
 // GoogleComputeAddressTimeouts is a nested-block type used by the parent resource.
 type GoogleComputeAddressTimeouts struct {
-	Create *Value[string] `tf:"create"`
-	Delete *Value[string] `tf:"delete"`
-	Update *Value[string] `tf:"update"`
+	Create *Value[string] `tf:"create" json:"create,omitempty"`
+	Delete *Value[string] `tf:"delete" json:"delete,omitempty"`
+	Update *Value[string] `tf:"update" json:"update,omitempty"`
 }
 
 // GoogleComputeAddressSchema describes provider metadata for each attribute / nested

@@ -7,31 +7,31 @@ import "reflect"
 // GoogleLoggingProjectSink is the generated Layer 1 typed model for the
 // `google_logging_project_sink` Terraform resource.
 type GoogleLoggingProjectSink struct {
-	CustomWriterIdentity *Value[string]                            `tf:"custom_writer_identity"`
-	Description          *Value[string]                            `tf:"description"`
-	Destination          *Value[string]                            `tf:"destination"`
-	Disabled             *Value[bool]                              `tf:"disabled"`
-	Filter               *Value[string]                            `tf:"filter"`
-	ID                   *Value[string]                            `tf:"id"`
-	Name                 *Value[string]                            `tf:"name"`
-	Project              *Value[string]                            `tf:"project"`
-	UniqueWriterIdentity *Value[bool]                              `tf:"unique_writer_identity"`
-	WriterIdentity       *Value[string]                            `tf:"writer_identity"`
-	BigqueryOptions      []GoogleLoggingProjectSinkBigqueryOptions `tf:"bigquery_options,blocks"`
-	Exclusions           []GoogleLoggingProjectSinkExclusions      `tf:"exclusions,blocks"`
+	CustomWriterIdentity *Value[string]                            `tf:"custom_writer_identity" json:"custom_writer_identity,omitempty"`
+	Description          *Value[string]                            `tf:"description" json:"description,omitempty"`
+	Destination          *Value[string]                            `tf:"destination" json:"destination,omitempty"`
+	Disabled             *Value[bool]                              `tf:"disabled" json:"disabled,omitempty"`
+	Filter               *Value[string]                            `tf:"filter" json:"filter,omitempty"`
+	ID                   *Value[string]                            `tf:"id" json:"id,omitempty"`
+	Name                 *Value[string]                            `tf:"name" json:"name,omitempty"`
+	Project              *Value[string]                            `tf:"project" json:"project,omitempty"`
+	UniqueWriterIdentity *Value[bool]                              `tf:"unique_writer_identity" json:"unique_writer_identity,omitempty"`
+	WriterIdentity       *Value[string]                            `tf:"writer_identity" json:"writer_identity,omitempty"`
+	BigqueryOptions      []GoogleLoggingProjectSinkBigqueryOptions `tf:"bigquery_options,blocks" json:"bigquery_options,omitempty"`
+	Exclusions           []GoogleLoggingProjectSinkExclusions      `tf:"exclusions,blocks" json:"exclusions,omitempty"`
 }
 
 // GoogleLoggingProjectSinkBigqueryOptions is a nested-block type used by the parent resource.
 type GoogleLoggingProjectSinkBigqueryOptions struct {
-	UsePartitionedTables *Value[bool] `tf:"use_partitioned_tables"`
+	UsePartitionedTables *Value[bool] `tf:"use_partitioned_tables" json:"use_partitioned_tables,omitempty"`
 }
 
 // GoogleLoggingProjectSinkExclusions is a nested-block type used by the parent resource.
 type GoogleLoggingProjectSinkExclusions struct {
-	Description *Value[string] `tf:"description"`
-	Disabled    *Value[bool]   `tf:"disabled"`
-	Filter      *Value[string] `tf:"filter"`
-	Name        *Value[string] `tf:"name"`
+	Description *Value[string] `tf:"description" json:"description,omitempty"`
+	Disabled    *Value[bool]   `tf:"disabled" json:"disabled,omitempty"`
+	Filter      *Value[string] `tf:"filter" json:"filter,omitempty"`
+	Name        *Value[string] `tf:"name" json:"name,omitempty"`
 }
 
 // GoogleLoggingProjectSinkSchema describes provider metadata for each attribute / nested

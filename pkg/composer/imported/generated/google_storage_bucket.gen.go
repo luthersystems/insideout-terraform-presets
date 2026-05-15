@@ -7,132 +7,132 @@ import "reflect"
 // GoogleStorageBucket is the generated Layer 1 typed model for the
 // `google_storage_bucket` Terraform resource.
 type GoogleStorageBucket struct {
-	DefaultEventBasedHold    *Value[bool]                               `tf:"default_event_based_hold"`
-	EffectiveLabels          map[string]*Value[string]                  `tf:"effective_labels"`
-	EnableObjectRetention    *Value[bool]                               `tf:"enable_object_retention"`
-	ForceDestroy             *Value[bool]                               `tf:"force_destroy"`
-	ID                       *Value[string]                             `tf:"id"`
-	Labels                   map[string]*Value[string]                  `tf:"labels"`
-	Location                 *Value[string]                             `tf:"location"`
-	Name                     *Value[string]                             `tf:"name"`
-	Project                  *Value[string]                             `tf:"project"`
-	ProjectNumber            *Value[float64]                            `tf:"project_number"`
-	PublicAccessPrevention   *Value[string]                             `tf:"public_access_prevention"`
-	RequesterPays            *Value[bool]                               `tf:"requester_pays"`
-	Rpo                      *Value[string]                             `tf:"rpo"`
-	SelfLink                 *Value[string]                             `tf:"self_link"`
-	StorageClass             *Value[string]                             `tf:"storage_class"`
-	TerraformLabels          map[string]*Value[string]                  `tf:"terraform_labels"`
-	UniformBucketLevelAccess *Value[bool]                               `tf:"uniform_bucket_level_access"`
-	URL                      *Value[string]                             `tf:"url"`
-	Autoclass                []GoogleStorageBucketAutoclass             `tf:"autoclass,blocks"`
-	Cors                     []GoogleStorageBucketCors                  `tf:"cors,blocks"`
-	CustomPlacementConfig    []GoogleStorageBucketCustomPlacementConfig `tf:"custom_placement_config,blocks"`
-	Encryption               []GoogleStorageBucketEncryption            `tf:"encryption,blocks"`
-	HierarchicalNamespace    []GoogleStorageBucketHierarchicalNamespace `tf:"hierarchical_namespace,blocks"`
-	LifecycleRule            []GoogleStorageBucketLifecycleRule         `tf:"lifecycle_rule,blocks"`
-	Logging                  []GoogleStorageBucketLogging               `tf:"logging,blocks"`
-	RetentionPolicy          []GoogleStorageBucketRetentionPolicy       `tf:"retention_policy,blocks"`
-	SoftDeletePolicy         []GoogleStorageBucketSoftDeletePolicy      `tf:"soft_delete_policy,blocks"`
-	Timeouts                 *GoogleStorageBucketTimeouts               `tf:"timeouts,block"`
-	Versioning               []GoogleStorageBucketVersioning            `tf:"versioning,blocks"`
-	Website                  []GoogleStorageBucketWebsite               `tf:"website,blocks"`
+	DefaultEventBasedHold    *Value[bool]                               `tf:"default_event_based_hold" json:"default_event_based_hold,omitempty"`
+	EffectiveLabels          map[string]*Value[string]                  `tf:"effective_labels" json:"effective_labels,omitempty"`
+	EnableObjectRetention    *Value[bool]                               `tf:"enable_object_retention" json:"enable_object_retention,omitempty"`
+	ForceDestroy             *Value[bool]                               `tf:"force_destroy" json:"force_destroy,omitempty"`
+	ID                       *Value[string]                             `tf:"id" json:"id,omitempty"`
+	Labels                   map[string]*Value[string]                  `tf:"labels" json:"labels,omitempty"`
+	Location                 *Value[string]                             `tf:"location" json:"location,omitempty"`
+	Name                     *Value[string]                             `tf:"name" json:"name,omitempty"`
+	Project                  *Value[string]                             `tf:"project" json:"project,omitempty"`
+	ProjectNumber            *Value[float64]                            `tf:"project_number" json:"project_number,omitempty"`
+	PublicAccessPrevention   *Value[string]                             `tf:"public_access_prevention" json:"public_access_prevention,omitempty"`
+	RequesterPays            *Value[bool]                               `tf:"requester_pays" json:"requester_pays,omitempty"`
+	Rpo                      *Value[string]                             `tf:"rpo" json:"rpo,omitempty"`
+	SelfLink                 *Value[string]                             `tf:"self_link" json:"self_link,omitempty"`
+	StorageClass             *Value[string]                             `tf:"storage_class" json:"storage_class,omitempty"`
+	TerraformLabels          map[string]*Value[string]                  `tf:"terraform_labels" json:"terraform_labels,omitempty"`
+	UniformBucketLevelAccess *Value[bool]                               `tf:"uniform_bucket_level_access" json:"uniform_bucket_level_access,omitempty"`
+	URL                      *Value[string]                             `tf:"url" json:"url,omitempty"`
+	Autoclass                []GoogleStorageBucketAutoclass             `tf:"autoclass,blocks" json:"autoclass,omitempty"`
+	Cors                     []GoogleStorageBucketCors                  `tf:"cors,blocks" json:"cors,omitempty"`
+	CustomPlacementConfig    []GoogleStorageBucketCustomPlacementConfig `tf:"custom_placement_config,blocks" json:"custom_placement_config,omitempty"`
+	Encryption               []GoogleStorageBucketEncryption            `tf:"encryption,blocks" json:"encryption,omitempty"`
+	HierarchicalNamespace    []GoogleStorageBucketHierarchicalNamespace `tf:"hierarchical_namespace,blocks" json:"hierarchical_namespace,omitempty"`
+	LifecycleRule            []GoogleStorageBucketLifecycleRule         `tf:"lifecycle_rule,blocks" json:"lifecycle_rule,omitempty"`
+	Logging                  []GoogleStorageBucketLogging               `tf:"logging,blocks" json:"logging,omitempty"`
+	RetentionPolicy          []GoogleStorageBucketRetentionPolicy       `tf:"retention_policy,blocks" json:"retention_policy,omitempty"`
+	SoftDeletePolicy         []GoogleStorageBucketSoftDeletePolicy      `tf:"soft_delete_policy,blocks" json:"soft_delete_policy,omitempty"`
+	Timeouts                 *GoogleStorageBucketTimeouts               `tf:"timeouts,block" json:"timeouts,omitempty"`
+	Versioning               []GoogleStorageBucketVersioning            `tf:"versioning,blocks" json:"versioning,omitempty"`
+	Website                  []GoogleStorageBucketWebsite               `tf:"website,blocks" json:"website,omitempty"`
 }
 
 // GoogleStorageBucketAutoclass is a nested-block type used by the parent resource.
 type GoogleStorageBucketAutoclass struct {
-	Enabled              *Value[bool]   `tf:"enabled"`
-	TerminalStorageClass *Value[string] `tf:"terminal_storage_class"`
+	Enabled              *Value[bool]   `tf:"enabled" json:"enabled,omitempty"`
+	TerminalStorageClass *Value[string] `tf:"terminal_storage_class" json:"terminal_storage_class,omitempty"`
 }
 
 // GoogleStorageBucketCors is a nested-block type used by the parent resource.
 type GoogleStorageBucketCors struct {
-	MaxAgeSeconds  *Value[int64]    `tf:"max_age_seconds"`
-	Method         []*Value[string] `tf:"method"`
-	Origin         []*Value[string] `tf:"origin"`
-	ResponseHeader []*Value[string] `tf:"response_header"`
+	MaxAgeSeconds  *Value[int64]    `tf:"max_age_seconds" json:"max_age_seconds,omitempty"`
+	Method         []*Value[string] `tf:"method" json:"method,omitempty"`
+	Origin         []*Value[string] `tf:"origin" json:"origin,omitempty"`
+	ResponseHeader []*Value[string] `tf:"response_header" json:"response_header,omitempty"`
 }
 
 // GoogleStorageBucketCustomPlacementConfig is a nested-block type used by the parent resource.
 type GoogleStorageBucketCustomPlacementConfig struct {
-	DataLocations []*Value[string] `tf:"data_locations"`
+	DataLocations []*Value[string] `tf:"data_locations" json:"data_locations,omitempty"`
 }
 
 // GoogleStorageBucketEncryption is a nested-block type used by the parent resource.
 type GoogleStorageBucketEncryption struct {
-	DefaultKMSKeyName *Value[string] `tf:"default_kms_key_name"`
+	DefaultKMSKeyName *Value[string] `tf:"default_kms_key_name" json:"default_kms_key_name,omitempty"`
 }
 
 // GoogleStorageBucketHierarchicalNamespace is a nested-block type used by the parent resource.
 type GoogleStorageBucketHierarchicalNamespace struct {
-	Enabled *Value[bool] `tf:"enabled"`
+	Enabled *Value[bool] `tf:"enabled" json:"enabled,omitempty"`
 }
 
 // GoogleStorageBucketLifecycleRule is a nested-block type used by the parent resource.
 type GoogleStorageBucketLifecycleRule struct {
-	Action    []GoogleStorageBucketLifecycleRuleAction    `tf:"action,blocks"`
-	Condition []GoogleStorageBucketLifecycleRuleCondition `tf:"condition,blocks"`
+	Action    []GoogleStorageBucketLifecycleRuleAction    `tf:"action,blocks" json:"action,omitempty"`
+	Condition []GoogleStorageBucketLifecycleRuleCondition `tf:"condition,blocks" json:"condition,omitempty"`
 }
 
 // GoogleStorageBucketLifecycleRuleAction is a nested-block type used by the parent resource.
 type GoogleStorageBucketLifecycleRuleAction struct {
-	StorageClass *Value[string] `tf:"storage_class"`
-	Type_        *Value[string] `tf:"type"`
+	StorageClass *Value[string] `tf:"storage_class" json:"storage_class,omitempty"`
+	Type_        *Value[string] `tf:"type" json:"type,omitempty"`
 }
 
 // GoogleStorageBucketLifecycleRuleCondition is a nested-block type used by the parent resource.
 type GoogleStorageBucketLifecycleRuleCondition struct {
-	Age                               *Value[float64]  `tf:"age"`
-	CreatedBefore                     *Value[string]   `tf:"created_before"`
-	CustomTimeBefore                  *Value[string]   `tf:"custom_time_before"`
-	DaysSinceCustomTime               *Value[float64]  `tf:"days_since_custom_time"`
-	DaysSinceNoncurrentTime           *Value[float64]  `tf:"days_since_noncurrent_time"`
-	MatchesPrefix                     []*Value[string] `tf:"matches_prefix"`
-	MatchesStorageClass               []*Value[string] `tf:"matches_storage_class"`
-	MatchesSuffix                     []*Value[string] `tf:"matches_suffix"`
-	NoncurrentTimeBefore              *Value[string]   `tf:"noncurrent_time_before"`
-	NumNewerVersions                  *Value[float64]  `tf:"num_newer_versions"`
-	SendAgeIfZero                     *Value[bool]     `tf:"send_age_if_zero"`
-	SendDaysSinceCustomTimeIfZero     *Value[bool]     `tf:"send_days_since_custom_time_if_zero"`
-	SendDaysSinceNoncurrentTimeIfZero *Value[bool]     `tf:"send_days_since_noncurrent_time_if_zero"`
-	SendNumNewerVersionsIfZero        *Value[bool]     `tf:"send_num_newer_versions_if_zero"`
-	WithState                         *Value[string]   `tf:"with_state"`
+	Age                               *Value[float64]  `tf:"age" json:"age,omitempty"`
+	CreatedBefore                     *Value[string]   `tf:"created_before" json:"created_before,omitempty"`
+	CustomTimeBefore                  *Value[string]   `tf:"custom_time_before" json:"custom_time_before,omitempty"`
+	DaysSinceCustomTime               *Value[float64]  `tf:"days_since_custom_time" json:"days_since_custom_time,omitempty"`
+	DaysSinceNoncurrentTime           *Value[float64]  `tf:"days_since_noncurrent_time" json:"days_since_noncurrent_time,omitempty"`
+	MatchesPrefix                     []*Value[string] `tf:"matches_prefix" json:"matches_prefix,omitempty"`
+	MatchesStorageClass               []*Value[string] `tf:"matches_storage_class" json:"matches_storage_class,omitempty"`
+	MatchesSuffix                     []*Value[string] `tf:"matches_suffix" json:"matches_suffix,omitempty"`
+	NoncurrentTimeBefore              *Value[string]   `tf:"noncurrent_time_before" json:"noncurrent_time_before,omitempty"`
+	NumNewerVersions                  *Value[float64]  `tf:"num_newer_versions" json:"num_newer_versions,omitempty"`
+	SendAgeIfZero                     *Value[bool]     `tf:"send_age_if_zero" json:"send_age_if_zero,omitempty"`
+	SendDaysSinceCustomTimeIfZero     *Value[bool]     `tf:"send_days_since_custom_time_if_zero" json:"send_days_since_custom_time_if_zero,omitempty"`
+	SendDaysSinceNoncurrentTimeIfZero *Value[bool]     `tf:"send_days_since_noncurrent_time_if_zero" json:"send_days_since_noncurrent_time_if_zero,omitempty"`
+	SendNumNewerVersionsIfZero        *Value[bool]     `tf:"send_num_newer_versions_if_zero" json:"send_num_newer_versions_if_zero,omitempty"`
+	WithState                         *Value[string]   `tf:"with_state" json:"with_state,omitempty"`
 }
 
 // GoogleStorageBucketLogging is a nested-block type used by the parent resource.
 type GoogleStorageBucketLogging struct {
-	LogBucket       *Value[string] `tf:"log_bucket"`
-	LogObjectPrefix *Value[string] `tf:"log_object_prefix"`
+	LogBucket       *Value[string] `tf:"log_bucket" json:"log_bucket,omitempty"`
+	LogObjectPrefix *Value[string] `tf:"log_object_prefix" json:"log_object_prefix,omitempty"`
 }
 
 // GoogleStorageBucketRetentionPolicy is a nested-block type used by the parent resource.
 type GoogleStorageBucketRetentionPolicy struct {
-	IsLocked        *Value[bool]  `tf:"is_locked"`
-	RetentionPeriod *Value[int64] `tf:"retention_period"`
+	IsLocked        *Value[bool]  `tf:"is_locked" json:"is_locked,omitempty"`
+	RetentionPeriod *Value[int64] `tf:"retention_period" json:"retention_period,omitempty"`
 }
 
 // GoogleStorageBucketSoftDeletePolicy is a nested-block type used by the parent resource.
 type GoogleStorageBucketSoftDeletePolicy struct {
-	EffectiveTime            *Value[string] `tf:"effective_time"`
-	RetentionDurationSeconds *Value[int64]  `tf:"retention_duration_seconds"`
+	EffectiveTime            *Value[string] `tf:"effective_time" json:"effective_time,omitempty"`
+	RetentionDurationSeconds *Value[int64]  `tf:"retention_duration_seconds" json:"retention_duration_seconds,omitempty"`
 }
 
 // GoogleStorageBucketTimeouts is a nested-block type used by the parent resource.
 type GoogleStorageBucketTimeouts struct {
-	Create *Value[string] `tf:"create"`
-	Read   *Value[string] `tf:"read"`
-	Update *Value[string] `tf:"update"`
+	Create *Value[string] `tf:"create" json:"create,omitempty"`
+	Read   *Value[string] `tf:"read" json:"read,omitempty"`
+	Update *Value[string] `tf:"update" json:"update,omitempty"`
 }
 
 // GoogleStorageBucketVersioning is a nested-block type used by the parent resource.
 type GoogleStorageBucketVersioning struct {
-	Enabled *Value[bool] `tf:"enabled"`
+	Enabled *Value[bool] `tf:"enabled" json:"enabled,omitempty"`
 }
 
 // GoogleStorageBucketWebsite is a nested-block type used by the parent resource.
 type GoogleStorageBucketWebsite struct {
-	MainPageSuffix *Value[string] `tf:"main_page_suffix"`
-	NotFoundPage   *Value[string] `tf:"not_found_page"`
+	MainPageSuffix *Value[string] `tf:"main_page_suffix" json:"main_page_suffix,omitempty"`
+	NotFoundPage   *Value[string] `tf:"not_found_page" json:"not_found_page,omitempty"`
 }
 
 // GoogleStorageBucketSchema describes provider metadata for each attribute / nested

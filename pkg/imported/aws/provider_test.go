@@ -63,9 +63,16 @@ func TestProvider_Capabilities_Enrichable(t *testing.T) {
 	if got := p.Capabilities("aws_dynamodb_table"); !got.Enrichable {
 		t.Errorf("aws_dynamodb_table: Enrichable should be true, got %+v", got)
 	}
-	// aws_vpc is in the registry but has no enricher yet — Enrichable=false.
-	if got := p.Capabilities("aws_vpc"); got.Enrichable {
-		t.Errorf("aws_vpc: Enrichable should be false (no enricher), got %+v", got)
+	// aws_apigatewayv2_stage is a Bucket-C hand-rolled discoverer that
+	// is NOT in cloudControlTypeConfigs (CC returns
+	// UnsupportedActionException for AWS::ApiGatewayV2::Stage READ) and
+	// has no hand-rolled AttributeEnricher today, so it is the
+	// canonical "registered for discovery, not enriched" sample.
+	// Replaced the prior aws_vpc reference after #490 wired a generic
+	// cloudControlEnricher to every CC-routed type — aws_vpc now has a
+	// (generic) enricher.
+	if got := p.Capabilities("aws_apigatewayv2_stage"); got.Enrichable {
+		t.Errorf("aws_apigatewayv2_stage: Enrichable should be false (no enricher), got %+v", got)
 	}
 	// Unknown type: all flags false.
 	if got := p.Capabilities("aws_bogus_unknown"); got.Discoverable || got.Enrichable {
@@ -229,8 +236,13 @@ func TestProvider_EnrichByID_NoEnricher(t *testing.T) {
 	d := awsdiscover.NewAWSDiscoverer(awssdk.Config{})
 	p := awsprov.NewProvider(d, nil)
 
-	// aws_vpc has no enricher registered → ErrEnrichByIDNotImplemented.
-	id := &composerimported.ResourceIdentity{Type: "aws_vpc", ImportID: "vpc-123"}
+	// aws_apigatewayv2_stage is a Bucket-C hand-rolled discoverer that
+	// has no AttributeEnricher today (and is not in
+	// cloudControlTypeConfigs, so #490's generic CC enricher loop does
+	// not register one either) → ErrEnrichByIDNotImplemented.
+	// Replaced the prior aws_vpc reference after #490 wired a generic
+	// cloudControlEnricher for every CC-routed type.
+	id := &composerimported.ResourceIdentity{Type: "aws_apigatewayv2_stage", ImportID: "api/stage"}
 	_, err := p.EnrichByID(context.Background(), id, imp.Clients{AWS: awsprov.Clients{}})
 	if !errors.Is(err, imp.ErrEnrichByIDNotImplemented) {
 		t.Errorf("EnrichByID for non-enriched type: err = %v, want ErrEnrichByIDNotImplemented", err)

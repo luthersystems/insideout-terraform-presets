@@ -7,43 +7,43 @@ import "reflect"
 // GooglePubsubTopic is the generated Layer 1 typed model for the
 // `google_pubsub_topic` Terraform resource.
 type GooglePubsubTopic struct {
-	EffectiveLabels             map[string]*Value[string]                      `tf:"effective_labels"`
-	ID                          *Value[string]                                 `tf:"id"`
-	KMSKeyName                  *Value[string]                                 `tf:"kms_key_name"`
-	Labels                      map[string]*Value[string]                      `tf:"labels"`
-	MessageRetentionDuration    *Value[string]                                 `tf:"message_retention_duration"`
-	Name                        *Value[string]                                 `tf:"name"`
-	Project                     *Value[string]                                 `tf:"project"`
-	TerraformLabels             map[string]*Value[string]                      `tf:"terraform_labels"`
-	IngestionDataSourceSettings []GooglePubsubTopicIngestionDataSourceSettings `tf:"ingestion_data_source_settings,blocks"`
-	MessageStoragePolicy        []GooglePubsubTopicMessageStoragePolicy        `tf:"message_storage_policy,blocks"`
-	SchemaSettings              []GooglePubsubTopicSchemaSettings              `tf:"schema_settings,blocks"`
-	Timeouts                    *GooglePubsubTopicTimeouts                     `tf:"timeouts,block"`
+	EffectiveLabels             map[string]*Value[string]                      `tf:"effective_labels" json:"effective_labels,omitempty"`
+	ID                          *Value[string]                                 `tf:"id" json:"id,omitempty"`
+	KMSKeyName                  *Value[string]                                 `tf:"kms_key_name" json:"kms_key_name,omitempty"`
+	Labels                      map[string]*Value[string]                      `tf:"labels" json:"labels,omitempty"`
+	MessageRetentionDuration    *Value[string]                                 `tf:"message_retention_duration" json:"message_retention_duration,omitempty"`
+	Name                        *Value[string]                                 `tf:"name" json:"name,omitempty"`
+	Project                     *Value[string]                                 `tf:"project" json:"project,omitempty"`
+	TerraformLabels             map[string]*Value[string]                      `tf:"terraform_labels" json:"terraform_labels,omitempty"`
+	IngestionDataSourceSettings []GooglePubsubTopicIngestionDataSourceSettings `tf:"ingestion_data_source_settings,blocks" json:"ingestion_data_source_settings,omitempty"`
+	MessageStoragePolicy        []GooglePubsubTopicMessageStoragePolicy        `tf:"message_storage_policy,blocks" json:"message_storage_policy,omitempty"`
+	SchemaSettings              []GooglePubsubTopicSchemaSettings              `tf:"schema_settings,blocks" json:"schema_settings,omitempty"`
+	Timeouts                    *GooglePubsubTopicTimeouts                     `tf:"timeouts,block" json:"timeouts,omitempty"`
 }
 
 // GooglePubsubTopicIngestionDataSourceSettings is a nested-block type used by the parent resource.
 type GooglePubsubTopicIngestionDataSourceSettings struct {
-	AWSKinesis           []GooglePubsubTopicIngestionDataSourceSettingsAWSKinesis           `tf:"aws_kinesis,blocks"`
-	CloudStorage         []GooglePubsubTopicIngestionDataSourceSettingsCloudStorage         `tf:"cloud_storage,blocks"`
-	PlatformLogsSettings []GooglePubsubTopicIngestionDataSourceSettingsPlatformLogsSettings `tf:"platform_logs_settings,blocks"`
+	AWSKinesis           []GooglePubsubTopicIngestionDataSourceSettingsAWSKinesis           `tf:"aws_kinesis,blocks" json:"aws_kinesis,omitempty"`
+	CloudStorage         []GooglePubsubTopicIngestionDataSourceSettingsCloudStorage         `tf:"cloud_storage,blocks" json:"cloud_storage,omitempty"`
+	PlatformLogsSettings []GooglePubsubTopicIngestionDataSourceSettingsPlatformLogsSettings `tf:"platform_logs_settings,blocks" json:"platform_logs_settings,omitempty"`
 }
 
 // GooglePubsubTopicIngestionDataSourceSettingsAWSKinesis is a nested-block type used by the parent resource.
 type GooglePubsubTopicIngestionDataSourceSettingsAWSKinesis struct {
-	AWSRoleARN        *Value[string] `tf:"aws_role_arn"`
-	ConsumerARN       *Value[string] `tf:"consumer_arn"`
-	GCPServiceAccount *Value[string] `tf:"gcp_service_account"`
-	StreamARN         *Value[string] `tf:"stream_arn"`
+	AWSRoleARN        *Value[string] `tf:"aws_role_arn" json:"aws_role_arn,omitempty"`
+	ConsumerARN       *Value[string] `tf:"consumer_arn" json:"consumer_arn,omitempty"`
+	GCPServiceAccount *Value[string] `tf:"gcp_service_account" json:"gcp_service_account,omitempty"`
+	StreamARN         *Value[string] `tf:"stream_arn" json:"stream_arn,omitempty"`
 }
 
 // GooglePubsubTopicIngestionDataSourceSettingsCloudStorage is a nested-block type used by the parent resource.
 type GooglePubsubTopicIngestionDataSourceSettingsCloudStorage struct {
-	Bucket                  *Value[string]                                                             `tf:"bucket"`
-	MatchGlob               *Value[string]                                                             `tf:"match_glob"`
-	MinimumObjectCreateTime *Value[string]                                                             `tf:"minimum_object_create_time"`
-	AvroFormat              []GooglePubsubTopicIngestionDataSourceSettingsCloudStorageAvroFormat       `tf:"avro_format,blocks"`
-	PubsubAvroFormat        []GooglePubsubTopicIngestionDataSourceSettingsCloudStoragePubsubAvroFormat `tf:"pubsub_avro_format,blocks"`
-	TextFormat              []GooglePubsubTopicIngestionDataSourceSettingsCloudStorageTextFormat       `tf:"text_format,blocks"`
+	Bucket                  *Value[string]                                                             `tf:"bucket" json:"bucket,omitempty"`
+	MatchGlob               *Value[string]                                                             `tf:"match_glob" json:"match_glob,omitempty"`
+	MinimumObjectCreateTime *Value[string]                                                             `tf:"minimum_object_create_time" json:"minimum_object_create_time,omitempty"`
+	AvroFormat              []GooglePubsubTopicIngestionDataSourceSettingsCloudStorageAvroFormat       `tf:"avro_format,blocks" json:"avro_format,omitempty"`
+	PubsubAvroFormat        []GooglePubsubTopicIngestionDataSourceSettingsCloudStoragePubsubAvroFormat `tf:"pubsub_avro_format,blocks" json:"pubsub_avro_format,omitempty"`
+	TextFormat              []GooglePubsubTopicIngestionDataSourceSettingsCloudStorageTextFormat       `tf:"text_format,blocks" json:"text_format,omitempty"`
 }
 
 // GooglePubsubTopicIngestionDataSourceSettingsCloudStorageAvroFormat is a nested-block type used by the parent resource.
@@ -56,30 +56,30 @@ type GooglePubsubTopicIngestionDataSourceSettingsCloudStoragePubsubAvroFormat st
 
 // GooglePubsubTopicIngestionDataSourceSettingsCloudStorageTextFormat is a nested-block type used by the parent resource.
 type GooglePubsubTopicIngestionDataSourceSettingsCloudStorageTextFormat struct {
-	Delimiter *Value[string] `tf:"delimiter"`
+	Delimiter *Value[string] `tf:"delimiter" json:"delimiter,omitempty"`
 }
 
 // GooglePubsubTopicIngestionDataSourceSettingsPlatformLogsSettings is a nested-block type used by the parent resource.
 type GooglePubsubTopicIngestionDataSourceSettingsPlatformLogsSettings struct {
-	Severity *Value[string] `tf:"severity"`
+	Severity *Value[string] `tf:"severity" json:"severity,omitempty"`
 }
 
 // GooglePubsubTopicMessageStoragePolicy is a nested-block type used by the parent resource.
 type GooglePubsubTopicMessageStoragePolicy struct {
-	AllowedPersistenceRegions []*Value[string] `tf:"allowed_persistence_regions"`
+	AllowedPersistenceRegions []*Value[string] `tf:"allowed_persistence_regions" json:"allowed_persistence_regions,omitempty"`
 }
 
 // GooglePubsubTopicSchemaSettings is a nested-block type used by the parent resource.
 type GooglePubsubTopicSchemaSettings struct {
-	Encoding *Value[string] `tf:"encoding"`
-	Schema   *Value[string] `tf:"schema"`
+	Encoding *Value[string] `tf:"encoding" json:"encoding,omitempty"`
+	Schema   *Value[string] `tf:"schema" json:"schema,omitempty"`
 }
 
 // GooglePubsubTopicTimeouts is a nested-block type used by the parent resource.
 type GooglePubsubTopicTimeouts struct {
-	Create *Value[string] `tf:"create"`
-	Delete *Value[string] `tf:"delete"`
-	Update *Value[string] `tf:"update"`
+	Create *Value[string] `tf:"create" json:"create,omitempty"`
+	Delete *Value[string] `tf:"delete" json:"delete,omitempty"`
+	Update *Value[string] `tf:"update" json:"update,omitempty"`
 }
 
 // GooglePubsubTopicSchema describes provider metadata for each attribute / nested

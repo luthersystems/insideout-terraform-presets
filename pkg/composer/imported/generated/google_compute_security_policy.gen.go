@@ -7,142 +7,142 @@ import "reflect"
 // GoogleComputeSecurityPolicy is the generated Layer 1 typed model for the
 // `google_compute_security_policy` Terraform resource.
 type GoogleComputeSecurityPolicy struct {
-	Description              *Value[string]                                        `tf:"description"`
-	Fingerprint              *Value[string]                                        `tf:"fingerprint"`
-	ID                       *Value[string]                                        `tf:"id"`
-	Name                     *Value[string]                                        `tf:"name"`
-	Project                  *Value[string]                                        `tf:"project"`
-	SelfLink                 *Value[string]                                        `tf:"self_link"`
-	Type_                    *Value[string]                                        `tf:"type"`
-	AdaptiveProtectionConfig []GoogleComputeSecurityPolicyAdaptiveProtectionConfig `tf:"adaptive_protection_config,blocks"`
-	AdvancedOptionsConfig    []GoogleComputeSecurityPolicyAdvancedOptionsConfig    `tf:"advanced_options_config,blocks"`
-	RecaptchaOptionsConfig   []GoogleComputeSecurityPolicyRecaptchaOptionsConfig   `tf:"recaptcha_options_config,blocks"`
-	Rule                     []GoogleComputeSecurityPolicyRule                     `tf:"rule,blocks"`
-	Timeouts                 *GoogleComputeSecurityPolicyTimeouts                  `tf:"timeouts,block"`
+	Description              *Value[string]                                        `tf:"description" json:"description,omitempty"`
+	Fingerprint              *Value[string]                                        `tf:"fingerprint" json:"fingerprint,omitempty"`
+	ID                       *Value[string]                                        `tf:"id" json:"id,omitempty"`
+	Name                     *Value[string]                                        `tf:"name" json:"name,omitempty"`
+	Project                  *Value[string]                                        `tf:"project" json:"project,omitempty"`
+	SelfLink                 *Value[string]                                        `tf:"self_link" json:"self_link,omitempty"`
+	Type_                    *Value[string]                                        `tf:"type" json:"type,omitempty"`
+	AdaptiveProtectionConfig []GoogleComputeSecurityPolicyAdaptiveProtectionConfig `tf:"adaptive_protection_config,blocks" json:"adaptive_protection_config,omitempty"`
+	AdvancedOptionsConfig    []GoogleComputeSecurityPolicyAdvancedOptionsConfig    `tf:"advanced_options_config,blocks" json:"advanced_options_config,omitempty"`
+	RecaptchaOptionsConfig   []GoogleComputeSecurityPolicyRecaptchaOptionsConfig   `tf:"recaptcha_options_config,blocks" json:"recaptcha_options_config,omitempty"`
+	Rule                     []GoogleComputeSecurityPolicyRule                     `tf:"rule,blocks" json:"rule,omitempty"`
+	Timeouts                 *GoogleComputeSecurityPolicyTimeouts                  `tf:"timeouts,block" json:"timeouts,omitempty"`
 }
 
 // GoogleComputeSecurityPolicyAdaptiveProtectionConfig is a nested-block type used by the parent resource.
 type GoogleComputeSecurityPolicyAdaptiveProtectionConfig struct {
-	Layer7DdosDefenseConfig []GoogleComputeSecurityPolicyAdaptiveProtectionConfigLayer7DdosDefenseConfig `tf:"layer_7_ddos_defense_config,blocks"`
+	Layer7DdosDefenseConfig []GoogleComputeSecurityPolicyAdaptiveProtectionConfigLayer7DdosDefenseConfig `tf:"layer_7_ddos_defense_config,blocks" json:"layer_7_ddos_defense_config,omitempty"`
 }
 
 // GoogleComputeSecurityPolicyAdaptiveProtectionConfigLayer7DdosDefenseConfig is a nested-block type used by the parent resource.
 type GoogleComputeSecurityPolicyAdaptiveProtectionConfigLayer7DdosDefenseConfig struct {
-	Enable         *Value[bool]   `tf:"enable"`
-	RuleVisibility *Value[string] `tf:"rule_visibility"`
+	Enable         *Value[bool]   `tf:"enable" json:"enable,omitempty"`
+	RuleVisibility *Value[string] `tf:"rule_visibility" json:"rule_visibility,omitempty"`
 }
 
 // GoogleComputeSecurityPolicyAdvancedOptionsConfig is a nested-block type used by the parent resource.
 type GoogleComputeSecurityPolicyAdvancedOptionsConfig struct {
-	JSONParsing          *Value[string]                                                     `tf:"json_parsing"`
-	LogLevel             *Value[string]                                                     `tf:"log_level"`
-	UserIpRequestHeaders []*Value[string]                                                   `tf:"user_ip_request_headers"`
-	JSONCustomConfig     []GoogleComputeSecurityPolicyAdvancedOptionsConfigJSONCustomConfig `tf:"json_custom_config,blocks"`
+	JSONParsing          *Value[string]                                                     `tf:"json_parsing" json:"json_parsing,omitempty"`
+	LogLevel             *Value[string]                                                     `tf:"log_level" json:"log_level,omitempty"`
+	UserIpRequestHeaders []*Value[string]                                                   `tf:"user_ip_request_headers" json:"user_ip_request_headers,omitempty"`
+	JSONCustomConfig     []GoogleComputeSecurityPolicyAdvancedOptionsConfigJSONCustomConfig `tf:"json_custom_config,blocks" json:"json_custom_config,omitempty"`
 }
 
 // GoogleComputeSecurityPolicyAdvancedOptionsConfigJSONCustomConfig is a nested-block type used by the parent resource.
 type GoogleComputeSecurityPolicyAdvancedOptionsConfigJSONCustomConfig struct {
-	ContentTypes []*Value[string] `tf:"content_types"`
+	ContentTypes []*Value[string] `tf:"content_types" json:"content_types,omitempty"`
 }
 
 // GoogleComputeSecurityPolicyRecaptchaOptionsConfig is a nested-block type used by the parent resource.
 type GoogleComputeSecurityPolicyRecaptchaOptionsConfig struct {
-	RedirectSiteKey *Value[string] `tf:"redirect_site_key"`
+	RedirectSiteKey *Value[string] `tf:"redirect_site_key" json:"redirect_site_key,omitempty"`
 }
 
 // GoogleComputeSecurityPolicyRule is a nested-block type used by the parent resource.
 type GoogleComputeSecurityPolicyRule struct {
-	Action           *Value[string]                                    `tf:"action"`
-	Description      *Value[string]                                    `tf:"description"`
-	Preview          *Value[bool]                                      `tf:"preview"`
-	Priority         *Value[float64]                                   `tf:"priority"`
-	HeaderAction     []GoogleComputeSecurityPolicyRuleHeaderAction     `tf:"header_action,blocks"`
-	Match            []GoogleComputeSecurityPolicyRuleMatch            `tf:"match,blocks"`
-	RateLimitOptions []GoogleComputeSecurityPolicyRuleRateLimitOptions `tf:"rate_limit_options,blocks"`
-	RedirectOptions  []GoogleComputeSecurityPolicyRuleRedirectOptions  `tf:"redirect_options,blocks"`
+	Action           *Value[string]                                    `tf:"action" json:"action,omitempty"`
+	Description      *Value[string]                                    `tf:"description" json:"description,omitempty"`
+	Preview          *Value[bool]                                      `tf:"preview" json:"preview,omitempty"`
+	Priority         *Value[float64]                                   `tf:"priority" json:"priority,omitempty"`
+	HeaderAction     []GoogleComputeSecurityPolicyRuleHeaderAction     `tf:"header_action,blocks" json:"header_action,omitempty"`
+	Match            []GoogleComputeSecurityPolicyRuleMatch            `tf:"match,blocks" json:"match,omitempty"`
+	RateLimitOptions []GoogleComputeSecurityPolicyRuleRateLimitOptions `tf:"rate_limit_options,blocks" json:"rate_limit_options,omitempty"`
+	RedirectOptions  []GoogleComputeSecurityPolicyRuleRedirectOptions  `tf:"redirect_options,blocks" json:"redirect_options,omitempty"`
 }
 
 // GoogleComputeSecurityPolicyRuleHeaderAction is a nested-block type used by the parent resource.
 type GoogleComputeSecurityPolicyRuleHeaderAction struct {
-	RequestHeadersToAdds []GoogleComputeSecurityPolicyRuleHeaderActionRequestHeadersToAdds `tf:"request_headers_to_adds,blocks"`
+	RequestHeadersToAdds []GoogleComputeSecurityPolicyRuleHeaderActionRequestHeadersToAdds `tf:"request_headers_to_adds,blocks" json:"request_headers_to_adds,omitempty"`
 }
 
 // GoogleComputeSecurityPolicyRuleHeaderActionRequestHeadersToAdds is a nested-block type used by the parent resource.
 type GoogleComputeSecurityPolicyRuleHeaderActionRequestHeadersToAdds struct {
-	HeaderName  *Value[string] `tf:"header_name"`
-	HeaderValue *Value[string] `tf:"header_value"`
+	HeaderName  *Value[string] `tf:"header_name" json:"header_name,omitempty"`
+	HeaderValue *Value[string] `tf:"header_value" json:"header_value,omitempty"`
 }
 
 // GoogleComputeSecurityPolicyRuleMatch is a nested-block type used by the parent resource.
 type GoogleComputeSecurityPolicyRuleMatch struct {
-	VersionedExpr *Value[string]                                    `tf:"versioned_expr"`
-	Config        []GoogleComputeSecurityPolicyRuleMatchConfig      `tf:"config,blocks"`
-	Expr          []GoogleComputeSecurityPolicyRuleMatchExpr        `tf:"expr,blocks"`
-	ExprOptions   []GoogleComputeSecurityPolicyRuleMatchExprOptions `tf:"expr_options,blocks"`
+	VersionedExpr *Value[string]                                    `tf:"versioned_expr" json:"versioned_expr,omitempty"`
+	Config        []GoogleComputeSecurityPolicyRuleMatchConfig      `tf:"config,blocks" json:"config,omitempty"`
+	Expr          []GoogleComputeSecurityPolicyRuleMatchExpr        `tf:"expr,blocks" json:"expr,omitempty"`
+	ExprOptions   []GoogleComputeSecurityPolicyRuleMatchExprOptions `tf:"expr_options,blocks" json:"expr_options,omitempty"`
 }
 
 // GoogleComputeSecurityPolicyRuleMatchConfig is a nested-block type used by the parent resource.
 type GoogleComputeSecurityPolicyRuleMatchConfig struct {
-	SrcIpRanges []*Value[string] `tf:"src_ip_ranges"`
+	SrcIpRanges []*Value[string] `tf:"src_ip_ranges" json:"src_ip_ranges,omitempty"`
 }
 
 // GoogleComputeSecurityPolicyRuleMatchExpr is a nested-block type used by the parent resource.
 type GoogleComputeSecurityPolicyRuleMatchExpr struct {
-	Expression *Value[string] `tf:"expression"`
+	Expression *Value[string] `tf:"expression" json:"expression,omitempty"`
 }
 
 // GoogleComputeSecurityPolicyRuleMatchExprOptions is a nested-block type used by the parent resource.
 type GoogleComputeSecurityPolicyRuleMatchExprOptions struct {
-	RecaptchaOptions []GoogleComputeSecurityPolicyRuleMatchExprOptionsRecaptchaOptions `tf:"recaptcha_options,blocks"`
+	RecaptchaOptions []GoogleComputeSecurityPolicyRuleMatchExprOptionsRecaptchaOptions `tf:"recaptcha_options,blocks" json:"recaptcha_options,omitempty"`
 }
 
 // GoogleComputeSecurityPolicyRuleMatchExprOptionsRecaptchaOptions is a nested-block type used by the parent resource.
 type GoogleComputeSecurityPolicyRuleMatchExprOptionsRecaptchaOptions struct {
-	ActionTokenSiteKeys  []*Value[string] `tf:"action_token_site_keys"`
-	SessionTokenSiteKeys []*Value[string] `tf:"session_token_site_keys"`
+	ActionTokenSiteKeys  []*Value[string] `tf:"action_token_site_keys" json:"action_token_site_keys,omitempty"`
+	SessionTokenSiteKeys []*Value[string] `tf:"session_token_site_keys" json:"session_token_site_keys,omitempty"`
 }
 
 // GoogleComputeSecurityPolicyRuleRateLimitOptions is a nested-block type used by the parent resource.
 type GoogleComputeSecurityPolicyRuleRateLimitOptions struct {
-	BanDurationSec        *Value[float64]                                                        `tf:"ban_duration_sec"`
-	ConformAction         *Value[string]                                                         `tf:"conform_action"`
-	EnforceOnKey          *Value[string]                                                         `tf:"enforce_on_key"`
-	EnforceOnKeyName      *Value[string]                                                         `tf:"enforce_on_key_name"`
-	ExceedAction          *Value[string]                                                         `tf:"exceed_action"`
-	BanThreshold          []GoogleComputeSecurityPolicyRuleRateLimitOptionsBanThreshold          `tf:"ban_threshold,blocks"`
-	ExceedRedirectOptions []GoogleComputeSecurityPolicyRuleRateLimitOptionsExceedRedirectOptions `tf:"exceed_redirect_options,blocks"`
-	RateLimitThreshold    []GoogleComputeSecurityPolicyRuleRateLimitOptionsRateLimitThreshold    `tf:"rate_limit_threshold,blocks"`
+	BanDurationSec        *Value[float64]                                                        `tf:"ban_duration_sec" json:"ban_duration_sec,omitempty"`
+	ConformAction         *Value[string]                                                         `tf:"conform_action" json:"conform_action,omitempty"`
+	EnforceOnKey          *Value[string]                                                         `tf:"enforce_on_key" json:"enforce_on_key,omitempty"`
+	EnforceOnKeyName      *Value[string]                                                         `tf:"enforce_on_key_name" json:"enforce_on_key_name,omitempty"`
+	ExceedAction          *Value[string]                                                         `tf:"exceed_action" json:"exceed_action,omitempty"`
+	BanThreshold          []GoogleComputeSecurityPolicyRuleRateLimitOptionsBanThreshold          `tf:"ban_threshold,blocks" json:"ban_threshold,omitempty"`
+	ExceedRedirectOptions []GoogleComputeSecurityPolicyRuleRateLimitOptionsExceedRedirectOptions `tf:"exceed_redirect_options,blocks" json:"exceed_redirect_options,omitempty"`
+	RateLimitThreshold    []GoogleComputeSecurityPolicyRuleRateLimitOptionsRateLimitThreshold    `tf:"rate_limit_threshold,blocks" json:"rate_limit_threshold,omitempty"`
 }
 
 // GoogleComputeSecurityPolicyRuleRateLimitOptionsBanThreshold is a nested-block type used by the parent resource.
 type GoogleComputeSecurityPolicyRuleRateLimitOptionsBanThreshold struct {
-	Count       *Value[float64] `tf:"count"`
-	IntervalSec *Value[float64] `tf:"interval_sec"`
+	Count       *Value[float64] `tf:"count" json:"count,omitempty"`
+	IntervalSec *Value[float64] `tf:"interval_sec" json:"interval_sec,omitempty"`
 }
 
 // GoogleComputeSecurityPolicyRuleRateLimitOptionsExceedRedirectOptions is a nested-block type used by the parent resource.
 type GoogleComputeSecurityPolicyRuleRateLimitOptionsExceedRedirectOptions struct {
-	Target *Value[string] `tf:"target"`
-	Type_  *Value[string] `tf:"type"`
+	Target *Value[string] `tf:"target" json:"target,omitempty"`
+	Type_  *Value[string] `tf:"type" json:"type,omitempty"`
 }
 
 // GoogleComputeSecurityPolicyRuleRateLimitOptionsRateLimitThreshold is a nested-block type used by the parent resource.
 type GoogleComputeSecurityPolicyRuleRateLimitOptionsRateLimitThreshold struct {
-	Count       *Value[float64] `tf:"count"`
-	IntervalSec *Value[float64] `tf:"interval_sec"`
+	Count       *Value[float64] `tf:"count" json:"count,omitempty"`
+	IntervalSec *Value[float64] `tf:"interval_sec" json:"interval_sec,omitempty"`
 }
 
 // GoogleComputeSecurityPolicyRuleRedirectOptions is a nested-block type used by the parent resource.
 type GoogleComputeSecurityPolicyRuleRedirectOptions struct {
-	Target *Value[string] `tf:"target"`
-	Type_  *Value[string] `tf:"type"`
+	Target *Value[string] `tf:"target" json:"target,omitempty"`
+	Type_  *Value[string] `tf:"type" json:"type,omitempty"`
 }
 
 // GoogleComputeSecurityPolicyTimeouts is a nested-block type used by the parent resource.
 type GoogleComputeSecurityPolicyTimeouts struct {
-	Create *Value[string] `tf:"create"`
-	Delete *Value[string] `tf:"delete"`
-	Update *Value[string] `tf:"update"`
+	Create *Value[string] `tf:"create" json:"create,omitempty"`
+	Delete *Value[string] `tf:"delete" json:"delete,omitempty"`
+	Update *Value[string] `tf:"update" json:"update,omitempty"`
 }
 
 // GoogleComputeSecurityPolicySchema describes provider metadata for each attribute / nested

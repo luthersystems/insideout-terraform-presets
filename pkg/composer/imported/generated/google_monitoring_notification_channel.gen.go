@@ -7,33 +7,33 @@ import "reflect"
 // GoogleMonitoringNotificationChannel is the generated Layer 1 typed model for the
 // `google_monitoring_notification_channel` Terraform resource.
 type GoogleMonitoringNotificationChannel struct {
-	Description        *Value[string]                                       `tf:"description"`
-	DisplayName        *Value[string]                                       `tf:"display_name"`
-	Enabled            *Value[bool]                                         `tf:"enabled"`
-	ForceDelete        *Value[bool]                                         `tf:"force_delete"`
-	ID                 *Value[string]                                       `tf:"id"`
-	Labels             map[string]*Value[string]                            `tf:"labels"`
-	Name               *Value[string]                                       `tf:"name"`
-	Project            *Value[string]                                       `tf:"project"`
-	Type_              *Value[string]                                       `tf:"type"`
-	UserLabels         map[string]*Value[string]                            `tf:"user_labels"`
-	VerificationStatus *Value[string]                                       `tf:"verification_status"`
-	SensitiveLabels    []GoogleMonitoringNotificationChannelSensitiveLabels `tf:"sensitive_labels,blocks"`
-	Timeouts           *GoogleMonitoringNotificationChannelTimeouts         `tf:"timeouts,block"`
+	Description        *Value[string]                                       `tf:"description" json:"description,omitempty"`
+	DisplayName        *Value[string]                                       `tf:"display_name" json:"display_name,omitempty"`
+	Enabled            *Value[bool]                                         `tf:"enabled" json:"enabled,omitempty"`
+	ForceDelete        *Value[bool]                                         `tf:"force_delete" json:"force_delete,omitempty"`
+	ID                 *Value[string]                                       `tf:"id" json:"id,omitempty"`
+	Labels             map[string]*Value[string]                            `tf:"labels" json:"labels,omitempty"`
+	Name               *Value[string]                                       `tf:"name" json:"name,omitempty"`
+	Project            *Value[string]                                       `tf:"project" json:"project,omitempty"`
+	Type_              *Value[string]                                       `tf:"type" json:"type,omitempty"`
+	UserLabels         map[string]*Value[string]                            `tf:"user_labels" json:"user_labels,omitempty"`
+	VerificationStatus *Value[string]                                       `tf:"verification_status" json:"verification_status,omitempty"`
+	SensitiveLabels    []GoogleMonitoringNotificationChannelSensitiveLabels `tf:"sensitive_labels,blocks" json:"sensitive_labels,omitempty"`
+	Timeouts           *GoogleMonitoringNotificationChannelTimeouts         `tf:"timeouts,block" json:"timeouts,omitempty"`
 }
 
 // GoogleMonitoringNotificationChannelSensitiveLabels is a nested-block type used by the parent resource.
 type GoogleMonitoringNotificationChannelSensitiveLabels struct {
-	AuthToken  *Value[string] `tf:"auth_token"`
-	Password   *Value[string] `tf:"password"`
-	ServiceKey *Value[string] `tf:"service_key"`
+	AuthToken  *Value[string] `tf:"auth_token" json:"auth_token,omitempty"`
+	Password   *Value[string] `tf:"password" json:"password,omitempty"`
+	ServiceKey *Value[string] `tf:"service_key" json:"service_key,omitempty"`
 }
 
 // GoogleMonitoringNotificationChannelTimeouts is a nested-block type used by the parent resource.
 type GoogleMonitoringNotificationChannelTimeouts struct {
-	Create *Value[string] `tf:"create"`
-	Delete *Value[string] `tf:"delete"`
-	Update *Value[string] `tf:"update"`
+	Create *Value[string] `tf:"create" json:"create,omitempty"`
+	Delete *Value[string] `tf:"delete" json:"delete,omitempty"`
+	Update *Value[string] `tf:"update" json:"update,omitempty"`
 }
 
 // GoogleMonitoringNotificationChannelSchema describes provider metadata for each attribute / nested

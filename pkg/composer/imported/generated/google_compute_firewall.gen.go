@@ -7,51 +7,51 @@ import "reflect"
 // GoogleComputeFirewall is the generated Layer 1 typed model for the
 // `google_compute_firewall` Terraform resource.
 type GoogleComputeFirewall struct {
-	CreationTimestamp     *Value[string]                   `tf:"creation_timestamp"`
-	Description           *Value[string]                   `tf:"description"`
-	DestinationRanges     []*Value[string]                 `tf:"destination_ranges"`
-	Direction             *Value[string]                   `tf:"direction"`
-	Disabled              *Value[bool]                     `tf:"disabled"`
-	EnableLogging         *Value[bool]                     `tf:"enable_logging"`
-	ID                    *Value[string]                   `tf:"id"`
-	Name                  *Value[string]                   `tf:"name"`
-	Network               *Value[string]                   `tf:"network"`
-	Priority              *Value[float64]                  `tf:"priority"`
-	Project               *Value[string]                   `tf:"project"`
-	SelfLink              *Value[string]                   `tf:"self_link"`
-	SourceRanges          []*Value[string]                 `tf:"source_ranges"`
-	SourceServiceAccounts []*Value[string]                 `tf:"source_service_accounts"`
-	SourceTags            []*Value[string]                 `tf:"source_tags"`
-	TargetServiceAccounts []*Value[string]                 `tf:"target_service_accounts"`
-	TargetTags            []*Value[string]                 `tf:"target_tags"`
-	Allow                 []GoogleComputeFirewallAllow     `tf:"allow,blocks"`
-	Deny                  []GoogleComputeFirewallDeny      `tf:"deny,blocks"`
-	LogConfig             []GoogleComputeFirewallLogConfig `tf:"log_config,blocks"`
-	Timeouts              *GoogleComputeFirewallTimeouts   `tf:"timeouts,block"`
+	CreationTimestamp     *Value[string]                   `tf:"creation_timestamp" json:"creation_timestamp,omitempty"`
+	Description           *Value[string]                   `tf:"description" json:"description,omitempty"`
+	DestinationRanges     []*Value[string]                 `tf:"destination_ranges" json:"destination_ranges,omitempty"`
+	Direction             *Value[string]                   `tf:"direction" json:"direction,omitempty"`
+	Disabled              *Value[bool]                     `tf:"disabled" json:"disabled,omitempty"`
+	EnableLogging         *Value[bool]                     `tf:"enable_logging" json:"enable_logging,omitempty"`
+	ID                    *Value[string]                   `tf:"id" json:"id,omitempty"`
+	Name                  *Value[string]                   `tf:"name" json:"name,omitempty"`
+	Network               *Value[string]                   `tf:"network" json:"network,omitempty"`
+	Priority              *Value[float64]                  `tf:"priority" json:"priority,omitempty"`
+	Project               *Value[string]                   `tf:"project" json:"project,omitempty"`
+	SelfLink              *Value[string]                   `tf:"self_link" json:"self_link,omitempty"`
+	SourceRanges          []*Value[string]                 `tf:"source_ranges" json:"source_ranges,omitempty"`
+	SourceServiceAccounts []*Value[string]                 `tf:"source_service_accounts" json:"source_service_accounts,omitempty"`
+	SourceTags            []*Value[string]                 `tf:"source_tags" json:"source_tags,omitempty"`
+	TargetServiceAccounts []*Value[string]                 `tf:"target_service_accounts" json:"target_service_accounts,omitempty"`
+	TargetTags            []*Value[string]                 `tf:"target_tags" json:"target_tags,omitempty"`
+	Allow                 []GoogleComputeFirewallAllow     `tf:"allow,blocks" json:"allow,omitempty"`
+	Deny                  []GoogleComputeFirewallDeny      `tf:"deny,blocks" json:"deny,omitempty"`
+	LogConfig             []GoogleComputeFirewallLogConfig `tf:"log_config,blocks" json:"log_config,omitempty"`
+	Timeouts              *GoogleComputeFirewallTimeouts   `tf:"timeouts,block" json:"timeouts,omitempty"`
 }
 
 // GoogleComputeFirewallAllow is a nested-block type used by the parent resource.
 type GoogleComputeFirewallAllow struct {
-	Ports    []*Value[string] `tf:"ports"`
-	Protocol *Value[string]   `tf:"protocol"`
+	Ports    []*Value[string] `tf:"ports" json:"ports,omitempty"`
+	Protocol *Value[string]   `tf:"protocol" json:"protocol,omitempty"`
 }
 
 // GoogleComputeFirewallDeny is a nested-block type used by the parent resource.
 type GoogleComputeFirewallDeny struct {
-	Ports    []*Value[string] `tf:"ports"`
-	Protocol *Value[string]   `tf:"protocol"`
+	Ports    []*Value[string] `tf:"ports" json:"ports,omitempty"`
+	Protocol *Value[string]   `tf:"protocol" json:"protocol,omitempty"`
 }
 
 // GoogleComputeFirewallLogConfig is a nested-block type used by the parent resource.
 type GoogleComputeFirewallLogConfig struct {
-	Metadata *Value[string] `tf:"metadata"`
+	Metadata *Value[string] `tf:"metadata" json:"metadata,omitempty"`
 }
 
 // GoogleComputeFirewallTimeouts is a nested-block type used by the parent resource.
 type GoogleComputeFirewallTimeouts struct {
-	Create *Value[string] `tf:"create"`
-	Delete *Value[string] `tf:"delete"`
-	Update *Value[string] `tf:"update"`
+	Create *Value[string] `tf:"create" json:"create,omitempty"`
+	Delete *Value[string] `tf:"delete" json:"delete,omitempty"`
+	Update *Value[string] `tf:"update" json:"update,omitempty"`
 }
 
 // GoogleComputeFirewallSchema describes provider metadata for each attribute / nested

@@ -7,74 +7,74 @@ import "reflect"
 // GoogleAPIGatewayAPIConfig is the generated Layer 1 typed model for the
 // `google_api_gateway_api_config` Terraform resource.
 type GoogleAPIGatewayAPIConfig struct {
-	API                   *Value[string]                                   `tf:"api"`
-	APIConfigID           *Value[string]                                   `tf:"api_config_id"`
-	APIConfigIDPrefix     *Value[string]                                   `tf:"api_config_id_prefix"`
-	DisplayName           *Value[string]                                   `tf:"display_name"`
-	EffectiveLabels       map[string]*Value[string]                        `tf:"effective_labels"`
-	ID                    *Value[string]                                   `tf:"id"`
-	Labels                map[string]*Value[string]                        `tf:"labels"`
-	Name                  *Value[string]                                   `tf:"name"`
-	Project               *Value[string]                                   `tf:"project"`
-	ServiceConfigID       *Value[string]                                   `tf:"service_config_id"`
-	TerraformLabels       map[string]*Value[string]                        `tf:"terraform_labels"`
-	GatewayConfig         []GoogleAPIGatewayAPIConfigGatewayConfig         `tf:"gateway_config,blocks"`
-	GRPCServices          []GoogleAPIGatewayAPIConfigGRPCServices          `tf:"grpc_services,blocks"`
-	ManagedServiceConfigs []GoogleAPIGatewayAPIConfigManagedServiceConfigs `tf:"managed_service_configs,blocks"`
-	OpenapiDocuments      []GoogleAPIGatewayAPIConfigOpenapiDocuments      `tf:"openapi_documents,blocks"`
-	Timeouts              *GoogleAPIGatewayAPIConfigTimeouts               `tf:"timeouts,block"`
+	API                   *Value[string]                                   `tf:"api" json:"api,omitempty"`
+	APIConfigID           *Value[string]                                   `tf:"api_config_id" json:"api_config_id,omitempty"`
+	APIConfigIDPrefix     *Value[string]                                   `tf:"api_config_id_prefix" json:"api_config_id_prefix,omitempty"`
+	DisplayName           *Value[string]                                   `tf:"display_name" json:"display_name,omitempty"`
+	EffectiveLabels       map[string]*Value[string]                        `tf:"effective_labels" json:"effective_labels,omitempty"`
+	ID                    *Value[string]                                   `tf:"id" json:"id,omitempty"`
+	Labels                map[string]*Value[string]                        `tf:"labels" json:"labels,omitempty"`
+	Name                  *Value[string]                                   `tf:"name" json:"name,omitempty"`
+	Project               *Value[string]                                   `tf:"project" json:"project,omitempty"`
+	ServiceConfigID       *Value[string]                                   `tf:"service_config_id" json:"service_config_id,omitempty"`
+	TerraformLabels       map[string]*Value[string]                        `tf:"terraform_labels" json:"terraform_labels,omitempty"`
+	GatewayConfig         []GoogleAPIGatewayAPIConfigGatewayConfig         `tf:"gateway_config,blocks" json:"gateway_config,omitempty"`
+	GRPCServices          []GoogleAPIGatewayAPIConfigGRPCServices          `tf:"grpc_services,blocks" json:"grpc_services,omitempty"`
+	ManagedServiceConfigs []GoogleAPIGatewayAPIConfigManagedServiceConfigs `tf:"managed_service_configs,blocks" json:"managed_service_configs,omitempty"`
+	OpenapiDocuments      []GoogleAPIGatewayAPIConfigOpenapiDocuments      `tf:"openapi_documents,blocks" json:"openapi_documents,omitempty"`
+	Timeouts              *GoogleAPIGatewayAPIConfigTimeouts               `tf:"timeouts,block" json:"timeouts,omitempty"`
 }
 
 // GoogleAPIGatewayAPIConfigGRPCServices is a nested-block type used by the parent resource.
 type GoogleAPIGatewayAPIConfigGRPCServices struct {
-	FileDescriptorSet []GoogleAPIGatewayAPIConfigGRPCServicesFileDescriptorSet `tf:"file_descriptor_set,blocks"`
-	Source            []GoogleAPIGatewayAPIConfigGRPCServicesSource            `tf:"source,blocks"`
+	FileDescriptorSet []GoogleAPIGatewayAPIConfigGRPCServicesFileDescriptorSet `tf:"file_descriptor_set,blocks" json:"file_descriptor_set,omitempty"`
+	Source            []GoogleAPIGatewayAPIConfigGRPCServicesSource            `tf:"source,blocks" json:"source,omitempty"`
 }
 
 // GoogleAPIGatewayAPIConfigGRPCServicesFileDescriptorSet is a nested-block type used by the parent resource.
 type GoogleAPIGatewayAPIConfigGRPCServicesFileDescriptorSet struct {
-	Contents *Value[string] `tf:"contents"`
-	Path     *Value[string] `tf:"path"`
+	Contents *Value[string] `tf:"contents" json:"contents,omitempty"`
+	Path     *Value[string] `tf:"path" json:"path,omitempty"`
 }
 
 // GoogleAPIGatewayAPIConfigGRPCServicesSource is a nested-block type used by the parent resource.
 type GoogleAPIGatewayAPIConfigGRPCServicesSource struct {
-	Contents *Value[string] `tf:"contents"`
-	Path     *Value[string] `tf:"path"`
+	Contents *Value[string] `tf:"contents" json:"contents,omitempty"`
+	Path     *Value[string] `tf:"path" json:"path,omitempty"`
 }
 
 // GoogleAPIGatewayAPIConfigGatewayConfig is a nested-block type used by the parent resource.
 type GoogleAPIGatewayAPIConfigGatewayConfig struct {
-	BackendConfig []GoogleAPIGatewayAPIConfigGatewayConfigBackendConfig `tf:"backend_config,blocks"`
+	BackendConfig []GoogleAPIGatewayAPIConfigGatewayConfigBackendConfig `tf:"backend_config,blocks" json:"backend_config,omitempty"`
 }
 
 // GoogleAPIGatewayAPIConfigGatewayConfigBackendConfig is a nested-block type used by the parent resource.
 type GoogleAPIGatewayAPIConfigGatewayConfigBackendConfig struct {
-	GoogleServiceAccount *Value[string] `tf:"google_service_account"`
+	GoogleServiceAccount *Value[string] `tf:"google_service_account" json:"google_service_account,omitempty"`
 }
 
 // GoogleAPIGatewayAPIConfigManagedServiceConfigs is a nested-block type used by the parent resource.
 type GoogleAPIGatewayAPIConfigManagedServiceConfigs struct {
-	Contents *Value[string] `tf:"contents"`
-	Path     *Value[string] `tf:"path"`
+	Contents *Value[string] `tf:"contents" json:"contents,omitempty"`
+	Path     *Value[string] `tf:"path" json:"path,omitempty"`
 }
 
 // GoogleAPIGatewayAPIConfigOpenapiDocuments is a nested-block type used by the parent resource.
 type GoogleAPIGatewayAPIConfigOpenapiDocuments struct {
-	Document []GoogleAPIGatewayAPIConfigOpenapiDocumentsDocument `tf:"document,blocks"`
+	Document []GoogleAPIGatewayAPIConfigOpenapiDocumentsDocument `tf:"document,blocks" json:"document,omitempty"`
 }
 
 // GoogleAPIGatewayAPIConfigOpenapiDocumentsDocument is a nested-block type used by the parent resource.
 type GoogleAPIGatewayAPIConfigOpenapiDocumentsDocument struct {
-	Contents *Value[string] `tf:"contents"`
-	Path     *Value[string] `tf:"path"`
+	Contents *Value[string] `tf:"contents" json:"contents,omitempty"`
+	Path     *Value[string] `tf:"path" json:"path,omitempty"`
 }
 
 // GoogleAPIGatewayAPIConfigTimeouts is a nested-block type used by the parent resource.
 type GoogleAPIGatewayAPIConfigTimeouts struct {
-	Create *Value[string] `tf:"create"`
-	Delete *Value[string] `tf:"delete"`
-	Update *Value[string] `tf:"update"`
+	Create *Value[string] `tf:"create" json:"create,omitempty"`
+	Delete *Value[string] `tf:"delete" json:"delete,omitempty"`
+	Update *Value[string] `tf:"update" json:"update,omitempty"`
 }
 
 // GoogleAPIGatewayAPIConfigSchema describes provider metadata for each attribute / nested

@@ -7,214 +7,214 @@ import "reflect"
 // AWSS3Bucket is the generated Layer 1 typed model for the
 // `aws_s3_bucket` Terraform resource.
 type AWSS3Bucket struct {
-	AccelerationStatus                *Value[string]                                 `tf:"acceleration_status"`
-	ACL                               *Value[string]                                 `tf:"acl"`
-	ARN                               *Value[string]                                 `tf:"arn"`
-	Bucket                            *Value[string]                                 `tf:"bucket"`
-	BucketDomainName                  *Value[string]                                 `tf:"bucket_domain_name"`
-	BucketPrefix                      *Value[string]                                 `tf:"bucket_prefix"`
-	BucketRegionalDomainName          *Value[string]                                 `tf:"bucket_regional_domain_name"`
-	ForceDestroy                      *Value[bool]                                   `tf:"force_destroy"`
-	HostedZoneID                      *Value[string]                                 `tf:"hosted_zone_id"`
-	ID                                *Value[string]                                 `tf:"id"`
-	ObjectLockEnabled                 *Value[bool]                                   `tf:"object_lock_enabled"`
-	Policy                            *Value[string]                                 `tf:"policy"`
-	Region                            *Value[string]                                 `tf:"region"`
-	RequestPayer                      *Value[string]                                 `tf:"request_payer"`
-	Tags                              map[string]*Value[string]                      `tf:"tags"`
-	TagsAll                           map[string]*Value[string]                      `tf:"tags_all"`
-	WebsiteDomain                     *Value[string]                                 `tf:"website_domain"`
-	WebsiteEndpoint                   *Value[string]                                 `tf:"website_endpoint"`
-	CorsRule                          []AWSS3BucketCorsRule                          `tf:"cors_rule,blocks"`
-	Grant                             []AWSS3BucketGrant                             `tf:"grant,blocks"`
-	LifecycleRule                     []AWSS3BucketLifecycleRule                     `tf:"lifecycle_rule,blocks"`
-	Logging                           []AWSS3BucketLogging                           `tf:"logging,blocks"`
-	ObjectLockConfiguration           []AWSS3BucketObjectLockConfiguration           `tf:"object_lock_configuration,blocks"`
-	ReplicationConfiguration          []AWSS3BucketReplicationConfiguration          `tf:"replication_configuration,blocks"`
-	ServerSideEncryptionConfiguration []AWSS3BucketServerSideEncryptionConfiguration `tf:"server_side_encryption_configuration,blocks"`
-	Timeouts                          *AWSS3BucketTimeouts                           `tf:"timeouts,block"`
-	Versioning                        []AWSS3BucketVersioning                        `tf:"versioning,blocks"`
-	Website                           []AWSS3BucketWebsite                           `tf:"website,blocks"`
+	AccelerationStatus                *Value[string]                                 `tf:"acceleration_status" json:"acceleration_status,omitempty"`
+	ACL                               *Value[string]                                 `tf:"acl" json:"acl,omitempty"`
+	ARN                               *Value[string]                                 `tf:"arn" json:"arn,omitempty"`
+	Bucket                            *Value[string]                                 `tf:"bucket" json:"bucket,omitempty"`
+	BucketDomainName                  *Value[string]                                 `tf:"bucket_domain_name" json:"bucket_domain_name,omitempty"`
+	BucketPrefix                      *Value[string]                                 `tf:"bucket_prefix" json:"bucket_prefix,omitempty"`
+	BucketRegionalDomainName          *Value[string]                                 `tf:"bucket_regional_domain_name" json:"bucket_regional_domain_name,omitempty"`
+	ForceDestroy                      *Value[bool]                                   `tf:"force_destroy" json:"force_destroy,omitempty"`
+	HostedZoneID                      *Value[string]                                 `tf:"hosted_zone_id" json:"hosted_zone_id,omitempty"`
+	ID                                *Value[string]                                 `tf:"id" json:"id,omitempty"`
+	ObjectLockEnabled                 *Value[bool]                                   `tf:"object_lock_enabled" json:"object_lock_enabled,omitempty"`
+	Policy                            *Value[string]                                 `tf:"policy" json:"policy,omitempty"`
+	Region                            *Value[string]                                 `tf:"region" json:"region,omitempty"`
+	RequestPayer                      *Value[string]                                 `tf:"request_payer" json:"request_payer,omitempty"`
+	Tags                              map[string]*Value[string]                      `tf:"tags" json:"tags,omitempty"`
+	TagsAll                           map[string]*Value[string]                      `tf:"tags_all" json:"tags_all,omitempty"`
+	WebsiteDomain                     *Value[string]                                 `tf:"website_domain" json:"website_domain,omitempty"`
+	WebsiteEndpoint                   *Value[string]                                 `tf:"website_endpoint" json:"website_endpoint,omitempty"`
+	CorsRule                          []AWSS3BucketCorsRule                          `tf:"cors_rule,blocks" json:"cors_rule,omitempty"`
+	Grant                             []AWSS3BucketGrant                             `tf:"grant,blocks" json:"grant,omitempty"`
+	LifecycleRule                     []AWSS3BucketLifecycleRule                     `tf:"lifecycle_rule,blocks" json:"lifecycle_rule,omitempty"`
+	Logging                           []AWSS3BucketLogging                           `tf:"logging,blocks" json:"logging,omitempty"`
+	ObjectLockConfiguration           []AWSS3BucketObjectLockConfiguration           `tf:"object_lock_configuration,blocks" json:"object_lock_configuration,omitempty"`
+	ReplicationConfiguration          []AWSS3BucketReplicationConfiguration          `tf:"replication_configuration,blocks" json:"replication_configuration,omitempty"`
+	ServerSideEncryptionConfiguration []AWSS3BucketServerSideEncryptionConfiguration `tf:"server_side_encryption_configuration,blocks" json:"server_side_encryption_configuration,omitempty"`
+	Timeouts                          *AWSS3BucketTimeouts                           `tf:"timeouts,block" json:"timeouts,omitempty"`
+	Versioning                        []AWSS3BucketVersioning                        `tf:"versioning,blocks" json:"versioning,omitempty"`
+	Website                           []AWSS3BucketWebsite                           `tf:"website,blocks" json:"website,omitempty"`
 }
 
 // AWSS3BucketCorsRule is a nested-block type used by the parent resource.
 type AWSS3BucketCorsRule struct {
-	AllowedHeaders []*Value[string] `tf:"allowed_headers"`
-	AllowedMethods []*Value[string] `tf:"allowed_methods"`
-	AllowedOrigins []*Value[string] `tf:"allowed_origins"`
-	ExposeHeaders  []*Value[string] `tf:"expose_headers"`
-	MaxAgeSeconds  *Value[int64]    `tf:"max_age_seconds"`
+	AllowedHeaders []*Value[string] `tf:"allowed_headers" json:"allowed_headers,omitempty"`
+	AllowedMethods []*Value[string] `tf:"allowed_methods" json:"allowed_methods,omitempty"`
+	AllowedOrigins []*Value[string] `tf:"allowed_origins" json:"allowed_origins,omitempty"`
+	ExposeHeaders  []*Value[string] `tf:"expose_headers" json:"expose_headers,omitempty"`
+	MaxAgeSeconds  *Value[int64]    `tf:"max_age_seconds" json:"max_age_seconds,omitempty"`
 }
 
 // AWSS3BucketGrant is a nested-block type used by the parent resource.
 type AWSS3BucketGrant struct {
-	ID          *Value[string]   `tf:"id"`
-	Permissions []*Value[string] `tf:"permissions"`
-	Type_       *Value[string]   `tf:"type"`
-	URI         *Value[string]   `tf:"uri"`
+	ID          *Value[string]   `tf:"id" json:"id,omitempty"`
+	Permissions []*Value[string] `tf:"permissions" json:"permissions,omitempty"`
+	Type_       *Value[string]   `tf:"type" json:"type,omitempty"`
+	URI         *Value[string]   `tf:"uri" json:"uri,omitempty"`
 }
 
 // AWSS3BucketLifecycleRule is a nested-block type used by the parent resource.
 type AWSS3BucketLifecycleRule struct {
-	AbortIncompleteMultipartUploadDays *Value[float64]                                       `tf:"abort_incomplete_multipart_upload_days"`
-	Enabled                            *Value[bool]                                          `tf:"enabled"`
-	ID                                 *Value[string]                                        `tf:"id"`
-	Prefix                             *Value[string]                                        `tf:"prefix"`
-	Tags                               map[string]*Value[string]                             `tf:"tags"`
-	Expiration                         []AWSS3BucketLifecycleRuleExpiration                  `tf:"expiration,blocks"`
-	NoncurrentVersionExpiration        []AWSS3BucketLifecycleRuleNoncurrentVersionExpiration `tf:"noncurrent_version_expiration,blocks"`
-	NoncurrentVersionTransition        []AWSS3BucketLifecycleRuleNoncurrentVersionTransition `tf:"noncurrent_version_transition,blocks"`
-	Transition                         []AWSS3BucketLifecycleRuleTransition                  `tf:"transition,blocks"`
+	AbortIncompleteMultipartUploadDays *Value[float64]                                       `tf:"abort_incomplete_multipart_upload_days" json:"abort_incomplete_multipart_upload_days,omitempty"`
+	Enabled                            *Value[bool]                                          `tf:"enabled" json:"enabled,omitempty"`
+	ID                                 *Value[string]                                        `tf:"id" json:"id,omitempty"`
+	Prefix                             *Value[string]                                        `tf:"prefix" json:"prefix,omitempty"`
+	Tags                               map[string]*Value[string]                             `tf:"tags" json:"tags,omitempty"`
+	Expiration                         []AWSS3BucketLifecycleRuleExpiration                  `tf:"expiration,blocks" json:"expiration,omitempty"`
+	NoncurrentVersionExpiration        []AWSS3BucketLifecycleRuleNoncurrentVersionExpiration `tf:"noncurrent_version_expiration,blocks" json:"noncurrent_version_expiration,omitempty"`
+	NoncurrentVersionTransition        []AWSS3BucketLifecycleRuleNoncurrentVersionTransition `tf:"noncurrent_version_transition,blocks" json:"noncurrent_version_transition,omitempty"`
+	Transition                         []AWSS3BucketLifecycleRuleTransition                  `tf:"transition,blocks" json:"transition,omitempty"`
 }
 
 // AWSS3BucketLifecycleRuleExpiration is a nested-block type used by the parent resource.
 type AWSS3BucketLifecycleRuleExpiration struct {
-	Date                      *Value[string]  `tf:"date"`
-	Days                      *Value[float64] `tf:"days"`
-	ExpiredObjectDeleteMarker *Value[bool]    `tf:"expired_object_delete_marker"`
+	Date                      *Value[string]  `tf:"date" json:"date,omitempty"`
+	Days                      *Value[float64] `tf:"days" json:"days,omitempty"`
+	ExpiredObjectDeleteMarker *Value[bool]    `tf:"expired_object_delete_marker" json:"expired_object_delete_marker,omitempty"`
 }
 
 // AWSS3BucketLifecycleRuleNoncurrentVersionExpiration is a nested-block type used by the parent resource.
 type AWSS3BucketLifecycleRuleNoncurrentVersionExpiration struct {
-	Days *Value[float64] `tf:"days"`
+	Days *Value[float64] `tf:"days" json:"days,omitempty"`
 }
 
 // AWSS3BucketLifecycleRuleNoncurrentVersionTransition is a nested-block type used by the parent resource.
 type AWSS3BucketLifecycleRuleNoncurrentVersionTransition struct {
-	Days         *Value[float64] `tf:"days"`
-	StorageClass *Value[string]  `tf:"storage_class"`
+	Days         *Value[float64] `tf:"days" json:"days,omitempty"`
+	StorageClass *Value[string]  `tf:"storage_class" json:"storage_class,omitempty"`
 }
 
 // AWSS3BucketLifecycleRuleTransition is a nested-block type used by the parent resource.
 type AWSS3BucketLifecycleRuleTransition struct {
-	Date         *Value[string]  `tf:"date"`
-	Days         *Value[float64] `tf:"days"`
-	StorageClass *Value[string]  `tf:"storage_class"`
+	Date         *Value[string]  `tf:"date" json:"date,omitempty"`
+	Days         *Value[float64] `tf:"days" json:"days,omitempty"`
+	StorageClass *Value[string]  `tf:"storage_class" json:"storage_class,omitempty"`
 }
 
 // AWSS3BucketLogging is a nested-block type used by the parent resource.
 type AWSS3BucketLogging struct {
-	TargetBucket *Value[string] `tf:"target_bucket"`
-	TargetPrefix *Value[string] `tf:"target_prefix"`
+	TargetBucket *Value[string] `tf:"target_bucket" json:"target_bucket,omitempty"`
+	TargetPrefix *Value[string] `tf:"target_prefix" json:"target_prefix,omitempty"`
 }
 
 // AWSS3BucketObjectLockConfiguration is a nested-block type used by the parent resource.
 type AWSS3BucketObjectLockConfiguration struct {
-	ObjectLockEnabled *Value[string]                           `tf:"object_lock_enabled"`
-	Rule              []AWSS3BucketObjectLockConfigurationRule `tf:"rule,blocks"`
+	ObjectLockEnabled *Value[string]                           `tf:"object_lock_enabled" json:"object_lock_enabled,omitempty"`
+	Rule              []AWSS3BucketObjectLockConfigurationRule `tf:"rule,blocks" json:"rule,omitempty"`
 }
 
 // AWSS3BucketObjectLockConfigurationRule is a nested-block type used by the parent resource.
 type AWSS3BucketObjectLockConfigurationRule struct {
-	DefaultRetention []AWSS3BucketObjectLockConfigurationRuleDefaultRetention `tf:"default_retention,blocks"`
+	DefaultRetention []AWSS3BucketObjectLockConfigurationRuleDefaultRetention `tf:"default_retention,blocks" json:"default_retention,omitempty"`
 }
 
 // AWSS3BucketObjectLockConfigurationRuleDefaultRetention is a nested-block type used by the parent resource.
 type AWSS3BucketObjectLockConfigurationRuleDefaultRetention struct {
-	Days  *Value[float64] `tf:"days"`
-	Mode  *Value[string]  `tf:"mode"`
-	Years *Value[float64] `tf:"years"`
+	Days  *Value[float64] `tf:"days" json:"days,omitempty"`
+	Mode  *Value[string]  `tf:"mode" json:"mode,omitempty"`
+	Years *Value[float64] `tf:"years" json:"years,omitempty"`
 }
 
 // AWSS3BucketReplicationConfiguration is a nested-block type used by the parent resource.
 type AWSS3BucketReplicationConfiguration struct {
-	Role  *Value[string]                             `tf:"role"`
-	Rules []AWSS3BucketReplicationConfigurationRules `tf:"rules,blocks"`
+	Role  *Value[string]                             `tf:"role" json:"role,omitempty"`
+	Rules []AWSS3BucketReplicationConfigurationRules `tf:"rules,blocks" json:"rules,omitempty"`
 }
 
 // AWSS3BucketReplicationConfigurationRules is a nested-block type used by the parent resource.
 type AWSS3BucketReplicationConfigurationRules struct {
-	DeleteMarkerReplicationStatus *Value[string]                                                    `tf:"delete_marker_replication_status"`
-	ID                            *Value[string]                                                    `tf:"id"`
-	Prefix                        *Value[string]                                                    `tf:"prefix"`
-	Priority                      *Value[float64]                                                   `tf:"priority"`
-	Status                        *Value[string]                                                    `tf:"status"`
-	Destination                   []AWSS3BucketReplicationConfigurationRulesDestination             `tf:"destination,blocks"`
-	Filter                        []AWSS3BucketReplicationConfigurationRulesFilter                  `tf:"filter,blocks"`
-	SourceSelectionCriteria       []AWSS3BucketReplicationConfigurationRulesSourceSelectionCriteria `tf:"source_selection_criteria,blocks"`
+	DeleteMarkerReplicationStatus *Value[string]                                                    `tf:"delete_marker_replication_status" json:"delete_marker_replication_status,omitempty"`
+	ID                            *Value[string]                                                    `tf:"id" json:"id,omitempty"`
+	Prefix                        *Value[string]                                                    `tf:"prefix" json:"prefix,omitempty"`
+	Priority                      *Value[float64]                                                   `tf:"priority" json:"priority,omitempty"`
+	Status                        *Value[string]                                                    `tf:"status" json:"status,omitempty"`
+	Destination                   []AWSS3BucketReplicationConfigurationRulesDestination             `tf:"destination,blocks" json:"destination,omitempty"`
+	Filter                        []AWSS3BucketReplicationConfigurationRulesFilter                  `tf:"filter,blocks" json:"filter,omitempty"`
+	SourceSelectionCriteria       []AWSS3BucketReplicationConfigurationRulesSourceSelectionCriteria `tf:"source_selection_criteria,blocks" json:"source_selection_criteria,omitempty"`
 }
 
 // AWSS3BucketReplicationConfigurationRulesDestination is a nested-block type used by the parent resource.
 type AWSS3BucketReplicationConfigurationRulesDestination struct {
-	AccountID                *Value[string]                                                                `tf:"account_id"`
-	Bucket                   *Value[string]                                                                `tf:"bucket"`
-	ReplicaKMSKeyID          *Value[string]                                                                `tf:"replica_kms_key_id"`
-	StorageClass             *Value[string]                                                                `tf:"storage_class"`
-	AccessControlTranslation []AWSS3BucketReplicationConfigurationRulesDestinationAccessControlTranslation `tf:"access_control_translation,blocks"`
-	Metrics                  []AWSS3BucketReplicationConfigurationRulesDestinationMetrics                  `tf:"metrics,blocks"`
-	ReplicationTime          []AWSS3BucketReplicationConfigurationRulesDestinationReplicationTime          `tf:"replication_time,blocks"`
+	AccountID                *Value[string]                                                                `tf:"account_id" json:"account_id,omitempty"`
+	Bucket                   *Value[string]                                                                `tf:"bucket" json:"bucket,omitempty"`
+	ReplicaKMSKeyID          *Value[string]                                                                `tf:"replica_kms_key_id" json:"replica_kms_key_id,omitempty"`
+	StorageClass             *Value[string]                                                                `tf:"storage_class" json:"storage_class,omitempty"`
+	AccessControlTranslation []AWSS3BucketReplicationConfigurationRulesDestinationAccessControlTranslation `tf:"access_control_translation,blocks" json:"access_control_translation,omitempty"`
+	Metrics                  []AWSS3BucketReplicationConfigurationRulesDestinationMetrics                  `tf:"metrics,blocks" json:"metrics,omitempty"`
+	ReplicationTime          []AWSS3BucketReplicationConfigurationRulesDestinationReplicationTime          `tf:"replication_time,blocks" json:"replication_time,omitempty"`
 }
 
 // AWSS3BucketReplicationConfigurationRulesDestinationAccessControlTranslation is a nested-block type used by the parent resource.
 type AWSS3BucketReplicationConfigurationRulesDestinationAccessControlTranslation struct {
-	Owner *Value[string] `tf:"owner"`
+	Owner *Value[string] `tf:"owner" json:"owner,omitempty"`
 }
 
 // AWSS3BucketReplicationConfigurationRulesDestinationMetrics is a nested-block type used by the parent resource.
 type AWSS3BucketReplicationConfigurationRulesDestinationMetrics struct {
-	Minutes *Value[float64] `tf:"minutes"`
-	Status  *Value[string]  `tf:"status"`
+	Minutes *Value[float64] `tf:"minutes" json:"minutes,omitempty"`
+	Status  *Value[string]  `tf:"status" json:"status,omitempty"`
 }
 
 // AWSS3BucketReplicationConfigurationRulesDestinationReplicationTime is a nested-block type used by the parent resource.
 type AWSS3BucketReplicationConfigurationRulesDestinationReplicationTime struct {
-	Minutes *Value[float64] `tf:"minutes"`
-	Status  *Value[string]  `tf:"status"`
+	Minutes *Value[float64] `tf:"minutes" json:"minutes,omitempty"`
+	Status  *Value[string]  `tf:"status" json:"status,omitempty"`
 }
 
 // AWSS3BucketReplicationConfigurationRulesFilter is a nested-block type used by the parent resource.
 type AWSS3BucketReplicationConfigurationRulesFilter struct {
-	Prefix *Value[string]            `tf:"prefix"`
-	Tags   map[string]*Value[string] `tf:"tags"`
+	Prefix *Value[string]            `tf:"prefix" json:"prefix,omitempty"`
+	Tags   map[string]*Value[string] `tf:"tags" json:"tags,omitempty"`
 }
 
 // AWSS3BucketReplicationConfigurationRulesSourceSelectionCriteria is a nested-block type used by the parent resource.
 type AWSS3BucketReplicationConfigurationRulesSourceSelectionCriteria struct {
-	SSEKMSEncryptedObjects []AWSS3BucketReplicationConfigurationRulesSourceSelectionCriteriaSSEKMSEncryptedObjects `tf:"sse_kms_encrypted_objects,blocks"`
+	SSEKMSEncryptedObjects []AWSS3BucketReplicationConfigurationRulesSourceSelectionCriteriaSSEKMSEncryptedObjects `tf:"sse_kms_encrypted_objects,blocks" json:"sse_kms_encrypted_objects,omitempty"`
 }
 
 // AWSS3BucketReplicationConfigurationRulesSourceSelectionCriteriaSSEKMSEncryptedObjects is a nested-block type used by the parent resource.
 type AWSS3BucketReplicationConfigurationRulesSourceSelectionCriteriaSSEKMSEncryptedObjects struct {
-	Enabled *Value[bool] `tf:"enabled"`
+	Enabled *Value[bool] `tf:"enabled" json:"enabled,omitempty"`
 }
 
 // AWSS3BucketServerSideEncryptionConfiguration is a nested-block type used by the parent resource.
 type AWSS3BucketServerSideEncryptionConfiguration struct {
-	Rule []AWSS3BucketServerSideEncryptionConfigurationRule `tf:"rule,blocks"`
+	Rule []AWSS3BucketServerSideEncryptionConfigurationRule `tf:"rule,blocks" json:"rule,omitempty"`
 }
 
 // AWSS3BucketServerSideEncryptionConfigurationRule is a nested-block type used by the parent resource.
 type AWSS3BucketServerSideEncryptionConfigurationRule struct {
-	BucketKeyEnabled                   *Value[bool]                                                                         `tf:"bucket_key_enabled"`
-	ApplyServerSideEncryptionByDefault []AWSS3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault `tf:"apply_server_side_encryption_by_default,blocks"`
+	BucketKeyEnabled                   *Value[bool]                                                                         `tf:"bucket_key_enabled" json:"bucket_key_enabled,omitempty"`
+	ApplyServerSideEncryptionByDefault []AWSS3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault `tf:"apply_server_side_encryption_by_default,blocks" json:"apply_server_side_encryption_by_default,omitempty"`
 }
 
 // AWSS3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault is a nested-block type used by the parent resource.
 type AWSS3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault struct {
-	KMSMasterKeyID *Value[string] `tf:"kms_master_key_id"`
-	SSEAlgorithm   *Value[string] `tf:"sse_algorithm"`
+	KMSMasterKeyID *Value[string] `tf:"kms_master_key_id" json:"kms_master_key_id,omitempty"`
+	SSEAlgorithm   *Value[string] `tf:"sse_algorithm" json:"sse_algorithm,omitempty"`
 }
 
 // AWSS3BucketTimeouts is a nested-block type used by the parent resource.
 type AWSS3BucketTimeouts struct {
-	Create *Value[string] `tf:"create"`
-	Delete *Value[string] `tf:"delete"`
-	Read   *Value[string] `tf:"read"`
-	Update *Value[string] `tf:"update"`
+	Create *Value[string] `tf:"create" json:"create,omitempty"`
+	Delete *Value[string] `tf:"delete" json:"delete,omitempty"`
+	Read   *Value[string] `tf:"read" json:"read,omitempty"`
+	Update *Value[string] `tf:"update" json:"update,omitempty"`
 }
 
 // AWSS3BucketVersioning is a nested-block type used by the parent resource.
 type AWSS3BucketVersioning struct {
-	Enabled   *Value[bool] `tf:"enabled"`
-	MFADelete *Value[bool] `tf:"mfa_delete"`
+	Enabled   *Value[bool] `tf:"enabled" json:"enabled,omitempty"`
+	MFADelete *Value[bool] `tf:"mfa_delete" json:"mfa_delete,omitempty"`
 }
 
 // AWSS3BucketWebsite is a nested-block type used by the parent resource.
 type AWSS3BucketWebsite struct {
-	ErrorDocument         *Value[string] `tf:"error_document"`
-	IndexDocument         *Value[string] `tf:"index_document"`
-	RedirectAllRequestsTo *Value[string] `tf:"redirect_all_requests_to"`
-	RoutingRules          *Value[string] `tf:"routing_rules"`
+	ErrorDocument         *Value[string] `tf:"error_document" json:"error_document,omitempty"`
+	IndexDocument         *Value[string] `tf:"index_document" json:"index_document,omitempty"`
+	RedirectAllRequestsTo *Value[string] `tf:"redirect_all_requests_to" json:"redirect_all_requests_to,omitempty"`
+	RoutingRules          *Value[string] `tf:"routing_rules" json:"routing_rules,omitempty"`
 }
 
 // AWSS3BucketSchema describes provider metadata for each attribute / nested

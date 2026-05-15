@@ -7,25 +7,25 @@ import "reflect"
 // GoogleAPIGatewayGateway is the generated Layer 1 typed model for the
 // `google_api_gateway_gateway` Terraform resource.
 type GoogleAPIGatewayGateway struct {
-	APIConfig       *Value[string]                   `tf:"api_config"`
-	DefaultHostname *Value[string]                   `tf:"default_hostname"`
-	DisplayName     *Value[string]                   `tf:"display_name"`
-	EffectiveLabels map[string]*Value[string]        `tf:"effective_labels"`
-	GatewayID       *Value[string]                   `tf:"gateway_id"`
-	ID              *Value[string]                   `tf:"id"`
-	Labels          map[string]*Value[string]        `tf:"labels"`
-	Name            *Value[string]                   `tf:"name"`
-	Project         *Value[string]                   `tf:"project"`
-	Region          *Value[string]                   `tf:"region"`
-	TerraformLabels map[string]*Value[string]        `tf:"terraform_labels"`
-	Timeouts        *GoogleAPIGatewayGatewayTimeouts `tf:"timeouts,block"`
+	APIConfig       *Value[string]                   `tf:"api_config" json:"api_config,omitempty"`
+	DefaultHostname *Value[string]                   `tf:"default_hostname" json:"default_hostname,omitempty"`
+	DisplayName     *Value[string]                   `tf:"display_name" json:"display_name,omitempty"`
+	EffectiveLabels map[string]*Value[string]        `tf:"effective_labels" json:"effective_labels,omitempty"`
+	GatewayID       *Value[string]                   `tf:"gateway_id" json:"gateway_id,omitempty"`
+	ID              *Value[string]                   `tf:"id" json:"id,omitempty"`
+	Labels          map[string]*Value[string]        `tf:"labels" json:"labels,omitempty"`
+	Name            *Value[string]                   `tf:"name" json:"name,omitempty"`
+	Project         *Value[string]                   `tf:"project" json:"project,omitempty"`
+	Region          *Value[string]                   `tf:"region" json:"region,omitempty"`
+	TerraformLabels map[string]*Value[string]        `tf:"terraform_labels" json:"terraform_labels,omitempty"`
+	Timeouts        *GoogleAPIGatewayGatewayTimeouts `tf:"timeouts,block" json:"timeouts,omitempty"`
 }
 
 // GoogleAPIGatewayGatewayTimeouts is a nested-block type used by the parent resource.
 type GoogleAPIGatewayGatewayTimeouts struct {
-	Create *Value[string] `tf:"create"`
-	Delete *Value[string] `tf:"delete"`
-	Update *Value[string] `tf:"update"`
+	Create *Value[string] `tf:"create" json:"create,omitempty"`
+	Delete *Value[string] `tf:"delete" json:"delete,omitempty"`
+	Update *Value[string] `tf:"update" json:"update,omitempty"`
 }
 
 // GoogleAPIGatewayGatewaySchema describes provider metadata for each attribute / nested

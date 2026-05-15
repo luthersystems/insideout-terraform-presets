@@ -7,30 +7,30 @@ import "reflect"
 // GoogleComputeGlobalAddress is the generated Layer 1 typed model for the
 // `google_compute_global_address` Terraform resource.
 type GoogleComputeGlobalAddress struct {
-	Address           *Value[string]                      `tf:"address"`
-	AddressType       *Value[string]                      `tf:"address_type"`
-	CreationTimestamp *Value[string]                      `tf:"creation_timestamp"`
-	Description       *Value[string]                      `tf:"description"`
-	EffectiveLabels   map[string]*Value[string]           `tf:"effective_labels"`
-	ID                *Value[string]                      `tf:"id"`
-	IpVersion         *Value[string]                      `tf:"ip_version"`
-	LabelFingerprint  *Value[string]                      `tf:"label_fingerprint"`
-	Labels            map[string]*Value[string]           `tf:"labels"`
-	Name              *Value[string]                      `tf:"name"`
-	Network           *Value[string]                      `tf:"network"`
-	PrefixLength      *Value[float64]                     `tf:"prefix_length"`
-	Project           *Value[string]                      `tf:"project"`
-	Purpose           *Value[string]                      `tf:"purpose"`
-	SelfLink          *Value[string]                      `tf:"self_link"`
-	TerraformLabels   map[string]*Value[string]           `tf:"terraform_labels"`
-	Timeouts          *GoogleComputeGlobalAddressTimeouts `tf:"timeouts,block"`
+	Address           *Value[string]                      `tf:"address" json:"address,omitempty"`
+	AddressType       *Value[string]                      `tf:"address_type" json:"address_type,omitempty"`
+	CreationTimestamp *Value[string]                      `tf:"creation_timestamp" json:"creation_timestamp,omitempty"`
+	Description       *Value[string]                      `tf:"description" json:"description,omitempty"`
+	EffectiveLabels   map[string]*Value[string]           `tf:"effective_labels" json:"effective_labels,omitempty"`
+	ID                *Value[string]                      `tf:"id" json:"id,omitempty"`
+	IpVersion         *Value[string]                      `tf:"ip_version" json:"ip_version,omitempty"`
+	LabelFingerprint  *Value[string]                      `tf:"label_fingerprint" json:"label_fingerprint,omitempty"`
+	Labels            map[string]*Value[string]           `tf:"labels" json:"labels,omitempty"`
+	Name              *Value[string]                      `tf:"name" json:"name,omitempty"`
+	Network           *Value[string]                      `tf:"network" json:"network,omitempty"`
+	PrefixLength      *Value[float64]                     `tf:"prefix_length" json:"prefix_length,omitempty"`
+	Project           *Value[string]                      `tf:"project" json:"project,omitempty"`
+	Purpose           *Value[string]                      `tf:"purpose" json:"purpose,omitempty"`
+	SelfLink          *Value[string]                      `tf:"self_link" json:"self_link,omitempty"`
+	TerraformLabels   map[string]*Value[string]           `tf:"terraform_labels" json:"terraform_labels,omitempty"`
+	Timeouts          *GoogleComputeGlobalAddressTimeouts `tf:"timeouts,block" json:"timeouts,omitempty"`
 }
 
 // GoogleComputeGlobalAddressTimeouts is a nested-block type used by the parent resource.
 type GoogleComputeGlobalAddressTimeouts struct {
-	Create *Value[string] `tf:"create"`
-	Delete *Value[string] `tf:"delete"`
-	Update *Value[string] `tf:"update"`
+	Create *Value[string] `tf:"create" json:"create,omitempty"`
+	Delete *Value[string] `tf:"delete" json:"delete,omitempty"`
+	Update *Value[string] `tf:"update" json:"update,omitempty"`
 }
 
 // GoogleComputeGlobalAddressSchema describes provider metadata for each attribute / nested

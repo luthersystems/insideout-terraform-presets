@@ -7,170 +7,170 @@ import "reflect"
 // GoogleMonitoringAlertPolicy is the generated Layer 1 typed model for the
 // `google_monitoring_alert_policy` Terraform resource.
 type GoogleMonitoringAlertPolicy struct {
-	Combiner             *Value[string]                              `tf:"combiner"`
-	CreationRecord       []GoogleMonitoringAlertPolicyCreationRecord `tf:"creation_record"`
-	DisplayName          *Value[string]                              `tf:"display_name"`
-	Enabled              *Value[bool]                                `tf:"enabled"`
-	ID                   *Value[string]                              `tf:"id"`
-	Name                 *Value[string]                              `tf:"name"`
-	NotificationChannels []*Value[string]                            `tf:"notification_channels"`
-	Project              *Value[string]                              `tf:"project"`
-	Severity             *Value[string]                              `tf:"severity"`
-	UserLabels           map[string]*Value[string]                   `tf:"user_labels"`
-	AlertStrategy        []GoogleMonitoringAlertPolicyAlertStrategy  `tf:"alert_strategy,blocks"`
-	Conditions           []GoogleMonitoringAlertPolicyConditions     `tf:"conditions,blocks"`
-	Documentation        []GoogleMonitoringAlertPolicyDocumentation  `tf:"documentation,blocks"`
-	Timeouts             *GoogleMonitoringAlertPolicyTimeouts        `tf:"timeouts,block"`
+	Combiner             *Value[string]                              `tf:"combiner" json:"combiner,omitempty"`
+	CreationRecord       []GoogleMonitoringAlertPolicyCreationRecord `tf:"creation_record" json:"creation_record,omitempty"`
+	DisplayName          *Value[string]                              `tf:"display_name" json:"display_name,omitempty"`
+	Enabled              *Value[bool]                                `tf:"enabled" json:"enabled,omitempty"`
+	ID                   *Value[string]                              `tf:"id" json:"id,omitempty"`
+	Name                 *Value[string]                              `tf:"name" json:"name,omitempty"`
+	NotificationChannels []*Value[string]                            `tf:"notification_channels" json:"notification_channels,omitempty"`
+	Project              *Value[string]                              `tf:"project" json:"project,omitempty"`
+	Severity             *Value[string]                              `tf:"severity" json:"severity,omitempty"`
+	UserLabels           map[string]*Value[string]                   `tf:"user_labels" json:"user_labels,omitempty"`
+	AlertStrategy        []GoogleMonitoringAlertPolicyAlertStrategy  `tf:"alert_strategy,blocks" json:"alert_strategy,omitempty"`
+	Conditions           []GoogleMonitoringAlertPolicyConditions     `tf:"conditions,blocks" json:"conditions,omitempty"`
+	Documentation        []GoogleMonitoringAlertPolicyDocumentation  `tf:"documentation,blocks" json:"documentation,omitempty"`
+	Timeouts             *GoogleMonitoringAlertPolicyTimeouts        `tf:"timeouts,block" json:"timeouts,omitempty"`
 }
 
 // GoogleMonitoringAlertPolicyAlertStrategy is a nested-block type used by the parent resource.
 type GoogleMonitoringAlertPolicyAlertStrategy struct {
-	AutoClose                   *Value[string]                                                        `tf:"auto_close"`
-	NotificationPrompts         []*Value[string]                                                      `tf:"notification_prompts"`
-	NotificationChannelStrategy []GoogleMonitoringAlertPolicyAlertStrategyNotificationChannelStrategy `tf:"notification_channel_strategy,blocks"`
-	NotificationRateLimit       []GoogleMonitoringAlertPolicyAlertStrategyNotificationRateLimit       `tf:"notification_rate_limit,blocks"`
+	AutoClose                   *Value[string]                                                        `tf:"auto_close" json:"auto_close,omitempty"`
+	NotificationPrompts         []*Value[string]                                                      `tf:"notification_prompts" json:"notification_prompts,omitempty"`
+	NotificationChannelStrategy []GoogleMonitoringAlertPolicyAlertStrategyNotificationChannelStrategy `tf:"notification_channel_strategy,blocks" json:"notification_channel_strategy,omitempty"`
+	NotificationRateLimit       []GoogleMonitoringAlertPolicyAlertStrategyNotificationRateLimit       `tf:"notification_rate_limit,blocks" json:"notification_rate_limit,omitempty"`
 }
 
 // GoogleMonitoringAlertPolicyAlertStrategyNotificationChannelStrategy is a nested-block type used by the parent resource.
 type GoogleMonitoringAlertPolicyAlertStrategyNotificationChannelStrategy struct {
-	NotificationChannelNames []*Value[string] `tf:"notification_channel_names"`
-	RenotifyInterval         *Value[string]   `tf:"renotify_interval"`
+	NotificationChannelNames []*Value[string] `tf:"notification_channel_names" json:"notification_channel_names,omitempty"`
+	RenotifyInterval         *Value[string]   `tf:"renotify_interval" json:"renotify_interval,omitempty"`
 }
 
 // GoogleMonitoringAlertPolicyAlertStrategyNotificationRateLimit is a nested-block type used by the parent resource.
 type GoogleMonitoringAlertPolicyAlertStrategyNotificationRateLimit struct {
-	Period *Value[string] `tf:"period"`
+	Period *Value[string] `tf:"period" json:"period,omitempty"`
 }
 
 // GoogleMonitoringAlertPolicyConditions is a nested-block type used by the parent resource.
 type GoogleMonitoringAlertPolicyConditions struct {
-	DisplayName                      *Value[string]                                                          `tf:"display_name"`
-	Name                             *Value[string]                                                          `tf:"name"`
-	ConditionAbsent                  []GoogleMonitoringAlertPolicyConditionsConditionAbsent                  `tf:"condition_absent,blocks"`
-	ConditionMatchedLog              []GoogleMonitoringAlertPolicyConditionsConditionMatchedLog              `tf:"condition_matched_log,blocks"`
-	ConditionMonitoringQueryLanguage []GoogleMonitoringAlertPolicyConditionsConditionMonitoringQueryLanguage `tf:"condition_monitoring_query_language,blocks"`
-	ConditionPrometheusQueryLanguage []GoogleMonitoringAlertPolicyConditionsConditionPrometheusQueryLanguage `tf:"condition_prometheus_query_language,blocks"`
-	ConditionThreshold               []GoogleMonitoringAlertPolicyConditionsConditionThreshold               `tf:"condition_threshold,blocks"`
+	DisplayName                      *Value[string]                                                          `tf:"display_name" json:"display_name,omitempty"`
+	Name                             *Value[string]                                                          `tf:"name" json:"name,omitempty"`
+	ConditionAbsent                  []GoogleMonitoringAlertPolicyConditionsConditionAbsent                  `tf:"condition_absent,blocks" json:"condition_absent,omitempty"`
+	ConditionMatchedLog              []GoogleMonitoringAlertPolicyConditionsConditionMatchedLog              `tf:"condition_matched_log,blocks" json:"condition_matched_log,omitempty"`
+	ConditionMonitoringQueryLanguage []GoogleMonitoringAlertPolicyConditionsConditionMonitoringQueryLanguage `tf:"condition_monitoring_query_language,blocks" json:"condition_monitoring_query_language,omitempty"`
+	ConditionPrometheusQueryLanguage []GoogleMonitoringAlertPolicyConditionsConditionPrometheusQueryLanguage `tf:"condition_prometheus_query_language,blocks" json:"condition_prometheus_query_language,omitempty"`
+	ConditionThreshold               []GoogleMonitoringAlertPolicyConditionsConditionThreshold               `tf:"condition_threshold,blocks" json:"condition_threshold,omitempty"`
 }
 
 // GoogleMonitoringAlertPolicyConditionsConditionAbsent is a nested-block type used by the parent resource.
 type GoogleMonitoringAlertPolicyConditionsConditionAbsent struct {
-	Duration     *Value[string]                                                     `tf:"duration"`
-	Filter       *Value[string]                                                     `tf:"filter"`
-	Aggregations []GoogleMonitoringAlertPolicyConditionsConditionAbsentAggregations `tf:"aggregations,blocks"`
-	Trigger      []GoogleMonitoringAlertPolicyConditionsConditionAbsentTrigger      `tf:"trigger,blocks"`
+	Duration     *Value[string]                                                     `tf:"duration" json:"duration,omitempty"`
+	Filter       *Value[string]                                                     `tf:"filter" json:"filter,omitempty"`
+	Aggregations []GoogleMonitoringAlertPolicyConditionsConditionAbsentAggregations `tf:"aggregations,blocks" json:"aggregations,omitempty"`
+	Trigger      []GoogleMonitoringAlertPolicyConditionsConditionAbsentTrigger      `tf:"trigger,blocks" json:"trigger,omitempty"`
 }
 
 // GoogleMonitoringAlertPolicyConditionsConditionAbsentAggregations is a nested-block type used by the parent resource.
 type GoogleMonitoringAlertPolicyConditionsConditionAbsentAggregations struct {
-	AlignmentPeriod    *Value[string]   `tf:"alignment_period"`
-	CrossSeriesReducer *Value[string]   `tf:"cross_series_reducer"`
-	GroupByFields      []*Value[string] `tf:"group_by_fields"`
-	PerSeriesAligner   *Value[string]   `tf:"per_series_aligner"`
+	AlignmentPeriod    *Value[string]   `tf:"alignment_period" json:"alignment_period,omitempty"`
+	CrossSeriesReducer *Value[string]   `tf:"cross_series_reducer" json:"cross_series_reducer,omitempty"`
+	GroupByFields      []*Value[string] `tf:"group_by_fields" json:"group_by_fields,omitempty"`
+	PerSeriesAligner   *Value[string]   `tf:"per_series_aligner" json:"per_series_aligner,omitempty"`
 }
 
 // GoogleMonitoringAlertPolicyConditionsConditionAbsentTrigger is a nested-block type used by the parent resource.
 type GoogleMonitoringAlertPolicyConditionsConditionAbsentTrigger struct {
-	Count   *Value[float64] `tf:"count"`
-	Percent *Value[float64] `tf:"percent"`
+	Count   *Value[float64] `tf:"count" json:"count,omitempty"`
+	Percent *Value[float64] `tf:"percent" json:"percent,omitempty"`
 }
 
 // GoogleMonitoringAlertPolicyConditionsConditionMatchedLog is a nested-block type used by the parent resource.
 type GoogleMonitoringAlertPolicyConditionsConditionMatchedLog struct {
-	Filter          *Value[string]            `tf:"filter"`
-	LabelExtractors map[string]*Value[string] `tf:"label_extractors"`
+	Filter          *Value[string]            `tf:"filter" json:"filter,omitempty"`
+	LabelExtractors map[string]*Value[string] `tf:"label_extractors" json:"label_extractors,omitempty"`
 }
 
 // GoogleMonitoringAlertPolicyConditionsConditionMonitoringQueryLanguage is a nested-block type used by the parent resource.
 type GoogleMonitoringAlertPolicyConditionsConditionMonitoringQueryLanguage struct {
-	Duration              *Value[string]                                                                 `tf:"duration"`
-	EvaluationMissingData *Value[string]                                                                 `tf:"evaluation_missing_data"`
-	Query                 *Value[string]                                                                 `tf:"query"`
-	Trigger               []GoogleMonitoringAlertPolicyConditionsConditionMonitoringQueryLanguageTrigger `tf:"trigger,blocks"`
+	Duration              *Value[string]                                                                 `tf:"duration" json:"duration,omitempty"`
+	EvaluationMissingData *Value[string]                                                                 `tf:"evaluation_missing_data" json:"evaluation_missing_data,omitempty"`
+	Query                 *Value[string]                                                                 `tf:"query" json:"query,omitempty"`
+	Trigger               []GoogleMonitoringAlertPolicyConditionsConditionMonitoringQueryLanguageTrigger `tf:"trigger,blocks" json:"trigger,omitempty"`
 }
 
 // GoogleMonitoringAlertPolicyConditionsConditionMonitoringQueryLanguageTrigger is a nested-block type used by the parent resource.
 type GoogleMonitoringAlertPolicyConditionsConditionMonitoringQueryLanguageTrigger struct {
-	Count   *Value[float64] `tf:"count"`
-	Percent *Value[float64] `tf:"percent"`
+	Count   *Value[float64] `tf:"count" json:"count,omitempty"`
+	Percent *Value[float64] `tf:"percent" json:"percent,omitempty"`
 }
 
 // GoogleMonitoringAlertPolicyConditionsConditionPrometheusQueryLanguage is a nested-block type used by the parent resource.
 type GoogleMonitoringAlertPolicyConditionsConditionPrometheusQueryLanguage struct {
-	AlertRule          *Value[string]            `tf:"alert_rule"`
-	Duration           *Value[string]            `tf:"duration"`
-	EvaluationInterval *Value[string]            `tf:"evaluation_interval"`
-	Labels             map[string]*Value[string] `tf:"labels"`
-	Query              *Value[string]            `tf:"query"`
-	RuleGroup          *Value[string]            `tf:"rule_group"`
+	AlertRule          *Value[string]            `tf:"alert_rule" json:"alert_rule,omitempty"`
+	Duration           *Value[string]            `tf:"duration" json:"duration,omitempty"`
+	EvaluationInterval *Value[string]            `tf:"evaluation_interval" json:"evaluation_interval,omitempty"`
+	Labels             map[string]*Value[string] `tf:"labels" json:"labels,omitempty"`
+	Query              *Value[string]            `tf:"query" json:"query,omitempty"`
+	RuleGroup          *Value[string]            `tf:"rule_group" json:"rule_group,omitempty"`
 }
 
 // GoogleMonitoringAlertPolicyConditionsConditionThreshold is a nested-block type used by the parent resource.
 type GoogleMonitoringAlertPolicyConditionsConditionThreshold struct {
-	Comparison              *Value[string]                                                                   `tf:"comparison"`
-	DenominatorFilter       *Value[string]                                                                   `tf:"denominator_filter"`
-	Duration                *Value[string]                                                                   `tf:"duration"`
-	EvaluationMissingData   *Value[string]                                                                   `tf:"evaluation_missing_data"`
-	Filter                  *Value[string]                                                                   `tf:"filter"`
-	ThresholdValue          *Value[float64]                                                                  `tf:"threshold_value"`
-	Aggregations            []GoogleMonitoringAlertPolicyConditionsConditionThresholdAggregations            `tf:"aggregations,blocks"`
-	DenominatorAggregations []GoogleMonitoringAlertPolicyConditionsConditionThresholdDenominatorAggregations `tf:"denominator_aggregations,blocks"`
-	ForecastOptions         []GoogleMonitoringAlertPolicyConditionsConditionThresholdForecastOptions         `tf:"forecast_options,blocks"`
-	Trigger                 []GoogleMonitoringAlertPolicyConditionsConditionThresholdTrigger                 `tf:"trigger,blocks"`
+	Comparison              *Value[string]                                                                   `tf:"comparison" json:"comparison,omitempty"`
+	DenominatorFilter       *Value[string]                                                                   `tf:"denominator_filter" json:"denominator_filter,omitempty"`
+	Duration                *Value[string]                                                                   `tf:"duration" json:"duration,omitempty"`
+	EvaluationMissingData   *Value[string]                                                                   `tf:"evaluation_missing_data" json:"evaluation_missing_data,omitempty"`
+	Filter                  *Value[string]                                                                   `tf:"filter" json:"filter,omitempty"`
+	ThresholdValue          *Value[float64]                                                                  `tf:"threshold_value" json:"threshold_value,omitempty"`
+	Aggregations            []GoogleMonitoringAlertPolicyConditionsConditionThresholdAggregations            `tf:"aggregations,blocks" json:"aggregations,omitempty"`
+	DenominatorAggregations []GoogleMonitoringAlertPolicyConditionsConditionThresholdDenominatorAggregations `tf:"denominator_aggregations,blocks" json:"denominator_aggregations,omitempty"`
+	ForecastOptions         []GoogleMonitoringAlertPolicyConditionsConditionThresholdForecastOptions         `tf:"forecast_options,blocks" json:"forecast_options,omitempty"`
+	Trigger                 []GoogleMonitoringAlertPolicyConditionsConditionThresholdTrigger                 `tf:"trigger,blocks" json:"trigger,omitempty"`
 }
 
 // GoogleMonitoringAlertPolicyConditionsConditionThresholdAggregations is a nested-block type used by the parent resource.
 type GoogleMonitoringAlertPolicyConditionsConditionThresholdAggregations struct {
-	AlignmentPeriod    *Value[string]   `tf:"alignment_period"`
-	CrossSeriesReducer *Value[string]   `tf:"cross_series_reducer"`
-	GroupByFields      []*Value[string] `tf:"group_by_fields"`
-	PerSeriesAligner   *Value[string]   `tf:"per_series_aligner"`
+	AlignmentPeriod    *Value[string]   `tf:"alignment_period" json:"alignment_period,omitempty"`
+	CrossSeriesReducer *Value[string]   `tf:"cross_series_reducer" json:"cross_series_reducer,omitempty"`
+	GroupByFields      []*Value[string] `tf:"group_by_fields" json:"group_by_fields,omitempty"`
+	PerSeriesAligner   *Value[string]   `tf:"per_series_aligner" json:"per_series_aligner,omitempty"`
 }
 
 // GoogleMonitoringAlertPolicyConditionsConditionThresholdDenominatorAggregations is a nested-block type used by the parent resource.
 type GoogleMonitoringAlertPolicyConditionsConditionThresholdDenominatorAggregations struct {
-	AlignmentPeriod    *Value[string]   `tf:"alignment_period"`
-	CrossSeriesReducer *Value[string]   `tf:"cross_series_reducer"`
-	GroupByFields      []*Value[string] `tf:"group_by_fields"`
-	PerSeriesAligner   *Value[string]   `tf:"per_series_aligner"`
+	AlignmentPeriod    *Value[string]   `tf:"alignment_period" json:"alignment_period,omitempty"`
+	CrossSeriesReducer *Value[string]   `tf:"cross_series_reducer" json:"cross_series_reducer,omitempty"`
+	GroupByFields      []*Value[string] `tf:"group_by_fields" json:"group_by_fields,omitempty"`
+	PerSeriesAligner   *Value[string]   `tf:"per_series_aligner" json:"per_series_aligner,omitempty"`
 }
 
 // GoogleMonitoringAlertPolicyConditionsConditionThresholdForecastOptions is a nested-block type used by the parent resource.
 type GoogleMonitoringAlertPolicyConditionsConditionThresholdForecastOptions struct {
-	ForecastHorizon *Value[string] `tf:"forecast_horizon"`
+	ForecastHorizon *Value[string] `tf:"forecast_horizon" json:"forecast_horizon,omitempty"`
 }
 
 // GoogleMonitoringAlertPolicyConditionsConditionThresholdTrigger is a nested-block type used by the parent resource.
 type GoogleMonitoringAlertPolicyConditionsConditionThresholdTrigger struct {
-	Count   *Value[float64] `tf:"count"`
-	Percent *Value[float64] `tf:"percent"`
+	Count   *Value[float64] `tf:"count" json:"count,omitempty"`
+	Percent *Value[float64] `tf:"percent" json:"percent,omitempty"`
 }
 
 // GoogleMonitoringAlertPolicyCreationRecord is a nested-block type used by the parent resource.
 type GoogleMonitoringAlertPolicyCreationRecord struct {
-	MutateTime *Value[string] `tf:"mutate_time"`
-	MutatedBy  *Value[string] `tf:"mutated_by"`
+	MutateTime *Value[string] `tf:"mutate_time" json:"mutate_time,omitempty"`
+	MutatedBy  *Value[string] `tf:"mutated_by" json:"mutated_by,omitempty"`
 }
 
 // GoogleMonitoringAlertPolicyDocumentation is a nested-block type used by the parent resource.
 type GoogleMonitoringAlertPolicyDocumentation struct {
-	Content  *Value[string]                                  `tf:"content"`
-	MimeType *Value[string]                                  `tf:"mime_type"`
-	Subject  *Value[string]                                  `tf:"subject"`
-	Links    []GoogleMonitoringAlertPolicyDocumentationLinks `tf:"links,blocks"`
+	Content  *Value[string]                                  `tf:"content" json:"content,omitempty"`
+	MimeType *Value[string]                                  `tf:"mime_type" json:"mime_type,omitempty"`
+	Subject  *Value[string]                                  `tf:"subject" json:"subject,omitempty"`
+	Links    []GoogleMonitoringAlertPolicyDocumentationLinks `tf:"links,blocks" json:"links,omitempty"`
 }
 
 // GoogleMonitoringAlertPolicyDocumentationLinks is a nested-block type used by the parent resource.
 type GoogleMonitoringAlertPolicyDocumentationLinks struct {
-	DisplayName *Value[string] `tf:"display_name"`
-	URL         *Value[string] `tf:"url"`
+	DisplayName *Value[string] `tf:"display_name" json:"display_name,omitempty"`
+	URL         *Value[string] `tf:"url" json:"url,omitempty"`
 }
 
 // GoogleMonitoringAlertPolicyTimeouts is a nested-block type used by the parent resource.
 type GoogleMonitoringAlertPolicyTimeouts struct {
-	Create *Value[string] `tf:"create"`
-	Delete *Value[string] `tf:"delete"`
-	Update *Value[string] `tf:"update"`
+	Create *Value[string] `tf:"create" json:"create,omitempty"`
+	Delete *Value[string] `tf:"delete" json:"delete,omitempty"`
+	Update *Value[string] `tf:"update" json:"update,omitempty"`
 }
 
 // GoogleMonitoringAlertPolicySchema describes provider metadata for each attribute / nested

@@ -128,7 +128,7 @@ func TestInjectProvenance_AWSTypedAttrsExisting(t *testing.T) {
 	ir := imported.ImportedResource{
 		Identity: imported.ResourceIdentity{Cloud: "aws", Type: "aws_sqs_queue", Address: "aws_sqs_queue.q"},
 		Tier:     imported.TierImportedFlat,
-		Attrs:    []byte(`{"Name":{"Literal":"q"},"Tags":{"Owner":{"Literal":"team-payments"}}}`),
+		Attrs:    []byte(`{"name":{"literal":"q"},"tags":{"Owner":{"literal":"team-payments"}}}`),
 	}
 	body, _, err := emitTestBody(t, ir)
 	require.NoError(t, err)
@@ -154,7 +154,7 @@ func TestInjectProvenance_GCPTypedAttrsExisting(t *testing.T) {
 	ir := imported.ImportedResource{
 		Identity: imported.ResourceIdentity{Cloud: "gcp", Type: "google_storage_bucket", Address: "google_storage_bucket.docs"},
 		Tier:     imported.TierImportedFlat,
-		Attrs:    []byte(`{"Name":{"Literal":"docs"},"Labels":{"team":{"Literal":"docs"}}}`),
+		Attrs:    []byte(`{"name":{"literal":"docs"},"labels":{"team":{"literal":"docs"}}}`),
 	}
 	body, _, err := emitTestBody(t, ir)
 	require.NoError(t, err)
@@ -323,7 +323,7 @@ func TestInjectProvenance_GCPUntaggableType(t *testing.T) {
 	ir := imported.ImportedResource{
 		Identity: imported.ResourceIdentity{Cloud: "gcp", Type: "google_compute_network", Address: "google_compute_network.vpc"},
 		Tier:     imported.TierImportedFlat,
-		Attrs:    []byte(`{"Name":{"Literal":"vpc"}}`),
+		Attrs:    []byte(`{"name":{"literal":"vpc"}}`),
 	}
 	body, _, err := emitTestBody(t, ir)
 	require.NoError(t, err)
@@ -338,7 +338,7 @@ func TestInjectProvenance_NoExistingTags(t *testing.T) {
 	ir := imported.ImportedResource{
 		Identity: imported.ResourceIdentity{Cloud: "aws", Type: "aws_sqs_queue", Address: "aws_sqs_queue.q"},
 		Tier:     imported.TierImportedFlat,
-		Attrs:    []byte(`{"Name":{"Literal":"q"}}`),
+		Attrs:    []byte(`{"name":{"literal":"q"}}`),
 	}
 	body, _, err := emitTestBody(t, ir)
 	require.NoError(t, err)
@@ -383,7 +383,7 @@ func TestInjectProvenance_Deterministic(t *testing.T) {
 	ir := imported.ImportedResource{
 		Identity: imported.ResourceIdentity{Cloud: "aws", Type: "aws_sqs_queue", Address: "aws_sqs_queue.q"},
 		Tier:     imported.TierImportedFlat,
-		Attrs:    []byte(`{"Name":{"Literal":"q"}}`),
+		Attrs:    []byte(`{"name":{"literal":"q"}}`),
 	}
 	body, _, err := emitTestBody(t, ir)
 	require.NoError(t, err)
@@ -406,7 +406,7 @@ func TestInjectProvenance_DoubleInjectionNests(t *testing.T) {
 	ir := imported.ImportedResource{
 		Identity: imported.ResourceIdentity{Cloud: "aws", Type: "aws_sqs_queue", Address: "aws_sqs_queue.q"},
 		Tier:     imported.TierImportedFlat,
-		Attrs:    []byte(`{"Name":{"Literal":"q"}}`),
+		Attrs:    []byte(`{"name":{"literal":"q"}}`),
 	}
 	body, _, err := emitTestBody(t, ir)
 	require.NoError(t, err)
