@@ -344,8 +344,14 @@ func TestRenderAgentContext_UnregisteredTypeIsSkipped(t *testing.T) {
 // surfaces through repeated RenderAgentContext calls; we don't expose
 // getOrBuildTypeBlock directly so the test exercises the public
 // surface.
+//
+// Intentionally NOT t.Parallel(): the package-level type-block cache
+// is shared, and a neighbouring parallel test calling
+// ResetAgentContextCacheForTest mid-test would race the assertion
+// that "the second call hits the cache" — both calls would rebuild
+// and the round-trip would still pass (they're deterministic) but
+// the test would no longer be exercising the cache path it claims to.
 func TestRenderAgentContext_TypeBlockCaching(t *testing.T) {
-	t.Parallel()
 	imp.ResetAgentContextCacheForTest()
 
 	irs := []composerimported.ImportedResource{
