@@ -171,4 +171,3 @@ func mapServiceAccount(b *iamv1.ServiceAccount, projectID string) *generated.Goo
 
 	return out
 }
-

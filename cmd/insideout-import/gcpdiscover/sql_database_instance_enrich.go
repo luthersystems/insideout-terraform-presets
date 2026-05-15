@@ -356,4 +356,3 @@ func mapSQLSettings(s *sqladmin.Settings) generated.GoogleSqlDatabaseInstanceSet
 
 	return out
 }
-
