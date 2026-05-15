@@ -3,11 +3,8 @@ package gcpdiscover
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"net/http"
 
-	"google.golang.org/api/googleapi"
 	identitytoolkitv2 "google.golang.org/api/identitytoolkit/v2"
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
@@ -82,7 +79,7 @@ func (e identityPlatformConfigEnricher) fetchTyped(ctx context.Context, id *impo
 	fullName := fmt.Sprintf("projects/%s/config", c.ProjectID)
 	cfg, err := e.fetch(ctx, c.IdentityToolkit, fullName)
 	if err != nil {
-		if isIdentityToolkitNotFound(err) {
+		if isGoogleAPINotFound(err) {
 			return nil, fmt.Errorf("identity_platform_config: %s: %w", fullName, ErrNotFound)
 		}
 		return nil, fmt.Errorf("identity_platform_config: get %s: %w", fullName, err)
@@ -97,14 +94,6 @@ func (e identityPlatformConfigEnricher) fetchTyped(ctx context.Context, id *impo
 
 func defaultIdentityPlatformConfigFetch(ctx context.Context, svc *identitytoolkitv2.Service, name string) (*identitytoolkitv2.GoogleCloudIdentitytoolkitAdminV2Config, error) {
 	return svc.Projects.GetConfig(name).Context(ctx).Do()
-}
-
-func isIdentityToolkitNotFound(err error) bool {
-	var gerr *googleapi.Error
-	if errors.As(err, &gerr) {
-		return gerr.Code == http.StatusNotFound
-	}
-	return false
 }
 
 // mapIdentityPlatformConfig converts the SDK Config struct into the

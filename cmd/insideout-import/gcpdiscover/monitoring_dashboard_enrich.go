@@ -3,11 +3,8 @@ package gcpdiscover
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"net/http"
 
-	"google.golang.org/api/googleapi"
 	monitoringv1 "google.golang.org/api/monitoring/v1"
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
@@ -67,7 +64,7 @@ func (e monitoringDashboardEnricher) EnrichByID(ctx context.Context, identity *i
 }
 
 func (e monitoringDashboardEnricher) fetchTyped(ctx context.Context, id *imported.ResourceIdentity, c EnrichClients) (json.RawMessage, error) {
-	if c.MonitoringDashboard == nil {
+	if c.MonitoringV1 == nil {
 		return nil, ErrEnrichClientUnavailable
 	}
 	fullName := monitoringDashboardNameForEnrich(id, c.ProjectID)
@@ -75,9 +72,9 @@ func (e monitoringDashboardEnricher) fetchTyped(ctx context.Context, id *importe
 		return nil, fmt.Errorf("monitoring_dashboard: cannot derive resource name from Identity (Address=%q ImportID=%q NameHint=%q)",
 			id.Address, id.ImportID, id.NameHint)
 	}
-	d, err := e.fetch(ctx, c.MonitoringDashboard, fullName)
+	d, err := e.fetch(ctx, c.MonitoringV1, fullName)
 	if err != nil {
-		if isMonitoringDashboardNotFound(err) {
+		if isGoogleAPINotFound(err) {
 			return nil, fmt.Errorf("monitoring_dashboard: %s: %w", fullName, ErrNotFound)
 		}
 		return nil, fmt.Errorf("monitoring_dashboard: get %s: %w", fullName, err)
@@ -108,14 +105,6 @@ func monitoringDashboardNameForEnrich(id *imported.ResourceIdentity, projectID s
 
 func defaultMonitoringDashboardFetch(ctx context.Context, svc *monitoringv1.Service, name string) (*monitoringv1.Dashboard, error) {
 	return svc.Projects.Dashboards.Get(name).Context(ctx).Do()
-}
-
-func isMonitoringDashboardNotFound(err error) bool {
-	var gerr *googleapi.Error
-	if errors.As(err, &gerr) {
-		return gerr.Code == http.StatusNotFound
-	}
-	return false
 }
 
 // mapMonitoringDashboard converts a *monitoringv1.Dashboard into the

@@ -144,17 +144,22 @@ type ByIDEnricher interface {
 // override return ErrEnrichClientUnavailable when this is nil, which
 // the EnrichAttributes loop downgrades to a per-resource warning.
 type EnrichClients struct {
-	Storage             *storagev1.Service
-	Pubsub              *pubsubv1.Service
-	SecretManager       *secretmanagerv1.Service
-	Compute             *computev1.Service
-	SQLAdmin            *sqladminv1.Service
-	Logging             *loggingv2.Service
-	IdentityToolkit     *identitytoolkitv2.Service
-	Monitoring          *monitoringv3.Service
-	MonitoringDashboard *monitoringv1.Service
-	CloudAsset          gcpAssetGetter
-	ProjectID           string
+	Storage         *storagev1.Service
+	Pubsub          *pubsubv1.Service
+	SecretManager   *secretmanagerv1.Service
+	Compute         *computev1.Service
+	SQLAdmin        *sqladminv1.Service
+	Logging         *loggingv2.Service
+	IdentityToolkit *identitytoolkitv2.Service
+	Monitoring      *monitoringv3.Service
+	// MonitoringV1 is the Cloud Monitoring v1 SDK service. Used for
+	// dashboards (v1 schema); v3 (the Monitoring field above) covers
+	// AlertPolicies, NotificationChannels, etc. — the two SDK packages
+	// expose disjoint resource families and the dashboards-only client
+	// is kept as a separate field so the wiring is explicit.
+	MonitoringV1 *monitoringv1.Service
+	CloudAsset   gcpAssetGetter
+	ProjectID    string
 }
 
 // ErrEnrichClientUnavailable signals that the SDK client an enricher

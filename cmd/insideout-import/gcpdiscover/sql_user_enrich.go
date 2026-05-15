@@ -3,12 +3,9 @@ package gcpdiscover
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"net/http"
 	"strings"
 
-	"google.golang.org/api/googleapi"
 	sqladminv1 "google.golang.org/api/sqladmin/v1"
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
@@ -90,7 +87,7 @@ func (e sqlUserEnricher) fetchTyped(ctx context.Context, id *imported.ResourceId
 	}
 	u, err := e.fetch(ctx, c.SQLAdmin, c.ProjectID, instance, host, name)
 	if err != nil {
-		if isSQLAdminNotFound(err) {
+		if isGoogleAPINotFound(err) {
 			return nil, fmt.Errorf("sql_user: %s/%s/%s: %w", c.ProjectID, instance, name, ErrNotFound)
 		}
 		return nil, fmt.Errorf("sql_user: get %s/%s/%s: %w", c.ProjectID, instance, name, err)
@@ -167,16 +164,6 @@ func defaultSQLUserFetch(ctx context.Context, svc *sqladminv1.Service, project, 
 		call = call.Host(host)
 	}
 	return call.Context(ctx).Do()
-}
-
-// isSQLAdminNotFound reports whether err is a googleapi.Error with
-// HTTP 404.
-func isSQLAdminNotFound(err error) bool {
-	var gerr *googleapi.Error
-	if errors.As(err, &gerr) {
-		return gerr.Code == http.StatusNotFound
-	}
-	return false
 }
 
 // mapSQLUser converts a *sqladminv1.User into the typed Layer-1

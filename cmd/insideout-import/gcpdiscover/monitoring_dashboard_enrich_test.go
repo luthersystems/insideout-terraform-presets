@@ -26,7 +26,7 @@ func TestMonitoringDashboardEnricher_NilClient_ReturnsClientUnavailable(t *testi
 	ir := &imported.ImportedResource{
 		Identity: imported.ResourceIdentity{Type: monitoringDashboardTFType, ImportID: "projects/p/dashboards/1"},
 	}
-	err := e.Enrich(context.Background(), ir, EnrichClients{MonitoringDashboard: nil, ProjectID: "p"})
+	err := e.Enrich(context.Background(), ir, EnrichClients{MonitoringV1: nil, ProjectID: "p"})
 	require.ErrorIs(t, err, ErrEnrichClientUnavailable)
 	assert.Empty(t, ir.Attrs)
 }
@@ -39,7 +39,7 @@ func TestMonitoringDashboardEnricher_NotFound_ReturnsErrNotFound(t *testing.T) {
 		},
 	}
 	id := &imported.ResourceIdentity{Type: monitoringDashboardTFType, ImportID: "projects/p/dashboards/1"}
-	raw, err := e.EnrichByID(context.Background(), id, EnrichClients{MonitoringDashboard: &monitoringv1.Service{}, ProjectID: "p"})
+	raw, err := e.EnrichByID(context.Background(), id, EnrichClients{MonitoringV1: &monitoringv1.Service{}, ProjectID: "p"})
 	require.ErrorIs(t, err, ErrNotFound)
 	assert.Nil(t, raw)
 }
@@ -65,7 +65,7 @@ func TestMonitoringDashboardEnricher_HappyPath(t *testing.T) {
 	ir := &imported.ImportedResource{
 		Identity: imported.ResourceIdentity{Type: monitoringDashboardTFType, ImportID: "projects/my-project/dashboards/abc"},
 	}
-	require.NoError(t, e.Enrich(context.Background(), ir, EnrichClients{MonitoringDashboard: &monitoringv1.Service{}, ProjectID: "my-project"}))
+	require.NoError(t, e.Enrich(context.Background(), ir, EnrichClients{MonitoringV1: &monitoringv1.Service{}, ProjectID: "my-project"}))
 	assert.Equal(t, "projects/my-project/dashboards/abc", gotName)
 
 	decoded, err := generated.UnmarshalAttrs("google_monitoring_dashboard", ir.Attrs)
@@ -96,7 +96,7 @@ func TestMonitoringDashboardEnricher_NameFromHint(t *testing.T) {
 		},
 	}
 	id := &imported.ResourceIdentity{Type: monitoringDashboardTFType, NameHint: "dash-abc"}
-	_, err := e.EnrichByID(context.Background(), id, EnrichClients{MonitoringDashboard: &monitoringv1.Service{}, ProjectID: "p"})
+	_, err := e.EnrichByID(context.Background(), id, EnrichClients{MonitoringV1: &monitoringv1.Service{}, ProjectID: "p"})
 	require.NoError(t, err)
 	assert.Equal(t, "projects/p/dashboards/dash-abc", gotName)
 }
@@ -114,9 +114,9 @@ func TestMonitoringDashboardEnricher_EnrichByID_MirrorsEnrich(t *testing.T) {
 
 	id := imported.ResourceIdentity{Type: monitoringDashboardTFType, ImportID: "projects/p/dashboards/1"}
 	ir := &imported.ImportedResource{Identity: id}
-	require.NoError(t, enrichE.Enrich(context.Background(), ir, EnrichClients{MonitoringDashboard: &monitoringv1.Service{}, ProjectID: "p"}))
+	require.NoError(t, enrichE.Enrich(context.Background(), ir, EnrichClients{MonitoringV1: &monitoringv1.Service{}, ProjectID: "p"}))
 
-	raw, err := byIDE.EnrichByID(context.Background(), &id, EnrichClients{MonitoringDashboard: &monitoringv1.Service{}, ProjectID: "p"})
+	raw, err := byIDE.EnrichByID(context.Background(), &id, EnrichClients{MonitoringV1: &monitoringv1.Service{}, ProjectID: "p"})
 	require.NoError(t, err)
 	assert.JSONEq(t, string(ir.Attrs), string(raw))
 }
@@ -124,7 +124,7 @@ func TestMonitoringDashboardEnricher_EnrichByID_MirrorsEnrich(t *testing.T) {
 func TestMonitoringDashboardEnricher_NilIdentity(t *testing.T) {
 	t.Parallel()
 	e := newMonitoringDashboardEnricher().(*monitoringDashboardEnricher)
-	_, err := e.EnrichByID(context.Background(), nil, EnrichClients{MonitoringDashboard: &monitoringv1.Service{}, ProjectID: "p"})
+	_, err := e.EnrichByID(context.Background(), nil, EnrichClients{MonitoringV1: &monitoringv1.Service{}, ProjectID: "p"})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "nil identity")
 }
@@ -138,7 +138,7 @@ func TestMonitoringDashboardEnricher_CannotDeriveName(t *testing.T) {
 		},
 	}
 	ir := &imported.ImportedResource{Identity: imported.ResourceIdentity{Type: monitoringDashboardTFType}}
-	err := e.Enrich(context.Background(), ir, EnrichClients{MonitoringDashboard: &monitoringv1.Service{}})
+	err := e.Enrich(context.Background(), ir, EnrichClients{MonitoringV1: &monitoringv1.Service{}})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "cannot derive resource name")
 }

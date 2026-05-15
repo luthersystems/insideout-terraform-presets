@@ -3,11 +3,8 @@ package gcpdiscover
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"net/http"
 
-	"google.golang.org/api/googleapi"
 	loggingv2 "google.golang.org/api/logging/v2"
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
@@ -77,7 +74,7 @@ func (e loggingProjectSinkEnricher) fetchTyped(ctx context.Context, id *imported
 	fullName := fmt.Sprintf("projects/%s/sinks/%s", c.ProjectID, name)
 	s, err := e.fetch(ctx, c.Logging, fullName)
 	if err != nil {
-		if isLoggingNotFound(err) {
+		if isGoogleAPINotFound(err) {
 			return nil, fmt.Errorf("logging_project_sink: %s: %w", fullName, ErrNotFound)
 		}
 		return nil, fmt.Errorf("logging_project_sink: get %s: %w", fullName, err)
@@ -102,14 +99,6 @@ func loggingProjectSinkNameForEnrich(id *imported.ResourceIdentity) string {
 
 func defaultLoggingProjectSinkFetch(ctx context.Context, svc *loggingv2.Service, sinkName string) (*loggingv2.LogSink, error) {
 	return svc.Sinks.Get(sinkName).Context(ctx).Do()
-}
-
-func isLoggingNotFound(err error) bool {
-	var gerr *googleapi.Error
-	if errors.As(err, &gerr) {
-		return gerr.Code == http.StatusNotFound
-	}
-	return false
 }
 
 // mapLoggingProjectSink converts a *loggingv2.LogSink into the typed

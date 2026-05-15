@@ -73,7 +73,7 @@ func (e monitoringNotificationChannelEnricher) fetchTyped(ctx context.Context, i
 	}
 	ch, err := e.fetch(ctx, c.Monitoring, fullName)
 	if err != nil {
-		if isMonitoringNotFound(err) {
+		if isGoogleAPINotFound(err) {
 			return nil, fmt.Errorf("monitoring_notification_channel: %s: %w", fullName, ErrNotFound)
 		}
 		return nil, fmt.Errorf("monitoring_notification_channel: get %s: %w", fullName, err)
@@ -121,8 +121,19 @@ func mapMonitoringNotificationChannel(ch *monitoringv3.NotificationChannel, proj
 		out.Enabled = generated.LiteralOf(true)
 	}
 	if len(ch.Labels) > 0 {
-		// `labels` is the channel's functional configuration. Pass it
-		// through unfiltered — these aren't system labels.
+		// `labels` is the channel's functional configuration (e.g.
+		// email channels carry `email_address` here; PagerDuty
+		// channels carry the integration key; webhook channels carry
+		// the URL). Some of those values are sensitive — service
+		// keys, webhook URLs — but per decision #36 the enricher
+		// writes them verbatim into the typed Attrs. Redaction is
+		// the emit layer's job, not the enricher's, because the
+		// enricher and the emitter can disagree about which keys
+		// are sensitive (varies by channel type) and centralizing
+		// that policy at emit time avoids duplicating the rule.
+		// These are NOT system / goog-managed labels, so the
+		// goog-* prefix filter applied to UserLabels below does not
+		// apply here.
 		labels := map[string]*generated.Value[string]{}
 		for k, v := range ch.Labels {
 			labels[k] = generated.LiteralOf(v)

@@ -3,12 +3,9 @@ package gcpdiscover
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	"net/http"
 	"strings"
 
-	"google.golang.org/api/googleapi"
 	monitoringv3 "google.golang.org/api/monitoring/v3"
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
@@ -77,7 +74,7 @@ func (e monitoringAlertPolicyEnricher) fetchTyped(ctx context.Context, id *impor
 	}
 	p, err := e.fetch(ctx, c.Monitoring, fullName)
 	if err != nil {
-		if isMonitoringNotFound(err) {
+		if isGoogleAPINotFound(err) {
 			return nil, fmt.Errorf("monitoring_alert_policy: %s: %w", fullName, ErrNotFound)
 		}
 		return nil, fmt.Errorf("monitoring_alert_policy: get %s: %w", fullName, err)
@@ -105,14 +102,6 @@ func monitoringAlertPolicyNameForEnrich(id *imported.ResourceIdentity, projectID
 
 func defaultMonitoringAlertPolicyFetch(ctx context.Context, svc *monitoringv3.Service, name string) (*monitoringv3.AlertPolicy, error) {
 	return svc.Projects.AlertPolicies.Get(name).Context(ctx).Do()
-}
-
-func isMonitoringNotFound(err error) bool {
-	var gerr *googleapi.Error
-	if errors.As(err, &gerr) {
-		return gerr.Code == http.StatusNotFound
-	}
-	return false
 }
 
 func mapMonitoringAlertPolicy(p *monitoringv3.AlertPolicy, projectID string) *generated.GoogleMonitoringAlertPolicy {
