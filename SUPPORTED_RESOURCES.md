@@ -23,7 +23,7 @@ and is checked in lockstep with the runtime registries. See the
 ## Summary
 
 - **AWS:** 109 types · 100% Discoverable · 98% Enrichable · 36% DriftDetectable · 0% MetricsAvailable · 34% AgentEditable
-- **GCP:** 54 types · 100% Discoverable · 100% Enrichable · 50% DriftDetectable · 0% MetricsAvailable · 89% AgentEditable
+- **GCP:** 54 types · 100% Discoverable · 100% Enrichable · 63% DriftDetectable · 0% MetricsAvailable · 89% AgentEditable
 
 ## AWS
 
@@ -163,7 +163,7 @@ and is checked in lockstep with the runtime registries. See the
 | `google_compute_network` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_compute_resource_policy` | ✓ | ✓ | – | – | ✓ |
 | `google_compute_router` | ✓ | ✓ | ✓ | – | ✓ |
-| `google_compute_security_policy` | ✓ | ✓ | – | – | ✓ |
+| `google_compute_security_policy` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_compute_target_http_proxy` | ✓ | ✓ | – | – | ✓ |
 | `google_compute_target_https_proxy` | ✓ | ✓ | – | – | ✓ |
 | `google_compute_url_map` | ✓ | ✓ | ✓ | – | ✓ |
@@ -174,11 +174,11 @@ and is checked in lockstep with the runtime registries. See the
 | `google_identity_platform_default_supported_idp_config` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_kms_crypto_key` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_kms_crypto_key_iam_binding` | ✓ | ✓ | – | – | ✓ |
-| `google_kms_key_ring` | ✓ | ✓ | – | – | – |
-| `google_logging_project_sink` | ✓ | ✓ | – | – | ✓ |
-| `google_monitoring_alert_policy` | ✓ | ✓ | – | – | ✓ |
-| `google_monitoring_dashboard` | ✓ | ✓ | – | – | ✓ |
-| `google_monitoring_notification_channel` | ✓ | ✓ | – | – | ✓ |
+| `google_kms_key_ring` | ✓ | ✓ | ✓ | – | – |
+| `google_logging_project_sink` | ✓ | ✓ | ✓ | – | ✓ |
+| `google_monitoring_alert_policy` | ✓ | ✓ | ✓ | – | ✓ |
+| `google_monitoring_dashboard` | ✓ | ✓ | ✓ | – | ✓ |
+| `google_monitoring_notification_channel` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_project_iam_member` | ✓ | ✓ | – | – | – |
 | `google_project_service` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_pubsub_subscription` | ✓ | ✓ | ✓ | – | ✓ |
@@ -195,7 +195,7 @@ and is checked in lockstep with the runtime registries. See the
 | `google_storage_bucket` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_storage_bucket_iam_member` | ✓ | ✓ | – | – | – |
 | `google_storage_bucket_object` | ✓ | ✓ | ✓ | – | ✓ |
-| `google_vertex_ai_dataset` | ✓ | ✓ | – | – | ✓ |
+| `google_vertex_ai_dataset` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_vpc_access_connector` | ✓ | ✓ | ✓ | – | ✓ |
 
 ## How to regenerate
