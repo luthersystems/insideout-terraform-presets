@@ -1,4 +1,102 @@
 {
+  "aws_apigatewayv2_stage": [
+    {
+      "path": "access_log_settings.destination_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "access_log_settings.format",
+      "semantic": "Exact"
+    },
+    {
+      "path": "api_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "auto_deploy",
+      "semantic": "Exact"
+    },
+    {
+      "path": "client_certificate_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "default_route_settings.data_trace_enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "default_route_settings.detailed_metrics_enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "default_route_settings.logging_level",
+      "semantic": "Exact"
+    },
+    {
+      "path": "default_route_settings.throttling_burst_limit",
+      "semantic": "Exact"
+    },
+    {
+      "path": "default_route_settings.throttling_rate_limit",
+      "semantic": "Exact"
+    },
+    {
+      "path": "deployment_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "description",
+      "semantic": "Exact"
+    },
+    {
+      "path": "execution_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "invoke_url",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "route_settings.data_trace_enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "route_settings.detailed_metrics_enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "route_settings.logging_level",
+      "semantic": "Exact"
+    },
+    {
+      "path": "route_settings.route_key",
+      "semantic": "Exact"
+    },
+    {
+      "path": "route_settings.throttling_burst_limit",
+      "semantic": "Exact"
+    },
+    {
+      "path": "route_settings.throttling_rate_limit",
+      "semantic": "Exact"
+    },
+    {
+      "path": "stage_variables",
+      "semantic": "Exact"
+    }
+  ],
   "aws_cloudwatch_log_group": [
     {
       "path": "arn",
@@ -22,6 +120,20 @@
     },
     {
       "path": "skip_destroy",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_dynamodb_contributor_insights": [
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "index_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "table_name",
       "semantic": "Exact"
     }
   ],
@@ -196,6 +308,20 @@
     },
     {
       "path": "write_capacity",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_iam_role_policy_attachment": [
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "policy_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "role",
       "semantic": "Exact"
     }
   ],
@@ -484,6 +610,160 @@
     },
     {
       "path": "website_endpoint",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_s3_bucket_lifecycle_configuration": [
+    {
+      "path": "bucket",
+      "semantic": "Exact"
+    },
+    {
+      "path": "expected_bucket_owner",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "rule.abort_incomplete_multipart_upload.days_after_initiation",
+      "semantic": "Exact"
+    },
+    {
+      "path": "rule.expiration.date",
+      "semantic": "Exact"
+    },
+    {
+      "path": "rule.expiration.days",
+      "semantic": "Exact"
+    },
+    {
+      "path": "rule.id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "rule.noncurrent_version_expiration.noncurrent_days",
+      "semantic": "Exact"
+    },
+    {
+      "path": "rule.noncurrent_version_transition.noncurrent_days",
+      "semantic": "Exact"
+    },
+    {
+      "path": "rule.noncurrent_version_transition.storage_class",
+      "semantic": "Exact"
+    },
+    {
+      "path": "rule.prefix",
+      "semantic": "Exact"
+    },
+    {
+      "path": "rule.status",
+      "semantic": "Exact"
+    },
+    {
+      "path": "rule.transition.days",
+      "semantic": "Exact"
+    },
+    {
+      "path": "rule.transition.storage_class",
+      "semantic": "Exact"
+    },
+    {
+      "path": "transition_default_minimum_object_size",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_s3_bucket_ownership_controls": [
+    {
+      "path": "bucket",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "rule.object_ownership",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_s3_bucket_public_access_block": [
+    {
+      "path": "block_public_acls",
+      "semantic": "Exact"
+    },
+    {
+      "path": "block_public_policy",
+      "semantic": "Exact"
+    },
+    {
+      "path": "bucket",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ignore_public_acls",
+      "semantic": "Exact"
+    },
+    {
+      "path": "restrict_public_buckets",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_s3_bucket_server_side_encryption_configuration": [
+    {
+      "path": "bucket",
+      "semantic": "Exact"
+    },
+    {
+      "path": "expected_bucket_owner",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "rule.apply_server_side_encryption_by_default.kms_master_key_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "rule.apply_server_side_encryption_by_default.sse_algorithm",
+      "semantic": "Exact"
+    },
+    {
+      "path": "rule.bucket_key_enabled",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_s3_bucket_versioning": [
+    {
+      "path": "bucket",
+      "semantic": "Exact"
+    },
+    {
+      "path": "expected_bucket_owner",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "mfa",
+      "semantic": "Exact"
+    },
+    {
+      "path": "versioning_configuration.mfa_delete",
+      "semantic": "Exact"
+    },
+    {
+      "path": "versioning_configuration.status",
       "semantic": "Exact"
     }
   ],

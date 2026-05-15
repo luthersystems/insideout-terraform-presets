@@ -7,34 +7,34 @@ import "reflect"
 // AWSS3Bucket is the generated Layer 1 typed model for the
 // `aws_s3_bucket` Terraform resource.
 type AWSS3Bucket struct {
-	AccelerationStatus                *Value[string]                                 `tf:"acceleration_status" json:"acceleration_status,omitempty"`
-	ACL                               *Value[string]                                 `tf:"acl" json:"acl,omitempty"`
-	ARN                               *Value[string]                                 `tf:"arn" json:"arn,omitempty"`
-	Bucket                            *Value[string]                                 `tf:"bucket" json:"bucket,omitempty"`
-	BucketDomainName                  *Value[string]                                 `tf:"bucket_domain_name" json:"bucket_domain_name,omitempty"`
-	BucketPrefix                      *Value[string]                                 `tf:"bucket_prefix" json:"bucket_prefix,omitempty"`
-	BucketRegionalDomainName          *Value[string]                                 `tf:"bucket_regional_domain_name" json:"bucket_regional_domain_name,omitempty"`
-	ForceDestroy                      *Value[bool]                                   `tf:"force_destroy" json:"force_destroy,omitempty"`
-	HostedZoneID                      *Value[string]                                 `tf:"hosted_zone_id" json:"hosted_zone_id,omitempty"`
-	ID                                *Value[string]                                 `tf:"id" json:"id,omitempty"`
-	ObjectLockEnabled                 *Value[bool]                                   `tf:"object_lock_enabled" json:"object_lock_enabled,omitempty"`
-	Policy                            *Value[string]                                 `tf:"policy" json:"policy,omitempty"`
-	Region                            *Value[string]                                 `tf:"region" json:"region,omitempty"`
-	RequestPayer                      *Value[string]                                 `tf:"request_payer" json:"request_payer,omitempty"`
-	Tags                              map[string]*Value[string]                      `tf:"tags" json:"tags,omitempty"`
-	TagsAll                           map[string]*Value[string]                      `tf:"tags_all" json:"tags_all,omitempty"`
-	WebsiteDomain                     *Value[string]                                 `tf:"website_domain" json:"website_domain,omitempty"`
-	WebsiteEndpoint                   *Value[string]                                 `tf:"website_endpoint" json:"website_endpoint,omitempty"`
-	CorsRule                          []AWSS3BucketCorsRule                          `tf:"cors_rule,blocks" json:"cors_rule,omitempty"`
-	Grant                             []AWSS3BucketGrant                             `tf:"grant,blocks" json:"grant,omitempty"`
-	LifecycleRule                     []AWSS3BucketLifecycleRule                     `tf:"lifecycle_rule,blocks" json:"lifecycle_rule,omitempty"`
-	Logging                           []AWSS3BucketLogging                           `tf:"logging,blocks" json:"logging,omitempty"`
-	ObjectLockConfiguration           []AWSS3BucketObjectLockConfiguration           `tf:"object_lock_configuration,blocks" json:"object_lock_configuration,omitempty"`
-	ReplicationConfiguration          []AWSS3BucketReplicationConfiguration          `tf:"replication_configuration,blocks" json:"replication_configuration,omitempty"`
-	ServerSideEncryptionConfiguration []AWSS3BucketServerSideEncryptionConfiguration `tf:"server_side_encryption_configuration,blocks" json:"server_side_encryption_configuration,omitempty"`
-	Timeouts                          *AWSS3BucketTimeouts                           `tf:"timeouts,block" json:"timeouts,omitempty"`
-	Versioning                        []AWSS3BucketVersioning                        `tf:"versioning,blocks" json:"versioning,omitempty"`
-	Website                           []AWSS3BucketWebsite                           `tf:"website,blocks" json:"website,omitempty"`
+	AccelerationStatus                *Value[string]                                       `tf:"acceleration_status" json:"acceleration_status,omitempty"`
+	ACL                               *Value[string]                                       `tf:"acl" json:"acl,omitempty"`
+	ARN                               *Value[string]                                       `tf:"arn" json:"arn,omitempty"`
+	Bucket                            *Value[string]                                       `tf:"bucket" json:"bucket,omitempty"`
+	BucketDomainName                  *Value[string]                                       `tf:"bucket_domain_name" json:"bucket_domain_name,omitempty"`
+	BucketPrefix                      *Value[string]                                       `tf:"bucket_prefix" json:"bucket_prefix,omitempty"`
+	BucketRegionalDomainName          *Value[string]                                       `tf:"bucket_regional_domain_name" json:"bucket_regional_domain_name,omitempty"`
+	ForceDestroy                      *Value[bool]                                         `tf:"force_destroy" json:"force_destroy,omitempty"`
+	HostedZoneID                      *Value[string]                                       `tf:"hosted_zone_id" json:"hosted_zone_id,omitempty"`
+	ID                                *Value[string]                                       `tf:"id" json:"id,omitempty"`
+	ObjectLockEnabled                 *Value[bool]                                         `tf:"object_lock_enabled" json:"object_lock_enabled,omitempty"`
+	Policy                            *Value[string]                                       `tf:"policy" json:"policy,omitempty"`
+	Region                            *Value[string]                                       `tf:"region" json:"region,omitempty"`
+	RequestPayer                      *Value[string]                                       `tf:"request_payer" json:"request_payer,omitempty"`
+	Tags                              map[string]*Value[string]                            `tf:"tags" json:"tags,omitempty"`
+	TagsAll                           map[string]*Value[string]                            `tf:"tags_all" json:"tags_all,omitempty"`
+	WebsiteDomain                     *Value[string]                                       `tf:"website_domain" json:"website_domain,omitempty"`
+	WebsiteEndpoint                   *Value[string]                                       `tf:"website_endpoint" json:"website_endpoint,omitempty"`
+	CorsRule                          []AWSS3BucketCorsRule                                `tf:"cors_rule,blocks" json:"cors_rule,omitempty"`
+	Grant                             []AWSS3BucketGrant                                   `tf:"grant,blocks" json:"grant,omitempty"`
+	LifecycleRule                     []AWSS3BucketLifecycleRule                           `tf:"lifecycle_rule,blocks" json:"lifecycle_rule,omitempty"`
+	Logging                           []AWSS3BucketLogging                                 `tf:"logging,blocks" json:"logging,omitempty"`
+	ObjectLockConfiguration           []AWSS3BucketObjectLockConfiguration                 `tf:"object_lock_configuration,blocks" json:"object_lock_configuration,omitempty"`
+	ReplicationConfiguration          []AWSS3BucketReplicationConfiguration                `tf:"replication_configuration,blocks" json:"replication_configuration,omitempty"`
+	ServerSideEncryptionConfiguration []AWSS3BucketServerSideEncryptionConfigurationNested `tf:"server_side_encryption_configuration,blocks" json:"server_side_encryption_configuration,omitempty"`
+	Timeouts                          *AWSS3BucketTimeouts                                 `tf:"timeouts,block" json:"timeouts,omitempty"`
+	Versioning                        []AWSS3BucketVersioningNested                        `tf:"versioning,blocks" json:"versioning,omitempty"`
+	Website                           []AWSS3BucketWebsite                                 `tf:"website,blocks" json:"website,omitempty"`
 }
 
 // AWSS3BucketCorsRule is a nested-block type used by the parent resource.
@@ -178,19 +178,19 @@ type AWSS3BucketReplicationConfigurationRulesSourceSelectionCriteriaSSEKMSEncryp
 	Enabled *Value[bool] `tf:"enabled" json:"enabled,omitempty"`
 }
 
-// AWSS3BucketServerSideEncryptionConfiguration is a nested-block type used by the parent resource.
-type AWSS3BucketServerSideEncryptionConfiguration struct {
-	Rule []AWSS3BucketServerSideEncryptionConfigurationRule `tf:"rule,blocks" json:"rule,omitempty"`
+// AWSS3BucketServerSideEncryptionConfigurationNested is a nested-block type used by the parent resource.
+type AWSS3BucketServerSideEncryptionConfigurationNested struct {
+	Rule []AWSS3BucketServerSideEncryptionConfigurationNestedRule `tf:"rule,blocks" json:"rule,omitempty"`
 }
 
-// AWSS3BucketServerSideEncryptionConfigurationRule is a nested-block type used by the parent resource.
-type AWSS3BucketServerSideEncryptionConfigurationRule struct {
-	BucketKeyEnabled                   *Value[bool]                                                                         `tf:"bucket_key_enabled" json:"bucket_key_enabled,omitempty"`
-	ApplyServerSideEncryptionByDefault []AWSS3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault `tf:"apply_server_side_encryption_by_default,blocks" json:"apply_server_side_encryption_by_default,omitempty"`
+// AWSS3BucketServerSideEncryptionConfigurationNestedRule is a nested-block type used by the parent resource.
+type AWSS3BucketServerSideEncryptionConfigurationNestedRule struct {
+	BucketKeyEnabled                   *Value[bool]                                                                               `tf:"bucket_key_enabled" json:"bucket_key_enabled,omitempty"`
+	ApplyServerSideEncryptionByDefault []AWSS3BucketServerSideEncryptionConfigurationNestedRuleApplyServerSideEncryptionByDefault `tf:"apply_server_side_encryption_by_default,blocks" json:"apply_server_side_encryption_by_default,omitempty"`
 }
 
-// AWSS3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault is a nested-block type used by the parent resource.
-type AWSS3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault struct {
+// AWSS3BucketServerSideEncryptionConfigurationNestedRuleApplyServerSideEncryptionByDefault is a nested-block type used by the parent resource.
+type AWSS3BucketServerSideEncryptionConfigurationNestedRuleApplyServerSideEncryptionByDefault struct {
 	KMSMasterKeyID *Value[string] `tf:"kms_master_key_id" json:"kms_master_key_id,omitempty"`
 	SSEAlgorithm   *Value[string] `tf:"sse_algorithm" json:"sse_algorithm,omitempty"`
 }
@@ -203,8 +203,8 @@ type AWSS3BucketTimeouts struct {
 	Update *Value[string] `tf:"update" json:"update,omitempty"`
 }
 
-// AWSS3BucketVersioning is a nested-block type used by the parent resource.
-type AWSS3BucketVersioning struct {
+// AWSS3BucketVersioningNested is a nested-block type used by the parent resource.
+type AWSS3BucketVersioningNested struct {
 	Enabled   *Value[bool] `tf:"enabled" json:"enabled,omitempty"`
 	MFADelete *Value[bool] `tf:"mfa_delete" json:"mfa_delete,omitempty"`
 }

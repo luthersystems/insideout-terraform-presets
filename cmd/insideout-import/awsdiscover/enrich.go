@@ -22,9 +22,11 @@ import (
 	"sort"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/service/apigatewayv2"
 	"github.com/aws/aws-sdk-go-v2/service/cloudcontrol"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/resourceexplorer2"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
@@ -154,7 +156,18 @@ type EnrichClients struct {
 	// via a Options closure so a single client serves every region in the
 	// run. Nil is tolerated and surfaces as ErrEnrichClientUnavailable.
 	ResourceExplorer2 *resourceexplorer2.Client
-	AccountID         string
+	// APIGatewayV2 is the shared client for the API Gateway v2 hand-
+	// rolled enricher (aws_apigatewayv2_stage). One client serves every
+	// region in the run; the enricher applies a per-call region override
+	// via an Options closure. Nil is tolerated and surfaces as
+	// ErrEnrichClientUnavailable.
+	APIGatewayV2 *apigatewayv2.Client
+	// IAM is the shared client for IAM hand-rolled enrichers
+	// (aws_iam_role_policy_attachment). IAM is a global service, so
+	// no per-region override is needed. Nil is tolerated and surfaces
+	// as ErrEnrichClientUnavailable.
+	IAM       *iam.Client
+	AccountID string
 }
 
 // ErrEnrichClientUnavailable signals that the SDK client an enricher

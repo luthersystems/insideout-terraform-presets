@@ -49,24 +49,29 @@ func TestExistingEnrichersDoNotImplementByID(t *testing.T) {
 
 	// Fail-fast: pin the expected total byTypeEnricher size so a
 	// silent drop (or duplicate-key squashing) in production fails the
-	// test. The expected total = 6 hand-rolled enrichers
-	// (cloudwatch_log_group, dynamodb_table, resourceexplorer2_index,
-	// resourceexplorer2_view, s3_bucket, secretsmanager_secret) + every
-	// type in cloudControlTypeConfigs that doesn't have a hand-rolled
-	// override. The latter is computed at test time so an addition to
-	// cloudControlTypeConfigs doesn't silently flow into the production
-	// enricher coverage without a deliberate test update — the math
-	// below makes that change visible as a numeric diff in the test
-	// failure message.
-	handRolled := 6
+	// test. The expected total = 14 hand-rolled enrichers (see
+	// handRolledTypes below) + every type in cloudControlTypeConfigs
+	// that doesn't have a hand-rolled override. The latter is computed
+	// at test time so an addition to cloudControlTypeConfigs doesn't
+	// silently flow into the production enricher coverage without a
+	// deliberate test update.
+	handRolled := 14
 	ccOverrides := 0
 	handRolledTypes := map[string]bool{
-		"aws_cloudwatch_log_group":    true,
-		"aws_dynamodb_table":          true,
-		"aws_resourceexplorer2_index": true,
-		"aws_resourceexplorer2_view":  true,
-		"aws_s3_bucket":               true,
-		"aws_secretsmanager_secret":   true,
+		"aws_apigatewayv2_stage":                             true,
+		"aws_cloudwatch_log_group":                           true,
+		"aws_dynamodb_contributor_insights":                  true,
+		"aws_dynamodb_table":                                 true,
+		"aws_iam_role_policy_attachment":                     true,
+		"aws_resourceexplorer2_index":                        true,
+		"aws_resourceexplorer2_view":                         true,
+		"aws_s3_bucket":                                      true,
+		"aws_s3_bucket_lifecycle_configuration":              true,
+		"aws_s3_bucket_ownership_controls":                   true,
+		"aws_s3_bucket_public_access_block":                  true,
+		"aws_s3_bucket_server_side_encryption_configuration": true,
+		"aws_s3_bucket_versioning":                           true,
+		"aws_secretsmanager_secret":                          true,
 	}
 	for _, ccCfg := range cloudControlTypeConfigs {
 		if handRolledTypes[ccCfg.TFType] {
@@ -122,11 +127,19 @@ func TestCloudControlEnricherSkipsHandRolledOverrides(t *testing.T) {
 	// adding a new hand-rolled enricher requires an explicit update
 	// here — the next reviewer sees the intent in the test diff.
 	handRolled := []string{
+		"aws_apigatewayv2_stage",
 		"aws_cloudwatch_log_group",
+		"aws_dynamodb_contributor_insights",
 		"aws_dynamodb_table",
+		"aws_iam_role_policy_attachment",
 		"aws_resourceexplorer2_index",
 		"aws_resourceexplorer2_view",
 		"aws_s3_bucket",
+		"aws_s3_bucket_lifecycle_configuration",
+		"aws_s3_bucket_ownership_controls",
+		"aws_s3_bucket_public_access_block",
+		"aws_s3_bucket_server_side_encryption_configuration",
+		"aws_s3_bucket_versioning",
 		"aws_secretsmanager_secret",
 	}
 	for _, tfType := range handRolled {
