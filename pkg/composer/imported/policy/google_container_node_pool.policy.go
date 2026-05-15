@@ -1,26 +1,45 @@
 package policy
 
+// googleContainerNodePoolPolicy curates Layer 2 for
+// `google_container_node_pool`. Identity scalars and the
+// parent-cluster wiring leaf are tagged DriftSemanticExact so drift
+// detection catches re-parenting / relocation. The list-valued
+// `node_locations` uses DriftSemanticWholeList — the authored zone
+// set is the meaningful drift signal regardless of element order.
+// Other curated fields stay DriftSemanticNone until per-leaf
+// comparators land.
 var googleContainerNodePoolPolicy = Map{
 	// Identity
-	"name": {Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever},
-	"id":   {Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever},
+	"name": {
+		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"id": {
+		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		DriftSemantic: DriftSemanticExact,
+	},
 	"name_prefix": {
 		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
-		ChangeRisk: ChangeAlwaysReplace,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"project": {
 		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
-		ChangeRisk: ChangeAlwaysReplace,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"location": {
 		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
-		ChangeRisk: ChangeAlwaysReplace,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
 	},
 
 	// Wiring — parent cluster.
 	"cluster": {
 		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityUIVisible,
-		Edit: EditRelationshipOnly, ChangeRisk: ChangeAlwaysReplace,
+		Edit:          EditRelationshipOnly,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
 	},
 
 	// Tuning — size + version.
@@ -41,7 +60,8 @@ var googleContainerNodePoolPolicy = Map{
 	},
 	"node_locations": {
 		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
-		Edit: EditRequiresApproval,
+		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticWholeList,
 	},
 
 	// Autoscaling.

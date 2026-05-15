@@ -1,22 +1,38 @@
 package policy
 
+// googleCloudfunctions2FunctionPolicy curates Layer 2 for
+// `google_cloudfunctions2_function`. Identity scalars and the KMS
+// wiring leaf are tagged DriftSemanticExact so drift detection
+// surfaces ownership / encryption deviation; other curated fields
+// stay DriftSemanticNone until per-leaf comparators land. The type
+// surface has no curated list leaves.
 var googleCloudfunctions2FunctionPolicy = Map{
 	// Identity
-	"name": {Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever},
-	"id":   {Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever},
+	"name": {
+		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"id": {
+		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		DriftSemantic: DriftSemanticExact,
+	},
 	"project": {
 		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
-		ChangeRisk: ChangeAlwaysReplace,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"location": {
 		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
-		ChangeRisk: ChangeAlwaysReplace,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
 	},
 
 	// Wiring — KMS key reference.
 	"kms_key_name": {
 		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
-		Edit: EditRelationshipOnly, ChangeRisk: ChangeAlwaysReplace,
+		Edit:          EditRelationshipOnly,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
 	},
 
 	// Tuning — function-level metadata.

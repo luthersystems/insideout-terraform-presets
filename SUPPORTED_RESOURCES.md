@@ -23,7 +23,7 @@ and is checked in lockstep with the runtime registries. See the
 ## Summary
 
 - **AWS:** 109 types · 100% Discoverable · 98% Enrichable · 36% DriftDetectable · 0% MetricsAvailable · 34% AgentEditable
-- **GCP:** 54 types · 100% Discoverable · 100% Enrichable · 37% DriftDetectable · 0% MetricsAvailable · 89% AgentEditable
+- **GCP:** 54 types · 100% Discoverable · 100% Enrichable · 50% DriftDetectable · 0% MetricsAvailable · 89% AgentEditable
 
 ## AWS
 
@@ -146,13 +146,13 @@ and is checked in lockstep with the runtime registries. See the
 | `google_api_gateway_api` | ✓ | ✓ | – | – | ✓ |
 | `google_api_gateway_api_config` | ✓ | ✓ | – | – | ✓ |
 | `google_api_gateway_gateway` | ✓ | ✓ | – | – | ✓ |
-| `google_cloud_run_v2_service` | ✓ | ✓ | – | – | ✓ |
+| `google_cloud_run_v2_service` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_cloud_run_v2_service_iam_member` | ✓ | ✓ | – | – | – |
 | `google_cloudbuild_trigger` | ✓ | ✓ | – | – | ✓ |
-| `google_cloudfunctions2_function` | ✓ | ✓ | – | – | ✓ |
+| `google_cloudfunctions2_function` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_cloudfunctions2_function_iam_member` | ✓ | ✓ | – | – | – |
 | `google_compute_address` | ✓ | ✓ | ✓ | – | ✓ |
-| `google_compute_backend_service` | ✓ | ✓ | – | – | ✓ |
+| `google_compute_backend_service` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_compute_firewall` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_compute_forwarding_rule` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_compute_global_address` | ✓ | ✓ | – | – | ✓ |
@@ -166,9 +166,9 @@ and is checked in lockstep with the runtime registries. See the
 | `google_compute_security_policy` | ✓ | ✓ | – | – | ✓ |
 | `google_compute_target_http_proxy` | ✓ | ✓ | – | – | ✓ |
 | `google_compute_target_https_proxy` | ✓ | ✓ | – | – | ✓ |
-| `google_compute_url_map` | ✓ | ✓ | – | – | ✓ |
-| `google_container_cluster` | ✓ | ✓ | – | – | ✓ |
-| `google_container_node_pool` | ✓ | ✓ | – | – | ✓ |
+| `google_compute_url_map` | ✓ | ✓ | ✓ | – | ✓ |
+| `google_container_cluster` | ✓ | ✓ | ✓ | – | ✓ |
+| `google_container_node_pool` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_firestore_database` | ✓ | ✓ | – | – | ✓ |
 | `google_identity_platform_config` | ✓ | ✓ | – | – | ✓ |
 | `google_identity_platform_default_supported_idp_config` | ✓ | ✓ | ✓ | – | ✓ |
@@ -183,7 +183,7 @@ and is checked in lockstep with the runtime registries. See the
 | `google_project_service` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_pubsub_subscription` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_pubsub_topic` | ✓ | ✓ | ✓ | – | ✓ |
-| `google_redis_instance` | ✓ | ✓ | – | – | ✓ |
+| `google_redis_instance` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_secret_manager_secret` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_secret_manager_secret_iam_binding` | ✓ | ✓ | – | – | ✓ |
 | `google_secret_manager_secret_iam_member` | ✓ | ✓ | – | – | – |

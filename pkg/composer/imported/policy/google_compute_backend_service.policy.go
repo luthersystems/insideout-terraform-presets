@@ -1,21 +1,42 @@
 package policy
 
+// googleComputeBackendServicePolicy curates Layer 2 for
+// `google_compute_backend_service`. Identity scalars are tagged
+// DriftSemanticExact so drift detection catches re-parenting /
+// fingerprint deviation. The list-valued `health_checks` references
+// are compared as a whole list — the authored set of HC self-links is
+// the meaningful drift signal regardless of order. Other curated
+// fields stay DriftSemanticNone until per-leaf comparators land.
 var googleComputeBackendServicePolicy = Map{
 	// Identity
-	"name":         {Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever},
-	"id":           {Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever},
-	"self_link":    {Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever},
-	"generated_id": {Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever},
+	"name": {
+		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"id": {
+		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"self_link": {
+		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"generated_id": {
+		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		DriftSemantic: DriftSemanticExact,
+	},
 	"fingerprint":  {Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever},
 	"project": {
 		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
-		ChangeRisk: ChangeAlwaysReplace,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
 	},
 
 	// Wiring — health checks, security policy, edge policy.
 	"health_checks": {
 		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityUIVisible,
-		Edit: EditRelationshipOnly,
+		Edit:          EditRelationshipOnly,
+		DriftSemantic: DriftSemanticWholeList,
 	},
 	"security_policy": {
 		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityUIVisible,

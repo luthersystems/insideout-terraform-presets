@@ -1,16 +1,30 @@
 package policy
 
+// googleCloudRunV2ServicePolicy curates Layer 2 for
+// `google_cloud_run_v2_service`. Identity scalars are tagged
+// DriftSemanticExact; `custom_audiences` is a list-valued audience
+// allowlist where authored order is the meaningful drift signal so it
+// uses DriftSemanticWholeList. Other curated fields stay
+// DriftSemanticNone until per-leaf comparators land.
 var googleCloudRunV2ServicePolicy = Map{
 	// Identity
-	"name": {Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever},
-	"id":   {Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever},
+	"name": {
+		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"id": {
+		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		DriftSemantic: DriftSemanticExact,
+	},
 	"project": {
 		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
-		ChangeRisk: ChangeAlwaysReplace,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"location": {
 		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
-		ChangeRisk: ChangeAlwaysReplace,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
 	},
 
 	// Tuning — top-level
@@ -33,7 +47,8 @@ var googleCloudRunV2ServicePolicy = Map{
 	},
 	"custom_audiences": {
 		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
-		Edit: EditRequiresApproval,
+		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticWholeList,
 	},
 
 	// Template — image + scaling + concurrency are the core knobs.
