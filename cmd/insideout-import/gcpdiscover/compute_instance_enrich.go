@@ -198,7 +198,7 @@ func mapComputeInstance(b *computev1.Instance, projectID, zone string) *generate
 	if len(b.Labels) > 0 {
 		labels := map[string]*generated.Value[string]{}
 		for k, v := range b.Labels {
-			if hasGoogPrefix(k) {
+			if strings.HasPrefix(k, "goog-") || strings.HasPrefix(k, "goog_") {
 				continue
 			}
 			labels[k] = generated.LiteralOf(v)

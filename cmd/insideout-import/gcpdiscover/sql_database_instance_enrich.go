@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"google.golang.org/api/googleapi"
 	sqladmin "google.golang.org/api/sqladmin/v1"
@@ -242,7 +243,7 @@ func mapSQLSettings(s *sqladmin.Settings) generated.GoogleSqlDatabaseInstanceSet
 	if len(s.UserLabels) > 0 {
 		labels := map[string]*generated.Value[string]{}
 		for k, v := range s.UserLabels {
-			if hasGoogPrefix(k) {
+			if strings.HasPrefix(k, "goog-") || strings.HasPrefix(k, "goog_") {
 				continue
 			}
 			labels[k] = generated.LiteralOf(v)
@@ -356,9 +357,3 @@ func mapSQLSettings(s *sqladmin.Settings) generated.GoogleSqlDatabaseInstanceSet
 	return out
 }
 
-// hasGoogPrefix returns true if k begins with "goog-" or "goog_".
-// Shared by labels filters across enrichers in this package; defined
-// once here to avoid duplicating the prefix list at each call site.
-func hasGoogPrefix(k string) bool {
-	return len(k) >= 5 && (k[:5] == "goog-" || k[:5] == "goog_")
-}

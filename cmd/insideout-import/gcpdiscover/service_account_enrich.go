@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"google.golang.org/api/googleapi"
 	iamv1 "google.golang.org/api/iam/v1"
@@ -144,7 +145,7 @@ func mapServiceAccount(b *iamv1.ServiceAccount, projectID string) *generated.Goo
 	if b.Email != "" {
 		out.Email = generated.LiteralOf(b.Email)
 		// account_id = local part of the email.
-		if i := indexByte(b.Email, '@'); i > 0 {
+		if i := strings.IndexByte(b.Email, '@'); i > 0 {
 			out.AccountID = generated.LiteralOf(b.Email[:i])
 		}
 	}
@@ -171,14 +172,3 @@ func mapServiceAccount(b *iamv1.ServiceAccount, projectID string) *generated.Goo
 	return out
 }
 
-// indexByte is a thin shim so this file doesn't need the strings
-// package import (we only need the byte form, and the local part of an
-// email is always ASCII). Kept private to this file.
-func indexByte(s string, c byte) int {
-	for i := 0; i < len(s); i++ {
-		if s[i] == c {
-			return i
-		}
-	}
-	return -1
-}
