@@ -8,8 +8,8 @@ package generated
 //     destroys and recreates.
 //   - ReplacementMayReplace — plan-time-only behavior (e.g. shrinking
 //     storage). Static schemas do not expose this state; the codegen never
-//     emits it. Runtime callers (Riley's planner) may set it on a copy of
-//     the FieldSchema after inspecting a concrete plan.
+//     emits it. Runtime callers (the interactive agent's planner) may set it
+//     on a copy of the FieldSchema after inspecting a concrete plan.
 //   - ReplacementUnknown — the schema does not expose force_new for this
 //     attribute (typically nested-block fields in newer provider schemas).
 type ReplacementBehavior string
@@ -22,9 +22,10 @@ const (
 )
 
 // FieldSchema captures the per-attribute provider metadata that the
-// composer, validators, and Riley's edit path need to make decisions about
-// a field without re-reading the original provider schema. One FieldSchema
-// per attribute is emitted into the generated <Type>Schema map.
+// composer, validators, and the interactive agent's edit path need to make
+// decisions about a field without re-reading the original provider schema.
+// One FieldSchema per attribute is emitted into the generated <Type>Schema
+// map.
 //
 // Composer emission rule (per docs/managed-resource-tiers.md lines 167-171):
 // emit configurable fields (Required or Optional) from the desired model;

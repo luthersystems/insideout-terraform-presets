@@ -309,8 +309,8 @@ func TestWriteManifest_EmptyInputWritesJSONArrayNotNull(t *testing.T) {
 	}
 	body, _ := os.ReadFile(path)
 	// json.MarshalIndent of a nil slice writes "null", which downstream
-	// consumers (Reliable, Riley) cannot range over. Pin that the writer
-	// emits an empty JSON array even on empty input.
+	// consumers (Reliable, the interactive agent) cannot range over. Pin
+	// that the writer emits an empty JSON array even on empty input.
 	if strings.TrimSpace(string(body)) == "null" {
 		t.Errorf("manifest must be `[]` not `null` for empty input; got: %s", body)
 	}

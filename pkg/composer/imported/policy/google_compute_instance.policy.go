@@ -49,7 +49,7 @@ var googleComputeInstancePolicy = Map{
 	},
 	// NB: `tags` on compute_instance is NOT labels — it's the GCE network
 	// tags list that drives firewall source_tags / target_tags, so the
-	// wizard / Riley need to see them. Intentionally uncurated until
+	// wizard / interactive agent need to see them. Intentionally uncurated until
 	// lint.go's tagAttrSuffixes can exempt this case (separate follow-up);
 	// curating with tagPolicy() would mark it SystemOnly+Hidden, which is
 	// wrong, and any non-SystemOnly curation trips CodeTagFieldNotSystemOnly.
@@ -149,7 +149,7 @@ var googleComputeInstancePolicy = Map{
 	},
 
 	// Metadata: kv map that legitimately carries SSH keys, env config, and
-	// user data scripts. Visible to Riley + UI (operators need to see it),
+	// user data scripts. Visible to the interactive agent + UI (operators need to see it),
 	// edits require approval (instance-impacting), values redacted (may
 	// contain credentials).
 	"metadata": {

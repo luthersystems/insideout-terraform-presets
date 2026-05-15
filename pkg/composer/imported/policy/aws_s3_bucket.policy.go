@@ -10,7 +10,7 @@ package policy
 // curated. Computed-only fields (arn, bucket_domain_name, hosted_zone_id,
 // region, website_domain, website_endpoint, id) are surfaced as
 // Identity / Never / UIVisible so the diff screen can render them as
-// read-only context without making them Riley-editable.
+// read-only context without making them agent-editable.
 //
 // Identity vs Wiring on top-level: `bucket` is the S3 primary key and
 // is `AlwaysReplace`, which the composer's drift comparator depends on
@@ -78,8 +78,8 @@ var awsS3BucketPolicy = Map{
 
 	// Wiring — bucket policy doc ---------------------------------------
 	"policy": {
-		// IAM-style JSON document. Riley can propose changes but apply
-		// requires explicit approval against the diff.
+		// IAM-style JSON document. The interactive agent can propose
+		// changes but apply requires explicit approval against the diff.
 		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
 		Edit: EditRequiresApproval,
 	},

@@ -25,10 +25,10 @@ type Map map[string]FieldPolicy
 
 // tagPolicy is the uniform treatment for tag- and label-shaped
 // attributes (tags, tags_all, labels, effective_labels,
-// terraform_labels, annotations, effective_annotations). Riley never
-// authors these; the importer / composer system writes them and the
-// diff layer redacts user-set values during display. Used by every
-// curated map.
+// terraform_labels, annotations, effective_annotations). The interactive
+// agent never authors these; the importer / composer system writes them
+// and the diff layer redacts user-set values during display. Used by
+// every curated map.
 func tagPolicy() FieldPolicy {
 	return FieldPolicy{
 		Role:        RoleTuning,
@@ -40,7 +40,7 @@ func tagPolicy() FieldPolicy {
 
 // timeoutsPolicy is the uniform treatment for the singleton timeouts
 // block present on most resources (create / update / delete / read).
-// Treated as system-owned operational metadata, hidden from Riley.
+// Treated as system-owned operational metadata, hidden from the interactive agent.
 func timeoutsPolicy() FieldPolicy {
 	return FieldPolicy{
 		Role:       RoleTuning,

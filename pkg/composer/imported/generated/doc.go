@@ -14,7 +14,7 @@
 //
 // Importing this package registers every supported resource type via the
 // init() side effects in the generated files. Consumers (composer, validators,
-// Riley's edit path) discover types through the registry rather than naming
-// the structs directly, so adding a type does not require touching call
-// sites.
+// the interactive agent's edit path) discover types through the registry
+// rather than naming the structs directly, so adding a type does not require
+// touching call sites.
 package generated

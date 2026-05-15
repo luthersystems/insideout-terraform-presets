@@ -37,16 +37,16 @@ type ImportedResource struct {
 
 	// Attributes is the current desired provider attributes as an opaque
 	// bag (Phase 1 / wire-compatible shape). The composer emits HCL from
-	// this state. Riley's chat edits update the values here through the
-	// model write path; FieldEdits records audit/conflict metadata only —
-	// the composer does not emit from FieldEdits.
+	// this state. Interactive-agent chat edits update the values here
+	// through the model write path; FieldEdits records audit/conflict
+	// metadata only — the composer does not emit from FieldEdits.
 	Attributes map[string]any `json:"attributes,omitempty"`
 
 	// FieldEdits is audit/conflict metadata for changes made via the model
 	// write path since the last successful `terraform apply`. The edited
 	// values are already reflected in Attributes; this map exists to detect
-	// conflicts between Riley's pending edits and independent cloud changes
-	// at re-import time. Cleared when an apply succeeds.
+	// conflicts between the interactive agent's pending edits and independent
+	// cloud changes at re-import time. Cleared when an apply succeeds.
 	FieldEdits map[string]FieldEdit `json:"field_edits,omitempty"`
 
 	// Attrs is the typed Layer 1 attribute payload for this resource,

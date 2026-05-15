@@ -57,7 +57,7 @@ type Files map[string][]byte
 // ComposeStackResult is the aggregated output of ComposeStackWithIssues.
 // Files is the composed stack (same map as ComposeStack returns); Issues is
 // the deduped list of pre-plan validator findings (missing required vars,
-// type mismatches, wiring drift, etc.) that callers like the InsideOut backend/Riley
+// type mismatches, wiring drift, etc.) that callers like the InsideOut backend/interactive-agent
 // surface for same-turn correction.
 type ComposeStackResult struct {
 	Files  Files
@@ -942,7 +942,7 @@ func renderRequiredProviders(m map[string]*tfconfig.ProviderRequirement) string 
 // validateRequiredIssues returns a structured ValidationIssue per missing
 // required variable, instead of short-circuiting on the first miss. This lets
 // the composer aggregate every missing-input across all selected modules into
-// a single Result.Issues list, so callers like the InsideOut backend/Riley can correct
+// a single Result.Issues list, so callers like the InsideOut backend/interactive-agent can correct
 // every gap in one round-trip.
 func validateRequiredIssues(vars []*tfconfig.Variable, wired WiredInputs, vals map[string]any, module string) []ValidationIssue {
 	var out []ValidationIssue

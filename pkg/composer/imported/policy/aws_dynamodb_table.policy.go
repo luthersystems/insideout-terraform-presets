@@ -7,10 +7,11 @@ package policy
 // against silent drift.
 //
 // Coverage decision (slice #1346 / presets bundle #461 follow-up): only
-// the configurable surface that Riley can sensibly reason about is
-// curated. Computed-only fields (arn, id, stream_arn, stream_label) are
-// surfaced as Identity / Never / UIVisible so the diff screen can render
-// them as read-only context without making them Riley-editable.
+// the configurable surface that the interactive agent can sensibly
+// reason about is curated. Computed-only fields (arn, id, stream_arn,
+// stream_label) are surfaced as Identity / Never / UIVisible so the
+// diff screen can render them as read-only context without making
+// them agent-editable.
 //
 // Identity vs Wiring on top-level: `name` is the table's primary key
 // and is `AlwaysReplace`; `hash_key` and `range_key` are the partition
@@ -56,8 +57,8 @@ var awsDynamodbTablePolicy = Map{
 
 	// Tuning — capacity and storage ------------------------------------
 	"billing_mode": {
-		// Provisioned vs on-demand — reversible in-place. Riley should
-		// be able to propose the flip for cost optimization.
+		// Provisioned vs on-demand — reversible in-place. The interactive
+		// agent should be able to propose the flip for cost optimization.
 		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible,
 		Edit: EditChatSafe,
 	},
@@ -81,7 +82,7 @@ var awsDynamodbTablePolicy = Map{
 		Edit: EditChatSafe,
 	},
 	"deletion_protection_enabled": {
-		// Safety flag — Riley can propose flipping it, UI shows the change.
+		// Safety flag — the interactive agent can propose flipping it, UI shows the change.
 		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
 		Edit: EditChatSafe,
 	},
@@ -114,8 +115,8 @@ var awsDynamodbTablePolicy = Map{
 		Edit: EditChatSafe,
 	},
 	"server_side_encryption.kms_key_arn": {
-		// KMS key is a cross-resource wiring relationship — Riley edits
-		// the relationship, the composer's graph resolver owns the ARN.
+		// KMS key is a cross-resource wiring relationship — the interactive
+		// agent edits the relationship, the composer's graph resolver owns the ARN.
 		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
 		Edit: EditRelationshipOnly, ChangeRisk: ChangeMayReplace,
 	},

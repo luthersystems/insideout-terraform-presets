@@ -106,7 +106,7 @@ func TestRegisteredTypes_CoveredSetExact(t *testing.T) {
 // independently populated (via WantedGoogle/WantedAWS driving codegen
 // vs. hand-authored *.policy.go files), so a curator adding to
 // WantedGoogle but forgetting the policy file would silently leave the
-// new type with no axes — the wizard / Riley would fall back to default
+// new type with no axes — the wizard / interactive agent would fall back to default
 // behavior, defeating the bundle's purpose.
 //
 // Symmetric to TestRegisteredTypes_PhaseSetExact, which guards the

@@ -112,8 +112,8 @@ func hasMetricsBinding(tfType string) bool {
 // These are the two Edit policies that route through an interactive
 // agent's write path; the other three (Never, RelationshipOnly,
 // SystemOnly) disallow direct agent scalar edits. Agent-name-agnostic
-// so the per-product naming (Riley today) can rotate without
-// flipping the codegen output.
+// so the per-product naming can rotate without flipping the codegen
+// output.
 func isAgentEditable(tfType string) bool {
 	m, ok := policy.Lookup(tfType)
 	if !ok {
