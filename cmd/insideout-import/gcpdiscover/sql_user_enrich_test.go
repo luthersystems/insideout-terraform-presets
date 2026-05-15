@@ -176,9 +176,9 @@ func TestSQLUserEnricher_DerivesFromImportID(t *testing.T) {
 func TestParseSQLUserImportID(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
-		name                            string
-		in                              string
-		wantInst, wantHost, wantName    string
+		name                         string
+		in                           string
+		wantInst, wantHost, wantName string
 	}{
 		{"empty", "", "", "", ""},
 		{"single segment treated as bare name", "appuser", "", "", "appuser"},
