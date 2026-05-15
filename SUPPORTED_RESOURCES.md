@@ -22,8 +22,8 @@ and is checked in lockstep with the runtime registries. See the
 
 ## Summary
 
-- **AWS:** 109 types · 100% Discoverable · 86% Enrichable · 6% DriftDetectable · 0% MetricsAvailable · 6% AgentEditable
-- **GCP:** 54 types · 100% Discoverable · 94% Enrichable · 22% DriftDetectable · 0% MetricsAvailable · 83% AgentEditable
+- **AWS:** 109 types · 100% Discoverable · 88% Enrichable · 7% DriftDetectable · 0% MetricsAvailable · 7% AgentEditable
+- **GCP:** 54 types · 100% Discoverable · 94% Enrichable · 31% DriftDetectable · 0% MetricsAvailable · 83% AgentEditable
 
 ## AWS
 
@@ -111,8 +111,8 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_opensearchserverless_access_policy` | ✓ | ✓ | – | – | – |
 | `aws_opensearchserverless_collection` | ✓ | ✓ | – | – | – |
 | `aws_opensearchserverless_security_policy` | ✓ | ✓ | – | – | – |
-| `aws_resourceexplorer2_index` | ✓ | – | – | – | – |
-| `aws_resourceexplorer2_view` | ✓ | – | – | – | – |
+| `aws_resourceexplorer2_index` | ✓ | ✓ | ✓ | – | ✓ |
+| `aws_resourceexplorer2_view` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_route53_zone` | ✓ | ✓ | – | – | – |
 | `aws_route_table` | ✓ | ✓ | – | – | – |
 | `aws_s3_bucket` | ✓ | ✓ | ✓ | – | ✓ |
@@ -151,13 +151,13 @@ and is checked in lockstep with the runtime registries. See the
 | `google_cloudbuild_trigger` | ✓ | ✓ | – | – | ✓ |
 | `google_cloudfunctions2_function` | ✓ | ✓ | – | – | ✓ |
 | `google_cloudfunctions2_function_iam_member` | ✓ | ✓ | – | – | – |
-| `google_compute_address` | ✓ | ✓ | – | – | ✓ |
+| `google_compute_address` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_compute_backend_service` | ✓ | ✓ | – | – | ✓ |
-| `google_compute_firewall` | ✓ | ✓ | – | – | ✓ |
-| `google_compute_forwarding_rule` | ✓ | ✓ | – | – | ✓ |
+| `google_compute_firewall` | ✓ | ✓ | ✓ | – | ✓ |
+| `google_compute_forwarding_rule` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_compute_global_address` | ✓ | ✓ | – | – | ✓ |
 | `google_compute_global_forwarding_rule` | ✓ | ✓ | – | – | ✓ |
-| `google_compute_health_check` | ✓ | ✓ | – | – | ✓ |
+| `google_compute_health_check` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_compute_instance` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_compute_managed_ssl_certificate` | ✓ | ✓ | – | – | ✓ |
 | `google_compute_network` | ✓ | ✓ | ✓ | – | ✓ |
@@ -181,7 +181,7 @@ and is checked in lockstep with the runtime registries. See the
 | `google_monitoring_notification_channel` | ✓ | ✓ | – | – | ✓ |
 | `google_project_iam_member` | ✓ | ✓ | – | – | – |
 | `google_project_service` | ✓ | ✓ | ✓ | – | ✓ |
-| `google_pubsub_subscription` | ✓ | ✓ | – | – | ✓ |
+| `google_pubsub_subscription` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_pubsub_topic` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_redis_instance` | ✓ | ✓ | – | – | ✓ |
 | `google_secret_manager_secret` | ✓ | ✓ | ✓ | – | ✓ |
