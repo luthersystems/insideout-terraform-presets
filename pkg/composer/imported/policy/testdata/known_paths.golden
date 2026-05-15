@@ -64,6 +64,41 @@ aws_bedrock_model_invocation_logging_configuration	logging_config.image_data_del
 aws_bedrock_model_invocation_logging_configuration	logging_config.s3_config.bucket_name	Wiring	Reliability	RileyVisible	RelationshipOnly		
 aws_bedrock_model_invocation_logging_configuration	logging_config.s3_config.key_prefix	Tuning	Reliability	RileyVisible	ChatSafe		
 aws_bedrock_model_invocation_logging_configuration	logging_config.text_data_delivery_enabled	Tuning	Security	RileyVisible	ChatSafe		
+aws_cloudfront_distribution	aliases	Wiring	Reliability	UIVisible	RelationshipOnly		
+aws_cloudfront_distribution	arn	Identity		UIVisible	Never		
+aws_cloudfront_distribution	caller_reference	Identity		UIVisible	Never		
+aws_cloudfront_distribution	comment	Tuning	Reliability	UIVisible	ChatSafe		
+aws_cloudfront_distribution	default_cache_behavior.compress	Tuning	Performance	RileyVisible	ChatSafe		
+aws_cloudfront_distribution	default_cache_behavior.default_ttl	Tuning	Performance	RileyVisible	ChatSafe		
+aws_cloudfront_distribution	default_cache_behavior.max_ttl	Tuning	Performance	RileyVisible	ChatSafe		
+aws_cloudfront_distribution	default_cache_behavior.min_ttl	Tuning	Performance	RileyVisible	ChatSafe		
+aws_cloudfront_distribution	default_cache_behavior.target_origin_id	Wiring	Reliability	UIVisible	RelationshipOnly		
+aws_cloudfront_distribution	default_cache_behavior.viewer_protocol_policy	Tuning	Security	UIVisible	RequiresApproval		
+aws_cloudfront_distribution	default_root_object	Tuning	Reliability	UIVisible	ChatSafe		
+aws_cloudfront_distribution	domain_name	Identity		UIVisible	Never		
+aws_cloudfront_distribution	enabled	Tuning	Reliability	UIVisible	ChatSafe		
+aws_cloudfront_distribution	etag	Identity		UIVisible	Never		
+aws_cloudfront_distribution	hosted_zone_id	Identity		UIVisible	Never		
+aws_cloudfront_distribution	http_version	Tuning	Performance	RileyVisible	ChatSafe		
+aws_cloudfront_distribution	id	Identity		UIVisible	Never		
+aws_cloudfront_distribution	in_progress_validation_batches	Identity		UIVisible	Never		
+aws_cloudfront_distribution	is_ipv6_enabled	Tuning	Reliability	RileyVisible	ChatSafe		
+aws_cloudfront_distribution	last_modified_time	Identity		UIVisible	Never		
+aws_cloudfront_distribution	price_class	Tuning	Performance	UIVisible	ChatSafe		
+aws_cloudfront_distribution	restrictions.geo_restriction.locations	Tuning	Security	RileyVisible	RequiresApproval		
+aws_cloudfront_distribution	restrictions.geo_restriction.restriction_type	Tuning	Security	UIVisible	RequiresApproval		
+aws_cloudfront_distribution	retain_on_delete	Tuning	Reliability	RileyVisible	ChatSafe		
+aws_cloudfront_distribution	staging	Tuning	Reliability	UIVisible	Never		AlwaysReplace
+aws_cloudfront_distribution	status	Identity		UIVisible	Never		
+aws_cloudfront_distribution	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_cloudfront_distribution	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_cloudfront_distribution	viewer_certificate.acm_certificate_arn	Wiring	Security	UIVisible	RelationshipOnly		
+aws_cloudfront_distribution	viewer_certificate.cloudfront_default_certificate	Tuning	Security	RileyVisible	RequiresApproval		
+aws_cloudfront_distribution	viewer_certificate.iam_certificate_id	Wiring	Security	UIVisible	RelationshipOnly		
+aws_cloudfront_distribution	viewer_certificate.minimum_protocol_version	Tuning	Security	RileyVisible	RequiresApproval		
+aws_cloudfront_distribution	viewer_certificate.ssl_support_method	Tuning	Security	RileyVisible	RequiresApproval		
+aws_cloudfront_distribution	wait_for_deployment	Tuning	Reliability	RileyVisible	ChatSafe		
+aws_cloudfront_distribution	web_acl_id	Wiring	Security	UIVisible	RelationshipOnly		
 aws_cloudwatch_log_group	arn	Identity		UIVisible	Never		
 aws_cloudwatch_log_group	kms_key_id	Wiring	Security	RileyVisible	RelationshipOnly		
 aws_cloudwatch_log_group	log_group_class	Tuning	Performance	RileyVisible	ChatSafe		MayReplace
@@ -72,6 +107,46 @@ aws_cloudwatch_log_group	retention_in_days	Tuning	Reliability	RileyVisible	ChatS
 aws_cloudwatch_log_group	skip_destroy	Tuning	Reliability	RileyVisible	RequiresApproval		
 aws_cloudwatch_log_group	tags	Tuning		Hidden	SystemOnly	Redacted	
 aws_cloudwatch_log_group	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_db_instance	address	Identity		UIVisible	Never		
+aws_db_instance	allocated_storage	Tuning	Performance	RileyVisible	RequiresApproval		
+aws_db_instance	arn	Identity		UIVisible	Never		
+aws_db_instance	auto_minor_version_upgrade	Tuning	Reliability	RileyVisible	ChatSafe		
+aws_db_instance	backup_retention_period	Tuning	Reliability	RileyVisible	ChatSafe		
+aws_db_instance	backup_window	Tuning	Reliability	RileyVisible	ChatSafe		
+aws_db_instance	copy_tags_to_snapshot	Tuning	Reliability	RileyVisible	ChatSafe		
+aws_db_instance	db_subnet_group_name	Wiring	Reliability	RileyVisible	RelationshipOnly		
+aws_db_instance	deletion_protection	Tuning	Reliability	RileyVisible	ChatSafe		
+aws_db_instance	enabled_cloudwatch_logs_exports	Tuning	Reliability	RileyVisible	ChatSafe		
+aws_db_instance	endpoint	Identity		UIVisible	Never		
+aws_db_instance	engine	Tuning	Reliability	UIVisible	Never		AlwaysReplace
+aws_db_instance	engine_version	Tuning	Reliability	UIVisible	RequiresApproval		
+aws_db_instance	hosted_zone_id	Identity		UIVisible	Never		
+aws_db_instance	iam_database_authentication_enabled	Tuning	Security	RileyVisible	RequiresApproval		
+aws_db_instance	id	Identity		UIVisible	Never		
+aws_db_instance	identifier	Identity		UIVisible	Never		AlwaysReplace
+aws_db_instance	identifier_prefix	Identity		UIVisible	Never		AlwaysReplace
+aws_db_instance	instance_class	Tuning	Performance	UIVisible	RequiresApproval		
+aws_db_instance	iops	Tuning	Performance	RileyVisible	RequiresApproval		
+aws_db_instance	kms_key_id	Wiring	Security	RileyVisible	RelationshipOnly		AlwaysReplace
+aws_db_instance	maintenance_window	Tuning	Reliability	RileyVisible	ChatSafe		
+aws_db_instance	max_allocated_storage	Tuning	Performance	RileyVisible	ChatSafe		
+aws_db_instance	monitoring_role_arn	Wiring	Reliability	RileyVisible	RelationshipOnly		
+aws_db_instance	multi_az	Tuning	Reliability	UIVisible	RequiresApproval		
+aws_db_instance	option_group_name	Wiring	Reliability	RileyVisible	RequiresApproval		
+aws_db_instance	parameter_group_name	Wiring	Performance	RileyVisible	RequiresApproval		
+aws_db_instance	performance_insights_enabled	Tuning	Performance	RileyVisible	ChatSafe		
+aws_db_instance	port	Identity		UIVisible	Never		
+aws_db_instance	publicly_accessible	Tuning	Security	UIVisible	RequiresApproval		
+aws_db_instance	replicate_source_db	Wiring	Reliability	UIVisible	RelationshipOnly		
+aws_db_instance	resource_id	Identity		UIVisible	Never		
+aws_db_instance	status	Identity		UIVisible	Never		
+aws_db_instance	storage_encrypted	Tuning	Security	UIVisible	Never		AlwaysReplace
+aws_db_instance	storage_throughput	Tuning	Performance	RileyVisible	RequiresApproval		
+aws_db_instance	storage_type	Tuning	Performance	RileyVisible	RequiresApproval		
+aws_db_instance	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_db_instance	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_db_instance	timeouts	Tuning		Hidden	SystemOnly		
+aws_db_instance	vpc_security_group_ids	Wiring	Security	RileyVisible	RelationshipOnly		
 aws_dynamodb_contributor_insights	id	Identity		UIVisible	Never		
 aws_dynamodb_contributor_insights	index_name	Identity		UIVisible	Never		AlwaysReplace
 aws_dynamodb_contributor_insights	table_name	Identity		UIVisible	Never		AlwaysReplace
@@ -121,6 +196,87 @@ aws_dynamodb_table	timeouts	Tuning		Hidden	SystemOnly
 aws_dynamodb_table	ttl.attribute_name	Wiring	Reliability	RileyVisible	RelationshipOnly		
 aws_dynamodb_table	ttl.enabled	Tuning	Reliability	RileyVisible	ChatSafe		
 aws_dynamodb_table	write_capacity	Tuning	Performance	RileyVisible	ChatSafe		
+aws_ecs_cluster	arn	Identity		UIVisible	Never		
+aws_ecs_cluster	configuration.execute_command_configuration.kms_key_id	Wiring	Security	RileyVisible	RelationshipOnly		
+aws_ecs_cluster	configuration.execute_command_configuration.log_configuration.cloud_watch_encryption_enabled	Tuning	Security	RileyVisible	ChatSafe		
+aws_ecs_cluster	configuration.execute_command_configuration.log_configuration.cloud_watch_log_group_name	Wiring	Reliability	RileyVisible	RelationshipOnly		
+aws_ecs_cluster	configuration.execute_command_configuration.logging	Tuning	Security	RileyVisible	RequiresApproval		
+aws_ecs_cluster	configuration.managed_storage_configuration.fargate_ephemeral_storage_kms_key_id	Wiring	Security	RileyVisible	RelationshipOnly		
+aws_ecs_cluster	configuration.managed_storage_configuration.kms_key_id	Wiring	Security	RileyVisible	RelationshipOnly		
+aws_ecs_cluster	id	Identity		UIVisible	Never		
+aws_ecs_cluster	name	Identity		UIVisible	Never		AlwaysReplace
+aws_ecs_cluster	service_connect_defaults.namespace	Wiring	Reliability	UIVisible	RelationshipOnly		
+aws_ecs_cluster	setting.name	Tuning	Reliability	RileyVisible	RequiresApproval		
+aws_ecs_cluster	setting.value	Tuning	Reliability	RileyVisible	ChatSafe		
+aws_ecs_cluster	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_ecs_cluster	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_eks_cluster	access_config.authentication_mode	Tuning	Security	UIVisible	RequiresApproval		
+aws_eks_cluster	access_config.bootstrap_cluster_creator_admin_permissions	Tuning	Security	RileyVisible	Never		AlwaysReplace
+aws_eks_cluster	arn	Identity		UIVisible	Never		
+aws_eks_cluster	bootstrap_self_managed_addons	Tuning	Reliability	RileyVisible	Never		AlwaysReplace
+aws_eks_cluster	cluster_id	Identity		UIVisible	Never		
+aws_eks_cluster	enabled_cluster_log_types	Tuning	Reliability	RileyVisible	ChatSafe		
+aws_eks_cluster	encryption_config.provider.key_arn	Wiring	Security	UIVisible	RelationshipOnly		AlwaysReplace
+aws_eks_cluster	encryption_config.resources	Tuning	Security	UIVisible	Never		AlwaysReplace
+aws_eks_cluster	endpoint	Identity		UIVisible	Never		
+aws_eks_cluster	id	Identity		UIVisible	Never		
+aws_eks_cluster	kubernetes_network_config.ip_family	Tuning	Reliability	UIVisible	Never		AlwaysReplace
+aws_eks_cluster	name	Identity		UIVisible	Never		AlwaysReplace
+aws_eks_cluster	platform_version	Identity		UIVisible	Never		
+aws_eks_cluster	role_arn	Wiring	Security	UIVisible	RelationshipOnly		
+aws_eks_cluster	status	Identity		UIVisible	Never		
+aws_eks_cluster	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_eks_cluster	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_eks_cluster	timeouts	Tuning		Hidden	SystemOnly		
+aws_eks_cluster	upgrade_policy.support_type	Tuning	Reliability	RileyVisible	RequiresApproval		
+aws_eks_cluster	version	Tuning	Reliability	UIVisible	RequiresApproval		
+aws_eks_cluster	vpc_config.cluster_security_group_id	Wiring	Security	UIVisible	Never		
+aws_eks_cluster	vpc_config.endpoint_private_access	Tuning	Security	UIVisible	RequiresApproval		
+aws_eks_cluster	vpc_config.endpoint_public_access	Tuning	Security	UIVisible	RequiresApproval		
+aws_eks_cluster	vpc_config.public_access_cidrs	Tuning	Security	RileyVisible	RequiresApproval		
+aws_eks_cluster	vpc_config.security_group_ids	Wiring	Security	RileyVisible	RelationshipOnly		
+aws_eks_cluster	vpc_config.subnet_ids	Wiring	Reliability	RileyVisible	RelationshipOnly		
+aws_eks_cluster	vpc_config.vpc_id	Wiring	Reliability	UIVisible	Never		
+aws_elasticache_replication_group	apply_immediately	Tuning	Reliability	RileyVisible	ChatSafe		
+aws_elasticache_replication_group	arn	Identity		UIVisible	Never		
+aws_elasticache_replication_group	at_rest_encryption_enabled	Tuning	Security	UIVisible	Never		AlwaysReplace
+aws_elasticache_replication_group	auto_minor_version_upgrade	Tuning	Reliability	RileyVisible	ChatSafe		
+aws_elasticache_replication_group	automatic_failover_enabled	Tuning	Reliability	UIVisible	RequiresApproval		
+aws_elasticache_replication_group	cluster_mode	Tuning	Reliability	RileyVisible	RequiresApproval		
+aws_elasticache_replication_group	configuration_endpoint_address	Identity		UIVisible	Never		
+aws_elasticache_replication_group	data_tiering_enabled	Tuning	Performance	RileyVisible	Never		AlwaysReplace
+aws_elasticache_replication_group	description	Tuning	Reliability	UIVisible	ChatSafe		
+aws_elasticache_replication_group	engine	Tuning	Reliability	UIVisible	Never		AlwaysReplace
+aws_elasticache_replication_group	engine_version	Tuning	Reliability	UIVisible	RequiresApproval		
+aws_elasticache_replication_group	final_snapshot_identifier	Tuning	Reliability	RileyVisible	ChatSafe		
+aws_elasticache_replication_group	global_replication_group_id	Wiring	Reliability	UIVisible	RelationshipOnly		
+aws_elasticache_replication_group	id	Identity		UIVisible	Never		
+aws_elasticache_replication_group	kms_key_id	Wiring	Security	RileyVisible	RelationshipOnly		AlwaysReplace
+aws_elasticache_replication_group	maintenance_window	Tuning	Reliability	RileyVisible	ChatSafe		
+aws_elasticache_replication_group	member_clusters	Identity		UIVisible	Never		
+aws_elasticache_replication_group	multi_az_enabled	Tuning	Reliability	UIVisible	RequiresApproval		
+aws_elasticache_replication_group	network_type	Tuning	Reliability	RileyVisible	Never		AlwaysReplace
+aws_elasticache_replication_group	node_type	Tuning	Performance	UIVisible	RequiresApproval		
+aws_elasticache_replication_group	notification_topic_arn	Wiring	Reliability	RileyVisible	RelationshipOnly		
+aws_elasticache_replication_group	num_cache_clusters	Tuning	Performance	UIVisible	ChatSafe		
+aws_elasticache_replication_group	num_node_groups	Tuning	Performance	UIVisible	ChatSafe		
+aws_elasticache_replication_group	parameter_group_name	Wiring	Performance	RileyVisible	RequiresApproval		
+aws_elasticache_replication_group	port	Tuning	Reliability	UIVisible	Never		AlwaysReplace
+aws_elasticache_replication_group	preferred_cache_cluster_azs	Wiring	Reliability	RileyVisible	RelationshipOnly		
+aws_elasticache_replication_group	primary_endpoint_address	Identity		UIVisible	Never		
+aws_elasticache_replication_group	reader_endpoint_address	Identity		UIVisible	Never		
+aws_elasticache_replication_group	replicas_per_node_group	Tuning	Reliability	UIVisible	ChatSafe		
+aws_elasticache_replication_group	replication_group_id	Identity		UIVisible	Never		AlwaysReplace
+aws_elasticache_replication_group	security_group_ids	Wiring	Security	RileyVisible	RelationshipOnly		
+aws_elasticache_replication_group	snapshot_retention_limit	Tuning	Reliability	RileyVisible	ChatSafe		
+aws_elasticache_replication_group	snapshot_window	Tuning	Reliability	RileyVisible	ChatSafe		
+aws_elasticache_replication_group	subnet_group_name	Wiring	Reliability	RileyVisible	RelationshipOnly		AlwaysReplace
+aws_elasticache_replication_group	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_elasticache_replication_group	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_elasticache_replication_group	timeouts	Tuning		Hidden	SystemOnly		
+aws_elasticache_replication_group	transit_encryption_enabled	Tuning	Security	UIVisible	Never		AlwaysReplace
+aws_elasticache_replication_group	transit_encryption_mode	Tuning	Security	RileyVisible	RequiresApproval		
+aws_elasticache_replication_group	user_group_ids	Wiring	Security	RileyVisible	RelationshipOnly		
 aws_iam_policy	arn	Identity		UIVisible	Never		
 aws_iam_policy	attachment_count	Tuning		UIVisible	Never		
 aws_iam_policy	description	Tuning	Security	UIVisible	ChatSafe		
@@ -152,6 +308,48 @@ aws_iam_role	unique_id	Identity		UIVisible	Never
 aws_iam_role_policy_attachment	id	Identity		UIVisible	Never		
 aws_iam_role_policy_attachment	policy_arn	Wiring	Security	RileyVisible	RelationshipOnly		AlwaysReplace
 aws_iam_role_policy_attachment	role	Identity		UIVisible	Never		AlwaysReplace
+aws_instance	ami	Tuning	Reliability	UIVisible	Never		AlwaysReplace
+aws_instance	arn	Identity		UIVisible	Never		
+aws_instance	associate_public_ip_address	Tuning	Security	UIVisible	RequiresApproval		
+aws_instance	availability_zone	Tuning	Reliability	UIVisible	Never		AlwaysReplace
+aws_instance	disable_api_stop	Tuning	Reliability	RileyVisible	ChatSafe		
+aws_instance	disable_api_termination	Tuning	Reliability	RileyVisible	ChatSafe		
+aws_instance	ebs_optimized	Tuning	Performance	RileyVisible	RequiresApproval		
+aws_instance	hibernation	Tuning	Reliability	RileyVisible	Never		AlwaysReplace
+aws_instance	iam_instance_profile	Wiring	Security	RileyVisible	RelationshipOnly		
+aws_instance	id	Identity		UIVisible	Never		
+aws_instance	instance_state	Identity		UIVisible	Never		
+aws_instance	instance_type	Tuning	Performance	UIVisible	RequiresApproval		
+aws_instance	key_name	Wiring	Security	UIVisible	Never		AlwaysReplace
+aws_instance	metadata_options.http_endpoint	Tuning	Security	RileyVisible	RequiresApproval		
+aws_instance	metadata_options.http_put_response_hop_limit	Tuning	Security	RileyVisible	ChatSafe		
+aws_instance	metadata_options.http_tokens	Tuning	Security	RileyVisible	RequiresApproval		
+aws_instance	metadata_options.instance_metadata_tags	Tuning	Security	RileyVisible	ChatSafe		
+aws_instance	monitoring	Tuning	Reliability	RileyVisible	ChatSafe		
+aws_instance	outpost_arn	Identity		UIVisible	Never		
+aws_instance	placement_group	Wiring	Reliability	RileyVisible	RelationshipOnly		
+aws_instance	primary_network_interface_id	Identity		UIVisible	Never		
+aws_instance	private_dns	Identity		UIVisible	Never		
+aws_instance	private_ip	Identity		UIVisible	Never		
+aws_instance	public_dns	Identity		UIVisible	Never		
+aws_instance	public_ip	Identity		UIVisible	Never		
+aws_instance	root_block_device.delete_on_termination	Tuning	Reliability	RileyVisible	RequiresApproval		
+aws_instance	root_block_device.encrypted	Tuning	Security	UIVisible	Never		AlwaysReplace
+aws_instance	root_block_device.iops	Tuning	Performance	RileyVisible	RequiresApproval		
+aws_instance	root_block_device.kms_key_id	Wiring	Security	RileyVisible	RelationshipOnly		
+aws_instance	root_block_device.throughput	Tuning	Performance	RileyVisible	RequiresApproval		
+aws_instance	root_block_device.volume_size	Tuning	Performance	RileyVisible	RequiresApproval		
+aws_instance	root_block_device.volume_type	Tuning	Performance	RileyVisible	RequiresApproval		
+aws_instance	security_groups	Wiring	Security	RileyVisible	RelationshipOnly		
+aws_instance	source_dest_check	Tuning	Security	RileyVisible	ChatSafe		
+aws_instance	subnet_id	Wiring	Reliability	RileyVisible	RelationshipOnly		AlwaysReplace
+aws_instance	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_instance	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_instance	tenancy	Tuning	Security	RileyVisible	Never		AlwaysReplace
+aws_instance	timeouts	Tuning		Hidden	SystemOnly		
+aws_instance	user_data	Tuning	Security	RileyVisible	RequiresApproval		
+aws_instance	user_data_replace_on_change	Tuning	Reliability	RileyVisible	RequiresApproval		
+aws_instance	vpc_security_group_ids	Wiring	Security	RileyVisible	RelationshipOnly		
 aws_kms_key	arn	Identity		UIVisible	Never		
 aws_kms_key	bypass_policy_lockout_safety_check	Tuning	Security	RileyVisible	RequiresApproval		
 aws_kms_key	custom_key_store_id	Wiring	Security	UIVisible	Never		AlwaysReplace
@@ -286,6 +484,72 @@ aws_lb_target_group	tags	Tuning		Hidden	SystemOnly	Redacted
 aws_lb_target_group	tags_all	Tuning		Hidden	SystemOnly	Redacted	
 aws_lb_target_group	target_type	Tuning	Reliability	UIVisible	Never		AlwaysReplace
 aws_lb_target_group	vpc_id	Wiring	Reliability	UIVisible	Never		AlwaysReplace
+aws_msk_cluster	arn	Identity		UIVisible	Never		
+aws_msk_cluster	bootstrap_brokers	Identity		UIVisible	Never		
+aws_msk_cluster	bootstrap_brokers_sasl_iam	Identity		UIVisible	Never		
+aws_msk_cluster	bootstrap_brokers_tls	Identity		UIVisible	Never		
+aws_msk_cluster	broker_node_group_info.az_distribution	Tuning	Reliability	RileyVisible	Never		AlwaysReplace
+aws_msk_cluster	broker_node_group_info.client_subnets	Wiring	Reliability	RileyVisible	RelationshipOnly		AlwaysReplace
+aws_msk_cluster	broker_node_group_info.instance_type	Tuning	Performance	UIVisible	RequiresApproval		
+aws_msk_cluster	broker_node_group_info.security_groups	Wiring	Security	RileyVisible	RelationshipOnly		
+aws_msk_cluster	broker_node_group_info.storage_info.ebs_storage_info.volume_size	Tuning	Performance	RileyVisible	RequiresApproval		
+aws_msk_cluster	client_authentication.sasl.iam	Tuning	Security	RileyVisible	RequiresApproval		
+aws_msk_cluster	client_authentication.sasl.scram	Tuning	Security	RileyVisible	RequiresApproval		
+aws_msk_cluster	client_authentication.tls.certificate_authority_arns	Wiring	Security	RileyVisible	RelationshipOnly		
+aws_msk_cluster	client_authentication.unauthenticated	Tuning	Security	RileyVisible	RequiresApproval		
+aws_msk_cluster	cluster_name	Identity		UIVisible	Never		AlwaysReplace
+aws_msk_cluster	cluster_uuid	Identity		UIVisible	Never		
+aws_msk_cluster	current_version	Identity		UIVisible	Never		
+aws_msk_cluster	encryption_info.encryption_at_rest_kms_key_arn	Wiring	Security	RileyVisible	RelationshipOnly		AlwaysReplace
+aws_msk_cluster	encryption_info.encryption_in_transit.client_broker	Tuning	Security	UIVisible	RequiresApproval		
+aws_msk_cluster	encryption_info.encryption_in_transit.in_cluster	Tuning	Security	RileyVisible	Never		AlwaysReplace
+aws_msk_cluster	enhanced_monitoring	Tuning	Reliability	RileyVisible	ChatSafe		
+aws_msk_cluster	id	Identity		UIVisible	Never		
+aws_msk_cluster	kafka_version	Tuning	Reliability	UIVisible	RequiresApproval		
+aws_msk_cluster	logging_info.broker_logs.cloudwatch_logs.enabled	Tuning	Reliability	RileyVisible	ChatSafe		
+aws_msk_cluster	logging_info.broker_logs.cloudwatch_logs.log_group	Wiring	Reliability	RileyVisible	RelationshipOnly		
+aws_msk_cluster	number_of_broker_nodes	Tuning	Performance	UIVisible	RequiresApproval		
+aws_msk_cluster	storage_mode	Tuning	Performance	RileyVisible	RequiresApproval		
+aws_msk_cluster	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_msk_cluster	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_msk_cluster	timeouts	Tuning		Hidden	SystemOnly		
+aws_msk_cluster	zookeeper_connect_string	Identity		UIVisible	Never		
+aws_opensearch_domain	access_policies	Wiring	Security	RileyVisible	RequiresApproval		
+aws_opensearch_domain	advanced_security_options.anonymous_auth_enabled	Tuning	Security	RileyVisible	RequiresApproval		
+aws_opensearch_domain	advanced_security_options.enabled	Tuning	Security	UIVisible	RequiresApproval		
+aws_opensearch_domain	advanced_security_options.internal_user_database_enabled	Tuning	Security	RileyVisible	RequiresApproval		
+aws_opensearch_domain	arn	Identity		UIVisible	Never		
+aws_opensearch_domain	cluster_config.dedicated_master_count	Tuning	Reliability	RileyVisible	RequiresApproval		
+aws_opensearch_domain	cluster_config.dedicated_master_enabled	Tuning	Reliability	RileyVisible	RequiresApproval		
+aws_opensearch_domain	cluster_config.dedicated_master_type	Tuning	Performance	RileyVisible	RequiresApproval		
+aws_opensearch_domain	cluster_config.instance_count	Tuning	Performance	UIVisible	ChatSafe		
+aws_opensearch_domain	cluster_config.instance_type	Tuning	Performance	UIVisible	RequiresApproval		
+aws_opensearch_domain	cluster_config.multi_az_with_standby_enabled	Tuning	Reliability	RileyVisible	RequiresApproval		
+aws_opensearch_domain	cluster_config.zone_awareness_enabled	Tuning	Reliability	RileyVisible	RequiresApproval		
+aws_opensearch_domain	dashboard_endpoint	Identity		UIVisible	Never		
+aws_opensearch_domain	domain_endpoint_options.enforce_https	Tuning	Security	RileyVisible	RequiresApproval		
+aws_opensearch_domain	domain_endpoint_options.tls_security_policy	Tuning	Security	RileyVisible	RequiresApproval		
+aws_opensearch_domain	domain_id	Identity		UIVisible	Never		
+aws_opensearch_domain	domain_name	Identity		UIVisible	Never		AlwaysReplace
+aws_opensearch_domain	ebs_options.ebs_enabled	Tuning	Performance	RileyVisible	Never		AlwaysReplace
+aws_opensearch_domain	ebs_options.iops	Tuning	Performance	RileyVisible	RequiresApproval		
+aws_opensearch_domain	ebs_options.throughput	Tuning	Performance	RileyVisible	RequiresApproval		
+aws_opensearch_domain	ebs_options.volume_size	Tuning	Performance	RileyVisible	RequiresApproval		
+aws_opensearch_domain	ebs_options.volume_type	Tuning	Performance	RileyVisible	RequiresApproval		
+aws_opensearch_domain	encrypt_at_rest.enabled	Tuning	Security	UIVisible	Never		AlwaysReplace
+aws_opensearch_domain	encrypt_at_rest.kms_key_id	Wiring	Security	RileyVisible	RelationshipOnly		AlwaysReplace
+aws_opensearch_domain	endpoint	Identity		UIVisible	Never		
+aws_opensearch_domain	engine_version	Tuning	Reliability	UIVisible	RequiresApproval		
+aws_opensearch_domain	id	Identity		UIVisible	Never		
+aws_opensearch_domain	ip_address_type	Tuning	Reliability	RileyVisible	RequiresApproval		
+aws_opensearch_domain	kibana_endpoint	Identity		UIVisible	Never		
+aws_opensearch_domain	node_to_node_encryption.enabled	Tuning	Security	UIVisible	Never		AlwaysReplace
+aws_opensearch_domain	snapshot_options.automated_snapshot_start_hour	Tuning	Reliability	RileyVisible	ChatSafe		
+aws_opensearch_domain	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_opensearch_domain	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_opensearch_domain	timeouts	Tuning		Hidden	SystemOnly		
+aws_opensearch_domain	vpc_options.security_group_ids	Wiring	Security	RileyVisible	RelationshipOnly		
+aws_opensearch_domain	vpc_options.subnet_ids	Wiring	Reliability	RileyVisible	RelationshipOnly		
 aws_resourceexplorer2_index	arn	Identity		UIVisible	Never		
 aws_resourceexplorer2_index	tags	Tuning		Hidden	SystemOnly	Redacted	
 aws_resourceexplorer2_index	tags_all	Tuning		Hidden	SystemOnly	Redacted	
@@ -383,6 +647,14 @@ aws_secretsmanager_secret	replica.kms_key_id	Wiring	Security	RileyVisible	Relati
 aws_secretsmanager_secret	replica.region	Wiring	Reliability	RileyVisible	RelationshipOnly		
 aws_secretsmanager_secret	tags	Tuning		Hidden	SystemOnly	Redacted	
 aws_secretsmanager_secret	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_secretsmanager_secret_rotation	id	Identity		UIVisible	Never		
+aws_secretsmanager_secret_rotation	rotate_immediately	Tuning	Security	RileyVisible	RequiresApproval		
+aws_secretsmanager_secret_rotation	rotation_enabled	Identity		UIVisible	Never		
+aws_secretsmanager_secret_rotation	rotation_lambda_arn	Wiring	Security	UIVisible	RelationshipOnly		
+aws_secretsmanager_secret_rotation	rotation_rules.automatically_after_days	Tuning	Security	RileyVisible	ChatSafe		
+aws_secretsmanager_secret_rotation	rotation_rules.duration	Tuning	Security	RileyVisible	ChatSafe		
+aws_secretsmanager_secret_rotation	rotation_rules.schedule_expression	Tuning	Security	RileyVisible	ChatSafe		
+aws_secretsmanager_secret_rotation	secret_id	Identity		UIVisible	Never		AlwaysReplace
 aws_security_group	arn	Identity		UIVisible	Never		
 aws_security_group	description	Tuning	Security	UIVisible	Never		AlwaysReplace
 aws_security_group	egress	Wiring	Security	RileyVisible	RequiresApproval		
@@ -404,6 +676,28 @@ aws_service_discovery_private_dns_namespace	name	Identity		UIVisible	Never		Alwa
 aws_service_discovery_private_dns_namespace	tags	Tuning		Hidden	SystemOnly	Redacted	
 aws_service_discovery_private_dns_namespace	tags_all	Tuning		Hidden	SystemOnly	Redacted	
 aws_service_discovery_private_dns_namespace	vpc	Wiring	Reliability	RileyVisible	RelationshipOnly		AlwaysReplace
+aws_sns_topic	archive_policy	Tuning	Reliability	RileyVisible	ChatSafe		
+aws_sns_topic	arn	Identity		UIVisible	Never		
+aws_sns_topic	content_based_deduplication	Tuning	Reliability	RileyVisible	ChatSafe		
+aws_sns_topic	delivery_policy	Tuning	Reliability	RileyVisible	RequiresApproval		
+aws_sns_topic	display_name	Tuning	Reliability	UIVisible	ChatSafe		
+aws_sns_topic	fifo_topic	Tuning	Reliability	UIVisible	Never		AlwaysReplace
+aws_sns_topic	http_failure_feedback_role_arn	Wiring	Reliability	RileyVisible	RelationshipOnly		
+aws_sns_topic	http_success_feedback_role_arn	Wiring	Reliability	RileyVisible	RelationshipOnly		
+aws_sns_topic	id	Identity		UIVisible	Never		
+aws_sns_topic	kms_master_key_id	Wiring	Security	UIVisible	RelationshipOnly		
+aws_sns_topic	lambda_failure_feedback_role_arn	Wiring	Reliability	RileyVisible	RelationshipOnly		
+aws_sns_topic	lambda_success_feedback_role_arn	Wiring	Reliability	RileyVisible	RelationshipOnly		
+aws_sns_topic	name	Identity		UIVisible	Never		AlwaysReplace
+aws_sns_topic	name_prefix	Identity		UIVisible	Never		AlwaysReplace
+aws_sns_topic	owner	Identity		UIVisible	Never		
+aws_sns_topic	policy	Wiring	Security	RileyVisible	RequiresApproval		
+aws_sns_topic	signature_version	Tuning	Security	RileyVisible	RequiresApproval		
+aws_sns_topic	sqs_failure_feedback_role_arn	Wiring	Reliability	RileyVisible	RelationshipOnly		
+aws_sns_topic	sqs_success_feedback_role_arn	Wiring	Reliability	RileyVisible	RelationshipOnly		
+aws_sns_topic	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_sns_topic	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_sns_topic	tracing_config	Tuning	Reliability	RileyVisible	ChatSafe		
 aws_sqs_queue	arn	Identity		UIVisible	Never		
 aws_sqs_queue	content_based_deduplication	Tuning		RileyVisible	ChatSafe		
 aws_sqs_queue	delay_seconds	Tuning		RileyVisible	ChatSafe		

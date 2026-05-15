@@ -53,11 +53,11 @@ func GoFieldType(t cty.Type, attrName string, parentTypeName string) (goType str
 		return collectionGoType(t.ElementType(), attrName, parentTypeName, "map")
 	case t.IsObjectType():
 		nestedName := parentTypeName + GoName(attrName)
-		nested, err := buildObjectNested(nestedName, t, parentTypeName)
+		nested, descendants, err := buildObjectNested(nestedName, t, parentTypeName)
 		if err != nil {
 			return "", nil, "", err
 		}
-		return "*" + nestedName, []NestedType{nested}, "", nil
+		return "*" + nestedName, append([]NestedType{nested}, descendants...), "", nil
 	case t.IsTupleType():
 		// Tuples are heterogeneous — we don't generate per-element types.
 		// Fall back to a Value[string] so the field at least round-trips
@@ -80,15 +80,16 @@ func collectionGoType(elem cty.Type, attrName, parentTypeName, kind string) (str
 	}
 	if elem.IsObjectType() {
 		nestedName := parentTypeName + GoName(attrName)
-		nested, err := buildObjectNested(nestedName, elem, parentTypeName)
+		nested, descendants, err := buildObjectNested(nestedName, elem, parentTypeName)
 		if err != nil {
 			return "", nil, "", err
 		}
+		all := append([]NestedType{nested}, descendants...)
 		switch kind {
 		case "map":
-			return "map[string]" + nestedName, []NestedType{nested}, "", nil
+			return "map[string]" + nestedName, all, "", nil
 		default:
-			return "[]" + nestedName, []NestedType{nested}, "", nil
+			return "[]" + nestedName, all, "", nil
 		}
 	}
 	return "", nil, "", fmt.Errorf("unsupported %s element type %s for attr %q", kind, elem.FriendlyName(), attrName)
@@ -109,24 +110,31 @@ type NestedField struct {
 	BlockKind string // "", "block", "blocks"
 }
 
-func buildObjectNested(typeName string, t cty.Type, _ string) (NestedType, error) {
+// buildObjectNested returns the NestedType for an object-typed attribute
+// plus every transitively-nested type its fields reference, so the caller
+// can emit Go declarations for them. Without the descendants slice, an
+// object-of-list-of-object schema (e.g. cloudfront trusted_key_groups,
+// eks_cluster identity.oidc) would leave the inner type name dangling.
+func buildObjectNested(typeName string, t cty.Type, _ string) (NestedType, []NestedType, error) {
 	if !t.IsObjectType() {
-		return NestedType{}, fmt.Errorf("buildObjectNested: not an object type")
+		return NestedType{}, nil, fmt.Errorf("buildObjectNested: not an object type")
 	}
 	out := NestedType{GoName: typeName}
+	var descendants []NestedType
 	atype := t.AttributeTypes()
 	for _, name := range sortedAttributeNames(atype) {
-		gt, _, _, err := GoFieldType(atype[name], name, typeName)
+		gt, childNested, _, err := GoFieldType(atype[name], name, typeName)
 		if err != nil {
-			return NestedType{}, fmt.Errorf("nested attr %q: %w", name, err)
+			return NestedType{}, nil, fmt.Errorf("nested attr %q: %w", name, err)
 		}
 		out.Fields = append(out.Fields, NestedField{
 			TFName: name,
 			GoName: GoName(name),
 			GoType: gt,
 		})
+		descendants = append(descendants, childNested...)
 	}
-	return out, nil
+	return out, descendants, nil
 }
 
 func sortedAttributeNames(m map[string]cty.Type) []string {

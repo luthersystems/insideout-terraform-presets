@@ -2677,6 +2677,916 @@
             "description_kind": "plain"
           }
         },
+        "aws_cloudfront_distribution": {
+          "version": 1,
+          "block": {
+            "attributes": {
+              "aliases": {
+                "type": [
+                  "set",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true
+              },
+              "arn": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "caller_reference": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "comment": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "continuous_deployment_policy_id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "default_root_object": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "domain_name": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "enabled": {
+                "type": "bool",
+                "description_kind": "plain",
+                "required": true
+              },
+              "etag": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "hosted_zone_id": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "http_version": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "in_progress_validation_batches": {
+                "type": "number",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "is_ipv6_enabled": {
+                "type": "bool",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "last_modified_time": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "price_class": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "retain_on_delete": {
+                "type": "bool",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "staging": {
+                "type": "bool",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "status": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "tags": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true
+              },
+              "tags_all": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "trusted_key_groups": {
+                "type": [
+                  "list",
+                  [
+                    "object",
+                    {
+                      "enabled": "bool",
+                      "items": [
+                        "list",
+                        [
+                          "object",
+                          {
+                            "key_group_id": "string",
+                            "key_pair_ids": [
+                              "set",
+                              "string"
+                            ]
+                          }
+                        ]
+                      ]
+                    }
+                  ]
+                ],
+                "description_kind": "plain",
+                "computed": true
+              },
+              "trusted_signers": {
+                "type": [
+                  "list",
+                  [
+                    "object",
+                    {
+                      "enabled": "bool",
+                      "items": [
+                        "list",
+                        [
+                          "object",
+                          {
+                            "aws_account_number": "string",
+                            "key_pair_ids": [
+                              "set",
+                              "string"
+                            ]
+                          }
+                        ]
+                      ]
+                    }
+                  ]
+                ],
+                "description_kind": "plain",
+                "computed": true
+              },
+              "wait_for_deployment": {
+                "type": "bool",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "web_acl_id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true
+              }
+            },
+            "block_types": {
+              "custom_error_response": {
+                "nesting_mode": "set",
+                "block": {
+                  "attributes": {
+                    "error_caching_min_ttl": {
+                      "type": "number",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "error_code": {
+                      "type": "number",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "response_code": {
+                      "type": "number",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "response_page_path": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "description_kind": "plain"
+                }
+              },
+              "default_cache_behavior": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "allowed_methods": {
+                      "type": [
+                        "set",
+                        "string"
+                      ],
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "cache_policy_id": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "cached_methods": {
+                      "type": [
+                        "set",
+                        "string"
+                      ],
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "compress": {
+                      "type": "bool",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "default_ttl": {
+                      "type": "number",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    },
+                    "field_level_encryption_id": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "max_ttl": {
+                      "type": "number",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    },
+                    "min_ttl": {
+                      "type": "number",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "origin_request_policy_id": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "realtime_log_config_arn": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "response_headers_policy_id": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "smooth_streaming": {
+                      "type": "bool",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "target_origin_id": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "trusted_key_groups": {
+                      "type": [
+                        "list",
+                        "string"
+                      ],
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    },
+                    "trusted_signers": {
+                      "type": [
+                        "list",
+                        "string"
+                      ],
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    },
+                    "viewer_protocol_policy": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    }
+                  },
+                  "block_types": {
+                    "forwarded_values": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "headers": {
+                            "type": [
+                              "set",
+                              "string"
+                            ],
+                            "description_kind": "plain",
+                            "optional": true,
+                            "computed": true
+                          },
+                          "query_string": {
+                            "type": "bool",
+                            "description_kind": "plain",
+                            "required": true
+                          },
+                          "query_string_cache_keys": {
+                            "type": [
+                              "list",
+                              "string"
+                            ],
+                            "description_kind": "plain",
+                            "optional": true,
+                            "computed": true
+                          }
+                        },
+                        "block_types": {
+                          "cookies": {
+                            "nesting_mode": "list",
+                            "block": {
+                              "attributes": {
+                                "forward": {
+                                  "type": "string",
+                                  "description_kind": "plain",
+                                  "required": true
+                                },
+                                "whitelisted_names": {
+                                  "type": [
+                                    "set",
+                                    "string"
+                                  ],
+                                  "description_kind": "plain",
+                                  "optional": true,
+                                  "computed": true
+                                }
+                              },
+                              "description_kind": "plain"
+                            },
+                            "min_items": 1,
+                            "max_items": 1
+                          }
+                        },
+                        "description_kind": "plain"
+                      },
+                      "max_items": 1
+                    },
+                    "function_association": {
+                      "nesting_mode": "set",
+                      "block": {
+                        "attributes": {
+                          "event_type": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "required": true
+                          },
+                          "function_arn": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "required": true
+                          }
+                        },
+                        "description_kind": "plain"
+                      },
+                      "max_items": 2
+                    },
+                    "lambda_function_association": {
+                      "nesting_mode": "set",
+                      "block": {
+                        "attributes": {
+                          "event_type": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "required": true
+                          },
+                          "include_body": {
+                            "type": "bool",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "lambda_arn": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "required": true
+                          }
+                        },
+                        "description_kind": "plain"
+                      },
+                      "max_items": 4
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "min_items": 1,
+                "max_items": 1
+              },
+              "logging_config": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "bucket": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "include_cookies": {
+                      "type": "bool",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "prefix": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "ordered_cache_behavior": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "allowed_methods": {
+                      "type": [
+                        "set",
+                        "string"
+                      ],
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "cache_policy_id": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "cached_methods": {
+                      "type": [
+                        "set",
+                        "string"
+                      ],
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "compress": {
+                      "type": "bool",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "default_ttl": {
+                      "type": "number",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    },
+                    "field_level_encryption_id": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "max_ttl": {
+                      "type": "number",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    },
+                    "min_ttl": {
+                      "type": "number",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "origin_request_policy_id": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "path_pattern": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "realtime_log_config_arn": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "response_headers_policy_id": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "smooth_streaming": {
+                      "type": "bool",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "target_origin_id": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "trusted_key_groups": {
+                      "type": [
+                        "list",
+                        "string"
+                      ],
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "trusted_signers": {
+                      "type": [
+                        "list",
+                        "string"
+                      ],
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "viewer_protocol_policy": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    }
+                  },
+                  "block_types": {
+                    "forwarded_values": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "headers": {
+                            "type": [
+                              "set",
+                              "string"
+                            ],
+                            "description_kind": "plain",
+                            "optional": true,
+                            "computed": true
+                          },
+                          "query_string": {
+                            "type": "bool",
+                            "description_kind": "plain",
+                            "required": true
+                          },
+                          "query_string_cache_keys": {
+                            "type": [
+                              "list",
+                              "string"
+                            ],
+                            "description_kind": "plain",
+                            "optional": true,
+                            "computed": true
+                          }
+                        },
+                        "block_types": {
+                          "cookies": {
+                            "nesting_mode": "list",
+                            "block": {
+                              "attributes": {
+                                "forward": {
+                                  "type": "string",
+                                  "description_kind": "plain",
+                                  "required": true
+                                },
+                                "whitelisted_names": {
+                                  "type": [
+                                    "set",
+                                    "string"
+                                  ],
+                                  "description_kind": "plain",
+                                  "optional": true
+                                }
+                              },
+                              "description_kind": "plain"
+                            },
+                            "min_items": 1,
+                            "max_items": 1
+                          }
+                        },
+                        "description_kind": "plain"
+                      },
+                      "max_items": 1
+                    },
+                    "function_association": {
+                      "nesting_mode": "set",
+                      "block": {
+                        "attributes": {
+                          "event_type": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "required": true
+                          },
+                          "function_arn": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "required": true
+                          }
+                        },
+                        "description_kind": "plain"
+                      },
+                      "max_items": 2
+                    },
+                    "lambda_function_association": {
+                      "nesting_mode": "set",
+                      "block": {
+                        "attributes": {
+                          "event_type": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "required": true
+                          },
+                          "include_body": {
+                            "type": "bool",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "lambda_arn": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "required": true
+                          }
+                        },
+                        "description_kind": "plain"
+                      },
+                      "max_items": 4
+                    }
+                  },
+                  "description_kind": "plain"
+                }
+              },
+              "origin": {
+                "nesting_mode": "set",
+                "block": {
+                  "attributes": {
+                    "connection_attempts": {
+                      "type": "number",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "connection_timeout": {
+                      "type": "number",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "domain_name": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "origin_access_control_id": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "origin_id": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "origin_path": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "block_types": {
+                    "custom_header": {
+                      "nesting_mode": "set",
+                      "block": {
+                        "attributes": {
+                          "name": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "required": true
+                          },
+                          "value": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "required": true
+                          }
+                        },
+                        "description_kind": "plain"
+                      }
+                    },
+                    "custom_origin_config": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "http_port": {
+                            "type": "number",
+                            "description_kind": "plain",
+                            "required": true
+                          },
+                          "https_port": {
+                            "type": "number",
+                            "description_kind": "plain",
+                            "required": true
+                          },
+                          "origin_keepalive_timeout": {
+                            "type": "number",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "origin_protocol_policy": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "required": true
+                          },
+                          "origin_read_timeout": {
+                            "type": "number",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "origin_ssl_protocols": {
+                            "type": [
+                              "set",
+                              "string"
+                            ],
+                            "description_kind": "plain",
+                            "required": true
+                          }
+                        },
+                        "description_kind": "plain"
+                      },
+                      "max_items": 1
+                    },
+                    "origin_shield": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "enabled": {
+                            "type": "bool",
+                            "description_kind": "plain",
+                            "required": true
+                          },
+                          "origin_shield_region": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "optional": true
+                          }
+                        },
+                        "description_kind": "plain"
+                      },
+                      "max_items": 1
+                    },
+                    "s3_origin_config": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "origin_access_identity": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "required": true
+                          }
+                        },
+                        "description_kind": "plain"
+                      },
+                      "max_items": 1
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "min_items": 1
+              },
+              "origin_group": {
+                "nesting_mode": "set",
+                "block": {
+                  "attributes": {
+                    "origin_id": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    }
+                  },
+                  "block_types": {
+                    "failover_criteria": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "status_codes": {
+                            "type": [
+                              "set",
+                              "number"
+                            ],
+                            "description_kind": "plain",
+                            "required": true
+                          }
+                        },
+                        "description_kind": "plain"
+                      },
+                      "min_items": 1,
+                      "max_items": 1
+                    },
+                    "member": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "origin_id": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "required": true
+                          }
+                        },
+                        "description_kind": "plain"
+                      },
+                      "min_items": 2,
+                      "max_items": 2
+                    }
+                  },
+                  "description_kind": "plain"
+                }
+              },
+              "restrictions": {
+                "nesting_mode": "list",
+                "block": {
+                  "block_types": {
+                    "geo_restriction": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "locations": {
+                            "type": [
+                              "set",
+                              "string"
+                            ],
+                            "description_kind": "plain",
+                            "optional": true,
+                            "computed": true
+                          },
+                          "restriction_type": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "required": true
+                          }
+                        },
+                        "description_kind": "plain"
+                      },
+                      "min_items": 1,
+                      "max_items": 1
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "min_items": 1,
+                "max_items": 1
+              },
+              "viewer_certificate": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "acm_certificate_arn": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "cloudfront_default_certificate": {
+                      "type": "bool",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "iam_certificate_id": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "minimum_protocol_version": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "ssl_support_method": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "min_items": 1,
+                "max_items": 1
+              }
+            },
+            "description_kind": "plain"
+          }
+        },
         "aws_cloudwatch_log_group": {
           "version": 0,
           "block": {
@@ -2741,6 +3651,588 @@
                 "description_kind": "plain",
                 "optional": true,
                 "computed": true
+              }
+            },
+            "description_kind": "plain"
+          }
+        },
+        "aws_db_instance": {
+          "version": 2,
+          "block": {
+            "attributes": {
+              "address": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "allocated_storage": {
+                "type": "number",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "allow_major_version_upgrade": {
+                "type": "bool",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "apply_immediately": {
+                "type": "bool",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "arn": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "auto_minor_version_upgrade": {
+                "type": "bool",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "availability_zone": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "backup_retention_period": {
+                "type": "number",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "backup_target": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "backup_window": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "ca_cert_identifier": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "character_set_name": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "copy_tags_to_snapshot": {
+                "type": "bool",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "custom_iam_instance_profile": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "customer_owned_ip_enabled": {
+                "type": "bool",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "db_name": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "db_subnet_group_name": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "dedicated_log_volume": {
+                "type": "bool",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "delete_automated_backups": {
+                "type": "bool",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "deletion_protection": {
+                "type": "bool",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "domain": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "domain_auth_secret_arn": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "domain_dns_ips": {
+                "type": [
+                  "list",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true
+              },
+              "domain_fqdn": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "domain_iam_role_name": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "domain_ou": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "enabled_cloudwatch_logs_exports": {
+                "type": [
+                  "set",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true
+              },
+              "endpoint": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "engine": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "engine_lifecycle_support": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "engine_version": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "engine_version_actual": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "final_snapshot_identifier": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "hosted_zone_id": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "iam_database_authentication_enabled": {
+                "type": "bool",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "identifier": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "identifier_prefix": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "instance_class": {
+                "type": "string",
+                "description_kind": "plain",
+                "required": true
+              },
+              "iops": {
+                "type": "number",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "kms_key_id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "latest_restorable_time": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "license_model": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "listener_endpoint": {
+                "type": [
+                  "list",
+                  [
+                    "object",
+                    {
+                      "address": "string",
+                      "hosted_zone_id": "string",
+                      "port": "number"
+                    }
+                  ]
+                ],
+                "description_kind": "plain",
+                "computed": true
+              },
+              "maintenance_window": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "manage_master_user_password": {
+                "type": "bool",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "master_user_secret": {
+                "type": [
+                  "list",
+                  [
+                    "object",
+                    {
+                      "kms_key_id": "string",
+                      "secret_arn": "string",
+                      "secret_status": "string"
+                    }
+                  ]
+                ],
+                "description_kind": "plain",
+                "computed": true
+              },
+              "master_user_secret_kms_key_id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "max_allocated_storage": {
+                "type": "number",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "monitoring_interval": {
+                "type": "number",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "monitoring_role_arn": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "multi_az": {
+                "type": "bool",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "nchar_character_set_name": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "network_type": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "option_group_name": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "parameter_group_name": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "password": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "sensitive": true
+              },
+              "performance_insights_enabled": {
+                "type": "bool",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "performance_insights_kms_key_id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "performance_insights_retention_period": {
+                "type": "number",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "port": {
+                "type": "number",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "publicly_accessible": {
+                "type": "bool",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "replica_mode": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "replicas": {
+                "type": [
+                  "list",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "computed": true
+              },
+              "replicate_source_db": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "resource_id": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "skip_final_snapshot": {
+                "type": "bool",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "snapshot_identifier": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "status": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "storage_encrypted": {
+                "type": "bool",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "storage_throughput": {
+                "type": "number",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "storage_type": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "tags": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true
+              },
+              "tags_all": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "timezone": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "upgrade_storage_config": {
+                "type": "bool",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "username": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "vpc_security_group_ids": {
+                "type": [
+                  "set",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              }
+            },
+            "block_types": {
+              "blue_green_update": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "enabled": {
+                      "type": "bool",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "restore_to_point_in_time": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "restore_time": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "source_db_instance_automated_backups_arn": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "source_db_instance_identifier": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "source_dbi_resource_id": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "use_latest_restorable_time": {
+                      "type": "bool",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "s3_import": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "bucket_name": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "bucket_prefix": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "ingestion_role": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "source_engine": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "source_engine_version": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "timeouts": {
+                "nesting_mode": "single",
+                "block": {
+                  "attributes": {
+                    "create": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "delete": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "update": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "description_kind": "plain"
+                }
               }
             },
             "description_kind": "plain"
@@ -3204,6 +4696,846 @@
             "description_kind": "plain"
           }
         },
+        "aws_ecs_cluster": {
+          "version": 0,
+          "block": {
+            "attributes": {
+              "arn": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "name": {
+                "type": "string",
+                "description_kind": "plain",
+                "required": true
+              },
+              "tags": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true
+              },
+              "tags_all": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              }
+            },
+            "block_types": {
+              "configuration": {
+                "nesting_mode": "list",
+                "block": {
+                  "block_types": {
+                    "execute_command_configuration": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "kms_key_id": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "logging": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "optional": true
+                          }
+                        },
+                        "block_types": {
+                          "log_configuration": {
+                            "nesting_mode": "list",
+                            "block": {
+                              "attributes": {
+                                "cloud_watch_encryption_enabled": {
+                                  "type": "bool",
+                                  "description_kind": "plain",
+                                  "optional": true
+                                },
+                                "cloud_watch_log_group_name": {
+                                  "type": "string",
+                                  "description_kind": "plain",
+                                  "optional": true
+                                },
+                                "s3_bucket_encryption_enabled": {
+                                  "type": "bool",
+                                  "description_kind": "plain",
+                                  "optional": true
+                                },
+                                "s3_bucket_name": {
+                                  "type": "string",
+                                  "description_kind": "plain",
+                                  "optional": true
+                                },
+                                "s3_key_prefix": {
+                                  "type": "string",
+                                  "description_kind": "plain",
+                                  "optional": true
+                                }
+                              },
+                              "description_kind": "plain"
+                            },
+                            "max_items": 1
+                          }
+                        },
+                        "description_kind": "plain"
+                      },
+                      "max_items": 1
+                    },
+                    "managed_storage_configuration": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "fargate_ephemeral_storage_kms_key_id": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "kms_key_id": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "optional": true
+                          }
+                        },
+                        "description_kind": "plain"
+                      },
+                      "max_items": 1
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "service_connect_defaults": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "namespace": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "setting": {
+                "nesting_mode": "set",
+                "block": {
+                  "attributes": {
+                    "name": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "value": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    }
+                  },
+                  "description_kind": "plain"
+                }
+              }
+            },
+            "description_kind": "plain"
+          }
+        },
+        "aws_eks_cluster": {
+          "version": 1,
+          "block": {
+            "attributes": {
+              "arn": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "bootstrap_self_managed_addons": {
+                "type": "bool",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "certificate_authority": {
+                "type": [
+                  "list",
+                  [
+                    "object",
+                    {
+                      "data": "string"
+                    }
+                  ]
+                ],
+                "description_kind": "plain",
+                "computed": true
+              },
+              "cluster_id": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "created_at": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "enabled_cluster_log_types": {
+                "type": [
+                  "set",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true
+              },
+              "endpoint": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "identity": {
+                "type": [
+                  "list",
+                  [
+                    "object",
+                    {
+                      "oidc": [
+                        "list",
+                        [
+                          "object",
+                          {
+                            "issuer": "string"
+                          }
+                        ]
+                      ]
+                    }
+                  ]
+                ],
+                "description_kind": "plain",
+                "computed": true
+              },
+              "name": {
+                "type": "string",
+                "description_kind": "plain",
+                "required": true
+              },
+              "platform_version": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "role_arn": {
+                "type": "string",
+                "description_kind": "plain",
+                "required": true
+              },
+              "status": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "tags": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true
+              },
+              "tags_all": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "version": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              }
+            },
+            "block_types": {
+              "access_config": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "authentication_mode": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    },
+                    "bootstrap_cluster_creator_admin_permissions": {
+                      "type": "bool",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "encryption_config": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "resources": {
+                      "type": [
+                        "set",
+                        "string"
+                      ],
+                      "description_kind": "plain",
+                      "required": true
+                    }
+                  },
+                  "block_types": {
+                    "provider": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "key_arn": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "required": true
+                          }
+                        },
+                        "description_kind": "plain"
+                      },
+                      "min_items": 1,
+                      "max_items": 1
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "kubernetes_network_config": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "ip_family": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    },
+                    "service_ipv4_cidr": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    },
+                    "service_ipv6_cidr": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "computed": true
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "outpost_config": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "control_plane_instance_type": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "outpost_arns": {
+                      "type": [
+                        "set",
+                        "string"
+                      ],
+                      "description_kind": "plain",
+                      "required": true
+                    }
+                  },
+                  "block_types": {
+                    "control_plane_placement": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "group_name": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "required": true
+                          }
+                        },
+                        "description_kind": "plain"
+                      },
+                      "max_items": 1
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "timeouts": {
+                "nesting_mode": "single",
+                "block": {
+                  "attributes": {
+                    "create": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "delete": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "update": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "description_kind": "plain"
+                }
+              },
+              "upgrade_policy": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "support_type": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "vpc_config": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "cluster_security_group_id": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "computed": true
+                    },
+                    "endpoint_private_access": {
+                      "type": "bool",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "endpoint_public_access": {
+                      "type": "bool",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "public_access_cidrs": {
+                      "type": [
+                        "set",
+                        "string"
+                      ],
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    },
+                    "security_group_ids": {
+                      "type": [
+                        "set",
+                        "string"
+                      ],
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "subnet_ids": {
+                      "type": [
+                        "set",
+                        "string"
+                      ],
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "vpc_id": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "computed": true
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "min_items": 1,
+                "max_items": 1
+              }
+            },
+            "description_kind": "plain"
+          }
+        },
+        "aws_elasticache_replication_group": {
+          "version": 2,
+          "block": {
+            "attributes": {
+              "apply_immediately": {
+                "type": "bool",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "arn": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "at_rest_encryption_enabled": {
+                "type": "bool",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "auth_token": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "sensitive": true
+              },
+              "auth_token_update_strategy": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "auto_minor_version_upgrade": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "automatic_failover_enabled": {
+                "type": "bool",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "cluster_enabled": {
+                "type": "bool",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "cluster_mode": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "configuration_endpoint_address": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "data_tiering_enabled": {
+                "type": "bool",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "description": {
+                "type": "string",
+                "description_kind": "plain",
+                "required": true
+              },
+              "engine": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "engine_version": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "engine_version_actual": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "final_snapshot_identifier": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "global_replication_group_id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "ip_discovery": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "kms_key_id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "maintenance_window": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "member_clusters": {
+                "type": [
+                  "set",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "computed": true
+              },
+              "multi_az_enabled": {
+                "type": "bool",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "network_type": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "node_type": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "notification_topic_arn": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "num_cache_clusters": {
+                "type": "number",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "num_node_groups": {
+                "type": "number",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "parameter_group_name": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "port": {
+                "type": "number",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "preferred_cache_cluster_azs": {
+                "type": [
+                  "list",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true
+              },
+              "primary_endpoint_address": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "reader_endpoint_address": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "replicas_per_node_group": {
+                "type": "number",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "replication_group_id": {
+                "type": "string",
+                "description_kind": "plain",
+                "required": true
+              },
+              "security_group_ids": {
+                "type": [
+                  "set",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "security_group_names": {
+                "type": [
+                  "set",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "snapshot_arns": {
+                "type": [
+                  "set",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true
+              },
+              "snapshot_name": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "snapshot_retention_limit": {
+                "type": "number",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "snapshot_window": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "subnet_group_name": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "tags": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true
+              },
+              "tags_all": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "transit_encryption_enabled": {
+                "type": "bool",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "transit_encryption_mode": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "user_group_ids": {
+                "type": [
+                  "set",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true
+              }
+            },
+            "block_types": {
+              "log_delivery_configuration": {
+                "nesting_mode": "set",
+                "block": {
+                  "attributes": {
+                    "destination": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "destination_type": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "log_format": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "log_type": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 2
+              },
+              "timeouts": {
+                "nesting_mode": "single",
+                "block": {
+                  "attributes": {
+                    "create": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "delete": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "update": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "description_kind": "plain"
+                }
+              }
+            },
+            "description_kind": "plain"
+          }
+        },
         "aws_iam_policy": {
           "version": 0,
           "block": {
@@ -3414,6 +5746,777 @@
                 "type": "string",
                 "description_kind": "plain",
                 "required": true
+              }
+            },
+            "description_kind": "plain"
+          }
+        },
+        "aws_instance": {
+          "version": 1,
+          "block": {
+            "attributes": {
+              "ami": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "arn": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "associate_public_ip_address": {
+                "type": "bool",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "availability_zone": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "cpu_core_count": {
+                "type": "number",
+                "description_kind": "plain",
+                "deprecated": true,
+                "optional": true,
+                "computed": true
+              },
+              "cpu_threads_per_core": {
+                "type": "number",
+                "description_kind": "plain",
+                "deprecated": true,
+                "optional": true,
+                "computed": true
+              },
+              "disable_api_stop": {
+                "type": "bool",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "disable_api_termination": {
+                "type": "bool",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "ebs_optimized": {
+                "type": "bool",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "get_password_data": {
+                "type": "bool",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "hibernation": {
+                "type": "bool",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "host_id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "host_resource_group_arn": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "iam_instance_profile": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "instance_initiated_shutdown_behavior": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "instance_lifecycle": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "instance_state": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "instance_type": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "ipv6_address_count": {
+                "type": "number",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "ipv6_addresses": {
+                "type": [
+                  "list",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "key_name": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "monitoring": {
+                "type": "bool",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "outpost_arn": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "password_data": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "placement_group": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "placement_partition_number": {
+                "type": "number",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "primary_network_interface_id": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "private_dns": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "private_ip": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "public_dns": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "public_ip": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "secondary_private_ips": {
+                "type": [
+                  "set",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "security_groups": {
+                "type": [
+                  "set",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "source_dest_check": {
+                "type": "bool",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "spot_instance_request_id": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "subnet_id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "tags": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true
+              },
+              "tags_all": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "tenancy": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "user_data": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "user_data_base64": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "user_data_replace_on_change": {
+                "type": "bool",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "volume_tags": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true
+              },
+              "vpc_security_group_ids": {
+                "type": [
+                  "set",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              }
+            },
+            "block_types": {
+              "capacity_reservation_specification": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "capacity_reservation_preference": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "block_types": {
+                    "capacity_reservation_target": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "capacity_reservation_id": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "capacity_reservation_resource_group_arn": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "optional": true
+                          }
+                        },
+                        "description_kind": "plain"
+                      },
+                      "max_items": 1
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "cpu_options": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "amd_sev_snp": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    },
+                    "core_count": {
+                      "type": "number",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    },
+                    "threads_per_core": {
+                      "type": "number",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "credit_specification": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "cpu_credits": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "ebs_block_device": {
+                "nesting_mode": "set",
+                "block": {
+                  "attributes": {
+                    "delete_on_termination": {
+                      "type": "bool",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "device_name": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "encrypted": {
+                      "type": "bool",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    },
+                    "iops": {
+                      "type": "number",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    },
+                    "kms_key_id": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    },
+                    "snapshot_id": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    },
+                    "tags": {
+                      "type": [
+                        "map",
+                        "string"
+                      ],
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "tags_all": {
+                      "type": [
+                        "map",
+                        "string"
+                      ],
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    },
+                    "throughput": {
+                      "type": "number",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    },
+                    "volume_id": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "computed": true
+                    },
+                    "volume_size": {
+                      "type": "number",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    },
+                    "volume_type": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    }
+                  },
+                  "description_kind": "plain"
+                }
+              },
+              "enclave_options": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "enabled": {
+                      "type": "bool",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "ephemeral_block_device": {
+                "nesting_mode": "set",
+                "block": {
+                  "attributes": {
+                    "device_name": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "no_device": {
+                      "type": "bool",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "virtual_name": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "description_kind": "plain"
+                }
+              },
+              "instance_market_options": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "market_type": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    }
+                  },
+                  "block_types": {
+                    "spot_options": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "instance_interruption_behavior": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "optional": true,
+                            "computed": true
+                          },
+                          "max_price": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "optional": true,
+                            "computed": true
+                          },
+                          "spot_instance_type": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "optional": true,
+                            "computed": true
+                          },
+                          "valid_until": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "optional": true,
+                            "computed": true
+                          }
+                        },
+                        "description_kind": "plain"
+                      },
+                      "max_items": 1
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "launch_template": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "id": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    },
+                    "name": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    },
+                    "version": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "maintenance_options": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "auto_recovery": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "metadata_options": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "http_endpoint": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "http_protocol_ipv6": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "http_put_response_hop_limit": {
+                      "type": "number",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    },
+                    "http_tokens": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    },
+                    "instance_metadata_tags": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "network_interface": {
+                "nesting_mode": "set",
+                "block": {
+                  "attributes": {
+                    "delete_on_termination": {
+                      "type": "bool",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "device_index": {
+                      "type": "number",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "network_card_index": {
+                      "type": "number",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "network_interface_id": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    }
+                  },
+                  "description_kind": "plain"
+                }
+              },
+              "private_dns_name_options": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "enable_resource_name_dns_a_record": {
+                      "type": "bool",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    },
+                    "enable_resource_name_dns_aaaa_record": {
+                      "type": "bool",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    },
+                    "hostname_type": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "root_block_device": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "delete_on_termination": {
+                      "type": "bool",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "device_name": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "computed": true
+                    },
+                    "encrypted": {
+                      "type": "bool",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    },
+                    "iops": {
+                      "type": "number",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    },
+                    "kms_key_id": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    },
+                    "tags": {
+                      "type": [
+                        "map",
+                        "string"
+                      ],
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "tags_all": {
+                      "type": [
+                        "map",
+                        "string"
+                      ],
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    },
+                    "throughput": {
+                      "type": "number",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    },
+                    "volume_id": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "computed": true
+                    },
+                    "volume_size": {
+                      "type": "number",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    },
+                    "volume_type": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "timeouts": {
+                "nesting_mode": "single",
+                "block": {
+                  "attributes": {
+                    "create": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "delete": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "read": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "update": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "description_kind": "plain"
+                }
               }
             },
             "description_kind": "plain"
@@ -4942,6 +8045,1161 @@
             "description_kind": "plain"
           }
         },
+        "aws_msk_cluster": {
+          "version": 0,
+          "block": {
+            "attributes": {
+              "arn": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "bootstrap_brokers": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "bootstrap_brokers_public_sasl_iam": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "bootstrap_brokers_public_sasl_scram": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "bootstrap_brokers_public_tls": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "bootstrap_brokers_sasl_iam": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "bootstrap_brokers_sasl_scram": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "bootstrap_brokers_tls": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "bootstrap_brokers_vpc_connectivity_sasl_iam": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "bootstrap_brokers_vpc_connectivity_sasl_scram": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "bootstrap_brokers_vpc_connectivity_tls": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "cluster_name": {
+                "type": "string",
+                "description_kind": "plain",
+                "required": true
+              },
+              "cluster_uuid": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "current_version": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "enhanced_monitoring": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "kafka_version": {
+                "type": "string",
+                "description_kind": "plain",
+                "required": true
+              },
+              "number_of_broker_nodes": {
+                "type": "number",
+                "description_kind": "plain",
+                "required": true
+              },
+              "storage_mode": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "tags": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true
+              },
+              "tags_all": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "zookeeper_connect_string": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "zookeeper_connect_string_tls": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              }
+            },
+            "block_types": {
+              "broker_node_group_info": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "az_distribution": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "client_subnets": {
+                      "type": [
+                        "set",
+                        "string"
+                      ],
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "instance_type": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "security_groups": {
+                      "type": [
+                        "set",
+                        "string"
+                      ],
+                      "description_kind": "plain",
+                      "required": true
+                    }
+                  },
+                  "block_types": {
+                    "connectivity_info": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "block_types": {
+                          "public_access": {
+                            "nesting_mode": "list",
+                            "block": {
+                              "attributes": {
+                                "type": {
+                                  "type": "string",
+                                  "description_kind": "plain",
+                                  "optional": true,
+                                  "computed": true
+                                }
+                              },
+                              "description_kind": "plain"
+                            },
+                            "max_items": 1
+                          },
+                          "vpc_connectivity": {
+                            "nesting_mode": "list",
+                            "block": {
+                              "block_types": {
+                                "client_authentication": {
+                                  "nesting_mode": "list",
+                                  "block": {
+                                    "attributes": {
+                                      "tls": {
+                                        "type": "bool",
+                                        "description_kind": "plain",
+                                        "optional": true,
+                                        "computed": true
+                                      }
+                                    },
+                                    "block_types": {
+                                      "sasl": {
+                                        "nesting_mode": "list",
+                                        "block": {
+                                          "attributes": {
+                                            "iam": {
+                                              "type": "bool",
+                                              "description_kind": "plain",
+                                              "optional": true,
+                                              "computed": true
+                                            },
+                                            "scram": {
+                                              "type": "bool",
+                                              "description_kind": "plain",
+                                              "optional": true,
+                                              "computed": true
+                                            }
+                                          },
+                                          "description_kind": "plain"
+                                        },
+                                        "max_items": 1
+                                      }
+                                    },
+                                    "description_kind": "plain"
+                                  },
+                                  "max_items": 1
+                                }
+                              },
+                              "description_kind": "plain"
+                            },
+                            "max_items": 1
+                          }
+                        },
+                        "description_kind": "plain"
+                      },
+                      "max_items": 1
+                    },
+                    "storage_info": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "block_types": {
+                          "ebs_storage_info": {
+                            "nesting_mode": "list",
+                            "block": {
+                              "attributes": {
+                                "volume_size": {
+                                  "type": "number",
+                                  "description_kind": "plain",
+                                  "optional": true
+                                }
+                              },
+                              "block_types": {
+                                "provisioned_throughput": {
+                                  "nesting_mode": "list",
+                                  "block": {
+                                    "attributes": {
+                                      "enabled": {
+                                        "type": "bool",
+                                        "description_kind": "plain",
+                                        "optional": true
+                                      },
+                                      "volume_throughput": {
+                                        "type": "number",
+                                        "description_kind": "plain",
+                                        "optional": true
+                                      }
+                                    },
+                                    "description_kind": "plain"
+                                  },
+                                  "max_items": 1
+                                }
+                              },
+                              "description_kind": "plain"
+                            },
+                            "max_items": 1
+                          }
+                        },
+                        "description_kind": "plain"
+                      },
+                      "max_items": 1
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "min_items": 1,
+                "max_items": 1
+              },
+              "client_authentication": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "unauthenticated": {
+                      "type": "bool",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "block_types": {
+                    "sasl": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "iam": {
+                            "type": "bool",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "scram": {
+                            "type": "bool",
+                            "description_kind": "plain",
+                            "optional": true
+                          }
+                        },
+                        "description_kind": "plain"
+                      },
+                      "max_items": 1
+                    },
+                    "tls": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "certificate_authority_arns": {
+                            "type": [
+                              "set",
+                              "string"
+                            ],
+                            "description_kind": "plain",
+                            "optional": true
+                          }
+                        },
+                        "description_kind": "plain"
+                      },
+                      "max_items": 1
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "configuration_info": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "arn": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "revision": {
+                      "type": "number",
+                      "description_kind": "plain",
+                      "required": true
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "encryption_info": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "encryption_at_rest_kms_key_arn": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    }
+                  },
+                  "block_types": {
+                    "encryption_in_transit": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "client_broker": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "in_cluster": {
+                            "type": "bool",
+                            "description_kind": "plain",
+                            "optional": true
+                          }
+                        },
+                        "description_kind": "plain"
+                      },
+                      "max_items": 1
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "logging_info": {
+                "nesting_mode": "list",
+                "block": {
+                  "block_types": {
+                    "broker_logs": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "block_types": {
+                          "cloudwatch_logs": {
+                            "nesting_mode": "list",
+                            "block": {
+                              "attributes": {
+                                "enabled": {
+                                  "type": "bool",
+                                  "description_kind": "plain",
+                                  "required": true
+                                },
+                                "log_group": {
+                                  "type": "string",
+                                  "description_kind": "plain",
+                                  "optional": true
+                                }
+                              },
+                              "description_kind": "plain"
+                            },
+                            "max_items": 1
+                          },
+                          "firehose": {
+                            "nesting_mode": "list",
+                            "block": {
+                              "attributes": {
+                                "delivery_stream": {
+                                  "type": "string",
+                                  "description_kind": "plain",
+                                  "optional": true
+                                },
+                                "enabled": {
+                                  "type": "bool",
+                                  "description_kind": "plain",
+                                  "required": true
+                                }
+                              },
+                              "description_kind": "plain"
+                            },
+                            "max_items": 1
+                          },
+                          "s3": {
+                            "nesting_mode": "list",
+                            "block": {
+                              "attributes": {
+                                "bucket": {
+                                  "type": "string",
+                                  "description_kind": "plain",
+                                  "optional": true
+                                },
+                                "enabled": {
+                                  "type": "bool",
+                                  "description_kind": "plain",
+                                  "required": true
+                                },
+                                "prefix": {
+                                  "type": "string",
+                                  "description_kind": "plain",
+                                  "optional": true
+                                }
+                              },
+                              "description_kind": "plain"
+                            },
+                            "max_items": 1
+                          }
+                        },
+                        "description_kind": "plain"
+                      },
+                      "min_items": 1,
+                      "max_items": 1
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "open_monitoring": {
+                "nesting_mode": "list",
+                "block": {
+                  "block_types": {
+                    "prometheus": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "block_types": {
+                          "jmx_exporter": {
+                            "nesting_mode": "list",
+                            "block": {
+                              "attributes": {
+                                "enabled_in_broker": {
+                                  "type": "bool",
+                                  "description_kind": "plain",
+                                  "required": true
+                                }
+                              },
+                              "description_kind": "plain"
+                            },
+                            "max_items": 1
+                          },
+                          "node_exporter": {
+                            "nesting_mode": "list",
+                            "block": {
+                              "attributes": {
+                                "enabled_in_broker": {
+                                  "type": "bool",
+                                  "description_kind": "plain",
+                                  "required": true
+                                }
+                              },
+                              "description_kind": "plain"
+                            },
+                            "max_items": 1
+                          }
+                        },
+                        "description_kind": "plain"
+                      },
+                      "min_items": 1,
+                      "max_items": 1
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "timeouts": {
+                "nesting_mode": "single",
+                "block": {
+                  "attributes": {
+                    "create": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "delete": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "update": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "description_kind": "plain"
+                }
+              }
+            },
+            "description_kind": "plain"
+          }
+        },
+        "aws_opensearch_domain": {
+          "version": 0,
+          "block": {
+            "attributes": {
+              "access_policies": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "advanced_options": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "arn": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "dashboard_endpoint": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "dashboard_endpoint_v2": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "domain_endpoint_v2_hosted_zone_id": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "domain_id": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "domain_name": {
+                "type": "string",
+                "description_kind": "plain",
+                "required": true
+              },
+              "endpoint": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "endpoint_v2": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "engine_version": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "ip_address_type": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "kibana_endpoint": {
+                "type": "string",
+                "description_kind": "plain",
+                "deprecated": true,
+                "computed": true
+              },
+              "tags": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true
+              },
+              "tags_all": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              }
+            },
+            "block_types": {
+              "advanced_security_options": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "anonymous_auth_enabled": {
+                      "type": "bool",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    },
+                    "enabled": {
+                      "type": "bool",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "internal_user_database_enabled": {
+                      "type": "bool",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "block_types": {
+                    "master_user_options": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "master_user_arn": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "master_user_name": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "master_user_password": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "optional": true,
+                            "sensitive": true
+                          }
+                        },
+                        "description_kind": "plain"
+                      },
+                      "max_items": 1
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "auto_tune_options": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "desired_state": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "rollback_on_disable": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    },
+                    "use_off_peak_window": {
+                      "type": "bool",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "block_types": {
+                    "maintenance_schedule": {
+                      "nesting_mode": "set",
+                      "block": {
+                        "attributes": {
+                          "cron_expression_for_recurrence": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "required": true
+                          },
+                          "start_at": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "required": true
+                          }
+                        },
+                        "block_types": {
+                          "duration": {
+                            "nesting_mode": "list",
+                            "block": {
+                              "attributes": {
+                                "unit": {
+                                  "type": "string",
+                                  "description_kind": "plain",
+                                  "required": true
+                                },
+                                "value": {
+                                  "type": "number",
+                                  "description_kind": "plain",
+                                  "required": true
+                                }
+                              },
+                              "description_kind": "plain"
+                            },
+                            "min_items": 1,
+                            "max_items": 1
+                          }
+                        },
+                        "description_kind": "plain"
+                      }
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "cluster_config": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "dedicated_master_count": {
+                      "type": "number",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "dedicated_master_enabled": {
+                      "type": "bool",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "dedicated_master_type": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "instance_count": {
+                      "type": "number",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "instance_type": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "multi_az_with_standby_enabled": {
+                      "type": "bool",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "warm_count": {
+                      "type": "number",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "warm_enabled": {
+                      "type": "bool",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "warm_type": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "zone_awareness_enabled": {
+                      "type": "bool",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "block_types": {
+                    "cold_storage_options": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "enabled": {
+                            "type": "bool",
+                            "description_kind": "plain",
+                            "optional": true,
+                            "computed": true
+                          }
+                        },
+                        "description_kind": "plain"
+                      },
+                      "max_items": 1
+                    },
+                    "zone_awareness_config": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "availability_zone_count": {
+                            "type": "number",
+                            "description_kind": "plain",
+                            "optional": true
+                          }
+                        },
+                        "description_kind": "plain"
+                      },
+                      "max_items": 1
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "cognito_options": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "enabled": {
+                      "type": "bool",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "identity_pool_id": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "role_arn": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "user_pool_id": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "domain_endpoint_options": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "custom_endpoint": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "custom_endpoint_certificate_arn": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "custom_endpoint_enabled": {
+                      "type": "bool",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "enforce_https": {
+                      "type": "bool",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "tls_security_policy": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "ebs_options": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "ebs_enabled": {
+                      "type": "bool",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "iops": {
+                      "type": "number",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    },
+                    "throughput": {
+                      "type": "number",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    },
+                    "volume_size": {
+                      "type": "number",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "volume_type": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "encrypt_at_rest": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "enabled": {
+                      "type": "bool",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "kms_key_id": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "log_publishing_options": {
+                "nesting_mode": "set",
+                "block": {
+                  "attributes": {
+                    "cloudwatch_log_group_arn": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "enabled": {
+                      "type": "bool",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "log_type": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    }
+                  },
+                  "description_kind": "plain"
+                }
+              },
+              "node_to_node_encryption": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "enabled": {
+                      "type": "bool",
+                      "description_kind": "plain",
+                      "required": true
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "off_peak_window_options": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "enabled": {
+                      "type": "bool",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    }
+                  },
+                  "block_types": {
+                    "off_peak_window": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "block_types": {
+                          "window_start_time": {
+                            "nesting_mode": "list",
+                            "block": {
+                              "attributes": {
+                                "hours": {
+                                  "type": "number",
+                                  "description_kind": "plain",
+                                  "optional": true,
+                                  "computed": true
+                                },
+                                "minutes": {
+                                  "type": "number",
+                                  "description_kind": "plain",
+                                  "optional": true,
+                                  "computed": true
+                                }
+                              },
+                              "description_kind": "plain"
+                            },
+                            "max_items": 1
+                          }
+                        },
+                        "description_kind": "plain"
+                      },
+                      "max_items": 1
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "snapshot_options": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "automated_snapshot_start_hour": {
+                      "type": "number",
+                      "description_kind": "plain",
+                      "required": true
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "software_update_options": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "auto_software_update_enabled": {
+                      "type": "bool",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "timeouts": {
+                "nesting_mode": "single",
+                "block": {
+                  "attributes": {
+                    "create": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "delete": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "update": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "description_kind": "plain"
+                }
+              },
+              "vpc_options": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "availability_zones": {
+                      "type": [
+                        "set",
+                        "string"
+                      ],
+                      "description_kind": "plain",
+                      "computed": true
+                    },
+                    "security_group_ids": {
+                      "type": [
+                        "set",
+                        "string"
+                      ],
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "subnet_ids": {
+                      "type": [
+                        "set",
+                        "string"
+                      ],
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "vpc_id": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "computed": true
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              }
+            },
+            "description_kind": "plain"
+          }
+        },
         "aws_resourceexplorer2_index": {
           "version": 0,
           "block": {
@@ -6431,6 +10689,67 @@
             "description_kind": "plain"
           }
         },
+        "aws_secretsmanager_secret_rotation": {
+          "version": 1,
+          "block": {
+            "attributes": {
+              "id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "rotate_immediately": {
+                "type": "bool",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "rotation_enabled": {
+                "type": "bool",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "rotation_lambda_arn": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "secret_id": {
+                "type": "string",
+                "description_kind": "plain",
+                "required": true
+              }
+            },
+            "block_types": {
+              "rotation_rules": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "automatically_after_days": {
+                      "type": "number",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "duration": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "schedule_expression": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "min_items": 1,
+                "max_items": 1
+              }
+            },
+            "description_kind": "plain"
+          }
+        },
         "aws_security_group": {
           "version": 1,
           "block": {
@@ -6639,6 +10958,187 @@
                 "type": "string",
                 "description_kind": "plain",
                 "required": true
+              }
+            },
+            "description_kind": "plain"
+          }
+        },
+        "aws_sns_topic": {
+          "version": 0,
+          "block": {
+            "attributes": {
+              "application_failure_feedback_role_arn": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "application_success_feedback_role_arn": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "application_success_feedback_sample_rate": {
+                "type": "number",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "archive_policy": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "arn": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "beginning_archive_time": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "content_based_deduplication": {
+                "type": "bool",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "delivery_policy": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "display_name": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "fifo_topic": {
+                "type": "bool",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "firehose_failure_feedback_role_arn": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "firehose_success_feedback_role_arn": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "firehose_success_feedback_sample_rate": {
+                "type": "number",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "http_failure_feedback_role_arn": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "http_success_feedback_role_arn": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "http_success_feedback_sample_rate": {
+                "type": "number",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "kms_master_key_id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "lambda_failure_feedback_role_arn": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "lambda_success_feedback_role_arn": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "lambda_success_feedback_sample_rate": {
+                "type": "number",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "name": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "name_prefix": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "owner": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "policy": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "signature_version": {
+                "type": "number",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "sqs_failure_feedback_role_arn": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "sqs_success_feedback_role_arn": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "sqs_success_feedback_sample_rate": {
+                "type": "number",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "tags": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true
+              },
+              "tags_all": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "tracing_config": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
               }
             },
             "description_kind": "plain"

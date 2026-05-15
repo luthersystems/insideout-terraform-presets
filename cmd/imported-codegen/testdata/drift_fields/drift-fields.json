@@ -249,6 +249,140 @@
       "semantic": "Exact"
     }
   ],
+  "aws_cloudfront_distribution": [
+    {
+      "path": "aliases",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "caller_reference",
+      "semantic": "Exact"
+    },
+    {
+      "path": "comment",
+      "semantic": "Exact"
+    },
+    {
+      "path": "default_cache_behavior.compress",
+      "semantic": "Exact"
+    },
+    {
+      "path": "default_cache_behavior.default_ttl",
+      "semantic": "Exact"
+    },
+    {
+      "path": "default_cache_behavior.max_ttl",
+      "semantic": "Exact"
+    },
+    {
+      "path": "default_cache_behavior.min_ttl",
+      "semantic": "Exact"
+    },
+    {
+      "path": "default_cache_behavior.target_origin_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "default_cache_behavior.viewer_protocol_policy",
+      "semantic": "Exact"
+    },
+    {
+      "path": "default_root_object",
+      "semantic": "Exact"
+    },
+    {
+      "path": "domain_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "etag",
+      "semantic": "Exact"
+    },
+    {
+      "path": "hosted_zone_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "http_version",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "in_progress_validation_batches",
+      "semantic": "Exact"
+    },
+    {
+      "path": "is_ipv6_enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "last_modified_time",
+      "semantic": "Exact"
+    },
+    {
+      "path": "price_class",
+      "semantic": "Exact"
+    },
+    {
+      "path": "restrictions.geo_restriction.locations",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "restrictions.geo_restriction.restriction_type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "retain_on_delete",
+      "semantic": "Exact"
+    },
+    {
+      "path": "staging",
+      "semantic": "Exact"
+    },
+    {
+      "path": "status",
+      "semantic": "Exact"
+    },
+    {
+      "path": "viewer_certificate.acm_certificate_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "viewer_certificate.cloudfront_default_certificate",
+      "semantic": "Exact"
+    },
+    {
+      "path": "viewer_certificate.iam_certificate_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "viewer_certificate.minimum_protocol_version",
+      "semantic": "Exact"
+    },
+    {
+      "path": "viewer_certificate.ssl_support_method",
+      "semantic": "Exact"
+    },
+    {
+      "path": "wait_for_deployment",
+      "semantic": "Exact"
+    },
+    {
+      "path": "web_acl_id",
+      "semantic": "Exact"
+    }
+  ],
   "aws_cloudwatch_log_group": [
     {
       "path": "arn",
@@ -273,6 +407,156 @@
     {
       "path": "skip_destroy",
       "semantic": "Exact"
+    }
+  ],
+  "aws_db_instance": [
+    {
+      "path": "address",
+      "semantic": "Exact"
+    },
+    {
+      "path": "allocated_storage",
+      "semantic": "Exact"
+    },
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "auto_minor_version_upgrade",
+      "semantic": "Exact"
+    },
+    {
+      "path": "backup_retention_period",
+      "semantic": "Exact"
+    },
+    {
+      "path": "backup_window",
+      "semantic": "Exact"
+    },
+    {
+      "path": "copy_tags_to_snapshot",
+      "semantic": "Exact"
+    },
+    {
+      "path": "db_subnet_group_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "deletion_protection",
+      "semantic": "Exact"
+    },
+    {
+      "path": "enabled_cloudwatch_logs_exports",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "endpoint",
+      "semantic": "Exact"
+    },
+    {
+      "path": "engine",
+      "semantic": "Exact"
+    },
+    {
+      "path": "engine_version",
+      "semantic": "Exact"
+    },
+    {
+      "path": "hosted_zone_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "iam_database_authentication_enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "identifier",
+      "semantic": "Exact"
+    },
+    {
+      "path": "identifier_prefix",
+      "semantic": "Exact"
+    },
+    {
+      "path": "instance_class",
+      "semantic": "Exact"
+    },
+    {
+      "path": "iops",
+      "semantic": "Exact"
+    },
+    {
+      "path": "kms_key_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "maintenance_window",
+      "semantic": "Exact"
+    },
+    {
+      "path": "max_allocated_storage",
+      "semantic": "Exact"
+    },
+    {
+      "path": "monitoring_role_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "multi_az",
+      "semantic": "Exact"
+    },
+    {
+      "path": "option_group_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "parameter_group_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "performance_insights_enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "port",
+      "semantic": "Exact"
+    },
+    {
+      "path": "publicly_accessible",
+      "semantic": "Exact"
+    },
+    {
+      "path": "replicate_source_db",
+      "semantic": "Exact"
+    },
+    {
+      "path": "resource_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "status",
+      "semantic": "Exact"
+    },
+    {
+      "path": "storage_encrypted",
+      "semantic": "Exact"
+    },
+    {
+      "path": "storage_throughput",
+      "semantic": "Exact"
+    },
+    {
+      "path": "storage_type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "vpc_security_group_ids",
+      "semantic": "WholeList"
     }
   ],
   "aws_dynamodb_contributor_insights": [
@@ -463,6 +747,304 @@
       "semantic": "Exact"
     }
   ],
+  "aws_ecs_cluster": [
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "configuration.execute_command_configuration.kms_key_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "configuration.execute_command_configuration.log_configuration.cloud_watch_encryption_enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "configuration.execute_command_configuration.log_configuration.cloud_watch_log_group_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "configuration.execute_command_configuration.logging",
+      "semantic": "Exact"
+    },
+    {
+      "path": "configuration.managed_storage_configuration.fargate_ephemeral_storage_kms_key_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "configuration.managed_storage_configuration.kms_key_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "service_connect_defaults.namespace",
+      "semantic": "Exact"
+    },
+    {
+      "path": "setting.name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "setting.value",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_eks_cluster": [
+    {
+      "path": "access_config.authentication_mode",
+      "semantic": "Exact"
+    },
+    {
+      "path": "access_config.bootstrap_cluster_creator_admin_permissions",
+      "semantic": "Exact"
+    },
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "bootstrap_self_managed_addons",
+      "semantic": "Exact"
+    },
+    {
+      "path": "cluster_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "enabled_cluster_log_types",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "encryption_config.provider.key_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "encryption_config.resources",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "endpoint",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "kubernetes_network_config.ip_family",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "platform_version",
+      "semantic": "Exact"
+    },
+    {
+      "path": "role_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "status",
+      "semantic": "Exact"
+    },
+    {
+      "path": "upgrade_policy.support_type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "version",
+      "semantic": "Exact"
+    },
+    {
+      "path": "vpc_config.cluster_security_group_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "vpc_config.endpoint_private_access",
+      "semantic": "Exact"
+    },
+    {
+      "path": "vpc_config.endpoint_public_access",
+      "semantic": "Exact"
+    },
+    {
+      "path": "vpc_config.public_access_cidrs",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "vpc_config.security_group_ids",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "vpc_config.subnet_ids",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "vpc_config.vpc_id",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_elasticache_replication_group": [
+    {
+      "path": "apply_immediately",
+      "semantic": "Exact"
+    },
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "at_rest_encryption_enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "auto_minor_version_upgrade",
+      "semantic": "Exact"
+    },
+    {
+      "path": "automatic_failover_enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "cluster_mode",
+      "semantic": "Exact"
+    },
+    {
+      "path": "configuration_endpoint_address",
+      "semantic": "Exact"
+    },
+    {
+      "path": "data_tiering_enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "description",
+      "semantic": "Exact"
+    },
+    {
+      "path": "engine",
+      "semantic": "Exact"
+    },
+    {
+      "path": "engine_version",
+      "semantic": "Exact"
+    },
+    {
+      "path": "final_snapshot_identifier",
+      "semantic": "Exact"
+    },
+    {
+      "path": "global_replication_group_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "kms_key_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "maintenance_window",
+      "semantic": "Exact"
+    },
+    {
+      "path": "member_clusters",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "multi_az_enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "network_type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "node_type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "notification_topic_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "num_cache_clusters",
+      "semantic": "Exact"
+    },
+    {
+      "path": "num_node_groups",
+      "semantic": "Exact"
+    },
+    {
+      "path": "parameter_group_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "port",
+      "semantic": "Exact"
+    },
+    {
+      "path": "preferred_cache_cluster_azs",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "primary_endpoint_address",
+      "semantic": "Exact"
+    },
+    {
+      "path": "reader_endpoint_address",
+      "semantic": "Exact"
+    },
+    {
+      "path": "replicas_per_node_group",
+      "semantic": "Exact"
+    },
+    {
+      "path": "replication_group_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "security_group_ids",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "snapshot_retention_limit",
+      "semantic": "Exact"
+    },
+    {
+      "path": "snapshot_window",
+      "semantic": "Exact"
+    },
+    {
+      "path": "subnet_group_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "transit_encryption_enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "transit_encryption_mode",
+      "semantic": "Exact"
+    },
+    {
+      "path": "user_group_ids",
+      "semantic": "WholeList"
+    }
+  ],
   "aws_iam_policy": [
     {
       "path": "arn",
@@ -575,6 +1157,164 @@
     {
       "path": "role",
       "semantic": "Exact"
+    }
+  ],
+  "aws_instance": [
+    {
+      "path": "ami",
+      "semantic": "Exact"
+    },
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "associate_public_ip_address",
+      "semantic": "Exact"
+    },
+    {
+      "path": "availability_zone",
+      "semantic": "Exact"
+    },
+    {
+      "path": "disable_api_stop",
+      "semantic": "Exact"
+    },
+    {
+      "path": "disable_api_termination",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ebs_optimized",
+      "semantic": "Exact"
+    },
+    {
+      "path": "hibernation",
+      "semantic": "Exact"
+    },
+    {
+      "path": "iam_instance_profile",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "instance_state",
+      "semantic": "Exact"
+    },
+    {
+      "path": "instance_type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "key_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "metadata_options.http_endpoint",
+      "semantic": "Exact"
+    },
+    {
+      "path": "metadata_options.http_put_response_hop_limit",
+      "semantic": "Exact"
+    },
+    {
+      "path": "metadata_options.http_tokens",
+      "semantic": "Exact"
+    },
+    {
+      "path": "metadata_options.instance_metadata_tags",
+      "semantic": "Exact"
+    },
+    {
+      "path": "monitoring",
+      "semantic": "Exact"
+    },
+    {
+      "path": "outpost_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "placement_group",
+      "semantic": "Exact"
+    },
+    {
+      "path": "primary_network_interface_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "private_dns",
+      "semantic": "Exact"
+    },
+    {
+      "path": "private_ip",
+      "semantic": "Exact"
+    },
+    {
+      "path": "public_dns",
+      "semantic": "Exact"
+    },
+    {
+      "path": "public_ip",
+      "semantic": "Exact"
+    },
+    {
+      "path": "root_block_device.delete_on_termination",
+      "semantic": "Exact"
+    },
+    {
+      "path": "root_block_device.encrypted",
+      "semantic": "Exact"
+    },
+    {
+      "path": "root_block_device.iops",
+      "semantic": "Exact"
+    },
+    {
+      "path": "root_block_device.kms_key_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "root_block_device.throughput",
+      "semantic": "Exact"
+    },
+    {
+      "path": "root_block_device.volume_size",
+      "semantic": "Exact"
+    },
+    {
+      "path": "root_block_device.volume_type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "security_groups",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "source_dest_check",
+      "semantic": "Exact"
+    },
+    {
+      "path": "subnet_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "tenancy",
+      "semantic": "Exact"
+    },
+    {
+      "path": "user_data",
+      "semantic": "Exact"
+    },
+    {
+      "path": "user_data_replace_on_change",
+      "semantic": "Exact"
+    },
+    {
+      "path": "vpc_security_group_ids",
+      "semantic": "WholeList"
     }
   ],
   "aws_kms_key": [
@@ -1063,6 +1803,250 @@
       "semantic": "Exact"
     }
   ],
+  "aws_msk_cluster": [
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "bootstrap_brokers",
+      "semantic": "Exact"
+    },
+    {
+      "path": "bootstrap_brokers_sasl_iam",
+      "semantic": "Exact"
+    },
+    {
+      "path": "bootstrap_brokers_tls",
+      "semantic": "Exact"
+    },
+    {
+      "path": "broker_node_group_info.az_distribution",
+      "semantic": "Exact"
+    },
+    {
+      "path": "broker_node_group_info.client_subnets",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "broker_node_group_info.instance_type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "broker_node_group_info.security_groups",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "broker_node_group_info.storage_info.ebs_storage_info.volume_size",
+      "semantic": "Exact"
+    },
+    {
+      "path": "client_authentication.sasl.iam",
+      "semantic": "Exact"
+    },
+    {
+      "path": "client_authentication.sasl.scram",
+      "semantic": "Exact"
+    },
+    {
+      "path": "client_authentication.tls.certificate_authority_arns",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "client_authentication.unauthenticated",
+      "semantic": "Exact"
+    },
+    {
+      "path": "cluster_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "cluster_uuid",
+      "semantic": "Exact"
+    },
+    {
+      "path": "current_version",
+      "semantic": "Exact"
+    },
+    {
+      "path": "encryption_info.encryption_at_rest_kms_key_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "encryption_info.encryption_in_transit.client_broker",
+      "semantic": "Exact"
+    },
+    {
+      "path": "encryption_info.encryption_in_transit.in_cluster",
+      "semantic": "Exact"
+    },
+    {
+      "path": "enhanced_monitoring",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "kafka_version",
+      "semantic": "Exact"
+    },
+    {
+      "path": "logging_info.broker_logs.cloudwatch_logs.enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "logging_info.broker_logs.cloudwatch_logs.log_group",
+      "semantic": "Exact"
+    },
+    {
+      "path": "number_of_broker_nodes",
+      "semantic": "Exact"
+    },
+    {
+      "path": "storage_mode",
+      "semantic": "Exact"
+    },
+    {
+      "path": "zookeeper_connect_string",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_opensearch_domain": [
+    {
+      "path": "access_policies",
+      "semantic": "Exact"
+    },
+    {
+      "path": "advanced_security_options.anonymous_auth_enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "advanced_security_options.enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "advanced_security_options.internal_user_database_enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "cluster_config.dedicated_master_count",
+      "semantic": "Exact"
+    },
+    {
+      "path": "cluster_config.dedicated_master_enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "cluster_config.dedicated_master_type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "cluster_config.instance_count",
+      "semantic": "Exact"
+    },
+    {
+      "path": "cluster_config.instance_type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "cluster_config.multi_az_with_standby_enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "cluster_config.zone_awareness_enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "dashboard_endpoint",
+      "semantic": "Exact"
+    },
+    {
+      "path": "domain_endpoint_options.enforce_https",
+      "semantic": "Exact"
+    },
+    {
+      "path": "domain_endpoint_options.tls_security_policy",
+      "semantic": "Exact"
+    },
+    {
+      "path": "domain_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "domain_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ebs_options.ebs_enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ebs_options.iops",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ebs_options.throughput",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ebs_options.volume_size",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ebs_options.volume_type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "encrypt_at_rest.enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "encrypt_at_rest.kms_key_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "endpoint",
+      "semantic": "Exact"
+    },
+    {
+      "path": "engine_version",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ip_address_type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "kibana_endpoint",
+      "semantic": "Exact"
+    },
+    {
+      "path": "node_to_node_encryption.enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "snapshot_options.automated_snapshot_start_hour",
+      "semantic": "Exact"
+    },
+    {
+      "path": "vpc_options.security_group_ids",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "vpc_options.subnet_ids",
+      "semantic": "WholeList"
+    }
+  ],
   "aws_resourceexplorer2_index": [
     {
       "path": "arn",
@@ -1431,6 +2415,40 @@
       "semantic": "Exact"
     }
   ],
+  "aws_secretsmanager_secret_rotation": [
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "rotate_immediately",
+      "semantic": "Exact"
+    },
+    {
+      "path": "rotation_enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "rotation_lambda_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "rotation_rules.automatically_after_days",
+      "semantic": "Exact"
+    },
+    {
+      "path": "rotation_rules.duration",
+      "semantic": "Exact"
+    },
+    {
+      "path": "rotation_rules.schedule_expression",
+      "semantic": "Exact"
+    },
+    {
+      "path": "secret_id",
+      "semantic": "Exact"
+    }
+  ],
   "aws_security_group": [
     {
       "path": "arn",
@@ -1496,6 +2514,88 @@
     },
     {
       "path": "vpc",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_sns_topic": [
+    {
+      "path": "archive_policy",
+      "semantic": "Exact"
+    },
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "content_based_deduplication",
+      "semantic": "Exact"
+    },
+    {
+      "path": "delivery_policy",
+      "semantic": "Exact"
+    },
+    {
+      "path": "display_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "fifo_topic",
+      "semantic": "Exact"
+    },
+    {
+      "path": "http_failure_feedback_role_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "http_success_feedback_role_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "kms_master_key_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "lambda_failure_feedback_role_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "lambda_success_feedback_role_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name_prefix",
+      "semantic": "Exact"
+    },
+    {
+      "path": "owner",
+      "semantic": "Exact"
+    },
+    {
+      "path": "policy",
+      "semantic": "Exact"
+    },
+    {
+      "path": "signature_version",
+      "semantic": "Exact"
+    },
+    {
+      "path": "sqs_failure_feedback_role_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "sqs_success_feedback_role_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "tracing_config",
       "semantic": "Exact"
     }
   ],

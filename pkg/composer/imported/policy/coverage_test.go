@@ -27,20 +27,32 @@ var coveredTypes = []string{
 	"aws_apigatewayv2_stage",
 	"aws_bedrock_guardrail",
 	"aws_bedrock_model_invocation_logging_configuration",
+	// AWS drift coverage bundle 2 (#482) — cloud-control-routed types
+	// in the RDS / compute / monitoring / managed-search family.
+	"aws_cloudfront_distribution",
 	"aws_cloudwatch_log_group",
+	"aws_db_instance",
 	"aws_dynamodb_contributor_insights",
 	"aws_dynamodb_table",
+	"aws_ecs_cluster",
+	"aws_eks_cluster",
+	"aws_elasticache_replication_group",
 	// AWS drift coverage bundle 1 (#482) — high-value cloud-control-routed
 	// types that already had Enrichable coverage but lacked a curated
 	// Layer 2 policy.Map.
 	"aws_iam_policy",
 	"aws_iam_role",
 	"aws_iam_role_policy_attachment",
+	// `aws_instance` is the canonical TF name for EC2 instances.
+	"aws_instance",
 	"aws_kms_key",
 	"aws_lambda_function",
 	"aws_lb",
 	"aws_lb_listener",
 	"aws_lb_target_group",
+	// Bundle 2 (cont.) — managed-search / streaming / rotation types.
+	"aws_msk_cluster",
+	"aws_opensearch_domain",
 	"aws_resourceexplorer2_index",
 	"aws_resourceexplorer2_view",
 	"aws_route53_zone",
@@ -52,8 +64,10 @@ var coveredTypes = []string{
 	"aws_s3_bucket_server_side_encryption_configuration",
 	"aws_s3_bucket_versioning",
 	"aws_secretsmanager_secret",
+	"aws_secretsmanager_secret_rotation",
 	"aws_security_group",
 	"aws_service_discovery_private_dns_namespace",
+	"aws_sns_topic",
 	"aws_sqs_queue",
 	"aws_subnet",
 	"aws_vpc",
