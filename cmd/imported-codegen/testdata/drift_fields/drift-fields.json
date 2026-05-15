@@ -3409,6 +3409,44 @@
       "semantic": "Exact"
     }
   ],
+  "google_compute_security_policy": [
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "rule.action",
+      "semantic": "Exact"
+    },
+    {
+      "path": "rule.match.config.src_ip_ranges",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "rule.match.versioned_expr",
+      "semantic": "Exact"
+    },
+    {
+      "path": "rule.priority",
+      "semantic": "Exact"
+    },
+    {
+      "path": "self_link",
+      "semantic": "Exact"
+    },
+    {
+      "path": "type",
+      "semantic": "Exact"
+    }
+  ],
   "google_compute_url_map": [
     {
       "path": "default_service",
@@ -3564,6 +3602,120 @@
     },
     {
       "path": "version_template.protection_level",
+      "semantic": "Exact"
+    }
+  ],
+  "google_kms_key_ring": [
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "location",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    }
+  ],
+  "google_logging_project_sink": [
+    {
+      "path": "destination",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "writer_identity",
+      "semantic": "Exact"
+    }
+  ],
+  "google_monitoring_alert_policy": [
+    {
+      "path": "combiner",
+      "semantic": "Exact"
+    },
+    {
+      "path": "display_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "notification_channels",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "severity",
+      "semantic": "Exact"
+    }
+  ],
+  "google_monitoring_dashboard": [
+    {
+      "path": "dashboard_json",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    }
+  ],
+  "google_monitoring_notification_channel": [
+    {
+      "path": "display_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "type",
       "semantic": "Exact"
     }
   ],
@@ -4302,6 +4454,36 @@
     },
     {
       "path": "temporary_hold",
+      "semantic": "Exact"
+    }
+  ],
+  "google_vertex_ai_dataset": [
+    {
+      "path": "display_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "encryption_spec.kms_key_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "metadata_schema_uri",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "region",
       "semantic": "Exact"
     }
   ],
