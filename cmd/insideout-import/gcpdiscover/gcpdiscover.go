@@ -327,7 +327,7 @@ func NewGCPDiscoverer(searcher gcpAssetSearcher, projectID string, opts GCPDisco
 			// child configs, Service Networking peering connections,
 			// Serverless VPC Access connectors, and Compute resource
 			// policies (snapshot schedules / placement policies).
-			"google_project_service": newProjectServiceDiscoverer(opts.ProjectServiceLister),
+			"google_project_service":                                newProjectServiceDiscoverer(opts.ProjectServiceLister),
 			"google_identity_platform_default_supported_idp_config": newIdentityPlatformDefaultSupportedIdpConfigDiscoverer(opts.DefaultSupportedIdpConfigLister),
 			"google_service_networking_connection":                  newServiceNetworkingConnectionDiscoverer(opts.ServiceNetworkingConnectionLister),
 			"google_vpc_access_connector":                           newVPCAccessConnectorDiscoverer(opts.VPCAccessConnectorLister),
@@ -341,11 +341,13 @@ func NewGCPDiscoverer(searcher gcpAssetSearcher, projectID string, opts GCPDisco
 		// silently skipped by EnrichAttributes — the full enricher rollout
 		// follows the existing per-type ordering one PR at a time.
 		byTypeEnricher: map[string]AttributeEnricher{
-			"google_storage_bucket":        newStorageBucketEnricher(),
-			"google_pubsub_topic":          newPubsubTopicEnricher(),
-			"google_pubsub_subscription":   newPubsubSubscriptionEnricher(),
-			"google_secret_manager_secret": newSecretManagerSecretEnricher(),
+			"google_compute_address":       newComputeAddressEnricher(),
+			"google_compute_firewall":      newComputeFirewallEnricher(),
 			"google_compute_network":       newComputeNetworkEnricher(),
+			"google_pubsub_subscription":   newPubsubSubscriptionEnricher(),
+			"google_pubsub_topic":          newPubsubTopicEnricher(),
+			"google_secret_manager_secret": newSecretManagerSecretEnricher(),
+			"google_storage_bucket":        newStorageBucketEnricher(),
 		},
 	}
 }

@@ -120,6 +120,29 @@ func TestChangeRiskPolicy_Valid(t *testing.T) {
 	}
 }
 
+func TestDriftSemantic_Valid(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		in   DriftSemantic
+		want bool
+	}{
+		// Empty string is intentionally valid — pre-existing policy
+		// files leave this axis unset and must continue to lint
+		// cleanly with the new field present.
+		{DriftSemanticNone, true},
+		{DriftSemanticExact, true},
+		{DriftSemanticWholeList, true},
+		{DriftSemanticLabelFilter, true},
+		{"exact", false},        // case-sensitive
+		{"whole_list", false},   // snake-case rejected
+		{"LabelFilter ", false}, // trailing space (parallel to VisibilityPolicy's "Hidden " probe)
+		{"unknown", false},
+	}
+	for _, tc := range cases {
+		assert.Equal(t, tc.want, tc.in.Valid(), "DriftSemantic(%q).Valid()", string(tc.in))
+	}
+}
+
 func TestSharedPolicies(t *testing.T) {
 	t.Parallel()
 	// Whole-struct equality: these constructors are baked into every

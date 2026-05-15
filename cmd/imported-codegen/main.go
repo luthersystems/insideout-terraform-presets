@@ -27,6 +27,27 @@
 //	        for consumer repos and mirrors
 //	        pkg/composer/imported/policy/<type>.policy.go.
 //
+//	labels [--output <path>]
+//	        Emit a JSON object mapping every supported TF type to
+//	        {label, iconKey}. Falls back to the default labeling rule
+//	        for types without a curated override (presets#482).
+//
+//	capabilities [--output <path>]
+//	        Emit a per-type Capabilities matrix JSON
+//	        ({discoverable, enrichable, driftDetectable,
+//	         metricsAvailable, rileyEditable}) computed from the
+//	        upstream registries (presets#482).
+//
+//	dependencies [--output <path>]
+//	        Emit a per-type cross-resource ref edge-list JSON computed
+//	        from a hand-curated tf-tag → target-type map applied to the
+//	        Layer-1 generated structs (presets#482, v1 scope).
+//
+//	drift-fields [--output <path>]
+//	        Emit a per-type list of (path, DriftSemantic) entries for
+//	        every curated policy.Map field with a non-empty drift axis
+//	        (presets#482).
+//
 // Default subcommand is `gen` so plain `imported-codegen --aws-schema=...`
 // works.
 package main
@@ -55,6 +76,14 @@ func main() {
 			os.Exit(runZod(os.Args[2:]))
 		case "policy-ts":
 			os.Exit(runPolicyTS(os.Args[2:]))
+		case "labels":
+			os.Exit(runLabels(os.Args[2:]))
+		case "capabilities":
+			os.Exit(runCapabilities(os.Args[2:]))
+		case "dependencies":
+			os.Exit(runDependencies(os.Args[2:]))
+		case "drift-fields":
+			os.Exit(runDriftFields(os.Args[2:]))
 		case "-h", "--help":
 			usage()
 			return
@@ -67,10 +96,14 @@ func usage() {
 	fmt.Fprintln(os.Stderr, `imported-codegen: generate Layer 1 typed structs from terraform provider schemas.
 
 Subcommands:
-  gen        (default) generate <type>.gen.go files
-  filter     strip a full ProviderSchemas dump to wanted types only
-  zod        generate <type>.ts (Zod schema + metadata) for TS consumers
-  policy-ts  generate <type>.policy.ts (Layer-2 policy projection) for TS consumers
+  gen           (default) generate <type>.gen.go files
+  filter        strip a full ProviderSchemas dump to wanted types only
+  zod           generate <type>.ts (Zod schema + metadata) for TS consumers
+  policy-ts     generate <type>.policy.ts (Layer-2 policy projection) for TS consumers
+  labels        emit per-type display label + iconKey JSON (presets#482)
+  capabilities  emit per-type Capabilities matrix JSON (presets#482)
+  dependencies  emit per-type cross-resource ref edge-list JSON (presets#482)
+  drift-fields  emit per-type DriftSemantic field list JSON (presets#482)
 
 Run 'imported-codegen <subcommand> --help' for subcommand flags.`)
 }
@@ -378,4 +411,3 @@ func (f typesFilter) unknownAgainst(wants ...[]string) []string {
 	sort.Strings(unknown)
 	return unknown
 }
-

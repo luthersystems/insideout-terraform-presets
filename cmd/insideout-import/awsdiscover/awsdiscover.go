@@ -207,7 +207,9 @@ func NewAWSDiscovererWithConcurrency(cfg aws.Config, maxConcurrency int) *AWSDis
 		// support) is in place already so the wiring there is a one-line
 		// registration.
 		byTypeEnricher: map[string]AttributeEnricher{
-			"aws_dynamodb_table": newDynamoDBTableEnricher(),
+			"aws_cloudwatch_log_group":  newCloudWatchLogGroupEnricher(),
+			"aws_dynamodb_table":        newDynamoDBTableEnricher(),
+			"aws_secretsmanager_secret": newSecretsManagerSecretEnricher(),
 		},
 	}
 }
@@ -224,8 +226,8 @@ func NewAWSDiscovererWithConcurrency(cfg aws.Config, maxConcurrency int) *AWSDis
 var serviceSlugByTFType = map[string]string{
 	// Bucket C — hand-rolled. Slugs must match the per-discoverer
 	// ServiceStart/Finish strings inside each *.go file.
-	"aws_apigatewayv2_stage": "apigatewayv2_stage",
-	"aws_bedrock_guardrail":  "bedrock_guardrail",
+	"aws_apigatewayv2_stage":                             "apigatewayv2_stage",
+	"aws_bedrock_guardrail":                              "bedrock_guardrail",
 	"aws_bedrock_model_invocation_logging_configuration": "bedrock_model_invocation_logging_configuration",
 	"aws_resourceexplorer2_index":                        "resourceexplorer2_index",
 	"aws_resourceexplorer2_view":                         "resourceexplorer2_view",
