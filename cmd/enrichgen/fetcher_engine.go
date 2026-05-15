@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"sort"
 	"strings"
 )
@@ -139,12 +140,7 @@ func (e *fetcherEngine) emitSingleCall(f fetcherTarget) {
 	zero := zeroValueForResult(f.resultType)
 	e.line("\tout, err := c.%s(ctx, input)", f.sdkMethod)
 	e.line("\tif err != nil {")
-	if zero.todo {
-		e.line("\t\t// TODO(enrichgen): unsupported result shape %q — caller must handle.", f.resultType)
-		e.line("\t\treturn %s, err", zero.expr)
-	} else {
-		e.line("\t\treturn %s, err", zero.expr)
-	}
+	e.line("\t\treturn %s, err", zero.expr)
 	e.line("\t}")
 	e.line("\tif out == nil {")
 	e.line("\t\treturn %s, nil", zero.expr)
@@ -172,12 +168,12 @@ func (e *fetcherEngine) emitPaginated(f fetcherTarget) {
 
 // resultZero captures how to spell the zero value for a fetcher's
 // declared resultType, used in error-path returns. Slice / pointer
-// types are spelled as the literal "nil"; anything else is flagged as
-// a TODO so the engine emits a build-time signal rather than a silent
-// wrong default.
+// types are spelled as the literal "nil"; anything else is unsupported
+// and surfaced at generate-time via log.Fatal so a future contributor
+// adding a scalar return sees a clear codegen failure rather than a
+// downstream "cannot use nil as int" build error.
 type resultZero struct {
 	expr string
-	todo bool
 }
 
 func zeroValueForResult(resultType string) resultZero {
@@ -186,11 +182,12 @@ func zeroValueForResult(resultType string) resultZero {
 	case strings.HasPrefix(t, "[]"), strings.HasPrefix(t, "*"):
 		return resultZero{expr: "nil"}
 	default:
-		// Scalar shape — emit a TODO so future contributors notice the
-		// gap. All current fetcher entries return slices or pointers,
-		// so this branch only exists to surface the omission if a
-		// scalar return shows up.
-		return resultZero{expr: "nil", todo: true}
+		// Scalar / value-typed result not yet supported. All current
+		// fetcher entries return slices or pointers; extend
+		// zeroValueForResult before adding a scalar entry so the
+		// emitted error-path return matches the declared type.
+		log.Fatalf("enrichgen: fetcher result type %q has no defined zero value (only slice and pointer return types are supported)", resultType)
+		return resultZero{} // unreachable; satisfies the compiler.
 	}
 }
 
