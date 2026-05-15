@@ -310,6 +310,19 @@ jobs:
           cache: true
       - run: make verify-gen
 
+  # Re-renders SUPPORTED_RESOURCES.md from the capabilities matrix and
+  # fails if the committed copy is stale (#492). Cheap pure-Go gate; no
+  # provider schemas or terraform required.
+  verify-supported-resources:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c  # v6.4.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: make verify-supported-resources
+
   # Single aggregator status for branch protection to require. Lets the
   # matrix jobs above grow/shrink without updating the protection rule.
   ci-gate:
@@ -325,6 +338,7 @@ jobs:
       - go-vet
       - go-test
       - verify-gen
+      - verify-supported-resources
       - verify-phantom-schema
       - tflint
     if: always()
