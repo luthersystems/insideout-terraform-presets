@@ -22,7 +22,7 @@ and is checked in lockstep with the runtime registries. See the
 
 ## Summary
 
-- **AWS:** 109 types · 100% Discoverable · 100% Enrichable · 42% DriftDetectable · 8% MetricsAvailable · 39% AgentEditable
+- **AWS:** 109 types · 100% Discoverable · 100% Enrichable · 44% DriftDetectable · 8% MetricsAvailable · 39% AgentEditable
 - **GCP:** 54 types · 100% Discoverable · 100% Enrichable · 63% DriftDetectable · 11% MetricsAvailable · 89% AgentEditable
 
 ## AWS
@@ -31,7 +31,7 @@ and is checked in lockstep with the runtime registries. See the
 |---|---|---|---|---|---|
 | `aws_acm_certificate` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_api_gateway_deployment` | ✓ | ✓ | – | – | – |
-| `aws_api_gateway_resource` | ✓ | ✓ | – | – | – |
+| `aws_api_gateway_resource` | ✓ | ✓ | ✓ | – | – |
 | `aws_api_gateway_stage` | ✓ | ✓ | – | – | – |
 | `aws_apigatewayv2_api` | ✓ | ✓ | – | – | – |
 | `aws_apigatewayv2_api_mapping` | ✓ | ✓ | – | – | – |
@@ -44,7 +44,7 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_autoscaling_group_tag` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_backup_plan` | ✓ | ✓ | – | – | – |
 | `aws_backup_selection` | ✓ | ✓ | – | – | – |
-| `aws_backup_vault` | ✓ | ✓ | – | – | – |
+| `aws_backup_vault` | ✓ | ✓ | ✓ | – | – |
 | `aws_bedrock_guardrail` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_bedrock_model_invocation_logging_configuration` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_cloudfront_distribution` | ✓ | ✓ | ✓ | – | ✓ |

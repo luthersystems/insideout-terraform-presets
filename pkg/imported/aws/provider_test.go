@@ -95,11 +95,11 @@ func TestProvider_Capabilities_DriftDetectable(t *testing.T) {
 	if got := pWithCmp.Capabilities("aws_dynamodb_table"); !got.DriftDetectable {
 		t.Errorf("With comparator + policy, DriftDetectable should be true; got %+v", got)
 	}
-	// aws_cloudtrail has no policy registered today (used as a stable
-	// "uncovered" negative example — previously aws_acm_certificate,
-	// which gained a curated policy in the #482 AWS drift bundle 3).
-	if got := pWithCmp.Capabilities("aws_cloudtrail"); got.DriftDetectable {
-		t.Errorf("aws_cloudtrail has no policy; DriftDetectable should be false; got %+v", got)
+	// aws_glacier_vault has no policy registered today (used as a stable
+	// "uncovered" negative example — previously aws_cloudtrail, which
+	// gained a curated policy in the #482 AWS drift bundle 4).
+	if got := pWithCmp.Capabilities("aws_glacier_vault"); got.DriftDetectable {
+		t.Errorf("aws_glacier_vault has no policy; DriftDetectable should be false; got %+v", got)
 	}
 }
 

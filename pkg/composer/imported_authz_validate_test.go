@@ -258,15 +258,16 @@ func TestValidateImportedResourceAuthorization_EditPolicyGates(t *testing.T) {
 
 func TestValidateImportedResourceAuthorization_NoPolicyForType(t *testing.T) {
 	t.Parallel()
-	// aws_cloudtrail isn't in the Phase 1 ten — no policy registered, so any
-	// FieldEdit defaults to deny.
-	require.False(t, hasPolicyRegistered("aws_cloudtrail"),
-		"test premise: aws_cloudtrail should not be in the curated Phase 1 set")
+	// aws_glacier_vault has no policy registered, so any FieldEdit
+	// defaults to deny. Pivoted from aws_cloudtrail, which entered the
+	// curated set via #482 drift coverage bundle 4.
+	require.False(t, hasPolicyRegistered("aws_glacier_vault"),
+		"test premise: aws_glacier_vault should not be in the curated set")
 	irs := []imported.ImportedResource{{
 		Identity: imported.ResourceIdentity{
 			Cloud:    "aws",
-			Type:     "aws_cloudtrail",
-			Address:  "aws_cloudtrail.r",
+			Type:     "aws_glacier_vault",
+			Address:  "aws_glacier_vault.r",
 			ImportID: "r",
 		},
 		Tier: imported.TierImportedFlat,
@@ -277,7 +278,7 @@ func TestValidateImportedResourceAuthorization_NoPolicyForType(t *testing.T) {
 	issues := ValidateImportedResourceAuthorization("aws", irs)
 	require.Len(t, issues, 1)
 	assert.Equal(t, "imported_resource_field_edit_no_policy", issues[0].Code)
-	assert.Equal(t, "imported.aws_cloudtrail.r.description", issues[0].Field)
+	assert.Equal(t, "imported.aws_glacier_vault.r.description", issues[0].Field)
 }
 
 func TestValidateImportedResourceAuthorization_UnknownPath(t *testing.T) {

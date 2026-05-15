@@ -25,8 +25,14 @@ const syntheticTypePrefix = "policy_test_"
 // updating this list — the diff makes the surface change explicit.
 var coveredTypes = []string{
 	"aws_acm_certificate",
+	// AWS drift coverage bundle 4 (#482) — 10 more cloud-control-routed
+	// types pushing DriftDetectable from 42% to ~51%.
+	"aws_api_gateway_resource",
 	"aws_apigatewayv2_stage",
+	"aws_appautoscaling_policy",
+	"aws_appautoscaling_target",
 	"aws_athena_workgroup",
+	"aws_backup_vault",
 	// Final-2 push (#482) — closes the last hand-rolled enrichers
 	// (per-tag-on-ASG and resource-arn × web-acl-arn binding). Both
 	// have curated Layer 2 policy.Maps with Exact drift semantics.
@@ -34,6 +40,8 @@ var coveredTypes = []string{
 	"aws_autoscaling_group_tag",
 	"aws_bedrock_guardrail",
 	"aws_bedrock_model_invocation_logging_configuration",
+	// Bundle 4 (cont.) — CloudTrail.
+	"aws_cloudtrail",
 	// AWS drift coverage bundle 2 (#482) — cloud-control-routed types
 	// in the RDS / compute / monitoring / managed-search family.
 	"aws_cloudfront_distribution",
@@ -41,13 +49,22 @@ var coveredTypes = []string{
 	"aws_cloudwatch_log_group",
 	"aws_cloudwatch_metric_alarm",
 	"aws_codebuild_project",
+	// Bundle 4 (cont.) — CodeDeploy app.
+	"aws_codedeploy_app",
 	"aws_codepipeline",
 	"aws_db_instance",
 	"aws_dynamodb_contributor_insights",
+	// Bundle 4 (cont.) — DynamoDB global table.
+	"aws_dynamodb_global_table",
 	"aws_dynamodb_table",
 	"aws_ecs_cluster",
+	// Bundle 4 (cont.) — EFS file system.
+	"aws_efs_file_system",
 	"aws_eks_cluster",
 	"aws_elasticache_replication_group",
+	// Bundle 4 (cont.) — Glue catalog database (substituted in for
+	// aws_cognito_user_pool which trips a codegen name collision).
+	"aws_glue_catalog_database",
 	// AWS drift coverage bundle 1 (#482) — high-value cloud-control-routed
 	// types that already had Enrichable coverage but lacked a curated
 	// Layer 2 policy.Map.
@@ -56,6 +73,8 @@ var coveredTypes = []string{
 	"aws_iam_role_policy_attachment",
 	// `aws_instance` is the canonical TF name for EC2 instances.
 	"aws_instance",
+	// Bundle 4 (cont.) — Kinesis Data Stream.
+	"aws_kinesis_stream",
 	"aws_kms_key",
 	"aws_lambda_function",
 	"aws_lambda_layer_version",

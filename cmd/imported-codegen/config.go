@@ -4,8 +4,16 @@ package main
 // structs for. Add new types here to expand coverage.
 var WantedAWS = []string{
 	"aws_acm_certificate",
+	// Drift coverage bundle 4 (#482) — 10 more cloud-control-routed AWS
+	// types pushing DriftDetectable from 42% to ~51%. Each was already
+	// cloud-control-enriched; adding the Layer 1 typed struct + Layer 2
+	// curated policy.Map flips them to DriftDetectable.
+	"aws_api_gateway_resource",
 	"aws_apigatewayv2_stage",
+	"aws_appautoscaling_policy",
+	"aws_appautoscaling_target",
 	"aws_athena_workgroup",
+	"aws_backup_vault",
 	// Final-2 enricher push (#482) — closes the last hand-rolled
 	// AWS discoverer types that had no Layer 1 typed struct yet,
 	// flipping AWS Enrichable coverage to 100%. Both are
@@ -16,6 +24,8 @@ var WantedAWS = []string{
 	"aws_autoscaling_group_tag",
 	"aws_bedrock_guardrail",
 	"aws_bedrock_model_invocation_logging_configuration",
+	// Bundle 4 (cont.) — CloudTrail.
+	"aws_cloudtrail",
 	// Drift coverage bundle 2 (#482) — cloud-control-routed AWS types
 	// in the RDS / compute / monitoring family. Each was already
 	// cloud-control-enriched; adding the Layer 1 typed struct + Layer 2
@@ -25,13 +35,25 @@ var WantedAWS = []string{
 	"aws_cloudwatch_log_group",
 	"aws_cloudwatch_metric_alarm",
 	"aws_codebuild_project",
+	// Bundle 4 (cont.) — CodeDeploy app.
+	"aws_codedeploy_app",
 	"aws_codepipeline",
 	"aws_db_instance",
 	"aws_dynamodb_contributor_insights",
+	// Bundle 4 (cont.) — DynamoDB global table.
+	"aws_dynamodb_global_table",
 	"aws_dynamodb_table",
 	"aws_ecs_cluster",
+	// Bundle 4 (cont.) — EFS file system.
+	"aws_efs_file_system",
 	"aws_eks_cluster",
 	"aws_elasticache_replication_group",
+	// Bundle 4 (cont.) — Glue catalog database. Substituted for
+	// aws_cognito_user_pool, which trips a codegen name collision (the
+	// resource's `schema` nested block generates a Go type named
+	// AWSCognitoUserPoolSchema that clashes with the resource's
+	// generated `<Type>Schema` variable name).
+	"aws_glue_catalog_database",
 	// Drift coverage bundle 1 (#482) — high-value cloud-control-routed
 	// AWS types. Each was already cloud-control-enriched but lacked a
 	// Layer 1 typed struct (and thus a curated Layer 2 policy.Map), so
@@ -44,6 +66,8 @@ var WantedAWS = []string{
 	// `aws_instance` is the canonical TF name for EC2 instances
 	// (the resource was never renamed to `aws_ec2_instance` upstream).
 	"aws_instance",
+	// Bundle 4 (cont.) — Kinesis Data Stream.
+	"aws_kinesis_stream",
 	"aws_kms_key",
 	"aws_lambda_function",
 	"aws_lambda_layer_version",

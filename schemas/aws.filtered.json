@@ -2304,6 +2304,40 @@
             "description_kind": "plain"
           }
         },
+        "aws_api_gateway_resource": {
+          "version": 0,
+          "block": {
+            "attributes": {
+              "id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "parent_id": {
+                "type": "string",
+                "description_kind": "plain",
+                "required": true
+              },
+              "path": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "path_part": {
+                "type": "string",
+                "description_kind": "plain",
+                "required": true
+              },
+              "rest_api_id": {
+                "type": "string",
+                "description_kind": "plain",
+                "required": true
+              }
+            },
+            "description_kind": "plain"
+          }
+        },
         "aws_apigatewayv2_stage": {
           "version": 0,
           "block": {
@@ -2479,6 +2513,397 @@
                   },
                   "description_kind": "plain"
                 }
+              }
+            },
+            "description_kind": "plain"
+          }
+        },
+        "aws_appautoscaling_policy": {
+          "version": 0,
+          "block": {
+            "attributes": {
+              "alarm_arns": {
+                "type": [
+                  "list",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "computed": true
+              },
+              "arn": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "name": {
+                "type": "string",
+                "description_kind": "plain",
+                "required": true
+              },
+              "policy_type": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "resource_id": {
+                "type": "string",
+                "description_kind": "plain",
+                "required": true
+              },
+              "scalable_dimension": {
+                "type": "string",
+                "description_kind": "plain",
+                "required": true
+              },
+              "service_namespace": {
+                "type": "string",
+                "description_kind": "plain",
+                "required": true
+              }
+            },
+            "block_types": {
+              "step_scaling_policy_configuration": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "adjustment_type": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "cooldown": {
+                      "type": "number",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "metric_aggregation_type": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "min_adjustment_magnitude": {
+                      "type": "number",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "block_types": {
+                    "step_adjustment": {
+                      "nesting_mode": "set",
+                      "block": {
+                        "attributes": {
+                          "metric_interval_lower_bound": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "metric_interval_upper_bound": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "scaling_adjustment": {
+                            "type": "number",
+                            "description_kind": "plain",
+                            "required": true
+                          }
+                        },
+                        "description_kind": "plain"
+                      }
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "target_tracking_scaling_policy_configuration": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "disable_scale_in": {
+                      "type": "bool",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "scale_in_cooldown": {
+                      "type": "number",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "scale_out_cooldown": {
+                      "type": "number",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "target_value": {
+                      "type": "number",
+                      "description_kind": "plain",
+                      "required": true
+                    }
+                  },
+                  "block_types": {
+                    "customized_metric_specification": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "metric_name": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "namespace": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "statistic": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "unit": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "optional": true
+                          }
+                        },
+                        "block_types": {
+                          "dimensions": {
+                            "nesting_mode": "set",
+                            "block": {
+                              "attributes": {
+                                "name": {
+                                  "type": "string",
+                                  "description_kind": "plain",
+                                  "required": true
+                                },
+                                "value": {
+                                  "type": "string",
+                                  "description_kind": "plain",
+                                  "required": true
+                                }
+                              },
+                              "description_kind": "plain"
+                            }
+                          },
+                          "metrics": {
+                            "nesting_mode": "set",
+                            "block": {
+                              "attributes": {
+                                "expression": {
+                                  "type": "string",
+                                  "description_kind": "plain",
+                                  "optional": true
+                                },
+                                "id": {
+                                  "type": "string",
+                                  "description_kind": "plain",
+                                  "required": true
+                                },
+                                "label": {
+                                  "type": "string",
+                                  "description_kind": "plain",
+                                  "optional": true
+                                },
+                                "return_data": {
+                                  "type": "bool",
+                                  "description_kind": "plain",
+                                  "optional": true
+                                }
+                              },
+                              "block_types": {
+                                "metric_stat": {
+                                  "nesting_mode": "list",
+                                  "block": {
+                                    "attributes": {
+                                      "stat": {
+                                        "type": "string",
+                                        "description_kind": "plain",
+                                        "required": true
+                                      },
+                                      "unit": {
+                                        "type": "string",
+                                        "description_kind": "plain",
+                                        "optional": true
+                                      }
+                                    },
+                                    "block_types": {
+                                      "metric": {
+                                        "nesting_mode": "list",
+                                        "block": {
+                                          "attributes": {
+                                            "metric_name": {
+                                              "type": "string",
+                                              "description_kind": "plain",
+                                              "required": true
+                                            },
+                                            "namespace": {
+                                              "type": "string",
+                                              "description_kind": "plain",
+                                              "required": true
+                                            }
+                                          },
+                                          "block_types": {
+                                            "dimensions": {
+                                              "nesting_mode": "set",
+                                              "block": {
+                                                "attributes": {
+                                                  "name": {
+                                                    "type": "string",
+                                                    "description_kind": "plain",
+                                                    "required": true
+                                                  },
+                                                  "value": {
+                                                    "type": "string",
+                                                    "description_kind": "plain",
+                                                    "required": true
+                                                  }
+                                                },
+                                                "description_kind": "plain"
+                                              }
+                                            }
+                                          },
+                                          "description_kind": "plain"
+                                        },
+                                        "min_items": 1,
+                                        "max_items": 1
+                                      }
+                                    },
+                                    "description_kind": "plain"
+                                  },
+                                  "max_items": 1
+                                }
+                              },
+                              "description_kind": "plain"
+                            }
+                          }
+                        },
+                        "description_kind": "plain"
+                      },
+                      "max_items": 1
+                    },
+                    "predefined_metric_specification": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "predefined_metric_type": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "required": true
+                          },
+                          "resource_label": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "optional": true
+                          }
+                        },
+                        "description_kind": "plain"
+                      },
+                      "max_items": 1
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              }
+            },
+            "description_kind": "plain"
+          }
+        },
+        "aws_appautoscaling_target": {
+          "version": 0,
+          "block": {
+            "attributes": {
+              "arn": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "max_capacity": {
+                "type": "number",
+                "description_kind": "plain",
+                "required": true
+              },
+              "min_capacity": {
+                "type": "number",
+                "description_kind": "plain",
+                "required": true
+              },
+              "resource_id": {
+                "type": "string",
+                "description_kind": "plain",
+                "required": true
+              },
+              "role_arn": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "scalable_dimension": {
+                "type": "string",
+                "description_kind": "plain",
+                "required": true
+              },
+              "service_namespace": {
+                "type": "string",
+                "description_kind": "plain",
+                "required": true
+              },
+              "tags": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true
+              },
+              "tags_all": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              }
+            },
+            "block_types": {
+              "suspended_state": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "dynamic_scaling_in_suspended": {
+                      "type": "bool",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "dynamic_scaling_out_suspended": {
+                      "type": "bool",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "scheduled_scaling_suspended": {
+                      "type": "bool",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
               }
             },
             "description_kind": "plain"
@@ -3617,6 +4042,78 @@
                 },
                 "min_items": 1,
                 "max_items": 1
+              }
+            },
+            "description_kind": "plain"
+          }
+        },
+        "aws_backup_vault": {
+          "version": 0,
+          "block": {
+            "attributes": {
+              "arn": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "force_destroy": {
+                "type": "bool",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "kms_key_arn": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "name": {
+                "type": "string",
+                "description_kind": "plain",
+                "required": true
+              },
+              "recovery_points": {
+                "type": "number",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "tags": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true
+              },
+              "tags_all": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              }
+            },
+            "block_types": {
+              "timeouts": {
+                "nesting_mode": "single",
+                "block": {
+                  "attributes": {
+                    "delete": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "description_kind": "plain"
+                }
               }
             },
             "description_kind": "plain"
@@ -4917,6 +5414,249 @@
             "description_kind": "plain"
           }
         },
+        "aws_cloudtrail": {
+          "version": 1,
+          "block": {
+            "attributes": {
+              "arn": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "cloud_watch_logs_group_arn": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "cloud_watch_logs_role_arn": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "enable_log_file_validation": {
+                "type": "bool",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "enable_logging": {
+                "type": "bool",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "home_region": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "include_global_service_events": {
+                "type": "bool",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "is_multi_region_trail": {
+                "type": "bool",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "is_organization_trail": {
+                "type": "bool",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "kms_key_id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "name": {
+                "type": "string",
+                "description_kind": "plain",
+                "required": true
+              },
+              "s3_bucket_name": {
+                "type": "string",
+                "description_kind": "plain",
+                "required": true
+              },
+              "s3_key_prefix": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "sns_topic_name": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "tags": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true
+              },
+              "tags_all": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              }
+            },
+            "block_types": {
+              "advanced_event_selector": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "name": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "block_types": {
+                    "field_selector": {
+                      "nesting_mode": "set",
+                      "block": {
+                        "attributes": {
+                          "ends_with": {
+                            "type": [
+                              "list",
+                              "string"
+                            ],
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "equals": {
+                            "type": [
+                              "list",
+                              "string"
+                            ],
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "field": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "required": true
+                          },
+                          "not_ends_with": {
+                            "type": [
+                              "list",
+                              "string"
+                            ],
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "not_equals": {
+                            "type": [
+                              "list",
+                              "string"
+                            ],
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "not_starts_with": {
+                            "type": [
+                              "list",
+                              "string"
+                            ],
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "starts_with": {
+                            "type": [
+                              "list",
+                              "string"
+                            ],
+                            "description_kind": "plain",
+                            "optional": true
+                          }
+                        },
+                        "description_kind": "plain"
+                      },
+                      "min_items": 1
+                    }
+                  },
+                  "description_kind": "plain"
+                }
+              },
+              "event_selector": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "exclude_management_event_sources": {
+                      "type": [
+                        "set",
+                        "string"
+                      ],
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "include_management_events": {
+                      "type": "bool",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "read_write_type": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "block_types": {
+                    "data_resource": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "type": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "required": true
+                          },
+                          "values": {
+                            "type": [
+                              "list",
+                              "string"
+                            ],
+                            "description_kind": "plain",
+                            "required": true
+                          }
+                        },
+                        "description_kind": "plain"
+                      }
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 5
+              },
+              "insight_selector": {
+                "nesting_mode": "set",
+                "block": {
+                  "attributes": {
+                    "insight_type": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    }
+                  },
+                  "description_kind": "plain"
+                }
+              }
+            },
+            "description_kind": "plain"
+          }
+        },
         "aws_cloudwatch_event_rule": {
           "version": 1,
           "block": {
@@ -6003,6 +6743,67 @@
             "description_kind": "plain"
           }
         },
+        "aws_codedeploy_app": {
+          "version": 0,
+          "block": {
+            "attributes": {
+              "application_id": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "arn": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "compute_platform": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "github_account_name": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "linked_to_github": {
+                "type": "bool",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "name": {
+                "type": "string",
+                "description_kind": "plain",
+                "required": true
+              },
+              "tags": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true
+              },
+              "tags_all": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              }
+            },
+            "description_kind": "plain"
+          }
+        },
         "aws_codepipeline": {
           "version": 0,
           "block": {
@@ -7042,6 +7843,69 @@
             "description_kind": "plain"
           }
         },
+        "aws_dynamodb_global_table": {
+          "version": 0,
+          "block": {
+            "attributes": {
+              "arn": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "name": {
+                "type": "string",
+                "description_kind": "plain",
+                "required": true
+              }
+            },
+            "block_types": {
+              "replica": {
+                "nesting_mode": "set",
+                "block": {
+                  "attributes": {
+                    "region_name": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "min_items": 1
+              },
+              "timeouts": {
+                "nesting_mode": "single",
+                "block": {
+                  "attributes": {
+                    "create": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "delete": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "update": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "description_kind": "plain"
+                }
+              }
+            },
+            "description_kind": "plain"
+          }
+        },
         "aws_dynamodb_table": {
           "version": 1,
           "block": {
@@ -7609,6 +8473,163 @@
                   },
                   "description_kind": "plain"
                 }
+              }
+            },
+            "description_kind": "plain"
+          }
+        },
+        "aws_efs_file_system": {
+          "version": 0,
+          "block": {
+            "attributes": {
+              "arn": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "availability_zone_id": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "availability_zone_name": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "creation_token": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "dns_name": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "encrypted": {
+                "type": "bool",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "kms_key_id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "name": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "number_of_mount_targets": {
+                "type": "number",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "owner_id": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "performance_mode": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "provisioned_throughput_in_mibps": {
+                "type": "number",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "size_in_bytes": {
+                "type": [
+                  "list",
+                  [
+                    "object",
+                    {
+                      "value": "number",
+                      "value_in_ia": "number",
+                      "value_in_standard": "number"
+                    }
+                  ]
+                ],
+                "description_kind": "plain",
+                "computed": true
+              },
+              "tags": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true
+              },
+              "tags_all": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "throughput_mode": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true
+              }
+            },
+            "block_types": {
+              "lifecycle_policy": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "transition_to_archive": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "transition_to_ia": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "transition_to_primary_storage_class": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 3
+              },
+              "protection": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "replication_overwrite": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
               }
             },
             "description_kind": "plain"
@@ -8291,6 +9312,149 @@
                   },
                   "description_kind": "plain"
                 }
+              }
+            },
+            "description_kind": "plain"
+          }
+        },
+        "aws_glue_catalog_database": {
+          "version": 0,
+          "block": {
+            "attributes": {
+              "arn": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "catalog_id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "description": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "location_uri": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "name": {
+                "type": "string",
+                "description_kind": "plain",
+                "required": true
+              },
+              "parameters": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true
+              },
+              "tags": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true
+              },
+              "tags_all": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              }
+            },
+            "block_types": {
+              "create_table_default_permission": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "permissions": {
+                      "type": [
+                        "set",
+                        "string"
+                      ],
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "block_types": {
+                    "principal": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "data_lake_principal_identifier": {
+                            "type": "string",
+                            "description_kind": "plain",
+                            "optional": true
+                          }
+                        },
+                        "description_kind": "plain"
+                      },
+                      "max_items": 1
+                    }
+                  },
+                  "description_kind": "plain"
+                }
+              },
+              "federated_database": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "connection_name": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "identifier": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "target_database": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "catalog_id": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "database_name": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "region": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
               }
             },
             "description_kind": "plain"
@@ -9265,6 +10429,120 @@
                       "optional": true
                     },
                     "read": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "update": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "description_kind": "plain"
+                }
+              }
+            },
+            "description_kind": "plain"
+          }
+        },
+        "aws_kinesis_stream": {
+          "version": 1,
+          "block": {
+            "attributes": {
+              "arn": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "encryption_type": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "enforce_consumer_deletion": {
+                "type": "bool",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "kms_key_id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "name": {
+                "type": "string",
+                "description_kind": "plain",
+                "required": true
+              },
+              "retention_period": {
+                "type": "number",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "shard_count": {
+                "type": "number",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "shard_level_metrics": {
+                "type": [
+                  "set",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true
+              },
+              "tags": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true
+              },
+              "tags_all": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              }
+            },
+            "block_types": {
+              "stream_mode_details": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "stream_mode": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "timeouts": {
+                "nesting_mode": "single",
+                "block": {
+                  "attributes": {
+                    "create": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "delete": {
                       "type": "string",
                       "description_kind": "plain",
                       "optional": true

@@ -504,16 +504,19 @@ func TestDiffImportedResources_StableOrdering(t *testing.T) {
 
 func TestDiffImportedResources_NoPolicyForType(t *testing.T) {
 	t.Parallel()
+	// aws_glacier_vault is the uncurated stand-in — pivoted from
+	// aws_cloudtrail, which entered the curated set via #482 drift
+	// coverage bundle 4.
 	old := imported.ImportedResource{
 		Identity: imported.ResourceIdentity{
-			Cloud: "aws", Type: "aws_cloudtrail", Address: "aws_cloudtrail.t", ImportID: "t",
+			Cloud: "aws", Type: "aws_glacier_vault", Address: "aws_glacier_vault.t", ImportID: "t",
 		},
 		Tier:       imported.TierImportedFlat,
 		Attributes: map[string]any{"description": "old"},
 	}
 	new := old
 	new.Attributes = map[string]any{"description": "new"}
-	require.False(t, hasPolicy("aws_cloudtrail"), "test premise: aws_cloudtrail uncurated")
+	require.False(t, hasPolicy("aws_glacier_vault"), "test premise: aws_glacier_vault uncurated")
 
 	diffs := DiffImportedResources([]imported.ImportedResource{old}, []imported.ImportedResource{new})
 	require.Len(t, diffs, 1)
