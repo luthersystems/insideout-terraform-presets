@@ -9,8 +9,13 @@ import (
 	"time"
 
 	computev1 "google.golang.org/api/compute/v1"
+	identitytoolkitv2 "google.golang.org/api/identitytoolkit/v2"
+	loggingv2 "google.golang.org/api/logging/v2"
+	monitoringv1 "google.golang.org/api/monitoring/v1"
+	monitoringv3 "google.golang.org/api/monitoring/v3"
 	pubsubv1 "google.golang.org/api/pubsub/v1"
 	secretmanagerv1 "google.golang.org/api/secretmanager/v1"
+	sqladminv1 "google.golang.org/api/sqladmin/v1"
 	storagev1 "google.golang.org/api/storage/v1"
 
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/progress"
@@ -139,12 +144,17 @@ type ByIDEnricher interface {
 // override return ErrEnrichClientUnavailable when this is nil, which
 // the EnrichAttributes loop downgrades to a per-resource warning.
 type EnrichClients struct {
-	Storage       *storagev1.Service
-	Pubsub        *pubsubv1.Service
-	SecretManager *secretmanagerv1.Service
-	Compute       *computev1.Service
-	CloudAsset    gcpAssetGetter
-	ProjectID     string
+	Storage             *storagev1.Service
+	Pubsub              *pubsubv1.Service
+	SecretManager       *secretmanagerv1.Service
+	Compute             *computev1.Service
+	SQLAdmin            *sqladminv1.Service
+	Logging             *loggingv2.Service
+	IdentityToolkit     *identitytoolkitv2.Service
+	Monitoring          *monitoringv3.Service
+	MonitoringDashboard *monitoringv1.Service
+	CloudAsset          gcpAssetGetter
+	ProjectID           string
 }
 
 // ErrEnrichClientUnavailable signals that the SDK client an enricher

@@ -63,9 +63,9 @@ func TestExistingEnrichersDoNotImplementByID(t *testing.T) {
 	// (cloudAssetTypeConfigs entries that aren't hand-rolled overrides).
 	// Recomputed at runtime from cloudAssetTypeConfigs so adding a new
 	// CAI config entry only requires changing cloudasset_types.go.
-	// Hand-rolled count is the literal 7 from gcpdiscover.go's
-	// byTypeEnricher initializer.
-	const handRolledCount = 7
+	// Hand-rolled count is the literal 13 from gcpdiscover.go's
+	// byTypeEnricher initializer (7 pre-G6 + 6 Bundle G6 entries).
+	const handRolledCount = 13
 	caiNonOverlap := 0
 	for _, cfg := range cloudAssetTypeConfigs {
 		if cfg.Skip {

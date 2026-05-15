@@ -356,6 +356,13 @@ func NewGCPDiscoverer(searcher gcpAssetSearcher, projectID string, opts GCPDisco
 			"google_pubsub_topic":          newPubsubTopicEnricher(),
 			"google_secret_manager_secret": newSecretManagerSecretEnricher(),
 			"google_storage_bucket":        newStorageBucketEnricher(),
+			// Bundle G6 — 6 hand-rolled enrichers (issue #494).
+			"google_sql_user":                        newSQLUserEnricher(),
+			"google_logging_project_sink":            newLoggingProjectSinkEnricher(),
+			"google_identity_platform_config":        newIdentityPlatformConfigEnricher(),
+			"google_monitoring_alert_policy":         newMonitoringAlertPolicyEnricher(),
+			"google_monitoring_dashboard":            newMonitoringDashboardEnricher(),
+			"google_monitoring_notification_channel": newMonitoringNotificationChannelEnricher(),
 		},
 	}
 	// HYBRID Cloud Asset Inventory fallback (mirrors AWS #490 steps 1+2):

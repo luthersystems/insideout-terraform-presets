@@ -23,7 +23,7 @@ and is checked in lockstep with the runtime registries. See the
 ## Summary
 
 - **AWS:** 109 types · 100% Discoverable · 86% Enrichable · 3% DriftDetectable · 0% MetricsAvailable · 6% AgentEditable
-- **GCP:** 54 types · 100% Discoverable · 56% Enrichable · 4% DriftDetectable · 0% MetricsAvailable · 65% AgentEditable
+- **GCP:** 54 types · 100% Discoverable · 67% Enrichable · 4% DriftDetectable · 0% MetricsAvailable · 65% AgentEditable
 
 ## AWS
 
@@ -170,15 +170,15 @@ and is checked in lockstep with the runtime registries. See the
 | `google_container_cluster` | ✓ | ✓ | – | – | ✓ |
 | `google_container_node_pool` | ✓ | ✓ | – | – | ✓ |
 | `google_firestore_database` | ✓ | ✓ | – | – | ✓ |
-| `google_identity_platform_config` | ✓ | – | – | – | ✓ |
+| `google_identity_platform_config` | ✓ | ✓ | – | – | ✓ |
 | `google_identity_platform_default_supported_idp_config` | ✓ | – | – | – | – |
 | `google_kms_crypto_key` | ✓ | ✓ | – | – | ✓ |
 | `google_kms_crypto_key_iam_binding` | ✓ | – | – | – | – |
 | `google_kms_key_ring` | ✓ | ✓ | – | – | – |
-| `google_logging_project_sink` | ✓ | – | – | – | ✓ |
-| `google_monitoring_alert_policy` | ✓ | – | – | – | ✓ |
-| `google_monitoring_dashboard` | ✓ | – | – | – | ✓ |
-| `google_monitoring_notification_channel` | ✓ | – | – | – | ✓ |
+| `google_logging_project_sink` | ✓ | ✓ | – | – | ✓ |
+| `google_monitoring_alert_policy` | ✓ | ✓ | – | – | ✓ |
+| `google_monitoring_dashboard` | ✓ | ✓ | – | – | ✓ |
+| `google_monitoring_notification_channel` | ✓ | ✓ | – | – | ✓ |
 | `google_project_iam_member` | ✓ | – | – | – | – |
 | `google_project_service` | ✓ | – | – | – | – |
 | `google_pubsub_subscription` | ✓ | ✓ | – | – | ✓ |
@@ -191,7 +191,7 @@ and is checked in lockstep with the runtime registries. See the
 | `google_service_account` | ✓ | ✓ | – | – | ✓ |
 | `google_service_networking_connection` | ✓ | – | – | – | – |
 | `google_sql_database_instance` | ✓ | ✓ | – | – | ✓ |
-| `google_sql_user` | ✓ | – | – | – | ✓ |
+| `google_sql_user` | ✓ | ✓ | – | – | ✓ |
 | `google_storage_bucket` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_storage_bucket_iam_member` | ✓ | – | – | – | – |
 | `google_storage_bucket_object` | ✓ | – | – | – | – |
