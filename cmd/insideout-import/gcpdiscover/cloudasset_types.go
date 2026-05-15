@@ -78,7 +78,7 @@ type cloudAssetConfig struct {
 // time to populate byTypeEnricher with one cloudAssetEnricher per
 // entry that does NOT already have a hand-rolled override.
 //
-// Coverage today: 36 entries covering the CAI-surfaced GCP TF types in
+// Coverage today: 41 entries covering the CAI-surfaced GCP TF types in
 // the registry. Notable omissions:
 //
 //   - IAM binding/member types (google_project_iam_member,
@@ -105,7 +105,7 @@ type cloudAssetConfig struct {
 //     provider's view; keep these on the hand-rolled path until the
 //     shapes prove to round-trip.
 //
-// The remaining 36 entries below all have a corresponding
+// The remaining 41 entries below all have a corresponding
 // pkg/composer/imported/generated/<tfType>.gen.go file (verified by
 // TestCloudAssetEnricherCoversEveryCAIRoutedType — a configured type
 // without a generated struct would fail at UnmarshalAttrs time).
@@ -114,25 +114,21 @@ var cloudAssetTypeConfigs = []cloudAssetConfig{
 	// Compute Engine — compute.googleapis.com
 	// =====================================================================
 	{TFType: "google_compute_address", AssetType: "compute.googleapis.com/Address"},
+	{TFType: "google_compute_backend_service", AssetType: "compute.googleapis.com/BackendService"},
 	{TFType: "google_compute_global_address", AssetType: "compute.googleapis.com/GlobalAddress"},
 	{TFType: "google_compute_firewall", AssetType: "compute.googleapis.com/Firewall"},
 	{TFType: "google_compute_forwarding_rule", AssetType: "compute.googleapis.com/ForwardingRule"},
 	{TFType: "google_compute_global_forwarding_rule", AssetType: "compute.googleapis.com/GlobalForwardingRule"},
+	{TFType: "google_compute_health_check", AssetType: "compute.googleapis.com/HealthCheck"},
 	{TFType: "google_compute_instance", AssetType: "compute.googleapis.com/Instance"},
+	{TFType: "google_compute_managed_ssl_certificate", AssetType: "compute.googleapis.com/SslCertificate"},
 	{TFType: "google_compute_network", AssetType: "compute.googleapis.com/Network"},
+	{TFType: "google_compute_resource_policy", AssetType: "compute.googleapis.com/ResourcePolicy"},
 	{TFType: "google_compute_router", AssetType: "compute.googleapis.com/Router"},
 	{TFType: "google_compute_security_policy", AssetType: "compute.googleapis.com/SecurityPolicy"},
+	{TFType: "google_compute_target_http_proxy", AssetType: "compute.googleapis.com/TargetHttpProxy"},
 	{TFType: "google_compute_target_https_proxy", AssetType: "compute.googleapis.com/TargetHttpsProxy"},
 	{TFType: "google_compute_url_map", AssetType: "compute.googleapis.com/UrlMap"},
-	// NOTE: google_compute_target_http_proxy, google_compute_backend_service,
-	// google_compute_health_check, google_compute_managed_ssl_certificate,
-	// and google_compute_resource_policy don't have Layer-1 generated
-	// structs in pkg/composer/imported/generated/ yet — their
-	// hand-rolled discoverers stay on the Identity-only path until the
-	// codegen catches up. The pinning test
-	// TestCloudAssetTypeConfigs_TFTypesAreRegisteredInGenerated gates
-	// re-adding them so a typo here can't silently land an enricher
-	// without a backing typed model.
 
 	// =====================================================================
 	// Cloud Storage — storage.googleapis.com

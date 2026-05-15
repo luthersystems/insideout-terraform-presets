@@ -63,9 +63,15 @@ func TestExistingEnrichersDoNotImplementByID(t *testing.T) {
 	// (cloudAssetTypeConfigs entries that aren't hand-rolled overrides).
 	// Recomputed at runtime from cloudAssetTypeConfigs so adding a new
 	// CAI config entry only requires changing cloudasset_types.go.
-	// Hand-rolled count is the literal 7 from gcpdiscover.go's
-	// byTypeEnricher initializer.
-	const handRolledCount = 7
+	// Hand-rolled count is the literal from gcpdiscover.go's
+	// byTypeEnricher initializer: 5 pre-Phase-2 + compute_address +
+	// compute_firewall + Bundle G5 (5 enrichers: compute_instance,
+	// compute_router, kms_crypto_key, service_account,
+	// sql_database_instance) + Bundle G6 (6 enrichers: sql_user,
+	// logging_project_sink, identity_platform_config,
+	// monitoring_alert_policy, monitoring_dashboard,
+	// monitoring_notification_channel) = 18.
+	const handRolledCount = 18
 	caiNonOverlap := 0
 	for _, cfg := range cloudAssetTypeConfigs {
 		if cfg.Skip {
@@ -78,7 +84,12 @@ func TestExistingEnrichersDoNotImplementByID(t *testing.T) {
 			"google_secret_manager_secret",
 			"google_compute_network",
 			"google_compute_address",
-			"google_compute_firewall":
+			"google_compute_firewall",
+			"google_compute_instance",
+			"google_compute_router",
+			"google_kms_crypto_key",
+			"google_service_account",
+			"google_sql_database_instance":
 			// Hand-rolled override wins; this CAI entry doesn't add a
 			// new map slot.
 			continue

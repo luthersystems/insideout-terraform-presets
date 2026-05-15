@@ -55,9 +55,9 @@ func TestProvider_Capabilities_Enrichable(t *testing.T) {
 	if got := p.Capabilities("google_storage_bucket"); !got.Enrichable {
 		t.Errorf("google_storage_bucket: Enrichable should be true, got %+v", got)
 	}
-	// google_sql_user is in the registry but no enricher.
-	if got := p.Capabilities("google_sql_user"); got.Enrichable {
-		t.Errorf("google_sql_user: Enrichable should be false, got %+v", got)
+	// google_project_iam_member is in the registry but no enricher.
+	if got := p.Capabilities("google_project_iam_member"); got.Enrichable {
+		t.Errorf("google_project_iam_member: Enrichable should be false, got %+v", got)
 	}
 }
 
@@ -198,7 +198,7 @@ func TestProvider_EnrichByID_NoEnricher(t *testing.T) {
 	d := gcpdiscover.NewGCPDiscoverer(nil, "test-project", gcpdiscover.GCPDiscovererOpts{})
 	p := gcpprov.NewProvider(d, nil)
 
-	id := &composerimported.ResourceIdentity{Type: "google_sql_user", ImportID: "u/v"}
+	id := &composerimported.ResourceIdentity{Type: "google_project_iam_member", ImportID: "p roles/x"}
 	_, err := p.EnrichByID(context.Background(), id, imp.Clients{GCP: gcpprov.Clients{}})
 	if !errors.Is(err, imp.ErrEnrichByIDNotImplemented) {
 		t.Errorf("EnrichByID for non-enriched type: err = %v, want ErrEnrichByIDNotImplemented", err)
