@@ -19,6 +19,7 @@ import (
 // constant below in the same patch. Future paginator-shape coverage
 // belongs in a sibling test rather than this one.
 func TestFetcherEngineGoldenDynamoDBTableTags(t *testing.T) {
+	t.Parallel()
 	tgt := target{
 		typedType:    reflect.TypeFor[generated.AWSDynamodbTable](),
 		apiType:      reflect.TypeFor[dynamotypes.TableDescription](),
@@ -101,6 +102,7 @@ func defaultDynamoDBTableFetchTags(ctx context.Context, c *dynamodb.Client, tabl
 // any real fetcher entry — this test pins the emitted shape so the
 // branch keeps compiling and stays gofmt-clean as the engine evolves.
 func TestFetcherEnginePaginatedShape(t *testing.T) {
+	t.Parallel()
 	tgt := target{
 		typedType:    reflect.TypeFor[generated.AWSDynamodbTable](),
 		apiType:      reflect.TypeFor[dynamotypes.TableDescription](),
@@ -128,11 +130,13 @@ func TestFetcherEnginePaginatedShape(t *testing.T) {
 	_, err := format.Source([]byte(body))
 	require.NoErrorf(t, err, "gofmt failed on paginated shape\n--- raw output ---\n%s", body)
 
-	// Smoke check: the body must contain the paginator loop scaffolding.
+	// Smoke check: the body must contain the paginator loop scaffolding,
+	// including the per-page nil-guard (defensive against SDK quirks).
 	for _, want := range []string{
 		"NewListResourcesPaginator(c, input)",
 		"for p.HasMorePages()",
 		"p.NextPage(ctx)",
+		"if page == nil",
 		"append(out, page.ResourceDescriptions...)",
 		"[]cctypes.ResourceDescription",
 	} {
