@@ -174,7 +174,16 @@ type EnrichClients struct {
 	// is kept as a separate field so the wiring is explicit.
 	MonitoringV1 *monitoringv1.Service
 	CloudAsset   gcpAssetGetter
-	ProjectID    string
+	// IAMPolicyLister is the shared per-service GetIamPolicy seam reused
+	// by every IAM-binding enricher (project_iam_member, storage_bucket_
+	// iam_member, kms_crypto_key_iam_binding, secret_manager_secret_iam_
+	// member, secret_manager_secret_iam_binding, cloud_run_v2_service_iam_
+	// member, cloudfunctions2_function_iam_member). One unified interface
+	// fronts six per-service SDK clients so the EnrichClients surface
+	// doesn't grow per added IAM resource type. Nil tolerated per the
+	// same convention: IAM enrichers report ErrEnrichClientUnavailable.
+	IAMPolicyLister gcpIAMPolicyLister
+	ProjectID       string
 }
 
 // ErrEnrichClientUnavailable signals that the SDK client an enricher

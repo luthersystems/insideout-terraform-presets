@@ -71,6 +71,16 @@ var coveredTypes = []string{
 	"google_sql_user",
 	"google_storage_bucket",
 	"google_vertex_ai_dataset",
+	// IAM-binding types (#482 follow-up). Curated minimally — the (parent
+	// × role × member) tuple is identity; `members` lists on _iam_binding
+	// rows are the only non-identity field, edited via RequiresApproval.
+	"google_cloud_run_v2_service_iam_member",
+	"google_cloudfunctions2_function_iam_member",
+	"google_kms_crypto_key_iam_binding",
+	"google_project_iam_member",
+	"google_secret_manager_secret_iam_binding",
+	"google_secret_manager_secret_iam_member",
+	"google_storage_bucket_iam_member",
 }
 
 func TestCoveredTypesHavePolicies(t *testing.T) {

@@ -370,6 +370,18 @@ func NewGCPDiscoverer(searcher gcpAssetSearcher, projectID string, opts GCPDisco
 			"google_monitoring_alert_policy":         newMonitoringAlertPolicyEnricher(),
 			"google_monitoring_dashboard":            newMonitoringDashboardEnricher(),
 			"google_monitoring_notification_channel": newMonitoringNotificationChannelEnricher(),
+			// IAM-binding enrichers (#482 follow-up). Generic single-impl
+			// dispatching on the TF type to the appropriate parent service's
+			// GetIamPolicy SDK call. See iam_binding_enricher.go for the
+			// dispatch table; each entry here MUST also have a row in
+			// iamBindingDispatchTable.
+			"google_cloud_run_v2_service_iam_member":     newIAMBindingEnricher("google_cloud_run_v2_service_iam_member"),
+			"google_cloudfunctions2_function_iam_member": newIAMBindingEnricher("google_cloudfunctions2_function_iam_member"),
+			"google_kms_crypto_key_iam_binding":          newIAMBindingEnricher("google_kms_crypto_key_iam_binding"),
+			"google_project_iam_member":                  newIAMBindingEnricher("google_project_iam_member"),
+			"google_secret_manager_secret_iam_binding":   newIAMBindingEnricher("google_secret_manager_secret_iam_binding"),
+			"google_secret_manager_secret_iam_member":    newIAMBindingEnricher("google_secret_manager_secret_iam_member"),
+			"google_storage_bucket_iam_member":           newIAMBindingEnricher("google_storage_bucket_iam_member"),
 		},
 	}
 	// HYBRID Cloud Asset Inventory fallback (mirrors AWS #490 steps 1+2):
