@@ -23,7 +23,7 @@ and is checked in lockstep with the runtime registries. See the
 ## Summary
 
 - **AWS:** 109 types · 100% Discoverable · 86% Enrichable · 3% DriftDetectable · 0% MetricsAvailable · 6% AgentEditable
-- **GCP:** 54 types · 100% Discoverable · 65% Enrichable · 4% DriftDetectable · 0% MetricsAvailable · 74% AgentEditable
+- **GCP:** 54 types · 100% Discoverable · 22% Enrichable · 13% DriftDetectable · 0% MetricsAvailable · 65% AgentEditable
 
 ## AWS
 
@@ -143,38 +143,38 @@ and is checked in lockstep with the runtime registries. See the
 
 | TF Type | Discoverable | Enrichable | DriftDetectable | MetricsAvailable | AgentEditable |
 |---|---|---|---|---|---|
-| `google_api_gateway_api` | ✓ | ✓ | – | – | ✓ |
-| `google_api_gateway_api_config` | ✓ | ✓ | – | – | ✓ |
-| `google_api_gateway_gateway` | ✓ | ✓ | – | – | ✓ |
-| `google_cloud_run_v2_service` | ✓ | ✓ | – | – | ✓ |
+| `google_api_gateway_api` | ✓ | – | – | – | ✓ |
+| `google_api_gateway_api_config` | ✓ | – | – | – | ✓ |
+| `google_api_gateway_gateway` | ✓ | – | – | – | ✓ |
+| `google_cloud_run_v2_service` | ✓ | – | – | – | ✓ |
 | `google_cloud_run_v2_service_iam_member` | ✓ | – | – | – | – |
-| `google_cloudbuild_trigger` | ✓ | ✓ | – | – | ✓ |
-| `google_cloudfunctions2_function` | ✓ | ✓ | – | – | ✓ |
+| `google_cloudbuild_trigger` | ✓ | – | – | – | ✓ |
+| `google_cloudfunctions2_function` | ✓ | – | – | – | ✓ |
 | `google_cloudfunctions2_function_iam_member` | ✓ | – | – | – | – |
 | `google_compute_address` | ✓ | ✓ | – | – | ✓ |
-| `google_compute_backend_service` | ✓ | ✓ | – | – | ✓ |
+| `google_compute_backend_service` | ✓ | – | – | – | – |
 | `google_compute_firewall` | ✓ | ✓ | – | – | ✓ |
-| `google_compute_forwarding_rule` | ✓ | ✓ | – | – | ✓ |
-| `google_compute_global_address` | ✓ | ✓ | – | – | ✓ |
-| `google_compute_global_forwarding_rule` | ✓ | ✓ | – | – | ✓ |
-| `google_compute_health_check` | ✓ | ✓ | – | – | ✓ |
-| `google_compute_instance` | ✓ | ✓ | – | – | ✓ |
-| `google_compute_managed_ssl_certificate` | ✓ | ✓ | – | – | ✓ |
+| `google_compute_forwarding_rule` | ✓ | – | – | – | ✓ |
+| `google_compute_global_address` | ✓ | – | – | – | ✓ |
+| `google_compute_global_forwarding_rule` | ✓ | – | – | – | ✓ |
+| `google_compute_health_check` | ✓ | – | – | – | – |
+| `google_compute_instance` | ✓ | ✓ | ✓ | – | ✓ |
+| `google_compute_managed_ssl_certificate` | ✓ | – | – | – | – |
 | `google_compute_network` | ✓ | ✓ | – | – | ✓ |
-| `google_compute_resource_policy` | ✓ | ✓ | – | – | ✓ |
-| `google_compute_router` | ✓ | ✓ | – | – | ✓ |
-| `google_compute_security_policy` | ✓ | ✓ | – | – | ✓ |
-| `google_compute_target_http_proxy` | ✓ | ✓ | – | – | ✓ |
-| `google_compute_target_https_proxy` | ✓ | ✓ | – | – | ✓ |
-| `google_compute_url_map` | ✓ | ✓ | – | – | ✓ |
-| `google_container_cluster` | ✓ | ✓ | – | – | ✓ |
-| `google_container_node_pool` | ✓ | ✓ | – | – | ✓ |
-| `google_firestore_database` | ✓ | ✓ | – | – | ✓ |
+| `google_compute_resource_policy` | ✓ | – | – | – | – |
+| `google_compute_router` | ✓ | ✓ | ✓ | – | ✓ |
+| `google_compute_security_policy` | ✓ | – | – | – | ✓ |
+| `google_compute_target_http_proxy` | ✓ | – | – | – | – |
+| `google_compute_target_https_proxy` | ✓ | – | – | – | ✓ |
+| `google_compute_url_map` | ✓ | – | – | – | ✓ |
+| `google_container_cluster` | ✓ | – | – | – | ✓ |
+| `google_container_node_pool` | ✓ | – | – | – | ✓ |
+| `google_firestore_database` | ✓ | – | – | – | ✓ |
 | `google_identity_platform_config` | ✓ | – | – | – | ✓ |
 | `google_identity_platform_default_supported_idp_config` | ✓ | – | – | – | – |
-| `google_kms_crypto_key` | ✓ | ✓ | – | – | ✓ |
+| `google_kms_crypto_key` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_kms_crypto_key_iam_binding` | ✓ | – | – | – | – |
-| `google_kms_key_ring` | ✓ | ✓ | – | – | – |
+| `google_kms_key_ring` | ✓ | – | – | – | – |
 | `google_logging_project_sink` | ✓ | – | – | – | ✓ |
 | `google_monitoring_alert_policy` | ✓ | – | – | – | ✓ |
 | `google_monitoring_dashboard` | ✓ | – | – | – | ✓ |
@@ -183,19 +183,19 @@ and is checked in lockstep with the runtime registries. See the
 | `google_project_service` | ✓ | – | – | – | – |
 | `google_pubsub_subscription` | ✓ | ✓ | – | – | ✓ |
 | `google_pubsub_topic` | ✓ | ✓ | ✓ | – | ✓ |
-| `google_redis_instance` | ✓ | ✓ | – | – | ✓ |
+| `google_redis_instance` | ✓ | – | – | – | ✓ |
 | `google_secret_manager_secret` | ✓ | ✓ | – | – | ✓ |
 | `google_secret_manager_secret_iam_binding` | ✓ | – | – | – | – |
 | `google_secret_manager_secret_iam_member` | ✓ | – | – | – | – |
 | `google_secret_manager_secret_version` | ✓ | – | – | – | – |
-| `google_service_account` | ✓ | ✓ | – | – | ✓ |
+| `google_service_account` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_service_networking_connection` | ✓ | – | – | – | – |
-| `google_sql_database_instance` | ✓ | ✓ | – | – | ✓ |
+| `google_sql_database_instance` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_sql_user` | ✓ | – | – | – | ✓ |
 | `google_storage_bucket` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_storage_bucket_iam_member` | ✓ | – | – | – | – |
 | `google_storage_bucket_object` | ✓ | – | – | – | – |
-| `google_vertex_ai_dataset` | ✓ | ✓ | – | – | ✓ |
+| `google_vertex_ai_dataset` | ✓ | – | – | – | ✓ |
 | `google_vpc_access_connector` | ✓ | – | – | – | – |
 
 ## How to regenerate

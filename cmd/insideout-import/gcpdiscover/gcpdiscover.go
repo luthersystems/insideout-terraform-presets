@@ -356,6 +356,13 @@ func NewGCPDiscoverer(searcher gcpAssetSearcher, projectID string, opts GCPDisco
 			"google_pubsub_topic":          newPubsubTopicEnricher(),
 			"google_secret_manager_secret": newSecretManagerSecretEnricher(),
 			"google_storage_bucket":        newStorageBucketEnricher(),
+			// Bundle G5 (#482) — five new GCP enrichers, all
+			// implementing ByIDEnricher in addition to AttributeEnricher.
+			"google_compute_instance":      newComputeInstanceEnricher(),
+			"google_compute_router":        newComputeRouterEnricher(),
+			"google_kms_crypto_key":        newKMSCryptoKeyEnricher(),
+			"google_service_account":       newServiceAccountEnricher(),
+			"google_sql_database_instance": newSQLDatabaseInstanceEnricher(),
 		},
 	}
 	// HYBRID Cloud Asset Inventory fallback (mirrors AWS #490 steps 1+2):
