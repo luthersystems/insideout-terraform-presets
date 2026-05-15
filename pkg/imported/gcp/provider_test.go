@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/gcpdiscover"
-	composer_imported "github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
+	composerimported "github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 	imp "github.com/luthersystems/insideout-terraform-presets/pkg/imported"
 	gcpprov "github.com/luthersystems/insideout-terraform-presets/pkg/imported/gcp"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/insideout-import/registry"
@@ -87,7 +87,7 @@ func TestProvider_StableID(t *testing.T) {
 	}
 
 	// self_link-bearing identity.
-	id := &composer_imported.ResourceIdentity{
+	id := &composerimported.ResourceIdentity{
 		Type:      "google_storage_bucket",
 		Address:   "google_storage_bucket.b",
 		ImportID:  "my-bucket",
@@ -97,7 +97,7 @@ func TestProvider_StableID(t *testing.T) {
 		t.Errorf("StableID self_link-bearing = %q", got)
 	}
 
-	id2 := &composer_imported.ResourceIdentity{
+	id2 := &composerimported.ResourceIdentity{
 		Type:     "google_pubsub_topic",
 		Address:  "google_pubsub_topic.t",
 		ImportID: "projects/p/topics/t",
@@ -106,7 +106,7 @@ func TestProvider_StableID(t *testing.T) {
 		t.Errorf("StableID ImportID fallback = %q", got)
 	}
 
-	id3 := &composer_imported.ResourceIdentity{
+	id3 := &composerimported.ResourceIdentity{
 		Type:    "google_pubsub_topic",
 		Address: "google_pubsub_topic.t",
 	}
@@ -123,7 +123,7 @@ func TestProvider_CanonicalAddress(t *testing.T) {
 		t.Errorf("CanonicalAddress(nil) = %q, want \"\"", got)
 	}
 
-	id := &composer_imported.ResourceIdentity{
+	id := &composerimported.ResourceIdentity{
 		Type:    "google_storage_bucket",
 		Address: "google_storage_bucket.mybucket",
 	}
@@ -131,7 +131,7 @@ func TestProvider_CanonicalAddress(t *testing.T) {
 		t.Errorf("CanonicalAddress unchanged = %q", got)
 	}
 
-	id2 := &composer_imported.ResourceIdentity{
+	id2 := &composerimported.ResourceIdentity{
 		Type:     "google_storage_bucket",
 		NameHint: "MyBucket",
 	}
@@ -140,24 +140,24 @@ func TestProvider_CanonicalAddress(t *testing.T) {
 	}
 }
 
-func TestProvider_RileyContext(t *testing.T) {
+func TestProvider_AgentContext(t *testing.T) {
 	t.Parallel()
 	p := gcpprov.NewProvider(nil, nil)
 
-	if got := p.RileyContext(nil); got != nil {
-		t.Errorf("RileyContext(nil) = %v, want nil", got)
+	if got := p.AgentContext(nil); got != nil {
+		t.Errorf("AgentContext(nil) = %v, want nil", got)
 	}
 
-	irs := []composer_imported.ImportedResource{
-		{Identity: composer_imported.ResourceIdentity{Type: "google_storage_bucket", Address: "google_storage_bucket.z"}},
-		{Identity: composer_imported.ResourceIdentity{Type: "google_pubsub_topic", Address: "google_pubsub_topic.a"}},
+	irs := []composerimported.ImportedResource{
+		{Identity: composerimported.ResourceIdentity{Type: "google_storage_bucket", Address: "google_storage_bucket.z"}},
+		{Identity: composerimported.ResourceIdentity{Type: "google_pubsub_topic", Address: "google_pubsub_topic.a"}},
 	}
-	got := p.RileyContext(irs)
+	got := p.AgentContext(irs)
 	if len(got) != 2 {
 		t.Fatalf("expected 2 lines, got %d", len(got))
 	}
 	if got[0] >= got[1] {
-		t.Errorf("RileyContext not sorted: %v", got)
+		t.Errorf("AgentContext not sorted: %v", got)
 	}
 }
 
@@ -198,7 +198,7 @@ func TestProvider_EnrichByID_NoEnricher(t *testing.T) {
 	d := gcpdiscover.NewGCPDiscoverer(nil, "test-project", gcpdiscover.GCPDiscovererOpts{})
 	p := gcpprov.NewProvider(d, nil)
 
-	id := &composer_imported.ResourceIdentity{Type: "google_sql_user", ImportID: "u/v"}
+	id := &composerimported.ResourceIdentity{Type: "google_sql_user", ImportID: "u/v"}
 	_, err := p.EnrichByID(context.Background(), id, imp.Clients{GCP: gcpprov.Clients{}})
 	if !errors.Is(err, imp.ErrEnrichByIDNotImplemented) {
 		t.Errorf("EnrichByID for non-enriched type: err = %v, want ErrEnrichByIDNotImplemented", err)
@@ -223,7 +223,7 @@ func TestProvider_CapabilitiesParity(t *testing.T) {
 
 	for _, tfType := range p.SupportedTypes() {
 		caps := p.Capabilities(tfType)
-		id := &composer_imported.ResourceIdentity{
+		id := &composerimported.ResourceIdentity{
 			Type:     tfType,
 			ImportID: "test-id",
 		}

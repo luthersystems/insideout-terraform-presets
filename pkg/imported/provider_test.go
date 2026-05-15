@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	composer_imported "github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
+	composerimported "github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported/policy"
 	imp "github.com/luthersystems/insideout-terraform-presets/pkg/imported"
 	// Side-effect imports populate the Provider registry.
@@ -21,26 +21,26 @@ type stubProvider struct {
 	name string
 }
 
-func (s *stubProvider) SupportedTypes() []string                { return []string{"stub_type"} }
-func (s *stubProvider) Capabilities(string) imp.Capabilities    { return imp.Capabilities{} }
-func (s *stubProvider) LabelFor(string) (string, string)        { return "", "" }
-func (s *stubProvider) PolicyFor(string) (policy.Map, bool)     { return nil, false }
+func (s *stubProvider) SupportedTypes() []string             { return []string{"stub_type"} }
+func (s *stubProvider) Capabilities(string) imp.Capabilities { return imp.Capabilities{} }
+func (s *stubProvider) LabelFor(string) (string, string)     { return "", "" }
+func (s *stubProvider) PolicyFor(string) (policy.Map, bool)  { return nil, false }
 func (s *stubProvider) MetricsBinding(string) (imp.ComponentMetricsBinding, bool) {
 	return imp.ComponentMetricsBinding{}, false
 }
-func (s *stubProvider) StableID(*composer_imported.ResourceIdentity) string         { return "" }
-func (s *stubProvider) CanonicalAddress(*composer_imported.ResourceIdentity) string { return "" }
-func (s *stubProvider) Discover(context.Context, []string, imp.Clients, imp.DiscoverOpts) ([]composer_imported.ImportedResource, error) {
+func (s *stubProvider) StableID(*composerimported.ResourceIdentity) string         { return "" }
+func (s *stubProvider) CanonicalAddress(*composerimported.ResourceIdentity) string { return "" }
+func (s *stubProvider) Discover(context.Context, []string, imp.Clients, imp.DiscoverOpts) ([]composerimported.ImportedResource, error) {
 	return nil, nil
 }
-func (s *stubProvider) EnrichAttributes(context.Context, []composer_imported.ImportedResource, imp.Clients) error {
+func (s *stubProvider) EnrichAttributes(context.Context, []composerimported.ImportedResource, imp.Clients) error {
 	return nil
 }
-func (s *stubProvider) EnrichByID(context.Context, *composer_imported.ResourceIdentity, imp.Clients) (imp.Attrs, error) {
+func (s *stubProvider) EnrichByID(context.Context, *composerimported.ResourceIdentity, imp.Clients) (imp.Attrs, error) {
 	return nil, nil
 }
 func (s *stubProvider) CompareDrift(string, imp.Attrs, imp.Attrs) []imp.FieldMismatch { return nil }
-func (s *stubProvider) RileyContext([]composer_imported.ImportedResource) []string    { return nil }
+func (s *stubProvider) AgentContext([]composerimported.ImportedResource) []string     { return nil }
 
 // Compile-time interface satisfaction check.
 var _ imp.Provider = (*stubProvider)(nil)
@@ -70,7 +70,7 @@ func TestProviderInterfaceShape(t *testing.T) {
 		t.Errorf("EnrichByID stub returned err: %v", err)
 	}
 	_ = p.CompareDrift("x", nil, nil)
-	_ = p.RileyContext(nil)
+	_ = p.AgentContext(nil)
 }
 
 func TestErrUnknownCloud(t *testing.T) {

@@ -198,11 +198,14 @@ func (p *Provider) EnrichByID(ctx context.Context, identity *imported.ResourceId
 }
 
 // unwrapGCPClients pulls the typed GCP bundle out of the cloud-agnostic
-// Clients union. Returns ErrClientsWrongCloud when the AWS slot is set
-// (cross-cloud misroute) and ErrEnrichClientUnavailable when the GCP
-// slot is nil.
+// Clients union. Returns ErrClientsWrongCloud when the AWS slot is
+// populated (the caller has misrouted AWS clients to a GCP provider —
+// reported regardless of whether the GCP slot is also set, because both-
+// set is itself a bug worth flagging loudly). Returns
+// ErrEnrichClientUnavailable when neither slot is set, or when the GCP
+// slot is a nil pointer.
 func unwrapGCPClients(c imp.Clients) (Clients, error) {
-	if c.AWS != nil && c.GCP == nil {
+	if c.AWS != nil {
 		return Clients{}, imp.ErrClientsWrongCloud
 	}
 	if c.GCP == nil {
@@ -230,16 +233,22 @@ func (p *Provider) CompareDrift(tfType string, snapshot, live imp.Attrs) []imp.F
 	return p.comparer(tfType, snapshot, live)
 }
 
-// RileyContext returns a one-line-per-IR summary sorted by Address.
-func (p *Provider) RileyContext(irs []imported.ImportedResource) []string {
+// AgentContext returns a one-line-per-IR summary sorted by Address —
+// see aws.Provider.AgentContext for the contract; this is the
+// one-for-one mirror.
+func (p *Provider) AgentContext(irs []imported.ImportedResource) []string {
 	if len(irs) == 0 {
 		return nil
 	}
-	out := make([]string, 0, len(irs))
-	for _, ir := range irs {
+	sorted := make([]imported.ImportedResource, len(irs))
+	copy(sorted, irs)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		return sorted[i].Identity.Address < sorted[j].Identity.Address
+	})
+	out := make([]string, 0, len(sorted))
+	for _, ir := range sorted {
 		out = append(out, fmt.Sprintf("%s (%s)", ir.Identity.Address, ir.Identity.Type))
 	}
-	sort.Strings(out)
 	return out
 }
 

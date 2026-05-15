@@ -251,11 +251,14 @@ func (p *Provider) EnrichByID(ctx context.Context, identity *imported.ResourceId
 }
 
 // unwrapAWSClients pulls the typed AWS bundle out of the cloud-agnostic
-// Clients union. Returns ErrClientsWrongCloud when the GCP slot is set
-// (cross-cloud misroute) and ErrEnrichClientUnavailable when the AWS
-// slot is nil.
+// Clients union. Returns ErrClientsWrongCloud when the GCP slot is
+// populated (the caller has misrouted GCP clients to an AWS provider —
+// reported regardless of whether the AWS slot is also set, because both-
+// set is itself a bug worth flagging loudly). Returns
+// ErrEnrichClientUnavailable when neither slot is set, or when the AWS
+// slot is a nil pointer.
 func unwrapAWSClients(c imp.Clients) (Clients, error) {
-	if c.GCP != nil && c.AWS == nil {
+	if c.GCP != nil {
 		return Clients{}, imp.ErrClientsWrongCloud
 	}
 	if c.AWS == nil {
@@ -287,19 +290,27 @@ func (p *Provider) CompareDrift(tfType string, snapshot, live imp.Attrs) []imp.F
 	return p.comparer(tfType, snapshot, live)
 }
 
-// RileyContext returns a one-line-per-IR summary sorted by Address.
-// Conservative format: `<address> (<type>)`. The downstream consumer
-// (Riley's chat surface) layers richer formatting on top; this is
-// the cross-cloud baseline.
-func (p *Provider) RileyContext(irs []imported.ImportedResource) []string {
+// AgentContext returns a one-line-per-IR summary sorted by Address.
+// Conservative format: `<address> (<type>)`. The downstream interactive
+// agent (Riley today) layers richer formatting on top; this is the
+// cross-cloud baseline.
+//
+// Sort key is Identity.Address — sorting the formatted output strings
+// is equivalent today (since the format starts with the Address), but
+// pinning on the source field decouples the contract from the format.
+func (p *Provider) AgentContext(irs []imported.ImportedResource) []string {
 	if len(irs) == 0 {
 		return nil
 	}
-	out := make([]string, 0, len(irs))
-	for _, ir := range irs {
+	sorted := make([]imported.ImportedResource, len(irs))
+	copy(sorted, irs)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		return sorted[i].Identity.Address < sorted[j].Identity.Address
+	})
+	out := make([]string, 0, len(sorted))
+	for _, ir := range sorted {
 		out = append(out, fmt.Sprintf("%s (%s)", ir.Identity.Address, ir.Identity.Type))
 	}
-	sort.Strings(out)
 	return out
 }
 
@@ -308,7 +319,7 @@ func (p *Provider) RileyContext(irs []imported.ImportedResource) []string {
 // default drift comparator wired (pkg/drift/imported.Compare) but no
 // live AWSDiscoverer — so static introspection (SupportedTypes,
 // Capabilities, LabelFor, PolicyFor, MetricsBinding, StableID,
-// CanonicalAddress, CompareDrift, RileyContext) works out of the box;
+// CanonicalAddress, CompareDrift, AgentContext) works out of the box;
 // callers needing Discover / Enrich must construct via NewProvider
 // with a real *awsdiscover.AWSDiscoverer.
 func init() {

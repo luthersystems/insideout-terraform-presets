@@ -3,7 +3,7 @@ package imported
 import (
 	"context"
 
-	composer_imported "github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
+	composerimported "github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported/policy"
 )
 
@@ -59,14 +59,14 @@ type Provider interface {
 	// downstream UI. Distinct from Address (which is the
 	// Terraform-state-form key) — StableID is opaque and may
 	// outlive an Address rename.
-	StableID(identity *composer_imported.ResourceIdentity) string
+	StableID(identity *composerimported.ResourceIdentity) string
 
 	// CanonicalAddress returns the Terraform resource address
 	// (`<type>.<label>`) for identity, regenerating it from the
 	// underlying NameHint / NativeIDs when identity.Address is
 	// empty. Equivalent to imported.GenerateAddress for a fresh
 	// identity; round-trips identity.Address when set.
-	CanonicalAddress(identity *composer_imported.ResourceIdentity) string
+	CanonicalAddress(identity *composerimported.ResourceIdentity) string
 
 	// Discover enumerates resources of the named types from the
 	// caller's cloud account/project. The clients union must
@@ -75,7 +75,7 @@ type Provider interface {
 	// ImportedResource per matched cloud resource, with
 	// Identity populated and Tier=TierImportedFlat,
 	// Source=SourceImporter.
-	Discover(ctx context.Context, types []string, clients Clients, opts DiscoverOpts) ([]composer_imported.ImportedResource, error)
+	Discover(ctx context.Context, types []string, clients Clients, opts DiscoverOpts) ([]composerimported.ImportedResource, error)
 
 	// EnrichAttributes populates ir.Attrs in place for every
 	// resource whose Identity.Type has a registered enricher.
@@ -84,7 +84,7 @@ type Provider interface {
 	// joined error; ErrEnrichClientUnavailable failures are
 	// downgraded internally (the per-cloud impls surface them as
 	// progress warnings without failing the batch).
-	EnrichAttributes(ctx context.Context, irs []composer_imported.ImportedResource, clients Clients) error
+	EnrichAttributes(ctx context.Context, irs []composerimported.ImportedResource, clients Clients) error
 
 	// EnrichByID fetches the typed Layer-1 Attrs payload for a
 	// single resource named by identity. Used by the per-IR drift
@@ -92,7 +92,7 @@ type Provider interface {
 	// per-type enricher does not satisfy the ByIDEnricher
 	// contract; callers downgrade that to "skip drift refresh for
 	// this type" rather than treating it as a hard error.
-	EnrichByID(ctx context.Context, identity *composer_imported.ResourceIdentity, clients Clients) (Attrs, error)
+	EnrichByID(ctx context.Context, identity *composerimported.ResourceIdentity, clients Clients) (Attrs, error)
 
 	// CompareDrift diffs snapshot against live attrs for tfType
 	// and returns the list of mismatched fields. Returns nil
@@ -104,10 +104,13 @@ type Provider interface {
 	// DriftSemantic tags.
 	CompareDrift(tfType string, snapshot, live Attrs) []FieldMismatch
 
-	// RileyContext returns a short, human-readable summary line
-	// per imported resource, suitable for inclusion in a Riley
-	// chat-context prompt. Conservative format: one line per IR
-	// of the form "<address> (<type>)". Stable ordering across
-	// calls — sorted by Identity.Address.
-	RileyContext(irs []composer_imported.ImportedResource) []string
+	// AgentContext returns a short, human-readable summary line
+	// per imported resource, suitable for inclusion in an
+	// interactive-agent chat-context prompt. Conservative format:
+	// one line per IR of the form "<address> (<type>)". Stable
+	// ordering across calls — sorted by Identity.Address.
+	//
+	// Agent-name-agnostic on purpose: the per-product naming
+	// (Riley today) can rotate without flipping the interface.
+	AgentContext(irs []composerimported.ImportedResource) []string
 }

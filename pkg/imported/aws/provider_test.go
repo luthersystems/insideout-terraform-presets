@@ -9,7 +9,7 @@ import (
 	awssdk "github.com/aws/aws-sdk-go-v2/aws"
 
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/awsdiscover"
-	composer_imported "github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
+	composerimported "github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 	imp "github.com/luthersystems/insideout-terraform-presets/pkg/imported"
 	awsprov "github.com/luthersystems/insideout-terraform-presets/pkg/imported/aws"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/insideout-import/registry"
@@ -106,7 +106,7 @@ func TestProvider_StableID(t *testing.T) {
 	}
 
 	// ARN-bearing identity.
-	id := &composer_imported.ResourceIdentity{
+	id := &composerimported.ResourceIdentity{
 		Type:      "aws_s3_bucket",
 		Address:   "aws_s3_bucket.b",
 		ImportID:  "my-bucket",
@@ -117,7 +117,7 @@ func TestProvider_StableID(t *testing.T) {
 	}
 
 	// ImportID fallback when no ARN.
-	id2 := &composer_imported.ResourceIdentity{
+	id2 := &composerimported.ResourceIdentity{
 		Type:     "aws_iam_role",
 		Address:  "aws_iam_role.r",
 		ImportID: "my-role",
@@ -127,7 +127,7 @@ func TestProvider_StableID(t *testing.T) {
 	}
 
 	// Address fallback when no ARN or ImportID.
-	id3 := &composer_imported.ResourceIdentity{
+	id3 := &composerimported.ResourceIdentity{
 		Type:    "aws_iam_role",
 		Address: "aws_iam_role.r",
 	}
@@ -145,7 +145,7 @@ func TestProvider_CanonicalAddress(t *testing.T) {
 	}
 
 	// Address set → returned unchanged.
-	id := &composer_imported.ResourceIdentity{
+	id := &composerimported.ResourceIdentity{
 		Type:    "aws_s3_bucket",
 		Address: "aws_s3_bucket.mybucket",
 	}
@@ -154,7 +154,7 @@ func TestProvider_CanonicalAddress(t *testing.T) {
 	}
 
 	// Address empty → regenerated from NameHint via imported.GenerateAddress.
-	id2 := &composer_imported.ResourceIdentity{
+	id2 := &composerimported.ResourceIdentity{
 		Type:     "aws_s3_bucket",
 		NameHint: "MyBucket",
 	}
@@ -164,25 +164,25 @@ func TestProvider_CanonicalAddress(t *testing.T) {
 	}
 }
 
-func TestProvider_RileyContext(t *testing.T) {
+func TestProvider_AgentContext(t *testing.T) {
 	t.Parallel()
 	p := awsprov.NewProvider(nil, nil)
 
-	if got := p.RileyContext(nil); got != nil {
-		t.Errorf("RileyContext(nil) = %v, want nil", got)
+	if got := p.AgentContext(nil); got != nil {
+		t.Errorf("AgentContext(nil) = %v, want nil", got)
 	}
 
-	irs := []composer_imported.ImportedResource{
-		{Identity: composer_imported.ResourceIdentity{Type: "aws_s3_bucket", Address: "aws_s3_bucket.z"}},
-		{Identity: composer_imported.ResourceIdentity{Type: "aws_iam_role", Address: "aws_iam_role.a"}},
+	irs := []composerimported.ImportedResource{
+		{Identity: composerimported.ResourceIdentity{Type: "aws_s3_bucket", Address: "aws_s3_bucket.z"}},
+		{Identity: composerimported.ResourceIdentity{Type: "aws_iam_role", Address: "aws_iam_role.a"}},
 	}
-	got := p.RileyContext(irs)
+	got := p.AgentContext(irs)
 	if len(got) != 2 {
 		t.Fatalf("expected 2 lines, got %d", len(got))
 	}
 	// Sorted by line — aws_iam_role.a (...) sorts before aws_s3_bucket.z (...)
 	if got[0] >= got[1] {
-		t.Errorf("RileyContext not sorted: %v", got)
+		t.Errorf("AgentContext not sorted: %v", got)
 	}
 }
 
@@ -231,7 +231,7 @@ func TestProvider_EnrichByID_NoEnricher(t *testing.T) {
 	p := awsprov.NewProvider(d, nil)
 
 	// aws_vpc has no enricher registered → ErrEnrichByIDNotImplemented.
-	id := &composer_imported.ResourceIdentity{Type: "aws_vpc", ImportID: "vpc-123"}
+	id := &composerimported.ResourceIdentity{Type: "aws_vpc", ImportID: "vpc-123"}
 	_, err := p.EnrichByID(context.Background(), id, imp.Clients{AWS: awsprov.Clients{}})
 	if !errors.Is(err, imp.ErrEnrichByIDNotImplemented) {
 		t.Errorf("EnrichByID for non-enriched type: err = %v, want ErrEnrichByIDNotImplemented", err)
@@ -247,7 +247,7 @@ func TestProvider_EnrichByID_HasByIDEnricher(t *testing.T) {
 	// per byid_enricher_test.go. With nil clients on EnrichClients it
 	// should surface ErrEnrichClientUnavailable from the underlying
 	// enricher — that's the expected path for a no-creds test.
-	id := &composer_imported.ResourceIdentity{
+	id := &composerimported.ResourceIdentity{
 		Type:     "aws_cloudwatch_log_group",
 		Region:   "us-east-1",
 		ImportID: "/aws/lambda/test",
@@ -314,7 +314,7 @@ func TestProvider_CapabilitiesParity(t *testing.T) {
 
 	for _, tfType := range p.SupportedTypes() {
 		caps := p.Capabilities(tfType)
-		id := &composer_imported.ResourceIdentity{
+		id := &composerimported.ResourceIdentity{
 			Type:     tfType,
 			Region:   "us-east-1",
 			ImportID: "test-id",
