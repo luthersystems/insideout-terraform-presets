@@ -175,69 +175,69 @@ type target struct {
 // target.fetchersOutputPath to the new gen.go path, and re-run the
 // generator.
 type fetcherTarget struct {
-	// FuncName is the emitted identifier — must match the consumer's
+	// funcName is the emitted identifier — must match the consumer's
 	// call site exactly so the swap from hand-written to generated is
 	// a no-op refactor. Convention: prefixed with "default" plus the
 	// resource type plus an action, e.g. "defaultDynamoDBTableFetchTags".
 	funcName string
 
-	// Doc is an optional one-paragraph comment placed above the
+	// doc is an optional one-paragraph comment placed above the
 	// emitted function. Empty string emits no comment.
 	doc string
 
-	// ClientType is the SDK client Go type (with pointer + package
+	// clientType is the SDK client Go type (with pointer + package
 	// qualifier), e.g. "*dynamodb.Client".
 	clientType string
 
-	// ParamArg is the comma-separated caller parameter list that
+	// paramArg is the comma-separated caller parameter list that
 	// follows ctx and c. The SDK client (c) and ctx are always
-	// emitted; ParamArg is any extra (e.g. "tableArn string").
+	// emitted; paramArg is any extra (e.g. "tableArn string").
 	paramArg string
 
-	// SDKMethod is the method on the client to invoke for the
-	// non-paginated form. Ignored when Paginator is non-empty.
+	// sdkMethod is the method on the client to invoke for the
+	// non-paginated form. Ignored when paginator is non-empty.
 	sdkMethod string
 
-	// InputType is the SDK input struct name (without package
+	// inputType is the SDK input struct name (without package
 	// qualifier), e.g. "ListTagsOfResourceInput".
 	inputType string
 
-	// InputAssign maps each input-struct field name to a Go expression
+	// inputAssign maps each input-struct field name to a Go expression
 	// evaluable in helper scope, e.g.
 	// {"ResourceArn": "aws.String(tableArn)"}.
 	inputAssign map[string]string
 
-	// ResultType is the Go type returned by the helper, e.g.
+	// resultType is the Go type returned by the helper, e.g.
 	// "[]dynamotypes.Tag" or "*dynamotypes.TimeToLiveDescription".
-	// For Paginator != "", this should be the element type — the
+	// For paginator != "", this should be the element type — the
 	// generator emits "[]" prefix internally.
 	resultType string
 
-	// ResultExpr is a Go expression reading the result from the SDK
+	// resultExpr is a Go expression reading the result from the SDK
 	// response variable named "out", e.g. "out.Tags". Ignored for the
 	// paginated form (the accumulator field drives that).
 	resultExpr string
 
-	// SDKClientPkgImport / SDKClientPkgAlias are the import path and
-	// alias for the SDK client package (defining ClientType + the
+	// sdkClientPkgImport / sdkClientPkgAlias are the import path and
+	// alias for the SDK client package (defining clientType + the
 	// paginator constructor when paginated). e.g.
 	// "github.com/aws/aws-sdk-go-v2/service/dynamodb" / "dynamodb".
 	sdkClientPkgImport string
 	sdkClientPkgAlias  string
 
-	// Paginator is the optional paginator-constructor name on the SDK
+	// paginator is the optional paginator-constructor name on the SDK
 	// client package, e.g. "NewListResourcesPaginator". Empty string
 	// = non-paginated single-call shape.
 	paginator string
 
-	// AccumulatorField is the response-page struct's slice field name
+	// accumulatorField is the response-page struct's slice field name
 	// to accumulate across pages, e.g. "ResourceDescriptions". Used
-	// only when Paginator is non-empty.
+	// only when paginator is non-empty.
 	accumulatorField string
 
-	// AccumulatorElemType is the element Go type accumulated in the
+	// accumulatorElemType is the element Go type accumulated in the
 	// paginator form, e.g. "cctypes.ResourceDescription". Used only
-	// when Paginator is non-empty; the emitted return type is
-	// "[]<AccumulatorElemType>".
+	// when paginator is non-empty; the emitted return type is
+	// "[]<accumulatorElemType>".
 	accumulatorElemType string
 }
