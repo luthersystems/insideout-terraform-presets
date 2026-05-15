@@ -55,12 +55,11 @@ func TestProvider_Capabilities_Enrichable(t *testing.T) {
 	if got := p.Capabilities("google_storage_bucket"); !got.Enrichable {
 		t.Errorf("google_storage_bucket: Enrichable should be true, got %+v", got)
 	}
-	// google_storage_bucket_object is in the registry but has no
-	// registered enricher (sub-resource fanned out by the bespoke
-	// lister, no Layer-1 codegen). Replaces the pre-#482 sample
-	// google_project_iam_member which gained an IAM-binding enricher.
-	if got := p.Capabilities("google_storage_bucket_object"); got.Enrichable {
-		t.Errorf("google_storage_bucket_object: Enrichable should be false, got %+v", got)
+	// Unknown type: Enrichable false. After the GCP 100% push every
+	// registered type has an enricher, so the only remaining sample
+	// for the "Enrichable false" branch is an unregistered type.
+	if got := p.Capabilities("google_bogus_unknown"); got.Enrichable {
+		t.Errorf("google_bogus_unknown: Enrichable should be false, got %+v", got)
 	}
 }
 
@@ -201,10 +200,12 @@ func TestProvider_EnrichByID_NoEnricher(t *testing.T) {
 	d := gcpdiscover.NewGCPDiscoverer(nil, "test-project", gcpdiscover.GCPDiscovererOpts{})
 	p := gcpprov.NewProvider(d, nil)
 
-	// google_storage_bucket_object: registry-present but no enricher.
-	// Replaces the pre-#482 sample google_project_iam_member which
-	// gained an IAM-binding enricher.
-	id := &composerimported.ResourceIdentity{Type: "google_storage_bucket_object", ImportID: "b/my-bucket/o/key"}
+	// Unknown type: ErrEnrichByIDNotImplemented. After the GCP 100%
+	// push every registered type has an enricher, so the only
+	// remaining sample for this branch is an unregistered type — the
+	// provider's dispatch path returns the same sentinel for "type
+	// has no enricher" and "type unknown to provider".
+	id := &composerimported.ResourceIdentity{Type: "google_bogus_unknown", ImportID: "irrelevant"}
 	_, err := p.EnrichByID(context.Background(), id, imp.Clients{GCP: gcpprov.Clients{}})
 	if !errors.Is(err, imp.ErrEnrichByIDNotImplemented) {
 		t.Errorf("EnrichByID for non-enriched type: err = %v, want ErrEnrichByIDNotImplemented", err)

@@ -63,17 +63,14 @@ func TestProvider_Capabilities_Enrichable(t *testing.T) {
 	if got := p.Capabilities("aws_dynamodb_table"); !got.Enrichable {
 		t.Errorf("aws_dynamodb_table: Enrichable should be true, got %+v", got)
 	}
-	// aws_bedrock_guardrail is a Bucket-C hand-rolled discoverer that
-	// is NOT in cloudControlTypeConfigs (CC is not used for the per-
-	// version fan-out semantics required by Bedrock guardrails) and
-	// has no hand-rolled AttributeEnricher today, so it is the
-	// canonical "registered for discovery, not enriched" sample.
-	// Replaced the prior aws_apigatewayv2_stage reference after #482
-	// wired a hand-rolled enricher for that type; #490 wired a generic
-	// cloudControlEnricher to every CC-routed type, so any new pin
-	// here must avoid both.
-	if got := p.Capabilities("aws_bedrock_guardrail"); got.Enrichable {
-		t.Errorf("aws_bedrock_guardrail: Enrichable should be false (no enricher), got %+v", got)
+	// aws_autoscaling_group_tag is a hand-rolled discoverer that is
+	// NOT in cloudControlTypeConfigs and has no hand-rolled
+	// AttributeEnricher today, so it is the canonical "registered for
+	// discovery, not enriched" sample. Replaced the prior
+	// aws_bedrock_guardrail reference after the 98% push wired a
+	// hand-rolled enricher for that type.
+	if got := p.Capabilities("aws_autoscaling_group_tag"); got.Enrichable {
+		t.Errorf("aws_autoscaling_group_tag: Enrichable should be false (no enricher), got %+v", got)
 	}
 	// Unknown type: all flags false.
 	if got := p.Capabilities("aws_bogus_unknown"); got.Discoverable || got.Enrichable {
@@ -237,13 +234,13 @@ func TestProvider_EnrichByID_NoEnricher(t *testing.T) {
 	d := awsdiscover.NewAWSDiscoverer(awssdk.Config{})
 	p := awsprov.NewProvider(d, nil)
 
-	// aws_bedrock_guardrail is a Bucket-C hand-rolled discoverer that
-	// has no AttributeEnricher today (and is not in
-	// cloudControlTypeConfigs, so #490's generic CC enricher loop does
-	// not register one either) → ErrEnrichByIDNotImplemented.
-	// Replaced the prior aws_apigatewayv2_stage reference after the
-	// 95% coverage push wired an enricher for it.
-	id := &composerimported.ResourceIdentity{Type: "aws_bedrock_guardrail", ImportID: "guardrail-id"}
+	// aws_autoscaling_group_tag is a hand-rolled discoverer that has
+	// no AttributeEnricher today (and is not in cloudControlTypeConfigs,
+	// so #490's generic CC enricher loop does not register one either)
+	// → ErrEnrichByIDNotImplemented. Replaced the prior
+	// aws_bedrock_guardrail reference after the 98% push wired an
+	// enricher for it.
+	id := &composerimported.ResourceIdentity{Type: "aws_autoscaling_group_tag", ImportID: "asg-name,key"}
 	_, err := p.EnrichByID(context.Background(), id, imp.Clients{AWS: awsprov.Clients{}})
 	if !errors.Is(err, imp.ErrEnrichByIDNotImplemented) {
 		t.Errorf("EnrichByID for non-enriched type: err = %v, want ErrEnrichByIDNotImplemented", err)

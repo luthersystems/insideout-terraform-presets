@@ -1,4 +1,102 @@
 {
+  "aws_apigatewayv2_stage": [
+    {
+      "path": "access_log_settings.destination_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "access_log_settings.format",
+      "semantic": "Exact"
+    },
+    {
+      "path": "api_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "auto_deploy",
+      "semantic": "Exact"
+    },
+    {
+      "path": "client_certificate_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "default_route_settings.data_trace_enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "default_route_settings.detailed_metrics_enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "default_route_settings.logging_level",
+      "semantic": "Exact"
+    },
+    {
+      "path": "default_route_settings.throttling_burst_limit",
+      "semantic": "Exact"
+    },
+    {
+      "path": "default_route_settings.throttling_rate_limit",
+      "semantic": "Exact"
+    },
+    {
+      "path": "deployment_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "description",
+      "semantic": "Exact"
+    },
+    {
+      "path": "execution_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "invoke_url",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "route_settings.data_trace_enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "route_settings.detailed_metrics_enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "route_settings.logging_level",
+      "semantic": "Exact"
+    },
+    {
+      "path": "route_settings.route_key",
+      "semantic": "Exact"
+    },
+    {
+      "path": "route_settings.throttling_burst_limit",
+      "semantic": "Exact"
+    },
+    {
+      "path": "route_settings.throttling_rate_limit",
+      "semantic": "Exact"
+    },
+    {
+      "path": "stage_variables",
+      "semantic": "Exact"
+    }
+  ],
   "aws_bedrock_guardrail": [
     {
       "path": "blocked_input_messaging",
@@ -177,6 +275,20 @@
       "semantic": "Exact"
     }
   ],
+  "aws_dynamodb_contributor_insights": [
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "index_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "table_name",
+      "semantic": "Exact"
+    }
+  ],
   "aws_dynamodb_table": [
     {
       "path": "arn",
@@ -351,6 +463,20 @@
       "semantic": "Exact"
     }
   ],
+  "aws_iam_role_policy_attachment": [
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "policy_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "role",
+      "semantic": "Exact"
+    }
+  ],
   "aws_lambda_function": [
     {
       "path": "architectures",
@@ -505,6 +631,38 @@
       "semantic": "Exact"
     }
   ],
+  "aws_resourceexplorer2_index": [
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "type",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_resourceexplorer2_view": [
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "default_view",
+      "semantic": "Exact"
+    },
+    {
+      "path": "filters.filter_string",
+      "semantic": "Exact"
+    },
+    {
+      "path": "included_property.name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    }
+  ],
   "aws_s3_bucket": [
     {
       "path": "acceleration_status",
@@ -604,6 +762,160 @@
     },
     {
       "path": "website_endpoint",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_s3_bucket_lifecycle_configuration": [
+    {
+      "path": "bucket",
+      "semantic": "Exact"
+    },
+    {
+      "path": "expected_bucket_owner",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "rule.abort_incomplete_multipart_upload.days_after_initiation",
+      "semantic": "Exact"
+    },
+    {
+      "path": "rule.expiration.date",
+      "semantic": "Exact"
+    },
+    {
+      "path": "rule.expiration.days",
+      "semantic": "Exact"
+    },
+    {
+      "path": "rule.id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "rule.noncurrent_version_expiration.noncurrent_days",
+      "semantic": "Exact"
+    },
+    {
+      "path": "rule.noncurrent_version_transition.noncurrent_days",
+      "semantic": "Exact"
+    },
+    {
+      "path": "rule.noncurrent_version_transition.storage_class",
+      "semantic": "Exact"
+    },
+    {
+      "path": "rule.prefix",
+      "semantic": "Exact"
+    },
+    {
+      "path": "rule.status",
+      "semantic": "Exact"
+    },
+    {
+      "path": "rule.transition.days",
+      "semantic": "Exact"
+    },
+    {
+      "path": "rule.transition.storage_class",
+      "semantic": "Exact"
+    },
+    {
+      "path": "transition_default_minimum_object_size",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_s3_bucket_ownership_controls": [
+    {
+      "path": "bucket",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "rule.object_ownership",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_s3_bucket_public_access_block": [
+    {
+      "path": "block_public_acls",
+      "semantic": "Exact"
+    },
+    {
+      "path": "block_public_policy",
+      "semantic": "Exact"
+    },
+    {
+      "path": "bucket",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ignore_public_acls",
+      "semantic": "Exact"
+    },
+    {
+      "path": "restrict_public_buckets",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_s3_bucket_server_side_encryption_configuration": [
+    {
+      "path": "bucket",
+      "semantic": "Exact"
+    },
+    {
+      "path": "expected_bucket_owner",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "rule.apply_server_side_encryption_by_default.kms_master_key_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "rule.apply_server_side_encryption_by_default.sse_algorithm",
+      "semantic": "Exact"
+    },
+    {
+      "path": "rule.bucket_key_enabled",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_s3_bucket_versioning": [
+    {
+      "path": "bucket",
+      "semantic": "Exact"
+    },
+    {
+      "path": "expected_bucket_owner",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "mfa",
+      "semantic": "Exact"
+    },
+    {
+      "path": "versioning_configuration.mfa_delete",
+      "semantic": "Exact"
+    },
+    {
+      "path": "versioning_configuration.status",
       "semantic": "Exact"
     }
   ],
@@ -718,6 +1030,286 @@
     },
     {
       "path": "visibility_timeout_seconds",
+      "semantic": "Exact"
+    }
+  ],
+  "google_compute_address": [
+    {
+      "path": "address",
+      "semantic": "Exact"
+    },
+    {
+      "path": "address_type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "description",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ip_version",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "network",
+      "semantic": "Exact"
+    },
+    {
+      "path": "network_tier",
+      "semantic": "Exact"
+    },
+    {
+      "path": "prefix_length",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "purpose",
+      "semantic": "Exact"
+    },
+    {
+      "path": "region",
+      "semantic": "Exact"
+    },
+    {
+      "path": "self_link",
+      "semantic": "Exact"
+    },
+    {
+      "path": "subnetwork",
+      "semantic": "Exact"
+    }
+  ],
+  "google_compute_firewall": [
+    {
+      "path": "allow.ports",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "allow.protocol",
+      "semantic": "Exact"
+    },
+    {
+      "path": "deny.ports",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "deny.protocol",
+      "semantic": "Exact"
+    },
+    {
+      "path": "description",
+      "semantic": "Exact"
+    },
+    {
+      "path": "destination_ranges",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "direction",
+      "semantic": "Exact"
+    },
+    {
+      "path": "disabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "enable_logging",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "log_config.metadata",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "network",
+      "semantic": "Exact"
+    },
+    {
+      "path": "priority",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "self_link",
+      "semantic": "Exact"
+    },
+    {
+      "path": "source_ranges",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "source_service_accounts",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "source_tags",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "target_service_accounts",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "target_tags",
+      "semantic": "WholeList"
+    }
+  ],
+  "google_compute_forwarding_rule": [
+    {
+      "path": "all_ports",
+      "semantic": "Exact"
+    },
+    {
+      "path": "allow_global_access",
+      "semantic": "Exact"
+    },
+    {
+      "path": "allow_psc_global_access",
+      "semantic": "Exact"
+    },
+    {
+      "path": "backend_service",
+      "semantic": "Exact"
+    },
+    {
+      "path": "description",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ip_address",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ip_protocol",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ip_version",
+      "semantic": "Exact"
+    },
+    {
+      "path": "load_balancing_scheme",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "network",
+      "semantic": "Exact"
+    },
+    {
+      "path": "network_tier",
+      "semantic": "Exact"
+    },
+    {
+      "path": "port_range",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ports",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "region",
+      "semantic": "Exact"
+    },
+    {
+      "path": "self_link",
+      "semantic": "Exact"
+    },
+    {
+      "path": "service_label",
+      "semantic": "Exact"
+    },
+    {
+      "path": "subnetwork",
+      "semantic": "Exact"
+    },
+    {
+      "path": "target",
+      "semantic": "Exact"
+    }
+  ],
+  "google_compute_health_check": [
+    {
+      "path": "check_interval_sec",
+      "semantic": "Exact"
+    },
+    {
+      "path": "creation_timestamp",
+      "semantic": "Exact"
+    },
+    {
+      "path": "description",
+      "semantic": "Exact"
+    },
+    {
+      "path": "healthy_threshold",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "self_link",
+      "semantic": "Exact"
+    },
+    {
+      "path": "source_regions",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "timeout_sec",
+      "semantic": "Exact"
+    },
+    {
+      "path": "type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "unhealthy_threshold",
       "semantic": "Exact"
     }
   ],
@@ -1047,6 +1639,154 @@
       "semantic": "Exact"
     }
   ],
+  "google_project_service": [
+    {
+      "path": "disable_dependent_services",
+      "semantic": "Exact"
+    },
+    {
+      "path": "disable_on_destroy",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "service",
+      "semantic": "Exact"
+    }
+  ],
+  "google_pubsub_subscription": [
+    {
+      "path": "ack_deadline_seconds",
+      "semantic": "Exact"
+    },
+    {
+      "path": "bigquery_config.drop_unknown_fields",
+      "semantic": "Exact"
+    },
+    {
+      "path": "bigquery_config.service_account_email",
+      "semantic": "Exact"
+    },
+    {
+      "path": "bigquery_config.table",
+      "semantic": "Exact"
+    },
+    {
+      "path": "bigquery_config.use_table_schema",
+      "semantic": "Exact"
+    },
+    {
+      "path": "bigquery_config.use_topic_schema",
+      "semantic": "Exact"
+    },
+    {
+      "path": "bigquery_config.write_metadata",
+      "semantic": "Exact"
+    },
+    {
+      "path": "cloud_storage_config.avro_config.use_topic_schema",
+      "semantic": "Exact"
+    },
+    {
+      "path": "cloud_storage_config.avro_config.write_metadata",
+      "semantic": "Exact"
+    },
+    {
+      "path": "cloud_storage_config.bucket",
+      "semantic": "Exact"
+    },
+    {
+      "path": "cloud_storage_config.filename_datetime_format",
+      "semantic": "Exact"
+    },
+    {
+      "path": "cloud_storage_config.filename_prefix",
+      "semantic": "Exact"
+    },
+    {
+      "path": "cloud_storage_config.filename_suffix",
+      "semantic": "Exact"
+    },
+    {
+      "path": "cloud_storage_config.max_bytes",
+      "semantic": "Exact"
+    },
+    {
+      "path": "cloud_storage_config.max_duration",
+      "semantic": "Exact"
+    },
+    {
+      "path": "cloud_storage_config.max_messages",
+      "semantic": "Exact"
+    },
+    {
+      "path": "cloud_storage_config.service_account_email",
+      "semantic": "Exact"
+    },
+    {
+      "path": "dead_letter_policy.dead_letter_topic",
+      "semantic": "Exact"
+    },
+    {
+      "path": "dead_letter_policy.max_delivery_attempts",
+      "semantic": "Exact"
+    },
+    {
+      "path": "enable_exactly_once_delivery",
+      "semantic": "Exact"
+    },
+    {
+      "path": "enable_message_ordering",
+      "semantic": "Exact"
+    },
+    {
+      "path": "expiration_policy.ttl",
+      "semantic": "Exact"
+    },
+    {
+      "path": "filter",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "message_retention_duration",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "push_config.oidc_token.service_account_email",
+      "semantic": "Exact"
+    },
+    {
+      "path": "retain_acked_messages",
+      "semantic": "Exact"
+    },
+    {
+      "path": "retry_policy.maximum_backoff",
+      "semantic": "Exact"
+    },
+    {
+      "path": "retry_policy.minimum_backoff",
+      "semantic": "Exact"
+    },
+    {
+      "path": "topic",
+      "semantic": "Exact"
+    }
+  ],
   "google_pubsub_topic": [
     {
       "path": "id",
@@ -1171,6 +1911,32 @@
       "semantic": "Exact"
     }
   ],
+  "google_secret_manager_secret_version": [
+    {
+      "path": "deletion_policy",
+      "semantic": "Exact"
+    },
+    {
+      "path": "enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "secret",
+      "semantic": "Exact"
+    },
+    {
+      "path": "version",
+      "semantic": "Exact"
+    }
+  ],
   "google_service_account": [
     {
       "path": "account_id",
@@ -1214,6 +1980,32 @@
     },
     {
       "path": "unique_id",
+      "semantic": "Exact"
+    }
+  ],
+  "google_service_networking_connection": [
+    {
+      "path": "deletion_policy",
+      "semantic": "Exact"
+    },
+    {
+      "path": "network",
+      "semantic": "Exact"
+    },
+    {
+      "path": "peering",
+      "semantic": "Exact"
+    },
+    {
+      "path": "reserved_peering_ranges",
+      "semantic": "Exact"
+    },
+    {
+      "path": "service",
+      "semantic": "Exact"
+    },
+    {
+      "path": "update_on_creation_fail",
       "semantic": "Exact"
     }
   ],
@@ -1560,6 +2352,60 @@
     },
     {
       "path": "temporary_hold",
+      "semantic": "Exact"
+    }
+  ],
+  "google_vpc_access_connector": [
+    {
+      "path": "connected_projects",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ip_cidr_range",
+      "semantic": "Exact"
+    },
+    {
+      "path": "machine_type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "max_instances",
+      "semantic": "Exact"
+    },
+    {
+      "path": "max_throughput",
+      "semantic": "Exact"
+    },
+    {
+      "path": "min_instances",
+      "semantic": "Exact"
+    },
+    {
+      "path": "min_throughput",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "network",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "region",
+      "semantic": "Exact"
+    },
+    {
+      "path": "subnet.name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "subnet.project_id",
       "semantic": "Exact"
     }
   ]

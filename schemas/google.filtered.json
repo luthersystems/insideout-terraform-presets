@@ -1920,6 +1920,78 @@
             "description_kind": "plain"
           }
         },
+        "google_cloud_run_v2_service_iam_member": {
+          "version": 0,
+          "block": {
+            "attributes": {
+              "etag": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "location": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "member": {
+                "type": "string",
+                "description_kind": "plain",
+                "required": true
+              },
+              "name": {
+                "type": "string",
+                "description_kind": "plain",
+                "required": true
+              },
+              "project": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "role": {
+                "type": "string",
+                "description_kind": "plain",
+                "required": true
+              }
+            },
+            "block_types": {
+              "condition": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "description": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "expression": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "title": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              }
+            },
+            "description_kind": "plain"
+          }
+        },
         "google_cloudbuild_trigger": {
           "version": 2,
           "block": {
@@ -3686,6 +3758,78 @@
                   },
                   "description_kind": "plain"
                 }
+              }
+            },
+            "description_kind": "plain"
+          }
+        },
+        "google_cloudfunctions2_function_iam_member": {
+          "version": 0,
+          "block": {
+            "attributes": {
+              "cloud_function": {
+                "type": "string",
+                "description_kind": "plain",
+                "required": true
+              },
+              "etag": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "location": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "member": {
+                "type": "string",
+                "description_kind": "plain",
+                "required": true
+              },
+              "project": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "role": {
+                "type": "string",
+                "description_kind": "plain",
+                "required": true
+              }
+            },
+            "block_types": {
+              "condition": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "description": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "expression": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "title": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
               }
             },
             "description_kind": "plain"
@@ -16415,6 +16559,69 @@
             "description_kind": "plain"
           }
         },
+        "google_kms_crypto_key_iam_binding": {
+          "version": 0,
+          "block": {
+            "attributes": {
+              "crypto_key_id": {
+                "type": "string",
+                "description_kind": "plain",
+                "required": true
+              },
+              "etag": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "members": {
+                "type": [
+                  "set",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "required": true
+              },
+              "role": {
+                "type": "string",
+                "description_kind": "plain",
+                "required": true
+              }
+            },
+            "block_types": {
+              "condition": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "description": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "expression": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "title": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              }
+            },
+            "description_kind": "plain"
+          }
+        },
         "google_kms_key_ring": {
           "version": 0,
           "block": {
@@ -17374,6 +17581,131 @@
                       "optional": true
                     },
                     "delete": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "update": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "description_kind": "plain"
+                }
+              }
+            },
+            "description_kind": "plain"
+          }
+        },
+        "google_project_iam_member": {
+          "version": 0,
+          "block": {
+            "attributes": {
+              "etag": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "member": {
+                "type": "string",
+                "description_kind": "plain",
+                "required": true
+              },
+              "project": {
+                "type": "string",
+                "description_kind": "plain",
+                "required": true
+              },
+              "role": {
+                "type": "string",
+                "description_kind": "plain",
+                "required": true
+              }
+            },
+            "block_types": {
+              "condition": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "description": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "expression": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "title": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              }
+            },
+            "description_kind": "plain"
+          }
+        },
+        "google_project_service": {
+          "version": 0,
+          "block": {
+            "attributes": {
+              "disable_dependent_services": {
+                "type": "bool",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "disable_on_destroy": {
+                "type": "bool",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "project": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "service": {
+                "type": "string",
+                "description_kind": "plain",
+                "required": true
+              }
+            },
+            "block_types": {
+              "timeouts": {
+                "nesting_mode": "single",
+                "block": {
+                  "attributes": {
+                    "create": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "delete": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "read": {
                       "type": "string",
                       "description_kind": "plain",
                       "optional": true
@@ -18701,6 +19033,235 @@
             "description_kind": "plain"
           }
         },
+        "google_secret_manager_secret_iam_binding": {
+          "version": 0,
+          "block": {
+            "attributes": {
+              "etag": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "members": {
+                "type": [
+                  "set",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "required": true
+              },
+              "project": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "role": {
+                "type": "string",
+                "description_kind": "plain",
+                "required": true
+              },
+              "secret_id": {
+                "type": "string",
+                "description_kind": "plain",
+                "required": true
+              }
+            },
+            "block_types": {
+              "condition": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "description": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "expression": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "title": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              }
+            },
+            "description_kind": "plain"
+          }
+        },
+        "google_secret_manager_secret_iam_member": {
+          "version": 0,
+          "block": {
+            "attributes": {
+              "etag": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "member": {
+                "type": "string",
+                "description_kind": "plain",
+                "required": true
+              },
+              "project": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "role": {
+                "type": "string",
+                "description_kind": "plain",
+                "required": true
+              },
+              "secret_id": {
+                "type": "string",
+                "description_kind": "plain",
+                "required": true
+              }
+            },
+            "block_types": {
+              "condition": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "description": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "expression": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "title": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              }
+            },
+            "description_kind": "plain"
+          }
+        },
+        "google_secret_manager_secret_version": {
+          "version": 0,
+          "block": {
+            "attributes": {
+              "create_time": {
+                "type": "string",
+                "description": "The time at which the Secret was created.",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "deletion_policy": {
+                "type": "string",
+                "description": "The deletion policy for the secret version. Setting 'ABANDON' allows the resource\nto be abandoned rather than deleted. Setting 'DISABLE' allows the resource to be\ndisabled rather than deleted. Default is 'DELETE'. Possible values are:\n  * DELETE\n  * DISABLE\n  * ABANDON",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "destroy_time": {
+                "type": "string",
+                "description": "The time at which the Secret was destroyed. Only present if state is DESTROYED.",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "enabled": {
+                "type": "bool",
+                "description": "The current state of the SecretVersion.",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "is_secret_data_base64": {
+                "type": "bool",
+                "description": "If set to 'true', the secret data is expected to be base64-encoded string and would be sent as is.",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "name": {
+                "type": "string",
+                "description": "The resource name of the SecretVersion. Format:\n'projects/{{project}}/secrets/{{secret_id}}/versions/{{version}}'",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "secret": {
+                "type": "string",
+                "description": "Secret Manager secret resource",
+                "description_kind": "plain",
+                "required": true
+              },
+              "secret_data": {
+                "type": "string",
+                "description": "The secret data. Must be no larger than 64KiB.",
+                "description_kind": "plain",
+                "required": true,
+                "sensitive": true
+              },
+              "version": {
+                "type": "string",
+                "description": "The version of the Secret.",
+                "description_kind": "plain",
+                "computed": true
+              }
+            },
+            "block_types": {
+              "timeouts": {
+                "nesting_mode": "single",
+                "block": {
+                  "attributes": {
+                    "create": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "delete": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "update": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "description_kind": "plain"
+                }
+              }
+            },
+            "description_kind": "plain"
+          }
+        },
         "google_service_account": {
           "version": 0,
           "block": {
@@ -18779,6 +19340,83 @@
                 "block": {
                   "attributes": {
                     "create": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "description_kind": "plain"
+                }
+              }
+            },
+            "description_kind": "plain"
+          }
+        },
+        "google_service_networking_connection": {
+          "version": 0,
+          "block": {
+            "attributes": {
+              "deletion_policy": {
+                "type": "string",
+                "description": "When set to ABANDON, terraform will abandon management of the resource instead of deleting it. Prevents terraform apply failures with CloudSQL. Note: The resource will still exist.",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "network": {
+                "type": "string",
+                "description": "Name of VPC network connected with service producers using VPC peering.",
+                "description_kind": "plain",
+                "required": true
+              },
+              "peering": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "reserved_peering_ranges": {
+                "type": [
+                  "list",
+                  "string"
+                ],
+                "description": "Named IP address range(s) of PEERING type reserved for this service provider. Note that invoking this method with a different range when connection is already established will not reallocate already provisioned service producer subnetworks.",
+                "description_kind": "plain",
+                "required": true
+              },
+              "service": {
+                "type": "string",
+                "description": "Provider peering service that is managing peering connectivity for a service provider organization. For Google services that support this functionality it is 'servicenetworking.googleapis.com'.",
+                "description_kind": "plain",
+                "required": true
+              },
+              "update_on_creation_fail": {
+                "type": "bool",
+                "description": "When set to true, enforce an update of the reserved peering ranges on the existing service networking connection in case of a new connection creation failure.",
+                "description_kind": "plain",
+                "optional": true
+              }
+            },
+            "block_types": {
+              "timeouts": {
+                "nesting_mode": "single",
+                "block": {
+                  "attributes": {
+                    "create": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "delete": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "update": {
                       "type": "string",
                       "description_kind": "plain",
                       "optional": true
@@ -20349,6 +20987,66 @@
             "description_kind": "plain"
           }
         },
+        "google_storage_bucket_iam_member": {
+          "version": 0,
+          "block": {
+            "attributes": {
+              "bucket": {
+                "type": "string",
+                "description_kind": "plain",
+                "required": true
+              },
+              "etag": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "member": {
+                "type": "string",
+                "description_kind": "plain",
+                "required": true
+              },
+              "role": {
+                "type": "string",
+                "description_kind": "plain",
+                "required": true
+              }
+            },
+            "block_types": {
+              "condition": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "description": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "expression": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    },
+                    "title": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "required": true
+                    }
+                  },
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              }
+            },
+            "description_kind": "plain"
+          }
+        },
         "google_storage_bucket_object": {
           "version": 0,
           "block": {
@@ -20679,6 +21377,150 @@
                       "optional": true
                     },
                     "update": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "description_kind": "plain"
+                }
+              }
+            },
+            "description_kind": "plain"
+          }
+        },
+        "google_vpc_access_connector": {
+          "version": 0,
+          "block": {
+            "attributes": {
+              "connected_projects": {
+                "type": [
+                  "list",
+                  "string"
+                ],
+                "description": "List of projects using the connector.",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "ip_cidr_range": {
+                "type": "string",
+                "description": "The range of internal addresses that follows RFC 4632 notation. Example: '10.132.0.0/28'.",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "machine_type": {
+                "type": "string",
+                "description": "Machine type of VM Instance underlying connector. Default is e2-micro",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "max_instances": {
+                "type": "number",
+                "description": "Maximum value of instances in autoscaling group underlying the connector. Value must be between 3 and 10, inclusive. Must be\nhigher than the value specified by min_instances.",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "max_throughput": {
+                "type": "number",
+                "description": "Maximum throughput of the connector in Mbps, must be greater than 'min_throughput'. Default is 300. Refers to the expected throughput\nwhen using an e2-micro machine type. Value must be a multiple of 100 from 300 through 1000. Must be higher than the value specified by\nmin_throughput. Only one of 'max_throughput' and 'max_instances' can be specified. The use of max_throughput is discouraged in favor of max_instances.",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "min_instances": {
+                "type": "number",
+                "description": "Minimum value of instances in autoscaling group underlying the connector. Value must be between 2 and 9, inclusive. Must be\nlower than the value specified by max_instances.",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "min_throughput": {
+                "type": "number",
+                "description": "Minimum throughput of the connector in Mbps. Default and min is 200. Refers to the expected throughput when using an e2-micro machine type.\nValue must be a multiple of 100 from 200 through 900. Must be lower than the value specified by max_throughput.\nOnly one of 'min_throughput' and 'min_instances' can be specified. The use of min_throughput is discouraged in favor of min_instances.",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "name": {
+                "type": "string",
+                "description": "The name of the resource (Max 25 characters).",
+                "description_kind": "plain",
+                "required": true
+              },
+              "network": {
+                "type": "string",
+                "description": "Name or self_link of the VPC network. Required if 'ip_cidr_range' is set.",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "project": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "region": {
+                "type": "string",
+                "description": "Region where the VPC Access connector resides. If it is not provided, the provider region is used.",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "self_link": {
+                "type": "string",
+                "description": "The fully qualified name of this VPC connector",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "state": {
+                "type": "string",
+                "description": "State of the VPC access connector.",
+                "description_kind": "plain",
+                "computed": true
+              }
+            },
+            "block_types": {
+              "subnet": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "name": {
+                      "type": "string",
+                      "description": "Subnet name (relative, not fully qualified). E.g. if the full subnet selfLink is\nhttps://compute.googleapis.com/compute/v1/projects/{project}/regions/{region}/subnetworks/{subnetName} the correct input for this field would be {subnetName}\"",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "project_id": {
+                      "type": "string",
+                      "description": "Project in which the subnet exists. If not set, this project is assumed to be the project for which the connector create request was issued.",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    }
+                  },
+                  "description": "The subnet in which to house the connector",
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "timeouts": {
+                "nesting_mode": "single",
+                "block": {
+                  "attributes": {
+                    "create": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "delete": {
                       "type": "string",
                       "description_kind": "plain",
                       "optional": true
