@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Bundle D1 (#491) curated-policy fixture tests.
+// Bundle D1 + D2 (#491) curated-policy fixture tests.
 //
 // These tests exercise the production policy.Map entries registered for
 // the five tfTypes in the bundle, end-to-end through Compare(). Each
@@ -260,6 +260,221 @@ func TestCompare_Curated_GooglePubsubTopic(t *testing.T) {
 
 	// kms_key_name is identical on both sides → not in drift output.
 	assert.NotContains(t, idx, "kms_key_name")
+}
+
+// --- Bundle D2 (#491) ------------------------------------------------
+
+// TestCompare_Curated_AWSCloudwatchLogGroup_Exact exercises an Exact
+// retention drift on aws_cloudwatch_log_group. Tag drift must stay
+// invisible (tagPolicy() leaves DriftSemantic=None).
+func TestCompare_Curated_AWSCloudwatchLogGroup_Exact(t *testing.T) {
+	t.Parallel()
+	snap := json.RawMessage(`{
+		"arn": "arn:aws:logs:us-east-1:111:log-group:/aws/lambda/fn:*",
+		"name": "/aws/lambda/fn",
+		"kms_key_id": "arn:aws:kms:us-east-1:111:key/abc",
+		"retention_in_days": 14,
+		"log_group_class": "STANDARD",
+		"skip_destroy": false,
+		"tags": {"team": "infra"}
+	}`)
+	live := json.RawMessage(`{
+		"arn": "arn:aws:logs:us-east-1:111:log-group:/aws/lambda/fn:*",
+		"name": "/aws/lambda/fn",
+		"kms_key_id": "arn:aws:kms:us-east-1:111:key/abc",
+		"retention_in_days": 90,
+		"log_group_class": "STANDARD",
+		"skip_destroy": false,
+		"tags": {"team": "platform"}
+	}`)
+	got := Compare("aws_cloudwatch_log_group", snap, live)
+	idx := fieldsByPath(t, got)
+
+	require.Contains(t, idx, "retention_in_days",
+		"expected retention_in_days mismatch; got fields: %v", keysOf(idx))
+	assert.Equal(t, float64(14), idx["retention_in_days"].Snapshot)
+	assert.Equal(t, float64(90), idx["retention_in_days"].Cloud)
+
+	// kms_key_id is identical → no mismatch.
+	assert.NotContains(t, idx, "kms_key_id")
+	// tags use tagPolicy() (DriftSemantic=None) → never emitted.
+	assert.NotContains(t, idx, "tags")
+}
+
+// TestCompare_Curated_AWSSecretsmanagerSecret_Exact exercises an Exact
+// drift on the rotation-window knob and confirms the resource policy
+// JSON document diff also surfaces. The secret payload lives on a
+// separate resource (aws_secretsmanager_secret_version) and is not
+// curated on this map, so no Sensitive-leak path applies here.
+func TestCompare_Curated_AWSSecretsmanagerSecret_Exact(t *testing.T) {
+	t.Parallel()
+	snap := json.RawMessage(`{
+		"arn": "arn:aws:secretsmanager:us-east-1:111:secret:db-creds-AbCdEf",
+		"name": "db-creds",
+		"kms_key_id": "arn:aws:kms:us-east-1:111:key/abc",
+		"description": "primary db credentials",
+		"recovery_window_in_days": 30,
+		"policy": "{\"Version\":\"2012-10-17\",\"Statement\":[]}",
+		"tags": {"team": "infra"}
+	}`)
+	live := json.RawMessage(`{
+		"arn": "arn:aws:secretsmanager:us-east-1:111:secret:db-creds-AbCdEf",
+		"name": "db-creds",
+		"kms_key_id": "arn:aws:kms:us-east-1:111:key/abc",
+		"description": "primary db credentials",
+		"recovery_window_in_days": 7,
+		"policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Deny\",\"Principal\":\"*\",\"Action\":\"*\"}]}",
+		"tags": {"team": "infra"}
+	}`)
+	got := Compare("aws_secretsmanager_secret", snap, live)
+	idx := fieldsByPath(t, got)
+
+	require.Contains(t, idx, "recovery_window_in_days")
+	assert.Equal(t, float64(30), idx["recovery_window_in_days"].Snapshot)
+	assert.Equal(t, float64(7), idx["recovery_window_in_days"].Cloud)
+
+	require.Contains(t, idx, "policy",
+		"expected resource-policy JSON diff to surface as an Exact mismatch")
+
+	// Identity / wiring values are equal → no mismatch.
+	assert.NotContains(t, idx, "kms_key_id")
+	assert.NotContains(t, idx, "arn")
+}
+
+// TestCompare_Curated_AWSSQSQueue_Exact exercises an Exact drift on a
+// flat scalar (visibility_timeout_seconds) and confirms the equal
+// kms_master_key_id wiring leaf does not surface. The redrive_policy.*
+// JSON-projection paths intentionally do not produce a signal through
+// the current comparator (see policy file comment) — this test pins
+// that observable behavior so a future projection-aware comparator
+// refactor surfaces here as an intentional diff.
+func TestCompare_Curated_AWSSQSQueue_Exact(t *testing.T) {
+	t.Parallel()
+	snap := json.RawMessage(`{
+		"arn": "arn:aws:sqs:us-east-1:111:work-queue",
+		"name": "work-queue",
+		"kms_master_key_id": "alias/aws/sqs",
+		"visibility_timeout_seconds": 30,
+		"delay_seconds": 0,
+		"message_retention_seconds": 345600,
+		"max_message_size": 262144,
+		"fifo_queue": false,
+		"content_based_deduplication": false,
+		"redrive_policy": "{\"deadLetterTargetArn\":\"arn:aws:sqs:us-east-1:111:dlq\",\"maxReceiveCount\":5}",
+		"tags": {"team": "infra"}
+	}`)
+	live := json.RawMessage(`{
+		"arn": "arn:aws:sqs:us-east-1:111:work-queue",
+		"name": "work-queue",
+		"kms_master_key_id": "alias/aws/sqs",
+		"visibility_timeout_seconds": 120,
+		"delay_seconds": 0,
+		"message_retention_seconds": 345600,
+		"max_message_size": 262144,
+		"fifo_queue": false,
+		"content_based_deduplication": false,
+		"redrive_policy": "{\"deadLetterTargetArn\":\"arn:aws:sqs:us-east-1:111:dlq\",\"maxReceiveCount\":5}",
+		"tags": {"team": "infra"}
+	}`)
+	got := Compare("aws_sqs_queue", snap, live)
+	idx := fieldsByPath(t, got)
+
+	require.Contains(t, idx, "visibility_timeout_seconds")
+	assert.Equal(t, float64(30), idx["visibility_timeout_seconds"].Snapshot)
+	assert.Equal(t, float64(120), idx["visibility_timeout_seconds"].Cloud)
+
+	// Wiring / identity equal → no mismatch.
+	assert.NotContains(t, idx, "kms_master_key_id")
+	assert.NotContains(t, idx, "arn")
+
+	// JSON-projection paths: the parent is a JSON-encoded string, not a
+	// nested map. Pin current behavior — these do not surface today.
+	assert.NotContains(t, idx, "redrive_policy.deadLetterTargetArn",
+		"redrive_policy JSON projection should not surface through the "+
+			"current comparator; if this fails, projection-aware traversal "+
+			"has landed and the policy file comment needs updating")
+	assert.NotContains(t, idx, "redrive_policy.maxReceiveCount")
+}
+
+// TestCompare_Curated_GoogleSecretManagerSecret_Exact exercises an
+// Exact drift on the rotation-period knob and confirms that label
+// drift stays invisible (tagPolicy() leaves DriftSemantic=None). As
+// with the AWS counterpart, the secret payload lives on a separate
+// resource (google_secret_manager_secret_version) — no
+// Sensitive-leak path applies here.
+func TestCompare_Curated_GoogleSecretManagerSecret_Exact(t *testing.T) {
+	t.Parallel()
+	snap := json.RawMessage(`{
+		"name": "projects/p/secrets/api-key",
+		"secret_id": "api-key",
+		"project": "p",
+		"rotation": {
+			"rotation_period": "2592000s",
+			"next_rotation_time": "2026-06-01T00:00:00Z"
+		},
+		"ttl": "7776000s",
+		"labels": {"env": "prod", "goog-managed-by": "tf"}
+	}`)
+	live := json.RawMessage(`{
+		"name": "projects/p/secrets/api-key",
+		"secret_id": "api-key",
+		"project": "p",
+		"rotation": {
+			"rotation_period": "604800s",
+			"next_rotation_time": "2026-06-01T00:00:00Z"
+		},
+		"ttl": "7776000s",
+		"labels": {"env": "staging", "goog-managed-by": "tf"}
+	}`)
+	got := Compare("google_secret_manager_secret", snap, live)
+	idx := fieldsByPath(t, got)
+
+	require.Contains(t, idx, "rotation.rotation_period")
+	assert.Equal(t, "2592000s", idx["rotation.rotation_period"].Snapshot)
+	assert.Equal(t, "604800s", idx["rotation.rotation_period"].Cloud)
+
+	// Identity / TTL identical → no mismatch.
+	assert.NotContains(t, idx, "project")
+	assert.NotContains(t, idx, "ttl")
+	// Labels use tagPolicy() → DriftSemantic=None → never emitted.
+	assert.NotContains(t, idx, "labels")
+}
+
+// TestCompare_Curated_GoogleComputeNetwork_Exact exercises an Exact
+// drift on routing_mode and confirms identical identity fields don't
+// surface. google_compute_network has no labels and no list-valued
+// curated fields, so neither LabelFilter nor WholeList comes into play.
+func TestCompare_Curated_GoogleComputeNetwork_Exact(t *testing.T) {
+	t.Parallel()
+	snap := json.RawMessage(`{
+		"name": "vpc-prod",
+		"self_link": "https://www.googleapis.com/compute/v1/projects/p/global/networks/vpc-prod",
+		"project": "p",
+		"auto_create_subnetworks": false,
+		"routing_mode": "REGIONAL",
+		"mtu": 1460,
+		"description": "production VPC"
+	}`)
+	live := json.RawMessage(`{
+		"name": "vpc-prod",
+		"self_link": "https://www.googleapis.com/compute/v1/projects/p/global/networks/vpc-prod",
+		"project": "p",
+		"auto_create_subnetworks": false,
+		"routing_mode": "GLOBAL",
+		"mtu": 1460,
+		"description": "production VPC"
+	}`)
+	got := Compare("google_compute_network", snap, live)
+	idx := fieldsByPath(t, got)
+
+	require.Contains(t, idx, "routing_mode")
+	assert.Equal(t, "REGIONAL", idx["routing_mode"].Snapshot)
+	assert.Equal(t, "GLOBAL", idx["routing_mode"].Cloud)
+
+	// Identity / unchanged knobs → no mismatch.
+	assert.NotContains(t, idx, "project")
+	assert.NotContains(t, idx, "mtu")
+	assert.NotContains(t, idx, "description")
 }
 
 // keysOf returns the sorted key set of m for diagnostic logging.

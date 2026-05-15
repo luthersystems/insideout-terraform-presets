@@ -1,4 +1,30 @@
 {
+  "aws_cloudwatch_log_group": [
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "kms_key_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "log_group_class",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "retention_in_days",
+      "semantic": "Exact"
+    },
+    {
+      "path": "skip_destroy",
+      "semantic": "Exact"
+    }
+  ],
   "aws_dynamodb_table": [
     {
       "path": "arn",
@@ -429,6 +455,148 @@
       "semantic": "Exact"
     }
   ],
+  "aws_secretsmanager_secret": [
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "description",
+      "semantic": "Exact"
+    },
+    {
+      "path": "kms_key_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "policy",
+      "semantic": "Exact"
+    },
+    {
+      "path": "recovery_window_in_days",
+      "semantic": "Exact"
+    },
+    {
+      "path": "replica.kms_key_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "replica.region",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_sqs_queue": [
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "content_based_deduplication",
+      "semantic": "Exact"
+    },
+    {
+      "path": "delay_seconds",
+      "semantic": "Exact"
+    },
+    {
+      "path": "fifo_queue",
+      "semantic": "Exact"
+    },
+    {
+      "path": "kms_master_key_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "max_message_size",
+      "semantic": "Exact"
+    },
+    {
+      "path": "message_retention_seconds",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "receive_wait_time_seconds",
+      "semantic": "Exact"
+    },
+    {
+      "path": "redrive_policy.deadLetterTargetArn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "redrive_policy.maxReceiveCount",
+      "semantic": "Exact"
+    },
+    {
+      "path": "sqs_managed_sse_enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "visibility_timeout_seconds",
+      "semantic": "Exact"
+    }
+  ],
+  "google_compute_network": [
+    {
+      "path": "auto_create_subnetworks",
+      "semantic": "Exact"
+    },
+    {
+      "path": "delete_default_routes_on_create",
+      "semantic": "Exact"
+    },
+    {
+      "path": "description",
+      "semantic": "Exact"
+    },
+    {
+      "path": "enable_ula_internal_ipv6",
+      "semantic": "Exact"
+    },
+    {
+      "path": "gateway_ipv4",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "mtu",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "network_firewall_policy_enforcement_order",
+      "semantic": "Exact"
+    },
+    {
+      "path": "numeric_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "routing_mode",
+      "semantic": "Exact"
+    },
+    {
+      "path": "self_link",
+      "semantic": "Exact"
+    }
+  ],
   "google_pubsub_topic": [
     {
       "path": "id",
@@ -496,6 +664,60 @@
     },
     {
       "path": "schema_settings.schema",
+      "semantic": "Exact"
+    }
+  ],
+  "google_secret_manager_secret": [
+    {
+      "path": "expire_time",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "replication.auto.customer_managed_encryption.kms_key_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "replication.user_managed.replicas.customer_managed_encryption.kms_key_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "replication.user_managed.replicas.location",
+      "semantic": "Exact"
+    },
+    {
+      "path": "rotation.next_rotation_time",
+      "semantic": "Exact"
+    },
+    {
+      "path": "rotation.rotation_period",
+      "semantic": "Exact"
+    },
+    {
+      "path": "secret_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "topics.name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ttl",
+      "semantic": "Exact"
+    },
+    {
+      "path": "version_destroy_ttl",
       "semantic": "Exact"
     }
   ],
