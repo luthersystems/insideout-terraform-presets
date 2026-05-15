@@ -28,15 +28,14 @@ func (fakeByIDEnricher) EnrichByID(ctx context.Context, identity *imported.Resou
 // observe beyond the compile.
 var _ ByIDEnricher = (*fakeByIDEnricher)(nil)
 
-// TestExistingEnrichersDoNotImplementByID confirms the additive
-// nature of ByIDEnricher: the 1 existing enricher (aws_dynamodb_table)
-// implements only AttributeEnricher today. The test pins against the
-// REAL production registration in NewAWSDiscoverer — not a hand-rolled
-// map — so when Phase 2 PRs add real EnrichByID impls, the allowlist
-// must shrink in lockstep with the production registration. A
-// production-only change (add a ByIDEnricher impl, forget to update
-// allowlist) fails the test loud. A regression that drops the
-// registration entirely is caught by the size sanity check below.
+// TestExistingEnrichersDoNotImplementByID pins the per-type
+// ByIDEnricher implementation status against the REAL production
+// registration in NewAWSDiscoverer. As Phase 2 PRs add real
+// EnrichByID impls, the allowlist must shrink in lockstep with the
+// production registration. A production-only change (add a
+// ByIDEnricher impl, forget to update allowlist; or vice versa) fails
+// the test loud. A regression that drops the registration entirely is
+// caught by the explicit wantTotal size check below.
 func TestExistingEnrichersDoNotImplementByID(t *testing.T) {
 	// Empty aws.Config is safe — the constructor only stores closures
 	// and per-type discoverer/enricher structs; no SDK calls fire.
@@ -48,13 +47,15 @@ func TestExistingEnrichersDoNotImplementByID(t *testing.T) {
 		"aws_dynamodb_table": true,
 	}
 
-	// Fail-fast: if the constructor silently dropped the registration,
-	// the for-range below iterates zero times and reports a green
-	// non-test. Pin the expected size to the allowlist length so a
-	// "silent drop in production, allowlist untouched" regression
-	// fails loud.
-	if got, want := len(d.byTypeEnricher), len(notImplemented); got != want {
-		t.Errorf("byTypeEnricher size = %d, want %d (production registration and notImplemented allowlist drifted)", got, want)
+	// Fail-fast: pin the expected total byTypeEnricher size so a
+	// silent drop (or duplicate-key squashing) in production fails the
+	// test. The expected total = allowlist size + types that DO
+	// implement ByIDEnricher. When adding a new enricher: bump
+	// wantTotal and either add to allowlist (no ByIDEnricher) or leave
+	// it off (implements ByIDEnricher).
+	const wantTotal = 3 // dynamodb_table + cloudwatch_log_group + secretsmanager_secret
+	if got := len(d.byTypeEnricher); got != wantTotal {
+		t.Errorf("byTypeEnricher size = %d, want %d (production registration drifted from test)", got, wantTotal)
 	}
 
 	for tfType, enr := range d.byTypeEnricher {

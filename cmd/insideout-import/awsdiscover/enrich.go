@@ -22,8 +22,10 @@ import (
 	"sort"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
 
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/progress"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
@@ -131,9 +133,11 @@ type ByIDEnricher interface {
 // Empty is tolerated when no enricher uses it (today: DynamoDB doesn't
 // need it because TableArn comes back in DescribeTable directly).
 type EnrichClients struct {
-	S3        *s3.Client
-	DynamoDB  *dynamodb.Client
-	AccountID string
+	S3             *s3.Client
+	DynamoDB       *dynamodb.Client
+	CloudWatchLogs *cloudwatchlogs.Client
+	SecretsManager *secretsmanager.Client
+	AccountID      string
 }
 
 // ErrEnrichClientUnavailable signals that the SDK client an enricher

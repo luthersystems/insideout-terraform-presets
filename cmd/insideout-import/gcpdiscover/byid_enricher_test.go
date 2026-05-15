@@ -26,15 +26,14 @@ func (fakeByIDEnricher) EnrichByID(ctx context.Context, identity *imported.Resou
 // observe beyond the compile.
 var _ ByIDEnricher = (*fakeByIDEnricher)(nil)
 
-// TestExistingEnrichersDoNotImplementByID confirms the additive
-// nature of ByIDEnricher: the 5 existing enrichers today implement
-// only AttributeEnricher. The test pins against the REAL production
-// registration in NewGCPDiscoverer — not a hand-rolled map — so when
-// Phase 2 PRs add real EnrichByID impls, the allowlist must shrink
-// in lockstep with the production registration. A production-only
-// change (add a ByIDEnricher impl, forget to update allowlist) fails
-// the test loud. A regression that drops the registration entirely
-// is caught by the size sanity check below.
+// TestExistingEnrichersDoNotImplementByID pins the per-type
+// ByIDEnricher implementation status against the REAL production
+// registration in NewGCPDiscoverer. As Phase 2 PRs add real
+// EnrichByID impls, the allowlist must shrink in lockstep with the
+// production registration. A production-only change (add a
+// ByIDEnricher impl, forget to update allowlist; or vice versa) fails
+// the test loud. A regression that drops the registration entirely is
+// caught by the explicit wantTotal size check below.
 func TestExistingEnrichersDoNotImplementByID(t *testing.T) {
 	// Nil searcher is safe — the constructor only stores it; no
 	// SearchAll call fires here.
@@ -50,13 +49,15 @@ func TestExistingEnrichersDoNotImplementByID(t *testing.T) {
 		"google_compute_network":       true,
 	}
 
-	// Fail-fast: if the constructor silently dropped the registration,
-	// the for-range below iterates zero times and reports a green
-	// non-test. Pin the expected size to the allowlist length so a
-	// "silent drop in production, allowlist untouched" regression
-	// fails loud.
-	if got, want := len(d.byTypeEnricher), len(notImplemented); got != want {
-		t.Errorf("byTypeEnricher size = %d, want %d (production registration and notImplemented allowlist drifted)", got, want)
+	// Fail-fast: pin the expected total byTypeEnricher size so a
+	// silent drop (or duplicate-key squashing) in production fails the
+	// test. The expected total = allowlist size + types that DO
+	// implement ByIDEnricher. When adding a new enricher: bump
+	// wantTotal and either add to allowlist (no ByIDEnricher) or leave
+	// it off (implements ByIDEnricher).
+	const wantTotal = 7 // 5 pre-Phase-2 + compute_address + compute_firewall
+	if got := len(d.byTypeEnricher); got != wantTotal {
+		t.Errorf("byTypeEnricher size = %d, want %d (production registration drifted from test)", got, wantTotal)
 	}
 
 	for tfType, enr := range d.byTypeEnricher {
