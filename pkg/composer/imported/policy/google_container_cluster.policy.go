@@ -1,27 +1,50 @@
 package policy
 
+// googleContainerClusterPolicy curates Layer 2 for
+// `google_container_cluster`. Identity scalars and the VPC wiring
+// leaves are tagged DriftSemanticExact so drift detection surfaces
+// cluster relocation / re-parenting / VPC re-pointing. The list-valued
+// `node_config.oauth_scopes` uses DriftSemanticWholeList — the
+// authored set of scopes is the meaningful drift signal regardless
+// of element order. Other curated fields stay DriftSemanticNone until
+// per-leaf comparators land.
 var googleContainerClusterPolicy = Map{
 	// Identity
-	"name":      {Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever},
-	"id":        {Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever},
-	"self_link": {Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever},
+	"name": {
+		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"id": {
+		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"self_link": {
+		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		DriftSemantic: DriftSemanticExact,
+	},
 	"project": {
 		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
-		ChangeRisk: ChangeAlwaysReplace,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"location": {
 		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
-		ChangeRisk: ChangeAlwaysReplace,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
 	},
 
 	// Wiring — VPC.
 	"network": {
 		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityUIVisible,
-		Edit: EditRelationshipOnly, ChangeRisk: ChangeAlwaysReplace,
+		Edit:          EditRelationshipOnly,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"subnetwork": {
 		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityUIVisible,
-		Edit: EditRelationshipOnly, ChangeRisk: ChangeAlwaysReplace,
+		Edit:          EditRelationshipOnly,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
 	},
 
 	// Tuning — top-level cluster knobs.
@@ -96,7 +119,9 @@ var googleContainerClusterPolicy = Map{
 	},
 	"node_config.oauth_scopes": {
 		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
-		Edit: EditNever, ChangeRisk: ChangeAlwaysReplace,
+		Edit:          EditNever,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticWholeList,
 	},
 
 	// IP allocation policy (VPC-native).

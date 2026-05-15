@@ -97,28 +97,6 @@
       "semantic": "Exact"
     }
   ],
-  "aws_autoscaling_group_tag": [
-    {
-      "path": "autoscaling_group_name",
-      "semantic": "Exact"
-    },
-    {
-      "path": "id",
-      "semantic": "Exact"
-    },
-    {
-      "path": "tag.key",
-      "semantic": "Exact"
-    },
-    {
-      "path": "tag.propagate_at_launch",
-      "semantic": "Exact"
-    },
-    {
-      "path": "tag.value",
-      "semantic": "Exact"
-    }
-  ],
   "aws_bedrock_guardrail": [
     {
       "path": "blocked_input_messaging",
@@ -2823,17 +2801,47 @@
       "semantic": "Exact"
     }
   ],
-  "aws_wafv2_web_acl_association": [
+  "google_cloud_run_v2_service": [
+    {
+      "path": "custom_audiences",
+      "semantic": "WholeList"
+    },
     {
       "path": "id",
       "semantic": "Exact"
     },
     {
-      "path": "resource_arn",
+      "path": "location",
       "semantic": "Exact"
     },
     {
-      "path": "web_acl_arn",
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    }
+  ],
+  "google_cloudfunctions2_function": [
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "kms_key_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "location",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
       "semantic": "Exact"
     }
   ],
@@ -2892,6 +2900,32 @@
     },
     {
       "path": "subnetwork",
+      "semantic": "Exact"
+    }
+  ],
+  "google_compute_backend_service": [
+    {
+      "path": "generated_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "health_checks",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "self_link",
       "semantic": "Exact"
     }
   ],
@@ -3375,6 +3409,96 @@
       "semantic": "Exact"
     }
   ],
+  "google_compute_url_map": [
+    {
+      "path": "default_service",
+      "semantic": "Exact"
+    },
+    {
+      "path": "host_rule.hosts",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "self_link",
+      "semantic": "Exact"
+    }
+  ],
+  "google_container_cluster": [
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "location",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "network",
+      "semantic": "Exact"
+    },
+    {
+      "path": "node_config.oauth_scopes",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "self_link",
+      "semantic": "Exact"
+    },
+    {
+      "path": "subnetwork",
+      "semantic": "Exact"
+    }
+  ],
+  "google_container_node_pool": [
+    {
+      "path": "cluster",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "location",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name_prefix",
+      "semantic": "Exact"
+    },
+    {
+      "path": "node_locations",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    }
+  ],
   "google_identity_platform_default_supported_idp_config": [
     {
       "path": "enabled",
@@ -3658,6 +3782,28 @@
     },
     {
       "path": "schema_settings.schema",
+      "semantic": "Exact"
+    }
+  ],
+  "google_redis_instance": [
+    {
+      "path": "authorized_network",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "region",
       "semantic": "Exact"
     }
   ],
