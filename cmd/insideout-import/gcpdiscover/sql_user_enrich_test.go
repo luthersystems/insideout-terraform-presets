@@ -38,7 +38,7 @@ func TestSQLUserEnricher_NilClient_ReturnsClientUnavailable(t *testing.T) {
 func TestSQLUserEnricher_ProjectIDRequired(t *testing.T) {
 	t.Parallel()
 	e := &sqlUserEnricher{
-		fetch: func(_ context.Context, _ *sqladminv1.Service, _, _, _ string) (*sqladminv1.User, error) {
+		fetch: func(_ context.Context, _ *sqladminv1.Service, _, _, _, _ string) (*sqladminv1.User, error) {
 			t.Fatal("fetch must not be called")
 			return nil, nil
 		},
@@ -57,7 +57,7 @@ func TestSQLUserEnricher_ProjectIDRequired(t *testing.T) {
 func TestSQLUserEnricher_NotFound_ReturnsErrNotFound(t *testing.T) {
 	t.Parallel()
 	e := &sqlUserEnricher{
-		fetch: func(_ context.Context, _ *sqladminv1.Service, _, _, _ string) (*sqladminv1.User, error) {
+		fetch: func(_ context.Context, _ *sqladminv1.Service, _, _, _, _ string) (*sqladminv1.User, error) {
 			return nil, &googleapi.Error{Code: http.StatusNotFound, Message: "not found"}
 		},
 	}
@@ -80,10 +80,13 @@ func TestSQLUserEnricher_HappyPath(t *testing.T) {
 		Password: "secret",
 	}
 	e := &sqlUserEnricher{
-		fetch: func(_ context.Context, _ *sqladminv1.Service, project, instance, name string) (*sqladminv1.User, error) {
+		fetch: func(_ context.Context, _ *sqladminv1.Service, project, instance, host, name string) (*sqladminv1.User, error) {
 			assert.Equal(t, "my-project", project)
 			assert.Equal(t, "db1", instance)
 			assert.Equal(t, "appuser", name)
+			// No NativeIDs.host or ImportID host segment provided →
+			// fetch host stays empty.
+			assert.Empty(t, host)
 			return user, nil
 		},
 	}
@@ -115,8 +118,8 @@ func TestSQLUserEnricher_HappyPath(t *testing.T) {
 func TestSQLUserEnricher_EnrichByID_MirrorsEnrich(t *testing.T) {
 	t.Parallel()
 	user := &sqladminv1.User{Host: "%", Type: "BUILT_IN"}
-	mkFetch := func() func(context.Context, *sqladminv1.Service, string, string, string) (*sqladminv1.User, error) {
-		return func(_ context.Context, _ *sqladminv1.Service, _, _, _ string) (*sqladminv1.User, error) {
+	mkFetch := func() func(context.Context, *sqladminv1.Service, string, string, string, string) (*sqladminv1.User, error) {
+		return func(_ context.Context, _ *sqladminv1.Service, _, _, _, _ string) (*sqladminv1.User, error) {
 			return user, nil
 		}
 	}
@@ -137,23 +140,26 @@ func TestSQLUserEnricher_EnrichByID_MirrorsEnrich(t *testing.T) {
 
 func TestSQLUserEnricher_DerivesFromImportID(t *testing.T) {
 	t.Parallel()
-	var gotInstance, gotName string
+	var gotInstance, gotHost, gotName string
 	e := &sqlUserEnricher{
-		fetch: func(_ context.Context, _ *sqladminv1.Service, _, instance, name string) (*sqladminv1.User, error) {
-			gotInstance, gotName = instance, name
+		fetch: func(_ context.Context, _ *sqladminv1.Service, _, instance, host, name string) (*sqladminv1.User, error) {
+			gotInstance, gotHost, gotName = instance, host, name
 			return &sqladminv1.User{}, nil
 		},
 	}
 	for _, tc := range []struct {
-		name        string
-		importID    string
-		wantInst    string
-		wantUser    string
+		name     string
+		importID string
+		wantInst string
+		wantHost string
+		wantUser string
 	}{
-		{"instance/host/name", "db1/%/appuser", "db1", "appuser"},
-		{"instance/name", "db1/appuser", "db1", "appuser"},
+		{"instance/host/name", "db1/%/appuser", "db1", "%", "appuser"},
+		{"instance/name", "db1/appuser", "db1", "", "appuser"},
+		{"instance/specifichost/name", "db1/10.0.0.1/appuser", "db1", "10.0.0.1", "appuser"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			gotInstance, gotHost, gotName = "", "", ""
 			id := &imported.ResourceIdentity{
 				Type:     sqlUserTFType,
 				ImportID: tc.importID,
@@ -161,7 +167,34 @@ func TestSQLUserEnricher_DerivesFromImportID(t *testing.T) {
 			_, err := e.EnrichByID(context.Background(), id, EnrichClients{SQLAdmin: &sqladminv1.Service{}, ProjectID: "p"})
 			require.NoError(t, err)
 			assert.Equal(t, tc.wantInst, gotInstance)
+			assert.Equal(t, tc.wantHost, gotHost, "host must be preserved across the SDK call so users on different hosts don't collide")
 			assert.Equal(t, tc.wantUser, gotName)
+		})
+	}
+}
+
+func TestParseSQLUserImportID(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name                            string
+		in                              string
+		wantInst, wantHost, wantName    string
+	}{
+		{"empty", "", "", "", ""},
+		{"single segment treated as bare name", "appuser", "", "", "appuser"},
+		{"two segments", "db1/appuser", "db1", "", "appuser"},
+		{"three segments preserve host", "db1/%/appuser", "db1", "%", "appuser"},
+		{"three segments specific host", "db1/10.0.0.1/appuser", "db1", "10.0.0.1", "appuser"},
+		{"leading slash yields empty instance", "/appuser", "", "", "appuser"},
+		{"trailing slash yields empty name", "db1/appuser/", "db1", "appuser", ""},
+		{"three segments preserve embedded slashes via SplitN", "db1/host/name/with/extra", "db1", "host", "name/with/extra"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			instance, host, name := parseSQLUserImportID(tc.in)
+			assert.Equal(t, tc.wantInst, instance)
+			assert.Equal(t, tc.wantHost, host)
+			assert.Equal(t, tc.wantName, name)
 		})
 	}
 }
@@ -179,7 +212,7 @@ func TestSQLUserEnricher_NonNotFoundErrorPassesThrough(t *testing.T) {
 	t.Parallel()
 	upstream := &googleapi.Error{Code: http.StatusForbidden, Message: "denied"}
 	e := &sqlUserEnricher{
-		fetch: func(_ context.Context, _ *sqladminv1.Service, _, _, _ string) (*sqladminv1.User, error) {
+		fetch: func(_ context.Context, _ *sqladminv1.Service, _, _, _, _ string) (*sqladminv1.User, error) {
 			return nil, upstream
 		},
 	}
@@ -210,7 +243,7 @@ func TestMapSQLUser_SqlServerDetails(t *testing.T) {
 func TestSQLUserEnricher_CannotDeriveInstanceOrName(t *testing.T) {
 	t.Parallel()
 	e := &sqlUserEnricher{
-		fetch: func(_ context.Context, _ *sqladminv1.Service, _, _, _ string) (*sqladminv1.User, error) {
+		fetch: func(_ context.Context, _ *sqladminv1.Service, _, _, _, _ string) (*sqladminv1.User, error) {
 			t.Fatal("fetch must not be called")
 			return nil, nil
 		},

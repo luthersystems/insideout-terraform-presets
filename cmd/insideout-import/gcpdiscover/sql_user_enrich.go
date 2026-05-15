@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"google.golang.org/api/googleapi"
 	sqladminv1 "google.golang.org/api/sqladmin/v1"
@@ -18,11 +19,16 @@ import (
 // google_sql_user. Pairs with sqlUserDiscoverer.
 //
 // SQL Admin API quirk: Users.Get takes (project, instance, name) as
-// three positional parameters. The discoverer puts the instance ID into
+// three positional parameters AND a separate optional host query param
+// — the Cloud SQL API distinguishes users by the (name, host) tuple, so
+// two `appuser` rows with different hosts (e.g. `%` vs `10.0.0.1`) are
+// distinct entities. The discoverer puts the instance ID into
 // Identity.NativeIDs["instance"] and the user's short name into
-// Identity.NameHint, so the enricher pulls (project, instance, name)
-// from those slots (or falls back to parsing the ImportID, which
-// follows the <instance>/<host>/<name> or <instance>/<name> shape).
+// Identity.NameHint; host is parsed from the ImportID (provider import
+// shape: <instance>/<host>/<name> or <instance>/<name>). The enricher
+// pulls (project, instance, host, name) from those slots and threads
+// host through to the SDK call via .Host(host) so the Get hits the
+// correct row.
 //
 // Mapping rationale matches the compute_address pattern: computed-only
 // TF attributes (id) are NOT populated per the decision-#5 composer
@@ -33,8 +39,9 @@ import (
 // SqlserverUserDetails only for that flavor).
 type sqlUserEnricher struct {
 	// fetch is overridable for tests. Defaults to a real Users.Get
-	// call against the sqladminv1.Service in EnrichClients.
-	fetch func(ctx context.Context, svc *sqladminv1.Service, project, instance, name string) (*sqladminv1.User, error)
+	// call against the sqladminv1.Service in EnrichClients. host may
+	// be empty (no .Host(...) filter applied).
+	fetch func(ctx context.Context, svc *sqladminv1.Service, project, instance, host, name string) (*sqladminv1.User, error)
 }
 
 func newSQLUserEnricher() AttributeEnricher {
@@ -76,12 +83,12 @@ func (e sqlUserEnricher) fetchTyped(ctx context.Context, id *imported.ResourceId
 	if c.ProjectID == "" {
 		return nil, fmt.Errorf("sql_user: EnrichClients.ProjectID required (sqladmin Users.Get uses project+instance+name positional args)")
 	}
-	instance, name := sqlUserInstanceAndNameForEnrich(id)
+	instance, host, name := sqlUserInstanceHostNameForEnrich(id)
 	if instance == "" || name == "" {
 		return nil, fmt.Errorf("sql_user: cannot derive instance/name from Identity (Address=%q ImportID=%q NameHint=%q NativeIDs.instance=%q)",
 			id.Address, id.ImportID, id.NameHint, id.NativeIDs["instance"])
 	}
-	u, err := e.fetch(ctx, c.SQLAdmin, c.ProjectID, instance, name)
+	u, err := e.fetch(ctx, c.SQLAdmin, c.ProjectID, instance, host, name)
 	if err != nil {
 		if isSQLAdminNotFound(err) {
 			return nil, fmt.Errorf("sql_user: %s/%s/%s: %w", c.ProjectID, instance, name, ErrNotFound)
@@ -96,65 +103,70 @@ func (e sqlUserEnricher) fetchTyped(ctx context.Context, id *imported.ResourceId
 	return raw, nil
 }
 
-// sqlUserInstanceAndNameForEnrich pulls (instance, name) from the
-// Identity. Precedence: NameHint + NativeIDs["instance"], then the
-// ImportID parsed via the <instance>/<host>/<name> or <instance>/<name>
-// provider shape.
-func sqlUserInstanceAndNameForEnrich(id *imported.ResourceIdentity) (string, string) {
-	name := id.NameHint
-	instance := id.NativeIDs["instance"]
-	if name != "" && instance != "" {
-		return instance, name
-	}
+// sqlUserInstanceHostNameForEnrich pulls (instance, host, name) from
+// the Identity. Precedence: NameHint + NativeIDs["instance"] for
+// instance and name; host is parsed from the ImportID when present
+// (the discoverer does not currently populate a NativeIDs["host"]
+// slot, but if it ever does it will take precedence here). The
+// ImportID is also consulted to backfill instance/name when the slots
+// are empty (provider shape: <instance>/<host>/<name> or
+// <instance>/<name>).
+func sqlUserInstanceHostNameForEnrich(id *imported.ResourceIdentity) (instance, host, name string) {
+	name = id.NameHint
+	instance = id.NativeIDs["instance"]
+	host = id.NativeIDs["host"]
 	if id.ImportID != "" {
-		i, n := parseSQLUserImportID(id.ImportID)
+		i, h, n := parseSQLUserImportID(id.ImportID)
 		if instance == "" {
 			instance = i
+		}
+		if host == "" {
+			host = h
 		}
 		if name == "" {
 			name = n
 		}
 	}
-	return instance, name
+	return instance, host, name
 }
 
 // parseSQLUserImportID parses the provider's <instance>/<host>/<name>
-// or <instance>/<name> import shape. Returns ("", "") if the shape
-// doesn't match.
-func parseSQLUserImportID(id string) (instance, name string) {
-	// Strategy: split by "/". 2 segments → instance/name. 3 segments →
-	// instance/host/name.
-	first := 0
-	for i := 0; i < len(id); i++ {
-		if id[i] == '/' {
-			first = i
-			break
-		}
+// or <instance>/<name> import shape. Returns:
+//   - 1 segment  → ("", "", segment)         — treat as bare name with
+//     no instance/host (caller surfaces a "cannot derive instance"
+//     error via the empty-instance guard).
+//   - 2 segments → (instance, "", name)
+//   - 3 segments → (instance, host, name)    — host preserved so the
+//     SDK call can disambiguate same-named users across hosts.
+//
+// Empty strings round-trip — leading/trailing slashes yield empty
+// segments, which the caller's empty-name / empty-instance guard
+// surfaces as a "cannot derive" error.
+func parseSQLUserImportID(id string) (instance, host, name string) {
+	if id == "" {
+		return "", "", ""
 	}
-	if first == 0 {
-		return "", ""
+	parts := strings.SplitN(id, "/", 3)
+	switch len(parts) {
+	case 1:
+		return "", "", parts[0]
+	case 2:
+		return parts[0], "", parts[1]
+	default: // 3
+		return parts[0], parts[1], parts[2]
 	}
-	instance = id[:first]
-	rest := id[first+1:]
-	// Find the LAST slash in rest — name is everything after it; if
-	// no slash, rest is the name directly.
-	last := -1
-	for i := 0; i < len(rest); i++ {
-		if rest[i] == '/' {
-			last = i
-		}
-	}
-	if last < 0 {
-		name = rest
-	} else {
-		name = rest[last+1:]
-	}
-	return instance, name
 }
 
-// defaultSQLUserFetch is the production fetch path.
-func defaultSQLUserFetch(ctx context.Context, svc *sqladminv1.Service, project, instance, name string) (*sqladminv1.User, error) {
-	return svc.Users.Get(project, instance, name).Context(ctx).Do()
+// defaultSQLUserFetch is the production fetch path. host may be empty;
+// when set it is threaded through Users.Get via the Host() option to
+// disambiguate same-named users across hosts (Cloud SQL distinguishes
+// users by (name, host)).
+func defaultSQLUserFetch(ctx context.Context, svc *sqladminv1.Service, project, instance, host, name string) (*sqladminv1.User, error) {
+	call := svc.Users.Get(project, instance, name)
+	if host != "" {
+		call = call.Host(host)
+	}
+	return call.Context(ctx).Do()
 }
 
 // isSQLAdminNotFound reports whether err is a googleapi.Error with
