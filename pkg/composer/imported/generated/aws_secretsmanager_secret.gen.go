@@ -7,27 +7,27 @@ import "reflect"
 // AWSSecretsmanagerSecret is the generated Layer 1 typed model for the
 // `aws_secretsmanager_secret` Terraform resource.
 type AWSSecretsmanagerSecret struct {
-	ARN                         *Value[string]                   `tf:"arn"`
-	Description                 *Value[string]                   `tf:"description"`
-	ForceOverwriteReplicaSecret *Value[bool]                     `tf:"force_overwrite_replica_secret"`
-	ID                          *Value[string]                   `tf:"id"`
-	KMSKeyID                    *Value[string]                   `tf:"kms_key_id"`
-	Name                        *Value[string]                   `tf:"name"`
-	NamePrefix                  *Value[string]                   `tf:"name_prefix"`
-	Policy                      *Value[string]                   `tf:"policy"`
-	RecoveryWindowInDays        *Value[float64]                  `tf:"recovery_window_in_days"`
-	Tags                        map[string]*Value[string]        `tf:"tags"`
-	TagsAll                     map[string]*Value[string]        `tf:"tags_all"`
-	Replica                     []AWSSecretsmanagerSecretReplica `tf:"replica,blocks"`
+	ARN                         *Value[string]                   `tf:"arn" json:"arn,omitempty"`
+	Description                 *Value[string]                   `tf:"description" json:"description,omitempty"`
+	ForceOverwriteReplicaSecret *Value[bool]                     `tf:"force_overwrite_replica_secret" json:"force_overwrite_replica_secret,omitempty"`
+	ID                          *Value[string]                   `tf:"id" json:"id,omitempty"`
+	KMSKeyID                    *Value[string]                   `tf:"kms_key_id" json:"kms_key_id,omitempty"`
+	Name                        *Value[string]                   `tf:"name" json:"name,omitempty"`
+	NamePrefix                  *Value[string]                   `tf:"name_prefix" json:"name_prefix,omitempty"`
+	Policy                      *Value[string]                   `tf:"policy" json:"policy,omitempty"`
+	RecoveryWindowInDays        *Value[float64]                  `tf:"recovery_window_in_days" json:"recovery_window_in_days,omitempty"`
+	Tags                        map[string]*Value[string]        `tf:"tags" json:"tags,omitempty"`
+	TagsAll                     map[string]*Value[string]        `tf:"tags_all" json:"tags_all,omitempty"`
+	Replica                     []AWSSecretsmanagerSecretReplica `tf:"replica,blocks" json:"replica,omitempty"`
 }
 
 // AWSSecretsmanagerSecretReplica is a nested-block type used by the parent resource.
 type AWSSecretsmanagerSecretReplica struct {
-	KMSKeyID         *Value[string] `tf:"kms_key_id"`
-	LastAccessedDate *Value[string] `tf:"last_accessed_date"`
-	Region           *Value[string] `tf:"region"`
-	Status           *Value[string] `tf:"status"`
-	StatusMessage    *Value[string] `tf:"status_message"`
+	KMSKeyID         *Value[string] `tf:"kms_key_id" json:"kms_key_id,omitempty"`
+	LastAccessedDate *Value[string] `tf:"last_accessed_date" json:"last_accessed_date,omitempty"`
+	Region           *Value[string] `tf:"region" json:"region,omitempty"`
+	Status           *Value[string] `tf:"status" json:"status,omitempty"`
+	StatusMessage    *Value[string] `tf:"status_message" json:"status_message,omitempty"`
 }
 
 // AWSSecretsmanagerSecretSchema describes provider metadata for each attribute / nested

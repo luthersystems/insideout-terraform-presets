@@ -22,6 +22,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/service/cloudcontrol"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -137,7 +138,15 @@ type EnrichClients struct {
 	DynamoDB       *dynamodb.Client
 	CloudWatchLogs *cloudwatchlogs.Client
 	SecretsManager *secretsmanager.Client
-	AccountID      string
+	// CloudControl is the shared client for the generic Cloud Control
+	// enricher (#490 HYBRID). One client is reused across every
+	// cloudControlEnricher registered in NewAWSDiscoverer.byTypeEnricher
+	// — the SDK client is stateless over an aws.Config so a single
+	// instance serves every CFN type. Nil is tolerated and surfaces as
+	// ErrEnrichClientUnavailable at Enrich time; EnrichAttributes
+	// downgrades that to a per-resource ServiceWarn.
+	CloudControl *cloudcontrol.Client
+	AccountID    string
 }
 
 // ErrEnrichClientUnavailable signals that the SDK client an enricher

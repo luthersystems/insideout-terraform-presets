@@ -384,7 +384,7 @@ func TestValidateProvenanceConflicts_GCPTagFromTypedAttrs(t *testing.T) {
 		{
 			Identity: imported.ResourceIdentity{Cloud: "gcp", Type: "google_storage_bucket", Address: "google_storage_bucket.b", ImportID: "b"},
 			Tier:     imported.TierImportedFlat,
-			Attrs:    []byte(`{"Name":{"Literal":"b"},"Labels":{"insideout-import-project":{"Literal":"io-other"}}}`),
+			Attrs:    []byte(`{"name":{"literal":"b"},"labels":{"insideout-import-project":{"literal":"io-other"}}}`),
 		},
 	}
 	issues := ValidateProvenanceConflicts("gcp", irs, ProvenanceOpts{ImportProjectID: "io-1"})

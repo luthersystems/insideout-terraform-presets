@@ -7,74 +7,74 @@ import "reflect"
 // GoogleSecretManagerSecret is the generated Layer 1 typed model for the
 // `google_secret_manager_secret` Terraform resource.
 type GoogleSecretManagerSecret struct {
-	Annotations          map[string]*Value[string]              `tf:"annotations"`
-	CreateTime           *Value[string]                         `tf:"create_time"`
-	EffectiveAnnotations map[string]*Value[string]              `tf:"effective_annotations"`
-	EffectiveLabels      map[string]*Value[string]              `tf:"effective_labels"`
-	ExpireTime           *Value[string]                         `tf:"expire_time"`
-	ID                   *Value[string]                         `tf:"id"`
-	Labels               map[string]*Value[string]              `tf:"labels"`
-	Name                 *Value[string]                         `tf:"name"`
-	Project              *Value[string]                         `tf:"project"`
-	SecretID             *Value[string]                         `tf:"secret_id"`
-	TerraformLabels      map[string]*Value[string]              `tf:"terraform_labels"`
-	TTL                  *Value[string]                         `tf:"ttl"`
-	VersionAliases       map[string]*Value[string]              `tf:"version_aliases"`
-	VersionDestroyTTL    *Value[string]                         `tf:"version_destroy_ttl"`
-	Replication          []GoogleSecretManagerSecretReplication `tf:"replication,blocks"`
-	Rotation             []GoogleSecretManagerSecretRotation    `tf:"rotation,blocks"`
-	Timeouts             *GoogleSecretManagerSecretTimeouts     `tf:"timeouts,block"`
-	Topics               []GoogleSecretManagerSecretTopics      `tf:"topics,blocks"`
+	Annotations          map[string]*Value[string]              `tf:"annotations" json:"annotations,omitempty"`
+	CreateTime           *Value[string]                         `tf:"create_time" json:"create_time,omitempty"`
+	EffectiveAnnotations map[string]*Value[string]              `tf:"effective_annotations" json:"effective_annotations,omitempty"`
+	EffectiveLabels      map[string]*Value[string]              `tf:"effective_labels" json:"effective_labels,omitempty"`
+	ExpireTime           *Value[string]                         `tf:"expire_time" json:"expire_time,omitempty"`
+	ID                   *Value[string]                         `tf:"id" json:"id,omitempty"`
+	Labels               map[string]*Value[string]              `tf:"labels" json:"labels,omitempty"`
+	Name                 *Value[string]                         `tf:"name" json:"name,omitempty"`
+	Project              *Value[string]                         `tf:"project" json:"project,omitempty"`
+	SecretID             *Value[string]                         `tf:"secret_id" json:"secret_id,omitempty"`
+	TerraformLabels      map[string]*Value[string]              `tf:"terraform_labels" json:"terraform_labels,omitempty"`
+	TTL                  *Value[string]                         `tf:"ttl" json:"ttl,omitempty"`
+	VersionAliases       map[string]*Value[string]              `tf:"version_aliases" json:"version_aliases,omitempty"`
+	VersionDestroyTTL    *Value[string]                         `tf:"version_destroy_ttl" json:"version_destroy_ttl,omitempty"`
+	Replication          []GoogleSecretManagerSecretReplication `tf:"replication,blocks" json:"replication,omitempty"`
+	Rotation             []GoogleSecretManagerSecretRotation    `tf:"rotation,blocks" json:"rotation,omitempty"`
+	Timeouts             *GoogleSecretManagerSecretTimeouts     `tf:"timeouts,block" json:"timeouts,omitempty"`
+	Topics               []GoogleSecretManagerSecretTopics      `tf:"topics,blocks" json:"topics,omitempty"`
 }
 
 // GoogleSecretManagerSecretReplication is a nested-block type used by the parent resource.
 type GoogleSecretManagerSecretReplication struct {
-	Auto        []GoogleSecretManagerSecretReplicationAuto        `tf:"auto,blocks"`
-	UserManaged []GoogleSecretManagerSecretReplicationUserManaged `tf:"user_managed,blocks"`
+	Auto        []GoogleSecretManagerSecretReplicationAuto        `tf:"auto,blocks" json:"auto,omitempty"`
+	UserManaged []GoogleSecretManagerSecretReplicationUserManaged `tf:"user_managed,blocks" json:"user_managed,omitempty"`
 }
 
 // GoogleSecretManagerSecretReplicationAuto is a nested-block type used by the parent resource.
 type GoogleSecretManagerSecretReplicationAuto struct {
-	CustomerManagedEncryption []GoogleSecretManagerSecretReplicationAutoCustomerManagedEncryption `tf:"customer_managed_encryption,blocks"`
+	CustomerManagedEncryption []GoogleSecretManagerSecretReplicationAutoCustomerManagedEncryption `tf:"customer_managed_encryption,blocks" json:"customer_managed_encryption,omitempty"`
 }
 
 // GoogleSecretManagerSecretReplicationAutoCustomerManagedEncryption is a nested-block type used by the parent resource.
 type GoogleSecretManagerSecretReplicationAutoCustomerManagedEncryption struct {
-	KMSKeyName *Value[string] `tf:"kms_key_name"`
+	KMSKeyName *Value[string] `tf:"kms_key_name" json:"kms_key_name,omitempty"`
 }
 
 // GoogleSecretManagerSecretReplicationUserManaged is a nested-block type used by the parent resource.
 type GoogleSecretManagerSecretReplicationUserManaged struct {
-	Replicas []GoogleSecretManagerSecretReplicationUserManagedReplicas `tf:"replicas,blocks"`
+	Replicas []GoogleSecretManagerSecretReplicationUserManagedReplicas `tf:"replicas,blocks" json:"replicas,omitempty"`
 }
 
 // GoogleSecretManagerSecretReplicationUserManagedReplicas is a nested-block type used by the parent resource.
 type GoogleSecretManagerSecretReplicationUserManagedReplicas struct {
-	Location                  *Value[string]                                                                     `tf:"location"`
-	CustomerManagedEncryption []GoogleSecretManagerSecretReplicationUserManagedReplicasCustomerManagedEncryption `tf:"customer_managed_encryption,blocks"`
+	Location                  *Value[string]                                                                     `tf:"location" json:"location,omitempty"`
+	CustomerManagedEncryption []GoogleSecretManagerSecretReplicationUserManagedReplicasCustomerManagedEncryption `tf:"customer_managed_encryption,blocks" json:"customer_managed_encryption,omitempty"`
 }
 
 // GoogleSecretManagerSecretReplicationUserManagedReplicasCustomerManagedEncryption is a nested-block type used by the parent resource.
 type GoogleSecretManagerSecretReplicationUserManagedReplicasCustomerManagedEncryption struct {
-	KMSKeyName *Value[string] `tf:"kms_key_name"`
+	KMSKeyName *Value[string] `tf:"kms_key_name" json:"kms_key_name,omitempty"`
 }
 
 // GoogleSecretManagerSecretRotation is a nested-block type used by the parent resource.
 type GoogleSecretManagerSecretRotation struct {
-	NextRotationTime *Value[string] `tf:"next_rotation_time"`
-	RotationPeriod   *Value[string] `tf:"rotation_period"`
+	NextRotationTime *Value[string] `tf:"next_rotation_time" json:"next_rotation_time,omitempty"`
+	RotationPeriod   *Value[string] `tf:"rotation_period" json:"rotation_period,omitempty"`
 }
 
 // GoogleSecretManagerSecretTimeouts is a nested-block type used by the parent resource.
 type GoogleSecretManagerSecretTimeouts struct {
-	Create *Value[string] `tf:"create"`
-	Delete *Value[string] `tf:"delete"`
-	Update *Value[string] `tf:"update"`
+	Create *Value[string] `tf:"create" json:"create,omitempty"`
+	Delete *Value[string] `tf:"delete" json:"delete,omitempty"`
+	Update *Value[string] `tf:"update" json:"update,omitempty"`
 }
 
 // GoogleSecretManagerSecretTopics is a nested-block type used by the parent resource.
 type GoogleSecretManagerSecretTopics struct {
-	Name *Value[string] `tf:"name"`
+	Name *Value[string] `tf:"name" json:"name,omitempty"`
 }
 
 // GoogleSecretManagerSecretSchema describes provider metadata for each attribute / nested

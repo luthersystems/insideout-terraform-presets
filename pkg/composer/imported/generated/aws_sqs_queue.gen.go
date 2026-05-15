@@ -7,28 +7,28 @@ import "reflect"
 // AWSSQSQueue is the generated Layer 1 typed model for the
 // `aws_sqs_queue` Terraform resource.
 type AWSSQSQueue struct {
-	ARN                          *Value[string]            `tf:"arn"`
-	ContentBasedDeduplication    *Value[bool]              `tf:"content_based_deduplication"`
-	DeduplicationScope           *Value[string]            `tf:"deduplication_scope"`
-	DelaySeconds                 *Value[int64]             `tf:"delay_seconds"`
-	FIFOQueue                    *Value[bool]              `tf:"fifo_queue"`
-	FIFOThroughputLimit          *Value[string]            `tf:"fifo_throughput_limit"`
-	ID                           *Value[string]            `tf:"id"`
-	KMSDataKeyReusePeriodSeconds *Value[int64]             `tf:"kms_data_key_reuse_period_seconds"`
-	KMSMasterKeyID               *Value[string]            `tf:"kms_master_key_id"`
-	MaxMessageSize               *Value[int64]             `tf:"max_message_size"`
-	MessageRetentionSeconds      *Value[int64]             `tf:"message_retention_seconds"`
-	Name                         *Value[string]            `tf:"name"`
-	NamePrefix                   *Value[string]            `tf:"name_prefix"`
-	Policy                       *Value[string]            `tf:"policy"`
-	ReceiveWaitTimeSeconds       *Value[int64]             `tf:"receive_wait_time_seconds"`
-	RedriveAllowPolicy           *Value[string]            `tf:"redrive_allow_policy"`
-	RedrivePolicy                *Value[string]            `tf:"redrive_policy"`
-	SQSManagedSSEEnabled         *Value[bool]              `tf:"sqs_managed_sse_enabled"`
-	Tags                         map[string]*Value[string] `tf:"tags"`
-	TagsAll                      map[string]*Value[string] `tf:"tags_all"`
-	URL                          *Value[string]            `tf:"url"`
-	VisibilityTimeoutSeconds     *Value[int64]             `tf:"visibility_timeout_seconds"`
+	ARN                          *Value[string]            `tf:"arn" json:"arn,omitempty"`
+	ContentBasedDeduplication    *Value[bool]              `tf:"content_based_deduplication" json:"content_based_deduplication,omitempty"`
+	DeduplicationScope           *Value[string]            `tf:"deduplication_scope" json:"deduplication_scope,omitempty"`
+	DelaySeconds                 *Value[int64]             `tf:"delay_seconds" json:"delay_seconds,omitempty"`
+	FIFOQueue                    *Value[bool]              `tf:"fifo_queue" json:"fifo_queue,omitempty"`
+	FIFOThroughputLimit          *Value[string]            `tf:"fifo_throughput_limit" json:"fifo_throughput_limit,omitempty"`
+	ID                           *Value[string]            `tf:"id" json:"id,omitempty"`
+	KMSDataKeyReusePeriodSeconds *Value[int64]             `tf:"kms_data_key_reuse_period_seconds" json:"kms_data_key_reuse_period_seconds,omitempty"`
+	KMSMasterKeyID               *Value[string]            `tf:"kms_master_key_id" json:"kms_master_key_id,omitempty"`
+	MaxMessageSize               *Value[int64]             `tf:"max_message_size" json:"max_message_size,omitempty"`
+	MessageRetentionSeconds      *Value[int64]             `tf:"message_retention_seconds" json:"message_retention_seconds,omitempty"`
+	Name                         *Value[string]            `tf:"name" json:"name,omitempty"`
+	NamePrefix                   *Value[string]            `tf:"name_prefix" json:"name_prefix,omitempty"`
+	Policy                       *Value[string]            `tf:"policy" json:"policy,omitempty"`
+	ReceiveWaitTimeSeconds       *Value[int64]             `tf:"receive_wait_time_seconds" json:"receive_wait_time_seconds,omitempty"`
+	RedriveAllowPolicy           *Value[string]            `tf:"redrive_allow_policy" json:"redrive_allow_policy,omitempty"`
+	RedrivePolicy                *Value[string]            `tf:"redrive_policy" json:"redrive_policy,omitempty"`
+	SQSManagedSSEEnabled         *Value[bool]              `tf:"sqs_managed_sse_enabled" json:"sqs_managed_sse_enabled,omitempty"`
+	Tags                         map[string]*Value[string] `tf:"tags" json:"tags,omitempty"`
+	TagsAll                      map[string]*Value[string] `tf:"tags_all" json:"tags_all,omitempty"`
+	URL                          *Value[string]            `tf:"url" json:"url,omitempty"`
+	VisibilityTimeoutSeconds     *Value[int64]             `tf:"visibility_timeout_seconds" json:"visibility_timeout_seconds,omitempty"`
 }
 
 // AWSSQSQueueSchema describes provider metadata for each attribute / nested

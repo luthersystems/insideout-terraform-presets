@@ -7,233 +7,233 @@ import "reflect"
 // GoogleComputeInstance is the generated Layer 1 typed model for the
 // `google_compute_instance` Terraform resource.
 type GoogleComputeInstance struct {
-	AllowStoppingForUpdate     *Value[bool]                                      `tf:"allow_stopping_for_update"`
-	CanIpForward               *Value[bool]                                      `tf:"can_ip_forward"`
-	CPUPlatform                *Value[string]                                    `tf:"cpu_platform"`
-	CreationTimestamp          *Value[string]                                    `tf:"creation_timestamp"`
-	CurrentStatus              *Value[string]                                    `tf:"current_status"`
-	DeletionProtection         *Value[bool]                                      `tf:"deletion_protection"`
-	Description                *Value[string]                                    `tf:"description"`
-	DesiredStatus              *Value[string]                                    `tf:"desired_status"`
-	EffectiveLabels            map[string]*Value[string]                         `tf:"effective_labels"`
-	EnableDisplay              *Value[bool]                                      `tf:"enable_display"`
-	Hostname                   *Value[string]                                    `tf:"hostname"`
-	ID                         *Value[string]                                    `tf:"id"`
-	InstanceID                 *Value[string]                                    `tf:"instance_id"`
-	KeyRevocationActionType    *Value[string]                                    `tf:"key_revocation_action_type"`
-	LabelFingerprint           *Value[string]                                    `tf:"label_fingerprint"`
-	Labels                     map[string]*Value[string]                         `tf:"labels"`
-	MachineType                *Value[string]                                    `tf:"machine_type"`
-	Metadata                   map[string]*Value[string]                         `tf:"metadata"`
-	MetadataFingerprint        *Value[string]                                    `tf:"metadata_fingerprint"`
-	MetadataStartupScript      *Value[string]                                    `tf:"metadata_startup_script"`
-	MinCPUPlatform             *Value[string]                                    `tf:"min_cpu_platform"`
-	Name                       *Value[string]                                    `tf:"name"`
-	Project                    *Value[string]                                    `tf:"project"`
-	ResourcePolicies           []*Value[string]                                  `tf:"resource_policies"`
-	SelfLink                   *Value[string]                                    `tf:"self_link"`
-	Tags                       []*Value[string]                                  `tf:"tags"`
-	TagsFingerprint            *Value[string]                                    `tf:"tags_fingerprint"`
-	TerraformLabels            map[string]*Value[string]                         `tf:"terraform_labels"`
-	Zone                       *Value[string]                                    `tf:"zone"`
-	AdvancedMachineFeatures    []GoogleComputeInstanceAdvancedMachineFeatures    `tf:"advanced_machine_features,blocks"`
-	AttachedDisk               []GoogleComputeInstanceAttachedDisk               `tf:"attached_disk,blocks"`
-	BootDisk                   []GoogleComputeInstanceBootDisk                   `tf:"boot_disk,blocks"`
-	ConfidentialInstanceConfig []GoogleComputeInstanceConfidentialInstanceConfig `tf:"confidential_instance_config,blocks"`
-	GuestAccelerator           []GoogleComputeInstanceGuestAccelerator           `tf:"guest_accelerator,blocks"`
-	NetworkInterface           []GoogleComputeInstanceNetworkInterface           `tf:"network_interface,blocks"`
-	NetworkPerformanceConfig   []GoogleComputeInstanceNetworkPerformanceConfig   `tf:"network_performance_config,blocks"`
-	Params                     []GoogleComputeInstanceParams                     `tf:"params,blocks"`
-	ReservationAffinity        []GoogleComputeInstanceReservationAffinity        `tf:"reservation_affinity,blocks"`
-	Scheduling                 []GoogleComputeInstanceScheduling                 `tf:"scheduling,blocks"`
-	ScratchDisk                []GoogleComputeInstanceScratchDisk                `tf:"scratch_disk,blocks"`
-	ServiceAccount             []GoogleComputeInstanceServiceAccount             `tf:"service_account,blocks"`
-	ShieldedInstanceConfig     []GoogleComputeInstanceShieldedInstanceConfig     `tf:"shielded_instance_config,blocks"`
-	Timeouts                   *GoogleComputeInstanceTimeouts                    `tf:"timeouts,block"`
+	AllowStoppingForUpdate     *Value[bool]                                      `tf:"allow_stopping_for_update" json:"allow_stopping_for_update,omitempty"`
+	CanIpForward               *Value[bool]                                      `tf:"can_ip_forward" json:"can_ip_forward,omitempty"`
+	CPUPlatform                *Value[string]                                    `tf:"cpu_platform" json:"cpu_platform,omitempty"`
+	CreationTimestamp          *Value[string]                                    `tf:"creation_timestamp" json:"creation_timestamp,omitempty"`
+	CurrentStatus              *Value[string]                                    `tf:"current_status" json:"current_status,omitempty"`
+	DeletionProtection         *Value[bool]                                      `tf:"deletion_protection" json:"deletion_protection,omitempty"`
+	Description                *Value[string]                                    `tf:"description" json:"description,omitempty"`
+	DesiredStatus              *Value[string]                                    `tf:"desired_status" json:"desired_status,omitempty"`
+	EffectiveLabels            map[string]*Value[string]                         `tf:"effective_labels" json:"effective_labels,omitempty"`
+	EnableDisplay              *Value[bool]                                      `tf:"enable_display" json:"enable_display,omitempty"`
+	Hostname                   *Value[string]                                    `tf:"hostname" json:"hostname,omitempty"`
+	ID                         *Value[string]                                    `tf:"id" json:"id,omitempty"`
+	InstanceID                 *Value[string]                                    `tf:"instance_id" json:"instance_id,omitempty"`
+	KeyRevocationActionType    *Value[string]                                    `tf:"key_revocation_action_type" json:"key_revocation_action_type,omitempty"`
+	LabelFingerprint           *Value[string]                                    `tf:"label_fingerprint" json:"label_fingerprint,omitempty"`
+	Labels                     map[string]*Value[string]                         `tf:"labels" json:"labels,omitempty"`
+	MachineType                *Value[string]                                    `tf:"machine_type" json:"machine_type,omitempty"`
+	Metadata                   map[string]*Value[string]                         `tf:"metadata" json:"metadata,omitempty"`
+	MetadataFingerprint        *Value[string]                                    `tf:"metadata_fingerprint" json:"metadata_fingerprint,omitempty"`
+	MetadataStartupScript      *Value[string]                                    `tf:"metadata_startup_script" json:"metadata_startup_script,omitempty"`
+	MinCPUPlatform             *Value[string]                                    `tf:"min_cpu_platform" json:"min_cpu_platform,omitempty"`
+	Name                       *Value[string]                                    `tf:"name" json:"name,omitempty"`
+	Project                    *Value[string]                                    `tf:"project" json:"project,omitempty"`
+	ResourcePolicies           []*Value[string]                                  `tf:"resource_policies" json:"resource_policies,omitempty"`
+	SelfLink                   *Value[string]                                    `tf:"self_link" json:"self_link,omitempty"`
+	Tags                       []*Value[string]                                  `tf:"tags" json:"tags,omitempty"`
+	TagsFingerprint            *Value[string]                                    `tf:"tags_fingerprint" json:"tags_fingerprint,omitempty"`
+	TerraformLabels            map[string]*Value[string]                         `tf:"terraform_labels" json:"terraform_labels,omitempty"`
+	Zone                       *Value[string]                                    `tf:"zone" json:"zone,omitempty"`
+	AdvancedMachineFeatures    []GoogleComputeInstanceAdvancedMachineFeatures    `tf:"advanced_machine_features,blocks" json:"advanced_machine_features,omitempty"`
+	AttachedDisk               []GoogleComputeInstanceAttachedDisk               `tf:"attached_disk,blocks" json:"attached_disk,omitempty"`
+	BootDisk                   []GoogleComputeInstanceBootDisk                   `tf:"boot_disk,blocks" json:"boot_disk,omitempty"`
+	ConfidentialInstanceConfig []GoogleComputeInstanceConfidentialInstanceConfig `tf:"confidential_instance_config,blocks" json:"confidential_instance_config,omitempty"`
+	GuestAccelerator           []GoogleComputeInstanceGuestAccelerator           `tf:"guest_accelerator,blocks" json:"guest_accelerator,omitempty"`
+	NetworkInterface           []GoogleComputeInstanceNetworkInterface           `tf:"network_interface,blocks" json:"network_interface,omitempty"`
+	NetworkPerformanceConfig   []GoogleComputeInstanceNetworkPerformanceConfig   `tf:"network_performance_config,blocks" json:"network_performance_config,omitempty"`
+	Params                     []GoogleComputeInstanceParams                     `tf:"params,blocks" json:"params,omitempty"`
+	ReservationAffinity        []GoogleComputeInstanceReservationAffinity        `tf:"reservation_affinity,blocks" json:"reservation_affinity,omitempty"`
+	Scheduling                 []GoogleComputeInstanceScheduling                 `tf:"scheduling,blocks" json:"scheduling,omitempty"`
+	ScratchDisk                []GoogleComputeInstanceScratchDisk                `tf:"scratch_disk,blocks" json:"scratch_disk,omitempty"`
+	ServiceAccount             []GoogleComputeInstanceServiceAccount             `tf:"service_account,blocks" json:"service_account,omitempty"`
+	ShieldedInstanceConfig     []GoogleComputeInstanceShieldedInstanceConfig     `tf:"shielded_instance_config,blocks" json:"shielded_instance_config,omitempty"`
+	Timeouts                   *GoogleComputeInstanceTimeouts                    `tf:"timeouts,block" json:"timeouts,omitempty"`
 }
 
 // GoogleComputeInstanceAdvancedMachineFeatures is a nested-block type used by the parent resource.
 type GoogleComputeInstanceAdvancedMachineFeatures struct {
-	EnableNestedVirtualization *Value[bool]    `tf:"enable_nested_virtualization"`
-	ThreadsPerCore             *Value[float64] `tf:"threads_per_core"`
-	TurboMode                  *Value[string]  `tf:"turbo_mode"`
-	VisibleCoreCount           *Value[int64]   `tf:"visible_core_count"`
+	EnableNestedVirtualization *Value[bool]    `tf:"enable_nested_virtualization" json:"enable_nested_virtualization,omitempty"`
+	ThreadsPerCore             *Value[float64] `tf:"threads_per_core" json:"threads_per_core,omitempty"`
+	TurboMode                  *Value[string]  `tf:"turbo_mode" json:"turbo_mode,omitempty"`
+	VisibleCoreCount           *Value[int64]   `tf:"visible_core_count" json:"visible_core_count,omitempty"`
 }
 
 // GoogleComputeInstanceAttachedDisk is a nested-block type used by the parent resource.
 type GoogleComputeInstanceAttachedDisk struct {
-	DeviceName              *Value[string] `tf:"device_name"`
-	DiskEncryptionKeyRaw    *Value[string] `tf:"disk_encryption_key_raw"`
-	DiskEncryptionKeySHA256 *Value[string] `tf:"disk_encryption_key_sha256"`
-	KMSKeySelfLink          *Value[string] `tf:"kms_key_self_link"`
-	Mode                    *Value[string] `tf:"mode"`
-	Source                  *Value[string] `tf:"source"`
+	DeviceName              *Value[string] `tf:"device_name" json:"device_name,omitempty"`
+	DiskEncryptionKeyRaw    *Value[string] `tf:"disk_encryption_key_raw" json:"disk_encryption_key_raw,omitempty"`
+	DiskEncryptionKeySHA256 *Value[string] `tf:"disk_encryption_key_sha256" json:"disk_encryption_key_sha256,omitempty"`
+	KMSKeySelfLink          *Value[string] `tf:"kms_key_self_link" json:"kms_key_self_link,omitempty"`
+	Mode                    *Value[string] `tf:"mode" json:"mode,omitempty"`
+	Source                  *Value[string] `tf:"source" json:"source,omitempty"`
 }
 
 // GoogleComputeInstanceBootDisk is a nested-block type used by the parent resource.
 type GoogleComputeInstanceBootDisk struct {
-	AutoDelete              *Value[bool]                                    `tf:"auto_delete"`
-	DeviceName              *Value[string]                                  `tf:"device_name"`
-	DiskEncryptionKeyRaw    *Value[string]                                  `tf:"disk_encryption_key_raw"`
-	DiskEncryptionKeySHA256 *Value[string]                                  `tf:"disk_encryption_key_sha256"`
-	Interface_              *Value[string]                                  `tf:"interface"`
-	KMSKeySelfLink          *Value[string]                                  `tf:"kms_key_self_link"`
-	Mode                    *Value[string]                                  `tf:"mode"`
-	Source                  *Value[string]                                  `tf:"source"`
-	InitializeParams        []GoogleComputeInstanceBootDiskInitializeParams `tf:"initialize_params,blocks"`
+	AutoDelete              *Value[bool]                                    `tf:"auto_delete" json:"auto_delete,omitempty"`
+	DeviceName              *Value[string]                                  `tf:"device_name" json:"device_name,omitempty"`
+	DiskEncryptionKeyRaw    *Value[string]                                  `tf:"disk_encryption_key_raw" json:"disk_encryption_key_raw,omitempty"`
+	DiskEncryptionKeySHA256 *Value[string]                                  `tf:"disk_encryption_key_sha256" json:"disk_encryption_key_sha256,omitempty"`
+	Interface_              *Value[string]                                  `tf:"interface" json:"interface,omitempty"`
+	KMSKeySelfLink          *Value[string]                                  `tf:"kms_key_self_link" json:"kms_key_self_link,omitempty"`
+	Mode                    *Value[string]                                  `tf:"mode" json:"mode,omitempty"`
+	Source                  *Value[string]                                  `tf:"source" json:"source,omitempty"`
+	InitializeParams        []GoogleComputeInstanceBootDiskInitializeParams `tf:"initialize_params,blocks" json:"initialize_params,omitempty"`
 }
 
 // GoogleComputeInstanceBootDiskInitializeParams is a nested-block type used by the parent resource.
 type GoogleComputeInstanceBootDiskInitializeParams struct {
-	EnableConfidentialCompute *Value[bool]              `tf:"enable_confidential_compute"`
-	Image                     *Value[string]            `tf:"image"`
-	Labels                    map[string]*Value[string] `tf:"labels"`
-	ProvisionedIops           *Value[float64]           `tf:"provisioned_iops"`
-	ProvisionedThroughput     *Value[float64]           `tf:"provisioned_throughput"`
-	ResourceManagerTags       map[string]*Value[string] `tf:"resource_manager_tags"`
-	ResourcePolicies          []*Value[string]          `tf:"resource_policies"`
-	Size                      *Value[float64]           `tf:"size"`
-	StoragePool               *Value[string]            `tf:"storage_pool"`
-	Type_                     *Value[string]            `tf:"type"`
+	EnableConfidentialCompute *Value[bool]              `tf:"enable_confidential_compute" json:"enable_confidential_compute,omitempty"`
+	Image                     *Value[string]            `tf:"image" json:"image,omitempty"`
+	Labels                    map[string]*Value[string] `tf:"labels" json:"labels,omitempty"`
+	ProvisionedIops           *Value[float64]           `tf:"provisioned_iops" json:"provisioned_iops,omitempty"`
+	ProvisionedThroughput     *Value[float64]           `tf:"provisioned_throughput" json:"provisioned_throughput,omitempty"`
+	ResourceManagerTags       map[string]*Value[string] `tf:"resource_manager_tags" json:"resource_manager_tags,omitempty"`
+	ResourcePolicies          []*Value[string]          `tf:"resource_policies" json:"resource_policies,omitempty"`
+	Size                      *Value[float64]           `tf:"size" json:"size,omitempty"`
+	StoragePool               *Value[string]            `tf:"storage_pool" json:"storage_pool,omitempty"`
+	Type_                     *Value[string]            `tf:"type" json:"type,omitempty"`
 }
 
 // GoogleComputeInstanceConfidentialInstanceConfig is a nested-block type used by the parent resource.
 type GoogleComputeInstanceConfidentialInstanceConfig struct {
-	ConfidentialInstanceType  *Value[string] `tf:"confidential_instance_type"`
-	EnableConfidentialCompute *Value[bool]   `tf:"enable_confidential_compute"`
+	ConfidentialInstanceType  *Value[string] `tf:"confidential_instance_type" json:"confidential_instance_type,omitempty"`
+	EnableConfidentialCompute *Value[bool]   `tf:"enable_confidential_compute" json:"enable_confidential_compute,omitempty"`
 }
 
 // GoogleComputeInstanceGuestAccelerator is a nested-block type used by the parent resource.
 type GoogleComputeInstanceGuestAccelerator struct {
-	Count *Value[float64] `tf:"count"`
-	Type_ *Value[string]  `tf:"type"`
+	Count *Value[float64] `tf:"count" json:"count,omitempty"`
+	Type_ *Value[string]  `tf:"type" json:"type,omitempty"`
 }
 
 // GoogleComputeInstanceNetworkInterface is a nested-block type used by the parent resource.
 type GoogleComputeInstanceNetworkInterface struct {
-	InternalIPV6PrefixLength *Value[float64]                                         `tf:"internal_ipv6_prefix_length"`
-	IPV6AccessType           *Value[string]                                          `tf:"ipv6_access_type"`
-	IPV6Address              *Value[string]                                          `tf:"ipv6_address"`
-	Name                     *Value[string]                                          `tf:"name"`
-	Network                  *Value[string]                                          `tf:"network"`
-	NetworkIp                *Value[string]                                          `tf:"network_ip"`
-	NicType                  *Value[string]                                          `tf:"nic_type"`
-	QueueCount               *Value[int64]                                           `tf:"queue_count"`
-	StackType                *Value[string]                                          `tf:"stack_type"`
-	Subnetwork               *Value[string]                                          `tf:"subnetwork"`
-	SubnetworkProject        *Value[string]                                          `tf:"subnetwork_project"`
-	AccessConfig             []GoogleComputeInstanceNetworkInterfaceAccessConfig     `tf:"access_config,blocks"`
-	AliasIpRange             []GoogleComputeInstanceNetworkInterfaceAliasIpRange     `tf:"alias_ip_range,blocks"`
-	IPV6AccessConfig         []GoogleComputeInstanceNetworkInterfaceIPV6AccessConfig `tf:"ipv6_access_config,blocks"`
+	InternalIPV6PrefixLength *Value[float64]                                         `tf:"internal_ipv6_prefix_length" json:"internal_ipv6_prefix_length,omitempty"`
+	IPV6AccessType           *Value[string]                                          `tf:"ipv6_access_type" json:"ipv6_access_type,omitempty"`
+	IPV6Address              *Value[string]                                          `tf:"ipv6_address" json:"ipv6_address,omitempty"`
+	Name                     *Value[string]                                          `tf:"name" json:"name,omitempty"`
+	Network                  *Value[string]                                          `tf:"network" json:"network,omitempty"`
+	NetworkIp                *Value[string]                                          `tf:"network_ip" json:"network_ip,omitempty"`
+	NicType                  *Value[string]                                          `tf:"nic_type" json:"nic_type,omitempty"`
+	QueueCount               *Value[int64]                                           `tf:"queue_count" json:"queue_count,omitempty"`
+	StackType                *Value[string]                                          `tf:"stack_type" json:"stack_type,omitempty"`
+	Subnetwork               *Value[string]                                          `tf:"subnetwork" json:"subnetwork,omitempty"`
+	SubnetworkProject        *Value[string]                                          `tf:"subnetwork_project" json:"subnetwork_project,omitempty"`
+	AccessConfig             []GoogleComputeInstanceNetworkInterfaceAccessConfig     `tf:"access_config,blocks" json:"access_config,omitempty"`
+	AliasIpRange             []GoogleComputeInstanceNetworkInterfaceAliasIpRange     `tf:"alias_ip_range,blocks" json:"alias_ip_range,omitempty"`
+	IPV6AccessConfig         []GoogleComputeInstanceNetworkInterfaceIPV6AccessConfig `tf:"ipv6_access_config,blocks" json:"ipv6_access_config,omitempty"`
 }
 
 // GoogleComputeInstanceNetworkInterfaceAccessConfig is a nested-block type used by the parent resource.
 type GoogleComputeInstanceNetworkInterfaceAccessConfig struct {
-	NatIp               *Value[string] `tf:"nat_ip"`
-	NetworkTier         *Value[string] `tf:"network_tier"`
-	PublicPtrDomainName *Value[string] `tf:"public_ptr_domain_name"`
+	NatIp               *Value[string] `tf:"nat_ip" json:"nat_ip,omitempty"`
+	NetworkTier         *Value[string] `tf:"network_tier" json:"network_tier,omitempty"`
+	PublicPtrDomainName *Value[string] `tf:"public_ptr_domain_name" json:"public_ptr_domain_name,omitempty"`
 }
 
 // GoogleComputeInstanceNetworkInterfaceAliasIpRange is a nested-block type used by the parent resource.
 type GoogleComputeInstanceNetworkInterfaceAliasIpRange struct {
-	IpCIDRRange         *Value[string] `tf:"ip_cidr_range"`
-	SubnetworkRangeName *Value[string] `tf:"subnetwork_range_name"`
+	IpCIDRRange         *Value[string] `tf:"ip_cidr_range" json:"ip_cidr_range,omitempty"`
+	SubnetworkRangeName *Value[string] `tf:"subnetwork_range_name" json:"subnetwork_range_name,omitempty"`
 }
 
 // GoogleComputeInstanceNetworkInterfaceIPV6AccessConfig is a nested-block type used by the parent resource.
 type GoogleComputeInstanceNetworkInterfaceIPV6AccessConfig struct {
-	ExternalIPV6             *Value[string] `tf:"external_ipv6"`
-	ExternalIPV6PrefixLength *Value[string] `tf:"external_ipv6_prefix_length"`
-	Name                     *Value[string] `tf:"name"`
-	NetworkTier              *Value[string] `tf:"network_tier"`
-	PublicPtrDomainName      *Value[string] `tf:"public_ptr_domain_name"`
+	ExternalIPV6             *Value[string] `tf:"external_ipv6" json:"external_ipv6,omitempty"`
+	ExternalIPV6PrefixLength *Value[string] `tf:"external_ipv6_prefix_length" json:"external_ipv6_prefix_length,omitempty"`
+	Name                     *Value[string] `tf:"name" json:"name,omitempty"`
+	NetworkTier              *Value[string] `tf:"network_tier" json:"network_tier,omitempty"`
+	PublicPtrDomainName      *Value[string] `tf:"public_ptr_domain_name" json:"public_ptr_domain_name,omitempty"`
 }
 
 // GoogleComputeInstanceNetworkPerformanceConfig is a nested-block type used by the parent resource.
 type GoogleComputeInstanceNetworkPerformanceConfig struct {
-	TotalEgressBandwidthTier *Value[string] `tf:"total_egress_bandwidth_tier"`
+	TotalEgressBandwidthTier *Value[string] `tf:"total_egress_bandwidth_tier" json:"total_egress_bandwidth_tier,omitempty"`
 }
 
 // GoogleComputeInstanceParams is a nested-block type used by the parent resource.
 type GoogleComputeInstanceParams struct {
-	ResourceManagerTags map[string]*Value[string] `tf:"resource_manager_tags"`
+	ResourceManagerTags map[string]*Value[string] `tf:"resource_manager_tags" json:"resource_manager_tags,omitempty"`
 }
 
 // GoogleComputeInstanceReservationAffinity is a nested-block type used by the parent resource.
 type GoogleComputeInstanceReservationAffinity struct {
-	Type_               *Value[string]                                                `tf:"type"`
-	SpecificReservation []GoogleComputeInstanceReservationAffinitySpecificReservation `tf:"specific_reservation,blocks"`
+	Type_               *Value[string]                                                `tf:"type" json:"type,omitempty"`
+	SpecificReservation []GoogleComputeInstanceReservationAffinitySpecificReservation `tf:"specific_reservation,blocks" json:"specific_reservation,omitempty"`
 }
 
 // GoogleComputeInstanceReservationAffinitySpecificReservation is a nested-block type used by the parent resource.
 type GoogleComputeInstanceReservationAffinitySpecificReservation struct {
-	Key    *Value[string]   `tf:"key"`
-	Values []*Value[string] `tf:"values"`
+	Key    *Value[string]   `tf:"key" json:"key,omitempty"`
+	Values []*Value[string] `tf:"values" json:"values,omitempty"`
 }
 
 // GoogleComputeInstanceScheduling is a nested-block type used by the parent resource.
 type GoogleComputeInstanceScheduling struct {
-	AutomaticRestart          *Value[bool]                                             `tf:"automatic_restart"`
-	InstanceTerminationAction *Value[string]                                           `tf:"instance_termination_action"`
-	MinNodeCpus               *Value[int64]                                            `tf:"min_node_cpus"`
-	OnHostMaintenance         *Value[string]                                           `tf:"on_host_maintenance"`
-	Preemptible               *Value[bool]                                             `tf:"preemptible"`
-	ProvisioningModel         *Value[string]                                           `tf:"provisioning_model"`
-	LocalSsdRecoveryTimeout   []GoogleComputeInstanceSchedulingLocalSsdRecoveryTimeout `tf:"local_ssd_recovery_timeout,blocks"`
-	MaxRunDuration            []GoogleComputeInstanceSchedulingMaxRunDuration          `tf:"max_run_duration,blocks"`
-	NodeAffinities            []GoogleComputeInstanceSchedulingNodeAffinities          `tf:"node_affinities,blocks"`
-	OnInstanceStopAction      []GoogleComputeInstanceSchedulingOnInstanceStopAction    `tf:"on_instance_stop_action,blocks"`
+	AutomaticRestart          *Value[bool]                                             `tf:"automatic_restart" json:"automatic_restart,omitempty"`
+	InstanceTerminationAction *Value[string]                                           `tf:"instance_termination_action" json:"instance_termination_action,omitempty"`
+	MinNodeCpus               *Value[int64]                                            `tf:"min_node_cpus" json:"min_node_cpus,omitempty"`
+	OnHostMaintenance         *Value[string]                                           `tf:"on_host_maintenance" json:"on_host_maintenance,omitempty"`
+	Preemptible               *Value[bool]                                             `tf:"preemptible" json:"preemptible,omitempty"`
+	ProvisioningModel         *Value[string]                                           `tf:"provisioning_model" json:"provisioning_model,omitempty"`
+	LocalSsdRecoveryTimeout   []GoogleComputeInstanceSchedulingLocalSsdRecoveryTimeout `tf:"local_ssd_recovery_timeout,blocks" json:"local_ssd_recovery_timeout,omitempty"`
+	MaxRunDuration            []GoogleComputeInstanceSchedulingMaxRunDuration          `tf:"max_run_duration,blocks" json:"max_run_duration,omitempty"`
+	NodeAffinities            []GoogleComputeInstanceSchedulingNodeAffinities          `tf:"node_affinities,blocks" json:"node_affinities,omitempty"`
+	OnInstanceStopAction      []GoogleComputeInstanceSchedulingOnInstanceStopAction    `tf:"on_instance_stop_action,blocks" json:"on_instance_stop_action,omitempty"`
 }
 
 // GoogleComputeInstanceSchedulingLocalSsdRecoveryTimeout is a nested-block type used by the parent resource.
 type GoogleComputeInstanceSchedulingLocalSsdRecoveryTimeout struct {
-	Nanos   *Value[float64] `tf:"nanos"`
-	Seconds *Value[float64] `tf:"seconds"`
+	Nanos   *Value[float64] `tf:"nanos" json:"nanos,omitempty"`
+	Seconds *Value[float64] `tf:"seconds" json:"seconds,omitempty"`
 }
 
 // GoogleComputeInstanceSchedulingMaxRunDuration is a nested-block type used by the parent resource.
 type GoogleComputeInstanceSchedulingMaxRunDuration struct {
-	Nanos   *Value[float64] `tf:"nanos"`
-	Seconds *Value[float64] `tf:"seconds"`
+	Nanos   *Value[float64] `tf:"nanos" json:"nanos,omitempty"`
+	Seconds *Value[float64] `tf:"seconds" json:"seconds,omitempty"`
 }
 
 // GoogleComputeInstanceSchedulingNodeAffinities is a nested-block type used by the parent resource.
 type GoogleComputeInstanceSchedulingNodeAffinities struct {
-	Key      *Value[string]   `tf:"key"`
-	Operator *Value[string]   `tf:"operator"`
-	Values   []*Value[string] `tf:"values"`
+	Key      *Value[string]   `tf:"key" json:"key,omitempty"`
+	Operator *Value[string]   `tf:"operator" json:"operator,omitempty"`
+	Values   []*Value[string] `tf:"values" json:"values,omitempty"`
 }
 
 // GoogleComputeInstanceSchedulingOnInstanceStopAction is a nested-block type used by the parent resource.
 type GoogleComputeInstanceSchedulingOnInstanceStopAction struct {
-	DiscardLocalSsd *Value[bool] `tf:"discard_local_ssd"`
+	DiscardLocalSsd *Value[bool] `tf:"discard_local_ssd" json:"discard_local_ssd,omitempty"`
 }
 
 // GoogleComputeInstanceScratchDisk is a nested-block type used by the parent resource.
 type GoogleComputeInstanceScratchDisk struct {
-	DeviceName *Value[string]  `tf:"device_name"`
-	Interface_ *Value[string]  `tf:"interface"`
-	Size       *Value[float64] `tf:"size"`
+	DeviceName *Value[string]  `tf:"device_name" json:"device_name,omitempty"`
+	Interface_ *Value[string]  `tf:"interface" json:"interface,omitempty"`
+	Size       *Value[float64] `tf:"size" json:"size,omitempty"`
 }
 
 // GoogleComputeInstanceServiceAccount is a nested-block type used by the parent resource.
 type GoogleComputeInstanceServiceAccount struct {
-	Email  *Value[string]   `tf:"email"`
-	Scopes []*Value[string] `tf:"scopes"`
+	Email  *Value[string]   `tf:"email" json:"email,omitempty"`
+	Scopes []*Value[string] `tf:"scopes" json:"scopes,omitempty"`
 }
 
 // GoogleComputeInstanceShieldedInstanceConfig is a nested-block type used by the parent resource.
 type GoogleComputeInstanceShieldedInstanceConfig struct {
-	EnableIntegrityMonitoring *Value[bool] `tf:"enable_integrity_monitoring"`
-	EnableSecureBoot          *Value[bool] `tf:"enable_secure_boot"`
-	EnableVtpm                *Value[bool] `tf:"enable_vtpm"`
+	EnableIntegrityMonitoring *Value[bool] `tf:"enable_integrity_monitoring" json:"enable_integrity_monitoring,omitempty"`
+	EnableSecureBoot          *Value[bool] `tf:"enable_secure_boot" json:"enable_secure_boot,omitempty"`
+	EnableVtpm                *Value[bool] `tf:"enable_vtpm" json:"enable_vtpm,omitempty"`
 }
 
 // GoogleComputeInstanceTimeouts is a nested-block type used by the parent resource.
 type GoogleComputeInstanceTimeouts struct {
-	Create *Value[string] `tf:"create"`
-	Delete *Value[string] `tf:"delete"`
-	Update *Value[string] `tf:"update"`
+	Create *Value[string] `tf:"create" json:"create,omitempty"`
+	Delete *Value[string] `tf:"delete" json:"delete,omitempty"`
+	Update *Value[string] `tf:"update" json:"update,omitempty"`
 }
 
 // GoogleComputeInstanceSchema describes provider metadata for each attribute / nested

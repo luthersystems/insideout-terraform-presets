@@ -7,230 +7,230 @@ import "reflect"
 // GoogleSqlDatabaseInstance is the generated Layer 1 typed model for the
 // `google_sql_database_instance` Terraform resource.
 type GoogleSqlDatabaseInstance struct {
-	AvailableMaintenanceVersions []*Value[string]                                `tf:"available_maintenance_versions"`
-	ConnectionName               *Value[string]                                  `tf:"connection_name"`
-	DatabaseVersion              *Value[string]                                  `tf:"database_version"`
-	DeletionProtection           *Value[bool]                                    `tf:"deletion_protection"`
-	DNSName                      *Value[string]                                  `tf:"dns_name"`
-	EncryptionKeyName            *Value[string]                                  `tf:"encryption_key_name"`
-	FirstIpAddress               *Value[string]                                  `tf:"first_ip_address"`
-	ID                           *Value[string]                                  `tf:"id"`
-	InstanceType                 *Value[string]                                  `tf:"instance_type"`
-	IpAddress                    []GoogleSqlDatabaseInstanceIpAddress            `tf:"ip_address"`
-	MaintenanceVersion           *Value[string]                                  `tf:"maintenance_version"`
-	MasterInstanceName           *Value[string]                                  `tf:"master_instance_name"`
-	Name                         *Value[string]                                  `tf:"name"`
-	PrivateIpAddress             *Value[string]                                  `tf:"private_ip_address"`
-	Project                      *Value[string]                                  `tf:"project"`
-	PscServiceAttachmentLink     *Value[string]                                  `tf:"psc_service_attachment_link"`
-	PublicIpAddress              *Value[string]                                  `tf:"public_ip_address"`
-	Region                       *Value[string]                                  `tf:"region"`
-	RootPassword                 *Value[string]                                  `tf:"root_password"`
-	SelfLink                     *Value[string]                                  `tf:"self_link"`
-	ServerCaCert                 []GoogleSqlDatabaseInstanceServerCaCert         `tf:"server_ca_cert"`
-	ServiceAccountEmailAddress   *Value[string]                                  `tf:"service_account_email_address"`
-	Clone                        []GoogleSqlDatabaseInstanceClone                `tf:"clone,blocks"`
-	ReplicaConfiguration         []GoogleSqlDatabaseInstanceReplicaConfiguration `tf:"replica_configuration,blocks"`
-	RestoreBackupContext         []GoogleSqlDatabaseInstanceRestoreBackupContext `tf:"restore_backup_context,blocks"`
-	Settings                     []GoogleSqlDatabaseInstanceSettings             `tf:"settings,blocks"`
-	Timeouts                     *GoogleSqlDatabaseInstanceTimeouts              `tf:"timeouts,block"`
+	AvailableMaintenanceVersions []*Value[string]                                `tf:"available_maintenance_versions" json:"available_maintenance_versions,omitempty"`
+	ConnectionName               *Value[string]                                  `tf:"connection_name" json:"connection_name,omitempty"`
+	DatabaseVersion              *Value[string]                                  `tf:"database_version" json:"database_version,omitempty"`
+	DeletionProtection           *Value[bool]                                    `tf:"deletion_protection" json:"deletion_protection,omitempty"`
+	DNSName                      *Value[string]                                  `tf:"dns_name" json:"dns_name,omitempty"`
+	EncryptionKeyName            *Value[string]                                  `tf:"encryption_key_name" json:"encryption_key_name,omitempty"`
+	FirstIpAddress               *Value[string]                                  `tf:"first_ip_address" json:"first_ip_address,omitempty"`
+	ID                           *Value[string]                                  `tf:"id" json:"id,omitempty"`
+	InstanceType                 *Value[string]                                  `tf:"instance_type" json:"instance_type,omitempty"`
+	IpAddress                    []GoogleSqlDatabaseInstanceIpAddress            `tf:"ip_address" json:"ip_address,omitempty"`
+	MaintenanceVersion           *Value[string]                                  `tf:"maintenance_version" json:"maintenance_version,omitempty"`
+	MasterInstanceName           *Value[string]                                  `tf:"master_instance_name" json:"master_instance_name,omitempty"`
+	Name                         *Value[string]                                  `tf:"name" json:"name,omitempty"`
+	PrivateIpAddress             *Value[string]                                  `tf:"private_ip_address" json:"private_ip_address,omitempty"`
+	Project                      *Value[string]                                  `tf:"project" json:"project,omitempty"`
+	PscServiceAttachmentLink     *Value[string]                                  `tf:"psc_service_attachment_link" json:"psc_service_attachment_link,omitempty"`
+	PublicIpAddress              *Value[string]                                  `tf:"public_ip_address" json:"public_ip_address,omitempty"`
+	Region                       *Value[string]                                  `tf:"region" json:"region,omitempty"`
+	RootPassword                 *Value[string]                                  `tf:"root_password" json:"root_password,omitempty"`
+	SelfLink                     *Value[string]                                  `tf:"self_link" json:"self_link,omitempty"`
+	ServerCaCert                 []GoogleSqlDatabaseInstanceServerCaCert         `tf:"server_ca_cert" json:"server_ca_cert,omitempty"`
+	ServiceAccountEmailAddress   *Value[string]                                  `tf:"service_account_email_address" json:"service_account_email_address,omitempty"`
+	Clone                        []GoogleSqlDatabaseInstanceClone                `tf:"clone,blocks" json:"clone,omitempty"`
+	ReplicaConfiguration         []GoogleSqlDatabaseInstanceReplicaConfiguration `tf:"replica_configuration,blocks" json:"replica_configuration,omitempty"`
+	RestoreBackupContext         []GoogleSqlDatabaseInstanceRestoreBackupContext `tf:"restore_backup_context,blocks" json:"restore_backup_context,omitempty"`
+	Settings                     []GoogleSqlDatabaseInstanceSettings             `tf:"settings,blocks" json:"settings,omitempty"`
+	Timeouts                     *GoogleSqlDatabaseInstanceTimeouts              `tf:"timeouts,block" json:"timeouts,omitempty"`
 }
 
 // GoogleSqlDatabaseInstanceClone is a nested-block type used by the parent resource.
 type GoogleSqlDatabaseInstanceClone struct {
-	AllocatedIpRange   *Value[string]   `tf:"allocated_ip_range"`
-	DatabaseNames      []*Value[string] `tf:"database_names"`
-	PointInTime        *Value[string]   `tf:"point_in_time"`
-	PreferredZone      *Value[string]   `tf:"preferred_zone"`
-	SourceInstanceName *Value[string]   `tf:"source_instance_name"`
+	AllocatedIpRange   *Value[string]   `tf:"allocated_ip_range" json:"allocated_ip_range,omitempty"`
+	DatabaseNames      []*Value[string] `tf:"database_names" json:"database_names,omitempty"`
+	PointInTime        *Value[string]   `tf:"point_in_time" json:"point_in_time,omitempty"`
+	PreferredZone      *Value[string]   `tf:"preferred_zone" json:"preferred_zone,omitempty"`
+	SourceInstanceName *Value[string]   `tf:"source_instance_name" json:"source_instance_name,omitempty"`
 }
 
 // GoogleSqlDatabaseInstanceIpAddress is a nested-block type used by the parent resource.
 type GoogleSqlDatabaseInstanceIpAddress struct {
-	IpAddress    *Value[string] `tf:"ip_address"`
-	TimeToRetire *Value[string] `tf:"time_to_retire"`
-	Type_        *Value[string] `tf:"type"`
+	IpAddress    *Value[string] `tf:"ip_address" json:"ip_address,omitempty"`
+	TimeToRetire *Value[string] `tf:"time_to_retire" json:"time_to_retire,omitempty"`
+	Type_        *Value[string] `tf:"type" json:"type,omitempty"`
 }
 
 // GoogleSqlDatabaseInstanceReplicaConfiguration is a nested-block type used by the parent resource.
 type GoogleSqlDatabaseInstanceReplicaConfiguration struct {
-	CaCertificate           *Value[string]  `tf:"ca_certificate"`
-	ClientCertificate       *Value[string]  `tf:"client_certificate"`
-	ClientKey               *Value[string]  `tf:"client_key"`
-	ConnectRetryInterval    *Value[float64] `tf:"connect_retry_interval"`
-	DumpFilePath            *Value[string]  `tf:"dump_file_path"`
-	FailoverTarget          *Value[bool]    `tf:"failover_target"`
-	MasterHeartbeatPeriod   *Value[int64]   `tf:"master_heartbeat_period"`
-	Password                *Value[string]  `tf:"password"`
-	SSLCipher               *Value[string]  `tf:"ssl_cipher"`
-	Username                *Value[string]  `tf:"username"`
-	VerifyServerCertificate *Value[bool]    `tf:"verify_server_certificate"`
+	CaCertificate           *Value[string]  `tf:"ca_certificate" json:"ca_certificate,omitempty"`
+	ClientCertificate       *Value[string]  `tf:"client_certificate" json:"client_certificate,omitempty"`
+	ClientKey               *Value[string]  `tf:"client_key" json:"client_key,omitempty"`
+	ConnectRetryInterval    *Value[float64] `tf:"connect_retry_interval" json:"connect_retry_interval,omitempty"`
+	DumpFilePath            *Value[string]  `tf:"dump_file_path" json:"dump_file_path,omitempty"`
+	FailoverTarget          *Value[bool]    `tf:"failover_target" json:"failover_target,omitempty"`
+	MasterHeartbeatPeriod   *Value[int64]   `tf:"master_heartbeat_period" json:"master_heartbeat_period,omitempty"`
+	Password                *Value[string]  `tf:"password" json:"password,omitempty"`
+	SSLCipher               *Value[string]  `tf:"ssl_cipher" json:"ssl_cipher,omitempty"`
+	Username                *Value[string]  `tf:"username" json:"username,omitempty"`
+	VerifyServerCertificate *Value[bool]    `tf:"verify_server_certificate" json:"verify_server_certificate,omitempty"`
 }
 
 // GoogleSqlDatabaseInstanceRestoreBackupContext is a nested-block type used by the parent resource.
 type GoogleSqlDatabaseInstanceRestoreBackupContext struct {
-	BackupRunID *Value[float64] `tf:"backup_run_id"`
-	InstanceID  *Value[string]  `tf:"instance_id"`
-	Project     *Value[string]  `tf:"project"`
+	BackupRunID *Value[float64] `tf:"backup_run_id" json:"backup_run_id,omitempty"`
+	InstanceID  *Value[string]  `tf:"instance_id" json:"instance_id,omitempty"`
+	Project     *Value[string]  `tf:"project" json:"project,omitempty"`
 }
 
 // GoogleSqlDatabaseInstanceServerCaCert is a nested-block type used by the parent resource.
 type GoogleSqlDatabaseInstanceServerCaCert struct {
-	Cert            *Value[string] `tf:"cert"`
-	CommonName      *Value[string] `tf:"common_name"`
-	CreateTime      *Value[string] `tf:"create_time"`
-	ExpirationTime  *Value[string] `tf:"expiration_time"`
-	SHA1Fingerprint *Value[string] `tf:"sha1_fingerprint"`
+	Cert            *Value[string] `tf:"cert" json:"cert,omitempty"`
+	CommonName      *Value[string] `tf:"common_name" json:"common_name,omitempty"`
+	CreateTime      *Value[string] `tf:"create_time" json:"create_time,omitempty"`
+	ExpirationTime  *Value[string] `tf:"expiration_time" json:"expiration_time,omitempty"`
+	SHA1Fingerprint *Value[string] `tf:"sha1_fingerprint" json:"sha1_fingerprint,omitempty"`
 }
 
 // GoogleSqlDatabaseInstanceSettings is a nested-block type used by the parent resource.
 type GoogleSqlDatabaseInstanceSettings struct {
-	ActivationPolicy          *Value[string]                                              `tf:"activation_policy"`
-	AvailabilityType          *Value[string]                                              `tf:"availability_type"`
-	Collation                 *Value[string]                                              `tf:"collation"`
-	ConnectorEnforcement      *Value[string]                                              `tf:"connector_enforcement"`
-	DeletionProtectionEnabled *Value[bool]                                                `tf:"deletion_protection_enabled"`
-	DiskAutoresize            *Value[bool]                                                `tf:"disk_autoresize"`
-	DiskAutoresizeLimit       *Value[float64]                                             `tf:"disk_autoresize_limit"`
-	DiskSize                  *Value[int64]                                               `tf:"disk_size"`
-	DiskType                  *Value[string]                                              `tf:"disk_type"`
-	Edition                   *Value[string]                                              `tf:"edition"`
-	EnableDataplexIntegration *Value[bool]                                                `tf:"enable_dataplex_integration"`
-	EnableGoogleMlIntegration *Value[bool]                                                `tf:"enable_google_ml_integration"`
-	PricingPlan               *Value[string]                                              `tf:"pricing_plan"`
-	Tier                      *Value[string]                                              `tf:"tier"`
-	TimeZone                  *Value[string]                                              `tf:"time_zone"`
-	UserLabels                map[string]*Value[string]                                   `tf:"user_labels"`
-	Version                   *Value[int64]                                               `tf:"version"`
-	ActiveDirectoryConfig     []GoogleSqlDatabaseInstanceSettingsActiveDirectoryConfig    `tf:"active_directory_config,blocks"`
-	AdvancedMachineFeatures   []GoogleSqlDatabaseInstanceSettingsAdvancedMachineFeatures  `tf:"advanced_machine_features,blocks"`
-	BackupConfiguration       []GoogleSqlDatabaseInstanceSettingsBackupConfiguration      `tf:"backup_configuration,blocks"`
-	DataCacheConfig           []GoogleSqlDatabaseInstanceSettingsDataCacheConfig          `tf:"data_cache_config,blocks"`
-	DatabaseFlags             []GoogleSqlDatabaseInstanceSettingsDatabaseFlags            `tf:"database_flags,blocks"`
-	DenyMaintenancePeriod     []GoogleSqlDatabaseInstanceSettingsDenyMaintenancePeriod    `tf:"deny_maintenance_period,blocks"`
-	InsightsConfig            []GoogleSqlDatabaseInstanceSettingsInsightsConfig           `tf:"insights_config,blocks"`
-	IpConfiguration           []GoogleSqlDatabaseInstanceSettingsIpConfiguration          `tf:"ip_configuration,blocks"`
-	LocationPreference        []GoogleSqlDatabaseInstanceSettingsLocationPreference       `tf:"location_preference,blocks"`
-	MaintenanceWindow         []GoogleSqlDatabaseInstanceSettingsMaintenanceWindow        `tf:"maintenance_window,blocks"`
-	PasswordValidationPolicy  []GoogleSqlDatabaseInstanceSettingsPasswordValidationPolicy `tf:"password_validation_policy,blocks"`
-	SqlServerAuditConfig      []GoogleSqlDatabaseInstanceSettingsSqlServerAuditConfig     `tf:"sql_server_audit_config,blocks"`
+	ActivationPolicy          *Value[string]                                              `tf:"activation_policy" json:"activation_policy,omitempty"`
+	AvailabilityType          *Value[string]                                              `tf:"availability_type" json:"availability_type,omitempty"`
+	Collation                 *Value[string]                                              `tf:"collation" json:"collation,omitempty"`
+	ConnectorEnforcement      *Value[string]                                              `tf:"connector_enforcement" json:"connector_enforcement,omitempty"`
+	DeletionProtectionEnabled *Value[bool]                                                `tf:"deletion_protection_enabled" json:"deletion_protection_enabled,omitempty"`
+	DiskAutoresize            *Value[bool]                                                `tf:"disk_autoresize" json:"disk_autoresize,omitempty"`
+	DiskAutoresizeLimit       *Value[float64]                                             `tf:"disk_autoresize_limit" json:"disk_autoresize_limit,omitempty"`
+	DiskSize                  *Value[int64]                                               `tf:"disk_size" json:"disk_size,omitempty"`
+	DiskType                  *Value[string]                                              `tf:"disk_type" json:"disk_type,omitempty"`
+	Edition                   *Value[string]                                              `tf:"edition" json:"edition,omitempty"`
+	EnableDataplexIntegration *Value[bool]                                                `tf:"enable_dataplex_integration" json:"enable_dataplex_integration,omitempty"`
+	EnableGoogleMlIntegration *Value[bool]                                                `tf:"enable_google_ml_integration" json:"enable_google_ml_integration,omitempty"`
+	PricingPlan               *Value[string]                                              `tf:"pricing_plan" json:"pricing_plan,omitempty"`
+	Tier                      *Value[string]                                              `tf:"tier" json:"tier,omitempty"`
+	TimeZone                  *Value[string]                                              `tf:"time_zone" json:"time_zone,omitempty"`
+	UserLabels                map[string]*Value[string]                                   `tf:"user_labels" json:"user_labels,omitempty"`
+	Version                   *Value[int64]                                               `tf:"version" json:"version,omitempty"`
+	ActiveDirectoryConfig     []GoogleSqlDatabaseInstanceSettingsActiveDirectoryConfig    `tf:"active_directory_config,blocks" json:"active_directory_config,omitempty"`
+	AdvancedMachineFeatures   []GoogleSqlDatabaseInstanceSettingsAdvancedMachineFeatures  `tf:"advanced_machine_features,blocks" json:"advanced_machine_features,omitempty"`
+	BackupConfiguration       []GoogleSqlDatabaseInstanceSettingsBackupConfiguration      `tf:"backup_configuration,blocks" json:"backup_configuration,omitempty"`
+	DataCacheConfig           []GoogleSqlDatabaseInstanceSettingsDataCacheConfig          `tf:"data_cache_config,blocks" json:"data_cache_config,omitempty"`
+	DatabaseFlags             []GoogleSqlDatabaseInstanceSettingsDatabaseFlags            `tf:"database_flags,blocks" json:"database_flags,omitempty"`
+	DenyMaintenancePeriod     []GoogleSqlDatabaseInstanceSettingsDenyMaintenancePeriod    `tf:"deny_maintenance_period,blocks" json:"deny_maintenance_period,omitempty"`
+	InsightsConfig            []GoogleSqlDatabaseInstanceSettingsInsightsConfig           `tf:"insights_config,blocks" json:"insights_config,omitempty"`
+	IpConfiguration           []GoogleSqlDatabaseInstanceSettingsIpConfiguration          `tf:"ip_configuration,blocks" json:"ip_configuration,omitempty"`
+	LocationPreference        []GoogleSqlDatabaseInstanceSettingsLocationPreference       `tf:"location_preference,blocks" json:"location_preference,omitempty"`
+	MaintenanceWindow         []GoogleSqlDatabaseInstanceSettingsMaintenanceWindow        `tf:"maintenance_window,blocks" json:"maintenance_window,omitempty"`
+	PasswordValidationPolicy  []GoogleSqlDatabaseInstanceSettingsPasswordValidationPolicy `tf:"password_validation_policy,blocks" json:"password_validation_policy,omitempty"`
+	SqlServerAuditConfig      []GoogleSqlDatabaseInstanceSettingsSqlServerAuditConfig     `tf:"sql_server_audit_config,blocks" json:"sql_server_audit_config,omitempty"`
 }
 
 // GoogleSqlDatabaseInstanceSettingsActiveDirectoryConfig is a nested-block type used by the parent resource.
 type GoogleSqlDatabaseInstanceSettingsActiveDirectoryConfig struct {
-	Domain *Value[string] `tf:"domain"`
+	Domain *Value[string] `tf:"domain" json:"domain,omitempty"`
 }
 
 // GoogleSqlDatabaseInstanceSettingsAdvancedMachineFeatures is a nested-block type used by the parent resource.
 type GoogleSqlDatabaseInstanceSettingsAdvancedMachineFeatures struct {
-	ThreadsPerCore *Value[float64] `tf:"threads_per_core"`
+	ThreadsPerCore *Value[float64] `tf:"threads_per_core" json:"threads_per_core,omitempty"`
 }
 
 // GoogleSqlDatabaseInstanceSettingsBackupConfiguration is a nested-block type used by the parent resource.
 type GoogleSqlDatabaseInstanceSettingsBackupConfiguration struct {
-	BinaryLogEnabled            *Value[bool]                                                                  `tf:"binary_log_enabled"`
-	Enabled                     *Value[bool]                                                                  `tf:"enabled"`
-	Location                    *Value[string]                                                                `tf:"location"`
-	PointInTimeRecoveryEnabled  *Value[bool]                                                                  `tf:"point_in_time_recovery_enabled"`
-	StartTime                   *Value[string]                                                                `tf:"start_time"`
-	TransactionLogRetentionDays *Value[float64]                                                               `tf:"transaction_log_retention_days"`
-	BackupRetentionSettings     []GoogleSqlDatabaseInstanceSettingsBackupConfigurationBackupRetentionSettings `tf:"backup_retention_settings,blocks"`
+	BinaryLogEnabled            *Value[bool]                                                                  `tf:"binary_log_enabled" json:"binary_log_enabled,omitempty"`
+	Enabled                     *Value[bool]                                                                  `tf:"enabled" json:"enabled,omitempty"`
+	Location                    *Value[string]                                                                `tf:"location" json:"location,omitempty"`
+	PointInTimeRecoveryEnabled  *Value[bool]                                                                  `tf:"point_in_time_recovery_enabled" json:"point_in_time_recovery_enabled,omitempty"`
+	StartTime                   *Value[string]                                                                `tf:"start_time" json:"start_time,omitempty"`
+	TransactionLogRetentionDays *Value[float64]                                                               `tf:"transaction_log_retention_days" json:"transaction_log_retention_days,omitempty"`
+	BackupRetentionSettings     []GoogleSqlDatabaseInstanceSettingsBackupConfigurationBackupRetentionSettings `tf:"backup_retention_settings,blocks" json:"backup_retention_settings,omitempty"`
 }
 
 // GoogleSqlDatabaseInstanceSettingsBackupConfigurationBackupRetentionSettings is a nested-block type used by the parent resource.
 type GoogleSqlDatabaseInstanceSettingsBackupConfigurationBackupRetentionSettings struct {
-	RetainedBackups *Value[float64] `tf:"retained_backups"`
-	RetentionUnit   *Value[string]  `tf:"retention_unit"`
+	RetainedBackups *Value[float64] `tf:"retained_backups" json:"retained_backups,omitempty"`
+	RetentionUnit   *Value[string]  `tf:"retention_unit" json:"retention_unit,omitempty"`
 }
 
 // GoogleSqlDatabaseInstanceSettingsDataCacheConfig is a nested-block type used by the parent resource.
 type GoogleSqlDatabaseInstanceSettingsDataCacheConfig struct {
-	DataCacheEnabled *Value[bool] `tf:"data_cache_enabled"`
+	DataCacheEnabled *Value[bool] `tf:"data_cache_enabled" json:"data_cache_enabled,omitempty"`
 }
 
 // GoogleSqlDatabaseInstanceSettingsDatabaseFlags is a nested-block type used by the parent resource.
 type GoogleSqlDatabaseInstanceSettingsDatabaseFlags struct {
-	Name  *Value[string] `tf:"name"`
-	Value *Value[string] `tf:"value"`
+	Name  *Value[string] `tf:"name" json:"name,omitempty"`
+	Value *Value[string] `tf:"value" json:"value,omitempty"`
 }
 
 // GoogleSqlDatabaseInstanceSettingsDenyMaintenancePeriod is a nested-block type used by the parent resource.
 type GoogleSqlDatabaseInstanceSettingsDenyMaintenancePeriod struct {
-	EndDate   *Value[string] `tf:"end_date"`
-	StartDate *Value[string] `tf:"start_date"`
-	Time      *Value[string] `tf:"time"`
+	EndDate   *Value[string] `tf:"end_date" json:"end_date,omitempty"`
+	StartDate *Value[string] `tf:"start_date" json:"start_date,omitempty"`
+	Time      *Value[string] `tf:"time" json:"time,omitempty"`
 }
 
 // GoogleSqlDatabaseInstanceSettingsInsightsConfig is a nested-block type used by the parent resource.
 type GoogleSqlDatabaseInstanceSettingsInsightsConfig struct {
-	QueryInsightsEnabled  *Value[bool]    `tf:"query_insights_enabled"`
-	QueryPlansPerMinute   *Value[float64] `tf:"query_plans_per_minute"`
-	QueryStringLength     *Value[float64] `tf:"query_string_length"`
-	RecordApplicationTags *Value[bool]    `tf:"record_application_tags"`
-	RecordClientAddress   *Value[bool]    `tf:"record_client_address"`
+	QueryInsightsEnabled  *Value[bool]    `tf:"query_insights_enabled" json:"query_insights_enabled,omitempty"`
+	QueryPlansPerMinute   *Value[float64] `tf:"query_plans_per_minute" json:"query_plans_per_minute,omitempty"`
+	QueryStringLength     *Value[float64] `tf:"query_string_length" json:"query_string_length,omitempty"`
+	RecordApplicationTags *Value[bool]    `tf:"record_application_tags" json:"record_application_tags,omitempty"`
+	RecordClientAddress   *Value[bool]    `tf:"record_client_address" json:"record_client_address,omitempty"`
 }
 
 // GoogleSqlDatabaseInstanceSettingsIpConfiguration is a nested-block type used by the parent resource.
 type GoogleSqlDatabaseInstanceSettingsIpConfiguration struct {
-	AllocatedIpRange                        *Value[string]                                                       `tf:"allocated_ip_range"`
-	EnablePrivatePathForGoogleCloudServices *Value[bool]                                                         `tf:"enable_private_path_for_google_cloud_services"`
-	IPV4Enabled                             *Value[bool]                                                         `tf:"ipv4_enabled"`
-	PrivateNetwork                          *Value[string]                                                       `tf:"private_network"`
-	ServerCaMode                            *Value[string]                                                       `tf:"server_ca_mode"`
-	SSLMode                                 *Value[string]                                                       `tf:"ssl_mode"`
-	AuthorizedNetworks                      []GoogleSqlDatabaseInstanceSettingsIpConfigurationAuthorizedNetworks `tf:"authorized_networks,blocks"`
-	PscConfig                               []GoogleSqlDatabaseInstanceSettingsIpConfigurationPscConfig          `tf:"psc_config,blocks"`
+	AllocatedIpRange                        *Value[string]                                                       `tf:"allocated_ip_range" json:"allocated_ip_range,omitempty"`
+	EnablePrivatePathForGoogleCloudServices *Value[bool]                                                         `tf:"enable_private_path_for_google_cloud_services" json:"enable_private_path_for_google_cloud_services,omitempty"`
+	IPV4Enabled                             *Value[bool]                                                         `tf:"ipv4_enabled" json:"ipv4_enabled,omitempty"`
+	PrivateNetwork                          *Value[string]                                                       `tf:"private_network" json:"private_network,omitempty"`
+	ServerCaMode                            *Value[string]                                                       `tf:"server_ca_mode" json:"server_ca_mode,omitempty"`
+	SSLMode                                 *Value[string]                                                       `tf:"ssl_mode" json:"ssl_mode,omitempty"`
+	AuthorizedNetworks                      []GoogleSqlDatabaseInstanceSettingsIpConfigurationAuthorizedNetworks `tf:"authorized_networks,blocks" json:"authorized_networks,omitempty"`
+	PscConfig                               []GoogleSqlDatabaseInstanceSettingsIpConfigurationPscConfig          `tf:"psc_config,blocks" json:"psc_config,omitempty"`
 }
 
 // GoogleSqlDatabaseInstanceSettingsIpConfigurationAuthorizedNetworks is a nested-block type used by the parent resource.
 type GoogleSqlDatabaseInstanceSettingsIpConfigurationAuthorizedNetworks struct {
-	ExpirationTime *Value[string] `tf:"expiration_time"`
-	Name           *Value[string] `tf:"name"`
-	Value          *Value[string] `tf:"value"`
+	ExpirationTime *Value[string] `tf:"expiration_time" json:"expiration_time,omitempty"`
+	Name           *Value[string] `tf:"name" json:"name,omitempty"`
+	Value          *Value[string] `tf:"value" json:"value,omitempty"`
 }
 
 // GoogleSqlDatabaseInstanceSettingsIpConfigurationPscConfig is a nested-block type used by the parent resource.
 type GoogleSqlDatabaseInstanceSettingsIpConfigurationPscConfig struct {
-	AllowedConsumerProjects []*Value[string] `tf:"allowed_consumer_projects"`
-	PscEnabled              *Value[bool]     `tf:"psc_enabled"`
+	AllowedConsumerProjects []*Value[string] `tf:"allowed_consumer_projects" json:"allowed_consumer_projects,omitempty"`
+	PscEnabled              *Value[bool]     `tf:"psc_enabled" json:"psc_enabled,omitempty"`
 }
 
 // GoogleSqlDatabaseInstanceSettingsLocationPreference is a nested-block type used by the parent resource.
 type GoogleSqlDatabaseInstanceSettingsLocationPreference struct {
-	FollowGaeApplication *Value[string] `tf:"follow_gae_application"`
-	SecondaryZone        *Value[string] `tf:"secondary_zone"`
-	Zone                 *Value[string] `tf:"zone"`
+	FollowGaeApplication *Value[string] `tf:"follow_gae_application" json:"follow_gae_application,omitempty"`
+	SecondaryZone        *Value[string] `tf:"secondary_zone" json:"secondary_zone,omitempty"`
+	Zone                 *Value[string] `tf:"zone" json:"zone,omitempty"`
 }
 
 // GoogleSqlDatabaseInstanceSettingsMaintenanceWindow is a nested-block type used by the parent resource.
 type GoogleSqlDatabaseInstanceSettingsMaintenanceWindow struct {
-	Day         *Value[float64] `tf:"day"`
-	Hour        *Value[float64] `tf:"hour"`
-	UpdateTrack *Value[string]  `tf:"update_track"`
+	Day         *Value[float64] `tf:"day" json:"day,omitempty"`
+	Hour        *Value[float64] `tf:"hour" json:"hour,omitempty"`
+	UpdateTrack *Value[string]  `tf:"update_track" json:"update_track,omitempty"`
 }
 
 // GoogleSqlDatabaseInstanceSettingsPasswordValidationPolicy is a nested-block type used by the parent resource.
 type GoogleSqlDatabaseInstanceSettingsPasswordValidationPolicy struct {
-	Complexity                *Value[string]  `tf:"complexity"`
-	DisallowUsernameSubstring *Value[bool]    `tf:"disallow_username_substring"`
-	EnablePasswordPolicy      *Value[bool]    `tf:"enable_password_policy"`
-	MinLength                 *Value[int64]   `tf:"min_length"`
-	PasswordChangeInterval    *Value[string]  `tf:"password_change_interval"`
-	ReuseInterval             *Value[float64] `tf:"reuse_interval"`
+	Complexity                *Value[string]  `tf:"complexity" json:"complexity,omitempty"`
+	DisallowUsernameSubstring *Value[bool]    `tf:"disallow_username_substring" json:"disallow_username_substring,omitempty"`
+	EnablePasswordPolicy      *Value[bool]    `tf:"enable_password_policy" json:"enable_password_policy,omitempty"`
+	MinLength                 *Value[int64]   `tf:"min_length" json:"min_length,omitempty"`
+	PasswordChangeInterval    *Value[string]  `tf:"password_change_interval" json:"password_change_interval,omitempty"`
+	ReuseInterval             *Value[float64] `tf:"reuse_interval" json:"reuse_interval,omitempty"`
 }
 
 // GoogleSqlDatabaseInstanceSettingsSqlServerAuditConfig is a nested-block type used by the parent resource.
 type GoogleSqlDatabaseInstanceSettingsSqlServerAuditConfig struct {
-	Bucket            *Value[string] `tf:"bucket"`
-	RetentionInterval *Value[string] `tf:"retention_interval"`
-	UploadInterval    *Value[string] `tf:"upload_interval"`
+	Bucket            *Value[string] `tf:"bucket" json:"bucket,omitempty"`
+	RetentionInterval *Value[string] `tf:"retention_interval" json:"retention_interval,omitempty"`
+	UploadInterval    *Value[string] `tf:"upload_interval" json:"upload_interval,omitempty"`
 }
 
 // GoogleSqlDatabaseInstanceTimeouts is a nested-block type used by the parent resource.
 type GoogleSqlDatabaseInstanceTimeouts struct {
-	Create *Value[string] `tf:"create"`
-	Delete *Value[string] `tf:"delete"`
-	Update *Value[string] `tf:"update"`
+	Create *Value[string] `tf:"create" json:"create,omitempty"`
+	Delete *Value[string] `tf:"delete" json:"delete,omitempty"`
+	Update *Value[string] `tf:"update" json:"update,omitempty"`
 }
 
 // GoogleSqlDatabaseInstanceSchema describes provider metadata for each attribute / nested

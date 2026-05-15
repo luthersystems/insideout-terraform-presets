@@ -7,655 +7,655 @@ import "reflect"
 // GoogleComputeURLMap is the generated Layer 1 typed model for the
 // `google_compute_url_map` Terraform resource.
 type GoogleComputeURLMap struct {
-	CreationTimestamp  *Value[string]                          `tf:"creation_timestamp"`
-	DefaultService     *Value[string]                          `tf:"default_service"`
-	Description        *Value[string]                          `tf:"description"`
-	Fingerprint        *Value[string]                          `tf:"fingerprint"`
-	ID                 *Value[string]                          `tf:"id"`
-	MapID              *Value[float64]                         `tf:"map_id"`
-	Name               *Value[string]                          `tf:"name"`
-	Project            *Value[string]                          `tf:"project"`
-	SelfLink           *Value[string]                          `tf:"self_link"`
-	DefaultRouteAction []GoogleComputeURLMapDefaultRouteAction `tf:"default_route_action,blocks"`
-	DefaultURLRedirect []GoogleComputeURLMapDefaultURLRedirect `tf:"default_url_redirect,blocks"`
-	HeaderAction       []GoogleComputeURLMapHeaderAction       `tf:"header_action,blocks"`
-	HostRule           []GoogleComputeURLMapHostRule           `tf:"host_rule,blocks"`
-	PathMatcher        []GoogleComputeURLMapPathMatcher        `tf:"path_matcher,blocks"`
-	Test               []GoogleComputeURLMapTest               `tf:"test,blocks"`
-	Timeouts           *GoogleComputeURLMapTimeouts            `tf:"timeouts,block"`
+	CreationTimestamp  *Value[string]                          `tf:"creation_timestamp" json:"creation_timestamp,omitempty"`
+	DefaultService     *Value[string]                          `tf:"default_service" json:"default_service,omitempty"`
+	Description        *Value[string]                          `tf:"description" json:"description,omitempty"`
+	Fingerprint        *Value[string]                          `tf:"fingerprint" json:"fingerprint,omitempty"`
+	ID                 *Value[string]                          `tf:"id" json:"id,omitempty"`
+	MapID              *Value[float64]                         `tf:"map_id" json:"map_id,omitempty"`
+	Name               *Value[string]                          `tf:"name" json:"name,omitempty"`
+	Project            *Value[string]                          `tf:"project" json:"project,omitempty"`
+	SelfLink           *Value[string]                          `tf:"self_link" json:"self_link,omitempty"`
+	DefaultRouteAction []GoogleComputeURLMapDefaultRouteAction `tf:"default_route_action,blocks" json:"default_route_action,omitempty"`
+	DefaultURLRedirect []GoogleComputeURLMapDefaultURLRedirect `tf:"default_url_redirect,blocks" json:"default_url_redirect,omitempty"`
+	HeaderAction       []GoogleComputeURLMapHeaderAction       `tf:"header_action,blocks" json:"header_action,omitempty"`
+	HostRule           []GoogleComputeURLMapHostRule           `tf:"host_rule,blocks" json:"host_rule,omitempty"`
+	PathMatcher        []GoogleComputeURLMapPathMatcher        `tf:"path_matcher,blocks" json:"path_matcher,omitempty"`
+	Test               []GoogleComputeURLMapTest               `tf:"test,blocks" json:"test,omitempty"`
+	Timeouts           *GoogleComputeURLMapTimeouts            `tf:"timeouts,block" json:"timeouts,omitempty"`
 }
 
 // GoogleComputeURLMapDefaultRouteAction is a nested-block type used by the parent resource.
 type GoogleComputeURLMapDefaultRouteAction struct {
-	CorsPolicy              []GoogleComputeURLMapDefaultRouteActionCorsPolicy              `tf:"cors_policy,blocks"`
-	FaultInjectionPolicy    []GoogleComputeURLMapDefaultRouteActionFaultInjectionPolicy    `tf:"fault_injection_policy,blocks"`
-	RequestMirrorPolicy     []GoogleComputeURLMapDefaultRouteActionRequestMirrorPolicy     `tf:"request_mirror_policy,blocks"`
-	RetryPolicy             []GoogleComputeURLMapDefaultRouteActionRetryPolicy             `tf:"retry_policy,blocks"`
-	Timeout                 []GoogleComputeURLMapDefaultRouteActionTimeout                 `tf:"timeout,blocks"`
-	URLRewrite              []GoogleComputeURLMapDefaultRouteActionURLRewrite              `tf:"url_rewrite,blocks"`
-	WeightedBackendServices []GoogleComputeURLMapDefaultRouteActionWeightedBackendServices `tf:"weighted_backend_services,blocks"`
+	CorsPolicy              []GoogleComputeURLMapDefaultRouteActionCorsPolicy              `tf:"cors_policy,blocks" json:"cors_policy,omitempty"`
+	FaultInjectionPolicy    []GoogleComputeURLMapDefaultRouteActionFaultInjectionPolicy    `tf:"fault_injection_policy,blocks" json:"fault_injection_policy,omitempty"`
+	RequestMirrorPolicy     []GoogleComputeURLMapDefaultRouteActionRequestMirrorPolicy     `tf:"request_mirror_policy,blocks" json:"request_mirror_policy,omitempty"`
+	RetryPolicy             []GoogleComputeURLMapDefaultRouteActionRetryPolicy             `tf:"retry_policy,blocks" json:"retry_policy,omitempty"`
+	Timeout                 []GoogleComputeURLMapDefaultRouteActionTimeout                 `tf:"timeout,blocks" json:"timeout,omitempty"`
+	URLRewrite              []GoogleComputeURLMapDefaultRouteActionURLRewrite              `tf:"url_rewrite,blocks" json:"url_rewrite,omitempty"`
+	WeightedBackendServices []GoogleComputeURLMapDefaultRouteActionWeightedBackendServices `tf:"weighted_backend_services,blocks" json:"weighted_backend_services,omitempty"`
 }
 
 // GoogleComputeURLMapDefaultRouteActionCorsPolicy is a nested-block type used by the parent resource.
 type GoogleComputeURLMapDefaultRouteActionCorsPolicy struct {
-	AllowCredentials   *Value[bool]     `tf:"allow_credentials"`
-	AllowHeaders       []*Value[string] `tf:"allow_headers"`
-	AllowMethods       []*Value[string] `tf:"allow_methods"`
-	AllowOriginRegexes []*Value[string] `tf:"allow_origin_regexes"`
-	AllowOrigins       []*Value[string] `tf:"allow_origins"`
-	Disabled           *Value[bool]     `tf:"disabled"`
-	ExposeHeaders      []*Value[string] `tf:"expose_headers"`
-	MaxAge             *Value[int64]    `tf:"max_age"`
+	AllowCredentials   *Value[bool]     `tf:"allow_credentials" json:"allow_credentials,omitempty"`
+	AllowHeaders       []*Value[string] `tf:"allow_headers" json:"allow_headers,omitempty"`
+	AllowMethods       []*Value[string] `tf:"allow_methods" json:"allow_methods,omitempty"`
+	AllowOriginRegexes []*Value[string] `tf:"allow_origin_regexes" json:"allow_origin_regexes,omitempty"`
+	AllowOrigins       []*Value[string] `tf:"allow_origins" json:"allow_origins,omitempty"`
+	Disabled           *Value[bool]     `tf:"disabled" json:"disabled,omitempty"`
+	ExposeHeaders      []*Value[string] `tf:"expose_headers" json:"expose_headers,omitempty"`
+	MaxAge             *Value[int64]    `tf:"max_age" json:"max_age,omitempty"`
 }
 
 // GoogleComputeURLMapDefaultRouteActionFaultInjectionPolicy is a nested-block type used by the parent resource.
 type GoogleComputeURLMapDefaultRouteActionFaultInjectionPolicy struct {
-	Abort []GoogleComputeURLMapDefaultRouteActionFaultInjectionPolicyAbort `tf:"abort,blocks"`
-	Delay []GoogleComputeURLMapDefaultRouteActionFaultInjectionPolicyDelay `tf:"delay,blocks"`
+	Abort []GoogleComputeURLMapDefaultRouteActionFaultInjectionPolicyAbort `tf:"abort,blocks" json:"abort,omitempty"`
+	Delay []GoogleComputeURLMapDefaultRouteActionFaultInjectionPolicyDelay `tf:"delay,blocks" json:"delay,omitempty"`
 }
 
 // GoogleComputeURLMapDefaultRouteActionFaultInjectionPolicyAbort is a nested-block type used by the parent resource.
 type GoogleComputeURLMapDefaultRouteActionFaultInjectionPolicyAbort struct {
-	HTTPStatus *Value[float64] `tf:"http_status"`
-	Percentage *Value[float64] `tf:"percentage"`
+	HTTPStatus *Value[float64] `tf:"http_status" json:"http_status,omitempty"`
+	Percentage *Value[float64] `tf:"percentage" json:"percentage,omitempty"`
 }
 
 // GoogleComputeURLMapDefaultRouteActionFaultInjectionPolicyDelay is a nested-block type used by the parent resource.
 type GoogleComputeURLMapDefaultRouteActionFaultInjectionPolicyDelay struct {
-	Percentage *Value[float64]                                                            `tf:"percentage"`
-	FixedDelay []GoogleComputeURLMapDefaultRouteActionFaultInjectionPolicyDelayFixedDelay `tf:"fixed_delay,blocks"`
+	Percentage *Value[float64]                                                            `tf:"percentage" json:"percentage,omitempty"`
+	FixedDelay []GoogleComputeURLMapDefaultRouteActionFaultInjectionPolicyDelayFixedDelay `tf:"fixed_delay,blocks" json:"fixed_delay,omitempty"`
 }
 
 // GoogleComputeURLMapDefaultRouteActionFaultInjectionPolicyDelayFixedDelay is a nested-block type used by the parent resource.
 type GoogleComputeURLMapDefaultRouteActionFaultInjectionPolicyDelayFixedDelay struct {
-	Nanos   *Value[float64] `tf:"nanos"`
-	Seconds *Value[string]  `tf:"seconds"`
+	Nanos   *Value[float64] `tf:"nanos" json:"nanos,omitempty"`
+	Seconds *Value[string]  `tf:"seconds" json:"seconds,omitempty"`
 }
 
 // GoogleComputeURLMapDefaultRouteActionRequestMirrorPolicy is a nested-block type used by the parent resource.
 type GoogleComputeURLMapDefaultRouteActionRequestMirrorPolicy struct {
-	BackendService *Value[string] `tf:"backend_service"`
+	BackendService *Value[string] `tf:"backend_service" json:"backend_service,omitempty"`
 }
 
 // GoogleComputeURLMapDefaultRouteActionRetryPolicy is a nested-block type used by the parent resource.
 type GoogleComputeURLMapDefaultRouteActionRetryPolicy struct {
-	NumRetries      *Value[float64]                                                 `tf:"num_retries"`
-	RetryConditions []*Value[string]                                                `tf:"retry_conditions"`
-	PerTryTimeout   []GoogleComputeURLMapDefaultRouteActionRetryPolicyPerTryTimeout `tf:"per_try_timeout,blocks"`
+	NumRetries      *Value[float64]                                                 `tf:"num_retries" json:"num_retries,omitempty"`
+	RetryConditions []*Value[string]                                                `tf:"retry_conditions" json:"retry_conditions,omitempty"`
+	PerTryTimeout   []GoogleComputeURLMapDefaultRouteActionRetryPolicyPerTryTimeout `tf:"per_try_timeout,blocks" json:"per_try_timeout,omitempty"`
 }
 
 // GoogleComputeURLMapDefaultRouteActionRetryPolicyPerTryTimeout is a nested-block type used by the parent resource.
 type GoogleComputeURLMapDefaultRouteActionRetryPolicyPerTryTimeout struct {
-	Nanos   *Value[float64] `tf:"nanos"`
-	Seconds *Value[string]  `tf:"seconds"`
+	Nanos   *Value[float64] `tf:"nanos" json:"nanos,omitempty"`
+	Seconds *Value[string]  `tf:"seconds" json:"seconds,omitempty"`
 }
 
 // GoogleComputeURLMapDefaultRouteActionTimeout is a nested-block type used by the parent resource.
 type GoogleComputeURLMapDefaultRouteActionTimeout struct {
-	Nanos   *Value[float64] `tf:"nanos"`
-	Seconds *Value[string]  `tf:"seconds"`
+	Nanos   *Value[float64] `tf:"nanos" json:"nanos,omitempty"`
+	Seconds *Value[string]  `tf:"seconds" json:"seconds,omitempty"`
 }
 
 // GoogleComputeURLMapDefaultRouteActionURLRewrite is a nested-block type used by the parent resource.
 type GoogleComputeURLMapDefaultRouteActionURLRewrite struct {
-	HostRewrite       *Value[string] `tf:"host_rewrite"`
-	PathPrefixRewrite *Value[string] `tf:"path_prefix_rewrite"`
+	HostRewrite       *Value[string] `tf:"host_rewrite" json:"host_rewrite,omitempty"`
+	PathPrefixRewrite *Value[string] `tf:"path_prefix_rewrite" json:"path_prefix_rewrite,omitempty"`
 }
 
 // GoogleComputeURLMapDefaultRouteActionWeightedBackendServices is a nested-block type used by the parent resource.
 type GoogleComputeURLMapDefaultRouteActionWeightedBackendServices struct {
-	BackendService *Value[string]                                                             `tf:"backend_service"`
-	Weight         *Value[float64]                                                            `tf:"weight"`
-	HeaderAction   []GoogleComputeURLMapDefaultRouteActionWeightedBackendServicesHeaderAction `tf:"header_action,blocks"`
+	BackendService *Value[string]                                                             `tf:"backend_service" json:"backend_service,omitempty"`
+	Weight         *Value[float64]                                                            `tf:"weight" json:"weight,omitempty"`
+	HeaderAction   []GoogleComputeURLMapDefaultRouteActionWeightedBackendServicesHeaderAction `tf:"header_action,blocks" json:"header_action,omitempty"`
 }
 
 // GoogleComputeURLMapDefaultRouteActionWeightedBackendServicesHeaderAction is a nested-block type used by the parent resource.
 type GoogleComputeURLMapDefaultRouteActionWeightedBackendServicesHeaderAction struct {
-	RequestHeadersToRemove  []*Value[string]                                                                               `tf:"request_headers_to_remove"`
-	ResponseHeadersToRemove []*Value[string]                                                                               `tf:"response_headers_to_remove"`
-	RequestHeadersToAdd     []GoogleComputeURLMapDefaultRouteActionWeightedBackendServicesHeaderActionRequestHeadersToAdd  `tf:"request_headers_to_add,blocks"`
-	ResponseHeadersToAdd    []GoogleComputeURLMapDefaultRouteActionWeightedBackendServicesHeaderActionResponseHeadersToAdd `tf:"response_headers_to_add,blocks"`
+	RequestHeadersToRemove  []*Value[string]                                                                               `tf:"request_headers_to_remove" json:"request_headers_to_remove,omitempty"`
+	ResponseHeadersToRemove []*Value[string]                                                                               `tf:"response_headers_to_remove" json:"response_headers_to_remove,omitempty"`
+	RequestHeadersToAdd     []GoogleComputeURLMapDefaultRouteActionWeightedBackendServicesHeaderActionRequestHeadersToAdd  `tf:"request_headers_to_add,blocks" json:"request_headers_to_add,omitempty"`
+	ResponseHeadersToAdd    []GoogleComputeURLMapDefaultRouteActionWeightedBackendServicesHeaderActionResponseHeadersToAdd `tf:"response_headers_to_add,blocks" json:"response_headers_to_add,omitempty"`
 }
 
 // GoogleComputeURLMapDefaultRouteActionWeightedBackendServicesHeaderActionRequestHeadersToAdd is a nested-block type used by the parent resource.
 type GoogleComputeURLMapDefaultRouteActionWeightedBackendServicesHeaderActionRequestHeadersToAdd struct {
-	HeaderName  *Value[string] `tf:"header_name"`
-	HeaderValue *Value[string] `tf:"header_value"`
-	Replace     *Value[bool]   `tf:"replace"`
+	HeaderName  *Value[string] `tf:"header_name" json:"header_name,omitempty"`
+	HeaderValue *Value[string] `tf:"header_value" json:"header_value,omitempty"`
+	Replace     *Value[bool]   `tf:"replace" json:"replace,omitempty"`
 }
 
 // GoogleComputeURLMapDefaultRouteActionWeightedBackendServicesHeaderActionResponseHeadersToAdd is a nested-block type used by the parent resource.
 type GoogleComputeURLMapDefaultRouteActionWeightedBackendServicesHeaderActionResponseHeadersToAdd struct {
-	HeaderName  *Value[string] `tf:"header_name"`
-	HeaderValue *Value[string] `tf:"header_value"`
-	Replace     *Value[bool]   `tf:"replace"`
+	HeaderName  *Value[string] `tf:"header_name" json:"header_name,omitempty"`
+	HeaderValue *Value[string] `tf:"header_value" json:"header_value,omitempty"`
+	Replace     *Value[bool]   `tf:"replace" json:"replace,omitempty"`
 }
 
 // GoogleComputeURLMapDefaultURLRedirect is a nested-block type used by the parent resource.
 type GoogleComputeURLMapDefaultURLRedirect struct {
-	HostRedirect         *Value[string] `tf:"host_redirect"`
-	HTTPSRedirect        *Value[bool]   `tf:"https_redirect"`
-	PathRedirect         *Value[string] `tf:"path_redirect"`
-	PrefixRedirect       *Value[string] `tf:"prefix_redirect"`
-	RedirectResponseCode *Value[string] `tf:"redirect_response_code"`
-	StripQuery           *Value[bool]   `tf:"strip_query"`
+	HostRedirect         *Value[string] `tf:"host_redirect" json:"host_redirect,omitempty"`
+	HTTPSRedirect        *Value[bool]   `tf:"https_redirect" json:"https_redirect,omitempty"`
+	PathRedirect         *Value[string] `tf:"path_redirect" json:"path_redirect,omitempty"`
+	PrefixRedirect       *Value[string] `tf:"prefix_redirect" json:"prefix_redirect,omitempty"`
+	RedirectResponseCode *Value[string] `tf:"redirect_response_code" json:"redirect_response_code,omitempty"`
+	StripQuery           *Value[bool]   `tf:"strip_query" json:"strip_query,omitempty"`
 }
 
 // GoogleComputeURLMapHeaderAction is a nested-block type used by the parent resource.
 type GoogleComputeURLMapHeaderAction struct {
-	RequestHeadersToRemove  []*Value[string]                                      `tf:"request_headers_to_remove"`
-	ResponseHeadersToRemove []*Value[string]                                      `tf:"response_headers_to_remove"`
-	RequestHeadersToAdd     []GoogleComputeURLMapHeaderActionRequestHeadersToAdd  `tf:"request_headers_to_add,blocks"`
-	ResponseHeadersToAdd    []GoogleComputeURLMapHeaderActionResponseHeadersToAdd `tf:"response_headers_to_add,blocks"`
+	RequestHeadersToRemove  []*Value[string]                                      `tf:"request_headers_to_remove" json:"request_headers_to_remove,omitempty"`
+	ResponseHeadersToRemove []*Value[string]                                      `tf:"response_headers_to_remove" json:"response_headers_to_remove,omitempty"`
+	RequestHeadersToAdd     []GoogleComputeURLMapHeaderActionRequestHeadersToAdd  `tf:"request_headers_to_add,blocks" json:"request_headers_to_add,omitempty"`
+	ResponseHeadersToAdd    []GoogleComputeURLMapHeaderActionResponseHeadersToAdd `tf:"response_headers_to_add,blocks" json:"response_headers_to_add,omitempty"`
 }
 
 // GoogleComputeURLMapHeaderActionRequestHeadersToAdd is a nested-block type used by the parent resource.
 type GoogleComputeURLMapHeaderActionRequestHeadersToAdd struct {
-	HeaderName  *Value[string] `tf:"header_name"`
-	HeaderValue *Value[string] `tf:"header_value"`
-	Replace     *Value[bool]   `tf:"replace"`
+	HeaderName  *Value[string] `tf:"header_name" json:"header_name,omitempty"`
+	HeaderValue *Value[string] `tf:"header_value" json:"header_value,omitempty"`
+	Replace     *Value[bool]   `tf:"replace" json:"replace,omitempty"`
 }
 
 // GoogleComputeURLMapHeaderActionResponseHeadersToAdd is a nested-block type used by the parent resource.
 type GoogleComputeURLMapHeaderActionResponseHeadersToAdd struct {
-	HeaderName  *Value[string] `tf:"header_name"`
-	HeaderValue *Value[string] `tf:"header_value"`
-	Replace     *Value[bool]   `tf:"replace"`
+	HeaderName  *Value[string] `tf:"header_name" json:"header_name,omitempty"`
+	HeaderValue *Value[string] `tf:"header_value" json:"header_value,omitempty"`
+	Replace     *Value[bool]   `tf:"replace" json:"replace,omitempty"`
 }
 
 // GoogleComputeURLMapHostRule is a nested-block type used by the parent resource.
 type GoogleComputeURLMapHostRule struct {
-	Description *Value[string]   `tf:"description"`
-	Hosts       []*Value[string] `tf:"hosts"`
-	PathMatcher *Value[string]   `tf:"path_matcher"`
+	Description *Value[string]   `tf:"description" json:"description,omitempty"`
+	Hosts       []*Value[string] `tf:"hosts" json:"hosts,omitempty"`
+	PathMatcher *Value[string]   `tf:"path_matcher" json:"path_matcher,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcher is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcher struct {
-	DefaultService     *Value[string]                                     `tf:"default_service"`
-	Description        *Value[string]                                     `tf:"description"`
-	Name               *Value[string]                                     `tf:"name"`
-	DefaultRouteAction []GoogleComputeURLMapPathMatcherDefaultRouteAction `tf:"default_route_action,blocks"`
-	DefaultURLRedirect []GoogleComputeURLMapPathMatcherDefaultURLRedirect `tf:"default_url_redirect,blocks"`
-	HeaderAction       []GoogleComputeURLMapPathMatcherHeaderAction       `tf:"header_action,blocks"`
-	PathRule           []GoogleComputeURLMapPathMatcherPathRule           `tf:"path_rule,blocks"`
-	RouteRules         []GoogleComputeURLMapPathMatcherRouteRules         `tf:"route_rules,blocks"`
+	DefaultService     *Value[string]                                     `tf:"default_service" json:"default_service,omitempty"`
+	Description        *Value[string]                                     `tf:"description" json:"description,omitempty"`
+	Name               *Value[string]                                     `tf:"name" json:"name,omitempty"`
+	DefaultRouteAction []GoogleComputeURLMapPathMatcherDefaultRouteAction `tf:"default_route_action,blocks" json:"default_route_action,omitempty"`
+	DefaultURLRedirect []GoogleComputeURLMapPathMatcherDefaultURLRedirect `tf:"default_url_redirect,blocks" json:"default_url_redirect,omitempty"`
+	HeaderAction       []GoogleComputeURLMapPathMatcherHeaderAction       `tf:"header_action,blocks" json:"header_action,omitempty"`
+	PathRule           []GoogleComputeURLMapPathMatcherPathRule           `tf:"path_rule,blocks" json:"path_rule,omitempty"`
+	RouteRules         []GoogleComputeURLMapPathMatcherRouteRules         `tf:"route_rules,blocks" json:"route_rules,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherDefaultRouteAction is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherDefaultRouteAction struct {
-	CorsPolicy              []GoogleComputeURLMapPathMatcherDefaultRouteActionCorsPolicy              `tf:"cors_policy,blocks"`
-	FaultInjectionPolicy    []GoogleComputeURLMapPathMatcherDefaultRouteActionFaultInjectionPolicy    `tf:"fault_injection_policy,blocks"`
-	RequestMirrorPolicy     []GoogleComputeURLMapPathMatcherDefaultRouteActionRequestMirrorPolicy     `tf:"request_mirror_policy,blocks"`
-	RetryPolicy             []GoogleComputeURLMapPathMatcherDefaultRouteActionRetryPolicy             `tf:"retry_policy,blocks"`
-	Timeout                 []GoogleComputeURLMapPathMatcherDefaultRouteActionTimeout                 `tf:"timeout,blocks"`
-	URLRewrite              []GoogleComputeURLMapPathMatcherDefaultRouteActionURLRewrite              `tf:"url_rewrite,blocks"`
-	WeightedBackendServices []GoogleComputeURLMapPathMatcherDefaultRouteActionWeightedBackendServices `tf:"weighted_backend_services,blocks"`
+	CorsPolicy              []GoogleComputeURLMapPathMatcherDefaultRouteActionCorsPolicy              `tf:"cors_policy,blocks" json:"cors_policy,omitempty"`
+	FaultInjectionPolicy    []GoogleComputeURLMapPathMatcherDefaultRouteActionFaultInjectionPolicy    `tf:"fault_injection_policy,blocks" json:"fault_injection_policy,omitempty"`
+	RequestMirrorPolicy     []GoogleComputeURLMapPathMatcherDefaultRouteActionRequestMirrorPolicy     `tf:"request_mirror_policy,blocks" json:"request_mirror_policy,omitempty"`
+	RetryPolicy             []GoogleComputeURLMapPathMatcherDefaultRouteActionRetryPolicy             `tf:"retry_policy,blocks" json:"retry_policy,omitempty"`
+	Timeout                 []GoogleComputeURLMapPathMatcherDefaultRouteActionTimeout                 `tf:"timeout,blocks" json:"timeout,omitempty"`
+	URLRewrite              []GoogleComputeURLMapPathMatcherDefaultRouteActionURLRewrite              `tf:"url_rewrite,blocks" json:"url_rewrite,omitempty"`
+	WeightedBackendServices []GoogleComputeURLMapPathMatcherDefaultRouteActionWeightedBackendServices `tf:"weighted_backend_services,blocks" json:"weighted_backend_services,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherDefaultRouteActionCorsPolicy is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherDefaultRouteActionCorsPolicy struct {
-	AllowCredentials   *Value[bool]     `tf:"allow_credentials"`
-	AllowHeaders       []*Value[string] `tf:"allow_headers"`
-	AllowMethods       []*Value[string] `tf:"allow_methods"`
-	AllowOriginRegexes []*Value[string] `tf:"allow_origin_regexes"`
-	AllowOrigins       []*Value[string] `tf:"allow_origins"`
-	Disabled           *Value[bool]     `tf:"disabled"`
-	ExposeHeaders      []*Value[string] `tf:"expose_headers"`
-	MaxAge             *Value[int64]    `tf:"max_age"`
+	AllowCredentials   *Value[bool]     `tf:"allow_credentials" json:"allow_credentials,omitempty"`
+	AllowHeaders       []*Value[string] `tf:"allow_headers" json:"allow_headers,omitempty"`
+	AllowMethods       []*Value[string] `tf:"allow_methods" json:"allow_methods,omitempty"`
+	AllowOriginRegexes []*Value[string] `tf:"allow_origin_regexes" json:"allow_origin_regexes,omitempty"`
+	AllowOrigins       []*Value[string] `tf:"allow_origins" json:"allow_origins,omitempty"`
+	Disabled           *Value[bool]     `tf:"disabled" json:"disabled,omitempty"`
+	ExposeHeaders      []*Value[string] `tf:"expose_headers" json:"expose_headers,omitempty"`
+	MaxAge             *Value[int64]    `tf:"max_age" json:"max_age,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherDefaultRouteActionFaultInjectionPolicy is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherDefaultRouteActionFaultInjectionPolicy struct {
-	Abort []GoogleComputeURLMapPathMatcherDefaultRouteActionFaultInjectionPolicyAbort `tf:"abort,blocks"`
-	Delay []GoogleComputeURLMapPathMatcherDefaultRouteActionFaultInjectionPolicyDelay `tf:"delay,blocks"`
+	Abort []GoogleComputeURLMapPathMatcherDefaultRouteActionFaultInjectionPolicyAbort `tf:"abort,blocks" json:"abort,omitempty"`
+	Delay []GoogleComputeURLMapPathMatcherDefaultRouteActionFaultInjectionPolicyDelay `tf:"delay,blocks" json:"delay,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherDefaultRouteActionFaultInjectionPolicyAbort is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherDefaultRouteActionFaultInjectionPolicyAbort struct {
-	HTTPStatus *Value[float64] `tf:"http_status"`
-	Percentage *Value[float64] `tf:"percentage"`
+	HTTPStatus *Value[float64] `tf:"http_status" json:"http_status,omitempty"`
+	Percentage *Value[float64] `tf:"percentage" json:"percentage,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherDefaultRouteActionFaultInjectionPolicyDelay is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherDefaultRouteActionFaultInjectionPolicyDelay struct {
-	Percentage *Value[float64]                                                                       `tf:"percentage"`
-	FixedDelay []GoogleComputeURLMapPathMatcherDefaultRouteActionFaultInjectionPolicyDelayFixedDelay `tf:"fixed_delay,blocks"`
+	Percentage *Value[float64]                                                                       `tf:"percentage" json:"percentage,omitempty"`
+	FixedDelay []GoogleComputeURLMapPathMatcherDefaultRouteActionFaultInjectionPolicyDelayFixedDelay `tf:"fixed_delay,blocks" json:"fixed_delay,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherDefaultRouteActionFaultInjectionPolicyDelayFixedDelay is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherDefaultRouteActionFaultInjectionPolicyDelayFixedDelay struct {
-	Nanos   *Value[float64] `tf:"nanos"`
-	Seconds *Value[string]  `tf:"seconds"`
+	Nanos   *Value[float64] `tf:"nanos" json:"nanos,omitempty"`
+	Seconds *Value[string]  `tf:"seconds" json:"seconds,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherDefaultRouteActionRequestMirrorPolicy is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherDefaultRouteActionRequestMirrorPolicy struct {
-	BackendService *Value[string] `tf:"backend_service"`
+	BackendService *Value[string] `tf:"backend_service" json:"backend_service,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherDefaultRouteActionRetryPolicy is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherDefaultRouteActionRetryPolicy struct {
-	NumRetries      *Value[float64]                                                            `tf:"num_retries"`
-	RetryConditions []*Value[string]                                                           `tf:"retry_conditions"`
-	PerTryTimeout   []GoogleComputeURLMapPathMatcherDefaultRouteActionRetryPolicyPerTryTimeout `tf:"per_try_timeout,blocks"`
+	NumRetries      *Value[float64]                                                            `tf:"num_retries" json:"num_retries,omitempty"`
+	RetryConditions []*Value[string]                                                           `tf:"retry_conditions" json:"retry_conditions,omitempty"`
+	PerTryTimeout   []GoogleComputeURLMapPathMatcherDefaultRouteActionRetryPolicyPerTryTimeout `tf:"per_try_timeout,blocks" json:"per_try_timeout,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherDefaultRouteActionRetryPolicyPerTryTimeout is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherDefaultRouteActionRetryPolicyPerTryTimeout struct {
-	Nanos   *Value[float64] `tf:"nanos"`
-	Seconds *Value[string]  `tf:"seconds"`
+	Nanos   *Value[float64] `tf:"nanos" json:"nanos,omitempty"`
+	Seconds *Value[string]  `tf:"seconds" json:"seconds,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherDefaultRouteActionTimeout is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherDefaultRouteActionTimeout struct {
-	Nanos   *Value[float64] `tf:"nanos"`
-	Seconds *Value[string]  `tf:"seconds"`
+	Nanos   *Value[float64] `tf:"nanos" json:"nanos,omitempty"`
+	Seconds *Value[string]  `tf:"seconds" json:"seconds,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherDefaultRouteActionURLRewrite is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherDefaultRouteActionURLRewrite struct {
-	HostRewrite       *Value[string] `tf:"host_rewrite"`
-	PathPrefixRewrite *Value[string] `tf:"path_prefix_rewrite"`
+	HostRewrite       *Value[string] `tf:"host_rewrite" json:"host_rewrite,omitempty"`
+	PathPrefixRewrite *Value[string] `tf:"path_prefix_rewrite" json:"path_prefix_rewrite,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherDefaultRouteActionWeightedBackendServices is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherDefaultRouteActionWeightedBackendServices struct {
-	BackendService *Value[string]                                                                        `tf:"backend_service"`
-	Weight         *Value[float64]                                                                       `tf:"weight"`
-	HeaderAction   []GoogleComputeURLMapPathMatcherDefaultRouteActionWeightedBackendServicesHeaderAction `tf:"header_action,blocks"`
+	BackendService *Value[string]                                                                        `tf:"backend_service" json:"backend_service,omitempty"`
+	Weight         *Value[float64]                                                                       `tf:"weight" json:"weight,omitempty"`
+	HeaderAction   []GoogleComputeURLMapPathMatcherDefaultRouteActionWeightedBackendServicesHeaderAction `tf:"header_action,blocks" json:"header_action,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherDefaultRouteActionWeightedBackendServicesHeaderAction is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherDefaultRouteActionWeightedBackendServicesHeaderAction struct {
-	RequestHeadersToRemove  []*Value[string]                                                                                          `tf:"request_headers_to_remove"`
-	ResponseHeadersToRemove []*Value[string]                                                                                          `tf:"response_headers_to_remove"`
-	RequestHeadersToAdd     []GoogleComputeURLMapPathMatcherDefaultRouteActionWeightedBackendServicesHeaderActionRequestHeadersToAdd  `tf:"request_headers_to_add,blocks"`
-	ResponseHeadersToAdd    []GoogleComputeURLMapPathMatcherDefaultRouteActionWeightedBackendServicesHeaderActionResponseHeadersToAdd `tf:"response_headers_to_add,blocks"`
+	RequestHeadersToRemove  []*Value[string]                                                                                          `tf:"request_headers_to_remove" json:"request_headers_to_remove,omitempty"`
+	ResponseHeadersToRemove []*Value[string]                                                                                          `tf:"response_headers_to_remove" json:"response_headers_to_remove,omitempty"`
+	RequestHeadersToAdd     []GoogleComputeURLMapPathMatcherDefaultRouteActionWeightedBackendServicesHeaderActionRequestHeadersToAdd  `tf:"request_headers_to_add,blocks" json:"request_headers_to_add,omitempty"`
+	ResponseHeadersToAdd    []GoogleComputeURLMapPathMatcherDefaultRouteActionWeightedBackendServicesHeaderActionResponseHeadersToAdd `tf:"response_headers_to_add,blocks" json:"response_headers_to_add,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherDefaultRouteActionWeightedBackendServicesHeaderActionRequestHeadersToAdd is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherDefaultRouteActionWeightedBackendServicesHeaderActionRequestHeadersToAdd struct {
-	HeaderName  *Value[string] `tf:"header_name"`
-	HeaderValue *Value[string] `tf:"header_value"`
-	Replace     *Value[bool]   `tf:"replace"`
+	HeaderName  *Value[string] `tf:"header_name" json:"header_name,omitempty"`
+	HeaderValue *Value[string] `tf:"header_value" json:"header_value,omitempty"`
+	Replace     *Value[bool]   `tf:"replace" json:"replace,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherDefaultRouteActionWeightedBackendServicesHeaderActionResponseHeadersToAdd is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherDefaultRouteActionWeightedBackendServicesHeaderActionResponseHeadersToAdd struct {
-	HeaderName  *Value[string] `tf:"header_name"`
-	HeaderValue *Value[string] `tf:"header_value"`
-	Replace     *Value[bool]   `tf:"replace"`
+	HeaderName  *Value[string] `tf:"header_name" json:"header_name,omitempty"`
+	HeaderValue *Value[string] `tf:"header_value" json:"header_value,omitempty"`
+	Replace     *Value[bool]   `tf:"replace" json:"replace,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherDefaultURLRedirect is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherDefaultURLRedirect struct {
-	HostRedirect         *Value[string] `tf:"host_redirect"`
-	HTTPSRedirect        *Value[bool]   `tf:"https_redirect"`
-	PathRedirect         *Value[string] `tf:"path_redirect"`
-	PrefixRedirect       *Value[string] `tf:"prefix_redirect"`
-	RedirectResponseCode *Value[string] `tf:"redirect_response_code"`
-	StripQuery           *Value[bool]   `tf:"strip_query"`
+	HostRedirect         *Value[string] `tf:"host_redirect" json:"host_redirect,omitempty"`
+	HTTPSRedirect        *Value[bool]   `tf:"https_redirect" json:"https_redirect,omitempty"`
+	PathRedirect         *Value[string] `tf:"path_redirect" json:"path_redirect,omitempty"`
+	PrefixRedirect       *Value[string] `tf:"prefix_redirect" json:"prefix_redirect,omitempty"`
+	RedirectResponseCode *Value[string] `tf:"redirect_response_code" json:"redirect_response_code,omitempty"`
+	StripQuery           *Value[bool]   `tf:"strip_query" json:"strip_query,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherHeaderAction is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherHeaderAction struct {
-	RequestHeadersToRemove  []*Value[string]                                                 `tf:"request_headers_to_remove"`
-	ResponseHeadersToRemove []*Value[string]                                                 `tf:"response_headers_to_remove"`
-	RequestHeadersToAdd     []GoogleComputeURLMapPathMatcherHeaderActionRequestHeadersToAdd  `tf:"request_headers_to_add,blocks"`
-	ResponseHeadersToAdd    []GoogleComputeURLMapPathMatcherHeaderActionResponseHeadersToAdd `tf:"response_headers_to_add,blocks"`
+	RequestHeadersToRemove  []*Value[string]                                                 `tf:"request_headers_to_remove" json:"request_headers_to_remove,omitempty"`
+	ResponseHeadersToRemove []*Value[string]                                                 `tf:"response_headers_to_remove" json:"response_headers_to_remove,omitempty"`
+	RequestHeadersToAdd     []GoogleComputeURLMapPathMatcherHeaderActionRequestHeadersToAdd  `tf:"request_headers_to_add,blocks" json:"request_headers_to_add,omitempty"`
+	ResponseHeadersToAdd    []GoogleComputeURLMapPathMatcherHeaderActionResponseHeadersToAdd `tf:"response_headers_to_add,blocks" json:"response_headers_to_add,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherHeaderActionRequestHeadersToAdd is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherHeaderActionRequestHeadersToAdd struct {
-	HeaderName  *Value[string] `tf:"header_name"`
-	HeaderValue *Value[string] `tf:"header_value"`
-	Replace     *Value[bool]   `tf:"replace"`
+	HeaderName  *Value[string] `tf:"header_name" json:"header_name,omitempty"`
+	HeaderValue *Value[string] `tf:"header_value" json:"header_value,omitempty"`
+	Replace     *Value[bool]   `tf:"replace" json:"replace,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherHeaderActionResponseHeadersToAdd is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherHeaderActionResponseHeadersToAdd struct {
-	HeaderName  *Value[string] `tf:"header_name"`
-	HeaderValue *Value[string] `tf:"header_value"`
-	Replace     *Value[bool]   `tf:"replace"`
+	HeaderName  *Value[string] `tf:"header_name" json:"header_name,omitempty"`
+	HeaderValue *Value[string] `tf:"header_value" json:"header_value,omitempty"`
+	Replace     *Value[bool]   `tf:"replace" json:"replace,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherPathRule is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherPathRule struct {
-	Paths       []*Value[string]                                    `tf:"paths"`
-	Service     *Value[string]                                      `tf:"service"`
-	RouteAction []GoogleComputeURLMapPathMatcherPathRuleRouteAction `tf:"route_action,blocks"`
-	URLRedirect []GoogleComputeURLMapPathMatcherPathRuleURLRedirect `tf:"url_redirect,blocks"`
+	Paths       []*Value[string]                                    `tf:"paths" json:"paths,omitempty"`
+	Service     *Value[string]                                      `tf:"service" json:"service,omitempty"`
+	RouteAction []GoogleComputeURLMapPathMatcherPathRuleRouteAction `tf:"route_action,blocks" json:"route_action,omitempty"`
+	URLRedirect []GoogleComputeURLMapPathMatcherPathRuleURLRedirect `tf:"url_redirect,blocks" json:"url_redirect,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherPathRuleRouteAction is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherPathRuleRouteAction struct {
-	CorsPolicy              []GoogleComputeURLMapPathMatcherPathRuleRouteActionCorsPolicy              `tf:"cors_policy,blocks"`
-	FaultInjectionPolicy    []GoogleComputeURLMapPathMatcherPathRuleRouteActionFaultInjectionPolicy    `tf:"fault_injection_policy,blocks"`
-	RequestMirrorPolicy     []GoogleComputeURLMapPathMatcherPathRuleRouteActionRequestMirrorPolicy     `tf:"request_mirror_policy,blocks"`
-	RetryPolicy             []GoogleComputeURLMapPathMatcherPathRuleRouteActionRetryPolicy             `tf:"retry_policy,blocks"`
-	Timeout                 []GoogleComputeURLMapPathMatcherPathRuleRouteActionTimeout                 `tf:"timeout,blocks"`
-	URLRewrite              []GoogleComputeURLMapPathMatcherPathRuleRouteActionURLRewrite              `tf:"url_rewrite,blocks"`
-	WeightedBackendServices []GoogleComputeURLMapPathMatcherPathRuleRouteActionWeightedBackendServices `tf:"weighted_backend_services,blocks"`
+	CorsPolicy              []GoogleComputeURLMapPathMatcherPathRuleRouteActionCorsPolicy              `tf:"cors_policy,blocks" json:"cors_policy,omitempty"`
+	FaultInjectionPolicy    []GoogleComputeURLMapPathMatcherPathRuleRouteActionFaultInjectionPolicy    `tf:"fault_injection_policy,blocks" json:"fault_injection_policy,omitempty"`
+	RequestMirrorPolicy     []GoogleComputeURLMapPathMatcherPathRuleRouteActionRequestMirrorPolicy     `tf:"request_mirror_policy,blocks" json:"request_mirror_policy,omitempty"`
+	RetryPolicy             []GoogleComputeURLMapPathMatcherPathRuleRouteActionRetryPolicy             `tf:"retry_policy,blocks" json:"retry_policy,omitempty"`
+	Timeout                 []GoogleComputeURLMapPathMatcherPathRuleRouteActionTimeout                 `tf:"timeout,blocks" json:"timeout,omitempty"`
+	URLRewrite              []GoogleComputeURLMapPathMatcherPathRuleRouteActionURLRewrite              `tf:"url_rewrite,blocks" json:"url_rewrite,omitempty"`
+	WeightedBackendServices []GoogleComputeURLMapPathMatcherPathRuleRouteActionWeightedBackendServices `tf:"weighted_backend_services,blocks" json:"weighted_backend_services,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherPathRuleRouteActionCorsPolicy is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherPathRuleRouteActionCorsPolicy struct {
-	AllowCredentials   *Value[bool]     `tf:"allow_credentials"`
-	AllowHeaders       []*Value[string] `tf:"allow_headers"`
-	AllowMethods       []*Value[string] `tf:"allow_methods"`
-	AllowOriginRegexes []*Value[string] `tf:"allow_origin_regexes"`
-	AllowOrigins       []*Value[string] `tf:"allow_origins"`
-	Disabled           *Value[bool]     `tf:"disabled"`
-	ExposeHeaders      []*Value[string] `tf:"expose_headers"`
-	MaxAge             *Value[int64]    `tf:"max_age"`
+	AllowCredentials   *Value[bool]     `tf:"allow_credentials" json:"allow_credentials,omitempty"`
+	AllowHeaders       []*Value[string] `tf:"allow_headers" json:"allow_headers,omitempty"`
+	AllowMethods       []*Value[string] `tf:"allow_methods" json:"allow_methods,omitempty"`
+	AllowOriginRegexes []*Value[string] `tf:"allow_origin_regexes" json:"allow_origin_regexes,omitempty"`
+	AllowOrigins       []*Value[string] `tf:"allow_origins" json:"allow_origins,omitempty"`
+	Disabled           *Value[bool]     `tf:"disabled" json:"disabled,omitempty"`
+	ExposeHeaders      []*Value[string] `tf:"expose_headers" json:"expose_headers,omitempty"`
+	MaxAge             *Value[int64]    `tf:"max_age" json:"max_age,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherPathRuleRouteActionFaultInjectionPolicy is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherPathRuleRouteActionFaultInjectionPolicy struct {
-	Abort []GoogleComputeURLMapPathMatcherPathRuleRouteActionFaultInjectionPolicyAbort `tf:"abort,blocks"`
-	Delay []GoogleComputeURLMapPathMatcherPathRuleRouteActionFaultInjectionPolicyDelay `tf:"delay,blocks"`
+	Abort []GoogleComputeURLMapPathMatcherPathRuleRouteActionFaultInjectionPolicyAbort `tf:"abort,blocks" json:"abort,omitempty"`
+	Delay []GoogleComputeURLMapPathMatcherPathRuleRouteActionFaultInjectionPolicyDelay `tf:"delay,blocks" json:"delay,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherPathRuleRouteActionFaultInjectionPolicyAbort is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherPathRuleRouteActionFaultInjectionPolicyAbort struct {
-	HTTPStatus *Value[float64] `tf:"http_status"`
-	Percentage *Value[float64] `tf:"percentage"`
+	HTTPStatus *Value[float64] `tf:"http_status" json:"http_status,omitempty"`
+	Percentage *Value[float64] `tf:"percentage" json:"percentage,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherPathRuleRouteActionFaultInjectionPolicyDelay is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherPathRuleRouteActionFaultInjectionPolicyDelay struct {
-	Percentage *Value[float64]                                                                        `tf:"percentage"`
-	FixedDelay []GoogleComputeURLMapPathMatcherPathRuleRouteActionFaultInjectionPolicyDelayFixedDelay `tf:"fixed_delay,blocks"`
+	Percentage *Value[float64]                                                                        `tf:"percentage" json:"percentage,omitempty"`
+	FixedDelay []GoogleComputeURLMapPathMatcherPathRuleRouteActionFaultInjectionPolicyDelayFixedDelay `tf:"fixed_delay,blocks" json:"fixed_delay,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherPathRuleRouteActionFaultInjectionPolicyDelayFixedDelay is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherPathRuleRouteActionFaultInjectionPolicyDelayFixedDelay struct {
-	Nanos   *Value[float64] `tf:"nanos"`
-	Seconds *Value[string]  `tf:"seconds"`
+	Nanos   *Value[float64] `tf:"nanos" json:"nanos,omitempty"`
+	Seconds *Value[string]  `tf:"seconds" json:"seconds,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherPathRuleRouteActionRequestMirrorPolicy is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherPathRuleRouteActionRequestMirrorPolicy struct {
-	BackendService *Value[string] `tf:"backend_service"`
+	BackendService *Value[string] `tf:"backend_service" json:"backend_service,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherPathRuleRouteActionRetryPolicy is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherPathRuleRouteActionRetryPolicy struct {
-	NumRetries      *Value[float64]                                                             `tf:"num_retries"`
-	RetryConditions []*Value[string]                                                            `tf:"retry_conditions"`
-	PerTryTimeout   []GoogleComputeURLMapPathMatcherPathRuleRouteActionRetryPolicyPerTryTimeout `tf:"per_try_timeout,blocks"`
+	NumRetries      *Value[float64]                                                             `tf:"num_retries" json:"num_retries,omitempty"`
+	RetryConditions []*Value[string]                                                            `tf:"retry_conditions" json:"retry_conditions,omitempty"`
+	PerTryTimeout   []GoogleComputeURLMapPathMatcherPathRuleRouteActionRetryPolicyPerTryTimeout `tf:"per_try_timeout,blocks" json:"per_try_timeout,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherPathRuleRouteActionRetryPolicyPerTryTimeout is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherPathRuleRouteActionRetryPolicyPerTryTimeout struct {
-	Nanos   *Value[float64] `tf:"nanos"`
-	Seconds *Value[string]  `tf:"seconds"`
+	Nanos   *Value[float64] `tf:"nanos" json:"nanos,omitempty"`
+	Seconds *Value[string]  `tf:"seconds" json:"seconds,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherPathRuleRouteActionTimeout is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherPathRuleRouteActionTimeout struct {
-	Nanos   *Value[float64] `tf:"nanos"`
-	Seconds *Value[string]  `tf:"seconds"`
+	Nanos   *Value[float64] `tf:"nanos" json:"nanos,omitempty"`
+	Seconds *Value[string]  `tf:"seconds" json:"seconds,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherPathRuleRouteActionURLRewrite is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherPathRuleRouteActionURLRewrite struct {
-	HostRewrite       *Value[string] `tf:"host_rewrite"`
-	PathPrefixRewrite *Value[string] `tf:"path_prefix_rewrite"`
+	HostRewrite       *Value[string] `tf:"host_rewrite" json:"host_rewrite,omitempty"`
+	PathPrefixRewrite *Value[string] `tf:"path_prefix_rewrite" json:"path_prefix_rewrite,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherPathRuleRouteActionWeightedBackendServices is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherPathRuleRouteActionWeightedBackendServices struct {
-	BackendService *Value[string]                                                                         `tf:"backend_service"`
-	Weight         *Value[float64]                                                                        `tf:"weight"`
-	HeaderAction   []GoogleComputeURLMapPathMatcherPathRuleRouteActionWeightedBackendServicesHeaderAction `tf:"header_action,blocks"`
+	BackendService *Value[string]                                                                         `tf:"backend_service" json:"backend_service,omitempty"`
+	Weight         *Value[float64]                                                                        `tf:"weight" json:"weight,omitempty"`
+	HeaderAction   []GoogleComputeURLMapPathMatcherPathRuleRouteActionWeightedBackendServicesHeaderAction `tf:"header_action,blocks" json:"header_action,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherPathRuleRouteActionWeightedBackendServicesHeaderAction is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherPathRuleRouteActionWeightedBackendServicesHeaderAction struct {
-	RequestHeadersToRemove  []*Value[string]                                                                                           `tf:"request_headers_to_remove"`
-	ResponseHeadersToRemove []*Value[string]                                                                                           `tf:"response_headers_to_remove"`
-	RequestHeadersToAdd     []GoogleComputeURLMapPathMatcherPathRuleRouteActionWeightedBackendServicesHeaderActionRequestHeadersToAdd  `tf:"request_headers_to_add,blocks"`
-	ResponseHeadersToAdd    []GoogleComputeURLMapPathMatcherPathRuleRouteActionWeightedBackendServicesHeaderActionResponseHeadersToAdd `tf:"response_headers_to_add,blocks"`
+	RequestHeadersToRemove  []*Value[string]                                                                                           `tf:"request_headers_to_remove" json:"request_headers_to_remove,omitempty"`
+	ResponseHeadersToRemove []*Value[string]                                                                                           `tf:"response_headers_to_remove" json:"response_headers_to_remove,omitempty"`
+	RequestHeadersToAdd     []GoogleComputeURLMapPathMatcherPathRuleRouteActionWeightedBackendServicesHeaderActionRequestHeadersToAdd  `tf:"request_headers_to_add,blocks" json:"request_headers_to_add,omitempty"`
+	ResponseHeadersToAdd    []GoogleComputeURLMapPathMatcherPathRuleRouteActionWeightedBackendServicesHeaderActionResponseHeadersToAdd `tf:"response_headers_to_add,blocks" json:"response_headers_to_add,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherPathRuleRouteActionWeightedBackendServicesHeaderActionRequestHeadersToAdd is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherPathRuleRouteActionWeightedBackendServicesHeaderActionRequestHeadersToAdd struct {
-	HeaderName  *Value[string] `tf:"header_name"`
-	HeaderValue *Value[string] `tf:"header_value"`
-	Replace     *Value[bool]   `tf:"replace"`
+	HeaderName  *Value[string] `tf:"header_name" json:"header_name,omitempty"`
+	HeaderValue *Value[string] `tf:"header_value" json:"header_value,omitempty"`
+	Replace     *Value[bool]   `tf:"replace" json:"replace,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherPathRuleRouteActionWeightedBackendServicesHeaderActionResponseHeadersToAdd is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherPathRuleRouteActionWeightedBackendServicesHeaderActionResponseHeadersToAdd struct {
-	HeaderName  *Value[string] `tf:"header_name"`
-	HeaderValue *Value[string] `tf:"header_value"`
-	Replace     *Value[bool]   `tf:"replace"`
+	HeaderName  *Value[string] `tf:"header_name" json:"header_name,omitempty"`
+	HeaderValue *Value[string] `tf:"header_value" json:"header_value,omitempty"`
+	Replace     *Value[bool]   `tf:"replace" json:"replace,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherPathRuleURLRedirect is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherPathRuleURLRedirect struct {
-	HostRedirect         *Value[string] `tf:"host_redirect"`
-	HTTPSRedirect        *Value[bool]   `tf:"https_redirect"`
-	PathRedirect         *Value[string] `tf:"path_redirect"`
-	PrefixRedirect       *Value[string] `tf:"prefix_redirect"`
-	RedirectResponseCode *Value[string] `tf:"redirect_response_code"`
-	StripQuery           *Value[bool]   `tf:"strip_query"`
+	HostRedirect         *Value[string] `tf:"host_redirect" json:"host_redirect,omitempty"`
+	HTTPSRedirect        *Value[bool]   `tf:"https_redirect" json:"https_redirect,omitempty"`
+	PathRedirect         *Value[string] `tf:"path_redirect" json:"path_redirect,omitempty"`
+	PrefixRedirect       *Value[string] `tf:"prefix_redirect" json:"prefix_redirect,omitempty"`
+	RedirectResponseCode *Value[string] `tf:"redirect_response_code" json:"redirect_response_code,omitempty"`
+	StripQuery           *Value[bool]   `tf:"strip_query" json:"strip_query,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherRouteRules is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherRouteRules struct {
-	Priority     *Value[float64]                                        `tf:"priority"`
-	Service      *Value[string]                                         `tf:"service"`
-	HeaderAction []GoogleComputeURLMapPathMatcherRouteRulesHeaderAction `tf:"header_action,blocks"`
-	MatchRules   []GoogleComputeURLMapPathMatcherRouteRulesMatchRules   `tf:"match_rules,blocks"`
-	RouteAction  []GoogleComputeURLMapPathMatcherRouteRulesRouteAction  `tf:"route_action,blocks"`
-	URLRedirect  []GoogleComputeURLMapPathMatcherRouteRulesURLRedirect  `tf:"url_redirect,blocks"`
+	Priority     *Value[float64]                                        `tf:"priority" json:"priority,omitempty"`
+	Service      *Value[string]                                         `tf:"service" json:"service,omitempty"`
+	HeaderAction []GoogleComputeURLMapPathMatcherRouteRulesHeaderAction `tf:"header_action,blocks" json:"header_action,omitempty"`
+	MatchRules   []GoogleComputeURLMapPathMatcherRouteRulesMatchRules   `tf:"match_rules,blocks" json:"match_rules,omitempty"`
+	RouteAction  []GoogleComputeURLMapPathMatcherRouteRulesRouteAction  `tf:"route_action,blocks" json:"route_action,omitempty"`
+	URLRedirect  []GoogleComputeURLMapPathMatcherRouteRulesURLRedirect  `tf:"url_redirect,blocks" json:"url_redirect,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherRouteRulesHeaderAction is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherRouteRulesHeaderAction struct {
-	RequestHeadersToRemove  []*Value[string]                                                           `tf:"request_headers_to_remove"`
-	ResponseHeadersToRemove []*Value[string]                                                           `tf:"response_headers_to_remove"`
-	RequestHeadersToAdd     []GoogleComputeURLMapPathMatcherRouteRulesHeaderActionRequestHeadersToAdd  `tf:"request_headers_to_add,blocks"`
-	ResponseHeadersToAdd    []GoogleComputeURLMapPathMatcherRouteRulesHeaderActionResponseHeadersToAdd `tf:"response_headers_to_add,blocks"`
+	RequestHeadersToRemove  []*Value[string]                                                           `tf:"request_headers_to_remove" json:"request_headers_to_remove,omitempty"`
+	ResponseHeadersToRemove []*Value[string]                                                           `tf:"response_headers_to_remove" json:"response_headers_to_remove,omitempty"`
+	RequestHeadersToAdd     []GoogleComputeURLMapPathMatcherRouteRulesHeaderActionRequestHeadersToAdd  `tf:"request_headers_to_add,blocks" json:"request_headers_to_add,omitempty"`
+	ResponseHeadersToAdd    []GoogleComputeURLMapPathMatcherRouteRulesHeaderActionResponseHeadersToAdd `tf:"response_headers_to_add,blocks" json:"response_headers_to_add,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherRouteRulesHeaderActionRequestHeadersToAdd is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherRouteRulesHeaderActionRequestHeadersToAdd struct {
-	HeaderName  *Value[string] `tf:"header_name"`
-	HeaderValue *Value[string] `tf:"header_value"`
-	Replace     *Value[bool]   `tf:"replace"`
+	HeaderName  *Value[string] `tf:"header_name" json:"header_name,omitempty"`
+	HeaderValue *Value[string] `tf:"header_value" json:"header_value,omitempty"`
+	Replace     *Value[bool]   `tf:"replace" json:"replace,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherRouteRulesHeaderActionResponseHeadersToAdd is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherRouteRulesHeaderActionResponseHeadersToAdd struct {
-	HeaderName  *Value[string] `tf:"header_name"`
-	HeaderValue *Value[string] `tf:"header_value"`
-	Replace     *Value[bool]   `tf:"replace"`
+	HeaderName  *Value[string] `tf:"header_name" json:"header_name,omitempty"`
+	HeaderValue *Value[string] `tf:"header_value" json:"header_value,omitempty"`
+	Replace     *Value[bool]   `tf:"replace" json:"replace,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherRouteRulesMatchRules is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherRouteRulesMatchRules struct {
-	FullPathMatch         *Value[string]                                                            `tf:"full_path_match"`
-	IgnoreCase            *Value[bool]                                                              `tf:"ignore_case"`
-	PathTemplateMatch     *Value[string]                                                            `tf:"path_template_match"`
-	PrefixMatch           *Value[string]                                                            `tf:"prefix_match"`
-	RegexMatch            *Value[string]                                                            `tf:"regex_match"`
-	HeaderMatches         []GoogleComputeURLMapPathMatcherRouteRulesMatchRulesHeaderMatches         `tf:"header_matches,blocks"`
-	MetadataFilters       []GoogleComputeURLMapPathMatcherRouteRulesMatchRulesMetadataFilters       `tf:"metadata_filters,blocks"`
-	QueryParameterMatches []GoogleComputeURLMapPathMatcherRouteRulesMatchRulesQueryParameterMatches `tf:"query_parameter_matches,blocks"`
+	FullPathMatch         *Value[string]                                                            `tf:"full_path_match" json:"full_path_match,omitempty"`
+	IgnoreCase            *Value[bool]                                                              `tf:"ignore_case" json:"ignore_case,omitempty"`
+	PathTemplateMatch     *Value[string]                                                            `tf:"path_template_match" json:"path_template_match,omitempty"`
+	PrefixMatch           *Value[string]                                                            `tf:"prefix_match" json:"prefix_match,omitempty"`
+	RegexMatch            *Value[string]                                                            `tf:"regex_match" json:"regex_match,omitempty"`
+	HeaderMatches         []GoogleComputeURLMapPathMatcherRouteRulesMatchRulesHeaderMatches         `tf:"header_matches,blocks" json:"header_matches,omitempty"`
+	MetadataFilters       []GoogleComputeURLMapPathMatcherRouteRulesMatchRulesMetadataFilters       `tf:"metadata_filters,blocks" json:"metadata_filters,omitempty"`
+	QueryParameterMatches []GoogleComputeURLMapPathMatcherRouteRulesMatchRulesQueryParameterMatches `tf:"query_parameter_matches,blocks" json:"query_parameter_matches,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherRouteRulesMatchRulesHeaderMatches is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherRouteRulesMatchRulesHeaderMatches struct {
-	ExactMatch   *Value[string]                                                              `tf:"exact_match"`
-	HeaderName   *Value[string]                                                              `tf:"header_name"`
-	InvertMatch  *Value[bool]                                                                `tf:"invert_match"`
-	PrefixMatch  *Value[string]                                                              `tf:"prefix_match"`
-	PresentMatch *Value[bool]                                                                `tf:"present_match"`
-	RegexMatch   *Value[string]                                                              `tf:"regex_match"`
-	SuffixMatch  *Value[string]                                                              `tf:"suffix_match"`
-	RangeMatch   []GoogleComputeURLMapPathMatcherRouteRulesMatchRulesHeaderMatchesRangeMatch `tf:"range_match,blocks"`
+	ExactMatch   *Value[string]                                                              `tf:"exact_match" json:"exact_match,omitempty"`
+	HeaderName   *Value[string]                                                              `tf:"header_name" json:"header_name,omitempty"`
+	InvertMatch  *Value[bool]                                                                `tf:"invert_match" json:"invert_match,omitempty"`
+	PrefixMatch  *Value[string]                                                              `tf:"prefix_match" json:"prefix_match,omitempty"`
+	PresentMatch *Value[bool]                                                                `tf:"present_match" json:"present_match,omitempty"`
+	RegexMatch   *Value[string]                                                              `tf:"regex_match" json:"regex_match,omitempty"`
+	SuffixMatch  *Value[string]                                                              `tf:"suffix_match" json:"suffix_match,omitempty"`
+	RangeMatch   []GoogleComputeURLMapPathMatcherRouteRulesMatchRulesHeaderMatchesRangeMatch `tf:"range_match,blocks" json:"range_match,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherRouteRulesMatchRulesHeaderMatchesRangeMatch is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherRouteRulesMatchRulesHeaderMatchesRangeMatch struct {
-	RangeEnd   *Value[float64] `tf:"range_end"`
-	RangeStart *Value[float64] `tf:"range_start"`
+	RangeEnd   *Value[float64] `tf:"range_end" json:"range_end,omitempty"`
+	RangeStart *Value[float64] `tf:"range_start" json:"range_start,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherRouteRulesMatchRulesMetadataFilters is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherRouteRulesMatchRulesMetadataFilters struct {
-	FilterMatchCriteria *Value[string]                                                                  `tf:"filter_match_criteria"`
-	FilterLabels        []GoogleComputeURLMapPathMatcherRouteRulesMatchRulesMetadataFiltersFilterLabels `tf:"filter_labels,blocks"`
+	FilterMatchCriteria *Value[string]                                                                  `tf:"filter_match_criteria" json:"filter_match_criteria,omitempty"`
+	FilterLabels        []GoogleComputeURLMapPathMatcherRouteRulesMatchRulesMetadataFiltersFilterLabels `tf:"filter_labels,blocks" json:"filter_labels,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherRouteRulesMatchRulesMetadataFiltersFilterLabels is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherRouteRulesMatchRulesMetadataFiltersFilterLabels struct {
-	Name  *Value[string] `tf:"name"`
-	Value *Value[string] `tf:"value"`
+	Name  *Value[string] `tf:"name" json:"name,omitempty"`
+	Value *Value[string] `tf:"value" json:"value,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherRouteRulesMatchRulesQueryParameterMatches is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherRouteRulesMatchRulesQueryParameterMatches struct {
-	ExactMatch   *Value[string] `tf:"exact_match"`
-	Name         *Value[string] `tf:"name"`
-	PresentMatch *Value[bool]   `tf:"present_match"`
-	RegexMatch   *Value[string] `tf:"regex_match"`
+	ExactMatch   *Value[string] `tf:"exact_match" json:"exact_match,omitempty"`
+	Name         *Value[string] `tf:"name" json:"name,omitempty"`
+	PresentMatch *Value[bool]   `tf:"present_match" json:"present_match,omitempty"`
+	RegexMatch   *Value[string] `tf:"regex_match" json:"regex_match,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherRouteRulesRouteAction is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherRouteRulesRouteAction struct {
-	CorsPolicy              []GoogleComputeURLMapPathMatcherRouteRulesRouteActionCorsPolicy              `tf:"cors_policy,blocks"`
-	FaultInjectionPolicy    []GoogleComputeURLMapPathMatcherRouteRulesRouteActionFaultInjectionPolicy    `tf:"fault_injection_policy,blocks"`
-	RequestMirrorPolicy     []GoogleComputeURLMapPathMatcherRouteRulesRouteActionRequestMirrorPolicy     `tf:"request_mirror_policy,blocks"`
-	RetryPolicy             []GoogleComputeURLMapPathMatcherRouteRulesRouteActionRetryPolicy             `tf:"retry_policy,blocks"`
-	Timeout                 []GoogleComputeURLMapPathMatcherRouteRulesRouteActionTimeout                 `tf:"timeout,blocks"`
-	URLRewrite              []GoogleComputeURLMapPathMatcherRouteRulesRouteActionURLRewrite              `tf:"url_rewrite,blocks"`
-	WeightedBackendServices []GoogleComputeURLMapPathMatcherRouteRulesRouteActionWeightedBackendServices `tf:"weighted_backend_services,blocks"`
+	CorsPolicy              []GoogleComputeURLMapPathMatcherRouteRulesRouteActionCorsPolicy              `tf:"cors_policy,blocks" json:"cors_policy,omitempty"`
+	FaultInjectionPolicy    []GoogleComputeURLMapPathMatcherRouteRulesRouteActionFaultInjectionPolicy    `tf:"fault_injection_policy,blocks" json:"fault_injection_policy,omitempty"`
+	RequestMirrorPolicy     []GoogleComputeURLMapPathMatcherRouteRulesRouteActionRequestMirrorPolicy     `tf:"request_mirror_policy,blocks" json:"request_mirror_policy,omitempty"`
+	RetryPolicy             []GoogleComputeURLMapPathMatcherRouteRulesRouteActionRetryPolicy             `tf:"retry_policy,blocks" json:"retry_policy,omitempty"`
+	Timeout                 []GoogleComputeURLMapPathMatcherRouteRulesRouteActionTimeout                 `tf:"timeout,blocks" json:"timeout,omitempty"`
+	URLRewrite              []GoogleComputeURLMapPathMatcherRouteRulesRouteActionURLRewrite              `tf:"url_rewrite,blocks" json:"url_rewrite,omitempty"`
+	WeightedBackendServices []GoogleComputeURLMapPathMatcherRouteRulesRouteActionWeightedBackendServices `tf:"weighted_backend_services,blocks" json:"weighted_backend_services,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherRouteRulesRouteActionCorsPolicy is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherRouteRulesRouteActionCorsPolicy struct {
-	AllowCredentials   *Value[bool]     `tf:"allow_credentials"`
-	AllowHeaders       []*Value[string] `tf:"allow_headers"`
-	AllowMethods       []*Value[string] `tf:"allow_methods"`
-	AllowOriginRegexes []*Value[string] `tf:"allow_origin_regexes"`
-	AllowOrigins       []*Value[string] `tf:"allow_origins"`
-	Disabled           *Value[bool]     `tf:"disabled"`
-	ExposeHeaders      []*Value[string] `tf:"expose_headers"`
-	MaxAge             *Value[int64]    `tf:"max_age"`
+	AllowCredentials   *Value[bool]     `tf:"allow_credentials" json:"allow_credentials,omitempty"`
+	AllowHeaders       []*Value[string] `tf:"allow_headers" json:"allow_headers,omitempty"`
+	AllowMethods       []*Value[string] `tf:"allow_methods" json:"allow_methods,omitempty"`
+	AllowOriginRegexes []*Value[string] `tf:"allow_origin_regexes" json:"allow_origin_regexes,omitempty"`
+	AllowOrigins       []*Value[string] `tf:"allow_origins" json:"allow_origins,omitempty"`
+	Disabled           *Value[bool]     `tf:"disabled" json:"disabled,omitempty"`
+	ExposeHeaders      []*Value[string] `tf:"expose_headers" json:"expose_headers,omitempty"`
+	MaxAge             *Value[int64]    `tf:"max_age" json:"max_age,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherRouteRulesRouteActionFaultInjectionPolicy is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherRouteRulesRouteActionFaultInjectionPolicy struct {
-	Abort []GoogleComputeURLMapPathMatcherRouteRulesRouteActionFaultInjectionPolicyAbort `tf:"abort,blocks"`
-	Delay []GoogleComputeURLMapPathMatcherRouteRulesRouteActionFaultInjectionPolicyDelay `tf:"delay,blocks"`
+	Abort []GoogleComputeURLMapPathMatcherRouteRulesRouteActionFaultInjectionPolicyAbort `tf:"abort,blocks" json:"abort,omitempty"`
+	Delay []GoogleComputeURLMapPathMatcherRouteRulesRouteActionFaultInjectionPolicyDelay `tf:"delay,blocks" json:"delay,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherRouteRulesRouteActionFaultInjectionPolicyAbort is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherRouteRulesRouteActionFaultInjectionPolicyAbort struct {
-	HTTPStatus *Value[float64] `tf:"http_status"`
-	Percentage *Value[float64] `tf:"percentage"`
+	HTTPStatus *Value[float64] `tf:"http_status" json:"http_status,omitempty"`
+	Percentage *Value[float64] `tf:"percentage" json:"percentage,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherRouteRulesRouteActionFaultInjectionPolicyDelay is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherRouteRulesRouteActionFaultInjectionPolicyDelay struct {
-	Percentage *Value[float64]                                                                          `tf:"percentage"`
-	FixedDelay []GoogleComputeURLMapPathMatcherRouteRulesRouteActionFaultInjectionPolicyDelayFixedDelay `tf:"fixed_delay,blocks"`
+	Percentage *Value[float64]                                                                          `tf:"percentage" json:"percentage,omitempty"`
+	FixedDelay []GoogleComputeURLMapPathMatcherRouteRulesRouteActionFaultInjectionPolicyDelayFixedDelay `tf:"fixed_delay,blocks" json:"fixed_delay,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherRouteRulesRouteActionFaultInjectionPolicyDelayFixedDelay is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherRouteRulesRouteActionFaultInjectionPolicyDelayFixedDelay struct {
-	Nanos   *Value[float64] `tf:"nanos"`
-	Seconds *Value[string]  `tf:"seconds"`
+	Nanos   *Value[float64] `tf:"nanos" json:"nanos,omitempty"`
+	Seconds *Value[string]  `tf:"seconds" json:"seconds,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherRouteRulesRouteActionRequestMirrorPolicy is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherRouteRulesRouteActionRequestMirrorPolicy struct {
-	BackendService *Value[string] `tf:"backend_service"`
+	BackendService *Value[string] `tf:"backend_service" json:"backend_service,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherRouteRulesRouteActionRetryPolicy is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherRouteRulesRouteActionRetryPolicy struct {
-	NumRetries      *Value[float64]                                                               `tf:"num_retries"`
-	RetryConditions []*Value[string]                                                              `tf:"retry_conditions"`
-	PerTryTimeout   []GoogleComputeURLMapPathMatcherRouteRulesRouteActionRetryPolicyPerTryTimeout `tf:"per_try_timeout,blocks"`
+	NumRetries      *Value[float64]                                                               `tf:"num_retries" json:"num_retries,omitempty"`
+	RetryConditions []*Value[string]                                                              `tf:"retry_conditions" json:"retry_conditions,omitempty"`
+	PerTryTimeout   []GoogleComputeURLMapPathMatcherRouteRulesRouteActionRetryPolicyPerTryTimeout `tf:"per_try_timeout,blocks" json:"per_try_timeout,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherRouteRulesRouteActionRetryPolicyPerTryTimeout is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherRouteRulesRouteActionRetryPolicyPerTryTimeout struct {
-	Nanos   *Value[float64] `tf:"nanos"`
-	Seconds *Value[string]  `tf:"seconds"`
+	Nanos   *Value[float64] `tf:"nanos" json:"nanos,omitempty"`
+	Seconds *Value[string]  `tf:"seconds" json:"seconds,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherRouteRulesRouteActionTimeout is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherRouteRulesRouteActionTimeout struct {
-	Nanos   *Value[float64] `tf:"nanos"`
-	Seconds *Value[string]  `tf:"seconds"`
+	Nanos   *Value[float64] `tf:"nanos" json:"nanos,omitempty"`
+	Seconds *Value[string]  `tf:"seconds" json:"seconds,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherRouteRulesRouteActionURLRewrite is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherRouteRulesRouteActionURLRewrite struct {
-	HostRewrite         *Value[string] `tf:"host_rewrite"`
-	PathPrefixRewrite   *Value[string] `tf:"path_prefix_rewrite"`
-	PathTemplateRewrite *Value[string] `tf:"path_template_rewrite"`
+	HostRewrite         *Value[string] `tf:"host_rewrite" json:"host_rewrite,omitempty"`
+	PathPrefixRewrite   *Value[string] `tf:"path_prefix_rewrite" json:"path_prefix_rewrite,omitempty"`
+	PathTemplateRewrite *Value[string] `tf:"path_template_rewrite" json:"path_template_rewrite,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherRouteRulesRouteActionWeightedBackendServices is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherRouteRulesRouteActionWeightedBackendServices struct {
-	BackendService *Value[string]                                                                           `tf:"backend_service"`
-	Weight         *Value[float64]                                                                          `tf:"weight"`
-	HeaderAction   []GoogleComputeURLMapPathMatcherRouteRulesRouteActionWeightedBackendServicesHeaderAction `tf:"header_action,blocks"`
+	BackendService *Value[string]                                                                           `tf:"backend_service" json:"backend_service,omitempty"`
+	Weight         *Value[float64]                                                                          `tf:"weight" json:"weight,omitempty"`
+	HeaderAction   []GoogleComputeURLMapPathMatcherRouteRulesRouteActionWeightedBackendServicesHeaderAction `tf:"header_action,blocks" json:"header_action,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherRouteRulesRouteActionWeightedBackendServicesHeaderAction is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherRouteRulesRouteActionWeightedBackendServicesHeaderAction struct {
-	RequestHeadersToRemove  []*Value[string]                                                                                             `tf:"request_headers_to_remove"`
-	ResponseHeadersToRemove []*Value[string]                                                                                             `tf:"response_headers_to_remove"`
-	RequestHeadersToAdd     []GoogleComputeURLMapPathMatcherRouteRulesRouteActionWeightedBackendServicesHeaderActionRequestHeadersToAdd  `tf:"request_headers_to_add,blocks"`
-	ResponseHeadersToAdd    []GoogleComputeURLMapPathMatcherRouteRulesRouteActionWeightedBackendServicesHeaderActionResponseHeadersToAdd `tf:"response_headers_to_add,blocks"`
+	RequestHeadersToRemove  []*Value[string]                                                                                             `tf:"request_headers_to_remove" json:"request_headers_to_remove,omitempty"`
+	ResponseHeadersToRemove []*Value[string]                                                                                             `tf:"response_headers_to_remove" json:"response_headers_to_remove,omitempty"`
+	RequestHeadersToAdd     []GoogleComputeURLMapPathMatcherRouteRulesRouteActionWeightedBackendServicesHeaderActionRequestHeadersToAdd  `tf:"request_headers_to_add,blocks" json:"request_headers_to_add,omitempty"`
+	ResponseHeadersToAdd    []GoogleComputeURLMapPathMatcherRouteRulesRouteActionWeightedBackendServicesHeaderActionResponseHeadersToAdd `tf:"response_headers_to_add,blocks" json:"response_headers_to_add,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherRouteRulesRouteActionWeightedBackendServicesHeaderActionRequestHeadersToAdd is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherRouteRulesRouteActionWeightedBackendServicesHeaderActionRequestHeadersToAdd struct {
-	HeaderName  *Value[string] `tf:"header_name"`
-	HeaderValue *Value[string] `tf:"header_value"`
-	Replace     *Value[bool]   `tf:"replace"`
+	HeaderName  *Value[string] `tf:"header_name" json:"header_name,omitempty"`
+	HeaderValue *Value[string] `tf:"header_value" json:"header_value,omitempty"`
+	Replace     *Value[bool]   `tf:"replace" json:"replace,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherRouteRulesRouteActionWeightedBackendServicesHeaderActionResponseHeadersToAdd is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherRouteRulesRouteActionWeightedBackendServicesHeaderActionResponseHeadersToAdd struct {
-	HeaderName  *Value[string] `tf:"header_name"`
-	HeaderValue *Value[string] `tf:"header_value"`
-	Replace     *Value[bool]   `tf:"replace"`
+	HeaderName  *Value[string] `tf:"header_name" json:"header_name,omitempty"`
+	HeaderValue *Value[string] `tf:"header_value" json:"header_value,omitempty"`
+	Replace     *Value[bool]   `tf:"replace" json:"replace,omitempty"`
 }
 
 // GoogleComputeURLMapPathMatcherRouteRulesURLRedirect is a nested-block type used by the parent resource.
 type GoogleComputeURLMapPathMatcherRouteRulesURLRedirect struct {
-	HostRedirect         *Value[string] `tf:"host_redirect"`
-	HTTPSRedirect        *Value[bool]   `tf:"https_redirect"`
-	PathRedirect         *Value[string] `tf:"path_redirect"`
-	PrefixRedirect       *Value[string] `tf:"prefix_redirect"`
-	RedirectResponseCode *Value[string] `tf:"redirect_response_code"`
-	StripQuery           *Value[bool]   `tf:"strip_query"`
+	HostRedirect         *Value[string] `tf:"host_redirect" json:"host_redirect,omitempty"`
+	HTTPSRedirect        *Value[bool]   `tf:"https_redirect" json:"https_redirect,omitempty"`
+	PathRedirect         *Value[string] `tf:"path_redirect" json:"path_redirect,omitempty"`
+	PrefixRedirect       *Value[string] `tf:"prefix_redirect" json:"prefix_redirect,omitempty"`
+	RedirectResponseCode *Value[string] `tf:"redirect_response_code" json:"redirect_response_code,omitempty"`
+	StripQuery           *Value[bool]   `tf:"strip_query" json:"strip_query,omitempty"`
 }
 
 // GoogleComputeURLMapTest is a nested-block type used by the parent resource.
 type GoogleComputeURLMapTest struct {
-	Description *Value[string] `tf:"description"`
-	Host        *Value[string] `tf:"host"`
-	Path        *Value[string] `tf:"path"`
-	Service     *Value[string] `tf:"service"`
+	Description *Value[string] `tf:"description" json:"description,omitempty"`
+	Host        *Value[string] `tf:"host" json:"host,omitempty"`
+	Path        *Value[string] `tf:"path" json:"path,omitempty"`
+	Service     *Value[string] `tf:"service" json:"service,omitempty"`
 }
 
 // GoogleComputeURLMapTimeouts is a nested-block type used by the parent resource.
 type GoogleComputeURLMapTimeouts struct {
-	Create *Value[string] `tf:"create"`
-	Delete *Value[string] `tf:"delete"`
-	Update *Value[string] `tf:"update"`
+	Create *Value[string] `tf:"create" json:"create,omitempty"`
+	Delete *Value[string] `tf:"delete" json:"delete,omitempty"`
+	Update *Value[string] `tf:"update" json:"update,omitempty"`
 }
 
 // GoogleComputeURLMapSchema describes provider metadata for each attribute / nested

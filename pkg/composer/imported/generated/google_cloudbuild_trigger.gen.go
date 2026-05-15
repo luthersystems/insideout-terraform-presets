@@ -7,305 +7,305 @@ import "reflect"
 // GoogleCloudbuildTrigger is the generated Layer 1 typed model for the
 // `google_cloudbuild_trigger` Terraform resource.
 type GoogleCloudbuildTrigger struct {
-	CreateTime                   *Value[string]                                        `tf:"create_time"`
-	Description                  *Value[string]                                        `tf:"description"`
-	Disabled                     *Value[bool]                                          `tf:"disabled"`
-	Filename                     *Value[string]                                        `tf:"filename"`
-	Filter                       *Value[string]                                        `tf:"filter"`
-	ID                           *Value[string]                                        `tf:"id"`
-	IgnoredFiles                 []*Value[string]                                      `tf:"ignored_files"`
-	IncludeBuildLogs             *Value[string]                                        `tf:"include_build_logs"`
-	IncludedFiles                []*Value[string]                                      `tf:"included_files"`
-	Location                     *Value[string]                                        `tf:"location"`
-	Name                         *Value[string]                                        `tf:"name"`
-	Project                      *Value[string]                                        `tf:"project"`
-	ServiceAccount               *Value[string]                                        `tf:"service_account"`
-	Substitutions                map[string]*Value[string]                             `tf:"substitutions"`
-	Tags                         []*Value[string]                                      `tf:"tags"`
-	TriggerID                    *Value[string]                                        `tf:"trigger_id"`
-	ApprovalConfig               []GoogleCloudbuildTriggerApprovalConfig               `tf:"approval_config,blocks"`
-	BitbucketServerTriggerConfig []GoogleCloudbuildTriggerBitbucketServerTriggerConfig `tf:"bitbucket_server_trigger_config,blocks"`
-	Build                        []GoogleCloudbuildTriggerBuild                        `tf:"build,blocks"`
-	GitFileSource                []GoogleCloudbuildTriggerGitFileSource                `tf:"git_file_source,blocks"`
-	Github                       []GoogleCloudbuildTriggerGithub                       `tf:"github,blocks"`
-	PubsubConfig                 []GoogleCloudbuildTriggerPubsubConfig                 `tf:"pubsub_config,blocks"`
-	RepositoryEventConfig        []GoogleCloudbuildTriggerRepositoryEventConfig        `tf:"repository_event_config,blocks"`
-	SourceToBuild                []GoogleCloudbuildTriggerSourceToBuild                `tf:"source_to_build,blocks"`
-	Timeouts                     *GoogleCloudbuildTriggerTimeouts                      `tf:"timeouts,block"`
-	TriggerTemplate              []GoogleCloudbuildTriggerTriggerTemplate              `tf:"trigger_template,blocks"`
-	WebhookConfig                []GoogleCloudbuildTriggerWebhookConfig                `tf:"webhook_config,blocks"`
+	CreateTime                   *Value[string]                                        `tf:"create_time" json:"create_time,omitempty"`
+	Description                  *Value[string]                                        `tf:"description" json:"description,omitempty"`
+	Disabled                     *Value[bool]                                          `tf:"disabled" json:"disabled,omitempty"`
+	Filename                     *Value[string]                                        `tf:"filename" json:"filename,omitempty"`
+	Filter                       *Value[string]                                        `tf:"filter" json:"filter,omitempty"`
+	ID                           *Value[string]                                        `tf:"id" json:"id,omitempty"`
+	IgnoredFiles                 []*Value[string]                                      `tf:"ignored_files" json:"ignored_files,omitempty"`
+	IncludeBuildLogs             *Value[string]                                        `tf:"include_build_logs" json:"include_build_logs,omitempty"`
+	IncludedFiles                []*Value[string]                                      `tf:"included_files" json:"included_files,omitempty"`
+	Location                     *Value[string]                                        `tf:"location" json:"location,omitempty"`
+	Name                         *Value[string]                                        `tf:"name" json:"name,omitempty"`
+	Project                      *Value[string]                                        `tf:"project" json:"project,omitempty"`
+	ServiceAccount               *Value[string]                                        `tf:"service_account" json:"service_account,omitempty"`
+	Substitutions                map[string]*Value[string]                             `tf:"substitutions" json:"substitutions,omitempty"`
+	Tags                         []*Value[string]                                      `tf:"tags" json:"tags,omitempty"`
+	TriggerID                    *Value[string]                                        `tf:"trigger_id" json:"trigger_id,omitempty"`
+	ApprovalConfig               []GoogleCloudbuildTriggerApprovalConfig               `tf:"approval_config,blocks" json:"approval_config,omitempty"`
+	BitbucketServerTriggerConfig []GoogleCloudbuildTriggerBitbucketServerTriggerConfig `tf:"bitbucket_server_trigger_config,blocks" json:"bitbucket_server_trigger_config,omitempty"`
+	Build                        []GoogleCloudbuildTriggerBuild                        `tf:"build,blocks" json:"build,omitempty"`
+	GitFileSource                []GoogleCloudbuildTriggerGitFileSource                `tf:"git_file_source,blocks" json:"git_file_source,omitempty"`
+	Github                       []GoogleCloudbuildTriggerGithub                       `tf:"github,blocks" json:"github,omitempty"`
+	PubsubConfig                 []GoogleCloudbuildTriggerPubsubConfig                 `tf:"pubsub_config,blocks" json:"pubsub_config,omitempty"`
+	RepositoryEventConfig        []GoogleCloudbuildTriggerRepositoryEventConfig        `tf:"repository_event_config,blocks" json:"repository_event_config,omitempty"`
+	SourceToBuild                []GoogleCloudbuildTriggerSourceToBuild                `tf:"source_to_build,blocks" json:"source_to_build,omitempty"`
+	Timeouts                     *GoogleCloudbuildTriggerTimeouts                      `tf:"timeouts,block" json:"timeouts,omitempty"`
+	TriggerTemplate              []GoogleCloudbuildTriggerTriggerTemplate              `tf:"trigger_template,blocks" json:"trigger_template,omitempty"`
+	WebhookConfig                []GoogleCloudbuildTriggerWebhookConfig                `tf:"webhook_config,blocks" json:"webhook_config,omitempty"`
 }
 
 // GoogleCloudbuildTriggerApprovalConfig is a nested-block type used by the parent resource.
 type GoogleCloudbuildTriggerApprovalConfig struct {
-	ApprovalRequired *Value[bool] `tf:"approval_required"`
+	ApprovalRequired *Value[bool] `tf:"approval_required" json:"approval_required,omitempty"`
 }
 
 // GoogleCloudbuildTriggerBitbucketServerTriggerConfig is a nested-block type used by the parent resource.
 type GoogleCloudbuildTriggerBitbucketServerTriggerConfig struct {
-	BitbucketServerConfigResource *Value[string]                                                   `tf:"bitbucket_server_config_resource"`
-	ProjectKey                    *Value[string]                                                   `tf:"project_key"`
-	RepoSlug                      *Value[string]                                                   `tf:"repo_slug"`
-	PullRequest                   []GoogleCloudbuildTriggerBitbucketServerTriggerConfigPullRequest `tf:"pull_request,blocks"`
-	Push                          []GoogleCloudbuildTriggerBitbucketServerTriggerConfigPush        `tf:"push,blocks"`
+	BitbucketServerConfigResource *Value[string]                                                   `tf:"bitbucket_server_config_resource" json:"bitbucket_server_config_resource,omitempty"`
+	ProjectKey                    *Value[string]                                                   `tf:"project_key" json:"project_key,omitempty"`
+	RepoSlug                      *Value[string]                                                   `tf:"repo_slug" json:"repo_slug,omitempty"`
+	PullRequest                   []GoogleCloudbuildTriggerBitbucketServerTriggerConfigPullRequest `tf:"pull_request,blocks" json:"pull_request,omitempty"`
+	Push                          []GoogleCloudbuildTriggerBitbucketServerTriggerConfigPush        `tf:"push,blocks" json:"push,omitempty"`
 }
 
 // GoogleCloudbuildTriggerBitbucketServerTriggerConfigPullRequest is a nested-block type used by the parent resource.
 type GoogleCloudbuildTriggerBitbucketServerTriggerConfigPullRequest struct {
-	Branch         *Value[string] `tf:"branch"`
-	CommentControl *Value[string] `tf:"comment_control"`
-	InvertRegex    *Value[bool]   `tf:"invert_regex"`
+	Branch         *Value[string] `tf:"branch" json:"branch,omitempty"`
+	CommentControl *Value[string] `tf:"comment_control" json:"comment_control,omitempty"`
+	InvertRegex    *Value[bool]   `tf:"invert_regex" json:"invert_regex,omitempty"`
 }
 
 // GoogleCloudbuildTriggerBitbucketServerTriggerConfigPush is a nested-block type used by the parent resource.
 type GoogleCloudbuildTriggerBitbucketServerTriggerConfigPush struct {
-	Branch      *Value[string] `tf:"branch"`
-	InvertRegex *Value[bool]   `tf:"invert_regex"`
-	Tag         *Value[string] `tf:"tag"`
+	Branch      *Value[string] `tf:"branch" json:"branch,omitempty"`
+	InvertRegex *Value[bool]   `tf:"invert_regex" json:"invert_regex,omitempty"`
+	Tag         *Value[string] `tf:"tag" json:"tag,omitempty"`
 }
 
 // GoogleCloudbuildTriggerBuild is a nested-block type used by the parent resource.
 type GoogleCloudbuildTriggerBuild struct {
-	Images           []*Value[string]                               `tf:"images"`
-	LogsBucket       *Value[string]                                 `tf:"logs_bucket"`
-	QueueTTL         *Value[string]                                 `tf:"queue_ttl"`
-	Substitutions    map[string]*Value[string]                      `tf:"substitutions"`
-	Tags             []*Value[string]                               `tf:"tags"`
-	Timeout          *Value[string]                                 `tf:"timeout"`
-	Artifacts        []GoogleCloudbuildTriggerBuildArtifacts        `tf:"artifacts,blocks"`
-	AvailableSecrets []GoogleCloudbuildTriggerBuildAvailableSecrets `tf:"available_secrets,blocks"`
-	Options          []GoogleCloudbuildTriggerBuildOptions          `tf:"options,blocks"`
-	Secret           []GoogleCloudbuildTriggerBuildSecret           `tf:"secret,blocks"`
-	Source           []GoogleCloudbuildTriggerBuildSource           `tf:"source,blocks"`
-	Step             []GoogleCloudbuildTriggerBuildStep             `tf:"step,blocks"`
+	Images           []*Value[string]                               `tf:"images" json:"images,omitempty"`
+	LogsBucket       *Value[string]                                 `tf:"logs_bucket" json:"logs_bucket,omitempty"`
+	QueueTTL         *Value[string]                                 `tf:"queue_ttl" json:"queue_ttl,omitempty"`
+	Substitutions    map[string]*Value[string]                      `tf:"substitutions" json:"substitutions,omitempty"`
+	Tags             []*Value[string]                               `tf:"tags" json:"tags,omitempty"`
+	Timeout          *Value[string]                                 `tf:"timeout" json:"timeout,omitempty"`
+	Artifacts        []GoogleCloudbuildTriggerBuildArtifacts        `tf:"artifacts,blocks" json:"artifacts,omitempty"`
+	AvailableSecrets []GoogleCloudbuildTriggerBuildAvailableSecrets `tf:"available_secrets,blocks" json:"available_secrets,omitempty"`
+	Options          []GoogleCloudbuildTriggerBuildOptions          `tf:"options,blocks" json:"options,omitempty"`
+	Secret           []GoogleCloudbuildTriggerBuildSecret           `tf:"secret,blocks" json:"secret,omitempty"`
+	Source           []GoogleCloudbuildTriggerBuildSource           `tf:"source,blocks" json:"source,omitempty"`
+	Step             []GoogleCloudbuildTriggerBuildStep             `tf:"step,blocks" json:"step,omitempty"`
 }
 
 // GoogleCloudbuildTriggerBuildArtifacts is a nested-block type used by the parent resource.
 type GoogleCloudbuildTriggerBuildArtifacts struct {
-	Images         []*Value[string]                                      `tf:"images"`
-	MavenArtifacts []GoogleCloudbuildTriggerBuildArtifactsMavenArtifacts `tf:"maven_artifacts,blocks"`
-	NpmPackages    []GoogleCloudbuildTriggerBuildArtifactsNpmPackages    `tf:"npm_packages,blocks"`
-	Objects        []GoogleCloudbuildTriggerBuildArtifactsObjects        `tf:"objects,blocks"`
-	PythonPackages []GoogleCloudbuildTriggerBuildArtifactsPythonPackages `tf:"python_packages,blocks"`
+	Images         []*Value[string]                                      `tf:"images" json:"images,omitempty"`
+	MavenArtifacts []GoogleCloudbuildTriggerBuildArtifactsMavenArtifacts `tf:"maven_artifacts,blocks" json:"maven_artifacts,omitempty"`
+	NpmPackages    []GoogleCloudbuildTriggerBuildArtifactsNpmPackages    `tf:"npm_packages,blocks" json:"npm_packages,omitempty"`
+	Objects        []GoogleCloudbuildTriggerBuildArtifactsObjects        `tf:"objects,blocks" json:"objects,omitempty"`
+	PythonPackages []GoogleCloudbuildTriggerBuildArtifactsPythonPackages `tf:"python_packages,blocks" json:"python_packages,omitempty"`
 }
 
 // GoogleCloudbuildTriggerBuildArtifactsMavenArtifacts is a nested-block type used by the parent resource.
 type GoogleCloudbuildTriggerBuildArtifactsMavenArtifacts struct {
-	ArtifactID *Value[string] `tf:"artifact_id"`
-	GroupID    *Value[string] `tf:"group_id"`
-	Path       *Value[string] `tf:"path"`
-	Repository *Value[string] `tf:"repository"`
-	Version    *Value[string] `tf:"version"`
+	ArtifactID *Value[string] `tf:"artifact_id" json:"artifact_id,omitempty"`
+	GroupID    *Value[string] `tf:"group_id" json:"group_id,omitempty"`
+	Path       *Value[string] `tf:"path" json:"path,omitempty"`
+	Repository *Value[string] `tf:"repository" json:"repository,omitempty"`
+	Version    *Value[string] `tf:"version" json:"version,omitempty"`
 }
 
 // GoogleCloudbuildTriggerBuildArtifactsNpmPackages is a nested-block type used by the parent resource.
 type GoogleCloudbuildTriggerBuildArtifactsNpmPackages struct {
-	PackagePath *Value[string] `tf:"package_path"`
-	Repository  *Value[string] `tf:"repository"`
+	PackagePath *Value[string] `tf:"package_path" json:"package_path,omitempty"`
+	Repository  *Value[string] `tf:"repository" json:"repository,omitempty"`
 }
 
 // GoogleCloudbuildTriggerBuildArtifactsObjects is a nested-block type used by the parent resource.
 type GoogleCloudbuildTriggerBuildArtifactsObjects struct {
-	Location *Value[string]                                       `tf:"location"`
-	Paths    []*Value[string]                                     `tf:"paths"`
-	Timing   []GoogleCloudbuildTriggerBuildArtifactsObjectsTiming `tf:"timing"`
+	Location *Value[string]                                       `tf:"location" json:"location,omitempty"`
+	Paths    []*Value[string]                                     `tf:"paths" json:"paths,omitempty"`
+	Timing   []GoogleCloudbuildTriggerBuildArtifactsObjectsTiming `tf:"timing" json:"timing,omitempty"`
 }
 
 // GoogleCloudbuildTriggerBuildArtifactsObjectsTiming is a nested-block type used by the parent resource.
 type GoogleCloudbuildTriggerBuildArtifactsObjectsTiming struct {
-	EndTime   *Value[string] `tf:"end_time"`
-	StartTime *Value[string] `tf:"start_time"`
+	EndTime   *Value[string] `tf:"end_time" json:"end_time,omitempty"`
+	StartTime *Value[string] `tf:"start_time" json:"start_time,omitempty"`
 }
 
 // GoogleCloudbuildTriggerBuildArtifactsPythonPackages is a nested-block type used by the parent resource.
 type GoogleCloudbuildTriggerBuildArtifactsPythonPackages struct {
-	Paths      []*Value[string] `tf:"paths"`
-	Repository *Value[string]   `tf:"repository"`
+	Paths      []*Value[string] `tf:"paths" json:"paths,omitempty"`
+	Repository *Value[string]   `tf:"repository" json:"repository,omitempty"`
 }
 
 // GoogleCloudbuildTriggerBuildAvailableSecrets is a nested-block type used by the parent resource.
 type GoogleCloudbuildTriggerBuildAvailableSecrets struct {
-	SecretManager []GoogleCloudbuildTriggerBuildAvailableSecretsSecretManager `tf:"secret_manager,blocks"`
+	SecretManager []GoogleCloudbuildTriggerBuildAvailableSecretsSecretManager `tf:"secret_manager,blocks" json:"secret_manager,omitempty"`
 }
 
 // GoogleCloudbuildTriggerBuildAvailableSecretsSecretManager is a nested-block type used by the parent resource.
 type GoogleCloudbuildTriggerBuildAvailableSecretsSecretManager struct {
-	Env         *Value[string] `tf:"env"`
-	VersionName *Value[string] `tf:"version_name"`
+	Env         *Value[string] `tf:"env" json:"env,omitempty"`
+	VersionName *Value[string] `tf:"version_name" json:"version_name,omitempty"`
 }
 
 // GoogleCloudbuildTriggerBuildOptions is a nested-block type used by the parent resource.
 type GoogleCloudbuildTriggerBuildOptions struct {
-	DiskSizeGb            *Value[float64]                              `tf:"disk_size_gb"`
-	DynamicSubstitutions  *Value[bool]                                 `tf:"dynamic_substitutions"`
-	Env                   []*Value[string]                             `tf:"env"`
-	LogStreamingOption    *Value[string]                               `tf:"log_streaming_option"`
-	Logging               *Value[string]                               `tf:"logging"`
-	MachineType           *Value[string]                               `tf:"machine_type"`
-	RequestedVerifyOption *Value[string]                               `tf:"requested_verify_option"`
-	SecretEnv             []*Value[string]                             `tf:"secret_env"`
-	SourceProvenanceHash  []*Value[string]                             `tf:"source_provenance_hash"`
-	SubstitutionOption    *Value[string]                               `tf:"substitution_option"`
-	WorkerPool            *Value[string]                               `tf:"worker_pool"`
-	Volumes               []GoogleCloudbuildTriggerBuildOptionsVolumes `tf:"volumes,blocks"`
+	DiskSizeGb            *Value[float64]                              `tf:"disk_size_gb" json:"disk_size_gb,omitempty"`
+	DynamicSubstitutions  *Value[bool]                                 `tf:"dynamic_substitutions" json:"dynamic_substitutions,omitempty"`
+	Env                   []*Value[string]                             `tf:"env" json:"env,omitempty"`
+	LogStreamingOption    *Value[string]                               `tf:"log_streaming_option" json:"log_streaming_option,omitempty"`
+	Logging               *Value[string]                               `tf:"logging" json:"logging,omitempty"`
+	MachineType           *Value[string]                               `tf:"machine_type" json:"machine_type,omitempty"`
+	RequestedVerifyOption *Value[string]                               `tf:"requested_verify_option" json:"requested_verify_option,omitempty"`
+	SecretEnv             []*Value[string]                             `tf:"secret_env" json:"secret_env,omitempty"`
+	SourceProvenanceHash  []*Value[string]                             `tf:"source_provenance_hash" json:"source_provenance_hash,omitempty"`
+	SubstitutionOption    *Value[string]                               `tf:"substitution_option" json:"substitution_option,omitempty"`
+	WorkerPool            *Value[string]                               `tf:"worker_pool" json:"worker_pool,omitempty"`
+	Volumes               []GoogleCloudbuildTriggerBuildOptionsVolumes `tf:"volumes,blocks" json:"volumes,omitempty"`
 }
 
 // GoogleCloudbuildTriggerBuildOptionsVolumes is a nested-block type used by the parent resource.
 type GoogleCloudbuildTriggerBuildOptionsVolumes struct {
-	Name *Value[string] `tf:"name"`
-	Path *Value[string] `tf:"path"`
+	Name *Value[string] `tf:"name" json:"name,omitempty"`
+	Path *Value[string] `tf:"path" json:"path,omitempty"`
 }
 
 // GoogleCloudbuildTriggerBuildSecret is a nested-block type used by the parent resource.
 type GoogleCloudbuildTriggerBuildSecret struct {
-	KMSKeyName *Value[string]            `tf:"kms_key_name"`
-	SecretEnv  map[string]*Value[string] `tf:"secret_env"`
+	KMSKeyName *Value[string]            `tf:"kms_key_name" json:"kms_key_name,omitempty"`
+	SecretEnv  map[string]*Value[string] `tf:"secret_env" json:"secret_env,omitempty"`
 }
 
 // GoogleCloudbuildTriggerBuildSource is a nested-block type used by the parent resource.
 type GoogleCloudbuildTriggerBuildSource struct {
-	RepoSource    []GoogleCloudbuildTriggerBuildSourceRepoSource    `tf:"repo_source,blocks"`
-	StorageSource []GoogleCloudbuildTriggerBuildSourceStorageSource `tf:"storage_source,blocks"`
+	RepoSource    []GoogleCloudbuildTriggerBuildSourceRepoSource    `tf:"repo_source,blocks" json:"repo_source,omitempty"`
+	StorageSource []GoogleCloudbuildTriggerBuildSourceStorageSource `tf:"storage_source,blocks" json:"storage_source,omitempty"`
 }
 
 // GoogleCloudbuildTriggerBuildSourceRepoSource is a nested-block type used by the parent resource.
 type GoogleCloudbuildTriggerBuildSourceRepoSource struct {
-	BranchName    *Value[string]            `tf:"branch_name"`
-	CommitSHA     *Value[string]            `tf:"commit_sha"`
-	Dir           *Value[string]            `tf:"dir"`
-	InvertRegex   *Value[bool]              `tf:"invert_regex"`
-	ProjectID     *Value[string]            `tf:"project_id"`
-	RepoName      *Value[string]            `tf:"repo_name"`
-	Substitutions map[string]*Value[string] `tf:"substitutions"`
-	TagName       *Value[string]            `tf:"tag_name"`
+	BranchName    *Value[string]            `tf:"branch_name" json:"branch_name,omitempty"`
+	CommitSHA     *Value[string]            `tf:"commit_sha" json:"commit_sha,omitempty"`
+	Dir           *Value[string]            `tf:"dir" json:"dir,omitempty"`
+	InvertRegex   *Value[bool]              `tf:"invert_regex" json:"invert_regex,omitempty"`
+	ProjectID     *Value[string]            `tf:"project_id" json:"project_id,omitempty"`
+	RepoName      *Value[string]            `tf:"repo_name" json:"repo_name,omitempty"`
+	Substitutions map[string]*Value[string] `tf:"substitutions" json:"substitutions,omitempty"`
+	TagName       *Value[string]            `tf:"tag_name" json:"tag_name,omitempty"`
 }
 
 // GoogleCloudbuildTriggerBuildSourceStorageSource is a nested-block type used by the parent resource.
 type GoogleCloudbuildTriggerBuildSourceStorageSource struct {
-	Bucket     *Value[string] `tf:"bucket"`
-	Generation *Value[string] `tf:"generation"`
-	Object     *Value[string] `tf:"object"`
+	Bucket     *Value[string] `tf:"bucket" json:"bucket,omitempty"`
+	Generation *Value[string] `tf:"generation" json:"generation,omitempty"`
+	Object     *Value[string] `tf:"object" json:"object,omitempty"`
 }
 
 // GoogleCloudbuildTriggerBuildStep is a nested-block type used by the parent resource.
 type GoogleCloudbuildTriggerBuildStep struct {
-	AllowExitCodes []*Value[float64]                         `tf:"allow_exit_codes"`
-	AllowFailure   *Value[bool]                              `tf:"allow_failure"`
-	Args           []*Value[string]                          `tf:"args"`
-	Dir            *Value[string]                            `tf:"dir"`
-	Entrypoint     *Value[string]                            `tf:"entrypoint"`
-	Env            []*Value[string]                          `tf:"env"`
-	ID             *Value[string]                            `tf:"id"`
-	Name           *Value[string]                            `tf:"name"`
-	Script         *Value[string]                            `tf:"script"`
-	SecretEnv      []*Value[string]                          `tf:"secret_env"`
-	Timeout        *Value[string]                            `tf:"timeout"`
-	Timing         *Value[string]                            `tf:"timing"`
-	WaitFor        []*Value[string]                          `tf:"wait_for"`
-	Volumes        []GoogleCloudbuildTriggerBuildStepVolumes `tf:"volumes,blocks"`
+	AllowExitCodes []*Value[float64]                         `tf:"allow_exit_codes" json:"allow_exit_codes,omitempty"`
+	AllowFailure   *Value[bool]                              `tf:"allow_failure" json:"allow_failure,omitempty"`
+	Args           []*Value[string]                          `tf:"args" json:"args,omitempty"`
+	Dir            *Value[string]                            `tf:"dir" json:"dir,omitempty"`
+	Entrypoint     *Value[string]                            `tf:"entrypoint" json:"entrypoint,omitempty"`
+	Env            []*Value[string]                          `tf:"env" json:"env,omitempty"`
+	ID             *Value[string]                            `tf:"id" json:"id,omitempty"`
+	Name           *Value[string]                            `tf:"name" json:"name,omitempty"`
+	Script         *Value[string]                            `tf:"script" json:"script,omitempty"`
+	SecretEnv      []*Value[string]                          `tf:"secret_env" json:"secret_env,omitempty"`
+	Timeout        *Value[string]                            `tf:"timeout" json:"timeout,omitempty"`
+	Timing         *Value[string]                            `tf:"timing" json:"timing,omitempty"`
+	WaitFor        []*Value[string]                          `tf:"wait_for" json:"wait_for,omitempty"`
+	Volumes        []GoogleCloudbuildTriggerBuildStepVolumes `tf:"volumes,blocks" json:"volumes,omitempty"`
 }
 
 // GoogleCloudbuildTriggerBuildStepVolumes is a nested-block type used by the parent resource.
 type GoogleCloudbuildTriggerBuildStepVolumes struct {
-	Name *Value[string] `tf:"name"`
-	Path *Value[string] `tf:"path"`
+	Name *Value[string] `tf:"name" json:"name,omitempty"`
+	Path *Value[string] `tf:"path" json:"path,omitempty"`
 }
 
 // GoogleCloudbuildTriggerGitFileSource is a nested-block type used by the parent resource.
 type GoogleCloudbuildTriggerGitFileSource struct {
-	BitbucketServerConfig  *Value[string] `tf:"bitbucket_server_config"`
-	GithubEnterpriseConfig *Value[string] `tf:"github_enterprise_config"`
-	Path                   *Value[string] `tf:"path"`
-	RepoType               *Value[string] `tf:"repo_type"`
-	Repository             *Value[string] `tf:"repository"`
-	Revision               *Value[string] `tf:"revision"`
-	URI                    *Value[string] `tf:"uri"`
+	BitbucketServerConfig  *Value[string] `tf:"bitbucket_server_config" json:"bitbucket_server_config,omitempty"`
+	GithubEnterpriseConfig *Value[string] `tf:"github_enterprise_config" json:"github_enterprise_config,omitempty"`
+	Path                   *Value[string] `tf:"path" json:"path,omitempty"`
+	RepoType               *Value[string] `tf:"repo_type" json:"repo_type,omitempty"`
+	Repository             *Value[string] `tf:"repository" json:"repository,omitempty"`
+	Revision               *Value[string] `tf:"revision" json:"revision,omitempty"`
+	URI                    *Value[string] `tf:"uri" json:"uri,omitempty"`
 }
 
 // GoogleCloudbuildTriggerGithub is a nested-block type used by the parent resource.
 type GoogleCloudbuildTriggerGithub struct {
-	EnterpriseConfigResourceName *Value[string]                             `tf:"enterprise_config_resource_name"`
-	Name                         *Value[string]                             `tf:"name"`
-	Owner                        *Value[string]                             `tf:"owner"`
-	PullRequest                  []GoogleCloudbuildTriggerGithubPullRequest `tf:"pull_request,blocks"`
-	Push                         []GoogleCloudbuildTriggerGithubPush        `tf:"push,blocks"`
+	EnterpriseConfigResourceName *Value[string]                             `tf:"enterprise_config_resource_name" json:"enterprise_config_resource_name,omitempty"`
+	Name                         *Value[string]                             `tf:"name" json:"name,omitempty"`
+	Owner                        *Value[string]                             `tf:"owner" json:"owner,omitempty"`
+	PullRequest                  []GoogleCloudbuildTriggerGithubPullRequest `tf:"pull_request,blocks" json:"pull_request,omitempty"`
+	Push                         []GoogleCloudbuildTriggerGithubPush        `tf:"push,blocks" json:"push,omitempty"`
 }
 
 // GoogleCloudbuildTriggerGithubPullRequest is a nested-block type used by the parent resource.
 type GoogleCloudbuildTriggerGithubPullRequest struct {
-	Branch         *Value[string] `tf:"branch"`
-	CommentControl *Value[string] `tf:"comment_control"`
-	InvertRegex    *Value[bool]   `tf:"invert_regex"`
+	Branch         *Value[string] `tf:"branch" json:"branch,omitempty"`
+	CommentControl *Value[string] `tf:"comment_control" json:"comment_control,omitempty"`
+	InvertRegex    *Value[bool]   `tf:"invert_regex" json:"invert_regex,omitempty"`
 }
 
 // GoogleCloudbuildTriggerGithubPush is a nested-block type used by the parent resource.
 type GoogleCloudbuildTriggerGithubPush struct {
-	Branch      *Value[string] `tf:"branch"`
-	InvertRegex *Value[bool]   `tf:"invert_regex"`
-	Tag         *Value[string] `tf:"tag"`
+	Branch      *Value[string] `tf:"branch" json:"branch,omitempty"`
+	InvertRegex *Value[bool]   `tf:"invert_regex" json:"invert_regex,omitempty"`
+	Tag         *Value[string] `tf:"tag" json:"tag,omitempty"`
 }
 
 // GoogleCloudbuildTriggerPubsubConfig is a nested-block type used by the parent resource.
 type GoogleCloudbuildTriggerPubsubConfig struct {
-	ServiceAccountEmail *Value[string] `tf:"service_account_email"`
-	State               *Value[string] `tf:"state"`
-	Subscription        *Value[string] `tf:"subscription"`
-	Topic               *Value[string] `tf:"topic"`
+	ServiceAccountEmail *Value[string] `tf:"service_account_email" json:"service_account_email,omitempty"`
+	State               *Value[string] `tf:"state" json:"state,omitempty"`
+	Subscription        *Value[string] `tf:"subscription" json:"subscription,omitempty"`
+	Topic               *Value[string] `tf:"topic" json:"topic,omitempty"`
 }
 
 // GoogleCloudbuildTriggerRepositoryEventConfig is a nested-block type used by the parent resource.
 type GoogleCloudbuildTriggerRepositoryEventConfig struct {
-	Repository  *Value[string]                                            `tf:"repository"`
-	PullRequest []GoogleCloudbuildTriggerRepositoryEventConfigPullRequest `tf:"pull_request,blocks"`
-	Push        []GoogleCloudbuildTriggerRepositoryEventConfigPush        `tf:"push,blocks"`
+	Repository  *Value[string]                                            `tf:"repository" json:"repository,omitempty"`
+	PullRequest []GoogleCloudbuildTriggerRepositoryEventConfigPullRequest `tf:"pull_request,blocks" json:"pull_request,omitempty"`
+	Push        []GoogleCloudbuildTriggerRepositoryEventConfigPush        `tf:"push,blocks" json:"push,omitempty"`
 }
 
 // GoogleCloudbuildTriggerRepositoryEventConfigPullRequest is a nested-block type used by the parent resource.
 type GoogleCloudbuildTriggerRepositoryEventConfigPullRequest struct {
-	Branch         *Value[string] `tf:"branch"`
-	CommentControl *Value[string] `tf:"comment_control"`
-	InvertRegex    *Value[bool]   `tf:"invert_regex"`
+	Branch         *Value[string] `tf:"branch" json:"branch,omitempty"`
+	CommentControl *Value[string] `tf:"comment_control" json:"comment_control,omitempty"`
+	InvertRegex    *Value[bool]   `tf:"invert_regex" json:"invert_regex,omitempty"`
 }
 
 // GoogleCloudbuildTriggerRepositoryEventConfigPush is a nested-block type used by the parent resource.
 type GoogleCloudbuildTriggerRepositoryEventConfigPush struct {
-	Branch      *Value[string] `tf:"branch"`
-	InvertRegex *Value[bool]   `tf:"invert_regex"`
-	Tag         *Value[string] `tf:"tag"`
+	Branch      *Value[string] `tf:"branch" json:"branch,omitempty"`
+	InvertRegex *Value[bool]   `tf:"invert_regex" json:"invert_regex,omitempty"`
+	Tag         *Value[string] `tf:"tag" json:"tag,omitempty"`
 }
 
 // GoogleCloudbuildTriggerSourceToBuild is a nested-block type used by the parent resource.
 type GoogleCloudbuildTriggerSourceToBuild struct {
-	BitbucketServerConfig  *Value[string] `tf:"bitbucket_server_config"`
-	GithubEnterpriseConfig *Value[string] `tf:"github_enterprise_config"`
-	Ref                    *Value[string] `tf:"ref"`
-	RepoType               *Value[string] `tf:"repo_type"`
-	Repository             *Value[string] `tf:"repository"`
-	URI                    *Value[string] `tf:"uri"`
+	BitbucketServerConfig  *Value[string] `tf:"bitbucket_server_config" json:"bitbucket_server_config,omitempty"`
+	GithubEnterpriseConfig *Value[string] `tf:"github_enterprise_config" json:"github_enterprise_config,omitempty"`
+	Ref                    *Value[string] `tf:"ref" json:"ref,omitempty"`
+	RepoType               *Value[string] `tf:"repo_type" json:"repo_type,omitempty"`
+	Repository             *Value[string] `tf:"repository" json:"repository,omitempty"`
+	URI                    *Value[string] `tf:"uri" json:"uri,omitempty"`
 }
 
 // GoogleCloudbuildTriggerTimeouts is a nested-block type used by the parent resource.
 type GoogleCloudbuildTriggerTimeouts struct {
-	Create *Value[string] `tf:"create"`
-	Delete *Value[string] `tf:"delete"`
-	Update *Value[string] `tf:"update"`
+	Create *Value[string] `tf:"create" json:"create,omitempty"`
+	Delete *Value[string] `tf:"delete" json:"delete,omitempty"`
+	Update *Value[string] `tf:"update" json:"update,omitempty"`
 }
 
 // GoogleCloudbuildTriggerTriggerTemplate is a nested-block type used by the parent resource.
 type GoogleCloudbuildTriggerTriggerTemplate struct {
-	BranchName  *Value[string] `tf:"branch_name"`
-	CommitSHA   *Value[string] `tf:"commit_sha"`
-	Dir         *Value[string] `tf:"dir"`
-	InvertRegex *Value[bool]   `tf:"invert_regex"`
-	ProjectID   *Value[string] `tf:"project_id"`
-	RepoName    *Value[string] `tf:"repo_name"`
-	TagName     *Value[string] `tf:"tag_name"`
+	BranchName  *Value[string] `tf:"branch_name" json:"branch_name,omitempty"`
+	CommitSHA   *Value[string] `tf:"commit_sha" json:"commit_sha,omitempty"`
+	Dir         *Value[string] `tf:"dir" json:"dir,omitempty"`
+	InvertRegex *Value[bool]   `tf:"invert_regex" json:"invert_regex,omitempty"`
+	ProjectID   *Value[string] `tf:"project_id" json:"project_id,omitempty"`
+	RepoName    *Value[string] `tf:"repo_name" json:"repo_name,omitempty"`
+	TagName     *Value[string] `tf:"tag_name" json:"tag_name,omitempty"`
 }
 
 // GoogleCloudbuildTriggerWebhookConfig is a nested-block type used by the parent resource.
 type GoogleCloudbuildTriggerWebhookConfig struct {
-	Secret *Value[string] `tf:"secret"`
-	State  *Value[string] `tf:"state"`
+	Secret *Value[string] `tf:"secret" json:"secret,omitempty"`
+	State  *Value[string] `tf:"state" json:"state,omitempty"`
 }
 
 // GoogleCloudbuildTriggerSchema describes provider metadata for each attribute / nested

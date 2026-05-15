@@ -7,24 +7,24 @@ import "reflect"
 // GoogleAPIGatewayAPI is the generated Layer 1 typed model for the
 // `google_api_gateway_api` Terraform resource.
 type GoogleAPIGatewayAPI struct {
-	APIID           *Value[string]               `tf:"api_id"`
-	CreateTime      *Value[string]               `tf:"create_time"`
-	DisplayName     *Value[string]               `tf:"display_name"`
-	EffectiveLabels map[string]*Value[string]    `tf:"effective_labels"`
-	ID              *Value[string]               `tf:"id"`
-	Labels          map[string]*Value[string]    `tf:"labels"`
-	ManagedService  *Value[string]               `tf:"managed_service"`
-	Name            *Value[string]               `tf:"name"`
-	Project         *Value[string]               `tf:"project"`
-	TerraformLabels map[string]*Value[string]    `tf:"terraform_labels"`
-	Timeouts        *GoogleAPIGatewayAPITimeouts `tf:"timeouts,block"`
+	APIID           *Value[string]               `tf:"api_id" json:"api_id,omitempty"`
+	CreateTime      *Value[string]               `tf:"create_time" json:"create_time,omitempty"`
+	DisplayName     *Value[string]               `tf:"display_name" json:"display_name,omitempty"`
+	EffectiveLabels map[string]*Value[string]    `tf:"effective_labels" json:"effective_labels,omitempty"`
+	ID              *Value[string]               `tf:"id" json:"id,omitempty"`
+	Labels          map[string]*Value[string]    `tf:"labels" json:"labels,omitempty"`
+	ManagedService  *Value[string]               `tf:"managed_service" json:"managed_service,omitempty"`
+	Name            *Value[string]               `tf:"name" json:"name,omitempty"`
+	Project         *Value[string]               `tf:"project" json:"project,omitempty"`
+	TerraformLabels map[string]*Value[string]    `tf:"terraform_labels" json:"terraform_labels,omitempty"`
+	Timeouts        *GoogleAPIGatewayAPITimeouts `tf:"timeouts,block" json:"timeouts,omitempty"`
 }
 
 // GoogleAPIGatewayAPITimeouts is a nested-block type used by the parent resource.
 type GoogleAPIGatewayAPITimeouts struct {
-	Create *Value[string] `tf:"create"`
-	Delete *Value[string] `tf:"delete"`
-	Update *Value[string] `tf:"update"`
+	Create *Value[string] `tf:"create" json:"create,omitempty"`
+	Delete *Value[string] `tf:"delete" json:"delete,omitempty"`
+	Update *Value[string] `tf:"update" json:"update,omitempty"`
 }
 
 // GoogleAPIGatewayAPISchema describes provider metadata for each attribute / nested

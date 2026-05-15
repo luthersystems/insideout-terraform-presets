@@ -7,157 +7,157 @@ import "reflect"
 // GoogleIdentityPlatformConfig is the generated Layer 1 typed model for the
 // `google_identity_platform_config` Terraform resource.
 type GoogleIdentityPlatformConfig struct {
-	AuthorizedDomains        []*Value[string]                                `tf:"authorized_domains"`
-	AutodeleteAnonymousUsers *Value[bool]                                    `tf:"autodelete_anonymous_users"`
-	ID                       *Value[string]                                  `tf:"id"`
-	Name                     *Value[string]                                  `tf:"name"`
-	Project                  *Value[string]                                  `tf:"project"`
-	BlockingFunctions        []GoogleIdentityPlatformConfigBlockingFunctions `tf:"blocking_functions,blocks"`
-	Client                   []GoogleIdentityPlatformConfigClient            `tf:"client,blocks"`
-	MFA                      []GoogleIdentityPlatformConfigMFA               `tf:"mfa,blocks"`
-	Monitoring               []GoogleIdentityPlatformConfigMonitoring        `tf:"monitoring,blocks"`
-	MultiTenant              []GoogleIdentityPlatformConfigMultiTenant       `tf:"multi_tenant,blocks"`
-	Quota                    []GoogleIdentityPlatformConfigQuota             `tf:"quota,blocks"`
-	SignIn                   []GoogleIdentityPlatformConfigSignIn            `tf:"sign_in,blocks"`
-	SMSRegionConfig          []GoogleIdentityPlatformConfigSMSRegionConfig   `tf:"sms_region_config,blocks"`
-	Timeouts                 *GoogleIdentityPlatformConfigTimeouts           `tf:"timeouts,block"`
+	AuthorizedDomains        []*Value[string]                                `tf:"authorized_domains" json:"authorized_domains,omitempty"`
+	AutodeleteAnonymousUsers *Value[bool]                                    `tf:"autodelete_anonymous_users" json:"autodelete_anonymous_users,omitempty"`
+	ID                       *Value[string]                                  `tf:"id" json:"id,omitempty"`
+	Name                     *Value[string]                                  `tf:"name" json:"name,omitempty"`
+	Project                  *Value[string]                                  `tf:"project" json:"project,omitempty"`
+	BlockingFunctions        []GoogleIdentityPlatformConfigBlockingFunctions `tf:"blocking_functions,blocks" json:"blocking_functions,omitempty"`
+	Client                   []GoogleIdentityPlatformConfigClient            `tf:"client,blocks" json:"client,omitempty"`
+	MFA                      []GoogleIdentityPlatformConfigMFA               `tf:"mfa,blocks" json:"mfa,omitempty"`
+	Monitoring               []GoogleIdentityPlatformConfigMonitoring        `tf:"monitoring,blocks" json:"monitoring,omitempty"`
+	MultiTenant              []GoogleIdentityPlatformConfigMultiTenant       `tf:"multi_tenant,blocks" json:"multi_tenant,omitempty"`
+	Quota                    []GoogleIdentityPlatformConfigQuota             `tf:"quota,blocks" json:"quota,omitempty"`
+	SignIn                   []GoogleIdentityPlatformConfigSignIn            `tf:"sign_in,blocks" json:"sign_in,omitempty"`
+	SMSRegionConfig          []GoogleIdentityPlatformConfigSMSRegionConfig   `tf:"sms_region_config,blocks" json:"sms_region_config,omitempty"`
+	Timeouts                 *GoogleIdentityPlatformConfigTimeouts           `tf:"timeouts,block" json:"timeouts,omitempty"`
 }
 
 // GoogleIdentityPlatformConfigBlockingFunctions is a nested-block type used by the parent resource.
 type GoogleIdentityPlatformConfigBlockingFunctions struct {
-	ForwardInboundCredentials []GoogleIdentityPlatformConfigBlockingFunctionsForwardInboundCredentials `tf:"forward_inbound_credentials,blocks"`
-	Triggers                  []GoogleIdentityPlatformConfigBlockingFunctionsTriggers                  `tf:"triggers,blocks"`
+	ForwardInboundCredentials []GoogleIdentityPlatformConfigBlockingFunctionsForwardInboundCredentials `tf:"forward_inbound_credentials,blocks" json:"forward_inbound_credentials,omitempty"`
+	Triggers                  []GoogleIdentityPlatformConfigBlockingFunctionsTriggers                  `tf:"triggers,blocks" json:"triggers,omitempty"`
 }
 
 // GoogleIdentityPlatformConfigBlockingFunctionsForwardInboundCredentials is a nested-block type used by the parent resource.
 type GoogleIdentityPlatformConfigBlockingFunctionsForwardInboundCredentials struct {
-	AccessToken  *Value[bool] `tf:"access_token"`
-	IDToken      *Value[bool] `tf:"id_token"`
-	RefreshToken *Value[bool] `tf:"refresh_token"`
+	AccessToken  *Value[bool] `tf:"access_token" json:"access_token,omitempty"`
+	IDToken      *Value[bool] `tf:"id_token" json:"id_token,omitempty"`
+	RefreshToken *Value[bool] `tf:"refresh_token" json:"refresh_token,omitempty"`
 }
 
 // GoogleIdentityPlatformConfigBlockingFunctionsTriggers is a nested-block type used by the parent resource.
 type GoogleIdentityPlatformConfigBlockingFunctionsTriggers struct {
-	EventType   *Value[string] `tf:"event_type"`
-	FunctionURI *Value[string] `tf:"function_uri"`
-	UpdateTime  *Value[string] `tf:"update_time"`
+	EventType   *Value[string] `tf:"event_type" json:"event_type,omitempty"`
+	FunctionURI *Value[string] `tf:"function_uri" json:"function_uri,omitempty"`
+	UpdateTime  *Value[string] `tf:"update_time" json:"update_time,omitempty"`
 }
 
 // GoogleIdentityPlatformConfigClient is a nested-block type used by the parent resource.
 type GoogleIdentityPlatformConfigClient struct {
-	APIKey            *Value[string]                                  `tf:"api_key"`
-	FirebaseSubdomain *Value[string]                                  `tf:"firebase_subdomain"`
-	Permissions       []GoogleIdentityPlatformConfigClientPermissions `tf:"permissions,blocks"`
+	APIKey            *Value[string]                                  `tf:"api_key" json:"api_key,omitempty"`
+	FirebaseSubdomain *Value[string]                                  `tf:"firebase_subdomain" json:"firebase_subdomain,omitempty"`
+	Permissions       []GoogleIdentityPlatformConfigClientPermissions `tf:"permissions,blocks" json:"permissions,omitempty"`
 }
 
 // GoogleIdentityPlatformConfigClientPermissions is a nested-block type used by the parent resource.
 type GoogleIdentityPlatformConfigClientPermissions struct {
-	DisabledUserDeletion *Value[bool] `tf:"disabled_user_deletion"`
-	DisabledUserSignup   *Value[bool] `tf:"disabled_user_signup"`
+	DisabledUserDeletion *Value[bool] `tf:"disabled_user_deletion" json:"disabled_user_deletion,omitempty"`
+	DisabledUserSignup   *Value[bool] `tf:"disabled_user_signup" json:"disabled_user_signup,omitempty"`
 }
 
 // GoogleIdentityPlatformConfigMFA is a nested-block type used by the parent resource.
 type GoogleIdentityPlatformConfigMFA struct {
-	EnabledProviders []*Value[string]                                 `tf:"enabled_providers"`
-	State            *Value[string]                                   `tf:"state"`
-	ProviderConfigs  []GoogleIdentityPlatformConfigMFAProviderConfigs `tf:"provider_configs,blocks"`
+	EnabledProviders []*Value[string]                                 `tf:"enabled_providers" json:"enabled_providers,omitempty"`
+	State            *Value[string]                                   `tf:"state" json:"state,omitempty"`
+	ProviderConfigs  []GoogleIdentityPlatformConfigMFAProviderConfigs `tf:"provider_configs,blocks" json:"provider_configs,omitempty"`
 }
 
 // GoogleIdentityPlatformConfigMFAProviderConfigs is a nested-block type used by the parent resource.
 type GoogleIdentityPlatformConfigMFAProviderConfigs struct {
-	State              *Value[string]                                                     `tf:"state"`
-	TotpProviderConfig []GoogleIdentityPlatformConfigMFAProviderConfigsTotpProviderConfig `tf:"totp_provider_config,blocks"`
+	State              *Value[string]                                                     `tf:"state" json:"state,omitempty"`
+	TotpProviderConfig []GoogleIdentityPlatformConfigMFAProviderConfigsTotpProviderConfig `tf:"totp_provider_config,blocks" json:"totp_provider_config,omitempty"`
 }
 
 // GoogleIdentityPlatformConfigMFAProviderConfigsTotpProviderConfig is a nested-block type used by the parent resource.
 type GoogleIdentityPlatformConfigMFAProviderConfigsTotpProviderConfig struct {
-	AdjacentIntervals *Value[float64] `tf:"adjacent_intervals"`
+	AdjacentIntervals *Value[float64] `tf:"adjacent_intervals" json:"adjacent_intervals,omitempty"`
 }
 
 // GoogleIdentityPlatformConfigMonitoring is a nested-block type used by the parent resource.
 type GoogleIdentityPlatformConfigMonitoring struct {
-	RequestLogging []GoogleIdentityPlatformConfigMonitoringRequestLogging `tf:"request_logging,blocks"`
+	RequestLogging []GoogleIdentityPlatformConfigMonitoringRequestLogging `tf:"request_logging,blocks" json:"request_logging,omitempty"`
 }
 
 // GoogleIdentityPlatformConfigMonitoringRequestLogging is a nested-block type used by the parent resource.
 type GoogleIdentityPlatformConfigMonitoringRequestLogging struct {
-	Enabled *Value[bool] `tf:"enabled"`
+	Enabled *Value[bool] `tf:"enabled" json:"enabled,omitempty"`
 }
 
 // GoogleIdentityPlatformConfigMultiTenant is a nested-block type used by the parent resource.
 type GoogleIdentityPlatformConfigMultiTenant struct {
-	AllowTenants          *Value[bool]   `tf:"allow_tenants"`
-	DefaultTenantLocation *Value[string] `tf:"default_tenant_location"`
+	AllowTenants          *Value[bool]   `tf:"allow_tenants" json:"allow_tenants,omitempty"`
+	DefaultTenantLocation *Value[string] `tf:"default_tenant_location" json:"default_tenant_location,omitempty"`
 }
 
 // GoogleIdentityPlatformConfigQuota is a nested-block type used by the parent resource.
 type GoogleIdentityPlatformConfigQuota struct {
-	SignUpQuotaConfig []GoogleIdentityPlatformConfigQuotaSignUpQuotaConfig `tf:"sign_up_quota_config,blocks"`
+	SignUpQuotaConfig []GoogleIdentityPlatformConfigQuotaSignUpQuotaConfig `tf:"sign_up_quota_config,blocks" json:"sign_up_quota_config,omitempty"`
 }
 
 // GoogleIdentityPlatformConfigQuotaSignUpQuotaConfig is a nested-block type used by the parent resource.
 type GoogleIdentityPlatformConfigQuotaSignUpQuotaConfig struct {
-	Quota         *Value[float64] `tf:"quota"`
-	QuotaDuration *Value[string]  `tf:"quota_duration"`
-	StartTime     *Value[string]  `tf:"start_time"`
+	Quota         *Value[float64] `tf:"quota" json:"quota,omitempty"`
+	QuotaDuration *Value[string]  `tf:"quota_duration" json:"quota_duration,omitempty"`
+	StartTime     *Value[string]  `tf:"start_time" json:"start_time,omitempty"`
 }
 
 // GoogleIdentityPlatformConfigSMSRegionConfig is a nested-block type used by the parent resource.
 type GoogleIdentityPlatformConfigSMSRegionConfig struct {
-	AllowByDefault []GoogleIdentityPlatformConfigSMSRegionConfigAllowByDefault `tf:"allow_by_default,blocks"`
-	AllowlistOnly  []GoogleIdentityPlatformConfigSMSRegionConfigAllowlistOnly  `tf:"allowlist_only,blocks"`
+	AllowByDefault []GoogleIdentityPlatformConfigSMSRegionConfigAllowByDefault `tf:"allow_by_default,blocks" json:"allow_by_default,omitempty"`
+	AllowlistOnly  []GoogleIdentityPlatformConfigSMSRegionConfigAllowlistOnly  `tf:"allowlist_only,blocks" json:"allowlist_only,omitempty"`
 }
 
 // GoogleIdentityPlatformConfigSMSRegionConfigAllowByDefault is a nested-block type used by the parent resource.
 type GoogleIdentityPlatformConfigSMSRegionConfigAllowByDefault struct {
-	DisallowedRegions []*Value[string] `tf:"disallowed_regions"`
+	DisallowedRegions []*Value[string] `tf:"disallowed_regions" json:"disallowed_regions,omitempty"`
 }
 
 // GoogleIdentityPlatformConfigSMSRegionConfigAllowlistOnly is a nested-block type used by the parent resource.
 type GoogleIdentityPlatformConfigSMSRegionConfigAllowlistOnly struct {
-	AllowedRegions []*Value[string] `tf:"allowed_regions"`
+	AllowedRegions []*Value[string] `tf:"allowed_regions" json:"allowed_regions,omitempty"`
 }
 
 // GoogleIdentityPlatformConfigSignIn is a nested-block type used by the parent resource.
 type GoogleIdentityPlatformConfigSignIn struct {
-	AllowDuplicateEmails *Value[bool]                                    `tf:"allow_duplicate_emails"`
-	HashConfig           []GoogleIdentityPlatformConfigSignInHashConfig  `tf:"hash_config"`
-	Anonymous            []GoogleIdentityPlatformConfigSignInAnonymous   `tf:"anonymous,blocks"`
-	Email                []GoogleIdentityPlatformConfigSignInEmail       `tf:"email,blocks"`
-	PhoneNumber          []GoogleIdentityPlatformConfigSignInPhoneNumber `tf:"phone_number,blocks"`
+	AllowDuplicateEmails *Value[bool]                                    `tf:"allow_duplicate_emails" json:"allow_duplicate_emails,omitempty"`
+	HashConfig           []GoogleIdentityPlatformConfigSignInHashConfig  `tf:"hash_config" json:"hash_config,omitempty"`
+	Anonymous            []GoogleIdentityPlatformConfigSignInAnonymous   `tf:"anonymous,blocks" json:"anonymous,omitempty"`
+	Email                []GoogleIdentityPlatformConfigSignInEmail       `tf:"email,blocks" json:"email,omitempty"`
+	PhoneNumber          []GoogleIdentityPlatformConfigSignInPhoneNumber `tf:"phone_number,blocks" json:"phone_number,omitempty"`
 }
 
 // GoogleIdentityPlatformConfigSignInAnonymous is a nested-block type used by the parent resource.
 type GoogleIdentityPlatformConfigSignInAnonymous struct {
-	Enabled *Value[bool] `tf:"enabled"`
+	Enabled *Value[bool] `tf:"enabled" json:"enabled,omitempty"`
 }
 
 // GoogleIdentityPlatformConfigSignInEmail is a nested-block type used by the parent resource.
 type GoogleIdentityPlatformConfigSignInEmail struct {
-	Enabled          *Value[bool] `tf:"enabled"`
-	PasswordRequired *Value[bool] `tf:"password_required"`
+	Enabled          *Value[bool] `tf:"enabled" json:"enabled,omitempty"`
+	PasswordRequired *Value[bool] `tf:"password_required" json:"password_required,omitempty"`
 }
 
 // GoogleIdentityPlatformConfigSignInHashConfig is a nested-block type used by the parent resource.
 type GoogleIdentityPlatformConfigSignInHashConfig struct {
-	Algorithm     *Value[string]  `tf:"algorithm"`
-	MemoryCost    *Value[float64] `tf:"memory_cost"`
-	Rounds        *Value[float64] `tf:"rounds"`
-	SaltSeparator *Value[string]  `tf:"salt_separator"`
-	SignerKey     *Value[string]  `tf:"signer_key"`
+	Algorithm     *Value[string]  `tf:"algorithm" json:"algorithm,omitempty"`
+	MemoryCost    *Value[float64] `tf:"memory_cost" json:"memory_cost,omitempty"`
+	Rounds        *Value[float64] `tf:"rounds" json:"rounds,omitempty"`
+	SaltSeparator *Value[string]  `tf:"salt_separator" json:"salt_separator,omitempty"`
+	SignerKey     *Value[string]  `tf:"signer_key" json:"signer_key,omitempty"`
 }
 
 // GoogleIdentityPlatformConfigSignInPhoneNumber is a nested-block type used by the parent resource.
 type GoogleIdentityPlatformConfigSignInPhoneNumber struct {
-	Enabled          *Value[bool]              `tf:"enabled"`
-	TestPhoneNumbers map[string]*Value[string] `tf:"test_phone_numbers"`
+	Enabled          *Value[bool]              `tf:"enabled" json:"enabled,omitempty"`
+	TestPhoneNumbers map[string]*Value[string] `tf:"test_phone_numbers" json:"test_phone_numbers,omitempty"`
 }
 
 // GoogleIdentityPlatformConfigTimeouts is a nested-block type used by the parent resource.
 type GoogleIdentityPlatformConfigTimeouts struct {
-	Create *Value[string] `tf:"create"`
-	Delete *Value[string] `tf:"delete"`
-	Update *Value[string] `tf:"update"`
+	Create *Value[string] `tf:"create" json:"create,omitempty"`
+	Delete *Value[string] `tf:"delete" json:"delete,omitempty"`
+	Update *Value[string] `tf:"update" json:"update,omitempty"`
 }
 
 // GoogleIdentityPlatformConfigSchema describes provider metadata for each attribute / nested

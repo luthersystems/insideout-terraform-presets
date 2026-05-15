@@ -7,40 +7,40 @@ import "reflect"
 // GoogleComputeRouter is the generated Layer 1 typed model for the
 // `google_compute_router` Terraform resource.
 type GoogleComputeRouter struct {
-	CreationTimestamp           *Value[string]               `tf:"creation_timestamp"`
-	Description                 *Value[string]               `tf:"description"`
-	EncryptedInterconnectRouter *Value[bool]                 `tf:"encrypted_interconnect_router"`
-	ID                          *Value[string]               `tf:"id"`
-	Name                        *Value[string]               `tf:"name"`
-	Network                     *Value[string]               `tf:"network"`
-	Project                     *Value[string]               `tf:"project"`
-	Region                      *Value[string]               `tf:"region"`
-	SelfLink                    *Value[string]               `tf:"self_link"`
-	Bgp                         []GoogleComputeRouterBgp     `tf:"bgp,blocks"`
-	Timeouts                    *GoogleComputeRouterTimeouts `tf:"timeouts,block"`
+	CreationTimestamp           *Value[string]               `tf:"creation_timestamp" json:"creation_timestamp,omitempty"`
+	Description                 *Value[string]               `tf:"description" json:"description,omitempty"`
+	EncryptedInterconnectRouter *Value[bool]                 `tf:"encrypted_interconnect_router" json:"encrypted_interconnect_router,omitempty"`
+	ID                          *Value[string]               `tf:"id" json:"id,omitempty"`
+	Name                        *Value[string]               `tf:"name" json:"name,omitempty"`
+	Network                     *Value[string]               `tf:"network" json:"network,omitempty"`
+	Project                     *Value[string]               `tf:"project" json:"project,omitempty"`
+	Region                      *Value[string]               `tf:"region" json:"region,omitempty"`
+	SelfLink                    *Value[string]               `tf:"self_link" json:"self_link,omitempty"`
+	Bgp                         []GoogleComputeRouterBgp     `tf:"bgp,blocks" json:"bgp,omitempty"`
+	Timeouts                    *GoogleComputeRouterTimeouts `tf:"timeouts,block" json:"timeouts,omitempty"`
 }
 
 // GoogleComputeRouterBgp is a nested-block type used by the parent resource.
 type GoogleComputeRouterBgp struct {
-	AdvertiseMode      *Value[string]                             `tf:"advertise_mode"`
-	AdvertisedGroups   []*Value[string]                           `tf:"advertised_groups"`
-	Asn                *Value[float64]                            `tf:"asn"`
-	IdentifierRange    *Value[string]                             `tf:"identifier_range"`
-	KeepaliveInterval  *Value[float64]                            `tf:"keepalive_interval"`
-	AdvertisedIpRanges []GoogleComputeRouterBgpAdvertisedIpRanges `tf:"advertised_ip_ranges,blocks"`
+	AdvertiseMode      *Value[string]                             `tf:"advertise_mode" json:"advertise_mode,omitempty"`
+	AdvertisedGroups   []*Value[string]                           `tf:"advertised_groups" json:"advertised_groups,omitempty"`
+	Asn                *Value[float64]                            `tf:"asn" json:"asn,omitempty"`
+	IdentifierRange    *Value[string]                             `tf:"identifier_range" json:"identifier_range,omitempty"`
+	KeepaliveInterval  *Value[float64]                            `tf:"keepalive_interval" json:"keepalive_interval,omitempty"`
+	AdvertisedIpRanges []GoogleComputeRouterBgpAdvertisedIpRanges `tf:"advertised_ip_ranges,blocks" json:"advertised_ip_ranges,omitempty"`
 }
 
 // GoogleComputeRouterBgpAdvertisedIpRanges is a nested-block type used by the parent resource.
 type GoogleComputeRouterBgpAdvertisedIpRanges struct {
-	Description *Value[string] `tf:"description"`
-	Range_      *Value[string] `tf:"range"`
+	Description *Value[string] `tf:"description" json:"description,omitempty"`
+	Range_      *Value[string] `tf:"range" json:"range,omitempty"`
 }
 
 // GoogleComputeRouterTimeouts is a nested-block type used by the parent resource.
 type GoogleComputeRouterTimeouts struct {
-	Create *Value[string] `tf:"create"`
-	Delete *Value[string] `tf:"delete"`
-	Update *Value[string] `tf:"update"`
+	Create *Value[string] `tf:"create" json:"create,omitempty"`
+	Delete *Value[string] `tf:"delete" json:"delete,omitempty"`
+	Update *Value[string] `tf:"update" json:"update,omitempty"`
 }
 
 // GoogleComputeRouterSchema describes provider metadata for each attribute / nested

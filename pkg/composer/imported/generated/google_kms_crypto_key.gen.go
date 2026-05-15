@@ -7,40 +7,40 @@ import "reflect"
 // GoogleKMSCryptoKey is the generated Layer 1 typed model for the
 // `google_kms_crypto_key` Terraform resource.
 type GoogleKMSCryptoKey struct {
-	CryptoKeyBackend           *Value[string]                      `tf:"crypto_key_backend"`
-	DestroyScheduledDuration   *Value[string]                      `tf:"destroy_scheduled_duration"`
-	EffectiveLabels            map[string]*Value[string]           `tf:"effective_labels"`
-	ID                         *Value[string]                      `tf:"id"`
-	ImportOnly                 *Value[bool]                        `tf:"import_only"`
-	KeyRing                    *Value[string]                      `tf:"key_ring"`
-	Labels                     map[string]*Value[string]           `tf:"labels"`
-	Name                       *Value[string]                      `tf:"name"`
-	Primary                    []GoogleKMSCryptoKeyPrimary         `tf:"primary"`
-	Purpose                    *Value[string]                      `tf:"purpose"`
-	RotationPeriod             *Value[string]                      `tf:"rotation_period"`
-	SkipInitialVersionCreation *Value[bool]                        `tf:"skip_initial_version_creation"`
-	TerraformLabels            map[string]*Value[string]           `tf:"terraform_labels"`
-	Timeouts                   *GoogleKMSCryptoKeyTimeouts         `tf:"timeouts,block"`
-	VersionTemplate            []GoogleKMSCryptoKeyVersionTemplate `tf:"version_template,blocks"`
+	CryptoKeyBackend           *Value[string]                      `tf:"crypto_key_backend" json:"crypto_key_backend,omitempty"`
+	DestroyScheduledDuration   *Value[string]                      `tf:"destroy_scheduled_duration" json:"destroy_scheduled_duration,omitempty"`
+	EffectiveLabels            map[string]*Value[string]           `tf:"effective_labels" json:"effective_labels,omitempty"`
+	ID                         *Value[string]                      `tf:"id" json:"id,omitempty"`
+	ImportOnly                 *Value[bool]                        `tf:"import_only" json:"import_only,omitempty"`
+	KeyRing                    *Value[string]                      `tf:"key_ring" json:"key_ring,omitempty"`
+	Labels                     map[string]*Value[string]           `tf:"labels" json:"labels,omitempty"`
+	Name                       *Value[string]                      `tf:"name" json:"name,omitempty"`
+	Primary                    []GoogleKMSCryptoKeyPrimary         `tf:"primary" json:"primary,omitempty"`
+	Purpose                    *Value[string]                      `tf:"purpose" json:"purpose,omitempty"`
+	RotationPeriod             *Value[string]                      `tf:"rotation_period" json:"rotation_period,omitempty"`
+	SkipInitialVersionCreation *Value[bool]                        `tf:"skip_initial_version_creation" json:"skip_initial_version_creation,omitempty"`
+	TerraformLabels            map[string]*Value[string]           `tf:"terraform_labels" json:"terraform_labels,omitempty"`
+	Timeouts                   *GoogleKMSCryptoKeyTimeouts         `tf:"timeouts,block" json:"timeouts,omitempty"`
+	VersionTemplate            []GoogleKMSCryptoKeyVersionTemplate `tf:"version_template,blocks" json:"version_template,omitempty"`
 }
 
 // GoogleKMSCryptoKeyPrimary is a nested-block type used by the parent resource.
 type GoogleKMSCryptoKeyPrimary struct {
-	Name  *Value[string] `tf:"name"`
-	State *Value[string] `tf:"state"`
+	Name  *Value[string] `tf:"name" json:"name,omitempty"`
+	State *Value[string] `tf:"state" json:"state,omitempty"`
 }
 
 // GoogleKMSCryptoKeyTimeouts is a nested-block type used by the parent resource.
 type GoogleKMSCryptoKeyTimeouts struct {
-	Create *Value[string] `tf:"create"`
-	Delete *Value[string] `tf:"delete"`
-	Update *Value[string] `tf:"update"`
+	Create *Value[string] `tf:"create" json:"create,omitempty"`
+	Delete *Value[string] `tf:"delete" json:"delete,omitempty"`
+	Update *Value[string] `tf:"update" json:"update,omitempty"`
 }
 
 // GoogleKMSCryptoKeyVersionTemplate is a nested-block type used by the parent resource.
 type GoogleKMSCryptoKeyVersionTemplate struct {
-	Algorithm       *Value[string] `tf:"algorithm"`
-	ProtectionLevel *Value[string] `tf:"protection_level"`
+	Algorithm       *Value[string] `tf:"algorithm" json:"algorithm,omitempty"`
+	ProtectionLevel *Value[string] `tf:"protection_level" json:"protection_level,omitempty"`
 }
 
 // GoogleKMSCryptoKeySchema describes provider metadata for each attribute / nested

@@ -7,31 +7,31 @@ import "reflect"
 // GoogleComputeTargetHTTPSProxy is the generated Layer 1 typed model for the
 // `google_compute_target_https_proxy` Terraform resource.
 type GoogleComputeTargetHTTPSProxy struct {
-	CertificateManagerCertificates []*Value[string]                       `tf:"certificate_manager_certificates"`
-	CertificateMap                 *Value[string]                         `tf:"certificate_map"`
-	CreationTimestamp              *Value[string]                         `tf:"creation_timestamp"`
-	Description                    *Value[string]                         `tf:"description"`
-	HTTPKeepAliveTimeoutSec        *Value[float64]                        `tf:"http_keep_alive_timeout_sec"`
-	ID                             *Value[string]                         `tf:"id"`
-	Name                           *Value[string]                         `tf:"name"`
-	Project                        *Value[string]                         `tf:"project"`
-	ProxyBind                      *Value[bool]                           `tf:"proxy_bind"`
-	ProxyID                        *Value[float64]                        `tf:"proxy_id"`
-	QuicOverride                   *Value[string]                         `tf:"quic_override"`
-	SelfLink                       *Value[string]                         `tf:"self_link"`
-	ServerTLSPolicy                *Value[string]                         `tf:"server_tls_policy"`
-	SSLCertificates                []*Value[string]                       `tf:"ssl_certificates"`
-	SSLPolicy                      *Value[string]                         `tf:"ssl_policy"`
-	TLSEarlyData                   *Value[string]                         `tf:"tls_early_data"`
-	URLMap                         *Value[string]                         `tf:"url_map"`
-	Timeouts                       *GoogleComputeTargetHTTPSProxyTimeouts `tf:"timeouts,block"`
+	CertificateManagerCertificates []*Value[string]                       `tf:"certificate_manager_certificates" json:"certificate_manager_certificates,omitempty"`
+	CertificateMap                 *Value[string]                         `tf:"certificate_map" json:"certificate_map,omitempty"`
+	CreationTimestamp              *Value[string]                         `tf:"creation_timestamp" json:"creation_timestamp,omitempty"`
+	Description                    *Value[string]                         `tf:"description" json:"description,omitempty"`
+	HTTPKeepAliveTimeoutSec        *Value[float64]                        `tf:"http_keep_alive_timeout_sec" json:"http_keep_alive_timeout_sec,omitempty"`
+	ID                             *Value[string]                         `tf:"id" json:"id,omitempty"`
+	Name                           *Value[string]                         `tf:"name" json:"name,omitempty"`
+	Project                        *Value[string]                         `tf:"project" json:"project,omitempty"`
+	ProxyBind                      *Value[bool]                           `tf:"proxy_bind" json:"proxy_bind,omitempty"`
+	ProxyID                        *Value[float64]                        `tf:"proxy_id" json:"proxy_id,omitempty"`
+	QuicOverride                   *Value[string]                         `tf:"quic_override" json:"quic_override,omitempty"`
+	SelfLink                       *Value[string]                         `tf:"self_link" json:"self_link,omitempty"`
+	ServerTLSPolicy                *Value[string]                         `tf:"server_tls_policy" json:"server_tls_policy,omitempty"`
+	SSLCertificates                []*Value[string]                       `tf:"ssl_certificates" json:"ssl_certificates,omitempty"`
+	SSLPolicy                      *Value[string]                         `tf:"ssl_policy" json:"ssl_policy,omitempty"`
+	TLSEarlyData                   *Value[string]                         `tf:"tls_early_data" json:"tls_early_data,omitempty"`
+	URLMap                         *Value[string]                         `tf:"url_map" json:"url_map,omitempty"`
+	Timeouts                       *GoogleComputeTargetHTTPSProxyTimeouts `tf:"timeouts,block" json:"timeouts,omitempty"`
 }
 
 // GoogleComputeTargetHTTPSProxyTimeouts is a nested-block type used by the parent resource.
 type GoogleComputeTargetHTTPSProxyTimeouts struct {
-	Create *Value[string] `tf:"create"`
-	Delete *Value[string] `tf:"delete"`
-	Update *Value[string] `tf:"update"`
+	Create *Value[string] `tf:"create" json:"create,omitempty"`
+	Delete *Value[string] `tf:"delete" json:"delete,omitempty"`
+	Update *Value[string] `tf:"update" json:"update,omitempty"`
 }
 
 // GoogleComputeTargetHTTPSProxySchema describes provider metadata for each attribute / nested

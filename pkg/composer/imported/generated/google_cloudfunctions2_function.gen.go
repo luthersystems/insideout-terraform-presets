@@ -7,37 +7,37 @@ import "reflect"
 // GoogleCloudfunctions2Function is the generated Layer 1 typed model for the
 // `google_cloudfunctions2_function` Terraform resource.
 type GoogleCloudfunctions2Function struct {
-	Description     *Value[string]                               `tf:"description"`
-	EffectiveLabels map[string]*Value[string]                    `tf:"effective_labels"`
-	Environment     *Value[string]                               `tf:"environment"`
-	ID              *Value[string]                               `tf:"id"`
-	KMSKeyName      *Value[string]                               `tf:"kms_key_name"`
-	Labels          map[string]*Value[string]                    `tf:"labels"`
-	Location        *Value[string]                               `tf:"location"`
-	Name            *Value[string]                               `tf:"name"`
-	Project         *Value[string]                               `tf:"project"`
-	State           *Value[string]                               `tf:"state"`
-	TerraformLabels map[string]*Value[string]                    `tf:"terraform_labels"`
-	UpdateTime      *Value[string]                               `tf:"update_time"`
-	URL             *Value[string]                               `tf:"url"`
-	BuildConfig     []GoogleCloudfunctions2FunctionBuildConfig   `tf:"build_config,blocks"`
-	EventTrigger    []GoogleCloudfunctions2FunctionEventTrigger  `tf:"event_trigger,blocks"`
-	ServiceConfig   []GoogleCloudfunctions2FunctionServiceConfig `tf:"service_config,blocks"`
-	Timeouts        *GoogleCloudfunctions2FunctionTimeouts       `tf:"timeouts,block"`
+	Description     *Value[string]                               `tf:"description" json:"description,omitempty"`
+	EffectiveLabels map[string]*Value[string]                    `tf:"effective_labels" json:"effective_labels,omitempty"`
+	Environment     *Value[string]                               `tf:"environment" json:"environment,omitempty"`
+	ID              *Value[string]                               `tf:"id" json:"id,omitempty"`
+	KMSKeyName      *Value[string]                               `tf:"kms_key_name" json:"kms_key_name,omitempty"`
+	Labels          map[string]*Value[string]                    `tf:"labels" json:"labels,omitempty"`
+	Location        *Value[string]                               `tf:"location" json:"location,omitempty"`
+	Name            *Value[string]                               `tf:"name" json:"name,omitempty"`
+	Project         *Value[string]                               `tf:"project" json:"project,omitempty"`
+	State           *Value[string]                               `tf:"state" json:"state,omitempty"`
+	TerraformLabels map[string]*Value[string]                    `tf:"terraform_labels" json:"terraform_labels,omitempty"`
+	UpdateTime      *Value[string]                               `tf:"update_time" json:"update_time,omitempty"`
+	URL             *Value[string]                               `tf:"url" json:"url,omitempty"`
+	BuildConfig     []GoogleCloudfunctions2FunctionBuildConfig   `tf:"build_config,blocks" json:"build_config,omitempty"`
+	EventTrigger    []GoogleCloudfunctions2FunctionEventTrigger  `tf:"event_trigger,blocks" json:"event_trigger,omitempty"`
+	ServiceConfig   []GoogleCloudfunctions2FunctionServiceConfig `tf:"service_config,blocks" json:"service_config,omitempty"`
+	Timeouts        *GoogleCloudfunctions2FunctionTimeouts       `tf:"timeouts,block" json:"timeouts,omitempty"`
 }
 
 // GoogleCloudfunctions2FunctionBuildConfig is a nested-block type used by the parent resource.
 type GoogleCloudfunctions2FunctionBuildConfig struct {
-	Build                 *Value[string]                                                  `tf:"build"`
-	DockerRepository      *Value[string]                                                  `tf:"docker_repository"`
-	EntryPoint            *Value[string]                                                  `tf:"entry_point"`
-	EnvironmentVariables  map[string]*Value[string]                                       `tf:"environment_variables"`
-	Runtime               *Value[string]                                                  `tf:"runtime"`
-	ServiceAccount        *Value[string]                                                  `tf:"service_account"`
-	WorkerPool            *Value[string]                                                  `tf:"worker_pool"`
-	AutomaticUpdatePolicy []GoogleCloudfunctions2FunctionBuildConfigAutomaticUpdatePolicy `tf:"automatic_update_policy,blocks"`
-	OnDeployUpdatePolicy  []GoogleCloudfunctions2FunctionBuildConfigOnDeployUpdatePolicy  `tf:"on_deploy_update_policy,blocks"`
-	Source                []GoogleCloudfunctions2FunctionBuildConfigSource                `tf:"source,blocks"`
+	Build                 *Value[string]                                                  `tf:"build" json:"build,omitempty"`
+	DockerRepository      *Value[string]                                                  `tf:"docker_repository" json:"docker_repository,omitempty"`
+	EntryPoint            *Value[string]                                                  `tf:"entry_point" json:"entry_point,omitempty"`
+	EnvironmentVariables  map[string]*Value[string]                                       `tf:"environment_variables" json:"environment_variables,omitempty"`
+	Runtime               *Value[string]                                                  `tf:"runtime" json:"runtime,omitempty"`
+	ServiceAccount        *Value[string]                                                  `tf:"service_account" json:"service_account,omitempty"`
+	WorkerPool            *Value[string]                                                  `tf:"worker_pool" json:"worker_pool,omitempty"`
+	AutomaticUpdatePolicy []GoogleCloudfunctions2FunctionBuildConfigAutomaticUpdatePolicy `tf:"automatic_update_policy,blocks" json:"automatic_update_policy,omitempty"`
+	OnDeployUpdatePolicy  []GoogleCloudfunctions2FunctionBuildConfigOnDeployUpdatePolicy  `tf:"on_deploy_update_policy,blocks" json:"on_deploy_update_policy,omitempty"`
+	Source                []GoogleCloudfunctions2FunctionBuildConfigSource                `tf:"source,blocks" json:"source,omitempty"`
 }
 
 // GoogleCloudfunctions2FunctionBuildConfigAutomaticUpdatePolicy is a nested-block type used by the parent resource.
@@ -46,99 +46,99 @@ type GoogleCloudfunctions2FunctionBuildConfigAutomaticUpdatePolicy struct {
 
 // GoogleCloudfunctions2FunctionBuildConfigOnDeployUpdatePolicy is a nested-block type used by the parent resource.
 type GoogleCloudfunctions2FunctionBuildConfigOnDeployUpdatePolicy struct {
-	RuntimeVersion *Value[string] `tf:"runtime_version"`
+	RuntimeVersion *Value[string] `tf:"runtime_version" json:"runtime_version,omitempty"`
 }
 
 // GoogleCloudfunctions2FunctionBuildConfigSource is a nested-block type used by the parent resource.
 type GoogleCloudfunctions2FunctionBuildConfigSource struct {
-	RepoSource    []GoogleCloudfunctions2FunctionBuildConfigSourceRepoSource    `tf:"repo_source,blocks"`
-	StorageSource []GoogleCloudfunctions2FunctionBuildConfigSourceStorageSource `tf:"storage_source,blocks"`
+	RepoSource    []GoogleCloudfunctions2FunctionBuildConfigSourceRepoSource    `tf:"repo_source,blocks" json:"repo_source,omitempty"`
+	StorageSource []GoogleCloudfunctions2FunctionBuildConfigSourceStorageSource `tf:"storage_source,blocks" json:"storage_source,omitempty"`
 }
 
 // GoogleCloudfunctions2FunctionBuildConfigSourceRepoSource is a nested-block type used by the parent resource.
 type GoogleCloudfunctions2FunctionBuildConfigSourceRepoSource struct {
-	BranchName  *Value[string] `tf:"branch_name"`
-	CommitSHA   *Value[string] `tf:"commit_sha"`
-	Dir         *Value[string] `tf:"dir"`
-	InvertRegex *Value[bool]   `tf:"invert_regex"`
-	ProjectID   *Value[string] `tf:"project_id"`
-	RepoName    *Value[string] `tf:"repo_name"`
-	TagName     *Value[string] `tf:"tag_name"`
+	BranchName  *Value[string] `tf:"branch_name" json:"branch_name,omitempty"`
+	CommitSHA   *Value[string] `tf:"commit_sha" json:"commit_sha,omitempty"`
+	Dir         *Value[string] `tf:"dir" json:"dir,omitempty"`
+	InvertRegex *Value[bool]   `tf:"invert_regex" json:"invert_regex,omitempty"`
+	ProjectID   *Value[string] `tf:"project_id" json:"project_id,omitempty"`
+	RepoName    *Value[string] `tf:"repo_name" json:"repo_name,omitempty"`
+	TagName     *Value[string] `tf:"tag_name" json:"tag_name,omitempty"`
 }
 
 // GoogleCloudfunctions2FunctionBuildConfigSourceStorageSource is a nested-block type used by the parent resource.
 type GoogleCloudfunctions2FunctionBuildConfigSourceStorageSource struct {
-	Bucket     *Value[string]  `tf:"bucket"`
-	Generation *Value[float64] `tf:"generation"`
-	Object     *Value[string]  `tf:"object"`
+	Bucket     *Value[string]  `tf:"bucket" json:"bucket,omitempty"`
+	Generation *Value[float64] `tf:"generation" json:"generation,omitempty"`
+	Object     *Value[string]  `tf:"object" json:"object,omitempty"`
 }
 
 // GoogleCloudfunctions2FunctionEventTrigger is a nested-block type used by the parent resource.
 type GoogleCloudfunctions2FunctionEventTrigger struct {
-	EventType           *Value[string]                                          `tf:"event_type"`
-	PubsubTopic         *Value[string]                                          `tf:"pubsub_topic"`
-	RetryPolicy         *Value[string]                                          `tf:"retry_policy"`
-	ServiceAccountEmail *Value[string]                                          `tf:"service_account_email"`
-	Trigger             *Value[string]                                          `tf:"trigger"`
-	TriggerRegion       *Value[string]                                          `tf:"trigger_region"`
-	EventFilters        []GoogleCloudfunctions2FunctionEventTriggerEventFilters `tf:"event_filters,blocks"`
+	EventType           *Value[string]                                          `tf:"event_type" json:"event_type,omitempty"`
+	PubsubTopic         *Value[string]                                          `tf:"pubsub_topic" json:"pubsub_topic,omitempty"`
+	RetryPolicy         *Value[string]                                          `tf:"retry_policy" json:"retry_policy,omitempty"`
+	ServiceAccountEmail *Value[string]                                          `tf:"service_account_email" json:"service_account_email,omitempty"`
+	Trigger             *Value[string]                                          `tf:"trigger" json:"trigger,omitempty"`
+	TriggerRegion       *Value[string]                                          `tf:"trigger_region" json:"trigger_region,omitempty"`
+	EventFilters        []GoogleCloudfunctions2FunctionEventTriggerEventFilters `tf:"event_filters,blocks" json:"event_filters,omitempty"`
 }
 
 // GoogleCloudfunctions2FunctionEventTriggerEventFilters is a nested-block type used by the parent resource.
 type GoogleCloudfunctions2FunctionEventTriggerEventFilters struct {
-	Attribute *Value[string] `tf:"attribute"`
-	Operator  *Value[string] `tf:"operator"`
-	Value     *Value[string] `tf:"value"`
+	Attribute *Value[string] `tf:"attribute" json:"attribute,omitempty"`
+	Operator  *Value[string] `tf:"operator" json:"operator,omitempty"`
+	Value     *Value[string] `tf:"value" json:"value,omitempty"`
 }
 
 // GoogleCloudfunctions2FunctionServiceConfig is a nested-block type used by the parent resource.
 type GoogleCloudfunctions2FunctionServiceConfig struct {
-	AllTrafficOnLatestRevision    *Value[bool]                                                           `tf:"all_traffic_on_latest_revision"`
-	AvailableCPU                  *Value[string]                                                         `tf:"available_cpu"`
-	AvailableMemory               *Value[string]                                                         `tf:"available_memory"`
-	EnvironmentVariables          map[string]*Value[string]                                              `tf:"environment_variables"`
-	GcfURI                        *Value[string]                                                         `tf:"gcf_uri"`
-	IngressSettings               *Value[string]                                                         `tf:"ingress_settings"`
-	MaxInstanceCount              *Value[int64]                                                          `tf:"max_instance_count"`
-	MaxInstanceRequestConcurrency *Value[int64]                                                          `tf:"max_instance_request_concurrency"`
-	MinInstanceCount              *Value[int64]                                                          `tf:"min_instance_count"`
-	Service                       *Value[string]                                                         `tf:"service"`
-	ServiceAccountEmail           *Value[string]                                                         `tf:"service_account_email"`
-	TimeoutSeconds                *Value[int64]                                                          `tf:"timeout_seconds"`
-	URI                           *Value[string]                                                         `tf:"uri"`
-	VPCConnector                  *Value[string]                                                         `tf:"vpc_connector"`
-	VPCConnectorEgressSettings    *Value[string]                                                         `tf:"vpc_connector_egress_settings"`
-	SecretEnvironmentVariables    []GoogleCloudfunctions2FunctionServiceConfigSecretEnvironmentVariables `tf:"secret_environment_variables,blocks"`
-	SecretVolumes                 []GoogleCloudfunctions2FunctionServiceConfigSecretVolumes              `tf:"secret_volumes,blocks"`
+	AllTrafficOnLatestRevision    *Value[bool]                                                           `tf:"all_traffic_on_latest_revision" json:"all_traffic_on_latest_revision,omitempty"`
+	AvailableCPU                  *Value[string]                                                         `tf:"available_cpu" json:"available_cpu,omitempty"`
+	AvailableMemory               *Value[string]                                                         `tf:"available_memory" json:"available_memory,omitempty"`
+	EnvironmentVariables          map[string]*Value[string]                                              `tf:"environment_variables" json:"environment_variables,omitempty"`
+	GcfURI                        *Value[string]                                                         `tf:"gcf_uri" json:"gcf_uri,omitempty"`
+	IngressSettings               *Value[string]                                                         `tf:"ingress_settings" json:"ingress_settings,omitempty"`
+	MaxInstanceCount              *Value[int64]                                                          `tf:"max_instance_count" json:"max_instance_count,omitempty"`
+	MaxInstanceRequestConcurrency *Value[int64]                                                          `tf:"max_instance_request_concurrency" json:"max_instance_request_concurrency,omitempty"`
+	MinInstanceCount              *Value[int64]                                                          `tf:"min_instance_count" json:"min_instance_count,omitempty"`
+	Service                       *Value[string]                                                         `tf:"service" json:"service,omitempty"`
+	ServiceAccountEmail           *Value[string]                                                         `tf:"service_account_email" json:"service_account_email,omitempty"`
+	TimeoutSeconds                *Value[int64]                                                          `tf:"timeout_seconds" json:"timeout_seconds,omitempty"`
+	URI                           *Value[string]                                                         `tf:"uri" json:"uri,omitempty"`
+	VPCConnector                  *Value[string]                                                         `tf:"vpc_connector" json:"vpc_connector,omitempty"`
+	VPCConnectorEgressSettings    *Value[string]                                                         `tf:"vpc_connector_egress_settings" json:"vpc_connector_egress_settings,omitempty"`
+	SecretEnvironmentVariables    []GoogleCloudfunctions2FunctionServiceConfigSecretEnvironmentVariables `tf:"secret_environment_variables,blocks" json:"secret_environment_variables,omitempty"`
+	SecretVolumes                 []GoogleCloudfunctions2FunctionServiceConfigSecretVolumes              `tf:"secret_volumes,blocks" json:"secret_volumes,omitempty"`
 }
 
 // GoogleCloudfunctions2FunctionServiceConfigSecretEnvironmentVariables is a nested-block type used by the parent resource.
 type GoogleCloudfunctions2FunctionServiceConfigSecretEnvironmentVariables struct {
-	Key       *Value[string] `tf:"key"`
-	ProjectID *Value[string] `tf:"project_id"`
-	Secret    *Value[string] `tf:"secret"`
-	Version   *Value[string] `tf:"version"`
+	Key       *Value[string] `tf:"key" json:"key,omitempty"`
+	ProjectID *Value[string] `tf:"project_id" json:"project_id,omitempty"`
+	Secret    *Value[string] `tf:"secret" json:"secret,omitempty"`
+	Version   *Value[string] `tf:"version" json:"version,omitempty"`
 }
 
 // GoogleCloudfunctions2FunctionServiceConfigSecretVolumes is a nested-block type used by the parent resource.
 type GoogleCloudfunctions2FunctionServiceConfigSecretVolumes struct {
-	MountPath *Value[string]                                                    `tf:"mount_path"`
-	ProjectID *Value[string]                                                    `tf:"project_id"`
-	Secret    *Value[string]                                                    `tf:"secret"`
-	Versions  []GoogleCloudfunctions2FunctionServiceConfigSecretVolumesVersions `tf:"versions,blocks"`
+	MountPath *Value[string]                                                    `tf:"mount_path" json:"mount_path,omitempty"`
+	ProjectID *Value[string]                                                    `tf:"project_id" json:"project_id,omitempty"`
+	Secret    *Value[string]                                                    `tf:"secret" json:"secret,omitempty"`
+	Versions  []GoogleCloudfunctions2FunctionServiceConfigSecretVolumesVersions `tf:"versions,blocks" json:"versions,omitempty"`
 }
 
 // GoogleCloudfunctions2FunctionServiceConfigSecretVolumesVersions is a nested-block type used by the parent resource.
 type GoogleCloudfunctions2FunctionServiceConfigSecretVolumesVersions struct {
-	Path    *Value[string] `tf:"path"`
-	Version *Value[string] `tf:"version"`
+	Path    *Value[string] `tf:"path" json:"path,omitempty"`
+	Version *Value[string] `tf:"version" json:"version,omitempty"`
 }
 
 // GoogleCloudfunctions2FunctionTimeouts is a nested-block type used by the parent resource.
 type GoogleCloudfunctions2FunctionTimeouts struct {
-	Create *Value[string] `tf:"create"`
-	Delete *Value[string] `tf:"delete"`
-	Update *Value[string] `tf:"update"`
+	Create *Value[string] `tf:"create" json:"create,omitempty"`
+	Delete *Value[string] `tf:"delete" json:"delete,omitempty"`
+	Update *Value[string] `tf:"update" json:"update,omitempty"`
 }
 
 // GoogleCloudfunctions2FunctionSchema describes provider metadata for each attribute / nested

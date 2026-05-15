@@ -7,45 +7,45 @@ import "reflect"
 // GoogleSqlUser is the generated Layer 1 typed model for the
 // `google_sql_user` Terraform resource.
 type GoogleSqlUser struct {
-	DeletionPolicy       *Value[string]                      `tf:"deletion_policy"`
-	Host                 *Value[string]                      `tf:"host"`
-	ID                   *Value[string]                      `tf:"id"`
-	Instance             *Value[string]                      `tf:"instance"`
-	Name                 *Value[string]                      `tf:"name"`
-	Password             *Value[string]                      `tf:"password"`
-	Project              *Value[string]                      `tf:"project"`
-	SqlServerUserDetails []GoogleSqlUserSqlServerUserDetails `tf:"sql_server_user_details"`
-	Type_                *Value[string]                      `tf:"type"`
-	PasswordPolicy       []GoogleSqlUserPasswordPolicy       `tf:"password_policy,blocks"`
-	Timeouts             *GoogleSqlUserTimeouts              `tf:"timeouts,block"`
+	DeletionPolicy       *Value[string]                      `tf:"deletion_policy" json:"deletion_policy,omitempty"`
+	Host                 *Value[string]                      `tf:"host" json:"host,omitempty"`
+	ID                   *Value[string]                      `tf:"id" json:"id,omitempty"`
+	Instance             *Value[string]                      `tf:"instance" json:"instance,omitempty"`
+	Name                 *Value[string]                      `tf:"name" json:"name,omitempty"`
+	Password             *Value[string]                      `tf:"password" json:"password,omitempty"`
+	Project              *Value[string]                      `tf:"project" json:"project,omitempty"`
+	SqlServerUserDetails []GoogleSqlUserSqlServerUserDetails `tf:"sql_server_user_details" json:"sql_server_user_details,omitempty"`
+	Type_                *Value[string]                      `tf:"type" json:"type,omitempty"`
+	PasswordPolicy       []GoogleSqlUserPasswordPolicy       `tf:"password_policy,blocks" json:"password_policy,omitempty"`
+	Timeouts             *GoogleSqlUserTimeouts              `tf:"timeouts,block" json:"timeouts,omitempty"`
 }
 
 // GoogleSqlUserPasswordPolicy is a nested-block type used by the parent resource.
 type GoogleSqlUserPasswordPolicy struct {
-	AllowedFailedAttempts      *Value[float64]                     `tf:"allowed_failed_attempts"`
-	EnableFailedAttemptsCheck  *Value[bool]                        `tf:"enable_failed_attempts_check"`
-	EnablePasswordVerification *Value[bool]                        `tf:"enable_password_verification"`
-	PasswordExpirationDuration *Value[string]                      `tf:"password_expiration_duration"`
-	Status                     []GoogleSqlUserPasswordPolicyStatus `tf:"status"`
+	AllowedFailedAttempts      *Value[float64]                     `tf:"allowed_failed_attempts" json:"allowed_failed_attempts,omitempty"`
+	EnableFailedAttemptsCheck  *Value[bool]                        `tf:"enable_failed_attempts_check" json:"enable_failed_attempts_check,omitempty"`
+	EnablePasswordVerification *Value[bool]                        `tf:"enable_password_verification" json:"enable_password_verification,omitempty"`
+	PasswordExpirationDuration *Value[string]                      `tf:"password_expiration_duration" json:"password_expiration_duration,omitempty"`
+	Status                     []GoogleSqlUserPasswordPolicyStatus `tf:"status" json:"status,omitempty"`
 }
 
 // GoogleSqlUserPasswordPolicyStatus is a nested-block type used by the parent resource.
 type GoogleSqlUserPasswordPolicyStatus struct {
-	Locked                 *Value[bool]   `tf:"locked"`
-	PasswordExpirationTime *Value[string] `tf:"password_expiration_time"`
+	Locked                 *Value[bool]   `tf:"locked" json:"locked,omitempty"`
+	PasswordExpirationTime *Value[string] `tf:"password_expiration_time" json:"password_expiration_time,omitempty"`
 }
 
 // GoogleSqlUserSqlServerUserDetails is a nested-block type used by the parent resource.
 type GoogleSqlUserSqlServerUserDetails struct {
-	Disabled    *Value[bool]     `tf:"disabled"`
-	ServerRoles []*Value[string] `tf:"server_roles"`
+	Disabled    *Value[bool]     `tf:"disabled" json:"disabled,omitempty"`
+	ServerRoles []*Value[string] `tf:"server_roles" json:"server_roles,omitempty"`
 }
 
 // GoogleSqlUserTimeouts is a nested-block type used by the parent resource.
 type GoogleSqlUserTimeouts struct {
-	Create *Value[string] `tf:"create"`
-	Delete *Value[string] `tf:"delete"`
-	Update *Value[string] `tf:"update"`
+	Create *Value[string] `tf:"create" json:"create,omitempty"`
+	Delete *Value[string] `tf:"delete" json:"delete,omitempty"`
+	Update *Value[string] `tf:"update" json:"update,omitempty"`
 }
 
 // GoogleSqlUserSchema describes provider metadata for each attribute / nested

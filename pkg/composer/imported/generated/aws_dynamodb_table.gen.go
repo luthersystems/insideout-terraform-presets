@@ -7,121 +7,121 @@ import "reflect"
 // AWSDynamodbTable is the generated Layer 1 typed model for the
 // `aws_dynamodb_table` Terraform resource.
 type AWSDynamodbTable struct {
-	ARN                       *Value[string]                         `tf:"arn"`
-	BillingMode               *Value[string]                         `tf:"billing_mode"`
-	DeletionProtectionEnabled *Value[bool]                           `tf:"deletion_protection_enabled"`
-	HashKey                   *Value[string]                         `tf:"hash_key"`
-	ID                        *Value[string]                         `tf:"id"`
-	Name                      *Value[string]                         `tf:"name"`
-	RangeKey                  *Value[string]                         `tf:"range_key"`
-	ReadCapacity              *Value[float64]                        `tf:"read_capacity"`
-	RestoreDateTime           *Value[string]                         `tf:"restore_date_time"`
-	RestoreSourceName         *Value[string]                         `tf:"restore_source_name"`
-	RestoreSourceTableARN     *Value[string]                         `tf:"restore_source_table_arn"`
-	RestoreToLatestTime       *Value[bool]                           `tf:"restore_to_latest_time"`
-	StreamARN                 *Value[string]                         `tf:"stream_arn"`
-	StreamEnabled             *Value[bool]                           `tf:"stream_enabled"`
-	StreamLabel               *Value[string]                         `tf:"stream_label"`
-	StreamViewType            *Value[string]                         `tf:"stream_view_type"`
-	TableClass                *Value[string]                         `tf:"table_class"`
-	Tags                      map[string]*Value[string]              `tf:"tags"`
-	TagsAll                   map[string]*Value[string]              `tf:"tags_all"`
-	WriteCapacity             *Value[float64]                        `tf:"write_capacity"`
-	Attribute                 []AWSDynamodbTableAttribute            `tf:"attribute,blocks"`
-	GlobalSecondaryIndex      []AWSDynamodbTableGlobalSecondaryIndex `tf:"global_secondary_index,blocks"`
-	ImportTable               []AWSDynamodbTableImportTable          `tf:"import_table,blocks"`
-	LocalSecondaryIndex       []AWSDynamodbTableLocalSecondaryIndex  `tf:"local_secondary_index,blocks"`
-	PointInTimeRecovery       []AWSDynamodbTablePointInTimeRecovery  `tf:"point_in_time_recovery,blocks"`
-	Replica                   []AWSDynamodbTableReplica              `tf:"replica,blocks"`
-	ServerSideEncryption      []AWSDynamodbTableServerSideEncryption `tf:"server_side_encryption,blocks"`
-	Timeouts                  *AWSDynamodbTableTimeouts              `tf:"timeouts,block"`
-	TTL                       []AWSDynamodbTableTTL                  `tf:"ttl,blocks"`
+	ARN                       *Value[string]                         `tf:"arn" json:"arn,omitempty"`
+	BillingMode               *Value[string]                         `tf:"billing_mode" json:"billing_mode,omitempty"`
+	DeletionProtectionEnabled *Value[bool]                           `tf:"deletion_protection_enabled" json:"deletion_protection_enabled,omitempty"`
+	HashKey                   *Value[string]                         `tf:"hash_key" json:"hash_key,omitempty"`
+	ID                        *Value[string]                         `tf:"id" json:"id,omitempty"`
+	Name                      *Value[string]                         `tf:"name" json:"name,omitempty"`
+	RangeKey                  *Value[string]                         `tf:"range_key" json:"range_key,omitempty"`
+	ReadCapacity              *Value[float64]                        `tf:"read_capacity" json:"read_capacity,omitempty"`
+	RestoreDateTime           *Value[string]                         `tf:"restore_date_time" json:"restore_date_time,omitempty"`
+	RestoreSourceName         *Value[string]                         `tf:"restore_source_name" json:"restore_source_name,omitempty"`
+	RestoreSourceTableARN     *Value[string]                         `tf:"restore_source_table_arn" json:"restore_source_table_arn,omitempty"`
+	RestoreToLatestTime       *Value[bool]                           `tf:"restore_to_latest_time" json:"restore_to_latest_time,omitempty"`
+	StreamARN                 *Value[string]                         `tf:"stream_arn" json:"stream_arn,omitempty"`
+	StreamEnabled             *Value[bool]                           `tf:"stream_enabled" json:"stream_enabled,omitempty"`
+	StreamLabel               *Value[string]                         `tf:"stream_label" json:"stream_label,omitempty"`
+	StreamViewType            *Value[string]                         `tf:"stream_view_type" json:"stream_view_type,omitempty"`
+	TableClass                *Value[string]                         `tf:"table_class" json:"table_class,omitempty"`
+	Tags                      map[string]*Value[string]              `tf:"tags" json:"tags,omitempty"`
+	TagsAll                   map[string]*Value[string]              `tf:"tags_all" json:"tags_all,omitempty"`
+	WriteCapacity             *Value[float64]                        `tf:"write_capacity" json:"write_capacity,omitempty"`
+	Attribute                 []AWSDynamodbTableAttribute            `tf:"attribute,blocks" json:"attribute,omitempty"`
+	GlobalSecondaryIndex      []AWSDynamodbTableGlobalSecondaryIndex `tf:"global_secondary_index,blocks" json:"global_secondary_index,omitempty"`
+	ImportTable               []AWSDynamodbTableImportTable          `tf:"import_table,blocks" json:"import_table,omitempty"`
+	LocalSecondaryIndex       []AWSDynamodbTableLocalSecondaryIndex  `tf:"local_secondary_index,blocks" json:"local_secondary_index,omitempty"`
+	PointInTimeRecovery       []AWSDynamodbTablePointInTimeRecovery  `tf:"point_in_time_recovery,blocks" json:"point_in_time_recovery,omitempty"`
+	Replica                   []AWSDynamodbTableReplica              `tf:"replica,blocks" json:"replica,omitempty"`
+	ServerSideEncryption      []AWSDynamodbTableServerSideEncryption `tf:"server_side_encryption,blocks" json:"server_side_encryption,omitempty"`
+	Timeouts                  *AWSDynamodbTableTimeouts              `tf:"timeouts,block" json:"timeouts,omitempty"`
+	TTL                       []AWSDynamodbTableTTL                  `tf:"ttl,blocks" json:"ttl,omitempty"`
 }
 
 // AWSDynamodbTableAttribute is a nested-block type used by the parent resource.
 type AWSDynamodbTableAttribute struct {
-	Name  *Value[string] `tf:"name"`
-	Type_ *Value[string] `tf:"type"`
+	Name  *Value[string] `tf:"name" json:"name,omitempty"`
+	Type_ *Value[string] `tf:"type" json:"type,omitempty"`
 }
 
 // AWSDynamodbTableGlobalSecondaryIndex is a nested-block type used by the parent resource.
 type AWSDynamodbTableGlobalSecondaryIndex struct {
-	HashKey          *Value[string]   `tf:"hash_key"`
-	Name             *Value[string]   `tf:"name"`
-	NonKeyAttributes []*Value[string] `tf:"non_key_attributes"`
-	ProjectionType   *Value[string]   `tf:"projection_type"`
-	RangeKey         *Value[string]   `tf:"range_key"`
-	ReadCapacity     *Value[float64]  `tf:"read_capacity"`
-	WriteCapacity    *Value[float64]  `tf:"write_capacity"`
+	HashKey          *Value[string]   `tf:"hash_key" json:"hash_key,omitempty"`
+	Name             *Value[string]   `tf:"name" json:"name,omitempty"`
+	NonKeyAttributes []*Value[string] `tf:"non_key_attributes" json:"non_key_attributes,omitempty"`
+	ProjectionType   *Value[string]   `tf:"projection_type" json:"projection_type,omitempty"`
+	RangeKey         *Value[string]   `tf:"range_key" json:"range_key,omitempty"`
+	ReadCapacity     *Value[float64]  `tf:"read_capacity" json:"read_capacity,omitempty"`
+	WriteCapacity    *Value[float64]  `tf:"write_capacity" json:"write_capacity,omitempty"`
 }
 
 // AWSDynamodbTableImportTable is a nested-block type used by the parent resource.
 type AWSDynamodbTableImportTable struct {
-	InputCompressionType *Value[string]                                  `tf:"input_compression_type"`
-	InputFormat          *Value[string]                                  `tf:"input_format"`
-	InputFormatOptions   []AWSDynamodbTableImportTableInputFormatOptions `tf:"input_format_options,blocks"`
-	S3BucketSource       []AWSDynamodbTableImportTableS3BucketSource     `tf:"s3_bucket_source,blocks"`
+	InputCompressionType *Value[string]                                  `tf:"input_compression_type" json:"input_compression_type,omitempty"`
+	InputFormat          *Value[string]                                  `tf:"input_format" json:"input_format,omitempty"`
+	InputFormatOptions   []AWSDynamodbTableImportTableInputFormatOptions `tf:"input_format_options,blocks" json:"input_format_options,omitempty"`
+	S3BucketSource       []AWSDynamodbTableImportTableS3BucketSource     `tf:"s3_bucket_source,blocks" json:"s3_bucket_source,omitempty"`
 }
 
 // AWSDynamodbTableImportTableInputFormatOptions is a nested-block type used by the parent resource.
 type AWSDynamodbTableImportTableInputFormatOptions struct {
-	CSV []AWSDynamodbTableImportTableInputFormatOptionsCSV `tf:"csv,blocks"`
+	CSV []AWSDynamodbTableImportTableInputFormatOptionsCSV `tf:"csv,blocks" json:"csv,omitempty"`
 }
 
 // AWSDynamodbTableImportTableInputFormatOptionsCSV is a nested-block type used by the parent resource.
 type AWSDynamodbTableImportTableInputFormatOptionsCSV struct {
-	Delimiter  *Value[string]   `tf:"delimiter"`
-	HeaderList []*Value[string] `tf:"header_list"`
+	Delimiter  *Value[string]   `tf:"delimiter" json:"delimiter,omitempty"`
+	HeaderList []*Value[string] `tf:"header_list" json:"header_list,omitempty"`
 }
 
 // AWSDynamodbTableImportTableS3BucketSource is a nested-block type used by the parent resource.
 type AWSDynamodbTableImportTableS3BucketSource struct {
-	Bucket      *Value[string] `tf:"bucket"`
-	BucketOwner *Value[string] `tf:"bucket_owner"`
-	KeyPrefix   *Value[string] `tf:"key_prefix"`
+	Bucket      *Value[string] `tf:"bucket" json:"bucket,omitempty"`
+	BucketOwner *Value[string] `tf:"bucket_owner" json:"bucket_owner,omitempty"`
+	KeyPrefix   *Value[string] `tf:"key_prefix" json:"key_prefix,omitempty"`
 }
 
 // AWSDynamodbTableLocalSecondaryIndex is a nested-block type used by the parent resource.
 type AWSDynamodbTableLocalSecondaryIndex struct {
-	Name             *Value[string]   `tf:"name"`
-	NonKeyAttributes []*Value[string] `tf:"non_key_attributes"`
-	ProjectionType   *Value[string]   `tf:"projection_type"`
-	RangeKey         *Value[string]   `tf:"range_key"`
+	Name             *Value[string]   `tf:"name" json:"name,omitempty"`
+	NonKeyAttributes []*Value[string] `tf:"non_key_attributes" json:"non_key_attributes,omitempty"`
+	ProjectionType   *Value[string]   `tf:"projection_type" json:"projection_type,omitempty"`
+	RangeKey         *Value[string]   `tf:"range_key" json:"range_key,omitempty"`
 }
 
 // AWSDynamodbTablePointInTimeRecovery is a nested-block type used by the parent resource.
 type AWSDynamodbTablePointInTimeRecovery struct {
-	Enabled *Value[bool] `tf:"enabled"`
+	Enabled *Value[bool] `tf:"enabled" json:"enabled,omitempty"`
 }
 
 // AWSDynamodbTableReplica is a nested-block type used by the parent resource.
 type AWSDynamodbTableReplica struct {
-	ARN                 *Value[string] `tf:"arn"`
-	KMSKeyARN           *Value[string] `tf:"kms_key_arn"`
-	PointInTimeRecovery *Value[bool]   `tf:"point_in_time_recovery"`
-	PropagateTags       *Value[bool]   `tf:"propagate_tags"`
-	RegionName          *Value[string] `tf:"region_name"`
-	StreamARN           *Value[string] `tf:"stream_arn"`
-	StreamLabel         *Value[string] `tf:"stream_label"`
+	ARN                 *Value[string] `tf:"arn" json:"arn,omitempty"`
+	KMSKeyARN           *Value[string] `tf:"kms_key_arn" json:"kms_key_arn,omitempty"`
+	PointInTimeRecovery *Value[bool]   `tf:"point_in_time_recovery" json:"point_in_time_recovery,omitempty"`
+	PropagateTags       *Value[bool]   `tf:"propagate_tags" json:"propagate_tags,omitempty"`
+	RegionName          *Value[string] `tf:"region_name" json:"region_name,omitempty"`
+	StreamARN           *Value[string] `tf:"stream_arn" json:"stream_arn,omitempty"`
+	StreamLabel         *Value[string] `tf:"stream_label" json:"stream_label,omitempty"`
 }
 
 // AWSDynamodbTableServerSideEncryption is a nested-block type used by the parent resource.
 type AWSDynamodbTableServerSideEncryption struct {
-	Enabled   *Value[bool]   `tf:"enabled"`
-	KMSKeyARN *Value[string] `tf:"kms_key_arn"`
+	Enabled   *Value[bool]   `tf:"enabled" json:"enabled,omitempty"`
+	KMSKeyARN *Value[string] `tf:"kms_key_arn" json:"kms_key_arn,omitempty"`
 }
 
 // AWSDynamodbTableTTL is a nested-block type used by the parent resource.
 type AWSDynamodbTableTTL struct {
-	AttributeName *Value[string] `tf:"attribute_name"`
-	Enabled       *Value[bool]   `tf:"enabled"`
+	AttributeName *Value[string] `tf:"attribute_name" json:"attribute_name,omitempty"`
+	Enabled       *Value[bool]   `tf:"enabled" json:"enabled,omitempty"`
 }
 
 // AWSDynamodbTableTimeouts is a nested-block type used by the parent resource.
 type AWSDynamodbTableTimeouts struct {
-	Create *Value[string] `tf:"create"`
-	Delete *Value[string] `tf:"delete"`
-	Update *Value[string] `tf:"update"`
+	Create *Value[string] `tf:"create" json:"create,omitempty"`
+	Delete *Value[string] `tf:"delete" json:"delete,omitempty"`
+	Update *Value[string] `tf:"update" json:"update,omitempty"`
 }
 
 // AWSDynamodbTableSchema describes provider metadata for each attribute / nested
