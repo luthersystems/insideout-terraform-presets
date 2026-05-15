@@ -65,9 +65,13 @@ func TestExistingEnrichersDoNotImplementByID(t *testing.T) {
 	// CAI config entry only requires changing cloudasset_types.go.
 	// Hand-rolled count is the literal from gcpdiscover.go's
 	// byTypeEnricher initializer: 5 pre-Phase-2 + compute_address +
-	// compute_firewall + Bundle G5 (compute_instance, compute_router,
-	// kms_crypto_key, service_account, sql_database_instance) = 12.
-	const handRolledCount = 12
+	// compute_firewall + Bundle G5 (5 enrichers: compute_instance,
+	// compute_router, kms_crypto_key, service_account,
+	// sql_database_instance) + Bundle G6 (6 enrichers: sql_user,
+	// logging_project_sink, identity_platform_config,
+	// monitoring_alert_policy, monitoring_dashboard,
+	// monitoring_notification_channel) = 18.
+	const handRolledCount = 18
 	caiNonOverlap := 0
 	for _, cfg := range cloudAssetTypeConfigs {
 		if cfg.Skip {

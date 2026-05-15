@@ -11,9 +11,13 @@ import (
 	"google.golang.org/api/cloudkms/v1"
 	computev1 "google.golang.org/api/compute/v1"
 	iamv1 "google.golang.org/api/iam/v1"
+	identitytoolkitv2 "google.golang.org/api/identitytoolkit/v2"
+	loggingv2 "google.golang.org/api/logging/v2"
+	monitoringv1 "google.golang.org/api/monitoring/v1"
+	monitoringv3 "google.golang.org/api/monitoring/v3"
 	pubsubv1 "google.golang.org/api/pubsub/v1"
 	secretmanagerv1 "google.golang.org/api/secretmanager/v1"
-	sqladmin "google.golang.org/api/sqladmin/v1"
+	sqladminv1 "google.golang.org/api/sqladmin/v1"
 	storagev1 "google.golang.org/api/storage/v1"
 
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/progress"
@@ -151,11 +155,26 @@ type EnrichClients struct {
 	// google_sql_database_instance; IAM backs google_service_account.
 	// Nil tolerated per the same convention as the other clients:
 	// affected enrichers report ErrEnrichClientUnavailable.
-	KMS        *cloudkms.Service
-	SQLAdmin   *sqladmin.Service
-	IAM        *iamv1.Service
-	CloudAsset gcpAssetGetter
-	ProjectID  string
+	KMS      *cloudkms.Service
+	SQLAdmin *sqladminv1.Service
+	IAM      *iamv1.Service
+	// Bundle G6 (#482) — added for Logging, IdentityToolkit, and
+	// Monitoring enrichers. Logging backs google_logging_project_sink;
+	// IdentityToolkit backs google_identity_platform_config;
+	// Monitoring (v3) backs alert policies and notification channels;
+	// MonitoringV1 backs dashboards (v1 schema). Nil tolerated per the
+	// same convention as the other clients.
+	Logging         *loggingv2.Service
+	IdentityToolkit *identitytoolkitv2.Service
+	Monitoring      *monitoringv3.Service
+	// MonitoringV1 is the Cloud Monitoring v1 SDK service. Used for
+	// dashboards (v1 schema); v3 (the Monitoring field above) covers
+	// AlertPolicies, NotificationChannels, etc. — the two SDK packages
+	// expose disjoint resource families and the dashboards-only client
+	// is kept as a separate field so the wiring is explicit.
+	MonitoringV1 *monitoringv1.Service
+	CloudAsset   gcpAssetGetter
+	ProjectID    string
 }
 
 // ErrEnrichClientUnavailable signals that the SDK client an enricher
