@@ -340,16 +340,58 @@ func NewGCPDiscoverer(searcher gcpAssetSearcher, projectID string, opts GCPDisco
 		// terraform-driven Stage 2b path. Types without an entry here are
 		// silently skipped by EnrichAttributes — the full enricher rollout
 		// follows the existing per-type ordering one PR at a time.
-		byTypeEnricher: map[string]AttributeEnricher{
-			"google_compute_address":       newComputeAddressEnricher(),
-			"google_compute_firewall":      newComputeFirewallEnricher(),
-			"google_compute_network":       newComputeNetworkEnricher(),
-			"google_pubsub_subscription":   newPubsubSubscriptionEnricher(),
-			"google_pubsub_topic":          newPubsubTopicEnricher(),
-			"google_secret_manager_secret": newSecretManagerSecretEnricher(),
-			"google_storage_bucket":        newStorageBucketEnricher(),
-		},
+		byTypeEnricher: buildByTypeEnricher(),
 	}
+}
+
+// buildByTypeEnricher constructs the per-Terraform-type enricher map.
+// Hand-rolled enrichers register first so they survive the override-wins
+// loop that follows; the generic cloudAssetEnricher backfills every TF
+// type listed in cloudAssetTypeConfigs that does NOT already have a
+// hand-rolled override (mirrors the AWS Cloud Control HYBRID pattern
+// from #490).
+//
+// Quality band: hand-rolled enrichers produce strictly more correct
+// payloads today (primary-name field aliasing, computed-only field
+// normalization, sensitive-overlay fetches). The CAI enricher fills in
+// the long tail of CAI-routed types that have no hand-rolled override;
+// per-type Normalizer hooks (the GCP equivalent of #501) are tracked as
+// a follow-up and not in scope for this registration loop.
+func buildByTypeEnricher() map[string]AttributeEnricher {
+	byTypeEnricher := map[string]AttributeEnricher{
+		"google_compute_address":       newComputeAddressEnricher(),
+		"google_compute_firewall":      newComputeFirewallEnricher(),
+		"google_compute_network":       newComputeNetworkEnricher(),
+		"google_pubsub_subscription":   newPubsubSubscriptionEnricher(),
+		"google_pubsub_topic":          newPubsubTopicEnricher(),
+		"google_secret_manager_secret": newSecretManagerSecretEnricher(),
+		"google_storage_bucket":        newStorageBucketEnricher(),
+	}
+	// HYBRID Cloud Asset Inventory fallback: register one
+	// cloudAssetEnricher for every TF type in cloudAssetTypeConfigs that
+	// doesn't already have a hand-rolled override above. Hand-rolled
+	// wins; the loop iterates the same config the discoverer registry
+	// pulls from so enricher coverage stays in lockstep with listing
+	// coverage. Entries with Skip=true are excluded — that flag is the
+	// per-type opt-out for cases where the CAI fallback would be
+	// strictly worse than letting the type emit Identity-only.
+	//
+	// The enricher's fetch callback defaults to nil and is resolved at
+	// Enrich time from EnrichClients.CloudAsset. Callers constructing
+	// EnrichClients without a CloudAsset client see a per-resource
+	// ErrEnrichClientUnavailable warning (not a batch-fatal error) so a
+	// partial-credentials run still produces useful output from the
+	// hand-rolled enrichers.
+	for _, cfg := range cloudAssetTypeConfigs {
+		if cfg.Skip {
+			continue
+		}
+		if _, has := byTypeEnricher[cfg.TFType]; has {
+			continue
+		}
+		byTypeEnricher[cfg.TFType] = newCloudAssetEnricher(cfg.TFType, cfg.AssetType, nil)
+	}
+	return byTypeEnricher
 }
 
 // SupportedTypes returns the registered Terraform types in lexicographic

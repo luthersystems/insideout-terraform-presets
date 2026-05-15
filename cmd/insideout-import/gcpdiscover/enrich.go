@@ -133,7 +133,17 @@ type EnrichClients struct {
 	Pubsub        *pubsubv1.Service
 	SecretManager *secretmanagerv1.Service
 	Compute       *computev1.Service
-	ProjectID     string
+	// CloudAsset is the unified Cloud Asset Inventory getter the generic
+	// HYBRID enricher (cloudasset_enricher.go) calls into to fetch the
+	// typed JSON representation of a single asset by name. Distinct from
+	// the per-service SDK clients above: one CloudAsset client backs
+	// every TF type routed through cloudAssetTypeConfigs, while each of
+	// the per-service clients backs exactly one hand-rolled enricher.
+	// Hand-rolled enrichers win as overrides at registration time, so
+	// callers that ship both clients pay no CAI hit on types covered by
+	// a hand-rolled enricher.
+	CloudAsset gcpAssetGetter
+	ProjectID  string
 }
 
 // ErrEnrichClientUnavailable signals that the SDK client an enricher
