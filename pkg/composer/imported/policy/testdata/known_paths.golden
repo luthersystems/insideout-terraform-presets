@@ -24,6 +24,11 @@ aws_apigatewayv2_stage	route_settings.throttling_rate_limit	Tuning	Performance	R
 aws_apigatewayv2_stage	stage_variables	Tuning		RileyVisible	RequiresApproval		
 aws_apigatewayv2_stage	tags	Tuning		Hidden	SystemOnly	Redacted	
 aws_apigatewayv2_stage	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_autoscaling_group_tag	autoscaling_group_name	Identity		UIVisible	Never		AlwaysReplace
+aws_autoscaling_group_tag	id	Identity		UIVisible	Never		
+aws_autoscaling_group_tag	tag.key	Identity		UIVisible	Never		AlwaysReplace
+aws_autoscaling_group_tag	tag.propagate_at_launch	Tuning	Reliability	UIVisible	RequiresApproval		
+aws_autoscaling_group_tag	tag.value	Tuning	Reliability	UIVisible	RequiresApproval		
 aws_bedrock_guardrail	blocked_input_messaging	Tuning	Security	RileyVisible	ChatSafe		
 aws_bedrock_guardrail	blocked_outputs_messaging	Tuning	Security	RileyVisible	ChatSafe		
 aws_bedrock_guardrail	content_policy_config.filters_config.input_strength	Tuning	Security	RileyVisible	RequiresApproval		
@@ -754,6 +759,9 @@ aws_vpc	main_route_table_id	Identity		UIVisible	Never
 aws_vpc	owner_id	Identity		UIVisible	Never		
 aws_vpc	tags	Tuning		Hidden	SystemOnly	Redacted	
 aws_vpc	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_wafv2_web_acl_association	id	Identity		UIVisible	Never		
+aws_wafv2_web_acl_association	resource_arn	Identity		UIVisible	Never		AlwaysReplace
+aws_wafv2_web_acl_association	web_acl_arn	Wiring	Security	RileyVisible	RelationshipOnly		AlwaysReplace
 google_api_gateway_api	api_id	Identity		UIVisible	Never		AlwaysReplace
 google_api_gateway_api	create_time	Identity		RileyVisible	Never		
 google_api_gateway_api	display_name	Tuning		UIVisible	ChatSafe		

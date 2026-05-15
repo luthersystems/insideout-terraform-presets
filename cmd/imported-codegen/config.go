@@ -4,6 +4,13 @@ package main
 // structs for. Add new types here to expand coverage.
 var WantedAWS = []string{
 	"aws_apigatewayv2_stage",
+	// Final-2 enricher push (#482) — closes the last hand-rolled
+	// AWS discoverer types that had no Layer 1 typed struct yet,
+	// flipping AWS Enrichable coverage to 100%. Both are
+	// association-style sub-resources (per-tag-on-ASG and
+	// resource-arn × web-acl-arn binding respectively); the
+	// generated structs follow the iam_role_policy_attachment shape.
+	"aws_autoscaling_group_tag",
 	"aws_bedrock_guardrail",
 	"aws_bedrock_model_invocation_logging_configuration",
 	// Drift coverage bundle 2 (#482) — cloud-control-routed AWS types
@@ -60,6 +67,10 @@ var WantedAWS = []string{
 	"aws_sqs_queue",
 	"aws_subnet",
 	"aws_vpc",
+	// Final-2 enricher push (#482), continued — wafv2_web_acl_association
+	// is the second of the two hand-rolled types being closed; alphabetical
+	// order placed it at the end of the AWS list.
+	"aws_wafv2_web_acl_association",
 }
 
 // WantedGoogle lists the GCP resource types we generate Layer 1 structs
