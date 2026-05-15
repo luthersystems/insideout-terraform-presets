@@ -382,6 +382,12 @@ func NewGCPDiscoverer(searcher gcpAssetSearcher, projectID string, opts GCPDisco
 			"google_secret_manager_secret_iam_binding":   newIAMBindingEnricher("google_secret_manager_secret_iam_binding"),
 			"google_secret_manager_secret_iam_member":    newIAMBindingEnricher("google_secret_manager_secret_iam_member"),
 			"google_storage_bucket_iam_member":           newIAMBindingEnricher("google_storage_bucket_iam_member"),
+			// Final-push enrichers (#482) — three non-CAI types each
+			// backed by a single SDK Get/List call. See per-type
+			// *_enrich.go files for the dispatch shape.
+			"google_project_service":               newProjectServiceEnricher(),
+			"google_service_networking_connection": newServiceNetworkingConnectionEnricher(),
+			"google_vpc_access_connector":          newVPCAccessConnectorEnricher(),
 		},
 	}
 	// HYBRID Cloud Asset Inventory fallback (mirrors AWS #490 steps 1+2):

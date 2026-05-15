@@ -847,6 +847,24 @@
       "semantic": "Exact"
     }
   ],
+  "google_project_service": [
+    {
+      "path": "disable_dependent_services",
+      "semantic": "Exact"
+    },
+    {
+      "path": "disable_on_destroy",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "service",
+      "semantic": "Exact"
+    }
+  ],
   "google_pubsub_topic": [
     {
       "path": "id",
@@ -1014,6 +1032,32 @@
     },
     {
       "path": "unique_id",
+      "semantic": "Exact"
+    }
+  ],
+  "google_service_networking_connection": [
+    {
+      "path": "deletion_policy",
+      "semantic": "Exact"
+    },
+    {
+      "path": "network",
+      "semantic": "Exact"
+    },
+    {
+      "path": "peering",
+      "semantic": "Exact"
+    },
+    {
+      "path": "reserved_peering_ranges",
+      "semantic": "Exact"
+    },
+    {
+      "path": "service",
+      "semantic": "Exact"
+    },
+    {
+      "path": "update_on_creation_fail",
       "semantic": "Exact"
     }
   ],
@@ -1290,6 +1334,60 @@
     },
     {
       "path": "website.not_found_page",
+      "semantic": "Exact"
+    }
+  ],
+  "google_vpc_access_connector": [
+    {
+      "path": "connected_projects",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ip_cidr_range",
+      "semantic": "Exact"
+    },
+    {
+      "path": "machine_type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "max_instances",
+      "semantic": "Exact"
+    },
+    {
+      "path": "max_throughput",
+      "semantic": "Exact"
+    },
+    {
+      "path": "min_instances",
+      "semantic": "Exact"
+    },
+    {
+      "path": "min_throughput",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "network",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "region",
+      "semantic": "Exact"
+    },
+    {
+      "path": "subnet.name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "subnet.project_id",
       "semantic": "Exact"
     }
   ]

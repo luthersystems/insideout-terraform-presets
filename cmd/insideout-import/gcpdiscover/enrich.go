@@ -17,8 +17,11 @@ import (
 	monitoringv3 "google.golang.org/api/monitoring/v3"
 	pubsubv1 "google.golang.org/api/pubsub/v1"
 	secretmanagerv1 "google.golang.org/api/secretmanager/v1"
+	servicenetworkingv1 "google.golang.org/api/servicenetworking/v1"
+	serviceusagev1 "google.golang.org/api/serviceusage/v1"
 	sqladminv1 "google.golang.org/api/sqladmin/v1"
 	storagev1 "google.golang.org/api/storage/v1"
+	vpcaccessv1 "google.golang.org/api/vpcaccess/v1"
 
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/progress"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
@@ -183,7 +186,22 @@ type EnrichClients struct {
 	// doesn't grow per added IAM resource type. Nil tolerated per the
 	// same convention: IAM enrichers report ErrEnrichClientUnavailable.
 	IAMPolicyLister gcpIAMPolicyLister
-	ProjectID       string
+	// Final-push enrichers (#482) — three non-CAI enrichers stacked on
+	// Bundle G6 to push GCP enrichable coverage past 95%. Each is a
+	// single per-service SDK client; nil tolerated per the same
+	// convention as the others.
+	//
+	// ServiceUsage backs google_project_service (Services.Get on the
+	// `projects/<p>/services/<svc>` resource name).
+	// ServiceNetworking backs google_service_networking_connection
+	// (Services.Connections.List filtered by network — no per-connection
+	// Get exists on the API).
+	// VPCAccess backs google_vpc_access_connector
+	// (Projects.Locations.Connectors.Get on the full connector path).
+	ServiceUsage      *serviceusagev1.Service
+	ServiceNetworking *servicenetworkingv1.APIService
+	VPCAccess         *vpcaccessv1.Service
+	ProjectID         string
 }
 
 // ErrEnrichClientUnavailable signals that the SDK client an enricher
