@@ -563,12 +563,15 @@ func TestIAMBindingDispatchTable_AllRegistered(t *testing.T) {
 	}
 }
 
-// Sanity check: the wrapGCPAPIError-style sentinel path used by the
-// production RealIAMPolicyLister wraps a 404 from googleapi.Error,
-// which the enricher needs to convert into ErrNotFound. Drives the
-// errors.Is path independently of the googleapi.Error code path
-// (covered by TestIAMBindingEnricher_NotFound).
-func TestIAMBindingEnricher_NotFoundViaErrNotFound(t *testing.T) {
+// TestIAMBindingEnricher_StringWrappedNotFoundDoesNotCarrySentinel
+// pins the negative case for the errors.Is path: a plain-string wrap
+// of ErrNotFound.Error() does NOT carry the sentinel, so the enricher
+// surfaces the error as a generic fetch failure rather than the
+// drift-signalling ErrNotFound. The googleapi.Error code path is
+// covered by TestIAMBindingEnricher_NotFound; this test pins the
+// fragile-wrapping anti-case so a future refactor that loses %w
+// fails loud.
+func TestIAMBindingEnricher_StringWrappedNotFoundDoesNotCarrySentinel(t *testing.T) {
 	t.Parallel()
 	lister := &fakeIAMPolicyLister{
 		errProject: map[string]error{"my-project": errors.New("get project iam: " + ErrNotFound.Error())},

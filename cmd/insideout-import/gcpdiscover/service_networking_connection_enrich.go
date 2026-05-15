@@ -93,11 +93,12 @@ func (e serviceNetworkingConnectionEnricher) fetchTyped(ctx context.Context, id 
 	}
 	// Find the connection whose Network matches. The API filters by
 	// network on the call but we belt-and-braces match here so the
-	// fetch seam can return unfiltered results.
+	// fetch seam can return unfiltered results. Iterator var is named
+	// `conn` (not `c`) to avoid shadowing the outer EnrichClients param.
 	var match *servicenetworkingv1.Connection
-	for _, c := range conns {
-		if c.Network == network {
-			match = c
+	for _, conn := range conns {
+		if conn.Network == network {
+			match = conn
 			break
 		}
 	}
