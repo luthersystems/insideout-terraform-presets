@@ -161,6 +161,29 @@ var awsDiscoverTypes = []string{
 	"aws_wafv2_web_acl_association",
 }
 
+// awsDiscoverButNotCodegen lists types that the live discoverer registers
+// but whose Layer-1 codegen can't run cleanly today. Three entries:
+//
+//   - aws_cognito_user_pool: the nested `schema` block trips a Go
+//     type-name collision (the generated AWSCognitoUserPoolSchema struct
+//     clashes with the generated `<Type>Schema` package-level variable
+//     name). aws_glue_catalog_database was substituted for it in the
+//     drift bundle 4 curation work; see the historical bundle headers.
+//   - aws_opensearchserverless_access_policy and _security_policy:
+//     present in the live awsdiscover constructor but absent from the
+//     filtered AWS provider schema dump (they were never in the
+//     pre-#494 WantedAWS, so the schema filter dropped them). Codegen
+//     would surface them as "resource type … not in provider" errors;
+//     skip until a future schema refresh adds them.
+//
+// SUPPORTED_RESOURCES.md shows these rows with Discoverable=✓ +
+// Enrichable=✓ + DriftDetectable=✗.
+var awsDiscoverButNotCodegen = []string{
+	"aws_cognito_user_pool",
+	"aws_opensearchserverless_access_policy",
+	"aws_opensearchserverless_security_policy",
+}
+
 // awsCodegenOnlyTypes is the sorted list of AWS Terraform resource types
 // that have Layer-1 typed structs + curated Layer-2 policy maps but are
 // NOT yet wired to a live discoverer. They were authored as part of the
@@ -316,19 +339,30 @@ func SupportedProviders() []string {
 }
 
 // AWSCodegenTypes returns the sorted union of awsDiscoverTypes and
-// awsCodegenOnlyTypes — every AWS Terraform resource type that
-// cmd/imported-codegen emits a Layer-1 typed struct for.
+// awsCodegenOnlyTypes (excluding awsDiscoverButNotCodegen) — every AWS
+// Terraform resource type that cmd/imported-codegen emits a Layer-1 typed
+// struct for.
 //
 // This is the canonical input to the imported-codegen pipeline. The cmd
 // package re-exports it as WantedAWS for backwards compatibility with the
 // pre-#482 naming. Curators editing the AWS type set must edit
-// awsDiscoverTypes / awsCodegenOnlyTypes in this file — there is no longer
-// a parallel hand-maintained list in cmd/imported-codegen/config.go.
+// awsDiscoverTypes / awsCodegenOnlyTypes / awsDiscoverButNotCodegen in
+// this file — there is no longer a parallel hand-maintained list in
+// cmd/imported-codegen/config.go.
 //
 // The returned slice is a fresh copy; callers may mutate it freely.
 func AWSCodegenTypes() []string {
+	skip := make(map[string]struct{}, len(awsDiscoverButNotCodegen))
+	for _, t := range awsDiscoverButNotCodegen {
+		skip[t] = struct{}{}
+	}
 	out := make([]string, 0, len(awsDiscoverTypes)+len(awsCodegenOnlyTypes))
-	out = append(out, awsDiscoverTypes...)
+	for _, t := range awsDiscoverTypes {
+		if _, drop := skip[t]; drop {
+			continue
+		}
+		out = append(out, t)
+	}
 	out = append(out, awsCodegenOnlyTypes...)
 	slices.Sort(out)
 	return out
