@@ -3,7 +3,6 @@ package policy
 import (
 	"os"
 	"path/filepath"
-	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -20,186 +19,20 @@ import (
 // runs don't observe each other through RegisteredTypes() or LintAll().
 const syntheticTypePrefix = "policy_test_"
 
-// coveredTypes pins the exact set of import resource types that must
-// have a Layer 2 policy registered. Adding or removing a type requires
-// updating this list — the diff makes the surface change explicit.
-var coveredTypes = []string{
-	"aws_acm_certificate",
-	// AWS drift coverage bundle 4 (#482) — 10 more cloud-control-routed
-	// types pushing DriftDetectable from 42% to ~51%.
-	"aws_api_gateway_resource",
-	"aws_apigatewayv2_stage",
-	"aws_appautoscaling_policy",
-	"aws_appautoscaling_target",
-	"aws_athena_workgroup",
-	"aws_backup_vault",
-	// Final-2 push (#482) — closes the last hand-rolled enrichers
-	// (per-tag-on-ASG and resource-arn × web-acl-arn binding). Both
-	// have curated Layer 2 policy.Maps with Exact drift semantics.
-	"aws_autoscaling_group",
-	"aws_autoscaling_group_tag",
-	"aws_bedrock_guardrail",
-	"aws_bedrock_model_invocation_logging_configuration",
-	// Bundle 4 (cont.) — CloudTrail.
-	"aws_cloudtrail",
-	// AWS drift coverage bundle 2 (#482) — cloud-control-routed types
-	// in the RDS / compute / monitoring / managed-search family.
-	"aws_cloudfront_distribution",
-	// AWS drift coverage bundle 5 (#482) — 10 more cloud-control-routed
-	// types pushing DriftDetectable further. Compute/container, RDS,
-	// MSK, Glue, Cognito, Lambda alias/permission, IAM user, event bus.
-	"aws_cloudwatch_event_bus",
-	"aws_cloudwatch_event_rule",
-	"aws_cloudwatch_log_group",
-	"aws_cloudwatch_metric_alarm",
-	"aws_codebuild_project",
-	// Bundle 4 (cont.) — CodeDeploy app.
-	"aws_codedeploy_app",
-	"aws_codepipeline",
-	// Bundle 5 (cont.) — Cognito user-pool client.
-	"aws_cognito_user_pool_client",
-	"aws_db_instance",
-	// Bundle 6 (#482) — RDS DB subnet group, EIP, IAM group, IAM
-	// instance profile, internet gateway, NAT gateway, network
-	// interface, route table.
-	"aws_db_subnet_group",
-	"aws_dynamodb_contributor_insights",
-	// Bundle 4 (cont.) — DynamoDB global table.
-	"aws_dynamodb_global_table",
-	"aws_dynamodb_table",
-	"aws_ecs_cluster",
-	// Bundle 5 (cont.) — ECS service + task definition.
-	"aws_ecs_service",
-	"aws_ecs_task_definition",
-	// Bundle 4 (cont.) — EFS file system.
-	"aws_efs_file_system",
-	"aws_eip",
-	"aws_eks_cluster",
-	"aws_elasticache_replication_group",
-	// Bundle 4 (cont.) — Glue catalog database (substituted in for
-	// aws_cognito_user_pool which trips a codegen name collision).
-	"aws_glue_catalog_database",
-	// Bundle 5 (cont.) — Glue ETL job.
-	"aws_glue_job",
-	// AWS drift coverage bundle 1 (#482) — high-value cloud-control-routed
-	// types that already had Enrichable coverage but lacked a curated
-	// Layer 2 policy.Map.
-	"aws_iam_group",
-	"aws_iam_instance_profile",
-	"aws_iam_policy",
-	"aws_iam_role",
-	"aws_iam_role_policy_attachment",
-	// Bundle 5 (cont.) — standalone IAM user.
-	"aws_iam_user",
-	// `aws_instance` is the canonical TF name for EC2 instances.
-	"aws_instance",
-	"aws_internet_gateway",
-	// Bundle 4 (cont.) — Kinesis Data Stream.
-	"aws_kinesis_stream",
-	"aws_kms_key",
-	// Bundle 5 (cont.) — Lambda alias + permission.
-	"aws_lambda_alias",
-	"aws_lambda_function",
-	"aws_lambda_layer_version",
-	"aws_lambda_permission",
-	"aws_lb",
-	"aws_lb_listener",
-	"aws_lb_target_group",
-	// Bundle 2 (cont.) — managed-search / streaming / rotation types.
-	"aws_msk_cluster",
-	// Bundle 5 (cont.) — MSK broker-configuration revision.
-	"aws_msk_configuration",
-	"aws_nat_gateway",
-	"aws_network_interface",
-	"aws_opensearch_domain",
-	// Bundle 5 (cont.) — RDS Aurora / multi-AZ cluster.
-	"aws_rds_cluster",
-	"aws_resourceexplorer2_index",
-	"aws_resourceexplorer2_view",
-	"aws_route53_zone",
-	"aws_route_table",
-	"aws_s3_bucket",
-	// S3 bucket sub-resources (#482 enricher push to 95%).
-	"aws_s3_bucket_lifecycle_configuration",
-	"aws_s3_bucket_ownership_controls",
-	"aws_s3_bucket_public_access_block",
-	"aws_s3_bucket_server_side_encryption_configuration",
-	"aws_s3_bucket_versioning",
-	"aws_secretsmanager_secret",
-	"aws_secretsmanager_secret_rotation",
-	"aws_security_group",
-	"aws_service_discovery_private_dns_namespace",
-	"aws_sfn_state_machine",
-	"aws_sns_topic",
-	"aws_sqs_queue",
-	"aws_subnet",
-	"aws_vpc",
-	"aws_vpc_endpoint",
-	// Final-2 push (#482), continued — wafv2_web_acl_association in
-	// alphabetical position at the end of the AWS block.
-	"aws_wafv2_web_acl_association",
-	"google_api_gateway_api",
-	"google_api_gateway_api_config",
-	"google_api_gateway_gateway",
-	"google_cloud_run_v2_service",
-	"google_cloudbuild_trigger",
-	"google_cloudfunctions2_function",
-	"google_firestore_database",
-	"google_compute_address",
-	"google_compute_backend_service",
-	"google_compute_firewall",
-	"google_compute_forwarding_rule",
-	"google_compute_global_address",
-	"google_compute_global_forwarding_rule",
-	"google_compute_health_check",
-	"google_compute_instance",
-	"google_compute_managed_ssl_certificate",
-	"google_compute_network",
-	"google_compute_resource_policy",
-	"google_compute_router",
-	"google_compute_security_policy",
-	"google_compute_target_http_proxy",
-	"google_compute_target_https_proxy",
-	"google_compute_url_map",
-	"google_container_cluster",
-	"google_container_node_pool",
-	"google_identity_platform_config",
-	"google_identity_platform_default_supported_idp_config",
-	"google_kms_crypto_key",
-	"google_kms_key_ring",
-	"google_logging_project_sink",
-	"google_monitoring_alert_policy",
-	"google_monitoring_dashboard",
-	"google_monitoring_notification_channel",
-	"google_project_service",
-	"google_pubsub_subscription",
-	"google_pubsub_topic",
-	"google_redis_instance",
-	"google_secret_manager_secret",
-	"google_secret_manager_secret_version",
-	"google_service_account",
-	"google_service_networking_connection",
-	"google_sql_database_instance",
-	"google_sql_user",
-	"google_storage_bucket",
-	"google_storage_bucket_object",
-	"google_vertex_ai_dataset",
-	"google_vpc_access_connector",
-	// IAM-binding types (#482 follow-up). Curated minimally — the (parent
-	// × role × member) tuple is identity; `members` lists on _iam_binding
-	// rows are the only non-identity field, edited via RequiresApproval.
-	"google_cloud_run_v2_service_iam_member",
-	"google_cloudfunctions2_function_iam_member",
-	"google_kms_crypto_key_iam_binding",
-	"google_project_iam_member",
-	"google_secret_manager_secret_iam_binding",
-	"google_secret_manager_secret_iam_member",
-	"google_storage_bucket_iam_member",
+// coveredTypes returns the set of production tfTypes that must have a
+// Layer 2 policy registered. Derived directly from the generated Layer 1
+// registry so adding a type to WantedAWS / WantedGoogle automatically
+// flows here — there is no parallel hand-maintained list to keep in
+// sync. The invariant that every generated type has a policy (and vice
+// versa) is enforced by TestPolicyRegistry_CoversGeneratedRegistry
+// below; this helper just hands the same set to the range-based tests.
+func coveredTypes() []string {
+	return generated.RegisteredTypes()
 }
 
 func TestCoveredTypesHavePolicies(t *testing.T) {
 	t.Parallel()
-	for _, tfType := range coveredTypes {
+	for _, tfType := range coveredTypes() {
 		t.Run(tfType, func(t *testing.T) {
 			t.Parallel()
 			m, ok := Lookup(tfType)
@@ -207,26 +40,6 @@ func TestCoveredTypesHavePolicies(t *testing.T) {
 			require.NotEmpty(t, m, "policy for %q is empty", tfType)
 		})
 	}
-}
-
-// TestRegisteredTypes_CoveredSetExact filters out synthetic test
-// registrations (the "policy_test_" prefix used by registry_test.go
-// and lint_test.go helpers) and asserts the remaining production
-// registrations match the covered set exactly. Adding or removing a
-// production tfType requires a deliberate edit to coveredTypes.
-func TestRegisteredTypes_CoveredSetExact(t *testing.T) {
-	t.Parallel()
-	got := RegisteredTypes()
-	production := got[:0:0]
-	for _, tfType := range got {
-		if !strings.HasPrefix(tfType, syntheticTypePrefix) {
-			production = append(production, tfType)
-		}
-	}
-	want := append([]string(nil), coveredTypes...)
-	sort.Strings(want)
-	assert.Equal(t, want, production,
-		"production policy registrations must equal coveredTypes exactly")
 }
 
 // TestPolicyRegistry_CoversGeneratedRegistry pins the invariant that
@@ -238,8 +51,10 @@ func TestRegisteredTypes_CoveredSetExact(t *testing.T) {
 // new type with no axes — the wizard / interactive agent would fall back to default
 // behavior, defeating the bundle's purpose.
 //
-// Symmetric to TestRegisteredTypes_PhaseSetExact, which guards the
-// other direction (no orphan policies without a generated struct).
+// This is the single source of truth for the covered-set invariant —
+// coveredTypes() above derives from generated.RegisteredTypes(), so the
+// older "exact match against a hand-maintained list" test would just be
+// a tautology.
 func TestPolicyRegistry_CoversGeneratedRegistry(t *testing.T) {
 	t.Parallel()
 	gen := generated.RegisteredTypes()
@@ -255,8 +70,7 @@ func TestPolicyRegistry_CoversGeneratedRegistry(t *testing.T) {
 	assert.Equal(t, gen, production,
 		"every generated.RegisteredTypes() entry must have a Layer 2 policy "+
 			"registered (and vice versa). If you added a type to WantedGoogle "+
-			"or WantedAWS, also author a corresponding *.policy.go file and "+
-			"extend coveredTypes.")
+			"or WantedAWS, also author a corresponding *.policy.go file.")
 }
 
 // TestTagsIntentionallyUncurated pins the deliberate gap documented in
@@ -293,7 +107,7 @@ func TestTagsIntentionallyUncurated(t *testing.T) {
 
 func TestLintAll_Clean(t *testing.T) {
 	t.Parallel()
-	for _, tfType := range coveredTypes {
+	for _, tfType := range coveredTypes() {
 		t.Run(tfType, func(t *testing.T) {
 			t.Parallel()
 			issues := Lint(tfType)
@@ -380,5 +194,6 @@ func snapshot() string {
 }
 
 func isCovered(tfType string) bool {
-	return slices.Contains(coveredTypes, tfType)
+	_, _, ok := generated.Lookup(tfType)
+	return ok
 }
