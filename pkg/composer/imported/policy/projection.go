@@ -34,7 +34,7 @@ type FieldView struct {
 }
 
 // VisibleFieldsFor returns every Layer-2-curated field for tfType whose
-// Visibility is UIVisible or RileyVisible, in stable Path order, with
+// Visibility is UIVisible or SummaryVisible, in stable Path order, with
 // current values projected from attrs.
 //
 // Provider-Sensitive fields (FieldSchema.Sensitive=true in the Layer 1
@@ -91,7 +91,7 @@ func filterVisible(fv FieldView, schemaSensitive bool) filterDecision {
 		return skipField
 	}
 	switch fv.Visibility {
-	case VisibilityUIVisible, VisibilityRileyVisible:
+	case VisibilityUIVisible, VisibilitySummaryVisible:
 		return includeField
 	}
 	return skipField

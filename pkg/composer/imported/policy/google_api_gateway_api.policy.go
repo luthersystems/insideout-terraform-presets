@@ -12,7 +12,7 @@ var googleAPIGatewayAPIPolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 	"id": {
-		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		Role: RoleIdentity, Visibility: VisibilitySummaryVisible, Edit: EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"api_id": {
@@ -25,10 +25,10 @@ var googleAPIGatewayAPIPolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 	"create_time": {
-		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		Role: RoleIdentity, Visibility: VisibilitySummaryVisible, Edit: EditNever,
 	},
 	"managed_service": {
-		Role: RoleIdentity, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleIdentity, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},

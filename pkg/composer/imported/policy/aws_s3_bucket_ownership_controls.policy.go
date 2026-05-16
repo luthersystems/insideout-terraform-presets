@@ -22,7 +22,7 @@ var awsS3BucketOwnershipControlsPolicy = Map{
 
 	// Tuning — object ownership enum -----------------------------------
 	"rule.object_ownership": {
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},

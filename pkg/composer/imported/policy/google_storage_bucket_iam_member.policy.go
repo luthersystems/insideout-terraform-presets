@@ -10,8 +10,8 @@ package policy
 // publicly-readable GCS bucket). bucket is Exact for completeness;
 // id / etag stay DriftSemantic=None.
 var googleStorageBucketIAMMemberPolicy = Map{
-	"id":   {Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever},
-	"etag": {Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever},
+	"id":   {Role: RoleIdentity, Visibility: VisibilitySummaryVisible, Edit: EditNever},
+	"etag": {Role: RoleIdentity, Visibility: VisibilitySummaryVisible, Edit: EditNever},
 	"bucket": {
 		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
 		ChangeRisk:    ChangeAlwaysReplace,

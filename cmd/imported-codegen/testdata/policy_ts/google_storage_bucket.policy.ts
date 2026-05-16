@@ -31,37 +31,37 @@ import { projectFields } from "./_policy";
  * presets's projection.go (sort.Strings on keys).
  */
 export const POLICY: ReadonlyArray<FieldRow> = [
-  { path: "autoclass.enabled", role: "Tuning", pillar: "Performance", visibility: "RileyVisible", edit: "ChatSafe", sensitivity: "Public", changeRisk: "Unknown" },
-  { path: "cors.max_age_seconds", role: "Tuning", pillar: "None", visibility: "RileyVisible", edit: "ChatSafe", sensitivity: "Public", changeRisk: "Unknown" },
-  { path: "cors.method", role: "Tuning", pillar: "None", visibility: "RileyVisible", edit: "ChatSafe", sensitivity: "Public", changeRisk: "Unknown" },
-  { path: "cors.origin", role: "Tuning", pillar: "Security", visibility: "RileyVisible", edit: "ChatSafe", sensitivity: "Public", changeRisk: "Unknown" },
-  { path: "cors.response_header", role: "Tuning", pillar: "None", visibility: "RileyVisible", edit: "ChatSafe", sensitivity: "Public", changeRisk: "Unknown" },
+  { path: "autoclass.enabled", role: "Tuning", pillar: "Performance", visibility: "SummaryVisible", edit: "ChatSafe", sensitivity: "Public", changeRisk: "Unknown" },
+  { path: "cors.max_age_seconds", role: "Tuning", pillar: "None", visibility: "SummaryVisible", edit: "ChatSafe", sensitivity: "Public", changeRisk: "Unknown" },
+  { path: "cors.method", role: "Tuning", pillar: "None", visibility: "SummaryVisible", edit: "ChatSafe", sensitivity: "Public", changeRisk: "Unknown" },
+  { path: "cors.origin", role: "Tuning", pillar: "Security", visibility: "SummaryVisible", edit: "ChatSafe", sensitivity: "Public", changeRisk: "Unknown" },
+  { path: "cors.response_header", role: "Tuning", pillar: "None", visibility: "SummaryVisible", edit: "ChatSafe", sensitivity: "Public", changeRisk: "Unknown" },
   { path: "effective_labels", role: "Tuning", pillar: "None", visibility: "Hidden", edit: "SystemOnly", sensitivity: "Redacted", changeRisk: "Unknown" },
-  { path: "encryption.default_kms_key_name", role: "Wiring", pillar: "Security", visibility: "RileyVisible", edit: "RelationshipOnly", sensitivity: "Public", changeRisk: "Unknown" },
-  { path: "force_destroy", role: "Tuning", pillar: "Reliability", visibility: "RileyVisible", edit: "RequiresApproval", sensitivity: "Public", changeRisk: "Unknown" },
-  { path: "id", role: "Identity", pillar: "None", visibility: "RileyVisible", edit: "Never", sensitivity: "Public", changeRisk: "Unknown" },
+  { path: "encryption.default_kms_key_name", role: "Wiring", pillar: "Security", visibility: "SummaryVisible", edit: "RelationshipOnly", sensitivity: "Public", changeRisk: "Unknown" },
+  { path: "force_destroy", role: "Tuning", pillar: "Reliability", visibility: "SummaryVisible", edit: "RequiresApproval", sensitivity: "Public", changeRisk: "Unknown" },
+  { path: "id", role: "Identity", pillar: "None", visibility: "SummaryVisible", edit: "Never", sensitivity: "Public", changeRisk: "Unknown" },
   { path: "labels", role: "Tuning", pillar: "None", visibility: "Hidden", edit: "SystemOnly", sensitivity: "Redacted", changeRisk: "Unknown" },
-  { path: "lifecycle_rule", role: "Tuning", pillar: "Reliability", visibility: "RileyVisible", edit: "ChatSafe", sensitivity: "Public", changeRisk: "Unknown" },
+  { path: "lifecycle_rule", role: "Tuning", pillar: "Reliability", visibility: "SummaryVisible", edit: "ChatSafe", sensitivity: "Public", changeRisk: "Unknown" },
   { path: "location", role: "Identity", pillar: "None", visibility: "UIVisible", edit: "Never", sensitivity: "Public", changeRisk: "AlwaysReplace" },
-  { path: "logging.log_bucket", role: "Wiring", pillar: "Reliability", visibility: "RileyVisible", edit: "RelationshipOnly", sensitivity: "Public", changeRisk: "Unknown" },
-  { path: "logging.log_object_prefix", role: "Tuning", pillar: "None", visibility: "RileyVisible", edit: "ChatSafe", sensitivity: "Public", changeRisk: "Unknown" },
+  { path: "logging.log_bucket", role: "Wiring", pillar: "Reliability", visibility: "SummaryVisible", edit: "RelationshipOnly", sensitivity: "Public", changeRisk: "Unknown" },
+  { path: "logging.log_object_prefix", role: "Tuning", pillar: "None", visibility: "SummaryVisible", edit: "ChatSafe", sensitivity: "Public", changeRisk: "Unknown" },
   { path: "name", role: "Identity", pillar: "None", visibility: "UIVisible", edit: "Never", sensitivity: "Public", changeRisk: "Unknown" },
   { path: "project", role: "Identity", pillar: "None", visibility: "UIVisible", edit: "Never", sensitivity: "Public", changeRisk: "AlwaysReplace" },
-  { path: "public_access_prevention", role: "Tuning", pillar: "Security", visibility: "RileyVisible", edit: "RequiresApproval", sensitivity: "Public", changeRisk: "MayReplace" },
-  { path: "requester_pays", role: "Tuning", pillar: "None", visibility: "RileyVisible", edit: "ChatSafe", sensitivity: "Public", changeRisk: "Unknown" },
-  { path: "retention_policy.is_locked", role: "Tuning", pillar: "Reliability", visibility: "RileyVisible", edit: "RequiresApproval", sensitivity: "Public", changeRisk: "MayReplace" },
-  { path: "retention_policy.retention_period", role: "Tuning", pillar: "Reliability", visibility: "RileyVisible", edit: "RequiresApproval", sensitivity: "Public", changeRisk: "Unknown" },
-  { path: "rpo", role: "Tuning", pillar: "Reliability", visibility: "RileyVisible", edit: "ChatSafe", sensitivity: "Public", changeRisk: "Unknown" },
-  { path: "self_link", role: "Identity", pillar: "None", visibility: "RileyVisible", edit: "Never", sensitivity: "Public", changeRisk: "Unknown" },
-  { path: "soft_delete_policy.retention_duration_seconds", role: "Tuning", pillar: "Reliability", visibility: "RileyVisible", edit: "ChatSafe", sensitivity: "Public", changeRisk: "Unknown" },
-  { path: "storage_class", role: "Tuning", pillar: "Performance", visibility: "RileyVisible", edit: "ChatSafe", sensitivity: "Public", changeRisk: "Unknown" },
+  { path: "public_access_prevention", role: "Tuning", pillar: "Security", visibility: "SummaryVisible", edit: "RequiresApproval", sensitivity: "Public", changeRisk: "MayReplace" },
+  { path: "requester_pays", role: "Tuning", pillar: "None", visibility: "SummaryVisible", edit: "ChatSafe", sensitivity: "Public", changeRisk: "Unknown" },
+  { path: "retention_policy.is_locked", role: "Tuning", pillar: "Reliability", visibility: "SummaryVisible", edit: "RequiresApproval", sensitivity: "Public", changeRisk: "MayReplace" },
+  { path: "retention_policy.retention_period", role: "Tuning", pillar: "Reliability", visibility: "SummaryVisible", edit: "RequiresApproval", sensitivity: "Public", changeRisk: "Unknown" },
+  { path: "rpo", role: "Tuning", pillar: "Reliability", visibility: "SummaryVisible", edit: "ChatSafe", sensitivity: "Public", changeRisk: "Unknown" },
+  { path: "self_link", role: "Identity", pillar: "None", visibility: "SummaryVisible", edit: "Never", sensitivity: "Public", changeRisk: "Unknown" },
+  { path: "soft_delete_policy.retention_duration_seconds", role: "Tuning", pillar: "Reliability", visibility: "SummaryVisible", edit: "ChatSafe", sensitivity: "Public", changeRisk: "Unknown" },
+  { path: "storage_class", role: "Tuning", pillar: "Performance", visibility: "SummaryVisible", edit: "ChatSafe", sensitivity: "Public", changeRisk: "Unknown" },
   { path: "terraform_labels", role: "Tuning", pillar: "None", visibility: "Hidden", edit: "SystemOnly", sensitivity: "Redacted", changeRisk: "Unknown" },
   { path: "timeouts", role: "Tuning", pillar: "None", visibility: "Hidden", edit: "SystemOnly", sensitivity: "Public", changeRisk: "Unknown" },
-  { path: "uniform_bucket_level_access", role: "Tuning", pillar: "Security", visibility: "RileyVisible", edit: "RequiresApproval", sensitivity: "Public", changeRisk: "Unknown" },
-  { path: "url", role: "Identity", pillar: "None", visibility: "RileyVisible", edit: "Never", sensitivity: "Public", changeRisk: "Unknown" },
-  { path: "versioning.enabled", role: "Tuning", pillar: "Reliability", visibility: "RileyVisible", edit: "ChatSafe", sensitivity: "Public", changeRisk: "Unknown" },
-  { path: "website.main_page_suffix", role: "Tuning", pillar: "None", visibility: "RileyVisible", edit: "ChatSafe", sensitivity: "Public", changeRisk: "Unknown" },
-  { path: "website.not_found_page", role: "Tuning", pillar: "None", visibility: "RileyVisible", edit: "ChatSafe", sensitivity: "Public", changeRisk: "Unknown" },
+  { path: "uniform_bucket_level_access", role: "Tuning", pillar: "Security", visibility: "SummaryVisible", edit: "RequiresApproval", sensitivity: "Public", changeRisk: "Unknown" },
+  { path: "url", role: "Identity", pillar: "None", visibility: "SummaryVisible", edit: "Never", sensitivity: "Public", changeRisk: "Unknown" },
+  { path: "versioning.enabled", role: "Tuning", pillar: "Reliability", visibility: "SummaryVisible", edit: "ChatSafe", sensitivity: "Public", changeRisk: "Unknown" },
+  { path: "website.main_page_suffix", role: "Tuning", pillar: "None", visibility: "SummaryVisible", edit: "ChatSafe", sensitivity: "Public", changeRisk: "Unknown" },
+  { path: "website.not_found_page", role: "Tuning", pillar: "None", visibility: "SummaryVisible", edit: "ChatSafe", sensitivity: "Public", changeRisk: "Unknown" },
 ];
 
 /** Re-export so a single import covers the row type + the data. */
@@ -69,7 +69,7 @@ export type { FieldRow, FieldRole, FieldPillar, VisibilityPolicy, EditPolicy, Se
 
 /**
  * visibleFields mirrors `policy.VisibleFieldsFor` in presets — every
- * curated row whose Visibility is UIVisible or RileyVisible, with
+ * curated row whose Visibility is UIVisible or SummaryVisible, with
  * Sensitive rows excluded. Returns rows in the same Path order as
  * POLICY, with `currentValue` resolved from `attrs` (null for
  * Sensitive rows by construction).

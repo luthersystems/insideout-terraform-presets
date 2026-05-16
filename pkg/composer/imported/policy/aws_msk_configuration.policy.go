@@ -47,7 +47,7 @@ var awsMskConfigurationPolicy = Map{
 	"server_properties": {
 		// Multi-line broker tuning text. RequiresApproval — a stale
 		// in-prod edit is the drift we want to catch.
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},

@@ -10,7 +10,7 @@ package policy
 // reason about; nothing here is sensitive.
 var googleProjectServicePolicy = Map{
 	// Identity
-	"id": {Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever},
+	"id": {Role: RoleIdentity, Visibility: VisibilitySummaryVisible, Edit: EditNever},
 	"project": {
 		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
 		ChangeRisk:    ChangeAlwaysReplace,
@@ -25,11 +25,11 @@ var googleProjectServicePolicy = Map{
 	// Tuning — destroy-time toggles. Pure lifecycle controls; safe to
 	// edit and have no impact on the live resource until destroy.
 	"disable_dependent_services": {
-		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		Role: RoleTuning, Visibility: VisibilitySummaryVisible, Edit: EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"disable_on_destroy": {
-		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		Role: RoleTuning, Visibility: VisibilitySummaryVisible, Edit: EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},
 

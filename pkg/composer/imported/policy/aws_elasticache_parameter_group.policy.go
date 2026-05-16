@@ -45,7 +45,7 @@ var awsElasticacheParameterGroupPolicy = Map{
 	// Tuning — description --------------------------------------------
 	"description": {
 		// Human-readable description; safe to update.
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},

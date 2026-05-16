@@ -27,7 +27,7 @@ var awsWafv2WebACLAssociationPolicy = Map{
 
 	// Wiring — Web ACL reference ---------------------------------------
 	"web_acl_arn": {
-		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRelationshipOnly,
 		ChangeRisk:    ChangeAlwaysReplace,
 		DriftSemantic: DriftSemanticExact,

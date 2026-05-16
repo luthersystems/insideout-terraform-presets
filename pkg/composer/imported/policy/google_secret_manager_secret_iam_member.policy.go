@@ -11,8 +11,8 @@ package policy
 // secret_id are Exact for completeness. id / etag stay
 // DriftSemantic=None.
 var googleSecretManagerSecretIAMMemberPolicy = Map{
-	"id":   {Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever},
-	"etag": {Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever},
+	"id":   {Role: RoleIdentity, Visibility: VisibilitySummaryVisible, Edit: EditNever},
+	"etag": {Role: RoleIdentity, Visibility: VisibilitySummaryVisible, Edit: EditNever},
 	"project": {
 		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
 		ChangeRisk:    ChangeAlwaysReplace,

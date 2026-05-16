@@ -55,27 +55,27 @@ var awsEKSAddonPolicy = Map{
 	"addon_version": {
 		// Pinned upstream version (e.g. v1.18.1-eksbuild.1). Drift
 		// indicates an out-of-band upgrade-through-AWS-console.
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"configuration_values": {
 		// JSON blob merged into the add-on values. Exact-string drift
 		// catches out-of-band reconfig.
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"resolve_conflicts_on_create": {
 		// NONE / OVERWRITE; how the AWS API reconciles operator overrides
 		// at install time.
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"resolve_conflicts_on_update": {
 		// NONE / OVERWRITE / PRESERVE; reconciliation policy on update.
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},

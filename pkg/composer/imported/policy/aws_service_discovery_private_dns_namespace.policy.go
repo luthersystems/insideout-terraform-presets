@@ -38,7 +38,7 @@ var awsServiceDiscoveryPrivateDNSNamespacePolicy = Map{
 		// The VPC the namespace is bound to. The composer's graph
 		// resolver owns the relationship; namespace recreates if the
 		// VPC changes (per provider ForceNew).
-		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRelationshipOnly,
 		ChangeRisk:    ChangeAlwaysReplace,
 		DriftSemantic: DriftSemanticExact,
@@ -46,7 +46,7 @@ var awsServiceDiscoveryPrivateDNSNamespacePolicy = Map{
 
 	// Tuning -----------------------------------------------------------
 	"description": {
-		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		Role: RoleTuning, Visibility: VisibilitySummaryVisible, Edit: EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},
 

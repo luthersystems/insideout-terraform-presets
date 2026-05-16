@@ -55,7 +55,7 @@ var awsEKSPodIdentityAssociationPolicy = Map{
 	"role_arn": {
 		// IAM role assumed by every pod backed by the SA. Drift = silent
 		// privilege re-grant.
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},

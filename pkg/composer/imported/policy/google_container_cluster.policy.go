@@ -15,11 +15,11 @@ var googleContainerClusterPolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 	"id": {
-		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		Role: RoleIdentity, Visibility: VisibilitySummaryVisible, Edit: EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"self_link": {
-		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		Role: RoleIdentity, Visibility: VisibilitySummaryVisible, Edit: EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"project": {
@@ -49,7 +49,7 @@ var googleContainerClusterPolicy = Map{
 
 	// Tuning — top-level cluster knobs.
 	"description": {
-		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		Role: RoleTuning, Visibility: VisibilitySummaryVisible, Edit: EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"min_master_version": {
@@ -73,12 +73,12 @@ var googleContainerClusterPolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 	"enable_intranode_visibility": {
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"enable_legacy_abac": {
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},
@@ -93,20 +93,20 @@ var googleContainerClusterPolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 	"datapath_provider": {
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit: EditNever, ChangeRisk: ChangeAlwaysReplace,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"initial_node_count": {
-		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilitySummaryVisible,
 		Edit: EditNever, ChangeRisk: ChangeAlwaysReplace,
 	},
 	"remove_default_node_pool": {
-		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		Role: RoleTuning, Visibility: VisibilitySummaryVisible, Edit: EditNever,
 		ChangeRisk: ChangeAlwaysReplace,
 	},
 	"default_max_pods_per_node": {
-		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilitySummaryVisible,
 		Edit: EditNever, ChangeRisk: ChangeAlwaysReplace,
 	},
 
@@ -116,11 +116,11 @@ var googleContainerClusterPolicy = Map{
 		Edit: EditNever, ChangeRisk: ChangeAlwaysReplace,
 	},
 	"node_config.disk_size_gb": {
-		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilitySummaryVisible,
 		Edit: EditNever, ChangeRisk: ChangeAlwaysReplace,
 	},
 	"node_config.disk_type": {
-		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilitySummaryVisible,
 		Edit: EditNever, ChangeRisk: ChangeAlwaysReplace,
 	},
 	"node_config.service_account": {
@@ -128,7 +128,7 @@ var googleContainerClusterPolicy = Map{
 		Edit: EditRelationshipOnly, ChangeRisk: ChangeAlwaysReplace,
 	},
 	"node_config.oauth_scopes": {
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditNever,
 		ChangeRisk:    ChangeAlwaysReplace,
 		DriftSemantic: DriftSemanticWholeList,
@@ -136,19 +136,19 @@ var googleContainerClusterPolicy = Map{
 
 	// IP allocation policy (VPC-native).
 	"ip_allocation_policy.cluster_secondary_range_name": {
-		Role: RoleWiring, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		Role: RoleWiring, Visibility: VisibilitySummaryVisible, Edit: EditNever,
 		ChangeRisk: ChangeAlwaysReplace,
 	},
 	"ip_allocation_policy.services_secondary_range_name": {
-		Role: RoleWiring, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		Role: RoleWiring, Visibility: VisibilitySummaryVisible, Edit: EditNever,
 		ChangeRisk: ChangeAlwaysReplace,
 	},
 	"ip_allocation_policy.cluster_ipv4_cidr_block": {
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit: EditNever, ChangeRisk: ChangeAlwaysReplace,
 	},
 	"ip_allocation_policy.services_ipv4_cidr_block": {
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit: EditNever, ChangeRisk: ChangeAlwaysReplace,
 	},
 
@@ -164,13 +164,13 @@ var googleContainerClusterPolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 	"private_cluster_config.master_ipv4_cidr_block": {
-		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		Role: RoleTuning, Visibility: VisibilitySummaryVisible, Edit: EditNever,
 		ChangeRisk: ChangeAlwaysReplace,
 	},
 
 	// Master auth.
 	"master_auth.client_certificate_config.issue_client_certificate": {
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit: EditNever, ChangeRisk: ChangeAlwaysReplace,
 	},
 
@@ -181,7 +181,7 @@ var googleContainerClusterPolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 	"database_encryption.key_name": {
-		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRelationshipOnly,
 		DriftSemantic: DriftSemanticExact,
 	},

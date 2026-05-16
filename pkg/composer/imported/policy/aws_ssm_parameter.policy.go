@@ -88,14 +88,14 @@ var awsSsmParameterPolicy = Map{
 		// SecureString value — Sensitive. Drift here flags out-of-band
 		// rotation (or tampering). The diff layer redacts the actual
 		// value at display time.
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		Sensitivity:   SensitivityRedacted,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"insecure_value": {
 		// Plaintext-acknowledged value for non-SecureString types.
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},

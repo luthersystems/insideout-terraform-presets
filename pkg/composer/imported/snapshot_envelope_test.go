@@ -47,7 +47,7 @@ func TestSnapshotEnvelope_RoundTrip(t *testing.T) {
 			},
 			FieldEdits: map[string]FieldEdit{
 				"visibility_timeout_seconds": {
-					Source:   SourceRiley,
+					Source:   SourceAgent,
 					EditedAt: time.Date(2026, 4, 27, 14, 30, 0, 0, time.UTC),
 					OldValue: float64(30),
 					NewValue: float64(60),

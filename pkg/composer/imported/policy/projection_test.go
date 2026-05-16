@@ -109,7 +109,7 @@ func TestVisibleFieldsFor_StorageBucket_AcceptanceA(t *testing.T) {
 	storageClass := set["storage_class"]
 	assert.Equal(t, RoleTuning, storageClass.Role)
 	assert.Equal(t, PillarPerformance, storageClass.Pillar)
-	assert.Equal(t, VisibilityRileyVisible, storageClass.Visibility)
+	assert.Equal(t, VisibilitySummaryVisible, storageClass.Visibility)
 	assert.Equal(t, EditChatSafe, storageClass.Edit)
 }
 

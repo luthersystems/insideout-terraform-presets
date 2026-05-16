@@ -13,8 +13,8 @@ package policy
 // pattern). crypto_key_id is Exact for completeness; id / etag stay
 // DriftSemantic=None.
 var googleKMSCryptoKeyIAMBindingPolicy = Map{
-	"id":   {Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever},
-	"etag": {Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever},
+	"id":   {Role: RoleIdentity, Visibility: VisibilitySummaryVisible, Edit: EditNever},
+	"etag": {Role: RoleIdentity, Visibility: VisibilitySummaryVisible, Edit: EditNever},
 	"crypto_key_id": {
 		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
 		ChangeRisk:    ChangeAlwaysReplace,

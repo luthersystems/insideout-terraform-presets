@@ -35,7 +35,7 @@ var awsCloudfrontFunctionPolicy = Map{
 	"runtime": {
 		// Pins JS engine version (cloudfront-js-1.0 / cloudfront-js-2.0).
 		// Out-of-band changes silently flip the execution semantics.
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},
@@ -43,7 +43,7 @@ var awsCloudfrontFunctionPolicy = Map{
 		// JS source. Exact-string drift catches out-of-band edits to the
 		// edge-runtime logic — security-sensitive (rewrites, redirects,
 		// auth header munging).
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},

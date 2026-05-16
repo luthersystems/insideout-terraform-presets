@@ -47,7 +47,7 @@ func TestSource_RoundTrip(t *testing.T) {
 	t.Parallel()
 	sources := []Source{
 		SourceComposer, SourceImporter, SourceInspector,
-		SourceRiley, SourceAPI, SourceMCP,
+		SourceAgent, SourceAPI, SourceMCP,
 	}
 	for _, s := range sources {
 		t.Run(string(s), func(t *testing.T) {
@@ -66,7 +66,7 @@ func TestSource_RoundTrip(t *testing.T) {
 
 func TestSource_ValidRejectsUnknown(t *testing.T) {
 	t.Parallel()
-	for _, v := range []Source{"", "RILEY", "user", "unknown"} {
+	for _, v := range []Source{"", "AGENT", "user", "unknown"} {
 		assert.Falsef(t, v.Valid(), "%q must not Valid()", v)
 	}
 }
@@ -134,7 +134,7 @@ func TestImportedResource_RoundTrip_Full(t *testing.T) {
 		},
 		FieldEdits: map[string]FieldEdit{
 			"visibility_timeout_seconds": {
-				Source:   SourceRiley,
+				Source:   SourceAgent,
 				EditedAt: time.Date(2026, 4, 27, 14, 30, 0, 0, time.UTC),
 				OldValue: float64(30),
 				NewValue: float64(60),
@@ -244,7 +244,7 @@ func TestFieldEdit_MarshalJSON_ConvertsToUTC(t *testing.T) {
 	// LA local time. The serializer must convert this back to UTC.
 	laTime := time.Date(2026, 4, 27, 7, 30, 15, 123_456_789, la)
 	fe := FieldEdit{
-		Source:   SourceRiley,
+		Source:   SourceAgent,
 		EditedAt: laTime,
 		OldValue: "before",
 		NewValue: "after",

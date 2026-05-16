@@ -60,7 +60,7 @@ var awsAcmCertificatePolicy = Map{
 	// Wiring — cross-resource references --------------------------------
 	"certificate_authority_arn": {
 		// Private CA ARN for AWS_PRIVATE_CA-issued certs.
-		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRelationshipOnly,
 		DriftSemantic: DriftSemanticExact,
 	},
@@ -68,30 +68,30 @@ var awsAcmCertificatePolicy = Map{
 	// Tuning — TLS posture ---------------------------------------------
 	"validation_method": {
 		// DNS / EMAIL / NONE. Pinned at create; replacement on change.
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditNever,
 		ChangeRisk:    ChangeAlwaysReplace,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"key_algorithm": {
 		// RSA_2048 / EC_prime256v1 / EC_secp384r1 etc. Pinned at create.
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditNever,
 		ChangeRisk:    ChangeAlwaysReplace,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"early_renewal_duration": {
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"renewal_eligibility": {
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"pending_renewal": {
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},
@@ -100,7 +100,7 @@ var awsAcmCertificatePolicy = Map{
 	"subject_alternative_names": {
 		// Order-insensitive SAN set; whole-list compare so a missing or
 		// extra SAN is one diff entry, not N.
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		ChangeRisk:    ChangeAlwaysReplace,
 		DriftSemantic: DriftSemanticWholeList,
@@ -108,19 +108,19 @@ var awsAcmCertificatePolicy = Map{
 
 	// Options block — transparency logging -----------------------------
 	"options.certificate_transparency_logging_preference": {
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},
 
 	// Imported-cert payload (IMPORTED type) ----------------------------
 	"certificate_body": {
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"certificate_chain": {
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},
@@ -134,51 +134,51 @@ var awsAcmCertificatePolicy = Map{
 
 	// Server-emitted DNS challenge tuples ------------------------------
 	"domain_validation_options.domain_name": {
-		Role: RoleIdentity, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleIdentity, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"domain_validation_options.resource_record_name": {
-		Role: RoleIdentity, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleIdentity, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"domain_validation_options.resource_record_type": {
-		Role: RoleIdentity, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleIdentity, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"domain_validation_options.resource_record_value": {
-		Role: RoleIdentity, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleIdentity, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},
 
 	// Renewal status ---------------------------------------------------
 	"renewal_summary.renewal_status": {
-		Role: RoleIdentity, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleIdentity, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"renewal_summary.renewal_status_reason": {
-		Role: RoleIdentity, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleIdentity, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"renewal_summary.updated_at": {
-		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		Role: RoleIdentity, Visibility: VisibilitySummaryVisible, Edit: EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},
 
 	// Per-SAN validation override -------------------------------------
 	"validation_option.domain_name": {
-		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditNever,
 		ChangeRisk:    ChangeAlwaysReplace,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"validation_option.validation_domain": {
-		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditNever,
 		ChangeRisk:    ChangeAlwaysReplace,
 		DriftSemantic: DriftSemanticExact,
@@ -186,7 +186,7 @@ var awsAcmCertificatePolicy = Map{
 
 	"validation_emails": {
 		// Server-emitted list of contacts for EMAIL validation.
-		Role: RoleIdentity, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleIdentity, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditNever,
 		DriftSemantic: DriftSemanticWholeList,
 	},

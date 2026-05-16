@@ -11,7 +11,7 @@ var googleMonitoringDashboardPolicy = Map{
 	// the dashboard's user-facing label lives inside dashboard_json's
 	// displayName property. `id` is the provider-assigned resource ID.
 	"id": {
-		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		Role: RoleIdentity, Visibility: VisibilitySummaryVisible, Edit: EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"project": {
@@ -24,7 +24,7 @@ var googleMonitoringDashboardPolicy = Map{
 	// authored blob; the interactive agent can edit via chat-safe JSON
 	// edits but the composer / wizard owns large refactors.
 	"dashboard_json": {
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible, Edit: EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},
 

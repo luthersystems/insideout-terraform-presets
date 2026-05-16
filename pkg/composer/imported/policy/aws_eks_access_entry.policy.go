@@ -46,7 +46,7 @@ var awsEKSAccessEntryPolicy = Map{
 	"type": {
 		// STANDARD / EC2_LINUX / EC2_WINDOWS / FARGATE_LINUX — drives
 		// which AWS-managed groups the principal inherits.
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		ChangeRisk:    ChangeAlwaysReplace,
 		DriftSemantic: DriftSemanticExact,
@@ -60,7 +60,7 @@ var awsEKSAccessEntryPolicy = Map{
 	},
 	"user_name": {
 		// In-cluster username override; affects RBAC audit attribution.
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},
