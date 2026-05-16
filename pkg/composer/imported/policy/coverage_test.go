@@ -493,3 +493,153 @@ func snapshot() string {
 func isCovered(tfType string) bool {
 	return slices.Contains(coveredTypes, tfType)
 }
+
+// driftMinimalExempt lists tfTypes whose curated FieldPolicy maps
+// have ZERO DriftSemantic-tagged fields, and where that absence is
+// deliberate — every field is identity-only, immutable, or
+// system-owned, leaving nothing for the comparator to meaningfully
+// drift-check.
+//
+// The entries fall into two categories:
+//
+//  1. IAM-binding / membership types (*_iam_binding, *_iam_member,
+//     project_iam_member). Every field is part of the
+//     (parent × role × member) identity tuple — the only mutable
+//     surface is `members`/`member`, which is RequiresApproval-gated
+//     at edit time; drift-detection on it would be redundant with the
+//     audit-log trail and would flood the UI with operator-driven
+//     deltas. Drift comparison stays opt-out here.
+//
+//  2. GCP networking / proxy / certificate primitives
+//     (compute_global_address, compute_global_forwarding_rule,
+//     compute_target_http_proxy, compute_target_https_proxy,
+//     compute_managed_ssl_certificate, compute_resource_policy,
+//     identity_platform_config, firestore_database, sql_user,
+//     api_gateway_*, cloudbuild_trigger). These have Identity-only
+//     fields plus ChangeAlwaysReplace tuning fields where the
+//     provider treats every value change as destroy/recreate — drift
+//     on these is captured at the resource-existence level (the
+//     resource itself drifts as "present vs absent"), and per-field
+//     drift would re-litigate the same delta in a noisier shape.
+//
+// To remove an entry: tag at least one field with a DriftSemantic
+// value (Exact / WholeList / LabelFilter) in the relevant *.policy.go
+// file. Prefer tagging over exempting where the type has any
+// in-place-mutable, drift-meaningful field.
+//
+// Stale-entry guard: TestDriftMinimalExemptNoStaleEntries asserts every
+// key still appears in policy.RegisteredTypes() — removing a policy
+// elsewhere must also remove its exempt entry.
+var driftMinimalExempt = map[string]bool{
+	// --- IAM membership types (identity tuple + RequiresApproval members) ---
+	"google_cloud_run_v2_service_iam_member":     true,
+	"google_cloudfunctions2_function_iam_member": true,
+	"google_kms_crypto_key_iam_binding":          true,
+	"google_project_iam_member":                  true,
+	"google_secret_manager_secret_iam_binding":   true,
+	"google_secret_manager_secret_iam_member":    true,
+	"google_storage_bucket_iam_member":           true,
+
+	// --- GCP API Gateway (every field ChangeAlwaysReplace or Identity) ---
+	"google_api_gateway_api":        true,
+	"google_api_gateway_api_config": true,
+	"google_api_gateway_gateway":    true,
+
+	// --- GCP Cloud Build trigger (uncurated tags + identity-only fields) ---
+	"google_cloudbuild_trigger": true,
+
+	// --- GCP Compute networking primitives (every tuning field
+	// ChangeAlwaysReplace, drift captured at existence level) ---
+	"google_compute_global_address":          true,
+	"google_compute_global_forwarding_rule":  true,
+	"google_compute_managed_ssl_certificate": true,
+	"google_compute_resource_policy":         true,
+	"google_compute_target_http_proxy":       true,
+	"google_compute_target_https_proxy":      true,
+
+	// --- GCP singletons / identity-only metadata ---
+	"google_firestore_database":       true,
+	"google_identity_platform_config": true,
+	"google_sql_user":                 true,
+}
+
+// TestEveryPolicyHasDriftSemantic asserts that every registered Layer 2
+// policy contains at least one field tagged with a non-empty
+// DriftSemantic value — or is explicitly listed in driftMinimalExempt
+// with a rationale comment.
+//
+// Rationale: DriftSemantic is the comparator's hook for translating
+// "the cloud state changed under us" into "this specific field
+// drifted". A policy file with ZERO DriftSemantic tags renders no
+// drift signal at all for that type — the comparator skips it. The
+// invariant catches the easy-to-miss case where a curator authors a
+// policy.Map but forgets to tag a single field for drift, which used
+// to silently pass code review and leave the type invisible to
+// post-deploy reconciliation.
+//
+// The exempt list captures the (small) set of types where every field
+// is legitimately identity-only or ChangeAlwaysReplace, leaving no
+// drift-meaningful surface; see driftMinimalExempt's header for the
+// per-category rationale.
+func TestEveryPolicyHasDriftSemantic(t *testing.T) {
+	t.Parallel()
+
+	missing := []string{}
+	for _, tfType := range RegisteredTypes() {
+		if strings.HasPrefix(tfType, syntheticTypePrefix) {
+			continue
+		}
+		if driftMinimalExempt[tfType] {
+			continue
+		}
+		m, ok := Lookup(tfType)
+		if !ok {
+			continue
+		}
+		hasDriftTag := false
+		for _, fp := range m {
+			if fp.DriftSemantic != DriftSemanticNone {
+				hasDriftTag = true
+				break
+			}
+		}
+		if !hasDriftTag {
+			missing = append(missing, tfType)
+		}
+	}
+	sort.Strings(missing)
+
+	require.Empty(t, missing,
+		"%d policy files have ZERO DriftSemantic-tagged fields:\n  %s\n\n"+
+			"Either tag at least one drift-meaningful field with DriftSemantic in "+
+			"the corresponding *.policy.go, or add the type to driftMinimalExempt "+
+			"with a rationale comment.",
+		len(missing), strings.Join(missing, "\n  "))
+}
+
+// TestDriftMinimalExemptNoStaleEntries guards against bit-rot in
+// driftMinimalExempt. Every key must still appear in
+// policy.RegisteredTypes() — removing a policy file elsewhere must
+// also remove its exempt entry, so the exempt list stays an accurate
+// decision log instead of accumulating dead references.
+func TestDriftMinimalExemptNoStaleEntries(t *testing.T) {
+	t.Parallel()
+
+	registered := map[string]struct{}{}
+	for _, tfType := range RegisteredTypes() {
+		registered[tfType] = struct{}{}
+	}
+
+	stale := []string{}
+	for tfType := range driftMinimalExempt {
+		if _, ok := registered[tfType]; !ok {
+			stale = append(stale, tfType)
+		}
+	}
+	sort.Strings(stale)
+
+	require.Empty(t, stale,
+		"%d entries in driftMinimalExempt are not in policy.RegisteredTypes() — "+
+			"remove them from the exempt list:\n  %s",
+		len(stale), strings.Join(stale, "\n  "))
+}
