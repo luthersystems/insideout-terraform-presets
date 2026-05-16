@@ -22,7 +22,7 @@ and is checked in lockstep with the runtime registries. See the
 
 ## Summary
 
-- **AWS:** 109 types · 100% Discoverable · 100% Enrichable · 99% DriftDetectable · 8% MetricsAvailable · 90% AgentEditable
+- **AWS:** 109 types · 100% Discoverable · 100% Enrichable · 100% DriftDetectable · 8% MetricsAvailable · 91% AgentEditable
 - **GCP:** 54 types · 100% Discoverable · 100% Enrichable · 63% DriftDetectable · 11% MetricsAvailable · 89% AgentEditable
 
 ## AWS
@@ -59,7 +59,7 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_cloudwatch_metric_alarm` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_cognito_identity_provider` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_cognito_resource_server` | ✓ | ✓ | ✓ | – | ✓ |
-| `aws_cognito_user_pool` | ✓ | ✓ | – | – | – |
+| `aws_cognito_user_pool` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_cognito_user_pool_client` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_cognito_user_pool_domain` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_db_instance` | ✓ | ✓ | ✓ | ✓ | ✓ |

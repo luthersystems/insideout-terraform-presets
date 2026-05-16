@@ -504,6 +504,28 @@ aws_cognito_resource_server	scope.scope_description	Tuning	Security	UIVisible	Ch
 aws_cognito_resource_server	scope.scope_name	Tuning	Security	RileyVisible	RequiresApproval		
 aws_cognito_resource_server	scope_identifiers	Identity	Security	UIVisible	Never		
 aws_cognito_resource_server	user_pool_id	Wiring	Reliability	UIVisible	Never		AlwaysReplace
+aws_cognito_user_pool	account_recovery_setting.recovery_mechanism	Tuning	Security	RileyVisible	RequiresApproval		
+aws_cognito_user_pool	admin_create_user_config.allow_admin_create_user_only	Tuning	Security	UIVisible	RequiresApproval		
+aws_cognito_user_pool	alias_attributes	Wiring	Security	UIVisible	Never		AlwaysReplace
+aws_cognito_user_pool	arn	Identity		UIVisible	Never		
+aws_cognito_user_pool	auto_verified_attributes	Tuning	Security	UIVisible	RequiresApproval		
+aws_cognito_user_pool	custom_domain	Identity		UIVisible	Never		
+aws_cognito_user_pool	deletion_protection	Tuning	Reliability	UIVisible	RequiresApproval		
+aws_cognito_user_pool	domain	Identity		UIVisible	Never		
+aws_cognito_user_pool	endpoint	Identity		UIVisible	Never		
+aws_cognito_user_pool	id	Identity		UIVisible	Never		
+aws_cognito_user_pool	mfa_configuration	Tuning	Security	UIVisible	RequiresApproval		
+aws_cognito_user_pool	name	Identity		UIVisible	Never		AlwaysReplace
+aws_cognito_user_pool	password_policy.minimum_length	Tuning	Security	UIVisible	RequiresApproval		
+aws_cognito_user_pool	password_policy.require_lowercase	Tuning	Security	RileyVisible	RequiresApproval		
+aws_cognito_user_pool	password_policy.require_numbers	Tuning	Security	RileyVisible	RequiresApproval		
+aws_cognito_user_pool	password_policy.require_symbols	Tuning	Security	RileyVisible	RequiresApproval		
+aws_cognito_user_pool	password_policy.require_uppercase	Tuning	Security	RileyVisible	RequiresApproval		
+aws_cognito_user_pool	password_policy.temporary_password_validity_days	Tuning	Security	RileyVisible	RequiresApproval		
+aws_cognito_user_pool	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_cognito_user_pool	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_cognito_user_pool	user_pool_add_ons.advanced_security_mode	Tuning	Security	UIVisible	RequiresApproval		
+aws_cognito_user_pool	username_attributes	Wiring	Security	UIVisible	Never		AlwaysReplace
 aws_cognito_user_pool_client	access_token_validity	Tuning	Security	RileyVisible	ChatSafe		
 aws_cognito_user_pool_client	allowed_oauth_flows	Tuning	Security	UIVisible	RequiresApproval		
 aws_cognito_user_pool_client	allowed_oauth_flows_user_pool_client	Tuning	Security	RileyVisible	RequiresApproval		

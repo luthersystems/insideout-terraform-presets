@@ -108,10 +108,21 @@ var WantedAWS = []string{
 	// resource fronted by Cognito; drift on `scope` is a security-
 	// relevant axis.
 	"aws_cognito_resource_server",
+	// Bundle 13 (#482) — Cognito user pool. Identity is (name, id, arn).
+	// Top-level Cognito tenant container; the `password_policy`,
+	// `mfa_configuration`, `account_recovery_setting`,
+	// `admin_create_user_config`, `user_pool_add_ons` blocks drive
+	// security posture; `lambda_config` wires post-auth / pre-sign-up
+	// triggers. The nested `schema` block (custom attribute schemas)
+	// historically tripped a codegen name collision against the package-
+	// level `<Type>Schema` FieldSchema map; resolved in bundle 13 by
+	// extending disambiguateNestedTypeName to handle the `<Type>Schema`
+	// suffix case (renamed to AWSCognitoUserPoolSchemaNested).
+	"aws_cognito_user_pool",
 	// Bundle 5 (#482) — Cognito user-pool client. The parent
-	// `aws_cognito_user_pool` trips a codegen `schema`-block name
-	// collision (see bundle 4); the *client* resource has no nested
-	// `schema` block, so it generates cleanly.
+	// `aws_cognito_user_pool` historically tripped a codegen name
+	// collision (resolved bundle 13); the *client* resource has no
+	// nested `schema` block, so it generates cleanly.
 	"aws_cognito_user_pool_client",
 	// Bundle 10 (#482) — Cognito user-pool custom domain. Pins a
 	// (domain, user_pool_id, certificate_arn) tuple; the domain is the

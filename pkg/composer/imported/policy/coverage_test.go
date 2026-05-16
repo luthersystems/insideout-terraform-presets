@@ -105,6 +105,12 @@ var coveredTypes = []string{
 	"aws_cognito_identity_provider",
 	// Bundle 12 (cont.) — Cognito resource server.
 	"aws_cognito_resource_server",
+	// Bundle 13 (#482) — Cognito user pool. Closes the last AWS
+	// Enrichable→Drift gap (push to 100%). Was previously blocked on a
+	// codegen `<Type>Schema` nested-block name collision (the resource
+	// has a nested `schema` block for custom attributes); resolved in
+	// bundle 13 by extending disambiguateNestedTypeName.
+	"aws_cognito_user_pool",
 	// Bundle 5 (cont.) — Cognito user-pool client.
 	"aws_cognito_user_pool_client",
 	// Bundle 10 (cont.) — Cognito user-pool custom domain.

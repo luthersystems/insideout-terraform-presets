@@ -274,16 +274,34 @@ func buildBlockNested(typeName string, nb *tfjson.SchemaBlockType, parent string
 
 // disambiguateNestedTypeName returns name with a `Nested` suffix when
 // the default would collide with a top-level Go name registered via
-// SetReservedTopLevelGoNames. The suffix lands on every recursive
-// descendant too, because the helper is called from both
-// buildTypeData (top-level → first-level nested) and buildBlockNested
-// (each-level → next-level nested).
+// SetReservedTopLevelGoNames, or with the package-level `<Type>Schema`
+// FieldSchema map variable emitted for any reserved top-level type.
+// The suffix lands on every recursive descendant too, because the
+// helper is called from both buildTypeData (top-level → first-level
+// nested) and buildBlockNested (each-level → next-level nested).
+//
+// Two collision shapes are handled:
+//
+//   - `name` equals a top-level `<Type>` GoName (e.g. nested
+//     `versioning` under `aws_s3_bucket` → `AWSS3BucketVersioning`
+//     would collide with top-level `aws_s3_bucket_versioning`).
+//   - `name` equals `<Type>Schema` for any reserved top-level type
+//     (e.g. nested `schema` under `aws_cognito_user_pool` →
+//     `AWSCognitoUserPoolSchema` would collide with the package-level
+//     `var AWSCognitoUserPoolSchema = map[string]FieldSchema{...}`
+//     that every generated type file emits).
 //
 // Empty reservedTopLevelGoNames is the no-disambiguation fallback —
 // the default name is returned unchanged, matching pre-#482 codegen.
 func disambiguateNestedTypeName(name string) string {
 	if reservedTopLevelGoNames[name] {
 		return name + "Nested"
+	}
+	if strings.HasSuffix(name, "Schema") {
+		base := strings.TrimSuffix(name, "Schema")
+		if reservedTopLevelGoNames[base] {
+			return name + "Nested"
+		}
 	}
 	return name
 }

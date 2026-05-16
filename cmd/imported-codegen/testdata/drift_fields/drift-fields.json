@@ -1927,6 +1927,88 @@
       "semantic": "Exact"
     }
   ],
+  "aws_cognito_user_pool": [
+    {
+      "path": "account_recovery_setting.recovery_mechanism",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "admin_create_user_config.allow_admin_create_user_only",
+      "semantic": "Exact"
+    },
+    {
+      "path": "alias_attributes",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "auto_verified_attributes",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "custom_domain",
+      "semantic": "Exact"
+    },
+    {
+      "path": "deletion_protection",
+      "semantic": "Exact"
+    },
+    {
+      "path": "domain",
+      "semantic": "Exact"
+    },
+    {
+      "path": "endpoint",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "mfa_configuration",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "password_policy.minimum_length",
+      "semantic": "Exact"
+    },
+    {
+      "path": "password_policy.require_lowercase",
+      "semantic": "Exact"
+    },
+    {
+      "path": "password_policy.require_numbers",
+      "semantic": "Exact"
+    },
+    {
+      "path": "password_policy.require_symbols",
+      "semantic": "Exact"
+    },
+    {
+      "path": "password_policy.require_uppercase",
+      "semantic": "Exact"
+    },
+    {
+      "path": "password_policy.temporary_password_validity_days",
+      "semantic": "Exact"
+    },
+    {
+      "path": "user_pool_add_ons.advanced_security_mode",
+      "semantic": "Exact"
+    },
+    {
+      "path": "username_attributes",
+      "semantic": "WholeList"
+    }
+  ],
   "aws_cognito_user_pool_client": [
     {
       "path": "access_token_validity",
