@@ -15,6 +15,13 @@ package policy
 // `vpc_config.security_group_ids`, and `vpc_config.public_access_cidrs`
 // are order-insensitive sets so WholeList compare. Tags use
 // tagPolicy().
+//
+// Depth-pass extras (#482 follow-up): adds `created_at`,
+// `certificate_authority.data` (cluster CA bundle — drift indicates
+// cluster re-creation), the `identity.oidc.issuer` URL (consumed by
+// downstream IAM roles for service accounts), the remaining
+// `kubernetes_network_config.*` fields (`service_ipv4_cidr`,
+// `service_ipv6_cidr`), and the Outposts nested-block triplet.
 var awsEksClusterPolicy = Map{
 	// Identity ----------------------------------------------------------
 	"arn": {
@@ -44,6 +51,23 @@ var awsEksClusterPolicy = Map{
 	},
 	"cluster_id": {
 		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"created_at": {
+		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"certificate_authority.data": {
+		// Cluster CA bundle (base64). Drift here means cluster was
+		// re-created out-of-band.
+		Role: RoleIdentity, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Edit:          EditNever,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"identity.oidc.issuer": {
+		// OIDC issuer URL — pinned per cluster, consumed by IRSA.
+		Role: RoleIdentity, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Edit:          EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},
 
@@ -148,6 +172,35 @@ var awsEksClusterPolicy = Map{
 		Edit:          EditNever,
 		ChangeRisk:    ChangeAlwaysReplace,
 		DriftSemantic: DriftSemanticExact,
+	},
+	"kubernetes_network_config.service_ipv4_cidr": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityUIVisible,
+		Edit:          EditNever,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"kubernetes_network_config.service_ipv6_cidr": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditNever,
+		DriftSemantic: DriftSemanticExact,
+	},
+	// Outposts (local cluster control-plane) ---------------------------
+	"outpost_config.control_plane_instance_type": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditNever,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"outpost_config.control_plane_placement.group_name": {
+		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditRelationshipOnly,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"outpost_config.outpost_arns": {
+		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditNever,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticWholeList,
 	},
 
 	// Tags --------------------------------------------------------------

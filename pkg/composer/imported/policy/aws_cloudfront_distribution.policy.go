@@ -17,6 +17,13 @@ package policy
 // Drift bundle (#482): scalar attributes use DriftSemanticExact.
 // `aliases` is an order-insensitive set so WholeList compare. Tags use
 // tagPolicy().
+//
+// Depth-pass extras (#482 follow-up): adds the
+// `continuous_deployment_policy_id` (staging-distro wiring), the
+// default_cache_behavior cache-policy / origin-request-policy /
+// response-headers-policy IDs, the `default_cache_behavior.allowed_methods`
+// + `.cached_methods` lists, the `logging_config.*` triplet (S3 access
+// logs), and the trusted-signers / trusted-key-groups WholeLists.
 var awsCloudfrontDistributionPolicy = Map{
 	// Identity ----------------------------------------------------------
 	"arn": {
@@ -53,6 +60,12 @@ var awsCloudfrontDistributionPolicy = Map{
 	},
 	"in_progress_validation_batches": {
 		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"continuous_deployment_policy_id": {
+		// Pointer to a staging-rollout policy resource.
+		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditRelationshipOnly,
 		DriftSemantic: DriftSemanticExact,
 	},
 
@@ -184,6 +197,74 @@ var awsCloudfrontDistributionPolicy = Map{
 	},
 	"default_cache_behavior.max_ttl": {
 		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"default_cache_behavior.cache_policy_id": {
+		// Managed / custom cache policy reference.
+		Role: RoleWiring, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible,
+		Edit:          EditRelationshipOnly,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"default_cache_behavior.origin_request_policy_id": {
+		Role: RoleWiring, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible,
+		Edit:          EditRelationshipOnly,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"default_cache_behavior.response_headers_policy_id": {
+		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Edit:          EditRelationshipOnly,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"default_cache_behavior.realtime_log_config_arn": {
+		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditRelationshipOnly,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"default_cache_behavior.field_level_encryption_id": {
+		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Edit:          EditRelationshipOnly,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"default_cache_behavior.allowed_methods": {
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticWholeList,
+	},
+	"default_cache_behavior.cached_methods": {
+		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticWholeList,
+	},
+	"default_cache_behavior.smooth_streaming": {
+		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"default_cache_behavior.trusted_key_groups": {
+		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Edit:          EditRelationshipOnly,
+		DriftSemantic: DriftSemanticWholeList,
+	},
+	"default_cache_behavior.trusted_signers": {
+		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Edit:          EditRelationshipOnly,
+		DriftSemantic: DriftSemanticWholeList,
+	},
+
+	// Logging (S3 access logs) -----------------------------------------
+	"logging_config.bucket": {
+		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Edit:          EditRelationshipOnly,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"logging_config.include_cookies": {
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"logging_config.prefix": {
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
 		Edit:          EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},

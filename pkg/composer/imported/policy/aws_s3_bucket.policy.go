@@ -25,6 +25,16 @@ package policy
 // replication role) also use Exact — a value diff there is real drift,
 // not provider noise. Tag bags stay DriftSemanticNone (tagPolicy() zero
 // value) because they're system-managed.
+//
+// Depth-pass extras (#482 follow-up): adds a curated sub-set of the
+// deprecated nested-config sub-paths the AWS v4+ provider keeps for
+// backward compat (`cors_rule.*`, `website.*`, `lifecycle_rule.*`,
+// `grant.*`). Modern stacks should prefer the separate
+// `aws_s3_bucket_cors_configuration` / `_website_configuration` /
+// `_lifecycle_configuration` resources (already curated in their own
+// policy files), but legacy customer state surfaced through the
+// importer still uses these inline blocks; tagging them gives drift
+// detection on those state files.
 var awsS3BucketPolicy = Map{
 	// Identity ----------------------------------------------------------
 	"arn": {
@@ -168,6 +178,108 @@ var awsS3BucketPolicy = Map{
 	"server_side_encryption_configuration.rule.bucket_key_enabled": {
 		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
 		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+
+	// CORS (deprecated inline) ------------------------------------------
+	"cors_rule.allowed_methods": {
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticWholeList,
+	},
+	"cors_rule.allowed_origins": {
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticWholeList,
+	},
+	"cors_rule.allowed_headers": {
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticWholeList,
+	},
+	"cors_rule.expose_headers": {
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticWholeList,
+	},
+	"cors_rule.max_age_seconds": {
+		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+
+	// Website (deprecated inline) --------------------------------------
+	"website.index_document": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"website.error_document": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"website.redirect_all_requests_to": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"website.routing_rules": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+
+	// Lifecycle (deprecated inline) -------------------------------------
+	"lifecycle_rule.id": {
+		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"lifecycle_rule.enabled": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"lifecycle_rule.prefix": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"lifecycle_rule.abort_incomplete_multipart_upload_days": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"lifecycle_rule.expiration.days": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"lifecycle_rule.expiration.expired_object_delete_marker": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"lifecycle_rule.noncurrent_version_expiration.days": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+
+	// Grant (deprecated; modern stacks use bucket policy + ACL) ---------
+	"grant.id": {
+		Role: RoleIdentity, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Edit:          EditNever,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"grant.permissions": {
+		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticWholeList,
+	},
+	"grant.type": {
+		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},
 

@@ -16,6 +16,15 @@ package policy
 // `security_group_ids`, `preferred_cache_cluster_azs`, and
 // `user_group_ids` are order-insensitive sets so WholeList compare.
 // Tags use tagPolicy().
+//
+// Depth-pass extras (#482 follow-up): adds the auth-token wiring
+// (`auth_token_update_strategy` — `auth_token` itself stays Sensitive),
+// `cluster_enabled` (Cluster-mode toggle), `engine_version_actual`
+// (provider-reported resolved version), `ip_discovery` (ipv4/ipv6),
+// the `log_delivery_configuration.*` triplet (CW Logs / Firehose
+// destinations for slow-log + engine-log), `security_group_names`
+// (Classic SG — legacy), and the import-from-snapshot pair
+// (`snapshot_arns`, `snapshot_name`).
 var awsElasticacheReplicationGroupPolicy = Map{
 	// Identity ----------------------------------------------------------
 	"arn": {
@@ -216,6 +225,83 @@ var awsElasticacheReplicationGroupPolicy = Map{
 	// Tags --------------------------------------------------------------
 	"tags":     tagPolicy(),
 	"tags_all": tagPolicy(),
+
+	// Auth token rotation strategy --------------------------------------
+	"auth_token_update_strategy": {
+		// SET | ROTATE | DELETE — drives the in-place auth_token rotation
+		// behavior on apply.
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"auth_token": {
+		// Sensitive — comparator must never emit the value.
+		Role: RoleTuning, Pillar: PillarSecurity,
+		Visibility:  VisibilityHidden,
+		Edit:        EditSystemOnly,
+		Sensitivity: SensitivitySensitive,
+	},
+
+	// Cluster-mode + IP discovery --------------------------------------
+	"cluster_enabled": {
+		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"engine_version_actual": {
+		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"ip_discovery": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticExact,
+	},
+
+	// Log delivery -----------------------------------------------------
+	"log_delivery_configuration.destination": {
+		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditRelationshipOnly,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"log_delivery_configuration.destination_type": {
+		// cloudwatch-logs | kinesis-firehose.
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"log_delivery_configuration.log_format": {
+		// json | text.
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"log_delivery_configuration.log_type": {
+		// slow-log | engine-log.
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticExact,
+	},
+
+	// Classic / legacy + restore-from-snapshot -------------------------
+	"security_group_names": {
+		// Classic SG names — legacy.
+		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Edit:          EditRelationshipOnly,
+		DriftSemantic: DriftSemanticWholeList,
+	},
+	"snapshot_arns": {
+		// Restore inputs — pinned at create.
+		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditNever,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticWholeList,
+	},
+	"snapshot_name": {
+		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditNever,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
+	},
 
 	// timeouts singleton ------------------------------------------------
 	"timeouts": timeoutsPolicy(),

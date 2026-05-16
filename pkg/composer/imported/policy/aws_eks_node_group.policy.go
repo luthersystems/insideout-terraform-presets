@@ -15,6 +15,13 @@ package policy
 // Nested blocks (scaling_config, update_config, taint, launch_template,
 // remote_access) are left uncurated — block-level drift is a follow-up.
 // Tags use tagPolicy(). Timeouts use timeoutsPolicy().
+//
+// Depth-pass extras (#482 follow-up): adds the curated nested blocks
+// the original bundle deferred — `scaling_config.*` (autoscaling
+// bounds), `update_config.*` (rolling-update guardrails),
+// `launch_template.*` (custom LT wiring), `remote_access.*` (SSH
+// access), `taint.*` (Kubernetes-level taints), and `resources.*`
+// (provider-reported child resource IDs).
 var awsEKSNodeGroupPolicy = Map{
 	// Identity ----------------------------------------------------------
 	"arn": {
@@ -105,6 +112,95 @@ var awsEKSNodeGroupPolicy = Map{
 		// Pod-eviction-bypass flag during upgrade. Operator-only.
 		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
 		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticExact,
+	},
+
+	// Scaling config ----------------------------------------------------
+	"scaling_config.min_size": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityUIVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"scaling_config.max_size": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityUIVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"scaling_config.desired_size": {
+		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityUIVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+
+	// Update config (rolling-update guardrails) ------------------------
+	"update_config.max_unavailable": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"update_config.max_unavailable_percentage": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+
+	// Launch template wiring -------------------------------------------
+	"launch_template.id": {
+		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditRelationshipOnly,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"launch_template.name": {
+		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditRelationshipOnly,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"launch_template.version": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticExact,
+	},
+
+	// Remote (SSH) access ----------------------------------------------
+	"remote_access.ec2_ssh_key": {
+		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Edit:          EditNever,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"remote_access.source_security_group_ids": {
+		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Edit:          EditNever,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticWholeList,
+	},
+
+	// Kubernetes taints ------------------------------------------------
+	"taint.key": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"taint.value": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"taint.effect": {
+		// NO_SCHEDULE | NO_EXECUTE | PREFER_NO_SCHEDULE.
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+
+	// Provider-reported child resource IDs -----------------------------
+	"resources.autoscaling_groups": {
+		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		DriftSemantic: DriftSemanticWholeList,
+	},
+	"resources.remote_access_security_group_id": {
+		Role: RoleIdentity, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Edit:          EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},
 

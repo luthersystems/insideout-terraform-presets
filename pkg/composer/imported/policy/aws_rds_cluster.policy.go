@@ -19,6 +19,15 @@ package policy
 // compare surfaces an extra/missing entry as one diff entry. Tags use
 // tagPolicy(). `master_password` is Sensitive in the schema; we keep it
 // Hidden + SystemOnly.
+//
+// Depth-pass extras (#482 follow-up): adds `database_name` and
+// `master_username` (logical identity), the cluster-domain Kerberos
+// triplet (`domain`, `domain_iam_role_name`), iam_roles (associated
+// role ARN whole-list), `cluster_members` (the read-only list of
+// cluster instance identifiers — drift = topology change), the
+// `master_user_secret.*` provider-managed secret details, the
+// `ca_certificate_identifier` / `ca_certificate_valid_till` SSL CA
+// surface, and `db_system_id` (Oracle CDB system ID).
 var awsRDSClusterPolicy = Map{
 	// Identity ----------------------------------------------------------
 	"arn": {
@@ -327,6 +336,79 @@ var awsRDSClusterPolicy = Map{
 	"scaling_configuration.min_capacity": {
 		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible,
 		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+
+	// Logical identity --------------------------------------------------
+	"database_name": {
+		// Initial database created in the cluster — pinned at create.
+		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"master_username": {
+		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"db_system_id": {
+		// Oracle CDB system ID.
+		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"cluster_members": {
+		// Provider-reported list of associated DB instance IDs — drift
+		// = topology change.
+		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		DriftSemantic: DriftSemanticWholeList,
+	},
+
+	// AD-join (Kerberos) ------------------------------------------------
+	"domain": {
+		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Edit:          EditRelationshipOnly,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"domain_iam_role_name": {
+		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Edit:          EditRelationshipOnly,
+		DriftSemantic: DriftSemanticExact,
+	},
+
+	// Associated IAM roles ----------------------------------------------
+	"iam_roles": {
+		// Whole-list of IAM role ARNs the cluster may assume.
+		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Edit:          EditRelationshipOnly,
+		DriftSemantic: DriftSemanticWholeList,
+	},
+
+	// CA certificate ----------------------------------------------------
+	"ca_certificate_identifier": {
+		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"ca_certificate_valid_till": {
+		// Provider-reported expiration. Drift here = CA rotated.
+		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		DriftSemantic: DriftSemanticExact,
+	},
+
+	// Provider-managed master secret ------------------------------------
+	"master_user_secret.kms_key_id": {
+		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Edit:          EditRelationshipOnly,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"master_user_secret.secret_arn": {
+		Role: RoleIdentity, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Edit:          EditNever,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"master_user_secret.secret_status": {
+		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},
 

@@ -18,6 +18,15 @@ package policy
 // `vpc_zone_identifier`, `availability_zones`, `termination_policies`,
 // `suspended_processes`) compare WholeList so a missing/extra entry is
 // one diff entry, not N.
+//
+// Depth-pass extras (#482 follow-up): adds the destroy/redeploy
+// switches (`force_delete`, `force_delete_warm_pool`,
+// `ignore_failed_scaling_activities`, `wait_for_capacity_timeout`,
+// `wait_for_elb_capacity`, `min_elb_capacity`), the
+// `instance_maintenance_policy.*` (replacement-rate guard), the
+// `instance_refresh.*` rolling-deploy config, and the
+// `mixed_instances_policy.*` spot/on-demand split. The `tag` nested
+// block stays uncurated per header rationale.
 var awsAutoscalingGroupPolicy = Map{
 	// Identity ----------------------------------------------------------
 	"arn": {
@@ -179,6 +188,129 @@ var awsAutoscalingGroupPolicy = Map{
 		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticWholeList,
+	},
+
+	// Apply / destroy switches -----------------------------------------
+	"force_delete": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"force_delete_warm_pool": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"ignore_failed_scaling_activities": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"wait_for_capacity_timeout": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"wait_for_elb_capacity": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"min_elb_capacity": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+
+	// Instance maintenance policy (replacement rate guard) -------------
+	"instance_maintenance_policy.min_healthy_percentage": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"instance_maintenance_policy.max_healthy_percentage": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+
+	// Instance refresh (rolling deploy config) -------------------------
+	"instance_refresh.strategy": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"instance_refresh.preferences.min_healthy_percentage": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"instance_refresh.preferences.instance_warmup": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"instance_refresh.preferences.checkpoint_delay": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"instance_refresh.preferences.checkpoint_percentages": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticWholeList,
+	},
+	"instance_refresh.triggers": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticWholeList,
+	},
+
+	// Mixed-instances policy (spot/on-demand split) --------------------
+	"mixed_instances_policy.launch_template.launch_template_specification.launch_template_id": {
+		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditRelationshipOnly,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"mixed_instances_policy.launch_template.launch_template_specification.launch_template_name": {
+		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditRelationshipOnly,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"mixed_instances_policy.launch_template.launch_template_specification.version": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"mixed_instances_policy.instances_distribution.on_demand_allocation_strategy": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"mixed_instances_policy.instances_distribution.on_demand_base_capacity": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"mixed_instances_policy.instances_distribution.on_demand_percentage_above_base_capacity": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"mixed_instances_policy.instances_distribution.spot_allocation_strategy": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"mixed_instances_policy.instances_distribution.spot_instance_pools": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"mixed_instances_policy.instances_distribution.spot_max_price": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
 	},
 
 	// Tags --------------------------------------------------------------

@@ -16,6 +16,11 @@ package policy
 // Drift bundle 3 (#482): scalar attributes use DriftSemanticExact.
 // VPC config security_group_ids / subnets are order-insensitive sets
 // compared WholeList.
+//
+// Depth-pass extras (#482 follow-up): adds the
+// `logs_config.cloudwatch_logs.*` + `logs_config.s3_logs.*` build-log
+// destinations, the `build_batch_config.*` batch-build governance
+// (service role, queue limits, restrictions), and `public_project_alias`.
 var awsCodebuildProjectPolicy = Map{
 	// Identity ----------------------------------------------------------
 	"arn": {
@@ -211,6 +216,78 @@ var awsCodebuildProjectPolicy = Map{
 		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
 		Edit:          EditRelationshipOnly,
 		DriftSemantic: DriftSemanticWholeList,
+	},
+
+	// Logs config (CW + S3 destinations) -------------------------------
+	"logs_config.cloudwatch_logs.status": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"logs_config.cloudwatch_logs.group_name": {
+		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditRelationshipOnly,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"logs_config.cloudwatch_logs.stream_name": {
+		// Stream-name is a string suffix the user picks for the CW log
+		// destination — Tuning, not Wiring.
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"logs_config.s3_logs.status": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"logs_config.s3_logs.location": {
+		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditRelationshipOnly,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"logs_config.s3_logs.encryption_disabled": {
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"logs_config.s3_logs.bucket_owner_access": {
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+
+	// Batch build governance -------------------------------------------
+	"build_batch_config.service_role": {
+		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Edit:          EditRelationshipOnly,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"build_batch_config.combine_artifacts": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"build_batch_config.timeout_in_mins": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"build_batch_config.restrictions.maximum_builds_allowed": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"build_batch_config.restrictions.compute_types_allowed": {
+		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticWholeList,
+	},
+
+	// Public read-only project alias -----------------------------------
+	"public_project_alias": {
+		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		DriftSemantic: DriftSemanticExact,
 	},
 
 	// Tags --------------------------------------------------------------

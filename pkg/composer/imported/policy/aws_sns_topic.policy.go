@@ -11,6 +11,12 @@ package policy
 //
 // Drift bundle (#482): scalar attributes use DriftSemanticExact. Tags
 // use tagPolicy() with DriftSemanticNone.
+//
+// Depth-pass extras (#482 follow-up): adds the missing per-protocol
+// success-sample-rate scalars and the application / firehose feedback
+// IAM role wirings (these mirror the existing http / sqs / lambda
+// entries the original bundle covered), plus `beginning_archive_time`
+// (a server-reported timestamp surfaced for audit drift).
 var awsSnsTopicPolicy = Map{
 	// Identity ----------------------------------------------------------
 	"arn": {
@@ -118,6 +124,61 @@ var awsSnsTopicPolicy = Map{
 	"lambda_failure_feedback_role_arn": {
 		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
 		Edit:          EditRelationshipOnly,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"application_success_feedback_role_arn": {
+		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditRelationshipOnly,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"application_failure_feedback_role_arn": {
+		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditRelationshipOnly,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"firehose_success_feedback_role_arn": {
+		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditRelationshipOnly,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"firehose_failure_feedback_role_arn": {
+		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditRelationshipOnly,
+		DriftSemantic: DriftSemanticExact,
+	},
+
+	// Delivery-status sample rates (0-100 per protocol) -----------------
+	"application_success_feedback_sample_rate": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"firehose_success_feedback_sample_rate": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"http_success_feedback_sample_rate": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"lambda_success_feedback_sample_rate": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"sqs_success_feedback_sample_rate": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+
+	// Server-reported audit timestamp (archive-policy interaction) ------
+	"beginning_archive_time": {
+		// Computed timestamp when message archival became active; drift
+		// here indicates an archive policy reset.
+		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},
 

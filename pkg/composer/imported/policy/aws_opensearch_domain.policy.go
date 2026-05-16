@@ -13,6 +13,16 @@ package policy
 // Drift bundle (#482): scalar attributes use DriftSemanticExact.
 // `vpc_options.subnet_ids` and `.security_group_ids` are
 // order-insensitive sets so WholeList compare. Tags use tagPolicy().
+//
+// Depth-pass extras (#482 follow-up): adds the dual-stack endpoint
+// scalars (`endpoint_v2`, `dashboard_endpoint_v2`,
+// `domain_endpoint_v2_hosted_zone_id`), warm + cold storage tier
+// toggles (`cluster_config.warm_enabled` + count + type, and
+// `cluster_config.cold_storage_options.enabled`), `auto_tune_options.*`
+// (machine-learned tuning maintenance window), `cognito_options.*`
+// (dashboard SSO via Cognito), custom-endpoint TLS surface,
+// `log_publishing_options.*` (per-log-type CW destinations),
+// `off_peak_window_options`, and `software_update_options.auto_software_update_enabled`.
 var awsOpensearchDomainPolicy = Map{
 	// Identity ----------------------------------------------------------
 	"arn": {
@@ -42,6 +52,19 @@ var awsOpensearchDomainPolicy = Map{
 	},
 	"kibana_endpoint": {
 		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"endpoint_v2": {
+		// Dual-stack endpoint (IPv4 + IPv6).
+		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"dashboard_endpoint_v2": {
+		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"domain_endpoint_v2_hosted_zone_id": {
+		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},
 
@@ -91,6 +114,26 @@ var awsOpensearchDomainPolicy = Map{
 	},
 	"cluster_config.multi_az_with_standby_enabled": {
 		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"cluster_config.warm_enabled": {
+		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible,
+		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"cluster_config.warm_count": {
+		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"cluster_config.warm_type": {
+		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible,
+		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"cluster_config.cold_storage_options.enabled": {
+		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},
@@ -152,6 +195,21 @@ var awsOpensearchDomainPolicy = Map{
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},
+	"domain_endpoint_options.custom_endpoint_enabled": {
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"domain_endpoint_options.custom_endpoint": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditRelationshipOnly,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"domain_endpoint_options.custom_endpoint_certificate_arn": {
+		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Edit:          EditRelationshipOnly,
+		DriftSemantic: DriftSemanticExact,
+	},
 
 	// VPC options + access policies -----------------------------------
 	"vpc_options.subnet_ids": {
@@ -188,6 +246,81 @@ var awsOpensearchDomainPolicy = Map{
 
 	// Snapshots ---------------------------------------------------------
 	"snapshot_options.automated_snapshot_start_hour": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+
+	// Cognito SSO for dashboard ----------------------------------------
+	"cognito_options.enabled": {
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"cognito_options.identity_pool_id": {
+		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Edit:          EditRelationshipOnly,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"cognito_options.user_pool_id": {
+		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Edit:          EditRelationshipOnly,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"cognito_options.role_arn": {
+		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Edit:          EditRelationshipOnly,
+		DriftSemantic: DriftSemanticExact,
+	},
+
+	// Auto-tune (ML maintenance window) --------------------------------
+	"auto_tune_options.desired_state": {
+		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"auto_tune_options.rollback_on_disable": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticExact,
+	},
+
+	// Log publishing (per-log-type CW destinations) --------------------
+	"log_publishing_options.log_type": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"log_publishing_options.cloudwatch_log_group_arn": {
+		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditRelationshipOnly,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"log_publishing_options.enabled": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+
+	// Off-peak maintenance window --------------------------------------
+	"off_peak_window_options.enabled": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"off_peak_window_options.off_peak_window.window_start_time.hours": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"off_peak_window_options.off_peak_window.window_start_time.minutes": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+
+	// Software update --------------------------------------------------
+	"software_update_options.auto_software_update_enabled": {
 		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
 		Edit:          EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
