@@ -35,6 +35,11 @@ var WantedAWS = []string{
 	// Bundle 7 (#482) — Backup plan. Schedule + retention rules; pairs
 	// with the existing `aws_backup_vault` (where snapshots land).
 	"aws_backup_plan",
+	// Bundle 10 (#482) — Backup selection. Identity is
+	// (plan_id, name); selection_tag + resources/not_resources drive
+	// which AWS resources the plan backs up. Wiring axis is iam_role_arn
+	// (Backup service uses it to read resource state).
+	"aws_backup_selection",
 	"aws_backup_vault",
 	// Final-2 enricher push (#482) — closes the last hand-rolled
 	// AWS discoverer types that had no Layer 1 typed struct yet,
@@ -50,6 +55,10 @@ var WantedAWS = []string{
 	// principal used to lock S3 origins so they only serve via the
 	// CloudFront distribution.
 	"aws_cloudfront_origin_access_identity",
+	// Bundle 10 (#482) — CloudFront function. Edge-runtime JS (viewer
+	// request / response). `code` is the load-bearing payload, `runtime`
+	// pins the JS engine version.
+	"aws_cloudfront_function",
 	// Bundle 4 (cont.) — CloudTrail.
 	"aws_cloudtrail",
 	// Drift coverage bundle 2 (#482) — cloud-control-routed AWS types
@@ -62,6 +71,10 @@ var WantedAWS = []string{
 	// EventBridge rename).
 	"aws_cloudwatch_event_bus",
 	"aws_cloudwatch_event_rule",
+	// Bundle 10 (#482) — CloudWatch dashboard. JSON `dashboard_body` is
+	// the load-bearing payload — widgets, queries, layout. Drift on the
+	// body indicates out-of-band dashboard edits in the AWS console.
+	"aws_cloudwatch_dashboard",
 	"aws_cloudwatch_log_group",
 	"aws_cloudwatch_metric_alarm",
 	"aws_codebuild_project",
@@ -77,6 +90,10 @@ var WantedAWS = []string{
 	// collision (see bundle 4); the *client* resource has no nested
 	// `schema` block, so it generates cleanly.
 	"aws_cognito_user_pool_client",
+	// Bundle 10 (#482) — Cognito user-pool custom domain. Pins a
+	// (domain, user_pool_id, certificate_arn) tuple; the domain is the
+	// hosted-UI hostname end-users hit during auth.
+	"aws_cognito_user_pool_domain",
 	"aws_db_instance",
 	// Bundle 7 (#482) — DB parameter group. Engine-family parameter set
 	// applied to RDS instances (db_instance.parameter_group_name).
@@ -93,6 +110,12 @@ var WantedAWS = []string{
 	// attachment is modeled separately (aws_volume_attachment).
 	"aws_ebs_volume",
 	"aws_ecs_cluster",
+	// Bundle 10 (#482) — ECS cluster capacity providers. Identity is
+	// (cluster_name); `capacity_providers` + the default-strategy block
+	// drive how new services route onto Fargate / FARGATE_SPOT / EC2 ASG
+	// capacity. Out-of-band changes silently retarget where new tasks
+	// land.
+	"aws_ecs_cluster_capacity_providers",
 	// Bundle 5 (#482) — ECS service + task definition. Round out the
 	// container-compute graph alongside aws_ecs_cluster.
 	"aws_ecs_service",
@@ -102,12 +125,21 @@ var WantedAWS = []string{
 	// Bundle 6 (#482) — Elastic IP. VPC-scoped allocation; instance/eni
 	// association is the wiring axis.
 	"aws_eip",
+	// Bundle 10 (#482) — EKS managed add-on. Identity is
+	// (cluster_name, addon_name); addon_version pins the version that
+	// lands in the cluster, resolve_conflicts_on_* drives upgrade
+	// strategy. Out-of-band addon-version flips show as drift.
+	"aws_eks_addon",
 	"aws_eks_cluster",
 	// Bundle 8 (#482) — EKS managed node group. Wires (cluster_name,
 	// node_role_arn, subnet_ids, scaling_config); the AMI + instance
 	// type set drives the workhorse compute axis.
 	"aws_eks_node_group",
 	"aws_elasticache_replication_group",
+	// Bundle 10 (#482) — ElastiCache subnet group. VPC-wiring sibling
+	// to the existing elasticache_replication_group; (name, subnet_ids)
+	// is the load-bearing surface.
+	"aws_elasticache_subnet_group",
 	// Bundle 4 (cont.) — Glue catalog database. Substituted for
 	// aws_cognito_user_pool, which trips a codegen name collision (the
 	// resource's `schema` nested block generates a Go type named
@@ -134,6 +166,12 @@ var WantedAWS = []string{
 	// blob, hashed/compared as opaque text for drift.
 	"aws_iam_role_policy",
 	"aws_iam_role_policy_attachment",
+	// Bundle 10 (#482) — IAM service-linked role. AWS-managed role
+	// auto-created for an AWS service principal. Identity is
+	// (aws_service_name, custom_suffix); description is the editable
+	// surface. Drift on aws_service_name means the role was re-pointed
+	// at a different service principal (effectively a different role).
+	"aws_iam_service_linked_role",
 	// Bundle 5 (#482) — standalone IAM user (cross-account access /
 	// machine identities not modeled through roles).
 	"aws_iam_user",

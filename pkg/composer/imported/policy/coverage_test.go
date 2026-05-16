@@ -51,6 +51,12 @@ var coveredTypes = []string{
 	"aws_appautoscaling_target",
 	"aws_athena_workgroup",
 	"aws_backup_plan",
+	// Bundle 10 (#482) — Backup selection (plan → resource scoping),
+	// CloudFront function, CloudWatch dashboard, Cognito user-pool
+	// custom domain, ECS cluster capacity providers, EKS managed
+	// add-on, ElastiCache subnet group, IAM service-linked role.
+	// Pushes AWS DriftDetectable from 78% to ~85%.
+	"aws_backup_selection",
 	"aws_backup_vault",
 	// Final-2 push (#482) — closes the last hand-rolled enrichers
 	// (per-tag-on-ASG and resource-arn × web-acl-arn binding). Both
