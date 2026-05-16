@@ -299,12 +299,11 @@ func TestAllComponentKeysCoversPresetKeyMap(t *testing.T) {
 	}
 
 	// And the reverse: every registry entry must resolve to a preset
-	// path. KeyAWSEKSControlPlane is the special case — it isn't in
-	// PresetKeyMap (GetPresetPath uses string(k)="resource" for it) but
-	// does back the aws/resource module.
+	// path via PresetKeyMap. Issue #224 removed the previous
+	// KeyAWSEKSControlPlane carve-out alongside the polymorphic-key collapse.
 	for _, k := range AllComponentKeys {
 		_, inMap := PresetKeyMap[k]
-		if !inMap && k != KeyAWSEKSControlPlane {
+		if !inMap {
 			t.Errorf("AllComponentKeys[%s] is registered but has no PresetKeyMap entry", k)
 		}
 	}

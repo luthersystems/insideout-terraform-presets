@@ -75,14 +75,11 @@ func (c *Client) ListAvailableComponentKeys() ([]string, error) {
 	// We need to check all possible ComponentKeys and see if they have a preset
 	// This is slightly inefficient but ensures consistency with GetPresetPath
 	allKeys := []ComponentKey{
-		// Polymorphic keys (preserve string values "ec2" / "resource")
-		KeyAWSEKSNodeGroup, KeyAWSEKSControlPlane,
-
 		// Third-party toggles with no AWS sibling
 		KeySplunk, KeyDatadog,
 
 		// AWS prefixed keys
-		KeyAWSVPC, KeyAWSBastion, KeyAWSEC2, KeyAWSEKS, KeyAWSECS, KeyAWSLambda,
+		KeyAWSVPC, KeyAWSBastion, KeyAWSEC2, KeyAWSEKS, KeyAWSEKSNodeGroup, KeyAWSECS, KeyAWSLambda,
 		KeyAWSALB, KeyAWSCloudfront, KeyAWSWAF, KeyAWSAPIGateway, KeyAWSRDS,
 		KeyAWSElastiCache, KeyAWSDynamoDB, KeyAWSS3, KeyAWSKMS, KeyAWSSecretsManager,
 		KeyAWSOpenSearch, KeyAWSBedrock, KeyAWSSQS, KeyAWSMSK, KeyAWSCloudWatchLogs, KeyAWSCloudWatchMonitoring,

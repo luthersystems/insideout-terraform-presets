@@ -81,8 +81,6 @@ func ComponentDisplayName(key composer.ComponentKey) string {
 		return "AWS ECS"
 	case composer.KeyAWSEKS:
 		return "AWS EKS"
-	case composer.KeyAWSEKSControlPlane:
-		return "AWS EKS Control Plane"
 	case composer.KeyAWSEKSNodeGroup:
 		return "AWS EKS Node Group"
 	case composer.KeyAWSRDS:

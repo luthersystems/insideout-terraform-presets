@@ -65,11 +65,11 @@ variable "region" {
   default     = "us-west-2"
 }
 
-variable "resource_project" {
+variable "aws_eks_project" {
   type = string
 }
 
-variable "resource_region" {
+variable "aws_eks_region" {
   type = string
 }
 

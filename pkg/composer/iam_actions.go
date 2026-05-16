@@ -30,19 +30,12 @@ var AlwaysRequiredAWSIAMActions = []string{
 // Every AWS-backed key in AllComponentKeys must have an entry here; the
 // drift-guard test (TestAWSIAMActions_CoverAllAWSKeys) fails the package
 // build otherwise. nil values are permitted for forward-compat.
-//
-// Polymorphic keys: KeyAWSEKSNodeGroup ("ec2") and KeyAWSEKSControlPlane
-// ("resource") share their cloud-prefixed siblings' actions. The
-// EKSControlPlane entry lists eks:CreateCluster (its default route); the
-// Lambda runtime variant is covered separately by KeyAWSLambda — caller
-// resolution happens in GetModuleDir, but IAM is declared per-key here.
 var AWSIAMActions = map[ComponentKey][]string{
 	KeyAWSVPC:                  {"ec2:AllocateAddress", "ec2:CreateInternetGateway", "ec2:CreateNatGateway", "ec2:CreateRouteTable", "ec2:CreateSubnet", "ec2:CreateVpc"},
 	KeyAWSBastion:              {"ec2:RunInstances"},
 	KeyAWSEC2:                  {"ec2:RunInstances"},
 	KeyAWSEKS:                  {"eks:CreateCluster", "eks:CreateNodegroup"},
-	KeyAWSEKSControlPlane:      {"eks:CreateCluster"},   // polymorphic; Lambda variant via KeyAWSLambda
-	KeyAWSEKSNodeGroup:         {"eks:CreateNodegroup"}, // polymorphic
+	KeyAWSEKSNodeGroup:         {"eks:CreateNodegroup"},
 	KeyAWSECS:                  {"ecs:CreateCluster", "ecs:CreateService"},
 	KeyAWSLambda:               {"lambda:CreateFunction"},
 	KeyAWSALB:                  {"elasticloadbalancing:CreateLoadBalancer", "elasticloadbalancing:CreateTargetGroup"},

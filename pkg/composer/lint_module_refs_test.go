@@ -195,11 +195,6 @@ func TestModuleReferenceLiteralsMatchComponentKeys(t *testing.T) {
 // Without this gate, a dir rename produces "preset for X (path %q)
 // returned no files" only at compose time, after the customer has
 // selected the affected component.
-//
-// Also exercises the polymorphic Lambda branch: GetPresetPath of
-// KeyAWSEKSControlPlane with comps.AWSLambda = true returns
-// `aws/lambda` instead of the default `aws/resource`, and that
-// resolved path must also exist on disk.
 func TestComponentKeyResolvesToExistingPreset(t *testing.T) {
 	repoRootDir := repoRoot(t)
 
@@ -224,9 +219,4 @@ func TestComponentKeyResolvesToExistingPreset(t *testing.T) {
 	for _, k := range AllComponentKeys {
 		check(t, k, nil)
 	}
-
-	// Polymorphic-Lambda variant: KeyAWSEKSControlPlane resolves to
-	// the lambda preset when comps signals a Lambda architecture.
-	enabled := true
-	check(t, KeyAWSEKSControlPlane, &Components{AWSLambda: &enabled})
 }

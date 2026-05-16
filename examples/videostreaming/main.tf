@@ -5,14 +5,14 @@ module "vpc" {
   region      = var.vpc_region
 }
 
-module "resource" {
-  source                    = "../../aws/resource"
+module "aws_eks" {
+  source                    = "../../aws/eks"
   vpc_id                    = module.vpc.vpc_id
   private_subnet_ids        = module.vpc.private_subnet_ids
   public_subnet_ids         = module.vpc.public_subnet_ids
   cluster_enabled_log_types = ["api", "audit", "authenticator", "controllerManager", "scheduler"]
-  region                    = var.resource_region
-  project                   = var.resource_project
+  region                    = var.aws_eks_region
+  project                   = var.aws_eks_project
   environment               = var.environment
 }
 

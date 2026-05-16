@@ -44,9 +44,8 @@ import (
 // check because they're a different class of allowlist entry.
 //
 // AWS keys with no metric surface at all (aws_backups,
-// aws_github_actions, aws_eks_control_plane, aws_eks_nodegroup) and
-// the polymorphic EKS sub-keys also live here — they have no
-// inspector dispatcher and never will, so a real extractor isn't
+// aws_github_actions, aws_eks_nodegroup) also live here — they have
+// no inspector dispatcher and never will, so a real extractor isn't
 // applicable. Same `[no-inspector]` prefix so the consistency check
 // can spot them.
 //
@@ -60,12 +59,9 @@ var configExtractorAllowlist = map[string]string{
 	"aws_backups":        "[no-inspector] AWS Backup vaults aren't inspected; covered via tag-based discovery (#204)",
 	"aws_github_actions": "[no-inspector] GitHub Actions IAM roles only — no SDK shape to extract (#204)",
 
-	// Polymorphic EKS sub-keys: the ComponentKey string values are
-	// "ec2" (KeyAWSEKSNodeGroup) and "resource" (KeyAWSEKSControlPlane)
-	// — placeholders that point at ec2 / cloudwatch resource APIs
-	// instead of having their own dispatch.
-	"ec2":      "[no-inspector] polymorphic KeyAWSEKSNodeGroup placeholder, extraction handled by aws_eks (#204)",
-	"resource": "[no-inspector] polymorphic KeyAWSEKSControlPlane placeholder, extraction handled by aws_eks (#204)",
+	// EKS node group: ComponentKey "aws_eks_nodegroup" doesn't have its
+	// own SDK inspector — extraction is handled by aws_eks (#204, #224).
+	"aws_eks_nodegroup": "[no-inspector] EKS node group is covered by the aws_eks inspector (#204)",
 
 	"gcp_backups": "[no-inspector] GCP Backup vaults aren't inspected; covered via label-based discovery (#204)",
 }
