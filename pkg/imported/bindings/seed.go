@@ -108,6 +108,14 @@ var seededTypes = []string{
 	"aws_apigatewayv2_authorizer",
 	"google_compute_global_address",
 	"google_monitoring_dashboard",
+	"aws_dynamodb_contributor_insights",
+	"aws_cloudwatch_log_stream",
+	"aws_secretsmanager_secret_rotation",
+	"aws_service_discovery_private_dns_namespace",
+	"aws_iam_group",
+	"aws_iam_instance_profile",
+	"google_secret_manager_secret_version",
+	"google_compute_managed_ssl_certificate",
 }
 
 // seededBindings mirrors the registrations performed by init(). Used
@@ -845,6 +853,64 @@ var seededBindings = map[string]ComponentMetricsBinding{
 		DimensionKey:   "dashboard_id",
 		DimensionFrom:  "id",
 		DefaultMetrics: []string{"monitoring.googleapis.com/dashboard/view_count"},
+	},
+	"aws_dynamodb_contributor_insights": {
+		Service:        "dynamodb",
+		Action:         "get-metrics",
+		DimensionKey:   "TableName",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"ConsumedReadCapacityUnits", "ConsumedWriteCapacityUnits"},
+	},
+	"aws_cloudwatch_log_stream": {
+		Service:        "logs",
+		Action:         "get-metrics",
+		DimensionKey:   "LogStreamName",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"IncomingBytes", "IncomingLogEvents"},
+	},
+	"aws_secretsmanager_secret_rotation": {
+		Service:        "secretsmanager",
+		Action:         "get-metrics",
+		DimensionKey:   "SecretName",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"RotationSucceeded", "RotationFailed"},
+	},
+	"aws_service_discovery_private_dns_namespace": {
+		Service:        "servicediscovery",
+		Action:         "get-metrics",
+		DimensionKey:   "NamespaceId",
+		DimensionFrom:  "id",
+		DefaultMetrics: []string{"RegisteredInstances", "DiscoveryRequests"},
+	},
+	"aws_iam_group": {
+		// IAM metrics are CloudTrail-only — registered so consumers can
+		// route policy queries; DefaultMetrics intentionally empty.
+		Service:       "iam",
+		Action:        "get-metrics",
+		DimensionKey:  "GroupName",
+		DimensionFrom: "name",
+	},
+	"aws_iam_instance_profile": {
+		// IAM metrics are CloudTrail-only — registered so consumers can
+		// route policy queries; DefaultMetrics intentionally empty.
+		Service:       "iam",
+		Action:        "get-metrics",
+		DimensionKey:  "InstanceProfileName",
+		DimensionFrom: "name",
+	},
+	"google_secret_manager_secret_version": {
+		Service:        "secretmanager",
+		Action:         "timeseries-list",
+		DimensionKey:   "secret_id",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"secretmanager.googleapis.com/secret/access_count", "secretmanager.googleapis.com/secret/version_count"},
+	},
+	"google_compute_managed_ssl_certificate": {
+		Service:        "loadbalancing",
+		Action:         "timeseries-list",
+		DimensionKey:   "certificate_name",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"loadbalancing.googleapis.com/https/request_count", "loadbalancing.googleapis.com/https/backend_request_count"},
 	},
 }
 

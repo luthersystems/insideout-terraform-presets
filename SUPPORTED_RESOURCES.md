@@ -22,8 +22,8 @@ and is checked in lockstep with the runtime registries. See the
 
 ## Summary
 
-- **AWS:** 109 types · 100% Discoverable · 100% Enrichable · 42% DriftDetectable · 56% MetricsAvailable · 39% AgentEditable
-- **GCP:** 54 types · 100% Discoverable · 100% Enrichable · 63% DriftDetectable · 70% MetricsAvailable · 89% AgentEditable
+- **AWS:** 109 types · 100% Discoverable · 100% Enrichable · 42% DriftDetectable · 61% MetricsAvailable · 39% AgentEditable
+- **GCP:** 54 types · 100% Discoverable · 100% Enrichable · 63% DriftDetectable · 74% MetricsAvailable · 89% AgentEditable
 
 ## AWS
 
@@ -55,7 +55,7 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_cloudwatch_event_rule` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_cloudwatch_log_group` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_cloudwatch_log_resource_policy` | ✓ | ✓ | – | – | – |
-| `aws_cloudwatch_log_stream` | ✓ | ✓ | – | – | – |
+| `aws_cloudwatch_log_stream` | ✓ | ✓ | – | ✓ | – |
 | `aws_cloudwatch_metric_alarm` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_cognito_identity_provider` | ✓ | ✓ | – | – | – |
 | `aws_cognito_resource_server` | ✓ | ✓ | – | – | – |
@@ -65,7 +65,7 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_db_instance` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_db_parameter_group` | ✓ | ✓ | – | – | – |
 | `aws_db_subnet_group` | ✓ | ✓ | – | – | – |
-| `aws_dynamodb_contributor_insights` | ✓ | ✓ | ✓ | – | – |
+| `aws_dynamodb_contributor_insights` | ✓ | ✓ | ✓ | ✓ | – |
 | `aws_dynamodb_table` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_ebs_volume` | ✓ | ✓ | – | ✓ | – |
 | `aws_ecs_cluster` | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -80,8 +80,8 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_elasticache_parameter_group` | ✓ | ✓ | – | – | – |
 | `aws_elasticache_replication_group` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_elasticache_subnet_group` | ✓ | ✓ | – | – | – |
-| `aws_iam_group` | ✓ | ✓ | – | – | – |
-| `aws_iam_instance_profile` | ✓ | ✓ | – | – | – |
+| `aws_iam_group` | ✓ | ✓ | – | ✓ | – |
+| `aws_iam_instance_profile` | ✓ | ✓ | – | ✓ | – |
 | `aws_iam_policy` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_iam_role` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_iam_role_policy` | ✓ | ✓ | – | – | – |
@@ -123,9 +123,9 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_s3_bucket_server_side_encryption_configuration` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_s3_bucket_versioning` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_secretsmanager_secret` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `aws_secretsmanager_secret_rotation` | ✓ | ✓ | ✓ | – | ✓ |
+| `aws_secretsmanager_secret_rotation` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_security_group` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `aws_service_discovery_private_dns_namespace` | ✓ | ✓ | ✓ | – | ✓ |
+| `aws_service_discovery_private_dns_namespace` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_sns_topic` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_sns_topic_subscription` | ✓ | ✓ | – | ✓ | – |
 | `aws_sqs_queue` | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -159,7 +159,7 @@ and is checked in lockstep with the runtime registries. See the
 | `google_compute_global_forwarding_rule` | ✓ | ✓ | – | ✓ | ✓ |
 | `google_compute_health_check` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_compute_instance` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `google_compute_managed_ssl_certificate` | ✓ | ✓ | – | – | ✓ |
+| `google_compute_managed_ssl_certificate` | ✓ | ✓ | – | ✓ | ✓ |
 | `google_compute_network` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_compute_resource_policy` | ✓ | ✓ | – | – | ✓ |
 | `google_compute_router` | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -187,7 +187,7 @@ and is checked in lockstep with the runtime registries. See the
 | `google_secret_manager_secret` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_secret_manager_secret_iam_binding` | ✓ | ✓ | – | – | ✓ |
 | `google_secret_manager_secret_iam_member` | ✓ | ✓ | – | – | – |
-| `google_secret_manager_secret_version` | ✓ | ✓ | ✓ | – | ✓ |
+| `google_secret_manager_secret_version` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_service_account` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_service_networking_connection` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_sql_database_instance` | ✓ | ✓ | ✓ | ✓ | ✓ |

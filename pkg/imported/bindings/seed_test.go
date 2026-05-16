@@ -29,17 +29,19 @@ func reseed(t *testing.T) {
 // DefaultMetrics means "use consumer defaults" and is distinct from
 // "type isn't bound at all".
 var emptyDefaultMetricsAllowed = map[string]bool{
-	"aws_iam_role":           true,
-	"aws_iam_policy":         true,
-	"aws_iam_user":           true,
-	"google_service_account": true,
+	"aws_iam_role":             true,
+	"aws_iam_policy":           true,
+	"aws_iam_user":             true,
+	"aws_iam_group":            true,
+	"aws_iam_instance_profile": true,
+	"google_service_account":   true,
 }
 
 func TestSeededBindings(t *testing.T) {
 	reseed(t)
 
-	require.GreaterOrEqual(t, len(RegisteredTypes()), 104,
-		"expected at least 104 seeded types, got %d", len(RegisteredTypes()))
+	require.GreaterOrEqual(t, len(RegisteredTypes()), 112,
+		"expected at least 112 seeded types, got %d", len(RegisteredTypes()))
 
 	for _, tfType := range seededTypes {
 		tfType := tfType
