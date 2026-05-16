@@ -446,6 +446,161 @@ func TestCloudAssetEnricher_UnregisteredTypeErrors(t *testing.T) {
 	assert.Contains(t, err.Error(), "google_synthetic_unregistered_type_xyz")
 }
 
+// TestCloudAssetEnricher_Enrich_Normalized exercises the #510
+// Normalizer hook on the wired types (google_compute_firewall,
+// google_compute_instance). For each type the test feeds a fake CAI
+// response with the known-divergent fields (self-link URL on
+// `network`, `tags: {items: [...]}` wrapper) and asserts the
+// post-Normalizer Layer-1 payload lands the values on the bare TF
+// field names (`network` short name, flat `tags` list).
+func TestCloudAssetEnricher_Enrich_Normalized(t *testing.T) {
+	t.Parallel()
+
+	t.Run("google_compute_firewall", func(t *testing.T) {
+		t.Parallel()
+		fetch := func(_ context.Context, _, _, _ string) (map[string]any, error) {
+			return map[string]any{
+				"name":        "allow-ssh",
+				"network":     "https://www.googleapis.com/compute/v1/projects/real-proj/global/networks/io-test-net",
+				"description": "ssh",
+				"direction":   "INGREST",
+				"priority":    1000.0,
+				"sourceRanges": []any{
+					"0.0.0.0/0",
+				},
+			}, nil
+		}
+		// Pull the Normalizer from the live cloudAssetTypeConfigs
+		// registration so this test catches drift in the per-type
+		// wiring (chain order, helper choice).
+		n := normalizerForAssetType(t, "compute.googleapis.com/Firewall")
+		e := newCloudAssetEnricherWithNormalizer("google_compute_firewall", "compute.googleapis.com/Firewall", fetch, n)
+		ir := &imported.ImportedResource{
+			Identity: imported.ResourceIdentity{
+				Type:      "google_compute_firewall",
+				ProjectID: "real-proj",
+				NativeIDs: map[string]string{"asset_name": "//compute.googleapis.com/projects/real-proj/global/firewalls/allow-ssh"},
+			},
+		}
+		require.NoError(t, e.Enrich(context.Background(), ir, EnrichClients{}))
+
+		decoded, err := generated.UnmarshalAttrs("google_compute_firewall", ir.Attrs)
+		require.NoError(t, err)
+		fw, ok := decoded.(*generated.GoogleComputeFirewall)
+		require.True(t, ok, "decoded type is %T", decoded)
+
+		// network self-link collapsed to bare name.
+		require.NotNil(t, fw.Network)
+		require.NotNil(t, fw.Network.Literal)
+		assert.Equal(t, "io-test-net", *fw.Network.Literal)
+		// Untouched fields still flow through the renamer.
+		require.NotNil(t, fw.Name)
+		require.NotNil(t, fw.Name.Literal)
+		assert.Equal(t, "allow-ssh", *fw.Name.Literal)
+	})
+
+	t.Run("google_compute_instance", func(t *testing.T) {
+		t.Parallel()
+		fetch := func(_ context.Context, _, _, _ string) (map[string]any, error) {
+			return map[string]any{
+				"name":        "io-test-inst",
+				"machineType": "https://www.googleapis.com/compute/v1/projects/real-proj/zones/us-east1-b/machineTypes/n1-standard-1",
+				"zone":        "https://www.googleapis.com/compute/v1/projects/real-proj/zones/us-east1-b",
+				"description": "test",
+				"tags": map[string]any{
+					"items":       []any{"web", "ssh"},
+					"fingerprint": "abc",
+				},
+				"resourcePolicies": []any{
+					"projects/real-proj/regions/us-east1/resourcePolicies/p1",
+					"projects/real-proj/regions/us-east1/resourcePolicies/p2",
+				},
+			}, nil
+		}
+		n := normalizerForAssetType(t, "compute.googleapis.com/Instance")
+		e := newCloudAssetEnricherWithNormalizer("google_compute_instance", "compute.googleapis.com/Instance", fetch, n)
+		ir := &imported.ImportedResource{
+			Identity: imported.ResourceIdentity{
+				Type:      "google_compute_instance",
+				ProjectID: "real-proj",
+				NativeIDs: map[string]string{"asset_name": "//compute.googleapis.com/projects/real-proj/zones/us-east1-b/instances/io-test-inst"},
+			},
+		}
+		require.NoError(t, e.Enrich(context.Background(), ir, EnrichClients{}))
+
+		decoded, err := generated.UnmarshalAttrs("google_compute_instance", ir.Attrs)
+		require.NoError(t, err)
+		inst, ok := decoded.(*generated.GoogleComputeInstance)
+		require.True(t, ok, "decoded type is %T", decoded)
+
+		// Self-link fields collapsed to short names.
+		require.NotNil(t, inst.MachineType)
+		require.NotNil(t, inst.MachineType.Literal)
+		assert.Equal(t, "n1-standard-1", *inst.MachineType.Literal)
+		require.NotNil(t, inst.Zone)
+		require.NotNil(t, inst.Zone.Literal)
+		assert.Equal(t, "us-east1-b", *inst.Zone.Literal)
+		// resourcePolicies list elements collapsed to short names.
+		require.NotNil(t, inst.ResourcePolicies)
+		require.Len(t, inst.ResourcePolicies, 2)
+		require.NotNil(t, inst.ResourcePolicies[0].Literal)
+		assert.Equal(t, "p1", *inst.ResourcePolicies[0].Literal)
+		require.NotNil(t, inst.ResourcePolicies[1].Literal)
+		assert.Equal(t, "p2", *inst.ResourcePolicies[1].Literal)
+		// Network tags wrapper flattened to bare list.
+		require.NotNil(t, inst.Tags)
+		require.Len(t, inst.Tags, 2)
+		require.NotNil(t, inst.Tags[0].Literal)
+		assert.Equal(t, "web", *inst.Tags[0].Literal)
+		require.NotNil(t, inst.Tags[1].Literal)
+		assert.Equal(t, "ssh", *inst.Tags[1].Literal)
+	})
+}
+
+// normalizerForAssetType returns the Normalizer registered on the
+// cloudAssetTypeConfigs entry for the given CAI asset type. Test-only;
+// fails the test if the type is not registered or has no Normalizer.
+// Pulling the Normalizer from the live registration (rather than
+// re-constructing one in the test) makes the test a regression guard
+// for the registration itself.
+func normalizerForAssetType(t *testing.T, assetType string) Normalizer {
+	t.Helper()
+	for _, cfg := range cloudAssetTypeConfigs {
+		if cfg.AssetType == assetType {
+			require.NotNilf(t, cfg.Normalizer, "no Normalizer registered for %s", assetType)
+			return cfg.Normalizer
+		}
+	}
+	t.Fatalf("no cloudAssetTypeConfigs entry for %s", assetType)
+	return nil
+}
+
+// TestCloudAssetEnricher_Enrich_NormalizerError pins the failure path:
+// a Normalizer that returns an error fails the fetch with the original
+// error wrapped, so soft-fail dispatchers can distinguish a
+// shape-transform bug from a real CAI API error. Mirrors the AWS
+// TestCloudControlEnricher_Enrich_NormalizerError shape.
+func TestCloudAssetEnricher_Enrich_NormalizerError(t *testing.T) {
+	t.Parallel()
+	fetch := func(_ context.Context, _, _, _ string) (map[string]any, error) {
+		return map[string]any{"name": "x"}, nil
+	}
+	boom := errors.New("normalizer-boom")
+	n := func(_ json.RawMessage) (json.RawMessage, error) { return nil, boom }
+	e := newCloudAssetEnricherWithNormalizer("google_compute_network", "compute.googleapis.com/Network", fetch, n)
+	ir := &imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Type:      "google_compute_network",
+			ProjectID: "real-proj",
+			NativeIDs: map[string]string{"asset_name": "//compute.googleapis.com/projects/real-proj/global/networks/x"},
+		},
+	}
+	err := e.Enrich(context.Background(), ir, EnrichClients{})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, boom)
+	assert.Contains(t, err.Error(), "normalize compute.googleapis.com/Network")
+}
+
 // TestCloudAssetEnricher_NilIRErrors pins the nil-IR guard.
 func TestCloudAssetEnricher_NilIRErrors(t *testing.T) {
 	t.Parallel()

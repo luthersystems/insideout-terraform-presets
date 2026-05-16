@@ -75,6 +75,13 @@ type cloudAssetEnricher struct {
 	resourceType string
 	assetType    string
 	fetch        func(ctx context.Context, scope, assetType, fullName string) (map[string]any, error)
+	// normalizer, when non-nil, runs on the raw CAI versionedResources
+	// JSON before the generic camelToSnakeGCP / Layer-1 unmarshal
+	// pipeline (#510). Sourced from cloudAssetConfig.Normalizer at
+	// registration time; see cai_normalizers.go for composable helpers
+	// (chain, selfLinkToBareName, flattenNetworkTags). A nil normalizer
+	// is a no-op — the existing generic path runs unchanged.
+	normalizer Normalizer
 }
 
 // newCloudAssetEnricher constructs an enricher for a single (tfType,
@@ -88,6 +95,20 @@ func newCloudAssetEnricher(tfType, assetType string, fetch func(ctx context.Cont
 		resourceType: tfType,
 		assetType:    assetType,
 		fetch:        fetch,
+	}
+}
+
+// newCloudAssetEnricherWithNormalizer is the #510 variant that wires a
+// per-type Normalizer alongside the (tfType, assetType, fetch) trio. Used
+// by NewGCPDiscoverer to thread cloudAssetConfig.Normalizer through into
+// the enricher; tests use it directly to exercise the normalizer path
+// without dragging in the discoverer registration.
+func newCloudAssetEnricherWithNormalizer(tfType, assetType string, fetch func(ctx context.Context, scope, assetType, fullName string) (map[string]any, error), n Normalizer) *cloudAssetEnricher {
+	return &cloudAssetEnricher{
+		resourceType: tfType,
+		assetType:    assetType,
+		fetch:        fetch,
+		normalizer:   n,
 	}
 }
 
@@ -201,6 +222,31 @@ func (e *cloudAssetEnricher) fetchAndMap(ctx context.Context, fetch func(ctx con
 			return nil, fmt.Errorf("cloudasset enricher: %s %q: %w", e.assetType, assetName, ErrNotFound)
 		}
 		return nil, fmt.Errorf("cloudasset enricher: GetByName %s %q: %w", e.assetType, assetName, err)
+	}
+
+	// #510 — Per-type Normalizer runs on the raw CAI JSON before the
+	// camelToSnakeGCP / Layer-1 unmarshal pipeline. The helpers in
+	// cai_normalizers.go bridge the shape gaps the generic renamer
+	// can't close on its own (self-link URLs → bare names, wrapped
+	// `tags.items: [...]` → flat `tags: [...]`). Returning an error
+	// fails the fetch with the original error wrapped so soft-fail
+	// dispatchers can distinguish a normalizer failure from a real
+	// API error. Round-trip the in-memory map through Marshal so the
+	// Normalizer signature can stay symmetric with the AWS Cloud
+	// Control version (json.RawMessage → json.RawMessage).
+	if e.normalizer != nil {
+		raw, err := json.Marshal(data)
+		if err != nil {
+			return nil, fmt.Errorf("cloudasset enricher: marshal pre-normalize for %s %q: %w", e.assetType, assetName, err)
+		}
+		normalized, err := e.normalizer(raw)
+		if err != nil {
+			return nil, fmt.Errorf("cloudasset enricher: normalize %s %q: %w", e.assetType, assetName, err)
+		}
+		data = map[string]any{}
+		if err := json.Unmarshal(normalized, &data); err != nil {
+			return nil, fmt.Errorf("cloudasset enricher: re-parse post-normalize for %s %q: %w", e.assetType, assetName, err)
+		}
 	}
 
 	// CAI returns the JSON representation as defined by each service's

@@ -417,7 +417,7 @@ func NewGCPDiscoverer(searcher gcpAssetSearcher, projectID string, opts GCPDisco
 		if _, has := d.byTypeEnricher[cfg.TFType]; has {
 			continue
 		}
-		d.byTypeEnricher[cfg.TFType] = newCloudAssetEnricher(cfg.TFType, cfg.AssetType, nil)
+		d.byTypeEnricher[cfg.TFType] = newCloudAssetEnricherWithNormalizer(cfg.TFType, cfg.AssetType, nil, cfg.Normalizer)
 	}
 	return d
 }
