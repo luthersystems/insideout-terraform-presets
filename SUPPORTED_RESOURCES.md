@@ -22,8 +22,8 @@ and is checked in lockstep with the runtime registries. See the
 
 ## Summary
 
-- **AWS:** 109 types · 100% Discoverable · 100% Enrichable · 42% DriftDetectable · 71% MetricsAvailable · 39% AgentEditable
-- **GCP:** 54 types · 100% Discoverable · 100% Enrichable · 63% DriftDetectable · 85% MetricsAvailable · 89% AgentEditable
+- **AWS:** 109 types · 100% Discoverable · 100% Enrichable · 42% DriftDetectable · 76% MetricsAvailable · 39% AgentEditable
+- **GCP:** 54 types · 100% Discoverable · 100% Enrichable · 63% DriftDetectable · 89% MetricsAvailable · 89% AgentEditable
 
 ## AWS
 
@@ -57,14 +57,14 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_cloudwatch_log_resource_policy` | ✓ | ✓ | – | – | – |
 | `aws_cloudwatch_log_stream` | ✓ | ✓ | – | ✓ | – |
 | `aws_cloudwatch_metric_alarm` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `aws_cognito_identity_provider` | ✓ | ✓ | – | – | – |
+| `aws_cognito_identity_provider` | ✓ | ✓ | – | ✓ | – |
 | `aws_cognito_resource_server` | ✓ | ✓ | – | – | – |
 | `aws_cognito_user_pool` | ✓ | ✓ | – | ✓ | – |
 | `aws_cognito_user_pool_client` | ✓ | ✓ | – | ✓ | – |
-| `aws_cognito_user_pool_domain` | ✓ | ✓ | – | – | – |
+| `aws_cognito_user_pool_domain` | ✓ | ✓ | – | ✓ | – |
 | `aws_db_instance` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_db_parameter_group` | ✓ | ✓ | – | ✓ | – |
-| `aws_db_subnet_group` | ✓ | ✓ | – | – | – |
+| `aws_db_subnet_group` | ✓ | ✓ | – | ✓ | – |
 | `aws_dynamodb_contributor_insights` | ✓ | ✓ | ✓ | ✓ | – |
 | `aws_dynamodb_table` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_ebs_volume` | ✓ | ✓ | – | ✓ | – |
@@ -77,9 +77,9 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_eks_fargate_profile` | ✓ | ✓ | – | ✓ | – |
 | `aws_eks_node_group` | ✓ | ✓ | – | ✓ | – |
 | `aws_eks_pod_identity_association` | ✓ | ✓ | – | – | – |
-| `aws_elasticache_parameter_group` | ✓ | ✓ | – | – | – |
+| `aws_elasticache_parameter_group` | ✓ | ✓ | – | ✓ | – |
 | `aws_elasticache_replication_group` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `aws_elasticache_subnet_group` | ✓ | ✓ | – | – | – |
+| `aws_elasticache_subnet_group` | ✓ | ✓ | – | ✓ | – |
 | `aws_iam_group` | ✓ | ✓ | – | ✓ | – |
 | `aws_iam_instance_profile` | ✓ | ✓ | – | ✓ | – |
 | `aws_iam_policy` | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -90,7 +90,7 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_iam_user` | ✓ | ✓ | – | ✓ | – |
 | `aws_instance` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_internet_gateway` | ✓ | ✓ | – | ✓ | – |
-| `aws_key_pair` | ✓ | ✓ | – | – | – |
+| `aws_key_pair` | ✓ | ✓ | – | ✓ | – |
 | `aws_kms_alias` | ✓ | ✓ | – | ✓ | – |
 | `aws_kms_key` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_lambda_alias` | ✓ | ✓ | – | ✓ | – |
@@ -186,10 +186,10 @@ and is checked in lockstep with the runtime registries. See the
 | `google_redis_instance` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_secret_manager_secret` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_secret_manager_secret_iam_binding` | ✓ | ✓ | – | – | ✓ |
-| `google_secret_manager_secret_iam_member` | ✓ | ✓ | – | – | – |
+| `google_secret_manager_secret_iam_member` | ✓ | ✓ | – | ✓ | – |
 | `google_secret_manager_secret_version` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_service_account` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `google_service_networking_connection` | ✓ | ✓ | ✓ | – | ✓ |
+| `google_service_networking_connection` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_sql_database_instance` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_sql_user` | ✓ | ✓ | – | ✓ | ✓ |
 | `google_storage_bucket` | ✓ | ✓ | ✓ | ✓ | ✓ |

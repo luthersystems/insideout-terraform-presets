@@ -132,6 +132,14 @@ var seededTypes = []string{
 	"google_compute_resource_policy",
 	"google_sql_user",
 	"google_storage_bucket_iam_member",
+	"aws_db_subnet_group",
+	"aws_elasticache_parameter_group",
+	"aws_elasticache_subnet_group",
+	"aws_cognito_user_pool_domain",
+	"aws_cognito_identity_provider",
+	"aws_key_pair",
+	"google_service_networking_connection",
+	"google_secret_manager_secret_iam_member",
 }
 
 // seededBindings mirrors the registrations performed by init(). Used
@@ -1058,6 +1066,78 @@ var seededBindings = map[string]ComponentMetricsBinding{
 	"google_storage_bucket_iam_member": {
 		// IAM-style: IAM member bindings have no per-binding metrics.
 		// Registered for routing only.
+		Service:       "iam",
+		Action:        "timeseries-list",
+		DimensionKey:  "member",
+		DimensionFrom: "id",
+	},
+	"aws_db_subnet_group": {
+		// Subnet groups have no per-group CloudWatch metrics — they're
+		// network plumbing attached to DB instances. Registered for
+		// routing only so consumers can resolve subnet-group → owning
+		// RDS instance and pull the instance's metrics.
+		Service:       "rds",
+		Action:        "get-metrics",
+		DimensionKey:  "DBSubnetGroupName",
+		DimensionFrom: "name",
+	},
+	"aws_elasticache_parameter_group": {
+		// Parameter groups themselves have no per-group metrics —
+		// they're config attached to replication groups. Registered
+		// for routing only.
+		Service:       "elasticache",
+		Action:        "get-metrics",
+		DimensionKey:  "CacheParameterGroupName",
+		DimensionFrom: "name",
+	},
+	"aws_elasticache_subnet_group": {
+		// Subnet groups have no per-group CloudWatch metrics — they're
+		// network plumbing. Registered for routing only.
+		Service:       "elasticache",
+		Action:        "get-metrics",
+		DimensionKey:  "CacheSubnetGroupName",
+		DimensionFrom: "name",
+	},
+	"aws_cognito_user_pool_domain": {
+		// Domains are routing aliases for a user pool — metrics roll up
+		// to the parent UserPool dimension. Surface the pool's sign-in
+		// metrics so consumers can correlate domain config with
+		// authentication traffic.
+		Service:        "cognito",
+		Action:         "get-metrics",
+		DimensionKey:   "UserPool",
+		DimensionFrom:  "id",
+		DefaultMetrics: []string{"SignInSuccesses", "SignInThrottles"},
+	},
+	"aws_cognito_identity_provider": {
+		// Identity providers are federation config on a user pool;
+		// CloudWatch surfaces federation activity under the parent
+		// UserPool dimension.
+		Service:        "cognito",
+		Action:         "get-metrics",
+		DimensionKey:   "UserPool",
+		DimensionFrom:  "id",
+		DefaultMetrics: []string{"FederationSuccesses", "FederationThrottles"},
+	},
+	"aws_key_pair": {
+		// SSH key pairs have no per-key CloudWatch metrics — they're
+		// EC2 credentials referenced by launch templates / instances.
+		// Registered for routing only.
+		Service:       "ec2",
+		Action:        "get-metrics",
+		DimensionKey:  "KeyName",
+		DimensionFrom: "name",
+	},
+	"google_service_networking_connection": {
+		Service:        "servicenetworking",
+		Action:         "timeseries-list",
+		DimensionKey:   "connection_name",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"networking.googleapis.com/vpc_flow/ingress_bytes_count", "networking.googleapis.com/vpc_flow/egress_bytes_count"},
+	},
+	"google_secret_manager_secret_iam_member": {
+		// IAM-style: IAM member bindings have no per-binding metrics.
+		// Registered for routing only (mirrors google_storage_bucket_iam_member).
 		Service:       "iam",
 		Action:        "timeseries-list",
 		DimensionKey:  "member",

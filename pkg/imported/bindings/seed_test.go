@@ -38,18 +38,23 @@ var emptyDefaultMetricsAllowed = map[string]bool{
 	"aws_iam_role_policy_attachment":  true,
 	"google_service_account":          true,
 	"google_project_iam_member":       true,
-	"aws_kms_alias":                   true,
-	"aws_msk_configuration":           true,
-	"aws_eks_access_entry":            true,
-	"google_sql_user":                 true,
-	"google_storage_bucket_iam_member": true,
+	"aws_kms_alias":                          true,
+	"aws_msk_configuration":                  true,
+	"aws_eks_access_entry":                   true,
+	"google_sql_user":                        true,
+	"google_storage_bucket_iam_member":       true,
+	"aws_db_subnet_group":                    true,
+	"aws_elasticache_parameter_group":        true,
+	"aws_elasticache_subnet_group":           true,
+	"aws_key_pair":                           true,
+	"google_secret_manager_secret_iam_member": true,
 }
 
 func TestSeededBindings(t *testing.T) {
 	reseed(t)
 
-	require.GreaterOrEqual(t, len(RegisteredTypes()), 128,
-		"expected at least 128 seeded types, got %d", len(RegisteredTypes()))
+	require.GreaterOrEqual(t, len(RegisteredTypes()), 136,
+		"expected at least 136 seeded types, got %d", len(RegisteredTypes()))
 
 	for _, tfType := range seededTypes {
 		tfType := tfType
