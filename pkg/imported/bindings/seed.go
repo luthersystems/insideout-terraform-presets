@@ -116,6 +116,14 @@ var seededTypes = []string{
 	"aws_iam_instance_profile",
 	"google_secret_manager_secret_version",
 	"google_compute_managed_ssl_certificate",
+	"aws_api_gateway_deployment",
+	"aws_db_parameter_group",
+	"aws_cloudwatch_dashboard",
+	"aws_iam_role_policy",
+	"aws_iam_role_policy_attachment",
+	"google_api_gateway_api",
+	"google_api_gateway_api_config",
+	"google_project_iam_member",
 }
 
 // seededBindings mirrors the registrations performed by init(). Used
@@ -911,6 +919,73 @@ var seededBindings = map[string]ComponentMetricsBinding{
 		DimensionKey:   "certificate_name",
 		DimensionFrom:  "name",
 		DefaultMetrics: []string{"loadbalancing.googleapis.com/https/request_count", "loadbalancing.googleapis.com/https/backend_request_count"},
+	},
+	"aws_api_gateway_deployment": {
+		// CloudWatch metrics for REST API deployments roll up under
+		// the parent ApiName dimension; a deployment is just a
+		// snapshot pointer, so consumers query Count/Latency
+		// scoped to the API.
+		Service:        "apigateway",
+		Action:         "get-metrics",
+		DimensionKey:   "ApiName",
+		DimensionFrom:  "id",
+		DefaultMetrics: []string{"Count", "4XXError", "5XXError", "Latency"},
+	},
+	"aws_db_parameter_group": {
+		// Parameter groups themselves have no per-group metrics —
+		// they're config attached to DB instances. Surface the
+		// RDS per-instance metrics so consumers can correlate
+		// param-group changes with downstream instance behavior.
+		Service:        "rds",
+		Action:         "get-metrics",
+		DimensionKey:   "DBParameterGroupName",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"CPUUtilization", "DatabaseConnections"},
+	},
+	"aws_cloudwatch_dashboard": {
+		Service:        "cloudwatch",
+		Action:         "get-metrics",
+		DimensionKey:   "DashboardName",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"GetDashboardCount", "PutDashboardCount"},
+	},
+	"aws_iam_role_policy": {
+		// IAM metrics are CloudTrail-only — registered so consumers
+		// can route policy queries; DefaultMetrics intentionally empty.
+		Service:       "iam",
+		Action:        "get-metrics",
+		DimensionKey:  "PolicyName",
+		DimensionFrom: "name",
+	},
+	"aws_iam_role_policy_attachment": {
+		// IAM metrics are CloudTrail-only — registered so consumers
+		// can route policy queries; DefaultMetrics intentionally empty.
+		Service:       "iam",
+		Action:        "get-metrics",
+		DimensionKey:  "PolicyArn",
+		DimensionFrom: "id",
+	},
+	"google_api_gateway_api": {
+		Service:        "apigateway",
+		Action:         "timeseries-list",
+		DimensionKey:   "api_id",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"apigateway.googleapis.com/gateway/request_count", "apigateway.googleapis.com/gateway/request_latencies"},
+	},
+	"google_api_gateway_api_config": {
+		Service:        "apigateway",
+		Action:         "timeseries-list",
+		DimensionKey:   "api_config_id",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"apigateway.googleapis.com/gateway/request_count"},
+	},
+	"google_project_iam_member": {
+		// IAM-style: registered for routing only; DefaultMetrics
+		// intentionally empty (mirrors aws_iam_role).
+		Service:       "iam",
+		Action:        "timeseries-list",
+		DimensionKey:  "member",
+		DimensionFrom: "id",
 	},
 }
 

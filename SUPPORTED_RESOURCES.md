@@ -22,15 +22,15 @@ and is checked in lockstep with the runtime registries. See the
 
 ## Summary
 
-- **AWS:** 109 types · 100% Discoverable · 100% Enrichable · 42% DriftDetectable · 61% MetricsAvailable · 39% AgentEditable
-- **GCP:** 54 types · 100% Discoverable · 100% Enrichable · 63% DriftDetectable · 74% MetricsAvailable · 89% AgentEditable
+- **AWS:** 109 types · 100% Discoverable · 100% Enrichable · 42% DriftDetectable · 66% MetricsAvailable · 39% AgentEditable
+- **GCP:** 54 types · 100% Discoverable · 100% Enrichable · 63% DriftDetectable · 80% MetricsAvailable · 89% AgentEditable
 
 ## AWS
 
 | TF Type | Discoverable | Enrichable | DriftDetectable | MetricsAvailable | AgentEditable |
 |---|---|---|---|---|---|
 | `aws_acm_certificate` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `aws_api_gateway_deployment` | ✓ | ✓ | – | – | – |
+| `aws_api_gateway_deployment` | ✓ | ✓ | – | ✓ | – |
 | `aws_api_gateway_resource` | ✓ | ✓ | – | – | – |
 | `aws_api_gateway_stage` | ✓ | ✓ | – | ✓ | – |
 | `aws_apigatewayv2_api` | ✓ | ✓ | – | ✓ | – |
@@ -51,7 +51,7 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_cloudfront_function` | ✓ | ✓ | – | ✓ | – |
 | `aws_cloudfront_monitoring_subscription` | ✓ | ✓ | – | – | – |
 | `aws_cloudfront_origin_access_identity` | ✓ | ✓ | – | – | – |
-| `aws_cloudwatch_dashboard` | ✓ | ✓ | – | – | – |
+| `aws_cloudwatch_dashboard` | ✓ | ✓ | – | ✓ | – |
 | `aws_cloudwatch_event_rule` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_cloudwatch_log_group` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_cloudwatch_log_resource_policy` | ✓ | ✓ | – | – | – |
@@ -63,7 +63,7 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_cognito_user_pool_client` | ✓ | ✓ | – | ✓ | – |
 | `aws_cognito_user_pool_domain` | ✓ | ✓ | – | – | – |
 | `aws_db_instance` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `aws_db_parameter_group` | ✓ | ✓ | – | – | – |
+| `aws_db_parameter_group` | ✓ | ✓ | – | ✓ | – |
 | `aws_db_subnet_group` | ✓ | ✓ | – | – | – |
 | `aws_dynamodb_contributor_insights` | ✓ | ✓ | ✓ | ✓ | – |
 | `aws_dynamodb_table` | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -84,8 +84,8 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_iam_instance_profile` | ✓ | ✓ | – | ✓ | – |
 | `aws_iam_policy` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_iam_role` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `aws_iam_role_policy` | ✓ | ✓ | – | – | – |
-| `aws_iam_role_policy_attachment` | ✓ | ✓ | ✓ | – | – |
+| `aws_iam_role_policy` | ✓ | ✓ | – | ✓ | – |
+| `aws_iam_role_policy_attachment` | ✓ | ✓ | ✓ | ✓ | – |
 | `aws_iam_service_linked_role` | ✓ | ✓ | – | – | – |
 | `aws_iam_user` | ✓ | ✓ | – | ✓ | – |
 | `aws_instance` | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -143,8 +143,8 @@ and is checked in lockstep with the runtime registries. See the
 
 | TF Type | Discoverable | Enrichable | DriftDetectable | MetricsAvailable | AgentEditable |
 |---|---|---|---|---|---|
-| `google_api_gateway_api` | ✓ | ✓ | – | – | ✓ |
-| `google_api_gateway_api_config` | ✓ | ✓ | – | – | ✓ |
+| `google_api_gateway_api` | ✓ | ✓ | – | ✓ | ✓ |
+| `google_api_gateway_api_config` | ✓ | ✓ | – | ✓ | ✓ |
 | `google_api_gateway_gateway` | ✓ | ✓ | – | ✓ | ✓ |
 | `google_cloud_run_v2_service` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_cloud_run_v2_service_iam_member` | ✓ | ✓ | – | – | – |
@@ -179,7 +179,7 @@ and is checked in lockstep with the runtime registries. See the
 | `google_monitoring_alert_policy` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_monitoring_dashboard` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_monitoring_notification_channel` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `google_project_iam_member` | ✓ | ✓ | – | – | – |
+| `google_project_iam_member` | ✓ | ✓ | – | ✓ | – |
 | `google_project_service` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_pubsub_subscription` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_pubsub_topic` | ✓ | ✓ | ✓ | ✓ | ✓ |
