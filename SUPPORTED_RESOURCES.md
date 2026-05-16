@@ -22,7 +22,7 @@ and is checked in lockstep with the runtime registries. See the
 
 ## Summary
 
-- **AWS:** 109 types · 100% Discoverable · 100% Enrichable · 44% DriftDetectable · 8% MetricsAvailable · 39% AgentEditable
+- **AWS:** 109 types · 100% Discoverable · 100% Enrichable · 49% DriftDetectable · 8% MetricsAvailable · 44% AgentEditable
 - **GCP:** 54 types · 100% Discoverable · 100% Enrichable · 63% DriftDetectable · 11% MetricsAvailable · 89% AgentEditable
 
 ## AWS
@@ -60,7 +60,7 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_cognito_identity_provider` | ✓ | ✓ | – | – | – |
 | `aws_cognito_resource_server` | ✓ | ✓ | – | – | – |
 | `aws_cognito_user_pool` | ✓ | ✓ | – | – | – |
-| `aws_cognito_user_pool_client` | ✓ | ✓ | – | – | – |
+| `aws_cognito_user_pool_client` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_cognito_user_pool_domain` | ✓ | ✓ | – | – | – |
 | `aws_db_instance` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_db_parameter_group` | ✓ | ✓ | – | – | – |
@@ -87,23 +87,23 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_iam_role_policy` | ✓ | ✓ | – | – | – |
 | `aws_iam_role_policy_attachment` | ✓ | ✓ | ✓ | – | – |
 | `aws_iam_service_linked_role` | ✓ | ✓ | – | – | – |
-| `aws_iam_user` | ✓ | ✓ | – | – | – |
+| `aws_iam_user` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_instance` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_internet_gateway` | ✓ | ✓ | – | – | – |
 | `aws_key_pair` | ✓ | ✓ | – | – | – |
 | `aws_kms_alias` | ✓ | ✓ | – | – | – |
 | `aws_kms_key` | ✓ | ✓ | ✓ | – | ✓ |
-| `aws_lambda_alias` | ✓ | ✓ | – | – | – |
+| `aws_lambda_alias` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_lambda_event_source_mapping` | ✓ | ✓ | – | – | – |
 | `aws_lambda_function` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_lambda_function_url` | ✓ | ✓ | – | – | – |
-| `aws_lambda_permission` | ✓ | ✓ | – | – | – |
+| `aws_lambda_permission` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_launch_template` | ✓ | ✓ | – | – | – |
 | `aws_lb` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_lb_listener` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_lb_target_group` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_msk_cluster` | ✓ | ✓ | ✓ | – | ✓ |
-| `aws_msk_configuration` | ✓ | ✓ | – | – | – |
+| `aws_msk_configuration` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_nat_gateway` | ✓ | ✓ | – | – | – |
 | `aws_network_acl` | ✓ | ✓ | – | – | – |
 | `aws_network_interface` | ✓ | ✓ | – | – | – |

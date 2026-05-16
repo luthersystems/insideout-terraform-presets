@@ -31,6 +31,10 @@ var WantedAWS = []string{
 	// cloud-control-enriched; adding the Layer 1 typed struct + Layer 2
 	// curated policy.Map flips them to DriftDetectable.
 	"aws_cloudfront_distribution",
+	// Bundle 5 (#482) — EventBridge default event bus. The TF canonical
+	// name is `aws_cloudwatch_event_bus` (the resource pre-dates the
+	// EventBridge rename).
+	"aws_cloudwatch_event_bus",
 	"aws_cloudwatch_event_rule",
 	"aws_cloudwatch_log_group",
 	"aws_cloudwatch_metric_alarm",
@@ -38,12 +42,21 @@ var WantedAWS = []string{
 	// Bundle 4 (cont.) — CodeDeploy app.
 	"aws_codedeploy_app",
 	"aws_codepipeline",
+	// Bundle 5 (#482) — Cognito user-pool client. The parent
+	// `aws_cognito_user_pool` trips a codegen `schema`-block name
+	// collision (see bundle 4); the *client* resource has no nested
+	// `schema` block, so it generates cleanly.
+	"aws_cognito_user_pool_client",
 	"aws_db_instance",
 	"aws_dynamodb_contributor_insights",
 	// Bundle 4 (cont.) — DynamoDB global table.
 	"aws_dynamodb_global_table",
 	"aws_dynamodb_table",
 	"aws_ecs_cluster",
+	// Bundle 5 (#482) — ECS service + task definition. Round out the
+	// container-compute graph alongside aws_ecs_cluster.
+	"aws_ecs_service",
+	"aws_ecs_task_definition",
 	// Bundle 4 (cont.) — EFS file system.
 	"aws_efs_file_system",
 	"aws_eks_cluster",
@@ -54,6 +67,8 @@ var WantedAWS = []string{
 	// AWSCognitoUserPoolSchema that clashes with the resource's
 	// generated `<Type>Schema` variable name).
 	"aws_glue_catalog_database",
+	// Bundle 5 (#482) — Glue ETL job.
+	"aws_glue_job",
 	// Drift coverage bundle 1 (#482) — high-value cloud-control-routed
 	// AWS types. Each was already cloud-control-enriched but lacked a
 	// Layer 1 typed struct (and thus a curated Layer 2 policy.Map), so
@@ -63,20 +78,33 @@ var WantedAWS = []string{
 	"aws_iam_policy",
 	"aws_iam_role",
 	"aws_iam_role_policy_attachment",
+	// Bundle 5 (#482) — standalone IAM user (cross-account access /
+	// machine identities not modeled through roles).
+	"aws_iam_user",
 	// `aws_instance` is the canonical TF name for EC2 instances
 	// (the resource was never renamed to `aws_ec2_instance` upstream).
 	"aws_instance",
 	// Bundle 4 (cont.) — Kinesis Data Stream.
 	"aws_kinesis_stream",
 	"aws_kms_key",
+	// Bundle 5 (#482) — Lambda alias + permission. Alias drives
+	// versioned-routing (CodeDeploy blue/green); permission is the
+	// resource-policy statement granting invoke rights to a principal.
+	"aws_lambda_alias",
 	"aws_lambda_function",
 	"aws_lambda_layer_version",
+	"aws_lambda_permission",
 	"aws_lb",
 	"aws_lb_listener",
 	"aws_lb_target_group",
 	// Bundle 2 (cont.) — managed-search / streaming / rotation types.
 	"aws_msk_cluster",
+	// Bundle 5 (#482) — MSK broker-configuration revision.
+	"aws_msk_configuration",
 	"aws_opensearch_domain",
+	// Bundle 5 (#482) — RDS Aurora / multi-AZ cluster (the cluster-level
+	// shape sibling to the existing cloud-control-routed db_instance).
+	"aws_rds_cluster",
 	"aws_resourceexplorer2_index",
 	"aws_resourceexplorer2_view",
 	"aws_route53_zone",

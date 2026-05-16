@@ -45,6 +45,10 @@ var coveredTypes = []string{
 	// AWS drift coverage bundle 2 (#482) — cloud-control-routed types
 	// in the RDS / compute / monitoring / managed-search family.
 	"aws_cloudfront_distribution",
+	// AWS drift coverage bundle 5 (#482) — 10 more cloud-control-routed
+	// types pushing DriftDetectable further. Compute/container, RDS,
+	// MSK, Glue, Cognito, Lambda alias/permission, IAM user, event bus.
+	"aws_cloudwatch_event_bus",
 	"aws_cloudwatch_event_rule",
 	"aws_cloudwatch_log_group",
 	"aws_cloudwatch_metric_alarm",
@@ -52,12 +56,17 @@ var coveredTypes = []string{
 	// Bundle 4 (cont.) — CodeDeploy app.
 	"aws_codedeploy_app",
 	"aws_codepipeline",
+	// Bundle 5 (cont.) — Cognito user-pool client.
+	"aws_cognito_user_pool_client",
 	"aws_db_instance",
 	"aws_dynamodb_contributor_insights",
 	// Bundle 4 (cont.) — DynamoDB global table.
 	"aws_dynamodb_global_table",
 	"aws_dynamodb_table",
 	"aws_ecs_cluster",
+	// Bundle 5 (cont.) — ECS service + task definition.
+	"aws_ecs_service",
+	"aws_ecs_task_definition",
 	// Bundle 4 (cont.) — EFS file system.
 	"aws_efs_file_system",
 	"aws_eks_cluster",
@@ -65,25 +74,36 @@ var coveredTypes = []string{
 	// Bundle 4 (cont.) — Glue catalog database (substituted in for
 	// aws_cognito_user_pool which trips a codegen name collision).
 	"aws_glue_catalog_database",
+	// Bundle 5 (cont.) — Glue ETL job.
+	"aws_glue_job",
 	// AWS drift coverage bundle 1 (#482) — high-value cloud-control-routed
 	// types that already had Enrichable coverage but lacked a curated
 	// Layer 2 policy.Map.
 	"aws_iam_policy",
 	"aws_iam_role",
 	"aws_iam_role_policy_attachment",
+	// Bundle 5 (cont.) — standalone IAM user.
+	"aws_iam_user",
 	// `aws_instance` is the canonical TF name for EC2 instances.
 	"aws_instance",
 	// Bundle 4 (cont.) — Kinesis Data Stream.
 	"aws_kinesis_stream",
 	"aws_kms_key",
+	// Bundle 5 (cont.) — Lambda alias + permission.
+	"aws_lambda_alias",
 	"aws_lambda_function",
 	"aws_lambda_layer_version",
+	"aws_lambda_permission",
 	"aws_lb",
 	"aws_lb_listener",
 	"aws_lb_target_group",
 	// Bundle 2 (cont.) — managed-search / streaming / rotation types.
 	"aws_msk_cluster",
+	// Bundle 5 (cont.) — MSK broker-configuration revision.
+	"aws_msk_configuration",
 	"aws_opensearch_domain",
+	// Bundle 5 (cont.) — RDS Aurora / multi-AZ cluster.
+	"aws_rds_cluster",
 	"aws_resourceexplorer2_index",
 	"aws_resourceexplorer2_view",
 	"aws_route53_zone",
