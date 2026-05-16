@@ -31,14 +31,15 @@ func reseed(t *testing.T) {
 var emptyDefaultMetricsAllowed = map[string]bool{
 	"aws_iam_role":           true,
 	"aws_iam_policy":         true,
+	"aws_iam_user":           true,
 	"google_service_account": true,
 }
 
 func TestSeededBindings(t *testing.T) {
 	reseed(t)
 
-	require.GreaterOrEqual(t, len(RegisteredTypes()), 88,
-		"expected at least 88 seeded types, got %d", len(RegisteredTypes()))
+	require.GreaterOrEqual(t, len(RegisteredTypes()), 96,
+		"expected at least 96 seeded types, got %d", len(RegisteredTypes()))
 
 	for _, tfType := range seededTypes {
 		tfType := tfType

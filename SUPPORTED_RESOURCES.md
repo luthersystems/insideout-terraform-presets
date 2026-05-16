@@ -22,8 +22,8 @@ and is checked in lockstep with the runtime registries. See the
 
 ## Summary
 
-- **AWS:** 109 types · 100% Discoverable · 100% Enrichable · 42% DriftDetectable · 45% MetricsAvailable · 39% AgentEditable
-- **GCP:** 54 types · 100% Discoverable · 100% Enrichable · 63% DriftDetectable · 63% MetricsAvailable · 89% AgentEditable
+- **AWS:** 109 types · 100% Discoverable · 100% Enrichable · 42% DriftDetectable · 50% MetricsAvailable · 39% AgentEditable
+- **GCP:** 54 types · 100% Discoverable · 100% Enrichable · 63% DriftDetectable · 67% MetricsAvailable · 89% AgentEditable
 
 ## AWS
 
@@ -70,7 +70,7 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_ebs_volume` | ✓ | ✓ | – | ✓ | – |
 | `aws_ecs_cluster` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_ecs_cluster_capacity_providers` | ✓ | ✓ | – | – | – |
-| `aws_eip` | ✓ | ✓ | – | – | – |
+| `aws_eip` | ✓ | ✓ | – | ✓ | – |
 | `aws_eks_access_entry` | ✓ | ✓ | – | – | – |
 | `aws_eks_addon` | ✓ | ✓ | – | – | – |
 | `aws_eks_cluster` | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -87,14 +87,14 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_iam_role_policy` | ✓ | ✓ | – | – | – |
 | `aws_iam_role_policy_attachment` | ✓ | ✓ | ✓ | – | – |
 | `aws_iam_service_linked_role` | ✓ | ✓ | – | – | – |
-| `aws_iam_user` | ✓ | ✓ | – | – | – |
+| `aws_iam_user` | ✓ | ✓ | – | ✓ | – |
 | `aws_instance` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_internet_gateway` | ✓ | ✓ | – | ✓ | – |
 | `aws_key_pair` | ✓ | ✓ | – | – | – |
 | `aws_kms_alias` | ✓ | ✓ | – | – | – |
 | `aws_kms_key` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_lambda_alias` | ✓ | ✓ | – | – | – |
-| `aws_lambda_event_source_mapping` | ✓ | ✓ | – | – | – |
+| `aws_lambda_event_source_mapping` | ✓ | ✓ | – | ✓ | – |
 | `aws_lambda_function` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_lambda_function_url` | ✓ | ✓ | – | ✓ | – |
 | `aws_lambda_permission` | ✓ | ✓ | – | – | – |
@@ -106,7 +106,7 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_msk_configuration` | ✓ | ✓ | – | – | – |
 | `aws_nat_gateway` | ✓ | ✓ | – | ✓ | – |
 | `aws_network_acl` | ✓ | ✓ | – | – | – |
-| `aws_network_interface` | ✓ | ✓ | – | – | – |
+| `aws_network_interface` | ✓ | ✓ | – | ✓ | – |
 | `aws_opensearch_domain` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_opensearchserverless_access_policy` | ✓ | ✓ | – | – | – |
 | `aws_opensearchserverless_collection` | ✓ | ✓ | – | – | – |
@@ -127,9 +127,9 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_security_group` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_service_discovery_private_dns_namespace` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_sns_topic` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `aws_sns_topic_subscription` | ✓ | ✓ | – | – | – |
+| `aws_sns_topic_subscription` | ✓ | ✓ | – | ✓ | – |
 | `aws_sqs_queue` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `aws_ssm_parameter` | ✓ | ✓ | – | – | – |
+| `aws_ssm_parameter` | ✓ | ✓ | – | ✓ | – |
 | `aws_subnet` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_vpc` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_vpc_dhcp_options` | ✓ | ✓ | – | – | – |
@@ -151,7 +151,7 @@ and is checked in lockstep with the runtime registries. See the
 | `google_cloudbuild_trigger` | ✓ | ✓ | – | ✓ | ✓ |
 | `google_cloudfunctions2_function` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_cloudfunctions2_function_iam_member` | ✓ | ✓ | – | – | – |
-| `google_compute_address` | ✓ | ✓ | ✓ | – | ✓ |
+| `google_compute_address` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_compute_backend_service` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_compute_firewall` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_compute_forwarding_rule` | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -178,7 +178,7 @@ and is checked in lockstep with the runtime registries. See the
 | `google_logging_project_sink` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_monitoring_alert_policy` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_monitoring_dashboard` | ✓ | ✓ | ✓ | – | ✓ |
-| `google_monitoring_notification_channel` | ✓ | ✓ | ✓ | – | ✓ |
+| `google_monitoring_notification_channel` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_project_iam_member` | ✓ | ✓ | – | – | – |
 | `google_project_service` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_pubsub_subscription` | ✓ | ✓ | ✓ | ✓ | ✓ |

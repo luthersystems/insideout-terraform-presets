@@ -92,6 +92,14 @@ var seededTypes = []string{
 	"google_compute_health_check",
 	"google_api_gateway_gateway",
 	"google_cloudbuild_trigger",
+	"aws_eip",
+	"aws_network_interface",
+	"aws_ssm_parameter",
+	"aws_sns_topic_subscription",
+	"aws_lambda_event_source_mapping",
+	"aws_iam_user",
+	"google_compute_address",
+	"google_monitoring_notification_channel",
 }
 
 // seededBindings mirrors the registrations performed by init(). Used
@@ -716,6 +724,63 @@ var seededBindings = map[string]ComponentMetricsBinding{
 		DimensionKey:   "trigger_id",
 		DimensionFrom:  "id",
 		DefaultMetrics: []string{"cloudbuild.googleapis.com/build_count", "cloudbuild.googleapis.com/build/duration"},
+	},
+	"aws_eip": {
+		Service:        "ec2",
+		Action:         "get-metrics",
+		DimensionKey:   "AllocationId",
+		DimensionFrom:  "id",
+		DefaultMetrics: []string{"NetworkIn", "NetworkOut", "NetworkPacketsIn", "NetworkPacketsOut"},
+	},
+	"aws_network_interface": {
+		Service:        "ec2",
+		Action:         "get-metrics",
+		DimensionKey:   "NetworkInterfaceId",
+		DimensionFrom:  "id",
+		DefaultMetrics: []string{"NetworkIn", "NetworkOut", "NetworkPacketsIn", "NetworkPacketsOut"},
+	},
+	"aws_ssm_parameter": {
+		Service:        "ssm",
+		Action:         "get-metrics",
+		DimensionKey:   "ParameterName",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"GetParameter", "PutParameter", "DescribeParameters"},
+	},
+	"aws_sns_topic_subscription": {
+		Service:        "sns",
+		Action:         "get-metrics",
+		DimensionKey:   "TopicName",
+		DimensionFrom:  "id",
+		DefaultMetrics: []string{"NumberOfNotificationsDelivered", "NumberOfNotificationsFailed", "NumberOfNotificationsFilteredOut"},
+	},
+	"aws_lambda_event_source_mapping": {
+		Service:        "lambda",
+		Action:         "get-metrics",
+		DimensionKey:   "EventSourceMappingArn",
+		DimensionFrom:  "id",
+		DefaultMetrics: []string{"PollerInvocations", "OffsetLag", "IteratorAge"},
+	},
+	"aws_iam_user": {
+		// IAM metrics are CloudTrail-only — registered so consumers can
+		// route policy queries; DefaultMetrics intentionally empty.
+		Service:       "iam",
+		Action:        "get-metrics",
+		DimensionKey:  "UserName",
+		DimensionFrom: "name",
+	},
+	"google_compute_address": {
+		Service:        "compute",
+		Action:         "timeseries-list",
+		DimensionKey:   "address_name",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"compute.googleapis.com/instance/network/sent_bytes_count", "compute.googleapis.com/instance/network/received_bytes_count"},
+	},
+	"google_monitoring_notification_channel": {
+		Service:        "monitoring",
+		Action:         "timeseries-list",
+		DimensionKey:   "channel_id",
+		DimensionFrom:  "id",
+		DefaultMetrics: []string{"monitoring.googleapis.com/notification_channel/sent_count", "monitoring.googleapis.com/notification_channel/error_count"},
 	},
 }
 
