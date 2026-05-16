@@ -9,10 +9,23 @@ var WantedAWS = []string{
 	// cloud-control-enriched; adding the Layer 1 typed struct + Layer 2
 	// curated policy.Map flips them to DriftDetectable.
 	"aws_api_gateway_resource",
+	// Bundle 7 (#482) — REST API v1 stage. Sibling to the existing
+	// `aws_api_gateway_resource`; pairs with the bundle-4 v2 stage.
+	"aws_api_gateway_stage",
+	// Bundle 7 (#482) — APIGW v2 (HTTP API / WebSocket) sub-resources.
+	// Each is the canonical wiring axis off `aws_apigatewayv2_api`:
+	// authorizer (JWT / Lambda gateway), integration (backend target),
+	// and route (request → integration binding).
+	"aws_apigatewayv2_authorizer",
+	"aws_apigatewayv2_integration",
+	"aws_apigatewayv2_route",
 	"aws_apigatewayv2_stage",
 	"aws_appautoscaling_policy",
 	"aws_appautoscaling_target",
 	"aws_athena_workgroup",
+	// Bundle 7 (#482) — Backup plan. Schedule + retention rules; pairs
+	// with the existing `aws_backup_vault` (where snapshots land).
+	"aws_backup_plan",
 	"aws_backup_vault",
 	// Final-2 enricher push (#482) — closes the last hand-rolled
 	// AWS discoverer types that had no Layer 1 typed struct yet,
@@ -48,6 +61,9 @@ var WantedAWS = []string{
 	// `schema` block, so it generates cleanly.
 	"aws_cognito_user_pool_client",
 	"aws_db_instance",
+	// Bundle 7 (#482) — DB parameter group. Engine-family parameter set
+	// applied to RDS instances (db_instance.parameter_group_name).
+	"aws_db_parameter_group",
 	// Bundle 6 (#482) — RDS DB subnet group (the VPC-wiring sibling to
 	// the existing db_instance / rds_cluster). Cloud-control-enriched
 	// already; the curated Layer 2 map adds the drift surface.
@@ -56,6 +72,9 @@ var WantedAWS = []string{
 	// Bundle 4 (cont.) — DynamoDB global table.
 	"aws_dynamodb_global_table",
 	"aws_dynamodb_table",
+	// Bundle 7 (#482) — EBS volume. Standalone disk; instance
+	// attachment is modeled separately (aws_volume_attachment).
+	"aws_ebs_volume",
 	"aws_ecs_cluster",
 	// Bundle 5 (#482) — ECS service + task definition. Round out the
 	// container-compute graph alongside aws_ecs_cluster.
@@ -108,6 +127,10 @@ var WantedAWS = []string{
 	"aws_lambda_function",
 	"aws_lambda_layer_version",
 	"aws_lambda_permission",
+	// Bundle 7 (#482) — Launch template. Versioned config used by ASG /
+	// EC2 fleet to spin up instances (image_id, instance_type, network /
+	// security-group set, user_data, block_device_mappings).
+	"aws_launch_template",
 	"aws_lb",
 	"aws_lb_listener",
 	"aws_lb_target_group",

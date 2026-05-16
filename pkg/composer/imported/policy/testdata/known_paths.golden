@@ -20,6 +20,58 @@ aws_api_gateway_resource	parent_id	Wiring	Reliability	RileyVisible	RelationshipO
 aws_api_gateway_resource	path	Identity		UIVisible	Never		
 aws_api_gateway_resource	path_part	Identity		UIVisible	Never		AlwaysReplace
 aws_api_gateway_resource	rest_api_id	Wiring	Reliability	UIVisible	Never		AlwaysReplace
+aws_api_gateway_stage	arn	Identity		UIVisible	Never		
+aws_api_gateway_stage	cache_cluster_enabled	Tuning	Reliability	UIVisible	RequiresApproval		
+aws_api_gateway_stage	cache_cluster_size	Tuning	Reliability	UIVisible	RequiresApproval		
+aws_api_gateway_stage	client_certificate_id	Wiring	Security	UIVisible	RequiresApproval		
+aws_api_gateway_stage	deployment_id	Wiring	Reliability	UIVisible	RequiresApproval		
+aws_api_gateway_stage	description	Tuning		UIVisible	ChatSafe		
+aws_api_gateway_stage	documentation_version	Tuning		UIVisible	ChatSafe		
+aws_api_gateway_stage	execution_arn	Identity		UIVisible	Never		
+aws_api_gateway_stage	id	Identity		UIVisible	Never		
+aws_api_gateway_stage	invoke_url	Identity		UIVisible	Never		
+aws_api_gateway_stage	rest_api_id	Wiring	Reliability	UIVisible	Never		AlwaysReplace
+aws_api_gateway_stage	stage_name	Identity		UIVisible	Never		AlwaysReplace
+aws_api_gateway_stage	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_api_gateway_stage	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_api_gateway_stage	web_acl_arn	Wiring	Security	UIVisible	Never		
+aws_api_gateway_stage	xray_tracing_enabled	Tuning	Reliability	UIVisible	ChatSafe		
+aws_apigatewayv2_authorizer	api_id	Wiring	Reliability	UIVisible	Never		AlwaysReplace
+aws_apigatewayv2_authorizer	authorizer_credentials_arn	Wiring	Security	UIVisible	RequiresApproval		
+aws_apigatewayv2_authorizer	authorizer_payload_format_version	Tuning	Security	UIVisible	RequiresApproval		
+aws_apigatewayv2_authorizer	authorizer_result_ttl_in_seconds	Tuning	Performance	UIVisible	ChatSafe		
+aws_apigatewayv2_authorizer	authorizer_type	Tuning	Security	UIVisible	Never		AlwaysReplace
+aws_apigatewayv2_authorizer	authorizer_uri	Wiring	Security	UIVisible	RequiresApproval		
+aws_apigatewayv2_authorizer	enable_simple_responses	Tuning	Security	UIVisible	RequiresApproval		
+aws_apigatewayv2_authorizer	id	Identity		UIVisible	Never		
+aws_apigatewayv2_authorizer	identity_sources	Tuning	Security	UIVisible	RequiresApproval		
+aws_apigatewayv2_authorizer	name	Identity		UIVisible	Never		AlwaysReplace
+aws_apigatewayv2_authorizer	timeouts	Tuning		Hidden	SystemOnly		
+aws_apigatewayv2_integration	api_id	Wiring	Reliability	UIVisible	Never		AlwaysReplace
+aws_apigatewayv2_integration	connection_id	Wiring	Reliability	UIVisible	RequiresApproval		
+aws_apigatewayv2_integration	connection_type	Tuning	Reliability	UIVisible	RequiresApproval		
+aws_apigatewayv2_integration	content_handling_strategy	Tuning		UIVisible	ChatSafe		
+aws_apigatewayv2_integration	credentials_arn	Wiring	Security	UIVisible	RequiresApproval		
+aws_apigatewayv2_integration	description	Tuning		UIVisible	ChatSafe		
+aws_apigatewayv2_integration	id	Identity		UIVisible	Never		
+aws_apigatewayv2_integration	integration_method	Tuning	Reliability	UIVisible	ChatSafe		
+aws_apigatewayv2_integration	integration_subtype	Tuning	Reliability	UIVisible	RequiresApproval		
+aws_apigatewayv2_integration	integration_type	Tuning	Reliability	UIVisible	Never		AlwaysReplace
+aws_apigatewayv2_integration	integration_uri	Wiring	Reliability	UIVisible	RequiresApproval		
+aws_apigatewayv2_integration	passthrough_behavior	Tuning		UIVisible	ChatSafe		
+aws_apigatewayv2_integration	payload_format_version	Tuning	Reliability	UIVisible	RequiresApproval		
+aws_apigatewayv2_integration	timeout_milliseconds	Tuning	Performance	UIVisible	ChatSafe		
+aws_apigatewayv2_route	api_id	Wiring	Reliability	UIVisible	Never		AlwaysReplace
+aws_apigatewayv2_route	api_key_required	Tuning	Security	UIVisible	RequiresApproval		
+aws_apigatewayv2_route	authorization_scopes	Tuning	Security	UIVisible	RequiresApproval		
+aws_apigatewayv2_route	authorization_type	Tuning	Security	UIVisible	RequiresApproval		
+aws_apigatewayv2_route	authorizer_id	Wiring	Security	UIVisible	RequiresApproval		
+aws_apigatewayv2_route	id	Identity		UIVisible	Never		
+aws_apigatewayv2_route	model_selection_expression	Tuning		UIVisible	ChatSafe		
+aws_apigatewayv2_route	operation_name	Tuning		UIVisible	ChatSafe		
+aws_apigatewayv2_route	route_key	Identity		UIVisible	Never		AlwaysReplace
+aws_apigatewayv2_route	route_response_selection_expression	Tuning		UIVisible	ChatSafe		
+aws_apigatewayv2_route	target	Wiring	Reliability	UIVisible	RequiresApproval		
 aws_apigatewayv2_stage	access_log_settings.destination_arn	Wiring	Reliability	RileyVisible	RelationshipOnly		
 aws_apigatewayv2_stage	access_log_settings.format	Tuning	Reliability	RileyVisible	RequiresApproval		
 aws_apigatewayv2_stage	api_id	Identity		UIVisible	Never		AlwaysReplace
@@ -132,6 +184,12 @@ aws_autoscaling_group_tag	id	Identity		UIVisible	Never
 aws_autoscaling_group_tag	tag.key	Identity		UIVisible	Never		AlwaysReplace
 aws_autoscaling_group_tag	tag.propagate_at_launch	Tuning	Reliability	UIVisible	RequiresApproval		
 aws_autoscaling_group_tag	tag.value	Tuning	Reliability	UIVisible	RequiresApproval		
+aws_backup_plan	arn	Identity		UIVisible	Never		
+aws_backup_plan	id	Identity		UIVisible	Never		
+aws_backup_plan	name	Identity		UIVisible	Never		AlwaysReplace
+aws_backup_plan	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_backup_plan	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_backup_plan	version	Identity		UIVisible	Never		
 aws_backup_vault	arn	Identity		UIVisible	Never		
 aws_backup_vault	force_destroy	Tuning	Reliability	UIVisible	SystemOnly		
 aws_backup_vault	id	Identity		UIVisible	Never		
@@ -432,6 +490,15 @@ aws_db_instance	tags	Tuning		Hidden	SystemOnly	Redacted
 aws_db_instance	tags_all	Tuning		Hidden	SystemOnly	Redacted	
 aws_db_instance	timeouts	Tuning		Hidden	SystemOnly		
 aws_db_instance	vpc_security_group_ids	Wiring	Security	RileyVisible	RelationshipOnly		
+aws_db_parameter_group	arn	Identity		UIVisible	Never		
+aws_db_parameter_group	description	Tuning		UIVisible	ChatSafe		
+aws_db_parameter_group	family	Tuning	Reliability	UIVisible	Never		AlwaysReplace
+aws_db_parameter_group	id	Identity		UIVisible	Never		
+aws_db_parameter_group	name	Identity		UIVisible	Never		AlwaysReplace
+aws_db_parameter_group	name_prefix	Identity		UIVisible	Never		AlwaysReplace
+aws_db_parameter_group	skip_destroy	Tuning	Reliability	UIVisible	ChatSafe		
+aws_db_parameter_group	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_db_parameter_group	tags_all	Tuning		Hidden	SystemOnly	Redacted	
 aws_db_subnet_group	arn	Identity		UIVisible	Never		
 aws_db_subnet_group	description	Tuning	Reliability	UIVisible	ChatSafe		
 aws_db_subnet_group	id	Identity		UIVisible	Never		
@@ -497,6 +564,22 @@ aws_dynamodb_table	timeouts	Tuning		Hidden	SystemOnly
 aws_dynamodb_table	ttl.attribute_name	Wiring	Reliability	RileyVisible	RelationshipOnly		
 aws_dynamodb_table	ttl.enabled	Tuning	Reliability	RileyVisible	ChatSafe		
 aws_dynamodb_table	write_capacity	Tuning	Performance	RileyVisible	ChatSafe		
+aws_ebs_volume	arn	Identity		UIVisible	Never		
+aws_ebs_volume	availability_zone	Identity		UIVisible	Never		AlwaysReplace
+aws_ebs_volume	encrypted	Tuning	Security	UIVisible	RequiresApproval		AlwaysReplace
+aws_ebs_volume	final_snapshot	Tuning	Reliability	UIVisible	ChatSafe		
+aws_ebs_volume	id	Identity		UIVisible	Never		
+aws_ebs_volume	iops	Tuning	Performance	UIVisible	RequiresApproval		
+aws_ebs_volume	kms_key_id	Wiring	Security	UIVisible	RequiresApproval		AlwaysReplace
+aws_ebs_volume	multi_attach_enabled	Tuning	Reliability	UIVisible	RequiresApproval		
+aws_ebs_volume	outpost_arn	Identity		UIVisible	Never		AlwaysReplace
+aws_ebs_volume	size	Tuning	Performance	UIVisible	RequiresApproval		
+aws_ebs_volume	snapshot_id	Identity		UIVisible	Never		AlwaysReplace
+aws_ebs_volume	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_ebs_volume	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_ebs_volume	throughput	Tuning	Performance	UIVisible	RequiresApproval		
+aws_ebs_volume	timeouts	Tuning		Hidden	SystemOnly		
+aws_ebs_volume	type	Tuning	Performance	UIVisible	RequiresApproval		
 aws_ecs_cluster	arn	Identity		UIVisible	Never		
 aws_ecs_cluster	configuration.execute_command_configuration.kms_key_id	Wiring	Security	RileyVisible	RelationshipOnly		
 aws_ecs_cluster	configuration.execute_command_configuration.log_configuration.cloud_watch_encryption_enabled	Tuning	Security	RileyVisible	ChatSafe		
@@ -937,6 +1020,28 @@ aws_lambda_permission	source_account	Wiring	Security	UIVisible	RequiresApproval
 aws_lambda_permission	source_arn	Wiring	Security	UIVisible	RequiresApproval		
 aws_lambda_permission	statement_id	Identity		UIVisible	Never		AlwaysReplace
 aws_lambda_permission	statement_id_prefix	Identity		UIVisible	Never		AlwaysReplace
+aws_launch_template	arn	Identity		UIVisible	Never		
+aws_launch_template	default_version	Identity		UIVisible	Never		
+aws_launch_template	description	Tuning		UIVisible	ChatSafe		
+aws_launch_template	disable_api_stop	Tuning	Reliability	UIVisible	ChatSafe		
+aws_launch_template	disable_api_termination	Tuning	Reliability	UIVisible	ChatSafe		
+aws_launch_template	ebs_optimized	Tuning	Performance	UIVisible	RequiresApproval		
+aws_launch_template	id	Identity		UIVisible	Never		
+aws_launch_template	image_id	Wiring	Security	UIVisible	RequiresApproval		
+aws_launch_template	instance_initiated_shutdown_behavior	Tuning	Reliability	UIVisible	ChatSafe		
+aws_launch_template	instance_type	Tuning	Performance	UIVisible	RequiresApproval		
+aws_launch_template	kernel_id	Tuning		UIVisible	RequiresApproval		
+aws_launch_template	key_name	Wiring	Security	UIVisible	RequiresApproval		
+aws_launch_template	latest_version	Identity		UIVisible	Never		
+aws_launch_template	name	Identity		UIVisible	Never		AlwaysReplace
+aws_launch_template	name_prefix	Identity		UIVisible	Never		AlwaysReplace
+aws_launch_template	ram_disk_id	Tuning		UIVisible	RequiresApproval		
+aws_launch_template	security_group_names	Wiring	Security	UIVisible	RequiresApproval		
+aws_launch_template	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_launch_template	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_launch_template	update_default_version	Tuning	Reliability	UIVisible	ChatSafe		
+aws_launch_template	user_data	Tuning	Security	UIVisible	RequiresApproval		
+aws_launch_template	vpc_security_group_ids	Wiring	Security	UIVisible	RequiresApproval		
 aws_lb	access_logs.bucket	Wiring	Security	RileyVisible	RelationshipOnly		
 aws_lb	access_logs.enabled	Tuning	Security	RileyVisible	ChatSafe		
 aws_lb	access_logs.prefix	Tuning	Security	RileyVisible	ChatSafe		

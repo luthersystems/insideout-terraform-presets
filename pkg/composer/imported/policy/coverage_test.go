@@ -28,10 +28,18 @@ var coveredTypes = []string{
 	// AWS drift coverage bundle 4 (#482) — 10 more cloud-control-routed
 	// types pushing DriftDetectable from 42% to ~51%.
 	"aws_api_gateway_resource",
+	// Bundle 7 (#482) — REST API v1 stage + APIGW v2
+	// authorizer/integration/route, backup_plan, db_parameter_group,
+	// ebs_volume, launch_template. Pushes AWS DriftDetectable past 56%.
+	"aws_api_gateway_stage",
+	"aws_apigatewayv2_authorizer",
+	"aws_apigatewayv2_integration",
+	"aws_apigatewayv2_route",
 	"aws_apigatewayv2_stage",
 	"aws_appautoscaling_policy",
 	"aws_appautoscaling_target",
 	"aws_athena_workgroup",
+	"aws_backup_plan",
 	"aws_backup_vault",
 	// Final-2 push (#482) — closes the last hand-rolled enrichers
 	// (per-tag-on-ASG and resource-arn × web-acl-arn binding). Both
@@ -59,6 +67,7 @@ var coveredTypes = []string{
 	// Bundle 5 (cont.) — Cognito user-pool client.
 	"aws_cognito_user_pool_client",
 	"aws_db_instance",
+	"aws_db_parameter_group",
 	// Bundle 6 (#482) — RDS DB subnet group, EIP, IAM group, IAM
 	// instance profile, internet gateway, NAT gateway, network
 	// interface, route table.
@@ -67,6 +76,7 @@ var coveredTypes = []string{
 	// Bundle 4 (cont.) — DynamoDB global table.
 	"aws_dynamodb_global_table",
 	"aws_dynamodb_table",
+	"aws_ebs_volume",
 	"aws_ecs_cluster",
 	// Bundle 5 (cont.) — ECS service + task definition.
 	"aws_ecs_service",
@@ -102,6 +112,7 @@ var coveredTypes = []string{
 	"aws_lambda_function",
 	"aws_lambda_layer_version",
 	"aws_lambda_permission",
+	"aws_launch_template",
 	"aws_lb",
 	"aws_lb_listener",
 	"aws_lb_target_group",

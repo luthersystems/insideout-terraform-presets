@@ -22,7 +22,7 @@ and is checked in lockstep with the runtime registries. See the
 
 ## Summary
 
-- **AWS:** 109 types · 100% Discoverable · 100% Enrichable · 56% DriftDetectable · 8% MetricsAvailable · 50% AgentEditable
+- **AWS:** 109 types · 100% Discoverable · 100% Enrichable · 63% DriftDetectable · 8% MetricsAvailable · 57% AgentEditable
 - **GCP:** 54 types · 100% Discoverable · 100% Enrichable · 63% DriftDetectable · 11% MetricsAvailable · 89% AgentEditable
 
 ## AWS
@@ -32,17 +32,17 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_acm_certificate` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_api_gateway_deployment` | ✓ | ✓ | – | – | – |
 | `aws_api_gateway_resource` | ✓ | ✓ | ✓ | – | – |
-| `aws_api_gateway_stage` | ✓ | ✓ | – | – | – |
+| `aws_api_gateway_stage` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_apigatewayv2_api` | ✓ | ✓ | – | – | – |
 | `aws_apigatewayv2_api_mapping` | ✓ | ✓ | – | – | – |
-| `aws_apigatewayv2_authorizer` | ✓ | ✓ | – | – | – |
+| `aws_apigatewayv2_authorizer` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_apigatewayv2_domain_name` | ✓ | ✓ | – | – | – |
-| `aws_apigatewayv2_integration` | ✓ | ✓ | – | – | – |
-| `aws_apigatewayv2_route` | ✓ | ✓ | – | – | – |
+| `aws_apigatewayv2_integration` | ✓ | ✓ | ✓ | – | ✓ |
+| `aws_apigatewayv2_route` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_apigatewayv2_stage` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_autoscaling_group` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_autoscaling_group_tag` | ✓ | ✓ | ✓ | – | ✓ |
-| `aws_backup_plan` | ✓ | ✓ | – | – | – |
+| `aws_backup_plan` | ✓ | ✓ | ✓ | – | – |
 | `aws_backup_selection` | ✓ | ✓ | – | – | – |
 | `aws_backup_vault` | ✓ | ✓ | ✓ | – | – |
 | `aws_bedrock_guardrail` | ✓ | ✓ | ✓ | – | ✓ |
@@ -63,11 +63,11 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_cognito_user_pool_client` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_cognito_user_pool_domain` | ✓ | ✓ | – | – | – |
 | `aws_db_instance` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `aws_db_parameter_group` | ✓ | ✓ | – | – | – |
+| `aws_db_parameter_group` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_db_subnet_group` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_dynamodb_contributor_insights` | ✓ | ✓ | ✓ | – | – |
 | `aws_dynamodb_table` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `aws_ebs_volume` | ✓ | ✓ | – | – | – |
+| `aws_ebs_volume` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_ecs_cluster` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_ecs_cluster_capacity_providers` | ✓ | ✓ | – | – | – |
 | `aws_eip` | ✓ | ✓ | ✓ | – | ✓ |
@@ -98,7 +98,7 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_lambda_function` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_lambda_function_url` | ✓ | ✓ | – | – | – |
 | `aws_lambda_permission` | ✓ | ✓ | ✓ | – | ✓ |
-| `aws_launch_template` | ✓ | ✓ | – | – | – |
+| `aws_launch_template` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_lb` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_lb_listener` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_lb_target_group` | ✓ | ✓ | ✓ | – | ✓ |
