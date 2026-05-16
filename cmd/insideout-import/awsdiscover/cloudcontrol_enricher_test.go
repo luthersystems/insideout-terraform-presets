@@ -425,6 +425,52 @@ func TestCloudControlEnricher_Enrich_Normalized(t *testing.T) {
 		assert.Equal(t, int64(30), *lg.RetentionInDays.Literal)
 	})
 
+	t.Run("aws_cloudwatch_log_group_minimal", func(t *testing.T) {
+		t.Parallel()
+		// #574 Gap 2: restore the pin from the retired
+		// cloudwatch_log_group_enrich_test.go's
+		// TestCloudwatchLogGroupEnricher_OmitsOptionalFieldsWhenUnset.
+		// A minimal CFN payload (only Arn + LogGroupName) must
+		// produce nil *Value[T] pointers for the optional fields,
+		// not non-nil Value with nil Literal. Guards against a
+		// shapeCFNForLayer1 / shapeValueForLayer1 regression that
+		// wraps null leaves in {"literal": null} envelopes — which
+		// would unmarshal into a non-nil *Value[T] with Literal ==
+		// nil and surface "clean HCL emitting drifty defaults"
+		// (decision #34).
+		fake := &fakeCCGet{
+			props: `{
+				"Arn": "arn:aws:logs:us-east-1:123:log-group:/aws/lambda/minimal:*",
+				"LogGroupName": "/aws/lambda/minimal"
+			}`,
+		}
+		n := normalizerForCFNType(t, "AWS::Logs::LogGroup")
+		enr := newCloudControlEnricherWithNormalizer("aws_cloudwatch_log_group", "AWS::Logs::LogGroup", fake.call, n)
+		ir := &imported.ImportedResource{
+			Identity: imported.ResourceIdentity{
+				Type:     "aws_cloudwatch_log_group",
+				ImportID: "/aws/lambda/minimal",
+			},
+		}
+		require.NoError(t, enr.Enrich(context.Background(), ir, EnrichClients{}))
+
+		decoded, err := generated.UnmarshalAttrs("aws_cloudwatch_log_group", ir.Attrs)
+		require.NoError(t, err)
+		lg, ok := decoded.(*generated.AWSCloudwatchLogGroup)
+		require.True(t, ok, "decoded type is %T", decoded)
+
+		// Required fields still land.
+		require.NotNil(t, lg.Name)
+		require.NotNil(t, lg.Name.Literal)
+		assert.Equal(t, "/aws/lambda/minimal", *lg.Name.Literal)
+
+		// Optional fields absent from props must produce nil
+		// *Value[T] pointers (not non-nil Value with nil Literal).
+		require.Nil(t, lg.KMSKeyID, "KMSKeyID must be nil when CFN omits KmsKeyId")
+		require.Nil(t, lg.RetentionInDays, "RetentionInDays must be nil when CFN omits it")
+		require.Nil(t, lg.LogGroupClass, "LogGroupClass must be nil when CFN omits it")
+	})
+
 	t.Run("aws_s3_bucket", func(t *testing.T) {
 		t.Parallel()
 		fake := &fakeCCGet{
