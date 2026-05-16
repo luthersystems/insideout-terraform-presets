@@ -72,9 +72,13 @@ var coveredTypes = []string{
 	// AWS drift coverage bundle 2 (#482) — cloud-control-routed types
 	// in the RDS / compute / monitoring / managed-search family.
 	"aws_cloudfront_distribution",
+	// Bundle 10 (cont.) — CloudFront function.
+	"aws_cloudfront_function",
 	// AWS drift coverage bundle 5 (#482) — 10 more cloud-control-routed
 	// types pushing DriftDetectable further. Compute/container, RDS,
 	// MSK, Glue, Cognito, Lambda alias/permission, IAM user, event bus.
+	// Bundle 10 (cont.) — CloudWatch dashboard.
+	"aws_cloudwatch_dashboard",
 	"aws_cloudwatch_event_bus",
 	"aws_cloudwatch_event_rule",
 	"aws_cloudwatch_log_group",
@@ -87,6 +91,8 @@ var coveredTypes = []string{
 	"aws_cognito_identity_provider",
 	// Bundle 5 (cont.) — Cognito user-pool client.
 	"aws_cognito_user_pool_client",
+	// Bundle 10 (cont.) — Cognito user-pool custom domain.
+	"aws_cognito_user_pool_domain",
 	"aws_db_instance",
 	"aws_db_parameter_group",
 	// Bundle 6 (#482) — RDS DB subnet group, EIP, IAM group, IAM
@@ -99,16 +105,22 @@ var coveredTypes = []string{
 	"aws_dynamodb_table",
 	"aws_ebs_volume",
 	"aws_ecs_cluster",
+	// Bundle 10 (cont.) — ECS cluster capacity providers.
+	"aws_ecs_cluster_capacity_providers",
 	// Bundle 5 (cont.) — ECS service + task definition.
 	"aws_ecs_service",
 	"aws_ecs_task_definition",
 	// Bundle 4 (cont.) — EFS file system.
 	"aws_efs_file_system",
 	"aws_eip",
+	// Bundle 10 (cont.) — EKS managed add-on.
+	"aws_eks_addon",
 	"aws_eks_cluster",
 	// Bundle 8 (cont.) — EKS managed node group.
 	"aws_eks_node_group",
 	"aws_elasticache_replication_group",
+	// Bundle 10 (cont.) — ElastiCache subnet group.
+	"aws_elasticache_subnet_group",
 	// Bundle 4 (cont.) — Glue catalog database (substituted in for
 	// aws_cognito_user_pool which trips a codegen name collision).
 	"aws_glue_catalog_database",
@@ -124,6 +136,8 @@ var coveredTypes = []string{
 	// Bundle 8 (cont.) — inline iam_role_policy.
 	"aws_iam_role_policy",
 	"aws_iam_role_policy_attachment",
+	// Bundle 10 (cont.) — IAM service-linked role.
+	"aws_iam_service_linked_role",
 	// Bundle 5 (cont.) — standalone IAM user.
 	"aws_iam_user",
 	// `aws_instance` is the canonical TF name for EC2 instances.

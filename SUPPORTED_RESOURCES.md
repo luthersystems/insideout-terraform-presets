@@ -22,7 +22,7 @@ and is checked in lockstep with the runtime registries. See the
 
 ## Summary
 
-- **AWS:** 109 types · 100% Discoverable · 100% Enrichable · 78% DriftDetectable · 8% MetricsAvailable · 70% AgentEditable
+- **AWS:** 109 types · 100% Discoverable · 100% Enrichable · 85% DriftDetectable · 8% MetricsAvailable · 77% AgentEditable
 - **GCP:** 54 types · 100% Discoverable · 100% Enrichable · 63% DriftDetectable · 11% MetricsAvailable · 89% AgentEditable
 
 ## AWS
@@ -43,15 +43,15 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_autoscaling_group` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_autoscaling_group_tag` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_backup_plan` | ✓ | ✓ | ✓ | – | – |
-| `aws_backup_selection` | ✓ | ✓ | – | – | – |
+| `aws_backup_selection` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_backup_vault` | ✓ | ✓ | ✓ | – | – |
 | `aws_bedrock_guardrail` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_bedrock_model_invocation_logging_configuration` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_cloudfront_distribution` | ✓ | ✓ | ✓ | – | ✓ |
-| `aws_cloudfront_function` | ✓ | ✓ | – | – | – |
+| `aws_cloudfront_function` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_cloudfront_monitoring_subscription` | ✓ | ✓ | – | – | – |
 | `aws_cloudfront_origin_access_identity` | ✓ | ✓ | ✓ | – | ✓ |
-| `aws_cloudwatch_dashboard` | ✓ | ✓ | – | – | – |
+| `aws_cloudwatch_dashboard` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_cloudwatch_event_rule` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_cloudwatch_log_group` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_cloudwatch_log_resource_policy` | ✓ | ✓ | – | – | – |
@@ -61,7 +61,7 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_cognito_resource_server` | ✓ | ✓ | – | – | – |
 | `aws_cognito_user_pool` | ✓ | ✓ | – | – | – |
 | `aws_cognito_user_pool_client` | ✓ | ✓ | ✓ | – | ✓ |
-| `aws_cognito_user_pool_domain` | ✓ | ✓ | – | – | – |
+| `aws_cognito_user_pool_domain` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_db_instance` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_db_parameter_group` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_db_subnet_group` | ✓ | ✓ | ✓ | – | ✓ |
@@ -69,24 +69,24 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_dynamodb_table` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_ebs_volume` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_ecs_cluster` | ✓ | ✓ | ✓ | – | ✓ |
-| `aws_ecs_cluster_capacity_providers` | ✓ | ✓ | – | – | – |
+| `aws_ecs_cluster_capacity_providers` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_eip` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_eks_access_entry` | ✓ | ✓ | – | – | – |
-| `aws_eks_addon` | ✓ | ✓ | – | – | – |
+| `aws_eks_addon` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_eks_cluster` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_eks_fargate_profile` | ✓ | ✓ | – | – | – |
 | `aws_eks_node_group` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_eks_pod_identity_association` | ✓ | ✓ | – | – | – |
 | `aws_elasticache_parameter_group` | ✓ | ✓ | – | – | – |
 | `aws_elasticache_replication_group` | ✓ | ✓ | ✓ | – | ✓ |
-| `aws_elasticache_subnet_group` | ✓ | ✓ | – | – | – |
+| `aws_elasticache_subnet_group` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_iam_group` | ✓ | ✓ | ✓ | – | – |
 | `aws_iam_instance_profile` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_iam_policy` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_iam_role` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_iam_role_policy` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_iam_role_policy_attachment` | ✓ | ✓ | ✓ | – | – |
-| `aws_iam_service_linked_role` | ✓ | ✓ | – | – | – |
+| `aws_iam_service_linked_role` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_iam_user` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_instance` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_internet_gateway` | ✓ | ✓ | ✓ | – | ✓ |

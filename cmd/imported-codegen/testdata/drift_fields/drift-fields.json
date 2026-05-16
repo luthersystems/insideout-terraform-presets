@@ -843,6 +843,32 @@
       "semantic": "Exact"
     }
   ],
+  "aws_backup_selection": [
+    {
+      "path": "iam_role_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "not_resources",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "plan_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "resources",
+      "semantic": "WholeList"
+    }
+  ],
   "aws_backup_vault": [
     {
       "path": "arn",
@@ -1155,6 +1181,36 @@
       "semantic": "Exact"
     }
   ],
+  "aws_cloudfront_function": [
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "code",
+      "semantic": "Exact"
+    },
+    {
+      "path": "etag",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "runtime",
+      "semantic": "Exact"
+    },
+    {
+      "path": "status",
+      "semantic": "Exact"
+    }
+  ],
   "aws_cloudfront_origin_access_identity": [
     {
       "path": "caller_reference",
@@ -1256,6 +1312,24 @@
     },
     {
       "path": "sns_topic_name",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_cloudwatch_dashboard": [
+    {
+      "path": "dashboard_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "dashboard_body",
+      "semantic": "Exact"
+    },
+    {
+      "path": "dashboard_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
       "semantic": "Exact"
     }
   ],
@@ -1869,6 +1943,32 @@
       "semantic": "WholeList"
     }
   ],
+  "aws_cognito_user_pool_domain": [
+    {
+      "path": "certificate_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "cloudfront_distribution",
+      "semantic": "Exact"
+    },
+    {
+      "path": "domain",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "user_pool_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "version",
+      "semantic": "Exact"
+    }
+  ],
   "aws_db_instance": [
     {
       "path": "address",
@@ -2397,6 +2497,20 @@
       "semantic": "Exact"
     }
   ],
+  "aws_ecs_cluster_capacity_providers": [
+    {
+      "path": "capacity_providers",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "cluster_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    }
+  ],
   "aws_ecs_service": [
     {
       "path": "capacity_provider_strategy",
@@ -2761,6 +2875,44 @@
       "semantic": "Exact"
     }
   ],
+  "aws_eks_addon": [
+    {
+      "path": "addon_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "addon_version",
+      "semantic": "Exact"
+    },
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "cluster_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "configuration_values",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "resolve_conflicts_on_create",
+      "semantic": "Exact"
+    },
+    {
+      "path": "resolve_conflicts_on_update",
+      "semantic": "Exact"
+    },
+    {
+      "path": "service_account_role_arn",
+      "semantic": "Exact"
+    }
+  ],
   "aws_eks_cluster": [
     {
       "path": "access_config.authentication_mode",
@@ -3069,6 +3221,32 @@
     {
       "path": "user_group_ids",
       "semantic": "WholeList"
+    }
+  ],
+  "aws_elasticache_subnet_group": [
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "description",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "subnet_ids",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "vpc_id",
+      "semantic": "Exact"
     }
   ],
   "aws_glue_catalog_database": [
@@ -3412,6 +3590,40 @@
     },
     {
       "path": "role",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_iam_service_linked_role": [
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "aws_service_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "custom_suffix",
+      "semantic": "Exact"
+    },
+    {
+      "path": "description",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "path",
+      "semantic": "Exact"
+    },
+    {
+      "path": "unique_id",
       "semantic": "Exact"
     }
   ],

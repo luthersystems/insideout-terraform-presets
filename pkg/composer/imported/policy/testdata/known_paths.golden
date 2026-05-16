@@ -220,6 +220,12 @@ aws_backup_plan	name	Identity		UIVisible	Never		AlwaysReplace
 aws_backup_plan	tags	Tuning		Hidden	SystemOnly	Redacted	
 aws_backup_plan	tags_all	Tuning		Hidden	SystemOnly	Redacted	
 aws_backup_plan	version	Identity		UIVisible	Never		
+aws_backup_selection	iam_role_arn	Wiring	Security	UIVisible	RequiresApproval		
+aws_backup_selection	id	Identity		UIVisible	Never		
+aws_backup_selection	name	Identity		UIVisible	Never		AlwaysReplace
+aws_backup_selection	not_resources	Tuning	Reliability	RileyVisible	RequiresApproval		
+aws_backup_selection	plan_id	Wiring	Reliability	UIVisible	Never		AlwaysReplace
+aws_backup_selection	resources	Tuning	Reliability	RileyVisible	RequiresApproval		
 aws_backup_vault	arn	Identity		UIVisible	Never		
 aws_backup_vault	force_destroy	Tuning	Reliability	UIVisible	SystemOnly		
 aws_backup_vault	id	Identity		UIVisible	Never		
@@ -304,6 +310,13 @@ aws_cloudfront_distribution	viewer_certificate.minimum_protocol_version	Tuning	S
 aws_cloudfront_distribution	viewer_certificate.ssl_support_method	Tuning	Security	RileyVisible	RequiresApproval		
 aws_cloudfront_distribution	wait_for_deployment	Tuning	Reliability	RileyVisible	ChatSafe		
 aws_cloudfront_distribution	web_acl_id	Wiring	Security	UIVisible	RelationshipOnly		
+aws_cloudfront_function	arn	Identity		UIVisible	Never		
+aws_cloudfront_function	code	Tuning	Security	RileyVisible	RequiresApproval		
+aws_cloudfront_function	etag	Tuning		UIVisible	Never		
+aws_cloudfront_function	id	Identity		UIVisible	Never		
+aws_cloudfront_function	name	Identity		UIVisible	Never		AlwaysReplace
+aws_cloudfront_function	runtime	Tuning	Reliability	RileyVisible	RequiresApproval		
+aws_cloudfront_function	status	Tuning		UIVisible	Never		
 aws_cloudfront_origin_access_identity	caller_reference	Identity		UIVisible	Never		
 aws_cloudfront_origin_access_identity	cloudfront_access_identity_path	Identity		UIVisible	Never		
 aws_cloudfront_origin_access_identity	comment	Tuning		UIVisible	ChatSafe		
@@ -331,6 +344,10 @@ aws_cloudtrail	s3_key_prefix	Tuning	Security	RileyVisible	ChatSafe
 aws_cloudtrail	sns_topic_name	Wiring	Reliability	RileyVisible	RelationshipOnly		
 aws_cloudtrail	tags	Tuning		Hidden	SystemOnly	Redacted	
 aws_cloudtrail	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_cloudwatch_dashboard	dashboard_arn	Identity		UIVisible	Never		
+aws_cloudwatch_dashboard	dashboard_body	Tuning	Reliability	RileyVisible	ChatSafe		
+aws_cloudwatch_dashboard	dashboard_name	Identity		UIVisible	Never		AlwaysReplace
+aws_cloudwatch_dashboard	id	Identity		UIVisible	Never		
 aws_cloudwatch_event_bus	arn	Identity		UIVisible	Never		
 aws_cloudwatch_event_bus	event_source_name	Wiring	Reliability	UIVisible	Never		AlwaysReplace
 aws_cloudwatch_event_bus	id	Identity		UIVisible	Never		
@@ -494,6 +511,12 @@ aws_cognito_user_pool_client	token_validity_units.id_token	Tuning	Security	Riley
 aws_cognito_user_pool_client	token_validity_units.refresh_token	Tuning	Security	RileyVisible	ChatSafe		
 aws_cognito_user_pool_client	user_pool_id	Identity		UIVisible	Never		AlwaysReplace
 aws_cognito_user_pool_client	write_attributes	Tuning	Security	RileyVisible	RequiresApproval		
+aws_cognito_user_pool_domain	certificate_arn	Wiring	Security	UIVisible	RequiresApproval		
+aws_cognito_user_pool_domain	cloudfront_distribution	Tuning		UIVisible	Never		
+aws_cognito_user_pool_domain	domain	Identity		UIVisible	Never		AlwaysReplace
+aws_cognito_user_pool_domain	id	Identity		UIVisible	Never		
+aws_cognito_user_pool_domain	user_pool_id	Wiring	Security	UIVisible	Never		AlwaysReplace
+aws_cognito_user_pool_domain	version	Tuning		UIVisible	Never		
 aws_db_instance	address	Identity		UIVisible	Never		
 aws_db_instance	allocated_storage	Tuning	Performance	RileyVisible	RequiresApproval		
 aws_db_instance	arn	Identity		UIVisible	Never		
@@ -638,6 +661,9 @@ aws_ecs_cluster	setting.name	Tuning	Reliability	RileyVisible	RequiresApproval
 aws_ecs_cluster	setting.value	Tuning	Reliability	RileyVisible	ChatSafe		
 aws_ecs_cluster	tags	Tuning		Hidden	SystemOnly	Redacted	
 aws_ecs_cluster	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_ecs_cluster_capacity_providers	capacity_providers	Tuning	Reliability	RileyVisible	RequiresApproval		
+aws_ecs_cluster_capacity_providers	cluster_name	Wiring	Reliability	UIVisible	Never		AlwaysReplace
+aws_ecs_cluster_capacity_providers	id	Identity		UIVisible	Never		
 aws_ecs_service	capacity_provider_strategy	Tuning	Reliability	RileyVisible	RequiresApproval		
 aws_ecs_service	cluster	Wiring	Reliability	UIVisible	Never		AlwaysReplace
 aws_ecs_service	deployment_circuit_breaker.enable	Tuning	Reliability	RileyVisible	ChatSafe		
@@ -737,6 +763,17 @@ aws_eip	tags	Tuning		Hidden	SystemOnly	Redacted
 aws_eip	tags_all	Tuning		Hidden	SystemOnly	Redacted	
 aws_eip	timeouts	Tuning		Hidden	SystemOnly		
 aws_eip	vpc	Identity		UIVisible	Never		AlwaysReplace
+aws_eks_addon	addon_name	Identity		UIVisible	Never		AlwaysReplace
+aws_eks_addon	addon_version	Tuning	Reliability	RileyVisible	RequiresApproval		
+aws_eks_addon	arn	Identity		UIVisible	Never		
+aws_eks_addon	cluster_name	Wiring	Reliability	UIVisible	Never		AlwaysReplace
+aws_eks_addon	configuration_values	Tuning	Reliability	RileyVisible	RequiresApproval		
+aws_eks_addon	id	Identity		UIVisible	Never		
+aws_eks_addon	resolve_conflicts_on_create	Tuning	Reliability	RileyVisible	ChatSafe		
+aws_eks_addon	resolve_conflicts_on_update	Tuning	Reliability	RileyVisible	ChatSafe		
+aws_eks_addon	service_account_role_arn	Wiring	Security	UIVisible	RequiresApproval		
+aws_eks_addon	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_eks_addon	tags_all	Tuning		Hidden	SystemOnly	Redacted	
 aws_eks_cluster	access_config.authentication_mode	Tuning	Security	UIVisible	RequiresApproval		
 aws_eks_cluster	access_config.bootstrap_cluster_creator_admin_permissions	Tuning	Security	RileyVisible	Never		AlwaysReplace
 aws_eks_cluster	arn	Identity		UIVisible	Never		
@@ -822,6 +859,14 @@ aws_elasticache_replication_group	timeouts	Tuning		Hidden	SystemOnly
 aws_elasticache_replication_group	transit_encryption_enabled	Tuning	Security	UIVisible	Never		AlwaysReplace
 aws_elasticache_replication_group	transit_encryption_mode	Tuning	Security	RileyVisible	RequiresApproval		
 aws_elasticache_replication_group	user_group_ids	Wiring	Security	RileyVisible	RelationshipOnly		
+aws_elasticache_subnet_group	arn	Identity		UIVisible	Never		
+aws_elasticache_subnet_group	description	Tuning		RileyVisible	ChatSafe		
+aws_elasticache_subnet_group	id	Identity		UIVisible	Never		
+aws_elasticache_subnet_group	name	Identity		UIVisible	Never		AlwaysReplace
+aws_elasticache_subnet_group	subnet_ids	Wiring	Reliability	UIVisible	RequiresApproval		
+aws_elasticache_subnet_group	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_elasticache_subnet_group	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_elasticache_subnet_group	vpc_id	Wiring	Reliability	UIVisible	Never		
 aws_glue_catalog_database	arn	Identity		UIVisible	Never		
 aws_glue_catalog_database	catalog_id	Wiring	Reliability	UIVisible	Never		AlwaysReplace
 aws_glue_catalog_database	create_table_default_permission	Wiring	Security	RileyVisible	RequiresApproval		
@@ -916,6 +961,16 @@ aws_iam_role_policy	role	Wiring	Security	UIVisible	Never		AlwaysReplace
 aws_iam_role_policy_attachment	id	Identity		UIVisible	Never		
 aws_iam_role_policy_attachment	policy_arn	Wiring	Security	RileyVisible	RelationshipOnly		AlwaysReplace
 aws_iam_role_policy_attachment	role	Identity		UIVisible	Never		AlwaysReplace
+aws_iam_service_linked_role	arn	Identity		UIVisible	Never		
+aws_iam_service_linked_role	aws_service_name	Wiring	Security	UIVisible	Never		AlwaysReplace
+aws_iam_service_linked_role	custom_suffix	Wiring		UIVisible	Never		AlwaysReplace
+aws_iam_service_linked_role	description	Tuning		RileyVisible	ChatSafe		
+aws_iam_service_linked_role	id	Identity		UIVisible	Never		
+aws_iam_service_linked_role	name	Identity		UIVisible	Never		
+aws_iam_service_linked_role	path	Wiring		UIVisible	Never		
+aws_iam_service_linked_role	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_iam_service_linked_role	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_iam_service_linked_role	unique_id	Identity		UIVisible	Never		
 aws_iam_user	arn	Identity		UIVisible	Never		
 aws_iam_user	force_destroy	Tuning	Security	RileyVisible	RequiresApproval		
 aws_iam_user	id	Identity		UIVisible	Never		
