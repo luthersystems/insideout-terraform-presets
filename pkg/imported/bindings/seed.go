@@ -124,6 +124,14 @@ var seededTypes = []string{
 	"google_api_gateway_api",
 	"google_api_gateway_api_config",
 	"google_project_iam_member",
+	"aws_s3_bucket_lifecycle_configuration",
+	"aws_apigatewayv2_domain_name",
+	"aws_kms_alias",
+	"aws_msk_configuration",
+	"aws_eks_access_entry",
+	"google_compute_resource_policy",
+	"google_sql_user",
+	"google_storage_bucket_iam_member",
 }
 
 // seededBindings mirrors the registrations performed by init(). Used
@@ -982,6 +990,74 @@ var seededBindings = map[string]ComponentMetricsBinding{
 	"google_project_iam_member": {
 		// IAM-style: registered for routing only; DefaultMetrics
 		// intentionally empty (mirrors aws_iam_role).
+		Service:       "iam",
+		Action:        "timeseries-list",
+		DimensionKey:  "member",
+		DimensionFrom: "id",
+	},
+	"aws_s3_bucket_lifecycle_configuration": {
+		// Lifecycle config has no per-config metrics — rolls up to
+		// the parent bucket's NumberOfObjects / BucketSizeBytes
+		// so consumers can correlate transitions with object-count
+		// changes scoped to BucketName.
+		Service:        "s3",
+		Action:         "get-metrics",
+		DimensionKey:   "BucketName",
+		DimensionFrom:  "id",
+		DefaultMetrics: []string{"NumberOfObjects", "BucketSizeBytes"},
+	},
+	"aws_apigatewayv2_domain_name": {
+		Service:        "apigateway",
+		Action:         "get-metrics",
+		DimensionKey:   "DomainName",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"Count", "4xx", "5xx", "Latency"},
+	},
+	"aws_kms_alias": {
+		// Aliases are pointers to a KMS key — no per-alias metrics;
+		// registered for routing only so consumers can resolve
+		// alias → key and pull the underlying key's metrics.
+		Service:       "kms",
+		Action:        "get-metrics",
+		DimensionKey:  "AliasName",
+		DimensionFrom: "name",
+	},
+	"aws_msk_configuration": {
+		// Config objects (Kafka broker config bundles) have no
+		// per-config CloudWatch metrics — they're applied to clusters
+		// at create-time. Registered for routing only.
+		Service:       "kafka",
+		Action:        "get-metrics",
+		DimensionKey:  "ConfigurationArn",
+		DimensionFrom: "id",
+	},
+	"aws_eks_access_entry": {
+		// IAM-style: an EKS access entry is an RBAC binding between
+		// an IAM principal and a cluster — no per-entry metrics.
+		// Registered for routing only.
+		Service:       "eks",
+		Action:        "get-metrics",
+		DimensionKey:  "PrincipalArn",
+		DimensionFrom: "id",
+	},
+	"google_compute_resource_policy": {
+		Service:        "compute",
+		Action:         "timeseries-list",
+		DimensionKey:   "policy_name",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"compute.googleapis.com/snapshot/total_storage_bytes", "compute.googleapis.com/snapshot/disk_size_bytes"},
+	},
+	"google_sql_user": {
+		// IAM-style: a Cloud SQL user is a DB grant — no per-user
+		// time-series. Registered for routing only.
+		Service:       "cloudsql",
+		Action:        "timeseries-list",
+		DimensionKey:  "user_name",
+		DimensionFrom: "name",
+	},
+	"google_storage_bucket_iam_member": {
+		// IAM-style: IAM member bindings have no per-binding metrics.
+		// Registered for routing only.
 		Service:       "iam",
 		Action:        "timeseries-list",
 		DimensionKey:  "member",

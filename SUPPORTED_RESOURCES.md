@@ -22,8 +22,8 @@ and is checked in lockstep with the runtime registries. See the
 
 ## Summary
 
-- **AWS:** 109 types · 100% Discoverable · 100% Enrichable · 42% DriftDetectable · 66% MetricsAvailable · 39% AgentEditable
-- **GCP:** 54 types · 100% Discoverable · 100% Enrichable · 63% DriftDetectable · 80% MetricsAvailable · 89% AgentEditable
+- **AWS:** 109 types · 100% Discoverable · 100% Enrichable · 42% DriftDetectable · 71% MetricsAvailable · 39% AgentEditable
+- **GCP:** 54 types · 100% Discoverable · 100% Enrichable · 63% DriftDetectable · 85% MetricsAvailable · 89% AgentEditable
 
 ## AWS
 
@@ -36,7 +36,7 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_apigatewayv2_api` | ✓ | ✓ | – | ✓ | – |
 | `aws_apigatewayv2_api_mapping` | ✓ | ✓ | – | – | – |
 | `aws_apigatewayv2_authorizer` | ✓ | ✓ | – | ✓ | – |
-| `aws_apigatewayv2_domain_name` | ✓ | ✓ | – | – | – |
+| `aws_apigatewayv2_domain_name` | ✓ | ✓ | – | ✓ | – |
 | `aws_apigatewayv2_integration` | ✓ | ✓ | – | ✓ | – |
 | `aws_apigatewayv2_route` | ✓ | ✓ | – | ✓ | – |
 | `aws_apigatewayv2_stage` | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -71,7 +71,7 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_ecs_cluster` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_ecs_cluster_capacity_providers` | ✓ | ✓ | – | – | – |
 | `aws_eip` | ✓ | ✓ | – | ✓ | – |
-| `aws_eks_access_entry` | ✓ | ✓ | – | – | – |
+| `aws_eks_access_entry` | ✓ | ✓ | – | ✓ | – |
 | `aws_eks_addon` | ✓ | ✓ | – | ✓ | – |
 | `aws_eks_cluster` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_eks_fargate_profile` | ✓ | ✓ | – | ✓ | – |
@@ -91,7 +91,7 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_instance` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_internet_gateway` | ✓ | ✓ | – | ✓ | – |
 | `aws_key_pair` | ✓ | ✓ | – | – | – |
-| `aws_kms_alias` | ✓ | ✓ | – | – | – |
+| `aws_kms_alias` | ✓ | ✓ | – | ✓ | – |
 | `aws_kms_key` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_lambda_alias` | ✓ | ✓ | – | ✓ | – |
 | `aws_lambda_event_source_mapping` | ✓ | ✓ | – | ✓ | – |
@@ -103,7 +103,7 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_lb_listener` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_lb_target_group` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_msk_cluster` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `aws_msk_configuration` | ✓ | ✓ | – | – | – |
+| `aws_msk_configuration` | ✓ | ✓ | – | ✓ | – |
 | `aws_nat_gateway` | ✓ | ✓ | – | ✓ | – |
 | `aws_network_acl` | ✓ | ✓ | – | ✓ | – |
 | `aws_network_interface` | ✓ | ✓ | – | ✓ | – |
@@ -116,7 +116,7 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_route53_zone` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_route_table` | ✓ | ✓ | – | ✓ | – |
 | `aws_s3_bucket` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `aws_s3_bucket_lifecycle_configuration` | ✓ | ✓ | ✓ | – | ✓ |
+| `aws_s3_bucket_lifecycle_configuration` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_s3_bucket_ownership_controls` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_s3_bucket_policy` | ✓ | ✓ | – | – | – |
 | `aws_s3_bucket_public_access_block` | ✓ | ✓ | ✓ | – | ✓ |
@@ -161,7 +161,7 @@ and is checked in lockstep with the runtime registries. See the
 | `google_compute_instance` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_compute_managed_ssl_certificate` | ✓ | ✓ | – | ✓ | ✓ |
 | `google_compute_network` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `google_compute_resource_policy` | ✓ | ✓ | – | – | ✓ |
+| `google_compute_resource_policy` | ✓ | ✓ | – | ✓ | ✓ |
 | `google_compute_router` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_compute_security_policy` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_compute_target_http_proxy` | ✓ | ✓ | – | ✓ | ✓ |
@@ -191,9 +191,9 @@ and is checked in lockstep with the runtime registries. See the
 | `google_service_account` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_service_networking_connection` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_sql_database_instance` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `google_sql_user` | ✓ | ✓ | – | – | ✓ |
+| `google_sql_user` | ✓ | ✓ | – | ✓ | ✓ |
 | `google_storage_bucket` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `google_storage_bucket_iam_member` | ✓ | ✓ | – | – | – |
+| `google_storage_bucket_iam_member` | ✓ | ✓ | – | ✓ | – |
 | `google_storage_bucket_object` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_vertex_ai_dataset` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_vpc_access_connector` | ✓ | ✓ | ✓ | ✓ | ✓ |
