@@ -12,6 +12,7 @@ import (
 
 	tfjson "github.com/hashicorp/terraform-json"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported/generated"
+	"github.com/luthersystems/insideout-terraform-presets/pkg/imported/forcenew"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zclconf/go-cty/cty"
@@ -252,12 +253,13 @@ func TestBuildBlockNestedZod_RecursiveBlocks(t *testing.T) {
 }
 
 // TestEmitZodTypeFile_TemplateHonorsReplacementWire renders the type
-// template directly (bypassing buildZodTypeData, which currently
-// always passes "Unknown") with hand-built ZodSchemaEntries to verify
-// that the template emits the wire string verbatim from the
+// template directly with hand-built ZodSchemaEntries to verify that
+// the template emits the wire string verbatim from the
 // ZodSchemaEntry.Replacement field. Catches a regression where someone
 // hardcodes `replacement: "unknown"` in the template or in
-// buildZodTypeData instead of plumbing the value through.
+// buildZodTypeData instead of plumbing the value through. Complements
+// TestEmitZod_AlwaysReplaceForRegisteredForceNewFields below, which
+// drives the full pipeline against the forcenew registry.
 func TestEmitZodTypeFile_TemplateHonorsReplacementWire(t *testing.T) {
 	t.Parallel()
 	outDir := t.TempDir()
@@ -289,6 +291,77 @@ func TestEmitZodTypeFile_TemplateHonorsReplacementWire(t *testing.T) {
 		"template must emit the wire string from SchemaEntry.Replacement, not a hardcoded constant")
 	assert.Contains(t, out, `"size": { optional: true, replacement: "never", },`,
 		"template must emit Never as never, not unknown")
+}
+
+// TestEmitZod_AlwaysReplaceForRegisteredForceNewFields is the
+// end-to-end regression guard for issue #566. It exercises the full
+// zod-emit pipeline against the committed filtered schemas and asserts
+// that every field registered in pkg/imported/forcenew with
+// ReplacementAlwaysReplace surfaces as `replacement: "always_replace"`
+// in the emitted .ts.
+//
+// Why end-to-end and not unit: the prior failure mode silently fell
+// through `buildZodTypeData`'s hardcoded "Unknown" because the
+// terraform-json schema-attribute struct doesn't carry force_new — a
+// unit test that hand-builds ZodSchemaEntry would have passed because
+// it bypasses the lookup. This test drives `runZod` end-to-end so any
+// regression that disconnects the forcenew overlay from the codegen
+// pipeline fails loudly.
+//
+// The assertion iterates forcenew.RegisteredEntries() rather than
+// hardcoding type/field pairs, so future overrides added to
+// pkg/imported/forcenew/overrides.go automatically get end-to-end
+// coverage without having to remember to extend this test.
+func TestEmitZod_AlwaysReplaceForRegisteredForceNewFields(t *testing.T) {
+	t.Parallel()
+	root := repoRoot(t)
+	outDir := t.TempDir()
+
+	rc := runZod([]string{
+		"--aws-schema", filepath.Join(root, "schemas", "aws.filtered.json"),
+		"--google-schema", filepath.Join(root, "schemas", "google.filtered.json"),
+		"--google-beta-schema", filepath.Join(root, "schemas", "google-beta.filtered.json"),
+		"--providers-tf", filepath.Join(root, "schemas", "providers.tf"),
+		"--out", outDir,
+	})
+	require.Equal(t, 0, rc)
+
+	// Require the seed isn't accidentally empty — a future PR that
+	// drops every override from forcenew/overrides.go would otherwise
+	// silently pass this whole test with zero iterations.
+	entries := forcenew.RegisteredEntries()
+	require.NotEmpty(t, entries,
+		"forcenew registry is empty — every entry from overrides.go must be exercised here; if you intentionally cleared the registry, retire this test in the same PR")
+
+	for _, e := range entries {
+		if e.Behavior != generated.ReplacementAlwaysReplace {
+			// Other behaviors (Never, MayReplace) are valid overrides
+			// but not what this regression test guards. Skip rather
+			// than fail so the test stays focused on the issue #566
+			// failure mode.
+			continue
+		}
+		path := filepath.Join(outDir, e.TFType+".ts")
+		b, err := os.ReadFile(path)
+		require.NoErrorf(t, err, "expected emitted %s.ts for forcenew entry", e.TFType)
+		content := string(b)
+
+		// Find the exact field line. The tolerant needle matches the
+		// template's `"<name>": { ` prefix; whitespace inside the
+		// braces can vary as the per-field flag set changes.
+		needle := fmt.Sprintf(`"%s": { `, e.Field)
+		idx := strings.Index(content, needle)
+		require.NotEqualf(t, -1, idx,
+			"forcenew entry %s.%s: field metadata line not found in %s.ts",
+			e.TFType, e.Field, e.TFType)
+		eol := strings.Index(content[idx:], "\n")
+		require.NotEqual(t, -1, eol)
+		line := content[idx : idx+eol]
+
+		assert.Containsf(t, line, `replacement: "always_replace"`,
+			"forcenew entry %s.%s should emit replacement=always_replace; got line: %s",
+			e.TFType, e.Field, line)
+	}
 }
 
 // TestEmitZod_FilterFlag pins the --types subset behavior: only the

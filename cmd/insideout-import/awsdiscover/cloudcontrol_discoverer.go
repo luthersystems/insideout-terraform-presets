@@ -121,6 +121,19 @@ type cloudControlConfig struct {
 	TagsFromProperties      func(props map[string]any) map[string]string
 	ParentLister            func(ctx context.Context, awsCfg aws.Config, region string, args DiscoverArgs) ([]string, error)
 	SDKLister               func(ctx context.Context, awsCfg aws.Config, region string, args DiscoverArgs) ([]string, error)
+	// Normalizer, when non-nil, transforms the Cloud Control raw JSON
+	// response before the generic CC→TF mapping step. Use for per-type
+	// shape adjustments that CloudFormation does differently from
+	// Terraform (e.g. ARN suffixes, tag list flattening, field renames).
+	// Returning an error fails the fetch with the original error wrapped.
+	//
+	// Consumed by the generic cloudControlEnricher (#501) — the discoverer
+	// itself reads properties via the PascalCase extractors and does NOT
+	// invoke the Normalizer. The Normalizer's purpose is to feed the
+	// Layer-1 unmarshal in the enricher, which the camelToSnake renamer
+	// alone cannot do for cases like list-of-{Key,Value} tags vs the
+	// generated `map[string]*Value[string]` Tags field.
+	Normalizer func(json.RawMessage) (json.RawMessage, error)
 }
 
 // cloudControlDiscoverer is the generic per-type Discoverer that routes

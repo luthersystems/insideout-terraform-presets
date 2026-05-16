@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/api/googleapi"
 	pubsubv1 "google.golang.org/api/pubsub/v1"
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer"
@@ -474,4 +476,112 @@ func TestPubsubTopicRegisteredOnAggregator(t *testing.T) {
 	require.True(t, ok, "google_pubsub_topic must be registered in byTypeEnricher")
 	require.NotNil(t, enr)
 	assert.Equal(t, "google_pubsub_topic", enr.ResourceType())
+	_, isByID := enr.(ByIDEnricher)
+	assert.True(t, isByID, "pubsub_topic enricher must satisfy ByIDEnricher (#571)")
+}
+
+// ---------------------------------------------------------------
+// ByIDEnricher tests (issue #571).
+// ---------------------------------------------------------------
+
+func TestPubsubTopicEnrichByID_NilIdentity(t *testing.T) {
+	t.Parallel()
+	e := newPubsubTopicEnricher().(*pubsubTopicEnricher)
+	raw, err := e.EnrichByID(context.Background(), nil, EnrichClients{Pubsub: &pubsubv1.Service{}, ProjectID: "p"})
+	require.Error(t, err)
+	assert.Nil(t, raw)
+	assert.Contains(t, err.Error(), "nil identity")
+}
+
+func TestPubsubTopicEnrichByID_ClientUnavailable(t *testing.T) {
+	t.Parallel()
+	e := newPubsubTopicEnricher().(*pubsubTopicEnricher)
+	id := &imported.ResourceIdentity{
+		Type:     "google_pubsub_topic",
+		ImportID: "projects/p/topics/orders",
+	}
+	raw, err := e.EnrichByID(context.Background(), id, EnrichClients{Pubsub: nil, ProjectID: "p"})
+	require.ErrorIs(t, err, ErrEnrichClientUnavailable)
+	assert.Nil(t, raw)
+}
+
+func TestPubsubTopicEnrichByID_NotFound(t *testing.T) {
+	t.Parallel()
+	e := pubsubTopicEnricher{
+		fetch: func(_ context.Context, _ *pubsubv1.Service, _ string) (*pubsubv1.Topic, error) {
+			return nil, &googleapi.Error{Code: http.StatusNotFound, Message: "not found"}
+		},
+	}
+	id := &imported.ResourceIdentity{
+		Type:     "google_pubsub_topic",
+		ImportID: "projects/p/topics/orders",
+	}
+	raw, err := e.EnrichByID(context.Background(), id, EnrichClients{Pubsub: &pubsubv1.Service{}, ProjectID: "p"})
+	require.ErrorIs(t, err, ErrNotFound)
+	assert.Nil(t, raw)
+}
+
+func TestPubsubTopicEnrichByID_NonNotFoundErrorPassesThrough(t *testing.T) {
+	t.Parallel()
+	upstream := &googleapi.Error{Code: http.StatusForbidden, Message: "denied"}
+	e := pubsubTopicEnricher{
+		fetch: func(_ context.Context, _ *pubsubv1.Service, _ string) (*pubsubv1.Topic, error) {
+			return nil, upstream
+		},
+	}
+	id := &imported.ResourceIdentity{
+		Type:     "google_pubsub_topic",
+		ImportID: "projects/p/topics/orders",
+	}
+	raw, err := e.EnrichByID(context.Background(), id, EnrichClients{Pubsub: &pubsubv1.Service{}, ProjectID: "p"})
+	require.Error(t, err)
+	assert.NotErrorIs(t, err, ErrNotFound, "403 must NOT be classified as ErrNotFound")
+	var gerr *googleapi.Error
+	require.True(t, errors.As(err, &gerr))
+	assert.Equal(t, http.StatusForbidden, gerr.Code)
+	assert.Nil(t, raw)
+}
+
+func TestPubsubTopicEnrichByID_HappyPath(t *testing.T) {
+	t.Parallel()
+	topic := &pubsubv1.Topic{
+		Name:   "projects/my-project/topics/orders",
+		Labels: map[string]string{"environment": "production"},
+	}
+	mkFetch := func() func(context.Context, *pubsubv1.Service, string) (*pubsubv1.Topic, error) {
+		return func(_ context.Context, _ *pubsubv1.Service, name string) (*pubsubv1.Topic, error) {
+			assert.Equal(t, "projects/my-project/topics/orders", name)
+			return topic, nil
+		}
+	}
+	enrichEnr := pubsubTopicEnricher{fetch: mkFetch()}
+	byIDEnr := pubsubTopicEnricher{fetch: mkFetch()}
+
+	ir := &imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Type:     "google_pubsub_topic",
+			ImportID: "projects/my-project/topics/orders",
+			Address:  "google_pubsub_topic.orders",
+		},
+	}
+	require.NoError(t, enrichEnr.Enrich(context.Background(), ir, EnrichClients{Pubsub: &pubsubv1.Service{}, ProjectID: "my-project"}))
+
+	id := &imported.ResourceIdentity{
+		Type:     "google_pubsub_topic",
+		ImportID: "projects/my-project/topics/orders",
+		Address:  "google_pubsub_topic.orders",
+	}
+	raw, err := byIDEnr.EnrichByID(context.Background(), id, EnrichClients{Pubsub: &pubsubv1.Service{}, ProjectID: "my-project"})
+	require.NoError(t, err)
+	assert.JSONEq(t, string(ir.Attrs), string(raw),
+		"EnrichByID must return the same JSON shape Enrich writes into ir.Attrs")
+
+	decoded, err := generated.UnmarshalAttrs("google_pubsub_topic", raw)
+	require.NoError(t, err)
+	gt, ok := decoded.(*generated.GooglePubsubTopic)
+	require.True(t, ok)
+	require.NotNil(t, gt.Name)
+	assert.Equal(t, "orders", *gt.Name.Literal)
+	require.NotNil(t, gt.Project)
+	assert.Equal(t, "my-project", *gt.Project.Literal)
 }

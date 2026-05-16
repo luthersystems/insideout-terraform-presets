@@ -10,6 +10,16 @@ import (
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
 
+// Compile-time assertion that this enricher satisfies both interfaces.
+// Phase 2 contract: every enricher implements ByIDEnricher in addition
+// to AttributeEnricher (issue #571). Pre-Phase-2 enrichers were on the
+// notImplemented allowlist in byid_enricher_test.go — this enricher
+// is no longer on that allowlist.
+var (
+	_ AttributeEnricher = (*storageBucketEnricher)(nil)
+	_ ByIDEnricher      = (*storageBucketEnricher)(nil)
+)
+
 // storageBucketEnricher implements AttributeEnricher for
 // google_storage_bucket. Pairs with storageBucketDiscoverer (Identity)
 // — same package convention as the per-type Discoverer files.
@@ -52,25 +62,54 @@ func (storageBucketEnricher) ResourceType() string { return storageBucketTFType 
 // ErrEnrichClientUnavailable if EnrichClients.Storage is nil; any
 // other error reflects a real GCS API failure.
 func (e storageBucketEnricher) Enrich(ctx context.Context, ir *imported.ImportedResource, c EnrichClients) error {
-	if c.Storage == nil {
-		return ErrEnrichClientUnavailable
+	raw, err := e.fetchTyped(ctx, &ir.Identity, c)
+	if err != nil {
+		return err
 	}
-	name := bucketNameForEnrich(ir)
+	ir.Attrs = raw
+	return nil
+}
+
+// EnrichByID is the sibling entry-point for the per-IR refresh path:
+// it accepts a bare Identity (no surrounding ImportedResource) and
+// returns the same json.RawMessage shape Enrich would write into
+// ir.Attrs. A 404 from the GCS API is translated to ErrNotFound so
+// callers can distinguish "bucket deleted since last discover" from a
+// real API failure. See issue #571.
+func (e storageBucketEnricher) EnrichByID(ctx context.Context, identity *imported.ResourceIdentity, c EnrichClients) (json.RawMessage, error) {
+	if identity == nil {
+		return nil, fmt.Errorf("storage_bucket: nil identity")
+	}
+	return e.fetchTyped(ctx, identity, c)
+}
+
+// fetchTyped is the shared helper between Enrich and EnrichByID. It
+// performs the client-availability check, derives the bucket name,
+// fires the SDK call, and marshals the typed payload. Keeping the two
+// entry-points thin around this helper means the two surfaces stay in
+// lockstep — every new validation or error translation lands once.
+func (e storageBucketEnricher) fetchTyped(ctx context.Context, id *imported.ResourceIdentity, c EnrichClients) (json.RawMessage, error) {
+	if c.Storage == nil {
+		return nil, ErrEnrichClientUnavailable
+	}
+	name := bucketNameForEnrichIdentity(id)
 	if name == "" {
-		return fmt.Errorf("storage_bucket: cannot derive bucket name from Identity (Address=%q ImportID=%q NativeIDs.asset_name=%q)",
-			ir.Identity.Address, ir.Identity.ImportID, ir.Identity.NativeIDs["asset_name"])
+		return nil, fmt.Errorf("storage_bucket: cannot derive bucket name from Identity (Address=%q ImportID=%q NativeIDs.asset_name=%q)",
+			id.Address, id.ImportID, id.NativeIDs["asset_name"])
 	}
 	b, err := e.fetch(ctx, c.Storage, name)
 	if err != nil {
-		return fmt.Errorf("storage_bucket: get %q: %w", name, err)
+		if isGoogleAPINotFound(err) {
+			return nil, fmt.Errorf("storage_bucket %q: %w", name, ErrNotFound)
+		}
+		return nil, fmt.Errorf("storage_bucket: get %q: %w", name, err)
 	}
 	typed := mapStorageBucket(b, c.ProjectID)
 	raw, err := json.Marshal(typed)
 	if err != nil {
-		return fmt.Errorf("storage_bucket: marshal Attrs: %w", err)
+		return nil, fmt.Errorf("storage_bucket: marshal Attrs: %w", err)
 	}
-	ir.Attrs = raw
-	return nil
+	return raw, nil
 }
 
 // bucketNameForEnrich pulls the bucket name from the identifiers
@@ -80,10 +119,21 @@ func (e storageBucketEnricher) Enrich(ctx context.Context, ir *imported.Imported
 // (//storage.googleapis.com/<name>) for safety against future shape
 // drift.
 func bucketNameForEnrich(ir *imported.ImportedResource) string {
-	if ir.Identity.ImportID != "" {
-		return ir.Identity.ImportID
+	return bucketNameForEnrichIdentity(&ir.Identity)
+}
+
+// bucketNameForEnrichIdentity is the identity-only counterpart used by
+// the EnrichByID path (and indirectly by bucketNameForEnrich). Keeping
+// the logic in one place means the two entry-points cannot disagree
+// about precedence.
+func bucketNameForEnrichIdentity(id *imported.ResourceIdentity) string {
+	if id == nil {
+		return ""
 	}
-	if asset := ir.Identity.NativeIDs["asset_name"]; asset != "" {
+	if id.ImportID != "" {
+		return id.ImportID
+	}
+	if asset := id.NativeIDs["asset_name"]; asset != "" {
 		if name, err := storageBucketNameFromID(asset); err == nil {
 			return name
 		}

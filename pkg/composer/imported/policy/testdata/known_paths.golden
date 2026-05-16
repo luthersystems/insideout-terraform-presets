@@ -2378,10 +2378,10 @@ google_cloud_run_v2_service	traffic.type	Tuning	Reliability	UIVisible	ChatSafe
 google_cloud_run_v2_service_iam_member	etag	Identity		RileyVisible	Never		
 google_cloud_run_v2_service_iam_member	id	Identity		RileyVisible	Never		
 google_cloud_run_v2_service_iam_member	location	Identity		UIVisible	Never		AlwaysReplace
-google_cloud_run_v2_service_iam_member	member	Identity		UIVisible	Never		AlwaysReplace
+google_cloud_run_v2_service_iam_member	member	Identity	Security	UIVisible	Never		AlwaysReplace
 google_cloud_run_v2_service_iam_member	name	Identity		UIVisible	Never		AlwaysReplace
 google_cloud_run_v2_service_iam_member	project	Identity		UIVisible	Never		AlwaysReplace
-google_cloud_run_v2_service_iam_member	role	Identity		UIVisible	Never		AlwaysReplace
+google_cloud_run_v2_service_iam_member	role	Identity	Security	UIVisible	Never		AlwaysReplace
 google_cloudbuild_trigger	approval_config.approval_required	Tuning	Reliability	UIVisible	RequiresApproval		
 google_cloudbuild_trigger	description	Tuning		RileyVisible	ChatSafe		
 google_cloudbuild_trigger	disabled	Tuning	Reliability	UIVisible	ChatSafe		
@@ -2445,9 +2445,9 @@ google_cloudfunctions2_function_iam_member	cloud_function	Identity		UIVisible	Ne
 google_cloudfunctions2_function_iam_member	etag	Identity		RileyVisible	Never		
 google_cloudfunctions2_function_iam_member	id	Identity		RileyVisible	Never		
 google_cloudfunctions2_function_iam_member	location	Identity		UIVisible	Never		AlwaysReplace
-google_cloudfunctions2_function_iam_member	member	Identity		UIVisible	Never		AlwaysReplace
+google_cloudfunctions2_function_iam_member	member	Identity	Security	UIVisible	Never		AlwaysReplace
 google_cloudfunctions2_function_iam_member	project	Identity		UIVisible	Never		AlwaysReplace
-google_cloudfunctions2_function_iam_member	role	Identity		UIVisible	Never		AlwaysReplace
+google_cloudfunctions2_function_iam_member	role	Identity	Security	UIVisible	Never		AlwaysReplace
 google_compute_address	address	Tuning		UIVisible	Never		AlwaysReplace
 google_compute_address	address_type	Tuning		RileyVisible	Never		AlwaysReplace
 google_compute_address	description	Tuning		RileyVisible	ChatSafe		
@@ -2844,7 +2844,7 @@ google_kms_crypto_key_iam_binding	crypto_key_id	Identity		UIVisible	Never		Alway
 google_kms_crypto_key_iam_binding	etag	Identity		RileyVisible	Never		
 google_kms_crypto_key_iam_binding	id	Identity		RileyVisible	Never		
 google_kms_crypto_key_iam_binding	members	Tuning	Security	UIVisible	RequiresApproval		InPlace
-google_kms_crypto_key_iam_binding	role	Identity		UIVisible	Never		AlwaysReplace
+google_kms_crypto_key_iam_binding	role	Identity	Security	UIVisible	Never		AlwaysReplace
 google_kms_key_ring	id	Identity		RileyVisible	Never		
 google_kms_key_ring	location	Identity		UIVisible	Never		AlwaysReplace
 google_kms_key_ring	name	Identity		UIVisible	Never		
@@ -2898,9 +2898,9 @@ google_monitoring_notification_channel	type	Identity		UIVisible	Never		AlwaysRep
 google_monitoring_notification_channel	user_labels	Tuning		Hidden	SystemOnly	Redacted	
 google_project_iam_member	etag	Identity		RileyVisible	Never		
 google_project_iam_member	id	Identity		RileyVisible	Never		
-google_project_iam_member	member	Identity		UIVisible	Never		AlwaysReplace
+google_project_iam_member	member	Identity	Security	UIVisible	Never		AlwaysReplace
 google_project_iam_member	project	Identity		UIVisible	Never		AlwaysReplace
-google_project_iam_member	role	Identity		UIVisible	Never		AlwaysReplace
+google_project_iam_member	role	Identity	Security	UIVisible	Never		AlwaysReplace
 google_project_service	disable_dependent_services	Tuning		RileyVisible	ChatSafe		
 google_project_service	disable_on_destroy	Tuning		RileyVisible	ChatSafe		
 google_project_service	id	Identity		RileyVisible	Never		
@@ -3019,13 +3019,13 @@ google_secret_manager_secret_iam_binding	etag	Identity		RileyVisible	Never
 google_secret_manager_secret_iam_binding	id	Identity		RileyVisible	Never		
 google_secret_manager_secret_iam_binding	members	Tuning	Security	UIVisible	RequiresApproval		InPlace
 google_secret_manager_secret_iam_binding	project	Identity		UIVisible	Never		AlwaysReplace
-google_secret_manager_secret_iam_binding	role	Identity		UIVisible	Never		AlwaysReplace
+google_secret_manager_secret_iam_binding	role	Identity	Security	UIVisible	Never		AlwaysReplace
 google_secret_manager_secret_iam_binding	secret_id	Identity		UIVisible	Never		AlwaysReplace
 google_secret_manager_secret_iam_member	etag	Identity		RileyVisible	Never		
 google_secret_manager_secret_iam_member	id	Identity		RileyVisible	Never		
-google_secret_manager_secret_iam_member	member	Identity		UIVisible	Never		AlwaysReplace
+google_secret_manager_secret_iam_member	member	Identity	Security	UIVisible	Never		AlwaysReplace
 google_secret_manager_secret_iam_member	project	Identity		UIVisible	Never		AlwaysReplace
-google_secret_manager_secret_iam_member	role	Identity		UIVisible	Never		AlwaysReplace
+google_secret_manager_secret_iam_member	role	Identity	Security	UIVisible	Never		AlwaysReplace
 google_secret_manager_secret_iam_member	secret_id	Identity		UIVisible	Never		AlwaysReplace
 google_secret_manager_secret_version	create_time	Identity		RileyVisible	Never		
 google_secret_manager_secret_version	deletion_policy	Tuning	Reliability	RileyVisible	ChatSafe		
@@ -3143,8 +3143,8 @@ google_storage_bucket	website.not_found_page	Tuning		RileyVisible	ChatSafe
 google_storage_bucket_iam_member	bucket	Identity		UIVisible	Never		AlwaysReplace
 google_storage_bucket_iam_member	etag	Identity		RileyVisible	Never		
 google_storage_bucket_iam_member	id	Identity		RileyVisible	Never		
-google_storage_bucket_iam_member	member	Identity		UIVisible	Never		AlwaysReplace
-google_storage_bucket_iam_member	role	Identity		UIVisible	Never		AlwaysReplace
+google_storage_bucket_iam_member	member	Identity	Security	UIVisible	Never		AlwaysReplace
+google_storage_bucket_iam_member	role	Identity	Security	UIVisible	Never		AlwaysReplace
 google_storage_bucket_object	bucket	Wiring	Reliability	UIVisible	RelationshipOnly		AlwaysReplace
 google_storage_bucket_object	cache_control	Tuning	Performance	RileyVisible	ChatSafe		
 google_storage_bucket_object	content	Tuning		Hidden	SystemOnly	Redacted	

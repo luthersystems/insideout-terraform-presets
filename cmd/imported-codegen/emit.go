@@ -12,6 +12,9 @@ import (
 	"text/template"
 
 	tfjson "github.com/hashicorp/terraform-json"
+
+	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported/generated"
+	"github.com/luthersystems/insideout-terraform-presets/pkg/imported/forcenew"
 )
 
 //go:embed templates/type.gen.go.tmpl
@@ -141,6 +144,43 @@ type SchemaEntry struct {
 	Replacement string // "Never" / "AlwaysReplace" / "Unknown"
 }
 
+// replacementSuffixFor returns the Go-identifier suffix
+// ("Unknown" / "Never" / "AlwaysReplace" / "MayReplace") for the
+// (tfType, field) pair, consulting the forcenew override registry and
+// falling back to "Unknown" when no override exists.
+//
+// The suffix is what the type.gen.go.tmpl template renders as
+// `Replacement: Replacement<Suffix>` (see line 28 of that template),
+// which matches the Go-side ReplacementBehavior constants in
+// pkg/composer/imported/generated/schema.go.
+//
+// Panics on a ReplacementBehavior the suffix table doesn't cover —
+// same fail-fast posture as emit_zod.go's replacementToWire. A silent
+// fallback would let a new constant added to generated.ReplacementBehavior
+// compile here while silently emitting wrong values; the panic forces
+// the codegen author to extend this switch when they add a constant.
+func replacementSuffixFor(tfType, field string) string {
+	behavior, ok := forcenew.Lookup(tfType, field)
+	if !ok {
+		return "Unknown"
+	}
+	switch behavior {
+	case generated.ReplacementNever:
+		return "Never"
+	case generated.ReplacementMayReplace:
+		return "MayReplace"
+	case generated.ReplacementAlwaysReplace:
+		return "AlwaysReplace"
+	case generated.ReplacementUnknown:
+		// forcenew.Register panics on ReplacementUnknown, so this
+		// branch is unreachable through the normal API. Kept for
+		// defense-in-depth and to satisfy exhaustive-switch lints.
+		return "Unknown"
+	default:
+		panic(fmt.Sprintf("imported-codegen: forcenew.Lookup(%q, %q) returned unknown ReplacementBehavior %q — extend replacementSuffixFor when adding a new constant to pkg/composer/imported/generated/schema.go", tfType, field, behavior))
+	}
+}
+
 func buildTypeData(res *tfjson.Schema, tfType, providerSource, providerVersion string) (*TypeData, error) {
 	typeName := GoName(tfType)
 	td := &TypeData{
@@ -170,10 +210,11 @@ func buildTypeData(res *tfjson.Schema, tfType, providerSource, providerVersion s
 			Computed:  attr.Computed,
 			Sensitive: attr.Sensitive,
 			// terraform-json does not expose force_new (it is stripped
-			// from the JSON schema dump). Per design doc, default to
-			// Unknown and let runtime callers refine via field-policy
-			// overlays.
-			Replacement: "Unknown",
+			// from the JSON schema dump). Default to Unknown and
+			// overlay curated overrides from pkg/imported/forcenew —
+			// see issue #566 for why downstream UX depends on accurate
+			// AlwaysReplace emission.
+			Replacement: replacementSuffixFor(tfType, name),
 		})
 	}
 
@@ -206,9 +247,13 @@ func buildTypeData(res *tfjson.Schema, tfType, providerSource, providerVersion s
 		// inferred from MinItems/MaxItems. Keep schema map simple by
 		// recording presence.
 		td.SchemaEntries = append(td.SchemaEntries, SchemaEntry{
-			TFName:      name,
-			Required:    nb.MinItems > 0,
-			Optional:    nb.MinItems == 0,
+			TFName:   name,
+			Required: nb.MinItems > 0,
+			Optional: nb.MinItems == 0,
+			// Nested-block fields default to Unknown. The forcenew
+			// registry today supports only top-level attribute names;
+			// nested-path overrides ("type.block.field") are tracked
+			// as a follow-up.
 			Replacement: "Unknown",
 		})
 	}

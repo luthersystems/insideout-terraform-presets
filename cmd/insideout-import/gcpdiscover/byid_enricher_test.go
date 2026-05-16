@@ -38,24 +38,23 @@ var _ ByIDEnricher = (*fakeByIDEnricher)(nil)
 // CAI HYBRID enricher (this PR): the cloudAssetEnricher implements
 // BOTH AttributeEnricher and ByIDEnricher, so every CAI-routed type
 // without a hand-rolled override is implicitly off the allowlist.
+//
+// Issue #571: the five pre-Phase-2 enrichers (storage_bucket,
+// pubsub_topic, pubsub_subscription, secret_manager_secret,
+// compute_network) now implement ByIDEnricher, so the allowlist is
+// empty. The map is retained as a structural placeholder so a future
+// regression that re-introduces an AttributeEnricher-only enricher
+// fails this test loudly (and the fix is obvious: add the type here
+// only as a deliberate, time-bounded exception).
 func TestExistingEnrichersDoNotImplementByID(t *testing.T) {
 	// Nil searcher is safe — the constructor only stores it; no
 	// SearchAll call fires here.
 	d := NewGCPDiscoverer(nil, "test-project", GCPDiscovererOpts{})
 
 	// Allowlist: types whose enrichers explicitly DO NOT implement
-	// ByIDEnricher yet. Shrink as Phase 2 rollout lands per-type impls.
-	// Five pre-Phase-2 hand-rolled enrichers remain on this list;
-	// every CAI-routed type registered via cloudAssetTypeConfigs (28
-	// additions) implements ByIDEnricher transparently because
-	// cloudAssetEnricher implements both interfaces.
-	notImplemented := map[string]bool{
-		"google_storage_bucket":        true,
-		"google_pubsub_topic":          true,
-		"google_pubsub_subscription":   true,
-		"google_secret_manager_secret": true,
-		"google_compute_network":       true,
-	}
+	// ByIDEnricher yet. Empty post-#571 — keep the map structure so
+	// future regressions land here visibly.
+	notImplemented := map[string]bool{}
 
 	// Fail-fast: pin the expected total byTypeEnricher size so a
 	// silent drop (or duplicate-key squashing) in production fails the
