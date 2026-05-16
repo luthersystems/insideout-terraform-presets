@@ -16,12 +16,8 @@ func TestCloudFor(t *testing.T) {
 		// Standard prefixed keys — the modern naming convention.
 		{"aws_lambda", KeyAWSLambda, "aws"},
 		{"gcp_vpc", KeyGCPVPC, "gcp"},
-		// Legacy polymorphic AWS keys whose string identity predates the
-		// cloud-prefixed vocabulary. The "default-aws" fallback exists
-		// specifically for these — a regression that flipped the default
-		// to "gcp" would mis-route their dispatch.
-		{"legacy resource (EKS control plane / lambda)", KeyAWSEKSControlPlane, "aws"},
-		{"legacy ec2 (EKS node group)", KeyAWSEKSNodeGroup, "aws"},
+		{"aws_eks", KeyAWSEKS, "aws"},
+		{"aws_eks_nodegroup", KeyAWSEKSNodeGroup, "aws"},
 		// Empty key — defaults to "aws". Matches the documented behaviour.
 		{"empty key", ComponentKey(""), "aws"},
 		// Adversarial: the contract is "gcp_" prefix INCLUDING the
@@ -63,11 +59,9 @@ func TestCloudFromKeys(t *testing.T) {
 		// session whose components list is empty.
 		{"nil slice", nil, "aws"},
 		{"empty slice", []string{}, "aws"},
-		// All AWS — uses both the modern "aws_*" prefix and the legacy
-		// "ec2" / "resource" polymorphic keys to confirm neither flips
-		// the cloud.
+		// All AWS — covers the modern "aws_*" prefix on every key.
 		{"all aws prefixed", []string{"aws_lambda", "aws_rds"}, "aws"},
-		{"all aws legacy keys", []string{"resource", "ec2"}, "aws"},
+		{"all aws eks family", []string{"aws_eks", "aws_eks_nodegroup"}, "aws"},
 		// Single GCP key alone or mixed with AWS keys must trigger
 		// "gcp" — the function is "any-gcp wins", not "majority".
 		{"all gcp prefixed", []string{"gcp_vpc", "gcp_cloudsql"}, "gcp"},

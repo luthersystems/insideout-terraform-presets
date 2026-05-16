@@ -13,10 +13,10 @@ import (
 // requirements and let terraform apply fail at AWS instead.
 //
 // We walk AllComponentKeys rather than ModulePath because the former is
-// the canonical "user-selectable component" registry: it includes the
-// polymorphic KeyAWSEKSControlPlane / KeyAWSEKSNodeGroup keys (so
-// preflight covers them), and excludes third-party toggles like
-// KeySplunk / KeyDatadog that have no Luther-managed AWS IAM surface.
+// the canonical "user-selectable component" registry: it includes
+// KeyAWSEKSNodeGroup alongside its sibling KeyAWSEKS so preflight covers
+// both, and excludes third-party toggles like KeySplunk / KeyDatadog that
+// have no Luther-managed AWS IAM surface.
 func TestAWSIAMActions_CoverAllAWSKeys(t *testing.T) {
 	for _, k := range AllComponentKeys {
 		if CloudFor(k) != "aws" {

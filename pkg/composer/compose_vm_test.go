@@ -103,25 +103,25 @@ func TestComposeSingle_VM_WithTestify(t *testing.T) {
 
 	// main.tf should contain module block and wire project/region to namespaced vars
 	mainStr := string(mainTF)
-	assert.Contains(t, mainStr, `module "ec2"`, `main.tf should contain module "ec2" block`)
-	require.Regexp(t, regexp.MustCompile(`(?m)^\s*project\s*=\s*var\.ec2_project\s*$`), mainStr,
-		"project should be wired as var.ec2_project")
-	require.Regexp(t, regexp.MustCompile(`(?m)^\s*region\s*=\s*var\.ec2_region\s*$`), mainStr,
-		"region should be wired as var.ec2_region")
+	assert.Contains(t, mainStr, `module "aws_eks_nodegroup"`, `main.tf should contain module "aws_eks_nodegroup" block`)
+	require.Regexp(t, regexp.MustCompile(`(?m)^\s*project\s*=\s*var\.aws_eks_nodegroup_project\s*$`), mainStr,
+		"project should be wired as var.aws_eks_nodegroup_project")
+	require.Regexp(t, regexp.MustCompile(`(?m)^\s*region\s*=\s*var\.aws_eks_nodegroup_region\s*$`), mainStr,
+		"region should be wired as var.aws_eks_nodegroup_region")
 
 	// variables.tf should declare namespaced vars
 	varsStr := string(varsTF)
-	assert.Contains(t, varsStr, `variable "ec2_project"`, `variables.tf should declare "ec2_project"`)
-	assert.Contains(t, varsStr, `variable "ec2_region"`, `variables.tf should declare "ec2_region"`)
+	assert.Contains(t, varsStr, `variable "aws_eks_nodegroup_project"`, `variables.tf should declare "aws_eks_nodegroup_project"`)
+	assert.Contains(t, varsStr, `variable "aws_eks_nodegroup_region"`, `variables.tf should declare "aws_eks_nodegroup_region"`)
 
-	// ec2.auto.tfvars should include mapper-provided values with namespaced keys (allow aligned spacing)
-	tfvars, ok := out["/ec2.auto.tfvars"]
-	require.True(t, ok, "expected /ec2.auto.tfvars in output")
+	// aws_eks_nodegroup.auto.tfvars should include mapper-provided values with namespaced keys (allow aligned spacing)
+	tfvars, ok := out["/aws_eks_nodegroup.auto.tfvars"]
+	require.True(t, ok, "expected /aws_eks_nodegroup.auto.tfvars in output")
 	tfvarsStr := string(tfvars)
-	require.Regexp(t, regexp.MustCompile(`(?m)^\s*ec2_project\s*=\s*"demo"\s*$`), tfvarsStr,
-		"/ec2.auto.tfvars should contain ec2_project (namespaced)")
-	require.Regexp(t, regexp.MustCompile(`(?m)^\s*ec2_region\s*=\s*"us-east-1"\s*$`), tfvarsStr,
-		"/ec2.auto.tfvars should contain ec2_region (namespaced)")
+	require.Regexp(t, regexp.MustCompile(`(?m)^\s*aws_eks_nodegroup_project\s*=\s*"demo"\s*$`), tfvarsStr,
+		"/aws_eks_nodegroup.auto.tfvars should contain aws_eks_nodegroup_project (namespaced)")
+	require.Regexp(t, regexp.MustCompile(`(?m)^\s*aws_eks_nodegroup_region\s*=\s*"us-east-1"\s*$`), tfvarsStr,
+		"/aws_eks_nodegroup.auto.tfvars should contain aws_eks_nodegroup_region (namespaced)")
 
 	// Optional: print and/or write files for manual inspection
 	if printGenerated {
