@@ -52,6 +52,14 @@ var seededTypes = []string{
 	"google_cloudfunctions2_function",
 	"google_monitoring_alert_policy",
 	"google_secret_manager_secret",
+	"aws_apigatewayv2_stage",
+	"aws_cognito_user_pool",
+	"aws_ebs_volume",
+	"aws_eks_node_group",
+	"aws_lb_listener",
+	"aws_vpc_endpoint",
+	"google_compute_forwarding_rule",
+	"google_vpc_access_connector",
 }
 
 // seededBindings mirrors the registrations performed by init(). Used
@@ -395,6 +403,62 @@ var seededBindings = map[string]ComponentMetricsBinding{
 		DimensionKey:   "secret_id",
 		DimensionFrom:  "name",
 		DefaultMetrics: []string{"secretmanager.googleapis.com/secret/access_count", "secretmanager.googleapis.com/secret/version_count"},
+	},
+	"aws_apigatewayv2_stage": {
+		Service:        "apigateway",
+		Action:         "get-metrics",
+		DimensionKey:   "Stage",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"Count", "4xx", "5xx", "Latency", "IntegrationLatency"},
+	},
+	"aws_cognito_user_pool": {
+		Service:        "cognito",
+		Action:         "get-metrics",
+		DimensionKey:   "UserPool",
+		DimensionFrom:  "id",
+		DefaultMetrics: []string{"SignInSuccesses", "SignUpSuccesses", "TokenRefreshSuccesses", "FederationSuccesses"},
+	},
+	"aws_ebs_volume": {
+		Service:        "ebs",
+		Action:         "get-metrics",
+		DimensionKey:   "VolumeId",
+		DimensionFrom:  "id",
+		DefaultMetrics: []string{"VolumeReadOps", "VolumeWriteOps", "VolumeQueueLength", "VolumeIdleTime"},
+	},
+	"aws_eks_node_group": {
+		Service:        "eks",
+		Action:         "get-metrics",
+		DimensionKey:   "NodegroupName",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"node_cpu_utilization", "node_memory_utilization", "node_filesystem_utilization"},
+	},
+	"aws_lb_listener": {
+		Service:        "elb",
+		Action:         "get-metrics",
+		DimensionKey:   "Listener",
+		DimensionFrom:  "id",
+		DefaultMetrics: []string{"RequestCount", "HTTPCode_ELB_4XX_Count", "HTTPCode_ELB_5XX_Count"},
+	},
+	"aws_vpc_endpoint": {
+		Service:        "vpc",
+		Action:         "get-metrics",
+		DimensionKey:   "VpcEndpointId",
+		DimensionFrom:  "id",
+		DefaultMetrics: []string{"BytesProcessed", "PacketsDropped", "ActiveConnections"},
+	},
+	"google_compute_forwarding_rule": {
+		Service:        "loadbalancing",
+		Action:         "timeseries-list",
+		DimensionKey:   "forwarding_rule_name",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"loadbalancing.googleapis.com/l3/internal/ingress_bytes_count", "loadbalancing.googleapis.com/l3/internal/egress_bytes_count"},
+	},
+	"google_vpc_access_connector": {
+		Service:        "vpcaccess",
+		Action:         "timeseries-list",
+		DimensionKey:   "connector_name",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"vpcaccess.googleapis.com/connector/sent_bytes_count", "vpcaccess.googleapis.com/connector/received_bytes_count", "vpcaccess.googleapis.com/connector/instances"},
 	},
 }
 
