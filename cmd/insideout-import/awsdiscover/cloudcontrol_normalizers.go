@@ -180,7 +180,17 @@ func flattenTagList(key string) Normalizer {
 					continue
 				}
 				// Value may legitimately be "" — preserve it.
-				flat[k] = obj["Value"]
+				// But absent or explicit-null Value drops the entry:
+				// otherwise flat[k] = nil json-marshals to a bare
+				// `null` which fails downstream Value[string]
+				// UnmarshalJSON (issue #575). Mirrors the empty-Key
+				// / non-object skip paths above — a key without a
+				// value isn't a useful tag.
+				v, hasValue := obj["Value"]
+				if !hasValue || v == nil {
+					continue
+				}
+				flat[k] = v
 			}
 			m[key] = map[string]any{verbatimMarkerKey: flat}
 			return encodeObject(m)

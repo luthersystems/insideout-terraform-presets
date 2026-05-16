@@ -251,6 +251,52 @@ func TestFlattenTagList(t *testing.T) {
 		assert.Equal(t, "", tags["AlsoOK"])
 	})
 
+	t.Run("missing Value drops entry", func(t *testing.T) {
+		t.Parallel()
+		// A CFN tag entry like {"Key":"OnlyKey"} (no Value) would
+		// otherwise produce flat["OnlyKey"] = nil, which json-
+		// marshals to a bare `null` and fails downstream
+		// Value[string].UnmarshalJSON (issue #575). The entry is
+		// dropped, matching the empty-Key / non-object skip paths.
+		in := json.RawMessage(`{"Tags":[
+			{"Key":"OnlyKey"},
+			{"Key":"K","Value":"V"}
+		]}`)
+		out, err := flattenTagList("Tags")(in)
+		require.NoError(t, err)
+		m := asMap(t, out)
+		wrapper, ok := m["Tags"].(map[string]any)
+		require.True(t, ok)
+		tags, ok := wrapper["__verbatim__"].(map[string]any)
+		require.True(t, ok)
+		assert.Len(t, tags, 1)
+		assert.Equal(t, "V", tags["K"])
+		_, hasOnlyKey := tags["OnlyKey"]
+		assert.False(t, hasOnlyKey, "OnlyKey must be dropped to avoid bare-null Tags[k]")
+	})
+
+	t.Run("Value is null drops entry", func(t *testing.T) {
+		t.Parallel()
+		// Explicit-null Value is treated the same as absent Value
+		// (issue #575): drop the entry instead of producing a
+		// bare-null Tags[k].
+		in := json.RawMessage(`{"Tags":[
+			{"Key":"NullVal","Value":null},
+			{"Key":"K","Value":"V"}
+		]}`)
+		out, err := flattenTagList("Tags")(in)
+		require.NoError(t, err)
+		m := asMap(t, out)
+		wrapper, ok := m["Tags"].(map[string]any)
+		require.True(t, ok)
+		tags, ok := wrapper["__verbatim__"].(map[string]any)
+		require.True(t, ok)
+		assert.Len(t, tags, 1)
+		assert.Equal(t, "V", tags["K"])
+		_, hasNullVal := tags["NullVal"]
+		assert.False(t, hasNullVal, "NullVal must be dropped to avoid bare-null Tags[k]")
+	})
+
 	t.Run("unexpected shape errors", func(t *testing.T) {
 		t.Parallel()
 		in := json.RawMessage(`{"Tags":"oops"}`)
