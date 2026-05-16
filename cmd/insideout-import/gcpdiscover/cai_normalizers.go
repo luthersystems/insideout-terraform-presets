@@ -21,6 +21,25 @@ package gcpdiscover
 //     `items` envelope so the renamer feeds a clean list to the
 //     generated Layer-1 field.
 //
+//   - System-managed labels. CAI returns goog-managed labels
+//     (`goog-managed`, `goog_internal`, …) alongside user labels; the
+//     TF provider's view omits them. dropLabelPrefix(field, prefix)
+//     filters by key prefix so the emit layer doesn't introduce
+//     permadiff (#511 — replaces the open-coded `HasPrefix(k,"goog-")`
+//     filter in the seven hand-rolled GCP enrichers).
+//
+//   - Fully-qualified resource names. Pub/Sub returns
+//     `projects/<p>/topics/<n>`; the TF schema's `name` attribute
+//     holds the bare short name. shortenLastSegment(field) trims to
+//     the trailing path segment.
+//
+//   - Provider-side defaults the API omits. The TF schema requires
+//     fields the underlying API doesn't model (canonical case:
+//     `force_destroy = false` on google_storage_bucket — the GCS API
+//     has no such field but the TF schema requires it). setDefaultIfAbsent
+//     emits the default so the CAI path matches the hand-rolled
+//     mapping's unconditional `LiteralOf(false)`.
+//
 // Each helper is intentionally narrow: one transform per helper, no
 // type-specific magic. chain composes them in registration order. A
 // nil entry in chain is a silent no-op so callers can build the chain
@@ -245,6 +264,157 @@ func shortFromGCPSelfLink(s string) string {
 		return s[i+1:]
 	}
 	return s
+}
+
+// dropLabelPrefix returns a Normalizer that walks the labels-map at the
+// given top-level field and drops every key whose name starts with the
+// given prefix. The canonical use is filtering out goog-managed labels
+// (`goog-managed`, `goog_internal`, …) the GCP backend stamps on
+// resources without user intent — the Terraform provider's view doesn't
+// surface them and emitting them into the HCL surface would cause
+// permadiff (issue #511 — the seven hand-rolled GCP enrichers all open-
+// code this same `strings.HasPrefix(k, "goog-")` filter as the only
+// post-mapping cleanup pass).
+//
+// Idempotent: a labels-field that is absent, null, or not a map passes
+// through unchanged. An empty result map is removed from the parent
+// object entirely (so the emit layer can omit the attribute rather than
+// emit a `labels = {}` block on a resource whose only labels were
+// goog-managed).
+//
+// Operates only on the named top-level field. Per-block label scrubbing
+// (e.g. labels inside a nested `template` block) belongs in a bespoke
+// normalizer with a path-aware walker — none of the #511 retire
+// candidates need it.
+func dropLabelPrefix(labelsField, prefix string) Normalizer {
+	return func(in json.RawMessage) (json.RawMessage, error) {
+		if labelsField == "" || prefix == "" {
+			return in, nil
+		}
+		m, err := decodeCAIObject(in)
+		if err != nil {
+			return nil, fmt.Errorf("dropLabelPrefix(%q,%q): %w", labelsField, prefix, err)
+		}
+		if m == nil {
+			return in, nil
+		}
+		raw, ok := m[labelsField]
+		if !ok || raw == nil {
+			return in, nil
+		}
+		labels, ok := raw.(map[string]any)
+		if !ok {
+			// Labels field exists but isn't a map — leave the
+			// payload untouched so the downstream renamer sees the
+			// same shape it always would (and surfaces a clean
+			// unmarshal error rather than the helper masking a real
+			// shape regression).
+			return in, nil
+		}
+		changed := false
+		for k := range labels {
+			if strings.HasPrefix(k, prefix) {
+				delete(labels, k)
+				changed = true
+			}
+		}
+		if !changed {
+			return in, nil
+		}
+		if len(labels) == 0 {
+			// All entries were goog-managed — drop the empty map so
+			// the emit layer omits the attribute entirely. Matches
+			// the hand-rolled enricher's `if len(labels) > 0` guard
+			// (compute_address_enrich.go:217, pubsub_topic_enrich.gen.go:43).
+			delete(m, labelsField)
+		} else {
+			m[labelsField] = labels
+		}
+		return encodeCAIObject(m)
+	}
+}
+
+// shortenLastSegment returns a Normalizer that, for the top-level string
+// at the given field, replaces the value with the substring after the
+// last `/`. Used for GCP resource-name fields whose API representation
+// is a fully-qualified path (`projects/<p>/topics/<n>`,
+// `projects/<p>/subscriptions/<n>`, `projects/<p>/secrets/<n>`) while
+// Terraform stores the bare short name (`<n>`).
+//
+// Distinct from selfLinkToBareName only by intent: the underlying
+// trim-after-last-slash transform is identical, but the documentation
+// trail matters — a future contributor asking "why is this here?"
+// should see a name-shortener for resource paths, not a self-link
+// trimmer for compute URLs.
+//
+// Idempotent: a value without a `/` passes through unchanged. Absent
+// field / non-string value / null value all pass through.
+func shortenLastSegment(field string) Normalizer {
+	return func(in json.RawMessage) (json.RawMessage, error) {
+		if field == "" {
+			return in, nil
+		}
+		m, err := decodeCAIObject(in)
+		if err != nil {
+			return nil, fmt.Errorf("shortenLastSegment(%q): %w", field, err)
+		}
+		if m == nil {
+			return in, nil
+		}
+		raw, ok := m[field]
+		if !ok || raw == nil {
+			return in, nil
+		}
+		s, ok := raw.(string)
+		if !ok {
+			return in, nil
+		}
+		short := shortFromGCPSelfLink(s)
+		if short == s {
+			return in, nil
+		}
+		m[field] = short
+		return encodeCAIObject(m)
+	}
+}
+
+// setDefaultIfAbsent returns a Normalizer that sets the given top-level
+// field to value iff the field is missing from the object. A field
+// present with value null is treated as PRESENT and left alone — the
+// caller wanted an explicit null and the helper must not overwrite
+// that. Used to emit TF-required defaults the CAI body omits (the
+// canonical case is `force_destroy = false` on google_storage_bucket
+// — the GCS API has no such field, but the TF schema requires it; the
+// hand-rolled storage_bucket_enrich.gen.go::mapStorageBucket
+// unconditionally writes `out.ForceDestroy = generated.LiteralOf(false)`,
+// and the equivalent on the CAI path is to inject the default here so
+// the renamer + Layer-1 unmarshal pipeline lands the same value).
+//
+// Mutates only the top-level object — nested defaults belong in a
+// path-aware variant if one is ever needed.
+func setDefaultIfAbsent(field string, value any) Normalizer {
+	return func(in json.RawMessage) (json.RawMessage, error) {
+		if field == "" {
+			return in, nil
+		}
+		m, err := decodeCAIObject(in)
+		if err != nil {
+			return nil, fmt.Errorf("setDefaultIfAbsent(%q): %w", field, err)
+		}
+		if m == nil {
+			// Synthesize a minimal object so callers depending on
+			// the default-injection contract still get the field
+			// landed when the CAI payload was empty. Round-trips
+			// cleanly through the downstream renamer.
+			m = map[string]any{field: value}
+			return encodeCAIObject(m)
+		}
+		if _, present := m[field]; present {
+			return in, nil
+		}
+		m[field] = value
+		return encodeCAIObject(m)
+	}
 }
 
 // decodeCAIObject is the shared parse step. Returns (nil, nil) for an

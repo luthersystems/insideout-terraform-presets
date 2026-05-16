@@ -259,6 +259,256 @@ func TestFlattenNetworkTags_TableDriven(t *testing.T) {
 	})
 }
 
+// TestDropLabelPrefix_TableDriven pins the goog-managed-label filter
+// that #511 hand-rolled enrichers all open-code as their only post-
+// mapping cleanup pass. Covers happy path, both prefixes (`goog-` and
+// `goog_`), the all-filtered-collapses-to-nil branch (must drop the
+// labels field entirely so the emit layer omits the attribute), and
+// the absent / non-map shape pass-through paths.
+func TestDropLabelPrefix_TableDriven(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name   string
+		field  string
+		prefix string
+		in     string
+		want   string
+	}{
+		{
+			name:   "filters goog-managed labels keeps user labels",
+			field:  "labels",
+			prefix: "goog-",
+			in:     `{"labels":{"team":"platform","env":"prod","goog-managed":"true"}}`,
+			want:   `{"labels":{"team":"platform","env":"prod"}}`,
+		},
+		{
+			name:   "all-goog map collapses to absent labels field",
+			field:  "labels",
+			prefix: "goog-",
+			in:     `{"labels":{"goog-managed":"true","goog-other":"1"},"name":"x"}`,
+			want:   `{"name":"x"}`,
+		},
+		{
+			name:   "no matching prefix is a no-op",
+			field:  "labels",
+			prefix: "goog-",
+			in:     `{"labels":{"team":"platform"}}`,
+			want:   `{"labels":{"team":"platform"}}`,
+		},
+		{
+			name:   "missing labels field passes through",
+			field:  "labels",
+			prefix: "goog-",
+			in:     `{"name":"x"}`,
+			want:   `{"name":"x"}`,
+		},
+		{
+			name:   "null labels passes through",
+			field:  "labels",
+			prefix: "goog-",
+			in:     `{"labels":null}`,
+			want:   `{"labels":null}`,
+		},
+		{
+			name:   "non-map labels value passes through unchanged",
+			field:  "labels",
+			prefix: "goog-",
+			in:     `{"labels":"not-a-map"}`,
+			want:   `{"labels":"not-a-map"}`,
+		},
+		{
+			name:   "empty field arg is a no-op",
+			field:  "",
+			prefix: "goog-",
+			in:     `{"labels":{"goog-x":"y"}}`,
+			want:   `{"labels":{"goog-x":"y"}}`,
+		},
+		{
+			name:   "empty prefix arg is a no-op",
+			field:  "labels",
+			prefix: "",
+			in:     `{"labels":{"goog-x":"y"}}`,
+			want:   `{"labels":{"goog-x":"y"}}`,
+		},
+		{
+			name:   "underscore prefix variant",
+			field:  "labels",
+			prefix: "goog_",
+			in:     `{"labels":{"goog_internal":"ignore","team":"x"}}`,
+			want:   `{"labels":{"team":"x"}}`,
+		},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			n := dropLabelPrefix(tc.field, tc.prefix)
+			got, err := n(json.RawMessage(tc.in))
+			require.NoError(t, err)
+			assert.JSONEq(t, tc.want, string(got))
+		})
+	}
+}
+
+// TestDropLabelPrefix_ComposableForGoogDashAndUnderscore pins the
+// canonical use site: a chain of two dropLabelPrefix calls collapses
+// both `goog-` and `goog_` keys in a single normalizer pass. The
+// hand-rolled enrichers (compute_address_enrich.go,
+// pubsub_topic_enrich.gen.go, storage_bucket_enrich.gen.go) all check
+// BOTH prefixes; the CAI-side replacement is two helpers chained.
+func TestDropLabelPrefix_ComposableForGoogDashAndUnderscore(t *testing.T) {
+	t.Parallel()
+	n := chain(
+		dropLabelPrefix("labels", "goog-"),
+		dropLabelPrefix("labels", "goog_"),
+	)
+	in := json.RawMessage(`{"labels":{"goog-managed":"true","goog_internal":"x","team":"platform"}}`)
+	got, err := n(in)
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"labels":{"team":"platform"}}`, string(got))
+}
+
+// TestShortenLastSegment_TableDriven pins the resource-name shortener
+// used to convert `projects/<p>/topics/<n>` → `<n>` for Pub/Sub,
+// Secret Manager, and similar fully-qualified-name fields. Covers
+// happy path, idempotent pass-through, and the no-slash, missing,
+// non-string edge cases.
+func TestShortenLastSegment_TableDriven(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name  string
+		field string
+		in    string
+		want  string
+	}{
+		{
+			name:  "projects-rooted topic name shortens",
+			field: "name",
+			in:    `{"name":"projects/my-proj/topics/my-topic"}`,
+			want:  `{"name":"my-topic"}`,
+		},
+		{
+			name:  "projects-rooted subscription name shortens",
+			field: "name",
+			in:    `{"name":"projects/my-proj/subscriptions/my-sub"}`,
+			want:  `{"name":"my-sub"}`,
+		},
+		{
+			name:  "bare short name passes through",
+			field: "name",
+			in:    `{"name":"my-topic"}`,
+			want:  `{"name":"my-topic"}`,
+		},
+		{
+			name:  "missing field passes through",
+			field: "name",
+			in:    `{"other":"x"}`,
+			want:  `{"other":"x"}`,
+		},
+		{
+			name:  "non-string value passes through",
+			field: "name",
+			in:    `{"name":42}`,
+			want:  `{"name":42}`,
+		},
+		{
+			name:  "null value passes through",
+			field: "name",
+			in:    `{"name":null}`,
+			want:  `{"name":null}`,
+		},
+		{
+			name:  "empty field arg is a no-op",
+			field: "",
+			in:    `{"name":"projects/p/topics/t"}`,
+			want:  `{"name":"projects/p/topics/t"}`,
+		},
+		{
+			name:  "empty string value stays empty",
+			field: "name",
+			in:    `{"name":""}`,
+			want:  `{"name":""}`,
+		},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			n := shortenLastSegment(tc.field)
+			got, err := n(json.RawMessage(tc.in))
+			require.NoError(t, err)
+			assert.JSONEq(t, tc.want, string(got))
+		})
+	}
+}
+
+// TestSetDefaultIfAbsent_TableDriven pins the default-injection
+// helper used to emit TF-required defaults the CAI body omits. The
+// canonical use is `force_destroy = false` on google_storage_bucket.
+// Covers happy path (field missing), no-op when field already
+// present (even if null), and the empty-input synthesis.
+func TestSetDefaultIfAbsent_TableDriven(t *testing.T) {
+	t.Parallel()
+
+	t.Run("missing field gets default", func(t *testing.T) {
+		t.Parallel()
+		n := setDefaultIfAbsent("force_destroy", false)
+		got, err := n(json.RawMessage(`{"name":"my-bucket"}`))
+		require.NoError(t, err)
+		assert.JSONEq(t, `{"name":"my-bucket","force_destroy":false}`, string(got))
+	})
+
+	t.Run("present field is not overwritten", func(t *testing.T) {
+		t.Parallel()
+		n := setDefaultIfAbsent("force_destroy", false)
+		got, err := n(json.RawMessage(`{"force_destroy":true,"name":"my-bucket"}`))
+		require.NoError(t, err)
+		assert.JSONEq(t, `{"force_destroy":true,"name":"my-bucket"}`, string(got))
+	})
+
+	t.Run("present-with-null field is not overwritten", func(t *testing.T) {
+		t.Parallel()
+		n := setDefaultIfAbsent("force_destroy", false)
+		got, err := n(json.RawMessage(`{"force_destroy":null,"name":"my-bucket"}`))
+		require.NoError(t, err)
+		// Null preserved; the caller wanted an explicit null and the
+		// helper must not silently overwrite that.
+		assert.JSONEq(t, `{"force_destroy":null,"name":"my-bucket"}`, string(got))
+	})
+
+	t.Run("string default", func(t *testing.T) {
+		t.Parallel()
+		n := setDefaultIfAbsent("storage_class", "STANDARD")
+		got, err := n(json.RawMessage(`{"name":"b"}`))
+		require.NoError(t, err)
+		assert.JSONEq(t, `{"name":"b","storage_class":"STANDARD"}`, string(got))
+	})
+
+	t.Run("empty input synthesizes minimal object", func(t *testing.T) {
+		t.Parallel()
+		n := setDefaultIfAbsent("force_destroy", false)
+		got, err := n(json.RawMessage(``))
+		require.NoError(t, err)
+		assert.JSONEq(t, `{"force_destroy":false}`, string(got))
+	})
+
+	t.Run("null input synthesizes minimal object", func(t *testing.T) {
+		t.Parallel()
+		n := setDefaultIfAbsent("force_destroy", false)
+		got, err := n(json.RawMessage(`null`))
+		require.NoError(t, err)
+		assert.JSONEq(t, `{"force_destroy":false}`, string(got))
+	})
+
+	t.Run("empty field arg is a no-op", func(t *testing.T) {
+		t.Parallel()
+		n := setDefaultIfAbsent("", false)
+		got, err := n(json.RawMessage(`{"name":"x"}`))
+		require.NoError(t, err)
+		assert.JSONEq(t, `{"name":"x"}`, string(got))
+	})
+}
+
 // TestDecodeCAIObject_PassThroughCases pins the no-op contracts the
 // helpers depend on — empty input / "null" / whitespace all collapse
 // to (nil, nil) so the helpers can short-circuit without re-checking

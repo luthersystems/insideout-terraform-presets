@@ -249,6 +249,33 @@ func (e *cloudAssetEnricher) fetchAndMap(ctx context.Context, fetch func(ctx con
 		}
 	}
 
+	// #511 — Project injection. Every hand-rolled GCP enricher writes
+	// `out.Project = generated.LiteralOf(projectID)` from the run-level
+	// project ID (see mapComputeAddress, mapPubsubTopic, mapStorageBucket
+	// for the canonical instances — all open-code the same line). The
+	// CAI versionedResources body never carries a top-level `project`
+	// field because the project is part of the asset's URL scope rather
+	// than the resource representation, so the generic path needs to
+	// inject it the same way the hand-rolled path does.
+	//
+	// Source-of-truth precedence matches cloudAssetScopeFromIdentity:
+	// per-resource Identity.ProjectID wins (Discoverers stamp this for
+	// every CAI-routed type), then the run-level projectID arg. Setting
+	// only when missing means a per-type Normalizer that intentionally
+	// emits a different project value (none exist today) wins. Skipping
+	// the inject when both are empty matches the hand-rolled `if
+	// projectID != "" {` guard so a partially-configured run leaves the
+	// project field nil rather than landing an empty string.
+	projectForInject := projectID
+	if identity != nil && identity.ProjectID != "" {
+		projectForInject = identity.ProjectID
+	}
+	if projectForInject != "" {
+		if _, present := data["project"]; !present {
+			data["project"] = projectForInject
+		}
+	}
+
 	// CAI returns the JSON representation as defined by each service's
 	// REST API — `lowerCamelCase` keys (e.g. `selfLink`, `machineType`,
 	// `canIpForward`), native types for scalars, nested maps for

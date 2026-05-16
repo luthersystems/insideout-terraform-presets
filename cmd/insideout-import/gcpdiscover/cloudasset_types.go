@@ -128,7 +128,23 @@ var cloudAssetTypeConfigs = []cloudAssetConfig{
 	// =====================================================================
 	// Compute Engine — compute.googleapis.com
 	// =====================================================================
-	{TFType: "google_compute_address", AssetType: "compute.googleapis.com/Address"},
+	{
+		TFType:    "google_compute_address",
+		AssetType: "compute.googleapis.com/Address",
+		// #511 Normalizer: the CAI body returns `region` as a full
+		// self-link URL (https://.../regions/<r>) while TF state stores
+		// the bare region name; goog-managed labels need filtering so
+		// the emit layer doesn't introduce permadiff. Hand-rolled
+		// override wins today (compute_address_enrich.go); this chain
+		// hardens the CAI fallback for the day the hand-rolled is
+		// retired (gated on a computed-only attribute filter — see
+		// #511 PR body for the remaining gap).
+		Normalizer: chain(
+			selfLinkToBareName("region"),
+			dropLabelPrefix("labels", "goog-"),
+			dropLabelPrefix("labels", "goog_"),
+		),
+	},
 	{TFType: "google_compute_backend_service", AssetType: "compute.googleapis.com/BackendService"},
 	{TFType: "google_compute_global_address", AssetType: "compute.googleapis.com/GlobalAddress"},
 	{
@@ -179,13 +195,78 @@ var cloudAssetTypeConfigs = []cloudAssetConfig{
 	// =====================================================================
 	// Cloud Storage — storage.googleapis.com
 	// =====================================================================
-	{TFType: "google_storage_bucket", AssetType: "storage.googleapis.com/Bucket"},
+	{
+		TFType:    "google_storage_bucket",
+		AssetType: "storage.googleapis.com/Bucket",
+		// #511 Normalizer: drop goog-managed labels; emit TF-required
+		// defaults (force_destroy, default_event_based_hold,
+		// enable_object_retention, requester_pays) that the GCS REST
+		// body never carries — the hand-rolled mapStorageBucket sets
+		// these unconditionally via generated.LiteralOf(false).
+		// Hand-rolled override wins today
+		// (storage_bucket_enrich.{go,gen.go}); this chain hardens the
+		// CAI fallback but stops short of full parity — the
+		// hand-rolled also uppercases `location` (strings.ToUpper) and
+		// derives `enable_object_retention` from a nested
+		// `objectRetention.mode == "Enabled"` field, neither of which
+		// the current helper kit covers. See #511 PR body for the
+		// remaining blockers before retirement.
+		Normalizer: chain(
+			dropLabelPrefix("labels", "goog-"),
+			dropLabelPrefix("labels", "goog_"),
+			setDefaultIfAbsent("forceDestroy", false),
+			setDefaultIfAbsent("defaultEventBasedHold", false),
+			setDefaultIfAbsent("enableObjectRetention", false),
+			setDefaultIfAbsent("requesterPays", false),
+		),
+	},
 
 	// =====================================================================
 	// Pub/Sub — pubsub.googleapis.com
 	// =====================================================================
-	{TFType: "google_pubsub_topic", AssetType: "pubsub.googleapis.com/Topic"},
-	{TFType: "google_pubsub_subscription", AssetType: "pubsub.googleapis.com/Subscription"},
+	{
+		TFType:    "google_pubsub_topic",
+		AssetType: "pubsub.googleapis.com/Topic",
+		// #511 Normalizer: the CAI body returns `name` as the
+		// fully-qualified `projects/<p>/topics/<n>` resource path
+		// while TF stores the bare short name; goog-managed labels
+		// need filtering. Hand-rolled override wins today
+		// (pubsub_topic_enrich.{go,gen.go}); this chain hardens the
+		// CAI fallback. Per-resource nested blocks
+		// (ingestion_data_source_settings, message_storage_policy,
+		// schema_settings) are NOT yet handled — the CAI body returns
+		// these as single objects while the Layer-1 struct expects
+		// `[]Block`; a generic object-to-singleton-list wrapper is
+		// the remaining blocker. See #511 PR body.
+		Normalizer: chain(
+			shortenLastSegment("name"),
+			dropLabelPrefix("labels", "goog-"),
+			dropLabelPrefix("labels", "goog_"),
+		),
+	},
+	{
+		TFType:    "google_pubsub_subscription",
+		AssetType: "pubsub.googleapis.com/Subscription",
+		// #511 Normalizer: shorten `name`
+		// (projects/<p>/subscriptions/<n> → <n>); drop goog-managed
+		// labels; emit TF-required defaults
+		// (enable_exactly_once_delivery, enable_message_ordering,
+		// retain_acked_messages) that the Pub/Sub REST body omits.
+		// Hand-rolled override wins today
+		// (pubsub_subscription_enrich.{go,gen.go}); this chain
+		// hardens the CAI fallback. Nested blocks (push_config,
+		// bigquery_config, cloud_storage_config, dead_letter_policy,
+		// expiration_policy, retry_policy) face the same
+		// object-to-singleton-list blocker as pubsub_topic.
+		Normalizer: chain(
+			shortenLastSegment("name"),
+			dropLabelPrefix("labels", "goog-"),
+			dropLabelPrefix("labels", "goog_"),
+			setDefaultIfAbsent("enableExactlyOnceDelivery", false),
+			setDefaultIfAbsent("enableMessageOrdering", false),
+			setDefaultIfAbsent("retainAckedMessages", false),
+		),
+	},
 
 	// =====================================================================
 	// IAM service accounts — iam.googleapis.com
