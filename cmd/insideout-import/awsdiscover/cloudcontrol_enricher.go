@@ -79,6 +79,13 @@ type cloudControlEnricher struct {
 	resourceType string
 	cfnType      string
 	get          cloudControlGetResourceFn
+	// normalizer, when non-nil, runs on the raw Cloud Control properties
+	// JSON before the generic camelToSnake / Layer-1 unmarshal pipeline
+	// (#501). Sourced from cloudControlConfig.Normalizer at registration
+	// time; see cloudcontrol_normalizers.go for composable helpers
+	// (chain, renameField, flattenTagList, trimARNStar). A nil normalizer
+	// is a no-op — the existing generic path runs unchanged.
+	normalizer Normalizer
 }
 
 // newCloudControlEnricher constructs an enricher for a single
@@ -96,6 +103,20 @@ func newCloudControlEnricher(tfType, cfnType string, get cloudControlGetResource
 		resourceType: tfType,
 		cfnType:      cfnType,
 		get:          get,
+	}
+}
+
+// newCloudControlEnricherWithNormalizer is the #501 variant that wires a
+// per-type Normalizer alongside the (tfType, cfnType, get) trio. Used by
+// NewAWSDiscoverer to thread cloudControlConfig.Normalizer through into
+// the enricher; tests use it directly to exercise the normalizer path
+// without dragging in the discoverer registration.
+func newCloudControlEnricherWithNormalizer(tfType, cfnType string, get cloudControlGetResourceFn, n Normalizer) *cloudControlEnricher {
+	return &cloudControlEnricher{
+		resourceType: tfType,
+		cfnType:      cfnType,
+		get:          get,
+		normalizer:   n,
 	}
 }
 
@@ -215,6 +236,23 @@ func (e *cloudControlEnricher) fetchAndMap(ctx context.Context, get cloudControl
 		return nil, fmt.Errorf("cloudcontrol enricher: empty response for %s %q: %w", e.cfnType, identifier, ErrNotFound)
 	}
 
+	// #501 — Per-type Normalizer runs on the raw Cloud Control JSON
+	// before camelToSnake / Layer-1 unmarshal. The helpers in
+	// cloudcontrol_normalizers.go bridge the shape gaps the generic
+	// renamer can't close on its own (flat tag maps vs lists of
+	// {Key,Value}, primary-name aliases like LogGroupName → Name,
+	// trailing-:* ARN trimming). Returning an error fails the fetch
+	// with the original error wrapped so soft-fail dispatchers can
+	// distinguish a normalizer failure from a real API error.
+	rawProps := json.RawMessage(*out.ResourceDescription.Properties)
+	if e.normalizer != nil {
+		normalized, err := e.normalizer(rawProps)
+		if err != nil {
+			return nil, fmt.Errorf("cloudcontrol enricher: normalize %s %q: %w", e.cfnType, identifier, err)
+		}
+		rawProps = normalized
+	}
+
 	// Convert CamelCase property keys to snake_case so the json tags on
 	// the registered Layer-1 struct can match. The unmarshal would
 	// otherwise silently drop every CamelCase property (json tags are
@@ -225,7 +263,7 @@ func (e *cloudControlEnricher) fetchAndMap(ctx context.Context, get cloudControl
 	// struct fields use; without the wrap, a bare CFN scalar fails to
 	// decode (Value[T].UnmarshalJSON rejects non-object input).
 	var props map[string]any
-	if err := json.Unmarshal([]byte(*out.ResourceDescription.Properties), &props); err != nil {
+	if err := json.Unmarshal([]byte(rawProps), &props); err != nil {
 		return nil, fmt.Errorf("cloudcontrol enricher: parse properties for %s %q: %w", e.cfnType, identifier, err)
 	}
 	shaped := shapeCFNForLayer1(props)
@@ -282,6 +320,17 @@ func shapeCFNForLayer1(props map[string]any) map[string]any {
 	return out
 }
 
+// verbatimMarkerKey is the sentinel key produced by Normalizer helpers
+// (#501) that need a sub-tree of the payload to bypass the
+// CFN-CamelCase → snake_case rename while still benefiting from the
+// scalar-leaf {"literal": …} wrap. The flattenTagList helper uses it:
+// CFN tags arrive as list-of-{Key,Value}; the flat map shape the
+// generated `Tags map[string]*Value[string]` field expects has
+// user-data keys (tag NAMES) that must NOT be snake-cased. A map
+// whose only key is verbatimMarkerKey is unwrapped by shapeValueForLayer1
+// and the inner tree is leaf-wrapped without renaming any keys.
+const verbatimMarkerKey = "__verbatim__"
+
 // shapeValueForLayer1 is the recursive helper for shapeCFNForLayer1.
 // Scalar leaves get wrapped in {"literal": …}; maps recurse; lists of
 // maps recurse with key renames on each element; lists of scalars
@@ -292,6 +341,13 @@ func shapeValueForLayer1(v any) any {
 	case nil:
 		return nil
 	case map[string]any:
+		// Verbatim sub-tree (#501) — a Normalizer helper wrapped the
+		// payload to opt out of key renaming. Unwrap and leaf-wrap
+		// without recursing through shapeCFNForLayer1 (which would
+		// camelToSnake the user-data keys).
+		if inner, ok := t[verbatimMarkerKey]; ok && len(t) == 1 {
+			return wrapLeavesVerbatim(inner)
+		}
 		// Nested CFN object — recurse on keys, but DO NOT wrap the
 		// object itself in a literal envelope. The generated nested
 		// structs are bare structs (no Value[T] wrapper), so the
@@ -309,6 +365,34 @@ func shapeValueForLayer1(v any) any {
 	default:
 		// Scalar leaf — wrap in {"literal": …} so it decodes into
 		// generated.Value[T] cleanly.
+		return map[string]any{"literal": t}
+	}
+}
+
+// wrapLeavesVerbatim mirrors shapeValueForLayer1 but preserves map
+// keys exactly as-is — used inside a verbatim sub-tree (#501) where
+// the keys are user data (tag names) and the surrounding snake_case
+// rename would corrupt them. Nested maps recurse with key-preservation
+// too; scalar leaves still get the {"literal": …} envelope so the
+// outer struct's *Value[T] field (or map[string]*Value[T] field)
+// decodes cleanly.
+func wrapLeavesVerbatim(v any) any {
+	switch t := v.(type) {
+	case nil:
+		return nil
+	case map[string]any:
+		out := make(map[string]any, len(t))
+		for k, vv := range t {
+			out[k] = wrapLeavesVerbatim(vv)
+		}
+		return out
+	case []any:
+		out := make([]any, len(t))
+		for i, e := range t {
+			out[i] = wrapLeavesVerbatim(e)
+		}
+		return out
+	default:
 		return map[string]any{"literal": t}
 	}
 }

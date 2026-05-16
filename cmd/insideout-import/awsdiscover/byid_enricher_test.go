@@ -55,14 +55,18 @@ func TestExistingEnrichersDoNotImplementByID(t *testing.T) {
 	// at test time so an addition to cloudControlTypeConfigs doesn't
 	// silently flow into the production enricher coverage without a
 	// deliberate test update.
-	handRolled := 19
+	// Hand-rolled count drops to 18 in #502 — aws_cloudwatch_log_group
+	// retired in favor of the generic Cloud Control + Normalizer path
+	// (which now produces 100% exact field match against the retired
+	// hand-rolled enricher's payload thanks to the
+	// synthIDFromField("Name") step in the type's Normalizer chain).
+	handRolled := 18
 	ccOverrides := 0
 	handRolledTypes := map[string]bool{
 		"aws_apigatewayv2_stage":                             true,
 		"aws_autoscaling_group_tag":                          true,
 		"aws_bedrock_guardrail":                              true,
 		"aws_bedrock_model_invocation_logging_configuration": true,
-		"aws_cloudwatch_log_group":                           true,
 		"aws_dynamodb_contributor_insights":                  true,
 		"aws_dynamodb_table":                                 true,
 		"aws_iam_role_policy_attachment":                     true,
@@ -131,9 +135,28 @@ func TestCloudControlEnricherSkipsHandRolledOverrides(t *testing.T) {
 	// Kept as a literal slice rather than a reflection-based scan so
 	// adding a new hand-rolled enricher requires an explicit update
 	// here — the next reviewer sees the intent in the test diff.
+	// Updated in #502: aws_cloudwatch_log_group removed (retired in
+	// favor of the generic Cloud Control + Normalizer path). The
+	// remaining hand-rolled overrides each documented their own retire
+	// blocker in the #502 PR body:
+	//   - aws_dynamodb_table: 4-SDK-call overlay (PITR / TTL / Tags
+	//     out-of-band of DescribeTable) plus KeySchema → hash_key /
+	//     range_key derivation; CFN AWS::DynamoDB::Table does not
+	//     surface PITR / TTL state in the same shape and exposes
+	//     KeySchema as a list rather than the bare hash_key /
+	//     range_key the TF schema expects.
+	//   - aws_s3_bucket / S3 sub-resources: ~10 SDK calls
+	//     (GetBucket*) per bucket; CFN AWS::S3::Bucket exposes
+	//     materially fewer sub-resource details than the dedicated
+	//     S3 APIs.
+	//   - aws_secretsmanager_secret: CFN AWS::SecretsManager::Secret
+	//     exposes only the input-shaped ReplicaRegions (Region,
+	//     KmsKeyId); the hand-rolled enricher populates the live
+	//     replication state (Status, StatusMessage, LastAccessedDate)
+	//     from DescribeSecret's ReplicationStatus, which CFN cannot
+	//     return.
 	handRolled := []string{
 		"aws_apigatewayv2_stage",
-		"aws_cloudwatch_log_group",
 		"aws_dynamodb_contributor_insights",
 		"aws_dynamodb_table",
 		"aws_iam_role_policy_attachment",

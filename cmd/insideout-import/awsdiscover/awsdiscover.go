@@ -223,13 +223,18 @@ func NewAWSDiscovererWithConcurrency(cfg aws.Config, maxConcurrency int) *AWSDis
 		"aws_autoscaling_group_tag":                          newAutoscalingGroupTagEnricher(),
 		"aws_bedrock_guardrail":                              newBedrockGuardrailEnricher(),
 		"aws_bedrock_model_invocation_logging_configuration": newBedrockModelInvocationLoggingConfigurationEnricher(),
-		"aws_cloudwatch_log_group":                           newCloudWatchLogGroupEnricher(),
-		"aws_dynamodb_contributor_insights":                  newDDBContributorInsightsEnricher(),
-		"aws_dynamodb_table":                                 newDynamoDBTableEnricher(),
-		"aws_iam_role_policy_attachment":                     newIAMRolePolicyAttachmentEnricher(),
-		"aws_resourceexplorer2_index":                        newResourceExplorer2IndexEnricher(),
-		"aws_resourceexplorer2_view":                         newResourceExplorer2ViewEnricher(),
-		"aws_s3_bucket":                                      newS3BucketEnricher(),
+		// aws_cloudwatch_log_group retired in #502 — handled by the
+		// generic Cloud Control + Normalizer path below
+		// (chain(renameField LogGroupName→Name, synthIDFromField Name,
+		// trimARNStar Arn, flattenTagList Tags) reaches 100% exact field
+		// match with the retired hand-rolled enricher; see
+		// cloudcontrol_types.go for the wiring).
+		"aws_dynamodb_contributor_insights": newDDBContributorInsightsEnricher(),
+		"aws_dynamodb_table":                newDynamoDBTableEnricher(),
+		"aws_iam_role_policy_attachment":    newIAMRolePolicyAttachmentEnricher(),
+		"aws_resourceexplorer2_index":       newResourceExplorer2IndexEnricher(),
+		"aws_resourceexplorer2_view":        newResourceExplorer2ViewEnricher(),
+		"aws_s3_bucket":                     newS3BucketEnricher(),
 		// S3 bucket sub-resource enrichers — all five share the
 		// EnrichClients.S3 client; the per-bucket GetBucket* SDK calls
 		// fan out one-at-a-time and produce the typed Layer-1 payload
@@ -259,7 +264,11 @@ func NewAWSDiscovererWithConcurrency(cfg aws.Config, maxConcurrency int) *AWSDis
 		if _, has := byTypeEnricher[ccCfg.TFType]; has {
 			continue
 		}
-		byTypeEnricher[ccCfg.TFType] = newCloudControlEnricher(ccCfg.TFType, ccCfg.CloudFormationType, nil)
+		// #501 — pass through the per-type Normalizer (nil for types
+		// whose CFN shape already matches the camelToSnake projection).
+		byTypeEnricher[ccCfg.TFType] = newCloudControlEnricherWithNormalizer(
+			ccCfg.TFType, ccCfg.CloudFormationType, nil, ccCfg.Normalizer,
+		)
 	}
 	return &AWSDiscoverer{
 		defaultRegion:  cfg.Region,

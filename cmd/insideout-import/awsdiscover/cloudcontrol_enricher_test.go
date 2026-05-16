@@ -355,6 +355,210 @@ func TestCloudControlEnricher_Enrich_UnknownTFType(t *testing.T) {
 	assert.Contains(t, err.Error(), "unmarshal into aws_does_not_exist")
 }
 
+// TestCloudControlEnricher_Enrich_Normalized exercises the #501
+// Normalizer hook on the three currently-wired types
+// (aws_cloudwatch_log_group, aws_s3_bucket, aws_sqs_queue). For each
+// type the test feeds a fake CFN-shaped response with the
+// known-divergent fields (primary-name, list-of-{Key,Value} Tags,
+// trailing-:* ARN where applicable) and asserts the post-Normalizer
+// Layer-1 payload lands the values on the bare TF field names
+// (`name` / `bucket`) and the flat `tags` map.
+func TestCloudControlEnricher_Enrich_Normalized(t *testing.T) {
+	t.Parallel()
+
+	t.Run("aws_cloudwatch_log_group", func(t *testing.T) {
+		t.Parallel()
+		fake := &fakeCCGet{
+			props: `{
+				"Arn": "arn:aws:logs:us-east-1:123:log-group:/aws/lambda/demo:*",
+				"LogGroupName": "/aws/lambda/demo",
+				"RetentionInDays": 30,
+				"KmsKeyId": "arn:aws:kms:us-east-1:123:key/abc",
+				"Tags": [
+					{"Key": "Project", "Value": "io-abc"},
+					{"Key": "Env", "Value": "prod"}
+				]
+			}`,
+		}
+		// Mirror the production wiring: pull the Normalizer from
+		// cloudControlTypeConfigs so this test would catch any
+		// registration drift.
+		n := normalizerForCFNType(t, "AWS::Logs::LogGroup")
+		enr := newCloudControlEnricherWithNormalizer("aws_cloudwatch_log_group", "AWS::Logs::LogGroup", fake.call, n)
+		ir := &imported.ImportedResource{
+			Identity: imported.ResourceIdentity{
+				Type:     "aws_cloudwatch_log_group",
+				ImportID: "/aws/lambda/demo",
+			},
+		}
+		require.NoError(t, enr.Enrich(context.Background(), ir, EnrichClients{}))
+
+		decoded, err := generated.UnmarshalAttrs("aws_cloudwatch_log_group", ir.Attrs)
+		require.NoError(t, err)
+		lg, ok := decoded.(*generated.AWSCloudwatchLogGroup)
+		require.True(t, ok, "decoded type is %T", decoded)
+
+		// Primary-name field: CFN LogGroupName → TF name.
+		require.NotNil(t, lg.Name)
+		require.NotNil(t, lg.Name.Literal)
+		assert.Equal(t, "/aws/lambda/demo", *lg.Name.Literal)
+		// #502: id mirrors name (synthIDFromField), matching the
+		// retired hand-rolled enricher's `out.ID = out.Name` shape.
+		require.NotNil(t, lg.ID, "id must mirror name post-#502 synthIDFromField")
+		require.NotNil(t, lg.ID.Literal)
+		assert.Equal(t, "/aws/lambda/demo", *lg.ID.Literal)
+		// ARN trailing-:* stripped.
+		require.NotNil(t, lg.ARN)
+		require.NotNil(t, lg.ARN.Literal)
+		assert.Equal(t, "arn:aws:logs:us-east-1:123:log-group:/aws/lambda/demo", *lg.ARN.Literal)
+		// Tags landed as flat map.
+		require.NotNil(t, lg.Tags)
+		require.Contains(t, lg.Tags, "Project")
+		require.NotNil(t, lg.Tags["Project"].Literal)
+		assert.Equal(t, "io-abc", *lg.Tags["Project"].Literal)
+		require.Contains(t, lg.Tags, "Env")
+		require.NotNil(t, lg.Tags["Env"].Literal)
+		assert.Equal(t, "prod", *lg.Tags["Env"].Literal)
+		// Untouched fields still flow through the renamer.
+		require.NotNil(t, lg.RetentionInDays)
+		require.NotNil(t, lg.RetentionInDays.Literal)
+		assert.Equal(t, int64(30), *lg.RetentionInDays.Literal)
+	})
+
+	t.Run("aws_s3_bucket", func(t *testing.T) {
+		t.Parallel()
+		fake := &fakeCCGet{
+			props: `{
+				"Arn": "arn:aws:s3:::my-bucket",
+				"BucketName": "my-bucket",
+				"Tags": [
+					{"Key": "Project", "Value": "io-abc"}
+				]
+			}`,
+		}
+		n := normalizerForCFNType(t, "AWS::S3::Bucket")
+		enr := newCloudControlEnricherWithNormalizer("aws_s3_bucket", "AWS::S3::Bucket", fake.call, n)
+		ir := &imported.ImportedResource{
+			Identity: imported.ResourceIdentity{
+				Type:     "aws_s3_bucket",
+				ImportID: "my-bucket",
+			},
+		}
+		require.NoError(t, enr.Enrich(context.Background(), ir, EnrichClients{}))
+
+		decoded, err := generated.UnmarshalAttrs("aws_s3_bucket", ir.Attrs)
+		require.NoError(t, err)
+		b, ok := decoded.(*generated.AWSS3Bucket)
+		require.True(t, ok, "decoded type is %T", decoded)
+
+		// Primary-name: CFN BucketName → TF bucket.
+		require.NotNil(t, b.Bucket)
+		require.NotNil(t, b.Bucket.Literal)
+		assert.Equal(t, "my-bucket", *b.Bucket.Literal)
+		// ARN passes through unchanged (S3 ARN has no :* suffix).
+		require.NotNil(t, b.ARN)
+		require.NotNil(t, b.ARN.Literal)
+		assert.Equal(t, "arn:aws:s3:::my-bucket", *b.ARN.Literal)
+		// Tags landed as flat map.
+		require.NotNil(t, b.Tags)
+		require.Contains(t, b.Tags, "Project")
+		require.NotNil(t, b.Tags["Project"].Literal)
+		assert.Equal(t, "io-abc", *b.Tags["Project"].Literal)
+	})
+
+	t.Run("aws_sqs_queue", func(t *testing.T) {
+		t.Parallel()
+		fake := &fakeCCGet{
+			props: `{
+				"Arn": "arn:aws:sqs:us-east-1:123:my-queue",
+				"QueueName": "my-queue",
+				"MessageRetentionPeriod": 345600,
+				"VisibilityTimeout": 30,
+				"DelaySeconds": 0,
+				"FifoQueue": false,
+				"Tags": [
+					{"Key": "Project", "Value": "io-abc"}
+				]
+			}`,
+		}
+		n := normalizerForCFNType(t, "AWS::SQS::Queue")
+		enr := newCloudControlEnricherWithNormalizer("aws_sqs_queue", "AWS::SQS::Queue", fake.call, n)
+		ir := &imported.ImportedResource{
+			Identity: imported.ResourceIdentity{
+				Type:     "aws_sqs_queue",
+				ImportID: "https://sqs.us-east-1.amazonaws.com/123/my-queue",
+			},
+		}
+		require.NoError(t, enr.Enrich(context.Background(), ir, EnrichClients{}))
+
+		decoded, err := generated.UnmarshalAttrs("aws_sqs_queue", ir.Attrs)
+		require.NoError(t, err)
+		q, ok := decoded.(*generated.AWSSQSQueue)
+		require.True(t, ok, "decoded type is %T", decoded)
+
+		// Primary-name: CFN QueueName → TF name.
+		require.NotNil(t, q.Name)
+		require.NotNil(t, q.Name.Literal)
+		assert.Equal(t, "my-queue", *q.Name.Literal)
+		// Seconds-suffix renames.
+		require.NotNil(t, q.MessageRetentionSeconds)
+		require.NotNil(t, q.MessageRetentionSeconds.Literal)
+		assert.Equal(t, int64(345600), *q.MessageRetentionSeconds.Literal)
+		require.NotNil(t, q.VisibilityTimeoutSeconds)
+		require.NotNil(t, q.VisibilityTimeoutSeconds.Literal)
+		assert.Equal(t, int64(30), *q.VisibilityTimeoutSeconds.Literal)
+		// Untouched fields still flow through the renamer.
+		require.NotNil(t, q.DelaySeconds)
+		require.NotNil(t, q.DelaySeconds.Literal)
+		assert.Equal(t, int64(0), *q.DelaySeconds.Literal)
+		// Tags landed as flat map.
+		require.NotNil(t, q.Tags)
+		require.Contains(t, q.Tags, "Project")
+		require.NotNil(t, q.Tags["Project"].Literal)
+		assert.Equal(t, "io-abc", *q.Tags["Project"].Literal)
+	})
+}
+
+// normalizerForCFNType returns the Normalizer registered on the
+// cloudControlTypeConfigs entry for the given CFN type. Test-only;
+// fails the test if the type is not registered or has no Normalizer.
+// Pulling the Normalizer from the live registration (rather than
+// re-constructing one in the test) makes the test a regression guard
+// for the registration itself.
+func normalizerForCFNType(t *testing.T, cfnType string) Normalizer {
+	t.Helper()
+	for _, cfg := range cloudControlTypeConfigs {
+		if cfg.CloudFormationType == cfnType {
+			require.NotNilf(t, cfg.Normalizer, "no Normalizer registered for %s", cfnType)
+			return cfg.Normalizer
+		}
+	}
+	t.Fatalf("no cloudControlTypeConfigs entry for %s", cfnType)
+	return nil
+}
+
+// TestCloudControlEnricher_Enrich_NormalizerError pins the failure
+// path: a Normalizer that returns an error fails the fetch with the
+// original error wrapped, so soft-fail dispatchers can distinguish a
+// shape-transform bug from a real Cloud Control API error.
+func TestCloudControlEnricher_Enrich_NormalizerError(t *testing.T) {
+	t.Parallel()
+	fake := &fakeCCGet{props: `{"Arn":"x"}`}
+	boom := errors.New("normalizer-boom")
+	n := func(_ json.RawMessage) (json.RawMessage, error) { return nil, boom }
+	enr := newCloudControlEnricherWithNormalizer("aws_cloudwatch_log_group", "AWS::Logs::LogGroup", fake.call, n)
+	ir := &imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Type:     "aws_cloudwatch_log_group",
+			ImportID: "/aws/x",
+		},
+	}
+	err := enr.Enrich(context.Background(), ir, EnrichClients{})
+	require.Error(t, err)
+	assert.ErrorIs(t, err, boom)
+	assert.Contains(t, err.Error(), "normalize AWS::Logs::LogGroup")
+}
+
 // TestCloudControlEnricher_Enrich_RawAttrs_IsValidJSONWithSnakeKeys
 // guards the wire-format contract: after step 1 of #490 (json tags on
 // every generated Layer-1 field), ir.Attrs uses lowercase snake_case
