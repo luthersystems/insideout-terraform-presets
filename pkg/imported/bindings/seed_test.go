@@ -21,11 +21,23 @@ func reseed(t *testing.T) {
 	regMu.Unlock()
 }
 
+// emptyDefaultMetricsAllowed lists tfTypes that are intentionally
+// registered with an empty DefaultMetrics — typically IAM-style
+// types whose metrics are CloudTrail-only / audit-log-only and which
+// only need to appear in the registry so downstream consumers can
+// route policy queries. Per bindings.go, an entry with empty
+// DefaultMetrics means "use consumer defaults" and is distinct from
+// "type isn't bound at all".
+var emptyDefaultMetricsAllowed = map[string]bool{
+	"aws_iam_role":           true,
+	"google_service_account": true,
+}
+
 func TestSeededBindings(t *testing.T) {
 	reseed(t)
 
-	require.GreaterOrEqual(t, len(RegisteredTypes()), 32,
-		"expected at least 32 seeded types, got %d", len(RegisteredTypes()))
+	require.GreaterOrEqual(t, len(RegisteredTypes()), 40,
+		"expected at least 40 seeded types, got %d", len(RegisteredTypes()))
 
 	for _, tfType := range seededTypes {
 		tfType := tfType
@@ -38,7 +50,12 @@ func TestSeededBindings(t *testing.T) {
 			assert.NotEmpty(t, b.Action, "%s: Action empty", tfType)
 			assert.NotEmpty(t, b.DimensionKey, "%s: DimensionKey empty", tfType)
 			assert.NotEmpty(t, b.DimensionFrom, "%s: DimensionFrom empty", tfType)
-			assert.NotEmpty(t, b.DefaultMetrics, "%s: DefaultMetrics empty", tfType)
+			if emptyDefaultMetricsAllowed[tfType] {
+				assert.Empty(t, b.DefaultMetrics,
+					"%s: listed in emptyDefaultMetricsAllowed but DefaultMetrics is non-empty — remove from allowlist", tfType)
+			} else {
+				assert.NotEmpty(t, b.DefaultMetrics, "%s: DefaultMetrics empty", tfType)
+			}
 		})
 	}
 }

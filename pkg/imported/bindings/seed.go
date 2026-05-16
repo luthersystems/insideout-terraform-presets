@@ -36,6 +36,14 @@ var seededTypes = []string{
 	"google_compute_backend_service",
 	"google_vertex_ai_dataset",
 	"google_logging_project_sink",
+	"aws_vpc",
+	"aws_route53_zone",
+	"aws_kms_key",
+	"aws_iam_role",
+	"aws_cloudwatch_metric_alarm",
+	"google_compute_network",
+	"google_kms_crypto_key",
+	"google_service_account",
 }
 
 // seededBindings mirrors the registrations performed by init(). Used
@@ -265,6 +273,64 @@ var seededBindings = map[string]ComponentMetricsBinding{
 		DimensionKey:   "sink_name",
 		DimensionFrom:  "name",
 		DefaultMetrics: []string{"logging.googleapis.com/exports/byte_count", "logging.googleapis.com/exports/log_entry_count"},
+	},
+	"aws_vpc": {
+		Service:        "vpc",
+		Action:         "get-metrics",
+		DimensionKey:   "VpcId",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"network-bytes-in", "network-bytes-out"},
+	},
+	"aws_route53_zone": {
+		Service:        "route53",
+		Action:         "get-metrics",
+		DimensionKey:   "HostedZoneId",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"DNSQueries"},
+	},
+	"aws_kms_key": {
+		Service:        "kms",
+		Action:         "get-metrics",
+		DimensionKey:   "KeyId",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"SecondsUntilKeyMaterialExpiration"},
+	},
+	"aws_iam_role": {
+		// IAM metrics are CloudTrail-only — registered so consumers can
+		// route policy queries; DefaultMetrics intentionally empty.
+		Service:       "iam",
+		Action:        "get-metrics",
+		DimensionKey:  "RoleName",
+		DimensionFrom: "name",
+	},
+	"aws_cloudwatch_metric_alarm": {
+		Service:        "cloudwatch",
+		Action:         "get-metrics",
+		DimensionKey:   "AlarmName",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"StateValue"},
+	},
+	"google_compute_network": {
+		Service:        "compute",
+		Action:         "timeseries-list",
+		DimensionKey:   "network_name",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"networking.googleapis.com/vpc_flow/ingress_bytes_count", "networking.googleapis.com/vpc_flow/egress_bytes_count"},
+	},
+	"google_kms_crypto_key": {
+		Service:        "cloudkms",
+		Action:         "timeseries-list",
+		DimensionKey:   "crypto_key_id",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"cloudkms.googleapis.com/key/sign_request_count", "cloudkms.googleapis.com/key/verify_request_count"},
+	},
+	"google_service_account": {
+		// IAM-style: registered for routing only; DefaultMetrics
+		// intentionally empty (mirrors aws_iam_role).
+		Service:       "iam",
+		Action:        "timeseries-list",
+		DimensionKey:  "unique_id",
+		DimensionFrom: "name",
 	},
 }
 
