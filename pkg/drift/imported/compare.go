@@ -116,7 +116,7 @@ func Compare(tfType string, snapshot, live json.RawMessage) []FieldMismatch {
 				out = append(out, m)
 			}
 		case policy.DriftSemanticLabelFilter:
-			out = append(out, compareLabelFilter(path, entry.LabelDriftIgnorePrefixes, snapAttrs, liveAttrs)...)
+			out = append(out, compareLabelFilter(path, mergePrefixes(entry.LabelDriftIgnorePrefixes, entry.TagDriftIgnorePrefixes), snapAttrs, liveAttrs)...)
 		default:
 			// Unknown DriftSemantic — be conservative and skip. The
 			// policy lint enforces Valid() at registration, so an
@@ -234,6 +234,29 @@ func coerceList(v any) []any {
 // untouched policy keeps the same behavior after the per-policy
 // prefix knob lands.
 var defaultLabelDriftIgnorePrefixes = []string{"goog-", "goog_"}
+
+// mergePrefixes unions a FieldPolicy's GCP-flavored
+// LabelDriftIgnorePrefixes with its AWS-flavored TagDriftIgnorePrefixes.
+// Both fields populate the same filter set on a DriftSemanticLabelFilter
+// entry; keeping them as separate fields lets each cloud's helper
+// (gcpLabelDriftPolicy / awsTagDriftPolicy) read naturally at the
+// call site while the comparator stays cloud-agnostic. Order is
+// label-prefixes first, then tag-prefixes; the comparator does a
+// HasPrefix scan, so order only affects micro-perf, not correctness.
+// nil/empty inputs are ignored; if both are empty the result is nil
+// and compareLabelFilter falls back to defaultLabelDriftIgnorePrefixes.
+func mergePrefixes(label, tag []string) []string {
+	if len(label) == 0 {
+		return tag
+	}
+	if len(tag) == 0 {
+		return label
+	}
+	out := make([]string, 0, len(label)+len(tag))
+	out = append(out, label...)
+	out = append(out, tag...)
+	return out
+}
 
 // compareLabelFilter resolves path in both maps, filters keys whose
 // name has any of the ignorePrefixes on both sides, and emits ONE

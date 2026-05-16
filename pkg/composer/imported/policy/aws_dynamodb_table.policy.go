@@ -296,9 +296,14 @@ var awsDynamodbTablePolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 
-	// Tags (system-managed bag) ----------------------------------------
-	"tags":     tagPolicy(),
-	"tags_all": tagPolicy(),
+	// Tags — adopt awsTagDriftPolicy() (#568): user-set tag drift
+	// surfaces as per-key `tags.<key>` mismatches; AWS-managed
+	// prefixes (`aws:`, `eks:`, etc.) are filtered. DynamoDB tables
+	// are stable user-owned resources where the canonical `Project`
+	// tag drives InsideOut inspector attribution — stripping it
+	// out-of-band must surface as drift.
+	"tags":     awsTagDriftPolicy(),
+	"tags_all": awsTagDriftPolicy(),
 
 	// timeouts singleton — system-owned operational metadata -----------
 	"timeouts": timeoutsPolicy(),

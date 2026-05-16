@@ -159,4 +159,41 @@ func TestSharedPolicies(t *testing.T) {
 		Visibility: VisibilityHidden,
 		Edit:       EditSystemOnly,
 	}, timeoutsPolicy())
+	assert.Equal(t, FieldPolicy{
+		Role:                     RoleTuning,
+		Visibility:               VisibilityHidden,
+		Edit:                     EditSystemOnly,
+		Sensitivity:              SensitivityRedacted,
+		DriftSemantic:            DriftSemanticLabelFilter,
+		LabelDriftIgnorePrefixes: gcpLabelDriftIgnorePrefixes,
+	}, gcpLabelDriftPolicy())
+	// AWS parallel — #568. Tag prefixes live in TagDriftIgnorePrefixes
+	// (not LabelDriftIgnorePrefixes) so the helper reads naturally
+	// against the AWS-tag axis name; the comparator unions both
+	// fields before filtering keys.
+	assert.Equal(t, FieldPolicy{
+		Role:                   RoleTuning,
+		Visibility:             VisibilityHidden,
+		Edit:                   EditSystemOnly,
+		Sensitivity:            SensitivityRedacted,
+		DriftSemantic:          DriftSemanticLabelFilter,
+		TagDriftIgnorePrefixes: awsTagDriftIgnorePrefixes,
+	}, awsTagDriftPolicy())
+}
+
+// TestAWSTagDriftIgnorePrefixes pins the canonical AWS-managed prefix
+// set so a silent edit to the slice surfaces as a test failure rather
+// than altering the drift surface across every adopting policy at once.
+// The set is referenced from CLAUDE.md / #568; bump the assertion here
+// and the docstring in lockstep when extending it.
+func TestAWSTagDriftIgnorePrefixes(t *testing.T) {
+	t.Parallel()
+	assert.Equal(t, []string{
+		"aws:",
+		"eks:",
+		"elasticbeanstalk:",
+		"kubernetes.io/",
+		"InsideOut",
+		"insideout-",
+	}, awsTagDriftIgnorePrefixes)
 }

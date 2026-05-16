@@ -6,9 +6,15 @@ package policy
 // All curated leaves are scalar (ARN, name, KMS key ARN, retention days,
 // log group class, skip_destroy bool) — DriftSemanticExact is the
 // meaningful comparison. There are no list-valued or map-valued curated
-// fields here, so WholeList / LabelFilter do not apply. Tag bags stay
-// DriftSemanticNone (tagPolicy() zero value) — provider noise on tags is
-// filtered at a higher layer.
+// fields here, so WholeList / LabelFilter do not apply.
+//
+// #568: `tags` / `tags_all` adopt awsTagDriftPolicy() so user-set tags
+// (notably the canonical `Project` tag that the InsideOut inspector
+// uses to attribute resources — CLAUDE.md "Project tag is required on
+// every taggable AWS resource") surface as `tags.<key>` per-key drift
+// when stripped out-of-band. Log groups are a stable resource with
+// low tag-churn, so noise-vs-signal trades favor surfacing user-set
+// tag drift here.
 var awsCloudwatchLogGroupPolicy = Map{
 	// Identity
 	"arn": {
@@ -43,8 +49,12 @@ var awsCloudwatchLogGroupPolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 
-	"tags":     tagPolicy(),
-	"tags_all": tagPolicy(),
+	// Tags — adopt awsTagDriftPolicy() so user-set tag drift (esp.
+	// the Project tag used by the InsideOut inspector) surfaces as
+	// per-key `tags.<key>` mismatches with AWS-managed prefixes
+	// (`aws:`, `eks:`, etc.) filtered out (#568).
+	"tags":     awsTagDriftPolicy(),
+	"tags_all": awsTagDriftPolicy(),
 }
 
 func init() {

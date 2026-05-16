@@ -11,8 +11,12 @@ package policy
 // resource) and is not curated in this map, so the Sensitive-leak
 // concern that gates `aws_lambda_function.environment.variables` does
 // not arise. All curated leaves are scalar; DriftSemanticExact is the
-// meaningful comparison for each. Tag bags stay DriftSemanticNone
-// (tagPolicy() zero value).
+// meaningful comparison for each.
+//
+// #568: `tags` / `tags_all` adopt awsTagDriftPolicy() — symmetric
+// with google_secret_manager_secret's gcpLabelDriftPolicy() adoption.
+// User-set tag drift surfaces as per-key `tags.<key>` mismatches;
+// AWS-managed prefixes are filtered.
 var awsSecretsmanagerSecretPolicy = Map{
 	// Identity
 	"arn": {
@@ -62,8 +66,10 @@ var awsSecretsmanagerSecretPolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 
-	"tags":     tagPolicy(),
-	"tags_all": tagPolicy(),
+	// Tags — awsTagDriftPolicy() (#568): per-key user-tag drift
+	// surfaces; AWS-managed prefixes filtered.
+	"tags":     awsTagDriftPolicy(),
+	"tags_all": awsTagDriftPolicy(),
 }
 
 func init() {

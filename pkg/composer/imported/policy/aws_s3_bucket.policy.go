@@ -23,8 +23,15 @@ package policy
 // renamed-out-of-band bucket still surfaces. Configurable scalars use
 // Exact; the cross-resource wiring leaves (KMS key ARN, target bucket,
 // replication role) also use Exact — a value diff there is real drift,
-// not provider noise. Tag bags stay DriftSemanticNone (tagPolicy() zero
-// value) because they're system-managed.
+// not provider noise.
+//
+// #568: `tags` / `tags_all` adopt awsTagDriftPolicy() so user-set
+// tags (notably the canonical `Project` tag the InsideOut inspector
+// uses to attribute resources — CLAUDE.md "Project tag is required on
+// every taggable AWS resource") surface as per-key `tags.<key>` drift
+// when stripped out-of-band. AWS-managed prefixes (`aws:`, `eks:`,
+// `kubernetes.io/`, etc.) are filtered. S3 buckets are stable,
+// low-churn, customer-owned — the right shape for tag drift.
 //
 // Depth-pass extras (#482 follow-up): adds a curated sub-set of the
 // deprecated nested-config sub-paths the AWS v4+ provider keeps for
@@ -283,11 +290,11 @@ var awsS3BucketPolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 
-	// Tags (system-managed bag) ----------------------------------------
-	// DriftSemantic stays None — tag drift is provider noise; the diff
-	// surface filters tags at a higher layer.
-	"tags":     tagPolicy(),
-	"tags_all": tagPolicy(),
+	// Tags — adopt awsTagDriftPolicy() (#568): user-set tag drift
+	// surfaces as per-key `tags.<key>` mismatches; AWS-managed
+	// prefixes (`aws:`, `eks:`, `kubernetes.io/`, etc.) are filtered.
+	"tags":     awsTagDriftPolicy(),
+	"tags_all": awsTagDriftPolicy(),
 }
 
 func init() {
