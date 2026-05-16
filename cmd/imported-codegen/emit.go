@@ -20,6 +20,33 @@ var typeTemplateSrc string
 //go:embed templates/version.gen.go.tmpl
 var versionTemplateSrc string
 
+// reservedTopLevelGoNames is populated from all Wanted* slices at
+// codegen entry. Used by buildBlockNested to disambiguate a nested
+// type whose default Go name (parent + child) would collide with a
+// top-level Go name registered for a sibling tfType.
+//
+// Concretely: `aws_s3_bucket` has a nested `versioning` block whose
+// default Go name is `AWSS3BucketVersioning`, which collides with the
+// top-level Go name of `aws_s3_bucket_versioning`. The collision is
+// resolved by appending `Nested` to the nested-type name when its
+// default would land in this set.
+//
+// reservedTopLevelGoNames is set by SetReservedTopLevelGoNames before
+// EmitTypeFile is called; left empty, no disambiguation runs (every
+// downstream test exercises the same set, so a forgotten initializer
+// surfaces as a compile-time `redeclared` error).
+var reservedTopLevelGoNames = map[string]bool{}
+
+// SetReservedTopLevelGoNames configures the collision-detection set
+// used by buildBlockNested. Pass the union of GoName(tfType) for every
+// type in WantedAWS, WantedGoogle, and WantedGoogleBeta.
+func SetReservedTopLevelGoNames(names []string) {
+	reservedTopLevelGoNames = make(map[string]bool, len(names))
+	for _, n := range names {
+		reservedTopLevelGoNames[n] = true
+	}
+}
+
 // EmitTypeFile renders one resource type to a *.gen.go file under outDir.
 // Returns the path written.
 func EmitTypeFile(outDir string, res *tfjson.Schema, providerSource, tfType, providerVersion string) (string, error) {
@@ -155,7 +182,7 @@ func buildTypeData(res *tfjson.Schema, tfType, providerSource, providerVersion s
 	// all of them.
 	for _, name := range SortedBlockTypeNames(block) {
 		nb := block.NestedBlocks[name]
-		nestedTypeName := typeName + GoName(name)
+		nestedTypeName := disambiguateNestedTypeName(typeName + GoName(name))
 		nestedSet, err := buildBlockNested(nestedTypeName, nb, typeName)
 		if err != nil {
 			return nil, fmt.Errorf("block %q: %w", name, err)
@@ -221,7 +248,7 @@ func buildBlockNested(typeName string, nb *tfjson.SchemaBlockType, parent string
 	}
 	for _, name := range SortedBlockTypeNames(nb.Block) {
 		child := nb.Block.NestedBlocks[name]
-		childTypeName := typeName + GoName(name)
+		childTypeName := disambiguateNestedTypeName(typeName + GoName(name))
 		blockKind := "block"
 		childGoType := "*" + childTypeName
 		switch child.NestingMode {
@@ -243,6 +270,40 @@ func buildBlockNested(typeName string, nb *tfjson.SchemaBlockType, parent string
 	}
 	_ = parent
 	return append([]NestedType{out}, children...), nil
+}
+
+// disambiguateNestedTypeName returns name with a `Nested` suffix when
+// the default would collide with a top-level Go name registered via
+// SetReservedTopLevelGoNames, or with the package-level `<Type>Schema`
+// FieldSchema map variable emitted for any reserved top-level type.
+// The suffix lands on every recursive descendant too, because the
+// helper is called from both buildTypeData (top-level → first-level
+// nested) and buildBlockNested (each-level → next-level nested).
+//
+// Two collision shapes are handled:
+//
+//   - `name` equals a top-level `<Type>` GoName (e.g. nested
+//     `versioning` under `aws_s3_bucket` → `AWSS3BucketVersioning`
+//     would collide with top-level `aws_s3_bucket_versioning`).
+//   - `name` equals `<Type>Schema` for any reserved top-level type
+//     (e.g. nested `schema` under `aws_cognito_user_pool` →
+//     `AWSCognitoUserPoolSchema` would collide with the package-level
+//     `var AWSCognitoUserPoolSchema = map[string]FieldSchema{...}`
+//     that every generated type file emits).
+//
+// Empty reservedTopLevelGoNames is the no-disambiguation fallback —
+// the default name is returned unchanged, matching pre-#482 codegen.
+func disambiguateNestedTypeName(name string) string {
+	if reservedTopLevelGoNames[name] {
+		return name + "Nested"
+	}
+	if strings.HasSuffix(name, "Schema") {
+		base := strings.TrimSuffix(name, "Schema")
+		if reservedTopLevelGoNames[base] {
+			return name + "Nested"
+		}
+	}
+	return name
 }
 
 func dedupNested(in []NestedType) []NestedType {

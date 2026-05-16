@@ -1,45 +1,66 @@
 package policy
 
+// googleCloudRunV2ServicePolicy curates Layer 2 for
+// `google_cloud_run_v2_service`. Identity scalars are tagged
+// DriftSemanticExact; `custom_audiences` is a list-valued audience
+// allowlist where authored order is the meaningful drift signal so it
+// uses DriftSemanticWholeList. Other curated fields stay
+// DriftSemanticNone until per-leaf comparators land.
 var googleCloudRunV2ServicePolicy = Map{
 	// Identity
-	"name": {Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever},
-	"id":   {Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever},
+	"name": {
+		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"id": {
+		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		DriftSemantic: DriftSemanticExact,
+	},
 	"project": {
 		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
-		ChangeRisk: ChangeAlwaysReplace,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"location": {
 		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
-		ChangeRisk: ChangeAlwaysReplace,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
 	},
 
 	// Tuning — top-level
 	"description": {
 		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"ingress": {
 		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityUIVisible, Edit: EditRequiresApproval,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"launch_stage": {
 		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"invoker_iam_disabled": {
 		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityUIVisible,
-		Edit: EditRequiresApproval,
+		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"deletion_protection": {
 		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityUIVisible,
-		Edit: EditRequiresApproval,
+		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"custom_audiences": {
 		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
-		Edit: EditRequiresApproval,
+		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticWholeList,
 	},
 
 	// Template — image + scaling + concurrency are the core knobs.
 	"template.containers.image": {
 		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityUIVisible,
-		Edit: EditRequiresApproval,
+		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"template.containers.name": {
 		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
@@ -65,26 +86,33 @@ var googleCloudRunV2ServicePolicy = Map{
 	},
 	"template.scaling.min_instance_count": {
 		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityUIVisible, Edit: EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"template.scaling.max_instance_count": {
 		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityUIVisible, Edit: EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"template.max_instance_request_concurrency": {
 		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"template.timeout": {
 		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"template.service_account": {
 		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityUIVisible,
-		Edit: EditRelationshipOnly,
+		Edit:          EditRelationshipOnly,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"template.execution_environment": {
 		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"template.vpc_access.connector": {
 		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
-		Edit: EditRelationshipOnly,
+		Edit:          EditRelationshipOnly,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"template.vpc_access.egress": {
 		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,

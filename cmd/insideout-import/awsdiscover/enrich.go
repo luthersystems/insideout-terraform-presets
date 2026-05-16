@@ -22,11 +22,18 @@ import (
 	"sort"
 	"time"
 
+	"github.com/aws/aws-sdk-go-v2/service/apigatewayv2"
+	"github.com/aws/aws-sdk-go-v2/service/autoscaling"
+	"github.com/aws/aws-sdk-go-v2/service/bedrock"
 	"github.com/aws/aws-sdk-go-v2/service/cloudcontrol"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
+	"github.com/aws/aws-sdk-go-v2/service/iam"
+	"github.com/aws/aws-sdk-go-v2/service/resourceexplorer2"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
+	"github.com/aws/aws-sdk-go-v2/service/servicediscovery"
+	"github.com/aws/aws-sdk-go-v2/service/wafv2"
 
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/progress"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
@@ -138,6 +145,17 @@ type EnrichClients struct {
 	DynamoDB       *dynamodb.Client
 	CloudWatchLogs *cloudwatchlogs.Client
 	SecretsManager *secretsmanager.Client
+	// Bedrock is the shared client used by the bedrock_guardrail and
+	// bedrock_model_invocation_logging_configuration enrichers (#482
+	// Bucket-C push). The SDK client is stateless over an aws.Config so
+	// a single instance serves every Bedrock-routed enricher. Nil is
+	// tolerated and surfaces as ErrEnrichClientUnavailable at Enrich
+	// time; EnrichAttributes downgrades that to a per-resource ServiceWarn.
+	Bedrock *bedrock.Client
+	// ServiceDiscovery is the shared client used by the
+	// service_discovery_private_dns_namespace enricher (#482 Bucket-C
+	// push). Same nil-tolerated discipline as Bedrock.
+	ServiceDiscovery *servicediscovery.Client
 	// CloudControl is the shared client for the generic Cloud Control
 	// enricher (#490 HYBRID). One client is reused across every
 	// cloudControlEnricher registered in NewAWSDiscoverer.byTypeEnricher
@@ -146,7 +164,39 @@ type EnrichClients struct {
 	// ErrEnrichClientUnavailable at Enrich time; EnrichAttributes
 	// downgrades that to a per-resource ServiceWarn.
 	CloudControl *cloudcontrol.Client
-	AccountID    string
+	// ResourceExplorer2 is the shared client for the Resource Explorer 2
+	// hand-rolled enrichers (aws_resourceexplorer2_index,
+	// aws_resourceexplorer2_view). The SDK client carries an aws.Config
+	// across regions; each enricher applies its per-call region override
+	// via a Options closure so a single client serves every region in the
+	// run. Nil is tolerated and surfaces as ErrEnrichClientUnavailable.
+	ResourceExplorer2 *resourceexplorer2.Client
+	// APIGatewayV2 is the shared client for the API Gateway v2 hand-
+	// rolled enricher (aws_apigatewayv2_stage). One client serves every
+	// region in the run; the enricher applies a per-call region override
+	// via an Options closure. Nil is tolerated and surfaces as
+	// ErrEnrichClientUnavailable.
+	APIGatewayV2 *apigatewayv2.Client
+	// IAM is the shared client for IAM hand-rolled enrichers
+	// (aws_iam_role_policy_attachment). IAM is a global service, so
+	// no per-region override is needed. Nil is tolerated and surfaces
+	// as ErrEnrichClientUnavailable.
+	IAM *iam.Client
+	// AutoScaling is the shared client for the
+	// aws_autoscaling_group_tag enricher (#482 final-2 push). Auto
+	// Scaling is regional, so the enricher's fetch closure pins the
+	// per-call region; one client serves every region in the run.
+	// Nil is tolerated and surfaces as ErrEnrichClientUnavailable.
+	AutoScaling *autoscaling.Client
+	// WAFv2 is the shared client for the
+	// aws_wafv2_web_acl_association enricher (#482 final-2 push).
+	// WAFv2 is regional (CLOUDFRONT scope is handled on the
+	// cloudfront_distribution side); the enricher applies its per-
+	// call region override via an Options closure so a single client
+	// serves every region in the run. Nil is tolerated and surfaces
+	// as ErrEnrichClientUnavailable.
+	WAFv2     *wafv2.Client
+	AccountID string
 }
 
 // ErrEnrichClientUnavailable signals that the SDK client an enricher

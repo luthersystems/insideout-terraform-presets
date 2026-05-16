@@ -212,10 +212,36 @@ func NewAWSDiscovererWithConcurrency(cfg aws.Config, maxConcurrency int) *AWSDis
 	// retired (the framework preserves the override capability for any
 	// per-type quirk the unified path doesn't model).
 	byTypeEnricher := map[string]AttributeEnricher{
-		"aws_cloudwatch_log_group":  newCloudWatchLogGroupEnricher(),
-		"aws_dynamodb_table":        newDynamoDBTableEnricher(),
-		"aws_s3_bucket":             newS3BucketEnricher(),
-		"aws_secretsmanager_secret": newSecretsManagerSecretEnricher(),
+		"aws_apigatewayv2_stage": newAPIGatewayV2StageEnricher(),
+		// Final-2 enricher push (#482) — closes the last two SDK-only
+		// sub-resource discoverers (aws_autoscaling_group_tag,
+		// aws_wafv2_web_acl_association) that lacked a hand-rolled
+		// AttributeEnricher. Each uses a per-binding lookup RPC
+		// (DescribeTags filtered server-side, GetWebACLForResource)
+		// rather than rerunning the discoverer's fan-out shape; one
+		// SDK call per enriched row.
+		"aws_autoscaling_group_tag":                          newAutoscalingGroupTagEnricher(),
+		"aws_bedrock_guardrail":                              newBedrockGuardrailEnricher(),
+		"aws_bedrock_model_invocation_logging_configuration": newBedrockModelInvocationLoggingConfigurationEnricher(),
+		"aws_cloudwatch_log_group":                           newCloudWatchLogGroupEnricher(),
+		"aws_dynamodb_contributor_insights":                  newDDBContributorInsightsEnricher(),
+		"aws_dynamodb_table":                                 newDynamoDBTableEnricher(),
+		"aws_iam_role_policy_attachment":                     newIAMRolePolicyAttachmentEnricher(),
+		"aws_resourceexplorer2_index":                        newResourceExplorer2IndexEnricher(),
+		"aws_resourceexplorer2_view":                         newResourceExplorer2ViewEnricher(),
+		"aws_s3_bucket":                                      newS3BucketEnricher(),
+		// S3 bucket sub-resource enrichers — all five share the
+		// EnrichClients.S3 client; the per-bucket GetBucket* SDK calls
+		// fan out one-at-a-time and produce the typed Layer-1 payload
+		// for each sub-resource type.
+		"aws_s3_bucket_lifecycle_configuration":              newS3BucketLifecycleConfigurationEnricher(),
+		"aws_s3_bucket_ownership_controls":                   newS3BucketOwnershipControlsEnricher(),
+		"aws_s3_bucket_public_access_block":                  newS3BucketPublicAccessBlockEnricher(),
+		"aws_s3_bucket_server_side_encryption_configuration": newS3BucketServerSideEncryptionConfigurationEnricher(),
+		"aws_s3_bucket_versioning":                           newS3BucketVersioningEnricher(),
+		"aws_secretsmanager_secret":                          newSecretsManagerSecretEnricher(),
+		"aws_service_discovery_private_dns_namespace":        newServiceDiscoveryPrivateDNSNamespaceEnricher(),
+		"aws_wafv2_web_acl_association":                      newWAFv2WebACLAssociationEnricher(),
 	}
 	// HYBRID Cloud Control fallback (#490 steps 1+2): register one
 	// cloudControlEnricher for every TF type in cloudControlTypeConfigs

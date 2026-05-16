@@ -1,13 +1,30 @@
 package policy
 
+// googleComputeSecurityPolicyPolicy curates Layer 2 for
+// `google_compute_security_policy` (Cloud Armor). Identity scalars +
+// `type` (CLOUD_ARMOR vs CLOUD_ARMOR_EDGE) are DriftSemanticExact.
+// `rule.match.config.src_ip_ranges` is set-membership; element order
+// is irrelevant on the provider side and a missing CIDR is a missing
+// rule — DriftSemanticWholeList. Per-rule sub-scalars (priority /
+// action / versioned_expr) are exact-compare candidates today.
 var googleComputeSecurityPolicyPolicy = Map{
 	// Identity
-	"name":      {Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever},
-	"id":        {Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever},
-	"self_link": {Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever},
+	"name": {
+		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"id": {
+		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"self_link": {
+		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		DriftSemantic: DriftSemanticExact,
+	},
 	"project": {
 		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
-		ChangeRisk: ChangeAlwaysReplace,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
 	},
 
 	// Tuning — top-level policy knobs.
@@ -16,17 +33,21 @@ var googleComputeSecurityPolicyPolicy = Map{
 	},
 	"type": {
 		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityUIVisible,
-		Edit: EditNever, ChangeRisk: ChangeAlwaysReplace,
+		Edit:          EditNever,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
 	},
 
 	// Tuning — rule block (priority + action + match selectors).
 	"rule.priority": {
 		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
-		Edit: EditRequiresApproval,
+		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"rule.action": {
 		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityUIVisible,
-		Edit: EditRequiresApproval,
+		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"rule.description": {
 		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
@@ -36,11 +57,13 @@ var googleComputeSecurityPolicyPolicy = Map{
 	},
 	"rule.match.versioned_expr": {
 		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
-		Edit: EditRequiresApproval,
+		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"rule.match.config.src_ip_ranges": {
 		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
-		Edit: EditRequiresApproval,
+		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticWholeList,
 	},
 	"rule.match.expr.expression": {
 		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,

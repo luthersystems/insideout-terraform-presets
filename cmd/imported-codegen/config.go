@@ -1,73 +1,49 @@
 package main
 
-// WantedAWS lists the Phase 1 AWS resource types we generate Layer 1
-// structs for. Add new types here to expand coverage.
-var WantedAWS = []string{
-	"aws_cloudwatch_log_group",
-	"aws_dynamodb_table",
-	"aws_lambda_function",
-	"aws_s3_bucket",
-	"aws_secretsmanager_secret",
-	"aws_sqs_queue",
-}
+import (
+	"github.com/luthersystems/insideout-terraform-presets/pkg/insideout-import/registry"
+)
 
-// WantedGoogle lists the GCP resource types we generate Layer 1 structs
-// for from the hashicorp/google provider.
-var WantedGoogle = []string{
-	"google_cloud_run_v2_service",
-	"google_cloudbuild_trigger",
-	"google_cloudfunctions2_function",
-	"google_firestore_database",
-	"google_compute_address",
-	"google_compute_backend_service",
-	"google_compute_firewall",
-	"google_compute_forwarding_rule",
-	"google_compute_global_address",
-	"google_compute_global_forwarding_rule",
-	"google_compute_health_check",
-	"google_compute_instance",
-	"google_compute_managed_ssl_certificate",
-	"google_compute_network",
-	"google_compute_resource_policy",
-	"google_compute_router",
-	"google_compute_security_policy",
-	"google_compute_target_http_proxy",
-	"google_compute_target_https_proxy",
-	"google_compute_url_map",
-	"google_container_cluster",
-	"google_container_node_pool",
-	"google_identity_platform_config",
-	"google_kms_crypto_key",
-	"google_kms_key_ring",
-	"google_logging_project_sink",
-	"google_monitoring_alert_policy",
-	"google_monitoring_dashboard",
-	"google_monitoring_notification_channel",
-	"google_pubsub_subscription",
-	"google_pubsub_topic",
-	"google_redis_instance",
-	"google_secret_manager_secret",
-	"google_service_account",
-	"google_sql_database_instance",
-	"google_sql_user",
-	"google_storage_bucket",
-	"google_vertex_ai_dataset",
-}
+// The lists of Terraform resource types this generator emits Layer-1
+// structs for were historically maintained here (WantedAWS / WantedGoogle /
+// WantedGoogleBeta) as a parallel hand-edited copy of the discover
+// registry. That parallel split caused bundle 12 (#482) to silently
+// miscount drift coverage when a curator added a type to one list but
+// not the other.
+//
+// The canonical lists now live in pkg/insideout-import/registry alongside
+// the discover-supported list, so curators only edit one file. These
+// package-level vars are thin re-exports preserved for callers that
+// reference the historical names (schema_filter, main, tests).
+//
+// Per the registry package doc comment:
+//   - registry.AWSCodegenTypes()      → discoverable AWS ∪ codegen-only AWS
+//   - registry.GoogleCodegenTypes()   → GA-provider GCP types
+//   - registry.GoogleBetaCodegenTypes() → google-beta-provider-only GCP types
+var (
+	// WantedAWS lists the AWS resource types we generate Layer 1 structs
+	// for. Sourced from registry.AWSCodegenTypes — edit
+	// awsDiscoverTypes / awsCodegenOnlyTypes in
+	// pkg/insideout-import/registry/registry.go to expand coverage.
+	WantedAWS = registry.AWSCodegenTypes()
 
-// WantedGoogleBeta lists the GCP resource types whose schema lives in
-// the hashicorp/google-beta provider rather than hashicorp/google. The
-// API Gateway resources are the canonical case — the GA provider exposes
-// the data sources but not the resources, so the api_gateway preset
-// declares `google-beta` and uses `provider = google-beta` on each
-// resource. The codegen processes these types against the beta schema
-// dump and the resulting registrations carry GoogleBetaProviderSource
-// so the composer's imported-resource emission routes them through the
-// `google-beta.imported` provider alias instead of `google.imported`.
-var WantedGoogleBeta = []string{
-	"google_api_gateway_api",
-	"google_api_gateway_api_config",
-	"google_api_gateway_gateway",
-}
+	// WantedGoogle lists the GCP resource types we generate Layer 1
+	// structs for from the hashicorp/google provider. Sourced from
+	// registry.GoogleCodegenTypes.
+	WantedGoogle = registry.GoogleCodegenTypes()
+
+	// WantedGoogleBeta lists the GCP resource types whose schema lives in
+	// the hashicorp/google-beta provider rather than hashicorp/google. The
+	// API Gateway resources are the canonical case — the GA provider exposes
+	// the data sources but not the resources, so the api_gateway preset
+	// declares `google-beta` and uses `provider = google-beta` on each
+	// resource. The codegen processes these types against the beta schema
+	// dump and the resulting registrations carry GoogleBetaProviderSource
+	// so the composer's imported-resource emission routes them through the
+	// `google-beta.imported` provider alias instead of `google.imported`.
+	// Sourced from registry.GoogleBetaCodegenTypes.
+	WantedGoogleBeta = registry.GoogleBetaCodegenTypes()
+)
 
 // AWSProviderSource is the Terraform Registry source string for the AWS
 // provider. Pinned in schemas/providers.tf and persisted via the generated

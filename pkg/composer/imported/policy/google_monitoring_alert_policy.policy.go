@@ -1,33 +1,51 @@
 package policy
 
+// googleMonitoringAlertPolicyPolicy curates Layer 2 for
+// `google_monitoring_alert_policy`. Identity scalars + the
+// `combiner` / `enabled` tuning scalars are DriftSemanticExact;
+// `notification_channels` is a list of managed channel references
+// where set-membership drift is the actionable signal but per-element
+// removal is not independently meaningful — DriftSemanticWholeList.
 var googleMonitoringAlertPolicyPolicy = Map{
 	// Identity
-	"name": {Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever},
-	"id":   {Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever},
+	"name": {
+		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"id": {
+		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		DriftSemantic: DriftSemanticExact,
+	},
 	"project": {
 		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
-		ChangeRisk: ChangeAlwaysReplace,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"display_name": {
 		Role: RoleTuning, Visibility: VisibilityUIVisible, Edit: EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
 	},
 
 	// Wiring — notification channels are managed resources.
 	"notification_channels": {
 		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityUIVisible,
-		Edit: EditRelationshipOnly,
+		Edit:          EditRelationshipOnly,
+		DriftSemantic: DriftSemanticWholeList,
 	},
 
 	// Tuning — combiner + enable + severity.
 	"combiner": {
 		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityUIVisible,
-		Edit: EditRequiresApproval,
+		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"enabled": {
 		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityUIVisible, Edit: EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"severity": {
 		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
 	},
 
 	// Conditions block — match conditions are core alert semantics.
