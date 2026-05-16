@@ -39,6 +39,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported/generated"
 )
 
 // Normalizer is the per-type hook on cloudControlConfig.Normalizer
@@ -300,6 +302,140 @@ func synthIDFromField(src string) Normalizer {
 			return in, nil
 		}
 		m["Id"] = s
+		return encodeObject(m)
+	}
+}
+
+// universallyElidedTFFields are top-level attribute names dropped on
+// every Terraform resource regardless of the schema's Optional /
+// Computed flags. EMPTY today on the AWS side — diverges from the
+// GCP-side analog in cmd/insideout-import/gcpdiscover/cai_normalizers.go
+// (#581), which elides `id` universally because the GCP hand-rolled
+// enrichers uniformly skip assigning to `out.ID`.
+//
+// The AWS hand-rolled enrichers do the opposite: they SYNTHESIZE
+// `out.ID` from the primary-name field (mapS3Bucket sets ID = bucket;
+// the retired mapCloudwatchLogGroup set ID = name). The Cloud Control
+// generic path matches this by placing synthIDFromField in the
+// Normalizer chain. Elide-id universally here would strip both the
+// CFN-leaked `Id` AND the synthesized one — breaking parity for
+// every type whose chain already wires synthIDFromField.
+//
+// Kept as a hook (rather than removed) so a future per-type opt-in
+// for AWS resources that legitimately leak `id` from CFN-without-
+// synth has a single registration point. New entries belong here
+// only when they're universally "Optional+Computed in schema but
+// treated as computed-only in the hand-rolled emit layer" across
+// EVERY AWS resource (not just one or two).
+var universallyElidedTFFields = map[string]bool{}
+
+// stripComputedOnlyForType returns a Normalizer that removes top-level
+// fields the registered FieldSchema marks as purely computed
+// (Computed=true && Required=false && Optional=false) from the raw
+// Cloud Control properties JSON before the camelToSnake / Layer-1
+// unmarshal pipeline (#582 — mirror of the GCP-side #581 helper in
+// cmd/insideout-import/gcpdiscover/cai_normalizers.go).
+//
+// Per decision #5 (computed-only field elision; see
+// docs/managed-resource-tiers.md and pkg/composer/imported/generated/schema.go),
+// the composed HCL surface MUST NOT emit fields whose only schema role
+// is "server-set on read". The hand-rolled AWS enrichers all open-
+// code this rule in their map<Type> functions (mapS3Bucket,
+// mapDynamoDBTable, mapSecretsManagerSecret, etc. — none assign to
+// computed-only fields like `arn`, `bucket_domain_name`,
+// `hosted_zone_id`, `url`, `creation_date`). Without this Normalizer,
+// retiring a hand-rolled enricher and falling back to the generic
+// Cloud Control path would silently re-introduce those fields into
+// ir.Attrs — fields the emitter would strip later, but the
+// framework-level invariant would be lost (and any consumer reading
+// Attrs directly would see the difference).
+//
+// Lookup precedence: the helper consults generated.Lookup(tfType) at
+// each call (not at construction) so a Register that lands after this
+// Normalizer is constructed still takes effect. A type with no
+// registered schema is fail-open: the input passes through untouched
+// (the downstream UnmarshalAttrs will already fail loudly if the type
+// is truly unregistered, so no information is lost; and the typed
+// fallback path is where wiring bugs surface).
+//
+// CloudFormation returns PascalCase keys (`Arn`, `BucketName`,
+// `CreationTime`); FieldSchema keys are snake_case
+// (`arn`, `bucket_name`, `creation_time`). The helper bridges by
+// camelToSnake-renaming each top-level key for the lookup. Place this
+// Normalizer LAST in the chain so it sees the post-rename / post-
+// synth payload (renameField may have changed `LogGroupName` to
+// `Name`; synthIDFromField may have added `Id` — the post-rename
+// snake_case lookup matches the schema). Distinguishes the cases
+// that LOOK computed-only but aren't:
+//
+//   - Optional+Computed: user MAY own the value (e.g. `name` on
+//     log_group, `id` on every AWS resource). Configurable() returns
+//     true; kept — EXCEPT for entries in universallyElidedTFFields
+//     (empty today on the AWS side; see that variable's godoc for
+//     why the GCP-side `id` entry doesn't carry over).
+//   - Required+Computed: rare but the schema says the user must
+//     supply it. Configurable() returns true; kept.
+//   - Computed-only (the target): Configurable() returns false;
+//     dropped. Canonical AWS examples: `arn`, `url` (sqs_queue),
+//     `bucket_domain_name`, `bucket_regional_domain_name`,
+//     `hosted_zone_id`, `region`, `website_domain`, `website_endpoint`
+//     (s3_bucket), `arn` (log_group).
+//
+// Operates only on top-level fields. Nested-block computed-only
+// filtering (e.g. inside a `lifecycle_rule[0]` block) would need a
+// recursive walker — none of the AWS retirement candidates need it
+// today; the hand-rolled enrichers' decision-#5 list is uniformly
+// top-level.
+//
+// Idempotent: an absent field is a no-op; an empty object is a no-op;
+// a non-object payload (rare — only happens if a normalizer earlier
+// in the chain produced one) returns a wrapped error so the chain
+// reports the failing helper instead of cascading into a confusing
+// unmarshal error downstream.
+func stripComputedOnlyForType(tfType string) Normalizer {
+	return func(in json.RawMessage) (json.RawMessage, error) {
+		if tfType == "" {
+			return in, nil
+		}
+		_, schema, ok := generated.Lookup(tfType)
+		if !ok || len(schema) == 0 {
+			// Fail-open: no registered schema → pass through. The
+			// downstream UnmarshalAttrs will already fail with
+			// "no registered type" if the type is truly missing.
+			return in, nil
+		}
+		m, err := decodeObject(in)
+		if err != nil {
+			return nil, fmt.Errorf("stripComputedOnlyForType(%q): %w", tfType, err)
+		}
+		if m == nil {
+			return in, nil
+		}
+		changed := false
+		for k := range m {
+			snake := camelToSnake(k)
+			if universallyElidedTFFields[snake] {
+				delete(m, k)
+				changed = true
+				continue
+			}
+			fs, present := schema[snake]
+			if !present {
+				// Unknown-to-schema field — keep it. The downstream
+				// renamer + UnmarshalAttrs will drop it via json
+				// ignore-unknown-keys; preserving it here means a
+				// future schema regeneration that adds the field
+				// doesn't silently start eliding it.
+				continue
+			}
+			if fs.Computed && !fs.Configurable() {
+				delete(m, k)
+				changed = true
+			}
+		}
+		if !changed {
+			return in, nil
+		}
 		return encodeObject(m)
 	}
 }

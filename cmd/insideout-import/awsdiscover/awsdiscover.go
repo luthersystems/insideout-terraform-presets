@@ -266,8 +266,18 @@ func NewAWSDiscovererWithConcurrency(cfg aws.Config, maxConcurrency int) *AWSDis
 		}
 		// #501 — pass through the per-type Normalizer (nil for types
 		// whose CFN shape already matches the camelToSnake projection).
+		// #582 — wrap with the generic computed-only filter LAST so
+		// every CC-routed type benefits from decision-#5 elision
+		// without per-type opt-in. The filter is a no-op for types
+		// whose CFN payload doesn't include any computed-only fields
+		// (and fail-open for the rare unregistered-in-`generated`
+		// type, so a wiring gap can't cause a runtime regression).
+		// Hand-rolled enricher overrides (above) take precedence over
+		// this loop, so the filter doesn't perturb the SDK-only
+		// enrichers' map<Type> output.
+		normalizer := chain(ccCfg.Normalizer, stripComputedOnlyForType(ccCfg.TFType))
 		byTypeEnricher[ccCfg.TFType] = newCloudControlEnricherWithNormalizer(
-			ccCfg.TFType, ccCfg.CloudFormationType, nil, ccCfg.Normalizer,
+			ccCfg.TFType, ccCfg.CloudFormationType, nil, normalizer,
 		)
 	}
 	return &AWSDiscoverer{
