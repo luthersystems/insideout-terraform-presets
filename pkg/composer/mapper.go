@@ -573,6 +573,42 @@ func (m DefaultMapper) BuildModuleValues(
 			}
 		}
 
+	case KeyAWSRoute53:
+		// Route 53 (#584). domain_name is required by the preset (no
+		// default); supply a preview-safe placeholder so single-module
+		// previews and validation runs succeed when the caller hasn't yet
+		// provided cfg.AWSRoute53.DomainName. The placeholder is a
+		// syntactically valid DNS name that obviously isn't a real domain
+		// — it'll fail the registrar/Route 53 check at apply time, which
+		// is the correct fail-loud surface (rather than a silent
+		// validation-time miss).
+		domain := "example.invalid"
+		if cfg != nil && cfg.AWSRoute53 != nil && strings.TrimSpace(cfg.AWSRoute53.DomainName) != "" {
+			domain = strings.TrimSpace(cfg.AWSRoute53.DomainName)
+		}
+		vals["domain_name"] = domain
+		if cfg != nil && cfg.AWSRoute53 != nil {
+			if cfg.AWSRoute53.CreateZone != nil {
+				vals["create_zone"] = *cfg.AWSRoute53.CreateZone
+			}
+			if cfg.AWSRoute53.ZoneID != "" {
+				vals["zone_id"] = cfg.AWSRoute53.ZoneID
+			}
+			if cfg.AWSRoute53.PrivateZone != nil {
+				vals["private_zone"] = *cfg.AWSRoute53.PrivateZone
+			}
+			if len(cfg.AWSRoute53.VPCIDs) > 0 {
+				vpcIDs := make([]any, len(cfg.AWSRoute53.VPCIDs))
+				for i, id := range cfg.AWSRoute53.VPCIDs {
+					vpcIDs[i] = id
+				}
+				vals["vpc_ids"] = vpcIDs
+			}
+			if cfg.AWSRoute53.ForceDestroy != nil {
+				vals["force_destroy"] = *cfg.AWSRoute53.ForceDestroy
+			}
+		}
+
 	case KeyAWSKMS:
 		if cfg != nil && cfg.AWSKMS != nil && cfg.AWSKMS.NumKeys != "" {
 			n, err := strconv.Atoi(strings.TrimSpace(cfg.AWSKMS.NumKeys))
