@@ -56,6 +56,7 @@ NON_TAGGABLE_AWS=(
   aws_msk_configuration
   aws_opensearchserverless_access_policy
   aws_opensearchserverless_security_policy
+  aws_route53_record
   aws_s3_bucket_lifecycle_configuration
   aws_s3_bucket_ownership_controls
   aws_s3_bucket_policy
