@@ -21,11 +21,40 @@ func reseed(t *testing.T) {
 	regMu.Unlock()
 }
 
+// emptyDefaultMetricsAllowed lists tfTypes that are intentionally
+// registered with an empty DefaultMetrics — typically IAM-style
+// types whose metrics are CloudTrail-only / audit-log-only and which
+// only need to appear in the registry so downstream consumers can
+// route policy queries. Per bindings.go, an entry with empty
+// DefaultMetrics means "use consumer defaults" and is distinct from
+// "type isn't bound at all".
+var emptyDefaultMetricsAllowed = map[string]bool{
+	"aws_iam_role":                    true,
+	"aws_iam_policy":                  true,
+	"aws_iam_user":                    true,
+	"aws_iam_group":                   true,
+	"aws_iam_instance_profile":        true,
+	"aws_iam_role_policy":             true,
+	"aws_iam_role_policy_attachment":  true,
+	"google_service_account":          true,
+	"google_project_iam_member":       true,
+	"aws_kms_alias":                          true,
+	"aws_msk_configuration":                  true,
+	"aws_eks_access_entry":                   true,
+	"google_sql_user":                        true,
+	"google_storage_bucket_iam_member":       true,
+	"aws_db_subnet_group":                    true,
+	"aws_elasticache_parameter_group":        true,
+	"aws_elasticache_subnet_group":           true,
+	"aws_key_pair":                           true,
+	"google_secret_manager_secret_iam_member": true,
+}
+
 func TestSeededBindings(t *testing.T) {
 	reseed(t)
 
-	require.GreaterOrEqual(t, len(RegisteredTypes()), 16,
-		"expected at least 16 seeded types, got %d", len(RegisteredTypes()))
+	require.GreaterOrEqual(t, len(RegisteredTypes()), 136,
+		"expected at least 136 seeded types, got %d", len(RegisteredTypes()))
 
 	for _, tfType := range seededTypes {
 		tfType := tfType
@@ -38,7 +67,12 @@ func TestSeededBindings(t *testing.T) {
 			assert.NotEmpty(t, b.Action, "%s: Action empty", tfType)
 			assert.NotEmpty(t, b.DimensionKey, "%s: DimensionKey empty", tfType)
 			assert.NotEmpty(t, b.DimensionFrom, "%s: DimensionFrom empty", tfType)
-			assert.NotEmpty(t, b.DefaultMetrics, "%s: DefaultMetrics empty", tfType)
+			if emptyDefaultMetricsAllowed[tfType] {
+				assert.Empty(t, b.DefaultMetrics,
+					"%s: listed in emptyDefaultMetricsAllowed but DefaultMetrics is non-empty — remove from allowlist", tfType)
+			} else {
+				assert.NotEmpty(t, b.DefaultMetrics, "%s: DefaultMetrics empty", tfType)
+			}
 		})
 	}
 }
