@@ -22,7 +22,7 @@ and is checked in lockstep with the runtime registries. See the
 
 ## Summary
 
-- **AWS:** 109 types · 100% Discoverable · 100% Enrichable · 97% DriftDetectable · 8% MetricsAvailable · 88% AgentEditable
+- **AWS:** 109 types · 100% Discoverable · 100% Enrichable · 99% DriftDetectable · 8% MetricsAvailable · 90% AgentEditable
 - **GCP:** 54 types · 100% Discoverable · 100% Enrichable · 63% DriftDetectable · 11% MetricsAvailable · 89% AgentEditable
 
 ## AWS
@@ -108,9 +108,9 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_network_acl` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_network_interface` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_opensearch_domain` | ✓ | ✓ | ✓ | – | ✓ |
-| `aws_opensearchserverless_access_policy` | ✓ | ✓ | – | – | – |
+| `aws_opensearchserverless_access_policy` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_opensearchserverless_collection` | ✓ | ✓ | ✓ | – | ✓ |
-| `aws_opensearchserverless_security_policy` | ✓ | ✓ | – | – | – |
+| `aws_opensearchserverless_security_policy` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_resourceexplorer2_index` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_resourceexplorer2_view` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_route53_zone` | ✓ | ✓ | ✓ | – | ✓ |

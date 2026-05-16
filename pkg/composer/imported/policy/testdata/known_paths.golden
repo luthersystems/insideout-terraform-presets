@@ -1480,6 +1480,12 @@ aws_opensearch_domain	tags_all	Tuning		Hidden	SystemOnly	Redacted
 aws_opensearch_domain	timeouts	Tuning		Hidden	SystemOnly		
 aws_opensearch_domain	vpc_options.security_group_ids	Wiring	Security	RileyVisible	RelationshipOnly		
 aws_opensearch_domain	vpc_options.subnet_ids	Wiring	Reliability	RileyVisible	RelationshipOnly		
+aws_opensearchserverless_access_policy	description	Tuning	Reliability	UIVisible	ChatSafe		
+aws_opensearchserverless_access_policy	id	Identity		UIVisible	Never		
+aws_opensearchserverless_access_policy	name	Identity		UIVisible	Never		AlwaysReplace
+aws_opensearchserverless_access_policy	policy	Tuning	Security	RileyVisible	RequiresApproval		
+aws_opensearchserverless_access_policy	policy_version	Identity		UIVisible	Never		
+aws_opensearchserverless_access_policy	type	Identity		UIVisible	Never		AlwaysReplace
 aws_opensearchserverless_collection	arn	Identity		UIVisible	Never		
 aws_opensearchserverless_collection	collection_endpoint	Identity		UIVisible	Never		
 aws_opensearchserverless_collection	dashboard_endpoint	Identity		UIVisible	Never		
@@ -1491,6 +1497,12 @@ aws_opensearchserverless_collection	standby_replicas	Tuning	Reliability	UIVisibl
 aws_opensearchserverless_collection	tags	Tuning		Hidden	SystemOnly	Redacted	
 aws_opensearchserverless_collection	tags_all	Tuning		Hidden	SystemOnly	Redacted	
 aws_opensearchserverless_collection	type	Tuning	Performance	UIVisible	Never		AlwaysReplace
+aws_opensearchserverless_security_policy	description	Tuning	Reliability	UIVisible	ChatSafe		
+aws_opensearchserverless_security_policy	id	Identity		UIVisible	Never		
+aws_opensearchserverless_security_policy	name	Identity		UIVisible	Never		AlwaysReplace
+aws_opensearchserverless_security_policy	policy	Tuning	Security	RileyVisible	RequiresApproval		
+aws_opensearchserverless_security_policy	policy_version	Identity		UIVisible	Never		
+aws_opensearchserverless_security_policy	type	Identity		UIVisible	Never		AlwaysReplace
 aws_rds_cluster	allocated_storage	Tuning	Performance	UIVisible	ChatSafe		
 aws_rds_cluster	allow_major_version_upgrade	Tuning	Reliability	RileyVisible	RequiresApproval		
 aws_rds_cluster	apply_immediately	Tuning	Reliability	RileyVisible	ChatSafe		

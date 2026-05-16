@@ -196,8 +196,15 @@ var coveredTypes = []string{
 	"aws_network_acl",
 	"aws_network_interface",
 	"aws_opensearch_domain",
+	// Bundle 13 (#482) — OpenSearch Serverless access policy + security
+	// policy. Close the last AWS Enrichable→Drift gap (push to 100%).
+	// Both are JSON-document policies (data access / encryption-network);
+	// `policy` is the security-critical surface.
+	"aws_opensearchserverless_access_policy",
 	// Bundle 12 (cont.) — OpenSearch Serverless collection.
 	"aws_opensearchserverless_collection",
+	// Bundle 13 (cont.) — OpenSearch Serverless security policy.
+	"aws_opensearchserverless_security_policy",
 	// Bundle 5 (cont.) — RDS Aurora / multi-AZ cluster.
 	"aws_rds_cluster",
 	"aws_resourceexplorer2_index",

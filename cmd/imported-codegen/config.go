@@ -275,11 +275,22 @@ var WantedAWS = []string{
 	// group set, private_ip_list, source_dest_check.
 	"aws_network_interface",
 	"aws_opensearch_domain",
+	// Bundle 13 (#482) — OpenSearch Serverless access policy. Identity
+	// is (name, type=data). `policy` is a JSON document that controls
+	// principal → collection/index permissions; drift on `policy` is a
+	// security-critical surface (who can read/write serverless indices).
+	"aws_opensearchserverless_access_policy",
 	// Bundle 12 (#482) — OpenSearch Serverless collection. Identity is
 	// (name, id, arn). type (SEARCH / TIMESERIES / VECTORSEARCH) +
 	// kms_key_arn are the security/perf-relevant axes. standby_replicas
 	// flips availability tier (ENABLED / DISABLED).
 	"aws_opensearchserverless_collection",
+	// Bundle 13 (#482) — OpenSearch Serverless security policy. Identity
+	// is (name, type=encryption|network). `policy` JSON binds collection
+	// patterns to network/encryption rules. Drift on `policy` silently
+	// re-scopes who can reach the collection at the network/encryption
+	// boundary.
+	"aws_opensearchserverless_security_policy",
 	// Bundle 5 (#482) — RDS Aurora / multi-AZ cluster (the cluster-level
 	// shape sibling to the existing cloud-control-routed db_instance).
 	"aws_rds_cluster",

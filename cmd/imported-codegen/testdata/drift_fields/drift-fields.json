@@ -5511,6 +5511,32 @@
       "semantic": "WholeList"
     }
   ],
+  "aws_opensearchserverless_access_policy": [
+    {
+      "path": "description",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "policy",
+      "semantic": "Exact"
+    },
+    {
+      "path": "policy_version",
+      "semantic": "Exact"
+    },
+    {
+      "path": "type",
+      "semantic": "Exact"
+    }
+  ],
   "aws_opensearchserverless_collection": [
     {
       "path": "arn",
@@ -5542,6 +5568,32 @@
     },
     {
       "path": "standby_replicas",
+      "semantic": "Exact"
+    },
+    {
+      "path": "type",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_opensearchserverless_security_policy": [
+    {
+      "path": "description",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "policy",
+      "semantic": "Exact"
+    },
+    {
+      "path": "policy_version",
       "semantic": "Exact"
     },
     {
