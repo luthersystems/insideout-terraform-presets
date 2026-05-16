@@ -20,6 +20,10 @@ var WantedAWS = []string{
 	// API is the top-level container; the domain name is the public
 	// custom-domain endpoint that maps onto an API via api_mapping.
 	"aws_apigatewayv2_api",
+	// Bundle 9 (#482) — APIGW v2 API mapping. Binds a custom
+	// `aws_apigatewayv2_domain_name` to a specific API + stage. Identity
+	// is (domain_name, api_id, stage); api_mapping_key is the path prefix.
+	"aws_apigatewayv2_api_mapping",
 	"aws_apigatewayv2_authorizer",
 	"aws_apigatewayv2_domain_name",
 	"aws_apigatewayv2_integration",

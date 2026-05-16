@@ -37,6 +37,11 @@ var coveredTypes = []string{
 	// KMS alias, Lambda function URL, SSM Parameter Store entry. Pushes
 	// AWS DriftDetectable from 63% to ~70%.
 	"aws_apigatewayv2_api",
+	// Bundle 9 (#482) — APIGW v2 API mapping (binds custom domain to
+	// api+stage), cognito identity provider, lambda event source mapping,
+	// network ACL, VPC DHCP options, VPC SG ingress/egress rules,
+	// WAFv2 web ACL. Pushes AWS DriftDetectable from 71% to ~78%.
+	"aws_apigatewayv2_api_mapping",
 	"aws_apigatewayv2_authorizer",
 	"aws_apigatewayv2_domain_name",
 	"aws_apigatewayv2_integration",

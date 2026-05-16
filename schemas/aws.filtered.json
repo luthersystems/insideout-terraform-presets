@@ -2649,6 +2649,40 @@
             "description_kind": "plain"
           }
         },
+        "aws_apigatewayv2_api_mapping": {
+          "version": 0,
+          "block": {
+            "attributes": {
+              "api_id": {
+                "type": "string",
+                "description_kind": "plain",
+                "required": true
+              },
+              "api_mapping_key": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "domain_name": {
+                "type": "string",
+                "description_kind": "plain",
+                "required": true
+              },
+              "id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "stage": {
+                "type": "string",
+                "description_kind": "plain",
+                "required": true
+              }
+            },
+            "description_kind": "plain"
+          }
+        },
         "aws_apigatewayv2_authorizer": {
           "version": 0,
           "block": {
