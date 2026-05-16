@@ -321,6 +321,9 @@ aws_cloudfront_function	id	Identity		UIVisible	Never
 aws_cloudfront_function	name	Identity		UIVisible	Never		AlwaysReplace
 aws_cloudfront_function	runtime	Tuning	Reliability	RileyVisible	RequiresApproval		
 aws_cloudfront_function	status	Tuning		UIVisible	Never		
+aws_cloudfront_monitoring_subscription	distribution_id	Wiring	Reliability	UIVisible	Never		AlwaysReplace
+aws_cloudfront_monitoring_subscription	id	Identity		UIVisible	Never		
+aws_cloudfront_monitoring_subscription	monitoring_subscription.realtime_metrics_subscription_config.realtime_metrics_subscription_status	Tuning	Performance	UIVisible	ChatSafe		
 aws_cloudfront_origin_access_identity	caller_reference	Identity		UIVisible	Never		
 aws_cloudfront_origin_access_identity	cloudfront_access_identity_path	Identity		UIVisible	Never		
 aws_cloudfront_origin_access_identity	comment	Tuning		UIVisible	ChatSafe		
@@ -381,6 +384,9 @@ aws_cloudwatch_log_group	retention_in_days	Tuning	Reliability	RileyVisible	ChatS
 aws_cloudwatch_log_group	skip_destroy	Tuning	Reliability	RileyVisible	RequiresApproval		
 aws_cloudwatch_log_group	tags	Tuning		Hidden	SystemOnly	Redacted	
 aws_cloudwatch_log_group	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_cloudwatch_log_resource_policy	id	Identity		UIVisible	Never		
+aws_cloudwatch_log_resource_policy	policy_document	Tuning	Security	RileyVisible	RequiresApproval		
+aws_cloudwatch_log_resource_policy	policy_name	Identity		UIVisible	Never		AlwaysReplace
 aws_cloudwatch_log_stream	arn	Identity		UIVisible	Never		
 aws_cloudwatch_log_stream	id	Identity		UIVisible	Never		
 aws_cloudwatch_log_stream	log_group_name	Wiring	Reliability	UIVisible	Never		AlwaysReplace
@@ -491,6 +497,13 @@ aws_cognito_identity_provider	provider_details	Tuning	Security	RileyVisible	Requ
 aws_cognito_identity_provider	provider_name	Identity		UIVisible	Never		AlwaysReplace
 aws_cognito_identity_provider	provider_type	Identity		UIVisible	Never		AlwaysReplace
 aws_cognito_identity_provider	user_pool_id	Wiring	Security	UIVisible	Never		AlwaysReplace
+aws_cognito_resource_server	id	Identity		UIVisible	Never		
+aws_cognito_resource_server	identifier	Identity		UIVisible	Never		AlwaysReplace
+aws_cognito_resource_server	name	Identity		UIVisible	Never		
+aws_cognito_resource_server	scope.scope_description	Tuning	Security	UIVisible	ChatSafe		
+aws_cognito_resource_server	scope.scope_name	Tuning	Security	RileyVisible	RequiresApproval		
+aws_cognito_resource_server	scope_identifiers	Identity	Security	UIVisible	Never		
+aws_cognito_resource_server	user_pool_id	Wiring	Reliability	UIVisible	Never		AlwaysReplace
 aws_cognito_user_pool_client	access_token_validity	Tuning	Security	RileyVisible	ChatSafe		
 aws_cognito_user_pool_client	allowed_oauth_flows	Tuning	Security	UIVisible	RequiresApproval		
 aws_cognito_user_pool_client	allowed_oauth_flows_user_pool_client	Tuning	Security	RileyVisible	RequiresApproval		
@@ -845,6 +858,15 @@ aws_eks_node_group	tags	Tuning		Hidden	SystemOnly	Redacted
 aws_eks_node_group	tags_all	Tuning		Hidden	SystemOnly	Redacted	
 aws_eks_node_group	timeouts	Tuning		Hidden	SystemOnly		
 aws_eks_node_group	version	Tuning	Security	UIVisible	RequiresApproval		
+aws_eks_pod_identity_association	association_arn	Identity		UIVisible	Never		
+aws_eks_pod_identity_association	association_id	Identity		UIVisible	Never		
+aws_eks_pod_identity_association	cluster_name	Wiring	Reliability	UIVisible	Never		AlwaysReplace
+aws_eks_pod_identity_association	id	Identity		UIVisible	Never		
+aws_eks_pod_identity_association	namespace	Wiring	Security	UIVisible	Never		AlwaysReplace
+aws_eks_pod_identity_association	role_arn	Tuning	Security	RileyVisible	RequiresApproval		
+aws_eks_pod_identity_association	service_account	Wiring	Security	UIVisible	Never		AlwaysReplace
+aws_eks_pod_identity_association	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_eks_pod_identity_association	tags_all	Tuning		Hidden	SystemOnly	Redacted	
 aws_elasticache_parameter_group	arn	Identity		UIVisible	Never		
 aws_elasticache_parameter_group	description	Tuning	Reliability	RileyVisible	ChatSafe		
 aws_elasticache_parameter_group	family	Wiring	Reliability	UIVisible	Never		AlwaysReplace
@@ -1458,6 +1480,17 @@ aws_opensearch_domain	tags_all	Tuning		Hidden	SystemOnly	Redacted
 aws_opensearch_domain	timeouts	Tuning		Hidden	SystemOnly		
 aws_opensearch_domain	vpc_options.security_group_ids	Wiring	Security	RileyVisible	RelationshipOnly		
 aws_opensearch_domain	vpc_options.subnet_ids	Wiring	Reliability	RileyVisible	RelationshipOnly		
+aws_opensearchserverless_collection	arn	Identity		UIVisible	Never		
+aws_opensearchserverless_collection	collection_endpoint	Identity		UIVisible	Never		
+aws_opensearchserverless_collection	dashboard_endpoint	Identity		UIVisible	Never		
+aws_opensearchserverless_collection	description	Tuning	Reliability	UIVisible	ChatSafe		
+aws_opensearchserverless_collection	id	Identity		UIVisible	Never		
+aws_opensearchserverless_collection	kms_key_arn	Wiring	Security	UIVisible	Never		
+aws_opensearchserverless_collection	name	Identity		UIVisible	Never		AlwaysReplace
+aws_opensearchserverless_collection	standby_replicas	Tuning	Reliability	UIVisible	RequiresApproval		
+aws_opensearchserverless_collection	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_opensearchserverless_collection	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_opensearchserverless_collection	type	Tuning	Performance	UIVisible	Never		AlwaysReplace
 aws_rds_cluster	allocated_storage	Tuning	Performance	UIVisible	ChatSafe		
 aws_rds_cluster	allow_major_version_upgrade	Tuning	Reliability	RileyVisible	RequiresApproval		
 aws_rds_cluster	apply_immediately	Tuning	Reliability	RileyVisible	ChatSafe		

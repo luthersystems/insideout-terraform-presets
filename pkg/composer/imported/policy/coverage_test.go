@@ -79,6 +79,11 @@ var coveredTypes = []string{
 	"aws_cloudfront_distribution",
 	// Bundle 10 (cont.) — CloudFront function.
 	"aws_cloudfront_function",
+	// Bundle 12 (#482) — CloudFront monitoring subscription +
+	// CloudWatch log resource policy + Cognito resource server + EKS
+	// pod identity association + OpenSearch Serverless collection.
+	// Pushes AWS DriftDetectable from 93% past the ≥95% target.
+	"aws_cloudfront_monitoring_subscription",
 	// AWS drift coverage bundle 5 (#482) — 10 more cloud-control-routed
 	// types pushing DriftDetectable further. Compute/container, RDS,
 	// MSK, Glue, Cognito, Lambda alias/permission, IAM user, event bus.
@@ -87,6 +92,8 @@ var coveredTypes = []string{
 	"aws_cloudwatch_event_bus",
 	"aws_cloudwatch_event_rule",
 	"aws_cloudwatch_log_group",
+	// Bundle 12 (cont.) — CloudWatch log resource policy.
+	"aws_cloudwatch_log_resource_policy",
 	// Bundle 11 (cont.) — CloudWatch log stream.
 	"aws_cloudwatch_log_stream",
 	"aws_cloudwatch_metric_alarm",
@@ -96,6 +103,8 @@ var coveredTypes = []string{
 	"aws_codepipeline",
 	// Bundle 9 (cont.) — Cognito identity provider.
 	"aws_cognito_identity_provider",
+	// Bundle 12 (cont.) — Cognito resource server.
+	"aws_cognito_resource_server",
 	// Bundle 5 (cont.) — Cognito user-pool client.
 	"aws_cognito_user_pool_client",
 	// Bundle 10 (cont.) — Cognito user-pool custom domain.
@@ -129,6 +138,8 @@ var coveredTypes = []string{
 	"aws_eks_fargate_profile",
 	// Bundle 8 (cont.) — EKS managed node group.
 	"aws_eks_node_group",
+	// Bundle 12 (cont.) — EKS pod identity association.
+	"aws_eks_pod_identity_association",
 	// Bundle 11 (cont.) — ElastiCache parameter group.
 	"aws_elasticache_parameter_group",
 	"aws_elasticache_replication_group",
@@ -185,6 +196,8 @@ var coveredTypes = []string{
 	"aws_network_acl",
 	"aws_network_interface",
 	"aws_opensearch_domain",
+	// Bundle 12 (cont.) — OpenSearch Serverless collection.
+	"aws_opensearchserverless_collection",
 	// Bundle 5 (cont.) — RDS Aurora / multi-AZ cluster.
 	"aws_rds_cluster",
 	"aws_resourceexplorer2_index",

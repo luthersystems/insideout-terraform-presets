@@ -22,7 +22,7 @@ and is checked in lockstep with the runtime registries. See the
 
 ## Summary
 
-- **AWS:** 109 types · 100% Discoverable · 100% Enrichable · 93% DriftDetectable · 8% MetricsAvailable · 83% AgentEditable
+- **AWS:** 109 types · 100% Discoverable · 100% Enrichable · 97% DriftDetectable · 8% MetricsAvailable · 88% AgentEditable
 - **GCP:** 54 types · 100% Discoverable · 100% Enrichable · 63% DriftDetectable · 11% MetricsAvailable · 89% AgentEditable
 
 ## AWS
@@ -49,16 +49,16 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_bedrock_model_invocation_logging_configuration` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_cloudfront_distribution` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_cloudfront_function` | ✓ | ✓ | ✓ | – | ✓ |
-| `aws_cloudfront_monitoring_subscription` | ✓ | ✓ | – | – | – |
+| `aws_cloudfront_monitoring_subscription` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_cloudfront_origin_access_identity` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_cloudwatch_dashboard` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_cloudwatch_event_rule` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_cloudwatch_log_group` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `aws_cloudwatch_log_resource_policy` | ✓ | ✓ | – | – | – |
+| `aws_cloudwatch_log_resource_policy` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_cloudwatch_log_stream` | ✓ | ✓ | ✓ | – | – |
 | `aws_cloudwatch_metric_alarm` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_cognito_identity_provider` | ✓ | ✓ | ✓ | – | ✓ |
-| `aws_cognito_resource_server` | ✓ | ✓ | – | – | – |
+| `aws_cognito_resource_server` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_cognito_user_pool` | ✓ | ✓ | – | – | – |
 | `aws_cognito_user_pool_client` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_cognito_user_pool_domain` | ✓ | ✓ | ✓ | – | ✓ |
@@ -76,7 +76,7 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_eks_cluster` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_eks_fargate_profile` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_eks_node_group` | ✓ | ✓ | ✓ | – | ✓ |
-| `aws_eks_pod_identity_association` | ✓ | ✓ | – | – | – |
+| `aws_eks_pod_identity_association` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_elasticache_parameter_group` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_elasticache_replication_group` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_elasticache_subnet_group` | ✓ | ✓ | ✓ | – | ✓ |
@@ -109,7 +109,7 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_network_interface` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_opensearch_domain` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_opensearchserverless_access_policy` | ✓ | ✓ | – | – | – |
-| `aws_opensearchserverless_collection` | ✓ | ✓ | – | – | – |
+| `aws_opensearchserverless_collection` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_opensearchserverless_security_policy` | ✓ | ✓ | – | – | – |
 | `aws_resourceexplorer2_index` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_resourceexplorer2_view` | ✓ | ✓ | ✓ | – | ✓ |

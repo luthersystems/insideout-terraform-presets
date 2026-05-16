@@ -64,6 +64,10 @@ var WantedAWS = []string{
 	// request / response). `code` is the load-bearing payload, `runtime`
 	// pins the JS engine version.
 	"aws_cloudfront_function",
+	// Bundle 12 (#482) — CloudFront monitoring subscription. Toggles
+	// per-distribution realtime metrics. Singleton per distribution;
+	// identity is the distribution id.
+	"aws_cloudfront_monitoring_subscription",
 	// Bundle 4 (cont.) — CloudTrail.
 	"aws_cloudtrail",
 	// Drift coverage bundle 2 (#482) — cloud-control-routed AWS types
@@ -85,6 +89,11 @@ var WantedAWS = []string{
 	// after creation; drift on log_group_name indicates re-pointing.
 	"aws_cloudwatch_log_stream",
 	"aws_cloudwatch_log_group",
+	// Bundle 12 (#482) — CloudWatch log group resource policy. JSON
+	// IAM-style policy attached at the log-group scope; controls which
+	// principals (typically other AWS services) can write to a group.
+	// Drift on policy_document is security-critical.
+	"aws_cloudwatch_log_resource_policy",
 	"aws_cloudwatch_metric_alarm",
 	"aws_codebuild_project",
 	// Bundle 4 (cont.) — CodeDeploy app.
@@ -94,6 +103,11 @@ var WantedAWS = []string{
 	// federated IdP record (SAML / OIDC / Facebook / Google). Wires
 	// (user_pool_id, provider_name).
 	"aws_cognito_identity_provider",
+	// Bundle 12 (#482) — Cognito resource server. Identity is
+	// (identifier, user_pool_id). Defines OAuth2 scopes for an API
+	// resource fronted by Cognito; drift on `scope` is a security-
+	// relevant axis.
+	"aws_cognito_resource_server",
 	// Bundle 5 (#482) — Cognito user-pool client. The parent
 	// `aws_cognito_user_pool` trips a codegen `schema`-block name
 	// collision (see bundle 4); the *client* resource has no nested
@@ -154,6 +168,11 @@ var WantedAWS = []string{
 	// node_role_arn, subnet_ids, scaling_config); the AMI + instance
 	// type set drives the workhorse compute axis.
 	"aws_eks_node_group",
+	// Bundle 12 (#482) — EKS pod identity association. Binds a
+	// (cluster_name, namespace, service_account) tuple to an IAM role
+	// arn — the post-IRSA way to grant AWS API access to pods. Drift
+	// on role_arn silently re-grants privileges to the bound SA.
+	"aws_eks_pod_identity_association",
 	// Bundle 11 (#482) — ElastiCache parameter group. Engine-family
 	// parameter set applied to ElastiCache clusters. Identity is
 	// (name, family); the `parameter` block is the load-bearing surface
@@ -256,6 +275,11 @@ var WantedAWS = []string{
 	// group set, private_ip_list, source_dest_check.
 	"aws_network_interface",
 	"aws_opensearch_domain",
+	// Bundle 12 (#482) — OpenSearch Serverless collection. Identity is
+	// (name, id, arn). type (SEARCH / TIMESERIES / VECTORSEARCH) +
+	// kms_key_arn are the security/perf-relevant axes. standby_replicas
+	// flips availability tier (ENABLED / DISABLED).
+	"aws_opensearchserverless_collection",
 	// Bundle 5 (#482) — RDS Aurora / multi-AZ cluster (the cluster-level
 	// shape sibling to the existing cloud-control-routed db_instance).
 	"aws_rds_cluster",
