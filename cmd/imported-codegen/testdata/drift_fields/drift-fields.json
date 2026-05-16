@@ -1631,6 +1631,40 @@
       "semantic": "WholeList"
     }
   ],
+  "aws_db_subnet_group": [
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "description",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name_prefix",
+      "semantic": "Exact"
+    },
+    {
+      "path": "subnet_ids",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "supported_network_types",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "vpc_id",
+      "semantic": "Exact"
+    }
+  ],
   "aws_dynamodb_contributor_insights": [
     {
       "path": "id",
@@ -2173,6 +2207,88 @@
       "semantic": "Exact"
     }
   ],
+  "aws_eip": [
+    {
+      "path": "address",
+      "semantic": "Exact"
+    },
+    {
+      "path": "allocation_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "associate_with_private_ip",
+      "semantic": "Exact"
+    },
+    {
+      "path": "association_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "carrier_ip",
+      "semantic": "Exact"
+    },
+    {
+      "path": "customer_owned_ip",
+      "semantic": "Exact"
+    },
+    {
+      "path": "customer_owned_ipv4_pool",
+      "semantic": "Exact"
+    },
+    {
+      "path": "domain",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "instance",
+      "semantic": "Exact"
+    },
+    {
+      "path": "network_border_group",
+      "semantic": "Exact"
+    },
+    {
+      "path": "network_interface",
+      "semantic": "Exact"
+    },
+    {
+      "path": "private_dns",
+      "semantic": "Exact"
+    },
+    {
+      "path": "private_ip",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ptr_record",
+      "semantic": "Exact"
+    },
+    {
+      "path": "public_dns",
+      "semantic": "Exact"
+    },
+    {
+      "path": "public_ip",
+      "semantic": "Exact"
+    },
+    {
+      "path": "public_ipv4_pool",
+      "semantic": "Exact"
+    },
+    {
+      "path": "vpc",
+      "semantic": "Exact"
+    }
+  ],
   "aws_eks_cluster": [
     {
       "path": "access_config.authentication_mode",
@@ -2577,6 +2693,58 @@
       "semantic": "Exact"
     }
   ],
+  "aws_iam_group": [
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "path",
+      "semantic": "Exact"
+    },
+    {
+      "path": "unique_id",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_iam_instance_profile": [
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name_prefix",
+      "semantic": "Exact"
+    },
+    {
+      "path": "path",
+      "semantic": "Exact"
+    },
+    {
+      "path": "role",
+      "semantic": "Exact"
+    },
+    {
+      "path": "unique_id",
+      "semantic": "Exact"
+    }
+  ],
   "aws_iam_policy": [
     {
       "path": "arn",
@@ -2877,6 +3045,24 @@
     {
       "path": "vpc_security_group_ids",
       "semantic": "WholeList"
+    }
+  ],
+  "aws_internet_gateway": [
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "owner_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "vpc_id",
+      "semantic": "Exact"
     }
   ],
   "aws_kinesis_stream": [
@@ -3713,6 +3899,154 @@
       "semantic": "Exact"
     }
   ],
+  "aws_nat_gateway": [
+    {
+      "path": "allocation_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "association_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "connectivity_type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "network_interface_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "private_ip",
+      "semantic": "Exact"
+    },
+    {
+      "path": "public_ip",
+      "semantic": "Exact"
+    },
+    {
+      "path": "secondary_allocation_ids",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "secondary_private_ip_address_count",
+      "semantic": "Exact"
+    },
+    {
+      "path": "secondary_private_ip_addresses",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "subnet_id",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_network_interface": [
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "attachment",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "description",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "interface_type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ipv4_prefix_count",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ipv4_prefixes",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "ipv6_address_count",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ipv6_address_list",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "ipv6_address_list_enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ipv6_addresses",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "ipv6_prefix_count",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ipv6_prefixes",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "mac_address",
+      "semantic": "Exact"
+    },
+    {
+      "path": "outpost_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "owner_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "private_dns_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "private_ip",
+      "semantic": "Exact"
+    },
+    {
+      "path": "private_ip_list",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "private_ip_list_enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "private_ips",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "private_ips_count",
+      "semantic": "Exact"
+    },
+    {
+      "path": "security_groups",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "source_dest_check",
+      "semantic": "Exact"
+    },
+    {
+      "path": "subnet_id",
+      "semantic": "Exact"
+    }
+  ],
   "aws_opensearch_domain": [
     {
       "path": "access_policies",
@@ -4140,6 +4474,32 @@
     },
     {
       "path": "zone_id",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_route_table": [
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "owner_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "propagating_vgws",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "route",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "vpc_id",
       "semantic": "Exact"
     }
   ],

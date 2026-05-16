@@ -432,6 +432,16 @@ aws_db_instance	tags	Tuning		Hidden	SystemOnly	Redacted
 aws_db_instance	tags_all	Tuning		Hidden	SystemOnly	Redacted	
 aws_db_instance	timeouts	Tuning		Hidden	SystemOnly		
 aws_db_instance	vpc_security_group_ids	Wiring	Security	RileyVisible	RelationshipOnly		
+aws_db_subnet_group	arn	Identity		UIVisible	Never		
+aws_db_subnet_group	description	Tuning	Reliability	UIVisible	ChatSafe		
+aws_db_subnet_group	id	Identity		UIVisible	Never		
+aws_db_subnet_group	name	Identity		UIVisible	Never		AlwaysReplace
+aws_db_subnet_group	name_prefix	Identity		UIVisible	Never		AlwaysReplace
+aws_db_subnet_group	subnet_ids	Wiring	Reliability	UIVisible	RequiresApproval		
+aws_db_subnet_group	supported_network_types	Identity		UIVisible	Never		
+aws_db_subnet_group	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_db_subnet_group	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_db_subnet_group	vpc_id	Wiring	Reliability	UIVisible	Never		
 aws_dynamodb_contributor_insights	id	Identity		UIVisible	Never		
 aws_dynamodb_contributor_insights	index_name	Identity		UIVisible	Never		AlwaysReplace
 aws_dynamodb_contributor_insights	table_name	Identity		UIVisible	Never		AlwaysReplace
@@ -577,6 +587,29 @@ aws_efs_file_system	provisioned_throughput_in_mibps	Tuning	Performance	RileyVisi
 aws_efs_file_system	tags	Tuning		Hidden	SystemOnly	Redacted	
 aws_efs_file_system	tags_all	Tuning		Hidden	SystemOnly	Redacted	
 aws_efs_file_system	throughput_mode	Tuning	Performance	UIVisible	RequiresApproval		
+aws_eip	address	Identity		UIVisible	Never		AlwaysReplace
+aws_eip	allocation_id	Identity		UIVisible	Never		
+aws_eip	arn	Identity		UIVisible	Never		
+aws_eip	associate_with_private_ip	Wiring	Reliability	UIVisible	RequiresApproval		
+aws_eip	association_id	Identity		UIVisible	Never		
+aws_eip	carrier_ip	Identity		UIVisible	Never		
+aws_eip	customer_owned_ip	Identity		UIVisible	Never		
+aws_eip	customer_owned_ipv4_pool	Tuning	Reliability	UIVisible	Never		AlwaysReplace
+aws_eip	domain	Identity		UIVisible	Never		AlwaysReplace
+aws_eip	id	Identity		UIVisible	Never		
+aws_eip	instance	Wiring	Reliability	UIVisible	RequiresApproval		
+aws_eip	network_border_group	Tuning	Reliability	UIVisible	Never		AlwaysReplace
+aws_eip	network_interface	Wiring	Reliability	UIVisible	RequiresApproval		
+aws_eip	private_dns	Identity		UIVisible	Never		
+aws_eip	private_ip	Identity		UIVisible	Never		
+aws_eip	ptr_record	Identity		UIVisible	Never		
+aws_eip	public_dns	Identity		UIVisible	Never		
+aws_eip	public_ip	Identity		UIVisible	Never		
+aws_eip	public_ipv4_pool	Tuning	Reliability	UIVisible	Never		AlwaysReplace
+aws_eip	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_eip	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_eip	timeouts	Tuning		Hidden	SystemOnly		
+aws_eip	vpc	Identity		UIVisible	Never		AlwaysReplace
 aws_eks_cluster	access_config.authentication_mode	Tuning	Security	UIVisible	RequiresApproval		
 aws_eks_cluster	access_config.bootstrap_cluster_creator_admin_permissions	Tuning	Security	RileyVisible	Never		AlwaysReplace
 aws_eks_cluster	arn	Identity		UIVisible	Never		
@@ -687,6 +720,21 @@ aws_glue_job	tags	Tuning		Hidden	SystemOnly	Redacted
 aws_glue_job	tags_all	Tuning		Hidden	SystemOnly	Redacted	
 aws_glue_job	timeout	Tuning	Reliability	RileyVisible	ChatSafe		
 aws_glue_job	worker_type	Tuning	Performance	UIVisible	RequiresApproval		
+aws_iam_group	arn	Identity		UIVisible	Never		
+aws_iam_group	id	Identity		UIVisible	Never		
+aws_iam_group	name	Identity		UIVisible	Never		AlwaysReplace
+aws_iam_group	path	Identity		UIVisible	Never		AlwaysReplace
+aws_iam_group	unique_id	Identity		UIVisible	Never		
+aws_iam_instance_profile	arn	Identity		UIVisible	Never		
+aws_iam_instance_profile	create_date	Identity		UIVisible	Never		
+aws_iam_instance_profile	id	Identity		UIVisible	Never		
+aws_iam_instance_profile	name	Identity		UIVisible	Never		AlwaysReplace
+aws_iam_instance_profile	name_prefix	Identity		UIVisible	Never		AlwaysReplace
+aws_iam_instance_profile	path	Identity		UIVisible	Never		AlwaysReplace
+aws_iam_instance_profile	role	Wiring	Security	UIVisible	RequiresApproval		
+aws_iam_instance_profile	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_iam_instance_profile	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_iam_instance_profile	unique_id	Identity		UIVisible	Never		
 aws_iam_policy	arn	Identity		UIVisible	Never		
 aws_iam_policy	attachment_count	Tuning		UIVisible	Never		
 aws_iam_policy	description	Tuning	Security	UIVisible	ChatSafe		
@@ -769,6 +817,13 @@ aws_instance	timeouts	Tuning		Hidden	SystemOnly
 aws_instance	user_data	Tuning	Security	RileyVisible	RequiresApproval		
 aws_instance	user_data_replace_on_change	Tuning	Reliability	RileyVisible	RequiresApproval		
 aws_instance	vpc_security_group_ids	Wiring	Security	RileyVisible	RelationshipOnly		
+aws_internet_gateway	arn	Identity		UIVisible	Never		
+aws_internet_gateway	id	Identity		UIVisible	Never		
+aws_internet_gateway	owner_id	Identity		UIVisible	Never		
+aws_internet_gateway	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_internet_gateway	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_internet_gateway	timeouts	Tuning		Hidden	SystemOnly		
+aws_internet_gateway	vpc_id	Wiring	Security	UIVisible	RequiresApproval		
 aws_kinesis_stream	arn	Identity		UIVisible	Never		
 aws_kinesis_stream	encryption_type	Tuning	Security	UIVisible	RequiresApproval		
 aws_kinesis_stream	enforce_consumer_deletion	Tuning	Reliability	RileyVisible	SystemOnly		
@@ -993,6 +1048,47 @@ aws_msk_configuration	kafka_versions	Tuning	Reliability	UIVisible	RequiresApprov
 aws_msk_configuration	latest_revision	Identity		UIVisible	Never		
 aws_msk_configuration	name	Identity		UIVisible	Never		AlwaysReplace
 aws_msk_configuration	server_properties	Tuning	Reliability	RileyVisible	RequiresApproval		
+aws_nat_gateway	allocation_id	Wiring	Reliability	UIVisible	RequiresApproval		MayReplace
+aws_nat_gateway	association_id	Identity		UIVisible	Never		
+aws_nat_gateway	connectivity_type	Tuning	Security	UIVisible	Never		AlwaysReplace
+aws_nat_gateway	id	Identity		UIVisible	Never		
+aws_nat_gateway	network_interface_id	Identity		UIVisible	Never		
+aws_nat_gateway	private_ip	Identity		UIVisible	Never		MayReplace
+aws_nat_gateway	public_ip	Identity		UIVisible	Never		
+aws_nat_gateway	secondary_allocation_ids	Wiring	Reliability	UIVisible	RequiresApproval		
+aws_nat_gateway	secondary_private_ip_address_count	Tuning	Reliability	RileyVisible	RequiresApproval		
+aws_nat_gateway	secondary_private_ip_addresses	Tuning	Reliability	RileyVisible	RequiresApproval		
+aws_nat_gateway	subnet_id	Wiring	Reliability	UIVisible	Never		AlwaysReplace
+aws_nat_gateway	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_nat_gateway	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_nat_gateway	timeouts	Tuning		Hidden	SystemOnly		
+aws_network_interface	arn	Identity		UIVisible	Never		
+aws_network_interface	attachment	Wiring	Reliability	UIVisible	RequiresApproval		
+aws_network_interface	description	Tuning	Reliability	UIVisible	ChatSafe		
+aws_network_interface	id	Identity		UIVisible	Never		
+aws_network_interface	interface_type	Identity		UIVisible	Never		AlwaysReplace
+aws_network_interface	ipv4_prefix_count	Tuning	Reliability	RileyVisible	RequiresApproval		
+aws_network_interface	ipv4_prefixes	Tuning	Reliability	UIVisible	RequiresApproval		
+aws_network_interface	ipv6_address_count	Tuning	Reliability	RileyVisible	RequiresApproval		
+aws_network_interface	ipv6_address_list	Tuning	Reliability	UIVisible	RequiresApproval		
+aws_network_interface	ipv6_address_list_enabled	Tuning	Reliability	RileyVisible	RequiresApproval		
+aws_network_interface	ipv6_addresses	Tuning	Reliability	UIVisible	RequiresApproval		
+aws_network_interface	ipv6_prefix_count	Tuning	Reliability	RileyVisible	RequiresApproval		
+aws_network_interface	ipv6_prefixes	Tuning	Reliability	UIVisible	RequiresApproval		
+aws_network_interface	mac_address	Identity		UIVisible	Never		
+aws_network_interface	outpost_arn	Identity		UIVisible	Never		
+aws_network_interface	owner_id	Identity		UIVisible	Never		
+aws_network_interface	private_dns_name	Identity		UIVisible	Never		
+aws_network_interface	private_ip	Identity		UIVisible	Never		MayReplace
+aws_network_interface	private_ip_list	Tuning	Reliability	UIVisible	RequiresApproval		
+aws_network_interface	private_ip_list_enabled	Tuning	Reliability	RileyVisible	RequiresApproval		
+aws_network_interface	private_ips	Tuning	Reliability	UIVisible	RequiresApproval		
+aws_network_interface	private_ips_count	Tuning	Reliability	RileyVisible	RequiresApproval		
+aws_network_interface	security_groups	Wiring	Security	UIVisible	RequiresApproval		
+aws_network_interface	source_dest_check	Tuning	Security	UIVisible	RequiresApproval		
+aws_network_interface	subnet_id	Wiring	Reliability	UIVisible	Never		AlwaysReplace
+aws_network_interface	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_network_interface	tags_all	Tuning		Hidden	SystemOnly	Redacted	
 aws_opensearch_domain	access_policies	Wiring	Security	RileyVisible	RequiresApproval		
 aws_opensearch_domain	advanced_security_options.anonymous_auth_enabled	Tuning	Security	RileyVisible	RequiresApproval		
 aws_opensearch_domain	advanced_security_options.enabled	Tuning	Security	UIVisible	RequiresApproval		
@@ -1111,6 +1207,15 @@ aws_route53_zone	tags_all	Tuning		Hidden	SystemOnly	Redacted
 aws_route53_zone	vpc.vpc_id	Wiring	Reliability	RileyVisible	RelationshipOnly		
 aws_route53_zone	vpc.vpc_region	Wiring	Reliability	RileyVisible	RelationshipOnly		
 aws_route53_zone	zone_id	Identity		UIVisible	Never		
+aws_route_table	arn	Identity		UIVisible	Never		
+aws_route_table	id	Identity		UIVisible	Never		
+aws_route_table	owner_id	Identity		UIVisible	Never		
+aws_route_table	propagating_vgws	Wiring	Reliability	UIVisible	RequiresApproval		
+aws_route_table	route	Wiring	Security	UIVisible	RequiresApproval		
+aws_route_table	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_route_table	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_route_table	timeouts	Tuning		Hidden	SystemOnly		
+aws_route_table	vpc_id	Wiring	Reliability	UIVisible	Never		AlwaysReplace
 aws_s3_bucket	acceleration_status	Tuning	Performance	RileyVisible	ChatSafe		
 aws_s3_bucket	acl	Tuning	Security	RileyVisible	RequiresApproval		
 aws_s3_bucket	arn	Identity		UIVisible	Never		

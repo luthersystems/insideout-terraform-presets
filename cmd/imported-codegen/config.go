@@ -48,6 +48,10 @@ var WantedAWS = []string{
 	// `schema` block, so it generates cleanly.
 	"aws_cognito_user_pool_client",
 	"aws_db_instance",
+	// Bundle 6 (#482) — RDS DB subnet group (the VPC-wiring sibling to
+	// the existing db_instance / rds_cluster). Cloud-control-enriched
+	// already; the curated Layer 2 map adds the drift surface.
+	"aws_db_subnet_group",
 	"aws_dynamodb_contributor_insights",
 	// Bundle 4 (cont.) — DynamoDB global table.
 	"aws_dynamodb_global_table",
@@ -59,6 +63,9 @@ var WantedAWS = []string{
 	"aws_ecs_task_definition",
 	// Bundle 4 (cont.) — EFS file system.
 	"aws_efs_file_system",
+	// Bundle 6 (#482) — Elastic IP. VPC-scoped allocation; instance/eni
+	// association is the wiring axis.
+	"aws_eip",
 	"aws_eks_cluster",
 	"aws_elasticache_replication_group",
 	// Bundle 4 (cont.) — Glue catalog database. Substituted for
@@ -75,6 +82,11 @@ var WantedAWS = []string{
 	// SUPPORTED_RESOURCES.md showed them as Enrichable but not
 	// DriftDetectable. Adding the Layer 1 struct + Layer 2 policy file
 	// is the minimal lift to flip each to DriftDetectable.
+	// Bundle 6 (#482) — IAM group + instance profile. group is the IAM
+	// principal collection (memberships are separate attachment rows);
+	// instance_profile binds an EC2 instance to a role.
+	"aws_iam_group",
+	"aws_iam_instance_profile",
 	"aws_iam_policy",
 	"aws_iam_role",
 	"aws_iam_role_policy_attachment",
@@ -84,7 +96,9 @@ var WantedAWS = []string{
 	// `aws_instance` is the canonical TF name for EC2 instances
 	// (the resource was never renamed to `aws_ec2_instance` upstream).
 	"aws_instance",
-	// Bundle 4 (cont.) — Kinesis Data Stream.
+	// Bundle 6 (#482) — VPC internet gateway. Identity is (id) +
+	// wiring to its attached vpc_id.
+	"aws_internet_gateway",
 	"aws_kinesis_stream",
 	"aws_kms_key",
 	// Bundle 5 (#482) — Lambda alias + permission. Alias drives
@@ -101,6 +115,14 @@ var WantedAWS = []string{
 	"aws_msk_cluster",
 	// Bundle 5 (#482) — MSK broker-configuration revision.
 	"aws_msk_configuration",
+	// Bundle 6 (#482) — VPC NAT gateway. Public/private NAT wiring;
+	// allocation_id (EIP), subnet_id, connectivity_type are the
+	// drift-relevant axes.
+	"aws_nat_gateway",
+	// Bundle 6 (#482) — ENI. The pluggable network attachment for EC2,
+	// Lambda-in-VPC, RDS, etc. Drift-relevant axes: subnet_id, security
+	// group set, private_ip_list, source_dest_check.
+	"aws_network_interface",
 	"aws_opensearch_domain",
 	// Bundle 5 (#482) — RDS Aurora / multi-AZ cluster (the cluster-level
 	// shape sibling to the existing cloud-control-routed db_instance).
@@ -108,6 +130,9 @@ var WantedAWS = []string{
 	"aws_resourceexplorer2_index",
 	"aws_resourceexplorer2_view",
 	"aws_route53_zone",
+	// Bundle 6 (#482) — VPC route table. The route set + propagating
+	// VGWs are the drift-relevant axes.
+	"aws_route_table",
 	"aws_s3_bucket",
 	// S3 bucket sub-resources (#482 push to 95% coverage). Each maps
 	// to an SDK-only sub-resource discoverer already registered in

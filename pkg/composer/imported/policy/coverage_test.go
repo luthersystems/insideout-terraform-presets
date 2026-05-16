@@ -59,6 +59,10 @@ var coveredTypes = []string{
 	// Bundle 5 (cont.) — Cognito user-pool client.
 	"aws_cognito_user_pool_client",
 	"aws_db_instance",
+	// Bundle 6 (#482) — RDS DB subnet group, EIP, IAM group, IAM
+	// instance profile, internet gateway, NAT gateway, network
+	// interface, route table.
+	"aws_db_subnet_group",
 	"aws_dynamodb_contributor_insights",
 	// Bundle 4 (cont.) — DynamoDB global table.
 	"aws_dynamodb_global_table",
@@ -69,6 +73,7 @@ var coveredTypes = []string{
 	"aws_ecs_task_definition",
 	// Bundle 4 (cont.) — EFS file system.
 	"aws_efs_file_system",
+	"aws_eip",
 	"aws_eks_cluster",
 	"aws_elasticache_replication_group",
 	// Bundle 4 (cont.) — Glue catalog database (substituted in for
@@ -79,6 +84,8 @@ var coveredTypes = []string{
 	// AWS drift coverage bundle 1 (#482) — high-value cloud-control-routed
 	// types that already had Enrichable coverage but lacked a curated
 	// Layer 2 policy.Map.
+	"aws_iam_group",
+	"aws_iam_instance_profile",
 	"aws_iam_policy",
 	"aws_iam_role",
 	"aws_iam_role_policy_attachment",
@@ -86,6 +93,7 @@ var coveredTypes = []string{
 	"aws_iam_user",
 	// `aws_instance` is the canonical TF name for EC2 instances.
 	"aws_instance",
+	"aws_internet_gateway",
 	// Bundle 4 (cont.) — Kinesis Data Stream.
 	"aws_kinesis_stream",
 	"aws_kms_key",
@@ -101,12 +109,15 @@ var coveredTypes = []string{
 	"aws_msk_cluster",
 	// Bundle 5 (cont.) — MSK broker-configuration revision.
 	"aws_msk_configuration",
+	"aws_nat_gateway",
+	"aws_network_interface",
 	"aws_opensearch_domain",
 	// Bundle 5 (cont.) — RDS Aurora / multi-AZ cluster.
 	"aws_rds_cluster",
 	"aws_resourceexplorer2_index",
 	"aws_resourceexplorer2_view",
 	"aws_route53_zone",
+	"aws_route_table",
 	"aws_s3_bucket",
 	// S3 bucket sub-resources (#482 enricher push to 95%).
 	"aws_s3_bucket_lifecycle_configuration",
