@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	computev1 "google.golang.org/api/compute/v1"
+	"google.golang.org/api/googleapi"
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
@@ -280,4 +282,128 @@ func TestComputeNetworkRegisteredOnAggregator(t *testing.T) {
 	require.True(t, ok)
 	require.NotNil(t, enr)
 	assert.Equal(t, "google_compute_network", enr.ResourceType())
+	_, isByID := enr.(ByIDEnricher)
+	assert.True(t, isByID, "compute_network enricher must satisfy ByIDEnricher (#571)")
+}
+
+// ---------------------------------------------------------------
+// ByIDEnricher tests (issue #571).
+// ---------------------------------------------------------------
+
+func TestComputeNetworkEnrichByID_NilIdentity(t *testing.T) {
+	t.Parallel()
+	e := newComputeNetworkEnricher().(*computeNetworkEnricher)
+	raw, err := e.EnrichByID(context.Background(), nil, EnrichClients{Compute: &computev1.Service{}, ProjectID: "p"})
+	require.Error(t, err)
+	assert.Nil(t, raw)
+	assert.Contains(t, err.Error(), "nil identity")
+}
+
+func TestComputeNetworkEnrichByID_ClientUnavailable(t *testing.T) {
+	t.Parallel()
+	e := newComputeNetworkEnricher().(*computeNetworkEnricher)
+	id := &imported.ResourceIdentity{
+		Type:     "google_compute_network",
+		ImportID: "projects/p/global/networks/vpc-prod",
+	}
+	raw, err := e.EnrichByID(context.Background(), id, EnrichClients{Compute: nil, ProjectID: "p"})
+	require.ErrorIs(t, err, ErrEnrichClientUnavailable)
+	assert.Nil(t, raw)
+}
+
+func TestComputeNetworkEnrichByID_ProjectIDRequired(t *testing.T) {
+	t.Parallel()
+	e := newComputeNetworkEnricher().(*computeNetworkEnricher)
+	id := &imported.ResourceIdentity{
+		Type:     "google_compute_network",
+		ImportID: "projects/p/global/networks/vpc-prod",
+	}
+	raw, err := e.EnrichByID(context.Background(), id, EnrichClients{Compute: &computev1.Service{}, ProjectID: ""})
+	require.Error(t, err)
+	assert.Nil(t, raw)
+	assert.Contains(t, err.Error(), "ProjectID required")
+}
+
+func TestComputeNetworkEnrichByID_NotFound(t *testing.T) {
+	t.Parallel()
+	e := computeNetworkEnricher{
+		fetch: func(_ context.Context, _ *computev1.Service, _, _ string) (*computev1.Network, error) {
+			return nil, &googleapi.Error{Code: http.StatusNotFound, Message: "not found"}
+		},
+	}
+	id := &imported.ResourceIdentity{
+		Type:     "google_compute_network",
+		ImportID: "projects/p/global/networks/vpc-prod",
+	}
+	raw, err := e.EnrichByID(context.Background(), id, EnrichClients{Compute: &computev1.Service{}, ProjectID: "p"})
+	require.ErrorIs(t, err, ErrNotFound)
+	assert.Nil(t, raw)
+}
+
+func TestComputeNetworkEnrichByID_NonNotFoundErrorPassesThrough(t *testing.T) {
+	t.Parallel()
+	upstream := &googleapi.Error{Code: http.StatusForbidden, Message: "denied"}
+	e := computeNetworkEnricher{
+		fetch: func(_ context.Context, _ *computev1.Service, _, _ string) (*computev1.Network, error) {
+			return nil, upstream
+		},
+	}
+	id := &imported.ResourceIdentity{
+		Type:     "google_compute_network",
+		ImportID: "projects/p/global/networks/vpc-prod",
+	}
+	raw, err := e.EnrichByID(context.Background(), id, EnrichClients{Compute: &computev1.Service{}, ProjectID: "p"})
+	require.Error(t, err)
+	assert.NotErrorIs(t, err, ErrNotFound)
+	var gerr *googleapi.Error
+	require.True(t, errors.As(err, &gerr))
+	assert.Equal(t, http.StatusForbidden, gerr.Code)
+	assert.Nil(t, raw)
+}
+
+func TestComputeNetworkEnrichByID_HappyPath(t *testing.T) {
+	t.Parallel()
+	net := &computev1.Network{
+		Name:                  "vpc-prod",
+		AutoCreateSubnetworks: true,
+		Description:           "Production VPC",
+		Mtu:                   1460,
+		RoutingConfig:         &computev1.NetworkRoutingConfig{RoutingMode: "REGIONAL"},
+	}
+	mkFetch := func() func(context.Context, *computev1.Service, string, string) (*computev1.Network, error) {
+		return func(_ context.Context, _ *computev1.Service, project, name string) (*computev1.Network, error) {
+			assert.Equal(t, "my-project", project)
+			assert.Equal(t, "vpc-prod", name)
+			return net, nil
+		}
+	}
+	enrichEnr := computeNetworkEnricher{fetch: mkFetch()}
+	byIDEnr := computeNetworkEnricher{fetch: mkFetch()}
+
+	ir := &imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Type:     "google_compute_network",
+			ImportID: "projects/my-project/global/networks/vpc-prod",
+			Address:  "google_compute_network.vpc_prod",
+		},
+	}
+	require.NoError(t, enrichEnr.Enrich(context.Background(), ir, EnrichClients{Compute: &computev1.Service{}, ProjectID: "my-project"}))
+
+	id := &imported.ResourceIdentity{
+		Type:     "google_compute_network",
+		ImportID: "projects/my-project/global/networks/vpc-prod",
+		Address:  "google_compute_network.vpc_prod",
+	}
+	raw, err := byIDEnr.EnrichByID(context.Background(), id, EnrichClients{Compute: &computev1.Service{}, ProjectID: "my-project"})
+	require.NoError(t, err)
+	assert.JSONEq(t, string(ir.Attrs), string(raw))
+
+	decoded, err := generated.UnmarshalAttrs("google_compute_network", raw)
+	require.NoError(t, err)
+	gn, ok := decoded.(*generated.GoogleComputeNetwork)
+	require.True(t, ok)
+	require.NotNil(t, gn.Name)
+	assert.Equal(t, "vpc-prod", *gn.Name.Literal)
+	require.NotNil(t, gn.Project)
+	assert.Equal(t, "my-project", *gn.Project.Literal)
 }

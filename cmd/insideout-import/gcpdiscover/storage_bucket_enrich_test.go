@@ -4,11 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/api/googleapi"
 	storagev1 "google.golang.org/api/storage/v1"
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer"
@@ -570,4 +572,135 @@ func TestRegisteredOnAggregator(t *testing.T) {
 	require.True(t, ok, "google_storage_bucket must be registered in byTypeEnricher")
 	require.NotNil(t, enr)
 	assert.Equal(t, "google_storage_bucket", enr.ResourceType())
+	_, isByID := enr.(ByIDEnricher)
+	assert.True(t, isByID, "storage_bucket enricher must satisfy ByIDEnricher (#571)")
+}
+
+// ---------------------------------------------------------------
+// ByIDEnricher tests (issue #571).
+// ---------------------------------------------------------------
+
+// TestStorageBucketEnrichByID_NilIdentity confirms the EnrichByID
+// surface gives a clean error on a nil identity (the dispatcher in
+// pkg/imported should never call with nil, but a defensive check
+// keeps the failure mode obvious if it does).
+func TestStorageBucketEnrichByID_NilIdentity(t *testing.T) {
+	t.Parallel()
+	e := newStorageBucketEnricher().(*storageBucketEnricher)
+	raw, err := e.EnrichByID(context.Background(), nil, EnrichClients{Storage: &storagev1.Service{}})
+	require.Error(t, err)
+	assert.Nil(t, raw)
+	assert.Contains(t, err.Error(), "nil identity")
+}
+
+// TestStorageBucketEnrichByID_ClientUnavailable mirrors the Enrich
+// equivalent: the by-ID surface must report the same sentinel so the
+// per-IR refresh dispatcher can distinguish "not configured" from a
+// real API error.
+func TestStorageBucketEnrichByID_ClientUnavailable(t *testing.T) {
+	t.Parallel()
+	e := newStorageBucketEnricher().(*storageBucketEnricher)
+	id := &imported.ResourceIdentity{
+		Type: "google_storage_bucket", ImportID: "io-bucket",
+		Address: "google_storage_bucket.bucket",
+	}
+	raw, err := e.EnrichByID(context.Background(), id, EnrichClients{Storage: nil})
+	require.ErrorIs(t, err, ErrEnrichClientUnavailable)
+	assert.Nil(t, raw)
+}
+
+// TestStorageBucketEnrichByID_NotFound pins the 404-to-ErrNotFound
+// translation. The storage API surfaces a *googleapi.Error with
+// Code = 404 on a deleted-since-discover bucket; per the ByIDEnricher
+// contract that must become ErrNotFound so the caller can prune the
+// row from its UI without surfacing an alarming "API error".
+func TestStorageBucketEnrichByID_NotFound(t *testing.T) {
+	t.Parallel()
+	e := storageBucketEnricher{
+		fetch: func(_ context.Context, _ *storagev1.Service, _ string) (*storagev1.Bucket, error) {
+			return nil, &googleapi.Error{Code: http.StatusNotFound, Message: "not found"}
+		},
+	}
+	id := &imported.ResourceIdentity{
+		Type: "google_storage_bucket", ImportID: "io-bucket",
+		Address: "google_storage_bucket.bucket",
+	}
+	raw, err := e.EnrichByID(context.Background(), id, EnrichClients{Storage: &storagev1.Service{}})
+	require.ErrorIs(t, err, ErrNotFound)
+	assert.Nil(t, raw)
+}
+
+// TestStorageBucketEnrichByID_NonNotFoundErrorPassesThrough — a
+// non-404 googleapi error (e.g. 500 or 403) MUST NOT be confused
+// with ErrNotFound. The wrapper passes the original error through so
+// the caller can errors.As back to *googleapi.Error if it cares.
+func TestStorageBucketEnrichByID_NonNotFoundErrorPassesThrough(t *testing.T) {
+	t.Parallel()
+	upstream := &googleapi.Error{Code: http.StatusForbidden, Message: "denied"}
+	e := storageBucketEnricher{
+		fetch: func(_ context.Context, _ *storagev1.Service, _ string) (*storagev1.Bucket, error) {
+			return nil, upstream
+		},
+	}
+	id := &imported.ResourceIdentity{
+		Type: "google_storage_bucket", ImportID: "io-bucket",
+	}
+	raw, err := e.EnrichByID(context.Background(), id, EnrichClients{Storage: &storagev1.Service{}})
+	require.Error(t, err)
+	assert.NotErrorIs(t, err, ErrNotFound, "403 must NOT be classified as ErrNotFound")
+	var gerr *googleapi.Error
+	require.True(t, errors.As(err, &gerr), "underlying googleapi.Error must be preserved for caller inspection")
+	assert.Equal(t, http.StatusForbidden, gerr.Code)
+	assert.Nil(t, raw)
+}
+
+// TestStorageBucketEnrichByID_HappyPath confirms EnrichByID returns
+// the exact JSON shape Enrich would have written into ir.Attrs.
+// Pin via JSON-equality so a future divergence between the two
+// entry-points is caught loud.
+func TestStorageBucketEnrichByID_HappyPath(t *testing.T) {
+	t.Parallel()
+	bucket := &storagev1.Bucket{
+		Name:         "io-test-data",
+		Location:     "US",
+		StorageClass: "STANDARD",
+		Labels:       map[string]string{"environment": "staging"},
+	}
+	mkFetch := func() func(context.Context, *storagev1.Service, string) (*storagev1.Bucket, error) {
+		return func(_ context.Context, _ *storagev1.Service, name string) (*storagev1.Bucket, error) {
+			assert.Equal(t, "io-test-data", name)
+			return bucket, nil
+		}
+	}
+	enrichEnr := storageBucketEnricher{fetch: mkFetch()}
+	byIDEnr := storageBucketEnricher{fetch: mkFetch()}
+
+	ir := &imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Type:     "google_storage_bucket",
+			ImportID: "io-test-data",
+			Address:  "google_storage_bucket.assets",
+		},
+	}
+	require.NoError(t, enrichEnr.Enrich(context.Background(), ir, EnrichClients{Storage: &storagev1.Service{}, ProjectID: "my-project"}))
+
+	id := &imported.ResourceIdentity{
+		Type:     "google_storage_bucket",
+		ImportID: "io-test-data",
+		Address:  "google_storage_bucket.assets",
+	}
+	raw, err := byIDEnr.EnrichByID(context.Background(), id, EnrichClients{Storage: &storagev1.Service{}, ProjectID: "my-project"})
+	require.NoError(t, err)
+	assert.JSONEq(t, string(ir.Attrs), string(raw),
+		"EnrichByID must return the same JSON shape Enrich writes into ir.Attrs")
+
+	// Spot-check the typed payload carries the expected keys.
+	decoded, err := generated.UnmarshalAttrs("google_storage_bucket", raw)
+	require.NoError(t, err)
+	gb, ok := decoded.(*generated.GoogleStorageBucket)
+	require.True(t, ok, "decoded type must be *GoogleStorageBucket, got %T", decoded)
+	require.NotNil(t, gb.Name)
+	assert.Equal(t, "io-test-data", *gb.Name.Literal)
+	require.NotNil(t, gb.Project)
+	assert.Equal(t, "my-project", *gb.Project.Literal)
 }

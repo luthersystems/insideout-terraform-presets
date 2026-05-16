@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/api/googleapi"
 	secretmanagerv1 "google.golang.org/api/secretmanager/v1"
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer"
@@ -331,4 +333,113 @@ func TestSecretManagerSecretRegisteredOnAggregator(t *testing.T) {
 	require.True(t, ok)
 	require.NotNil(t, enr)
 	assert.Equal(t, "google_secret_manager_secret", enr.ResourceType())
+	_, isByID := enr.(ByIDEnricher)
+	assert.True(t, isByID, "secret_manager_secret enricher must satisfy ByIDEnricher (#571)")
+}
+
+// ---------------------------------------------------------------
+// ByIDEnricher tests (issue #571).
+// ---------------------------------------------------------------
+
+func TestSecretManagerSecretEnrichByID_NilIdentity(t *testing.T) {
+	t.Parallel()
+	e := newSecretManagerSecretEnricher().(*secretManagerSecretEnricher)
+	raw, err := e.EnrichByID(context.Background(), nil, EnrichClients{SecretManager: &secretmanagerv1.Service{}, ProjectID: "p"})
+	require.Error(t, err)
+	assert.Nil(t, raw)
+	assert.Contains(t, err.Error(), "nil identity")
+}
+
+func TestSecretManagerSecretEnrichByID_ClientUnavailable(t *testing.T) {
+	t.Parallel()
+	e := newSecretManagerSecretEnricher().(*secretManagerSecretEnricher)
+	id := &imported.ResourceIdentity{
+		Type:     "google_secret_manager_secret",
+		ImportID: "projects/p/secrets/api-key",
+	}
+	raw, err := e.EnrichByID(context.Background(), id, EnrichClients{SecretManager: nil, ProjectID: "p"})
+	require.ErrorIs(t, err, ErrEnrichClientUnavailable)
+	assert.Nil(t, raw)
+}
+
+func TestSecretManagerSecretEnrichByID_NotFound(t *testing.T) {
+	t.Parallel()
+	e := secretManagerSecretEnricher{
+		fetch: func(_ context.Context, _ *secretmanagerv1.Service, _ string) (*secretmanagerv1.Secret, error) {
+			return nil, &googleapi.Error{Code: http.StatusNotFound, Message: "not found"}
+		},
+	}
+	id := &imported.ResourceIdentity{
+		Type:     "google_secret_manager_secret",
+		ImportID: "projects/p/secrets/api-key",
+	}
+	raw, err := e.EnrichByID(context.Background(), id, EnrichClients{SecretManager: &secretmanagerv1.Service{}, ProjectID: "p"})
+	require.ErrorIs(t, err, ErrNotFound)
+	assert.Nil(t, raw)
+}
+
+func TestSecretManagerSecretEnrichByID_NonNotFoundErrorPassesThrough(t *testing.T) {
+	t.Parallel()
+	upstream := &googleapi.Error{Code: http.StatusForbidden, Message: "denied"}
+	e := secretManagerSecretEnricher{
+		fetch: func(_ context.Context, _ *secretmanagerv1.Service, _ string) (*secretmanagerv1.Secret, error) {
+			return nil, upstream
+		},
+	}
+	id := &imported.ResourceIdentity{
+		Type:     "google_secret_manager_secret",
+		ImportID: "projects/p/secrets/api-key",
+	}
+	raw, err := e.EnrichByID(context.Background(), id, EnrichClients{SecretManager: &secretmanagerv1.Service{}, ProjectID: "p"})
+	require.Error(t, err)
+	assert.NotErrorIs(t, err, ErrNotFound)
+	var gerr *googleapi.Error
+	require.True(t, errors.As(err, &gerr))
+	assert.Equal(t, http.StatusForbidden, gerr.Code)
+	assert.Nil(t, raw)
+}
+
+func TestSecretManagerSecretEnrichByID_HappyPath(t *testing.T) {
+	t.Parallel()
+	secret := &secretmanagerv1.Secret{
+		Name: "projects/my-project/secrets/api-key",
+		Replication: &secretmanagerv1.Replication{
+			Automatic: &secretmanagerv1.Automatic{},
+		},
+	}
+	mkFetch := func() func(context.Context, *secretmanagerv1.Service, string) (*secretmanagerv1.Secret, error) {
+		return func(_ context.Context, _ *secretmanagerv1.Service, name string) (*secretmanagerv1.Secret, error) {
+			assert.Equal(t, "projects/my-project/secrets/api-key", name)
+			return secret, nil
+		}
+	}
+	enrichEnr := secretManagerSecretEnricher{fetch: mkFetch()}
+	byIDEnr := secretManagerSecretEnricher{fetch: mkFetch()}
+
+	ir := &imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Type:     "google_secret_manager_secret",
+			ImportID: "projects/my-project/secrets/api-key",
+			Address:  "google_secret_manager_secret.api_key",
+		},
+	}
+	require.NoError(t, enrichEnr.Enrich(context.Background(), ir, EnrichClients{SecretManager: &secretmanagerv1.Service{}, ProjectID: "my-project"}))
+
+	id := &imported.ResourceIdentity{
+		Type:     "google_secret_manager_secret",
+		ImportID: "projects/my-project/secrets/api-key",
+		Address:  "google_secret_manager_secret.api_key",
+	}
+	raw, err := byIDEnr.EnrichByID(context.Background(), id, EnrichClients{SecretManager: &secretmanagerv1.Service{}, ProjectID: "my-project"})
+	require.NoError(t, err)
+	assert.JSONEq(t, string(ir.Attrs), string(raw))
+
+	decoded, err := generated.UnmarshalAttrs("google_secret_manager_secret", raw)
+	require.NoError(t, err)
+	gs, ok := decoded.(*generated.GoogleSecretManagerSecret)
+	require.True(t, ok)
+	require.NotNil(t, gs.SecretID)
+	assert.Equal(t, "api-key", *gs.SecretID.Literal)
+	require.NotNil(t, gs.Project)
+	assert.Equal(t, "my-project", *gs.Project.Literal)
 }
