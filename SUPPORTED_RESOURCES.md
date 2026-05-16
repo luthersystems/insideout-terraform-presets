@@ -23,7 +23,7 @@ and is checked in lockstep with the runtime registries. See the
 ## Summary
 
 - **AWS:** 109 types · 100% Discoverable · 100% Enrichable · 42% DriftDetectable · 8% MetricsAvailable · 39% AgentEditable
-- **GCP:** 54 types · 100% Discoverable · 100% Enrichable · 89% DriftDetectable · 11% MetricsAvailable · 89% AgentEditable
+- **GCP:** 54 types · 100% Discoverable · 100% Enrichable · 100% DriftDetectable · 11% MetricsAvailable · 89% AgentEditable
 
 ## AWS
 
@@ -170,7 +170,7 @@ and is checked in lockstep with the runtime registries. See the
 | `google_container_cluster` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_container_node_pool` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_firestore_database` | ✓ | ✓ | ✓ | – | ✓ |
-| `google_identity_platform_config` | ✓ | ✓ | – | – | ✓ |
+| `google_identity_platform_config` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_identity_platform_default_supported_idp_config` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_kms_crypto_key` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_kms_crypto_key_iam_binding` | ✓ | ✓ | ✓ | – | ✓ |
@@ -179,21 +179,21 @@ and is checked in lockstep with the runtime registries. See the
 | `google_monitoring_alert_policy` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_monitoring_dashboard` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_monitoring_notification_channel` | ✓ | ✓ | ✓ | – | ✓ |
-| `google_project_iam_member` | ✓ | ✓ | – | – | – |
+| `google_project_iam_member` | ✓ | ✓ | ✓ | – | – |
 | `google_project_service` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_pubsub_subscription` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_pubsub_topic` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_redis_instance` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_secret_manager_secret` | ✓ | ✓ | ✓ | – | ✓ |
-| `google_secret_manager_secret_iam_binding` | ✓ | ✓ | – | – | ✓ |
-| `google_secret_manager_secret_iam_member` | ✓ | ✓ | – | – | – |
+| `google_secret_manager_secret_iam_binding` | ✓ | ✓ | ✓ | – | ✓ |
+| `google_secret_manager_secret_iam_member` | ✓ | ✓ | ✓ | – | – |
 | `google_secret_manager_secret_version` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_service_account` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_service_networking_connection` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_sql_database_instance` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `google_sql_user` | ✓ | ✓ | – | – | ✓ |
+| `google_sql_user` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_storage_bucket` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `google_storage_bucket_iam_member` | ✓ | ✓ | – | – | – |
+| `google_storage_bucket_iam_member` | ✓ | ✓ | ✓ | – | – |
 | `google_storage_bucket_object` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_vertex_ai_dataset` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_vpc_access_connector` | ✓ | ✓ | ✓ | – | ✓ |

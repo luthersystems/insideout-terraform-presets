@@ -4983,6 +4983,28 @@
       "semantic": "Exact"
     }
   ],
+  "google_identity_platform_config": [
+    {
+      "path": "authorized_domains",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "autodelete_anonymous_users",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    }
+  ],
   "google_identity_platform_default_supported_idp_config": [
     {
       "path": "enabled",
@@ -5180,6 +5202,24 @@
     },
     {
       "path": "type",
+      "semantic": "Exact"
+    }
+  ],
+  "google_project_iam_member": [
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "member",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "role",
       "semantic": "Exact"
     }
   ],
@@ -5477,6 +5517,50 @@
       "semantic": "Exact"
     }
   ],
+  "google_secret_manager_secret_iam_binding": [
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "members",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "role",
+      "semantic": "Exact"
+    },
+    {
+      "path": "secret_id",
+      "semantic": "Exact"
+    }
+  ],
+  "google_secret_manager_secret_iam_member": [
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "member",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "role",
+      "semantic": "Exact"
+    },
+    {
+      "path": "secret_id",
+      "semantic": "Exact"
+    }
+  ],
   "google_secret_manager_secret_version": [
     {
       "path": "deletion_policy",
@@ -5729,6 +5813,32 @@
       "semantic": "Exact"
     }
   ],
+  "google_sql_user": [
+    {
+      "path": "host",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "instance",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "type",
+      "semantic": "Exact"
+    }
+  ],
   "google_storage_bucket": [
     {
       "path": "autoclass.enabled",
@@ -5848,6 +5958,24 @@
     },
     {
       "path": "website.not_found_page",
+      "semantic": "Exact"
+    }
+  ],
+  "google_storage_bucket_iam_member": [
+    {
+      "path": "bucket",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "member",
+      "semantic": "Exact"
+    },
+    {
+      "path": "role",
       "semantic": "Exact"
     }
   ],

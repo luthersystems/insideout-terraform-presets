@@ -10,11 +10,11 @@ package policy
 // rows rather than as an editable nested struct here.
 var googleProjectIAMMemberPolicy = Map{
 	// Identity.
-	"id":      {Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever},
+	"id":      {Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever, DriftSemantic: DriftSemanticExact},
 	"etag":    {Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever},
-	"project": {Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever, ChangeRisk: ChangeAlwaysReplace},
-	"role":    {Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever, ChangeRisk: ChangeAlwaysReplace},
-	"member":  {Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever, ChangeRisk: ChangeAlwaysReplace},
+	"project": {Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever, ChangeRisk: ChangeAlwaysReplace, DriftSemantic: DriftSemanticExact},
+	"role":    {Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever, ChangeRisk: ChangeAlwaysReplace, DriftSemantic: DriftSemanticExact},
+	"member":  {Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever, ChangeRisk: ChangeAlwaysReplace, DriftSemantic: DriftSemanticExact},
 }
 
 func init() {

@@ -2,27 +2,27 @@ package policy
 
 var googleSqlUserPolicy = Map{
 	// Identity
-	"name": {Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever},
-	"id":   {Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever},
+	"name": {Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever, DriftSemantic: DriftSemanticExact},
+	"id":   {Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever, DriftSemantic: DriftSemanticExact},
 	"project": {
 		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
-		ChangeRisk: ChangeAlwaysReplace,
+		ChangeRisk: ChangeAlwaysReplace, DriftSemantic: DriftSemanticExact,
 	},
 	"host": {
 		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
-		ChangeRisk: ChangeAlwaysReplace,
+		ChangeRisk: ChangeAlwaysReplace, DriftSemantic: DriftSemanticExact,
 	},
 
 	// Wiring — parent instance.
 	"instance": {
 		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityUIVisible,
-		Edit: EditRelationshipOnly, ChangeRisk: ChangeAlwaysReplace,
+		Edit: EditRelationshipOnly, ChangeRisk: ChangeAlwaysReplace, DriftSemantic: DriftSemanticExact,
 	},
 
 	// Tuning — user type.
 	"type": {
 		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityUIVisible,
-		Edit: EditNever, ChangeRisk: ChangeAlwaysReplace,
+		Edit: EditNever, ChangeRisk: ChangeAlwaysReplace, DriftSemantic: DriftSemanticExact,
 	},
 	"deletion_policy": {
 		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
