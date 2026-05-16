@@ -68,6 +68,7 @@ const (
 	KeyAWSBackups              ComponentKey = "aws_backups"
 	KeyAWSGitHubActions        ComponentKey = "aws_github_actions"
 	KeyAWSCodePipeline         ComponentKey = "aws_codepipeline"
+	KeyAWSRoute53              ComponentKey = "aws_route53"
 
 	// GCP components
 	KeyGCPVPC              ComponentKey = "gcp_vpc"
@@ -137,6 +138,9 @@ var ComposeOrder = []ComponentKey{
 	KeyGCPIdentityPlatform,
 	KeyAWSAPIGateway,
 	KeyGCPAPIGateway,
+	// Route 53 last so DefaultWiring can read ALB / CloudFront / API Gateway /
+	// Cognito siblings and auto-derive the matching alias records (#584).
+	KeyAWSRoute53,
 	KeyAWSKMS,
 	KeyGCPCloudKMS,
 	KeyAWSSecretsManager,
@@ -193,6 +197,7 @@ var ModulePath = map[ComponentKey]string{
 	KeyAWSBastion:              "modules/bastion",
 	KeyAWSGitHubActions:        "modules/githubactions",
 	KeyAWSCodePipeline:         "modules/codepipeline",
+	KeyAWSRoute53:              "modules/route53",
 
 	// GCP
 	KeyGCPVPC:              "gcp/vpc",
@@ -359,6 +364,7 @@ var PresetKeyMap = map[ComponentKey]string{
 	KeyAWSBackups:              "backups",
 	KeyAWSGitHubActions:        "githubactions",
 	KeyAWSCodePipeline:         "codepipeline",
+	KeyAWSRoute53:              "route53",
 	KeyGCPVPC:                  "vpc",
 	KeyGCPCompute:              "compute",
 	KeyGCPGKE:                  "gke",
@@ -471,6 +477,7 @@ var AllComponentKeys = []ComponentKey{
 	KeyAWSMSK,
 	KeyAWSOpenSearch,
 	KeyAWSRDS,
+	KeyAWSRoute53,
 	KeyAWSS3,
 	KeyAWSSQS,
 	KeyAWSSecretsManager,
@@ -716,6 +723,66 @@ func DefaultWiring(selected map[ComponentKey]bool, k ComponentKey, comps *Compon
 		wi.RawHCL["scope"] = `"CLOUDFRONT"`
 		wi.RawHCL["region"] = `"us-east-1"`
 		wi.Names = append(wi.Names, "scope", "region")
+
+	case KeyAWSRoute53:
+		// Auto-emit alias records for in-stack endpoints (issue #584).
+		//
+		// Today's auto-aliases cover the two consumers whose presets already
+		// expose the (dns_name, zone_id) pair the alias-target shape needs:
+		//
+		//   - ALB:        module.aws_alb.alb_dns_name + .alb_zone_id, alias
+		//                 at the apex ("") with evaluate_target_health=true.
+		//   - CloudFront: module.aws_cloudfront.domain_name; CloudFront's
+		//                 hosted zone is the documented global static
+		//                 Z2FDTNDATAQYW2; alias at "cdn".
+		//                 evaluate_target_health must be false (CloudFront
+		//                 contract — no Route 53 health-check semantics on
+		//                 the global edge).
+		//
+		// Deferred (no preset outputs yet — TODO(#584-followup)):
+		//   - API Gateway: needs aws/apigateway to expose
+		//     aws_apigatewayv2_domain_name.api[0].domain_name_configuration[0]
+		//     {target_domain_name,hosted_zone_id} as outputs. Today they are
+		//     internal to the preset and the count=var.domain_name!=null gate
+		//     makes the outputs themselves nullable, so even after adding
+		//     them the wiring needs to gate on the user supplying a domain
+		//     to apigateway. Filed as a follow-up.
+		//   - Cognito: needs aws/cognito to manage an actual custom domain
+		//     (aws_cognito_user_pool_domain with `domain` instead of
+		//     `domain_prefix`) and surface its cloudfront_distribution_arn.
+		//     The current preset only manages the hosted UI prefix.
+		//
+		// The aliases HCL is emitted as a list literal of objects. Only
+		// emitted when at least one consumer is selected — leaving
+		// var.aliases at its preset default of `[]` when route53 is
+		// composed standalone (test contract: wiring stays inert when only
+		// one side is selected).
+		var aliasEntries []string
+		if hasALB {
+			aliasEntries = append(aliasEntries, `    {
+      name                   = ""
+      target_dns_name        = `+albRef(selected)+`.alb_dns_name
+      target_zone_id         = `+albRef(selected)+`.alb_zone_id
+      type                   = "A"
+      evaluate_target_health = true
+    }`)
+		}
+		if selected[KeyAWSCloudfront] {
+			// Z2FDTNDATAQYW2 is the documented global hosted-zone ID for
+			// every CloudFront distribution. evaluate_target_health must
+			// remain false for CloudFront alias targets.
+			aliasEntries = append(aliasEntries, `    {
+      name                   = "cdn"
+      target_dns_name        = `+WireRef(KeyAWSCloudfront, "domain_name")+`
+      target_zone_id         = "Z2FDTNDATAQYW2"
+      type                   = "A"
+      evaluate_target_health = false
+    }`)
+		}
+		if len(aliasEntries) > 0 {
+			wi.RawHCL["aliases"] = "[\n" + strings.Join(aliasEntries, ",\n") + ",\n  ]"
+			wi.Names = append(wi.Names, "aliases")
+		}
 
 	case KeyAWSCloudWatchMonitoring:
 		// When any per-component observability consumer is in the stack

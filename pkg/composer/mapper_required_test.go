@@ -139,6 +139,7 @@ func kitchenSinkComponents() *Components {
 		AWSCognito:              &t,
 		AWSGitHubActions:        &t,
 		AWSCodePipeline:         &t,
+		AWSRoute53:              &t,
 		// GCP
 		GCPVPC:              &t,
 		GCPBastion:          &t,

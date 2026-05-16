@@ -166,6 +166,14 @@ func kitchenSinkConfig() *Config {
 		ModelID           string `json:"modelId,omitempty"`
 		EmbeddingModelID  string `json:"embeddingModelId,omitempty"`
 	}{KnowledgeBaseName: "kb", ModelID: "anthropic.claude-3", EmbeddingModelID: "amazon.titan-embed"}
+	cfg.AWSRoute53 = &struct {
+		DomainName   string   `json:"domainName,omitempty"`
+		CreateZone   *bool    `json:"createZone,omitempty"`
+		ZoneID       string   `json:"zoneId,omitempty"`
+		PrivateZone  *bool    `json:"privateZone,omitempty"`
+		VPCIDs       []string `json:"vpcIds,omitempty"`
+		ForceDestroy *bool    `json:"forceDestroy,omitempty"`
+	}{DomainName: "example.com", CreateZone: &t, ZoneID: "Z1234567890ABC", VPCIDs: []string{"vpc-aaa"}, ForceDestroy: &t}
 
 	// GCP
 	cfg.GCPCompute = &struct {

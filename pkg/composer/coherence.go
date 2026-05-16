@@ -93,6 +93,8 @@ func ComponentSelected(c *Components, key ComponentKey) bool {
 		return boolPtrTrue(c.AWSGitHubActions)
 	case KeyAWSCodePipeline:
 		return boolPtrTrue(c.AWSCodePipeline)
+	case KeyAWSRoute53:
+		return boolPtrTrue(c.AWSRoute53)
 	case KeyAWSBackups:
 		return c.AWSBackups != nil
 	// GCP pointer-typed selections.
@@ -283,7 +285,7 @@ func isOrphanStrippableKey(key ComponentKey) bool {
 		KeyAWSCloudWatchLogs, KeyAWSCloudWatchMonitoring,
 		KeyAWSCognito, KeyAWSLambda, KeyAWSAPIGateway,
 		KeyAWSKMS, KeyAWSSecretsManager, KeyAWSOpenSearch,
-		KeyAWSBedrock, KeyAWSBackups,
+		KeyAWSBedrock, KeyAWSBackups, KeyAWSRoute53,
 		KeyGCPCompute, KeyGCPGKE, KeyGCPCloudRun,
 		KeyGCPCloudFunctions, KeyGCPLoadbalancer,
 		KeyGCPCloudSQL, KeyGCPMemorystore, KeyGCPGCS,
