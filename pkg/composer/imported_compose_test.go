@@ -381,8 +381,17 @@ func TestComposeStackWithIssues_Imported_GCP(t *testing.T) {
 
 // TestComposeStackWithIssues_Imported_MissingBlocksApply pins the safety
 // invariant from issue #148 task #9: TierImportedMissing without an
-// operator-chosen Remediation must surface a validation issue, must NOT
-// emit a resource block, and must NOT declare the imported provider alias.
+// operator-chosen Remediation must surface a validation issue and must NOT
+// emit a resource block.
+//
+// Note (issue #562): the aws.imported provider alias is now emitted
+// unconditionally for every AWS stack, so we no longer assert its absence
+// here. The original "no imported alias when blocked" assertion existed to
+// guard a downstream-symptom of the missing-remediation path; the symptom
+// is now intentionally absent because the alias declaration no longer
+// depends on the Imported list. We instead assert the alias IS present —
+// proving the missing-remediation path doesn't accidentally suppress the
+// unconditional emit.
 func TestComposeStackWithIssues_Imported_MissingBlocksApply(t *testing.T) {
 	t.Parallel()
 
@@ -420,7 +429,7 @@ func TestComposeStackWithIssues_Imported_MissingBlocksApply(t *testing.T) {
 		"no imported.tf should be emitted when only blocked records are present")
 
 	providersTF := string(res.Files["/providers.tf"])
-	assertImportedAliasNotDeclared(t, providersTF, "aws")
+	assertImportedAliasDeclared(t, providersTF, "aws")
 }
 
 // TestComposeStackWithIssues_Imported_StrictValidateEscalates pins that
@@ -464,10 +473,18 @@ func TestComposeStackWithIssues_Imported_StrictValidateEscalates(t *testing.T) {
 		"the structured issue code must be present in res.Issues")
 }
 
-// TestComposeStack_NoImportedKeepsExistingBehavior pins backward
-// compatibility: the historical (Files, error) entry point with no Imported
-// list emits no imported.tf and no aws.imported alias, byte-identical to
-// pre-#148 behavior.
+// TestComposeStack_NoImportedKeepsExistingBehavior pins the surviving
+// portion of pre-#148 backward compatibility: the historical
+// (Files, error) entry point with no Imported list still emits no
+// imported.tf.
+//
+// Previously this test also asserted "no aws.imported alias" — that part
+// of the historical behavior is intentionally changed by issue #562, which
+// makes the aws.imported provider alias unconditional for every AWS stack
+// so that terraform state from a prior compose can't crash `terraform
+// plan` with "Provider configuration not present" when the current
+// compose's Imported list happens to be empty. The flipped assertion
+// below pins the new invariant.
 func TestComposeStack_NoImportedKeepsExistingBehavior(t *testing.T) {
 	t.Parallel()
 
@@ -485,7 +502,7 @@ func TestComposeStack_NoImportedKeepsExistingBehavior(t *testing.T) {
 	assert.False(t, hasImportedTF,
 		"composes without Imported must not produce imported.tf")
 	providers := string(files["/providers.tf"])
-	assertImportedAliasNotDeclared(t, providers, "aws")
+	assertImportedAliasDeclared(t, providers, "aws")
 }
 
 // TestImportedResource_EveryTierBranchExercised acts as a CI gate ensuring
@@ -574,12 +591,6 @@ func assertImportedAliasDeclared(t *testing.T, providersTF, cloud string) {
 		"imported provider alias for %q must be declared:\n%s", cloud, providersTF)
 }
 
-// assertImportedAliasNotDeclared asserts no imported alias block exists.
-func assertImportedAliasNotDeclared(t *testing.T, providersTF, cloud string) {
-	t.Helper()
-	assert.NotRegexp(t, importedAliasBlockPattern(cloud), providersTF,
-		"unexpected imported alias for %q in providers.tf:\n%s", cloud, providersTF)
-}
 
 // hasProviderAttr reports whether the imported alias block for cloud contains
 // `<name> = <value>` (whitespace-tolerant).

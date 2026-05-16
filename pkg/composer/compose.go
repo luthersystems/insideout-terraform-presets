@@ -764,7 +764,12 @@ func generateProvidersTF(in providersTFInput) []byte {
 	gcpProjectID := in.GCPProjectID
 	selected := in.Selected
 	discovered := in.Discovered
-	importedClouds := in.ImportedClouds
+	// in.ImportedClouds is intentionally unused: as of issue #562 the
+	// `aws.imported` / `google.imported` / `google-beta.imported` alias
+	// blocks are emitted unconditionally for the matching cloud rather
+	// than gated on the current compose's Imported list. The field stays
+	// on providersTFInput for backwards compatibility with callers; a
+	// follow-up PR will retire it once the public API is audited.
 	// Seed required_providers with the cloud's base entry, then union the
 	// child-module discoveries on top. Discovered entries win on conflict.
 	required := map[string]*tfconfig.ProviderRequirement{}
@@ -778,16 +783,13 @@ func generateProvidersTF(in providersTFInput) []byte {
 		// minors. Hard-bumping to ">= 5.16" guarantees the safety net
 		// emitted below is always honored.
 		required["google"] = &tfconfig.ProviderRequirement{Source: "hashicorp/google", VersionConstraints: []string{">= 5.16"}}
-		// google-beta is pulled in either because a child module's
-		// required_providers declared it (already captured in
-		// `discovered`) or because the imported resource set carries
-		// google-beta types and we need the `google-beta.imported`
-		// alias. Declare it explicitly here so the alias block below
-		// doesn't fail required_providers resolution when the only
-		// google-beta consumer is the imported alias.
-		if importedClouds[ProvidersUsedKeyGCPBeta] {
-			required["google-beta"] = &tfconfig.ProviderRequirement{Source: "hashicorp/google-beta", VersionConstraints: []string{">= 5.16"}}
-		}
+		// google-beta is part of every GCP stack's provider set so the
+		// `google-beta.imported` alias block below always resolves —
+		// even when the current compose's Imported list is empty but
+		// terraform state still references the alias (issue #562).
+		// google-beta only ships with GCP-cloud composes; the outer
+		// `switch cloud` keeps it out of AWS stacks.
+		required["google-beta"] = &tfconfig.ProviderRequirement{Source: "hashicorp/google-beta", VersionConstraints: []string{">= 5.16"}}
 		maps.Copy(required, discovered)
 
 		// default_labels is a safety net so every GCP resource in the
@@ -809,30 +811,32 @@ func generateProvidersTF(in providersTFInput) []byte {
 		b.WriteString(renderRequiredProviders(required))
 		b.WriteString("  }\n}\n\n")
 		fmt.Fprintf(&b, "provider \"google\" {\n  region = %q%s\n}\n", region, gcpDefaultLabels)
-		if importedClouds["gcp"] {
-			b.WriteString("\n")
-			// google.imported drives Terraform's import {} for previously
-			// existing GCP resources. project is rendered as a literal —
-			// the root stack does not declare var.gcp_project_id, and the
-			// project ID is known at compose time. No default_labels:
-			// imported resources keep any pre-existing labels untouched.
-			// An empty gcpProjectID still emits an empty literal: the
-			// gcp_project_id_required ValidationIssue surfaces the real
-			// fix to the caller before apply.
-			fmt.Fprintf(&b, "provider \"google\" {\n  alias   = \"imported\"\n  region  = %q\n  project = %q\n}\n", region, gcpProjectID)
-		}
-		if importedClouds[ProvidersUsedKeyGCPBeta] {
-			b.WriteString("\n")
-			// google-beta.imported is the alias used by imported
-			// resources whose schema lives in hashicorp/google-beta —
-			// most notably the API Gateway family. Mirrors the
-			// google.imported alias above (no default_labels) so the
-			// imported resources don't inherit the session's
-			// project label. EmitImportedTF flips importedClouds
-			// ["gcp-beta"] to true whenever any rendered resource
-			// carries provider = google-beta.imported.
-			fmt.Fprintf(&b, "provider \"google-beta\" {\n  alias   = \"imported\"\n  region  = %q\n  project = %q\n}\n", region, gcpProjectID)
-		}
+		b.WriteString("\n")
+		// google.imported drives Terraform's import {} for previously
+		// existing GCP resources. project is rendered as a literal —
+		// the root stack does not declare var.gcp_project_id, and the
+		// project ID is known at compose time. No default_labels:
+		// imported resources keep any pre-existing labels untouched.
+		// An empty gcpProjectID still emits an empty literal: the
+		// gcp_project_id_required ValidationIssue surfaces the real
+		// fix to the caller before apply.
+		//
+		// Emitted unconditionally for every GCP stack (issue #562):
+		// terraform state from a prior compose may still reference
+		// `google.imported` even when the current compose's Imported
+		// list is empty (drift-correction recompose, re-import flow,
+		// etc.). Omitting the alias block then crashes `terraform
+		// plan` with "Provider configuration not present".
+		fmt.Fprintf(&b, "provider \"google\" {\n  alias   = \"imported\"\n  region  = %q\n  project = %q\n}\n", region, gcpProjectID)
+		b.WriteString("\n")
+		// google-beta.imported is the alias used by imported
+		// resources whose schema lives in hashicorp/google-beta —
+		// most notably the API Gateway family. Mirrors the
+		// google.imported alias above (no default_labels) so the
+		// imported resources don't inherit the session's
+		// project label. Emitted unconditionally for the same
+		// reason as google.imported above (issue #562).
+		fmt.Fprintf(&b, "provider \"google-beta\" {\n  alias   = \"imported\"\n  region  = %q\n  project = %q\n}\n", region, gcpProjectID)
 		return []byte(b.String())
 
 	default: // aws
@@ -902,10 +906,15 @@ variable "external_id" {
 		// session and must not silently inherit the stack's Project tag.
 		// Provenance tagging is system-owned and re-emitted in the resource
 		// body via merge() instead (issue #153).
-		if importedClouds["aws"] {
-			b.WriteString("\n")
-			fmt.Fprintf(&b, "provider \"aws\" {\n  alias  = \"imported\"\n  region = %q%s\n}\n", region, awsDynamicAssumeRole)
-		}
+		//
+		// Emitted unconditionally for every AWS stack (issue #562):
+		// terraform state from a prior compose may still reference
+		// `aws.imported` even when the current compose's Imported list is
+		// empty (drift-correction recompose, re-import flow, etc.).
+		// Omitting the alias block then crashes `terraform plan` with
+		// "Provider configuration not present".
+		b.WriteString("\n")
+		fmt.Fprintf(&b, "provider \"aws\" {\n  alias  = \"imported\"\n  region = %q%s\n}\n", region, awsDynamicAssumeRole)
 
 		return []byte(b.String())
 	}
