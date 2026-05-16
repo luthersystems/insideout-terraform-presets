@@ -77,6 +77,8 @@ var coveredTypes = []string{
 	// Bundle 4 (cont.) — CodeDeploy app.
 	"aws_codedeploy_app",
 	"aws_codepipeline",
+	// Bundle 9 (cont.) — Cognito identity provider.
+	"aws_cognito_identity_provider",
 	// Bundle 5 (cont.) — Cognito user-pool client.
 	"aws_cognito_user_pool_client",
 	"aws_db_instance",

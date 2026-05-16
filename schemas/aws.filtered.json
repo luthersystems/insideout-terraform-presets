@@ -8304,6 +8304,60 @@
             "description_kind": "plain"
           }
         },
+        "aws_cognito_identity_provider": {
+          "version": 0,
+          "block": {
+            "attributes": {
+              "attribute_mapping": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "idp_identifiers": {
+                "type": [
+                  "list",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true
+              },
+              "provider_details": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "required": true
+              },
+              "provider_name": {
+                "type": "string",
+                "description_kind": "plain",
+                "required": true
+              },
+              "provider_type": {
+                "type": "string",
+                "description_kind": "plain",
+                "required": true
+              },
+              "user_pool_id": {
+                "type": "string",
+                "description_kind": "plain",
+                "required": true
+              }
+            },
+            "description_kind": "plain"
+          }
+        },
         "aws_cognito_user_pool_client": {
           "version": 0,
           "block": {
