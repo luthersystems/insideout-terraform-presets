@@ -22,8 +22,8 @@ and is checked in lockstep with the runtime registries. See the
 
 ## Summary
 
-- **AWS:** 109 types · 100% Discoverable · 100% Enrichable · 42% DriftDetectable · 8% MetricsAvailable · 39% AgentEditable
-- **GCP:** 54 types · 100% Discoverable · 100% Enrichable · 63% DriftDetectable · 11% MetricsAvailable · 89% AgentEditable
+- **AWS:** 109 types · 100% Discoverable · 100% Enrichable · 42% DriftDetectable · 23% MetricsAvailable · 39% AgentEditable
+- **GCP:** 54 types · 100% Discoverable · 100% Enrichable · 63% DriftDetectable · 33% MetricsAvailable · 89% AgentEditable
 
 ## AWS
 
@@ -40,14 +40,14 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_apigatewayv2_integration` | ✓ | ✓ | – | – | – |
 | `aws_apigatewayv2_route` | ✓ | ✓ | – | – | – |
 | `aws_apigatewayv2_stage` | ✓ | ✓ | ✓ | – | ✓ |
-| `aws_autoscaling_group` | ✓ | ✓ | ✓ | – | ✓ |
+| `aws_autoscaling_group` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_autoscaling_group_tag` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_backup_plan` | ✓ | ✓ | – | – | – |
 | `aws_backup_selection` | ✓ | ✓ | – | – | – |
 | `aws_backup_vault` | ✓ | ✓ | – | – | – |
 | `aws_bedrock_guardrail` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_bedrock_model_invocation_logging_configuration` | ✓ | ✓ | ✓ | – | ✓ |
-| `aws_cloudfront_distribution` | ✓ | ✓ | ✓ | – | ✓ |
+| `aws_cloudfront_distribution` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_cloudfront_function` | ✓ | ✓ | – | – | – |
 | `aws_cloudfront_monitoring_subscription` | ✓ | ✓ | – | – | – |
 | `aws_cloudfront_origin_access_identity` | ✓ | ✓ | – | – | – |
@@ -56,7 +56,7 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_cloudwatch_log_group` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_cloudwatch_log_resource_policy` | ✓ | ✓ | – | – | – |
 | `aws_cloudwatch_log_stream` | ✓ | ✓ | – | – | – |
-| `aws_cloudwatch_metric_alarm` | ✓ | ✓ | ✓ | – | ✓ |
+| `aws_cloudwatch_metric_alarm` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_cognito_identity_provider` | ✓ | ✓ | – | – | – |
 | `aws_cognito_resource_server` | ✓ | ✓ | – | – | – |
 | `aws_cognito_user_pool` | ✓ | ✓ | – | – | – |
@@ -68,31 +68,31 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_dynamodb_contributor_insights` | ✓ | ✓ | ✓ | – | – |
 | `aws_dynamodb_table` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_ebs_volume` | ✓ | ✓ | – | – | – |
-| `aws_ecs_cluster` | ✓ | ✓ | ✓ | – | ✓ |
+| `aws_ecs_cluster` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_ecs_cluster_capacity_providers` | ✓ | ✓ | – | – | – |
 | `aws_eip` | ✓ | ✓ | – | – | – |
 | `aws_eks_access_entry` | ✓ | ✓ | – | – | – |
 | `aws_eks_addon` | ✓ | ✓ | – | – | – |
-| `aws_eks_cluster` | ✓ | ✓ | ✓ | – | ✓ |
+| `aws_eks_cluster` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_eks_fargate_profile` | ✓ | ✓ | – | – | – |
 | `aws_eks_node_group` | ✓ | ✓ | – | – | – |
 | `aws_eks_pod_identity_association` | ✓ | ✓ | – | – | – |
 | `aws_elasticache_parameter_group` | ✓ | ✓ | – | – | – |
-| `aws_elasticache_replication_group` | ✓ | ✓ | ✓ | – | ✓ |
+| `aws_elasticache_replication_group` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_elasticache_subnet_group` | ✓ | ✓ | – | – | – |
 | `aws_iam_group` | ✓ | ✓ | – | – | – |
 | `aws_iam_instance_profile` | ✓ | ✓ | – | – | – |
 | `aws_iam_policy` | ✓ | ✓ | ✓ | – | ✓ |
-| `aws_iam_role` | ✓ | ✓ | ✓ | – | ✓ |
+| `aws_iam_role` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_iam_role_policy` | ✓ | ✓ | – | – | – |
 | `aws_iam_role_policy_attachment` | ✓ | ✓ | ✓ | – | – |
 | `aws_iam_service_linked_role` | ✓ | ✓ | – | – | – |
 | `aws_iam_user` | ✓ | ✓ | – | – | – |
-| `aws_instance` | ✓ | ✓ | ✓ | – | ✓ |
+| `aws_instance` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_internet_gateway` | ✓ | ✓ | – | – | – |
 | `aws_key_pair` | ✓ | ✓ | – | – | – |
 | `aws_kms_alias` | ✓ | ✓ | – | – | – |
-| `aws_kms_key` | ✓ | ✓ | ✓ | – | ✓ |
+| `aws_kms_key` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_lambda_alias` | ✓ | ✓ | – | – | – |
 | `aws_lambda_event_source_mapping` | ✓ | ✓ | – | – | – |
 | `aws_lambda_function` | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -101,19 +101,19 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_launch_template` | ✓ | ✓ | – | – | – |
 | `aws_lb` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_lb_listener` | ✓ | ✓ | ✓ | – | ✓ |
-| `aws_lb_target_group` | ✓ | ✓ | ✓ | – | ✓ |
-| `aws_msk_cluster` | ✓ | ✓ | ✓ | – | ✓ |
+| `aws_lb_target_group` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `aws_msk_cluster` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_msk_configuration` | ✓ | ✓ | – | – | – |
-| `aws_nat_gateway` | ✓ | ✓ | – | – | – |
+| `aws_nat_gateway` | ✓ | ✓ | – | ✓ | – |
 | `aws_network_acl` | ✓ | ✓ | – | – | – |
 | `aws_network_interface` | ✓ | ✓ | – | – | – |
-| `aws_opensearch_domain` | ✓ | ✓ | ✓ | – | ✓ |
+| `aws_opensearch_domain` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_opensearchserverless_access_policy` | ✓ | ✓ | – | – | – |
 | `aws_opensearchserverless_collection` | ✓ | ✓ | – | – | – |
 | `aws_opensearchserverless_security_policy` | ✓ | ✓ | – | – | – |
 | `aws_resourceexplorer2_index` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_resourceexplorer2_view` | ✓ | ✓ | ✓ | – | ✓ |
-| `aws_route53_zone` | ✓ | ✓ | ✓ | – | ✓ |
+| `aws_route53_zone` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_route_table` | ✓ | ✓ | – | – | – |
 | `aws_s3_bucket` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_s3_bucket_lifecycle_configuration` | ✓ | ✓ | ✓ | – | ✓ |
@@ -131,12 +131,12 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_sqs_queue` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_ssm_parameter` | ✓ | ✓ | – | – | – |
 | `aws_subnet` | ✓ | ✓ | ✓ | – | ✓ |
-| `aws_vpc` | ✓ | ✓ | ✓ | – | ✓ |
+| `aws_vpc` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_vpc_dhcp_options` | ✓ | ✓ | – | – | – |
 | `aws_vpc_endpoint` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_vpc_security_group_egress_rule` | ✓ | ✓ | – | – | – |
 | `aws_vpc_security_group_ingress_rule` | ✓ | ✓ | – | – | – |
-| `aws_wafv2_web_acl` | ✓ | ✓ | – | – | – |
+| `aws_wafv2_web_acl` | ✓ | ✓ | – | ✓ | – |
 | `aws_wafv2_web_acl_association` | ✓ | ✓ | ✓ | – | – |
 
 ## GCP
@@ -149,34 +149,34 @@ and is checked in lockstep with the runtime registries. See the
 | `google_cloud_run_v2_service` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_cloud_run_v2_service_iam_member` | ✓ | ✓ | – | – | – |
 | `google_cloudbuild_trigger` | ✓ | ✓ | – | – | ✓ |
-| `google_cloudfunctions2_function` | ✓ | ✓ | ✓ | – | ✓ |
+| `google_cloudfunctions2_function` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_cloudfunctions2_function_iam_member` | ✓ | ✓ | – | – | – |
 | `google_compute_address` | ✓ | ✓ | ✓ | – | ✓ |
-| `google_compute_backend_service` | ✓ | ✓ | ✓ | – | ✓ |
+| `google_compute_backend_service` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_compute_firewall` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_compute_forwarding_rule` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_compute_global_address` | ✓ | ✓ | – | – | ✓ |
 | `google_compute_global_forwarding_rule` | ✓ | ✓ | – | – | ✓ |
 | `google_compute_health_check` | ✓ | ✓ | ✓ | – | ✓ |
-| `google_compute_instance` | ✓ | ✓ | ✓ | – | ✓ |
+| `google_compute_instance` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_compute_managed_ssl_certificate` | ✓ | ✓ | – | – | ✓ |
-| `google_compute_network` | ✓ | ✓ | ✓ | – | ✓ |
+| `google_compute_network` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_compute_resource_policy` | ✓ | ✓ | – | – | ✓ |
 | `google_compute_router` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_compute_security_policy` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_compute_target_http_proxy` | ✓ | ✓ | – | – | ✓ |
 | `google_compute_target_https_proxy` | ✓ | ✓ | – | – | ✓ |
 | `google_compute_url_map` | ✓ | ✓ | ✓ | – | ✓ |
-| `google_container_cluster` | ✓ | ✓ | ✓ | – | ✓ |
+| `google_container_cluster` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_container_node_pool` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_firestore_database` | ✓ | ✓ | – | – | ✓ |
 | `google_identity_platform_config` | ✓ | ✓ | – | – | ✓ |
 | `google_identity_platform_default_supported_idp_config` | ✓ | ✓ | ✓ | – | ✓ |
-| `google_kms_crypto_key` | ✓ | ✓ | ✓ | – | ✓ |
+| `google_kms_crypto_key` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_kms_crypto_key_iam_binding` | ✓ | ✓ | – | – | ✓ |
 | `google_kms_key_ring` | ✓ | ✓ | ✓ | – | – |
-| `google_logging_project_sink` | ✓ | ✓ | ✓ | – | ✓ |
-| `google_monitoring_alert_policy` | ✓ | ✓ | ✓ | – | ✓ |
+| `google_logging_project_sink` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `google_monitoring_alert_policy` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_monitoring_dashboard` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_monitoring_notification_channel` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_project_iam_member` | ✓ | ✓ | – | – | – |
@@ -184,18 +184,18 @@ and is checked in lockstep with the runtime registries. See the
 | `google_pubsub_subscription` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_pubsub_topic` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_redis_instance` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `google_secret_manager_secret` | ✓ | ✓ | ✓ | – | ✓ |
+| `google_secret_manager_secret` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_secret_manager_secret_iam_binding` | ✓ | ✓ | – | – | ✓ |
 | `google_secret_manager_secret_iam_member` | ✓ | ✓ | – | – | – |
 | `google_secret_manager_secret_version` | ✓ | ✓ | ✓ | – | ✓ |
-| `google_service_account` | ✓ | ✓ | ✓ | – | ✓ |
+| `google_service_account` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_service_networking_connection` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_sql_database_instance` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_sql_user` | ✓ | ✓ | – | – | ✓ |
 | `google_storage_bucket` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_storage_bucket_iam_member` | ✓ | ✓ | – | – | – |
-| `google_storage_bucket_object` | ✓ | ✓ | ✓ | – | ✓ |
-| `google_vertex_ai_dataset` | ✓ | ✓ | ✓ | – | ✓ |
+| `google_storage_bucket_object` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `google_vertex_ai_dataset` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_vpc_access_connector` | ✓ | ✓ | ✓ | – | ✓ |
 
 ## How to regenerate

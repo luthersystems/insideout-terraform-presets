@@ -44,6 +44,14 @@ var seededTypes = []string{
 	"google_compute_network",
 	"google_kms_crypto_key",
 	"google_service_account",
+	"aws_autoscaling_group",
+	"aws_ecs_cluster",
+	"aws_instance",
+	"aws_nat_gateway",
+	"aws_wafv2_web_acl",
+	"google_cloudfunctions2_function",
+	"google_monitoring_alert_policy",
+	"google_secret_manager_secret",
 }
 
 // seededBindings mirrors the registrations performed by init(). Used
@@ -331,6 +339,62 @@ var seededBindings = map[string]ComponentMetricsBinding{
 		Action:        "timeseries-list",
 		DimensionKey:  "unique_id",
 		DimensionFrom: "name",
+	},
+	"aws_autoscaling_group": {
+		Service:        "autoscaling",
+		Action:         "get-metrics",
+		DimensionKey:   "AutoScalingGroupName",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"GroupDesiredCapacity", "GroupInServiceInstances", "GroupTotalInstances"},
+	},
+	"aws_ecs_cluster": {
+		Service:        "ecs",
+		Action:         "get-metrics",
+		DimensionKey:   "ClusterName",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"CPUUtilization", "MemoryUtilization", "CPUReservation", "MemoryReservation"},
+	},
+	"aws_instance": {
+		Service:        "ec2",
+		Action:         "get-metrics",
+		DimensionKey:   "InstanceId",
+		DimensionFrom:  "id",
+		DefaultMetrics: []string{"CPUUtilization", "NetworkIn", "NetworkOut", "StatusCheckFailed"},
+	},
+	"aws_nat_gateway": {
+		Service:        "natgateway",
+		Action:         "get-metrics",
+		DimensionKey:   "NatGatewayId",
+		DimensionFrom:  "id",
+		DefaultMetrics: []string{"BytesInFromDestination", "BytesOutToDestination", "ErrorPortAllocation", "PacketsDropCount"},
+	},
+	"aws_wafv2_web_acl": {
+		Service:        "wafv2",
+		Action:         "get-metrics",
+		DimensionKey:   "WebACL",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"AllowedRequests", "BlockedRequests", "CountedRequests"},
+	},
+	"google_cloudfunctions2_function": {
+		Service:        "cloudfunctions",
+		Action:         "timeseries-list",
+		DimensionKey:   "function_name",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"cloudfunctions.googleapis.com/function/execution_count", "cloudfunctions.googleapis.com/function/execution_times", "cloudfunctions.googleapis.com/function/user_memory_bytes"},
+	},
+	"google_monitoring_alert_policy": {
+		Service:        "monitoring",
+		Action:         "timeseries-list",
+		DimensionKey:   "policy_name",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"monitoring.googleapis.com/alert_policy/open_incidents_count"},
+	},
+	"google_secret_manager_secret": {
+		Service:        "secretmanager",
+		Action:         "timeseries-list",
+		DimensionKey:   "secret_id",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"secretmanager.googleapis.com/secret/access_count", "secretmanager.googleapis.com/secret/version_count"},
 	},
 }
 
