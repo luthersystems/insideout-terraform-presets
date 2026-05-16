@@ -22,7 +22,7 @@ and is checked in lockstep with the runtime registries. See the
 
 ## Summary
 
-- **AWS:** 109 types · 100% Discoverable · 100% Enrichable · 97% DriftDetectable · 8% MetricsAvailable · 88% AgentEditable
+- **AWS:** 127 types · 86% Discoverable · 86% Enrichable · 98% DriftDetectable · 8% MetricsAvailable · 89% AgentEditable
 - **GCP:** 54 types · 100% Discoverable · 100% Enrichable · 63% DriftDetectable · 11% MetricsAvailable · 89% AgentEditable
 
 ## AWS
@@ -40,6 +40,9 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_apigatewayv2_integration` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_apigatewayv2_route` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_apigatewayv2_stage` | ✓ | ✓ | ✓ | – | ✓ |
+| `aws_appautoscaling_policy` | – | – | ✓ | – | ✓ |
+| `aws_appautoscaling_target` | – | – | ✓ | – | ✓ |
+| `aws_athena_workgroup` | – | – | ✓ | – | ✓ |
 | `aws_autoscaling_group` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_autoscaling_group_tag` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_backup_plan` | ✓ | ✓ | ✓ | – | – |
@@ -51,12 +54,17 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_cloudfront_function` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_cloudfront_monitoring_subscription` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_cloudfront_origin_access_identity` | ✓ | ✓ | ✓ | – | ✓ |
+| `aws_cloudtrail` | – | – | ✓ | – | ✓ |
 | `aws_cloudwatch_dashboard` | ✓ | ✓ | ✓ | – | ✓ |
+| `aws_cloudwatch_event_bus` | – | – | ✓ | – | – |
 | `aws_cloudwatch_event_rule` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_cloudwatch_log_group` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_cloudwatch_log_resource_policy` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_cloudwatch_log_stream` | ✓ | ✓ | ✓ | – | – |
 | `aws_cloudwatch_metric_alarm` | ✓ | ✓ | ✓ | – | ✓ |
+| `aws_codebuild_project` | – | – | ✓ | – | ✓ |
+| `aws_codedeploy_app` | – | – | ✓ | – | ✓ |
+| `aws_codepipeline` | – | – | ✓ | – | ✓ |
 | `aws_cognito_identity_provider` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_cognito_resource_server` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_cognito_user_pool` | ✓ | ✓ | – | – | – |
@@ -66,10 +74,14 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_db_parameter_group` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_db_subnet_group` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_dynamodb_contributor_insights` | ✓ | ✓ | ✓ | – | – |
+| `aws_dynamodb_global_table` | – | – | ✓ | – | ✓ |
 | `aws_dynamodb_table` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_ebs_volume` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_ecs_cluster` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_ecs_cluster_capacity_providers` | ✓ | ✓ | ✓ | – | ✓ |
+| `aws_ecs_service` | – | – | ✓ | – | ✓ |
+| `aws_ecs_task_definition` | – | – | ✓ | – | ✓ |
+| `aws_efs_file_system` | – | – | ✓ | – | ✓ |
 | `aws_eip` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_eks_access_entry` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_eks_addon` | ✓ | ✓ | ✓ | – | ✓ |
@@ -80,6 +92,8 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_elasticache_parameter_group` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_elasticache_replication_group` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_elasticache_subnet_group` | ✓ | ✓ | ✓ | – | ✓ |
+| `aws_glue_catalog_database` | – | – | ✓ | – | ✓ |
+| `aws_glue_job` | – | – | ✓ | – | ✓ |
 | `aws_iam_group` | ✓ | ✓ | ✓ | – | – |
 | `aws_iam_instance_profile` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_iam_policy` | ✓ | ✓ | ✓ | – | ✓ |
@@ -91,12 +105,14 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_instance` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_internet_gateway` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_key_pair` | ✓ | ✓ | ✓ | – | ✓ |
+| `aws_kinesis_stream` | – | – | ✓ | – | ✓ |
 | `aws_kms_alias` | ✓ | ✓ | ✓ | – | – |
 | `aws_kms_key` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_lambda_alias` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_lambda_event_source_mapping` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_lambda_function` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_lambda_function_url` | ✓ | ✓ | ✓ | – | ✓ |
+| `aws_lambda_layer_version` | – | – | ✓ | – | ✓ |
 | `aws_lambda_permission` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_launch_template` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_lb` | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -111,6 +127,7 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_opensearchserverless_access_policy` | ✓ | ✓ | – | – | – |
 | `aws_opensearchserverless_collection` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_opensearchserverless_security_policy` | ✓ | ✓ | – | – | – |
+| `aws_rds_cluster` | – | – | ✓ | ✓ | ✓ |
 | `aws_resourceexplorer2_index` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_resourceexplorer2_view` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_route53_zone` | ✓ | ✓ | ✓ | – | ✓ |
@@ -126,6 +143,7 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_secretsmanager_secret_rotation` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_security_group` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_service_discovery_private_dns_namespace` | ✓ | ✓ | ✓ | – | ✓ |
+| `aws_sfn_state_machine` | – | – | ✓ | – | ✓ |
 | `aws_sns_topic` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_sns_topic_subscription` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_sqs_queue` | ✓ | ✓ | ✓ | ✓ | ✓ |

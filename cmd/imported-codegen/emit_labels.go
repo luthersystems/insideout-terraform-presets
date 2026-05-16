@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"sort"
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/imported/labels"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/insideout-import/registry"
@@ -52,23 +51,21 @@ func buildLabelsMap() map[string]labelEntry {
 	return m
 }
 
-// unionDiscoverTypes returns the deduped, sorted union of AWS and GCP
-// supported discover types. Shared helper for every subcommand that
-// iterates "every TF type the discover pipeline supports".
+// unionDiscoverTypes returns the deduped, sorted union of every
+// Terraform type known to the InsideOut pipeline — discoverable + codegen-
+// only — across AWS and GCP. Shared helper for every subcommand that
+// iterates "every TF type the pipeline knows about" (labels, capabilities
+// matrix, supported-resources doc).
+//
+// Was registry.SupportedDiscoverTypes(AWS|GCP) pre-#494 — the rename to
+// registry.KnownTypes is the bundle-12 fix: types that have Layer-1 +
+// curated policy authored but no live discoverer (awsCodegenOnlyTypes)
+// now appear in the capabilities matrix, so their drift-coverage credit
+// is no longer silently dropped. Their Discoverable + Enrichable axes
+// show ✗; DriftDetectable + AgentEditable show ✓ — correctly surfacing
+// the "policy authored, discoverer pending" gap.
 func unionDiscoverTypes() []string {
-	seen := map[string]struct{}{}
-	for _, t := range registry.SupportedDiscoverTypes(registry.ProviderAWS) {
-		seen[t] = struct{}{}
-	}
-	for _, t := range registry.SupportedDiscoverTypes(registry.ProviderGCP) {
-		seen[t] = struct{}{}
-	}
-	out := make([]string, 0, len(seen))
-	for t := range seen {
-		out = append(out, t)
-	}
-	sort.Strings(out)
-	return out
+	return registry.KnownTypes()
 }
 
 // writeJSONOutput marshals v as deterministic indented JSON and writes

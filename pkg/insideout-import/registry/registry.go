@@ -400,19 +400,27 @@ func GoogleBetaCodegenTypes() []string {
 }
 
 // KnownTypes returns the sorted union of every Terraform resource type
-// known to the InsideOut pipeline — discoverable + codegen-only — across
-// all providers. SUPPORTED_RESOURCES.md iterates this so codegen-only
-// types still appear in the capabilities matrix (with Discoverable=✗) and
-// drift-coverage % isn't silently undercounted (the bundle-12 regression
-// guard).
+// known to the InsideOut pipeline — discoverable (including discover-but-
+// not-codegen) + codegen-only — across all providers. SUPPORTED_RESOURCES.md
+// iterates this so codegen-only types still appear in the capabilities
+// matrix (with Discoverable=✗) and drift-coverage % isn't silently
+// undercounted (the bundle-12 regression guard).
 //
 // The returned slice is a fresh copy; callers may mutate it freely.
 func KnownTypes() []string {
-	aws := AWSCodegenTypes()
-	gcp := gcpDiscoverTypes
-	out := make([]string, 0, len(aws)+len(gcp))
-	out = append(out, aws...)
-	out = append(out, gcp...)
+	seen := map[string]struct{}{}
+	add := func(ss []string) {
+		for _, s := range ss {
+			seen[s] = struct{}{}
+		}
+	}
+	add(awsDiscoverTypes)
+	add(awsCodegenOnlyTypes)
+	add(gcpDiscoverTypes)
+	out := make([]string, 0, len(seen))
+	for t := range seen {
+		out = append(out, t)
+	}
 	slices.Sort(out)
 	return out
 }
