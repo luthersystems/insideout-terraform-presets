@@ -211,17 +211,22 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 		NameHintFromProperties:  nameOrIdentifier("LogGroupName"),
 		NativeIDsFromProperties: arnUnderKey("Arn"),
 		TagsFromProperties:      tagsFromKey("Tags"),
-		// #501 Normalizer: CFN AWS::Logs::LogGroup uses primary-name
+		// #501/#502 Normalizer: CFN AWS::Logs::LogGroup uses primary-name
 		// `LogGroupName` (TF: `name`), an `Arn` that includes the
 		// trailing `:*` log-stream wildcard (TF strips it), and a
-		// list-of-{Key,Value} `Tags` shape (TF: map shape). NOTE: a
-		// hand-rolled enricher in byTypeEnricher currently overrides
-		// the Cloud Control generic path for this type, so the
-		// normalizer is dormant at runtime — staged here so Bucket C
-		// can compare the generic-path payload to the hand-rolled
-		// output and decide whether to retire the override.
+		// list-of-{Key,Value} `Tags` shape (TF: map shape). The
+		// trailing `synthIDFromField("Name")` step copies the
+		// post-rename `Name` value into `Id` so the generated `id`
+		// field lands the same value the retired hand-rolled enricher
+		// produced (TF state stores the log-group name as the
+		// resource id).
+		//
+		// As of #502 the hand-rolled cloudwatch_log_group enricher is
+		// retired and this generic Cloud Control + Normalizer path is
+		// the production enricher for aws_cloudwatch_log_group.
 		Normalizer: chain(
 			renameField("LogGroupName", "Name"),
+			synthIDFromField("Name"),
 			trimARNStar("Arn"),
 			flattenTagList("Tags"),
 		),

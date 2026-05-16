@@ -402,6 +402,11 @@ func TestCloudControlEnricher_Enrich_Normalized(t *testing.T) {
 		require.NotNil(t, lg.Name)
 		require.NotNil(t, lg.Name.Literal)
 		assert.Equal(t, "/aws/lambda/demo", *lg.Name.Literal)
+		// #502: id mirrors name (synthIDFromField), matching the
+		// retired hand-rolled enricher's `out.ID = out.Name` shape.
+		require.NotNil(t, lg.ID, "id must mirror name post-#502 synthIDFromField")
+		require.NotNil(t, lg.ID.Literal)
+		assert.Equal(t, "/aws/lambda/demo", *lg.ID.Literal)
 		// ARN trailing-:* stripped.
 		require.NotNil(t, lg.ARN)
 		require.NotNil(t, lg.ARN.Literal)

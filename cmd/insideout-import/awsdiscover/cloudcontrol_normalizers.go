@@ -241,6 +241,59 @@ func trimARNStar(key string) Normalizer {
 	}
 }
 
+// synthIDFromField returns a Normalizer that copies the value at the
+// top-level `src` key into a new top-level `Id` key, matching the
+// hand-rolled enricher convention of setting `id == name` for resources
+// whose Terraform `id` field mirrors the primary name (e.g.
+// aws_cloudwatch_log_group's `id == name == LogGroupName`).
+//
+// The post-camelToSnake projection turns `Id` into `id`, which lands on
+// the generated `ID *Value[string]` field via its `json:"id"` tag.
+//
+// Idempotent: if `src` is absent or empty, the payload passes through
+// unchanged. If `Id` is already present, the existing value wins (the
+// synth is a no-op rather than an overwrite) — matches the
+// renameField convention so the helper composes cleanly when callers
+// build conditional chains.
+//
+// Operates only on top-level string scalars. Non-string `src` values
+// pass through without synthesis — the calling chain places this helper
+// AFTER any renameField that lands `src` so the value is the
+// post-rename primary-name string.
+//
+// Use with the camelToSnake projection in mind: the helper writes `Id`
+// (not `id`) so the downstream shapeCFNForLayer1 wraps the scalar in
+// the `{"literal": …}` envelope the generated `Value[T]` field decodes.
+// Writing `id` directly would bypass the projection and land a bare
+// scalar that Value[T].UnmarshalJSON rejects.
+func synthIDFromField(src string) Normalizer {
+	return func(in json.RawMessage) (json.RawMessage, error) {
+		if src == "" {
+			return in, nil
+		}
+		m, err := decodeObject(in)
+		if err != nil {
+			return nil, fmt.Errorf("synthIDFromField(%q): %w", src, err)
+		}
+		if m == nil {
+			return in, nil
+		}
+		if _, exists := m["Id"]; exists {
+			return in, nil
+		}
+		raw, ok := m[src]
+		if !ok || raw == nil {
+			return in, nil
+		}
+		s, ok := raw.(string)
+		if !ok || s == "" {
+			return in, nil
+		}
+		m["Id"] = s
+		return encodeObject(m)
+	}
+}
+
 // decodeObject is the shared parse step. Returns (nil, nil) for an
 // empty / null payload so helpers can pass-through cleanly without
 // special-casing.

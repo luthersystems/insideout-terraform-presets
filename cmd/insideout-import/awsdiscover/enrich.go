@@ -26,7 +26,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/autoscaling"
 	"github.com/aws/aws-sdk-go-v2/service/bedrock"
 	"github.com/aws/aws-sdk-go-v2/service/cloudcontrol"
-	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/resourceexplorer2"
@@ -141,9 +140,13 @@ type ByIDEnricher interface {
 // Empty is tolerated when no enricher uses it (today: DynamoDB doesn't
 // need it because TableArn comes back in DescribeTable directly).
 type EnrichClients struct {
-	S3             *s3.Client
-	DynamoDB       *dynamodb.Client
-	CloudWatchLogs *cloudwatchlogs.Client
+	S3       *s3.Client
+	DynamoDB *dynamodb.Client
+	// CloudWatchLogs removed in #502 — the aws_cloudwatch_log_group
+	// hand-rolled enricher retired in favor of the generic Cloud Control
+	// + Normalizer path. The Cloud Control discoverer's listing fallback
+	// constructs its own cloudwatchlogs.Client inline (see
+	// cloudcontrol_listers.go), so this field had no remaining consumer.
 	SecretsManager *secretsmanager.Client
 	// Bedrock is the shared client used by the bedrock_guardrail and
 	// bedrock_model_invocation_logging_configuration enrichers (#482

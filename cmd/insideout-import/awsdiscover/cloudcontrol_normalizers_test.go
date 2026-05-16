@@ -344,3 +344,115 @@ func TestTrimARNStar(t *testing.T) {
 		assert.JSONEq(t, `{"X":1}`, string(out))
 	})
 }
+
+// TestSynthIDFromField pins the id-synthesis contract used by #502 to
+// land the hand-rolled `id == name` invariant on the generic Cloud
+// Control path. Covers: present source copies into `Id`, absent source
+// is a no-op, already-present `Id` is preserved (no clobber),
+// non-string source is a no-op (the helper expects a string scalar),
+// and malformed payloads error cleanly.
+func TestSynthIDFromField(t *testing.T) {
+	t.Parallel()
+
+	t.Run("copies post-rename Name into Id", func(t *testing.T) {
+		t.Parallel()
+		// Typical chain shape: renameField has already landed `Name`
+		// from `LogGroupName`; synthIDFromField copies it to `Id` so
+		// the downstream camelToSnake projection produces `id` on the
+		// shaped payload.
+		in := json.RawMessage(`{"Name":"/aws/lambda/demo","Arn":"a"}`)
+		out, err := synthIDFromField("Name")(in)
+		require.NoError(t, err)
+		m := asMap(t, out)
+		assert.Equal(t, "/aws/lambda/demo", m["Name"])
+		assert.Equal(t, "/aws/lambda/demo", m["Id"], "Id should mirror Name")
+		assert.Equal(t, "a", m["Arn"])
+	})
+
+	t.Run("absent source is no-op", func(t *testing.T) {
+		t.Parallel()
+		in := json.RawMessage(`{"Arn":"a"}`)
+		out, err := synthIDFromField("Name")(in)
+		require.NoError(t, err)
+		assert.JSONEq(t, `{"Arn":"a"}`, string(out))
+	})
+
+	t.Run("preserves existing Id (no clobber)", func(t *testing.T) {
+		t.Parallel()
+		// If `Id` is already on the payload (e.g. a hand-shaped CFN
+		// response or a prior synth pass), leave it intact — matches
+		// renameField's no-clobber convention.
+		in := json.RawMessage(`{"Name":"/aws/x","Id":"keep-me"}`)
+		out, err := synthIDFromField("Name")(in)
+		require.NoError(t, err)
+		m := asMap(t, out)
+		assert.Equal(t, "keep-me", m["Id"])
+		assert.Equal(t, "/aws/x", m["Name"])
+	})
+
+	t.Run("non-string source is no-op", func(t *testing.T) {
+		t.Parallel()
+		in := json.RawMessage(`{"Name":123}`)
+		out, err := synthIDFromField("Name")(in)
+		require.NoError(t, err)
+		m := asMap(t, out)
+		assert.NotContains(t, m, "Id")
+	})
+
+	t.Run("empty string source is no-op", func(t *testing.T) {
+		t.Parallel()
+		in := json.RawMessage(`{"Name":""}`)
+		out, err := synthIDFromField("Name")(in)
+		require.NoError(t, err)
+		m := asMap(t, out)
+		assert.NotContains(t, m, "Id")
+	})
+
+	t.Run("null source is no-op", func(t *testing.T) {
+		t.Parallel()
+		in := json.RawMessage(`{"Name":null}`)
+		out, err := synthIDFromField("Name")(in)
+		require.NoError(t, err)
+		m := asMap(t, out)
+		assert.NotContains(t, m, "Id")
+	})
+
+	t.Run("empty src is no-op", func(t *testing.T) {
+		t.Parallel()
+		in := json.RawMessage(`{"Name":"x"}`)
+		out, err := synthIDFromField("")(in)
+		require.NoError(t, err)
+		assert.JSONEq(t, `{"Name":"x"}`, string(out))
+	})
+
+	t.Run("null payload is no-op", func(t *testing.T) {
+		t.Parallel()
+		out, err := synthIDFromField("Name")(json.RawMessage(`null`))
+		require.NoError(t, err)
+		assert.Equal(t, "null", string(out))
+	})
+
+	t.Run("malformed JSON returns error", func(t *testing.T) {
+		t.Parallel()
+		_, err := synthIDFromField("Name")(json.RawMessage(`{not json`))
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "synthIDFromField")
+	})
+
+	t.Run("composes after renameField in chain", func(t *testing.T) {
+		t.Parallel()
+		// End-to-end production-shape: a CFN payload with `LogGroupName`
+		// flows through renameField → synthIDFromField and lands both
+		// `Name` and `Id` for the downstream Layer-1 unmarshal.
+		n := chain(
+			renameField("LogGroupName", "Name"),
+			synthIDFromField("Name"),
+		)
+		out, err := n(json.RawMessage(`{"LogGroupName":"/aws/x"}`))
+		require.NoError(t, err)
+		m := asMap(t, out)
+		assert.Equal(t, "/aws/x", m["Name"])
+		assert.Equal(t, "/aws/x", m["Id"])
+		assert.NotContains(t, m, "LogGroupName")
+	})
+}
