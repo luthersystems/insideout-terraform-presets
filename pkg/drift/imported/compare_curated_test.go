@@ -182,7 +182,9 @@ func TestCompare_Curated_AWSLambdaFunction(t *testing.T) {
 
 // TestCompare_Curated_GoogleStorageBucket covers an Exact mismatch on
 // uniform_bucket_level_access and a WholeList mismatch on cors.origin
-// (whose ordering matters for the provider's diff).
+// (whose ordering matters for the provider's diff). Labels are equal
+// on the user-key side (only goog-* may differ) so per-key labels
+// drift stays empty.
 func TestCompare_Curated_GoogleStorageBucket(t *testing.T) {
 	t.Parallel()
 	snap := json.RawMessage(`{
@@ -221,8 +223,58 @@ func TestCompare_Curated_GoogleStorageBucket(t *testing.T) {
 	require.Contains(t, idx, "cors.origin")
 	assert.IsType(t, []any{}, idx["cors.origin"].Snapshot)
 
-	// `labels` uses tagPolicy() → DriftSemantic=None → never emitted.
+	// `labels` uses gcpLabelDriftPolicy(): with identical user keys
+	// (env=prod on both sides) and only goog-* matched on either
+	// side, no per-key labels.* mismatch is emitted. The whole-map
+	// "labels" field name is never used with LabelFilter.
 	assert.NotContains(t, idx, "labels")
+	assert.NotContains(t, idx, "labels.env")
+	assert.NotContains(t, idx, "labels.goog-managed-by")
+}
+
+// TestCompare_Curated_GoogleStorageBucket_LifecycleWholeList covers
+// the lifecycle_rule whole-list collapse: a leaf-level change (age
+// 30 → 60) inside one rule of a multi-rule list emits ONE
+// `lifecycle_rule` mismatch with both sides as []any, not the
+// pre-#1479 fan-out into four `lifecycle_rule.action.type`,
+// `lifecycle_rule.condition.age`, etc per-leaf entries.
+func TestCompare_Curated_GoogleStorageBucket_LifecycleWholeList(t *testing.T) {
+	t.Parallel()
+	snap := json.RawMessage(`{
+		"name": "my-bucket",
+		"location": "US",
+		"storage_class": "STANDARD",
+		"lifecycle_rule": [
+			{"action": {"type": "SetStorageClass", "storage_class": "NEARLINE"}, "condition": {"age": 30}},
+			{"action": {"type": "Delete"}, "condition": {"age": 365}}
+		]
+	}`)
+	live := json.RawMessage(`{
+		"name": "my-bucket",
+		"location": "US",
+		"storage_class": "STANDARD",
+		"lifecycle_rule": [
+			{"action": {"type": "SetStorageClass", "storage_class": "NEARLINE"}, "condition": {"age": 60}},
+			{"action": {"type": "Delete"}, "condition": {"age": 365}}
+		]
+	}`)
+	got := Compare("google_storage_bucket", snap, live)
+	idx := fieldsByPath(t, got)
+
+	// One whole-list mismatch on the parent — no per-leaf fan-out.
+	require.Contains(t, idx, "lifecycle_rule",
+		"expected single lifecycle_rule WholeList mismatch")
+	assert.IsType(t, []any{}, idx["lifecycle_rule"].Snapshot)
+	assert.IsType(t, []any{}, idx["lifecycle_rule"].Cloud)
+	assert.NotContains(t, idx, "lifecycle_rule.action.type")
+	assert.NotContains(t, idx, "lifecycle_rule.condition.age")
+	assert.NotContains(t, idx, "lifecycle_rule.condition.with_state")
+	assert.NotContains(t, idx, "lifecycle_rule.action.storage_class")
+
+	// Identical lifecycle on both sides → no mismatch.
+	got2 := Compare("google_storage_bucket", snap, snap)
+	idx2 := fieldsByPath(t, got2)
+	assert.NotContains(t, idx2, "lifecycle_rule")
 }
 
 // TestCompare_Curated_GooglePubsubTopic covers an Exact mismatch on
@@ -397,11 +449,12 @@ func TestCompare_Curated_AWSSQSQueue_Exact(t *testing.T) {
 }
 
 // TestCompare_Curated_GoogleSecretManagerSecret_Exact exercises an
-// Exact drift on the rotation-period knob and confirms that label
-// drift stays invisible (tagPolicy() leaves DriftSemantic=None). As
-// with the AWS counterpart, the secret payload lives on a separate
-// resource (google_secret_manager_secret_version) — no
-// Sensitive-leak path applies here.
+// Exact drift on the rotation-period knob plus a per-key labels drift
+// (env=prod → env=staging) via the gcpLabelDriftPolicy() adoption.
+// goog-* control-plane labels stay filtered. As with the AWS
+// counterpart, the secret payload lives on a separate resource
+// (google_secret_manager_secret_version) — no Sensitive-leak path
+// applies here.
 func TestCompare_Curated_GoogleSecretManagerSecret_Exact(t *testing.T) {
 	t.Parallel()
 	snap := json.RawMessage(`{
@@ -436,8 +489,15 @@ func TestCompare_Curated_GoogleSecretManagerSecret_Exact(t *testing.T) {
 	// Identity / TTL identical → no mismatch.
 	assert.NotContains(t, idx, "project")
 	assert.NotContains(t, idx, "ttl")
-	// Labels use tagPolicy() → DriftSemantic=None → never emitted.
+	// Per-key labels drift surfaces; goog-* prefix is filtered.
+	require.Contains(t, idx, "labels.env",
+		"expected per-key labels.env mismatch via gcpLabelDriftPolicy()")
+	assert.Equal(t, "prod", idx["labels.env"].Snapshot)
+	assert.Equal(t, "staging", idx["labels.env"].Cloud)
+	// Whole-map "labels" field never emitted with LabelFilter — only per-key.
 	assert.NotContains(t, idx, "labels")
+	// goog-managed-by is identical AND filtered → never emitted either way.
+	assert.NotContains(t, idx, "labels.goog-managed-by")
 }
 
 // TestCompare_Curated_GoogleComputeNetwork_Exact exercises an Exact

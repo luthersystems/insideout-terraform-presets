@@ -7,10 +7,15 @@ package policy
 // list-valued tuning leaf, `message_storage_policy.allowed_persistence_regions`,
 // uses DriftSemanticWholeList — the provider returns the residency
 // regions in an authored order and a whole-list diff is the meaningful
-// signal. Labels stay at the tagPolicy() default (DriftSemanticNone);
-// LabelFilter coverage on user-author labels is deferred until the
-// drift comparator's redacted-mode output is in place (axes.go
-// follow-up referenced in aws_lambda_function).
+// signal.
+//
+// Reliable #1479 follow-up: `labels` adopts gcpLabelDriftPolicy() so
+// user-set labels surface as drift (per-key `labels.<keyname>`
+// mismatches) while goog-* / insideout-import* control-plane and
+// provenance labels are filtered out — matches the legacy reliable
+// comparator (compareGooglePubsubTopicAttrs.diffUserLabels) so the
+// Surface B per-type-comparator deletion preserves the user-facing
+// drift signal.
 var googlePubsubTopicPolicy = Map{
 	// Identity
 	"name": {
@@ -91,8 +96,9 @@ var googlePubsubTopicPolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 
-	// Labels — system-owned. DriftSemantic deferred (see file comment).
-	"labels":           tagPolicy(),
+	// Labels — `labels` carries user-set drift signal; computed
+	// echoes (`effective_labels`, `terraform_labels`) stay system-only.
+	"labels":           gcpLabelDriftPolicy(),
 	"effective_labels": tagPolicy(),
 	"terraform_labels": tagPolicy(),
 

@@ -3119,10 +3119,7 @@ google_storage_bucket	encryption.default_kms_key_name	Wiring	Security	RileyVisib
 google_storage_bucket	force_destroy	Tuning	Reliability	RileyVisible	RequiresApproval		
 google_storage_bucket	id	Identity		RileyVisible	Never		
 google_storage_bucket	labels	Tuning		Hidden	SystemOnly	Redacted	
-google_storage_bucket	lifecycle_rule.action.storage_class	Tuning	Performance	RileyVisible	ChatSafe		
-google_storage_bucket	lifecycle_rule.action.type	Tuning	Reliability	RileyVisible	ChatSafe		
-google_storage_bucket	lifecycle_rule.condition.age	Tuning		RileyVisible	ChatSafe		
-google_storage_bucket	lifecycle_rule.condition.with_state	Tuning		RileyVisible	ChatSafe		
+google_storage_bucket	lifecycle_rule	Tuning	Reliability	RileyVisible	ChatSafe		
 google_storage_bucket	location	Identity		UIVisible	Never		AlwaysReplace
 google_storage_bucket	logging.log_bucket	Wiring	Reliability	RileyVisible	RelationshipOnly		
 google_storage_bucket	logging.log_object_prefix	Tuning		RileyVisible	ChatSafe		

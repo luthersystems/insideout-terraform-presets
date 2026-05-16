@@ -179,6 +179,9 @@ func TestCompare_DriftSemanticWholeList(t *testing.T) {
 }
 
 func TestCompare_DriftSemanticLabelFilter(t *testing.T) {
+	// Default-prefixes policy: when LabelDriftIgnorePrefixes is left
+	// unset, the comparator falls back to {"goog-", "goog_"} for
+	// back-compat with policies authored before the per-policy knob.
 	tfType := registerSyntheticPolicy(t, policy.Map{
 		"labels": {DriftSemantic: policy.DriftSemanticLabelFilter},
 	})
@@ -190,14 +193,43 @@ func TestCompare_DriftSemanticLabelFilter(t *testing.T) {
 		assert.Empty(t, got, "goog-/goog_ prefixed keys must be filtered before compare")
 	})
 
-	t.Run("user-key drift detected even when goog-* noise is present", func(t *testing.T) {
+	t.Run("user-key drift emits one per-key mismatch, goog-* noise filtered", func(t *testing.T) {
 		snap := json.RawMessage(`{"labels":{"env":"prod","goog-managed-by":"x"}}`)
 		live := json.RawMessage(`{"labels":{"env":"staging","goog-managed-by":"y"}}`)
 		got := Compare(tfType, snap, live)
+		require.Len(t, got, 1, "expected one per-key mismatch on labels.env")
+		assert.Equal(t, "labels.env", got[0].Field)
+		assert.Equal(t, "prod", got[0].Snapshot)
+		assert.Equal(t, "staging", got[0].Cloud)
+	})
+
+	t.Run("missing-on-cloud emits per-key mismatch with empty Cloud", func(t *testing.T) {
+		snap := json.RawMessage(`{"labels":{"env":"prod","team":"infra"}}`)
+		live := json.RawMessage(`{"labels":{"env":"prod"}}`)
+		got := Compare(tfType, snap, live)
 		require.Len(t, got, 1)
-		assert.Equal(t, "labels", got[0].Field)
-		assert.Equal(t, map[string]any{"env": "prod"}, got[0].Snapshot)
-		assert.Equal(t, map[string]any{"env": "staging"}, got[0].Cloud)
+		assert.Equal(t, "labels.team", got[0].Field)
+		assert.Equal(t, "infra", got[0].Snapshot)
+		assert.Equal(t, "", got[0].Cloud)
+	})
+
+	t.Run("missing-on-snapshot emits per-key mismatch with empty Snapshot", func(t *testing.T) {
+		snap := json.RawMessage(`{"labels":{"env":"prod"}}`)
+		live := json.RawMessage(`{"labels":{"env":"prod","new":"v"}}`)
+		got := Compare(tfType, snap, live)
+		require.Len(t, got, 1)
+		assert.Equal(t, "labels.new", got[0].Field)
+		assert.Equal(t, "", got[0].Snapshot)
+		assert.Equal(t, "v", got[0].Cloud)
+	})
+
+	t.Run("multiple user-key drifts emit sorted per-key mismatches", func(t *testing.T) {
+		snap := json.RawMessage(`{"labels":{"env":"prod","team":"infra","goog-x":"1"}}`)
+		live := json.RawMessage(`{"labels":{"env":"staging","team":"platform","goog-x":"2"}}`)
+		got := Compare(tfType, snap, live)
+		require.Len(t, got, 2)
+		assert.Equal(t, "labels.env", got[0].Field)
+		assert.Equal(t, "labels.team", got[1].Field)
 	})
 
 	t.Run("absent both sides → no mismatch", func(t *testing.T) {
@@ -211,6 +243,57 @@ func TestCompare_DriftSemanticLabelFilter(t *testing.T) {
 		got := Compare(tfType, snap, live)
 		assert.Empty(t, got)
 	})
+}
+
+func TestCompare_DriftSemanticLabelFilter_PerPolicyPrefixes(t *testing.T) {
+	// Per-policy ignore prefixes: extends the default goog- set with
+	// reliable's "insideout-import" provenance prefix so a re-emission
+	// that bumps the import-session label doesn't surface as drift.
+	tfType := registerSyntheticPolicy(t, policy.Map{
+		"labels": {
+			DriftSemantic:            policy.DriftSemanticLabelFilter,
+			LabelDriftIgnorePrefixes: []string{"goog-", "goog_", "insideout-import"},
+		},
+	})
+
+	t.Run("insideout-import* prefix filtered alongside goog-*", func(t *testing.T) {
+		snap := json.RawMessage(`{"labels":{
+			"env": "prod",
+			"goog-managed-by": "composer-A",
+			"insideout-imported": "2026-01-01",
+			"insideout-import-session": "sess_v2_aaa"
+		}}`)
+		live := json.RawMessage(`{"labels":{
+			"env": "prod",
+			"goog-managed-by": "composer-B",
+			"insideout-imported": "2026-05-15",
+			"insideout-import-session": "sess_v2_bbb"
+		}}`)
+		got := Compare(tfType, snap, live)
+		assert.Empty(t, got, "all diffs are on filtered prefixes")
+	})
+
+	t.Run("user-key diff still emitted when only the prefixes match noise", func(t *testing.T) {
+		snap := json.RawMessage(`{"labels":{"env":"prod","insideout-imported":"x"}}`)
+		live := json.RawMessage(`{"labels":{"env":"staging","insideout-imported":"y"}}`)
+		got := Compare(tfType, snap, live)
+		require.Len(t, got, 1)
+		assert.Equal(t, "labels.env", got[0].Field)
+	})
+}
+
+func TestCompare_DriftSemanticLabelFilter_NestedPath(t *testing.T) {
+	// A label-shaped attribute nested inside a singleton block — the
+	// per-key Field must use the policy path as its parent so the
+	// resulting field name reads as `metadata.labels.env`.
+	tfType := registerSyntheticPolicy(t, policy.Map{
+		"metadata.labels": {DriftSemantic: policy.DriftSemanticLabelFilter},
+	})
+	snap := json.RawMessage(`{"metadata":[{"labels":{"env":"prod"}}]}`)
+	live := json.RawMessage(`{"metadata":[{"labels":{"env":"staging"}}]}`)
+	got := Compare(tfType, snap, live)
+	require.Len(t, got, 1)
+	assert.Equal(t, "metadata.labels.env", got[0].Field)
 }
 
 func TestCompare_SortedOutput(t *testing.T) {
@@ -234,7 +317,8 @@ func TestCompare_SortedOutput(t *testing.T) {
 func TestCompare_MixedSemantics(t *testing.T) {
 	// One policy with several axes at once — exercises the dispatch
 	// switch end-to-end and confirms None entries never leak into
-	// output even when their value differs.
+	// output even when their value differs. LabelFilter now emits one
+	// per-key entry, so the labels.env diff appears as `labels.env`.
 	tfType := registerSyntheticPolicy(t, policy.Map{
 		"name":               {}, // None
 		"versioning.enabled": {DriftSemantic: policy.DriftSemanticExact},
@@ -255,8 +339,8 @@ func TestCompare_MixedSemantics(t *testing.T) {
 	}`)
 	got := Compare(tfType, snap, live)
 	require.Len(t, got, 3)
-	// Sorted: labels, lifecycle_rule, versioning.enabled
-	assert.Equal(t, "labels", got[0].Field)
+	// Sorted: labels.env, lifecycle_rule, versioning.enabled.
+	assert.Equal(t, "labels.env", got[0].Field)
 	assert.Equal(t, "lifecycle_rule", got[1].Field)
 	assert.Equal(t, "versioning.enabled", got[2].Field)
 }

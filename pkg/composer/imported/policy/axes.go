@@ -175,22 +175,14 @@ func (c ChangeRiskPolicy) Valid() bool {
 
 // DriftSemantic classifies how the comparator should interpret a
 // curated field when computing drift between a sealed snapshot and a
-// fresh live read. The skeleton ships the enum and an additive field
-// on FieldPolicy; the comparator that consumes the value lives in
-// the eventual pkg/drift/imported package (presets#482).
+// fresh live read. The comparator that consumes this axis lives in
+// pkg/drift/imported.
 //
 // The empty string is intentionally valid and means "no drift
 // comparison" — that is, the field is informational only for drift
 // purposes. Every existing policy file in pkg/composer/imported/policy
 // pre-dates this axis, so leaving it unset must not be a lint
 // failure.
-//
-// Form note: DriftSemanticLabelFilter eventually carries a key-prefix
-// parameter (e.g. ignore `goog-*` labels). The skeleton declares the
-// const but defers the wire format for the parameter to presets#482
-// — likely either a sibling DriftFilter string field on FieldPolicy
-// or an encoded suffix on the value, decided when the comparator
-// lands and the real use cases are concrete.
 type DriftSemantic string
 
 const (
@@ -203,10 +195,18 @@ const (
 	// (order-sensitive). Used for fields like GCS lifecycle_rule
 	// where per-element diffs are not meaningful.
 	DriftSemanticWholeList DriftSemantic = "WholeList"
-	// DriftSemanticLabelFilter — map-valued field compared after
-	// filtering out keys matching a prefix (e.g. `goog-*` labels
-	// the provider auto-populates). The prefix wire format is
-	// deferred to presets#482.
+	// DriftSemanticLabelFilter — map-valued field compared per-key
+	// after filtering out keys matching the prefixes declared in
+	// FieldPolicy.LabelDriftIgnorePrefixes (default {"goog-",
+	// "goog_"} when unset, for back-compat with the original
+	// implementation). Each surviving differing key produces ONE
+	// FieldMismatch with Field=`<path>.<keyname>`, Snapshot/Cloud
+	// set to the per-key string value (or "" when absent on that
+	// side). Used for GCS / Pub/Sub / Secret Manager `labels` where
+	// user-set labels are a meaningful drift signal but
+	// auto-populated control-plane labels are noise. See
+	// gcpLabelDriftPolicy() in policy.go for the canonical Google
+	// adoption.
 	DriftSemanticLabelFilter DriftSemantic = "LabelFilter"
 )
 

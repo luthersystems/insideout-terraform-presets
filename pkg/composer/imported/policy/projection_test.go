@@ -65,16 +65,32 @@ func TestVisibleFieldsFor_StorageBucket_AcceptanceA(t *testing.T) {
 
 	set := pathSet(views)
 
-	// Curated UI/agent-visible entries are present.
+	// Curated UI/agent-visible entries are present. `lifecycle_rule`
+	// is now a single curated WholeList parent (rewired from the
+	// pre-#1479 per-leaf entries) — the child paths
+	// `lifecycle_rule.condition.age` / `lifecycle_rule.action.type`
+	// no longer exist as separate FieldView rows.
 	for _, p := range []string{
 		"name", "project", "location", "self_link", "url", "id",
 		"storage_class", "force_destroy", "encryption.default_kms_key_name",
-		"lifecycle_rule.condition.age", "lifecycle_rule.action.type",
+		"lifecycle_rule",
 	} {
 		assert.Contains(t, set, p, "expected visible path %q", p)
 	}
 
-	// Hidden curated entries are excluded.
+	// Per-leaf lifecycle paths are no longer curated — the parent
+	// WholeList entry replaces them.
+	for _, p := range []string{
+		"lifecycle_rule.condition.age", "lifecycle_rule.action.type",
+		"lifecycle_rule.action.storage_class", "lifecycle_rule.condition.with_state",
+	} {
+		assert.NotContains(t, set, p,
+			"per-leaf path %q must not be curated after the WholeList rewire", p)
+	}
+
+	// Hidden curated entries are excluded — note `labels` is now
+	// LabelFilter (gcpLabelDriftPolicy()) but its Visibility is still
+	// Hidden so it stays out of VisibleFieldsFor.
 	for _, p := range []string{"labels", "effective_labels", "terraform_labels", "timeouts"} {
 		assert.NotContains(t, set, p, "hidden path %q must not appear in VisibleFieldsFor", p)
 	}
@@ -88,10 +104,6 @@ func TestVisibleFieldsFor_StorageBucket_AcceptanceA(t *testing.T) {
 		[]any{"projects/p/locations/us/keyRings/r/cryptoKeys/k"},
 		set["encryption.default_kms_key_name"].CurrentValue,
 	)
-
-	// CurrentValue projection — multi-element repeated-block fanout.
-	assert.Equal(t, []any{float64(30), float64(60)}, set["lifecycle_rule.condition.age"].CurrentValue)
-	assert.Equal(t, []any{"Delete", "SetStorageClass"}, set["lifecycle_rule.action.type"].CurrentValue)
 
 	// Annotations preserved.
 	storageClass := set["storage_class"]
