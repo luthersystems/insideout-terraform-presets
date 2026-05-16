@@ -22,8 +22,8 @@ and is checked in lockstep with the runtime registries. See the
 
 ## Summary
 
-- **AWS:** 109 types · 100% Discoverable · 100% Enrichable · 42% DriftDetectable · 37% MetricsAvailable · 39% AgentEditable
-- **GCP:** 54 types · 100% Discoverable · 100% Enrichable · 63% DriftDetectable · 50% MetricsAvailable · 89% AgentEditable
+- **AWS:** 109 types · 100% Discoverable · 100% Enrichable · 42% DriftDetectable · 40% MetricsAvailable · 39% AgentEditable
+- **GCP:** 54 types · 100% Discoverable · 100% Enrichable · 63% DriftDetectable · 57% MetricsAvailable · 89% AgentEditable
 
 ## AWS
 
@@ -37,12 +37,12 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_apigatewayv2_api_mapping` | ✓ | ✓ | – | – | – |
 | `aws_apigatewayv2_authorizer` | ✓ | ✓ | – | – | – |
 | `aws_apigatewayv2_domain_name` | ✓ | ✓ | – | – | – |
-| `aws_apigatewayv2_integration` | ✓ | ✓ | – | – | – |
-| `aws_apigatewayv2_route` | ✓ | ✓ | – | – | – |
+| `aws_apigatewayv2_integration` | ✓ | ✓ | – | ✓ | – |
+| `aws_apigatewayv2_route` | ✓ | ✓ | – | ✓ | – |
 | `aws_apigatewayv2_stage` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_autoscaling_group` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_autoscaling_group_tag` | ✓ | ✓ | ✓ | – | ✓ |
-| `aws_backup_plan` | ✓ | ✓ | – | – | – |
+| `aws_backup_plan` | ✓ | ✓ | – | ✓ | – |
 | `aws_backup_selection` | ✓ | ✓ | – | – | – |
 | `aws_backup_vault` | ✓ | ✓ | – | ✓ | – |
 | `aws_bedrock_guardrail` | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -96,7 +96,7 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_lambda_alias` | ✓ | ✓ | – | – | – |
 | `aws_lambda_event_source_mapping` | ✓ | ✓ | – | – | – |
 | `aws_lambda_function` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `aws_lambda_function_url` | ✓ | ✓ | – | – | – |
+| `aws_lambda_function_url` | ✓ | ✓ | – | ✓ | – |
 | `aws_lambda_permission` | ✓ | ✓ | – | – | – |
 | `aws_launch_template` | ✓ | ✓ | – | – | – |
 | `aws_lb` | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -153,7 +153,7 @@ and is checked in lockstep with the runtime registries. See the
 | `google_cloudfunctions2_function_iam_member` | ✓ | ✓ | – | – | – |
 | `google_compute_address` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_compute_backend_service` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `google_compute_firewall` | ✓ | ✓ | ✓ | – | ✓ |
+| `google_compute_firewall` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_compute_forwarding_rule` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_compute_global_address` | ✓ | ✓ | – | – | ✓ |
 | `google_compute_global_forwarding_rule` | ✓ | ✓ | – | ✓ | ✓ |
@@ -164,8 +164,8 @@ and is checked in lockstep with the runtime registries. See the
 | `google_compute_resource_policy` | ✓ | ✓ | – | – | ✓ |
 | `google_compute_router` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_compute_security_policy` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `google_compute_target_http_proxy` | ✓ | ✓ | – | – | ✓ |
-| `google_compute_target_https_proxy` | ✓ | ✓ | – | – | ✓ |
+| `google_compute_target_http_proxy` | ✓ | ✓ | – | ✓ | ✓ |
+| `google_compute_target_https_proxy` | ✓ | ✓ | – | ✓ | ✓ |
 | `google_compute_url_map` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_container_cluster` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_container_node_pool` | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -180,7 +180,7 @@ and is checked in lockstep with the runtime registries. See the
 | `google_monitoring_dashboard` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_monitoring_notification_channel` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_project_iam_member` | ✓ | ✓ | – | – | – |
-| `google_project_service` | ✓ | ✓ | ✓ | – | ✓ |
+| `google_project_service` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_pubsub_subscription` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_pubsub_topic` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_redis_instance` | ✓ | ✓ | ✓ | ✓ | ✓ |

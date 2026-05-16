@@ -76,6 +76,14 @@ var seededTypes = []string{
 	"google_compute_url_map",
 	"google_container_node_pool",
 	"google_kms_key_ring",
+	"aws_backup_plan",
+	"aws_lambda_function_url",
+	"aws_apigatewayv2_route",
+	"aws_apigatewayv2_integration",
+	"google_compute_firewall",
+	"google_project_service",
+	"google_compute_target_https_proxy",
+	"google_compute_target_http_proxy",
 }
 
 // seededBindings mirrors the registrations performed by init(). Used
@@ -588,6 +596,62 @@ var seededBindings = map[string]ComponentMetricsBinding{
 		DimensionKey:   "key_ring_id",
 		DimensionFrom:  "name",
 		DefaultMetrics: []string{"cloudkms.googleapis.com/key/sign_request_count", "cloudkms.googleapis.com/key/verify_request_count"},
+	},
+	"aws_backup_plan": {
+		Service:        "backup",
+		Action:         "get-metrics",
+		DimensionKey:   "BackupPlanArn",
+		DimensionFrom:  "id",
+		DefaultMetrics: []string{"NumberOfBackupJobsCompleted", "NumberOfBackupJobsFailed", "NumberOfBackupJobsExpired"},
+	},
+	"aws_lambda_function_url": {
+		Service:        "lambda",
+		Action:         "get-metrics",
+		DimensionKey:   "FunctionName",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"UrlRequestCount", "Url4xx", "Url5xx", "UrlRequestLatency"},
+	},
+	"aws_apigatewayv2_route": {
+		Service:        "apigateway",
+		Action:         "get-metrics",
+		DimensionKey:   "ApiId",
+		DimensionFrom:  "id",
+		DefaultMetrics: []string{"Count", "4xx", "5xx", "Latency"},
+	},
+	"aws_apigatewayv2_integration": {
+		Service:        "apigateway",
+		Action:         "get-metrics",
+		DimensionKey:   "ApiId",
+		DimensionFrom:  "id",
+		DefaultMetrics: []string{"IntegrationLatency", "Count", "4xx", "5xx"},
+	},
+	"google_compute_firewall": {
+		Service:        "compute",
+		Action:         "timeseries-list",
+		DimensionKey:   "firewall_name",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"firewallinsights.googleapis.com/subnet/firewall_hit_count", "firewallinsights.googleapis.com/vm/firewall_hit_count"},
+	},
+	"google_project_service": {
+		Service:        "serviceusage",
+		Action:         "timeseries-list",
+		DimensionKey:   "service",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"serviceruntime.googleapis.com/api/request_count", "serviceruntime.googleapis.com/api/request_latencies"},
+	},
+	"google_compute_target_https_proxy": {
+		Service:        "loadbalancing",
+		Action:         "timeseries-list",
+		DimensionKey:   "target_proxy_name",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"loadbalancing.googleapis.com/https/request_count", "loadbalancing.googleapis.com/https/request_bytes_count", "loadbalancing.googleapis.com/https/total_latencies"},
+	},
+	"google_compute_target_http_proxy": {
+		Service:        "loadbalancing",
+		Action:         "timeseries-list",
+		DimensionKey:   "target_proxy_name",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"loadbalancing.googleapis.com/https/request_count", "loadbalancing.googleapis.com/https/request_bytes_count"},
 	},
 }
 
