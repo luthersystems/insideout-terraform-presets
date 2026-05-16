@@ -22,7 +22,7 @@ and is checked in lockstep with the runtime registries. See the
 
 ## Summary
 
-- **AWS:** 109 types · 100% Discoverable · 100% Enrichable · 63% DriftDetectable · 8% MetricsAvailable · 57% AgentEditable
+- **AWS:** 109 types · 100% Discoverable · 100% Enrichable · 71% DriftDetectable · 8% MetricsAvailable · 62% AgentEditable
 - **GCP:** 54 types · 100% Discoverable · 100% Enrichable · 63% DriftDetectable · 11% MetricsAvailable · 89% AgentEditable
 
 ## AWS
@@ -33,10 +33,10 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_api_gateway_deployment` | ✓ | ✓ | – | – | – |
 | `aws_api_gateway_resource` | ✓ | ✓ | ✓ | – | – |
 | `aws_api_gateway_stage` | ✓ | ✓ | ✓ | – | ✓ |
-| `aws_apigatewayv2_api` | ✓ | ✓ | – | – | – |
+| `aws_apigatewayv2_api` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_apigatewayv2_api_mapping` | ✓ | ✓ | – | – | – |
 | `aws_apigatewayv2_authorizer` | ✓ | ✓ | ✓ | – | ✓ |
-| `aws_apigatewayv2_domain_name` | ✓ | ✓ | – | – | – |
+| `aws_apigatewayv2_domain_name` | ✓ | ✓ | ✓ | – | – |
 | `aws_apigatewayv2_integration` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_apigatewayv2_route` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_apigatewayv2_stage` | ✓ | ✓ | ✓ | – | ✓ |
@@ -50,7 +50,7 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_cloudfront_distribution` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_cloudfront_function` | ✓ | ✓ | – | – | – |
 | `aws_cloudfront_monitoring_subscription` | ✓ | ✓ | – | – | – |
-| `aws_cloudfront_origin_access_identity` | ✓ | ✓ | – | – | – |
+| `aws_cloudfront_origin_access_identity` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_cloudwatch_dashboard` | ✓ | ✓ | – | – | – |
 | `aws_cloudwatch_event_rule` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_cloudwatch_log_group` | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -75,7 +75,7 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_eks_addon` | ✓ | ✓ | – | – | – |
 | `aws_eks_cluster` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_eks_fargate_profile` | ✓ | ✓ | – | – | – |
-| `aws_eks_node_group` | ✓ | ✓ | – | – | – |
+| `aws_eks_node_group` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_eks_pod_identity_association` | ✓ | ✓ | – | – | – |
 | `aws_elasticache_parameter_group` | ✓ | ✓ | – | – | – |
 | `aws_elasticache_replication_group` | ✓ | ✓ | ✓ | – | ✓ |
@@ -84,19 +84,19 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_iam_instance_profile` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_iam_policy` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_iam_role` | ✓ | ✓ | ✓ | – | ✓ |
-| `aws_iam_role_policy` | ✓ | ✓ | – | – | – |
+| `aws_iam_role_policy` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_iam_role_policy_attachment` | ✓ | ✓ | ✓ | – | – |
 | `aws_iam_service_linked_role` | ✓ | ✓ | – | – | – |
 | `aws_iam_user` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_instance` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_internet_gateway` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_key_pair` | ✓ | ✓ | – | – | – |
-| `aws_kms_alias` | ✓ | ✓ | – | – | – |
+| `aws_kms_alias` | ✓ | ✓ | ✓ | – | – |
 | `aws_kms_key` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_lambda_alias` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_lambda_event_source_mapping` | ✓ | ✓ | – | – | – |
 | `aws_lambda_function` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `aws_lambda_function_url` | ✓ | ✓ | – | – | – |
+| `aws_lambda_function_url` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_lambda_permission` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_launch_template` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_lb` | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -129,7 +129,7 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_sns_topic` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_sns_topic_subscription` | ✓ | ✓ | – | – | – |
 | `aws_sqs_queue` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `aws_ssm_parameter` | ✓ | ✓ | – | – | – |
+| `aws_ssm_parameter` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_subnet` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_vpc` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_vpc_dhcp_options` | ✓ | ✓ | – | – | – |

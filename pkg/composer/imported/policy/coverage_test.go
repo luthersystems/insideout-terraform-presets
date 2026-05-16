@@ -32,7 +32,13 @@ var coveredTypes = []string{
 	// authorizer/integration/route, backup_plan, db_parameter_group,
 	// ebs_volume, launch_template. Pushes AWS DriftDetectable past 56%.
 	"aws_api_gateway_stage",
+	// Bundle 8 (#482) — APIGW v2 parent API + custom domain name,
+	// CloudFront OAI, EKS managed node group, inline iam_role_policy,
+	// KMS alias, Lambda function URL, SSM Parameter Store entry. Pushes
+	// AWS DriftDetectable from 63% to ~70%.
+	"aws_apigatewayv2_api",
 	"aws_apigatewayv2_authorizer",
+	"aws_apigatewayv2_domain_name",
 	"aws_apigatewayv2_integration",
 	"aws_apigatewayv2_route",
 	"aws_apigatewayv2_stage",
@@ -48,6 +54,8 @@ var coveredTypes = []string{
 	"aws_autoscaling_group_tag",
 	"aws_bedrock_guardrail",
 	"aws_bedrock_model_invocation_logging_configuration",
+	// Bundle 8 (cont.) — CloudFront OAI.
+	"aws_cloudfront_origin_access_identity",
 	// Bundle 4 (cont.) — CloudTrail.
 	"aws_cloudtrail",
 	// AWS drift coverage bundle 2 (#482) — cloud-control-routed types
@@ -85,6 +93,8 @@ var coveredTypes = []string{
 	"aws_efs_file_system",
 	"aws_eip",
 	"aws_eks_cluster",
+	// Bundle 8 (cont.) — EKS managed node group.
+	"aws_eks_node_group",
 	"aws_elasticache_replication_group",
 	// Bundle 4 (cont.) — Glue catalog database (substituted in for
 	// aws_cognito_user_pool which trips a codegen name collision).
@@ -98,6 +108,8 @@ var coveredTypes = []string{
 	"aws_iam_instance_profile",
 	"aws_iam_policy",
 	"aws_iam_role",
+	// Bundle 8 (cont.) — inline iam_role_policy.
+	"aws_iam_role_policy",
 	"aws_iam_role_policy_attachment",
 	// Bundle 5 (cont.) — standalone IAM user.
 	"aws_iam_user",
@@ -106,10 +118,14 @@ var coveredTypes = []string{
 	"aws_internet_gateway",
 	// Bundle 4 (cont.) — Kinesis Data Stream.
 	"aws_kinesis_stream",
+	// Bundle 8 (cont.) — KMS alias.
+	"aws_kms_alias",
 	"aws_kms_key",
 	// Bundle 5 (cont.) — Lambda alias + permission.
 	"aws_lambda_alias",
 	"aws_lambda_function",
+	// Bundle 8 (cont.) — Lambda function URL.
+	"aws_lambda_function_url",
 	"aws_lambda_layer_version",
 	"aws_lambda_permission",
 	"aws_launch_template",
@@ -143,6 +159,8 @@ var coveredTypes = []string{
 	"aws_sfn_state_machine",
 	"aws_sns_topic",
 	"aws_sqs_queue",
+	// Bundle 8 (cont.) — SSM Parameter Store entry.
+	"aws_ssm_parameter",
 	"aws_subnet",
 	"aws_vpc",
 	"aws_vpc_endpoint",

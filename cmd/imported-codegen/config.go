@@ -16,7 +16,12 @@ var WantedAWS = []string{
 	// Each is the canonical wiring axis off `aws_apigatewayv2_api`:
 	// authorizer (JWT / Lambda gateway), integration (backend target),
 	// and route (request → integration binding).
+	// Bundle 8 (#482) — APIGW v2 parent API + custom domain name. The
+	// API is the top-level container; the domain name is the public
+	// custom-domain endpoint that maps onto an API via api_mapping.
+	"aws_apigatewayv2_api",
 	"aws_apigatewayv2_authorizer",
+	"aws_apigatewayv2_domain_name",
 	"aws_apigatewayv2_integration",
 	"aws_apigatewayv2_route",
 	"aws_apigatewayv2_stage",
@@ -37,6 +42,10 @@ var WantedAWS = []string{
 	"aws_autoscaling_group_tag",
 	"aws_bedrock_guardrail",
 	"aws_bedrock_model_invocation_logging_configuration",
+	// Bundle 8 (#482) — CloudFront origin access identity. Legacy OAI
+	// principal used to lock S3 origins so they only serve via the
+	// CloudFront distribution.
+	"aws_cloudfront_origin_access_identity",
 	// Bundle 4 (cont.) — CloudTrail.
 	"aws_cloudtrail",
 	// Drift coverage bundle 2 (#482) — cloud-control-routed AWS types
@@ -86,6 +95,10 @@ var WantedAWS = []string{
 	// association is the wiring axis.
 	"aws_eip",
 	"aws_eks_cluster",
+	// Bundle 8 (#482) — EKS managed node group. Wires (cluster_name,
+	// node_role_arn, subnet_ids, scaling_config); the AMI + instance
+	// type set drives the workhorse compute axis.
+	"aws_eks_node_group",
 	"aws_elasticache_replication_group",
 	// Bundle 4 (cont.) — Glue catalog database. Substituted for
 	// aws_cognito_user_pool, which trips a codegen name collision (the
@@ -108,6 +121,10 @@ var WantedAWS = []string{
 	"aws_iam_instance_profile",
 	"aws_iam_policy",
 	"aws_iam_role",
+	// Bundle 8 (#482) — Inline role policy. Identity is
+	// (role × name); the policy document is the security-critical
+	// blob, hashed/compared as opaque text for drift.
+	"aws_iam_role_policy",
 	"aws_iam_role_policy_attachment",
 	// Bundle 5 (#482) — standalone IAM user (cross-account access /
 	// machine identities not modeled through roles).
@@ -119,12 +136,20 @@ var WantedAWS = []string{
 	// wiring to its attached vpc_id.
 	"aws_internet_gateway",
 	"aws_kinesis_stream",
+	// Bundle 8 (#482) — KMS alias. Identity is (name → target_key_id);
+	// alias retargeting is the drift axis (rotating a workload onto a
+	// different CMK without flipping ARN references at the call site).
+	"aws_kms_alias",
 	"aws_kms_key",
 	// Bundle 5 (#482) — Lambda alias + permission. Alias drives
 	// versioned-routing (CodeDeploy blue/green); permission is the
 	// resource-policy statement granting invoke rights to a principal.
 	"aws_lambda_alias",
 	"aws_lambda_function",
+	// Bundle 8 (#482) — Lambda function URL. The standalone HTTPS
+	// endpoint pinned to a function (auth_type + cors are the
+	// security-critical knobs).
+	"aws_lambda_function_url",
 	"aws_lambda_layer_version",
 	"aws_lambda_permission",
 	// Bundle 7 (#482) — Launch template. Versioned config used by ASG /
@@ -174,6 +199,10 @@ var WantedAWS = []string{
 	"aws_sfn_state_machine",
 	"aws_sns_topic",
 	"aws_sqs_queue",
+	// Bundle 8 (#482) — SSM Parameter Store entry. Config + secret
+	// material referenced by deploys; `value` is sensitive and drift
+	// tracking flags out-of-band rotation.
+	"aws_ssm_parameter",
 	"aws_subnet",
 	"aws_vpc",
 	"aws_vpc_endpoint",

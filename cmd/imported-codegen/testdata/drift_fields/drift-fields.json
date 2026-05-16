@@ -141,6 +141,72 @@
       "semantic": "Exact"
     }
   ],
+  "aws_apigatewayv2_api": [
+    {
+      "path": "api_endpoint",
+      "semantic": "Exact"
+    },
+    {
+      "path": "api_key_selection_expression",
+      "semantic": "Exact"
+    },
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "body",
+      "semantic": "Exact"
+    },
+    {
+      "path": "credentials_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "description",
+      "semantic": "Exact"
+    },
+    {
+      "path": "disable_execute_api_endpoint",
+      "semantic": "Exact"
+    },
+    {
+      "path": "execution_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "fail_on_warnings",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "protocol_type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "route_key",
+      "semantic": "Exact"
+    },
+    {
+      "path": "route_selection_expression",
+      "semantic": "Exact"
+    },
+    {
+      "path": "target",
+      "semantic": "Exact"
+    },
+    {
+      "path": "version",
+      "semantic": "Exact"
+    }
+  ],
   "aws_apigatewayv2_authorizer": [
     {
       "path": "api_id",
@@ -180,6 +246,24 @@
     },
     {
       "path": "name",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_apigatewayv2_domain_name": [
+    {
+      "path": "api_mapping_selection_expression",
+      "semantic": "Exact"
+    },
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "domain_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
       "semantic": "Exact"
     }
   ],
@@ -1046,6 +1130,36 @@
     },
     {
       "path": "web_acl_id",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_cloudfront_origin_access_identity": [
+    {
+      "path": "caller_reference",
+      "semantic": "Exact"
+    },
+    {
+      "path": "cloudfront_access_identity_path",
+      "semantic": "Exact"
+    },
+    {
+      "path": "comment",
+      "semantic": "Exact"
+    },
+    {
+      "path": "etag",
+      "semantic": "Exact"
+    },
+    {
+      "path": "iam_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "s3_canonical_user_id",
       "semantic": "Exact"
     }
   ],
@@ -2693,6 +2807,68 @@
       "semantic": "Exact"
     }
   ],
+  "aws_eks_node_group": [
+    {
+      "path": "ami_type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "capacity_type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "cluster_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "disk_size",
+      "semantic": "Exact"
+    },
+    {
+      "path": "force_update_version",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "instance_types",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "node_group_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "node_group_name_prefix",
+      "semantic": "Exact"
+    },
+    {
+      "path": "node_role_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "release_version",
+      "semantic": "Exact"
+    },
+    {
+      "path": "status",
+      "semantic": "Exact"
+    },
+    {
+      "path": "subnet_ids",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "version",
+      "semantic": "Exact"
+    }
+  ],
   "aws_elasticache_replication_group": [
     {
       "path": "apply_immediately",
@@ -3151,6 +3327,28 @@
       "semantic": "Exact"
     }
   ],
+  "aws_iam_role_policy": [
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name_prefix",
+      "semantic": "Exact"
+    },
+    {
+      "path": "policy",
+      "semantic": "Exact"
+    },
+    {
+      "path": "role",
+      "semantic": "Exact"
+    }
+  ],
   "aws_iam_role_policy_attachment": [
     {
       "path": "id",
@@ -3413,6 +3611,32 @@
       "semantic": "Exact"
     }
   ],
+  "aws_kms_alias": [
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name_prefix",
+      "semantic": "Exact"
+    },
+    {
+      "path": "target_key_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "target_key_id",
+      "semantic": "Exact"
+    }
+  ],
   "aws_kms_key": [
     {
       "path": "arn",
@@ -3660,6 +3884,40 @@
     },
     {
       "path": "vpc_config.vpc_id",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_lambda_function_url": [
+    {
+      "path": "authorization_type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "function_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "function_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "function_url",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "invoke_mode",
+      "semantic": "Exact"
+    },
+    {
+      "path": "qualifier",
+      "semantic": "Exact"
+    },
+    {
+      "path": "url_id",
       "semantic": "Exact"
     }
   ],
@@ -5502,6 +5760,60 @@
     },
     {
       "path": "visibility_timeout_seconds",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_ssm_parameter": [
+    {
+      "path": "allowed_pattern",
+      "semantic": "Exact"
+    },
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "data_type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "description",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "insecure_value",
+      "semantic": "Exact"
+    },
+    {
+      "path": "key_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "overwrite",
+      "semantic": "Exact"
+    },
+    {
+      "path": "tier",
+      "semantic": "Exact"
+    },
+    {
+      "path": "type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "value",
+      "semantic": "Exact"
+    },
+    {
+      "path": "version",
       "semantic": "Exact"
     }
   ],
