@@ -181,6 +181,9 @@ var WantedAWS = []string{
 	// allocation_id (EIP), subnet_id, connectivity_type are the
 	// drift-relevant axes.
 	"aws_nat_gateway",
+	// Bundle 9 (#482) — VPC network ACL. Stateless subnet-level firewall;
+	// the ingress / egress rule set is the drift-relevant axis.
+	"aws_network_acl",
 	// Bundle 6 (#482) — ENI. The pluggable network attachment for EC2,
 	// Lambda-in-VPC, RDS, etc. Drift-relevant axes: subnet_id, security
 	// group set, private_ip_list, source_dest_check.

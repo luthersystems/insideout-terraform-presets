@@ -146,6 +146,8 @@ var coveredTypes = []string{
 	// Bundle 5 (cont.) — MSK broker-configuration revision.
 	"aws_msk_configuration",
 	"aws_nat_gateway",
+	// Bundle 9 (cont.) — VPC network ACL.
+	"aws_network_acl",
 	"aws_network_interface",
 	"aws_opensearch_domain",
 	// Bundle 5 (cont.) — RDS Aurora / multi-AZ cluster.

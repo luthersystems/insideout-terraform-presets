@@ -18047,6 +18047,105 @@
             "description_kind": "plain"
           }
         },
+        "aws_network_acl": {
+          "version": 0,
+          "block": {
+            "attributes": {
+              "arn": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "egress": {
+                "type": [
+                  "set",
+                  [
+                    "object",
+                    {
+                      "action": "string",
+                      "cidr_block": "string",
+                      "from_port": "number",
+                      "icmp_code": "number",
+                      "icmp_type": "number",
+                      "ipv6_cidr_block": "string",
+                      "protocol": "string",
+                      "rule_no": "number",
+                      "to_port": "number"
+                    }
+                  ]
+                ],
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "ingress": {
+                "type": [
+                  "set",
+                  [
+                    "object",
+                    {
+                      "action": "string",
+                      "cidr_block": "string",
+                      "from_port": "number",
+                      "icmp_code": "number",
+                      "icmp_type": "number",
+                      "ipv6_cidr_block": "string",
+                      "protocol": "string",
+                      "rule_no": "number",
+                      "to_port": "number"
+                    }
+                  ]
+                ],
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "owner_id": {
+                "type": "string",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "subnet_ids": {
+                "type": [
+                  "set",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "tags": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true
+              },
+              "tags_all": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "vpc_id": {
+                "type": "string",
+                "description_kind": "plain",
+                "required": true
+              }
+            },
+            "description_kind": "plain"
+          }
+        },
         "aws_network_interface": {
           "version": 0,
           "block": {
