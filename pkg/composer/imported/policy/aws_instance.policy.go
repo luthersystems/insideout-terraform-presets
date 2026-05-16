@@ -14,6 +14,13 @@ package policy
 // Drift bundle (#482): scalar attributes use DriftSemanticExact.
 // `vpc_security_group_ids` and `security_groups` are order-insensitive
 // sets so WholeList compare. Tags use tagPolicy().
+//
+// Depth-pass extras (#482 follow-up): adds `cpu_options.*`,
+// `credit_specification.cpu_credits`, `enclave_options.enabled`
+// (Nitro Enclaves), `capacity_reservation_specification.*`,
+// `instance_initiated_shutdown_behavior`, `host_id` / `host_resource_group_arn`,
+// `private_ip` + `secondary_private_ips` (static-IP wiring), and the
+// `maintenance_options.auto_recovery` toggle.
 var awsInstancePolicy = Map{
 	// Identity ----------------------------------------------------------
 	"arn": {
@@ -221,6 +228,124 @@ var awsInstancePolicy = Map{
 	"root_block_device.delete_on_termination": {
 		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
 		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticExact,
+	},
+
+	// CPU tuning --------------------------------------------------------
+	"cpu_core_count": {
+		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible,
+		Edit:          EditNever,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"cpu_threads_per_core": {
+		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible,
+		Edit:          EditNever,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"cpu_options.core_count": {
+		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible,
+		Edit:          EditNever,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"cpu_options.threads_per_core": {
+		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible,
+		Edit:          EditNever,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"cpu_options.amd_sev_snp": {
+		// Confidential-computing toggle.
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Edit:          EditNever,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"credit_specification.cpu_credits": {
+		// standard | unlimited for T-family.
+		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+
+	// Nitro Enclaves ---------------------------------------------------
+	"enclave_options.enabled": {
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityUIVisible,
+		Edit:          EditNever,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
+	},
+
+	// Capacity reservation ---------------------------------------------
+	"capacity_reservation_specification.capacity_reservation_preference": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"capacity_reservation_specification.capacity_reservation_target.capacity_reservation_id": {
+		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditRelationshipOnly,
+		DriftSemantic: DriftSemanticExact,
+	},
+
+	// Shutdown behavior / dedicated host wiring ------------------------
+	"instance_initiated_shutdown_behavior": {
+		// stop | terminate.
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"host_id": {
+		// Dedicated Host ID for tenancy=host.
+		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditRelationshipOnly,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"host_resource_group_arn": {
+		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditRelationshipOnly,
+		DriftSemantic: DriftSemanticExact,
+	},
+
+	// Static-IP wiring -------------------------------------------------
+	// (`private_ip` is already declared above under Identity.)
+	"secondary_private_ips": {
+		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditRelationshipOnly,
+		DriftSemantic: DriftSemanticWholeList,
+	},
+	"ipv6_addresses": {
+		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditRelationshipOnly,
+		DriftSemantic: DriftSemanticWholeList,
+	},
+	"ipv6_address_count": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+
+	// Maintenance ------------------------------------------------------
+	"maintenance_options.auto_recovery": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"private_dns_name_options.hostname_type": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"private_dns_name_options.enable_resource_name_dns_a_record": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"private_dns_name_options.enable_resource_name_dns_aaaa_record": {
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},
 

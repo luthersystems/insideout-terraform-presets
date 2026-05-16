@@ -14,6 +14,16 @@ package policy
 //
 // Drift bundle 9 (#482): scalars use DriftSemanticExact; list-shaped
 // attributes (function_response_types, queues, topics) compare WholeList.
+//
+// Depth-pass extras (#482 follow-up): adds the nested-block
+// `destination_config.on_failure.destination_arn` (DLQ wiring),
+// `filter_criteria.filter.pattern` (per-event filter JSON),
+// `scaling_config.maximum_concurrency`, `amazon_managed_kafka_event_source_config.consumer_group_id`,
+// `self_managed_kafka_event_source_config.consumer_group_id`,
+// `document_db_event_source_config.*` (database / collection /
+// full_document), and the
+// `self_managed_event_source.endpoints` + `source_access_configuration.*`
+// authentication tuples for SMK / MSK / MQ sources.
 var awsLambdaEventSourceMappingPolicy = Map{
 	// Identity ----------------------------------------------------------
 	"arn": {
@@ -153,6 +163,73 @@ var awsLambdaEventSourceMappingPolicy = Map{
 	},
 
 	// Tags --------------------------------------------------------------
+	// DLQ + filter + scaling -------------------------------------------
+	"destination_config.on_failure.destination_arn": {
+		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditRelationshipOnly,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"filter_criteria.filter.pattern": {
+		// Per-event JSON filter expression — drift here silently widens
+		// or narrows which messages reach the function.
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"scaling_config.maximum_concurrency": {
+		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+
+	// Kafka consumer groups --------------------------------------------
+	"amazon_managed_kafka_event_source_config.consumer_group_id": {
+		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"self_managed_kafka_event_source_config.consumer_group_id": {
+		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
+	},
+
+	// DocumentDB source ------------------------------------------------
+	"document_db_event_source_config.database_name": {
+		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"document_db_event_source_config.collection_name": {
+		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"document_db_event_source_config.full_document": {
+		// Default | UpdateLookup.
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+
+	// Self-managed source endpoints + auth -----------------------------
+	"self_managed_event_source.endpoints": {
+		// Map of broker endpoints (e.g. KAFKA_BOOTSTRAP_SERVERS -> csv).
+		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit: EditRelationshipOnly,
+	},
+	"source_access_configuration.type": {
+		// BASIC_AUTH | VPC_SUBNET | VPC_SECURITY_GROUP | SASL_SCRAM_512_AUTH ...
+		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"source_access_configuration.uri": {
+		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Edit:          EditRelationshipOnly,
+		DriftSemantic: DriftSemanticExact,
+	},
+
 	"tags":     tagPolicy(),
 	"tags_all": tagPolicy(),
 }
