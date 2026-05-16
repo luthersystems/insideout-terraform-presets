@@ -61,9 +61,13 @@ var awsLambdaEventSourceMappingPolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 	"function_name": {
-		// Name or ARN of the Lambda function.
+		// Name or ARN of the Lambda function. Identity-leaf per lint
+		// (`function_name` is a well-known identity attribute); the
+		// target-function ARN is the wiring axis but identity rules
+		// pin Edit=Never. Cross-resource pin = ChangeAlwaysReplace.
 		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityUIVisible,
-		Edit:          EditRequiresApproval,
+		Edit:          EditNever,
+		ChangeRisk:    ChangeAlwaysReplace,
 		DriftSemantic: DriftSemanticExact,
 	},
 

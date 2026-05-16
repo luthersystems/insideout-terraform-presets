@@ -174,7 +174,13 @@ var coveredTypes = []string{
 	"aws_ssm_parameter",
 	"aws_subnet",
 	"aws_vpc",
+	// Bundle 9 (cont.) — VPC DHCP option set.
+	"aws_vpc_dhcp_options",
 	"aws_vpc_endpoint",
+	// Bundle 9 (cont.) — Modern SG egress/ingress rule resources + WAFv2 web ACL.
+	"aws_vpc_security_group_egress_rule",
+	"aws_vpc_security_group_ingress_rule",
+	"aws_wafv2_web_acl",
 	// Final-2 push (#482), continued — wafv2_web_acl_association in
 	// alphabetical position at the end of the AWS block.
 	"aws_wafv2_web_acl_association",

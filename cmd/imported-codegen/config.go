@@ -222,7 +222,22 @@ var WantedAWS = []string{
 	"aws_ssm_parameter",
 	"aws_subnet",
 	"aws_vpc",
+	// Bundle 9 (#482) — VPC DHCP option set. Domain name + DNS server
+	// + NTP server config that VPC instances receive at lease time.
+	"aws_vpc_dhcp_options",
 	"aws_vpc_endpoint",
+	// Bundle 9 (#482) — Modern VPC SG egress + ingress rule resources.
+	// Each row is a single rule (vs. the legacy `aws_security_group`
+	// embedded `ingress` / `egress` blocks). Identity is the rule id;
+	// the (protocol, from_port, to_port, cidr/sg ref) tuple is the
+	// security-critical surface.
+	"aws_vpc_security_group_egress_rule",
+	"aws_vpc_security_group_ingress_rule",
+	// Bundle 9 (#482) — WAFv2 web ACL. The top-level firewall (vs. the
+	// existing wafv2_web_acl_association which is the binding row);
+	// `rule` is the load-bearing rules surface, default_action gates
+	// fallthrough behavior.
+	"aws_wafv2_web_acl",
 	// Final-2 enricher push (#482), continued — wafv2_web_acl_association
 	// is the second of the two hand-rolled types being closed; alphabetical
 	// order placed it at the end of the AWS list.
