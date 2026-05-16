@@ -1,5 +1,7 @@
 package gcpdiscover
 
+import "encoding/json"
+
 // cloudasset_types.go — registry of GCP Terraform resource types routed
 // through the generic Cloud Asset Inventory (CAI) HYBRID attribute
 // enricher (mirrors AWS #490 / cloudcontrol_types.go for GCP).
@@ -71,6 +73,19 @@ type cloudAssetConfig struct {
 	TFType    string
 	AssetType string
 	Skip      bool
+	// Normalizer, when non-nil, transforms the raw CAI versionedResources
+	// JSON before the generic camelToSnakeGCP / Layer-1 unmarshal pipeline
+	// (#510). Use for per-type shape adjustments that GCP's REST surface
+	// does differently from Terraform's view — e.g. self-link URLs that
+	// TF stores as bare names, or wrapped fields like
+	// `tags.items: [...]` that TF flattens to `tags: [...]`.
+	//
+	// Consumed by the generic cloudAssetEnricher; returning an error
+	// fails the fetch with the original error wrapped so soft-fail
+	// dispatchers can distinguish a normalizer bug from a real CAI API
+	// failure. See cai_normalizers.go for composable helpers (chain,
+	// selfLinkToBareName, flattenNetworkTags).
+	Normalizer func(json.RawMessage) (json.RawMessage, error)
 }
 
 // cloudAssetTypeConfigs is the GCP equivalent of AWS's
@@ -116,11 +131,42 @@ var cloudAssetTypeConfigs = []cloudAssetConfig{
 	{TFType: "google_compute_address", AssetType: "compute.googleapis.com/Address"},
 	{TFType: "google_compute_backend_service", AssetType: "compute.googleapis.com/BackendService"},
 	{TFType: "google_compute_global_address", AssetType: "compute.googleapis.com/GlobalAddress"},
-	{TFType: "google_compute_firewall", AssetType: "compute.googleapis.com/Firewall"},
+	{
+		TFType:    "google_compute_firewall",
+		AssetType: "compute.googleapis.com/Firewall",
+		// #510 Normalizer: the CAI body returns `network` as a full
+		// self-link URL (e.g.
+		// https://www.googleapis.com/compute/v1/projects/X/global/networks/foo);
+		// TF state stores the bare network name. No network-tags wrapper
+		// here — firewall sourceTags / targetTags are already bare lists
+		// at the top level (sourceTags / targetTags), not wrapped under
+		// a `tags.items` envelope.
+		Normalizer: chain(
+			selfLinkToBareName("network"),
+		),
+	},
 	{TFType: "google_compute_forwarding_rule", AssetType: "compute.googleapis.com/ForwardingRule"},
 	{TFType: "google_compute_global_forwarding_rule", AssetType: "compute.googleapis.com/GlobalForwardingRule"},
 	{TFType: "google_compute_health_check", AssetType: "compute.googleapis.com/HealthCheck"},
-	{TFType: "google_compute_instance", AssetType: "compute.googleapis.com/Instance"},
+	{
+		TFType:    "google_compute_instance",
+		AssetType: "compute.googleapis.com/Instance",
+		// #510 Normalizer: the CAI body returns several fields as
+		// self-link URLs (machineType, network/subnetwork inside
+		// networkInterface) and wraps GCE network tags as
+		// `tags: {items: [...]}`; TF flattens machineType to the bare
+		// type name and flattens `tags` to a bare list. Self-links on
+		// nested-block fields (network/subnetwork inside
+		// networkInterface, source/diskType inside disks) currently
+		// pass through unchanged; closing those is a follow-up that
+		// needs a path-aware self-link helper.
+		Normalizer: chain(
+			selfLinkToBareName("machineType"),
+			selfLinkToBareName("zone"),
+			selfLinkSliceToBareNames("resourcePolicies"),
+			flattenNetworkTags(),
+		),
+	},
 	{TFType: "google_compute_managed_ssl_certificate", AssetType: "compute.googleapis.com/SslCertificate"},
 	{TFType: "google_compute_network", AssetType: "compute.googleapis.com/Network"},
 	{TFType: "google_compute_resource_policy", AssetType: "compute.googleapis.com/ResourcePolicy"},
