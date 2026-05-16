@@ -22,8 +22,8 @@ and is checked in lockstep with the runtime registries. See the
 
 ## Summary
 
-- **AWS:** 109 types · 100% Discoverable · 100% Enrichable · 42% DriftDetectable · 40% MetricsAvailable · 39% AgentEditable
-- **GCP:** 54 types · 100% Discoverable · 100% Enrichable · 63% DriftDetectable · 57% MetricsAvailable · 89% AgentEditable
+- **AWS:** 109 types · 100% Discoverable · 100% Enrichable · 42% DriftDetectable · 45% MetricsAvailable · 39% AgentEditable
+- **GCP:** 54 types · 100% Discoverable · 100% Enrichable · 63% DriftDetectable · 63% MetricsAvailable · 89% AgentEditable
 
 ## AWS
 
@@ -48,7 +48,7 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_bedrock_guardrail` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_bedrock_model_invocation_logging_configuration` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_cloudfront_distribution` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `aws_cloudfront_function` | ✓ | ✓ | – | – | – |
+| `aws_cloudfront_function` | ✓ | ✓ | – | ✓ | – |
 | `aws_cloudfront_monitoring_subscription` | ✓ | ✓ | – | – | – |
 | `aws_cloudfront_origin_access_identity` | ✓ | ✓ | – | – | – |
 | `aws_cloudwatch_dashboard` | ✓ | ✓ | – | – | – |
@@ -89,7 +89,7 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_iam_service_linked_role` | ✓ | ✓ | – | – | – |
 | `aws_iam_user` | ✓ | ✓ | – | – | – |
 | `aws_instance` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `aws_internet_gateway` | ✓ | ✓ | – | – | – |
+| `aws_internet_gateway` | ✓ | ✓ | – | ✓ | – |
 | `aws_key_pair` | ✓ | ✓ | – | – | – |
 | `aws_kms_alias` | ✓ | ✓ | – | – | – |
 | `aws_kms_key` | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -124,20 +124,20 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_s3_bucket_versioning` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_secretsmanager_secret` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_secretsmanager_secret_rotation` | ✓ | ✓ | ✓ | – | ✓ |
-| `aws_security_group` | ✓ | ✓ | ✓ | – | ✓ |
+| `aws_security_group` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_service_discovery_private_dns_namespace` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_sns_topic` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_sns_topic_subscription` | ✓ | ✓ | – | – | – |
 | `aws_sqs_queue` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_ssm_parameter` | ✓ | ✓ | – | – | – |
-| `aws_subnet` | ✓ | ✓ | ✓ | – | ✓ |
+| `aws_subnet` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_vpc` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_vpc_dhcp_options` | ✓ | ✓ | – | – | – |
 | `aws_vpc_endpoint` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_vpc_security_group_egress_rule` | ✓ | ✓ | – | – | – |
 | `aws_vpc_security_group_ingress_rule` | ✓ | ✓ | – | – | – |
 | `aws_wafv2_web_acl` | ✓ | ✓ | – | ✓ | – |
-| `aws_wafv2_web_acl_association` | ✓ | ✓ | ✓ | – | – |
+| `aws_wafv2_web_acl_association` | ✓ | ✓ | ✓ | ✓ | – |
 
 ## GCP
 
@@ -145,10 +145,10 @@ and is checked in lockstep with the runtime registries. See the
 |---|---|---|---|---|---|
 | `google_api_gateway_api` | ✓ | ✓ | – | – | ✓ |
 | `google_api_gateway_api_config` | ✓ | ✓ | – | – | ✓ |
-| `google_api_gateway_gateway` | ✓ | ✓ | – | – | ✓ |
+| `google_api_gateway_gateway` | ✓ | ✓ | – | ✓ | ✓ |
 | `google_cloud_run_v2_service` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_cloud_run_v2_service_iam_member` | ✓ | ✓ | – | – | – |
-| `google_cloudbuild_trigger` | ✓ | ✓ | – | – | ✓ |
+| `google_cloudbuild_trigger` | ✓ | ✓ | – | ✓ | ✓ |
 | `google_cloudfunctions2_function` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_cloudfunctions2_function_iam_member` | ✓ | ✓ | – | – | – |
 | `google_compute_address` | ✓ | ✓ | ✓ | – | ✓ |
@@ -157,7 +157,7 @@ and is checked in lockstep with the runtime registries. See the
 | `google_compute_forwarding_rule` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_compute_global_address` | ✓ | ✓ | – | – | ✓ |
 | `google_compute_global_forwarding_rule` | ✓ | ✓ | – | ✓ | ✓ |
-| `google_compute_health_check` | ✓ | ✓ | ✓ | – | ✓ |
+| `google_compute_health_check` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_compute_instance` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_compute_managed_ssl_certificate` | ✓ | ✓ | – | – | ✓ |
 | `google_compute_network` | ✓ | ✓ | ✓ | ✓ | ✓ |

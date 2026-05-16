@@ -84,6 +84,14 @@ var seededTypes = []string{
 	"google_project_service",
 	"google_compute_target_https_proxy",
 	"google_compute_target_http_proxy",
+	"aws_security_group",
+	"aws_subnet",
+	"aws_internet_gateway",
+	"aws_cloudfront_function",
+	"aws_wafv2_web_acl_association",
+	"google_compute_health_check",
+	"google_api_gateway_gateway",
+	"google_cloudbuild_trigger",
 }
 
 // seededBindings mirrors the registrations performed by init(). Used
@@ -652,6 +660,62 @@ var seededBindings = map[string]ComponentMetricsBinding{
 		DimensionKey:   "target_proxy_name",
 		DimensionFrom:  "name",
 		DefaultMetrics: []string{"loadbalancing.googleapis.com/https/request_count", "loadbalancing.googleapis.com/https/request_bytes_count"},
+	},
+	"aws_security_group": {
+		Service:        "vpc",
+		Action:         "get-metrics",
+		DimensionKey:   "GroupId",
+		DimensionFrom:  "id",
+		DefaultMetrics: []string{"AllowedFlowsCount", "DeniedFlowsCount"},
+	},
+	"aws_subnet": {
+		Service:        "vpc",
+		Action:         "get-metrics",
+		DimensionKey:   "Subnet",
+		DimensionFrom:  "id",
+		DefaultMetrics: []string{"BytesIn", "BytesOut", "PacketsIn", "PacketsOut"},
+	},
+	"aws_internet_gateway": {
+		Service:        "vpc",
+		Action:         "get-metrics",
+		DimensionKey:   "InternetGatewayId",
+		DimensionFrom:  "id",
+		DefaultMetrics: []string{"BytesIn", "BytesOut", "PacketsIn", "PacketsOut"},
+	},
+	"aws_cloudfront_function": {
+		Service:        "cloudfront",
+		Action:         "get-metrics",
+		DimensionKey:   "FunctionName",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"FunctionInvocations", "FunctionExecutionErrors", "FunctionValidationErrors", "FunctionComputeUtilization"},
+	},
+	"aws_wafv2_web_acl_association": {
+		Service:        "wafv2",
+		Action:         "get-metrics",
+		DimensionKey:   "WebACL",
+		DimensionFrom:  "id",
+		DefaultMetrics: []string{"AllowedRequests", "BlockedRequests", "CountedRequests"},
+	},
+	"google_compute_health_check": {
+		Service:        "loadbalancing",
+		Action:         "timeseries-list",
+		DimensionKey:   "health_check_name",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"loadbalancing.googleapis.com/https/backend_request_count", "monitoring.googleapis.com/uptime_check/check_passed"},
+	},
+	"google_api_gateway_gateway": {
+		Service:        "apigateway",
+		Action:         "timeseries-list",
+		DimensionKey:   "gateway_id",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"apigateway.googleapis.com/gateway/request_count", "apigateway.googleapis.com/gateway/request_latencies"},
+	},
+	"google_cloudbuild_trigger": {
+		Service:        "cloudbuild",
+		Action:         "timeseries-list",
+		DimensionKey:   "trigger_id",
+		DimensionFrom:  "id",
+		DefaultMetrics: []string{"cloudbuild.googleapis.com/build_count", "cloudbuild.googleapis.com/build/duration"},
 	},
 }
 
