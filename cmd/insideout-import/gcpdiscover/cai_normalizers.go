@@ -55,6 +55,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported/generated"
 )
 
 // Normalizer is the per-type hook on cloudAssetConfig.Normalizer
@@ -413,6 +415,122 @@ func setDefaultIfAbsent(field string, value any) Normalizer {
 			return in, nil
 		}
 		m[field] = value
+		return encodeCAIObject(m)
+	}
+}
+
+// universallyElidedTFFields are top-level attribute names dropped on
+// every Terraform resource regardless of the schema's Optional /
+// Computed flags. `id` is the canonical case: every resource has it,
+// the schema declares it Optional+Computed (so FieldSchema.Configurable
+// returns true), but it's the provider-managed resource ID and the
+// hand-rolled GCP enrichers uniformly skip it (see mapComputeAddress,
+// mapPubsubTopic, mapPubsubSubscription, mapStorageBucket — none assign
+// to out.ID). Without this allowlist the CAI fallback would emit `id`
+// into ir.Attrs while the hand-rolled path would not, breaking byte-
+// equal parity needed for retirement.
+//
+// Keep this list MINIMAL — it's a parity hack, not a general rule.
+// New entries belong here only when they're universally
+// "Optional+Computed in schema but treated as computed-only in the
+// hand-rolled emit layer".
+var universallyElidedTFFields = map[string]bool{
+	"id": true,
+}
+
+// stripComputedOnlyForType returns a Normalizer that removes top-level
+// fields the registered FieldSchema marks as purely computed
+// (Computed=true && Required=false && Optional=false) from the raw CAI
+// JSON before the Layer-1 unmarshal pipeline (#581).
+//
+// Per decision #5 (computed-only field elision; see
+// docs/managed-resource-tiers.md and pkg/composer/imported/generated/schema.go),
+// the composed HCL surface MUST NOT emit fields whose only schema role
+// is "server-set on read". The hand-rolled GCP enrichers all open-code
+// this rule (mapComputeAddress, mapPubsubTopic, mapStorageBucket each
+// list the elided fields in their godoc and never assign to them).
+// Without this Normalizer, retiring a hand-rolled enricher and falling
+// back to the generic CAI path would silently re-introduce
+// creation_timestamp / id / label_fingerprint / self_link / users /
+// effective_labels / terraform_labels into ir.Attrs — fields the
+// emitter would strip later, but the framework-level invariant would
+// be lost (and any consumer reading Attrs directly would see the
+// difference).
+//
+// Lookup precedence: the helper consults generated.Lookup(tfType) at
+// each call (not at construction) so a Register that lands after this
+// Normalizer is constructed still takes effect. A type with no
+// registered schema is fail-open: the input passes through untouched
+// (the downstream UnmarshalAttrs will already fail loudly if the type
+// is truly unregistered, so no information is lost; and the typed
+// fallback path is where wiring bugs surface).
+//
+// CAI returns lowerCamelCase keys; FieldSchema keys are snake_case.
+// The helper bridges by camelToSnakeGCP-renaming each top-level key
+// for the lookup. Distinguishes the cases that LOOK computed-only but
+// aren't:
+//
+//   - Optional+Computed: user MAY own the value (e.g. `network_tier`
+//     on compute_address). Configurable() returns true; kept — EXCEPT
+//     for entries in universallyElidedTFFields (currently just `id`,
+//     where the hand-rolled enrichers uniformly skip the field
+//     regardless of its Optional+Computed schema role).
+//   - Required+Computed: rare but the schema says the user must
+//     supply it. Configurable() returns true; kept.
+//   - Computed-only (the target): Configurable() returns false; dropped.
+//
+// Operates only on top-level fields. Nested-block computed-only
+// filtering (e.g. inside a `template[0]` block) would need a recursive
+// walker — none of the #581 retirement candidates need it; the
+// hand-rolled enrichers' decision-#5 list is uniformly top-level.
+//
+// Idempotent: an absent field is a no-op; an empty object is a no-op;
+// a non-object payload (rare — only happens if a normalizer earlier
+// in the chain produced one) passes through unchanged.
+func stripComputedOnlyForType(tfType string) Normalizer {
+	return func(in json.RawMessage) (json.RawMessage, error) {
+		if tfType == "" {
+			return in, nil
+		}
+		_, schema, ok := generated.Lookup(tfType)
+		if !ok || len(schema) == 0 {
+			// Fail-open: no registered schema → pass through. The
+			// downstream UnmarshalAttrs will already fail with
+			// "no registered type" if the type is truly missing.
+			return in, nil
+		}
+		m, err := decodeCAIObject(in)
+		if err != nil {
+			return nil, fmt.Errorf("stripComputedOnlyForType(%q): %w", tfType, err)
+		}
+		if m == nil {
+			return in, nil
+		}
+		changed := false
+		for k := range m {
+			snake := camelToSnakeGCP(k)
+			if universallyElidedTFFields[snake] {
+				delete(m, k)
+				changed = true
+				continue
+			}
+			fs, present := schema[snake]
+			if !present {
+				// Unknown-to-schema field — keep it. The downstream
+				// renamer + UnmarshalAttrs will drop it via json
+				// ignore-unknown-keys; preserving it here means a
+				// future schema regeneration that adds the field
+				// doesn't silently start eliding it.
+				continue
+			}
+			if fs.Computed && !fs.Configurable() {
+				delete(m, k)
+				changed = true
+			}
+		}
+		if !changed {
+			return in, nil
+		}
 		return encodeCAIObject(m)
 	}
 }

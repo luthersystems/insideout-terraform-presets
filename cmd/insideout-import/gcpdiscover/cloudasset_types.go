@@ -131,18 +131,20 @@ var cloudAssetTypeConfigs = []cloudAssetConfig{
 	{
 		TFType:    "google_compute_address",
 		AssetType: "compute.googleapis.com/Address",
-		// #511 Normalizer: the CAI body returns `region` as a full
-		// self-link URL (https://.../regions/<r>) while TF state stores
-		// the bare region name; goog-managed labels need filtering so
-		// the emit layer doesn't introduce permadiff. Hand-rolled
-		// override wins today (compute_address_enrich.go); this chain
-		// hardens the CAI fallback for the day the hand-rolled is
-		// retired (gated on a computed-only attribute filter — see
-		// #511 PR body for the remaining gap).
+		// #581 Normalizer (post-retirement): the CAI body returns
+		// `region` as a full self-link URL (https://.../regions/<r>)
+		// while TF state stores the bare region name; goog-managed
+		// labels need filtering so the emit layer doesn't introduce
+		// permadiff; computed-only fields (creation_timestamp, id,
+		// label_fingerprint, self_link, effective_labels,
+		// terraform_labels, users) are stripped per decision-#5 so the
+		// CAI payload matches what the (now-retired) hand-rolled
+		// mapComputeAddress emitted.
 		Normalizer: chain(
 			selfLinkToBareName("region"),
 			dropLabelPrefix("labels", "goog-"),
 			dropLabelPrefix("labels", "goog_"),
+			stripComputedOnlyForType("google_compute_address"),
 		),
 	},
 	{TFType: "google_compute_backend_service", AssetType: "compute.googleapis.com/BackendService"},
@@ -202,15 +204,18 @@ var cloudAssetTypeConfigs = []cloudAssetConfig{
 		// defaults (force_destroy, default_event_based_hold,
 		// enable_object_retention, requester_pays) that the GCS REST
 		// body never carries — the hand-rolled mapStorageBucket sets
-		// these unconditionally via generated.LiteralOf(false).
+		// these unconditionally via generated.LiteralOf(false). #581
+		// adds the generic computed-only strip so creation_timestamp /
+		// effective_labels / self_link / terraform_labels / id /
+		// label_fingerprint don't leak.
 		// Hand-rolled override wins today
 		// (storage_bucket_enrich.{go,gen.go}); this chain hardens the
 		// CAI fallback but stops short of full parity — the
 		// hand-rolled also uppercases `location` (strings.ToUpper) and
 		// derives `enable_object_retention` from a nested
 		// `objectRetention.mode == "Enabled"` field, neither of which
-		// the current helper kit covers. See #511 PR body for the
-		// remaining blockers before retirement.
+		// the current helper kit covers. See #580 PR body Bucket F for
+		// the remaining blockers before retirement.
 		Normalizer: chain(
 			dropLabelPrefix("labels", "goog-"),
 			dropLabelPrefix("labels", "goog_"),
@@ -218,6 +223,7 @@ var cloudAssetTypeConfigs = []cloudAssetConfig{
 			setDefaultIfAbsent("defaultEventBasedHold", false),
 			setDefaultIfAbsent("enableObjectRetention", false),
 			setDefaultIfAbsent("requesterPays", false),
+			stripComputedOnlyForType("google_storage_bucket"),
 		),
 	},
 
@@ -227,37 +233,42 @@ var cloudAssetTypeConfigs = []cloudAssetConfig{
 	{
 		TFType:    "google_pubsub_topic",
 		AssetType: "pubsub.googleapis.com/Topic",
-		// #511 Normalizer: the CAI body returns `name` as the
-		// fully-qualified `projects/<p>/topics/<n>` resource path
-		// while TF stores the bare short name; goog-managed labels
-		// need filtering. Hand-rolled override wins today
-		// (pubsub_topic_enrich.{go,gen.go}); this chain hardens the
-		// CAI fallback. Per-resource nested blocks
+		// #581 Normalizer (post-retirement): the CAI body returns
+		// `name` as the fully-qualified `projects/<p>/topics/<n>`
+		// resource path while TF stores the bare short name;
+		// goog-managed labels need filtering; computed-only fields
+		// (effective_labels, id, terraform_labels) are stripped per
+		// decision-#5. Per-resource nested blocks
 		// (ingestion_data_source_settings, message_storage_policy,
-		// schema_settings) are NOT yet handled — the CAI body returns
-		// these as single objects while the Layer-1 struct expects
-		// `[]Block`; a generic object-to-singleton-list wrapper is
-		// the remaining blocker. See #511 PR body.
+		// schema_settings) are NOT yet handled by the helper kit —
+		// the CAI body returns these as single objects while the
+		// Layer-1 struct expects `[]Block`; a generic
+		// object-to-singleton-list wrapper is a follow-up. If the
+		// real CAI body for a given topic includes any of those nested
+		// settings, the generic path will drop them at
+		// generated.UnmarshalAttrs (unknown-key) — parity holds only
+		// for the no-nested-blocks shape, which is the common case for
+		// the topics used by InsideOut today.
 		Normalizer: chain(
 			shortenLastSegment("name"),
 			dropLabelPrefix("labels", "goog-"),
 			dropLabelPrefix("labels", "goog_"),
+			stripComputedOnlyForType("google_pubsub_topic"),
 		),
 	},
 	{
 		TFType:    "google_pubsub_subscription",
 		AssetType: "pubsub.googleapis.com/Subscription",
-		// #511 Normalizer: shorten `name`
+		// #581 Normalizer (post-retirement): shorten `name`
 		// (projects/<p>/subscriptions/<n> → <n>); drop goog-managed
 		// labels; emit TF-required defaults
 		// (enable_exactly_once_delivery, enable_message_ordering,
-		// retain_acked_messages) that the Pub/Sub REST body omits.
-		// Hand-rolled override wins today
-		// (pubsub_subscription_enrich.{go,gen.go}); this chain
-		// hardens the CAI fallback. Nested blocks (push_config,
-		// bigquery_config, cloud_storage_config, dead_letter_policy,
-		// expiration_policy, retry_policy) face the same
-		// object-to-singleton-list blocker as pubsub_topic.
+		// retain_acked_messages) that the Pub/Sub REST body omits;
+		// strip computed-only fields per decision-#5. Nested blocks
+		// (push_config, bigquery_config, cloud_storage_config,
+		// dead_letter_policy, expiration_policy, retry_policy) face
+		// the same object-to-singleton-list blocker as pubsub_topic —
+		// parity holds only for the no-nested-blocks shape.
 		Normalizer: chain(
 			shortenLastSegment("name"),
 			dropLabelPrefix("labels", "goog-"),
@@ -265,6 +276,7 @@ var cloudAssetTypeConfigs = []cloudAssetConfig{
 			setDefaultIfAbsent("enableExactlyOnceDelivery", false),
 			setDefaultIfAbsent("enableMessageOrdering", false),
 			setDefaultIfAbsent("retainAckedMessages", false),
+			stripComputedOnlyForType("google_pubsub_subscription"),
 		),
 	},
 

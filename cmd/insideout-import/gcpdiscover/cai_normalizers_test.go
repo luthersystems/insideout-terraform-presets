@@ -530,3 +530,148 @@ func TestDecodeCAIObject_PassThroughCases(t *testing.T) {
 		})
 	}
 }
+
+// TestStripComputedOnlyForType_TableDriven exercises the #581 generic
+// computed-only filter against the real generated.GoogleComputeAddress
+// schema. compute_address is chosen as the representative type because
+// its schema covers all four schema-flag combinations the helper must
+// distinguish: required-only (name), optional-only (description),
+// optional+computed (address, network_tier — user-overridable),
+// computed-only (creation_timestamp, effective_labels, label_fingerprint,
+// self_link, terraform_labels, users). Combined with `id`
+// (Optional+Computed but on the universal-elide allowlist), this single
+// type tables out every branch in stripComputedOnlyForType.
+//
+// Tests against the LIVE schema registration (not a fixture) so a
+// future regeneration of google_compute_address.gen.go that flips a
+// flag from Computed-only to Optional+Computed fails this test
+// immediately — guarding against silent parity drift.
+func TestStripComputedOnlyForType_TableDriven(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{
+			name: "computed-only fields stripped",
+			in:   `{"name":"a","creationTimestamp":"2024-01-01","selfLink":"https://x/a","labelFingerprint":"abc"}`,
+			want: `{"name":"a"}`,
+		},
+		{
+			name: "optional+computed kept (network_tier)",
+			in:   `{"name":"a","networkTier":"PREMIUM","creationTimestamp":"t"}`,
+			want: `{"name":"a","networkTier":"PREMIUM"}`,
+		},
+		{
+			name: "required-only kept (name)",
+			in:   `{"name":"a","creationTimestamp":"t"}`,
+			want: `{"name":"a"}`,
+		},
+		{
+			name: "optional-only kept (description)",
+			in:   `{"description":"d","selfLink":"x"}`,
+			want: `{"description":"d"}`,
+		},
+		{
+			name: "id stripped via universal-elide list even though schema is optional+computed",
+			in:   `{"name":"a","id":"projects/x/regions/r/addresses/a"}`,
+			want: `{"name":"a"}`,
+		},
+		{
+			name: "computed-only effective_labels and terraform_labels stripped",
+			in:   `{"name":"a","effectiveLabels":{"goog":"x"},"terraformLabels":{"team":"y"}}`,
+			want: `{"name":"a"}`,
+		},
+		{
+			name: "computed-only users slice stripped",
+			in:   `{"name":"a","users":["projects/x/instances/i1"]}`,
+			want: `{"name":"a"}`,
+		},
+		{
+			name: "unknown-to-schema key passes through (defensive against future-schema drift)",
+			in:   `{"name":"a","futureField":"value"}`,
+			want: `{"name":"a","futureField":"value"}`,
+		},
+		{
+			name: "no changes returns input unchanged",
+			in:   `{"name":"a","description":"d"}`,
+			want: `{"name":"a","description":"d"}`,
+		},
+		{
+			name: "all-computed-only input collapses to empty object",
+			in:   `{"creationTimestamp":"t","selfLink":"x","labelFingerprint":"f","effectiveLabels":{},"terraformLabels":{},"users":[]}`,
+			want: `{}`,
+		},
+	}
+	n := stripComputedOnlyForType("google_compute_address")
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := n(json.RawMessage(tc.in))
+			require.NoError(t, err)
+			assert.JSONEq(t, tc.want, string(got))
+		})
+	}
+}
+
+// TestStripComputedOnlyForType_NoSchema_PassesThrough pins the
+// fail-open contract: an unregistered TF type returns input unchanged.
+// The downstream generated.UnmarshalAttrs will already fail with "no
+// registered type" on a truly-missing registration; this Normalizer
+// stays out of the way rather than masking the wiring error.
+func TestStripComputedOnlyForType_NoSchema_PassesThrough(t *testing.T) {
+	t.Parallel()
+	n := stripComputedOnlyForType("google_does_not_exist_xyz")
+	in := json.RawMessage(`{"foo":"bar","creationTimestamp":"t"}`)
+	out, err := n(in)
+	require.NoError(t, err)
+	assert.JSONEq(t, string(in), string(out))
+}
+
+// TestStripComputedOnlyForType_EmptyType pins that an empty tfType
+// argument is a pass-through (defensive — no caller should be passing
+// "" but a future programmer error shouldn't blow up the chain).
+func TestStripComputedOnlyForType_EmptyType(t *testing.T) {
+	t.Parallel()
+	n := stripComputedOnlyForType("")
+	in := json.RawMessage(`{"foo":"bar"}`)
+	out, err := n(in)
+	require.NoError(t, err)
+	assert.JSONEq(t, string(in), string(out))
+}
+
+// TestStripComputedOnlyForType_EmptyPayload exercises decode-side
+// pass-through: empty / null / whitespace inputs short-circuit cleanly
+// without touching the schema.
+func TestStripComputedOnlyForType_EmptyPayload(t *testing.T) {
+	t.Parallel()
+	n := stripComputedOnlyForType("google_compute_address")
+	cases := []json.RawMessage{
+		json.RawMessage(``),
+		json.RawMessage(`null`),
+		json.RawMessage(`  `),
+	}
+	for _, in := range cases {
+		in := in
+		t.Run(string(in), func(t *testing.T) {
+			t.Parallel()
+			out, err := n(in)
+			require.NoError(t, err)
+			assert.Equal(t, string(in), string(out))
+		})
+	}
+}
+
+// TestStripComputedOnlyForType_MalformedJSON pins the error surface:
+// a non-object payload (e.g. an array or scalar at the top level)
+// returns a wrapped error so the chain reports the failing helper
+// instead of cascading into a confusing unmarshal error downstream.
+func TestStripComputedOnlyForType_MalformedJSON(t *testing.T) {
+	t.Parallel()
+	n := stripComputedOnlyForType("google_compute_address")
+	_, err := n(json.RawMessage(`[1,2,3]`))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "stripComputedOnlyForType")
+}

@@ -15,7 +15,6 @@ import (
 	loggingv2 "google.golang.org/api/logging/v2"
 	monitoringv1 "google.golang.org/api/monitoring/v1"
 	monitoringv3 "google.golang.org/api/monitoring/v3"
-	pubsubv1 "google.golang.org/api/pubsub/v1"
 	secretmanagerv1 "google.golang.org/api/secretmanager/v1"
 	servicenetworkingv1 "google.golang.org/api/servicenetworking/v1"
 	serviceusagev1 "google.golang.org/api/serviceusage/v1"
@@ -150,7 +149,6 @@ type ByIDEnricher interface {
 // the EnrichAttributes loop downgrades to a per-resource warning.
 type EnrichClients struct {
 	Storage       *storagev1.Service
-	Pubsub        *pubsubv1.Service
 	SecretManager *secretmanagerv1.Service
 	Compute       *computev1.Service
 	// Bundle G5 (#482) — added for KMS, SQL, and IAM enrichers.

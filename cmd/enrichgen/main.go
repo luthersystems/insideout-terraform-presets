@@ -38,8 +38,12 @@ import (
 var targets = []target{
 	// GCP targets — see presets#403.
 	storageBucketTarget,
-	pubsubTopicTarget,
-	pubsubSubscriptionTarget,
+	// #581: pubsubTopicTarget + pubsubSubscriptionTarget retired
+	// alongside the hand-rolled enrichers they generated — the CAI
+	// fallback with the #581 computed-only filter + #580 Normalizer
+	// kit now produces byte-equal Attrs for the no-nested-blocks
+	// shape (see computed_only_parity_test.go for the regression
+	// guard).
 	secretManagerSecretTarget,
 	computeNetworkTarget,
 	// AWS targets — see presets#457.

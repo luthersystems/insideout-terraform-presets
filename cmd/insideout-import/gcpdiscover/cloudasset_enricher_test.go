@@ -887,12 +887,13 @@ func TestCloudAssetEnricherCoversEveryCAIRoutedType(t *testing.T) {
 func TestCloudAssetEnricherSkipsHandRolledOverrides(t *testing.T) {
 	t.Parallel()
 	d := NewGCPDiscoverer(nil, "test-project", GCPDiscovererOpts{})
+	// #581: compute_address, pubsub_topic, pubsub_subscription
+	// retired — the CAI fallback now wins for those three (see
+	// computed_only_parity_test.go for the byte-equal regression
+	// guard). The remaining hand-rolled overrides MUST continue to win.
 	handRolled := []string{
-		"google_compute_address",
 		"google_compute_firewall",
 		"google_compute_network",
-		"google_pubsub_subscription",
-		"google_pubsub_topic",
 		"google_secret_manager_secret",
 		"google_storage_bucket",
 	}
