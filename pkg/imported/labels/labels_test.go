@@ -176,6 +176,82 @@ func TestRegisteredTypesSortedAndStable(t *testing.T) {
 	}
 }
 
+// TestCuratedOverrides_LockReliableCopy pins every curated
+// (label, iconKey) override registered by overrides.go against the
+// exact strings shipping today in luthersystems/reliable's
+// components/import/serviceMeta.ts (label) and the iconPath SVG
+// basenames it pairs with each type.
+//
+// Why this test isn't a fixture: every row is a deliberate product
+// copy choice the team has shipped to users. A future edit that wants
+// to change a label must therefore touch this test file — a loud
+// signal, with the change visible in the diff a reviewer will see.
+// Drift between this test and overrides.go indicates one of:
+//   - someone added/changed a curated override without updating the
+//     reliable consumer (this test fails),
+//   - reliable changed product copy first and the upstream override
+//     hasn't been bumped (catch on a parity-check follow-up — not in
+//     this test's scope, since the override file IS the upstream
+//     source of truth post-Surface-D-migration).
+//
+// Note: this test resets and re-runs registerCuratedOverrides() rather
+// than reading the production registry directly. Sibling tests in this
+// file wipe the registry via resetForTest(); without the reset+repopulate
+// we'd see whatever the last sibling test left behind, which would be
+// brittle to test-ordering.
+func TestCuratedOverrides_LockReliableCopy(t *testing.T) {
+	resetForTest(t)
+	registerCuratedOverrides()
+
+	cases := []struct {
+		tfType      string
+		wantLabel   string
+		wantIconKey string
+	}{
+		// AWS — importable today.
+		{"aws_sqs_queue", "Queue (SQS)", "sqs"},
+		{"aws_dynamodb_table", "Table (DynamoDB)", "ddb"},
+		{"aws_cloudwatch_log_group", "Log group (CloudWatch)", "cw"},
+		{"aws_secretsmanager_secret", "Secret (Secrets Manager)", "secretsmanager"},
+		{"aws_lambda_function", "Function (Lambda)", "lambda"},
+
+		// AWS — surfaced unsupported.
+		{"aws_iam_role", "IAM role", "aws"},
+		{"aws_iam_policy", "IAM policy", "aws"},
+		{"aws_kms_key", "KMS key", "kms"},
+		{"aws_s3_bucket", "Bucket (S3)", "s3"},
+		{"aws_vpc", "Virtual private cloud (VPC)", "vpc"},
+		{"aws_subnet", "Subnet", "vpc"},
+		{"aws_security_group", "Security group", "vpc"},
+		{"aws_eks_cluster", "Kubernetes cluster (EKS)", "eks"},
+		{"aws_eks_node_group", "EKS node group", "eks"},
+		{"aws_lb", "Load balancer (ALB)", "alb"},
+		{"aws_cloudfront_distribution", "CDN (CloudFront)", "cdn"},
+		{"aws_instance", "EC2 instance", "ec2"},
+
+		// GCP — importable today.
+		{"google_pubsub_topic", "Pub/Sub topic", "pubsub"},
+		{"google_pubsub_subscription", "Pub/Sub subscription", "pubsub"},
+		{"google_storage_bucket", "Cloud Storage bucket", "gcs"},
+		{"google_secret_manager_secret", "Secret (Secret Manager)", "secret_manager"},
+		{"google_compute_network", "VPC network", "vpc"},
+
+		// GCP — surfaced unsupported.
+		{"google_sql_database_instance", "Cloud SQL instance", "cloudsql"},
+		{"google_container_cluster", "Kubernetes cluster (GKE)", "gke"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.tfType, func(t *testing.T) {
+			if got := Label(tc.tfType); got != tc.wantLabel {
+				t.Errorf("Label(%q) = %q, want %q", tc.tfType, got, tc.wantLabel)
+			}
+			if got := IconKey(tc.tfType); got != tc.wantIconKey {
+				t.Errorf("IconKey(%q) = %q, want %q", tc.tfType, got, tc.wantIconKey)
+			}
+		})
+	}
+}
+
 func TestConcurrentRegisterReadSafety(t *testing.T) {
 	resetForTest(t)
 	// Race-detector smoke test: 32 concurrent readers against a writer

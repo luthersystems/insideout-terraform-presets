@@ -79,13 +79,20 @@ func TestBuildLabelsMap_KnownEntries(t *testing.T) {
 		wantLabel   string
 		wantIconKey string
 	}{
-		// Default-rule cases (skeleton labels package has an empty
-		// override registry, so every entry exercises the default
-		// path).
-		{tfType: "aws_s3_bucket", wantLabel: "S3 Bucket", wantIconKey: "s3_bucket"},
-		{tfType: "aws_dynamodb_table", wantLabel: "Dynamodb Table", wantIconKey: "dynamodb_table"},
-		{tfType: "google_pubsub_topic", wantLabel: "Pubsub Topic", wantIconKey: "pubsub_topic"},
-		{tfType: "google_compute_network", wantLabel: "Compute Network", wantIconKey: "compute_network"},
+		// Curated-override cases — these strings ship in
+		// luthersystems/reliable's components/import/serviceMeta.ts and
+		// are pinned by the per-cloud overrides in
+		// pkg/imported/labels/overrides.go. A regression in either the
+		// override registration or the emit-pipeline lookup chain
+		// surfaces here. The exhaustive override list is asserted by
+		// the labels package's own TestCuratedOverrides_LockReliableCopy.
+		{tfType: "aws_s3_bucket", wantLabel: "Bucket (S3)", wantIconKey: "s3"},
+		{tfType: "aws_dynamodb_table", wantLabel: "Table (DynamoDB)", wantIconKey: "ddb"},
+		{tfType: "google_pubsub_topic", wantLabel: "Pub/Sub topic", wantIconKey: "pubsub"},
+		// Default-rule case — google_compute_network is in the
+		// SupportedDiscoverTypes set but the override file pins
+		// "VPC network" / "vpc" against reliable's serviceMeta.ts.
+		{tfType: "google_compute_network", wantLabel: "VPC network", wantIconKey: "vpc"},
 	}
 	for _, tc := range cases {
 		entry, ok := got[tc.tfType]
