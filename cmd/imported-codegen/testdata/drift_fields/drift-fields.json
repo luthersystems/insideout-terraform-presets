@@ -61,6 +61,24 @@
       "semantic": "Exact"
     }
   ],
+  "aws_api_gateway_deployment": [
+    {
+      "path": "description",
+      "semantic": "Exact"
+    },
+    {
+      "path": "execution_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "rest_api_id",
+      "semantic": "Exact"
+    }
+  ],
   "aws_api_gateway_resource": [
     {
       "path": "id",
@@ -1428,6 +1446,24 @@
     },
     {
       "path": "skip_destroy",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_cloudwatch_log_stream": [
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "log_group_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
       "semantic": "Exact"
     }
   ],
@@ -2875,6 +2911,36 @@
       "semantic": "Exact"
     }
   ],
+  "aws_eks_access_entry": [
+    {
+      "path": "access_entry_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "cluster_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "kubernetes_groups",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "principal_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "user_name",
+      "semantic": "Exact"
+    }
+  ],
   "aws_eks_addon": [
     {
       "path": "addon_name",
@@ -3011,6 +3077,36 @@
       "semantic": "Exact"
     }
   ],
+  "aws_eks_fargate_profile": [
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "cluster_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "fargate_profile_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "pod_execution_role_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "status",
+      "semantic": "Exact"
+    },
+    {
+      "path": "subnet_ids",
+      "semantic": "WholeList"
+    }
+  ],
   "aws_eks_node_group": [
     {
       "path": "ami_type",
@@ -3070,6 +3166,28 @@
     },
     {
       "path": "version",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_elasticache_parameter_group": [
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "description",
+      "semantic": "Exact"
+    },
+    {
+      "path": "family",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
       "semantic": "Exact"
     }
   ],
@@ -3830,6 +3948,36 @@
     },
     {
       "path": "vpc_id",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_key_pair": [
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "fingerprint",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "key_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "key_pair_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "key_type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "public_key",
       "semantic": "Exact"
     }
   ],
@@ -5775,6 +5923,20 @@
       "semantic": "Exact"
     }
   ],
+  "aws_s3_bucket_policy": [
+    {
+      "path": "bucket",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "policy",
+      "semantic": "Exact"
+    }
+  ],
   "aws_s3_bucket_public_access_block": [
     {
       "path": "block_public_acls",
@@ -6154,6 +6316,52 @@
     },
     {
       "path": "tracing_config",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_sns_topic_subscription": [
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "endpoint",
+      "semantic": "Exact"
+    },
+    {
+      "path": "filter_policy",
+      "semantic": "Exact"
+    },
+    {
+      "path": "filter_policy_scope",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "owner_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "protocol",
+      "semantic": "Exact"
+    },
+    {
+      "path": "raw_message_delivery",
+      "semantic": "Exact"
+    },
+    {
+      "path": "redrive_policy",
+      "semantic": "Exact"
+    },
+    {
+      "path": "subscription_role_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "topic_arn",
       "semantic": "Exact"
     }
   ],

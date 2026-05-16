@@ -22,7 +22,7 @@ and is checked in lockstep with the runtime registries. See the
 
 ## Summary
 
-- **AWS:** 109 types · 100% Discoverable · 100% Enrichable · 85% DriftDetectable · 8% MetricsAvailable · 77% AgentEditable
+- **AWS:** 109 types · 100% Discoverable · 100% Enrichable · 93% DriftDetectable · 8% MetricsAvailable · 83% AgentEditable
 - **GCP:** 54 types · 100% Discoverable · 100% Enrichable · 63% DriftDetectable · 11% MetricsAvailable · 89% AgentEditable
 
 ## AWS
@@ -30,7 +30,7 @@ and is checked in lockstep with the runtime registries. See the
 | TF Type | Discoverable | Enrichable | DriftDetectable | MetricsAvailable | AgentEditable |
 |---|---|---|---|---|---|
 | `aws_acm_certificate` | ✓ | ✓ | ✓ | – | ✓ |
-| `aws_api_gateway_deployment` | ✓ | ✓ | – | – | – |
+| `aws_api_gateway_deployment` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_api_gateway_resource` | ✓ | ✓ | ✓ | – | – |
 | `aws_api_gateway_stage` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_apigatewayv2_api` | ✓ | ✓ | ✓ | – | ✓ |
@@ -55,7 +55,7 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_cloudwatch_event_rule` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_cloudwatch_log_group` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_cloudwatch_log_resource_policy` | ✓ | ✓ | – | – | – |
-| `aws_cloudwatch_log_stream` | ✓ | ✓ | – | – | – |
+| `aws_cloudwatch_log_stream` | ✓ | ✓ | ✓ | – | – |
 | `aws_cloudwatch_metric_alarm` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_cognito_identity_provider` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_cognito_resource_server` | ✓ | ✓ | – | – | – |
@@ -71,13 +71,13 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_ecs_cluster` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_ecs_cluster_capacity_providers` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_eip` | ✓ | ✓ | ✓ | – | ✓ |
-| `aws_eks_access_entry` | ✓ | ✓ | – | – | – |
+| `aws_eks_access_entry` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_eks_addon` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_eks_cluster` | ✓ | ✓ | ✓ | – | ✓ |
-| `aws_eks_fargate_profile` | ✓ | ✓ | – | – | – |
+| `aws_eks_fargate_profile` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_eks_node_group` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_eks_pod_identity_association` | ✓ | ✓ | – | – | – |
-| `aws_elasticache_parameter_group` | ✓ | ✓ | – | – | – |
+| `aws_elasticache_parameter_group` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_elasticache_replication_group` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_elasticache_subnet_group` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_iam_group` | ✓ | ✓ | ✓ | – | – |
@@ -90,7 +90,7 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_iam_user` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_instance` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_internet_gateway` | ✓ | ✓ | ✓ | – | ✓ |
-| `aws_key_pair` | ✓ | ✓ | – | – | – |
+| `aws_key_pair` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_kms_alias` | ✓ | ✓ | ✓ | – | – |
 | `aws_kms_key` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_lambda_alias` | ✓ | ✓ | ✓ | – | ✓ |
@@ -118,7 +118,7 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_s3_bucket` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_s3_bucket_lifecycle_configuration` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_s3_bucket_ownership_controls` | ✓ | ✓ | ✓ | – | ✓ |
-| `aws_s3_bucket_policy` | ✓ | ✓ | – | – | – |
+| `aws_s3_bucket_policy` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_s3_bucket_public_access_block` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_s3_bucket_server_side_encryption_configuration` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_s3_bucket_versioning` | ✓ | ✓ | ✓ | – | ✓ |
@@ -127,7 +127,7 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_security_group` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_service_discovery_private_dns_namespace` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_sns_topic` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `aws_sns_topic_subscription` | ✓ | ✓ | – | – | – |
+| `aws_sns_topic_subscription` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_sqs_queue` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_ssm_parameter` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_subnet` | ✓ | ✓ | ✓ | – | ✓ |

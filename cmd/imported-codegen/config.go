@@ -4,6 +4,11 @@ package main
 // structs for. Add new types here to expand coverage.
 var WantedAWS = []string{
 	"aws_acm_certificate",
+	// Bundle 11 (#482) — APIGW v1 deployment. Identity is
+	// (rest_api_id, id); the deployment is the snapshot the stage
+	// points at. Drift on description or triggers indicates an
+	// out-of-band re-deploy.
+	"aws_api_gateway_deployment",
 	// Drift coverage bundle 4 (#482) — 10 more cloud-control-routed AWS
 	// types pushing DriftDetectable from 42% to ~51%. Each was already
 	// cloud-control-enriched; adding the Layer 1 typed struct + Layer 2
@@ -75,6 +80,10 @@ var WantedAWS = []string{
 	// the load-bearing payload — widgets, queries, layout. Drift on the
 	// body indicates out-of-band dashboard edits in the AWS console.
 	"aws_cloudwatch_dashboard",
+	// Bundle 11 (#482) — CloudWatch log stream. Identity is
+	// (name, log_group_name). Streams are append-only and rarely change
+	// after creation; drift on log_group_name indicates re-pointing.
+	"aws_cloudwatch_log_stream",
 	"aws_cloudwatch_log_group",
 	"aws_cloudwatch_metric_alarm",
 	"aws_codebuild_project",
@@ -130,11 +139,26 @@ var WantedAWS = []string{
 	// lands in the cluster, resolve_conflicts_on_* drives upgrade
 	// strategy. Out-of-band addon-version flips show as drift.
 	"aws_eks_addon",
+	// Bundle 11 (#482) — EKS access entry. Identity is (cluster_name,
+	// principal_arn). Maps an IAM principal onto the cluster's RBAC
+	// access. type/kubernetes_groups/username are the drift-relevant
+	// axes; out-of-band changes silently re-key cluster permissions.
+	"aws_eks_access_entry",
 	"aws_eks_cluster",
+	// Bundle 11 (#482) — EKS Fargate profile. Identity is
+	// (cluster_name, fargate_profile_name); pod_execution_role_arn +
+	// subnet_ids + selectors are the wiring axes that determine which
+	// pods land on Fargate.
+	"aws_eks_fargate_profile",
 	// Bundle 8 (#482) — EKS managed node group. Wires (cluster_name,
 	// node_role_arn, subnet_ids, scaling_config); the AMI + instance
 	// type set drives the workhorse compute axis.
 	"aws_eks_node_group",
+	// Bundle 11 (#482) — ElastiCache parameter group. Engine-family
+	// parameter set applied to ElastiCache clusters. Identity is
+	// (name, family); the `parameter` block is the load-bearing surface
+	// where engine tunings live.
+	"aws_elasticache_parameter_group",
 	"aws_elasticache_replication_group",
 	// Bundle 10 (#482) — ElastiCache subnet group. VPC-wiring sibling
 	// to the existing elasticache_replication_group; (name, subnet_ids)
@@ -181,6 +205,11 @@ var WantedAWS = []string{
 	// Bundle 6 (#482) — VPC internet gateway. Identity is (id) +
 	// wiring to its attached vpc_id.
 	"aws_internet_gateway",
+	// Bundle 11 (#482) — EC2 key pair. SSH public key registered for
+	// EC2 instance bootstrap. Identity is (key_name, key_pair_id);
+	// public_key is the load-bearing key material that authorizes
+	// access — drift means an out-of-band key swap.
+	"aws_key_pair",
 	"aws_kinesis_stream",
 	// Bundle 8 (#482) — KMS alias. Identity is (name → target_key_id);
 	// alias retargeting is the drift axis (rotating a workload onto a
@@ -243,6 +272,10 @@ var WantedAWS = []string{
 	// calls produce the typed payload the new enrichers fan into
 	// ImportedResource.Attrs.
 	"aws_s3_bucket_lifecycle_configuration",
+	// Bundle 11 (#482) — S3 bucket policy. Identity is (bucket); the
+	// `policy` JSON is the security-critical surface (who can
+	// Get/Put/Delete objects). Drift is high-signal.
+	"aws_s3_bucket_policy",
 	"aws_s3_bucket_ownership_controls",
 	"aws_s3_bucket_public_access_block",
 	"aws_s3_bucket_server_side_encryption_configuration",
@@ -253,6 +286,11 @@ var WantedAWS = []string{
 	"aws_service_discovery_private_dns_namespace",
 	"aws_sfn_state_machine",
 	"aws_sns_topic",
+	// Bundle 11 (#482) — SNS topic subscription. Identity is (arn);
+	// (topic_arn, protocol, endpoint) is the fanout-wiring axis.
+	// filter_policy controls delivery filtering; drift retargets the
+	// fanout silently.
+	"aws_sns_topic_subscription",
 	"aws_sqs_queue",
 	// Bundle 8 (#482) — SSM Parameter Store entry. Config + secret
 	// material referenced by deploys; `value` is sensitive and drift

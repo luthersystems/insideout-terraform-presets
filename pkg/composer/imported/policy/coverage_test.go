@@ -25,6 +25,11 @@ const syntheticTypePrefix = "policy_test_"
 // updating this list — the diff makes the surface change explicit.
 var coveredTypes = []string{
 	"aws_acm_certificate",
+	// Bundle 11 (#482) — APIGW v1 deployment + CloudWatch log stream +
+	// EKS access entry + EKS Fargate profile + ElastiCache parameter
+	// group + EC2 key pair + S3 bucket policy + SNS topic subscription.
+	// Pushes AWS DriftDetectable from 85% to ~92%.
+	"aws_api_gateway_deployment",
 	// AWS drift coverage bundle 4 (#482) — 10 more cloud-control-routed
 	// types pushing DriftDetectable from 42% to ~51%.
 	"aws_api_gateway_resource",
@@ -82,6 +87,8 @@ var coveredTypes = []string{
 	"aws_cloudwatch_event_bus",
 	"aws_cloudwatch_event_rule",
 	"aws_cloudwatch_log_group",
+	// Bundle 11 (cont.) — CloudWatch log stream.
+	"aws_cloudwatch_log_stream",
 	"aws_cloudwatch_metric_alarm",
 	"aws_codebuild_project",
 	// Bundle 4 (cont.) — CodeDeploy app.
@@ -113,11 +120,17 @@ var coveredTypes = []string{
 	// Bundle 4 (cont.) — EFS file system.
 	"aws_efs_file_system",
 	"aws_eip",
+	// Bundle 11 (cont.) — EKS access entry.
+	"aws_eks_access_entry",
 	// Bundle 10 (cont.) — EKS managed add-on.
 	"aws_eks_addon",
 	"aws_eks_cluster",
+	// Bundle 11 (cont.) — EKS Fargate profile.
+	"aws_eks_fargate_profile",
 	// Bundle 8 (cont.) — EKS managed node group.
 	"aws_eks_node_group",
+	// Bundle 11 (cont.) — ElastiCache parameter group.
+	"aws_elasticache_parameter_group",
 	"aws_elasticache_replication_group",
 	// Bundle 10 (cont.) — ElastiCache subnet group.
 	"aws_elasticache_subnet_group",
@@ -143,6 +156,8 @@ var coveredTypes = []string{
 	// `aws_instance` is the canonical TF name for EC2 instances.
 	"aws_instance",
 	"aws_internet_gateway",
+	// Bundle 11 (cont.) — EC2 key pair.
+	"aws_key_pair",
 	// Bundle 4 (cont.) — Kinesis Data Stream.
 	"aws_kinesis_stream",
 	// Bundle 8 (cont.) — KMS alias.
@@ -180,6 +195,8 @@ var coveredTypes = []string{
 	// S3 bucket sub-resources (#482 enricher push to 95%).
 	"aws_s3_bucket_lifecycle_configuration",
 	"aws_s3_bucket_ownership_controls",
+	// Bundle 11 (cont.) — S3 bucket policy.
+	"aws_s3_bucket_policy",
 	"aws_s3_bucket_public_access_block",
 	"aws_s3_bucket_server_side_encryption_configuration",
 	"aws_s3_bucket_versioning",
@@ -189,6 +206,8 @@ var coveredTypes = []string{
 	"aws_service_discovery_private_dns_namespace",
 	"aws_sfn_state_machine",
 	"aws_sns_topic",
+	// Bundle 11 (cont.) — SNS topic subscription.
+	"aws_sns_topic_subscription",
 	"aws_sqs_queue",
 	// Bundle 8 (cont.) — SSM Parameter Store entry.
 	"aws_ssm_parameter",
