@@ -282,6 +282,55 @@ func TestCompare_DriftSemanticLabelFilter_PerPolicyPrefixes(t *testing.T) {
 	})
 }
 
+func TestCompare_DriftSemanticLabelFilter_TagDriftIgnorePrefixes(t *testing.T) {
+	// AWS-side parallel to the LabelDriftIgnorePrefixes test above:
+	// a policy populates TagDriftIgnorePrefixes (the field
+	// awsTagDriftPolicy() uses) and the comparator must respect it.
+	// Symmetric semantics — same filter behavior, separate field so
+	// each cloud's helper reads naturally at the call site (#568).
+	tfType := registerSyntheticPolicy(t, policy.Map{
+		"tags": {
+			DriftSemantic:          policy.DriftSemanticLabelFilter,
+			TagDriftIgnorePrefixes: []string{"aws:", "eks:", "kubernetes.io/"},
+		},
+	})
+
+	t.Run("aws-managed prefix keys filtered, user keys match -> no mismatch", func(t *testing.T) {
+		snap := json.RawMessage(`{"tags":{"Project":"prod","Owner":"team"}}`)
+		live := json.RawMessage(`{"tags":{"Project":"prod","Owner":"team","aws:cloudformation:stack-name":"x","eks:cluster-name":"c1","kubernetes.io/cluster/foo":"owned"}}`)
+		got := Compare(tfType, snap, live)
+		assert.Empty(t, got, "aws-prefix / eks: / kubernetes.io/ keys must be filtered before compare")
+	})
+
+	t.Run("user-key drift emits per-key mismatch, aws-prefix noise filtered", func(t *testing.T) {
+		snap := json.RawMessage(`{"tags":{"Project":"prod","aws:cloudformation:stack-name":"x"}}`)
+		live := json.RawMessage(`{"tags":{"Project":"staging","aws:cloudformation:stack-name":"y"}}`)
+		got := Compare(tfType, snap, live)
+		require.Len(t, got, 1, "expected one per-key mismatch on tags.Project")
+		assert.Equal(t, "tags.Project", got[0].Field)
+		assert.Equal(t, "prod", got[0].Snapshot)
+		assert.Equal(t, "staging", got[0].Cloud)
+	})
+}
+
+func TestCompare_DriftSemanticLabelFilter_UnionsBothPrefixFields(t *testing.T) {
+	// A policy can populate both LabelDriftIgnorePrefixes (GCP-style)
+	// and TagDriftIgnorePrefixes (AWS-style) — the comparator unions
+	// them before filtering. Exercised here so a future refactor that
+	// drops one of the fields surfaces immediately.
+	tfType := registerSyntheticPolicy(t, policy.Map{
+		"tags": {
+			DriftSemantic:            policy.DriftSemanticLabelFilter,
+			LabelDriftIgnorePrefixes: []string{"goog-"},
+			TagDriftIgnorePrefixes:   []string{"aws:"},
+		},
+	})
+	snap := json.RawMessage(`{"tags":{"Project":"p","goog-x":"a","aws:y":"b"}}`)
+	live := json.RawMessage(`{"tags":{"Project":"p","goog-x":"different","aws:y":"different"}}`)
+	got := Compare(tfType, snap, live)
+	assert.Empty(t, got, "both goog-* and aws:* keys must be filtered when both prefix fields are set")
+}
+
 func TestCompare_DriftSemanticLabelFilter_NestedPath(t *testing.T) {
 	// A label-shaped attribute nested inside a singleton block — the
 	// per-key Field must use the policy path as its parent so the

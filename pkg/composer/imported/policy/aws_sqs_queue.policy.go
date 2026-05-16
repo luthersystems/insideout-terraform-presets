@@ -138,8 +138,13 @@ var awsSQSQueuePolicy = Map{
 		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},
-	"tags":     tagPolicy(),
-	"tags_all": tagPolicy(),
+	// Tags — adopt awsTagDriftPolicy() (#568): user-set tag drift
+	// surfaces as per-key `tags.<key>` mismatches; AWS-managed
+	// prefixes are filtered. SQS queues are low-churn messaging
+	// infra where the canonical `Project` tag drives InsideOut
+	// inspector attribution — stripping it must surface as drift.
+	"tags":     awsTagDriftPolicy(),
+	"tags_all": awsTagDriftPolicy(),
 }
 
 func init() {

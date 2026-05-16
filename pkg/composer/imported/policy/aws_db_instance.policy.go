@@ -424,9 +424,14 @@ var awsDbInstancePolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 
-	// Tags --------------------------------------------------------------
-	"tags":     tagPolicy(),
-	"tags_all": tagPolicy(),
+	// Tags — adopt awsTagDriftPolicy() (#568): user-set tag drift
+	// surfaces as per-key `tags.<key>` mismatches; AWS-managed
+	// prefixes are filtered. RDS instances are long-lived
+	// customer-owned infra where the canonical `Project` /
+	// `Environment` tags drive cost attribution and InsideOut
+	// inspector grouping — stripping them must surface as drift.
+	"tags":     awsTagDriftPolicy(),
+	"tags_all": awsTagDriftPolicy(),
 
 	// timeouts singleton ------------------------------------------------
 	"timeouts": timeoutsPolicy(),
