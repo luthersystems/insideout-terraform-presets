@@ -155,6 +155,26 @@ func runGen(args []string) int {
 		return 1
 	}
 
+	// Seed nested-type collision detection with every wanted top-level
+	// Go name. A nested block whose default name (parent + child) would
+	// collide with one of these gets a `Nested` suffix. Two known
+	// collisions today (#482): `aws_s3_bucket_versioning` and
+	// `aws_s3_bucket_server_side_encryption_configuration` collide with
+	// the nested types of `aws_s3_bucket`.
+	{
+		reserved := make([]string, 0, len(WantedAWS)+len(WantedGoogle)+len(WantedGoogleBeta))
+		for _, t := range WantedAWS {
+			reserved = append(reserved, GoName(t))
+		}
+		for _, t := range WantedGoogle {
+			reserved = append(reserved, GoName(t))
+		}
+		for _, t := range WantedGoogleBeta {
+			reserved = append(reserved, GoName(t))
+		}
+		SetReservedTopLevelGoNames(reserved)
+	}
+
 	for _, tfType := range WantedAWS {
 		res, _, err := FindResource(awsPS, AWSProviderSource, tfType)
 		if err != nil {

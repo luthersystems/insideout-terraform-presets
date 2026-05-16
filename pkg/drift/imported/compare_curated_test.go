@@ -8,10 +8,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Bundle D1 + D2 (#491) curated-policy fixture tests.
+// Bundle D1 + D2 + D3 (#491) curated-policy fixture tests.
 //
 // These tests exercise the production policy.Map entries registered for
-// the five tfTypes in the bundle, end-to-end through Compare(). Each
+// the tfTypes in each bundle, end-to-end through Compare(). Each
 // test asserts a *useful* drift signal: a single fixture-driven scalar
 // diff under a curated path, plus the absence of a signal for
 // uncurated or DriftSemanticNone fields.
@@ -475,6 +475,262 @@ func TestCompare_Curated_GoogleComputeNetwork_Exact(t *testing.T) {
 	assert.NotContains(t, idx, "project")
 	assert.NotContains(t, idx, "mtu")
 	assert.NotContains(t, idx, "description")
+}
+
+// --- Bundle D3 (#491) ------------------------------------------------
+
+// TestCompare_Curated_GoogleComputeAddress_Exact exercises an Exact
+// drift on the network_tier knob and confirms identical identity /
+// wiring fields don't surface. google_compute_address has no
+// list-valued curated fields, so WholeList does not come into play;
+// labels stay at tagPolicy() (DriftSemantic=None).
+func TestCompare_Curated_GoogleComputeAddress_Exact(t *testing.T) {
+	t.Parallel()
+	snap := json.RawMessage(`{
+		"name": "ingress-ip",
+		"self_link": "https://www.googleapis.com/compute/v1/projects/p/regions/us-east1/addresses/ingress-ip",
+		"project": "p",
+		"region": "us-east1",
+		"address": "10.0.0.5",
+		"address_type": "INTERNAL",
+		"network_tier": "PREMIUM",
+		"subnetwork": "projects/p/regions/us-east1/subnetworks/private",
+		"labels": {"env": "prod"}
+	}`)
+	live := json.RawMessage(`{
+		"name": "ingress-ip",
+		"self_link": "https://www.googleapis.com/compute/v1/projects/p/regions/us-east1/addresses/ingress-ip",
+		"project": "p",
+		"region": "us-east1",
+		"address": "10.0.0.5",
+		"address_type": "INTERNAL",
+		"network_tier": "STANDARD",
+		"subnetwork": "projects/p/regions/us-east1/subnetworks/private",
+		"labels": {"env": "staging"}
+	}`)
+	got := Compare("google_compute_address", snap, live)
+	idx := fieldsByPath(t, got)
+
+	require.Contains(t, idx, "network_tier")
+	assert.Equal(t, "PREMIUM", idx["network_tier"].Snapshot)
+	assert.Equal(t, "STANDARD", idx["network_tier"].Cloud)
+
+	// Identity / wiring / address knobs are identical → no mismatch.
+	assert.NotContains(t, idx, "project")
+	assert.NotContains(t, idx, "region")
+	assert.NotContains(t, idx, "address")
+	assert.NotContains(t, idx, "subnetwork")
+	// Labels use tagPolicy() → DriftSemantic=None → never emitted.
+	assert.NotContains(t, idx, "labels")
+}
+
+// TestCompare_Curated_GooglePubsubSubscription_Exact exercises an
+// Exact drift on ack_deadline_seconds and confirms that push_config
+// Sensitive fields (push_endpoint, attributes, oidc_token.audience)
+// do not surface — they stay DriftSemantic=None to avoid echoing
+// bearer tokens through drift output. Mirrors the
+// aws_lambda_function.environment.variables guarantee from D1.
+func TestCompare_Curated_GooglePubsubSubscription_Exact(t *testing.T) {
+	t.Parallel()
+	snap := json.RawMessage(`{
+		"name": "projects/p/subscriptions/orders-sub",
+		"project": "p",
+		"topic": "projects/p/topics/orders",
+		"ack_deadline_seconds": 10,
+		"message_retention_duration": "604800s",
+		"enable_exactly_once_delivery": false,
+		"push_config": {
+			"push_endpoint": "https://app.example.com/push?token=secret-A",
+			"attributes": {"x-goog-version": "v1", "x-tenant-token": "tenant-A"},
+			"oidc_token": {"audience": "tenant-A-aud", "service_account_email": "pusher@p.iam.gserviceaccount.com"}
+		},
+		"labels": {"env": "prod"}
+	}`)
+	live := json.RawMessage(`{
+		"name": "projects/p/subscriptions/orders-sub",
+		"project": "p",
+		"topic": "projects/p/topics/orders",
+		"ack_deadline_seconds": 60,
+		"message_retention_duration": "604800s",
+		"enable_exactly_once_delivery": false,
+		"push_config": {
+			"push_endpoint": "https://app.example.com/push?token=secret-B",
+			"attributes": {"x-goog-version": "v1", "x-tenant-token": "tenant-B"},
+			"oidc_token": {"audience": "tenant-B-aud", "service_account_email": "pusher@p.iam.gserviceaccount.com"}
+		},
+		"labels": {"env": "prod"}
+	}`)
+	got := Compare("google_pubsub_subscription", snap, live)
+	idx := fieldsByPath(t, got)
+
+	require.Contains(t, idx, "ack_deadline_seconds")
+	assert.Equal(t, float64(10), idx["ack_deadline_seconds"].Snapshot)
+	assert.Equal(t, float64(60), idx["ack_deadline_seconds"].Cloud)
+
+	// Identity / topic wiring / retention are identical → no mismatch.
+	assert.NotContains(t, idx, "project")
+	assert.NotContains(t, idx, "topic")
+	assert.NotContains(t, idx, "message_retention_duration")
+
+	// Sensitive push_config fields must NOT surface — bearer tokens
+	// and per-tenant identifiers must not leak through drift output.
+	assert.NotContains(t, idx, "push_config.push_endpoint",
+		"Sensitive push_endpoint must not appear in drift output")
+	assert.NotContains(t, idx, "push_config.attributes",
+		"Sensitive push_config.attributes must not appear in drift output")
+	assert.NotContains(t, idx, "push_config.oidc_token.audience",
+		"Sensitive oidc_token.audience must not appear in drift output")
+
+	// Labels use tagPolicy() → DriftSemantic=None → never emitted.
+	assert.NotContains(t, idx, "labels")
+}
+
+// TestCompare_Curated_GoogleComputeFirewall_WholeList exercises a
+// WholeList mismatch on source_ranges (CIDR set) and an Exact
+// mismatch on the disabled scalar, and confirms equal selectors don't
+// surface.
+func TestCompare_Curated_GoogleComputeFirewall_WholeList(t *testing.T) {
+	t.Parallel()
+	snap := json.RawMessage(`{
+		"name": "fw-allow-ssh",
+		"self_link": "https://www.googleapis.com/compute/v1/projects/p/global/firewalls/fw-allow-ssh",
+		"project": "p",
+		"network": "projects/p/global/networks/vpc-prod",
+		"direction": "INGRESS",
+		"priority": 1000,
+		"disabled": false,
+		"source_ranges": ["10.0.0.0/8", "172.16.0.0/12"],
+		"target_tags": ["ssh-allowed"]
+	}`)
+	live := json.RawMessage(`{
+		"name": "fw-allow-ssh",
+		"self_link": "https://www.googleapis.com/compute/v1/projects/p/global/firewalls/fw-allow-ssh",
+		"project": "p",
+		"network": "projects/p/global/networks/vpc-prod",
+		"direction": "INGRESS",
+		"priority": 1000,
+		"disabled": true,
+		"source_ranges": ["10.0.0.0/8"],
+		"target_tags": ["ssh-allowed"]
+	}`)
+	got := Compare("google_compute_firewall", snap, live)
+	idx := fieldsByPath(t, got)
+
+	require.Contains(t, idx, "disabled")
+	assert.Equal(t, false, idx["disabled"].Snapshot)
+	assert.Equal(t, true, idx["disabled"].Cloud)
+
+	require.Contains(t, idx, "source_ranges")
+	assert.IsType(t, []any{}, idx["source_ranges"].Snapshot,
+		"WholeList output must be a []any, not a raw object")
+	assert.IsType(t, []any{}, idx["source_ranges"].Cloud)
+
+	// Equal selectors → no mismatch.
+	assert.NotContains(t, idx, "target_tags")
+	// Identity / wiring identical → no mismatch.
+	assert.NotContains(t, idx, "project")
+	assert.NotContains(t, idx, "network")
+	assert.NotContains(t, idx, "direction")
+}
+
+// TestCompare_Curated_GoogleComputeForwardingRule_WholeList covers
+// a WholeList mismatch on the ports list and an Exact mismatch on
+// network_tier, and confirms identical identity / wiring don't
+// surface.
+func TestCompare_Curated_GoogleComputeForwardingRule_WholeList(t *testing.T) {
+	t.Parallel()
+	snap := json.RawMessage(`{
+		"name": "ingress-fr",
+		"self_link": "https://www.googleapis.com/compute/v1/projects/p/regions/us-east1/forwardingRules/ingress-fr",
+		"project": "p",
+		"region": "us-east1",
+		"target": "projects/p/regions/us-east1/targetPools/web",
+		"ip_address": "203.0.113.10",
+		"ip_protocol": "TCP",
+		"load_balancing_scheme": "EXTERNAL",
+		"network_tier": "PREMIUM",
+		"ports": ["80", "443"],
+		"labels": {"env": "prod"}
+	}`)
+	live := json.RawMessage(`{
+		"name": "ingress-fr",
+		"self_link": "https://www.googleapis.com/compute/v1/projects/p/regions/us-east1/forwardingRules/ingress-fr",
+		"project": "p",
+		"region": "us-east1",
+		"target": "projects/p/regions/us-east1/targetPools/web",
+		"ip_address": "203.0.113.10",
+		"ip_protocol": "TCP",
+		"load_balancing_scheme": "EXTERNAL",
+		"network_tier": "STANDARD",
+		"ports": ["80", "443", "8080"],
+		"labels": {"env": "prod"}
+	}`)
+	got := Compare("google_compute_forwarding_rule", snap, live)
+	idx := fieldsByPath(t, got)
+
+	require.Contains(t, idx, "network_tier")
+	assert.Equal(t, "PREMIUM", idx["network_tier"].Snapshot)
+	assert.Equal(t, "STANDARD", idx["network_tier"].Cloud)
+
+	require.Contains(t, idx, "ports")
+	assert.IsType(t, []any{}, idx["ports"].Snapshot)
+	assert.IsType(t, []any{}, idx["ports"].Cloud)
+
+	// Identity / IP wiring / scheme are identical → no mismatch.
+	assert.NotContains(t, idx, "project")
+	assert.NotContains(t, idx, "region")
+	assert.NotContains(t, idx, "target")
+	assert.NotContains(t, idx, "ip_address")
+	assert.NotContains(t, idx, "load_balancing_scheme")
+	// Labels use tagPolicy() → DriftSemantic=None → never emitted.
+	assert.NotContains(t, idx, "labels")
+}
+
+// TestCompare_Curated_GoogleComputeHealthCheck_Exact exercises an
+// Exact drift on healthy_threshold and a WholeList drift on
+// source_regions, and confirms identical probe-interval scalars
+// don't surface.
+func TestCompare_Curated_GoogleComputeHealthCheck_Exact(t *testing.T) {
+	t.Parallel()
+	snap := json.RawMessage(`{
+		"name": "tcp-hc",
+		"self_link": "https://www.googleapis.com/compute/v1/projects/p/global/healthChecks/tcp-hc",
+		"project": "p",
+		"type": "TCP",
+		"check_interval_sec": 10,
+		"timeout_sec": 5,
+		"healthy_threshold": 2,
+		"unhealthy_threshold": 3,
+		"source_regions": ["us-east1", "us-central1"]
+	}`)
+	live := json.RawMessage(`{
+		"name": "tcp-hc",
+		"self_link": "https://www.googleapis.com/compute/v1/projects/p/global/healthChecks/tcp-hc",
+		"project": "p",
+		"type": "TCP",
+		"check_interval_sec": 10,
+		"timeout_sec": 5,
+		"healthy_threshold": 5,
+		"unhealthy_threshold": 3,
+		"source_regions": ["us-east1"]
+	}`)
+	got := Compare("google_compute_health_check", snap, live)
+	idx := fieldsByPath(t, got)
+
+	require.Contains(t, idx, "healthy_threshold")
+	assert.Equal(t, float64(2), idx["healthy_threshold"].Snapshot)
+	assert.Equal(t, float64(5), idx["healthy_threshold"].Cloud)
+
+	require.Contains(t, idx, "source_regions")
+	assert.IsType(t, []any{}, idx["source_regions"].Snapshot)
+	assert.IsType(t, []any{}, idx["source_regions"].Cloud)
+
+	// Identity / unchanged probe-interval scalars → no mismatch.
+	assert.NotContains(t, idx, "project")
+	assert.NotContains(t, idx, "type")
+	assert.NotContains(t, idx, "check_interval_sec")
+	assert.NotContains(t, idx, "timeout_sec")
+	assert.NotContains(t, idx, "unhealthy_threshold")
 }
 
 // keysOf returns the sorted key set of m for diagnostic logging.

@@ -214,7 +214,7 @@ func (e s3BucketEnricher) fetchAndMap(ctx context.Context, c *s3.Client, bucket 
 	// Encryption — GetBucketEncryption. Soft-fail.
 	if sse, ferr := e.fetchEncryption(ctx, c, bucket); ferr == nil && sse != nil {
 		if block := mapS3SSE(sse); block != nil {
-			typed.ServerSideEncryptionConfiguration = []generated.AWSS3BucketServerSideEncryptionConfiguration{*block}
+			typed.ServerSideEncryptionConfiguration = []generated.AWSS3BucketServerSideEncryptionConfigurationNested{*block}
 		}
 	}
 
@@ -223,7 +223,7 @@ func (e s3BucketEnricher) fetchAndMap(ctx context.Context, c *s3.Client, bucket 
 	// sub-resource "never configured" semantic from sdkonly_s3.go).
 	if v, ferr := e.fetchVersioning(ctx, c, bucket); ferr == nil && v != nil {
 		if block := mapS3Versioning(v); block != nil {
-			typed.Versioning = []generated.AWSS3BucketVersioning{*block}
+			typed.Versioning = []generated.AWSS3BucketVersioningNested{*block}
 		}
 	}
 
@@ -342,41 +342,41 @@ func mapS3Bucket(bucket string, head *s3.HeadBucketOutput) *generated.AWSS3Bucke
 // mapS3SSE projects a ServerSideEncryptionConfiguration into the
 // typed block. Returns nil when the configuration has no usable
 // rules.
-func mapS3SSE(sse *s3types.ServerSideEncryptionConfiguration) *generated.AWSS3BucketServerSideEncryptionConfiguration {
+func mapS3SSE(sse *s3types.ServerSideEncryptionConfiguration) *generated.AWSS3BucketServerSideEncryptionConfigurationNested {
 	if sse == nil || len(sse.Rules) == 0 {
 		return nil
 	}
-	rules := make([]generated.AWSS3BucketServerSideEncryptionConfigurationRule, 0, len(sse.Rules))
+	rules := make([]generated.AWSS3BucketServerSideEncryptionConfigurationNestedRule, 0, len(sse.Rules))
 	for i := range sse.Rules {
 		r := sse.Rules[i]
-		rule := generated.AWSS3BucketServerSideEncryptionConfigurationRule{}
+		rule := generated.AWSS3BucketServerSideEncryptionConfigurationNestedRule{}
 		if r.BucketKeyEnabled != nil {
 			rule.BucketKeyEnabled = generated.LiteralOf(*r.BucketKeyEnabled)
 		}
 		if r.ApplyServerSideEncryptionByDefault != nil {
-			apply := generated.AWSS3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault{}
+			apply := generated.AWSS3BucketServerSideEncryptionConfigurationNestedRuleApplyServerSideEncryptionByDefault{}
 			if alg := string(r.ApplyServerSideEncryptionByDefault.SSEAlgorithm); alg != "" {
 				apply.SSEAlgorithm = generated.LiteralOf(alg)
 			}
 			if k := aws.ToString(r.ApplyServerSideEncryptionByDefault.KMSMasterKeyID); k != "" {
 				apply.KMSMasterKeyID = generated.LiteralOf(k)
 			}
-			rule.ApplyServerSideEncryptionByDefault = []generated.AWSS3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault{apply}
+			rule.ApplyServerSideEncryptionByDefault = []generated.AWSS3BucketServerSideEncryptionConfigurationNestedRuleApplyServerSideEncryptionByDefault{apply}
 		}
 		rules = append(rules, rule)
 	}
-	return &generated.AWSS3BucketServerSideEncryptionConfiguration{Rule: rules}
+	return &generated.AWSS3BucketServerSideEncryptionConfigurationNested{Rule: rules}
 }
 
 // mapS3Versioning projects GetBucketVersioning output into the typed
 // block. Returns nil when neither Status nor MFADelete is set —
 // matching the "never configured" semantic from sdkonly_s3.go's
 // fetchS3BucketVersioning.
-func mapS3Versioning(v *s3.GetBucketVersioningOutput) *generated.AWSS3BucketVersioning {
+func mapS3Versioning(v *s3.GetBucketVersioningOutput) *generated.AWSS3BucketVersioningNested {
 	if v == nil || (v.Status == "" && v.MFADelete == "") {
 		return nil
 	}
-	block := generated.AWSS3BucketVersioning{}
+	block := generated.AWSS3BucketVersioningNested{}
 	// TF's `enabled` bool maps from Status == "Enabled".
 	block.Enabled = generated.LiteralOf(v.Status == s3types.BucketVersioningStatusEnabled)
 	// TF's `mfa_delete` bool maps from MFADelete == "Enabled".

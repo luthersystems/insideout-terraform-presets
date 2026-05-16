@@ -354,7 +354,8 @@ func NewGCPDiscoverer(searcher gcpAssetSearcher, projectID string, opts GCPDisco
 			"google_compute_network":       newComputeNetworkEnricher(),
 			"google_pubsub_subscription":   newPubsubSubscriptionEnricher(),
 			"google_pubsub_topic":          newPubsubTopicEnricher(),
-			"google_secret_manager_secret": newSecretManagerSecretEnricher(),
+			"google_secret_manager_secret":         newSecretManagerSecretEnricher(),
+			"google_secret_manager_secret_version": newSecretManagerSecretVersionEnricher(),
 			"google_storage_bucket":        newStorageBucketEnricher(),
 			// Bundle G5 (#482) — five new GCP enrichers, all
 			// implementing ByIDEnricher in addition to AttributeEnricher.
@@ -370,6 +371,30 @@ func NewGCPDiscoverer(searcher gcpAssetSearcher, projectID string, opts GCPDisco
 			"google_monitoring_alert_policy":         newMonitoringAlertPolicyEnricher(),
 			"google_monitoring_dashboard":            newMonitoringDashboardEnricher(),
 			"google_monitoring_notification_channel": newMonitoringNotificationChannelEnricher(),
+			// IAM-binding enrichers. Generic single-impl
+			// dispatching on the TF type to the appropriate parent service's
+			// GetIamPolicy SDK call. See iam_binding_enricher.go for the
+			// dispatch table; each entry here MUST also have a row in
+			// iamBindingDispatchTable.
+			"google_cloud_run_v2_service_iam_member":     newIAMBindingEnricher("google_cloud_run_v2_service_iam_member"),
+			"google_cloudfunctions2_function_iam_member": newIAMBindingEnricher("google_cloudfunctions2_function_iam_member"),
+			"google_kms_crypto_key_iam_binding":          newIAMBindingEnricher("google_kms_crypto_key_iam_binding"),
+			"google_project_iam_member":                  newIAMBindingEnricher("google_project_iam_member"),
+			"google_secret_manager_secret_iam_binding":   newIAMBindingEnricher("google_secret_manager_secret_iam_binding"),
+			"google_secret_manager_secret_iam_member":    newIAMBindingEnricher("google_secret_manager_secret_iam_member"),
+			"google_storage_bucket_iam_member":           newIAMBindingEnricher("google_storage_bucket_iam_member"),
+			// Per-type non-CAI enrichers each backed by a single
+			// SDK Get/List call. See per-type *_enrich.go files for
+			// the dispatch shape.
+			"google_project_service":               newProjectServiceEnricher(),
+			"google_service_networking_connection": newServiceNetworkingConnectionEnricher(),
+			"google_vpc_access_connector":          newVPCAccessConnectorEnricher(),
+			// Fan-out enrichers (#482) — closing the remaining GCP
+			// gap. Both pair with hand-rolled non-CAI fan-out
+			// discoverers (one IR per (parent, child) tuple) and
+			// implement ByIDEnricher in addition to AttributeEnricher.
+			"google_identity_platform_default_supported_idp_config": newIdentityPlatformDefaultSupportedIdpConfigEnricher(),
+			"google_storage_bucket_object":                          newStorageBucketObjectEnricher(),
 		},
 	}
 	// HYBRID Cloud Asset Inventory fallback (mirrors AWS #490 steps 1+2):
