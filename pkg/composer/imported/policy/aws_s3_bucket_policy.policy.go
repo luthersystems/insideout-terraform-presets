@@ -36,7 +36,7 @@ var awsS3BucketPolicyPolicy = Map{
 		// IAM policy JSON. Security boundary — drift means out-of-band
 		// access-grant changes (cross-account, public access, principal
 		// rewrites).
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},

@@ -50,12 +50,12 @@ func TestVisibilityPolicy_Valid(t *testing.T) {
 		want bool
 	}{
 		{VisibilityHidden, true},
-		{VisibilityRileyVisible, true},
+		{VisibilitySummaryVisible, true},
 		{VisibilityUIVisible, true},
 		{"", false},
 		{"hidden", false},       // case-sensitive
 		{"Hidden ", false},      // trailing space
-		{"RileyVisable", false}, // typo close to a real const
+		{"SummaryVisable", false}, // typo close to a real const
 	}
 	for _, tc := range cases {
 		assert.Equal(t, tc.want, tc.in.Valid(), "VisibilityPolicy(%q).Valid()", string(tc.in))

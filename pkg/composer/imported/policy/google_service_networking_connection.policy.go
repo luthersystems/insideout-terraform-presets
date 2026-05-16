@@ -11,7 +11,7 @@ package policy
 // the cross-VPC peering.
 var googleServiceNetworkingConnectionPolicy = Map{
 	// Identity
-	"id": {Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever},
+	"id": {Role: RoleIdentity, Visibility: VisibilitySummaryVisible, Edit: EditNever},
 	"network": {
 		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
 		ChangeRisk:    ChangeAlwaysReplace,
@@ -23,7 +23,7 @@ var googleServiceNetworkingConnectionPolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 	"peering": {
-		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		Role: RoleIdentity, Visibility: VisibilitySummaryVisible, Edit: EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},
 
@@ -37,11 +37,11 @@ var googleServiceNetworkingConnectionPolicy = Map{
 
 	// Tuning — destroy-time policy + create-fail recovery flag.
 	"deletion_policy": {
-		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		Role: RoleTuning, Visibility: VisibilitySummaryVisible, Edit: EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"update_on_creation_fail": {
-		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		Role: RoleTuning, Visibility: VisibilitySummaryVisible, Edit: EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},
 

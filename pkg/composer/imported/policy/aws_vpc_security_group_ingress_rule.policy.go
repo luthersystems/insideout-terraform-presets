@@ -67,7 +67,7 @@ var awsVPCSecurityGroupIngressRulePolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 	"prefix_list_id": {
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},
@@ -80,7 +80,7 @@ var awsVPCSecurityGroupIngressRulePolicy = Map{
 
 	// Description — operator annotation -------------------------------
 	"description": {
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},

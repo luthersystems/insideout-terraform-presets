@@ -60,7 +60,7 @@ manageable through the preset's surface.
 ### ImportedManaged
 Resources that exist in the account before InsideOut sees them. The reverse-
 Terraform tool (`insideout-import`) discovers them and emits flat HCL so
-Riley/the InsideOut backend can diff and change them. **No attempt** to fit them inside
+the interactive agent and the InsideOut backend can diff and change them. **No attempt** to fit them inside
 preset module calls by default.
 
 - **`ImportedFlat`** — `aws_sqs_queue.dlq { ... }`, with all attributes
@@ -172,7 +172,7 @@ resolution.
 
 Sensitivity rule: generated `Sensitive=true` fields default to
 `Visibility=Hidden`, `Edit=SystemOnly`, and redacted diffs unless a hand-
-curated field policy explicitly chooses a narrower safe display. Riley never
+curated field policy explicitly chooses a narrower safe display. The interactive agent never
 sees raw sensitive values.
 
 Code-gen is its own workstream (~1–2k LOC of generator → ~10–15k LOC
@@ -188,23 +188,23 @@ The field policy layer has **three jobs**:
 
 1. **Metadata** — annotate each field with its `Role` (Identity / Wiring /
    Tuning) and optionally a `Pillar` (Security / Performance / Reliability).
-   Drives diff grouping, badging, and Riley's prompt context.
-2. **Presentation boundary** — define which fields Riley and the InsideOut backend surface
+   Drives diff grouping, badging, and the interactive agent's prompt context.
+2. **Presentation boundary** — define which fields the interactive agent and the InsideOut backend surface
    to users. Salience means "this field is worth showing / reasoning about";
    it does **not** automatically mean "editable".
-3. **Write-permission boundary** — define which visible fields Riley can
+3. **Write-permission boundary** — define which visible fields the interactive agent can
    modify via the chat-authoring path. Editable fields are a strict subset of
    the field policy map. Fields outside Layer 2 still round-trip through the
-   model (Layer 1 preserves them) but are hidden from Riley and
+   model (Layer 1 preserves them) but are hidden from the interactive agent and
    write-protected against the chat flow.
 
 This separates **"every field on a resource"** (Layer 1, complete and
-generated) from **"what each field *means*, whether Riley sees it, and who
+generated) from **"what each field *means*, whether it is visible to the interactive agent, and who
 can write it"** (Layer 2, curated).
 
 #### Editor authority
 
-| Population | Riley (chat) | Importer / system | Product HCL path |
+| Population | Interactive agent (chat) | Importer / system | Product HCL path |
 |------------|:---:|:---:|:---:|
 | In Layer 1, NOT in Layer 2 | Hidden / no write | Read + write | Generated only |
 | In Layer 2, `Edit=Never` | Read only | Read + write | Generated only |
@@ -214,12 +214,12 @@ can write it"** (Layer 2, curated).
 | In Layer 2, `Edit=SystemOnly` | No write | System write only | Generated only |
 
 The importer is the only path that can author *new* `ImportedManaged`
-resources. Riley can modify existing ones but only when the field policy says
+resources. The interactive agent can modify existing ones but only when the field policy says
 the field is editable. `Identity` fields are generally `Edit=Never`; tag /
-label fields are `Edit=SystemOnly` and are never managed by Riley. Fields
+label fields are `Edit=SystemOnly` and are never managed by the interactive agent. Fields
 that hold references to other managed resources or modules are
-`Edit=RelationshipOnly`: Riley may explain the relationship and, in a future
-graph-editing flow, propose changing the relationship, but Riley may not
+`Edit=RelationshipOnly`: the interactive agent may explain the relationship and, in a future
+graph-editing flow, propose changing the relationship, but the interactive agent may not
 directly write the raw ARN / ID / Terraform expression field. To change an
 unexposed field, a user must re-run the importer or graduate to
 `ComposerManaged`.
@@ -229,7 +229,7 @@ flat HCL once during adoption; after that, the model is the source of truth
 and the composer re-emits HCL from the model on every apply.
 
 The InsideOut backend's UI today is **chat-driven**, not form-driven: users edit via
-conversation with Riley, who emits a full `[Core.*]` state block; the server
+conversation with the interactive agent, which emits a full `[Core.*]` state block; the server
 re-extracts `(Components, Config)` from the stream, writes a `draft` row in
 `stack_versions`, and renders the snapshot-vs-snapshot diff
 (`composer.DiffComponents` / `DiffConfigs`) as highlights. There is no
@@ -240,11 +240,11 @@ Given that architecture, the field policy layer's **actual** consumers are:
 
 | Consumer | What field policy drives |
 |----------|----------------------|
-| **Riley** (system prompt + correction loop) | Defines the visible and editable surfaces. Riley sees the visible subset (~5–15 fields per type) in his prompt; an `INTERNAL CORRECTION:` turn fires if he emits a write to a hidden field or a field whose `EditPolicy` forbids chat writes. Pillar tags drive in-chat confirmation prompts for security-relevant edits. |
+| **The interactive agent** (system prompt + correction loop) | Defines the visible and editable surfaces. The interactive agent sees the visible subset (~5–15 fields per type) in its prompt; an `INTERNAL CORRECTION:` turn fires if it emits a write to a hidden field or a field whose `EditPolicy` forbids chat writes. Pillar tags drive in-chat confirmation prompts for security-relevant edits. |
 | **Diff renderer** (`lib/stack/types.ts::ResourceDiff`) | Groups, summarizes, and badges field-level diffs by Pillar (e.g. "3 security changes, 1 reliability change"). Replaces today's per-component `category` string with per-field richness. |
 | **Composer's cross-ref resolver** | `Role=Wiring` is the marker the resolver uses to rewrite hardcoded ARNs/IDs into `aws_*.x.attr` references during stack emission. This is the only consumer of `Role`. |
 | **Pre-deploy validators** | `Role=Identity`, `Edit=Never`, and certain `Pillar=Security` fields flagged as immutable post-apply (changing them = destroy/recreate) feed into `composer.ValidateDeployConstraints`. |
-| **Server-side write authorization** | A new `validateImportedResources` (sibling to `validateConfigValues`) rejects any Riley-emitted change that violates `EditPolicy`. |
+| **Server-side write authorization** | A new `validateImportedResources` (sibling to `validateConfigValues`) rejects any agent-emitted change that violates `EditPolicy`. |
 
 It is **not**:
 - A schema (Layer 1 is the schema)
@@ -252,7 +252,7 @@ It is **not**:
 - A drift detector (the InsideOut backend does that on tfstate, post-apply)
 - A cost/pricing calculator (separate concern in `pricing_deps.go`)
 - A driver of form widgets or confirmation modals — there are none today
-- A license for Riley to mutate tags / labels — those are system-owned
+- A license for the interactive agent to mutate tags / labels — those are system-owned
 
 #### Shape
 
@@ -260,7 +260,7 @@ It is **not**:
 type FieldPolicy struct {
     Role        FieldRole           // Identity | Wiring | Tuning  (required)
     Pillar      FieldPillar         // Security | Performance | Reliability | None
-    Visibility  VisibilityPolicy    // Hidden | RileyVisible | UIVisible
+    Visibility  VisibilityPolicy    // Hidden | SummaryVisible | UIVisible
     Edit        EditPolicy          // Never | ChatSafe | RequiresApproval | RelationshipOnly | SystemOnly
     Sensitivity SensitivityPolicy   // Public | Redacted | Sensitive
     ChangeRisk  ChangeRiskPolicy    // InPlace | MayReplace | AlwaysReplace | Unknown
@@ -272,26 +272,26 @@ var awsSQSQueuePolicy = map[string]FieldPolicy{
         Role: Identity, Visibility: UIVisible, Edit: Never,
     },
     "kms_master_key_id": {
-        Role: Wiring, Pillar: Security, Visibility: RileyVisible,
+        Role: Wiring, Pillar: Security, Visibility: SummaryVisible,
         Edit: RelationshipOnly, ChangeRisk: MayReplace,
     },
     "redrive_policy.deadLetterTargetArn": {
-        Role: Wiring, Pillar: Reliability, Visibility: RileyVisible, Edit: RelationshipOnly,
+        Role: Wiring, Pillar: Reliability, Visibility: SummaryVisible, Edit: RelationshipOnly,
     },
     "redrive_policy.maxReceiveCount": {
-        Role: Tuning, Pillar: Reliability, Visibility: RileyVisible, Edit: ChatSafe,
+        Role: Tuning, Pillar: Reliability, Visibility: SummaryVisible, Edit: ChatSafe,
     },
     "sqs_managed_sse_enabled": {
-        Role: Tuning, Pillar: Security, Visibility: RileyVisible,
+        Role: Tuning, Pillar: Security, Visibility: SummaryVisible,
         Edit: RequiresApproval, ChangeRisk: MayReplace,
     },
     "visibility_timeout_seconds": {
-        Role: Tuning, Pillar: Reliability, Visibility: RileyVisible, Edit: ChatSafe,
+        Role: Tuning, Pillar: Reliability, Visibility: SummaryVisible, Edit: ChatSafe,
     },
     "tags": {
         Role: Tuning, Visibility: Hidden, Edit: SystemOnly, Sensitivity: Redacted,
     },
-    // unspecified fields → hidden, not Riley-editable
+    // unspecified fields → hidden, not agent-editable
 }
 ```
 
@@ -309,10 +309,10 @@ var awsSQSQueuePolicy = map[string]FieldPolicy{
 identifies the fields the importer's cross-ref resolver should rewrite as
 Terraform references.
 
-Wiring fields are not normal Riley-editable scalar fields. If a field points
+Wiring fields are not normal agent-editable scalar fields. If a field points
 at another managed resource (`aws_kms_key.main.arn`, `module.aws_kms.arn`,
 an imported queue ARN, etc.), the raw field value is owned by the graph /
-composer. Riley can show and reason about the relationship, but
+composer. The interactive agent can show and reason about the relationship, but
 `validateImportedResources` rejects direct `FieldEdit` writes to that path.
 Phase 2 preserves and displays relationships only. Relationship edits are out
 of scope unless a future phase defines explicit graph operations ("use this
@@ -369,19 +369,19 @@ can use either when scoping a query.
 
 | Edit policy | Meaning | Examples |
 |-------------|---------|----------|
-| `Never` | Visible for context / diff, but Riley cannot change it | `name`, `arn`, `region` |
-| `ChatSafe` | Riley can change it through normal chat flow | `visibility_timeout_seconds` |
-| `RequiresApproval` | Riley can propose it, but must get explicit user confirmation | public access toggles |
-| `RelationshipOnly` | Riley cannot edit the raw field; graph/composer owns the reference | `kms_master_key_id`, `subnet_ids`, `role_arn` |
+| `Never` | Visible for context / diff, but the interactive agent cannot change it | `name`, `arn`, `region` |
+| `ChatSafe` | The interactive agent can change it through normal chat flow | `visibility_timeout_seconds` |
+| `RequiresApproval` | The interactive agent can propose it, but must get explicit user confirmation | public access toggles |
+| `RelationshipOnly` | The interactive agent cannot edit the raw field; graph/composer owns the reference | `kms_master_key_id`, `subnet_ids`, `role_arn` |
 | `SystemOnly` | Only importer / composer system code can write it | `tags`, `labels`, provenance fields |
 
 **Axis 4 — Sensitivity (display / diff redaction):**
 
 | Sensitivity | Meaning |
 |-------------|---------|
-| `Public` | Safe to show in Riley context and diffs. |
+| `Public` | Safe to show in agent context and diffs. |
 | `Redacted` | Show existence / change metadata, but not raw values. |
-| `Sensitive` | Hidden from Riley and raw diffs; only system code can retain it. |
+| `Sensitive` | Hidden from the interactive agent and raw diffs; only system code can retain it. |
 
 **Axis 5 — Change risk (deployment impact):**
 
@@ -489,7 +489,7 @@ type ImportedResource struct {
     // write path since the last successful `terraform apply`. The edited
     // values are already reflected in Attributes; FieldEdits is not a second
     // source of truth and the composer does not emit from it directly. Used
-    // by re-import (decision #19) to detect conflicts between Riley's pending
+    // by re-import (decision #19) to detect conflicts between the agent's pending
     // edits and independent cloud changes. Cleared when an apply succeeds.
     FieldEdits map[string]FieldEdit
 
@@ -500,7 +500,7 @@ type ImportedResource struct {
 }
 
 type FieldEdit struct {
-    Source    Source    // riley | api | mcp
+    Source    Source    // agent | api | mcp
     EditedAt  time.Time
     OldValue  any       // pre-edit value, retained for the conflict UI
     NewValue  any       // post-edit value (current value in the model)
@@ -576,7 +576,7 @@ composer must:
    `google.imported` even though the current composer has no default-label
    safety net; symmetry keeps `ProviderConfig` meaningful across clouds and
    prevents future default-label changes from accidentally affecting imports.
-5. **Emit `Attributes` as current desired state.** Riley's chat edits update
+5. **Emit `Attributes` as current desired state.** agent chat edits update
    the imported resource's desired attributes through the model write path.
    `FieldEdits` records audit/conflict metadata only; it is not an overlay
    source. The composer serializes the current Layer 1 attribute state into
@@ -594,7 +594,7 @@ composer must:
 7. **Inject provenance tags on every emission, but keep tags system-owned.**
    The `InsideOutImport*` tags are emitted via `merge()` on every
    `terraform apply` — not just at first import — so a resource that loses
-   its tags out-of-band gets them back on the next apply. Riley never authors
+   its tags out-of-band gets them back on the next apply. The interactive agent never authors
    tag / label changes; tag / label fields are `Edit=SystemOnly`.
 8. **Block apply on `ImportedMissing` until operator action.**
    `ImportedMissing` is an alert state, not an automatic remediation. The
@@ -691,7 +691,7 @@ for two unrelated things:
 |---|---|---|
 | What it compares | Last applied snapshot vs new draft snapshot | tfstate vs cloud reality |
 | Purpose | Stage user changes for review | Alert on operational divergence |
-| Trigger | Riley emits a `[Core.*]` state block in chat | Periodic Oracle pull |
+| Trigger | The interactive agent emits a `[Core.*]` state block in chat | Periodic Oracle pull |
 | Output | `composer.VersionDiff` rendered as highlights | Drift banner + alert |
 | How it's stored | Immutable `stack_versions` rows (`draft → confirmed → applied`) | `StackMeta.driftReason`, `driftByComponent` |
 | Consumes this model | **Yes — directly** | No (works on tfstate / cloud APIs) |
@@ -715,7 +715,7 @@ don't exist in this architecture.
 - PR #58 lands `ImportedFlat` mechanics (flat import, zero-drift output) —
   the right shape for the default landing zone.
 - The composer IR doesn't yet model anything beyond `ComposerManaged`, so
-  Riley/the InsideOut backend can't currently diff against imported HCL through the same
+  the interactive agent and the InsideOut backend can't currently diff against imported HCL through the same
   code path it uses for composer-generated stacks. That's the next bit of
   work.
 - `ImportedConformant` (shape-matching → graduation) and the
@@ -730,22 +730,22 @@ don't exist in this architecture.
 | 1 | Cross-tier wiring | **Single IR**, `Components` and `ImportedResources` as peer collections, composer can reference both |
 | 2 | Typing strategy | **Two-layer**: code-gen full-fidelity Layer 1, hand-curated field policy Layer 2 |
 | 3 | Code-gen scope | **All fields** of every supported resource type, regenerated on provider bumps, with expression-aware value wrappers |
-| 4 | UI staging architecture | **Chat-driven** via Riley + snapshot-vs-snapshot diff (matches existing `stack_versions` flow); no client-side draft, no field-level pending changes, no form |
+| 4 | UI staging architecture | **Chat-driven** via the interactive agent + snapshot-vs-snapshot diff (matches existing `stack_versions` flow); no client-side draft, no field-level pending changes, no form |
 | 5 | Resource identity | **Composite** `ResourceIdentity`: immutable Terraform `Address` plus cloud scope (`Cloud`, account/project, region/location) and provider import identity (`ImportID` or `ProviderIdentity`) |
 | 6 | `ExternalObserved` handling | **In the model** with `ExternalByPolicy` / `ExternalUnsupported` flags; planner skips them, inspector / alert pipeline observes them |
 | 7 | Field policy taxonomy | **Multiple axes**: `Role`, `Pillar`, `Visibility`, `EditPolicy`, `SensitivityPolicy`, and `ChangeRiskPolicy` capture independent concerns without overloading one enum. |
-| 8 | Visibility vs editability | **Separated** — field policy controls what Riley / the InsideOut backend can show and reason about; `EditPolicy` controls what Riley can write |
-| 9 | Authorship model | **Hybrid** — importer is the only creator of new imported resources; Riley can modify existing ones only where `EditPolicy` permits chat writes |
+| 8 | Visibility vs editability | **Separated** — field policy controls what the interactive agent / the InsideOut backend can show and reason about; `EditPolicy` controls what the interactive agent can write |
+| 9 | Authorship model | **Hybrid** — importer is the only creator of new imported resources; the interactive agent can modify existing ones only where `EditPolicy` permits chat writes |
 | 10 | Snapshot persistence | **New top-level field** `Imported` on `StackVersion` (sibling to `Components` / `Config` / `Pricing`); separate JSON column |
 | 11 | Diff representation | **`ResourceDiff` sibling** to `ComponentDiff`, keyed by `(Type, Address)` with field-level `Changes []FieldDiff`; `VersionDiff` grows a `Resources []ResourceDiff` field |
-| 12 | Riley's prompt surface | **Field-policy visible subset only** (~5–15 fields per type); fields outside Layer 2 are invisible to chat |
-| 13 | Importer UX | **Separate UI**, outside Riley chat. Importer results are injected into Riley's session as context so he can reason about them, but Riley does not orchestrate the import. |
-| 14 | Field policy as authorization | **Universal** — every model write path (chat, API, MCP) is bounded by `EditPolicy`. Only importer / system code can write outside Riley's editable surface. |
+| 12 | Agent prompt surface | **Field-policy visible subset only** (~5–15 fields per type); fields outside Layer 2 are invisible to chat |
+| 13 | Importer UX | **Separate UI**, outside agent chat. Importer results are injected into the agent session as context so it can reason about them, but the interactive agent does not orchestrate the import. |
+| 14 | Field policy as authorization | **Universal** — every model write path (chat, API, MCP) is bounded by `EditPolicy`. Only importer / system code can write outside the agent editable surface. |
 | 15 | Field policy extensibility | **Code only** in v1 — policy maps ship as Go source; expanding them requires a release. No customer overlay. |
 | 16 | `ImportedConformant` graduation | **Deferred to Phase 3+** — Phase 2 ships `ImportedFlat` only. |
 | 17 | Provenance tags | **Distinct `InsideOutImport*` namespace** (AWS) / `insideout-import-*` (GCP) — `ImportedManaged` resources do *not* share `ComposerManaged`'s generic `Project` tag. Importer adds tags if missing, never overwrites. Tags double as a soft lock for cross-session mutual exclusion. See "Provenance tagging policy" below. |
 | 18 | Phase 1 scope | Hand-written carrier with opaque attribute bag; codegen + field policy map land in Phase 2 |
-| 19 | Re-import conflict resolution | **Surface to operator** — importer refuses to clobber a field that Riley has edited since the last apply. Conflict emitted as a `ValidationIssue`; operator resolves (accept cloud / keep edit / abort). Requires per-field edit tracking on `ImportedResource`. |
+| 19 | Re-import conflict resolution | **Surface to operator** — importer refuses to clobber a field that the interactive agent has edited since the last apply. Conflict emitted as a `ValidationIssue`; operator resolves (accept cloud / keep edit / abort). Requires per-field edit tracking on `ImportedResource`. |
 | 20 | Out-of-band deletion | **Sticky `ImportedMissing` flag + blocked apply** — when the importer discovers a previously-imported resource is gone from cloud, it does *not* auto-prune or recreate. The resource remains in the model, the InsideOut backend alerts the user, and apply is blocked until the operator chooses remove, recreate, or reclaim. |
 | 21 | Phase 2 scope | **Codegen the original 10** (5 AWS + 5 GCP from PR #58) plus the codegen pipeline itself. Each subsequent resource-type expansion ships its own codegen + policy entries as a separate increment. Avoids a single giant Phase 2 PR. |
 | 22 | Tier naming | **Stable string identifiers**, not numbered — adding/removing categories does not require renumbering. Constants live in `pkg/composer/imported.go` (or sibling). |
@@ -753,10 +753,10 @@ don't exist in this architecture.
 | 24 | Import block lifecycle | **Retain forever** — import blocks are idempotent after adoption and remain as historical record / state-recovery aid. |
 | 25 | Imported provider aliases | **Use `aws.imported` / `google.imported`** — same credentials / region as the default provider, but isolated from default tags / labels and future provider-level metadata. |
 | 26 | Terraform address mutability | **Immutable after import** — `ResourceIdentity.Address` is frozen. Future renames require an explicit migration operation with `moved {}` blocks. |
-| 27 | Tag / label authorship | **System-owned only** — Riley never manages user tags, provenance tags, or labels. Importer preserves / injects them; composer re-emits them mechanically. |
-| 28 | Direct HCL edits | **Not a product path** — HCL is generated on import and then re-emitted from the model. All supported edits go through Riley / model write paths. |
+| 27 | Tag / label authorship | **System-owned only** — The interactive agent never manages user tags, provenance tags, or labels. Importer preserves / injects them; composer re-emits them mechanically. |
+| 28 | Direct HCL edits | **Not a product path** — HCL is generated on import and then re-emitted from the model. All supported edits go through the interactive agent / model write paths. |
 | 29 | Attribute value representation | **Expression-aware** — generated fields preserve absent vs null vs literal vs raw Terraform expression; plain Go scalars are not sufficient for zero-loss HCL. |
-| 30 | Wiring field editability | **Relationship-only** — fields that reference managed resources are visible but not scalar-editable by Riley. They are owned by the graph / composer and changed only through explicit relationship operations. |
+| 30 | Wiring field editability | **Relationship-only** — fields that reference managed resources are visible but not scalar-editable by the interactive agent. They are owned by the graph / composer and changed only through explicit relationship operations. |
 | 31 | Relationship editing scope | **Out of Phase 2** — Phase 2 preserves and displays relationships, but does not support changing them. Future relationship edits require explicit graph-operation semantics. |
 | 32 | Desired attribute source of truth | **`Attributes` / typed `Attrs`** — edited values are written into current desired attributes; `FieldEdits` is audit/conflict metadata only. |
 | 33 | Logical field paths | **Stable product paths** — field policies and edits use Terraform attribute names plus dot/bracket logical subpaths; JSON-backed paths require a named projection rule. |
@@ -769,8 +769,8 @@ don't exist in this architecture.
 | 40 | Untaggable resources | **Weak lock allowed** — resources without tag/label support can be imported, but cross-session tag locks are skipped and the InsideOut backend marks them as weakly locked. |
 | 41 | Terraform address generation | **Deterministic from canonical identity** — generate once from stable name hints plus cloud/provider identity, append deterministic hash on collision, persist `NameHint`, and never recompute after import. |
 | 42 | Replacement-risk confirmation | **Plan-tied operator confirmation** — `MayReplace`, `AlwaysReplace`, and `Unknown` imported-resource changes require review of the concrete Terraform plan plus explicit confirmation before apply; `Unknown` follows the `MayReplace` workflow rather than blocking until curated. |
-| 43 | Field policy curation | **Human-reviewed code change** — new generated provider fields default hidden / system-owned / not Riley-editable. Making a field visible or editable requires a reviewed policy-map PR with role, visibility, edit, sensitivity, and change-risk metadata. |
-| 44 | Riley import-result context | **Structured import summary block** — importer results enter Riley's session as a structured context/tool-result block containing addresses, tiers, identities, visible fields, warnings, conflicts, and redacted sensitive values; do not mutate the system prompt ad hoc. |
+| 43 | Field policy curation | **Human-reviewed code change** — new generated provider fields default hidden / system-owned / not agent-editable. Making a field visible or editable requires a reviewed policy-map PR with role, visibility, edit, sensitivity, and change-risk metadata. |
+| 44 | Agent import-result context | **Structured import summary block** — importer results enter the agent session as a structured context/tool-result block containing addresses, tiers, identities, visible fields, warnings, conflicts, and redacted sensitive values; do not mutate the system prompt ad hoc. |
 | 45 | Force takeover | **Explicit audited operator action** — cross-session provenance conflicts are refused by default. Override requires a named force-takeover action with actor, reason, previous owner, and plan review; manual tag deletion is not the product path. |
 | 46 | Cross-cloud import IDs | **Same logical import project ID across clouds** — one InsideOut stack/session uses one `<import-project-id>` across AWS tags and GCP labels; cloud-specific key names plus `ResourceIdentity.Cloud` provide disambiguation. |
 | 47 | Reliability vocabulary | **Map, do not rename in Phase 2** — the InsideOut backend may keep `Ops Excellence` in existing checks while mapping imported field `Pillar=Reliability` into that vocabulary for display/scoring. |
@@ -798,7 +798,7 @@ Phase 2's initial typed surface covers the 10 Phase 1 import resource types:
 | #150 | Cross-tier graph wiring | #148, #147 | Relationship-preserving resolver and union graph validation across modules and flat imported resources |
 | #149 | Write authorization | #144, #147 | `validateImportedResources` enforcing `EditPolicy`, sensitivity, missing-resource, and replacement-risk gates |
 | #151 | Resource diffs | #144, #147 | `ResourceDiff`, redaction, field-policy grouping, tier-transition rendering, change-risk badges |
-| #152 | the InsideOut backend integration | #144, #151, #153 | Inspector filter updates, drift surfacing, structured Riley import-result context, confirmation UX |
+| #152 | the InsideOut backend integration | #144, #151, #153 | Inspector filter updates, drift surfacing, structured Agent import-result context, confirmation UX |
 
 Critical path for an end-to-end demo:
 
@@ -884,8 +884,8 @@ Before claiming a resource, the importer reads
   existing `InsideOutImport*` tag without explicit operator action. Once a
   resource is claimed, the composer re-emits the ownership tags on every
   apply so out-of-band tag deletion is repaired.
-- **Tags / labels are system-owned.** Riley never authors user tags,
-  provenance tags, or labels. They are hidden or read-only in Riley context
+- **Tags / labels are system-owned.** The interactive agent never authors user tags,
+  provenance tags, or labels. They are hidden or read-only in agent context
   and `Edit=SystemOnly` in the field policy map.
 - **Preserve existing tags.** All tags present on the cloud resource at import
   time become part of the desired imported model and round-trip through Layer 1

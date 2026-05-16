@@ -36,7 +36,7 @@ var awsECSClusterCapacityProvidersPolicy = Map{
 	"capacity_providers": {
 		// FARGATE / FARGATE_SPOT / an EC2 ASG provider name. Adding /
 		// removing changes the eligible scheduling targets.
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticWholeList,
 	},

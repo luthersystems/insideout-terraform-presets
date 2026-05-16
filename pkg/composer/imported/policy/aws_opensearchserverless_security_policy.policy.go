@@ -52,7 +52,7 @@ var awsOpensearchserverlessSecurityPolicyPolicy = Map{
 		// network reachability (VPC endpoint vs. public) or at-rest
 		// encryption key choice. Security boundary — drift silently
 		// re-scopes the collection's network or KMS posture.
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},

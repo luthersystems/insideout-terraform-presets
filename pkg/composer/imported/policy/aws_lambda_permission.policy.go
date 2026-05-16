@@ -68,7 +68,7 @@ var awsLambdaPermissionPolicy = Map{
 	},
 	"principal_org_id": {
 		// AWS Organizations scoping condition.
-		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},
@@ -86,7 +86,7 @@ var awsLambdaPermissionPolicy = Map{
 	},
 	"event_source_token": {
 		// Alexa-skill bearer token. Security-relevant.
-		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},

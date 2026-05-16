@@ -44,7 +44,7 @@ var awsCognitoResourceServerPolicy = Map{
 	"scope.scope_name": {
 		// Per-scope name (e.g. "read", "write"). Drift = silent
 		// expansion or removal of permissible JWT scopes.
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},

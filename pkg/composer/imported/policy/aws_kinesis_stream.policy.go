@@ -58,7 +58,7 @@ var awsKinesisStreamPolicy = Map{
 	},
 	"enforce_consumer_deletion": {
 		// Destructive flag — system-owned.
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditSystemOnly,
 		DriftSemantic: DriftSemanticExact,
 	},
@@ -72,7 +72,7 @@ var awsKinesisStreamPolicy = Map{
 
 	// Enhanced-monitoring metric set (list-shaped) --------------------
 	"shard_level_metrics": {
-		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilitySummaryVisible,
 		Edit:          EditChatSafe,
 		DriftSemantic: DriftSemanticWholeList,
 	},

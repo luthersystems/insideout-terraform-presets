@@ -35,7 +35,7 @@ var awsAPIGatewayDeploymentPolicy = Map{
 	// Tuning — description + invalidation triggers --------------------
 	"description": {
 		// Human-readable deployment description; safe to update.
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},

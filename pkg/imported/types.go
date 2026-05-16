@@ -53,10 +53,10 @@ type Attrs = json.RawMessage
 //     values an agent can author through normal chat / proposal
 //     flows). Agent-name-agnostic: the field reflects the policy
 //     surface, not which agent product is wired up downstream.
-//     The long-standing per-product naming on policy.VisibilityPolicy /
-//     EditPolicy constants (e.g. VisibilityRileyVisible = "RileyVisible")
-//     is wire-format-pinned and rotates via a coordinated cross-repo
-//     rename, tracked separately (see #489).
+//     The historical agent-product naming on policy.VisibilityPolicy
+//     (VisibilityRileyVisible = "RileyVisible") was rotated to
+//     VisibilitySummaryVisible = "SummaryVisible" in #489 so the wire
+//     surface is agent-name-agnostic too.
 type Capabilities struct {
 	Discoverable     bool
 	Enrichable       bool

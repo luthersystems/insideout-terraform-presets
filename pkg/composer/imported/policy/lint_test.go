@@ -52,7 +52,7 @@ func TestLint_SensitiveVisibleRequiresRationale(t *testing.T) {
 	t.Parallel()
 	bad := LintMap("aws_sqs_queue", Map{
 		"policy": {
-			Role: RoleTuning, Visibility: VisibilityRileyVisible,
+			Role: RoleTuning, Visibility: VisibilitySummaryVisible,
 			Edit: EditNever, Sensitivity: SensitivitySensitive,
 		},
 	})
@@ -60,7 +60,7 @@ func TestLint_SensitiveVisibleRequiresRationale(t *testing.T) {
 
 	withRationale := LintMap("aws_sqs_queue", Map{
 		"policy": {
-			Role: RoleTuning, Visibility: VisibilityRileyVisible,
+			Role: RoleTuning, Visibility: VisibilitySummaryVisible,
 			Edit: EditNever, Sensitivity: SensitivitySensitive,
 			Rationale: "IAM JSON document, no secrets in scope",
 		},
@@ -80,14 +80,14 @@ func TestLint_WiringChatEditable(t *testing.T) {
 	t.Parallel()
 	bad := LintMap("aws_sqs_queue", Map{
 		"kms_master_key_id": {
-			Role: RoleWiring, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+			Role: RoleWiring, Visibility: VisibilitySummaryVisible, Edit: EditChatSafe,
 		},
 	})
 	assert.Contains(t, codes(bad), CodeWiringChatEditable)
 
 	good := LintMap("aws_sqs_queue", Map{
 		"kms_master_key_id": {
-			Role: RoleWiring, Visibility: VisibilityRileyVisible, Edit: EditRelationshipOnly,
+			Role: RoleWiring, Visibility: VisibilitySummaryVisible, Edit: EditRelationshipOnly,
 		},
 	})
 	assert.NotContains(t, codes(good), CodeWiringChatEditable)
@@ -97,7 +97,7 @@ func TestLint_TagFieldNotSystemOnly(t *testing.T) {
 	t.Parallel()
 	bad := LintMap("aws_sqs_queue", Map{
 		"tags": {
-			Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+			Role: RoleTuning, Visibility: VisibilitySummaryVisible, Edit: EditChatSafe,
 		},
 	})
 	assert.Contains(t, codes(bad), CodeTagFieldNotSystemOnly)
@@ -132,7 +132,7 @@ func TestLint_IdentityCarveOut_NestedPath(t *testing.T) {
 	t.Parallel()
 	got := LintMap("aws_lambda_function", Map{
 		"file_system_config.arn": {
-			Role: RoleWiring, Visibility: VisibilityRileyVisible,
+			Role: RoleWiring, Visibility: VisibilitySummaryVisible,
 			Edit: EditRelationshipOnly,
 		},
 	})
@@ -178,7 +178,7 @@ func TestLint_UnknownPath(t *testing.T) {
 	t.Parallel()
 	got := LintMap("aws_sqs_queue", Map{
 		"definitely_not_a_real_attr": {
-			Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+			Role: RoleTuning, Visibility: VisibilitySummaryVisible, Edit: EditChatSafe,
 		},
 	})
 	issue := findIssue(got, CodeUnknownPath)
@@ -219,7 +219,7 @@ func TestLint_HiddenChatEditable(t *testing.T) {
 
 	good := LintMap("aws_sqs_queue", Map{
 		"visibility_timeout_seconds": {
-			Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+			Role: RoleTuning, Visibility: VisibilitySummaryVisible, Edit: EditChatSafe,
 		},
 	})
 	assert.NotContains(t, codes(good), CodeHiddenChatEditable)
@@ -229,7 +229,7 @@ func TestLint_SensitiveChatEditable(t *testing.T) {
 	t.Parallel()
 	bad := LintMap("aws_sqs_queue", Map{
 		"policy": {
-			Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+			Role: RoleTuning, Visibility: VisibilitySummaryVisible, Edit: EditChatSafe,
 			Sensitivity: SensitivitySensitive, Rationale: "test",
 		},
 	})
@@ -239,7 +239,7 @@ func TestLint_SensitiveChatEditable(t *testing.T) {
 	// plan and never has to read the raw value.
 	good := LintMap("aws_sqs_queue", Map{
 		"policy": {
-			Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditRequiresApproval,
+			Role: RoleTuning, Visibility: VisibilitySummaryVisible, Edit: EditRequiresApproval,
 			Sensitivity: SensitivitySensitive, Rationale: "test",
 		},
 	})

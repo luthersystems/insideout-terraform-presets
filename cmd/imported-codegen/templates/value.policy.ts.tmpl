@@ -17,7 +17,7 @@ export type FieldRole = "Identity" | "Wiring" | "Tuning";
 export type FieldPillar = "None" | "Security" | "Performance" | "Reliability";
 
 /** Visibility. Mirrors `policy.VisibilityPolicy`. */
-export type VisibilityPolicy = "Hidden" | "UIVisible" | "RileyVisible";
+export type VisibilityPolicy = "Hidden" | "UIVisible" | "SummaryVisible";
 
 /** Edit policy. Mirrors `policy.EditPolicy`. */
 export type EditPolicy =
@@ -109,7 +109,7 @@ function resolveAttrPath(
 
 function passesVisible(r: FieldRow): boolean {
   if (r.sensitivity === "Sensitive") return false;
-  return r.visibility === "UIVisible" || r.visibility === "RileyVisible";
+  return r.visibility === "UIVisible" || r.visibility === "SummaryVisible";
 }
 
 function passesEditable(r: FieldRow): boolean {

@@ -14,7 +14,7 @@ var googleAPIGatewayAPIConfigPolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 	"id": {
-		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		Role: RoleIdentity, Visibility: VisibilitySummaryVisible, Edit: EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"api_config_id": {
@@ -22,7 +22,7 @@ var googleAPIGatewayAPIConfigPolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 	"api_config_id_prefix": {
-		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		Role: RoleIdentity, Visibility: VisibilitySummaryVisible, Edit: EditNever,
 		ChangeRisk:    ChangeAlwaysReplace,
 		DriftSemantic: DriftSemanticExact,
 	},
@@ -32,7 +32,7 @@ var googleAPIGatewayAPIConfigPolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 	"service_config_id": {
-		Role: RoleIdentity, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleIdentity, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},
@@ -54,25 +54,25 @@ var googleAPIGatewayAPIConfigPolicy = Map{
 	// flagged (specs are public-API contracts; credentials live in the
 	// backend service account, not in the spec).
 	"openapi_documents.document.contents": {
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit: EditRequiresApproval, ChangeRisk: ChangeAlwaysReplace,
 	},
 	"openapi_documents.document.path": {
-		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		Role: RoleTuning, Visibility: VisibilitySummaryVisible, Edit: EditChatSafe,
 	},
 	"managed_service_configs.contents": {
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit: EditRequiresApproval,
 	},
 	"managed_service_configs.path": {
-		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		Role: RoleTuning, Visibility: VisibilitySummaryVisible, Edit: EditChatSafe,
 	},
 	"grpc_services.file_descriptor_set.contents": {
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit: EditRequiresApproval,
 	},
 	"grpc_services.source.contents": {
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit: EditRequiresApproval,
 	},
 

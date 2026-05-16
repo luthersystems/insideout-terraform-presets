@@ -44,7 +44,7 @@ var awsCodedeployAppPolicy = Map{
 
 	// GitHub integration (legacy Server platform) ---------------------
 	"github_account_name": {
-		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},

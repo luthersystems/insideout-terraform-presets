@@ -21,7 +21,7 @@ var googleSecretManagerSecretVersionPolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 	"id": {
-		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		Role: RoleIdentity, Visibility: VisibilitySummaryVisible, Edit: EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"version": {
@@ -44,7 +44,7 @@ var googleSecretManagerSecretVersionPolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 	"deletion_policy": {
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible, Edit: EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},
 
@@ -56,13 +56,13 @@ var googleSecretManagerSecretVersionPolicy = Map{
 
 	// Observability-only timestamps. RoleIdentity because the engine's
 	// axis model doesn't have a separate Observability role (#491);
-	// EditNever + VisibilityRileyVisible captures the intent without
+	// EditNever + VisibilitySummaryVisible captures the intent without
 	// triggering drift comparisons.
 	"create_time": {
-		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		Role: RoleIdentity, Visibility: VisibilitySummaryVisible, Edit: EditNever,
 	},
 	"destroy_time": {
-		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		Role: RoleIdentity, Visibility: VisibilitySummaryVisible, Edit: EditNever,
 	},
 
 	"timeouts": timeoutsPolicy(),

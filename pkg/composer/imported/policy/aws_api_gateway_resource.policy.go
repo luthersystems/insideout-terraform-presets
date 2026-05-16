@@ -43,7 +43,7 @@ var awsAPIGatewayResourcePolicy = Map{
 	"parent_id": {
 		// Pointer to the parent Resource (or REST API root resource).
 		// Moving a resource to a new parent forces replacement.
-		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRelationshipOnly,
 		ChangeRisk:    ChangeAlwaysReplace,
 		DriftSemantic: DriftSemanticExact,
