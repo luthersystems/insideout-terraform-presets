@@ -22,18 +22,18 @@ and is checked in lockstep with the runtime registries. See the
 
 ## Summary
 
-- **AWS:** 109 types · 100% Discoverable · 100% Enrichable · 42% DriftDetectable · 28% MetricsAvailable · 39% AgentEditable
-- **GCP:** 54 types · 100% Discoverable · 100% Enrichable · 63% DriftDetectable · 37% MetricsAvailable · 89% AgentEditable
+- **AWS:** 109 types · 100% Discoverable · 100% Enrichable · 42% DriftDetectable · 33% MetricsAvailable · 39% AgentEditable
+- **GCP:** 54 types · 100% Discoverable · 100% Enrichable · 63% DriftDetectable · 43% MetricsAvailable · 89% AgentEditable
 
 ## AWS
 
 | TF Type | Discoverable | Enrichable | DriftDetectable | MetricsAvailable | AgentEditable |
 |---|---|---|---|---|---|
-| `aws_acm_certificate` | ✓ | ✓ | ✓ | – | ✓ |
+| `aws_acm_certificate` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_api_gateway_deployment` | ✓ | ✓ | – | – | – |
 | `aws_api_gateway_resource` | ✓ | ✓ | – | – | – |
 | `aws_api_gateway_stage` | ✓ | ✓ | – | – | – |
-| `aws_apigatewayv2_api` | ✓ | ✓ | – | – | – |
+| `aws_apigatewayv2_api` | ✓ | ✓ | – | ✓ | – |
 | `aws_apigatewayv2_api_mapping` | ✓ | ✓ | – | – | – |
 | `aws_apigatewayv2_authorizer` | ✓ | ✓ | – | – | – |
 | `aws_apigatewayv2_domain_name` | ✓ | ✓ | – | – | – |
@@ -44,7 +44,7 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_autoscaling_group_tag` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_backup_plan` | ✓ | ✓ | – | – | – |
 | `aws_backup_selection` | ✓ | ✓ | – | – | – |
-| `aws_backup_vault` | ✓ | ✓ | – | – | – |
+| `aws_backup_vault` | ✓ | ✓ | – | ✓ | – |
 | `aws_bedrock_guardrail` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_bedrock_model_invocation_logging_configuration` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_cloudfront_distribution` | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -52,7 +52,7 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_cloudfront_monitoring_subscription` | ✓ | ✓ | – | – | – |
 | `aws_cloudfront_origin_access_identity` | ✓ | ✓ | – | – | – |
 | `aws_cloudwatch_dashboard` | ✓ | ✓ | – | – | – |
-| `aws_cloudwatch_event_rule` | ✓ | ✓ | ✓ | – | ✓ |
+| `aws_cloudwatch_event_rule` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_cloudwatch_log_group` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_cloudwatch_log_resource_policy` | ✓ | ✓ | – | – | – |
 | `aws_cloudwatch_log_stream` | ✓ | ✓ | – | – | – |
@@ -82,7 +82,7 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_elasticache_subnet_group` | ✓ | ✓ | – | – | – |
 | `aws_iam_group` | ✓ | ✓ | – | – | – |
 | `aws_iam_instance_profile` | ✓ | ✓ | – | – | – |
-| `aws_iam_policy` | ✓ | ✓ | ✓ | – | ✓ |
+| `aws_iam_policy` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_iam_role` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_iam_role_policy` | ✓ | ✓ | – | – | – |
 | `aws_iam_role_policy_attachment` | ✓ | ✓ | ✓ | – | – |
@@ -162,14 +162,14 @@ and is checked in lockstep with the runtime registries. See the
 | `google_compute_managed_ssl_certificate` | ✓ | ✓ | – | – | ✓ |
 | `google_compute_network` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_compute_resource_policy` | ✓ | ✓ | – | – | ✓ |
-| `google_compute_router` | ✓ | ✓ | ✓ | – | ✓ |
-| `google_compute_security_policy` | ✓ | ✓ | ✓ | – | ✓ |
+| `google_compute_router` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `google_compute_security_policy` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_compute_target_http_proxy` | ✓ | ✓ | – | – | ✓ |
 | `google_compute_target_https_proxy` | ✓ | ✓ | – | – | ✓ |
 | `google_compute_url_map` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_container_cluster` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_container_node_pool` | ✓ | ✓ | ✓ | – | ✓ |
-| `google_firestore_database` | ✓ | ✓ | – | – | ✓ |
+| `google_firestore_database` | ✓ | ✓ | – | ✓ | ✓ |
 | `google_identity_platform_config` | ✓ | ✓ | – | – | ✓ |
 | `google_identity_platform_default_supported_idp_config` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_kms_crypto_key` | ✓ | ✓ | ✓ | ✓ | ✓ |

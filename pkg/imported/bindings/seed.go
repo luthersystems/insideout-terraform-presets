@@ -60,6 +60,14 @@ var seededTypes = []string{
 	"aws_vpc_endpoint",
 	"google_compute_forwarding_rule",
 	"google_vpc_access_connector",
+	"aws_acm_certificate",
+	"aws_apigatewayv2_api",
+	"aws_backup_vault",
+	"aws_cloudwatch_event_rule",
+	"aws_iam_policy",
+	"google_compute_security_policy",
+	"google_compute_router",
+	"google_firestore_database",
 }
 
 // seededBindings mirrors the registrations performed by init(). Used
@@ -459,6 +467,63 @@ var seededBindings = map[string]ComponentMetricsBinding{
 		DimensionKey:   "connector_name",
 		DimensionFrom:  "name",
 		DefaultMetrics: []string{"vpcaccess.googleapis.com/connector/sent_bytes_count", "vpcaccess.googleapis.com/connector/received_bytes_count", "vpcaccess.googleapis.com/connector/instances"},
+	},
+	"aws_acm_certificate": {
+		Service:        "acm",
+		Action:         "get-metrics",
+		DimensionKey:   "CertificateArn",
+		DimensionFrom:  "id",
+		DefaultMetrics: []string{"DaysToExpiry"},
+	},
+	"aws_apigatewayv2_api": {
+		Service:        "apigateway",
+		Action:         "get-metrics",
+		DimensionKey:   "ApiId",
+		DimensionFrom:  "id",
+		DefaultMetrics: []string{"Count", "4xx", "5xx", "Latency", "IntegrationLatency"},
+	},
+	"aws_backup_vault": {
+		Service:        "backup",
+		Action:         "get-metrics",
+		DimensionKey:   "BackupVaultName",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"NumberOfBackupJobsCompleted", "NumberOfBackupJobsFailed", "NumberOfBackupJobsExpired"},
+	},
+	"aws_cloudwatch_event_rule": {
+		Service:        "events",
+		Action:         "get-metrics",
+		DimensionKey:   "RuleName",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"Invocations", "FailedInvocations", "TriggeredRules"},
+	},
+	"aws_iam_policy": {
+		// IAM metrics are CloudTrail-only — registered so consumers can
+		// route policy queries; DefaultMetrics intentionally empty.
+		Service:       "iam",
+		Action:        "get-metrics",
+		DimensionKey:  "PolicyArn",
+		DimensionFrom: "id",
+	},
+	"google_compute_security_policy": {
+		Service:        "networksecurity",
+		Action:         "timeseries-list",
+		DimensionKey:   "policy_name",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"networksecurity.googleapis.com/https/request_count", "networksecurity.googleapis.com/https/dropped_request_count"},
+	},
+	"google_compute_router": {
+		Service:        "compute",
+		Action:         "timeseries-list",
+		DimensionKey:   "router_id",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"router.googleapis.com/nat/sent_bytes_count", "router.googleapis.com/nat/received_bytes_count"},
+	},
+	"google_firestore_database": {
+		Service:        "firestore",
+		Action:         "timeseries-list",
+		DimensionKey:   "database_id",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"firestore.googleapis.com/document/read_count", "firestore.googleapis.com/document/write_count", "firestore.googleapis.com/document/delete_count"},
 	},
 }
 
