@@ -6,28 +6,26 @@ import (
 	"fmt"
 )
 
-// wireDrift is the on-the-wire shape of drift.json. It mirrors the
-// schema in sandbox-infrastructure-template/tf/drift-check.sh — both
-// the pre-#105 fields (drift_detected, drift_count, actionable,
-// template_version, presets_version, resources[].address) and the
-// post-#105 additive per-resource fields (type, name, action, change).
+// wireDrift is the on-the-wire shape of drift.json as emitted by
+// sandbox-infrastructure-template/tf/drift-check.sh: top-level
+// drift_detected / drift_count / template_version / presets_version
+// plus the per-resource entries that carry type / name / action /
+// change. The InsideOut backend's classifier is the sole consumer of
+// this data — there is no longer any "trust the typed boolean"
+// fallback path for callers that get HasClassifiableDetail == false
+// (issue #242, Phase 3).
 //
 // Any unknown JSON keys are ignored; missing keys decode to zero
-// values without error. This keeps the parser tolerant of both schema
-// versions and forward-compatible if the upstream wrapper later adds
-// further fields.
+// values without error, keeping the parser forward-compatible if the
+// upstream wrapper later adds further fields.
 type wireDrift struct {
 	DriftDetected   bool                `json:"drift_detected"`
 	DriftCount      int                 `json:"drift_count"`
 	TemplateVersion string              `json:"template_version"`
 	PresetsVersion  string              `json:"presets_version"`
 	Resources       []wireResourceDrift `json:"resources"`
-	// Note: top-level "actionable" is intentionally ignored here —
-	// the InsideOut backend's classifier owns that verdict now via Classify(). The
-	// field is still emitted by sandbox-infra for the
-	// trust-the-boolean fallback path that callers take when
-	// HasClassifiableDetail returns false; that fallback reads from
-	// Oracle's typed Job.drift_actionable, not from this struct.
+	// Note: top-level "actionable" in the JSON is intentionally
+	// ignored — the classifier owns that verdict via Classify().
 }
 
 // wireResourceDrift carries both old and new schema fields. Top-level
@@ -203,8 +201,12 @@ func resolveAction(wr wireResourceDrift) []string {
 // detail for the rules engine to produce useful verdicts. The
 // heuristic is conservative: every entry in d.Resources must have a
 // populated Type AND at least one of Change.Before or Change.After
-// non-empty. Callers that get false should fall back to whatever
-// coarse signal they had before (e.g. Oracle's drift_actionable).
+// non-empty. Callers that get false should treat the input as an
+// error from an out-of-date producer — there is no longer any coarse
+// signal to fall back to (issue #242, Phase 3). The producer
+// pipeline has emitted the post-#105 schema since 2026-04, so a
+// false result in production indicates a customer pinned to a
+// pre-#105 sandbox-infra template version that must be upgraded.
 //
 // Rationale:
 //
@@ -217,8 +219,7 @@ func resolveAction(wr wireResourceDrift) []string {
 //
 // Empty resource lists return true: the report says "no drift," and
 // Classify will produce an empty Result, which is the correct
-// not-actionable verdict. There's no useful "fall back" to escalate
-// to in that case.
+// not-actionable verdict.
 func HasClassifiableDetail(d Drift) bool {
 	for _, r := range d.Resources {
 		if r.Type == "" {
