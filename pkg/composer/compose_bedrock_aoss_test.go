@@ -291,7 +291,14 @@ func TestGenerateProvidersTF_DiscoveryUnion(t *testing.T) {
 			"nil and empty `selected` must produce identical providers.tf")
 	})
 
-	t.Run("gcp imported routes through google.imported alias", func(t *testing.T) {
+	t.Run("gcp imported alias pins the project id literal", func(t *testing.T) {
+		// As of issue #562, both google.imported and google-beta.imported
+		// are emitted unconditionally for every GCP stack — so the
+		// ImportedClouds input no longer gates emission. What this test
+		// still pins is the literal interpolation of GCPProjectID into
+		// both alias blocks' `project = ...` argument (twice, once per
+		// alias). Without that, the imported resources route to the
+		// wrong project at apply time.
 		got := string(generateProvidersTF(providersTFInput{
 			Cloud:          "gcp",
 			Region:         "us-central1",
@@ -300,21 +307,22 @@ func TestGenerateProvidersTF_DiscoveryUnion(t *testing.T) {
 			Discovered:     map[string]*tfconfig.ProviderRequirement{},
 			ImportedClouds: map[string]bool{"gcp": true},
 		}))
-		require.Contains(t, got, `alias   = "imported"`,
-			"google.imported alias must be declared when ImportedClouds[gcp] is set")
-		require.Contains(t, got, `project = "demo-project-12345"`,
-			"google.imported alias must pin the real project id")
-		require.NotContains(t, got, "google-beta",
-			"google-beta provider must NOT appear when only `gcp` (not `gcp-beta`) is imported")
+		require.Equal(t, 2, strings.Count(got, `alias   = "imported"`),
+			"both google.imported and google-beta.imported aliases must be declared")
+		require.Equal(t, 2, strings.Count(got, `project = "demo-project-12345"`),
+			"both google.imported and google-beta.imported must pin the real project id")
 	})
 
 	t.Run("gcp-beta imported emits google-beta.imported alias", func(t *testing.T) {
-		// The EmitImportedTF caller flips importedClouds["gcp-beta"]
-		// to true whenever any rendered resource carries
-		// `provider = google-beta.imported`. Verify the round-trip
-		// from that signal: providers.tf must declare both the
-		// google-beta provider in required_providers AND the
-		// google-beta.imported alias block.
+		// Pins the round-trip: when ImportedClouds carries both `gcp`
+		// and `gcp-beta` (the historical signal from EmitImportedTF
+		// when a resource uses `provider = google-beta.imported`),
+		// providers.tf declares hashicorp/google-beta in
+		// required_providers AND the google-beta.imported alias block.
+		// As of issue #562 those declarations are unconditional for
+		// every GCP stack, so the ImportedClouds input is informational
+		// only — this test stays as a guard against regressing the
+		// emitted HCL shape.
 		got := string(generateProvidersTF(providersTFInput{
 			Cloud:        "gcp",
 			Region:       "us-central1",
@@ -327,7 +335,7 @@ func TestGenerateProvidersTF_DiscoveryUnion(t *testing.T) {
 			},
 		}))
 		require.Contains(t, got, `hashicorp/google-beta`,
-			"required_providers must declare hashicorp/google-beta when gcp-beta imports present")
+			"required_providers must declare hashicorp/google-beta")
 		require.Contains(t, got, `provider "google-beta" {`,
 			"google-beta provider alias block must be declared")
 		require.Contains(t, got, `alias   = "imported"`,
@@ -339,12 +347,20 @@ func TestGenerateProvidersTF_DiscoveryUnion(t *testing.T) {
 			"both google.imported and google-beta.imported must pin the project id")
 	})
 
-	t.Run("gcp without imports does not declare beta provider", func(t *testing.T) {
-		// Regression guard: a GCP stack whose imported set is empty
-		// must NOT pull in google-beta required_providers. This
-		// caught a pre-merge bug where the beta required-provider
-		// entry was unconditionally emitted, blocking
-		// `terraform init` for stacks that never used google-beta.
+	t.Run("gcp stack without imports declares both google providers with imported aliases (issue #562)", func(t *testing.T) {
+		// Regression guard for issue #562: a GCP stack whose Imported
+		// list is empty must STILL declare hashicorp/google,
+		// hashicorp/google-beta, and both `.imported` alias blocks —
+		// because terraform state from a prior compose may still
+		// reference those aliases. Omitting them crashes
+		// `terraform plan` with "Provider configuration not present".
+		//
+		// This replaces an earlier guard ("gcp without imports does
+		// not declare beta provider") whose literal assertion was the
+		// opposite. The deeper invariant that earlier test was
+		// guarding — no cross-cloud provider contamination — is now
+		// pinned directly by the two cross-cloud separation tests
+		// below.
 		got := string(generateProvidersTF(providersTFInput{
 			Cloud:        "gcp",
 			Region:       "us-central1",
@@ -352,17 +368,80 @@ func TestGenerateProvidersTF_DiscoveryUnion(t *testing.T) {
 			Selected:     map[ComponentKey]bool{},
 			Discovered:   map[string]*tfconfig.ProviderRequirement{},
 		}))
-		require.NotContains(t, got, "hashicorp/google-beta",
-			"google-beta must not appear in required_providers when no imports use it")
-		require.NotContains(t, got, `provider "google-beta"`,
-			"google-beta provider block must not be emitted when no imports use it")
-		// Positive anchor: the test is otherwise all negatives — a
-		// regression that dropped every provider block would still
-		// pass. Pin that the base google provider remains declared.
 		require.Contains(t, got, "hashicorp/google",
-			"base google provider must remain declared even without imports")
+			"base google provider must be declared")
+		require.Contains(t, got, "hashicorp/google-beta",
+			"google-beta must be declared unconditionally for GCP stacks (#562)")
 		require.Contains(t, got, `provider "google" {`,
-			"base google provider block must remain emitted even without imports")
+			"base google provider block must be emitted")
+		require.Contains(t, got, `provider "google-beta" {`,
+			"google-beta provider alias block must be emitted unconditionally (#562)")
+		require.Equal(t, 2, strings.Count(got, `alias   = "imported"`),
+			"both google.imported and google-beta.imported alias blocks must be emitted unconditionally (#562)")
+	})
+
+	t.Run("aws stack does not pull in any google providers (cross-cloud separation)", func(t *testing.T) {
+		// Inherits the deeper invariant from the pre-#562 "gcp without
+		// imports does not declare beta provider" guard: a stack's
+		// providers.tf must never drag in a cloud's providers if the
+		// stack isn't targeting that cloud. This is structurally
+		// guaranteed by `switch cloud` in generateProvidersTF; this
+		// test pins it so the structure cannot regress silently.
+		got := string(generateProvidersTF(providersTFInput{
+			Cloud:      "aws",
+			Region:     "us-east-1",
+			Selected:   map[ComponentKey]bool{},
+			Discovered: map[string]*tfconfig.ProviderRequirement{},
+		}))
+		require.NotContains(t, got, "hashicorp/google",
+			"AWS stacks must not pull in hashicorp/google")
+		require.NotContains(t, got, "hashicorp/google-beta",
+			"AWS stacks must not pull in hashicorp/google-beta")
+		require.NotContains(t, got, `provider "google"`,
+			"AWS stacks must not emit any google provider block")
+		require.NotContains(t, got, `provider "google-beta"`,
+			"AWS stacks must not emit any google-beta provider block")
+	})
+
+	t.Run("gcp stack does not pull in any aws provider (cross-cloud separation)", func(t *testing.T) {
+		got := string(generateProvidersTF(providersTFInput{
+			Cloud:        "gcp",
+			Region:       "us-central1",
+			GCPProjectID: "demo-project-12345",
+			Selected:     map[ComponentKey]bool{},
+			Discovered:   map[string]*tfconfig.ProviderRequirement{},
+		}))
+		require.NotContains(t, got, "hashicorp/aws",
+			"GCP stacks must not pull in hashicorp/aws")
+		require.NotContains(t, got, `provider "aws"`,
+			"GCP stacks must not emit any aws provider block")
+	})
+
+	t.Run("aws stack without imports still declares aws.imported alias (issue #562)", func(t *testing.T) {
+		// Regression guard for issue #562 (AWS side): a stack whose
+		// Imported list is empty must STILL declare aws.imported,
+		// because terraform state from a prior compose may still
+		// reference the alias. Omitting it crashes `terraform plan`
+		// with "Provider configuration not present" — the original
+		// failure mode reported on reliable session sess_v2_CnqUJ6NRJnLC.
+		//
+		// Note the AWS alias template uses a two-space gap
+		// (`alias  = "imported"`) while the GCP templates use three
+		// spaces (`alias   = "imported"`) — they're indented to align
+		// with `region` / `region ` respectively. Assertions below
+		// match the AWS spacing.
+		got := string(generateProvidersTF(providersTFInput{
+			Cloud:      "aws",
+			Region:     "us-east-1",
+			Selected:   map[ComponentKey]bool{},
+			Discovered: map[string]*tfconfig.ProviderRequirement{},
+		}))
+		require.Contains(t, got, "hashicorp/aws",
+			"base aws provider must be declared")
+		require.Contains(t, got, `provider "aws" {`,
+			"base aws provider block must be emitted")
+		require.Contains(t, got, `alias  = "imported"`,
+			"aws.imported alias block must be emitted unconditionally (#562)")
 	})
 }
 

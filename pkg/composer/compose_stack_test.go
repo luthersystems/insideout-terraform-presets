@@ -20,24 +20,46 @@ func writeOutputs(t *testing.T, files Files, dir string) {
 }
 
 // assertProviderBlocksHaveDefaultTags splits providers.tf by `provider "aws" {`
-// and asserts that (1) exactly wantBlocks provider "aws" blocks exist, and
-// (2) each block declares a default_tags block with Project = var.project and
-// managed-by = "insideout". Split-and-check proves placement per block (a
-// regression dropping default_tags from the alias block would otherwise slip
-// past a global strings.Count), and regex matches tolerate whitespace-only
-// formatting changes from terraform fmt. Note this locks the HCL surface of
-// the provider blocks — it does not prove rendered resources inherit the tag
+// and asserts that (1) exactly wantBlocks tag-bearing provider "aws" blocks
+// exist, and (2) each tag-bearing block declares a default_tags block with
+// Project = var.project and managed-by = "insideout".
+//
+// The `aws.imported` alias block (always emitted as of issue #562) is
+// excluded from both the count and the per-block check: by design it omits
+// default_tags so imported resources don't silently inherit the session's
+// Project tag (compose.go aws.imported header, issue #153). Callers express
+// wantBlocks as "tag-bearing AWS provider blocks I expect" and don't need to
+// adjust as the unconditional-imported block comes and goes.
+//
+// Split-and-check proves placement per block (a regression dropping
+// default_tags from the alias block would otherwise slip past a global
+// strings.Count), and regex matches tolerate whitespace-only formatting
+// changes from terraform fmt. Note this locks the HCL surface of the
+// provider blocks — it does not prove rendered resources inherit the tag
 // at terraform apply, which requires a plan-json round-trip.
 func assertProviderBlocksHaveDefaultTags(t *testing.T, prov string, wantBlocks int) {
 	t.Helper()
 	chunks := strings.Split(prov, `provider "aws" {`)
-	require.Len(t, chunks, wantBlocks+1,
-		"expected %d provider \"aws\" blocks, got %d. prov:\n%s",
-		wantBlocks, len(chunks)-1, prov)
+	// chunks[0] is the file prefix before the first split point; skip it.
+	// For each remaining chunk, route blocks that declare the `imported`
+	// alias into a separate bucket so their (intentional) missing
+	// default_tags doesn't trip the per-block assertion.
+	var tagged []string
+	var importedCount int
+	for _, chunk := range chunks[1:] {
+		if strings.Contains(chunk, `alias  = "imported"`) {
+			importedCount++
+			continue
+		}
+		tagged = append(tagged, chunk)
+	}
+	require.Len(t, tagged, wantBlocks,
+		"expected %d tag-bearing provider \"aws\" blocks, got %d (plus %d imported-alias blocks). prov:\n%s",
+		wantBlocks, len(tagged), importedCount, prov)
 	defaultTagsRe := regexp.MustCompile(`default_tags\s*\{`)
 	projectRe := regexp.MustCompile(`Project\s*=\s*var\.project`)
 	managedByRe := regexp.MustCompile(`managed-by\s*=\s*"insideout"`)
-	for i, chunk := range chunks[1:] {
+	for i, chunk := range tagged {
 		require.Regexpf(t, defaultTagsRe, chunk,
 			"provider block #%d missing default_tags. chunk:\n%s", i+1, chunk)
 		require.Regexpf(t, projectRe, chunk,
