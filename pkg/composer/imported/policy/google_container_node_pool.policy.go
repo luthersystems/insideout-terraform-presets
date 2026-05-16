@@ -46,17 +46,21 @@ var googleContainerNodePoolPolicy = Map{
 	"initial_node_count": {
 		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible,
 		Edit: EditNever, ChangeRisk: ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"node_count": {
 		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityUIVisible, Edit: EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"max_pods_per_node": {
 		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible,
 		Edit: EditNever, ChangeRisk: ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"version": {
 		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityUIVisible,
-		Edit: EditRequiresApproval,
+		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"node_locations": {
 		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,

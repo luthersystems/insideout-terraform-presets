@@ -7197,13 +7197,131 @@
       "semantic": "Exact"
     }
   ],
+  "google_api_gateway_api": [
+    {
+      "path": "api_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "display_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "managed_service",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    }
+  ],
+  "google_api_gateway_api_config": [
+    {
+      "path": "api",
+      "semantic": "Exact"
+    },
+    {
+      "path": "api_config_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "api_config_id_prefix",
+      "semantic": "Exact"
+    },
+    {
+      "path": "display_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "gateway_config.backend_config.google_service_account",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "service_config_id",
+      "semantic": "Exact"
+    }
+  ],
+  "google_api_gateway_gateway": [
+    {
+      "path": "api_config",
+      "semantic": "Exact"
+    },
+    {
+      "path": "default_hostname",
+      "semantic": "Exact"
+    },
+    {
+      "path": "display_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "gateway_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "region",
+      "semantic": "Exact"
+    }
+  ],
   "google_cloud_run_v2_service": [
     {
       "path": "custom_audiences",
       "semantic": "WholeList"
     },
     {
+      "path": "deletion_protection",
+      "semantic": "Exact"
+    },
+    {
+      "path": "description",
+      "semantic": "Exact"
+    },
+    {
       "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ingress",
+      "semantic": "Exact"
+    },
+    {
+      "path": "invoker_iam_disabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "launch_stage",
       "semantic": "Exact"
     },
     {
@@ -7216,6 +7334,92 @@
     },
     {
       "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "template.containers.image",
+      "semantic": "Exact"
+    },
+    {
+      "path": "template.execution_environment",
+      "semantic": "Exact"
+    },
+    {
+      "path": "template.max_instance_request_concurrency",
+      "semantic": "Exact"
+    },
+    {
+      "path": "template.scaling.max_instance_count",
+      "semantic": "Exact"
+    },
+    {
+      "path": "template.scaling.min_instance_count",
+      "semantic": "Exact"
+    },
+    {
+      "path": "template.service_account",
+      "semantic": "Exact"
+    },
+    {
+      "path": "template.timeout",
+      "semantic": "Exact"
+    },
+    {
+      "path": "template.vpc_access.connector",
+      "semantic": "Exact"
+    }
+  ],
+  "google_cloudbuild_trigger": [
+    {
+      "path": "description",
+      "semantic": "Exact"
+    },
+    {
+      "path": "disabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "filename",
+      "semantic": "Exact"
+    },
+    {
+      "path": "filter",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ignored_files",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "include_build_logs",
+      "semantic": "Exact"
+    },
+    {
+      "path": "included_files",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "location",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "service_account",
+      "semantic": "Exact"
+    },
+    {
+      "path": "trigger_id",
       "semantic": "Exact"
     }
   ],
@@ -7301,6 +7505,38 @@
   ],
   "google_compute_backend_service": [
     {
+      "path": "affinity_cookie_ttl_sec",
+      "semantic": "Exact"
+    },
+    {
+      "path": "compression_mode",
+      "semantic": "Exact"
+    },
+    {
+      "path": "connection_draining_timeout_sec",
+      "semantic": "Exact"
+    },
+    {
+      "path": "custom_request_headers",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "custom_response_headers",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "description",
+      "semantic": "Exact"
+    },
+    {
+      "path": "edge_security_policy",
+      "semantic": "Exact"
+    },
+    {
+      "path": "enable_cdn",
+      "semantic": "Exact"
+    },
+    {
       "path": "generated_id",
       "semantic": "Exact"
     },
@@ -7313,7 +7549,23 @@
       "semantic": "Exact"
     },
     {
+      "path": "ip_address_selection_policy",
+      "semantic": "Exact"
+    },
+    {
+      "path": "load_balancing_scheme",
+      "semantic": "Exact"
+    },
+    {
+      "path": "locality_lb_policy",
+      "semantic": "Exact"
+    },
+    {
       "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "port_name",
       "semantic": "Exact"
     },
     {
@@ -7321,7 +7573,27 @@
       "semantic": "Exact"
     },
     {
+      "path": "protocol",
+      "semantic": "Exact"
+    },
+    {
+      "path": "security_policy",
+      "semantic": "Exact"
+    },
+    {
       "path": "self_link",
+      "semantic": "Exact"
+    },
+    {
+      "path": "service_lb_policy",
+      "semantic": "Exact"
+    },
+    {
+      "path": "session_affinity",
+      "semantic": "Exact"
+    },
+    {
+      "path": "timeout_sec",
       "semantic": "Exact"
     }
   ],
@@ -7486,6 +7758,106 @@
     },
     {
       "path": "service_label",
+      "semantic": "Exact"
+    },
+    {
+      "path": "subnetwork",
+      "semantic": "Exact"
+    },
+    {
+      "path": "target",
+      "semantic": "Exact"
+    }
+  ],
+  "google_compute_global_address": [
+    {
+      "path": "address",
+      "semantic": "Exact"
+    },
+    {
+      "path": "address_type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "description",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ip_version",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "network",
+      "semantic": "Exact"
+    },
+    {
+      "path": "prefix_length",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "purpose",
+      "semantic": "Exact"
+    },
+    {
+      "path": "self_link",
+      "semantic": "Exact"
+    }
+  ],
+  "google_compute_global_forwarding_rule": [
+    {
+      "path": "description",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ip_address",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ip_protocol",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ip_version",
+      "semantic": "Exact"
+    },
+    {
+      "path": "load_balancing_scheme",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "network",
+      "semantic": "Exact"
+    },
+    {
+      "path": "port_range",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "self_link",
       "semantic": "Exact"
     },
     {
@@ -7701,6 +8073,44 @@
       "semantic": "Exact"
     }
   ],
+  "google_compute_managed_ssl_certificate": [
+    {
+      "path": "certificate_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "description",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "managed.domains",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "self_link",
+      "semantic": "Exact"
+    },
+    {
+      "path": "subject_alternative_names",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "type",
+      "semantic": "Exact"
+    }
+  ],
   "google_compute_network": [
     {
       "path": "auto_create_subnetworks",
@@ -7748,6 +8158,32 @@
     },
     {
       "path": "routing_mode",
+      "semantic": "Exact"
+    },
+    {
+      "path": "self_link",
+      "semantic": "Exact"
+    }
+  ],
+  "google_compute_resource_policy": [
+    {
+      "path": "description",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "region",
       "semantic": "Exact"
     },
     {
@@ -7843,6 +8279,106 @@
       "semantic": "Exact"
     }
   ],
+  "google_compute_target_http_proxy": [
+    {
+      "path": "description",
+      "semantic": "Exact"
+    },
+    {
+      "path": "http_keep_alive_timeout_sec",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "proxy_bind",
+      "semantic": "Exact"
+    },
+    {
+      "path": "proxy_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "self_link",
+      "semantic": "Exact"
+    },
+    {
+      "path": "url_map",
+      "semantic": "Exact"
+    }
+  ],
+  "google_compute_target_https_proxy": [
+    {
+      "path": "certificate_manager_certificates",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "certificate_map",
+      "semantic": "Exact"
+    },
+    {
+      "path": "description",
+      "semantic": "Exact"
+    },
+    {
+      "path": "http_keep_alive_timeout_sec",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "proxy_bind",
+      "semantic": "Exact"
+    },
+    {
+      "path": "quic_override",
+      "semantic": "Exact"
+    },
+    {
+      "path": "self_link",
+      "semantic": "Exact"
+    },
+    {
+      "path": "server_tls_policy",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ssl_certificates",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "ssl_policy",
+      "semantic": "Exact"
+    },
+    {
+      "path": "tls_early_data",
+      "semantic": "Exact"
+    },
+    {
+      "path": "url_map",
+      "semantic": "Exact"
+    }
+  ],
   "google_compute_url_map": [
     {
       "path": "default_service",
@@ -7871,11 +8407,51 @@
   ],
   "google_container_cluster": [
     {
+      "path": "database_encryption.key_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "database_encryption.state",
+      "semantic": "Exact"
+    },
+    {
+      "path": "datapath_provider",
+      "semantic": "Exact"
+    },
+    {
+      "path": "deletion_protection",
+      "semantic": "Exact"
+    },
+    {
+      "path": "description",
+      "semantic": "Exact"
+    },
+    {
+      "path": "enable_autopilot",
+      "semantic": "Exact"
+    },
+    {
+      "path": "enable_intranode_visibility",
+      "semantic": "Exact"
+    },
+    {
+      "path": "enable_legacy_abac",
+      "semantic": "Exact"
+    },
+    {
+      "path": "enable_shielded_nodes",
+      "semantic": "Exact"
+    },
+    {
       "path": "id",
       "semantic": "Exact"
     },
     {
       "path": "location",
+      "semantic": "Exact"
+    },
+    {
+      "path": "min_master_version",
       "semantic": "Exact"
     },
     {
@@ -7887,11 +8463,31 @@
       "semantic": "Exact"
     },
     {
+      "path": "networking_mode",
+      "semantic": "Exact"
+    },
+    {
       "path": "node_config.oauth_scopes",
       "semantic": "WholeList"
     },
     {
+      "path": "node_version",
+      "semantic": "Exact"
+    },
+    {
+      "path": "private_cluster_config.enable_private_endpoint",
+      "semantic": "Exact"
+    },
+    {
+      "path": "private_cluster_config.enable_private_nodes",
+      "semantic": "Exact"
+    },
+    {
       "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "release_channel.channel",
       "semantic": "Exact"
     },
     {
@@ -7900,6 +8496,10 @@
     },
     {
       "path": "subnetwork",
+      "semantic": "Exact"
+    },
+    {
+      "path": "workload_identity_config.workload_pool",
       "semantic": "Exact"
     }
   ],
@@ -7913,7 +8513,15 @@
       "semantic": "Exact"
     },
     {
+      "path": "initial_node_count",
+      "semantic": "Exact"
+    },
+    {
       "path": "location",
+      "semantic": "Exact"
+    },
+    {
+      "path": "max_pods_per_node",
       "semantic": "Exact"
     },
     {
@@ -7925,8 +8533,84 @@
       "semantic": "Exact"
     },
     {
+      "path": "node_count",
+      "semantic": "Exact"
+    },
+    {
       "path": "node_locations",
       "semantic": "WholeList"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "version",
+      "semantic": "Exact"
+    }
+  ],
+  "google_firestore_database": [
+    {
+      "path": "app_engine_integration_mode",
+      "semantic": "Exact"
+    },
+    {
+      "path": "concurrency_mode",
+      "semantic": "Exact"
+    },
+    {
+      "path": "delete_protection_state",
+      "semantic": "Exact"
+    },
+    {
+      "path": "deletion_policy",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "location_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "point_in_time_recovery_enablement",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "version_retention_period",
+      "semantic": "Exact"
+    }
+  ],
+  "google_identity_platform_config": [
+    {
+      "path": "authorized_domains",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "autodelete_anonymous_users",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
     },
     {
       "path": "project",
@@ -8021,7 +8705,23 @@
   ],
   "google_logging_project_sink": [
     {
+      "path": "custom_writer_identity",
+      "semantic": "Exact"
+    },
+    {
+      "path": "description",
+      "semantic": "Exact"
+    },
+    {
       "path": "destination",
+      "semantic": "Exact"
+    },
+    {
+      "path": "disabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "filter",
       "semantic": "Exact"
     },
     {
@@ -8034,6 +8734,10 @@
     },
     {
       "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "unique_writer_identity",
       "semantic": "Exact"
     },
     {
@@ -8335,11 +9039,39 @@
   ],
   "google_redis_instance": [
     {
+      "path": "alternative_location_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "auth_enabled",
+      "semantic": "Exact"
+    },
+    {
       "path": "authorized_network",
       "semantic": "Exact"
     },
     {
+      "path": "connect_mode",
+      "semantic": "Exact"
+    },
+    {
+      "path": "customer_managed_key",
+      "semantic": "Exact"
+    },
+    {
+      "path": "display_name",
+      "semantic": "Exact"
+    },
+    {
       "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "location_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "memory_size_gb",
       "semantic": "Exact"
     },
     {
@@ -8351,7 +9083,35 @@
       "semantic": "Exact"
     },
     {
+      "path": "read_replicas_mode",
+      "semantic": "Exact"
+    },
+    {
+      "path": "redis_version",
+      "semantic": "Exact"
+    },
+    {
       "path": "region",
+      "semantic": "Exact"
+    },
+    {
+      "path": "replica_count",
+      "semantic": "Exact"
+    },
+    {
+      "path": "reserved_ip_range",
+      "semantic": "Exact"
+    },
+    {
+      "path": "secondary_ip_range",
+      "semantic": "Exact"
+    },
+    {
+      "path": "tier",
+      "semantic": "Exact"
+    },
+    {
+      "path": "transit_encryption_mode",
       "semantic": "Exact"
     }
   ],
@@ -8658,6 +9418,40 @@
     },
     {
       "path": "settings.tier",
+      "semantic": "Exact"
+    }
+  ],
+  "google_sql_user": [
+    {
+      "path": "deletion_policy",
+      "semantic": "Exact"
+    },
+    {
+      "path": "host",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "instance",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "sql_server_user_details.disabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "type",
       "semantic": "Exact"
     }
   ],

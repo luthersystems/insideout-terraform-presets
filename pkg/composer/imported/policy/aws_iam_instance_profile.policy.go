@@ -44,6 +44,9 @@ var awsIamInstanceProfilePolicy = Map{
 	},
 	"create_date": {
 		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
+		// Arrival-time-dependent — drift on this is a re-creation, which
+		// `arn` / `unique_id` already surface; keep DriftSemanticNone so
+		// the comparator doesn't double-count.
 	},
 
 	// Wiring — bound IAM role ------------------------------------------

@@ -29,6 +29,7 @@ var googleRedisInstancePolicy = Map{
 	},
 	"display_name": {
 		Role: RoleTuning, Visibility: VisibilityUIVisible, Edit: EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
 	},
 
 	// Wiring — VPC + CMEK.
@@ -41,58 +42,71 @@ var googleRedisInstancePolicy = Map{
 	"customer_managed_key": {
 		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityUIVisible,
 		Edit: EditRelationshipOnly, ChangeRisk: ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"reserved_ip_range": {
 		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
 		Edit: EditNever, ChangeRisk: ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"secondary_ip_range": {
 		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
-		Edit: EditNever,
+		Edit:          EditNever,
+		DriftSemantic: DriftSemanticExact,
 	},
 
 	// Tuning — sizing + tier + version.
 	"tier": {
 		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityUIVisible,
 		Edit: EditNever, ChangeRisk: ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"memory_size_gb": {
 		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityUIVisible,
-		Edit: EditRequiresApproval,
+		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"redis_version": {
 		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityUIVisible,
-		Edit: EditRequiresApproval,
+		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"replica_count": {
 		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityUIVisible,
-		Edit: EditRequiresApproval,
+		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"read_replicas_mode": {
 		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
-		Edit: EditRequiresApproval,
+		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"connect_mode": {
 		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
 		Edit: EditNever, ChangeRisk: ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"location_id": {
 		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
 		Edit: EditNever, ChangeRisk: ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"alternative_location_id": {
 		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
 		Edit: EditNever, ChangeRisk: ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
 	},
 
 	// Security knobs.
 	"auth_enabled": {
 		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityUIVisible,
-		Edit: EditRequiresApproval,
+		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"transit_encryption_mode": {
 		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityUIVisible,
 		Edit: EditRequiresApproval, ChangeRisk: ChangeMayReplace,
+		DriftSemantic: DriftSemanticExact,
 	},
 	// auth_string is the generated AUTH token — sensitive bootstrap secret.
 	"auth_string": {

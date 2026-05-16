@@ -30,20 +30,25 @@ var googleCloudRunV2ServicePolicy = Map{
 	// Tuning — top-level
 	"description": {
 		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"ingress": {
 		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityUIVisible, Edit: EditRequiresApproval,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"launch_stage": {
 		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"invoker_iam_disabled": {
 		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityUIVisible,
-		Edit: EditRequiresApproval,
+		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"deletion_protection": {
 		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityUIVisible,
-		Edit: EditRequiresApproval,
+		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"custom_audiences": {
 		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
@@ -54,7 +59,8 @@ var googleCloudRunV2ServicePolicy = Map{
 	// Template — image + scaling + concurrency are the core knobs.
 	"template.containers.image": {
 		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityUIVisible,
-		Edit: EditRequiresApproval,
+		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"template.containers.name": {
 		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
@@ -80,26 +86,33 @@ var googleCloudRunV2ServicePolicy = Map{
 	},
 	"template.scaling.min_instance_count": {
 		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityUIVisible, Edit: EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"template.scaling.max_instance_count": {
 		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityUIVisible, Edit: EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"template.max_instance_request_concurrency": {
 		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"template.timeout": {
 		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"template.service_account": {
 		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityUIVisible,
-		Edit: EditRelationshipOnly,
+		Edit:          EditRelationshipOnly,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"template.execution_environment": {
 		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"template.vpc_access.connector": {
 		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
-		Edit: EditRelationshipOnly,
+		Edit:          EditRelationshipOnly,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"template.vpc_access.egress": {
 		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,

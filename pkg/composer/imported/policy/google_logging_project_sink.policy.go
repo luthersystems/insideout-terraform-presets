@@ -33,13 +33,16 @@ var googleLoggingProjectSinkPolicy = Map{
 	// Tuning — filter expression + enabled state.
 	"filter": {
 		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
-		Edit: EditRequiresApproval,
+		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"description": {
 		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"disabled": {
 		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityUIVisible, Edit: EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
 	},
 
 	// Writer identity controls whether the sink gets a unique service
@@ -47,10 +50,12 @@ var googleLoggingProjectSinkPolicy = Map{
 	"unique_writer_identity": {
 		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityUIVisible,
 		Edit: EditRequiresApproval, ChangeRisk: ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"custom_writer_identity": {
 		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
-		Edit: EditRelationshipOnly,
+		Edit:          EditRelationshipOnly,
+		DriftSemantic: DriftSemanticExact,
 	},
 	// writer_identity is the computed SA email — read-only.
 	"writer_identity": {
