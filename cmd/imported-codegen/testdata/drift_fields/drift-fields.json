@@ -2155,6 +2155,14 @@
       "semantic": "Exact"
     },
     {
+      "path": "allow_major_version_upgrade",
+      "semantic": "Exact"
+    },
+    {
+      "path": "apply_immediately",
+      "semantic": "Exact"
+    },
+    {
       "path": "arn",
       "semantic": "Exact"
     },
@@ -2163,7 +2171,15 @@
       "semantic": "Exact"
     },
     {
+      "path": "availability_zone",
+      "semantic": "Exact"
+    },
+    {
       "path": "backup_retention_period",
+      "semantic": "Exact"
+    },
+    {
+      "path": "backup_target",
       "semantic": "Exact"
     },
     {
@@ -2171,7 +2187,27 @@
       "semantic": "Exact"
     },
     {
+      "path": "ca_cert_identifier",
+      "semantic": "Exact"
+    },
+    {
+      "path": "character_set_name",
+      "semantic": "Exact"
+    },
+    {
       "path": "copy_tags_to_snapshot",
+      "semantic": "Exact"
+    },
+    {
+      "path": "custom_iam_instance_profile",
+      "semantic": "Exact"
+    },
+    {
+      "path": "customer_owned_ip_enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "db_name",
       "semantic": "Exact"
     },
     {
@@ -2179,7 +2215,39 @@
       "semantic": "Exact"
     },
     {
+      "path": "dedicated_log_volume",
+      "semantic": "Exact"
+    },
+    {
+      "path": "delete_automated_backups",
+      "semantic": "Exact"
+    },
+    {
       "path": "deletion_protection",
+      "semantic": "Exact"
+    },
+    {
+      "path": "domain",
+      "semantic": "Exact"
+    },
+    {
+      "path": "domain_auth_secret_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "domain_dns_ips",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "domain_fqdn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "domain_iam_role_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "domain_ou",
       "semantic": "Exact"
     },
     {
@@ -2195,7 +2263,19 @@
       "semantic": "Exact"
     },
     {
+      "path": "engine_lifecycle_support",
+      "semantic": "Exact"
+    },
+    {
       "path": "engine_version",
+      "semantic": "Exact"
+    },
+    {
+      "path": "engine_version_actual",
+      "semantic": "Exact"
+    },
+    {
+      "path": "final_snapshot_identifier",
       "semantic": "Exact"
     },
     {
@@ -2231,11 +2311,35 @@
       "semantic": "Exact"
     },
     {
+      "path": "latest_restorable_time",
+      "semantic": "Exact"
+    },
+    {
+      "path": "license_model",
+      "semantic": "Exact"
+    },
+    {
+      "path": "listener_endpoint",
+      "semantic": "Exact"
+    },
+    {
       "path": "maintenance_window",
       "semantic": "Exact"
     },
     {
+      "path": "manage_master_user_password",
+      "semantic": "Exact"
+    },
+    {
+      "path": "master_user_secret_kms_key_id",
+      "semantic": "Exact"
+    },
+    {
       "path": "max_allocated_storage",
+      "semantic": "Exact"
+    },
+    {
+      "path": "monitoring_interval",
       "semantic": "Exact"
     },
     {
@@ -2244,6 +2348,14 @@
     },
     {
       "path": "multi_az",
+      "semantic": "Exact"
+    },
+    {
+      "path": "nchar_character_set_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "network_type",
       "semantic": "Exact"
     },
     {
@@ -2259,6 +2371,14 @@
       "semantic": "Exact"
     },
     {
+      "path": "performance_insights_kms_key_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "performance_insights_retention_period",
+      "semantic": "Exact"
+    },
+    {
       "path": "port",
       "semantic": "Exact"
     },
@@ -2267,11 +2387,23 @@
       "semantic": "Exact"
     },
     {
+      "path": "replica_mode",
+      "semantic": "Exact"
+    },
+    {
       "path": "replicate_source_db",
       "semantic": "Exact"
     },
     {
       "path": "resource_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "skip_final_snapshot",
+      "semantic": "Exact"
+    },
+    {
+      "path": "snapshot_identifier",
       "semantic": "Exact"
     },
     {
@@ -2288,6 +2420,18 @@
     },
     {
       "path": "storage_type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "timezone",
+      "semantic": "Exact"
+    },
+    {
+      "path": "upgrade_storage_config",
+      "semantic": "Exact"
+    },
+    {
+      "path": "username",
       "semantic": "Exact"
     },
     {
@@ -4423,11 +4567,19 @@
       "semantic": "Exact"
     },
     {
+      "path": "code_sha256",
+      "semantic": "Exact"
+    },
+    {
       "path": "code_signing_config_arn",
       "semantic": "Exact"
     },
     {
       "path": "dead_letter_config.target_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "description",
       "semantic": "Exact"
     },
     {
@@ -4443,11 +4595,19 @@
       "semantic": "Exact"
     },
     {
+      "path": "filename",
+      "semantic": "Exact"
+    },
+    {
       "path": "function_name",
       "semantic": "Exact"
     },
     {
       "path": "handler",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
       "semantic": "Exact"
     },
     {
@@ -4463,11 +4623,19 @@
       "semantic": "Exact"
     },
     {
+      "path": "image_uri",
+      "semantic": "Exact"
+    },
+    {
       "path": "invoke_arn",
       "semantic": "Exact"
     },
     {
       "path": "kms_key_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "last_modified",
       "semantic": "Exact"
     },
     {
@@ -4511,6 +4679,10 @@
       "semantic": "Exact"
     },
     {
+      "path": "replace_security_groups_on_destroy",
+      "semantic": "Exact"
+    },
+    {
       "path": "replacement_security_group_ids",
       "semantic": "WholeList"
     },
@@ -4539,7 +4711,27 @@
       "semantic": "Exact"
     },
     {
+      "path": "signing_job_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "signing_profile_version_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "skip_destroy",
+      "semantic": "Exact"
+    },
+    {
       "path": "snap_start.apply_on",
+      "semantic": "Exact"
+    },
+    {
+      "path": "source_code_hash",
+      "semantic": "Exact"
+    },
+    {
+      "path": "source_code_size",
       "semantic": "Exact"
     },
     {
@@ -4837,11 +5029,35 @@
       "semantic": "Exact"
     },
     {
+      "path": "client_keep_alive",
+      "semantic": "Exact"
+    },
+    {
+      "path": "connection_logs.bucket",
+      "semantic": "Exact"
+    },
+    {
+      "path": "connection_logs.enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "connection_logs.prefix",
+      "semantic": "Exact"
+    },
+    {
+      "path": "customer_owned_ipv4_pool",
+      "semantic": "Exact"
+    },
+    {
       "path": "desync_mitigation_mode",
       "semantic": "Exact"
     },
     {
       "path": "dns_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "dns_record_client_routing_policy",
       "semantic": "Exact"
     },
     {
@@ -4861,7 +5077,19 @@
       "semantic": "Exact"
     },
     {
+      "path": "enable_tls_version_and_cipher_suite_headers",
+      "semantic": "Exact"
+    },
+    {
       "path": "enable_waf_fail_open",
+      "semantic": "Exact"
+    },
+    {
+      "path": "enable_xff_client_port",
+      "semantic": "Exact"
+    },
+    {
+      "path": "enforce_security_group_inbound_rules_on_private_link_traffic",
       "semantic": "Exact"
     },
     {
@@ -4901,11 +5129,35 @@
       "semantic": "WholeList"
     },
     {
+      "path": "subnet_mapping.allocation_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "subnet_mapping.ipv6_address",
+      "semantic": "Exact"
+    },
+    {
+      "path": "subnet_mapping.outpost_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "subnet_mapping.private_ipv4_address",
+      "semantic": "Exact"
+    },
+    {
+      "path": "subnet_mapping.subnet_id",
+      "semantic": "Exact"
+    },
+    {
       "path": "subnets",
       "semantic": "WholeList"
     },
     {
       "path": "vpc_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "xff_header_processing_mode",
       "semantic": "Exact"
     },
     {
@@ -6499,11 +6751,27 @@
   ],
   "aws_sns_topic": [
     {
+      "path": "application_failure_feedback_role_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "application_success_feedback_role_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "application_success_feedback_sample_rate",
+      "semantic": "Exact"
+    },
+    {
       "path": "archive_policy",
       "semantic": "Exact"
     },
     {
       "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "beginning_archive_time",
       "semantic": "Exact"
     },
     {
@@ -6523,11 +6791,27 @@
       "semantic": "Exact"
     },
     {
+      "path": "firehose_failure_feedback_role_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "firehose_success_feedback_role_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "firehose_success_feedback_sample_rate",
+      "semantic": "Exact"
+    },
+    {
       "path": "http_failure_feedback_role_arn",
       "semantic": "Exact"
     },
     {
       "path": "http_success_feedback_role_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "http_success_feedback_sample_rate",
       "semantic": "Exact"
     },
     {
@@ -6544,6 +6828,10 @@
     },
     {
       "path": "lambda_success_feedback_role_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "lambda_success_feedback_sample_rate",
       "semantic": "Exact"
     },
     {
@@ -6572,6 +6860,10 @@
     },
     {
       "path": "sqs_success_feedback_role_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "sqs_success_feedback_sample_rate",
       "semantic": "Exact"
     },
     {
@@ -6635,11 +6927,27 @@
       "semantic": "Exact"
     },
     {
+      "path": "deduplication_scope",
+      "semantic": "Exact"
+    },
+    {
       "path": "delay_seconds",
       "semantic": "Exact"
     },
     {
       "path": "fifo_queue",
+      "semantic": "Exact"
+    },
+    {
+      "path": "fifo_throughput_limit",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "kms_data_key_reuse_period_seconds",
       "semantic": "Exact"
     },
     {
@@ -6659,6 +6967,14 @@
       "semantic": "Exact"
     },
     {
+      "path": "name_prefix",
+      "semantic": "Exact"
+    },
+    {
+      "path": "policy",
+      "semantic": "Exact"
+    },
+    {
       "path": "receive_wait_time_seconds",
       "semantic": "Exact"
     },
@@ -6672,6 +6988,10 @@
     },
     {
       "path": "sqs_managed_sse_enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "url",
       "semantic": "Exact"
     },
     {

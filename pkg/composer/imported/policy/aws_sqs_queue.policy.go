@@ -18,14 +18,75 @@ package policy
 // comparator gains JSON-projection traversal (parallel to the
 // projection.go follow-up), these paths light up without a re-curation
 // sweep. Tag bags stay DriftSemanticNone (tagPolicy() zero value).
+//
+// Depth-pass extras (#482 follow-up): adds `id`, `url`, `policy`,
+// `name_prefix`, the FIFO-specific knobs (`deduplication_scope`,
+// `fifo_throughput_limit`), KMS data-key reuse (`kms_data_key_reuse_period_seconds`),
+// and the redrive-allow JSON family. `policy` is the access-policy
+// JSON — security-critical, RequiresApproval. The two redrive_policy
+// JSON parents (`redrive_policy`, `redrive_allow_policy`) are mapped at
+// the parent path with DriftSemanticNone (they're JSON-encoded strings
+// the comparator can't decode today — the leaf .deadLetterTargetArn /
+// .maxReceiveCount entries above carry the actual semantic).
 var awsSQSQueuePolicy = Map{
 	"arn": {
 		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},
-	"name": {
+	"id": {
 		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
 		DriftSemantic: DriftSemanticExact,
+	},
+	"url": {
+		// Server-assigned queue URL — same identity tier as arn.
+		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"name": {
+		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"name_prefix": {
+		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"policy": {
+		// Access policy JSON — security-critical drift surface.
+		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"kms_data_key_reuse_period_seconds": {
+		// How long SQS reuses an encryption data key (60-86400s).
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"deduplication_scope": {
+		// FIFO-only: "messageGroup" vs "queue" dedupe scope.
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"fifo_throughput_limit": {
+		// FIFO-only: "perQueue" vs "perMessageGroupId" throughput cap.
+		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"redrive_policy": {
+		// JSON-encoded parent — the deadLetterTargetArn / maxReceiveCount
+		// leaves above carry the semantic. Parent path itself stays
+		// DriftSemanticNone until the comparator gains JSON traversal.
+		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit: EditRelationshipOnly,
+	},
+	"redrive_allow_policy": {
+		// JSON document scoping who's allowed to redrive INTO this DLQ.
+		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit: EditRelationshipOnly,
 	},
 	"kms_master_key_id": {
 		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,

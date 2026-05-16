@@ -13,6 +13,14 @@ package policy
 // `environment.variables` map stays DriftSemanticNone: per the Layer 2
 // contract, raw values for Sensitive fields must never flow through the
 // drift output (FieldMismatch.Snapshot / .Cloud would leak the secret).
+//
+// Depth-pass extras (#482 follow-up): adds the deployment-package hash
+// scalars (`code_sha256`, `source_code_hash`, `source_code_size`,
+// `last_modified`), the container-image variant (`image_uri`,
+// `filename`), code-signing identity (`signing_job_arn`,
+// `signing_profile_version_arn`), the `description` text knob, `id`,
+// and the two destroy-behavior switches (`skip_destroy`,
+// `replace_security_groups_on_destroy`).
 var awsLambdaFunctionPolicy = Map{
 	// Identity
 	"arn": {
@@ -37,6 +45,60 @@ var awsLambdaFunctionPolicy = Map{
 	},
 	"qualified_invoke_arn": {
 		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"id": {
+		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
+		DriftSemantic: DriftSemanticExact,
+	},
+
+	// Deployment-package hash / size telemetry --------------------------
+	"code_sha256": {
+		// Provider-reported hash of the deployed package. Drift here
+		// indicates an out-of-band redeploy.
+		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"source_code_hash": {
+		// Author-side hash input that gates re-publish. Mismatch =
+		// caller bumped source without redeploy (or vice versa).
+		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"source_code_size": {
+		// Provider-reported package size in bytes.
+		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"last_modified": {
+		// Provider timestamp of last update — drift on this without a
+		// matching Terraform change implies out-of-band deploy.
+		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		DriftSemantic: DriftSemanticExact,
+	},
+
+	// Container-image / file deployment surface -------------------------
+	"image_uri": {
+		// For package_type=Image: the ECR image URI.
+		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Edit:          EditRelationshipOnly,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"filename": {
+		// Zip path for the deployment package (local-file deploys).
+		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+
+	// Code-signing identity --------------------------------------------
+	"signing_job_arn": {
+		Role: RoleIdentity, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Edit:          EditNever,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"signing_profile_version_arn": {
+		Role: RoleIdentity, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Edit:          EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},
 
@@ -143,6 +205,22 @@ var awsLambdaFunctionPolicy = Map{
 	},
 	"publish": {
 		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"description": {
+		Role: RoleTuning, Visibility: VisibilityUIVisible, Edit: EditChatSafe,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"skip_destroy": {
+		// Whether to leave the resource in AWS on destroy.
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditRequiresApproval,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"replace_security_groups_on_destroy": {
+		// Whether to swap to placeholder SGs before delete (ENI cleanup).
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Edit:          EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},
 
