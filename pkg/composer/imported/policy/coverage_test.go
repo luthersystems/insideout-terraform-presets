@@ -500,27 +500,25 @@ func isCovered(tfType string) bool {
 // system-owned, leaving nothing for the comparator to meaningfully
 // drift-check.
 //
-// The entries fall into two categories:
+// As of #491 the IAM-binding / membership types
+// (*_iam_binding, *_iam_member, project_iam_member) are NO LONGER
+// exempt — their role + member + condition fields are Exact (and the
+// `members` list on *_iam_binding is WholeList) so that an out-of-band
+// IAM edit surfaces as a real security-pillar drift event rather than
+// being swallowed by the audit-log-only contract that predated the
+// drift bundle.
 //
-//  1. IAM-binding / membership types (*_iam_binding, *_iam_member,
-//     project_iam_member). Every field is part of the
-//     (parent × role × member) identity tuple — the only mutable
-//     surface is `members`/`member`, which is RequiresApproval-gated
-//     at edit time; drift-detection on it would be redundant with the
-//     audit-log trail and would flood the UI with operator-driven
-//     deltas. Drift comparison stays opt-out here.
-//
-//  2. GCP networking / proxy / certificate primitives
-//     (compute_global_address, compute_global_forwarding_rule,
-//     compute_target_http_proxy, compute_target_https_proxy,
-//     compute_managed_ssl_certificate, compute_resource_policy,
-//     identity_platform_config, firestore_database, sql_user,
-//     api_gateway_*, cloudbuild_trigger). These have Identity-only
-//     fields plus ChangeAlwaysReplace tuning fields where the
-//     provider treats every value change as destroy/recreate — drift
-//     on these is captured at the resource-existence level (the
-//     resource itself drifts as "present vs absent"), and per-field
-//     drift would re-litigate the same delta in a noisier shape.
+// The remaining entries are GCP networking / proxy / certificate
+// primitives (compute_global_address, compute_global_forwarding_rule,
+// compute_target_http_proxy, compute_target_https_proxy,
+// compute_managed_ssl_certificate, compute_resource_policy,
+// identity_platform_config, firestore_database, sql_user,
+// api_gateway_*, cloudbuild_trigger). These have Identity-only
+// fields plus ChangeAlwaysReplace tuning fields where the provider
+// treats every value change as destroy/recreate — drift on these is
+// captured at the resource-existence level (the resource itself
+// drifts as "present vs absent"), and per-field drift would
+// re-litigate the same delta in a noisier shape.
 //
 // To remove an entry: tag at least one field with a DriftSemantic
 // value (Exact / WholeList / LabelFilter) in the relevant *.policy.go
@@ -531,15 +529,6 @@ func isCovered(tfType string) bool {
 // key still appears in policy.RegisteredTypes() — removing a policy
 // elsewhere must also remove its exempt entry.
 var driftMinimalExempt = map[string]bool{
-	// --- IAM membership types (identity tuple + RequiresApproval members) ---
-	"google_cloud_run_v2_service_iam_member":     true,
-	"google_cloudfunctions2_function_iam_member": true,
-	"google_kms_crypto_key_iam_binding":          true,
-	"google_project_iam_member":                  true,
-	"google_secret_manager_secret_iam_binding":   true,
-	"google_secret_manager_secret_iam_member":    true,
-	"google_storage_bucket_iam_member":           true,
-
 	// --- GCP API Gateway (every field ChangeAlwaysReplace or Identity) ---
 	"google_api_gateway_api":        true,
 	"google_api_gateway_api_config": true,

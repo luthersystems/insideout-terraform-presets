@@ -8,13 +8,29 @@ package policy
 // deliberately omitted: the discoverer flattens conditional bindings
 // into separate rows, so a condition block surfaces as additional
 // rows rather than as an editable nested struct here.
+//
+// Drift bundle (#491): role + member are Exact — an out-of-band IAM
+// edit that flips either is a project-scope security event. project
+// is also Exact for completeness. id / etag stay DriftSemantic=None.
 var googleProjectIAMMemberPolicy = Map{
 	// Identity.
-	"id":      {Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever},
-	"etag":    {Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever},
-	"project": {Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever, ChangeRisk: ChangeAlwaysReplace},
-	"role":    {Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever, ChangeRisk: ChangeAlwaysReplace},
-	"member":  {Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever, ChangeRisk: ChangeAlwaysReplace},
+	"id":   {Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever},
+	"etag": {Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever},
+	"project": {
+		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"role": {
+		Role: RoleIdentity, Pillar: PillarSecurity, Visibility: VisibilityUIVisible, Edit: EditNever,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
+	},
+	"member": {
+		Role: RoleIdentity, Pillar: PillarSecurity, Visibility: VisibilityUIVisible, Edit: EditNever,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
+	},
 }
 
 func init() {
