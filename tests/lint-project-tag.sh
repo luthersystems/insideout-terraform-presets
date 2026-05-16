@@ -24,6 +24,7 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # Resource types that do NOT accept a tags attribute in AWS provider 6.x.
 # Keep sorted alphabetically.
 NON_TAGGABLE_AWS=(
+  aws_acm_certificate_validation
   aws_api_gateway_deployment
   aws_api_gateway_resource
   aws_apigatewayv2_api_mapping
