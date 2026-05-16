@@ -40,7 +40,7 @@ func TestSeededBindings(t *testing.T) {
 	require.GreaterOrEqual(t, len(RegisteredTypes()), 64,
 		"expected at least 64 seeded types, got %d", len(RegisteredTypes()))
 
-	for _, tfType := range seededTypes {
+	for tfType := range seededBindings {
 		tfType := tfType
 		t.Run(tfType, func(t *testing.T) {
 			t.Parallel()

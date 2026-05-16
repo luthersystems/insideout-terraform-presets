@@ -1,78 +1,14 @@
 package bindings
 
-// seededTypes captures the tfTypes registered by init() below, so that
-// tests which intentionally wipe the live registry (via resetForTest)
-// can still assert on the seeded set. Read-only after init().
-var seededTypes = []string{
-	"aws_s3_bucket",
-	"aws_dynamodb_table",
-	"aws_lambda_function",
-	"aws_sqs_queue",
-	"aws_lb",
-	"aws_rds_cluster",
-	"aws_db_instance",
-	"aws_sns_topic",
-	"aws_cloudwatch_log_group",
-	"aws_secretsmanager_secret",
-	"google_storage_bucket",
-	"google_pubsub_topic",
-	"google_cloud_run_v2_service",
-	"google_sql_database_instance",
-	"google_redis_instance",
-	"google_pubsub_subscription",
-	"aws_apigateway_rest_api",
-	"aws_lb_target_group",
-	"aws_ecs_service",
-	"aws_eks_cluster",
-	"aws_kinesis_stream",
-	"google_compute_instance",
-	"google_container_cluster",
-	"google_storage_bucket_object",
-	"aws_cloudfront_distribution",
-	"aws_msk_cluster",
-	"aws_elasticache_replication_group",
-	"aws_efs_file_system",
-	"aws_opensearch_domain",
-	"google_compute_backend_service",
-	"google_vertex_ai_dataset",
-	"google_logging_project_sink",
-	"aws_vpc",
-	"aws_route53_zone",
-	"aws_kms_key",
-	"aws_iam_role",
-	"aws_cloudwatch_metric_alarm",
-	"google_compute_network",
-	"google_kms_crypto_key",
-	"google_service_account",
-	"aws_autoscaling_group",
-	"aws_ecs_cluster",
-	"aws_instance",
-	"aws_nat_gateway",
-	"aws_wafv2_web_acl",
-	"google_cloudfunctions2_function",
-	"google_monitoring_alert_policy",
-	"google_secret_manager_secret",
-	"aws_apigatewayv2_stage",
-	"aws_cognito_user_pool",
-	"aws_ebs_volume",
-	"aws_eks_node_group",
-	"aws_lb_listener",
-	"aws_vpc_endpoint",
-	"google_compute_forwarding_rule",
-	"google_vpc_access_connector",
-	"aws_acm_certificate",
-	"aws_apigatewayv2_api",
-	"aws_backup_vault",
-	"aws_cloudwatch_event_rule",
-	"aws_iam_policy",
-	"google_compute_security_policy",
-	"google_compute_router",
-	"google_firestore_database",
-}
-
-// seededBindings mirrors the registrations performed by init(). Used
-// by seed_test.go to assert each entry's fields independent of the
-// live registry state (which other tests mutate via resetForTest).
+// seededBindings is the single source of truth for this package's
+// seeded MetricsBinding registrations. init() ranges over the map and
+// calls Register for each entry. Tests that wipe the live registry
+// (via resetForTest-style helpers) iterate this map directly to assert
+// on the seeded set independent of registry state.
+//
+// Adding a new seeded type is a single-file, single-block edit — drop
+// the entry into the map literal. There is no parallel slice to keep
+// in sync.
 var seededBindings = map[string]ComponentMetricsBinding{
 	"aws_s3_bucket": {
 		Service:        "s3",
@@ -528,7 +464,7 @@ var seededBindings = map[string]ComponentMetricsBinding{
 }
 
 func init() {
-	for _, t := range seededTypes {
-		Register(t, seededBindings[t])
+	for t, b := range seededBindings {
+		Register(t, b)
 	}
 }
