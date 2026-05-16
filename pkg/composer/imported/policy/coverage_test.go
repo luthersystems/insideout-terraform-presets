@@ -130,6 +130,8 @@ var coveredTypes = []string{
 	"aws_kms_key",
 	// Bundle 5 (cont.) — Lambda alias + permission.
 	"aws_lambda_alias",
+	// Bundle 9 (cont.) — Lambda event-source mapping.
+	"aws_lambda_event_source_mapping",
 	"aws_lambda_function",
 	// Bundle 8 (cont.) — Lambda function URL.
 	"aws_lambda_function_url",

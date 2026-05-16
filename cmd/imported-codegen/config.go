@@ -153,6 +153,12 @@ var WantedAWS = []string{
 	// versioned-routing (CodeDeploy blue/green); permission is the
 	// resource-policy statement granting invoke rights to a principal.
 	"aws_lambda_alias",
+	// Bundle 9 (#482) — Lambda event-source mapping. Pulls events
+	// from Kinesis / DynamoDB Streams / SQS / Kafka / MSK / Amazon MQ
+	// / DocumentDB into a Lambda function. Identity is (uuid,
+	// event_source_arn, function_name); batching + filter knobs drive
+	// the operational behavior.
+	"aws_lambda_event_source_mapping",
 	"aws_lambda_function",
 	// Bundle 8 (#482) — Lambda function URL. The standalone HTTPS
 	// endpoint pinned to a function (auth_type + cors are the
