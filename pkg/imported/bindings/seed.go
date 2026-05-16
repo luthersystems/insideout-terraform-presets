@@ -100,6 +100,14 @@ var seededTypes = []string{
 	"aws_iam_user",
 	"google_compute_address",
 	"google_monitoring_notification_channel",
+	"aws_route_table",
+	"aws_network_acl",
+	"aws_launch_template",
+	"aws_eks_addon",
+	"aws_lambda_alias",
+	"aws_apigatewayv2_authorizer",
+	"google_compute_global_address",
+	"google_monitoring_dashboard",
 }
 
 // seededBindings mirrors the registrations performed by init(). Used
@@ -781,6 +789,62 @@ var seededBindings = map[string]ComponentMetricsBinding{
 		DimensionKey:   "channel_id",
 		DimensionFrom:  "id",
 		DefaultMetrics: []string{"monitoring.googleapis.com/notification_channel/sent_count", "monitoring.googleapis.com/notification_channel/error_count"},
+	},
+	"aws_route_table": {
+		Service:        "vpc",
+		Action:         "get-metrics",
+		DimensionKey:   "RouteTableId",
+		DimensionFrom:  "id",
+		DefaultMetrics: []string{"BytesIn", "BytesOut", "PacketsIn", "PacketsOut"},
+	},
+	"aws_network_acl": {
+		Service:        "vpc",
+		Action:         "get-metrics",
+		DimensionKey:   "NetworkAclId",
+		DimensionFrom:  "id",
+		DefaultMetrics: []string{"AllowedFlowsCount", "DeniedFlowsCount"},
+	},
+	"aws_launch_template": {
+		Service:        "ec2",
+		Action:         "get-metrics",
+		DimensionKey:   "LaunchTemplateId",
+		DimensionFrom:  "id",
+		DefaultMetrics: []string{"CPUUtilization", "NetworkIn", "NetworkOut", "StatusCheckFailed"},
+	},
+	"aws_eks_addon": {
+		Service:        "eks",
+		Action:         "get-metrics",
+		DimensionKey:   "AddonName",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"pod_cpu_utilization", "pod_memory_utilization"},
+	},
+	"aws_lambda_alias": {
+		Service:        "lambda",
+		Action:         "get-metrics",
+		DimensionKey:   "Resource",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"Invocations", "Errors", "Duration", "Throttles"},
+	},
+	"aws_apigatewayv2_authorizer": {
+		Service:        "apigateway",
+		Action:         "get-metrics",
+		DimensionKey:   "ApiId",
+		DimensionFrom:  "id",
+		DefaultMetrics: []string{"Count", "4xx", "5xx", "Latency"},
+	},
+	"google_compute_global_address": {
+		Service:        "compute",
+		Action:         "timeseries-list",
+		DimensionKey:   "address_name",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"compute.googleapis.com/instance/network/sent_bytes_count", "compute.googleapis.com/instance/network/received_bytes_count"},
+	},
+	"google_monitoring_dashboard": {
+		Service:        "monitoring",
+		Action:         "timeseries-list",
+		DimensionKey:   "dashboard_id",
+		DimensionFrom:  "id",
+		DefaultMetrics: []string{"monitoring.googleapis.com/dashboard/view_count"},
 	},
 }
 

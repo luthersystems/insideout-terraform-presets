@@ -22,8 +22,8 @@ and is checked in lockstep with the runtime registries. See the
 
 ## Summary
 
-- **AWS:** 109 types · 100% Discoverable · 100% Enrichable · 42% DriftDetectable · 50% MetricsAvailable · 39% AgentEditable
-- **GCP:** 54 types · 100% Discoverable · 100% Enrichable · 63% DriftDetectable · 67% MetricsAvailable · 89% AgentEditable
+- **AWS:** 109 types · 100% Discoverable · 100% Enrichable · 42% DriftDetectable · 56% MetricsAvailable · 39% AgentEditable
+- **GCP:** 54 types · 100% Discoverable · 100% Enrichable · 63% DriftDetectable · 70% MetricsAvailable · 89% AgentEditable
 
 ## AWS
 
@@ -35,7 +35,7 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_api_gateway_stage` | ✓ | ✓ | – | ✓ | – |
 | `aws_apigatewayv2_api` | ✓ | ✓ | – | ✓ | – |
 | `aws_apigatewayv2_api_mapping` | ✓ | ✓ | – | – | – |
-| `aws_apigatewayv2_authorizer` | ✓ | ✓ | – | – | – |
+| `aws_apigatewayv2_authorizer` | ✓ | ✓ | – | ✓ | – |
 | `aws_apigatewayv2_domain_name` | ✓ | ✓ | – | – | – |
 | `aws_apigatewayv2_integration` | ✓ | ✓ | – | ✓ | – |
 | `aws_apigatewayv2_route` | ✓ | ✓ | – | ✓ | – |
@@ -72,7 +72,7 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_ecs_cluster_capacity_providers` | ✓ | ✓ | – | – | – |
 | `aws_eip` | ✓ | ✓ | – | ✓ | – |
 | `aws_eks_access_entry` | ✓ | ✓ | – | – | – |
-| `aws_eks_addon` | ✓ | ✓ | – | – | – |
+| `aws_eks_addon` | ✓ | ✓ | – | ✓ | – |
 | `aws_eks_cluster` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_eks_fargate_profile` | ✓ | ✓ | – | ✓ | – |
 | `aws_eks_node_group` | ✓ | ✓ | – | ✓ | – |
@@ -93,19 +93,19 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_key_pair` | ✓ | ✓ | – | – | – |
 | `aws_kms_alias` | ✓ | ✓ | – | – | – |
 | `aws_kms_key` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `aws_lambda_alias` | ✓ | ✓ | – | – | – |
+| `aws_lambda_alias` | ✓ | ✓ | – | ✓ | – |
 | `aws_lambda_event_source_mapping` | ✓ | ✓ | – | ✓ | – |
 | `aws_lambda_function` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_lambda_function_url` | ✓ | ✓ | – | ✓ | – |
 | `aws_lambda_permission` | ✓ | ✓ | – | – | – |
-| `aws_launch_template` | ✓ | ✓ | – | – | – |
+| `aws_launch_template` | ✓ | ✓ | – | ✓ | – |
 | `aws_lb` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_lb_listener` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_lb_target_group` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_msk_cluster` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_msk_configuration` | ✓ | ✓ | – | – | – |
 | `aws_nat_gateway` | ✓ | ✓ | – | ✓ | – |
-| `aws_network_acl` | ✓ | ✓ | – | – | – |
+| `aws_network_acl` | ✓ | ✓ | – | ✓ | – |
 | `aws_network_interface` | ✓ | ✓ | – | ✓ | – |
 | `aws_opensearch_domain` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_opensearchserverless_access_policy` | ✓ | ✓ | – | – | – |
@@ -114,7 +114,7 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_resourceexplorer2_index` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_resourceexplorer2_view` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_route53_zone` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `aws_route_table` | ✓ | ✓ | – | – | – |
+| `aws_route_table` | ✓ | ✓ | – | ✓ | – |
 | `aws_s3_bucket` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_s3_bucket_lifecycle_configuration` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_s3_bucket_ownership_controls` | ✓ | ✓ | ✓ | – | ✓ |
@@ -155,7 +155,7 @@ and is checked in lockstep with the runtime registries. See the
 | `google_compute_backend_service` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_compute_firewall` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_compute_forwarding_rule` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `google_compute_global_address` | ✓ | ✓ | – | – | ✓ |
+| `google_compute_global_address` | ✓ | ✓ | – | ✓ | ✓ |
 | `google_compute_global_forwarding_rule` | ✓ | ✓ | – | ✓ | ✓ |
 | `google_compute_health_check` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_compute_instance` | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -177,7 +177,7 @@ and is checked in lockstep with the runtime registries. See the
 | `google_kms_key_ring` | ✓ | ✓ | ✓ | ✓ | – |
 | `google_logging_project_sink` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_monitoring_alert_policy` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `google_monitoring_dashboard` | ✓ | ✓ | ✓ | – | ✓ |
+| `google_monitoring_dashboard` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_monitoring_notification_channel` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_project_iam_member` | ✓ | ✓ | – | – | – |
 | `google_project_service` | ✓ | ✓ | ✓ | ✓ | ✓ |

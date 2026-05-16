@@ -38,8 +38,8 @@ var emptyDefaultMetricsAllowed = map[string]bool{
 func TestSeededBindings(t *testing.T) {
 	reseed(t)
 
-	require.GreaterOrEqual(t, len(RegisteredTypes()), 96,
-		"expected at least 96 seeded types, got %d", len(RegisteredTypes()))
+	require.GreaterOrEqual(t, len(RegisteredTypes()), 104,
+		"expected at least 104 seeded types, got %d", len(RegisteredTypes()))
 
 	for _, tfType := range seededTypes {
 		tfType := tfType
