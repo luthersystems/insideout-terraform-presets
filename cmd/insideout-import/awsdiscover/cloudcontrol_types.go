@@ -164,6 +164,20 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 			return map[string]string{"arn": arn}
 		},
 		TagsFromProperties: tagsFromKey("Tags"),
+		// #501 Normalizer: CFN AWS::SQS::Queue uses primary-name
+		// `QueueName` (TF: `name`), seconds-suffix-elided
+		// `MessageRetentionPeriod` (TF: `message_retention_seconds`)
+		// and `VisibilityTimeout` (TF: `visibility_timeout_seconds`),
+		// and a list-of-{Key,Value} `Tags` shape (TF:
+		// map[string]*Value[string]). The renames + tag-list flatten
+		// land the values on the right Layer-1 fields after the
+		// camelToSnake projection.
+		Normalizer: chain(
+			renameField("QueueName", "Name"),
+			renameField("MessageRetentionPeriod", "MessageRetentionSeconds"),
+			renameField("VisibilityTimeout", "VisibilityTimeoutSeconds"),
+			flattenTagList("Tags"),
+		),
 	},
 
 	// =====================================================================
@@ -197,6 +211,20 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 		NameHintFromProperties:  nameOrIdentifier("LogGroupName"),
 		NativeIDsFromProperties: arnUnderKey("Arn"),
 		TagsFromProperties:      tagsFromKey("Tags"),
+		// #501 Normalizer: CFN AWS::Logs::LogGroup uses primary-name
+		// `LogGroupName` (TF: `name`), an `Arn` that includes the
+		// trailing `:*` log-stream wildcard (TF strips it), and a
+		// list-of-{Key,Value} `Tags` shape (TF: map shape). NOTE: a
+		// hand-rolled enricher in byTypeEnricher currently overrides
+		// the Cloud Control generic path for this type, so the
+		// normalizer is dormant at runtime — staged here so Bucket C
+		// can compare the generic-path payload to the hand-rolled
+		// output and decide whether to retire the override.
+		Normalizer: chain(
+			renameField("LogGroupName", "Name"),
+			trimARNStar("Arn"),
+			flattenTagList("Tags"),
+		),
 	},
 	{
 		TFType:                  "aws_cloudwatch_event_rule",
@@ -276,6 +304,19 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 		NameHintFromProperties:  nameOrIdentifier("BucketName"),
 		NativeIDsFromProperties: arnUnderKey("Arn"),
 		TagsFromProperties:      tagsFromKey("Tags"),
+		// #501 Normalizer: CFN AWS::S3::Bucket uses primary-name
+		// `BucketName` (TF: `bucket`) and a list-of-{Key,Value}
+		// `Tags` shape (TF: map shape). NOTE: a hand-rolled enricher
+		// in byTypeEnricher currently overrides the Cloud Control
+		// generic path for this type — see issue #493 / the s3
+		// multi-overlay note. The normalizer is staged here so
+		// Bucket C can compare the generic-path payload to the
+		// hand-rolled output and decide whether to retire the
+		// override.
+		Normalizer: chain(
+			renameField("BucketName", "Bucket"),
+			flattenTagList("Tags"),
+		),
 	},
 	{
 		TFType:                  "aws_dynamodb_table",

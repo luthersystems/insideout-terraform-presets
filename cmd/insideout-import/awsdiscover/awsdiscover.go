@@ -259,7 +259,11 @@ func NewAWSDiscovererWithConcurrency(cfg aws.Config, maxConcurrency int) *AWSDis
 		if _, has := byTypeEnricher[ccCfg.TFType]; has {
 			continue
 		}
-		byTypeEnricher[ccCfg.TFType] = newCloudControlEnricher(ccCfg.TFType, ccCfg.CloudFormationType, nil)
+		// #501 — pass through the per-type Normalizer (nil for types
+		// whose CFN shape already matches the camelToSnake projection).
+		byTypeEnricher[ccCfg.TFType] = newCloudControlEnricherWithNormalizer(
+			ccCfg.TFType, ccCfg.CloudFormationType, nil, ccCfg.Normalizer,
+		)
 	}
 	return &AWSDiscoverer{
 		defaultRegion:  cfg.Region,
