@@ -22,8 +22,8 @@ and is checked in lockstep with the runtime registries. See the
 
 ## Summary
 
-- **AWS:** 109 types · 100% Discoverable · 100% Enrichable · 42% DriftDetectable · 33% MetricsAvailable · 39% AgentEditable
-- **GCP:** 54 types · 100% Discoverable · 100% Enrichable · 63% DriftDetectable · 43% MetricsAvailable · 89% AgentEditable
+- **AWS:** 109 types · 100% Discoverable · 100% Enrichable · 42% DriftDetectable · 37% MetricsAvailable · 39% AgentEditable
+- **GCP:** 54 types · 100% Discoverable · 100% Enrichable · 63% DriftDetectable · 50% MetricsAvailable · 89% AgentEditable
 
 ## AWS
 
@@ -32,7 +32,7 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_acm_certificate` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_api_gateway_deployment` | ✓ | ✓ | – | – | – |
 | `aws_api_gateway_resource` | ✓ | ✓ | – | – | – |
-| `aws_api_gateway_stage` | ✓ | ✓ | – | – | – |
+| `aws_api_gateway_stage` | ✓ | ✓ | – | ✓ | – |
 | `aws_apigatewayv2_api` | ✓ | ✓ | – | ✓ | – |
 | `aws_apigatewayv2_api_mapping` | ✓ | ✓ | – | – | – |
 | `aws_apigatewayv2_authorizer` | ✓ | ✓ | – | – | – |
@@ -45,7 +45,7 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_backup_plan` | ✓ | ✓ | – | – | – |
 | `aws_backup_selection` | ✓ | ✓ | – | – | – |
 | `aws_backup_vault` | ✓ | ✓ | – | ✓ | – |
-| `aws_bedrock_guardrail` | ✓ | ✓ | ✓ | – | ✓ |
+| `aws_bedrock_guardrail` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_bedrock_model_invocation_logging_configuration` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_cloudfront_distribution` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_cloudfront_function` | ✓ | ✓ | – | – | – |
@@ -60,7 +60,7 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_cognito_identity_provider` | ✓ | ✓ | – | – | – |
 | `aws_cognito_resource_server` | ✓ | ✓ | – | – | – |
 | `aws_cognito_user_pool` | ✓ | ✓ | – | ✓ | – |
-| `aws_cognito_user_pool_client` | ✓ | ✓ | – | – | – |
+| `aws_cognito_user_pool_client` | ✓ | ✓ | – | ✓ | – |
 | `aws_cognito_user_pool_domain` | ✓ | ✓ | – | – | – |
 | `aws_db_instance` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_db_parameter_group` | ✓ | ✓ | – | – | – |
@@ -74,7 +74,7 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_eks_access_entry` | ✓ | ✓ | – | – | – |
 | `aws_eks_addon` | ✓ | ✓ | – | – | – |
 | `aws_eks_cluster` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `aws_eks_fargate_profile` | ✓ | ✓ | – | – | – |
+| `aws_eks_fargate_profile` | ✓ | ✓ | – | ✓ | – |
 | `aws_eks_node_group` | ✓ | ✓ | – | ✓ | – |
 | `aws_eks_pod_identity_association` | ✓ | ✓ | – | – | – |
 | `aws_elasticache_parameter_group` | ✓ | ✓ | – | – | – |
@@ -156,7 +156,7 @@ and is checked in lockstep with the runtime registries. See the
 | `google_compute_firewall` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_compute_forwarding_rule` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_compute_global_address` | ✓ | ✓ | – | – | ✓ |
-| `google_compute_global_forwarding_rule` | ✓ | ✓ | – | – | ✓ |
+| `google_compute_global_forwarding_rule` | ✓ | ✓ | – | ✓ | ✓ |
 | `google_compute_health_check` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_compute_instance` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_compute_managed_ssl_certificate` | ✓ | ✓ | – | – | ✓ |
@@ -166,15 +166,15 @@ and is checked in lockstep with the runtime registries. See the
 | `google_compute_security_policy` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_compute_target_http_proxy` | ✓ | ✓ | – | – | ✓ |
 | `google_compute_target_https_proxy` | ✓ | ✓ | – | – | ✓ |
-| `google_compute_url_map` | ✓ | ✓ | ✓ | – | ✓ |
+| `google_compute_url_map` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_container_cluster` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `google_container_node_pool` | ✓ | ✓ | ✓ | – | ✓ |
+| `google_container_node_pool` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_firestore_database` | ✓ | ✓ | – | ✓ | ✓ |
 | `google_identity_platform_config` | ✓ | ✓ | – | – | ✓ |
 | `google_identity_platform_default_supported_idp_config` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_kms_crypto_key` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_kms_crypto_key_iam_binding` | ✓ | ✓ | – | – | ✓ |
-| `google_kms_key_ring` | ✓ | ✓ | ✓ | – | – |
+| `google_kms_key_ring` | ✓ | ✓ | ✓ | ✓ | – |
 | `google_logging_project_sink` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_monitoring_alert_policy` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_monitoring_dashboard` | ✓ | ✓ | ✓ | – | ✓ |

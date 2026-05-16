@@ -68,6 +68,14 @@ var seededTypes = []string{
 	"google_compute_security_policy",
 	"google_compute_router",
 	"google_firestore_database",
+	"aws_api_gateway_stage",
+	"aws_bedrock_guardrail",
+	"aws_cognito_user_pool_client",
+	"aws_eks_fargate_profile",
+	"google_compute_global_forwarding_rule",
+	"google_compute_url_map",
+	"google_container_node_pool",
+	"google_kms_key_ring",
 }
 
 // seededBindings mirrors the registrations performed by init(). Used
@@ -524,6 +532,62 @@ var seededBindings = map[string]ComponentMetricsBinding{
 		DimensionKey:   "database_id",
 		DimensionFrom:  "name",
 		DefaultMetrics: []string{"firestore.googleapis.com/document/read_count", "firestore.googleapis.com/document/write_count", "firestore.googleapis.com/document/delete_count"},
+	},
+	"aws_api_gateway_stage": {
+		Service:        "apigateway",
+		Action:         "get-metrics",
+		DimensionKey:   "Stage",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"Count", "4XXError", "5XXError", "Latency", "IntegrationLatency"},
+	},
+	"aws_bedrock_guardrail": {
+		Service:        "bedrock",
+		Action:         "get-metrics",
+		DimensionKey:   "GuardrailId",
+		DimensionFrom:  "id",
+		DefaultMetrics: []string{"InvocationLatency", "InvocationClientErrors", "InvocationServerErrors", "InvocationThrottles"},
+	},
+	"aws_cognito_user_pool_client": {
+		Service:        "cognito",
+		Action:         "get-metrics",
+		DimensionKey:   "UserPoolClient",
+		DimensionFrom:  "id",
+		DefaultMetrics: []string{"SignInSuccesses", "SignUpSuccesses", "TokenRefreshSuccesses"},
+	},
+	"aws_eks_fargate_profile": {
+		Service:        "eks",
+		Action:         "get-metrics",
+		DimensionKey:   "FargateProfileName",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"pod_cpu_utilization", "pod_memory_utilization", "pod_network_rx_bytes", "pod_network_tx_bytes"},
+	},
+	"google_compute_global_forwarding_rule": {
+		Service:        "loadbalancing",
+		Action:         "timeseries-list",
+		DimensionKey:   "forwarding_rule_name",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"loadbalancing.googleapis.com/https/request_count", "loadbalancing.googleapis.com/https/request_bytes_count", "loadbalancing.googleapis.com/https/total_latencies"},
+	},
+	"google_compute_url_map": {
+		Service:        "loadbalancing",
+		Action:         "timeseries-list",
+		DimensionKey:   "url_map_name",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"loadbalancing.googleapis.com/https/request_count", "loadbalancing.googleapis.com/https/backend_latencies"},
+	},
+	"google_container_node_pool": {
+		Service:        "container",
+		Action:         "timeseries-list",
+		DimensionKey:   "node_pool_name",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"kubernetes.io/node/cpu/allocatable_utilization", "kubernetes.io/node/memory/allocatable_utilization", "kubernetes.io/node/ephemeral_storage/used_bytes"},
+	},
+	"google_kms_key_ring": {
+		Service:        "cloudkms",
+		Action:         "timeseries-list",
+		DimensionKey:   "key_ring_id",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"cloudkms.googleapis.com/key/sign_request_count", "cloudkms.googleapis.com/key/verify_request_count"},
 	},
 }
 
