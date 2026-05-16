@@ -169,12 +169,16 @@ func buildZodTypeData(res *tfjson.Schema, tfType, providerSource string) (*ZodTy
 		td.Fields = append(td.Fields, ZodFieldData{TFName: name, ZodType: zt})
 		td.NestedTypes = append(td.NestedTypes, convertNested(nested)...)
 		td.SchemaEntries = append(td.SchemaEntries, ZodSchemaEntry{
-			TFName:      name,
-			Required:    attr.Required,
-			Optional:    attr.Optional,
-			Computed:    attr.Computed,
-			Sensitive:   attr.Sensitive,
-			Replacement: replacementToWire("Unknown"),
+			TFName:    name,
+			Required:  attr.Required,
+			Optional:  attr.Optional,
+			Computed:  attr.Computed,
+			Sensitive: attr.Sensitive,
+			// Mirrors emit.go's buildTypeData: default to Unknown,
+			// overlay curated overrides from pkg/imported/forcenew so
+			// the TS-side ZodSchemaEntry stays byte-for-byte aligned
+			// with the Go-side SchemaEntry. Issue #566.
+			Replacement: replacementToWire(replacementSuffixFor(tfType, name)),
 		})
 	}
 
