@@ -54,6 +54,11 @@ aws_apigatewayv2_api	tags	Tuning		Hidden	SystemOnly	Redacted
 aws_apigatewayv2_api	tags_all	Tuning		Hidden	SystemOnly	Redacted	
 aws_apigatewayv2_api	target	Wiring		UIVisible	RequiresApproval		
 aws_apigatewayv2_api	version	Tuning		UIVisible	ChatSafe		
+aws_apigatewayv2_api_mapping	api_id	Wiring	Reliability	UIVisible	RequiresApproval		
+aws_apigatewayv2_api_mapping	api_mapping_key	Tuning	Reliability	RileyVisible	ChatSafe		
+aws_apigatewayv2_api_mapping	domain_name	Wiring	Reliability	UIVisible	Never		AlwaysReplace
+aws_apigatewayv2_api_mapping	id	Identity		UIVisible	Never		
+aws_apigatewayv2_api_mapping	stage	Wiring	Reliability	UIVisible	RequiresApproval		
 aws_apigatewayv2_authorizer	api_id	Wiring	Reliability	UIVisible	Never		AlwaysReplace
 aws_apigatewayv2_authorizer	authorizer_credentials_arn	Wiring	Security	UIVisible	RequiresApproval		
 aws_apigatewayv2_authorizer	authorizer_payload_format_version	Tuning	Security	UIVisible	RequiresApproval		
@@ -454,6 +459,13 @@ aws_codepipeline	stage.action.version	Tuning	Reliability	RileyVisible	ChatSafe
 aws_codepipeline	stage.name	Identity		UIVisible	Never		
 aws_codepipeline	tags	Tuning		Hidden	SystemOnly	Redacted	
 aws_codepipeline	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_cognito_identity_provider	attribute_mapping	Tuning	Security	RileyVisible	RequiresApproval		
+aws_cognito_identity_provider	id	Identity		UIVisible	Never		
+aws_cognito_identity_provider	idp_identifiers	Tuning	Security	RileyVisible	ChatSafe		
+aws_cognito_identity_provider	provider_details	Tuning	Security	RileyVisible	RequiresApproval		
+aws_cognito_identity_provider	provider_name	Identity		UIVisible	Never		AlwaysReplace
+aws_cognito_identity_provider	provider_type	Identity		UIVisible	Never		AlwaysReplace
+aws_cognito_identity_provider	user_pool_id	Wiring	Security	UIVisible	Never		AlwaysReplace
 aws_cognito_user_pool_client	access_token_validity	Tuning	Security	RileyVisible	ChatSafe		
 aws_cognito_user_pool_client	allowed_oauth_flows	Tuning	Security	UIVisible	RequiresApproval		
 aws_cognito_user_pool_client	allowed_oauth_flows_user_pool_client	Tuning	Security	RileyVisible	RequiresApproval		
@@ -1007,6 +1019,32 @@ aws_lambda_alias	id	Identity		UIVisible	Never
 aws_lambda_alias	invoke_arn	Identity		UIVisible	Never		
 aws_lambda_alias	name	Identity		UIVisible	Never		AlwaysReplace
 aws_lambda_alias	routing_config	Tuning	Reliability	UIVisible	RequiresApproval		
+aws_lambda_event_source_mapping	arn	Identity		UIVisible	Never		
+aws_lambda_event_source_mapping	batch_size	Tuning	Reliability	RileyVisible	ChatSafe		
+aws_lambda_event_source_mapping	bisect_batch_on_function_error	Tuning	Reliability	RileyVisible	ChatSafe		
+aws_lambda_event_source_mapping	enabled	Tuning	Reliability	RileyVisible	ChatSafe		
+aws_lambda_event_source_mapping	event_source_arn	Wiring	Reliability	UIVisible	Never		AlwaysReplace
+aws_lambda_event_source_mapping	function_arn	Identity		UIVisible	Never		
+aws_lambda_event_source_mapping	function_name	Wiring	Reliability	UIVisible	Never		AlwaysReplace
+aws_lambda_event_source_mapping	function_response_types	Tuning	Reliability	RileyVisible	ChatSafe		
+aws_lambda_event_source_mapping	id	Identity		UIVisible	Never		
+aws_lambda_event_source_mapping	kms_key_arn	Tuning	Security	RileyVisible	RequiresApproval		
+aws_lambda_event_source_mapping	last_modified	Identity		UIVisible	Never		
+aws_lambda_event_source_mapping	last_processing_result	Identity		UIVisible	Never		
+aws_lambda_event_source_mapping	maximum_batching_window_in_seconds	Tuning	Reliability	RileyVisible	ChatSafe		
+aws_lambda_event_source_mapping	maximum_record_age_in_seconds	Tuning	Reliability	RileyVisible	ChatSafe		
+aws_lambda_event_source_mapping	maximum_retry_attempts	Tuning	Reliability	RileyVisible	ChatSafe		
+aws_lambda_event_source_mapping	parallelization_factor	Tuning	Reliability	RileyVisible	ChatSafe		
+aws_lambda_event_source_mapping	queues	Wiring	Reliability	RileyVisible	RelationshipOnly		
+aws_lambda_event_source_mapping	starting_position	Tuning	Reliability	UIVisible	Never		AlwaysReplace
+aws_lambda_event_source_mapping	starting_position_timestamp	Tuning	Reliability	RileyVisible	Never		AlwaysReplace
+aws_lambda_event_source_mapping	state	Identity		UIVisible	Never		
+aws_lambda_event_source_mapping	state_transition_reason	Identity		UIVisible	Never		
+aws_lambda_event_source_mapping	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_lambda_event_source_mapping	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_lambda_event_source_mapping	topics	Wiring	Reliability	RileyVisible	RelationshipOnly		
+aws_lambda_event_source_mapping	tumbling_window_in_seconds	Tuning	Reliability	RileyVisible	ChatSafe		
+aws_lambda_event_source_mapping	uuid	Identity		UIVisible	Never		
 aws_lambda_function	architectures	Tuning	Performance	RileyVisible	ChatSafe		MayReplace
 aws_lambda_function	arn	Identity		UIVisible	Never		
 aws_lambda_function	code_signing_config_arn	Wiring	Security	RileyVisible	RelationshipOnly		
@@ -1237,6 +1275,29 @@ aws_nat_gateway	subnet_id	Wiring	Reliability	UIVisible	Never		AlwaysReplace
 aws_nat_gateway	tags	Tuning		Hidden	SystemOnly	Redacted	
 aws_nat_gateway	tags_all	Tuning		Hidden	SystemOnly	Redacted	
 aws_nat_gateway	timeouts	Tuning		Hidden	SystemOnly		
+aws_network_acl	arn	Identity		UIVisible	Never		
+aws_network_acl	egress	Tuning	Security	UIVisible	RequiresApproval		
+aws_network_acl	egress.action	Tuning	Security	UIVisible	RequiresApproval		
+aws_network_acl	egress.cidr_block	Tuning	Security	RileyVisible	RequiresApproval		
+aws_network_acl	egress.from_port	Tuning	Security	RileyVisible	RequiresApproval		
+aws_network_acl	egress.ipv6_cidr_block	Tuning	Security	RileyVisible	RequiresApproval		
+aws_network_acl	egress.protocol	Tuning	Security	RileyVisible	RequiresApproval		
+aws_network_acl	egress.rule_no	Tuning	Security	RileyVisible	RequiresApproval		
+aws_network_acl	egress.to_port	Tuning	Security	RileyVisible	RequiresApproval		
+aws_network_acl	id	Identity		UIVisible	Never		
+aws_network_acl	ingress	Tuning	Security	UIVisible	RequiresApproval		
+aws_network_acl	ingress.action	Tuning	Security	UIVisible	RequiresApproval		
+aws_network_acl	ingress.cidr_block	Tuning	Security	RileyVisible	RequiresApproval		
+aws_network_acl	ingress.from_port	Tuning	Security	RileyVisible	RequiresApproval		
+aws_network_acl	ingress.ipv6_cidr_block	Tuning	Security	RileyVisible	RequiresApproval		
+aws_network_acl	ingress.protocol	Tuning	Security	RileyVisible	RequiresApproval		
+aws_network_acl	ingress.rule_no	Tuning	Security	RileyVisible	RequiresApproval		
+aws_network_acl	ingress.to_port	Tuning	Security	RileyVisible	RequiresApproval		
+aws_network_acl	owner_id	Identity		UIVisible	Never		
+aws_network_acl	subnet_ids	Wiring	Security	RileyVisible	RelationshipOnly		
+aws_network_acl	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_network_acl	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_network_acl	vpc_id	Wiring	Security	UIVisible	Never		AlwaysReplace
 aws_network_interface	arn	Identity		UIVisible	Never		
 aws_network_interface	attachment	Wiring	Reliability	UIVisible	RequiresApproval		
 aws_network_interface	description	Tuning	Reliability	UIVisible	ChatSafe		
@@ -1610,6 +1671,17 @@ aws_vpc	main_route_table_id	Identity		UIVisible	Never
 aws_vpc	owner_id	Identity		UIVisible	Never		
 aws_vpc	tags	Tuning		Hidden	SystemOnly	Redacted	
 aws_vpc	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_vpc_dhcp_options	arn	Identity		UIVisible	Never		
+aws_vpc_dhcp_options	domain_name	Tuning	Reliability	UIVisible	Never		AlwaysReplace
+aws_vpc_dhcp_options	domain_name_servers	Tuning	Reliability	UIVisible	Never		AlwaysReplace
+aws_vpc_dhcp_options	id	Identity		UIVisible	Never		
+aws_vpc_dhcp_options	ipv6_address_preferred_lease_time	Tuning	Reliability	RileyVisible	ChatSafe		
+aws_vpc_dhcp_options	netbios_name_servers	Tuning	Reliability	RileyVisible	Never		AlwaysReplace
+aws_vpc_dhcp_options	netbios_node_type	Tuning	Reliability	RileyVisible	Never		AlwaysReplace
+aws_vpc_dhcp_options	ntp_servers	Tuning	Reliability	RileyVisible	Never		AlwaysReplace
+aws_vpc_dhcp_options	owner_id	Identity		UIVisible	Never		
+aws_vpc_dhcp_options	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_vpc_dhcp_options	tags_all	Tuning		Hidden	SystemOnly	Redacted	
 aws_vpc_endpoint	arn	Identity		UIVisible	Never		
 aws_vpc_endpoint	auto_accept	Tuning	Reliability	RileyVisible	ChatSafe		
 aws_vpc_endpoint	cidr_blocks	Identity		UIVisible	Never		
@@ -1636,6 +1708,53 @@ aws_vpc_endpoint	tags_all	Tuning		Hidden	SystemOnly	Redacted
 aws_vpc_endpoint	timeouts	Tuning		Hidden	SystemOnly		
 aws_vpc_endpoint	vpc_endpoint_type	Tuning	Reliability	UIVisible	Never		AlwaysReplace
 aws_vpc_endpoint	vpc_id	Wiring	Reliability	UIVisible	Never		AlwaysReplace
+aws_vpc_security_group_egress_rule	arn	Identity		UIVisible	Never		
+aws_vpc_security_group_egress_rule	cidr_ipv4	Tuning	Security	UIVisible	RequiresApproval		
+aws_vpc_security_group_egress_rule	cidr_ipv6	Tuning	Security	UIVisible	RequiresApproval		
+aws_vpc_security_group_egress_rule	description	Tuning	Security	RileyVisible	ChatSafe		
+aws_vpc_security_group_egress_rule	from_port	Tuning	Security	UIVisible	RequiresApproval		
+aws_vpc_security_group_egress_rule	id	Identity		UIVisible	Never		
+aws_vpc_security_group_egress_rule	ip_protocol	Tuning	Security	UIVisible	RequiresApproval		
+aws_vpc_security_group_egress_rule	prefix_list_id	Tuning	Security	RileyVisible	RequiresApproval		
+aws_vpc_security_group_egress_rule	referenced_security_group_id	Wiring	Security	UIVisible	RequiresApproval		
+aws_vpc_security_group_egress_rule	security_group_id	Wiring	Security	UIVisible	Never		AlwaysReplace
+aws_vpc_security_group_egress_rule	security_group_rule_id	Identity		UIVisible	Never		
+aws_vpc_security_group_egress_rule	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_vpc_security_group_egress_rule	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_vpc_security_group_egress_rule	to_port	Tuning	Security	UIVisible	RequiresApproval		
+aws_vpc_security_group_ingress_rule	arn	Identity		UIVisible	Never		
+aws_vpc_security_group_ingress_rule	cidr_ipv4	Tuning	Security	UIVisible	RequiresApproval		
+aws_vpc_security_group_ingress_rule	cidr_ipv6	Tuning	Security	UIVisible	RequiresApproval		
+aws_vpc_security_group_ingress_rule	description	Tuning	Security	RileyVisible	ChatSafe		
+aws_vpc_security_group_ingress_rule	from_port	Tuning	Security	UIVisible	RequiresApproval		
+aws_vpc_security_group_ingress_rule	id	Identity		UIVisible	Never		
+aws_vpc_security_group_ingress_rule	ip_protocol	Tuning	Security	UIVisible	RequiresApproval		
+aws_vpc_security_group_ingress_rule	prefix_list_id	Tuning	Security	RileyVisible	RequiresApproval		
+aws_vpc_security_group_ingress_rule	referenced_security_group_id	Wiring	Security	UIVisible	RequiresApproval		
+aws_vpc_security_group_ingress_rule	security_group_id	Wiring	Security	UIVisible	Never		AlwaysReplace
+aws_vpc_security_group_ingress_rule	security_group_rule_id	Identity		UIVisible	Never		
+aws_vpc_security_group_ingress_rule	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_vpc_security_group_ingress_rule	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_vpc_security_group_ingress_rule	to_port	Tuning	Security	UIVisible	RequiresApproval		
+aws_wafv2_web_acl	application_integration_url	Identity		UIVisible	Never		
+aws_wafv2_web_acl	arn	Identity		UIVisible	Never		
+aws_wafv2_web_acl	association_config	Tuning	Security	RileyVisible	RequiresApproval		
+aws_wafv2_web_acl	capacity	Identity		UIVisible	Never		
+aws_wafv2_web_acl	captcha_config	Tuning	Security	RileyVisible	RequiresApproval		
+aws_wafv2_web_acl	challenge_config	Tuning	Security	RileyVisible	RequiresApproval		
+aws_wafv2_web_acl	custom_response_body	Tuning	Security	RileyVisible	RequiresApproval		
+aws_wafv2_web_acl	default_action	Tuning	Security	UIVisible	RequiresApproval		
+aws_wafv2_web_acl	description	Tuning	Security	RileyVisible	ChatSafe		
+aws_wafv2_web_acl	id	Identity		UIVisible	Never		
+aws_wafv2_web_acl	lock_token	Identity		UIVisible	Never		
+aws_wafv2_web_acl	name	Identity		UIVisible	Never		AlwaysReplace
+aws_wafv2_web_acl	rule	Tuning	Security	UIVisible	RequiresApproval		
+aws_wafv2_web_acl	rule_json	Tuning	Security	RileyVisible	RequiresApproval		
+aws_wafv2_web_acl	scope	Wiring	Security	UIVisible	Never		AlwaysReplace
+aws_wafv2_web_acl	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_wafv2_web_acl	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_wafv2_web_acl	token_domains	Tuning	Security	RileyVisible	RequiresApproval		
+aws_wafv2_web_acl	visibility_config	Tuning	Reliability	RileyVisible	ChatSafe		
 aws_wafv2_web_acl_association	id	Identity		UIVisible	Never		
 aws_wafv2_web_acl_association	resource_arn	Identity		UIVisible	Never		AlwaysReplace
 aws_wafv2_web_acl_association	web_acl_arn	Wiring	Security	RileyVisible	RelationshipOnly		AlwaysReplace

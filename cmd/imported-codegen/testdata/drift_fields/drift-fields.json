@@ -207,6 +207,28 @@
       "semantic": "Exact"
     }
   ],
+  "aws_apigatewayv2_api_mapping": [
+    {
+      "path": "api_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "api_mapping_key",
+      "semantic": "Exact"
+    },
+    {
+      "path": "domain_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "stage",
+      "semantic": "Exact"
+    }
+  ],
   "aws_apigatewayv2_authorizer": [
     {
       "path": "api_id",
@@ -1704,6 +1726,36 @@
     },
     {
       "path": "stage.name",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_cognito_identity_provider": [
+    {
+      "path": "attribute_mapping",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "idp_identifiers",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "provider_details",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "provider_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "provider_type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "user_pool_id",
       "semantic": "Exact"
     }
   ],
@@ -3733,6 +3785,104 @@
       "semantic": "WholeList"
     }
   ],
+  "aws_lambda_event_source_mapping": [
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "batch_size",
+      "semantic": "Exact"
+    },
+    {
+      "path": "bisect_batch_on_function_error",
+      "semantic": "Exact"
+    },
+    {
+      "path": "enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "event_source_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "function_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "function_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "function_response_types",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "kms_key_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "last_modified",
+      "semantic": "Exact"
+    },
+    {
+      "path": "last_processing_result",
+      "semantic": "Exact"
+    },
+    {
+      "path": "maximum_batching_window_in_seconds",
+      "semantic": "Exact"
+    },
+    {
+      "path": "maximum_record_age_in_seconds",
+      "semantic": "Exact"
+    },
+    {
+      "path": "maximum_retry_attempts",
+      "semantic": "Exact"
+    },
+    {
+      "path": "parallelization_factor",
+      "semantic": "Exact"
+    },
+    {
+      "path": "queues",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "starting_position",
+      "semantic": "Exact"
+    },
+    {
+      "path": "starting_position_timestamp",
+      "semantic": "Exact"
+    },
+    {
+      "path": "state",
+      "semantic": "Exact"
+    },
+    {
+      "path": "state_transition_reason",
+      "semantic": "Exact"
+    },
+    {
+      "path": "topics",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "tumbling_window_in_seconds",
+      "semantic": "Exact"
+    },
+    {
+      "path": "uuid",
+      "semantic": "Exact"
+    }
+  ],
   "aws_lambda_function": [
     {
       "path": "architectures",
@@ -4588,6 +4738,92 @@
     },
     {
       "path": "subnet_id",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_network_acl": [
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "egress",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "egress.action",
+      "semantic": "Exact"
+    },
+    {
+      "path": "egress.cidr_block",
+      "semantic": "Exact"
+    },
+    {
+      "path": "egress.from_port",
+      "semantic": "Exact"
+    },
+    {
+      "path": "egress.ipv6_cidr_block",
+      "semantic": "Exact"
+    },
+    {
+      "path": "egress.protocol",
+      "semantic": "Exact"
+    },
+    {
+      "path": "egress.rule_no",
+      "semantic": "Exact"
+    },
+    {
+      "path": "egress.to_port",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ingress",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "ingress.action",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ingress.cidr_block",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ingress.from_port",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ingress.ipv6_cidr_block",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ingress.protocol",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ingress.rule_no",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ingress.to_port",
+      "semantic": "Exact"
+    },
+    {
+      "path": "owner_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "subnet_ids",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "vpc_id",
       "semantic": "Exact"
     }
   ],
@@ -5965,6 +6201,44 @@
       "semantic": "Exact"
     }
   ],
+  "aws_vpc_dhcp_options": [
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "domain_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "domain_name_servers",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ipv6_address_preferred_lease_time",
+      "semantic": "Exact"
+    },
+    {
+      "path": "netbios_name_servers",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "netbios_node_type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ntp_servers",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "owner_id",
+      "semantic": "Exact"
+    }
+  ],
   "aws_vpc_endpoint": [
     {
       "path": "arn",
@@ -6057,6 +6331,176 @@
     {
       "path": "vpc_id",
       "semantic": "Exact"
+    }
+  ],
+  "aws_vpc_security_group_egress_rule": [
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "cidr_ipv4",
+      "semantic": "Exact"
+    },
+    {
+      "path": "cidr_ipv6",
+      "semantic": "Exact"
+    },
+    {
+      "path": "description",
+      "semantic": "Exact"
+    },
+    {
+      "path": "from_port",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ip_protocol",
+      "semantic": "Exact"
+    },
+    {
+      "path": "prefix_list_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "referenced_security_group_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "security_group_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "security_group_rule_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "to_port",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_vpc_security_group_ingress_rule": [
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "cidr_ipv4",
+      "semantic": "Exact"
+    },
+    {
+      "path": "cidr_ipv6",
+      "semantic": "Exact"
+    },
+    {
+      "path": "description",
+      "semantic": "Exact"
+    },
+    {
+      "path": "from_port",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ip_protocol",
+      "semantic": "Exact"
+    },
+    {
+      "path": "prefix_list_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "referenced_security_group_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "security_group_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "security_group_rule_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "to_port",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_wafv2_web_acl": [
+    {
+      "path": "application_integration_url",
+      "semantic": "Exact"
+    },
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "association_config",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "capacity",
+      "semantic": "Exact"
+    },
+    {
+      "path": "captcha_config",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "challenge_config",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "custom_response_body",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "default_action",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "description",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "lock_token",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "rule",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "rule_json",
+      "semantic": "Exact"
+    },
+    {
+      "path": "scope",
+      "semantic": "Exact"
+    },
+    {
+      "path": "token_domains",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "visibility_config",
+      "semantic": "WholeList"
     }
   ],
   "aws_wafv2_web_acl_association": [

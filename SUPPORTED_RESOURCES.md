@@ -22,7 +22,7 @@ and is checked in lockstep with the runtime registries. See the
 
 ## Summary
 
-- **AWS:** 109 types · 100% Discoverable · 100% Enrichable · 71% DriftDetectable · 8% MetricsAvailable · 62% AgentEditable
+- **AWS:** 109 types · 100% Discoverable · 100% Enrichable · 78% DriftDetectable · 8% MetricsAvailable · 70% AgentEditable
 - **GCP:** 54 types · 100% Discoverable · 100% Enrichable · 63% DriftDetectable · 11% MetricsAvailable · 89% AgentEditable
 
 ## AWS
@@ -34,7 +34,7 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_api_gateway_resource` | ✓ | ✓ | ✓ | – | – |
 | `aws_api_gateway_stage` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_apigatewayv2_api` | ✓ | ✓ | ✓ | – | ✓ |
-| `aws_apigatewayv2_api_mapping` | ✓ | ✓ | – | – | – |
+| `aws_apigatewayv2_api_mapping` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_apigatewayv2_authorizer` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_apigatewayv2_domain_name` | ✓ | ✓ | ✓ | – | – |
 | `aws_apigatewayv2_integration` | ✓ | ✓ | ✓ | – | ✓ |
@@ -57,7 +57,7 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_cloudwatch_log_resource_policy` | ✓ | ✓ | – | – | – |
 | `aws_cloudwatch_log_stream` | ✓ | ✓ | – | – | – |
 | `aws_cloudwatch_metric_alarm` | ✓ | ✓ | ✓ | – | ✓ |
-| `aws_cognito_identity_provider` | ✓ | ✓ | – | – | – |
+| `aws_cognito_identity_provider` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_cognito_resource_server` | ✓ | ✓ | – | – | – |
 | `aws_cognito_user_pool` | ✓ | ✓ | – | – | – |
 | `aws_cognito_user_pool_client` | ✓ | ✓ | ✓ | – | ✓ |
@@ -94,7 +94,7 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_kms_alias` | ✓ | ✓ | ✓ | – | – |
 | `aws_kms_key` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_lambda_alias` | ✓ | ✓ | ✓ | – | ✓ |
-| `aws_lambda_event_source_mapping` | ✓ | ✓ | – | – | – |
+| `aws_lambda_event_source_mapping` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_lambda_function` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_lambda_function_url` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_lambda_permission` | ✓ | ✓ | ✓ | – | ✓ |
@@ -105,7 +105,7 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_msk_cluster` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_msk_configuration` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_nat_gateway` | ✓ | ✓ | ✓ | – | ✓ |
-| `aws_network_acl` | ✓ | ✓ | – | – | – |
+| `aws_network_acl` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_network_interface` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_opensearch_domain` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_opensearchserverless_access_policy` | ✓ | ✓ | – | – | – |
@@ -132,11 +132,11 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_ssm_parameter` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_subnet` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_vpc` | ✓ | ✓ | ✓ | – | ✓ |
-| `aws_vpc_dhcp_options` | ✓ | ✓ | – | – | – |
+| `aws_vpc_dhcp_options` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_vpc_endpoint` | ✓ | ✓ | ✓ | – | ✓ |
-| `aws_vpc_security_group_egress_rule` | ✓ | ✓ | – | – | – |
-| `aws_vpc_security_group_ingress_rule` | ✓ | ✓ | – | – | – |
-| `aws_wafv2_web_acl` | ✓ | ✓ | – | – | – |
+| `aws_vpc_security_group_egress_rule` | ✓ | ✓ | ✓ | – | ✓ |
+| `aws_vpc_security_group_ingress_rule` | ✓ | ✓ | ✓ | – | ✓ |
+| `aws_wafv2_web_acl` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_wafv2_web_acl_association` | ✓ | ✓ | ✓ | – | – |
 
 ## GCP
