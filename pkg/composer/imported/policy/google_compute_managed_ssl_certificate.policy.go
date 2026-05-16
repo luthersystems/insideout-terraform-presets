@@ -2,17 +2,19 @@ package policy
 
 var googleComputeManagedSslCertificatePolicy = Map{
 	// Identity
-	"name":           {Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever},
-	"id":             {Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever},
-	"self_link":      {Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever},
+	"name":           {Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever, DriftSemantic: DriftSemanticExact},
+	"id":             {Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever, DriftSemantic: DriftSemanticExact},
+	"self_link":      {Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever, DriftSemantic: DriftSemanticExact},
 	"certificate_id": {Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever},
 	"project": {
 		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
-		ChangeRisk: ChangeAlwaysReplace,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"type": {
 		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
-		ChangeRisk: ChangeAlwaysReplace,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
 	},
 
 	// Tuning
@@ -21,7 +23,8 @@ var googleComputeManagedSslCertificatePolicy = Map{
 	},
 	"subject_alternative_names": {
 		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityUIVisible,
-		Edit: EditNever,
+		Edit:          EditNever,
+		DriftSemantic: DriftSemanticWholeList,
 	},
 	"expire_time": {
 		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityUIVisible,
@@ -35,6 +38,7 @@ var googleComputeManagedSslCertificatePolicy = Map{
 	"managed.domains": {
 		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityUIVisible,
 		Edit: EditNever, ChangeRisk: ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticWholeList,
 	},
 
 	"timeouts": timeoutsPolicy(),

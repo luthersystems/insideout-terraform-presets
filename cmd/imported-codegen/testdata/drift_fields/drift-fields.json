@@ -3745,6 +3745,32 @@
       "semantic": "Exact"
     }
   ],
+  "google_api_gateway_api": [
+    {
+      "path": "api_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "display_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "managed_service",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    }
+  ],
   "google_api_gateway_api_config": [
     {
       "path": "api",
@@ -3832,6 +3858,32 @@
     },
     {
       "path": "project",
+      "semantic": "Exact"
+    }
+  ],
+  "google_cloud_run_v2_service_iam_member": [
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "location",
+      "semantic": "Exact"
+    },
+    {
+      "path": "member",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "role",
       "semantic": "Exact"
     }
   ],
@@ -3928,6 +3980,32 @@
     },
     {
       "path": "project",
+      "semantic": "Exact"
+    }
+  ],
+  "google_cloudfunctions2_function_iam_member": [
+    {
+      "path": "cloud_function",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "location",
+      "semantic": "Exact"
+    },
+    {
+      "path": "member",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "role",
       "semantic": "Exact"
     }
   ],
@@ -4491,6 +4569,36 @@
       "semantic": "Exact"
     }
   ],
+  "google_compute_managed_ssl_certificate": [
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "managed.domains",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "self_link",
+      "semantic": "Exact"
+    },
+    {
+      "path": "subject_alternative_names",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "type",
+      "semantic": "Exact"
+    }
+  ],
   "google_compute_network": [
     {
       "path": "auto_create_subnetworks",
@@ -4538,6 +4646,28 @@
     },
     {
       "path": "routing_mode",
+      "semantic": "Exact"
+    },
+    {
+      "path": "self_link",
+      "semantic": "Exact"
+    }
+  ],
+  "google_compute_resource_policy": [
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "region",
       "semantic": "Exact"
     },
     {
@@ -4630,6 +4760,28 @@
     },
     {
       "path": "type",
+      "semantic": "Exact"
+    }
+  ],
+  "google_compute_target_http_proxy": [
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "self_link",
+      "semantic": "Exact"
+    },
+    {
+      "path": "url_map",
       "semantic": "Exact"
     }
   ],
@@ -4896,6 +5048,24 @@
     },
     {
       "path": "version_template.protection_level",
+      "semantic": "Exact"
+    }
+  ],
+  "google_kms_crypto_key_iam_binding": [
+    {
+      "path": "crypto_key_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "members",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "role",
       "semantic": "Exact"
     }
   ],

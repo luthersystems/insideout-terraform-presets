@@ -2,19 +2,21 @@ package policy
 
 var googleComputeTargetHttpProxyPolicy = Map{
 	// Identity
-	"name":      {Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever},
-	"id":        {Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever},
-	"self_link": {Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever},
+	"name":      {Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever, DriftSemantic: DriftSemanticExact},
+	"id":        {Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever, DriftSemantic: DriftSemanticExact},
+	"self_link": {Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever, DriftSemantic: DriftSemanticExact},
 	"project": {
 		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
-		ChangeRisk: ChangeAlwaysReplace,
+		ChangeRisk:    ChangeAlwaysReplace,
+		DriftSemantic: DriftSemanticExact,
 	},
 	"proxy_id": {Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever},
 
 	// Wiring — URL map is the routing target.
 	"url_map": {
 		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityUIVisible,
-		Edit: EditRelationshipOnly,
+		Edit:          EditRelationshipOnly,
+		DriftSemantic: DriftSemanticExact,
 	},
 
 	// Tuning
