@@ -559,6 +559,53 @@ func TestCloudControlEnricher_Enrich_NormalizerError(t *testing.T) {
 	assert.Contains(t, err.Error(), "normalize AWS::Logs::LogGroup")
 }
 
+// TestCloudControlEnricher_LogGroup_EnrichAndEnrichByIDProduceSameJSON
+// pins the load-bearing #502 retirement claim: with the production
+// Normalizer wired, both entry points (Enrich → ir.Attrs and
+// EnrichByID → raw) produce byte-equivalent typed payloads. The
+// retired hand-rolled cloudwatchLogGroupEnricher's parity test
+// (TestCloudwatchLogGroupEnricher_EnrichAndEnrichByIDProduceSameJSON)
+// went away with the file; this is its CC+Normalizer successor.
+// Catches a regression that bypasses the Normalizer on one entry
+// point (e.g. EnrichByID short-circuiting fetchAndMap).
+func TestCloudControlEnricher_LogGroup_EnrichAndEnrichByIDProduceSameJSON(t *testing.T) {
+	t.Parallel()
+	props := `{
+		"Arn": "arn:aws:logs:us-east-1:123:log-group:/aws/lambda/demo:*",
+		"LogGroupName": "/aws/lambda/demo",
+		"RetentionInDays": 30,
+		"KmsKeyId": "arn:aws:kms:us-east-1:123:key/abc",
+		"Tags": [
+			{"Key": "Project", "Value": "io-abc"},
+			{"Key": "Env", "Value": "prod"}
+		]
+	}`
+	n := normalizerForCFNType(t, "AWS::Logs::LogGroup")
+
+	// Enrich path → ir.Attrs.
+	fakeA := &fakeCCGet{props: props}
+	enrA := newCloudControlEnricherWithNormalizer("aws_cloudwatch_log_group", "AWS::Logs::LogGroup", fakeA.call, n)
+	ir := &imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Type:     "aws_cloudwatch_log_group",
+			ImportID: "/aws/lambda/demo",
+		},
+	}
+	require.NoError(t, enrA.Enrich(context.Background(), ir, EnrichClients{}))
+
+	// EnrichByID path → raw. Fresh fake so the two paths can't
+	// accidentally share state.
+	fakeB := &fakeCCGet{props: props}
+	enrB := newCloudControlEnricherWithNormalizer("aws_cloudwatch_log_group", "AWS::Logs::LogGroup", fakeB.call, n)
+	raw, err := enrB.EnrichByID(context.Background(), &imported.ResourceIdentity{
+		Type:     "aws_cloudwatch_log_group",
+		ImportID: "/aws/lambda/demo",
+	}, EnrichClients{})
+	require.NoError(t, err)
+
+	assert.JSONEq(t, string(ir.Attrs), string(raw))
+}
+
 // TestCloudControlEnricher_Enrich_RawAttrs_IsValidJSONWithSnakeKeys
 // guards the wire-format contract: after step 1 of #490 (json tags on
 // every generated Layer-1 field), ir.Attrs uses lowercase snake_case
