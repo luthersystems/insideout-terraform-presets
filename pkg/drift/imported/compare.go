@@ -33,6 +33,21 @@
 //
 // When both sides of the compare resolve identically (including both
 // absent → both nil), no mismatch is reported.
+//
+// # LabelFilter shape
+//
+// DriftSemanticLabelFilter is a per-key comparator: it walks the
+// surviving keys of the snapshot ∪ live map after filtering out keys
+// matching the policy's FieldPolicy.LabelDriftIgnorePrefixes (default
+// {"goog-", "goog_"} when the policy leaves the slice empty), and
+// emits ONE FieldMismatch per differing key with Field=`<path>.<key>`
+// and per-key string-shaped Snapshot/Cloud. A key absent on a side
+// emits an empty-string for that side. This shape mirrors the legacy
+// per-type comparators in luthersystems/reliable
+// (internal/agentapi/imported_drift.go's diffUserLabels) so the
+// downstream UI render path is byte-identical between the curated
+// upstream comparator and the per-type comparator it replaces in the
+// reliable#1479 Surface B refactor.
 package imported
 
 import (
@@ -63,11 +78,11 @@ type FieldMismatch = imp.FieldMismatch
 //   - DriftSemanticWholeList — list-valued field compared as a whole
 //     (order-sensitive), via reflect.DeepEqual after coercion to
 //     []any.
-//   - DriftSemanticLabelFilter — map-valued field compared after
-//     filtering out keys with a "goog-" or "goog_" prefix (the only
-//     auto-populated label namespace today). Per-policy filter prefix
-//     support is documented in axes.go and is a follow-up; the
-//     current behavior is fixed to the GCP label-noise case.
+//   - DriftSemanticLabelFilter — map-valued field compared per-key
+//     after filtering out keys matching the policy's
+//     LabelDriftIgnorePrefixes (default {"goog-", "goog_"} when
+//     unset). One FieldMismatch per differing key, with
+//     Field=`<path>.<keyname>`.
 //
 // Types without a registered policy return nil (no fields curated →
 // no drift signal). Malformed JSON in either Attrs returns nil — this
@@ -101,9 +116,7 @@ func Compare(tfType string, snapshot, live json.RawMessage) []FieldMismatch {
 				out = append(out, m)
 			}
 		case policy.DriftSemanticLabelFilter:
-			if m, ok := compareLabelFilter(path, snapAttrs, liveAttrs); ok {
-				out = append(out, m)
-			}
+			out = append(out, compareLabelFilter(path, entry.LabelDriftIgnorePrefixes, snapAttrs, liveAttrs)...)
 		default:
 			// Unknown DriftSemantic — be conservative and skip. The
 			// policy lint enforces Valid() at registration, so an
@@ -215,26 +228,82 @@ func coerceList(v any) []any {
 	return []any{v}
 }
 
-// compareLabelFilter resolves path in both maps, filters auto-populated
-// goog-* / goog_* keys on both sides, and compares the residue. A
-// non-map value on either side (e.g. nil) is treated as an empty map
-// for the purpose of filtering — equal empties → no mismatch.
-func compareLabelFilter(path string, snap, live map[string]any) (FieldMismatch, bool) {
+// defaultLabelDriftIgnorePrefixes is the back-compat fallback used
+// when a policy declares DriftSemanticLabelFilter without setting
+// LabelDriftIgnorePrefixes. Mirrors the original hardcoded set so an
+// untouched policy keeps the same behavior after the per-policy
+// prefix knob lands.
+var defaultLabelDriftIgnorePrefixes = []string{"goog-", "goog_"}
+
+// compareLabelFilter resolves path in both maps, filters keys whose
+// name has any of the ignorePrefixes on both sides, and emits ONE
+// FieldMismatch per differing surviving key. The returned slice is
+// unsorted — Compare sorts the merged output across all policy
+// entries before returning to the caller.
+//
+// Field names: `<path>.<keyname>` so the UI / reason-string render
+// names exactly the changed key (e.g. "labels.env" rather than the
+// whole-map "labels"). Snapshot / Cloud are per-key string values:
+// the JSON-decoded value coerced to its scalar string when possible
+// (string kept as-is; bool/number formatted; structured values
+// json.Marshal-ed) and the empty string when the key is absent on
+// that side.
+//
+// A non-map value on either side (e.g. nil) is treated as an empty
+// map for the purpose of filtering — equal empties → no mismatches.
+//
+// ignorePrefixes empty/nil falls back to defaultLabelDriftIgnorePrefixes
+// for back-compat with policies authored before the per-policy knob.
+func compareLabelFilter(path string, ignorePrefixes []string, snap, live map[string]any) []FieldMismatch {
 	sv, sOK := resolvePath(path, snap)
 	lv, lOK := resolvePath(path, live)
 	if !sOK && !lOK {
-		return FieldMismatch{}, false
+		return nil
 	}
-	sMap := filterAutoLabels(coerceMap(sv))
-	lMap := filterAutoLabels(coerceMap(lv))
-	if reflect.DeepEqual(sMap, lMap) {
-		return FieldMismatch{}, false
+	prefixes := ignorePrefixes
+	if len(prefixes) == 0 {
+		prefixes = defaultLabelDriftIgnorePrefixes
 	}
-	return FieldMismatch{Field: path, Snapshot: sMap, Cloud: lMap}, true
+	sMap := filterLabelMap(coerceMap(sv), prefixes)
+	lMap := filterLabelMap(coerceMap(lv), prefixes)
+
+	keys := make(map[string]struct{}, len(sMap)+len(lMap))
+	for k := range sMap {
+		keys[k] = struct{}{}
+	}
+	for k := range lMap {
+		keys[k] = struct{}{}
+	}
+	if len(keys) == 0 {
+		return nil
+	}
+	sortedKeys := make([]string, 0, len(keys))
+	for k := range keys {
+		sortedKeys = append(sortedKeys, k)
+	}
+	sort.Strings(sortedKeys)
+
+	var out []FieldMismatch
+	for _, k := range sortedKeys {
+		sVal, sPresent := sMap[k]
+		lVal, lPresent := lMap[k]
+		switch {
+		case !sPresent && lPresent:
+			out = append(out, FieldMismatch{Field: path + "." + k, Snapshot: "", Cloud: stringifyLabelValue(lVal)})
+		case sPresent && !lPresent:
+			out = append(out, FieldMismatch{Field: path + "." + k, Snapshot: stringifyLabelValue(sVal), Cloud: ""})
+		default:
+			// Both present — emit only on inequality.
+			if !reflect.DeepEqual(sVal, lVal) {
+				out = append(out, FieldMismatch{Field: path + "." + k, Snapshot: stringifyLabelValue(sVal), Cloud: stringifyLabelValue(lVal)})
+			}
+		}
+	}
+	return out
 }
 
 // coerceMap returns v as map[string]any. A nil or non-map value yields
-// an empty (non-nil) map so filterAutoLabels can iterate uniformly.
+// an empty (non-nil) map so filterLabelMap can iterate uniformly.
 func coerceMap(v any) map[string]any {
 	if v == nil {
 		return map[string]any{}
@@ -245,22 +314,47 @@ func coerceMap(v any) map[string]any {
 	return map[string]any{}
 }
 
-// filterAutoLabels returns a copy of m with any "goog-" / "goog_"
-// prefixed keys removed. These are GCP's auto-populated label
-// namespace (e.g. goog-managed-by, goog_terraform_provisioned) and
-// drift on them is provider noise, not user-actionable.
-//
-// Future: per-policy filter-prefix support is documented in
-// axes.go's DriftSemanticLabelFilter comment. When that lands the
-// caller will pass the prefix; for now the rule is fixed to the
-// goog-* namespace.
-func filterAutoLabels(m map[string]any) map[string]any {
+// filterLabelMap returns a copy of m with any key matching one of
+// ignorePrefixes removed. Prefix matching is exact-string-prefix on
+// the key; an empty entry in ignorePrefixes matches every key (and is
+// almost certainly a policy-author bug — the empty-fallback case is
+// handled at the caller).
+func filterLabelMap(m map[string]any, ignorePrefixes []string) map[string]any {
 	out := make(map[string]any, len(m))
+keyloop:
 	for k, v := range m {
-		if strings.HasPrefix(k, "goog-") || strings.HasPrefix(k, "goog_") {
-			continue
+		for _, p := range ignorePrefixes {
+			if strings.HasPrefix(k, p) {
+				continue keyloop
+			}
 		}
 		out[k] = v
 	}
 	return out
+}
+
+// stringifyLabelValue renders a per-key label value as a string, in
+// the same shape the legacy reliable comparator produced (so the
+// downstream UI render path stays byte-identical when reliable swaps
+// to upstream Compare). The vast majority of label values are
+// strings; bools/numbers/structured values are handled defensively
+// so a label authored against a less-conventional schema doesn't
+// surface as `<unsupported>` in the reason text.
+func stringifyLabelValue(v any) string {
+	switch x := v.(type) {
+	case nil:
+		return ""
+	case string:
+		return x
+	}
+	b, err := json.Marshal(v)
+	if err != nil {
+		return ""
+	}
+	s := string(b)
+	// json.Marshal renders strings already-quoted; the string-case
+	// above peels that off. For everything else we keep the canonical
+	// JSON representation (true / 42 / [...] / {...}) so the value
+	// round-trips losslessly.
+	return s
 }

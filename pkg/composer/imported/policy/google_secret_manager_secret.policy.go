@@ -11,9 +11,16 @@ package policy
 // resource) and is not curated here, so the Sensitive-leak concern
 // that gates `aws_lambda_function.environment.variables` does not
 // arise. All curated leaves are scalar — DriftSemanticExact applies
-// uniformly. Label and annotation bags stay DriftSemanticNone
-// (tagPolicy() zero value); user-author label LabelFilter coverage
-// is deferred to the comparator's redacted-mode follow-up (axes.go).
+// uniformly.
+//
+// Reliable #1479 follow-up: `labels` adopts gcpLabelDriftPolicy() so
+// user-set labels surface as drift (per-key `labels.<keyname>`
+// mismatches) while goog-* / insideout-import* control-plane and
+// provenance labels are filtered out — matches the legacy reliable
+// comparator (compareGoogleSecretManagerSecretAttrs.diffUserLabels)
+// so the Surface B per-type-comparator deletion preserves the user-
+// facing drift signal. Annotations stay system-only (no curated
+// drift signal in the legacy comparator).
 var googleSecretManagerSecretPolicy = Map{
 	// Identity
 	"name": {
@@ -78,11 +85,10 @@ var googleSecretManagerSecretPolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 
-	// Labels and annotations — system-owned. DriftSemantic stays None
-	// (tagPolicy() zero value); user-author label drift coverage is the
-	// LabelFilter follow-up tracked alongside the axes.go redacted-mode
-	// work.
-	"labels":                tagPolicy(),
+	// Labels and annotations — `labels` carries user-set drift
+	// signal; computed echoes (`effective_labels`, `terraform_labels`)
+	// and annotation bags stay system-only.
+	"labels":                gcpLabelDriftPolicy(),
 	"effective_labels":      tagPolicy(),
 	"terraform_labels":      tagPolicy(),
 	"annotations":           tagPolicy(),

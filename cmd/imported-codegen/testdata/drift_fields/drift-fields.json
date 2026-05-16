@@ -10347,6 +10347,10 @@
       "semantic": "Exact"
     },
     {
+      "path": "labels",
+      "semantic": "LabelFilter"
+    },
+    {
       "path": "message_retention_duration",
       "semantic": "Exact"
     },
@@ -10423,6 +10427,10 @@
     {
       "path": "kms_key_name",
       "semantic": "Exact"
+    },
+    {
+      "path": "labels",
+      "semantic": "LabelFilter"
     },
     {
       "path": "message_retention_duration",
@@ -10535,6 +10543,10 @@
     {
       "path": "id",
       "semantic": "Exact"
+    },
+    {
+      "path": "labels",
+      "semantic": "LabelFilter"
     },
     {
       "path": "name",
@@ -10901,20 +10913,12 @@
       "semantic": "Exact"
     },
     {
-      "path": "lifecycle_rule.action.storage_class",
-      "semantic": "Exact"
+      "path": "labels",
+      "semantic": "LabelFilter"
     },
     {
-      "path": "lifecycle_rule.action.type",
-      "semantic": "Exact"
-    },
-    {
-      "path": "lifecycle_rule.condition.age",
-      "semantic": "Exact"
-    },
-    {
-      "path": "lifecycle_rule.condition.with_state",
-      "semantic": "Exact"
+      "path": "lifecycle_rule",
+      "semantic": "WholeList"
     },
     {
       "path": "location",

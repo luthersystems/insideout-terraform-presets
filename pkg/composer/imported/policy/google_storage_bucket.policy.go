@@ -4,15 +4,28 @@ package policy
 //
 // Bundle D1 (#491): DriftSemantic axis is curated on every non-tag,
 // non-timeouts entry. Scalars (name, project, location, storage_class,
-// encryption KMS key, etc.) use DriftSemanticExact. The CORS and
-// lifecycle leaves enumerated here are flat scalars within the
-// repeated block — per-leaf Exact is the right granularity, matching
-// the pattern used by aws_dynamodb_table for repeated-block leaves.
-// The label maps use the tagPolicy() default (DriftSemanticNone) — the
-// label-bag drift problem (filtering goog-*) is handled at a higher
-// surface; per-field LabelFilter on `labels` is the natural next step
-// when we promote label drift detection into the comparator, and is
-// deferred to a follow-up.
+// encryption KMS key, etc.) use DriftSemanticExact. The CORS leaves
+// are flat scalars within the repeated block — per-leaf Exact is the
+// right granularity, matching the pattern used by aws_dynamodb_table
+// for repeated-block leaves.
+//
+// Reliable #1479 follow-up: `lifecycle_rule` is now a single
+// DriftSemanticWholeList entry (instead of four per-leaf
+// `lifecycle_rule.{action.type, action.storage_class, condition.age,
+// condition.with_state}` entries). The lifecycle list is order-
+// sensitive on the GCS provider side (rules evaluate top-down), so a
+// re-ordered or any leaf-level change collapses into a single drift
+// banner rather than fanning out to N per-leaf banners. This matches
+// the legacy reliable comparator
+// (compareGCSBucketAttrs.canonicalizeSnapshotLifecycle) and unblocks
+// the Surface B per-type-comparator deletion.
+//
+// `labels` adopts gcpLabelDriftPolicy() so user-set labels surface as
+// drift (per-key `labels.<keyname>` mismatches) while goog-* /
+// insideout-import* control-plane and provenance labels are filtered
+// out. `effective_labels` and `terraform_labels` stay on tagPolicy()
+// — they're computed values that always echo `labels`, so re-emitting
+// drift on them would just be noise.
 var googleStorageBucketPolicy = Map{
 	// Identity
 	"name": {
@@ -89,21 +102,13 @@ var googleStorageBucketPolicy = Map{
 		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},
-	"lifecycle_rule.action.type": {
+	// lifecycle_rule — whole-list compare. The list is order-sensitive
+	// on the GCS provider side (rules evaluate top-down), so re-ordering
+	// or any leaf-level change collapses into one drift banner rather
+	// than per-leaf fan-out.
+	"lifecycle_rule": {
 		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
-		DriftSemantic: DriftSemanticExact,
-	},
-	"lifecycle_rule.action.storage_class": {
-		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
-		DriftSemantic: DriftSemanticExact,
-	},
-	"lifecycle_rule.condition.age": {
-		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
-		DriftSemantic: DriftSemanticExact,
-	},
-	"lifecycle_rule.condition.with_state": {
-		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
-		DriftSemantic: DriftSemanticExact,
+		DriftSemantic: DriftSemanticWholeList,
 	},
 	"retention_policy.retention_period": {
 		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
@@ -159,11 +164,11 @@ var googleStorageBucketPolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 
-	// Labels — uniformly system-owned. DriftSemantic stays None for
-	// now (tagPolicy() default); the goog-* filtering needed for GCP
-	// label drift is exercised via DriftSemanticLabelFilter on policies
-	// that have a curated label-drift signal.
-	"labels":           tagPolicy(),
+	// Labels — `labels` carries user-set drift signal (per-key
+	// `labels.<keyname>` mismatches). `effective_labels` and
+	// `terraform_labels` are computed echoes of `labels`; emitting
+	// drift on those would just duplicate the signal.
+	"labels":           gcpLabelDriftPolicy(),
 	"effective_labels": tagPolicy(),
 	"terraform_labels": tagPolicy(),
 

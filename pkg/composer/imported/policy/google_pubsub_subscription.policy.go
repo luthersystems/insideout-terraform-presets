@@ -180,8 +180,13 @@ var googlePubsubSubscriptionPolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 
-	// Labels — system-owned.
-	"labels":           tagPolicy(),
+	// Labels — `labels` carries user-set drift signal (per-key
+	// `labels.<keyname>` mismatches via gcpLabelDriftPolicy());
+	// computed echoes (`effective_labels`, `terraform_labels`) stay
+	// system-only. Mirrors compareGooglePubsubSubscriptionAttrs in
+	// reliable's per-type comparator so the Surface B deletion (#1479)
+	// preserves the user-facing drift signal.
+	"labels":           gcpLabelDriftPolicy(),
 	"effective_labels": tagPolicy(),
 	"terraform_labels": tagPolicy(),
 
