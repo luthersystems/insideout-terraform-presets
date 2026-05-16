@@ -793,6 +793,299 @@ func TestCompare_Curated_GoogleComputeHealthCheck_Exact(t *testing.T) {
 	assert.NotContains(t, idx, "unhealthy_threshold")
 }
 
+// --- Bundle D4 / IAM-binding curation (#491) -----------------------------
+//
+// Each IAM binding/member type is the (parent × role × member) tuple plus
+// a `members` list (binding-flavoured) or a singleton `member` scalar
+// (member-flavoured). Pre-#491 every field carried DriftSemantic=None,
+// so an out-of-band IAM edit slipped past the curated comparator
+// entirely. Bundle D4 flips the role / member / members fields onto
+// the comparator so a flipped role binding or a deleted/added principal
+// surfaces as a security-pillar drift signal.
+//
+// The subtests below pin: (1) role / member flips on each *_iam_member
+// type emit one Exact mismatch each, (2) the WholeList shape on
+// *_iam_binding `members` collapses a per-element change into a single
+// list mismatch (no per-element fan-out), and (3) identical tuples
+// emit zero mismatches so unchanged bindings stay quiet.
+
+// TestCompare_Curated_GoogleProjectIAMMember_Exact exercises the
+// canonical project-scope IAM member curation: a role flip emits one
+// Exact mismatch on `role`, and an identical binding emits nothing.
+func TestCompare_Curated_GoogleProjectIAMMember_Exact(t *testing.T) {
+	t.Parallel()
+	snap := json.RawMessage(`{
+		"id": "p/roles/storage.admin/user:dev@example.com",
+		"etag": "BwAbCdEf=",
+		"project": "p",
+		"role": "roles/storage.admin",
+		"member": "user:dev@example.com"
+	}`)
+	live := json.RawMessage(`{
+		"id": "p/roles/storage.objectViewer/user:dev@example.com",
+		"etag": "BwAbCdEf=",
+		"project": "p",
+		"role": "roles/storage.objectViewer",
+		"member": "user:dev@example.com"
+	}`)
+	got := Compare("google_project_iam_member", snap, live)
+	idx := fieldsByPath(t, got)
+
+	require.Contains(t, idx, "role",
+		"expected role mismatch; got fields: %v", keysOf(idx))
+	assert.Equal(t, "roles/storage.admin", idx["role"].Snapshot)
+	assert.Equal(t, "roles/storage.objectViewer", idx["role"].Cloud)
+
+	// Identity / member identical → no mismatch.
+	assert.NotContains(t, idx, "project")
+	assert.NotContains(t, idx, "member")
+	// id/etag are DriftSemantic=None → never emitted.
+	assert.NotContains(t, idx, "id")
+	assert.NotContains(t, idx, "etag")
+
+	// Identical binding on both sides → no mismatch at all.
+	got2 := Compare("google_project_iam_member", snap, snap)
+	assert.Empty(t, got2, "identical IAM binding must emit no drift")
+}
+
+// TestCompare_Curated_GoogleStorageBucketIAMMember_Exact exercises a
+// member flip (e.g. an out-of-band edit pointing the binding at a
+// different principal) — Exact mismatch on `member`, identity unchanged.
+func TestCompare_Curated_GoogleStorageBucketIAMMember_Exact(t *testing.T) {
+	t.Parallel()
+	snap := json.RawMessage(`{
+		"id": "b/my-bucket/roles/storage.objectViewer/user:reader-A@example.com",
+		"etag": "BwAbCdEf=",
+		"bucket": "my-bucket",
+		"role": "roles/storage.objectViewer",
+		"member": "user:reader-A@example.com"
+	}`)
+	live := json.RawMessage(`{
+		"id": "b/my-bucket/roles/storage.objectViewer/user:reader-B@example.com",
+		"etag": "BwAbCdEf=",
+		"bucket": "my-bucket",
+		"role": "roles/storage.objectViewer",
+		"member": "user:reader-B@example.com"
+	}`)
+	got := Compare("google_storage_bucket_iam_member", snap, live)
+	idx := fieldsByPath(t, got)
+
+	require.Contains(t, idx, "member",
+		"expected member mismatch; got fields: %v", keysOf(idx))
+	assert.Equal(t, "user:reader-A@example.com", idx["member"].Snapshot)
+	assert.Equal(t, "user:reader-B@example.com", idx["member"].Cloud)
+
+	// Identity / role unchanged → no mismatch.
+	assert.NotContains(t, idx, "bucket")
+	assert.NotContains(t, idx, "role")
+	assert.NotContains(t, idx, "id")
+	assert.NotContains(t, idx, "etag")
+}
+
+// TestCompare_Curated_GoogleCloudRunV2ServiceIAMMember_Exact exercises
+// a role flip on the Cloud Run v2 IAM-member type.
+func TestCompare_Curated_GoogleCloudRunV2ServiceIAMMember_Exact(t *testing.T) {
+	t.Parallel()
+	snap := json.RawMessage(`{
+		"id": "projects/p/locations/us-east1/services/api/roles/run.invoker/user:caller@example.com",
+		"etag": "BwAbCdEf=",
+		"name": "api",
+		"location": "us-east1",
+		"project": "p",
+		"role": "roles/run.invoker",
+		"member": "user:caller@example.com"
+	}`)
+	live := json.RawMessage(`{
+		"id": "projects/p/locations/us-east1/services/api/roles/run.developer/user:caller@example.com",
+		"etag": "BwAbCdEf=",
+		"name": "api",
+		"location": "us-east1",
+		"project": "p",
+		"role": "roles/run.developer",
+		"member": "user:caller@example.com"
+	}`)
+	got := Compare("google_cloud_run_v2_service_iam_member", snap, live)
+	idx := fieldsByPath(t, got)
+
+	require.Contains(t, idx, "role")
+	assert.Equal(t, "roles/run.invoker", idx["role"].Snapshot)
+	assert.Equal(t, "roles/run.developer", idx["role"].Cloud)
+
+	// Identity tuple unchanged → no mismatch.
+	assert.NotContains(t, idx, "name")
+	assert.NotContains(t, idx, "location")
+	assert.NotContains(t, idx, "project")
+	assert.NotContains(t, idx, "member")
+}
+
+// TestCompare_Curated_GoogleCloudfunctions2FunctionIAMMember_Exact
+// exercises a member flip on the Cloud Functions Gen-2 IAM-member type.
+func TestCompare_Curated_GoogleCloudfunctions2FunctionIAMMember_Exact(t *testing.T) {
+	t.Parallel()
+	snap := json.RawMessage(`{
+		"id": "projects/p/locations/us-east1/functions/fn/roles/cloudfunctions.invoker/serviceAccount:caller-A@p.iam.gserviceaccount.com",
+		"etag": "BwAbCdEf=",
+		"cloud_function": "projects/p/locations/us-east1/functions/fn",
+		"location": "us-east1",
+		"project": "p",
+		"role": "roles/cloudfunctions.invoker",
+		"member": "serviceAccount:caller-A@p.iam.gserviceaccount.com"
+	}`)
+	live := json.RawMessage(`{
+		"id": "projects/p/locations/us-east1/functions/fn/roles/cloudfunctions.invoker/serviceAccount:caller-B@p.iam.gserviceaccount.com",
+		"etag": "BwAbCdEf=",
+		"cloud_function": "projects/p/locations/us-east1/functions/fn",
+		"location": "us-east1",
+		"project": "p",
+		"role": "roles/cloudfunctions.invoker",
+		"member": "serviceAccount:caller-B@p.iam.gserviceaccount.com"
+	}`)
+	got := Compare("google_cloudfunctions2_function_iam_member", snap, live)
+	idx := fieldsByPath(t, got)
+
+	require.Contains(t, idx, "member")
+	assert.Equal(t, "serviceAccount:caller-A@p.iam.gserviceaccount.com", idx["member"].Snapshot)
+	assert.Equal(t, "serviceAccount:caller-B@p.iam.gserviceaccount.com", idx["member"].Cloud)
+
+	// Identity / role unchanged → no mismatch.
+	assert.NotContains(t, idx, "cloud_function")
+	assert.NotContains(t, idx, "location")
+	assert.NotContains(t, idx, "project")
+	assert.NotContains(t, idx, "role")
+}
+
+// TestCompare_Curated_GoogleSecretManagerSecretIAMMember_Exact
+// exercises a role flip on the Secret Manager IAM-member type.
+func TestCompare_Curated_GoogleSecretManagerSecretIAMMember_Exact(t *testing.T) {
+	t.Parallel()
+	snap := json.RawMessage(`{
+		"id": "projects/p/secrets/api-key/roles/secretmanager.secretAccessor/serviceAccount:reader@p.iam.gserviceaccount.com",
+		"etag": "BwAbCdEf=",
+		"project": "p",
+		"secret_id": "api-key",
+		"role": "roles/secretmanager.secretAccessor",
+		"member": "serviceAccount:reader@p.iam.gserviceaccount.com"
+	}`)
+	live := json.RawMessage(`{
+		"id": "projects/p/secrets/api-key/roles/secretmanager.admin/serviceAccount:reader@p.iam.gserviceaccount.com",
+		"etag": "BwAbCdEf=",
+		"project": "p",
+		"secret_id": "api-key",
+		"role": "roles/secretmanager.admin",
+		"member": "serviceAccount:reader@p.iam.gserviceaccount.com"
+	}`)
+	got := Compare("google_secret_manager_secret_iam_member", snap, live)
+	idx := fieldsByPath(t, got)
+
+	require.Contains(t, idx, "role")
+	assert.Equal(t, "roles/secretmanager.secretAccessor", idx["role"].Snapshot)
+	assert.Equal(t, "roles/secretmanager.admin", idx["role"].Cloud)
+
+	// Identity / member unchanged → no mismatch.
+	assert.NotContains(t, idx, "project")
+	assert.NotContains(t, idx, "secret_id")
+	assert.NotContains(t, idx, "member")
+}
+
+// TestCompare_Curated_GoogleKMSCryptoKeyIAMBinding_WholeList exercises
+// the `members` WholeList collapse on the KMS-key IAM-binding type: a
+// single added principal emits ONE `members` mismatch with both sides
+// as []any, not a per-element fan-out. Also confirms a role flip emits
+// an Exact mismatch alongside.
+func TestCompare_Curated_GoogleKMSCryptoKeyIAMBinding_WholeList(t *testing.T) {
+	t.Parallel()
+	snap := json.RawMessage(`{
+		"id": "projects/p/locations/global/keyRings/kr/cryptoKeys/k/roles/cloudkms.cryptoKeyEncrypterDecrypter",
+		"etag": "BwAbCdEf=",
+		"crypto_key_id": "projects/p/locations/global/keyRings/kr/cryptoKeys/k",
+		"role": "roles/cloudkms.cryptoKeyEncrypterDecrypter",
+		"members": [
+			"serviceAccount:writer@p.iam.gserviceaccount.com",
+			"serviceAccount:reader@p.iam.gserviceaccount.com"
+		]
+	}`)
+	live := json.RawMessage(`{
+		"id": "projects/p/locations/global/keyRings/kr/cryptoKeys/k/roles/cloudkms.cryptoKeyEncrypterDecrypter",
+		"etag": "BwAbCdEf=",
+		"crypto_key_id": "projects/p/locations/global/keyRings/kr/cryptoKeys/k",
+		"role": "roles/cloudkms.cryptoKeyEncrypterDecrypter",
+		"members": [
+			"serviceAccount:writer@p.iam.gserviceaccount.com",
+			"serviceAccount:reader@p.iam.gserviceaccount.com",
+			"serviceAccount:unauthorized@p.iam.gserviceaccount.com"
+		]
+	}`)
+	got := Compare("google_kms_crypto_key_iam_binding", snap, live)
+	idx := fieldsByPath(t, got)
+
+	require.Contains(t, idx, "members",
+		"expected single members WholeList mismatch; got: %v", keysOf(idx))
+	assert.IsType(t, []any{}, idx["members"].Snapshot,
+		"WholeList output must be a []any, not a raw scalar")
+	assert.IsType(t, []any{}, idx["members"].Cloud)
+
+	// No per-element fan-out under the members path.
+	assert.NotContains(t, idx, "members.0")
+	assert.NotContains(t, idx, "members.1")
+	assert.NotContains(t, idx, "members.2")
+
+	// Identity / role unchanged → no mismatch.
+	assert.NotContains(t, idx, "crypto_key_id")
+	assert.NotContains(t, idx, "role")
+
+	// Identical binding on both sides → no mismatch at all.
+	got2 := Compare("google_kms_crypto_key_iam_binding", snap, snap)
+	assert.Empty(t, got2, "identical IAM binding must emit no drift")
+}
+
+// TestCompare_Curated_GoogleSecretManagerSecretIAMBinding_WholeList
+// exercises the `members` WholeList collapse alongside a role flip on
+// the Secret Manager IAM-binding type.
+func TestCompare_Curated_GoogleSecretManagerSecretIAMBinding_WholeList(t *testing.T) {
+	t.Parallel()
+	snap := json.RawMessage(`{
+		"id": "projects/p/secrets/api-key/roles/secretmanager.secretAccessor",
+		"etag": "BwAbCdEf=",
+		"project": "p",
+		"secret_id": "api-key",
+		"role": "roles/secretmanager.secretAccessor",
+		"members": [
+			"serviceAccount:reader-A@p.iam.gserviceaccount.com",
+			"serviceAccount:reader-B@p.iam.gserviceaccount.com"
+		]
+	}`)
+	live := json.RawMessage(`{
+		"id": "projects/p/secrets/api-key/roles/secretmanager.admin",
+		"etag": "BwAbCdEf=",
+		"project": "p",
+		"secret_id": "api-key",
+		"role": "roles/secretmanager.admin",
+		"members": [
+			"serviceAccount:reader-A@p.iam.gserviceaccount.com"
+		]
+	}`)
+	got := Compare("google_secret_manager_secret_iam_binding", snap, live)
+	idx := fieldsByPath(t, got)
+
+	require.Contains(t, idx, "role",
+		"expected role Exact mismatch; got: %v", keysOf(idx))
+	assert.Equal(t, "roles/secretmanager.secretAccessor", idx["role"].Snapshot)
+	assert.Equal(t, "roles/secretmanager.admin", idx["role"].Cloud)
+
+	require.Contains(t, idx, "members",
+		"expected members WholeList mismatch; got: %v", keysOf(idx))
+	assert.IsType(t, []any{}, idx["members"].Snapshot)
+	assert.IsType(t, []any{}, idx["members"].Cloud)
+
+	// No per-element fan-out under members.
+	assert.NotContains(t, idx, "members.0")
+	assert.NotContains(t, idx, "members.1")
+
+	// Identity unchanged → no mismatch.
+	assert.NotContains(t, idx, "project")
+	assert.NotContains(t, idx, "secret_id")
+}
+
 // keysOf returns the sorted key set of m for diagnostic logging.
 func keysOf(m map[string]FieldMismatch) []string {
 	out := make([]string, 0, len(m))

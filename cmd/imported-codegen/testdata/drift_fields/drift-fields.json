@@ -8781,6 +8781,28 @@
       "semantic": "Exact"
     }
   ],
+  "google_cloud_run_v2_service_iam_member": [
+    {
+      "path": "location",
+      "semantic": "Exact"
+    },
+    {
+      "path": "member",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "role",
+      "semantic": "Exact"
+    }
+  ],
   "google_cloudbuild_trigger": [
     {
       "path": "description",
@@ -8854,6 +8876,28 @@
     },
     {
       "path": "project",
+      "semantic": "Exact"
+    }
+  ],
+  "google_cloudfunctions2_function_iam_member": [
+    {
+      "path": "cloud_function",
+      "semantic": "Exact"
+    },
+    {
+      "path": "location",
+      "semantic": "Exact"
+    },
+    {
+      "path": "member",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "role",
       "semantic": "Exact"
     }
   ],
@@ -10097,6 +10141,20 @@
       "semantic": "Exact"
     }
   ],
+  "google_kms_crypto_key_iam_binding": [
+    {
+      "path": "crypto_key_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "members",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "role",
+      "semantic": "Exact"
+    }
+  ],
   "google_kms_key_ring": [
     {
       "path": "id",
@@ -10228,6 +10286,20 @@
     },
     {
       "path": "type",
+      "semantic": "Exact"
+    }
+  ],
+  "google_project_iam_member": [
+    {
+      "path": "member",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "role",
       "semantic": "Exact"
     }
   ],
@@ -10590,6 +10662,42 @@
     },
     {
       "path": "version_destroy_ttl",
+      "semantic": "Exact"
+    }
+  ],
+  "google_secret_manager_secret_iam_binding": [
+    {
+      "path": "members",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "role",
+      "semantic": "Exact"
+    },
+    {
+      "path": "secret_id",
+      "semantic": "Exact"
+    }
+  ],
+  "google_secret_manager_secret_iam_member": [
+    {
+      "path": "member",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "role",
+      "semantic": "Exact"
+    },
+    {
+      "path": "secret_id",
       "semantic": "Exact"
     }
   ],
@@ -10990,6 +11098,20 @@
     },
     {
       "path": "website.not_found_page",
+      "semantic": "Exact"
+    }
+  ],
+  "google_storage_bucket_iam_member": [
+    {
+      "path": "bucket",
+      "semantic": "Exact"
+    },
+    {
+      "path": "member",
+      "semantic": "Exact"
+    },
+    {
+      "path": "role",
       "semantic": "Exact"
     }
   ],
