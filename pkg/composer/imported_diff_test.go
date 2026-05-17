@@ -189,7 +189,7 @@ func TestDiffImportedResources_HiddenFieldsOmitted(t *testing.T) {
 
 func TestDiffImportedResources_VisibleAndHiddenInSameResource(t *testing.T) {
 	t.Parallel()
-	// Mixed change: visibility_timeout_seconds is RileyVisible, tags is
+	// Mixed change: visibility_timeout_seconds is SummaryVisible, tags is
 	// Hidden. The diff must include only the visible field — a regression
 	// that filters the wrong field surfaces here as a count mismatch.
 	requirePolicyEntry(t, "aws_sqs_queue", "tags", policy.FieldPolicy{Visibility: policy.VisibilityHidden})
@@ -229,7 +229,7 @@ func TestMakeFieldDiff_RedactsSensitiveValues(t *testing.T) {
 			t.Parallel()
 			entry := policy.FieldPolicy{
 				Role:        policy.RoleTuning,
-				Visibility:  policy.VisibilityRileyVisible,
+				Visibility:  policy.VisibilitySummaryVisible,
 				Edit:        policy.EditChatSafe,
 				Sensitivity: tc.sensitivity,
 			}
@@ -293,7 +293,7 @@ func TestDiffImportedResources_HiddenSensitiveFilteredEndToEnd(t *testing.T) {
 func TestDiffImportedResources_VisibleRedactedEndToEnd(t *testing.T) {
 	t.Parallel()
 	requirePolicyEntry(t, "google_pubsub_subscription", "push_config.attributes", policy.FieldPolicy{
-		Visibility:  policy.VisibilityRileyVisible,
+		Visibility:  policy.VisibilitySummaryVisible,
 		Sensitivity: policy.SensitivityRedacted,
 	})
 	const oldSecret = "x-goog-version-not-public"

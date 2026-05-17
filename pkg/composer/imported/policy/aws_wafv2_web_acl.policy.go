@@ -76,45 +76,45 @@ var awsWAFv2WebACLPolicy = Map{
 	},
 	"rule_json": {
 		// Alternative JSON-blob rule specification.
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"visibility_config": {
 		// CloudWatch metric + sampled-requests opt-in.
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditChatSafe,
 		DriftSemantic: DriftSemanticWholeList,
 	},
 	"captcha_config": {
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticWholeList,
 	},
 	"challenge_config": {
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticWholeList,
 	},
 	"association_config": {
 		// Per-attached-resource body-size + content-type knobs.
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticWholeList,
 	},
 	"custom_response_body": {
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticWholeList,
 	},
 	"token_domains": {
 		// Domains allowed in the WAF token cookie scope.
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticWholeList,
 	},
 	"description": {
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},

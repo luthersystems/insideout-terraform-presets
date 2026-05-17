@@ -53,7 +53,7 @@ var awsIamUserPolicy = Map{
 	"force_destroy": {
 		// Whether deletion is allowed even when the user has attached
 		// access keys / login profiles. Operator-only.
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},

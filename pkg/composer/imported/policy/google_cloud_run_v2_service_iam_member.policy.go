@@ -12,8 +12,8 @@ package policy
 // provider scaffolding and stay DriftSemantic=None to avoid noise on
 // every refresh.
 var googleCloudRunV2ServiceIAMMemberPolicy = Map{
-	"id":   {Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever},
-	"etag": {Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever},
+	"id":   {Role: RoleIdentity, Visibility: VisibilitySummaryVisible, Edit: EditNever},
+	"etag": {Role: RoleIdentity, Visibility: VisibilitySummaryVisible, Edit: EditNever},
 	"name": {
 		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
 		ChangeRisk:    ChangeAlwaysReplace,

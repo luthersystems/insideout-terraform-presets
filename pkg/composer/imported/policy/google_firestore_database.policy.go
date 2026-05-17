@@ -12,7 +12,7 @@ var googleFirestoreDatabasePolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 	"id": {
-		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		Role: RoleIdentity, Visibility: VisibilitySummaryVisible, Edit: EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"project": {
@@ -33,12 +33,12 @@ var googleFirestoreDatabasePolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 	"concurrency_mode": {
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"app_engine_integration_mode": {
-		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		Role: RoleTuning, Visibility: VisibilitySummaryVisible, Edit: EditNever,
 		ChangeRisk:    ChangeAlwaysReplace,
 		DriftSemantic: DriftSemanticExact,
 	},
@@ -49,7 +49,7 @@ var googleFirestoreDatabasePolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 	"version_retention_period": {
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible, Edit: EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"delete_protection_state": {
@@ -58,7 +58,7 @@ var googleFirestoreDatabasePolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 	"deletion_policy": {
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},

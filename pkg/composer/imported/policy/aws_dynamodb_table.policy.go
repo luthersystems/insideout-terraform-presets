@@ -75,69 +75,69 @@ var awsDynamodbTablePolicy = Map{
 	"billing_mode": {
 		// Provisioned vs on-demand — reversible in-place. The interactive
 		// agent should be able to propose the flip for cost optimization.
-		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilitySummaryVisible,
 		Edit:          EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"read_capacity": {
-		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilitySummaryVisible,
 		Edit:          EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"write_capacity": {
-		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilitySummaryVisible,
 		Edit:          EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"table_class": {
 		// STANDARD vs STANDARD_INFREQUENT_ACCESS — cost optimization knob.
-		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilitySummaryVisible,
 		Edit:          EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},
 
 	// Tuning — backups and protection ----------------------------------
 	"point_in_time_recovery.enabled": {
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"deletion_protection_enabled": {
 		// Safety flag — the interactive agent can propose flipping it, UI shows the change.
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},
 
 	// TTL --------------------------------------------------------------
 	"ttl.enabled": {
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"ttl.attribute_name": {
 		// The TTL attribute name references a schema column — wiring,
 		// not a free-form tuning knob.
-		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRelationshipOnly,
 		DriftSemantic: DriftSemanticExact,
 	},
 
 	// Streams ----------------------------------------------------------
 	"stream_enabled": {
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"stream_view_type": {
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},
 
 	// Server-side encryption -------------------------------------------
 	"server_side_encryption.enabled": {
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},
@@ -145,7 +145,7 @@ var awsDynamodbTablePolicy = Map{
 		// KMS key is a cross-resource wiring relationship — the interactive
 		// agent edits the relationship, the composer's graph resolver owns
 		// the ARN. Exact equality: a different ARN is real security drift.
-		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRelationshipOnly,
 		ChangeRisk:    ChangeMayReplace,
 		DriftSemantic: DriftSemanticExact,
@@ -169,20 +169,20 @@ var awsDynamodbTablePolicy = Map{
 	// LSIs are created with the table and cannot be added or removed
 	// after the fact — provider replaces the table.
 	"local_secondary_index.name": {
-		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		ChangeRisk:    ChangeAlwaysReplace,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"local_secondary_index.projection_type": {
-		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		ChangeRisk:    ChangeMayReplace,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"local_secondary_index.range_key": {
 		// LSI sort key references an `attribute.name` — wiring.
-		Role: RoleWiring, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible,
+		Role: RoleWiring, Pillar: PillarPerformance, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRelationshipOnly,
 		ChangeRisk:    ChangeAlwaysReplace,
 		DriftSemantic: DriftSemanticExact,
@@ -191,7 +191,7 @@ var awsDynamodbTablePolicy = Map{
 		// List-valued non_key_attributes — order matters for the
 		// provider's diff and a per-element diff is not meaningfully
 		// scoped to a specific column, so compare the whole list.
-		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		ChangeRisk:    ChangeMayReplace,
 		DriftSemantic: DriftSemanticWholeList,
@@ -201,43 +201,43 @@ var awsDynamodbTablePolicy = Map{
 	// GSIs can be added/removed online but capacity and projection
 	// changes are heavier — gate behind RequiresApproval.
 	"global_secondary_index.name": {
-		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		ChangeRisk:    ChangeMayReplace,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"global_secondary_index.hash_key": {
-		Role: RoleWiring, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible,
+		Role: RoleWiring, Pillar: PillarPerformance, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRelationshipOnly,
 		ChangeRisk:    ChangeMayReplace,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"global_secondary_index.range_key": {
-		Role: RoleWiring, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible,
+		Role: RoleWiring, Pillar: PillarPerformance, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRelationshipOnly,
 		ChangeRisk:    ChangeMayReplace,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"global_secondary_index.projection_type": {
-		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		ChangeRisk:    ChangeMayReplace,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"global_secondary_index.non_key_attributes": {
 		// Same WholeList rationale as the LSI variant.
-		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		ChangeRisk:    ChangeMayReplace,
 		DriftSemantic: DriftSemanticWholeList,
 	},
 	"global_secondary_index.read_capacity": {
-		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilitySummaryVisible,
 		Edit:          EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"global_secondary_index.write_capacity": {
-		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilitySummaryVisible,
 		Edit:          EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},
@@ -245,22 +245,22 @@ var awsDynamodbTablePolicy = Map{
 	// Replicas (multi-region tables) -----------------------------------
 	"replica.region_name": {
 		// Region selection is a cross-resource wiring decision.
-		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRelationshipOnly,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"replica.kms_key_arn": {
-		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRelationshipOnly,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"replica.point_in_time_recovery": {
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"replica.propagate_tags": {
-		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditRequiresApproval,
+		Role: RoleTuning, Visibility: VisibilitySummaryVisible, Edit: EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"replica.arn": {
@@ -279,7 +279,7 @@ var awsDynamodbTablePolicy = Map{
 	// Restore (write-once inputs at create) ----------------------------
 	"restore_source_table_arn": {
 		// Source table ARN is a cross-resource wiring reference.
-		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRelationshipOnly,
 		DriftSemantic: DriftSemanticExact,
 	},
@@ -296,9 +296,14 @@ var awsDynamodbTablePolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 
-	// Tags (system-managed bag) ----------------------------------------
-	"tags":     tagPolicy(),
-	"tags_all": tagPolicy(),
+	// Tags — adopt awsTagDriftPolicy() (#568): user-set tag drift
+	// surfaces as per-key `tags.<key>` mismatches; AWS-managed
+	// prefixes (`aws:`, `eks:`, etc.) are filtered. DynamoDB tables
+	// are stable user-owned resources where the canonical `Project`
+	// tag drives InsideOut inspector attribution — stripping it
+	// out-of-band must surface as drift.
+	"tags":     awsTagDriftPolicy(),
+	"tags_all": awsTagDriftPolicy(),
 
 	// timeouts singleton — system-owned operational metadata -----------
 	"timeouts": timeoutsPolicy(),

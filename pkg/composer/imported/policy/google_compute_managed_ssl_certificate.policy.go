@@ -12,15 +12,15 @@ var googleComputeManagedSslCertificatePolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 	"id": {
-		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		Role: RoleIdentity, Visibility: VisibilitySummaryVisible, Edit: EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"self_link": {
-		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		Role: RoleIdentity, Visibility: VisibilitySummaryVisible, Edit: EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"certificate_id": {
-		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		Role: RoleIdentity, Visibility: VisibilitySummaryVisible, Edit: EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"project": {
@@ -36,7 +36,7 @@ var googleComputeManagedSslCertificatePolicy = Map{
 
 	// Tuning
 	"description": {
-		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		Role: RoleTuning, Visibility: VisibilitySummaryVisible, Edit: EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"subject_alternative_names": {
@@ -49,7 +49,7 @@ var googleComputeManagedSslCertificatePolicy = Map{
 		Edit: EditNever,
 	},
 	"creation_timestamp": {
-		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		Role: RoleTuning, Visibility: VisibilitySummaryVisible, Edit: EditNever,
 	},
 
 	// Managed block — domains are immutable post-create.

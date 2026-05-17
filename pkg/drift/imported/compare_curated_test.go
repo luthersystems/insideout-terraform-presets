@@ -39,8 +39,9 @@ func fieldsByPath(t *testing.T, got []FieldMismatch) map[string]FieldMismatch {
 
 // TestCompare_Curated_AWSS3Bucket exercises the curated drift surface
 // for aws_s3_bucket: a versioning flip and a server-side-encryption
-// algorithm change must surface as Exact mismatches; tag drift must
-// stay invisible (tagPolicy() leaves DriftSemantic=None).
+// algorithm change must surface as Exact mismatches; user-set tag
+// drift surfaces as a per-key `tags.<key>` mismatch since aws_s3_bucket
+// adopts awsTagDriftPolicy() (#568).
 func TestCompare_Curated_AWSS3Bucket(t *testing.T) {
 	t.Parallel()
 	snap := json.RawMessage(`{
@@ -85,9 +86,18 @@ func TestCompare_Curated_AWSS3Bucket(t *testing.T) {
 	if _, ok := idx["server_side_encryption_configuration.rule.apply_server_side_encryption_by_default.sse_algorithm"]; !ok {
 		t.Errorf("expected sse_algorithm mismatch; got fields: %v", keysOf(idx))
 	}
-	// tags drift must NOT appear — tagPolicy() leaves DriftSemantic=None.
+	// Whole-map `tags` field must NOT appear — awsTagDriftPolicy()
+	// uses DriftSemanticLabelFilter which emits per-key entries instead.
 	if _, ok := idx["tags"]; ok {
-		t.Error("tag drift must stay invisible (tagPolicy keeps DriftSemantic=None)")
+		t.Error("whole-map tag drift must not appear — LabelFilter emits per-key entries")
+	}
+	// Per-key user-tag drift MUST surface as tags.team (no AWS-managed
+	// prefix on `team`, so it survives the filter).
+	if _, ok := idx["tags.team"]; !ok {
+		t.Errorf("expected tags.team per-key mismatch; got fields: %v", keysOf(idx))
+	} else {
+		assert.Equal(t, "infra", idx["tags.team"].Snapshot)
+		assert.Equal(t, "platform", idx["tags.team"].Cloud)
 	}
 }
 
@@ -349,8 +359,13 @@ func TestCompare_Curated_AWSCloudwatchLogGroup_Exact(t *testing.T) {
 
 	// kms_key_id is identical → no mismatch.
 	assert.NotContains(t, idx, "kms_key_id")
-	// tags use tagPolicy() (DriftSemantic=None) → never emitted.
+	// Whole-map `tags` is not emitted (LabelFilter is per-key only).
 	assert.NotContains(t, idx, "tags")
+	// User-set tag drift surfaces per-key under awsTagDriftPolicy() (#568).
+	require.Contains(t, idx, "tags.team",
+		"expected per-key tags.team mismatch under awsTagDriftPolicy()")
+	assert.Equal(t, "infra", idx["tags.team"].Snapshot)
+	assert.Equal(t, "platform", idx["tags.team"].Cloud)
 }
 
 // TestCompare_Curated_AWSSecretsmanagerSecret_Exact exercises an Exact
@@ -1279,4 +1294,115 @@ func keysOf(m map[string]FieldMismatch) []string {
 		out = append(out, k)
 	}
 	return out
+}
+
+// TestCompare_Curated_AWSTags_AWSManagedPrefixIgnored pins the
+// awsTagDriftPolicy() ignore-prefix filter end-to-end against a real
+// curated type (aws_s3_bucket). An AWS-managed tag whose key carries
+// the reserved `aws:` prefix (e.g. `aws:cloudformation:stack-name`)
+// MUST NOT surface as drift even when it differs across snapshot and
+// live, because Terraform doesn't own it and the AWS API rejects
+// attempts to set it (#568).
+func TestCompare_Curated_AWSTags_AWSManagedPrefixIgnored(t *testing.T) {
+	t.Parallel()
+	// User-set tags identical on both sides; only AWS-managed-prefix
+	// keys differ across snap/live. Nothing should surface.
+	snap := json.RawMessage(`{
+		"arn": "arn:aws:s3:::my-bucket",
+		"bucket": "my-bucket",
+		"tags": {
+			"Project": "io-abc123",
+			"Environment": "prod",
+			"aws:cloudformation:stack-name": "managed-by-cfn-A",
+			"eks:cluster-name": "old-cluster",
+			"elasticbeanstalk:environment-name": "old-env",
+			"kubernetes.io/cluster/foo": "owned"
+		},
+		"tags_all": {
+			"Project": "io-abc123",
+			"Environment": "prod",
+			"aws:cloudformation:stack-name": "managed-by-cfn-A"
+		}
+	}`)
+	live := json.RawMessage(`{
+		"arn": "arn:aws:s3:::my-bucket",
+		"bucket": "my-bucket",
+		"tags": {
+			"Project": "io-abc123",
+			"Environment": "prod",
+			"aws:cloudformation:stack-name": "managed-by-cfn-B",
+			"eks:cluster-name": "new-cluster",
+			"elasticbeanstalk:environment-name": "new-env",
+			"kubernetes.io/cluster/foo": "shared"
+		},
+		"tags_all": {
+			"Project": "io-abc123",
+			"Environment": "prod",
+			"aws:cloudformation:stack-name": "managed-by-cfn-B"
+		}
+	}`)
+	got := Compare("aws_s3_bucket", snap, live)
+	idx := fieldsByPath(t, got)
+
+	for key := range idx {
+		// No tag-key drift may appear — every differing key matches
+		// an awsTagDriftIgnorePrefixes entry and must be filtered.
+		if len(key) >= 5 && key[:5] == "tags." {
+			t.Errorf("AWS-managed prefix tag must not surface as drift; got %q (snapshot=%v cloud=%v)",
+				key, idx[key].Snapshot, idx[key].Cloud)
+		}
+		if len(key) >= 9 && key[:9] == "tags_all." {
+			t.Errorf("AWS-managed prefix tag must not surface as drift; got %q (snapshot=%v cloud=%v)",
+				key, idx[key].Snapshot, idx[key].Cloud)
+		}
+	}
+}
+
+// TestCompare_Curated_AWSTags_UserManagedKeyDriftSurfaced pins the
+// positive case: a user-set tag (no AWS-managed prefix) whose value
+// differs between snap and live MUST surface as a per-key
+// `tags.<key>` mismatch via awsTagDriftPolicy()'s LabelFilter
+// semantic. This is the load-bearing assertion for #568 — an
+// operator stripping the `Project` tag out-of-band must not slip
+// past drift detection (CLAUDE.md "Project tag is required on
+// every taggable AWS resource" — backstory in #81).
+func TestCompare_Curated_AWSTags_UserManagedKeyDriftSurfaced(t *testing.T) {
+	t.Parallel()
+	// `Project` differs (the canonical InsideOut attribution tag);
+	// `Environment` differs; AWS-managed prefix `aws:...` is noise.
+	snap := json.RawMessage(`{
+		"arn": "arn:aws:s3:::my-bucket",
+		"bucket": "my-bucket",
+		"tags": {
+			"Project": "io-abc123",
+			"Environment": "prod",
+			"aws:cloudformation:stack-name": "cfn-noise"
+		}
+	}`)
+	live := json.RawMessage(`{
+		"arn": "arn:aws:s3:::my-bucket",
+		"bucket": "my-bucket",
+		"tags": {
+			"Environment": "staging",
+			"aws:cloudformation:stack-name": "cfn-noise-different"
+		}
+	}`)
+	got := Compare("aws_s3_bucket", snap, live)
+	idx := fieldsByPath(t, got)
+
+	// Project tag stripped → per-key mismatch with empty Cloud side.
+	require.Contains(t, idx, "tags.Project",
+		"expected stripped-Project to surface as tags.Project drift; got fields: %v", keysOf(idx))
+	assert.Equal(t, "io-abc123", idx["tags.Project"].Snapshot)
+	assert.Equal(t, "", idx["tags.Project"].Cloud)
+
+	// Environment changed → per-key mismatch with both sides set.
+	require.Contains(t, idx, "tags.Environment",
+		"expected Environment value-change to surface as tags.Environment drift; got fields: %v", keysOf(idx))
+	assert.Equal(t, "prod", idx["tags.Environment"].Snapshot)
+	assert.Equal(t, "staging", idx["tags.Environment"].Cloud)
+
+	// AWS-managed prefix key MUST NOT surface even though the value differs.
+	assert.NotContains(t, idx, "tags.aws:cloudformation:stack-name",
+		"aws:* prefix tag must be filtered; surfacing it would be noise")
 }

@@ -51,7 +51,7 @@ var awsApigatewayv2APIMappingPolicy = Map{
 		// Optional path prefix under the domain (empty = root). Visible
 		// in the URL; ChatSafe so the agent can rearrange path layouts
 		// without escalating.
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},

@@ -101,12 +101,12 @@ var awsMskClusterPolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 	"enhanced_monitoring": {
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"storage_mode": {
-		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},
@@ -118,24 +118,24 @@ var awsMskClusterPolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 	"broker_node_group_info.az_distribution": {
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditNever,
 		ChangeRisk:    ChangeAlwaysReplace,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"broker_node_group_info.client_subnets": {
-		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRelationshipOnly,
 		ChangeRisk:    ChangeAlwaysReplace,
 		DriftSemantic: DriftSemanticWholeList,
 	},
 	"broker_node_group_info.security_groups": {
-		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRelationshipOnly,
 		DriftSemantic: DriftSemanticWholeList,
 	},
 	"broker_node_group_info.storage_info.ebs_storage_info.volume_size": {
-		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},
@@ -146,48 +146,48 @@ var awsMskClusterPolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 	"broker_node_group_info.connectivity_info.vpc_connectivity.client_authentication.sasl.iam": {
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"broker_node_group_info.connectivity_info.vpc_connectivity.client_authentication.sasl.scram": {
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"broker_node_group_info.connectivity_info.vpc_connectivity.client_authentication.tls": {
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},
 
 	// Cluster configuration pointer ------------------------------------
 	"configuration_info.arn": {
-		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRelationshipOnly,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"configuration_info.revision": {
-		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},
 
 	// Open Monitoring (Prometheus exporters) ---------------------------
 	"open_monitoring.prometheus.jmx_exporter.enabled_in_broker": {
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"open_monitoring.prometheus.node_exporter.enabled_in_broker": {
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},
 
 	// Encryption --------------------------------------------------------
 	"encryption_info.encryption_at_rest_kms_key_arn": {
-		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRelationshipOnly,
 		ChangeRisk:    ChangeAlwaysReplace,
 		DriftSemantic: DriftSemanticExact,
@@ -198,7 +198,7 @@ var awsMskClusterPolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 	"encryption_info.encryption_in_transit.in_cluster": {
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditNever,
 		ChangeRisk:    ChangeAlwaysReplace,
 		DriftSemantic: DriftSemanticExact,
@@ -206,59 +206,59 @@ var awsMskClusterPolicy = Map{
 
 	// Client authentication --------------------------------------------
 	"client_authentication.unauthenticated": {
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"client_authentication.sasl.iam": {
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"client_authentication.sasl.scram": {
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"client_authentication.tls.certificate_authority_arns": {
-		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRelationshipOnly,
 		DriftSemantic: DriftSemanticWholeList,
 	},
 
 	// Logging -----------------------------------------------------------
 	"logging_info.broker_logs.cloudwatch_logs.enabled": {
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"logging_info.broker_logs.cloudwatch_logs.log_group": {
-		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRelationshipOnly,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"logging_info.broker_logs.firehose.enabled": {
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"logging_info.broker_logs.firehose.delivery_stream": {
-		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRelationshipOnly,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"logging_info.broker_logs.s3.enabled": {
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"logging_info.broker_logs.s3.bucket": {
-		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRelationshipOnly,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"logging_info.broker_logs.s3.prefix": {
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},

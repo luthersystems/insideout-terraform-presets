@@ -64,13 +64,14 @@ const (
 	// The composer still round-trips the value because Layer 1 preserves
 	// it; only system code may inspect it.
 	VisibilityHidden VisibilityPolicy = "Hidden"
-	// VisibilityRileyVisible — the interactive agent can read the field
-	// in chat context and propose changes (subject to EditPolicy). The
-	// "Riley" naming on this const + wire-format string is pinned by
-	// downstream TypeScript consumers (luthersystems/reliable, etc.);
-	// renaming is a coordinated cross-repo change tracked separately
-	// from the in-repo doc-sweep in #489.
-	VisibilityRileyVisible VisibilityPolicy = "RileyVisible"
+	// VisibilitySummaryVisible — the curated summary surface a consumer
+	// (interactive agent, importer wizard) sees: the interactive agent
+	// can read the field in chat context and propose changes (subject to
+	// EditPolicy). Renamed from the legacy agent-product-pinned
+	// "RileyVisible" wire string in #489; the new name mirrors the
+	// "Summary (default): Key fields only" vocabulary already used by
+	// pkg/observability/inspect/render.go.
+	VisibilitySummaryVisible VisibilityPolicy = "SummaryVisible"
 	// VisibilityUIVisible — exposed in the product UI / diff screens for
 	// a human operator. Implies agent-visible.
 	VisibilityUIVisible VisibilityPolicy = "UIVisible"
@@ -81,7 +82,7 @@ const (
 // state the choice explicitly when constructing a policy.
 func (v VisibilityPolicy) Valid() bool {
 	switch v {
-	case VisibilityHidden, VisibilityRileyVisible, VisibilityUIVisible:
+	case VisibilityHidden, VisibilitySummaryVisible, VisibilityUIVisible:
 		return true
 	}
 	return false

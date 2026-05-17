@@ -13,7 +13,7 @@ var googleCloudfunctions2FunctionPolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 	"id": {
-		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		Role: RoleIdentity, Visibility: VisibilitySummaryVisible, Edit: EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"project": {
@@ -29,7 +29,7 @@ var googleCloudfunctions2FunctionPolicy = Map{
 
 	// Wiring — KMS key reference.
 	"kms_key_name": {
-		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRelationshipOnly,
 		ChangeRisk:    ChangeAlwaysReplace,
 		DriftSemantic: DriftSemanticExact,
@@ -37,10 +37,10 @@ var googleCloudfunctions2FunctionPolicy = Map{
 
 	// Tuning — function-level metadata.
 	"description": {
-		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		Role: RoleTuning, Visibility: VisibilitySummaryVisible, Edit: EditChatSafe,
 	},
 	"environment": {
-		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		Role: RoleTuning, Visibility: VisibilitySummaryVisible, Edit: EditNever,
 		ChangeRisk: ChangeAlwaysReplace,
 	},
 
@@ -54,18 +54,18 @@ var googleCloudfunctions2FunctionPolicy = Map{
 		Edit: EditRequiresApproval,
 	},
 	"build_config.docker_repository": {
-		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit: EditRelationshipOnly,
 	},
 	"build_config.service_account": {
-		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit: EditRelationshipOnly,
 	},
 	"build_config.source.storage_source.bucket": {
-		Role: RoleWiring, Visibility: VisibilityRileyVisible, Edit: EditRelationshipOnly,
+		Role: RoleWiring, Visibility: VisibilitySummaryVisible, Edit: EditRelationshipOnly,
 	},
 	"build_config.source.storage_source.object": {
-		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditRequiresApproval,
+		Role: RoleTuning, Visibility: VisibilitySummaryVisible, Edit: EditRequiresApproval,
 	},
 	"build_config.environment_variables": tagPolicy(),
 
@@ -75,13 +75,13 @@ var googleCloudfunctions2FunctionPolicy = Map{
 		Edit: EditRelationshipOnly,
 	},
 	"service_config.available_memory": {
-		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilitySummaryVisible, Edit: EditChatSafe,
 	},
 	"service_config.available_cpu": {
-		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilitySummaryVisible, Edit: EditChatSafe,
 	},
 	"service_config.timeout_seconds": {
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible, Edit: EditChatSafe,
 	},
 	"service_config.max_instance_count": {
 		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityUIVisible, Edit: EditChatSafe,
@@ -90,39 +90,39 @@ var googleCloudfunctions2FunctionPolicy = Map{
 		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityUIVisible, Edit: EditChatSafe,
 	},
 	"service_config.max_instance_request_concurrency": {
-		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilitySummaryVisible, Edit: EditChatSafe,
 	},
 	"service_config.ingress_settings": {
 		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityUIVisible, Edit: EditRequiresApproval,
 	},
 	"service_config.all_traffic_on_latest_revision": {
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible, Edit: EditChatSafe,
 	},
 	"service_config.vpc_connector": {
-		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit: EditRelationshipOnly,
 	},
 	"service_config.vpc_connector_egress_settings": {
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible, Edit: EditChatSafe,
 	},
 	"service_config.environment_variables": tagPolicy(),
 
 	// Event trigger.
 	"event_trigger.trigger_region": {
-		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		Role: RoleTuning, Visibility: VisibilitySummaryVisible, Edit: EditChatSafe,
 	},
 	"event_trigger.event_type": {
 		Role: RoleTuning, Visibility: VisibilityUIVisible, Edit: EditRequiresApproval,
 	},
 	"event_trigger.pubsub_topic": {
-		Role: RoleWiring, Visibility: VisibilityRileyVisible, Edit: EditRelationshipOnly,
+		Role: RoleWiring, Visibility: VisibilitySummaryVisible, Edit: EditRelationshipOnly,
 	},
 	"event_trigger.service_account_email": {
-		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit: EditRelationshipOnly,
 	},
 	"event_trigger.retry_policy": {
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible, Edit: EditChatSafe,
 	},
 
 	// Labels

@@ -63,23 +63,12 @@ func TestExistingEnrichersDoNotImplementByID(t *testing.T) {
 	// Recomputed at runtime from cloudAssetTypeConfigs so adding a new
 	// CAI config entry only requires changing cloudasset_types.go.
 	// Hand-rolled count is the literal from gcpdiscover.go's
-	// byTypeEnricher initializer: 5 pre-Phase-2 + compute_address +
-	// compute_firewall + Bundle G5 (5 enrichers: compute_instance,
-	// compute_router, kms_crypto_key, service_account,
-	// sql_database_instance) + Bundle G6 (6 enrichers: sql_user,
-	// logging_project_sink, identity_platform_config,
-	// monitoring_alert_policy, monitoring_dashboard,
-	// monitoring_notification_channel) = 18. Plus 7 IAM-binding
-	// enrichers: project_iam_member, storage_bucket_iam_member,
-	// kms_crypto_key_iam_binding, secret_manager_secret_iam_member,
-	// secret_manager_secret_iam_binding, cloud_run_v2_service_iam_member,
-	// cloudfunctions2_function_iam_member. = 25. Plus 3 final-push
-	// enrichers: project_service, service_networking_connection,
-	// vpc_access_connector. = 28. Plus secret_manager_secret_version
-	// (GCP 94→96% push). = 29. Plus 2 fan-out enrichers
-	// (identity_platform_default_supported_idp_config,
-	// storage_bucket_object) = 31.
-	const handRolledCount = 31
+	// byTypeEnricher initializer: was 31 pre-#581; minus the three
+	// retired hand-rolled enrichers (compute_address, pubsub_topic,
+	// pubsub_subscription) whose CAI fallback now achieves byte-equal
+	// parity via the #581 computed-only filter + #580 Normalizer kit
+	// (see computed_only_parity_test.go for the regression guard) = 28.
+	const handRolledCount = 28
 	caiNonOverlap := 0
 	for _, cfg := range cloudAssetTypeConfigs {
 		if cfg.Skip {
@@ -87,11 +76,8 @@ func TestExistingEnrichersDoNotImplementByID(t *testing.T) {
 		}
 		switch cfg.TFType {
 		case "google_storage_bucket",
-			"google_pubsub_topic",
-			"google_pubsub_subscription",
 			"google_secret_manager_secret",
 			"google_compute_network",
-			"google_compute_address",
 			"google_compute_firewall",
 			"google_compute_instance",
 			"google_compute_router",

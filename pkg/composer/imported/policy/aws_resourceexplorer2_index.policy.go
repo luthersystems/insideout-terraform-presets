@@ -25,7 +25,7 @@ var awsResourceexplorer2IndexPolicy = Map{
 
 	// Tuning
 	"type": {
-		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},

@@ -48,7 +48,7 @@ var awsElasticacheSubnetGroupPolicy = Map{
 	// Tuning — description --------------------------------------------
 	"description": {
 		// Free-text description.
-		Role: RoleTuning, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Visibility: VisibilitySummaryVisible,
 		Edit:          EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},

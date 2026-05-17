@@ -47,7 +47,7 @@ var awsOpensearchserverlessAccessPolicyPolicy = Map{
 		// JSON document granting principal → collection/index data-plane
 		// permissions. Security boundary — drift silently re-grants
 		// who can read/write serverless indices.
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},

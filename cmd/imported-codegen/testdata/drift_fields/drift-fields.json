@@ -1657,6 +1657,14 @@
     {
       "path": "skip_destroy",
       "semantic": "Exact"
+    },
+    {
+      "path": "tags",
+      "semantic": "LabelFilter"
+    },
+    {
+      "path": "tags_all",
+      "semantic": "LabelFilter"
     }
   ],
   "aws_cloudwatch_log_resource_policy": [
@@ -2783,6 +2791,14 @@
       "semantic": "Exact"
     },
     {
+      "path": "tags",
+      "semantic": "LabelFilter"
+    },
+    {
+      "path": "tags_all",
+      "semantic": "LabelFilter"
+    },
+    {
       "path": "timezone",
       "semantic": "Exact"
     },
@@ -3059,6 +3075,14 @@
     {
       "path": "table_class",
       "semantic": "Exact"
+    },
+    {
+      "path": "tags",
+      "semantic": "LabelFilter"
+    },
+    {
+      "path": "tags_all",
+      "semantic": "LabelFilter"
     },
     {
       "path": "ttl.attribute_name",
@@ -7419,6 +7443,14 @@
       "semantic": "Exact"
     },
     {
+      "path": "tags",
+      "semantic": "LabelFilter"
+    },
+    {
+      "path": "tags_all",
+      "semantic": "LabelFilter"
+    },
+    {
       "path": "versioning.enabled",
       "semantic": "Exact"
     },
@@ -7651,6 +7683,14 @@
     {
       "path": "replica.region",
       "semantic": "Exact"
+    },
+    {
+      "path": "tags",
+      "semantic": "LabelFilter"
+    },
+    {
+      "path": "tags_all",
+      "semantic": "LabelFilter"
     }
   ],
   "aws_secretsmanager_secret_rotation": [
@@ -8081,6 +8121,14 @@
     {
       "path": "sqs_managed_sse_enabled",
       "semantic": "Exact"
+    },
+    {
+      "path": "tags",
+      "semantic": "LabelFilter"
+    },
+    {
+      "path": "tags_all",
+      "semantic": "LabelFilter"
     },
     {
       "path": "url",

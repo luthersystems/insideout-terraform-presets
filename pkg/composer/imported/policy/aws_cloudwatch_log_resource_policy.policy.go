@@ -31,7 +31,7 @@ var awsCloudwatchLogResourcePolicyPolicy = Map{
 	"policy_document": {
 		// IAM policy JSON. Who can PutLogEvents on which log groups.
 		// Drift = out-of-band access-grant changes.
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},

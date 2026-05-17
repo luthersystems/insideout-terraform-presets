@@ -13,7 +13,7 @@ var googleServiceAccountPolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 	"id": {
-		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		Role: RoleIdentity, Visibility: VisibilitySummaryVisible, Edit: EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"project": {
@@ -33,11 +33,11 @@ var googleServiceAccountPolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 	"unique_id": {
-		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		Role: RoleIdentity, Visibility: VisibilitySummaryVisible, Edit: EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"member": {
-		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		Role: RoleIdentity, Visibility: VisibilitySummaryVisible, Edit: EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},
 
@@ -47,7 +47,7 @@ var googleServiceAccountPolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 	"description": {
-		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		Role: RoleTuning, Visibility: VisibilitySummaryVisible, Edit: EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"disabled": {
@@ -56,7 +56,7 @@ var googleServiceAccountPolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 	"create_ignore_already_exists": {
-		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditRequiresApproval,
+		Role: RoleTuning, Visibility: VisibilitySummaryVisible, Edit: EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},
 

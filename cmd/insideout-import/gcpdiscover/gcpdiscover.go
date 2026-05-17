@@ -349,11 +349,14 @@ func NewGCPDiscoverer(searcher gcpAssetSearcher, projectID string, opts GCPDisco
 		// silently skipped by EnrichAttributes — the full enricher rollout
 		// follows the existing per-type ordering one PR at a time.
 		byTypeEnricher: map[string]AttributeEnricher{
-			"google_compute_address":       newComputeAddressEnricher(),
+			// #581 retired: google_compute_address, google_pubsub_topic,
+			// google_pubsub_subscription. The CAI fallback in
+			// cloudAssetTypeConfigs now wins for these three with the
+			// computed-only filter + #580 Normalizer kit producing
+			// byte-equal output to the deleted hand-rolled mappers (see
+			// computed_only_parity_test.go for the regression guard).
 			"google_compute_firewall":      newComputeFirewallEnricher(),
 			"google_compute_network":       newComputeNetworkEnricher(),
-			"google_pubsub_subscription":   newPubsubSubscriptionEnricher(),
-			"google_pubsub_topic":          newPubsubTopicEnricher(),
 			"google_secret_manager_secret":         newSecretManagerSecretEnricher(),
 			"google_secret_manager_secret_version": newSecretManagerSecretVersionEnricher(),
 			"google_storage_bucket":        newStorageBucketEnricher(),
@@ -417,7 +420,7 @@ func NewGCPDiscoverer(searcher gcpAssetSearcher, projectID string, opts GCPDisco
 		if _, has := d.byTypeEnricher[cfg.TFType]; has {
 			continue
 		}
-		d.byTypeEnricher[cfg.TFType] = newCloudAssetEnricher(cfg.TFType, cfg.AssetType, nil)
+		d.byTypeEnricher[cfg.TFType] = newCloudAssetEnricherWithNormalizer(cfg.TFType, cfg.AssetType, nil, cfg.Normalizer)
 	}
 	return d
 }

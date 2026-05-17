@@ -178,8 +178,9 @@ func TestUnmarshalJSON_MalformedReturnsError(t *testing.T) {
 func TestUnmarshalJSON_EmptyDriftIsClassifiable(t *testing.T) {
 	t.Parallel()
 	// "No drift" reports must be classifiable: HasClassifiableDetail
-	// returns true so callers don't fall back to a coarse signal when
-	// there's nothing to classify in the first place.
+	// returns true so callers don't treat an empty report as an input
+	// error when there's nothing to classify in the first place
+	// (issue #242).
 	d, err := UnmarshalJSON([]byte(`{"drift_detected": false, "drift_count": 0, "resources": []}`))
 	if err != nil {
 		t.Fatalf("unmarshal: %v", err)

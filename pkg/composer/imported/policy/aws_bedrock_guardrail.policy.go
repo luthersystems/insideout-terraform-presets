@@ -43,7 +43,7 @@ var awsBedrockGuardrailPolicy = Map{
 
 	// Wiring (KMS) -----------------------------------------------------
 	"kms_key_arn": {
-		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRelationshipOnly,
 		DriftSemantic: DriftSemanticExact,
 	},
@@ -52,17 +52,17 @@ var awsBedrockGuardrailPolicy = Map{
 	"blocked_input_messaging": {
 		// The default refusal text shown for blocked input — operator-
 		// tunable string the interactive agent can update directly.
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"blocked_outputs_messaging": {
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"description": {
-		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		Role: RoleTuning, Visibility: VisibilitySummaryVisible, Edit: EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},
 
@@ -71,12 +71,12 @@ var awsBedrockGuardrailPolicy = Map{
 	// strength dials. Strength changes are reversible, but they're
 	// security-sensitive so RequiresApproval gates the agent.
 	"content_policy_config.filters_config.input_strength": {
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"content_policy_config.filters_config.output_strength": {
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},
@@ -87,7 +87,7 @@ var awsBedrockGuardrailPolicy = Map{
 
 	// Contextual grounding filters -------------------------------------
 	"contextual_grounding_policy_config.filters_config.threshold": {
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},
@@ -105,7 +105,7 @@ var awsBedrockGuardrailPolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 	"sensitive_information_policy_config.pii_entities_config.action": {
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},
@@ -114,18 +114,18 @@ var awsBedrockGuardrailPolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 	"sensitive_information_policy_config.regexes_config.description": {
-		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		Role: RoleTuning, Visibility: VisibilitySummaryVisible, Edit: EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"sensitive_information_policy_config.regexes_config.pattern": {
 		// A regex tweak can dramatically change blocked-coverage —
 		// approval-gated.
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"sensitive_information_policy_config.regexes_config.action": {
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},
@@ -136,7 +136,7 @@ var awsBedrockGuardrailPolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 	"topic_policy_config.topics_config.definition": {
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},
@@ -148,19 +148,19 @@ var awsBedrockGuardrailPolicy = Map{
 		// List of example strings — order may be provider-stable but
 		// not semantically meaningful; whole-list compare matches the
 		// dynamodb non_key_attributes precedent.
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticWholeList,
 	},
 
 	// Word policy -----------------------------------------------------
 	"word_policy_config.words_config.text": {
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"word_policy_config.managed_word_lists_config.type": {
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},

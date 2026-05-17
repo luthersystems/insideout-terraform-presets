@@ -52,21 +52,21 @@ var awsCognitoIdentityProviderPolicy = Map{
 		// Map of IdP-protocol-specific knobs (client_id, client_secret,
 		// metadata URL, OIDC issuer, authorize_scopes, …). The
 		// security-critical blob; out-of-band rotation surfaces here.
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticWholeList,
 	},
 	"attribute_mapping": {
 		// IdP-claim → Cognito-attribute join. Drift on the mapping
 		// silently changes which claim populates which attribute.
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticWholeList,
 	},
 	"idp_identifiers": {
 		// Optional set of human-friendly IdP aliases used by the
 		// AdminQueryUser API. Whole-list compare.
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditChatSafe,
 		DriftSemantic: DriftSemanticWholeList,
 	},

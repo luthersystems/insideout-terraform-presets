@@ -15,11 +15,11 @@ var googleContainerNodePoolPolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 	"id": {
-		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		Role: RoleIdentity, Visibility: VisibilitySummaryVisible, Edit: EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"name_prefix": {
-		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		Role: RoleIdentity, Visibility: VisibilitySummaryVisible, Edit: EditNever,
 		ChangeRisk:    ChangeAlwaysReplace,
 		DriftSemantic: DriftSemanticExact,
 	},
@@ -44,7 +44,7 @@ var googleContainerNodePoolPolicy = Map{
 
 	// Tuning — size + version.
 	"initial_node_count": {
-		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilitySummaryVisible,
 		Edit: EditNever, ChangeRisk: ChangeAlwaysReplace,
 		DriftSemantic: DriftSemanticExact,
 	},
@@ -53,7 +53,7 @@ var googleContainerNodePoolPolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 	"max_pods_per_node": {
-		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilitySummaryVisible,
 		Edit: EditNever, ChangeRisk: ChangeAlwaysReplace,
 		DriftSemantic: DriftSemanticExact,
 	},
@@ -63,7 +63,7 @@ var googleContainerNodePoolPolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 	"node_locations": {
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticWholeList,
 	},
@@ -76,13 +76,13 @@ var googleContainerNodePoolPolicy = Map{
 		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityUIVisible, Edit: EditChatSafe,
 	},
 	"autoscaling.total_min_node_count": {
-		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilitySummaryVisible, Edit: EditChatSafe,
 	},
 	"autoscaling.total_max_node_count": {
-		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilitySummaryVisible, Edit: EditChatSafe,
 	},
 	"autoscaling.location_policy": {
-		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		Role: RoleTuning, Visibility: VisibilitySummaryVisible, Edit: EditChatSafe,
 	},
 
 	// Management.
@@ -95,13 +95,13 @@ var googleContainerNodePoolPolicy = Map{
 
 	// Upgrade settings.
 	"upgrade_settings.max_surge": {
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible, Edit: EditChatSafe,
 	},
 	"upgrade_settings.max_unavailable": {
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible, Edit: EditChatSafe,
 	},
 	"upgrade_settings.strategy": {
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible, Edit: EditChatSafe,
 	},
 
 	// Node config — machine + disk knobs (mirrors cluster.node_config).
@@ -110,11 +110,11 @@ var googleContainerNodePoolPolicy = Map{
 		Edit: EditNever, ChangeRisk: ChangeAlwaysReplace,
 	},
 	"node_config.disk_size_gb": {
-		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilitySummaryVisible,
 		Edit: EditNever, ChangeRisk: ChangeAlwaysReplace,
 	},
 	"node_config.disk_type": {
-		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilitySummaryVisible,
 		Edit: EditNever, ChangeRisk: ChangeAlwaysReplace,
 	},
 	"node_config.service_account": {
@@ -122,11 +122,11 @@ var googleContainerNodePoolPolicy = Map{
 		Edit: EditRelationshipOnly, ChangeRisk: ChangeAlwaysReplace,
 	},
 	"node_config.preemptible": {
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit: EditNever, ChangeRisk: ChangeAlwaysReplace,
 	},
 	"node_config.spot": {
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit: EditNever, ChangeRisk: ChangeAlwaysReplace,
 	},
 

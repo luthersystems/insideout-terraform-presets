@@ -24,17 +24,17 @@ var awsBedrockModelInvocationLoggingConfigurationPolicy = Map{
 
 	// Tuning — data-class toggles --------------------------------------
 	"logging_config.text_data_delivery_enabled": {
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"logging_config.image_data_delivery_enabled": {
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"logging_config.embedding_data_delivery_enabled": {
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},
@@ -43,35 +43,35 @@ var awsBedrockModelInvocationLoggingConfigurationPolicy = Map{
 	"logging_config.cloudwatch_config.log_group_name": {
 		// Log group reference — the composer's graph resolver edits the
 		// underlying aws_cloudwatch_log_group resource.
-		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRelationshipOnly,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"logging_config.cloudwatch_config.role_arn": {
 		// IAM role wiring — same Wiring discipline as KMS keys.
-		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRelationshipOnly,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"logging_config.cloudwatch_config.large_data_delivery_s3_config.bucket_name": {
-		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRelationshipOnly,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"logging_config.cloudwatch_config.large_data_delivery_s3_config.key_prefix": {
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},
 
 	// Wiring — S3 destination ------------------------------------------
 	"logging_config.s3_config.bucket_name": {
-		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRelationshipOnly,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"logging_config.s3_config.key_prefix": {
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},

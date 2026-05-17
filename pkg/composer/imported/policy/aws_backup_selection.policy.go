@@ -51,14 +51,14 @@ var awsBackupSelectionPolicy = Map{
 	"resources": {
 		// Explicit ARN inclusion list. Adding/removing here changes the
 		// set of resources Backup snapshots.
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticWholeList,
 	},
 	"not_resources": {
 		// Explicit ARN exclusion list. Subtractive override of `resources`
 		// / tag-based selection.
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticWholeList,
 	},

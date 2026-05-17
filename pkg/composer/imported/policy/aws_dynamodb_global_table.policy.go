@@ -40,7 +40,7 @@ var awsDynamodbGlobalTablePolicy = Map{
 	},
 	"replica.region_name": {
 		// Per-replica region pointer. Identity within the replica set.
-		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRelationshipOnly,
 		DriftSemantic: DriftSemanticExact,
 	},

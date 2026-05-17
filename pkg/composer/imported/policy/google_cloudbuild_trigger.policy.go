@@ -14,7 +14,7 @@ var googleCloudbuildTriggerPolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 	"id": {
-		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		Role: RoleIdentity, Visibility: VisibilitySummaryVisible, Edit: EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"project": {
@@ -28,7 +28,7 @@ var googleCloudbuildTriggerPolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 	"trigger_id": {
-		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		Role: RoleIdentity, Visibility: VisibilitySummaryVisible, Edit: EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},
 
@@ -41,7 +41,7 @@ var googleCloudbuildTriggerPolicy = Map{
 
 	// Tuning — top-level.
 	"description": {
-		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		Role: RoleTuning, Visibility: VisibilitySummaryVisible, Edit: EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"disabled": {
@@ -54,19 +54,19 @@ var googleCloudbuildTriggerPolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 	"filter": {
-		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		Role: RoleTuning, Visibility: VisibilitySummaryVisible, Edit: EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"include_build_logs": {
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible, Edit: EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"ignored_files": {
-		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		Role: RoleTuning, Visibility: VisibilitySummaryVisible, Edit: EditChatSafe,
 		DriftSemantic: DriftSemanticWholeList,
 	},
 	"included_files": {
-		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		Role: RoleTuning, Visibility: VisibilitySummaryVisible, Edit: EditChatSafe,
 		DriftSemantic: DriftSemanticWholeList,
 	},
 	// NB: `tags` on cloudbuild_trigger is NOT labels — it's a free-text
@@ -82,7 +82,7 @@ var googleCloudbuildTriggerPolicy = Map{
 	// the keys visible. EditRequiresApproval because changes affect
 	// downstream build behavior.
 	"substitutions": {
-		Role: RoleTuning, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Visibility: VisibilitySummaryVisible,
 		Edit: EditRequiresApproval, Sensitivity: SensitivityRedacted,
 	},
 
@@ -94,27 +94,27 @@ var googleCloudbuildTriggerPolicy = Map{
 		Role: RoleWiring, Visibility: VisibilityUIVisible, Edit: EditRequiresApproval,
 	},
 	"github.push.branch": {
-		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		Role: RoleTuning, Visibility: VisibilitySummaryVisible, Edit: EditChatSafe,
 	},
 	"github.push.tag": {
-		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		Role: RoleTuning, Visibility: VisibilitySummaryVisible, Edit: EditChatSafe,
 	},
 	"github.pull_request.branch": {
-		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		Role: RoleTuning, Visibility: VisibilitySummaryVisible, Edit: EditChatSafe,
 	},
 
 	// Webhook trigger source.
 	"webhook_config.secret": {
-		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit: EditRelationshipOnly, Sensitivity: SensitivityRedacted,
 	},
 
 	// Pub/Sub trigger source.
 	"pubsub_config.topic": {
-		Role: RoleWiring, Visibility: VisibilityRileyVisible, Edit: EditRelationshipOnly,
+		Role: RoleWiring, Visibility: VisibilitySummaryVisible, Edit: EditRelationshipOnly,
 	},
 	"pubsub_config.service_account_email": {
-		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit: EditRelationshipOnly,
 	},
 

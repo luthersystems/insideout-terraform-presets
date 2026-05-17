@@ -58,7 +58,7 @@ var awsEKSFargateProfilePolicy = Map{
 	// Tuning — observable status --------------------------------------
 	"status": {
 		// CREATING / ACTIVE / DELETING / etc.; provider-reported lifecycle.
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},

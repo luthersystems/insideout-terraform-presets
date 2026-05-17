@@ -36,7 +36,7 @@ var awsCloudwatchDashboardPolicy = Map{
 		// JSON describing the widget set. Exact-string drift catches
 		// console-edits, lost queries, layout changes. ChatSafe — agents
 		// may rearrange widgets without escalating.
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},

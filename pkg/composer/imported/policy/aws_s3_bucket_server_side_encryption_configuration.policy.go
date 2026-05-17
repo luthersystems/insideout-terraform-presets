@@ -32,7 +32,7 @@ var awsS3BucketServerSideEncryptionConfigurationPolicy = Map{
 
 	// Wiring — KMS key reference ---------------------------------------
 	"rule.apply_server_side_encryption_by_default.kms_master_key_id": {
-		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRelationshipOnly,
 		ChangeRisk:    ChangeMayReplace,
 		DriftSemantic: DriftSemanticExact,
@@ -40,12 +40,12 @@ var awsS3BucketServerSideEncryptionConfigurationPolicy = Map{
 
 	// Tuning — algorithm + bucket-key flag -----------------------------
 	"rule.apply_server_side_encryption_by_default.sse_algorithm": {
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"rule.bucket_key_enabled": {
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},

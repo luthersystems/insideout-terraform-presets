@@ -14,18 +14,18 @@ var googleComputeBackendServicePolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 	"id": {
-		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		Role: RoleIdentity, Visibility: VisibilitySummaryVisible, Edit: EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"self_link": {
-		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		Role: RoleIdentity, Visibility: VisibilitySummaryVisible, Edit: EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"generated_id": {
-		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		Role: RoleIdentity, Visibility: VisibilitySummaryVisible, Edit: EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},
-	"fingerprint":  {Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever},
+	"fingerprint":  {Role: RoleIdentity, Visibility: VisibilitySummaryVisible, Edit: EditNever},
 	"project": {
 		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
 		ChangeRisk:    ChangeAlwaysReplace,
@@ -44,19 +44,19 @@ var googleComputeBackendServicePolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 	"edge_security_policy": {
-		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRelationshipOnly,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"service_lb_policy": {
-		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRelationshipOnly,
 		DriftSemantic: DriftSemanticExact,
 	},
 
 	// Tuning
 	"description": {
-		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		Role: RoleTuning, Visibility: VisibilitySummaryVisible, Edit: EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"protocol": {
@@ -65,37 +65,37 @@ var googleComputeBackendServicePolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 	"load_balancing_scheme": {
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit: EditNever, ChangeRisk: ChangeAlwaysReplace,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"port_name": {
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"timeout_sec": {
-		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilitySummaryVisible,
 		Edit:          EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"connection_draining_timeout_sec": {
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"session_affinity": {
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"affinity_cookie_ttl_sec": {
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"locality_lb_policy": {
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},
@@ -105,25 +105,25 @@ var googleComputeBackendServicePolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 	"compression_mode": {
-		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilitySummaryVisible,
 		Edit:          EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"custom_request_headers": {
-		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditRequiresApproval,
+		Role: RoleTuning, Visibility: VisibilitySummaryVisible, Edit: EditRequiresApproval,
 		DriftSemantic: DriftSemanticWholeList,
 	},
 	"custom_response_headers": {
-		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditRequiresApproval,
+		Role: RoleTuning, Visibility: VisibilitySummaryVisible, Edit: EditRequiresApproval,
 		DriftSemantic: DriftSemanticWholeList,
 	},
 	"ip_address_selection_policy": {
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"creation_timestamp": {
-		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		Role: RoleTuning, Visibility: VisibilitySummaryVisible, Edit: EditNever,
 	},
 
 	"timeouts": timeoutsPolicy(),

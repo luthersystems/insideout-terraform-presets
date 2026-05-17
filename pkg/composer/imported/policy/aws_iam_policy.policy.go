@@ -45,7 +45,7 @@ var awsIamPolicyPolicy = Map{
 	// Wiring — the policy document is the security surface --------------
 	"policy": {
 		// JSON policy document. Out-of-band edits = real security drift.
-		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleWiring, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},

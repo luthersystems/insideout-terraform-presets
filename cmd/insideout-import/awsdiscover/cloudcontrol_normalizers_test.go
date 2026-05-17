@@ -502,3 +502,226 @@ func TestSynthIDFromField(t *testing.T) {
 		assert.NotContains(t, m, "LogGroupName")
 	})
 }
+
+// TestStripComputedOnlyForType_TableDriven exercises the #582 generic
+// computed-only filter against the real generated.AWSS3Bucket schema.
+// s3_bucket is chosen as the representative type because its schema
+// covers all four flag combinations the helper must distinguish:
+// required-only (none; AWS s3 has no Required-only fields, so we use a
+// synthetic example with the SQS schema below to cover that), optional-
+// only (force_destroy), optional+computed (bucket, name, acl, policy,
+// region — but region is actually Computed-only here, see below),
+// computed-only (arn, bucket_domain_name, bucket_regional_domain_name,
+// hosted_zone_id, website_domain, website_endpoint, region — these are
+// all server-set on read). Combined with `id` (Optional+Computed but on
+// the universal-elide allowlist), this single type tables out every
+// branch in stripComputedOnlyForType.
+//
+// Tests against the LIVE schema registration (not a fixture) so a
+// future regeneration of aws_s3_bucket.gen.go that flips a flag from
+// Computed-only to Optional+Computed fails this test immediately —
+// guarding against silent parity drift.
+//
+// Inputs use PascalCase keys (the CFN wire shape the Normalizer
+// receives BEFORE shapeCFNForLayer1 runs); the helper internally
+// camelToSnake-renames each key for the schema lookup.
+func TestStripComputedOnlyForType_TableDriven(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{
+			name: "computed-only fields stripped (s3_bucket arn, bucket_domain_name, hosted_zone_id)",
+			in:   `{"Bucket":"b","Arn":"arn:aws:s3:::b","BucketDomainName":"b.s3.amazonaws.com","HostedZoneId":"Z3","Region":"us-east-1"}`,
+			want: `{"Bucket":"b"}`,
+		},
+		{
+			name: "optional+computed kept (bucket)",
+			in:   `{"Bucket":"b","Arn":"arn:aws:s3:::b"}`,
+			want: `{"Bucket":"b"}`,
+		},
+		{
+			name: "optional-only kept (force_destroy)",
+			in:   `{"ForceDestroy":false,"Arn":"x"}`,
+			want: `{"ForceDestroy":false}`,
+		},
+		{
+			// AWS-side diverges from GCP: `id` is NOT in
+			// universallyElidedTFFields here (see that variable's godoc
+			// — AWS hand-rolled enrichers synthesize ID via
+			// synthIDFromField, so universal elide would break parity).
+			// `id` is Optional+Computed → Configurable → kept.
+			name: "id kept (Optional+Computed, not on AWS universal-elide list)",
+			in:   `{"Bucket":"b","Id":"b"}`,
+			want: `{"Bucket":"b","Id":"b"}`,
+		},
+		{
+			name: "computed-only website_domain and website_endpoint stripped",
+			in:   `{"Bucket":"b","WebsiteDomain":"b.s3-website-us-east-1.amazonaws.com","WebsiteEndpoint":"http://b/"}`,
+			want: `{"Bucket":"b"}`,
+		},
+		{
+			name: "computed-only bucket_regional_domain_name stripped",
+			in:   `{"Bucket":"b","BucketRegionalDomainName":"b.s3.us-east-1.amazonaws.com"}`,
+			want: `{"Bucket":"b"}`,
+		},
+		{
+			name: "unknown-to-schema key passes through (defensive against future-schema drift)",
+			in:   `{"Bucket":"b","FutureField":"value"}`,
+			want: `{"Bucket":"b","FutureField":"value"}`,
+		},
+		{
+			name: "no changes returns input unchanged",
+			in:   `{"Bucket":"b","ForceDestroy":false}`,
+			want: `{"Bucket":"b","ForceDestroy":false}`,
+		},
+		{
+			name: "all-computed-only input collapses to empty object",
+			in:   `{"Arn":"x","BucketDomainName":"d","HostedZoneId":"z","Region":"r","WebsiteDomain":"w","WebsiteEndpoint":"e"}`,
+			want: `{}`,
+		},
+	}
+	n := stripComputedOnlyForType("aws_s3_bucket")
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := n(json.RawMessage(tc.in))
+			require.NoError(t, err)
+			assert.JSONEq(t, tc.want, string(got))
+		})
+	}
+}
+
+// TestStripComputedOnlyForType_SQSQueue_URLArn pins parity on the
+// canonical SQS computed-only fields (`Arn`, `Url`) — distinct from
+// the s3_bucket table because SQS routes `URL` through the unusual
+// json-tag `url` (lowercase) and the schema lookup must still match
+// via the camelToSnake bridge. Also exercises the post-rename shape
+// the production chain produces: a CFN payload that's been
+// renameField'd from `QueueName`/`MessageRetentionPeriod`/
+// `VisibilityTimeout` to the TF Layer-1 PascalCase aliases (`Name`,
+// `MessageRetentionSeconds`, `VisibilityTimeoutSeconds`) which then
+// snake_case to fields the schema knows about.
+func TestStripComputedOnlyForType_SQSQueue_URLArn(t *testing.T) {
+	t.Parallel()
+	n := stripComputedOnlyForType("aws_sqs_queue")
+
+	t.Run("Arn and Url stripped; user-set fields kept", func(t *testing.T) {
+		t.Parallel()
+		// Post-rename shape: QueueName → Name,
+		// MessageRetentionPeriod → MessageRetentionSeconds.
+		in := json.RawMessage(`{"Name":"q","Arn":"arn:aws:sqs:us-east-1:1:q","Url":"https://sqs.us-east-1.amazonaws.com/1/q","MessageRetentionSeconds":345600}`)
+		out, err := n(in)
+		require.NoError(t, err)
+		assert.JSONEq(t, `{"Name":"q","MessageRetentionSeconds":345600}`, string(out))
+	})
+
+	t.Run("optional+computed kms_master_key_id and tags_all flags handled correctly", func(t *testing.T) {
+		t.Parallel()
+		// kms_master_key_id is Optional (no Computed) → kept.
+		// tags_all is Optional+Computed → kept (Configurable()).
+		// arn (Computed-only) → stripped.
+		in := json.RawMessage(`{"KmsMasterKeyId":"alias/x","TagsAll":{"k":"v"},"Arn":"x"}`)
+		out, err := n(in)
+		require.NoError(t, err)
+		assert.JSONEq(t, `{"KmsMasterKeyId":"alias/x","TagsAll":{"k":"v"}}`, string(out))
+	})
+}
+
+// TestStripComputedOnlyForType_NoSchema_PassesThrough pins the
+// fail-open contract: an unregistered TF type returns input unchanged.
+// The downstream generated.UnmarshalAttrs will already fail with "no
+// registered type" on a truly-missing registration; this Normalizer
+// stays out of the way rather than masking the wiring error.
+func TestStripComputedOnlyForType_NoSchema_PassesThrough(t *testing.T) {
+	t.Parallel()
+	n := stripComputedOnlyForType("aws_does_not_exist_xyz")
+	in := json.RawMessage(`{"Foo":"bar","Arn":"x"}`)
+	out, err := n(in)
+	require.NoError(t, err)
+	assert.JSONEq(t, string(in), string(out))
+}
+
+// TestStripComputedOnlyForType_EmptyType pins that an empty tfType
+// argument is a pass-through (defensive — no caller should be passing
+// "" but a future programmer error shouldn't blow up the chain).
+func TestStripComputedOnlyForType_EmptyType(t *testing.T) {
+	t.Parallel()
+	n := stripComputedOnlyForType("")
+	in := json.RawMessage(`{"Foo":"bar"}`)
+	out, err := n(in)
+	require.NoError(t, err)
+	assert.JSONEq(t, string(in), string(out))
+}
+
+// TestStripComputedOnlyForType_EmptyPayload exercises decode-side
+// pass-through: empty / null / whitespace inputs short-circuit cleanly
+// without touching the schema.
+func TestStripComputedOnlyForType_EmptyPayload(t *testing.T) {
+	t.Parallel()
+	n := stripComputedOnlyForType("aws_s3_bucket")
+	cases := []json.RawMessage{
+		json.RawMessage(``),
+		json.RawMessage(`null`),
+		json.RawMessage(`  `),
+	}
+	for _, in := range cases {
+		in := in
+		t.Run(string(in), func(t *testing.T) {
+			t.Parallel()
+			out, err := n(in)
+			require.NoError(t, err)
+			assert.Equal(t, string(in), string(out))
+		})
+	}
+}
+
+// TestStripComputedOnlyForType_MalformedJSON pins the error surface:
+// a non-object payload (e.g. an array or scalar at the top level)
+// returns a wrapped error so the chain reports the failing helper
+// instead of cascading into a confusing unmarshal error downstream.
+func TestStripComputedOnlyForType_MalformedJSON(t *testing.T) {
+	t.Parallel()
+	n := stripComputedOnlyForType("aws_s3_bucket")
+	_, err := n(json.RawMessage(`[1,2,3]`))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "stripComputedOnlyForType")
+}
+
+// TestStripComputedOnlyForType_ComposesAfterRenameAndSynth exercises
+// the production chain shape (#502 / #582): renameField →
+// synthIDFromField → trimARNStar → stripComputedOnlyForType. Pins
+// that placing the strip LAST in the chain:
+//   - preserves the synthesized `Id` (universallyElidedTFFields is
+//     empty on the AWS side; `id` is Optional+Computed → Configurable
+//     → kept by the per-field check), AND
+//   - elides the computed-only `Arn`.
+//
+// This is the canonical recipe for any new CC-routed AWS type that
+// gates retirement of a hand-rolled enricher on decision-#5 parity.
+func TestStripComputedOnlyForType_ComposesAfterRenameAndSynth(t *testing.T) {
+	t.Parallel()
+	n := chain(
+		renameField("LogGroupName", "Name"),
+		synthIDFromField("Name"),
+		trimARNStar("Arn"),
+		stripComputedOnlyForType("aws_cloudwatch_log_group"),
+	)
+	// CFN payload: LogGroupName lands as Name; synthIDFromField copies
+	// it into Id; trimARNStar drops the :* wildcard; stripComputedOnly
+	// elides `Arn` (Computed-only in the schema). Id survives because
+	// `id` is NOT in the AWS universallyElidedTFFields list and its
+	// schema is Optional+Computed (Configurable → kept).
+	in := json.RawMessage(`{"LogGroupName":"/aws/x","Arn":"arn:aws:logs:us-east-1:1:log-group:/aws/x:*","RetentionInDays":30}`)
+	out, err := n(in)
+	require.NoError(t, err)
+	m := asMap(t, out)
+	assert.Equal(t, "/aws/x", m["Name"])
+	assert.Equal(t, "/aws/x", m["Id"])
+	assert.Equal(t, float64(30), m["RetentionInDays"])
+	assert.NotContains(t, m, "Arn")
+	assert.NotContains(t, m, "LogGroupName")
+}

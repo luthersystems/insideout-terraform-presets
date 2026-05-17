@@ -38,7 +38,7 @@ func (t Tier) Valid() bool {
 //   - ImportedResource.Source: who created the resource record. Valid values
 //     are SourceComposer, SourceImporter, SourceInspector.
 //   - FieldEdit.Source: who authored a pending model-side edit. Valid values
-//     are SourceRiley, SourceAPI, SourceMCP.
+//     are SourceAgent, SourceAPI, SourceMCP.
 //
 // One typed string keeps the wire format simple and matches the single Source
 // symbol used throughout docs/managed-resource-tiers.md.
@@ -49,7 +49,11 @@ const (
 	SourceImporter  Source = "importer"
 	SourceInspector Source = "inspector"
 
-	SourceRiley Source = "riley"
+	// SourceAgent identifies edits authored by the interactive
+	// chat / agent surface. Renamed in #489 from the previous
+	// agent-product-pinned name ("riley") so the wire format is
+	// agent-name-agnostic.
+	SourceAgent Source = "agent"
 	SourceAPI   Source = "api"
 	SourceMCP   Source = "mcp"
 )
@@ -58,7 +62,7 @@ const (
 func (s Source) Valid() bool {
 	switch s {
 	case SourceComposer, SourceImporter, SourceInspector,
-		SourceRiley, SourceAPI, SourceMCP:
+		SourceAgent, SourceAPI, SourceMCP:
 		return true
 	}
 	return false

@@ -10,7 +10,7 @@
 // answers, per attribute, six independent questions: what role does the
 // field play (Identity / Wiring / Tuning), which operational pillar it
 // touches (Security / Performance / Reliability / None), who can see it
-// (Hidden / RileyVisible / UIVisible), who can edit it (Never / ChatSafe /
+// (Hidden / SummaryVisible / UIVisible), who can edit it (Never / ChatSafe /
 // RequiresApproval / RelationshipOnly / SystemOnly), how sensitive its
 // value is (Public / Redacted / Sensitive), and how risky a change is
 // (InPlace / MayReplace / AlwaysReplace / Unknown).

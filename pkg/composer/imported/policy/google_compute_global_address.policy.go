@@ -11,11 +11,11 @@ var googleComputeGlobalAddressPolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 	"id": {
-		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		Role: RoleIdentity, Visibility: VisibilitySummaryVisible, Edit: EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"self_link": {
-		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		Role: RoleIdentity, Visibility: VisibilitySummaryVisible, Edit: EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"project": {
@@ -26,7 +26,7 @@ var googleComputeGlobalAddressPolicy = Map{
 
 	// Wiring — VPC association for INTERNAL purpose.
 	"network": {
-		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit: EditRelationshipOnly, ChangeRisk: ChangeAlwaysReplace,
 		DriftSemantic: DriftSemanticExact,
 	},
@@ -38,27 +38,27 @@ var googleComputeGlobalAddressPolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 	"address_type": {
-		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		Role: RoleTuning, Visibility: VisibilitySummaryVisible, Edit: EditNever,
 		ChangeRisk:    ChangeAlwaysReplace,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"purpose": {
-		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		Role: RoleTuning, Visibility: VisibilitySummaryVisible, Edit: EditNever,
 		ChangeRisk:    ChangeAlwaysReplace,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"ip_version": {
-		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		Role: RoleTuning, Visibility: VisibilitySummaryVisible, Edit: EditNever,
 		ChangeRisk:    ChangeAlwaysReplace,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"prefix_length": {
-		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		Role: RoleTuning, Visibility: VisibilitySummaryVisible, Edit: EditNever,
 		ChangeRisk:    ChangeAlwaysReplace,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"description": {
-		Role: RoleTuning, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		Role: RoleTuning, Visibility: VisibilitySummaryVisible, Edit: EditChatSafe,
 		DriftSemantic: DriftSemanticExact,
 	},
 

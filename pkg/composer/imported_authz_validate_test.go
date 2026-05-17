@@ -83,7 +83,7 @@ func TestValidateImportedResourceAuthorization_TierImportedMissingFiresBothValid
 		},
 		Tier: imported.TierImportedMissing,
 		FieldEdits: map[string]imported.FieldEdit{
-			"name": {Source: imported.SourceRiley, NewValue: "rename"},
+			"name": {Source: imported.SourceAgent, NewValue: "rename"},
 		},
 	}}
 
@@ -159,7 +159,7 @@ func TestValidateImportedResourceAuthorization_ReimportConflictNoOpsOnNestedPath
 				},
 				FieldEdits: map[string]imported.FieldEdit{
 					tc.path: {
-						Source:   imported.SourceRiley,
+						Source:   imported.SourceAgent,
 						NewValue: "wholly-different",
 						Approval: approval,
 					},
@@ -241,7 +241,7 @@ func TestValidateImportedResourceAuthorization_EditPolicyGates(t *testing.T) {
 				Identity: good,
 				Tier:     imported.TierImportedFlat,
 				FieldEdits: map[string]imported.FieldEdit{
-					tc.path: {Source: imported.SourceRiley, NewValue: tc.newValue, EditedAt: time.Now()},
+					tc.path: {Source: imported.SourceAgent, NewValue: tc.newValue, EditedAt: time.Now()},
 				},
 			}}
 			issues := ValidateImportedResourceAuthorization("aws", irs)
@@ -272,7 +272,7 @@ func TestValidateImportedResourceAuthorization_NoPolicyForType(t *testing.T) {
 		},
 		Tier: imported.TierImportedFlat,
 		FieldEdits: map[string]imported.FieldEdit{
-			"description": {Source: imported.SourceRiley, NewValue: "edited"},
+			"description": {Source: imported.SourceAgent, NewValue: "edited"},
 		},
 	}}
 	issues := ValidateImportedResourceAuthorization("aws", irs)
@@ -292,7 +292,7 @@ func TestValidateImportedResourceAuthorization_UnknownPath(t *testing.T) {
 		},
 		Tier: imported.TierImportedFlat,
 		FieldEdits: map[string]imported.FieldEdit{
-			"this_field_does_not_exist": {Source: imported.SourceRiley, NewValue: "x"},
+			"this_field_does_not_exist": {Source: imported.SourceAgent, NewValue: "x"},
 		},
 	}}
 	issues := ValidateImportedResourceAuthorization("aws", irs)
@@ -325,7 +325,7 @@ func TestValidateImportedResourceAuthorization_PathWithoutPolicyEntry(t *testing
 		},
 		Tier: imported.TierImportedFlat,
 		FieldEdits: map[string]imported.FieldEdit{
-			uncurated: {Source: imported.SourceRiley, NewValue: "x"},
+			uncurated: {Source: imported.SourceAgent, NewValue: "x"},
 		},
 	}}
 	issues := ValidateImportedResourceAuthorization("aws", irs)
@@ -346,7 +346,7 @@ func TestValidateImportedResourceAuthorization_RequiresApprovalNoApproval(t *tes
 		},
 		Tier: imported.TierImportedFlat,
 		FieldEdits: map[string]imported.FieldEdit{
-			"sqs_managed_sse_enabled": {Source: imported.SourceRiley, NewValue: true},
+			"sqs_managed_sse_enabled": {Source: imported.SourceAgent, NewValue: true},
 		},
 	}}
 	issues := ValidateImportedResourceAuthorization("aws", irs)
@@ -378,7 +378,7 @@ func TestValidateImportedResourceAuthorization_RequiresApprovalIncomplete(t *tes
 				Tier: imported.TierImportedFlat,
 				FieldEdits: map[string]imported.FieldEdit{
 					"sqs_managed_sse_enabled": {
-						Source:   imported.SourceRiley,
+						Source:   imported.SourceAgent,
 						NewValue: true,
 						Approval: &ap,
 					},
@@ -410,7 +410,7 @@ func TestValidateImportedResourceAuthorization_RequiresApprovalComplete(t *testi
 		Tier: imported.TierImportedFlat,
 		FieldEdits: map[string]imported.FieldEdit{
 			"recovery_window_in_days": {
-				Source:   imported.SourceRiley,
+				Source:   imported.SourceAgent,
 				NewValue: 7,
 				Approval: approval,
 			},
@@ -440,7 +440,7 @@ func TestValidateImportedResourceAuthorization_RequiresApprovalAndReplacementRis
 		Tier: imported.TierImportedFlat,
 		FieldEdits: map[string]imported.FieldEdit{
 			"sqs_managed_sse_enabled": {
-				Source:   imported.SourceRiley,
+				Source:   imported.SourceAgent,
 				NewValue: true,
 				Approval: approval,
 			},
@@ -463,7 +463,7 @@ func TestValidateImportedResourceAuthorization_ReplacementRiskUnconfirmed(t *tes
 		},
 		Tier: imported.TierImportedFlat,
 		FieldEdits: map[string]imported.FieldEdit{
-			"architectures": {Source: imported.SourceRiley, NewValue: []any{"arm64"}},
+			"architectures": {Source: imported.SourceAgent, NewValue: []any{"arm64"}},
 		},
 	}}
 	issues := ValidateImportedResourceAuthorization("aws", irs)
@@ -489,7 +489,7 @@ func TestValidateImportedResourceAuthorization_ReplacementRiskApproved(t *testin
 		Tier: imported.TierImportedFlat,
 		FieldEdits: map[string]imported.FieldEdit{
 			"architectures": {
-				Source:   imported.SourceRiley,
+				Source:   imported.SourceAgent,
 				NewValue: []any{"arm64"},
 				Approval: approval,
 			},
@@ -516,7 +516,7 @@ func TestValidateImportedResourceAuthorization_ReimportConflict(t *testing.T) {
 		},
 		FieldEdits: map[string]imported.FieldEdit{
 			"visibility_timeout_seconds": {
-				Source:   imported.SourceRiley,
+				Source:   imported.SourceAgent,
 				NewValue: 120,
 				EditedAt: time.Now(),
 			},
@@ -542,7 +542,7 @@ func TestValidateImportedResourceAuthorization_ReimportConflictAlignedNoIssue(t 
 			"visibility_timeout_seconds": 120,
 		},
 		FieldEdits: map[string]imported.FieldEdit{
-			"visibility_timeout_seconds": {Source: imported.SourceRiley, NewValue: 120},
+			"visibility_timeout_seconds": {Source: imported.SourceAgent, NewValue: 120},
 		},
 	}}
 	assert.Empty(t, ValidateImportedResourceAuthorization("aws", irs))
@@ -591,7 +591,7 @@ func TestValidateImportedResourceAuthorization_RedactsAcrossSeverities(t *testin
 				},
 				Tier: imported.TierImportedFlat,
 				FieldEdits: map[string]imported.FieldEdit{
-					tc.path: {Source: imported.SourceRiley, NewValue: tc.newValue},
+					tc.path: {Source: imported.SourceAgent, NewValue: tc.newValue},
 				},
 			}}
 			issues := ValidateImportedResourceAuthorization("aws", irs)
@@ -619,8 +619,8 @@ func TestValidateImportedResourceAuthorization_DeterministicOrder(t *testing.T) 
 		},
 		Tier: imported.TierImportedFlat,
 		FieldEdits: map[string]imported.FieldEdit{
-			"name": {Source: imported.SourceRiley, NewValue: "renamed"},
-			"arn":  {Source: imported.SourceRiley, NewValue: "arn:aws:sqs:..."},
+			"name": {Source: imported.SourceAgent, NewValue: "renamed"},
+			"arn":  {Source: imported.SourceAgent, NewValue: "arn:aws:sqs:..."},
 		},
 	}}
 	for i := range 50 {
@@ -643,7 +643,7 @@ func TestValidateImportedResourceAuthorization_MultipleResources(t *testing.T) {
 			},
 			Tier: imported.TierImportedFlat,
 			FieldEdits: map[string]imported.FieldEdit{
-				"visibility_timeout_seconds": {Source: imported.SourceRiley, NewValue: 60},
+				"visibility_timeout_seconds": {Source: imported.SourceAgent, NewValue: 60},
 			},
 		},
 		{
@@ -652,7 +652,7 @@ func TestValidateImportedResourceAuthorization_MultipleResources(t *testing.T) {
 			},
 			Tier: imported.TierImportedFlat,
 			FieldEdits: map[string]imported.FieldEdit{
-				"name": {Source: imported.SourceRiley, NewValue: "rename"},
+				"name": {Source: imported.SourceAgent, NewValue: "rename"},
 			},
 		},
 	}
@@ -695,7 +695,7 @@ func TestValidateImportedResourceAuthorization_HookedIntoComposeStack(t *testing
 			},
 			Tier: imported.TierImportedFlat,
 			FieldEdits: map[string]imported.FieldEdit{
-				"name": {Source: imported.SourceRiley, NewValue: "rename"},
+				"name": {Source: imported.SourceAgent, NewValue: "rename"},
 			},
 		}},
 	})
@@ -717,7 +717,7 @@ func TestValidateImportedResourceAuthorization_HookedIntoValidateAll(t *testing.
 				},
 				Tier: imported.TierImportedFlat,
 				FieldEdits: map[string]imported.FieldEdit{
-					"kms_master_key_id": {Source: imported.SourceRiley, NewValue: "alias/foo"},
+					"kms_master_key_id": {Source: imported.SourceAgent, NewValue: "alias/foo"},
 				},
 			}},
 		},

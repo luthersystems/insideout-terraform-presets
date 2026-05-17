@@ -14,7 +14,7 @@ var googleRedisInstancePolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 	"id": {
-		Role: RoleIdentity, Visibility: VisibilityRileyVisible, Edit: EditNever,
+		Role: RoleIdentity, Visibility: VisibilitySummaryVisible, Edit: EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"project": {
@@ -45,12 +45,12 @@ var googleRedisInstancePolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 	"reserved_ip_range": {
-		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit: EditNever, ChangeRisk: ChangeAlwaysReplace,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"secondary_ip_range": {
-		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleWiring, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},
@@ -77,22 +77,22 @@ var googleRedisInstancePolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 	"read_replicas_mode": {
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"connect_mode": {
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit: EditNever, ChangeRisk: ChangeAlwaysReplace,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"location_id": {
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit: EditNever, ChangeRisk: ChangeAlwaysReplace,
 		DriftSemantic: DriftSemanticExact,
 	},
 	"alternative_location_id": {
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
 		Edit: EditNever, ChangeRisk: ChangeAlwaysReplace,
 		DriftSemantic: DriftSemanticExact,
 	},
@@ -119,20 +119,20 @@ var googleRedisInstancePolicy = Map{
 	// etc.) — operator-controlled, not labels. RoleTuning with
 	// EditRequiresApproval (changes affect runtime behavior).
 	"redis_configs": {
-		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilitySummaryVisible,
 		Edit: EditRequiresApproval,
 	},
 	"maintenance_version": {
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible, Edit: EditChatSafe,
 	},
 	"maintenance_policy.weekly_maintenance_window.day": {
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible, Edit: EditChatSafe,
 	},
 	"persistence_config.persistence_mode": {
 		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityUIVisible, Edit: EditChatSafe,
 	},
 	"persistence_config.rdb_snapshot_period": {
-		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilityRileyVisible, Edit: EditChatSafe,
+		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible, Edit: EditChatSafe,
 	},
 
 	// Labels

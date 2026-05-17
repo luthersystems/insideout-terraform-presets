@@ -46,7 +46,7 @@ var awsIAMRolePolicyPolicy = Map{
 	"policy": {
 		// IAM policy JSON. Exact-string drift catches out-of-band edits
 		// (statement additions, action expansions, resource widening).
-		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilityRileyVisible,
+		Role: RoleTuning, Pillar: PillarSecurity, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticExact,
 	},

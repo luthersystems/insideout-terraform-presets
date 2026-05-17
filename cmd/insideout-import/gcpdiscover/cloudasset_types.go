@@ -1,5 +1,7 @@
 package gcpdiscover
 
+import "encoding/json"
+
 // cloudasset_types.go — registry of GCP Terraform resource types routed
 // through the generic Cloud Asset Inventory (CAI) HYBRID attribute
 // enricher (mirrors AWS #490 / cloudcontrol_types.go for GCP).
@@ -71,6 +73,19 @@ type cloudAssetConfig struct {
 	TFType    string
 	AssetType string
 	Skip      bool
+	// Normalizer, when non-nil, transforms the raw CAI versionedResources
+	// JSON before the generic camelToSnakeGCP / Layer-1 unmarshal pipeline
+	// (#510). Use for per-type shape adjustments that GCP's REST surface
+	// does differently from Terraform's view — e.g. self-link URLs that
+	// TF stores as bare names, or wrapped fields like
+	// `tags.items: [...]` that TF flattens to `tags: [...]`.
+	//
+	// Consumed by the generic cloudAssetEnricher; returning an error
+	// fails the fetch with the original error wrapped so soft-fail
+	// dispatchers can distinguish a normalizer bug from a real CAI API
+	// failure. See cai_normalizers.go for composable helpers (chain,
+	// selfLinkToBareName, flattenNetworkTags).
+	Normalizer func(json.RawMessage) (json.RawMessage, error)
 }
 
 // cloudAssetTypeConfigs is the GCP equivalent of AWS's
@@ -113,14 +128,63 @@ var cloudAssetTypeConfigs = []cloudAssetConfig{
 	// =====================================================================
 	// Compute Engine — compute.googleapis.com
 	// =====================================================================
-	{TFType: "google_compute_address", AssetType: "compute.googleapis.com/Address"},
+	{
+		TFType:    "google_compute_address",
+		AssetType: "compute.googleapis.com/Address",
+		// #581 Normalizer (post-retirement): the CAI body returns
+		// `region` as a full self-link URL (https://.../regions/<r>)
+		// while TF state stores the bare region name; goog-managed
+		// labels need filtering so the emit layer doesn't introduce
+		// permadiff; computed-only fields (creation_timestamp, id,
+		// label_fingerprint, self_link, effective_labels,
+		// terraform_labels, users) are stripped per decision-#5 so the
+		// CAI payload matches what the (now-retired) hand-rolled
+		// mapComputeAddress emitted.
+		Normalizer: chain(
+			selfLinkToBareName("region"),
+			dropLabelPrefix("labels", "goog-"),
+			dropLabelPrefix("labels", "goog_"),
+			stripComputedOnlyForType("google_compute_address"),
+		),
+	},
 	{TFType: "google_compute_backend_service", AssetType: "compute.googleapis.com/BackendService"},
 	{TFType: "google_compute_global_address", AssetType: "compute.googleapis.com/GlobalAddress"},
-	{TFType: "google_compute_firewall", AssetType: "compute.googleapis.com/Firewall"},
+	{
+		TFType:    "google_compute_firewall",
+		AssetType: "compute.googleapis.com/Firewall",
+		// #510 Normalizer: the CAI body returns `network` as a full
+		// self-link URL (e.g.
+		// https://www.googleapis.com/compute/v1/projects/X/global/networks/foo);
+		// TF state stores the bare network name. No network-tags wrapper
+		// here — firewall sourceTags / targetTags are already bare lists
+		// at the top level (sourceTags / targetTags), not wrapped under
+		// a `tags.items` envelope.
+		Normalizer: chain(
+			selfLinkToBareName("network"),
+		),
+	},
 	{TFType: "google_compute_forwarding_rule", AssetType: "compute.googleapis.com/ForwardingRule"},
 	{TFType: "google_compute_global_forwarding_rule", AssetType: "compute.googleapis.com/GlobalForwardingRule"},
 	{TFType: "google_compute_health_check", AssetType: "compute.googleapis.com/HealthCheck"},
-	{TFType: "google_compute_instance", AssetType: "compute.googleapis.com/Instance"},
+	{
+		TFType:    "google_compute_instance",
+		AssetType: "compute.googleapis.com/Instance",
+		// #510 Normalizer: the CAI body returns several fields as
+		// self-link URLs (machineType, network/subnetwork inside
+		// networkInterface) and wraps GCE network tags as
+		// `tags: {items: [...]}`; TF flattens machineType to the bare
+		// type name and flattens `tags` to a bare list. Self-links on
+		// nested-block fields (network/subnetwork inside
+		// networkInterface, source/diskType inside disks) currently
+		// pass through unchanged; closing those is a follow-up that
+		// needs a path-aware self-link helper.
+		Normalizer: chain(
+			selfLinkToBareName("machineType"),
+			selfLinkToBareName("zone"),
+			selfLinkSliceToBareNames("resourcePolicies"),
+			flattenNetworkTags(),
+		),
+	},
 	{TFType: "google_compute_managed_ssl_certificate", AssetType: "compute.googleapis.com/SslCertificate"},
 	{TFType: "google_compute_network", AssetType: "compute.googleapis.com/Network"},
 	{TFType: "google_compute_resource_policy", AssetType: "compute.googleapis.com/ResourcePolicy"},
@@ -133,13 +197,88 @@ var cloudAssetTypeConfigs = []cloudAssetConfig{
 	// =====================================================================
 	// Cloud Storage — storage.googleapis.com
 	// =====================================================================
-	{TFType: "google_storage_bucket", AssetType: "storage.googleapis.com/Bucket"},
+	{
+		TFType:    "google_storage_bucket",
+		AssetType: "storage.googleapis.com/Bucket",
+		// #511 Normalizer: drop goog-managed labels; emit TF-required
+		// defaults (force_destroy, default_event_based_hold,
+		// enable_object_retention, requester_pays) that the GCS REST
+		// body never carries — the hand-rolled mapStorageBucket sets
+		// these unconditionally via generated.LiteralOf(false). #581
+		// adds the generic computed-only strip so creation_timestamp /
+		// effective_labels / self_link / terraform_labels / id /
+		// label_fingerprint don't leak.
+		// Hand-rolled override wins today
+		// (storage_bucket_enrich.{go,gen.go}); this chain hardens the
+		// CAI fallback but stops short of full parity — the
+		// hand-rolled also uppercases `location` (strings.ToUpper) and
+		// derives `enable_object_retention` from a nested
+		// `objectRetention.mode == "Enabled"` field, neither of which
+		// the current helper kit covers. See #580 PR body Bucket F for
+		// the remaining blockers before retirement.
+		Normalizer: chain(
+			dropLabelPrefix("labels", "goog-"),
+			dropLabelPrefix("labels", "goog_"),
+			setDefaultIfAbsent("forceDestroy", false),
+			setDefaultIfAbsent("defaultEventBasedHold", false),
+			setDefaultIfAbsent("enableObjectRetention", false),
+			setDefaultIfAbsent("requesterPays", false),
+			stripComputedOnlyForType("google_storage_bucket"),
+		),
+	},
 
 	// =====================================================================
 	// Pub/Sub — pubsub.googleapis.com
 	// =====================================================================
-	{TFType: "google_pubsub_topic", AssetType: "pubsub.googleapis.com/Topic"},
-	{TFType: "google_pubsub_subscription", AssetType: "pubsub.googleapis.com/Subscription"},
+	{
+		TFType:    "google_pubsub_topic",
+		AssetType: "pubsub.googleapis.com/Topic",
+		// #581 Normalizer (post-retirement): the CAI body returns
+		// `name` as the fully-qualified `projects/<p>/topics/<n>`
+		// resource path while TF stores the bare short name;
+		// goog-managed labels need filtering; computed-only fields
+		// (effective_labels, id, terraform_labels) are stripped per
+		// decision-#5. Per-resource nested blocks
+		// (ingestion_data_source_settings, message_storage_policy,
+		// schema_settings) are NOT yet handled by the helper kit —
+		// the CAI body returns these as single objects while the
+		// Layer-1 struct expects `[]Block`; a generic
+		// object-to-singleton-list wrapper is a follow-up. If the
+		// real CAI body for a given topic includes any of those nested
+		// settings, the generic path will drop them at
+		// generated.UnmarshalAttrs (unknown-key) — parity holds only
+		// for the no-nested-blocks shape, which is the common case for
+		// the topics used by InsideOut today.
+		Normalizer: chain(
+			shortenLastSegment("name"),
+			dropLabelPrefix("labels", "goog-"),
+			dropLabelPrefix("labels", "goog_"),
+			stripComputedOnlyForType("google_pubsub_topic"),
+		),
+	},
+	{
+		TFType:    "google_pubsub_subscription",
+		AssetType: "pubsub.googleapis.com/Subscription",
+		// #581 Normalizer (post-retirement): shorten `name`
+		// (projects/<p>/subscriptions/<n> → <n>); drop goog-managed
+		// labels; emit TF-required defaults
+		// (enable_exactly_once_delivery, enable_message_ordering,
+		// retain_acked_messages) that the Pub/Sub REST body omits;
+		// strip computed-only fields per decision-#5. Nested blocks
+		// (push_config, bigquery_config, cloud_storage_config,
+		// dead_letter_policy, expiration_policy, retry_policy) face
+		// the same object-to-singleton-list blocker as pubsub_topic —
+		// parity holds only for the no-nested-blocks shape.
+		Normalizer: chain(
+			shortenLastSegment("name"),
+			dropLabelPrefix("labels", "goog-"),
+			dropLabelPrefix("labels", "goog_"),
+			setDefaultIfAbsent("enableExactlyOnceDelivery", false),
+			setDefaultIfAbsent("enableMessageOrdering", false),
+			setDefaultIfAbsent("retainAckedMessages", false),
+			stripComputedOnlyForType("google_pubsub_subscription"),
+		),
+	},
 
 	// =====================================================================
 	// IAM service accounts — iam.googleapis.com
