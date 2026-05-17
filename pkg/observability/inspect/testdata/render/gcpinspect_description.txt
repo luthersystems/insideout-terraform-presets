@@ -12,7 +12,7 @@ RESPONSE TIERS (default is summary for token efficiency):
 - Raw: Complete unprocessed API response. Set raw=true.
 
 REQUIRES: session_id from convoopen response (format: sess_v2_...).
-Supported services: apigateway, bastion, billing, cloudarmor, cloudbuild, cloudcdn, cloudfunctions, cloudkms, cloudlogging, cloudmonitoring, cloudrun, cloudsql, compute, firestore, gcs, gke, identityplatform, loadbalancer, memorystore, pubsub, secretmanager, vertexai, vpc
+Supported services: apigateway, bastion, billing, certificatemanager, cloudarmor, cloudbuild, cloudcdn, clouddns, cloudfunctions, cloudkms, cloudlogging, cloudmonitoring, cloudrun, cloudsql, compute, firestore, gcs, gke, identityplatform, loadbalancer, memorystore, pubsub, secretmanager, vertexai, vpc
 For a specific service's actions, call with action="list-actions".
 
 METRICS: Use list-metrics to see available Cloud Monitoring metrics for any service (no credentials needed — progressive disclosure). Use get-metrics to retrieve time-series data. Optional filters JSON: {"hours":6,"period":300}.

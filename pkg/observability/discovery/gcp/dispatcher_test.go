@@ -44,6 +44,9 @@ var firstListAction = map[string]string{
 	"bastion":          "list-bastion-instances",
 	"cloudmonitoring":  "list-alert-policies",
 	"billing":          "get-billing-info",
+	// #596: new DNS+cert services.
+	"clouddns":           "list-managed-zones",
+	"certificatemanager": "list-certificates",
 }
 
 // unreachableEndpoint is an explicit RFC5737 documentation IP — every

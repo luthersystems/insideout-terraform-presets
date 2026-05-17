@@ -105,6 +105,10 @@ func TestLive255_AWSInspectorsJSONShape(t *testing.T) {
 		{"ec2", "describe-security-groups"},
 		{"ebs", "describe-volumes"},
 		{"ebs", "describe-snapshots"},
+		// #596: Route 53 + ACM. Route 53 list-resource-record-sets needs
+		// a hosted_zone_id and is exercised separately below.
+		{"route53", "list-hosted-zones"},
+		{"acm", "list-certificates"},
 	} {
 		probes = append(probes, mk(pair[0], pair[1])...)
 	}

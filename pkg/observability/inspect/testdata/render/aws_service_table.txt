@@ -1,6 +1,7 @@
 | Service | Common Actions |
 |---------|----------------|
 | account | get-info |
+| acm | list-certificates, describe-certificate, get-metrics |
 | alb | describe-load-balancers, get-metrics |
 | apigateway | get-apis, get-domain-names, get-metrics |
 | backup | list-backup-vaults |
@@ -20,6 +21,7 @@
 | msk | list-clusters, get-metrics |
 | opensearch | list-domains, describe-domains, list-collections, get-metrics |
 | rds | describe-db-instances, describe-db-clusters, get-metrics |
+| route53 | list-hosted-zones, list-resource-record-sets |
 | s3 | list-buckets, get-metrics |
 | secretsmanager | list-secrets, get-metrics |
 | sqs | list-queues, get-metrics |
