@@ -508,14 +508,14 @@ func TestComposeStack_V2KitchenSink(t *testing.T) {
 }
 
 func TestComposeStack_KitchenSink(t *testing.T) {
-	// Select a broad set of modules to exercise wiring. Uses prefixed keys
-	// plus the polymorphic KeyAWSEKSControlPlane (EKS control plane) and KeyAWSEKSNodeGroup (EKS
-	// managed node group) — those stay until Phase 4 renames them to
-	// unambiguous `KeyAWSEKSControlPlane` / `KeyAWSEKSNodeGroup`.
+	// Select a broad set of modules to exercise wiring. Issue #224
+	// collapsed the legacy polymorphic KeyAWSEKSControlPlane / "resource"
+	// and KeyAWSEKSNodeGroup / "ec2" string identities into canonical
+	// KeyAWSEKS / KeyAWSEKSNodeGroup.
 	selected := []ComponentKey{
 		KeyAWSVPC,
 		KeyAWSEKS,          // EKS control plane
-		KeyAWSEKSNodeGroup, // EKS node group (polymorphic; KeyAWSEKSNodeGroup lands in Phase 4)
+		KeyAWSEKSNodeGroup, // EKS managed node group
 		KeyAWSBastion,
 		KeyAWSALB,
 		KeyAWSRDS,
@@ -675,17 +675,17 @@ func TestComposeStack_KitchenSink(t *testing.T) {
 		require.Regexp(t, regexp.MustCompile(`(?m)^\s*default_rule\s*=\s*var\.aws_backups_default_rule\s*$`), mainTF)
 	})
 
-	t.Run("tfvars/ec2_namespacing", func(t *testing.T) {
-		require.Contains(t, out, "/ec2.auto.tfvars")
-		ec2Tf := string(out["/ec2.auto.tfvars"])
-		require.Regexp(t, regexp.MustCompile(`(?m)^\s*ec2_project\s*=\s*"demo"\s*$`), ec2Tf)
-		require.Regexp(t, regexp.MustCompile(`(?m)^\s*ec2_region\s*=\s*"us-west-2"\s*$`), ec2Tf)
+	t.Run("tfvars/nodegroup_namespacing", func(t *testing.T) {
+		require.Contains(t, out, "/aws_eks_nodegroup.auto.tfvars")
+		ngTf := string(out["/aws_eks_nodegroup.auto.tfvars"])
+		require.Regexp(t, regexp.MustCompile(`(?m)^\s*aws_eks_nodegroup_project\s*=\s*"demo"\s*$`), ngTf)
+		require.Regexp(t, regexp.MustCompile(`(?m)^\s*aws_eks_nodegroup_region\s*=\s*"us-west-2"\s*$`), ngTf)
 	})
 
 	t.Run("variables_tf", func(t *testing.T) {
 		varsTF := string(out["/variables.tf"])
-		require.Contains(t, varsTF, `variable "ec2_project"`)
-		require.Contains(t, varsTF, `variable "ec2_region"`)
+		require.Contains(t, varsTF, `variable "aws_eks_nodegroup_project"`)
+		require.Contains(t, varsTF, `variable "aws_eks_nodegroup_region"`)
 		require.Contains(t, varsTF, `variable "project"`)
 		require.Contains(t, varsTF, `variable "region"`)
 	})
@@ -802,7 +802,7 @@ func TestComposeStack_LambdaPublicVPC(t *testing.T) {
 func TestComposeStack_AWS_ValidHCL(t *testing.T) {
 	selected := []ComponentKey{
 		KeyAWSVPC,
-		KeyAWSEKSNodeGroup, // EKS node group (polymorphic)
+		KeyAWSEKSNodeGroup, // EKS managed node group
 		KeyAWSRDS,
 		KeyAWSS3,
 	}
@@ -829,12 +829,12 @@ func TestComposeStack_AWS_ValidHCL(t *testing.T) {
 
 // TestComposeStack_TFVarsMatchVariables verifies that every key in .auto.tfvars files
 // has a corresponding declaration in variables.tf. This test catches naming mismatches
-// like writing "project" in .auto.tfvars when variables.tf declares "ec2_project".
+// like writing "project" in .auto.tfvars when variables.tf declares "aws_eks_nodegroup_project".
 func TestComposeStack_TFVarsMatchVariables(t *testing.T) {
 	selected := []ComponentKey{
 		KeyAWSVPC,
 		KeyAWSEKS,
-		KeyAWSEKSNodeGroup, // EKS node group (polymorphic)
+		KeyAWSEKSNodeGroup, // EKS managed node group
 		KeyAWSBastion,
 		KeyAWSALB,
 		KeyAWSRDS,
@@ -925,7 +925,7 @@ func TestComposeStack_TerraformInit(t *testing.T) {
 	selected := []ComponentKey{
 		KeyAWSVPC,
 		KeyAWSEKS,
-		KeyAWSEKSNodeGroup, // EKS node group (polymorphic)
+		KeyAWSEKSNodeGroup, // EKS managed node group
 		KeyAWSRDS,
 		KeyAWSS3,
 		KeyAWSCloudWatchLogs,
@@ -1567,8 +1567,8 @@ func TestComposeStack_OutputsTF_KitchenSink(t *testing.T) {
 
 	selected := []ComponentKey{
 		KeyAWSVPC,
-		KeyAWSEKSControlPlane, // EKS control plane (polymorphic)
-		KeyAWSEKSNodeGroup,    // EKS node group (polymorphic)
+		KeyAWSEKS,          // EKS control plane
+		KeyAWSEKSNodeGroup, // EKS managed node group
 		KeyAWSRDS,
 		KeyAWSS3,
 	}
@@ -2144,63 +2144,59 @@ func TestComposeStack_AWSECS(t *testing.T) {
 	require.Contains(t, ecsTfStr, "aws_ecs_region")
 }
 
-// TestComposeStack_PolymorphicKeyPullsInPrefixedVPC is a regression test for
-// the implicit-dependency leak where ResolveDependencies would have expanded
-// a polymorphic key to a legacy VPC sibling. A direct Go caller passing only
-// [KeyAWSEKSControlPlane] must still produce a prefixed-only stack.
-//
-// Post-#206: the comps-aware resolver also auto-includes the worker node group
-// (module "ec2") when comps is non-Lambda, so the assertion set covers that.
-func TestComposeStack_PolymorphicKeyPullsInPrefixedVPC(t *testing.T) {
+// TestComposeStack_EKSKeyPullsInPrefixedVPC is a regression test for the
+// implicit-dependency leak where ResolveDependencies would have expanded a
+// key to a legacy VPC sibling. A direct Go caller passing only [KeyAWSEKS]
+// must still produce a prefixed-only stack and auto-include the worker node
+// group module per #206.
+func TestComposeStack_EKSKeyPullsInPrefixedVPC(t *testing.T) {
 	c := newTestClient()
 	out, err := c.ComposeStack(ComposeStackOpts{
 		Cloud:        "aws",
-		SelectedKeys: []ComponentKey{KeyAWSEKSControlPlane}, // polymorphic, pulls VPC via ImplicitDependencies
+		SelectedKeys: []ComponentKey{KeyAWSEKS},
 		Comps:        &Components{},
 		Cfg:          &Config{Region: "us-east-1"},
 		Project:      "test",
 		Region:       "us-east-1",
 	})
-	require.NoError(t, err, "ComposeStack with polymorphic KeyAWSEKSControlPlane should succeed")
+	require.NoError(t, err, "ComposeStack with KeyAWSEKS should succeed")
 
 	mainTF := string(out["/main.tf"])
 	require.Contains(t, mainTF, `module "aws_vpc"`,
 		"implicit dep must render aws_vpc")
-	require.Contains(t, mainTF, `module "resource"`,
-		"polymorphic KeyAWSEKSControlPlane preserves its string value and renders as module.resource")
-	require.Contains(t, mainTF, `module "ec2"`,
-		"non-Lambda EKS must auto-include the worker node group (issue #206)")
+	require.Contains(t, mainTF, `module "aws_eks"`,
+		"KeyAWSEKS composes module.aws_eks")
+	require.Contains(t, mainTF, `module "aws_eks_nodegroup"`,
+		"EKS must auto-include the worker node group (issue #206)")
+	// Issue #224: the legacy polymorphic string identities ("resource" /
+	// "ec2") must NOT appear in the composed root. Anchor to line-start +
+	// optional whitespace before "{" so a future formatter that drops the
+	// space (e.g. `module "ec2"{`) doesn't sneak past the negative pin.
+	require.NotRegexp(t, regexp.MustCompile(`(?m)^module "resource"\s*\{`), mainTF,
+		"legacy polymorphic module \"resource\" must not appear (issue #224)")
+	require.NotRegexp(t, regexp.MustCompile(`(?m)^module "ec2"\s*\{`), mainTF,
+		"legacy polymorphic module \"ec2\" must not appear (issue #224); distinct from aws_ec2 which is line-anchored separately")
 }
 
 // TestComposeStack_EKSAutoIncludesNodeGroup is the issue #206 regression: a
-// caller selecting only KeyAWSEKS (or KeyAWSEKSControlPlane) on a non-Lambda
-// architecture must end up with the worker node group module composed,
-// otherwise EKS addons (coredns, kube-proxy, aws-ebs-csi-driver) have nowhere
-// to schedule and `terraform apply` times out at 20 min in DEGRADED state.
-//
-// The expected cluster-module name depends on which cluster key the caller
-// selected: KeyAWSEKS ("aws_eks") composes module "aws_eks", and
-// KeyAWSEKSControlPlane ("resource") composes module "resource". The
-// auto-include must emit *exactly one* cluster module — not both — so that
-// the prefix-aware key path doesn't drag the legacy polymorphic key in via
-// the node group's static dep.
+// caller selecting only KeyAWSEKS must end up with the worker node group
+// module composed, otherwise EKS addons (coredns, kube-proxy,
+// aws-ebs-csi-driver) have nowhere to schedule and `terraform apply` times
+// out at 20 min in DEGRADED state.
 func TestComposeStack_EKSAutoIncludesNodeGroup(t *testing.T) {
 	t.Parallel()
 	awsEKSEnabled := true
 	cases := []struct {
-		name        string
-		selected    []ComponentKey
-		comps       *Components
-		wantCluster string // module name expected for the EKS control plane
-		notCluster  string // module name that must NOT be present
+		name     string
+		selected []ComponentKey
+		comps    *Components
 	}{
-		{"OnlyEKS_AutoAddsNodeGroup", []ComponentKey{KeyAWSEKS}, &Components{}, `module "aws_eks"`, `module "resource"`},
-		{"OnlyControlPlane_AutoAddsNodeGroup", []ComponentKey{KeyAWSEKSControlPlane}, &Components{}, `module "resource"`, `module "aws_eks"`},
-		{"EKSPlusVPC_AutoAddsNodeGroup", []ComponentKey{KeyAWSEKS, KeyAWSVPC}, &Components{}, `module "aws_eks"`, `module "resource"`},
-		// Non-empty non-Lambda comps confirms isLambda returns false on a
-		// populated Components{} where AWSLambda is unset — guards against a
-		// regression where isLambda might check non-nil instead of the field.
-		{"EKSWithEnabledFlag_NonEmptyComps", []ComponentKey{KeyAWSEKS}, &Components{AWSEKS: &awsEKSEnabled}, `module "aws_eks"`, `module "resource"`},
+		{"OnlyEKS_AutoAddsNodeGroup", []ComponentKey{KeyAWSEKS}, &Components{}},
+		{"EKSPlusVPC_AutoAddsNodeGroup", []ComponentKey{KeyAWSEKS, KeyAWSVPC}, &Components{}},
+		// Non-empty comps confirms a populated Components{} doesn't perturb
+		// the auto-include — guards against regressions where a presence
+		// check on the struct (vs the specific field) flips behavior.
+		{"EKSWithEnabledFlag_NonEmptyComps", []ComponentKey{KeyAWSEKS}, &Components{AWSEKS: &awsEKSEnabled}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -2216,20 +2212,15 @@ func TestComposeStack_EKSAutoIncludesNodeGroup(t *testing.T) {
 			require.NoError(t, err, "ComposeStack should succeed")
 			mainTF := string(out["/main.tf"])
 			require.Contains(t, mainTF, `module "aws_vpc"`)
-			require.Contains(t, mainTF, tc.wantCluster,
+			require.Contains(t, mainTF, `module "aws_eks"`,
 				"EKS control plane module must compose")
-			require.NotContains(t, mainTF, tc.notCluster,
-				"only one cluster module must compose — the auto-include must not pull in the other polymorphic alias")
 			// Match the block-opening shape, not just a substring, so a
 			// rename of the node-group module wouldn't accidentally credit
-			// (e.g.) a "module \"ec2_legacy_workers\"" occurrence. Pins the
-			// composed name "ec2" and asserts the source path resolves to
-			// the eks_nodegroup preset, which is what actually keeps EKS
-			// schedulable per #206.
-			require.Regexp(t, regexp.MustCompile(`(?m)^module "ec2"\s*\{`), mainTF,
-				"EKS worker node group (polymorphic key 'ec2') must auto-include for non-Lambda EKS (issue #206)")
-			ec2Blocks := regexp.MustCompile(`(?m)^module "ec2"\s*\{`).FindAllStringIndex(mainTF, -1)
-			require.Len(t, ec2Blocks, 1,
+			// (e.g.) a "module \"aws_eks_nodegroup_legacy\"" occurrence.
+			require.Regexp(t, regexp.MustCompile(`(?m)^module "aws_eks_nodegroup"\s*\{`), mainTF,
+				"EKS worker node group must auto-include for EKS stacks (issue #206)")
+			ngBlocks := regexp.MustCompile(`(?m)^module "aws_eks_nodegroup"\s*\{`).FindAllStringIndex(mainTF, -1)
+			require.Len(t, ngBlocks, 1,
 				"node group must compose exactly once — auto-include must not duplicate when user pre-selects KeyAWSEKSNodeGroup")
 			require.Regexp(t, regexp.MustCompile(`source\s*=\s*"\./modules/eks_nodegroup"`), mainTF,
 				"node group module's source must resolve to ./modules/eks_nodegroup")
@@ -2241,14 +2232,7 @@ func TestComposeStack_EKSAutoIncludesNodeGroup(t *testing.T) {
 // hasNodeGroup short-circuit: when the caller already selected
 // KeyAWSEKSNodeGroup explicitly, the auto-include must not append a second
 // copy. A mutation removing the hasNodeGroup check would emit two
-// `module "ec2"` blocks, which terraform would reject at init.
-//
-// Note: pre-existing static-map behavior emits two cluster modules
-// (`module "aws_eks"` AND `module "resource"`) when both KeyAWSEKS and
-// KeyAWSEKSNodeGroup are selected explicitly, because the static map declares
-// KeyAWSEKSNodeGroup's dep as KeyAWSEKSControlPlane (the legacy polymorphic
-// alias). That's a separate latent issue outside #206's scope and is not
-// asserted here — this test pins only the node-group-not-doubled invariant.
+// `module "aws_eks_nodegroup"` blocks, which terraform would reject at init.
 func TestComposeStack_EKSAutoIncludeIdempotent(t *testing.T) {
 	t.Parallel()
 	c := newTestClient()
@@ -2262,33 +2246,16 @@ func TestComposeStack_EKSAutoIncludeIdempotent(t *testing.T) {
 	})
 	require.NoError(t, err, "ComposeStack should succeed")
 	mainTF := string(out["/main.tf"])
-	ec2Blocks := regexp.MustCompile(`(?m)^module "ec2"\s*\{`).FindAllStringIndex(mainTF, -1)
-	require.Len(t, ec2Blocks, 1,
+	ngBlocks := regexp.MustCompile(`(?m)^module "aws_eks_nodegroup"\s*\{`).FindAllStringIndex(mainTF, -1)
+	require.Len(t, ngBlocks, 1,
 		"node group must compose exactly once even when caller pre-selects KeyAWSEKSNodeGroup — pins the hasNodeGroup short-circuit in ResolveDependenciesForCompose")
-}
-
-// TestComposeStack_EKSControlPlaneLambdaSkipsNodeGroup pins the Lambda gate:
-// when comps.AWSLambda is set, KeyAWSEKSControlPlane routes to the Lambda
-// runtime preset (not EKS), so the auto-include of the worker node group
-// must NOT fire.
-func TestComposeStack_EKSControlPlaneLambdaSkipsNodeGroup(t *testing.T) {
-	t.Parallel()
-	trueVal := true
-	c := newTestClient()
-	out, err := c.ComposeStack(ComposeStackOpts{
-		Cloud:        "aws",
-		SelectedKeys: []ComponentKey{KeyAWSEKSControlPlane},
-		Comps:        &Components{AWSLambda: &trueVal}, // Lambda architecture
-		Cfg:          &Config{Region: "us-east-1"},
-		Project:      "lambda-no-eks",
-		Region:       "us-east-1",
-	})
-	require.NoError(t, err, "ComposeStack(Lambda) should succeed")
-	mainTF := string(out["/main.tf"])
-	require.Contains(t, mainTF, `module "resource"`,
-		"polymorphic KeyAWSEKSControlPlane still composes as module 'resource'")
-	require.NotContains(t, mainTF, `module "ec2"`,
-		"Lambda architecture must NOT auto-include the EKS worker node group (issue #206)")
+	// Mirror dedup guard on the cluster: a regression in dedup that
+	// duplicated the cluster module (not just node group) when both keys
+	// are explicitly selected would not be caught by the node-group
+	// assertion above.
+	clusterBlocks := regexp.MustCompile(`(?m)^module "aws_eks"\s*\{`).FindAllStringIndex(mainTF, -1)
+	require.Len(t, clusterBlocks, 1,
+		"cluster module must compose exactly once when caller pre-selects both KeyAWSEKS and KeyAWSEKSNodeGroup")
 }
 
 // TestDefaultWiring_GCPSubnetSelfLinkUsesTryGuard pins the issue #178 fix:

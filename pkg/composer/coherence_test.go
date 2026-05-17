@@ -87,17 +87,16 @@ func TestComponentSelected_NilComponents_AlwaysFalse(t *testing.T) {
 	}
 }
 
-func TestComponentSelected_PolymorphicAndNonConfigKeys_AlwaysFalse(t *testing.T) {
+func TestComponentSelected_NodeGroupAndNonConfigKeys_AlwaysFalse(t *testing.T) {
 	t.Parallel()
 
-	// Polymorphic preset keys (KeyAWSEKSNodeGroup / KeyAWSEKSControlPlane)
-	// don't map to a Components field — selection is encoded by AWSEKS +
-	// AWSLambda. ComponentSelected must NOT report them as a standalone
-	// selection (downstream code would treat them as orphan-strippable and
-	// misbehave).
+	// KeyAWSEKSNodeGroup doesn't map to a Components field — selection is
+	// encoded by AWSEKS (and auto-include of the node group is driven by
+	// ResolveDependenciesForCompose). ComponentSelected must NOT report it
+	// as a standalone selection (downstream code would treat it as
+	// orphan-strippable and misbehave).
 	c := &Components{AWSEKS: boolPtr(true), AWSLambda: boolPtr(true)}
 	assert.False(t, ComponentSelected(c, KeyAWSEKSNodeGroup))
-	assert.False(t, ComponentSelected(c, KeyAWSEKSControlPlane))
 
 	// KeyComposer / KeyArch / KeyCloud are meta-keys, not components.
 	assert.False(t, ComponentSelected(c, KeyComposer))

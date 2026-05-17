@@ -37,6 +37,7 @@ const (
 // the resource WeakLocked. TestUntaggableAllowlistsMatchLintScripts ensures
 // this list stays in sync with the bash array.
 var untaggableAWS = map[string]struct{}{
+	"aws_acm_certificate_validation":                     {},
 	"aws_api_gateway_deployment":                         {},
 	"aws_api_gateway_resource":                           {},
 	"aws_apigatewayv2_api_mapping":                       {},

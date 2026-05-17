@@ -25,23 +25,17 @@ const (
 	KeyArch     ComponentKey = "architecture"
 	KeyCloud    ComponentKey = "cloud"
 
-	// KeyAWSEKSNodeGroup is the polymorphic EKS node-group / Lambda compute
-	// key. Preserves the string value "ec2" so TF state continuity with
-	// pre-v0.4.0 stacks is maintained (the module is named `"ec2"` in the
-	// composed main.tf). Distinct from KeyAWSEC2 (standalone EC2 instance);
-	// GetModuleDir routes based on comps.AWSLambda.
-	KeyAWSEKSNodeGroup ComponentKey = "ec2"
-	// KeyAWSEKSControlPlane is the polymorphic EKS control plane / Lambda
-	// runtime key. Preserves the string value "resource" for pre-v0.4.0 TF
-	// state continuity. GetModuleDir routes to modules/lambda when
-	// comps.AWSLambda is set, else modules/eks.
-	KeyAWSEKSControlPlane ComponentKey = "resource"
-
 	KeySplunk  ComponentKey = "splunk"
 	KeyDatadog ComponentKey = "datadog"
 
 	// AWS components (cloud-prefixed canonical vocabulary)
-	KeyAWSVPC                  ComponentKey = "aws_vpc"
+	KeyAWSVPC ComponentKey = "aws_vpc"
+	// KeyAWSEKSNodeGroup is the canonical EKS managed node-group key. The
+	// preset directory is aws/eks_nodegroup and the composed module label
+	// is `module "aws_eks_nodegroup"` (issue #224 — the legacy
+	// polymorphic "ec2" string identity was removed when its sibling
+	// polymorphic KeyAWSEKSControlPlane was collapsed into KeyAWSEKS).
+	KeyAWSEKSNodeGroup         ComponentKey = "aws_eks_nodegroup"
 	KeyAWSBastion              ComponentKey = "aws_bastion"
 	KeyAWSEC2                  ComponentKey = "aws_ec2"
 	KeyAWSEKS                  ComponentKey = "aws_eks"
@@ -99,7 +93,6 @@ var ComposeOrder = []ComponentKey{
 	// Deps first, then consumers.
 	KeyAWSVPC,
 	KeyGCPVPC,
-	KeyAWSEKSControlPlane, // EKS cluster or Lambda (polymorphic)
 	KeyAWSEKS,
 	KeyAWSECS,
 	KeyGCPGKE,
@@ -108,7 +101,7 @@ var ComposeOrder = []ComponentKey{
 	KeyGCPCloudRun,
 	KeyGCPCloudFunctions,
 	KeyAWSLambda,
-	KeyAWSEKSNodeGroup, // node group after cluster (polymorphic)
+	KeyAWSEKSNodeGroup, // node group after cluster
 	KeyAWSEC2,
 	KeyAWSBastion,
 	KeyAWSALB,
@@ -160,11 +153,6 @@ var ComposeOrder = []ComponentKey{
 
 // ModulePath defines the base directory for each component's preset.
 var ModulePath = map[ComponentKey]string{
-	// Polymorphic (preserve string-value module names "ec2" / "resource"
-	// for TF state continuity).
-	KeyAWSEKSNodeGroup:    "modules/eks_nodegroup", // EKS managed node group
-	KeyAWSEKSControlPlane: "modules/eks",           // EKS cluster (default; Lambda path via GetModuleDir)
-
 	// Third-party toggles
 	KeySplunk:  "modules/splunk",
 	KeyDatadog: "modules/datadog",
@@ -173,6 +161,7 @@ var ModulePath = map[ComponentKey]string{
 	KeyAWSVPC:                  "modules/vpc",
 	KeyAWSEC2:                  "modules/ec2",
 	KeyAWSEKS:                  "modules/eks",
+	KeyAWSEKSNodeGroup:         "modules/eks_nodegroup",
 	KeyAWSECS:                  "modules/ecs",
 	KeyAWSLambda:               "modules/lambda",
 	KeyAWSALB:                  "modules/alb",
@@ -237,26 +226,21 @@ var ImplicitDependencies = map[ComponentKey][]ComponentKey{
 	KeyAWSOpenSearch:   {KeyAWSVPC},
 	KeyAWSBedrock:      {KeyAWSS3, KeyAWSOpenSearch},
 	KeyAWSCloudfront:   {KeyAWSALB},
-	// Polymorphic keys: dep on AWSVPC so a direct caller selecting only a
-	// polymorphic key still produces a prefixed-only stack.
-	KeyAWSEKSControlPlane: {KeyAWSVPC},
-	KeyAWSEKS:             {KeyAWSVPC},
-	KeyAWSECS:             {KeyAWSVPC},
-	KeyGCPGKE:             {KeyGCPVPC},
-	KeyAWSLambda:          {KeyAWSVPC},
-	KeyAWSEKSNodeGroup:    {KeyAWSEKSControlPlane, KeyAWSVPC},
-	KeyAWSEC2:             {KeyAWSVPC},
-	KeyGCPCompute:         {KeyGCPVPC},
+	KeyAWSEKS:          {KeyAWSVPC},
+	KeyAWSECS:          {KeyAWSVPC},
+	KeyGCPGKE:          {KeyGCPVPC},
+	KeyAWSLambda:       {KeyAWSVPC},
+	KeyAWSEKSNodeGroup: {KeyAWSEKS, KeyAWSVPC},
+	KeyAWSEC2:          {KeyAWSVPC},
+	KeyGCPCompute:      {KeyGCPVPC},
 }
 
 // ResolveDependencies recursively finds all required components for a given set of keys.
 //
 // This signature is kept stable for downstream callers (e.g. The InsideOut backend). For
-// EKS auto-include of the worker node group, callers that have *Components
-// available should use ResolveDependenciesForCompose instead — without comps,
-// we cannot tell EKS-the-Kubernetes-cluster apart from
-// KeyAWSEKSControlPlane-as-Lambda-runtime, and unconditionally adding the node
-// group would produce a stray ec2 module in Lambda stacks.
+// EKS auto-include of the worker node group, callers should use
+// ResolveDependenciesForCompose instead so the node group is appended
+// automatically whenever KeyAWSEKS is in the selected set.
 func ResolveDependencies(keys []ComponentKey) []ComponentKey {
 	added := make(map[ComponentKey]bool)
 	var final []ComponentKey
@@ -288,21 +272,18 @@ func ResolveDependencies(keys []ComponentKey) []ComponentKey {
 
 // ResolveDependenciesForCompose is the comps-aware resolver used by ComposeStack
 // and ComposeSingle. It runs ResolveDependencies first, then auto-includes
-// KeyAWSEKSNodeGroup whenever a non-Lambda EKS cluster is in the resolved set
-// (issue #206). The injection is gated on isLambda(comps) so the polymorphic
-// KeyAWSEKSControlPlane key doesn't drag a worker node group into a Lambda
-// stack. KeyAWSEKS is always Kubernetes (never polymorphic with Lambda), so
-// it always gets the node group.
+// KeyAWSEKSNodeGroup whenever KeyAWSEKS is in the resolved set (issue #206).
+// The `comps` parameter is retained for API stability — Lambda vs EKS is now
+// chosen explicitly via the caller's KeyAWSLambda / KeyAWSEKS selection
+// (issue #224, polymorphic dispatch removed).
 func ResolveDependenciesForCompose(keys []ComponentKey, comps *Components) []ComponentKey {
+	_ = comps // retained for API stability; no longer used for polymorphic dispatch
 	resolved := ResolveDependencies(keys)
-	if isLambda(comps) {
-		return resolved
-	}
 	hasEKS := false
 	hasNodeGroup := false
 	for _, k := range resolved {
 		switch k {
-		case KeyAWSEKS, KeyAWSEKSControlPlane:
+		case KeyAWSEKS:
 			hasEKS = true
 		case KeyAWSEKSNodeGroup:
 			hasNodeGroup = true
@@ -311,36 +292,28 @@ func ResolveDependenciesForCompose(keys []ComponentKey, comps *Components) []Com
 	if !hasEKS || hasNodeGroup {
 		return resolved
 	}
-	// Append KeyAWSEKSNodeGroup directly rather than re-resolving via the
-	// static map. The static map declares KeyAWSEKSNodeGroup deps as
-	// {KeyAWSEKSControlPlane, KeyAWSVPC} — re-resolving would force the
-	// legacy polymorphic cluster key into a stack that already has the
-	// prefix-aware KeyAWSEKS, emitting two cluster modules
-	// (module "aws_eks" and module "resource"). Both deps are already
-	// covered: KeyAWSVPC by the cluster key's own dep, and the cluster
-	// itself by the user-selected KeyAWSEKS or KeyAWSEKSControlPlane.
-	// Wiring (resourceRef, contracts.go:528) routes node-group references
-	// to whichever cluster key is present.
 	return append(resolved, KeyAWSEKSNodeGroup)
 }
 
 // GetModuleDir returns the output directory for a key (e.g., "modules/vpc").
 // This is where the composed terraform files are placed.
+//
+// The `comps` parameter is retained for API stability; polymorphic dispatch
+// (issue #224) has been removed — callers select KeyAWSEKS or KeyAWSLambda
+// explicitly.
 func GetModuleDir(k ComponentKey, comps *Components) string {
-	if k == KeyAWSEKSControlPlane && isLambda(comps) {
-		return ModulePath[KeyAWSLambda]
-	}
+	_ = comps
 	return ModulePath[k]
 }
 
 // PresetKeyMap maps component keys to their preset directory names.
 // Used when the preset name differs from the component key.
 var PresetKeyMap = map[ComponentKey]string{
-	KeyAWSEKSNodeGroup:         "eks_nodegroup", // polymorphic; preset name differs from string value ("ec2")
+	KeyAWSEKSNodeGroup:         "eks_nodegroup",
 	KeyAWSVPC:                  "vpc",
 	KeyAWSBastion:              "bastion",
 	KeyAWSEC2:                  "ec2",
-	KeyAWSEKS:                  "resource", // Uses the same preset as KeyAWSEKSControlPlane (aws/resource/)
+	KeyAWSEKS:                  "eks",
 	KeyAWSECS:                  "ecs",
 	KeyAWSLambda:               "lambda",
 	KeyAWSALB:                  "alb",
@@ -391,7 +364,12 @@ var PresetKeyMap = map[ComponentKey]string{
 
 // GetPresetPath returns the cloud-prefixed preset path for a component.
 // For example: GetPresetPath("aws", KeyAWSVPC, nil) returns "aws/vpc"
+//
+// The `comps` parameter is retained for API stability; polymorphic dispatch
+// (issue #224) was removed — callers select KeyAWSEKS or KeyAWSLambda
+// explicitly.
 func GetPresetPath(cloud string, k ComponentKey, comps *Components) string {
+	_ = comps
 	presetName := string(k)
 
 	// Handle special cases where preset name differs from key
@@ -399,21 +377,12 @@ func GetPresetPath(cloud string, k ComponentKey, comps *Components) string {
 		presetName = mapped
 	}
 
-	// Handle dynamic resource -> lambda mapping. Route through PresetKeyMap
-	// so the preset-path segment matches the canonical Lambda directory
-	// name ("lambda") rather than the ComponentKey's string value.
-	if k == KeyAWSEKSControlPlane && isLambda(comps) {
-		presetName = PresetKeyMap[KeyAWSLambda]
-	}
-
 	return cloud + "/" + presetName
 }
 
 // CloudFor returns the cloud prefix ("aws" or "gcp") for a ComponentKey.
-// Defaults to "aws" for keys whose string value doesn't carry the "gcp_"
-// prefix — covers polymorphic AWS keys (KeyAWSEKSNodeGroup="ec2",
-// KeyAWSEKSControlPlane="resource") whose string identity predates the
-// cloud-prefixed vocabulary.
+// Defaults to "aws" for any key whose string value doesn't carry the "gcp_"
+// prefix.
 func CloudFor(k ComponentKey) string {
 	if strings.HasPrefix(string(k), "gcp_") {
 		return "gcp"
@@ -423,11 +392,9 @@ func CloudFor(k ComponentKey) string {
 
 // CloudFromKeys returns the dominant cloud ("aws" or "gcp") for a slice
 // of component keys. Returns "gcp" if any key carries the "gcp_" prefix,
-// otherwise "aws". Mirrors CloudFor's bias toward "aws" for legacy
-// non-prefixed keys (KeyAWSEKSNodeGroup="ec2",
-// KeyAWSEKSControlPlane="resource"). Use this when only string keys are
-// in hand — e.g. derived from a session's selected components — and the
-// typed ComponentKey form isn't available.
+// otherwise "aws". Use this when only string keys are in hand — e.g.
+// derived from a session's selected components — and the typed
+// ComponentKey form isn't available.
 func CloudFromKeys(keys []string) string {
 	for _, k := range keys {
 		if strings.HasPrefix(k, "gcp_") {
@@ -467,7 +434,6 @@ var AllComponentKeys = []ComponentKey{
 	KeyAWSEC2,
 	KeyAWSECS,
 	KeyAWSEKS,
-	KeyAWSEKSControlPlane,
 	KeyAWSEKSNodeGroup,
 	KeyAWSElastiCache,
 	KeyAWSGitHubActions,
@@ -552,20 +518,17 @@ func opensearchRef(_ map[ComponentKey]bool) string { return ModuleRef(KeyAWSOpen
 func sqsRef(_ map[ComponentKey]bool) string        { return ModuleRef(KeyAWSSQS) }
 
 // resourceRef returns the EKS/ECS module reference for the selected stack.
-// Prefers the prefixed KeyAWSEKS / KeyAWSECS keys, with a KeyAWSEKSControlPlane path
-// for the polymorphic selection Phase 4 has not yet renamed. Falls back to
-// module.aws_eks when nothing matches — the final fallback is effectively
-// unreachable (wiring only runs when `hasResource` is true) but picks the
-// prefixed name defensively.
+// Prefers KeyAWSEKS over KeyAWSECS when both are somehow present (validators
+// reject the combination elsewhere). Falls back to module.aws_eks when
+// nothing matches — the final fallback is effectively unreachable (wiring
+// only runs when `hasResource` is true) but picks the prefixed name
+// defensively.
 func resourceRef(selected map[ComponentKey]bool) string {
 	if selected[KeyAWSEKS] {
 		return ModuleRef(KeyAWSEKS)
 	}
 	if selected[KeyAWSECS] {
 		return ModuleRef(KeyAWSECS)
-	}
-	if selected[KeyAWSEKSControlPlane] {
-		return ModuleRef(KeyAWSEKSControlPlane)
 	}
 	return ModuleRef(KeyAWSEKS)
 }
@@ -585,7 +548,7 @@ func DefaultWiring(selected map[ComponentKey]bool, k ComponentKey, comps *Compon
 	hasS3 := selected[KeyAWSS3]
 	hasOpenSearch := selected[KeyAWSOpenSearch]
 	hasSQS := selected[KeyAWSSQS]
-	hasResource := selected[KeyAWSEKS] || selected[KeyAWSEKSControlPlane]
+	hasResource := selected[KeyAWSEKS]
 
 	switch k {
 
@@ -599,29 +562,19 @@ func DefaultWiring(selected map[ComponentKey]bool, k ComponentKey, comps *Compon
 			wi.Names = append(wi.Names, "vpc_id", "public_subnet_ids")
 		}
 
-	case KeyAWSEKSControlPlane, KeyAWSEKS:
-		if isLambda(comps) {
-			// Lambda Wiring
-			if hasVPC {
-				vpc := vpcRef(selected)
-				wi.RawHCL["enable_vpc"] = "true"
-				wi.RawHCL["vpc_id"] = vpc + ".vpc_id"
-				wi.RawHCL["subnet_ids"] = vpc + ".private_subnet_ids"
-				wi.RawHCL["security_group_ids"] = "[]"
-				wi.Names = append(wi.Names, "enable_vpc", "vpc_id", "subnet_ids", "security_group_ids")
-			}
-		} else {
-			// EKS Wiring
-			if hasVPC {
-				vpc := vpcRef(selected)
-				wi.RawHCL["vpc_id"] = vpc + ".vpc_id"
-				wi.RawHCL["private_subnet_ids"] = vpc + ".private_subnet_ids"
-				wi.RawHCL["public_subnet_ids"] = vpc + ".public_subnet_ids"
-				wi.Names = append(wi.Names, "vpc_id", "private_subnet_ids", "public_subnet_ids")
-			}
-			wi.RawHCL["cluster_enabled_log_types"] = `["api", "audit", "authenticator", "controllerManager", "scheduler"]`
-			wi.Names = append(wi.Names, "cluster_enabled_log_types")
+	case KeyAWSEKS:
+		// EKS Wiring (Lambda has its own KeyAWSLambda case below; the
+		// legacy KeyAWSEKSControlPlane polymorphic dispatch was removed
+		// in #224).
+		if hasVPC {
+			vpc := vpcRef(selected)
+			wi.RawHCL["vpc_id"] = vpc + ".vpc_id"
+			wi.RawHCL["private_subnet_ids"] = vpc + ".private_subnet_ids"
+			wi.RawHCL["public_subnet_ids"] = vpc + ".public_subnet_ids"
+			wi.Names = append(wi.Names, "vpc_id", "private_subnet_ids", "public_subnet_ids")
 		}
+		wi.RawHCL["cluster_enabled_log_types"] = `["api", "audit", "authenticator", "controllerManager", "scheduler"]`
+		wi.Names = append(wi.Names, "cluster_enabled_log_types")
 
 	case KeyAWSECS:
 		if hasVPC {
@@ -647,7 +600,7 @@ func DefaultWiring(selected map[ComponentKey]bool, k ComponentKey, comps *Compon
 		}
 
 	case KeyAWSEKSNodeGroup:
-		if hasResource && !isLambda(comps) {
+		if hasResource {
 			wi.RawHCL["cluster_name"] = resourceRef(selected) + ".cluster_name"
 			wi.Names = append(wi.Names, "cluster_name")
 		}

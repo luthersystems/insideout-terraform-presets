@@ -30,8 +30,8 @@ import "reflect"
 // backup config itself encodes the selection.
 //
 // Returns false for ComponentKeys that don't appear on Components (e.g.,
-// KeyAWSEKSNodeGroup / KeyAWSEKSControlPlane — those are polymorphic preset
-// keys driven by other component selections, not standalone components).
+// KeyAWSEKSNodeGroup — driven by KeyAWSEKS auto-include rather than a
+// standalone Components field).
 func ComponentSelected(c *Components, key ComponentKey) bool {
 	if c == nil {
 		return false
@@ -273,10 +273,10 @@ func DeriveCrossComponentFields(comps *Components, cfg *Config) {
 // isOrphanStrippableKey reports whether the given ComponentKey has a per-
 // component sub-block on Config that participates in the orphan strip. The
 // list mirrors the *struct sub-fields of Config with cloud-prefixed json
-// tags. Polymorphic preset keys (KeyAWSEKSNodeGroup / KeyAWSEKSControlPlane)
-// and pure non-config components (KeyAWSALB / KeyAWSGrafana / KeyAWSWAF /
-// KeySplunk / KeyDatadog / KeyGitHubActions etc.) are NOT in scope — there
-// is no cfg.<key> sub-block to strip.
+// tags. KeyAWSEKSNodeGroup (driven by KeyAWSEKS auto-include) and pure
+// non-config components (KeyAWSALB / KeyAWSGrafana / KeyAWSWAF /
+// KeySplunk / KeyDatadog / KeyGitHubActions etc.) are NOT in scope —
+// there is no cfg.<key> sub-block to strip.
 func isOrphanStrippableKey(key ComponentKey) bool {
 	switch key {
 	case KeyAWSEC2, KeyAWSEKS, KeyAWSECS, KeyAWSVPC,

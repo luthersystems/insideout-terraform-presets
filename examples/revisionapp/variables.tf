@@ -80,27 +80,27 @@ variable "dynamodb_region" {
   type = string
 }
 
-variable "ec2_desired_size" {
+variable "aws_eks_nodegroup_desired_size" {
   type = number
 }
 
-variable "ec2_instance_types" {
+variable "aws_eks_nodegroup_instance_types" {
   type = list(string)
 }
 
-variable "ec2_max_size" {
+variable "aws_eks_nodegroup_max_size" {
   type = number
 }
 
-variable "ec2_min_size" {
+variable "aws_eks_nodegroup_min_size" {
   type = number
 }
 
-variable "ec2_project" {
+variable "aws_eks_nodegroup_project" {
   type = string
 }
 
-variable "ec2_region" {
+variable "aws_eks_nodegroup_region" {
   type = string
 }
 
@@ -165,11 +165,11 @@ variable "region" {
   default     = "us-east-1"
 }
 
-variable "resource_project" {
+variable "aws_eks_project" {
   type = string
 }
 
-variable "resource_region" {
+variable "aws_eks_region" {
   type = string
 }
 

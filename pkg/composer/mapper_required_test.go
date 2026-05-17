@@ -93,17 +93,7 @@ func extractBraceBody(src string) string {
 // composer intentionally does NOT provide a value — caller supplies it
 // via tfvars or root-level wiring outside the composer's mapper /
 // DefaultWiring scope. Each entry needs a justification.
-var requiredVariableAllowlist = map[ComponentKey]map[string]string{
-	// KeyAWSEKS shares the aws/resource preset with KeyAWSEKSControlPlane
-	// (the polymorphic Lambda key). With Lambda enabled in the kitchen-
-	// sink Components, DefaultWiring routes through the Lambda branch
-	// and emits subnet_ids — not private_subnet_ids — so the EKS-shape
-	// var is not provided. In real stacks, AWSLambda and AWSEKS are
-	// mutually exclusive so the wiring matches the preset's expectation.
-	KeyAWSEKS: {
-		"private_subnet_ids": "polymorphic preset shared with Lambda; kitchen-sink has both AWSEKS and AWSLambda set, real stacks pick one",
-	},
-}
+var requiredVariableAllowlist = map[ComponentKey]map[string]string{}
 
 // kitchenSinkComponents flips every Components flag on so DefaultWiring
 // has the maximum signal to compute cross-module references. Mirrors the
@@ -267,11 +257,10 @@ func TestRequiredVariableAllowlist_NotStale(t *testing.T) {
 	for key, varNames := range requiredVariableAllowlist {
 		mod, err := InspectPreset(GetPresetPath(CloudFor(key), key, &Components{}))
 		if err != nil {
-			// Polymorphic keys like KeyAWSEKSControlPlane share preset
-			// directories with their non-polymorphic siblings; the
-			// inspect happens via that path. If the preset doesn't
-			// exist for this key, leave the entry alone — it's
-			// scoped to the polymorphic dispatch.
+			// If the preset doesn't resolve for this key, leave the
+			// entry alone — it may be scoped to a key that's been
+			// renamed in this PR but still listed in the allowlist
+			// during a multi-step migration.
 			continue
 		}
 		for varName := range varNames {

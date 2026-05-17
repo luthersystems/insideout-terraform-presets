@@ -26,11 +26,10 @@ var PricingDependencies = map[ComponentKey][]ComponentKey{
 		KeyAWSEKS,
 		// KeyAWSEKSNodeGroup is paired with KeyAWSEKS because the
 		// per-component EKS alarm (cluster_failed_node_count) lives in
-		// aws/eks_nodegroup/observability.tf — PresetKeyMap[KeyAWSEKS]
-		// resolves to aws/resource/ which has no observability.tf, so
-		// without this entry the SNS-topic wiring lands on a module
-		// that can't consume it and the alarm fires with empty
-		// alarm_actions (silent paging failure). #204 P1.
+		// aws/eks_nodegroup/observability.tf. Without this entry the
+		// SNS-topic wiring would skip the nodegroup module and the
+		// alarm would fire with empty alarm_actions (silent paging
+		// failure). #204 P1.
 		KeyAWSEKSNodeGroup,
 		KeyAWSEC2,
 		KeyAWSALB,

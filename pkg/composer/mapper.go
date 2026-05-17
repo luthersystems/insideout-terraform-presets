@@ -174,10 +174,7 @@ func (m DefaultMapper) BuildModuleValues(
 			vals["provider"] = strings.ToLower(comps.Cloud) // "aws", "gcp"
 		}
 
-	case KeyAWSEKSControlPlane, KeyAWSEKS: // EKS control plane or Lambda
-		if isLambda(comps) {
-			return m.BuildModuleValues(KeyAWSLambda, comps, cfg, project, region)
-		}
+	case KeyAWSEKS: // EKS control plane
 		// Preview-safe stubs for required, usually-wired inputs
 		if _, ok := vals["vpc_id"]; !ok {
 			vals["vpc_id"] = "" // unknown in single-module preview

@@ -30,8 +30,8 @@ func TestValidateComputeExclusivity(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name:    "valid: polymorphic EKS control + node group",
-			keys:    []ComponentKey{KeyAWSEKSControlPlane, KeyAWSEKSNodeGroup, KeyAWSVPC, KeyAWSALB},
+			name:    "valid: EKS control + node group",
+			keys:    []ComponentKey{KeyAWSEKS, KeyAWSEKSNodeGroup, KeyAWSVPC, KeyAWSALB},
 			wantErr: false,
 		},
 		{
@@ -46,7 +46,7 @@ func TestValidateComputeExclusivity(t *testing.T) {
 		},
 		{
 			name:    "valid: single container key alone",
-			keys:    []ComponentKey{KeyAWSEKSControlPlane},
+			keys:    []ComponentKey{KeyAWSEKS},
 			wantErr: false,
 		},
 		{
@@ -76,18 +76,11 @@ func TestValidateComputeExclusivity(t *testing.T) {
 		},
 		// --- Invalid AWS combinations ---
 		{
-			name:            "invalid: AWS Lambda + polymorphic EKS control plane",
-			keys:            []ComponentKey{KeyAWSLambda, KeyAWSEKSControlPlane, KeyAWSVPC},
-			wantErr:         true,
-			errMsg:          "incompatible AWS compute",
-			errContainsKeys: []string{"aws_lambda", "resource"},
-		},
-		{
-			name:            "invalid: AWS Lambda + polymorphic EKS node group",
+			name:            "invalid: AWS Lambda + EKS node group",
 			keys:            []ComponentKey{KeyAWSLambda, KeyAWSEKSNodeGroup, KeyAWSVPC},
 			wantErr:         true,
 			errMsg:          "incompatible AWS compute",
-			errContainsKeys: []string{"aws_lambda", "ec2"},
+			errContainsKeys: []string{"aws_lambda", "aws_eks_nodegroup"},
 		},
 		{
 			name:            "invalid: AWS Lambda + AWS EKS (prefixed)",
@@ -112,10 +105,10 @@ func TestValidateComputeExclusivity(t *testing.T) {
 		},
 		{
 			name:            "invalid: duplicate keys still caught",
-			keys:            []ComponentKey{KeyAWSLambda, KeyAWSLambda, KeyAWSEKSControlPlane},
+			keys:            []ComponentKey{KeyAWSLambda, KeyAWSLambda, KeyAWSEKS},
 			wantErr:         true,
 			errMsg:          "incompatible AWS compute",
-			errContainsKeys: []string{"aws_lambda", "resource"},
+			errContainsKeys: []string{"aws_lambda", "aws_eks"},
 		},
 		// --- Invalid GCP combinations ---
 		{

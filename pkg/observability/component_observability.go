@@ -637,7 +637,6 @@ var observabilityDeferred = map[composer.ComponentKey]string{
 	composer.KeyAWSEC2:                  "#204",
 	composer.KeyAWSECS:                  "#204",
 	composer.KeyAWSEKS:                  "#204",
-	composer.KeyAWSEKSControlPlane:      "#204",
 	composer.KeyAWSEKSNodeGroup:         "#204",
 	composer.KeyAWSElastiCache:          "#204",
 	composer.KeyAWSGitHubActions:        "#204",

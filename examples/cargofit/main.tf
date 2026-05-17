@@ -5,43 +5,30 @@ module "vpc" {
   region      = var.vpc_region
 }
 
-module "resource" {
-  source      = "../../aws/lambda"
-  enable_vpc  = true
-  subnet_ids  = module.vpc.private_subnet_ids
-  vpc_id      = module.vpc.vpc_id
-  region      = var.resource_region
-  runtime     = var.resource_runtime
-  timeout     = var.resource_timeout
-  memory_size = var.resource_memory_size
-  project     = var.resource_project
-  environment = var.environment
-}
-
-module "lambda" {
+module "aws_lambda" {
   source      = "../../aws/lambda"
   enable_vpc  = true
   vpc_id      = module.vpc.vpc_id
   subnet_ids  = module.vpc.private_subnet_ids
-  memory_size = var.lambda_memory_size
-  project     = var.lambda_project
+  memory_size = var.aws_lambda_memory_size
+  project     = var.aws_lambda_project
   environment = var.environment
-  region      = var.lambda_region
-  runtime     = var.lambda_runtime
-  timeout     = var.lambda_timeout
+  region      = var.aws_lambda_region
+  runtime     = var.aws_lambda_runtime
+  timeout     = var.aws_lambda_timeout
 }
 
-module "ec2" {
+module "aws_eks_nodegroup" {
   source         = "../../aws/eks_nodegroup"
   subnet_ids     = module.vpc.private_subnet_ids
-  desired_size   = var.ec2_desired_size
-  instance_types = var.ec2_instance_types
-  max_size       = var.ec2_max_size
-  min_size       = var.ec2_min_size
-  project        = var.ec2_project
+  desired_size   = var.aws_eks_nodegroup_desired_size
+  instance_types = var.aws_eks_nodegroup_instance_types
+  max_size       = var.aws_eks_nodegroup_max_size
+  min_size       = var.aws_eks_nodegroup_min_size
+  project        = var.aws_eks_nodegroup_project
   environment    = var.environment
-  region         = var.ec2_region
-  cluster_name   = var.ec2_cluster_name
+  region         = var.aws_eks_nodegroup_region
+  cluster_name   = var.aws_eks_nodegroup_cluster_name
 }
 
 module "alb" {

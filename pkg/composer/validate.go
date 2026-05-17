@@ -847,7 +847,7 @@ var AWSServerlessKeys = []ComponentKey{
 // AWSContainerKeys lists every AWS ComponentKey that
 // ValidateComputeExclusivity classifies as container/VM compute.
 var AWSContainerKeys = []ComponentKey{
-	KeyAWSEKSControlPlane, KeyAWSEKS, KeyAWSECS,
+	KeyAWSEKS, KeyAWSECS,
 	KeyAWSEKSNodeGroup, KeyAWSEC2,
 }
 
