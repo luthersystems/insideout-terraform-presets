@@ -76,6 +76,7 @@ type Components struct {
 	GCPIdentityPlatform *bool  `json:"gcp_identity_platform,omitempty"`
 	GCPCloudBuild       *bool  `json:"gcp_cloud_build,omitempty"`
 	GCPCloudDNS         *bool  `json:"gcp_cloud_dns,omitempty"`
+	GCPGitHubActions    *bool  `json:"gcp_github_actions,omitempty"`
 	GCPBackups          *struct {
 		Compute  *bool `json:"gcp_compute,omitempty"`
 		CloudSQL *bool `json:"gcp_cloudsql,omitempty"`
@@ -368,6 +369,25 @@ type Config struct {
 		ForceDestroy     *bool    `json:"forceDestroy,omitempty"`
 	} `json:"gcp_cloud_dns,omitempty"`
 
+	// GCPGitHubActions carries the caller-supplied GitHub Actions WIF
+	// configuration (#597 row 1). GitHubRepository is the OWNER/REPO that
+	// the WIF provider's attribute_condition pins; without it the mapper
+	// supplies a placeholder.invalid/placeholder default so single-module
+	// previews compose, but the WIF condition built around the placeholder
+	// will never match a real workflow — callers MUST override before
+	// terraform apply (the placeholder is shaped to fail loudly rather
+	// than silently accept any repo). AllowedBranches / AllowedTags /
+	// AllowedPullRequest gate which refs / events from that repo can
+	// mint credentials; DeployRoles is the project-level role grant list
+	// on the deploy SA.
+	GCPGitHubActions *struct {
+		GitHubRepository   string   `json:"githubRepository,omitempty"`
+		AllowedBranches    []string `json:"allowedBranches,omitempty"`
+		AllowedTags        []string `json:"allowedTags,omitempty"`
+		AllowedPullRequest *bool    `json:"allowedPullRequest,omitempty"`
+		DeployRoles        []string `json:"deployRoles,omitempty"`
+	} `json:"gcp_github_actions,omitempty"`
+
 	GCPBackups *struct {
 		Compute *struct {
 			FrequencyHours int `json:"frequencyHours,omitempty"`
@@ -427,6 +447,7 @@ func (c *Components) Normalize() {
 		c.GCPIdentityPlatform = nil
 		c.GCPCloudBuild = nil
 		c.GCPCloudDNS = nil
+		c.GCPGitHubActions = nil
 		c.GCPBackups = nil
 	}
 	if c.Cloud == "GCP" {
@@ -531,6 +552,7 @@ func (c *Config) Normalize() {
 		c.GCPAPIGateway = nil
 		c.GCPLoadbalancer = nil
 		c.GCPCloudDNS = nil
+		c.GCPGitHubActions = nil
 		c.GCPBackups = nil
 		// AWSCloudfront.CachePaths is a within-prefixed deprecated sub-field;
 		// migrate to OriginPath and clear. Distinct from the legacy Cloudfront
