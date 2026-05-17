@@ -73,6 +73,7 @@ var GCPServices = map[ComponentKey][]GCPService{
 		{Name: "servicemanagement.googleapis.com", Title: "Service Management"},
 	},
 	KeyGCPBackups: {{Name: "backupdr.googleapis.com", Title: "Backup and DR Service"}},
+	KeyGCPCloudDNS: {{Name: "dns.googleapis.com", Title: "Cloud DNS"}},
 	// Components that need no extra service beyond the always-required set
 	// (covered by Compute / always-required entries):
 	KeyGCPVPC:          nil,

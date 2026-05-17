@@ -120,6 +120,8 @@ type PricingData struct {
 		AWSCognito              *PricingItem    `json:"aws_cognito,omitempty"`
 		AWSGitHubActions        *PricingItem    `json:"aws_github_actions,omitempty"`
 		AWSCodePipeline         *PricingItem    `json:"aws_codepipeline,omitempty"`
+		AWSRoute53              *PricingItem    `json:"aws_route53,omitempty"`
+		AWSACM                  *PricingItem    `json:"aws_acm,omitempty"`
 		AWSBackups              *PricingBackups `json:"aws_backups,omitempty"`
 
 		// GCP Components
@@ -144,6 +146,7 @@ type PricingData struct {
 		GCPCloudMonitoring  *PricingItem       `json:"gcp_cloud_monitoring,omitempty"`
 		GCPIdentityPlatform *PricingItem       `json:"gcp_identity_platform,omitempty"`
 		GCPCloudBuild       *PricingItem       `json:"gcp_cloud_build,omitempty"`
+		GCPCloudDNS         *PricingItem       `json:"gcp_cloud_dns,omitempty"`
 		GCPBackups          *GCPPricingBackups `json:"gcp_backups,omitempty"`
 
 		// External/Third-Party
@@ -226,6 +229,8 @@ func (p *PricingData) Normalize() {
 		c.AWSCognito = nil
 		c.AWSGitHubActions = nil
 		c.AWSCodePipeline = nil
+		c.AWSRoute53 = nil
+		c.AWSACM = nil
 		c.AWSBackups = nil
 
 		// Sync legacy and cloud-specific fields for GCP
@@ -400,6 +405,7 @@ func (p *PricingData) Normalize() {
 		c.GCPCloudMonitoring = nil
 		c.GCPIdentityPlatform = nil
 		c.GCPCloudBuild = nil
+		c.GCPCloudDNS = nil
 		c.GCPBackups = nil
 
 		// Sync legacy and cloud-specific fields for AWS

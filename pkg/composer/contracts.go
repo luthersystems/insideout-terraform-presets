@@ -63,6 +63,7 @@ const (
 	KeyAWSGitHubActions        ComponentKey = "aws_github_actions"
 	KeyAWSCodePipeline         ComponentKey = "aws_codepipeline"
 	KeyAWSRoute53              ComponentKey = "aws_route53"
+	KeyAWSACM                  ComponentKey = "aws_acm"
 
 	// GCP components
 	KeyGCPVPC              ComponentKey = "gcp_vpc"
@@ -87,6 +88,7 @@ const (
 	KeyGCPCloudArmor       ComponentKey = "gcp_cloud_armor"
 	KeyGCPAPIGateway       ComponentKey = "gcp_api_gateway"
 	KeyGCPBackups          ComponentKey = "gcp_backups"
+	KeyGCPCloudDNS         ComponentKey = "gcp_cloud_dns"
 )
 
 var ComposeOrder = []ComponentKey{
@@ -131,8 +133,17 @@ var ComposeOrder = []ComponentKey{
 	KeyGCPIdentityPlatform,
 	KeyAWSAPIGateway,
 	KeyGCPAPIGateway,
+	// ACM before Route 53 so DefaultWiring for KeyAWSRoute53 can read ACM's
+	// validation_records output and inject it into route53.records (#593).
+	KeyAWSACM,
+	// Cloud DNS — GCP analog of Route 53. No back-edges from other GCP
+	// presets today (no Cloud Armor / load-balancer alias auto-wiring), so
+	// position is not load-bearing relative to other GCP keys (#593).
+	KeyGCPCloudDNS,
 	// Route 53 last so DefaultWiring can read ALB / CloudFront / API Gateway /
-	// Cognito siblings and auto-derive the matching alias records (#584).
+	// Cognito siblings and auto-derive the matching alias records (#584),
+	// AND read ACM's validation_records output to wire DNS-01 challenges
+	// without manual caller plumbing (#593).
 	KeyAWSRoute53,
 	KeyAWSKMS,
 	KeyGCPCloudKMS,
@@ -187,6 +198,7 @@ var ModulePath = map[ComponentKey]string{
 	KeyAWSGitHubActions:        "modules/githubactions",
 	KeyAWSCodePipeline:         "modules/codepipeline",
 	KeyAWSRoute53:              "modules/route53",
+	KeyAWSACM:                  "modules/acm",
 
 	// GCP
 	KeyGCPVPC:              "gcp/vpc",
@@ -211,6 +223,7 @@ var ModulePath = map[ComponentKey]string{
 	KeyGCPIdentityPlatform: "gcp/identity_platform",
 	KeyGCPCloudBuild:       "gcp/cloud_build",
 	KeyGCPBackups:          "gcp/backups",
+	KeyGCPCloudDNS:         "gcp/cloud_dns",
 }
 
 // ImplicitDependencies defines components that must be automatically added
@@ -338,6 +351,7 @@ var PresetKeyMap = map[ComponentKey]string{
 	KeyAWSGitHubActions:        "githubactions",
 	KeyAWSCodePipeline:         "codepipeline",
 	KeyAWSRoute53:              "route53",
+	KeyAWSACM:                  "acm",
 	KeyGCPVPC:                  "vpc",
 	KeyGCPCompute:              "compute",
 	KeyGCPGKE:                  "gke",
@@ -360,6 +374,7 @@ var PresetKeyMap = map[ComponentKey]string{
 	KeyGCPCloudRun:             "cloud_run",
 	KeyGCPCloudFunctions:       "cloud_functions",
 	KeyGCPBastion:              "bastion",
+	KeyGCPCloudDNS:             "cloud_dns",
 }
 
 // GetPresetPath returns the cloud-prefixed preset path for a component.
@@ -420,6 +435,7 @@ func CloudFromKeys(keys []string) string {
 //     (consumed directly by the InsideOut backend's composeradapter).
 var AllComponentKeys = []ComponentKey{
 	// AWS (alphabetical for reviewability)
+	KeyAWSACM,
 	KeyAWSALB,
 	KeyAWSAPIGateway,
 	KeyAWSBackups,
@@ -455,6 +471,7 @@ var AllComponentKeys = []ComponentKey{
 	KeyGCPBastion,
 	KeyGCPCloudArmor,
 	KeyGCPCloudBuild,
+	KeyGCPCloudDNS,
 	KeyGCPCloudFunctions,
 	KeyGCPCloudKMS,
 	KeyGCPCloudLogging,
@@ -735,6 +752,36 @@ func DefaultWiring(selected map[ComponentKey]bool, k ComponentKey, comps *Compon
 		if len(aliasEntries) > 0 {
 			wi.RawHCL["aliases"] = "[\n" + strings.Join(aliasEntries, ",\n") + ",\n  ]"
 			wi.Names = append(wi.Names, "aliases")
+		}
+		// Auto-inject ACM DNS-01 validation records when aws/acm is in the
+		// stack (issue #593). ACM's validation_records output is a list of
+		// {name, type, value} maps; route53.records expects a list of
+		// {name, type, ttl, values} objects. The for-expression reshapes
+		// the data and pins TTL to 60s — ACM's DNS validation polls every
+		// 60s, so anything higher wastes time on first apply. The records
+		// are CNAME (ACM's only validation method here), so the type pass-
+		// through is safe.
+		//
+		// TODO(#601): wire the back-edge route53.record_fqdns →
+		// acm.validation_record_fqdns + flip acm.create_validation=true so
+		// the composed stack produces an ISSUED cert in one apply. Today's
+		// blocker: closing that loop creates an acm ↔ route53 2-cycle that
+		// ValidateNoModuleCycles flags before terraform plan ever runs.
+		// The cleanest fix is to give route53 a dedicated
+		// `acm_validation_records` input (separate from var.records) so the
+		// back-edge can read a route53 output that doesn't depend on the
+		// acm-sourced records. Until then, callers needing an ISSUED cert
+		// must run a second-pass `terraform apply` with
+		// `acm.validation_record_fqdns = module.aws_route53.record_fqdns`
+		// and `acm.create_validation = true` set manually.
+		if selected[KeyAWSACM] {
+			wi.RawHCL["records"] = `[for r in ` + WireRef(KeyAWSACM, "validation_records") + ` : {
+      name   = r.name
+      type   = r.type
+      ttl    = 60
+      values = [r.value]
+    }]`
+			wi.Names = append(wi.Names, "records")
 		}
 
 	case KeyAWSCloudWatchMonitoring:

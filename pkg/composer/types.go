@@ -44,6 +44,7 @@ type Components struct {
 	AWSGitHubActions        *bool  `json:"aws_github_actions,omitempty"`
 	AWSCodePipeline         *bool  `json:"aws_codepipeline,omitempty"`
 	AWSRoute53              *bool  `json:"aws_route53,omitempty"`
+	AWSACM                  *bool  `json:"aws_acm,omitempty"`
 	AWSBackups              *struct {
 		EC2         *bool `json:"aws_ec2,omitempty"`
 		RDS         *bool `json:"aws_rds,omitempty"`
@@ -74,6 +75,7 @@ type Components struct {
 	GCPCloudMonitoring  *bool  `json:"gcp_cloud_monitoring,omitempty"`
 	GCPIdentityPlatform *bool  `json:"gcp_identity_platform,omitempty"`
 	GCPCloudBuild       *bool  `json:"gcp_cloud_build,omitempty"`
+	GCPCloudDNS         *bool  `json:"gcp_cloud_dns,omitempty"`
 	GCPBackups          *struct {
 		Compute  *bool `json:"gcp_compute,omitempty"`
 		CloudSQL *bool `json:"gcp_cloudsql,omitempty"`
@@ -221,6 +223,23 @@ type Config struct {
 		ForceDestroy *bool  `json:"forceDestroy,omitempty"`
 	} `json:"aws_route53,omitempty"`
 
+	// AWSACM carries the caller-supplied ACM certificate configuration.
+	// DomainName is the primary FQDN; SubjectAlternativeNames adds SANs.
+	// CreateValidation toggles the synchronous `aws_acm_certificate_validation`
+	// wait — the composer leaves this at the module's default (false) today,
+	// but a future #593-followup PR will flip it to true automatically when
+	// aws/route53 is in the stack (once the back-edge wiring is unblocked).
+	// KeyAlgorithm pins RSA_2048 (default) vs EC_prime256v1 / EC_secp384r1.
+	// ValidationTimeout caps the validation wait when CreateValidation=true.
+	AWSACM *struct {
+		DomainName                     string   `json:"domainName,omitempty"`
+		SubjectAlternativeNames        []string `json:"subjectAlternativeNames,omitempty"`
+		KeyAlgorithm                   string   `json:"keyAlgorithm,omitempty"`
+		CertificateTransparencyLogging string   `json:"certificateTransparencyLogging,omitempty"`
+		CreateValidation               *bool    `json:"createValidation,omitempty"`
+		ValidationTimeout              string   `json:"validationTimeout,omitempty"`
+	} `json:"aws_acm,omitempty"`
+
 	AWSKMS *struct {
 		NumKeys string `json:"numKeys,omitempty"`
 	} `json:"aws_kms,omitempty"`
@@ -333,6 +352,22 @@ type Config struct {
 		EnableCDN *bool `json:"enable_cdn,omitempty"`
 	} `json:"gcp_loadbalancer,omitempty"`
 
+	// GCPCloudDNS carries the caller-supplied Cloud DNS configuration.
+	// DNSName is the apex (e.g. "example.com.") and is required when
+	// KeyGCPCloudDNS is selected. CreateZone toggles between creating a
+	// managed zone in-stack (true) and looking up an existing one by
+	// ZoneName (false). PrivateZone + NetworkSelfLinks are only consulted
+	// when CreateZone is true and the zone is intended to be private.
+	GCPCloudDNS *struct {
+		DNSName          string   `json:"dnsName,omitempty"`
+		CreateZone       *bool    `json:"createZone,omitempty"`
+		ZoneShortName    string   `json:"zoneShortName,omitempty"`
+		ZoneName         string   `json:"zoneName,omitempty"`
+		PrivateZone      *bool    `json:"privateZone,omitempty"`
+		NetworkSelfLinks []string `json:"networkSelfLinks,omitempty"`
+		ForceDestroy     *bool    `json:"forceDestroy,omitempty"`
+	} `json:"gcp_cloud_dns,omitempty"`
+
 	GCPBackups *struct {
 		Compute *struct {
 			FrequencyHours int `json:"frequencyHours,omitempty"`
@@ -391,6 +426,7 @@ func (c *Components) Normalize() {
 		c.GCPCloudMonitoring = nil
 		c.GCPIdentityPlatform = nil
 		c.GCPCloudBuild = nil
+		c.GCPCloudDNS = nil
 		c.GCPBackups = nil
 	}
 	if c.Cloud == "GCP" {
@@ -421,6 +457,7 @@ func (c *Components) Normalize() {
 		c.AWSGitHubActions = nil
 		c.AWSCodePipeline = nil
 		c.AWSRoute53 = nil
+		c.AWSACM = nil
 		c.AWSBackups = nil
 	}
 }
@@ -493,6 +530,7 @@ func (c *Config) Normalize() {
 		c.GCPIdentityPlatform = nil
 		c.GCPAPIGateway = nil
 		c.GCPLoadbalancer = nil
+		c.GCPCloudDNS = nil
 		c.GCPBackups = nil
 		// AWSCloudfront.CachePaths is a within-prefixed deprecated sub-field;
 		// migrate to OriginPath and clear. Distinct from the legacy Cloudfront
@@ -527,6 +565,7 @@ func (c *Config) Normalize() {
 		c.AWSOpenSearch = nil
 		c.AWSBedrock = nil
 		c.AWSRoute53 = nil
+		c.AWSACM = nil
 		c.AWSBackups = nil
 	}
 }

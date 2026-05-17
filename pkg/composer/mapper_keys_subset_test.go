@@ -174,6 +174,14 @@ func kitchenSinkConfig() *Config {
 		VPCIDs       []string `json:"vpcIds,omitempty"`
 		ForceDestroy *bool    `json:"forceDestroy,omitempty"`
 	}{DomainName: "example.com", CreateZone: &t, ZoneID: "Z1234567890ABC", VPCIDs: []string{"vpc-aaa"}, ForceDestroy: &t}
+	cfg.AWSACM = &struct {
+		DomainName                     string   `json:"domainName,omitempty"`
+		SubjectAlternativeNames        []string `json:"subjectAlternativeNames,omitempty"`
+		KeyAlgorithm                   string   `json:"keyAlgorithm,omitempty"`
+		CertificateTransparencyLogging string   `json:"certificateTransparencyLogging,omitempty"`
+		CreateValidation               *bool    `json:"createValidation,omitempty"`
+		ValidationTimeout              string   `json:"validationTimeout,omitempty"`
+	}{DomainName: "example.com", SubjectAlternativeNames: []string{"www.example.com"}, KeyAlgorithm: "RSA_2048", CertificateTransparencyLogging: "ENABLED", CreateValidation: &t, ValidationTimeout: "45m"}
 
 	// GCP
 	cfg.GCPCompute = &struct {
@@ -226,6 +234,15 @@ func kitchenSinkConfig() *Config {
 	cfg.GCPLoadbalancer = &struct {
 		EnableCDN *bool `json:"enable_cdn,omitempty"`
 	}{EnableCDN: &t}
+	cfg.GCPCloudDNS = &struct {
+		DNSName          string   `json:"dnsName,omitempty"`
+		CreateZone       *bool    `json:"createZone,omitempty"`
+		ZoneShortName    string   `json:"zoneShortName,omitempty"`
+		ZoneName         string   `json:"zoneName,omitempty"`
+		PrivateZone      *bool    `json:"privateZone,omitempty"`
+		NetworkSelfLinks []string `json:"networkSelfLinks,omitempty"`
+		ForceDestroy     *bool    `json:"forceDestroy,omitempty"`
+	}{DNSName: "example.com.", CreateZone: &t, ZoneShortName: "primary", ZoneName: "example-com", NetworkSelfLinks: []string{"projects/p/global/networks/n"}, ForceDestroy: &t}
 
 	return cfg
 }

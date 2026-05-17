@@ -59,12 +59,14 @@ var configExtractorAllowlist = map[string]string{
 	"aws_backups":        "[no-inspector] AWS Backup vaults aren't inspected; covered via tag-based discovery (#204)",
 	"aws_github_actions": "[no-inspector] GitHub Actions IAM roles only — no SDK shape to extract (#204)",
 	"aws_route53":        "[no-inspector] Route 53 hosted zones / records not yet covered by the discovery pipeline (#584 follow-up)",
+	"aws_acm":            "[no-inspector] ACM certificates not yet covered by the discovery pipeline (#593 follow-up)",
 
 	// EKS node group: ComponentKey "aws_eks_nodegroup" doesn't have its
 	// own SDK inspector — extraction is handled by aws_eks (#204, #224).
 	"aws_eks_nodegroup": "[no-inspector] EKS node group is covered by the aws_eks inspector (#204)",
 
-	"gcp_backups": "[no-inspector] GCP Backup vaults aren't inspected; covered via label-based discovery (#204)",
+	"gcp_backups":   "[no-inspector] GCP Backup vaults aren't inspected; covered via label-based discovery (#204)",
+	"gcp_cloud_dns": "[no-inspector] Cloud DNS managed zones / record sets not yet covered by the discovery pipeline (#593 follow-up)",
 }
 
 // extractorFixtures are minimal SDK-shape fixtures that exercise each
