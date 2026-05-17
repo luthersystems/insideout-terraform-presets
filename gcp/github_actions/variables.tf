@@ -102,11 +102,12 @@ variable "pool_short_name" {
   default     = "github-actions"
 
   validation {
-    # Pool ID regex: `^[a-z][a-z0-9-]{3,30}[a-z0-9]$` per Google. The
-    # composed `${var.project}-${var.pool_short_name}` must satisfy this;
-    # the short_name itself must use the same charset.
-    condition     = can(regex("^[a-z][a-z0-9-]*[a-z0-9]$", var.pool_short_name))
-    error_message = "pool_short_name must start with a lowercase letter, end alphanumeric, and contain only lowercase letters / digits / hyphens."
+    # Pool ID regex: `^[a-z][a-z0-9-]{3,30}[a-z0-9]$` per Google (4–32 chars
+    # total). The composed `${var.project}-${var.pool_short_name}` must
+    # satisfy this — pin a 3-char floor on the short_name so even a 1-char
+    # var.project clears Google's 4-char minimum after the hyphen join.
+    condition     = can(regex("^[a-z][a-z0-9-]{1,30}[a-z0-9]$", var.pool_short_name))
+    error_message = "pool_short_name must be 3–32 chars: start with a lowercase letter, end alphanumeric, contain only lowercase letters / digits / hyphens (the 3-char floor keeps `${var.project}-${var.pool_short_name}` ≥ Google's 4-char pool-ID minimum)."
   }
 }
 
@@ -116,8 +117,9 @@ variable "provider_short_name" {
   default     = "github"
 
   validation {
-    condition     = can(regex("^[a-z][a-z0-9-]*[a-z0-9]$", var.provider_short_name))
-    error_message = "provider_short_name must start with a lowercase letter, end alphanumeric, and contain only lowercase letters / digits / hyphens."
+    # Same Google 4-char-floor reasoning as pool_short_name above.
+    condition     = can(regex("^[a-z][a-z0-9-]{1,30}[a-z0-9]$", var.provider_short_name))
+    error_message = "provider_short_name must be 3–32 chars: start with a lowercase letter, end alphanumeric, contain only lowercase letters / digits / hyphens."
   }
 }
 

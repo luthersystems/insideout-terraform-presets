@@ -111,6 +111,29 @@ run "github_actions_rejects_malformed_repository" {
   expect_failures = [var.github_repository]
 }
 
+run "github_actions_minimum_ref_gate_plans_cleanly" {
+  # Positive companion to github_actions_rejects_all_empty_ref_gates
+  # below: with exactly the smallest valid ref-gate config (a single
+  # branch), plan must succeed. This triangulates that the negative
+  # test's failure is really caused by the all-empty gates and not a
+  # mock_provider quirk on the WIF provider resource.
+  command = plan
+
+  variables {
+    project              = "test"
+    project_id           = "test-project"
+    github_repository    = "luthersystems/foo"
+    allowed_branches     = ["main"]
+    allowed_tags         = []
+    allowed_pull_request = false
+  }
+
+  assert {
+    condition     = length(google_iam_workload_identity_pool_provider.github) >= 0
+    error_message = "Minimum-valid ref-gate config (single branch) should plan cleanly with no precondition violations."
+  }
+}
+
 run "github_actions_rejects_all_empty_ref_gates" {
   command = plan
 
@@ -125,10 +148,23 @@ run "github_actions_rejects_all_empty_ref_gates" {
 
   # Cross-variable validation is hosted as a precondition on the WIF
   # provider resource (Terraform 1.5+ disallows multi-variable rules in
-  # variable validation blocks). Precondition violations surface as a
-  # generic plan error, not a typed expect_failures handle — so we
-  # assert the failure mode by inverting the expectation and relying
-  # on the framework to flag a missing failure.
+  # variable validation blocks). tftest's expect_failures matches by
+  # resource address, not by error_message text — so this assertion
+  # would pass on ANY plan failure on the WIF provider, not just on
+  # the all-empty-gates precondition.
+  #
+  # Maintainer note: there is currently exactly one precondition on
+  # google_iam_workload_identity_pool_provider.github (see main.tf —
+  # the "at-least-one-ref-gate" rule). Adding a second precondition
+  # to that resource means this test loses specificity — at that
+  # point, either (a) split the new precondition's negative-case
+  # exercise into its own run-block with a per-variable trigger so
+  # the failures don't collide, or (b) add an explicit fixture/
+  # script-level error_message assertion.
+  #
+  # The positive companion `github_actions_minimum_ref_gate_plans_cleanly`
+  # above triangulates that this failure isn't a mock_provider quirk —
+  # a single allowed_branch satisfies the precondition and plans clean.
   expect_failures = [
     google_iam_workload_identity_pool_provider.github,
   ]

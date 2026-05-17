@@ -106,13 +106,20 @@ var AWSActionAliases = map[string]map[string]string{
 	// LLM guesses ("list-zones", "describe-zones", "list-records",
 	// "describe-certificates") are absorbed here so callers land on the
 	// canonical SDK verbs instead of an unsupported-action error.
+	// Note: "list-record-sets" is also the canonical GCP Cloud DNS action
+	// name (see GCPServiceActions["clouddns"] below). A cross-cloud caller
+	// using --service=route53 --action=list-record-sets lands on
+	// route53.list-resource-record-sets here; --service=clouddns
+	// --action=list-record-sets lands on clouddns.list-record-sets there.
+	// The two SDK verbs differ; the user-facing alias intentionally
+	// converges so cross-cloud tooling can use a single action name.
 	"route53": {
-		"list-zones":             "list-hosted-zones",
-		"describe-zones":         "list-hosted-zones",
-		"describe-hosted-zones":  "list-hosted-zones",
-		"list-records":           "list-resource-record-sets",
-		"list-record-sets":       "list-resource-record-sets",
-		"describe-record-sets":   "list-resource-record-sets",
+		"list-zones":            "list-hosted-zones",
+		"describe-zones":        "list-hosted-zones",
+		"describe-hosted-zones": "list-hosted-zones",
+		"list-records":          "list-resource-record-sets",
+		"list-record-sets":      "list-resource-record-sets",
+		"describe-record-sets":  "list-resource-record-sets",
 	},
 	"acm": {
 		"describe-certificates": "list-certificates",

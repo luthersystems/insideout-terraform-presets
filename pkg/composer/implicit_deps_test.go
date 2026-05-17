@@ -16,7 +16,7 @@ import (
 // KeyGCPGKE → KeyGCPVPC was the existing template; the rest were
 // backfilled in #600. KeyGCPCloudArmor → KeyGCPLoadbalancer is the
 // parallel for the LB-only attachment point.
-func TestImplicitDependencies_GCPCompute_AutoWiresVPC(t *testing.T) {
+func TestImplicitDependencies_GCPServices_AutoWireVPC(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
@@ -24,9 +24,12 @@ func TestImplicitDependencies_GCPCompute_AutoWiresVPC(t *testing.T) {
 		need     ComponentKey
 		reason   string
 	}{
-		// Template (pre-existing) — pinned here so the table reads as a
-		// complete contract, not just the new rows.
+		// Templates (pre-existing) — pinned so the table reads as a complete
+		// contract for every GCP service that auto-includes the VPC, not
+		// just the new #600 rows. Deleting any row in
+		// `ImplicitDependencies` here would survive without these guards.
 		{KeyGCPGKE, KeyGCPVPC, "GKE clusters require a VPC for the cluster network"},
+		{KeyGCPCompute, KeyGCPVPC, "GCE VM instances attach to a subnetwork in the VPC"},
 
 		// Issue #600 backfill.
 		{KeyGCPVertexAI, KeyGCPVPC, "Vertex AI private endpoints peer with the VPC via servicenetworking"},

@@ -46,11 +46,10 @@ const listManagedZonesPopulated = `{
 
 func TestInspectCloudDNS_ListManagedZones_EmptyEmitsArray(t *testing.T) {
 	t.Parallel()
-	srv, opts := fakeGCPRESTServer(t, func(w http.ResponseWriter, _ *http.Request) {
+	_, opts := fakeGCPRESTServer(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(listManagedZonesEmpty))
 	})
-	defer srv.Close()
 
 	got, err := inspectCloudDNS(context.Background(), "demo-proj", "list-managed-zones", "", opts...)
 	require.NoError(t, err)
@@ -62,11 +61,10 @@ func TestInspectCloudDNS_ListManagedZones_EmptyEmitsArray(t *testing.T) {
 
 func TestInspectCloudDNS_ListManagedZones_NoFilterReturnsAll(t *testing.T) {
 	t.Parallel()
-	srv, opts := fakeGCPRESTServer(t, func(w http.ResponseWriter, _ *http.Request) {
+	_, opts := fakeGCPRESTServer(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(listManagedZonesPopulated))
 	})
-	defer srv.Close()
 
 	got, err := inspectCloudDNS(context.Background(), "demo-proj", "list-managed-zones", "", opts...)
 	require.NoError(t, err)
@@ -83,11 +81,10 @@ func TestInspectCloudDNS_ListManagedZones_NoFilterReturnsAll(t *testing.T) {
 
 func TestInspectCloudDNS_ListManagedZones_FiltersByProject(t *testing.T) {
 	t.Parallel()
-	srv, opts := fakeGCPRESTServer(t, func(w http.ResponseWriter, _ *http.Request) {
+	_, opts := fakeGCPRESTServer(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(listManagedZonesPopulated))
 	})
-	defer srv.Close()
 
 	got, err := inspectCloudDNS(context.Background(), "demo-proj", "list-managed-zones", `{"project":"io-foo"}`, opts...)
 	require.NoError(t, err)
@@ -114,11 +111,10 @@ const listRecordSetsPopulated = `{
 
 func TestInspectCloudDNS_ListRecordSets_EmptyEmitsArray(t *testing.T) {
 	t.Parallel()
-	srv, opts := fakeGCPRESTServer(t, func(w http.ResponseWriter, _ *http.Request) {
+	_, opts := fakeGCPRESTServer(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(listRecordSetsEmpty))
 	})
-	defer srv.Close()
 
 	got, err := inspectCloudDNS(context.Background(), "demo-proj", "list-record-sets",
 		`{"managed_zone":"example-com"}`, opts...)
@@ -130,11 +126,10 @@ func TestInspectCloudDNS_ListRecordSets_EmptyEmitsArray(t *testing.T) {
 
 func TestInspectCloudDNS_ListRecordSets_NonEmpty(t *testing.T) {
 	t.Parallel()
-	srv, opts := fakeGCPRESTServer(t, func(w http.ResponseWriter, _ *http.Request) {
+	_, opts := fakeGCPRESTServer(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(listRecordSetsPopulated))
 	})
-	defer srv.Close()
 
 	got, err := inspectCloudDNS(context.Background(), "demo-proj", "list-record-sets",
 		`{"managed_zone":"example-com"}`, opts...)
@@ -192,11 +187,10 @@ const listCertsPopulated = `{
 
 func TestInspectCertificateManager_ListCertificates_EmptyEmitsArray(t *testing.T) {
 	t.Parallel()
-	srv, opts := fakeGCPRESTServer(t, func(w http.ResponseWriter, _ *http.Request) {
+	_, opts := fakeGCPRESTServer(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(listCertsEmpty))
 	})
-	defer srv.Close()
 
 	got, err := inspectCertificateManager(context.Background(), "demo-proj", "list-certificates", "", opts...)
 	require.NoError(t, err)
@@ -207,11 +201,10 @@ func TestInspectCertificateManager_ListCertificates_EmptyEmitsArray(t *testing.T
 
 func TestInspectCertificateManager_ListCertificates_FiltersByProject(t *testing.T) {
 	t.Parallel()
-	srv, opts := fakeGCPRESTServer(t, func(w http.ResponseWriter, _ *http.Request) {
+	_, opts := fakeGCPRESTServer(t, func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(listCertsPopulated))
 	})
-	defer srv.Close()
 
 	got, err := inspectCertificateManager(context.Background(), "demo-proj", "list-certificates",
 		`{"project":"io-foo"}`, opts...)

@@ -72,7 +72,7 @@ var GCPServices = map[ComponentKey][]GCPService{
 		{Name: "servicecontrol.googleapis.com", Title: "Service Control"},
 		{Name: "servicemanagement.googleapis.com", Title: "Service Management"},
 	},
-	KeyGCPBackups: {{Name: "backupdr.googleapis.com", Title: "Backup and DR Service"}},
+	KeyGCPBackups:  {{Name: "backupdr.googleapis.com", Title: "Backup and DR Service"}},
 	KeyGCPCloudDNS: {{Name: "dns.googleapis.com", Title: "Cloud DNS"}},
 	// GCP GitHub Actions WIF preset (#597 row 1). The preset enables
 	// iam.googleapis.com (covered by always-required) plus IAM Credentials

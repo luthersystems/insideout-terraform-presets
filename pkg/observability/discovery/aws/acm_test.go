@@ -20,10 +20,10 @@ import (
 )
 
 type fakeACMClient struct {
-	listOut          *acm.ListCertificatesOutput
-	describeOut      *acm.DescribeCertificateOutput
-	describeIn       *acm.DescribeCertificateInput
-	err              error
+	listOut     *acm.ListCertificatesOutput
+	describeOut *acm.DescribeCertificateOutput
+	describeIn  *acm.DescribeCertificateInput
+	err         error
 }
 
 func (f *fakeACMClient) ListCertificates(_ context.Context, _ *acm.ListCertificatesInput, _ ...func(*acm.Options)) (*acm.ListCertificatesOutput, error) {
@@ -60,13 +60,21 @@ func TestListCertificates_EmptyResult(t *testing.T) {
 	assert.Equal(t, "[]", string(b))
 }
 
-func TestListCertificates_TypedNilSliceNormalized(t *testing.T) {
+// TestListCertificates_ExplicitEmptySliceNormalized — separate code
+// path from typed-nil: when the AWS SDK returns an explicitly-empty
+// slice (distinct from nil in Go's type system), it must still pass
+// through as a non-nil []. Pins the #255 contract against a future
+// SDK behavior change.
+func TestListCertificates_ExplicitEmptySliceNormalized(t *testing.T) {
 	t.Parallel()
-	client := &fakeACMClient{listOut: &acm.ListCertificatesOutput{}}
+	client := &fakeACMClient{listOut: &acm.ListCertificatesOutput{
+		CertificateSummaryList: []acmtypes.CertificateSummary{}, // explicitly empty, not nil
+	}}
 	got, err := listCertificates(context.Background(), client)
 	require.NoError(t, err)
-	require.NotNil(t, got)
-	b, _ := json.Marshal(got)
+	require.NotNil(t, got, "explicit-empty SDK slice must pass through as non-nil")
+	b, err := json.Marshal(got)
+	require.NoError(t, err)
 	assert.Equal(t, "[]", string(b))
 }
 

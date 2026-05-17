@@ -216,12 +216,12 @@ type Config struct {
 	// DefaultWiring at KeyAWSRoute53) flow through the same-named module
 	// variables.
 	AWSRoute53 *struct {
-		DomainName   string `json:"domainName,omitempty"`
-		CreateZone   *bool  `json:"createZone,omitempty"`
-		ZoneID       string `json:"zoneId,omitempty"`
-		PrivateZone  *bool  `json:"privateZone,omitempty"`
+		DomainName   string   `json:"domainName,omitempty"`
+		CreateZone   *bool    `json:"createZone,omitempty"`
+		ZoneID       string   `json:"zoneId,omitempty"`
+		PrivateZone  *bool    `json:"privateZone,omitempty"`
 		VPCIDs       []string `json:"vpcIds,omitempty"`
-		ForceDestroy *bool  `json:"forceDestroy,omitempty"`
+		ForceDestroy *bool    `json:"forceDestroy,omitempty"`
 	} `json:"aws_route53,omitempty"`
 
 	// AWSACM carries the caller-supplied ACM certificate configuration.
@@ -380,13 +380,7 @@ type Config struct {
 	// AllowedPullRequest gate which refs / events from that repo can
 	// mint credentials; DeployRoles is the project-level role grant list
 	// on the deploy SA.
-	GCPGitHubActions *struct {
-		GitHubRepository   string   `json:"githubRepository,omitempty"`
-		AllowedBranches    []string `json:"allowedBranches,omitempty"`
-		AllowedTags        []string `json:"allowedTags,omitempty"`
-		AllowedPullRequest *bool    `json:"allowedPullRequest,omitempty"`
-		DeployRoles        []string `json:"deployRoles,omitempty"`
-	} `json:"gcp_github_actions,omitempty"`
+	GCPGitHubActions *GCPGitHubActionsConfig `json:"gcp_github_actions,omitempty"`
 
 	GCPBackups *struct {
 		Compute *struct {
@@ -401,6 +395,18 @@ type Config struct {
 			Enabled *bool `json:"enabled,omitempty"`
 		} `json:"gcp_gcs,omitempty"`
 	} `json:"gcp_backups,omitempty"`
+}
+
+// GCPGitHubActionsConfig is the caller-facing config for the gcp/github_actions
+// preset. Named (not inline) so callers can construct it without re-typing the
+// anonymous struct shape at every site, and so future field additions don't
+// force every test instantiation to be touched.
+type GCPGitHubActionsConfig struct {
+	GitHubRepository   string   `json:"githubRepository,omitempty"`
+	AllowedBranches    []string `json:"allowedBranches,omitempty"`
+	AllowedTags        []string `json:"allowedTags,omitempty"`
+	AllowedPullRequest *bool    `json:"allowedPullRequest,omitempty"`
+	DeployRoles        []string `json:"deployRoles,omitempty"`
 }
 
 // VarEntry holds a module variable name and a value (or nil). RawExpr can be used for expressions.

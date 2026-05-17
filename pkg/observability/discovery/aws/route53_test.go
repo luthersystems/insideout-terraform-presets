@@ -23,10 +23,10 @@ import (
 )
 
 type fakeRoute53Client struct {
-	listHostedZonesOut       *route53.ListHostedZonesOutput
-	listResourceRecordSetsIn *route53.ListResourceRecordSetsInput
+	listHostedZonesOut        *route53.ListHostedZonesOutput
+	listResourceRecordSetsIn  *route53.ListResourceRecordSetsInput
 	listResourceRecordSetsOut *route53.ListResourceRecordSetsOutput
-	err                      error
+	err                       error
 }
 
 func (f *fakeRoute53Client) ListHostedZones(_ context.Context, _ *route53.ListHostedZonesInput, _ ...func(*route53.Options)) (*route53.ListHostedZonesOutput, error) {
@@ -63,19 +63,24 @@ func TestListHostedZones_EmptyResult(t *testing.T) {
 	assert.Equal(t, "[]", string(b), "#255: empty JSON wire must be `[]`, not `null`")
 }
 
-// TestListHostedZones_TypedNilSliceNormalized — when the AWS SDK
-// populates HostedZones as a typed-nil slice (the SDK's empty-response
-// behavior), nilSliceToEmpty must normalize it to []. Pattern B from
-// the CONTRIBUTING.md cheat-sheet.
-func TestListHostedZones_TypedNilSliceNormalized(t *testing.T) {
+// TestListHostedZones_ExplicitEmptySliceNormalized — separate code
+// path from typed-nil: when the AWS SDK returns an explicitly-empty
+// slice (`HostedZones: []HostedZone{}` — distinct from `HostedZones: nil`
+// in Go's type system), nilSliceToEmpty must still pass it through
+// as a non-nil empty. Without this, an SDK behavior change that
+// switches the empty-response shape from typed-nil to typed-empty
+// would silently regress the #255 contract. Pattern B from the
+// CONTRIBUTING.md cheat-sheet.
+func TestListHostedZones_ExplicitEmptySliceNormalized(t *testing.T) {
 	t.Parallel()
 	client := &fakeRoute53Client{
-		// HostedZones is the zero value — a typed-nil []HostedZone.
-		listHostedZonesOut: &route53.ListHostedZonesOutput{},
+		listHostedZonesOut: &route53.ListHostedZonesOutput{
+			HostedZones: []route53types.HostedZone{}, // explicitly empty, not nil
+		},
 	}
 	got, err := listHostedZones(context.Background(), client)
 	require.NoError(t, err)
-	require.NotNil(t, got, "typed-nil from SDK must be normalized to []")
+	require.NotNil(t, got, "explicit-empty SDK slice must pass through as non-nil")
 	b, err := json.Marshal(got)
 	require.NoError(t, err)
 	assert.Equal(t, "[]", string(b))

@@ -46,13 +46,7 @@ func TestMapper_GCPGitHubActions_CallerSuppliedConfig(t *testing.T) {
 
 	tr := true
 	cfg := &Config{
-		GCPGitHubActions: &struct {
-			GitHubRepository   string   `json:"githubRepository,omitempty"`
-			AllowedBranches    []string `json:"allowedBranches,omitempty"`
-			AllowedTags        []string `json:"allowedTags,omitempty"`
-			AllowedPullRequest *bool    `json:"allowedPullRequest,omitempty"`
-			DeployRoles        []string `json:"deployRoles,omitempty"`
-		}{
+		GCPGitHubActions: &GCPGitHubActionsConfig{
 			GitHubRepository:   "luthersystems/foo",
 			AllowedBranches:    []string{"main", "release"},
 			AllowedTags:        []string{"v1.0.0"},
@@ -80,13 +74,7 @@ func TestMapper_GCPGitHubActions_PartialConfig(t *testing.T) {
 	t.Parallel()
 
 	cfg := &Config{
-		GCPGitHubActions: &struct {
-			GitHubRepository   string   `json:"githubRepository,omitempty"`
-			AllowedBranches    []string `json:"allowedBranches,omitempty"`
-			AllowedTags        []string `json:"allowedTags,omitempty"`
-			AllowedPullRequest *bool    `json:"allowedPullRequest,omitempty"`
-			DeployRoles        []string `json:"deployRoles,omitempty"`
-		}{
+		GCPGitHubActions: &GCPGitHubActionsConfig{
 			GitHubRepository: "luthersystems/foo",
 			// AllowedBranches, AllowedTags, AllowedPullRequest, DeployRoles
 			// intentionally left at zero values.
@@ -148,13 +136,7 @@ func TestComposeStack_GCPGitHubActions_CallerSuppliedRepo(t *testing.T) {
 		Comps:        &Components{Cloud: "GCP"},
 		Cfg: &Config{
 			Region: "us-central1",
-			GCPGitHubActions: &struct {
-				GitHubRepository   string   `json:"githubRepository,omitempty"`
-				AllowedBranches    []string `json:"allowedBranches,omitempty"`
-				AllowedTags        []string `json:"allowedTags,omitempty"`
-				AllowedPullRequest *bool    `json:"allowedPullRequest,omitempty"`
-				DeployRoles        []string `json:"deployRoles,omitempty"`
-			}{
+			GCPGitHubActions: &GCPGitHubActionsConfig{
 				GitHubRepository: "luthersystems/insideout-terraform-presets",
 			},
 		},

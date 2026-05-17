@@ -277,10 +277,11 @@ func TestComposeStack_ACMStandalone(t *testing.T) {
 
 	// ACM-only stack must NOT trigger the back-edge locals plumbing
 	// (the local is only meaningful when route53 is also present).
+	// Asserting on the specific key here (not just "locals {") so this
+	// test doesn't false-fail if a future preset emits an unrelated
+	// root-level local for some other reason.
 	require.NotContains(t, rootStr, "acm_validation_record_fqdns",
 		"acm-only stack must not emit the back-edge local — route53 is absent")
-	require.NotContains(t, rootStr, "locals {",
-		"acm-only stack should not emit a composed-root locals block")
 }
 
 // TestDefaultWiring_ACMValidationRecordsBackEdge pins the #601 back-edge:
@@ -352,8 +353,14 @@ func TestDefaultRootLocals_InertWhenEitherAbsent(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			locals := DefaultRootLocals(tc.selected)
-			require.Empty(t, locals,
-				"DefaultRootLocals(%v) should be empty/nil — the back-edge local is only emitted when both ACM and Route53 are selected (got %v)",
+			// Pin nil specifically (not just len==0). DefaultRootLocals
+			// returns explicit nil on the no-emit path; downstream
+			// callers may switch on `if locals == nil` for the no-locals-
+			// block-emitted shortcut. A regression that returns
+			// `map[string]string{}` would compile and pass `require.Empty`
+			// but break that contract — pin it here.
+			require.Nil(t, locals,
+				"DefaultRootLocals(%v) should be nil (no-emit sentinel), not an empty map — got %v",
 				tc.selected, locals)
 		})
 	}
