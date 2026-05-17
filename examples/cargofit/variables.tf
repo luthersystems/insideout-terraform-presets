@@ -52,31 +52,31 @@ variable "dynamodb_region" {
   type = string
 }
 
-variable "ec2_cluster_name" {
+variable "aws_eks_nodegroup_cluster_name" {
   type = string
 }
 
-variable "ec2_desired_size" {
+variable "aws_eks_nodegroup_desired_size" {
   type = number
 }
 
-variable "ec2_instance_types" {
+variable "aws_eks_nodegroup_instance_types" {
   type = list(string)
 }
 
-variable "ec2_max_size" {
+variable "aws_eks_nodegroup_max_size" {
   type = number
 }
 
-variable "ec2_min_size" {
+variable "aws_eks_nodegroup_min_size" {
   type = number
 }
 
-variable "ec2_project" {
+variable "aws_eks_nodegroup_project" {
   type = string
 }
 
-variable "ec2_region" {
+variable "aws_eks_nodegroup_region" {
   type = string
 }
 
@@ -84,23 +84,23 @@ variable "githubactions_project" {
   type = string
 }
 
-variable "lambda_memory_size" {
+variable "aws_lambda_memory_size" {
   type = number
 }
 
-variable "lambda_project" {
+variable "aws_lambda_project" {
   type = string
 }
 
-variable "lambda_region" {
+variable "aws_lambda_region" {
   type = string
 }
 
-variable "lambda_runtime" {
+variable "aws_lambda_runtime" {
   type = string
 }
 
-variable "lambda_timeout" {
+variable "aws_lambda_timeout" {
   type = number
 }
 
@@ -115,26 +115,6 @@ variable "region" {
   description = "AWS region"
   type        = string
   default     = "us-east-1"
-}
-
-variable "resource_memory_size" {
-  type = number
-}
-
-variable "resource_project" {
-  type = string
-}
-
-variable "resource_region" {
-  type = string
-}
-
-variable "resource_runtime" {
-  type = string
-}
-
-variable "resource_timeout" {
-  type = number
 }
 
 variable "s3_project" {

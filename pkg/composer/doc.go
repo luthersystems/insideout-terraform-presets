@@ -6,13 +6,15 @@
 //
 // The public API uses cloud-prefixed [ComponentKey] values exclusively:
 //
-//   - AWS: KeyAWSVPC, KeyAWSBastion, KeyAWSEKS, KeyAWSRDS, KeyAWSS3, …
+//   - AWS: KeyAWSVPC, KeyAWSBastion, KeyAWSEKS, KeyAWSEKSNodeGroup,
+//     KeyAWSRDS, KeyAWSS3, …
 //   - GCP: KeyGCPVPC, KeyGCPGKE, KeyGCPCloudSQL, KeyGCPGCS, …
 //   - Third-party (not cloud-specific): KeySplunk, KeyDatadog.
-//   - Polymorphic (resolve by comps.AWSLambda): KeyAWSEKSControlPlane,
-//     KeyAWSEKSNodeGroup. These preserve the string values "resource" / "ec2"
-//     for continuity with Terraform state deployed under earlier releases;
-//     see GetModuleDir.
+//
+// Issue #224 collapsed the previous polymorphic legacy keys
+// (KeyAWSEKSControlPlane = "resource" and KeyAWSEKSNodeGroup = "ec2") into
+// the canonical cloud-prefixed vocabulary; callers select KeyAWSEKS or
+// KeyAWSLambda explicitly.
 //
 // Callers populate the AWS*/GCP* fields on [Components] and [Config] and
 // select modules from the prefixed ComponentKey set.

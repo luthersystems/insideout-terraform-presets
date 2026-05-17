@@ -107,7 +107,7 @@ func resourceTopLevelGated(body string) bool {
 // allowlist entry.
 //
 // Currently empty: previous opensearch / resource / waf entries were stale
-// — each preset has an unconditional `module "name"` (and aws/resource
+// — each preset has an unconditional `module "name"` (and aws/eks
 // also has unconditional `module "eks"`) so they're already past this
 // gate without help. TestFullyConditionalPresetAllowlist_NotStale guards
 // against re-adding entries that the gate would let through anyway.

@@ -5,15 +5,15 @@ module "vpc" {
   region      = var.vpc_region
 }
 
-module "resource" {
-  source                    = "../../aws/resource"
+module "aws_eks" {
+  source                    = "../../aws/eks"
   private_subnet_ids        = module.vpc.private_subnet_ids
   public_subnet_ids         = module.vpc.public_subnet_ids
   cluster_enabled_log_types = ["api", "audit", "authenticator", "controllerManager", "scheduler"]
   vpc_id                    = module.vpc.vpc_id
-  project                   = var.resource_project
+  project                   = var.aws_eks_project
   environment               = var.environment
-  region                    = var.resource_region
+  region                    = var.aws_eks_region
 }
 
 module "lambda" {
@@ -27,17 +27,17 @@ module "lambda" {
   runtime     = var.lambda_runtime
 }
 
-module "ec2" {
+module "aws_eks_nodegroup" {
   source         = "../../aws/eks_nodegroup"
-  cluster_name   = module.resource.cluster_name
+  cluster_name   = module.aws_eks.cluster_name
   subnet_ids     = module.vpc.private_subnet_ids
-  desired_size   = var.ec2_desired_size
-  instance_types = var.ec2_instance_types
-  max_size       = var.ec2_max_size
-  min_size       = var.ec2_min_size
-  project        = var.ec2_project
+  desired_size   = var.aws_eks_nodegroup_desired_size
+  instance_types = var.aws_eks_nodegroup_instance_types
+  max_size       = var.aws_eks_nodegroup_max_size
+  min_size       = var.aws_eks_nodegroup_min_size
+  project        = var.aws_eks_nodegroup_project
   environment    = var.environment
-  region         = var.ec2_region
+  region         = var.aws_eks_nodegroup_region
 }
 
 module "alb" {

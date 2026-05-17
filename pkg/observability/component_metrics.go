@@ -19,8 +19,8 @@ type ComponentMetricsBinding struct {
 //
 // Keys not present here have no panel-default discovery and the UI shows
 // "no observable resources" — typically third-party toggles or
-// conceptual classifiers (KeySplunk, KeyDatadog, the polymorphic EKS
-// keys, KeyAWSGitHubActions, etc.).
+// conceptual classifiers (KeySplunk, KeyDatadog,
+// KeyAWSGitHubActions, etc.).
 //
 // Cross-references:
 //   - Service strings join the AWS/GCP service-actions registries
