@@ -246,6 +246,31 @@ var ImplicitDependencies = map[ComponentKey][]ComponentKey{
 	KeyAWSEKSNodeGroup: {KeyAWSEKS, KeyAWSVPC},
 	KeyAWSEC2:          {KeyAWSVPC},
 	KeyGCPCompute:      {KeyGCPVPC},
+	// Issue #600: GCP services that consume the VPC at apply time but were
+	// previously not declared, causing silent apply-time failures whenever
+	// private endpoints / VPC connectors were configured.
+	//
+	// Vertex AI private endpoints peer with the customer VPC via
+	// servicenetworking.googleapis.com — without the VPC up first, the
+	// google_vertex_ai_endpoint resource errors with NOT_FOUND on the
+	// network reference.
+	KeyGCPVertexAI: {KeyGCPVPC},
+	// Cloud Functions Gen 2 with vpc_connector / VPC egress requires the
+	// serverless VPC access connector (provisioned by gcp/vpc when
+	// enable_serverless_connector is on). Selecting Cloud Functions without
+	// the VPC leaves the connector ref dangling.
+	KeyGCPCloudFunctions: {KeyGCPVPC},
+	// Cloud Run with vpc_access_connector has the same dependency on the
+	// serverless VPC access connector as Cloud Functions Gen 2.
+	KeyGCPCloudRun: {KeyGCPVPC},
+	// Cloud Build private worker pools peer with the customer VPC via
+	// servicenetworking; the pool create call fails if the VPC + private
+	// service connection isn't up.
+	KeyGCPCloudBuild: {KeyGCPVPC},
+	// Cloud Armor security policies only attach to backend services on an
+	// HTTPS load balancer; selecting Cloud Armor without the LB silently
+	// no-ops at apply time.
+	KeyGCPCloudArmor: {KeyGCPLoadbalancer},
 }
 
 // ResolveDependencies recursively finds all required components for a given set of keys.
