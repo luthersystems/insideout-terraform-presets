@@ -128,6 +128,34 @@ func TestValidateNoModuleCycles_AllowsDAG(t *testing.T) {
 	require.Empty(t, ValidateNoModuleCycles(blocks))
 }
 
+// TestValidateNoModuleCycles_LocalsIndirectionBreaksCycle pins the
+// #601 Option G contract at the validator layer: a 2-module graph
+// where A→B is wired via a direct `module.B.X` reference and B→A is
+// wired via `local.foo` (which the composer separately emits as
+// `local foo = module.A.Y`) must NOT be flagged as a module_cycle.
+//
+// extractWiringEdges (validate_module_graph.go) intentionally only
+// matches `module.X.Y` traversals — the locals layer is the cycle-
+// break mechanism. This test would fail if a future refactor broadens
+// the regex to also match `local.X` or starts inspecting a separate
+// locals registry; both would re-introduce the regression #602
+// deliberately deferred.
+func TestValidateNoModuleCycles_LocalsIndirectionBreaksCycle(t *testing.T) {
+	t.Parallel()
+
+	// A consumes B directly (module-ref); B consumes A via a local-ref
+	// (the composer emits `local x = module.a.out` separately, but the
+	// validator only sees module blocks).
+	blocks := []ModuleBlock{
+		{Name: "a", Raw: map[string]string{"input_from_b": "module.b.out"}},
+		{Name: "b", Raw: map[string]string{"input_from_a": "local.a_out"}},
+	}
+	require.Empty(t, ValidateNoModuleCycles(blocks),
+		"local.X traversals must not register as wiring edges; the locals layer "+
+			"is the #601 cycle-break mechanism. If this fails, extractWiringEdges "+
+			"has been broadened to inspect locals — the back-edge wiring contract is broken.")
+}
+
 func TestValidateValueTypes_FlagsStringForNumber(t *testing.T) {
 	t.Parallel()
 

@@ -3,6 +3,7 @@ package composer
 import (
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 
 	hcl "github.com/hashicorp/hcl/v2"
@@ -398,8 +399,37 @@ func (m MovedRef) FromHCL() string {
 }
 
 func EmitRootMainTF(blocks []ModuleBlock) []byte {
+	return EmitRootMainTFWithLocals(blocks, nil)
+}
+
+// EmitRootMainTFWithLocals renders the composed-root main.tf with an
+// optional `locals { }` block emitted before the module blocks. The locals
+// channel is the cycle-break mechanism for #601-class back-edges:
+// terraform plan honors the data dependency through the local, but the
+// composer's cycle validator (extractWiringEdges + ValidateNoModuleCycles)
+// only inspects `module.X.Y` traversals inside module blocks, so a
+// back-edge wired via local.X reads as a one-way graph at validation time
+// while still ordering correctly at plan time.
+//
+// Pass locals=nil for the legacy zero-locals shape.
+func EmitRootMainTFWithLocals(blocks []ModuleBlock, locals map[string]string) []byte {
 	doc := hclwrite.NewEmptyFile()
 	body := doc.Body()
+	if len(locals) > 0 {
+		names := make([]string, 0, len(locals))
+		for n := range locals {
+			names = append(names, n)
+		}
+		sort.Strings(names)
+		lb := body.AppendNewBlock("locals", nil).Body()
+		for _, n := range names {
+			setRawExpr(lb, n, locals[n])
+		}
+		// Blank line separating the locals block from the first module block.
+		if len(blocks) > 0 {
+			body.AppendNewline()
+		}
+	}
 	for i, m := range blocks {
 		b := body.AppendNewBlock("module", []string{m.Name})
 		mb := b.Body()

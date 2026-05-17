@@ -652,7 +652,11 @@ func (c *Client) composeStackImpl(opts ComposeStackOpts) (*ComposeStackResult, e
 	schema := MergeSchemas(autoSchema, RootVarSchema())
 
 	files["/variables.tf"] = EmitVariablesTFWithSchema(rootVars, typeHints, schema)
-	files["/main.tf"] = EmitRootMainTF(blocks)
+	// Emit composed-root `locals { }` block alongside the module blocks
+	// when DefaultRootLocals(selected) returns back-edge plumbing
+	// (#601). Pass nil to keep the legacy zero-locals shape for stacks
+	// that don't trigger any back-edge wiring.
+	files["/main.tf"] = EmitRootMainTFWithLocals(blocks, DefaultRootLocals(selected))
 	if len(moduleOutputs) > 0 {
 		files["/outputs.tf"] = EmitRootOutputsTF(moduleOutputs)
 	}
