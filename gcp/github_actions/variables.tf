@@ -103,11 +103,13 @@ variable "pool_short_name" {
 
   validation {
     # Pool ID regex: `^[a-z][a-z0-9-]{3,30}[a-z0-9]$` per Google (4–32 chars
-    # total). The composed `${var.project}-${var.pool_short_name}` must
-    # satisfy this — pin a 3-char floor on the short_name so even a 1-char
-    # var.project clears Google's 4-char minimum after the hyphen join.
+    # total). The composed `<project>-<pool_short_name>` must satisfy this
+    # — pin a 3-char floor on the short_name so even a 1-char project
+    # clears Google's 4-char minimum after the hyphen join. (Terraform
+    # 1.5+ forbids cross-variable references in error_message, so the
+    # composed-id arithmetic is documented in this comment instead.)
     condition     = can(regex("^[a-z][a-z0-9-]{1,30}[a-z0-9]$", var.pool_short_name))
-    error_message = "pool_short_name must be 3–32 chars: start with a lowercase letter, end alphanumeric, contain only lowercase letters / digits / hyphens (the 3-char floor keeps `${var.project}-${var.pool_short_name}` ≥ Google's 4-char pool-ID minimum)."
+    error_message = "pool_short_name must be 3–32 chars: start with a lowercase letter, end alphanumeric, contain only lowercase letters / digits / hyphens. The 3-char floor ensures the composed pool ID clears Google's 4-char minimum even for a 1-char project prefix."
   }
 }
 
