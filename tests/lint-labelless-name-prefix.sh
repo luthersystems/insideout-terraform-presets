@@ -100,6 +100,11 @@ EXEMPT_LABELLESS_GCP=(
   google_secret_manager_secret_version
   google_storage_bucket_object
   google_service_networking_connection
+  # google_dns_record_set — Cloud DNS record sets have semantic DNS
+  # names (e.g. "www.example.com.") and cannot legally carry var.project
+  # in the name field. Attribution flows through the parent managed_zone
+  # whose name does carry var.project.
+  google_dns_record_set
   # Compute network-plane sub-resources scoped to a project-prefixed
   # parent network. The network/subnet/router/firewall NAME does carry
   # var.project where authored; the rule below only checks resource
