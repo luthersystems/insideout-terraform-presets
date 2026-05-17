@@ -107,3 +107,61 @@ run "acm_ct_logging_defaults_enabled" {
     error_message = "Certificate Transparency logging should default to ENABLED (browser/CT-log requirement for public certs)."
   }
 }
+
+# --- Negative cases: validation blocks must reject obvious misconfigurations
+# at plan time so callers don't discover them at apply.
+
+run "acm_rejects_domain_with_leading_hyphen" {
+  command = plan
+
+  variables {
+    project     = "test"
+    region      = "us-east-1"
+    environment = "test"
+    domain_name = "-bad.example.com"
+  }
+
+  expect_failures = [var.domain_name]
+}
+
+run "acm_rejects_more_than_9_sans" {
+  command = plan
+
+  variables {
+    project                   = "test"
+    region                    = "us-east-1"
+    environment               = "test"
+    domain_name               = "primary.example.com"
+    subject_alternative_names = ["a.example.com", "b.example.com", "c.example.com", "d.example.com", "e.example.com", "f.example.com", "g.example.com", "h.example.com", "i.example.com", "j.example.com"]
+  }
+
+  expect_failures = [var.subject_alternative_names]
+}
+
+run "acm_rejects_invalid_key_algorithm" {
+  command = plan
+
+  variables {
+    project       = "test"
+    region        = "us-east-1"
+    environment   = "test"
+    domain_name   = "example.com"
+    key_algorithm = "MD5"
+  }
+
+  expect_failures = [var.key_algorithm]
+}
+
+run "acm_rejects_malformed_validation_timeout" {
+  command = plan
+
+  variables {
+    project            = "test"
+    region             = "us-east-1"
+    environment        = "test"
+    domain_name        = "example.com"
+    validation_timeout = "forty-five-minutes"
+  }
+
+  expect_failures = [var.validation_timeout]
+}

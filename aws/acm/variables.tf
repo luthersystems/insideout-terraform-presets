@@ -116,13 +116,13 @@ variable "validation_record_fqdns" {
 }
 
 variable "validation_timeout" {
-  description = "Maximum time to wait for AWS to mark the cert ISSUED when create_validation = true. ACM DNS validation typically completes in a few minutes but the published SLA is up to 72 hours; '45m' is a pragmatic ceiling for stack deploys."
+  description = "Maximum time to wait for AWS to mark the cert ISSUED when create_validation = true. ACM DNS validation typically completes in a few minutes but the published SLA is up to 72 hours; '45m' is a pragmatic ceiling for stack deploys. Accepts compound Go-duration strings (e.g. '1h30m')."
   type        = string
   default     = "45m"
 
   validation {
-    condition     = can(regex("^[0-9]+[smh]$", var.validation_timeout))
-    error_message = "validation_timeout must be a Go duration string (e.g. '30m', '1h', '90s')."
+    condition     = can(regex("^([0-9]+[smh])+$", var.validation_timeout))
+    error_message = "validation_timeout must be a Go duration string (e.g. '30m', '1h', '90s', '1h30m')."
   }
 }
 

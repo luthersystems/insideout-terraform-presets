@@ -131,6 +131,24 @@ variable "records" {
     condition     = alltrue([for r in var.records : length(r.values) > 0])
     error_message = "Each record must have at least one entry in `values`."
   }
+
+  # Distinct (name, type) pairs — Cloud DNS rejects duplicate rrsets per
+  # zone, and the locals' map-keying would silently collapse collisions.
+  validation {
+    condition     = length(distinct([for r in var.records : "${r.name}|${r.type}"])) == length(var.records)
+    error_message = "Each (name, type) pair must be unique across var.records. Cloud DNS rejects duplicate record sets per zone."
+  }
+
+  # TXT / SPF rrdata values must be wrapped in literal double quotes per
+  # Cloud DNS's rrdata format. Catching unquoted values at plan time
+  # avoids a confusing API rejection at apply.
+  validation {
+    condition = alltrue([
+      for r in var.records :
+      contains(["TXT", "SPF"], r.type) ? alltrue([for v in r.values : can(regex("^\".*\"$", v))]) : true
+    ])
+    error_message = "TXT and SPF record values must be wrapped in literal double quotes (e.g. \"\\\"v=spf1 -all\\\"\")."
+  }
 }
 
 variable "labels" {

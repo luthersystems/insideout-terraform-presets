@@ -34,10 +34,12 @@ terraform {
 #   provider region) per instance. Compose two ACM module instances when a
 #   stack needs both an us-east-1 CloudFront cert and a regional ALB cert.
 #
-# Composer wiring (follow-up issue):
+# Composer wiring (tracked in #593):
 #   - `validation_records` output -> `aws/route53.records` input
 #   - `certificate_arn` output -> ALB / API Gateway / CloudFront cert input
 #   - `validation_record_fqdns` (caller-supplied) -> `aws_acm_certificate_validation.this`
+# Until #593 lands, callers wire this module manually (see
+# examples/alb_route53_custom_domain for the pattern).
 
 module "name" {
   source         = "github.com/luthersystems/tf-modules.git//luthername?ref=v55.15.0"

@@ -16,7 +16,7 @@
 #     load-balancer IPs / Cloud Run service IPs / etc. with plain A / AAAA
 #     or CNAME entries via var.records.
 #
-# TODO(#583 follow-up): register google_dns_managed_zone and
+# TODO(#593): composer wiring + register google_dns_managed_zone and
 # google_dns_record_set in pkg/insideout-import/registry/registry.go
 # (gcpDiscoverTypes) and add a Cloud DNS inspector under
 # pkg/observability/discovery/gcp/. Until then, this module's resources
@@ -91,6 +91,15 @@ resource "google_dns_managed_zone" "this" {
   }
 
   labels = merge({ project = var.project }, var.labels)
+
+  # Cloud DNS rejects a private zone with zero networks at apply time
+  # with a generic INVALID_ARGUMENT; surface it at plan instead.
+  lifecycle {
+    precondition {
+      condition     = !var.private_zone || length(var.network_self_links) > 0
+      error_message = "private_zone = true requires at least one entry in network_self_links."
+    }
+  }
 }
 
 data "google_dns_managed_zone" "existing" {
@@ -98,6 +107,16 @@ data "google_dns_managed_zone" "existing" {
 
   project = var.project_id
   name    = var.zone_name
+
+  # create_zone = false (the default) requires zone_name; without it the
+  # data source dies at refresh with a confusing "name is required" — pin
+  # the failure to plan with a directive message.
+  lifecycle {
+    precondition {
+      condition     = var.zone_name != null
+      error_message = "create_zone = false requires var.zone_name to identify the existing Cloud DNS managed zone."
+    }
+  }
 }
 
 locals {

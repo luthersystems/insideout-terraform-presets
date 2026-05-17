@@ -829,7 +829,7 @@ func TestComposeStack_AWS_ValidHCL(t *testing.T) {
 
 // TestComposeStack_TFVarsMatchVariables verifies that every key in .auto.tfvars files
 // has a corresponding declaration in variables.tf. This test catches naming mismatches
-// like writing "project" in .auto.tfvars when variables.tf declares "aws_ec2_project".
+// like writing "project" in .auto.tfvars when variables.tf declares "aws_eks_nodegroup_project".
 func TestComposeStack_TFVarsMatchVariables(t *testing.T) {
 	selected := []ComponentKey{
 		KeyAWSVPC,
@@ -2169,11 +2169,13 @@ func TestComposeStack_EKSKeyPullsInPrefixedVPC(t *testing.T) {
 	require.Contains(t, mainTF, `module "aws_eks_nodegroup"`,
 		"EKS must auto-include the worker node group (issue #206)")
 	// Issue #224: the legacy polymorphic string identities ("resource" /
-	// "ec2") must NOT appear in the composed root.
-	require.NotContains(t, mainTF, `module "resource"`,
+	// "ec2") must NOT appear in the composed root. Anchor to line-start +
+	// optional whitespace before "{" so a future formatter that drops the
+	// space (e.g. `module "ec2"{`) doesn't sneak past the negative pin.
+	require.NotRegexp(t, regexp.MustCompile(`(?m)^module "resource"\s*\{`), mainTF,
 		"legacy polymorphic module \"resource\" must not appear (issue #224)")
-	require.NotContains(t, mainTF, `module "ec2" `,
-		"legacy polymorphic module \"ec2\" (with trailing space, distinguishing from aws_ec2) must not appear (issue #224)")
+	require.NotRegexp(t, regexp.MustCompile(`(?m)^module "ec2"\s*\{`), mainTF,
+		"legacy polymorphic module \"ec2\" must not appear (issue #224); distinct from aws_ec2 which is line-anchored separately")
 }
 
 // TestComposeStack_EKSAutoIncludesNodeGroup is the issue #206 regression: a
@@ -2247,6 +2249,13 @@ func TestComposeStack_EKSAutoIncludeIdempotent(t *testing.T) {
 	ngBlocks := regexp.MustCompile(`(?m)^module "aws_eks_nodegroup"\s*\{`).FindAllStringIndex(mainTF, -1)
 	require.Len(t, ngBlocks, 1,
 		"node group must compose exactly once even when caller pre-selects KeyAWSEKSNodeGroup — pins the hasNodeGroup short-circuit in ResolveDependenciesForCompose")
+	// Mirror dedup guard on the cluster: a regression in dedup that
+	// duplicated the cluster module (not just node group) when both keys
+	// are explicitly selected would not be caught by the node-group
+	// assertion above.
+	clusterBlocks := regexp.MustCompile(`(?m)^module "aws_eks"\s*\{`).FindAllStringIndex(mainTF, -1)
+	require.Len(t, clusterBlocks, 1,
+		"cluster module must compose exactly once when caller pre-selects both KeyAWSEKS and KeyAWSEKSNodeGroup")
 }
 
 // TestDefaultWiring_GCPSubnetSelfLinkUsesTryGuard pins the issue #178 fix:
