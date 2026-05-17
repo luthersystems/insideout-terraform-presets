@@ -152,6 +152,17 @@ func TestLive255_AllInspectorsJSONShape(t *testing.T) {
 				return inspectKMS(ctx, projectID, "list-keyrings", projectFilter, opts...)
 			}, filters: projectFilter},
 
+		// dns.go (#596)
+		{name: "clouddns/list-managed-zones",
+			fn: func() (any, error) {
+				return inspectCloudDNS(ctx, projectID, "list-managed-zones", projectFilter, opts...)
+			}, filters: projectFilter},
+		// certificatemanager/list-certificates — defaults to location=global.
+		{name: "certificatemanager/list-certificates",
+			fn: func() (any, error) {
+				return inspectCertificateManager(ctx, projectID, "list-certificates", projectFilter, opts...)
+			}, filters: projectFilter},
+
 		// identity.go — list-tenants on a project without multi-tenancy
 		// returns a structured error (TestLive_InspectIdentityPlatform_*).
 		// list-providers is a baseline.

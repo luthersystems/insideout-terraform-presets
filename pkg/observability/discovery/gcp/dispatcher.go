@@ -114,6 +114,12 @@ func Inspect(ctx context.Context, projectID, service, action, filtersJSON string
 	case "billing":
 		return inspectBilling(ctx, projectID, action, filtersJSON, opts...)
 
+	// --- dns.go (issue #596) ---
+	case "clouddns":
+		return inspectCloudDNS(ctx, projectID, action, filtersJSON, opts...)
+	case "certificatemanager":
+		return inspectCertificateManager(ctx, projectID, action, filtersJSON, opts...)
+
 	default:
 		return nil, unsupportedServiceError(service, observability.GCPServiceNames())
 	}

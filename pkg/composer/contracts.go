@@ -516,13 +516,6 @@ var AllComponentKeys = []ComponentKey{
 	KeyGCPVertexAI,
 }
 
-func isLambda(comps *Components) bool {
-	if comps == nil {
-		return false
-	}
-	return comps.IsLambdaArchitecture()
-}
-
 // isPublicVPC returns true if the VPC is configured as a Public VPC (no
 // private subnets). Reads only comps.AWSVPC; the legacy comps.VPC string is
 // promoted to AWSVPC by Components.Normalize, which ComposeStack /

@@ -136,6 +136,10 @@ func Inspect(ctx context.Context, cfg aws.Config, service, action, filtersJSON s
 		return inspectCostExplorer(ctx, cfg, action, filtersJSON)
 	case "account":
 		return inspectAccount(ctx, cfg, action, filtersJSON)
+	case "route53":
+		return inspectRoute53(ctx, cfg, action, filtersJSON)
+	case "acm":
+		return inspectACM(ctx, cfg, action, filtersJSON)
 	default:
 		return nil, unsupportedServiceError(service)
 	}

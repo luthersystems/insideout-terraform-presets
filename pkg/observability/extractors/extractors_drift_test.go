@@ -58,15 +58,19 @@ var configExtractorAllowlist = map[string]string{
 	"aws_codepipeline":   "[placeholder] mapped to ec2.describe-instances, no dedicated shape (#204)",
 	"aws_backups":        "[no-inspector] AWS Backup vaults aren't inspected; covered via tag-based discovery (#204)",
 	"aws_github_actions": "[no-inspector] GitHub Actions IAM roles only — no SDK shape to extract (#204)",
-	"aws_route53":        "[no-inspector] Route 53 hosted zones / records not yet covered by the discovery pipeline (#584 follow-up)",
-	"aws_acm":            "[no-inspector] ACM certificates not yet covered by the discovery pipeline (#593 follow-up)",
+	// #596: route53/acm dispatchers ship in pkg/observability/discovery/aws
+	// (route53.go, acm.go) but no extractor lands yet — the panel
+	// surfaces inspector output as raw SDK shapes until per-key field
+	// extraction stabilizes. Tracked as a discovery-pipeline follow-up.
+	"aws_route53": "[no-inspector] Route 53 dispatcher landed in #596 (route53.go); per-component extractor (config map for panel) deferred until SDK-shape extractor design settles for one-off resources",
+	"aws_acm":     "[no-inspector] ACM dispatcher landed in #596 (acm.go); per-component extractor deferred until cert-specific field reads (status, days_to_expiry, validation state) are designed",
 
 	// EKS node group: ComponentKey "aws_eks_nodegroup" doesn't have its
 	// own SDK inspector — extraction is handled by aws_eks (#204, #224).
 	"aws_eks_nodegroup": "[no-inspector] EKS node group is covered by the aws_eks inspector (#204)",
 
 	"gcp_backups":   "[no-inspector] GCP Backup vaults aren't inspected; covered via label-based discovery (#204)",
-	"gcp_cloud_dns": "[no-inspector] Cloud DNS managed zones / record sets not yet covered by the discovery pipeline (#593 follow-up)",
+	"gcp_cloud_dns": "[no-inspector] Cloud DNS dispatcher landed in #596 (gcp/dns.go); per-component extractor (config map for panel) deferred pending zone-detail field reads (visibility, dnssec_config, record-count summary)",
 }
 
 // extractorFixtures are minimal SDK-shape fixtures that exercise each
