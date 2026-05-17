@@ -89,6 +89,7 @@ const (
 	KeyGCPAPIGateway       ComponentKey = "gcp_api_gateway"
 	KeyGCPBackups          ComponentKey = "gcp_backups"
 	KeyGCPCloudDNS         ComponentKey = "gcp_cloud_dns"
+	KeyGCPGitHubActions    ComponentKey = "gcp_github_actions"
 )
 
 var ComposeOrder = []ComponentKey{
@@ -157,6 +158,10 @@ var ComposeOrder = []ComponentKey{
 	KeyGCPCloudBuild,
 	KeyAWSGitHubActions,
 	KeyAWSCodePipeline,
+	// GCP GitHub Actions WIF preset (#597 row 1). Independent of any
+	// upstream GCP preset so position is not load-bearing — placed
+	// alongside the AWS sibling for reviewability.
+	KeyGCPGitHubActions,
 	KeyArch,
 	KeyCloud,
 	KeyComposer,
@@ -224,6 +229,7 @@ var ModulePath = map[ComponentKey]string{
 	KeyGCPCloudBuild:       "gcp/cloud_build",
 	KeyGCPBackups:          "gcp/backups",
 	KeyGCPCloudDNS:         "gcp/cloud_dns",
+	KeyGCPGitHubActions:    "gcp/github_actions",
 }
 
 // ImplicitDependencies defines components that must be automatically added
@@ -400,6 +406,7 @@ var PresetKeyMap = map[ComponentKey]string{
 	KeyGCPCloudFunctions:       "cloud_functions",
 	KeyGCPBastion:              "bastion",
 	KeyGCPCloudDNS:             "cloud_dns",
+	KeyGCPGitHubActions:        "github_actions",
 }
 
 // GetPresetPath returns the cloud-prefixed preset path for a component.
@@ -507,6 +514,7 @@ var AllComponentKeys = []ComponentKey{
 	KeyGCPFirestore,
 	KeyGCPGCS,
 	KeyGCPGKE,
+	KeyGCPGitHubActions,
 	KeyGCPIdentityPlatform,
 	KeyGCPLoadbalancer,
 	KeyGCPMemorystore,

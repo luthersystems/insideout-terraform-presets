@@ -162,6 +162,18 @@ var GCPIAMPermissions = map[ComponentKey][]string{
 		"dns.managedZones.create",
 		"dns.resourceRecordSets.create",
 	},
+	// GCP GitHub Actions WIF preset (#597 row 1). The deploying SA needs
+	// permissions to create the WIF pool + provider, the deploy SA, and
+	// project-level IAM bindings on that SA — plus enable the IAM /
+	// IAM Credentials / STS APIs.
+	KeyGCPGitHubActions: {
+		"iam.workloadIdentityPools.create",
+		"iam.workloadIdentityPoolProviders.create",
+		"iam.serviceAccounts.create",
+		"iam.serviceAccounts.setIamPolicy",
+		"resourcemanager.projects.setIamPolicy",
+		"serviceusage.services.enable",
+	},
 	// Components that need no extra permission beyond the always-required set:
 	KeyGCPVPC:          nil,
 	KeyGCPCompute:      nil,

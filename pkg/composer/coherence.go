@@ -142,6 +142,8 @@ func ComponentSelected(c *Components, key ComponentKey) bool {
 		return boolPtrTrue(c.GCPCloudBuild)
 	case KeyGCPCloudDNS:
 		return boolPtrTrue(c.GCPCloudDNS)
+	case KeyGCPGitHubActions:
+		return boolPtrTrue(c.GCPGitHubActions)
 	case KeyGCPBackups:
 		return c.GCPBackups != nil
 	// External / third-party.
@@ -296,7 +298,7 @@ func isOrphanStrippableKey(key ComponentKey) bool {
 		KeyGCPCloudSQL, KeyGCPMemorystore, KeyGCPGCS,
 		KeyGCPPubSub, KeyGCPCloudLogging,
 		KeyGCPIdentityPlatform, KeyGCPAPIGateway, KeyGCPBackups,
-		KeyGCPCloudDNS:
+		KeyGCPCloudDNS, KeyGCPGitHubActions:
 		return true
 	}
 	return false

@@ -1080,6 +1080,50 @@ func (m DefaultMapper) BuildModuleValues(
 				vals["force_destroy"] = *cfg.GCPCloudDNS.ForceDestroy
 			}
 		}
+
+	case KeyGCPGitHubActions:
+		// GCP GitHub Actions WIF (#597 row 1). github_repository is required
+		// by the preset (no default); supply a preview-safe placeholder
+		// matching the OWNER/REPO regex so single-module previews and
+		// validation runs succeed when the caller hasn't yet provided
+		// cfg.GCPGitHubActions.GitHubRepository. The placeholder is shaped
+		// to obviously not match any real GitHub repo — callers MUST
+		// override before terraform apply or the WIF condition will reject
+		// every workflow token at exchange time. .invalid is the IANA-
+		// reserved TLD for testing; the slash separator satisfies the
+		// preset's OWNER/REPO regex without colliding with any real
+		// GitHub identity (slash characters are illegal in GitHub logins).
+		repo := "placeholder.invalid/placeholder"
+		if cfg != nil && cfg.GCPGitHubActions != nil && strings.TrimSpace(cfg.GCPGitHubActions.GitHubRepository) != "" {
+			repo = strings.TrimSpace(cfg.GCPGitHubActions.GitHubRepository)
+		}
+		vals["github_repository"] = repo
+		if cfg != nil && cfg.GCPGitHubActions != nil {
+			if len(cfg.GCPGitHubActions.AllowedBranches) > 0 {
+				bs := make([]any, len(cfg.GCPGitHubActions.AllowedBranches))
+				for i, b := range cfg.GCPGitHubActions.AllowedBranches {
+					bs[i] = b
+				}
+				vals["allowed_branches"] = bs
+			}
+			if len(cfg.GCPGitHubActions.AllowedTags) > 0 {
+				ts := make([]any, len(cfg.GCPGitHubActions.AllowedTags))
+				for i, t := range cfg.GCPGitHubActions.AllowedTags {
+					ts[i] = t
+				}
+				vals["allowed_tags"] = ts
+			}
+			if cfg.GCPGitHubActions.AllowedPullRequest != nil {
+				vals["allowed_pull_request"] = *cfg.GCPGitHubActions.AllowedPullRequest
+			}
+			if len(cfg.GCPGitHubActions.DeployRoles) > 0 {
+				rs := make([]any, len(cfg.GCPGitHubActions.DeployRoles))
+				for i, r := range cfg.GCPGitHubActions.DeployRoles {
+					rs[i] = r
+				}
+				vals["deploy_roles"] = rs
+			}
+		}
 	}
 
 	return vals, nil

@@ -69,6 +69,7 @@ EXEMPT_PROJECT_PIN_GCP=(
   google_kms_crypto_key                 # parent: key_ring (gcp/kms/main.tf:82,103)
   google_kms_crypto_key_iam_binding     # parent: crypto_key_id (gcp/kms/main.tf:126)
   google_secret_manager_secret_version  # parent: secret (gcp/cloud_build, gcp/secretmanager)
+  google_service_account_iam_binding    # parent: service_account_id (gcp/github_actions/main.tf, #597)
   google_service_networking_connection  # parent: network (gcp/cloudsql/main.tf:41)
   google_storage_bucket_iam_member      # parent: bucket (gcp/cloud_logging/main.tf:60)
   google_storage_bucket_object          # parent: bucket (gcp/cloud_functions/main.tf:56)

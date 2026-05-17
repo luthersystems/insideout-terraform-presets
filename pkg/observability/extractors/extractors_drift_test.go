@@ -69,8 +69,9 @@ var configExtractorAllowlist = map[string]string{
 	// own SDK inspector — extraction is handled by aws_eks (#204, #224).
 	"aws_eks_nodegroup": "[no-inspector] EKS node group is covered by the aws_eks inspector (#204)",
 
-	"gcp_backups":   "[no-inspector] GCP Backup vaults aren't inspected; covered via label-based discovery (#204)",
-	"gcp_cloud_dns": "[no-inspector] Cloud DNS dispatcher landed in #596 (gcp/dns.go); per-component extractor (config map for panel) deferred pending zone-detail field reads (visibility, dnssec_config, record-count summary)",
+	"gcp_backups":        "[no-inspector] GCP Backup vaults aren't inspected; covered via label-based discovery (#204)",
+	"gcp_cloud_dns":      "[no-inspector] Cloud DNS dispatcher landed in #596 (gcp/dns.go); per-component extractor (config map for panel) deferred pending zone-detail field reads (visibility, dnssec_config, record-count summary)",
+	"gcp_github_actions": "[no-inspector] GitHub Actions WIF pool/provider/SA not yet covered by the discovery pipeline (#597 follow-up; #606 tracks the inspector port)",
 }
 
 // extractorFixtures are minimal SDK-shape fixtures that exercise each
