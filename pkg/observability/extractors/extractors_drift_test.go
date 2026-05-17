@@ -59,6 +59,7 @@ var configExtractorAllowlist = map[string]string{
 	"aws_codepipeline":   "[placeholder] mapped to ec2.describe-instances, no dedicated shape (#204)",
 	"aws_backups":        "[no-inspector] AWS Backup vaults aren't inspected; covered via tag-based discovery (#204)",
 	"aws_github_actions": "[no-inspector] GitHub Actions IAM roles only — no SDK shape to extract (#204)",
+	"aws_route53":        "[no-inspector] Route 53 hosted zones / records not yet covered by the discovery pipeline (#584 follow-up)",
 
 	// Polymorphic EKS sub-keys: the ComponentKey string values are
 	// "ec2" (KeyAWSEKSNodeGroup) and "resource" (KeyAWSEKSControlPlane)

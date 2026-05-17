@@ -66,6 +66,11 @@ var AWSIAMActions = map[ComponentKey][]string{
 	KeyAWSBackups:              {"backup:CreateBackupPlan", "backup:CreateBackupVault"},
 	KeyAWSGitHubActions:        {"iam:CreateOpenIDConnectProvider"},
 	KeyAWSCodePipeline:         {"codepipeline:CreatePipeline"},
+	// route53:CreateHostedZone covers the create_zone=true path; the data-
+	// lookup path (create_zone=false) needs only route53:GetHostedZone, which
+	// is implied by the create capability. Record-set CRUD is covered by
+	// ChangeResourceRecordSets (issued via change batches by the provider).
+	KeyAWSRoute53: {"route53:ChangeResourceRecordSets", "route53:CreateHostedZone"},
 }
 
 // RequiredAWSIAMActions returns the deduplicated, sorted list of IAM

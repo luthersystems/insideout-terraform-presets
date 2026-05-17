@@ -43,6 +43,7 @@ type Components struct {
 	AWSCognito              *bool  `json:"aws_cognito,omitempty"`
 	AWSGitHubActions        *bool  `json:"aws_github_actions,omitempty"`
 	AWSCodePipeline         *bool  `json:"aws_codepipeline,omitempty"`
+	AWSRoute53              *bool  `json:"aws_route53,omitempty"`
 	AWSBackups              *struct {
 		EC2         *bool `json:"aws_ec2,omitempty"`
 		RDS         *bool `json:"aws_rds,omitempty"`
@@ -201,6 +202,24 @@ type Config struct {
 		DomainName     string `json:"domainName,omitempty"`
 		CertificateArn string `json:"certificateArn,omitempty"`
 	} `json:"aws_api_gateway,omitempty"`
+
+	// AWSRoute53 carries the caller-supplied Route 53 configuration. DomainName
+	// is the apex (e.g. "example.com") and is required when KeyAWSRoute53 is
+	// selected. CreateZone toggles between creating a hosted zone in-stack
+	// (true) and looking up an existing one by ZoneID (false). PrivateZone +
+	// VPCIDs are only consulted when CreateZone is true and the zone is
+	// intended to be private. Plain records and aliases (in addition to the
+	// auto-derived aliases the composer wires from ALB / CloudFront — see
+	// DefaultWiring at KeyAWSRoute53) flow through the same-named module
+	// variables.
+	AWSRoute53 *struct {
+		DomainName   string `json:"domainName,omitempty"`
+		CreateZone   *bool  `json:"createZone,omitempty"`
+		ZoneID       string `json:"zoneId,omitempty"`
+		PrivateZone  *bool  `json:"privateZone,omitempty"`
+		VPCIDs       []string `json:"vpcIds,omitempty"`
+		ForceDestroy *bool  `json:"forceDestroy,omitempty"`
+	} `json:"aws_route53,omitempty"`
 
 	AWSKMS *struct {
 		NumKeys string `json:"numKeys,omitempty"`
@@ -401,6 +420,7 @@ func (c *Components) Normalize() {
 		c.AWSCognito = nil
 		c.AWSGitHubActions = nil
 		c.AWSCodePipeline = nil
+		c.AWSRoute53 = nil
 		c.AWSBackups = nil
 	}
 }
@@ -506,6 +526,7 @@ func (c *Config) Normalize() {
 		c.AWSSecretsManager = nil
 		c.AWSOpenSearch = nil
 		c.AWSBedrock = nil
+		c.AWSRoute53 = nil
 		c.AWSBackups = nil
 	}
 }
