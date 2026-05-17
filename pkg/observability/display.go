@@ -131,6 +131,8 @@ func ComponentDisplayName(key composer.ComponentKey) string {
 		return "AWS GitHub Actions OIDC"
 	case composer.KeyAWSRoute53:
 		return "AWS Route 53"
+	case composer.KeyAWSACM:
+		return "AWS Certificate Manager"
 	case composer.KeyGCPCompute:
 		return "GCP Compute Engine"
 	case composer.KeyGCPGKE:
@@ -173,6 +175,8 @@ func ComponentDisplayName(key composer.ComponentKey) string {
 		return "GCP Cloud Logging"
 	case composer.KeyGCPCloudMonitoring:
 		return "GCP Cloud Monitoring"
+	case composer.KeyGCPCloudDNS:
+		return "GCP Cloud DNS"
 	case composer.KeyGCPBackups:
 		return "GCP Backups"
 	default:

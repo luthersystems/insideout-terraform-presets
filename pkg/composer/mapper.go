@@ -606,6 +606,39 @@ func (m DefaultMapper) BuildModuleValues(
 			}
 		}
 
+	case KeyAWSACM:
+		// ACM (#593). domain_name is required by the preset (no default);
+		// supply a preview-safe placeholder so single-module previews and
+		// validation runs succeed when the caller hasn't yet provided
+		// cfg.AWSACM.DomainName. Same .invalid TLD strategy as route53:
+		// fails loud at apply time against the real ACM API.
+		domain := "example.invalid"
+		if cfg != nil && cfg.AWSACM != nil && strings.TrimSpace(cfg.AWSACM.DomainName) != "" {
+			domain = strings.TrimSpace(cfg.AWSACM.DomainName)
+		}
+		vals["domain_name"] = domain
+		if cfg != nil && cfg.AWSACM != nil {
+			if len(cfg.AWSACM.SubjectAlternativeNames) > 0 {
+				sans := make([]any, len(cfg.AWSACM.SubjectAlternativeNames))
+				for i, s := range cfg.AWSACM.SubjectAlternativeNames {
+					sans[i] = s
+				}
+				vals["subject_alternative_names"] = sans
+			}
+			if cfg.AWSACM.KeyAlgorithm != "" {
+				vals["key_algorithm"] = cfg.AWSACM.KeyAlgorithm
+			}
+			if cfg.AWSACM.CertificateTransparencyLogging != "" {
+				vals["certificate_transparency_logging"] = cfg.AWSACM.CertificateTransparencyLogging
+			}
+			if cfg.AWSACM.CreateValidation != nil {
+				vals["create_validation"] = *cfg.AWSACM.CreateValidation
+			}
+			if cfg.AWSACM.ValidationTimeout != "" {
+				vals["validation_timeout"] = cfg.AWSACM.ValidationTimeout
+			}
+		}
+
 	case KeyAWSKMS:
 		if cfg != nil && cfg.AWSKMS != nil && cfg.AWSKMS.NumKeys != "" {
 			n, err := strconv.Atoi(strings.TrimSpace(cfg.AWSKMS.NumKeys))
@@ -1010,6 +1043,41 @@ func (m DefaultMapper) BuildModuleValues(
 		if cfg != nil && cfg.GCPBackups != nil {
 			if cfg.GCPBackups.Compute != nil && cfg.GCPBackups.Compute.RetentionDays > 0 {
 				vals["snapshot_retention_days"] = cfg.GCPBackups.Compute.RetentionDays
+			}
+		}
+
+	case KeyGCPCloudDNS:
+		// Cloud DNS (#593). dns_name is required by the preset (no
+		// default); supply a preview-safe placeholder with the trailing
+		// dot Cloud DNS expects. Same .invalid TLD strategy as
+		// route53 / acm.
+		dns := "example.invalid."
+		if cfg != nil && cfg.GCPCloudDNS != nil && strings.TrimSpace(cfg.GCPCloudDNS.DNSName) != "" {
+			dns = strings.TrimSpace(cfg.GCPCloudDNS.DNSName)
+		}
+		vals["dns_name"] = dns
+		if cfg != nil && cfg.GCPCloudDNS != nil {
+			if cfg.GCPCloudDNS.CreateZone != nil {
+				vals["create_zone"] = *cfg.GCPCloudDNS.CreateZone
+			}
+			if cfg.GCPCloudDNS.ZoneShortName != "" {
+				vals["zone_short_name"] = cfg.GCPCloudDNS.ZoneShortName
+			}
+			if cfg.GCPCloudDNS.ZoneName != "" {
+				vals["zone_name"] = cfg.GCPCloudDNS.ZoneName
+			}
+			if cfg.GCPCloudDNS.PrivateZone != nil {
+				vals["private_zone"] = *cfg.GCPCloudDNS.PrivateZone
+			}
+			if len(cfg.GCPCloudDNS.NetworkSelfLinks) > 0 {
+				links := make([]any, len(cfg.GCPCloudDNS.NetworkSelfLinks))
+				for i, l := range cfg.GCPCloudDNS.NetworkSelfLinks {
+					links[i] = l
+				}
+				vals["network_self_links"] = links
+			}
+			if cfg.GCPCloudDNS.ForceDestroy != nil {
+				vals["force_destroy"] = *cfg.GCPCloudDNS.ForceDestroy
 			}
 		}
 	}

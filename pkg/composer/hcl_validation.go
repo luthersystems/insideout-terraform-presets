@@ -223,6 +223,7 @@ func validationFunctions() map[string]function.Function {
 		validationFunctionsMap = map[string]function.Function{
 			"can":         tryfunc.CanFunc,
 			"contains":    stdlib.ContainsFunc,
+			"distinct":    stdlib.DistinctFunc,
 			"length":      lengthFunc(),
 			"lower":       stdlib.LowerFunc,
 			"regex":       stdlib.RegexFunc,

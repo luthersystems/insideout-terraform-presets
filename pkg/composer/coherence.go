@@ -95,6 +95,8 @@ func ComponentSelected(c *Components, key ComponentKey) bool {
 		return boolPtrTrue(c.AWSCodePipeline)
 	case KeyAWSRoute53:
 		return boolPtrTrue(c.AWSRoute53)
+	case KeyAWSACM:
+		return boolPtrTrue(c.AWSACM)
 	case KeyAWSBackups:
 		return c.AWSBackups != nil
 	// GCP pointer-typed selections.
@@ -138,6 +140,8 @@ func ComponentSelected(c *Components, key ComponentKey) bool {
 		return boolPtrTrue(c.GCPIdentityPlatform)
 	case KeyGCPCloudBuild:
 		return boolPtrTrue(c.GCPCloudBuild)
+	case KeyGCPCloudDNS:
+		return boolPtrTrue(c.GCPCloudDNS)
 	case KeyGCPBackups:
 		return c.GCPBackups != nil
 	// External / third-party.
@@ -286,11 +290,13 @@ func isOrphanStrippableKey(key ComponentKey) bool {
 		KeyAWSCognito, KeyAWSLambda, KeyAWSAPIGateway,
 		KeyAWSKMS, KeyAWSSecretsManager, KeyAWSOpenSearch,
 		KeyAWSBedrock, KeyAWSBackups, KeyAWSRoute53,
+		KeyAWSACM,
 		KeyGCPCompute, KeyGCPGKE, KeyGCPCloudRun,
 		KeyGCPCloudFunctions, KeyGCPLoadbalancer,
 		KeyGCPCloudSQL, KeyGCPMemorystore, KeyGCPGCS,
 		KeyGCPPubSub, KeyGCPCloudLogging,
-		KeyGCPIdentityPlatform, KeyGCPAPIGateway, KeyGCPBackups:
+		KeyGCPIdentityPlatform, KeyGCPAPIGateway, KeyGCPBackups,
+		KeyGCPCloudDNS:
 		return true
 	}
 	return false

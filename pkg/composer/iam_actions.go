@@ -64,6 +64,20 @@ var AWSIAMActions = map[ComponentKey][]string{
 	// is implied by the create capability. Record-set CRUD is covered by
 	// ChangeResourceRecordSets (issued via change batches by the provider).
 	KeyAWSRoute53: {"route53:ChangeResourceRecordSets", "route53:CreateHostedZone"},
+	// ACM (#593). acm:RequestCertificate covers the cert CREATE; the
+	// surrounding tag / option / describe operations cover the lifecycle
+	// the provider exercises during plan/apply/destroy. Public certs
+	// require no extra permission for issuance — DNS validation runs
+	// asynchronously inside AWS once the validation records exist.
+	KeyAWSACM: {
+		"acm:AddTagsToCertificate",
+		"acm:DeleteCertificate",
+		"acm:DescribeCertificate",
+		"acm:ListCertificates",
+		"acm:ListTagsForCertificate",
+		"acm:RequestCertificate",
+		"acm:UpdateCertificateOptions",
+	},
 }
 
 // RequiredAWSIAMActions returns the deduplicated, sorted list of IAM
@@ -138,6 +152,16 @@ var GCPIAMPermissions = map[ComponentKey][]string{
 	KeyGCPVertexAI:         {"aiplatform.endpoints.create"},
 	KeyGCPAPIGateway:       {"apigateway.gateways.create"},
 	KeyGCPBackups:          {"backupdr.managementServers.create"},
+	// Cloud DNS (#593). managedZones.create + resourceRecordSets.create
+	// cover zone + record CRUD; changes.create covers the underlying
+	// change-batch API the provider uses. SA needs dns.googleapis.com
+	// enabled but the API-enable lives in always-required
+	// (serviceusage.services.enable is implicit in resourcemanager.projects.get).
+	KeyGCPCloudDNS: {
+		"dns.changes.create",
+		"dns.managedZones.create",
+		"dns.resourceRecordSets.create",
+	},
 	// Components that need no extra permission beyond the always-required set:
 	KeyGCPVPC:          nil,
 	KeyGCPCompute:      nil,
