@@ -16,6 +16,7 @@ type AWSVPCSecurityGroupEgressRule struct {
 	IpProtocol                *Value[string]            `tf:"ip_protocol" json:"ip_protocol,omitempty"`
 	PrefixListID              *Value[string]            `tf:"prefix_list_id" json:"prefix_list_id,omitempty"`
 	ReferencedSecurityGroupID *Value[string]            `tf:"referenced_security_group_id" json:"referenced_security_group_id,omitempty"`
+	Region                    *Value[string]            `tf:"region" json:"region,omitempty"`
 	SecurityGroupID           *Value[string]            `tf:"security_group_id" json:"security_group_id,omitempty"`
 	SecurityGroupRuleID       *Value[string]            `tf:"security_group_rule_id" json:"security_group_rule_id,omitempty"`
 	Tags                      map[string]*Value[string] `tf:"tags" json:"tags,omitempty"`
@@ -35,6 +36,7 @@ var AWSVPCSecurityGroupEgressRuleSchema = map[string]FieldSchema{
 	"ip_protocol":                  {Required: true, Replacement: ReplacementUnknown},
 	"prefix_list_id":               {Optional: true, Replacement: ReplacementUnknown},
 	"referenced_security_group_id": {Optional: true, Replacement: ReplacementUnknown},
+	"region":                       {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"security_group_id":            {Required: true, Replacement: ReplacementUnknown},
 	"security_group_rule_id":       {Computed: true, Replacement: ReplacementUnknown},
 	"tags":                         {Optional: true, Replacement: ReplacementUnknown},

@@ -20,6 +20,7 @@ type AWSEFSFileSystem struct {
 	OwnerID                      *Value[string]                    `tf:"owner_id" json:"owner_id,omitempty"`
 	PerformanceMode              *Value[string]                    `tf:"performance_mode" json:"performance_mode,omitempty"`
 	ProvisionedThroughputInMibps *Value[float64]                   `tf:"provisioned_throughput_in_mibps" json:"provisioned_throughput_in_mibps,omitempty"`
+	Region                       *Value[string]                    `tf:"region" json:"region,omitempty"`
 	SizeInBytes                  []AWSEFSFileSystemSizeInBytes     `tf:"size_in_bytes" json:"size_in_bytes,omitempty"`
 	Tags                         map[string]*Value[string]         `tf:"tags" json:"tags,omitempty"`
 	TagsAll                      map[string]*Value[string]         `tf:"tags_all" json:"tags_all,omitempty"`
@@ -63,6 +64,7 @@ var AWSEFSFileSystemSchema = map[string]FieldSchema{
 	"owner_id":                        {Computed: true, Replacement: ReplacementUnknown},
 	"performance_mode":                {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"provisioned_throughput_in_mibps": {Optional: true, Replacement: ReplacementUnknown},
+	"region":                          {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"size_in_bytes":                   {Computed: true, Replacement: ReplacementUnknown},
 	"tags":                            {Optional: true, Replacement: ReplacementUnknown},
 	"tags_all":                        {Optional: true, Computed: true, Replacement: ReplacementUnknown},

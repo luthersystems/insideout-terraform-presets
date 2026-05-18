@@ -10,6 +10,7 @@ type AWSS3BucketPolicy struct {
 	Bucket *Value[string] `tf:"bucket" json:"bucket,omitempty"`
 	ID     *Value[string] `tf:"id" json:"id,omitempty"`
 	Policy *Value[string] `tf:"policy" json:"policy,omitempty"`
+	Region *Value[string] `tf:"region" json:"region,omitempty"`
 }
 
 // AWSS3BucketPolicySchema describes provider metadata for each attribute / nested
@@ -18,6 +19,7 @@ var AWSS3BucketPolicySchema = map[string]FieldSchema{
 	"bucket": {Required: true, Replacement: ReplacementUnknown},
 	"id":     {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"policy": {Required: true, Replacement: ReplacementUnknown},
+	"region": {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 }
 
 func init() {

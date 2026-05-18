@@ -7,6 +7,8 @@ import "reflect"
 // AWSECSService is the generated Layer 1 typed model for the
 // `aws_ecs_service` Terraform resource.
 type AWSECSService struct {
+	ARN                             *Value[string]                             `tf:"arn" json:"arn,omitempty"`
+	AvailabilityZoneRebalancing     *Value[string]                             `tf:"availability_zone_rebalancing" json:"availability_zone_rebalancing,omitempty"`
 	Cluster                         *Value[string]                             `tf:"cluster" json:"cluster,omitempty"`
 	DeploymentMaximumPercent        *Value[float64]                            `tf:"deployment_maximum_percent" json:"deployment_maximum_percent,omitempty"`
 	DeploymentMinimumHealthyPercent *Value[float64]                            `tf:"deployment_minimum_healthy_percent" json:"deployment_minimum_healthy_percent,omitempty"`
@@ -22,7 +24,9 @@ type AWSECSService struct {
 	Name                            *Value[string]                             `tf:"name" json:"name,omitempty"`
 	PlatformVersion                 *Value[string]                             `tf:"platform_version" json:"platform_version,omitempty"`
 	PropagateTags                   *Value[string]                             `tf:"propagate_tags" json:"propagate_tags,omitempty"`
+	Region                          *Value[string]                             `tf:"region" json:"region,omitempty"`
 	SchedulingStrategy              *Value[string]                             `tf:"scheduling_strategy" json:"scheduling_strategy,omitempty"`
+	SigintRollback                  *Value[bool]                               `tf:"sigint_rollback" json:"sigint_rollback,omitempty"`
 	Tags                            map[string]*Value[string]                  `tf:"tags" json:"tags,omitempty"`
 	TagsAll                         map[string]*Value[string]                  `tf:"tags_all" json:"tags_all,omitempty"`
 	TaskDefinition                  *Value[string]                             `tf:"task_definition" json:"task_definition,omitempty"`
@@ -31,6 +35,7 @@ type AWSECSService struct {
 	Alarms                          []AWSECSServiceAlarms                      `tf:"alarms,blocks" json:"alarms,omitempty"`
 	CapacityProviderStrategy        []AWSECSServiceCapacityProviderStrategy    `tf:"capacity_provider_strategy,blocks" json:"capacity_provider_strategy,omitempty"`
 	DeploymentCircuitBreaker        []AWSECSServiceDeploymentCircuitBreaker    `tf:"deployment_circuit_breaker,blocks" json:"deployment_circuit_breaker,omitempty"`
+	DeploymentConfiguration         []AWSECSServiceDeploymentConfiguration     `tf:"deployment_configuration,blocks" json:"deployment_configuration,omitempty"`
 	DeploymentController            []AWSECSServiceDeploymentController        `tf:"deployment_controller,blocks" json:"deployment_controller,omitempty"`
 	LoadBalancer                    []AWSECSServiceLoadBalancer                `tf:"load_balancer,blocks" json:"load_balancer,omitempty"`
 	NetworkConfiguration            []AWSECSServiceNetworkConfiguration        `tf:"network_configuration,blocks" json:"network_configuration,omitempty"`
@@ -40,6 +45,7 @@ type AWSECSService struct {
 	ServiceRegistries               []AWSECSServiceServiceRegistries           `tf:"service_registries,blocks" json:"service_registries,omitempty"`
 	Timeouts                        *AWSECSServiceTimeouts                     `tf:"timeouts,block" json:"timeouts,omitempty"`
 	VolumeConfiguration             []AWSECSServiceVolumeConfiguration         `tf:"volume_configuration,blocks" json:"volume_configuration,omitempty"`
+	VPCLatticeConfigurations        []AWSECSServiceVPCLatticeConfigurations    `tf:"vpc_lattice_configurations,blocks" json:"vpc_lattice_configurations,omitempty"`
 }
 
 // AWSECSServiceAlarms is a nested-block type used by the parent resource.
@@ -62,6 +68,35 @@ type AWSECSServiceDeploymentCircuitBreaker struct {
 	Rollback *Value[bool] `tf:"rollback" json:"rollback,omitempty"`
 }
 
+// AWSECSServiceDeploymentConfiguration is a nested-block type used by the parent resource.
+type AWSECSServiceDeploymentConfiguration struct {
+	BakeTimeInMinutes   *Value[string]                                            `tf:"bake_time_in_minutes" json:"bake_time_in_minutes,omitempty"`
+	Strategy            *Value[string]                                            `tf:"strategy" json:"strategy,omitempty"`
+	CanaryConfiguration []AWSECSServiceDeploymentConfigurationCanaryConfiguration `tf:"canary_configuration,blocks" json:"canary_configuration,omitempty"`
+	LifecycleHook       []AWSECSServiceDeploymentConfigurationLifecycleHook       `tf:"lifecycle_hook,blocks" json:"lifecycle_hook,omitempty"`
+	LinearConfiguration []AWSECSServiceDeploymentConfigurationLinearConfiguration `tf:"linear_configuration,blocks" json:"linear_configuration,omitempty"`
+}
+
+// AWSECSServiceDeploymentConfigurationCanaryConfiguration is a nested-block type used by the parent resource.
+type AWSECSServiceDeploymentConfigurationCanaryConfiguration struct {
+	CanaryBakeTimeInMinutes *Value[string]  `tf:"canary_bake_time_in_minutes" json:"canary_bake_time_in_minutes,omitempty"`
+	CanaryPercent           *Value[float64] `tf:"canary_percent" json:"canary_percent,omitempty"`
+}
+
+// AWSECSServiceDeploymentConfigurationLifecycleHook is a nested-block type used by the parent resource.
+type AWSECSServiceDeploymentConfigurationLifecycleHook struct {
+	HookDetails     *Value[string]   `tf:"hook_details" json:"hook_details,omitempty"`
+	HookTargetARN   *Value[string]   `tf:"hook_target_arn" json:"hook_target_arn,omitempty"`
+	LifecycleStages []*Value[string] `tf:"lifecycle_stages" json:"lifecycle_stages,omitempty"`
+	RoleARN         *Value[string]   `tf:"role_arn" json:"role_arn,omitempty"`
+}
+
+// AWSECSServiceDeploymentConfigurationLinearConfiguration is a nested-block type used by the parent resource.
+type AWSECSServiceDeploymentConfigurationLinearConfiguration struct {
+	StepBakeTimeInMinutes *Value[string]  `tf:"step_bake_time_in_minutes" json:"step_bake_time_in_minutes,omitempty"`
+	StepPercent           *Value[float64] `tf:"step_percent" json:"step_percent,omitempty"`
+}
+
 // AWSECSServiceDeploymentController is a nested-block type used by the parent resource.
 type AWSECSServiceDeploymentController struct {
 	Type_ *Value[string] `tf:"type" json:"type,omitempty"`
@@ -69,10 +104,19 @@ type AWSECSServiceDeploymentController struct {
 
 // AWSECSServiceLoadBalancer is a nested-block type used by the parent resource.
 type AWSECSServiceLoadBalancer struct {
-	ContainerName  *Value[string]  `tf:"container_name" json:"container_name,omitempty"`
-	ContainerPort  *Value[float64] `tf:"container_port" json:"container_port,omitempty"`
-	ElbName        *Value[string]  `tf:"elb_name" json:"elb_name,omitempty"`
-	TargetGroupARN *Value[string]  `tf:"target_group_arn" json:"target_group_arn,omitempty"`
+	ContainerName         *Value[string]                                   `tf:"container_name" json:"container_name,omitempty"`
+	ContainerPort         *Value[float64]                                  `tf:"container_port" json:"container_port,omitempty"`
+	ElbName               *Value[string]                                   `tf:"elb_name" json:"elb_name,omitempty"`
+	TargetGroupARN        *Value[string]                                   `tf:"target_group_arn" json:"target_group_arn,omitempty"`
+	AdvancedConfiguration []AWSECSServiceLoadBalancerAdvancedConfiguration `tf:"advanced_configuration,blocks" json:"advanced_configuration,omitempty"`
+}
+
+// AWSECSServiceLoadBalancerAdvancedConfiguration is a nested-block type used by the parent resource.
+type AWSECSServiceLoadBalancerAdvancedConfiguration struct {
+	AlternateTargetGroupARN *Value[string] `tf:"alternate_target_group_arn" json:"alternate_target_group_arn,omitempty"`
+	ProductionListenerRule  *Value[string] `tf:"production_listener_rule" json:"production_listener_rule,omitempty"`
+	RoleARN                 *Value[string] `tf:"role_arn" json:"role_arn,omitempty"`
+	TestListenerRule        *Value[string] `tf:"test_listener_rule" json:"test_listener_rule,omitempty"`
 }
 
 // AWSECSServiceNetworkConfiguration is a nested-block type used by the parent resource.
@@ -96,10 +140,17 @@ type AWSECSServicePlacementConstraints struct {
 
 // AWSECSServiceServiceConnectConfiguration is a nested-block type used by the parent resource.
 type AWSECSServiceServiceConnectConfiguration struct {
-	Enabled          *Value[bool]                                               `tf:"enabled" json:"enabled,omitempty"`
-	Namespace        *Value[string]                                             `tf:"namespace" json:"namespace,omitempty"`
-	LogConfiguration []AWSECSServiceServiceConnectConfigurationLogConfiguration `tf:"log_configuration,blocks" json:"log_configuration,omitempty"`
-	Service          []AWSECSServiceServiceConnectConfigurationService          `tf:"service,blocks" json:"service,omitempty"`
+	Enabled                *Value[bool]                                                     `tf:"enabled" json:"enabled,omitempty"`
+	Namespace              *Value[string]                                                   `tf:"namespace" json:"namespace,omitempty"`
+	AccessLogConfiguration []AWSECSServiceServiceConnectConfigurationAccessLogConfiguration `tf:"access_log_configuration,blocks" json:"access_log_configuration,omitempty"`
+	LogConfiguration       []AWSECSServiceServiceConnectConfigurationLogConfiguration       `tf:"log_configuration,blocks" json:"log_configuration,omitempty"`
+	Service                []AWSECSServiceServiceConnectConfigurationService                `tf:"service,blocks" json:"service,omitempty"`
+}
+
+// AWSECSServiceServiceConnectConfigurationAccessLogConfiguration is a nested-block type used by the parent resource.
+type AWSECSServiceServiceConnectConfigurationAccessLogConfiguration struct {
+	Format                 *Value[string] `tf:"format" json:"format,omitempty"`
+	IncludeQueryParameters *Value[string] `tf:"include_query_parameters" json:"include_query_parameters,omitempty"`
 }
 
 // AWSECSServiceServiceConnectConfigurationLogConfiguration is a nested-block type used by the parent resource.
@@ -127,8 +178,25 @@ type AWSECSServiceServiceConnectConfigurationService struct {
 
 // AWSECSServiceServiceConnectConfigurationServiceClientAlias is a nested-block type used by the parent resource.
 type AWSECSServiceServiceConnectConfigurationServiceClientAlias struct {
-	DNSName *Value[string] `tf:"dns_name" json:"dns_name,omitempty"`
-	Port    *Value[int64]  `tf:"port" json:"port,omitempty"`
+	DNSName          *Value[string]                                                               `tf:"dns_name" json:"dns_name,omitempty"`
+	Port             *Value[int64]                                                                `tf:"port" json:"port,omitempty"`
+	TestTrafficRules []AWSECSServiceServiceConnectConfigurationServiceClientAliasTestTrafficRules `tf:"test_traffic_rules,blocks" json:"test_traffic_rules,omitempty"`
+}
+
+// AWSECSServiceServiceConnectConfigurationServiceClientAliasTestTrafficRules is a nested-block type used by the parent resource.
+type AWSECSServiceServiceConnectConfigurationServiceClientAliasTestTrafficRules struct {
+	Header []AWSECSServiceServiceConnectConfigurationServiceClientAliasTestTrafficRulesHeader `tf:"header,blocks" json:"header,omitempty"`
+}
+
+// AWSECSServiceServiceConnectConfigurationServiceClientAliasTestTrafficRulesHeader is a nested-block type used by the parent resource.
+type AWSECSServiceServiceConnectConfigurationServiceClientAliasTestTrafficRulesHeader struct {
+	Name  *Value[string]                                                                          `tf:"name" json:"name,omitempty"`
+	Value []AWSECSServiceServiceConnectConfigurationServiceClientAliasTestTrafficRulesHeaderValue `tf:"value,blocks" json:"value,omitempty"`
+}
+
+// AWSECSServiceServiceConnectConfigurationServiceClientAliasTestTrafficRulesHeaderValue is a nested-block type used by the parent resource.
+type AWSECSServiceServiceConnectConfigurationServiceClientAliasTestTrafficRulesHeaderValue struct {
+	Exact *Value[string] `tf:"exact" json:"exact,omitempty"`
 }
 
 // AWSECSServiceServiceConnectConfigurationServiceTLS is a nested-block type used by the parent resource.
@@ -164,6 +232,13 @@ type AWSECSServiceTimeouts struct {
 	Update *Value[string] `tf:"update" json:"update,omitempty"`
 }
 
+// AWSECSServiceVPCLatticeConfigurations is a nested-block type used by the parent resource.
+type AWSECSServiceVPCLatticeConfigurations struct {
+	PortName       *Value[string] `tf:"port_name" json:"port_name,omitempty"`
+	RoleARN        *Value[string] `tf:"role_arn" json:"role_arn,omitempty"`
+	TargetGroupARN *Value[string] `tf:"target_group_arn" json:"target_group_arn,omitempty"`
+}
+
 // AWSECSServiceVolumeConfiguration is a nested-block type used by the parent resource.
 type AWSECSServiceVolumeConfiguration struct {
 	Name             *Value[string]                                     `tf:"name" json:"name,omitempty"`
@@ -172,16 +247,17 @@ type AWSECSServiceVolumeConfiguration struct {
 
 // AWSECSServiceVolumeConfigurationManagedEBSVolume is a nested-block type used by the parent resource.
 type AWSECSServiceVolumeConfigurationManagedEBSVolume struct {
-	Encrypted         *Value[bool]                                                        `tf:"encrypted" json:"encrypted,omitempty"`
-	FileSystemType    *Value[string]                                                      `tf:"file_system_type" json:"file_system_type,omitempty"`
-	Iops              *Value[float64]                                                     `tf:"iops" json:"iops,omitempty"`
-	KMSKeyID          *Value[string]                                                      `tf:"kms_key_id" json:"kms_key_id,omitempty"`
-	RoleARN           *Value[string]                                                      `tf:"role_arn" json:"role_arn,omitempty"`
-	SizeInGb          *Value[float64]                                                     `tf:"size_in_gb" json:"size_in_gb,omitempty"`
-	SnapshotID        *Value[string]                                                      `tf:"snapshot_id" json:"snapshot_id,omitempty"`
-	Throughput        *Value[float64]                                                     `tf:"throughput" json:"throughput,omitempty"`
-	VolumeType        *Value[string]                                                      `tf:"volume_type" json:"volume_type,omitempty"`
-	TagSpecifications []AWSECSServiceVolumeConfigurationManagedEBSVolumeTagSpecifications `tf:"tag_specifications,blocks" json:"tag_specifications,omitempty"`
+	Encrypted                *Value[bool]                                                        `tf:"encrypted" json:"encrypted,omitempty"`
+	FileSystemType           *Value[string]                                                      `tf:"file_system_type" json:"file_system_type,omitempty"`
+	Iops                     *Value[float64]                                                     `tf:"iops" json:"iops,omitempty"`
+	KMSKeyID                 *Value[string]                                                      `tf:"kms_key_id" json:"kms_key_id,omitempty"`
+	RoleARN                  *Value[string]                                                      `tf:"role_arn" json:"role_arn,omitempty"`
+	SizeInGb                 *Value[float64]                                                     `tf:"size_in_gb" json:"size_in_gb,omitempty"`
+	SnapshotID               *Value[string]                                                      `tf:"snapshot_id" json:"snapshot_id,omitempty"`
+	Throughput               *Value[float64]                                                     `tf:"throughput" json:"throughput,omitempty"`
+	VolumeInitializationRate *Value[float64]                                                     `tf:"volume_initialization_rate" json:"volume_initialization_rate,omitempty"`
+	VolumeType               *Value[string]                                                      `tf:"volume_type" json:"volume_type,omitempty"`
+	TagSpecifications        []AWSECSServiceVolumeConfigurationManagedEBSVolumeTagSpecifications `tf:"tag_specifications,blocks" json:"tag_specifications,omitempty"`
 }
 
 // AWSECSServiceVolumeConfigurationManagedEBSVolumeTagSpecifications is a nested-block type used by the parent resource.
@@ -194,6 +270,8 @@ type AWSECSServiceVolumeConfigurationManagedEBSVolumeTagSpecifications struct {
 // AWSECSServiceSchema describes provider metadata for each attribute / nested
 // block of aws_ecs_service.
 var AWSECSServiceSchema = map[string]FieldSchema{
+	"arn":                                {Computed: true, Replacement: ReplacementUnknown},
+	"availability_zone_rebalancing":      {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"cluster":                            {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"deployment_maximum_percent":         {Optional: true, Replacement: ReplacementUnknown},
 	"deployment_minimum_healthy_percent": {Optional: true, Replacement: ReplacementUnknown},
@@ -209,7 +287,9 @@ var AWSECSServiceSchema = map[string]FieldSchema{
 	"name":                               {Required: true, Replacement: ReplacementUnknown},
 	"platform_version":                   {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"propagate_tags":                     {Optional: true, Replacement: ReplacementUnknown},
+	"region":                             {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"scheduling_strategy":                {Optional: true, Replacement: ReplacementUnknown},
+	"sigint_rollback":                    {Optional: true, Replacement: ReplacementUnknown},
 	"tags":                               {Optional: true, Replacement: ReplacementUnknown},
 	"tags_all":                           {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"task_definition":                    {Optional: true, Replacement: ReplacementUnknown},
@@ -218,6 +298,7 @@ var AWSECSServiceSchema = map[string]FieldSchema{
 	"alarms":                             {Optional: true, Replacement: ReplacementUnknown},
 	"capacity_provider_strategy":         {Optional: true, Replacement: ReplacementUnknown},
 	"deployment_circuit_breaker":         {Optional: true, Replacement: ReplacementUnknown},
+	"deployment_configuration":           {Optional: true, Replacement: ReplacementUnknown},
 	"deployment_controller":              {Optional: true, Replacement: ReplacementUnknown},
 	"load_balancer":                      {Optional: true, Replacement: ReplacementUnknown},
 	"network_configuration":              {Optional: true, Replacement: ReplacementUnknown},
@@ -227,6 +308,7 @@ var AWSECSServiceSchema = map[string]FieldSchema{
 	"service_registries":                 {Optional: true, Replacement: ReplacementUnknown},
 	"timeouts":                           {Optional: true, Replacement: ReplacementUnknown},
 	"volume_configuration":               {Optional: true, Replacement: ReplacementUnknown},
+	"vpc_lattice_configurations":         {Optional: true, Replacement: ReplacementUnknown},
 }
 
 func init() {

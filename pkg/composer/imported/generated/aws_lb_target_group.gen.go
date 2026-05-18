@@ -25,9 +25,11 @@ type AWSLbTargetGroup struct {
 	Protocol                       *Value[string]                      `tf:"protocol" json:"protocol,omitempty"`
 	ProtocolVersion                *Value[string]                      `tf:"protocol_version" json:"protocol_version,omitempty"`
 	ProxyProtocolV2                *Value[bool]                        `tf:"proxy_protocol_v2" json:"proxy_protocol_v2,omitempty"`
+	Region                         *Value[string]                      `tf:"region" json:"region,omitempty"`
 	SlowStart                      *Value[float64]                     `tf:"slow_start" json:"slow_start,omitempty"`
 	Tags                           map[string]*Value[string]           `tf:"tags" json:"tags,omitempty"`
 	TagsAll                        map[string]*Value[string]           `tf:"tags_all" json:"tags_all,omitempty"`
+	TargetControlPort              *Value[float64]                     `tf:"target_control_port" json:"target_control_port,omitempty"`
 	TargetType                     *Value[string]                      `tf:"target_type" json:"target_type,omitempty"`
 	VPCID                          *Value[string]                      `tf:"vpc_id" json:"vpc_id,omitempty"`
 	HealthCheck                    []AWSLbTargetGroupHealthCheck       `tf:"health_check,blocks" json:"health_check,omitempty"`
@@ -109,9 +111,11 @@ var AWSLbTargetGroupSchema = map[string]FieldSchema{
 	"protocol":                           {Optional: true, Replacement: ReplacementUnknown},
 	"protocol_version":                   {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"proxy_protocol_v2":                  {Optional: true, Replacement: ReplacementUnknown},
+	"region":                             {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"slow_start":                         {Optional: true, Replacement: ReplacementUnknown},
 	"tags":                               {Optional: true, Replacement: ReplacementUnknown},
 	"tags_all":                           {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"target_control_port":                {Optional: true, Replacement: ReplacementUnknown},
 	"target_type":                        {Optional: true, Replacement: ReplacementUnknown},
 	"vpc_id":                             {Optional: true, Replacement: ReplacementUnknown},
 	"health_check":                       {Optional: true, Replacement: ReplacementUnknown},

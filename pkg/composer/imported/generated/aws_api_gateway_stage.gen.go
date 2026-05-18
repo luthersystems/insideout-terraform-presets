@@ -17,6 +17,7 @@ type AWSAPIGatewayStage struct {
 	ExecutionARN         *Value[string]                        `tf:"execution_arn" json:"execution_arn,omitempty"`
 	ID                   *Value[string]                        `tf:"id" json:"id,omitempty"`
 	InvokeURL            *Value[string]                        `tf:"invoke_url" json:"invoke_url,omitempty"`
+	Region               *Value[string]                        `tf:"region" json:"region,omitempty"`
 	RestAPIID            *Value[string]                        `tf:"rest_api_id" json:"rest_api_id,omitempty"`
 	StageName            *Value[string]                        `tf:"stage_name" json:"stage_name,omitempty"`
 	Tags                 map[string]*Value[string]             `tf:"tags" json:"tags,omitempty"`
@@ -36,6 +37,7 @@ type AWSAPIGatewayStageAccessLogSettings struct {
 
 // AWSAPIGatewayStageCanarySettings is a nested-block type used by the parent resource.
 type AWSAPIGatewayStageCanarySettings struct {
+	DeploymentID           *Value[string]            `tf:"deployment_id" json:"deployment_id,omitempty"`
 	PercentTraffic         *Value[float64]           `tf:"percent_traffic" json:"percent_traffic,omitempty"`
 	StageVariableOverrides map[string]*Value[string] `tf:"stage_variable_overrides" json:"stage_variable_overrides,omitempty"`
 	UseStageCache          *Value[bool]              `tf:"use_stage_cache" json:"use_stage_cache,omitempty"`
@@ -54,6 +56,7 @@ var AWSAPIGatewayStageSchema = map[string]FieldSchema{
 	"execution_arn":         {Computed: true, Replacement: ReplacementUnknown},
 	"id":                    {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"invoke_url":            {Computed: true, Replacement: ReplacementUnknown},
+	"region":                {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"rest_api_id":           {Required: true, Replacement: ReplacementUnknown},
 	"stage_name":            {Required: true, Replacement: ReplacementUnknown},
 	"tags":                  {Optional: true, Replacement: ReplacementUnknown},

@@ -147,6 +147,15 @@ func defaultBedrockModelInvocationLoggingConfigurationFetch(ctx context.Context,
 // Decision-#34 cleanliness: every field is emitted only when present on
 // the API response, so the resulting HCL does not contain "field =
 // null" noise.
+//
+// Provider 6.x nested-block shape: AWS provider 6.x flipped every
+// nested block on this resource from `single` to `list` nesting mode
+// (#599 backfill side-effect). The Layer 1 codegen now models each
+// nested block as a Go slice, so the helper wraps each constructed
+// block in a one-element slice. Read sites that flattened to a singleton
+// (tests, comparators) re-derive `[0]` from the slice — see
+// firstLoggingConfig / firstCloudwatchConfig / firstS3Config /
+// firstLargeDataDeliveryS3Config below.
 func mapBedrockModelInvocationLoggingConfiguration(out *bedrock.GetModelInvocationLoggingConfigurationOutput, region string) *generated.AWSBedrockModelInvocationLoggingConfiguration {
 	typed := &generated.AWSBedrockModelInvocationLoggingConfiguration{}
 	if region != "" {
@@ -156,7 +165,7 @@ func mapBedrockModelInvocationLoggingConfiguration(out *bedrock.GetModelInvocati
 		return typed
 	}
 	lc := out.LoggingConfig
-	block := &generated.AWSBedrockModelInvocationLoggingConfigurationLoggingConfig{}
+	block := generated.AWSBedrockModelInvocationLoggingConfigurationLoggingConfig{}
 	if lc.TextDataDeliveryEnabled != nil {
 		block.TextDataDeliveryEnabled = generated.LiteralOf(*lc.TextDataDeliveryEnabled)
 	}
@@ -167,7 +176,7 @@ func mapBedrockModelInvocationLoggingConfiguration(out *bedrock.GetModelInvocati
 		block.EmbeddingDataDeliveryEnabled = generated.LiteralOf(*lc.EmbeddingDataDeliveryEnabled)
 	}
 	if lc.CloudWatchConfig != nil {
-		cwc := &generated.AWSBedrockModelInvocationLoggingConfigurationLoggingConfigCloudwatchConfig{}
+		cwc := generated.AWSBedrockModelInvocationLoggingConfigurationLoggingConfigCloudwatchConfig{}
 		if s := aws.ToString(lc.CloudWatchConfig.LogGroupName); s != "" {
 			cwc.LogGroupName = generated.LiteralOf(s)
 		}
@@ -175,28 +184,28 @@ func mapBedrockModelInvocationLoggingConfiguration(out *bedrock.GetModelInvocati
 			cwc.RoleARN = generated.LiteralOf(s)
 		}
 		if lc.CloudWatchConfig.LargeDataDeliveryS3Config != nil {
-			lds3 := &generated.AWSBedrockModelInvocationLoggingConfigurationLoggingConfigCloudwatchConfigLargeDataDeliveryS3Config{}
+			lds3 := generated.AWSBedrockModelInvocationLoggingConfigurationLoggingConfigCloudwatchConfigLargeDataDeliveryS3Config{}
 			if s := aws.ToString(lc.CloudWatchConfig.LargeDataDeliveryS3Config.BucketName); s != "" {
 				lds3.BucketName = generated.LiteralOf(s)
 			}
 			if s := aws.ToString(lc.CloudWatchConfig.LargeDataDeliveryS3Config.KeyPrefix); s != "" {
 				lds3.KeyPrefix = generated.LiteralOf(s)
 			}
-			cwc.LargeDataDeliveryS3Config = lds3
+			cwc.LargeDataDeliveryS3Config = []generated.AWSBedrockModelInvocationLoggingConfigurationLoggingConfigCloudwatchConfigLargeDataDeliveryS3Config{lds3}
 		}
-		block.CloudwatchConfig = cwc
+		block.CloudwatchConfig = []generated.AWSBedrockModelInvocationLoggingConfigurationLoggingConfigCloudwatchConfig{cwc}
 	}
 	if lc.S3Config != nil {
-		s3c := &generated.AWSBedrockModelInvocationLoggingConfigurationLoggingConfigS3Config{}
+		s3c := generated.AWSBedrockModelInvocationLoggingConfigurationLoggingConfigS3Config{}
 		if s := aws.ToString(lc.S3Config.BucketName); s != "" {
 			s3c.BucketName = generated.LiteralOf(s)
 		}
 		if s := aws.ToString(lc.S3Config.KeyPrefix); s != "" {
 			s3c.KeyPrefix = generated.LiteralOf(s)
 		}
-		block.S3Config = s3c
+		block.S3Config = []generated.AWSBedrockModelInvocationLoggingConfigurationLoggingConfigS3Config{s3c}
 	}
-	typed.LoggingConfig = block
+	typed.LoggingConfig = []generated.AWSBedrockModelInvocationLoggingConfigurationLoggingConfig{block}
 	return typed
 }
 

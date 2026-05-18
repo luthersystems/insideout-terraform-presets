@@ -22,14 +22,15 @@ and is checked in lockstep with the runtime registries. See the
 
 ## Summary
 
-- **AWS:** 127 types · 86% Discoverable · 86% Enrichable · 100% DriftDetectable · 69% MetricsAvailable · 91% AgentEditable
-- **GCP:** 54 types · 100% Discoverable · 100% Enrichable · 100% DriftDetectable · 89% MetricsAvailable · 89% AgentEditable
+- **AWS:** 129 types · 84% Discoverable · 84% Enrichable · 100% DriftDetectable · 67% MetricsAvailable · 91% AgentEditable
+- **GCP:** 59 types · 92% Discoverable · 92% Enrichable · 100% DriftDetectable · 81% MetricsAvailable · 90% AgentEditable
 
 ## AWS
 
 | TF Type | Discoverable | Enrichable | DriftDetectable | MetricsAvailable | AgentEditable |
 |---|---|---|---|---|---|
 | `aws_acm_certificate` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `aws_acm_certificate_validation` | – | – | ✓ | – | ✓ |
 | `aws_api_gateway_deployment` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_api_gateway_resource` | ✓ | ✓ | ✓ | – | – |
 | `aws_api_gateway_stage` | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -130,6 +131,7 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_rds_cluster` | – | – | ✓ | ✓ | ✓ |
 | `aws_resourceexplorer2_index` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_resourceexplorer2_view` | ✓ | ✓ | ✓ | – | ✓ |
+| `aws_route53_record` | – | – | ✓ | – | ✓ |
 | `aws_route53_zone` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_route_table` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_s3_bucket` | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -164,6 +166,9 @@ and is checked in lockstep with the runtime registries. See the
 | `google_api_gateway_api` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_api_gateway_api_config` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_api_gateway_gateway` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `google_certificate_manager_certificate` | – | – | ✓ | – | ✓ |
+| `google_certificate_manager_certificate_map` | – | – | ✓ | – | ✓ |
+| `google_certificate_manager_certificate_map_entry` | – | – | ✓ | – | ✓ |
 | `google_cloud_run_v2_service` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_cloud_run_v2_service_iam_member` | ✓ | ✓ | ✓ | – | – |
 | `google_cloudbuild_trigger` | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -187,6 +192,8 @@ and is checked in lockstep with the runtime registries. See the
 | `google_compute_url_map` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_container_cluster` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_container_node_pool` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `google_dns_managed_zone` | – | – | ✓ | – | ✓ |
+| `google_dns_record_set` | – | – | ✓ | – | ✓ |
 | `google_firestore_database` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_identity_platform_config` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_identity_platform_default_supported_idp_config` | ✓ | ✓ | ✓ | – | ✓ |

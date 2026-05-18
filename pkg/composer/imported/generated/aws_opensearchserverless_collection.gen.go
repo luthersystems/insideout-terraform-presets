@@ -7,18 +7,27 @@ import "reflect"
 // AWSOpensearchserverlessCollection is the generated Layer 1 typed model for the
 // `aws_opensearchserverless_collection` Terraform resource.
 type AWSOpensearchserverlessCollection struct {
-	ARN                *Value[string]                             `tf:"arn" json:"arn,omitempty"`
-	CollectionEndpoint *Value[string]                             `tf:"collection_endpoint" json:"collection_endpoint,omitempty"`
-	DashboardEndpoint  *Value[string]                             `tf:"dashboard_endpoint" json:"dashboard_endpoint,omitempty"`
-	Description        *Value[string]                             `tf:"description" json:"description,omitempty"`
-	ID                 *Value[string]                             `tf:"id" json:"id,omitempty"`
-	KMSKeyARN          *Value[string]                             `tf:"kms_key_arn" json:"kms_key_arn,omitempty"`
-	Name               *Value[string]                             `tf:"name" json:"name,omitempty"`
-	StandbyReplicas    *Value[string]                             `tf:"standby_replicas" json:"standby_replicas,omitempty"`
-	Tags               map[string]*Value[string]                  `tf:"tags" json:"tags,omitempty"`
-	TagsAll            map[string]*Value[string]                  `tf:"tags_all" json:"tags_all,omitempty"`
-	Type_              *Value[string]                             `tf:"type" json:"type,omitempty"`
-	Timeouts           *AWSOpensearchserverlessCollectionTimeouts `tf:"timeouts,block" json:"timeouts,omitempty"`
+	ARN                 *Value[string]                                      `tf:"arn" json:"arn,omitempty"`
+	CollectionEndpoint  *Value[string]                                      `tf:"collection_endpoint" json:"collection_endpoint,omitempty"`
+	CollectionGroupName *Value[string]                                      `tf:"collection_group_name" json:"collection_group_name,omitempty"`
+	DashboardEndpoint   *Value[string]                                      `tf:"dashboard_endpoint" json:"dashboard_endpoint,omitempty"`
+	Description         *Value[string]                                      `tf:"description" json:"description,omitempty"`
+	EncryptionConfig    []AWSOpensearchserverlessCollectionEncryptionConfig `tf:"encryption_config" json:"encryption_config,omitempty"`
+	ID                  *Value[string]                                      `tf:"id" json:"id,omitempty"`
+	KMSKeyARN           *Value[string]                                      `tf:"kms_key_arn" json:"kms_key_arn,omitempty"`
+	Name                *Value[string]                                      `tf:"name" json:"name,omitempty"`
+	Region              *Value[string]                                      `tf:"region" json:"region,omitempty"`
+	StandbyReplicas     *Value[string]                                      `tf:"standby_replicas" json:"standby_replicas,omitempty"`
+	Tags                map[string]*Value[string]                           `tf:"tags" json:"tags,omitempty"`
+	TagsAll             map[string]*Value[string]                           `tf:"tags_all" json:"tags_all,omitempty"`
+	Type_               *Value[string]                                      `tf:"type" json:"type,omitempty"`
+	Timeouts            *AWSOpensearchserverlessCollectionTimeouts          `tf:"timeouts,block" json:"timeouts,omitempty"`
+}
+
+// AWSOpensearchserverlessCollectionEncryptionConfig is a nested-block type used by the parent resource.
+type AWSOpensearchserverlessCollectionEncryptionConfig struct {
+	AWSOwnedKey *Value[bool]   `tf:"aws_owned_key" json:"aws_owned_key,omitempty"`
+	KMSKeyARN   *Value[string] `tf:"kms_key_arn" json:"kms_key_arn,omitempty"`
 }
 
 // AWSOpensearchserverlessCollectionTimeouts is a nested-block type used by the parent resource.
@@ -30,18 +39,21 @@ type AWSOpensearchserverlessCollectionTimeouts struct {
 // AWSOpensearchserverlessCollectionSchema describes provider metadata for each attribute / nested
 // block of aws_opensearchserverless_collection.
 var AWSOpensearchserverlessCollectionSchema = map[string]FieldSchema{
-	"arn":                 {Computed: true, Replacement: ReplacementUnknown},
-	"collection_endpoint": {Computed: true, Replacement: ReplacementUnknown},
-	"dashboard_endpoint":  {Computed: true, Replacement: ReplacementUnknown},
-	"description":         {Optional: true, Replacement: ReplacementUnknown},
-	"id":                  {Computed: true, Replacement: ReplacementUnknown},
-	"kms_key_arn":         {Computed: true, Replacement: ReplacementUnknown},
-	"name":                {Required: true, Replacement: ReplacementUnknown},
-	"standby_replicas":    {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"tags":                {Optional: true, Replacement: ReplacementUnknown},
-	"tags_all":            {Computed: true, Replacement: ReplacementUnknown},
-	"type":                {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"timeouts":            {Optional: true, Replacement: ReplacementUnknown},
+	"arn":                   {Computed: true, Replacement: ReplacementUnknown},
+	"collection_endpoint":   {Computed: true, Replacement: ReplacementUnknown},
+	"collection_group_name": {Optional: true, Replacement: ReplacementUnknown},
+	"dashboard_endpoint":    {Computed: true, Replacement: ReplacementUnknown},
+	"description":           {Optional: true, Replacement: ReplacementUnknown},
+	"encryption_config":     {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"id":                    {Computed: true, Replacement: ReplacementUnknown},
+	"kms_key_arn":           {Computed: true, Replacement: ReplacementUnknown},
+	"name":                  {Required: true, Replacement: ReplacementUnknown},
+	"region":                {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"standby_replicas":      {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"tags":                  {Optional: true, Replacement: ReplacementUnknown},
+	"tags_all":              {Computed: true, Replacement: ReplacementUnknown},
+	"type":                  {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"timeouts":              {Optional: true, Replacement: ReplacementUnknown},
 }
 
 func init() {

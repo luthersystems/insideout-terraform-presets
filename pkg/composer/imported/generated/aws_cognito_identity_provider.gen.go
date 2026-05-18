@@ -13,6 +13,7 @@ type AWSCognitoIdentityProvider struct {
 	ProviderDetails  map[string]*Value[string] `tf:"provider_details" json:"provider_details,omitempty"`
 	ProviderName     *Value[string]            `tf:"provider_name" json:"provider_name,omitempty"`
 	ProviderType     *Value[string]            `tf:"provider_type" json:"provider_type,omitempty"`
+	Region           *Value[string]            `tf:"region" json:"region,omitempty"`
 	UserPoolID       *Value[string]            `tf:"user_pool_id" json:"user_pool_id,omitempty"`
 }
 
@@ -25,6 +26,7 @@ var AWSCognitoIdentityProviderSchema = map[string]FieldSchema{
 	"provider_details":  {Required: true, Replacement: ReplacementUnknown},
 	"provider_name":     {Required: true, Replacement: ReplacementUnknown},
 	"provider_type":     {Required: true, Replacement: ReplacementUnknown},
+	"region":            {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"user_pool_id":      {Required: true, Replacement: ReplacementUnknown},
 }
 

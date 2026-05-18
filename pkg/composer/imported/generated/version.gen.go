@@ -8,7 +8,7 @@ package generated
 // schema drift.
 const (
 	AWSProviderSource         = "registry.terraform.io/hashicorp/aws"
-	AWSProviderVersion        = "5.70.0"
+	AWSProviderVersion        = "6.45.0"
 	GoogleProviderSource      = "registry.terraform.io/hashicorp/google"
 	GoogleProviderVersion     = "6.10.0"
 	GoogleBetaProviderSource  = "registry.terraform.io/hashicorp/google-beta"

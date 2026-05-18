@@ -17,8 +17,10 @@ type AWSApigatewayv2API struct {
 	ExecutionARN              *Value[string]                        `tf:"execution_arn" json:"execution_arn,omitempty"`
 	FailOnWarnings            *Value[bool]                          `tf:"fail_on_warnings" json:"fail_on_warnings,omitempty"`
 	ID                        *Value[string]                        `tf:"id" json:"id,omitempty"`
+	IpAddressType             *Value[string]                        `tf:"ip_address_type" json:"ip_address_type,omitempty"`
 	Name                      *Value[string]                        `tf:"name" json:"name,omitempty"`
 	ProtocolType              *Value[string]                        `tf:"protocol_type" json:"protocol_type,omitempty"`
+	Region                    *Value[string]                        `tf:"region" json:"region,omitempty"`
 	RouteKey                  *Value[string]                        `tf:"route_key" json:"route_key,omitempty"`
 	RouteSelectionExpression  *Value[string]                        `tf:"route_selection_expression" json:"route_selection_expression,omitempty"`
 	Tags                      map[string]*Value[string]             `tf:"tags" json:"tags,omitempty"`
@@ -51,8 +53,10 @@ var AWSApigatewayv2APISchema = map[string]FieldSchema{
 	"execution_arn":                {Computed: true, Replacement: ReplacementUnknown},
 	"fail_on_warnings":             {Optional: true, Replacement: ReplacementUnknown},
 	"id":                           {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"ip_address_type":              {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"name":                         {Required: true, Replacement: ReplacementUnknown},
 	"protocol_type":                {Required: true, Replacement: ReplacementUnknown},
+	"region":                       {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"route_key":                    {Optional: true, Replacement: ReplacementUnknown},
 	"route_selection_expression":   {Optional: true, Replacement: ReplacementUnknown},
 	"tags":                         {Optional: true, Replacement: ReplacementUnknown},

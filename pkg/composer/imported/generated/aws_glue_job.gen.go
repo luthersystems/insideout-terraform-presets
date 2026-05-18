@@ -14,6 +14,7 @@ type AWSGlueJob struct {
 	ExecutionClass          *Value[string]                   `tf:"execution_class" json:"execution_class,omitempty"`
 	GlueVersion             *Value[string]                   `tf:"glue_version" json:"glue_version,omitempty"`
 	ID                      *Value[string]                   `tf:"id" json:"id,omitempty"`
+	JobMode                 *Value[string]                   `tf:"job_mode" json:"job_mode,omitempty"`
 	JobRunQueuingEnabled    *Value[bool]                     `tf:"job_run_queuing_enabled" json:"job_run_queuing_enabled,omitempty"`
 	MaintenanceWindow       *Value[string]                   `tf:"maintenance_window" json:"maintenance_window,omitempty"`
 	MaxCapacity             *Value[int64]                    `tf:"max_capacity" json:"max_capacity,omitempty"`
@@ -21,6 +22,7 @@ type AWSGlueJob struct {
 	Name                    *Value[string]                   `tf:"name" json:"name,omitempty"`
 	NonOverridableArguments map[string]*Value[string]        `tf:"non_overridable_arguments" json:"non_overridable_arguments,omitempty"`
 	NumberOfWorkers         *Value[float64]                  `tf:"number_of_workers" json:"number_of_workers,omitempty"`
+	Region                  *Value[string]                   `tf:"region" json:"region,omitempty"`
 	RoleARN                 *Value[string]                   `tf:"role_arn" json:"role_arn,omitempty"`
 	SecurityConfiguration   *Value[string]                   `tf:"security_configuration" json:"security_configuration,omitempty"`
 	Tags                    map[string]*Value[string]        `tf:"tags" json:"tags,omitempty"`
@@ -30,6 +32,7 @@ type AWSGlueJob struct {
 	Command                 []AWSGlueJobCommand              `tf:"command,blocks" json:"command,omitempty"`
 	ExecutionProperty       []AWSGlueJobExecutionProperty    `tf:"execution_property,blocks" json:"execution_property,omitempty"`
 	NotificationProperty    []AWSGlueJobNotificationProperty `tf:"notification_property,blocks" json:"notification_property,omitempty"`
+	SourceControlDetails    []AWSGlueJobSourceControlDetails `tf:"source_control_details,blocks" json:"source_control_details,omitempty"`
 }
 
 // AWSGlueJobCommand is a nested-block type used by the parent resource.
@@ -50,6 +53,18 @@ type AWSGlueJobNotificationProperty struct {
 	NotifyDelayAfter *Value[float64] `tf:"notify_delay_after" json:"notify_delay_after,omitempty"`
 }
 
+// AWSGlueJobSourceControlDetails is a nested-block type used by the parent resource.
+type AWSGlueJobSourceControlDetails struct {
+	AuthStrategy *Value[string] `tf:"auth_strategy" json:"auth_strategy,omitempty"`
+	AuthToken    *Value[string] `tf:"auth_token" json:"auth_token,omitempty"`
+	Branch       *Value[string] `tf:"branch" json:"branch,omitempty"`
+	Folder       *Value[string] `tf:"folder" json:"folder,omitempty"`
+	LastCommitID *Value[string] `tf:"last_commit_id" json:"last_commit_id,omitempty"`
+	Owner        *Value[string] `tf:"owner" json:"owner,omitempty"`
+	Provider     *Value[string] `tf:"provider" json:"provider,omitempty"`
+	Repository   *Value[string] `tf:"repository" json:"repository,omitempty"`
+}
+
 // AWSGlueJobSchema describes provider metadata for each attribute / nested
 // block of aws_glue_job.
 var AWSGlueJobSchema = map[string]FieldSchema{
@@ -60,6 +75,7 @@ var AWSGlueJobSchema = map[string]FieldSchema{
 	"execution_class":           {Optional: true, Replacement: ReplacementUnknown},
 	"glue_version":              {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"id":                        {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"job_mode":                  {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"job_run_queuing_enabled":   {Optional: true, Replacement: ReplacementUnknown},
 	"maintenance_window":        {Optional: true, Replacement: ReplacementUnknown},
 	"max_capacity":              {Optional: true, Computed: true, Replacement: ReplacementUnknown},
@@ -67,6 +83,7 @@ var AWSGlueJobSchema = map[string]FieldSchema{
 	"name":                      {Required: true, Replacement: ReplacementUnknown},
 	"non_overridable_arguments": {Optional: true, Replacement: ReplacementUnknown},
 	"number_of_workers":         {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"region":                    {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"role_arn":                  {Required: true, Replacement: ReplacementUnknown},
 	"security_configuration":    {Optional: true, Replacement: ReplacementUnknown},
 	"tags":                      {Optional: true, Replacement: ReplacementUnknown},
@@ -76,6 +93,7 @@ var AWSGlueJobSchema = map[string]FieldSchema{
 	"command":                   {Required: true, Replacement: ReplacementUnknown},
 	"execution_property":        {Optional: true, Replacement: ReplacementUnknown},
 	"notification_property":     {Optional: true, Replacement: ReplacementUnknown},
+	"source_control_details":    {Optional: true, Replacement: ReplacementUnknown},
 }
 
 func init() {

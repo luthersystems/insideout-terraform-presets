@@ -12,6 +12,7 @@ type AWSNetworkACL struct {
 	ID        *Value[string]            `tf:"id" json:"id,omitempty"`
 	Ingress   []AWSNetworkACLIngress    `tf:"ingress" json:"ingress,omitempty"`
 	OwnerID   *Value[string]            `tf:"owner_id" json:"owner_id,omitempty"`
+	Region    *Value[string]            `tf:"region" json:"region,omitempty"`
 	SubnetIDS []*Value[string]          `tf:"subnet_ids" json:"subnet_ids,omitempty"`
 	Tags      map[string]*Value[string] `tf:"tags" json:"tags,omitempty"`
 	TagsAll   map[string]*Value[string] `tf:"tags_all" json:"tags_all,omitempty"`
@@ -52,6 +53,7 @@ var AWSNetworkACLSchema = map[string]FieldSchema{
 	"id":         {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"ingress":    {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"owner_id":   {Computed: true, Replacement: ReplacementUnknown},
+	"region":     {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"subnet_ids": {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"tags":       {Optional: true, Replacement: ReplacementUnknown},
 	"tags_all":   {Optional: true, Computed: true, Replacement: ReplacementUnknown},

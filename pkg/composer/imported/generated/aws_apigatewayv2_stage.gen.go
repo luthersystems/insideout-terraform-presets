@@ -17,6 +17,7 @@ type AWSApigatewayv2Stage struct {
 	ID                   *Value[string]                             `tf:"id" json:"id,omitempty"`
 	InvokeURL            *Value[string]                             `tf:"invoke_url" json:"invoke_url,omitempty"`
 	Name                 *Value[string]                             `tf:"name" json:"name,omitempty"`
+	Region               *Value[string]                             `tf:"region" json:"region,omitempty"`
 	StageVariables       map[string]*Value[string]                  `tf:"stage_variables" json:"stage_variables,omitempty"`
 	Tags                 map[string]*Value[string]                  `tf:"tags" json:"tags,omitempty"`
 	TagsAll              map[string]*Value[string]                  `tf:"tags_all" json:"tags_all,omitempty"`
@@ -63,6 +64,7 @@ var AWSApigatewayv2StageSchema = map[string]FieldSchema{
 	"id":                     {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"invoke_url":             {Computed: true, Replacement: ReplacementUnknown},
 	"name":                   {Required: true, Replacement: ReplacementUnknown},
+	"region":                 {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"stage_variables":        {Optional: true, Replacement: ReplacementUnknown},
 	"tags":                   {Optional: true, Replacement: ReplacementUnknown},
 	"tags_all":               {Optional: true, Computed: true, Replacement: ReplacementUnknown},

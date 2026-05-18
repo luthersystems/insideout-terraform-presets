@@ -11,6 +11,7 @@ type AWSECSTaskDefinition struct {
 	ARNWithoutRevision      *Value[string]                             `tf:"arn_without_revision" json:"arn_without_revision,omitempty"`
 	ContainerDefinitions    *Value[string]                             `tf:"container_definitions" json:"container_definitions,omitempty"`
 	CPU                     *Value[string]                             `tf:"cpu" json:"cpu,omitempty"`
+	EnableFaultInjection    *Value[bool]                               `tf:"enable_fault_injection" json:"enable_fault_injection,omitempty"`
 	ExecutionRoleARN        *Value[string]                             `tf:"execution_role_arn" json:"execution_role_arn,omitempty"`
 	Family                  *Value[string]                             `tf:"family" json:"family,omitempty"`
 	ID                      *Value[string]                             `tf:"id" json:"id,omitempty"`
@@ -18,6 +19,7 @@ type AWSECSTaskDefinition struct {
 	Memory                  *Value[string]                             `tf:"memory" json:"memory,omitempty"`
 	NetworkMode             *Value[string]                             `tf:"network_mode" json:"network_mode,omitempty"`
 	PidMode                 *Value[string]                             `tf:"pid_mode" json:"pid_mode,omitempty"`
+	Region                  *Value[string]                             `tf:"region" json:"region,omitempty"`
 	RequiresCompatibilities []*Value[string]                           `tf:"requires_compatibilities" json:"requires_compatibilities,omitempty"`
 	Revision                *Value[float64]                            `tf:"revision" json:"revision,omitempty"`
 	SkipDestroy             *Value[bool]                               `tf:"skip_destroy" json:"skip_destroy,omitempty"`
@@ -26,7 +28,6 @@ type AWSECSTaskDefinition struct {
 	TaskRoleARN             *Value[string]                             `tf:"task_role_arn" json:"task_role_arn,omitempty"`
 	TrackLatest             *Value[bool]                               `tf:"track_latest" json:"track_latest,omitempty"`
 	EphemeralStorage        []AWSECSTaskDefinitionEphemeralStorage     `tf:"ephemeral_storage,blocks" json:"ephemeral_storage,omitempty"`
-	InferenceAccelerator    []AWSECSTaskDefinitionInferenceAccelerator `tf:"inference_accelerator,blocks" json:"inference_accelerator,omitempty"`
 	PlacementConstraints    []AWSECSTaskDefinitionPlacementConstraints `tf:"placement_constraints,blocks" json:"placement_constraints,omitempty"`
 	ProxyConfiguration      []AWSECSTaskDefinitionProxyConfiguration   `tf:"proxy_configuration,blocks" json:"proxy_configuration,omitempty"`
 	RuntimePlatform         []AWSECSTaskDefinitionRuntimePlatform      `tf:"runtime_platform,blocks" json:"runtime_platform,omitempty"`
@@ -36,12 +37,6 @@ type AWSECSTaskDefinition struct {
 // AWSECSTaskDefinitionEphemeralStorage is a nested-block type used by the parent resource.
 type AWSECSTaskDefinitionEphemeralStorage struct {
 	SizeInGib *Value[float64] `tf:"size_in_gib" json:"size_in_gib,omitempty"`
-}
-
-// AWSECSTaskDefinitionInferenceAccelerator is a nested-block type used by the parent resource.
-type AWSECSTaskDefinitionInferenceAccelerator struct {
-	DeviceName *Value[string] `tf:"device_name" json:"device_name,omitempty"`
-	DeviceType *Value[string] `tf:"device_type" json:"device_type,omitempty"`
 }
 
 // AWSECSTaskDefinitionPlacementConstraints is a nested-block type used by the parent resource.
@@ -71,6 +66,7 @@ type AWSECSTaskDefinitionVolume struct {
 	DockerVolumeConfiguration               []AWSECSTaskDefinitionVolumeDockerVolumeConfiguration               `tf:"docker_volume_configuration,blocks" json:"docker_volume_configuration,omitempty"`
 	EFSVolumeConfiguration                  []AWSECSTaskDefinitionVolumeEFSVolumeConfiguration                  `tf:"efs_volume_configuration,blocks" json:"efs_volume_configuration,omitempty"`
 	FsxWindowsFileServerVolumeConfiguration []AWSECSTaskDefinitionVolumeFsxWindowsFileServerVolumeConfiguration `tf:"fsx_windows_file_server_volume_configuration,blocks" json:"fsx_windows_file_server_volume_configuration,omitempty"`
+	S3filesVolumeConfiguration              []AWSECSTaskDefinitionVolumeS3filesVolumeConfiguration              `tf:"s3files_volume_configuration,blocks" json:"s3files_volume_configuration,omitempty"`
 }
 
 // AWSECSTaskDefinitionVolumeDockerVolumeConfiguration is a nested-block type used by the parent resource.
@@ -110,6 +106,14 @@ type AWSECSTaskDefinitionVolumeFsxWindowsFileServerVolumeConfigurationAuthorizat
 	Domain               *Value[string] `tf:"domain" json:"domain,omitempty"`
 }
 
+// AWSECSTaskDefinitionVolumeS3filesVolumeConfiguration is a nested-block type used by the parent resource.
+type AWSECSTaskDefinitionVolumeS3filesVolumeConfiguration struct {
+	AccessPointARN        *Value[string]  `tf:"access_point_arn" json:"access_point_arn,omitempty"`
+	FileSystemARN         *Value[string]  `tf:"file_system_arn" json:"file_system_arn,omitempty"`
+	RootDirectory         *Value[string]  `tf:"root_directory" json:"root_directory,omitempty"`
+	TransitEncryptionPort *Value[float64] `tf:"transit_encryption_port" json:"transit_encryption_port,omitempty"`
+}
+
 // AWSECSTaskDefinitionSchema describes provider metadata for each attribute / nested
 // block of aws_ecs_task_definition.
 var AWSECSTaskDefinitionSchema = map[string]FieldSchema{
@@ -117,6 +121,7 @@ var AWSECSTaskDefinitionSchema = map[string]FieldSchema{
 	"arn_without_revision":     {Computed: true, Replacement: ReplacementUnknown},
 	"container_definitions":    {Required: true, Replacement: ReplacementUnknown},
 	"cpu":                      {Optional: true, Replacement: ReplacementUnknown},
+	"enable_fault_injection":   {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"execution_role_arn":       {Optional: true, Replacement: ReplacementUnknown},
 	"family":                   {Required: true, Replacement: ReplacementUnknown},
 	"id":                       {Optional: true, Computed: true, Replacement: ReplacementUnknown},
@@ -124,6 +129,7 @@ var AWSECSTaskDefinitionSchema = map[string]FieldSchema{
 	"memory":                   {Optional: true, Replacement: ReplacementUnknown},
 	"network_mode":             {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"pid_mode":                 {Optional: true, Replacement: ReplacementUnknown},
+	"region":                   {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"requires_compatibilities": {Optional: true, Replacement: ReplacementUnknown},
 	"revision":                 {Computed: true, Replacement: ReplacementUnknown},
 	"skip_destroy":             {Optional: true, Replacement: ReplacementUnknown},
@@ -132,7 +138,6 @@ var AWSECSTaskDefinitionSchema = map[string]FieldSchema{
 	"task_role_arn":            {Optional: true, Replacement: ReplacementUnknown},
 	"track_latest":             {Optional: true, Replacement: ReplacementUnknown},
 	"ephemeral_storage":        {Optional: true, Replacement: ReplacementUnknown},
-	"inference_accelerator":    {Optional: true, Replacement: ReplacementUnknown},
 	"placement_constraints":    {Optional: true, Replacement: ReplacementUnknown},
 	"proxy_configuration":      {Optional: true, Replacement: ReplacementUnknown},
 	"runtime_platform":         {Optional: true, Replacement: ReplacementUnknown},

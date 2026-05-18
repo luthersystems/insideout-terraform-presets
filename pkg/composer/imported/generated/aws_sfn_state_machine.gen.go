@@ -15,6 +15,7 @@ type AWSSfnStateMachine struct {
 	Name                    *Value[string]                              `tf:"name" json:"name,omitempty"`
 	NamePrefix              *Value[string]                              `tf:"name_prefix" json:"name_prefix,omitempty"`
 	Publish                 *Value[bool]                                `tf:"publish" json:"publish,omitempty"`
+	Region                  *Value[string]                              `tf:"region" json:"region,omitempty"`
 	RevisionID              *Value[string]                              `tf:"revision_id" json:"revision_id,omitempty"`
 	RoleARN                 *Value[string]                              `tf:"role_arn" json:"role_arn,omitempty"`
 	StateMachineVersionARN  *Value[string]                              `tf:"state_machine_version_arn" json:"state_machine_version_arn,omitempty"`
@@ -66,6 +67,7 @@ var AWSSfnStateMachineSchema = map[string]FieldSchema{
 	"name":                      {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"name_prefix":               {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"publish":                   {Optional: true, Replacement: ReplacementUnknown},
+	"region":                    {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"revision_id":               {Computed: true, Replacement: ReplacementUnknown},
 	"role_arn":                  {Required: true, Replacement: ReplacementUnknown},
 	"state_machine_version_arn": {Computed: true, Replacement: ReplacementUnknown},

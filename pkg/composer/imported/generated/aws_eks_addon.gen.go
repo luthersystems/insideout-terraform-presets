@@ -7,22 +7,35 @@ import "reflect"
 // AWSEKSAddon is the generated Layer 1 typed model for the
 // `aws_eks_addon` Terraform resource.
 type AWSEKSAddon struct {
-	AddonName                *Value[string]            `tf:"addon_name" json:"addon_name,omitempty"`
-	AddonVersion             *Value[string]            `tf:"addon_version" json:"addon_version,omitempty"`
-	ARN                      *Value[string]            `tf:"arn" json:"arn,omitempty"`
-	ClusterName              *Value[string]            `tf:"cluster_name" json:"cluster_name,omitempty"`
-	ConfigurationValues      *Value[string]            `tf:"configuration_values" json:"configuration_values,omitempty"`
-	CreatedAt                *Value[string]            `tf:"created_at" json:"created_at,omitempty"`
-	ID                       *Value[string]            `tf:"id" json:"id,omitempty"`
-	ModifiedAt               *Value[string]            `tf:"modified_at" json:"modified_at,omitempty"`
-	Preserve                 *Value[bool]              `tf:"preserve" json:"preserve,omitempty"`
-	ResolveConflicts         *Value[string]            `tf:"resolve_conflicts" json:"resolve_conflicts,omitempty"`
-	ResolveConflictsOnCreate *Value[string]            `tf:"resolve_conflicts_on_create" json:"resolve_conflicts_on_create,omitempty"`
-	ResolveConflictsOnUpdate *Value[string]            `tf:"resolve_conflicts_on_update" json:"resolve_conflicts_on_update,omitempty"`
-	ServiceAccountRoleARN    *Value[string]            `tf:"service_account_role_arn" json:"service_account_role_arn,omitempty"`
-	Tags                     map[string]*Value[string] `tf:"tags" json:"tags,omitempty"`
-	TagsAll                  map[string]*Value[string] `tf:"tags_all" json:"tags_all,omitempty"`
-	Timeouts                 *AWSEKSAddonTimeouts      `tf:"timeouts,block" json:"timeouts,omitempty"`
+	AddonName                *Value[string]                      `tf:"addon_name" json:"addon_name,omitempty"`
+	AddonVersion             *Value[string]                      `tf:"addon_version" json:"addon_version,omitempty"`
+	ARN                      *Value[string]                      `tf:"arn" json:"arn,omitempty"`
+	ClusterName              *Value[string]                      `tf:"cluster_name" json:"cluster_name,omitempty"`
+	ConfigurationValues      *Value[string]                      `tf:"configuration_values" json:"configuration_values,omitempty"`
+	CreatedAt                *Value[string]                      `tf:"created_at" json:"created_at,omitempty"`
+	ID                       *Value[string]                      `tf:"id" json:"id,omitempty"`
+	ModifiedAt               *Value[string]                      `tf:"modified_at" json:"modified_at,omitempty"`
+	Preserve                 *Value[bool]                        `tf:"preserve" json:"preserve,omitempty"`
+	Region                   *Value[string]                      `tf:"region" json:"region,omitempty"`
+	ResolveConflictsOnCreate *Value[string]                      `tf:"resolve_conflicts_on_create" json:"resolve_conflicts_on_create,omitempty"`
+	ResolveConflictsOnUpdate *Value[string]                      `tf:"resolve_conflicts_on_update" json:"resolve_conflicts_on_update,omitempty"`
+	ServiceAccountRoleARN    *Value[string]                      `tf:"service_account_role_arn" json:"service_account_role_arn,omitempty"`
+	Tags                     map[string]*Value[string]           `tf:"tags" json:"tags,omitempty"`
+	TagsAll                  map[string]*Value[string]           `tf:"tags_all" json:"tags_all,omitempty"`
+	NamespaceConfig          []AWSEKSAddonNamespaceConfig        `tf:"namespace_config,blocks" json:"namespace_config,omitempty"`
+	PodIdentityAssociation   []AWSEKSAddonPodIdentityAssociation `tf:"pod_identity_association,blocks" json:"pod_identity_association,omitempty"`
+	Timeouts                 *AWSEKSAddonTimeouts                `tf:"timeouts,block" json:"timeouts,omitempty"`
+}
+
+// AWSEKSAddonNamespaceConfig is a nested-block type used by the parent resource.
+type AWSEKSAddonNamespaceConfig struct {
+	Namespace *Value[string] `tf:"namespace" json:"namespace,omitempty"`
+}
+
+// AWSEKSAddonPodIdentityAssociation is a nested-block type used by the parent resource.
+type AWSEKSAddonPodIdentityAssociation struct {
+	RoleARN        *Value[string] `tf:"role_arn" json:"role_arn,omitempty"`
+	ServiceAccount *Value[string] `tf:"service_account" json:"service_account,omitempty"`
 }
 
 // AWSEKSAddonTimeouts is a nested-block type used by the parent resource.
@@ -44,12 +57,14 @@ var AWSEKSAddonSchema = map[string]FieldSchema{
 	"id":                          {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"modified_at":                 {Computed: true, Replacement: ReplacementUnknown},
 	"preserve":                    {Optional: true, Replacement: ReplacementUnknown},
-	"resolve_conflicts":           {Optional: true, Replacement: ReplacementUnknown},
+	"region":                      {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"resolve_conflicts_on_create": {Optional: true, Replacement: ReplacementUnknown},
 	"resolve_conflicts_on_update": {Optional: true, Replacement: ReplacementUnknown},
 	"service_account_role_arn":    {Optional: true, Replacement: ReplacementUnknown},
 	"tags":                        {Optional: true, Replacement: ReplacementUnknown},
 	"tags_all":                    {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"namespace_config":            {Optional: true, Replacement: ReplacementUnknown},
+	"pod_identity_association":    {Optional: true, Replacement: ReplacementUnknown},
 	"timeouts":                    {Optional: true, Replacement: ReplacementUnknown},
 }
 

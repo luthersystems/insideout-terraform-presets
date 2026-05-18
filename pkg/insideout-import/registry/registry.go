@@ -208,6 +208,7 @@ var awsDiscoverButNotCodegen = []string{
 //     and the slug entry to permissions_test.go::awsTFTypeToServiceSlug.
 //  3. Move the entry from this list to awsDiscoverTypes (alphabetical).
 var awsCodegenOnlyTypes = []string{
+	"aws_acm_certificate_validation",
 	"aws_appautoscaling_policy",
 	"aws_appautoscaling_target",
 	"aws_athena_workgroup",
@@ -225,6 +226,7 @@ var awsCodegenOnlyTypes = []string{
 	"aws_kinesis_stream",
 	"aws_lambda_layer_version",
 	"aws_rds_cluster",
+	"aws_route53_record",
 	"aws_sfn_state_machine",
 }
 
@@ -235,8 +237,9 @@ var awsCodegenOnlyTypes = []string{
 //
 // This is the union of gcpGoogleCodegenTypes and gcpGoogleBetaCodegenTypes
 // (the underlying schema source differs but discovery treats them identical-
-// ly). Unlike AWS, every GCP discoverer entry already has a Layer-1 struct,
-// so there's no GCP equivalent of awsCodegenOnlyTypes.
+// ly). For types that need a Layer-1 struct + curated Layer-2 policy but
+// don't yet have a CAI discoverer wired, see gcpCodegenOnlyTypes — the
+// GCP-side mirror of awsCodegenOnlyTypes (added in #599).
 var gcpDiscoverTypes = []string{
 	"google_api_gateway_api",
 	"google_api_gateway_api_config",
@@ -292,6 +295,42 @@ var gcpDiscoverTypes = []string{
 	"google_storage_bucket_object",
 	"google_vertex_ai_dataset",
 	"google_vpc_access_connector",
+}
+
+// gcpCodegenOnlyTypes is the sorted list of GCP Terraform resource types
+// that have Layer-1 typed structs + curated Layer-2 policy maps but are
+// NOT yet wired to a live CAI discoverer in gcpdiscover. The GCP-side
+// mirror of awsCodegenOnlyTypes (#599 backfill for the DNS + cert-manager
+// types newly shipped in #594).
+//
+// Background: every GCP discoverer entry historically went through Cloud
+// Asset Inventory's SearchAllResources call, which transparently lists
+// every CAI-routable asset type. Adding a row to gcpDiscoverTypes therefore
+// required a paired entry in cmd/insideout-import/gcpdiscover with a
+// CAI asset-type → tfType mapping (parity-pinned by
+// TestRegistryParity_GCP_LiveMatchesRegistry, the gate that bit #604).
+// That coupling forced drift-policy backfill PRs to bundle CAI plumbing
+// for every new tfType — high friction for types whose drift surface is
+// stable but whose CAI mapping needs separate research.
+//
+// gcpCodegenOnlyTypes breaks the coupling: entries here flow through
+// imported-codegen + the Layer-2 policy registry, surface in
+// SUPPORTED_RESOURCES.md as Discoverable=✗ + Enrichable=✗ +
+// DriftDetectable=✓, and are deliberately excluded from
+// SupportedDiscoverTypes so the wizard doesn't advertise picker rows
+// it cannot fetch. The CAI discoverer hookup is a separate, lower-
+// priority follow-up per type.
+//
+// To promote an entry from this list to gcpDiscoverTypes:
+//  1. Wire the discoverer in cmd/insideout-import/gcpdiscover (CAI
+//     asset-type mapping + per-type construction).
+//  2. Move the entry from this list to gcpDiscoverTypes (alphabetical).
+var gcpCodegenOnlyTypes = []string{
+	"google_certificate_manager_certificate",
+	"google_certificate_manager_certificate_map",
+	"google_certificate_manager_certificate_map_entry",
+	"google_dns_managed_zone",
+	"google_dns_record_set",
 }
 
 // googleBetaCodegenTypes is the subset of gcpDiscoverTypes whose schema
@@ -372,18 +411,24 @@ func AWSCodegenTypes() []string {
 // types that cmd/imported-codegen emits Layer-1 typed structs for from
 // the hashicorp/google provider (i.e. excluding google-beta-only types).
 //
+// Concatenates gcpDiscoverTypes (minus googleBetaCodegenTypes) with
+// gcpCodegenOnlyTypes — the latter is the GCP-side mirror of
+// awsCodegenOnlyTypes for types whose drift policy ships before the CAI
+// discoverer hookup (introduced in #599).
+//
 // The returned slice is a fresh copy; callers may mutate it freely.
 func GoogleCodegenTypes() []string {
 	beta := make(map[string]struct{}, len(googleBetaCodegenTypes))
 	for _, t := range googleBetaCodegenTypes {
 		beta[t] = struct{}{}
 	}
-	out := make([]string, 0, len(gcpDiscoverTypes))
+	out := make([]string, 0, len(gcpDiscoverTypes)+len(gcpCodegenOnlyTypes))
 	for _, t := range gcpDiscoverTypes {
 		if _, isBeta := beta[t]; !isBeta {
 			out = append(out, t)
 		}
 	}
+	out = append(out, gcpCodegenOnlyTypes...)
 	slices.Sort(out)
 	return out
 }
@@ -417,6 +462,7 @@ func KnownTypes() []string {
 	add(awsDiscoverTypes)
 	add(awsCodegenOnlyTypes)
 	add(gcpDiscoverTypes)
+	add(gcpCodegenOnlyTypes)
 	out := make([]string, 0, len(seen))
 	for t := range seen {
 		out = append(out, t)

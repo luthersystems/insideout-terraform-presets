@@ -9,6 +9,7 @@ import "reflect"
 type AWSResourceexplorer2Index struct {
 	ARN      *Value[string]                     `tf:"arn" json:"arn,omitempty"`
 	ID       *Value[string]                     `tf:"id" json:"id,omitempty"`
+	Region   *Value[string]                     `tf:"region" json:"region,omitempty"`
 	Tags     map[string]*Value[string]          `tf:"tags" json:"tags,omitempty"`
 	TagsAll  map[string]*Value[string]          `tf:"tags_all" json:"tags_all,omitempty"`
 	Type_    *Value[string]                     `tf:"type" json:"type,omitempty"`
@@ -27,6 +28,7 @@ type AWSResourceexplorer2IndexTimeouts struct {
 var AWSResourceexplorer2IndexSchema = map[string]FieldSchema{
 	"arn":      {Computed: true, Replacement: ReplacementUnknown},
 	"id":       {Computed: true, Replacement: ReplacementUnknown},
+	"region":   {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"tags":     {Optional: true, Replacement: ReplacementUnknown},
 	"tags_all": {Computed: true, Replacement: ReplacementUnknown},
 	"type":     {Required: true, Replacement: ReplacementUnknown},

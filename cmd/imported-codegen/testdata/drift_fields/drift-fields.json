@@ -109,13 +109,27 @@
       "semantic": "Exact"
     }
   ],
-  "aws_api_gateway_deployment": [
+  "aws_acm_certificate_validation": [
     {
-      "path": "description",
+      "path": "certificate_arn",
       "semantic": "Exact"
     },
     {
-      "path": "execution_arn",
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "region",
+      "semantic": "Exact"
+    },
+    {
+      "path": "validation_record_fqdns",
+      "semantic": "WholeList"
+    }
+  ],
+  "aws_api_gateway_deployment": [
+    {
+      "path": "description",
       "semantic": "Exact"
     },
     {
@@ -3391,10 +3405,6 @@
       "semantic": "Exact"
     },
     {
-      "path": "inference_accelerator",
-      "semantic": "WholeList"
-    },
-    {
       "path": "ipc_mode",
       "semantic": "Exact"
     },
@@ -3608,10 +3618,6 @@
     },
     {
       "path": "public_ipv4_pool",
-      "semantic": "Exact"
-    },
-    {
-      "path": "vpc",
       "semantic": "Exact"
     }
   ],
@@ -4671,10 +4677,6 @@
       "semantic": "Exact"
     },
     {
-      "path": "cpu_core_count",
-      "semantic": "Exact"
-    },
-    {
       "path": "cpu_options.amd_sev_snp",
       "semantic": "Exact"
     },
@@ -4684,10 +4686,6 @@
     },
     {
       "path": "cpu_options.threads_per_core",
-      "semantic": "Exact"
-    },
-    {
-      "path": "cpu_threads_per_core",
       "semantic": "Exact"
     },
     {
@@ -6789,10 +6787,6 @@
       "semantic": "Exact"
     },
     {
-      "path": "kibana_endpoint",
-      "semantic": "Exact"
-    },
-    {
       "path": "log_publishing_options.cloudwatch_log_group_arn",
       "semantic": "Exact"
     },
@@ -7222,6 +7216,116 @@
     },
     {
       "path": "name",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_route53_record": [
+    {
+      "path": "alias.evaluate_target_health",
+      "semantic": "Exact"
+    },
+    {
+      "path": "alias.name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "alias.zone_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "allow_overwrite",
+      "semantic": "Exact"
+    },
+    {
+      "path": "cidr_routing_policy.collection_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "cidr_routing_policy.location_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "failover_routing_policy.type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "fqdn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "geolocation_routing_policy.continent",
+      "semantic": "Exact"
+    },
+    {
+      "path": "geolocation_routing_policy.country",
+      "semantic": "Exact"
+    },
+    {
+      "path": "geolocation_routing_policy.subdivision",
+      "semantic": "Exact"
+    },
+    {
+      "path": "geoproximity_routing_policy.aws_region",
+      "semantic": "Exact"
+    },
+    {
+      "path": "geoproximity_routing_policy.bias",
+      "semantic": "Exact"
+    },
+    {
+      "path": "geoproximity_routing_policy.coordinates.latitude",
+      "semantic": "Exact"
+    },
+    {
+      "path": "geoproximity_routing_policy.coordinates.longitude",
+      "semantic": "Exact"
+    },
+    {
+      "path": "geoproximity_routing_policy.local_zone_group",
+      "semantic": "Exact"
+    },
+    {
+      "path": "health_check_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "latency_routing_policy.region",
+      "semantic": "Exact"
+    },
+    {
+      "path": "multivalue_answer_routing_policy",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "records",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "set_identifier",
+      "semantic": "Exact"
+    },
+    {
+      "path": "ttl",
+      "semantic": "Exact"
+    },
+    {
+      "path": "type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "weighted_routing_policy.weight",
+      "semantic": "Exact"
+    },
+    {
+      "path": "zone_id",
       "semantic": "Exact"
     }
   ],
@@ -8755,6 +8859,184 @@
       "semantic": "Exact"
     }
   ],
+  "google_certificate_manager_certificate": [
+    {
+      "path": "description",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "labels",
+      "semantic": "LabelFilter"
+    },
+    {
+      "path": "location",
+      "semantic": "Exact"
+    },
+    {
+      "path": "managed.authorization_attempt_info.details",
+      "semantic": "Exact"
+    },
+    {
+      "path": "managed.authorization_attempt_info.domain",
+      "semantic": "Exact"
+    },
+    {
+      "path": "managed.authorization_attempt_info.failure_reason",
+      "semantic": "Exact"
+    },
+    {
+      "path": "managed.authorization_attempt_info.state",
+      "semantic": "Exact"
+    },
+    {
+      "path": "managed.dns_authorizations",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "managed.domains",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "managed.issuance_config",
+      "semantic": "Exact"
+    },
+    {
+      "path": "managed.provisioning_issue.details",
+      "semantic": "Exact"
+    },
+    {
+      "path": "managed.provisioning_issue.reason",
+      "semantic": "Exact"
+    },
+    {
+      "path": "managed.state",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "san_dnsnames",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "scope",
+      "semantic": "Exact"
+    },
+    {
+      "path": "self_managed.certificate_pem",
+      "semantic": "Exact"
+    },
+    {
+      "path": "self_managed.pem_certificate",
+      "semantic": "Exact"
+    }
+  ],
+  "google_certificate_manager_certificate_map": [
+    {
+      "path": "create_time",
+      "semantic": "Exact"
+    },
+    {
+      "path": "description",
+      "semantic": "Exact"
+    },
+    {
+      "path": "gclb_targets.ip_configs.ip_address",
+      "semantic": "Exact"
+    },
+    {
+      "path": "gclb_targets.ip_configs.ports",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "gclb_targets.target_https_proxy",
+      "semantic": "Exact"
+    },
+    {
+      "path": "gclb_targets.target_ssl_proxy",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "labels",
+      "semantic": "LabelFilter"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "update_time",
+      "semantic": "Exact"
+    }
+  ],
+  "google_certificate_manager_certificate_map_entry": [
+    {
+      "path": "certificates",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "create_time",
+      "semantic": "Exact"
+    },
+    {
+      "path": "description",
+      "semantic": "Exact"
+    },
+    {
+      "path": "hostname",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "labels",
+      "semantic": "LabelFilter"
+    },
+    {
+      "path": "map",
+      "semantic": "Exact"
+    },
+    {
+      "path": "matcher",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "state",
+      "semantic": "Exact"
+    },
+    {
+      "path": "update_time",
+      "semantic": "Exact"
+    }
+  ],
   "google_cloud_run_v2_service": [
     {
       "path": "custom_audiences",
@@ -10050,6 +10332,242 @@
     },
     {
       "path": "version",
+      "semantic": "Exact"
+    }
+  ],
+  "google_dns_managed_zone": [
+    {
+      "path": "cloud_logging_config.enable_logging",
+      "semantic": "Exact"
+    },
+    {
+      "path": "creation_time",
+      "semantic": "Exact"
+    },
+    {
+      "path": "description",
+      "semantic": "Exact"
+    },
+    {
+      "path": "dns_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "dnssec_config.default_key_specs.algorithm",
+      "semantic": "Exact"
+    },
+    {
+      "path": "dnssec_config.default_key_specs.key_length",
+      "semantic": "Exact"
+    },
+    {
+      "path": "dnssec_config.default_key_specs.key_type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "dnssec_config.default_key_specs.kind",
+      "semantic": "Exact"
+    },
+    {
+      "path": "dnssec_config.kind",
+      "semantic": "Exact"
+    },
+    {
+      "path": "dnssec_config.non_existence",
+      "semantic": "Exact"
+    },
+    {
+      "path": "dnssec_config.state",
+      "semantic": "Exact"
+    },
+    {
+      "path": "force_destroy",
+      "semantic": "Exact"
+    },
+    {
+      "path": "forwarding_config.target_name_servers.forwarding_path",
+      "semantic": "Exact"
+    },
+    {
+      "path": "forwarding_config.target_name_servers.ipv4_address",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "labels",
+      "semantic": "LabelFilter"
+    },
+    {
+      "path": "managed_zone_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name_servers",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "peering_config.target_network.network_url",
+      "semantic": "Exact"
+    },
+    {
+      "path": "private_visibility_config.gke_clusters.gke_cluster_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "private_visibility_config.networks.network_url",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "visibility",
+      "semantic": "Exact"
+    }
+  ],
+  "google_dns_record_set": [
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "managed_zone",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "routing_policy.enable_geo_fencing",
+      "semantic": "Exact"
+    },
+    {
+      "path": "routing_policy.geo.health_checked_targets.internal_load_balancers.ip_address",
+      "semantic": "Exact"
+    },
+    {
+      "path": "routing_policy.geo.health_checked_targets.internal_load_balancers.ip_protocol",
+      "semantic": "Exact"
+    },
+    {
+      "path": "routing_policy.geo.health_checked_targets.internal_load_balancers.load_balancer_type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "routing_policy.geo.health_checked_targets.internal_load_balancers.network_url",
+      "semantic": "Exact"
+    },
+    {
+      "path": "routing_policy.geo.health_checked_targets.internal_load_balancers.port",
+      "semantic": "Exact"
+    },
+    {
+      "path": "routing_policy.geo.health_checked_targets.internal_load_balancers.project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "routing_policy.geo.health_checked_targets.internal_load_balancers.region",
+      "semantic": "Exact"
+    },
+    {
+      "path": "routing_policy.geo.location",
+      "semantic": "Exact"
+    },
+    {
+      "path": "routing_policy.geo.rrdatas",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "routing_policy.primary_backup.backup_geo.health_checked_targets.internal_load_balancers.ip_address",
+      "semantic": "Exact"
+    },
+    {
+      "path": "routing_policy.primary_backup.backup_geo.health_checked_targets.internal_load_balancers.network_url",
+      "semantic": "Exact"
+    },
+    {
+      "path": "routing_policy.primary_backup.backup_geo.location",
+      "semantic": "Exact"
+    },
+    {
+      "path": "routing_policy.primary_backup.backup_geo.rrdatas",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "routing_policy.primary_backup.enable_geo_fencing_for_backups",
+      "semantic": "Exact"
+    },
+    {
+      "path": "routing_policy.primary_backup.primary.internal_load_balancers.ip_address",
+      "semantic": "Exact"
+    },
+    {
+      "path": "routing_policy.primary_backup.primary.internal_load_balancers.network_url",
+      "semantic": "Exact"
+    },
+    {
+      "path": "routing_policy.primary_backup.trickle_ratio",
+      "semantic": "Exact"
+    },
+    {
+      "path": "routing_policy.wrr.health_checked_targets.internal_load_balancers.ip_address",
+      "semantic": "Exact"
+    },
+    {
+      "path": "routing_policy.wrr.health_checked_targets.internal_load_balancers.ip_protocol",
+      "semantic": "Exact"
+    },
+    {
+      "path": "routing_policy.wrr.health_checked_targets.internal_load_balancers.load_balancer_type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "routing_policy.wrr.health_checked_targets.internal_load_balancers.network_url",
+      "semantic": "Exact"
+    },
+    {
+      "path": "routing_policy.wrr.health_checked_targets.internal_load_balancers.port",
+      "semantic": "Exact"
+    },
+    {
+      "path": "routing_policy.wrr.health_checked_targets.internal_load_balancers.project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "routing_policy.wrr.health_checked_targets.internal_load_balancers.region",
+      "semantic": "Exact"
+    },
+    {
+      "path": "routing_policy.wrr.rrdatas",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "routing_policy.wrr.weight",
+      "semantic": "Exact"
+    },
+    {
+      "path": "rrdatas",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "ttl",
+      "semantic": "Exact"
+    },
+    {
+      "path": "type",
       "semantic": "Exact"
     }
   ],

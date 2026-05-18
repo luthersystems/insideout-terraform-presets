@@ -7,35 +7,39 @@ import "reflect"
 // AWSLambdaPermission is the generated Layer 1 typed model for the
 // `aws_lambda_permission` Terraform resource.
 type AWSLambdaPermission struct {
-	Action              *Value[string] `tf:"action" json:"action,omitempty"`
-	EventSourceToken    *Value[string] `tf:"event_source_token" json:"event_source_token,omitempty"`
-	FunctionName        *Value[string] `tf:"function_name" json:"function_name,omitempty"`
-	FunctionURLAuthType *Value[string] `tf:"function_url_auth_type" json:"function_url_auth_type,omitempty"`
-	ID                  *Value[string] `tf:"id" json:"id,omitempty"`
-	Principal           *Value[string] `tf:"principal" json:"principal,omitempty"`
-	PrincipalOrgID      *Value[string] `tf:"principal_org_id" json:"principal_org_id,omitempty"`
-	Qualifier           *Value[string] `tf:"qualifier" json:"qualifier,omitempty"`
-	SourceAccount       *Value[string] `tf:"source_account" json:"source_account,omitempty"`
-	SourceARN           *Value[string] `tf:"source_arn" json:"source_arn,omitempty"`
-	StatementID         *Value[string] `tf:"statement_id" json:"statement_id,omitempty"`
-	StatementIDPrefix   *Value[string] `tf:"statement_id_prefix" json:"statement_id_prefix,omitempty"`
+	Action                *Value[string] `tf:"action" json:"action,omitempty"`
+	EventSourceToken      *Value[string] `tf:"event_source_token" json:"event_source_token,omitempty"`
+	FunctionName          *Value[string] `tf:"function_name" json:"function_name,omitempty"`
+	FunctionURLAuthType   *Value[string] `tf:"function_url_auth_type" json:"function_url_auth_type,omitempty"`
+	ID                    *Value[string] `tf:"id" json:"id,omitempty"`
+	InvokedViaFunctionURL *Value[bool]   `tf:"invoked_via_function_url" json:"invoked_via_function_url,omitempty"`
+	Principal             *Value[string] `tf:"principal" json:"principal,omitempty"`
+	PrincipalOrgID        *Value[string] `tf:"principal_org_id" json:"principal_org_id,omitempty"`
+	Qualifier             *Value[string] `tf:"qualifier" json:"qualifier,omitempty"`
+	Region                *Value[string] `tf:"region" json:"region,omitempty"`
+	SourceAccount         *Value[string] `tf:"source_account" json:"source_account,omitempty"`
+	SourceARN             *Value[string] `tf:"source_arn" json:"source_arn,omitempty"`
+	StatementID           *Value[string] `tf:"statement_id" json:"statement_id,omitempty"`
+	StatementIDPrefix     *Value[string] `tf:"statement_id_prefix" json:"statement_id_prefix,omitempty"`
 }
 
 // AWSLambdaPermissionSchema describes provider metadata for each attribute / nested
 // block of aws_lambda_permission.
 var AWSLambdaPermissionSchema = map[string]FieldSchema{
-	"action":                 {Required: true, Replacement: ReplacementUnknown},
-	"event_source_token":     {Optional: true, Replacement: ReplacementUnknown},
-	"function_name":          {Required: true, Replacement: ReplacementUnknown},
-	"function_url_auth_type": {Optional: true, Replacement: ReplacementUnknown},
-	"id":                     {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"principal":              {Required: true, Replacement: ReplacementUnknown},
-	"principal_org_id":       {Optional: true, Replacement: ReplacementUnknown},
-	"qualifier":              {Optional: true, Replacement: ReplacementUnknown},
-	"source_account":         {Optional: true, Replacement: ReplacementUnknown},
-	"source_arn":             {Optional: true, Replacement: ReplacementUnknown},
-	"statement_id":           {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"statement_id_prefix":    {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"action":                   {Required: true, Replacement: ReplacementUnknown},
+	"event_source_token":       {Optional: true, Replacement: ReplacementUnknown},
+	"function_name":            {Required: true, Replacement: ReplacementUnknown},
+	"function_url_auth_type":   {Optional: true, Replacement: ReplacementUnknown},
+	"id":                       {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"invoked_via_function_url": {Optional: true, Replacement: ReplacementUnknown},
+	"principal":                {Required: true, Replacement: ReplacementUnknown},
+	"principal_org_id":         {Optional: true, Replacement: ReplacementUnknown},
+	"qualifier":                {Optional: true, Replacement: ReplacementUnknown},
+	"region":                   {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"source_account":           {Optional: true, Replacement: ReplacementUnknown},
+	"source_arn":               {Optional: true, Replacement: ReplacementUnknown},
+	"statement_id":             {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"statement_id_prefix":      {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 }
 
 func init() {

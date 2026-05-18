@@ -18,6 +18,7 @@ type AWSEip struct {
 	Domain                 *Value[string]            `tf:"domain" json:"domain,omitempty"`
 	ID                     *Value[string]            `tf:"id" json:"id,omitempty"`
 	Instance               *Value[string]            `tf:"instance" json:"instance,omitempty"`
+	IpamPoolID             *Value[string]            `tf:"ipam_pool_id" json:"ipam_pool_id,omitempty"`
 	NetworkBorderGroup     *Value[string]            `tf:"network_border_group" json:"network_border_group,omitempty"`
 	NetworkInterface       *Value[string]            `tf:"network_interface" json:"network_interface,omitempty"`
 	PrivateDNS             *Value[string]            `tf:"private_dns" json:"private_dns,omitempty"`
@@ -26,9 +27,9 @@ type AWSEip struct {
 	PublicDNS              *Value[string]            `tf:"public_dns" json:"public_dns,omitempty"`
 	PublicIp               *Value[string]            `tf:"public_ip" json:"public_ip,omitempty"`
 	PublicIPV4Pool         *Value[string]            `tf:"public_ipv4_pool" json:"public_ipv4_pool,omitempty"`
+	Region                 *Value[string]            `tf:"region" json:"region,omitempty"`
 	Tags                   map[string]*Value[string] `tf:"tags" json:"tags,omitempty"`
 	TagsAll                map[string]*Value[string] `tf:"tags_all" json:"tags_all,omitempty"`
-	VPC                    *Value[bool]              `tf:"vpc" json:"vpc,omitempty"`
 	Timeouts               *AWSEipTimeouts           `tf:"timeouts,block" json:"timeouts,omitempty"`
 }
 
@@ -53,6 +54,7 @@ var AWSEipSchema = map[string]FieldSchema{
 	"domain":                    {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"id":                        {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"instance":                  {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"ipam_pool_id":              {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"network_border_group":      {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"network_interface":         {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"private_dns":               {Computed: true, Replacement: ReplacementUnknown},
@@ -61,9 +63,9 @@ var AWSEipSchema = map[string]FieldSchema{
 	"public_dns":                {Computed: true, Replacement: ReplacementUnknown},
 	"public_ip":                 {Computed: true, Replacement: ReplacementUnknown},
 	"public_ipv4_pool":          {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"region":                    {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"tags":                      {Optional: true, Replacement: ReplacementUnknown},
 	"tags_all":                  {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"vpc":                       {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"timeouts":                  {Optional: true, Replacement: ReplacementUnknown},
 }
 

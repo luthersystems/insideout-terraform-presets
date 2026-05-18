@@ -24,11 +24,20 @@ type AWSSQSQueue struct {
 	ReceiveWaitTimeSeconds       *Value[int64]             `tf:"receive_wait_time_seconds" json:"receive_wait_time_seconds,omitempty"`
 	RedriveAllowPolicy           *Value[string]            `tf:"redrive_allow_policy" json:"redrive_allow_policy,omitempty"`
 	RedrivePolicy                *Value[string]            `tf:"redrive_policy" json:"redrive_policy,omitempty"`
+	Region                       *Value[string]            `tf:"region" json:"region,omitempty"`
 	SQSManagedSSEEnabled         *Value[bool]              `tf:"sqs_managed_sse_enabled" json:"sqs_managed_sse_enabled,omitempty"`
 	Tags                         map[string]*Value[string] `tf:"tags" json:"tags,omitempty"`
 	TagsAll                      map[string]*Value[string] `tf:"tags_all" json:"tags_all,omitempty"`
 	URL                          *Value[string]            `tf:"url" json:"url,omitempty"`
 	VisibilityTimeoutSeconds     *Value[int64]             `tf:"visibility_timeout_seconds" json:"visibility_timeout_seconds,omitempty"`
+	Timeouts                     *AWSSQSQueueTimeouts      `tf:"timeouts,block" json:"timeouts,omitempty"`
+}
+
+// AWSSQSQueueTimeouts is a nested-block type used by the parent resource.
+type AWSSQSQueueTimeouts struct {
+	Create *Value[string] `tf:"create" json:"create,omitempty"`
+	Delete *Value[string] `tf:"delete" json:"delete,omitempty"`
+	Update *Value[string] `tf:"update" json:"update,omitempty"`
 }
 
 // AWSSQSQueueSchema describes provider metadata for each attribute / nested
@@ -51,11 +60,13 @@ var AWSSQSQueueSchema = map[string]FieldSchema{
 	"receive_wait_time_seconds":         {Optional: true, Replacement: ReplacementUnknown},
 	"redrive_allow_policy":              {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"redrive_policy":                    {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"region":                            {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"sqs_managed_sse_enabled":           {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"tags":                              {Optional: true, Replacement: ReplacementUnknown},
 	"tags_all":                          {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"url":                               {Computed: true, Replacement: ReplacementUnknown},
 	"visibility_timeout_seconds":        {Optional: true, Replacement: ReplacementUnknown},
+	"timeouts":                          {Optional: true, Replacement: ReplacementUnknown},
 }
 
 func init() {

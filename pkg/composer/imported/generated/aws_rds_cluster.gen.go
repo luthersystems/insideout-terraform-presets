@@ -20,7 +20,9 @@ type AWSRDSCluster struct {
 	ClusterIdentifierPrefix            *Value[string]                                  `tf:"cluster_identifier_prefix" json:"cluster_identifier_prefix,omitempty"`
 	ClusterMembers                     []*Value[string]                                `tf:"cluster_members" json:"cluster_members,omitempty"`
 	ClusterResourceID                  *Value[string]                                  `tf:"cluster_resource_id" json:"cluster_resource_id,omitempty"`
+	ClusterScalabilityType             *Value[string]                                  `tf:"cluster_scalability_type" json:"cluster_scalability_type,omitempty"`
 	CopyTagsToSnapshot                 *Value[bool]                                    `tf:"copy_tags_to_snapshot" json:"copy_tags_to_snapshot,omitempty"`
+	DatabaseInsightsMode               *Value[string]                                  `tf:"database_insights_mode" json:"database_insights_mode,omitempty"`
 	DatabaseName                       *Value[string]                                  `tf:"database_name" json:"database_name,omitempty"`
 	DbClusterInstanceClass             *Value[string]                                  `tf:"db_cluster_instance_class" json:"db_cluster_instance_class,omitempty"`
 	DbClusterParameterGroupName        *Value[string]                                  `tf:"db_cluster_parameter_group_name" json:"db_cluster_parameter_group_name,omitempty"`
@@ -51,9 +53,13 @@ type AWSRDSCluster struct {
 	KMSKeyID                           *Value[string]                                  `tf:"kms_key_id" json:"kms_key_id,omitempty"`
 	ManageMasterUserPassword           *Value[bool]                                    `tf:"manage_master_user_password" json:"manage_master_user_password,omitempty"`
 	MasterPassword                     *Value[string]                                  `tf:"master_password" json:"master_password,omitempty"`
+	MasterPasswordWo                   *Value[string]                                  `tf:"master_password_wo" json:"master_password_wo,omitempty"`
+	MasterPasswordWoVersion            *Value[float64]                                 `tf:"master_password_wo_version" json:"master_password_wo_version,omitempty"`
 	MasterUserSecret                   []AWSRDSClusterMasterUserSecret                 `tf:"master_user_secret" json:"master_user_secret,omitempty"`
 	MasterUserSecretKMSKeyID           *Value[string]                                  `tf:"master_user_secret_kms_key_id" json:"master_user_secret_kms_key_id,omitempty"`
 	MasterUsername                     *Value[string]                                  `tf:"master_username" json:"master_username,omitempty"`
+	MonitoringInterval                 *Value[float64]                                 `tf:"monitoring_interval" json:"monitoring_interval,omitempty"`
+	MonitoringRoleARN                  *Value[string]                                  `tf:"monitoring_role_arn" json:"monitoring_role_arn,omitempty"`
 	NetworkType                        *Value[string]                                  `tf:"network_type" json:"network_type,omitempty"`
 	PerformanceInsightsEnabled         *Value[bool]                                    `tf:"performance_insights_enabled" json:"performance_insights_enabled,omitempty"`
 	PerformanceInsightsKMSKeyID        *Value[string]                                  `tf:"performance_insights_kms_key_id" json:"performance_insights_kms_key_id,omitempty"`
@@ -62,6 +68,7 @@ type AWSRDSCluster struct {
 	PreferredBackupWindow              *Value[string]                                  `tf:"preferred_backup_window" json:"preferred_backup_window,omitempty"`
 	PreferredMaintenanceWindow         *Value[string]                                  `tf:"preferred_maintenance_window" json:"preferred_maintenance_window,omitempty"`
 	ReaderEndpoint                     *Value[string]                                  `tf:"reader_endpoint" json:"reader_endpoint,omitempty"`
+	Region                             *Value[string]                                  `tf:"region" json:"region,omitempty"`
 	ReplicationSourceIdentifier        *Value[string]                                  `tf:"replication_source_identifier" json:"replication_source_identifier,omitempty"`
 	SkipFinalSnapshot                  *Value[bool]                                    `tf:"skip_final_snapshot" json:"skip_final_snapshot,omitempty"`
 	SnapshotIdentifier                 *Value[string]                                  `tf:"snapshot_identifier" json:"snapshot_identifier,omitempty"`
@@ -70,6 +77,7 @@ type AWSRDSCluster struct {
 	StorageType                        *Value[string]                                  `tf:"storage_type" json:"storage_type,omitempty"`
 	Tags                               map[string]*Value[string]                       `tf:"tags" json:"tags,omitempty"`
 	TagsAll                            map[string]*Value[string]                       `tf:"tags_all" json:"tags_all,omitempty"`
+	UpgradeRolloutOrder                *Value[string]                                  `tf:"upgrade_rollout_order" json:"upgrade_rollout_order,omitempty"`
 	VPCSecurityGroupIDS                []*Value[string]                                `tf:"vpc_security_group_ids" json:"vpc_security_group_ids,omitempty"`
 	RestoreToPointInTime               []AWSRDSClusterRestoreToPointInTime             `tf:"restore_to_point_in_time,blocks" json:"restore_to_point_in_time,omitempty"`
 	S3Import                           []AWSRDSClusterS3Import                         `tf:"s3_import,blocks" json:"s3_import,omitempty"`
@@ -115,8 +123,9 @@ type AWSRDSClusterScalingConfiguration struct {
 
 // AWSRDSClusterServerlessv2ScalingConfiguration is a nested-block type used by the parent resource.
 type AWSRDSClusterServerlessv2ScalingConfiguration struct {
-	MaxCapacity *Value[int64] `tf:"max_capacity" json:"max_capacity,omitempty"`
-	MinCapacity *Value[int64] `tf:"min_capacity" json:"min_capacity,omitempty"`
+	MaxCapacity           *Value[int64]   `tf:"max_capacity" json:"max_capacity,omitempty"`
+	MinCapacity           *Value[int64]   `tf:"min_capacity" json:"min_capacity,omitempty"`
+	SecondsUntilAutoPause *Value[float64] `tf:"seconds_until_auto_pause" json:"seconds_until_auto_pause,omitempty"`
 }
 
 // AWSRDSClusterTimeouts is a nested-block type used by the parent resource.
@@ -142,7 +151,9 @@ var AWSRDSClusterSchema = map[string]FieldSchema{
 	"cluster_identifier_prefix":             {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"cluster_members":                       {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"cluster_resource_id":                   {Computed: true, Replacement: ReplacementUnknown},
+	"cluster_scalability_type":              {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"copy_tags_to_snapshot":                 {Optional: true, Replacement: ReplacementUnknown},
+	"database_insights_mode":                {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"database_name":                         {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"db_cluster_instance_class":             {Optional: true, Replacement: ReplacementUnknown},
 	"db_cluster_parameter_group_name":       {Optional: true, Computed: true, Replacement: ReplacementUnknown},
@@ -173,9 +184,13 @@ var AWSRDSClusterSchema = map[string]FieldSchema{
 	"kms_key_id":                            {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"manage_master_user_password":           {Optional: true, Replacement: ReplacementUnknown},
 	"master_password":                       {Optional: true, Sensitive: true, Replacement: ReplacementUnknown},
+	"master_password_wo":                    {Optional: true, Sensitive: true, Replacement: ReplacementUnknown},
+	"master_password_wo_version":            {Optional: true, Replacement: ReplacementUnknown},
 	"master_user_secret":                    {Computed: true, Replacement: ReplacementUnknown},
 	"master_user_secret_kms_key_id":         {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"master_username":                       {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"monitoring_interval":                   {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"monitoring_role_arn":                   {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"network_type":                          {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"performance_insights_enabled":          {Optional: true, Replacement: ReplacementUnknown},
 	"performance_insights_kms_key_id":       {Optional: true, Computed: true, Replacement: ReplacementUnknown},
@@ -184,6 +199,7 @@ var AWSRDSClusterSchema = map[string]FieldSchema{
 	"preferred_backup_window":               {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"preferred_maintenance_window":          {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"reader_endpoint":                       {Computed: true, Replacement: ReplacementUnknown},
+	"region":                                {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"replication_source_identifier":         {Optional: true, Replacement: ReplacementUnknown},
 	"skip_final_snapshot":                   {Optional: true, Replacement: ReplacementUnknown},
 	"snapshot_identifier":                   {Optional: true, Replacement: ReplacementUnknown},
@@ -192,6 +208,7 @@ var AWSRDSClusterSchema = map[string]FieldSchema{
 	"storage_type":                          {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"tags":                                  {Optional: true, Replacement: ReplacementUnknown},
 	"tags_all":                              {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"upgrade_rollout_order":                 {Computed: true, Replacement: ReplacementUnknown},
 	"vpc_security_group_ids":                {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"restore_to_point_in_time":              {Optional: true, Replacement: ReplacementUnknown},
 	"s3_import":                             {Optional: true, Replacement: ReplacementUnknown},

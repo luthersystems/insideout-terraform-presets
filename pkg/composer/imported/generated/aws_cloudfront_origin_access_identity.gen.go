@@ -7,6 +7,7 @@ import "reflect"
 // AWSCloudfrontOriginAccessIdentity is the generated Layer 1 typed model for the
 // `aws_cloudfront_origin_access_identity` Terraform resource.
 type AWSCloudfrontOriginAccessIdentity struct {
+	ARN                          *Value[string] `tf:"arn" json:"arn,omitempty"`
 	CallerReference              *Value[string] `tf:"caller_reference" json:"caller_reference,omitempty"`
 	CloudfrontAccessIdentityPath *Value[string] `tf:"cloudfront_access_identity_path" json:"cloudfront_access_identity_path,omitempty"`
 	Comment                      *Value[string] `tf:"comment" json:"comment,omitempty"`
@@ -19,6 +20,7 @@ type AWSCloudfrontOriginAccessIdentity struct {
 // AWSCloudfrontOriginAccessIdentitySchema describes provider metadata for each attribute / nested
 // block of aws_cloudfront_origin_access_identity.
 var AWSCloudfrontOriginAccessIdentitySchema = map[string]FieldSchema{
+	"arn":                             {Computed: true, Replacement: ReplacementUnknown},
 	"caller_reference":                {Computed: true, Replacement: ReplacementUnknown},
 	"cloudfront_access_identity_path": {Computed: true, Replacement: ReplacementUnknown},
 	"comment":                         {Optional: true, Replacement: ReplacementUnknown},

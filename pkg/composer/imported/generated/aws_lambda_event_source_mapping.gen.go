@@ -24,6 +24,7 @@ type AWSLambdaEventSourceMapping struct {
 	MaximumRetryAttempts                *Value[float64]                                                  `tf:"maximum_retry_attempts" json:"maximum_retry_attempts,omitempty"`
 	ParallelizationFactor               *Value[float64]                                                  `tf:"parallelization_factor" json:"parallelization_factor,omitempty"`
 	Queues                              []*Value[string]                                                 `tf:"queues" json:"queues,omitempty"`
+	Region                              *Value[string]                                                   `tf:"region" json:"region,omitempty"`
 	StartingPosition                    *Value[string]                                                   `tf:"starting_position" json:"starting_position,omitempty"`
 	StartingPositionTimestamp           *Value[string]                                                   `tf:"starting_position_timestamp" json:"starting_position_timestamp,omitempty"`
 	State                               *Value[string]                                                   `tf:"state" json:"state,omitempty"`
@@ -37,6 +38,8 @@ type AWSLambdaEventSourceMapping struct {
 	DestinationConfig                   []AWSLambdaEventSourceMappingDestinationConfig                   `tf:"destination_config,blocks" json:"destination_config,omitempty"`
 	DocumentDbEventSourceConfig         []AWSLambdaEventSourceMappingDocumentDbEventSourceConfig         `tf:"document_db_event_source_config,blocks" json:"document_db_event_source_config,omitempty"`
 	FilterCriteria                      []AWSLambdaEventSourceMappingFilterCriteria                      `tf:"filter_criteria,blocks" json:"filter_criteria,omitempty"`
+	MetricsConfig                       []AWSLambdaEventSourceMappingMetricsConfig                       `tf:"metrics_config,blocks" json:"metrics_config,omitempty"`
+	ProvisionedPollerConfig             []AWSLambdaEventSourceMappingProvisionedPollerConfig             `tf:"provisioned_poller_config,blocks" json:"provisioned_poller_config,omitempty"`
 	ScalingConfig                       []AWSLambdaEventSourceMappingScalingConfig                       `tf:"scaling_config,blocks" json:"scaling_config,omitempty"`
 	SelfManagedEventSource              []AWSLambdaEventSourceMappingSelfManagedEventSource              `tf:"self_managed_event_source,blocks" json:"self_managed_event_source,omitempty"`
 	SelfManagedKafkaEventSourceConfig   []AWSLambdaEventSourceMappingSelfManagedKafkaEventSourceConfig   `tf:"self_managed_kafka_event_source_config,blocks" json:"self_managed_kafka_event_source_config,omitempty"`
@@ -45,7 +48,27 @@ type AWSLambdaEventSourceMapping struct {
 
 // AWSLambdaEventSourceMappingAmazonManagedKafkaEventSourceConfig is a nested-block type used by the parent resource.
 type AWSLambdaEventSourceMappingAmazonManagedKafkaEventSourceConfig struct {
-	ConsumerGroupID *Value[string] `tf:"consumer_group_id" json:"consumer_group_id,omitempty"`
+	ConsumerGroupID      *Value[string]                                                                       `tf:"consumer_group_id" json:"consumer_group_id,omitempty"`
+	SchemaRegistryConfig []AWSLambdaEventSourceMappingAmazonManagedKafkaEventSourceConfigSchemaRegistryConfig `tf:"schema_registry_config,blocks" json:"schema_registry_config,omitempty"`
+}
+
+// AWSLambdaEventSourceMappingAmazonManagedKafkaEventSourceConfigSchemaRegistryConfig is a nested-block type used by the parent resource.
+type AWSLambdaEventSourceMappingAmazonManagedKafkaEventSourceConfigSchemaRegistryConfig struct {
+	EventRecordFormat      *Value[string]                                                                                             `tf:"event_record_format" json:"event_record_format,omitempty"`
+	SchemaRegistryURI      *Value[string]                                                                                             `tf:"schema_registry_uri" json:"schema_registry_uri,omitempty"`
+	AccessConfig           []AWSLambdaEventSourceMappingAmazonManagedKafkaEventSourceConfigSchemaRegistryConfigAccessConfig           `tf:"access_config,blocks" json:"access_config,omitempty"`
+	SchemaValidationConfig []AWSLambdaEventSourceMappingAmazonManagedKafkaEventSourceConfigSchemaRegistryConfigSchemaValidationConfig `tf:"schema_validation_config,blocks" json:"schema_validation_config,omitempty"`
+}
+
+// AWSLambdaEventSourceMappingAmazonManagedKafkaEventSourceConfigSchemaRegistryConfigAccessConfig is a nested-block type used by the parent resource.
+type AWSLambdaEventSourceMappingAmazonManagedKafkaEventSourceConfigSchemaRegistryConfigAccessConfig struct {
+	Type_ *Value[string] `tf:"type" json:"type,omitempty"`
+	URI   *Value[string] `tf:"uri" json:"uri,omitempty"`
+}
+
+// AWSLambdaEventSourceMappingAmazonManagedKafkaEventSourceConfigSchemaRegistryConfigSchemaValidationConfig is a nested-block type used by the parent resource.
+type AWSLambdaEventSourceMappingAmazonManagedKafkaEventSourceConfigSchemaRegistryConfigSchemaValidationConfig struct {
+	Attribute *Value[string] `tf:"attribute" json:"attribute,omitempty"`
 }
 
 // AWSLambdaEventSourceMappingDestinationConfig is a nested-block type used by the parent resource.
@@ -75,6 +98,18 @@ type AWSLambdaEventSourceMappingFilterCriteriaFilter struct {
 	Pattern *Value[string] `tf:"pattern" json:"pattern,omitempty"`
 }
 
+// AWSLambdaEventSourceMappingMetricsConfig is a nested-block type used by the parent resource.
+type AWSLambdaEventSourceMappingMetricsConfig struct {
+	Metrics []*Value[string] `tf:"metrics" json:"metrics,omitempty"`
+}
+
+// AWSLambdaEventSourceMappingProvisionedPollerConfig is a nested-block type used by the parent resource.
+type AWSLambdaEventSourceMappingProvisionedPollerConfig struct {
+	MaximumPollers  *Value[float64] `tf:"maximum_pollers" json:"maximum_pollers,omitempty"`
+	MinimumPollers  *Value[float64] `tf:"minimum_pollers" json:"minimum_pollers,omitempty"`
+	PollerGroupName *Value[string]  `tf:"poller_group_name" json:"poller_group_name,omitempty"`
+}
+
 // AWSLambdaEventSourceMappingScalingConfig is a nested-block type used by the parent resource.
 type AWSLambdaEventSourceMappingScalingConfig struct {
 	MaximumConcurrency *Value[float64] `tf:"maximum_concurrency" json:"maximum_concurrency,omitempty"`
@@ -87,7 +122,27 @@ type AWSLambdaEventSourceMappingSelfManagedEventSource struct {
 
 // AWSLambdaEventSourceMappingSelfManagedKafkaEventSourceConfig is a nested-block type used by the parent resource.
 type AWSLambdaEventSourceMappingSelfManagedKafkaEventSourceConfig struct {
-	ConsumerGroupID *Value[string] `tf:"consumer_group_id" json:"consumer_group_id,omitempty"`
+	ConsumerGroupID      *Value[string]                                                                     `tf:"consumer_group_id" json:"consumer_group_id,omitempty"`
+	SchemaRegistryConfig []AWSLambdaEventSourceMappingSelfManagedKafkaEventSourceConfigSchemaRegistryConfig `tf:"schema_registry_config,blocks" json:"schema_registry_config,omitempty"`
+}
+
+// AWSLambdaEventSourceMappingSelfManagedKafkaEventSourceConfigSchemaRegistryConfig is a nested-block type used by the parent resource.
+type AWSLambdaEventSourceMappingSelfManagedKafkaEventSourceConfigSchemaRegistryConfig struct {
+	EventRecordFormat      *Value[string]                                                                                           `tf:"event_record_format" json:"event_record_format,omitempty"`
+	SchemaRegistryURI      *Value[string]                                                                                           `tf:"schema_registry_uri" json:"schema_registry_uri,omitempty"`
+	AccessConfig           []AWSLambdaEventSourceMappingSelfManagedKafkaEventSourceConfigSchemaRegistryConfigAccessConfig           `tf:"access_config,blocks" json:"access_config,omitempty"`
+	SchemaValidationConfig []AWSLambdaEventSourceMappingSelfManagedKafkaEventSourceConfigSchemaRegistryConfigSchemaValidationConfig `tf:"schema_validation_config,blocks" json:"schema_validation_config,omitempty"`
+}
+
+// AWSLambdaEventSourceMappingSelfManagedKafkaEventSourceConfigSchemaRegistryConfigAccessConfig is a nested-block type used by the parent resource.
+type AWSLambdaEventSourceMappingSelfManagedKafkaEventSourceConfigSchemaRegistryConfigAccessConfig struct {
+	Type_ *Value[string] `tf:"type" json:"type,omitempty"`
+	URI   *Value[string] `tf:"uri" json:"uri,omitempty"`
+}
+
+// AWSLambdaEventSourceMappingSelfManagedKafkaEventSourceConfigSchemaRegistryConfigSchemaValidationConfig is a nested-block type used by the parent resource.
+type AWSLambdaEventSourceMappingSelfManagedKafkaEventSourceConfigSchemaRegistryConfigSchemaValidationConfig struct {
+	Attribute *Value[string] `tf:"attribute" json:"attribute,omitempty"`
 }
 
 // AWSLambdaEventSourceMappingSourceAccessConfiguration is a nested-block type used by the parent resource.
@@ -116,6 +171,7 @@ var AWSLambdaEventSourceMappingSchema = map[string]FieldSchema{
 	"maximum_retry_attempts":             {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"parallelization_factor":             {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"queues":                             {Optional: true, Replacement: ReplacementUnknown},
+	"region":                             {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"starting_position":                  {Optional: true, Replacement: ReplacementUnknown},
 	"starting_position_timestamp":        {Optional: true, Replacement: ReplacementUnknown},
 	"state":                              {Computed: true, Replacement: ReplacementUnknown},
@@ -129,6 +185,8 @@ var AWSLambdaEventSourceMappingSchema = map[string]FieldSchema{
 	"destination_config":                       {Optional: true, Replacement: ReplacementUnknown},
 	"document_db_event_source_config":          {Optional: true, Replacement: ReplacementUnknown},
 	"filter_criteria":                          {Optional: true, Replacement: ReplacementUnknown},
+	"metrics_config":                           {Optional: true, Replacement: ReplacementUnknown},
+	"provisioned_poller_config":                {Optional: true, Replacement: ReplacementUnknown},
 	"scaling_config":                           {Optional: true, Replacement: ReplacementUnknown},
 	"self_managed_event_source":                {Optional: true, Replacement: ReplacementUnknown},
 	"self_managed_kafka_event_source_config":   {Optional: true, Replacement: ReplacementUnknown},

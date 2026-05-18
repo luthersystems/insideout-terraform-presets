@@ -21,6 +21,7 @@ type AWSApigatewayv2Integration struct {
 	IntegrationURI                         *Value[string]                                 `tf:"integration_uri" json:"integration_uri,omitempty"`
 	PassthroughBehavior                    *Value[string]                                 `tf:"passthrough_behavior" json:"passthrough_behavior,omitempty"`
 	PayloadFormatVersion                   *Value[string]                                 `tf:"payload_format_version" json:"payload_format_version,omitempty"`
+	Region                                 *Value[string]                                 `tf:"region" json:"region,omitempty"`
 	RequestParameters                      map[string]*Value[string]                      `tf:"request_parameters" json:"request_parameters,omitempty"`
 	RequestTemplates                       map[string]*Value[string]                      `tf:"request_templates" json:"request_templates,omitempty"`
 	TemplateSelectionExpression            *Value[string]                                 `tf:"template_selection_expression" json:"template_selection_expression,omitempty"`
@@ -57,6 +58,7 @@ var AWSApigatewayv2IntegrationSchema = map[string]FieldSchema{
 	"integration_uri":                           {Optional: true, Replacement: ReplacementUnknown},
 	"passthrough_behavior":                      {Optional: true, Replacement: ReplacementUnknown},
 	"payload_format_version":                    {Optional: true, Replacement: ReplacementUnknown},
+	"region":                                    {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"request_parameters":                        {Optional: true, Replacement: ReplacementUnknown},
 	"request_templates":                         {Optional: true, Replacement: ReplacementUnknown},
 	"template_selection_expression":             {Optional: true, Replacement: ReplacementUnknown},

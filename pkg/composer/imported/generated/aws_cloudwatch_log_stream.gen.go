@@ -11,6 +11,7 @@ type AWSCloudwatchLogStream struct {
 	ID           *Value[string] `tf:"id" json:"id,omitempty"`
 	LogGroupName *Value[string] `tf:"log_group_name" json:"log_group_name,omitempty"`
 	Name         *Value[string] `tf:"name" json:"name,omitempty"`
+	Region       *Value[string] `tf:"region" json:"region,omitempty"`
 }
 
 // AWSCloudwatchLogStreamSchema describes provider metadata for each attribute / nested
@@ -20,6 +21,7 @@ var AWSCloudwatchLogStreamSchema = map[string]FieldSchema{
 	"id":             {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"log_group_name": {Required: true, Replacement: ReplacementUnknown},
 	"name":           {Required: true, Replacement: ReplacementUnknown},
+	"region":         {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 }
 
 func init() {

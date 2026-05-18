@@ -9,7 +9,7 @@ import "reflect"
 type AWSElasticacheReplicationGroup struct {
 	ApplyImmediately             *Value[bool]                                             `tf:"apply_immediately" json:"apply_immediately,omitempty"`
 	ARN                          *Value[string]                                           `tf:"arn" json:"arn,omitempty"`
-	AtRestEncryptionEnabled      *Value[bool]                                             `tf:"at_rest_encryption_enabled" json:"at_rest_encryption_enabled,omitempty"`
+	AtRestEncryptionEnabled      *Value[string]                                           `tf:"at_rest_encryption_enabled" json:"at_rest_encryption_enabled,omitempty"`
 	AuthToken                    *Value[string]                                           `tf:"auth_token" json:"auth_token,omitempty"`
 	AuthTokenUpdateStrategy      *Value[string]                                           `tf:"auth_token_update_strategy" json:"auth_token_update_strategy,omitempty"`
 	AutoMinorVersionUpgrade      *Value[string]                                           `tf:"auto_minor_version_upgrade" json:"auto_minor_version_upgrade,omitempty"`
@@ -40,6 +40,7 @@ type AWSElasticacheReplicationGroup struct {
 	PreferredCacheClusterAzs     []*Value[string]                                         `tf:"preferred_cache_cluster_azs" json:"preferred_cache_cluster_azs,omitempty"`
 	PrimaryEndpointAddress       *Value[string]                                           `tf:"primary_endpoint_address" json:"primary_endpoint_address,omitempty"`
 	ReaderEndpointAddress        *Value[string]                                           `tf:"reader_endpoint_address" json:"reader_endpoint_address,omitempty"`
+	Region                       *Value[string]                                           `tf:"region" json:"region,omitempty"`
 	ReplicasPerNodeGroup         *Value[float64]                                          `tf:"replicas_per_node_group" json:"replicas_per_node_group,omitempty"`
 	ReplicationGroupID           *Value[string]                                           `tf:"replication_group_id" json:"replication_group_id,omitempty"`
 	SecurityGroupIDS             []*Value[string]                                         `tf:"security_group_ids" json:"security_group_ids,omitempty"`
@@ -55,6 +56,7 @@ type AWSElasticacheReplicationGroup struct {
 	TransitEncryptionMode        *Value[string]                                           `tf:"transit_encryption_mode" json:"transit_encryption_mode,omitempty"`
 	UserGroupIDS                 []*Value[string]                                         `tf:"user_group_ids" json:"user_group_ids,omitempty"`
 	LogDeliveryConfiguration     []AWSElasticacheReplicationGroupLogDeliveryConfiguration `tf:"log_delivery_configuration,blocks" json:"log_delivery_configuration,omitempty"`
+	NodeGroupConfiguration       []AWSElasticacheReplicationGroupNodeGroupConfiguration   `tf:"node_group_configuration,blocks" json:"node_group_configuration,omitempty"`
 	Timeouts                     *AWSElasticacheReplicationGroupTimeouts                  `tf:"timeouts,block" json:"timeouts,omitempty"`
 }
 
@@ -64,6 +66,17 @@ type AWSElasticacheReplicationGroupLogDeliveryConfiguration struct {
 	DestinationType *Value[string] `tf:"destination_type" json:"destination_type,omitempty"`
 	LogFormat       *Value[string] `tf:"log_format" json:"log_format,omitempty"`
 	LogType         *Value[string] `tf:"log_type" json:"log_type,omitempty"`
+}
+
+// AWSElasticacheReplicationGroupNodeGroupConfiguration is a nested-block type used by the parent resource.
+type AWSElasticacheReplicationGroupNodeGroupConfiguration struct {
+	NodeGroupID              *Value[string]   `tf:"node_group_id" json:"node_group_id,omitempty"`
+	PrimaryAvailabilityZone  *Value[string]   `tf:"primary_availability_zone" json:"primary_availability_zone,omitempty"`
+	PrimaryOutpostARN        *Value[string]   `tf:"primary_outpost_arn" json:"primary_outpost_arn,omitempty"`
+	ReplicaAvailabilityZones []*Value[string] `tf:"replica_availability_zones" json:"replica_availability_zones,omitempty"`
+	ReplicaCount             *Value[int64]    `tf:"replica_count" json:"replica_count,omitempty"`
+	ReplicaOutpostArns       []*Value[string] `tf:"replica_outpost_arns" json:"replica_outpost_arns,omitempty"`
+	Slots                    *Value[string]   `tf:"slots" json:"slots,omitempty"`
 }
 
 // AWSElasticacheReplicationGroupTimeouts is a nested-block type used by the parent resource.
@@ -88,7 +101,7 @@ var AWSElasticacheReplicationGroupSchema = map[string]FieldSchema{
 	"configuration_endpoint_address": {Computed: true, Replacement: ReplacementUnknown},
 	"data_tiering_enabled":           {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"description":                    {Required: true, Replacement: ReplacementUnknown},
-	"engine":                         {Optional: true, Replacement: ReplacementUnknown},
+	"engine":                         {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"engine_version":                 {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"engine_version_actual":          {Computed: true, Replacement: ReplacementUnknown},
 	"final_snapshot_identifier":      {Optional: true, Replacement: ReplacementUnknown},
@@ -109,6 +122,7 @@ var AWSElasticacheReplicationGroupSchema = map[string]FieldSchema{
 	"preferred_cache_cluster_azs":    {Optional: true, Replacement: ReplacementUnknown},
 	"primary_endpoint_address":       {Computed: true, Replacement: ReplacementUnknown},
 	"reader_endpoint_address":        {Computed: true, Replacement: ReplacementUnknown},
+	"region":                         {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"replicas_per_node_group":        {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"replication_group_id":           {Required: true, Replacement: ReplacementUnknown},
 	"security_group_ids":             {Optional: true, Computed: true, Replacement: ReplacementUnknown},
@@ -124,6 +138,7 @@ var AWSElasticacheReplicationGroupSchema = map[string]FieldSchema{
 	"transit_encryption_mode":        {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"user_group_ids":                 {Optional: true, Replacement: ReplacementUnknown},
 	"log_delivery_configuration":     {Optional: true, Replacement: ReplacementUnknown},
+	"node_group_configuration":       {Optional: true, Replacement: ReplacementUnknown},
 	"timeouts":                       {Optional: true, Replacement: ReplacementUnknown},
 }
 

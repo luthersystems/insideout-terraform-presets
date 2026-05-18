@@ -11,6 +11,8 @@ type AWSResourceexplorer2View struct {
 	DefaultView      *Value[bool]                               `tf:"default_view" json:"default_view,omitempty"`
 	ID               *Value[string]                             `tf:"id" json:"id,omitempty"`
 	Name             *Value[string]                             `tf:"name" json:"name,omitempty"`
+	Region           *Value[string]                             `tf:"region" json:"region,omitempty"`
+	Scope            *Value[string]                             `tf:"scope" json:"scope,omitempty"`
 	Tags             map[string]*Value[string]                  `tf:"tags" json:"tags,omitempty"`
 	TagsAll          map[string]*Value[string]                  `tf:"tags_all" json:"tags_all,omitempty"`
 	Filters          []AWSResourceexplorer2ViewFilters          `tf:"filters,blocks" json:"filters,omitempty"`
@@ -34,6 +36,8 @@ var AWSResourceexplorer2ViewSchema = map[string]FieldSchema{
 	"default_view":      {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"id":                {Computed: true, Replacement: ReplacementUnknown},
 	"name":              {Required: true, Replacement: ReplacementUnknown},
+	"region":            {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"scope":             {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"tags":              {Optional: true, Replacement: ReplacementUnknown},
 	"tags_all":          {Computed: true, Replacement: ReplacementUnknown},
 	"filters":           {Optional: true, Replacement: ReplacementUnknown},

@@ -9,6 +9,7 @@ import "reflect"
 type AWSAutoscalingGroupTag struct {
 	AutoscalingGroupName *Value[string]              `tf:"autoscaling_group_name" json:"autoscaling_group_name,omitempty"`
 	ID                   *Value[string]              `tf:"id" json:"id,omitempty"`
+	Region               *Value[string]              `tf:"region" json:"region,omitempty"`
 	Tag                  []AWSAutoscalingGroupTagTag `tf:"tag,blocks" json:"tag,omitempty"`
 }
 
@@ -24,6 +25,7 @@ type AWSAutoscalingGroupTagTag struct {
 var AWSAutoscalingGroupTagSchema = map[string]FieldSchema{
 	"autoscaling_group_name": {Required: true, Replacement: ReplacementUnknown},
 	"id":                     {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"region":                 {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"tag":                    {Required: true, Replacement: ReplacementUnknown},
 }
 

@@ -7,57 +7,82 @@ import "reflect"
 // AWSLambdaFunction is the generated Layer 1 typed model for the
 // `aws_lambda_function` Terraform resource.
 type AWSLambdaFunction struct {
-	Architectures                  []*Value[string]                    `tf:"architectures" json:"architectures,omitempty"`
-	ARN                            *Value[string]                      `tf:"arn" json:"arn,omitempty"`
-	CodeSHA256                     *Value[string]                      `tf:"code_sha256" json:"code_sha256,omitempty"`
-	CodeSigningConfigARN           *Value[string]                      `tf:"code_signing_config_arn" json:"code_signing_config_arn,omitempty"`
-	Description                    *Value[string]                      `tf:"description" json:"description,omitempty"`
-	Filename                       *Value[string]                      `tf:"filename" json:"filename,omitempty"`
-	FunctionName                   *Value[string]                      `tf:"function_name" json:"function_name,omitempty"`
-	Handler                        *Value[string]                      `tf:"handler" json:"handler,omitempty"`
-	ID                             *Value[string]                      `tf:"id" json:"id,omitempty"`
-	ImageURI                       *Value[string]                      `tf:"image_uri" json:"image_uri,omitempty"`
-	InvokeARN                      *Value[string]                      `tf:"invoke_arn" json:"invoke_arn,omitempty"`
-	KMSKeyARN                      *Value[string]                      `tf:"kms_key_arn" json:"kms_key_arn,omitempty"`
-	LastModified                   *Value[string]                      `tf:"last_modified" json:"last_modified,omitempty"`
-	Layers                         []*Value[string]                    `tf:"layers" json:"layers,omitempty"`
-	MemorySize                     *Value[int64]                       `tf:"memory_size" json:"memory_size,omitempty"`
-	PackageType                    *Value[string]                      `tf:"package_type" json:"package_type,omitempty"`
-	Publish                        *Value[bool]                        `tf:"publish" json:"publish,omitempty"`
-	QualifiedARN                   *Value[string]                      `tf:"qualified_arn" json:"qualified_arn,omitempty"`
-	QualifiedInvokeARN             *Value[string]                      `tf:"qualified_invoke_arn" json:"qualified_invoke_arn,omitempty"`
-	ReplaceSecurityGroupsOnDestroy *Value[bool]                        `tf:"replace_security_groups_on_destroy" json:"replace_security_groups_on_destroy,omitempty"`
-	ReplacementSecurityGroupIDS    []*Value[string]                    `tf:"replacement_security_group_ids" json:"replacement_security_group_ids,omitempty"`
-	ReservedConcurrentExecutions   *Value[int64]                       `tf:"reserved_concurrent_executions" json:"reserved_concurrent_executions,omitempty"`
-	Role                           *Value[string]                      `tf:"role" json:"role,omitempty"`
-	Runtime                        *Value[string]                      `tf:"runtime" json:"runtime,omitempty"`
-	S3Bucket                       *Value[string]                      `tf:"s3_bucket" json:"s3_bucket,omitempty"`
-	S3Key                          *Value[string]                      `tf:"s3_key" json:"s3_key,omitempty"`
-	S3ObjectVersion                *Value[string]                      `tf:"s3_object_version" json:"s3_object_version,omitempty"`
-	SigningJobARN                  *Value[string]                      `tf:"signing_job_arn" json:"signing_job_arn,omitempty"`
-	SigningProfileVersionARN       *Value[string]                      `tf:"signing_profile_version_arn" json:"signing_profile_version_arn,omitempty"`
-	SkipDestroy                    *Value[bool]                        `tf:"skip_destroy" json:"skip_destroy,omitempty"`
-	SourceCodeHash                 *Value[string]                      `tf:"source_code_hash" json:"source_code_hash,omitempty"`
-	SourceCodeSize                 *Value[int64]                       `tf:"source_code_size" json:"source_code_size,omitempty"`
-	Tags                           map[string]*Value[string]           `tf:"tags" json:"tags,omitempty"`
-	TagsAll                        map[string]*Value[string]           `tf:"tags_all" json:"tags_all,omitempty"`
-	Timeout                        *Value[int64]                       `tf:"timeout" json:"timeout,omitempty"`
-	Version                        *Value[string]                      `tf:"version" json:"version,omitempty"`
-	DeadLetterConfig               []AWSLambdaFunctionDeadLetterConfig `tf:"dead_letter_config,blocks" json:"dead_letter_config,omitempty"`
-	Environment                    []AWSLambdaFunctionEnvironment      `tf:"environment,blocks" json:"environment,omitempty"`
-	EphemeralStorage               []AWSLambdaFunctionEphemeralStorage `tf:"ephemeral_storage,blocks" json:"ephemeral_storage,omitempty"`
-	FileSystemConfig               []AWSLambdaFunctionFileSystemConfig `tf:"file_system_config,blocks" json:"file_system_config,omitempty"`
-	ImageConfig                    []AWSLambdaFunctionImageConfig      `tf:"image_config,blocks" json:"image_config,omitempty"`
-	LoggingConfig                  []AWSLambdaFunctionLoggingConfig    `tf:"logging_config,blocks" json:"logging_config,omitempty"`
-	SnapStart                      []AWSLambdaFunctionSnapStart        `tf:"snap_start,blocks" json:"snap_start,omitempty"`
-	Timeouts                       *AWSLambdaFunctionTimeouts          `tf:"timeouts,block" json:"timeouts,omitempty"`
-	TracingConfig                  []AWSLambdaFunctionTracingConfig    `tf:"tracing_config,blocks" json:"tracing_config,omitempty"`
-	VPCConfig                      []AWSLambdaFunctionVPCConfig        `tf:"vpc_config,blocks" json:"vpc_config,omitempty"`
+	Architectures                  []*Value[string]                          `tf:"architectures" json:"architectures,omitempty"`
+	ARN                            *Value[string]                            `tf:"arn" json:"arn,omitempty"`
+	CodeSHA256                     *Value[string]                            `tf:"code_sha256" json:"code_sha256,omitempty"`
+	CodeSigningConfigARN           *Value[string]                            `tf:"code_signing_config_arn" json:"code_signing_config_arn,omitempty"`
+	Description                    *Value[string]                            `tf:"description" json:"description,omitempty"`
+	Filename                       *Value[string]                            `tf:"filename" json:"filename,omitempty"`
+	FunctionName                   *Value[string]                            `tf:"function_name" json:"function_name,omitempty"`
+	Handler                        *Value[string]                            `tf:"handler" json:"handler,omitempty"`
+	ID                             *Value[string]                            `tf:"id" json:"id,omitempty"`
+	ImageURI                       *Value[string]                            `tf:"image_uri" json:"image_uri,omitempty"`
+	InvokeARN                      *Value[string]                            `tf:"invoke_arn" json:"invoke_arn,omitempty"`
+	KMSKeyARN                      *Value[string]                            `tf:"kms_key_arn" json:"kms_key_arn,omitempty"`
+	LastModified                   *Value[string]                            `tf:"last_modified" json:"last_modified,omitempty"`
+	Layers                         []*Value[string]                          `tf:"layers" json:"layers,omitempty"`
+	MemorySize                     *Value[int64]                             `tf:"memory_size" json:"memory_size,omitempty"`
+	PackageType                    *Value[string]                            `tf:"package_type" json:"package_type,omitempty"`
+	Publish                        *Value[bool]                              `tf:"publish" json:"publish,omitempty"`
+	PublishTo                      *Value[string]                            `tf:"publish_to" json:"publish_to,omitempty"`
+	QualifiedARN                   *Value[string]                            `tf:"qualified_arn" json:"qualified_arn,omitempty"`
+	QualifiedInvokeARN             *Value[string]                            `tf:"qualified_invoke_arn" json:"qualified_invoke_arn,omitempty"`
+	Region                         *Value[string]                            `tf:"region" json:"region,omitempty"`
+	ReplaceSecurityGroupsOnDestroy *Value[bool]                              `tf:"replace_security_groups_on_destroy" json:"replace_security_groups_on_destroy,omitempty"`
+	ReplacementSecurityGroupIDS    []*Value[string]                          `tf:"replacement_security_group_ids" json:"replacement_security_group_ids,omitempty"`
+	ReservedConcurrentExecutions   *Value[int64]                             `tf:"reserved_concurrent_executions" json:"reserved_concurrent_executions,omitempty"`
+	ResponseStreamingInvokeARN     *Value[string]                            `tf:"response_streaming_invoke_arn" json:"response_streaming_invoke_arn,omitempty"`
+	Role                           *Value[string]                            `tf:"role" json:"role,omitempty"`
+	Runtime                        *Value[string]                            `tf:"runtime" json:"runtime,omitempty"`
+	S3Bucket                       *Value[string]                            `tf:"s3_bucket" json:"s3_bucket,omitempty"`
+	S3Key                          *Value[string]                            `tf:"s3_key" json:"s3_key,omitempty"`
+	S3ObjectVersion                *Value[string]                            `tf:"s3_object_version" json:"s3_object_version,omitempty"`
+	SigningJobARN                  *Value[string]                            `tf:"signing_job_arn" json:"signing_job_arn,omitempty"`
+	SigningProfileVersionARN       *Value[string]                            `tf:"signing_profile_version_arn" json:"signing_profile_version_arn,omitempty"`
+	SkipDestroy                    *Value[bool]                              `tf:"skip_destroy" json:"skip_destroy,omitempty"`
+	SourceCodeHash                 *Value[string]                            `tf:"source_code_hash" json:"source_code_hash,omitempty"`
+	SourceCodeSize                 *Value[int64]                             `tf:"source_code_size" json:"source_code_size,omitempty"`
+	SourceKMSKeyARN                *Value[string]                            `tf:"source_kms_key_arn" json:"source_kms_key_arn,omitempty"`
+	Tags                           map[string]*Value[string]                 `tf:"tags" json:"tags,omitempty"`
+	TagsAll                        map[string]*Value[string]                 `tf:"tags_all" json:"tags_all,omitempty"`
+	Timeout                        *Value[int64]                             `tf:"timeout" json:"timeout,omitempty"`
+	Version                        *Value[string]                            `tf:"version" json:"version,omitempty"`
+	CapacityProviderConfig         []AWSLambdaFunctionCapacityProviderConfig `tf:"capacity_provider_config,blocks" json:"capacity_provider_config,omitempty"`
+	DeadLetterConfig               []AWSLambdaFunctionDeadLetterConfig       `tf:"dead_letter_config,blocks" json:"dead_letter_config,omitempty"`
+	DurableConfig                  []AWSLambdaFunctionDurableConfig          `tf:"durable_config,blocks" json:"durable_config,omitempty"`
+	Environment                    []AWSLambdaFunctionEnvironment            `tf:"environment,blocks" json:"environment,omitempty"`
+	EphemeralStorage               []AWSLambdaFunctionEphemeralStorage       `tf:"ephemeral_storage,blocks" json:"ephemeral_storage,omitempty"`
+	FileSystemConfig               []AWSLambdaFunctionFileSystemConfig       `tf:"file_system_config,blocks" json:"file_system_config,omitempty"`
+	ImageConfig                    []AWSLambdaFunctionImageConfig            `tf:"image_config,blocks" json:"image_config,omitempty"`
+	LoggingConfig                  []AWSLambdaFunctionLoggingConfig          `tf:"logging_config,blocks" json:"logging_config,omitempty"`
+	SnapStart                      []AWSLambdaFunctionSnapStart              `tf:"snap_start,blocks" json:"snap_start,omitempty"`
+	TenancyConfig                  []AWSLambdaFunctionTenancyConfig          `tf:"tenancy_config,blocks" json:"tenancy_config,omitempty"`
+	Timeouts                       *AWSLambdaFunctionTimeouts                `tf:"timeouts,block" json:"timeouts,omitempty"`
+	TracingConfig                  []AWSLambdaFunctionTracingConfig          `tf:"tracing_config,blocks" json:"tracing_config,omitempty"`
+	VPCConfig                      []AWSLambdaFunctionVPCConfig              `tf:"vpc_config,blocks" json:"vpc_config,omitempty"`
+}
+
+// AWSLambdaFunctionCapacityProviderConfig is a nested-block type used by the parent resource.
+type AWSLambdaFunctionCapacityProviderConfig struct {
+	LambdaManagedInstancesCapacityProviderConfig []AWSLambdaFunctionCapacityProviderConfigLambdaManagedInstancesCapacityProviderConfig `tf:"lambda_managed_instances_capacity_provider_config,blocks" json:"lambda_managed_instances_capacity_provider_config,omitempty"`
+}
+
+// AWSLambdaFunctionCapacityProviderConfigLambdaManagedInstancesCapacityProviderConfig is a nested-block type used by the parent resource.
+type AWSLambdaFunctionCapacityProviderConfigLambdaManagedInstancesCapacityProviderConfig struct {
+	CapacityProviderARN                   *Value[string]  `tf:"capacity_provider_arn" json:"capacity_provider_arn,omitempty"`
+	ExecutionEnvironmentMemoryGibPerVcpu  *Value[float64] `tf:"execution_environment_memory_gib_per_vcpu" json:"execution_environment_memory_gib_per_vcpu,omitempty"`
+	PerExecutionEnvironmentMaxConcurrency *Value[float64] `tf:"per_execution_environment_max_concurrency" json:"per_execution_environment_max_concurrency,omitempty"`
 }
 
 // AWSLambdaFunctionDeadLetterConfig is a nested-block type used by the parent resource.
 type AWSLambdaFunctionDeadLetterConfig struct {
 	TargetARN *Value[string] `tf:"target_arn" json:"target_arn,omitempty"`
+}
+
+// AWSLambdaFunctionDurableConfig is a nested-block type used by the parent resource.
+type AWSLambdaFunctionDurableConfig struct {
+	ExecutionTimeout *Value[int64] `tf:"execution_timeout" json:"execution_timeout,omitempty"`
+	RetentionPeriod  *Value[int64] `tf:"retention_period" json:"retention_period,omitempty"`
 }
 
 // AWSLambdaFunctionEnvironment is a nested-block type used by the parent resource.
@@ -97,6 +122,11 @@ type AWSLambdaFunctionSnapStart struct {
 	OptimizationStatus *Value[string] `tf:"optimization_status" json:"optimization_status,omitempty"`
 }
 
+// AWSLambdaFunctionTenancyConfig is a nested-block type used by the parent resource.
+type AWSLambdaFunctionTenancyConfig struct {
+	TenantIsolationMode *Value[string] `tf:"tenant_isolation_mode" json:"tenant_isolation_mode,omitempty"`
+}
+
 // AWSLambdaFunctionTimeouts is a nested-block type used by the parent resource.
 type AWSLambdaFunctionTimeouts struct {
 	Create *Value[string] `tf:"create" json:"create,omitempty"`
@@ -122,7 +152,7 @@ type AWSLambdaFunctionVPCConfig struct {
 var AWSLambdaFunctionSchema = map[string]FieldSchema{
 	"architectures":                      {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"arn":                                {Computed: true, Replacement: ReplacementUnknown},
-	"code_sha256":                        {Computed: true, Replacement: ReplacementUnknown},
+	"code_sha256":                        {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"code_signing_config_arn":            {Optional: true, Replacement: ReplacementUnknown},
 	"description":                        {Optional: true, Replacement: ReplacementUnknown},
 	"filename":                           {Optional: true, Replacement: ReplacementUnknown},
@@ -137,11 +167,14 @@ var AWSLambdaFunctionSchema = map[string]FieldSchema{
 	"memory_size":                        {Optional: true, Replacement: ReplacementUnknown},
 	"package_type":                       {Optional: true, Replacement: ReplacementUnknown},
 	"publish":                            {Optional: true, Replacement: ReplacementUnknown},
+	"publish_to":                         {Optional: true, Replacement: ReplacementUnknown},
 	"qualified_arn":                      {Computed: true, Replacement: ReplacementUnknown},
 	"qualified_invoke_arn":               {Computed: true, Replacement: ReplacementUnknown},
+	"region":                             {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"replace_security_groups_on_destroy": {Optional: true, Replacement: ReplacementUnknown},
 	"replacement_security_group_ids":     {Optional: true, Replacement: ReplacementUnknown},
 	"reserved_concurrent_executions":     {Optional: true, Replacement: ReplacementUnknown},
+	"response_streaming_invoke_arn":      {Computed: true, Replacement: ReplacementUnknown},
 	"role":                               {Required: true, Replacement: ReplacementUnknown},
 	"runtime":                            {Optional: true, Replacement: ReplacementUnknown},
 	"s3_bucket":                          {Optional: true, Replacement: ReplacementUnknown},
@@ -152,17 +185,21 @@ var AWSLambdaFunctionSchema = map[string]FieldSchema{
 	"skip_destroy":                       {Optional: true, Replacement: ReplacementUnknown},
 	"source_code_hash":                   {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"source_code_size":                   {Computed: true, Replacement: ReplacementUnknown},
+	"source_kms_key_arn":                 {Optional: true, Replacement: ReplacementUnknown},
 	"tags":                               {Optional: true, Replacement: ReplacementUnknown},
 	"tags_all":                           {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"timeout":                            {Optional: true, Replacement: ReplacementUnknown},
 	"version":                            {Computed: true, Replacement: ReplacementUnknown},
+	"capacity_provider_config":           {Optional: true, Replacement: ReplacementUnknown},
 	"dead_letter_config":                 {Optional: true, Replacement: ReplacementUnknown},
+	"durable_config":                     {Optional: true, Replacement: ReplacementUnknown},
 	"environment":                        {Optional: true, Replacement: ReplacementUnknown},
 	"ephemeral_storage":                  {Optional: true, Replacement: ReplacementUnknown},
 	"file_system_config":                 {Optional: true, Replacement: ReplacementUnknown},
 	"image_config":                       {Optional: true, Replacement: ReplacementUnknown},
 	"logging_config":                     {Optional: true, Replacement: ReplacementUnknown},
 	"snap_start":                         {Optional: true, Replacement: ReplacementUnknown},
+	"tenancy_config":                     {Optional: true, Replacement: ReplacementUnknown},
 	"timeouts":                           {Optional: true, Replacement: ReplacementUnknown},
 	"tracing_config":                     {Optional: true, Replacement: ReplacementUnknown},
 	"vpc_config":                         {Optional: true, Replacement: ReplacementUnknown},

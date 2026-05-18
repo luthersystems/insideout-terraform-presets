@@ -7,18 +7,27 @@ import "reflect"
 // AWSRoute53Zone is the generated Layer 1 typed model for the
 // `aws_route53_zone` Terraform resource.
 type AWSRoute53Zone struct {
-	ARN               *Value[string]            `tf:"arn" json:"arn,omitempty"`
-	Comment           *Value[string]            `tf:"comment" json:"comment,omitempty"`
-	DelegationSetID   *Value[string]            `tf:"delegation_set_id" json:"delegation_set_id,omitempty"`
-	ForceDestroy      *Value[bool]              `tf:"force_destroy" json:"force_destroy,omitempty"`
-	ID                *Value[string]            `tf:"id" json:"id,omitempty"`
-	Name              *Value[string]            `tf:"name" json:"name,omitempty"`
-	NameServers       []*Value[string]          `tf:"name_servers" json:"name_servers,omitempty"`
-	PrimaryNameServer *Value[string]            `tf:"primary_name_server" json:"primary_name_server,omitempty"`
-	Tags              map[string]*Value[string] `tf:"tags" json:"tags,omitempty"`
-	TagsAll           map[string]*Value[string] `tf:"tags_all" json:"tags_all,omitempty"`
-	ZoneID            *Value[string]            `tf:"zone_id" json:"zone_id,omitempty"`
-	VPC               []AWSRoute53ZoneVPC       `tf:"vpc,blocks" json:"vpc,omitempty"`
+	ARN                       *Value[string]            `tf:"arn" json:"arn,omitempty"`
+	Comment                   *Value[string]            `tf:"comment" json:"comment,omitempty"`
+	DelegationSetID           *Value[string]            `tf:"delegation_set_id" json:"delegation_set_id,omitempty"`
+	EnableAcceleratedRecovery *Value[bool]              `tf:"enable_accelerated_recovery" json:"enable_accelerated_recovery,omitempty"`
+	ForceDestroy              *Value[bool]              `tf:"force_destroy" json:"force_destroy,omitempty"`
+	ID                        *Value[string]            `tf:"id" json:"id,omitempty"`
+	Name                      *Value[string]            `tf:"name" json:"name,omitempty"`
+	NameServers               []*Value[string]          `tf:"name_servers" json:"name_servers,omitempty"`
+	PrimaryNameServer         *Value[string]            `tf:"primary_name_server" json:"primary_name_server,omitempty"`
+	Tags                      map[string]*Value[string] `tf:"tags" json:"tags,omitempty"`
+	TagsAll                   map[string]*Value[string] `tf:"tags_all" json:"tags_all,omitempty"`
+	ZoneID                    *Value[string]            `tf:"zone_id" json:"zone_id,omitempty"`
+	Timeouts                  *AWSRoute53ZoneTimeouts   `tf:"timeouts,block" json:"timeouts,omitempty"`
+	VPC                       []AWSRoute53ZoneVPC       `tf:"vpc,blocks" json:"vpc,omitempty"`
+}
+
+// AWSRoute53ZoneTimeouts is a nested-block type used by the parent resource.
+type AWSRoute53ZoneTimeouts struct {
+	Create *Value[string] `tf:"create" json:"create,omitempty"`
+	Delete *Value[string] `tf:"delete" json:"delete,omitempty"`
+	Update *Value[string] `tf:"update" json:"update,omitempty"`
 }
 
 // AWSRoute53ZoneVPC is a nested-block type used by the parent resource.
@@ -30,18 +39,20 @@ type AWSRoute53ZoneVPC struct {
 // AWSRoute53ZoneSchema describes provider metadata for each attribute / nested
 // block of aws_route53_zone.
 var AWSRoute53ZoneSchema = map[string]FieldSchema{
-	"arn":                 {Computed: true, Replacement: ReplacementUnknown},
-	"comment":             {Optional: true, Replacement: ReplacementUnknown},
-	"delegation_set_id":   {Optional: true, Replacement: ReplacementUnknown},
-	"force_destroy":       {Optional: true, Replacement: ReplacementUnknown},
-	"id":                  {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"name":                {Required: true, Replacement: ReplacementUnknown},
-	"name_servers":        {Computed: true, Replacement: ReplacementUnknown},
-	"primary_name_server": {Computed: true, Replacement: ReplacementUnknown},
-	"tags":                {Optional: true, Replacement: ReplacementUnknown},
-	"tags_all":            {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"zone_id":             {Computed: true, Replacement: ReplacementUnknown},
-	"vpc":                 {Optional: true, Replacement: ReplacementUnknown},
+	"arn":                         {Computed: true, Replacement: ReplacementUnknown},
+	"comment":                     {Optional: true, Replacement: ReplacementUnknown},
+	"delegation_set_id":           {Optional: true, Replacement: ReplacementUnknown},
+	"enable_accelerated_recovery": {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"force_destroy":               {Optional: true, Replacement: ReplacementUnknown},
+	"id":                          {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"name":                        {Required: true, Replacement: ReplacementUnknown},
+	"name_servers":                {Computed: true, Replacement: ReplacementUnknown},
+	"primary_name_server":         {Computed: true, Replacement: ReplacementUnknown},
+	"tags":                        {Optional: true, Replacement: ReplacementUnknown},
+	"tags_all":                    {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"zone_id":                     {Computed: true, Replacement: ReplacementUnknown},
+	"timeouts":                    {Optional: true, Replacement: ReplacementUnknown},
+	"vpc":                         {Optional: true, Replacement: ReplacementUnknown},
 }
 
 func init() {

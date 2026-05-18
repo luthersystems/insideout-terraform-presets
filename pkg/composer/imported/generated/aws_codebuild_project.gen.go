@@ -8,6 +8,7 @@ import "reflect"
 // `aws_codebuild_project` Terraform resource.
 type AWSCodebuildProject struct {
 	ARN                    *Value[string]                              `tf:"arn" json:"arn,omitempty"`
+	AutoRetryLimit         *Value[float64]                             `tf:"auto_retry_limit" json:"auto_retry_limit,omitempty"`
 	BadgeEnabled           *Value[bool]                                `tf:"badge_enabled" json:"badge_enabled,omitempty"`
 	BadgeURL               *Value[string]                              `tf:"badge_url" json:"badge_url,omitempty"`
 	BuildTimeout           *Value[int64]                               `tf:"build_timeout" json:"build_timeout,omitempty"`
@@ -19,6 +20,7 @@ type AWSCodebuildProject struct {
 	ProjectVisibility      *Value[string]                              `tf:"project_visibility" json:"project_visibility,omitempty"`
 	PublicProjectAlias     *Value[string]                              `tf:"public_project_alias" json:"public_project_alias,omitempty"`
 	QueuedTimeout          *Value[int64]                               `tf:"queued_timeout" json:"queued_timeout,omitempty"`
+	Region                 *Value[string]                              `tf:"region" json:"region,omitempty"`
 	ResourceAccessRole     *Value[string]                              `tf:"resource_access_role" json:"resource_access_role,omitempty"`
 	ServiceRole            *Value[string]                              `tf:"service_role" json:"service_role,omitempty"`
 	SourceVersion          *Value[string]                              `tf:"source_version" json:"source_version,omitempty"`
@@ -67,9 +69,10 @@ type AWSCodebuildProjectBuildBatchConfigRestrictions struct {
 
 // AWSCodebuildProjectCache is a nested-block type used by the parent resource.
 type AWSCodebuildProjectCache struct {
-	Location *Value[string]   `tf:"location" json:"location,omitempty"`
-	Modes    []*Value[string] `tf:"modes" json:"modes,omitempty"`
-	Type_    *Value[string]   `tf:"type" json:"type,omitempty"`
+	CacheNamespace *Value[string]   `tf:"cache_namespace" json:"cache_namespace,omitempty"`
+	Location       *Value[string]   `tf:"location" json:"location,omitempty"`
+	Modes          []*Value[string] `tf:"modes" json:"modes,omitempty"`
+	Type_          *Value[string]   `tf:"type" json:"type,omitempty"`
 }
 
 // AWSCodebuildProjectEnvironment is a nested-block type used by the parent resource.
@@ -80,9 +83,16 @@ type AWSCodebuildProjectEnvironment struct {
 	ImagePullCredentialsType *Value[string]                                      `tf:"image_pull_credentials_type" json:"image_pull_credentials_type,omitempty"`
 	PrivilegedMode           *Value[bool]                                        `tf:"privileged_mode" json:"privileged_mode,omitempty"`
 	Type_                    *Value[string]                                      `tf:"type" json:"type,omitempty"`
+	DockerServer             []AWSCodebuildProjectEnvironmentDockerServer        `tf:"docker_server,blocks" json:"docker_server,omitempty"`
 	EnvironmentVariable      []AWSCodebuildProjectEnvironmentEnvironmentVariable `tf:"environment_variable,blocks" json:"environment_variable,omitempty"`
 	Fleet                    []AWSCodebuildProjectEnvironmentFleet               `tf:"fleet,blocks" json:"fleet,omitempty"`
 	RegistryCredential       []AWSCodebuildProjectEnvironmentRegistryCredential  `tf:"registry_credential,blocks" json:"registry_credential,omitempty"`
+}
+
+// AWSCodebuildProjectEnvironmentDockerServer is a nested-block type used by the parent resource.
+type AWSCodebuildProjectEnvironmentDockerServer struct {
+	ComputeType      *Value[string]   `tf:"compute_type" json:"compute_type,omitempty"`
+	SecurityGroupIDS []*Value[string] `tf:"security_group_ids" json:"security_group_ids,omitempty"`
 }
 
 // AWSCodebuildProjectEnvironmentEnvironmentVariable is a nested-block type used by the parent resource.
@@ -162,8 +172,15 @@ type AWSCodebuildProjectSecondarySources struct {
 	ReportBuildStatus   *Value[bool]                                             `tf:"report_build_status" json:"report_build_status,omitempty"`
 	SourceIdentifier    *Value[string]                                           `tf:"source_identifier" json:"source_identifier,omitempty"`
 	Type_               *Value[string]                                           `tf:"type" json:"type,omitempty"`
+	Auth                []AWSCodebuildProjectSecondarySourcesAuth                `tf:"auth,blocks" json:"auth,omitempty"`
 	BuildStatusConfig   []AWSCodebuildProjectSecondarySourcesBuildStatusConfig   `tf:"build_status_config,blocks" json:"build_status_config,omitempty"`
 	GitSubmodulesConfig []AWSCodebuildProjectSecondarySourcesGitSubmodulesConfig `tf:"git_submodules_config,blocks" json:"git_submodules_config,omitempty"`
+}
+
+// AWSCodebuildProjectSecondarySourcesAuth is a nested-block type used by the parent resource.
+type AWSCodebuildProjectSecondarySourcesAuth struct {
+	Resource *Value[string] `tf:"resource" json:"resource,omitempty"`
+	Type_    *Value[string] `tf:"type" json:"type,omitempty"`
 }
 
 // AWSCodebuildProjectSecondarySourcesBuildStatusConfig is a nested-block type used by the parent resource.
@@ -185,8 +202,15 @@ type AWSCodebuildProjectSource struct {
 	Location            *Value[string]                                 `tf:"location" json:"location,omitempty"`
 	ReportBuildStatus   *Value[bool]                                   `tf:"report_build_status" json:"report_build_status,omitempty"`
 	Type_               *Value[string]                                 `tf:"type" json:"type,omitempty"`
+	Auth                []AWSCodebuildProjectSourceAuth                `tf:"auth,blocks" json:"auth,omitempty"`
 	BuildStatusConfig   []AWSCodebuildProjectSourceBuildStatusConfig   `tf:"build_status_config,blocks" json:"build_status_config,omitempty"`
 	GitSubmodulesConfig []AWSCodebuildProjectSourceGitSubmodulesConfig `tf:"git_submodules_config,blocks" json:"git_submodules_config,omitempty"`
+}
+
+// AWSCodebuildProjectSourceAuth is a nested-block type used by the parent resource.
+type AWSCodebuildProjectSourceAuth struct {
+	Resource *Value[string] `tf:"resource" json:"resource,omitempty"`
+	Type_    *Value[string] `tf:"type" json:"type,omitempty"`
 }
 
 // AWSCodebuildProjectSourceBuildStatusConfig is a nested-block type used by the parent resource.
@@ -211,6 +235,7 @@ type AWSCodebuildProjectVPCConfig struct {
 // block of aws_codebuild_project.
 var AWSCodebuildProjectSchema = map[string]FieldSchema{
 	"arn":                      {Computed: true, Replacement: ReplacementUnknown},
+	"auto_retry_limit":         {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"badge_enabled":            {Optional: true, Replacement: ReplacementUnknown},
 	"badge_url":                {Computed: true, Replacement: ReplacementUnknown},
 	"build_timeout":            {Optional: true, Replacement: ReplacementUnknown},
@@ -222,6 +247,7 @@ var AWSCodebuildProjectSchema = map[string]FieldSchema{
 	"project_visibility":       {Optional: true, Replacement: ReplacementUnknown},
 	"public_project_alias":     {Computed: true, Replacement: ReplacementUnknown},
 	"queued_timeout":           {Optional: true, Replacement: ReplacementUnknown},
+	"region":                   {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"resource_access_role":     {Optional: true, Replacement: ReplacementUnknown},
 	"service_role":             {Required: true, Replacement: ReplacementUnknown},
 	"source_version":           {Optional: true, Replacement: ReplacementUnknown},

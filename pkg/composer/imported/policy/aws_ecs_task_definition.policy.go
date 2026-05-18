@@ -12,10 +12,14 @@ package policy
 // are the security-critical surface.
 //
 // Drift bundle 5 (#482): scalar attributes use DriftSemanticExact;
-// requires_compatibilities and the volume/placement_constraints/
-// inference_accelerator nested-block lists are compared WholeList.
-// container_definitions is a JSON-encoded blob — diff Exact at the
-// string level; structured diff is left to a later pass.
+// requires_compatibilities and the volume/placement_constraints
+// nested-block lists are compared WholeList. container_definitions is
+// a JSON-encoded blob — diff Exact at the string level; structured
+// diff is left to a later pass.
+//
+// AWS provider 6.x (#599 schema-bump cleanup) removed the
+// `inference_accelerator` nested block (Elastic Inference was retired
+// by AWS in 2024); the policy no longer curates it.
 var awsECSTaskDefinitionPolicy = Map{
 	// Identity ----------------------------------------------------------
 	"arn": {
@@ -136,13 +140,11 @@ var awsECSTaskDefinitionPolicy = Map{
 	},
 
 	// Tuning — placement constraints (whole-list) ---------------------
+	// AWS provider 6.x removed the `inference_accelerator` nested block
+	// (Elastic Inference was retired by AWS in 2024); #599 schema-bump
+	// cleanup. ECS task definitions no longer surface EI attachments.
 	"placement_constraints": {
 		Role: RoleTuning, Pillar: PillarReliability, Visibility: VisibilitySummaryVisible,
-		Edit:          EditRequiresApproval,
-		DriftSemantic: DriftSemanticWholeList,
-	},
-	"inference_accelerator": {
-		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilitySummaryVisible,
 		Edit:          EditRequiresApproval,
 		DriftSemantic: DriftSemanticWholeList,
 	},

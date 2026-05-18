@@ -20,6 +20,7 @@ type AWSKMSKey struct {
 	KeyUsage                       *Value[string]            `tf:"key_usage" json:"key_usage,omitempty"`
 	MultiRegion                    *Value[bool]              `tf:"multi_region" json:"multi_region,omitempty"`
 	Policy                         *Value[string]            `tf:"policy" json:"policy,omitempty"`
+	Region                         *Value[string]            `tf:"region" json:"region,omitempty"`
 	RotationPeriodInDays           *Value[float64]           `tf:"rotation_period_in_days" json:"rotation_period_in_days,omitempty"`
 	Tags                           map[string]*Value[string] `tf:"tags" json:"tags,omitempty"`
 	TagsAll                        map[string]*Value[string] `tf:"tags_all" json:"tags_all,omitempty"`
@@ -48,6 +49,7 @@ var AWSKMSKeySchema = map[string]FieldSchema{
 	"key_usage":                          {Optional: true, Replacement: ReplacementUnknown},
 	"multi_region":                       {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"policy":                             {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"region":                             {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"rotation_period_in_days":            {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"tags":                               {Optional: true, Replacement: ReplacementUnknown},
 	"tags_all":                           {Optional: true, Computed: true, Replacement: ReplacementUnknown},

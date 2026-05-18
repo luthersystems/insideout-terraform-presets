@@ -18,6 +18,7 @@ type AWSLambdaLayerVersion struct {
 	LayerARN                 *Value[string]   `tf:"layer_arn" json:"layer_arn,omitempty"`
 	LayerName                *Value[string]   `tf:"layer_name" json:"layer_name,omitempty"`
 	LicenseInfo              *Value[string]   `tf:"license_info" json:"license_info,omitempty"`
+	Region                   *Value[string]   `tf:"region" json:"region,omitempty"`
 	S3Bucket                 *Value[string]   `tf:"s3_bucket" json:"s3_bucket,omitempty"`
 	S3Key                    *Value[string]   `tf:"s3_key" json:"s3_key,omitempty"`
 	S3ObjectVersion          *Value[string]   `tf:"s3_object_version" json:"s3_object_version,omitempty"`
@@ -43,6 +44,7 @@ var AWSLambdaLayerVersionSchema = map[string]FieldSchema{
 	"layer_arn":                   {Computed: true, Replacement: ReplacementUnknown},
 	"layer_name":                  {Required: true, Replacement: ReplacementUnknown},
 	"license_info":                {Optional: true, Replacement: ReplacementUnknown},
+	"region":                      {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"s3_bucket":                   {Optional: true, Replacement: ReplacementUnknown},
 	"s3_key":                      {Optional: true, Replacement: ReplacementUnknown},
 	"s3_object_version":           {Optional: true, Replacement: ReplacementUnknown},

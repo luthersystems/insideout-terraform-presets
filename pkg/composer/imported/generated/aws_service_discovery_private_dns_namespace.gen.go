@@ -12,6 +12,7 @@ type AWSServiceDiscoveryPrivateDNSNamespace struct {
 	HostedZone  *Value[string]            `tf:"hosted_zone" json:"hosted_zone,omitempty"`
 	ID          *Value[string]            `tf:"id" json:"id,omitempty"`
 	Name        *Value[string]            `tf:"name" json:"name,omitempty"`
+	Region      *Value[string]            `tf:"region" json:"region,omitempty"`
 	Tags        map[string]*Value[string] `tf:"tags" json:"tags,omitempty"`
 	TagsAll     map[string]*Value[string] `tf:"tags_all" json:"tags_all,omitempty"`
 	VPC         *Value[string]            `tf:"vpc" json:"vpc,omitempty"`
@@ -25,6 +26,7 @@ var AWSServiceDiscoveryPrivateDNSNamespaceSchema = map[string]FieldSchema{
 	"hosted_zone": {Computed: true, Replacement: ReplacementUnknown},
 	"id":          {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"name":        {Required: true, Replacement: ReplacementUnknown},
+	"region":      {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"tags":        {Optional: true, Replacement: ReplacementUnknown},
 	"tags_all":    {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"vpc":         {Required: true, Replacement: ReplacementUnknown},

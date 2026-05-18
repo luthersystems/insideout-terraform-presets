@@ -16,6 +16,7 @@ type AWSSNSTopic struct {
 	ContentBasedDeduplication            *Value[bool]              `tf:"content_based_deduplication" json:"content_based_deduplication,omitempty"`
 	DeliveryPolicy                       *Value[string]            `tf:"delivery_policy" json:"delivery_policy,omitempty"`
 	DisplayName                          *Value[string]            `tf:"display_name" json:"display_name,omitempty"`
+	FIFOThroughputScope                  *Value[string]            `tf:"fifo_throughput_scope" json:"fifo_throughput_scope,omitempty"`
 	FIFOTopic                            *Value[bool]              `tf:"fifo_topic" json:"fifo_topic,omitempty"`
 	FirehoseFailureFeedbackRoleARN       *Value[string]            `tf:"firehose_failure_feedback_role_arn" json:"firehose_failure_feedback_role_arn,omitempty"`
 	FirehoseSuccessFeedbackRoleARN       *Value[string]            `tf:"firehose_success_feedback_role_arn" json:"firehose_success_feedback_role_arn,omitempty"`
@@ -32,6 +33,7 @@ type AWSSNSTopic struct {
 	NamePrefix                           *Value[string]            `tf:"name_prefix" json:"name_prefix,omitempty"`
 	Owner                                *Value[string]            `tf:"owner" json:"owner,omitempty"`
 	Policy                               *Value[string]            `tf:"policy" json:"policy,omitempty"`
+	Region                               *Value[string]            `tf:"region" json:"region,omitempty"`
 	SignatureVersion                     *Value[float64]           `tf:"signature_version" json:"signature_version,omitempty"`
 	SQSFailureFeedbackRoleARN            *Value[string]            `tf:"sqs_failure_feedback_role_arn" json:"sqs_failure_feedback_role_arn,omitempty"`
 	SQSSuccessFeedbackRoleARN            *Value[string]            `tf:"sqs_success_feedback_role_arn" json:"sqs_success_feedback_role_arn,omitempty"`
@@ -53,6 +55,7 @@ var AWSSNSTopicSchema = map[string]FieldSchema{
 	"content_based_deduplication":              {Optional: true, Replacement: ReplacementUnknown},
 	"delivery_policy":                          {Optional: true, Replacement: ReplacementUnknown},
 	"display_name":                             {Optional: true, Replacement: ReplacementUnknown},
+	"fifo_throughput_scope":                    {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"fifo_topic":                               {Optional: true, Replacement: ReplacementUnknown},
 	"firehose_failure_feedback_role_arn":       {Optional: true, Replacement: ReplacementUnknown},
 	"firehose_success_feedback_role_arn":       {Optional: true, Replacement: ReplacementUnknown},
@@ -69,6 +72,7 @@ var AWSSNSTopicSchema = map[string]FieldSchema{
 	"name_prefix":                              {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"owner":                                    {Computed: true, Replacement: ReplacementUnknown},
 	"policy":                                   {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"region":                                   {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"signature_version":                        {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"sqs_failure_feedback_role_arn":            {Optional: true, Replacement: ReplacementUnknown},
 	"sqs_success_feedback_role_arn":            {Optional: true, Replacement: ReplacementUnknown},

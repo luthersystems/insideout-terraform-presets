@@ -17,6 +17,7 @@ type AWSApigatewayv2Authorizer struct {
 	ID                             *Value[string]                              `tf:"id" json:"id,omitempty"`
 	IdentitySources                []*Value[string]                            `tf:"identity_sources" json:"identity_sources,omitempty"`
 	Name                           *Value[string]                              `tf:"name" json:"name,omitempty"`
+	Region                         *Value[string]                              `tf:"region" json:"region,omitempty"`
 	JWTConfiguration               []AWSApigatewayv2AuthorizerJWTConfiguration `tf:"jwt_configuration,blocks" json:"jwt_configuration,omitempty"`
 	Timeouts                       *AWSApigatewayv2AuthorizerTimeouts          `tf:"timeouts,block" json:"timeouts,omitempty"`
 }
@@ -45,6 +46,7 @@ var AWSApigatewayv2AuthorizerSchema = map[string]FieldSchema{
 	"id":                                {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"identity_sources":                  {Optional: true, Replacement: ReplacementUnknown},
 	"name":                              {Required: true, Replacement: ReplacementUnknown},
+	"region":                            {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"jwt_configuration":                 {Optional: true, Replacement: ReplacementUnknown},
 	"timeouts":                          {Optional: true, Replacement: ReplacementUnknown},
 }

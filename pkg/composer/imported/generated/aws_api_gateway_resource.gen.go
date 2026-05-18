@@ -11,6 +11,7 @@ type AWSAPIGatewayResource struct {
 	ParentID  *Value[string] `tf:"parent_id" json:"parent_id,omitempty"`
 	Path      *Value[string] `tf:"path" json:"path,omitempty"`
 	PathPart  *Value[string] `tf:"path_part" json:"path_part,omitempty"`
+	Region    *Value[string] `tf:"region" json:"region,omitempty"`
 	RestAPIID *Value[string] `tf:"rest_api_id" json:"rest_api_id,omitempty"`
 }
 
@@ -21,6 +22,7 @@ var AWSAPIGatewayResourceSchema = map[string]FieldSchema{
 	"parent_id":   {Required: true, Replacement: ReplacementUnknown},
 	"path":        {Computed: true, Replacement: ReplacementUnknown},
 	"path_part":   {Required: true, Replacement: ReplacementUnknown},
+	"region":      {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"rest_api_id": {Required: true, Replacement: ReplacementUnknown},
 }
 

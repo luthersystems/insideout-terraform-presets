@@ -11,6 +11,7 @@ type AWSKMSAlias struct {
 	ID           *Value[string] `tf:"id" json:"id,omitempty"`
 	Name         *Value[string] `tf:"name" json:"name,omitempty"`
 	NamePrefix   *Value[string] `tf:"name_prefix" json:"name_prefix,omitempty"`
+	Region       *Value[string] `tf:"region" json:"region,omitempty"`
 	TargetKeyARN *Value[string] `tf:"target_key_arn" json:"target_key_arn,omitempty"`
 	TargetKeyID  *Value[string] `tf:"target_key_id" json:"target_key_id,omitempty"`
 }
@@ -22,6 +23,7 @@ var AWSKMSAliasSchema = map[string]FieldSchema{
 	"id":             {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"name":           {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"name_prefix":    {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"region":         {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"target_key_arn": {Computed: true, Replacement: ReplacementUnknown},
 	"target_key_id":  {Required: true, Replacement: ReplacementUnknown},
 }

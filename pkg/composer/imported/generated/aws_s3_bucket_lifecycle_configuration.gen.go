@@ -10,6 +10,7 @@ type AWSS3BucketLifecycleConfiguration struct {
 	Bucket                             *Value[string]                             `tf:"bucket" json:"bucket,omitempty"`
 	ExpectedBucketOwner                *Value[string]                             `tf:"expected_bucket_owner" json:"expected_bucket_owner,omitempty"`
 	ID                                 *Value[string]                             `tf:"id" json:"id,omitempty"`
+	Region                             *Value[string]                             `tf:"region" json:"region,omitempty"`
 	TransitionDefaultMinimumObjectSize *Value[string]                             `tf:"transition_default_minimum_object_size" json:"transition_default_minimum_object_size,omitempty"`
 	Rule                               []AWSS3BucketLifecycleConfigurationRule    `tf:"rule,blocks" json:"rule,omitempty"`
 	Timeouts                           *AWSS3BucketLifecycleConfigurationTimeouts `tf:"timeouts,block" json:"timeouts,omitempty"`
@@ -42,8 +43,8 @@ type AWSS3BucketLifecycleConfigurationRuleExpiration struct {
 
 // AWSS3BucketLifecycleConfigurationRuleFilter is a nested-block type used by the parent resource.
 type AWSS3BucketLifecycleConfigurationRuleFilter struct {
-	ObjectSizeGreaterThan *Value[string]                                   `tf:"object_size_greater_than" json:"object_size_greater_than,omitempty"`
-	ObjectSizeLessThan    *Value[string]                                   `tf:"object_size_less_than" json:"object_size_less_than,omitempty"`
+	ObjectSizeGreaterThan *Value[float64]                                  `tf:"object_size_greater_than" json:"object_size_greater_than,omitempty"`
+	ObjectSizeLessThan    *Value[float64]                                  `tf:"object_size_less_than" json:"object_size_less_than,omitempty"`
 	Prefix                *Value[string]                                   `tf:"prefix" json:"prefix,omitempty"`
 	And                   []AWSS3BucketLifecycleConfigurationRuleFilterAnd `tf:"and,blocks" json:"and,omitempty"`
 	Tag                   []AWSS3BucketLifecycleConfigurationRuleFilterTag `tf:"tag,blocks" json:"tag,omitempty"`
@@ -65,13 +66,13 @@ type AWSS3BucketLifecycleConfigurationRuleFilterTag struct {
 
 // AWSS3BucketLifecycleConfigurationRuleNoncurrentVersionExpiration is a nested-block type used by the parent resource.
 type AWSS3BucketLifecycleConfigurationRuleNoncurrentVersionExpiration struct {
-	NewerNoncurrentVersions *Value[string]  `tf:"newer_noncurrent_versions" json:"newer_noncurrent_versions,omitempty"`
+	NewerNoncurrentVersions *Value[float64] `tf:"newer_noncurrent_versions" json:"newer_noncurrent_versions,omitempty"`
 	NoncurrentDays          *Value[float64] `tf:"noncurrent_days" json:"noncurrent_days,omitempty"`
 }
 
 // AWSS3BucketLifecycleConfigurationRuleNoncurrentVersionTransition is a nested-block type used by the parent resource.
 type AWSS3BucketLifecycleConfigurationRuleNoncurrentVersionTransition struct {
-	NewerNoncurrentVersions *Value[string]  `tf:"newer_noncurrent_versions" json:"newer_noncurrent_versions,omitempty"`
+	NewerNoncurrentVersions *Value[float64] `tf:"newer_noncurrent_versions" json:"newer_noncurrent_versions,omitempty"`
 	NoncurrentDays          *Value[float64] `tf:"noncurrent_days" json:"noncurrent_days,omitempty"`
 	StorageClass            *Value[string]  `tf:"storage_class" json:"storage_class,omitempty"`
 }
@@ -93,10 +94,11 @@ type AWSS3BucketLifecycleConfigurationTimeouts struct {
 // block of aws_s3_bucket_lifecycle_configuration.
 var AWSS3BucketLifecycleConfigurationSchema = map[string]FieldSchema{
 	"bucket":                                 {Required: true, Replacement: ReplacementUnknown},
-	"expected_bucket_owner":                  {Optional: true, Replacement: ReplacementUnknown},
-	"id":                                     {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"expected_bucket_owner":                  {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"id":                                     {Computed: true, Replacement: ReplacementUnknown},
+	"region":                                 {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"transition_default_minimum_object_size": {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"rule":                                   {Required: true, Replacement: ReplacementUnknown},
+	"rule":                                   {Optional: true, Replacement: ReplacementUnknown},
 	"timeouts":                               {Optional: true, Replacement: ReplacementUnknown},
 }
 

@@ -12,6 +12,7 @@ type AWSBackupSelection struct {
 	Name         *Value[string]                   `tf:"name" json:"name,omitempty"`
 	NotResources []*Value[string]                 `tf:"not_resources" json:"not_resources,omitempty"`
 	PlanID       *Value[string]                   `tf:"plan_id" json:"plan_id,omitempty"`
+	Region       *Value[string]                   `tf:"region" json:"region,omitempty"`
 	Resources    []*Value[string]                 `tf:"resources" json:"resources,omitempty"`
 	Condition    []AWSBackupSelectionCondition    `tf:"condition,blocks" json:"condition,omitempty"`
 	SelectionTag []AWSBackupSelectionSelectionTag `tf:"selection_tag,blocks" json:"selection_tag,omitempty"`
@@ -64,6 +65,7 @@ var AWSBackupSelectionSchema = map[string]FieldSchema{
 	"name":          {Required: true, Replacement: ReplacementUnknown},
 	"not_resources": {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"plan_id":       {Required: true, Replacement: ReplacementUnknown},
+	"region":        {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"resources":     {Optional: true, Replacement: ReplacementUnknown},
 	"condition":     {Optional: true, Replacement: ReplacementUnknown},
 	"selection_tag": {Optional: true, Replacement: ReplacementUnknown},

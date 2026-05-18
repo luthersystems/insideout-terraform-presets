@@ -25,6 +25,7 @@ type AWSMskCluster struct {
 	ID                                       *Value[string]                      `tf:"id" json:"id,omitempty"`
 	KafkaVersion                             *Value[string]                      `tf:"kafka_version" json:"kafka_version,omitempty"`
 	NumberOfBrokerNodes                      *Value[float64]                     `tf:"number_of_broker_nodes" json:"number_of_broker_nodes,omitempty"`
+	Region                                   *Value[string]                      `tf:"region" json:"region,omitempty"`
 	StorageMode                              *Value[string]                      `tf:"storage_mode" json:"storage_mode,omitempty"`
 	Tags                                     map[string]*Value[string]           `tf:"tags" json:"tags,omitempty"`
 	TagsAll                                  map[string]*Value[string]           `tf:"tags_all" json:"tags_all,omitempty"`
@@ -36,6 +37,7 @@ type AWSMskCluster struct {
 	EncryptionInfo                           []AWSMskClusterEncryptionInfo       `tf:"encryption_info,blocks" json:"encryption_info,omitempty"`
 	LoggingInfo                              []AWSMskClusterLoggingInfo          `tf:"logging_info,blocks" json:"logging_info,omitempty"`
 	OpenMonitoring                           []AWSMskClusterOpenMonitoring       `tf:"open_monitoring,blocks" json:"open_monitoring,omitempty"`
+	Rebalancing                              []AWSMskClusterRebalancing          `tf:"rebalancing,blocks" json:"rebalancing,omitempty"`
 	Timeouts                                 *AWSMskClusterTimeouts              `tf:"timeouts,block" json:"timeouts,omitempty"`
 }
 
@@ -51,6 +53,7 @@ type AWSMskClusterBrokerNodeGroupInfo struct {
 
 // AWSMskClusterBrokerNodeGroupInfoConnectivityInfo is a nested-block type used by the parent resource.
 type AWSMskClusterBrokerNodeGroupInfoConnectivityInfo struct {
+	NetworkType     *Value[string]                                                    `tf:"network_type" json:"network_type,omitempty"`
 	PublicAccess    []AWSMskClusterBrokerNodeGroupInfoConnectivityInfoPublicAccess    `tf:"public_access,blocks" json:"public_access,omitempty"`
 	VPCConnectivity []AWSMskClusterBrokerNodeGroupInfoConnectivityInfoVPCConnectivity `tf:"vpc_connectivity,blocks" json:"vpc_connectivity,omitempty"`
 }
@@ -182,6 +185,11 @@ type AWSMskClusterOpenMonitoringPrometheusNodeExporter struct {
 	EnabledInBroker *Value[bool] `tf:"enabled_in_broker" json:"enabled_in_broker,omitempty"`
 }
 
+// AWSMskClusterRebalancing is a nested-block type used by the parent resource.
+type AWSMskClusterRebalancing struct {
+	Status *Value[string] `tf:"status" json:"status,omitempty"`
+}
+
 // AWSMskClusterTimeouts is a nested-block type used by the parent resource.
 type AWSMskClusterTimeouts struct {
 	Create *Value[string] `tf:"create" json:"create,omitempty"`
@@ -210,6 +218,7 @@ var AWSMskClusterSchema = map[string]FieldSchema{
 	"id":                                            {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"kafka_version":                                 {Required: true, Replacement: ReplacementUnknown},
 	"number_of_broker_nodes":                        {Required: true, Replacement: ReplacementUnknown},
+	"region":                                        {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"storage_mode":                                  {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"tags":                                          {Optional: true, Replacement: ReplacementUnknown},
 	"tags_all":                                      {Optional: true, Computed: true, Replacement: ReplacementUnknown},
@@ -221,6 +230,7 @@ var AWSMskClusterSchema = map[string]FieldSchema{
 	"encryption_info":                               {Optional: true, Replacement: ReplacementUnknown},
 	"logging_info":                                  {Optional: true, Replacement: ReplacementUnknown},
 	"open_monitoring":                               {Optional: true, Replacement: ReplacementUnknown},
+	"rebalancing":                                   {Optional: true, Replacement: ReplacementUnknown},
 	"timeouts":                                      {Optional: true, Replacement: ReplacementUnknown},
 }
 

@@ -11,6 +11,7 @@ type AWSAppautoscalingTarget struct {
 	ID                *Value[string]                          `tf:"id" json:"id,omitempty"`
 	MaxCapacity       *Value[int64]                           `tf:"max_capacity" json:"max_capacity,omitempty"`
 	MinCapacity       *Value[int64]                           `tf:"min_capacity" json:"min_capacity,omitempty"`
+	Region            *Value[string]                          `tf:"region" json:"region,omitempty"`
 	ResourceID        *Value[string]                          `tf:"resource_id" json:"resource_id,omitempty"`
 	RoleARN           *Value[string]                          `tf:"role_arn" json:"role_arn,omitempty"`
 	ScalableDimension *Value[string]                          `tf:"scalable_dimension" json:"scalable_dimension,omitempty"`
@@ -34,6 +35,7 @@ var AWSAppautoscalingTargetSchema = map[string]FieldSchema{
 	"id":                 {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"max_capacity":       {Required: true, Replacement: ReplacementUnknown},
 	"min_capacity":       {Required: true, Replacement: ReplacementUnknown},
+	"region":             {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"resource_id":        {Required: true, Replacement: ReplacementUnknown},
 	"role_arn":           {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"scalable_dimension": {Required: true, Replacement: ReplacementUnknown},

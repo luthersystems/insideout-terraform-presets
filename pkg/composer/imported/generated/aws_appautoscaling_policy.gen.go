@@ -12,11 +12,153 @@ type AWSAppautoscalingPolicy struct {
 	ID                                       *Value[string]                                                    `tf:"id" json:"id,omitempty"`
 	Name                                     *Value[string]                                                    `tf:"name" json:"name,omitempty"`
 	PolicyType                               *Value[string]                                                    `tf:"policy_type" json:"policy_type,omitempty"`
+	Region                                   *Value[string]                                                    `tf:"region" json:"region,omitempty"`
 	ResourceID                               *Value[string]                                                    `tf:"resource_id" json:"resource_id,omitempty"`
 	ScalableDimension                        *Value[string]                                                    `tf:"scalable_dimension" json:"scalable_dimension,omitempty"`
 	ServiceNamespace                         *Value[string]                                                    `tf:"service_namespace" json:"service_namespace,omitempty"`
+	PredictiveScalingPolicyConfiguration     []AWSAppautoscalingPolicyPredictiveScalingPolicyConfiguration     `tf:"predictive_scaling_policy_configuration,blocks" json:"predictive_scaling_policy_configuration,omitempty"`
 	StepScalingPolicyConfiguration           []AWSAppautoscalingPolicyStepScalingPolicyConfiguration           `tf:"step_scaling_policy_configuration,blocks" json:"step_scaling_policy_configuration,omitempty"`
 	TargetTrackingScalingPolicyConfiguration []AWSAppautoscalingPolicyTargetTrackingScalingPolicyConfiguration `tf:"target_tracking_scaling_policy_configuration,blocks" json:"target_tracking_scaling_policy_configuration,omitempty"`
+}
+
+// AWSAppautoscalingPolicyPredictiveScalingPolicyConfiguration is a nested-block type used by the parent resource.
+type AWSAppautoscalingPolicyPredictiveScalingPolicyConfiguration struct {
+	MaxCapacityBreachBehavior *Value[string]                                                                   `tf:"max_capacity_breach_behavior" json:"max_capacity_breach_behavior,omitempty"`
+	MaxCapacityBuffer         *Value[int64]                                                                    `tf:"max_capacity_buffer" json:"max_capacity_buffer,omitempty"`
+	Mode                      *Value[string]                                                                   `tf:"mode" json:"mode,omitempty"`
+	SchedulingBufferTime      *Value[float64]                                                                  `tf:"scheduling_buffer_time" json:"scheduling_buffer_time,omitempty"`
+	MetricSpecification       []AWSAppautoscalingPolicyPredictiveScalingPolicyConfigurationMetricSpecification `tf:"metric_specification,blocks" json:"metric_specification,omitempty"`
+}
+
+// AWSAppautoscalingPolicyPredictiveScalingPolicyConfigurationMetricSpecification is a nested-block type used by the parent resource.
+type AWSAppautoscalingPolicyPredictiveScalingPolicyConfigurationMetricSpecification struct {
+	TargetValue                           *Value[string]                                                                                                        `tf:"target_value" json:"target_value,omitempty"`
+	CustomizedCapacityMetricSpecification []AWSAppautoscalingPolicyPredictiveScalingPolicyConfigurationMetricSpecificationCustomizedCapacityMetricSpecification `tf:"customized_capacity_metric_specification,blocks" json:"customized_capacity_metric_specification,omitempty"`
+	CustomizedLoadMetricSpecification     []AWSAppautoscalingPolicyPredictiveScalingPolicyConfigurationMetricSpecificationCustomizedLoadMetricSpecification     `tf:"customized_load_metric_specification,blocks" json:"customized_load_metric_specification,omitempty"`
+	CustomizedScalingMetricSpecification  []AWSAppautoscalingPolicyPredictiveScalingPolicyConfigurationMetricSpecificationCustomizedScalingMetricSpecification  `tf:"customized_scaling_metric_specification,blocks" json:"customized_scaling_metric_specification,omitempty"`
+	PredefinedLoadMetricSpecification     []AWSAppautoscalingPolicyPredictiveScalingPolicyConfigurationMetricSpecificationPredefinedLoadMetricSpecification     `tf:"predefined_load_metric_specification,blocks" json:"predefined_load_metric_specification,omitempty"`
+	PredefinedMetricPairSpecification     []AWSAppautoscalingPolicyPredictiveScalingPolicyConfigurationMetricSpecificationPredefinedMetricPairSpecification     `tf:"predefined_metric_pair_specification,blocks" json:"predefined_metric_pair_specification,omitempty"`
+	PredefinedScalingMetricSpecification  []AWSAppautoscalingPolicyPredictiveScalingPolicyConfigurationMetricSpecificationPredefinedScalingMetricSpecification  `tf:"predefined_scaling_metric_specification,blocks" json:"predefined_scaling_metric_specification,omitempty"`
+}
+
+// AWSAppautoscalingPolicyPredictiveScalingPolicyConfigurationMetricSpecificationCustomizedCapacityMetricSpecification is a nested-block type used by the parent resource.
+type AWSAppautoscalingPolicyPredictiveScalingPolicyConfigurationMetricSpecificationCustomizedCapacityMetricSpecification struct {
+	MetricDataQuery []AWSAppautoscalingPolicyPredictiveScalingPolicyConfigurationMetricSpecificationCustomizedCapacityMetricSpecificationMetricDataQuery `tf:"metric_data_query,blocks" json:"metric_data_query,omitempty"`
+}
+
+// AWSAppautoscalingPolicyPredictiveScalingPolicyConfigurationMetricSpecificationCustomizedCapacityMetricSpecificationMetricDataQuery is a nested-block type used by the parent resource.
+type AWSAppautoscalingPolicyPredictiveScalingPolicyConfigurationMetricSpecificationCustomizedCapacityMetricSpecificationMetricDataQuery struct {
+	Expression *Value[string]                                                                                                                                 `tf:"expression" json:"expression,omitempty"`
+	ID         *Value[string]                                                                                                                                 `tf:"id" json:"id,omitempty"`
+	Label      *Value[string]                                                                                                                                 `tf:"label" json:"label,omitempty"`
+	ReturnData *Value[bool]                                                                                                                                   `tf:"return_data" json:"return_data,omitempty"`
+	MetricStat []AWSAppautoscalingPolicyPredictiveScalingPolicyConfigurationMetricSpecificationCustomizedCapacityMetricSpecificationMetricDataQueryMetricStat `tf:"metric_stat,blocks" json:"metric_stat,omitempty"`
+}
+
+// AWSAppautoscalingPolicyPredictiveScalingPolicyConfigurationMetricSpecificationCustomizedCapacityMetricSpecificationMetricDataQueryMetricStat is a nested-block type used by the parent resource.
+type AWSAppautoscalingPolicyPredictiveScalingPolicyConfigurationMetricSpecificationCustomizedCapacityMetricSpecificationMetricDataQueryMetricStat struct {
+	Stat   *Value[string]                                                                                                                                       `tf:"stat" json:"stat,omitempty"`
+	Unit   *Value[string]                                                                                                                                       `tf:"unit" json:"unit,omitempty"`
+	Metric []AWSAppautoscalingPolicyPredictiveScalingPolicyConfigurationMetricSpecificationCustomizedCapacityMetricSpecificationMetricDataQueryMetricStatMetric `tf:"metric,blocks" json:"metric,omitempty"`
+}
+
+// AWSAppautoscalingPolicyPredictiveScalingPolicyConfigurationMetricSpecificationCustomizedCapacityMetricSpecificationMetricDataQueryMetricStatMetric is a nested-block type used by the parent resource.
+type AWSAppautoscalingPolicyPredictiveScalingPolicyConfigurationMetricSpecificationCustomizedCapacityMetricSpecificationMetricDataQueryMetricStatMetric struct {
+	MetricName *Value[string]                                                                                                                                                `tf:"metric_name" json:"metric_name,omitempty"`
+	Namespace  *Value[string]                                                                                                                                                `tf:"namespace" json:"namespace,omitempty"`
+	Dimension  []AWSAppautoscalingPolicyPredictiveScalingPolicyConfigurationMetricSpecificationCustomizedCapacityMetricSpecificationMetricDataQueryMetricStatMetricDimension `tf:"dimension,blocks" json:"dimension,omitempty"`
+}
+
+// AWSAppautoscalingPolicyPredictiveScalingPolicyConfigurationMetricSpecificationCustomizedCapacityMetricSpecificationMetricDataQueryMetricStatMetricDimension is a nested-block type used by the parent resource.
+type AWSAppautoscalingPolicyPredictiveScalingPolicyConfigurationMetricSpecificationCustomizedCapacityMetricSpecificationMetricDataQueryMetricStatMetricDimension struct {
+	Name  *Value[string] `tf:"name" json:"name,omitempty"`
+	Value *Value[string] `tf:"value" json:"value,omitempty"`
+}
+
+// AWSAppautoscalingPolicyPredictiveScalingPolicyConfigurationMetricSpecificationCustomizedLoadMetricSpecification is a nested-block type used by the parent resource.
+type AWSAppautoscalingPolicyPredictiveScalingPolicyConfigurationMetricSpecificationCustomizedLoadMetricSpecification struct {
+	MetricDataQuery []AWSAppautoscalingPolicyPredictiveScalingPolicyConfigurationMetricSpecificationCustomizedLoadMetricSpecificationMetricDataQuery `tf:"metric_data_query,blocks" json:"metric_data_query,omitempty"`
+}
+
+// AWSAppautoscalingPolicyPredictiveScalingPolicyConfigurationMetricSpecificationCustomizedLoadMetricSpecificationMetricDataQuery is a nested-block type used by the parent resource.
+type AWSAppautoscalingPolicyPredictiveScalingPolicyConfigurationMetricSpecificationCustomizedLoadMetricSpecificationMetricDataQuery struct {
+	Expression *Value[string]                                                                                                                             `tf:"expression" json:"expression,omitempty"`
+	ID         *Value[string]                                                                                                                             `tf:"id" json:"id,omitempty"`
+	Label      *Value[string]                                                                                                                             `tf:"label" json:"label,omitempty"`
+	ReturnData *Value[bool]                                                                                                                               `tf:"return_data" json:"return_data,omitempty"`
+	MetricStat []AWSAppautoscalingPolicyPredictiveScalingPolicyConfigurationMetricSpecificationCustomizedLoadMetricSpecificationMetricDataQueryMetricStat `tf:"metric_stat,blocks" json:"metric_stat,omitempty"`
+}
+
+// AWSAppautoscalingPolicyPredictiveScalingPolicyConfigurationMetricSpecificationCustomizedLoadMetricSpecificationMetricDataQueryMetricStat is a nested-block type used by the parent resource.
+type AWSAppautoscalingPolicyPredictiveScalingPolicyConfigurationMetricSpecificationCustomizedLoadMetricSpecificationMetricDataQueryMetricStat struct {
+	Stat   *Value[string]                                                                                                                                   `tf:"stat" json:"stat,omitempty"`
+	Unit   *Value[string]                                                                                                                                   `tf:"unit" json:"unit,omitempty"`
+	Metric []AWSAppautoscalingPolicyPredictiveScalingPolicyConfigurationMetricSpecificationCustomizedLoadMetricSpecificationMetricDataQueryMetricStatMetric `tf:"metric,blocks" json:"metric,omitempty"`
+}
+
+// AWSAppautoscalingPolicyPredictiveScalingPolicyConfigurationMetricSpecificationCustomizedLoadMetricSpecificationMetricDataQueryMetricStatMetric is a nested-block type used by the parent resource.
+type AWSAppautoscalingPolicyPredictiveScalingPolicyConfigurationMetricSpecificationCustomizedLoadMetricSpecificationMetricDataQueryMetricStatMetric struct {
+	MetricName *Value[string]                                                                                                                                            `tf:"metric_name" json:"metric_name,omitempty"`
+	Namespace  *Value[string]                                                                                                                                            `tf:"namespace" json:"namespace,omitempty"`
+	Dimension  []AWSAppautoscalingPolicyPredictiveScalingPolicyConfigurationMetricSpecificationCustomizedLoadMetricSpecificationMetricDataQueryMetricStatMetricDimension `tf:"dimension,blocks" json:"dimension,omitempty"`
+}
+
+// AWSAppautoscalingPolicyPredictiveScalingPolicyConfigurationMetricSpecificationCustomizedLoadMetricSpecificationMetricDataQueryMetricStatMetricDimension is a nested-block type used by the parent resource.
+type AWSAppautoscalingPolicyPredictiveScalingPolicyConfigurationMetricSpecificationCustomizedLoadMetricSpecificationMetricDataQueryMetricStatMetricDimension struct {
+	Name  *Value[string] `tf:"name" json:"name,omitempty"`
+	Value *Value[string] `tf:"value" json:"value,omitempty"`
+}
+
+// AWSAppautoscalingPolicyPredictiveScalingPolicyConfigurationMetricSpecificationCustomizedScalingMetricSpecification is a nested-block type used by the parent resource.
+type AWSAppautoscalingPolicyPredictiveScalingPolicyConfigurationMetricSpecificationCustomizedScalingMetricSpecification struct {
+	MetricDataQuery []AWSAppautoscalingPolicyPredictiveScalingPolicyConfigurationMetricSpecificationCustomizedScalingMetricSpecificationMetricDataQuery `tf:"metric_data_query,blocks" json:"metric_data_query,omitempty"`
+}
+
+// AWSAppautoscalingPolicyPredictiveScalingPolicyConfigurationMetricSpecificationCustomizedScalingMetricSpecificationMetricDataQuery is a nested-block type used by the parent resource.
+type AWSAppautoscalingPolicyPredictiveScalingPolicyConfigurationMetricSpecificationCustomizedScalingMetricSpecificationMetricDataQuery struct {
+	Expression *Value[string]                                                                                                                                `tf:"expression" json:"expression,omitempty"`
+	ID         *Value[string]                                                                                                                                `tf:"id" json:"id,omitempty"`
+	Label      *Value[string]                                                                                                                                `tf:"label" json:"label,omitempty"`
+	ReturnData *Value[bool]                                                                                                                                  `tf:"return_data" json:"return_data,omitempty"`
+	MetricStat []AWSAppautoscalingPolicyPredictiveScalingPolicyConfigurationMetricSpecificationCustomizedScalingMetricSpecificationMetricDataQueryMetricStat `tf:"metric_stat,blocks" json:"metric_stat,omitempty"`
+}
+
+// AWSAppautoscalingPolicyPredictiveScalingPolicyConfigurationMetricSpecificationCustomizedScalingMetricSpecificationMetricDataQueryMetricStat is a nested-block type used by the parent resource.
+type AWSAppautoscalingPolicyPredictiveScalingPolicyConfigurationMetricSpecificationCustomizedScalingMetricSpecificationMetricDataQueryMetricStat struct {
+	Stat   *Value[string]                                                                                                                                      `tf:"stat" json:"stat,omitempty"`
+	Unit   *Value[string]                                                                                                                                      `tf:"unit" json:"unit,omitempty"`
+	Metric []AWSAppautoscalingPolicyPredictiveScalingPolicyConfigurationMetricSpecificationCustomizedScalingMetricSpecificationMetricDataQueryMetricStatMetric `tf:"metric,blocks" json:"metric,omitempty"`
+}
+
+// AWSAppautoscalingPolicyPredictiveScalingPolicyConfigurationMetricSpecificationCustomizedScalingMetricSpecificationMetricDataQueryMetricStatMetric is a nested-block type used by the parent resource.
+type AWSAppautoscalingPolicyPredictiveScalingPolicyConfigurationMetricSpecificationCustomizedScalingMetricSpecificationMetricDataQueryMetricStatMetric struct {
+	MetricName *Value[string]                                                                                                                                               `tf:"metric_name" json:"metric_name,omitempty"`
+	Namespace  *Value[string]                                                                                                                                               `tf:"namespace" json:"namespace,omitempty"`
+	Dimension  []AWSAppautoscalingPolicyPredictiveScalingPolicyConfigurationMetricSpecificationCustomizedScalingMetricSpecificationMetricDataQueryMetricStatMetricDimension `tf:"dimension,blocks" json:"dimension,omitempty"`
+}
+
+// AWSAppautoscalingPolicyPredictiveScalingPolicyConfigurationMetricSpecificationCustomizedScalingMetricSpecificationMetricDataQueryMetricStatMetricDimension is a nested-block type used by the parent resource.
+type AWSAppautoscalingPolicyPredictiveScalingPolicyConfigurationMetricSpecificationCustomizedScalingMetricSpecificationMetricDataQueryMetricStatMetricDimension struct {
+	Name  *Value[string] `tf:"name" json:"name,omitempty"`
+	Value *Value[string] `tf:"value" json:"value,omitempty"`
+}
+
+// AWSAppautoscalingPolicyPredictiveScalingPolicyConfigurationMetricSpecificationPredefinedLoadMetricSpecification is a nested-block type used by the parent resource.
+type AWSAppautoscalingPolicyPredictiveScalingPolicyConfigurationMetricSpecificationPredefinedLoadMetricSpecification struct {
+	PredefinedMetricType *Value[string] `tf:"predefined_metric_type" json:"predefined_metric_type,omitempty"`
+	ResourceLabel        *Value[string] `tf:"resource_label" json:"resource_label,omitempty"`
+}
+
+// AWSAppautoscalingPolicyPredictiveScalingPolicyConfigurationMetricSpecificationPredefinedMetricPairSpecification is a nested-block type used by the parent resource.
+type AWSAppautoscalingPolicyPredictiveScalingPolicyConfigurationMetricSpecificationPredefinedMetricPairSpecification struct {
+	PredefinedMetricType *Value[string] `tf:"predefined_metric_type" json:"predefined_metric_type,omitempty"`
+	ResourceLabel        *Value[string] `tf:"resource_label" json:"resource_label,omitempty"`
+}
+
+// AWSAppautoscalingPolicyPredictiveScalingPolicyConfigurationMetricSpecificationPredefinedScalingMetricSpecification is a nested-block type used by the parent resource.
+type AWSAppautoscalingPolicyPredictiveScalingPolicyConfigurationMetricSpecificationPredefinedScalingMetricSpecification struct {
+	PredefinedMetricType *Value[string] `tf:"predefined_metric_type" json:"predefined_metric_type,omitempty"`
+	ResourceLabel        *Value[string] `tf:"resource_label" json:"resource_label,omitempty"`
 }
 
 // AWSAppautoscalingPolicyStepScalingPolicyConfiguration is a nested-block type used by the parent resource.
@@ -99,15 +241,17 @@ type AWSAppautoscalingPolicyTargetTrackingScalingPolicyConfigurationPredefinedMe
 // AWSAppautoscalingPolicySchema describes provider metadata for each attribute / nested
 // block of aws_appautoscaling_policy.
 var AWSAppautoscalingPolicySchema = map[string]FieldSchema{
-	"alarm_arns":                        {Computed: true, Replacement: ReplacementUnknown},
-	"arn":                               {Computed: true, Replacement: ReplacementUnknown},
-	"id":                                {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"name":                              {Required: true, Replacement: ReplacementUnknown},
-	"policy_type":                       {Optional: true, Replacement: ReplacementUnknown},
-	"resource_id":                       {Required: true, Replacement: ReplacementUnknown},
-	"scalable_dimension":                {Required: true, Replacement: ReplacementUnknown},
-	"service_namespace":                 {Required: true, Replacement: ReplacementUnknown},
-	"step_scaling_policy_configuration": {Optional: true, Replacement: ReplacementUnknown},
+	"alarm_arns":         {Computed: true, Replacement: ReplacementUnknown},
+	"arn":                {Computed: true, Replacement: ReplacementUnknown},
+	"id":                 {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"name":               {Required: true, Replacement: ReplacementUnknown},
+	"policy_type":        {Optional: true, Replacement: ReplacementUnknown},
+	"region":             {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"resource_id":        {Required: true, Replacement: ReplacementUnknown},
+	"scalable_dimension": {Required: true, Replacement: ReplacementUnknown},
+	"service_namespace":  {Required: true, Replacement: ReplacementUnknown},
+	"predictive_scaling_policy_configuration":      {Optional: true, Replacement: ReplacementUnknown},
+	"step_scaling_policy_configuration":            {Optional: true, Replacement: ReplacementUnknown},
 	"target_tracking_scaling_policy_configuration": {Optional: true, Replacement: ReplacementUnknown},
 }
 

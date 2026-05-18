@@ -7,19 +7,40 @@ import "reflect"
 // AWSLbListener is the generated Layer 1 typed model for the
 // `aws_lb_listener` Terraform resource.
 type AWSLbListener struct {
-	AlpnPolicy           *Value[string]                      `tf:"alpn_policy" json:"alpn_policy,omitempty"`
-	ARN                  *Value[string]                      `tf:"arn" json:"arn,omitempty"`
-	CertificateARN       *Value[string]                      `tf:"certificate_arn" json:"certificate_arn,omitempty"`
-	ID                   *Value[string]                      `tf:"id" json:"id,omitempty"`
-	LoadBalancerARN      *Value[string]                      `tf:"load_balancer_arn" json:"load_balancer_arn,omitempty"`
-	Port                 *Value[int64]                       `tf:"port" json:"port,omitempty"`
-	Protocol             *Value[string]                      `tf:"protocol" json:"protocol,omitempty"`
-	SSLPolicy            *Value[string]                      `tf:"ssl_policy" json:"ssl_policy,omitempty"`
-	Tags                 map[string]*Value[string]           `tf:"tags" json:"tags,omitempty"`
-	TagsAll              map[string]*Value[string]           `tf:"tags_all" json:"tags_all,omitempty"`
-	DefaultAction        []AWSLbListenerDefaultAction        `tf:"default_action,blocks" json:"default_action,omitempty"`
-	MutualAuthentication []AWSLbListenerMutualAuthentication `tf:"mutual_authentication,blocks" json:"mutual_authentication,omitempty"`
-	Timeouts             *AWSLbListenerTimeouts              `tf:"timeouts,block" json:"timeouts,omitempty"`
+	AlpnPolicy                                                  *Value[string]                      `tf:"alpn_policy" json:"alpn_policy,omitempty"`
+	ARN                                                         *Value[string]                      `tf:"arn" json:"arn,omitempty"`
+	CertificateARN                                              *Value[string]                      `tf:"certificate_arn" json:"certificate_arn,omitempty"`
+	ID                                                          *Value[string]                      `tf:"id" json:"id,omitempty"`
+	LoadBalancerARN                                             *Value[string]                      `tf:"load_balancer_arn" json:"load_balancer_arn,omitempty"`
+	Port                                                        *Value[int64]                       `tf:"port" json:"port,omitempty"`
+	Protocol                                                    *Value[string]                      `tf:"protocol" json:"protocol,omitempty"`
+	Region                                                      *Value[string]                      `tf:"region" json:"region,omitempty"`
+	RoutingHTTPRequestXAmznMtlsClientcertHeaderName             *Value[string]                      `tf:"routing_http_request_x_amzn_mtls_clientcert_header_name" json:"routing_http_request_x_amzn_mtls_clientcert_header_name,omitempty"`
+	RoutingHTTPRequestXAmznMtlsClientcertIssuerHeaderName       *Value[string]                      `tf:"routing_http_request_x_amzn_mtls_clientcert_issuer_header_name" json:"routing_http_request_x_amzn_mtls_clientcert_issuer_header_name,omitempty"`
+	RoutingHTTPRequestXAmznMtlsClientcertLeafHeaderName         *Value[string]                      `tf:"routing_http_request_x_amzn_mtls_clientcert_leaf_header_name" json:"routing_http_request_x_amzn_mtls_clientcert_leaf_header_name,omitempty"`
+	RoutingHTTPRequestXAmznMtlsClientcertSerialNumberHeaderName *Value[string]                      `tf:"routing_http_request_x_amzn_mtls_clientcert_serial_number_header_name" json:"routing_http_request_x_amzn_mtls_clientcert_serial_number_header_name,omitempty"`
+	RoutingHTTPRequestXAmznMtlsClientcertSubjectHeaderName      *Value[string]                      `tf:"routing_http_request_x_amzn_mtls_clientcert_subject_header_name" json:"routing_http_request_x_amzn_mtls_clientcert_subject_header_name,omitempty"`
+	RoutingHTTPRequestXAmznMtlsClientcertValidityHeaderName     *Value[string]                      `tf:"routing_http_request_x_amzn_mtls_clientcert_validity_header_name" json:"routing_http_request_x_amzn_mtls_clientcert_validity_header_name,omitempty"`
+	RoutingHTTPRequestXAmznTLSCipherSuiteHeaderName             *Value[string]                      `tf:"routing_http_request_x_amzn_tls_cipher_suite_header_name" json:"routing_http_request_x_amzn_tls_cipher_suite_header_name,omitempty"`
+	RoutingHTTPRequestXAmznTLSVersionHeaderName                 *Value[string]                      `tf:"routing_http_request_x_amzn_tls_version_header_name" json:"routing_http_request_x_amzn_tls_version_header_name,omitempty"`
+	RoutingHTTPResponseAccessControlAllowCredentialsHeaderValue *Value[string]                      `tf:"routing_http_response_access_control_allow_credentials_header_value" json:"routing_http_response_access_control_allow_credentials_header_value,omitempty"`
+	RoutingHTTPResponseAccessControlAllowHeadersHeaderValue     *Value[string]                      `tf:"routing_http_response_access_control_allow_headers_header_value" json:"routing_http_response_access_control_allow_headers_header_value,omitempty"`
+	RoutingHTTPResponseAccessControlAllowMethodsHeaderValue     *Value[string]                      `tf:"routing_http_response_access_control_allow_methods_header_value" json:"routing_http_response_access_control_allow_methods_header_value,omitempty"`
+	RoutingHTTPResponseAccessControlAllowOriginHeaderValue      *Value[string]                      `tf:"routing_http_response_access_control_allow_origin_header_value" json:"routing_http_response_access_control_allow_origin_header_value,omitempty"`
+	RoutingHTTPResponseAccessControlExposeHeadersHeaderValue    *Value[string]                      `tf:"routing_http_response_access_control_expose_headers_header_value" json:"routing_http_response_access_control_expose_headers_header_value,omitempty"`
+	RoutingHTTPResponseAccessControlMaxAgeHeaderValue           *Value[string]                      `tf:"routing_http_response_access_control_max_age_header_value" json:"routing_http_response_access_control_max_age_header_value,omitempty"`
+	RoutingHTTPResponseContentSecurityPolicyHeaderValue         *Value[string]                      `tf:"routing_http_response_content_security_policy_header_value" json:"routing_http_response_content_security_policy_header_value,omitempty"`
+	RoutingHTTPResponseServerEnabled                            *Value[bool]                        `tf:"routing_http_response_server_enabled" json:"routing_http_response_server_enabled,omitempty"`
+	RoutingHTTPResponseStrictTransportSecurityHeaderValue       *Value[string]                      `tf:"routing_http_response_strict_transport_security_header_value" json:"routing_http_response_strict_transport_security_header_value,omitempty"`
+	RoutingHTTPResponseXContentTypeOptionsHeaderValue           *Value[string]                      `tf:"routing_http_response_x_content_type_options_header_value" json:"routing_http_response_x_content_type_options_header_value,omitempty"`
+	RoutingHTTPResponseXFrameOptionsHeaderValue                 *Value[string]                      `tf:"routing_http_response_x_frame_options_header_value" json:"routing_http_response_x_frame_options_header_value,omitempty"`
+	SSLPolicy                                                   *Value[string]                      `tf:"ssl_policy" json:"ssl_policy,omitempty"`
+	Tags                                                        map[string]*Value[string]           `tf:"tags" json:"tags,omitempty"`
+	TagsAll                                                     map[string]*Value[string]           `tf:"tags_all" json:"tags_all,omitempty"`
+	TCPIdleTimeoutSeconds                                       *Value[int64]                       `tf:"tcp_idle_timeout_seconds" json:"tcp_idle_timeout_seconds,omitempty"`
+	DefaultAction                                               []AWSLbListenerDefaultAction        `tf:"default_action,blocks" json:"default_action,omitempty"`
+	MutualAuthentication                                        []AWSLbListenerMutualAuthentication `tf:"mutual_authentication,blocks" json:"mutual_authentication,omitempty"`
+	Timeouts                                                    *AWSLbListenerTimeouts              `tf:"timeouts,block" json:"timeouts,omitempty"`
 }
 
 // AWSLbListenerDefaultAction is a nested-block type used by the parent resource.
@@ -31,6 +52,7 @@ type AWSLbListenerDefaultAction struct {
 	AuthenticateOIDC    []AWSLbListenerDefaultActionAuthenticateOIDC    `tf:"authenticate_oidc,blocks" json:"authenticate_oidc,omitempty"`
 	FixedResponse       []AWSLbListenerDefaultActionFixedResponse       `tf:"fixed_response,blocks" json:"fixed_response,omitempty"`
 	Forward             []AWSLbListenerDefaultActionForward             `tf:"forward,blocks" json:"forward,omitempty"`
+	JWTValidation       []AWSLbListenerDefaultActionJWTValidation       `tf:"jwt_validation,blocks" json:"jwt_validation,omitempty"`
 	Redirect            []AWSLbListenerDefaultActionRedirect            `tf:"redirect,blocks" json:"redirect,omitempty"`
 }
 
@@ -86,6 +108,20 @@ type AWSLbListenerDefaultActionForwardTargetGroup struct {
 	Weight *Value[float64] `tf:"weight" json:"weight,omitempty"`
 }
 
+// AWSLbListenerDefaultActionJWTValidation is a nested-block type used by the parent resource.
+type AWSLbListenerDefaultActionJWTValidation struct {
+	Issuer          *Value[string]                                           `tf:"issuer" json:"issuer,omitempty"`
+	JwksEndpoint    *Value[string]                                           `tf:"jwks_endpoint" json:"jwks_endpoint,omitempty"`
+	AdditionalClaim []AWSLbListenerDefaultActionJWTValidationAdditionalClaim `tf:"additional_claim,blocks" json:"additional_claim,omitempty"`
+}
+
+// AWSLbListenerDefaultActionJWTValidationAdditionalClaim is a nested-block type used by the parent resource.
+type AWSLbListenerDefaultActionJWTValidationAdditionalClaim struct {
+	Format *Value[string]   `tf:"format" json:"format,omitempty"`
+	Name   *Value[string]   `tf:"name" json:"name,omitempty"`
+	Values []*Value[string] `tf:"values" json:"values,omitempty"`
+}
+
 // AWSLbListenerDefaultActionRedirect is a nested-block type used by the parent resource.
 type AWSLbListenerDefaultActionRedirect struct {
 	Host       *Value[string] `tf:"host" json:"host,omitempty"`
@@ -98,6 +134,7 @@ type AWSLbListenerDefaultActionRedirect struct {
 
 // AWSLbListenerMutualAuthentication is a nested-block type used by the parent resource.
 type AWSLbListenerMutualAuthentication struct {
+	AdvertiseTrustStoreCaNames    *Value[string] `tf:"advertise_trust_store_ca_names" json:"advertise_trust_store_ca_names,omitempty"`
 	IgnoreClientCertificateExpiry *Value[bool]   `tf:"ignore_client_certificate_expiry" json:"ignore_client_certificate_expiry,omitempty"`
 	Mode                          *Value[string] `tf:"mode" json:"mode,omitempty"`
 	TrustStoreARN                 *Value[string] `tf:"trust_store_arn" json:"trust_store_arn,omitempty"`
@@ -112,19 +149,40 @@ type AWSLbListenerTimeouts struct {
 // AWSLbListenerSchema describes provider metadata for each attribute / nested
 // block of aws_lb_listener.
 var AWSLbListenerSchema = map[string]FieldSchema{
-	"alpn_policy":           {Optional: true, Replacement: ReplacementUnknown},
-	"arn":                   {Computed: true, Replacement: ReplacementUnknown},
-	"certificate_arn":       {Optional: true, Replacement: ReplacementUnknown},
-	"id":                    {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"load_balancer_arn":     {Required: true, Replacement: ReplacementUnknown},
-	"port":                  {Optional: true, Replacement: ReplacementUnknown},
-	"protocol":              {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"ssl_policy":            {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"tags":                  {Optional: true, Replacement: ReplacementUnknown},
-	"tags_all":              {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"default_action":        {Required: true, Replacement: ReplacementUnknown},
-	"mutual_authentication": {Optional: true, Replacement: ReplacementUnknown},
-	"timeouts":              {Optional: true, Replacement: ReplacementUnknown},
+	"alpn_policy":       {Optional: true, Replacement: ReplacementUnknown},
+	"arn":               {Computed: true, Replacement: ReplacementUnknown},
+	"certificate_arn":   {Optional: true, Replacement: ReplacementUnknown},
+	"id":                {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"load_balancer_arn": {Required: true, Replacement: ReplacementUnknown},
+	"port":              {Optional: true, Replacement: ReplacementUnknown},
+	"protocol":          {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"region":            {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"routing_http_request_x_amzn_mtls_clientcert_header_name":               {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"routing_http_request_x_amzn_mtls_clientcert_issuer_header_name":        {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"routing_http_request_x_amzn_mtls_clientcert_leaf_header_name":          {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"routing_http_request_x_amzn_mtls_clientcert_serial_number_header_name": {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"routing_http_request_x_amzn_mtls_clientcert_subject_header_name":       {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"routing_http_request_x_amzn_mtls_clientcert_validity_header_name":      {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"routing_http_request_x_amzn_tls_cipher_suite_header_name":              {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"routing_http_request_x_amzn_tls_version_header_name":                   {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"routing_http_response_access_control_allow_credentials_header_value":   {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"routing_http_response_access_control_allow_headers_header_value":       {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"routing_http_response_access_control_allow_methods_header_value":       {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"routing_http_response_access_control_allow_origin_header_value":        {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"routing_http_response_access_control_expose_headers_header_value":      {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"routing_http_response_access_control_max_age_header_value":             {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"routing_http_response_content_security_policy_header_value":            {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"routing_http_response_server_enabled":                                  {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"routing_http_response_strict_transport_security_header_value":          {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"routing_http_response_x_content_type_options_header_value":             {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"routing_http_response_x_frame_options_header_value":                    {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"ssl_policy":               {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"tags":                     {Optional: true, Replacement: ReplacementUnknown},
+	"tags_all":                 {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"tcp_idle_timeout_seconds": {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"default_action":           {Required: true, Replacement: ReplacementUnknown},
+	"mutual_authentication":    {Optional: true, Replacement: ReplacementUnknown},
+	"timeouts":                 {Optional: true, Replacement: ReplacementUnknown},
 }
 
 func init() {

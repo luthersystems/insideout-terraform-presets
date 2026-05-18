@@ -25,6 +25,14 @@ const syntheticTypePrefix = "policy_test_"
 // updating this list — the diff makes the surface change explicit.
 var coveredTypes = []string{
 	"aws_acm_certificate",
+	// Bundle 14 / #599 — DNS+cert drift policy mega-bundle backfill for
+	// the 7 types newly shipped by #594 / #610 (aws/route53, aws/acm,
+	// gcp/cloud_dns, gcp/certificate_manager). Bundles the AWS provider
+	// schema pin bump (5.70.0 → 6.45.0) and the new gcpCodegenOnlyTypes
+	// bucket (mirror of awsCodegenOnlyTypes, lets a Layer-1 struct +
+	// Layer-2 policy ship before the CAI discoverer hookup). See
+	// pkg/insideout-import/registry/registry.go::gcpCodegenOnlyTypes.
+	"aws_acm_certificate_validation",
 	// Bundle 11 (#482) — APIGW v1 deployment + CloudWatch log stream +
 	// EKS access entry + EKS Fargate profile + ElastiCache parameter
 	// group + EC2 key pair + S3 bucket policy + SNS topic subscription.
@@ -215,6 +223,9 @@ var coveredTypes = []string{
 	"aws_rds_cluster",
 	"aws_resourceexplorer2_index",
 	"aws_resourceexplorer2_view",
+	// Bundle 14 / #599 — high-traffic Route53 record sets; backfill for
+	// the aws/route53 preset (#140 / #585).
+	"aws_route53_record",
 	"aws_route53_zone",
 	"aws_route_table",
 	"aws_s3_bucket",
@@ -255,6 +266,14 @@ var coveredTypes = []string{
 	"google_cloud_run_v2_service",
 	"google_cloudbuild_trigger",
 	"google_cloudfunctions2_function",
+	// Bundle 14 / #599 — Certificate Manager (managed-cert lifecycle for
+	// GCLB) + DNS record / zone backfill for the gcp/cloud_dns preset
+	// (#583). All four GCP types ship via the new gcpCodegenOnlyTypes
+	// bucket — drift policy + Layer-1 struct, no live CAI discoverer
+	// yet.
+	"google_certificate_manager_certificate",
+	"google_certificate_manager_certificate_map",
+	"google_certificate_manager_certificate_map_entry",
 	"google_firestore_database",
 	"google_compute_address",
 	"google_compute_backend_service",
@@ -274,6 +293,9 @@ var coveredTypes = []string{
 	"google_compute_url_map",
 	"google_container_cluster",
 	"google_container_node_pool",
+	// Bundle 14 / #599 (cont.) — Cloud DNS managed zone + record set.
+	"google_dns_managed_zone",
+	"google_dns_record_set",
 	"google_identity_platform_config",
 	"google_identity_platform_default_supported_idp_config",
 	"google_kms_crypto_key",

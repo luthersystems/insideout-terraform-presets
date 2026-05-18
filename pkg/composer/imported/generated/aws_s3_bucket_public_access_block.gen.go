@@ -12,7 +12,9 @@ type AWSS3BucketPublicAccessBlock struct {
 	Bucket                *Value[string] `tf:"bucket" json:"bucket,omitempty"`
 	ID                    *Value[string] `tf:"id" json:"id,omitempty"`
 	IgnorePublicAcls      *Value[bool]   `tf:"ignore_public_acls" json:"ignore_public_acls,omitempty"`
+	Region                *Value[string] `tf:"region" json:"region,omitempty"`
 	RestrictPublicBuckets *Value[bool]   `tf:"restrict_public_buckets" json:"restrict_public_buckets,omitempty"`
+	SkipDestroy           *Value[bool]   `tf:"skip_destroy" json:"skip_destroy,omitempty"`
 }
 
 // AWSS3BucketPublicAccessBlockSchema describes provider metadata for each attribute / nested
@@ -23,7 +25,9 @@ var AWSS3BucketPublicAccessBlockSchema = map[string]FieldSchema{
 	"bucket":                  {Required: true, Replacement: ReplacementUnknown},
 	"id":                      {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"ignore_public_acls":      {Optional: true, Replacement: ReplacementUnknown},
+	"region":                  {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"restrict_public_buckets": {Optional: true, Replacement: ReplacementUnknown},
+	"skip_destroy":            {Optional: true, Replacement: ReplacementUnknown},
 }
 
 func init() {

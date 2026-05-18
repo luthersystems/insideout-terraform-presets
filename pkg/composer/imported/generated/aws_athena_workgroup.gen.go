@@ -12,6 +12,7 @@ type AWSAthenaWorkgroup struct {
 	ForceDestroy  *Value[bool]                      `tf:"force_destroy" json:"force_destroy,omitempty"`
 	ID            *Value[string]                    `tf:"id" json:"id,omitempty"`
 	Name          *Value[string]                    `tf:"name" json:"name,omitempty"`
+	Region        *Value[string]                    `tf:"region" json:"region,omitempty"`
 	State         *Value[string]                    `tf:"state" json:"state,omitempty"`
 	Tags          map[string]*Value[string]         `tf:"tags" json:"tags,omitempty"`
 	TagsAll       map[string]*Value[string]         `tf:"tags_all" json:"tags_all,omitempty"`
@@ -20,19 +21,88 @@ type AWSAthenaWorkgroup struct {
 
 // AWSAthenaWorkgroupConfiguration is a nested-block type used by the parent resource.
 type AWSAthenaWorkgroupConfiguration struct {
-	BytesScannedCutoffPerQuery      *Value[float64]                                      `tf:"bytes_scanned_cutoff_per_query" json:"bytes_scanned_cutoff_per_query,omitempty"`
-	EnforceWorkgroupConfiguration   *Value[bool]                                         `tf:"enforce_workgroup_configuration" json:"enforce_workgroup_configuration,omitempty"`
-	ExecutionRole                   *Value[string]                                       `tf:"execution_role" json:"execution_role,omitempty"`
-	PublishCloudwatchMetricsEnabled *Value[bool]                                         `tf:"publish_cloudwatch_metrics_enabled" json:"publish_cloudwatch_metrics_enabled,omitempty"`
-	RequesterPaysEnabled            *Value[bool]                                         `tf:"requester_pays_enabled" json:"requester_pays_enabled,omitempty"`
-	EngineVersion                   []AWSAthenaWorkgroupConfigurationEngineVersion       `tf:"engine_version,blocks" json:"engine_version,omitempty"`
-	ResultConfiguration             []AWSAthenaWorkgroupConfigurationResultConfiguration `tf:"result_configuration,blocks" json:"result_configuration,omitempty"`
+	BytesScannedCutoffPerQuery              *Value[float64]                                                          `tf:"bytes_scanned_cutoff_per_query" json:"bytes_scanned_cutoff_per_query,omitempty"`
+	EnableMinimumEncryptionConfiguration    *Value[bool]                                                             `tf:"enable_minimum_encryption_configuration" json:"enable_minimum_encryption_configuration,omitempty"`
+	EnforceWorkgroupConfiguration           *Value[bool]                                                             `tf:"enforce_workgroup_configuration" json:"enforce_workgroup_configuration,omitempty"`
+	ExecutionRole                           *Value[string]                                                           `tf:"execution_role" json:"execution_role,omitempty"`
+	PublishCloudwatchMetricsEnabled         *Value[bool]                                                             `tf:"publish_cloudwatch_metrics_enabled" json:"publish_cloudwatch_metrics_enabled,omitempty"`
+	RequesterPaysEnabled                    *Value[bool]                                                             `tf:"requester_pays_enabled" json:"requester_pays_enabled,omitempty"`
+	CustomerContentEncryptionConfiguration  []AWSAthenaWorkgroupConfigurationCustomerContentEncryptionConfiguration  `tf:"customer_content_encryption_configuration,blocks" json:"customer_content_encryption_configuration,omitempty"`
+	EngineVersion                           []AWSAthenaWorkgroupConfigurationEngineVersion                           `tf:"engine_version,blocks" json:"engine_version,omitempty"`
+	IdentityCenterConfiguration             []AWSAthenaWorkgroupConfigurationIdentityCenterConfiguration             `tf:"identity_center_configuration,blocks" json:"identity_center_configuration,omitempty"`
+	ManagedQueryResultsConfiguration        []AWSAthenaWorkgroupConfigurationManagedQueryResultsConfiguration        `tf:"managed_query_results_configuration,blocks" json:"managed_query_results_configuration,omitempty"`
+	MonitoringConfiguration                 []AWSAthenaWorkgroupConfigurationMonitoringConfiguration                 `tf:"monitoring_configuration,blocks" json:"monitoring_configuration,omitempty"`
+	QueryResultsS3AccessGrantsConfiguration []AWSAthenaWorkgroupConfigurationQueryResultsS3AccessGrantsConfiguration `tf:"query_results_s3_access_grants_configuration,blocks" json:"query_results_s3_access_grants_configuration,omitempty"`
+	ResultConfiguration                     []AWSAthenaWorkgroupConfigurationResultConfiguration                     `tf:"result_configuration,blocks" json:"result_configuration,omitempty"`
+}
+
+// AWSAthenaWorkgroupConfigurationCustomerContentEncryptionConfiguration is a nested-block type used by the parent resource.
+type AWSAthenaWorkgroupConfigurationCustomerContentEncryptionConfiguration struct {
+	KMSKey *Value[string] `tf:"kms_key" json:"kms_key,omitempty"`
 }
 
 // AWSAthenaWorkgroupConfigurationEngineVersion is a nested-block type used by the parent resource.
 type AWSAthenaWorkgroupConfigurationEngineVersion struct {
 	EffectiveEngineVersion *Value[string] `tf:"effective_engine_version" json:"effective_engine_version,omitempty"`
 	SelectedEngineVersion  *Value[string] `tf:"selected_engine_version" json:"selected_engine_version,omitempty"`
+}
+
+// AWSAthenaWorkgroupConfigurationIdentityCenterConfiguration is a nested-block type used by the parent resource.
+type AWSAthenaWorkgroupConfigurationIdentityCenterConfiguration struct {
+	EnableIdentityCenter      *Value[bool]   `tf:"enable_identity_center" json:"enable_identity_center,omitempty"`
+	IdentityCenterInstanceARN *Value[string] `tf:"identity_center_instance_arn" json:"identity_center_instance_arn,omitempty"`
+}
+
+// AWSAthenaWorkgroupConfigurationManagedQueryResultsConfiguration is a nested-block type used by the parent resource.
+type AWSAthenaWorkgroupConfigurationManagedQueryResultsConfiguration struct {
+	Enabled                 *Value[bool]                                                                             `tf:"enabled" json:"enabled,omitempty"`
+	EncryptionConfiguration []AWSAthenaWorkgroupConfigurationManagedQueryResultsConfigurationEncryptionConfiguration `tf:"encryption_configuration,blocks" json:"encryption_configuration,omitempty"`
+}
+
+// AWSAthenaWorkgroupConfigurationManagedQueryResultsConfigurationEncryptionConfiguration is a nested-block type used by the parent resource.
+type AWSAthenaWorkgroupConfigurationManagedQueryResultsConfigurationEncryptionConfiguration struct {
+	KMSKey *Value[string] `tf:"kms_key" json:"kms_key,omitempty"`
+}
+
+// AWSAthenaWorkgroupConfigurationMonitoringConfiguration is a nested-block type used by the parent resource.
+type AWSAthenaWorkgroupConfigurationMonitoringConfiguration struct {
+	CloudWatchLoggingConfiguration []AWSAthenaWorkgroupConfigurationMonitoringConfigurationCloudWatchLoggingConfiguration `tf:"cloud_watch_logging_configuration,blocks" json:"cloud_watch_logging_configuration,omitempty"`
+	ManagedLoggingConfiguration    []AWSAthenaWorkgroupConfigurationMonitoringConfigurationManagedLoggingConfiguration    `tf:"managed_logging_configuration,blocks" json:"managed_logging_configuration,omitempty"`
+	S3LoggingConfiguration         []AWSAthenaWorkgroupConfigurationMonitoringConfigurationS3LoggingConfiguration         `tf:"s3_logging_configuration,blocks" json:"s3_logging_configuration,omitempty"`
+}
+
+// AWSAthenaWorkgroupConfigurationMonitoringConfigurationCloudWatchLoggingConfiguration is a nested-block type used by the parent resource.
+type AWSAthenaWorkgroupConfigurationMonitoringConfigurationCloudWatchLoggingConfiguration struct {
+	Enabled             *Value[bool]                                                                                  `tf:"enabled" json:"enabled,omitempty"`
+	LogGroup            *Value[string]                                                                                `tf:"log_group" json:"log_group,omitempty"`
+	LogStreamNamePrefix *Value[string]                                                                                `tf:"log_stream_name_prefix" json:"log_stream_name_prefix,omitempty"`
+	LogType             []AWSAthenaWorkgroupConfigurationMonitoringConfigurationCloudWatchLoggingConfigurationLogType `tf:"log_type,blocks" json:"log_type,omitempty"`
+}
+
+// AWSAthenaWorkgroupConfigurationMonitoringConfigurationCloudWatchLoggingConfigurationLogType is a nested-block type used by the parent resource.
+type AWSAthenaWorkgroupConfigurationMonitoringConfigurationCloudWatchLoggingConfigurationLogType struct {
+	Key    *Value[string]   `tf:"key" json:"key,omitempty"`
+	Values []*Value[string] `tf:"values" json:"values,omitempty"`
+}
+
+// AWSAthenaWorkgroupConfigurationMonitoringConfigurationManagedLoggingConfiguration is a nested-block type used by the parent resource.
+type AWSAthenaWorkgroupConfigurationMonitoringConfigurationManagedLoggingConfiguration struct {
+	Enabled *Value[bool]   `tf:"enabled" json:"enabled,omitempty"`
+	KMSKey  *Value[string] `tf:"kms_key" json:"kms_key,omitempty"`
+}
+
+// AWSAthenaWorkgroupConfigurationMonitoringConfigurationS3LoggingConfiguration is a nested-block type used by the parent resource.
+type AWSAthenaWorkgroupConfigurationMonitoringConfigurationS3LoggingConfiguration struct {
+	Enabled     *Value[bool]   `tf:"enabled" json:"enabled,omitempty"`
+	KMSKey      *Value[string] `tf:"kms_key" json:"kms_key,omitempty"`
+	LogLocation *Value[string] `tf:"log_location" json:"log_location,omitempty"`
+}
+
+// AWSAthenaWorkgroupConfigurationQueryResultsS3AccessGrantsConfiguration is a nested-block type used by the parent resource.
+type AWSAthenaWorkgroupConfigurationQueryResultsS3AccessGrantsConfiguration struct {
+	AuthenticationType    *Value[string] `tf:"authentication_type" json:"authentication_type,omitempty"`
+	CreateUserLevelPrefix *Value[bool]   `tf:"create_user_level_prefix" json:"create_user_level_prefix,omitempty"`
+	EnableS3AccessGrants  *Value[bool]   `tf:"enable_s3_access_grants" json:"enable_s3_access_grants,omitempty"`
 }
 
 // AWSAthenaWorkgroupConfigurationResultConfiguration is a nested-block type used by the parent resource.
@@ -62,6 +132,7 @@ var AWSAthenaWorkgroupSchema = map[string]FieldSchema{
 	"force_destroy": {Optional: true, Replacement: ReplacementUnknown},
 	"id":            {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"name":          {Required: true, Replacement: ReplacementUnknown},
+	"region":        {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"state":         {Optional: true, Replacement: ReplacementUnknown},
 	"tags":          {Optional: true, Replacement: ReplacementUnknown},
 	"tags_all":      {Optional: true, Computed: true, Replacement: ReplacementUnknown},

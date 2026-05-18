@@ -14,6 +14,7 @@ type AWSEKSAccessEntry struct {
 	KubernetesGroups []*Value[string]           `tf:"kubernetes_groups" json:"kubernetes_groups,omitempty"`
 	ModifiedAt       *Value[string]             `tf:"modified_at" json:"modified_at,omitempty"`
 	PrincipalARN     *Value[string]             `tf:"principal_arn" json:"principal_arn,omitempty"`
+	Region           *Value[string]             `tf:"region" json:"region,omitempty"`
 	Tags             map[string]*Value[string]  `tf:"tags" json:"tags,omitempty"`
 	TagsAll          map[string]*Value[string]  `tf:"tags_all" json:"tags_all,omitempty"`
 	Type_            *Value[string]             `tf:"type" json:"type,omitempty"`
@@ -37,6 +38,7 @@ var AWSEKSAccessEntrySchema = map[string]FieldSchema{
 	"kubernetes_groups": {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"modified_at":       {Computed: true, Replacement: ReplacementUnknown},
 	"principal_arn":     {Required: true, Replacement: ReplacementUnknown},
+	"region":            {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"tags":              {Optional: true, Replacement: ReplacementUnknown},
 	"tags_all":          {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"type":              {Optional: true, Replacement: ReplacementUnknown},

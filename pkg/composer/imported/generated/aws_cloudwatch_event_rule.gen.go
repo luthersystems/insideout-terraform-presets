@@ -16,6 +16,7 @@ type AWSCloudwatchEventRule struct {
 	IsEnabled          *Value[bool]              `tf:"is_enabled" json:"is_enabled,omitempty"`
 	Name               *Value[string]            `tf:"name" json:"name,omitempty"`
 	NamePrefix         *Value[string]            `tf:"name_prefix" json:"name_prefix,omitempty"`
+	Region             *Value[string]            `tf:"region" json:"region,omitempty"`
 	RoleARN            *Value[string]            `tf:"role_arn" json:"role_arn,omitempty"`
 	ScheduleExpression *Value[string]            `tf:"schedule_expression" json:"schedule_expression,omitempty"`
 	State              *Value[string]            `tf:"state" json:"state,omitempty"`
@@ -35,6 +36,7 @@ var AWSCloudwatchEventRuleSchema = map[string]FieldSchema{
 	"is_enabled":          {Optional: true, Replacement: ReplacementUnknown},
 	"name":                {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"name_prefix":         {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"region":              {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"role_arn":            {Optional: true, Replacement: ReplacementUnknown},
 	"schedule_expression": {Optional: true, Replacement: ReplacementUnknown},
 	"state":               {Optional: true, Replacement: ReplacementUnknown},

@@ -14,6 +14,7 @@ type AWSLambdaAlias struct {
 	ID              *Value[string]                `tf:"id" json:"id,omitempty"`
 	InvokeARN       *Value[string]                `tf:"invoke_arn" json:"invoke_arn,omitempty"`
 	Name            *Value[string]                `tf:"name" json:"name,omitempty"`
+	Region          *Value[string]                `tf:"region" json:"region,omitempty"`
 	RoutingConfig   []AWSLambdaAliasRoutingConfig `tf:"routing_config,blocks" json:"routing_config,omitempty"`
 }
 
@@ -32,6 +33,7 @@ var AWSLambdaAliasSchema = map[string]FieldSchema{
 	"id":               {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"invoke_arn":       {Computed: true, Replacement: ReplacementUnknown},
 	"name":             {Required: true, Replacement: ReplacementUnknown},
+	"region":           {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"routing_config":   {Optional: true, Replacement: ReplacementUnknown},
 }
 
