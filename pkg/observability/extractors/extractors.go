@@ -110,6 +110,8 @@ func Extract(componentKey composer.ComponentKey, rawResult any) map[string]strin
 		return extractGCPAPIGatewayConfig(rawResult)
 	case "gcp_bastion":
 		return extractGCPBastionConfig(rawResult)
+	case "gcp_github_actions":
+		return extractGCPGitHubActionsConfig(rawResult)
 	default:
 		return nil
 	}
@@ -1939,6 +1941,47 @@ func extractGCPAPIGatewayConfig(rawResult any) map[string]string {
 	}
 	if v := getString(first, "state"); v != "" {
 		cfg["state"] = v
+	}
+	return cfg
+}
+
+// extractGCPGitHubActionsConfig extracts config from the
+// list-workload-identity-pools response (inspectIAM →
+// iam.NewService.Projects.Locations.WorkloadIdentityPools.List). Shape
+// (after JSON round-trip of []*iam.WorkloadIdentityPool):
+//
+//	[ { name (projects/<p>/locations/global/workloadIdentityPools/<id>),
+//	    displayName, description, state, disabled } ]
+//
+// gcp_github_actions in lib/stack/ir.ts is a bare boolean — no
+// designable config — but the panel still wants live signal. Surface
+// identity + state + the security-load-bearing disabled flag so drift
+// fires when a deployed WIF pool is disabled out-of-band (the global
+// kill-switch every downstream federation workflow depends on).
+//
+// Bundle (#606): part of the gcp/github_actions full-fidelity
+// follow-up for the v1 preset (#605). Replaces the
+// configExtractorAllowlist [no-inspector] entry for gcp_github_actions.
+func extractGCPGitHubActionsConfig(rawResult any) map[string]string {
+	items := sliceFromEnvelope(rawResult, "workloadIdentityPools")
+	if len(items) == 0 {
+		return nil
+	}
+	cfg := map[string]string{
+		"poolCount": strconv.Itoa(len(items)),
+	}
+	first := items[0]
+	if v := gcpResourceBasename(getString(first, "name")); v != "" {
+		cfg["poolName"] = v
+	}
+	if v := getString(first, "displayName"); v != "" {
+		cfg["displayName"] = v
+	}
+	if v := getString(first, "state"); v != "" {
+		cfg["state"] = v
+	}
+	if v := boolStr(first, "disabled"); v != "" {
+		cfg["disabled"] = v
 	}
 	return cfg
 }

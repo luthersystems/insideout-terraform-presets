@@ -120,6 +120,10 @@ func Inspect(ctx context.Context, projectID, service, action, filtersJSON string
 	case "certificatemanager":
 		return inspectCertificateManager(ctx, projectID, action, filtersJSON, opts...)
 
+	// --- iam_workload_identity.go (issue #606) ---
+	case "iam":
+		return inspectIAM(ctx, projectID, action, filtersJSON, opts...)
+
 	default:
 		return nil, unsupportedServiceError(service, observability.GCPServiceNames())
 	}

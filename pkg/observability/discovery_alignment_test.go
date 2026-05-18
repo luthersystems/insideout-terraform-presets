@@ -86,6 +86,10 @@ var expectedResourceTypesByAction = map[string][]string{
 	"gcp/apigateway/list-apis":                {"google_api_gateway_api"},
 	"gcp/cloudlogging/list-logs":              {"google_logging_project_sink", "google_logging_project_bucket_config"},
 	"gcp/cloudmonitoring/list-alert-policies": {"google_monitoring_alert_policy"},
+	// #606: gcp_github_actions binding. The preset creates the WIF pool
+	// (google_iam_workload_identity_pool) as its top-level federation
+	// trust boundary; the panel discovers it via the IAM admin API.
+	"gcp/iam/list-workload-identity-pools": {"google_iam_workload_identity_pool"},
 }
 
 // presetMatchesActionAllowlist holds (component, reason) entries for

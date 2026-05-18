@@ -331,6 +331,16 @@ var gcpCodegenOnlyTypes = []string{
 	"google_certificate_manager_certificate_map_entry",
 	"google_dns_managed_zone",
 	"google_dns_record_set",
+	// #608 — gcp/github_actions WIF preset (#605). WIF pool / provider /
+	// service-account IAM binding aren't in Cloud Asset Inventory's
+	// inventory (they live on the IAM v1 admin API surface), so the
+	// hand-rolled CAI fan-out doesn't cover them. Layer-1 codegen +
+	// curated Layer-2 policy ship here; the live discoverer hookup is
+	// the inspector dispatch in pkg/observability/discovery/gcp/
+	// iam_workload_identity.go (#606), not CAI.
+	"google_iam_workload_identity_pool",
+	"google_iam_workload_identity_pool_provider",
+	"google_service_account_iam_binding",
 }
 
 // googleBetaCodegenTypes is the subset of gcpDiscoverTypes whose schema
