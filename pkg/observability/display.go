@@ -161,6 +161,8 @@ func ComponentDisplayName(key composer.ComponentKey) string {
 		return "GCP Cloud Armor"
 	case composer.KeyGCPCloudBuild:
 		return "GCP Cloud Build"
+	case composer.KeyGCPCloudDeploy:
+		return "GCP Cloud Deploy"
 	case composer.KeyGCPCloudFunctions:
 		return "GCP Cloud Functions"
 	case composer.KeyGCPIdentityPlatform:
