@@ -147,6 +147,7 @@ type PricingData struct {
 		GCPIdentityPlatform *PricingItem       `json:"gcp_identity_platform,omitempty"`
 		GCPCloudBuild       *PricingItem       `json:"gcp_cloud_build,omitempty"`
 		GCPCloudDNS         *PricingItem       `json:"gcp_cloud_dns,omitempty"`
+		GCPGitHubActions    *PricingItem       `json:"gcp_github_actions,omitempty"`
 		GCPBackups          *GCPPricingBackups `json:"gcp_backups,omitempty"`
 
 		// External/Third-Party
@@ -406,6 +407,7 @@ func (p *PricingData) Normalize() {
 		c.GCPIdentityPlatform = nil
 		c.GCPCloudBuild = nil
 		c.GCPCloudDNS = nil
+		c.GCPGitHubActions = nil
 		c.GCPBackups = nil
 
 		// Sync legacy and cloud-specific fields for AWS

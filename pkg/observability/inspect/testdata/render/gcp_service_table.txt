@@ -3,9 +3,11 @@
 | apigateway | list-apis, get-metrics |
 | bastion | list-bastion-instances, get-metrics |
 | billing | get-billing-info, get-budgets |
+| certificatemanager | list-certificates |
 | cloudarmor | list-policies, describe-policy, get-metrics |
 | cloudbuild | list-triggers, list-builds, get-metrics |
 | cloudcdn | list-backend-services-cdn, get-metrics |
+| clouddns | list-managed-zones, list-record-sets |
 | cloudfunctions | list-functions, get-metrics |
 | cloudkms | list-keyrings, list-keys, get-metrics |
 | cloudlogging | list-logs |

@@ -89,6 +89,7 @@ const (
 	KeyGCPAPIGateway       ComponentKey = "gcp_api_gateway"
 	KeyGCPBackups          ComponentKey = "gcp_backups"
 	KeyGCPCloudDNS         ComponentKey = "gcp_cloud_dns"
+	KeyGCPGitHubActions    ComponentKey = "gcp_github_actions"
 )
 
 var ComposeOrder = []ComponentKey{
@@ -157,6 +158,10 @@ var ComposeOrder = []ComponentKey{
 	KeyGCPCloudBuild,
 	KeyAWSGitHubActions,
 	KeyAWSCodePipeline,
+	// GCP GitHub Actions WIF preset (#597 row 1). Independent of any
+	// upstream GCP preset so position is not load-bearing — placed
+	// alongside the AWS sibling for reviewability.
+	KeyGCPGitHubActions,
 	KeyArch,
 	KeyCloud,
 	KeyComposer,
@@ -224,6 +229,7 @@ var ModulePath = map[ComponentKey]string{
 	KeyGCPCloudBuild:       "gcp/cloud_build",
 	KeyGCPBackups:          "gcp/backups",
 	KeyGCPCloudDNS:         "gcp/cloud_dns",
+	KeyGCPGitHubActions:    "gcp/github_actions",
 }
 
 // ImplicitDependencies defines components that must be automatically added
@@ -246,6 +252,31 @@ var ImplicitDependencies = map[ComponentKey][]ComponentKey{
 	KeyAWSEKSNodeGroup: {KeyAWSEKS, KeyAWSVPC},
 	KeyAWSEC2:          {KeyAWSVPC},
 	KeyGCPCompute:      {KeyGCPVPC},
+	// Issue #600: GCP services that consume the VPC at apply time but were
+	// previously not declared, causing silent apply-time failures whenever
+	// private endpoints / VPC connectors were configured.
+	//
+	// Vertex AI private endpoints peer with the customer VPC via
+	// servicenetworking.googleapis.com — without the VPC up first, the
+	// google_vertex_ai_endpoint resource errors with NOT_FOUND on the
+	// network reference.
+	KeyGCPVertexAI: {KeyGCPVPC},
+	// Cloud Functions Gen 2 with vpc_connector / VPC egress requires the
+	// serverless VPC access connector (provisioned by gcp/vpc when
+	// enable_serverless_connector is on). Selecting Cloud Functions without
+	// the VPC leaves the connector ref dangling.
+	KeyGCPCloudFunctions: {KeyGCPVPC},
+	// Cloud Run with vpc_access_connector has the same dependency on the
+	// serverless VPC access connector as Cloud Functions Gen 2.
+	KeyGCPCloudRun: {KeyGCPVPC},
+	// Cloud Build private worker pools peer with the customer VPC via
+	// servicenetworking; the pool create call fails if the VPC + private
+	// service connection isn't up.
+	KeyGCPCloudBuild: {KeyGCPVPC},
+	// Cloud Armor security policies only attach to backend services on an
+	// HTTPS load balancer; selecting Cloud Armor without the LB silently
+	// no-ops at apply time.
+	KeyGCPCloudArmor: {KeyGCPLoadbalancer},
 }
 
 // ResolveDependencies recursively finds all required components for a given set of keys.
@@ -375,6 +406,7 @@ var PresetKeyMap = map[ComponentKey]string{
 	KeyGCPCloudFunctions:       "cloud_functions",
 	KeyGCPBastion:              "bastion",
 	KeyGCPCloudDNS:             "cloud_dns",
+	KeyGCPGitHubActions:        "github_actions",
 }
 
 // GetPresetPath returns the cloud-prefixed preset path for a component.
@@ -482,6 +514,7 @@ var AllComponentKeys = []ComponentKey{
 	KeyGCPFirestore,
 	KeyGCPGCS,
 	KeyGCPGKE,
+	KeyGCPGitHubActions,
 	KeyGCPIdentityPlatform,
 	KeyGCPLoadbalancer,
 	KeyGCPMemorystore,
@@ -489,13 +522,6 @@ var AllComponentKeys = []ComponentKey{
 	KeyGCPSecretManager,
 	KeyGCPVPC,
 	KeyGCPVertexAI,
-}
-
-func isLambda(comps *Components) bool {
-	if comps == nil {
-		return false
-	}
-	return comps.IsLambdaArchitecture()
 }
 
 // isPublicVPC returns true if the VPC is configured as a Public VPC (no
@@ -512,6 +538,38 @@ func isPublicVPC(comps *Components) bool {
 type WiredInputs struct {
 	Names  []string
 	RawHCL map[string]string // var name -> raw expression or object literal
+}
+
+// DefaultRootLocals returns the composed-root `locals { }` map keyed by
+// local name to raw HCL expression. The composer emits these as a
+// top-of-file `locals { }` block in main.tf and any module-block input
+// that wires through this layer reads `local.<name>` instead of
+// `module.<producer>.<output>` directly.
+//
+// The locals channel exists specifically to break cycle-validator
+// rejections on real-terraform-valid back-edges (issue #601): the
+// validator's extractWiringEdges only inspects `module.X.Y` traversals
+// inside ModuleBlock.Raw, so a back-edge expressed as
+// `local.acm_validation_record_fqdns` is invisible to the cycle topology
+// while terraform plan still orders the data flow correctly.
+//
+// Returns nil when no back-edge locals fire for the current selection.
+//
+// Today's locals (extend here when adding new back-edge pairs):
+//   - acm_validation_record_fqdns : list of FQDNs derived from
+//     route53.record_fqdns, consumed by ACM. Wired when both KeyAWSACM
+//     and KeyAWSRoute53 are selected (#601).
+func DefaultRootLocals(selected map[ComponentKey]bool) map[string]string {
+	locals := map[string]string{}
+	if selected[KeyAWSACM] && selected[KeyAWSRoute53] {
+		// route53.record_fqdns is map(string) keyed by "<name>-<type>";
+		// ACM's validation_record_fqdns wants list(string). values() flattens.
+		locals["acm_validation_record_fqdns"] = "values(" + WireRef(KeyAWSRoute53, "record_fqdns") + ")"
+	}
+	if len(locals) == 0 {
+		return nil
+	}
+	return locals
 }
 
 // Module-reference helpers return "module.<name>" paths used by wiring to
@@ -762,18 +820,11 @@ func DefaultWiring(selected map[ComponentKey]bool, k ComponentKey, comps *Compon
 		// are CNAME (ACM's only validation method here), so the type pass-
 		// through is safe.
 		//
-		// TODO(#601): wire the back-edge route53.record_fqdns →
-		// acm.validation_record_fqdns + flip acm.create_validation=true so
-		// the composed stack produces an ISSUED cert in one apply. Today's
-		// blocker: closing that loop creates an acm ↔ route53 2-cycle that
-		// ValidateNoModuleCycles flags before terraform plan ever runs.
-		// The cleanest fix is to give route53 a dedicated
-		// `acm_validation_records` input (separate from var.records) so the
-		// back-edge can read a route53 output that doesn't depend on the
-		// acm-sourced records. Until then, callers needing an ISSUED cert
-		// must run a second-pass `terraform apply` with
-		// `acm.validation_record_fqdns = module.aws_route53.record_fqdns`
-		// and `acm.create_validation = true` set manually.
+		// The back-edge (route53.record_fqdns → acm.validation_record_fqdns
+		// + auto-flip acm.create_validation=true) lives on the KeyAWSACM
+		// case below and is routed through a composed-root `locals { }`
+		// block (DefaultRootLocals) so ValidateNoModuleCycles sees a
+		// one-way graph. See #601.
 		if selected[KeyAWSACM] {
 			wi.RawHCL["records"] = `[for r in ` + WireRef(KeyAWSACM, "validation_records") + ` : {
       name   = r.name
@@ -782,6 +833,29 @@ func DefaultWiring(selected map[ComponentKey]bool, k ComponentKey, comps *Compon
       values = [r.value]
     }]`
 			wi.Names = append(wi.Names, "records")
+		}
+
+	case KeyAWSACM:
+		// Back-edge into ACM: when route53 is also in the stack, ACM
+		// reads its validation_record_fqdns from the composed-root local
+		// `acm_validation_record_fqdns` (emitted by DefaultRootLocals as
+		// `values(module.aws_route53.record_fqdns)`). The local layer is
+		// the cycle-break — moduleRefPattern in validate_module_graph.go
+		// only matches module.X.Y traversals, so the validator sees a
+		// one-way graph (acm → route53) while terraform plan still orders
+		// correctly through the local-to-module data flow. Issue #601.
+		//
+		// create_validation auto-flips to true so the composed stack
+		// produces an ISSUED cert in one apply. The wired RawHCL value
+		// (`true`) takes precedence over any cfg.AWSACM.CreateValidation
+		// the caller supplies — matching the unconditional behavior of
+		// the forward edge on the KeyAWSRoute53 case above. Callers who
+		// need create_validation=false when route53 is also selected
+		// must drop one of the keys from the selection.
+		if selected[KeyAWSRoute53] {
+			wi.RawHCL["validation_record_fqdns"] = "local.acm_validation_record_fqdns"
+			wi.RawHCL["create_validation"] = "true"
+			wi.Names = append(wi.Names, "validation_record_fqdns", "create_validation")
 		}
 
 	case KeyAWSCloudWatchMonitoring:

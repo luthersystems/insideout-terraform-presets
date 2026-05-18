@@ -72,8 +72,18 @@ var GCPServices = map[ComponentKey][]GCPService{
 		{Name: "servicecontrol.googleapis.com", Title: "Service Control"},
 		{Name: "servicemanagement.googleapis.com", Title: "Service Management"},
 	},
-	KeyGCPBackups: {{Name: "backupdr.googleapis.com", Title: "Backup and DR Service"}},
+	KeyGCPBackups:  {{Name: "backupdr.googleapis.com", Title: "Backup and DR Service"}},
 	KeyGCPCloudDNS: {{Name: "dns.googleapis.com", Title: "Cloud DNS"}},
+	// GCP GitHub Actions WIF preset (#597 row 1). The preset enables
+	// iam.googleapis.com (covered by always-required) plus IAM Credentials
+	// (the STS token-minting endpoint the action calls) and STS itself
+	// (the federation endpoint). Without these enabled, terraform apply
+	// succeeds but the first GitHub Actions workflow run fails at the
+	// auth step with PERMISSION_DENIED.
+	KeyGCPGitHubActions: {
+		{Name: "iamcredentials.googleapis.com", Title: "IAM Service Account Credentials"},
+		{Name: "sts.googleapis.com", Title: "Security Token Service"},
+	},
 	// Components that need no extra service beyond the always-required set
 	// (covered by Compute / always-required entries):
 	KeyGCPVPC:          nil,

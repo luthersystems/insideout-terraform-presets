@@ -44,6 +44,17 @@ var AWSServiceActions = map[string][]string{
 	"bedrock":        {"list-knowledge-bases", "describe-knowledge-base", "list-agents", "list-guardrails", "get-metrics"},
 	"cost-explorer":  {"get-cost-summary", "get-cost-forecast", "get-cost-by-tag"},
 	"account":        {"get-info"},
+	// Route 53 (#596). Hosted-zone discovery uses list-hosted-zones (global —
+	// no region scoping); per-zone record sets are fetched via
+	// list-resource-record-sets, which requires a hosted_zone_id in the
+	// filters envelope.
+	"route53": {"list-hosted-zones", "list-resource-record-sets"},
+	// ACM (#596). list-certificates returns the account's cert summaries
+	// (no server-side tag filter — caller post-filters); describe-certificate
+	// fetches the full detail (including domain_validation_options) for a
+	// specific ARN. get-metrics routes to the metrics package for the
+	// DaysToExpiry CloudWatch series.
+	"acm": {"list-certificates", "describe-certificate", "get-metrics"},
 }
 
 // AWSServiceAliases maps caller-supplied aliases to canonical service
@@ -59,6 +70,11 @@ var AWSServiceAliases = map[string]string{
 	"auth":    "cognito",
 	"billing": "cost-explorer",
 	"costs":   "cost-explorer",
+	// #596: LLM-friendly aliases for the new DNS+cert pair. "dns" maps
+	// to route53 (the only AWS DNS service); "certs" maps to acm
+	// (AWS's cert manager).
+	"dns":   "route53",
+	"certs": "acm",
 }
 
 // AWSActionAliases maps service → (alias action → canonical action).
@@ -85,6 +101,30 @@ var AWSActionAliases = map[string]map[string]string{
 	},
 	"s3": {
 		"describe-buckets": "list-buckets",
+	},
+	// #596: LLM-friendly aliases for Route 53 + ACM. Common patterns the
+	// LLM guesses ("list-zones", "describe-zones", "list-records",
+	// "describe-certificates") are absorbed here so callers land on the
+	// canonical SDK verbs instead of an unsupported-action error.
+	// Note: "list-record-sets" is also the canonical GCP Cloud DNS action
+	// name (see GCPServiceActions["clouddns"] below). A cross-cloud caller
+	// using --service=route53 --action=list-record-sets lands on
+	// route53.list-resource-record-sets here; --service=clouddns
+	// --action=list-record-sets lands on clouddns.list-record-sets there.
+	// The two SDK verbs differ; the user-facing alias intentionally
+	// converges so cross-cloud tooling can use a single action name.
+	"route53": {
+		"list-zones":            "list-hosted-zones",
+		"describe-zones":        "list-hosted-zones",
+		"describe-hosted-zones": "list-hosted-zones",
+		"list-records":          "list-resource-record-sets",
+		"list-record-sets":      "list-resource-record-sets",
+		"describe-record-sets":  "list-resource-record-sets",
+	},
+	"acm": {
+		"describe-certificates": "list-certificates",
+		"list-certs":            "list-certificates",
+		"get-certificate":       "describe-certificate",
 	},
 }
 
@@ -117,6 +157,14 @@ var GCPServiceActions = map[string][]string{
 	// design (cloudlogging follows the same pattern).
 	"cloudmonitoring": {"list-alert-policies"},
 	"billing":         {"get-billing-info", "get-budgets"},
+	// Cloud DNS (#596). list-managed-zones returns the project's zones
+	// (filtered by labels.project post-fetch); list-record-sets requires
+	// a managed_zone in the filters envelope (the API is per-zone).
+	"clouddns": {"list-managed-zones", "list-record-sets"},
+	// Certificate Manager (#596). list-certificates returns the cert
+	// inventory for a given location (defaults to "global" — the
+	// CloudFront / global LB cert flow).
+	"certificatemanager": {"list-certificates"},
 }
 
 // GCPServiceAliases is the GCP analog of AWSServiceAliases.
@@ -128,6 +176,12 @@ var GCPServiceAliases = map[string]string{
 	"network":   "vpc",
 	"functions": "cloudfunctions",
 	"cdn":       "cloudcdn",
+	// #596: LLM-friendly aliases for the GCP DNS+cert pair. "dns" maps
+	// to clouddns (GCP's Cloud DNS service); "certs" / "certmanager"
+	// map to certificatemanager (GCP's Certificate Manager service).
+	"dns":         "clouddns",
+	"certs":       "certificatemanager",
+	"certmanager": "certificatemanager",
 }
 
 // CanonicalAWSService resolves an alias to its canonical AWS service

@@ -177,6 +177,8 @@ func ComponentDisplayName(key composer.ComponentKey) string {
 		return "GCP Cloud Monitoring"
 	case composer.KeyGCPCloudDNS:
 		return "GCP Cloud DNS"
+	case composer.KeyGCPGitHubActions:
+		return "GCP GitHub Actions WIF"
 	case composer.KeyGCPBackups:
 		return "GCP Backups"
 	default:
