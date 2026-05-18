@@ -12,7 +12,14 @@ mock_provider "google" {}
 #     collapse pipeline stages).
 
 run "cloud_deploy_minimum_inputs" {
-  command = plan
+  # `command = apply` (not plan) so the assertions below can cross-reference
+  # google_service_account.deploy_runner.email — the email is Computed by
+  # the Google provider and is plan-time-unknown. The mock_provider above
+  # generates a deterministic mock value at apply, making the cross-ref
+  # evaluable. All assertions in this block are about static configuration
+  # (names, labels, structural counts), not real API behaviour, so the
+  # mock-provider apply is safe.
+  command = apply
 
   variables {
     project    = "test"
