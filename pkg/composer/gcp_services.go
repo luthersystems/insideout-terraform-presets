@@ -84,6 +84,16 @@ var GCPServices = map[ComponentKey][]GCPService{
 		{Name: "iamcredentials.googleapis.com", Title: "IAM Service Account Credentials"},
 		{Name: "sts.googleapis.com", Title: "Security Token Service"},
 	},
+	// GCP Cloud Deploy delivery-pipeline preset (#613). The preset enables
+	// clouddeploy.googleapis.com itself via google_project_service; the
+	// always-required IAM activation covers the runner SA + role bindings.
+	// Without this entry, the pre-deploy serviceusage.batchGet check
+	// would silently omit Cloud Deploy and the first
+	// google_clouddeploy_delivery_pipeline create fails with a
+	// SERVICE_DISABLED 403.
+	KeyGCPCloudDeploy: {
+		{Name: "clouddeploy.googleapis.com", Title: "Cloud Deploy"},
+	},
 	// Components that need no extra service beyond the always-required set
 	// (covered by Compute / always-required entries):
 	KeyGCPVPC:          nil,

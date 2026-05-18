@@ -92,7 +92,7 @@ func (c *Client) ListAvailableComponentKeys() ([]string, error) {
 		KeyGCPGCS, KeyGCPCloudKMS, KeyGCPSecretManager, KeyGCPVertexAI,
 		KeyGCPPubSub, KeyGCPCloudLogging, KeyGCPCloudMonitoring,
 		KeyGCPIdentityPlatform, KeyGCPCloudBuild, KeyGCPBackups,
-		KeyGCPCloudDNS, KeyGCPGitHubActions,
+		KeyGCPCloudDNS, KeyGCPGitHubActions, KeyGCPCloudDeploy,
 	}
 
 	for _, cloud := range clouds {
