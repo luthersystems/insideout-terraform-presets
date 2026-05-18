@@ -16,6 +16,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/aws-sdk-go-v2/service/eks"
+	"github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/kms"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
@@ -683,10 +684,11 @@ func listEKSClustersWithClient(ctx context.Context, client eksClustersLister) ([
 
 // listEKSClustersAsResourceModels enumerates EKS clusters and wraps
 // each cluster name into a JSON ResourceModel `{"ClusterName":"..."}`
-// for feeding into Cloud Control ListResources for the four child
+// for feeding into Cloud Control ListResources for the five child
 // types scoped on ClusterName: Nodegroup, Addon, FargateProfile,
-// AccessEntry (#14f). Reuses `listEKSClusters` for the underlying SDK
-// call so pagination semantics are shared.
+// AccessEntry, PodIdentityAssociation (#14f, #616). Reuses
+// `listEKSClusters` for the underlying SDK call so pagination
+// semantics are shared.
 func listEKSClustersAsResourceModels(ctx context.Context, awsCfg aws.Config, region string, args DiscoverArgs) ([]string, error) {
 	names, err := listEKSClusters(ctx, awsCfg, region, args)
 	if err != nil {
@@ -695,6 +697,73 @@ func listEKSClustersAsResourceModels(ctx context.Context, awsCfg aws.Config, reg
 	models := make([]string, 0, len(names))
 	for _, n := range names {
 		models = append(models, fmt.Sprintf(`{"ClusterName":%q}`, n))
+	}
+	return models, nil
+}
+
+// elbv2LoadBalancersLister is the narrow subset of the ELBv2 SDK used
+// by the aws_lb_listener parent-scoped enumeration (#616 follow-up).
+// The interface is package-private so test fakes can satisfy it
+// without depending on the full ELBv2 client surface.
+type elbv2LoadBalancersLister interface {
+	DescribeLoadBalancers(ctx context.Context, in *elasticloadbalancingv2.DescribeLoadBalancersInput, opts ...func(*elasticloadbalancingv2.Options)) (*elasticloadbalancingv2.DescribeLoadBalancersOutput, error)
+}
+
+// listLoadBalancers enumerates ELBv2 load balancers in the region and
+// returns each LoadBalancerArn. Used as the parent enumeration for
+// AWS::ElasticLoadBalancingV2::Listener whose CC ListResources handler
+// requires ResourceModel={"LoadBalancerArn":"..."}.
+//
+// DescribeLoadBalancers paginates via Marker/NextMarker. The
+// terminator condition mirrors the other listers: break on both nil
+// AND empty-string cursors.
+func listLoadBalancers(ctx context.Context, awsCfg aws.Config, region string, _ DiscoverArgs) ([]string, error) {
+	client := elasticloadbalancingv2.NewFromConfig(awsCfg, func(o *elasticloadbalancingv2.Options) {
+		if region != "" {
+			o.Region = region
+		}
+	})
+	return listLoadBalancersWithClient(ctx, client)
+}
+
+func listLoadBalancersWithClient(ctx context.Context, client elbv2LoadBalancersLister) ([]string, error) {
+	arns := []string{}
+	var marker *string
+	for {
+		page, err := client.DescribeLoadBalancers(ctx, &elasticloadbalancingv2.DescribeLoadBalancersInput{Marker: marker})
+		if err != nil {
+			return nil, fmt.Errorf("elbv2:DescribeLoadBalancers: %w", err)
+		}
+		for _, lb := range page.LoadBalancers {
+			arn := aws.ToString(lb.LoadBalancerArn)
+			if arn == "" {
+				continue
+			}
+			arns = append(arns, arn)
+		}
+		if page.NextMarker == nil || aws.ToString(page.NextMarker) == "" {
+			break
+		}
+		marker = page.NextMarker
+	}
+	return arns, nil
+}
+
+// listLoadBalancersAsResourceModels enumerates ELBv2 load balancers
+// and wraps each LoadBalancerArn into a JSON ResourceModel
+// `{"LoadBalancerArn":"..."}` for feeding into Cloud Control
+// ListResources for AWS::ElasticLoadBalancingV2::Listener (#616
+// follow-up — the same regression class as
+// AWS::EKS::PodIdentityAssociation). Reuses `listLoadBalancers` for
+// the underlying SDK call so pagination semantics are shared.
+func listLoadBalancersAsResourceModels(ctx context.Context, awsCfg aws.Config, region string, args DiscoverArgs) ([]string, error) {
+	arns, err := listLoadBalancers(ctx, awsCfg, region, args)
+	if err != nil {
+		return nil, err
+	}
+	models := make([]string, 0, len(arns))
+	for _, a := range arns {
+		models = append(models, fmt.Sprintf(`{"LoadBalancerArn":%q}`, a))
 	}
 	return models, nil
 }

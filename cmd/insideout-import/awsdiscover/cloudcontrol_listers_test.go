@@ -28,6 +28,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
 	"github.com/aws/aws-sdk-go-v2/service/eks"
+	"github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2"
+	elbv2types "github.com/aws/aws-sdk-go-v2/service/elasticloadbalancingv2/types"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	iamtypes "github.com/aws/aws-sdk-go-v2/service/iam/types"
 	"github.com/aws/aws-sdk-go-v2/service/kms"
@@ -1643,7 +1645,7 @@ func TestListEKSClusters_SkipsEmptyClusterName(t *testing.T) {
 
 // TestListEKSClustersAsResourceModels_WrapsNamesAsResourceModelJSON pins
 // the parent-fan-out emit shape: each cluster name is wrapped into a
-// JSON ResourceModel `{"ClusterName":"..."}` for the four EKS child
+// JSON ResourceModel `{"ClusterName":"..."}` for the five EKS child
 // types' CC ListResources fan-out. Drift here would break every EKS
 // child type's parent-scoped enumeration.
 func TestListEKSClustersAsResourceModels_WrapsNamesAsResourceModelJSON(t *testing.T) {
@@ -1673,6 +1675,164 @@ func TestListEKSClustersAsResourceModels_WrapsNamesAsResourceModelJSON(t *testin
 		}
 		if parsed["ClusterName"] != name {
 			t.Errorf("name %q: round-tripped to %q under ClusterName key", name, parsed["ClusterName"])
+		}
+	}
+}
+
+// =====================================================================
+// #616 follow-up — listLoadBalancers /
+// listLoadBalancersAsResourceModels (ELBv2 parent enumeration for
+// aws_lb_listener)
+// =====================================================================
+
+// fakeELBv2LoadBalancersLister is the per-test seam for
+// elbv2:DescribeLoadBalancers. The canned `listPages` table is consumed
+// in order; the per-call `marker` receipts are captured for cursor
+// round-trip assertions.
+type fakeELBv2LoadBalancersLister struct {
+	listPages   []elasticloadbalancingv2.DescribeLoadBalancersOutput
+	listCalls   int
+	listErr     error
+	markersSeen []*string
+}
+
+func (f *fakeELBv2LoadBalancersLister) DescribeLoadBalancers(_ context.Context, in *elasticloadbalancingv2.DescribeLoadBalancersInput, _ ...func(*elasticloadbalancingv2.Options)) (*elasticloadbalancingv2.DescribeLoadBalancersOutput, error) {
+	f.markersSeen = append(f.markersSeen, in.Marker)
+	if f.listErr != nil {
+		return nil, f.listErr
+	}
+	if f.listCalls >= len(f.listPages) {
+		return &elasticloadbalancingv2.DescribeLoadBalancersOutput{}, nil
+	}
+	page := f.listPages[f.listCalls]
+	f.listCalls++
+	return &page, nil
+}
+
+func elbv2LoadBalancersPage(nextMarker string, arns ...string) elasticloadbalancingv2.DescribeLoadBalancersOutput {
+	lbs := make([]elbv2types.LoadBalancer, 0, len(arns))
+	for _, a := range arns {
+		arn := a
+		lbs = append(lbs, elbv2types.LoadBalancer{LoadBalancerArn: &arn})
+	}
+	out := elasticloadbalancingv2.DescribeLoadBalancersOutput{LoadBalancers: lbs}
+	if nextMarker != "" {
+		out.NextMarker = aws.String(nextMarker)
+	}
+	return out
+}
+
+func TestListLoadBalancers_PaginatesAndReturnsArns(t *testing.T) {
+	t.Parallel()
+	fake := &fakeELBv2LoadBalancersLister{
+		listPages: []elasticloadbalancingv2.DescribeLoadBalancersOutput{
+			elbv2LoadBalancersPage("m1", "arn:aws:elasticloadbalancing:us-east-1:123:loadbalancer/app/alpha/aaaa"),
+			elbv2LoadBalancersPage("m2", "arn:aws:elasticloadbalancing:us-east-1:123:loadbalancer/app/beta/bbbb"),
+			elbv2LoadBalancersPage("", "arn:aws:elasticloadbalancing:us-east-1:123:loadbalancer/net/gamma/cccc"),
+		},
+	}
+	got, err := listLoadBalancersWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{
+		"arn:aws:elasticloadbalancing:us-east-1:123:loadbalancer/app/alpha/aaaa",
+		"arn:aws:elasticloadbalancing:us-east-1:123:loadbalancer/app/beta/bbbb",
+		"arn:aws:elasticloadbalancing:us-east-1:123:loadbalancer/net/gamma/cccc",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("arns drift:\n got %v\nwant %v", got, want)
+	}
+	if fake.listCalls != 3 {
+		t.Errorf("listCalls=%d, want 3", fake.listCalls)
+	}
+	// Cursor round-trip: a regression dropping `marker = page.NextMarker`
+	// would still call 3 times (the fake serves by count) but markersSeen
+	// would be all-nil.
+	if len(fake.markersSeen) != 3 {
+		t.Fatalf("markersSeen len=%d, want 3", len(fake.markersSeen))
+	}
+	if fake.markersSeen[0] != nil {
+		t.Errorf("markersSeen[0]=%v, want nil", aws.ToString(fake.markersSeen[0]))
+	}
+	if aws.ToString(fake.markersSeen[1]) != "m1" {
+		t.Errorf("markersSeen[1]=%q, want m1", aws.ToString(fake.markersSeen[1]))
+	}
+	if aws.ToString(fake.markersSeen[2]) != "m2" {
+		t.Errorf("markersSeen[2]=%q, want m2", aws.ToString(fake.markersSeen[2]))
+	}
+}
+
+func TestListLoadBalancers_EmptyAccountReturnsNonNilEmpty(t *testing.T) {
+	t.Parallel()
+	fake := &fakeELBv2LoadBalancersLister{
+		listPages: []elasticloadbalancingv2.DescribeLoadBalancersOutput{elbv2LoadBalancersPage("")},
+	}
+	got, err := listLoadBalancersWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got == nil || len(got) != 0 {
+		t.Errorf("got %v, want non-nil empty slice", got)
+	}
+}
+
+func TestListLoadBalancers_PropagatesListError(t *testing.T) {
+	t.Parallel()
+	sentinel := errors.New("AccessDenied: elbv2:DescribeLoadBalancers")
+	fake := &fakeELBv2LoadBalancersLister{listErr: sentinel}
+	_, err := listLoadBalancersWithClient(context.Background(), fake)
+	if !errors.Is(err, sentinel) {
+		t.Errorf("err does not wrap sentinel; got %v", err)
+	}
+}
+
+func TestListLoadBalancers_SkipsEmptyLoadBalancerArn(t *testing.T) {
+	t.Parallel()
+	good := "arn:aws:elasticloadbalancing:us-east-1:123:loadbalancer/app/good/aaaa"
+	empty := ""
+	alsoGood := "arn:aws:elasticloadbalancing:us-east-1:123:loadbalancer/app/also-good/cccc"
+	fake := &fakeELBv2LoadBalancersLister{
+		listPages: []elasticloadbalancingv2.DescribeLoadBalancersOutput{
+			{LoadBalancers: []elbv2types.LoadBalancer{
+				{LoadBalancerArn: &good},
+				{LoadBalancerArn: &empty},
+				{LoadBalancerArn: nil},
+				{LoadBalancerArn: &alsoGood},
+			}},
+		},
+	}
+	got, err := listLoadBalancersWithClient(context.Background(), fake)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{good, alsoGood}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("empty-arn skip drift: got %v want %v", got, want)
+	}
+}
+
+// TestListLoadBalancersAsResourceModels_WrapsArnsAsResourceModelJSON pins
+// the parent-fan-out emit shape for AWS::ElasticLoadBalancingV2::Listener:
+// each LB ARN is wrapped into a JSON ResourceModel
+// `{"LoadBalancerArn":"..."}` so the CC ListResources fallback supplies
+// the property AWS requires (#616 follow-up; missing wrap would surface
+// as the same InvalidRequestException that #616 fixed for EKS).
+func TestListLoadBalancersAsResourceModels_WrapsArnsAsResourceModelJSON(t *testing.T) {
+	t.Parallel()
+	for _, arn := range []string{
+		"arn:aws:elasticloadbalancing:us-east-1:123:loadbalancer/app/plain/aaaa",
+		`arn:aws:elasticloadbalancing:us-east-1:123:loadbalancer/app/with"quote/bbbb`,
+		"arn:aws:elasticloadbalancing:us-east-1:123:loadbalancer/net/with-slash/cccc/extra",
+	} {
+		got := fmt.Sprintf(`{"LoadBalancerArn":%q}`, arn)
+		var parsed map[string]string
+		if err := json.Unmarshal([]byte(got), &parsed); err != nil {
+			t.Errorf("arn %q produced unparseable JSON: %v (got %q)", arn, err, got)
+			continue
+		}
+		if parsed["LoadBalancerArn"] != arn {
+			t.Errorf("arn %q: round-tripped to %q under LoadBalancerArn key", arn, parsed["LoadBalancerArn"])
 		}
 	}
 }
