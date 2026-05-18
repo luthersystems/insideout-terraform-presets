@@ -43,7 +43,7 @@ locals {
   # gcp/cloud_build / gcp/github_actions). The downstream InsideOut
   # inspector filters Cloud Deploy resources on the project label for
   # drift attribution.
-  tags_or_labels = merge({ project = var.project }, var.labels)
+  labels = merge({ project = var.project }, var.labels)
 
   # Each target's Cloud Deploy identifier is the var.project-prefixed form
   # of the user-supplied short name. The prefix is load-bearing for the
@@ -82,8 +82,10 @@ resource "google_project_service" "this" {
 # Cloud Deploy executes render/deploy/verify jobs as a service account; the
 # default is the Compute Engine default SA, which is over-privileged and
 # typically locked-down in production projects. Provision a per-pipeline
-# runner SA with least-privilege bindings (releaser + operator below) so
-# Cloud Deploy has explicit, auditable identity for its execution.
+# runner SA with the single least-privilege binding (jobRunner below) so
+# Cloud Deploy has explicit, auditable identity for its execution. Callers
+# that create releases (CI, gcloud users) hold roles/clouddeploy.releaser
+# themselves — the runner SA is the executor, not the release-creator.
 #
 # account_id has a 6-30 char limit and `[a-z]([-a-z0-9]*[a-z0-9])` regex.
 # var.project (the stack naming prefix) can overflow when combined with a
@@ -133,7 +135,7 @@ resource "google_clouddeploy_delivery_pipeline" "this" {
     }
   }
 
-  labels = local.tags_or_labels
+  labels = local.labels
 
   depends_on = [
     google_project_service.this,
@@ -174,7 +176,7 @@ resource "google_clouddeploy_target" "this" {
 
   description = "Cloud Deploy target ${each.value.name} (runtime: ${each.value.runtime}) for pipeline ${var.project}-${var.pipeline_short_name}"
 
-  require_approval = lookup(each.value, "require_approval", false)
+  require_approval = each.value.require_approval
 
   dynamic "run" {
     for_each = each.value.runtime == "run" ? [1] : []
@@ -196,40 +198,36 @@ resource "google_clouddeploy_target" "this" {
     execution_timeout = "3600s"
   }
 
-  labels = local.tags_or_labels
+  labels = local.labels
 
   depends_on = [
     google_project_service.this,
-    google_project_iam_member.deploy_runner_releaser,
-    google_project_iam_member.deploy_runner_operator,
+    google_project_iam_member.deploy_runner_job_runner,
   ]
 }
 
 # -----------------------------------------------------------------------------
-# Project-level IAM bindings for the runner SA
+# Project-level IAM binding for the runner SA
 # -----------------------------------------------------------------------------
-# roles/clouddeploy.releaser  — create releases + promote between targets.
-# roles/clouddeploy.operator  — execute render/deploy/verify jobs as part
-#                               of release rollout.
+# roles/clouddeploy.jobRunner  — execute render/deploy/verify jobs as part of
+#                                release rollout. The runner SA is the *executor*
+#                                identity, not the release-creator. Callers that
+#                                cut releases (CI workflow SA, gcloud user)
+#                                grant themselves roles/clouddeploy.releaser
+#                                separately — binding it to the runner SA here
+#                                would be over-privileged (the runner does not
+#                                create releases).
 #
-# Both are project-scoped because Cloud Deploy's release / rollout APIs
-# operate at the project level. google_project_iam_member (additive) is used
-# rather than google_project_iam_binding (authoritative) to avoid stomping
-# pre-existing role grants on the project. Etag drifts on refresh but is
-# Computed-only — lifecycle.ignore_changes has no effect; drift suppression
-# happens at the inspector level (matches gcp/cloud_build:81 pattern).
+# Project-scoped because Cloud Deploy's release / rollout APIs operate at the
+# project level. google_project_iam_member (additive) is used rather than
+# google_project_iam_binding (authoritative) to avoid stomping pre-existing
+# role grants on the project. Etag drifts on refresh but is Computed-only —
+# lifecycle.ignore_changes has no effect; drift suppression happens at the
+# inspector level (matches gcp/cloud_build:81 pattern).
 #
 # depends_on pins binding-creation after API enable so first-apply doesn't
 # race the Cloud Deploy service-account-readiness check.
-resource "google_project_iam_member" "deploy_runner_releaser" {
-  project = var.project_id
-  role    = "roles/clouddeploy.releaser"
-  member  = "serviceAccount:${google_service_account.deploy_runner.email}"
-
-  depends_on = [google_project_service.this]
-}
-
-resource "google_project_iam_member" "deploy_runner_operator" {
+resource "google_project_iam_member" "deploy_runner_job_runner" {
   project = var.project_id
   role    = "roles/clouddeploy.jobRunner"
   member  = "serviceAccount:${google_service_account.deploy_runner.email}"

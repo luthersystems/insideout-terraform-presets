@@ -29,6 +29,7 @@ package composer
 //     check fires on the right surface (ui-core #192).
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -233,14 +234,31 @@ func TestComposeStack_GCPCloudDeploy_CallerSuppliedConfig(t *testing.T) {
 	require.True(t, ok)
 	tfvarsStr := string(tfvars)
 
-	// caller-supplied PipelineShortName must override default.
-	require.Contains(t, tfvarsStr, "release",
-		"caller-supplied pipeline_short_name must flow through to tfvars")
-	// caller-supplied target identifiers must be present.
-	require.Contains(t, tfvarsStr, "qa",
-		"caller-supplied target name \"qa\" must flow through to tfvars")
-	require.Contains(t, tfvarsStr, "us-west2",
-		"caller-supplied runtime_target must flow through to tfvars")
+	// Top-level scalar: pin the full assignment so a future composer change
+	// that re-keys / re-formats the line breaks the test instead of
+	// silently passing. The composer namespaces variables with
+	// `<component>_` prefix to avoid collisions across modules in the
+	// composed root (CLAUDE.md "Downstream Composition"), so the tfvars
+	// key is gcp_cloud_deploy_<var>.
+	require.Contains(t, tfvarsStr, `gcp_cloud_deploy_pipeline_short_name = "release"`,
+		"caller-supplied pipeline_short_name must flow through to tfvars under the namespaced key")
+	// Nested object values inside the targets list have column-aligned `=`
+	// (whitespace width is a function of the longest field name in the
+	// block — `runtime_target` here), so we can't pin a single-space
+	// `key = value` form. Scope the substring check to the
+	// `gcp_cloud_deploy_targets = [...]` section so a value appearing in
+	// a comment / unrelated key elsewhere in the file cannot satisfy it.
+	targetsIdx := strings.Index(tfvarsStr, "gcp_cloud_deploy_targets = [")
+	require.NotEqual(t, -1, targetsIdx, "gcp_cloud_deploy_targets list block must be emitted in tfvars")
+	targetsSection := tfvarsStr[targetsIdx:]
+	require.Contains(t, targetsSection, `"qa"`,
+		"caller-supplied target name \"qa\" must land inside the targets list")
+	require.Contains(t, targetsSection, `"us-west2"`,
+		"caller-supplied runtime_target \"us-west2\" must land inside the targets list")
+	require.Contains(t, targetsSection, `"prod"`,
+		"caller-supplied target name \"prod\" must land inside the targets list")
+	require.Contains(t, targetsSection, `"us-east1"`,
+		"caller-supplied runtime_target \"us-east1\" must land inside the targets list")
 }
 
 // TestComponentSelected_GCPCloudDeploy pins the coherence.go entry. Without

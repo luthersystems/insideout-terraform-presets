@@ -14,7 +14,11 @@ output "service_account_email" {
 }
 
 output "target_names" {
-  value       = [for t in var.targets : "${var.project}-${t.name}"]
+  # Read straight from the resources rather than recomputing the prefix here —
+  # keeps main.tf's local.target_full_names the single source of truth for the
+  # prefixing rule. var.targets is iterated to preserve the author-supplied
+  # ordering that google_clouddeploy_target.this (a for_each map) does not.
+  value       = [for t in var.targets : google_clouddeploy_target.this[t.name].name]
   description = "Ordered list of var.project-prefixed Cloud Deploy target names the pipeline promotes through. Same order as var.targets — element [0] is the first promotion stage. Each element matches the corresponding google_clouddeploy_target.name (= local.target_full_names entry)."
 }
 

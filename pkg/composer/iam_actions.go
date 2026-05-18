@@ -178,8 +178,9 @@ var GCPIAMPermissions = map[ComponentKey][]string{
 	// needs delivery-pipeline + target create capability (the two Cloud
 	// Deploy resource types this preset manages), service-account create
 	// (for the runner SA), and project-level IAM binding capability (for
-	// the two roles/clouddeploy.* grants on that SA), plus the API enable
-	// for clouddeploy.googleapis.com.
+	// the single roles/clouddeploy.jobRunner grant on that SA — releaser
+	// is granted out-of-stack to the principal that cuts releases), plus
+	// the API enable for clouddeploy.googleapis.com.
 	KeyGCPCloudDeploy: {
 		"clouddeploy.deliveryPipelines.create",
 		"clouddeploy.targets.create",

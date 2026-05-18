@@ -41,6 +41,23 @@ run "cloud_deploy_minimum_inputs" {
     condition     = google_clouddeploy_target.this["prod"].name == "test-prod"
     error_message = "Target name must be var.project-prefixed (lint-labelless-name-prefix contract)."
   }
+
+  # serial_pipeline.stages[*].target_id must equal the var.project-prefixed
+  # target name (= local.target_full_names entry). Cloud Deploy resolves
+  # stages to targets by exact name match — a drift here would compose a
+  # plan that apply-time rejects with INVALID_ARGUMENT "target X does not
+  # exist". Pinning the correspondence in a tftest keeps the
+  # local.target_full_names indirection from accidentally diverging from
+  # the stage target_id reference.
+  assert {
+    condition     = tolist(google_clouddeploy_delivery_pipeline.this.serial_pipeline[0].stages)[0].target_id == "test-staging"
+    error_message = "serial_pipeline.stages[0].target_id must be the var.project-prefixed first target name."
+  }
+
+  assert {
+    condition     = tolist(google_clouddeploy_delivery_pipeline.this.serial_pipeline[0].stages)[1].target_id == "test-prod"
+    error_message = "serial_pipeline.stages[1].target_id must be the var.project-prefixed second target name."
+  }
 }
 
 run "cloud_deploy_gke_target_dispatches_gke_block" {
