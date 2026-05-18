@@ -174,6 +174,20 @@ var GCPIAMPermissions = map[ComponentKey][]string{
 		"resourcemanager.projects.setIamPolicy",
 		"serviceusage.services.enable",
 	},
+	// GCP Cloud Deploy delivery-pipeline preset (#613). Deploying SA
+	// needs delivery-pipeline + target create capability (the two Cloud
+	// Deploy resource types this preset manages), service-account create
+	// (for the runner SA), and project-level IAM binding capability (for
+	// the single roles/clouddeploy.jobRunner grant on that SA — releaser
+	// is granted out-of-stack to the principal that cuts releases), plus
+	// the API enable for clouddeploy.googleapis.com.
+	KeyGCPCloudDeploy: {
+		"clouddeploy.deliveryPipelines.create",
+		"clouddeploy.targets.create",
+		"iam.serviceAccounts.create",
+		"resourcemanager.projects.setIamPolicy",
+		"serviceusage.services.enable",
+	},
 	// Components that need no extra permission beyond the always-required set:
 	KeyGCPVPC:          nil,
 	KeyGCPCompute:      nil,

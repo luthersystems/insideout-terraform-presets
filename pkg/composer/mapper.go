@@ -1124,6 +1124,48 @@ func (m DefaultMapper) BuildModuleValues(
 				vals["deploy_roles"] = rs
 			}
 		}
+
+	case KeyGCPCloudDeploy:
+		// GCP Cloud Deploy delivery pipeline (#613). Every field is optional —
+		// only emit the tfvar when the caller set a value, so the preset's
+		// variables.tf defaults (staging->prod Cloud Run pair in var.region;
+		// "delivery" pipeline short name; "clouddeploy-runner" SA short name)
+		// stay in force when the caller doesn't override. The partial-config
+		// pattern catches a class of bug where the mapper would
+		// unconditionally emit empty slices / false bools that override
+		// the module's defaults — see
+		// TestMapper_GCPCloudDeploy_PartialConfig.
+		if cfg != nil && cfg.GCPCloudDeploy != nil {
+			cd := cfg.GCPCloudDeploy
+			if cd.ServiceAccountShortName != nil && strings.TrimSpace(*cd.ServiceAccountShortName) != "" {
+				vals["service_account_short_name"] = strings.TrimSpace(*cd.ServiceAccountShortName)
+			}
+			if cd.PipelineShortName != nil && strings.TrimSpace(*cd.PipelineShortName) != "" {
+				vals["pipeline_short_name"] = strings.TrimSpace(*cd.PipelineShortName)
+			}
+			if len(cd.Targets) > 0 {
+				targets := make([]any, len(cd.Targets))
+				for i, t := range cd.Targets {
+					entry := map[string]any{
+						"name":           t.Name,
+						"runtime":        t.Runtime,
+						"runtime_target": t.RuntimeTarget,
+					}
+					// require_approval is an optional object attribute on
+					// the preset's var.targets schema (default false). Only
+					// emit it when the caller set the *bool — leaving it
+					// out lets the preset's `optional(bool, false)` default
+					// apply per element. Emitting `false` explicitly would
+					// be equivalent but couples the on-the-wire shape to
+					// every caller's mental model of the default.
+					if t.RequireApproval != nil {
+						entry["require_approval"] = *t.RequireApproval
+					}
+					targets[i] = entry
+				}
+				vals["targets"] = targets
+			}
+		}
 	}
 
 	return vals, nil

@@ -75,6 +75,7 @@ type Components struct {
 	GCPCloudMonitoring  *bool  `json:"gcp_cloud_monitoring,omitempty"`
 	GCPIdentityPlatform *bool  `json:"gcp_identity_platform,omitempty"`
 	GCPCloudBuild       *bool  `json:"gcp_cloud_build,omitempty"`
+	GCPCloudDeploy      *bool  `json:"gcp_cloud_deploy,omitempty"`
 	GCPCloudDNS         *bool  `json:"gcp_cloud_dns,omitempty"`
 	GCPGitHubActions    *bool  `json:"gcp_github_actions,omitempty"`
 	GCPBackups          *struct {
@@ -382,6 +383,16 @@ type Config struct {
 	// on the deploy SA.
 	GCPGitHubActions *GCPGitHubActionsConfig `json:"gcp_github_actions,omitempty"`
 
+	// GCPCloudDeploy carries the caller-supplied Cloud Deploy delivery-
+	// pipeline configuration (#613). Every field is optional; the mapper
+	// only emits its tfvar when set so the preset's variables.tf defaults
+	// (staging->prod Cloud Run pair in var.region) apply when callers
+	// don't override. Targets is the ordered promotion chain — element [0]
+	// is the first stage. ServiceAccountShortName / PipelineShortName let
+	// callers rename the runner SA / pipeline when the var.project prefix
+	// alone would collide with downstream consumers.
+	GCPCloudDeploy *GCPCloudDeployConfig `json:"gcp_cloud_deploy,omitempty"`
+
 	GCPBackups *struct {
 		Compute *struct {
 			FrequencyHours int `json:"frequencyHours,omitempty"`
@@ -407,6 +418,36 @@ type GCPGitHubActionsConfig struct {
 	AllowedTags        []string `json:"allowedTags,omitempty"`
 	AllowedPullRequest *bool    `json:"allowedPullRequest,omitempty"`
 	DeployRoles        []string `json:"deployRoles,omitempty"`
+}
+
+// GCPCloudDeployTarget is a single entry in GCPCloudDeployConfig.Targets.
+// Mirrors the gcp/cloud_deploy preset's var.targets list-of-objects shape:
+//   - Name: pipeline-scoped target identifier (short form; the preset prefixes
+//     it with var.project before sending to Cloud Deploy).
+//   - Runtime: "run" (Cloud Run) | "gke" (GKE).
+//   - RuntimeTarget: runtime-dispatched destination. For runtime="run", a
+//     Cloud Run region (e.g. "us-central1"). For runtime="gke", a fully-
+//     qualified cluster ID ("projects/<id>/locations/<loc>/clusters/<name>").
+//   - RequireApproval: optional, default false. When true, Cloud Deploy halts
+//     promotion to this target and waits for a manual operator step.
+//
+// Named (not inline) for the same UX reasons as GCPGitHubActionsConfig.
+type GCPCloudDeployTarget struct {
+	Name            string `json:"name"`
+	Runtime         string `json:"runtime"`
+	RuntimeTarget   string `json:"runtimeTarget"`
+	RequireApproval *bool  `json:"requireApproval,omitempty"`
+}
+
+// GCPCloudDeployConfig is the caller-facing config for the gcp/cloud_deploy
+// preset (#613). Every field is optional — the mapper only emits its tfvar
+// when set, so the preset's variables.tf defaults (staging->prod Cloud Run
+// pair in var.region; "delivery" pipeline short name; "clouddeploy-runner"
+// SA short name) apply when callers don't override.
+type GCPCloudDeployConfig struct {
+	ServiceAccountShortName *string                `json:"serviceAccountShortName,omitempty"`
+	PipelineShortName       *string                `json:"pipelineShortName,omitempty"`
+	Targets                 []GCPCloudDeployTarget `json:"targets,omitempty"`
 }
 
 // VarEntry holds a module variable name and a value (or nil). RawExpr can be used for expressions.
@@ -452,6 +493,7 @@ func (c *Components) Normalize() {
 		c.GCPCloudMonitoring = nil
 		c.GCPIdentityPlatform = nil
 		c.GCPCloudBuild = nil
+		c.GCPCloudDeploy = nil
 		c.GCPCloudDNS = nil
 		c.GCPGitHubActions = nil
 		c.GCPBackups = nil
@@ -559,6 +601,7 @@ func (c *Config) Normalize() {
 		c.GCPLoadbalancer = nil
 		c.GCPCloudDNS = nil
 		c.GCPGitHubActions = nil
+		c.GCPCloudDeploy = nil
 		c.GCPBackups = nil
 		// AWSCloudfront.CachePaths is a within-prefixed deprecated sub-field;
 		// migrate to OriginPath and clear. Distinct from the legacy Cloudfront

@@ -83,6 +83,7 @@ const (
 	KeyGCPCloudMonitoring  ComponentKey = "gcp_cloud_monitoring"
 	KeyGCPIdentityPlatform ComponentKey = "gcp_identity_platform"
 	KeyGCPCloudBuild       ComponentKey = "gcp_cloud_build"
+	KeyGCPCloudDeploy      ComponentKey = "gcp_cloud_deploy"
 	KeyGCPFirestore        ComponentKey = "gcp_firestore"
 	KeyGCPVertexAI         ComponentKey = "gcp_vertex_ai"
 	KeyGCPCloudArmor       ComponentKey = "gcp_cloud_armor"
@@ -162,6 +163,12 @@ var ComposeOrder = []ComponentKey{
 	// upstream GCP preset so position is not load-bearing — placed
 	// alongside the AWS sibling for reviewability.
 	KeyGCPGitHubActions,
+	// GCP Cloud Deploy delivery-pipeline preset (#613). The pipeline is
+	// independent of any upstream GCP preset in this repo (its targets
+	// reference Cloud Run regions / GKE cluster IDs the caller supplies
+	// out-of-stack), so position is not load-bearing — placed alongside
+	// the AWS CodePipeline sibling for reviewability.
+	KeyGCPCloudDeploy,
 	KeyArch,
 	KeyCloud,
 	KeyComposer,
@@ -227,6 +234,7 @@ var ModulePath = map[ComponentKey]string{
 	KeyGCPCloudMonitoring:  "gcp/cloud_monitoring",
 	KeyGCPIdentityPlatform: "gcp/identity_platform",
 	KeyGCPCloudBuild:       "gcp/cloud_build",
+	KeyGCPCloudDeploy:      "gcp/cloud_deploy",
 	KeyGCPBackups:          "gcp/backups",
 	KeyGCPCloudDNS:         "gcp/cloud_dns",
 	KeyGCPGitHubActions:    "gcp/github_actions",
@@ -407,6 +415,7 @@ var PresetKeyMap = map[ComponentKey]string{
 	KeyGCPBastion:              "bastion",
 	KeyGCPCloudDNS:             "cloud_dns",
 	KeyGCPGitHubActions:        "github_actions",
+	KeyGCPCloudDeploy:          "cloud_deploy",
 }
 
 // GetPresetPath returns the cloud-prefixed preset path for a component.
@@ -503,6 +512,7 @@ var AllComponentKeys = []ComponentKey{
 	KeyGCPBastion,
 	KeyGCPCloudArmor,
 	KeyGCPCloudBuild,
+	KeyGCPCloudDeploy,
 	KeyGCPCloudDNS,
 	KeyGCPCloudFunctions,
 	KeyGCPCloudKMS,
