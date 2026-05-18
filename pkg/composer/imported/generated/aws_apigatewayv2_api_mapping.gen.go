@@ -11,6 +11,7 @@ type AWSApigatewayv2APIMapping struct {
 	APIMappingKey *Value[string] `tf:"api_mapping_key" json:"api_mapping_key,omitempty"`
 	DomainName    *Value[string] `tf:"domain_name" json:"domain_name,omitempty"`
 	ID            *Value[string] `tf:"id" json:"id,omitempty"`
+	Region        *Value[string] `tf:"region" json:"region,omitempty"`
 	Stage         *Value[string] `tf:"stage" json:"stage,omitempty"`
 }
 
@@ -21,6 +22,7 @@ var AWSApigatewayv2APIMappingSchema = map[string]FieldSchema{
 	"api_mapping_key": {Optional: true, Replacement: ReplacementUnknown},
 	"domain_name":     {Required: true, Replacement: ReplacementUnknown},
 	"id":              {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"region":          {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"stage":           {Required: true, Replacement: ReplacementUnknown},
 }
 

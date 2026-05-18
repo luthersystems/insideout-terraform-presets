@@ -11,6 +11,7 @@ type AWSElasticacheSubnetGroup struct {
 	Description *Value[string]            `tf:"description" json:"description,omitempty"`
 	ID          *Value[string]            `tf:"id" json:"id,omitempty"`
 	Name        *Value[string]            `tf:"name" json:"name,omitempty"`
+	Region      *Value[string]            `tf:"region" json:"region,omitempty"`
 	SubnetIDS   []*Value[string]          `tf:"subnet_ids" json:"subnet_ids,omitempty"`
 	Tags        map[string]*Value[string] `tf:"tags" json:"tags,omitempty"`
 	TagsAll     map[string]*Value[string] `tf:"tags_all" json:"tags_all,omitempty"`
@@ -24,6 +25,7 @@ var AWSElasticacheSubnetGroupSchema = map[string]FieldSchema{
 	"description": {Optional: true, Replacement: ReplacementUnknown},
 	"id":          {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"name":        {Required: true, Replacement: ReplacementUnknown},
+	"region":      {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"subnet_ids":  {Required: true, Replacement: ReplacementUnknown},
 	"tags":        {Optional: true, Replacement: ReplacementUnknown},
 	"tags_all":    {Optional: true, Computed: true, Replacement: ReplacementUnknown},

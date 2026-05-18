@@ -12,6 +12,7 @@ type AWSDbSubnetGroup struct {
 	ID                    *Value[string]            `tf:"id" json:"id,omitempty"`
 	Name                  *Value[string]            `tf:"name" json:"name,omitempty"`
 	NamePrefix            *Value[string]            `tf:"name_prefix" json:"name_prefix,omitempty"`
+	Region                *Value[string]            `tf:"region" json:"region,omitempty"`
 	SubnetIDS             []*Value[string]          `tf:"subnet_ids" json:"subnet_ids,omitempty"`
 	SupportedNetworkTypes []*Value[string]          `tf:"supported_network_types" json:"supported_network_types,omitempty"`
 	Tags                  map[string]*Value[string] `tf:"tags" json:"tags,omitempty"`
@@ -27,6 +28,7 @@ var AWSDbSubnetGroupSchema = map[string]FieldSchema{
 	"id":                      {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"name":                    {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"name_prefix":             {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"region":                  {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"subnet_ids":              {Required: true, Replacement: ReplacementUnknown},
 	"supported_network_types": {Computed: true, Replacement: ReplacementUnknown},
 	"tags":                    {Optional: true, Replacement: ReplacementUnknown},

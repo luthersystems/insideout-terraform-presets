@@ -7,40 +7,55 @@ import "reflect"
 // AWSNetworkInterface is the generated Layer 1 typed model for the
 // `aws_network_interface` Terraform resource.
 type AWSNetworkInterface struct {
-	ARN                    *Value[string]                  `tf:"arn" json:"arn,omitempty"`
-	Description            *Value[string]                  `tf:"description" json:"description,omitempty"`
-	ID                     *Value[string]                  `tf:"id" json:"id,omitempty"`
-	InterfaceType          *Value[string]                  `tf:"interface_type" json:"interface_type,omitempty"`
-	IPV4PrefixCount        *Value[int64]                   `tf:"ipv4_prefix_count" json:"ipv4_prefix_count,omitempty"`
-	IPV4Prefixes           []*Value[string]                `tf:"ipv4_prefixes" json:"ipv4_prefixes,omitempty"`
-	IPV6AddressCount       *Value[int64]                   `tf:"ipv6_address_count" json:"ipv6_address_count,omitempty"`
-	IPV6AddressList        []*Value[string]                `tf:"ipv6_address_list" json:"ipv6_address_list,omitempty"`
-	IPV6AddressListEnabled *Value[bool]                    `tf:"ipv6_address_list_enabled" json:"ipv6_address_list_enabled,omitempty"`
-	IPV6Addresses          []*Value[string]                `tf:"ipv6_addresses" json:"ipv6_addresses,omitempty"`
-	IPV6PrefixCount        *Value[int64]                   `tf:"ipv6_prefix_count" json:"ipv6_prefix_count,omitempty"`
-	IPV6Prefixes           []*Value[string]                `tf:"ipv6_prefixes" json:"ipv6_prefixes,omitempty"`
-	MacAddress             *Value[string]                  `tf:"mac_address" json:"mac_address,omitempty"`
-	OutpostARN             *Value[string]                  `tf:"outpost_arn" json:"outpost_arn,omitempty"`
-	OwnerID                *Value[string]                  `tf:"owner_id" json:"owner_id,omitempty"`
-	PrivateDNSName         *Value[string]                  `tf:"private_dns_name" json:"private_dns_name,omitempty"`
-	PrivateIp              *Value[string]                  `tf:"private_ip" json:"private_ip,omitempty"`
-	PrivateIpList          []*Value[string]                `tf:"private_ip_list" json:"private_ip_list,omitempty"`
-	PrivateIpListEnabled   *Value[bool]                    `tf:"private_ip_list_enabled" json:"private_ip_list_enabled,omitempty"`
-	PrivateIps             []*Value[string]                `tf:"private_ips" json:"private_ips,omitempty"`
-	PrivateIpsCount        *Value[int64]                   `tf:"private_ips_count" json:"private_ips_count,omitempty"`
-	SecurityGroups         []*Value[string]                `tf:"security_groups" json:"security_groups,omitempty"`
-	SourceDestCheck        *Value[bool]                    `tf:"source_dest_check" json:"source_dest_check,omitempty"`
-	SubnetID               *Value[string]                  `tf:"subnet_id" json:"subnet_id,omitempty"`
-	Tags                   map[string]*Value[string]       `tf:"tags" json:"tags,omitempty"`
-	TagsAll                map[string]*Value[string]       `tf:"tags_all" json:"tags_all,omitempty"`
-	Attachment             []AWSNetworkInterfaceAttachment `tf:"attachment,blocks" json:"attachment,omitempty"`
+	ARN                    *Value[string]                           `tf:"arn" json:"arn,omitempty"`
+	Description            *Value[string]                           `tf:"description" json:"description,omitempty"`
+	EnablePrimaryIPV6      *Value[bool]                             `tf:"enable_primary_ipv6" json:"enable_primary_ipv6,omitempty"`
+	ID                     *Value[string]                           `tf:"id" json:"id,omitempty"`
+	InterfaceType          *Value[string]                           `tf:"interface_type" json:"interface_type,omitempty"`
+	IPV4PrefixCount        *Value[int64]                            `tf:"ipv4_prefix_count" json:"ipv4_prefix_count,omitempty"`
+	IPV4Prefixes           []*Value[string]                         `tf:"ipv4_prefixes" json:"ipv4_prefixes,omitempty"`
+	IPV6AddressCount       *Value[int64]                            `tf:"ipv6_address_count" json:"ipv6_address_count,omitempty"`
+	IPV6AddressList        []*Value[string]                         `tf:"ipv6_address_list" json:"ipv6_address_list,omitempty"`
+	IPV6AddressListEnabled *Value[bool]                             `tf:"ipv6_address_list_enabled" json:"ipv6_address_list_enabled,omitempty"`
+	IPV6Addresses          []*Value[string]                         `tf:"ipv6_addresses" json:"ipv6_addresses,omitempty"`
+	IPV6PrefixCount        *Value[int64]                            `tf:"ipv6_prefix_count" json:"ipv6_prefix_count,omitempty"`
+	IPV6Prefixes           []*Value[string]                         `tf:"ipv6_prefixes" json:"ipv6_prefixes,omitempty"`
+	MacAddress             *Value[string]                           `tf:"mac_address" json:"mac_address,omitempty"`
+	OutpostARN             *Value[string]                           `tf:"outpost_arn" json:"outpost_arn,omitempty"`
+	OwnerID                *Value[string]                           `tf:"owner_id" json:"owner_id,omitempty"`
+	PrivateDNSName         *Value[string]                           `tf:"private_dns_name" json:"private_dns_name,omitempty"`
+	PrivateIp              *Value[string]                           `tf:"private_ip" json:"private_ip,omitempty"`
+	PrivateIpList          []*Value[string]                         `tf:"private_ip_list" json:"private_ip_list,omitempty"`
+	PrivateIpListEnabled   *Value[bool]                             `tf:"private_ip_list_enabled" json:"private_ip_list_enabled,omitempty"`
+	PrivateIps             []*Value[string]                         `tf:"private_ips" json:"private_ips,omitempty"`
+	PrivateIpsCount        *Value[int64]                            `tf:"private_ips_count" json:"private_ips_count,omitempty"`
+	Region                 *Value[string]                           `tf:"region" json:"region,omitempty"`
+	SecurityGroups         []*Value[string]                         `tf:"security_groups" json:"security_groups,omitempty"`
+	SourceDestCheck        *Value[bool]                             `tf:"source_dest_check" json:"source_dest_check,omitempty"`
+	SubnetID               *Value[string]                           `tf:"subnet_id" json:"subnet_id,omitempty"`
+	Tags                   map[string]*Value[string]                `tf:"tags" json:"tags,omitempty"`
+	TagsAll                map[string]*Value[string]                `tf:"tags_all" json:"tags_all,omitempty"`
+	Attachment             []AWSNetworkInterfaceAttachment          `tf:"attachment,blocks" json:"attachment,omitempty"`
+	EnaSrdSpecification    []AWSNetworkInterfaceEnaSrdSpecification `tf:"ena_srd_specification,blocks" json:"ena_srd_specification,omitempty"`
 }
 
 // AWSNetworkInterfaceAttachment is a nested-block type used by the parent resource.
 type AWSNetworkInterfaceAttachment struct {
-	AttachmentID *Value[string]  `tf:"attachment_id" json:"attachment_id,omitempty"`
-	DeviceIndex  *Value[float64] `tf:"device_index" json:"device_index,omitempty"`
-	Instance     *Value[string]  `tf:"instance" json:"instance,omitempty"`
+	AttachmentID     *Value[string]  `tf:"attachment_id" json:"attachment_id,omitempty"`
+	DeviceIndex      *Value[float64] `tf:"device_index" json:"device_index,omitempty"`
+	Instance         *Value[string]  `tf:"instance" json:"instance,omitempty"`
+	NetworkCardIndex *Value[float64] `tf:"network_card_index" json:"network_card_index,omitempty"`
+}
+
+// AWSNetworkInterfaceEnaSrdSpecification is a nested-block type used by the parent resource.
+type AWSNetworkInterfaceEnaSrdSpecification struct {
+	EnaSrdEnabled          *Value[bool]                                                   `tf:"ena_srd_enabled" json:"ena_srd_enabled,omitempty"`
+	EnaSrdUDPSpecification []AWSNetworkInterfaceEnaSrdSpecificationEnaSrdUDPSpecification `tf:"ena_srd_udp_specification,blocks" json:"ena_srd_udp_specification,omitempty"`
+}
+
+// AWSNetworkInterfaceEnaSrdSpecificationEnaSrdUDPSpecification is a nested-block type used by the parent resource.
+type AWSNetworkInterfaceEnaSrdSpecificationEnaSrdUDPSpecification struct {
+	EnaSrdUDPEnabled *Value[bool] `tf:"ena_srd_udp_enabled" json:"ena_srd_udp_enabled,omitempty"`
 }
 
 // AWSNetworkInterfaceSchema describes provider metadata for each attribute / nested
@@ -48,6 +63,7 @@ type AWSNetworkInterfaceAttachment struct {
 var AWSNetworkInterfaceSchema = map[string]FieldSchema{
 	"arn":                       {Computed: true, Replacement: ReplacementUnknown},
 	"description":               {Optional: true, Replacement: ReplacementUnknown},
+	"enable_primary_ipv6":       {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"id":                        {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"interface_type":            {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"ipv4_prefix_count":         {Optional: true, Computed: true, Replacement: ReplacementUnknown},
@@ -67,12 +83,14 @@ var AWSNetworkInterfaceSchema = map[string]FieldSchema{
 	"private_ip_list_enabled":   {Optional: true, Replacement: ReplacementUnknown},
 	"private_ips":               {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"private_ips_count":         {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"region":                    {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"security_groups":           {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"source_dest_check":         {Optional: true, Replacement: ReplacementUnknown},
 	"subnet_id":                 {Required: true, Replacement: ReplacementUnknown},
 	"tags":                      {Optional: true, Replacement: ReplacementUnknown},
 	"tags_all":                  {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"attachment":                {Optional: true, Replacement: ReplacementUnknown},
+	"ena_srd_specification":     {Optional: true, Replacement: ReplacementUnknown},
 }
 
 func init() {

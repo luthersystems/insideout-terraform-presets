@@ -13,6 +13,7 @@ type AWSBackupVault struct {
 	KMSKeyARN      *Value[string]            `tf:"kms_key_arn" json:"kms_key_arn,omitempty"`
 	Name           *Value[string]            `tf:"name" json:"name,omitempty"`
 	RecoveryPoints *Value[float64]           `tf:"recovery_points" json:"recovery_points,omitempty"`
+	Region         *Value[string]            `tf:"region" json:"region,omitempty"`
 	Tags           map[string]*Value[string] `tf:"tags" json:"tags,omitempty"`
 	TagsAll        map[string]*Value[string] `tf:"tags_all" json:"tags_all,omitempty"`
 	Timeouts       *AWSBackupVaultTimeouts   `tf:"timeouts,block" json:"timeouts,omitempty"`
@@ -32,6 +33,7 @@ var AWSBackupVaultSchema = map[string]FieldSchema{
 	"kms_key_arn":     {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"name":            {Required: true, Replacement: ReplacementUnknown},
 	"recovery_points": {Computed: true, Replacement: ReplacementUnknown},
+	"region":          {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"tags":            {Optional: true, Replacement: ReplacementUnknown},
 	"tags_all":        {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"timeouts":        {Optional: true, Replacement: ReplacementUnknown},

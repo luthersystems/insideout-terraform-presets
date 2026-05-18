@@ -11,6 +11,7 @@ type AWSS3BucketVersioning struct {
 	ExpectedBucketOwner     *Value[string]                                 `tf:"expected_bucket_owner" json:"expected_bucket_owner,omitempty"`
 	ID                      *Value[string]                                 `tf:"id" json:"id,omitempty"`
 	MFA                     *Value[string]                                 `tf:"mfa" json:"mfa,omitempty"`
+	Region                  *Value[string]                                 `tf:"region" json:"region,omitempty"`
 	VersioningConfiguration []AWSS3BucketVersioningVersioningConfiguration `tf:"versioning_configuration,blocks" json:"versioning_configuration,omitempty"`
 }
 
@@ -27,6 +28,7 @@ var AWSS3BucketVersioningSchema = map[string]FieldSchema{
 	"expected_bucket_owner":    {Optional: true, Replacement: ReplacementUnknown},
 	"id":                       {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"mfa":                      {Optional: true, Replacement: ReplacementUnknown},
+	"region":                   {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"versioning_configuration": {Required: true, Replacement: ReplacementUnknown},
 }
 

@@ -16,6 +16,7 @@ type AWSSecretsmanagerSecret struct {
 	NamePrefix                  *Value[string]                   `tf:"name_prefix" json:"name_prefix,omitempty"`
 	Policy                      *Value[string]                   `tf:"policy" json:"policy,omitempty"`
 	RecoveryWindowInDays        *Value[float64]                  `tf:"recovery_window_in_days" json:"recovery_window_in_days,omitempty"`
+	Region                      *Value[string]                   `tf:"region" json:"region,omitempty"`
 	Tags                        map[string]*Value[string]        `tf:"tags" json:"tags,omitempty"`
 	TagsAll                     map[string]*Value[string]        `tf:"tags_all" json:"tags_all,omitempty"`
 	Replica                     []AWSSecretsmanagerSecretReplica `tf:"replica,blocks" json:"replica,omitempty"`
@@ -42,6 +43,7 @@ var AWSSecretsmanagerSecretSchema = map[string]FieldSchema{
 	"name_prefix":                    {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"policy":                         {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"recovery_window_in_days":        {Optional: true, Replacement: ReplacementUnknown},
+	"region":                         {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"tags":                           {Optional: true, Replacement: ReplacementUnknown},
 	"tags_all":                       {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"replica":                        {Optional: true, Replacement: ReplacementUnknown},

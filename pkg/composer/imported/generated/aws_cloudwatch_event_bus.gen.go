@@ -7,25 +7,44 @@ import "reflect"
 // AWSCloudwatchEventBus is the generated Layer 1 typed model for the
 // `aws_cloudwatch_event_bus` Terraform resource.
 type AWSCloudwatchEventBus struct {
-	ARN              *Value[string]            `tf:"arn" json:"arn,omitempty"`
-	EventSourceName  *Value[string]            `tf:"event_source_name" json:"event_source_name,omitempty"`
-	ID               *Value[string]            `tf:"id" json:"id,omitempty"`
-	KMSKeyIdentifier *Value[string]            `tf:"kms_key_identifier" json:"kms_key_identifier,omitempty"`
-	Name             *Value[string]            `tf:"name" json:"name,omitempty"`
-	Tags             map[string]*Value[string] `tf:"tags" json:"tags,omitempty"`
-	TagsAll          map[string]*Value[string] `tf:"tags_all" json:"tags_all,omitempty"`
+	ARN              *Value[string]                          `tf:"arn" json:"arn,omitempty"`
+	Description      *Value[string]                          `tf:"description" json:"description,omitempty"`
+	EventSourceName  *Value[string]                          `tf:"event_source_name" json:"event_source_name,omitempty"`
+	ID               *Value[string]                          `tf:"id" json:"id,omitempty"`
+	KMSKeyIdentifier *Value[string]                          `tf:"kms_key_identifier" json:"kms_key_identifier,omitempty"`
+	Name             *Value[string]                          `tf:"name" json:"name,omitempty"`
+	Region           *Value[string]                          `tf:"region" json:"region,omitempty"`
+	Tags             map[string]*Value[string]               `tf:"tags" json:"tags,omitempty"`
+	TagsAll          map[string]*Value[string]               `tf:"tags_all" json:"tags_all,omitempty"`
+	DeadLetterConfig []AWSCloudwatchEventBusDeadLetterConfig `tf:"dead_letter_config,blocks" json:"dead_letter_config,omitempty"`
+	LogConfig        []AWSCloudwatchEventBusLogConfig        `tf:"log_config,blocks" json:"log_config,omitempty"`
+}
+
+// AWSCloudwatchEventBusDeadLetterConfig is a nested-block type used by the parent resource.
+type AWSCloudwatchEventBusDeadLetterConfig struct {
+	ARN *Value[string] `tf:"arn" json:"arn,omitempty"`
+}
+
+// AWSCloudwatchEventBusLogConfig is a nested-block type used by the parent resource.
+type AWSCloudwatchEventBusLogConfig struct {
+	IncludeDetail *Value[string] `tf:"include_detail" json:"include_detail,omitempty"`
+	Level         *Value[string] `tf:"level" json:"level,omitempty"`
 }
 
 // AWSCloudwatchEventBusSchema describes provider metadata for each attribute / nested
 // block of aws_cloudwatch_event_bus.
 var AWSCloudwatchEventBusSchema = map[string]FieldSchema{
 	"arn":                {Computed: true, Replacement: ReplacementUnknown},
+	"description":        {Optional: true, Replacement: ReplacementUnknown},
 	"event_source_name":  {Optional: true, Replacement: ReplacementUnknown},
 	"id":                 {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"kms_key_identifier": {Optional: true, Replacement: ReplacementUnknown},
 	"name":               {Required: true, Replacement: ReplacementUnknown},
+	"region":             {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"tags":               {Optional: true, Replacement: ReplacementUnknown},
 	"tags_all":           {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"dead_letter_config": {Optional: true, Replacement: ReplacementUnknown},
+	"log_config":         {Optional: true, Replacement: ReplacementUnknown},
 }
 
 func init() {

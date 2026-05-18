@@ -14,11 +14,11 @@ package policy
 // surface on this resource.
 var awsAPIGatewayDeploymentPolicy = Map{
 	// Identity ----------------------------------------------------------
+	// AWS provider 6.x removed the `execution_arn` computed attribute from
+	// aws_api_gateway_deployment (it lives on aws_api_gateway_stage now —
+	// the deployment itself is API-Gateway-internal and doesn't have a
+	// per-resource invocation URL). #599 schema-bump cleanup.
 	"id": {
-		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
-		DriftSemantic: DriftSemanticExact,
-	},
-	"execution_arn": {
 		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},

@@ -47,10 +47,10 @@ var awsOpensearchDomainPolicy = Map{
 		DriftSemantic: DriftSemanticExact,
 	},
 	"dashboard_endpoint": {
-		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
-		DriftSemantic: DriftSemanticExact,
-	},
-	"kibana_endpoint": {
+		// AWS provider 6.x dropped the legacy `kibana_endpoint` alias
+		// (deprecated since the Kibana → OpenSearch Dashboards rename);
+		// dashboard_endpoint is the canonical surface (#599 schema-bump
+		// cleanup).
 		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},

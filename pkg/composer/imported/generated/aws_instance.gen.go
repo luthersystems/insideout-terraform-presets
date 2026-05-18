@@ -11,11 +11,11 @@ type AWSInstance struct {
 	ARN                               *Value[string]                                `tf:"arn" json:"arn,omitempty"`
 	AssociatePublicIpAddress          *Value[bool]                                  `tf:"associate_public_ip_address" json:"associate_public_ip_address,omitempty"`
 	AvailabilityZone                  *Value[string]                                `tf:"availability_zone" json:"availability_zone,omitempty"`
-	CPUCoreCount                      *Value[int64]                                 `tf:"cpu_core_count" json:"cpu_core_count,omitempty"`
-	CPUThreadsPerCore                 *Value[float64]                               `tf:"cpu_threads_per_core" json:"cpu_threads_per_core,omitempty"`
 	DisableAPIStop                    *Value[bool]                                  `tf:"disable_api_stop" json:"disable_api_stop,omitempty"`
 	DisableAPITermination             *Value[bool]                                  `tf:"disable_api_termination" json:"disable_api_termination,omitempty"`
 	EBSOptimized                      *Value[bool]                                  `tf:"ebs_optimized" json:"ebs_optimized,omitempty"`
+	EnablePrimaryIPV6                 *Value[bool]                                  `tf:"enable_primary_ipv6" json:"enable_primary_ipv6,omitempty"`
+	ForceDestroy                      *Value[bool]                                  `tf:"force_destroy" json:"force_destroy,omitempty"`
 	GetPasswordData                   *Value[bool]                                  `tf:"get_password_data" json:"get_password_data,omitempty"`
 	Hibernation                       *Value[bool]                                  `tf:"hibernation" json:"hibernation,omitempty"`
 	HostID                            *Value[string]                                `tf:"host_id" json:"host_id,omitempty"`
@@ -33,12 +33,14 @@ type AWSInstance struct {
 	OutpostARN                        *Value[string]                                `tf:"outpost_arn" json:"outpost_arn,omitempty"`
 	PasswordData                      *Value[string]                                `tf:"password_data" json:"password_data,omitempty"`
 	PlacementGroup                    *Value[string]                                `tf:"placement_group" json:"placement_group,omitempty"`
+	PlacementGroupID                  *Value[string]                                `tf:"placement_group_id" json:"placement_group_id,omitempty"`
 	PlacementPartitionNumber          *Value[float64]                               `tf:"placement_partition_number" json:"placement_partition_number,omitempty"`
 	PrimaryNetworkInterfaceID         *Value[string]                                `tf:"primary_network_interface_id" json:"primary_network_interface_id,omitempty"`
 	PrivateDNS                        *Value[string]                                `tf:"private_dns" json:"private_dns,omitempty"`
 	PrivateIp                         *Value[string]                                `tf:"private_ip" json:"private_ip,omitempty"`
 	PublicDNS                         *Value[string]                                `tf:"public_dns" json:"public_dns,omitempty"`
 	PublicIp                          *Value[string]                                `tf:"public_ip" json:"public_ip,omitempty"`
+	Region                            *Value[string]                                `tf:"region" json:"region,omitempty"`
 	SecondaryPrivateIps               []*Value[string]                              `tf:"secondary_private_ips" json:"secondary_private_ips,omitempty"`
 	SecurityGroups                    []*Value[string]                              `tf:"security_groups" json:"security_groups,omitempty"`
 	SourceDestCheck                   *Value[bool]                                  `tf:"source_dest_check" json:"source_dest_check,omitempty"`
@@ -63,16 +65,19 @@ type AWSInstance struct {
 	MaintenanceOptions                []AWSInstanceMaintenanceOptions               `tf:"maintenance_options,blocks" json:"maintenance_options,omitempty"`
 	MetadataOptions                   []AWSInstanceMetadataOptions                  `tf:"metadata_options,blocks" json:"metadata_options,omitempty"`
 	NetworkInterface                  []AWSInstanceNetworkInterface                 `tf:"network_interface,blocks" json:"network_interface,omitempty"`
+	PrimaryNetworkInterface           []AWSInstancePrimaryNetworkInterface          `tf:"primary_network_interface,blocks" json:"primary_network_interface,omitempty"`
 	PrivateDNSNameOptions             []AWSInstancePrivateDNSNameOptions            `tf:"private_dns_name_options,blocks" json:"private_dns_name_options,omitempty"`
 	RootBlockDevice                   []AWSInstanceRootBlockDevice                  `tf:"root_block_device,blocks" json:"root_block_device,omitempty"`
+	SecondaryNetworkInterface         []AWSInstanceSecondaryNetworkInterface        `tf:"secondary_network_interface,blocks" json:"secondary_network_interface,omitempty"`
 	Timeouts                          *AWSInstanceTimeouts                          `tf:"timeouts,block" json:"timeouts,omitempty"`
 }
 
 // AWSInstanceCPUOptions is a nested-block type used by the parent resource.
 type AWSInstanceCPUOptions struct {
-	AmdSevSnp      *Value[string]  `tf:"amd_sev_snp" json:"amd_sev_snp,omitempty"`
-	CoreCount      *Value[int64]   `tf:"core_count" json:"core_count,omitempty"`
-	ThreadsPerCore *Value[float64] `tf:"threads_per_core" json:"threads_per_core,omitempty"`
+	AmdSevSnp            *Value[string]  `tf:"amd_sev_snp" json:"amd_sev_snp,omitempty"`
+	CoreCount            *Value[int64]   `tf:"core_count" json:"core_count,omitempty"`
+	NestedVirtualization *Value[string]  `tf:"nested_virtualization" json:"nested_virtualization,omitempty"`
+	ThreadsPerCore       *Value[float64] `tf:"threads_per_core" json:"threads_per_core,omitempty"`
 }
 
 // AWSInstanceCapacityReservationSpecification is a nested-block type used by the parent resource.
@@ -163,6 +168,12 @@ type AWSInstanceNetworkInterface struct {
 	NetworkInterfaceID  *Value[string]  `tf:"network_interface_id" json:"network_interface_id,omitempty"`
 }
 
+// AWSInstancePrimaryNetworkInterface is a nested-block type used by the parent resource.
+type AWSInstancePrimaryNetworkInterface struct {
+	DeleteOnTermination *Value[bool]   `tf:"delete_on_termination" json:"delete_on_termination,omitempty"`
+	NetworkInterfaceID  *Value[string] `tf:"network_interface_id" json:"network_interface_id,omitempty"`
+}
+
 // AWSInstancePrivateDNSNameOptions is a nested-block type used by the parent resource.
 type AWSInstancePrivateDNSNameOptions struct {
 	EnableResourceNameDNSARecord    *Value[bool]   `tf:"enable_resource_name_dns_a_record" json:"enable_resource_name_dns_a_record,omitempty"`
@@ -185,6 +196,22 @@ type AWSInstanceRootBlockDevice struct {
 	VolumeType          *Value[string]            `tf:"volume_type" json:"volume_type,omitempty"`
 }
 
+// AWSInstanceSecondaryNetworkInterface is a nested-block type used by the parent resource.
+type AWSInstanceSecondaryNetworkInterface struct {
+	DeleteOnTermination   *Value[bool]     `tf:"delete_on_termination" json:"delete_on_termination,omitempty"`
+	DeviceIndex           *Value[float64]  `tf:"device_index" json:"device_index,omitempty"`
+	InterfaceType         *Value[string]   `tf:"interface_type" json:"interface_type,omitempty"`
+	MacAddress            *Value[string]   `tf:"mac_address" json:"mac_address,omitempty"`
+	NetworkCardIndex      *Value[float64]  `tf:"network_card_index" json:"network_card_index,omitempty"`
+	PrivateIpAddressCount *Value[int64]    `tf:"private_ip_address_count" json:"private_ip_address_count,omitempty"`
+	PrivateIpAddresses    []*Value[string] `tf:"private_ip_addresses" json:"private_ip_addresses,omitempty"`
+	SecondaryInterfaceID  *Value[string]   `tf:"secondary_interface_id" json:"secondary_interface_id,omitempty"`
+	SecondaryNetworkID    *Value[string]   `tf:"secondary_network_id" json:"secondary_network_id,omitempty"`
+	SecondarySubnetID     *Value[string]   `tf:"secondary_subnet_id" json:"secondary_subnet_id,omitempty"`
+	SourceDestCheck       *Value[bool]     `tf:"source_dest_check" json:"source_dest_check,omitempty"`
+	Status                *Value[string]   `tf:"status" json:"status,omitempty"`
+}
+
 // AWSInstanceTimeouts is a nested-block type used by the parent resource.
 type AWSInstanceTimeouts struct {
 	Create *Value[string] `tf:"create" json:"create,omitempty"`
@@ -200,11 +227,11 @@ var AWSInstanceSchema = map[string]FieldSchema{
 	"arn":                                  {Computed: true, Replacement: ReplacementUnknown},
 	"associate_public_ip_address":          {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"availability_zone":                    {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"cpu_core_count":                       {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"cpu_threads_per_core":                 {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"disable_api_stop":                     {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"disable_api_termination":              {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"ebs_optimized":                        {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"enable_primary_ipv6":                  {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"force_destroy":                        {Optional: true, Replacement: ReplacementUnknown},
 	"get_password_data":                    {Optional: true, Replacement: ReplacementUnknown},
 	"hibernation":                          {Optional: true, Replacement: ReplacementUnknown},
 	"host_id":                              {Optional: true, Computed: true, Replacement: ReplacementUnknown},
@@ -222,12 +249,14 @@ var AWSInstanceSchema = map[string]FieldSchema{
 	"outpost_arn":                          {Computed: true, Replacement: ReplacementUnknown},
 	"password_data":                        {Computed: true, Replacement: ReplacementUnknown},
 	"placement_group":                      {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"placement_group_id":                   {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"placement_partition_number":           {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"primary_network_interface_id":         {Computed: true, Replacement: ReplacementUnknown},
 	"private_dns":                          {Computed: true, Replacement: ReplacementUnknown},
 	"private_ip":                           {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"public_dns":                           {Computed: true, Replacement: ReplacementUnknown},
 	"public_ip":                            {Computed: true, Replacement: ReplacementUnknown},
+	"region":                               {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"secondary_private_ips":                {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"security_groups":                      {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"source_dest_check":                    {Optional: true, Replacement: ReplacementUnknown},
@@ -236,7 +265,7 @@ var AWSInstanceSchema = map[string]FieldSchema{
 	"tags":                                 {Optional: true, Replacement: ReplacementUnknown},
 	"tags_all":                             {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"tenancy":                              {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"user_data":                            {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"user_data":                            {Optional: true, Replacement: ReplacementUnknown},
 	"user_data_base64":                     {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"user_data_replace_on_change":          {Optional: true, Replacement: ReplacementUnknown},
 	"volume_tags":                          {Optional: true, Replacement: ReplacementUnknown},
@@ -252,8 +281,10 @@ var AWSInstanceSchema = map[string]FieldSchema{
 	"maintenance_options":                  {Optional: true, Replacement: ReplacementUnknown},
 	"metadata_options":                     {Optional: true, Replacement: ReplacementUnknown},
 	"network_interface":                    {Optional: true, Replacement: ReplacementUnknown},
+	"primary_network_interface":            {Optional: true, Replacement: ReplacementUnknown},
 	"private_dns_name_options":             {Optional: true, Replacement: ReplacementUnknown},
 	"root_block_device":                    {Optional: true, Replacement: ReplacementUnknown},
+	"secondary_network_interface":          {Optional: true, Replacement: ReplacementUnknown},
 	"timeouts":                             {Optional: true, Replacement: ReplacementUnknown},
 }
 

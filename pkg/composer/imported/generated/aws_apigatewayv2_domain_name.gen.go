@@ -11,6 +11,8 @@ type AWSApigatewayv2DomainName struct {
 	ARN                           *Value[string]                                     `tf:"arn" json:"arn,omitempty"`
 	DomainName                    *Value[string]                                     `tf:"domain_name" json:"domain_name,omitempty"`
 	ID                            *Value[string]                                     `tf:"id" json:"id,omitempty"`
+	Region                        *Value[string]                                     `tf:"region" json:"region,omitempty"`
+	RoutingMode                   *Value[string]                                     `tf:"routing_mode" json:"routing_mode,omitempty"`
 	Tags                          map[string]*Value[string]                          `tf:"tags" json:"tags,omitempty"`
 	TagsAll                       map[string]*Value[string]                          `tf:"tags_all" json:"tags_all,omitempty"`
 	DomainNameConfiguration       []AWSApigatewayv2DomainNameDomainNameConfiguration `tf:"domain_name_configuration,blocks" json:"domain_name_configuration,omitempty"`
@@ -23,6 +25,7 @@ type AWSApigatewayv2DomainNameDomainNameConfiguration struct {
 	CertificateARN                      *Value[string] `tf:"certificate_arn" json:"certificate_arn,omitempty"`
 	EndpointType                        *Value[string] `tf:"endpoint_type" json:"endpoint_type,omitempty"`
 	HostedZoneID                        *Value[string] `tf:"hosted_zone_id" json:"hosted_zone_id,omitempty"`
+	IpAddressType                       *Value[string] `tf:"ip_address_type" json:"ip_address_type,omitempty"`
 	OwnershipVerificationCertificateARN *Value[string] `tf:"ownership_verification_certificate_arn" json:"ownership_verification_certificate_arn,omitempty"`
 	SecurityPolicy                      *Value[string] `tf:"security_policy" json:"security_policy,omitempty"`
 	TargetDomainName                    *Value[string] `tf:"target_domain_name" json:"target_domain_name,omitempty"`
@@ -47,6 +50,8 @@ var AWSApigatewayv2DomainNameSchema = map[string]FieldSchema{
 	"arn":                              {Computed: true, Replacement: ReplacementUnknown},
 	"domain_name":                      {Required: true, Replacement: ReplacementUnknown},
 	"id":                               {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"region":                           {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"routing_mode":                     {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"tags":                             {Optional: true, Replacement: ReplacementUnknown},
 	"tags_all":                         {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"domain_name_configuration":        {Required: true, Replacement: ReplacementUnknown},

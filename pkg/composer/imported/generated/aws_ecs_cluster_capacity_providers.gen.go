@@ -10,6 +10,7 @@ type AWSECSClusterCapacityProviders struct {
 	CapacityProviders               []*Value[string]                                                `tf:"capacity_providers" json:"capacity_providers,omitempty"`
 	ClusterName                     *Value[string]                                                  `tf:"cluster_name" json:"cluster_name,omitempty"`
 	ID                              *Value[string]                                                  `tf:"id" json:"id,omitempty"`
+	Region                          *Value[string]                                                  `tf:"region" json:"region,omitempty"`
 	DefaultCapacityProviderStrategy []AWSECSClusterCapacityProvidersDefaultCapacityProviderStrategy `tf:"default_capacity_provider_strategy,blocks" json:"default_capacity_provider_strategy,omitempty"`
 }
 
@@ -26,6 +27,7 @@ var AWSECSClusterCapacityProvidersSchema = map[string]FieldSchema{
 	"capacity_providers":                 {Optional: true, Replacement: ReplacementUnknown},
 	"cluster_name":                       {Required: true, Replacement: ReplacementUnknown},
 	"id":                                 {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"region":                             {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"default_capacity_provider_strategy": {Optional: true, Replacement: ReplacementUnknown},
 }
 

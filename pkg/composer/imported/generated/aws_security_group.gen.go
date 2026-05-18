@@ -15,6 +15,7 @@ type AWSSecurityGroup struct {
 	Name                *Value[string]            `tf:"name" json:"name,omitempty"`
 	NamePrefix          *Value[string]            `tf:"name_prefix" json:"name_prefix,omitempty"`
 	OwnerID             *Value[string]            `tf:"owner_id" json:"owner_id,omitempty"`
+	Region              *Value[string]            `tf:"region" json:"region,omitempty"`
 	RevokeRulesOnDelete *Value[bool]              `tf:"revoke_rules_on_delete" json:"revoke_rules_on_delete,omitempty"`
 	Tags                map[string]*Value[string] `tf:"tags" json:"tags,omitempty"`
 	TagsAll             map[string]*Value[string] `tf:"tags_all" json:"tags_all,omitempty"`
@@ -65,6 +66,7 @@ var AWSSecurityGroupSchema = map[string]FieldSchema{
 	"name":                   {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"name_prefix":            {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"owner_id":               {Computed: true, Replacement: ReplacementUnknown},
+	"region":                 {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"revoke_rules_on_delete": {Optional: true, Replacement: ReplacementUnknown},
 	"tags":                   {Optional: true, Replacement: ReplacementUnknown},
 	"tags_all":               {Optional: true, Computed: true, Replacement: ReplacementUnknown},

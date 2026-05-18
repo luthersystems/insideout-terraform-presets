@@ -10,11 +10,13 @@ type AWSS3BucketServerSideEncryptionConfiguration struct {
 	Bucket              *Value[string]                                     `tf:"bucket" json:"bucket,omitempty"`
 	ExpectedBucketOwner *Value[string]                                     `tf:"expected_bucket_owner" json:"expected_bucket_owner,omitempty"`
 	ID                  *Value[string]                                     `tf:"id" json:"id,omitempty"`
+	Region              *Value[string]                                     `tf:"region" json:"region,omitempty"`
 	Rule                []AWSS3BucketServerSideEncryptionConfigurationRule `tf:"rule,blocks" json:"rule,omitempty"`
 }
 
 // AWSS3BucketServerSideEncryptionConfigurationRule is a nested-block type used by the parent resource.
 type AWSS3BucketServerSideEncryptionConfigurationRule struct {
+	BlockedEncryptionTypes             []*Value[string]                                                                     `tf:"blocked_encryption_types" json:"blocked_encryption_types,omitempty"`
 	BucketKeyEnabled                   *Value[bool]                                                                         `tf:"bucket_key_enabled" json:"bucket_key_enabled,omitempty"`
 	ApplyServerSideEncryptionByDefault []AWSS3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault `tf:"apply_server_side_encryption_by_default,blocks" json:"apply_server_side_encryption_by_default,omitempty"`
 }
@@ -31,6 +33,7 @@ var AWSS3BucketServerSideEncryptionConfigurationSchema = map[string]FieldSchema{
 	"bucket":                {Required: true, Replacement: ReplacementUnknown},
 	"expected_bucket_owner": {Optional: true, Replacement: ReplacementUnknown},
 	"id":                    {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"region":                {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"rule":                  {Required: true, Replacement: ReplacementUnknown},
 }
 

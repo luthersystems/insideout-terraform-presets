@@ -10,6 +10,10 @@ type AWSCloudwatchLogResourcePolicy struct {
 	ID             *Value[string] `tf:"id" json:"id,omitempty"`
 	PolicyDocument *Value[string] `tf:"policy_document" json:"policy_document,omitempty"`
 	PolicyName     *Value[string] `tf:"policy_name" json:"policy_name,omitempty"`
+	PolicyScope    *Value[string] `tf:"policy_scope" json:"policy_scope,omitempty"`
+	Region         *Value[string] `tf:"region" json:"region,omitempty"`
+	ResourceARN    *Value[string] `tf:"resource_arn" json:"resource_arn,omitempty"`
+	RevisionID     *Value[string] `tf:"revision_id" json:"revision_id,omitempty"`
 }
 
 // AWSCloudwatchLogResourcePolicySchema describes provider metadata for each attribute / nested
@@ -17,7 +21,11 @@ type AWSCloudwatchLogResourcePolicy struct {
 var AWSCloudwatchLogResourcePolicySchema = map[string]FieldSchema{
 	"id":              {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"policy_document": {Required: true, Replacement: ReplacementUnknown},
-	"policy_name":     {Required: true, Replacement: ReplacementUnknown},
+	"policy_name":     {Optional: true, Replacement: ReplacementUnknown},
+	"policy_scope":    {Computed: true, Replacement: ReplacementUnknown},
+	"region":          {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"resource_arn":    {Optional: true, Replacement: ReplacementUnknown},
+	"revision_id":     {Computed: true, Replacement: ReplacementUnknown},
 }
 
 func init() {

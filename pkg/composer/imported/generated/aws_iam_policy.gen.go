@@ -7,33 +7,35 @@ import "reflect"
 // AWSIAMPolicy is the generated Layer 1 typed model for the
 // `aws_iam_policy` Terraform resource.
 type AWSIAMPolicy struct {
-	ARN             *Value[string]            `tf:"arn" json:"arn,omitempty"`
-	AttachmentCount *Value[int64]             `tf:"attachment_count" json:"attachment_count,omitempty"`
-	Description     *Value[string]            `tf:"description" json:"description,omitempty"`
-	ID              *Value[string]            `tf:"id" json:"id,omitempty"`
-	Name            *Value[string]            `tf:"name" json:"name,omitempty"`
-	NamePrefix      *Value[string]            `tf:"name_prefix" json:"name_prefix,omitempty"`
-	Path            *Value[string]            `tf:"path" json:"path,omitempty"`
-	Policy          *Value[string]            `tf:"policy" json:"policy,omitempty"`
-	PolicyID        *Value[string]            `tf:"policy_id" json:"policy_id,omitempty"`
-	Tags            map[string]*Value[string] `tf:"tags" json:"tags,omitempty"`
-	TagsAll         map[string]*Value[string] `tf:"tags_all" json:"tags_all,omitempty"`
+	ARN                          *Value[string]            `tf:"arn" json:"arn,omitempty"`
+	AttachmentCount              *Value[int64]             `tf:"attachment_count" json:"attachment_count,omitempty"`
+	DelayAfterPolicyCreationInMs *Value[float64]           `tf:"delay_after_policy_creation_in_ms" json:"delay_after_policy_creation_in_ms,omitempty"`
+	Description                  *Value[string]            `tf:"description" json:"description,omitempty"`
+	ID                           *Value[string]            `tf:"id" json:"id,omitempty"`
+	Name                         *Value[string]            `tf:"name" json:"name,omitempty"`
+	NamePrefix                   *Value[string]            `tf:"name_prefix" json:"name_prefix,omitempty"`
+	Path                         *Value[string]            `tf:"path" json:"path,omitempty"`
+	Policy                       *Value[string]            `tf:"policy" json:"policy,omitempty"`
+	PolicyID                     *Value[string]            `tf:"policy_id" json:"policy_id,omitempty"`
+	Tags                         map[string]*Value[string] `tf:"tags" json:"tags,omitempty"`
+	TagsAll                      map[string]*Value[string] `tf:"tags_all" json:"tags_all,omitempty"`
 }
 
 // AWSIAMPolicySchema describes provider metadata for each attribute / nested
 // block of aws_iam_policy.
 var AWSIAMPolicySchema = map[string]FieldSchema{
-	"arn":              {Computed: true, Replacement: ReplacementUnknown},
-	"attachment_count": {Computed: true, Replacement: ReplacementUnknown},
-	"description":      {Optional: true, Replacement: ReplacementUnknown},
-	"id":               {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"name":             {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"name_prefix":      {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"path":             {Optional: true, Replacement: ReplacementUnknown},
-	"policy":           {Required: true, Replacement: ReplacementUnknown},
-	"policy_id":        {Computed: true, Replacement: ReplacementUnknown},
-	"tags":             {Optional: true, Replacement: ReplacementUnknown},
-	"tags_all":         {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"arn":                               {Computed: true, Replacement: ReplacementUnknown},
+	"attachment_count":                  {Computed: true, Replacement: ReplacementUnknown},
+	"delay_after_policy_creation_in_ms": {Optional: true, Replacement: ReplacementUnknown},
+	"description":                       {Optional: true, Replacement: ReplacementUnknown},
+	"id":                                {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"name":                              {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"name_prefix":                       {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"path":                              {Optional: true, Replacement: ReplacementUnknown},
+	"policy":                            {Required: true, Replacement: ReplacementUnknown},
+	"policy_id":                         {Computed: true, Replacement: ReplacementUnknown},
+	"tags":                              {Optional: true, Replacement: ReplacementUnknown},
+	"tags_all":                          {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 }
 
 func init() {

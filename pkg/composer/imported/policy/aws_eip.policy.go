@@ -67,13 +67,9 @@ var awsEipPolicy = Map{
 	},
 	"domain": {
 		// Modern AWS only supports "vpc"; the legacy "standard" classic
-		// EC2 value is no longer assignable.
-		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
-		ChangeRisk:    ChangeAlwaysReplace,
-		DriftSemantic: DriftSemanticExact,
-	},
-	"vpc": {
-		// Deprecated alias of domain == "vpc". Kept for backwards compat.
+		// EC2 value is no longer assignable. (AWS provider 6.x removed the
+		// deprecated `vpc` alias attribute that briefly co-existed in 5.x —
+		// #599 schema-bump removed the corresponding policy entry.)
 		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
 		ChangeRisk:    ChangeAlwaysReplace,
 		DriftSemantic: DriftSemanticExact,

@@ -7,39 +7,48 @@ import "reflect"
 // AWSCloudfrontDistribution is the generated Layer 1 typed model for the
 // `aws_cloudfront_distribution` Terraform resource.
 type AWSCloudfrontDistribution struct {
-	Aliases                      []*Value[string]                                `tf:"aliases" json:"aliases,omitempty"`
-	ARN                          *Value[string]                                  `tf:"arn" json:"arn,omitempty"`
-	CallerReference              *Value[string]                                  `tf:"caller_reference" json:"caller_reference,omitempty"`
-	Comment                      *Value[string]                                  `tf:"comment" json:"comment,omitempty"`
-	ContinuousDeploymentPolicyID *Value[string]                                  `tf:"continuous_deployment_policy_id" json:"continuous_deployment_policy_id,omitempty"`
-	DefaultRootObject            *Value[string]                                  `tf:"default_root_object" json:"default_root_object,omitempty"`
-	DomainName                   *Value[string]                                  `tf:"domain_name" json:"domain_name,omitempty"`
-	Enabled                      *Value[bool]                                    `tf:"enabled" json:"enabled,omitempty"`
-	Etag                         *Value[string]                                  `tf:"etag" json:"etag,omitempty"`
-	HostedZoneID                 *Value[string]                                  `tf:"hosted_zone_id" json:"hosted_zone_id,omitempty"`
-	HTTPVersion                  *Value[string]                                  `tf:"http_version" json:"http_version,omitempty"`
-	ID                           *Value[string]                                  `tf:"id" json:"id,omitempty"`
-	InProgressValidationBatches  *Value[float64]                                 `tf:"in_progress_validation_batches" json:"in_progress_validation_batches,omitempty"`
-	IsIPV6Enabled                *Value[bool]                                    `tf:"is_ipv6_enabled" json:"is_ipv6_enabled,omitempty"`
-	LastModifiedTime             *Value[string]                                  `tf:"last_modified_time" json:"last_modified_time,omitempty"`
-	PriceClass                   *Value[string]                                  `tf:"price_class" json:"price_class,omitempty"`
-	RetainOnDelete               *Value[bool]                                    `tf:"retain_on_delete" json:"retain_on_delete,omitempty"`
-	Staging                      *Value[bool]                                    `tf:"staging" json:"staging,omitempty"`
-	Status                       *Value[string]                                  `tf:"status" json:"status,omitempty"`
-	Tags                         map[string]*Value[string]                       `tf:"tags" json:"tags,omitempty"`
-	TagsAll                      map[string]*Value[string]                       `tf:"tags_all" json:"tags_all,omitempty"`
-	TrustedKeyGroups             []AWSCloudfrontDistributionTrustedKeyGroups     `tf:"trusted_key_groups" json:"trusted_key_groups,omitempty"`
-	TrustedSigners               []AWSCloudfrontDistributionTrustedSigners       `tf:"trusted_signers" json:"trusted_signers,omitempty"`
-	WaitForDeployment            *Value[bool]                                    `tf:"wait_for_deployment" json:"wait_for_deployment,omitempty"`
-	WebACLID                     *Value[string]                                  `tf:"web_acl_id" json:"web_acl_id,omitempty"`
-	CustomErrorResponse          []AWSCloudfrontDistributionCustomErrorResponse  `tf:"custom_error_response,blocks" json:"custom_error_response,omitempty"`
-	DefaultCacheBehavior         []AWSCloudfrontDistributionDefaultCacheBehavior `tf:"default_cache_behavior,blocks" json:"default_cache_behavior,omitempty"`
-	LoggingConfig                []AWSCloudfrontDistributionLoggingConfig        `tf:"logging_config,blocks" json:"logging_config,omitempty"`
-	OrderedCacheBehavior         []AWSCloudfrontDistributionOrderedCacheBehavior `tf:"ordered_cache_behavior,blocks" json:"ordered_cache_behavior,omitempty"`
-	Origin                       []AWSCloudfrontDistributionOrigin               `tf:"origin,blocks" json:"origin,omitempty"`
-	OriginGroup                  []AWSCloudfrontDistributionOriginGroup          `tf:"origin_group,blocks" json:"origin_group,omitempty"`
-	Restrictions                 []AWSCloudfrontDistributionRestrictions         `tf:"restrictions,blocks" json:"restrictions,omitempty"`
-	ViewerCertificate            []AWSCloudfrontDistributionViewerCertificate    `tf:"viewer_certificate,blocks" json:"viewer_certificate,omitempty"`
+	Aliases                       []*Value[string]                                         `tf:"aliases" json:"aliases,omitempty"`
+	AnycastIpListID               *Value[string]                                           `tf:"anycast_ip_list_id" json:"anycast_ip_list_id,omitempty"`
+	ARN                           *Value[string]                                           `tf:"arn" json:"arn,omitempty"`
+	CallerReference               *Value[string]                                           `tf:"caller_reference" json:"caller_reference,omitempty"`
+	Comment                       *Value[string]                                           `tf:"comment" json:"comment,omitempty"`
+	ContinuousDeploymentPolicyID  *Value[string]                                           `tf:"continuous_deployment_policy_id" json:"continuous_deployment_policy_id,omitempty"`
+	DefaultRootObject             *Value[string]                                           `tf:"default_root_object" json:"default_root_object,omitempty"`
+	DomainName                    *Value[string]                                           `tf:"domain_name" json:"domain_name,omitempty"`
+	Enabled                       *Value[bool]                                             `tf:"enabled" json:"enabled,omitempty"`
+	Etag                          *Value[string]                                           `tf:"etag" json:"etag,omitempty"`
+	HostedZoneID                  *Value[string]                                           `tf:"hosted_zone_id" json:"hosted_zone_id,omitempty"`
+	HTTPVersion                   *Value[string]                                           `tf:"http_version" json:"http_version,omitempty"`
+	ID                            *Value[string]                                           `tf:"id" json:"id,omitempty"`
+	InProgressValidationBatches   *Value[float64]                                          `tf:"in_progress_validation_batches" json:"in_progress_validation_batches,omitempty"`
+	IsIPV6Enabled                 *Value[bool]                                             `tf:"is_ipv6_enabled" json:"is_ipv6_enabled,omitempty"`
+	LastModifiedTime              *Value[string]                                           `tf:"last_modified_time" json:"last_modified_time,omitempty"`
+	LoggingV1Enabled              *Value[bool]                                             `tf:"logging_v1_enabled" json:"logging_v1_enabled,omitempty"`
+	PriceClass                    *Value[string]                                           `tf:"price_class" json:"price_class,omitempty"`
+	RetainOnDelete                *Value[bool]                                             `tf:"retain_on_delete" json:"retain_on_delete,omitempty"`
+	Staging                       *Value[bool]                                             `tf:"staging" json:"staging,omitempty"`
+	Status                        *Value[string]                                           `tf:"status" json:"status,omitempty"`
+	Tags                          map[string]*Value[string]                                `tf:"tags" json:"tags,omitempty"`
+	TagsAll                       map[string]*Value[string]                                `tf:"tags_all" json:"tags_all,omitempty"`
+	TrustedKeyGroups              []AWSCloudfrontDistributionTrustedKeyGroups              `tf:"trusted_key_groups" json:"trusted_key_groups,omitempty"`
+	TrustedSigners                []AWSCloudfrontDistributionTrustedSigners                `tf:"trusted_signers" json:"trusted_signers,omitempty"`
+	WaitForDeployment             *Value[bool]                                             `tf:"wait_for_deployment" json:"wait_for_deployment,omitempty"`
+	WebACLID                      *Value[string]                                           `tf:"web_acl_id" json:"web_acl_id,omitempty"`
+	ConnectionFunctionAssociation []AWSCloudfrontDistributionConnectionFunctionAssociation `tf:"connection_function_association,blocks" json:"connection_function_association,omitempty"`
+	CustomErrorResponse           []AWSCloudfrontDistributionCustomErrorResponse           `tf:"custom_error_response,blocks" json:"custom_error_response,omitempty"`
+	DefaultCacheBehavior          []AWSCloudfrontDistributionDefaultCacheBehavior          `tf:"default_cache_behavior,blocks" json:"default_cache_behavior,omitempty"`
+	LoggingConfig                 []AWSCloudfrontDistributionLoggingConfig                 `tf:"logging_config,blocks" json:"logging_config,omitempty"`
+	OrderedCacheBehavior          []AWSCloudfrontDistributionOrderedCacheBehavior          `tf:"ordered_cache_behavior,blocks" json:"ordered_cache_behavior,omitempty"`
+	Origin                        []AWSCloudfrontDistributionOrigin                        `tf:"origin,blocks" json:"origin,omitempty"`
+	OriginGroup                   []AWSCloudfrontDistributionOriginGroup                   `tf:"origin_group,blocks" json:"origin_group,omitempty"`
+	Restrictions                  []AWSCloudfrontDistributionRestrictions                  `tf:"restrictions,blocks" json:"restrictions,omitempty"`
+	ViewerCertificate             []AWSCloudfrontDistributionViewerCertificate             `tf:"viewer_certificate,blocks" json:"viewer_certificate,omitempty"`
+	ViewerMtlsConfig              []AWSCloudfrontDistributionViewerMtlsConfig              `tf:"viewer_mtls_config,blocks" json:"viewer_mtls_config,omitempty"`
+}
+
+// AWSCloudfrontDistributionConnectionFunctionAssociation is a nested-block type used by the parent resource.
+type AWSCloudfrontDistributionConnectionFunctionAssociation struct {
+	ID *Value[string] `tf:"id" json:"id,omitempty"`
 }
 
 // AWSCloudfrontDistributionCustomErrorResponse is a nested-block type used by the parent resource.
@@ -70,6 +79,7 @@ type AWSCloudfrontDistributionDefaultCacheBehavior struct {
 	ViewerProtocolPolicy      *Value[string]                                                           `tf:"viewer_protocol_policy" json:"viewer_protocol_policy,omitempty"`
 	ForwardedValues           []AWSCloudfrontDistributionDefaultCacheBehaviorForwardedValues           `tf:"forwarded_values,blocks" json:"forwarded_values,omitempty"`
 	FunctionAssociation       []AWSCloudfrontDistributionDefaultCacheBehaviorFunctionAssociation       `tf:"function_association,blocks" json:"function_association,omitempty"`
+	GRPCConfig                []AWSCloudfrontDistributionDefaultCacheBehaviorGRPCConfig                `tf:"grpc_config,blocks" json:"grpc_config,omitempty"`
 	LambdaFunctionAssociation []AWSCloudfrontDistributionDefaultCacheBehaviorLambdaFunctionAssociation `tf:"lambda_function_association,blocks" json:"lambda_function_association,omitempty"`
 }
 
@@ -91,6 +101,11 @@ type AWSCloudfrontDistributionDefaultCacheBehaviorForwardedValuesCookies struct 
 type AWSCloudfrontDistributionDefaultCacheBehaviorFunctionAssociation struct {
 	EventType   *Value[string] `tf:"event_type" json:"event_type,omitempty"`
 	FunctionARN *Value[string] `tf:"function_arn" json:"function_arn,omitempty"`
+}
+
+// AWSCloudfrontDistributionDefaultCacheBehaviorGRPCConfig is a nested-block type used by the parent resource.
+type AWSCloudfrontDistributionDefaultCacheBehaviorGRPCConfig struct {
+	Enabled *Value[bool] `tf:"enabled" json:"enabled,omitempty"`
 }
 
 // AWSCloudfrontDistributionDefaultCacheBehaviorLambdaFunctionAssociation is a nested-block type used by the parent resource.
@@ -128,6 +143,7 @@ type AWSCloudfrontDistributionOrderedCacheBehavior struct {
 	ViewerProtocolPolicy      *Value[string]                                                           `tf:"viewer_protocol_policy" json:"viewer_protocol_policy,omitempty"`
 	ForwardedValues           []AWSCloudfrontDistributionOrderedCacheBehaviorForwardedValues           `tf:"forwarded_values,blocks" json:"forwarded_values,omitempty"`
 	FunctionAssociation       []AWSCloudfrontDistributionOrderedCacheBehaviorFunctionAssociation       `tf:"function_association,blocks" json:"function_association,omitempty"`
+	GRPCConfig                []AWSCloudfrontDistributionOrderedCacheBehaviorGRPCConfig                `tf:"grpc_config,blocks" json:"grpc_config,omitempty"`
 	LambdaFunctionAssociation []AWSCloudfrontDistributionOrderedCacheBehaviorLambdaFunctionAssociation `tf:"lambda_function_association,blocks" json:"lambda_function_association,omitempty"`
 }
 
@@ -151,6 +167,11 @@ type AWSCloudfrontDistributionOrderedCacheBehaviorFunctionAssociation struct {
 	FunctionARN *Value[string] `tf:"function_arn" json:"function_arn,omitempty"`
 }
 
+// AWSCloudfrontDistributionOrderedCacheBehaviorGRPCConfig is a nested-block type used by the parent resource.
+type AWSCloudfrontDistributionOrderedCacheBehaviorGRPCConfig struct {
+	Enabled *Value[bool] `tf:"enabled" json:"enabled,omitempty"`
+}
+
 // AWSCloudfrontDistributionOrderedCacheBehaviorLambdaFunctionAssociation is a nested-block type used by the parent resource.
 type AWSCloudfrontDistributionOrderedCacheBehaviorLambdaFunctionAssociation struct {
 	EventType   *Value[string] `tf:"event_type" json:"event_type,omitempty"`
@@ -160,16 +181,18 @@ type AWSCloudfrontDistributionOrderedCacheBehaviorLambdaFunctionAssociation stru
 
 // AWSCloudfrontDistributionOrigin is a nested-block type used by the parent resource.
 type AWSCloudfrontDistributionOrigin struct {
-	ConnectionAttempts    *Value[float64]                                     `tf:"connection_attempts" json:"connection_attempts,omitempty"`
-	ConnectionTimeout     *Value[int64]                                       `tf:"connection_timeout" json:"connection_timeout,omitempty"`
-	DomainName            *Value[string]                                      `tf:"domain_name" json:"domain_name,omitempty"`
-	OriginAccessControlID *Value[string]                                      `tf:"origin_access_control_id" json:"origin_access_control_id,omitempty"`
-	OriginID              *Value[string]                                      `tf:"origin_id" json:"origin_id,omitempty"`
-	OriginPath            *Value[string]                                      `tf:"origin_path" json:"origin_path,omitempty"`
-	CustomHeader          []AWSCloudfrontDistributionOriginCustomHeader       `tf:"custom_header,blocks" json:"custom_header,omitempty"`
-	CustomOriginConfig    []AWSCloudfrontDistributionOriginCustomOriginConfig `tf:"custom_origin_config,blocks" json:"custom_origin_config,omitempty"`
-	OriginShield          []AWSCloudfrontDistributionOriginOriginShield       `tf:"origin_shield,blocks" json:"origin_shield,omitempty"`
-	S3OriginConfig        []AWSCloudfrontDistributionOriginS3OriginConfig     `tf:"s3_origin_config,blocks" json:"s3_origin_config,omitempty"`
+	ConnectionAttempts        *Value[float64]                                     `tf:"connection_attempts" json:"connection_attempts,omitempty"`
+	ConnectionTimeout         *Value[int64]                                       `tf:"connection_timeout" json:"connection_timeout,omitempty"`
+	DomainName                *Value[string]                                      `tf:"domain_name" json:"domain_name,omitempty"`
+	OriginAccessControlID     *Value[string]                                      `tf:"origin_access_control_id" json:"origin_access_control_id,omitempty"`
+	OriginID                  *Value[string]                                      `tf:"origin_id" json:"origin_id,omitempty"`
+	OriginPath                *Value[string]                                      `tf:"origin_path" json:"origin_path,omitempty"`
+	ResponseCompletionTimeout *Value[int64]                                       `tf:"response_completion_timeout" json:"response_completion_timeout,omitempty"`
+	CustomHeader              []AWSCloudfrontDistributionOriginCustomHeader       `tf:"custom_header,blocks" json:"custom_header,omitempty"`
+	CustomOriginConfig        []AWSCloudfrontDistributionOriginCustomOriginConfig `tf:"custom_origin_config,blocks" json:"custom_origin_config,omitempty"`
+	OriginShield              []AWSCloudfrontDistributionOriginOriginShield       `tf:"origin_shield,blocks" json:"origin_shield,omitempty"`
+	S3OriginConfig            []AWSCloudfrontDistributionOriginS3OriginConfig     `tf:"s3_origin_config,blocks" json:"s3_origin_config,omitempty"`
+	VPCOriginConfig           []AWSCloudfrontDistributionOriginVPCOriginConfig    `tf:"vpc_origin_config,blocks" json:"vpc_origin_config,omitempty"`
 }
 
 // AWSCloudfrontDistributionOriginCustomHeader is a nested-block type used by the parent resource.
@@ -182,6 +205,7 @@ type AWSCloudfrontDistributionOriginCustomHeader struct {
 type AWSCloudfrontDistributionOriginCustomOriginConfig struct {
 	HTTPPort               *Value[float64]  `tf:"http_port" json:"http_port,omitempty"`
 	HTTPSPort              *Value[float64]  `tf:"https_port" json:"https_port,omitempty"`
+	IpAddressType          *Value[string]   `tf:"ip_address_type" json:"ip_address_type,omitempty"`
 	OriginKeepaliveTimeout *Value[int64]    `tf:"origin_keepalive_timeout" json:"origin_keepalive_timeout,omitempty"`
 	OriginProtocolPolicy   *Value[string]   `tf:"origin_protocol_policy" json:"origin_protocol_policy,omitempty"`
 	OriginReadTimeout      *Value[int64]    `tf:"origin_read_timeout" json:"origin_read_timeout,omitempty"`
@@ -214,6 +238,14 @@ type AWSCloudfrontDistributionOriginOriginShield struct {
 // AWSCloudfrontDistributionOriginS3OriginConfig is a nested-block type used by the parent resource.
 type AWSCloudfrontDistributionOriginS3OriginConfig struct {
 	OriginAccessIdentity *Value[string] `tf:"origin_access_identity" json:"origin_access_identity,omitempty"`
+}
+
+// AWSCloudfrontDistributionOriginVPCOriginConfig is a nested-block type used by the parent resource.
+type AWSCloudfrontDistributionOriginVPCOriginConfig struct {
+	OriginKeepaliveTimeout *Value[int64]  `tf:"origin_keepalive_timeout" json:"origin_keepalive_timeout,omitempty"`
+	OriginReadTimeout      *Value[int64]  `tf:"origin_read_timeout" json:"origin_read_timeout,omitempty"`
+	OwnerAccountID         *Value[string] `tf:"owner_account_id" json:"owner_account_id,omitempty"`
+	VPCOriginID            *Value[string] `tf:"vpc_origin_id" json:"vpc_origin_id,omitempty"`
 }
 
 // AWSCloudfrontDistributionRestrictions is a nested-block type used by the parent resource.
@@ -260,10 +292,24 @@ type AWSCloudfrontDistributionViewerCertificate struct {
 	SSLSupportMethod             *Value[string] `tf:"ssl_support_method" json:"ssl_support_method,omitempty"`
 }
 
+// AWSCloudfrontDistributionViewerMtlsConfig is a nested-block type used by the parent resource.
+type AWSCloudfrontDistributionViewerMtlsConfig struct {
+	Mode             *Value[string]                                              `tf:"mode" json:"mode,omitempty"`
+	TrustStoreConfig []AWSCloudfrontDistributionViewerMtlsConfigTrustStoreConfig `tf:"trust_store_config,blocks" json:"trust_store_config,omitempty"`
+}
+
+// AWSCloudfrontDistributionViewerMtlsConfigTrustStoreConfig is a nested-block type used by the parent resource.
+type AWSCloudfrontDistributionViewerMtlsConfigTrustStoreConfig struct {
+	AdvertiseTrustStoreCaNames *Value[bool]   `tf:"advertise_trust_store_ca_names" json:"advertise_trust_store_ca_names,omitempty"`
+	IgnoreCertificateExpiry    *Value[bool]   `tf:"ignore_certificate_expiry" json:"ignore_certificate_expiry,omitempty"`
+	TrustStoreID               *Value[string] `tf:"trust_store_id" json:"trust_store_id,omitempty"`
+}
+
 // AWSCloudfrontDistributionSchema describes provider metadata for each attribute / nested
 // block of aws_cloudfront_distribution.
 var AWSCloudfrontDistributionSchema = map[string]FieldSchema{
 	"aliases":                         {Optional: true, Replacement: ReplacementUnknown},
+	"anycast_ip_list_id":              {Optional: true, Replacement: ReplacementUnknown},
 	"arn":                             {Computed: true, Replacement: ReplacementUnknown},
 	"caller_reference":                {Computed: true, Replacement: ReplacementUnknown},
 	"comment":                         {Optional: true, Replacement: ReplacementUnknown},
@@ -278,6 +324,7 @@ var AWSCloudfrontDistributionSchema = map[string]FieldSchema{
 	"in_progress_validation_batches":  {Computed: true, Replacement: ReplacementUnknown},
 	"is_ipv6_enabled":                 {Optional: true, Replacement: ReplacementUnknown},
 	"last_modified_time":              {Computed: true, Replacement: ReplacementUnknown},
+	"logging_v1_enabled":              {Computed: true, Replacement: ReplacementUnknown},
 	"price_class":                     {Optional: true, Replacement: ReplacementUnknown},
 	"retain_on_delete":                {Optional: true, Replacement: ReplacementUnknown},
 	"staging":                         {Optional: true, Replacement: ReplacementUnknown},
@@ -288,6 +335,7 @@ var AWSCloudfrontDistributionSchema = map[string]FieldSchema{
 	"trusted_signers":                 {Computed: true, Replacement: ReplacementUnknown},
 	"wait_for_deployment":             {Optional: true, Replacement: ReplacementUnknown},
 	"web_acl_id":                      {Optional: true, Replacement: ReplacementUnknown},
+	"connection_function_association": {Optional: true, Replacement: ReplacementUnknown},
 	"custom_error_response":           {Optional: true, Replacement: ReplacementUnknown},
 	"default_cache_behavior":          {Required: true, Replacement: ReplacementUnknown},
 	"logging_config":                  {Optional: true, Replacement: ReplacementUnknown},
@@ -296,6 +344,7 @@ var AWSCloudfrontDistributionSchema = map[string]FieldSchema{
 	"origin_group":                    {Optional: true, Replacement: ReplacementUnknown},
 	"restrictions":                    {Required: true, Replacement: ReplacementUnknown},
 	"viewer_certificate":              {Required: true, Replacement: ReplacementUnknown},
+	"viewer_mtls_config":              {Optional: true, Replacement: ReplacementUnknown},
 }
 
 func init() {

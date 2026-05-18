@@ -28,8 +28,12 @@ aws_acm_certificate	validation_emails	Identity	Security	SummaryVisible	Never
 aws_acm_certificate	validation_method	Tuning	Security	SummaryVisible	Never		AlwaysReplace
 aws_acm_certificate	validation_option.domain_name	Wiring	Security	SummaryVisible	Never		AlwaysReplace
 aws_acm_certificate	validation_option.validation_domain	Wiring	Security	SummaryVisible	Never		AlwaysReplace
+aws_acm_certificate_validation	certificate_arn	Wiring	Security	UIVisible	RelationshipOnly		AlwaysReplace
+aws_acm_certificate_validation	id	Identity		UIVisible	Never		
+aws_acm_certificate_validation	region	Identity		UIVisible	Never		AlwaysReplace
+aws_acm_certificate_validation	timeouts	Tuning		Hidden	SystemOnly		
+aws_acm_certificate_validation	validation_record_fqdns	Tuning	Security	SummaryVisible	RequiresApproval		
 aws_api_gateway_deployment	description	Tuning	Reliability	SummaryVisible	ChatSafe		
-aws_api_gateway_deployment	execution_arn	Identity		UIVisible	Never		
 aws_api_gateway_deployment	id	Identity		UIVisible	Never		
 aws_api_gateway_deployment	rest_api_id	Wiring	Reliability	UIVisible	Never		AlwaysReplace
 aws_api_gateway_resource	id	Identity		UIVisible	Never		
@@ -881,7 +885,6 @@ aws_ecs_task_definition	ephemeral_storage.size_in_gib	Tuning	Performance	Summary
 aws_ecs_task_definition	execution_role_arn	Wiring	Security	UIVisible	RelationshipOnly		
 aws_ecs_task_definition	family	Identity		UIVisible	Never		AlwaysReplace
 aws_ecs_task_definition	id	Identity		UIVisible	Never		
-aws_ecs_task_definition	inference_accelerator	Tuning	Performance	SummaryVisible	RequiresApproval		
 aws_ecs_task_definition	ipc_mode	Tuning	Security	SummaryVisible	RequiresApproval		
 aws_ecs_task_definition	memory	Tuning	Performance	UIVisible	RequiresApproval		
 aws_ecs_task_definition	network_mode	Tuning	Reliability	UIVisible	Never		AlwaysReplace
@@ -942,7 +945,6 @@ aws_eip	public_ipv4_pool	Tuning	Reliability	UIVisible	Never		AlwaysReplace
 aws_eip	tags	Tuning		Hidden	SystemOnly	Redacted	
 aws_eip	tags_all	Tuning		Hidden	SystemOnly	Redacted	
 aws_eip	timeouts	Tuning		Hidden	SystemOnly		
-aws_eip	vpc	Identity		UIVisible	Never		AlwaysReplace
 aws_eks_access_entry	access_entry_arn	Identity		UIVisible	Never		
 aws_eks_access_entry	cluster_name	Wiring	Reliability	UIVisible	Never		AlwaysReplace
 aws_eks_access_entry	id	Identity		UIVisible	Never		
@@ -1235,11 +1237,9 @@ aws_instance	associate_public_ip_address	Tuning	Security	UIVisible	RequiresAppro
 aws_instance	availability_zone	Tuning	Reliability	UIVisible	Never		AlwaysReplace
 aws_instance	capacity_reservation_specification.capacity_reservation_preference	Tuning	Reliability	SummaryVisible	ChatSafe		
 aws_instance	capacity_reservation_specification.capacity_reservation_target.capacity_reservation_id	Wiring	Reliability	SummaryVisible	RelationshipOnly		
-aws_instance	cpu_core_count	Tuning	Performance	SummaryVisible	Never		AlwaysReplace
 aws_instance	cpu_options.amd_sev_snp	Tuning	Security	SummaryVisible	Never		AlwaysReplace
 aws_instance	cpu_options.core_count	Tuning	Performance	SummaryVisible	Never		AlwaysReplace
 aws_instance	cpu_options.threads_per_core	Tuning	Performance	SummaryVisible	Never		AlwaysReplace
-aws_instance	cpu_threads_per_core	Tuning	Performance	SummaryVisible	Never		AlwaysReplace
 aws_instance	credit_specification.cpu_credits	Tuning	Performance	SummaryVisible	ChatSafe		
 aws_instance	disable_api_stop	Tuning	Reliability	SummaryVisible	ChatSafe		
 aws_instance	disable_api_termination	Tuning	Reliability	SummaryVisible	ChatSafe		
@@ -1796,7 +1796,6 @@ aws_opensearch_domain	endpoint_v2	Identity		SummaryVisible	Never
 aws_opensearch_domain	engine_version	Tuning	Reliability	UIVisible	RequiresApproval		
 aws_opensearch_domain	id	Identity		UIVisible	Never		
 aws_opensearch_domain	ip_address_type	Tuning	Reliability	SummaryVisible	RequiresApproval		
-aws_opensearch_domain	kibana_endpoint	Identity		UIVisible	Never		
 aws_opensearch_domain	log_publishing_options.cloudwatch_log_group_arn	Wiring	Reliability	SummaryVisible	RelationshipOnly		
 aws_opensearch_domain	log_publishing_options.enabled	Tuning	Reliability	SummaryVisible	ChatSafe		
 aws_opensearch_domain	log_publishing_options.log_type	Tuning	Reliability	SummaryVisible	ChatSafe		
@@ -1915,6 +1914,34 @@ aws_resourceexplorer2_view	included_property.name	Tuning		SummaryVisible	ChatSaf
 aws_resourceexplorer2_view	name	Identity		UIVisible	Never		
 aws_resourceexplorer2_view	tags	Tuning		Hidden	SystemOnly	Redacted	
 aws_resourceexplorer2_view	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_route53_record	alias.evaluate_target_health	Tuning	Reliability	SummaryVisible	RequiresApproval		
+aws_route53_record	alias.name	Wiring	Reliability	UIVisible	RelationshipOnly		
+aws_route53_record	alias.zone_id	Wiring	Reliability	UIVisible	RelationshipOnly		
+aws_route53_record	allow_overwrite	Tuning	Reliability	SummaryVisible	SystemOnly		
+aws_route53_record	cidr_routing_policy.collection_id	Wiring	Reliability	SummaryVisible	RelationshipOnly		
+aws_route53_record	cidr_routing_policy.location_name	Tuning	Reliability	SummaryVisible	RequiresApproval		
+aws_route53_record	failover_routing_policy.type	Tuning	Reliability	UIVisible	RequiresApproval		
+aws_route53_record	fqdn	Identity		SummaryVisible	Never		
+aws_route53_record	geolocation_routing_policy.continent	Tuning	Reliability	SummaryVisible	RequiresApproval		
+aws_route53_record	geolocation_routing_policy.country	Tuning	Reliability	SummaryVisible	RequiresApproval		
+aws_route53_record	geolocation_routing_policy.subdivision	Tuning	Reliability	SummaryVisible	RequiresApproval		
+aws_route53_record	geoproximity_routing_policy.aws_region	Tuning	Reliability	SummaryVisible	RequiresApproval		
+aws_route53_record	geoproximity_routing_policy.bias	Tuning	Reliability	SummaryVisible	RequiresApproval		
+aws_route53_record	geoproximity_routing_policy.coordinates.latitude	Tuning	Reliability	SummaryVisible	RequiresApproval		
+aws_route53_record	geoproximity_routing_policy.coordinates.longitude	Tuning	Reliability	SummaryVisible	RequiresApproval		
+aws_route53_record	geoproximity_routing_policy.local_zone_group	Tuning	Reliability	SummaryVisible	RequiresApproval		
+aws_route53_record	health_check_id	Wiring	Reliability	SummaryVisible	RelationshipOnly		
+aws_route53_record	id	Identity		UIVisible	Never		
+aws_route53_record	latency_routing_policy.region	Tuning	Reliability	SummaryVisible	RequiresApproval		
+aws_route53_record	multivalue_answer_routing_policy	Tuning	Reliability	SummaryVisible	RequiresApproval		
+aws_route53_record	name	Identity		UIVisible	Never		AlwaysReplace
+aws_route53_record	records	Tuning	Reliability	UIVisible	RequiresApproval		
+aws_route53_record	set_identifier	Identity		UIVisible	Never		AlwaysReplace
+aws_route53_record	timeouts	Tuning		Hidden	SystemOnly		
+aws_route53_record	ttl	Tuning	Reliability	UIVisible	ChatSafe		
+aws_route53_record	type	Identity		UIVisible	Never		AlwaysReplace
+aws_route53_record	weighted_routing_policy.weight	Tuning	Reliability	UIVisible	RequiresApproval		
+aws_route53_record	zone_id	Wiring	Reliability	UIVisible	RelationshipOnly		AlwaysReplace
 aws_route53_zone	arn	Identity		UIVisible	Never		
 aws_route53_zone	comment	Tuning		UIVisible	ChatSafe		
 aws_route53_zone	delegation_set_id	Wiring	Reliability	SummaryVisible	Never		AlwaysReplace
@@ -2337,6 +2364,60 @@ google_api_gateway_gateway	project	Identity		UIVisible	Never		AlwaysReplace
 google_api_gateway_gateway	region	Identity		UIVisible	Never		AlwaysReplace
 google_api_gateway_gateway	terraform_labels	Tuning		Hidden	SystemOnly	Redacted	
 google_api_gateway_gateway	timeouts	Tuning		Hidden	SystemOnly		
+google_certificate_manager_certificate	description	Tuning		SummaryVisible	ChatSafe		
+google_certificate_manager_certificate	effective_labels	Tuning		Hidden	SystemOnly	Redacted	
+google_certificate_manager_certificate	id	Identity		UIVisible	Never		
+google_certificate_manager_certificate	labels	Tuning		Hidden	SystemOnly	Redacted	
+google_certificate_manager_certificate	location	Identity		UIVisible	Never		AlwaysReplace
+google_certificate_manager_certificate	managed.authorization_attempt_info.details	Identity	Reliability	SummaryVisible	Never		
+google_certificate_manager_certificate	managed.authorization_attempt_info.domain	Identity	Security	SummaryVisible	Never		
+google_certificate_manager_certificate	managed.authorization_attempt_info.failure_reason	Identity	Reliability	SummaryVisible	Never		
+google_certificate_manager_certificate	managed.authorization_attempt_info.state	Identity	Security	SummaryVisible	Never		
+google_certificate_manager_certificate	managed.dns_authorizations	Wiring	Security	SummaryVisible	RelationshipOnly		AlwaysReplace
+google_certificate_manager_certificate	managed.domains	Tuning	Security	UIVisible	Never		AlwaysReplace
+google_certificate_manager_certificate	managed.issuance_config	Wiring	Security	SummaryVisible	RelationshipOnly		AlwaysReplace
+google_certificate_manager_certificate	managed.provisioning_issue.details	Identity	Reliability	SummaryVisible	Never		
+google_certificate_manager_certificate	managed.provisioning_issue.reason	Identity	Reliability	SummaryVisible	Never		
+google_certificate_manager_certificate	managed.state	Identity	Reliability	SummaryVisible	Never		
+google_certificate_manager_certificate	name	Identity		UIVisible	Never		AlwaysReplace
+google_certificate_manager_certificate	project	Identity		UIVisible	Never		AlwaysReplace
+google_certificate_manager_certificate	san_dnsnames	Identity	Security	UIVisible	Never		
+google_certificate_manager_certificate	scope	Tuning	Security	UIVisible	Never		AlwaysReplace
+google_certificate_manager_certificate	self_managed.certificate_pem	Tuning	Security	SummaryVisible	RequiresApproval		
+google_certificate_manager_certificate	self_managed.pem_certificate	Tuning	Security	SummaryVisible	RequiresApproval		
+google_certificate_manager_certificate	self_managed.pem_private_key	Tuning	Security	Hidden	SystemOnly	Sensitive	
+google_certificate_manager_certificate	self_managed.private_key_pem	Tuning	Security	Hidden	SystemOnly	Sensitive	
+google_certificate_manager_certificate	terraform_labels	Tuning		Hidden	SystemOnly	Redacted	
+google_certificate_manager_certificate	timeouts	Tuning		Hidden	SystemOnly		
+google_certificate_manager_certificate_map	create_time	Identity		SummaryVisible	Never		
+google_certificate_manager_certificate_map	description	Tuning		SummaryVisible	ChatSafe		
+google_certificate_manager_certificate_map	effective_labels	Tuning		Hidden	SystemOnly	Redacted	
+google_certificate_manager_certificate_map	gclb_targets.ip_configs.ip_address	Wiring	Reliability	SummaryVisible	Never		
+google_certificate_manager_certificate_map	gclb_targets.ip_configs.ports	Wiring	Reliability	SummaryVisible	Never		
+google_certificate_manager_certificate_map	gclb_targets.target_https_proxy	Wiring	Reliability	SummaryVisible	Never		
+google_certificate_manager_certificate_map	gclb_targets.target_ssl_proxy	Wiring	Reliability	SummaryVisible	Never		
+google_certificate_manager_certificate_map	id	Identity		UIVisible	Never		
+google_certificate_manager_certificate_map	labels	Tuning		Hidden	SystemOnly	Redacted	
+google_certificate_manager_certificate_map	name	Identity		UIVisible	Never		AlwaysReplace
+google_certificate_manager_certificate_map	project	Identity		UIVisible	Never		AlwaysReplace
+google_certificate_manager_certificate_map	terraform_labels	Tuning		Hidden	SystemOnly	Redacted	
+google_certificate_manager_certificate_map	timeouts	Tuning		Hidden	SystemOnly		
+google_certificate_manager_certificate_map	update_time	Identity		SummaryVisible	Never		
+google_certificate_manager_certificate_map_entry	certificates	Wiring	Security	UIVisible	RequiresApproval		
+google_certificate_manager_certificate_map_entry	create_time	Identity		SummaryVisible	Never		
+google_certificate_manager_certificate_map_entry	description	Tuning		SummaryVisible	ChatSafe		
+google_certificate_manager_certificate_map_entry	effective_labels	Tuning		Hidden	SystemOnly	Redacted	
+google_certificate_manager_certificate_map_entry	hostname	Identity	Security	UIVisible	Never		AlwaysReplace
+google_certificate_manager_certificate_map_entry	id	Identity		UIVisible	Never		
+google_certificate_manager_certificate_map_entry	labels	Tuning		Hidden	SystemOnly	Redacted	
+google_certificate_manager_certificate_map_entry	map	Wiring	Reliability	UIVisible	RelationshipOnly		AlwaysReplace
+google_certificate_manager_certificate_map_entry	matcher	Identity	Security	UIVisible	Never		AlwaysReplace
+google_certificate_manager_certificate_map_entry	name	Identity		UIVisible	Never		AlwaysReplace
+google_certificate_manager_certificate_map_entry	project	Identity		UIVisible	Never		AlwaysReplace
+google_certificate_manager_certificate_map_entry	state	Identity	Reliability	SummaryVisible	Never		
+google_certificate_manager_certificate_map_entry	terraform_labels	Tuning		Hidden	SystemOnly	Redacted	
+google_certificate_manager_certificate_map_entry	timeouts	Tuning		Hidden	SystemOnly		
+google_certificate_manager_certificate_map_entry	update_time	Identity		SummaryVisible	Never		
 google_cloud_run_v2_service	annotations	Tuning		Hidden	SystemOnly	Redacted	
 google_cloud_run_v2_service	binary_authorization.policy	Wiring	Security	SummaryVisible	RelationshipOnly		
 google_cloud_run_v2_service	binary_authorization.use_default	Tuning	Security	SummaryVisible	ChatSafe		
@@ -2799,6 +2880,67 @@ google_container_node_pool	upgrade_settings.max_surge	Tuning	Reliability	Summary
 google_container_node_pool	upgrade_settings.max_unavailable	Tuning	Reliability	SummaryVisible	ChatSafe		
 google_container_node_pool	upgrade_settings.strategy	Tuning	Reliability	SummaryVisible	ChatSafe		
 google_container_node_pool	version	Tuning	Reliability	UIVisible	RequiresApproval		
+google_dns_managed_zone	cloud_logging_config.enable_logging	Tuning	Reliability	SummaryVisible	ChatSafe		
+google_dns_managed_zone	creation_time	Identity		SummaryVisible	Never		
+google_dns_managed_zone	description	Tuning		SummaryVisible	ChatSafe		
+google_dns_managed_zone	dns_name	Identity		UIVisible	Never		AlwaysReplace
+google_dns_managed_zone	dnssec_config.default_key_specs.algorithm	Tuning	Security	SummaryVisible	RequiresApproval		
+google_dns_managed_zone	dnssec_config.default_key_specs.key_length	Tuning	Security	SummaryVisible	RequiresApproval		
+google_dns_managed_zone	dnssec_config.default_key_specs.key_type	Tuning	Security	SummaryVisible	RequiresApproval		
+google_dns_managed_zone	dnssec_config.default_key_specs.kind	Tuning	Security	SummaryVisible	RequiresApproval		
+google_dns_managed_zone	dnssec_config.kind	Tuning	Security	SummaryVisible	Never		
+google_dns_managed_zone	dnssec_config.non_existence	Tuning	Security	SummaryVisible	RequiresApproval		
+google_dns_managed_zone	dnssec_config.state	Tuning	Security	UIVisible	RequiresApproval		
+google_dns_managed_zone	effective_labels	Tuning		Hidden	SystemOnly	Redacted	
+google_dns_managed_zone	force_destroy	Tuning	Reliability	SummaryVisible	SystemOnly		
+google_dns_managed_zone	forwarding_config.target_name_servers.forwarding_path	Tuning	Reliability	SummaryVisible	RequiresApproval		
+google_dns_managed_zone	forwarding_config.target_name_servers.ipv4_address	Tuning	Reliability	SummaryVisible	RequiresApproval		
+google_dns_managed_zone	id	Identity		UIVisible	Never		
+google_dns_managed_zone	labels	Tuning		Hidden	SystemOnly	Redacted	
+google_dns_managed_zone	managed_zone_id	Identity		SummaryVisible	Never		
+google_dns_managed_zone	name	Identity		UIVisible	Never		AlwaysReplace
+google_dns_managed_zone	name_servers	Identity		UIVisible	Never		
+google_dns_managed_zone	peering_config.target_network.network_url	Wiring	Reliability	SummaryVisible	RelationshipOnly		
+google_dns_managed_zone	private_visibility_config.gke_clusters.gke_cluster_name	Wiring	Security	SummaryVisible	RelationshipOnly		
+google_dns_managed_zone	private_visibility_config.networks.network_url	Wiring	Security	SummaryVisible	RelationshipOnly		
+google_dns_managed_zone	project	Identity		UIVisible	Never		AlwaysReplace
+google_dns_managed_zone	terraform_labels	Tuning		Hidden	SystemOnly	Redacted	
+google_dns_managed_zone	timeouts	Tuning		Hidden	SystemOnly		
+google_dns_managed_zone	visibility	Tuning	Security	UIVisible	Never		AlwaysReplace
+google_dns_record_set	id	Identity		UIVisible	Never		
+google_dns_record_set	managed_zone	Wiring	Reliability	UIVisible	RelationshipOnly		AlwaysReplace
+google_dns_record_set	name	Identity		UIVisible	Never		AlwaysReplace
+google_dns_record_set	project	Identity		UIVisible	Never		AlwaysReplace
+google_dns_record_set	routing_policy.enable_geo_fencing	Tuning	Reliability	SummaryVisible	RequiresApproval		
+google_dns_record_set	routing_policy.geo.health_checked_targets.internal_load_balancers.ip_address	Wiring	Reliability	SummaryVisible	RelationshipOnly		
+google_dns_record_set	routing_policy.geo.health_checked_targets.internal_load_balancers.ip_protocol	Tuning	Reliability	SummaryVisible	RequiresApproval		
+google_dns_record_set	routing_policy.geo.health_checked_targets.internal_load_balancers.load_balancer_type	Tuning	Reliability	SummaryVisible	RequiresApproval		
+google_dns_record_set	routing_policy.geo.health_checked_targets.internal_load_balancers.network_url	Wiring	Reliability	SummaryVisible	RelationshipOnly		
+google_dns_record_set	routing_policy.geo.health_checked_targets.internal_load_balancers.port	Tuning	Reliability	SummaryVisible	RequiresApproval		
+google_dns_record_set	routing_policy.geo.health_checked_targets.internal_load_balancers.project	Identity		SummaryVisible	Never		
+google_dns_record_set	routing_policy.geo.health_checked_targets.internal_load_balancers.region	Identity		SummaryVisible	Never		
+google_dns_record_set	routing_policy.geo.location	Tuning	Reliability	SummaryVisible	RequiresApproval		
+google_dns_record_set	routing_policy.geo.rrdatas	Tuning	Reliability	UIVisible	RequiresApproval		
+google_dns_record_set	routing_policy.primary_backup.backup_geo.health_checked_targets.internal_load_balancers.ip_address	Wiring	Reliability	SummaryVisible	RelationshipOnly		
+google_dns_record_set	routing_policy.primary_backup.backup_geo.health_checked_targets.internal_load_balancers.network_url	Wiring	Reliability	SummaryVisible	RelationshipOnly		
+google_dns_record_set	routing_policy.primary_backup.backup_geo.location	Tuning	Reliability	SummaryVisible	RequiresApproval		
+google_dns_record_set	routing_policy.primary_backup.backup_geo.rrdatas	Tuning	Reliability	UIVisible	RequiresApproval		
+google_dns_record_set	routing_policy.primary_backup.enable_geo_fencing_for_backups	Tuning	Reliability	SummaryVisible	RequiresApproval		
+google_dns_record_set	routing_policy.primary_backup.primary.internal_load_balancers.ip_address	Wiring	Reliability	SummaryVisible	RelationshipOnly		
+google_dns_record_set	routing_policy.primary_backup.primary.internal_load_balancers.network_url	Wiring	Reliability	SummaryVisible	RelationshipOnly		
+google_dns_record_set	routing_policy.primary_backup.trickle_ratio	Tuning	Reliability	SummaryVisible	RequiresApproval		
+google_dns_record_set	routing_policy.wrr.health_checked_targets.internal_load_balancers.ip_address	Wiring	Reliability	SummaryVisible	RelationshipOnly		
+google_dns_record_set	routing_policy.wrr.health_checked_targets.internal_load_balancers.ip_protocol	Tuning	Reliability	SummaryVisible	RequiresApproval		
+google_dns_record_set	routing_policy.wrr.health_checked_targets.internal_load_balancers.load_balancer_type	Tuning	Reliability	SummaryVisible	RequiresApproval		
+google_dns_record_set	routing_policy.wrr.health_checked_targets.internal_load_balancers.network_url	Wiring	Reliability	SummaryVisible	RelationshipOnly		
+google_dns_record_set	routing_policy.wrr.health_checked_targets.internal_load_balancers.port	Tuning	Reliability	SummaryVisible	RequiresApproval		
+google_dns_record_set	routing_policy.wrr.health_checked_targets.internal_load_balancers.project	Identity		SummaryVisible	Never		
+google_dns_record_set	routing_policy.wrr.health_checked_targets.internal_load_balancers.region	Identity		SummaryVisible	Never		
+google_dns_record_set	routing_policy.wrr.rrdatas	Tuning	Reliability	UIVisible	RequiresApproval		
+google_dns_record_set	routing_policy.wrr.weight	Tuning	Reliability	UIVisible	RequiresApproval		
+google_dns_record_set	rrdatas	Tuning	Reliability	UIVisible	RequiresApproval		
+google_dns_record_set	ttl	Tuning	Reliability	UIVisible	ChatSafe		
+google_dns_record_set	type	Identity		UIVisible	Never		AlwaysReplace
 google_firestore_database	app_engine_integration_mode	Tuning		SummaryVisible	Never		AlwaysReplace
 google_firestore_database	concurrency_mode	Tuning	Reliability	SummaryVisible	RequiresApproval		
 google_firestore_database	delete_protection_state	Tuning	Reliability	UIVisible	RequiresApproval		

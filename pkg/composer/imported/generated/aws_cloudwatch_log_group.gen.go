@@ -7,31 +7,35 @@ import "reflect"
 // AWSCloudwatchLogGroup is the generated Layer 1 typed model for the
 // `aws_cloudwatch_log_group` Terraform resource.
 type AWSCloudwatchLogGroup struct {
-	ARN             *Value[string]            `tf:"arn" json:"arn,omitempty"`
-	ID              *Value[string]            `tf:"id" json:"id,omitempty"`
-	KMSKeyID        *Value[string]            `tf:"kms_key_id" json:"kms_key_id,omitempty"`
-	LogGroupClass   *Value[string]            `tf:"log_group_class" json:"log_group_class,omitempty"`
-	Name            *Value[string]            `tf:"name" json:"name,omitempty"`
-	NamePrefix      *Value[string]            `tf:"name_prefix" json:"name_prefix,omitempty"`
-	RetentionInDays *Value[int64]             `tf:"retention_in_days" json:"retention_in_days,omitempty"`
-	SkipDestroy     *Value[bool]              `tf:"skip_destroy" json:"skip_destroy,omitempty"`
-	Tags            map[string]*Value[string] `tf:"tags" json:"tags,omitempty"`
-	TagsAll         map[string]*Value[string] `tf:"tags_all" json:"tags_all,omitempty"`
+	ARN                       *Value[string]            `tf:"arn" json:"arn,omitempty"`
+	DeletionProtectionEnabled *Value[bool]              `tf:"deletion_protection_enabled" json:"deletion_protection_enabled,omitempty"`
+	ID                        *Value[string]            `tf:"id" json:"id,omitempty"`
+	KMSKeyID                  *Value[string]            `tf:"kms_key_id" json:"kms_key_id,omitempty"`
+	LogGroupClass             *Value[string]            `tf:"log_group_class" json:"log_group_class,omitempty"`
+	Name                      *Value[string]            `tf:"name" json:"name,omitempty"`
+	NamePrefix                *Value[string]            `tf:"name_prefix" json:"name_prefix,omitempty"`
+	Region                    *Value[string]            `tf:"region" json:"region,omitempty"`
+	RetentionInDays           *Value[int64]             `tf:"retention_in_days" json:"retention_in_days,omitempty"`
+	SkipDestroy               *Value[bool]              `tf:"skip_destroy" json:"skip_destroy,omitempty"`
+	Tags                      map[string]*Value[string] `tf:"tags" json:"tags,omitempty"`
+	TagsAll                   map[string]*Value[string] `tf:"tags_all" json:"tags_all,omitempty"`
 }
 
 // AWSCloudwatchLogGroupSchema describes provider metadata for each attribute / nested
 // block of aws_cloudwatch_log_group.
 var AWSCloudwatchLogGroupSchema = map[string]FieldSchema{
-	"arn":               {Computed: true, Replacement: ReplacementUnknown},
-	"id":                {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"kms_key_id":        {Optional: true, Replacement: ReplacementUnknown},
-	"log_group_class":   {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"name":              {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"name_prefix":       {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"retention_in_days": {Optional: true, Replacement: ReplacementUnknown},
-	"skip_destroy":      {Optional: true, Replacement: ReplacementUnknown},
-	"tags":              {Optional: true, Replacement: ReplacementUnknown},
-	"tags_all":          {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"arn":                         {Computed: true, Replacement: ReplacementUnknown},
+	"deletion_protection_enabled": {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"id":                          {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"kms_key_id":                  {Optional: true, Replacement: ReplacementUnknown},
+	"log_group_class":             {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"name":                        {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"name_prefix":                 {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"region":                      {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"retention_in_days":           {Optional: true, Replacement: ReplacementUnknown},
+	"skip_destroy":                {Optional: true, Replacement: ReplacementUnknown},
+	"tags":                        {Optional: true, Replacement: ReplacementUnknown},
+	"tags_all":                    {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 }
 
 func init() {

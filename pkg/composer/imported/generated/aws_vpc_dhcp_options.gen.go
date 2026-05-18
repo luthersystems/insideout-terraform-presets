@@ -16,6 +16,7 @@ type AWSVPCDhcpOptions struct {
 	NetbiosNodeType               *Value[string]            `tf:"netbios_node_type" json:"netbios_node_type,omitempty"`
 	NtpServers                    []*Value[string]          `tf:"ntp_servers" json:"ntp_servers,omitempty"`
 	OwnerID                       *Value[string]            `tf:"owner_id" json:"owner_id,omitempty"`
+	Region                        *Value[string]            `tf:"region" json:"region,omitempty"`
 	Tags                          map[string]*Value[string] `tf:"tags" json:"tags,omitempty"`
 	TagsAll                       map[string]*Value[string] `tf:"tags_all" json:"tags_all,omitempty"`
 }
@@ -32,6 +33,7 @@ var AWSVPCDhcpOptionsSchema = map[string]FieldSchema{
 	"netbios_node_type":                 {Optional: true, Replacement: ReplacementUnknown},
 	"ntp_servers":                       {Optional: true, Replacement: ReplacementUnknown},
 	"owner_id":                          {Computed: true, Replacement: ReplacementUnknown},
+	"region":                            {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"tags":                              {Optional: true, Replacement: ReplacementUnknown},
 	"tags_all":                          {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 }

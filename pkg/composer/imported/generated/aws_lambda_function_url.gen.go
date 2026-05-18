@@ -14,6 +14,7 @@ type AWSLambdaFunctionURL struct {
 	ID                *Value[string]                `tf:"id" json:"id,omitempty"`
 	InvokeMode        *Value[string]                `tf:"invoke_mode" json:"invoke_mode,omitempty"`
 	Qualifier         *Value[string]                `tf:"qualifier" json:"qualifier,omitempty"`
+	Region            *Value[string]                `tf:"region" json:"region,omitempty"`
 	URLID             *Value[string]                `tf:"url_id" json:"url_id,omitempty"`
 	Cors              []AWSLambdaFunctionURLCors    `tf:"cors,blocks" json:"cors,omitempty"`
 	Timeouts          *AWSLambdaFunctionURLTimeouts `tf:"timeouts,block" json:"timeouts,omitempty"`
@@ -44,6 +45,7 @@ var AWSLambdaFunctionURLSchema = map[string]FieldSchema{
 	"id":                 {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"invoke_mode":        {Optional: true, Replacement: ReplacementUnknown},
 	"qualifier":          {Optional: true, Replacement: ReplacementUnknown},
+	"region":             {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"url_id":             {Computed: true, Replacement: ReplacementUnknown},
 	"cors":               {Optional: true, Replacement: ReplacementUnknown},
 	"timeouts":           {Optional: true, Replacement: ReplacementUnknown},

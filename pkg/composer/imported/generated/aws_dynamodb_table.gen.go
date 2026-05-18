@@ -15,6 +15,8 @@ type AWSDynamodbTable struct {
 	Name                      *Value[string]                         `tf:"name" json:"name,omitempty"`
 	RangeKey                  *Value[string]                         `tf:"range_key" json:"range_key,omitempty"`
 	ReadCapacity              *Value[float64]                        `tf:"read_capacity" json:"read_capacity,omitempty"`
+	Region                    *Value[string]                         `tf:"region" json:"region,omitempty"`
+	RestoreBackupARN          *Value[string]                         `tf:"restore_backup_arn" json:"restore_backup_arn,omitempty"`
 	RestoreDateTime           *Value[string]                         `tf:"restore_date_time" json:"restore_date_time,omitempty"`
 	RestoreSourceName         *Value[string]                         `tf:"restore_source_name" json:"restore_source_name,omitempty"`
 	RestoreSourceTableARN     *Value[string]                         `tf:"restore_source_table_arn" json:"restore_source_table_arn,omitempty"`
@@ -29,13 +31,16 @@ type AWSDynamodbTable struct {
 	WriteCapacity             *Value[float64]                        `tf:"write_capacity" json:"write_capacity,omitempty"`
 	Attribute                 []AWSDynamodbTableAttribute            `tf:"attribute,blocks" json:"attribute,omitempty"`
 	GlobalSecondaryIndex      []AWSDynamodbTableGlobalSecondaryIndex `tf:"global_secondary_index,blocks" json:"global_secondary_index,omitempty"`
+	GlobalTableWitness        []AWSDynamodbTableGlobalTableWitness   `tf:"global_table_witness,blocks" json:"global_table_witness,omitempty"`
 	ImportTable               []AWSDynamodbTableImportTable          `tf:"import_table,blocks" json:"import_table,omitempty"`
 	LocalSecondaryIndex       []AWSDynamodbTableLocalSecondaryIndex  `tf:"local_secondary_index,blocks" json:"local_secondary_index,omitempty"`
+	OnDemandThroughput        []AWSDynamodbTableOnDemandThroughput   `tf:"on_demand_throughput,blocks" json:"on_demand_throughput,omitempty"`
 	PointInTimeRecovery       []AWSDynamodbTablePointInTimeRecovery  `tf:"point_in_time_recovery,blocks" json:"point_in_time_recovery,omitempty"`
 	Replica                   []AWSDynamodbTableReplica              `tf:"replica,blocks" json:"replica,omitempty"`
 	ServerSideEncryption      []AWSDynamodbTableServerSideEncryption `tf:"server_side_encryption,blocks" json:"server_side_encryption,omitempty"`
 	Timeouts                  *AWSDynamodbTableTimeouts              `tf:"timeouts,block" json:"timeouts,omitempty"`
 	TTL                       []AWSDynamodbTableTTL                  `tf:"ttl,blocks" json:"ttl,omitempty"`
+	WarmThroughput            []AWSDynamodbTableWarmThroughput       `tf:"warm_throughput,blocks" json:"warm_throughput,omitempty"`
 }
 
 // AWSDynamodbTableAttribute is a nested-block type used by the parent resource.
@@ -46,13 +51,39 @@ type AWSDynamodbTableAttribute struct {
 
 // AWSDynamodbTableGlobalSecondaryIndex is a nested-block type used by the parent resource.
 type AWSDynamodbTableGlobalSecondaryIndex struct {
-	HashKey          *Value[string]   `tf:"hash_key" json:"hash_key,omitempty"`
-	Name             *Value[string]   `tf:"name" json:"name,omitempty"`
-	NonKeyAttributes []*Value[string] `tf:"non_key_attributes" json:"non_key_attributes,omitempty"`
-	ProjectionType   *Value[string]   `tf:"projection_type" json:"projection_type,omitempty"`
-	RangeKey         *Value[string]   `tf:"range_key" json:"range_key,omitempty"`
-	ReadCapacity     *Value[float64]  `tf:"read_capacity" json:"read_capacity,omitempty"`
-	WriteCapacity    *Value[float64]  `tf:"write_capacity" json:"write_capacity,omitempty"`
+	HashKey            *Value[string]                                           `tf:"hash_key" json:"hash_key,omitempty"`
+	Name               *Value[string]                                           `tf:"name" json:"name,omitempty"`
+	NonKeyAttributes   []*Value[string]                                         `tf:"non_key_attributes" json:"non_key_attributes,omitempty"`
+	ProjectionType     *Value[string]                                           `tf:"projection_type" json:"projection_type,omitempty"`
+	RangeKey           *Value[string]                                           `tf:"range_key" json:"range_key,omitempty"`
+	ReadCapacity       *Value[float64]                                          `tf:"read_capacity" json:"read_capacity,omitempty"`
+	WriteCapacity      *Value[float64]                                          `tf:"write_capacity" json:"write_capacity,omitempty"`
+	KeySchema          []AWSDynamodbTableGlobalSecondaryIndexKeySchema          `tf:"key_schema,blocks" json:"key_schema,omitempty"`
+	OnDemandThroughput []AWSDynamodbTableGlobalSecondaryIndexOnDemandThroughput `tf:"on_demand_throughput,blocks" json:"on_demand_throughput,omitempty"`
+	WarmThroughput     []AWSDynamodbTableGlobalSecondaryIndexWarmThroughput     `tf:"warm_throughput,blocks" json:"warm_throughput,omitempty"`
+}
+
+// AWSDynamodbTableGlobalSecondaryIndexKeySchema is a nested-block type used by the parent resource.
+type AWSDynamodbTableGlobalSecondaryIndexKeySchema struct {
+	AttributeName *Value[string] `tf:"attribute_name" json:"attribute_name,omitempty"`
+	KeyType       *Value[string] `tf:"key_type" json:"key_type,omitempty"`
+}
+
+// AWSDynamodbTableGlobalSecondaryIndexOnDemandThroughput is a nested-block type used by the parent resource.
+type AWSDynamodbTableGlobalSecondaryIndexOnDemandThroughput struct {
+	MaxReadRequestUnits  *Value[int64] `tf:"max_read_request_units" json:"max_read_request_units,omitempty"`
+	MaxWriteRequestUnits *Value[int64] `tf:"max_write_request_units" json:"max_write_request_units,omitempty"`
+}
+
+// AWSDynamodbTableGlobalSecondaryIndexWarmThroughput is a nested-block type used by the parent resource.
+type AWSDynamodbTableGlobalSecondaryIndexWarmThroughput struct {
+	ReadUnitsPerSecond  *Value[float64] `tf:"read_units_per_second" json:"read_units_per_second,omitempty"`
+	WriteUnitsPerSecond *Value[float64] `tf:"write_units_per_second" json:"write_units_per_second,omitempty"`
+}
+
+// AWSDynamodbTableGlobalTableWitness is a nested-block type used by the parent resource.
+type AWSDynamodbTableGlobalTableWitness struct {
+	RegionName *Value[string] `tf:"region_name" json:"region_name,omitempty"`
 }
 
 // AWSDynamodbTableImportTable is a nested-block type used by the parent resource.
@@ -89,20 +120,29 @@ type AWSDynamodbTableLocalSecondaryIndex struct {
 	RangeKey         *Value[string]   `tf:"range_key" json:"range_key,omitempty"`
 }
 
+// AWSDynamodbTableOnDemandThroughput is a nested-block type used by the parent resource.
+type AWSDynamodbTableOnDemandThroughput struct {
+	MaxReadRequestUnits  *Value[int64] `tf:"max_read_request_units" json:"max_read_request_units,omitempty"`
+	MaxWriteRequestUnits *Value[int64] `tf:"max_write_request_units" json:"max_write_request_units,omitempty"`
+}
+
 // AWSDynamodbTablePointInTimeRecovery is a nested-block type used by the parent resource.
 type AWSDynamodbTablePointInTimeRecovery struct {
-	Enabled *Value[bool] `tf:"enabled" json:"enabled,omitempty"`
+	Enabled              *Value[bool]    `tf:"enabled" json:"enabled,omitempty"`
+	RecoveryPeriodInDays *Value[float64] `tf:"recovery_period_in_days" json:"recovery_period_in_days,omitempty"`
 }
 
 // AWSDynamodbTableReplica is a nested-block type used by the parent resource.
 type AWSDynamodbTableReplica struct {
-	ARN                 *Value[string] `tf:"arn" json:"arn,omitempty"`
-	KMSKeyARN           *Value[string] `tf:"kms_key_arn" json:"kms_key_arn,omitempty"`
-	PointInTimeRecovery *Value[bool]   `tf:"point_in_time_recovery" json:"point_in_time_recovery,omitempty"`
-	PropagateTags       *Value[bool]   `tf:"propagate_tags" json:"propagate_tags,omitempty"`
-	RegionName          *Value[string] `tf:"region_name" json:"region_name,omitempty"`
-	StreamARN           *Value[string] `tf:"stream_arn" json:"stream_arn,omitempty"`
-	StreamLabel         *Value[string] `tf:"stream_label" json:"stream_label,omitempty"`
+	ARN                       *Value[string] `tf:"arn" json:"arn,omitempty"`
+	ConsistencyMode           *Value[string] `tf:"consistency_mode" json:"consistency_mode,omitempty"`
+	DeletionProtectionEnabled *Value[bool]   `tf:"deletion_protection_enabled" json:"deletion_protection_enabled,omitempty"`
+	KMSKeyARN                 *Value[string] `tf:"kms_key_arn" json:"kms_key_arn,omitempty"`
+	PointInTimeRecovery       *Value[bool]   `tf:"point_in_time_recovery" json:"point_in_time_recovery,omitempty"`
+	PropagateTags             *Value[bool]   `tf:"propagate_tags" json:"propagate_tags,omitempty"`
+	RegionName                *Value[string] `tf:"region_name" json:"region_name,omitempty"`
+	StreamARN                 *Value[string] `tf:"stream_arn" json:"stream_arn,omitempty"`
+	StreamLabel               *Value[string] `tf:"stream_label" json:"stream_label,omitempty"`
 }
 
 // AWSDynamodbTableServerSideEncryption is a nested-block type used by the parent resource.
@@ -124,6 +164,12 @@ type AWSDynamodbTableTimeouts struct {
 	Update *Value[string] `tf:"update" json:"update,omitempty"`
 }
 
+// AWSDynamodbTableWarmThroughput is a nested-block type used by the parent resource.
+type AWSDynamodbTableWarmThroughput struct {
+	ReadUnitsPerSecond  *Value[float64] `tf:"read_units_per_second" json:"read_units_per_second,omitempty"`
+	WriteUnitsPerSecond *Value[float64] `tf:"write_units_per_second" json:"write_units_per_second,omitempty"`
+}
+
 // AWSDynamodbTableSchema describes provider metadata for each attribute / nested
 // block of aws_dynamodb_table.
 var AWSDynamodbTableSchema = map[string]FieldSchema{
@@ -135,6 +181,8 @@ var AWSDynamodbTableSchema = map[string]FieldSchema{
 	"name":                        {Required: true, Replacement: ReplacementUnknown},
 	"range_key":                   {Optional: true, Replacement: ReplacementUnknown},
 	"read_capacity":               {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"region":                      {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"restore_backup_arn":          {Optional: true, Replacement: ReplacementUnknown},
 	"restore_date_time":           {Optional: true, Replacement: ReplacementUnknown},
 	"restore_source_name":         {Optional: true, Replacement: ReplacementUnknown},
 	"restore_source_table_arn":    {Optional: true, Replacement: ReplacementUnknown},
@@ -149,13 +197,16 @@ var AWSDynamodbTableSchema = map[string]FieldSchema{
 	"write_capacity":              {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"attribute":                   {Optional: true, Replacement: ReplacementUnknown},
 	"global_secondary_index":      {Optional: true, Replacement: ReplacementUnknown},
+	"global_table_witness":        {Optional: true, Replacement: ReplacementUnknown},
 	"import_table":                {Optional: true, Replacement: ReplacementUnknown},
 	"local_secondary_index":       {Optional: true, Replacement: ReplacementUnknown},
+	"on_demand_throughput":        {Optional: true, Replacement: ReplacementUnknown},
 	"point_in_time_recovery":      {Optional: true, Replacement: ReplacementUnknown},
 	"replica":                     {Optional: true, Replacement: ReplacementUnknown},
 	"server_side_encryption":      {Optional: true, Replacement: ReplacementUnknown},
 	"timeouts":                    {Optional: true, Replacement: ReplacementUnknown},
 	"ttl":                         {Optional: true, Replacement: ReplacementUnknown},
+	"warm_throughput":             {Optional: true, Replacement: ReplacementUnknown},
 }
 
 func init() {

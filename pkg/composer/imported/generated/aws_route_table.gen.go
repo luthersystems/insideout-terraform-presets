@@ -11,6 +11,7 @@ type AWSRouteTable struct {
 	ID              *Value[string]            `tf:"id" json:"id,omitempty"`
 	OwnerID         *Value[string]            `tf:"owner_id" json:"owner_id,omitempty"`
 	PropagatingVgws []*Value[string]          `tf:"propagating_vgws" json:"propagating_vgws,omitempty"`
+	Region          *Value[string]            `tf:"region" json:"region,omitempty"`
 	Route           []AWSRouteTableRoute      `tf:"route" json:"route,omitempty"`
 	Tags            map[string]*Value[string] `tf:"tags" json:"tags,omitempty"`
 	TagsAll         map[string]*Value[string] `tf:"tags_all" json:"tags_all,omitempty"`
@@ -49,6 +50,7 @@ var AWSRouteTableSchema = map[string]FieldSchema{
 	"id":               {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"owner_id":         {Computed: true, Replacement: ReplacementUnknown},
 	"propagating_vgws": {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"region":           {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"route":            {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"tags":             {Optional: true, Replacement: ReplacementUnknown},
 	"tags_all":         {Optional: true, Computed: true, Replacement: ReplacementUnknown},

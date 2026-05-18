@@ -12,7 +12,9 @@ type AWSS3Bucket struct {
 	ARN                               *Value[string]                                       `tf:"arn" json:"arn,omitempty"`
 	Bucket                            *Value[string]                                       `tf:"bucket" json:"bucket,omitempty"`
 	BucketDomainName                  *Value[string]                                       `tf:"bucket_domain_name" json:"bucket_domain_name,omitempty"`
+	BucketNamespace                   *Value[string]                                       `tf:"bucket_namespace" json:"bucket_namespace,omitempty"`
 	BucketPrefix                      *Value[string]                                       `tf:"bucket_prefix" json:"bucket_prefix,omitempty"`
+	BucketRegion                      *Value[string]                                       `tf:"bucket_region" json:"bucket_region,omitempty"`
 	BucketRegionalDomainName          *Value[string]                                       `tf:"bucket_regional_domain_name" json:"bucket_regional_domain_name,omitempty"`
 	ForceDestroy                      *Value[bool]                                         `tf:"force_destroy" json:"force_destroy,omitempty"`
 	HostedZoneID                      *Value[string]                                       `tf:"hosted_zone_id" json:"hosted_zone_id,omitempty"`
@@ -225,14 +227,16 @@ var AWSS3BucketSchema = map[string]FieldSchema{
 	"arn":                                  {Computed: true, Replacement: ReplacementUnknown},
 	"bucket":                               {Optional: true, Computed: true, Replacement: ReplacementAlwaysReplace},
 	"bucket_domain_name":                   {Computed: true, Replacement: ReplacementUnknown},
+	"bucket_namespace":                     {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"bucket_prefix":                        {Optional: true, Computed: true, Replacement: ReplacementAlwaysReplace},
+	"bucket_region":                        {Computed: true, Replacement: ReplacementUnknown},
 	"bucket_regional_domain_name":          {Computed: true, Replacement: ReplacementUnknown},
 	"force_destroy":                        {Optional: true, Replacement: ReplacementUnknown},
 	"hosted_zone_id":                       {Computed: true, Replacement: ReplacementUnknown},
 	"id":                                   {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"object_lock_enabled":                  {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"policy":                               {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"region":                               {Computed: true, Replacement: ReplacementUnknown},
+	"region":                               {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"request_payer":                        {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"tags":                                 {Optional: true, Replacement: ReplacementUnknown},
 	"tags_all":                             {Optional: true, Computed: true, Replacement: ReplacementUnknown},

@@ -7,20 +7,47 @@ import "reflect"
 // AWSNatGateway is the generated Layer 1 typed model for the
 // `aws_nat_gateway` Terraform resource.
 type AWSNatGateway struct {
-	AllocationID                   *Value[string]            `tf:"allocation_id" json:"allocation_id,omitempty"`
-	AssociationID                  *Value[string]            `tf:"association_id" json:"association_id,omitempty"`
-	ConnectivityType               *Value[string]            `tf:"connectivity_type" json:"connectivity_type,omitempty"`
-	ID                             *Value[string]            `tf:"id" json:"id,omitempty"`
-	NetworkInterfaceID             *Value[string]            `tf:"network_interface_id" json:"network_interface_id,omitempty"`
-	PrivateIp                      *Value[string]            `tf:"private_ip" json:"private_ip,omitempty"`
-	PublicIp                       *Value[string]            `tf:"public_ip" json:"public_ip,omitempty"`
-	SecondaryAllocationIDS         []*Value[string]          `tf:"secondary_allocation_ids" json:"secondary_allocation_ids,omitempty"`
-	SecondaryPrivateIpAddressCount *Value[int64]             `tf:"secondary_private_ip_address_count" json:"secondary_private_ip_address_count,omitempty"`
-	SecondaryPrivateIpAddresses    []*Value[string]          `tf:"secondary_private_ip_addresses" json:"secondary_private_ip_addresses,omitempty"`
-	SubnetID                       *Value[string]            `tf:"subnet_id" json:"subnet_id,omitempty"`
-	Tags                           map[string]*Value[string] `tf:"tags" json:"tags,omitempty"`
-	TagsAll                        map[string]*Value[string] `tf:"tags_all" json:"tags_all,omitempty"`
-	Timeouts                       *AWSNatGatewayTimeouts    `tf:"timeouts,block" json:"timeouts,omitempty"`
+	AllocationID                   *Value[string]                           `tf:"allocation_id" json:"allocation_id,omitempty"`
+	AssociationID                  *Value[string]                           `tf:"association_id" json:"association_id,omitempty"`
+	AutoProvisionZones             *Value[string]                           `tf:"auto_provision_zones" json:"auto_provision_zones,omitempty"`
+	AutoScalingIps                 *Value[string]                           `tf:"auto_scaling_ips" json:"auto_scaling_ips,omitempty"`
+	AvailabilityMode               *Value[string]                           `tf:"availability_mode" json:"availability_mode,omitempty"`
+	ConnectivityType               *Value[string]                           `tf:"connectivity_type" json:"connectivity_type,omitempty"`
+	ID                             *Value[string]                           `tf:"id" json:"id,omitempty"`
+	NetworkInterfaceID             *Value[string]                           `tf:"network_interface_id" json:"network_interface_id,omitempty"`
+	PrivateIp                      *Value[string]                           `tf:"private_ip" json:"private_ip,omitempty"`
+	PublicIp                       *Value[string]                           `tf:"public_ip" json:"public_ip,omitempty"`
+	Region                         *Value[string]                           `tf:"region" json:"region,omitempty"`
+	RegionalNatGatewayAddress      []AWSNatGatewayRegionalNatGatewayAddress `tf:"regional_nat_gateway_address" json:"regional_nat_gateway_address,omitempty"`
+	RegionalNatGatewayAutoMode     *Value[string]                           `tf:"regional_nat_gateway_auto_mode" json:"regional_nat_gateway_auto_mode,omitempty"`
+	RouteTableID                   *Value[string]                           `tf:"route_table_id" json:"route_table_id,omitempty"`
+	SecondaryAllocationIDS         []*Value[string]                         `tf:"secondary_allocation_ids" json:"secondary_allocation_ids,omitempty"`
+	SecondaryPrivateIpAddressCount *Value[int64]                            `tf:"secondary_private_ip_address_count" json:"secondary_private_ip_address_count,omitempty"`
+	SecondaryPrivateIpAddresses    []*Value[string]                         `tf:"secondary_private_ip_addresses" json:"secondary_private_ip_addresses,omitempty"`
+	SubnetID                       *Value[string]                           `tf:"subnet_id" json:"subnet_id,omitempty"`
+	Tags                           map[string]*Value[string]                `tf:"tags" json:"tags,omitempty"`
+	TagsAll                        map[string]*Value[string]                `tf:"tags_all" json:"tags_all,omitempty"`
+	VPCID                          *Value[string]                           `tf:"vpc_id" json:"vpc_id,omitempty"`
+	AvailabilityZoneAddress        []AWSNatGatewayAvailabilityZoneAddress   `tf:"availability_zone_address,blocks" json:"availability_zone_address,omitempty"`
+	Timeouts                       *AWSNatGatewayTimeouts                   `tf:"timeouts,block" json:"timeouts,omitempty"`
+}
+
+// AWSNatGatewayAvailabilityZoneAddress is a nested-block type used by the parent resource.
+type AWSNatGatewayAvailabilityZoneAddress struct {
+	AllocationIDS      []*Value[string] `tf:"allocation_ids" json:"allocation_ids,omitempty"`
+	AvailabilityZone   *Value[string]   `tf:"availability_zone" json:"availability_zone,omitempty"`
+	AvailabilityZoneID *Value[string]   `tf:"availability_zone_id" json:"availability_zone_id,omitempty"`
+}
+
+// AWSNatGatewayRegionalNatGatewayAddress is a nested-block type used by the parent resource.
+type AWSNatGatewayRegionalNatGatewayAddress struct {
+	AllocationID       *Value[string] `tf:"allocation_id" json:"allocation_id,omitempty"`
+	AssociationID      *Value[string] `tf:"association_id" json:"association_id,omitempty"`
+	AvailabilityZone   *Value[string] `tf:"availability_zone" json:"availability_zone,omitempty"`
+	AvailabilityZoneID *Value[string] `tf:"availability_zone_id" json:"availability_zone_id,omitempty"`
+	NetworkInterfaceID *Value[string] `tf:"network_interface_id" json:"network_interface_id,omitempty"`
+	PublicIp           *Value[string] `tf:"public_ip" json:"public_ip,omitempty"`
+	Status             *Value[string] `tf:"status" json:"status,omitempty"`
 }
 
 // AWSNatGatewayTimeouts is a nested-block type used by the parent resource.
@@ -35,17 +62,26 @@ type AWSNatGatewayTimeouts struct {
 var AWSNatGatewaySchema = map[string]FieldSchema{
 	"allocation_id":                      {Optional: true, Replacement: ReplacementUnknown},
 	"association_id":                     {Computed: true, Replacement: ReplacementUnknown},
+	"auto_provision_zones":               {Computed: true, Replacement: ReplacementUnknown},
+	"auto_scaling_ips":                   {Computed: true, Replacement: ReplacementUnknown},
+	"availability_mode":                  {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"connectivity_type":                  {Optional: true, Replacement: ReplacementUnknown},
 	"id":                                 {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"network_interface_id":               {Computed: true, Replacement: ReplacementUnknown},
 	"private_ip":                         {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"public_ip":                          {Computed: true, Replacement: ReplacementUnknown},
-	"secondary_allocation_ids":           {Optional: true, Replacement: ReplacementUnknown},
+	"region":                             {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"regional_nat_gateway_address":       {Computed: true, Replacement: ReplacementUnknown},
+	"regional_nat_gateway_auto_mode":     {Computed: true, Replacement: ReplacementUnknown},
+	"route_table_id":                     {Computed: true, Replacement: ReplacementUnknown},
+	"secondary_allocation_ids":           {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"secondary_private_ip_address_count": {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"secondary_private_ip_addresses":     {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"subnet_id":                          {Required: true, Replacement: ReplacementUnknown},
+	"subnet_id":                          {Optional: true, Replacement: ReplacementUnknown},
 	"tags":                               {Optional: true, Replacement: ReplacementUnknown},
 	"tags_all":                           {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"vpc_id":                             {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"availability_zone_address":          {Optional: true, Replacement: ReplacementUnknown},
 	"timeouts":                           {Optional: true, Replacement: ReplacementUnknown},
 }
 

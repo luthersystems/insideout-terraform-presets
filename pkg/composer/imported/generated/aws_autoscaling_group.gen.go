@@ -7,50 +7,70 @@ import "reflect"
 // AWSAutoscalingGroup is the generated Layer 1 typed model for the
 // `aws_autoscaling_group` Terraform resource.
 type AWSAutoscalingGroup struct {
-	ARN                           *Value[string]                                 `tf:"arn" json:"arn,omitempty"`
-	AvailabilityZones             []*Value[string]                               `tf:"availability_zones" json:"availability_zones,omitempty"`
-	CapacityRebalance             *Value[bool]                                   `tf:"capacity_rebalance" json:"capacity_rebalance,omitempty"`
-	Context                       *Value[string]                                 `tf:"context" json:"context,omitempty"`
-	DefaultCooldown               *Value[float64]                                `tf:"default_cooldown" json:"default_cooldown,omitempty"`
-	DefaultInstanceWarmup         *Value[float64]                                `tf:"default_instance_warmup" json:"default_instance_warmup,omitempty"`
-	DesiredCapacity               *Value[float64]                                `tf:"desired_capacity" json:"desired_capacity,omitempty"`
-	DesiredCapacityType           *Value[string]                                 `tf:"desired_capacity_type" json:"desired_capacity_type,omitempty"`
-	EnabledMetrics                []*Value[string]                               `tf:"enabled_metrics" json:"enabled_metrics,omitempty"`
-	ForceDelete                   *Value[bool]                                   `tf:"force_delete" json:"force_delete,omitempty"`
-	ForceDeleteWarmPool           *Value[bool]                                   `tf:"force_delete_warm_pool" json:"force_delete_warm_pool,omitempty"`
-	HealthCheckGracePeriod        *Value[int64]                                  `tf:"health_check_grace_period" json:"health_check_grace_period,omitempty"`
-	HealthCheckType               *Value[string]                                 `tf:"health_check_type" json:"health_check_type,omitempty"`
-	ID                            *Value[string]                                 `tf:"id" json:"id,omitempty"`
-	IgnoreFailedScalingActivities *Value[bool]                                   `tf:"ignore_failed_scaling_activities" json:"ignore_failed_scaling_activities,omitempty"`
-	LaunchConfiguration           *Value[string]                                 `tf:"launch_configuration" json:"launch_configuration,omitempty"`
-	LoadBalancers                 []*Value[string]                               `tf:"load_balancers" json:"load_balancers,omitempty"`
-	MaxInstanceLifetime           *Value[int64]                                  `tf:"max_instance_lifetime" json:"max_instance_lifetime,omitempty"`
-	MaxSize                       *Value[int64]                                  `tf:"max_size" json:"max_size,omitempty"`
-	MetricsGranularity            *Value[string]                                 `tf:"metrics_granularity" json:"metrics_granularity,omitempty"`
-	MinElbCapacity                *Value[int64]                                  `tf:"min_elb_capacity" json:"min_elb_capacity,omitempty"`
-	MinSize                       *Value[int64]                                  `tf:"min_size" json:"min_size,omitempty"`
-	Name                          *Value[string]                                 `tf:"name" json:"name,omitempty"`
-	NamePrefix                    *Value[string]                                 `tf:"name_prefix" json:"name_prefix,omitempty"`
-	PlacementGroup                *Value[string]                                 `tf:"placement_group" json:"placement_group,omitempty"`
-	PredictedCapacity             *Value[float64]                                `tf:"predicted_capacity" json:"predicted_capacity,omitempty"`
-	ProtectFromScaleIn            *Value[bool]                                   `tf:"protect_from_scale_in" json:"protect_from_scale_in,omitempty"`
-	ServiceLinkedRoleARN          *Value[string]                                 `tf:"service_linked_role_arn" json:"service_linked_role_arn,omitempty"`
-	SuspendedProcesses            []*Value[string]                               `tf:"suspended_processes" json:"suspended_processes,omitempty"`
-	TargetGroupArns               []*Value[string]                               `tf:"target_group_arns" json:"target_group_arns,omitempty"`
-	TerminationPolicies           []*Value[string]                               `tf:"termination_policies" json:"termination_policies,omitempty"`
-	VPCZoneIdentifier             []*Value[string]                               `tf:"vpc_zone_identifier" json:"vpc_zone_identifier,omitempty"`
-	WaitForCapacityTimeout        *Value[string]                                 `tf:"wait_for_capacity_timeout" json:"wait_for_capacity_timeout,omitempty"`
-	WaitForElbCapacity            *Value[float64]                                `tf:"wait_for_elb_capacity" json:"wait_for_elb_capacity,omitempty"`
-	WarmPoolSize                  *Value[int64]                                  `tf:"warm_pool_size" json:"warm_pool_size,omitempty"`
-	InitialLifecycleHook          []AWSAutoscalingGroupInitialLifecycleHook      `tf:"initial_lifecycle_hook,blocks" json:"initial_lifecycle_hook,omitempty"`
-	InstanceMaintenancePolicy     []AWSAutoscalingGroupInstanceMaintenancePolicy `tf:"instance_maintenance_policy,blocks" json:"instance_maintenance_policy,omitempty"`
-	InstanceRefresh               []AWSAutoscalingGroupInstanceRefresh           `tf:"instance_refresh,blocks" json:"instance_refresh,omitempty"`
-	LaunchTemplate                []AWSAutoscalingGroupLaunchTemplate            `tf:"launch_template,blocks" json:"launch_template,omitempty"`
-	MixedInstancesPolicy          []AWSAutoscalingGroupMixedInstancesPolicy      `tf:"mixed_instances_policy,blocks" json:"mixed_instances_policy,omitempty"`
-	Tag                           []AWSAutoscalingGroupTagNested                 `tf:"tag,blocks" json:"tag,omitempty"`
-	Timeouts                      *AWSAutoscalingGroupTimeouts                   `tf:"timeouts,block" json:"timeouts,omitempty"`
-	TrafficSource                 []AWSAutoscalingGroupTrafficSource             `tf:"traffic_source,blocks" json:"traffic_source,omitempty"`
-	WarmPool                      []AWSAutoscalingGroupWarmPool                  `tf:"warm_pool,blocks" json:"warm_pool,omitempty"`
+	ARN                              *Value[string]                                        `tf:"arn" json:"arn,omitempty"`
+	AvailabilityZones                []*Value[string]                                      `tf:"availability_zones" json:"availability_zones,omitempty"`
+	CapacityRebalance                *Value[bool]                                          `tf:"capacity_rebalance" json:"capacity_rebalance,omitempty"`
+	Context                          *Value[string]                                        `tf:"context" json:"context,omitempty"`
+	DefaultCooldown                  *Value[float64]                                       `tf:"default_cooldown" json:"default_cooldown,omitempty"`
+	DefaultInstanceWarmup            *Value[float64]                                       `tf:"default_instance_warmup" json:"default_instance_warmup,omitempty"`
+	DesiredCapacity                  *Value[float64]                                       `tf:"desired_capacity" json:"desired_capacity,omitempty"`
+	DesiredCapacityType              *Value[string]                                        `tf:"desired_capacity_type" json:"desired_capacity_type,omitempty"`
+	EnabledMetrics                   []*Value[string]                                      `tf:"enabled_metrics" json:"enabled_metrics,omitempty"`
+	ForceDelete                      *Value[bool]                                          `tf:"force_delete" json:"force_delete,omitempty"`
+	ForceDeleteWarmPool              *Value[bool]                                          `tf:"force_delete_warm_pool" json:"force_delete_warm_pool,omitempty"`
+	HealthCheckGracePeriod           *Value[int64]                                         `tf:"health_check_grace_period" json:"health_check_grace_period,omitempty"`
+	HealthCheckType                  *Value[string]                                        `tf:"health_check_type" json:"health_check_type,omitempty"`
+	ID                               *Value[string]                                        `tf:"id" json:"id,omitempty"`
+	IgnoreFailedScalingActivities    *Value[bool]                                          `tf:"ignore_failed_scaling_activities" json:"ignore_failed_scaling_activities,omitempty"`
+	LaunchConfiguration              *Value[string]                                        `tf:"launch_configuration" json:"launch_configuration,omitempty"`
+	LoadBalancers                    []*Value[string]                                      `tf:"load_balancers" json:"load_balancers,omitempty"`
+	MaxInstanceLifetime              *Value[int64]                                         `tf:"max_instance_lifetime" json:"max_instance_lifetime,omitempty"`
+	MaxSize                          *Value[int64]                                         `tf:"max_size" json:"max_size,omitempty"`
+	MetricsGranularity               *Value[string]                                        `tf:"metrics_granularity" json:"metrics_granularity,omitempty"`
+	MinElbCapacity                   *Value[int64]                                         `tf:"min_elb_capacity" json:"min_elb_capacity,omitempty"`
+	MinSize                          *Value[int64]                                         `tf:"min_size" json:"min_size,omitempty"`
+	Name                             *Value[string]                                        `tf:"name" json:"name,omitempty"`
+	NamePrefix                       *Value[string]                                        `tf:"name_prefix" json:"name_prefix,omitempty"`
+	PlacementGroup                   *Value[string]                                        `tf:"placement_group" json:"placement_group,omitempty"`
+	PredictedCapacity                *Value[float64]                                       `tf:"predicted_capacity" json:"predicted_capacity,omitempty"`
+	ProtectFromScaleIn               *Value[bool]                                          `tf:"protect_from_scale_in" json:"protect_from_scale_in,omitempty"`
+	Region                           *Value[string]                                        `tf:"region" json:"region,omitempty"`
+	ServiceLinkedRoleARN             *Value[string]                                        `tf:"service_linked_role_arn" json:"service_linked_role_arn,omitempty"`
+	SuspendedProcesses               []*Value[string]                                      `tf:"suspended_processes" json:"suspended_processes,omitempty"`
+	TargetGroupArns                  []*Value[string]                                      `tf:"target_group_arns" json:"target_group_arns,omitempty"`
+	TerminationPolicies              []*Value[string]                                      `tf:"termination_policies" json:"termination_policies,omitempty"`
+	VPCZoneIdentifier                []*Value[string]                                      `tf:"vpc_zone_identifier" json:"vpc_zone_identifier,omitempty"`
+	WaitForCapacityTimeout           *Value[string]                                        `tf:"wait_for_capacity_timeout" json:"wait_for_capacity_timeout,omitempty"`
+	WaitForElbCapacity               *Value[float64]                                       `tf:"wait_for_elb_capacity" json:"wait_for_elb_capacity,omitempty"`
+	WarmPoolSize                     *Value[int64]                                         `tf:"warm_pool_size" json:"warm_pool_size,omitempty"`
+	AvailabilityZoneDistribution     []AWSAutoscalingGroupAvailabilityZoneDistribution     `tf:"availability_zone_distribution,blocks" json:"availability_zone_distribution,omitempty"`
+	CapacityReservationSpecification []AWSAutoscalingGroupCapacityReservationSpecification `tf:"capacity_reservation_specification,blocks" json:"capacity_reservation_specification,omitempty"`
+	InitialLifecycleHook             []AWSAutoscalingGroupInitialLifecycleHook             `tf:"initial_lifecycle_hook,blocks" json:"initial_lifecycle_hook,omitempty"`
+	InstanceMaintenancePolicy        []AWSAutoscalingGroupInstanceMaintenancePolicy        `tf:"instance_maintenance_policy,blocks" json:"instance_maintenance_policy,omitempty"`
+	InstanceRefresh                  []AWSAutoscalingGroupInstanceRefresh                  `tf:"instance_refresh,blocks" json:"instance_refresh,omitempty"`
+	LaunchTemplate                   []AWSAutoscalingGroupLaunchTemplate                   `tf:"launch_template,blocks" json:"launch_template,omitempty"`
+	MixedInstancesPolicy             []AWSAutoscalingGroupMixedInstancesPolicy             `tf:"mixed_instances_policy,blocks" json:"mixed_instances_policy,omitempty"`
+	Tag                              []AWSAutoscalingGroupTagNested                        `tf:"tag,blocks" json:"tag,omitempty"`
+	Timeouts                         *AWSAutoscalingGroupTimeouts                          `tf:"timeouts,block" json:"timeouts,omitempty"`
+	TrafficSource                    []AWSAutoscalingGroupTrafficSource                    `tf:"traffic_source,blocks" json:"traffic_source,omitempty"`
+	WarmPool                         []AWSAutoscalingGroupWarmPool                         `tf:"warm_pool,blocks" json:"warm_pool,omitempty"`
+}
+
+// AWSAutoscalingGroupAvailabilityZoneDistribution is a nested-block type used by the parent resource.
+type AWSAutoscalingGroupAvailabilityZoneDistribution struct {
+	CapacityDistributionStrategy *Value[string] `tf:"capacity_distribution_strategy" json:"capacity_distribution_strategy,omitempty"`
+}
+
+// AWSAutoscalingGroupCapacityReservationSpecification is a nested-block type used by the parent resource.
+type AWSAutoscalingGroupCapacityReservationSpecification struct {
+	CapacityReservationPreference *Value[string]                                                                 `tf:"capacity_reservation_preference" json:"capacity_reservation_preference,omitempty"`
+	CapacityReservationTarget     []AWSAutoscalingGroupCapacityReservationSpecificationCapacityReservationTarget `tf:"capacity_reservation_target,blocks" json:"capacity_reservation_target,omitempty"`
+}
+
+// AWSAutoscalingGroupCapacityReservationSpecificationCapacityReservationTarget is a nested-block type used by the parent resource.
+type AWSAutoscalingGroupCapacityReservationSpecificationCapacityReservationTarget struct {
+	CapacityReservationIDS               []*Value[string] `tf:"capacity_reservation_ids" json:"capacity_reservation_ids,omitempty"`
+	CapacityReservationResourceGroupArns []*Value[string] `tf:"capacity_reservation_resource_group_arns" json:"capacity_reservation_resource_group_arns,omitempty"`
 }
 
 // AWSAutoscalingGroupInitialLifecycleHook is a nested-block type used by the parent resource.
@@ -264,50 +284,53 @@ type AWSAutoscalingGroupWarmPoolInstanceReusePolicy struct {
 // AWSAutoscalingGroupSchema describes provider metadata for each attribute / nested
 // block of aws_autoscaling_group.
 var AWSAutoscalingGroupSchema = map[string]FieldSchema{
-	"arn":                              {Computed: true, Replacement: ReplacementUnknown},
-	"availability_zones":               {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"capacity_rebalance":               {Optional: true, Replacement: ReplacementUnknown},
-	"context":                          {Optional: true, Replacement: ReplacementUnknown},
-	"default_cooldown":                 {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"default_instance_warmup":          {Optional: true, Replacement: ReplacementUnknown},
-	"desired_capacity":                 {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"desired_capacity_type":            {Optional: true, Replacement: ReplacementUnknown},
-	"enabled_metrics":                  {Optional: true, Replacement: ReplacementUnknown},
-	"force_delete":                     {Optional: true, Replacement: ReplacementUnknown},
-	"force_delete_warm_pool":           {Optional: true, Replacement: ReplacementUnknown},
-	"health_check_grace_period":        {Optional: true, Replacement: ReplacementUnknown},
-	"health_check_type":                {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"id":                               {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"ignore_failed_scaling_activities": {Optional: true, Replacement: ReplacementUnknown},
-	"launch_configuration":             {Optional: true, Replacement: ReplacementUnknown},
-	"load_balancers":                   {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"max_instance_lifetime":            {Optional: true, Replacement: ReplacementUnknown},
-	"max_size":                         {Required: true, Replacement: ReplacementUnknown},
-	"metrics_granularity":              {Optional: true, Replacement: ReplacementUnknown},
-	"min_elb_capacity":                 {Optional: true, Replacement: ReplacementUnknown},
-	"min_size":                         {Required: true, Replacement: ReplacementUnknown},
-	"name":                             {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"name_prefix":                      {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"placement_group":                  {Optional: true, Replacement: ReplacementUnknown},
-	"predicted_capacity":               {Computed: true, Replacement: ReplacementUnknown},
-	"protect_from_scale_in":            {Optional: true, Replacement: ReplacementUnknown},
-	"service_linked_role_arn":          {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"suspended_processes":              {Optional: true, Replacement: ReplacementUnknown},
-	"target_group_arns":                {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"termination_policies":             {Optional: true, Replacement: ReplacementUnknown},
-	"vpc_zone_identifier":              {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"wait_for_capacity_timeout":        {Optional: true, Replacement: ReplacementUnknown},
-	"wait_for_elb_capacity":            {Optional: true, Replacement: ReplacementUnknown},
-	"warm_pool_size":                   {Computed: true, Replacement: ReplacementUnknown},
-	"initial_lifecycle_hook":           {Optional: true, Replacement: ReplacementUnknown},
-	"instance_maintenance_policy":      {Optional: true, Replacement: ReplacementUnknown},
-	"instance_refresh":                 {Optional: true, Replacement: ReplacementUnknown},
-	"launch_template":                  {Optional: true, Replacement: ReplacementUnknown},
-	"mixed_instances_policy":           {Optional: true, Replacement: ReplacementUnknown},
-	"tag":                              {Optional: true, Replacement: ReplacementUnknown},
-	"timeouts":                         {Optional: true, Replacement: ReplacementUnknown},
-	"traffic_source":                   {Optional: true, Replacement: ReplacementUnknown},
-	"warm_pool":                        {Optional: true, Replacement: ReplacementUnknown},
+	"arn":                                {Computed: true, Replacement: ReplacementUnknown},
+	"availability_zones":                 {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"capacity_rebalance":                 {Optional: true, Replacement: ReplacementUnknown},
+	"context":                            {Optional: true, Replacement: ReplacementUnknown},
+	"default_cooldown":                   {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"default_instance_warmup":            {Optional: true, Replacement: ReplacementUnknown},
+	"desired_capacity":                   {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"desired_capacity_type":              {Optional: true, Replacement: ReplacementUnknown},
+	"enabled_metrics":                    {Optional: true, Replacement: ReplacementUnknown},
+	"force_delete":                       {Optional: true, Replacement: ReplacementUnknown},
+	"force_delete_warm_pool":             {Optional: true, Replacement: ReplacementUnknown},
+	"health_check_grace_period":          {Optional: true, Replacement: ReplacementUnknown},
+	"health_check_type":                  {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"id":                                 {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"ignore_failed_scaling_activities":   {Optional: true, Replacement: ReplacementUnknown},
+	"launch_configuration":               {Optional: true, Replacement: ReplacementUnknown},
+	"load_balancers":                     {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"max_instance_lifetime":              {Optional: true, Replacement: ReplacementUnknown},
+	"max_size":                           {Required: true, Replacement: ReplacementUnknown},
+	"metrics_granularity":                {Optional: true, Replacement: ReplacementUnknown},
+	"min_elb_capacity":                   {Optional: true, Replacement: ReplacementUnknown},
+	"min_size":                           {Required: true, Replacement: ReplacementUnknown},
+	"name":                               {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"name_prefix":                        {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"placement_group":                    {Optional: true, Replacement: ReplacementUnknown},
+	"predicted_capacity":                 {Computed: true, Replacement: ReplacementUnknown},
+	"protect_from_scale_in":              {Optional: true, Replacement: ReplacementUnknown},
+	"region":                             {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"service_linked_role_arn":            {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"suspended_processes":                {Optional: true, Replacement: ReplacementUnknown},
+	"target_group_arns":                  {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"termination_policies":               {Optional: true, Replacement: ReplacementUnknown},
+	"vpc_zone_identifier":                {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"wait_for_capacity_timeout":          {Optional: true, Replacement: ReplacementUnknown},
+	"wait_for_elb_capacity":              {Optional: true, Replacement: ReplacementUnknown},
+	"warm_pool_size":                     {Computed: true, Replacement: ReplacementUnknown},
+	"availability_zone_distribution":     {Optional: true, Replacement: ReplacementUnknown},
+	"capacity_reservation_specification": {Optional: true, Replacement: ReplacementUnknown},
+	"initial_lifecycle_hook":             {Optional: true, Replacement: ReplacementUnknown},
+	"instance_maintenance_policy":        {Optional: true, Replacement: ReplacementUnknown},
+	"instance_refresh":                   {Optional: true, Replacement: ReplacementUnknown},
+	"launch_template":                    {Optional: true, Replacement: ReplacementUnknown},
+	"mixed_instances_policy":             {Optional: true, Replacement: ReplacementUnknown},
+	"tag":                                {Optional: true, Replacement: ReplacementUnknown},
+	"timeouts":                           {Optional: true, Replacement: ReplacementUnknown},
+	"traffic_source":                     {Optional: true, Replacement: ReplacementUnknown},
+	"warm_pool":                          {Optional: true, Replacement: ReplacementUnknown},
 }
 
 func init() {

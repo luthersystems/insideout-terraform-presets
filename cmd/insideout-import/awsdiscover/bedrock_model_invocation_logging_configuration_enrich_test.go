@@ -195,30 +195,39 @@ func TestBedrockMILCEnricher_HappyPath(t *testing.T) {
 	require.NotNil(t, g.ID)
 	assert.Equal(t, region, *g.ID.Literal, "id is the region per TF provider convention")
 
-	require.NotNil(t, g.LoggingConfig)
-	require.NotNil(t, g.LoggingConfig.TextDataDeliveryEnabled)
-	assert.Equal(t, true, *g.LoggingConfig.TextDataDeliveryEnabled.Literal)
-	require.NotNil(t, g.LoggingConfig.ImageDataDeliveryEnabled)
-	assert.Equal(t, false, *g.LoggingConfig.ImageDataDeliveryEnabled.Literal)
-	require.NotNil(t, g.LoggingConfig.EmbeddingDataDeliveryEnabled)
-	assert.Equal(t, true, *g.LoggingConfig.EmbeddingDataDeliveryEnabled.Literal)
+	// AWS provider 6.x flipped every nested block on this resource from
+	// `single` to `list` nesting (#599 provider-bump side-effect). The
+	// Layer 1 typed model now models each nested block as a Go slice;
+	// the round-tripped block is always length 1 in practice (the
+	// upstream API returns a single LoggingConfig).
+	require.Len(t, g.LoggingConfig, 1)
+	lc := g.LoggingConfig[0]
+	require.NotNil(t, lc.TextDataDeliveryEnabled)
+	assert.Equal(t, true, *lc.TextDataDeliveryEnabled.Literal)
+	require.NotNil(t, lc.ImageDataDeliveryEnabled)
+	assert.Equal(t, false, *lc.ImageDataDeliveryEnabled.Literal)
+	require.NotNil(t, lc.EmbeddingDataDeliveryEnabled)
+	assert.Equal(t, true, *lc.EmbeddingDataDeliveryEnabled.Literal)
 
-	require.NotNil(t, g.LoggingConfig.CloudwatchConfig)
-	require.NotNil(t, g.LoggingConfig.CloudwatchConfig.LogGroupName)
-	assert.Equal(t, logGroupName, *g.LoggingConfig.CloudwatchConfig.LogGroupName.Literal)
-	require.NotNil(t, g.LoggingConfig.CloudwatchConfig.RoleARN)
-	assert.Equal(t, roleARN, *g.LoggingConfig.CloudwatchConfig.RoleARN.Literal)
-	require.NotNil(t, g.LoggingConfig.CloudwatchConfig.LargeDataDeliveryS3Config)
-	require.NotNil(t, g.LoggingConfig.CloudwatchConfig.LargeDataDeliveryS3Config.BucketName)
-	assert.Equal(t, ldsBucket, *g.LoggingConfig.CloudwatchConfig.LargeDataDeliveryS3Config.BucketName.Literal)
-	require.NotNil(t, g.LoggingConfig.CloudwatchConfig.LargeDataDeliveryS3Config.KeyPrefix)
-	assert.Equal(t, "large/", *g.LoggingConfig.CloudwatchConfig.LargeDataDeliveryS3Config.KeyPrefix.Literal)
+	require.Len(t, lc.CloudwatchConfig, 1)
+	cwc := lc.CloudwatchConfig[0]
+	require.NotNil(t, cwc.LogGroupName)
+	assert.Equal(t, logGroupName, *cwc.LogGroupName.Literal)
+	require.NotNil(t, cwc.RoleARN)
+	assert.Equal(t, roleARN, *cwc.RoleARN.Literal)
+	require.Len(t, cwc.LargeDataDeliveryS3Config, 1)
+	lds := cwc.LargeDataDeliveryS3Config[0]
+	require.NotNil(t, lds.BucketName)
+	assert.Equal(t, ldsBucket, *lds.BucketName.Literal)
+	require.NotNil(t, lds.KeyPrefix)
+	assert.Equal(t, "large/", *lds.KeyPrefix.Literal)
 
-	require.NotNil(t, g.LoggingConfig.S3Config)
-	require.NotNil(t, g.LoggingConfig.S3Config.BucketName)
-	assert.Equal(t, s3Bucket, *g.LoggingConfig.S3Config.BucketName.Literal)
-	require.NotNil(t, g.LoggingConfig.S3Config.KeyPrefix)
-	assert.Equal(t, s3Prefix, *g.LoggingConfig.S3Config.KeyPrefix.Literal)
+	require.Len(t, lc.S3Config, 1)
+	s3c := lc.S3Config[0]
+	require.NotNil(t, s3c.BucketName)
+	assert.Equal(t, s3Bucket, *s3c.BucketName.Literal)
+	require.NotNil(t, s3c.KeyPrefix)
+	assert.Equal(t, s3Prefix, *s3c.KeyPrefix.Literal)
 }
 
 func TestBedrockMILCEnricher_EnrichByID_MirrorsEnrich(t *testing.T) {

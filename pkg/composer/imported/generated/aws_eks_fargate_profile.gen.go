@@ -12,6 +12,7 @@ type AWSEKSFargateProfile struct {
 	FargateProfileName  *Value[string]                 `tf:"fargate_profile_name" json:"fargate_profile_name,omitempty"`
 	ID                  *Value[string]                 `tf:"id" json:"id,omitempty"`
 	PodExecutionRoleARN *Value[string]                 `tf:"pod_execution_role_arn" json:"pod_execution_role_arn,omitempty"`
+	Region              *Value[string]                 `tf:"region" json:"region,omitempty"`
 	Status              *Value[string]                 `tf:"status" json:"status,omitempty"`
 	SubnetIDS           []*Value[string]               `tf:"subnet_ids" json:"subnet_ids,omitempty"`
 	Tags                map[string]*Value[string]      `tf:"tags" json:"tags,omitempty"`
@@ -40,6 +41,7 @@ var AWSEKSFargateProfileSchema = map[string]FieldSchema{
 	"fargate_profile_name":   {Required: true, Replacement: ReplacementUnknown},
 	"id":                     {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"pod_execution_role_arn": {Required: true, Replacement: ReplacementUnknown},
+	"region":                 {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"status":                 {Computed: true, Replacement: ReplacementUnknown},
 	"subnet_ids":             {Optional: true, Replacement: ReplacementUnknown},
 	"tags":                   {Optional: true, Replacement: ReplacementUnknown},

@@ -11,6 +11,7 @@ type AWSCloudwatchDashboard struct {
 	DashboardBody *Value[string] `tf:"dashboard_body" json:"dashboard_body,omitempty"`
 	DashboardName *Value[string] `tf:"dashboard_name" json:"dashboard_name,omitempty"`
 	ID            *Value[string] `tf:"id" json:"id,omitempty"`
+	Region        *Value[string] `tf:"region" json:"region,omitempty"`
 }
 
 // AWSCloudwatchDashboardSchema describes provider metadata for each attribute / nested
@@ -20,6 +21,7 @@ var AWSCloudwatchDashboardSchema = map[string]FieldSchema{
 	"dashboard_body": {Required: true, Replacement: ReplacementUnknown},
 	"dashboard_name": {Required: true, Replacement: ReplacementUnknown},
 	"id":             {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"region":         {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 }
 
 func init() {

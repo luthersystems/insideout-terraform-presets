@@ -8,6 +8,7 @@ import "reflect"
 // `aws_secretsmanager_secret_rotation` Terraform resource.
 type AWSSecretsmanagerSecretRotation struct {
 	ID                *Value[string]                                 `tf:"id" json:"id,omitempty"`
+	Region            *Value[string]                                 `tf:"region" json:"region,omitempty"`
 	RotateImmediately *Value[bool]                                   `tf:"rotate_immediately" json:"rotate_immediately,omitempty"`
 	RotationEnabled   *Value[bool]                                   `tf:"rotation_enabled" json:"rotation_enabled,omitempty"`
 	RotationLambdaARN *Value[string]                                 `tf:"rotation_lambda_arn" json:"rotation_lambda_arn,omitempty"`
@@ -26,6 +27,7 @@ type AWSSecretsmanagerSecretRotationRotationRules struct {
 // block of aws_secretsmanager_secret_rotation.
 var AWSSecretsmanagerSecretRotationSchema = map[string]FieldSchema{
 	"id":                  {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"region":              {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"rotate_immediately":  {Optional: true, Replacement: ReplacementUnknown},
 	"rotation_enabled":    {Computed: true, Replacement: ReplacementUnknown},
 	"rotation_lambda_arn": {Optional: true, Replacement: ReplacementUnknown},

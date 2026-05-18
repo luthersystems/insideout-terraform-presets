@@ -7,24 +7,26 @@ import "reflect"
 // AWSBedrockModelInvocationLoggingConfiguration is the generated Layer 1 typed model for the
 // `aws_bedrock_model_invocation_logging_configuration` Terraform resource.
 type AWSBedrockModelInvocationLoggingConfiguration struct {
-	ID            *Value[string]                                              `tf:"id" json:"id,omitempty"`
-	LoggingConfig *AWSBedrockModelInvocationLoggingConfigurationLoggingConfig `tf:"logging_config,block" json:"logging_config,omitempty"`
+	ID            *Value[string]                                               `tf:"id" json:"id,omitempty"`
+	Region        *Value[string]                                               `tf:"region" json:"region,omitempty"`
+	LoggingConfig []AWSBedrockModelInvocationLoggingConfigurationLoggingConfig `tf:"logging_config,blocks" json:"logging_config,omitempty"`
 }
 
 // AWSBedrockModelInvocationLoggingConfigurationLoggingConfig is a nested-block type used by the parent resource.
 type AWSBedrockModelInvocationLoggingConfigurationLoggingConfig struct {
-	EmbeddingDataDeliveryEnabled *Value[bool]                                                                `tf:"embedding_data_delivery_enabled" json:"embedding_data_delivery_enabled,omitempty"`
-	ImageDataDeliveryEnabled     *Value[bool]                                                                `tf:"image_data_delivery_enabled" json:"image_data_delivery_enabled,omitempty"`
-	TextDataDeliveryEnabled      *Value[bool]                                                                `tf:"text_data_delivery_enabled" json:"text_data_delivery_enabled,omitempty"`
-	CloudwatchConfig             *AWSBedrockModelInvocationLoggingConfigurationLoggingConfigCloudwatchConfig `tf:"cloudwatch_config,block" json:"cloudwatch_config,omitempty"`
-	S3Config                     *AWSBedrockModelInvocationLoggingConfigurationLoggingConfigS3Config         `tf:"s3_config,block" json:"s3_config,omitempty"`
+	EmbeddingDataDeliveryEnabled *Value[bool]                                                                 `tf:"embedding_data_delivery_enabled" json:"embedding_data_delivery_enabled,omitempty"`
+	ImageDataDeliveryEnabled     *Value[bool]                                                                 `tf:"image_data_delivery_enabled" json:"image_data_delivery_enabled,omitempty"`
+	TextDataDeliveryEnabled      *Value[bool]                                                                 `tf:"text_data_delivery_enabled" json:"text_data_delivery_enabled,omitempty"`
+	VideoDataDeliveryEnabled     *Value[bool]                                                                 `tf:"video_data_delivery_enabled" json:"video_data_delivery_enabled,omitempty"`
+	CloudwatchConfig             []AWSBedrockModelInvocationLoggingConfigurationLoggingConfigCloudwatchConfig `tf:"cloudwatch_config,blocks" json:"cloudwatch_config,omitempty"`
+	S3Config                     []AWSBedrockModelInvocationLoggingConfigurationLoggingConfigS3Config         `tf:"s3_config,blocks" json:"s3_config,omitempty"`
 }
 
 // AWSBedrockModelInvocationLoggingConfigurationLoggingConfigCloudwatchConfig is a nested-block type used by the parent resource.
 type AWSBedrockModelInvocationLoggingConfigurationLoggingConfigCloudwatchConfig struct {
-	LogGroupName              *Value[string]                                                                                       `tf:"log_group_name" json:"log_group_name,omitempty"`
-	RoleARN                   *Value[string]                                                                                       `tf:"role_arn" json:"role_arn,omitempty"`
-	LargeDataDeliveryS3Config *AWSBedrockModelInvocationLoggingConfigurationLoggingConfigCloudwatchConfigLargeDataDeliveryS3Config `tf:"large_data_delivery_s3_config,block" json:"large_data_delivery_s3_config,omitempty"`
+	LogGroupName              *Value[string]                                                                                        `tf:"log_group_name" json:"log_group_name,omitempty"`
+	RoleARN                   *Value[string]                                                                                        `tf:"role_arn" json:"role_arn,omitempty"`
+	LargeDataDeliveryS3Config []AWSBedrockModelInvocationLoggingConfigurationLoggingConfigCloudwatchConfigLargeDataDeliveryS3Config `tf:"large_data_delivery_s3_config,blocks" json:"large_data_delivery_s3_config,omitempty"`
 }
 
 // AWSBedrockModelInvocationLoggingConfigurationLoggingConfigCloudwatchConfigLargeDataDeliveryS3Config is a nested-block type used by the parent resource.
@@ -43,6 +45,7 @@ type AWSBedrockModelInvocationLoggingConfigurationLoggingConfigS3Config struct {
 // block of aws_bedrock_model_invocation_logging_configuration.
 var AWSBedrockModelInvocationLoggingConfigurationSchema = map[string]FieldSchema{
 	"id":             {Computed: true, Replacement: ReplacementUnknown},
+	"region":         {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"logging_config": {Optional: true, Replacement: ReplacementUnknown},
 }
 

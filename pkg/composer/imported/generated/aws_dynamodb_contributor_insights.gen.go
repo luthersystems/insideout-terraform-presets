@@ -9,6 +9,8 @@ import "reflect"
 type AWSDynamodbContributorInsights struct {
 	ID        *Value[string]                          `tf:"id" json:"id,omitempty"`
 	IndexName *Value[string]                          `tf:"index_name" json:"index_name,omitempty"`
+	Mode      *Value[string]                          `tf:"mode" json:"mode,omitempty"`
+	Region    *Value[string]                          `tf:"region" json:"region,omitempty"`
 	TableName *Value[string]                          `tf:"table_name" json:"table_name,omitempty"`
 	Timeouts  *AWSDynamodbContributorInsightsTimeouts `tf:"timeouts,block" json:"timeouts,omitempty"`
 }
@@ -24,6 +26,8 @@ type AWSDynamodbContributorInsightsTimeouts struct {
 var AWSDynamodbContributorInsightsSchema = map[string]FieldSchema{
 	"id":         {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"index_name": {Optional: true, Replacement: ReplacementUnknown},
+	"mode":       {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"region":     {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"table_name": {Required: true, Replacement: ReplacementUnknown},
 	"timeouts":   {Optional: true, Replacement: ReplacementUnknown},
 }

@@ -7,31 +7,33 @@ import "reflect"
 // AWSEKSNodeGroup is the generated Layer 1 typed model for the
 // `aws_eks_node_group` Terraform resource.
 type AWSEKSNodeGroup struct {
-	AmiType             *Value[string]                  `tf:"ami_type" json:"ami_type,omitempty"`
-	ARN                 *Value[string]                  `tf:"arn" json:"arn,omitempty"`
-	CapacityType        *Value[string]                  `tf:"capacity_type" json:"capacity_type,omitempty"`
-	ClusterName         *Value[string]                  `tf:"cluster_name" json:"cluster_name,omitempty"`
-	DiskSize            *Value[int64]                   `tf:"disk_size" json:"disk_size,omitempty"`
-	ForceUpdateVersion  *Value[bool]                    `tf:"force_update_version" json:"force_update_version,omitempty"`
-	ID                  *Value[string]                  `tf:"id" json:"id,omitempty"`
-	InstanceTypes       []*Value[string]                `tf:"instance_types" json:"instance_types,omitempty"`
-	Labels              map[string]*Value[string]       `tf:"labels" json:"labels,omitempty"`
-	NodeGroupName       *Value[string]                  `tf:"node_group_name" json:"node_group_name,omitempty"`
-	NodeGroupNamePrefix *Value[string]                  `tf:"node_group_name_prefix" json:"node_group_name_prefix,omitempty"`
-	NodeRoleARN         *Value[string]                  `tf:"node_role_arn" json:"node_role_arn,omitempty"`
-	ReleaseVersion      *Value[string]                  `tf:"release_version" json:"release_version,omitempty"`
-	Resources           []AWSEKSNodeGroupResources      `tf:"resources" json:"resources,omitempty"`
-	Status              *Value[string]                  `tf:"status" json:"status,omitempty"`
-	SubnetIDS           []*Value[string]                `tf:"subnet_ids" json:"subnet_ids,omitempty"`
-	Tags                map[string]*Value[string]       `tf:"tags" json:"tags,omitempty"`
-	TagsAll             map[string]*Value[string]       `tf:"tags_all" json:"tags_all,omitempty"`
-	Version             *Value[string]                  `tf:"version" json:"version,omitempty"`
-	LaunchTemplate      []AWSEKSNodeGroupLaunchTemplate `tf:"launch_template,blocks" json:"launch_template,omitempty"`
-	RemoteAccess        []AWSEKSNodeGroupRemoteAccess   `tf:"remote_access,blocks" json:"remote_access,omitempty"`
-	ScalingConfig       []AWSEKSNodeGroupScalingConfig  `tf:"scaling_config,blocks" json:"scaling_config,omitempty"`
-	Taint               []AWSEKSNodeGroupTaint          `tf:"taint,blocks" json:"taint,omitempty"`
-	Timeouts            *AWSEKSNodeGroupTimeouts        `tf:"timeouts,block" json:"timeouts,omitempty"`
-	UpdateConfig        []AWSEKSNodeGroupUpdateConfig   `tf:"update_config,blocks" json:"update_config,omitempty"`
+	AmiType             *Value[string]                    `tf:"ami_type" json:"ami_type,omitempty"`
+	ARN                 *Value[string]                    `tf:"arn" json:"arn,omitempty"`
+	CapacityType        *Value[string]                    `tf:"capacity_type" json:"capacity_type,omitempty"`
+	ClusterName         *Value[string]                    `tf:"cluster_name" json:"cluster_name,omitempty"`
+	DiskSize            *Value[int64]                     `tf:"disk_size" json:"disk_size,omitempty"`
+	ForceUpdateVersion  *Value[bool]                      `tf:"force_update_version" json:"force_update_version,omitempty"`
+	ID                  *Value[string]                    `tf:"id" json:"id,omitempty"`
+	InstanceTypes       []*Value[string]                  `tf:"instance_types" json:"instance_types,omitempty"`
+	Labels              map[string]*Value[string]         `tf:"labels" json:"labels,omitempty"`
+	NodeGroupName       *Value[string]                    `tf:"node_group_name" json:"node_group_name,omitempty"`
+	NodeGroupNamePrefix *Value[string]                    `tf:"node_group_name_prefix" json:"node_group_name_prefix,omitempty"`
+	NodeRoleARN         *Value[string]                    `tf:"node_role_arn" json:"node_role_arn,omitempty"`
+	Region              *Value[string]                    `tf:"region" json:"region,omitempty"`
+	ReleaseVersion      *Value[string]                    `tf:"release_version" json:"release_version,omitempty"`
+	Resources           []AWSEKSNodeGroupResources        `tf:"resources" json:"resources,omitempty"`
+	Status              *Value[string]                    `tf:"status" json:"status,omitempty"`
+	SubnetIDS           []*Value[string]                  `tf:"subnet_ids" json:"subnet_ids,omitempty"`
+	Tags                map[string]*Value[string]         `tf:"tags" json:"tags,omitempty"`
+	TagsAll             map[string]*Value[string]         `tf:"tags_all" json:"tags_all,omitempty"`
+	Version             *Value[string]                    `tf:"version" json:"version,omitempty"`
+	LaunchTemplate      []AWSEKSNodeGroupLaunchTemplate   `tf:"launch_template,blocks" json:"launch_template,omitempty"`
+	NodeRepairConfig    []AWSEKSNodeGroupNodeRepairConfig `tf:"node_repair_config,blocks" json:"node_repair_config,omitempty"`
+	RemoteAccess        []AWSEKSNodeGroupRemoteAccess     `tf:"remote_access,blocks" json:"remote_access,omitempty"`
+	ScalingConfig       []AWSEKSNodeGroupScalingConfig    `tf:"scaling_config,blocks" json:"scaling_config,omitempty"`
+	Taint               []AWSEKSNodeGroupTaint            `tf:"taint,blocks" json:"taint,omitempty"`
+	Timeouts            *AWSEKSNodeGroupTimeouts          `tf:"timeouts,block" json:"timeouts,omitempty"`
+	UpdateConfig        []AWSEKSNodeGroupUpdateConfig     `tf:"update_config,blocks" json:"update_config,omitempty"`
 }
 
 // AWSEKSNodeGroupLaunchTemplate is a nested-block type used by the parent resource.
@@ -39,6 +41,24 @@ type AWSEKSNodeGroupLaunchTemplate struct {
 	ID      *Value[string] `tf:"id" json:"id,omitempty"`
 	Name    *Value[string] `tf:"name" json:"name,omitempty"`
 	Version *Value[string] `tf:"version" json:"version,omitempty"`
+}
+
+// AWSEKSNodeGroupNodeRepairConfig is a nested-block type used by the parent resource.
+type AWSEKSNodeGroupNodeRepairConfig struct {
+	Enabled                             *Value[bool]                                               `tf:"enabled" json:"enabled,omitempty"`
+	MaxParallelNodesRepairedCount       *Value[int64]                                              `tf:"max_parallel_nodes_repaired_count" json:"max_parallel_nodes_repaired_count,omitempty"`
+	MaxParallelNodesRepairedPercentage  *Value[int64]                                              `tf:"max_parallel_nodes_repaired_percentage" json:"max_parallel_nodes_repaired_percentage,omitempty"`
+	MaxUnhealthyNodeThresholdCount      *Value[int64]                                              `tf:"max_unhealthy_node_threshold_count" json:"max_unhealthy_node_threshold_count,omitempty"`
+	MaxUnhealthyNodeThresholdPercentage *Value[int64]                                              `tf:"max_unhealthy_node_threshold_percentage" json:"max_unhealthy_node_threshold_percentage,omitempty"`
+	NodeRepairConfigOverrides           []AWSEKSNodeGroupNodeRepairConfigNodeRepairConfigOverrides `tf:"node_repair_config_overrides,blocks" json:"node_repair_config_overrides,omitempty"`
+}
+
+// AWSEKSNodeGroupNodeRepairConfigNodeRepairConfigOverrides is a nested-block type used by the parent resource.
+type AWSEKSNodeGroupNodeRepairConfigNodeRepairConfigOverrides struct {
+	MinRepairWaitTimeMins   *Value[int64]  `tf:"min_repair_wait_time_mins" json:"min_repair_wait_time_mins,omitempty"`
+	NodeMonitoringCondition *Value[string] `tf:"node_monitoring_condition" json:"node_monitoring_condition,omitempty"`
+	NodeUnhealthyReason     *Value[string] `tf:"node_unhealthy_reason" json:"node_unhealthy_reason,omitempty"`
+	RepairAction            *Value[string] `tf:"repair_action" json:"repair_action,omitempty"`
 }
 
 // AWSEKSNodeGroupRemoteAccess is a nested-block type used by the parent resource.
@@ -81,8 +101,9 @@ type AWSEKSNodeGroupTimeouts struct {
 
 // AWSEKSNodeGroupUpdateConfig is a nested-block type used by the parent resource.
 type AWSEKSNodeGroupUpdateConfig struct {
-	MaxUnavailable           *Value[int64] `tf:"max_unavailable" json:"max_unavailable,omitempty"`
-	MaxUnavailablePercentage *Value[int64] `tf:"max_unavailable_percentage" json:"max_unavailable_percentage,omitempty"`
+	MaxUnavailable           *Value[int64]  `tf:"max_unavailable" json:"max_unavailable,omitempty"`
+	MaxUnavailablePercentage *Value[int64]  `tf:"max_unavailable_percentage" json:"max_unavailable_percentage,omitempty"`
+	UpdateStrategy           *Value[string] `tf:"update_strategy" json:"update_strategy,omitempty"`
 }
 
 // AWSEKSNodeGroupSchema describes provider metadata for each attribute / nested
@@ -100,6 +121,7 @@ var AWSEKSNodeGroupSchema = map[string]FieldSchema{
 	"node_group_name":        {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"node_group_name_prefix": {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"node_role_arn":          {Required: true, Replacement: ReplacementUnknown},
+	"region":                 {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"release_version":        {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"resources":              {Computed: true, Replacement: ReplacementUnknown},
 	"status":                 {Computed: true, Replacement: ReplacementUnknown},
@@ -108,6 +130,7 @@ var AWSEKSNodeGroupSchema = map[string]FieldSchema{
 	"tags_all":               {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"version":                {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"launch_template":        {Optional: true, Replacement: ReplacementUnknown},
+	"node_repair_config":     {Optional: true, Replacement: ReplacementUnknown},
 	"remote_access":          {Optional: true, Replacement: ReplacementUnknown},
 	"scaling_config":         {Required: true, Replacement: ReplacementUnknown},
 	"taint":                  {Optional: true, Replacement: ReplacementUnknown},

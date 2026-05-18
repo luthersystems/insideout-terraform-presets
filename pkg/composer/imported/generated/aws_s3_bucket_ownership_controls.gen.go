@@ -9,6 +9,7 @@ import "reflect"
 type AWSS3BucketOwnershipControls struct {
 	Bucket *Value[string]                     `tf:"bucket" json:"bucket,omitempty"`
 	ID     *Value[string]                     `tf:"id" json:"id,omitempty"`
+	Region *Value[string]                     `tf:"region" json:"region,omitempty"`
 	Rule   []AWSS3BucketOwnershipControlsRule `tf:"rule,blocks" json:"rule,omitempty"`
 }
 
@@ -22,6 +23,7 @@ type AWSS3BucketOwnershipControlsRule struct {
 var AWSS3BucketOwnershipControlsSchema = map[string]FieldSchema{
 	"bucket": {Required: true, Replacement: ReplacementUnknown},
 	"id":     {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"region": {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"rule":   {Required: true, Replacement: ReplacementUnknown},
 }
 

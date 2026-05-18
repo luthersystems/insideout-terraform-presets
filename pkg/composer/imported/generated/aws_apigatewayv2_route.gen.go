@@ -15,6 +15,7 @@ type AWSApigatewayv2Route struct {
 	ID                               *Value[string]                         `tf:"id" json:"id,omitempty"`
 	ModelSelectionExpression         *Value[string]                         `tf:"model_selection_expression" json:"model_selection_expression,omitempty"`
 	OperationName                    *Value[string]                         `tf:"operation_name" json:"operation_name,omitempty"`
+	Region                           *Value[string]                         `tf:"region" json:"region,omitempty"`
 	RequestModels                    map[string]*Value[string]              `tf:"request_models" json:"request_models,omitempty"`
 	RouteKey                         *Value[string]                         `tf:"route_key" json:"route_key,omitempty"`
 	RouteResponseSelectionExpression *Value[string]                         `tf:"route_response_selection_expression" json:"route_response_selection_expression,omitempty"`
@@ -39,6 +40,7 @@ var AWSApigatewayv2RouteSchema = map[string]FieldSchema{
 	"id":                                  {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"model_selection_expression":          {Optional: true, Replacement: ReplacementUnknown},
 	"operation_name":                      {Optional: true, Replacement: ReplacementUnknown},
+	"region":                              {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"request_models":                      {Optional: true, Replacement: ReplacementUnknown},
 	"route_key":                           {Required: true, Replacement: ReplacementUnknown},
 	"route_response_selection_expression": {Optional: true, Replacement: ReplacementUnknown},

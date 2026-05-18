@@ -10,11 +10,13 @@ type AWSBackupPlan struct {
 	ARN                   *Value[string]                       `tf:"arn" json:"arn,omitempty"`
 	ID                    *Value[string]                       `tf:"id" json:"id,omitempty"`
 	Name                  *Value[string]                       `tf:"name" json:"name,omitempty"`
+	Region                *Value[string]                       `tf:"region" json:"region,omitempty"`
 	Tags                  map[string]*Value[string]            `tf:"tags" json:"tags,omitempty"`
 	TagsAll               map[string]*Value[string]            `tf:"tags_all" json:"tags_all,omitempty"`
 	Version               *Value[string]                       `tf:"version" json:"version,omitempty"`
 	AdvancedBackupSetting []AWSBackupPlanAdvancedBackupSetting `tf:"advanced_backup_setting,blocks" json:"advanced_backup_setting,omitempty"`
 	Rule                  []AWSBackupPlanRule                  `tf:"rule,blocks" json:"rule,omitempty"`
+	ScanSetting           []AWSBackupPlanScanSetting           `tf:"scan_setting,blocks" json:"scan_setting,omitempty"`
 }
 
 // AWSBackupPlanAdvancedBackupSetting is a nested-block type used by the parent resource.
@@ -25,15 +27,18 @@ type AWSBackupPlanAdvancedBackupSetting struct {
 
 // AWSBackupPlanRule is a nested-block type used by the parent resource.
 type AWSBackupPlanRule struct {
-	CompletionWindow       *Value[float64]               `tf:"completion_window" json:"completion_window,omitempty"`
-	EnableContinuousBackup *Value[bool]                  `tf:"enable_continuous_backup" json:"enable_continuous_backup,omitempty"`
-	RecoveryPointTags      map[string]*Value[string]     `tf:"recovery_point_tags" json:"recovery_point_tags,omitempty"`
-	RuleName               *Value[string]                `tf:"rule_name" json:"rule_name,omitempty"`
-	Schedule               *Value[string]                `tf:"schedule" json:"schedule,omitempty"`
-	StartWindow            *Value[float64]               `tf:"start_window" json:"start_window,omitempty"`
-	TargetVaultName        *Value[string]                `tf:"target_vault_name" json:"target_vault_name,omitempty"`
-	CopyAction             []AWSBackupPlanRuleCopyAction `tf:"copy_action,blocks" json:"copy_action,omitempty"`
-	Lifecycle              []AWSBackupPlanRuleLifecycle  `tf:"lifecycle,blocks" json:"lifecycle,omitempty"`
+	CompletionWindow                       *Value[float64]               `tf:"completion_window" json:"completion_window,omitempty"`
+	EnableContinuousBackup                 *Value[bool]                  `tf:"enable_continuous_backup" json:"enable_continuous_backup,omitempty"`
+	RecoveryPointTags                      map[string]*Value[string]     `tf:"recovery_point_tags" json:"recovery_point_tags,omitempty"`
+	RuleName                               *Value[string]                `tf:"rule_name" json:"rule_name,omitempty"`
+	Schedule                               *Value[string]                `tf:"schedule" json:"schedule,omitempty"`
+	ScheduleExpressionTimezone             *Value[string]                `tf:"schedule_expression_timezone" json:"schedule_expression_timezone,omitempty"`
+	StartWindow                            *Value[float64]               `tf:"start_window" json:"start_window,omitempty"`
+	TargetLogicallyAirGappedBackupVaultARN *Value[string]                `tf:"target_logically_air_gapped_backup_vault_arn" json:"target_logically_air_gapped_backup_vault_arn,omitempty"`
+	TargetVaultName                        *Value[string]                `tf:"target_vault_name" json:"target_vault_name,omitempty"`
+	CopyAction                             []AWSBackupPlanRuleCopyAction `tf:"copy_action,blocks" json:"copy_action,omitempty"`
+	Lifecycle                              []AWSBackupPlanRuleLifecycle  `tf:"lifecycle,blocks" json:"lifecycle,omitempty"`
+	ScanAction                             []AWSBackupPlanRuleScanAction `tf:"scan_action,blocks" json:"scan_action,omitempty"`
 }
 
 // AWSBackupPlanRuleCopyAction is a nested-block type used by the parent resource.
@@ -56,17 +61,32 @@ type AWSBackupPlanRuleLifecycle struct {
 	OptInToArchiveForSupportedResources *Value[bool]    `tf:"opt_in_to_archive_for_supported_resources" json:"opt_in_to_archive_for_supported_resources,omitempty"`
 }
 
+// AWSBackupPlanRuleScanAction is a nested-block type used by the parent resource.
+type AWSBackupPlanRuleScanAction struct {
+	MalwareScanner *Value[string] `tf:"malware_scanner" json:"malware_scanner,omitempty"`
+	ScanMode       *Value[string] `tf:"scan_mode" json:"scan_mode,omitempty"`
+}
+
+// AWSBackupPlanScanSetting is a nested-block type used by the parent resource.
+type AWSBackupPlanScanSetting struct {
+	MalwareScanner *Value[string]   `tf:"malware_scanner" json:"malware_scanner,omitempty"`
+	ResourceTypes  []*Value[string] `tf:"resource_types" json:"resource_types,omitempty"`
+	ScannerRoleARN *Value[string]   `tf:"scanner_role_arn" json:"scanner_role_arn,omitempty"`
+}
+
 // AWSBackupPlanSchema describes provider metadata for each attribute / nested
 // block of aws_backup_plan.
 var AWSBackupPlanSchema = map[string]FieldSchema{
 	"arn":                     {Computed: true, Replacement: ReplacementUnknown},
 	"id":                      {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"name":                    {Required: true, Replacement: ReplacementUnknown},
+	"region":                  {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"tags":                    {Optional: true, Replacement: ReplacementUnknown},
 	"tags_all":                {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"version":                 {Computed: true, Replacement: ReplacementUnknown},
 	"advanced_backup_setting": {Optional: true, Replacement: ReplacementUnknown},
 	"rule":                    {Required: true, Replacement: ReplacementUnknown},
+	"scan_setting":            {Optional: true, Replacement: ReplacementUnknown},
 }
 
 func init() {

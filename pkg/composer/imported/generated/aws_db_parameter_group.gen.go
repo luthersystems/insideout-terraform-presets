@@ -13,6 +13,7 @@ type AWSDbParameterGroup struct {
 	ID          *Value[string]                 `tf:"id" json:"id,omitempty"`
 	Name        *Value[string]                 `tf:"name" json:"name,omitempty"`
 	NamePrefix  *Value[string]                 `tf:"name_prefix" json:"name_prefix,omitempty"`
+	Region      *Value[string]                 `tf:"region" json:"region,omitempty"`
 	SkipDestroy *Value[bool]                   `tf:"skip_destroy" json:"skip_destroy,omitempty"`
 	Tags        map[string]*Value[string]      `tf:"tags" json:"tags,omitempty"`
 	TagsAll     map[string]*Value[string]      `tf:"tags_all" json:"tags_all,omitempty"`
@@ -35,6 +36,7 @@ var AWSDbParameterGroupSchema = map[string]FieldSchema{
 	"id":           {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"name":         {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"name_prefix":  {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"region":       {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"skip_destroy": {Optional: true, Replacement: ReplacementUnknown},
 	"tags":         {Optional: true, Replacement: ReplacementUnknown},
 	"tags_all":     {Optional: true, Computed: true, Replacement: ReplacementUnknown},

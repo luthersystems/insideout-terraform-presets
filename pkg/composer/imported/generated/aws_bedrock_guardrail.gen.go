@@ -15,12 +15,14 @@ type AWSBedrockGuardrail struct {
 	GuardrailID                      *Value[string]                                        `tf:"guardrail_id" json:"guardrail_id,omitempty"`
 	KMSKeyARN                        *Value[string]                                        `tf:"kms_key_arn" json:"kms_key_arn,omitempty"`
 	Name                             *Value[string]                                        `tf:"name" json:"name,omitempty"`
+	Region                           *Value[string]                                        `tf:"region" json:"region,omitempty"`
 	Status                           *Value[string]                                        `tf:"status" json:"status,omitempty"`
 	Tags                             map[string]*Value[string]                             `tf:"tags" json:"tags,omitempty"`
 	TagsAll                          map[string]*Value[string]                             `tf:"tags_all" json:"tags_all,omitempty"`
 	Version                          *Value[string]                                        `tf:"version" json:"version,omitempty"`
 	ContentPolicyConfig              []AWSBedrockGuardrailContentPolicyConfig              `tf:"content_policy_config,blocks" json:"content_policy_config,omitempty"`
 	ContextualGroundingPolicyConfig  []AWSBedrockGuardrailContextualGroundingPolicyConfig  `tf:"contextual_grounding_policy_config,blocks" json:"contextual_grounding_policy_config,omitempty"`
+	CrossRegionConfig                []AWSBedrockGuardrailCrossRegionConfig                `tf:"cross_region_config,blocks" json:"cross_region_config,omitempty"`
 	SensitiveInformationPolicyConfig []AWSBedrockGuardrailSensitiveInformationPolicyConfig `tf:"sensitive_information_policy_config,blocks" json:"sensitive_information_policy_config,omitempty"`
 	Timeouts                         *AWSBedrockGuardrailTimeouts                          `tf:"timeouts,block" json:"timeouts,omitempty"`
 	TopicPolicyConfig                []AWSBedrockGuardrailTopicPolicyConfig                `tf:"topic_policy_config,blocks" json:"topic_policy_config,omitempty"`
@@ -29,14 +31,26 @@ type AWSBedrockGuardrail struct {
 
 // AWSBedrockGuardrailContentPolicyConfig is a nested-block type used by the parent resource.
 type AWSBedrockGuardrailContentPolicyConfig struct {
+	TierConfig    []AWSBedrockGuardrailContentPolicyConfigTierConfig    `tf:"tier_config" json:"tier_config,omitempty"`
 	FiltersConfig []AWSBedrockGuardrailContentPolicyConfigFiltersConfig `tf:"filters_config,blocks" json:"filters_config,omitempty"`
 }
 
 // AWSBedrockGuardrailContentPolicyConfigFiltersConfig is a nested-block type used by the parent resource.
 type AWSBedrockGuardrailContentPolicyConfigFiltersConfig struct {
-	InputStrength  *Value[string] `tf:"input_strength" json:"input_strength,omitempty"`
-	OutputStrength *Value[string] `tf:"output_strength" json:"output_strength,omitempty"`
-	Type_          *Value[string] `tf:"type" json:"type,omitempty"`
+	InputAction      *Value[string]   `tf:"input_action" json:"input_action,omitempty"`
+	InputEnabled     *Value[bool]     `tf:"input_enabled" json:"input_enabled,omitempty"`
+	InputModalities  []*Value[string] `tf:"input_modalities" json:"input_modalities,omitempty"`
+	InputStrength    *Value[string]   `tf:"input_strength" json:"input_strength,omitempty"`
+	OutputAction     *Value[string]   `tf:"output_action" json:"output_action,omitempty"`
+	OutputEnabled    *Value[bool]     `tf:"output_enabled" json:"output_enabled,omitempty"`
+	OutputModalities []*Value[string] `tf:"output_modalities" json:"output_modalities,omitempty"`
+	OutputStrength   *Value[string]   `tf:"output_strength" json:"output_strength,omitempty"`
+	Type_            *Value[string]   `tf:"type" json:"type,omitempty"`
+}
+
+// AWSBedrockGuardrailContentPolicyConfigTierConfig is a nested-block type used by the parent resource.
+type AWSBedrockGuardrailContentPolicyConfigTierConfig struct {
+	TierName *Value[string] `tf:"tier_name" json:"tier_name,omitempty"`
 }
 
 // AWSBedrockGuardrailContextualGroundingPolicyConfig is a nested-block type used by the parent resource.
@@ -50,6 +64,11 @@ type AWSBedrockGuardrailContextualGroundingPolicyConfigFiltersConfig struct {
 	Type_     *Value[string]  `tf:"type" json:"type,omitempty"`
 }
 
+// AWSBedrockGuardrailCrossRegionConfig is a nested-block type used by the parent resource.
+type AWSBedrockGuardrailCrossRegionConfig struct {
+	GuardrailProfileIdentifier *Value[string] `tf:"guardrail_profile_identifier" json:"guardrail_profile_identifier,omitempty"`
+}
+
 // AWSBedrockGuardrailSensitiveInformationPolicyConfig is a nested-block type used by the parent resource.
 type AWSBedrockGuardrailSensitiveInformationPolicyConfig struct {
 	PiiEntitiesConfig []AWSBedrockGuardrailSensitiveInformationPolicyConfigPiiEntitiesConfig `tf:"pii_entities_config,blocks" json:"pii_entities_config,omitempty"`
@@ -58,16 +77,24 @@ type AWSBedrockGuardrailSensitiveInformationPolicyConfig struct {
 
 // AWSBedrockGuardrailSensitiveInformationPolicyConfigPiiEntitiesConfig is a nested-block type used by the parent resource.
 type AWSBedrockGuardrailSensitiveInformationPolicyConfigPiiEntitiesConfig struct {
-	Action *Value[string] `tf:"action" json:"action,omitempty"`
-	Type_  *Value[string] `tf:"type" json:"type,omitempty"`
+	Action        *Value[string] `tf:"action" json:"action,omitempty"`
+	InputAction   *Value[string] `tf:"input_action" json:"input_action,omitempty"`
+	InputEnabled  *Value[bool]   `tf:"input_enabled" json:"input_enabled,omitempty"`
+	OutputAction  *Value[string] `tf:"output_action" json:"output_action,omitempty"`
+	OutputEnabled *Value[bool]   `tf:"output_enabled" json:"output_enabled,omitempty"`
+	Type_         *Value[string] `tf:"type" json:"type,omitempty"`
 }
 
 // AWSBedrockGuardrailSensitiveInformationPolicyConfigRegexesConfig is a nested-block type used by the parent resource.
 type AWSBedrockGuardrailSensitiveInformationPolicyConfigRegexesConfig struct {
-	Action      *Value[string] `tf:"action" json:"action,omitempty"`
-	Description *Value[string] `tf:"description" json:"description,omitempty"`
-	Name        *Value[string] `tf:"name" json:"name,omitempty"`
-	Pattern     *Value[string] `tf:"pattern" json:"pattern,omitempty"`
+	Action        *Value[string] `tf:"action" json:"action,omitempty"`
+	Description   *Value[string] `tf:"description" json:"description,omitempty"`
+	InputAction   *Value[string] `tf:"input_action" json:"input_action,omitempty"`
+	InputEnabled  *Value[bool]   `tf:"input_enabled" json:"input_enabled,omitempty"`
+	Name          *Value[string] `tf:"name" json:"name,omitempty"`
+	OutputAction  *Value[string] `tf:"output_action" json:"output_action,omitempty"`
+	OutputEnabled *Value[bool]   `tf:"output_enabled" json:"output_enabled,omitempty"`
+	Pattern       *Value[string] `tf:"pattern" json:"pattern,omitempty"`
 }
 
 // AWSBedrockGuardrailTimeouts is a nested-block type used by the parent resource.
@@ -79,7 +106,13 @@ type AWSBedrockGuardrailTimeouts struct {
 
 // AWSBedrockGuardrailTopicPolicyConfig is a nested-block type used by the parent resource.
 type AWSBedrockGuardrailTopicPolicyConfig struct {
+	TierConfig   []AWSBedrockGuardrailTopicPolicyConfigTierConfig   `tf:"tier_config" json:"tier_config,omitempty"`
 	TopicsConfig []AWSBedrockGuardrailTopicPolicyConfigTopicsConfig `tf:"topics_config,blocks" json:"topics_config,omitempty"`
+}
+
+// AWSBedrockGuardrailTopicPolicyConfigTierConfig is a nested-block type used by the parent resource.
+type AWSBedrockGuardrailTopicPolicyConfigTierConfig struct {
+	TierName *Value[string] `tf:"tier_name" json:"tier_name,omitempty"`
 }
 
 // AWSBedrockGuardrailTopicPolicyConfigTopicsConfig is a nested-block type used by the parent resource.
@@ -98,12 +131,20 @@ type AWSBedrockGuardrailWordPolicyConfig struct {
 
 // AWSBedrockGuardrailWordPolicyConfigManagedWordListsConfig is a nested-block type used by the parent resource.
 type AWSBedrockGuardrailWordPolicyConfigManagedWordListsConfig struct {
-	Type_ *Value[string] `tf:"type" json:"type,omitempty"`
+	InputAction   *Value[string] `tf:"input_action" json:"input_action,omitempty"`
+	InputEnabled  *Value[bool]   `tf:"input_enabled" json:"input_enabled,omitempty"`
+	OutputAction  *Value[string] `tf:"output_action" json:"output_action,omitempty"`
+	OutputEnabled *Value[bool]   `tf:"output_enabled" json:"output_enabled,omitempty"`
+	Type_         *Value[string] `tf:"type" json:"type,omitempty"`
 }
 
 // AWSBedrockGuardrailWordPolicyConfigWordsConfig is a nested-block type used by the parent resource.
 type AWSBedrockGuardrailWordPolicyConfigWordsConfig struct {
-	Text *Value[string] `tf:"text" json:"text,omitempty"`
+	InputAction   *Value[string] `tf:"input_action" json:"input_action,omitempty"`
+	InputEnabled  *Value[bool]   `tf:"input_enabled" json:"input_enabled,omitempty"`
+	OutputAction  *Value[string] `tf:"output_action" json:"output_action,omitempty"`
+	OutputEnabled *Value[bool]   `tf:"output_enabled" json:"output_enabled,omitempty"`
+	Text          *Value[string] `tf:"text" json:"text,omitempty"`
 }
 
 // AWSBedrockGuardrailSchema describes provider metadata for each attribute / nested
@@ -117,12 +158,14 @@ var AWSBedrockGuardrailSchema = map[string]FieldSchema{
 	"guardrail_id":                        {Computed: true, Replacement: ReplacementUnknown},
 	"kms_key_arn":                         {Optional: true, Replacement: ReplacementUnknown},
 	"name":                                {Required: true, Replacement: ReplacementUnknown},
+	"region":                              {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"status":                              {Computed: true, Replacement: ReplacementUnknown},
 	"tags":                                {Optional: true, Replacement: ReplacementUnknown},
 	"tags_all":                            {Computed: true, Replacement: ReplacementUnknown},
 	"version":                             {Computed: true, Replacement: ReplacementUnknown},
 	"content_policy_config":               {Optional: true, Replacement: ReplacementUnknown},
 	"contextual_grounding_policy_config":  {Optional: true, Replacement: ReplacementUnknown},
+	"cross_region_config":                 {Optional: true, Replacement: ReplacementUnknown},
 	"sensitive_information_policy_config": {Optional: true, Replacement: ReplacementUnknown},
 	"timeouts":                            {Optional: true, Replacement: ReplacementUnknown},
 	"topic_policy_config":                 {Optional: true, Replacement: ReplacementUnknown},

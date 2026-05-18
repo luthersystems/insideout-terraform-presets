@@ -7,29 +7,37 @@ import "reflect"
 // AWSEKSCluster is the generated Layer 1 typed model for the
 // `aws_eks_cluster` Terraform resource.
 type AWSEKSCluster struct {
-	ARN                        *Value[string]                         `tf:"arn" json:"arn,omitempty"`
-	BootstrapSelfManagedAddons *Value[bool]                           `tf:"bootstrap_self_managed_addons" json:"bootstrap_self_managed_addons,omitempty"`
-	CertificateAuthority       []AWSEKSClusterCertificateAuthority    `tf:"certificate_authority" json:"certificate_authority,omitempty"`
-	ClusterID                  *Value[string]                         `tf:"cluster_id" json:"cluster_id,omitempty"`
-	CreatedAt                  *Value[string]                         `tf:"created_at" json:"created_at,omitempty"`
-	EnabledClusterLogTypes     []*Value[string]                       `tf:"enabled_cluster_log_types" json:"enabled_cluster_log_types,omitempty"`
-	Endpoint                   *Value[string]                         `tf:"endpoint" json:"endpoint,omitempty"`
-	ID                         *Value[string]                         `tf:"id" json:"id,omitempty"`
-	Identity                   []AWSEKSClusterIdentity                `tf:"identity" json:"identity,omitempty"`
-	Name                       *Value[string]                         `tf:"name" json:"name,omitempty"`
-	PlatformVersion            *Value[string]                         `tf:"platform_version" json:"platform_version,omitempty"`
-	RoleARN                    *Value[string]                         `tf:"role_arn" json:"role_arn,omitempty"`
-	Status                     *Value[string]                         `tf:"status" json:"status,omitempty"`
-	Tags                       map[string]*Value[string]              `tf:"tags" json:"tags,omitempty"`
-	TagsAll                    map[string]*Value[string]              `tf:"tags_all" json:"tags_all,omitempty"`
-	Version                    *Value[string]                         `tf:"version" json:"version,omitempty"`
-	AccessConfig               []AWSEKSClusterAccessConfig            `tf:"access_config,blocks" json:"access_config,omitempty"`
-	EncryptionConfig           []AWSEKSClusterEncryptionConfig        `tf:"encryption_config,blocks" json:"encryption_config,omitempty"`
-	KubernetesNetworkConfig    []AWSEKSClusterKubernetesNetworkConfig `tf:"kubernetes_network_config,blocks" json:"kubernetes_network_config,omitempty"`
-	OutpostConfig              []AWSEKSClusterOutpostConfig           `tf:"outpost_config,blocks" json:"outpost_config,omitempty"`
-	Timeouts                   *AWSEKSClusterTimeouts                 `tf:"timeouts,block" json:"timeouts,omitempty"`
-	UpgradePolicy              []AWSEKSClusterUpgradePolicy           `tf:"upgrade_policy,blocks" json:"upgrade_policy,omitempty"`
-	VPCConfig                  []AWSEKSClusterVPCConfig               `tf:"vpc_config,blocks" json:"vpc_config,omitempty"`
+	ARN                        *Value[string]                           `tf:"arn" json:"arn,omitempty"`
+	BootstrapSelfManagedAddons *Value[bool]                             `tf:"bootstrap_self_managed_addons" json:"bootstrap_self_managed_addons,omitempty"`
+	CertificateAuthority       []AWSEKSClusterCertificateAuthority      `tf:"certificate_authority" json:"certificate_authority,omitempty"`
+	ClusterID                  *Value[string]                           `tf:"cluster_id" json:"cluster_id,omitempty"`
+	CreatedAt                  *Value[string]                           `tf:"created_at" json:"created_at,omitempty"`
+	DeletionProtection         *Value[bool]                             `tf:"deletion_protection" json:"deletion_protection,omitempty"`
+	EnabledClusterLogTypes     []*Value[string]                         `tf:"enabled_cluster_log_types" json:"enabled_cluster_log_types,omitempty"`
+	Endpoint                   *Value[string]                           `tf:"endpoint" json:"endpoint,omitempty"`
+	ForceUpdateVersion         *Value[bool]                             `tf:"force_update_version" json:"force_update_version,omitempty"`
+	ID                         *Value[string]                           `tf:"id" json:"id,omitempty"`
+	Identity                   []AWSEKSClusterIdentity                  `tf:"identity" json:"identity,omitempty"`
+	Name                       *Value[string]                           `tf:"name" json:"name,omitempty"`
+	PlatformVersion            *Value[string]                           `tf:"platform_version" json:"platform_version,omitempty"`
+	Region                     *Value[string]                           `tf:"region" json:"region,omitempty"`
+	RoleARN                    *Value[string]                           `tf:"role_arn" json:"role_arn,omitempty"`
+	Status                     *Value[string]                           `tf:"status" json:"status,omitempty"`
+	Tags                       map[string]*Value[string]                `tf:"tags" json:"tags,omitempty"`
+	TagsAll                    map[string]*Value[string]                `tf:"tags_all" json:"tags_all,omitempty"`
+	Version                    *Value[string]                           `tf:"version" json:"version,omitempty"`
+	AccessConfig               []AWSEKSClusterAccessConfig              `tf:"access_config,blocks" json:"access_config,omitempty"`
+	ComputeConfig              []AWSEKSClusterComputeConfig             `tf:"compute_config,blocks" json:"compute_config,omitempty"`
+	ControlPlaneScalingConfig  []AWSEKSClusterControlPlaneScalingConfig `tf:"control_plane_scaling_config,blocks" json:"control_plane_scaling_config,omitempty"`
+	EncryptionConfig           []AWSEKSClusterEncryptionConfig          `tf:"encryption_config,blocks" json:"encryption_config,omitempty"`
+	KubernetesNetworkConfig    []AWSEKSClusterKubernetesNetworkConfig   `tf:"kubernetes_network_config,blocks" json:"kubernetes_network_config,omitempty"`
+	OutpostConfig              []AWSEKSClusterOutpostConfig             `tf:"outpost_config,blocks" json:"outpost_config,omitempty"`
+	RemoteNetworkConfig        []AWSEKSClusterRemoteNetworkConfig       `tf:"remote_network_config,blocks" json:"remote_network_config,omitempty"`
+	StorageConfig              []AWSEKSClusterStorageConfig             `tf:"storage_config,blocks" json:"storage_config,omitempty"`
+	Timeouts                   *AWSEKSClusterTimeouts                   `tf:"timeouts,block" json:"timeouts,omitempty"`
+	UpgradePolicy              []AWSEKSClusterUpgradePolicy             `tf:"upgrade_policy,blocks" json:"upgrade_policy,omitempty"`
+	VPCConfig                  []AWSEKSClusterVPCConfig                 `tf:"vpc_config,blocks" json:"vpc_config,omitempty"`
+	ZonalShiftConfig           []AWSEKSClusterZonalShiftConfig          `tf:"zonal_shift_config,blocks" json:"zonal_shift_config,omitempty"`
 }
 
 // AWSEKSClusterAccessConfig is a nested-block type used by the parent resource.
@@ -41,6 +49,18 @@ type AWSEKSClusterAccessConfig struct {
 // AWSEKSClusterCertificateAuthority is a nested-block type used by the parent resource.
 type AWSEKSClusterCertificateAuthority struct {
 	Data *Value[string] `tf:"data" json:"data,omitempty"`
+}
+
+// AWSEKSClusterComputeConfig is a nested-block type used by the parent resource.
+type AWSEKSClusterComputeConfig struct {
+	Enabled     *Value[bool]     `tf:"enabled" json:"enabled,omitempty"`
+	NodePools   []*Value[string] `tf:"node_pools" json:"node_pools,omitempty"`
+	NodeRoleARN *Value[string]   `tf:"node_role_arn" json:"node_role_arn,omitempty"`
+}
+
+// AWSEKSClusterControlPlaneScalingConfig is a nested-block type used by the parent resource.
+type AWSEKSClusterControlPlaneScalingConfig struct {
+	Tier *Value[string] `tf:"tier" json:"tier,omitempty"`
 }
 
 // AWSEKSClusterEncryptionConfig is a nested-block type used by the parent resource.
@@ -66,9 +86,15 @@ type AWSEKSClusterIdentityOIDC struct {
 
 // AWSEKSClusterKubernetesNetworkConfig is a nested-block type used by the parent resource.
 type AWSEKSClusterKubernetesNetworkConfig struct {
-	IpFamily        *Value[string] `tf:"ip_family" json:"ip_family,omitempty"`
-	ServiceIPV4CIDR *Value[string] `tf:"service_ipv4_cidr" json:"service_ipv4_cidr,omitempty"`
-	ServiceIPV6CIDR *Value[string] `tf:"service_ipv6_cidr" json:"service_ipv6_cidr,omitempty"`
+	IpFamily             *Value[string]                                             `tf:"ip_family" json:"ip_family,omitempty"`
+	ServiceIPV4CIDR      *Value[string]                                             `tf:"service_ipv4_cidr" json:"service_ipv4_cidr,omitempty"`
+	ServiceIPV6CIDR      *Value[string]                                             `tf:"service_ipv6_cidr" json:"service_ipv6_cidr,omitempty"`
+	ElasticLoadBalancing []AWSEKSClusterKubernetesNetworkConfigElasticLoadBalancing `tf:"elastic_load_balancing,blocks" json:"elastic_load_balancing,omitempty"`
+}
+
+// AWSEKSClusterKubernetesNetworkConfigElasticLoadBalancing is a nested-block type used by the parent resource.
+type AWSEKSClusterKubernetesNetworkConfigElasticLoadBalancing struct {
+	Enabled *Value[bool] `tf:"enabled" json:"enabled,omitempty"`
 }
 
 // AWSEKSClusterOutpostConfig is a nested-block type used by the parent resource.
@@ -81,6 +107,32 @@ type AWSEKSClusterOutpostConfig struct {
 // AWSEKSClusterOutpostConfigControlPlanePlacement is a nested-block type used by the parent resource.
 type AWSEKSClusterOutpostConfigControlPlanePlacement struct {
 	GroupName *Value[string] `tf:"group_name" json:"group_name,omitempty"`
+}
+
+// AWSEKSClusterRemoteNetworkConfig is a nested-block type used by the parent resource.
+type AWSEKSClusterRemoteNetworkConfig struct {
+	RemoteNodeNetworks []AWSEKSClusterRemoteNetworkConfigRemoteNodeNetworks `tf:"remote_node_networks,blocks" json:"remote_node_networks,omitempty"`
+	RemotePodNetworks  []AWSEKSClusterRemoteNetworkConfigRemotePodNetworks  `tf:"remote_pod_networks,blocks" json:"remote_pod_networks,omitempty"`
+}
+
+// AWSEKSClusterRemoteNetworkConfigRemoteNodeNetworks is a nested-block type used by the parent resource.
+type AWSEKSClusterRemoteNetworkConfigRemoteNodeNetworks struct {
+	Cidrs []*Value[string] `tf:"cidrs" json:"cidrs,omitempty"`
+}
+
+// AWSEKSClusterRemoteNetworkConfigRemotePodNetworks is a nested-block type used by the parent resource.
+type AWSEKSClusterRemoteNetworkConfigRemotePodNetworks struct {
+	Cidrs []*Value[string] `tf:"cidrs" json:"cidrs,omitempty"`
+}
+
+// AWSEKSClusterStorageConfig is a nested-block type used by the parent resource.
+type AWSEKSClusterStorageConfig struct {
+	BlockStorage []AWSEKSClusterStorageConfigBlockStorage `tf:"block_storage,blocks" json:"block_storage,omitempty"`
+}
+
+// AWSEKSClusterStorageConfigBlockStorage is a nested-block type used by the parent resource.
+type AWSEKSClusterStorageConfigBlockStorage struct {
+	Enabled *Value[bool] `tf:"enabled" json:"enabled,omitempty"`
 }
 
 // AWSEKSClusterTimeouts is a nested-block type used by the parent resource.
@@ -106,6 +158,11 @@ type AWSEKSClusterVPCConfig struct {
 	VPCID                  *Value[string]   `tf:"vpc_id" json:"vpc_id,omitempty"`
 }
 
+// AWSEKSClusterZonalShiftConfig is a nested-block type used by the parent resource.
+type AWSEKSClusterZonalShiftConfig struct {
+	Enabled *Value[bool] `tf:"enabled" json:"enabled,omitempty"`
+}
+
 // AWSEKSClusterSchema describes provider metadata for each attribute / nested
 // block of aws_eks_cluster.
 var AWSEKSClusterSchema = map[string]FieldSchema{
@@ -114,24 +171,32 @@ var AWSEKSClusterSchema = map[string]FieldSchema{
 	"certificate_authority":         {Computed: true, Replacement: ReplacementUnknown},
 	"cluster_id":                    {Computed: true, Replacement: ReplacementUnknown},
 	"created_at":                    {Computed: true, Replacement: ReplacementUnknown},
+	"deletion_protection":           {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"enabled_cluster_log_types":     {Optional: true, Replacement: ReplacementUnknown},
 	"endpoint":                      {Computed: true, Replacement: ReplacementUnknown},
+	"force_update_version":          {Optional: true, Replacement: ReplacementUnknown},
 	"id":                            {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"identity":                      {Computed: true, Replacement: ReplacementUnknown},
 	"name":                          {Required: true, Replacement: ReplacementUnknown},
 	"platform_version":              {Computed: true, Replacement: ReplacementUnknown},
+	"region":                        {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"role_arn":                      {Required: true, Replacement: ReplacementUnknown},
 	"status":                        {Computed: true, Replacement: ReplacementUnknown},
 	"tags":                          {Optional: true, Replacement: ReplacementUnknown},
 	"tags_all":                      {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"version":                       {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"access_config":                 {Optional: true, Replacement: ReplacementUnknown},
+	"compute_config":                {Optional: true, Replacement: ReplacementUnknown},
+	"control_plane_scaling_config":  {Optional: true, Replacement: ReplacementUnknown},
 	"encryption_config":             {Optional: true, Replacement: ReplacementUnknown},
 	"kubernetes_network_config":     {Optional: true, Replacement: ReplacementUnknown},
 	"outpost_config":                {Optional: true, Replacement: ReplacementUnknown},
+	"remote_network_config":         {Optional: true, Replacement: ReplacementUnknown},
+	"storage_config":                {Optional: true, Replacement: ReplacementUnknown},
 	"timeouts":                      {Optional: true, Replacement: ReplacementUnknown},
 	"upgrade_policy":                {Optional: true, Replacement: ReplacementUnknown},
 	"vpc_config":                    {Required: true, Replacement: ReplacementUnknown},
+	"zonal_shift_config":            {Optional: true, Replacement: ReplacementUnknown},
 }
 
 func init() {

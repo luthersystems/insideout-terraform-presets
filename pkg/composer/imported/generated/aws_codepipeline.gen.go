@@ -12,9 +12,11 @@ type AWSCodepipeline struct {
 	ID            *Value[string]                 `tf:"id" json:"id,omitempty"`
 	Name          *Value[string]                 `tf:"name" json:"name,omitempty"`
 	PipelineType  *Value[string]                 `tf:"pipeline_type" json:"pipeline_type,omitempty"`
+	Region        *Value[string]                 `tf:"region" json:"region,omitempty"`
 	RoleARN       *Value[string]                 `tf:"role_arn" json:"role_arn,omitempty"`
 	Tags          map[string]*Value[string]      `tf:"tags" json:"tags,omitempty"`
 	TagsAll       map[string]*Value[string]      `tf:"tags_all" json:"tags_all,omitempty"`
+	TriggerAll    []AWSCodepipelineTriggerAll    `tf:"trigger_all" json:"trigger_all,omitempty"`
 	ArtifactStore []AWSCodepipelineArtifactStore `tf:"artifact_store,blocks" json:"artifact_store,omitempty"`
 	Stage         []AWSCodepipelineStage         `tf:"stage,blocks" json:"stage,omitempty"`
 	Trigger       []AWSCodepipelineTrigger       `tf:"trigger,blocks" json:"trigger,omitempty"`
@@ -37,8 +39,11 @@ type AWSCodepipelineArtifactStoreEncryptionKey struct {
 
 // AWSCodepipelineStage is a nested-block type used by the parent resource.
 type AWSCodepipelineStage struct {
-	Name   *Value[string]               `tf:"name" json:"name,omitempty"`
-	Action []AWSCodepipelineStageAction `tf:"action,blocks" json:"action,omitempty"`
+	Name        *Value[string]                    `tf:"name" json:"name,omitempty"`
+	Action      []AWSCodepipelineStageAction      `tf:"action,blocks" json:"action,omitempty"`
+	BeforeEntry []AWSCodepipelineStageBeforeEntry `tf:"before_entry,blocks" json:"before_entry,omitempty"`
+	OnFailure   []AWSCodepipelineStageOnFailure   `tf:"on_failure,blocks" json:"on_failure,omitempty"`
+	OnSuccess   []AWSCodepipelineStageOnSuccess   `tf:"on_success,blocks" json:"on_success,omitempty"`
 }
 
 // AWSCodepipelineStageAction is a nested-block type used by the parent resource.
@@ -58,10 +63,167 @@ type AWSCodepipelineStageAction struct {
 	Version          *Value[string]            `tf:"version" json:"version,omitempty"`
 }
 
+// AWSCodepipelineStageBeforeEntry is a nested-block type used by the parent resource.
+type AWSCodepipelineStageBeforeEntry struct {
+	Condition []AWSCodepipelineStageBeforeEntryCondition `tf:"condition,blocks" json:"condition,omitempty"`
+}
+
+// AWSCodepipelineStageBeforeEntryCondition is a nested-block type used by the parent resource.
+type AWSCodepipelineStageBeforeEntryCondition struct {
+	Result *Value[string]                                 `tf:"result" json:"result,omitempty"`
+	Rule   []AWSCodepipelineStageBeforeEntryConditionRule `tf:"rule,blocks" json:"rule,omitempty"`
+}
+
+// AWSCodepipelineStageBeforeEntryConditionRule is a nested-block type used by the parent resource.
+type AWSCodepipelineStageBeforeEntryConditionRule struct {
+	Commands         []*Value[string]                                         `tf:"commands" json:"commands,omitempty"`
+	Configuration    map[string]*Value[string]                                `tf:"configuration" json:"configuration,omitempty"`
+	InputArtifacts   []*Value[string]                                         `tf:"input_artifacts" json:"input_artifacts,omitempty"`
+	Name             *Value[string]                                           `tf:"name" json:"name,omitempty"`
+	Region           *Value[string]                                           `tf:"region" json:"region,omitempty"`
+	RoleARN          *Value[string]                                           `tf:"role_arn" json:"role_arn,omitempty"`
+	TimeoutInMinutes *Value[float64]                                          `tf:"timeout_in_minutes" json:"timeout_in_minutes,omitempty"`
+	RuleTypeID       []AWSCodepipelineStageBeforeEntryConditionRuleRuleTypeID `tf:"rule_type_id,blocks" json:"rule_type_id,omitempty"`
+}
+
+// AWSCodepipelineStageBeforeEntryConditionRuleRuleTypeID is a nested-block type used by the parent resource.
+type AWSCodepipelineStageBeforeEntryConditionRuleRuleTypeID struct {
+	Category *Value[string] `tf:"category" json:"category,omitempty"`
+	Owner    *Value[string] `tf:"owner" json:"owner,omitempty"`
+	Provider *Value[string] `tf:"provider" json:"provider,omitempty"`
+	Version  *Value[string] `tf:"version" json:"version,omitempty"`
+}
+
+// AWSCodepipelineStageOnFailure is a nested-block type used by the parent resource.
+type AWSCodepipelineStageOnFailure struct {
+	Result             *Value[string]                                    `tf:"result" json:"result,omitempty"`
+	Condition          []AWSCodepipelineStageOnFailureCondition          `tf:"condition,blocks" json:"condition,omitempty"`
+	RetryConfiguration []AWSCodepipelineStageOnFailureRetryConfiguration `tf:"retry_configuration,blocks" json:"retry_configuration,omitempty"`
+}
+
+// AWSCodepipelineStageOnFailureCondition is a nested-block type used by the parent resource.
+type AWSCodepipelineStageOnFailureCondition struct {
+	Result *Value[string]                               `tf:"result" json:"result,omitempty"`
+	Rule   []AWSCodepipelineStageOnFailureConditionRule `tf:"rule,blocks" json:"rule,omitempty"`
+}
+
+// AWSCodepipelineStageOnFailureConditionRule is a nested-block type used by the parent resource.
+type AWSCodepipelineStageOnFailureConditionRule struct {
+	Commands         []*Value[string]                                       `tf:"commands" json:"commands,omitempty"`
+	Configuration    map[string]*Value[string]                              `tf:"configuration" json:"configuration,omitempty"`
+	InputArtifacts   []*Value[string]                                       `tf:"input_artifacts" json:"input_artifacts,omitempty"`
+	Name             *Value[string]                                         `tf:"name" json:"name,omitempty"`
+	Region           *Value[string]                                         `tf:"region" json:"region,omitempty"`
+	RoleARN          *Value[string]                                         `tf:"role_arn" json:"role_arn,omitempty"`
+	TimeoutInMinutes *Value[float64]                                        `tf:"timeout_in_minutes" json:"timeout_in_minutes,omitempty"`
+	RuleTypeID       []AWSCodepipelineStageOnFailureConditionRuleRuleTypeID `tf:"rule_type_id,blocks" json:"rule_type_id,omitempty"`
+}
+
+// AWSCodepipelineStageOnFailureConditionRuleRuleTypeID is a nested-block type used by the parent resource.
+type AWSCodepipelineStageOnFailureConditionRuleRuleTypeID struct {
+	Category *Value[string] `tf:"category" json:"category,omitempty"`
+	Owner    *Value[string] `tf:"owner" json:"owner,omitempty"`
+	Provider *Value[string] `tf:"provider" json:"provider,omitempty"`
+	Version  *Value[string] `tf:"version" json:"version,omitempty"`
+}
+
+// AWSCodepipelineStageOnFailureRetryConfiguration is a nested-block type used by the parent resource.
+type AWSCodepipelineStageOnFailureRetryConfiguration struct {
+	RetryMode *Value[string] `tf:"retry_mode" json:"retry_mode,omitempty"`
+}
+
+// AWSCodepipelineStageOnSuccess is a nested-block type used by the parent resource.
+type AWSCodepipelineStageOnSuccess struct {
+	Condition []AWSCodepipelineStageOnSuccessCondition `tf:"condition,blocks" json:"condition,omitempty"`
+}
+
+// AWSCodepipelineStageOnSuccessCondition is a nested-block type used by the parent resource.
+type AWSCodepipelineStageOnSuccessCondition struct {
+	Result *Value[string]                               `tf:"result" json:"result,omitempty"`
+	Rule   []AWSCodepipelineStageOnSuccessConditionRule `tf:"rule,blocks" json:"rule,omitempty"`
+}
+
+// AWSCodepipelineStageOnSuccessConditionRule is a nested-block type used by the parent resource.
+type AWSCodepipelineStageOnSuccessConditionRule struct {
+	Commands         []*Value[string]                                       `tf:"commands" json:"commands,omitempty"`
+	Configuration    map[string]*Value[string]                              `tf:"configuration" json:"configuration,omitempty"`
+	InputArtifacts   []*Value[string]                                       `tf:"input_artifacts" json:"input_artifacts,omitempty"`
+	Name             *Value[string]                                         `tf:"name" json:"name,omitempty"`
+	Region           *Value[string]                                         `tf:"region" json:"region,omitempty"`
+	RoleARN          *Value[string]                                         `tf:"role_arn" json:"role_arn,omitempty"`
+	TimeoutInMinutes *Value[float64]                                        `tf:"timeout_in_minutes" json:"timeout_in_minutes,omitempty"`
+	RuleTypeID       []AWSCodepipelineStageOnSuccessConditionRuleRuleTypeID `tf:"rule_type_id,blocks" json:"rule_type_id,omitempty"`
+}
+
+// AWSCodepipelineStageOnSuccessConditionRuleRuleTypeID is a nested-block type used by the parent resource.
+type AWSCodepipelineStageOnSuccessConditionRuleRuleTypeID struct {
+	Category *Value[string] `tf:"category" json:"category,omitempty"`
+	Owner    *Value[string] `tf:"owner" json:"owner,omitempty"`
+	Provider *Value[string] `tf:"provider" json:"provider,omitempty"`
+	Version  *Value[string] `tf:"version" json:"version,omitempty"`
+}
+
 // AWSCodepipelineTrigger is a nested-block type used by the parent resource.
 type AWSCodepipelineTrigger struct {
 	ProviderType     *Value[string]                           `tf:"provider_type" json:"provider_type,omitempty"`
 	GitConfiguration []AWSCodepipelineTriggerGitConfiguration `tf:"git_configuration,blocks" json:"git_configuration,omitempty"`
+}
+
+// AWSCodepipelineTriggerAll is a nested-block type used by the parent resource.
+type AWSCodepipelineTriggerAll struct {
+	GitConfiguration []AWSCodepipelineTriggerAllGitConfiguration `tf:"git_configuration" json:"git_configuration,omitempty"`
+	ProviderType     *Value[string]                              `tf:"provider_type" json:"provider_type,omitempty"`
+}
+
+// AWSCodepipelineTriggerAllGitConfiguration is a nested-block type used by the parent resource.
+type AWSCodepipelineTriggerAllGitConfiguration struct {
+	PullRequest      []AWSCodepipelineTriggerAllGitConfigurationPullRequest `tf:"pull_request" json:"pull_request,omitempty"`
+	Push             []AWSCodepipelineTriggerAllGitConfigurationPush        `tf:"push" json:"push,omitempty"`
+	SourceActionName *Value[string]                                         `tf:"source_action_name" json:"source_action_name,omitempty"`
+}
+
+// AWSCodepipelineTriggerAllGitConfigurationPullRequest is a nested-block type used by the parent resource.
+type AWSCodepipelineTriggerAllGitConfigurationPullRequest struct {
+	Branches  []AWSCodepipelineTriggerAllGitConfigurationPullRequestBranches  `tf:"branches" json:"branches,omitempty"`
+	Events    []*Value[string]                                                `tf:"events" json:"events,omitempty"`
+	FilePaths []AWSCodepipelineTriggerAllGitConfigurationPullRequestFilePaths `tf:"file_paths" json:"file_paths,omitempty"`
+}
+
+// AWSCodepipelineTriggerAllGitConfigurationPullRequestBranches is a nested-block type used by the parent resource.
+type AWSCodepipelineTriggerAllGitConfigurationPullRequestBranches struct {
+	Excludes []*Value[string] `tf:"excludes" json:"excludes,omitempty"`
+	Includes []*Value[string] `tf:"includes" json:"includes,omitempty"`
+}
+
+// AWSCodepipelineTriggerAllGitConfigurationPullRequestFilePaths is a nested-block type used by the parent resource.
+type AWSCodepipelineTriggerAllGitConfigurationPullRequestFilePaths struct {
+	Excludes []*Value[string] `tf:"excludes" json:"excludes,omitempty"`
+	Includes []*Value[string] `tf:"includes" json:"includes,omitempty"`
+}
+
+// AWSCodepipelineTriggerAllGitConfigurationPush is a nested-block type used by the parent resource.
+type AWSCodepipelineTriggerAllGitConfigurationPush struct {
+	Branches  []AWSCodepipelineTriggerAllGitConfigurationPushBranches  `tf:"branches" json:"branches,omitempty"`
+	FilePaths []AWSCodepipelineTriggerAllGitConfigurationPushFilePaths `tf:"file_paths" json:"file_paths,omitempty"`
+	Tags      []AWSCodepipelineTriggerAllGitConfigurationPushTags      `tf:"tags" json:"tags,omitempty"`
+}
+
+// AWSCodepipelineTriggerAllGitConfigurationPushBranches is a nested-block type used by the parent resource.
+type AWSCodepipelineTriggerAllGitConfigurationPushBranches struct {
+	Excludes []*Value[string] `tf:"excludes" json:"excludes,omitempty"`
+	Includes []*Value[string] `tf:"includes" json:"includes,omitempty"`
+}
+
+// AWSCodepipelineTriggerAllGitConfigurationPushFilePaths is a nested-block type used by the parent resource.
+type AWSCodepipelineTriggerAllGitConfigurationPushFilePaths struct {
+	Excludes []*Value[string] `tf:"excludes" json:"excludes,omitempty"`
+	Includes []*Value[string] `tf:"includes" json:"includes,omitempty"`
+}
+
+// AWSCodepipelineTriggerAllGitConfigurationPushTags is a nested-block type used by the parent resource.
+type AWSCodepipelineTriggerAllGitConfigurationPushTags struct {
+	Excludes []*Value[string] `tf:"excludes" json:"excludes,omitempty"`
+	Includes []*Value[string] `tf:"includes" json:"includes,omitempty"`
 }
 
 // AWSCodepipelineTriggerGitConfiguration is a nested-block type used by the parent resource.
@@ -130,9 +292,11 @@ var AWSCodepipelineSchema = map[string]FieldSchema{
 	"id":             {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"name":           {Required: true, Replacement: ReplacementUnknown},
 	"pipeline_type":  {Optional: true, Replacement: ReplacementUnknown},
+	"region":         {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"role_arn":       {Required: true, Replacement: ReplacementUnknown},
 	"tags":           {Optional: true, Replacement: ReplacementUnknown},
 	"tags_all":       {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"trigger_all":    {Computed: true, Replacement: ReplacementUnknown},
 	"artifact_store": {Required: true, Replacement: ReplacementUnknown},
 	"stage":          {Required: true, Replacement: ReplacementUnknown},
 	"trigger":        {Optional: true, Replacement: ReplacementUnknown},

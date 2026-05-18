@@ -313,6 +313,79 @@ func TestSupportedProviders_ReturnsBothCloudKeysSorted(t *testing.T) {
 	}
 }
 
+// TestGoogleCodegenTypes_IncludesCodegenOnlyBucket pins the contract that
+// gcpCodegenOnlyTypes entries (the GCP mirror of awsCodegenOnlyTypes,
+// introduced in #599 so DNS + cert-manager drift policies can ship without
+// a paired CAI discoverer) flow through GoogleCodegenTypes. The exact pin
+// is the union of the discover bucket (minus beta) and the codegen-only
+// bucket — promoting an entry from codegen-only to discover must keep the
+// total set unchanged.
+func TestGoogleCodegenTypes_IncludesCodegenOnlyBucket(t *testing.T) {
+	t.Parallel()
+	got := GoogleCodegenTypes()
+
+	// Every gcpCodegenOnlyTypes entry must appear in GoogleCodegenTypes.
+	asMap := make(map[string]struct{}, len(got))
+	for _, t := range got {
+		asMap[t] = struct{}{}
+	}
+	for _, want := range gcpCodegenOnlyTypes {
+		if _, ok := asMap[want]; !ok {
+			t.Errorf("GoogleCodegenTypes() missing %q from gcpCodegenOnlyTypes", want)
+		}
+	}
+
+	// Discoverer-side parity: no codegen-only type should leak into
+	// SupportedDiscoverTypes (that's the bucket's whole point — drift
+	// policy ships ahead of the wizard-facing picker row).
+	discoverable := make(map[string]struct{})
+	for _, t := range SupportedDiscoverTypes(ProviderGCP) {
+		discoverable[t] = struct{}{}
+	}
+	for _, codegenOnly := range gcpCodegenOnlyTypes {
+		if _, leaked := discoverable[codegenOnly]; leaked {
+			t.Errorf("gcpCodegenOnlyTypes entry %q leaked into SupportedDiscoverTypes — promote to gcpDiscoverTypes or remove from codegen-only", codegenOnly)
+		}
+	}
+
+	// Sort invariant.
+	if !sort.StringsAreSorted(got) {
+		t.Errorf("GoogleCodegenTypes() not sorted: %v", got)
+	}
+}
+
+// TestAWSCodegenTypes_IncludesCodegenOnlyBucket is the AWS-side parallel
+// of TestGoogleCodegenTypes_IncludesCodegenOnlyBucket. The
+// awsCodegenOnlyTypes bucket predates the GCP one but had no dedicated
+// pin until #599 — adding it here so the two bucket contracts are
+// symmetric, and a future regression that drops awsCodegenOnlyTypes from
+// AWSCodegenTypes fails here rather than via the downstream policy parity.
+func TestAWSCodegenTypes_IncludesCodegenOnlyBucket(t *testing.T) {
+	t.Parallel()
+	got := AWSCodegenTypes()
+	asMap := make(map[string]struct{}, len(got))
+	for _, t := range got {
+		asMap[t] = struct{}{}
+	}
+	for _, want := range awsCodegenOnlyTypes {
+		if _, ok := asMap[want]; !ok {
+			t.Errorf("AWSCodegenTypes() missing %q from awsCodegenOnlyTypes", want)
+		}
+	}
+	discoverable := make(map[string]struct{})
+	for _, t := range SupportedDiscoverTypes(ProviderAWS) {
+		discoverable[t] = struct{}{}
+	}
+	for _, codegenOnly := range awsCodegenOnlyTypes {
+		if _, leaked := discoverable[codegenOnly]; leaked {
+			t.Errorf("awsCodegenOnlyTypes entry %q leaked into SupportedDiscoverTypes — promote to awsDiscoverTypes or remove from codegen-only", codegenOnly)
+		}
+	}
+	if !sort.StringsAreSorted(got) {
+		t.Errorf("AWSCodegenTypes() not sorted: %v", got)
+	}
+}
+
 // TestSupportedDiscoverTypes_ConcurrentAccess_IsRaceFree pins the documented
 // goroutine-safety contract by running concurrent callers under -race. The
 // package is safe by construction today (only stateless reads + per-call

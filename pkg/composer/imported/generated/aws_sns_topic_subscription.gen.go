@@ -21,6 +21,7 @@ type AWSSNSTopicSubscription struct {
 	Protocol                     *Value[string]  `tf:"protocol" json:"protocol,omitempty"`
 	RawMessageDelivery           *Value[bool]    `tf:"raw_message_delivery" json:"raw_message_delivery,omitempty"`
 	RedrivePolicy                *Value[string]  `tf:"redrive_policy" json:"redrive_policy,omitempty"`
+	Region                       *Value[string]  `tf:"region" json:"region,omitempty"`
 	ReplayPolicy                 *Value[string]  `tf:"replay_policy" json:"replay_policy,omitempty"`
 	SubscriptionRoleARN          *Value[string]  `tf:"subscription_role_arn" json:"subscription_role_arn,omitempty"`
 	TopicARN                     *Value[string]  `tf:"topic_arn" json:"topic_arn,omitempty"`
@@ -43,6 +44,7 @@ var AWSSNSTopicSubscriptionSchema = map[string]FieldSchema{
 	"protocol":                        {Required: true, Replacement: ReplacementUnknown},
 	"raw_message_delivery":            {Optional: true, Replacement: ReplacementUnknown},
 	"redrive_policy":                  {Optional: true, Replacement: ReplacementUnknown},
+	"region":                          {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"replay_policy":                   {Optional: true, Replacement: ReplacementUnknown},
 	"subscription_role_arn":           {Optional: true, Replacement: ReplacementUnknown},
 	"topic_arn":                       {Required: true, Replacement: ReplacementUnknown},

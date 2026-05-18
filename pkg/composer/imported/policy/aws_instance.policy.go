@@ -232,18 +232,10 @@ var awsInstancePolicy = Map{
 	},
 
 	// CPU tuning --------------------------------------------------------
-	"cpu_core_count": {
-		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilitySummaryVisible,
-		Edit:          EditNever,
-		ChangeRisk:    ChangeAlwaysReplace,
-		DriftSemantic: DriftSemanticExact,
-	},
-	"cpu_threads_per_core": {
-		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilitySummaryVisible,
-		Edit:          EditNever,
-		ChangeRisk:    ChangeAlwaysReplace,
-		DriftSemantic: DriftSemanticExact,
-	},
+	// AWS provider 6.x removed the top-level `cpu_core_count` and
+	// `cpu_threads_per_core` aliases (deprecated since 5.x); the
+	// `cpu_options` nested block is the canonical surface (#599
+	// schema-bump cleanup).
 	"cpu_options.core_count": {
 		Role: RoleTuning, Pillar: PillarPerformance, Visibility: VisibilitySummaryVisible,
 		Edit:          EditNever,

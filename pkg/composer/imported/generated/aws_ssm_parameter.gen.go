@@ -11,37 +11,45 @@ type AWSSsmParameter struct {
 	ARN            *Value[string]            `tf:"arn" json:"arn,omitempty"`
 	DataType       *Value[string]            `tf:"data_type" json:"data_type,omitempty"`
 	Description    *Value[string]            `tf:"description" json:"description,omitempty"`
+	HasValueWo     *Value[bool]              `tf:"has_value_wo" json:"has_value_wo,omitempty"`
 	ID             *Value[string]            `tf:"id" json:"id,omitempty"`
 	InsecureValue  *Value[string]            `tf:"insecure_value" json:"insecure_value,omitempty"`
 	KeyID          *Value[string]            `tf:"key_id" json:"key_id,omitempty"`
 	Name           *Value[string]            `tf:"name" json:"name,omitempty"`
 	Overwrite      *Value[bool]              `tf:"overwrite" json:"overwrite,omitempty"`
+	Region         *Value[string]            `tf:"region" json:"region,omitempty"`
 	Tags           map[string]*Value[string] `tf:"tags" json:"tags,omitempty"`
 	TagsAll        map[string]*Value[string] `tf:"tags_all" json:"tags_all,omitempty"`
 	Tier           *Value[string]            `tf:"tier" json:"tier,omitempty"`
 	Type_          *Value[string]            `tf:"type" json:"type,omitempty"`
 	Value          *Value[string]            `tf:"value" json:"value,omitempty"`
+	ValueWo        *Value[string]            `tf:"value_wo" json:"value_wo,omitempty"`
+	ValueWoVersion *Value[float64]           `tf:"value_wo_version" json:"value_wo_version,omitempty"`
 	Version        *Value[int64]             `tf:"version" json:"version,omitempty"`
 }
 
 // AWSSsmParameterSchema describes provider metadata for each attribute / nested
 // block of aws_ssm_parameter.
 var AWSSsmParameterSchema = map[string]FieldSchema{
-	"allowed_pattern": {Optional: true, Replacement: ReplacementUnknown},
-	"arn":             {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"data_type":       {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"description":     {Optional: true, Replacement: ReplacementUnknown},
-	"id":              {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"insecure_value":  {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"key_id":          {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"name":            {Required: true, Replacement: ReplacementUnknown},
-	"overwrite":       {Optional: true, Replacement: ReplacementUnknown},
-	"tags":            {Optional: true, Replacement: ReplacementUnknown},
-	"tags_all":        {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"tier":            {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"type":            {Required: true, Replacement: ReplacementUnknown},
-	"value":           {Optional: true, Computed: true, Sensitive: true, Replacement: ReplacementUnknown},
-	"version":         {Computed: true, Replacement: ReplacementUnknown},
+	"allowed_pattern":  {Optional: true, Replacement: ReplacementUnknown},
+	"arn":              {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"data_type":        {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"description":      {Optional: true, Replacement: ReplacementUnknown},
+	"has_value_wo":     {Computed: true, Replacement: ReplacementUnknown},
+	"id":               {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"insecure_value":   {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"key_id":           {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"name":             {Required: true, Replacement: ReplacementUnknown},
+	"overwrite":        {Optional: true, Replacement: ReplacementUnknown},
+	"region":           {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"tags":             {Optional: true, Replacement: ReplacementUnknown},
+	"tags_all":         {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"tier":             {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"type":             {Required: true, Replacement: ReplacementUnknown},
+	"value":            {Optional: true, Computed: true, Sensitive: true, Replacement: ReplacementUnknown},
+	"value_wo":         {Optional: true, Sensitive: true, Replacement: ReplacementUnknown},
+	"value_wo_version": {Optional: true, Replacement: ReplacementUnknown},
+	"version":          {Computed: true, Replacement: ReplacementUnknown},
 }
 
 func init() {

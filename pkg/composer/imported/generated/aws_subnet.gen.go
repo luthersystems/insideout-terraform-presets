@@ -18,14 +18,19 @@ type AWSSubnet struct {
 	EnableResourceNameDNSARecordOnLaunch    *Value[bool]              `tf:"enable_resource_name_dns_a_record_on_launch" json:"enable_resource_name_dns_a_record_on_launch,omitempty"`
 	EnableResourceNameDNSAaaaRecordOnLaunch *Value[bool]              `tf:"enable_resource_name_dns_aaaa_record_on_launch" json:"enable_resource_name_dns_aaaa_record_on_launch,omitempty"`
 	ID                                      *Value[string]            `tf:"id" json:"id,omitempty"`
+	IPV4IpamPoolID                          *Value[string]            `tf:"ipv4_ipam_pool_id" json:"ipv4_ipam_pool_id,omitempty"`
+	IPV4NetmaskLength                       *Value[float64]           `tf:"ipv4_netmask_length" json:"ipv4_netmask_length,omitempty"`
 	IPV6CIDRBlock                           *Value[string]            `tf:"ipv6_cidr_block" json:"ipv6_cidr_block,omitempty"`
 	IPV6CIDRBlockAssociationID              *Value[string]            `tf:"ipv6_cidr_block_association_id" json:"ipv6_cidr_block_association_id,omitempty"`
+	IPV6IpamPoolID                          *Value[string]            `tf:"ipv6_ipam_pool_id" json:"ipv6_ipam_pool_id,omitempty"`
 	IPV6Native                              *Value[bool]              `tf:"ipv6_native" json:"ipv6_native,omitempty"`
+	IPV6NetmaskLength                       *Value[float64]           `tf:"ipv6_netmask_length" json:"ipv6_netmask_length,omitempty"`
 	MapCustomerOwnedIpOnLaunch              *Value[bool]              `tf:"map_customer_owned_ip_on_launch" json:"map_customer_owned_ip_on_launch,omitempty"`
 	MapPublicIpOnLaunch                     *Value[bool]              `tf:"map_public_ip_on_launch" json:"map_public_ip_on_launch,omitempty"`
 	OutpostARN                              *Value[string]            `tf:"outpost_arn" json:"outpost_arn,omitempty"`
 	OwnerID                                 *Value[string]            `tf:"owner_id" json:"owner_id,omitempty"`
 	PrivateDNSHostnameTypeOnLaunch          *Value[string]            `tf:"private_dns_hostname_type_on_launch" json:"private_dns_hostname_type_on_launch,omitempty"`
+	Region                                  *Value[string]            `tf:"region" json:"region,omitempty"`
 	Tags                                    map[string]*Value[string] `tf:"tags" json:"tags,omitempty"`
 	TagsAll                                 map[string]*Value[string] `tf:"tags_all" json:"tags_all,omitempty"`
 	VPCID                                   *Value[string]            `tf:"vpc_id" json:"vpc_id,omitempty"`
@@ -45,21 +50,26 @@ var AWSSubnetSchema = map[string]FieldSchema{
 	"assign_ipv6_address_on_creation": {Optional: true, Replacement: ReplacementUnknown},
 	"availability_zone":               {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"availability_zone_id":            {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"cidr_block":                      {Optional: true, Replacement: ReplacementUnknown},
+	"cidr_block":                      {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"customer_owned_ipv4_pool":        {Optional: true, Replacement: ReplacementUnknown},
 	"enable_dns64":                    {Optional: true, Replacement: ReplacementUnknown},
 	"enable_lni_at_device_index":      {Optional: true, Replacement: ReplacementUnknown},
 	"enable_resource_name_dns_a_record_on_launch":    {Optional: true, Replacement: ReplacementUnknown},
 	"enable_resource_name_dns_aaaa_record_on_launch": {Optional: true, Replacement: ReplacementUnknown},
 	"id":                                  {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"ipv6_cidr_block":                     {Optional: true, Replacement: ReplacementUnknown},
+	"ipv4_ipam_pool_id":                   {Optional: true, Replacement: ReplacementUnknown},
+	"ipv4_netmask_length":                 {Optional: true, Replacement: ReplacementUnknown},
+	"ipv6_cidr_block":                     {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"ipv6_cidr_block_association_id":      {Computed: true, Replacement: ReplacementUnknown},
+	"ipv6_ipam_pool_id":                   {Optional: true, Replacement: ReplacementUnknown},
 	"ipv6_native":                         {Optional: true, Replacement: ReplacementUnknown},
+	"ipv6_netmask_length":                 {Optional: true, Replacement: ReplacementUnknown},
 	"map_customer_owned_ip_on_launch":     {Optional: true, Replacement: ReplacementUnknown},
 	"map_public_ip_on_launch":             {Optional: true, Replacement: ReplacementUnknown},
 	"outpost_arn":                         {Optional: true, Replacement: ReplacementUnknown},
 	"owner_id":                            {Computed: true, Replacement: ReplacementUnknown},
 	"private_dns_hostname_type_on_launch": {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"region":                              {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"tags":                                {Optional: true, Replacement: ReplacementUnknown},
 	"tags_all":                            {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"vpc_id":                              {Required: true, Replacement: ReplacementUnknown},

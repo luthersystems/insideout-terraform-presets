@@ -19,8 +19,10 @@ type AWSCloudtrail struct {
 	IsOrganizationTrail        *Value[bool]                         `tf:"is_organization_trail" json:"is_organization_trail,omitempty"`
 	KMSKeyID                   *Value[string]                       `tf:"kms_key_id" json:"kms_key_id,omitempty"`
 	Name                       *Value[string]                       `tf:"name" json:"name,omitempty"`
+	Region                     *Value[string]                       `tf:"region" json:"region,omitempty"`
 	S3BucketName               *Value[string]                       `tf:"s3_bucket_name" json:"s3_bucket_name,omitempty"`
 	S3KeyPrefix                *Value[string]                       `tf:"s3_key_prefix" json:"s3_key_prefix,omitempty"`
+	SNSTopicARN                *Value[string]                       `tf:"sns_topic_arn" json:"sns_topic_arn,omitempty"`
 	SNSTopicName               *Value[string]                       `tf:"sns_topic_name" json:"sns_topic_name,omitempty"`
 	Tags                       map[string]*Value[string]            `tf:"tags" json:"tags,omitempty"`
 	TagsAll                    map[string]*Value[string]            `tf:"tags_all" json:"tags_all,omitempty"`
@@ -80,8 +82,10 @@ var AWSCloudtrailSchema = map[string]FieldSchema{
 	"is_organization_trail":         {Optional: true, Replacement: ReplacementUnknown},
 	"kms_key_id":                    {Optional: true, Replacement: ReplacementUnknown},
 	"name":                          {Required: true, Replacement: ReplacementUnknown},
+	"region":                        {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"s3_bucket_name":                {Required: true, Replacement: ReplacementUnknown},
 	"s3_key_prefix":                 {Optional: true, Replacement: ReplacementUnknown},
+	"sns_topic_arn":                 {Computed: true, Replacement: ReplacementUnknown},
 	"sns_topic_name":                {Optional: true, Replacement: ReplacementUnknown},
 	"tags":                          {Optional: true, Replacement: ReplacementUnknown},
 	"tags_all":                      {Optional: true, Computed: true, Replacement: ReplacementUnknown},

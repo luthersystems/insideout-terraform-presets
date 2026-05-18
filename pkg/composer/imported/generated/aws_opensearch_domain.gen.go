@@ -7,36 +7,39 @@ import "reflect"
 // AWSOpensearchDomain is the generated Layer 1 typed model for the
 // `aws_opensearch_domain` Terraform resource.
 type AWSOpensearchDomain struct {
-	AccessPolicies               *Value[string]                               `tf:"access_policies" json:"access_policies,omitempty"`
-	AdvancedOptions              map[string]*Value[string]                    `tf:"advanced_options" json:"advanced_options,omitempty"`
-	ARN                          *Value[string]                               `tf:"arn" json:"arn,omitempty"`
-	DashboardEndpoint            *Value[string]                               `tf:"dashboard_endpoint" json:"dashboard_endpoint,omitempty"`
-	DashboardEndpointV2          *Value[string]                               `tf:"dashboard_endpoint_v2" json:"dashboard_endpoint_v2,omitempty"`
-	DomainEndpointV2HostedZoneID *Value[string]                               `tf:"domain_endpoint_v2_hosted_zone_id" json:"domain_endpoint_v2_hosted_zone_id,omitempty"`
-	DomainID                     *Value[string]                               `tf:"domain_id" json:"domain_id,omitempty"`
-	DomainName                   *Value[string]                               `tf:"domain_name" json:"domain_name,omitempty"`
-	Endpoint                     *Value[string]                               `tf:"endpoint" json:"endpoint,omitempty"`
-	EndpointV2                   *Value[string]                               `tf:"endpoint_v2" json:"endpoint_v2,omitempty"`
-	EngineVersion                *Value[string]                               `tf:"engine_version" json:"engine_version,omitempty"`
-	ID                           *Value[string]                               `tf:"id" json:"id,omitempty"`
-	IpAddressType                *Value[string]                               `tf:"ip_address_type" json:"ip_address_type,omitempty"`
-	KibanaEndpoint               *Value[string]                               `tf:"kibana_endpoint" json:"kibana_endpoint,omitempty"`
-	Tags                         map[string]*Value[string]                    `tf:"tags" json:"tags,omitempty"`
-	TagsAll                      map[string]*Value[string]                    `tf:"tags_all" json:"tags_all,omitempty"`
-	AdvancedSecurityOptions      []AWSOpensearchDomainAdvancedSecurityOptions `tf:"advanced_security_options,blocks" json:"advanced_security_options,omitempty"`
-	AutoTuneOptions              []AWSOpensearchDomainAutoTuneOptions         `tf:"auto_tune_options,blocks" json:"auto_tune_options,omitempty"`
-	ClusterConfig                []AWSOpensearchDomainClusterConfig           `tf:"cluster_config,blocks" json:"cluster_config,omitempty"`
-	CognitoOptions               []AWSOpensearchDomainCognitoOptions          `tf:"cognito_options,blocks" json:"cognito_options,omitempty"`
-	DomainEndpointOptions        []AWSOpensearchDomainDomainEndpointOptions   `tf:"domain_endpoint_options,blocks" json:"domain_endpoint_options,omitempty"`
-	EBSOptions                   []AWSOpensearchDomainEBSOptions              `tf:"ebs_options,blocks" json:"ebs_options,omitempty"`
-	EncryptAtRest                []AWSOpensearchDomainEncryptAtRest           `tf:"encrypt_at_rest,blocks" json:"encrypt_at_rest,omitempty"`
-	LogPublishingOptions         []AWSOpensearchDomainLogPublishingOptions    `tf:"log_publishing_options,blocks" json:"log_publishing_options,omitempty"`
-	NodeToNodeEncryption         []AWSOpensearchDomainNodeToNodeEncryption    `tf:"node_to_node_encryption,blocks" json:"node_to_node_encryption,omitempty"`
-	OffPeakWindowOptions         []AWSOpensearchDomainOffPeakWindowOptions    `tf:"off_peak_window_options,blocks" json:"off_peak_window_options,omitempty"`
-	SnapshotOptions              []AWSOpensearchDomainSnapshotOptions         `tf:"snapshot_options,blocks" json:"snapshot_options,omitempty"`
-	SoftwareUpdateOptions        []AWSOpensearchDomainSoftwareUpdateOptions   `tf:"software_update_options,blocks" json:"software_update_options,omitempty"`
-	Timeouts                     *AWSOpensearchDomainTimeouts                 `tf:"timeouts,block" json:"timeouts,omitempty"`
-	VPCOptions                   []AWSOpensearchDomainVPCOptions              `tf:"vpc_options,blocks" json:"vpc_options,omitempty"`
+	AccessPolicies               *Value[string]                                 `tf:"access_policies" json:"access_policies,omitempty"`
+	AdvancedOptions              map[string]*Value[string]                      `tf:"advanced_options" json:"advanced_options,omitempty"`
+	ARN                          *Value[string]                                 `tf:"arn" json:"arn,omitempty"`
+	DashboardEndpoint            *Value[string]                                 `tf:"dashboard_endpoint" json:"dashboard_endpoint,omitempty"`
+	DashboardEndpointV2          *Value[string]                                 `tf:"dashboard_endpoint_v2" json:"dashboard_endpoint_v2,omitempty"`
+	DomainEndpointV2HostedZoneID *Value[string]                                 `tf:"domain_endpoint_v2_hosted_zone_id" json:"domain_endpoint_v2_hosted_zone_id,omitempty"`
+	DomainID                     *Value[string]                                 `tf:"domain_id" json:"domain_id,omitempty"`
+	DomainName                   *Value[string]                                 `tf:"domain_name" json:"domain_name,omitempty"`
+	Endpoint                     *Value[string]                                 `tf:"endpoint" json:"endpoint,omitempty"`
+	EndpointV2                   *Value[string]                                 `tf:"endpoint_v2" json:"endpoint_v2,omitempty"`
+	EngineVersion                *Value[string]                                 `tf:"engine_version" json:"engine_version,omitempty"`
+	ID                           *Value[string]                                 `tf:"id" json:"id,omitempty"`
+	IpAddressType                *Value[string]                                 `tf:"ip_address_type" json:"ip_address_type,omitempty"`
+	Region                       *Value[string]                                 `tf:"region" json:"region,omitempty"`
+	Tags                         map[string]*Value[string]                      `tf:"tags" json:"tags,omitempty"`
+	TagsAll                      map[string]*Value[string]                      `tf:"tags_all" json:"tags_all,omitempty"`
+	AdvancedSecurityOptions      []AWSOpensearchDomainAdvancedSecurityOptions   `tf:"advanced_security_options,blocks" json:"advanced_security_options,omitempty"`
+	AimlOptions                  []AWSOpensearchDomainAimlOptions               `tf:"aiml_options,blocks" json:"aiml_options,omitempty"`
+	AutoTuneOptions              []AWSOpensearchDomainAutoTuneOptions           `tf:"auto_tune_options,blocks" json:"auto_tune_options,omitempty"`
+	ClusterConfig                []AWSOpensearchDomainClusterConfig             `tf:"cluster_config,blocks" json:"cluster_config,omitempty"`
+	CognitoOptions               []AWSOpensearchDomainCognitoOptions            `tf:"cognito_options,blocks" json:"cognito_options,omitempty"`
+	DeploymentStrategyOptions    []AWSOpensearchDomainDeploymentStrategyOptions `tf:"deployment_strategy_options,blocks" json:"deployment_strategy_options,omitempty"`
+	DomainEndpointOptions        []AWSOpensearchDomainDomainEndpointOptions     `tf:"domain_endpoint_options,blocks" json:"domain_endpoint_options,omitempty"`
+	EBSOptions                   []AWSOpensearchDomainEBSOptions                `tf:"ebs_options,blocks" json:"ebs_options,omitempty"`
+	EncryptAtRest                []AWSOpensearchDomainEncryptAtRest             `tf:"encrypt_at_rest,blocks" json:"encrypt_at_rest,omitempty"`
+	IdentityCenterOptions        []AWSOpensearchDomainIdentityCenterOptions     `tf:"identity_center_options,blocks" json:"identity_center_options,omitempty"`
+	LogPublishingOptions         []AWSOpensearchDomainLogPublishingOptions      `tf:"log_publishing_options,blocks" json:"log_publishing_options,omitempty"`
+	NodeToNodeEncryption         []AWSOpensearchDomainNodeToNodeEncryption      `tf:"node_to_node_encryption,blocks" json:"node_to_node_encryption,omitempty"`
+	OffPeakWindowOptions         []AWSOpensearchDomainOffPeakWindowOptions      `tf:"off_peak_window_options,blocks" json:"off_peak_window_options,omitempty"`
+	SnapshotOptions              []AWSOpensearchDomainSnapshotOptions           `tf:"snapshot_options,blocks" json:"snapshot_options,omitempty"`
+	SoftwareUpdateOptions        []AWSOpensearchDomainSoftwareUpdateOptions     `tf:"software_update_options,blocks" json:"software_update_options,omitempty"`
+	Timeouts                     *AWSOpensearchDomainTimeouts                   `tf:"timeouts,block" json:"timeouts,omitempty"`
+	VPCOptions                   []AWSOpensearchDomainVPCOptions                `tf:"vpc_options,blocks" json:"vpc_options,omitempty"`
 }
 
 // AWSOpensearchDomainAdvancedSecurityOptions is a nested-block type used by the parent resource.
@@ -44,7 +47,16 @@ type AWSOpensearchDomainAdvancedSecurityOptions struct {
 	AnonymousAuthEnabled        *Value[bool]                                                  `tf:"anonymous_auth_enabled" json:"anonymous_auth_enabled,omitempty"`
 	Enabled                     *Value[bool]                                                  `tf:"enabled" json:"enabled,omitempty"`
 	InternalUserDatabaseEnabled *Value[bool]                                                  `tf:"internal_user_database_enabled" json:"internal_user_database_enabled,omitempty"`
+	JWTOptions                  []AWSOpensearchDomainAdvancedSecurityOptionsJWTOptions        `tf:"jwt_options,blocks" json:"jwt_options,omitempty"`
 	MasterUserOptions           []AWSOpensearchDomainAdvancedSecurityOptionsMasterUserOptions `tf:"master_user_options,blocks" json:"master_user_options,omitempty"`
+}
+
+// AWSOpensearchDomainAdvancedSecurityOptionsJWTOptions is a nested-block type used by the parent resource.
+type AWSOpensearchDomainAdvancedSecurityOptionsJWTOptions struct {
+	Enabled    *Value[bool]   `tf:"enabled" json:"enabled,omitempty"`
+	PublicKey  *Value[string] `tf:"public_key" json:"public_key,omitempty"`
+	RolesKey   *Value[string] `tf:"roles_key" json:"roles_key,omitempty"`
+	SubjectKey *Value[string] `tf:"subject_key" json:"subject_key,omitempty"`
 }
 
 // AWSOpensearchDomainAdvancedSecurityOptionsMasterUserOptions is a nested-block type used by the parent resource.
@@ -52,6 +64,28 @@ type AWSOpensearchDomainAdvancedSecurityOptionsMasterUserOptions struct {
 	MasterUserARN      *Value[string] `tf:"master_user_arn" json:"master_user_arn,omitempty"`
 	MasterUserName     *Value[string] `tf:"master_user_name" json:"master_user_name,omitempty"`
 	MasterUserPassword *Value[string] `tf:"master_user_password" json:"master_user_password,omitempty"`
+}
+
+// AWSOpensearchDomainAimlOptions is a nested-block type used by the parent resource.
+type AWSOpensearchDomainAimlOptions struct {
+	NaturalLanguageQueryGenerationOptions []AWSOpensearchDomainAimlOptionsNaturalLanguageQueryGenerationOptions `tf:"natural_language_query_generation_options,blocks" json:"natural_language_query_generation_options,omitempty"`
+	S3VectorsEngine                       []AWSOpensearchDomainAimlOptionsS3VectorsEngine                       `tf:"s3_vectors_engine,blocks" json:"s3_vectors_engine,omitempty"`
+	ServerlessVectorAcceleration          []AWSOpensearchDomainAimlOptionsServerlessVectorAcceleration          `tf:"serverless_vector_acceleration,blocks" json:"serverless_vector_acceleration,omitempty"`
+}
+
+// AWSOpensearchDomainAimlOptionsNaturalLanguageQueryGenerationOptions is a nested-block type used by the parent resource.
+type AWSOpensearchDomainAimlOptionsNaturalLanguageQueryGenerationOptions struct {
+	DesiredState *Value[string] `tf:"desired_state" json:"desired_state,omitempty"`
+}
+
+// AWSOpensearchDomainAimlOptionsS3VectorsEngine is a nested-block type used by the parent resource.
+type AWSOpensearchDomainAimlOptionsS3VectorsEngine struct {
+	Enabled *Value[bool] `tf:"enabled" json:"enabled,omitempty"`
+}
+
+// AWSOpensearchDomainAimlOptionsServerlessVectorAcceleration is a nested-block type used by the parent resource.
+type AWSOpensearchDomainAimlOptionsServerlessVectorAcceleration struct {
+	Enabled *Value[bool] `tf:"enabled" json:"enabled,omitempty"`
 }
 
 // AWSOpensearchDomainAutoTuneOptions is a nested-block type used by the parent resource.
@@ -88,12 +122,26 @@ type AWSOpensearchDomainClusterConfig struct {
 	WarmType                  *Value[string]                                        `tf:"warm_type" json:"warm_type,omitempty"`
 	ZoneAwarenessEnabled      *Value[bool]                                          `tf:"zone_awareness_enabled" json:"zone_awareness_enabled,omitempty"`
 	ColdStorageOptions        []AWSOpensearchDomainClusterConfigColdStorageOptions  `tf:"cold_storage_options,blocks" json:"cold_storage_options,omitempty"`
+	NodeOptions               []AWSOpensearchDomainClusterConfigNodeOptions         `tf:"node_options,blocks" json:"node_options,omitempty"`
 	ZoneAwarenessConfig       []AWSOpensearchDomainClusterConfigZoneAwarenessConfig `tf:"zone_awareness_config,blocks" json:"zone_awareness_config,omitempty"`
 }
 
 // AWSOpensearchDomainClusterConfigColdStorageOptions is a nested-block type used by the parent resource.
 type AWSOpensearchDomainClusterConfigColdStorageOptions struct {
 	Enabled *Value[bool] `tf:"enabled" json:"enabled,omitempty"`
+}
+
+// AWSOpensearchDomainClusterConfigNodeOptions is a nested-block type used by the parent resource.
+type AWSOpensearchDomainClusterConfigNodeOptions struct {
+	NodeType   *Value[string]                                          `tf:"node_type" json:"node_type,omitempty"`
+	NodeConfig []AWSOpensearchDomainClusterConfigNodeOptionsNodeConfig `tf:"node_config,blocks" json:"node_config,omitempty"`
+}
+
+// AWSOpensearchDomainClusterConfigNodeOptionsNodeConfig is a nested-block type used by the parent resource.
+type AWSOpensearchDomainClusterConfigNodeOptionsNodeConfig struct {
+	Count   *Value[float64] `tf:"count" json:"count,omitempty"`
+	Enabled *Value[bool]    `tf:"enabled" json:"enabled,omitempty"`
+	Type_   *Value[string]  `tf:"type" json:"type,omitempty"`
 }
 
 // AWSOpensearchDomainClusterConfigZoneAwarenessConfig is a nested-block type used by the parent resource.
@@ -107,6 +155,11 @@ type AWSOpensearchDomainCognitoOptions struct {
 	IdentityPoolID *Value[string] `tf:"identity_pool_id" json:"identity_pool_id,omitempty"`
 	RoleARN        *Value[string] `tf:"role_arn" json:"role_arn,omitempty"`
 	UserPoolID     *Value[string] `tf:"user_pool_id" json:"user_pool_id,omitempty"`
+}
+
+// AWSOpensearchDomainDeploymentStrategyOptions is a nested-block type used by the parent resource.
+type AWSOpensearchDomainDeploymentStrategyOptions struct {
+	DeploymentStrategy *Value[string] `tf:"deployment_strategy" json:"deployment_strategy,omitempty"`
 }
 
 // AWSOpensearchDomainDomainEndpointOptions is a nested-block type used by the parent resource.
@@ -131,6 +184,14 @@ type AWSOpensearchDomainEBSOptions struct {
 type AWSOpensearchDomainEncryptAtRest struct {
 	Enabled  *Value[bool]   `tf:"enabled" json:"enabled,omitempty"`
 	KMSKeyID *Value[string] `tf:"kms_key_id" json:"kms_key_id,omitempty"`
+}
+
+// AWSOpensearchDomainIdentityCenterOptions is a nested-block type used by the parent resource.
+type AWSOpensearchDomainIdentityCenterOptions struct {
+	EnabledAPIAccess          *Value[bool]   `tf:"enabled_api_access" json:"enabled_api_access,omitempty"`
+	IdentityCenterInstanceARN *Value[string] `tf:"identity_center_instance_arn" json:"identity_center_instance_arn,omitempty"`
+	RolesKey                  *Value[string] `tf:"roles_key" json:"roles_key,omitempty"`
+	SubjectKey                *Value[string] `tf:"subject_key" json:"subject_key,omitempty"`
 }
 
 // AWSOpensearchDomainLogPublishingOptions is a nested-block type used by the parent resource.
@@ -203,16 +264,19 @@ var AWSOpensearchDomainSchema = map[string]FieldSchema{
 	"engine_version":                    {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"id":                                {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"ip_address_type":                   {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"kibana_endpoint":                   {Computed: true, Replacement: ReplacementUnknown},
+	"region":                            {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"tags":                              {Optional: true, Replacement: ReplacementUnknown},
 	"tags_all":                          {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"advanced_security_options":         {Optional: true, Replacement: ReplacementUnknown},
+	"aiml_options":                      {Optional: true, Replacement: ReplacementUnknown},
 	"auto_tune_options":                 {Optional: true, Replacement: ReplacementUnknown},
 	"cluster_config":                    {Optional: true, Replacement: ReplacementUnknown},
 	"cognito_options":                   {Optional: true, Replacement: ReplacementUnknown},
+	"deployment_strategy_options":       {Optional: true, Replacement: ReplacementUnknown},
 	"domain_endpoint_options":           {Optional: true, Replacement: ReplacementUnknown},
 	"ebs_options":                       {Optional: true, Replacement: ReplacementUnknown},
 	"encrypt_at_rest":                   {Optional: true, Replacement: ReplacementUnknown},
+	"identity_center_options":           {Optional: true, Replacement: ReplacementUnknown},
 	"log_publishing_options":            {Optional: true, Replacement: ReplacementUnknown},
 	"node_to_node_encryption":           {Optional: true, Replacement: ReplacementUnknown},
 	"off_peak_window_options":           {Optional: true, Replacement: ReplacementUnknown},

@@ -7,31 +7,46 @@ import "reflect"
 // AWSCloudwatchMetricAlarm is the generated Layer 1 typed model for the
 // `aws_cloudwatch_metric_alarm` Terraform resource.
 type AWSCloudwatchMetricAlarm struct {
-	ActionsEnabled                    *Value[bool]                          `tf:"actions_enabled" json:"actions_enabled,omitempty"`
-	AlarmActions                      []*Value[string]                      `tf:"alarm_actions" json:"alarm_actions,omitempty"`
-	AlarmDescription                  *Value[string]                        `tf:"alarm_description" json:"alarm_description,omitempty"`
-	AlarmName                         *Value[string]                        `tf:"alarm_name" json:"alarm_name,omitempty"`
-	ARN                               *Value[string]                        `tf:"arn" json:"arn,omitempty"`
-	ComparisonOperator                *Value[string]                        `tf:"comparison_operator" json:"comparison_operator,omitempty"`
-	DatapointsToAlarm                 *Value[float64]                       `tf:"datapoints_to_alarm" json:"datapoints_to_alarm,omitempty"`
-	Dimensions                        map[string]*Value[string]             `tf:"dimensions" json:"dimensions,omitempty"`
-	EvaluateLowSampleCountPercentiles *Value[string]                        `tf:"evaluate_low_sample_count_percentiles" json:"evaluate_low_sample_count_percentiles,omitempty"`
-	EvaluationPeriods                 *Value[float64]                       `tf:"evaluation_periods" json:"evaluation_periods,omitempty"`
-	ExtendedStatistic                 *Value[string]                        `tf:"extended_statistic" json:"extended_statistic,omitempty"`
-	ID                                *Value[string]                        `tf:"id" json:"id,omitempty"`
-	InsufficientDataActions           []*Value[string]                      `tf:"insufficient_data_actions" json:"insufficient_data_actions,omitempty"`
-	MetricName                        *Value[string]                        `tf:"metric_name" json:"metric_name,omitempty"`
-	Namespace                         *Value[string]                        `tf:"namespace" json:"namespace,omitempty"`
-	OkActions                         []*Value[string]                      `tf:"ok_actions" json:"ok_actions,omitempty"`
-	Period                            *Value[float64]                       `tf:"period" json:"period,omitempty"`
-	Statistic                         *Value[string]                        `tf:"statistic" json:"statistic,omitempty"`
-	Tags                              map[string]*Value[string]             `tf:"tags" json:"tags,omitempty"`
-	TagsAll                           map[string]*Value[string]             `tf:"tags_all" json:"tags_all,omitempty"`
-	Threshold                         *Value[float64]                       `tf:"threshold" json:"threshold,omitempty"`
-	ThresholdMetricID                 *Value[string]                        `tf:"threshold_metric_id" json:"threshold_metric_id,omitempty"`
-	TreatMissingData                  *Value[string]                        `tf:"treat_missing_data" json:"treat_missing_data,omitempty"`
-	Unit                              *Value[string]                        `tf:"unit" json:"unit,omitempty"`
-	MetricQuery                       []AWSCloudwatchMetricAlarmMetricQuery `tf:"metric_query,blocks" json:"metric_query,omitempty"`
+	ActionsEnabled                    *Value[bool]                                 `tf:"actions_enabled" json:"actions_enabled,omitempty"`
+	AlarmActions                      []*Value[string]                             `tf:"alarm_actions" json:"alarm_actions,omitempty"`
+	AlarmDescription                  *Value[string]                               `tf:"alarm_description" json:"alarm_description,omitempty"`
+	AlarmName                         *Value[string]                               `tf:"alarm_name" json:"alarm_name,omitempty"`
+	ARN                               *Value[string]                               `tf:"arn" json:"arn,omitempty"`
+	ComparisonOperator                *Value[string]                               `tf:"comparison_operator" json:"comparison_operator,omitempty"`
+	DatapointsToAlarm                 *Value[float64]                              `tf:"datapoints_to_alarm" json:"datapoints_to_alarm,omitempty"`
+	Dimensions                        map[string]*Value[string]                    `tf:"dimensions" json:"dimensions,omitempty"`
+	EvaluateLowSampleCountPercentiles *Value[string]                               `tf:"evaluate_low_sample_count_percentiles" json:"evaluate_low_sample_count_percentiles,omitempty"`
+	EvaluationInterval                *Value[float64]                              `tf:"evaluation_interval" json:"evaluation_interval,omitempty"`
+	EvaluationPeriods                 *Value[float64]                              `tf:"evaluation_periods" json:"evaluation_periods,omitempty"`
+	ExtendedStatistic                 *Value[string]                               `tf:"extended_statistic" json:"extended_statistic,omitempty"`
+	ID                                *Value[string]                               `tf:"id" json:"id,omitempty"`
+	InsufficientDataActions           []*Value[string]                             `tf:"insufficient_data_actions" json:"insufficient_data_actions,omitempty"`
+	MetricName                        *Value[string]                               `tf:"metric_name" json:"metric_name,omitempty"`
+	Namespace                         *Value[string]                               `tf:"namespace" json:"namespace,omitempty"`
+	OkActions                         []*Value[string]                             `tf:"ok_actions" json:"ok_actions,omitempty"`
+	Period                            *Value[float64]                              `tf:"period" json:"period,omitempty"`
+	Region                            *Value[string]                               `tf:"region" json:"region,omitempty"`
+	Statistic                         *Value[string]                               `tf:"statistic" json:"statistic,omitempty"`
+	Tags                              map[string]*Value[string]                    `tf:"tags" json:"tags,omitempty"`
+	TagsAll                           map[string]*Value[string]                    `tf:"tags_all" json:"tags_all,omitempty"`
+	Threshold                         *Value[float64]                              `tf:"threshold" json:"threshold,omitempty"`
+	ThresholdMetricID                 *Value[string]                               `tf:"threshold_metric_id" json:"threshold_metric_id,omitempty"`
+	TreatMissingData                  *Value[string]                               `tf:"treat_missing_data" json:"treat_missing_data,omitempty"`
+	Unit                              *Value[string]                               `tf:"unit" json:"unit,omitempty"`
+	EvaluationCriteria                []AWSCloudwatchMetricAlarmEvaluationCriteria `tf:"evaluation_criteria,blocks" json:"evaluation_criteria,omitempty"`
+	MetricQuery                       []AWSCloudwatchMetricAlarmMetricQuery        `tf:"metric_query,blocks" json:"metric_query,omitempty"`
+}
+
+// AWSCloudwatchMetricAlarmEvaluationCriteria is a nested-block type used by the parent resource.
+type AWSCloudwatchMetricAlarmEvaluationCriteria struct {
+	PromqlCriteria []AWSCloudwatchMetricAlarmEvaluationCriteriaPromqlCriteria `tf:"promql_criteria,blocks" json:"promql_criteria,omitempty"`
+}
+
+// AWSCloudwatchMetricAlarmEvaluationCriteriaPromqlCriteria is a nested-block type used by the parent resource.
+type AWSCloudwatchMetricAlarmEvaluationCriteriaPromqlCriteria struct {
+	PendingPeriod  *Value[int64]  `tf:"pending_period" json:"pending_period,omitempty"`
+	Query          *Value[string] `tf:"query" json:"query,omitempty"`
+	RecoveryPeriod *Value[int64]  `tf:"recovery_period" json:"recovery_period,omitempty"`
 }
 
 // AWSCloudwatchMetricAlarmMetricQuery is a nested-block type used by the parent resource.
@@ -63,11 +78,12 @@ var AWSCloudwatchMetricAlarmSchema = map[string]FieldSchema{
 	"alarm_description":                     {Optional: true, Replacement: ReplacementUnknown},
 	"alarm_name":                            {Required: true, Replacement: ReplacementUnknown},
 	"arn":                                   {Computed: true, Replacement: ReplacementUnknown},
-	"comparison_operator":                   {Required: true, Replacement: ReplacementUnknown},
+	"comparison_operator":                   {Optional: true, Replacement: ReplacementUnknown},
 	"datapoints_to_alarm":                   {Optional: true, Replacement: ReplacementUnknown},
 	"dimensions":                            {Optional: true, Replacement: ReplacementUnknown},
 	"evaluate_low_sample_count_percentiles": {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"evaluation_periods":                    {Required: true, Replacement: ReplacementUnknown},
+	"evaluation_interval":                   {Optional: true, Replacement: ReplacementUnknown},
+	"evaluation_periods":                    {Optional: true, Replacement: ReplacementUnknown},
 	"extended_statistic":                    {Optional: true, Replacement: ReplacementUnknown},
 	"id":                                    {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"insufficient_data_actions":             {Optional: true, Replacement: ReplacementUnknown},
@@ -75,6 +91,7 @@ var AWSCloudwatchMetricAlarmSchema = map[string]FieldSchema{
 	"namespace":                             {Optional: true, Replacement: ReplacementUnknown},
 	"ok_actions":                            {Optional: true, Replacement: ReplacementUnknown},
 	"period":                                {Optional: true, Replacement: ReplacementUnknown},
+	"region":                                {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"statistic":                             {Optional: true, Replacement: ReplacementUnknown},
 	"tags":                                  {Optional: true, Replacement: ReplacementUnknown},
 	"tags_all":                              {Optional: true, Computed: true, Replacement: ReplacementUnknown},
@@ -82,6 +99,7 @@ var AWSCloudwatchMetricAlarmSchema = map[string]FieldSchema{
 	"threshold_metric_id":                   {Optional: true, Replacement: ReplacementUnknown},
 	"treat_missing_data":                    {Optional: true, Replacement: ReplacementUnknown},
 	"unit":                                  {Optional: true, Replacement: ReplacementUnknown},
+	"evaluation_criteria":                   {Optional: true, Replacement: ReplacementUnknown},
 	"metric_query":                          {Optional: true, Replacement: ReplacementUnknown},
 }
 

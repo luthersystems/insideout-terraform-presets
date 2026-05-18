@@ -10,6 +10,7 @@ type AWSCognitoResourceServer struct {
 	ID               *Value[string]                  `tf:"id" json:"id,omitempty"`
 	Identifier       *Value[string]                  `tf:"identifier" json:"identifier,omitempty"`
 	Name             *Value[string]                  `tf:"name" json:"name,omitempty"`
+	Region           *Value[string]                  `tf:"region" json:"region,omitempty"`
 	ScopeIdentifiers []*Value[string]                `tf:"scope_identifiers" json:"scope_identifiers,omitempty"`
 	UserPoolID       *Value[string]                  `tf:"user_pool_id" json:"user_pool_id,omitempty"`
 	Scope            []AWSCognitoResourceServerScope `tf:"scope,blocks" json:"scope,omitempty"`
@@ -27,6 +28,7 @@ var AWSCognitoResourceServerSchema = map[string]FieldSchema{
 	"id":                {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"identifier":        {Required: true, Replacement: ReplacementUnknown},
 	"name":              {Required: true, Replacement: ReplacementUnknown},
+	"region":            {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"scope_identifiers": {Computed: true, Replacement: ReplacementUnknown},
 	"user_pool_id":      {Required: true, Replacement: ReplacementUnknown},
 	"scope":             {Optional: true, Replacement: ReplacementUnknown},

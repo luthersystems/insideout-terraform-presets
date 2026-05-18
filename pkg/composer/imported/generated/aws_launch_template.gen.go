@@ -23,6 +23,7 @@ type AWSLaunchTemplate struct {
 	Name                              *Value[string]                                      `tf:"name" json:"name,omitempty"`
 	NamePrefix                        *Value[string]                                      `tf:"name_prefix" json:"name_prefix,omitempty"`
 	RAMDiskID                         *Value[string]                                      `tf:"ram_disk_id" json:"ram_disk_id,omitempty"`
+	Region                            *Value[string]                                      `tf:"region" json:"region,omitempty"`
 	SecurityGroupNames                []*Value[string]                                    `tf:"security_group_names" json:"security_group_names,omitempty"`
 	Tags                              map[string]*Value[string]                           `tf:"tags" json:"tags,omitempty"`
 	TagsAll                           map[string]*Value[string]                           `tf:"tags_all" json:"tags_all,omitempty"`
@@ -33,8 +34,6 @@ type AWSLaunchTemplate struct {
 	CapacityReservationSpecification  []AWSLaunchTemplateCapacityReservationSpecification `tf:"capacity_reservation_specification,blocks" json:"capacity_reservation_specification,omitempty"`
 	CPUOptions                        []AWSLaunchTemplateCPUOptions                       `tf:"cpu_options,blocks" json:"cpu_options,omitempty"`
 	CreditSpecification               []AWSLaunchTemplateCreditSpecification              `tf:"credit_specification,blocks" json:"credit_specification,omitempty"`
-	ElasticGpuSpecifications          []AWSLaunchTemplateElasticGpuSpecifications         `tf:"elastic_gpu_specifications,blocks" json:"elastic_gpu_specifications,omitempty"`
-	ElasticInferenceAccelerator       []AWSLaunchTemplateElasticInferenceAccelerator      `tf:"elastic_inference_accelerator,blocks" json:"elastic_inference_accelerator,omitempty"`
 	EnclaveOptions                    []AWSLaunchTemplateEnclaveOptions                   `tf:"enclave_options,blocks" json:"enclave_options,omitempty"`
 	HibernationOptions                []AWSLaunchTemplateHibernationOptions               `tf:"hibernation_options,blocks" json:"hibernation_options,omitempty"`
 	IAMInstanceProfile                []AWSLaunchTemplateIAMInstanceProfile               `tf:"iam_instance_profile,blocks" json:"iam_instance_profile,omitempty"`
@@ -45,8 +44,10 @@ type AWSLaunchTemplate struct {
 	MetadataOptions                   []AWSLaunchTemplateMetadataOptions                  `tf:"metadata_options,blocks" json:"metadata_options,omitempty"`
 	Monitoring                        []AWSLaunchTemplateMonitoring                       `tf:"monitoring,blocks" json:"monitoring,omitempty"`
 	NetworkInterfaces                 []AWSLaunchTemplateNetworkInterfaces                `tf:"network_interfaces,blocks" json:"network_interfaces,omitempty"`
+	NetworkPerformanceOptions         []AWSLaunchTemplateNetworkPerformanceOptions        `tf:"network_performance_options,blocks" json:"network_performance_options,omitempty"`
 	Placement                         []AWSLaunchTemplatePlacement                        `tf:"placement,blocks" json:"placement,omitempty"`
 	PrivateDNSNameOptions             []AWSLaunchTemplatePrivateDNSNameOptions            `tf:"private_dns_name_options,blocks" json:"private_dns_name_options,omitempty"`
+	SecondaryInterfaces               []AWSLaunchTemplateSecondaryInterfaces              `tf:"secondary_interfaces,blocks" json:"secondary_interfaces,omitempty"`
 	TagSpecifications                 []AWSLaunchTemplateTagSpecifications                `tf:"tag_specifications,blocks" json:"tag_specifications,omitempty"`
 }
 
@@ -60,21 +61,23 @@ type AWSLaunchTemplateBlockDeviceMappings struct {
 
 // AWSLaunchTemplateBlockDeviceMappingsEBS is a nested-block type used by the parent resource.
 type AWSLaunchTemplateBlockDeviceMappingsEBS struct {
-	DeleteOnTermination *Value[string]  `tf:"delete_on_termination" json:"delete_on_termination,omitempty"`
-	Encrypted           *Value[string]  `tf:"encrypted" json:"encrypted,omitempty"`
-	Iops                *Value[float64] `tf:"iops" json:"iops,omitempty"`
-	KMSKeyID            *Value[string]  `tf:"kms_key_id" json:"kms_key_id,omitempty"`
-	SnapshotID          *Value[string]  `tf:"snapshot_id" json:"snapshot_id,omitempty"`
-	Throughput          *Value[float64] `tf:"throughput" json:"throughput,omitempty"`
-	VolumeSize          *Value[int64]   `tf:"volume_size" json:"volume_size,omitempty"`
-	VolumeType          *Value[string]  `tf:"volume_type" json:"volume_type,omitempty"`
+	DeleteOnTermination      *Value[string]  `tf:"delete_on_termination" json:"delete_on_termination,omitempty"`
+	Encrypted                *Value[string]  `tf:"encrypted" json:"encrypted,omitempty"`
+	Iops                     *Value[float64] `tf:"iops" json:"iops,omitempty"`
+	KMSKeyID                 *Value[string]  `tf:"kms_key_id" json:"kms_key_id,omitempty"`
+	SnapshotID               *Value[string]  `tf:"snapshot_id" json:"snapshot_id,omitempty"`
+	Throughput               *Value[float64] `tf:"throughput" json:"throughput,omitempty"`
+	VolumeInitializationRate *Value[float64] `tf:"volume_initialization_rate" json:"volume_initialization_rate,omitempty"`
+	VolumeSize               *Value[int64]   `tf:"volume_size" json:"volume_size,omitempty"`
+	VolumeType               *Value[string]  `tf:"volume_type" json:"volume_type,omitempty"`
 }
 
 // AWSLaunchTemplateCPUOptions is a nested-block type used by the parent resource.
 type AWSLaunchTemplateCPUOptions struct {
-	AmdSevSnp      *Value[string]  `tf:"amd_sev_snp" json:"amd_sev_snp,omitempty"`
-	CoreCount      *Value[int64]   `tf:"core_count" json:"core_count,omitempty"`
-	ThreadsPerCore *Value[float64] `tf:"threads_per_core" json:"threads_per_core,omitempty"`
+	AmdSevSnp            *Value[string]  `tf:"amd_sev_snp" json:"amd_sev_snp,omitempty"`
+	CoreCount            *Value[int64]   `tf:"core_count" json:"core_count,omitempty"`
+	NestedVirtualization *Value[string]  `tf:"nested_virtualization" json:"nested_virtualization,omitempty"`
+	ThreadsPerCore       *Value[float64] `tf:"threads_per_core" json:"threads_per_core,omitempty"`
 }
 
 // AWSLaunchTemplateCapacityReservationSpecification is a nested-block type used by the parent resource.
@@ -92,16 +95,6 @@ type AWSLaunchTemplateCapacityReservationSpecificationCapacityReservationTarget 
 // AWSLaunchTemplateCreditSpecification is a nested-block type used by the parent resource.
 type AWSLaunchTemplateCreditSpecification struct {
 	CPUCredits *Value[string] `tf:"cpu_credits" json:"cpu_credits,omitempty"`
-}
-
-// AWSLaunchTemplateElasticGpuSpecifications is a nested-block type used by the parent resource.
-type AWSLaunchTemplateElasticGpuSpecifications struct {
-	Type_ *Value[string] `tf:"type" json:"type,omitempty"`
-}
-
-// AWSLaunchTemplateElasticInferenceAccelerator is a nested-block type used by the parent resource.
-type AWSLaunchTemplateElasticInferenceAccelerator struct {
-	Type_ *Value[string] `tf:"type" json:"type,omitempty"`
 }
 
 // AWSLaunchTemplateEnclaveOptions is a nested-block type used by the parent resource.
@@ -243,32 +236,58 @@ type AWSLaunchTemplateMonitoring struct {
 
 // AWSLaunchTemplateNetworkInterfaces is a nested-block type used by the parent resource.
 type AWSLaunchTemplateNetworkInterfaces struct {
-	AssociateCarrierIpAddress *Value[string]   `tf:"associate_carrier_ip_address" json:"associate_carrier_ip_address,omitempty"`
-	AssociatePublicIpAddress  *Value[string]   `tf:"associate_public_ip_address" json:"associate_public_ip_address,omitempty"`
-	DeleteOnTermination       *Value[string]   `tf:"delete_on_termination" json:"delete_on_termination,omitempty"`
-	Description               *Value[string]   `tf:"description" json:"description,omitempty"`
-	DeviceIndex               *Value[float64]  `tf:"device_index" json:"device_index,omitempty"`
-	InterfaceType             *Value[string]   `tf:"interface_type" json:"interface_type,omitempty"`
-	IPV4AddressCount          *Value[int64]    `tf:"ipv4_address_count" json:"ipv4_address_count,omitempty"`
-	IPV4Addresses             []*Value[string] `tf:"ipv4_addresses" json:"ipv4_addresses,omitempty"`
-	IPV4PrefixCount           *Value[int64]    `tf:"ipv4_prefix_count" json:"ipv4_prefix_count,omitempty"`
-	IPV4Prefixes              []*Value[string] `tf:"ipv4_prefixes" json:"ipv4_prefixes,omitempty"`
-	IPV6AddressCount          *Value[int64]    `tf:"ipv6_address_count" json:"ipv6_address_count,omitempty"`
-	IPV6Addresses             []*Value[string] `tf:"ipv6_addresses" json:"ipv6_addresses,omitempty"`
-	IPV6PrefixCount           *Value[int64]    `tf:"ipv6_prefix_count" json:"ipv6_prefix_count,omitempty"`
-	IPV6Prefixes              []*Value[string] `tf:"ipv6_prefixes" json:"ipv6_prefixes,omitempty"`
-	NetworkCardIndex          *Value[float64]  `tf:"network_card_index" json:"network_card_index,omitempty"`
-	NetworkInterfaceID        *Value[string]   `tf:"network_interface_id" json:"network_interface_id,omitempty"`
-	PrimaryIPV6               *Value[string]   `tf:"primary_ipv6" json:"primary_ipv6,omitempty"`
-	PrivateIpAddress          *Value[string]   `tf:"private_ip_address" json:"private_ip_address,omitempty"`
-	SecurityGroups            []*Value[string] `tf:"security_groups" json:"security_groups,omitempty"`
-	SubnetID                  *Value[string]   `tf:"subnet_id" json:"subnet_id,omitempty"`
+	AssociateCarrierIpAddress       *Value[string]                                                      `tf:"associate_carrier_ip_address" json:"associate_carrier_ip_address,omitempty"`
+	AssociatePublicIpAddress        *Value[string]                                                      `tf:"associate_public_ip_address" json:"associate_public_ip_address,omitempty"`
+	DeleteOnTermination             *Value[string]                                                      `tf:"delete_on_termination" json:"delete_on_termination,omitempty"`
+	Description                     *Value[string]                                                      `tf:"description" json:"description,omitempty"`
+	DeviceIndex                     *Value[float64]                                                     `tf:"device_index" json:"device_index,omitempty"`
+	InterfaceType                   *Value[string]                                                      `tf:"interface_type" json:"interface_type,omitempty"`
+	IPV4AddressCount                *Value[int64]                                                       `tf:"ipv4_address_count" json:"ipv4_address_count,omitempty"`
+	IPV4Addresses                   []*Value[string]                                                    `tf:"ipv4_addresses" json:"ipv4_addresses,omitempty"`
+	IPV4PrefixCount                 *Value[int64]                                                       `tf:"ipv4_prefix_count" json:"ipv4_prefix_count,omitempty"`
+	IPV4Prefixes                    []*Value[string]                                                    `tf:"ipv4_prefixes" json:"ipv4_prefixes,omitempty"`
+	IPV6AddressCount                *Value[int64]                                                       `tf:"ipv6_address_count" json:"ipv6_address_count,omitempty"`
+	IPV6Addresses                   []*Value[string]                                                    `tf:"ipv6_addresses" json:"ipv6_addresses,omitempty"`
+	IPV6PrefixCount                 *Value[int64]                                                       `tf:"ipv6_prefix_count" json:"ipv6_prefix_count,omitempty"`
+	IPV6Prefixes                    []*Value[string]                                                    `tf:"ipv6_prefixes" json:"ipv6_prefixes,omitempty"`
+	NetworkCardIndex                *Value[float64]                                                     `tf:"network_card_index" json:"network_card_index,omitempty"`
+	NetworkInterfaceID              *Value[string]                                                      `tf:"network_interface_id" json:"network_interface_id,omitempty"`
+	PrimaryIPV6                     *Value[string]                                                      `tf:"primary_ipv6" json:"primary_ipv6,omitempty"`
+	PrivateIpAddress                *Value[string]                                                      `tf:"private_ip_address" json:"private_ip_address,omitempty"`
+	SecurityGroups                  []*Value[string]                                                    `tf:"security_groups" json:"security_groups,omitempty"`
+	SubnetID                        *Value[string]                                                      `tf:"subnet_id" json:"subnet_id,omitempty"`
+	ConnectionTrackingSpecification []AWSLaunchTemplateNetworkInterfacesConnectionTrackingSpecification `tf:"connection_tracking_specification,blocks" json:"connection_tracking_specification,omitempty"`
+	EnaSrdSpecification             []AWSLaunchTemplateNetworkInterfacesEnaSrdSpecification             `tf:"ena_srd_specification,blocks" json:"ena_srd_specification,omitempty"`
+}
+
+// AWSLaunchTemplateNetworkInterfacesConnectionTrackingSpecification is a nested-block type used by the parent resource.
+type AWSLaunchTemplateNetworkInterfacesConnectionTrackingSpecification struct {
+	TCPEstablishedTimeout *Value[int64] `tf:"tcp_established_timeout" json:"tcp_established_timeout,omitempty"`
+	UDPStreamTimeout      *Value[int64] `tf:"udp_stream_timeout" json:"udp_stream_timeout,omitempty"`
+	UDPTimeout            *Value[int64] `tf:"udp_timeout" json:"udp_timeout,omitempty"`
+}
+
+// AWSLaunchTemplateNetworkInterfacesEnaSrdSpecification is a nested-block type used by the parent resource.
+type AWSLaunchTemplateNetworkInterfacesEnaSrdSpecification struct {
+	EnaSrdEnabled          *Value[bool]                                                                  `tf:"ena_srd_enabled" json:"ena_srd_enabled,omitempty"`
+	EnaSrdUDPSpecification []AWSLaunchTemplateNetworkInterfacesEnaSrdSpecificationEnaSrdUDPSpecification `tf:"ena_srd_udp_specification,blocks" json:"ena_srd_udp_specification,omitempty"`
+}
+
+// AWSLaunchTemplateNetworkInterfacesEnaSrdSpecificationEnaSrdUDPSpecification is a nested-block type used by the parent resource.
+type AWSLaunchTemplateNetworkInterfacesEnaSrdSpecificationEnaSrdUDPSpecification struct {
+	EnaSrdUDPEnabled *Value[bool] `tf:"ena_srd_udp_enabled" json:"ena_srd_udp_enabled,omitempty"`
+}
+
+// AWSLaunchTemplateNetworkPerformanceOptions is a nested-block type used by the parent resource.
+type AWSLaunchTemplateNetworkPerformanceOptions struct {
+	BandwidthWeighting *Value[string] `tf:"bandwidth_weighting" json:"bandwidth_weighting,omitempty"`
 }
 
 // AWSLaunchTemplatePlacement is a nested-block type used by the parent resource.
 type AWSLaunchTemplatePlacement struct {
 	Affinity             *Value[string]  `tf:"affinity" json:"affinity,omitempty"`
 	AvailabilityZone     *Value[string]  `tf:"availability_zone" json:"availability_zone,omitempty"`
+	GroupID              *Value[string]  `tf:"group_id" json:"group_id,omitempty"`
 	GroupName            *Value[string]  `tf:"group_name" json:"group_name,omitempty"`
 	HostID               *Value[string]  `tf:"host_id" json:"host_id,omitempty"`
 	HostResourceGroupARN *Value[string]  `tf:"host_resource_group_arn" json:"host_resource_group_arn,omitempty"`
@@ -282,6 +301,17 @@ type AWSLaunchTemplatePrivateDNSNameOptions struct {
 	EnableResourceNameDNSARecord    *Value[bool]   `tf:"enable_resource_name_dns_a_record" json:"enable_resource_name_dns_a_record,omitempty"`
 	EnableResourceNameDNSAaaaRecord *Value[bool]   `tf:"enable_resource_name_dns_aaaa_record" json:"enable_resource_name_dns_aaaa_record,omitempty"`
 	HostnameType                    *Value[string] `tf:"hostname_type" json:"hostname_type,omitempty"`
+}
+
+// AWSLaunchTemplateSecondaryInterfaces is a nested-block type used by the parent resource.
+type AWSLaunchTemplateSecondaryInterfaces struct {
+	DeleteOnTermination   *Value[bool]     `tf:"delete_on_termination" json:"delete_on_termination,omitempty"`
+	DeviceIndex           *Value[float64]  `tf:"device_index" json:"device_index,omitempty"`
+	InterfaceType         *Value[string]   `tf:"interface_type" json:"interface_type,omitempty"`
+	NetworkCardIndex      *Value[float64]  `tf:"network_card_index" json:"network_card_index,omitempty"`
+	PrivateIpAddressCount *Value[int64]    `tf:"private_ip_address_count" json:"private_ip_address_count,omitempty"`
+	PrivateIpAddresses    []*Value[string] `tf:"private_ip_addresses" json:"private_ip_addresses,omitempty"`
+	SecondarySubnetID     *Value[string]   `tf:"secondary_subnet_id" json:"secondary_subnet_id,omitempty"`
 }
 
 // AWSLaunchTemplateTagSpecifications is a nested-block type used by the parent resource.
@@ -309,6 +339,7 @@ var AWSLaunchTemplateSchema = map[string]FieldSchema{
 	"name":                                 {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"name_prefix":                          {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"ram_disk_id":                          {Optional: true, Replacement: ReplacementUnknown},
+	"region":                               {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"security_group_names":                 {Optional: true, Replacement: ReplacementUnknown},
 	"tags":                                 {Optional: true, Replacement: ReplacementUnknown},
 	"tags_all":                             {Optional: true, Computed: true, Replacement: ReplacementUnknown},
@@ -319,8 +350,6 @@ var AWSLaunchTemplateSchema = map[string]FieldSchema{
 	"capacity_reservation_specification":   {Optional: true, Replacement: ReplacementUnknown},
 	"cpu_options":                          {Optional: true, Replacement: ReplacementUnknown},
 	"credit_specification":                 {Optional: true, Replacement: ReplacementUnknown},
-	"elastic_gpu_specifications":           {Optional: true, Replacement: ReplacementUnknown},
-	"elastic_inference_accelerator":        {Optional: true, Replacement: ReplacementUnknown},
 	"enclave_options":                      {Optional: true, Replacement: ReplacementUnknown},
 	"hibernation_options":                  {Optional: true, Replacement: ReplacementUnknown},
 	"iam_instance_profile":                 {Optional: true, Replacement: ReplacementUnknown},
@@ -331,8 +360,10 @@ var AWSLaunchTemplateSchema = map[string]FieldSchema{
 	"metadata_options":                     {Optional: true, Replacement: ReplacementUnknown},
 	"monitoring":                           {Optional: true, Replacement: ReplacementUnknown},
 	"network_interfaces":                   {Optional: true, Replacement: ReplacementUnknown},
+	"network_performance_options":          {Optional: true, Replacement: ReplacementUnknown},
 	"placement":                            {Optional: true, Replacement: ReplacementUnknown},
 	"private_dns_name_options":             {Optional: true, Replacement: ReplacementUnknown},
+	"secondary_interfaces":                 {Optional: true, Replacement: ReplacementUnknown},
 	"tag_specifications":                   {Optional: true, Replacement: ReplacementUnknown},
 }
 

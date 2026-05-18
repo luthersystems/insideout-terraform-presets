@@ -26,10 +26,12 @@ type AWSCognitoUserPoolClient struct {
 	PreventUserExistenceErrors               *Value[string]                                   `tf:"prevent_user_existence_errors" json:"prevent_user_existence_errors,omitempty"`
 	ReadAttributes                           []*Value[string]                                 `tf:"read_attributes" json:"read_attributes,omitempty"`
 	RefreshTokenValidity                     *Value[float64]                                  `tf:"refresh_token_validity" json:"refresh_token_validity,omitempty"`
+	Region                                   *Value[string]                                   `tf:"region" json:"region,omitempty"`
 	SupportedIdentityProviders               []*Value[string]                                 `tf:"supported_identity_providers" json:"supported_identity_providers,omitempty"`
 	UserPoolID                               *Value[string]                                   `tf:"user_pool_id" json:"user_pool_id,omitempty"`
 	WriteAttributes                          []*Value[string]                                 `tf:"write_attributes" json:"write_attributes,omitempty"`
 	AnalyticsConfiguration                   []AWSCognitoUserPoolClientAnalyticsConfiguration `tf:"analytics_configuration,blocks" json:"analytics_configuration,omitempty"`
+	RefreshTokenRotation                     []AWSCognitoUserPoolClientRefreshTokenRotation   `tf:"refresh_token_rotation,blocks" json:"refresh_token_rotation,omitempty"`
 	TokenValidityUnits                       []AWSCognitoUserPoolClientTokenValidityUnits     `tf:"token_validity_units,blocks" json:"token_validity_units,omitempty"`
 }
 
@@ -40,6 +42,12 @@ type AWSCognitoUserPoolClientAnalyticsConfiguration struct {
 	ExternalID     *Value[string] `tf:"external_id" json:"external_id,omitempty"`
 	RoleARN        *Value[string] `tf:"role_arn" json:"role_arn,omitempty"`
 	UserDataShared *Value[bool]   `tf:"user_data_shared" json:"user_data_shared,omitempty"`
+}
+
+// AWSCognitoUserPoolClientRefreshTokenRotation is a nested-block type used by the parent resource.
+type AWSCognitoUserPoolClientRefreshTokenRotation struct {
+	Feature                 *Value[string] `tf:"feature" json:"feature,omitempty"`
+	RetryGracePeriodSeconds *Value[int64]  `tf:"retry_grace_period_seconds" json:"retry_grace_period_seconds,omitempty"`
 }
 
 // AWSCognitoUserPoolClientTokenValidityUnits is a nested-block type used by the parent resource.
@@ -71,10 +79,12 @@ var AWSCognitoUserPoolClientSchema = map[string]FieldSchema{
 	"prevent_user_existence_errors":                 {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"read_attributes":                               {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"refresh_token_validity":                        {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"region":                                        {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"supported_identity_providers":                  {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"user_pool_id":                                  {Required: true, Replacement: ReplacementUnknown},
 	"write_attributes":                              {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"analytics_configuration":                       {Optional: true, Replacement: ReplacementUnknown},
+	"refresh_token_rotation":                        {Optional: true, Replacement: ReplacementUnknown},
 	"token_validity_units":                          {Optional: true, Replacement: ReplacementUnknown},
 }
 

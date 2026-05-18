@@ -7,40 +7,46 @@ import "reflect"
 // AWSLb is the generated Layer 1 typed model for the
 // `aws_lb` Terraform resource.
 type AWSLb struct {
-	ARN                                                  *Value[string]            `tf:"arn" json:"arn,omitempty"`
-	ARNSuffix                                            *Value[string]            `tf:"arn_suffix" json:"arn_suffix,omitempty"`
-	ClientKeepAlive                                      *Value[float64]           `tf:"client_keep_alive" json:"client_keep_alive,omitempty"`
-	CustomerOwnedIPV4Pool                                *Value[string]            `tf:"customer_owned_ipv4_pool" json:"customer_owned_ipv4_pool,omitempty"`
-	DesyncMitigationMode                                 *Value[string]            `tf:"desync_mitigation_mode" json:"desync_mitigation_mode,omitempty"`
-	DNSName                                              *Value[string]            `tf:"dns_name" json:"dns_name,omitempty"`
-	DNSRecordClientRoutingPolicy                         *Value[string]            `tf:"dns_record_client_routing_policy" json:"dns_record_client_routing_policy,omitempty"`
-	DropInvalidHeaderFields                              *Value[bool]              `tf:"drop_invalid_header_fields" json:"drop_invalid_header_fields,omitempty"`
-	EnableCrossZoneLoadBalancing                         *Value[bool]              `tf:"enable_cross_zone_load_balancing" json:"enable_cross_zone_load_balancing,omitempty"`
-	EnableDeletionProtection                             *Value[bool]              `tf:"enable_deletion_protection" json:"enable_deletion_protection,omitempty"`
-	EnableHttp2                                          *Value[bool]              `tf:"enable_http2" json:"enable_http2,omitempty"`
-	EnableTLSVersionAndCipherSuiteHeaders                *Value[bool]              `tf:"enable_tls_version_and_cipher_suite_headers" json:"enable_tls_version_and_cipher_suite_headers,omitempty"`
-	EnableWAFFailOpen                                    *Value[bool]              `tf:"enable_waf_fail_open" json:"enable_waf_fail_open,omitempty"`
-	EnableXffClientPort                                  *Value[bool]              `tf:"enable_xff_client_port" json:"enable_xff_client_port,omitempty"`
-	EnforceSecurityGroupInboundRulesOnPrivateLinkTraffic *Value[string]            `tf:"enforce_security_group_inbound_rules_on_private_link_traffic" json:"enforce_security_group_inbound_rules_on_private_link_traffic,omitempty"`
-	ID                                                   *Value[string]            `tf:"id" json:"id,omitempty"`
-	IdleTimeout                                          *Value[int64]             `tf:"idle_timeout" json:"idle_timeout,omitempty"`
-	Internal                                             *Value[bool]              `tf:"internal" json:"internal,omitempty"`
-	IpAddressType                                        *Value[string]            `tf:"ip_address_type" json:"ip_address_type,omitempty"`
-	LoadBalancerType                                     *Value[string]            `tf:"load_balancer_type" json:"load_balancer_type,omitempty"`
-	Name                                                 *Value[string]            `tf:"name" json:"name,omitempty"`
-	NamePrefix                                           *Value[string]            `tf:"name_prefix" json:"name_prefix,omitempty"`
-	PreserveHostHeader                                   *Value[bool]              `tf:"preserve_host_header" json:"preserve_host_header,omitempty"`
-	SecurityGroups                                       []*Value[string]          `tf:"security_groups" json:"security_groups,omitempty"`
-	Subnets                                              []*Value[string]          `tf:"subnets" json:"subnets,omitempty"`
-	Tags                                                 map[string]*Value[string] `tf:"tags" json:"tags,omitempty"`
-	TagsAll                                              map[string]*Value[string] `tf:"tags_all" json:"tags_all,omitempty"`
-	VPCID                                                *Value[string]            `tf:"vpc_id" json:"vpc_id,omitempty"`
-	XffHeaderProcessingMode                              *Value[string]            `tf:"xff_header_processing_mode" json:"xff_header_processing_mode,omitempty"`
-	ZoneID                                               *Value[string]            `tf:"zone_id" json:"zone_id,omitempty"`
-	AccessLogs                                           []AWSLbAccessLogs         `tf:"access_logs,blocks" json:"access_logs,omitempty"`
-	ConnectionLogs                                       []AWSLbConnectionLogs     `tf:"connection_logs,blocks" json:"connection_logs,omitempty"`
-	SubnetMapping                                        []AWSLbSubnetMapping      `tf:"subnet_mapping,blocks" json:"subnet_mapping,omitempty"`
-	Timeouts                                             *AWSLbTimeouts            `tf:"timeouts,block" json:"timeouts,omitempty"`
+	ARN                                                  *Value[string]                     `tf:"arn" json:"arn,omitempty"`
+	ARNSuffix                                            *Value[string]                     `tf:"arn_suffix" json:"arn_suffix,omitempty"`
+	ClientKeepAlive                                      *Value[float64]                    `tf:"client_keep_alive" json:"client_keep_alive,omitempty"`
+	CustomerOwnedIPV4Pool                                *Value[string]                     `tf:"customer_owned_ipv4_pool" json:"customer_owned_ipv4_pool,omitempty"`
+	DesyncMitigationMode                                 *Value[string]                     `tf:"desync_mitigation_mode" json:"desync_mitigation_mode,omitempty"`
+	DNSName                                              *Value[string]                     `tf:"dns_name" json:"dns_name,omitempty"`
+	DNSRecordClientRoutingPolicy                         *Value[string]                     `tf:"dns_record_client_routing_policy" json:"dns_record_client_routing_policy,omitempty"`
+	DropInvalidHeaderFields                              *Value[bool]                       `tf:"drop_invalid_header_fields" json:"drop_invalid_header_fields,omitempty"`
+	EnableCrossZoneLoadBalancing                         *Value[bool]                       `tf:"enable_cross_zone_load_balancing" json:"enable_cross_zone_load_balancing,omitempty"`
+	EnableDeletionProtection                             *Value[bool]                       `tf:"enable_deletion_protection" json:"enable_deletion_protection,omitempty"`
+	EnableHttp2                                          *Value[bool]                       `tf:"enable_http2" json:"enable_http2,omitempty"`
+	EnableTLSVersionAndCipherSuiteHeaders                *Value[bool]                       `tf:"enable_tls_version_and_cipher_suite_headers" json:"enable_tls_version_and_cipher_suite_headers,omitempty"`
+	EnableWAFFailOpen                                    *Value[bool]                       `tf:"enable_waf_fail_open" json:"enable_waf_fail_open,omitempty"`
+	EnableXffClientPort                                  *Value[bool]                       `tf:"enable_xff_client_port" json:"enable_xff_client_port,omitempty"`
+	EnableZonalShift                                     *Value[bool]                       `tf:"enable_zonal_shift" json:"enable_zonal_shift,omitempty"`
+	EnforceSecurityGroupInboundRulesOnPrivateLinkTraffic *Value[string]                     `tf:"enforce_security_group_inbound_rules_on_private_link_traffic" json:"enforce_security_group_inbound_rules_on_private_link_traffic,omitempty"`
+	ID                                                   *Value[string]                     `tf:"id" json:"id,omitempty"`
+	IdleTimeout                                          *Value[int64]                      `tf:"idle_timeout" json:"idle_timeout,omitempty"`
+	Internal                                             *Value[bool]                       `tf:"internal" json:"internal,omitempty"`
+	IpAddressType                                        *Value[string]                     `tf:"ip_address_type" json:"ip_address_type,omitempty"`
+	LoadBalancerType                                     *Value[string]                     `tf:"load_balancer_type" json:"load_balancer_type,omitempty"`
+	Name                                                 *Value[string]                     `tf:"name" json:"name,omitempty"`
+	NamePrefix                                           *Value[string]                     `tf:"name_prefix" json:"name_prefix,omitempty"`
+	PreserveHostHeader                                   *Value[bool]                       `tf:"preserve_host_header" json:"preserve_host_header,omitempty"`
+	Region                                               *Value[string]                     `tf:"region" json:"region,omitempty"`
+	SecondaryIpsAutoAssignedPerSubnet                    *Value[float64]                    `tf:"secondary_ips_auto_assigned_per_subnet" json:"secondary_ips_auto_assigned_per_subnet,omitempty"`
+	SecurityGroups                                       []*Value[string]                   `tf:"security_groups" json:"security_groups,omitempty"`
+	Subnets                                              []*Value[string]                   `tf:"subnets" json:"subnets,omitempty"`
+	Tags                                                 map[string]*Value[string]          `tf:"tags" json:"tags,omitempty"`
+	TagsAll                                              map[string]*Value[string]          `tf:"tags_all" json:"tags_all,omitempty"`
+	VPCID                                                *Value[string]                     `tf:"vpc_id" json:"vpc_id,omitempty"`
+	XffHeaderProcessingMode                              *Value[string]                     `tf:"xff_header_processing_mode" json:"xff_header_processing_mode,omitempty"`
+	ZoneID                                               *Value[string]                     `tf:"zone_id" json:"zone_id,omitempty"`
+	AccessLogs                                           []AWSLbAccessLogs                  `tf:"access_logs,blocks" json:"access_logs,omitempty"`
+	ConnectionLogs                                       []AWSLbConnectionLogs              `tf:"connection_logs,blocks" json:"connection_logs,omitempty"`
+	HealthCheckLogs                                      []AWSLbHealthCheckLogs             `tf:"health_check_logs,blocks" json:"health_check_logs,omitempty"`
+	IpamPools                                            []AWSLbIpamPools                   `tf:"ipam_pools,blocks" json:"ipam_pools,omitempty"`
+	MinimumLoadBalancerCapacity                          []AWSLbMinimumLoadBalancerCapacity `tf:"minimum_load_balancer_capacity,blocks" json:"minimum_load_balancer_capacity,omitempty"`
+	SubnetMapping                                        []AWSLbSubnetMapping               `tf:"subnet_mapping,blocks" json:"subnet_mapping,omitempty"`
+	Timeouts                                             *AWSLbTimeouts                     `tf:"timeouts,block" json:"timeouts,omitempty"`
 }
 
 // AWSLbAccessLogs is a nested-block type used by the parent resource.
@@ -55,6 +61,23 @@ type AWSLbConnectionLogs struct {
 	Bucket  *Value[string] `tf:"bucket" json:"bucket,omitempty"`
 	Enabled *Value[bool]   `tf:"enabled" json:"enabled,omitempty"`
 	Prefix  *Value[string] `tf:"prefix" json:"prefix,omitempty"`
+}
+
+// AWSLbHealthCheckLogs is a nested-block type used by the parent resource.
+type AWSLbHealthCheckLogs struct {
+	Bucket  *Value[string] `tf:"bucket" json:"bucket,omitempty"`
+	Enabled *Value[bool]   `tf:"enabled" json:"enabled,omitempty"`
+	Prefix  *Value[string] `tf:"prefix" json:"prefix,omitempty"`
+}
+
+// AWSLbIpamPools is a nested-block type used by the parent resource.
+type AWSLbIpamPools struct {
+	IPV4IpamPoolID *Value[string] `tf:"ipv4_ipam_pool_id" json:"ipv4_ipam_pool_id,omitempty"`
+}
+
+// AWSLbMinimumLoadBalancerCapacity is a nested-block type used by the parent resource.
+type AWSLbMinimumLoadBalancerCapacity struct {
+	CapacityUnits *Value[float64] `tf:"capacity_units" json:"capacity_units,omitempty"`
 }
 
 // AWSLbSubnetMapping is a nested-block type used by the parent resource.
@@ -90,26 +113,32 @@ var AWSLbSchema = map[string]FieldSchema{
 	"enable_tls_version_and_cipher_suite_headers": {Optional: true, Replacement: ReplacementUnknown},
 	"enable_waf_fail_open":                        {Optional: true, Replacement: ReplacementUnknown},
 	"enable_xff_client_port":                      {Optional: true, Replacement: ReplacementUnknown},
+	"enable_zonal_shift":                          {Optional: true, Replacement: ReplacementUnknown},
 	"enforce_security_group_inbound_rules_on_private_link_traffic": {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"id":                         {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"idle_timeout":               {Optional: true, Replacement: ReplacementUnknown},
-	"internal":                   {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"ip_address_type":            {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"load_balancer_type":         {Optional: true, Replacement: ReplacementUnknown},
-	"name":                       {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"name_prefix":                {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"preserve_host_header":       {Optional: true, Replacement: ReplacementUnknown},
-	"security_groups":            {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"subnets":                    {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"tags":                       {Optional: true, Replacement: ReplacementUnknown},
-	"tags_all":                   {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"vpc_id":                     {Computed: true, Replacement: ReplacementUnknown},
-	"xff_header_processing_mode": {Optional: true, Replacement: ReplacementUnknown},
-	"zone_id":                    {Computed: true, Replacement: ReplacementUnknown},
-	"access_logs":                {Optional: true, Replacement: ReplacementUnknown},
-	"connection_logs":            {Optional: true, Replacement: ReplacementUnknown},
-	"subnet_mapping":             {Optional: true, Replacement: ReplacementUnknown},
-	"timeouts":                   {Optional: true, Replacement: ReplacementUnknown},
+	"id":                                     {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"idle_timeout":                           {Optional: true, Replacement: ReplacementUnknown},
+	"internal":                               {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"ip_address_type":                        {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"load_balancer_type":                     {Optional: true, Replacement: ReplacementUnknown},
+	"name":                                   {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"name_prefix":                            {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"preserve_host_header":                   {Optional: true, Replacement: ReplacementUnknown},
+	"region":                                 {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"secondary_ips_auto_assigned_per_subnet": {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"security_groups":                        {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"subnets":                                {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"tags":                                   {Optional: true, Replacement: ReplacementUnknown},
+	"tags_all":                               {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"vpc_id":                                 {Computed: true, Replacement: ReplacementUnknown},
+	"xff_header_processing_mode":             {Optional: true, Replacement: ReplacementUnknown},
+	"zone_id":                                {Computed: true, Replacement: ReplacementUnknown},
+	"access_logs":                            {Optional: true, Replacement: ReplacementUnknown},
+	"connection_logs":                        {Optional: true, Replacement: ReplacementUnknown},
+	"health_check_logs":                      {Optional: true, Replacement: ReplacementUnknown},
+	"ipam_pools":                             {Optional: true, Replacement: ReplacementUnknown},
+	"minimum_load_balancer_capacity":         {Optional: true, Replacement: ReplacementUnknown},
+	"subnet_mapping":                         {Optional: true, Replacement: ReplacementUnknown},
+	"timeouts":                               {Optional: true, Replacement: ReplacementUnknown},
 }
 
 func init() {

@@ -7,29 +7,37 @@ import "reflect"
 // AWSEKSPodIdentityAssociation is the generated Layer 1 typed model for the
 // `aws_eks_pod_identity_association` Terraform resource.
 type AWSEKSPodIdentityAssociation struct {
-	AssociationARN *Value[string]            `tf:"association_arn" json:"association_arn,omitempty"`
-	AssociationID  *Value[string]            `tf:"association_id" json:"association_id,omitempty"`
-	ClusterName    *Value[string]            `tf:"cluster_name" json:"cluster_name,omitempty"`
-	ID             *Value[string]            `tf:"id" json:"id,omitempty"`
-	Namespace      *Value[string]            `tf:"namespace" json:"namespace,omitempty"`
-	RoleARN        *Value[string]            `tf:"role_arn" json:"role_arn,omitempty"`
-	ServiceAccount *Value[string]            `tf:"service_account" json:"service_account,omitempty"`
-	Tags           map[string]*Value[string] `tf:"tags" json:"tags,omitempty"`
-	TagsAll        map[string]*Value[string] `tf:"tags_all" json:"tags_all,omitempty"`
+	AssociationARN     *Value[string]            `tf:"association_arn" json:"association_arn,omitempty"`
+	AssociationID      *Value[string]            `tf:"association_id" json:"association_id,omitempty"`
+	ClusterName        *Value[string]            `tf:"cluster_name" json:"cluster_name,omitempty"`
+	DisableSessionTags *Value[bool]              `tf:"disable_session_tags" json:"disable_session_tags,omitempty"`
+	ExternalID         *Value[string]            `tf:"external_id" json:"external_id,omitempty"`
+	ID                 *Value[string]            `tf:"id" json:"id,omitempty"`
+	Namespace          *Value[string]            `tf:"namespace" json:"namespace,omitempty"`
+	Region             *Value[string]            `tf:"region" json:"region,omitempty"`
+	RoleARN            *Value[string]            `tf:"role_arn" json:"role_arn,omitempty"`
+	ServiceAccount     *Value[string]            `tf:"service_account" json:"service_account,omitempty"`
+	Tags               map[string]*Value[string] `tf:"tags" json:"tags,omitempty"`
+	TagsAll            map[string]*Value[string] `tf:"tags_all" json:"tags_all,omitempty"`
+	TargetRoleARN      *Value[string]            `tf:"target_role_arn" json:"target_role_arn,omitempty"`
 }
 
 // AWSEKSPodIdentityAssociationSchema describes provider metadata for each attribute / nested
 // block of aws_eks_pod_identity_association.
 var AWSEKSPodIdentityAssociationSchema = map[string]FieldSchema{
-	"association_arn": {Computed: true, Replacement: ReplacementUnknown},
-	"association_id":  {Computed: true, Replacement: ReplacementUnknown},
-	"cluster_name":    {Required: true, Replacement: ReplacementUnknown},
-	"id":              {Computed: true, Replacement: ReplacementUnknown},
-	"namespace":       {Required: true, Replacement: ReplacementUnknown},
-	"role_arn":        {Required: true, Replacement: ReplacementUnknown},
-	"service_account": {Required: true, Replacement: ReplacementUnknown},
-	"tags":            {Optional: true, Replacement: ReplacementUnknown},
-	"tags_all":        {Computed: true, Replacement: ReplacementUnknown},
+	"association_arn":      {Computed: true, Replacement: ReplacementUnknown},
+	"association_id":       {Computed: true, Replacement: ReplacementUnknown},
+	"cluster_name":         {Required: true, Replacement: ReplacementUnknown},
+	"disable_session_tags": {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"external_id":          {Computed: true, Replacement: ReplacementUnknown},
+	"id":                   {Computed: true, Replacement: ReplacementUnknown},
+	"namespace":            {Required: true, Replacement: ReplacementUnknown},
+	"region":               {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"role_arn":             {Required: true, Replacement: ReplacementUnknown},
+	"service_account":      {Required: true, Replacement: ReplacementUnknown},
+	"tags":                 {Optional: true, Replacement: ReplacementUnknown},
+	"tags_all":             {Computed: true, Replacement: ReplacementUnknown},
+	"target_role_arn":      {Optional: true, Replacement: ReplacementUnknown},
 }
 
 func init() {

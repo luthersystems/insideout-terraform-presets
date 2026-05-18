@@ -15,6 +15,7 @@ type AWSKeyPair struct {
 	KeyPairID     *Value[string]            `tf:"key_pair_id" json:"key_pair_id,omitempty"`
 	KeyType       *Value[string]            `tf:"key_type" json:"key_type,omitempty"`
 	PublicKey     *Value[string]            `tf:"public_key" json:"public_key,omitempty"`
+	Region        *Value[string]            `tf:"region" json:"region,omitempty"`
 	Tags          map[string]*Value[string] `tf:"tags" json:"tags,omitempty"`
 	TagsAll       map[string]*Value[string] `tf:"tags_all" json:"tags_all,omitempty"`
 }
@@ -30,6 +31,7 @@ var AWSKeyPairSchema = map[string]FieldSchema{
 	"key_pair_id":     {Computed: true, Replacement: ReplacementUnknown},
 	"key_type":        {Computed: true, Replacement: ReplacementUnknown},
 	"public_key":      {Required: true, Replacement: ReplacementUnknown},
+	"region":          {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"tags":            {Optional: true, Replacement: ReplacementUnknown},
 	"tags_all":        {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 }

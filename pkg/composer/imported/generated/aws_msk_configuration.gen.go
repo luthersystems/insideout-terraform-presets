@@ -13,6 +13,7 @@ type AWSMskConfiguration struct {
 	KafkaVersions    []*Value[string] `tf:"kafka_versions" json:"kafka_versions,omitempty"`
 	LatestRevision   *Value[float64]  `tf:"latest_revision" json:"latest_revision,omitempty"`
 	Name             *Value[string]   `tf:"name" json:"name,omitempty"`
+	Region           *Value[string]   `tf:"region" json:"region,omitempty"`
 	ServerProperties *Value[string]   `tf:"server_properties" json:"server_properties,omitempty"`
 }
 
@@ -25,6 +26,7 @@ var AWSMskConfigurationSchema = map[string]FieldSchema{
 	"kafka_versions":    {Optional: true, Replacement: ReplacementUnknown},
 	"latest_revision":   {Computed: true, Replacement: ReplacementUnknown},
 	"name":              {Required: true, Replacement: ReplacementUnknown},
+	"region":            {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"server_properties": {Required: true, Replacement: ReplacementUnknown},
 }
 

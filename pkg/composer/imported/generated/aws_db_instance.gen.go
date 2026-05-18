@@ -22,6 +22,7 @@ type AWSDbInstance struct {
 	CopyTagsToSnapshot                 *Value[bool]                        `tf:"copy_tags_to_snapshot" json:"copy_tags_to_snapshot,omitempty"`
 	CustomIAMInstanceProfile           *Value[string]                      `tf:"custom_iam_instance_profile" json:"custom_iam_instance_profile,omitempty"`
 	CustomerOwnedIpEnabled             *Value[bool]                        `tf:"customer_owned_ip_enabled" json:"customer_owned_ip_enabled,omitempty"`
+	DatabaseInsightsMode               *Value[string]                      `tf:"database_insights_mode" json:"database_insights_mode,omitempty"`
 	DbName                             *Value[string]                      `tf:"db_name" json:"db_name,omitempty"`
 	DbSubnetGroupName                  *Value[string]                      `tf:"db_subnet_group_name" json:"db_subnet_group_name,omitempty"`
 	DedicatedLogVolume                 *Value[bool]                        `tf:"dedicated_log_volume" json:"dedicated_log_volume,omitempty"`
@@ -64,11 +65,14 @@ type AWSDbInstance struct {
 	OptionGroupName                    *Value[string]                      `tf:"option_group_name" json:"option_group_name,omitempty"`
 	ParameterGroupName                 *Value[string]                      `tf:"parameter_group_name" json:"parameter_group_name,omitempty"`
 	Password                           *Value[string]                      `tf:"password" json:"password,omitempty"`
+	PasswordWo                         *Value[string]                      `tf:"password_wo" json:"password_wo,omitempty"`
+	PasswordWoVersion                  *Value[float64]                     `tf:"password_wo_version" json:"password_wo_version,omitempty"`
 	PerformanceInsightsEnabled         *Value[bool]                        `tf:"performance_insights_enabled" json:"performance_insights_enabled,omitempty"`
 	PerformanceInsightsKMSKeyID        *Value[string]                      `tf:"performance_insights_kms_key_id" json:"performance_insights_kms_key_id,omitempty"`
 	PerformanceInsightsRetentionPeriod *Value[int64]                       `tf:"performance_insights_retention_period" json:"performance_insights_retention_period,omitempty"`
 	Port                               *Value[int64]                       `tf:"port" json:"port,omitempty"`
 	PubliclyAccessible                 *Value[bool]                        `tf:"publicly_accessible" json:"publicly_accessible,omitempty"`
+	Region                             *Value[string]                      `tf:"region" json:"region,omitempty"`
 	ReplicaMode                        *Value[string]                      `tf:"replica_mode" json:"replica_mode,omitempty"`
 	Replicas                           []*Value[string]                    `tf:"replicas" json:"replicas,omitempty"`
 	ReplicateSourceDb                  *Value[string]                      `tf:"replicate_source_db" json:"replicate_source_db,omitempty"`
@@ -82,6 +86,7 @@ type AWSDbInstance struct {
 	Tags                               map[string]*Value[string]           `tf:"tags" json:"tags,omitempty"`
 	TagsAll                            map[string]*Value[string]           `tf:"tags_all" json:"tags_all,omitempty"`
 	Timezone                           *Value[string]                      `tf:"timezone" json:"timezone,omitempty"`
+	UpgradeRolloutOrder                *Value[string]                      `tf:"upgrade_rollout_order" json:"upgrade_rollout_order,omitempty"`
 	UpgradeStorageConfig               *Value[bool]                        `tf:"upgrade_storage_config" json:"upgrade_storage_config,omitempty"`
 	Username                           *Value[string]                      `tf:"username" json:"username,omitempty"`
 	VPCSecurityGroupIDS                []*Value[string]                    `tf:"vpc_security_group_ids" json:"vpc_security_group_ids,omitempty"`
@@ -153,6 +158,7 @@ var AWSDbInstanceSchema = map[string]FieldSchema{
 	"copy_tags_to_snapshot":                 {Optional: true, Replacement: ReplacementUnknown},
 	"custom_iam_instance_profile":           {Optional: true, Replacement: ReplacementUnknown},
 	"customer_owned_ip_enabled":             {Optional: true, Replacement: ReplacementUnknown},
+	"database_insights_mode":                {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"db_name":                               {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"db_subnet_group_name":                  {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"dedicated_log_volume":                  {Optional: true, Replacement: ReplacementUnknown},
@@ -195,11 +201,14 @@ var AWSDbInstanceSchema = map[string]FieldSchema{
 	"option_group_name":                     {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"parameter_group_name":                  {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"password":                              {Optional: true, Sensitive: true, Replacement: ReplacementUnknown},
+	"password_wo":                           {Optional: true, Sensitive: true, Replacement: ReplacementUnknown},
+	"password_wo_version":                   {Optional: true, Replacement: ReplacementUnknown},
 	"performance_insights_enabled":          {Optional: true, Replacement: ReplacementUnknown},
 	"performance_insights_kms_key_id":       {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"performance_insights_retention_period": {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"port":                                  {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"publicly_accessible":                   {Optional: true, Replacement: ReplacementUnknown},
+	"region":                                {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"replica_mode":                          {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"replicas":                              {Computed: true, Replacement: ReplacementUnknown},
 	"replicate_source_db":                   {Optional: true, Replacement: ReplacementUnknown},
@@ -213,6 +222,7 @@ var AWSDbInstanceSchema = map[string]FieldSchema{
 	"tags":                                  {Optional: true, Replacement: ReplacementUnknown},
 	"tags_all":                              {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"timezone":                              {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"upgrade_rollout_order":                 {Computed: true, Replacement: ReplacementUnknown},
 	"upgrade_storage_config":                {Optional: true, Replacement: ReplacementUnknown},
 	"username":                              {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"vpc_security_group_ids":                {Optional: true, Computed: true, Replacement: ReplacementUnknown},

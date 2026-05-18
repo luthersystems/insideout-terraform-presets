@@ -7,30 +7,34 @@ import "reflect"
 // AWSVPCEndpoint is the generated Layer 1 typed model for the
 // `aws_vpc_endpoint` Terraform resource.
 type AWSVPCEndpoint struct {
-	ARN                 *Value[string]                      `tf:"arn" json:"arn,omitempty"`
-	AutoAccept          *Value[bool]                        `tf:"auto_accept" json:"auto_accept,omitempty"`
-	CIDRBlocks          []*Value[string]                    `tf:"cidr_blocks" json:"cidr_blocks,omitempty"`
-	DNSEntry            []AWSVPCEndpointDNSEntry            `tf:"dns_entry" json:"dns_entry,omitempty"`
-	ID                  *Value[string]                      `tf:"id" json:"id,omitempty"`
-	IpAddressType       *Value[string]                      `tf:"ip_address_type" json:"ip_address_type,omitempty"`
-	NetworkInterfaceIDS []*Value[string]                    `tf:"network_interface_ids" json:"network_interface_ids,omitempty"`
-	OwnerID             *Value[string]                      `tf:"owner_id" json:"owner_id,omitempty"`
-	Policy              *Value[string]                      `tf:"policy" json:"policy,omitempty"`
-	PrefixListID        *Value[string]                      `tf:"prefix_list_id" json:"prefix_list_id,omitempty"`
-	PrivateDNSEnabled   *Value[bool]                        `tf:"private_dns_enabled" json:"private_dns_enabled,omitempty"`
-	RequesterManaged    *Value[bool]                        `tf:"requester_managed" json:"requester_managed,omitempty"`
-	RouteTableIDS       []*Value[string]                    `tf:"route_table_ids" json:"route_table_ids,omitempty"`
-	SecurityGroupIDS    []*Value[string]                    `tf:"security_group_ids" json:"security_group_ids,omitempty"`
-	ServiceName         *Value[string]                      `tf:"service_name" json:"service_name,omitempty"`
-	State               *Value[string]                      `tf:"state" json:"state,omitempty"`
-	SubnetIDS           []*Value[string]                    `tf:"subnet_ids" json:"subnet_ids,omitempty"`
-	Tags                map[string]*Value[string]           `tf:"tags" json:"tags,omitempty"`
-	TagsAll             map[string]*Value[string]           `tf:"tags_all" json:"tags_all,omitempty"`
-	VPCEndpointType     *Value[string]                      `tf:"vpc_endpoint_type" json:"vpc_endpoint_type,omitempty"`
-	VPCID               *Value[string]                      `tf:"vpc_id" json:"vpc_id,omitempty"`
-	DNSOptions          []AWSVPCEndpointDNSOptions          `tf:"dns_options,blocks" json:"dns_options,omitempty"`
-	SubnetConfiguration []AWSVPCEndpointSubnetConfiguration `tf:"subnet_configuration,blocks" json:"subnet_configuration,omitempty"`
-	Timeouts            *AWSVPCEndpointTimeouts             `tf:"timeouts,block" json:"timeouts,omitempty"`
+	ARN                      *Value[string]                      `tf:"arn" json:"arn,omitempty"`
+	AutoAccept               *Value[bool]                        `tf:"auto_accept" json:"auto_accept,omitempty"`
+	CIDRBlocks               []*Value[string]                    `tf:"cidr_blocks" json:"cidr_blocks,omitempty"`
+	DNSEntry                 []AWSVPCEndpointDNSEntry            `tf:"dns_entry" json:"dns_entry,omitempty"`
+	ID                       *Value[string]                      `tf:"id" json:"id,omitempty"`
+	IpAddressType            *Value[string]                      `tf:"ip_address_type" json:"ip_address_type,omitempty"`
+	NetworkInterfaceIDS      []*Value[string]                    `tf:"network_interface_ids" json:"network_interface_ids,omitempty"`
+	OwnerID                  *Value[string]                      `tf:"owner_id" json:"owner_id,omitempty"`
+	Policy                   *Value[string]                      `tf:"policy" json:"policy,omitempty"`
+	PrefixListID             *Value[string]                      `tf:"prefix_list_id" json:"prefix_list_id,omitempty"`
+	PrivateDNSEnabled        *Value[bool]                        `tf:"private_dns_enabled" json:"private_dns_enabled,omitempty"`
+	Region                   *Value[string]                      `tf:"region" json:"region,omitempty"`
+	RequesterManaged         *Value[bool]                        `tf:"requester_managed" json:"requester_managed,omitempty"`
+	ResourceConfigurationARN *Value[string]                      `tf:"resource_configuration_arn" json:"resource_configuration_arn,omitempty"`
+	RouteTableIDS            []*Value[string]                    `tf:"route_table_ids" json:"route_table_ids,omitempty"`
+	SecurityGroupIDS         []*Value[string]                    `tf:"security_group_ids" json:"security_group_ids,omitempty"`
+	ServiceName              *Value[string]                      `tf:"service_name" json:"service_name,omitempty"`
+	ServiceNetworkARN        *Value[string]                      `tf:"service_network_arn" json:"service_network_arn,omitempty"`
+	ServiceRegion            *Value[string]                      `tf:"service_region" json:"service_region,omitempty"`
+	State                    *Value[string]                      `tf:"state" json:"state,omitempty"`
+	SubnetIDS                []*Value[string]                    `tf:"subnet_ids" json:"subnet_ids,omitempty"`
+	Tags                     map[string]*Value[string]           `tf:"tags" json:"tags,omitempty"`
+	TagsAll                  map[string]*Value[string]           `tf:"tags_all" json:"tags_all,omitempty"`
+	VPCEndpointType          *Value[string]                      `tf:"vpc_endpoint_type" json:"vpc_endpoint_type,omitempty"`
+	VPCID                    *Value[string]                      `tf:"vpc_id" json:"vpc_id,omitempty"`
+	DNSOptions               []AWSVPCEndpointDNSOptions          `tf:"dns_options,blocks" json:"dns_options,omitempty"`
+	SubnetConfiguration      []AWSVPCEndpointSubnetConfiguration `tf:"subnet_configuration,blocks" json:"subnet_configuration,omitempty"`
+	Timeouts                 *AWSVPCEndpointTimeouts             `tf:"timeouts,block" json:"timeouts,omitempty"`
 }
 
 // AWSVPCEndpointDNSEntry is a nested-block type used by the parent resource.
@@ -41,8 +45,10 @@ type AWSVPCEndpointDNSEntry struct {
 
 // AWSVPCEndpointDNSOptions is a nested-block type used by the parent resource.
 type AWSVPCEndpointDNSOptions struct {
-	DNSRecordIpType                          *Value[string] `tf:"dns_record_ip_type" json:"dns_record_ip_type,omitempty"`
-	PrivateDNSOnlyForInboundResolverEndpoint *Value[bool]   `tf:"private_dns_only_for_inbound_resolver_endpoint" json:"private_dns_only_for_inbound_resolver_endpoint,omitempty"`
+	DNSRecordIpType                          *Value[string]   `tf:"dns_record_ip_type" json:"dns_record_ip_type,omitempty"`
+	PrivateDNSOnlyForInboundResolverEndpoint *Value[bool]     `tf:"private_dns_only_for_inbound_resolver_endpoint" json:"private_dns_only_for_inbound_resolver_endpoint,omitempty"`
+	PrivateDNSPreference                     *Value[string]   `tf:"private_dns_preference" json:"private_dns_preference,omitempty"`
+	PrivateDNSSpecifiedDomains               []*Value[string] `tf:"private_dns_specified_domains" json:"private_dns_specified_domains,omitempty"`
 }
 
 // AWSVPCEndpointSubnetConfiguration is a nested-block type used by the parent resource.
@@ -62,30 +68,34 @@ type AWSVPCEndpointTimeouts struct {
 // AWSVPCEndpointSchema describes provider metadata for each attribute / nested
 // block of aws_vpc_endpoint.
 var AWSVPCEndpointSchema = map[string]FieldSchema{
-	"arn":                   {Computed: true, Replacement: ReplacementUnknown},
-	"auto_accept":           {Optional: true, Replacement: ReplacementUnknown},
-	"cidr_blocks":           {Computed: true, Replacement: ReplacementUnknown},
-	"dns_entry":             {Computed: true, Replacement: ReplacementUnknown},
-	"id":                    {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"ip_address_type":       {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"network_interface_ids": {Computed: true, Replacement: ReplacementUnknown},
-	"owner_id":              {Computed: true, Replacement: ReplacementUnknown},
-	"policy":                {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"prefix_list_id":        {Computed: true, Replacement: ReplacementUnknown},
-	"private_dns_enabled":   {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"requester_managed":     {Computed: true, Replacement: ReplacementUnknown},
-	"route_table_ids":       {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"security_group_ids":    {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"service_name":          {Required: true, Replacement: ReplacementUnknown},
-	"state":                 {Computed: true, Replacement: ReplacementUnknown},
-	"subnet_ids":            {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"tags":                  {Optional: true, Replacement: ReplacementUnknown},
-	"tags_all":              {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"vpc_endpoint_type":     {Optional: true, Replacement: ReplacementUnknown},
-	"vpc_id":                {Required: true, Replacement: ReplacementUnknown},
-	"dns_options":           {Optional: true, Replacement: ReplacementUnknown},
-	"subnet_configuration":  {Optional: true, Replacement: ReplacementUnknown},
-	"timeouts":              {Optional: true, Replacement: ReplacementUnknown},
+	"arn":                        {Computed: true, Replacement: ReplacementUnknown},
+	"auto_accept":                {Optional: true, Replacement: ReplacementUnknown},
+	"cidr_blocks":                {Computed: true, Replacement: ReplacementUnknown},
+	"dns_entry":                  {Computed: true, Replacement: ReplacementUnknown},
+	"id":                         {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"ip_address_type":            {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"network_interface_ids":      {Computed: true, Replacement: ReplacementUnknown},
+	"owner_id":                   {Computed: true, Replacement: ReplacementUnknown},
+	"policy":                     {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"prefix_list_id":             {Computed: true, Replacement: ReplacementUnknown},
+	"private_dns_enabled":        {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"region":                     {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"requester_managed":          {Computed: true, Replacement: ReplacementUnknown},
+	"resource_configuration_arn": {Optional: true, Replacement: ReplacementUnknown},
+	"route_table_ids":            {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"security_group_ids":         {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"service_name":               {Optional: true, Replacement: ReplacementUnknown},
+	"service_network_arn":        {Optional: true, Replacement: ReplacementUnknown},
+	"service_region":             {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"state":                      {Computed: true, Replacement: ReplacementUnknown},
+	"subnet_ids":                 {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"tags":                       {Optional: true, Replacement: ReplacementUnknown},
+	"tags_all":                   {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"vpc_endpoint_type":          {Optional: true, Replacement: ReplacementUnknown},
+	"vpc_id":                     {Required: true, Replacement: ReplacementUnknown},
+	"dns_options":                {Optional: true, Replacement: ReplacementUnknown},
+	"subnet_configuration":       {Optional: true, Replacement: ReplacementUnknown},
+	"timeouts":                   {Optional: true, Replacement: ReplacementUnknown},
 }
 
 func init() {

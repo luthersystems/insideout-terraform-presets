@@ -533,9 +533,14 @@ func TestStripComputedOnlyForType_TableDriven(t *testing.T) {
 		want string
 	}{
 		{
-			name: "computed-only fields stripped (s3_bucket arn, bucket_domain_name, hosted_zone_id)",
+			// AWS provider 6.x flipped `region` from computed-only to
+			// Optional+Computed (multi-region clients can set it per-
+			// resource); the stripper now keeps it. arn /
+			// bucket_domain_name / hosted_zone_id remain computed-only.
+			// #599 schema-bump.
+			name: "computed-only fields stripped (s3_bucket arn, bucket_domain_name, hosted_zone_id); region kept in 6.x",
 			in:   `{"Bucket":"b","Arn":"arn:aws:s3:::b","BucketDomainName":"b.s3.amazonaws.com","HostedZoneId":"Z3","Region":"us-east-1"}`,
-			want: `{"Bucket":"b"}`,
+			want: `{"Bucket":"b","Region":"us-east-1"}`,
 		},
 		{
 			name: "optional+computed kept (bucket)",
@@ -578,9 +583,12 @@ func TestStripComputedOnlyForType_TableDriven(t *testing.T) {
 			want: `{"Bucket":"b","ForceDestroy":false}`,
 		},
 		{
-			name: "all-computed-only input collapses to empty object",
+			// AWS provider 6.x flipped `region` from computed-only to
+			// Optional+Computed (multi-region clients can set it per-
+			// resource); the stripper now keeps it. #599 schema-bump.
+			name: "all-computed-only input collapses to empty object (region is configurable in 6.x and kept)",
 			in:   `{"Arn":"x","BucketDomainName":"d","HostedZoneId":"z","Region":"r","WebsiteDomain":"w","WebsiteEndpoint":"e"}`,
-			want: `{}`,
+			want: `{"Region":"r"}`,
 		},
 	}
 	n := stripComputedOnlyForType("aws_s3_bucket")

@@ -12,7 +12,9 @@ type AWSKinesisStream struct {
 	EnforceConsumerDeletion *Value[bool]                        `tf:"enforce_consumer_deletion" json:"enforce_consumer_deletion,omitempty"`
 	ID                      *Value[string]                      `tf:"id" json:"id,omitempty"`
 	KMSKeyID                *Value[string]                      `tf:"kms_key_id" json:"kms_key_id,omitempty"`
+	MaxRecordSizeInKib      *Value[int64]                       `tf:"max_record_size_in_kib" json:"max_record_size_in_kib,omitempty"`
 	Name                    *Value[string]                      `tf:"name" json:"name,omitempty"`
+	Region                  *Value[string]                      `tf:"region" json:"region,omitempty"`
 	RetentionPeriod         *Value[int64]                       `tf:"retention_period" json:"retention_period,omitempty"`
 	ShardCount              *Value[int64]                       `tf:"shard_count" json:"shard_count,omitempty"`
 	ShardLevelMetrics       []*Value[string]                    `tf:"shard_level_metrics" json:"shard_level_metrics,omitempty"`
@@ -42,7 +44,9 @@ var AWSKinesisStreamSchema = map[string]FieldSchema{
 	"enforce_consumer_deletion": {Optional: true, Replacement: ReplacementUnknown},
 	"id":                        {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"kms_key_id":                {Optional: true, Replacement: ReplacementUnknown},
+	"max_record_size_in_kib":    {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"name":                      {Required: true, Replacement: ReplacementUnknown},
+	"region":                    {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"retention_period":          {Optional: true, Replacement: ReplacementUnknown},
 	"shard_count":               {Optional: true, Replacement: ReplacementUnknown},
 	"shard_level_metrics":       {Optional: true, Replacement: ReplacementUnknown},

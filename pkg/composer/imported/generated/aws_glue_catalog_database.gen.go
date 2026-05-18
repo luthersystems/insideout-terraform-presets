@@ -14,6 +14,7 @@ type AWSGlueCatalogDatabase struct {
 	LocationURI                  *Value[string]                                       `tf:"location_uri" json:"location_uri,omitempty"`
 	Name                         *Value[string]                                       `tf:"name" json:"name,omitempty"`
 	Parameters                   map[string]*Value[string]                            `tf:"parameters" json:"parameters,omitempty"`
+	Region                       *Value[string]                                       `tf:"region" json:"region,omitempty"`
 	Tags                         map[string]*Value[string]                            `tf:"tags" json:"tags,omitempty"`
 	TagsAll                      map[string]*Value[string]                            `tf:"tags_all" json:"tags_all,omitempty"`
 	CreateTableDefaultPermission []AWSGlueCatalogDatabaseCreateTableDefaultPermission `tf:"create_table_default_permission,blocks" json:"create_table_default_permission,omitempty"`
@@ -55,6 +56,7 @@ var AWSGlueCatalogDatabaseSchema = map[string]FieldSchema{
 	"location_uri":                    {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"name":                            {Required: true, Replacement: ReplacementUnknown},
 	"parameters":                      {Optional: true, Replacement: ReplacementUnknown},
+	"region":                          {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"tags":                            {Optional: true, Replacement: ReplacementUnknown},
 	"tags_all":                        {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"create_table_default_permission": {Optional: true, Replacement: ReplacementUnknown},

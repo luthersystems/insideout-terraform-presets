@@ -7,22 +7,25 @@ import "reflect"
 // AWSEBSVolume is the generated Layer 1 typed model for the
 // `aws_ebs_volume` Terraform resource.
 type AWSEBSVolume struct {
-	ARN                *Value[string]            `tf:"arn" json:"arn,omitempty"`
-	AvailabilityZone   *Value[string]            `tf:"availability_zone" json:"availability_zone,omitempty"`
-	Encrypted          *Value[bool]              `tf:"encrypted" json:"encrypted,omitempty"`
-	FinalSnapshot      *Value[bool]              `tf:"final_snapshot" json:"final_snapshot,omitempty"`
-	ID                 *Value[string]            `tf:"id" json:"id,omitempty"`
-	Iops               *Value[float64]           `tf:"iops" json:"iops,omitempty"`
-	KMSKeyID           *Value[string]            `tf:"kms_key_id" json:"kms_key_id,omitempty"`
-	MultiAttachEnabled *Value[bool]              `tf:"multi_attach_enabled" json:"multi_attach_enabled,omitempty"`
-	OutpostARN         *Value[string]            `tf:"outpost_arn" json:"outpost_arn,omitempty"`
-	Size               *Value[float64]           `tf:"size" json:"size,omitempty"`
-	SnapshotID         *Value[string]            `tf:"snapshot_id" json:"snapshot_id,omitempty"`
-	Tags               map[string]*Value[string] `tf:"tags" json:"tags,omitempty"`
-	TagsAll            map[string]*Value[string] `tf:"tags_all" json:"tags_all,omitempty"`
-	Throughput         *Value[float64]           `tf:"throughput" json:"throughput,omitempty"`
-	Type_              *Value[string]            `tf:"type" json:"type,omitempty"`
-	Timeouts           *AWSEBSVolumeTimeouts     `tf:"timeouts,block" json:"timeouts,omitempty"`
+	ARN                      *Value[string]            `tf:"arn" json:"arn,omitempty"`
+	AvailabilityZone         *Value[string]            `tf:"availability_zone" json:"availability_zone,omitempty"`
+	CreateTime               *Value[string]            `tf:"create_time" json:"create_time,omitempty"`
+	Encrypted                *Value[bool]              `tf:"encrypted" json:"encrypted,omitempty"`
+	FinalSnapshot            *Value[bool]              `tf:"final_snapshot" json:"final_snapshot,omitempty"`
+	ID                       *Value[string]            `tf:"id" json:"id,omitempty"`
+	Iops                     *Value[float64]           `tf:"iops" json:"iops,omitempty"`
+	KMSKeyID                 *Value[string]            `tf:"kms_key_id" json:"kms_key_id,omitempty"`
+	MultiAttachEnabled       *Value[bool]              `tf:"multi_attach_enabled" json:"multi_attach_enabled,omitempty"`
+	OutpostARN               *Value[string]            `tf:"outpost_arn" json:"outpost_arn,omitempty"`
+	Region                   *Value[string]            `tf:"region" json:"region,omitempty"`
+	Size                     *Value[float64]           `tf:"size" json:"size,omitempty"`
+	SnapshotID               *Value[string]            `tf:"snapshot_id" json:"snapshot_id,omitempty"`
+	Tags                     map[string]*Value[string] `tf:"tags" json:"tags,omitempty"`
+	TagsAll                  map[string]*Value[string] `tf:"tags_all" json:"tags_all,omitempty"`
+	Throughput               *Value[float64]           `tf:"throughput" json:"throughput,omitempty"`
+	Type_                    *Value[string]            `tf:"type" json:"type,omitempty"`
+	VolumeInitializationRate *Value[float64]           `tf:"volume_initialization_rate" json:"volume_initialization_rate,omitempty"`
+	Timeouts                 *AWSEBSVolumeTimeouts     `tf:"timeouts,block" json:"timeouts,omitempty"`
 }
 
 // AWSEBSVolumeTimeouts is a nested-block type used by the parent resource.
@@ -35,22 +38,25 @@ type AWSEBSVolumeTimeouts struct {
 // AWSEBSVolumeSchema describes provider metadata for each attribute / nested
 // block of aws_ebs_volume.
 var AWSEBSVolumeSchema = map[string]FieldSchema{
-	"arn":                  {Computed: true, Replacement: ReplacementUnknown},
-	"availability_zone":    {Required: true, Replacement: ReplacementUnknown},
-	"encrypted":            {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"final_snapshot":       {Optional: true, Replacement: ReplacementUnknown},
-	"id":                   {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"iops":                 {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"kms_key_id":           {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"multi_attach_enabled": {Optional: true, Replacement: ReplacementUnknown},
-	"outpost_arn":          {Optional: true, Replacement: ReplacementUnknown},
-	"size":                 {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"snapshot_id":          {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"tags":                 {Optional: true, Replacement: ReplacementUnknown},
-	"tags_all":             {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"throughput":           {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"type":                 {Optional: true, Computed: true, Replacement: ReplacementUnknown},
-	"timeouts":             {Optional: true, Replacement: ReplacementUnknown},
+	"arn":                        {Computed: true, Replacement: ReplacementUnknown},
+	"availability_zone":          {Required: true, Replacement: ReplacementUnknown},
+	"create_time":                {Computed: true, Replacement: ReplacementUnknown},
+	"encrypted":                  {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"final_snapshot":             {Optional: true, Replacement: ReplacementUnknown},
+	"id":                         {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"iops":                       {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"kms_key_id":                 {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"multi_attach_enabled":       {Optional: true, Replacement: ReplacementUnknown},
+	"outpost_arn":                {Optional: true, Replacement: ReplacementUnknown},
+	"region":                     {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"size":                       {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"snapshot_id":                {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"tags":                       {Optional: true, Replacement: ReplacementUnknown},
+	"tags_all":                   {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"throughput":                 {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"type":                       {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"volume_initialization_rate": {Optional: true, Replacement: ReplacementUnknown},
+	"timeouts":                   {Optional: true, Replacement: ReplacementUnknown},
 }
 
 func init() {

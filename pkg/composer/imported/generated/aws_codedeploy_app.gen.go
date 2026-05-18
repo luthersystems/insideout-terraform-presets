@@ -14,6 +14,7 @@ type AWSCodedeployApp struct {
 	ID                *Value[string]            `tf:"id" json:"id,omitempty"`
 	LinkedToGithub    *Value[bool]              `tf:"linked_to_github" json:"linked_to_github,omitempty"`
 	Name              *Value[string]            `tf:"name" json:"name,omitempty"`
+	Region            *Value[string]            `tf:"region" json:"region,omitempty"`
 	Tags              map[string]*Value[string] `tf:"tags" json:"tags,omitempty"`
 	TagsAll           map[string]*Value[string] `tf:"tags_all" json:"tags_all,omitempty"`
 }
@@ -28,6 +29,7 @@ var AWSCodedeployAppSchema = map[string]FieldSchema{
 	"id":                  {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"linked_to_github":    {Computed: true, Replacement: ReplacementUnknown},
 	"name":                {Required: true, Replacement: ReplacementUnknown},
+	"region":              {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"tags":                {Optional: true, Replacement: ReplacementUnknown},
 	"tags_all":            {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 }

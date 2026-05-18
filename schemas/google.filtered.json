@@ -821,6 +821,475 @@
         }
       },
       "resource_schemas": {
+        "google_certificate_manager_certificate": {
+          "version": 1,
+          "block": {
+            "attributes": {
+              "description": {
+                "type": "string",
+                "description": "A human-readable description of the resource.",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "effective_labels": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description": "All of labels (key/value pairs) present on the resource in GCP, including the labels configured through Terraform, other clients and services.",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "labels": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description": "Set of label tags associated with the Certificate resource.\n\n**Note**: This field is non-authoritative, and will only manage the labels present in your configuration.\nPlease refer to the field 'effective_labels' for all of the labels present on the resource.",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "location": {
+                "type": "string",
+                "description": "The Certificate Manager location. If not specified, \"global\" is used.",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "name": {
+                "type": "string",
+                "description": "A user-defined name of the certificate. Certificate names must be unique\nThe name must be 1-64 characters long, and match the regular expression [a-zA-Z][a-zA-Z0-9_-]* which means the first character must be a letter,\nand all following characters must be a dash, underscore, letter or digit.",
+                "description_kind": "plain",
+                "required": true
+              },
+              "project": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "san_dnsnames": {
+                "type": [
+                  "list",
+                  "string"
+                ],
+                "description": "The list of Subject Alternative Names of dnsName type defined in the certificate (see RFC 5280 4.2.1.6)",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "scope": {
+                "type": "string",
+                "description": "The scope of the certificate.\n\nDEFAULT: Certificates with default scope are served from core Google data centers.\nIf unsure, choose this option.\n\nEDGE_CACHE: Certificates with scope EDGE_CACHE are special-purposed certificates, served from Edge Points of Presence.\nSee https://cloud.google.com/vpc/docs/edge-locations.\n\nALL_REGIONS: Certificates with ALL_REGIONS scope are served from all GCP regions (You can only use ALL_REGIONS with global certs).\nSee https://cloud.google.com/compute/docs/regions-zones",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "terraform_labels": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description": "The combination of labels configured directly on the resource\n and default labels configured on the provider.",
+                "description_kind": "plain",
+                "computed": true
+              }
+            },
+            "block_types": {
+              "managed": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "authorization_attempt_info": {
+                      "type": [
+                        "list",
+                        [
+                          "object",
+                          {
+                            "details": "string",
+                            "domain": "string",
+                            "failure_reason": "string",
+                            "state": "string"
+                          }
+                        ]
+                      ],
+                      "description": "Detailed state of the latest authorization attempt for each domain\nspecified for this Managed Certificate.",
+                      "description_kind": "plain",
+                      "computed": true
+                    },
+                    "dns_authorizations": {
+                      "type": [
+                        "list",
+                        "string"
+                      ],
+                      "description": "Authorizations that will be used for performing domain authorization. Either issuanceConfig or dnsAuthorizations should be specificed, but not both.",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "domains": {
+                      "type": [
+                        "list",
+                        "string"
+                      ],
+                      "description": "The domains for which a managed SSL certificate will be generated.\nWildcard domains are only supported with DNS challenge resolution",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "issuance_config": {
+                      "type": "string",
+                      "description": "The resource name for a CertificateIssuanceConfig used to configure private PKI certificates in the format projects/*/locations/*/certificateIssuanceConfigs/*.\nIf this field is not set, the certificates will instead be publicly signed as documented at https://cloud.google.com/load-balancing/docs/ssl-certificates/google-managed-certs#caa.\nEither issuanceConfig or dnsAuthorizations should be specificed, but not both.",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "provisioning_issue": {
+                      "type": [
+                        "list",
+                        [
+                          "object",
+                          {
+                            "details": "string",
+                            "reason": "string"
+                          }
+                        ]
+                      ],
+                      "description": "Information about issues with provisioning this Managed Certificate.",
+                      "description_kind": "plain",
+                      "computed": true
+                    },
+                    "state": {
+                      "type": "string",
+                      "description": "A state of this Managed Certificate.",
+                      "description_kind": "plain",
+                      "computed": true
+                    }
+                  },
+                  "description": "Configuration and state of a Managed Certificate.\nCertificate Manager provisions and renews Managed Certificates\nautomatically, for as long as it's authorized to do so.",
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "self_managed": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "certificate_pem": {
+                      "type": "string",
+                      "description": "The certificate chain in PEM-encoded form.\n\nLeaf certificate comes first, followed by intermediate ones if any.",
+                      "description_kind": "plain",
+                      "deprecated": true,
+                      "optional": true,
+                      "sensitive": true
+                    },
+                    "pem_certificate": {
+                      "type": "string",
+                      "description": "The certificate chain in PEM-encoded form.\n\nLeaf certificate comes first, followed by intermediate ones if any.",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "pem_private_key": {
+                      "type": "string",
+                      "description": "The private key of the leaf certificate in PEM-encoded form.",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "sensitive": true
+                    },
+                    "private_key_pem": {
+                      "type": "string",
+                      "description": "The private key of the leaf certificate in PEM-encoded form.",
+                      "description_kind": "plain",
+                      "deprecated": true,
+                      "optional": true,
+                      "sensitive": true
+                    }
+                  },
+                  "description": "Certificate data for a SelfManaged Certificate.\nSelfManaged Certificates are uploaded by the user. Updating such\ncertificates before they expire remains the user's responsibility.",
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "timeouts": {
+                "nesting_mode": "single",
+                "block": {
+                  "attributes": {
+                    "create": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "delete": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "update": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "description_kind": "plain"
+                }
+              }
+            },
+            "description_kind": "plain"
+          }
+        },
+        "google_certificate_manager_certificate_map": {
+          "version": 0,
+          "block": {
+            "attributes": {
+              "create_time": {
+                "type": "string",
+                "description": "Creation timestamp of a Certificate Map. Timestamp is in RFC3339 UTC \"Zulu\" format,\naccurate to nanoseconds with up to nine fractional digits.\nExamples: \"2014-10-02T15:01:23Z\" and \"2014-10-02T15:01:23.045123456Z\".",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "description": {
+                "type": "string",
+                "description": "A human-readable description of the resource.",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "effective_labels": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description": "All of labels (key/value pairs) present on the resource in GCP, including the labels configured through Terraform, other clients and services.",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "gclb_targets": {
+                "type": [
+                  "list",
+                  [
+                    "object",
+                    {
+                      "ip_configs": [
+                        "list",
+                        [
+                          "object",
+                          {
+                            "ip_address": "string",
+                            "ports": [
+                              "list",
+                              "number"
+                            ]
+                          }
+                        ]
+                      ],
+                      "target_https_proxy": "string",
+                      "target_ssl_proxy": "string"
+                    }
+                  ]
+                ],
+                "description": "A list of target proxies that use this Certificate Map",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "labels": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description": "Set of labels associated with a Certificate Map resource.\n\n\n**Note**: This field is non-authoritative, and will only manage the labels present in your configuration.\nPlease refer to the field 'effective_labels' for all of the labels present on the resource.",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "name": {
+                "type": "string",
+                "description": "A user-defined name of the Certificate Map. Certificate Map names must be unique\nglobally and match the pattern 'projects/*/locations/*/certificateMaps/*'.",
+                "description_kind": "plain",
+                "required": true
+              },
+              "project": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "terraform_labels": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description": "The combination of labels configured directly on the resource\n and default labels configured on the provider.",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "update_time": {
+                "type": "string",
+                "description": "Update timestamp of a Certificate Map. Timestamp is in RFC3339 UTC \"Zulu\" format,\naccurate to nanoseconds with up to nine fractional digits.\nExamples: \"2014-10-02T15:01:23Z\" and \"2014-10-02T15:01:23.045123456Z\".",
+                "description_kind": "plain",
+                "computed": true
+              }
+            },
+            "block_types": {
+              "timeouts": {
+                "nesting_mode": "single",
+                "block": {
+                  "attributes": {
+                    "create": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "delete": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "update": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "description_kind": "plain"
+                }
+              }
+            },
+            "description_kind": "plain"
+          }
+        },
+        "google_certificate_manager_certificate_map_entry": {
+          "version": 0,
+          "block": {
+            "attributes": {
+              "certificates": {
+                "type": [
+                  "list",
+                  "string"
+                ],
+                "description": "A set of Certificates defines for the given hostname.\nThere can be defined up to fifteen certificates in each Certificate Map Entry.\nEach certificate must match pattern projects/*/locations/*/certificates/*.",
+                "description_kind": "plain",
+                "required": true
+              },
+              "create_time": {
+                "type": "string",
+                "description": "Creation timestamp of a Certificate Map Entry. Timestamp in RFC3339 UTC \"Zulu\" format,\nwith nanosecond resolution and up to nine fractional digits.\nExamples: \"2014-10-02T15:01:23Z\" and \"2014-10-02T15:01:23.045123456Z\".",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "description": {
+                "type": "string",
+                "description": "A human-readable description of the resource.",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "effective_labels": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description": "All of labels (key/value pairs) present on the resource in GCP, including the labels configured through Terraform, other clients and services.",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "hostname": {
+                "type": "string",
+                "description": "A Hostname (FQDN, e.g. example.com) or a wildcard hostname expression (*.example.com)\nfor a set of hostnames with common suffix. Used as Server Name Indication (SNI) for\nselecting a proper certificate.",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "labels": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description": "Set of labels associated with a Certificate Map Entry.\nAn object containing a list of \"key\": value pairs.\nExample: { \"name\": \"wrench\", \"mass\": \"1.3kg\", \"count\": \"3\" }.\n\n\n**Note**: This field is non-authoritative, and will only manage the labels present in your configuration.\nPlease refer to the field 'effective_labels' for all of the labels present on the resource.",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "map": {
+                "type": "string",
+                "description": "A map entry that is inputted into the cetrificate map",
+                "description_kind": "plain",
+                "required": true
+              },
+              "matcher": {
+                "type": "string",
+                "description": "A predefined matcher for particular cases, other than SNI selection",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "name": {
+                "type": "string",
+                "description": "A user-defined name of the Certificate Map Entry. Certificate Map Entry\nnames must be unique globally and match pattern\n'projects/*/locations/*/certificateMaps/*/certificateMapEntries/*'",
+                "description_kind": "plain",
+                "required": true
+              },
+              "project": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "state": {
+                "type": "string",
+                "description": "A serving state of this Certificate Map Entry.",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "terraform_labels": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description": "The combination of labels configured directly on the resource\n and default labels configured on the provider.",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "update_time": {
+                "type": "string",
+                "description": "Update timestamp of a Certificate Map Entry. Timestamp in RFC3339 UTC \"Zulu\" format,\nwith nanosecond resolution and up to nine fractional digits.\nExamples: \"2014-10-02T15:01:23Z\" and \"2014-10-02T15:01:23.045123456Z\".",
+                "description_kind": "plain",
+                "computed": true
+              }
+            },
+            "block_types": {
+              "timeouts": {
+                "nesting_mode": "single",
+                "block": {
+                  "attributes": {
+                    "create": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "delete": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "update": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "description_kind": "plain"
+                }
+              }
+            },
+            "description_kind": "plain"
+          }
+        },
         "google_cloud_run_v2_service": {
           "version": 0,
           "block": {
@@ -15685,6 +16154,731 @@
                     }
                   },
                   "description": "Specify node upgrade settings to change how many nodes GKE attempts to upgrade at once. The number of nodes upgraded simultaneously is the sum of max_surge and max_unavailable. The maximum number of nodes upgraded simultaneously is limited to 20.",
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              }
+            },
+            "description_kind": "plain"
+          }
+        },
+        "google_dns_managed_zone": {
+          "version": 0,
+          "block": {
+            "attributes": {
+              "creation_time": {
+                "type": "string",
+                "description": "The time that this resource was created on the server.\nThis is in RFC3339 text format.",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "description": {
+                "type": "string",
+                "description": "A textual description field. Defaults to 'Managed by Terraform'.",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "dns_name": {
+                "type": "string",
+                "description": "The DNS name of this managed zone, for instance \"example.com.\".",
+                "description_kind": "plain",
+                "required": true
+              },
+              "effective_labels": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description": "All of labels (key/value pairs) present on the resource in GCP, including the labels configured through Terraform, other clients and services.",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "force_destroy": {
+                "type": "bool",
+                "description": "Set this true to delete all records in the zone.",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "labels": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description": "A set of key/value label pairs to assign to this ManagedZone.\n\n\n**Note**: This field is non-authoritative, and will only manage the labels present in your configuration.\nPlease refer to the field 'effective_labels' for all of the labels present on the resource.",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "managed_zone_id": {
+                "type": "number",
+                "description": "Unique identifier for the resource; defined by the server.",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "name": {
+                "type": "string",
+                "description": "User assigned name for this resource.\nMust be unique within the project.",
+                "description_kind": "plain",
+                "required": true
+              },
+              "name_servers": {
+                "type": [
+                  "list",
+                  "string"
+                ],
+                "description": "Delegate your managed_zone to these virtual name servers;\ndefined by the server",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "project": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "terraform_labels": {
+                "type": [
+                  "map",
+                  "string"
+                ],
+                "description": "The combination of labels configured directly on the resource\n and default labels configured on the provider.",
+                "description_kind": "plain",
+                "computed": true
+              },
+              "visibility": {
+                "type": "string",
+                "description": "The zone's visibility: public zones are exposed to the Internet,\nwhile private zones are visible only to Virtual Private Cloud resources. Default value: \"public\" Possible values: [\"private\", \"public\"]",
+                "description_kind": "plain",
+                "optional": true
+              }
+            },
+            "block_types": {
+              "cloud_logging_config": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "enable_logging": {
+                      "type": "bool",
+                      "description": "If set, enable query logging for this ManagedZone. False by default, making logging opt-in.",
+                      "description_kind": "plain",
+                      "required": true
+                    }
+                  },
+                  "description": "Cloud logging configuration",
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "dnssec_config": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "kind": {
+                      "type": "string",
+                      "description": "Identifies what kind of resource this is",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "non_existence": {
+                      "type": "string",
+                      "description": "Specifies the mechanism used to provide authenticated denial-of-existence responses.\nnon_existence can only be updated when the state is 'off'. Possible values: [\"nsec\", \"nsec3\"]",
+                      "description_kind": "plain",
+                      "optional": true,
+                      "computed": true
+                    },
+                    "state": {
+                      "type": "string",
+                      "description": "Specifies whether DNSSEC is enabled, and what mode it is in Possible values: [\"off\", \"on\", \"transfer\"]",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "block_types": {
+                    "default_key_specs": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "algorithm": {
+                            "type": "string",
+                            "description": "String mnemonic specifying the DNSSEC algorithm of this key Possible values: [\"ecdsap256sha256\", \"ecdsap384sha384\", \"rsasha1\", \"rsasha256\", \"rsasha512\"]",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "key_length": {
+                            "type": "number",
+                            "description": "Length of the keys in bits",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "key_type": {
+                            "type": "string",
+                            "description": "Specifies whether this is a key signing key (KSK) or a zone\nsigning key (ZSK). Key signing keys have the Secure Entry\nPoint flag set and, when active, will only be used to sign\nresource record sets of type DNSKEY. Zone signing keys do\nnot have the Secure Entry Point flag set and will be used\nto sign all other types of resource record sets. Possible values: [\"keySigning\", \"zoneSigning\"]",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "kind": {
+                            "type": "string",
+                            "description": "Identifies what kind of resource this is",
+                            "description_kind": "plain",
+                            "optional": true
+                          }
+                        },
+                        "description": "Specifies parameters that will be used for generating initial DnsKeys\nfor this ManagedZone. If you provide a spec for keySigning or zoneSigning,\nyou must also provide one for the other.\ndefault_key_specs can only be updated when the state is 'off'.",
+                        "description_kind": "plain"
+                      }
+                    }
+                  },
+                  "description": "DNSSEC configuration",
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "forwarding_config": {
+                "nesting_mode": "list",
+                "block": {
+                  "block_types": {
+                    "target_name_servers": {
+                      "nesting_mode": "set",
+                      "block": {
+                        "attributes": {
+                          "forwarding_path": {
+                            "type": "string",
+                            "description": "Forwarding path for this TargetNameServer. If unset or 'default' Cloud DNS will make forwarding\ndecision based on address ranges, i.e. RFC1918 addresses go to the VPC, Non-RFC1918 addresses go\nto the Internet. When set to 'private', Cloud DNS will always send queries through VPC for this target Possible values: [\"default\", \"private\"]",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "ipv4_address": {
+                            "type": "string",
+                            "description": "IPv4 address of a target name server.",
+                            "description_kind": "plain",
+                            "required": true
+                          }
+                        },
+                        "description": "List of target name servers to forward to. Cloud DNS will\nselect the best available name server if more than\none target is given.",
+                        "description_kind": "plain"
+                      },
+                      "min_items": 1
+                    }
+                  },
+                  "description": "The presence for this field indicates that outbound forwarding is enabled\nfor this zone. The value of this field contains the set of destinations\nto forward to.",
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "peering_config": {
+                "nesting_mode": "list",
+                "block": {
+                  "block_types": {
+                    "target_network": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "network_url": {
+                            "type": "string",
+                            "description": "The id or fully qualified URL of the VPC network to forward queries to.\nThis should be formatted like 'projects/{project}/global/networks/{network}' or\n'https://www.googleapis.com/compute/v1/projects/{project}/global/networks/{network}'",
+                            "description_kind": "plain",
+                            "required": true
+                          }
+                        },
+                        "description": "The network with which to peer.",
+                        "description_kind": "plain"
+                      },
+                      "min_items": 1,
+                      "max_items": 1
+                    }
+                  },
+                  "description": "The presence of this field indicates that DNS Peering is enabled for this\nzone. The value of this field contains the network to peer with.",
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "private_visibility_config": {
+                "nesting_mode": "list",
+                "block": {
+                  "block_types": {
+                    "gke_clusters": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "gke_cluster_name": {
+                            "type": "string",
+                            "description": "The resource name of the cluster to bind this ManagedZone to.\nThis should be specified in the format like\n'projects/*/locations/*/clusters/*'",
+                            "description_kind": "plain",
+                            "required": true
+                          }
+                        },
+                        "description": "The list of Google Kubernetes Engine clusters that can see this zone.",
+                        "description_kind": "plain"
+                      }
+                    },
+                    "networks": {
+                      "nesting_mode": "set",
+                      "block": {
+                        "attributes": {
+                          "network_url": {
+                            "type": "string",
+                            "description": "The id or fully qualified URL of the VPC network to bind to.\nThis should be formatted like 'projects/{project}/global/networks/{network}' or\n'https://www.googleapis.com/compute/v1/projects/{project}/global/networks/{network}'",
+                            "description_kind": "plain",
+                            "required": true
+                          }
+                        },
+                        "description": "The list of VPC networks that can see this zone. Until the provider updates to use the Terraform 0.12 SDK in a future release, you\nmay experience issues with this resource while updating. If you've defined a 'networks' block and\nadd another 'networks' block while keeping the old block, Terraform will see an incorrect diff\nand apply an incorrect update to the resource. If you encounter this issue, remove all 'networks'\nblocks in an update and then apply another update adding all of them back simultaneously.",
+                        "description_kind": "plain"
+                      }
+                    }
+                  },
+                  "description": "For privately visible zones, the set of Virtual Private Cloud\nresources that the zone is visible from. At least one of 'gke_clusters' or 'networks' must be specified.",
+                  "description_kind": "plain"
+                },
+                "max_items": 1
+              },
+              "timeouts": {
+                "nesting_mode": "single",
+                "block": {
+                  "attributes": {
+                    "create": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "delete": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    },
+                    "update": {
+                      "type": "string",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "description_kind": "plain"
+                }
+              }
+            },
+            "description_kind": "plain"
+          }
+        },
+        "google_dns_record_set": {
+          "version": 0,
+          "block": {
+            "attributes": {
+              "id": {
+                "type": "string",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "managed_zone": {
+                "type": "string",
+                "description": "The name of the zone in which this record set will reside.",
+                "description_kind": "plain",
+                "required": true
+              },
+              "name": {
+                "type": "string",
+                "description": "The DNS name this record set will apply to.",
+                "description_kind": "plain",
+                "required": true
+              },
+              "project": {
+                "type": "string",
+                "description": "The ID of the project in which the resource belongs. If it is not provided, the provider project is used.",
+                "description_kind": "plain",
+                "optional": true,
+                "computed": true
+              },
+              "rrdatas": {
+                "type": [
+                  "list",
+                  "string"
+                ],
+                "description": "The string data for the records in this record set whose meaning depends on the DNS type. For TXT record, if the string data contains spaces, add surrounding \\\" if you don't want your string to get split on spaces. To specify a single record value longer than 255 characters such as a TXT record for DKIM, add \\\"\\\" inside the Terraform configuration string (e.g. \"first255characters\\\"\\\"morecharacters\").",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "ttl": {
+                "type": "number",
+                "description": "The time-to-live of this record set (seconds).",
+                "description_kind": "plain",
+                "optional": true
+              },
+              "type": {
+                "type": "string",
+                "description": "The DNS record set type.",
+                "description_kind": "plain",
+                "required": true
+              }
+            },
+            "block_types": {
+              "routing_policy": {
+                "nesting_mode": "list",
+                "block": {
+                  "attributes": {
+                    "enable_geo_fencing": {
+                      "type": "bool",
+                      "description": "Specifies whether to enable fencing for geo queries.",
+                      "description_kind": "plain",
+                      "optional": true
+                    }
+                  },
+                  "block_types": {
+                    "geo": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "location": {
+                            "type": "string",
+                            "description": "The location name defined in Google Cloud.",
+                            "description_kind": "plain",
+                            "required": true
+                          },
+                          "rrdatas": {
+                            "type": [
+                              "list",
+                              "string"
+                            ],
+                            "description_kind": "plain",
+                            "optional": true
+                          }
+                        },
+                        "block_types": {
+                          "health_checked_targets": {
+                            "nesting_mode": "list",
+                            "block": {
+                              "block_types": {
+                                "internal_load_balancers": {
+                                  "nesting_mode": "list",
+                                  "block": {
+                                    "attributes": {
+                                      "ip_address": {
+                                        "type": "string",
+                                        "description": "The frontend IP address of the load balancer.",
+                                        "description_kind": "plain",
+                                        "required": true
+                                      },
+                                      "ip_protocol": {
+                                        "type": "string",
+                                        "description": "The configured IP protocol of the load balancer. This value is case-sensitive. Possible values: [\"tcp\", \"udp\"]",
+                                        "description_kind": "plain",
+                                        "required": true
+                                      },
+                                      "load_balancer_type": {
+                                        "type": "string",
+                                        "description": "The type of load balancer. This value is case-sensitive. Possible values: [\"regionalL4ilb\", \"regionalL7ilb\", \"globalL7ilb\"]",
+                                        "description_kind": "plain",
+                                        "optional": true
+                                      },
+                                      "network_url": {
+                                        "type": "string",
+                                        "description": "The fully qualified url of the network in which the load balancer belongs. This should be formatted like `https://www.googleapis.com/compute/v1/projects/{project}/global/networks/{network}`.",
+                                        "description_kind": "plain",
+                                        "required": true
+                                      },
+                                      "port": {
+                                        "type": "string",
+                                        "description": "The configured port of the load balancer.",
+                                        "description_kind": "plain",
+                                        "required": true
+                                      },
+                                      "project": {
+                                        "type": "string",
+                                        "description": "The ID of the project in which the load balancer belongs.",
+                                        "description_kind": "plain",
+                                        "required": true
+                                      },
+                                      "region": {
+                                        "type": "string",
+                                        "description": "The region of the load balancer. Only needed for regional load balancers.",
+                                        "description_kind": "plain",
+                                        "optional": true
+                                      }
+                                    },
+                                    "description": "The list of internal load balancers to health check.",
+                                    "description_kind": "plain"
+                                  },
+                                  "min_items": 1
+                                }
+                              },
+                              "description": "For A and AAAA types only. The list of targets to be health checked. These can be specified along with `rrdatas` within this item.",
+                              "description_kind": "plain"
+                            },
+                            "max_items": 1
+                          }
+                        },
+                        "description": "The configuration for Geo location based routing policy.",
+                        "description_kind": "plain"
+                      }
+                    },
+                    "primary_backup": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "enable_geo_fencing_for_backups": {
+                            "type": "bool",
+                            "description": "Specifies whether to enable fencing for backup geo queries.",
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "trickle_ratio": {
+                            "type": "number",
+                            "description": "Specifies the percentage of traffic to send to the backup targets even when the primary targets are healthy.",
+                            "description_kind": "plain",
+                            "optional": true
+                          }
+                        },
+                        "block_types": {
+                          "backup_geo": {
+                            "nesting_mode": "list",
+                            "block": {
+                              "attributes": {
+                                "location": {
+                                  "type": "string",
+                                  "description": "The location name defined in Google Cloud.",
+                                  "description_kind": "plain",
+                                  "required": true
+                                },
+                                "rrdatas": {
+                                  "type": [
+                                    "list",
+                                    "string"
+                                  ],
+                                  "description_kind": "plain",
+                                  "optional": true
+                                }
+                              },
+                              "block_types": {
+                                "health_checked_targets": {
+                                  "nesting_mode": "list",
+                                  "block": {
+                                    "block_types": {
+                                      "internal_load_balancers": {
+                                        "nesting_mode": "list",
+                                        "block": {
+                                          "attributes": {
+                                            "ip_address": {
+                                              "type": "string",
+                                              "description": "The frontend IP address of the load balancer.",
+                                              "description_kind": "plain",
+                                              "required": true
+                                            },
+                                            "ip_protocol": {
+                                              "type": "string",
+                                              "description": "The configured IP protocol of the load balancer. This value is case-sensitive. Possible values: [\"tcp\", \"udp\"]",
+                                              "description_kind": "plain",
+                                              "required": true
+                                            },
+                                            "load_balancer_type": {
+                                              "type": "string",
+                                              "description": "The type of load balancer. This value is case-sensitive. Possible values: [\"regionalL4ilb\", \"regionalL7ilb\", \"globalL7ilb\"]",
+                                              "description_kind": "plain",
+                                              "optional": true
+                                            },
+                                            "network_url": {
+                                              "type": "string",
+                                              "description": "The fully qualified url of the network in which the load balancer belongs. This should be formatted like `https://www.googleapis.com/compute/v1/projects/{project}/global/networks/{network}`.",
+                                              "description_kind": "plain",
+                                              "required": true
+                                            },
+                                            "port": {
+                                              "type": "string",
+                                              "description": "The configured port of the load balancer.",
+                                              "description_kind": "plain",
+                                              "required": true
+                                            },
+                                            "project": {
+                                              "type": "string",
+                                              "description": "The ID of the project in which the load balancer belongs.",
+                                              "description_kind": "plain",
+                                              "required": true
+                                            },
+                                            "region": {
+                                              "type": "string",
+                                              "description": "The region of the load balancer. Only needed for regional load balancers.",
+                                              "description_kind": "plain",
+                                              "optional": true
+                                            }
+                                          },
+                                          "description": "The list of internal load balancers to health check.",
+                                          "description_kind": "plain"
+                                        },
+                                        "min_items": 1
+                                      }
+                                    },
+                                    "description": "For A and AAAA types only. The list of targets to be health checked. These can be specified along with `rrdatas` within this item.",
+                                    "description_kind": "plain"
+                                  },
+                                  "max_items": 1
+                                }
+                              },
+                              "description": "The backup geo targets, which provide a regional failover policy for the otherwise global primary targets.",
+                              "description_kind": "plain"
+                            },
+                            "min_items": 1
+                          },
+                          "primary": {
+                            "nesting_mode": "list",
+                            "block": {
+                              "block_types": {
+                                "internal_load_balancers": {
+                                  "nesting_mode": "list",
+                                  "block": {
+                                    "attributes": {
+                                      "ip_address": {
+                                        "type": "string",
+                                        "description": "The frontend IP address of the load balancer.",
+                                        "description_kind": "plain",
+                                        "required": true
+                                      },
+                                      "ip_protocol": {
+                                        "type": "string",
+                                        "description": "The configured IP protocol of the load balancer. This value is case-sensitive. Possible values: [\"tcp\", \"udp\"]",
+                                        "description_kind": "plain",
+                                        "required": true
+                                      },
+                                      "load_balancer_type": {
+                                        "type": "string",
+                                        "description": "The type of load balancer. This value is case-sensitive. Possible values: [\"regionalL4ilb\", \"regionalL7ilb\", \"globalL7ilb\"]",
+                                        "description_kind": "plain",
+                                        "optional": true
+                                      },
+                                      "network_url": {
+                                        "type": "string",
+                                        "description": "The fully qualified url of the network in which the load balancer belongs. This should be formatted like `https://www.googleapis.com/compute/v1/projects/{project}/global/networks/{network}`.",
+                                        "description_kind": "plain",
+                                        "required": true
+                                      },
+                                      "port": {
+                                        "type": "string",
+                                        "description": "The configured port of the load balancer.",
+                                        "description_kind": "plain",
+                                        "required": true
+                                      },
+                                      "project": {
+                                        "type": "string",
+                                        "description": "The ID of the project in which the load balancer belongs.",
+                                        "description_kind": "plain",
+                                        "required": true
+                                      },
+                                      "region": {
+                                        "type": "string",
+                                        "description": "The region of the load balancer. Only needed for regional load balancers.",
+                                        "description_kind": "plain",
+                                        "optional": true
+                                      }
+                                    },
+                                    "description": "The list of internal load balancers to health check.",
+                                    "description_kind": "plain"
+                                  },
+                                  "min_items": 1
+                                }
+                              },
+                              "description": "The list of global primary targets to be health checked.",
+                              "description_kind": "plain"
+                            },
+                            "min_items": 1,
+                            "max_items": 1
+                          }
+                        },
+                        "description": "The configuration for a failover policy with global to regional failover. Queries are responded to with the global primary targets, but if none of the primary targets are healthy, then we fallback to a regional failover policy.",
+                        "description_kind": "plain"
+                      },
+                      "max_items": 1
+                    },
+                    "wrr": {
+                      "nesting_mode": "list",
+                      "block": {
+                        "attributes": {
+                          "rrdatas": {
+                            "type": [
+                              "list",
+                              "string"
+                            ],
+                            "description_kind": "plain",
+                            "optional": true
+                          },
+                          "weight": {
+                            "type": "number",
+                            "description": "The ratio of traffic routed to the target.",
+                            "description_kind": "plain",
+                            "required": true
+                          }
+                        },
+                        "block_types": {
+                          "health_checked_targets": {
+                            "nesting_mode": "list",
+                            "block": {
+                              "block_types": {
+                                "internal_load_balancers": {
+                                  "nesting_mode": "list",
+                                  "block": {
+                                    "attributes": {
+                                      "ip_address": {
+                                        "type": "string",
+                                        "description": "The frontend IP address of the load balancer.",
+                                        "description_kind": "plain",
+                                        "required": true
+                                      },
+                                      "ip_protocol": {
+                                        "type": "string",
+                                        "description": "The configured IP protocol of the load balancer. This value is case-sensitive. Possible values: [\"tcp\", \"udp\"]",
+                                        "description_kind": "plain",
+                                        "required": true
+                                      },
+                                      "load_balancer_type": {
+                                        "type": "string",
+                                        "description": "The type of load balancer. This value is case-sensitive. Possible values: [\"regionalL4ilb\", \"regionalL7ilb\", \"globalL7ilb\"]",
+                                        "description_kind": "plain",
+                                        "optional": true
+                                      },
+                                      "network_url": {
+                                        "type": "string",
+                                        "description": "The fully qualified url of the network in which the load balancer belongs. This should be formatted like `https://www.googleapis.com/compute/v1/projects/{project}/global/networks/{network}`.",
+                                        "description_kind": "plain",
+                                        "required": true
+                                      },
+                                      "port": {
+                                        "type": "string",
+                                        "description": "The configured port of the load balancer.",
+                                        "description_kind": "plain",
+                                        "required": true
+                                      },
+                                      "project": {
+                                        "type": "string",
+                                        "description": "The ID of the project in which the load balancer belongs.",
+                                        "description_kind": "plain",
+                                        "required": true
+                                      },
+                                      "region": {
+                                        "type": "string",
+                                        "description": "The region of the load balancer. Only needed for regional load balancers.",
+                                        "description_kind": "plain",
+                                        "optional": true
+                                      }
+                                    },
+                                    "description": "The list of internal load balancers to health check.",
+                                    "description_kind": "plain"
+                                  },
+                                  "min_items": 1
+                                }
+                              },
+                              "description": "The list of targets to be health checked. Note that if DNSSEC is enabled for this zone, only one of `rrdatas` or `health_checked_targets` can be set.",
+                              "description_kind": "plain"
+                            },
+                            "max_items": 1
+                          }
+                        },
+                        "description": "The configuration for Weighted Round Robin based routing policy.",
+                        "description_kind": "plain"
+                      }
+                    }
+                  },
+                  "description": "The configuration for steering traffic based on query. You can specify either Weighted Round Robin(WRR) type or Geolocation(GEO) type.",
                   "description_kind": "plain"
                 },
                 "max_items": 1

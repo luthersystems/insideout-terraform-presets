@@ -10,6 +10,7 @@ type AWSDynamodbGlobalTable struct {
 	ARN      *Value[string]                  `tf:"arn" json:"arn,omitempty"`
 	ID       *Value[string]                  `tf:"id" json:"id,omitempty"`
 	Name     *Value[string]                  `tf:"name" json:"name,omitempty"`
+	Region   *Value[string]                  `tf:"region" json:"region,omitempty"`
 	Replica  []AWSDynamodbGlobalTableReplica `tf:"replica,blocks" json:"replica,omitempty"`
 	Timeouts *AWSDynamodbGlobalTableTimeouts `tf:"timeouts,block" json:"timeouts,omitempty"`
 }
@@ -32,6 +33,7 @@ var AWSDynamodbGlobalTableSchema = map[string]FieldSchema{
 	"arn":      {Computed: true, Replacement: ReplacementUnknown},
 	"id":       {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"name":     {Required: true, Replacement: ReplacementUnknown},
+	"region":   {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"replica":  {Required: true, Replacement: ReplacementUnknown},
 	"timeouts": {Optional: true, Replacement: ReplacementUnknown},
 }

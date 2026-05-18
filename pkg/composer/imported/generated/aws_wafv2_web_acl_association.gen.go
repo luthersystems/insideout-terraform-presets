@@ -8,6 +8,7 @@ import "reflect"
 // `aws_wafv2_web_acl_association` Terraform resource.
 type AWSWafv2WebACLAssociation struct {
 	ID          *Value[string]                     `tf:"id" json:"id,omitempty"`
+	Region      *Value[string]                     `tf:"region" json:"region,omitempty"`
 	ResourceARN *Value[string]                     `tf:"resource_arn" json:"resource_arn,omitempty"`
 	WebACLARN   *Value[string]                     `tf:"web_acl_arn" json:"web_acl_arn,omitempty"`
 	Timeouts    *AWSWafv2WebACLAssociationTimeouts `tf:"timeouts,block" json:"timeouts,omitempty"`
@@ -22,6 +23,7 @@ type AWSWafv2WebACLAssociationTimeouts struct {
 // block of aws_wafv2_web_acl_association.
 var AWSWafv2WebACLAssociationSchema = map[string]FieldSchema{
 	"id":           {Optional: true, Computed: true, Replacement: ReplacementUnknown},
+	"region":       {Optional: true, Computed: true, Replacement: ReplacementUnknown},
 	"resource_arn": {Required: true, Replacement: ReplacementUnknown},
 	"web_acl_arn":  {Required: true, Replacement: ReplacementUnknown},
 	"timeouts":     {Optional: true, Replacement: ReplacementUnknown},
