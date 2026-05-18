@@ -546,12 +546,21 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 		TagsFromProperties: tagsFromKey("Tags"),
 	},
 	{
-		TFType:             "aws_lb_listener",
-		CloudFormationType: "AWS::ElasticLoadBalancingV2::Listener",
-		Slug:               "lb_listener",
-		// Listener identifier = full ARN. The hand-rolled parent-scoped
-		// enumeration is no longer needed: RGT returns listener ARNs
-		// directly.
+		// AWS::ElasticLoadBalancingV2::Listener is parent-scoped: CC
+		// ListResources requires ResourceModel={"LoadBalancerArn":"..."}.
+		// RGT supplies listener ARNs directly on cache-hit, but on RGT
+		// cache miss the fallback CC ListResources fires with no
+		// ResourceModel and AWS rejects with InvalidRequestException
+		// (HTTP 400). Same regression class as #616's
+		// AWS::EKS::PodIdentityAssociation; surfaced by the live #616
+		// full-scan integration test against the platform-test-admin
+		// account in us-east-1.
+		//
+		// Listener identifier = full ARN; Terraform import is passthrough.
+		TFType:                 "aws_lb_listener",
+		CloudFormationType:     "AWS::ElasticLoadBalancingV2::Listener",
+		Slug:                   "lb_listener",
+		ParentLister:           listLoadBalancersAsResourceModels,
 		ImportIDFromIdentifier: passthroughImportID,
 		NameHintFromProperties: func(identifier string, _ map[string]any) string {
 			// Listener ARNs end in `:listener/app/<lb>/<lbId>/<listenerId>`;
@@ -741,14 +750,21 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 	},
 
 	// =====================================================================
-	// EKS Pod Identity Association — compound import-ID rewrite
+	// EKS Pod Identity Association — parent-scoped on ClusterName, taggable (#616)
 	// =====================================================================
 	{
+		// AWS::EKS::PodIdentityAssociation is parent-scoped: CC ListResources
+		// requires ResourceModel={"ClusterName":"..."}. Without ParentLister
+		// the fallback CC ListResources fires with no ResourceModel and AWS
+		// rejects with InvalidRequestException (HTTP 400). See #616 / live
+		// repro against test account in us-east-1.
+		//
+		// Cloud Control identifier = "cluster|assocID"; Terraform import
+		// format = "cluster,assocID" (comma-separated). Rewrite.
 		TFType:             "aws_eks_pod_identity_association",
 		CloudFormationType: "AWS::EKS::PodIdentityAssociation",
 		Slug:               "eks_pod_identity",
-		// Cloud Control identifier = "cluster|assocID"; Terraform
-		// import format = "cluster,assocID" (comma-separated). Rewrite.
+		ParentLister:       listEKSClustersAsResourceModels,
 		ImportIDFromIdentifier: func(identifier string, _ map[string]any) string {
 			return strings.Replace(identifier, "|", ",", 1)
 		},
