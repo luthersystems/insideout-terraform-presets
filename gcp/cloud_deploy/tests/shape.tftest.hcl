@@ -58,6 +58,60 @@ run "cloud_deploy_minimum_inputs" {
     condition     = tolist(google_clouddeploy_delivery_pipeline.this.serial_pipeline[0].stages)[1].target_id == "test-prod"
     error_message = "serial_pipeline.stages[1].target_id must be the var.project-prefixed second target name."
   }
+
+  # Runner SA's account_id must hit the variables.tf default. A rename
+  # that slipped under the SA's 30-char cap would not trip the validation
+  # block but WOULD change a stack-stable identifier consumers might
+  # already grant cross-project access to — surface the default
+  # explicitly so a default-flip is a deliberate test break.
+  assert {
+    condition     = google_service_account.deploy_runner.account_id == "clouddeploy-runner"
+    error_message = "Runner SA account_id should default to `clouddeploy-runner` (length-safe at 18 chars)."
+  }
+
+  # execution_configs.service_account MUST point at the per-pipeline
+  # runner SA, not the default Compute Engine SA. The entire reason this
+  # preset provisions a runner SA is to avoid the over-privileged CE
+  # default — a mutation that dropped execution_configs (or pointed it
+  # at the wrong reference) would silently regress that security promise.
+  assert {
+    condition     = google_clouddeploy_target.this["staging"].execution_configs[0].service_account == google_service_account.deploy_runner.email
+    error_message = "Cloud Deploy targets must execute as the per-pipeline runner SA, not the default Compute Engine SA (over-privileged)."
+  }
+
+  assert {
+    condition     = contains(google_clouddeploy_target.this["staging"].execution_configs[0].usages, "DEPLOY")
+    error_message = "execution_configs.usages must include DEPLOY so render/deploy/verify all route through the runner SA."
+  }
+}
+
+# Positive companion to the cloud_deploy_rejects_* triad below. With a
+# valid single-entry targets list (same SHAPE the negatives use, just
+# with valid values), plan must succeed. This triangulates that the
+# negatives' expect_failures on var.targets is the right validation
+# firing (the field under test), not e.g. the empty-list check
+# unexpectedly tripping on a single-entry list, or the name regex
+# tripping on the targets we use in the duplicate-names case.
+run "cloud_deploy_single_valid_target_plans_cleanly" {
+  command = plan
+
+  variables {
+    project    = "test"
+    project_id = "test-project"
+    targets = [
+      { name = "prod", runtime = "run", runtime_target = "us-central1" },
+    ]
+  }
+
+  assert {
+    condition     = length(google_clouddeploy_target.this) == 1
+    error_message = "Valid single-target list must plan cleanly with exactly one target resource."
+  }
+
+  assert {
+    condition     = google_clouddeploy_target.this["prod"].name == "test-prod"
+    error_message = "Single target must still get the var.project name-prefix."
+  }
 }
 
 run "cloud_deploy_gke_target_dispatches_gke_block" {
