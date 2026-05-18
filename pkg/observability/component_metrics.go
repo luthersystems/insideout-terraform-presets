@@ -96,6 +96,13 @@ var ComponentMetricsMapping = map[composer.ComponentKey]ComponentMetricsBinding{
 	// session without GCE instances and rendered as "No live observable
 	// resources were found" — misleading in the InsideOut backend#1234.
 	composer.KeyGCPCloudMonitoring: {Service: "cloudmonitoring", Action: "list-alert-policies"},
+	// gcp_github_actions (#606) routes to iam.list-workload-identity-pools.
+	// The preset (#605) creates the WIF pool as its top-level entity; the
+	// provider + service account + IAM bindings hang off it. Listing pools
+	// is the panel-default discovery surface that surfaces the deployed
+	// federation trust boundary and its security-load-bearing disabled
+	// flag. Companion to the #607 drift policy on the WIF resource family.
+	composer.KeyGCPGitHubActions: {Service: "iam", Action: "list-workload-identity-pools"},
 }
 
 // EmptyDiscoveryAllowlist contains component keys where empty inspector

@@ -47,6 +47,9 @@ var firstListAction = map[string]string{
 	// #596: new DNS+cert services.
 	"clouddns":           "list-managed-zones",
 	"certificatemanager": "list-certificates",
+	// #606: IAM WIF + service accounts + project IAM policy. Backs the
+	// gcp/github_actions WIF preset (#605).
+	"iam": "list-workload-identity-pools",
 }
 
 // unreachableEndpoint is an explicit RFC5737 documentation IP — every

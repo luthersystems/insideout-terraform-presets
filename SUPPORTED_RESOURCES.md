@@ -23,7 +23,7 @@ and is checked in lockstep with the runtime registries. See the
 ## Summary
 
 - **AWS:** 129 types · 84% Discoverable · 84% Enrichable · 100% DriftDetectable · 67% MetricsAvailable · 91% AgentEditable
-- **GCP:** 59 types · 92% Discoverable · 92% Enrichable · 100% DriftDetectable · 81% MetricsAvailable · 90% AgentEditable
+- **GCP:** 62 types · 87% Discoverable · 87% Enrichable · 100% DriftDetectable · 77% MetricsAvailable · 90% AgentEditable
 
 ## AWS
 
@@ -195,6 +195,8 @@ and is checked in lockstep with the runtime registries. See the
 | `google_dns_managed_zone` | – | – | ✓ | – | ✓ |
 | `google_dns_record_set` | – | – | ✓ | – | ✓ |
 | `google_firestore_database` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `google_iam_workload_identity_pool` | – | – | ✓ | – | ✓ |
+| `google_iam_workload_identity_pool_provider` | – | – | ✓ | – | ✓ |
 | `google_identity_platform_config` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_identity_platform_default_supported_idp_config` | ✓ | ✓ | ✓ | – | ✓ |
 | `google_kms_crypto_key` | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -214,6 +216,7 @@ and is checked in lockstep with the runtime registries. See the
 | `google_secret_manager_secret_iam_member` | ✓ | ✓ | ✓ | ✓ | – |
 | `google_secret_manager_secret_version` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_service_account` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `google_service_account_iam_binding` | – | – | ✓ | – | ✓ |
 | `google_service_networking_connection` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_sql_database_instance` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_sql_user` | ✓ | ✓ | ✓ | ✓ | ✓ |

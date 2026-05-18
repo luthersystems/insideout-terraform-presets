@@ -166,6 +166,25 @@ func TestLive255_AllInspectorsJSONShape(t *testing.T) {
 		// identity.go — list-tenants on a project without multi-tenancy
 		// returns a structured error (TestLive_InspectIdentityPlatform_*).
 		// list-providers is a baseline.
+
+		// iam_workload_identity.go (#606)
+		{name: "iam/list-workload-identity-pools",
+			fn: func() (any, error) {
+				return inspectIAM(ctx, projectID, "list-workload-identity-pools", "", opts...)
+			}},
+		// iam/list-workload-identity-pool-providers — covered conditionally
+		// below (needs a pool to exist; we route around the structured
+		// error here).
+		{name: "iam/list-service-accounts",
+			fn: func() (any, error) {
+				return inspectIAM(ctx, projectID, "list-service-accounts", "", opts...)
+			}},
+		// iam/get-project-iam-policy — wrapped-in-parent shape; #255
+		// pattern C. Defensively re-inits bindings to `[]` if SDK nil.
+		{name: "iam/get-project-iam-policy (wrapped)",
+			fn: func() (any, error) {
+				return inspectIAM(ctx, projectID, "get-project-iam-policy", "", opts...)
+			}},
 	}
 
 	for _, p := range probes {

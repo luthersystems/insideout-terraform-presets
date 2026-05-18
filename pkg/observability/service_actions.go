@@ -165,6 +165,21 @@ var GCPServiceActions = map[string][]string{
 	// inventory for a given location (defaults to "global" — the
 	// CloudFront / global LB cert flow).
 	"certificatemanager": {"list-certificates"},
+	// IAM Workload Identity Federation + service accounts + project IAM
+	// policy (#606). Backs the gcp/github_actions WIF preset (#605).
+	//   - list-workload-identity-pools: every WIF pool under the project
+	//     (location=global is the only valid WIF location).
+	//   - list-workload-identity-pool-providers: per-pool providers; the
+	//     caller must supply `pool` in the filters envelope. Returns
+	//     attribute_condition + attribute_mapping + oidc/aws/saml/x509
+	//     — the security-load-bearing surface the drift policy guards.
+	//   - list-service-accounts: every SA in the project (no labels at
+	//     the IAM v1 admin surface; post-filter by display_name /
+	//     account_id / email if needed).
+	//   - get-project-iam-policy: project-level role → members bindings
+	//     via the Resource Manager v1 API. Backs google_project_iam_member
+	//     drift detection.
+	"iam": {"list-workload-identity-pools", "list-workload-identity-pool-providers", "list-service-accounts", "get-project-iam-policy"},
 }
 
 // GCPServiceAliases is the GCP analog of AWSServiceAliases.

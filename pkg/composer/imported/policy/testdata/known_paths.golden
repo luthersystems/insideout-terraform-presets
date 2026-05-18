@@ -2953,6 +2953,34 @@ google_firestore_database	project	Identity		UIVisible	Never		AlwaysReplace
 google_firestore_database	timeouts	Tuning		Hidden	SystemOnly		
 google_firestore_database	type	Tuning	Reliability	UIVisible	Never		AlwaysReplace
 google_firestore_database	version_retention_period	Tuning	Reliability	SummaryVisible	ChatSafe		
+google_iam_workload_identity_pool	description	Tuning		SummaryVisible	ChatSafe		
+google_iam_workload_identity_pool	disabled	Tuning	Security	UIVisible	RequiresApproval		
+google_iam_workload_identity_pool	display_name	Tuning		UIVisible	ChatSafe		
+google_iam_workload_identity_pool	id	Identity		SummaryVisible	Never		
+google_iam_workload_identity_pool	name	Identity		UIVisible	Never		
+google_iam_workload_identity_pool	project	Identity		UIVisible	Never		AlwaysReplace
+google_iam_workload_identity_pool	state	Identity		SummaryVisible	Never		
+google_iam_workload_identity_pool	timeouts	Tuning		Hidden	SystemOnly		
+google_iam_workload_identity_pool	workload_identity_pool_id	Identity		UIVisible	Never		AlwaysReplace
+google_iam_workload_identity_pool_provider	attribute_condition	Tuning	Security	UIVisible	RequiresApproval		
+google_iam_workload_identity_pool_provider	attribute_mapping	Tuning	Security	UIVisible	RequiresApproval		
+google_iam_workload_identity_pool_provider	aws.account_id	Tuning	Security	UIVisible	RequiresApproval		
+google_iam_workload_identity_pool_provider	description	Tuning		SummaryVisible	ChatSafe		
+google_iam_workload_identity_pool_provider	disabled	Tuning	Security	UIVisible	RequiresApproval		
+google_iam_workload_identity_pool_provider	display_name	Tuning		UIVisible	ChatSafe		
+google_iam_workload_identity_pool_provider	id	Identity		SummaryVisible	Never		
+google_iam_workload_identity_pool_provider	name	Identity		UIVisible	Never		
+google_iam_workload_identity_pool_provider	oidc.allowed_audiences	Tuning	Security	UIVisible	RequiresApproval		
+google_iam_workload_identity_pool_provider	oidc.issuer_uri	Tuning	Security	UIVisible	RequiresApproval		
+google_iam_workload_identity_pool_provider	oidc.jwks_json	Tuning	Security	SummaryVisible	RequiresApproval		
+google_iam_workload_identity_pool_provider	project	Identity		UIVisible	Never		AlwaysReplace
+google_iam_workload_identity_pool_provider	saml.idp_metadata_xml	Tuning	Security	SummaryVisible	RequiresApproval		
+google_iam_workload_identity_pool_provider	state	Identity		SummaryVisible	Never		
+google_iam_workload_identity_pool_provider	timeouts	Tuning		Hidden	SystemOnly		
+google_iam_workload_identity_pool_provider	workload_identity_pool_id	Identity		UIVisible	Never		AlwaysReplace
+google_iam_workload_identity_pool_provider	workload_identity_pool_provider_id	Identity		UIVisible	Never		AlwaysReplace
+google_iam_workload_identity_pool_provider	x509.trust_store.intermediate_cas.pem_certificate	Tuning	Security	SummaryVisible	RequiresApproval		
+google_iam_workload_identity_pool_provider	x509.trust_store.trust_anchors.pem_certificate	Tuning	Security	SummaryVisible	RequiresApproval		
 google_identity_platform_config	authorized_domains	Tuning	Security	UIVisible	RequiresApproval		
 google_identity_platform_config	autodelete_anonymous_users	Tuning	Reliability	SummaryVisible	ChatSafe		
 google_identity_platform_config	id	Identity		SummaryVisible	Never		
@@ -3192,6 +3220,11 @@ google_service_account	name	Identity		UIVisible	Never
 google_service_account	project	Identity		UIVisible	Never		AlwaysReplace
 google_service_account	timeouts	Tuning		Hidden	SystemOnly		
 google_service_account	unique_id	Identity		SummaryVisible	Never		
+google_service_account_iam_binding	etag	Identity		SummaryVisible	Never		
+google_service_account_iam_binding	id	Identity		SummaryVisible	Never		
+google_service_account_iam_binding	members	Tuning	Security	UIVisible	RequiresApproval		InPlace
+google_service_account_iam_binding	role	Identity	Security	UIVisible	Never		AlwaysReplace
+google_service_account_iam_binding	service_account_id	Identity		UIVisible	Never		AlwaysReplace
 google_service_networking_connection	deletion_policy	Tuning		SummaryVisible	ChatSafe		
 google_service_networking_connection	id	Identity		SummaryVisible	Never		
 google_service_networking_connection	network	Identity		UIVisible	Never		AlwaysReplace

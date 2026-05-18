@@ -328,6 +328,15 @@ var coveredTypes = []string{
 	"google_secret_manager_secret_iam_binding",
 	"google_secret_manager_secret_iam_member",
 	"google_storage_bucket_iam_member",
+	// Bundle (#607) — gcp/github_actions WIF full-fidelity follow-up for
+	// the v1 preset (#605). attribute_condition + attribute_mapping +
+	// oidc.issuer_uri carry PillarSecurity + DriftSemanticExact (silent
+	// edits are real attack-shaped events); google_service_account_iam_
+	// binding follows the canonical IAM-binding template (members =
+	// WholeList + Security).
+	"google_iam_workload_identity_pool",
+	"google_iam_workload_identity_pool_provider",
+	"google_service_account_iam_binding",
 }
 
 func TestCoveredTypesHavePolicies(t *testing.T) {

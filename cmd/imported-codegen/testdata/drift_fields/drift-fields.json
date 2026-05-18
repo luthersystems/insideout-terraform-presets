@@ -10617,6 +10617,114 @@
       "semantic": "Exact"
     }
   ],
+  "google_iam_workload_identity_pool": [
+    {
+      "path": "description",
+      "semantic": "Exact"
+    },
+    {
+      "path": "disabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "display_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "state",
+      "semantic": "Exact"
+    },
+    {
+      "path": "workload_identity_pool_id",
+      "semantic": "Exact"
+    }
+  ],
+  "google_iam_workload_identity_pool_provider": [
+    {
+      "path": "attribute_condition",
+      "semantic": "Exact"
+    },
+    {
+      "path": "attribute_mapping",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "aws.account_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "description",
+      "semantic": "Exact"
+    },
+    {
+      "path": "disabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "display_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "oidc.allowed_audiences",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "oidc.issuer_uri",
+      "semantic": "Exact"
+    },
+    {
+      "path": "oidc.jwks_json",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "saml.idp_metadata_xml",
+      "semantic": "Exact"
+    },
+    {
+      "path": "state",
+      "semantic": "Exact"
+    },
+    {
+      "path": "workload_identity_pool_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "workload_identity_pool_provider_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "x509.trust_store.intermediate_cas.pem_certificate",
+      "semantic": "Exact"
+    },
+    {
+      "path": "x509.trust_store.trust_anchors.pem_certificate",
+      "semantic": "Exact"
+    }
+  ],
   "google_identity_platform_config": [
     {
       "path": "authorized_domains",
@@ -11336,6 +11444,20 @@
     },
     {
       "path": "unique_id",
+      "semantic": "Exact"
+    }
+  ],
+  "google_service_account_iam_binding": [
+    {
+      "path": "members",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "role",
+      "semantic": "Exact"
+    },
+    {
+      "path": "service_account_id",
       "semantic": "Exact"
     }
   ],
