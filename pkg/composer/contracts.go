@@ -41,6 +41,7 @@ const (
 	KeyAWSEKS                  ComponentKey = "aws_eks"
 	KeyAWSECS                  ComponentKey = "aws_ecs"
 	KeyAWSLambda               ComponentKey = "aws_lambda"
+	KeyAWSAppRunner            ComponentKey = "aws_apprunner"
 	KeyAWSSageMaker            ComponentKey = "aws_sagemaker"
 	KeyAWSALB                  ComponentKey = "aws_alb"
 	KeyAWSCloudfront           ComponentKey = "aws_cloudfront"
@@ -156,6 +157,12 @@ var ComposeOrder = []ComponentKey{
 	KeyAWSBedrock,
 	KeyAWSSageMaker,
 	KeyGCPVertexAI,
+	// App Runner (#598 row 2). Independent of EKS/ECS/Lambda compute
+	// keys — App Runner is a peer managed-container service (Cloud Run
+	// analog), not a downstream consumer of them. Position adjacent to
+	// other managed-compute pairs for reviewability; ordering is not
+	// load-bearing because no other key wires off of it.
+	KeyAWSAppRunner,
 	KeyAWSSQS,
 	KeyGCPPubSub,
 	KeyGCPCloudBuild,
@@ -189,6 +196,7 @@ var ModulePath = map[ComponentKey]string{
 	KeyAWSEKSNodeGroup:         "modules/eks_nodegroup",
 	KeyAWSECS:                  "modules/ecs",
 	KeyAWSLambda:               "modules/lambda",
+	KeyAWSAppRunner:            "modules/apprunner",
 	KeyAWSSageMaker:            "modules/sagemaker",
 	KeyAWSALB:                  "modules/alb",
 	KeyAWSCloudfront:           "modules/cloudfront",
@@ -265,6 +273,13 @@ var ImplicitDependencies = map[ComponentKey][]ComponentKey{
 	// network_mode is PublicInternetOnly or VpcOnly — selecting SageMaker
 	// without a VPC leaves the required inputs without a wired source.
 	KeyAWSSageMaker: {KeyAWSVPC},
+	// App Runner (#598 row 2). The public-only service does NOT strictly
+	// require a VPC, but the preset's optional VPC connector path
+	// (enable_vpc_connector = true) feeds vpc_id + subnet_ids from
+	// module.aws_vpc. Forcing the implicit dep mirrors the GCP analog
+	// (gcp/cloud_run also declares KeyGCPVPC) and ensures the wiring is
+	// satisfiable when the caller flips on private egress later.
+	KeyAWSAppRunner: {KeyAWSVPC},
 	KeyAWSEKSNodeGroup: {KeyAWSEKS, KeyAWSVPC},
 	KeyAWSEC2:          {KeyAWSVPC},
 	KeyGCPCompute:      {KeyGCPVPC},
@@ -376,6 +391,7 @@ var PresetKeyMap = map[ComponentKey]string{
 	KeyAWSEKS:                  "eks",
 	KeyAWSECS:                  "ecs",
 	KeyAWSLambda:               "lambda",
+	KeyAWSAppRunner:            "apprunner",
 	KeyAWSSageMaker:            "sagemaker",
 	KeyAWSALB:                  "alb",
 	KeyAWSCloudfront:           "cloudfront",
@@ -488,6 +504,7 @@ var AllComponentKeys = []ComponentKey{
 	KeyAWSACM,
 	KeyAWSALB,
 	KeyAWSAPIGateway,
+	KeyAWSAppRunner,
 	KeyAWSBackups,
 	KeyAWSBastion,
 	KeyAWSBedrock,
@@ -692,6 +709,28 @@ func DefaultWiring(selected map[ComponentKey]bool, k ComponentKey, comps *Compon
 			wi.RawHCL["subnet_ids"] = vpc + ".private_subnet_ids"
 			wi.RawHCL["security_group_ids"] = "[]"
 			wi.Names = append(wi.Names, "enable_vpc", "vpc_id", "subnet_ids", "security_group_ids")
+		}
+
+	case KeyAWSAppRunner:
+		// App Runner VPC-connector path consumes vpc_id + subnet_ids
+		// (#598 row 2). The preset's enable_vpc_connector flag gates
+		// actual creation of the connector, but threading the wiring
+		// unconditionally is fine — when the flag is false the inputs
+		// are simply ignored. Prefer private subnets when the upstream
+		// VPC is non-public so the connector lands in the right tier;
+		// fall back to public subnets on Public-VPC stacks (the connector
+		// still works — egress NAT is provided by App Runner's own
+		// network plane, the customer subnets are only the ENI placement
+		// for cross-VPC reachability).
+		if hasVPC {
+			vpc := vpcRef(selected)
+			wi.RawHCL["vpc_id"] = vpc + ".vpc_id"
+			if isPublicVPC(comps) {
+				wi.RawHCL["subnet_ids"] = vpc + ".public_subnet_ids"
+			} else {
+				wi.RawHCL["subnet_ids"] = vpc + ".private_subnet_ids"
+			}
+			wi.Names = append(wi.Names, "vpc_id", "subnet_ids")
 		}
 
 	case KeyAWSSageMaker:

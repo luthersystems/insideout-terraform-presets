@@ -23,6 +23,7 @@ type Components struct {
 	AWSEKS                  *bool  `json:"aws_eks,omitempty"`
 	AWSECS                  *bool  `json:"aws_ecs,omitempty"`
 	AWSLambda               *bool  `json:"aws_lambda,omitempty"`
+	AWSAppRunner            *bool  `json:"aws_apprunner,omitempty"`
 	AWSSageMaker            *bool  `json:"aws_sagemaker,omitempty"`
 	AWSALB                  *bool  `json:"aws_alb,omitempty"`
 	AWSCloudFront           *bool  `json:"aws_cloudfront,omitempty"`
@@ -202,6 +203,13 @@ type Config struct {
 		MemorySize string `json:"memorySize,omitempty"`
 		Timeout    string `json:"timeout,omitempty"`
 	} `json:"aws_lambda,omitempty"`
+
+	// AWSAppRunner carries the caller-supplied App Runner config (#598
+	// row 2). Named (not inline) so callers can construct it without
+	// re-typing the anonymous struct shape at every site, and so future
+	// field additions don't force every test instantiation to be touched
+	// (matches the GCPCloudDeployConfig + AWSSageMakerConfig pattern).
+	AWSAppRunner *AWSAppRunnerConfig `json:"aws_apprunner,omitempty"`
 
 	// AWSSageMaker carries the caller-supplied SageMaker Studio config
 	// (#615). Named (not inline) so callers can construct it without
@@ -458,6 +466,40 @@ type GCPCloudDeployConfig struct {
 	Targets                 []GCPCloudDeployTarget `json:"targets,omitempty"`
 }
 
+// AWSAppRunnerConfig is the caller-facing config for the aws/apprunner
+// preset (#598 row 2). Named (not inline) so callers can construct it
+// without re-typing the anonymous struct shape at every site, and so
+// future field additions don't force every test instantiation to be
+// touched. Mirrors AWSSageMakerConfig.
+//
+// Field semantics map 1:1 to aws/apprunner/variables.tf. Empty / nil
+// values mean "defer to the module's HCL default" — the mapper only
+// emits a tfvar when the caller supplies a value. VPCID / SubnetIDs are
+// normally wired automatically (DefaultWiring reads module.aws_vpc) so
+// callers don't usually populate them on this struct unless they need
+// to override the wiring.
+type AWSAppRunnerConfig struct {
+	ServiceName              string            `json:"serviceName,omitempty"`
+	ImageRepositoryURL       string            `json:"imageRepositoryUrl,omitempty"`
+	ImageRepositoryType      string            `json:"imageRepositoryType,omitempty"`
+	Port                     *int              `json:"port,omitempty"`
+	EnvVars                  map[string]string `json:"envVars,omitempty"`
+	CPU                      string            `json:"cpu,omitempty"`
+	Memory                   string            `json:"memory,omitempty"`
+	MinSize                  *int              `json:"minSize,omitempty"`
+	MaxSize                  *int              `json:"maxSize,omitempty"`
+	MaxConcurrency           *int              `json:"maxConcurrency,omitempty"`
+	IsPubliclyAccessible     *bool             `json:"isPubliclyAccessible,omitempty"`
+	AutoDeploymentsEnabled   *bool             `json:"autoDeploymentsEnabled,omitempty"`
+	HealthCheckProtocol      string            `json:"healthCheckProtocol,omitempty"`
+	HealthCheckPath          string            `json:"healthCheckPath,omitempty"`
+	EnableVPCConnector       *bool             `json:"enableVpcConnector,omitempty"`
+	VPCID                    string            `json:"vpcId,omitempty"`
+	SubnetIDs                []string          `json:"subnetIds,omitempty"`
+	CustomDomainName         string            `json:"customDomainName,omitempty"`
+	EnableWWWSubdomain       *bool             `json:"enableWwwSubdomain,omitempty"`
+}
+
 // AWSSageMakerConfig is the caller-facing config for the aws/sagemaker
 // Studio preset (#615). Named (not inline) so callers can construct it
 // without re-typing the anonymous struct shape at every site, and so
@@ -534,6 +576,7 @@ func (c *Components) Normalize() {
 		c.AWSEKS = nil
 		c.AWSECS = nil
 		c.AWSLambda = nil
+		c.AWSAppRunner = nil
 		c.AWSSageMaker = nil
 		c.AWSALB = nil
 		c.AWSCloudFront = nil
@@ -660,6 +703,7 @@ func (c *Config) Normalize() {
 		c.AWSCloudWatchMonitoring = nil
 		c.AWSCognito = nil
 		c.AWSLambda = nil
+		c.AWSAppRunner = nil
 		c.AWSSageMaker = nil
 		c.AWSAPIGateway = nil
 		c.AWSKMS = nil

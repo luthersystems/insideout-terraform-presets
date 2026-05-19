@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-InsideOut Terraform Presets — a library of standardized, composable Terraform module presets for AWS (29 modules) and GCP (22 modules). Used standalone or composed by the InsideOut engine to generate cloud infrastructure stacks. Currently in beta.
+InsideOut Terraform Presets — a library of standardized, composable Terraform module presets for AWS (35 modules) and GCP (25 modules). Used standalone or composed by the InsideOut engine to generate cloud infrastructure stacks. Currently in beta.
 
 The Go module (`zz_embed.go`) embeds all `.tf` and `.tmpl` files via `embed.FS` for use by the InsideOut composition engine.
 
@@ -28,8 +28,8 @@ terraform fmt -recursive
 ## Architecture
 
 ```
-aws/<module>/          # AWS Terraform modules (29 modules)
-gcp/<module>/          # GCP Terraform modules (22 modules)
+aws/<module>/          # AWS Terraform modules (35 modules)
+gcp/<module>/          # GCP Terraform modules (25 modules)
 zz_embed.go            # Go embed directive exposing FS for all .tf/.tmpl files
 go.mod                 # Go module: github.com/luthersystems/insideout-terraform-presets
 ```

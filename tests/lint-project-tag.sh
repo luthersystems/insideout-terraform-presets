@@ -31,6 +31,7 @@ NON_TAGGABLE_AWS=(
   aws_apigatewayv2_authorizer
   aws_apigatewayv2_integration
   aws_apigatewayv2_route
+  aws_apprunner_custom_domain_association
   aws_autoscaling_group_tag
   aws_backup_selection
   aws_bedrock_model_invocation_logging_configuration
