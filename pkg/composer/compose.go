@@ -59,9 +59,23 @@ type Files map[string][]byte
 // the deduped list of pre-plan validator findings (missing required vars,
 // type mismatches, wiring drift, etc.) that callers like the InsideOut backend/interactive-agent
 // surface for same-turn correction.
+//
+// ProvidersUsed mirrors the providersUsed map returned by EmitImportedTF: it
+// lists the clouds (and the synthetic gcp-beta key) for which at least one
+// imported resource was emitted. Downstream consumers use it to gate
+// archive-side behaviour without re-running EmitImportedTF — e.g. reliable's
+// renderImportedAliasProviderArchiveFile (luthersystems/reliable#1588) only
+// needs to ship a sibling provider-alias file when ProvidersUsed is
+// non-empty.
+//
+// Keys are the same constants exported by imported_emit.go:
+// ProvidersUsedKeyAWS ("aws"), ProvidersUsedKeyGCP ("gcp"),
+// ProvidersUsedKeyGCPBeta ("gcp-beta"). The map is nil when no imported
+// resources were emitted (matching EmitImportedTF's zero-result contract).
 type ComposeStackResult struct {
-	Files  Files
-	Issues []ValidationIssue
+	Files         Files
+	Issues        []ValidationIssue
+	ProvidersUsed map[string]bool
 }
 
 // ComposeSingleResult mirrors ComposeStackResult for the single-module path.
@@ -687,7 +701,7 @@ func (c *Client) composeStackImpl(opts ComposeStackOpts) (*ComposeStackResult, e
 		files["/imported.tf"] = importedTF
 	}
 
-	files["/providers.tf"] = generateProvidersTF(providersTFInput{
+	providersFiles := generateProvidersFiles(providersTFInput{
 		Cloud:          cloud,
 		Region:         reg,
 		GCPProjectID:   opts.GCPProjectID,
@@ -695,6 +709,20 @@ func (c *Client) composeStackImpl(opts ComposeStackOpts) (*ComposeStackResult, e
 		Discovered:     discoveredProviders,
 		ImportedClouds: importedClouds,
 	})
+	// /providers.tf holds only the terraform{} required_providers block and
+	// the default provider. /providers-aliases.tf and /providers-imported.tf
+	// carry the selection-dependent and `*.imported` alias blocks. The
+	// split lets archive packagers (notably reliable's
+	// sandbox-infrastructure-template wrapper) keep their own
+	// /providers.tf via PRESERVE_PATTERNS while the alias declarations
+	// slip through as sibling files — see luthersystems/reliable#1588.
+	files["/providers.tf"] = providersFiles.Main
+	if len(providersFiles.Aliases) > 0 {
+		files["/providers-aliases.tf"] = providersFiles.Aliases
+	}
+	if len(providersFiles.Imported) > 0 {
+		files["/providers-imported.tf"] = providersFiles.Imported
+	}
 
 	// Validator dispatcher — runs after the stack is fully composed, before
 	// returning. Each validator appends to issues. The missing-required check
@@ -710,7 +738,11 @@ func (c *Client) composeStackImpl(opts ComposeStackOpts) (*ComposeStackResult, e
 	issues = append(issues, ValidateGCPProjectID(cloud, opts.GCPProjectID)...)
 	issues = append(issues, ValidateAWSVPCNATConsistency(cloud, opts.Comps, opts.Cfg)...)
 
-	return &ComposeStackResult{Files: files, Issues: issues}, nil
+	return &ComposeStackResult{
+		Files:         files,
+		Issues:        issues,
+		ProvidersUsed: importedClouds,
+	}, nil
 }
 
 // providersTFInput bundles every input needed to render the composed
@@ -758,11 +790,66 @@ type providersTFInput struct {
 	ImportedClouds map[string]bool
 }
 
+// providersTFFiles is the split-up output of generateProvidersFiles.
+//
+// Main carries the `terraform { required_providers { … } }` block and the
+// default `provider "<cloud>" {}` block — anything a baseline stack needs to
+// `terraform init` regardless of whether it has cross-region or imported
+// resources.
+//
+// Aliases carries non-imported provider aliases that depend on which
+// components are selected — today that means the AWS `us_east_1` alias used
+// by CloudFront / WAF cert validation. Nil when no such alias is needed
+// (e.g. GCP stacks, AWS stacks without WAF).
+//
+// Imported carries the `aws.imported` / `google.imported` /
+// `google-beta.imported` alias blocks emitted unconditionally for the
+// matching cloud (issue #562). Nil when neither AWS nor GCP would emit an
+// imported alias (i.e. an empty-cloud compose, which the current pipeline
+// doesn't produce — but keep the nil contract so callers can rely on a
+// non-nil slice meaning "write this file").
+//
+// The split lets archive packagers (e.g. reliable's
+// sandbox-infrastructure-template wrapper) preserve the wrapper's own
+// providers.tf while still receiving the alias declarations as sibling
+// files that don't collide with the wrapper's PRESERVE_PATTERNS filter.
+// See luthersystems/reliable#1588 for the production bug this split fixes.
+type providersTFFiles struct {
+	Main     []byte
+	Aliases  []byte
+	Imported []byte
+}
+
 // generateProvidersTF generates cloud-specific provider configuration.
 // For AWS it includes assume_role blocks with bootstrap_role_arn and
 // external_id variables so Oracle can deploy into the customer's account
 // using cross-account role assumption with confused-deputy protection.
+//
+// Deprecated for internal callers: prefer generateProvidersFiles, which
+// returns the three logical pieces (main / aliases / imported) as separate
+// files so archive packagers can sidestep PRESERVE_PATTERNS-style filters
+// that protect a wrapper's own /providers.tf. This wrapper concatenates the
+// three pieces back into a single byte slice for backwards compatibility
+// with tests that assert against the full document.
 func generateProvidersTF(in providersTFInput) []byte {
+	pf := generateProvidersFiles(in)
+	var b []byte
+	b = append(b, pf.Main...)
+	if len(pf.Aliases) > 0 {
+		b = append(b, pf.Aliases...)
+	}
+	if len(pf.Imported) > 0 {
+		b = append(b, pf.Imported...)
+	}
+	return b
+}
+
+// generateProvidersFiles renders provider configuration as three logical
+// files: the always-present terraform{} + default provider block (Main),
+// non-imported aliases keyed off in.Selected (Aliases), and the
+// unconditional `*.imported` alias blocks for the active cloud
+// (Imported). See providersTFFiles for the file-level contract.
+func generateProvidersFiles(in providersTFInput) providersTFFiles {
 	cloud := in.Cloud
 	region := in.Region
 	gcpProjectID := in.GCPProjectID
@@ -810,38 +897,45 @@ func generateProvidersTF(in providersTFInput) []byte {
     managed-by = %q
   }`, insideoutManagedByValue)
 
-		var b strings.Builder
-		b.WriteString("terraform {\n  required_providers {\n")
-		b.WriteString(renderRequiredProviders(required))
-		b.WriteString("  }\n}\n\n")
-		fmt.Fprintf(&b, "provider \"google\" {\n  region = %q%s\n}\n", region, gcpDefaultLabels)
-		b.WriteString("\n")
-		// google.imported drives Terraform's import {} for previously
-		// existing GCP resources. project is rendered as a literal —
-		// the root stack does not declare var.gcp_project_id, and the
-		// project ID is known at compose time. No default_labels:
-		// imported resources keep any pre-existing labels untouched.
-		// An empty gcpProjectID still emits an empty literal: the
-		// gcp_project_id_required ValidationIssue surfaces the real
-		// fix to the caller before apply.
+		var main strings.Builder
+		main.WriteString("terraform {\n  required_providers {\n")
+		main.WriteString(renderRequiredProviders(required))
+		main.WriteString("  }\n}\n\n")
+		fmt.Fprintf(&main, "provider \"google\" {\n  region = %q%s\n}\n", region, gcpDefaultLabels)
+
+		// GCP composes never declare additional non-imported aliases at
+		// the root today, so Aliases stays nil. Keep the slot for parity
+		// with the AWS branch and to give future GCP cross-region
+		// aliases a place to land without breaking the file layout.
+		var aliases []byte
+
+		// imported: google.imported drives Terraform's import {} for
+		// previously existing GCP resources, plus the google-beta.imported
+		// sibling for API-Gateway-family resources whose schema lives in
+		// hashicorp/google-beta. project is rendered as a literal — the
+		// root stack does not declare var.gcp_project_id, and the project
+		// ID is known at compose time. No default_labels: imported
+		// resources keep any pre-existing labels untouched. An empty
+		// gcpProjectID still emits an empty literal: the
+		// gcp_project_id_required ValidationIssue surfaces the real fix
+		// to the caller before apply.
 		//
-		// Emitted unconditionally for every GCP stack (issue #562):
-		// terraform state from a prior compose may still reference
-		// `google.imported` even when the current compose's Imported
-		// list is empty (drift-correction recompose, re-import flow,
-		// etc.). Omitting the alias block then crashes `terraform
-		// plan` with "Provider configuration not present".
-		fmt.Fprintf(&b, "provider \"google\" {\n  alias   = \"imported\"\n  region  = %q\n  project = %q\n}\n", region, gcpProjectID)
-		b.WriteString("\n")
-		// google-beta.imported is the alias used by imported
-		// resources whose schema lives in hashicorp/google-beta —
-		// most notably the API Gateway family. Mirrors the
-		// google.imported alias above (no default_labels) so the
-		// imported resources don't inherit the session's
-		// project label. Emitted unconditionally for the same
-		// reason as google.imported above (issue #562).
-		fmt.Fprintf(&b, "provider \"google-beta\" {\n  alias   = \"imported\"\n  region  = %q\n  project = %q\n}\n", region, gcpProjectID)
-		return []byte(b.String())
+		// Both blocks are emitted unconditionally for every GCP stack
+		// (issue #562): terraform state from a prior compose may still
+		// reference `google.imported` even when the current compose's
+		// Imported list is empty (drift-correction recompose, re-import
+		// flow, etc.). Omitting the alias block then crashes
+		// `terraform plan` with "Provider configuration not present".
+		var imp strings.Builder
+		imp.WriteString("\n")
+		fmt.Fprintf(&imp, "provider \"google\" {\n  alias   = \"imported\"\n  region  = %q\n  project = %q\n}\n", region, gcpProjectID)
+		imp.WriteString("\n")
+		fmt.Fprintf(&imp, "provider \"google-beta\" {\n  alias   = \"imported\"\n  region  = %q\n  project = %q\n}\n", region, gcpProjectID)
+		return providersTFFiles{
+			Main:     []byte(main.String()),
+			Aliases:  aliases,
+			Imported: []byte(imp.String()),
+		}
 
 	default: // aws
 		if region == "" {
@@ -888,19 +982,25 @@ variable "external_id" {
 		required["aws"] = &tfconfig.ProviderRequirement{Source: "hashicorp/aws", VersionConstraints: []string{">= 6.0"}}
 		maps.Copy(required, discovered)
 
-		var b strings.Builder
-		b.WriteString(awsVarDecls)
-		b.WriteString("terraform {\n  required_providers {\n")
-		b.WriteString(renderRequiredProviders(required))
-		b.WriteString("  }\n}\n\n")
-		fmt.Fprintf(&b, "provider \"aws\" {\n  region = %q%s%s\n}\n", region, awsDefaultTags, awsDynamicAssumeRole)
+		var main strings.Builder
+		main.WriteString(awsVarDecls)
+		main.WriteString("terraform {\n  required_providers {\n")
+		main.WriteString(renderRequiredProviders(required))
+		main.WriteString("  }\n}\n\n")
+		fmt.Fprintf(&main, "provider \"aws\" {\n  region = %q%s%s\n}\n", region, awsDefaultTags, awsDynamicAssumeRole)
 
 		// WAF requires an additional us_east_1 provider alias for CloudFront
 		// certificate validation. This is a root-configuration concern, not a
-		// child-module concern, so it stays cloud-aware here.
+		// child-module concern, so it stays cloud-aware here. The block
+		// lives in the Aliases slot so archive packagers can preserve the
+		// wrapper's own /providers.tf without dropping this alias
+		// (luthersystems/reliable#1588).
+		var aliases []byte
 		if selected[KeyAWSWAF] {
-			b.WriteString("\n")
-			fmt.Fprintf(&b, "provider \"aws\" {\n  alias  = \"us_east_1\"\n  region = \"us-east-1\"%s%s\n}\n", awsDefaultTags, awsDynamicAssumeRole)
+			var ab strings.Builder
+			ab.WriteString("\n")
+			fmt.Fprintf(&ab, "provider \"aws\" {\n  alias  = \"us_east_1\"\n  region = \"us-east-1\"%s%s\n}\n", awsDefaultTags, awsDynamicAssumeRole)
+			aliases = []byte(ab.String())
 		}
 
 		// aws.imported is the dedicated alias for resources discovered via
@@ -917,10 +1017,15 @@ variable "external_id" {
 		// empty (drift-correction recompose, re-import flow, etc.).
 		// Omitting the alias block then crashes `terraform plan` with
 		// "Provider configuration not present".
-		b.WriteString("\n")
-		fmt.Fprintf(&b, "provider \"aws\" {\n  alias  = \"imported\"\n  region = %q%s\n}\n", region, awsDynamicAssumeRole)
+		var imp strings.Builder
+		imp.WriteString("\n")
+		fmt.Fprintf(&imp, "provider \"aws\" {\n  alias  = \"imported\"\n  region = %q%s\n}\n", region, awsDynamicAssumeRole)
 
-		return []byte(b.String())
+		return providersTFFiles{
+			Main:     []byte(main.String()),
+			Aliases:  aliases,
+			Imported: []byte(imp.String()),
+		}
 	}
 }
 
