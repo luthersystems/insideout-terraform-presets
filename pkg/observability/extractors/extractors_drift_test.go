@@ -69,6 +69,8 @@ var configExtractorAllowlist = map[string]string{
 	// own SDK inspector — extraction is handled by aws_eks (#204, #224).
 	"aws_eks_nodegroup": "[no-inspector] EKS node group is covered by the aws_eks inspector (#204)",
 
+	"aws_sagemaker": "[no-inspector] SageMaker Studio inspector deferred (#615 explicitly marks discovery inspector as optional/follow-up — domain + execution role are surfaced via name-prefix scoping until per-resource extractors land)",
+
 	"gcp_backups":      "[no-inspector] GCP Backup vaults aren't inspected; covered via label-based discovery (#204)",
 	"gcp_cloud_deploy": "[no-inspector] Cloud Deploy delivery-pipeline inspector deferred (#613 explicitly marks discovery inspector + extractor as optional/follow-up); ComponentMetricsMapping has no entry yet so the panel falls back to design values until the per-component extractor lands",
 	"gcp_cloud_dns":    "[no-inspector] Cloud DNS dispatcher landed in #596 (gcp/dns.go); per-component extractor (config map for panel) deferred pending zone-detail field reads (visibility, dnssec_config, record-count summary)",
