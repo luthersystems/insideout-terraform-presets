@@ -23,6 +23,7 @@ type Components struct {
 	AWSEKS                  *bool  `json:"aws_eks,omitempty"`
 	AWSECS                  *bool  `json:"aws_ecs,omitempty"`
 	AWSLambda               *bool  `json:"aws_lambda,omitempty"`
+	AWSSageMaker            *bool  `json:"aws_sagemaker,omitempty"`
 	AWSALB                  *bool  `json:"aws_alb,omitempty"`
 	AWSCloudFront           *bool  `json:"aws_cloudfront,omitempty"`
 	AWSWAF                  *bool  `json:"aws_waf,omitempty"`
@@ -201,6 +202,13 @@ type Config struct {
 		MemorySize string `json:"memorySize,omitempty"`
 		Timeout    string `json:"timeout,omitempty"`
 	} `json:"aws_lambda,omitempty"`
+
+	// AWSSageMaker carries the caller-supplied SageMaker Studio config
+	// (#615). Named (not inline) so callers can construct it without
+	// re-typing the anonymous struct shape at every site, and so future
+	// field additions don't force every test instantiation to be touched
+	// (matches the GCPGitHubActionsConfig pattern set in #597).
+	AWSSageMaker *AWSSageMakerConfig `json:"aws_sagemaker,omitempty"`
 
 	AWSAPIGateway *struct {
 		DomainName     string `json:"domainName,omitempty"`
@@ -450,6 +458,27 @@ type GCPCloudDeployConfig struct {
 	Targets                 []GCPCloudDeployTarget `json:"targets,omitempty"`
 }
 
+// AWSSageMakerConfig is the caller-facing config for the aws/sagemaker
+// Studio preset (#615). Named (not inline) so callers can construct it
+// without re-typing the anonymous struct shape at every site, and so
+// future field additions don't force every test instantiation to be
+// touched. Mirrors GCPGitHubActionsConfig pattern.
+//
+// Field semantics map 1:1 to aws/sagemaker/variables.tf. Empty / nil
+// values mean "defer to the module's HCL default" — the mapper only
+// emits a tfvar when the caller supplies a value. VPCID / SubnetIDs are
+// normally wired automatically (DefaultWiring reads module.aws_vpc) so
+// callers don't usually populate them on this struct.
+type AWSSageMakerConfig struct {
+	VPCID                       string   `json:"vpcId,omitempty"`
+	SubnetIDs                   []string `json:"subnetIds,omitempty"`
+	NetworkMode                 string   `json:"networkMode,omitempty"`
+	WorkspaceBucket             string   `json:"workspaceBucket,omitempty"`
+	WorkspaceBucketForceDestroy *bool    `json:"workspaceBucketForceDestroy,omitempty"`
+	StudioUsers                 []string `json:"studioUsers,omitempty"`
+	SageMakerManagedPolicyARN   string   `json:"sagemakerManagedPolicyArn,omitempty"`
+}
+
 // VarEntry holds a module variable name and a value (or nil). RawExpr can be used for expressions.
 type VarEntry struct {
 	Name  string
@@ -505,6 +534,7 @@ func (c *Components) Normalize() {
 		c.AWSEKS = nil
 		c.AWSECS = nil
 		c.AWSLambda = nil
+		c.AWSSageMaker = nil
 		c.AWSALB = nil
 		c.AWSCloudFront = nil
 		c.AWSWAF = nil
@@ -630,6 +660,7 @@ func (c *Config) Normalize() {
 		c.AWSCloudWatchMonitoring = nil
 		c.AWSCognito = nil
 		c.AWSLambda = nil
+		c.AWSSageMaker = nil
 		c.AWSAPIGateway = nil
 		c.AWSKMS = nil
 		c.AWSSecretsManager = nil

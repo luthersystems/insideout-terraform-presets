@@ -1081,6 +1081,72 @@ func (m DefaultMapper) BuildModuleValues(
 			}
 		}
 
+	case KeyAWSSageMaker:
+		// SageMaker Studio (#615). vpc_id + subnet_ids are required by the
+		// preset (AWS provider 6.x demands them on aws_sagemaker_domain).
+		// The composer's KeyAWSSageMaker → KeyAWSVPC implicit dep + the
+		// DefaultWiring case in contracts.go normally fills these from
+		// module.aws_vpc — but for single-module previews and tests that
+		// don't include the VPC, we drop in preview-safe stubs so the
+		// composed root parses cleanly. The stubs are obviously not real
+		// AWS resource IDs (preview-vpc / preview-subnet) so any leakage
+		// into a deploy fails loud at apply rather than silently picking
+		// up a wrong VPC.
+		if _, ok := vals["vpc_id"]; !ok {
+			vals["vpc_id"] = "vpc-00000000preview"
+		}
+		if _, ok := vals["subnet_ids"]; !ok {
+			vals["subnet_ids"] = []any{"subnet-00000000preview"}
+		}
+		// Partial-config pattern: only emit overrides for fields the
+		// caller actually populated. Leaving a field zero must let the
+		// preset's own default win (matches the gcp/github_actions
+		// partial-config contract pinned by TestMapper_GCPGitHubActions_PartialConfig).
+		if cfg != nil && cfg.AWSSageMaker != nil {
+			sm := cfg.AWSSageMaker
+			if strings.TrimSpace(sm.VPCID) != "" {
+				vals["vpc_id"] = strings.TrimSpace(sm.VPCID)
+			}
+			if len(sm.SubnetIDs) > 0 {
+				ids := make([]any, 0, len(sm.SubnetIDs))
+				for _, id := range sm.SubnetIDs {
+					t := strings.TrimSpace(id)
+					if t == "" {
+						continue
+					}
+					ids = append(ids, t)
+				}
+				if len(ids) > 0 {
+					vals["subnet_ids"] = ids
+				}
+			}
+			if strings.TrimSpace(sm.NetworkMode) != "" {
+				vals["network_mode"] = strings.TrimSpace(sm.NetworkMode)
+			}
+			if strings.TrimSpace(sm.WorkspaceBucket) != "" {
+				vals["workspace_bucket"] = strings.TrimSpace(sm.WorkspaceBucket)
+			}
+			if sm.WorkspaceBucketForceDestroy != nil {
+				vals["workspace_bucket_force_destroy"] = *sm.WorkspaceBucketForceDestroy
+			}
+			if len(sm.StudioUsers) > 0 {
+				us := make([]any, 0, len(sm.StudioUsers))
+				for _, u := range sm.StudioUsers {
+					t := strings.TrimSpace(u)
+					if t == "" {
+						continue
+					}
+					us = append(us, t)
+				}
+				if len(us) > 0 {
+					vals["studio_users"] = us
+				}
+			}
+			if strings.TrimSpace(sm.SageMakerManagedPolicyARN) != "" {
+				vals["sagemaker_managed_policy_arn"] = strings.TrimSpace(sm.SageMakerManagedPolicyARN)
+			}
+		}
+
 	case KeyGCPGitHubActions:
 		// GCP GitHub Actions WIF (#597 row 1). github_repository is required
 		// by the preset (no default); supply a preview-safe placeholder
