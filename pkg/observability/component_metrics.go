@@ -65,6 +65,20 @@ var ComponentMetricsMapping = map[composer.ComponentKey]ComponentMetricsBinding{
 	composer.KeyAWSBastion:              {Service: "ec2", Action: "describe-instances"},
 	composer.KeyAWSGrafana:              {Service: "ec2", Action: "describe-instances"},
 	composer.KeyAWSCodePipeline:         {Service: "ec2", Action: "describe-instances"},
+	// #622 historical-drift backfill: ACM panel surface is the cert
+	// inventory; Route 53 panel surface is the hosted-zone inventory;
+	// Backups panel surface is the vault inventory. All three had
+	// discovery dispatchers (#596 ACM + Route 53, storage.go for Backup)
+	// without a ComponentMetricsMapping entry — the panel fell through
+	// to "no observable resources" on healthy stacks.
+	composer.KeyAWSACM:     {Service: "acm", Action: "list-certificates"},
+	composer.KeyAWSRoute53: {Service: "route53", Action: "list-hosted-zones"},
+	composer.KeyAWSBackups: {Service: "backup", Action: "list-backup-vaults"},
+	// #622 parity-roll-up: aws_apprunner (#598 / #620) →
+	// apprunner.list-services is the panel-default surface; aws_sagemaker
+	// (#615 / #618) → sagemaker.list-domains.
+	composer.KeyAWSAppRunner: {Service: "apprunner", Action: "list-services"},
+	composer.KeyAWSSageMaker: {Service: "sagemaker", Action: "list-domains"},
 	// GCP
 	composer.KeyGCPCompute:          {Service: "compute", Action: "list-instances"},
 	composer.KeyGCPGKE:              {Service: "gke", Action: "list-clusters"},
@@ -103,6 +117,15 @@ var ComponentMetricsMapping = map[composer.ComponentKey]ComponentMetricsBinding{
 	// federation trust boundary and its security-load-bearing disabled
 	// flag. Companion to the #607 drift policy on the WIF resource family.
 	composer.KeyGCPGitHubActions: {Service: "iam", Action: "list-workload-identity-pools"},
+	// #622 historical-drift backfill: Cloud DNS already had a discovery
+	// dispatcher (#596 — gcp/dns.go) but no ComponentMetricsMapping
+	// entry. The panel fell through to "no observable resources" on
+	// healthy stacks.
+	composer.KeyGCPCloudDNS: {Service: "clouddns", Action: "list-managed-zones"},
+	// #622 parity-roll-up: gcp_cloud_deploy (#613 / #614) →
+	// clouddeploy.list-delivery-pipelines is the panel-default surface
+	// (the pipeline is the top-level orchestration entity).
+	composer.KeyGCPCloudDeploy: {Service: "clouddeploy", Action: "list-delivery-pipelines"},
 }
 
 // EmptyDiscoveryAllowlist contains component keys where empty inspector

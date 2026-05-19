@@ -62,6 +62,13 @@ var expectedResourceTypesByAction = map[string][]string{
 	"aws/opensearch/describe-domains":         {"aws_opensearch_domain"},
 	"aws/bedrock/list-knowledge-bases":        {"aws_bedrockagent_knowledge_base"},
 	"aws/vpc/describe-vpcs":                   {"aws_vpc"},
+	// #622 historical-drift backfill.
+	"aws/acm/list-certificates":     {"aws_acm_certificate"},
+	"aws/route53/list-hosted-zones": {"aws_route53_zone"},
+	"aws/backup/list-backup-vaults": {"aws_backup_vault"},
+	// #622 parity-roll-up.
+	"aws/apprunner/list-services": {"aws_apprunner_service"},
+	"aws/sagemaker/list-domains":  {"aws_sagemaker_domain"},
 
 	// GCP
 	"gcp/compute/list-instances":              {"google_compute_instance", "google_compute_instance_template", "google_compute_instance_group_manager"},
@@ -90,6 +97,10 @@ var expectedResourceTypesByAction = map[string][]string{
 	// (google_iam_workload_identity_pool) as its top-level federation
 	// trust boundary; the panel discovers it via the IAM admin API.
 	"gcp/iam/list-workload-identity-pools": {"google_iam_workload_identity_pool"},
+	// #622 historical-drift backfill: Cloud DNS panel surfaces zones.
+	"gcp/clouddns/list-managed-zones": {"google_dns_managed_zone"},
+	// #622 parity-roll-up: Cloud Deploy panel surfaces delivery pipelines.
+	"gcp/clouddeploy/list-delivery-pipelines": {"google_clouddeploy_delivery_pipeline"},
 }
 
 // presetMatchesActionAllowlist holds (component, reason) entries for

@@ -50,6 +50,8 @@ var firstListAction = map[string]string{
 	// #606: IAM WIF + service accounts + project IAM policy. Backs the
 	// gcp/github_actions WIF preset (#605).
 	"iam": "list-workload-identity-pools",
+	// #622: Cloud Deploy (panel-default for gcp_cloud_deploy).
+	"clouddeploy": "list-delivery-pipelines",
 }
 
 // unreachableEndpoint is an explicit RFC5737 documentation IP — every

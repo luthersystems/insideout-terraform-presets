@@ -55,6 +55,18 @@ var AWSServiceActions = map[string][]string{
 	// specific ARN. get-metrics routes to the metrics package for the
 	// DaysToExpiry CloudWatch series.
 	"acm": {"list-certificates", "describe-certificate", "get-metrics"},
+	// App Runner (#622). list-services returns the account+region service
+	// summaries (no server-side tag filter); describe-service fetches the
+	// full detail for a specific ARN. get-metrics routes to the metrics
+	// package for the AWS/AppRunner CloudWatch namespace.
+	"apprunner": {"list-services", "describe-service", "get-metrics"},
+	// SageMaker (#622). list-domains is the panel-default surface; the
+	// top-level entity that holds user profiles + Studio apps.
+	// describe-domain fetches the full output for a given domain ID.
+	// list-user-profiles enumerates user profiles across visible domains.
+	// get-metrics routes to the metrics package for the AWS/SageMaker
+	// CloudWatch namespace.
+	"sagemaker": {"list-domains", "describe-domain", "list-user-profiles", "get-metrics"},
 }
 
 // AWSServiceAliases maps caller-supplied aliases to canonical service
@@ -180,6 +192,13 @@ var GCPServiceActions = map[string][]string{
 	//     via the Resource Manager v1 API. Backs google_project_iam_member
 	//     drift detection.
 	"iam": {"list-workload-identity-pools", "list-workload-identity-pool-providers", "list-service-accounts", "get-project-iam-policy"},
+	// Cloud Deploy (#622). list-delivery-pipelines is the panel-default
+	// surface (the pipeline is the top-level entity that orchestrates
+	// rollouts across targets). list-targets enumerates the deployment
+	// targets the pipeline references. get-metrics is registry-only —
+	// Cloud Monitoring lookups live in pkg/observability/metrics, not
+	// the discovery dispatcher.
+	"clouddeploy": {"list-delivery-pipelines", "list-targets", "get-metrics"},
 }
 
 // GCPServiceAliases is the GCP analog of AWSServiceAliases.
