@@ -80,6 +80,7 @@ func (c *Client) ListAvailableComponentKeys() ([]string, error) {
 
 		// AWS prefixed keys
 		KeyAWSVPC, KeyAWSBastion, KeyAWSEC2, KeyAWSEKS, KeyAWSEKSNodeGroup, KeyAWSECS, KeyAWSLambda,
+		KeyAWSAppRunner,
 		KeyAWSSageMaker,
 		KeyAWSALB, KeyAWSCloudfront, KeyAWSWAF, KeyAWSAPIGateway, KeyAWSRDS,
 		KeyAWSElastiCache, KeyAWSDynamoDB, KeyAWSS3, KeyAWSKMS, KeyAWSSecretsManager,

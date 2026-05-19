@@ -1081,6 +1081,91 @@ func (m DefaultMapper) BuildModuleValues(
 			}
 		}
 
+	case KeyAWSAppRunner:
+		// App Runner (#598 row 2). vpc_id + subnet_ids are wired
+		// automatically by DefaultWiring when KeyAWSVPC is selected, but
+		// the preset only consumes them when enable_vpc_connector = true.
+		// For single-module previews (no VPC in the selection), the
+		// preset's own variables.tf defaults (empty string / empty list)
+		// are fine because enable_vpc_connector also defaults to false —
+		// so we don't need preview-safe stubs like SageMaker does. The
+		// mapper emits overrides ONLY for fields the caller actually
+		// populated, following the partial-config pattern.
+		if cfg != nil && cfg.AWSAppRunner != nil {
+			ar := cfg.AWSAppRunner
+			if strings.TrimSpace(ar.ServiceName) != "" {
+				vals["service_name"] = strings.TrimSpace(ar.ServiceName)
+			}
+			if strings.TrimSpace(ar.ImageRepositoryURL) != "" {
+				vals["image_repository_url"] = strings.TrimSpace(ar.ImageRepositoryURL)
+			}
+			if strings.TrimSpace(ar.ImageRepositoryType) != "" {
+				vals["image_repository_type"] = strings.TrimSpace(ar.ImageRepositoryType)
+			}
+			if ar.Port != nil {
+				vals["port"] = *ar.Port
+			}
+			if len(ar.EnvVars) > 0 {
+				ev := make(map[string]any, len(ar.EnvVars))
+				for k, v := range ar.EnvVars {
+					ev[k] = v
+				}
+				vals["env_vars"] = ev
+			}
+			if strings.TrimSpace(ar.CPU) != "" {
+				vals["cpu"] = strings.TrimSpace(ar.CPU)
+			}
+			if strings.TrimSpace(ar.Memory) != "" {
+				vals["memory"] = strings.TrimSpace(ar.Memory)
+			}
+			if ar.MinSize != nil {
+				vals["min_size"] = *ar.MinSize
+			}
+			if ar.MaxSize != nil {
+				vals["max_size"] = *ar.MaxSize
+			}
+			if ar.MaxConcurrency != nil {
+				vals["max_concurrency"] = *ar.MaxConcurrency
+			}
+			if ar.IsPubliclyAccessible != nil {
+				vals["is_publicly_accessible"] = *ar.IsPubliclyAccessible
+			}
+			if ar.AutoDeploymentsEnabled != nil {
+				vals["auto_deployments_enabled"] = *ar.AutoDeploymentsEnabled
+			}
+			if strings.TrimSpace(ar.HealthCheckProtocol) != "" {
+				vals["health_check_protocol"] = strings.TrimSpace(ar.HealthCheckProtocol)
+			}
+			if strings.TrimSpace(ar.HealthCheckPath) != "" {
+				vals["health_check_path"] = strings.TrimSpace(ar.HealthCheckPath)
+			}
+			if ar.EnableVPCConnector != nil {
+				vals["enable_vpc_connector"] = *ar.EnableVPCConnector
+			}
+			if strings.TrimSpace(ar.VPCID) != "" {
+				vals["vpc_id"] = strings.TrimSpace(ar.VPCID)
+			}
+			if len(ar.SubnetIDs) > 0 {
+				ids := make([]any, 0, len(ar.SubnetIDs))
+				for _, id := range ar.SubnetIDs {
+					t := strings.TrimSpace(id)
+					if t == "" {
+						continue
+					}
+					ids = append(ids, t)
+				}
+				if len(ids) > 0 {
+					vals["subnet_ids"] = ids
+				}
+			}
+			if strings.TrimSpace(ar.CustomDomainName) != "" {
+				vals["custom_domain_name"] = strings.TrimSpace(ar.CustomDomainName)
+			}
+			if ar.EnableWWWSubdomain != nil {
+				vals["enable_www_subdomain"] = *ar.EnableWWWSubdomain
+			}
+		}
+
 	case KeyAWSSageMaker:
 		// SageMaker Studio (#615). vpc_id + subnet_ids are required by the
 		// preset (AWS provider 6.x demands them on aws_sagemaker_domain).

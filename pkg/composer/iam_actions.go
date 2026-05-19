@@ -38,6 +38,20 @@ var AWSIAMActions = map[ComponentKey][]string{
 	KeyAWSEKSNodeGroup:         {"eks:CreateNodegroup"},
 	KeyAWSECS:                  {"ecs:CreateCluster", "ecs:CreateService"},
 	KeyAWSLambda:               {"lambda:CreateFunction"},
+	// App Runner (#598 row 2). Service + autoscaling-config-version
+	// CREATE + the access role (only when image_repository_type = ECR)
+	// + the instance role + optional VPC connector. PassRole is needed
+	// so the App Runner control plane can assume the instance role and
+	// (when private ECR) the access role.
+	KeyAWSAppRunner: {
+		"apprunner:CreateAutoScalingConfiguration",
+		"apprunner:CreateService",
+		"apprunner:CreateVpcConnector",
+		"ec2:CreateSecurityGroup",
+		"iam:AttachRolePolicy",
+		"iam:CreateRole",
+		"iam:PassRole",
+	},
 	// SageMaker Studio (#615). Domain + user-profile CREATE + the IAM
 	// execution role / inline policy + the workspace S3 bucket setup
 	// (versioning / encryption / public-access block). PassRole is needed
