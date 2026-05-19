@@ -140,6 +140,10 @@ func Inspect(ctx context.Context, cfg aws.Config, service, action, filtersJSON s
 		return inspectRoute53(ctx, cfg, action, filtersJSON)
 	case "acm":
 		return inspectACM(ctx, cfg, action, filtersJSON)
+	case "apprunner":
+		return inspectAppRunner(ctx, cfg, action, filtersJSON)
+	case "sagemaker":
+		return inspectSageMaker(ctx, cfg, action, filtersJSON)
 	default:
 		return nil, unsupportedServiceError(service)
 	}

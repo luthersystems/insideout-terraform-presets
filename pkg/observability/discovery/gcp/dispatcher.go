@@ -124,6 +124,10 @@ func Inspect(ctx context.Context, projectID, service, action, filtersJSON string
 	case "iam":
 		return inspectIAM(ctx, projectID, action, filtersJSON, opts...)
 
+	// --- clouddeploy.go (issue #622) ---
+	case "clouddeploy":
+		return inspectCloudDeploy(ctx, projectID, action, filtersJSON, opts...)
+
 	default:
 		return nil, unsupportedServiceError(service, observability.GCPServiceNames())
 	}

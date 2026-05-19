@@ -37,23 +37,10 @@ import (
 //     AWSServiceActions / GCPServiceActions. Adding a mapping
 //     requires registering the service + its actions first.
 //
-// Trim back as backfills land.
-var metricsDeferredKeys = map[composer.ComponentKey]string{
-	// Cohort 1: pre-existing historical drift. All tracked in #622.
-	composer.KeyAWSACM:           "Pre-existing (tracked in #622): ACM has no panel mapping. Listing certificates is the natural surface but it was not wired when the ACM preset (#280) landed.",
-	composer.KeyAWSBackups:       "Pre-existing (tracked in #622): aws_backups panel surface unclear (vault list vs plan list vs selection list). The [no-inspector] allowlist in extractors_drift_test.go acknowledges the parallel discovery gap.",
-	composer.KeyAWSGitHubActions: "Pre-existing (tracked in #622): IAM-only component, no panel resource. Either belongs in metricsNonComponentKeys permanently OR needs an IAM-list mapping for the OIDC provider.",
-	composer.KeyAWSRoute53:       "Pre-existing (tracked in #622): Route 53 has a discovery dispatcher (#596 — route53.go) but no panel mapping. list-hosted-zones is the natural surface.",
-	composer.KeyGCPBackups:       "Pre-existing (tracked in #622): gcp_backups panel surface unclear, parallel to aws_backups deferral above.",
-	composer.KeyGCPCloudDNS:      "Pre-existing (tracked in #622): Cloud DNS has a discovery dispatcher (#596 — gcp/dns.go) but no panel mapping. list-managed-zones is the natural surface.",
-
-	// Cohort 2: parity-roll-up — needs both ComponentMetricsMapping
-	// entry AND a matching service registered in service_actions.go.
-	// All tracked in #622.
-	composer.KeyGCPCloudDeploy: "Backfill ComponentMetricsMapping + service_actions.go for gcp_cloud_deploy (#614 / tracked in #622). Natural surface: list-delivery-pipelines.",
-	composer.KeyAWSSageMaker:   "Backfill ComponentMetricsMapping + service_actions.go for aws_sagemaker (#615 / #618 / tracked in #622). Natural surface: list-domains.",
-	composer.KeyAWSAppRunner:   "Backfill ComponentMetricsMapping + service_actions.go for aws_apprunner (#598 / #620 / tracked in #622). Natural surface: list-services.",
-}
+// All #622 entries cleared. The two by-design omissions
+// (aws_github_actions, gcp_backups) live in metricsNonComponentKeys
+// below with rationale.
+var metricsDeferredKeys = map[composer.ComponentKey]string{}
 
 // metricsNonComponentKeys are AllComponentKeys entries that genuinely
 // do NOT correspond to a panel-renderable resource. Distinct from
@@ -62,6 +49,29 @@ var metricsNonComponentKeys = map[composer.ComponentKey]bool{
 	// Auto-included node group is covered by the parent KeyAWSEKS row;
 	// the dispatcher routes both keys through the same eks panel.
 	composer.KeyAWSEKSNodeGroup: true,
+	// aws_github_actions (#622): IAM-only component — the preset
+	// provisions an IAM OIDC provider + IAM role for GitHub Actions
+	// to assume. There is no panel-renderable resource analogous to
+	// the GCP WIF pool (gcp_github_actions routes to
+	// iam.list-workload-identity-pools because GCP exposes the pool
+	// as a first-class listable resource; AWS exposes only the OIDC
+	// provider ARN, which is a single static config not worth a
+	// panel). IAM identity is observed via the IAM/Role panels for
+	// the assumed role, not the OIDC provider list.
+	composer.KeyAWSGitHubActions: true,
+	// gcp_backups (#622): the preset creates two heterogeneous
+	// resources — a google_storage_bucket (covered by the
+	// gcp_storage panel via gcs.list-buckets) and a
+	// google_compute_resource_policy snapshot schedule (a
+	// compute.resource_policy, not a standalone listable service).
+	// Neither maps cleanly to a single (service, action) pair on the
+	// "backups" surface. Snapshot policies could be surfaced via a
+	// compute.list-resource-policies action if customers ask for
+	// it, but the current preset's GCS bucket is already observable
+	// through the storage panel, so dual-binding to backups would
+	// double-count. Marked non-component by design until a customer
+	// signal emerges for the snapshot-policy panel.
+	composer.KeyGCPBackups: true,
 }
 
 // TestComponentMetricsMappingCoversAllComponentKeys fails when an

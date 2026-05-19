@@ -4,6 +4,7 @@
 | acm | list-certificates, describe-certificate, get-metrics |
 | alb | describe-load-balancers, get-metrics |
 | apigateway | get-apis, get-domain-names, get-metrics |
+| apprunner | list-services, describe-service, get-metrics |
 | backup | list-backup-vaults |
 | bedrock | list-knowledge-bases, describe-knowledge-base, list-agents, list-guardrails, get-metrics |
 | cloudfront | list-distributions, get-metrics |
@@ -23,6 +24,7 @@
 | rds | describe-db-instances, describe-db-clusters, get-metrics |
 | route53 | list-hosted-zones, list-resource-record-sets |
 | s3 | list-buckets, get-metrics |
+| sagemaker | list-domains, describe-domain, list-user-profiles, get-metrics |
 | secretsmanager | list-secrets, get-metrics |
 | sqs | list-queues, get-metrics |
 | vpc | describe-nat-gateways, get-metrics |
