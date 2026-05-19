@@ -13,7 +13,8 @@
 // Discoverers in this package own narrow client interfaces so unit tests
 // can mock the SDK boundary without depending on real AWS credentials.
 // The aggregator (AWSDiscoverer) wires real SDK clients in production and
-// fans out to the registered per-type discoverers.
+// fans out to the registered per-type discoverers concurrently under a
+// bounded errgroup (defaultDiscoverTypesConcurrency).
 package awsdiscover
 
 import (
@@ -24,10 +25,22 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/progress"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
+
+// defaultDiscoverTypesConcurrency caps the number of per-service
+// discoverers DiscoverTypes runs concurrently. Each selected
+// Discoverer already has its own internal bounded fan-out for per-item
+// SDK calls (tag fetches, GetResource walks); this constant bounds the
+// service-level layer on top. 8 is conservative — the dominant
+// per-service discoverers (cloud-control, dynamodb, lambda) issue
+// hundreds of API calls each, so service-level fan-out gives wall-time
+// wins from overlapping the slow services without multiplying the
+// account-wide AWS API rate by the registered-type count.
+const defaultDiscoverTypesConcurrency = 8
 
 // ErrNotSupported signals that a discoverer cannot resolve a given ID
 // (e.g. an ARN whose service portion does not match this discoverer's
@@ -367,16 +380,22 @@ func (a *AWSDiscoverer) DiscoverByID(ctx context.Context, tfType, id, region, ac
 	return d.DiscoverByID(ctx, id, region, accountID)
 }
 
-// DiscoverTypes runs each named discoverer in series and concatenates the
-// results. Unknown type names are reported as a single error containing all
-// invalid names (not interleaved with partial results) so the operator sees
-// the full set of misspellings in one shot.
+// DiscoverTypes runs the selected per-service discoverers concurrently
+// under a bounded errgroup (default concurrency:
+// defaultDiscoverTypesConcurrency). Per-item concurrency already lives
+// inside each discoverer (tag-fanout, sub-resource walks); adding
+// service-level fan-out shortens wall time for multi-service imports
+// without changing per-service throttle behavior. Unknown type names
+// are still reported as a single error containing all invalid names
+// (not interleaved with partial results) so the operator sees the full
+// set of misspellings in one shot.
 //
-// The aggregator itself is sequential across resource types — concurrency
-// lives inside individual discoverers (DynamoDB, Lambda) where per-item
-// tag-fanout dominates wall time. Stage 2c2 (#270) bounded that fanout via
-// errgroup; the SDK retryer config in cmd/insideout-import/discover.go
-// raises maxAttempts so transient Throttling no longer aborts a run.
+// Selection order is preserved in the returned slice: each goroutine
+// writes into its own pre-allocated index, so a flatten-after-Wait
+// keeps results deterministic without a mutex. Errors propagate via
+// errgroup's fail-fast semantics — the first per-service error cancels
+// sibling goroutines and is returned wrapped as
+// "<ResourceType>: <err>", matching the pre-parallelization shape.
 //
 // Multi-region (#291): each per-service Discover loops args.Regions
 // internally and builds per-region SDK clients via the configured
@@ -427,13 +446,30 @@ func (a *AWSDiscoverer) DiscoverTypes(ctx context.Context, types []string, args 
 	}
 
 	stageStart := time.Now()
-	var all []imported.ImportedResource
-	for _, d := range selected {
-		entries, err := d.Discover(ctx, args)
-		if err != nil {
-			return nil, fmt.Errorf("%s: %w", d.ResourceType(), err)
-		}
-		all = append(all, entries...)
+	results := make([][]imported.ImportedResource, len(selected))
+	g, gctx := errgroup.WithContext(ctx)
+	g.SetLimit(defaultDiscoverTypesConcurrency)
+	for i, d := range selected {
+		i, d := i, d
+		g.Go(func() error {
+			entries, err := d.Discover(gctx, args)
+			if err != nil {
+				return fmt.Errorf("%s: %w", d.ResourceType(), err)
+			}
+			results[i] = entries
+			return nil
+		})
+	}
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
+	var total int
+	for _, r := range results {
+		total += len(r)
+	}
+	all := make([]imported.ImportedResource, 0, total)
+	for _, r := range results {
+		all = append(all, r...)
 	}
 	args.Emitter.StageFinish("discover", len(all), time.Since(stageStart))
 	return all, nil
