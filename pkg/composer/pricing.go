@@ -113,6 +113,7 @@ type PricingData struct {
 		AWSKMS                  *PricingItem    `json:"aws_kms,omitempty"`
 		AWSSecretsManager       *PricingItem    `json:"aws_secretsmanager,omitempty"`
 		AWSBedrock              *PricingItem    `json:"aws_bedrock,omitempty"`
+		AWSSageMaker            *PricingItem    `json:"aws_sagemaker,omitempty"`
 		AWSSQS                  *PricingItem    `json:"aws_sqs,omitempty"`
 		AWSMSK                  *PricingItem    `json:"aws_msk,omitempty"`
 		AWSCloudWatchLogs       *PricingItem    `json:"aws_cloudwatch_logs,omitempty"`
@@ -147,6 +148,7 @@ type PricingData struct {
 		GCPCloudMonitoring  *PricingItem       `json:"gcp_cloud_monitoring,omitempty"`
 		GCPIdentityPlatform *PricingItem       `json:"gcp_identity_platform,omitempty"`
 		GCPCloudBuild       *PricingItem       `json:"gcp_cloud_build,omitempty"`
+		GCPCloudDeploy      *PricingItem       `json:"gcp_cloud_deploy,omitempty"`
 		GCPCloudDNS         *PricingItem       `json:"gcp_cloud_dns,omitempty"`
 		GCPGitHubActions    *PricingItem       `json:"gcp_github_actions,omitempty"`
 		GCPBackups          *GCPPricingBackups `json:"gcp_backups,omitempty"`
@@ -223,6 +225,7 @@ func (p *PricingData) Normalize() {
 		c.AWSKMS = nil
 		c.AWSSecretsManager = nil
 		c.AWSBedrock = nil
+		c.AWSSageMaker = nil
 		c.AWSSQS = nil
 		c.AWSMSK = nil
 		c.AWSCloudWatchLogs = nil
@@ -407,6 +410,7 @@ func (p *PricingData) Normalize() {
 		c.GCPCloudMonitoring = nil
 		c.GCPIdentityPlatform = nil
 		c.GCPCloudBuild = nil
+		c.GCPCloudDeploy = nil
 		c.GCPCloudDNS = nil
 		c.GCPGitHubActions = nil
 		c.GCPBackups = nil

@@ -28,10 +28,7 @@ import (
 // field will make the test fail — that's the point.
 //
 // Trim back to {} once the corresponding backfill PR lands.
-var pricingDeferredKeys = map[ComponentKey]string{
-	KeyGCPCloudDeploy: "Backfill pricing row for gcp_cloud_deploy (#614 / tracked in #621). The cost-LLM cannot emit a Cloud Deploy line until PricingData.Components has a `GCPCloudDeploy *PricingItem` field.",
-	KeyAWSSageMaker:   "Backfill pricing row for aws_sagemaker (#615 / #618 / tracked in #621). The cost-LLM cannot emit a SageMaker Studio line until PricingData.Components has an `AWSSageMaker *PricingItem` field.",
-}
+var pricingDeferredKeys = map[ComponentKey]string{}
 
 // pricingNonComponentKeys are AllComponentKeys entries that are NOT
 // expected to have a pricing row — third-party toggles, conceptual
