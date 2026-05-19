@@ -1,5 +1,5 @@
 variable "project" {
-  description = "Naming / Project-tag prefix for stack resources. The InsideOut inspector filters AWS resources by exact `Project = <project>` match — this value also seeds the SageMaker Studio domain name (`<project>-studio`) so label-less attribution works."
+  description = "Naming / Project-tag prefix for stack resources. The InsideOut inspector filters AWS resources by exact `Project = <project>` match — this value also seeds the SageMaker Studio domain name (`<project>-studio`) so label-less attribution works. Capped at 35 chars so the preset-created workspace bucket name (`<project>-sagemaker-workspace-<6hex>`, 28 fixed chars) stays inside S3's 63-char hard limit."
   type        = string
   default     = "demo"
 
@@ -7,16 +7,32 @@ variable "project" {
     condition     = length(trimspace(var.project)) > 0
     error_message = "project must be a non-empty string."
   }
+
+  validation {
+    condition     = length(var.project) <= 35
+    error_message = "project must be 35 chars or fewer so the preset-created S3 workspace bucket name fits inside the 63-char AWS limit (project + `-sagemaker-workspace-<6hex>` = 28 fixed chars)."
+  }
 }
 
 variable "region" {
-  description = "AWS region. Declared so the composer's namespaced wiring (`sagemaker_region`) sees a target — the AWS provider itself picks region up from provider config, so this value is informational at the module level."
+  description = "AWS region. Passed into the luthername module so the standard tag set carries the region, and threaded through to S3 ARN partition resolution. The AWS provider itself picks region up from provider config."
   type        = string
   default     = "us-east-1"
 }
 
+variable "environment" {
+  description = "Deployment environment (e.g. production, staging, sandbox). Feeds the luthername module's standard tag set; not used elsewhere in the preset."
+  type        = string
+  default     = "sandbox"
+
+  validation {
+    condition     = length(trimspace(var.environment)) > 0
+    error_message = "environment must be a non-empty string."
+  }
+}
+
 variable "tags" {
-  description = "Extra tags merged onto every taggable resource. The preset always sets `Project = var.project`; entries here override or extend that base set."
+  description = "Extra tags merged onto every taggable resource. The preset always sets the standard luthername tag set (including `Project = var.project`); entries here override or extend that base set."
   type        = map(string)
   default     = {}
 }

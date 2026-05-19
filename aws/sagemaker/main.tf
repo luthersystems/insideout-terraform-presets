@@ -37,14 +37,37 @@ terraform {
   }
 }
 
+# Standard luthername-driven naming + tag set. Every AWS preset in the
+# repo wires through this module so the InsideOut inspector's exact
+# `Project = <project>` filter (CLAUDE.md issue #81) catches every
+# resource, alongside the other standard tags the luthername module
+# emits (env, component, region, etc.).
+module "name" {
+  source         = "github.com/luthersystems/tf-modules.git//luthername?ref=v55.15.0"
+  luther_project = var.project
+  aws_region     = var.region
+  luther_env     = var.environment
+  org_name       = "luthersystems"
+  component      = "insideout"
+  subcomponent   = "sm"
+  resource       = "sm"
+}
+
 # Caller identity drives the aws:SourceAccount confused-deputy guard on
 # the Studio execution role's trust policy (matches aws/bedrock).
 data "aws_caller_identity" "current" {}
 
+# Partition-aware ARN construction for the caller-supplied bucket fallback
+# (aws / aws-us-gov / aws-cn). aws_s3_bucket.workspace[0].arn already
+# carries the right partition for the preset-managed case.
+data "aws_partition" "current" {}
+
 locals {
-  # Standard Project-tag merge so the InsideOut inspector's exact
-  # `Project = <project>` filter sees every resource (CLAUDE.md issue #81).
-  tags = merge({ Project = var.project }, var.tags)
+  # Project-tag merge from the luthername module so every taggable
+  # resource carries the full standard tag set (Project + env + region
+  # + component + subcomponent + resource). var.tags overrides or
+  # extends.
+  tags = merge(module.name.tags, var.tags)
 
   # SageMaker domains can run in PublicInternetOnly or VpcOnly mode.
   # AWS provider 6.x requires `vpc_id` + `subnet_ids` on every domain
@@ -64,7 +87,7 @@ locals {
   # same stack is deployed twice in different accounts/regions.
   create_bucket         = var.workspace_bucket == null
   workspace_bucket_name = local.create_bucket ? aws_s3_bucket.workspace[0].id : var.workspace_bucket
-  workspace_bucket_arn  = local.create_bucket ? aws_s3_bucket.workspace[0].arn : "arn:aws:s3:::${var.workspace_bucket}"
+  workspace_bucket_arn  = local.create_bucket ? aws_s3_bucket.workspace[0].arn : "arn:${data.aws_partition.current.partition}:s3:::${var.workspace_bucket}"
   default_bucket_name   = local.create_bucket ? "${var.project}-sagemaker-workspace-${random_id.workspace_suffix[0].hex}" : null
 }
 
@@ -214,18 +237,6 @@ resource "aws_sagemaker_domain" "studio" {
   }
 
   tags = local.tags
-
-  # Cross-attr validation hosted as a precondition so the rule can
-  # reference both var.vpc_id (non-null) and var.subnet_ids (non-empty)
-  # together — Terraform 1.5+ disallows multi-variable refs in variable
-  # validation blocks. Mirrors the gcp/github_actions all-empty-ref-gates
-  # precondition pattern.
-  lifecycle {
-    precondition {
-      condition     = length(trimspace(var.vpc_id)) > 0 && length(var.subnet_ids) > 0
-      error_message = "vpc_id must be non-empty and subnet_ids must contain at least one subnet (SageMaker domains require a VPC + subnet pair in both VpcOnly and PublicInternetOnly modes)."
-    }
-  }
 }
 
 # -----------------------------------------------------------------------------
