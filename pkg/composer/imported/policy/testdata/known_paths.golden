@@ -180,6 +180,73 @@ aws_appautoscaling_target	suspended_state.dynamic_scaling_out_suspended	Tuning	R
 aws_appautoscaling_target	suspended_state.scheduled_scaling_suspended	Tuning	Reliability	SummaryVisible	RequiresApproval		
 aws_appautoscaling_target	tags	Tuning		Hidden	SystemOnly	Redacted	
 aws_appautoscaling_target	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_apprunner_auto_scaling_configuration_version	arn	Identity		UIVisible	Never		
+aws_apprunner_auto_scaling_configuration_version	auto_scaling_configuration_name	Identity		UIVisible	Never		AlwaysReplace
+aws_apprunner_auto_scaling_configuration_version	auto_scaling_configuration_revision	Identity		SummaryVisible	Never		
+aws_apprunner_auto_scaling_configuration_version	has_associated_service	Identity		SummaryVisible	Never		
+aws_apprunner_auto_scaling_configuration_version	id	Identity		UIVisible	Never		
+aws_apprunner_auto_scaling_configuration_version	is_default	Identity		SummaryVisible	Never		
+aws_apprunner_auto_scaling_configuration_version	latest	Identity		SummaryVisible	Never		
+aws_apprunner_auto_scaling_configuration_version	max_concurrency	Tuning	Performance	UIVisible	ChatSafe		AlwaysReplace
+aws_apprunner_auto_scaling_configuration_version	max_size	Tuning	Performance	UIVisible	ChatSafe		AlwaysReplace
+aws_apprunner_auto_scaling_configuration_version	min_size	Tuning	Performance	UIVisible	ChatSafe		AlwaysReplace
+aws_apprunner_auto_scaling_configuration_version	region	Identity		UIVisible	Never		AlwaysReplace
+aws_apprunner_auto_scaling_configuration_version	status	Identity		UIVisible	Never		
+aws_apprunner_auto_scaling_configuration_version	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_apprunner_auto_scaling_configuration_version	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_apprunner_custom_domain_association	certificate_validation_records	Identity		UIVisible	Never		
+aws_apprunner_custom_domain_association	dns_target	Identity		UIVisible	Never		
+aws_apprunner_custom_domain_association	domain_name	Identity		UIVisible	Never		AlwaysReplace
+aws_apprunner_custom_domain_association	enable_www_subdomain	Tuning		UIVisible	RequiresApproval		AlwaysReplace
+aws_apprunner_custom_domain_association	id	Identity		UIVisible	Never		
+aws_apprunner_custom_domain_association	region	Identity		UIVisible	Never		AlwaysReplace
+aws_apprunner_custom_domain_association	service_arn	Wiring	Reliability	UIVisible	RelationshipOnly		AlwaysReplace
+aws_apprunner_custom_domain_association	status	Identity		UIVisible	Never		
+aws_apprunner_service	arn	Identity		UIVisible	Never		
+aws_apprunner_service	auto_scaling_configuration_arn	Wiring	Performance	UIVisible	RelationshipOnly		
+aws_apprunner_service	encryption_configuration.kms_key	Wiring	Security	SummaryVisible	RelationshipOnly		AlwaysReplace
+aws_apprunner_service	health_check_configuration.healthy_threshold	Tuning	Reliability	SummaryVisible	ChatSafe		
+aws_apprunner_service	health_check_configuration.interval	Tuning	Reliability	SummaryVisible	ChatSafe		
+aws_apprunner_service	health_check_configuration.path	Tuning	Reliability	SummaryVisible	ChatSafe		
+aws_apprunner_service	health_check_configuration.protocol	Tuning	Reliability	SummaryVisible	ChatSafe		
+aws_apprunner_service	health_check_configuration.timeout	Tuning	Reliability	SummaryVisible	ChatSafe		
+aws_apprunner_service	health_check_configuration.unhealthy_threshold	Tuning	Reliability	SummaryVisible	ChatSafe		
+aws_apprunner_service	id	Identity		UIVisible	Never		
+aws_apprunner_service	instance_configuration.cpu	Tuning	Performance	UIVisible	ChatSafe		
+aws_apprunner_service	instance_configuration.instance_role_arn	Wiring	Security	UIVisible	RelationshipOnly		
+aws_apprunner_service	instance_configuration.memory	Tuning	Performance	UIVisible	ChatSafe		
+aws_apprunner_service	network_configuration.egress_configuration.egress_type	Tuning	Security	SummaryVisible	RequiresApproval		
+aws_apprunner_service	network_configuration.egress_configuration.vpc_connector_arn	Wiring	Reliability	UIVisible	RelationshipOnly		
+aws_apprunner_service	network_configuration.ingress_configuration.is_publicly_accessible	Tuning	Security	UIVisible	RequiresApproval		
+aws_apprunner_service	network_configuration.ip_address_type	Tuning	Reliability	SummaryVisible	RequiresApproval		
+aws_apprunner_service	observability_configuration.observability_configuration_arn	Wiring	Reliability	SummaryVisible	RelationshipOnly		
+aws_apprunner_service	observability_configuration.observability_enabled	Tuning	Reliability	SummaryVisible	ChatSafe		
+aws_apprunner_service	region	Identity		UIVisible	Never		AlwaysReplace
+aws_apprunner_service	service_id	Identity		SummaryVisible	Never		
+aws_apprunner_service	service_name	Identity		UIVisible	Never		AlwaysReplace
+aws_apprunner_service	service_url	Identity		UIVisible	Never		
+aws_apprunner_service	source_configuration.authentication_configuration.access_role_arn	Wiring	Security	UIVisible	RelationshipOnly		
+aws_apprunner_service	source_configuration.authentication_configuration.connection_arn	Wiring	Security	SummaryVisible	RelationshipOnly		
+aws_apprunner_service	source_configuration.auto_deployments_enabled	Tuning	Reliability	UIVisible	ChatSafe		
+aws_apprunner_service	source_configuration.image_repository.image_configuration.port	Tuning		SummaryVisible	ChatSafe		
+aws_apprunner_service	source_configuration.image_repository.image_configuration.runtime_environment_secrets	Tuning	Security	SummaryVisible	RequiresApproval	Redacted	
+aws_apprunner_service	source_configuration.image_repository.image_configuration.runtime_environment_variables	Tuning		SummaryVisible	ChatSafe		
+aws_apprunner_service	source_configuration.image_repository.image_configuration.start_command	Tuning		SummaryVisible	ChatSafe		
+aws_apprunner_service	source_configuration.image_repository.image_identifier	Wiring	Reliability	UIVisible	RelationshipOnly		
+aws_apprunner_service	source_configuration.image_repository.image_repository_type	Tuning		SummaryVisible	RequiresApproval		
+aws_apprunner_service	status	Identity		UIVisible	Never		
+aws_apprunner_service	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_apprunner_service	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_apprunner_vpc_connector	arn	Identity		UIVisible	Never		
+aws_apprunner_vpc_connector	id	Identity		UIVisible	Never		
+aws_apprunner_vpc_connector	region	Identity		UIVisible	Never		AlwaysReplace
+aws_apprunner_vpc_connector	security_groups	Wiring	Security	UIVisible	RelationshipOnly		AlwaysReplace
+aws_apprunner_vpc_connector	status	Identity		UIVisible	Never		
+aws_apprunner_vpc_connector	subnets	Wiring	Reliability	UIVisible	RelationshipOnly		AlwaysReplace
+aws_apprunner_vpc_connector	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_apprunner_vpc_connector	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_apprunner_vpc_connector	vpc_connector_name	Identity		UIVisible	Never		AlwaysReplace
+aws_apprunner_vpc_connector	vpc_connector_revision	Identity		SummaryVisible	Never		
 aws_athena_workgroup	arn	Identity		UIVisible	Never		
 aws_athena_workgroup	configuration.bytes_scanned_cutoff_per_query	Tuning	Performance	SummaryVisible	ChatSafe		
 aws_athena_workgroup	configuration.enforce_workgroup_configuration	Tuning	Security	SummaryVisible	RequiresApproval		
@@ -2049,6 +2116,44 @@ aws_s3_bucket_versioning	id	Identity		UIVisible	Never
 aws_s3_bucket_versioning	mfa	Tuning	Security	UIVisible	SystemOnly		
 aws_s3_bucket_versioning	versioning_configuration.mfa_delete	Tuning	Security	SummaryVisible	RequiresApproval		
 aws_s3_bucket_versioning	versioning_configuration.status	Tuning	Reliability	SummaryVisible	ChatSafe		
+aws_sagemaker_domain	app_network_access_type	Tuning	Security	UIVisible	RequiresApproval		
+aws_sagemaker_domain	app_security_group_management	Tuning	Security	SummaryVisible	RequiresApproval		
+aws_sagemaker_domain	arn	Identity		UIVisible	Never		
+aws_sagemaker_domain	auth_mode	Tuning	Security	UIVisible	RequiresApproval		AlwaysReplace
+aws_sagemaker_domain	default_user_settings.execution_role	Wiring	Security	UIVisible	RelationshipOnly		
+aws_sagemaker_domain	default_user_settings.security_groups	Wiring	Security	SummaryVisible	RelationshipOnly		
+aws_sagemaker_domain	domain_name	Identity		UIVisible	Never		AlwaysReplace
+aws_sagemaker_domain	domain_settings.execution_role_identity_config	Tuning	Security	SummaryVisible	RequiresApproval		
+aws_sagemaker_domain	domain_settings.security_group_ids	Wiring	Security	SummaryVisible	RelationshipOnly		
+aws_sagemaker_domain	home_efs_file_system_id	Identity		SummaryVisible	Never		
+aws_sagemaker_domain	id	Identity		UIVisible	Never		
+aws_sagemaker_domain	kms_key_id	Wiring	Security	SummaryVisible	RelationshipOnly		
+aws_sagemaker_domain	region	Identity		UIVisible	Never		AlwaysReplace
+aws_sagemaker_domain	retention_policy.home_efs_file_system	Tuning	Reliability	UIVisible	RequiresApproval		
+aws_sagemaker_domain	security_group_id_for_domain_boundary	Identity		SummaryVisible	Never		
+aws_sagemaker_domain	single_sign_on_application_arn	Identity		SummaryVisible	Never		
+aws_sagemaker_domain	single_sign_on_managed_application_instance_id	Identity		SummaryVisible	Never		
+aws_sagemaker_domain	subnet_ids	Wiring	Reliability	UIVisible	RelationshipOnly		
+aws_sagemaker_domain	tag_propagation	Tuning		SummaryVisible	ChatSafe		
+aws_sagemaker_domain	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_sagemaker_domain	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_sagemaker_domain	url	Identity		UIVisible	Never		
+aws_sagemaker_domain	vpc_id	Wiring	Security	UIVisible	RelationshipOnly		AlwaysReplace
+aws_sagemaker_user_profile	arn	Identity		UIVisible	Never		
+aws_sagemaker_user_profile	domain_id	Wiring	Security	UIVisible	RelationshipOnly		AlwaysReplace
+aws_sagemaker_user_profile	home_efs_file_system_uid	Identity		SummaryVisible	Never		
+aws_sagemaker_user_profile	id	Identity		UIVisible	Never		
+aws_sagemaker_user_profile	region	Identity		UIVisible	Never		AlwaysReplace
+aws_sagemaker_user_profile	single_sign_on_user_identifier	Wiring	Security	SummaryVisible	RelationshipOnly		
+aws_sagemaker_user_profile	single_sign_on_user_value	Wiring	Security	SummaryVisible	RelationshipOnly		
+aws_sagemaker_user_profile	tags	Tuning		Hidden	SystemOnly	Redacted	
+aws_sagemaker_user_profile	tags_all	Tuning		Hidden	SystemOnly	Redacted	
+aws_sagemaker_user_profile	user_profile_name	Identity		UIVisible	Never		AlwaysReplace
+aws_sagemaker_user_profile	user_settings.auto_mount_home_efs	Tuning		SummaryVisible	ChatSafe		
+aws_sagemaker_user_profile	user_settings.default_landing_uri	Tuning		SummaryVisible	ChatSafe		
+aws_sagemaker_user_profile	user_settings.execution_role	Wiring	Security	UIVisible	RelationshipOnly		
+aws_sagemaker_user_profile	user_settings.security_groups	Wiring	Security	SummaryVisible	RelationshipOnly		
+aws_sagemaker_user_profile	user_settings.studio_web_portal	Tuning	Security	SummaryVisible	RequiresApproval		
 aws_secretsmanager_secret	arn	Identity		UIVisible	Never		
 aws_secretsmanager_secret	description	Tuning		SummaryVisible	ChatSafe		
 aws_secretsmanager_secret	kms_key_id	Wiring	Security	SummaryVisible	RelationshipOnly		
@@ -2487,6 +2592,56 @@ google_cloudbuild_trigger	substitutions	Tuning		SummaryVisible	RequiresApproval	
 google_cloudbuild_trigger	timeouts	Tuning		Hidden	SystemOnly		
 google_cloudbuild_trigger	trigger_id	Identity		SummaryVisible	Never		
 google_cloudbuild_trigger	webhook_config.secret	Wiring	Security	SummaryVisible	RelationshipOnly	Redacted	
+google_clouddeploy_delivery_pipeline	annotations	Tuning		Hidden	SystemOnly	Redacted	
+google_clouddeploy_delivery_pipeline	create_time	Identity		SummaryVisible	Never		
+google_clouddeploy_delivery_pipeline	description	Tuning		SummaryVisible	ChatSafe		
+google_clouddeploy_delivery_pipeline	effective_annotations	Tuning		Hidden	SystemOnly	Redacted	
+google_clouddeploy_delivery_pipeline	effective_labels	Tuning		Hidden	SystemOnly	Redacted	
+google_clouddeploy_delivery_pipeline	etag	Identity		SummaryVisible	Never		
+google_clouddeploy_delivery_pipeline	id	Identity		UIVisible	Never		
+google_clouddeploy_delivery_pipeline	labels	Tuning		Hidden	SystemOnly	Redacted	
+google_clouddeploy_delivery_pipeline	location	Identity		UIVisible	Never		AlwaysReplace
+google_clouddeploy_delivery_pipeline	name	Identity		UIVisible	Never		AlwaysReplace
+google_clouddeploy_delivery_pipeline	project	Identity		UIVisible	Never		AlwaysReplace
+google_clouddeploy_delivery_pipeline	serial_pipeline.stages	Tuning	Reliability	UIVisible	RequiresApproval		
+google_clouddeploy_delivery_pipeline	serial_pipeline.stages.profiles	Tuning		SummaryVisible	ChatSafe		
+google_clouddeploy_delivery_pipeline	serial_pipeline.stages.target_id	Wiring	Reliability	SummaryVisible	RelationshipOnly		
+google_clouddeploy_delivery_pipeline	suspended	Tuning	Security	UIVisible	RequiresApproval		
+google_clouddeploy_delivery_pipeline	terraform_labels	Tuning		Hidden	SystemOnly	Redacted	
+google_clouddeploy_delivery_pipeline	timeouts	Tuning		Hidden	SystemOnly		
+google_clouddeploy_delivery_pipeline	uid	Identity		SummaryVisible	Never		
+google_clouddeploy_delivery_pipeline	update_time	Identity		SummaryVisible	Never		
+google_clouddeploy_target	annotations	Tuning		Hidden	SystemOnly	Redacted	
+google_clouddeploy_target	anthos_cluster.membership	Wiring	Reliability	UIVisible	RelationshipOnly		
+google_clouddeploy_target	create_time	Identity		SummaryVisible	Never		
+google_clouddeploy_target	custom_target.custom_target_type	Wiring	Reliability	SummaryVisible	RelationshipOnly		
+google_clouddeploy_target	deploy_parameters	Tuning		SummaryVisible	ChatSafe		
+google_clouddeploy_target	description	Tuning		SummaryVisible	ChatSafe		
+google_clouddeploy_target	effective_annotations	Tuning		Hidden	SystemOnly	Redacted	
+google_clouddeploy_target	effective_labels	Tuning		Hidden	SystemOnly	Redacted	
+google_clouddeploy_target	etag	Identity		SummaryVisible	Never		
+google_clouddeploy_target	execution_configs.artifact_storage	Wiring	Reliability	SummaryVisible	RelationshipOnly		
+google_clouddeploy_target	execution_configs.execution_timeout	Tuning	Reliability	SummaryVisible	ChatSafe		
+google_clouddeploy_target	execution_configs.service_account	Wiring	Security	UIVisible	RelationshipOnly		
+google_clouddeploy_target	execution_configs.usages	Tuning	Reliability	UIVisible	RequiresApproval		
+google_clouddeploy_target	execution_configs.verbose	Tuning		SummaryVisible	ChatSafe		
+google_clouddeploy_target	execution_configs.worker_pool	Wiring	Reliability	SummaryVisible	RelationshipOnly		
+google_clouddeploy_target	gke.cluster	Wiring	Reliability	UIVisible	RelationshipOnly		
+google_clouddeploy_target	gke.internal_ip	Tuning	Security	SummaryVisible	RequiresApproval		
+google_clouddeploy_target	gke.proxy_url	Tuning		SummaryVisible	ChatSafe		
+google_clouddeploy_target	id	Identity		UIVisible	Never		
+google_clouddeploy_target	labels	Tuning		Hidden	SystemOnly	Redacted	
+google_clouddeploy_target	location	Identity		UIVisible	Never		AlwaysReplace
+google_clouddeploy_target	multi_target.target_ids	Wiring	Reliability	UIVisible	RelationshipOnly		
+google_clouddeploy_target	name	Identity		UIVisible	Never		AlwaysReplace
+google_clouddeploy_target	project	Identity		UIVisible	Never		AlwaysReplace
+google_clouddeploy_target	require_approval	Tuning	Security	UIVisible	RequiresApproval		
+google_clouddeploy_target	run.location	Wiring	Reliability	UIVisible	RelationshipOnly		
+google_clouddeploy_target	target_id	Identity		SummaryVisible	Never		
+google_clouddeploy_target	terraform_labels	Tuning		Hidden	SystemOnly	Redacted	
+google_clouddeploy_target	timeouts	Tuning		Hidden	SystemOnly		
+google_clouddeploy_target	uid	Identity		SummaryVisible	Never		
+google_clouddeploy_target	update_time	Identity		SummaryVisible	Never		
 google_cloudfunctions2_function	build_config.docker_repository	Wiring	Reliability	SummaryVisible	RelationshipOnly		
 google_cloudfunctions2_function	build_config.entry_point	Tuning	Reliability	UIVisible	RequiresApproval		
 google_cloudfunctions2_function	build_config.environment_variables	Tuning		Hidden	SystemOnly	Redacted	

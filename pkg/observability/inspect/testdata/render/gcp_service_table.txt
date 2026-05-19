@@ -7,6 +7,7 @@
 | cloudarmor | list-policies, describe-policy, get-metrics |
 | cloudbuild | list-triggers, list-builds, get-metrics |
 | cloudcdn | list-backend-services-cdn, get-metrics |
+| clouddeploy | list-delivery-pipelines, list-targets, get-metrics |
 | clouddns | list-managed-zones, list-record-sets |
 | cloudfunctions | list-functions, get-metrics |
 | cloudkms | list-keyrings, list-keys, get-metrics |

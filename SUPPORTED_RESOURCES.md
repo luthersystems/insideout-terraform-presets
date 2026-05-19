@@ -22,8 +22,8 @@ and is checked in lockstep with the runtime registries. See the
 
 ## Summary
 
-- **AWS:** 129 types · 84% Discoverable · 84% Enrichable · 100% DriftDetectable · 67% MetricsAvailable · 91% AgentEditable
-- **GCP:** 62 types · 87% Discoverable · 87% Enrichable · 100% DriftDetectable · 77% MetricsAvailable · 90% AgentEditable
+- **AWS:** 135 types · 81% Discoverable · 81% Enrichable · 100% DriftDetectable · 64% MetricsAvailable · 91% AgentEditable
+- **GCP:** 64 types · 84% Discoverable · 84% Enrichable · 100% DriftDetectable · 75% MetricsAvailable · 91% AgentEditable
 
 ## AWS
 
@@ -43,6 +43,10 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_apigatewayv2_stage` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_appautoscaling_policy` | – | – | ✓ | – | ✓ |
 | `aws_appautoscaling_target` | – | – | ✓ | – | ✓ |
+| `aws_apprunner_auto_scaling_configuration_version` | – | – | ✓ | – | ✓ |
+| `aws_apprunner_custom_domain_association` | – | – | ✓ | – | ✓ |
+| `aws_apprunner_service` | – | – | ✓ | – | ✓ |
+| `aws_apprunner_vpc_connector` | – | – | ✓ | – | – |
 | `aws_athena_workgroup` | – | – | ✓ | – | ✓ |
 | `aws_autoscaling_group` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_autoscaling_group_tag` | ✓ | ✓ | ✓ | – | ✓ |
@@ -141,6 +145,8 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_s3_bucket_public_access_block` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_s3_bucket_server_side_encryption_configuration` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_s3_bucket_versioning` | ✓ | ✓ | ✓ | – | ✓ |
+| `aws_sagemaker_domain` | – | – | ✓ | – | ✓ |
+| `aws_sagemaker_user_profile` | – | – | ✓ | – | ✓ |
 | `aws_secretsmanager_secret` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_secretsmanager_secret_rotation` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_security_group` | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -172,6 +178,8 @@ and is checked in lockstep with the runtime registries. See the
 | `google_cloud_run_v2_service` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_cloud_run_v2_service_iam_member` | ✓ | ✓ | ✓ | – | – |
 | `google_cloudbuild_trigger` | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `google_clouddeploy_delivery_pipeline` | – | – | ✓ | – | ✓ |
+| `google_clouddeploy_target` | – | – | ✓ | – | ✓ |
 | `google_cloudfunctions2_function` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_cloudfunctions2_function_iam_member` | ✓ | ✓ | ✓ | – | – |
 | `google_compute_address` | ✓ | ✓ | ✓ | ✓ | ✓ |
