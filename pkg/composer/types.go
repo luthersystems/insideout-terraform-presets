@@ -44,6 +44,7 @@ type Components struct {
 	AWSGrafana              *bool  `json:"aws_grafana,omitempty"`
 	AWSCognito              *bool  `json:"aws_cognito,omitempty"`
 	AWSGitHubActions        *bool  `json:"aws_github_actions,omitempty"`
+	AWSCodeBuild            *bool  `json:"aws_codebuild,omitempty"`
 	AWSCodePipeline         *bool  `json:"aws_codepipeline,omitempty"`
 	AWSRoute53              *bool  `json:"aws_route53,omitempty"`
 	AWSACM                  *bool  `json:"aws_acm,omitempty"`
@@ -217,6 +218,13 @@ type Config struct {
 	// field additions don't force every test instantiation to be touched
 	// (matches the GCPGitHubActionsConfig pattern set in #597).
 	AWSSageMaker *AWSSageMakerConfig `json:"aws_sagemaker,omitempty"`
+
+	// AWSCodeBuild carries the caller-supplied CodeBuild project config
+	// (#619). Named (not inline) so callers can construct it without
+	// re-typing the anonymous struct shape at every site, and so future
+	// field additions don't force every test instantiation to be touched
+	// (matches the AWSAppRunnerConfig + AWSSageMakerConfig pattern).
+	AWSCodeBuild *AWSCodeBuildConfig `json:"aws_codebuild,omitempty"`
 
 	AWSAPIGateway *struct {
 		DomainName     string `json:"domainName,omitempty"`
@@ -479,25 +487,25 @@ type GCPCloudDeployConfig struct {
 // callers don't usually populate them on this struct unless they need
 // to override the wiring.
 type AWSAppRunnerConfig struct {
-	ServiceName              string            `json:"serviceName,omitempty"`
-	ImageRepositoryURL       string            `json:"imageRepositoryUrl,omitempty"`
-	ImageRepositoryType      string            `json:"imageRepositoryType,omitempty"`
-	Port                     *int              `json:"port,omitempty"`
-	EnvVars                  map[string]string `json:"envVars,omitempty"`
-	CPU                      string            `json:"cpu,omitempty"`
-	Memory                   string            `json:"memory,omitempty"`
-	MinSize                  *int              `json:"minSize,omitempty"`
-	MaxSize                  *int              `json:"maxSize,omitempty"`
-	MaxConcurrency           *int              `json:"maxConcurrency,omitempty"`
-	IsPubliclyAccessible     *bool             `json:"isPubliclyAccessible,omitempty"`
-	AutoDeploymentsEnabled   *bool             `json:"autoDeploymentsEnabled,omitempty"`
-	HealthCheckProtocol      string            `json:"healthCheckProtocol,omitempty"`
-	HealthCheckPath          string            `json:"healthCheckPath,omitempty"`
-	EnableVPCConnector       *bool             `json:"enableVpcConnector,omitempty"`
-	VPCID                    string            `json:"vpcId,omitempty"`
-	SubnetIDs                []string          `json:"subnetIds,omitempty"`
-	CustomDomainName         string            `json:"customDomainName,omitempty"`
-	EnableWWWSubdomain       *bool             `json:"enableWwwSubdomain,omitempty"`
+	ServiceName            string            `json:"serviceName,omitempty"`
+	ImageRepositoryURL     string            `json:"imageRepositoryUrl,omitempty"`
+	ImageRepositoryType    string            `json:"imageRepositoryType,omitempty"`
+	Port                   *int              `json:"port,omitempty"`
+	EnvVars                map[string]string `json:"envVars,omitempty"`
+	CPU                    string            `json:"cpu,omitempty"`
+	Memory                 string            `json:"memory,omitempty"`
+	MinSize                *int              `json:"minSize,omitempty"`
+	MaxSize                *int              `json:"maxSize,omitempty"`
+	MaxConcurrency         *int              `json:"maxConcurrency,omitempty"`
+	IsPubliclyAccessible   *bool             `json:"isPubliclyAccessible,omitempty"`
+	AutoDeploymentsEnabled *bool             `json:"autoDeploymentsEnabled,omitempty"`
+	HealthCheckProtocol    string            `json:"healthCheckProtocol,omitempty"`
+	HealthCheckPath        string            `json:"healthCheckPath,omitempty"`
+	EnableVPCConnector     *bool             `json:"enableVpcConnector,omitempty"`
+	VPCID                  string            `json:"vpcId,omitempty"`
+	SubnetIDs              []string          `json:"subnetIds,omitempty"`
+	CustomDomainName       string            `json:"customDomainName,omitempty"`
+	EnableWWWSubdomain     *bool             `json:"enableWwwSubdomain,omitempty"`
 }
 
 // AWSSageMakerConfig is the caller-facing config for the aws/sagemaker
@@ -519,6 +527,34 @@ type AWSSageMakerConfig struct {
 	WorkspaceBucketForceDestroy *bool    `json:"workspaceBucketForceDestroy,omitempty"`
 	StudioUsers                 []string `json:"studioUsers,omitempty"`
 	SageMakerManagedPolicyARN   string   `json:"sagemakerManagedPolicyArn,omitempty"`
+}
+
+// AWSCodeBuildConfig is the caller-facing config for the aws/codebuild
+// preset (#619). Named (not inline) so callers can construct it
+// without re-typing the anonymous struct shape at every site, and so
+// future field additions don't force every test instantiation to be
+// touched. Mirrors AWSAppRunnerConfig + AWSSageMakerConfig.
+//
+// Field semantics map 1:1 to aws/codebuild/variables.tf. Empty / nil
+// values mean "defer to the module's HCL default" — the mapper only
+// emits a tfvar when the caller supplies a value. VPCID / SubnetIDs are
+// normally wired automatically (DefaultWiring reads module.aws_vpc) so
+// callers don't usually populate them on this struct unless they need
+// to override the wiring. SecurityGroupIDs is always caller-supplied —
+// the preset doesn't create an SG.
+type AWSCodeBuildConfig struct {
+	ProjectName       string   `json:"projectName,omitempty"`
+	BuildImage        string   `json:"buildImage,omitempty"`
+	ComputeType       string   `json:"computeType,omitempty"`
+	SourceType        string   `json:"sourceType,omitempty"`
+	SourceLocation    string   `json:"sourceLocation,omitempty"`
+	Buildspec         string   `json:"buildspec,omitempty"`
+	ArtifactsType     string   `json:"artifactsType,omitempty"`
+	ArtifactsLocation string   `json:"artifactsLocation,omitempty"`
+	EnableS3Logs      *bool    `json:"enableS3Logs,omitempty"`
+	VPCID             string   `json:"vpcId,omitempty"`
+	SubnetIDs         []string `json:"subnetIds,omitempty"`
+	SecurityGroupIDs  []string `json:"securityGroupIds,omitempty"`
 }
 
 // VarEntry holds a module variable name and a value (or nil). RawExpr can be used for expressions.
@@ -597,6 +633,7 @@ func (c *Components) Normalize() {
 		c.AWSGrafana = nil
 		c.AWSCognito = nil
 		c.AWSGitHubActions = nil
+		c.AWSCodeBuild = nil
 		c.AWSCodePipeline = nil
 		c.AWSRoute53 = nil
 		c.AWSACM = nil
@@ -705,6 +742,7 @@ func (c *Config) Normalize() {
 		c.AWSLambda = nil
 		c.AWSAppRunner = nil
 		c.AWSSageMaker = nil
+		c.AWSCodeBuild = nil
 		c.AWSAPIGateway = nil
 		c.AWSKMS = nil
 		c.AWSSecretsManager = nil

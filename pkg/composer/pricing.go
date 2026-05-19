@@ -121,6 +121,7 @@ type PricingData struct {
 		AWSGrafana              *PricingItem    `json:"aws_grafana,omitempty"`
 		AWSCognito              *PricingItem    `json:"aws_cognito,omitempty"`
 		AWSGitHubActions        *PricingItem    `json:"aws_github_actions,omitempty"`
+		AWSCodeBuild            *PricingItem    `json:"aws_codebuild,omitempty"`
 		AWSCodePipeline         *PricingItem    `json:"aws_codepipeline,omitempty"`
 		AWSRoute53              *PricingItem    `json:"aws_route53,omitempty"`
 		AWSACM                  *PricingItem    `json:"aws_acm,omitempty"`
@@ -233,6 +234,7 @@ func (p *PricingData) Normalize() {
 		c.AWSGrafana = nil
 		c.AWSCognito = nil
 		c.AWSGitHubActions = nil
+		c.AWSCodeBuild = nil
 		c.AWSCodePipeline = nil
 		c.AWSRoute53 = nil
 		c.AWSACM = nil

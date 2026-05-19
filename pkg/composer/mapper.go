@@ -1232,6 +1232,76 @@ func (m DefaultMapper) BuildModuleValues(
 			}
 		}
 
+	case KeyAWSCodeBuild:
+		// CodeBuild (#619). vpc_id + subnet_ids are wired automatically
+		// by DefaultWiring when KeyAWSVPC is selected, but the preset
+		// only consumes them when subnet_ids is non-empty. For single-
+		// module previews (no VPC in the selection), the preset's own
+		// variables.tf defaults (empty string / empty list) leave the
+		// vpc_config block off — so we don't need preview-safe stubs
+		// like SageMaker does. The mapper emits overrides ONLY for
+		// fields the caller actually populated, following the partial-
+		// config pattern.
+		if cfg != nil && cfg.AWSCodeBuild != nil {
+			cb := cfg.AWSCodeBuild
+			if strings.TrimSpace(cb.ProjectName) != "" {
+				vals["codebuild_project_name"] = strings.TrimSpace(cb.ProjectName)
+			}
+			if strings.TrimSpace(cb.BuildImage) != "" {
+				vals["build_image"] = strings.TrimSpace(cb.BuildImage)
+			}
+			if strings.TrimSpace(cb.ComputeType) != "" {
+				vals["compute_type"] = strings.TrimSpace(cb.ComputeType)
+			}
+			if strings.TrimSpace(cb.SourceType) != "" {
+				vals["source_type"] = strings.TrimSpace(cb.SourceType)
+			}
+			if strings.TrimSpace(cb.SourceLocation) != "" {
+				vals["source_location"] = strings.TrimSpace(cb.SourceLocation)
+			}
+			if strings.TrimSpace(cb.Buildspec) != "" {
+				vals["buildspec"] = strings.TrimSpace(cb.Buildspec)
+			}
+			if strings.TrimSpace(cb.ArtifactsType) != "" {
+				vals["artifacts_type"] = strings.TrimSpace(cb.ArtifactsType)
+			}
+			if strings.TrimSpace(cb.ArtifactsLocation) != "" {
+				vals["artifacts_location"] = strings.TrimSpace(cb.ArtifactsLocation)
+			}
+			if cb.EnableS3Logs != nil {
+				vals["enable_s3_logs"] = *cb.EnableS3Logs
+			}
+			if strings.TrimSpace(cb.VPCID) != "" {
+				vals["vpc_id"] = strings.TrimSpace(cb.VPCID)
+			}
+			if len(cb.SubnetIDs) > 0 {
+				ids := make([]any, 0, len(cb.SubnetIDs))
+				for _, id := range cb.SubnetIDs {
+					t := strings.TrimSpace(id)
+					if t == "" {
+						continue
+					}
+					ids = append(ids, t)
+				}
+				if len(ids) > 0 {
+					vals["subnet_ids"] = ids
+				}
+			}
+			if len(cb.SecurityGroupIDs) > 0 {
+				ids := make([]any, 0, len(cb.SecurityGroupIDs))
+				for _, id := range cb.SecurityGroupIDs {
+					t := strings.TrimSpace(id)
+					if t == "" {
+						continue
+					}
+					ids = append(ids, t)
+				}
+				if len(ids) > 0 {
+					vals["security_group_ids"] = ids
+				}
+			}
+		}
+
 	case KeyGCPGitHubActions:
 		// GCP GitHub Actions WIF (#597 row 1). github_repository is required
 		// by the preset (no default); supply a preview-safe placeholder
