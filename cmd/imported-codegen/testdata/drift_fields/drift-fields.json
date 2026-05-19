@@ -691,6 +691,250 @@
       "semantic": "Exact"
     }
   ],
+  "aws_apprunner_auto_scaling_configuration_version": [
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "auto_scaling_configuration_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "auto_scaling_configuration_revision",
+      "semantic": "Exact"
+    },
+    {
+      "path": "has_associated_service",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "is_default",
+      "semantic": "Exact"
+    },
+    {
+      "path": "latest",
+      "semantic": "Exact"
+    },
+    {
+      "path": "max_concurrency",
+      "semantic": "Exact"
+    },
+    {
+      "path": "max_size",
+      "semantic": "Exact"
+    },
+    {
+      "path": "min_size",
+      "semantic": "Exact"
+    },
+    {
+      "path": "region",
+      "semantic": "Exact"
+    },
+    {
+      "path": "status",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_apprunner_custom_domain_association": [
+    {
+      "path": "certificate_validation_records",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "dns_target",
+      "semantic": "Exact"
+    },
+    {
+      "path": "domain_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "enable_www_subdomain",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "region",
+      "semantic": "Exact"
+    },
+    {
+      "path": "service_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "status",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_apprunner_service": [
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "auto_scaling_configuration_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "encryption_configuration.kms_key",
+      "semantic": "Exact"
+    },
+    {
+      "path": "health_check_configuration.healthy_threshold",
+      "semantic": "Exact"
+    },
+    {
+      "path": "health_check_configuration.interval",
+      "semantic": "Exact"
+    },
+    {
+      "path": "health_check_configuration.path",
+      "semantic": "Exact"
+    },
+    {
+      "path": "health_check_configuration.protocol",
+      "semantic": "Exact"
+    },
+    {
+      "path": "health_check_configuration.timeout",
+      "semantic": "Exact"
+    },
+    {
+      "path": "health_check_configuration.unhealthy_threshold",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "instance_configuration.cpu",
+      "semantic": "Exact"
+    },
+    {
+      "path": "instance_configuration.instance_role_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "instance_configuration.memory",
+      "semantic": "Exact"
+    },
+    {
+      "path": "network_configuration.egress_configuration.egress_type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "network_configuration.egress_configuration.vpc_connector_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "network_configuration.ingress_configuration.is_publicly_accessible",
+      "semantic": "Exact"
+    },
+    {
+      "path": "network_configuration.ip_address_type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "observability_configuration.observability_configuration_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "observability_configuration.observability_enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "region",
+      "semantic": "Exact"
+    },
+    {
+      "path": "service_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "service_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "service_url",
+      "semantic": "Exact"
+    },
+    {
+      "path": "source_configuration.authentication_configuration.access_role_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "source_configuration.authentication_configuration.connection_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "source_configuration.auto_deployments_enabled",
+      "semantic": "Exact"
+    },
+    {
+      "path": "source_configuration.image_repository.image_configuration.port",
+      "semantic": "Exact"
+    },
+    {
+      "path": "source_configuration.image_repository.image_configuration.start_command",
+      "semantic": "Exact"
+    },
+    {
+      "path": "source_configuration.image_repository.image_identifier",
+      "semantic": "Exact"
+    },
+    {
+      "path": "source_configuration.image_repository.image_repository_type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "status",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_apprunner_vpc_connector": [
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "region",
+      "semantic": "Exact"
+    },
+    {
+      "path": "security_groups",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "status",
+      "semantic": "Exact"
+    },
+    {
+      "path": "subnets",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "vpc_connector_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "vpc_connector_revision",
+      "semantic": "Exact"
+    }
+  ],
   "aws_athena_workgroup": [
     {
       "path": "arn",
@@ -7755,6 +7999,146 @@
       "semantic": "Exact"
     }
   ],
+  "aws_sagemaker_domain": [
+    {
+      "path": "app_network_access_type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "app_security_group_management",
+      "semantic": "Exact"
+    },
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "auth_mode",
+      "semantic": "Exact"
+    },
+    {
+      "path": "default_user_settings.execution_role",
+      "semantic": "Exact"
+    },
+    {
+      "path": "default_user_settings.security_groups",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "domain_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "domain_settings.execution_role_identity_config",
+      "semantic": "Exact"
+    },
+    {
+      "path": "domain_settings.security_group_ids",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "home_efs_file_system_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "kms_key_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "region",
+      "semantic": "Exact"
+    },
+    {
+      "path": "retention_policy.home_efs_file_system",
+      "semantic": "Exact"
+    },
+    {
+      "path": "security_group_id_for_domain_boundary",
+      "semantic": "Exact"
+    },
+    {
+      "path": "single_sign_on_application_arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "single_sign_on_managed_application_instance_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "subnet_ids",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "tag_propagation",
+      "semantic": "Exact"
+    },
+    {
+      "path": "url",
+      "semantic": "Exact"
+    },
+    {
+      "path": "vpc_id",
+      "semantic": "Exact"
+    }
+  ],
+  "aws_sagemaker_user_profile": [
+    {
+      "path": "arn",
+      "semantic": "Exact"
+    },
+    {
+      "path": "domain_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "home_efs_file_system_uid",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "region",
+      "semantic": "Exact"
+    },
+    {
+      "path": "single_sign_on_user_identifier",
+      "semantic": "Exact"
+    },
+    {
+      "path": "single_sign_on_user_value",
+      "semantic": "Exact"
+    },
+    {
+      "path": "user_profile_name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "user_settings.auto_mount_home_efs",
+      "semantic": "Exact"
+    },
+    {
+      "path": "user_settings.default_landing_uri",
+      "semantic": "Exact"
+    },
+    {
+      "path": "user_settings.execution_role",
+      "semantic": "Exact"
+    },
+    {
+      "path": "user_settings.security_groups",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "user_settings.studio_web_portal",
+      "semantic": "Exact"
+    }
+  ],
   "aws_secretsmanager_secret": [
     {
       "path": "arn",
@@ -9184,6 +9568,150 @@
     },
     {
       "path": "trigger_id",
+      "semantic": "Exact"
+    }
+  ],
+  "google_clouddeploy_delivery_pipeline": [
+    {
+      "path": "create_time",
+      "semantic": "Exact"
+    },
+    {
+      "path": "description",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "location",
+      "semantic": "Exact"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "serial_pipeline.stages",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "serial_pipeline.stages.profiles",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "serial_pipeline.stages.target_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "suspended",
+      "semantic": "Exact"
+    },
+    {
+      "path": "uid",
+      "semantic": "Exact"
+    },
+    {
+      "path": "update_time",
+      "semantic": "Exact"
+    }
+  ],
+  "google_clouddeploy_target": [
+    {
+      "path": "anthos_cluster.membership",
+      "semantic": "Exact"
+    },
+    {
+      "path": "create_time",
+      "semantic": "Exact"
+    },
+    {
+      "path": "custom_target.custom_target_type",
+      "semantic": "Exact"
+    },
+    {
+      "path": "description",
+      "semantic": "Exact"
+    },
+    {
+      "path": "execution_configs.artifact_storage",
+      "semantic": "Exact"
+    },
+    {
+      "path": "execution_configs.execution_timeout",
+      "semantic": "Exact"
+    },
+    {
+      "path": "execution_configs.service_account",
+      "semantic": "Exact"
+    },
+    {
+      "path": "execution_configs.usages",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "execution_configs.verbose",
+      "semantic": "Exact"
+    },
+    {
+      "path": "execution_configs.worker_pool",
+      "semantic": "Exact"
+    },
+    {
+      "path": "gke.cluster",
+      "semantic": "Exact"
+    },
+    {
+      "path": "gke.internal_ip",
+      "semantic": "Exact"
+    },
+    {
+      "path": "gke.proxy_url",
+      "semantic": "Exact"
+    },
+    {
+      "path": "id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "location",
+      "semantic": "Exact"
+    },
+    {
+      "path": "multi_target.target_ids",
+      "semantic": "WholeList"
+    },
+    {
+      "path": "name",
+      "semantic": "Exact"
+    },
+    {
+      "path": "project",
+      "semantic": "Exact"
+    },
+    {
+      "path": "require_approval",
+      "semantic": "Exact"
+    },
+    {
+      "path": "run.location",
+      "semantic": "Exact"
+    },
+    {
+      "path": "target_id",
+      "semantic": "Exact"
+    },
+    {
+      "path": "uid",
+      "semantic": "Exact"
+    },
+    {
+      "path": "update_time",
       "semantic": "Exact"
     }
   ],
