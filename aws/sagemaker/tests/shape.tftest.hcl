@@ -1,4 +1,5 @@
 mock_provider "aws" {}
+mock_provider "random" {}
 
 # Issue #615 (aws/sagemaker Studio preset) shape tests. Verifies that:
 #   - Defaults compose cleanly (happy path).
@@ -69,8 +70,8 @@ run "sagemaker_creates_workspace_bucket_by_default" {
   }
 
   assert {
-    condition     = aws_s3_bucket.workspace[0].bucket == "test-sagemaker-workspace"
-    error_message = "Preset-created bucket name must be project-prefixed (`<project>-sagemaker-workspace`)."
+    condition     = startswith(aws_s3_bucket.workspace[0].bucket, "test-sagemaker-workspace-")
+    error_message = "Preset-created bucket name must be project-prefixed (`<project>-sagemaker-workspace-<random>`)."
   }
 
   assert {

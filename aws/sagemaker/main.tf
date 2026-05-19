@@ -30,8 +30,16 @@ terraform {
       source  = "hashicorp/aws"
       version = ">= 6.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = ">= 3.5"
+    }
   }
 }
+
+# Caller identity drives the aws:SourceAccount confused-deputy guard on
+# the Studio execution role's trust policy (matches aws/bedrock).
+data "aws_caller_identity" "current" {}
 
 locals {
   # Standard Project-tag merge so the InsideOut inspector's exact
@@ -51,10 +59,18 @@ locals {
   # Workspace bucket: preset-managed unless the caller supplies one. We
   # surface the resolved name as an output regardless of who owns the
   # bucket so callers can wire IAM policies / downstream consumers.
+  # S3 bucket names are globally unique, so we suffix the preset-managed
+  # bucket with a random_id to avoid project-name collisions when the
+  # same stack is deployed twice in different accounts/regions.
   create_bucket         = var.workspace_bucket == null
   workspace_bucket_name = local.create_bucket ? aws_s3_bucket.workspace[0].id : var.workspace_bucket
   workspace_bucket_arn  = local.create_bucket ? aws_s3_bucket.workspace[0].arn : "arn:aws:s3:::${var.workspace_bucket}"
-  default_bucket_name   = "${var.project}-sagemaker-workspace"
+  default_bucket_name   = local.create_bucket ? "${var.project}-sagemaker-workspace-${random_id.workspace_suffix[0].hex}" : null
+}
+
+resource "random_id" "workspace_suffix" {
+  count       = local.create_bucket ? 1 : 0
+  byte_length = 3
 }
 
 # -----------------------------------------------------------------------------
@@ -106,6 +122,10 @@ resource "aws_iam_role" "studio_execution" {
   name = "${var.project}-sagemaker-execution"
   path = "/service-role/"
 
+  # Confused-deputy guard: scope the service trust to the deploying
+  # account so a hostile cross-account caller can't trick the SageMaker
+  # control plane into assuming this role on their behalf. Matches
+  # aws/bedrock's bedrock_kb role + aws/route53's invocation_logging role.
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -114,16 +134,23 @@ resource "aws_iam_role" "studio_execution" {
         Service = "sagemaker.amazonaws.com"
       }
       Action = "sts:AssumeRole"
+      Condition = {
+        StringEquals = {
+          "aws:SourceAccount" = data.aws_caller_identity.current.account_id
+        }
+      }
     }]
   })
 
-  # NOTE: Managed policies attach via the sibling
-  # aws_iam_role_policy_attachment block below; we don't pin
-  # `managed_policy_arns` directly because AWS provider 6.x deprecated that
-  # attribute (Read alone returns the attached set on refresh, so no drift
-  # warning needed).
-
   tags = local.tags
+
+  # Managed policies attach via the sibling aws_iam_role_policy_attachment
+  # block below; ignore_changes prevents drift noise when the provider
+  # refresh re-reads the attached set onto the role attribute. Matches
+  # aws/lambda's lambda_exec + aws/bedrock's bedrock_kb pattern.
+  lifecycle {
+    ignore_changes = [managed_policy_arns]
+  }
 }
 
 # AmazonSageMakerFullAccess is broad — it permits the role to manage almost
