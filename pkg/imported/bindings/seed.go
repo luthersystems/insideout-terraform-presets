@@ -140,6 +140,11 @@ var seededTypes = []string{
 	"aws_key_pair",
 	"google_service_networking_connection",
 	"google_secret_manager_secret_iam_member",
+	"aws_codebuild_project",
+	"aws_codepipeline",
+	"aws_glue_job",
+	"aws_sfn_state_machine",
+	"google_dns_managed_zone",
 }
 
 // seededBindings mirrors the registrations performed by init(). Used
@@ -1142,6 +1147,41 @@ var seededBindings = map[string]ComponentMetricsBinding{
 		Action:        "timeseries-list",
 		DimensionKey:  "member",
 		DimensionFrom: "id",
+	},
+	"aws_codebuild_project": {
+		Service:        "codebuild",
+		Action:         "get-metrics",
+		DimensionKey:   "ProjectName",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"Builds", "Duration", "FailedBuilds", "SucceededBuilds"},
+	},
+	"aws_codepipeline": {
+		Service:        "codepipeline",
+		Action:         "get-metrics",
+		DimensionKey:   "PipelineName",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"SucceededPipelineExecutions", "FailedPipelineExecutions", "PipelineExecutionTime"},
+	},
+	"aws_glue_job": {
+		Service:        "glue",
+		Action:         "get-metrics",
+		DimensionKey:   "JobName",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"glue.driver.aggregate.numCompletedTasks", "glue.driver.aggregate.numFailedTasks", "glue.driver.aggregate.elapsedTime"},
+	},
+	"aws_sfn_state_machine": {
+		Service:        "states",
+		Action:         "get-metrics",
+		DimensionKey:   "StateMachineArn",
+		DimensionFrom:  "id",
+		DefaultMetrics: []string{"ExecutionsStarted", "ExecutionsSucceeded", "ExecutionsFailed", "ExecutionTime"},
+	},
+	"google_dns_managed_zone": {
+		Service:        "dns",
+		Action:         "timeseries-list",
+		DimensionKey:   "target_name",
+		DimensionFrom:  "name",
+		DefaultMetrics: []string{"dns.googleapis.com/query/response_count"},
 	},
 }
 
