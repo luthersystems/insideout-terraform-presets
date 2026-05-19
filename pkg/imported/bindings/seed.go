@@ -1148,6 +1148,11 @@ var seededBindings = map[string]ComponentMetricsBinding{
 		DimensionKey:  "member",
 		DimensionFrom: "id",
 	},
+	// --- Codegen-only types (not in registry.SupportedDiscoverTypes; see
+	// awsCodegenOnlyTypes / gcpCodegenOnlyTypes in pkg/insideout-import/registry).
+	// These bindings are dormant until a per-type SDKLister / CAI mapping
+	// promotes the type into the live discoverer — wired here so the
+	// metrics surface lights up automatically when discovery lands. ---
 	"aws_codebuild_project": {
 		Service:        "codebuild",
 		Action:         "get-metrics",
@@ -1163,6 +1168,10 @@ var seededBindings = map[string]ComponentMetricsBinding{
 		DefaultMetrics: []string{"SucceededPipelineExecutions", "FailedPipelineExecutions", "PipelineExecutionTime"},
 	},
 	"aws_glue_job": {
+		// CloudWatch Glue metrics are typically compound-dimensioned
+		// (JobName + JobRunId + Type); JobName alone aggregates across
+		// runs and metric types. Acceptable as a default surface — the
+		// downstream consumer can fan out per-run / per-type if needed.
 		Service:        "glue",
 		Action:         "get-metrics",
 		DimensionKey:   "JobName",
@@ -1170,6 +1179,9 @@ var seededBindings = map[string]ComponentMetricsBinding{
 		DefaultMetrics: []string{"glue.driver.aggregate.numCompletedTasks", "glue.driver.aggregate.numFailedTasks", "glue.driver.aggregate.elapsedTime"},
 	},
 	"aws_sfn_state_machine": {
+		// DimensionFrom="id" because the AWS/States CloudWatch
+		// dimension is StateMachineArn, and the TF resource ID for
+		// aws_sfn_state_machine IS the ARN (not the name).
 		Service:        "states",
 		Action:         "get-metrics",
 		DimensionKey:   "StateMachineArn",
