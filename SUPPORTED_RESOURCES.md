@@ -22,8 +22,8 @@ and is checked in lockstep with the runtime registries. See the
 
 ## Summary
 
-- **AWS:** 135 types · 81% Discoverable · 81% Enrichable · 100% DriftDetectable · 64% MetricsAvailable · 91% AgentEditable
-- **GCP:** 64 types · 84% Discoverable · 84% Enrichable · 100% DriftDetectable · 75% MetricsAvailable · 91% AgentEditable
+- **AWS:** 135 types · 81% Discoverable · 81% Enrichable · 100% DriftDetectable · 67% MetricsAvailable · 91% AgentEditable
+- **GCP:** 64 types · 84% Discoverable · 84% Enrichable · 100% DriftDetectable · 77% MetricsAvailable · 91% AgentEditable
 
 ## AWS
 
@@ -67,9 +67,9 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_cloudwatch_log_resource_policy` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_cloudwatch_log_stream` | ✓ | ✓ | ✓ | ✓ | – |
 | `aws_cloudwatch_metric_alarm` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `aws_codebuild_project` | – | – | ✓ | – | ✓ |
+| `aws_codebuild_project` | – | – | ✓ | ✓ | ✓ |
 | `aws_codedeploy_app` | – | – | ✓ | – | ✓ |
-| `aws_codepipeline` | – | – | ✓ | – | ✓ |
+| `aws_codepipeline` | – | – | ✓ | ✓ | ✓ |
 | `aws_cognito_identity_provider` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_cognito_resource_server` | ✓ | ✓ | ✓ | – | ✓ |
 | `aws_cognito_user_pool` | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -98,7 +98,7 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_elasticache_replication_group` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_elasticache_subnet_group` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_glue_catalog_database` | – | – | ✓ | – | ✓ |
-| `aws_glue_job` | – | – | ✓ | – | ✓ |
+| `aws_glue_job` | – | – | ✓ | ✓ | ✓ |
 | `aws_iam_group` | ✓ | ✓ | ✓ | ✓ | – |
 | `aws_iam_instance_profile` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_iam_policy` | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -151,7 +151,7 @@ and is checked in lockstep with the runtime registries. See the
 | `aws_secretsmanager_secret_rotation` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_security_group` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_service_discovery_private_dns_namespace` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `aws_sfn_state_machine` | – | – | ✓ | – | ✓ |
+| `aws_sfn_state_machine` | – | – | ✓ | ✓ | ✓ |
 | `aws_sns_topic` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_sns_topic_subscription` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `aws_sqs_queue` | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -200,7 +200,7 @@ and is checked in lockstep with the runtime registries. See the
 | `google_compute_url_map` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_container_cluster` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_container_node_pool` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `google_dns_managed_zone` | – | – | ✓ | – | ✓ |
+| `google_dns_managed_zone` | – | – | ✓ | ✓ | ✓ |
 | `google_dns_record_set` | – | – | ✓ | – | ✓ |
 | `google_firestore_database` | ✓ | ✓ | ✓ | ✓ | ✓ |
 | `google_iam_workload_identity_pool` | – | – | ✓ | – | ✓ |
