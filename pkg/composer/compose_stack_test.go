@@ -464,19 +464,30 @@ func TestComposeStack_V2KitchenSink(t *testing.T) {
 	require.Contains(t, mainTF, "aws = aws")
 	require.Contains(t, mainTF, "aws.us_east_1 = aws.us_east_1")
 
-	// Providers file should declare default + us_east_1 alias
+	// Providers files: /providers.tf carries terraform{} + default block;
+	// /providers-aliases.tf carries the WAF us_east_1 alias post-split
+	// (luthersystems/reliable#1588). Both files must independently carry
+	// their own default_tags safety net (#1112).
 	require.Contains(t, out, "/providers.tf")
 	prov := string(out["/providers.tf"])
 	require.Contains(t, prov, `terraform {`)
 	require.Contains(t, prov, `required_providers`)
 	require.Contains(t, prov, `provider "aws" {`)
-	require.Contains(t, prov, `alias  = "us_east_1"`)
-	require.Contains(t, prov, `region = "us-east-1"`)
+	require.NotContains(t, prov, `alias  = "us_east_1"`,
+		"us_east_1 alias must live in /providers-aliases.tf, not /providers.tf")
+
+	require.Contains(t, out, "/providers-aliases.tf")
+	aliases := string(out["/providers-aliases.tf"])
+	require.Contains(t, aliases, `alias  = "us_east_1"`)
+	require.Contains(t, aliases, `region = "us-east-1"`)
+
 	// Verify each provider block independently carries default_tags with
 	// Project = var.project — the #1112 safety net. Split-per-block proves
 	// placement (a regression dropping default_tags from just one block
-	// would otherwise pass a global substring count).
-	assertProviderBlocksHaveDefaultTags(t, prov, 2)
+	// would otherwise pass a global substring count). One in /providers.tf
+	// (the default block) and one in /providers-aliases.tf (the us_east_1
+	// block) — total of 2 across the pair.
+	assertProviderBlocksHaveDefaultTags(t, prov+aliases, 2)
 
 	// Monitoring: per-component observability is active (consumers selected
 	// alongside cwm), so the legacy aggregator-side back-edges are dropped
@@ -691,16 +702,25 @@ func TestComposeStack_KitchenSink(t *testing.T) {
 	})
 
 	t.Run("providers_tf", func(t *testing.T) {
+		// Post-split (luthersystems/reliable#1588): /providers.tf only
+		// carries terraform{} + default provider; /providers-aliases.tf
+		// holds selection-dependent aliases (here: WAF's us_east_1).
 		require.Contains(t, out, "/providers.tf")
 		prov := string(out["/providers.tf"])
 		require.Contains(t, prov, `terraform {`)
 		require.Contains(t, prov, `required_providers`)
 		require.Contains(t, prov, `provider "aws" {`)
-		require.Contains(t, prov, `alias  = "us_east_1"`)
-		require.Contains(t, prov, `region = "us-east-1"`)
+		require.NotContains(t, prov, `alias  = "us_east_1"`,
+			"us_east_1 alias must live in /providers-aliases.tf, not /providers.tf")
+
+		require.Contains(t, out, "/providers-aliases.tf")
+		aliases := string(out["/providers-aliases.tf"])
+		require.Contains(t, aliases, `alias  = "us_east_1"`)
+		require.Contains(t, aliases, `region = "us-east-1"`)
+
 		// WAF is selected here so both default + us_east_1 blocks render;
 		// each must independently carry the #1112 default_tags safety net.
-		assertProviderBlocksHaveDefaultTags(t, prov, 2)
+		assertProviderBlocksHaveDefaultTags(t, prov+aliases, 2)
 	})
 }
 
