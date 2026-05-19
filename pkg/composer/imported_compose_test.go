@@ -316,9 +316,16 @@ func TestComposeStackWithIssues_Imported_AWS(t *testing.T) {
 		pairs,
 		"every imported resource must have a paired import block with the matching id")
 
-	providersTF := string(res.Files["/providers.tf"])
-	assertImportedAliasDeclared(t, providersTF, "aws")
-	assertImportedProviderHasNoDefaultTags(t, providersTF, "aws")
+	// Imported alias blocks moved out of /providers.tf into
+	// /providers-imported.tf (luthersystems/reliable#1588) so archive
+	// packagers can ship them as a sibling file that slips through
+	// PRESERVE_PATTERNS-style filters. Assert against the imported file
+	// directly; the no-default-tags property still holds.
+	importedProvidersTF := string(res.Files["/providers-imported.tf"])
+	assertImportedAliasDeclared(t, importedProvidersTF, "aws")
+	assertImportedProviderHasNoDefaultTags(t, importedProvidersTF, "aws")
+	assert.NotContains(t, string(res.Files["/providers.tf"]), `alias  = "imported"`,
+		"/providers.tf must no longer carry the imported alias — it moved to /providers-imported.tf")
 
 	// Composed root must parse cleanly — ValidateComposedRoot is the
 	// terminal gate. No HCL parse issues should appear in res.Issues.
@@ -366,12 +373,14 @@ func TestComposeStackWithIssues_Imported_GCP(t *testing.T) {
 		parseImportPairs(t, importedTF),
 		"imported google resource must have a paired import block")
 
-	providersTF := string(res.Files["/providers.tf"])
-	assertImportedAliasDeclared(t, providersTF, "gcp")
-	assert.True(t, hasProviderAttr(providersTF, "gcp", "project", `"demo-project-12345"`),
+	// Imported alias blocks live in /providers-imported.tf as of the
+	// providers.tf split (luthersystems/reliable#1588).
+	importedProvidersTF := string(res.Files["/providers-imported.tf"])
+	assertImportedAliasDeclared(t, importedProvidersTF, "gcp")
+	assert.True(t, hasProviderAttr(importedProvidersTF, "gcp", "project", `"demo-project-12345"`),
 		"google.imported must carry project as a literal (root vars do not declare gcp_project_id):\n%s",
-		providersTF)
-	assertImportedProviderHasNoDefaultTags(t, providersTF, "gcp")
+		importedProvidersTF)
+	assertImportedProviderHasNoDefaultTags(t, importedProvidersTF, "gcp")
 
 	for _, iss := range res.Issues {
 		require.NotEqualf(t, "hcl_parse_error", iss.Code,
@@ -428,8 +437,11 @@ func TestComposeStackWithIssues_Imported_MissingBlocksApply(t *testing.T) {
 	assert.False(t, hasImportedTF,
 		"no imported.tf should be emitted when only blocked records are present")
 
-	providersTF := string(res.Files["/providers.tf"])
-	assertImportedAliasDeclared(t, providersTF, "aws")
+	// Imported alias still emits unconditionally for every AWS stack
+	// (#562), but it now lives in /providers-imported.tf
+	// (luthersystems/reliable#1588).
+	importedProvidersTF := string(res.Files["/providers-imported.tf"])
+	assertImportedAliasDeclared(t, importedProvidersTF, "aws")
 }
 
 // TestComposeStackWithIssues_Imported_StrictValidateEscalates pins that
@@ -501,8 +513,14 @@ func TestComposeStack_NoImportedKeepsExistingBehavior(t *testing.T) {
 	_, hasImportedTF := files["/imported.tf"]
 	assert.False(t, hasImportedTF,
 		"composes without Imported must not produce imported.tf")
-	providers := string(files["/providers.tf"])
-	assertImportedAliasDeclared(t, providers, "aws")
+	// The imported alias still emits unconditionally for every AWS stack
+	// (#562), but it now lives in /providers-imported.tf
+	// (luthersystems/reliable#1588). /providers.tf itself no longer
+	// carries any alias block.
+	importedProviders := string(files["/providers-imported.tf"])
+	assertImportedAliasDeclared(t, importedProviders, "aws")
+	assert.NotContains(t, string(files["/providers.tf"]), `alias  = "imported"`,
+		"/providers.tf must not carry the imported alias post-split")
 }
 
 // TestImportedResource_EveryTierBranchExercised acts as a CI gate ensuring
