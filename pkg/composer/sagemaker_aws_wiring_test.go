@@ -100,6 +100,15 @@ func TestMapper_AWSSageMaker_CallerSuppliedConfig(t *testing.T) {
 // preset's variables.tf defaults must apply to the rest. Catches a class
 // of bug where the mapper would unconditionally emit empty slices /
 // false bools that override the module's defaults.
+//
+// Note: because AWSSageMakerConfig uses value-type fields (string,
+// []string) rather than pointers, the "leave field unset" path and the
+// "set field to empty string" path collapse into the same code branch
+// — both hit the `strings.TrimSpace(...) != ""` gate and produce no
+// tfvar. This test pins the unset-path; TestMapper_AWSSageMaker_
+// EmptyStringsIgnored pins the explicit-empty-string path. They cover
+// the same predicate from two angles; deleting either would weaken
+// mutation resistance.
 func TestMapper_AWSSageMaker_PartialConfig(t *testing.T) {
 	t.Parallel()
 
@@ -203,6 +212,14 @@ func TestComposeStack_AWSSageMaker_Forward(t *testing.T) {
 	require.Contains(t, rootStr, `module "aws_vpc"`,
 		"composer must auto-add KeyAWSVPC when KeyAWSSageMaker is selected (ImplicitDependencies)")
 
+	// Wiring assertion: aws_sagemaker's vpc_id argument must literally
+	// reference module.aws_vpc.vpc_id. Without this, the previous check
+	// only pins that aws_vpc is emitted — it doesn't pin that the value
+	// actually flows into aws_sagemaker (the preview-stub could still
+	// be leaking through).
+	require.Contains(t, rootStr, `module.aws_vpc.vpc_id`,
+		"DefaultWiring must thread module.aws_vpc.vpc_id into the aws_sagemaker module block")
+
 	// Confirm the tfvars file landed.
 	tfvars, ok := out["/aws_sagemaker.auto.tfvars"]
 	require.True(t, ok, "expected aws_sagemaker.auto.tfvars")
@@ -253,14 +270,19 @@ func TestComposeStack_AWSSageMaker_CallerSuppliedConfig(t *testing.T) {
 		"caller-supplied SageMakerManagedPolicyARN must flow through to the namespaced tfvar")
 
 	// studio_users is a list, which the tfvars pretty-printer renders on
-	// multiple lines for longer lists. Bound the substring check to the
-	// studio_users line + the list literal that follows (closing `]`)
-	// so we don't bleed into a later tfvar's value.
+	// multiple lines. Bound the substring check to the slice between
+	// the studio_users key and the `]` that closes its list literal —
+	// anchoring on the var-name (not on `= [`, which the HCL writer
+	// pads variably) and then skipping forward to the literal `[` makes
+	// the scan robust to column-alignment padding.
 	studioUsersIdx := strings.Index(tfvarsStr, "aws_sagemaker_studio_users")
 	require.GreaterOrEqual(t, studioUsersIdx, 0, "tfvars must contain a studio_users assignment")
-	endIdx := strings.Index(tfvarsStr[studioUsersIdx:], "]")
+	listOpenOffset := strings.Index(tfvarsStr[studioUsersIdx:], "[")
+	require.GreaterOrEqual(t, listOpenOffset, 0, "studio_users assignment must be a list literal")
+	listStartIdx := studioUsersIdx + listOpenOffset
+	endIdx := strings.Index(tfvarsStr[listStartIdx:], "]")
 	require.GreaterOrEqual(t, endIdx, 0, "studio_users list literal must terminate with ]")
-	studioUsersBlock := tfvarsStr[studioUsersIdx : studioUsersIdx+endIdx+1]
+	studioUsersBlock := tfvarsStr[listStartIdx : listStartIdx+endIdx+1]
 	require.Contains(t, studioUsersBlock, `"alice"`,
 		"caller-supplied studio_users[0] must flow into the tfvars list")
 	require.Contains(t, studioUsersBlock, `"bob"`,
