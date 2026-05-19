@@ -109,6 +109,8 @@ func ComponentDisplayName(key composer.ComponentKey) string {
 		return "AWS Cognito"
 	case composer.KeyAWSLambda:
 		return "AWS Lambda"
+	case composer.KeyAWSAppRunner:
+		return "AWS App Runner"
 	case composer.KeyAWSSageMaker:
 		return "AWS SageMaker"
 	case composer.KeyAWSALB:
