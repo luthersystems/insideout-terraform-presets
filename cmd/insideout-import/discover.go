@@ -70,6 +70,16 @@ var (
 // stage budgets above can absorb.
 const discoverRetryMaxAttempts = 8
 
+// discoverRetryMode pins the SDK retryer to v2's adaptive mode (#632).
+// The default `standard` mode uses exponential backoff + jitter, which
+// reacts to ThrottlingException after the fact. Adaptive mode adds a
+// client-side token bucket that *proactively* slows the send rate when
+// the server signals throttling, which is the right shape for the
+// parallel DiscoverTypes walk (#629): per-service goroutines share the
+// same per-region CloudControl rate budget, so a feedback signal from
+// one goroutine's 400 should slow the others' first calls too.
+const discoverRetryMode = aws.RetryModeAdaptive
+
 // discoveryAggregator is the small subset of awsdiscover.AWSDiscoverer
 // (and gcpdiscover.GCPDiscoverer) the orchestrator needs. Defining the
 // interface in main lets tests inject a fake aggregator without standing
@@ -247,6 +257,7 @@ func productionDiscoverDeps() discoverDeps {
 			opts := []func(*config.LoadOptions) error{
 				config.WithRegion(region),
 				config.WithRetryMaxAttempts(discoverRetryMaxAttempts),
+				config.WithRetryMode(discoverRetryMode),
 			}
 			if endpointURL != "" {
 				opts = append(opts, config.WithBaseEndpoint(endpointURL))
