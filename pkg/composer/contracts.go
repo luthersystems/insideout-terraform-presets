@@ -63,6 +63,7 @@ const (
 	KeyAWSCognito              ComponentKey = "aws_cognito"
 	KeyAWSBackups              ComponentKey = "aws_backups"
 	KeyAWSGitHubActions        ComponentKey = "aws_github_actions"
+	KeyAWSCodeBuild            ComponentKey = "aws_codebuild"
 	KeyAWSCodePipeline         ComponentKey = "aws_codepipeline"
 	KeyAWSRoute53              ComponentKey = "aws_route53"
 	KeyAWSACM                  ComponentKey = "aws_acm"
@@ -166,6 +167,11 @@ var ComposeOrder = []ComponentKey{
 	KeyAWSSQS,
 	KeyGCPPubSub,
 	KeyGCPCloudBuild,
+	// CodeBuild standalone preset (#619, deferred row 3 of #598). Peer
+	// of gcp/cloud_build; no other key wires off of it today (CodePipeline
+	// integration is a future PR). Placed alongside the GCP analog +
+	// CodePipeline sibling for reviewability; ordering is not load-bearing.
+	KeyAWSCodeBuild,
 	KeyAWSGitHubActions,
 	KeyAWSCodePipeline,
 	// GCP GitHub Actions WIF preset (#597 row 1). Independent of any
@@ -219,6 +225,7 @@ var ModulePath = map[ComponentKey]string{
 	KeyAWSBackups:              "modules/backups",
 	KeyAWSBastion:              "modules/bastion",
 	KeyAWSGitHubActions:        "modules/githubactions",
+	KeyAWSCodeBuild:            "modules/codebuild",
 	KeyAWSCodePipeline:         "modules/codepipeline",
 	KeyAWSRoute53:              "modules/route53",
 	KeyAWSACM:                  "modules/acm",
@@ -280,6 +287,13 @@ var ImplicitDependencies = map[ComponentKey][]ComponentKey{
 	// (gcp/cloud_run also declares KeyGCPVPC) and ensures the wiring is
 	// satisfiable when the caller flips on private egress later.
 	KeyAWSAppRunner: {KeyAWSVPC},
+	// CodeBuild (#619). Public-network builds do not strictly require
+	// a VPC, but the preset's optional vpc_config path (subnet_ids
+	// non-empty) feeds vpc_id + subnet_ids from module.aws_vpc. Forcing
+	// the implicit dep mirrors the GCP analog (gcp/cloud_build also
+	// declares KeyGCPVPC) and keeps the wiring satisfiable when the
+	// caller flips on private builds later.
+	KeyAWSCodeBuild:    {KeyAWSVPC},
 	KeyAWSEKSNodeGroup: {KeyAWSEKS, KeyAWSVPC},
 	KeyAWSEC2:          {KeyAWSVPC},
 	KeyGCPCompute:      {KeyGCPVPC},
@@ -413,6 +427,7 @@ var PresetKeyMap = map[ComponentKey]string{
 	KeyAWSCognito:              "cognito",
 	KeyAWSBackups:              "backups",
 	KeyAWSGitHubActions:        "githubactions",
+	KeyAWSCodeBuild:            "codebuild",
 	KeyAWSCodePipeline:         "codepipeline",
 	KeyAWSRoute53:              "route53",
 	KeyAWSACM:                  "acm",
@@ -511,6 +526,7 @@ var AllComponentKeys = []ComponentKey{
 	KeyAWSCloudWatchLogs,
 	KeyAWSCloudWatchMonitoring,
 	KeyAWSCloudfront,
+	KeyAWSCodeBuild,
 	KeyAWSCodePipeline,
 	KeyAWSCognito,
 	KeyAWSDynamoDB,
@@ -722,6 +738,28 @@ func DefaultWiring(selected map[ComponentKey]bool, k ComponentKey, comps *Compon
 		// still works — egress NAT is provided by App Runner's own
 		// network plane, the customer subnets are only the ENI placement
 		// for cross-VPC reachability).
+		if hasVPC {
+			vpc := vpcRef(selected)
+			wi.RawHCL["vpc_id"] = vpc + ".vpc_id"
+			if isPublicVPC(comps) {
+				wi.RawHCL["subnet_ids"] = vpc + ".public_subnet_ids"
+			} else {
+				wi.RawHCL["subnet_ids"] = vpc + ".private_subnet_ids"
+			}
+			wi.Names = append(wi.Names, "vpc_id", "subnet_ids")
+		}
+
+	case KeyAWSCodeBuild:
+		// CodeBuild VPC-config path consumes vpc_id + subnet_ids
+		// (#619). The preset gates vpc_config creation on a non-empty
+		// subnet_ids list, but threading the wiring unconditionally is
+		// fine — when subnet_ids is empty (e.g. on a single-module
+		// preview) the preset simply leaves the vpc_config dynamic
+		// block off. Prefer private subnets when the upstream VPC is
+		// non-public so the build ENIs land in the right tier; fall
+		// back to public subnets on Public-VPC stacks so callers still
+		// get a non-empty list when they later opt-in by populating
+		// subnet_ids out-of-stack.
 		if hasVPC {
 			vpc := vpcRef(selected)
 			wi.RawHCL["vpc_id"] = vpc + ".vpc_id"

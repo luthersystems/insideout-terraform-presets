@@ -127,6 +127,8 @@ func ComponentDisplayName(key composer.ComponentKey) string {
 		return "AWS Bastion"
 	case composer.KeyAWSGrafana:
 		return "AWS Grafana"
+	case composer.KeyAWSCodeBuild:
+		return "AWS CodeBuild"
 	case composer.KeyAWSCodePipeline:
 		return "AWS CodePipeline"
 	case composer.KeyAWSBackups:

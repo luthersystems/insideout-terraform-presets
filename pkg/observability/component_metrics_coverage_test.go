@@ -40,7 +40,16 @@ import (
 // All #622 entries cleared. The two by-design omissions
 // (aws_github_actions, gcp_backups) live in metricsNonComponentKeys
 // below with rationale.
-var metricsDeferredKeys = map[composer.ComponentKey]string{}
+var metricsDeferredKeys = map[composer.ComponentKey]string{
+	// CodeBuild (#619). The issue explicitly defers the discovery
+	// inspector — service + actions are not yet registered in
+	// AWSServiceActions, so a ComponentMetricsMapping entry pointing at
+	// codebuild.list-projects would dispatch to an unregistered service
+	// and surface "unsupported service" at runtime instead of the panel.
+	// Backfill alongside the inspector landing (mirrors the #622 backfill
+	// of apprunner + sagemaker after #618 / #620 added their inspectors).
+	composer.KeyAWSCodeBuild: "[#619] discovery inspector deferred; ComponentMetricsMapping entry pending the codebuild.list-projects handler registration alongside the inspector backfill PR",
+}
 
 // metricsNonComponentKeys are AllComponentKeys entries that genuinely
 // do NOT correspond to a panel-renderable resource. Distinct from

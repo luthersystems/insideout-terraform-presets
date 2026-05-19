@@ -31,13 +31,13 @@ var AlwaysRequiredAWSIAMActions = []string{
 // drift-guard test (TestAWSIAMActions_CoverAllAWSKeys) fails the package
 // build otherwise. nil values are permitted for forward-compat.
 var AWSIAMActions = map[ComponentKey][]string{
-	KeyAWSVPC:                  {"ec2:AllocateAddress", "ec2:CreateInternetGateway", "ec2:CreateNatGateway", "ec2:CreateRouteTable", "ec2:CreateSubnet", "ec2:CreateVpc"},
-	KeyAWSBastion:              {"ec2:RunInstances"},
-	KeyAWSEC2:                  {"ec2:RunInstances"},
-	KeyAWSEKS:                  {"eks:CreateCluster", "eks:CreateNodegroup"},
-	KeyAWSEKSNodeGroup:         {"eks:CreateNodegroup"},
-	KeyAWSECS:                  {"ecs:CreateCluster", "ecs:CreateService"},
-	KeyAWSLambda:               {"lambda:CreateFunction"},
+	KeyAWSVPC:          {"ec2:AllocateAddress", "ec2:CreateInternetGateway", "ec2:CreateNatGateway", "ec2:CreateRouteTable", "ec2:CreateSubnet", "ec2:CreateVpc"},
+	KeyAWSBastion:      {"ec2:RunInstances"},
+	KeyAWSEC2:          {"ec2:RunInstances"},
+	KeyAWSEKS:          {"eks:CreateCluster", "eks:CreateNodegroup"},
+	KeyAWSEKSNodeGroup: {"eks:CreateNodegroup"},
+	KeyAWSECS:          {"ecs:CreateCluster", "ecs:CreateService"},
+	KeyAWSLambda:       {"lambda:CreateFunction"},
 	// App Runner (#598 row 2). Service + autoscaling-config-version
 	// CREATE + the access role (only when image_repository_type = ECR)
 	// + the instance role + optional VPC connector. PassRole is needed
@@ -90,7 +90,26 @@ var AWSIAMActions = map[ComponentKey][]string{
 	KeyAWSCognito:              {"cognito-idp:CreateUserPool"},
 	KeyAWSBackups:              {"backup:CreateBackupPlan", "backup:CreateBackupVault"},
 	KeyAWSGitHubActions:        {"iam:CreateOpenIDConnectProvider"},
-	KeyAWSCodePipeline:         {"codepipeline:CreatePipeline"},
+	// CodeBuild (#619). Project CREATE + the inline service-role
+	// policies the preset attaches (logs:CreateLogGroup for the build's
+	// CloudWatch Logs group, optional S3 bucket setup when enable_s3_logs
+	// is on, EC2 ENI lifecycle perms when the optional VPC config kicks
+	// in). PassRole is needed so the CodeBuild control plane can assume
+	// the service role we create.
+	KeyAWSCodeBuild: {
+		"codebuild:CreateProject",
+		"ec2:CreateNetworkInterface",
+		"iam:AttachRolePolicy",
+		"iam:CreateRole",
+		"iam:PassRole",
+		"iam:PutRolePolicy",
+		"logs:CreateLogGroup",
+		"s3:CreateBucket",
+		"s3:PutBucketPublicAccessBlock",
+		"s3:PutBucketVersioning",
+		"s3:PutEncryptionConfiguration",
+	},
+	KeyAWSCodePipeline: {"codepipeline:CreatePipeline"},
 	// route53:CreateHostedZone covers the create_zone=true path; the data-
 	// lookup path (create_zone=false) needs only route53:GetHostedZone, which
 	// is implied by the create capability. Record-set CRUD is covered by
