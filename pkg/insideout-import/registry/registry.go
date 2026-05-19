@@ -211,6 +211,17 @@ var awsCodegenOnlyTypes = []string{
 	"aws_acm_certificate_validation",
 	"aws_appautoscaling_policy",
 	"aws_appautoscaling_target",
+	// #623 — aws/apprunner preset (#598 / #620) drift-policy backfill.
+	// App Runner resource types lack a cloud-control routing in the AWS
+	// provider, so a hand-rolled SDKLister in awsdiscover is the future
+	// promotion path. Until that lands, Layer-1 codegen + curated
+	// Layer-2 policy ship here so out-of-band edits to App Runner
+	// services / autoscaling configs / VPC connectors / custom domain
+	// associations are not invisible to drift detection.
+	"aws_apprunner_auto_scaling_configuration_version",
+	"aws_apprunner_custom_domain_association",
+	"aws_apprunner_service",
+	"aws_apprunner_vpc_connector",
 	"aws_athena_workgroup",
 	"aws_cloudtrail",
 	"aws_cloudwatch_event_bus",
@@ -227,6 +238,14 @@ var awsCodegenOnlyTypes = []string{
 	"aws_lambda_layer_version",
 	"aws_rds_cluster",
 	"aws_route53_record",
+	// #623 — aws/sagemaker preset (#615 / #618) drift-policy backfill.
+	// SageMaker Studio domain + user profile are not cloud-control-routed
+	// either; a hand-rolled SDKLister in awsdiscover is the future
+	// promotion path. The drift surface (default user settings, network
+	// access type, KMS / VPC wiring) is high-value security-adjacent
+	// state that must not be invisible to drift detection.
+	"aws_sagemaker_domain",
+	"aws_sagemaker_user_profile",
 	"aws_sfn_state_machine",
 }
 
@@ -329,6 +348,14 @@ var gcpCodegenOnlyTypes = []string{
 	"google_certificate_manager_certificate",
 	"google_certificate_manager_certificate_map",
 	"google_certificate_manager_certificate_map_entry",
+	// #623 — gcp/cloud_deploy preset (#613 / #614) drift-policy backfill.
+	// Cloud Deploy delivery pipelines and targets are not yet in the CAI
+	// inventory fan-out; the curated drift policy ships here so out-of-band
+	// edits to the serial-pipeline stage chain or per-target runtime /
+	// execution config are visible to drift detection. CAI discoverer
+	// hookup is the lower-priority follow-up per the codegen-only contract.
+	"google_clouddeploy_delivery_pipeline",
+	"google_clouddeploy_target",
 	"google_dns_managed_zone",
 	"google_dns_record_set",
 	// #608 — gcp/github_actions WIF preset (#605). WIF pool / provider /

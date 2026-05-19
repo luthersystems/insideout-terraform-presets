@@ -62,6 +62,15 @@ var coveredTypes = []string{
 	"aws_apigatewayv2_stage",
 	"aws_appautoscaling_policy",
 	"aws_appautoscaling_target",
+	// #623 — aws/apprunner preset (#598 / #620) drift-policy backfill.
+	// App Runner service + autoscaling version + VPC connector + custom
+	// domain association. Closes the discovered gap that
+	// pkg/drift/imported/compare.go returned nil for these types and
+	// drift detection was blind to out-of-band edits.
+	"aws_apprunner_auto_scaling_configuration_version",
+	"aws_apprunner_custom_domain_association",
+	"aws_apprunner_service",
+	"aws_apprunner_vpc_connector",
 	"aws_athena_workgroup",
 	"aws_backup_plan",
 	// Bundle 10 (#482) — Backup selection (plan → resource scoping),
@@ -237,6 +246,13 @@ var coveredTypes = []string{
 	"aws_s3_bucket_public_access_block",
 	"aws_s3_bucket_server_side_encryption_configuration",
 	"aws_s3_bucket_versioning",
+	// #623 — aws/sagemaker preset (#615 / #618) drift-policy backfill.
+	// Studio domain + per-user profile. The default_user_settings.
+	// execution_role / user_settings.execution_role surfaces are the
+	// high-value privilege-escalation drift signal — a silent rebind
+	// re-purposes every running studio app's IAM identity.
+	"aws_sagemaker_domain",
+	"aws_sagemaker_user_profile",
 	"aws_secretsmanager_secret",
 	"aws_secretsmanager_secret_rotation",
 	"aws_security_group",
@@ -265,6 +281,14 @@ var coveredTypes = []string{
 	"google_api_gateway_gateway",
 	"google_cloud_run_v2_service",
 	"google_cloudbuild_trigger",
+	// #623 — gcp/cloud_deploy preset (#613 / #614) drift-policy backfill.
+	// Delivery pipeline + target. The serial_pipeline.stages.target_id
+	// graph + execution_configs.service_account binding are the
+	// high-value drift surfaces (silent stage re-order changes the
+	// promotion contract; silent SA rebind re-purposes the executor
+	// identity at project scope).
+	"google_clouddeploy_delivery_pipeline",
+	"google_clouddeploy_target",
 	"google_cloudfunctions2_function",
 	// Bundle 14 / #599 — Certificate Manager (managed-cert lifecycle for
 	// GCLB) + DNS record / zone backfill for the gcp/cloud_dns preset
