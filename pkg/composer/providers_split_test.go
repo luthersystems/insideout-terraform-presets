@@ -201,6 +201,92 @@ func TestGenerateProvidersTF_WithImportedGCP(t *testing.T) {
 		"ProvidersUsed[aws] must be false on a GCP-only compose: %v", res.ProvidersUsed)
 }
 
+// TestGenerateProvidersTF_AWSVariablesImportedDeclared locks in the issue-#630
+// regression: on every AWS compose, the `bootstrap_role_arn` and `external_id`
+// variable declarations must land in /variables-imported.tf (a sibling file),
+// NOT in /providers.tf — because the runtime wrapper's PRESERVE_PATTERNS rsync
+// filter drops the composer's /providers.tf while preserving the wrapper's own
+// stub. The sibling alias files (/providers-aliases.tf, /providers-imported.tf)
+// reference these vars via the assume_role dynamic block, so the declarations
+// must survive the same filter or `terraform plan` fails with:
+//
+//	Error: Reference to undeclared input variable
+//	  on providers-imported.tf line 7, in provider "aws":
+//	   7:     for_each = var.bootstrap_role_arn != "" ? [1] : []
+//
+// See:
+//   - luthersystems/insideout-terraform-presets#630 (this fix)
+//   - luthersystems/sandbox-infrastructure-template#111 (the PRESERVE_PATTERNS contract)
+//   - luthersystems/reliable#1588 (the original archive-packager split)
+func TestGenerateProvidersTF_AWSVariablesImportedDeclared(t *testing.T) {
+	t.Parallel()
+
+	c := newTestClient()
+	res, err := c.ComposeStackWithIssues(ComposeStackOpts{
+		Cloud:        "aws",
+		SelectedKeys: []ComponentKey{KeyAWSVPC},
+		Comps:        &Components{Cloud: "AWS", AWSVPC: "Private VPC"},
+		Cfg:          &Config{},
+		Project:      "p",
+		Region:       "us-east-1",
+	})
+	require.NoError(t, err)
+	require.NotNil(t, res)
+
+	// The declarations live in /variables-imported.tf — a sibling that
+	// survives the wrapper's PRESERVE_PATTERNS rsync filter.
+	require.Contains(t, res.Files, "/variables-imported.tf",
+		"every AWS compose must emit /variables-imported.tf for the assume_role dynamic block's vars")
+	vars := string(res.Files["/variables-imported.tf"])
+	assert.Contains(t, vars, `variable "bootstrap_role_arn"`,
+		"/variables-imported.tf must declare bootstrap_role_arn")
+	assert.Contains(t, vars, `variable "external_id"`,
+		"/variables-imported.tf must declare external_id")
+
+	// They must NOT live in /providers.tf — that file is dropped by the
+	// wrapper's PRESERVE_PATTERNS filter. Putting them here would let
+	// non-wrapper direct-archive paths see them but leave wrapper-mode
+	// terraform plan broken (the original #630 bug).
+	prov := string(res.Files["/providers.tf"])
+	assert.NotContains(t, prov, `variable "bootstrap_role_arn"`,
+		"bootstrap_role_arn declaration must NOT live in /providers.tf — that file is dropped by the wrapper's PRESERVE_PATTERNS filter (#630)")
+	assert.NotContains(t, prov, `variable "external_id"`,
+		"external_id declaration must NOT live in /providers.tf — that file is dropped by the wrapper's PRESERVE_PATTERNS filter (#630)")
+
+	// And the surviving sibling alias files reference these vars — confirm
+	// the resolution graph is complete: declarations in a surviving sibling,
+	// references in surviving siblings.
+	importedTF := string(res.Files["/providers-imported.tf"])
+	assert.Contains(t, importedTF, `var.bootstrap_role_arn`,
+		"sanity: /providers-imported.tf must reference var.bootstrap_role_arn (else this regression test is meaningless)")
+}
+
+// TestGenerateProvidersTF_GCPNoVariablesImported pins the symmetric invariant
+// for GCP: the imported alias for google / google-beta does NOT use an
+// assume_role dynamic block (GCP doesn't use AWS-style cross-account role
+// assumption), so /variables-imported.tf must not emit. Guards against an
+// accidental "always emit on every cloud" refactor.
+func TestGenerateProvidersTF_GCPNoVariablesImported(t *testing.T) {
+	t.Parallel()
+
+	c := newTestClient()
+	res, err := c.ComposeStackWithIssues(ComposeStackOpts{
+		Cloud:        "gcp",
+		SelectedKeys: []ComponentKey{KeyGCPVPC},
+		Comps:        &Components{Cloud: "GCP"},
+		Cfg:          &Config{},
+		Project:      "demo",
+		Region:       "us-central1",
+		GCPProjectID: "demo-project-12345",
+	})
+	require.NoError(t, err)
+	require.NotNil(t, res)
+
+	_, has := res.Files["/variables-imported.tf"]
+	assert.False(t, has,
+		"GCP composes don't reference bootstrap_role_arn/external_id — /variables-imported.tf must not emit")
+}
+
 // TestComposeStackResult_ProvidersUsed_BackwardCompat pins that the new
 // ProvidersUsed field is additive: callers that ignore it still see the
 // same Files map and Issues list they always saw. This guards against an
