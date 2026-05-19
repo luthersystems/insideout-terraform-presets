@@ -100,6 +100,7 @@ type PricingData struct {
 		AWSEKS                  *PricingItem    `json:"aws_eks,omitempty"`
 		AWSECS                  *PricingItem    `json:"aws_ecs,omitempty"`
 		AWSLambda               *PricingItem    `json:"aws_lambda,omitempty"`
+		AWSAppRunner            *PricingItem    `json:"aws_apprunner,omitempty"`
 		AWSALB                  *PricingItem    `json:"aws_alb,omitempty"`
 		AWSCloudFront           *PricingItem    `json:"aws_cloudfront,omitempty"`
 		AWSWAF                  *PricingItem    `json:"aws_waf,omitempty"`
