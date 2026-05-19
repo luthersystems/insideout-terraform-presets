@@ -47,14 +47,16 @@ func TestInspectCloudDeploy_NoGetMetrics(t *testing.T) {
 		"get-metrics is metrics-pkg responsibility, not discovery")
 }
 
-// TestCloudDeployLocationFromFilters_DefaultsGlobal — when no location
-// filter is supplied, the inspector targets `locations/global`, the
-// canonical region for the cloud_deploy preset's pipeline objects.
-func TestCloudDeployLocationFromFilters_DefaultsGlobal(t *testing.T) {
+// TestCloudDeployLocationFromFilters_DefaultsWildcard — Cloud Deploy
+// is a regional service with no "global" location, so the inspector
+// defaults to the AIP-159 wildcard "-" and lists across every region.
+// This mirrors the Cloud Run inspector's `locations/-` pattern.
+// Callers that know their region override via the filters envelope.
+func TestCloudDeployLocationFromFilters_DefaultsWildcard(t *testing.T) {
 	t.Parallel()
-	assert.Equal(t, "global", cloudDeployLocationFromFilters(""))
-	assert.Equal(t, "global", cloudDeployLocationFromFilters(`{"project":"demo"}`))
-	assert.Equal(t, "global", cloudDeployLocationFromFilters(`{"location":""}`))
+	assert.Equal(t, "-", cloudDeployLocationFromFilters(""))
+	assert.Equal(t, "-", cloudDeployLocationFromFilters(`{"project":"demo"}`))
+	assert.Equal(t, "-", cloudDeployLocationFromFilters(`{"location":""}`))
 }
 
 func TestCloudDeployLocationFromFilters_OverridesViaFilter(t *testing.T) {
@@ -64,9 +66,16 @@ func TestCloudDeployLocationFromFilters_OverridesViaFilter(t *testing.T) {
 }
 
 // Empty-state pins per #256: every list site routes through
-// drainIterator, so the helper-test file already pins the contract.
-// These per-site tests pin the *call-site type* end-to-end so a future
-// refactor that bypasses drainIterator is caught at the inspector level.
+// drainIterator, and the helper-test file already pins the runtime
+// contract. The two tests below pin the *type-parameter wiring* —
+// exercising drainIterator directly against the same iterator types
+// (`*deploypb.DeliveryPipeline`, `*deploypb.Target`) the inspector
+// uses, so a future refactor that changes the iterator's element type
+// without updating the inspector fails to compile here. They do NOT
+// exercise inspectCloudDeploy end-to-end; a refactor that stops
+// calling drainIterator from the inspector would not be caught at
+// this layer (the dispatcher gate at TestInspectCoversAllGCPServices
+// covers the routing surface).
 
 func TestInspectCloudDeploy_ListDeliveryPipelines_NoMatches_EmptySlice(t *testing.T) {
 	t.Parallel()

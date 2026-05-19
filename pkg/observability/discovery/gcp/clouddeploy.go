@@ -81,16 +81,21 @@ func inspectCloudDeploy(ctx context.Context, projectID, action, filters string, 
 }
 
 // cloudDeployLocationFromFilters extracts the `location` key from the
-// filters JSON envelope, defaulting to "global" — the canonical
-// region for the cloud_deploy preset's pipeline objects. Callers
-// using a regional pipeline override via the filters envelope.
+// filters JSON envelope, defaulting to "-" (the AIP-159 wildcard) so
+// list calls fan out across every region the caller's credentials
+// can see. Cloud Deploy is a regional service (gcp/cloud_deploy/main.tf
+// pins `location = var.region`); there is no "global" location, so the
+// inspector cannot pick a single sensible default without the caller's
+// region. Mirrors the Cloud Run inspector's `locations/-` pattern
+// (app.go::inspectCloudRun). Callers that know the region can override
+// via the filters envelope (e.g. `{"location":"us-central1"}`).
 func cloudDeployLocationFromFilters(filters string) string {
 	fm := parseFilterMap(filters)
 	if fm == nil {
-		return "global"
+		return "-"
 	}
 	if loc := fm["location"]; loc != "" {
 		return loc
 	}
-	return "global"
+	return "-"
 }
