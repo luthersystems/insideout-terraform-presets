@@ -41,6 +41,7 @@ const (
 	KeyAWSEKS                  ComponentKey = "aws_eks"
 	KeyAWSECS                  ComponentKey = "aws_ecs"
 	KeyAWSLambda               ComponentKey = "aws_lambda"
+	KeyAWSSageMaker            ComponentKey = "aws_sagemaker"
 	KeyAWSALB                  ComponentKey = "aws_alb"
 	KeyAWSCloudfront           ComponentKey = "aws_cloudfront"
 	KeyAWSWAF                  ComponentKey = "aws_waf"
@@ -153,6 +154,7 @@ var ComposeOrder = []ComponentKey{
 	KeyGCPSecretManager,
 	KeyAWSOpenSearch,
 	KeyAWSBedrock,
+	KeyAWSSageMaker,
 	KeyGCPVertexAI,
 	KeyAWSSQS,
 	KeyGCPPubSub,
@@ -187,6 +189,7 @@ var ModulePath = map[ComponentKey]string{
 	KeyAWSEKSNodeGroup:         "modules/eks_nodegroup",
 	KeyAWSECS:                  "modules/ecs",
 	KeyAWSLambda:               "modules/lambda",
+	KeyAWSSageMaker:            "modules/sagemaker",
 	KeyAWSALB:                  "modules/alb",
 	KeyAWSCloudfront:           "modules/cloudfront",
 	KeyAWSWAF:                  "modules/waf",
@@ -257,6 +260,11 @@ var ImplicitDependencies = map[ComponentKey][]ComponentKey{
 	KeyAWSECS:          {KeyAWSVPC},
 	KeyGCPGKE:          {KeyGCPVPC},
 	KeyAWSLambda:       {KeyAWSVPC},
+	// SageMaker (#615): the AWS provider 6.x resource demands vpc_id +
+	// subnet_ids on every aws_sagemaker_domain, regardless of whether the
+	// network_mode is PublicInternetOnly or VpcOnly — selecting SageMaker
+	// without a VPC leaves the required inputs without a wired source.
+	KeyAWSSageMaker: {KeyAWSVPC},
 	KeyAWSEKSNodeGroup: {KeyAWSEKS, KeyAWSVPC},
 	KeyAWSEC2:          {KeyAWSVPC},
 	KeyGCPCompute:      {KeyGCPVPC},
@@ -368,6 +376,7 @@ var PresetKeyMap = map[ComponentKey]string{
 	KeyAWSEKS:                  "eks",
 	KeyAWSECS:                  "ecs",
 	KeyAWSLambda:               "lambda",
+	KeyAWSSageMaker:            "sagemaker",
 	KeyAWSALB:                  "alb",
 	KeyAWSCloudfront:           "cloudfront",
 	KeyAWSWAF:                  "waf",
@@ -503,6 +512,7 @@ var AllComponentKeys = []ComponentKey{
 	KeyAWSRoute53,
 	KeyAWSS3,
 	KeyAWSSQS,
+	KeyAWSSageMaker,
 	KeyAWSSecretsManager,
 	KeyAWSVPC,
 	KeyAWSWAF,
@@ -682,6 +692,31 @@ func DefaultWiring(selected map[ComponentKey]bool, k ComponentKey, comps *Compon
 			wi.RawHCL["subnet_ids"] = vpc + ".private_subnet_ids"
 			wi.RawHCL["security_group_ids"] = "[]"
 			wi.Names = append(wi.Names, "enable_vpc", "vpc_id", "subnet_ids", "security_group_ids")
+		}
+
+	case KeyAWSSageMaker:
+		// SageMaker domains demand vpc_id + subnet_ids on every shape
+		// (AWS provider 6.x required arguments). The composer's
+		// ImplicitDependencies entry guarantees KeyAWSVPC is selected
+		// whenever KeyAWSSageMaker is — so the vpcRef wiring is always
+		// satisfiable here.
+		//
+		// We prefer private subnets when available; on a Public-VPC stack
+		// (no private subnets) we fall back to public subnets so the
+		// resource at least gets a non-empty list. The studio app ENIs
+		// only need outbound network so public subnets work for both
+		// PublicInternetOnly and VpcOnly modes — VpcOnly callers who want
+		// strict private-only egress should switch the upstream VPC off
+		// "Public VPC" so private subnets are provisioned.
+		if hasVPC {
+			vpc := vpcRef(selected)
+			wi.RawHCL["vpc_id"] = vpc + ".vpc_id"
+			if isPublicVPC(comps) {
+				wi.RawHCL["subnet_ids"] = vpc + ".public_subnet_ids"
+			} else {
+				wi.RawHCL["subnet_ids"] = vpc + ".private_subnet_ids"
+			}
+			wi.Names = append(wi.Names, "vpc_id", "subnet_ids")
 		}
 
 	case KeyAWSEKSNodeGroup:

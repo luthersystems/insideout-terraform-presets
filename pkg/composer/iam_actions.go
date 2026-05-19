@@ -38,6 +38,24 @@ var AWSIAMActions = map[ComponentKey][]string{
 	KeyAWSEKSNodeGroup:         {"eks:CreateNodegroup"},
 	KeyAWSECS:                  {"ecs:CreateCluster", "ecs:CreateService"},
 	KeyAWSLambda:               {"lambda:CreateFunction"},
+	// SageMaker Studio (#615). Domain + user-profile CREATE + the IAM
+	// execution role / inline policy + the workspace S3 bucket setup
+	// (versioning / encryption / public-access block). PassRole is needed
+	// so the SageMaker control plane can assume the execution role we
+	// create. Specific create permissions catch the fail-fast surface
+	// before terraform hits AWS.
+	KeyAWSSageMaker: {
+		"iam:AttachRolePolicy",
+		"iam:CreateRole",
+		"iam:PassRole",
+		"iam:PutRolePolicy",
+		"s3:CreateBucket",
+		"s3:PutBucketPublicAccessBlock",
+		"s3:PutBucketVersioning",
+		"s3:PutEncryptionConfiguration",
+		"sagemaker:CreateDomain",
+		"sagemaker:CreateUserProfile",
+	},
 	KeyAWSALB:                  {"elasticloadbalancing:CreateLoadBalancer", "elasticloadbalancing:CreateTargetGroup"},
 	KeyAWSCloudfront:           {"cloudfront:CreateDistribution"},
 	KeyAWSWAF:                  {"wafv2:CreateWebACL"},
