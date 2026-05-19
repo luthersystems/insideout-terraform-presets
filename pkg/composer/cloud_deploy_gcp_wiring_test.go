@@ -54,6 +54,21 @@ func requireTfvarAssignment(t *testing.T, tfvars, key, value, msg string) {
 	require.True(t, matched, "%s\n--- tfvars ---\n%s", msg, tfvars)
 }
 
+// requireNoTfvarAssignment is the inverse of requireTfvarAssignment: it
+// pins that no top-level `<key> =` assignment exists in tfvars. Uses the
+// same anchored regex shape so it's robust to the HCL pretty-printer's
+// column-alignment padding (a substring like `"<key> "` would otherwise
+// false-match `"<key>      = "` for any wider-aligned file). Also robust
+// to false matches on `<key>_suffix` keys because the `\s*=` anchor
+// requires the next non-whitespace character to be `=`.
+func requireNoTfvarAssignment(t *testing.T, tfvars, key, msg string) {
+	t.Helper()
+	pattern := `(?m)^` + regexp.QuoteMeta(key) + `\s*=`
+	matched, err := regexp.MatchString(pattern, tfvars)
+	require.NoError(t, err, "regexp compile error for %q", pattern)
+	require.False(t, matched, "%s\n--- tfvars ---\n%s", msg, tfvars)
+}
+
 // TestMapper_GCPCloudDeploy_DefaultConfig pins the no-config path. When
 // cfg.GCPCloudDeploy is nil the mapper MUST emit no Cloud Deploy specific
 // tfvars — the preset's variables.tf defaults are the source of truth
