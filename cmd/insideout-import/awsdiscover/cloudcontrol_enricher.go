@@ -222,10 +222,22 @@ func (e *cloudControlEnricher) fetchAndMap(ctx context.Context, get cloudControl
 	if identifier == "" {
 		return nil, fmt.Errorf("cloudcontrol enricher: cannot derive identifier from Identity (Address=%q)", identity.Address)
 	}
+	// Cloud Control GetResource is a regional API. The enricher's
+	// default client is pinned to the discoverer's primary region, so a
+	// resource discovered in another region (multi-region scans stamp
+	// Identity.Region) must override the per-call region — otherwise
+	// GetResource queries the wrong region and returns ResourceNotFound,
+	// dropping the resource's Attrs entirely (#640 follow-up, live-
+	// confirmed against cross-region aws_lambda_function).
+	var getOpts []func(*cloudcontrol.Options)
+	if identity.Region != "" {
+		region := identity.Region
+		getOpts = append(getOpts, func(o *cloudcontrol.Options) { o.Region = region })
+	}
 	out, err := get(ctx, &cloudcontrol.GetResourceInput{
 		TypeName:   aws.String(e.cfnType),
 		Identifier: aws.String(identifier),
-	})
+	}, getOpts...)
 	if err != nil {
 		if isCloudControlNotFound(err) {
 			return nil, fmt.Errorf("cloudcontrol enricher: %s %q: %w", e.cfnType, identifier, ErrNotFound)
@@ -252,6 +264,18 @@ func (e *cloudControlEnricher) fetchAndMap(ctx context.Context, get cloudControl
 		}
 		rawProps = normalized
 	}
+	// #640 follow-up — generic CFN array-shaped tag fix. CFN serializes
+	// Tags as a list-of-{Key,Value} for most services, but the generated
+	// struct types `tags` as a map; a list on a map field hard-fails
+	// encoding/json and aborts the whole UnmarshalAttrs. flattenTagListsForType
+	// reflects the registered struct and flattens the list to a map.
+	// Idempotent with any per-type flattenTagList Normalizer (see
+	// cloudcontrol_normalizers.go).
+	flattened, err := flattenTagListsForType(e.resourceType, rawProps)
+	if err != nil {
+		return nil, fmt.Errorf("cloudcontrol enricher: flatten tags %s %q: %w", e.cfnType, identifier, err)
+	}
+	rawProps = flattened
 
 	// Convert CamelCase property keys to snake_case so the json tags on
 	// the registered Layer-1 struct can match. The unmarshal would
@@ -267,6 +291,16 @@ func (e *cloudControlEnricher) fetchAndMap(ctx context.Context, get cloudControl
 		return nil, fmt.Errorf("cloudcontrol enricher: parse properties for %s %q: %w", e.cfnType, identifier, err)
 	}
 	shaped := shapeCFNForLayer1(props)
+	// #640 follow-up — generic CFN-object-on-block-slice fix. CFN
+	// serializes singleton nested configs as plain objects, but the
+	// generated Layer-1 struct types repeated nested blocks as slices
+	// (`tf:"<name>,blocks"`). An object on a slice field hard-fails
+	// encoding/json and aborts the whole UnmarshalAttrs, dropping every
+	// attribute. wrapObjectBlocksForType reflects the registered struct
+	// and wraps each such object into a one-element list. Idempotent
+	// with any per-type wrapObjectAsList Normalizer (see
+	// cloudcontrol_block_wrap.go).
+	shaped = wrapObjectBlocksForType(e.resourceType, shaped)
 	shapedJSON, err := json.Marshal(shaped)
 	if err != nil {
 		return nil, fmt.Errorf("cloudcontrol enricher: re-marshal snake_case for %s %q: %w", e.cfnType, identifier, err)

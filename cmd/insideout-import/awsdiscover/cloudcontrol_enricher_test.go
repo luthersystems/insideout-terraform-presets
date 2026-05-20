@@ -106,12 +106,14 @@ func TestShapeCFNForLayer1Recursive(t *testing.T) {
 // TypeName / Identifier without an AWS account.
 type fakeCCGet struct {
 	gotInput *cloudcontrol.GetResourceInput
-	props    string // raw JSON for Properties; "" → nil Properties
+	gotOpts  []func(*cloudcontrol.Options) // per-call option overrides (region threading)
+	props    string                        // raw JSON for Properties; "" → nil Properties
 	err      error
 }
 
-func (f *fakeCCGet) call(_ context.Context, in *cloudcontrol.GetResourceInput, _ ...func(*cloudcontrol.Options)) (*cloudcontrol.GetResourceOutput, error) {
+func (f *fakeCCGet) call(_ context.Context, in *cloudcontrol.GetResourceInput, opts ...func(*cloudcontrol.Options)) (*cloudcontrol.GetResourceOutput, error) {
 	f.gotInput = in
+	f.gotOpts = opts
 	if f.err != nil {
 		return nil, f.err
 	}
@@ -124,6 +126,18 @@ func (f *fakeCCGet) call(_ context.Context, in *cloudcontrol.GetResourceInput, _
 			Properties: aws.String(f.props),
 		},
 	}, nil
+}
+
+// optsRegion applies the captured per-call option overrides to a zero
+// cloudcontrol.Options and reports the resulting Region — "" when no
+// override was passed. Lets region-threading tests assert that
+// fetchAndMap pinned GetResource to the resource's own region.
+func (f *fakeCCGet) optsRegion() string {
+	var o cloudcontrol.Options
+	for _, fn := range f.gotOpts {
+		fn(&o)
+	}
+	return o.Region
 }
 
 // TestCloudControlEnricher_Enrich_LogGroup exercises the full Enrich

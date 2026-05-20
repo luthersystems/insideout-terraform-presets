@@ -38,6 +38,7 @@ package awsdiscover
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported/generated"
@@ -616,6 +617,89 @@ func verbatimMapField(outerKey, innerKey string) Normalizer {
 		outer[innerKey] = map[string]any{verbatimMarkerKey: inner}
 		return encodeObject(m)
 	}
+}
+
+// flattenTagListsForType is the generic, reflection-driven counterpart
+// of the per-type flattenTagList Normalizer (#640 follow-up). It runs on
+// the raw Cloud Control JSON for tfType and flattens a CFN
+// list-of-{Key,Value} tag set that lands on the struct's map-typed
+// `tags` field into the flat map shape that field expects.
+//
+// The bug it closes is the tag-shape sibling of the object-on-block-
+// slice crash: CloudFormation serializes Tags as `[{Key,Value},...]`
+// for most modern services, but the generated Layer-1 struct types
+// `tags` as map[string]*Value[string]. A list landing on a map-typed
+// field hard-fails encoding/json with "cannot unmarshal array into Go
+// struct field ....tags of type map[...]", which aborts the *entire*
+// generated.UnmarshalAttrs call — so the whole resource's Attrs drop to
+// nil (reliable #1620 tags variant; live-confirmed against ~16 AWS
+// types incl. aws_lambda_function, aws_security_group, aws_lb, aws_vpc).
+//
+// Why generic: per-type flattenTagList("Tags") registration is
+// drift-prone — every newly registered taggable type reintroduces the
+// crash until someone adds the line. The map-vs-block distinction is
+// already encoded structurally (the struct field's Go kind), so one
+// reflection check covers every current and future type.
+//
+// Runs pre-shape (raw CFN JSON), so the verbatim-marker wrapping
+// flattenTagList applies survives into shapeCFNForLayer1 and the
+// operator-chosen tag keys are not camelToSnake-mangled. Idempotent
+// with any per-type flattenTagList already in the chain: a tag set
+// already flattened to a map (or wrapped under the verbatim marker) is
+// not a JSON list, so the list-shape guard below skips it.
+//
+// Scoped to the field named `tags`: that is the universal Terraform tag
+// attribute, and restricting to it avoids mis-flattening an exotic
+// non-tag map field whose CFN value is legitimately a list. Services
+// that surface tags under a bespoke CFN key (BackupVaultTags,
+// BackupPlanTags) keep their per-type extractors.
+func flattenTagListsForType(tfType string, raw json.RawMessage) (json.RawMessage, error) {
+	goType, _, ok := generated.Lookup(tfType)
+	if !ok || !hasStringMapField(goType, "tags") {
+		return raw, nil
+	}
+	m, err := decodeObject(raw)
+	if err != nil {
+		return nil, fmt.Errorf("flattenTagListsForType(%q): %w", tfType, err)
+	}
+	if m == nil {
+		return raw, nil
+	}
+	cur := raw
+	for k, v := range m {
+		if _, isList := v.([]any); !isList {
+			continue
+		}
+		if camelToSnake(k) != "tags" {
+			continue
+		}
+		if cur, err = flattenTagList(k)(cur); err != nil {
+			return nil, err
+		}
+	}
+	return cur, nil
+}
+
+// hasStringMapField reports whether goType (a registered Layer-1 struct,
+// or a pointer to one) has a map-typed field whose `tf:` attribute name
+// is tfName — i.e. the resource carries a `tags`-style flat map field.
+func hasStringMapField(goType reflect.Type, tfName string) bool {
+	for goType != nil && goType.Kind() == reflect.Pointer {
+		goType = goType.Elem()
+	}
+	if goType == nil || goType.Kind() != reflect.Struct {
+		return false
+	}
+	for i := 0; i < goType.NumField(); i++ {
+		f := goType.Field(i)
+		if f.Type.Kind() != reflect.Map {
+			continue
+		}
+		if name, _ := tfTagKind(f.Tag.Get("tf")); name == tfName {
+			return true
+		}
+	}
+	return false
 }
 
 // decodeObject is the shared parse step. Returns (nil, nil) for an
