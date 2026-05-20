@@ -60,42 +60,62 @@ resource "aws_iam_role" "bedrock_kb" {
   }
 }
 
+# The role's inline policy is assembled from one always-on statement plus
+# two optional ones. bedrock:InvokeModel is unconditional — it is the whole
+# point of the role for the plain model-invocation use case, and keeps the
+# policy non-empty (aws_iam_role_policy rejects an empty Statement list).
+# The S3 and AOSS statements are appended only when their ARN is supplied:
+# they are Knowledge Base concerns (an S3 data source to ingest from, an
+# AOSS collection to grant data-plane access on) and have no purpose for a
+# role that only invokes models.
+locals {
+  bedrock_invoke_statement = {
+    Action = [
+      "bedrock:InvokeModel"
+    ]
+    Effect = "Allow"
+    # KB ingestion calls the embedding model; downstream consumers
+    # of the KB typically invoke the chat model through the same role.
+    Resource = [
+      "arn:aws:bedrock:${var.region}::foundation-model/${var.model_id}",
+      "arn:aws:bedrock:${var.region}::foundation-model/${var.embedding_model_id}",
+    ]
+  }
+
+  bedrock_s3_statements = var.s3_bucket_arn == null ? [] : [
+    {
+      Action = [
+        "s3:ListBucket",
+        "s3:GetObject"
+      ]
+      Effect = "Allow"
+      Resource = [
+        var.s3_bucket_arn,
+        "${var.s3_bucket_arn}/*"
+      ]
+    }
+  ]
+
+  bedrock_aoss_statements = var.opensearch_collection_arn == null ? [] : [
+    {
+      Action   = ["aoss:APIAccessAll"]
+      Effect   = "Allow"
+      Resource = var.opensearch_collection_arn
+    }
+  ]
+}
+
 resource "aws_iam_role_policy" "bedrock_kb" {
   name = "${var.project}-bedrock-policy"
   role = aws_iam_role.bedrock_kb.id
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [
-      {
-        Action = [
-          "bedrock:InvokeModel"
-        ]
-        Effect = "Allow"
-        # KB ingestion calls the embedding model; downstream consumers
-        # of the KB typically invoke the chat model through the same role.
-        Resource = [
-          "arn:aws:bedrock:${var.region}::foundation-model/${var.model_id}",
-          "arn:aws:bedrock:${var.region}::foundation-model/${var.embedding_model_id}",
-        ]
-      },
-      {
-        Action = [
-          "s3:ListBucket",
-          "s3:GetObject"
-        ]
-        Effect = "Allow"
-        Resource = [
-          var.s3_bucket_arn,
-          "${var.s3_bucket_arn}/*"
-        ]
-      },
-      {
-        Action   = ["aoss:APIAccessAll"]
-        Effect   = "Allow"
-        Resource = var.opensearch_collection_arn
-      }
-    ]
+    Statement = concat(
+      [local.bedrock_invoke_statement],
+      local.bedrock_s3_statements,
+      local.bedrock_aoss_statements,
+    )
   })
 }
 
