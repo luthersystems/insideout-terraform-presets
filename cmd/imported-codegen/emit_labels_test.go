@@ -109,6 +109,101 @@ func TestBuildLabelsMap_KnownEntries(t *testing.T) {
 	}
 }
 
+// TestBuildLabelsMap_CarriesParentTfType pins that the emitted labels
+// artifact carries the parentTfType field for child resource types and
+// leaves it empty for standalone types. This is the contract reliable's
+// `/import` wizard depends on (reliable#1617) — without the field in the
+// generated JSON the UI has no way to fold child tiles into their
+// parent.
+func TestBuildLabelsMap_CarriesParentTfType(t *testing.T) {
+	t.Parallel()
+	got := buildLabelsMap()
+
+	cases := []struct {
+		tfType     string
+		wantParent string // "" => must be a standalone type
+	}{
+		// Child types — parentTfType must be populated.
+		{tfType: "aws_s3_bucket_versioning", wantParent: "aws_s3_bucket"},
+		{tfType: "aws_s3_bucket_public_access_block", wantParent: "aws_s3_bucket"},
+		{tfType: "aws_route_table", wantParent: "aws_vpc"},
+		{tfType: "aws_vpc_security_group_ingress_rule", wantParent: "aws_security_group"},
+		{tfType: "aws_kms_alias", wantParent: "aws_kms_key"},
+		{tfType: "aws_cloudwatch_log_stream", wantParent: "aws_cloudwatch_log_group"},
+		{tfType: "aws_iam_role_policy_attachment", wantParent: "aws_iam_role"},
+		{tfType: "aws_db_parameter_group", wantParent: "aws_db_instance"},
+		// Standalone types — parentTfType must be the zero string.
+		{tfType: "aws_s3_bucket", wantParent: ""},
+		{tfType: "aws_vpc", wantParent: ""},
+		{tfType: "aws_dynamodb_table", wantParent: ""},
+	}
+	for _, tc := range cases {
+		entry, ok := got[tc.tfType]
+		if !ok {
+			t.Errorf("%s: missing from emitted labels map", tc.tfType)
+			continue
+		}
+		if entry.ParentTfType != tc.wantParent {
+			t.Errorf("%s: ParentTfType = %q, want %q", tc.tfType, entry.ParentTfType, tc.wantParent)
+		}
+	}
+}
+
+// TestRunLabels_OmitsEmptyParentTfType pins that the JSON-on-disk drops
+// the parentTfType key for standalone types (omitempty) but emits it for
+// child types. This locks the wire shape downstream consumers parse — a
+// standalone entry stays a two-key object, a child entry gains the third
+// key.
+func TestRunLabels_OmitsEmptyParentTfType(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	out := filepath.Join(dir, "labels.json")
+	if code := runLabels([]string{"--output", out}); code != 0 {
+		t.Fatalf("runLabels exit code = %d, want 0", code)
+	}
+	buf, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatalf("read output: %v", err)
+	}
+	// Decode into raw maps so we can assert key presence/absence rather
+	// than the struct's zero-value default.
+	var raw map[string]map[string]any
+	if err := json.Unmarshal(buf, &raw); err != nil {
+		t.Fatalf("unmarshal output: %v", err)
+	}
+
+	child, ok := raw["aws_s3_bucket_versioning"]
+	if !ok {
+		t.Fatal("aws_s3_bucket_versioning missing from emitted JSON")
+	}
+	if got := child["parentTfType"]; got != "aws_s3_bucket" {
+		t.Errorf("aws_s3_bucket_versioning: parentTfType key = %v, want %q", got, "aws_s3_bucket")
+	}
+
+	// A child entry keeps the existing two keys plus the new one.
+	if _, present := child["label"]; !present {
+		t.Error("aws_s3_bucket_versioning: label key missing")
+	}
+	if _, present := child["iconKey"]; !present {
+		t.Error("aws_s3_bucket_versioning: iconKey key missing")
+	}
+
+	standalone, ok := raw["aws_s3_bucket"]
+	if !ok {
+		t.Fatal("aws_s3_bucket missing from emitted JSON")
+	}
+	if _, present := standalone["parentTfType"]; present {
+		t.Errorf("aws_s3_bucket: parentTfType key present, want omitted (omitempty)")
+	}
+	// omitempty must drop only parentTfType — the other two keys stay.
+	if _, present := standalone["label"]; !present {
+		t.Error("aws_s3_bucket: label key missing")
+	}
+	if _, present := standalone["iconKey"]; !present {
+		t.Error("aws_s3_bucket: iconKey key missing")
+	}
+}
+
 // TestUnionDiscoverTypes_SortedAndDeduped pins the shared helper's
 // guarantee that the union slice is sorted and contains no duplicates.
 // Downstream subcommands depend on this for deterministic output.
