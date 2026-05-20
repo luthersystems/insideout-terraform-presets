@@ -28,10 +28,7 @@ import (
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
 
-const (
-	re2ViewTFType    = "aws_resourceexplorer2_view"
-	re2ViewAssetType = "resource-explorer-2:view"
-)
+const re2ViewTFType = "aws_resourceexplorer2_view"
 
 // resourceExplorer2ViewClient is the narrow subset of the Resource
 // Explorer 2 SDK the view discoverer uses. Mirrors the per-service

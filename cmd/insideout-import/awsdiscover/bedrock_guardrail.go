@@ -19,10 +19,7 @@ import (
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
 
-const (
-	bedrockGuardrailTFType    = "aws_bedrock_guardrail"
-	bedrockGuardrailAssetType = "bedrock:guardrail"
-)
+const bedrockGuardrailTFType = "aws_bedrock_guardrail"
 
 // bedrockGuardrailClient is the narrow subset of the bedrock (runtime) SDK
 // the guardrail discoverer uses. Tag fetches go through ListTagsForResource
