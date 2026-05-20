@@ -260,6 +260,21 @@ var ModulePath = map[ComponentKey]string{
 
 // ImplicitDependencies defines components that must be automatically added
 // if a certain component is selected.
+//
+// Entries here are HARD dependencies only: the selected component's preset
+// literally will not compose without the dependency (a required input with
+// no source, a module reference that resolves to nothing). "Commonly used
+// together" is NOT a dependency — that is a recommendation and belongs in
+// the conversational layer, not here. Registering a soft pairing as a hard
+// dep silently re-selects a component the user explicitly removed (see the
+// Bedrock→OpenSearch removal below).
+//
+// Bedrock is deliberately absent: the aws/bedrock preset's s3_bucket_arn
+// and opensearch_collection_arn inputs are optional (default null). A
+// Bedrock-only stack composes to a model-invocation role + guardrails;
+// S3 and OpenSearch join only when the user selects them for the
+// Knowledge Base use case, and DefaultWiring already wires them
+// conditionally on that selection.
 var ImplicitDependencies = map[ComponentKey][]ComponentKey{
 	KeyAWSALB:          {KeyAWSVPC},
 	KeyGCPLoadbalancer: {KeyGCPVPC},
@@ -269,7 +284,6 @@ var ImplicitDependencies = map[ComponentKey][]ComponentKey{
 	KeyAWSElastiCache:  {KeyAWSVPC},
 	KeyGCPMemorystore:  {KeyGCPVPC},
 	KeyAWSOpenSearch:   {KeyAWSVPC},
-	KeyAWSBedrock:      {KeyAWSS3, KeyAWSOpenSearch},
 	KeyAWSCloudfront:   {KeyAWSALB},
 	KeyAWSEKS:          {KeyAWSVPC},
 	KeyAWSECS:          {KeyAWSVPC},

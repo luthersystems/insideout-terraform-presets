@@ -1,19 +1,11 @@
 package composer
 
 import (
-	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/hashicorp/terraform-config-inspect/tfconfig"
 	"github.com/stretchr/testify/require"
-)
-
-// awsBedrockCollectionArnRegex mirrors the validation regex baked into
-// aws/bedrock/variables.tf in this repo (landed in #69). If that regex
-// tightens, the preview stub below must also tighten.
-var awsBedrockCollectionArnRegex = regexp.MustCompile(
-	`^arn:aws[a-z-]*:aoss:[a-z0-9-]+:[0-9]{12}:collection/[a-z0-9]+$`,
 )
 
 // These tests cover composer-side wiring for the AOSS/Bedrock preset
@@ -108,54 +100,100 @@ func TestMapper_OpenSearchDeploymentTypeOverride(t *testing.T) {
 	// serverless override).
 }
 
-// TestMapper_BedrockPreviewStub locks in the preview-safe AOSS ARN stub
-// the mapper supplies so ComposeSingle can satisfy the preset's AOSS regex
-// validation and validateRequired.
-func TestMapper_BedrockPreviewStub(t *testing.T) {
+// TestMapper_BedrockNoKBStub confirms the mapper does NOT inject the
+// Knowledge Base inputs (s3_bucket_arn / opensearch_collection_arn) for a
+// Bedrock-only preview. Both preset inputs are optional (default null) since
+// the Bedrock→{S3,OpenSearch} implicit dependency was removed — a plain
+// model-invocation role needs neither. The mapper used to inject a stub
+// AOSS ARN because the inputs were required + regex-validated; that stub is
+// gone.
+func TestMapper_BedrockNoKBStub(t *testing.T) {
 	m := DefaultMapper{}
 
-	t.Run("stub emitted when absent", func(t *testing.T) {
-		vals, err := m.BuildModuleValues(
-			KeyAWSBedrock,
-			&Components{AWSBedrock: ptrBool(true)},
-			&Config{},
-			"demo", "us-east-1",
-		)
-		require.NoError(t, err)
+	vals, err := m.BuildModuleValues(
+		KeyAWSBedrock,
+		&Components{AWSBedrock: ptrBool(true)},
+		&Config{},
+		"demo", "us-east-1",
+	)
+	require.NoError(t, err)
 
-		stub, ok := vals["opensearch_collection_arn"]
-		require.True(t, ok, "mapper must supply opensearch_collection_arn stub for preview")
-		stubStr, isStr := stub.(string)
-		require.True(t, isStr, "stub must be a string")
-		require.True(t, strings.HasPrefix(stubStr, "arn:aws:aoss:"),
-			"stub must be AOSS-shaped (got %q)", stubStr)
-		require.Contains(t, stubStr, ":collection/",
-			"stub must include :collection/ segment required by the preset regex")
-		require.Regexp(t, awsBedrockCollectionArnRegex, stubStr,
-			"stub must satisfy the preset's AOSS-collection-ARN regex exactly")
-
-		// AWS's documentation-placeholder account ID. Pinned to
-		// 123456789012 specifically so a careless refactor to a random
-		// 12-digit value doesn't silently pass the shape regex.
-		require.Contains(t, stubStr, ":123456789012:",
-			"stub account ID must be AWS's documentation placeholder 123456789012")
-	})
+	_, hasOS := vals["opensearch_collection_arn"]
+	require.False(t, hasOS,
+		"mapper must not inject opensearch_collection_arn — it is an optional KB input")
+	_, hasS3 := vals["s3_bucket_arn"]
+	require.False(t, hasS3,
+		"mapper must not inject s3_bucket_arn — it is an optional KB input")
 }
 
-// TestMapper_BedrockPreviewStub_DoesNotOverwrite confirms that in a full
-// stack compose — where DefaultWiring populates `opensearch_collection_arn`
-// with a real `module.aws_opensearch.collection_arn` reference — the mapper
-// does NOT clobber it with the preview stub. `BuildModuleValues` runs
-// before wiring is applied and shares the same `vals` map, so the guard
-// `if _, ok := vals["opensearch_collection_arn"]; !ok { … }` is the
-// invariant to protect. A regression here would put a bogus hardcoded ARN
-// into every deployed Bedrock stack.
-func TestMapper_BedrockPreviewStub_DoesNotOverwrite(t *testing.T) {
-	// Directly exercise the mapper contract: if the key is already
-	// present, don't replace it. We can't easily seed `vals` from outside
-	// BuildModuleValues today, but ComposeStack's wiring does it via
-	// `block.Raw` — so the equivalent test is end-to-end: verify the
-	// composed main.tf has the real reference (not the stub).
+// TestComposeSingle_BedrockOnly_NoKBDepsRequired locks the core fix: a
+// standalone Bedrock module composes without S3 or OpenSearch. Before the
+// inputs were made optional, ComposeSingle(Bedrock) failed validateRequired
+// on the two missing KB ARNs (which is why the mapper stub existed).
+func TestComposeSingle_BedrockOnly_NoKBDepsRequired(t *testing.T) {
+	t.Parallel()
+
+	c := newTestClient()
+	out, err := c.ComposeSingle(ComposeSingleOpts{
+		Cloud:   "aws",
+		Key:     KeyAWSBedrock,
+		Comps:   &Components{AWSBedrock: ptrBool(true)},
+		Cfg:     &Config{},
+		Project: "demo",
+		Region:  "us-east-1",
+	})
+	require.NoError(t, err,
+		"ComposeSingle(Bedrock) must succeed with no S3/OpenSearch — KB inputs are optional")
+
+	bedrockTfvars := string(out["/aws_bedrock.auto.tfvars"])
+	// The optional KB inputs must not be set to a fabricated value — the
+	// preset defaults them to null and the role composes as invoke-only.
+	require.NotContains(t, bedrockTfvars, "composerpreview",
+		"no fabricated preview ARN may appear in a Bedrock-only compose")
+	require.NotContains(t, bedrockTfvars, "opensearch_collection_arn",
+		"opensearch_collection_arn must be left unset (null default) for a Bedrock-only compose")
+}
+
+// TestComposeStack_BedrockOnly_NoImplicitKBDeps verifies that selecting
+// Bedrock in a stack no longer drags S3 + OpenSearch in via
+// ImplicitDependencies. The user explicitly removing OpenSearch from a
+// Bedrock stack was being silently undone by the implicit-dependency
+// resolver — this is the regression guard for that bug.
+func TestComposeStack_BedrockOnly_NoImplicitKBDeps(t *testing.T) {
+	t.Parallel()
+
+	c := newTestClient()
+	out, err := c.ComposeStack(ComposeStackOpts{
+		Cloud:        "aws",
+		SelectedKeys: []ComponentKey{KeyAWSBedrock},
+		Comps:        &Components{AWSBedrock: ptrBool(true)},
+		Cfg:          &Config{},
+		Project:      "demo",
+		Region:       "us-east-1",
+	})
+	require.NoError(t, err)
+
+	mainTF := string(out["/main.tf"])
+	// No S3 or OpenSearch module should have been pulled into the stack.
+	require.NotContains(t, mainTF, `module "aws_s3"`,
+		"Bedrock alone must not implicitly pull in the S3 module")
+	require.NotContains(t, mainTF, `module "aws_opensearch"`,
+		"Bedrock alone must not implicitly pull in the OpenSearch module")
+	// And therefore no KB wiring.
+	require.NotContains(t, mainTF, "opensearch_collection_arn",
+		"a Bedrock-only stack must not wire opensearch_collection_arn")
+	require.NotContains(t, mainTF, "s3_bucket_arn",
+		"a Bedrock-only stack must not wire s3_bucket_arn")
+}
+
+// TestComposeStack_BedrockWiresRealAOSSArn confirms that when the user DOES
+// select OpenSearch + S3 alongside Bedrock (the Knowledge Base use case),
+// the composed stack wires the real module outputs — no stub, no fabricated
+// ARN. This is the KB-path counterpart to
+// TestComposeStack_BedrockOnly_NoImplicitKBDeps.
+func TestComposeStack_BedrockWiresRealAOSSArn(t *testing.T) {
+	t.Parallel()
+
 	c := newTestClient()
 	out, err := c.ComposeStack(ComposeStackOpts{
 		Cloud: "aws",
@@ -178,18 +216,16 @@ func TestMapper_BedrockPreviewStub_DoesNotOverwrite(t *testing.T) {
 	mainTF := string(out["/main.tf"])
 	bedrockTfvars := string(out["/aws_bedrock.auto.tfvars"])
 
-	// The composed module block must carry the real wiring, not the stub.
+	// The composed module block must carry the real wiring.
 	require.Contains(t, mainTF,
 		`opensearch_collection_arn = module.aws_opensearch.collection_arn`,
-		"stack composition must wire the real AOSS collection_arn, not the stub")
+		"KB-path stack composition must wire the real AOSS collection_arn")
 
-	// The preview-stub value must not appear anywhere — neither in the
-	// module block nor in .auto.tfvars for Bedrock. `block.Raw` wins over
-	// mapper vals in ComposeStack, so the stub should never reach the tfvars.
+	// No fabricated preview ARN may appear anywhere.
 	require.NotContains(t, mainTF, "composerpreview",
-		"preview stub must not leak into a composed stack's main.tf")
+		"no fabricated preview ARN may leak into a composed stack's main.tf")
 	require.NotContains(t, bedrockTfvars, "composerpreview",
-		"preview stub must not leak into a composed stack's tfvars")
+		"no fabricated preview ARN may leak into a composed stack's tfvars")
 }
 
 // TestGenerateProvidersTF_DiscoveryUnion verifies that discovered child

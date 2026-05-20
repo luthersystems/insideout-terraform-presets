@@ -726,19 +726,12 @@ func (m DefaultMapper) BuildModuleValues(
 				vals["embedding_model_id"] = cfg.AWSBedrock.EmbeddingModelID
 			}
 		}
-		// In stacks, wiring supplies s3_bucket_arn and opensearch_collection_arn.
-		// For single-module preview compose there is no opensearch module in
-		// the bundle, and the preset's regex validation rejects anything that
-		// isn't an AOSS collection ARN. Provide a well-formed stub that never
-		// reaches a live account — account ID 123456789012 is AWS's
-		// documentation placeholder, and the "composer-preview" collection
-		// name makes it obvious in logs / generated tfvars that this is not
-		// a real ARN.
-		if _, ok := vals["opensearch_collection_arn"]; !ok {
-			// The preset's regex requires [a-z0-9]+ with no hyphens for the
-			// collection name segment.
-			vals["opensearch_collection_arn"] = "arn:aws:aoss:us-east-1:123456789012:collection/composerpreview"
-		}
+		// s3_bucket_arn and opensearch_collection_arn are optional (default
+		// null) Knowledge Base inputs. In a full stack DefaultWiring supplies
+		// them from module.aws_s3 / module.aws_opensearch when those
+		// components are selected. For single-module preview compose they are
+		// simply left unset — the preset defaults them to null and the role
+		// composes as a plain model-invocation role. No stub needed.
 
 	case KeyAWSLambda:
 		vals["runtime"] = "nodejs20.x" // Default to nodejs
