@@ -406,12 +406,13 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 		TagsFromProperties:     tagsFromKey("Tags"),
 	},
 	{
-		TFType:                 "aws_subnet",
-		CloudFormationType:     "AWS::EC2::Subnet",
-		Slug:                   "subnet",
-		ImportIDFromIdentifier: passthroughImportID,
-		NameHintFromProperties: passthroughIdentifierName,
-		TagsFromProperties:     tagsFromKey("Tags"),
+		TFType:                  "aws_subnet",
+		CloudFormationType:      "AWS::EC2::Subnet",
+		Slug:                    "subnet",
+		ImportIDFromIdentifier:  passthroughImportID,
+		NameHintFromProperties:  passthroughIdentifierName,
+		NativeIDsFromProperties: vpcIDNativeIDs,
+		TagsFromProperties:      tagsFromKey("Tags"),
 	},
 	{
 		TFType:                 "aws_security_group",
@@ -527,12 +528,13 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 		TagsFromProperties: tagsFromKey("Tags"),
 	},
 	{
-		TFType:                 "aws_route_table",
-		CloudFormationType:     "AWS::EC2::RouteTable",
-		Slug:                   "route_table",
-		ImportIDFromIdentifier: passthroughImportID,
-		NameHintFromProperties: passthroughIdentifierName,
-		TagsFromProperties:     tagsFromKey("Tags"),
+		TFType:                  "aws_route_table",
+		CloudFormationType:      "AWS::EC2::RouteTable",
+		Slug:                    "route_table",
+		ImportIDFromIdentifier:  passthroughImportID,
+		NameHintFromProperties:  passthroughIdentifierName,
+		NativeIDsFromProperties: vpcIDNativeIDs,
+		TagsFromProperties:      tagsFromKey("Tags"),
 	},
 	{
 		TFType:                 "aws_network_acl",
@@ -663,12 +665,16 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 	// RDS
 	// =====================================================================
 	{
-		TFType:                  "aws_db_instance",
-		CloudFormationType:      "AWS::RDS::DBInstance",
-		Slug:                    "db_instance",
-		ImportIDFromIdentifier:  passthroughImportID,
-		NameHintFromProperties:  nameOrIdentifier("DBInstanceIdentifier"),
-		NativeIDsFromProperties: arnUnderKey("DBInstanceArn"),
+		TFType:                 "aws_db_instance",
+		CloudFormationType:     "AWS::RDS::DBInstance",
+		Slug:                   "db_instance",
+		ImportIDFromIdentifier: passthroughImportID,
+		NameHintFromProperties: nameOrIdentifier("DBInstanceIdentifier"),
+		// Also carries DBParameterGroupName as a reverse foreign key so
+		// the #650 parent-instance resolver can link an
+		// aws_db_parameter_group child back to the instance that uses
+		// it (the parameter group's own model has no instance back-ref).
+		NativeIDsFromProperties: arnAndKey("DBInstanceArn", "DBParameterGroupName", "db_parameter_group"),
 		TagsFromProperties:      tagsFromKey("Tags"),
 	},
 	{
@@ -1899,12 +1905,17 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 		// aws_elasticache_replication_group matches — passthrough.
 		// Verified against terraform-provider-aws v6.x docs and live
 		// CC probe.
-		TFType:                  "aws_elasticache_replication_group",
-		CloudFormationType:      "AWS::ElastiCache::ReplicationGroup",
-		Slug:                    "elasticache_replication_group",
-		ImportIDFromIdentifier:  passthroughImportID,
-		NameHintFromProperties:  nameOrIdentifier("ReplicationGroupId"),
-		NativeIDsFromProperties: arnUnderKey("Arn"),
+		TFType:                 "aws_elasticache_replication_group",
+		CloudFormationType:     "AWS::ElastiCache::ReplicationGroup",
+		Slug:                   "elasticache_replication_group",
+		ImportIDFromIdentifier: passthroughImportID,
+		NameHintFromProperties: nameOrIdentifier("ReplicationGroupId"),
+		// Also carries CacheParameterGroupName as a reverse foreign key
+		// so the #650 parent-instance resolver can link an
+		// aws_elasticache_parameter_group child back to the replication
+		// group that uses it (the parameter group's own model has no
+		// replication-group back-ref).
+		NativeIDsFromProperties: arnAndKey("Arn", "CacheParameterGroupName", "cache_parameter_group"),
 		TagsFromProperties:      tagsFromKey("Tags"),
 	},
 
@@ -2748,6 +2759,41 @@ func isAWSManagedPolicyARN(arn string) bool {
 		}
 	}
 	return false
+}
+
+// vpcIDNativeIDs is a NativeIDsFromProperties extractor that lifts the
+// CloudFormation model's VpcId into NativeIDs["vpc_id"] — the foreign
+// key the #650 parent-instance resolver joins against an aws_vpc's
+// ImportID. Returns nil when VpcId is absent so callers see "no native
+// IDs" rather than an empty map.
+func vpcIDNativeIDs(_ string, props map[string]any) map[string]string {
+	if vpc := extractString(props, "VpcId"); vpc != "" {
+		return map[string]string{"vpc_id": vpc}
+	}
+	return nil
+}
+
+// arnAndKey returns a NativeIDsFromProperties extractor that stamps the
+// arnKey property under "arn" and, when present, the extraKey property
+// under extraNativeKey. It is used by parent resources that also need to
+// carry a reverse foreign key for the #650 parent-instance resolver —
+// e.g. an aws_db_instance carrying its DBParameterGroupName so an
+// aws_db_parameter_group child can be linked back to the instance that
+// references it. Returns nil when neither property is present.
+func arnAndKey(arnKey, extraKey, extraNativeKey string) func(string, map[string]any) map[string]string {
+	return func(_ string, props map[string]any) map[string]string {
+		out := map[string]string{}
+		if arn := extractString(props, arnKey); arn != "" {
+			out["arn"] = arn
+		}
+		if extra := extractString(props, extraKey); extra != "" {
+			out[extraNativeKey] = extra
+		}
+		if len(out) == 0 {
+			return nil
+		}
+		return out
+	}
 }
 
 // tagsFromKey returns a TagsFromProperties extractor that reads tags

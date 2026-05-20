@@ -166,6 +166,45 @@ func TestValidateImportedResources_Codes(t *testing.T) {
 			},
 			wantCodes: []string{"imported_resource_decode_failed"},
 		},
+		{
+			name:  "dangling parent reference",
+			cloud: "aws",
+			irs: []imported.ImportedResource{
+				{
+					Identity: imported.ResourceIdentity{
+						Cloud:         "aws",
+						Type:          "aws_s3_bucket_versioning",
+						Address:       "aws_s3_bucket_versioning.x",
+						ImportID:      "x",
+						ParentAddress: "aws_s3_bucket.gone",
+					},
+					Tier: imported.TierImportedFlat,
+				},
+			},
+			wantCodes: []string{"imported_resource_dangling_parent"},
+		},
+		{
+			name:  "valid parent reference passes",
+			cloud: "aws",
+			irs: []imported.ImportedResource{
+				{
+					Identity: imported.ResourceIdentity{Cloud: "aws", Type: "aws_s3_bucket", Address: "aws_s3_bucket.b", ImportID: "b"},
+					Tier:     imported.TierImportedFlat,
+				},
+				{
+					Identity: imported.ResourceIdentity{
+						Cloud:         "aws",
+						Type:          "aws_s3_bucket_versioning",
+						Address:       "aws_s3_bucket_versioning.b",
+						ImportID:      "b",
+						ParentAddress: "aws_s3_bucket.b",
+					},
+					Tier: imported.TierImportedFlat,
+				},
+			},
+			wantCodes: nil,
+			denyCodes: []string{"imported_resource_dangling_parent"},
+		},
 	}
 
 	for _, tc := range cases {

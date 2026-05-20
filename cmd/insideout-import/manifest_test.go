@@ -172,6 +172,50 @@ func TestReadManifest_HappyPath(t *testing.T) {
 	}
 }
 
+// TestManifest_ParentAddressRoundTrips pins that the #650 per-instance
+// parent reference survives a writeManifest → readManifest cycle: the
+// child carries its resolved ParentAddress, and a resource with no
+// parent has it absent (the omitempty JSON tag) rather than serialized
+// as an empty string.
+func TestManifest_ParentAddressRoundTrips(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	bucket := validIR("aws_s3_bucket", "aws_s3_bucket.b", "b")
+	child := validIR("aws_s3_bucket_versioning", "aws_s3_bucket_versioning.b", "b")
+	child.Identity.ParentAddress = "aws_s3_bucket.b"
+
+	path, _, err := writeManifest(dir, "aws", []imported.ImportedResource{bucket, child})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := readManifest(path, "aws")
+	if err != nil {
+		t.Fatal(err)
+	}
+	byAddr := map[string]imported.ImportedResource{}
+	for _, r := range got {
+		byAddr[r.Identity.Address] = r
+	}
+	if pa := byAddr["aws_s3_bucket_versioning.b"].Identity.ParentAddress; pa != "aws_s3_bucket.b" {
+		t.Errorf("child ParentAddress=%q, want aws_s3_bucket.b", pa)
+	}
+	if pa := byAddr["aws_s3_bucket.b"].Identity.ParentAddress; pa != "" {
+		t.Errorf("parent-less resource ParentAddress=%q, want empty", pa)
+	}
+
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), `"parent_address": "aws_s3_bucket.b"`) {
+		t.Errorf("manifest JSON missing parent_address key:\n%s", raw)
+	}
+	// The parent-less bucket must not serialize an empty parent_address.
+	if strings.Count(string(raw), `"parent_address"`) != 1 {
+		t.Errorf("expected exactly one parent_address key (omitempty); got:\n%s", raw)
+	}
+}
+
 // TestReadManifest_MalformedJSONIncludesOffset pins that a syntactically
 // invalid manifest surfaces a json.SyntaxError offset in the error message.
 // Operators editing the file by hand need a position pointer; without it

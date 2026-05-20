@@ -553,6 +553,12 @@ func (a *AWSDiscoverer) DiscoverTypes(ctx context.Context, types []string, args 
 	for _, r := range results {
 		all = append(all, r...)
 	}
+	// Parent-instance resolution (#650): now that the full cross-
+	// discoverer set is assembled, join each discovered child to the
+	// specific parent instance it belongs to and stamp the parent's
+	// Terraform Address onto Identity.ParentAddress. Pure in-memory join
+	// — no AWS calls.
+	resolveParentAddresses(all)
 	args.Emitter.StageFinish("discover", len(all), time.Since(stageStart))
 	return all, nil
 }

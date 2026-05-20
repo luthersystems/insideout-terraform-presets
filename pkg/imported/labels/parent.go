@@ -34,6 +34,8 @@
 // ParentTfType returns ("", false) for it.
 package labels
 
+import "sort"
+
 // parentTfTypes is the declarative childTfType → parentTfType registry.
 //
 // Each key is a Terraform resource type that the discovery pipeline can
@@ -117,4 +119,19 @@ func ParentTfType(childTfType string) (string, bool) {
 func HasParent(childTfType string) bool {
 	_, ok := parentTfTypes[childTfType]
 	return ok
+}
+
+// ChildTfTypes returns the sorted list of every registered child type —
+// the keys of the parentTfType registry. It exists so consumers in other
+// packages (notably the awsdiscover parent-instance resolver) can pin a
+// cross-package consistency invariant: every type-level child edge must
+// have a corresponding instance-level foreign-key resolution rule, or be
+// explicitly exempted. Returns a fresh slice; callers may mutate it.
+func ChildTfTypes() []string {
+	out := make([]string, 0, len(parentTfTypes))
+	for child := range parentTfTypes {
+		out = append(out, child)
+	}
+	sort.Strings(out)
+	return out
 }
