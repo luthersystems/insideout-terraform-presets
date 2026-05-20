@@ -304,6 +304,37 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 		NameHintFromProperties:  nameOrIdentifier("FunctionName"),
 		NativeIDsFromProperties: arnUnderKey("Arn"),
 		TagsFromProperties:      tagsFromKey("Tags"),
+		// Normalizer: CFN AWS::Lambda::Function models each singleton
+		// nested config (Environment, TracingConfig, VpcConfig, …) as a
+		// plain JSON *object*, but the Terraform provider exposes them as
+		// nested *blocks* — the generated Layer-1 struct types each as a
+		// slice (`[]AWSLambdaFunctionEnvironment`, `tf:"environment,blocks"`).
+		// An object landing on a slice-typed field makes encoding/json
+		// hard-fail, which aborts the WHOLE generated.UnmarshalAttrs call
+		// and drops every attribute — so the imported aws_lambda_function
+		// came back with empty Attrs and `terraform plan` then failed on
+		// the missing required `function_name` / `role` args
+		// (reliable #1620, sibling of presets #638/#639). wrapObjectAsList
+		// rewrites each object into a one-element list so the typed
+		// unmarshal succeeds and every scalar argument is captured too.
+		//
+		// verbatimMapField runs FIRST for Environment.Variables: the
+		// Variables keys are environment-variable NAMES (operator data),
+		// and the generic camelToSnake recursion would mangle them
+		// (`LOG_LEVEL` → `log__level`). The verbatim marker opts that
+		// sub-tree out of key renaming — same mechanism flattenTagList
+		// uses for tag keys.
+		Normalizer: chain(
+			verbatimMapField("Environment", "Variables"),
+			wrapObjectAsList("DeadLetterConfig"),
+			wrapObjectAsList("Environment"),
+			wrapObjectAsList("EphemeralStorage"),
+			wrapObjectAsList("ImageConfig"),
+			wrapObjectAsList("LoggingConfig"),
+			wrapObjectAsList("SnapStart"),
+			wrapObjectAsList("TracingConfig"),
+			wrapObjectAsList("VpcConfig"),
+		),
 	},
 
 	// =====================================================================

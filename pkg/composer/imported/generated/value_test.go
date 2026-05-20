@@ -45,6 +45,74 @@ func TestValueJSON_Literal(t *testing.T) {
 	assert.False(t, got.Null)
 }
 
+// TestValueJSON_CoercesStringEncodedScalars pins the tolerant literal
+// decode: CloudFormation / Cloud Control serialize bool and numeric
+// scalars as JSON strings ("true", "443", "1.5"), and a strict decode
+// onto a Value[bool] / Value[int64] / Value[float64] field would
+// hard-fail and abort the whole resource unmarshal. The retry against
+// the unquoted bytes must land the value.
+func TestValueJSON_CoercesStringEncodedScalars(t *testing.T) {
+	t.Parallel()
+
+	var b Value[bool]
+	require.NoError(t, json.Unmarshal([]byte(`{"literal":"true"}`), &b),
+		"string-encoded bool literal must coerce")
+	require.NotNil(t, b.Literal)
+	assert.True(t, *b.Literal)
+
+	var bf Value[bool]
+	require.NoError(t, json.Unmarshal([]byte(`{"literal":"false"}`), &bf))
+	require.NotNil(t, bf.Literal)
+	assert.False(t, *bf.Literal)
+
+	var i Value[int64]
+	require.NoError(t, json.Unmarshal([]byte(`{"literal":"443"}`), &i),
+		"string-encoded int literal must coerce")
+	require.NotNil(t, i.Literal)
+	assert.Equal(t, int64(443), *i.Literal)
+
+	var f Value[float64]
+	require.NoError(t, json.Unmarshal([]byte(`{"literal":"1.5"}`), &f),
+		"string-encoded float literal must coerce")
+	require.NotNil(t, f.Literal)
+	assert.InEpsilon(t, 1.5, *f.Literal, 1e-9)
+}
+
+// TestValueJSON_NativeScalarsUnaffected pins that the coercion is purely
+// additive: a literal that already decodes strictly is never routed
+// through the retry, and a native string literal is unchanged.
+func TestValueJSON_NativeScalarsUnaffected(t *testing.T) {
+	t.Parallel()
+
+	var b Value[bool]
+	require.NoError(t, json.Unmarshal([]byte(`{"literal":true}`), &b))
+	require.NotNil(t, b.Literal)
+	assert.True(t, *b.Literal)
+
+	// A native string literal that happens to read like a bool must stay
+	// the string "true", not be coerced.
+	var s Value[string]
+	require.NoError(t, json.Unmarshal([]byte(`{"literal":"true"}`), &s))
+	require.NotNil(t, s.Literal)
+	assert.Equal(t, "true", *s.Literal)
+}
+
+// TestValueJSON_UncoercibleStringStillErrors pins that a quoted string
+// that is not a valid scalar of the target type still surfaces the
+// original decode error rather than being silently swallowed.
+func TestValueJSON_UncoercibleStringStillErrors(t *testing.T) {
+	t.Parallel()
+
+	var b Value[bool]
+	err := json.Unmarshal([]byte(`{"literal":"hello"}`), &b)
+	require.Error(t, err, `"hello" is not a bool — must still fail`)
+	assert.Contains(t, err.Error(), "decoding literal")
+
+	var i Value[int64]
+	err = json.Unmarshal([]byte(`{"literal":""}`), &i)
+	require.Error(t, err, "empty string is not an int — must still fail")
+}
+
 func TestValueJSON_Null(t *testing.T) {
 	t.Parallel()
 	v := NullOf[int64]()

@@ -38,6 +38,7 @@ package awsdiscover
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported/generated"
@@ -506,6 +507,199 @@ func jsonStringifyField(from, to string) Normalizer {
 		delete(m, from)
 		return encodeObject(m)
 	}
+}
+
+// wrapObjectAsList returns a Normalizer that wraps a top-level key whose
+// CloudFormation value is a single JSON *object* into a one-element JSON
+// *array* (`{...}` → `[{...}]`).
+//
+// This bridges a CloudFormation-vs-Terraform shape gap for nested
+// single-instance config blocks. CloudFormation models a singleton
+// nested config (e.g. `AWS::Lambda::Function.Environment`,
+// `.TracingConfig`, `.VpcConfig`) as a plain JSON object, but the
+// Terraform provider exposes the same config as a nested *block* — the
+// generated Layer-1 struct types it as a slice (`[]AWSLambdaFunctionEnvironment`,
+// `tf:"environment,blocks"`). An object landing on a slice-typed field
+// makes `encoding/json` hard-fail with "cannot unmarshal object into Go
+// struct field ... of type []...", which aborts the *entire*
+// generated.UnmarshalAttrs call — so a single un-normalized block field
+// drops the whole resource's Attrs to nil, not just the offending key
+// (reliable #1620: imported aws_lambda_function came back with empty
+// Attrs, and terraform plan then failed on the missing required
+// `function_name` / `role` args — presets #638/#639).
+//
+// Idempotent / fail-open:
+//   - absent key → pass through unchanged.
+//   - value already a list → pass through unchanged (re-run safe, and a
+//     CFN array-typed property such as a *plural* `FileSystemConfigs`
+//     stays untouched).
+//   - value is a scalar or null → pass through unchanged; the downstream
+//     unmarshal will surface the genuine shape error rather than this
+//     helper masking it.
+//
+// Operates only on the named top-level key. The wrapped object's inner
+// keys are NOT renamed here — shapeCFNForLayer1 still recurses into the
+// single list element and applies the camelToSnake projection, so CFN
+// `{"Variables": {...}}` reaches the generated struct as
+// `{"variables": {...}}`.
+func wrapObjectAsList(key string) Normalizer {
+	return func(in json.RawMessage) (json.RawMessage, error) {
+		if key == "" {
+			return in, nil
+		}
+		m, err := decodeObject(in)
+		if err != nil {
+			return nil, fmt.Errorf("wrapObjectAsList(%q): %w", key, err)
+		}
+		if m == nil {
+			return in, nil
+		}
+		raw, ok := m[key]
+		if !ok || raw == nil {
+			return in, nil
+		}
+		obj, ok := raw.(map[string]any)
+		if !ok {
+			// Already a list, or a scalar — leave it for the downstream
+			// unmarshal to accept (list) or reject (scalar).
+			return in, nil
+		}
+		m[key] = []any{obj}
+		return encodeObject(m)
+	}
+}
+
+// verbatimMapField returns a Normalizer that marks a nested
+// user-data map so its keys bypass the CFN-CamelCase → snake_case
+// projection — the same mechanism flattenTagList uses for tag keys.
+//
+// The path is `outerKey` (a top-level object) → `innerKey` (a map whose
+// keys are operator-chosen identifiers). The classic case is
+// `AWS::Lambda::Function.Environment.Variables`: the Variables keys are
+// environment-variable NAMES (`LOG_LEVEL`, `DB_HOST`), and the generic
+// shapeCFNForLayer1 recursion would camelToSnake-mangle them
+// (`LOG_LEVEL` → `log__level`), corrupting the emitted HCL. Wrapping the
+// inner map under verbatimMarkerKey opts that sub-tree out of renaming
+// while still applying the scalar-leaf {"literal": …} wrap the generated
+// `map[string]*Value[string]` field decodes.
+//
+// Order matters: run this BEFORE wrapObjectAsList for the same outer key
+// — it expects `outerKey` to still hold a plain object, and leaves the
+// object-vs-list wrapping to the later step.
+//
+// Idempotent / fail-open: an absent outer key, an outer value that is
+// not an object, an absent inner key, an inner value that is not an
+// object, or an inner value already wrapped under the verbatim marker
+// all pass through unchanged.
+func verbatimMapField(outerKey, innerKey string) Normalizer {
+	return func(in json.RawMessage) (json.RawMessage, error) {
+		if outerKey == "" || innerKey == "" {
+			return in, nil
+		}
+		m, err := decodeObject(in)
+		if err != nil {
+			return nil, fmt.Errorf("verbatimMapField(%q, %q): %w", outerKey, innerKey, err)
+		}
+		if m == nil {
+			return in, nil
+		}
+		outer, ok := m[outerKey].(map[string]any)
+		if !ok {
+			return in, nil
+		}
+		inner, ok := outer[innerKey].(map[string]any)
+		if !ok {
+			return in, nil
+		}
+		if _, wrapped := inner[verbatimMarkerKey]; wrapped && len(inner) == 1 {
+			return in, nil
+		}
+		outer[innerKey] = map[string]any{verbatimMarkerKey: inner}
+		return encodeObject(m)
+	}
+}
+
+// flattenTagListsForType is the generic, reflection-driven counterpart
+// of the per-type flattenTagList Normalizer (#640 follow-up). It runs on
+// the raw Cloud Control JSON for tfType and flattens a CFN
+// list-of-{Key,Value} tag set that lands on the struct's map-typed
+// `tags` field into the flat map shape that field expects.
+//
+// The bug it closes is the tag-shape sibling of the object-on-block-
+// slice crash: CloudFormation serializes Tags as `[{Key,Value},...]`
+// for most modern services, but the generated Layer-1 struct types
+// `tags` as map[string]*Value[string]. A list landing on a map-typed
+// field hard-fails encoding/json with "cannot unmarshal array into Go
+// struct field ....tags of type map[...]", which aborts the *entire*
+// generated.UnmarshalAttrs call — so the whole resource's Attrs drop to
+// nil (reliable #1620 tags variant; live-confirmed against ~16 AWS
+// types incl. aws_lambda_function, aws_security_group, aws_lb, aws_vpc).
+//
+// Why generic: per-type flattenTagList("Tags") registration is
+// drift-prone — every newly registered taggable type reintroduces the
+// crash until someone adds the line. The map-vs-block distinction is
+// already encoded structurally (the struct field's Go kind), so one
+// reflection check covers every current and future type.
+//
+// Runs pre-shape (raw CFN JSON), so the verbatim-marker wrapping
+// flattenTagList applies survives into shapeCFNForLayer1 and the
+// operator-chosen tag keys are not camelToSnake-mangled. Idempotent
+// with any per-type flattenTagList already in the chain: a tag set
+// already flattened to a map (or wrapped under the verbatim marker) is
+// not a JSON list, so the list-shape guard below skips it.
+//
+// Scoped to the field named `tags`: that is the universal Terraform tag
+// attribute, and restricting to it avoids mis-flattening an exotic
+// non-tag map field whose CFN value is legitimately a list. Services
+// that surface tags under a bespoke CFN key (BackupVaultTags,
+// BackupPlanTags) keep their per-type extractors.
+func flattenTagListsForType(tfType string, raw json.RawMessage) (json.RawMessage, error) {
+	goType, _, ok := generated.Lookup(tfType)
+	if !ok || !hasStringMapField(goType, "tags") {
+		return raw, nil
+	}
+	m, err := decodeObject(raw)
+	if err != nil {
+		return nil, fmt.Errorf("flattenTagListsForType(%q): %w", tfType, err)
+	}
+	if m == nil {
+		return raw, nil
+	}
+	cur := raw
+	for k, v := range m {
+		if _, isList := v.([]any); !isList {
+			continue
+		}
+		if camelToSnake(k) != "tags" {
+			continue
+		}
+		if cur, err = flattenTagList(k)(cur); err != nil {
+			return nil, err
+		}
+	}
+	return cur, nil
+}
+
+// hasStringMapField reports whether goType (a registered Layer-1 struct,
+// or a pointer to one) has a map-typed field whose `tf:` attribute name
+// is tfName — i.e. the resource carries a `tags`-style flat map field.
+func hasStringMapField(goType reflect.Type, tfName string) bool {
+	for goType != nil && goType.Kind() == reflect.Pointer {
+		goType = goType.Elem()
+	}
+	if goType == nil || goType.Kind() != reflect.Struct {
+		return false
+	}
+	for i := 0; i < goType.NumField(); i++ {
+		f := goType.Field(i)
+		if f.Type.Kind() != reflect.Map {
+			continue
+		}
+		if name, _ := tfTagKind(f.Tag.Get("tf")); name == tfName {
+			return true
+		}
+	}
+	return false
 }
 
 // decodeObject is the shared parse step. Returns (nil, nil) for an
