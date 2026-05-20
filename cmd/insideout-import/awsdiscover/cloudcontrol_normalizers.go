@@ -440,6 +440,74 @@ func stripComputedOnlyForType(tfType string) Normalizer {
 	}
 }
 
+// jsonStringifyField returns a Normalizer that takes the top-level
+// `from` key — whose CloudFormation value is a JSON *object* (or array)
+// — JSON-encodes it into a *string*, and stores that string at the new
+// top-level `to` key. The original `from` key is removed.
+//
+// This bridges the CloudFormation-vs-Terraform shape gap for
+// policy-document attributes. CloudFormation surfaces e.g.
+// `AWS::IAM::ManagedPolicy.PolicyDocument` as a nested JSON object, but
+// the Terraform `aws_iam_policy.policy` attribute is a JSON-encoded
+// *string* (`*Value[string]` on the generated Layer-1 struct). A plain
+// renameField would land an object on a string field and the
+// downstream UnmarshalAttrs would either drop it or error; without the
+// stringify the required `policy` argument is missing entirely and
+// `terraform plan` fails with "Missing required argument:
+// policy" (reliable #1621). renameField alone can't bridge it —
+// an object landing on a `*Value[string]` field is dropped.
+//
+// The post-camelToSnake projection turns `to` into its snake_case form
+// (e.g. `Policy` → `policy`), and shapeCFNForLayer1 wraps the string
+// scalar in the `{"literal": …}` envelope the generated `Value[string]`
+// field decodes. `to` is therefore passed PascalCase by callers so the
+// projection and scalar-wrap both fire.
+//
+// Idempotent / fail-open: if `from` is absent the payload passes
+// through unchanged; if `to` is already present the existing value
+// wins (the stringify is a no-op rather than an overwrite — matches the
+// renameField convention). A `from` value that is already a string is
+// moved to `to` verbatim (no double-encoding) so a re-run, or a CFN
+// payload that already returns the document as a string, stays stable.
+func jsonStringifyField(from, to string) Normalizer {
+	return func(in json.RawMessage) (json.RawMessage, error) {
+		if from == "" || to == "" {
+			return in, nil
+		}
+		m, err := decodeObject(in)
+		if err != nil {
+			return nil, fmt.Errorf("jsonStringifyField(%q, %q): %w", from, to, err)
+		}
+		if m == nil {
+			return in, nil
+		}
+		raw, ok := m[from]
+		if !ok || raw == nil {
+			return in, nil
+		}
+		if _, exists := m[to]; exists {
+			// Target already populated — leave it; don't guess which is
+			// authoritative. Still drop `from` so a stray object doesn't
+			// reach the Layer-1 unmarshal.
+			delete(m, from)
+			return encodeObject(m)
+		}
+		switch v := raw.(type) {
+		case string:
+			// Already a string — move verbatim, no double-encoding.
+			m[to] = v
+		default:
+			encoded, err := json.Marshal(v)
+			if err != nil {
+				return nil, fmt.Errorf("jsonStringifyField(%q, %q): encode value: %w", from, to, err)
+			}
+			m[to] = string(encoded)
+		}
+		delete(m, from)
+		return encodeObject(m)
+	}
+}
+
 // decodeObject is the shared parse step. Returns (nil, nil) for an
 // empty / null payload so helpers can pass-through cleanly without
 // special-casing.

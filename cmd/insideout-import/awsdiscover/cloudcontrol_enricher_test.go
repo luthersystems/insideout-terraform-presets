@@ -685,3 +685,58 @@ func TestCloudControlEnricher_Enrich_RawAttrs_IsValidJSONWithSnakeKeys(t *testin
 		assert.Equalf(t, strings.ToLower(k), k, "expected lowercase top-level key, got %q", k)
 	}
 }
+
+// TestCloudControlEnricher_IAMPolicyDocumentToPolicy is the end-to-end
+// pin for reliable #1621 bug 2: a CloudFormation AWS::IAM::ManagedPolicy
+// payload surfaces the policy as a nested `PolicyDocument` object, but
+// Terraform's required `aws_iam_policy.policy` argument is a
+// JSON-encoded string. The jsonStringifyField normalizer wired into
+// cloudControlTypeConfigs must bridge the gap so the enriched typed
+// Attrs carry a non-empty `policy` string. Pre-fix the enriched
+// AWSIAMPolicy.Policy was nil and the composed resource block omitted
+// the required argument, failing terraform plan.
+func TestCloudControlEnricher_IAMPolicyDocumentToPolicy(t *testing.T) {
+	t.Parallel()
+	fake := &fakeCCGet{
+		props: `{
+			"PolicyArn": "arn:aws:iam::123456789012:policy/example",
+			"Path": "/",
+			"Description": "example policy",
+			"PolicyDocument": {
+				"Version": "2012-10-17",
+				"Statement": [
+					{"Effect": "Allow", "Action": "s3:GetObject", "Resource": "*"}
+				]
+			}
+		}`,
+	}
+	// Pull the Normalizer from the production config so a registration
+	// drift (someone dropping the normalizer) fails this test.
+	n := normalizerForCFNType(t, "AWS::IAM::ManagedPolicy")
+	enr := newCloudControlEnricherWithNormalizer("aws_iam_policy", "AWS::IAM::ManagedPolicy", fake.call, n)
+	ir := &imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Type:     "aws_iam_policy",
+			ImportID: "arn:aws:iam::123456789012:policy/example",
+		},
+	}
+	require.NoError(t, enr.Enrich(context.Background(), ir, EnrichClients{}))
+
+	decoded, err := generated.UnmarshalAttrs("aws_iam_policy", ir.Attrs)
+	require.NoError(t, err)
+	pol, ok := decoded.(*generated.AWSIAMPolicy)
+	require.True(t, ok, "decoded type is %T", decoded)
+
+	// The required `policy` argument must be populated as a JSON string.
+	require.NotNil(t, pol.Policy, "policy must be populated post-normalize")
+	require.NotNil(t, pol.Policy.Literal)
+	var doc map[string]any
+	require.NoError(t, json.Unmarshal([]byte(*pol.Policy.Literal), &doc),
+		"policy attribute must hold a valid JSON string")
+	assert.Equal(t, "2012-10-17", doc["Version"])
+
+	// Sibling fields still flow through the generic renamer.
+	require.NotNil(t, pol.Path)
+	require.NotNil(t, pol.Path.Literal)
+	assert.Equal(t, "/", *pol.Path.Literal)
+}

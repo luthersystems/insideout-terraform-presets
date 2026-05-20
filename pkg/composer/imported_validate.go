@@ -1,6 +1,7 @@
 package composer
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -124,6 +125,15 @@ func ValidateImportedResources(cloud string, irs []imported.ImportedResource) []
 				})
 			}
 		}
+
+		// Required-argument completeness is intentionally NOT checked
+		// here — see ValidateImportedEmitReadiness. ValidateImportedResources
+		// runs on the discovery manifest, an INTERMEDIATE artifact whose
+		// resources are still being enriched (dep-chase appends resources,
+		// drift-fix converges, the Cloud Control enricher lands typed
+		// Attrs in a later pass). Required args are guaranteed only at
+		// compose/emit time; gating the manifest writer on them would
+		// reject a perfectly valid mid-pipeline snapshot.
 	}
 
 	for addr, idxs := range addressIndex {
@@ -138,6 +148,71 @@ func ValidateImportedResources(cloud string, irs []imported.ImportedResource) []
 		})
 	}
 
+	return issues
+}
+
+// ValidateImportedEmitReadiness runs the emit-time-only checks on irs:
+// checks that are meaningful only once discovery has finished and the
+// composer is about to render `/imported.tf`. Unlike
+// ValidateImportedResources (which validates the INTERMEDIATE discovery
+// manifest — a snapshot whose resources are still being enriched by
+// dep-chase / drift-fix / Cloud Control passes), this function assumes a
+// final, ready-to-emit resource set.
+//
+// Issue codes:
+//
+//   - imported_resource_missing_required_attr — an emit-eligible resource
+//     is missing one or more schema-Required arguments. EmitImportedTF
+//     renders a `resource {}` block per emit-eligible resource and the
+//     deploy wrapper runs a plain `terraform plan` (no
+//     `-generate-config-out`), so Terraform does NOT backfill required
+//     arguments from the imported state — the resource block must already
+//     carry every Required attribute. A sparse discovery payload (e.g. an
+//     `aws_lambda_function` whose Cloud Control enrichment soft-failed,
+//     leaving Attrs empty) would otherwise emit a partial block that
+//     fails plan with an opaque "Missing required argument". This surfaces
+//     it with the exact missing keys at compose time instead.
+//
+// The check is skipped for resources flagged by ValidateImportedResources
+// for the wrong / unsupported cloud (they are not emitted into this
+// compose) and for removed-block-mode resources (which emit no resource
+// body). compose.go runs this alongside ValidateImportedResources before
+// EmitImportedTF; the discovery manifest writer deliberately does not.
+func ValidateImportedEmitReadiness(cloud string, irs []imported.ImportedResource) []ValidationIssue {
+	if len(irs) == 0 {
+		return nil
+	}
+	want := strings.ToLower(strings.TrimSpace(cloud))
+	var issues []ValidationIssue
+	for i, ir := range irs {
+		if !isImportedTier(ir.Tier) {
+			continue
+		}
+		got := strings.ToLower(strings.TrimSpace(ir.Identity.Cloud))
+		// Wrong / unsupported cloud — not emitted into this compose;
+		// ValidateImportedResources already reports the cloud issue.
+		if got != "aws" && got != "gcp" {
+			continue
+		}
+		if want != "" && got != want {
+			continue
+		}
+		mode := classifyEmitMode(ir)
+		if mode != emitModeResourceImport && mode != emitModeResourceOnly {
+			continue
+		}
+		if missing := missingRequiredAttrs(ir); len(missing) > 0 {
+			issues = append(issues, ValidationIssue{
+				Field: importedField(ir, i),
+				Value: ir.Identity.Type,
+				Code:  "imported_resource_missing_required_attr",
+				Reason: fmt.Sprintf(
+					"imported %s %q is missing required argument(s) %s; discovery did not capture them and Terraform plan will fail — the resource block is not plannable",
+					ir.Identity.Type, ir.Identity.Address, strings.Join(missing, ", ")),
+				Suggestion: "re-run discovery for this resource, or verify the cloud-credential scope can read the resource's full configuration",
+			})
+		}
+	}
 	return issues
 }
 
@@ -264,6 +339,57 @@ func ValidateProvenanceConflicts(cloud string, irs []imported.ImportedResource, 
 	}
 
 	return issues
+}
+
+// missingRequiredAttrs returns the sorted snake_case names of the
+// schema-Required attributes that are absent from ir's discovered
+// attribute bag. Returns nil when the type has no registered schema
+// (fail-open: the long tail of unregistered types runs the opaque-attr
+// fallback and the composer can't reason about their required set), when
+// the type has no Required fields, or when every Required field is
+// present.
+//
+// "Present" means the key appears in the typed Attrs JSON object (the
+// post-discovery payload) OR — for the opaque-attr fallback path — in
+// ir.Attributes. A key whose value is JSON null still counts as present:
+// the composer emits `attr = null`, which Terraform accepts as an
+// explicit value; the un-plannable case this guards against is the key
+// being absent entirely.
+//
+// The synthetic `id` attribute is never treated as required even if a
+// provider schema marks it so — it is stripped from emission by
+// stripResourceIDAttr and belongs only in the `import {}` block.
+func missingRequiredAttrs(ir imported.ImportedResource) []string {
+	_, schema, ok := generated.Lookup(ir.Identity.Type)
+	if !ok {
+		return nil
+	}
+	present := map[string]bool{}
+	if len(ir.Attrs) > 0 {
+		var obj map[string]json.RawMessage
+		if err := json.Unmarshal(ir.Attrs, &obj); err == nil {
+			for k := range obj {
+				present[k] = true
+			}
+		}
+	}
+	for k := range ir.Attributes {
+		present[k] = true
+	}
+	var missing []string
+	for name, fs := range schema {
+		if !fs.Required {
+			continue
+		}
+		if name == computedResourceIDAttr {
+			continue
+		}
+		if !present[name] {
+			missing = append(missing, name)
+		}
+	}
+	sort.Strings(missing)
+	return missing
 }
 
 // isImportedTier reports whether t is a tier that the composer emits as flat

@@ -2,6 +2,7 @@ package composer
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -212,12 +213,34 @@ func classifyEmitMode(ir imported.ImportedResource) emitMode {
 	return emitModeSkip
 }
 
+// computedResourceIDAttr is Terraform's synthetic per-resource
+// identifier attribute. It is exported by every provider's resource
+// schema as Optional+Computed (the historical "id == name" quirk on
+// some types means the provider technically marks it Optional), but it
+// is NEVER valid as an argument inside a `resource {}` block — supplying
+// it makes `terraform plan` fail with "Invalid or unknown key". The
+// discovered import id belongs in the sibling `import {}` block
+// (renderImportBlock), not in the resource body. EmitImportedTF strips
+// this key from every emitted resource body regardless of what the
+// discovery payload or the generated schema says — see stripResourceIDAttr.
+const computedResourceIDAttr = "id"
+
 // emitImportedResourceBody returns the HCL body bytes (no surrounding
 // `resource "..." "..." { ... }` wrapper) for ir. Branches on whether the
 // carrier carries typed Attrs or only opaque Attributes.
+//
+// The `id` attribute is stripped from both paths: discovery (e.g. the
+// Cloud Control enricher) can land the computed `id` into the typed
+// Attrs / opaque Attributes bag, but `id` is never a legal resource
+// argument — it must only ever appear in the `import {}` block. Emitting
+// it produces the malformed-HCL "Invalid or unknown key" plan failure.
 func emitImportedResourceBody(ir imported.ImportedResource) ([]byte, error) {
 	if len(ir.Attrs) > 0 {
-		typed, err := generated.UnmarshalAttrs(ir.Identity.Type, ir.Attrs)
+		attrs, err := stripResourceIDAttr(ir.Attrs)
+		if err != nil {
+			return nil, fmt.Errorf("strip id from typed Attrs for %q: %w", ir.Identity.Type, err)
+		}
+		typed, err := generated.UnmarshalAttrs(ir.Identity.Type, attrs)
 		if err != nil {
 			return nil, fmt.Errorf("decode typed Attrs for %q: %w", ir.Identity.Type, err)
 		}
@@ -228,6 +251,33 @@ func emitImportedResourceBody(ir imported.ImportedResource) ([]byte, error) {
 		return body, nil
 	}
 	return emitOpaqueAttrsBody(ir)
+}
+
+// stripResourceIDAttr removes the top-level `id` key from a typed-Attrs
+// JSON object before it is unmarshalled into a generated Layer-1 struct.
+// Returns the input unchanged when `id` is absent or the payload is not a
+// JSON object (defensive — UnmarshalAttrs will surface a non-object
+// payload as its own error). Operates only on the top level: a nested
+// block legitimately named `id` (none exist in the current schemas, but
+// the carve-out keeps the transform conservative) is untouched.
+func stripResourceIDAttr(raw json.RawMessage) (json.RawMessage, error) {
+	if len(raw) == 0 {
+		return raw, nil
+	}
+	var obj map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &obj); err != nil {
+		// Not a JSON object — leave it for UnmarshalAttrs to reject.
+		return raw, nil //nolint:nilerr // intentional passthrough
+	}
+	if _, ok := obj[computedResourceIDAttr]; !ok {
+		return raw, nil
+	}
+	delete(obj, computedResourceIDAttr)
+	out, err := json.Marshal(obj)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 // emitOpaqueAttrsBody renders ir.Attributes as HCL body. Skips computed-only
@@ -249,6 +299,13 @@ func emitOpaqueAttrsBody(ir imported.ImportedResource) ([]byte, error) {
 	body := f.Body()
 
 	for _, k := range keys {
+		// `id` is never a legal resource argument — it belongs in the
+		// `import {}` block only. Skip it in the opaque path too: the
+		// generated schema marks `id` Optional+Computed, so the
+		// Configurable() gate below would otherwise let it through.
+		if k == computedResourceIDAttr {
+			continue
+		}
 		if hasSchema {
 			if fs, ok := schema[k]; ok && !fs.Configurable() {
 				continue
