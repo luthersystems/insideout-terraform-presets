@@ -806,3 +806,215 @@ func TestJSONStringifyField(t *testing.T) {
 		require.Error(t, err)
 	})
 }
+
+// TestWrapObjectAsList pins the wrapObjectAsList contract: a single CFN
+// object value at the named key is rewrapped into a one-element list so
+// it decodes into a Terraform `,blocks` slice field. Without this the
+// generated.UnmarshalAttrs call hard-fails on the object-vs-slice
+// mismatch and drops the whole resource's Attrs (reliable #1620).
+func TestWrapObjectAsList(t *testing.T) {
+	t.Parallel()
+
+	t.Run("object value is wrapped into a one-element list", func(t *testing.T) {
+		t.Parallel()
+		in := json.RawMessage(`{"Environment":{"Variables":{"FOO":"bar"}}}`)
+		out, err := wrapObjectAsList("Environment")(in)
+		require.NoError(t, err)
+		m := asMap(t, out)
+		list, ok := m["Environment"].([]any)
+		require.Truef(t, ok, "Environment must be a list, got %T", m["Environment"])
+		require.Len(t, list, 1)
+		elem, ok := list[0].(map[string]any)
+		require.True(t, ok)
+		vars, ok := elem["Variables"].(map[string]any)
+		require.True(t, ok, "inner keys must be preserved unchanged")
+		assert.Equal(t, "bar", vars["FOO"])
+	})
+
+	t.Run("absent key is a no-op", func(t *testing.T) {
+		t.Parallel()
+		in := json.RawMessage(`{"FunctionName":"fn"}`)
+		out, err := wrapObjectAsList("Environment")(in)
+		require.NoError(t, err)
+		assert.JSONEq(t, string(in), string(out))
+	})
+
+	t.Run("value already a list passes through unchanged", func(t *testing.T) {
+		t.Parallel()
+		in := json.RawMessage(`{"Environment":[{"Variables":{"FOO":"bar"}}]}`)
+		out, err := wrapObjectAsList("Environment")(in)
+		require.NoError(t, err)
+		assert.JSONEq(t, string(in), string(out),
+			"an already-list value (or a CFN plural array property) must not be re-wrapped")
+	})
+
+	t.Run("scalar value passes through for downstream to reject", func(t *testing.T) {
+		t.Parallel()
+		in := json.RawMessage(`{"Environment":"oops"}`)
+		out, err := wrapObjectAsList("Environment")(in)
+		require.NoError(t, err)
+		assert.JSONEq(t, string(in), string(out),
+			"a scalar must not be masked — the typed unmarshal surfaces the real shape error")
+	})
+
+	t.Run("null value is a no-op", func(t *testing.T) {
+		t.Parallel()
+		in := json.RawMessage(`{"Environment":null}`)
+		out, err := wrapObjectAsList("Environment")(in)
+		require.NoError(t, err)
+		assert.JSONEq(t, string(in), string(out))
+	})
+
+	t.Run("empty key is a no-op", func(t *testing.T) {
+		t.Parallel()
+		in := json.RawMessage(`{"Environment":{"Variables":{}}}`)
+		out, err := wrapObjectAsList("")(in)
+		require.NoError(t, err)
+		assert.JSONEq(t, string(in), string(out))
+	})
+
+	t.Run("idempotent across a re-run", func(t *testing.T) {
+		t.Parallel()
+		in := json.RawMessage(`{"TracingConfig":{"Mode":"Active"}}`)
+		once, err := wrapObjectAsList("TracingConfig")(in)
+		require.NoError(t, err)
+		twice, err := wrapObjectAsList("TracingConfig")(once)
+		require.NoError(t, err)
+		assert.JSONEq(t, string(once), string(twice),
+			"applying the wrapper to an already-wrapped payload must be stable")
+	})
+
+	t.Run("malformed JSON surfaces an error", func(t *testing.T) {
+		t.Parallel()
+		_, err := wrapObjectAsList("Environment")(json.RawMessage(`{not json`))
+		require.Error(t, err)
+	})
+
+	t.Run("only the named key is wrapped", func(t *testing.T) {
+		t.Parallel()
+		in := json.RawMessage(`{"Environment":{"Variables":{}},"VpcConfig":{"SubnetIds":[]}}`)
+		out, err := wrapObjectAsList("Environment")(in)
+		require.NoError(t, err)
+		m := asMap(t, out)
+		_, envIsList := m["Environment"].([]any)
+		assert.True(t, envIsList, "named key must be wrapped")
+		_, vpcIsObj := m["VpcConfig"].(map[string]any)
+		assert.True(t, vpcIsObj, "un-named key must be left untouched")
+	})
+}
+
+// verbatimInner pulls the inner map out of a `outer.inner` path and
+// asserts it is wrapped under the verbatim marker, returning the
+// unwrapped user-data map for further assertions.
+func verbatimInner(t *testing.T, raw json.RawMessage, outerKey, innerKey string) map[string]any {
+	t.Helper()
+	m := asMap(t, raw)
+	outer, ok := m[outerKey].(map[string]any)
+	require.Truef(t, ok, "%s must remain an object, got %T", outerKey, m[outerKey])
+	wrapper, ok := outer[innerKey].(map[string]any)
+	require.Truef(t, ok, "%s.%s must be an object, got %T", outerKey, innerKey, outer[innerKey])
+	inner, ok := wrapper[verbatimMarkerKey].(map[string]any)
+	require.Truef(t, ok, "%s.%s must be wrapped under the verbatim marker", outerKey, innerKey)
+	require.Lenf(t, wrapper, 1, "verbatim wrapper must hold only the marker key")
+	return inner
+}
+
+// TestVerbatimMapField pins verbatimMapField: a nested user-data map
+// (Lambda's Environment.Variables) is marked verbatim so the downstream
+// shapeCFNForLayer1 recursion leaves its keys un-renamed.
+func TestVerbatimMapField(t *testing.T) {
+	t.Parallel()
+
+	t.Run("inner map is wrapped under the verbatim marker", func(t *testing.T) {
+		t.Parallel()
+		in := json.RawMessage(`{"Environment":{"Variables":{"LOG_LEVEL":"info","DBHost":"x"}}}`)
+		out, err := verbatimMapField("Environment", "Variables")(in)
+		require.NoError(t, err)
+		inner := verbatimInner(t, out, "Environment", "Variables")
+		assert.Equal(t, "info", inner["LOG_LEVEL"], "operator key must survive verbatim")
+		assert.Equal(t, "x", inner["DBHost"], "CamelCase operator key must NOT be snake_cased")
+	})
+
+	t.Run("absent outer key is a no-op", func(t *testing.T) {
+		t.Parallel()
+		in := json.RawMessage(`{"FunctionName":"fn"}`)
+		out, err := verbatimMapField("Environment", "Variables")(in)
+		require.NoError(t, err)
+		assert.JSONEq(t, string(in), string(out))
+	})
+
+	t.Run("absent inner key is a no-op", func(t *testing.T) {
+		t.Parallel()
+		in := json.RawMessage(`{"Environment":{"Other":"v"}}`)
+		out, err := verbatimMapField("Environment", "Variables")(in)
+		require.NoError(t, err)
+		assert.JSONEq(t, string(in), string(out))
+	})
+
+	t.Run("non-object outer value is a no-op", func(t *testing.T) {
+		t.Parallel()
+		in := json.RawMessage(`{"Environment":"oops"}`)
+		out, err := verbatimMapField("Environment", "Variables")(in)
+		require.NoError(t, err)
+		assert.JSONEq(t, string(in), string(out))
+	})
+
+	t.Run("non-object inner value is a no-op", func(t *testing.T) {
+		t.Parallel()
+		in := json.RawMessage(`{"Environment":{"Variables":"oops"}}`)
+		out, err := verbatimMapField("Environment", "Variables")(in)
+		require.NoError(t, err)
+		assert.JSONEq(t, string(in), string(out))
+	})
+
+	t.Run("idempotent across a re-run", func(t *testing.T) {
+		t.Parallel()
+		in := json.RawMessage(`{"Environment":{"Variables":{"FOO":"bar"}}}`)
+		once, err := verbatimMapField("Environment", "Variables")(in)
+		require.NoError(t, err)
+		twice, err := verbatimMapField("Environment", "Variables")(once)
+		require.NoError(t, err)
+		assert.JSONEq(t, string(once), string(twice),
+			"re-marking an already-verbatim sub-tree must be stable")
+	})
+
+	t.Run("empty keys are a no-op", func(t *testing.T) {
+		t.Parallel()
+		in := json.RawMessage(`{"Environment":{"Variables":{"FOO":"bar"}}}`)
+		out, err := verbatimMapField("", "Variables")(in)
+		require.NoError(t, err)
+		assert.JSONEq(t, string(in), string(out))
+		out, err = verbatimMapField("Environment", "")(in)
+		require.NoError(t, err)
+		assert.JSONEq(t, string(in), string(out))
+	})
+
+	t.Run("malformed JSON surfaces an error", func(t *testing.T) {
+		t.Parallel()
+		_, err := verbatimMapField("Environment", "Variables")(json.RawMessage(`{not json`))
+		require.Error(t, err)
+	})
+
+	t.Run("composes before wrapObjectAsList without corrupting keys", func(t *testing.T) {
+		t.Parallel()
+		// Replays the production Lambda chain ordering: mark verbatim,
+		// then wrap the object into a singleton list.
+		n := chain(
+			verbatimMapField("Environment", "Variables"),
+			wrapObjectAsList("Environment"),
+		)
+		out, err := n(json.RawMessage(`{"Environment":{"Variables":{"LOG_LEVEL":"info"}}}`))
+		require.NoError(t, err)
+		m := asMap(t, out)
+		list, ok := m["Environment"].([]any)
+		require.Truef(t, ok, "Environment must be a list, got %T", m["Environment"])
+		require.Len(t, list, 1)
+		elem, ok := list[0].(map[string]any)
+		require.True(t, ok)
+		wrapper, ok := elem["Variables"].(map[string]any)
+		require.True(t, ok)
+		inner, ok := wrapper[verbatimMarkerKey].(map[string]any)
+		require.True(t, ok, "verbatim marker must survive the list wrap")
+		assert.Equal(t, "info", inner["LOG_LEVEL"])
+	})
+}
