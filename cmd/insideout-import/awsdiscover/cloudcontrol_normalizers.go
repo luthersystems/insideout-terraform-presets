@@ -508,6 +508,116 @@ func jsonStringifyField(from, to string) Normalizer {
 	}
 }
 
+// wrapObjectAsList returns a Normalizer that wraps a top-level key whose
+// CloudFormation value is a single JSON *object* into a one-element JSON
+// *array* (`{...}` → `[{...}]`).
+//
+// This bridges a CloudFormation-vs-Terraform shape gap for nested
+// single-instance config blocks. CloudFormation models a singleton
+// nested config (e.g. `AWS::Lambda::Function.Environment`,
+// `.TracingConfig`, `.VpcConfig`) as a plain JSON object, but the
+// Terraform provider exposes the same config as a nested *block* — the
+// generated Layer-1 struct types it as a slice (`[]AWSLambdaFunctionEnvironment`,
+// `tf:"environment,blocks"`). An object landing on a slice-typed field
+// makes `encoding/json` hard-fail with "cannot unmarshal object into Go
+// struct field ... of type []...", which aborts the *entire*
+// generated.UnmarshalAttrs call — so a single un-normalized block field
+// drops the whole resource's Attrs to nil, not just the offending key
+// (reliable #1620: imported aws_lambda_function came back with empty
+// Attrs, and terraform plan then failed on the missing required
+// `function_name` / `role` args — presets #638/#639).
+//
+// Idempotent / fail-open:
+//   - absent key → pass through unchanged.
+//   - value already a list → pass through unchanged (re-run safe, and a
+//     CFN array-typed property such as a *plural* `FileSystemConfigs`
+//     stays untouched).
+//   - value is a scalar or null → pass through unchanged; the downstream
+//     unmarshal will surface the genuine shape error rather than this
+//     helper masking it.
+//
+// Operates only on the named top-level key. The wrapped object's inner
+// keys are NOT renamed here — shapeCFNForLayer1 still recurses into the
+// single list element and applies the camelToSnake projection, so CFN
+// `{"Variables": {...}}` reaches the generated struct as
+// `{"variables": {...}}`.
+func wrapObjectAsList(key string) Normalizer {
+	return func(in json.RawMessage) (json.RawMessage, error) {
+		if key == "" {
+			return in, nil
+		}
+		m, err := decodeObject(in)
+		if err != nil {
+			return nil, fmt.Errorf("wrapObjectAsList(%q): %w", key, err)
+		}
+		if m == nil {
+			return in, nil
+		}
+		raw, ok := m[key]
+		if !ok || raw == nil {
+			return in, nil
+		}
+		obj, ok := raw.(map[string]any)
+		if !ok {
+			// Already a list, or a scalar — leave it for the downstream
+			// unmarshal to accept (list) or reject (scalar).
+			return in, nil
+		}
+		m[key] = []any{obj}
+		return encodeObject(m)
+	}
+}
+
+// verbatimMapField returns a Normalizer that marks a nested
+// user-data map so its keys bypass the CFN-CamelCase → snake_case
+// projection — the same mechanism flattenTagList uses for tag keys.
+//
+// The path is `outerKey` (a top-level object) → `innerKey` (a map whose
+// keys are operator-chosen identifiers). The classic case is
+// `AWS::Lambda::Function.Environment.Variables`: the Variables keys are
+// environment-variable NAMES (`LOG_LEVEL`, `DB_HOST`), and the generic
+// shapeCFNForLayer1 recursion would camelToSnake-mangle them
+// (`LOG_LEVEL` → `log__level`), corrupting the emitted HCL. Wrapping the
+// inner map under verbatimMarkerKey opts that sub-tree out of renaming
+// while still applying the scalar-leaf {"literal": …} wrap the generated
+// `map[string]*Value[string]` field decodes.
+//
+// Order matters: run this BEFORE wrapObjectAsList for the same outer key
+// — it expects `outerKey` to still hold a plain object, and leaves the
+// object-vs-list wrapping to the later step.
+//
+// Idempotent / fail-open: an absent outer key, an outer value that is
+// not an object, an absent inner key, an inner value that is not an
+// object, or an inner value already wrapped under the verbatim marker
+// all pass through unchanged.
+func verbatimMapField(outerKey, innerKey string) Normalizer {
+	return func(in json.RawMessage) (json.RawMessage, error) {
+		if outerKey == "" || innerKey == "" {
+			return in, nil
+		}
+		m, err := decodeObject(in)
+		if err != nil {
+			return nil, fmt.Errorf("verbatimMapField(%q, %q): %w", outerKey, innerKey, err)
+		}
+		if m == nil {
+			return in, nil
+		}
+		outer, ok := m[outerKey].(map[string]any)
+		if !ok {
+			return in, nil
+		}
+		inner, ok := outer[innerKey].(map[string]any)
+		if !ok {
+			return in, nil
+		}
+		if _, wrapped := inner[verbatimMarkerKey]; wrapped && len(inner) == 1 {
+			return in, nil
+		}
+		outer[innerKey] = map[string]any{verbatimMarkerKey: inner}
+		return encodeObject(m)
+	}
+}
+
 // decodeObject is the shared parse step. Returns (nil, nil) for an
 // empty / null payload so helpers can pass-through cleanly without
 // special-casing.
