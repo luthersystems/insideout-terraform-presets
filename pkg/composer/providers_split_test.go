@@ -285,6 +285,12 @@ func TestGenerateProvidersTF_GCPNoVariablesImported(t *testing.T) {
 	_, has := res.Files["/variables-imported.tf"]
 	assert.False(t, has,
 		"GCP composes don't reference bootstrap_role_arn/external_id — /variables-imported.tf must not emit")
+	// Sanity: GCP compose still produces /providers.tf. Without this,
+	// a mutation that broke GCP provider generation entirely (so Files
+	// was missing both files) would pass the negative assertion above
+	// for the wrong reason.
+	assert.Contains(t, res.Files, "/providers.tf",
+		"GCP compose must still emit /providers.tf — the absence-of-variables-imported assertion above is meaningless if all provider files are missing")
 }
 
 // TestComposeStackResult_ProvidersUsed_BackwardCompat pins that the new

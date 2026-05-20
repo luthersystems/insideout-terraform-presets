@@ -1475,9 +1475,12 @@ func TestProductionDiscoverDeps_LoadConfigSetsRetryMaxAttempts(t *testing.T) {
 // DiscoverTypes walk (#629) where per-service goroutines share the
 // same per-region CloudControl rate budget.
 //
-// Pinning the literal "adaptive" (not the constant) is intentional —
-// a mutation that re-points discoverRetryMode to RetryModeStandard
-// must fail this test.
+// Pinning against `aws.RetryModeAdaptive` (the SDK constant, imported
+// independently of the production `discoverRetryMode` constant) is
+// intentional — re-reading the production constant would make this
+// test tautological. A mutation that re-points discoverRetryMode to
+// RetryModeStandard fails here because the SDK-imported expectation
+// stays "adaptive".
 func TestProductionDiscoverDeps_LoadConfigSetsRetryModeAdaptive(t *testing.T) {
 	t.Parallel()
 	deps := productionDiscoverDeps()

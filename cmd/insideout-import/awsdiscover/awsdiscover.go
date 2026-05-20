@@ -146,6 +146,15 @@ type AWSDiscoverer struct {
 	// tests override to 0 (disable) or a tiny value to keep wall time
 	// short while still asserting jitter is applied.
 	startupJitter time.Duration
+	// jitterSample produces the per-goroutine startup delay. The
+	// production constructor wires a closure that draws a uniform
+	// sample in [0, startupJitter); tests inject a deterministic
+	// sequence so jitter assertions don't depend on global rand's
+	// seeding policy (math/rand auto-seeds since Go 1.20, but a
+	// future move to math/rand/v2 or an explicit seed would break a
+	// statistical assertion). A nil sampler defaults inside
+	// DiscoverTypes to the same closure shape.
+	jitterSample func() time.Duration
 	// jitterSleep is the seam DiscoverTypes calls before each
 	// goroutine's first per-service Discover. Defaults to
 	// time.Sleep; tests inject a fake that records the per-goroutine
@@ -153,6 +162,17 @@ type AWSDiscoverer struct {
 	// spinning real wall time. Each call receives the sampled
 	// duration for that goroutine.
 	jitterSleep func(time.Duration)
+}
+
+// defaultJitterSample returns a uniformly-random delay in
+// [0, a.startupJitter). Returns 0 when startupJitter <= 0, so callers
+// don't have to guard rand.Int63n against a zero/negative bound (it
+// panics on n <= 0). Used as the default for AWSDiscoverer.jitterSample.
+func (a *AWSDiscoverer) defaultJitterSample() time.Duration {
+	if a.startupJitter <= 0 {
+		return 0
+	}
+	return time.Duration(rand.Int63n(int64(a.startupJitter)))
 }
 
 // NewAWSDiscoverer wires up the production set of AWS discoverers with the
@@ -322,7 +342,7 @@ func NewAWSDiscovererWithConcurrency(cfg aws.Config, maxConcurrency int) *AWSDis
 			ccCfg.TFType, ccCfg.CloudFormationType, nil, normalizer,
 		)
 	}
-	return &AWSDiscoverer{
+	disc := &AWSDiscoverer{
 		defaultRegion:  cfg.Region,
 		byType:         byType,
 		rgtPrefetcher:  newRealRGTPrefetcher(cfg),
@@ -330,6 +350,8 @@ func NewAWSDiscovererWithConcurrency(cfg aws.Config, maxConcurrency int) *AWSDis
 		startupJitter:  defaultDiscoverStartupJitterMax,
 		jitterSleep:    time.Sleep,
 	}
+	disc.jitterSample = disc.defaultJitterSample
+	return disc
 }
 
 // serviceSlugByTFType maps a Terraform resource type to the short,
@@ -488,21 +510,20 @@ func (a *AWSDiscoverer) DiscoverTypes(ctx context.Context, types []string, args 
 	// [0, a.startupJitter) before its first AWS call, spreading the
 	// initial wave so per-service requests don't all align at t=0.
 	//
-	// The sample is drawn here (deterministic-per-goroutine via the
-	// goroutine's index into the rand stream) and the actual sleep is
-	// performed via a.jitterSleep so tests can record the requested
-	// durations without spinning real wall time.
+	// Sampling is delegated to a.jitterSample (defaults to a uniform
+	// draw in [0, a.startupJitter)) and the actual sleep is performed
+	// via a.jitterSleep so tests can inject a deterministic sample
+	// sequence + recorder without spinning real wall time.
 	jitterSleep := a.jitterSleep
 	if jitterSleep == nil {
 		jitterSleep = time.Sleep
 	}
-	jitterMax := a.startupJitter
+	jitterSample := a.jitterSample
+	if jitterSample == nil {
+		jitterSample = a.defaultJitterSample
+	}
 	for i, d := range selected {
-		i, d := i, d
-		var delay time.Duration
-		if jitterMax > 0 {
-			delay = time.Duration(rand.Int63n(int64(jitterMax)))
-		}
+		delay := jitterSample()
 		g.Go(func() error {
 			if delay > 0 {
 				jitterSleep(delay)
