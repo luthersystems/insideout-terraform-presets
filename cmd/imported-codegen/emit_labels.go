@@ -14,9 +14,19 @@ import (
 // tags are lowerCamelCase so the emitted JSON matches the shape
 // downstream consumers (TS UIs) expect verbatim — no per-consumer
 // rename pass required.
+//
+// ParentTfType carries the parent/child relationship from the labels
+// package's parent registry (parent.go). It is the Terraform type of
+// the resource a child is scoped to (e.g. "aws_s3_bucket" for
+// "aws_s3_bucket_versioning"). It is empty — and omitted from the JSON
+// via omitempty — for every standalone, independently-importable type,
+// which is the vast majority. reliable's `/import` wizard reads this to
+// fold child types into their parent's tile instead of rendering them
+// as standalone import tiles (reliable#1617).
 type labelEntry struct {
-	Label   string `json:"label"`
-	IconKey string `json:"iconKey"`
+	Label        string `json:"label"`
+	IconKey      string `json:"iconKey"`
+	ParentTfType string `json:"parentTfType,omitempty"`
 }
 
 // runLabels is the `labels` subcommand: emit a deterministic JSON
@@ -43,9 +53,13 @@ func buildLabelsMap() map[string]labelEntry {
 	types := unionDiscoverTypes()
 	m := make(map[string]labelEntry, len(types))
 	for _, t := range types {
+		// ParentTfType returns ("", false) for standalone types; the
+		// zero string then drops out of the JSON via omitempty.
+		parent, _ := labels.ParentTfType(t)
 		m[t] = labelEntry{
-			Label:   labels.Label(t),
-			IconKey: labels.IconKey(t),
+			Label:        labels.Label(t),
+			IconKey:      labels.IconKey(t),
+			ParentTfType: parent,
 		}
 	}
 	return m
