@@ -250,9 +250,9 @@ func TestSecretManagerSecretEnrich_PopulatesAttrs(t *testing.T) {
 	}
 	ir := &imported.ImportedResource{
 		Identity: imported.ResourceIdentity{
-			Type: "google_secret_manager_secret",
+			Type:     "google_secret_manager_secret",
 			ImportID: "projects/my-project/secrets/api-key",
-			Address: "google_secret_manager_secret.k",
+			Address:  "google_secret_manager_secret.k",
 		},
 	}
 	require.NoError(t, e.Enrich(context.Background(), ir, EnrichClients{SecretManager: &secretmanagerv1.Service{}, ProjectID: "my-project"}))
@@ -293,7 +293,7 @@ func TestSecretManagerSecretEnrich_RoundTripThroughEmitImportedTF(t *testing.T) 
 	ir := imported.ImportedResource{
 		Identity: imported.ResourceIdentity{
 			Cloud: "gcp", Type: "google_secret_manager_secret",
-			Address: "google_secret_manager_secret.api_key",
+			Address:  "google_secret_manager_secret.api_key",
 			ImportID: "projects/my-project/secrets/api-key",
 		},
 		Tier:  imported.TierImportedFlat,

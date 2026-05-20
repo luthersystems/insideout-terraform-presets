@@ -24,15 +24,15 @@ import (
 // production loop would re-issue marker=nil and silently re-read
 // page 0; the recorded sequence catches that).
 type fakeIAMRPAClient struct {
-	rolesPages    []*iam.ListRolesOutput
-	rolesIdx      int
-	rolesErr      error
-	rolesMarkers  []string // Marker value seen on each ListRoles call (in order). "" == nil pointer.
+	rolesPages   []*iam.ListRolesOutput
+	rolesIdx     int
+	rolesErr     error
+	rolesMarkers []string // Marker value seen on each ListRoles call (in order). "" == nil pointer.
 
-	attachedByRole       map[string][]*iam.ListAttachedRolePoliciesOutput
-	attachedIdxByRole    map[string]int
-	attachedErrByRole    map[string]error
-	attachedMarkers      map[string][]string // Marker per ListAttachedRolePolicies call per role
+	attachedByRole    map[string][]*iam.ListAttachedRolePoliciesOutput
+	attachedIdxByRole map[string]int
+	attachedErrByRole map[string]error
+	attachedMarkers   map[string][]string // Marker per ListAttachedRolePolicies call per role
 }
 
 func (f *fakeIAMRPAClient) ListRoles(_ context.Context, in *iam.ListRolesInput, _ ...func(*iam.Options)) (*iam.ListRolesOutput, error) {

@@ -29,10 +29,7 @@ import (
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
 
-const (
-	re2IndexTFType    = "aws_resourceexplorer2_index"
-	re2IndexAssetType = "resource-explorer-2:index"
-)
+const re2IndexTFType = "aws_resourceexplorer2_index"
 
 // resourceExplorer2IndexClient is the narrow subset of the Resource
 // Explorer 2 SDK the index discoverer uses. Mirrors the per-service

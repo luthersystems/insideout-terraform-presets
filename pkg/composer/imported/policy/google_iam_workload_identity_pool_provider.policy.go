@@ -14,11 +14,15 @@ package policy
 // attacker-controlled OIDC issuer issuing arbitrary tokens).
 //
 // The gcp/github_actions preset sets attribute_condition to
-//   assertion.repository == "<owner>/<repo>"
+//
+//	assertion.repository == "<owner>/<repo>"
+//
 // and attribute_mapping to
-//   google.subject = assertion.sub
-//   attribute.repository = assertion.repository
-//   attribute.actor = assertion.actor
+//
+//	google.subject = assertion.sub
+//	attribute.repository = assertion.repository
+//	attribute.actor = assertion.actor
+//
 // — every byte of those values is load-bearing for keyless deploy
 // security.
 //

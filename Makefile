@@ -77,6 +77,15 @@ verify-supported-resources: ## Fail if SUPPORTED_RESOURCES.md is stale (CI gate,
 test: ## Run go test -race for the whole module.
 	$(GO) test -race ./...
 
+.PHONY: go-fmt-check
+go-fmt-check: ## Fail if any tracked Go file is not gofmt-clean (CI gate, #647).
+	@unformatted=$$(gofmt -l $$(git ls-files '*.go')); \
+	  if [ -n "$$unformatted" ]; then \
+	    echo "==> These Go files are not gofmt-clean. Run 'gofmt -w' on them:"; \
+	    echo "$$unformatted"; \
+	    exit 1; \
+	  fi
+
 .PHONY: verify-phantom-schema
 verify-phantom-schema: ## Validate phantom-computed-fields.txt against pinned provider schema.
 	@command -v terraform >/dev/null || { echo "terraform not found on PATH"; exit 1; }

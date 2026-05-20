@@ -88,13 +88,13 @@ func EmitVersionFile(outDir, awsVersion, googleVersion, googleBetaVersion string
 	}
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, map[string]string{
-		"AWSProviderSource":        AWSProviderSource,
-		"AWSProviderVersion":       awsVersion,
-		"GoogleProviderSource":     GoogleProviderSource,
-		"GoogleProviderVersion":    googleVersion,
-		"GoogleBetaProviderSource": GoogleBetaProviderSource,
+		"AWSProviderSource":         AWSProviderSource,
+		"AWSProviderVersion":        awsVersion,
+		"GoogleProviderSource":      GoogleProviderSource,
+		"GoogleProviderVersion":     googleVersion,
+		"GoogleBetaProviderSource":  GoogleBetaProviderSource,
 		"GoogleBetaProviderVersion": googleBetaVersion,
-		"SchemaCodegenVersion":     SchemaCodegenVersion,
+		"SchemaCodegenVersion":      SchemaCodegenVersion,
 	}); err != nil {
 		return "", fmt.Errorf("execute version template: %w", err)
 	}

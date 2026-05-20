@@ -25,7 +25,7 @@ var googleComputeBackendServicePolicy = Map{
 		Role: RoleIdentity, Visibility: VisibilitySummaryVisible, Edit: EditNever,
 		DriftSemantic: DriftSemanticExact,
 	},
-	"fingerprint":  {Role: RoleIdentity, Visibility: VisibilitySummaryVisible, Edit: EditNever},
+	"fingerprint": {Role: RoleIdentity, Visibility: VisibilitySummaryVisible, Edit: EditNever},
 	"project": {
 		Role: RoleIdentity, Visibility: VisibilityUIVisible, Edit: EditNever,
 		ChangeRisk:    ChangeAlwaysReplace,

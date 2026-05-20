@@ -290,6 +290,17 @@ func (e *cloudControlEnricher) fetchAndMap(ctx context.Context, get cloudControl
 	if err := json.Unmarshal([]byte(rawProps), &props); err != nil {
 		return nil, fmt.Errorf("cloudcontrol enricher: parse properties for %s %q: %w", e.cfnType, identifier, err)
 	}
+	// #646 — generic CFN-object-on-string-attribute fix. CFN serializes
+	// JSON-document attributes (SQS RedrivePolicy/RedriveAllowPolicy,
+	// policy strings, …) as nested objects, but the generated Layer-1
+	// struct types them as `*Value[string]`. shapeCFNForLayer1 would
+	// recurse the object instead of literal-wrapping it, landing an
+	// envelope with no null/literal/expr key on the field — which
+	// Value[T].UnmarshalJSON rejects, aborting the whole UnmarshalAttrs.
+	// stringifyValueStringFieldsForType reflects the registered struct
+	// and JSON-encodes such objects to strings pre-shape (see
+	// cloudcontrol_value_stringify.go).
+	props = stringifyValueStringFieldsForType(e.resourceType, props)
 	shaped := shapeCFNForLayer1(props)
 	// #640 follow-up — generic CFN-object-on-block-slice fix. CFN
 	// serializes singleton nested configs as plain objects, but the

@@ -25,10 +25,10 @@ type fakeS3SmithyErr struct {
 	msg  string
 }
 
-func (e *fakeS3SmithyErr) Error() string                       { return e.code + ": " + e.msg }
-func (e *fakeS3SmithyErr) ErrorCode() string                   { return e.code }
-func (e *fakeS3SmithyErr) ErrorMessage() string                { return e.msg }
-func (e *fakeS3SmithyErr) ErrorFault() smithy.ErrorFault       { return smithy.FaultClient }
+func (e *fakeS3SmithyErr) Error() string                 { return e.code + ": " + e.msg }
+func (e *fakeS3SmithyErr) ErrorCode() string             { return e.code }
+func (e *fakeS3SmithyErr) ErrorMessage() string          { return e.msg }
+func (e *fakeS3SmithyErr) ErrorFault() smithy.ErrorFault { return smithy.FaultClient }
 
 // Compile-time: must satisfy smithy.APIError.
 var _ smithy.APIError = (*fakeS3SmithyErr)(nil)

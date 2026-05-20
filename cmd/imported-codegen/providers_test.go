@@ -286,4 +286,3 @@ func TestLoadProviderPins_FileNotFound(t *testing.T) {
 	// declared" error.
 	assert.Contains(t, err.Error(), "parse")
 }
-

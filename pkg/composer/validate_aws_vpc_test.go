@@ -106,14 +106,14 @@ func TestComposeStackWithIssues_AWSVPCStaleNATGateway_Issue389(t *testing.T) {
 
 	// Build the components blob from the bug report.
 	comps := &Components{
-		Cloud:              "AWS",
-		AWSS3:              boolPtr(true),
-		AWSKMS:             boolPtr(true),
-		AWSVPC:             "Public VPC",
-		AWSLambda:          boolPtr(true),
-		Architecture:       "Serverless",
-		AWSSecretsManager:  boolPtr(true),
-		AWSCloudWatchLogs:  boolPtr(true),
+		Cloud:             "AWS",
+		AWSS3:             boolPtr(true),
+		AWSKMS:            boolPtr(true),
+		AWSVPC:            "Public VPC",
+		AWSLambda:         boolPtr(true),
+		Architecture:      "Serverless",
+		AWSSecretsManager: boolPtr(true),
+		AWSCloudWatchLogs: boolPtr(true),
 	}
 	cfg := awsVPCNATCfg(boolPtr(true))
 	cfg.Region = "us-east-1"

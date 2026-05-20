@@ -5,8 +5,10 @@ package policy
 // is RoleTuning + Security-pillar: it defines exactly which principals
 // can impersonate the underlying service account. For the
 // gcp/github_actions WIF stack the canonical member is
-//   principalSet://iam.googleapis.com/projects/<num>/locations/global/
-//     workloadIdentityPools/<pool>/attribute.repository/<owner>/<repo>
+//
+//	principalSet://iam.googleapis.com/projects/<num>/locations/global/
+//	  workloadIdentityPools/<pool>/attribute.repository/<owner>/<repo>
+//
 // — adding any other principal to that list grants long-term
 // impersonation rights, which is exactly the attack-shaped event drift
 // detection exists to catch.

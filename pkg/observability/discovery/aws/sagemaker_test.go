@@ -21,11 +21,11 @@ import (
 )
 
 type fakeSageMakerClient struct {
-	listDomainsOut       *sagemaker.ListDomainsOutput
-	describeDomainOut    *sagemaker.DescribeDomainOutput
-	describeDomainIn     *sagemaker.DescribeDomainInput
-	listUserProfilesOut  *sagemaker.ListUserProfilesOutput
-	err                  error
+	listDomainsOut      *sagemaker.ListDomainsOutput
+	describeDomainOut   *sagemaker.DescribeDomainOutput
+	describeDomainIn    *sagemaker.DescribeDomainInput
+	listUserProfilesOut *sagemaker.ListUserProfilesOutput
+	err                 error
 }
 
 func (f *fakeSageMakerClient) ListDomains(_ context.Context, _ *sagemaker.ListDomainsInput, _ ...func(*sagemaker.Options)) (*sagemaker.ListDomainsOutput, error) {

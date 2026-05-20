@@ -642,4 +642,3 @@ func TestLookupRule_ApiGatewayDisambiguation(t *testing.T) {
 		t.Errorf("stage ARN matched cfnType=%q, want \"\" (known-skip sentinel)", r.cfnType)
 	}
 }
-
