@@ -716,12 +716,21 @@ func (c *Client) composeStackImpl(opts ComposeStackOpts) (*ComposeStackResult, e
 	// sandbox-infrastructure-template wrapper) keep their own
 	// /providers.tf via PRESERVE_PATTERNS while the alias declarations
 	// slip through as sibling files — see luthersystems/reliable#1588.
+	//
+	// /variables-imported.tf carries the variable declarations that the
+	// AWS branch's assume_role dynamic block references
+	// (`bootstrap_role_arn`, `external_id`). They live in a sibling file
+	// rather than /providers.tf for the same PRESERVE_PATTERNS reason —
+	// see issue #630.
 	files["/providers.tf"] = providersFiles.Main
 	if len(providersFiles.Aliases) > 0 {
 		files["/providers-aliases.tf"] = providersFiles.Aliases
 	}
 	if len(providersFiles.Imported) > 0 {
 		files["/providers-imported.tf"] = providersFiles.Imported
+	}
+	if len(providersFiles.Variables) > 0 {
+		files["/variables-imported.tf"] = providersFiles.Variables
 	}
 
 	// Validator dispatcher — runs after the stack is fully composed, before
@@ -809,15 +818,27 @@ type providersTFInput struct {
 // doesn't produce — but keep the nil contract so callers can rely on a
 // non-nil slice meaning "write this file").
 //
+// Variables carries the `variable "bootstrap_role_arn" {}` and
+// `variable "external_id" {}` declarations consumed by the assume_role
+// dynamic block that the AWS branch threads through Main / Aliases /
+// Imported. Co-located in this sibling file (rather than left in Main)
+// because the runtime wrapper's PRESERVE_PATTERNS filter drops the
+// composer's Main while keeping the wrapper's own /providers.tf stub —
+// the Imported / Aliases siblings reference these vars, so the
+// declarations must live in a sibling file that survives the filter.
+// Nil when the cloud branch doesn't reference these vars (today: GCP).
+// See issue #630 for the production bug this split fixes.
+//
 // The split lets archive packagers (e.g. reliable's
 // sandbox-infrastructure-template wrapper) preserve the wrapper's own
 // providers.tf while still receiving the alias declarations as sibling
 // files that don't collide with the wrapper's PRESERVE_PATTERNS filter.
 // See luthersystems/reliable#1588 for the production bug this split fixes.
 type providersTFFiles struct {
-	Main     []byte
-	Aliases  []byte
-	Imported []byte
+	Main      []byte
+	Aliases   []byte
+	Imported  []byte
+	Variables []byte
 }
 
 // generateProvidersTF generates cloud-specific provider configuration.
@@ -834,6 +855,13 @@ type providersTFFiles struct {
 func generateProvidersTF(in providersTFInput) []byte {
 	pf := generateProvidersFiles(in)
 	var b []byte
+	// Variables must come before the provider blocks that reference them —
+	// terraform tolerates declaration order within a module, but the
+	// concatenated single-file form is read by humans (and a few legacy
+	// substring tests) where declaration-first is conventional.
+	if len(pf.Variables) > 0 {
+		b = append(b, pf.Variables...)
+	}
 	b = append(b, pf.Main...)
 	if len(pf.Aliases) > 0 {
 		b = append(b, pf.Aliases...)
@@ -983,7 +1011,14 @@ variable "external_id" {
 		maps.Copy(required, discovered)
 
 		var main strings.Builder
-		main.WriteString(awsVarDecls)
+		// NOTE: awsVarDecls is emitted into the Variables slot (→
+		// /variables-imported.tf) so it survives the runtime wrapper's
+		// PRESERVE_PATTERNS rsync filter, which drops the composer-emitted
+		// /providers.tf while keeping the wrapper's own stub. Both Aliases
+		// (us_east_1) and Imported (aws.imported) reference these vars via
+		// awsDynamicAssumeRole, and they're the sibling files that DO
+		// survive the filter — co-locating the declarations there keeps
+		// terraform plan resolvable on the deployed module. See issue #630.
 		main.WriteString("terraform {\n  required_providers {\n")
 		main.WriteString(renderRequiredProviders(required))
 		main.WriteString("  }\n}\n\n")
@@ -1022,9 +1057,10 @@ variable "external_id" {
 		fmt.Fprintf(&imp, "provider \"aws\" {\n  alias  = \"imported\"\n  region = %q%s\n}\n", region, awsDynamicAssumeRole)
 
 		return providersTFFiles{
-			Main:     []byte(main.String()),
-			Aliases:  aliases,
-			Imported: []byte(imp.String()),
+			Main:      []byte(main.String()),
+			Aliases:   aliases,
+			Imported:  []byte(imp.String()),
+			Variables: []byte(awsVarDecls),
 		}
 	}
 }

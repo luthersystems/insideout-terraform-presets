@@ -1466,6 +1466,33 @@ func TestProductionDiscoverDeps_LoadConfigSetsRetryMaxAttempts(t *testing.T) {
 	}
 }
 
+// TestProductionDiscoverDeps_LoadConfigSetsRetryModeAdaptive pins that
+// the production loadConfig path threads aws.RetryModeAdaptive onto
+// the resulting aws.Config (#632). The default RetryMode is "standard"
+// (post-hoc exponential+jitter); adaptive adds a client-side token
+// bucket that slows the send rate proactively when the server signals
+// throttling, which is the right behavior for the parallel
+// DiscoverTypes walk (#629) where per-service goroutines share the
+// same per-region CloudControl rate budget.
+//
+// Pinning against `aws.RetryModeAdaptive` (the SDK constant, imported
+// independently of the production `discoverRetryMode` constant) is
+// intentional — re-reading the production constant would make this
+// test tautological. A mutation that re-points discoverRetryMode to
+// RetryModeStandard fails here because the SDK-imported expectation
+// stays "adaptive".
+func TestProductionDiscoverDeps_LoadConfigSetsRetryModeAdaptive(t *testing.T) {
+	t.Parallel()
+	deps := productionDiscoverDeps()
+	cfg, err := deps.loadConfig(context.Background(), "us-east-1", "")
+	if err != nil {
+		t.Fatalf("loadConfig: %v", err)
+	}
+	if cfg.RetryMode != aws.RetryModeAdaptive {
+		t.Errorf("aws.Config.RetryMode=%q, want %q (constant discoverRetryMode must be threaded through productionDiscoverDeps.loadConfig — see #632)", cfg.RetryMode, aws.RetryModeAdaptive)
+	}
+}
+
 // TestProductionDiscoverDeps_LoadConfigBaseEndpoint pins how the
 // endpointURL parameter reaches aws.Config.BaseEndpoint across the
 // flag/env precedence matrix that the orchestrator-level table test

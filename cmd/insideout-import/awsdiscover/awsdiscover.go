@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"sort"
 	"time"
 
@@ -35,12 +36,27 @@ import (
 // discoverers DiscoverTypes runs concurrently. Each selected
 // Discoverer already has its own internal bounded fan-out for per-item
 // SDK calls (tag fetches, GetResource walks); this constant bounds the
-// service-level layer on top. 8 is conservative — the dominant
-// per-service discoverers (cloud-control, dynamodb, lambda) issue
-// hundreds of API calls each, so service-level fan-out gives wall-time
-// wins from overlapping the slow services without multiplying the
-// account-wide AWS API rate by the registered-type count.
-const defaultDiscoverTypesConcurrency = 8
+// service-level layer on top.
+//
+// Originally 8 (#629); lowered to 4 (#632) after staging hit a
+// ThrottlingException from CloudControl ListResources during the
+// broad scan. 8 simultaneous t=0 kickoffs, each with internal
+// per-service fan-out, exceeded CloudControl's per-account rate
+// budget. 4 still gives ~4× wall-time savings over sequential
+// without multiplying account-wide QPS by the registered-type count.
+// See also: defaultDiscoverStartupJitterMax for the per-goroutine
+// jitter applied before the first AWS call.
+const defaultDiscoverTypesConcurrency = 4
+
+// defaultDiscoverStartupJitterMax bounds the random sleep applied
+// before each per-service goroutine's first AWS call. Without
+// jitter, all N goroutines kick off at t=0 and their first
+// ListResources / Describe* calls land in the same burst, lighting
+// up the per-region CloudControl rate-limiter (#632). 500ms gives
+// the SDK retryer's adaptive token bucket room to spread the load
+// without materially extending wall time (a typical broad scan
+// takes tens of seconds).
+const defaultDiscoverStartupJitterMax = 500 * time.Millisecond
 
 // ErrNotSupported signals that a discoverer cannot resolve a given ID
 // (e.g. an ARN whose service portion does not match this discoverer's
@@ -124,6 +140,39 @@ type AWSDiscoverer struct {
 	// existing per-type ordering one PR at a time. Mirrors
 	// gcpdiscover.GCPDiscoverer.byTypeEnricher (presets#403).
 	byTypeEnricher map[string]AttributeEnricher
+	// startupJitter caps the random per-goroutine sleep applied
+	// before the first AWS call inside DiscoverTypes (#632). Set to
+	// defaultDiscoverStartupJitterMax by the production constructors;
+	// tests override to 0 (disable) or a tiny value to keep wall time
+	// short while still asserting jitter is applied.
+	startupJitter time.Duration
+	// jitterSample produces the per-goroutine startup delay. The
+	// production constructor wires a closure that draws a uniform
+	// sample in [0, startupJitter); tests inject a deterministic
+	// sequence so jitter assertions don't depend on global rand's
+	// seeding policy (math/rand auto-seeds since Go 1.20, but a
+	// future move to math/rand/v2 or an explicit seed would break a
+	// statistical assertion). A nil sampler defaults inside
+	// DiscoverTypes to the same closure shape.
+	jitterSample func() time.Duration
+	// jitterSleep is the seam DiscoverTypes calls before each
+	// goroutine's first per-service Discover. Defaults to
+	// time.Sleep; tests inject a fake that records the per-goroutine
+	// sleep durations so jitter behavior can be asserted without
+	// spinning real wall time. Each call receives the sampled
+	// duration for that goroutine.
+	jitterSleep func(time.Duration)
+}
+
+// defaultJitterSample returns a uniformly-random delay in
+// [0, a.startupJitter). Returns 0 when startupJitter <= 0, so callers
+// don't have to guard rand.Int63n against a zero/negative bound (it
+// panics on n <= 0). Used as the default for AWSDiscoverer.jitterSample.
+func (a *AWSDiscoverer) defaultJitterSample() time.Duration {
+	if a.startupJitter <= 0 {
+		return 0
+	}
+	return time.Duration(rand.Int63n(int64(a.startupJitter)))
 }
 
 // NewAWSDiscoverer wires up the production set of AWS discoverers with the
@@ -293,12 +342,16 @@ func NewAWSDiscovererWithConcurrency(cfg aws.Config, maxConcurrency int) *AWSDis
 			ccCfg.TFType, ccCfg.CloudFormationType, nil, normalizer,
 		)
 	}
-	return &AWSDiscoverer{
+	disc := &AWSDiscoverer{
 		defaultRegion:  cfg.Region,
 		byType:         byType,
 		rgtPrefetcher:  newRealRGTPrefetcher(cfg),
 		byTypeEnricher: byTypeEnricher,
+		startupJitter:  defaultDiscoverStartupJitterMax,
+		jitterSleep:    time.Sleep,
 	}
+	disc.jitterSample = disc.defaultJitterSample
+	return disc
 }
 
 // serviceSlugByTFType maps a Terraform resource type to the short,
@@ -449,9 +502,38 @@ func (a *AWSDiscoverer) DiscoverTypes(ctx context.Context, types []string, args 
 	results := make([][]imported.ImportedResource, len(selected))
 	g, gctx := errgroup.WithContext(ctx)
 	g.SetLimit(defaultDiscoverTypesConcurrency)
+	// Per-goroutine startup jitter (#632). Without this, all N
+	// service goroutines unblock at t=0 and their first
+	// ListResources / Describe* calls land in the same burst,
+	// lighting up the per-region CloudControl rate-limiter. Each
+	// goroutine sleeps a uniformly-random duration in
+	// [0, a.startupJitter) before its first AWS call, spreading the
+	// initial wave so per-service requests don't all align at t=0.
+	//
+	// Sampling is delegated to a.jitterSample (defaults to a uniform
+	// draw in [0, a.startupJitter)) and the actual sleep is performed
+	// via a.jitterSleep so tests can inject a deterministic sample
+	// sequence + recorder without spinning real wall time.
+	jitterSleep := a.jitterSleep
+	if jitterSleep == nil {
+		jitterSleep = time.Sleep
+	}
+	jitterSample := a.jitterSample
+	if jitterSample == nil {
+		jitterSample = a.defaultJitterSample
+	}
 	for i, d := range selected {
-		i, d := i, d
+		delay := jitterSample()
 		g.Go(func() error {
+			if delay > 0 {
+				jitterSleep(delay)
+			}
+			// Cancellation check after jitter so a fail-fast sibling
+			// can short-circuit the slowest-jittered goroutines
+			// before they fire any AWS calls.
+			if err := gctx.Err(); err != nil {
+				return err
+			}
 			entries, err := d.Discover(gctx, args)
 			if err != nil {
 				return fmt.Errorf("%s: %w", d.ResourceType(), err)
