@@ -269,13 +269,13 @@ func TestDiscoverTypes_StartupJitterApplied(t *testing.T) {
 	// non-zero entries in this order regardless of goroutine
 	// scheduling.
 	sequence := []time.Duration{
-		0,                        // pins the `if delay > 0` guard — must NOT be recorded
-		1 * time.Microsecond,     // near-zero, MUST be recorded
-		50 * time.Millisecond,    // mid-range, MUST be recorded
-		99 * time.Millisecond,    // near-window-max — catches a shrunk-window mutation
-		25 * time.Millisecond,    // mid-range
-		75 * time.Millisecond,    // mid-range
-		10 * time.Millisecond,    // near-zero+, MUST be recorded
+		0,                              // pins the `if delay > 0` guard — must NOT be recorded
+		1 * time.Microsecond,           // near-zero, MUST be recorded
+		50 * time.Millisecond,          // mid-range, MUST be recorded
+		99 * time.Millisecond,          // near-window-max — catches a shrunk-window mutation
+		25 * time.Millisecond,          // mid-range
+		75 * time.Millisecond,          // mid-range
+		10 * time.Millisecond,          // near-zero+, MUST be recorded
 		jitterWindow - time.Nanosecond, // [0, window) boundary
 	}
 	services := len(sequence)

@@ -609,7 +609,6 @@ func assertImportedAliasDeclared(t *testing.T, providersTF, cloud string) {
 		"imported provider alias for %q must be declared:\n%s", cloud, providersTF)
 }
 
-
 // hasProviderAttr reports whether the imported alias block for cloud contains
 // `<name> = <value>` (whitespace-tolerant).
 func hasProviderAttr(providersTF, cloud, name, value string) bool {

@@ -53,8 +53,8 @@ func TestVisibilityPolicy_Valid(t *testing.T) {
 		{VisibilitySummaryVisible, true},
 		{VisibilityUIVisible, true},
 		{"", false},
-		{"hidden", false},       // case-sensitive
-		{"Hidden ", false},      // trailing space
+		{"hidden", false},         // case-sensitive
+		{"Hidden ", false},        // trailing space
 		{"SummaryVisable", false}, // typo close to a real const
 	}
 	for _, tc := range cases {

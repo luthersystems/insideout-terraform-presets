@@ -56,8 +56,8 @@ import (
 	"sort"
 	"strings"
 
-	imp "github.com/luthersystems/insideout-terraform-presets/pkg/imported"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported/policy"
+	imp "github.com/luthersystems/insideout-terraform-presets/pkg/imported"
 )
 
 // FieldMismatch is a type alias for pkg/imported.FieldMismatch so

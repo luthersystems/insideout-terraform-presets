@@ -44,11 +44,14 @@ type cloudControlClient interface {
 //
 //   - TFType / CloudFormationType: Terraform-side and CloudFormation-side
 //     type identifiers. Both are required.
+//
 //   - Slug: progress-event service slug (matches serviceSlugByTFType for
 //     this TFType). Used for ServiceStart/ServiceFinish/ItemFound emits.
+//
 //   - IsGlobal: when true, the discoverer issues one call (region="")
 //     instead of looping args.Regions. Maps to CloudFormation type-level
 //     global classifications (e.g. AWS::IAM::Role would be global).
+//
 //   - ImportIDFromIdentifier: converts the Cloud Control primary
 //     identifier string (which uses "|" as a separator for compound
 //     identifiers) into the import ID format the Terraform AWS provider
@@ -56,12 +59,15 @@ type cloudControlClient interface {
 //     simple passthroughs; others need a separator rewrite. The
 //     properties payload is passed in case the identifier alone is
 //     ambiguous.
+//
 //   - NameHintFromProperties: extracts the human-readable name (becomes
 //     Identity.NameHint and NativeIDs["name"]). Falls back to the
 //     identifier if the properties payload is missing a name field.
+//
 //   - NativeIDsFromProperties: optional extra cloud-side IDs to stamp
 //     under Identity.NativeIDs (e.g. ARN, queue URL). Returns nil if
 //     no extras are needed.
+//
 //   - TagsFromProperties: extracts the tag map from the properties
 //     payload. Returns nil (not empty) when the resource simply carries
 //     no tags — the nil-vs-empty distinction is load-bearing for
@@ -70,6 +76,7 @@ type cloudControlClient interface {
 //     emptyTagsExtractor helper which returns a non-nil empty map so
 //     in-memory consumers can iterate without nil-check. JSON output
 //     elides the field either way via `omitempty`.
+//
 //   - ParentLister: optional. When set, the discoverer fans out one
 //     ListResources call per parent context (e.g. AWS::Cognito::UserPoolClient
 //     is parent-scoped on UserPoolId). The returned slice contains one
@@ -80,6 +87,7 @@ type cloudControlClient interface {
 //     (cognito-idp:ListUserPools, lambda:ListFunctions, …).
 //     Mutually exclusive with SDKLister; setting both panics at
 //     registration time.
+//
 //   - SDKLister: optional. When set, the discoverer bypasses Cloud
 //     Control ListResources entirely and seeds the per-identifier
 //     GetResource fan-out with the identifiers this function returns.
@@ -89,6 +97,7 @@ type cloudControlClient interface {
 //     AWS::CertificateManager::Certificate via acm:ListCertificates).
 //     Mutually exclusive with ParentLister; setting both panics at
 //     registration time.
+//
 //   - SkipProjectTagFilter: when true, the discoverer (a) bypasses the
 //     RGT-cache short-circuit and always drives through ListResources,
 //     and (b) bypasses the post-fetch `args.Project` Project-tag filter

@@ -402,4 +402,3 @@ func TestApplyCarryForward_ExplicitComponentsParam_FlowsToInner(t *testing.T) {
 		"phantom strip count MUST be surfaced on the stats out of ApplyCarryForward")
 	require.NotNil(t, merged.Components.AWSLambda)
 }
-

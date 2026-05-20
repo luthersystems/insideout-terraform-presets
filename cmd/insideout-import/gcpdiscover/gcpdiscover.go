@@ -355,11 +355,11 @@ func NewGCPDiscoverer(searcher gcpAssetSearcher, projectID string, opts GCPDisco
 			// computed-only filter + #580 Normalizer kit producing
 			// byte-equal output to the deleted hand-rolled mappers (see
 			// computed_only_parity_test.go for the regression guard).
-			"google_compute_firewall":      newComputeFirewallEnricher(),
-			"google_compute_network":       newComputeNetworkEnricher(),
+			"google_compute_firewall":              newComputeFirewallEnricher(),
+			"google_compute_network":               newComputeNetworkEnricher(),
 			"google_secret_manager_secret":         newSecretManagerSecretEnricher(),
 			"google_secret_manager_secret_version": newSecretManagerSecretVersionEnricher(),
-			"google_storage_bucket":        newStorageBucketEnricher(),
+			"google_storage_bucket":                newStorageBucketEnricher(),
 			// Bundle G5 (#482) — five new GCP enrichers, all
 			// implementing ByIDEnricher in addition to AttributeEnricher.
 			"google_compute_instance":      newComputeInstanceEnricher(),
