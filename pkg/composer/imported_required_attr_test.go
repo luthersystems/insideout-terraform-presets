@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestValidateImportedResources_MissingRequiredAttr_Lambda locks the
+// TestValidateImportedEmitReadiness_MissingRequiredAttr_Lambda locks the
 // fix for bugs 2 & 3 from reliable #1621 / staging session
 // sess_v2_CnqUJ6NRJnLC: the imported aws_lambda_function had Attrs=null
 // (Cloud Control enrichment captured nothing), so the composed resource
@@ -18,7 +18,7 @@ import (
 // imported_resource_missing_required_attr issue at compose time, naming
 // the exact missing keys, rather than letting the malformed HCL reach
 // terraform plan.
-func TestValidateImportedResources_MissingRequiredAttr_Lambda(t *testing.T) {
+func TestValidateImportedEmitReadiness_MissingRequiredAttr_Lambda(t *testing.T) {
 	t.Parallel()
 	ir := imported.ImportedResource{
 		Identity: imported.ResourceIdentity{
@@ -31,7 +31,7 @@ func TestValidateImportedResources_MissingRequiredAttr_Lambda(t *testing.T) {
 		// Attrs deliberately nil — mirrors the production payload where
 		// discovery returned nothing for the Lambda.
 	}
-	issues := ValidateImportedResources("aws", []imported.ImportedResource{ir})
+	issues := ValidateImportedEmitReadiness("aws", []imported.ImportedResource{ir})
 	require.Equal(t, 1, countCode(issues, "imported_resource_missing_required_attr"),
 		"expected exactly one missing-required-attr issue, got: %v", issueCodes(issues))
 
@@ -48,11 +48,11 @@ func TestValidateImportedResources_MissingRequiredAttr_Lambda(t *testing.T) {
 	assert.Equal(t, "imported.aws_lambda_function.io_lambdaa0ca", found.Field)
 }
 
-// TestValidateImportedResources_MissingRequiredAttr_IAMPolicy locks bug
+// TestValidateImportedEmitReadiness_MissingRequiredAttr_IAMPolicy locks bug
 // 2: an aws_iam_policy whose discovery payload omits the required
 // `policy` argument (the pre-fix behavior — CFN's PolicyDocument was
 // never renamed to `policy`) must be flagged.
-func TestValidateImportedResources_MissingRequiredAttr_IAMPolicy(t *testing.T) {
+func TestValidateImportedEmitReadiness_MissingRequiredAttr_IAMPolicy(t *testing.T) {
 	t.Parallel()
 	ir := imported.ImportedResource{
 		Identity: imported.ResourceIdentity{
@@ -66,7 +66,7 @@ func TestValidateImportedResources_MissingRequiredAttr_IAMPolicy(t *testing.T) {
 		// shape of the broken production payload.
 		Attrs: []byte(`{"path":{"literal":"/"},"description":{"literal":"x"}}`),
 	}
-	issues := ValidateImportedResources("aws", []imported.ImportedResource{ir})
+	issues := ValidateImportedEmitReadiness("aws", []imported.ImportedResource{ir})
 	require.Equal(t, 1, countCode(issues, "imported_resource_missing_required_attr"),
 		"expected one missing-required-attr issue, got: %v", issueCodes(issues))
 	for _, i := range issues {
@@ -76,10 +76,10 @@ func TestValidateImportedResources_MissingRequiredAttr_IAMPolicy(t *testing.T) {
 	}
 }
 
-// TestValidateImportedResources_RequiredAttrPresent asserts NO
+// TestValidateImportedEmitReadiness_RequiredAttrPresent asserts NO
 // missing-required issue is raised when the discovery payload carries
 // every required argument — the post-fix happy path.
-func TestValidateImportedResources_RequiredAttrPresent(t *testing.T) {
+func TestValidateImportedEmitReadiness_RequiredAttrPresent(t *testing.T) {
 	t.Parallel()
 	lambda := imported.ImportedResource{
 		Identity: imported.ResourceIdentity{
@@ -108,15 +108,15 @@ func TestValidateImportedResources_RequiredAttrPresent(t *testing.T) {
 			"policy":{"literal":"{}"}
 		}`),
 	}
-	issues := ValidateImportedResources("aws", []imported.ImportedResource{lambda, policy})
+	issues := ValidateImportedEmitReadiness("aws", []imported.ImportedResource{lambda, policy})
 	assert.Equal(t, 0, countCode(issues, "imported_resource_missing_required_attr"),
 		"no missing-required issue expected, got: %v", issueCodes(issues))
 }
 
-// TestValidateImportedResources_RequiredAttrViaOpaqueBag asserts the
+// TestValidateImportedEmitReadiness_RequiredAttrViaOpaqueBag asserts the
 // required-attr presence check also reads ir.Attributes (the opaque
 // fallback bag), not just typed Attrs.
-func TestValidateImportedResources_RequiredAttrViaOpaqueBag(t *testing.T) {
+func TestValidateImportedEmitReadiness_RequiredAttrViaOpaqueBag(t *testing.T) {
 	t.Parallel()
 	ir := imported.ImportedResource{
 		Identity: imported.ResourceIdentity{
@@ -131,16 +131,16 @@ func TestValidateImportedResources_RequiredAttrViaOpaqueBag(t *testing.T) {
 			"role":          "arn:aws:iam::123456789012:role/opaque",
 		},
 	}
-	issues := ValidateImportedResources("aws", []imported.ImportedResource{ir})
+	issues := ValidateImportedEmitReadiness("aws", []imported.ImportedResource{ir})
 	assert.Equal(t, 0, countCode(issues, "imported_resource_missing_required_attr"),
 		"opaque-bag required attrs must satisfy the check, got: %v", issueCodes(issues))
 }
 
-// TestValidateImportedResources_RemovedBlockExemptFromRequired asserts a
+// TestValidateImportedEmitReadiness_RemovedBlockExempt asserts a
 // removal-pending resource (emitted as a `removed {}` block, no resource
 // body) is NOT subjected to the required-argument check — a removed
 // block carries no arguments to be missing.
-func TestValidateImportedResources_RemovedBlockExemptFromRequired(t *testing.T) {
+func TestValidateImportedEmitReadiness_RemovedBlockExempt(t *testing.T) {
 	t.Parallel()
 	ir := imported.ImportedResource{
 		Identity: imported.ResourceIdentity{
@@ -152,9 +152,35 @@ func TestValidateImportedResources_RemovedBlockExemptFromRequired(t *testing.T) 
 		Tier:        imported.TierImportedMissing,
 		Remediation: imported.ActionRemoveFromInsideOut,
 	}
-	issues := ValidateImportedResources("aws", []imported.ImportedResource{ir})
+	issues := ValidateImportedEmitReadiness("aws", []imported.ImportedResource{ir})
 	assert.Equal(t, 0, countCode(issues, "imported_resource_missing_required_attr"),
 		"removed-block resources are exempt, got: %v", issueCodes(issues))
+}
+
+// TestValidateImportedResources_DoesNotFlagMissingRequired locks the
+// separation of concerns the discovery pipeline depends on: the
+// structural validator ValidateImportedResources runs on the
+// INTERMEDIATE discovery manifest (resources still being enriched by
+// dep-chase / drift-fix / Cloud Control passes), so it must NOT raise
+// imported_resource_missing_required_attr — that emit-readiness check
+// belongs to ValidateImportedEmitReadiness. Regressing this conflates
+// "manifest snapshot" with "ready to emit" and breaks the
+// cmd/insideout-import manifest writer.
+func TestValidateImportedResources_DoesNotFlagMissingRequired(t *testing.T) {
+	t.Parallel()
+	// A perfectly valid mid-pipeline snapshot: no typed Attrs yet.
+	ir := imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Cloud:    "aws",
+			Type:     "aws_lambda_function",
+			Address:  "aws_lambda_function.midpipeline",
+			ImportID: "midpipeline-fn",
+		},
+		Tier: imported.TierImportedFlat,
+	}
+	issues := ValidateImportedResources("aws", []imported.ImportedResource{ir})
+	assert.Equal(t, 0, countCode(issues, "imported_resource_missing_required_attr"),
+		"manifest-path validator must not flag missing-required, got: %v", issueCodes(issues))
 }
 
 // TestMissingRequiredAttrs_UnregisteredTypeFailOpen asserts the helper

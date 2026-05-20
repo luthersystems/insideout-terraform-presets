@@ -688,6 +688,11 @@ func (c *Client) composeStackImpl(opts ComposeStackOpts) (*ComposeStackResult, e
 	// (issue #148). This must happen before generateProvidersTF so that
 	// importedClouds tells the provider emitter which alias to declare.
 	issues = append(issues, ValidateImportedResources(cloud, opts.Imported)...)
+	// Emit-readiness checks (required-argument completeness) run here —
+	// at compose time, on the final ready-to-emit resource set — not in
+	// the discovery manifest writer, which validates a still-enriching
+	// intermediate snapshot. See ValidateImportedEmitReadiness.
+	issues = append(issues, ValidateImportedEmitReadiness(cloud, opts.Imported)...)
 	issues = append(issues, ValidateImportedResourceAuthorization(cloud, opts.Imported)...)
 	provOpts := ProvenanceOpts{ImportProjectID: opts.ImportProjectID}
 	issues = append(issues, ValidateProvenanceConflicts(cloud, opts.Imported, provOpts)...)

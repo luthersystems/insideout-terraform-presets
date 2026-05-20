@@ -61,21 +61,14 @@ func ValidateImportedResources(cloud string, irs []imported.ImportedResource) []
 		}
 
 		got := strings.ToLower(strings.TrimSpace(ir.Identity.Cloud))
-		// cloudOK gates the deeper per-record checks (decode, required-
-		// argument completeness) — a resource flagged for the wrong /
-		// unsupported cloud is not emitted into THIS compose, so layering
-		// additional issues on it is noise.
-		cloudOK := true
 		switch {
 		case got == "":
-			cloudOK = false
 			issues = append(issues, ValidationIssue{
 				Field:  field,
 				Code:   "imported_resource_unsupported_cloud",
 				Reason: "imported resource has empty Identity.Cloud; expected \"aws\" or \"gcp\"",
 			})
 		case got != "aws" && got != "gcp":
-			cloudOK = false
 			issues = append(issues, ValidationIssue{
 				Field:   field,
 				Value:   ir.Identity.Cloud,
@@ -84,7 +77,6 @@ func ValidateImportedResources(cloud string, irs []imported.ImportedResource) []
 				Reason:  fmt.Sprintf("imported resource has unsupported Identity.Cloud %q; expected \"aws\" or \"gcp\"", ir.Identity.Cloud),
 			})
 		case want != "" && got != want:
-			cloudOK = false
 			issues = append(issues, ValidationIssue{
 				Field:  field,
 				Value:  ir.Identity.Cloud,
@@ -134,36 +126,14 @@ func ValidateImportedResources(cloud string, irs []imported.ImportedResource) []
 			}
 		}
 
-		// Required-argument completeness. EmitImportedTF renders a
-		// `resource {}` block per emit-eligible resource; the wrapper
-		// runs a plain `terraform plan` against it (no
-		// `-generate-config-out`), so Terraform does NOT backfill
-		// required arguments from the imported state — the resource
-		// block must already carry every Required attribute. A sparse
-		// discovery payload (e.g. an `aws_lambda_function` whose Cloud
-		// Control enrichment soft-failed, leaving Attrs empty) would
-		// otherwise emit a partial block that fails plan with "Missing
-		// required argument". Surface it here as a blocking issue with
-		// the exact missing keys so the operator/agent gets an
-		// actionable error at compose time instead of an opaque
-		// terraform-plan failure. ResourceRecreate-mode missing
-		// resources are exempt — they emit a resource-only block whose
-		// purpose is to re-create from scratch and the same rule
-		// applies, so they are checked too; only the removed-block mode
-		// (which emits no resource body) is skipped.
-		if mode := classifyEmitMode(ir); cloudOK && (mode == emitModeResourceImport || mode == emitModeResourceOnly) {
-			if missing := missingRequiredAttrs(ir); len(missing) > 0 {
-				issues = append(issues, ValidationIssue{
-					Field: field,
-					Value: ir.Identity.Type,
-					Code:  "imported_resource_missing_required_attr",
-					Reason: fmt.Sprintf(
-						"imported %s %q is missing required argument(s) %s; discovery did not capture them and Terraform plan will fail — the resource block is not plannable",
-						ir.Identity.Type, ir.Identity.Address, strings.Join(missing, ", ")),
-					Suggestion: "re-run discovery for this resource, or verify the cloud-credential scope can read the resource's full configuration",
-				})
-			}
-		}
+		// Required-argument completeness is intentionally NOT checked
+		// here — see ValidateImportedEmitReadiness. ValidateImportedResources
+		// runs on the discovery manifest, an INTERMEDIATE artifact whose
+		// resources are still being enriched (dep-chase appends resources,
+		// drift-fix converges, the Cloud Control enricher lands typed
+		// Attrs in a later pass). Required args are guaranteed only at
+		// compose/emit time; gating the manifest writer on them would
+		// reject a perfectly valid mid-pipeline snapshot.
 	}
 
 	for addr, idxs := range addressIndex {
@@ -178,6 +148,71 @@ func ValidateImportedResources(cloud string, irs []imported.ImportedResource) []
 		})
 	}
 
+	return issues
+}
+
+// ValidateImportedEmitReadiness runs the emit-time-only checks on irs:
+// checks that are meaningful only once discovery has finished and the
+// composer is about to render `/imported.tf`. Unlike
+// ValidateImportedResources (which validates the INTERMEDIATE discovery
+// manifest — a snapshot whose resources are still being enriched by
+// dep-chase / drift-fix / Cloud Control passes), this function assumes a
+// final, ready-to-emit resource set.
+//
+// Issue codes:
+//
+//   - imported_resource_missing_required_attr — an emit-eligible resource
+//     is missing one or more schema-Required arguments. EmitImportedTF
+//     renders a `resource {}` block per emit-eligible resource and the
+//     deploy wrapper runs a plain `terraform plan` (no
+//     `-generate-config-out`), so Terraform does NOT backfill required
+//     arguments from the imported state — the resource block must already
+//     carry every Required attribute. A sparse discovery payload (e.g. an
+//     `aws_lambda_function` whose Cloud Control enrichment soft-failed,
+//     leaving Attrs empty) would otherwise emit a partial block that
+//     fails plan with an opaque "Missing required argument". This surfaces
+//     it with the exact missing keys at compose time instead.
+//
+// The check is skipped for resources flagged by ValidateImportedResources
+// for the wrong / unsupported cloud (they are not emitted into this
+// compose) and for removed-block-mode resources (which emit no resource
+// body). compose.go runs this alongside ValidateImportedResources before
+// EmitImportedTF; the discovery manifest writer deliberately does not.
+func ValidateImportedEmitReadiness(cloud string, irs []imported.ImportedResource) []ValidationIssue {
+	if len(irs) == 0 {
+		return nil
+	}
+	want := strings.ToLower(strings.TrimSpace(cloud))
+	var issues []ValidationIssue
+	for i, ir := range irs {
+		if !isImportedTier(ir.Tier) {
+			continue
+		}
+		got := strings.ToLower(strings.TrimSpace(ir.Identity.Cloud))
+		// Wrong / unsupported cloud — not emitted into this compose;
+		// ValidateImportedResources already reports the cloud issue.
+		if got != "aws" && got != "gcp" {
+			continue
+		}
+		if want != "" && got != want {
+			continue
+		}
+		mode := classifyEmitMode(ir)
+		if mode != emitModeResourceImport && mode != emitModeResourceOnly {
+			continue
+		}
+		if missing := missingRequiredAttrs(ir); len(missing) > 0 {
+			issues = append(issues, ValidationIssue{
+				Field: importedField(ir, i),
+				Value: ir.Identity.Type,
+				Code:  "imported_resource_missing_required_attr",
+				Reason: fmt.Sprintf(
+					"imported %s %q is missing required argument(s) %s; discovery did not capture them and Terraform plan will fail — the resource block is not plannable",
+					ir.Identity.Type, ir.Identity.Address, strings.Join(missing, ", ")),
+				Suggestion: "re-run discovery for this resource, or verify the cloud-credential scope can read the resource's full configuration",
+			})
+		}
+	}
 	return issues
 }
 
