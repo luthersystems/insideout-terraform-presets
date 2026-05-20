@@ -705,3 +705,121 @@ func extractResourceBlock(t *testing.T, hcl, tfType, label string) string {
 	t.Fatalf("unterminated resource block for %s.%s", tfType, label)
 	return ""
 }
+
+// TestEmitImportedTF_NoIDArgInResourceBlock locks the fix for the
+// malformed-HCL bug from reliable #1621 / staging session
+// sess_v2_CnqUJ6NRJnLC: discovery (the Cloud Control enricher's
+// synthIDFromField step) lands the computed `id` attribute into the
+// typed Attrs bag. `id` is Terraform's synthetic resource identifier —
+// emitting it inside a `resource {}` block makes `terraform plan` fail
+// with "Invalid or unknown key". The discovered import id belongs in
+// the sibling `import {}` block ONLY. This test asserts the emitted
+// resource body never carries an `id = ...` argument while the import
+// block still carries the id.
+func TestEmitImportedTF_NoIDArgInResourceBlock(t *testing.T) {
+	t.Parallel()
+	// Verbatim shape of the aws_cloudwatch_log_group entry persisted for
+	// session sess_v2_CnqUJ6NRJnLC — note the `id` key in Attrs.
+	ir := imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Cloud:    "aws",
+			Type:     "aws_cloudwatch_log_group",
+			Address:  "aws_cloudwatch_log_group.aws_lambda_io_lambdaa0ca",
+			ImportID: "/aws/lambda/io-cnquj6nrjnlc-prod-luthersystems-insideout-lambda-lambdaa0ca",
+		},
+		Tier: imported.TierImportedFlat,
+		Attrs: []byte(`{
+			"id":{"literal":"/aws/lambda/io-cnquj6nrjnlc-prod-luthersystems-insideout-lambda-lambdaa0ca"},
+			"name":{"literal":"/aws/lambda/io-cnquj6nrjnlc-prod-luthersystems-insideout-lambda-lambdaa0ca"},
+			"retention_in_days":{"literal":14},
+			"log_group_class":{"literal":"STANDARD"}
+		}`),
+	}
+	out, _ := EmitImportedTF("aws", []imported.ImportedResource{ir}, EmitImportedOpts{})
+	require.NotNil(t, out)
+	s := string(out)
+
+	block := extractResourceBlock(t, s, "aws_cloudwatch_log_group", "aws_lambda_io_lambdaa0ca")
+	// The resource body must NOT contain an `id = ...` argument.
+	idArg := regexp.MustCompile(`(?m)^\s*id\s*=`)
+	assert.False(t, idArg.MatchString(block),
+		"resource block must not emit an `id` argument (computed-only):\n%s", block)
+	// Non-id configurable attributes must survive the strip.
+	assert.True(t, hasAttr(t, block, "name", `"/aws/lambda/io-cnquj6nrjnlc-prod-luthersystems-insideout-lambda-lambdaa0ca"`),
+		"name attr must survive id-strip:\n%s", block)
+	assert.True(t, hasAttr(t, block, "retention_in_days", "14"),
+		"retention_in_days attr must survive id-strip:\n%s", block)
+
+	// The import block (not the resource block) carries the id.
+	assert.Contains(t, s, "import {")
+	assert.Contains(t, s, "to = aws_cloudwatch_log_group.aws_lambda_io_lambdaa0ca")
+	assert.Contains(t, s, `id = "/aws/lambda/io-cnquj6nrjnlc-prod-luthersystems-insideout-lambda-lambdaa0ca"`)
+
+	// Whole document must parse as valid HCL.
+	_, diags := hclsyntax.ParseConfig(out, "imported.tf", hcl.InitialPos)
+	require.False(t, diags.HasErrors(), "imported.tf must parse: %s", diags.Error())
+}
+
+// TestEmitImportedTF_NoIDArgOpaquePath asserts the opaque-attr fallback
+// path (ir.Attributes instead of typed ir.Attrs) also strips `id`. The
+// generated schema marks `id` Optional+Computed, so the
+// FieldSchema.Configurable() gate alone would let it through.
+func TestEmitImportedTF_NoIDArgOpaquePath(t *testing.T) {
+	t.Parallel()
+	ir := imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Cloud:    "aws",
+			Type:     "aws_cloudwatch_log_group",
+			Address:  "aws_cloudwatch_log_group.opaque",
+			ImportID: "/aws/lambda/opaque",
+		},
+		Tier: imported.TierImportedFlat,
+		Attributes: map[string]any{
+			"id":                "/aws/lambda/opaque",
+			"name":              "/aws/lambda/opaque",
+			"retention_in_days": 14,
+		},
+	}
+	out, _ := EmitImportedTF("aws", []imported.ImportedResource{ir}, EmitImportedOpts{})
+	require.NotNil(t, out)
+	s := string(out)
+	block := extractResourceBlock(t, s, "aws_cloudwatch_log_group", "opaque")
+	idArg := regexp.MustCompile(`(?m)^\s*id\s*=`)
+	assert.False(t, idArg.MatchString(block),
+		"opaque path must not emit an `id` argument:\n%s", block)
+	assert.True(t, hasAttr(t, block, "name", `"/aws/lambda/opaque"`),
+		"name must survive in opaque path:\n%s", block)
+}
+
+// TestEmitImportedTF_IAMPolicyCarriesPolicy locks bug 2: the composed
+// aws_iam_policy resource block must carry the required `policy`
+// argument. Discovery (with the new jsonStringifyField normalizer)
+// lands the policy document as a JSON-encoded string on the `policy`
+// key; EmitImportedTF must propagate it into the resource body.
+func TestEmitImportedTF_IAMPolicyCarriesPolicy(t *testing.T) {
+	t.Parallel()
+	policyJSON := `{\"Version\":\"2012-10-17\",\"Statement\":[{\"Effect\":\"Allow\",\"Action\":\"s3:GetObject\",\"Resource\":\"*\"}]}`
+	ir := imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Cloud:    "aws",
+			Type:     "aws_iam_policy",
+			Address:  "aws_iam_policy.example",
+			ImportID: "arn:aws:iam::123456789012:policy/example",
+		},
+		Tier: imported.TierImportedFlat,
+		Attrs: []byte(`{
+			"path":{"literal":"/"},
+			"description":{"literal":"example policy"},
+			"policy":{"literal":"` + policyJSON + `"}
+		}`),
+	}
+	out, _ := EmitImportedTF("aws", []imported.ImportedResource{ir}, EmitImportedOpts{})
+	require.NotNil(t, out)
+	s := string(out)
+	block := extractResourceBlock(t, s, "aws_iam_policy", "example")
+	policyArg := regexp.MustCompile(`(?m)^\s*policy\s*=`)
+	assert.True(t, policyArg.MatchString(block),
+		"aws_iam_policy resource block must carry the required `policy` argument:\n%s", block)
+	_, diags := hclsyntax.ParseConfig(out, "imported.tf", hcl.InitialPos)
+	require.False(t, diags.HasErrors(), "imported.tf must parse: %s", diags.Error())
+}

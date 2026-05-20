@@ -733,3 +733,76 @@ func TestStripComputedOnlyForType_ComposesAfterRenameAndSynth(t *testing.T) {
 	assert.NotContains(t, m, "Arn")
 	assert.NotContains(t, m, "LogGroupName")
 }
+
+// TestJSONStringifyField covers the normalizer that bridges
+// CloudFormation's nested PolicyDocument object onto Terraform's
+// JSON-string `policy` attribute (reliable #1621 bug 2).
+func TestJSONStringifyField(t *testing.T) {
+	t.Parallel()
+
+	t.Run("object value is JSON-stringified onto the target key", func(t *testing.T) {
+		t.Parallel()
+		in := json.RawMessage(`{"PolicyDocument":{"Version":"2012-10-17","Statement":[{"Effect":"Allow"}]},"Path":"/"}`)
+		out, err := jsonStringifyField("PolicyDocument", "Policy")(in)
+		require.NoError(t, err)
+		m := asMap(t, out)
+		// Source key is removed.
+		_, hasFrom := m["PolicyDocument"]
+		assert.False(t, hasFrom, "source key must be removed")
+		// Target key holds a STRING, not an object.
+		s, ok := m["Policy"].(string)
+		require.True(t, ok, "target key must hold a string, got %T", m["Policy"])
+		// The string must be valid JSON round-tripping to the original.
+		var doc map[string]any
+		require.NoError(t, json.Unmarshal([]byte(s), &doc))
+		assert.Equal(t, "2012-10-17", doc["Version"])
+		// Unrelated keys are untouched.
+		assert.Equal(t, "/", m["Path"])
+	})
+
+	t.Run("string value is moved verbatim, not double-encoded", func(t *testing.T) {
+		t.Parallel()
+		in := json.RawMessage(`{"PolicyDocument":"{\"Version\":\"2012-10-17\"}"}`)
+		out, err := jsonStringifyField("PolicyDocument", "Policy")(in)
+		require.NoError(t, err)
+		m := asMap(t, out)
+		assert.Equal(t, `{"Version":"2012-10-17"}`, m["Policy"],
+			"already-string value must move verbatim without double-encoding")
+	})
+
+	t.Run("absent source key is a no-op", func(t *testing.T) {
+		t.Parallel()
+		in := json.RawMessage(`{"Path":"/"}`)
+		out, err := jsonStringifyField("PolicyDocument", "Policy")(in)
+		require.NoError(t, err)
+		m := asMap(t, out)
+		assert.Equal(t, "/", m["Path"])
+		_, hasTarget := m["Policy"]
+		assert.False(t, hasTarget)
+	})
+
+	t.Run("pre-populated target wins, source dropped", func(t *testing.T) {
+		t.Parallel()
+		in := json.RawMessage(`{"PolicyDocument":{"a":1},"Policy":"existing"}`)
+		out, err := jsonStringifyField("PolicyDocument", "Policy")(in)
+		require.NoError(t, err)
+		m := asMap(t, out)
+		assert.Equal(t, "existing", m["Policy"], "existing target value must win")
+		_, hasFrom := m["PolicyDocument"]
+		assert.False(t, hasFrom, "stray source object must still be dropped")
+	})
+
+	t.Run("empty from/to is a no-op", func(t *testing.T) {
+		t.Parallel()
+		in := json.RawMessage(`{"PolicyDocument":{"a":1}}`)
+		out, err := jsonStringifyField("", "Policy")(in)
+		require.NoError(t, err)
+		assert.JSONEq(t, string(in), string(out))
+	})
+
+	t.Run("malformed JSON surfaces an error", func(t *testing.T) {
+		t.Parallel()
+		_, err := jsonStringifyField("PolicyDocument", "Policy")(json.RawMessage(`{not json`))
+		require.Error(t, err)
+	})
+}

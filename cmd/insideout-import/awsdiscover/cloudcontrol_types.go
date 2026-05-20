@@ -267,6 +267,17 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 			return map[string]string{"arn": identifier}
 		},
 		TagsFromProperties: tagsFromKey("Tags"),
+		// Normalizer: CFN AWS::IAM::ManagedPolicy surfaces the policy
+		// document as a nested JSON object under `PolicyDocument`, but
+		// Terraform's `aws_iam_policy.policy` is a REQUIRED JSON-encoded
+		// *string*. Without the stringify+rename the required `policy`
+		// argument is absent from the composed resource block and
+		// `terraform plan` fails with "Missing required argument:
+		// policy" (reliable #1621). renameField alone can't bridge it —
+		// an object landing on a `*Value[string]` field is dropped.
+		Normalizer: chain(
+			jsonStringifyField("PolicyDocument", "Policy"),
+		),
 	},
 
 	// =====================================================================

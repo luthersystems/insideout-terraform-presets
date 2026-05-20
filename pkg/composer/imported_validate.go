@@ -1,6 +1,7 @@
 package composer
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -60,14 +61,21 @@ func ValidateImportedResources(cloud string, irs []imported.ImportedResource) []
 		}
 
 		got := strings.ToLower(strings.TrimSpace(ir.Identity.Cloud))
+		// cloudOK gates the deeper per-record checks (decode, required-
+		// argument completeness) — a resource flagged for the wrong /
+		// unsupported cloud is not emitted into THIS compose, so layering
+		// additional issues on it is noise.
+		cloudOK := true
 		switch {
 		case got == "":
+			cloudOK = false
 			issues = append(issues, ValidationIssue{
 				Field:  field,
 				Code:   "imported_resource_unsupported_cloud",
 				Reason: "imported resource has empty Identity.Cloud; expected \"aws\" or \"gcp\"",
 			})
 		case got != "aws" && got != "gcp":
+			cloudOK = false
 			issues = append(issues, ValidationIssue{
 				Field:   field,
 				Value:   ir.Identity.Cloud,
@@ -76,6 +84,7 @@ func ValidateImportedResources(cloud string, irs []imported.ImportedResource) []
 				Reason:  fmt.Sprintf("imported resource has unsupported Identity.Cloud %q; expected \"aws\" or \"gcp\"", ir.Identity.Cloud),
 			})
 		case want != "" && got != want:
+			cloudOK = false
 			issues = append(issues, ValidationIssue{
 				Field:  field,
 				Value:  ir.Identity.Cloud,
@@ -121,6 +130,37 @@ func ValidateImportedResources(cloud string, irs []imported.ImportedResource) []
 					Value:  ir.Identity.Type,
 					Code:   "imported_resource_decode_failed",
 					Reason: fmt.Sprintf("decode typed Attrs for %q failed: %s", ir.Identity.Type, err.Error()),
+				})
+			}
+		}
+
+		// Required-argument completeness. EmitImportedTF renders a
+		// `resource {}` block per emit-eligible resource; the wrapper
+		// runs a plain `terraform plan` against it (no
+		// `-generate-config-out`), so Terraform does NOT backfill
+		// required arguments from the imported state — the resource
+		// block must already carry every Required attribute. A sparse
+		// discovery payload (e.g. an `aws_lambda_function` whose Cloud
+		// Control enrichment soft-failed, leaving Attrs empty) would
+		// otherwise emit a partial block that fails plan with "Missing
+		// required argument". Surface it here as a blocking issue with
+		// the exact missing keys so the operator/agent gets an
+		// actionable error at compose time instead of an opaque
+		// terraform-plan failure. ResourceRecreate-mode missing
+		// resources are exempt — they emit a resource-only block whose
+		// purpose is to re-create from scratch and the same rule
+		// applies, so they are checked too; only the removed-block mode
+		// (which emits no resource body) is skipped.
+		if mode := classifyEmitMode(ir); cloudOK && (mode == emitModeResourceImport || mode == emitModeResourceOnly) {
+			if missing := missingRequiredAttrs(ir); len(missing) > 0 {
+				issues = append(issues, ValidationIssue{
+					Field: field,
+					Value: ir.Identity.Type,
+					Code:  "imported_resource_missing_required_attr",
+					Reason: fmt.Sprintf(
+						"imported %s %q is missing required argument(s) %s; discovery did not capture them and Terraform plan will fail — the resource block is not plannable",
+						ir.Identity.Type, ir.Identity.Address, strings.Join(missing, ", ")),
+					Suggestion: "re-run discovery for this resource, or verify the cloud-credential scope can read the resource's full configuration",
 				})
 			}
 		}
@@ -264,6 +304,57 @@ func ValidateProvenanceConflicts(cloud string, irs []imported.ImportedResource, 
 	}
 
 	return issues
+}
+
+// missingRequiredAttrs returns the sorted snake_case names of the
+// schema-Required attributes that are absent from ir's discovered
+// attribute bag. Returns nil when the type has no registered schema
+// (fail-open: the long tail of unregistered types runs the opaque-attr
+// fallback and the composer can't reason about their required set), when
+// the type has no Required fields, or when every Required field is
+// present.
+//
+// "Present" means the key appears in the typed Attrs JSON object (the
+// post-discovery payload) OR — for the opaque-attr fallback path — in
+// ir.Attributes. A key whose value is JSON null still counts as present:
+// the composer emits `attr = null`, which Terraform accepts as an
+// explicit value; the un-plannable case this guards against is the key
+// being absent entirely.
+//
+// The synthetic `id` attribute is never treated as required even if a
+// provider schema marks it so — it is stripped from emission by
+// stripResourceIDAttr and belongs only in the `import {}` block.
+func missingRequiredAttrs(ir imported.ImportedResource) []string {
+	_, schema, ok := generated.Lookup(ir.Identity.Type)
+	if !ok {
+		return nil
+	}
+	present := map[string]bool{}
+	if len(ir.Attrs) > 0 {
+		var obj map[string]json.RawMessage
+		if err := json.Unmarshal(ir.Attrs, &obj); err == nil {
+			for k := range obj {
+				present[k] = true
+			}
+		}
+	}
+	for k := range ir.Attributes {
+		present[k] = true
+	}
+	var missing []string
+	for name, fs := range schema {
+		if !fs.Required {
+			continue
+		}
+		if name == computedResourceIDAttr {
+			continue
+		}
+		if !present[name] {
+			missing = append(missing, name)
+		}
+	}
+	sort.Strings(missing)
+	return missing
 }
 
 // isImportedTier reports whether t is a tier that the composer emits as flat
