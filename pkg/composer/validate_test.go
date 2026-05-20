@@ -217,11 +217,14 @@ func TestValidateRemovals(t *testing.T) {
 			wantKeys:  []string{"aws_alb", "aws_cloudfront"},
 		},
 		{
-			name:      "remove S3 and OpenSearch breaks Bedrock",
+			// S3 and OpenSearch are optional Knowledge Base inputs for
+			// Bedrock, not hard dependencies — a Bedrock role works for
+			// plain model invocation without either. Removing them from a
+			// Bedrock stack is therefore a safe removal, no warning.
+			name:      "remove S3 and OpenSearch from Bedrock stack — safe",
 			removed:   []ComponentKey{KeyAWSS3, KeyAWSOpenSearch},
 			remaining: []ComponentKey{KeyAWSVPC, KeyAWSBedrock},
-			wantWarn:  2,
-			wantKeys:  []string{"aws_s3", "aws_opensearch", "aws_bedrock"},
+			wantWarn:  0,
 		},
 		{
 			name:      "GCP: remove VPC breaks CloudSQL and GKE",
