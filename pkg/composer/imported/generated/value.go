@@ -173,9 +173,45 @@ func (v *Value[T]) UnmarshalJSON(b []byte) error {
 	default:
 		var lit T
 		if err := json.Unmarshal(raw.Literal, &lit); err != nil {
+			// CloudFormation / Cloud Control routinely serialize bool and
+			// numeric scalars as JSON *strings* — "true", "false", "443",
+			// "1.5" — even where the Terraform provider schema (and so
+			// the generated Value[bool] / Value[int64] / Value[float64]
+			// field) expects a native scalar. The strict decode above
+			// then hard-fails, and because UnmarshalAttrs decodes the
+			// whole resource in one pass, ONE such field drops every
+			// attribute of the resource to nil (live-confirmed: every
+			// aws_vpc_endpoint, whose PrivateDnsEnabled comes back as
+			// "true"). When the literal is a quoted string, retry the
+			// decode against the unquoted bytes so a stringified scalar
+			// still lands on its typed field. Purely additive: a literal
+			// that already decoded strictly never reaches this branch,
+			// and a string that is not a valid T (e.g. "hello" for a
+			// bool) still surfaces the original error.
+			if unquoted, ok := unquoteJSONString(raw.Literal); ok {
+				if err2 := json.Unmarshal(unquoted, &lit); err2 == nil {
+					v.Literal = &lit
+					return nil
+				}
+			}
 			return fmt.Errorf("Value: decoding literal: %w", err)
 		}
 		v.Literal = &lit
 	}
 	return nil
+}
+
+// unquoteJSONString reports whether raw is a JSON string literal and, if
+// so, returns its contents as raw bytes suitable for a retry decode:
+// `"true"` → `true`, `"443"` → `443`. Returns ok=false for any
+// non-string JSON, so a genuine bool/number literal is never disturbed.
+// An empty or otherwise non-scalar string is still returned ok=true —
+// the caller's retry json.Unmarshal rejects it and surfaces the
+// original error, so no separate guard is needed here.
+func unquoteJSONString(raw json.RawMessage) (json.RawMessage, bool) {
+	var s string
+	if err := json.Unmarshal(raw, &s); err != nil {
+		return nil, false
+	}
+	return json.RawMessage(s), true
 }
