@@ -250,6 +250,93 @@ func TestParentFK_AgreesWithLabelsRegistry(t *testing.T) {
 	}
 }
 
+// fkContractFixture is a representative discovery payload for one
+// resource type, used to drive the production Cloud Control config
+// closure in TestParentFK_DiscovererEmitsForeignKey.
+type fkContractFixture struct {
+	identifier string
+	props      map[string]any
+}
+
+// fkContractFixtures supplies, per Cloud Control resource type the #650
+// resolver depends on, an identifier + properties payload shaped like
+// what the AWS API returns. The contract test feeds these through the
+// production NativeIDsFromProperties closure and asserts the
+// foreign-key NativeIDs entry comes out — so a config refactor that
+// drops a parent-reference extractor fails CI here instead of silently
+// emptying ParentAddress at customer deploy time.
+var fkContractFixtures = map[string]fkContractFixture{
+	// Forward-edge children: the child's own config carries the FK.
+	"aws_route_table":                     {identifier: "rtb-1", props: map[string]any{"VpcId": "vpc-1"}},
+	"aws_subnet":                          {identifier: "subnet-1", props: map[string]any{"VpcId": "vpc-1"}},
+	"aws_vpc_security_group_ingress_rule": {identifier: "sgr-1", props: map[string]any{"GroupId": "sg-1"}},
+	"aws_vpc_security_group_egress_rule":  {identifier: "sgr-2", props: map[string]any{"GroupId": "sg-1"}},
+	"aws_kms_alias":                       {identifier: "alias/app", props: map[string]any{"TargetKeyId": "key-1"}},
+	"aws_cloudwatch_log_stream":           {identifier: "log-group|log-stream", props: nil},
+	"aws_iam_role_policy":                 {identifier: "policy-name|role-name", props: nil},
+	"aws_s3_bucket_policy":                {identifier: "my-bucket", props: nil},
+	// Reverse-edge parents: the parent's config carries the FK that
+	// points back at the parameter-group child.
+	"aws_db_instance":                   {identifier: "prod-db", props: map[string]any{"DBParameterGroupName": "prod-pg"}},
+	"aws_elasticache_replication_group": {identifier: "redis-rg", props: map[string]any{"CacheParameterGroupName": "redis-pg"}},
+}
+
+// sdkOnlyFKChildren are forward-edge child types discovered by the
+// SDK-only sub-resource pipeline rather than Cloud Control. Their
+// foreign-key NativeIDs entry cannot be driven through a
+// cloudControlConfig closure (the fetch funcs need a live/fake SDK
+// client), so the discoverer↔resolver contract for these is pinned by
+// their own discoverer tests (sdkonly_s3_test.go asserts NativeIDs
+// ["bucket"]; the IAM role-policy-attachment test asserts NativeIDs
+// ["role"]). They are listed here so TestParentFK_DiscovererEmitsForeignKey
+// can account for every forward edge and skip exactly these.
+var sdkOnlyFKChildren = map[string]struct{}{
+	"aws_s3_bucket_versioning":                           {},
+	"aws_s3_bucket_lifecycle_configuration":              {},
+	"aws_s3_bucket_ownership_controls":                   {},
+	"aws_s3_bucket_public_access_block":                  {},
+	"aws_s3_bucket_server_side_encryption_configuration": {},
+	"aws_iam_role_policy_attachment":                     {},
+}
+
+// TestParentFK_DiscovererEmitsForeignKey pins the discoverer↔resolver
+// contract: for every parent/child edge, the resource type that is
+// supposed to carry the foreign key actually emits it through its
+// production discoverer config. Without this, a refactor that drops a
+// NativeIDsFromProperties extractor would leave the FK registry pointing
+// at a key the discoverer no longer produces — ParentAddress would go
+// silently empty and only the resolver's synthetic-input unit tests
+// (which never exercise the real config) would still pass.
+func TestParentFK_DiscovererEmitsForeignKey(t *testing.T) {
+	t.Parallel()
+	for child, fk := range parentFKByChildType {
+		// The type whose config carries the FK, and the NativeIDs key
+		// it must emit: the child itself for a forward edge, the parent
+		// for a reverse edge.
+		typ, key := child, fk.childKey
+		if fk.parentKey != "" {
+			typ, key = fk.parentType, fk.parentKey
+		}
+		if _, sdkOnly := sdkOnlyFKChildren[child]; sdkOnly {
+			// Forward child discovered by the SDK-only pipeline; its
+			// FK is pinned by the discoverer's own test (see comment
+			// on sdkOnlyFKChildren).
+			continue
+		}
+		t.Run(child, func(t *testing.T) {
+			t.Parallel()
+			fx, ok := fkContractFixtures[typ]
+			require.Truef(t, ok, "no fkContractFixtures entry for %q (needed to verify the %q edge)", typ, child)
+			cfg := configByTFType(t, typ)
+			require.NotNilf(t, cfg.NativeIDsFromProperties,
+				"%q has no NativeIDsFromProperties extractor; the #650 resolver expects NativeIDs[%q]", typ, key)
+			native := cfg.NativeIDsFromProperties(fx.identifier, fx.props)
+			assert.NotEmptyf(t, native[key],
+				"%q discoverer must emit NativeIDs[%q] for the %q parent-instance edge; got %+v", typ, key, child, native)
+		})
+	}
+}
+
 // TestParentFK_CoversLabelsRegistry pins that every child type in the
 // labels parentTfType registry is accounted for here — either with a
 // resolvable FK rule or as a documented, deliberate omission in
