@@ -299,10 +299,18 @@ func NewAWSDiscovererWithConcurrency(cfg aws.Config, maxConcurrency int) *AWSDis
 		// cloudcontrol_types.go for the wiring).
 		"aws_dynamodb_contributor_insights": newDDBContributorInsightsEnricher(),
 		"aws_dynamodb_table":                newDynamoDBTableEnricher(),
-		"aws_iam_role_policy_attachment":    newIAMRolePolicyAttachmentEnricher(),
-		"aws_resourceexplorer2_index":       newResourceExplorer2IndexEnricher(),
-		"aws_resourceexplorer2_view":        newResourceExplorer2ViewEnricher(),
-		"aws_s3_bucket":                     newS3BucketEnricher(),
+		// aws_iam_policy: hand-rolled override (#661). The generic
+		// Cloud Control enricher's jsonStringifyField("PolicyDocument",
+		// "Policy") normalizer assumes GetResource returns a nested
+		// PolicyDocument, which the CFN AWS::IAM::ManagedPolicy schema
+		// often omits — leaving the REQUIRED `policy` argument empty.
+		// This enricher reads the document via iam:GetPolicy +
+		// iam:GetPolicyVersion instead. See iam_policy_enrich.go.
+		"aws_iam_policy":                 newIAMPolicyEnricher(),
+		"aws_iam_role_policy_attachment": newIAMRolePolicyAttachmentEnricher(),
+		"aws_resourceexplorer2_index":    newResourceExplorer2IndexEnricher(),
+		"aws_resourceexplorer2_view":     newResourceExplorer2ViewEnricher(),
+		"aws_s3_bucket":                  newS3BucketEnricher(),
 		// S3 bucket sub-resource enrichers — all five share the
 		// EnrichClients.S3 client; the per-bucket GetBucket* SDK calls
 		// fan out one-at-a-time and produce the typed Layer-1 payload
