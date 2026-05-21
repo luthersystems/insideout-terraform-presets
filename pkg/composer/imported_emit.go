@@ -245,6 +245,7 @@ func emitImportedResourceBody(ir imported.ImportedResource) ([]byte, error) {
 		if err != nil {
 			return nil, fmt.Errorf("decode typed Attrs for %q: %w", ir.Identity.Type, err)
 		}
+		ensureLambdaPlaceholderSource(typed)
 		body, err := generated.MarshalHCL(typed)
 		if err != nil {
 			return nil, fmt.Errorf("marshal typed body for %q: %w", ir.Identity.Type, err)
@@ -383,6 +384,45 @@ func appendImportedLifecycle(body []byte, tfType string) []byte {
 	b.WriteString(strings.Join(attrs, ", "))
 	b.WriteString("]\n}\n")
 	return b.Bytes()
+}
+
+// ensureLambdaPlaceholderSource injects a placeholder `filename` onto an
+// imported aws_lambda_function whose typed payload carries no usable
+// code source.
+//
+// The provider's schema rule requires exactly one of filename /
+// image_uri / s3_bucket. The SDK attribute enricher recovers image_uri
+// for container-image functions (lambda:GetFunction → Code.ImageUri),
+// but a zip-package function's filename / s3_bucket are genuinely
+// unrecoverable from the API — so without this injection the emitted
+// block fails `terraform plan` provider-side validation. The genconfig
+// fixup (fixupLambdaSource) does the equivalent on the terraform-driven
+// path; this is the SDK-enrich-path parity.
+//
+// The placeholder is always paired with the
+// `lifecycle { ignore_changes = LambdaCodeAttrs }` block that
+// appendImportedLifecycle adds for aws_lambda_function, so terraform
+// never reads the nonexistent file nor re-uploads it over the live
+// function's code (#652).
+//
+// A container-image function (package_type == "Image") never gets a
+// placeholder filename — filename and image_uri are mutually exclusive,
+// so injecting one would itself break the plan. A non-pointer / wrong
+// type is a no-op (defensive: only *generated.AWSLambdaFunction is
+// touched).
+func ensureLambdaPlaceholderSource(typed any) {
+	lf, ok := typed.(*generated.AWSLambdaFunction)
+	if !ok {
+		return
+	}
+	if lf.PackageType != nil && lf.PackageType.Literal != nil &&
+		strings.EqualFold(*lf.PackageType.Literal, "Image") {
+		return
+	}
+	if lf.Filename != nil || lf.ImageURI != nil || lf.S3Bucket != nil {
+		return
+	}
+	lf.Filename = generated.LiteralOf(imported.LambdaPlaceholderFilename)
 }
 
 func wrapResourceBlock(tfType, label, providerAlias string, body []byte) []byte {

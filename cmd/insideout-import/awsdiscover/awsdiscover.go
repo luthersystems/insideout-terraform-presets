@@ -299,18 +299,27 @@ func NewAWSDiscovererWithConcurrency(cfg aws.Config, maxConcurrency int) *AWSDis
 		// cloudcontrol_types.go for the wiring).
 		"aws_dynamodb_contributor_insights": newDDBContributorInsightsEnricher(),
 		"aws_dynamodb_table":                newDynamoDBTableEnricher(),
-		// aws_iam_policy: hand-rolled override (#661). The generic
-		// Cloud Control enricher's jsonStringifyField("PolicyDocument",
-		// "Policy") normalizer assumes GetResource returns a nested
-		// PolicyDocument, which the CFN AWS::IAM::ManagedPolicy schema
-		// often omits — leaving the REQUIRED `policy` argument empty.
-		// This enricher reads the document via iam:GetPolicy +
-		// iam:GetPolicyVersion instead. See iam_policy_enrich.go.
+		// aws_iam_policy / aws_iam_role / aws_iam_role_policy: hand-
+		// rolled overrides (#661 + follow-up). The generic Cloud Control
+		// enricher leaves these resources' REQUIRED JSON-document
+		// arguments (`policy`, `assume_role_policy`) empty — the CFN
+		// schemas treat the policy document as create-time input, not a
+		// stably-readable property, so GetResource omits it. Each
+		// enricher reads the document via the matching IAM Get* API
+		// instead. See iam_policy_enrich.go / iam_role_enrich.go /
+		// iam_role_policy_enrich.go.
 		"aws_iam_policy":                 newIAMPolicyEnricher(),
+		"aws_iam_role":                   newIAMRoleEnricher(),
+		"aws_iam_role_policy":            newIAMRolePolicyEnricher(),
 		"aws_iam_role_policy_attachment": newIAMRolePolicyAttachmentEnricher(),
 		"aws_resourceexplorer2_index":    newResourceExplorer2IndexEnricher(),
 		"aws_resourceexplorer2_view":     newResourceExplorer2ViewEnricher(),
 		"aws_s3_bucket":                  newS3BucketEnricher(),
+		// aws_s3_bucket_policy: hand-rolled override (#661 follow-up) —
+		// the REQUIRED `policy` argument has the same CC-path gap; the
+		// enricher reads it via s3:GetBucketPolicy. See
+		// s3_bucket_policy_enrich.go.
+		"aws_s3_bucket_policy": newS3BucketPolicyEnricher(),
 		// S3 bucket sub-resource enrichers — all five share the
 		// EnrichClients.S3 client; the per-bucket GetBucket* SDK calls
 		// fan out one-at-a-time and produce the typed Layer-1 payload
@@ -355,6 +364,18 @@ func NewAWSDiscovererWithConcurrency(cfg aws.Config, maxConcurrency int) *AWSDis
 		byTypeEnricher[ccCfg.TFType] = newCloudControlEnricherWithNormalizer(
 			ccCfg.TFType, ccCfg.CloudFormationType, nil, normalizer,
 		)
+	}
+	// aws_lambda_function: composite enricher (#661 follow-up). Unlike
+	// the policy-document enrichers above, lambda is NOT a full hand-
+	// rolled override — the Cloud Control path already maps the large
+	// AWS::Lambda::Function surface well. The composite delegates the
+	// bulk to the CC enricher the loop just registered, then issues one
+	// lambda:GetFunction call to recover the code attributes CC cannot
+	// read back (`image_uri` / `package_type` for container-image
+	// functions). Wrapping the already-built CC enricher keeps the
+	// composite in lockstep with any future CC lambda normalizer change.
+	if cc, ok := byTypeEnricher["aws_lambda_function"]; ok {
+		byTypeEnricher["aws_lambda_function"] = newLambdaFunctionEnricher(cc)
 	}
 	disc := &AWSDiscoverer{
 		defaultRegion:  cfg.Region,
