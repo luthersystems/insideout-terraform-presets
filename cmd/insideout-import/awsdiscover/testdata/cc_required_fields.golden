@@ -1,0 +1,68 @@
+aws_api_gateway_deployment: rest_api_id
+aws_api_gateway_resource: parent_id, path_part, rest_api_id
+aws_api_gateway_stage: deployment_id, rest_api_id, stage_name
+aws_apigatewayv2_api: name, protocol_type
+aws_apigatewayv2_api_mapping: api_id, domain_name, stage
+aws_apigatewayv2_authorizer: api_id, authorizer_type, name
+aws_apigatewayv2_domain_name: domain_name, domain_name_configuration
+aws_apigatewayv2_integration: api_id, integration_type
+aws_apigatewayv2_route: api_id, route_key
+aws_autoscaling_group: max_size, min_size
+aws_backup_plan: name, rule
+aws_backup_selection: iam_role_arn, name, plan_id
+aws_backup_vault: name
+aws_cloudfront_distribution: default_cache_behavior, enabled, origin, restrictions, viewer_certificate
+aws_cloudfront_function: code, name, runtime
+aws_cloudfront_monitoring_subscription: distribution_id, monitoring_subscription
+aws_cloudwatch_dashboard: dashboard_body, dashboard_name
+aws_cloudwatch_log_resource_policy: policy_document
+aws_cloudwatch_log_stream: log_group_name, name
+aws_cloudwatch_metric_alarm: alarm_name
+aws_cognito_identity_provider: provider_details, provider_name, provider_type, user_pool_id
+aws_cognito_resource_server: identifier, name, user_pool_id
+aws_cognito_user_pool: name
+aws_cognito_user_pool_client: name, user_pool_id
+aws_cognito_user_pool_domain: domain, user_pool_id
+aws_db_instance: instance_class
+aws_db_parameter_group: family
+aws_db_subnet_group: subnet_ids
+aws_ebs_volume: availability_zone
+aws_ecs_cluster: name
+aws_ecs_cluster_capacity_providers: cluster_name
+aws_eks_access_entry: cluster_name, principal_arn
+aws_eks_addon: addon_name, cluster_name
+aws_eks_cluster: name, role_arn, vpc_config
+aws_eks_fargate_profile: cluster_name, fargate_profile_name, pod_execution_role_arn, selector
+aws_eks_node_group: cluster_name, node_role_arn, scaling_config, subnet_ids
+aws_eks_pod_identity_association: cluster_name, namespace, role_arn, service_account
+aws_elasticache_parameter_group: family, name
+aws_elasticache_replication_group: description, replication_group_id
+aws_elasticache_subnet_group: name, subnet_ids
+aws_iam_group: name
+aws_iam_service_linked_role: aws_service_name
+aws_iam_user: name
+aws_key_pair: public_key
+aws_kms_alias: target_key_id
+aws_lambda_alias: function_name, function_version, name
+aws_lambda_event_source_mapping: function_name
+aws_lambda_function_url: authorization_type, function_name
+aws_lambda_permission: action, function_name, principal
+aws_lb_listener: default_action, load_balancer_arn
+aws_msk_cluster: broker_node_group_info, cluster_name, kafka_version, number_of_broker_nodes
+aws_msk_configuration: name, server_properties
+aws_network_acl: vpc_id
+aws_network_interface: subnet_id
+aws_opensearch_domain: domain_name
+aws_opensearchserverless_access_policy: name, policy, type
+aws_opensearchserverless_collection: name
+aws_opensearchserverless_security_policy: name, policy, type
+aws_route53_zone: name
+aws_route_table: vpc_id
+aws_secretsmanager_secret_rotation: rotation_rules, secret_id
+aws_sns_topic_subscription: endpoint, protocol, topic_arn
+aws_ssm_parameter: name, type
+aws_subnet: vpc_id
+aws_vpc_endpoint: vpc_id
+aws_vpc_security_group_egress_rule: ip_protocol, security_group_id
+aws_vpc_security_group_ingress_rule: ip_protocol, security_group_id
+aws_wafv2_web_acl: default_action, scope, visibility_config
