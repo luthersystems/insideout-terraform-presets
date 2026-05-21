@@ -1,10 +1,95 @@
 package genconfig
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
+
+// TestExtractAttributes_JSONEncodePolicyEvaluates pins the #652 fix: a
+// JSON-string attribute that `terraform plan -generate-config-out`
+// renders as a jsonencode({...}) call must be captured as a valid JSON
+// string, not as the literal source text "jsonencode({...})". Capturing
+// the text made the composer re-quote it into `policy =
+// "jsonencode({...})"`, which terraform plan rejects with `"policy"
+// contains an invalid JSON policy: not a JSON object`.
+func TestExtractAttributes_JSONEncodePolicyEvaluates(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_iam_policy" "x" {
+  name = "alpha"
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["s3:GetObject"]
+      Resource = "arn:aws:s3:::example-bucket/*"
+    }]
+  })
+}
+`)
+	out, err := extractAttributes(in, []imported.ImportedResource{
+		{Identity: imported.ResourceIdentity{Address: "aws_iam_policy.x"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	policy, ok := out[0].Attributes["policy"].(string)
+	if !ok {
+		t.Fatalf("policy should be a string; got %T = %v", out[0].Attributes["policy"], out[0].Attributes["policy"])
+	}
+	if strings.Contains(policy, "jsonencode") {
+		t.Fatalf("policy still carries the jsonencode() source text; the expression was not evaluated:\n%s", policy)
+	}
+	// The captured value must be a valid JSON object.
+	var doc map[string]any
+	if err := json.Unmarshal([]byte(policy), &doc); err != nil {
+		t.Fatalf("captured policy is not valid JSON: %v\n%s", err, policy)
+	}
+	if doc["Version"] != "2012-10-17" {
+		t.Errorf("policy JSON Version = %v, want 2012-10-17", doc["Version"])
+	}
+}
+
+// TestExtractAttributes_JSONEncodeAssumeRolePolicy is the sibling of
+// TestExtractAttributes_JSONEncodePolicyEvaluates for a different type
+// and attribute — aws_iam_role.assume_role_policy. terraform plan
+// -generate-config-out renders every IAM JSON-string attribute as a
+// jsonencode({...}) call, so the #652 fix must be generic across all of
+// them, not special-cased to aws_iam_policy.policy.
+func TestExtractAttributes_JSONEncodeAssumeRolePolicy(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_iam_role" "x" {
+  name = "alpha"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "lambda.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+}
+`)
+	out, err := extractAttributes(in, []imported.ImportedResource{
+		{Identity: imported.ResourceIdentity{Address: "aws_iam_role.x"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	policy, ok := out[0].Attributes["assume_role_policy"].(string)
+	if !ok {
+		t.Fatalf("assume_role_policy should be a string; got %T", out[0].Attributes["assume_role_policy"])
+	}
+	if strings.Contains(policy, "jsonencode") {
+		t.Fatalf("assume_role_policy still carries jsonencode() source text:\n%s", policy)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal([]byte(policy), &doc); err != nil {
+		t.Fatalf("captured assume_role_policy is not valid JSON: %v\n%s", err, policy)
+	}
+}
 
 func TestExtractAttributes_ScalarTypes(t *testing.T) {
 	t.Parallel()

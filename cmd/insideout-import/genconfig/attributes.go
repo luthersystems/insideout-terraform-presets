@@ -8,10 +8,32 @@ import (
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/hashicorp/hcl/v2/hclwrite"
+	"github.com/zclconf/go-cty/cty/function"
+	"github.com/zclconf/go-cty/cty/function/stdlib"
 	ctyjson "github.com/zclconf/go-cty/cty/json"
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
+
+// genconfigEvalContext is the evaluation context for decodeAttribute. It
+// registers the pure HCL functions that `terraform plan -generate-config-out`
+// emits into generated.tf — chiefly jsonencode, used for JSON-string
+// attributes such as aws_iam_policy.policy and
+// aws_iam_role.assume_role_policy. generate-config-out renders live cloud
+// state, so these calls carry only literal arguments (no variables or
+// resource refs) and evaluate cleanly with no variables in scope.
+//
+// Without this, jsonencode({...}) fails evaluation and decodeAttribute
+// captures the literal source text "jsonencode({...})" as a plain string;
+// the composer then re-quotes it into `policy = "jsonencode({...})"`, which
+// terraform plan rejects with `"policy" contains an invalid JSON policy`
+// (#652).
+var genconfigEvalContext = &hcl.EvalContext{
+	Functions: map[string]function.Function{
+		"jsonencode": stdlib.JSONEncodeFunc,
+		"jsondecode": stdlib.JSONDecodeFunc,
+	},
+}
 
 // extractAttributes parses the cleaned generated.tf and returns a copy of
 // the input slice with each ImportedResource.Attributes populated from its
@@ -97,11 +119,13 @@ func decodeAttribute(attr *hclwrite.Attribute) (any, error) {
 	if diags.HasErrors() {
 		return src, nil // unparseable: fall back to raw source
 	}
-	val, diags := parsedExpr.Value(nil)
+	val, diags := parsedExpr.Value(genconfigEvalContext)
 	if diags.HasErrors() {
-		// Has variables / refs / funcs we can't evaluate without context.
-		// Return the source text — Stage 2c can teach consumers to
-		// re-resolve it.
+		// Still unresolvable — a reference to another resource, or a
+		// function we don't register. generate-config-out emits only
+		// literals and jsonencode, so in practice this is a bare ref
+		// like aws_kms_key.foo.arn. Return the source text — Stage 2c
+		// can teach consumers to re-resolve it.
 		return src, nil
 	}
 
