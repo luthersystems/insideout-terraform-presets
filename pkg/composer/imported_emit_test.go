@@ -96,6 +96,68 @@ func TestEmitImportedTF_TypedGCP(t *testing.T) {
 //
 // Without this gate, Bundle 9's stated purpose — promoting 20 GCP
 // types from opaque-emit to typed-emit — has no end-to-end assertion.
+// TestEmitImportedTF_LambdaIgnoreChanges pins #652: an imported
+// aws_lambda_function carries a placeholder `filename` (its real code
+// lives in AWS, not on disk; the provider schema still demands one of
+// filename / image_uri / s3_bucket). The emitter must pin the code
+// attributes under lifecycle.ignore_changes — otherwise the first
+// `terraform apply` after import reads the nonexistent placeholder file
+// (apply fails) or re-uploads it over the live function's real code.
+func TestEmitImportedTF_LambdaIgnoreChanges(t *testing.T) {
+	t.Parallel()
+	ir := imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Cloud:    "aws",
+			Type:     "aws_lambda_function",
+			Address:  "aws_lambda_function.fn",
+			ImportID: "fn",
+		},
+		Tier: imported.TierImportedFlat,
+		Attributes: map[string]any{
+			"function_name": "fn",
+			"role":          "arn:aws:iam::123456789012:role/fn",
+			"filename":      "lambda_placeholder.zip",
+		},
+	}
+	out, _ := EmitImportedTF("aws", []imported.ImportedResource{ir}, EmitImportedOpts{})
+	require.NotNil(t, out)
+	s := string(out)
+	file, diags := hclsyntax.ParseConfig(out, "imported.tf", hcl.InitialPos)
+	require.Falsef(t, diags.HasErrors(), "imported.tf must parse: %s\n%s", diags.Error(), s)
+
+	var lifecycle *hclsyntax.Body
+	for _, blk := range file.Body.(*hclsyntax.Body).Blocks {
+		if blk.Type != "resource" {
+			continue
+		}
+		for _, sub := range blk.Body.Blocks {
+			if sub.Type == "lifecycle" {
+				lifecycle = sub.Body
+			}
+		}
+	}
+	require.NotNilf(t, lifecycle, "imported aws_lambda_function must emit a lifecycle block:\n%s", s)
+	ic := lifecycle.Attributes["ignore_changes"]
+	require.NotNil(t, ic, "lifecycle must set ignore_changes")
+	tuple, ok := ic.Expr.(*hclsyntax.TupleConsExpr)
+	require.True(t, ok, "ignore_changes must be a list")
+	// Assert the exact attribute identities against a literal — not
+	// against imported.LambdaCodeAttrs, which the production emitter
+	// also reads (that would be tautological). Pinning the wrong six
+	// attributes re-introduces the #652 "apply overwrites real code"
+	// failure while keeping the count correct.
+	var got []string
+	for _, e := range tuple.Exprs {
+		trav, isTrav := e.(*hclsyntax.ScopeTraversalExpr)
+		require.Truef(t, isTrav, "ignore_changes entry must be an attribute reference, got %T", e)
+		got = append(got, trav.Traversal.RootName())
+	}
+	sort.Strings(got)
+	want := []string{"filename", "image_uri", "s3_bucket", "s3_key", "s3_object_version", "source_code_hash"}
+	sort.Strings(want)
+	assert.Equal(t, want, got, "ignore_changes must pin exactly the Lambda code-source attributes")
+}
+
 func TestEmitImportedTF_TypedRoutingForAllGCPTypes(t *testing.T) {
 	t.Parallel()
 	for _, tfType := range generated.RegisteredTypes() {

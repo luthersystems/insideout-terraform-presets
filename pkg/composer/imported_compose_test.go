@@ -727,6 +727,7 @@ func TestComposeStackWithIssues_CrossTierWiring_RoundTrip(t *testing.T) {
 				Tier: imported.TierImportedFlat,
 				Attributes: map[string]any{
 					"function_name": "api",
+					"role":          "arn:aws:iam::123456789012:role/api",
 					// Cross-tier reference: api Lambda reads users table ARN.
 					"description": RawExpr{Expr: "aws_dynamodb_table.users.arn"},
 				},
@@ -777,6 +778,7 @@ func TestComposeStackWithIssues_CrossTierWiring_DanglingFlagged(t *testing.T) {
 				Tier: imported.TierImportedFlat,
 				Attributes: map[string]any{
 					"function_name": "api",
+					"role":          "arn:aws:iam::123456789012:role/api",
 					"description":   RawExpr{Expr: "aws_dynamodb_table.absent.arn"},
 				},
 			},

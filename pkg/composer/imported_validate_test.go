@@ -210,6 +210,41 @@ func TestValidateImportedResources_FieldFormat(t *testing.T) {
 	assert.Contains(t, fields, "imported.[1]")
 }
 
+// TestDropUncomposable pins the #652 "refuse uncomposable resources"
+// hardening: a resource flagged imported_resource_missing_required_attr
+// is dropped from the emit set so its partial resource block never
+// reaches terraform plan (where it would abort the whole stack with
+// "Missing required argument"), while every composable resource is kept.
+func TestDropUncomposable(t *testing.T) {
+	t.Parallel()
+	// aws_sqs_queue has no required arguments — composable with no Attrs.
+	good := imported.ImportedResource{
+		Identity: imported.ResourceIdentity{Cloud: "aws", Type: "aws_sqs_queue", Address: "aws_sqs_queue.ok", ImportID: "ok"},
+		Tier:     imported.TierImportedFlat,
+	}
+	// aws_lambda_function requires role + function_name — with no Attrs
+	// it is un-composable.
+	bad := imported.ImportedResource{
+		Identity: imported.ResourceIdentity{Cloud: "aws", Type: "aws_lambda_function", Address: "aws_lambda_function.bad", ImportID: "bad"},
+		Tier:     imported.TierImportedFlat,
+	}
+	irs := []imported.ImportedResource{good, bad}
+
+	issues := ValidateImportedEmitReadiness("aws", irs)
+	require.NotEmpty(t, issues, "the attr-less lambda must be flagged un-composable")
+
+	kept := dropUncomposable(irs, issues)
+	keptAddr := map[string]bool{}
+	for _, ir := range kept {
+		keptAddr[ir.Identity.Address] = true
+	}
+	assert.True(t, keptAddr["aws_sqs_queue.ok"], "composable resource must be kept")
+	assert.False(t, keptAddr["aws_lambda_function.bad"], "un-composable resource must be refused")
+
+	// No flagged resources -> the input slice is returned unchanged.
+	assert.Len(t, dropUncomposable([]imported.ImportedResource{good}, nil), 1)
+}
+
 func TestValidateProvenanceConflicts_Empty(t *testing.T) {
 	t.Parallel()
 	assert.Nil(t, ValidateProvenanceConflicts("aws", nil, ProvenanceOpts{ImportProjectID: "io-1"}))

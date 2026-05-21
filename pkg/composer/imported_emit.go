@@ -134,6 +134,7 @@ func EmitImportedTF(cloud string, irs []imported.ImportedResource, opts EmitImpo
 					continue
 				}
 			}
+			body = appendImportedLifecycle(body, ir.Identity.Type)
 			alias := providerAliasForResource(got, ir.Identity)
 			e.resource = wrapResourceBlock(ir.Identity.Type, addressLabel(addr), alias, body)
 			if mode == emitModeResourceImport {
@@ -346,6 +347,44 @@ func writeOpaqueAttr(body *hclwrite.Body, name string, v any) error {
 // <body> }` as a byte slice for downstream concatenation. Body bytes are
 // inserted verbatim; the outer hclwrite.ParseConfig pass canonicalises
 // formatting.
+// importedLifecycleIgnoreChanges maps a Terraform type to the attributes
+// an imported instance of it must pin under `lifecycle.ignore_changes`.
+//
+// aws_lambda_function: the discovery pipeline injects a placeholder
+// `filename` so the block satisfies the provider's "one of filename /
+// image_uri / s3_bucket" schema rule (an imported function's code lives
+// in AWS, not on disk). Without pinning the code attributes, the first
+// `terraform apply` after import either fails reading the nonexistent
+// placeholder file or re-uploads the placeholder over the live
+// function's real code (#652). The genconfig fixup adds the same pin to
+// generated.tf, but the composer re-emits imported.tf from the IR — and
+// the IR does not carry meta-blocks — so the emitter must re-add it.
+var importedLifecycleIgnoreChanges = map[string][]string{
+	"aws_lambda_function": imported.LambdaCodeAttrs,
+}
+
+// appendImportedLifecycle appends a `lifecycle { ignore_changes = [...] }`
+// block to an imported resource body when tfType is in
+// importedLifecycleIgnoreChanges. body is hclwrite-emitted attribute
+// text; the block is appended as raw HCL (ignore_changes items are bare
+// attribute references, not strings) and re-formatted by the caller's
+// outer parse. Types with no entry are returned unchanged.
+func appendImportedLifecycle(body []byte, tfType string) []byte {
+	attrs, ok := importedLifecycleIgnoreChanges[tfType]
+	if !ok || len(attrs) == 0 {
+		return body
+	}
+	var b bytes.Buffer
+	b.Write(body)
+	if len(body) > 0 && !bytes.HasSuffix(body, []byte("\n")) {
+		b.WriteByte('\n')
+	}
+	b.WriteString("\nlifecycle {\n  ignore_changes = [")
+	b.WriteString(strings.Join(attrs, ", "))
+	b.WriteString("]\n}\n")
+	return b.Bytes()
+}
+
 func wrapResourceBlock(tfType, label, providerAlias string, body []byte) []byte {
 	var b bytes.Buffer
 	fmt.Fprintf(&b, "resource %q %q {\n", tfType, label)

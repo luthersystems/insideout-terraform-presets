@@ -77,6 +77,10 @@ verify-supported-resources: ## Fail if SUPPORTED_RESOURCES.md is stale (CI gate,
 test: ## Run go test -race for the whole module.
 	$(GO) test -race ./...
 
+.PHONY: test-roundtrip
+test-roundtrip: ## Live AWS discover->emit->plan round-trip for the import flow (#652). Needs real AWS creds (aws_jump first) and terraform; creates and destroys real resources.
+	RUN_LIVE_ROUNDTRIP=1 $(GO) test -tags=integration -run TestLiveRoundTrip ./cmd/insideout-import/... -v -timeout 20m
+
 .PHONY: go-fmt-check
 go-fmt-check: ## Fail if any tracked Go file is not gofmt-clean (CI gate, #647).
 	@unformatted=$$(gofmt -l $$(git ls-files '*.go')); \

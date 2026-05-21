@@ -216,6 +216,40 @@ func ValidateImportedEmitReadiness(cloud string, irs []imported.ImportedResource
 	return issues
 }
 
+// dropUncomposable returns irs with every resource flagged
+// imported_resource_missing_required_attr removed. emitReadiness is the
+// ValidationIssue slice from ValidateImportedEmitReadiness for the same
+// resource set.
+//
+// A resource missing required arguments cannot be rendered as a
+// plannable `resource {}` block — `terraform plan` rejects the partial
+// body with "Missing required argument" and aborts planning for the
+// entire stack (#652). Refusing the single un-composable resource keeps
+// the rest of the stack composable; the issue is already recorded so the
+// caller still sees which resource was dropped and why.
+//
+// The input slice is returned unchanged (no allocation) when nothing is
+// flagged — the common case.
+func dropUncomposable(irs []imported.ImportedResource, emitReadiness []ValidationIssue) []imported.ImportedResource {
+	refused := map[string]bool{}
+	for _, is := range emitReadiness {
+		if is.Code == "imported_resource_missing_required_attr" {
+			refused[strings.TrimPrefix(is.Field, "imported.")] = true
+		}
+	}
+	if len(refused) == 0 {
+		return irs
+	}
+	out := make([]imported.ImportedResource, 0, len(irs))
+	for _, ir := range irs {
+		if refused[ir.Identity.Address] {
+			continue
+		}
+		out = append(out, ir)
+	}
+	return out
+}
+
 // ProvenanceOpts carries the per-compose context needed by
 // ValidateProvenanceConflicts. ImportProjectID is the logical claim/owner ID
 // used cross-cloud (decision #46 in docs/managed-resource-tiers.md). The

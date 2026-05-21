@@ -1,10 +1,27 @@
 package genconfig
 
 import (
+	"reflect"
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
+
+// TestLambdaIgnoreChangesUsesCanonicalList pins imported.LambdaCodeAttrs'
+// contract: the genconfig fixup and the composer's imported.tf emitter
+// must pin the identical lifecycle.ignore_changes set, or a Lambda
+// import breaks (#652). They cannot drift only because both read the
+// one shared list — a future edit re-introducing a local override here
+// is caught by this test.
+func TestLambdaIgnoreChangesUsesCanonicalList(t *testing.T) {
+	t.Parallel()
+	if !reflect.DeepEqual(lambdaIgnoreChanges, imported.LambdaCodeAttrs) {
+		t.Errorf("genconfig lambdaIgnoreChanges %v must equal the shared imported.LambdaCodeAttrs %v",
+			lambdaIgnoreChanges, imported.LambdaCodeAttrs)
+	}
+}
 
 // TestFixupLambda_NullSourceAttrsTreatedAsMissing pins the real-world
 // shape live AWS produces: terraform plan -generate-config-out emits
