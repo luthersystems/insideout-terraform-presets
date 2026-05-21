@@ -172,7 +172,12 @@ func TestResolveParentAddresses(t *testing.T) {
 			},
 		},
 		{
-			name: "unresolvable type — internet gateway has no FK rule, stays unlinked",
+			// IGW and DHCP options now have forward-edge FK rules
+			// (#651), but their vpc_id NativeID is stamped by the
+			// resolveVPCChildVPCIDs SDK pass, not the in-memory
+			// resolver. With no vpc_id present a forward edge with an
+			// empty FK value stays unlinked.
+			name: "child with FK rule but missing vpc_id NativeID stays unlinked",
 			in: []imported.ImportedResource{
 				res("aws_vpc", "aws_vpc.main", "vpc-0abc", map[string]string{"name": "vpc-0abc"}),
 				res("aws_internet_gateway", "aws_internet_gateway.igw", "igw-01", map[string]string{"name": "igw-01"}),
@@ -181,6 +186,21 @@ func TestResolveParentAddresses(t *testing.T) {
 			want: map[string]string{
 				"aws_internet_gateway.igw": "",
 				"aws_vpc_dhcp_options.d":   "",
+			},
+		},
+		{
+			// With vpc_id stamped (as the resolveVPCChildVPCIDs SDK
+			// pass would), the IGW and DHCP options forward-resolve to
+			// their parent aws_vpc like any other VPC child (#651).
+			name: "forward edge — IGW and DHCP options resolve via stamped vpc_id",
+			in: []imported.ImportedResource{
+				res("aws_vpc", "aws_vpc.main", "vpc-0abc", map[string]string{"name": "vpc-0abc"}),
+				res("aws_internet_gateway", "aws_internet_gateway.igw", "igw-01", map[string]string{"name": "igw-01", "vpc_id": "vpc-0abc"}),
+				res("aws_vpc_dhcp_options", "aws_vpc_dhcp_options.d", "dopt-01", map[string]string{"name": "dopt-01", "vpc_id": "vpc-0abc"}),
+			},
+			want: map[string]string{
+				"aws_internet_gateway.igw": "aws_vpc.main",
+				"aws_vpc_dhcp_options.d":   "aws_vpc.main",
 			},
 		},
 		{
@@ -281,15 +301,28 @@ var fkContractFixtures = map[string]fkContractFixture{
 	"aws_elasticache_replication_group": {identifier: "redis-rg", props: map[string]any{"CacheParameterGroupName": "redis-pg"}},
 }
 
-// sdkOnlyFKChildren are forward-edge child types discovered by the
-// SDK-only sub-resource pipeline rather than Cloud Control. Their
-// foreign-key NativeIDs entry cannot be driven through a
-// cloudControlConfig closure (the fetch funcs need a live/fake SDK
-// client), so the discoverer↔resolver contract for these is pinned by
-// their own discoverer tests (sdkonly_s3_test.go asserts NativeIDs
-// ["bucket"]; the IAM role-policy-attachment test asserts NativeIDs
-// ["role"]). They are listed here so TestParentFK_DiscovererEmitsForeignKey
-// can account for every forward edge and skip exactly these.
+// sdkOnlyFKChildren are forward-edge child types whose foreign-key
+// NativeIDs entry is NOT produced by a Cloud Control
+// NativeIDsFromProperties closure, so the
+// TestParentFK_DiscovererEmitsForeignKey contract test cannot drive it
+// through a cloudControlConfig closure and must skip them. Two distinct
+// reasons land a type here:
+//
+//   - SDK-only sub-resource pipeline: the S3 sub-resource and IAM
+//     role-policy-attachment children are discovered by the SDK-only
+//     sub-resource pipeline; their FK is pinned by the discoverer's own
+//     tests (sdkonly_s3_test.go asserts NativeIDs["bucket"]; the IAM
+//     role-policy-attachment test asserts NativeIDs["role"]).
+//
+//   - SDK augmentation pass (#651): aws_internet_gateway and
+//     aws_vpc_dhcp_options have no VpcId in their Cloud Control model at
+//     all — NativeIDs["vpc_id"] is stamped after discovery by the
+//     resolveVPCChildVPCIDs SDK pass (vpc_child_vpc_resolve.go), not by
+//     any per-type discoverer. The discoverer↔resolver contract for
+//     these two is pinned by vpc_child_vpc_resolve_test.go instead.
+//
+// They are listed here so TestParentFK_DiscovererEmitsForeignKey can
+// account for every forward edge and skip exactly these.
 var sdkOnlyFKChildren = map[string]struct{}{
 	"aws_s3_bucket_versioning":                           {},
 	"aws_s3_bucket_lifecycle_configuration":              {},
@@ -297,6 +330,9 @@ var sdkOnlyFKChildren = map[string]struct{}{
 	"aws_s3_bucket_public_access_block":                  {},
 	"aws_s3_bucket_server_side_encryption_configuration": {},
 	"aws_iam_role_policy_attachment":                     {},
+	// #651 — vpc_id stamped by the resolveVPCChildVPCIDs SDK pass.
+	"aws_internet_gateway": {},
+	"aws_vpc_dhcp_options": {},
 }
 
 // TestParentFK_DiscovererEmitsForeignKey pins the discoverer↔resolver

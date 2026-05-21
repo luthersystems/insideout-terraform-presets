@@ -69,9 +69,15 @@ var parentFKByChildType = map[string]parentFK{
 	// CloudFormation model's VpcId into NativeIDs["vpc_id"] (see
 	// vpcIDNativeIDs); it matches the parent aws_vpc's ImportID
 	// (vpc-…). aws_internet_gateway and aws_vpc_dhcp_options carry no
-	// VPC reference in their own model — see unresolvableChildTypes.
-	"aws_route_table": {parentType: "aws_vpc", childKey: "vpc_id"},
-	"aws_subnet":      {parentType: "aws_vpc", childKey: "vpc_id"},
+	// VPC reference in their own Cloud Control model — their
+	// NativeIDs["vpc_id"] is instead stamped by the resolveVPCChildVPCIDs
+	// SDK augmentation pass (vpc_child_vpc_resolve.go, #651), which runs
+	// just before resolveParentAddresses. Once stamped they join their
+	// parent aws_vpc as ordinary forward edges.
+	"aws_route_table":      {parentType: "aws_vpc", childKey: "vpc_id"},
+	"aws_subnet":           {parentType: "aws_vpc", childKey: "vpc_id"},
+	"aws_internet_gateway": {parentType: "aws_vpc", childKey: "vpc_id"},
+	"aws_vpc_dhcp_options": {parentType: "aws_vpc", childKey: "vpc_id"},
 
 	// Split security-group rules. The ingress/egress Cloud Control
 	// entries lift the model's GroupId into NativeIDs["security_group_id"],
@@ -112,15 +118,19 @@ var parentFKByChildType = map[string]parentFK{
 // unresolvableChildTypes are labels-registry child types for which the
 // AWS resource model the discoverer reads carries no usable parent
 // reference, so no parent-instance link can be emitted without
-// discovering an additional association resource (a new AWS API call,
-// out of scope for #650 which is "emit what you already know"). They are
-// listed explicitly — rather than simply omitted — so
+// discovering an additional association resource. They are listed
+// explicitly — rather than simply omitted — so
 // TestParentFK_CoversLabelsRegistry can tell a deliberate, documented
-// omission from an accidental gap. Tracked for follow-up in #651.
-var unresolvableChildTypes = map[string]string{
-	"aws_internet_gateway": "AWS::EC2::InternetGateway has no VpcId; the IGW↔VPC link is a separate AWS::EC2::VPCGatewayAttachment resource (#651)",
-	"aws_vpc_dhcp_options": "AWS::EC2::DHCPOptions has no VpcId; the link is a separate AWS::EC2::VPCDHCPOptionsAssociation resource (#651)",
-}
+// omission from an accidental gap.
+//
+// This map is currently empty: as of #651 all 18 labels-registry child
+// edges are resolvable — the last two holdouts (aws_internet_gateway and
+// aws_vpc_dhcp_options) now resolve via the resolveVPCChildVPCIDs SDK
+// augmentation pass (vpc_child_vpc_resolve.go). The variable is retained
+// (not deleted) as the documented-omission mechanism for any future
+// labels edge whose parent link genuinely cannot be recovered, and
+// because several tests reference it.
+var unresolvableChildTypes = map[string]string{}
 
 // parentIndexKey identifies a candidate parent by its Terraform type and
 // one of the identifier values it exposes.
