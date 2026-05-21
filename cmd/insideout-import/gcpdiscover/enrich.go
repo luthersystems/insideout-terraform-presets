@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/rand"
 	"sort"
 	"time"
 
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/api/cloudkms/v1"
 	computev1 "google.golang.org/api/compute/v1"
 	iamv1 "google.golang.org/api/iam/v1"
@@ -24,6 +26,53 @@ import (
 
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/progress"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
+)
+
+// defaultEnrichConcurrency bounds the per-resource cloud-API fan-out of
+// EnrichAttributes. Each enricher issues one or more GCP SDK round-trips
+// per resource; running them under a bounded worker pool turns the
+// previously serial ~1m30s pass on large accounts (~224 resources) into
+// a parallel one without unbounded fan-out hammering the GCP API rate
+// limits.
+//
+// Pinned to 4 to mirror awsdiscover.defaultDiscoverTypesConcurrency,
+// which was lowered from 8 to 4 in #632 after 8 simultaneous t=0
+// kickoffs tripped CloudControl's per-account rate budget with a
+// ThrottlingException. GCP's per-project quotas are likewise burst-
+// sensitive, so the enrich phase inherits the same ceiling. 4 still
+// delivers roughly a 4x wall-time saving over the old serial pass —
+// the marginal speedup from 8 isn't worth re-introducing the throttle
+// risk.
+const defaultEnrichConcurrency = 4
+
+// defaultEnrichStartupJitterMax bounds the random sleep applied before
+// the first defaultEnrichConcurrency enrich goroutines issue their
+// first GCP call. Mirrors awsdiscover.defaultDiscoverStartupJitterMax
+// (same value, same rationale): without jitter the first batch of
+// goroutines all kick off at t=0 and their opening Get/List calls land
+// in the same burst, lighting up the per-project rate limiter. 500ms
+// spreads the load without materially extending wall time. Only the
+// initial batch is jittered — goroutines beyond the first
+// defaultEnrichConcurrency are already naturally staggered by errgroup
+// slot availability.
+const defaultEnrichStartupJitterMax = 500 * time.Millisecond
+
+// enrichRetryMaxAttempts caps how many times enrichWithRetry calls the
+// wrapped enricher when it keeps returning a rate-limit error. Mirrors
+// awsdiscover.enrichRetryMaxAttempts / discoverRetryMaxAttempts.
+const enrichRetryMaxAttempts = 8
+
+// enrichRetryBaseDelay and enrichRetryMaxDelay bound the exponential
+// backoff enrichWithRetry sleeps between throttled attempts: the delay
+// starts at enrichRetryBaseDelay and doubles each attempt, capped at
+// enrichRetryMaxDelay.
+//
+// These are declared as package-level vars (not consts) purely so the
+// test suite can shrink them via a defer-restore to keep retry tests
+// fast; production code never reassigns them.
+var (
+	enrichRetryBaseDelay = 200 * time.Millisecond
+	enrichRetryMaxDelay  = 8 * time.Second
 )
 
 // enrichServiceSlug is the progress-event service slug for the SDK
@@ -210,10 +259,64 @@ type EnrichClients struct {
 // path in DiscoverTypes (gcpdiscover.go:430).
 var ErrEnrichClientUnavailable = errors.New("enrich: required SDK client unavailable on EnrichClients")
 
+// enrichWithRetry calls fn and, if it returns a rate-limit error (per
+// isGoogleAPIRateLimited), retries it under an exponential backoff with
+// jitter — up to enrichRetryMaxAttempts total attempts. A nil result, a
+// non-throttle error, or exhausting the attempt budget returns
+// immediately. The backoff sleep is select-cancellable on ctx.Done();
+// on cancel the last error is returned.
+//
+// This is a BACKSTOP retry loop. The AWS sibling layers this ON TOP of
+// the AWS SDK adaptive retryer; GCP has no equivalent client-level
+// adaptive retryer, so on the GCP side this loop is the PRIMARY throttle
+// defense — every rate-limit hit during enrichment is absorbed here
+// rather than surfacing as a per-resource error.
+//
+// Re-running a soft-failed Enrich is safe: per-type enrichers marshal
+// ir.Attrs atomically, so a retried call simply overwrites the prior
+// (failed) attempt's partial state.
+func enrichWithRetry(ctx context.Context, fn func() error) error {
+	var err error
+	backoff := enrichRetryBaseDelay
+	for attempt := 1; ; attempt++ {
+		err = fn()
+		if err == nil || !isGoogleAPIRateLimited(err) || attempt >= enrichRetryMaxAttempts {
+			return err
+		}
+		// Half-fixed + half-random of the current backoff window so
+		// retrying goroutines don't re-synchronize into a fresh burst.
+		sleep := backoff/2 + time.Duration(rand.Int63n(int64(backoff/2)+1))
+		t := time.NewTimer(sleep)
+		select {
+		case <-ctx.Done():
+			t.Stop()
+			return err
+		case <-t.C:
+		}
+		if backoff < enrichRetryMaxDelay {
+			backoff *= 2
+			if backoff > enrichRetryMaxDelay {
+				backoff = enrichRetryMaxDelay
+			}
+		}
+	}
+}
+
 // EnrichAttributes populates ir.Attrs in place for every imported
 // resource whose Identity.Type has a registered enricher. Resources
 // of types without a registered enricher are left untouched; the
 // caller can detect this via len(ir.Attrs) == 0 on return.
+//
+// The per-resource enrichers run concurrently under a bounded
+// errgroup (defaultEnrichConcurrency workers) so a large account's
+// cloud-API round-trips overlap instead of running strictly serially.
+// Each goroutine writes a distinct irs[i] element, so the fan-out is
+// data-race-free; the group is used purely as a bounded worker pool and
+// never fails early. Progress emission, EnrichmentStatus/EnrichErrors
+// stamping, and error aggregation happen in a SECOND serial pass after
+// the workers finish, walking idx in sorted order — so emit order and
+// error-join order remain exactly as deterministic as the old serial
+// implementation, regardless of which worker completes first.
 //
 // Errors are accumulated per-resource and surfaced together at the
 // end so a single mid-batch failure doesn't lose results from earlier
@@ -252,10 +355,54 @@ func (g *GCPDiscoverer) EnrichAttributes(ctx context.Context, irs []imported.Imp
 		return irs[ia].Identity.Address < irs[ib].Identity.Address
 	})
 
-	var errs []error
-	for _, i := range idx {
+	// Fan the per-resource enrichers out across a bounded worker pool.
+	// results[pos] holds the error (or nil) for idx[pos]; each worker
+	// writes exactly one distinct results slot and one distinct irs
+	// element, so no synchronization beyond errgroup is needed. The
+	// closure always returns nil — the group is a bounded pool, never
+	// an early-cancel mechanism — because the documented contract is
+	// "a partial result is more useful than no result": every resource
+	// must be attempted regardless of sibling failures. ctx is the
+	// caller's context (not a derived errgroup context) since we never
+	// cancel early.
+	results := make([]error, len(idx))
+	var grp errgroup.Group
+	grp.SetLimit(defaultEnrichConcurrency)
+	for pos, i := range idx {
 		enr := g.byTypeEnricher[irs[i].Identity.Type]
-		err := enr.Enrich(ctx, &irs[i], clients)
+		grp.Go(func() error {
+			// Jitter only the initial burst: the first
+			// defaultEnrichConcurrency goroutines start simultaneously
+			// at t=0, so their opening GCP calls would otherwise land
+			// together. Goroutines beyond that batch are already
+			// staggered by errgroup slot availability — jittering all
+			// of them would add tens of seconds of dead wall time.
+			if pos < defaultEnrichConcurrency {
+				sleep := time.Duration(rand.Int63n(int64(defaultEnrichStartupJitterMax)))
+				t := time.NewTimer(sleep)
+				select {
+				case <-ctx.Done():
+					t.Stop()
+				case <-t.C:
+				}
+			}
+			results[pos] = enrichWithRetry(ctx, func() error {
+				return enr.Enrich(ctx, &irs[i], clients)
+			})
+			return nil
+		})
+	}
+	_ = grp.Wait()
+
+	// Second pass: walk idx in sorted order to inspect results, stamp
+	// the per-IR EnrichmentStatus/EnrichErrors, emit progress events,
+	// and aggregate errors. Doing this serially — and outside the
+	// goroutines — keeps emit order and error-join order deterministic
+	// (progress.Emitter is not documented as concurrency-safe) and
+	// identical to the old serial behaviour.
+	var errs []error
+	for pos, i := range idx {
+		err := results[pos]
 		switch {
 		case err == nil:
 			// Per-type enrichers marshal Attrs atomically today, so

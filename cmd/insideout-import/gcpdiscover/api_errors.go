@@ -31,3 +31,32 @@ func isGoogleAPINotFound(err error) bool {
 	}
 	return false
 }
+
+// isGoogleAPIRateLimited reports whether err is a *googleapi.Error that
+// signals a rate-limit / quota-exhaustion condition. It matches an HTTP
+// 429 (Too Many Requests) or 503 (Service Unavailable) status, and also
+// scans the structured per-error Reason fields for the documented
+// rate-limit reasons (`rateLimitExceeded`, `userRateLimitExceeded`,
+// `quotaExceeded`) — Google APIs sometimes return the throttle reason in
+// the error detail with a non-429 top-level Code.
+//
+// Used by gcpdiscover.enrichWithRetry as the throttle classifier for the
+// enrich-phase backoff loop — the GCP-side parallel to awsdiscover's
+// isThrottleError. nil err returns false; a non-Google error returns
+// false.
+func isGoogleAPIRateLimited(err error) bool {
+	var gerr *googleapi.Error
+	if !errors.As(err, &gerr) {
+		return false
+	}
+	if gerr.Code == http.StatusTooManyRequests || gerr.Code == http.StatusServiceUnavailable {
+		return true
+	}
+	for _, e := range gerr.Errors {
+		switch e.Reason {
+		case "rateLimitExceeded", "userRateLimitExceeded", "quotaExceeded":
+			return true
+		}
+	}
+	return false
+}
