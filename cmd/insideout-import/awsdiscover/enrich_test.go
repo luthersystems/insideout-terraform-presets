@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -310,6 +311,14 @@ func TestEnrichAttributes_AccumulatesErrors(t *testing.T) {
 	// whack-a-mole.
 	assert.Contains(t, err.Error(), "a")
 	assert.Contains(t, err.Error(), "b")
+	// Each failed resource also carries the typed failure marker with
+	// the wrapped error text (#654).
+	assert.Equal(t, imported.EnrichmentStatusFailed, irs[0].Identity.EnrichmentStatus)
+	assert.Equal(t, imported.EnrichmentStatusFailed, irs[1].Identity.EnrichmentStatus)
+	require.NotEmpty(t, irs[0].Identity.EnrichErrors)
+	require.NotEmpty(t, irs[1].Identity.EnrichErrors)
+	assert.Contains(t, irs[0].Identity.EnrichErrors[0], "a")
+	assert.Contains(t, irs[1].Identity.EnrichErrors[0], "b")
 }
 
 func TestEnrichAttributes_DowngradesClientUnavailable(t *testing.T) {
@@ -332,6 +341,111 @@ func TestEnrichAttributes_DowngradesClientUnavailable(t *testing.T) {
 	require.Len(t, warns, 1, "exactly one ServiceWarn must be emitted for the unavailable client")
 	assert.Contains(t, warns[0].Message, "aws_dynamodb_table")
 	assert.Contains(t, warns[0].Message, "client unavailable")
+	// The downgrade still stamps the typed failure marker so a caller
+	// can distinguish this from a happy Identity-only IR (#654).
+	assert.Equal(t, imported.EnrichmentStatusFailed, irs[0].Identity.EnrichmentStatus)
+	assert.NotEmpty(t, irs[0].Identity.EnrichErrors)
+}
+
+// TestEnrichAttributes_DowngradesNotFound pins the #654 contract: an
+// enricher returning ErrNotFound — the resource, or a sub-resource it
+// reads, genuinely does not exist — is downgraded to a ServiceWarn and
+// NOT accumulated into the returned batch error, while still stamping
+// the typed EnrichmentStatusFailed marker so callers (and the composer's
+// drop-uncomposable filter) can flag the resource.
+func TestEnrichAttributes_DowngradesNotFound(t *testing.T) {
+	t.Parallel()
+	enr := &fakeEnricher{
+		tfType: "aws_dynamodb_table",
+		result: func(ir *imported.ImportedResource) error {
+			return fmt.Errorf("table %q: %w", ir.Identity.ImportID, ErrNotFound)
+		},
+	}
+	a := &AWSDiscoverer{byTypeEnricher: map[string]AttributeEnricher{"aws_dynamodb_table": enr}}
+
+	rec := &recordingEmitter{}
+	irs := []imported.ImportedResource{
+		{Identity: imported.ResourceIdentity{Type: "aws_dynamodb_table", ImportID: "t1", Address: "aws_dynamodb_table.t1"}},
+	}
+	err := a.EnrichAttributes(context.Background(), irs, EnrichClients{DynamoDB: &dynamodb.Client{}}, rec)
+	require.NoError(t, err, "ErrNotFound must downgrade to a warn, not a returned batch error")
+
+	warns := filterEvents(rec.snapshot(), "service_warn")
+	require.Len(t, warns, 1, "exactly one ServiceWarn must be emitted for the not-found resource")
+	assert.Contains(t, warns[0].Message, "aws_dynamodb_table")
+	assert.Contains(t, warns[0].Message, "t1",
+		"the warn message must carry the per-resource failure detail")
+
+	// A not-found resource is not a discovered item — ItemFound must
+	// not fire for it.
+	assert.Empty(t, filterEvents(rec.snapshot(), "item_found"),
+		"a not-found resource must not be reported as ItemFound")
+
+	assert.Equal(t, imported.EnrichmentStatusFailed, irs[0].Identity.EnrichmentStatus,
+		"a not-found resource must be stamped EnrichmentStatusFailed")
+	require.NotEmpty(t, irs[0].Identity.EnrichErrors, "EnrichErrors must carry the failure text")
+	assert.Contains(t, irs[0].Identity.EnrichErrors[0], "t1")
+}
+
+// TestEnrichAttributes_NotFoundDowngradedAlongsideRealError pins the
+// headline #654 interaction: in a heterogeneous batch an ErrNotFound
+// resource is downgraded (warn, no entry in the returned error) while a
+// genuine failure in the same pass is still accumulated — and both
+// resources are stamped EnrichmentStatusFailed.
+func TestEnrichAttributes_NotFoundDowngradedAlongsideRealError(t *testing.T) {
+	t.Parallel()
+	enr := &fakeEnricher{
+		tfType: "aws_dynamodb_table",
+		result: func(ir *imported.ImportedResource) error {
+			if ir.Identity.ImportID == "missing" {
+				return fmt.Errorf("table %q: %w", ir.Identity.ImportID, ErrNotFound)
+			}
+			return errors.New("403: " + ir.Identity.ImportID)
+		},
+	}
+	a := &AWSDiscoverer{byTypeEnricher: map[string]AttributeEnricher{"aws_dynamodb_table": enr}}
+
+	rec := &recordingEmitter{}
+	irs := []imported.ImportedResource{
+		{Identity: imported.ResourceIdentity{Type: "aws_dynamodb_table", ImportID: "missing", Address: "aws_dynamodb_table.missing"}},
+		{Identity: imported.ResourceIdentity{Type: "aws_dynamodb_table", ImportID: "denied", Address: "aws_dynamodb_table.denied"}},
+	}
+	err := a.EnrichAttributes(context.Background(), irs, EnrichClients{DynamoDB: &dynamodb.Client{}}, rec)
+
+	// The genuine 403 is still surfaced; the ErrNotFound resource is not.
+	require.Error(t, err, "a genuine failure must still be returned")
+	assert.Contains(t, err.Error(), "denied", "the real failure must be in the joined error")
+	assert.NotContains(t, err.Error(), "missing",
+		"the downgraded ErrNotFound resource must not appear in the joined error")
+
+	// Exactly one warn — for the downgraded ErrNotFound resource.
+	warns := filterEvents(rec.snapshot(), "service_warn")
+	require.Len(t, warns, 1)
+	assert.Contains(t, warns[0].Message, "missing")
+
+	// Both resources carry the typed failure marker regardless of which
+	// arm handled them.
+	assert.Equal(t, imported.EnrichmentStatusFailed, irs[0].Identity.EnrichmentStatus)
+	assert.Equal(t, imported.EnrichmentStatusFailed, irs[1].Identity.EnrichmentStatus)
+	assert.NotEmpty(t, irs[0].Identity.EnrichErrors)
+	assert.NotEmpty(t, irs[1].Identity.EnrichErrors)
+}
+
+// TestEnrichAttributes_StampsEnrichmentStatusFull pins that a successful
+// enrich stamps EnrichmentStatusFull and leaves EnrichErrors empty — the
+// machine-readable per-resource signal callers use instead of inspecting
+// Attrs or the joined batch error (#654).
+func TestEnrichAttributes_StampsEnrichmentStatusFull(t *testing.T) {
+	t.Parallel()
+	a := &AWSDiscoverer{byTypeEnricher: map[string]AttributeEnricher{
+		"aws_dynamodb_table": &fakeEnricher{tfType: "aws_dynamodb_table"},
+	}}
+	irs := []imported.ImportedResource{
+		{Identity: imported.ResourceIdentity{Type: "aws_dynamodb_table", ImportID: "t1", Address: "aws_dynamodb_table.t1"}},
+	}
+	require.NoError(t, a.EnrichAttributes(context.Background(), irs, EnrichClients{DynamoDB: &dynamodb.Client{}}, nil))
+	assert.Equal(t, imported.EnrichmentStatusFull, irs[0].Identity.EnrichmentStatus)
+	assert.Empty(t, irs[0].Identity.EnrichErrors)
 }
 
 func TestEnrichAttributes_EmitsItemFoundOnSuccess(t *testing.T) {

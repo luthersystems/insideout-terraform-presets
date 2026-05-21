@@ -368,11 +368,22 @@ func enrichWithRetry(ctx context.Context, fn func() error) error {
 // Errors are accumulated per-resource and surfaced together at the end
 // so a single mid-batch failure doesn't lose results from earlier
 // successful enrichments — a partial result is more useful than no
-// result. ErrEnrichClientUnavailable failures are downgraded to
-// progress.ServiceWarn events (and not included in the returned error)
-// since they reflect caller-side configuration, not API failures. The
-// returned error wraps the joined per-resource errors; callers may
-// inspect via errors.Is / errors.As.
+// result. Two error kinds are downgraded to progress.ServiceWarn events
+// (and not included in the returned error): ErrEnrichClientUnavailable,
+// which reflects caller-side configuration rather than an API failure,
+// and ErrNotFound, which is the expected per-resource outcome when the
+// resource (or a sub-resource the enricher reads) genuinely does not
+// exist — an S3 sub-resource that is unconfigured on its bucket, a Cloud
+// Control GetResource that 404s (issue #654). The returned error wraps
+// the joined per-resource errors for the remaining real failures;
+// callers may inspect via errors.Is / errors.As.
+//
+// Every enriched resource has its Identity.EnrichmentStatus /
+// EnrichErrors stamped: EnrichmentStatusFull on success,
+// EnrichmentStatusFailed (with the error text in EnrichErrors) on any
+// failure including the two downgraded kinds. This gives callers a
+// machine-readable per-resource signal that does not depend on
+// inspecting the returned joined error or on the absence of Attrs.
 //
 // emitter receives ItemFound per successfully enriched resource and
 // ServiceWarn per ErrEnrichClientUnavailable. The standard
@@ -458,14 +469,39 @@ func (a *AWSDiscoverer) EnrichAttributes(ctx context.Context, irs []imported.Imp
 		err := results[pos]
 		switch {
 		case err == nil:
+			// Per-type enrichers marshal Attrs atomically today, so a
+			// nil return means Full. The Partial state is reserved for
+			// a future multi-call enricher (see issue #471).
+			irs[i].Identity.EnrichmentStatus = imported.EnrichmentStatusFull
+			irs[i].Identity.EnrichErrors = nil
 			emitter.ItemFound(enrichServiceSlug, irs[i].Identity.Region, irs[i].Identity.Type, irs[i].Identity.ImportID)
 		case errors.Is(err, ErrEnrichClientUnavailable):
 			// Client-side configuration failure — surface as a warn
 			// but don't accumulate as an error. Mirrors the GCP-side
-			// downgrade semantics.
+			// downgrade semantics. The typed signal on Identity lets
+			// downstream consumers distinguish this from a happy
+			// Identity-only IR (issue #471).
+			irs[i].Identity.EnrichmentStatus = imported.EnrichmentStatusFailed
+			irs[i].Identity.EnrichErrors = append(irs[i].Identity.EnrichErrors, err.Error())
+			emitter.ServiceWarn(enrichServiceSlug, "", fmt.Sprintf("%s/%s: %v", irs[i].Identity.Type, irs[i].Identity.Address, err))
+		case errors.Is(err, ErrNotFound):
+			// The resource ID parsed but the cloud-side resource — or a
+			// sub-resource the enricher reads — does not exist: an S3
+			// sub-resource genuinely unconfigured on its bucket, a Cloud
+			// Control GetResource that 404s, and so on. This is an
+			// expected per-resource outcome, not a batch failure, so it
+			// is downgraded to a warn and NOT accumulated into errs
+			// (issue #654). The typed EnrichmentStatusFailed marker lets
+			// the composer's drop-uncomposable filter elide the resource
+			// and lets callers flag it without inspecting Attrs.
+			irs[i].Identity.EnrichmentStatus = imported.EnrichmentStatusFailed
+			irs[i].Identity.EnrichErrors = append(irs[i].Identity.EnrichErrors, err.Error())
 			emitter.ServiceWarn(enrichServiceSlug, "", fmt.Sprintf("%s/%s: %v", irs[i].Identity.Type, irs[i].Identity.Address, err))
 		default:
-			errs = append(errs, fmt.Errorf("enrich %s/%s: %w", irs[i].Identity.Type, irs[i].Identity.Address, err))
+			wrapped := fmt.Errorf("enrich %s/%s: %w", irs[i].Identity.Type, irs[i].Identity.Address, err)
+			irs[i].Identity.EnrichmentStatus = imported.EnrichmentStatusFailed
+			irs[i].Identity.EnrichErrors = append(irs[i].Identity.EnrichErrors, wrapped.Error())
+			errs = append(errs, wrapped)
 		}
 	}
 	if len(errs) > 0 {
