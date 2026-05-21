@@ -66,6 +66,20 @@ type ResourceIdentity struct {
 	// sanitized form. See the Address field comment for the
 	// relationship.
 	NameHint string `json:"name_hint,omitempty"`
+	// ParentAddress is the Terraform Address of the parent resource
+	// instance this resource is a child of, when that parent is present
+	// in the same discovery result. It is the per-instance counterpart of
+	// the type-level pkg/imported/labels parentTfType registry: that map
+	// answers "aws_s3_bucket_versioning is scoped to aws_s3_bucket"; this
+	// field answers "this versioning instance belongs to that specific
+	// bucket". Empty for resources with no parent, and for children whose
+	// parent instance was not discovered in this run (no dangling
+	// reference). Resolved post-discovery by joining the child's
+	// foreign-key identifier against the discovered set — see
+	// cmd/insideout-import/awsdiscover's parent resolver. Downstream
+	// consumers (reliable's reverse-Terraform import wizard, reliable#1617)
+	// use it to collapse child instance rows under their parent instance.
+	ParentAddress string `json:"parent_address,omitempty"`
 	// ProviderConfig identifies the provider alias used by emitted HCL,
 	// e.g. "aws.imported" or "google.imported".
 	ProviderConfig string `json:"provider_config,omitempty"`

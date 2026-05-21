@@ -29,6 +29,10 @@ import (
 //   - imported_resource_decode_failed — Attrs is non-empty but
 //     generated.UnmarshalAttrs(Identity.Type, Attrs) returns an error or the
 //     type is not in the registry.
+//   - imported_resource_dangling_parent — Identity.ParentAddress is set but
+//     no resource in the set carries that Address. The per-instance parent
+//     reference (#650) must point at a discovered resource; a dangling
+//     reference means the resolver linked to a parent that is not present.
 //
 // External tiers (ExternalByPolicy, ExternalUnsupported) and ComposerNative /
 // ComposerGraduated are out of scope here — they are not emitted as flat
@@ -40,6 +44,10 @@ func ValidateImportedResources(cloud string, irs []imported.ImportedResource) []
 	want := strings.ToLower(strings.TrimSpace(cloud))
 	var issues []ValidationIssue
 	addressIndex := map[string][]int{}
+	// parentRefs records, per resource index, a non-empty
+	// Identity.ParentAddress so the dangling-parent check can run after
+	// every Address in the set is known.
+	parentRefs := map[int]string{}
 
 	for i, ir := range irs {
 		field := importedField(ir, i)
@@ -96,6 +104,10 @@ func ValidateImportedResources(cloud string, irs []imported.ImportedResource) []
 			addressIndex[addr] = append(addressIndex[addr], i)
 		}
 
+		if parent := strings.TrimSpace(ir.Identity.ParentAddress); parent != "" {
+			parentRefs[i] = parent
+		}
+
 		if strings.TrimSpace(ir.Identity.ImportID) == "" {
 			issues = append(issues, ValidationIssue{
 				Field:  field,
@@ -145,6 +157,27 @@ func ValidateImportedResources(cloud string, irs []imported.ImportedResource) []
 			Value:  fmt.Sprintf("%d resources", len(idxs)),
 			Code:   "imported_resource_address_collision",
 			Reason: fmt.Sprintf("Terraform address %q is claimed by %d imported resources; addresses must be unique within a stack", addr, len(idxs)),
+		})
+	}
+
+	// Dangling parent-instance reference (#650): every non-empty
+	// ParentAddress must resolve to a resource Address present in the
+	// set. Sorted by index for deterministic issue ordering.
+	danglingIdxs := make([]int, 0, len(parentRefs))
+	for i := range parentRefs {
+		danglingIdxs = append(danglingIdxs, i)
+	}
+	sort.Ints(danglingIdxs)
+	for _, i := range danglingIdxs {
+		parent := parentRefs[i]
+		if _, ok := addressIndex[parent]; ok {
+			continue
+		}
+		issues = append(issues, ValidationIssue{
+			Field:  importedField(irs[i], i),
+			Value:  parent,
+			Code:   "imported_resource_dangling_parent",
+			Reason: fmt.Sprintf("Identity.ParentAddress %q does not match any imported resource Address in the set; the per-instance parent reference must point at a discovered resource", parent),
 		})
 	}
 
