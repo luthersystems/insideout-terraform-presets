@@ -29,6 +29,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cloudcontrol"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
+	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/aws/aws-sdk-go-v2/service/resourceexplorer2"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/secretsmanager"
@@ -234,10 +235,18 @@ type EnrichClients struct {
 	// ErrEnrichClientUnavailable.
 	APIGatewayV2 *apigatewayv2.Client
 	// IAM is the shared client for IAM hand-rolled enrichers
-	// (aws_iam_role_policy_attachment). IAM is a global service, so
-	// no per-region override is needed. Nil is tolerated and surfaces
-	// as ErrEnrichClientUnavailable.
+	// (aws_iam_role_policy_attachment, aws_iam_policy, aws_iam_role,
+	// aws_iam_role_policy). IAM is a global service, so no per-region
+	// override is needed. Nil is tolerated and surfaces as
+	// ErrEnrichClientUnavailable.
 	IAM *iam.Client
+	// Lambda is the shared client for the aws_lambda_function code
+	// enricher (#661 follow-up). Lambda is regional; the enricher
+	// applies a per-call region override via an Options closure so a
+	// single client serves every region in the run. Nil is tolerated:
+	// the lambda enricher still delegates to the Cloud Control path
+	// and simply skips the GetFunction-sourced code attributes.
+	Lambda *lambda.Client
 	// AutoScaling is the shared client for the
 	// aws_autoscaling_group_tag enricher (#482 final-2 push). Auto
 	// Scaling is regional, so the enricher's fetch closure pins the

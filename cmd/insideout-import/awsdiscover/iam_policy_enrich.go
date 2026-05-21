@@ -252,12 +252,17 @@ func fetchIAMPolicyWithClient(ctx context.Context, c iamPolicyAPI, policyARN str
 // The IAM API returns the document URL-encoded compliant with RFC 3986;
 // url.QueryUnescape reverses that. If unescaping fails the raw value is
 // used as-is (some callers / fakes pass an already-decoded document).
-// The result is then re-compacted via json.Compact so the emitted
-// `policy` string is stable regardless of the API's whitespace — a
-// non-JSON document is a hard error since `policy` must be valid JSON.
+// The result is then re-compacted via compactPolicyJSON so the emitted
+// `policy` string is stable regardless of the API's whitespace.
 //
 // An empty document yields an empty string (the caller omits the
 // `policy` field entirely in that case).
+//
+// Shared by the IAM-family enrichers (aws_iam_policy, aws_iam_role's
+// assume_role_policy, aws_iam_role_policy) — every IAM read API returns
+// policy documents URL-encoded. The S3 bucket-policy enricher uses
+// compactPolicyJSON directly because s3:GetBucketPolicy returns the
+// document already decoded.
 func decodeIAMPolicyDocument(raw string) (string, error) {
 	if raw == "" {
 		return "", nil
@@ -266,8 +271,20 @@ func decodeIAMPolicyDocument(raw string) (string, error) {
 	if err != nil {
 		decoded = raw
 	}
+	return compactPolicyJSON(decoded)
+}
+
+// compactPolicyJSON validates raw as JSON and returns it whitespace-
+// compacted so the emitted `policy` / `assume_role_policy` string is
+// stable regardless of the source API's formatting. An empty input
+// yields an empty string; a non-JSON input is a hard error since these
+// Terraform attributes must hold valid JSON.
+func compactPolicyJSON(raw string) (string, error) {
+	if raw == "" {
+		return "", nil
+	}
 	var buf bytes.Buffer
-	if err := json.Compact(&buf, []byte(decoded)); err != nil {
+	if err := json.Compact(&buf, []byte(raw)); err != nil {
 		return "", fmt.Errorf("policy document is not valid JSON: %w", err)
 	}
 	return buf.String(), nil
