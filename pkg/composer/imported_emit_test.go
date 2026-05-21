@@ -1,6 +1,7 @@
 package composer
 
 import (
+	"encoding/json"
 	"regexp"
 	"sort"
 	"strings"
@@ -156,6 +157,75 @@ func TestEmitImportedTF_LambdaIgnoreChanges(t *testing.T) {
 	want := []string{"filename", "image_uri", "s3_bucket", "s3_key", "s3_object_version", "source_code_hash"}
 	sort.Strings(want)
 	assert.Equal(t, want, got, "ignore_changes must pin exactly the Lambda code-source attributes")
+}
+
+// TestEmitImportedTF_LambdaTypedAttrsInjectsPlaceholderFilename pins the
+// SDK-enrich-path half of #663: a zip-package aws_lambda_function
+// enriched into typed Attrs has no recoverable code source (filename /
+// s3_bucket are unrecoverable from the API). The emitter must inject the
+// placeholder `filename` so the block satisfies the provider's
+// one-of-filename/image_uri/s3_bucket rule — the genconfig fixup does
+// the equivalent on the terraform-driven path.
+func TestEmitImportedTF_LambdaTypedAttrsInjectsPlaceholderFilename(t *testing.T) {
+	t.Parallel()
+	attrs, err := json.Marshal(&generated.AWSLambdaFunction{
+		FunctionName: generated.LiteralOf("fn"),
+		Role:         generated.LiteralOf("arn:aws:iam::123456789012:role/fn"),
+		PackageType:  generated.LiteralOf("Zip"),
+	})
+	require.NoError(t, err)
+	ir := imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Cloud:    "aws",
+			Type:     "aws_lambda_function",
+			Address:  "aws_lambda_function.fn",
+			ImportID: "fn",
+		},
+		Tier:  imported.TierImportedFlat,
+		Attrs: attrs,
+	}
+	out, _ := EmitImportedTF("aws", []imported.ImportedResource{ir}, EmitImportedOpts{})
+	require.NotNil(t, out)
+	s := string(out)
+	assert.Truef(t, hasAttr(t, s, "filename", `"lambda_placeholder.zip"`),
+		"zip-package lambda must get a placeholder filename:\n%s", s)
+	_, diags := hclsyntax.ParseConfig(out, "imported.tf", hcl.InitialPos)
+	require.Falsef(t, diags.HasErrors(), "imported.tf must parse: %s\n%s", diags.Error(), s)
+	assert.Contains(t, s, "ignore_changes", "placeholder filename must still be pinned under ignore_changes")
+}
+
+// TestEmitImportedTF_LambdaImagePackageNoPlaceholderFilename is the
+// negative: a container-image function carries image_uri (recovered by
+// the enricher) and must NOT get a placeholder filename — filename and
+// image_uri are mutually exclusive, so injecting one would itself break
+// the plan.
+func TestEmitImportedTF_LambdaImagePackageNoPlaceholderFilename(t *testing.T) {
+	t.Parallel()
+	const imageURI = "123456789012.dkr.ecr.us-east-1.amazonaws.com/app:latest"
+	attrs, err := json.Marshal(&generated.AWSLambdaFunction{
+		FunctionName: generated.LiteralOf("fn"),
+		Role:         generated.LiteralOf("arn:aws:iam::123456789012:role/fn"),
+		PackageType:  generated.LiteralOf("Image"),
+		ImageURI:     generated.LiteralOf(imageURI),
+	})
+	require.NoError(t, err)
+	ir := imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Cloud:    "aws",
+			Type:     "aws_lambda_function",
+			Address:  "aws_lambda_function.fn",
+			ImportID: "fn",
+		},
+		Tier:  imported.TierImportedFlat,
+		Attrs: attrs,
+	}
+	out, _ := EmitImportedTF("aws", []imported.ImportedResource{ir}, EmitImportedOpts{})
+	require.NotNil(t, out)
+	s := string(out)
+	assert.Falsef(t, hasAttr(t, s, "filename", `"lambda_placeholder.zip"`),
+		"image-package lambda must NOT get a placeholder filename:\n%s", s)
+	assert.Truef(t, hasAttr(t, s, "image_uri", `"`+imageURI+`"`),
+		"image-package lambda must keep its image_uri:\n%s", s)
 }
 
 func TestEmitImportedTF_TypedRoutingForAllGCPTypes(t *testing.T) {

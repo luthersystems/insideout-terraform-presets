@@ -70,11 +70,10 @@ var resourceTypeFixups = map[string]func(*hclwrite.Block){
 }
 
 // lambdaPlaceholderFile is what we set `filename` to so the block
-// validates without holding actual code. terraform validate doesn't open
-// the file (that happens at apply / build time), so the path can point
-// at a nonexistent file. A neutral, unmistakable name keeps the
-// generated.tf self-documenting.
-const lambdaPlaceholderFile = "lambda_placeholder.zip"
+// validates without holding actual code. It is the shared canonical
+// value — the composer's imported.tf emitter injects the identical
+// placeholder on the SDK-enrich path (see imported.LambdaPlaceholderFilename).
+const lambdaPlaceholderFile = imported.LambdaPlaceholderFilename
 
 // lambdaIgnoreChanges is the set of attributes lifecycle.ignore_changes
 // must cover so a real `terraform apply` against this stack will not try
