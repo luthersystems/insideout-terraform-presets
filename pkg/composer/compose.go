@@ -692,7 +692,8 @@ func (c *Client) composeStackImpl(opts ComposeStackOpts) (*ComposeStackResult, e
 	// at compose time, on the final ready-to-emit resource set — not in
 	// the discovery manifest writer, which validates a still-enriching
 	// intermediate snapshot. See ValidateImportedEmitReadiness.
-	issues = append(issues, ValidateImportedEmitReadiness(cloud, opts.Imported)...)
+	emitReadiness := ValidateImportedEmitReadiness(cloud, opts.Imported)
+	issues = append(issues, emitReadiness...)
 	issues = append(issues, ValidateImportedResourceAuthorization(cloud, opts.Imported)...)
 	provOpts := ProvenanceOpts{ImportProjectID: opts.ImportProjectID}
 	issues = append(issues, ValidateProvenanceConflicts(cloud, opts.Imported, provOpts)...)
@@ -701,7 +702,15 @@ func (c *Client) composeStackImpl(opts ComposeStackOpts) (*ComposeStackResult, e
 		ImportSessionID: opts.ImportSessionID,
 		ImportedAt:      nowFn(),
 	}
-	importedTF, importedClouds := EmitImportedTF(cloud, opts.Imported, emitOpts)
+	// Refuse to emit resources flagged un-composable — a resource block
+	// missing required arguments fails `terraform plan` with "Missing
+	// required argument", which aborts planning for the WHOLE stack
+	// (#652). The imported_resource_missing_required_attr issue is
+	// already recorded above, so the caller still learns which resource
+	// was dropped and why; emitting it anyway would turn a one-resource
+	// gap into a stack-wide planning failure.
+	composable := dropUncomposable(opts.Imported, emitReadiness)
+	importedTF, importedClouds := EmitImportedTF(cloud, composable, emitOpts)
 	if len(importedTF) > 0 {
 		files["/imported.tf"] = importedTF
 	}
