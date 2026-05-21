@@ -38,6 +38,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -54,6 +57,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/luthersystems/insideout-terraform-presets/pkg/composer"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported/generated"
 )
@@ -189,30 +193,33 @@ func TestE2E661_PolicyDocumentEnrichers(t *testing.T) {
 
 	// Identities shaped exactly as the Cloud Control discoverers stamp
 	// them (see cloudControlTypeConfigs).
+	// Cloud + Tier are set so the same slice composes via EmitImportedTF
+	// in the terraform-plan subtest below (the discoverer normally
+	// stamps these; here the resources are hand-built).
 	irs := []imported.ImportedResource{
-		{Identity: imported.ResourceIdentity{
-			Type: "aws_iam_policy", Address: "aws_iam_policy.e2e",
+		{Tier: imported.TierImportedFlat, Identity: imported.ResourceIdentity{
+			Cloud: "aws", Type: "aws_iam_policy", Address: "aws_iam_policy.e2e",
 			ImportID: managedARN, NameHint: managedName, Region: region,
 			NativeIDs: map[string]string{"arn": managedARN},
 		}},
-		{Identity: imported.ResourceIdentity{
-			Type: "aws_iam_role", Address: "aws_iam_role.e2e",
+		{Tier: imported.TierImportedFlat, Identity: imported.ResourceIdentity{
+			Cloud: "aws", Type: "aws_iam_role", Address: "aws_iam_role.e2e",
 			ImportID: roleName, NameHint: roleName, Region: region,
 		}},
-		{Identity: imported.ResourceIdentity{
-			Type: "aws_iam_role_policy", Address: "aws_iam_role_policy.e2e",
+		{Tier: imported.TierImportedFlat, Identity: imported.ResourceIdentity{
+			Cloud: "aws", Type: "aws_iam_role_policy", Address: "aws_iam_role_policy.e2e",
 			ImportID: roleName + ":" + inlineName, NameHint: inlineName, Region: region,
 			NativeIDs: map[string]string{"role_name": roleName, "policy_name": inlineName},
 		}},
-		{Identity: imported.ResourceIdentity{
-			Type: "aws_s3_bucket_policy", Address: "aws_s3_bucket_policy.e2e",
+		{Tier: imported.TierImportedFlat, Identity: imported.ResourceIdentity{
+			Cloud: "aws", Type: "aws_s3_bucket_policy", Address: "aws_s3_bucket_policy.e2e",
 			ImportID: bucketName, NameHint: bucketName, Region: region,
 			NativeIDs: map[string]string{"bucket": bucketName},
 		}},
 	}
 	if fnARN != "" {
-		irs = append(irs, imported.ImportedResource{Identity: imported.ResourceIdentity{
-			Type: "aws_lambda_function", Address: "aws_lambda_function.e2e",
+		irs = append(irs, imported.ImportedResource{Tier: imported.TierImportedFlat, Identity: imported.ResourceIdentity{
+			Cloud: "aws", Type: "aws_lambda_function", Address: "aws_lambda_function.e2e",
 			ImportID: fnName, NameHint: fnName, Region: region,
 			NativeIDs: map[string]string{"arn": fnARN},
 		}})
@@ -282,6 +289,70 @@ func TestE2E661_PolicyDocumentEnrichers(t *testing.T) {
 		// CC still mapped the bulk of the function.
 		require.NotNil(t, got.FunctionName)
 		assert.Equal(t, fnName, *got.FunctionName.Literal)
+	})
+
+	// The load-bearing confirmation: compose the enriched IRs to HCL and
+	// run `terraform plan` against the live account. This is what would
+	// "blow up on the next plan" if a required policy-document argument
+	// were empty or the lambda block lacked a code source — a plan-time
+	// error, not a compose-time one. A non-empty diff is expected and
+	// fine; a plan *error* is the regression this guards against.
+	t.Run("terraform plan accepts the composed imported.tf", func(t *testing.T) {
+		tfBin, lookErr := exec.LookPath("terraform")
+		if lookErr != nil {
+			t.Skip("terraform binary not on PATH")
+		}
+		out, _ := composer.EmitImportedTF("aws", irs, composer.EmitImportedOpts{})
+		require.NotEmpty(t, out, "EmitImportedTF produced no HCL")
+
+		dir := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "imported.tf"), out, 0o600))
+		providers := fmt.Sprintf(`terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = ">= 6.0"
+    }
+  }
+}
+provider "aws" {
+  region = %q
+}
+provider "aws" {
+  alias  = "imported"
+  region = %q
+}
+`, region, region)
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "providers.tf"), []byte(providers), 0o600))
+		// terraform plan never opens the lambda placeholder file, but
+		// write a real zip anyway so the directory is self-consistent.
+		if zipBytes, zerr := e2eLambdaZip(); zerr == nil {
+			_ = os.WriteFile(filepath.Join(dir, imported.LambdaPlaceholderFilename), zipBytes, 0o600)
+		}
+
+		runTF := func(args ...string) (string, error) {
+			cmd := exec.CommandContext(ctx, tfBin, args...)
+			cmd.Dir = dir
+			cmd.Env = append(os.Environ(), "TF_IN_AUTOMATION=1")
+			b, err := cmd.CombinedOutput()
+			return string(b), err
+		}
+		if o, err := runTF("init", "-input=false", "-no-color"); err != nil {
+			t.Fatalf("terraform init failed: %v\n%s", err, o)
+		}
+		// -detailed-exitcode: 0 = no diff, 2 = non-empty diff, 1 = error.
+		// A diff is expected (imported config rarely matches the live
+		// resource byte-for-byte); an error is the #663 regression.
+		o, err := runTF("plan", "-input=false", "-no-color", "-detailed-exitcode")
+		if err != nil {
+			var exitErr *exec.ExitError
+			if errors.As(err, &exitErr) && exitErr.ExitCode() == 2 {
+				t.Logf("terraform plan clean (exit 2 = non-empty diff, expected for import)")
+				return
+			}
+			t.Fatalf("terraform plan ERRORED — the composed imported.tf is not plan-clean:\n%s", o)
+		}
+		t.Logf("terraform plan clean (exit 0 = no diff)")
 	})
 }
 
