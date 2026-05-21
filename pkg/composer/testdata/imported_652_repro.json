@@ -1,0 +1,145 @@
+[
+  {
+    "tier": "ImportedFlat",
+    "attrs": {
+      "id": { "literal": "/aws/lambda/io-cnquj6nrjnlc-prod-luthersystems-insideout-lambda-lambdaa0ca" },
+      "name": { "literal": "/aws/lambda/io-cnquj6nrjnlc-prod-luthersystems-insideout-lambda-lambdaa0ca" },
+      "tags": {
+        "ID": { "literal": "lambdaa0ca" },
+        "Name": { "literal": "io-cnquj6nrjnlc-prod-luthersystems-insideout-lambda-lambdaa0ca" },
+        "Project": { "literal": "io-cnquj6nrjnlc" },
+        "Resource": { "literal": "lambda" },
+        "Component": { "literal": "insideout" },
+        "Environment": { "literal": "prod" },
+        "Organization": { "literal": "luthersystems" },
+        "Subcomponent": { "literal": "lambda" }
+      },
+      "log_group_class": { "literal": "STANDARD" },
+      "retention_in_days": { "literal": 14 }
+    },
+    "source": "importer",
+    "identity": {
+      "tags": {
+        "ID": "lambdaa0ca",
+        "Name": "io-cnquj6nrjnlc-prod-luthersystems-insideout-lambda-lambdaa0ca",
+        "Project": "io-cnquj6nrjnlc",
+        "Resource": "lambda",
+        "Component": "insideout",
+        "Environment": "prod",
+        "Organization": "luthersystems",
+        "Subcomponent": "lambda"
+      },
+      "type": "aws_cloudwatch_log_group",
+      "cloud": "aws",
+      "region": "us-east-1",
+      "address": "aws_cloudwatch_log_group.aws_lambda_io_cnquj6nrjnlc_prod_luthersystems_insideout_lambda_lambdaa0ca",
+      "import_id": "/aws/lambda/io-cnquj6nrjnlc-prod-luthersystems-insideout-lambda-lambdaa0ca",
+      "name_hint": "/aws/lambda/io-cnquj6nrjnlc-prod-luthersystems-insideout-lambda-lambdaa0ca",
+      "account_id": "031780745048",
+      "native_ids": {
+        "arn": "arn:aws:logs:us-east-1:031780745048:log-group:/aws/lambda/io-cnquj6nrjnlc-prod-luthersystems-insideout-lambda-lambdaa0ca:*",
+        "name": "/aws/lambda/io-cnquj6nrjnlc-prod-luthersystems-insideout-lambda-lambdaa0ca"
+      },
+      "provider_config": "aws.imported",
+      "provider_source": "registry.terraform.io/hashicorp/aws",
+      "provider_version": "5.40.0"
+    }
+  },
+  {
+    "tier": "ImportedFlat",
+    "attrs": {
+      "path": { "literal": "/" },
+      "description": { "literal": "Allows users to access the Account Usage Report page." }
+    },
+    "source": "importer",
+    "identity": {
+      "type": "aws_iam_policy",
+      "cloud": "aws",
+      "address": "aws_iam_policy.awsaccountusagereportaccess",
+      "import_id": "arn:aws:iam::aws:policy/AWSAccountUsageReportAccess",
+      "name_hint": "AWSAccountUsageReportAccess",
+      "account_id": "031780745048",
+      "native_ids": {
+        "arn": "arn:aws:iam::aws:policy/AWSAccountUsageReportAccess",
+        "name": "AWSAccountUsageReportAccess"
+      },
+      "provider_config": "aws.imported",
+      "provider_source": "registry.terraform.io/hashicorp/aws",
+      "provider_version": "5.40.0"
+    }
+  },
+  {
+    "tier": "ImportedFlat",
+    "source": "importer",
+    "identity": {
+      "tags": {
+        "ID": "lambdaa0ca",
+        "Name": "io-cnquj6nrjnlc-prod-luthersystems-insideout-lambda-lambdaa0ca",
+        "Project": "io-cnquj6nrjnlc",
+        "Resource": "lambda",
+        "Component": "insideout",
+        "Environment": "prod",
+        "Organization": "luthersystems",
+        "Subcomponent": "lambda"
+      },
+      "type": "aws_lambda_function",
+      "cloud": "aws",
+      "region": "us-east-1",
+      "address": "aws_lambda_function.io_cnquj6nrjnlc_prod_luthersystems_insideout_lambda_lambdaa0ca",
+      "import_id": "io-cnquj6nrjnlc-prod-luthersystems-insideout-lambda-lambdaa0ca",
+      "name_hint": "io-cnquj6nrjnlc-prod-luthersystems-insideout-lambda-lambdaa0ca",
+      "account_id": "031780745048",
+      "native_ids": {
+        "arn": "arn:aws:lambda:us-east-1:031780745048:function:io-cnquj6nrjnlc-prod-luthersystems-insideout-lambda-lambdaa0ca",
+        "name": "io-cnquj6nrjnlc-prod-luthersystems-insideout-lambda-lambdaa0ca"
+      },
+      "provider_config": "aws.imported",
+      "provider_source": "registry.terraform.io/hashicorp/aws",
+      "provider_version": "5.40.0"
+    }
+  },
+  {
+    "tier": "ImportedFlat",
+    "attrs": {
+      "tags": {
+        "ID": { "literal": "s30" },
+        "Name": { "literal": "io-cnquj6nrjnlc-prod-luthersystems-insideout-s3-s30" },
+        "Project": { "literal": "io-cnquj6nrjnlc" },
+        "Resource": { "literal": "s3" },
+        "Component": { "literal": "insideout" },
+        "Environment": { "literal": "prod" },
+        "Organization": { "literal": "luthersystems" },
+        "Subcomponent": { "literal": "s3" }
+      },
+      "bucket": { "literal": "io-cnquj6nrjnlc-93ce72" },
+      "region": { "literal": "us-east-1" }
+    },
+    "source": "importer",
+    "identity": {
+      "tags": {
+        "ID": "s30",
+        "Name": "io-cnquj6nrjnlc-prod-luthersystems-insideout-s3-s30",
+        "Project": "io-cnquj6nrjnlc",
+        "Resource": "s3",
+        "Component": "insideout",
+        "Environment": "prod",
+        "Organization": "luthersystems",
+        "Subcomponent": "s3"
+      },
+      "type": "aws_s3_bucket",
+      "cloud": "aws",
+      "region": "us-east-1",
+      "address": "aws_s3_bucket.io_cnquj6nrjnlc_93ce72",
+      "import_id": "io-cnquj6nrjnlc-93ce72",
+      "name_hint": "io-cnquj6nrjnlc-93ce72",
+      "account_id": "031780745048",
+      "native_ids": {
+        "arn": "arn:aws:s3:::io-cnquj6nrjnlc-93ce72",
+        "name": "io-cnquj6nrjnlc-93ce72"
+      },
+      "provider_config": "aws.imported",
+      "provider_source": "registry.terraform.io/hashicorp/aws",
+      "provider_version": "5.40.0"
+    }
+  }
+]
