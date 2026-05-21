@@ -12,7 +12,6 @@ aws_backup_plan: name, rule
 aws_backup_selection: iam_role_arn, name, plan_id
 aws_backup_vault: name
 aws_cloudfront_distribution: default_cache_behavior, enabled, origin, restrictions, viewer_certificate
-aws_cloudfront_function: code, name, runtime
 aws_cloudfront_monitoring_subscription: distribution_id, monitoring_subscription
 aws_cloudwatch_dashboard: dashboard_body, dashboard_name
 aws_cloudwatch_log_resource_policy: policy_document

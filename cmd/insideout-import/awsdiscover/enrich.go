@@ -27,6 +27,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/autoscaling"
 	"github.com/aws/aws-sdk-go-v2/service/bedrock"
 	"github.com/aws/aws-sdk-go-v2/service/cloudcontrol"
+	"github.com/aws/aws-sdk-go-v2/service/cloudfront"
 	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
@@ -247,6 +248,13 @@ type EnrichClients struct {
 	// the lambda enricher still delegates to the Cloud Control path
 	// and simply skips the GetFunction-sourced code attributes.
 	Lambda *lambda.Client
+	// CloudFront is the shared client for the aws_cloudfront_function
+	// code enricher (#665). CloudFront is a global service, so no
+	// per-region override is needed. Unlike the lambda overlay, the
+	// CloudFront overlay is mandatory (code + runtime are required
+	// Terraform arguments) — a nil client surfaces as
+	// ErrEnrichClientUnavailable for the resource.
+	CloudFront *cloudfront.Client
 	// AutoScaling is the shared client for the
 	// aws_autoscaling_group_tag enricher (#482 final-2 push). Auto
 	// Scaling is regional, so the enricher's fetch closure pins the
