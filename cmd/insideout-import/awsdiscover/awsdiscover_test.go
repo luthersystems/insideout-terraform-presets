@@ -220,6 +220,40 @@ func TestNewAWSDiscoverer_RegistersAllSupportedTypes(t *testing.T) {
 	}
 }
 
+// TestEnricherCoverage_EverySupportedTypeHasEnricher pins issue #654's
+// "the static capability list must reflect reality" contract: every type
+// the discoverer offers via SupportedTypes() must have a registered
+// AttributeEnricher. Without this a type can be discoverable — and so
+// offered as importable — while silently lacking an enricher, which
+// yields empty Attrs and an uncomposable resource block.
+//
+// A type may be listed in enricherExemptTypes only with a documented
+// reason. The set is empty today: every supported AWS type has an
+// enricher, either hand-rolled or the generic Cloud Control fallback
+// registered for every cloudControlTypeConfigs entry. Per-type Attrs
+// population on the happy path is pinned by the individual
+// *_enrich_test.go suites and cloudcontrol_enricher_test.go; this test
+// guards the registration so a newly-added discoverer cannot ship
+// without a matching enricher.
+func TestEnricherCoverage_EverySupportedTypeHasEnricher(t *testing.T) {
+	t.Parallel()
+	// enricherExemptTypes lists supported types intentionally shipped
+	// without an enricher. Each entry needs a one-line rationale. Empty
+	// today — retained as the documented-exemption mechanism.
+	enricherExemptTypes := map[string]string{}
+
+	agg := NewAWSDiscoverer(awsDummyConfig())
+	for _, typ := range agg.SupportedTypes() {
+		if reason, exempt := enricherExemptTypes[typ]; exempt {
+			t.Logf("%s: enricher-exempt (%s)", typ, reason)
+			continue
+		}
+		if _, ok := agg.byTypeEnricher[typ]; !ok {
+			t.Errorf("supported type %q has no registered AttributeEnricher — it would discover with empty Attrs and an uncomposable resource block (#654); add an enricher or list it in enricherExemptTypes with a reason", typ)
+		}
+	}
+}
+
 // TestNewAWSDiscoverer_DiscoverByID_DispatchesAndPropagatesErrNotSupported
 // pins the aggregator's per-type dispatch contract: registered types
 // route to the matching discoverer; unregistered types return
