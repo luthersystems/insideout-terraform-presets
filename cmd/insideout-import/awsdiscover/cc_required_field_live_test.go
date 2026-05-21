@@ -36,7 +36,11 @@ package awsdiscover
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
@@ -52,6 +56,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/stretchr/testify/require"
 
+	"github.com/luthersystems/insideout-terraform-presets/pkg/composer"
+	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported/generated"
 )
 
@@ -61,23 +67,22 @@ import (
 // it that turns up broken fails the probe (new bug-class instance), and
 // a listed type that turns up fixed also fails (stale entry — remove).
 var expectedGaps = map[string]string{
-	// Both confirmed by the first live run (2026-05) against a real
-	// account — see #665 for the fixes.
-
-	// aws_cloudfront_function: cloudcontrol:GetResource for
-	// AWS::CloudFront::Function does not return the function `code`
-	// (nor `runtime`) — the CFN handler treats FunctionCode as
-	// create-time input. Needs a hand-rolled enricher
-	// (cloudfront:GetFunction → Code + DescribeFunction → Runtime).
-	"aws_cloudfront_function": "GetResource omits code/runtime — see #665",
-
 	// aws_key_pair: cloudcontrol:GetResource for AWS::EC2::KeyPair
 	// returns the fingerprint but never the `public_key` material —
-	// EC2 does not expose public-key material on read. The required
-	// `public_key` argument is genuinely unrecoverable from the API;
-	// the fix is an adoption-style enricher that pins it under
-	// lifecycle.ignore_changes (the lambda-code precedent).
-	"aws_key_pair": "GetResource never returns public_key material — see #665",
+	// EC2 does not expose it on read, so NO enricher can recover it.
+	// This is a permanent enricher-layer gap by design; the #665 fix
+	// is composer-layer (composer.ensureKeyPairPlaceholder injects a
+	// placeholder public_key pinned under lifecycle.ignore_changes).
+	// The probe's compose+plan phase below verifies that fix end to
+	// end. This entry stays because the probe's per-type phase
+	// inspects the *enricher* output, which legitimately still lacks
+	// public_key.
+	"aws_key_pair": "public_key unrecoverable from any API — fixed at the composer layer, see #665",
+
+	// aws_cloudfront_function was a confirmed gap (GetResource omits
+	// code/runtime) — FIXED by the cloudfrontFunctionEnricher composite
+	// (#665), which overlays both from the CloudFront API. It is no
+	// longer listed here; the probe now asserts it enriches cleanly.
 }
 
 // e2eThrowawayPublicKey is a throwaway ed25519 public key for the
@@ -103,9 +108,17 @@ func TestLive665_CloudControlRequiredFieldProbe(t *testing.T) {
 		t.Skipf("STS GetCallerIdentity failed (no usable AWS creds), skipping: %v", err)
 	}
 
-	clients := EnrichClients{CloudControl: cloudcontrol.NewFromConfig(cfg)}
+	clients := EnrichClients{
+		CloudControl: cloudcontrol.NewFromConfig(cfg),
+		CloudFront:   cloudfront.NewFromConfig(cfg),
+	}
 	disc := NewAWSDiscoverer(cfg)
 	suffix := fmt.Sprintf("%d", time.Now().UnixNano())
+
+	// enriched collects the enriched IRs across the per-type subtests
+	// so the compose+terraform-plan subtest can verify the composed
+	// HCL end to end. Subtests run sequentially, so the append is safe.
+	var enriched []imported.ImportedResource
 
 	// Each probe provisions a resource and returns the resource name —
 	// the value the discoverer stamps on Identity.NameHint — so the
@@ -194,9 +207,15 @@ func TestLive665_CloudControlRequiredFieldProbe(t *testing.T) {
 		},
 	}
 
+	// rootT owns the resource teardown: each provision registers its
+	// t.Cleanup on rootT (not the per-type subtest) so the resources
+	// outlive the per-type subtests and are still present for the
+	// terraform-plan subtest, which imports them. A t.Cleanup on a
+	// subtest fires when that subtest ends — far too early here.
+	rootT := t
 	for _, p := range probes {
 		t.Run(p.tfType, func(t *testing.T) {
-			name, ok := p.provision(t)
+			name, ok := p.provision(rootT)
 			if !ok {
 				t.Skip("provisioning did not complete (see log)")
 			}
@@ -224,6 +243,7 @@ func TestLive665_CloudControlRequiredFieldProbe(t *testing.T) {
 			if err := disc.EnrichAttributes(ctx, irs, clients, nil); err != nil {
 				t.Fatalf("EnrichAttributes(%s): %v", p.tfType, err)
 			}
+			enriched = append(enriched, irs[0])
 			missing := missingRequiredFields(t, p.tfType, irs[0].Attrs)
 			reason, known := expectedGaps[p.tfType]
 			switch {
@@ -243,6 +263,65 @@ func TestLive665_CloudControlRequiredFieldProbe(t *testing.T) {
 			}
 		})
 	}
+
+	// End-to-end verification: compose the enriched IRs to HCL and run
+	// `terraform plan` against the live account. This proves the fixes
+	// hold where it matters — a plan ERROR is the regression. For
+	// aws_key_pair specifically, this is the only phase that exercises
+	// the composer-layer fix (placeholder public_key + ignore_changes),
+	// since the per-type phase above inspects only the enricher output.
+	t.Run("terraform plan accepts the composed imported.tf", func(t *testing.T) {
+		if len(enriched) == 0 {
+			t.Skip("no resources enriched (all provisioning skipped)")
+		}
+		tfBin, lookErr := exec.LookPath("terraform")
+		if lookErr != nil {
+			t.Skip("terraform binary not on PATH")
+		}
+		out, _ := composer.EmitImportedTF("aws", enriched, composer.EmitImportedOpts{})
+		require.NotEmpty(t, out, "EmitImportedTF produced no HCL")
+
+		dir := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "imported.tf"), out, 0o600))
+		providers := fmt.Sprintf(`terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = ">= 6.0"
+    }
+  }
+}
+provider "aws" {
+  region = %q
+}
+provider "aws" {
+  alias  = "imported"
+  region = %q
+}
+`, region, region)
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "providers.tf"), []byte(providers), 0o600))
+
+		runTF := func(args ...string) (string, error) {
+			cmd := exec.CommandContext(ctx, tfBin, args...)
+			cmd.Dir = dir
+			cmd.Env = append(os.Environ(), "TF_IN_AUTOMATION=1")
+			b, err := cmd.CombinedOutput()
+			return string(b), err
+		}
+		if o, err := runTF("init", "-input=false", "-no-color"); err != nil {
+			t.Fatalf("terraform init failed: %v\n%s", err, o)
+		}
+		o, err := runTF("plan", "-input=false", "-no-color", "-detailed-exitcode")
+		if err != nil {
+			var exitErr *exec.ExitError
+			if errors.As(err, &exitErr) && exitErr.ExitCode() == 2 {
+				t.Logf("terraform plan clean (exit 2 = non-empty diff, expected for import)")
+				return
+			}
+			t.Fatalf("terraform plan ERRORED — the composed imported.tf is not plan-clean:\n%s", o)
+		}
+		t.Logf("terraform plan clean (exit 0 = no diff)")
+	})
 }
 
 // missingRequiredFields returns the REQUIRED schema fields of tfType
