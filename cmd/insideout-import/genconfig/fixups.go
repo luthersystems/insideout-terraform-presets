@@ -8,6 +8,8 @@ import (
 	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/hashicorp/hcl/v2/hclwrite"
 	"github.com/zclconf/go-cty/cty"
+
+	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
 
 // applyResourceTypeFixups runs after schema cleanup. It plugs the gaps
@@ -77,15 +79,9 @@ const lambdaPlaceholderFile = "lambda_placeholder.zip"
 // lambdaIgnoreChanges is the set of attributes lifecycle.ignore_changes
 // must cover so a real `terraform apply` against this stack will not try
 // to re-upload code or churn checksum-derived attrs the operator never
-// edits.
-var lambdaIgnoreChanges = []string{
-	"filename",
-	"image_uri",
-	"s3_bucket",
-	"s3_key",
-	"s3_object_version",
-	"source_code_hash",
-}
+// edits. It is the shared canonical list — the composer's imported.tf
+// emitter pins the identical set (see imported.LambdaCodeAttrs).
+var lambdaIgnoreChanges = imported.LambdaCodeAttrs
 
 // fixupLambdaSource is the per-block implementation of the Lambda
 // post-cleanup contract documented on applyResourceTypeFixups. The block
