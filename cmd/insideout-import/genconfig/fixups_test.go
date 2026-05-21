@@ -2339,3 +2339,56 @@ resource "aws_other_resource" "extra" {
 		t.Errorf("aws_other_resource's empty domain_dns_ips must be preserved (fixup keyed by aws_db_instance)\n--- got ---\n%s", got)
 	}
 }
+
+// TestFixupKeyPair_NoPublicKeyInjectsPlaceholderAndIgnore pins the #665
+// fix: an imported aws_key_pair lands with no `public_key` (EC2 never
+// returns key material). The fixup injects the shared placeholder and
+// pins `public_key` under lifecycle.ignore_changes.
+func TestFixupKeyPair_NoPublicKeyInjectsPlaceholderAndIgnore(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_key_pair" "kp" {
+  key_name = "alpha"
+  key_type = "ed25519"
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if !strings.Contains(got, imported.KeyPairPlaceholderPublicKey) {
+		t.Errorf("placeholder public_key not injected\n--- got ---\n%s", got)
+	}
+	if !strings.Contains(got, "lifecycle") || !strings.Contains(got, "ignore_changes") {
+		t.Errorf("lifecycle.ignore_changes block not added\n--- got ---\n%s", got)
+	}
+	if !regexp.MustCompile(`(?s)ignore_changes\s*=\s*\[[^]]*public_key`).MatchString(got) {
+		t.Errorf("ignore_changes must pin public_key\n--- got ---\n%s", got)
+	}
+}
+
+// TestFixupKeyPair_ExistingPublicKeyNotOverwritten pins the friendly-
+// fire guard: an operator-supplied public_key must survive — only the
+// ignore_changes pin is added.
+func TestFixupKeyPair_ExistingPublicKeyNotOverwritten(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_key_pair" "kp" {
+  key_name   = "alpha"
+  public_key = "ssh-ed25519 REALKEYMATERIAL operator-supplied"
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if !strings.Contains(got, "REALKEYMATERIAL") {
+		t.Errorf("operator-supplied public_key was clobbered\n--- got ---\n%s", got)
+	}
+	if strings.Contains(got, imported.KeyPairPlaceholderPublicKey) {
+		t.Errorf("placeholder injected over existing public_key\n--- got ---\n%s", got)
+	}
+	if !strings.Contains(got, "ignore_changes") {
+		t.Errorf("ignore_changes pin missing\n--- got ---\n%s", got)
+	}
+}

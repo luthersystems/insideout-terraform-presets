@@ -194,6 +194,89 @@ func TestEmitImportedTF_LambdaTypedAttrsInjectsPlaceholderFilename(t *testing.T)
 	assert.Contains(t, s, "ignore_changes", "placeholder filename must still be pinned under ignore_changes")
 }
 
+// TestEmitImportedTF_KeyPairInjectsPlaceholderPublicKey pins the #665
+// fix: an imported aws_key_pair carries no public_key (EC2 never
+// returns key material), a REQUIRED + ForceNew argument. The emitter
+// must inject the shared placeholder and pin public_key under
+// lifecycle.ignore_changes so terraform never force-replaces the live
+// key pair.
+func TestEmitImportedTF_KeyPairInjectsPlaceholderPublicKey(t *testing.T) {
+	t.Parallel()
+	attrs, err := json.Marshal(&generated.AWSKeyPair{
+		KeyName: generated.LiteralOf("alpha"),
+		KeyType: generated.LiteralOf("ed25519"),
+	})
+	require.NoError(t, err)
+	ir := imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Cloud:    "aws",
+			Type:     "aws_key_pair",
+			Address:  "aws_key_pair.kp",
+			ImportID: "alpha",
+		},
+		Tier:  imported.TierImportedFlat,
+		Attrs: attrs,
+	}
+	out, _ := EmitImportedTF("aws", []imported.ImportedResource{ir}, EmitImportedOpts{})
+	require.NotNil(t, out)
+	s := string(out)
+	assert.Truef(t, strings.Contains(s, "insideout-imported-placeholder-key"),
+		"key pair must get a placeholder public_key:\n%s", s)
+	file, diags := hclsyntax.ParseConfig(out, "imported.tf", hcl.InitialPos)
+	require.Falsef(t, diags.HasErrors(), "imported.tf must parse: %s\n%s", diags.Error(), s)
+	// public_key must be pinned under lifecycle.ignore_changes.
+	var lifecycle *hclsyntax.Body
+	for _, blk := range file.Body.(*hclsyntax.Body).Blocks {
+		if blk.Type != "resource" {
+			continue
+		}
+		for _, sub := range blk.Body.Blocks {
+			if sub.Type == "lifecycle" {
+				lifecycle = sub.Body
+			}
+		}
+	}
+	require.NotNilf(t, lifecycle, "aws_key_pair must emit a lifecycle block:\n%s", s)
+	ic := lifecycle.Attributes["ignore_changes"]
+	require.NotNil(t, ic, "lifecycle must set ignore_changes")
+	tuple, ok := ic.Expr.(*hclsyntax.TupleConsExpr)
+	require.True(t, ok, "ignore_changes must be a list")
+	var got []string
+	for _, e := range tuple.Exprs {
+		trav, isTrav := e.(*hclsyntax.ScopeTraversalExpr)
+		require.Truef(t, isTrav, "ignore_changes entry must be an attribute reference, got %T", e)
+		got = append(got, trav.Traversal.RootName())
+	}
+	assert.Equal(t, []string{"public_key"}, got, "ignore_changes must pin exactly public_key")
+}
+
+// TestEmitImportedTF_KeyPairExistingPublicKeyKept is the negative: an
+// aws_key_pair that already carries a public_key keeps it — the
+// placeholder is injected only when the field is absent.
+func TestEmitImportedTF_KeyPairExistingPublicKeyKept(t *testing.T) {
+	t.Parallel()
+	attrs, err := json.Marshal(&generated.AWSKeyPair{
+		KeyName:   generated.LiteralOf("alpha"),
+		PublicKey: generated.LiteralOf("ssh-ed25519 REALKEY operator"),
+	})
+	require.NoError(t, err)
+	ir := imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Cloud:    "aws",
+			Type:     "aws_key_pair",
+			Address:  "aws_key_pair.kp",
+			ImportID: "alpha",
+		},
+		Tier:  imported.TierImportedFlat,
+		Attrs: attrs,
+	}
+	out, _ := EmitImportedTF("aws", []imported.ImportedResource{ir}, EmitImportedOpts{})
+	require.NotNil(t, out)
+	s := string(out)
+	assert.Contains(t, s, "REALKEY", "operator public_key must survive")
+	assert.NotContains(t, s, "insideout-imported-placeholder-key", "placeholder must not overwrite a real public_key")
+}
+
 // TestEmitImportedTF_LambdaImagePackageNoPlaceholderFilename is the
 // negative: a container-image function carries image_uri (recovered by
 // the enricher) and must NOT get a placeholder filename — filename and
