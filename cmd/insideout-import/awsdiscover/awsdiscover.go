@@ -377,6 +377,14 @@ func NewAWSDiscovererWithConcurrency(cfg aws.Config, maxConcurrency int) *AWSDis
 	if cc, ok := byTypeEnricher["aws_lambda_function"]; ok {
 		byTypeEnricher["aws_lambda_function"] = newLambdaFunctionEnricher(cc)
 	}
+	// aws_cloudfront_function: composite enricher (#665). Same shape as
+	// the lambda composite — delegates the bulk mapping to the CC
+	// enricher, then overlays the required `code` + `runtime`
+	// attributes CloudControl GetResource does not return. Unlike
+	// lambda, the overlay is mandatory (both are required arguments).
+	if cc, ok := byTypeEnricher["aws_cloudfront_function"]; ok {
+		byTypeEnricher["aws_cloudfront_function"] = newCloudfrontFunctionEnricher(cc)
+	}
 	disc := &AWSDiscoverer{
 		defaultRegion:  cfg.Region,
 		cfg:            cfg,

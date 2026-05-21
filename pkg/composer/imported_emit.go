@@ -246,6 +246,7 @@ func emitImportedResourceBody(ir imported.ImportedResource) ([]byte, error) {
 			return nil, fmt.Errorf("decode typed Attrs for %q: %w", ir.Identity.Type, err)
 		}
 		ensureLambdaPlaceholderSource(typed)
+		ensureKeyPairPlaceholder(typed)
 		body, err := generated.MarshalHCL(typed)
 		if err != nil {
 			return nil, fmt.Errorf("marshal typed body for %q: %w", ir.Identity.Type, err)
@@ -362,6 +363,11 @@ func writeOpaqueAttr(body *hclwrite.Body, name string, v any) error {
 // the IR does not carry meta-blocks — so the emitter must re-add it.
 var importedLifecycleIgnoreChanges = map[string][]string{
 	"aws_lambda_function": imported.LambdaCodeAttrs,
+	// aws_key_pair: public_key is unrecoverable from the API (EC2 never
+	// returns key material) and is ForceNew — pinning it under
+	// ignore_changes keeps the placeholder from force-replacing the
+	// live key pair. See ensureKeyPairPlaceholder and #665.
+	"aws_key_pair": imported.KeyPairPublicKeyAttr,
 }
 
 // appendImportedLifecycle appends a `lifecycle { ignore_changes = [...] }`
@@ -423,6 +429,31 @@ func ensureLambdaPlaceholderSource(typed any) {
 		return
 	}
 	lf.Filename = generated.LiteralOf(imported.LambdaPlaceholderFilename)
+}
+
+// ensureKeyPairPlaceholder injects a placeholder `public_key` onto an
+// imported aws_key_pair whose typed payload carries none.
+//
+// `public_key` is REQUIRED and ForceNew, and ec2:DescribeKeyPairs never
+// returns the key material — so the enricher cannot recover it (#665).
+// Without a value the composed block fails the composer's required-
+// argument check; with a guessed value that did not match, the first
+// apply would force-replace (destroy) the live key pair. The fix is the
+// Lambda-code adoption pattern: a syntactically valid placeholder,
+// always paired with the `lifecycle { ignore_changes = ["public_key"] }`
+// block appendImportedLifecycle adds for aws_key_pair, so terraform
+// never acts on the placeholder.
+//
+// A non-pointer / wrong type is a no-op.
+func ensureKeyPairPlaceholder(typed any) {
+	kp, ok := typed.(*generated.AWSKeyPair)
+	if !ok {
+		return
+	}
+	if kp.PublicKey != nil {
+		return
+	}
+	kp.PublicKey = generated.LiteralOf(imported.KeyPairPlaceholderPublicKey)
 }
 
 func wrapResourceBlock(tfType, label, providerAlias string, body []byte) []byte {

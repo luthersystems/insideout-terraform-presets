@@ -54,6 +54,7 @@ func applyResourceTypeFixups(raw []byte) ([]byte, error) {
 // by cleanGenerated.
 var resourceTypeFixups = map[string]func(*hclwrite.Block){
 	"aws_lambda_function":       fixupLambdaSource,
+	"aws_key_pair":              fixupKeyPairPublicKey,
 	"aws_kms_key":               fixupKMSRotationPeriodZero,
 	"aws_dynamodb_table":        fixupDynamoDBPITRRecoveryPeriodZero,
 	"aws_vpc":                   fixupVPCIPv6NetmaskOrphan,
@@ -106,6 +107,30 @@ func fixupLambdaSource(blk *hclwrite.Block) {
 	}
 	lc := body.AppendNewBlock("lifecycle", nil)
 	lc.Body().SetAttributeRaw("ignore_changes", ignoreChangesTokens(lambdaIgnoreChanges))
+}
+
+// fixupKeyPairPublicKey is the aws_key_pair counterpart to
+// fixupLambdaSource (#665). ec2:DescribeKeyPairs never returns the
+// public-key material, so an imported aws_key_pair lands with no
+// `public_key` — a REQUIRED, ForceNew argument. The fixup injects the
+// shared placeholder and pins `public_key` under
+// `lifecycle.ignore_changes` so terraform does not force-replace the
+// live key pair to match the placeholder. The composer's imported.tf
+// emitter (ensureKeyPairPlaceholder) does the identical injection on
+// the SDK-enrich path.
+func fixupKeyPairPublicKey(blk *hclwrite.Block) {
+	body := blk.Body()
+	if !hasUsableValue(body, "public_key") {
+		body.SetAttributeValue("public_key", cty.StringVal(imported.KeyPairPlaceholderPublicKey))
+	}
+	for _, sub := range body.Blocks() {
+		if sub.Type() == "lifecycle" {
+			mergeIgnoreChanges(sub, imported.KeyPairPublicKeyAttr)
+			return
+		}
+	}
+	lc := body.AppendNewBlock("lifecycle", nil)
+	lc.Body().SetAttributeRaw("ignore_changes", ignoreChangesTokens(imported.KeyPairPublicKeyAttr))
 }
 
 // fixupKMSRotationPeriodZero drops aws_kms_key.rotation_period_in_days
