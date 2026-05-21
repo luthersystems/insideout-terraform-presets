@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
+	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/progress"
@@ -122,6 +123,11 @@ const DefaultMaxConcurrency = 10
 type AWSDiscoverer struct {
 	byType        map[string]Discoverer
 	defaultRegion string
+	// cfg is the construction-time aws.Config. DiscoverTypes uses it to
+	// build per-region EC2 clients for the resolveVPCChildVPCIDs
+	// augmentation pass (#651), which needs live Describe* calls the
+	// per-type discoverers do not make.
+	cfg aws.Config
 	// rgtPrefetcher is the optional RGT (Resource Groups Tagging API)
 	// pre-pass run once per DiscoverTypes call. Defaults to a real
 	// prefetcher constructed from the aws.Config; tests can swap in a
@@ -344,6 +350,7 @@ func NewAWSDiscovererWithConcurrency(cfg aws.Config, maxConcurrency int) *AWSDis
 	}
 	disc := &AWSDiscoverer{
 		defaultRegion:  cfg.Region,
+		cfg:            cfg,
 		byType:         byType,
 		rgtPrefetcher:  newRealRGTPrefetcher(cfg),
 		byTypeEnricher: byTypeEnricher,
@@ -552,6 +559,24 @@ func (a *AWSDiscoverer) DiscoverTypes(ctx context.Context, types []string, args 
 	all := make([]imported.ImportedResource, 0, total)
 	for _, r := range results {
 		all = append(all, r...)
+	}
+	// VPC-child VPC augmentation (#651): aws_internet_gateway and
+	// aws_vpc_dhcp_options carry no VpcId in their Cloud Control model,
+	// so the #650 in-memory join cannot find their parent aws_vpc. This
+	// SDK-backed pass issues EC2 Describe* calls to recover the link and
+	// stamps NativeIDs["vpc_id"] onto the matching resources, after which
+	// resolveParentAddresses handles them as ordinary forward-edge FK
+	// rules. A failure here must not abort an otherwise-successful
+	// discovery run — the parent links are best-effort enrichment — so a
+	// non-nil error is downgraded to a service warning.
+	if err := resolveVPCChildVPCIDs(ctx, all, args.Regions, func(region string) ec2VPCChildAPI {
+		return ec2.NewFromConfig(a.cfg, func(o *ec2.Options) {
+			if region != "" {
+				o.Region = region
+			}
+		})
+	}); err != nil {
+		args.Emitter.ServiceWarn("vpc_parent_resolve", "", err.Error())
 	}
 	// Parent-instance resolution (#650): now that the full cross-
 	// discoverer set is assembled, join each discovered child to the
