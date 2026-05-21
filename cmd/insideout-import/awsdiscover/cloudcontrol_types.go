@@ -267,6 +267,12 @@ var cloudControlTypeConfigs = []cloudControlConfig{
 			return map[string]string{"arn": identifier}
 		},
 		TagsFromProperties: tagsFromKey("Tags"),
+		// CC ListResources for AWS::IAM::ManagedPolicy returns both
+		// customer-managed AND AWS-managed policies. AWS-managed
+		// policies (ARN account field literally "aws") are not
+		// customer-owned and must never be imported into customer
+		// state — see isAWSManagedPolicyARN and #652.
+		SkipIdentifier: isAWSManagedPolicyARN,
 		// Normalizer: CFN AWS::IAM::ManagedPolicy surfaces the policy
 		// document as a nested JSON object under `PolicyDocument`, but
 		// Terraform's `aws_iam_policy.policy` is a REQUIRED JSON-encoded
@@ -2717,6 +2723,31 @@ func arnUnderKey(key string) func(identifier string, props map[string]any) map[s
 		}
 		return map[string]string{"arn": arn}
 	}
+}
+
+// awsManagedPolicyARNPrefixes are the IAM-managed-policy ARN prefixes
+// across the standard, GovCloud, and China partitions. An AWS-managed
+// policy ARN carries the literal account field "aws" (e.g.
+// arn:aws:iam::aws:policy/AWSAccountUsageReportAccess); a customer-owned
+// policy carries a real 12-digit account ID.
+var awsManagedPolicyARNPrefixes = []string{
+	"arn:aws:iam::aws:policy/",
+	"arn:aws-us-gov:iam::aws:policy/",
+	"arn:aws-cn:iam::aws:policy/",
+}
+
+// isAWSManagedPolicyARN reports whether arn is an AWS-managed IAM policy
+// ARN. AWS-managed policies are not customer-owned — their lifecycle
+// belongs to AWS — so importing one into customer Terraform state would
+// surface permanent, unfixable drift (#652). The aws_iam_policy
+// discoverer drops them via the SkipIdentifier hook.
+func isAWSManagedPolicyARN(arn string) bool {
+	for _, p := range awsManagedPolicyARNPrefixes {
+		if strings.HasPrefix(arn, p) {
+			return true
+		}
+	}
+	return false
 }
 
 // tagsFromKey returns a TagsFromProperties extractor that reads tags

@@ -130,6 +130,17 @@ type cloudControlConfig struct {
 	TagsFromProperties      func(props map[string]any) map[string]string
 	ParentLister            func(ctx context.Context, awsCfg aws.Config, region string, args DiscoverArgs) ([]string, error)
 	SDKLister               func(ctx context.Context, awsCfg aws.Config, region string, args DiscoverArgs) ([]string, error)
+	// SkipIdentifier, when non-nil, is consulted for every identifier
+	// returned by ListResources / SDKLister: returning true drops that
+	// identifier before the GetResource fan-out (and short-circuits
+	// DiscoverByID with ErrNotSupported). Use it to exclude resources
+	// that the Cloud Control list surfaces but that must never enter
+	// customer Terraform state — e.g. AWS-managed IAM policies, whose
+	// ARN account field is literally "aws" (#652). The customer cannot
+	// manage such a resource's lifecycle, so importing it would surface
+	// permanent drift. Filtering at the identifier stage also avoids a
+	// wasted GetResource call per skipped item.
+	SkipIdentifier func(identifier string) bool
 	// Normalizer, when non-nil, transforms the Cloud Control raw JSON
 	// response before the generic CC→TF mapping step. Use for per-type
 	// shape adjustments that CloudFormation does differently from
@@ -364,6 +375,21 @@ func (d *cloudControlDiscoverer) Discover(ctx context.Context, args DiscoverArgs
 			}
 		}
 
+		// Drop identifiers the per-type config marks as not customer-
+		// owned (e.g. AWS-managed IAM policies — #652). Filtering here,
+		// before the GetResource fan-out, also avoids a wasted
+		// GetResource call per skipped item.
+		if d.cfg.SkipIdentifier != nil {
+			kept := refs[:0]
+			for _, ref := range refs {
+				if d.cfg.SkipIdentifier(ref.identifier) {
+					continue
+				}
+				kept = append(kept, ref)
+			}
+			refs = kept
+		}
+
 		// Per-identifier GetResource fan-out under bounded errgroup.
 		type fetched struct {
 			identifier  string
@@ -488,6 +514,14 @@ func (d *cloudControlDiscoverer) DiscoverByID(ctx context.Context, id, region, a
 	id = strings.TrimSpace(id)
 	if id == "" {
 		return imported.ImportedResource{}, fmt.Errorf("%s: empty id: %w", d.cfg.TFType, ErrNotSupported)
+	}
+	// Identifiers the per-type config excludes (e.g. AWS-managed IAM
+	// policies — #652) must not be imported even when dep-chase reaches
+	// them via a cross-reference. ErrNotSupported tells the dep-chase
+	// loop to drop the reference rather than retry with another
+	// discoverer.
+	if d.cfg.SkipIdentifier != nil && d.cfg.SkipIdentifier(id) {
+		return imported.ImportedResource{}, fmt.Errorf("%s %q: not customer-owned: %w", d.cfg.TFType, id, ErrNotSupported)
 	}
 	client := d.new(region)
 	resp, err := client.GetResource(ctx, &cloudcontrol.GetResourceInput{
