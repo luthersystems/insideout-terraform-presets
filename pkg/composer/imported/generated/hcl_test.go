@@ -198,6 +198,47 @@ future_block {
 	assert.Equal(t, "orders-DLQ", *q.Name.Literal)
 }
 
+// TestMarshalHCLConfigurable_SkipsComputedOnly pins #669: when a schema is
+// supplied, MarshalHCLConfigurable must drop top-level fields whose
+// FieldSchema is not Configurable() (computed-only attributes), while a
+// nil schema stays byte-identical to MarshalHCL.
+func TestMarshalHCLConfigurable_SkipsComputedOnly(t *testing.T) {
+	t.Parallel()
+	q := hclTestQueue{
+		Name:      LiteralOf("orders-DLQ"),
+		FifoQueue: LiteralOf(false),
+	}
+
+	// nil schema → no filtering, identical to MarshalHCL.
+	nilOut, err := MarshalHCLConfigurable(&q, nil)
+	require.NoError(t, err)
+	plainOut, err := MarshalHCL(&q)
+	require.NoError(t, err)
+	assert.Equal(t, string(plainOut), string(nilOut),
+		"nil schema must be byte-identical to MarshalHCL")
+	assert.Contains(t, string(nilOut), "fifo_queue")
+
+	// Schema marking fifo_queue computed-only must drop it; the
+	// configurable `name` survives.
+	schema := map[string]FieldSchema{
+		"name":       {Optional: true},
+		"fifo_queue": {Computed: true},
+	}
+	out, err := MarshalHCLConfigurable(&q, schema)
+	require.NoError(t, err)
+	s := string(out)
+	assert.Contains(t, s, `name`, "configurable attr must survive:\n%s", s)
+	assert.NotContains(t, s, "fifo_queue",
+		"computed-only attr must be dropped:\n%s", s)
+
+	// Optional+Computed is still Configurable() — must NOT be dropped.
+	schema["fifo_queue"] = FieldSchema{Optional: true, Computed: true}
+	out2, err := MarshalHCLConfigurable(&q, schema)
+	require.NoError(t, err)
+	assert.Contains(t, string(out2), "fifo_queue",
+		"Optional+Computed attr is configurable and must survive")
+}
+
 // parseAndUnmarshal is a small helper that wraps hclsyntax parsing so test
 // bodies stay focused on the assertions.
 func parseAndUnmarshal(t *testing.T, src []byte, into any) error {
