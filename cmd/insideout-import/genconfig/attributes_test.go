@@ -101,7 +101,7 @@ func TestExtractAttributes_ScalarTypes(t *testing.T) {
 }
 `)
 	out, err := extractAttributes(in, []imported.ImportedResource{
-		{Identity: imported.ResourceIdentity{Address: "aws_sqs_queue.x"}},
+		{Identity: imported.ResourceIdentity{Type: "aws_sqs_queue", Address: "aws_sqs_queue.x"}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -129,6 +129,17 @@ func TestExtractAttributes_ScalarTypes(t *testing.T) {
 	if len(got) != 4 {
 		t.Errorf("Attributes len=%d, want 4 (all fixture attrs decoded)\n--- got ---\n%v", len(got), got)
 	}
+
+	var typed map[string]map[string]any
+	if err := json.Unmarshal(out[0].Attrs, &typed); err != nil {
+		t.Fatalf("Attrs should decode as typed JSON: %v\n%s", err, out[0].Attrs)
+	}
+	if typed["name"]["literal"] != "alpha" {
+		t.Errorf("typed Attrs name literal = %v, want alpha", typed["name"]["literal"])
+	}
+	if typed["fifo_queue"]["literal"] != true {
+		t.Errorf("typed Attrs fifo_queue literal = %v, want true", typed["fifo_queue"]["literal"])
+	}
 }
 
 // TestExtractAttributes_PreservesRefAsSource pins the contract for
@@ -143,7 +154,7 @@ func TestExtractAttributes_PreservesRefAsSource(t *testing.T) {
 }
 `)
 	out, err := extractAttributes(in, []imported.ImportedResource{
-		{Identity: imported.ResourceIdentity{Address: "aws_secretsmanager_secret.x"}},
+		{Identity: imported.ResourceIdentity{Type: "aws_secretsmanager_secret", Address: "aws_secretsmanager_secret.x"}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -154,6 +165,14 @@ func TestExtractAttributes_PreservesRefAsSource(t *testing.T) {
 	}
 	if got != "aws_kms_key.foo.arn" {
 		t.Errorf("kms_key_id = %q, want \"aws_kms_key.foo.arn\"", got)
+	}
+
+	var typed map[string]map[string]any
+	if err := json.Unmarshal(out[0].Attrs, &typed); err != nil {
+		t.Fatalf("Attrs should decode as typed JSON: %v\n%s", err, out[0].Attrs)
+	}
+	if typed["kms_key_id"]["expr"] != "aws_kms_key.foo.arn" {
+		t.Errorf("typed Attrs kms_key_id expr = %v, want aws_kms_key.foo.arn", typed["kms_key_id"]["expr"])
 	}
 }
 

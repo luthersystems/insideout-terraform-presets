@@ -22,6 +22,8 @@ import (
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/genconfig"
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/progress"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
+	"github.com/luthersystems/insideout-terraform-presets/pkg/reverseimport"
+	reversejob "github.com/luthersystems/insideout-terraform-presets/pkg/reverseimport/job"
 )
 
 const (
@@ -241,6 +243,11 @@ type discoverDeps struct {
 	// fake the depchase package directly to exercise the orchestrator
 	// branch without scripting a multi-pass pipeline.
 	runDepChase func(ctx context.Context, opts depchase.Options, resources []imported.ImportedResource) (*depchase.Result, error)
+	// runReverse is the production SDK path for Stage 2b+. Tests that
+	// leave this nil continue to exercise the older injected
+	// genconfig/driftfix/depchase fakes directly; production wires it to
+	// reverseimport.Run so local discover and Mars share the same engine.
+	runReverse func(ctx context.Context, req reversejob.Request, opts reverseimport.Options) (reversejob.Result, error)
 	// enumerateUnsupportedAWS is the AWS-side seam for the
 	// --include-unsupported broad-enumeration path (#296). Production
 	// wires it to a closure that constructs a per-region Resource
@@ -357,6 +364,7 @@ func productionDiscoverDeps() discoverDeps {
 		runGenconfig: genconfig.Run,
 		runDriftfix:  driftfix.Run,
 		runDepChase:  depchase.Run,
+		runReverse:   reverseimport.Run,
 		enumerateUnsupportedAWS: func(ctx context.Context, cfg aws.Config, args awsdiscover.UnsupportedArgs) ([]awsdiscover.UnsupportedResource, bool, error) {
 			if args.Searcher == nil {
 				args.Searcher = awsdiscover.NewRealResourceExplorerSearcher(cfg)
@@ -951,6 +959,42 @@ Exit codes:
 	}
 
 	if *noHCL || n == 0 {
+		return discoverExitOK
+	}
+
+	if deps.runReverse != nil && !*noDriftFix && !*noDepChase {
+		req := reversejob.Request{
+			Version:   reversejob.Version,
+			Resources: make([]reversejob.ResourceSpec, 0, len(resources)),
+		}
+		for _, r := range resources {
+			req.Resources = append(req.Resources, reversejob.ResourceSpec{
+				Identity: r.Identity,
+				Tier:     r.Tier,
+				Source:   r.Source,
+			})
+		}
+		rev, err := deps.runReverse(ctx, req, reverseimport.Options{
+			OutputDir:             *outputDir,
+			Cloud:                 cloud,
+			Region:                primaryRegion,
+			GCPProjectID:          *gcpProjectID,
+			AWSEndpointURL:        *awsEndpointURL,
+			MaxDepChaseIterations: *maxDepChaseIter,
+			Discoverer:            d,
+		})
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "discover: reverse import SDK: %v\n", err)
+			fmt.Fprintln(os.Stderr, "discover: imported.json was written before reverse import. Re-run with --no-hcl to skip the provider-backed reverse import explicitly.")
+			return discoverExitFatal
+		}
+		summaryResources = rev.Imported
+		fmt.Fprintf(summaryOut, "reverse import SDK wrote %s (%d imported, %d add, %d change, %d destroy)\n",
+			filepath.Join(*outputDir, "reverse-result.json"),
+			rev.PlanSummary.ImportCount,
+			rev.PlanSummary.AddCount,
+			rev.PlanSummary.ChangeCount,
+			rev.PlanSummary.DestroyCount)
 		return discoverExitOK
 	}
 

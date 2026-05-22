@@ -22,6 +22,8 @@ import (
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/genconfig"
 	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/progress"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
+	"github.com/luthersystems/insideout-terraform-presets/pkg/reverseimport"
+	reversejob "github.com/luthersystems/insideout-terraform-presets/pkg/reverseimport/job"
 )
 
 // runDiscover error-path tests. Happy-path requires AWS credentials and
@@ -728,6 +730,41 @@ func TestRunDiscoverWithDeps_NoHCLSkipsGenconfig(t *testing.T) {
 	}
 	if gc.called != 0 {
 		t.Errorf("runGenconfig called %d times with --no-hcl, want 0", gc.called)
+	}
+}
+
+func TestRunDiscoverWithDeps_DefaultHCLUsesReverseSDK(t *testing.T) {
+	dir := t.TempDir()
+	agg := &fakeAggregator{out: []imported.ImportedResource{validResource("aws_sqs_queue.orders")}}
+	deps := okDeps(agg)
+	called := 0
+	deps.runReverse = func(_ context.Context, req reversejob.Request, opts reverseimport.Options) (reversejob.Result, error) {
+		called++
+		if len(req.Resources) != 1 {
+			t.Fatalf("runReverse got %d resources, want 1", len(req.Resources))
+		}
+		if opts.OutputDir != dir {
+			t.Fatalf("OutputDir = %q, want %q", opts.OutputDir, dir)
+		}
+		return reversejob.Result{
+			Version:     reversejob.Version,
+			Status:      reversejob.StatusSucceeded,
+			Imported:    req.ImportedResources(),
+			PlanSummary: reversejob.PlanSummary{ImportCount: 1},
+		}, nil
+	}
+
+	rc := runDiscoverWithDeps([]string{
+		"--provider", "aws",
+		"--project", "p",
+		"--region", "us-east-1",
+		"--output-dir", dir,
+	}, deps)
+	if rc != discoverExitOK {
+		t.Fatalf("exit = %d, want %d", rc, discoverExitOK)
+	}
+	if called != 1 {
+		t.Fatalf("runReverse called %d times, want 1", called)
 	}
 }
 

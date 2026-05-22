@@ -236,6 +236,24 @@ func TestRun_RecoversFromPlanErrorWhenFileWritten(t *testing.T) {
 	}
 }
 
+func TestFilterSkippedResourcesDropsOrphanAddresses(t *testing.T) {
+	t.Parallel()
+	in := []imported.ImportedResource{
+		{Identity: imported.ResourceIdentity{Address: "aws_sqs_queue.keep"}},
+		{Identity: imported.ResourceIdentity{Address: "aws_network_acl.orphan"}},
+		{Identity: imported.ResourceIdentity{Address: "aws_sqs_queue.keep2"}},
+	}
+	out := filterSkippedResources(in, []OrphanImport{{Address: "aws_network_acl.orphan"}})
+	if len(out) != 2 {
+		t.Fatalf("len(out) = %d, want 2", len(out))
+	}
+	for _, r := range out {
+		if r.Identity.Address == "aws_network_acl.orphan" {
+			t.Fatalf("orphan resource was not dropped: %+v", out)
+		}
+	}
+}
+
 // TestRun_PropagatesPlanErrorWhenFileMissing pins the negative side of
 // the recovery: a plan error with no on-disk file is fatal — there's
 // nothing for the fixup pass to act on, so the operator gets the

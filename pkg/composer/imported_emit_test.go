@@ -24,6 +24,35 @@ func hasAttr(t *testing.T, body, name, value string) bool {
 	return pattern.MatchString(body)
 }
 
+func lifecycleIgnoreChanges(t *testing.T, out []byte, tfType string) []string {
+	t.Helper()
+	file, diags := hclsyntax.ParseConfig(out, "imported.tf", hcl.InitialPos)
+	require.Falsef(t, diags.HasErrors(), "imported.tf must parse: %s\n%s", diags.Error(), out)
+	for _, blk := range file.Body.(*hclsyntax.Body).Blocks {
+		if blk.Type != "resource" || len(blk.Labels) != 2 || blk.Labels[0] != tfType {
+			continue
+		}
+		for _, sub := range blk.Body.Blocks {
+			if sub.Type != "lifecycle" {
+				continue
+			}
+			ic := sub.Body.Attributes["ignore_changes"]
+			require.NotNil(t, ic, "lifecycle must set ignore_changes")
+			tuple, ok := ic.Expr.(*hclsyntax.TupleConsExpr)
+			require.True(t, ok, "ignore_changes must be a list")
+			got := make([]string, 0, len(tuple.Exprs))
+			for _, e := range tuple.Exprs {
+				trav, isTrav := e.(*hclsyntax.ScopeTraversalExpr)
+				require.Truef(t, isTrav, "ignore_changes entry must be an attribute reference, got %T", e)
+				got = append(got, trav.Traversal.RootName())
+			}
+			return got
+		}
+	}
+	require.Failf(t, "missing lifecycle block", "%s must emit lifecycle.ignore_changes:\n%s", tfType, out)
+	return nil
+}
+
 func TestEmitImportedTF_Empty(t *testing.T) {
 	t.Parallel()
 	out, used := EmitImportedTF("aws", nil, EmitImportedOpts{})
@@ -222,6 +251,66 @@ func TestEmitImportedTF_LambdaTypedAttrsInjectsPlaceholderFilename(t *testing.T)
 	_, diags := hclsyntax.ParseConfig(out, "imported.tf", hcl.InitialPos)
 	require.Falsef(t, diags.HasErrors(), "imported.tf must parse: %s\n%s", diags.Error(), s)
 	assert.Contains(t, s, "ignore_changes", "placeholder filename must still be pinned under ignore_changes")
+}
+
+func TestEmitImportedTF_SecurityGroupTypedAttrsRestoresEmptyRuleLists(t *testing.T) {
+	t.Parallel()
+	attrs, err := json.Marshal(&generated.AWSSecurityGroup{
+		Name:  generated.LiteralOf("web"),
+		VPCID: generated.LiteralOf("vpc-123"),
+		Ingress: []generated.AWSSecurityGroupIngress{{
+			CIDRBlocks:  []*generated.Value[string]{generated.LiteralOf("0.0.0.0/0")},
+			Description: generated.LiteralOf("http"),
+			FromPort:    generated.LiteralOf[float64](80),
+			Protocol:    generated.LiteralOf("tcp"),
+			Self:        generated.LiteralOf(false),
+			ToPort:      generated.LiteralOf[float64](80),
+		}},
+	})
+	require.NoError(t, err)
+	ir := imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Cloud:    "aws",
+			Type:     "aws_security_group",
+			Address:  "aws_security_group.web",
+			ImportID: "sg-123",
+		},
+		Tier:  imported.TierImportedFlat,
+		Attrs: attrs,
+	}
+	out, _ := EmitImportedTF("aws", []imported.ImportedResource{ir}, EmitImportedOpts{})
+	require.NotNil(t, out)
+	s := string(out)
+	for _, want := range []string{"ipv6_cidr_blocks", "prefix_list_ids", "security_groups"} {
+		assert.Regexpf(t, regexp.MustCompile(`(?m)^\s*`+want+`\s*=\s*\[\]`), s,
+			"security group rule must restore required empty list %s:\n%s", want, s)
+	}
+	_, diags := hclsyntax.ParseConfig(out, "imported.tf", hcl.InitialPos)
+	require.Falsef(t, diags.HasErrors(), "imported.tf must parse: %s\n%s", diags.Error(), s)
+}
+
+func TestEmitImportedTF_SecretsManagerPinsProviderDefaultDrift(t *testing.T) {
+	t.Parallel()
+	attrs, err := json.Marshal(&generated.AWSSecretsmanagerSecret{
+		Name:   generated.LiteralOf("app-secret"),
+		Region: generated.LiteralOf("eu-west-2"),
+	})
+	require.NoError(t, err)
+	ir := imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Cloud:    "aws",
+			Type:     "aws_secretsmanager_secret",
+			Address:  "aws_secretsmanager_secret.app",
+			ImportID: "arn:aws:secretsmanager:eu-west-2:123456789012:secret:app-secret-AbCdEf",
+		},
+		Tier:  imported.TierImportedFlat,
+		Attrs: attrs,
+	}
+	out, _ := EmitImportedTF("aws", []imported.ImportedResource{ir}, EmitImportedOpts{})
+	require.NotNil(t, out)
+	got := lifecycleIgnoreChanges(t, out, "aws_secretsmanager_secret")
+	assert.Equal(t, []string{"force_overwrite_replica_secret", "recovery_window_in_days"}, got,
+		"Secrets Manager imported resources must pin provider default drift")
 }
 
 // TestEmitImportedTF_KeyPairInjectsPlaceholderPublicKey pins the #665

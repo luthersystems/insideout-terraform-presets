@@ -220,6 +220,7 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 			fmt.Fprintf(os.Stderr, "genconfig: WARN: dropped orphan import %s (id=%q, reason=%s) — terraform plan -generate-config-out produced no resource body\n",
 				s.Address, s.ImportID, s.Reason)
 		}
+		resources = filterSkippedResources(resources, skipped)
 	}
 
 	if err := runner.Validate(ctx); err != nil {
@@ -231,4 +232,22 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 		return nil, fmt.Errorf("extract attributes: %w", err)
 	}
 	return &Result{GeneratedPath: generatedPath, Resources: out}, nil
+}
+
+func filterSkippedResources(resources []imported.ImportedResource, skipped []OrphanImport) []imported.ImportedResource {
+	if len(resources) == 0 || len(skipped) == 0 {
+		return resources
+	}
+	skippedAddr := make(map[string]struct{}, len(skipped))
+	for _, s := range skipped {
+		skippedAddr[s.Address] = struct{}{}
+	}
+	out := make([]imported.ImportedResource, 0, len(resources))
+	for _, r := range resources {
+		if _, ok := skippedAddr[r.Identity.Address]; ok {
+			continue
+		}
+		out = append(out, r)
+	}
+	return out
 }

@@ -1,0 +1,911 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reverse Import Reconcile Architecture</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #17212b;
+      --muted: #5c6b78;
+      --line: #cfd8e3;
+      --panel: #f8fafc;
+      --panel-strong: #edf3f8;
+      --accent: #1f6f8b;
+      --accent-soft: #d9eef4;
+      --good: #1f7a4d;
+      --warn: #9a5b10;
+      --paper: #ffffff;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.48;
+    }
+
+    main {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 40px 28px 64px;
+    }
+
+    h1,
+    h2,
+    h3 {
+      margin: 0;
+      line-height: 1.15;
+      letter-spacing: 0;
+    }
+
+    h1 {
+      font-size: 36px;
+      max-width: 760px;
+    }
+
+    h2 {
+      font-size: 23px;
+      margin-top: 42px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    h3 {
+      font-size: 16px;
+      margin-top: 0;
+      margin-bottom: 10px;
+    }
+
+    p {
+      margin: 10px 0 0;
+      color: var(--muted);
+      max-width: 880px;
+    }
+
+    code,
+    pre {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 13px;
+    }
+
+    pre {
+      overflow: auto;
+      padding: 14px;
+      background: #101820;
+      color: #e6edf3;
+      border-radius: 6px;
+      line-height: 1.45;
+    }
+
+    .intro {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 320px;
+      gap: 28px;
+      align-items: start;
+      margin-bottom: 22px;
+    }
+
+    .summary {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 8px;
+      padding: 18px;
+    }
+
+    .summary dl {
+      display: grid;
+      grid-template-columns: 96px 1fr;
+      gap: 8px 14px;
+      margin: 0;
+    }
+
+    .summary dt {
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+    }
+
+    .summary dd {
+      margin: 0;
+      font-weight: 600;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+      margin-top: 18px;
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .card p {
+      margin-top: 6px;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+
+    .diagram {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 18px;
+      margin-top: 18px;
+      overflow-x: auto;
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(145px, 1fr));
+      gap: 12px;
+      align-items: stretch;
+      min-width: 1040px;
+    }
+
+    .node {
+      min-height: 96px;
+      border: 1px solid #b8c7d3;
+      border-radius: 8px;
+      background: #fff;
+      padding: 12px;
+      position: relative;
+    }
+
+    .node:not(:last-child)::after {
+      content: "->";
+      position: absolute;
+      right: -23px;
+      top: 40px;
+      color: var(--accent);
+      font-weight: 700;
+      z-index: 2;
+    }
+
+    .node strong {
+      display: block;
+      font-size: 14px;
+      margin-bottom: 6px;
+    }
+
+    .node span {
+      display: block;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .loop {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(190px, 1fr));
+      gap: 14px;
+      min-width: 760px;
+    }
+
+    .loop .node {
+      min-height: 108px;
+    }
+
+    .loop .node:nth-child(3)::after {
+      content: "";
+    }
+
+    .loop-return {
+      grid-column: 1 / 4;
+      border: 1px dashed var(--accent);
+      border-radius: 8px;
+      padding: 10px 12px;
+      background: #fff;
+      color: var(--accent);
+      font-weight: 700;
+      text-align: center;
+    }
+
+    .lanes {
+      display: grid;
+      grid-template-columns: 150px repeat(5, minmax(150px, 1fr));
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      min-width: 1080px;
+      background: #fff;
+    }
+
+    .lane-head,
+    .lane-cell {
+      padding: 12px;
+      border-right: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .lane-head {
+      background: var(--panel-strong);
+      font-weight: 700;
+    }
+
+    .lane-cell {
+      color: var(--muted);
+      min-height: 84px;
+    }
+
+    .lane-cell:last-child,
+    .lane-head:last-child {
+      border-right: 0;
+    }
+
+    .lanes > :nth-last-child(-n + 6) {
+      border-bottom: 0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 18px;
+      font-size: 14px;
+    }
+
+    th,
+    td {
+      border: 1px solid var(--line);
+      padding: 10px 12px;
+      vertical-align: top;
+      text-align: left;
+    }
+
+    th {
+      background: var(--panel-strong);
+    }
+
+    ul {
+      margin: 10px 0 0;
+      padding-left: 20px;
+    }
+
+    li {
+      margin: 6px 0;
+    }
+
+    .status {
+      border-left: 4px solid var(--good);
+      padding-left: 12px;
+    }
+
+    .warning {
+      border-left: 4px solid var(--warn);
+      padding-left: 12px;
+    }
+
+    @media (max-width: 820px) {
+      main {
+        padding: 28px 16px 48px;
+      }
+
+      h1 {
+        font-size: 30px;
+      }
+
+      .intro,
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section class="intro">
+      <div>
+        <div class="badge">Working design</div>
+        <h1>Reverse Import Reconcile Architecture</h1>
+        <p>
+          The durable design is to expose reverse import as a presets Go SDK,
+          then let a Mars Go job binary call that SDK beside Terraform and the
+          providers. The SDK converts provider readback into typed imported
+          resource IR, and Reliable persists that IR as the source of truth.
+          Resource selection should be parent-first: the UI sends the
+          top-level resources the user chose, and presets expands the
+          provider-specific child/dependency closure before generating IR.
+          Reliable should orchestrate the job and consume the returned result,
+          not attempt provider enrichment in Vercel.
+        </p>
+      </div>
+      <aside class="summary">
+        <dl>
+          <dt>Runtime</dt>
+          <dd>Mars Go job binary</dd>
+          <dt>Caller</dt>
+          <dd>Reliable via UI Core job</dd>
+          <dt>Canonical</dt>
+          <dd><code>ImportedResource.Attrs</code></dd>
+          <dt>Artifact</dt>
+          <dd><code>imported.tf</code></dd>
+          <dt>Validation</dt>
+          <dd>zero add/change/destroy, N import</dd>
+          <dt>SDK</dt>
+          <dd>presets reverse import</dd>
+          <dt>Closure</dt>
+          <dd>presets expands parents</dd>
+          <dt>Ticket</dt>
+          <dd>presets #672</dd>
+        </dl>
+      </aside>
+    </section>
+
+    <section>
+      <h2>Decision</h2>
+      <div class="grid">
+        <article class="card status">
+          <h3>Use provider runtime readback</h3>
+          <p>
+            Static enrichment from provider schema interrogation is not robust
+            enough for Lambda, KMS, and other resources whose usable HCL depends
+            on provider readback, import IDs, state behavior, or provider-specific
+            normalization.
+          </p>
+        </article>
+        <article class="card status">
+          <h3>Persist IR, regenerate HCL</h3>
+          <p>
+            The reverse job returns a typed imported resource snapshot. Reliable
+            persists that snapshot and later asks presets to regenerate HCL from
+            the same IR, rather than storing raw generated HCL as the truth.
+          </p>
+        </article>
+        <article class="card status">
+          <h3>Presets exposes the engine</h3>
+          <p>
+            The reusable implementation lives in a presets Go SDK. The existing
+            CLI becomes a thin wrapper over that SDK, and the Mars job binary
+            imports the same package rather than shelling out to presets.
+          </p>
+        </article>
+        <article class="card status">
+          <h3>Mars adapts job protocol</h3>
+          <p>
+            Mars owns execution concerns: env, credentials, work directories,
+            logs, artifact paths, and UI Core job protocol. It does not
+            re-implement import enrichment, HCL projection, or validation.
+          </p>
+        </article>
+        <article class="card status">
+          <h3>Presets owns dependency closure</h3>
+          <p>
+            The UI should not need to flood users with every sidecar resource.
+            Users select top-level parents; presets expands provider-specific
+            children, sidecars, and hard dependencies before Terraform
+            generation.
+          </p>
+        </article>
+        <article class="card status">
+          <h3>Local CLI exercises SDK</h3>
+          <p>
+            The local discover CLI should call the same SDK entry point that
+            Mars calls for Reliable. Troubleshooting here should reproduce the
+            same import selection, provider readback, IR projection, and final
+            plan validation path.
+          </p>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <h2>End-to-end Flow</h2>
+      <div class="diagram">
+        <div class="flow" aria-label="Reverse import end-to-end flow">
+          <div class="node">
+            <strong>Reliable discover</strong>
+            <span>Select top-level parent resources and build import candidates with identity, type, region, and native IDs.</span>
+          </div>
+          <div class="node">
+            <strong>UI Core job</strong>
+            <span>Launch a reverse Terraform job in Argo using the Mars image.</span>
+          </div>
+          <div class="node">
+            <strong>Mars Go binary</strong>
+            <span>Prepare job env, credentials, workdir, logs, and artifact locations.</span>
+          </div>
+          <div class="node">
+            <strong>Presets SDK</strong>
+            <span>Expand parent selections, run reverse import, project typed IR, render HCL, and validate the final plan.</span>
+          </div>
+          <div class="node">
+            <strong>Terraform provider</strong>
+            <span>Import, read provider state, generate config, and produce final plan JSON.</span>
+          </div>
+          <div class="node">
+            <strong>Reliable ingest</strong>
+            <span>Parse artifacts, persist imported IR, and expose plan data using existing job output conventions.</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Selection Closure</h2>
+      <p>
+        Dependency closure belongs in presets because it is provider and
+        Terraform-schema knowledge, not frontend presentation logic. The
+        frontend can group and display parents, but the SDK decides which
+        sidecars and dependencies are required for a clean import plan.
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Input kind</th>
+            <th>Presets expansion</th>
+            <th>Why it lives here</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Selected parent</td>
+            <td>Resource explicitly chosen by the user, such as Lambda, S3 bucket, VPC, API, or load balancer.</td>
+            <td>The UI should stay focused on understandable infrastructure components.</td>
+          </tr>
+          <tr>
+            <td>Child/sidecar</td>
+            <td>Provider-specific resources owned by the parent, such as bucket configuration resources, log groups, stages, listeners, target groups, and security group rules.</td>
+            <td>These rules change with provider schemas and Terraform import behavior.</td>
+          </tr>
+          <tr>
+            <td>Hard dependency</td>
+            <td>Resources required by references in generated HCL, such as VPCs, subnets, security groups, route tables, KMS keys, queues, and roles.</td>
+            <td>The SDK can prove the closure by re-running generated config, dep chasing, and the final import-only plan.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Canonicality Loop</h2>
+      <div class="diagram">
+        <div class="loop" aria-label="Canonical imported resource loop">
+          <div class="node">
+            <strong>Provider readback</strong>
+            <span>Terraform imports the selected resources and produces provider-normalized state and generated config.</span>
+          </div>
+          <div class="node">
+            <strong>Typed IR projection</strong>
+            <span>Presets converts the usable HCL/state into <code>ImportedResource</code> with canonical <code>Attrs</code>.</span>
+          </div>
+          <div class="node">
+            <strong>HCL regeneration</strong>
+            <span><code>EmitImportedTF</code> renders <code>imported.tf</code> from the same IR that Reliable will store.</span>
+          </div>
+          <div class="loop-return">
+            Final validation plans the regenerated imported.tf and proves: zero add, zero change, zero destroy, N import.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Package Shape</h2>
+      <p>
+        The implementation should make the SDK the real product surface. CLI
+        and Mars are adapters with different IO, not separate implementations.
+      </p>
+      <pre><code>insideout-terraform-presets
+  pkg/reverseimport/job
+    Request, ResourceSpec, Result, ArtifactSet, PlanSummary
+    pure JSON contract shared by presets, Mars, UI Core, and Reliable
+
+  pkg/reverseimport
+    Run(ctx, job.Request, options) -&gt; job.Result
+    selection closure, Terraform runner, reverse-import engine, HCL projection, validation
+
+  cmd/insideout-import
+    discover/adopt CLI wrappers around pkg/reverseimport
+    local discover exercises the same logic Mars calls for Reliable
+
+mars
+  cmd/mars-job
+    reverse-import job adapter
+    imports pkg/reverseimport
+    owns env, credentials, logs, workdir, and artifact upload
+
+reliable
+  imports pkg/reverseimport/job models or lightweight parsers
+  submits UI Core job and persists imported.json</code></pre>
+    </section>
+
+    <section>
+      <h2>Responsibility Lanes</h2>
+      <div class="diagram">
+        <div class="lanes" aria-label="Component responsibilities">
+          <div class="lane-head">Stage</div>
+          <div class="lane-head">Reliable</div>
+          <div class="lane-head">UI Core</div>
+          <div class="lane-head">Mars Go</div>
+          <div class="lane-head">Presets SDK</div>
+          <div class="lane-head">Terraform</div>
+
+          <div class="lane-head">Input</div>
+          <div class="lane-cell">Build selected parent snapshot from discovery results.</div>
+          <div class="lane-cell">Accept job payload and upload working input files.</div>
+          <div class="lane-cell">Decode job payload, configure env, credentials, workspace, and artifact paths.</div>
+          <div class="lane-cell">Validate selected parent identities, expand dependency closure, and prepare Terraform import blocks.</div>
+          <div class="lane-cell">Use installed binary, provider cache, backend config, and generated working files.</div>
+
+          <div class="lane-head">Runtime</div>
+          <div class="lane-cell">Poll job status and stream logs.</div>
+          <div class="lane-cell">Run the Argo workflow and collect artifacts.</div>
+          <div class="lane-cell">Call <code>pkg/reverseimport.Run</code> and proxy progress to UI Core.</div>
+          <div class="lane-cell">Iterate through import, cleanup, dep chasing, typed projection, and final plan validation.</div>
+          <div class="lane-cell">Perform provider readback, generated config, state refresh, and final plan.</div>
+
+          <div class="lane-head">Output</div>
+          <div class="lane-cell">Persist <code>imported.json</code> into stack version state and expose plan summary.</div>
+          <div class="lane-cell">Return artifacts using the same pattern as plan/apply jobs.</div>
+          <div class="lane-cell">Upload logs, plan JSON, HCL, result JSON, and diagnostics.</div>
+          <div class="lane-cell">Guarantee the returned IR regenerates the returned <code>imported.tf</code>.</div>
+          <div class="lane-cell">Provide final plan JSON and provider-normalized values.</div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Job Input</h2>
+      <p>
+        The job input should be the selected parent import snapshot, not just
+        raw ARNs. ARN is one useful native ID, but Terraform import IDs differ
+        by resource type. The job needs type, address, import ID, cloud,
+        account, region, and any native IDs already discovered. Presets may add
+        child and dependency resources to the returned <code>imported.json</code>.
+      </p>
+      <pre><code>{
+  "version": 1,
+  "resources": [
+    {
+      "identity": {
+        "cloud": "aws",
+        "type": "aws_lambda_function",
+        "address": "aws_lambda_function.worker",
+        "import_id": "worker",
+        "region": "us-east-1",
+        "account_id": "123456789012",
+        "native_ids": {
+          "arn": "arn:aws:lambda:us-east-1:123456789012:function:worker"
+        }
+      },
+      "tier": "ImportedFlat",
+      "source": "importer"
+    }
+  ]
+}</code></pre>
+    </section>
+
+    <section>
+      <h2>Job Output</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Artifact</th>
+            <th>Purpose</th>
+            <th>Consumer</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>imported.json</code></td>
+            <td>Canonical imported resource snapshot with typed <code>Attrs</code>.</td>
+            <td>Reliable persistence and future HCL regeneration.</td>
+          </tr>
+          <tr>
+            <td><code>imported.tf</code></td>
+            <td>Human-reviewable HCL rendered from <code>imported.json</code>.</td>
+            <td>UI preview, debugging, and final validation.</td>
+          </tr>
+          <tr>
+            <td><code>tfplan.json</code></td>
+            <td>Terraform plan JSON from the final validation plan.</td>
+            <td>Reliable plan display and import summary.</td>
+          </tr>
+          <tr>
+            <td><code>plan-summary.json</code></td>
+            <td>Small import-aware summary: exported import/add/change/destroy counts and diagnostics.</td>
+            <td>Reliable job status and UI copy.</td>
+          </tr>
+          <tr>
+            <td><code>reverse-result.json</code></td>
+            <td>Envelope linking all artifacts, diagnostics, resource results, and validation status.</td>
+            <td>Reliable SDK parser.</td>
+          </tr>
+          <tr>
+            <td><code>generated.tf</code>, <code>imports.tf</code>, <code>graph.json</code></td>
+            <td>Debug artifacts from Terraform generation and dependency chasing.</td>
+            <td>Operator diagnostics and test fixtures.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Model Contract</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Model</th>
+            <th>Contract</th>
+            <th>Reason</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>PlanSummary</code></td>
+            <td>Export <code>ImportCount</code> alongside add/change/destroy counts.</td>
+            <td>
+              The current CLI can count imports internally, but Reliable and UI
+              Core need the value in the result contract to show and validate
+              "N imported, 0 added, 0 changed, 0 destroyed".
+            </td>
+          </tr>
+          <tr>
+            <td><code>ReverseImportRequest</code></td>
+            <td>Carry selected resources with identity, type, address, import ID, region, account/project, and native IDs.</td>
+            <td>
+              Raw ARNs are not enough. Terraform import IDs vary by resource
+              type, and the SDK needs enough identity to render import blocks
+              and bind the returned IR to stable addresses.
+            </td>
+          </tr>
+          <tr>
+            <td><code>ReverseImportResult</code></td>
+            <td>Return imported resources, final plan summary, artifact metadata, diagnostics, and validation issues.</td>
+            <td>
+              Reliable should parse one stable envelope rather than infer
+              success from files, logs, or Terraform text output.
+            </td>
+          </tr>
+          <tr>
+            <td><code>ResourceResult</code></td>
+            <td>Report per-resource status, applied fixups, dependency additions, closure-added resources, and validation notes.</td>
+            <td>
+              The UI needs a way to explain why Lambda, KMS, or dependency
+              resources were adjusted without treating every case as bespoke
+              enrichment logic.
+            </td>
+          </tr>
+          <tr>
+            <td><code>ArtifactSet</code></td>
+            <td>Describe output paths, names, and optional checksums for <code>imported.json</code>, <code>imported.tf</code>, <code>tfplan.json</code>, and debug files.</td>
+            <td>
+              Mars can upload artifacts consistently while the SDK remains
+              testable with local file paths.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Model Position</h2>
+      <div class="grid">
+        <article class="card">
+          <h3>Existing model fits</h3>
+          <p>
+            <code>ImportedResource</code> and <code>ResourceIdentity</code> are the right
+            durable carriers. The missing piece is not a new persistence model;
+            it is an SDK request/result envelope, exported plan import counts,
+            and the projection from Terraform readback into typed <code>Attrs</code>.
+          </p>
+        </article>
+        <article class="card warning">
+          <h3>Deprecate opaque attributes</h3>
+          <p>
+            <code>Attributes</code> is a legacy Phase 1 compatibility field. New reverse
+            import output should write <code>Attrs</code>. When both are present,
+            <code>Attrs</code> is authoritative.
+          </p>
+        </article>
+        <article class="card">
+          <h3>SDK boundary</h3>
+          <p>
+            Runtime implementation belongs in presets. Mars imports it and
+            proxies job IO. Reliable imports only shared request/result models
+            or parsers, not Terraform execution code.
+          </p>
+        </article>
+        <article class="card">
+          <h3>CLI boundary</h3>
+          <p>
+            <code>cmd/insideout-import</code> should become a human/operator adapter
+            over the same SDK. It should not keep private result types that the
+            Mars job needs, such as the number of imported resources.
+          </p>
+        </article>
+      </div>
+    </section>
+
+    <section>
+      <h2>Required Work</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Area</th>
+            <th>Work</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Presets SDK models</td>
+            <td>Add exported request/result types, including <code>PlanSummary.ImportCount</code>, artifact metadata, diagnostics, and per-resource results.</td>
+          </tr>
+          <tr>
+            <td>Presets SDK engine</td>
+            <td>Move reusable reverse-import execution out of <code>cmd/insideout-import</code> into an importable package that runs Terraform, projects typed IR, emits HCL, and validates the final plan.</td>
+          </tr>
+          <tr>
+            <td>Dependency closure</td>
+            <td>Expand user-selected parents into required child, sidecar, and hard dependency resources before final HCL generation.</td>
+          </tr>
+          <tr>
+            <td>Presets composer</td>
+            <td>Guarantee <code>imported.json -> EmitImportedTF -> imported.tf</code> is stable and validates with the final plan.</td>
+          </tr>
+          <tr>
+            <td>Presets CLI</td>
+            <td>Keep <code>insideout-import</code> as a thin wrapper over the SDK. Its discover path should exercise the same logic Mars calls for Reliable, so local debugging is representative.</td>
+          </tr>
+          <tr>
+            <td>Mars</td>
+            <td>Add a Go job binary that imports the presets SDK, replaces bash for this path, and handles job IO, env, credentials, logs, and artifact upload.</td>
+          </tr>
+          <tr>
+            <td>UI Core</td>
+            <td>Add the reverse Terraform job type and artifact collection contract.</td>
+          </tr>
+          <tr>
+            <td>Reliable</td>
+            <td>Start the job, pass selected import identities, ingest <code>reverse-result.json</code>, persist <code>imported.json</code>, and display final plan data.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Invariants</h2>
+      <ul>
+        <li>The final validation plan runs against the regenerated <code>imported.tf</code>, not Terraform's scratch generated config.</li>
+        <li><code>Attrs</code> is the only new canonical desired-state payload; <code>Attributes</code> is compatibility only.</li>
+        <li><code>imported.tf</code> is a review artifact and reproducible output, not the persisted source of truth.</li>
+        <li>Provider-specific edge cases become reverse-import policies or fixups inside presets, not static enrichment in Reliable.</li>
+        <li>Parent-to-child and dependency closure lives in presets; the frontend may display groups but does not own correctness.</li>
+        <li>Mars imports the presets SDK and adapts job IO; it does not re-implement reverse import or depend on CLI-only private types.</li>
+        <li>The local discover CLI calls the same SDK path as Mars, so CLI reproduction is meaningful for Reliable failures.</li>
+        <li>The job may run multiple Terraform commands inside one Argo job, but Reliable sees one reverse job with one result envelope.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Implementation Plan</h2>
+      <p>
+        Presets ticket: <code>insideout-terraform-presets#672</code>. This plan is
+        repo-scoped. Mars gets a companion ticket for the Go job binary and
+        image wiring once the SDK contract and engine entry point are ready.
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Order</th>
+            <th>Task</th>
+            <th>Output</th>
+            <th>Validation</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>1</td>
+            <td>Define the shared job contract.</td>
+            <td>
+              <code>pkg/reverseimport/job</code> exposes <code>Request</code>,
+              <code>ResourceSpec</code>, <code>Result</code>,
+              <code>PlanSummary.ImportCount</code>, artifact metadata,
+              diagnostics, validation issues, and per-resource results.
+            </td>
+            <td>JSON round-trip tests prove import identity and import counts survive the contract.</td>
+          </tr>
+          <tr>
+            <td>2</td>
+            <td>Add parent selection closure in presets.</td>
+            <td>
+              The SDK accepts selected parent resources, expands provider-owned
+              children/sidecars and hard dependencies, and records dependency
+              additions in <code>ResourceResult.Dependencies</code>.
+            </td>
+            <td>Tests prove parent-only inputs add expected children without exposing those children as required UI selections.</td>
+          </tr>
+          <tr>
+            <td>3</td>
+            <td>Extract the runtime SDK engine from CLI-only code.</td>
+            <td>
+              <code>pkg/reverseimport.Run(ctx, job.Request, options)</code>
+              owns Terraform invocation, provider readback, generated-config
+              cleanup, dep chasing, typed IR projection, artifact writing, and
+              final result construction.
+            </td>
+            <td>Unit tests cover options, runner boundaries, result construction, and failure diagnostics without shelling out to real Terraform.</td>
+          </tr>
+          <tr>
+            <td>4</td>
+            <td>Move import-count planning into the SDK contract.</td>
+            <td>
+              The current CLI-private import count path becomes an exported
+              plan summary helper that can parse final plan JSON and populate
+              <code>PlanSummary.ImportCount</code>.
+            </td>
+            <td>Tests cover N import, zero add/change/destroy; unexpected create/update/destroy; and import count mismatch.</td>
+          </tr>
+          <tr>
+            <td>5</td>
+            <td>Make local CLI discover call the SDK.</td>
+            <td>
+              <code>insideout-import discover</code> and the new reverse path
+              exercise the same SDK logic that Mars calls for Reliable.
+            </td>
+            <td>Existing discover tests remain green, and local CLI fixtures use the SDK result contract.</td>
+          </tr>
+          <tr>
+            <td>6</td>
+            <td>Project provider readback into canonical imported IR.</td>
+            <td>
+              The SDK writes typed <code>ImportedResource.Attrs</code>, renders
+              <code>imported.tf</code> through <code>EmitImportedTF</code>, and
+              treats <code>Attributes</code> only as a compatibility fallback.
+            </td>
+            <td>Round-trip tests prove <code>imported.json -> EmitImportedTF -> imported.tf</code> stays stable for representative AWS and GCP resources.</td>
+          </tr>
+          <tr>
+            <td>7</td>
+            <td>Validate regenerated HCL with Terraform.</td>
+            <td>
+              The final plan runs against the regenerated <code>imported.tf</code>
+              and populates <code>reverse-result.json</code>,
+              <code>plan-summary.json</code>, and validation issues.
+            </td>
+            <td><code>ValidateFirstImportPlan</code> passes with N imports and zero unapproved non-import changes.</td>
+          </tr>
+          <tr>
+            <td>8</td>
+            <td>Add live AWS CLI smoke coverage.</td>
+            <td>
+              With operator-provided AWS auth in the Cust2 account, the local
+              CLI can run the same SDK path end to end and preserve artifacts
+              for debugging.
+            </td>
+            <td>Manual/live test produces <code>imported.json</code>, <code>imported.tf</code>, <code>tfplan.json</code>, and clean import summary.</td>
+          </tr>
+          <tr>
+            <td>9</td>
+            <td>Prepare Mars companion ticket.</td>
+            <td>
+              Document the Mars Go binary requirements, SDK import path, job
+              payload, artifact mapping, and Docker image changes.
+            </td>
+            <td>Companion ticket can be executed without re-deciding the presets SDK contract.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+  </main>
+</body>
+</html>

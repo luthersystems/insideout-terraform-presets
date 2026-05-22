@@ -7,10 +7,10 @@ import (
 
 // Note on Attrs vs Attributes: ImportedResource carries two attribute
 // representations to support a phased migration to the typed Layer 1 model.
-// Attributes is the Phase 1 opaque map; Attrs holds the typed shape decoded
-// from a generated struct (see pkg/composer/imported/generated). Storing
-// Attrs as json.RawMessage keeps this package free of any dependency on the
-// generated package and avoids future import cycles. Decoding goes through
+// Attrs is the canonical desired-state payload for new reverse-import code.
+// Attributes is the deprecated Phase 1 opaque map fallback. Storing Attrs as
+// json.RawMessage keeps this package free of any dependency on the generated
+// package and avoids future import cycles. Decoding goes through
 // generated.UnmarshalAttrs(id.Type, ir.Attrs).
 
 // ImportedResource is the IR carrier for one cloud resource that lives outside
@@ -18,11 +18,9 @@ import (
 // observed by the inspector. It rides alongside composer.Components in the
 // stack snapshot. See docs/managed-resource-tiers.md lines 477-500.
 //
-// Phase 2 stores desired provider attributes in the opaque Attributes bag for
-// wire-compatibility with the Phase 1 importer. A future ticket (#145) will
-// add a sibling typed Attrs field backed by per-resource-type generated
-// structs; the JSON key for that typed shape will differ from "attributes"
-// so both can coexist.
+// Reverse import should write desired provider state into Attrs. Attributes
+// remains only for wire-compatibility with the Phase 1 importer and consumers
+// that have not adopted the typed shape yet.
 type ImportedResource struct {
 	// Identity carries the immutable Terraform address and cloud-side
 	// correlation identifiers.
@@ -35,11 +33,12 @@ type ImportedResource struct {
 	// | inspector).
 	Source Source `json:"source,omitempty"`
 
-	// Attributes is the current desired provider attributes as an opaque
-	// bag (Phase 1 / wire-compatible shape). The composer emits HCL from
-	// this state. Interactive-agent chat edits update the values here
-	// through the model write path; FieldEdits records audit/conflict
-	// metadata only — the composer does not emit from FieldEdits.
+	// Attributes is the legacy desired provider attributes as an opaque
+	// bag (Phase 1 / wire-compatible shape).
+	//
+	// Deprecated: Use Attrs as the canonical desired-state payload.
+	// Attributes is retained only as a legacy fallback for consumers that
+	// have not adopted typed Attrs.
 	Attributes map[string]any `json:"attributes,omitempty"`
 
 	// FieldEdits is audit/conflict metadata for changes made via the model
