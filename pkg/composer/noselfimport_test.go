@@ -38,6 +38,7 @@ func TestNoForeignLutherImportsInNonTestFiles(t *testing.T) {
 	allowedSubpackages := map[string]struct{}{
 		parentPkg + "/pkg/composer/imported":           {},
 		parentPkg + "/pkg/composer/imported/generated": {},
+		parentPkg + "/pkg/composer/imported/importid":  {},
 		parentPkg + "/pkg/composer/imported/policy":    {},
 	}
 

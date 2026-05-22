@@ -14,6 +14,7 @@ import (
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported/generated"
+	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported/importid"
 )
 
 // EmitImportedOpts bundles the provenance inputs threaded into EmitImportedTF
@@ -138,7 +139,7 @@ func EmitImportedTF(cloud string, irs []imported.ImportedResource, opts EmitImpo
 			alias := providerAliasForResource(got, ir.Identity)
 			e.resource = wrapResourceBlock(ir.Identity.Type, addressLabel(addr), alias, body)
 			if mode == emitModeResourceImport {
-				e.imported = renderImportBlock(addr, ir.Identity.ImportID)
+				e.imported = renderImportBlock(addr, importid.ForResource(*ir))
 			}
 			providersUsed[got] = true
 			if alias == "google-beta.imported" {

@@ -11,6 +11,7 @@ import (
 	"github.com/zclconf/go-cty/cty"
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
+	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported/importid"
 )
 
 const (
@@ -40,7 +41,7 @@ func emitImports(dir string, resources []imported.ImportedResource) error {
 			return fmt.Errorf("import block for %q: %w", ir.Identity.Address, err)
 		}
 		bb.SetAttributeTraversal("to", traversal)
-		bb.SetAttributeValue("id", cty.StringVal(ir.Identity.ImportID))
+		bb.SetAttributeValue("id", cty.StringVal(importid.ForResource(ir)))
 	}
 	return os.WriteFile(filepath.Join(dir, importsFile), f.Bytes(), 0o644)
 }
