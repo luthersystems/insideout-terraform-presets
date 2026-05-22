@@ -3,17 +3,17 @@
 //
 // Scope (v1): emit an edge-list mapping each Layer-1 typed resource
 // to the other TF types it references via cross-resource fields. The
-// initial implementation uses a hand-curated map of TF-tag → target-
-// type to detect references — see crossRefMap below for the list. This
-// avoids the brittleness of guessing target types from field names
-// like `id` or `arn` alone (e.g. `aws_lambda_function.role` is an IAM
-// role ARN; `aws_lambda_function.kms_key_arn` is a KMS key) while
-// staying simple enough to extend by appending to one map.
+// references are detected via the curated TF-tag → target-type map in
+// the pkg/imported/dependencies package (dependencies.Lookup). That
+// map avoids the brittleness of guessing target types from field
+// names like `id` or `arn` alone (e.g. `aws_lambda_function.role` is
+// an IAM role ARN; `aws_lambda_function.kms_key_arn` is a KMS key)
+// while staying simple enough to extend by appending one entry.
 //
 // Phase 3 doesn't ship a full dependency-graph consumer — this is
 // informational scaffolding. Expansion follows real consumer demand:
-// when a UI consumer needs an edge that isn't in crossRefMap, add
-// the field-name entry and bump the golden test.
+// when a UI consumer needs an edge that isn't recognized, add the
+// field-name entry in pkg/imported/dependencies and bump the golden.
 package main
 
 import (
@@ -23,41 +23,8 @@ import (
 	"strings"
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported/generated"
+	"github.com/luthersystems/insideout-terraform-presets/pkg/imported/dependencies"
 )
-
-// crossRefMap is the hand-curated set of (Terraform-tag-name →
-// target-TF-type) pairs the v1 dependency-emitter recognizes. Each
-// entry says: "any *Value[string] (or []*Value[string]) field with this
-// tf tag, on any Layer-1 typed struct, references a resource of type
-// <target>".
-//
-// The map is intentionally small and conservative — only well-known,
-// unambiguous cross-resource references. False-positive edges are
-// worse than missing edges because they propagate into the eventual
-// UI graph; missing edges can be filled in later by appending entries.
-//
-// To extend: add the field-name (the lowercase tf-tag, exactly as
-// declared on the generated struct's `tf:"<name>"`) and the target
-// TF type. The emitter handles `*Value[string]` and `[]*Value[string]`
-// shapes automatically; nested-block tags are not currently scanned
-// (callers usually want the top-level wiring, not nested doc fields).
-var crossRefMap = map[string]string{
-	// GCP — compute graph
-	"network":    "google_compute_network",
-	"subnetwork": "google_compute_subnetwork",
-	// GCP — KMS
-	"kms_key_name": "google_kms_crypto_key",
-	// AWS — IAM
-	"role":     "aws_iam_role",
-	"role_arn": "aws_iam_role",
-	// AWS — KMS
-	"kms_key_arn":       "aws_kms_key",
-	"kms_key_id":        "aws_kms_key",
-	"kms_master_key_id": "aws_kms_key",
-	// AWS — VPC primitives
-	"vpc_id":    "aws_vpc",
-	"subnet_id": "aws_subnet",
-}
 
 // runDependencies is the `dependencies` subcommand: walk every Layer-1
 // typed struct registered in pkg/composer/imported/generated and emit
@@ -98,8 +65,8 @@ func buildDependenciesMap() map[string][]string {
 
 // inferEdges walks the top-level fields of a Layer-1 typed struct and
 // returns the sorted, deduped set of target TF types its tf-tagged
-// fields reference per crossRefMap. Nested-block fields are skipped —
-// the v1 contract is top-level wiring only.
+// fields reference per the dependencies registry. Nested-block fields
+// are skipped — the v1 contract is top-level wiring only.
 //
 // Recognized field shapes:
 //   - *Value[string]  (scalar reference, e.g. Network)
@@ -132,7 +99,7 @@ func inferEdges(goType reflect.Type) []string {
 		if i := strings.Index(name, ","); i >= 0 {
 			name = name[:i]
 		}
-		target, ok := crossRefMap[name]
+		target, ok := dependencies.Lookup(name)
 		if !ok {
 			continue
 		}
