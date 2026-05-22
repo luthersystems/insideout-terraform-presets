@@ -723,28 +723,37 @@ func (c *Client) composeStackImpl(opts ComposeStackOpts) (*ComposeStackResult, e
 		Discovered:     discoveredProviders,
 		ImportedClouds: importedClouds,
 	})
-	// /providers.tf holds only the terraform{} required_providers block and
-	// the default provider. /providers-aliases.tf and /providers-imported.tf
-	// carry the selection-dependent and `*.imported` alias blocks. The
-	// split lets archive packagers (notably reliable's
-	// sandbox-infrastructure-template wrapper) keep their own
-	// /providers.tf via PRESERVE_PATTERNS while the alias declarations
-	// slip through as sibling files — see luthersystems/reliable#1588.
+	// /providers.tf holds the terraform{} required_providers block, the
+	// default provider, and — on AWS — the `bootstrap_role` / `aws_external_id`
+	// variable declarations the assume_role dynamic block references.
+	// /providers-aliases.tf and /providers-imported.tf carry the
+	// selection-dependent and `*.imported` alias blocks. The split lets
+	// archive packagers (notably reliable's sandbox-infrastructure-template
+	// wrapper) keep their own /providers.tf via PRESERVE_PATTERNS while the
+	// alias declarations slip through as sibling files — see
+	// luthersystems/reliable#1588.
 	//
-	// /variables-imported.tf carries the variable declarations that the
-	// AWS branch's assume_role dynamic block references
-	// (`bootstrap_role_arn`, `external_id`). They live in a sibling file
-	// rather than /providers.tf for the same PRESERVE_PATTERNS reason —
-	// see issue #630.
+	// The AWS imported-provider credential contract (issue #677): the
+	// `aws.imported` alias and the `us_east_1` alias both assume the
+	// customer's role via `var.bootstrap_role` / `var.aws_external_id`.
+	// Those declarations live in /providers.tf so that:
+	//   - direct (non-wrapper) archives stay self-contained — /providers.tf
+	//     ships the declarations alongside the default provider; and
+	//   - wrapper mode produces no duplicate declarations — the wrapper
+	//     drops the composer's /providers.tf via PRESERVE_PATTERNS and
+	//     declares `bootstrap_role` / `aws_external_id` itself in its
+	//     wrapper-owned root files, so the surviving sibling alias files
+	//     resolve against the wrapper's declarations.
+	// This unifies the names the composer emits with the names the sandbox
+	// wrapper already uses, retiring the earlier `bootstrap_role_arn` /
+	// `external_id` names and the dedicated /variables-imported.tf sibling
+	// that issue #630 introduced as a name-mismatch workaround.
 	files["/providers.tf"] = providersFiles.Main
 	if len(providersFiles.Aliases) > 0 {
 		files["/providers-aliases.tf"] = providersFiles.Aliases
 	}
 	if len(providersFiles.Imported) > 0 {
 		files["/providers-imported.tf"] = providersFiles.Imported
-	}
-	if len(providersFiles.Variables) > 0 {
-		files["/variables-imported.tf"] = providersFiles.Variables
 	}
 
 	// Validator dispatcher — runs after the stack is fully composed, before
@@ -815,10 +824,12 @@ type providersTFInput struct {
 
 // providersTFFiles is the split-up output of generateProvidersFiles.
 //
-// Main carries the `terraform { required_providers { … } }` block and the
-// default `provider "<cloud>" {}` block — anything a baseline stack needs to
-// `terraform init` regardless of whether it has cross-region or imported
-// resources.
+// Main carries the `terraform { required_providers { … } }` block, the
+// default `provider "<cloud>" {}` block, and — on AWS — the
+// `variable "bootstrap_role" {}` / `variable "aws_external_id" {}`
+// declarations consumed by the assume_role dynamic block. It carries
+// anything a baseline stack needs to `terraform init` regardless of
+// whether it has cross-region or imported resources.
 //
 // Aliases carries non-imported provider aliases that depend on which
 // components are selected — today that means the AWS `us_east_1` alias used
@@ -832,16 +843,18 @@ type providersTFInput struct {
 // doesn't produce — but keep the nil contract so callers can rely on a
 // non-nil slice meaning "write this file").
 //
-// Variables carries the `variable "bootstrap_role_arn" {}` and
-// `variable "external_id" {}` declarations consumed by the assume_role
-// dynamic block that the AWS branch threads through Main / Aliases /
-// Imported. Co-located in this sibling file (rather than left in Main)
-// because the runtime wrapper's PRESERVE_PATTERNS filter drops the
-// composer's Main while keeping the wrapper's own /providers.tf stub —
-// the Imported / Aliases siblings reference these vars, so the
-// declarations must live in a sibling file that survives the filter.
-// Nil when the cloud branch doesn't reference these vars (today: GCP).
-// See issue #630 for the production bug this split fixes.
+// The AWS imported-provider credential contract (issue #677): both the
+// Aliases (`us_east_1`) and Imported (`aws.imported`) blocks reference
+// `var.bootstrap_role` / `var.aws_external_id`. Those declarations live in
+// Main, not in a dedicated sibling file. In a direct (non-wrapper) archive
+// every file ships, so Main keeps the stack self-contained. In wrapper
+// mode the runtime wrapper's PRESERVE_PATTERNS filter drops the composer's
+// Main and the wrapper declares `bootstrap_role` / `aws_external_id`
+// itself, so the surviving Aliases / Imported siblings resolve against the
+// wrapper's declarations with no duplicate-declaration error. This unifies
+// the composer's variable names with the wrapper's and retires the
+// `/variables-imported.tf` sibling that issue #630 introduced when the two
+// name sets diverged.
 //
 // The split lets archive packagers (e.g. reliable's
 // sandbox-infrastructure-template wrapper) preserve the wrapper's own
@@ -849,15 +862,14 @@ type providersTFInput struct {
 // files that don't collide with the wrapper's PRESERVE_PATTERNS filter.
 // See luthersystems/reliable#1588 for the production bug this split fixes.
 type providersTFFiles struct {
-	Main      []byte
-	Aliases   []byte
-	Imported  []byte
-	Variables []byte
+	Main     []byte
+	Aliases  []byte
+	Imported []byte
 }
 
 // generateProvidersTF generates cloud-specific provider configuration.
-// For AWS it includes assume_role blocks with bootstrap_role_arn and
-// external_id variables so Oracle can deploy into the customer's account
+// For AWS it includes assume_role blocks with the bootstrap_role and
+// aws_external_id variables so Oracle can deploy into the customer's account
 // using cross-account role assumption with confused-deputy protection.
 //
 // Deprecated for internal callers: prefer generateProvidersFiles, which
@@ -869,13 +881,6 @@ type providersTFFiles struct {
 func generateProvidersTF(in providersTFInput) []byte {
 	pf := generateProvidersFiles(in)
 	var b []byte
-	// Variables must come before the provider blocks that reference them —
-	// terraform tolerates declaration order within a module, but the
-	// concatenated single-file form is read by humans (and a few legacy
-	// substring tests) where declaration-first is conventional.
-	if len(pf.Variables) > 0 {
-		b = append(b, pf.Variables...)
-	}
 	b = append(b, pf.Main...)
 	if len(pf.Aliases) > 0 {
 		b = append(b, pf.Aliases...)
@@ -984,13 +989,21 @@ func generateProvidersFiles(in providersTFInput) providersTFFiles {
 			region = "us-east-1"
 		}
 
-		const awsVarDecls = `variable "bootstrap_role_arn" {
+		// Canonical AWS imported-provider credential contract (issue #677):
+		// `bootstrap_role` holds the ARN of the cross-account role to
+		// assume, `aws_external_id` the confused-deputy external ID. These
+		// names match the sandbox-infrastructure-template wrapper's
+		// wrapper-owned root declarations, so wrapper mode reuses the
+		// wrapper's declarations and direct archives ship these here. Do
+		// not reintroduce the legacy `bootstrap_role_arn` / `external_id`
+		// names — that divergence is exactly what issue #677 retires.
+		const awsVarDecls = `variable "bootstrap_role" {
   type        = string
   description = "ARN of the cross-account role to assume for deployment"
   default     = ""
 }
 
-variable "external_id" {
+variable "aws_external_id" {
   type        = string
   description = "External ID for confused-deputy protection when assuming the cross-account role"
   default     = ""
@@ -1001,10 +1014,10 @@ variable "external_id" {
 		const awsDynamicAssumeRole = `
 
   dynamic "assume_role" {
-    for_each = var.bootstrap_role_arn != "" ? [1] : []
+    for_each = var.bootstrap_role != "" ? [1] : []
     content {
-      role_arn    = var.bootstrap_role_arn
-      external_id = var.external_id != "" ? var.external_id : null
+      role_arn    = var.bootstrap_role
+      external_id = var.aws_external_id != "" ? var.aws_external_id : null
     }
   }`
 
@@ -1025,14 +1038,17 @@ variable "external_id" {
 		maps.Copy(required, discovered)
 
 		var main strings.Builder
-		// NOTE: awsVarDecls is emitted into the Variables slot (→
-		// /variables-imported.tf) so it survives the runtime wrapper's
-		// PRESERVE_PATTERNS rsync filter, which drops the composer-emitted
-		// /providers.tf while keeping the wrapper's own stub. Both Aliases
-		// (us_east_1) and Imported (aws.imported) reference these vars via
-		// awsDynamicAssumeRole, and they're the sibling files that DO
-		// survive the filter — co-locating the declarations there keeps
-		// terraform plan resolvable on the deployed module. See issue #630.
+		// awsVarDecls (the bootstrap_role / aws_external_id declarations)
+		// lives in Main alongside the default provider. Direct archives
+		// ship Main, so they stay self-contained; wrapper mode drops Main
+		// via PRESERVE_PATTERNS and the wrapper declares the same two
+		// variables itself, so the surviving Aliases (us_east_1) and
+		// Imported (aws.imported) siblings — which reference these vars via
+		// awsDynamicAssumeRole — resolve with no duplicate declaration.
+		// Declaration-first ordering is conventional for the human reader.
+		// See issue #677 (and #630, the name-mismatch workaround this
+		// supersedes).
+		main.WriteString(awsVarDecls)
 		main.WriteString("terraform {\n  required_providers {\n")
 		main.WriteString(renderRequiredProviders(required))
 		main.WriteString("  }\n}\n\n")
@@ -1071,10 +1087,9 @@ variable "external_id" {
 		fmt.Fprintf(&imp, "provider \"aws\" {\n  alias  = \"imported\"\n  region = %q%s\n}\n", region, awsDynamicAssumeRole)
 
 		return providersTFFiles{
-			Main:      []byte(main.String()),
-			Aliases:   aliases,
-			Imported:  []byte(imp.String()),
-			Variables: []byte(awsVarDecls),
+			Main:     []byte(main.String()),
+			Aliases:  aliases,
+			Imported: []byte(imp.String()),
 		}
 	}
 }
