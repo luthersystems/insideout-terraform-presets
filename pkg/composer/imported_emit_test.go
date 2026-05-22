@@ -38,6 +38,7 @@ func TestEmitImportedTF_TypedAWS(t *testing.T) {
 			Cloud:    "aws",
 			Type:     "aws_sqs_queue",
 			Address:  "aws_sqs_queue.orders_dlq",
+			Region:   "us-east-1",
 			ImportID: "https://sqs.us-east-1.amazonaws.com/123/orders-DLQ",
 		},
 		Tier:  imported.TierImportedFlat,
@@ -55,8 +56,37 @@ func TestEmitImportedTF_TypedAWS(t *testing.T) {
 	// import block paired with the resource.
 	assert.Contains(t, s, "import {")
 	assert.Contains(t, s, "to = aws_sqs_queue.orders_dlq")
-	assert.Contains(t, s, `id = "https://sqs.us-east-1.amazonaws.com/123/orders-DLQ"`)
+	assert.Contains(t, s, `id = "https://sqs.us-east-1.amazonaws.com/123/orders-DLQ@us-east-1"`)
 	// Output must parse as valid HCL.
+	_, diags := hclsyntax.ParseConfig(out, "imported.tf", hcl.InitialPos)
+	require.False(t, diags.HasErrors(), "imported.tf must parse: %s", diags.Error())
+}
+
+func TestEmitImportedTF_S3ImportIDUsesResourceRegion(t *testing.T) {
+	t.Parallel()
+	attrs, err := json.Marshal(&generated.AWSS3Bucket{
+		Bucket: generated.LiteralOf("io-uploads"),
+		Region: generated.LiteralOf("us-west-2"),
+	})
+	require.NoError(t, err)
+	ir := imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Cloud:    "aws",
+			Type:     "aws_s3_bucket",
+			Address:  "aws_s3_bucket.io_uploads",
+			Region:   "us-east-1",
+			ImportID: "io-uploads",
+		},
+		Tier:  imported.TierImportedFlat,
+		Attrs: attrs,
+	}
+
+	out, _ := EmitImportedTF("aws", []imported.ImportedResource{ir}, EmitImportedOpts{})
+	require.NotNil(t, out)
+	s := string(out)
+	assert.Contains(t, s, "to = aws_s3_bucket.io_uploads")
+	assert.Contains(t, s, `id = "io-uploads@us-west-2"`)
+	assert.True(t, hasAttr(t, s, "region", `"us-west-2"`), "region attr missing in:\n%s", s)
 	_, diags := hclsyntax.ParseConfig(out, "imported.tf", hcl.InitialPos)
 	require.False(t, diags.HasErrors(), "imported.tf must parse: %s", diags.Error())
 }

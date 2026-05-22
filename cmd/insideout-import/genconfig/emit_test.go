@@ -14,8 +14,8 @@ func TestEmitImports_HappyPath(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
 	resources := []imported.ImportedResource{
-		{Identity: imported.ResourceIdentity{Address: "aws_sqs_queue.alpha", ImportID: "https://example/alpha"}},
-		{Identity: imported.ResourceIdentity{Address: "aws_dynamodb_table.bravo", ImportID: "bravo"}},
+		{Identity: imported.ResourceIdentity{Type: "aws_sqs_queue", Address: "aws_sqs_queue.alpha", Region: "us-east-1", ImportID: "https://example/alpha"}},
+		{Identity: imported.ResourceIdentity{Type: "aws_dynamodb_table", Address: "aws_dynamodb_table.bravo", Region: "us-east-1", ImportID: "bravo"}},
 	}
 	if err := emitImports(dir, resources); err != nil {
 		t.Fatal(err)
@@ -27,13 +27,36 @@ func TestEmitImports_HappyPath(t *testing.T) {
 	got := string(body)
 	for _, want := range []string{
 		"to = aws_sqs_queue.alpha",
-		`id = "https://example/alpha"`,
+		`id = "https://example/alpha@us-east-1"`,
 		"to = aws_dynamodb_table.bravo",
-		`id = "bravo"`,
+		`id = "bravo@us-east-1"`,
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("imports.tf missing %q\n--- got ---\n%s", want, got)
 		}
+	}
+}
+
+func TestEmitImports_DoesNotAppendRegionForGlobalAWSResource(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	if err := emitImports(dir, []imported.ImportedResource{
+		{Identity: imported.ResourceIdentity{
+			Type:     "aws_iam_policy",
+			Address:  "aws_iam_policy.readonly",
+			Region:   "us-east-1",
+			ImportID: "arn:aws:iam::123456789012:policy/readonly",
+		}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(filepath.Join(dir, importsFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(body)
+	if want := `id = "arn:aws:iam::123456789012:policy/readonly"`; !strings.Contains(got, want) {
+		t.Errorf("imports.tf missing %q\n--- got ---\n%s", want, got)
 	}
 }
 
