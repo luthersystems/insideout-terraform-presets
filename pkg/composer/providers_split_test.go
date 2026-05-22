@@ -201,24 +201,31 @@ func TestGenerateProvidersTF_WithImportedGCP(t *testing.T) {
 		"ProvidersUsed[aws] must be false on a GCP-only compose: %v", res.ProvidersUsed)
 }
 
-// TestGenerateProvidersTF_AWSVariablesImportedDeclared locks in the issue-#630
-// regression: on every AWS compose, the `bootstrap_role_arn` and `external_id`
-// variable declarations must land in /variables-imported.tf (a sibling file),
-// NOT in /providers.tf — because the runtime wrapper's PRESERVE_PATTERNS rsync
-// filter drops the composer's /providers.tf while preserving the wrapper's own
-// stub. The sibling alias files (/providers-aliases.tf, /providers-imported.tf)
-// reference these vars via the assume_role dynamic block, so the declarations
-// must survive the same filter or `terraform plan` fails with:
+// TestGenerateProvidersTF_AWSImportedCredentialContract locks in the unified
+// AWS imported-provider credential contract (issue #677). On every AWS
+// compose:
 //
-//	Error: Reference to undeclared input variable
-//	  on providers-imported.tf line 7, in provider "aws":
-//	   7:     for_each = var.bootstrap_role_arn != "" ? [1] : []
+//   - /providers.tf declares `variable "bootstrap_role"` and
+//     `variable "aws_external_id"` — the canonical names, matching the
+//     sandbox-infrastructure-template wrapper's wrapper-owned declarations.
+//   - The legacy `bootstrap_role_arn` / `external_id` names appear nowhere.
+//   - The surviving sibling alias files (/providers-aliases.tf,
+//     /providers-imported.tf) reference the canonical names via the
+//     assume_role dynamic block.
+//   - No standalone /variables-imported.tf is emitted — it was a
+//     name-mismatch workaround (#630) and is retired by #677.
+//
+// Direct archives ship /providers.tf, so the stack stays self-contained.
+// In wrapper mode the wrapper drops /providers.tf via PRESERVE_PATTERNS and
+// declares `bootstrap_role` / `aws_external_id` itself, so the surviving
+// siblings resolve against the wrapper's declarations with no duplicate.
 //
 // See:
-//   - luthersystems/insideout-terraform-presets#630 (this fix)
+//   - luthersystems/insideout-terraform-presets#677 (this contract)
+//   - luthersystems/insideout-terraform-presets#630 (the superseded workaround)
 //   - luthersystems/sandbox-infrastructure-template#111 (the PRESERVE_PATTERNS contract)
 //   - luthersystems/reliable#1588 (the original archive-packager split)
-func TestGenerateProvidersTF_AWSVariablesImportedDeclared(t *testing.T) {
+func TestGenerateProvidersTF_AWSImportedCredentialContract(t *testing.T) {
 	t.Parallel()
 
 	c := newTestClient()
@@ -233,40 +240,65 @@ func TestGenerateProvidersTF_AWSVariablesImportedDeclared(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, res)
 
-	// The declarations live in /variables-imported.tf — a sibling that
-	// survives the wrapper's PRESERVE_PATTERNS rsync filter.
-	require.Contains(t, res.Files, "/variables-imported.tf",
-		"every AWS compose must emit /variables-imported.tf for the assume_role dynamic block's vars")
-	vars := string(res.Files["/variables-imported.tf"])
-	assert.Contains(t, vars, `variable "bootstrap_role_arn"`,
-		"/variables-imported.tf must declare bootstrap_role_arn")
-	assert.Contains(t, vars, `variable "external_id"`,
-		"/variables-imported.tf must declare external_id")
-
-	// They must NOT live in /providers.tf — that file is dropped by the
-	// wrapper's PRESERVE_PATTERNS filter. Putting them here would let
-	// non-wrapper direct-archive paths see them but leave wrapper-mode
-	// terraform plan broken (the original #630 bug).
+	// The canonical declarations live in /providers.tf — direct archives
+	// ship it, wrapper mode drops it (and the wrapper declares the same
+	// two names itself). Pin the variable body, not just the name: the
+	// `default = ""` is load-bearing — the assume_role dynamic block gates
+	// on `var.bootstrap_role != ""`, so a non-empty default would make
+	// every direct-archive compose attempt a role assumption.
 	prov := string(res.Files["/providers.tf"])
-	assert.NotContains(t, prov, `variable "bootstrap_role_arn"`,
-		"bootstrap_role_arn declaration must NOT live in /providers.tf — that file is dropped by the wrapper's PRESERVE_PATTERNS filter (#630)")
-	assert.NotContains(t, prov, `variable "external_id"`,
-		"external_id declaration must NOT live in /providers.tf — that file is dropped by the wrapper's PRESERVE_PATTERNS filter (#630)")
+	assert.Regexp(t, `variable "bootstrap_role" \{[^}]*type\s*=\s*string[^}]*default\s*=\s*""`, prov,
+		"/providers.tf must declare bootstrap_role as a string defaulting to \"\" (#677)")
+	assert.Regexp(t, `variable "aws_external_id" \{[^}]*type\s*=\s*string[^}]*default\s*=\s*""`, prov,
+		"/providers.tf must declare aws_external_id as a string defaulting to \"\" (#677)")
 
-	// And the surviving sibling alias files reference these vars — confirm
-	// the resolution graph is complete: declarations in a surviving sibling,
-	// references in surviving siblings.
+	// The default provider in /providers.tf must wire the assume_role
+	// dynamic block to the canonical vars — not just the imported alias.
+	// A mutation dropping assume_role from the default provider would
+	// deploy non-imported resources with the wrong credentials.
+	assert.Contains(t, prov, `var.bootstrap_role`,
+		"/providers.tf default provider must reference var.bootstrap_role in its assume_role block")
+	assert.Contains(t, prov, `var.aws_external_id`,
+		"/providers.tf default provider must reference var.aws_external_id in its assume_role block")
+
+	// The legacy name set is fully retired — it must not appear in any
+	// emitted file, or callers would still have to bridge both sets.
+	// Scope each scan to the declaration / reference forms (the bare
+	// token `external_id` is a legitimate AWS provider attribute name
+	// inside the assume_role block, so it must not be matched).
+	for path, body := range res.Files {
+		s := string(body)
+		assert.NotContains(t, s, `variable "bootstrap_role_arn"`,
+			"legacy bootstrap_role_arn declaration must not appear in %s (#677)", path)
+		assert.NotContains(t, s, `var.bootstrap_role_arn`,
+			"legacy var.bootstrap_role_arn reference must not appear in %s (#677)", path)
+		assert.NotContains(t, s, `variable "external_id"`,
+			"legacy external_id declaration must not appear in %s (#677)", path)
+		assert.NotContains(t, s, `var.external_id`,
+			"legacy var.external_id reference must not appear in %s (#677)", path)
+	}
+
+	// No standalone /variables-imported.tf — retired by #677.
+	_, hasVarsImported := res.Files["/variables-imported.tf"]
+	assert.False(t, hasVarsImported,
+		"/variables-imported.tf is retired by #677 — canonical decls live in /providers.tf")
+
+	// The surviving sibling alias file references the canonical names via
+	// the assume_role dynamic block — confirm the resolution graph holds.
 	importedTF := string(res.Files["/providers-imported.tf"])
-	assert.Contains(t, importedTF, `var.bootstrap_role_arn`,
-		"sanity: /providers-imported.tf must reference var.bootstrap_role_arn (else this regression test is meaningless)")
+	assert.Contains(t, importedTF, `var.bootstrap_role`,
+		"/providers-imported.tf must reference var.bootstrap_role")
+	assert.Contains(t, importedTF, `var.aws_external_id`,
+		"/providers-imported.tf must reference var.aws_external_id")
 }
 
-// TestGenerateProvidersTF_GCPNoVariablesImported pins the symmetric invariant
-// for GCP: the imported alias for google / google-beta does NOT use an
-// assume_role dynamic block (GCP doesn't use AWS-style cross-account role
-// assumption), so /variables-imported.tf must not emit. Guards against an
-// accidental "always emit on every cloud" refactor.
-func TestGenerateProvidersTF_GCPNoVariablesImported(t *testing.T) {
+// TestGenerateProvidersTF_GCPNoImportedCredentialVars pins the symmetric
+// invariant for GCP: the imported alias for google / google-beta does NOT
+// use an assume_role dynamic block (GCP doesn't use AWS-style cross-account
+// role assumption), so the AWS credential variables must not appear, and no
+// standalone /variables-imported.tf is emitted. Guards against an accidental
+// "always emit on every cloud" refactor.
+func TestGenerateProvidersTF_GCPNoImportedCredentialVars(t *testing.T) {
 	t.Parallel()
 
 	c := newTestClient()
@@ -284,13 +316,30 @@ func TestGenerateProvidersTF_GCPNoVariablesImported(t *testing.T) {
 
 	_, has := res.Files["/variables-imported.tf"]
 	assert.False(t, has,
-		"GCP composes don't reference bootstrap_role_arn/external_id — /variables-imported.tf must not emit")
+		"GCP composes never emit /variables-imported.tf")
+
+	// No AWS cross-account credential plumbing may leak into ANY emitted
+	// file — not just /providers.tf. A mutation that wrongly threaded
+	// awsDynamicAssumeRole into the GCP imported alias would land in
+	// /providers-imported.tf, so scan the whole file set.
+	for path, body := range res.Files {
+		s := string(body)
+		assert.NotContains(t, s, `variable "bootstrap_role"`,
+			"GCP compose must not declare the AWS bootstrap_role variable in %s", path)
+		assert.NotContains(t, s, `variable "aws_external_id"`,
+			"GCP compose must not declare the AWS aws_external_id variable in %s", path)
+		assert.NotContains(t, s, `var.bootstrap_role`,
+			"GCP compose must not reference var.bootstrap_role in %s", path)
+		assert.NotContains(t, s, `assume_role`,
+			"GCP compose must not emit an assume_role block in %s", path)
+	}
+
 	// Sanity: GCP compose still produces /providers.tf. Without this,
 	// a mutation that broke GCP provider generation entirely (so Files
-	// was missing both files) would pass the negative assertion above
+	// was missing /providers.tf) would pass the negative assertions above
 	// for the wrong reason.
 	assert.Contains(t, res.Files, "/providers.tf",
-		"GCP compose must still emit /providers.tf — the absence-of-variables-imported assertion above is meaningless if all provider files are missing")
+		"GCP compose must still emit /providers.tf — the negative assertions above are meaningless if the provider file is missing")
 }
 
 // TestComposeStackResult_ProvidersUsed_BackwardCompat pins that the new
