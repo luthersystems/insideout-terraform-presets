@@ -296,6 +296,11 @@ jobs:
         with:
           terraform_version: "1.7.5"
       - run: go test -race ./...
+      # Build-tagged terraform-validate harness (imported_tfvalidate_test.go,
+      # #669): emits imported.tf and runs `terraform validate` against the
+      # real provider schema. Excluded from the untagged run above; run it
+      # explicitly so a computed-attr leak is caught end-to-end in CI.
+      - run: go test -tags tfvalidate -run TestImportedTF_TerraformValidate ./pkg/composer/
 
   # NOTE (#406): the previous localstack-discover-gate job was removed
   # alongside Bundle 13c. The unified discoverer routes every AWS

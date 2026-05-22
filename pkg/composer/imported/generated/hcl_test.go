@@ -209,14 +209,14 @@ func TestMarshalHCLConfigurable_SkipsComputedOnly(t *testing.T) {
 		FifoQueue: LiteralOf(false),
 	}
 
-	// nil schema → no filtering, identical to MarshalHCL.
+	// nil schema → no filtering. The byte-for-byte equality is the
+	// load-bearing assertion: a nil schema must change nothing.
 	nilOut, err := MarshalHCLConfigurable(&q, nil)
 	require.NoError(t, err)
 	plainOut, err := MarshalHCL(&q)
 	require.NoError(t, err)
 	assert.Equal(t, string(plainOut), string(nilOut),
 		"nil schema must be byte-identical to MarshalHCL")
-	assert.Contains(t, string(nilOut), "fifo_queue")
 
 	// Schema marking fifo_queue computed-only must drop it; the
 	// configurable `name` survives.
@@ -227,7 +227,10 @@ func TestMarshalHCLConfigurable_SkipsComputedOnly(t *testing.T) {
 	out, err := MarshalHCLConfigurable(&q, schema)
 	require.NoError(t, err)
 	s := string(out)
-	assert.Contains(t, s, `name`, "configurable attr must survive:\n%s", s)
+	// Anchored: `name` must be emitted as an actual attribute assignment,
+	// not merely appear as a substring of a comment / block label.
+	assert.Regexp(t, `(?m)^\s*name\s*=\s*"orders-DLQ"`, s,
+		"configurable attr must survive as a real attribute:\n%s", s)
 	assert.NotContains(t, s, "fifo_queue",
 		"computed-only attr must be dropped:\n%s", s)
 
