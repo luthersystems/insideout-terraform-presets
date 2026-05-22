@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -42,6 +43,7 @@ Flags:`)
 	input := fs.String("input", "", "selected reverse-import request JSON, or imported.json from discover (required)")
 	outputDir := fs.String("output-dir", "", "directory to write imported.tf, imported.json, tfplan.json, plan-summary.json, and reverse-result.json (required)")
 	provider := fs.String("provider", "", "cloud provider override: aws or gcp (default: derive from input)")
+	project := fs.String("project", "", "InsideOut project tag/label filter for parent-child closure discovery")
 	region := fs.String("region", "", "AWS region or GCP provider region override (default: derive from input)")
 	gcpProjectID := fs.String("gcp-project-id", "", "GCP project ID override (default: derive from input)")
 	importProjectID := fs.String("import-project-id", "", "InsideOut import project ID for provenance tags/labels")
@@ -116,6 +118,8 @@ Flags:`)
 		ImportProjectID:       *importProjectID,
 		ImportSessionID:       *importSessionID,
 		ImportedAt:            time.Now().UTC(),
+		DiscoverProject:       *project,
+		DiscoverRegions:       requestRegions(req, *region),
 		TerraformBinary:       *tfBinary,
 		SkipDriftFix:          *noDriftFix,
 		SkipDepChase:          *noDepChase,
@@ -149,13 +153,13 @@ func newReverseDiscoverer(ctx context.Context, cloud, region, gcpProjectID, awsE
 		if err != nil {
 			return nil, func() {}, err
 		}
-		return awsdiscover.NewAWSDiscovererWithConcurrency(cfg, awsdiscover.DefaultMaxConcurrency), func() {}, nil
+		return awsAggAdapter{d: awsdiscover.NewAWSDiscovererWithConcurrency(cfg, awsdiscover.DefaultMaxConcurrency)}, func() {}, nil
 	case "gcp":
 		searcher, err := gcpdiscover.NewRealAssetSearcher(ctx)
 		if err != nil {
 			return nil, func() {}, err
 		}
-		return gcpdiscover.NewGCPDiscoverer(searcher, gcpProjectID, gcpdiscover.GCPDiscovererOpts{}), func() { _ = searcher.Close() }, nil
+		return gcpAggAdapter{d: gcpdiscover.NewGCPDiscoverer(searcher, gcpProjectID, gcpdiscover.GCPDiscovererOpts{})}, func() { _ = searcher.Close() }, nil
 	default:
 		return nil, func() {}, fmt.Errorf("unknown cloud %q", cloud)
 	}
@@ -171,6 +175,26 @@ func firstReqRegion(req reversejob.Request, fallback string) string {
 		}
 	}
 	return ""
+}
+
+func requestRegions(req reversejob.Request, override string) []string {
+	if strings.TrimSpace(override) != "" {
+		return []string{strings.TrimSpace(override)}
+	}
+	seen := map[string]struct{}{}
+	for _, r := range req.Resources {
+		region := strings.TrimSpace(r.Identity.Region)
+		if region == "" {
+			continue
+		}
+		seen[region] = struct{}{}
+	}
+	out := make([]string, 0, len(seen))
+	for region := range seen {
+		out = append(out, region)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func firstReqProjectID(req reversejob.Request, fallback string) string {

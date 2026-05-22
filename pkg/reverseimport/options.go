@@ -19,6 +19,27 @@ type Discoverer interface {
 	DiscoverByID(ctx context.Context, tfType, id, region, accountID string) (imported.ImportedResource, error)
 }
 
+// ClosureRequest describes the selected parent resources whose scoped
+// children should be discovered before provider readback.
+type ClosureRequest struct {
+	Cloud           string
+	Project         string
+	Regions         []string
+	AccountID       string
+	GCPProjectID    string
+	ParentResources []imported.ImportedResource
+	ParentTypes     []string
+	ChildTypes      []string
+}
+
+// ClosureDiscoverer is the optional parent-selection expansion surface.
+// The local CLI implements this by calling the same cloud discoverer used for
+// top-level discovery; Mars can wrap the same SDK-backed discoverer without
+// shelling out to CLI-private code.
+type ClosureDiscoverer interface {
+	DiscoverClosure(ctx context.Context, req ClosureRequest) ([]imported.ImportedResource, error)
+}
+
 // Options configures a reverse-import run.
 type Options struct {
 	OutputDir string
@@ -32,12 +53,16 @@ type Options struct {
 	ImportProjectID string
 	ImportSessionID string
 	ImportedAt      time.Time
+	DiscoverProject string
+	DiscoverRegions []string
+	AccountID       string
 
 	TerraformBinary       string
 	SkipDriftFix          bool
 	SkipDepChase          bool
 	MaxDepChaseIterations int
 	Discoverer            Discoverer
+	ClosureDiscoverer     ClosureDiscoverer
 
 	deps deps
 }

@@ -49,6 +49,19 @@ func Run(ctx context.Context, req job.Request, opts Options) (job.Result, error)
 			resources[i].Identity.Cloud = cloud
 		}
 	}
+	closure, err := expandSelectionClosure(ctx, selectionClosureInput{
+		resources:    resources,
+		opts:         opts,
+		cloud:        cloud,
+		region:       region,
+		gcpProjectID: gcpProjectID,
+	})
+	if err != nil {
+		return result, err
+	}
+	resources = closure.resources
+	result.Diagnostics = append(result.Diagnostics, closure.diagnostics...)
+	dependenciesByAddress := closure.dependencies
 
 	workdir := opts.Workdir
 	if workdir == "" {
@@ -105,6 +118,7 @@ func Run(ctx context.Context, req job.Request, opts Options) (job.Result, error)
 		}
 		if dcRes != nil {
 			resources = dcRes.Resources
+			appendDepChaseDependencies(dependenciesByAddress, resources, dcRes.Edges)
 		}
 	}
 
@@ -112,7 +126,7 @@ func Run(ctx context.Context, req job.Request, opts Options) (job.Result, error)
 		return result, err
 	}
 	result.Imported = resources
-	result.Resources = resourceResults(resources)
+	result.Resources = resourceResults(resources, dependenciesByAddress)
 
 	importedTF, providersUsed := composer.EmitImportedTF(cloud, resources, composer.EmitImportedOpts{
 		ImportProjectID: opts.ImportProjectID,
@@ -176,6 +190,15 @@ func Run(ctx context.Context, req job.Request, opts Options) (job.Result, error)
 	if dcRes != nil && len(dcRes.Edges) > 0 {
 		if err := writeJSON(filepath.Join(opts.OutputDir, graphJSONFile), dcRes.Edges); err != nil {
 			return result, err
+		}
+	}
+	if dcRes != nil {
+		for _, warning := range dcRes.Warnings {
+			result.Diagnostics = append(result.Diagnostics, job.Diagnostic{
+				Severity: "warning",
+				Code:     "depchase_warning",
+				Message:  warning,
+			})
 		}
 	}
 	planSummaryPath := filepath.Join(opts.OutputDir, planSummaryJSONFile)
@@ -257,17 +280,37 @@ func populateArtifacts(result *job.Result, outputDir, generatedPath string, dcRe
 	return nil
 }
 
-func resourceResults(resources []imported.ImportedResource) []job.ResourceResult {
+func resourceResults(resources []imported.ImportedResource, dependenciesByAddress map[string][]imported.ResourceIdentity) []job.ResourceResult {
 	out := make([]job.ResourceResult, 0, len(resources))
 	for _, r := range resources {
 		rr := r
 		out = append(out, job.ResourceResult{
-			Identity: r.Identity,
-			Status:   job.ResourceStatusImported,
-			Imported: &rr,
+			Identity:     r.Identity,
+			Status:       job.ResourceStatusImported,
+			Imported:     &rr,
+			Dependencies: dependenciesByAddress[r.Identity.Address],
 		})
 	}
 	return out
+}
+
+func appendDepChaseDependencies(dependenciesByAddress map[string][]imported.ResourceIdentity, resources []imported.ImportedResource, edges []depchase.GraphEdge) {
+	if len(edges) == 0 {
+		return
+	}
+	byAddress := make(map[string]imported.ResourceIdentity, len(resources))
+	for _, r := range resources {
+		if strings.TrimSpace(r.Identity.Address) != "" {
+			byAddress[r.Identity.Address] = r.Identity
+		}
+	}
+	for _, edge := range edges {
+		to, ok := byAddress[edge.To]
+		if !ok {
+			continue
+		}
+		dependenciesByAddress[edge.From] = append(dependenciesByAddress[edge.From], to)
+	}
 }
 
 func issuesFromComposer(in []composer.ValidationIssue) []job.Issue {

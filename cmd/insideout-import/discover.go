@@ -176,6 +176,15 @@ func (a awsAggAdapter) DiscoverByID(ctx context.Context, tfType, id, region, acc
 	return a.d.DiscoverByID(ctx, tfType, id, region, accountID)
 }
 
+func (a awsAggAdapter) DiscoverClosure(ctx context.Context, req reverseimport.ClosureRequest) ([]imported.ImportedResource, error) {
+	types := unionStrings(req.ParentTypes, req.ChildTypes)
+	return a.d.DiscoverTypes(ctx, types, awsdiscover.DiscoverArgs{
+		Project:   req.Project,
+		Regions:   req.Regions,
+		AccountID: req.AccountID,
+	})
+}
+
 // gcpAggAdapter wraps *gcpdiscover.GCPDiscoverer to satisfy
 // discoveryAggregator. Converts AggArgs into gcpdiscover.DiscoverArgs via
 // aggArgsToGCP; otherwise mirrors awsAggAdapter.
@@ -190,6 +199,33 @@ func (a gcpAggAdapter) DiscoverTypes(ctx context.Context, args AggArgs) ([]impor
 
 func (a gcpAggAdapter) DiscoverByID(ctx context.Context, tfType, id, region, accountID string) (imported.ImportedResource, error) {
 	return a.d.DiscoverByID(ctx, tfType, id, region, accountID)
+}
+
+func (a gcpAggAdapter) DiscoverClosure(ctx context.Context, req reverseimport.ClosureRequest) ([]imported.ImportedResource, error) {
+	types := unionStrings(req.ParentTypes, req.ChildTypes)
+	return a.d.DiscoverTypes(ctx, types, gcpdiscover.DiscoverArgs{
+		Project: req.Project,
+		Regions: req.Regions,
+	})
+}
+
+func unionStrings(groups ...[]string) []string {
+	seen := map[string]struct{}{}
+	for _, group := range groups {
+		for _, value := range group {
+			value = strings.TrimSpace(value)
+			if value == "" {
+				continue
+			}
+			seen[value] = struct{}{}
+		}
+	}
+	out := make([]string, 0, len(seen))
+	for value := range seen {
+		out = append(out, value)
+	}
+	sort.Strings(out)
+	return out
 }
 
 // unsupportedAWSEnumerator is the function-shaped seam used by
@@ -980,6 +1016,9 @@ Exit codes:
 			Region:                primaryRegion,
 			GCPProjectID:          *gcpProjectID,
 			AWSEndpointURL:        *awsEndpointURL,
+			DiscoverProject:       *project,
+			DiscoverRegions:       resolvedRegions,
+			AccountID:             accountID,
 			MaxDepChaseIterations: *maxDepChaseIter,
 			Discoverer:            d,
 		})
