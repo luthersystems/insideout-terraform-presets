@@ -235,6 +235,15 @@ const computedResourceIDAttr = "id"
 // Attrs / opaque Attributes bag, but `id` is never a legal resource
 // argument — it must only ever appear in the `import {}` block. Emitting
 // it produces the malformed-HCL "Invalid or unknown key" plan failure.
+//
+// Computed-only attributes (e.g. a resource's synthesized `arn`) are
+// likewise dropped from both paths: the opaque path filters them in
+// emitOpaqueAttrsBody, and the typed path passes the registered
+// <Type>Schema to generated.MarshalHCLConfigurable so the marshaler skips
+// any field whose FieldSchema is not Configurable(). An enricher may stamp
+// a computed value (e.g. the S3 enricher synthesizes ARN for identity
+// use); emitting it inside a `resource {}` block fails terraform plan with
+// "Value for unconfigurable attribute" (#669).
 func emitImportedResourceBody(ir imported.ImportedResource) ([]byte, error) {
 	if len(ir.Attrs) > 0 {
 		attrs, err := stripResourceIDAttr(ir.Attrs)
@@ -247,7 +256,11 @@ func emitImportedResourceBody(ir imported.ImportedResource) ([]byte, error) {
 		}
 		ensureLambdaPlaceholderSource(typed)
 		ensureKeyPairPlaceholder(typed)
-		body, err := generated.MarshalHCL(typed)
+		// Pass the registered schema so computed-only attributes are
+		// dropped. Lookup returns a nil schema for unregistered types,
+		// which makes MarshalHCLConfigurable byte-identical to MarshalHCL.
+		_, schema, _ := generated.Lookup(ir.Identity.Type)
+		body, err := generated.MarshalHCLConfigurable(typed, schema)
 		if err != nil {
 			return nil, fmt.Errorf("marshal typed body for %q: %w", ir.Identity.Type, err)
 		}

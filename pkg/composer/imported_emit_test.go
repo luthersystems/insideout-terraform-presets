@@ -1038,3 +1038,37 @@ func TestEmitImportedTF_IAMPolicyCarriesPolicy(t *testing.T) {
 	_, diags := hclsyntax.ParseConfig(out, "imported.tf", hcl.InitialPos)
 	require.False(t, diags.HasErrors(), "imported.tf must parse: %s", diags.Error())
 }
+
+// TestEmitImportedTF_TypedDropsComputedAttrs pins #669: the typed-Attrs
+// emit path must drop computed-only attributes. The S3 enricher
+// synthesizes a bucket `arn` for identity use and stamps it onto the typed
+// Attrs; `arn` on aws_s3_bucket is schema-Computed-only (not Optional, not
+// Required). Emitting it inside the `resource {}` block makes terraform
+// plan fail hard: "Value for unconfigurable attribute ... Can't configure
+// a value for arn". The configurable `bucket` attribute must still emit.
+func TestEmitImportedTF_TypedDropsComputedAttrs(t *testing.T) {
+	t.Parallel()
+	ir := imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Cloud:    "aws",
+			Type:     "aws_s3_bucket",
+			Address:  "aws_s3_bucket.io_uploads",
+			ImportID: "io-uploads",
+		},
+		Tier: imported.TierImportedFlat,
+		Attrs: []byte(`{` +
+			`"bucket":{"literal":"io-uploads"},` +
+			`"arn":{"literal":"arn:aws:s3:::io-uploads"}}`),
+	}
+	out, _ := EmitImportedTF("aws", []imported.ImportedResource{ir}, EmitImportedOpts{})
+	require.NotNil(t, out)
+	s := string(out)
+	// Output must parse.
+	_, diags := hclsyntax.ParseConfig(out, "imported.tf", hcl.InitialPos)
+	require.Falsef(t, diags.HasErrors(), "imported.tf must parse: %s\n%s", diags.Error(), s)
+	// The configurable attribute survives.
+	assert.True(t, hasAttr(t, s, "bucket", `"io-uploads"`), "bucket attr missing in:\n%s", s)
+	// The computed-only `arn` must NOT appear as a resource argument.
+	assert.Falsef(t, hasAttr(t, s, "arn", `"arn:aws:s3:::io-uploads"`),
+		"computed-only `arn` leaked into the resource body — terraform plan would fail:\n%s", s)
+}

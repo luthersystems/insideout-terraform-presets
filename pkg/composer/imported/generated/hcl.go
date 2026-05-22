@@ -25,6 +25,26 @@ import (
 // wrapper themselves; this keeps the marshaler indifferent to whether the
 // struct represents a top-level resource, a module call, or a nested block.
 func MarshalHCL(into any) ([]byte, error) {
+	return marshalHCL(into, nil)
+}
+
+// MarshalHCLConfigurable behaves like MarshalHCL but, when schema is
+// non-nil, skips any top-level field whose registered FieldSchema is not
+// Configurable() — i.e. computed-only attributes such as a resource's
+// synthesized `arn`. Terraform rejects a computed attribute supplied
+// inside a `resource {}` block ("Value for unconfigurable attribute"), so
+// the imported-resource emitter must drop them. This mirrors the filter
+// the opaque-Attributes path already applies in composer.emitOpaqueAttrsBody.
+//
+// schema is the flat top-level <Type>Schema map (see registry.Lookup); it
+// intentionally does not reach into nested blocks, matching the opaque
+// path's top-level-only behavior. A nil schema disables filtering and is
+// byte-identical to MarshalHCL.
+func MarshalHCLConfigurable(into any, schema map[string]FieldSchema) ([]byte, error) {
+	return marshalHCL(into, schema)
+}
+
+func marshalHCL(into any, schema map[string]FieldSchema) ([]byte, error) {
 	v := reflect.ValueOf(into)
 	if v.Kind() == reflect.Pointer {
 		v = v.Elem()
@@ -34,7 +54,7 @@ func MarshalHCL(into any) ([]byte, error) {
 	}
 
 	f := hclwrite.NewEmptyFile()
-	if err := writeBody(f.Body(), v); err != nil {
+	if err := writeBody(f.Body(), v, schema); err != nil {
 		return nil, err
 	}
 	return bytes.TrimRight(f.Bytes(), "\n"), nil
@@ -57,7 +77,12 @@ func UnmarshalHCL(src []byte, body *hclsyntax.Body, into any) error {
 // Marshal
 // ----------------------------------------------------------------------
 
-func writeBody(body *hclwrite.Body, v reflect.Value) error {
+// writeBody serializes the tf:-tagged fields of struct v into body. When
+// schema is non-nil, top-level fields whose FieldSchema is not
+// Configurable() are skipped (see MarshalHCLConfigurable). Nested blocks
+// recurse with a nil schema — the flat <Type>Schema map only covers
+// top-level attributes.
+func writeBody(body *hclwrite.Body, v reflect.Value, schema map[string]FieldSchema) error {
 	t := v.Type()
 	for i := 0; i < t.NumField(); i++ {
 		fld := t.Field(i)
@@ -67,6 +92,11 @@ func writeBody(body *hclwrite.Body, v reflect.Value) error {
 		tag, kind := parseTag(fld.Tag.Get("tf"))
 		if tag == "" {
 			continue
+		}
+		if schema != nil {
+			if fs, ok := schema[tag]; ok && !fs.Configurable() {
+				continue
+			}
 		}
 		fv := v.Field(i)
 		if err := writeField(body, tag, kind, fv); err != nil {
@@ -91,7 +121,7 @@ func writeField(body *hclwrite.Body, name string, kind tagKind, fv reflect.Value
 			return fmt.Errorf("block field must be struct or *struct, got %v", fv.Kind())
 		}
 		blk := body.AppendNewBlock(name, nil)
-		return writeBody(blk.Body(), fv)
+		return writeBody(blk.Body(), fv, nil)
 	case tagBlocks:
 		if fv.Kind() != reflect.Slice {
 			return fmt.Errorf("blocks field must be slice, got %v", fv.Kind())
@@ -108,7 +138,7 @@ func writeField(body *hclwrite.Body, name string, kind tagKind, fv reflect.Value
 				return fmt.Errorf("blocks element must be struct, got %v", elem.Kind())
 			}
 			blk := body.AppendNewBlock(name, nil)
-			if err := writeBody(blk.Body(), elem); err != nil {
+			if err := writeBody(blk.Body(), elem, nil); err != nil {
 				return err
 			}
 		}
