@@ -232,7 +232,7 @@ var arnRules = []arnRule{
 			return rest
 		}},
 	{matchService: "iam", matchResourceType: "role",
-		cfnType: "AWS::IAM::Role", identifierFn: identityResourceID},
+		cfnType: "AWS::IAM::Role", identifierFn: iamRoleNameIdentifier},
 	{matchService: "iam", matchResourceType: "policy",
 		cfnType: "AWS::IAM::ManagedPolicy", identifierFn: identityFullARN},
 	// IAM Instance Profile — untaggable (no Tags property on the CFN
@@ -403,6 +403,16 @@ func identityResourceID(p parsedARN) string { return p.resourceID }
 // identityFullARN is the common identifierFn for types whose Cloud Control
 // primary identifier is the entire ARN string.
 func identityFullARN(p parsedARN) string { return p.full }
+
+// iamRoleNameIdentifier extracts the IAM RoleName from either
+// role/<RoleName> or role/<path>/<RoleName>. Terraform and iam:GetRole both
+// key roles by RoleName, not by the path-qualified ARN resource ID.
+func iamRoleNameIdentifier(p parsedARN) string {
+	if idx := strings.LastIndex(p.resourceID, "/"); idx >= 0 {
+		return p.resourceID[idx+1:]
+	}
+	return p.resourceID
+}
 
 // wafv2WebACLIdentifier builds the Cloud Control primary identifier
 // for AWS::WAFv2::WebACL from a parsed ARN. The CC identifier is

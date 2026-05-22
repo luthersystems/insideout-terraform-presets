@@ -638,6 +638,41 @@ func TestCloudControlDiscoverByID_HappyPath(t *testing.T) {
 	}
 }
 
+func TestCloudControlDiscoverByID_NormalizesARNIdentifier(t *testing.T) {
+	t.Parallel()
+	fake := &fakeCloudControlClient{
+		propsByIdentifier: map[string]map[string]any{
+			"lambda-exec": {
+				"RoleName": "lambda-exec",
+				"Arn":      "arn:aws:iam::123:role/service-role/lambda-exec",
+				"Tags":     []any{map[string]any{"Key": "Project", "Value": "io-test"}},
+			},
+		},
+	}
+	d := &cloudControlDiscoverer{
+		cfg:            configByTFType(t, "aws_iam_role"),
+		new:            func(_ string) cloudControlClient { return fake },
+		maxConcurrency: DefaultMaxConcurrency,
+	}
+
+	got, err := d.DiscoverByID(context.Background(), "arn:aws:iam::123:role/service-role/lambda-exec", "us-east-1", "123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fake.getResourceCalls) != 1 || fake.getResourceCalls[0] != "lambda-exec" {
+		t.Fatalf("GetResource identifiers = %v, want [lambda-exec]", fake.getResourceCalls)
+	}
+	if got.Identity.ImportID != "lambda-exec" {
+		t.Errorf("ImportID=%q, want lambda-exec", got.Identity.ImportID)
+	}
+	if got.Identity.NameHint != "lambda-exec" {
+		t.Errorf("NameHint=%q, want lambda-exec", got.Identity.NameHint)
+	}
+	if got.Identity.NativeIDs["arn"] != "arn:aws:iam::123:role/service-role/lambda-exec" {
+		t.Errorf("NativeIDs[arn]=%q, want role ARN", got.Identity.NativeIDs["arn"])
+	}
+}
+
 // TestCloudControlDiscoverByID_NotFound pins that ResourceNotFoundException
 // (typed or via smithy APIError ErrorCode) maps to ErrNotFound so the
 // Stage-2c3 dep-chase loop can convert it to an operator-facing warning.

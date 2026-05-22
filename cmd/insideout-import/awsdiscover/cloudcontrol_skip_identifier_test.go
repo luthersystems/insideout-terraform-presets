@@ -41,7 +41,17 @@ func TestIsAWSManagedPolicyARN(t *testing.T) {
 // skipManagedConfig is testConfig with the production AWS-managed-policy
 // SkipIdentifier hook wired in, matching the aws_iam_policy config.
 func skipManagedConfig() cloudControlConfig {
-	cfg := testConfig()
+	cfg := cloudControlConfig{
+		TFType:                 "aws_iam_policy",
+		CloudFormationType:     "AWS::IAM::ManagedPolicy",
+		Slug:                   "iam_policy",
+		ImportIDFromIdentifier: passthroughImportID,
+		NameHintFromProperties: nameOrIdentifier("ManagedPolicyName"),
+		NativeIDsFromProperties: func(identifier string, _ map[string]any) map[string]string {
+			return map[string]string{"arn": identifier}
+		},
+		TagsFromProperties: tagsFromKey("Tags"),
+	}
 	cfg.SkipIdentifier = isAWSManagedPolicyARN
 	return cfg
 }

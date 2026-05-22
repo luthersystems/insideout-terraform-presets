@@ -187,15 +187,6 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 		return nil, fmt.Errorf("resource-type fixups: %w", err)
 	}
 
-	cleaned, err = applyCrossRefs(cleaned, resources, provider)
-	if err != nil {
-		return nil, fmt.Errorf("cross-ref: %w", err)
-	}
-
-	if err := os.WriteFile(generatedPath, cleaned, 0o644); err != nil {
-		return nil, fmt.Errorf("rewrite generated.tf: %w", err)
-	}
-
 	// Orphan-import safety net (#362): drop any import { to = X.Y }
 	// whose target resource has no body in generated.tf. terraform
 	// plan -generate-config-out occasionally produces no body for a
@@ -205,6 +196,11 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 	// it here keeps the rest of the import set running. Captured
 	// orphans are written to imports-skipped.json for traceability
 	// plus a stderr WARN per drop so the operator sees the soft-fail.
+	//
+	// This must run before cross-reference replacement. If an orphan
+	// resource remains in the cross-ref index, a surviving resource can
+	// be rewritten to reference a block that was just pruned from
+	// imports.tf and never existed in generated.tf.
 	skipped, err := pruneOrphanImports(opts.Workdir, cleaned)
 	if err != nil {
 		return nil, fmt.Errorf("orphan-import safety net: %w", err)
@@ -221,6 +217,15 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 				s.Address, s.ImportID, s.Reason)
 		}
 		resources = filterSkippedResources(resources, skipped)
+	}
+
+	cleaned, err = applyCrossRefs(cleaned, resources, provider)
+	if err != nil {
+		return nil, fmt.Errorf("cross-ref: %w", err)
+	}
+
+	if err := os.WriteFile(generatedPath, cleaned, 0o644); err != nil {
+		return nil, fmt.Errorf("rewrite generated.tf: %w", err)
 	}
 
 	if err := runner.Validate(ctx); err != nil {

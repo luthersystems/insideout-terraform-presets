@@ -515,28 +515,32 @@ func (d *cloudControlDiscoverer) DiscoverByID(ctx context.Context, id, region, a
 	if id == "" {
 		return imported.ImportedResource{}, fmt.Errorf("%s: empty id: %w", d.cfg.TFType, ErrNotSupported)
 	}
+	identifier, err := d.discoverByIDIdentifier(id)
+	if err != nil {
+		return imported.ImportedResource{}, err
+	}
 	// Identifiers the per-type config excludes (e.g. AWS-managed IAM
 	// policies — #652) must not be imported even when dep-chase reaches
 	// them via a cross-reference. ErrNotSupported tells the dep-chase
 	// loop to drop the reference rather than retry with another
 	// discoverer.
-	if d.cfg.SkipIdentifier != nil && d.cfg.SkipIdentifier(id) {
+	if d.cfg.SkipIdentifier != nil && d.cfg.SkipIdentifier(identifier) {
 		return imported.ImportedResource{}, fmt.Errorf("%s %q: not customer-owned: %w", d.cfg.TFType, id, ErrNotSupported)
 	}
 	client := d.new(region)
 	resp, err := client.GetResource(ctx, &cloudcontrol.GetResourceInput{
 		TypeName:   aws.String(d.cfg.CloudFormationType),
-		Identifier: aws.String(id),
+		Identifier: aws.String(identifier),
 	})
 	if err != nil {
 		if isCloudControlNotFound(err) {
-			return imported.ImportedResource{}, fmt.Errorf("%s %q: %w", d.cfg.TFType, id, ErrNotFound)
+			return imported.ImportedResource{}, fmt.Errorf("%s %q: %w", d.cfg.TFType, identifier, ErrNotFound)
 		}
 		if isCloudControlMalformedIdentifier(err) {
 			// Cloud Control rejected the identifier shape — Stage 2c3's
 			// dep-chase loop treats this as "not parseable by this
 			// discoverer" so it can try a different one.
-			return imported.ImportedResource{}, fmt.Errorf("%s %q: %w", d.cfg.TFType, id, ErrNotSupported)
+			return imported.ImportedResource{}, fmt.Errorf("%s %q: %w", d.cfg.TFType, identifier, ErrNotSupported)
 		}
 		return imported.ImportedResource{}, fmt.Errorf("GetResource %s: %w", d.cfg.CloudFormationType, err)
 	}
@@ -544,17 +548,17 @@ func (d *cloudControlDiscoverer) DiscoverByID(ctx context.Context, id, region, a
 	if err != nil {
 		return imported.ImportedResource{}, fmt.Errorf("parse properties %s %q: %w", d.cfg.CloudFormationType, id, err)
 	}
-	importID := id
+	importID := identifier
 	if d.cfg.ImportIDFromIdentifier != nil {
-		importID = d.cfg.ImportIDFromIdentifier(id, props)
+		importID = d.cfg.ImportIDFromIdentifier(identifier, props)
 	}
-	name := id
+	name := identifier
 	if d.cfg.NameHintFromProperties != nil {
-		name = d.cfg.NameHintFromProperties(id, props)
+		name = d.cfg.NameHintFromProperties(identifier, props)
 	}
 	var native map[string]string
 	if d.cfg.NativeIDsFromProperties != nil {
-		native = d.cfg.NativeIDsFromProperties(id, props)
+		native = d.cfg.NativeIDsFromProperties(identifier, props)
 	}
 	var tags map[string]string
 	if d.cfg.TagsFromProperties != nil {
@@ -570,6 +574,27 @@ func (d *cloudControlDiscoverer) DiscoverByID(ctx context.Context, id, region, a
 		native,
 		tags,
 	), nil
+}
+
+func (d *cloudControlDiscoverer) discoverByIDIdentifier(id string) (string, error) {
+	if !strings.HasPrefix(id, "arn:") {
+		return id, nil
+	}
+	parsed, err := parseARN(id)
+	if err != nil {
+		return "", fmt.Errorf("%s %q: %w", d.cfg.TFType, id, ErrNotSupported)
+	}
+	rule, ok := lookupRule(parsed)
+	if !ok || rule.cfnType == "" {
+		return "", fmt.Errorf("%s %q: no Cloud Control ARN rule: %w", d.cfg.TFType, id, ErrNotSupported)
+	}
+	if rule.cfnType != d.cfg.CloudFormationType {
+		return "", fmt.Errorf("%s %q maps to %s, not %s: %w", d.cfg.TFType, id, rule.cfnType, d.cfg.CloudFormationType, ErrNotSupported)
+	}
+	if rule.identifierFn == nil {
+		return id, nil
+	}
+	return rule.identifierFn(parsed), nil
 }
 
 // parsePropertiesPayload extracts the JSON properties blob from a Cloud
