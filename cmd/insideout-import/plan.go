@@ -9,8 +9,9 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
-	"strconv"
 	"strings"
+
+	reversejob "github.com/luthersystems/insideout-terraform-presets/pkg/reverseimport/job"
 )
 
 // planVerdict summarizes what `terraform plan` showed in the stack after
@@ -31,16 +32,6 @@ type planVerdict struct {
 // plan — the value `adopt` reports back to the operator. Equals the number
 // of unexpected imports plus all non-import banners.
 func (v planVerdict) unrelated() int { return v.unexpected + v.nonImport }
-
-// planSummaryRE matches the summary line Terraform prints at the bottom of a
-// plan when there are pending changes. The format has been stable since
-// Terraform 1.5 introduced the import action:
-//
-//	Plan: 5 to import, 0 to add, 0 to change, 0 to destroy.
-//
-// All four fields are required; the entire line is optional (Terraform omits
-// it when the plan is empty).
-var planSummaryRE = regexp.MustCompile(`Plan:\s+(\d+)\s+to import,\s+(\d+)\s+to add,\s+(\d+)\s+to change,\s+(\d+)\s+to destroy\.`)
 
 // changeLineRE matches the per-resource change banners in plain plan output:
 //
@@ -114,16 +105,12 @@ func parsePlanOutput(out string, expectedImports map[string]struct{}) planVerdic
 	// under-report. Importantly, this check only INCREASES drift counts —
 	// banners that exceed the summary (e.g. duplicate banner from a
 	// refresh-also-show output) leave the verdict alone.
-	if m := planSummaryRE.FindStringSubmatch(out); m != nil {
-		nImport, _ := strconv.Atoi(m[1])
-		nAdd, _ := strconv.Atoi(m[2])
-		nChange, _ := strconv.Atoi(m[3])
-		nDestroy, _ := strconv.Atoi(m[4])
-		summaryNonImport := nAdd + nChange + nDestroy
+	if summary, ok := reversejob.PlanSummaryFromText(out); ok {
+		summaryNonImport := summary.AddCount + summary.ChangeCount + summary.DestroyCount
 
 		bannerImports := v.imports + v.unexpected
-		if nImport > bannerImports {
-			v.unexpected += nImport - bannerImports
+		if summary.ImportCount > bannerImports {
+			v.unexpected += summary.ImportCount - bannerImports
 		}
 		if summaryNonImport > v.nonImport {
 			v.nonImport += summaryNonImport - v.nonImport

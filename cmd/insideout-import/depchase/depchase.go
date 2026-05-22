@@ -50,12 +50,12 @@ type Discoverer interface {
 // generated.tf without standing up terraform.
 //
 // Contract: RunGenconfig must return a GenconfigResult whose
-// Resources slice is a *superset* of the input — i.e. it may
-// populate Attributes on the input resources or add metadata, but it
-// must not drop entries. Depchase relies on this to keep the
-// resolved-set monotonic across iterations; a regenerate that
-// silently filters resources would let the loop oscillate by
-// re-marking previously resolved ARNs as unresolved.
+// Resources slice reflects the resources that survived config
+// generation. It may populate Attributes on the input resources and it
+// may drop entries Terraform could not render (for example orphan
+// imports). Depchase treats newly discovered resources that disappear
+// from this result as unresolvable warnings so the loop does not
+// oscillate on references to provider-generated gaps.
 type PipelineFns struct {
 	// RunGenconfig regenerates generated.tf from the current resource
 	// set. Receives the current []ImportedResource (the original set
@@ -187,6 +187,7 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 
 	res := &Result{Resources: slices.Clone(resources)}
 	seenWarning := make(map[string]struct{})
+	ignoredARNs := make(map[string]struct{})
 	var prevUnresolved []string
 
 	// seenEdges deduplicates Edges across iterations: the same
@@ -203,6 +204,7 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 		if err != nil {
 			return nil, err
 		}
+		unresolved = filterIgnoredARNs(unresolved, ignoredARNs)
 		if len(unresolved) == 0 {
 			res.GeneratedPath = generatedPath
 			sortEdges(res)
@@ -242,10 +244,12 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 				if errors.Is(err, ErrUnsupportedType) {
 					addWarning(res, seenWarning,
 						fmt.Sprintf("unsupported ARN type %q (no Terraform discoverer)", arn))
+					ignoredARNs[arn] = struct{}{}
 					continue
 				}
 				addWarning(res, seenWarning,
 					fmt.Sprintf("could not parse ARN %q: %v", arn, err))
+				ignoredARNs[arn] = struct{}{}
 				continue
 			}
 			newSeeds = append(newSeeds, seed{arn: arn, ref: ref})
@@ -255,6 +259,7 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 		sort.Slice(newSeeds, func(i, j int) bool { return newSeeds[i].arn < newSeeds[j].arn })
 
 		var added []imported.ImportedResource
+		var discoveries []discoveredResource
 		for _, s := range newSeeds {
 			ir, err := opts.Discoverer.DiscoverByID(ctx, s.ref.TFType, s.ref.ImportID, opts.Region, opts.AccountID)
 			if err != nil {
@@ -269,29 +274,19 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 				case errors.Is(err, awsdiscover.ErrNotFound), errors.Is(err, gcpdiscover.ErrNotFound):
 					addWarning(res, seenWarning,
 						fmt.Sprintf("ARN %q (%s): %v", s.arn, s.ref.TFType, err))
+					ignoredARNs[s.arn] = struct{}{}
 				case errors.Is(err, awsdiscover.ErrNotSupported), errors.Is(err, gcpdiscover.ErrNotSupported):
 					addWarning(res, seenWarning,
 						fmt.Sprintf("ARN %q: %s discoverer rejected ID: %v", s.arn, s.ref.TFType, err))
+					ignoredARNs[s.arn] = struct{}{}
 				default:
 					sortEdges(res)
 					return res, fmt.Errorf("DiscoverByID(%s, %s): %w", s.ref.TFType, s.ref.ImportID, err)
 				}
 				continue
 			}
-			// Record one edge per (consumer, discovered) pair (#297).
-			// consumersByARN was filled from the same generated.tf
-			// pass that produced unresolved; every unresolved literal
-			// that successfully discovered MUST appear in that map.
-			// A defensively-empty consumer slice (e.g. the literal
-			// surfaced from a body the walker doesn't handle) just
-			// drops the edge — better than panicking on a missing key.
-			toAddr := ir.Identity.Address
-			if toAddr != "" {
-				for _, fromAddr := range consumersByARN[s.arn] {
-					recordEdge(res, seenEdges, fromAddr, toAddr)
-				}
-			}
 			added = append(added, ir)
+			discoveries = append(discoveries, discoveredResource{seed: s, resource: ir})
 		}
 
 		if len(added) == 0 {
@@ -303,7 +298,6 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 		}
 
 		res.Resources = append(res.Resources, added...)
-		res.Added = append(res.Added, added...)
 
 		gcRes, err := opts.Pipeline.RunGenconfig(ctx, res.Resources)
 		if err != nil {
@@ -313,8 +307,32 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 		// Pick up the populated Attributes the regenerate pass wrote
 		// back; the next iteration's FindUnresolved should see them
 		// reflected in the generated.tf re-read.
-		if gcRes != nil && len(gcRes.Resources) > 0 {
+		if gcRes != nil {
 			res.Resources = gcRes.Resources
+		}
+		kept, dropped := partitionDiscoveries(discoveries, res.Resources)
+		for _, d := range dropped {
+			ignoredARNs[d.seed.arn] = struct{}{}
+			removeEdgesTo(res, seenEdges, d.resource.Identity.Address)
+			addWarning(res, seenWarning,
+				fmt.Sprintf("ARN %q (%s) discovered as %s, but generated config omitted it; leaving the literal reference",
+					d.seed.arn, d.seed.ref.TFType, d.resource.Identity.Address))
+		}
+		for _, d := range kept {
+			// Record one edge per (consumer, discovered) pair (#297).
+			// consumersByARN was filled from the same generated.tf
+			// pass that produced unresolved; every unresolved literal
+			// that successfully discovered and survived regeneration
+			// MUST appear in that map. A defensively-empty consumer
+			// slice just drops the edge — better than panicking on a
+			// missing key.
+			toAddr := d.resource.Identity.Address
+			if toAddr != "" {
+				for _, fromAddr := range consumersByARN[d.seed.arn] {
+					recordEdge(res, seenEdges, fromAddr, toAddr)
+				}
+			}
+			res.Added = append(res.Added, d.resource)
 		}
 
 		if _, err := opts.Pipeline.RunDriftfix(ctx); err != nil {
@@ -353,6 +371,45 @@ type seed struct {
 	ref Ref
 }
 
+type discoveredResource struct {
+	seed     seed
+	resource imported.ImportedResource
+}
+
+func filterIgnoredARNs(unresolved []string, ignored map[string]struct{}) []string {
+	if len(unresolved) == 0 || len(ignored) == 0 {
+		return unresolved
+	}
+	out := unresolved[:0]
+	for _, arn := range unresolved {
+		if _, ok := ignored[arn]; ok {
+			continue
+		}
+		out = append(out, arn)
+	}
+	return out
+}
+
+func partitionDiscoveries(discoveries []discoveredResource, resources []imported.ImportedResource) (kept, dropped []discoveredResource) {
+	if len(discoveries) == 0 {
+		return nil, nil
+	}
+	live := make(map[string]struct{}, len(resources))
+	for _, r := range resources {
+		if r.Identity.Address != "" {
+			live[r.Identity.Address] = struct{}{}
+		}
+	}
+	for _, d := range discoveries {
+		if _, ok := live[d.resource.Identity.Address]; ok {
+			kept = append(kept, d)
+			continue
+		}
+		dropped = append(dropped, d)
+	}
+	return kept, dropped
+}
+
 // recordEdge appends a (from, to) GraphEdge to res.Edges if the same
 // pair hasn't been recorded before in this run. Dedup is per-pair so
 // a consumer that references the same target twice (or that
@@ -373,6 +430,22 @@ func recordEdge(res *Result, seen map[string]struct{}, from, to string) {
 	}
 	seen[key] = struct{}{}
 	res.Edges = append(res.Edges, GraphEdge{From: from, To: to})
+}
+
+func removeEdgesTo(res *Result, seen map[string]struct{}, to string) {
+	if to == "" || len(res.Edges) == 0 {
+		return
+	}
+	out := res.Edges[:0]
+	for _, edge := range res.Edges {
+		key := edge.From + "\x00" + edge.To
+		if edge.To == to {
+			delete(seen, key)
+			continue
+		}
+		out = append(out, edge)
+	}
+	res.Edges = out
 }
 
 // sortEdges sorts res.Edges in (From, To) order. Called once per

@@ -54,6 +54,7 @@ func applyResourceTypeFixups(raw []byte) ([]byte, error) {
 // by cleanGenerated.
 var resourceTypeFixups = map[string]func(*hclwrite.Block){
 	"aws_lambda_function":       fixupLambdaSource,
+	"aws_cognito_user_pool":     fixupCognitoVerificationMessageConflict,
 	"aws_key_pair":              fixupKeyPairPublicKey,
 	"aws_kms_key":               fixupKMSRotationPeriodZero,
 	"aws_dynamodb_table":        fixupDynamoDBPITRRecoveryPeriodZero,
@@ -68,6 +69,28 @@ var resourceTypeFixups = map[string]func(*hclwrite.Block){
 	"aws_db_instance":           fixupDBInstanceProviderQuirks,
 	"aws_secretsmanager_secret": fixupSecretsManagerSecretDefaults,
 	"google_compute_firewall":   fixupComputeFirewallEmptySourceTargetArrays,
+}
+
+// fixupCognitoVerificationMessageConflict drops Cognito's legacy top-level
+// email verification fields when generate-config-out also emits the newer
+// verification_message_template block carrying the same settings. The AWS
+// provider schema marks the two forms as mutually exclusive, but live
+// imports can include both.
+func fixupCognitoVerificationMessageConflict(blk *hclwrite.Block) {
+	body := blk.Body()
+	for _, sub := range body.Blocks() {
+		if sub.Type() != "verification_message_template" {
+			continue
+		}
+		subBody := sub.Body()
+		if subBody.GetAttribute("email_message") != nil {
+			body.RemoveAttribute("email_verification_message")
+		}
+		if subBody.GetAttribute("email_subject") != nil {
+			body.RemoveAttribute("email_verification_subject")
+		}
+		return
+	}
 }
 
 // lambdaPlaceholderFile is what we set `filename` to so the block

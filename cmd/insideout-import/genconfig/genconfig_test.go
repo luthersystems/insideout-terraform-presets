@@ -236,6 +236,74 @@ func TestRun_RecoversFromPlanErrorWhenFileWritten(t *testing.T) {
 	}
 }
 
+func TestFilterSkippedResourcesDropsOrphanAddresses(t *testing.T) {
+	t.Parallel()
+	in := []imported.ImportedResource{
+		{Identity: imported.ResourceIdentity{Address: "aws_sqs_queue.keep"}},
+		{Identity: imported.ResourceIdentity{Address: "aws_network_acl.orphan"}},
+		{Identity: imported.ResourceIdentity{Address: "aws_sqs_queue.keep2"}},
+	}
+	out := filterSkippedResources(in, []OrphanImport{{Address: "aws_network_acl.orphan"}})
+	if len(out) != 2 {
+		t.Fatalf("len(out) = %d, want 2", len(out))
+	}
+	for _, r := range out {
+		if r.Identity.Address == "aws_network_acl.orphan" {
+			t.Fatalf("orphan resource was not dropped: %+v", out)
+		}
+	}
+}
+
+func TestRun_PrunesOrphansBeforeCrossRefs(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	roleARN := "arn:aws:iam::123:role/service-role/lambda-exec"
+	runner := &fakeRunner{
+		planBody: `resource "aws_lambda_function" "fn" {
+  function_name = "fn"
+  role          = "` + roleARN + `"
+}
+`,
+		schemas: &tfjson.ProviderSchemas{Schemas: map[string]*tfjson.ProviderSchema{
+			awsProviderKey: {ResourceSchemas: map[string]*tfjson.Schema{}},
+		}},
+	}
+	res, err := Run(context.Background(), Options{
+		Workdir: dir,
+		Region:  "us-east-1",
+		Runner:  runner,
+	}, []imported.ImportedResource{
+		{Identity: imported.ResourceIdentity{Address: "aws_lambda_function.fn", ImportID: "fn"}},
+		{Identity: imported.ResourceIdentity{
+			Address:  "aws_iam_role.lambda_exec",
+			ImportID: "lambda-exec",
+			NativeIDs: map[string]string{
+				"arn": roleARN,
+			},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Resources) != 1 || res.Resources[0].Identity.Address != "aws_lambda_function.fn" {
+		t.Fatalf("Resources = %+v, want only the non-orphan lambda", res.Resources)
+	}
+	validateBody := string(runner.bytesAtValidate)
+	if !strings.Contains(validateBody, `role          = "`+roleARN+`"`) {
+		t.Fatalf("validate body should keep orphan role ARN literal:\n%s", validateBody)
+	}
+	if strings.Contains(validateBody, "aws_iam_role.lambda_exec") {
+		t.Fatalf("validate body references pruned orphan role:\n%s", validateBody)
+	}
+	importsRaw, err := os.ReadFile(filepath.Join(dir, importsFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(importsRaw), "aws_iam_role.lambda_exec") {
+		t.Fatalf("imports.tf still contains pruned orphan role:\n%s", importsRaw)
+	}
+}
+
 // TestRun_PropagatesPlanErrorWhenFileMissing pins the negative side of
 // the recovery: a plan error with no on-disk file is fatal — there's
 // nothing for the fixup pass to act on, so the operator gets the

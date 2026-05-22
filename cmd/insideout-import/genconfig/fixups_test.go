@@ -161,6 +161,36 @@ func TestFixupLambda_NonLambdaResourceUntouched(t *testing.T) {
 	}
 }
 
+func TestFixupCognito_DropsLegacyVerificationFieldsWhenTemplatePresent(t *testing.T) {
+	t.Parallel()
+	in := []byte(`resource "aws_cognito_user_pool" "pool" {
+  email_verification_message = "Your verification code is {####}"
+  email_verification_subject = "alpha verification code"
+  name                       = "alpha"
+
+  verification_message_template {
+    default_email_option = "CONFIRM_WITH_CODE"
+    email_message        = "Your verification code is {####}"
+    email_subject        = "alpha verification code"
+  }
+}
+`)
+	out, err := applyResourceTypeFixups(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(out)
+	if strings.Contains(got, "email_verification_message") {
+		t.Errorf("legacy email_verification_message must be dropped when template carries email_message\n--- got ---\n%s", got)
+	}
+	if strings.Contains(got, "email_verification_subject") {
+		t.Errorf("legacy email_verification_subject must be dropped when template carries email_subject\n--- got ---\n%s", got)
+	}
+	if !strings.Contains(got, "verification_message_template") {
+		t.Errorf("verification_message_template must be preserved\n--- got ---\n%s", got)
+	}
+}
+
 // TestFixupKMS_RotationPeriodZeroDropped pins the LocalStack 4.x
 // fidelity workaround for #272: DescribeKey returns
 // rotation_period_in_days=0 for keys without rotation enabled, but the

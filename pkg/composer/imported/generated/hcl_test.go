@@ -18,6 +18,8 @@ type hclTestQueue struct {
 	FifoQueue                *Value[bool]              `tf:"fifo_queue"`
 	VisibilityTimeoutSeconds *Value[int64]             `tf:"visibility_timeout_seconds"`
 	KMSMasterKeyID           *Value[string]            `tf:"kms_master_key_id"`
+	ReplacementIDs           []*Value[string]          `tf:"replacement_ids"`
+	ObjectAttrs              []hclTestObjectAttr       `tf:"object_attrs"`
 	Tags                     map[string]*Value[string] `tf:"tags"`
 	RedrivePolicy            *Value[string]            `tf:"redrive_policy"`
 }
@@ -35,6 +37,12 @@ type hclTestVersioning struct {
 type hclTestLifecycle struct {
 	ID      *Value[string] `tf:"id"`
 	Enabled *Value[bool]   `tf:"enabled"`
+}
+
+type hclTestObjectAttr struct {
+	Name    *Value[string]   `tf:"name"`
+	Enabled *Value[bool]     `tf:"enabled"`
+	IDs     []*Value[string] `tf:"ids"`
 }
 
 func TestUnmarshalHCL_Scalars(t *testing.T) {
@@ -118,6 +126,35 @@ redrive_policy             = null
 	assert.Equal(t, q, q2)
 }
 
+func TestRoundTrip_HCL_ListObjectAttribute(t *testing.T) {
+	t.Parallel()
+	src := []byte(`name = "orders-DLQ"
+object_attrs = [{
+  enabled = true
+  ids     = []
+  name    = null
+}]
+`)
+	var q hclTestQueue
+	require.NoError(t, parseAndUnmarshal(t, src, &q))
+	require.Len(t, q.ObjectAttrs, 1)
+	require.NotNil(t, q.ObjectAttrs[0].Name)
+	assert.True(t, q.ObjectAttrs[0].Name.Null)
+	require.NotNil(t, q.ObjectAttrs[0].Enabled)
+	require.NotNil(t, q.ObjectAttrs[0].Enabled.Literal)
+	assert.True(t, *q.ObjectAttrs[0].Enabled.Literal)
+	assert.NotNil(t, q.ObjectAttrs[0].IDs)
+	assert.Empty(t, q.ObjectAttrs[0].IDs)
+
+	out, err := MarshalHCL(&q)
+	require.NoError(t, err)
+	assert.Regexp(t, `(?m)^\s*ids\s*=\s*\[\]`, string(out))
+	assert.Regexp(t, `(?m)^\s*name\s*=\s*null`, string(out))
+	var q2 hclTestQueue
+	require.NoError(t, parseAndUnmarshal(t, out, &q2))
+	assert.Equal(t, q, q2)
+}
+
 func TestUnmarshalHCL_NestedBlocks(t *testing.T) {
 	t.Parallel()
 	src := []byte(`
@@ -196,6 +233,22 @@ future_block {
 	require.NotNil(t, q.Name)
 	require.NotNil(t, q.Name.Literal)
 	assert.Equal(t, "orders-DLQ", *q.Name.Literal)
+}
+
+func TestUnmarshalHCL_NullCollectionsLeaveZeroValue(t *testing.T) {
+	t.Parallel()
+	src := []byte(`
+name            = "orders-DLQ"
+replacement_ids = null
+tags            = null
+`)
+	var q hclTestQueue
+	require.NoError(t, parseAndUnmarshal(t, src, &q))
+	require.NotNil(t, q.Name)
+	require.NotNil(t, q.Name.Literal)
+	assert.Equal(t, "orders-DLQ", *q.Name.Literal)
+	assert.Nil(t, q.ReplacementIDs)
+	assert.Nil(t, q.Tags)
 }
 
 // TestMarshalHCLConfigurable_SkipsComputedOnly pins #669: when a schema is

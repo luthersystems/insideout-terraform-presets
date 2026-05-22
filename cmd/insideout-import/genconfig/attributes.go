@@ -3,6 +3,7 @@ package genconfig
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/hashicorp/hcl/v2"
@@ -13,6 +14,7 @@ import (
 	ctyjson "github.com/zclconf/go-cty/cty/json"
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
+	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported/generated"
 )
 
 // genconfigEvalContext is the evaluation context for decodeAttribute. It
@@ -72,6 +74,11 @@ func extractAttributes(cleaned []byte, resources []imported.ImportedResource) ([
 		byAddr[labels[0]+"."+labels[1]] = blk
 	}
 
+	syntaxByAddr, err := syntaxResourceBodies(cleaned)
+	if err != nil {
+		return nil, err
+	}
+
 	out := make([]imported.ImportedResource, len(resources))
 	copy(out, resources)
 	for i := range out {
@@ -86,8 +93,57 @@ func extractAttributes(cleaned []byte, resources []imported.ImportedResource) ([
 		if len(attrs) > 0 {
 			out[i].Attributes = attrs
 		}
+		body, ok := syntaxByAddr[out[i].Identity.Address]
+		if !ok {
+			continue
+		}
+		typedAttrs, err := decodeTypedAttrs(cleaned, out[i].Identity.Type, body)
+		if err != nil {
+			return nil, fmt.Errorf("resource %q: typed attrs: %w", out[i].Identity.Address, err)
+		}
+		if len(typedAttrs) > 0 {
+			out[i].Attrs = typedAttrs
+		}
 	}
 	return out, nil
+}
+
+func syntaxResourceBodies(src []byte) (map[string]*hclsyntax.Body, error) {
+	file, diags := hclsyntax.ParseConfig(src, generatedFile, hcl.Pos{Line: 1, Column: 1})
+	if diags.HasErrors() {
+		return nil, fmt.Errorf("parse cleaned generated.tf for typed attrs: %s", diags.Error())
+	}
+	body, ok := file.Body.(*hclsyntax.Body)
+	if !ok {
+		return nil, fmt.Errorf("parse cleaned generated.tf for typed attrs: unexpected body type %T", file.Body)
+	}
+	out := map[string]*hclsyntax.Body{}
+	for _, blk := range body.Blocks {
+		if blk.Type != "resource" || len(blk.Labels) != 2 {
+			continue
+		}
+		out[blk.Labels[0]+"."+blk.Labels[1]] = blk.Body
+	}
+	return out, nil
+}
+
+func decodeTypedAttrs(src []byte, tfType string, body *hclsyntax.Body) (json.RawMessage, error) {
+	goType, _, ok := generated.Lookup(tfType)
+	if !ok {
+		return nil, nil
+	}
+	ptr := reflect.New(goType)
+	if err := generated.UnmarshalHCL(src, body, ptr.Interface()); err != nil {
+		return nil, err
+	}
+	raw, err := json.Marshal(ptr.Interface())
+	if err != nil {
+		return nil, err
+	}
+	if string(raw) == "{}" {
+		return nil, nil
+	}
+	return raw, nil
 }
 
 // decodeBlockAttrs returns the populated Attributes map for one resource

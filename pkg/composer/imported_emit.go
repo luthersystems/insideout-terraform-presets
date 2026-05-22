@@ -257,6 +257,7 @@ func emitImportedResourceBody(ir imported.ImportedResource) ([]byte, error) {
 		}
 		ensureLambdaPlaceholderSource(typed)
 		ensureKeyPairPlaceholder(typed)
+		ensureSecurityGroupRuleLists(typed)
 		// Pass the registered schema so computed-only attributes are
 		// dropped. Lookup returns a nil schema for unregistered types,
 		// which makes MarshalHCLConfigurable byte-identical to MarshalHCL.
@@ -268,6 +269,43 @@ func emitImportedResourceBody(ir imported.ImportedResource) ([]byte, error) {
 		return body, nil
 	}
 	return emitOpaqueAttrsBody(ir)
+}
+
+func ensureSecurityGroupRuleLists(typed any) {
+	sg, ok := typed.(*generated.AWSSecurityGroup)
+	if !ok {
+		return
+	}
+	for i := range sg.Egress {
+		ensureSecurityGroupEgressRuleLists(&sg.Egress[i])
+	}
+	for i := range sg.Ingress {
+		ensureSecurityGroupIngressRuleLists(&sg.Ingress[i])
+	}
+}
+
+func ensureSecurityGroupEgressRuleLists(rule *generated.AWSSecurityGroupEgress) {
+	if rule.IPV6CIDRBlocks == nil {
+		rule.IPV6CIDRBlocks = []*generated.Value[string]{}
+	}
+	if rule.PrefixListIDS == nil {
+		rule.PrefixListIDS = []*generated.Value[string]{}
+	}
+	if rule.SecurityGroups == nil {
+		rule.SecurityGroups = []*generated.Value[string]{}
+	}
+}
+
+func ensureSecurityGroupIngressRuleLists(rule *generated.AWSSecurityGroupIngress) {
+	if rule.IPV6CIDRBlocks == nil {
+		rule.IPV6CIDRBlocks = []*generated.Value[string]{}
+	}
+	if rule.PrefixListIDS == nil {
+		rule.PrefixListIDS = []*generated.Value[string]{}
+	}
+	if rule.SecurityGroups == nil {
+		rule.SecurityGroups = []*generated.Value[string]{}
+	}
 }
 
 // stripResourceIDAttr removes the top-level `id` key from a typed-Attrs
@@ -382,6 +420,12 @@ var importedLifecycleIgnoreChanges = map[string][]string{
 	// ignore_changes keeps the placeholder from force-replacing the
 	// live key pair. See ensureKeyPairPlaceholder and #665.
 	"aws_key_pair": imported.KeyPairPublicKeyAttr,
+	// aws_secretsmanager_secret: the provider plans schema defaults for
+	// these write-only/default-rich arguments even when AWS reads them
+	// back as null, producing a spurious post-import update. Terraform's
+	// generate-config path pins them; the IR emitter must preserve that
+	// adoption behavior because lifecycle blocks are not stored in Attrs.
+	"aws_secretsmanager_secret": {"force_overwrite_replica_secret", "recovery_window_in_days"},
 }
 
 // appendImportedLifecycle appends a `lifecycle { ignore_changes = [...] }`

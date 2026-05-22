@@ -387,6 +387,8 @@ func TestLookupRule(t *testing.T) {
 		// IAM
 		{name: "iam_role_name", arn: "arn:aws:iam::111111111111:role/my-role",
 			wantCFN: "AWS::IAM::Role", wantIdent: "my-role"},
+		{name: "iam_role_path_stripped_to_role_name", arn: "arn:aws:iam::111111111111:role/service-role/my-role",
+			wantCFN: "AWS::IAM::Role", wantIdent: "my-role"},
 		{name: "iam_policy_full_arn", arn: "arn:aws:iam::111111111111:policy/my-policy",
 			wantCFN: "AWS::IAM::ManagedPolicy", wantIdent: "arn:aws:iam::111111111111:policy/my-policy"},
 		{name: "iam_instance_profile", arn: "arn:aws:iam::111111111111:instance-profile/my-profile",

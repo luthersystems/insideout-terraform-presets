@@ -215,14 +215,9 @@ func writeValueSlice(body *hclwrite.Body, name string, slice reflect.Value) erro
 			}
 			elem = elem.Elem()
 		}
-		state := valueState(elem)
-		if state != StateLiteral {
-			return fmt.Errorf("non-literal list elements not yet supported (field %q index %d)", name, i)
-		}
-		lit := elem.FieldByName("Literal").Elem().Interface()
-		ctyVal, err := goToCty(lit)
+		ctyVal, err := valueToCty(elem)
 		if err != nil {
-			return err
+			return fmt.Errorf("field %q index %d: %w", name, i, err)
 		}
 		vals[i] = ctyVal
 	}
@@ -246,19 +241,119 @@ func writeValueMap(body *hclwrite.Body, name string, m reflect.Value) error {
 			}
 			val = val.Elem()
 		}
-		state := valueState(val)
-		if state != StateLiteral {
-			return fmt.Errorf("non-literal map elements not yet supported (field %q key %q)", name, k)
-		}
-		lit := val.FieldByName("Literal").Elem().Interface()
-		ctyVal, err := goToCty(lit)
+		ctyVal, err := valueToCty(val)
 		if err != nil {
-			return err
+			return fmt.Errorf("field %q key %q: %w", name, k, err)
 		}
 		out[k] = ctyVal
 	}
 	body.SetAttributeValue(name, cty.ObjectVal(out))
 	return nil
+}
+
+func valueToCty(v reflect.Value) (cty.Value, error) {
+	if isValueStruct(v) {
+		state := valueState(v)
+		switch state {
+		case StateLiteral:
+			lit := v.FieldByName("Literal").Elem().Interface()
+			return goToCty(lit)
+		case StateNull:
+			return cty.NullVal(cty.DynamicPseudoType), nil
+		case StateExpr:
+			return cty.NilVal, fmt.Errorf("expression value not yet supported")
+		case StateAbsent:
+			return cty.NilVal, fmt.Errorf("absent value not supported")
+		}
+	}
+	if v.Kind() == reflect.Struct {
+		return structToCty(v)
+	}
+	return cty.NilVal, fmt.Errorf("unsupported value shape %v", v.Kind())
+}
+
+func structToCty(v reflect.Value) (cty.Value, error) {
+	out := map[string]cty.Value{}
+	t := v.Type()
+	for i := 0; i < t.NumField(); i++ {
+		fld := t.Field(i)
+		if !fld.IsExported() {
+			continue
+		}
+		tag, kind := parseTag(fld.Tag.Get("tf"))
+		if tag == "" || kind != tagAttr {
+			continue
+		}
+		val, ok, err := fieldToCty(v.Field(i))
+		if err != nil {
+			return cty.NilVal, fmt.Errorf("field %s: %w", fld.Name, err)
+		}
+		if ok {
+			out[tag] = val
+		}
+	}
+	return cty.ObjectVal(out), nil
+}
+
+func fieldToCty(fv reflect.Value) (cty.Value, bool, error) {
+	switch fv.Kind() {
+	case reflect.Pointer:
+		if fv.IsNil() {
+			return cty.NilVal, false, nil
+		}
+		val, err := valueToCty(fv.Elem())
+		return val, true, err
+	case reflect.Slice:
+		if fv.IsNil() {
+			return cty.NilVal, false, nil
+		}
+		if fv.Len() == 0 {
+			return cty.EmptyTupleVal, true, nil
+		}
+		vals := make([]cty.Value, fv.Len())
+		for i := 0; i < fv.Len(); i++ {
+			elem := fv.Index(i)
+			if elem.Kind() == reflect.Pointer {
+				if elem.IsNil() {
+					vals[i] = cty.NullVal(cty.DynamicPseudoType)
+					continue
+				}
+				elem = elem.Elem()
+			}
+			val, err := valueToCty(elem)
+			if err != nil {
+				return cty.NilVal, false, fmt.Errorf("index %d: %w", i, err)
+			}
+			vals[i] = val
+		}
+		return cty.TupleVal(vals), true, nil
+	case reflect.Map:
+		if fv.IsNil() {
+			return cty.NilVal, false, nil
+		}
+		if fv.Len() == 0 {
+			return cty.EmptyObjectVal, true, nil
+		}
+		if fv.Type().Key().Kind() != reflect.String {
+			return cty.NilVal, false, fmt.Errorf("map key must be string")
+		}
+		out := map[string]cty.Value{}
+		iter := fv.MapRange()
+		for iter.Next() {
+			rawVal := iter.Value()
+			if rawVal.Kind() == reflect.Pointer && rawVal.IsNil() {
+				out[iter.Key().String()] = cty.NullVal(cty.DynamicPseudoType)
+				continue
+			}
+			val, err := valueToCty(derefValue(rawVal))
+			if err != nil {
+				return cty.NilVal, false, fmt.Errorf("key %q: %w", iter.Key().String(), err)
+			}
+			out[iter.Key().String()] = val
+		}
+		return cty.ObjectVal(out), true, nil
+	}
+	return cty.NilVal, false, fmt.Errorf("unsupported field kind %v", fv.Kind())
 }
 
 // valueState reads the Null/Expr/Literal fields of a Value[T] struct via
@@ -459,7 +554,13 @@ func readValueInto(src []byte, expr hcl.Expression, v reflect.Value) error {
 
 func readSliceInto(_ []byte, expr hcl.Expression, fv reflect.Value) error {
 	val, diags := expr.Value(nil)
-	if diags.HasErrors() || !val.CanIterateElements() {
+	if diags.HasErrors() {
+		return fmt.Errorf("expected list-typed value")
+	}
+	if val.IsNull() {
+		return nil
+	}
+	if !val.CanIterateElements() {
 		return fmt.Errorf("expected list-typed value")
 	}
 	elemType := fv.Type().Elem()
@@ -473,7 +574,7 @@ func readSliceInto(_ []byte, expr hcl.Expression, fv reflect.Value) error {
 			ptr2 := reflect.New(elemType.Elem())
 			target = ptr2.Elem()
 		}
-		if err := setLiteralFromCty(target, ev); err != nil {
+		if err := setFromCty(target, ev); err != nil {
 			return err
 		}
 		if elemType.Kind() == reflect.Pointer {
@@ -488,7 +589,13 @@ func readSliceInto(_ []byte, expr hcl.Expression, fv reflect.Value) error {
 
 func readMapInto(_ []byte, expr hcl.Expression, fv reflect.Value) error {
 	val, diags := expr.Value(nil)
-	if diags.HasErrors() || !val.CanIterateElements() {
+	if diags.HasErrors() {
+		return fmt.Errorf("expected map/object-typed value")
+	}
+	if val.IsNull() {
+		return nil
+	}
+	if !val.CanIterateElements() {
 		return fmt.Errorf("expected map/object-typed value")
 	}
 	out := reflect.MakeMapWithSize(fv.Type(), val.LengthInt())
@@ -502,7 +609,7 @@ func readMapInto(_ []byte, expr hcl.Expression, fv reflect.Value) error {
 			ptr2 := reflect.New(elemType.Elem())
 			target = ptr2.Elem()
 		}
-		if err := setLiteralFromCty(target, ev); err != nil {
+		if err := setFromCty(target, ev); err != nil {
 			return err
 		}
 		if elemType.Kind() == reflect.Pointer {
@@ -513,6 +620,16 @@ func readMapInto(_ []byte, expr hcl.Expression, fv reflect.Value) error {
 	}
 	fv.Set(out)
 	return nil
+}
+
+func setFromCty(v reflect.Value, ev cty.Value) error {
+	if isValueStruct(v) {
+		return setLiteralFromCty(v, ev)
+	}
+	if v.Kind() == reflect.Struct {
+		return setStructFromCty(v, ev)
+	}
+	return fmt.Errorf("unsupported cty target shape %v", v.Kind())
 }
 
 // setLiteralFromCty sets the Literal field of a Value[T] from a cty.Value.
@@ -531,6 +648,130 @@ func setLiteralFromCty(v reflect.Value, ev cty.Value) error {
 	ptr.Elem().Set(reflect.ValueOf(gv).Convert(litType))
 	litField.Set(ptr)
 	return nil
+}
+
+func setStructFromCty(v reflect.Value, ev cty.Value) error {
+	if ev.IsNull() {
+		return nil
+	}
+	if !ev.IsKnown() {
+		return fmt.Errorf("unknown object value")
+	}
+	if !ev.CanIterateElements() {
+		return fmt.Errorf("expected object-typed value")
+	}
+	fields := attrFieldIndexes(v.Type())
+	it := ev.ElementIterator()
+	for it.Next() {
+		key, val := it.Element()
+		idx, ok := fields[key.AsString()]
+		if !ok {
+			continue
+		}
+		if err := setFieldFromCty(v.Field(idx), val); err != nil {
+			return fmt.Errorf("field %q: %w", key.AsString(), err)
+		}
+	}
+	return nil
+}
+
+func setFieldFromCty(fv reflect.Value, val cty.Value) error {
+	switch fv.Kind() {
+	case reflect.Pointer:
+		if fv.IsNil() {
+			fv.Set(reflect.New(fv.Type().Elem()))
+		}
+		return setFromCty(fv.Elem(), val)
+	case reflect.Slice:
+		if val.IsNull() {
+			return nil
+		}
+		if !val.CanIterateElements() {
+			return fmt.Errorf("expected list-typed value")
+		}
+		elemType := fv.Type().Elem()
+		out := reflect.MakeSlice(fv.Type(), 0, val.LengthInt())
+		it := val.ElementIterator()
+		for it.Next() {
+			_, ev := it.Element()
+			target := reflect.New(elemType).Elem()
+			if elemType.Kind() == reflect.Pointer {
+				target = reflect.New(elemType.Elem()).Elem()
+			}
+			if err := setFromCty(target, ev); err != nil {
+				return err
+			}
+			if elemType.Kind() == reflect.Pointer {
+				out = reflect.Append(out, target.Addr())
+			} else {
+				out = reflect.Append(out, target)
+			}
+		}
+		fv.Set(out)
+		return nil
+	case reflect.Map:
+		if val.IsNull() {
+			return nil
+		}
+		if !val.CanIterateElements() {
+			return fmt.Errorf("expected map/object-typed value")
+		}
+		if fv.Type().Key().Kind() != reflect.String {
+			return fmt.Errorf("map key must be string")
+		}
+		out := reflect.MakeMapWithSize(fv.Type(), val.LengthInt())
+		elemType := fv.Type().Elem()
+		it := val.ElementIterator()
+		for it.Next() {
+			key, ev := it.Element()
+			target := reflect.New(elemType).Elem()
+			if elemType.Kind() == reflect.Pointer {
+				target = reflect.New(elemType.Elem()).Elem()
+			}
+			if err := setFromCty(target, ev); err != nil {
+				return err
+			}
+			if elemType.Kind() == reflect.Pointer {
+				out.SetMapIndex(reflect.ValueOf(key.AsString()), target.Addr())
+			} else {
+				out.SetMapIndex(reflect.ValueOf(key.AsString()), target)
+			}
+		}
+		fv.Set(out)
+		return nil
+	}
+	return fmt.Errorf("unsupported field kind %v", fv.Kind())
+}
+
+func attrFieldIndexes(t reflect.Type) map[string]int {
+	out := map[string]int{}
+	for i := 0; i < t.NumField(); i++ {
+		fld := t.Field(i)
+		if !fld.IsExported() {
+			continue
+		}
+		tag, kind := parseTag(fld.Tag.Get("tf"))
+		if tag != "" && kind == tagAttr {
+			out[tag] = i
+		}
+	}
+	return out
+}
+
+func isValueStruct(v reflect.Value) bool {
+	if v.Kind() != reflect.Struct {
+		return false
+	}
+	return v.FieldByName("Literal").IsValid() &&
+		v.FieldByName("Expr").IsValid() &&
+		v.FieldByName("Null").IsValid()
+}
+
+func derefValue(v reflect.Value) reflect.Value {
+	if v.Kind() == reflect.Pointer && !v.IsNil() {
+		return v.Elem()
+	}
+	return v
 }
 
 // ctyToGo converts a cty.Value to the Go type T expected by the generated

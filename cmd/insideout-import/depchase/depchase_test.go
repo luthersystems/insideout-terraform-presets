@@ -78,6 +78,7 @@ type scriptedPipeline struct {
 	t           *testing.T
 	workdir     string
 	generatedTF []string // slice of generated.tf bodies, one per RunGenconfig call
+	resources   [][]imported.ImportedResource
 	gcCalls     int
 	dfCalls     int
 }
@@ -91,9 +92,16 @@ func (p *scriptedPipeline) runGenconfig(_ context.Context, resources []imported.
 	if err := os.WriteFile(filepath.Join(p.workdir, generatedFile), []byte(body), 0o644); err != nil {
 		return nil, err
 	}
+	out := resources
+	if len(p.resources) > 0 {
+		if p.gcCalls > len(p.resources) {
+			p.t.Fatalf("scriptedPipeline: resources override missing for call %d", p.gcCalls)
+		}
+		out = p.resources[p.gcCalls-1]
+	}
 	return &GenconfigResult{
 		GeneratedPath: filepath.Join(p.workdir, generatedFile),
-		Resources:     resources,
+		Resources:     out,
 	}, nil
 }
 
@@ -174,6 +182,51 @@ resource "aws_iam_role" "io_foo_handler_role" {
 	}
 	if len(got.Warnings) != 0 {
 		t.Errorf("Warnings=%v, want none", got.Warnings)
+	}
+}
+
+func TestRun_DiscoveredResourceDroppedByPipelineWarnsAndConverges(t *testing.T) {
+	t.Parallel()
+	roleARN := "arn:aws:iam::123:role/io-foo-handler-role"
+	gen0 := `
+resource "aws_lambda_function" "h" {
+  function_name = "io-foo-handler"
+  role          = "` + roleARN + `"
+}`
+	dir := writeGen(t, gen0)
+	lambda := newRes("aws_lambda_function.h", "io-foo-handler", "arn:aws:lambda:us-east-1:123:function:io-foo-handler", "aws_lambda_function")
+	role := newRes("aws_iam_role.io_foo_handler_role", "io-foo-handler-role", roleARN, "aws_iam_role")
+
+	disc := &fakeDiscoverer{byID: map[string]imported.ImportedResource{
+		"aws_iam_role|" + roleARN: role,
+	}}
+	p := &scriptedPipeline{
+		t:           t,
+		workdir:     dir,
+		generatedTF: []string{gen0},
+		resources:   [][]imported.ImportedResource{{lambda}},
+	}
+
+	got, err := Run(context.Background(), Options{
+		Workdir: dir, Discoverer: disc, Pipeline: p.fns(),
+	}, []imported.ImportedResource{lambda})
+	if err != nil {
+		t.Fatalf("err=%v", err)
+	}
+	if got.Iterations != 1 {
+		t.Errorf("Iterations=%d, want 1", got.Iterations)
+	}
+	if len(got.Added) != 0 {
+		t.Errorf("Added=%+v, want none because role was dropped by genconfig", got.Added)
+	}
+	if len(got.Edges) != 0 {
+		t.Errorf("Edges=%+v, want none for dropped role", got.Edges)
+	}
+	if len(got.Warnings) != 1 || !strings.Contains(got.Warnings[0], "generated config omitted it") {
+		t.Errorf("Warnings=%v, want generated-config omission warning", got.Warnings)
+	}
+	if p.gcCalls != 1 || p.dfCalls != 1 {
+		t.Errorf("pipeline calls gc=%d df=%d, want 1/1", p.gcCalls, p.dfCalls)
 	}
 }
 
