@@ -16,7 +16,11 @@ import (
 // regional endpoint and report a live object as missing.
 func ForResource(ir imported.ImportedResource) string {
 	id := strings.TrimSpace(ir.Identity.ImportID)
-	if id == "" || !isAWSRegionAware(ir) {
+	if id == "" {
+		return id
+	}
+	tfType := terraformType(ir.Identity)
+	if !needsAWSRegionSuffix(ir, tfType) {
 		return id
 	}
 	region := regionForImport(ir)
@@ -26,9 +30,11 @@ func ForResource(ir imported.ImportedResource) string {
 	return id + "@" + region
 }
 
-func isAWSRegionAware(ir imported.ImportedResource) bool {
+func needsAWSRegionSuffix(ir imported.ImportedResource, tfType string) bool {
+	if usesBareImportID(tfType) {
+		return false
+	}
 	cloud := strings.ToLower(strings.TrimSpace(ir.Identity.Cloud))
-	tfType := terraformType(ir.Identity)
 	if cloud != "" && cloud != "aws" {
 		return false
 	}
@@ -41,6 +47,15 @@ func isAWSRegionAware(ir imported.ImportedResource) bool {
 	}
 	field, ok := schema["region"]
 	return ok && field.Configurable()
+}
+
+func usesBareImportID(tfType string) bool {
+	switch tfType {
+	case "aws_s3_bucket":
+		return true
+	default:
+		return false
+	}
 }
 
 func terraformType(id imported.ResourceIdentity) string {

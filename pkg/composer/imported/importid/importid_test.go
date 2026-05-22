@@ -10,6 +10,31 @@ import (
 
 func TestForResource_AppendsRegionForAWSRegionAwareResource(t *testing.T) {
 	t.Parallel()
+	attrs, err := json.Marshal(&generated.AWSSQSQueue{
+		URL:    generated.LiteralOf("https://sqs.us-west-2.amazonaws.com/123456789012/jobs"),
+		Region: generated.LiteralOf("us-west-2"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ir := imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Cloud:    "aws",
+			Type:     "aws_sqs_queue",
+			Address:  "aws_sqs_queue.jobs",
+			Region:   "us-east-1",
+			ImportID: "https://sqs.us-west-2.amazonaws.com/123456789012/jobs",
+		},
+		Attrs: attrs,
+	}
+
+	if got, want := ForResource(ir), "https://sqs.us-west-2.amazonaws.com/123456789012/jobs@us-west-2"; got != want {
+		t.Fatalf("ForResource() = %q, want %q", got, want)
+	}
+}
+
+func TestForResource_DoesNotAppendRegionForS3Bucket(t *testing.T) {
+	t.Parallel()
 	attrs, err := json.Marshal(&generated.AWSS3Bucket{
 		Bucket: generated.LiteralOf("io-uploads"),
 		Region: generated.LiteralOf("us-west-2"),
@@ -22,13 +47,13 @@ func TestForResource_AppendsRegionForAWSRegionAwareResource(t *testing.T) {
 			Cloud:    "aws",
 			Type:     "aws_s3_bucket",
 			Address:  "aws_s3_bucket.io_uploads",
-			Region:   "us-east-1",
+			Region:   "us-west-2",
 			ImportID: "io-uploads",
 		},
 		Attrs: attrs,
 	}
 
-	if got, want := ForResource(ir), "io-uploads@us-west-2"; got != want {
+	if got, want := ForResource(ir), "io-uploads"; got != want {
 		t.Fatalf("ForResource() = %q, want %q", got, want)
 	}
 }
@@ -105,14 +130,14 @@ func TestForResource_KeepsExistingRegionSuffix(t *testing.T) {
 	ir := imported.ImportedResource{
 		Identity: imported.ResourceIdentity{
 			Cloud:    "aws",
-			Type:     "aws_s3_bucket",
-			Address:  "aws_s3_bucket.io_uploads",
+			Type:     "aws_sqs_queue",
+			Address:  "aws_sqs_queue.jobs",
 			Region:   "us-east-1",
-			ImportID: "io-uploads@us-east-1",
+			ImportID: "https://sqs.us-east-1.amazonaws.com/123456789012/jobs@us-east-1",
 		},
 	}
 
-	if got, want := ForResource(ir), "io-uploads@us-east-1"; got != want {
+	if got, want := ForResource(ir), "https://sqs.us-east-1.amazonaws.com/123456789012/jobs@us-east-1"; got != want {
 		t.Fatalf("ForResource() = %q, want %q", got, want)
 	}
 }
