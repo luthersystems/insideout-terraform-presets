@@ -86,6 +86,11 @@ func TestTaggable_AllowlistFallback(t *testing.T) {
 	assert.False(t, ok)
 }
 
+// TestProvenanceKeysFor_AWS verifies provenanceKeysFor wiring (key set,
+// order, session omission). The literal values of the marker keys are
+// pinned in TestMarkerTagKeyValues_PinnedLiterals; here we use the
+// constants so a value rename caught there isn't silently masked by a
+// tautological assertion at this call site.
 func TestProvenanceKeysFor_AWS(t *testing.T) {
 	t.Parallel()
 	entries := provenanceKeysFor("aws", "io-stack-1", "sess-9", fixedTime())
