@@ -28,6 +28,12 @@ func importChange(addr string, actions tfjson.Actions, before, after map[string]
 	}
 }
 
+func typedImportChange(tfType, addr string, actions tfjson.Actions, before, after map[string]any) *tfjson.ResourceChange {
+	rc := importChange(addr, actions, before, after)
+	rc.Type = tfType
+	return rc
+}
+
 // plainChange builds a tfjson.ResourceChange for a non-import action.
 func plainChange(addr string, actions tfjson.Actions, before, after map[string]any) *tfjson.ResourceChange {
 	return &tfjson.ResourceChange{
@@ -108,6 +114,56 @@ func TestValidateFirstImportPlan_Contract(t *testing.T) {
 				),
 			}},
 			opts:      ValidateFirstImportPlanOpts{ExpectedImports: 1, ProvenanceLabelKeys: gcpProvenance},
+			wantCodes: []string{"imported_plan_unauthorized_change"},
+		},
+		{
+			name: "aws import provider optional bool default null to false passes",
+			plan: &tfjson.Plan{ResourceChanges: []*tfjson.ResourceChange{
+				typedImportChange("aws_lambda_function", "aws_lambda_function.fn",
+					tfjson.Actions{tfjson.ActionUpdate},
+					map[string]any{"publish": nil, "tags": map[string]any{}},
+					map[string]any{"publish": false, "tags": map[string]any{
+						"InsideOutImported": "true",
+					}},
+				),
+			}},
+			opts:      ValidateFirstImportPlanOpts{ExpectedImports: 1, ProvenanceLabelKeys: FirstImportProvenanceKeys("aws")},
+			wantCodes: nil,
+		},
+		{
+			name: "aws import provider optional bool default covers Route53 force destroy",
+			plan: &tfjson.Plan{ResourceChanges: []*tfjson.ResourceChange{
+				typedImportChange("aws_route53_zone", "aws_route53_zone.zone",
+					tfjson.Actions{tfjson.ActionUpdate},
+					map[string]any{"force_destroy": nil},
+					map[string]any{"force_destroy": false},
+				),
+			}},
+			opts:      ValidateFirstImportPlanOpts{ExpectedImports: 1, ProvenanceLabelKeys: FirstImportProvenanceKeys("aws")},
+			wantCodes: nil,
+		},
+		{
+			name: "aws lambda import publish true still fails",
+			plan: &tfjson.Plan{ResourceChanges: []*tfjson.ResourceChange{
+				typedImportChange("aws_lambda_function", "aws_lambda_function.fn",
+					tfjson.Actions{tfjson.ActionUpdate},
+					map[string]any{"publish": false},
+					map[string]any{"publish": true},
+				),
+			}},
+			opts:      ValidateFirstImportPlanOpts{ExpectedImports: 1, ProvenanceLabelKeys: FirstImportProvenanceKeys("aws")},
+			wantCodes: []string{"imported_plan_unauthorized_change"},
+		},
+		{
+			name: "required field null to zero still fails",
+			plan: &tfjson.Plan{ResourceChanges: []*tfjson.ResourceChange{
+				typedImportChange("aws_lambda_function", "aws_lambda_function.fn",
+					tfjson.Actions{tfjson.ActionUpdate},
+					map[string]any{"function_name": nil},
+					map[string]any{"function_name": ""},
+				),
+			}},
+			opts:      ValidateFirstImportPlanOpts{ExpectedImports: 1, ProvenanceLabelKeys: FirstImportProvenanceKeys("aws")},
 			wantCodes: []string{"imported_plan_unauthorized_change"},
 		},
 		{

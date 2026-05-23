@@ -3,8 +3,6 @@ package awsdiscover
 import (
 	"context"
 	"errors"
-	"io"
-	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -322,29 +320,22 @@ func TestSDPrivateDNSNSDiscover_TagsErrorSkipsNamespace(t *testing.T) {
 		newR53:         func() route53HostedZoneClient { return r53 },
 		maxConcurrency: 4,
 	}
-	// Capture stderr so we can pin that the tag-fetch failure surfaces
-	// as an operator-visible warn (the SUT writes to os.Stderr in the
-	// in-errgroup tag-error path; mutation that silently swallows the
-	// error would otherwise survive).
-	origStderr := os.Stderr
-	rPipe, wPipe, pipeErr := os.Pipe()
-	if pipeErr != nil {
-		t.Fatalf("os.Pipe: %v", pipeErr)
-	}
-	os.Stderr = wPipe
-	got, err := d.Discover(context.Background(), DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123"})
-	wPipe.Close()
-	os.Stderr = origStderr
-	stderrBytes, _ := io.ReadAll(rPipe)
-	stderr := string(stderrBytes)
+	rec := &recordingEmitter{}
+	got, err := d.Discover(context.Background(), DiscoverArgs{Project: "io-foo", Regions: []string{"us-east-1"}, AccountID: "123", Emitter: rec})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(got) != 1 || got[0].Identity.NameHint != "io-foo-good" {
 		t.Fatalf("got=%+v, want single io-foo-good", got)
 	}
-	if !strings.Contains(stderr, "io-foo-bad") || !strings.Contains(stderr, "ListTagsForResource") {
-		t.Errorf("stderr=%q, want warn naming the bad namespace + the failing SDK op", stderr)
+	var sawWarn bool
+	for _, ev := range rec.snapshot() {
+		if ev.Kind == "service_warn" && strings.Contains(ev.Message, "io-foo-bad") && strings.Contains(ev.Message, "ListTagsForResource") {
+			sawWarn = true
+		}
+	}
+	if !sawWarn {
+		t.Errorf("events=%+v, want warn naming the bad namespace + the failing SDK op", rec.snapshot())
 	}
 }
 
