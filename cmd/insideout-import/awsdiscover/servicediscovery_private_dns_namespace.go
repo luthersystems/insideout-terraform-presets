@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -109,9 +108,9 @@ func (d *serviceDiscoveryPrivateDNSNamespaceDiscoverer) ResourceType() string {
 // bedrock_guardrail posture.
 //
 // Failure modes inside the per-namespace fan-out are fail-open at the
-// item level: a tag-fetch error skips that one namespace with a stderr
-// warn rather than aborting the region; a Route53 hop error emits the
-// namespace with vpc_id="UNKNOWN" and surfaces a ServiceWarn so the
+// item level: a tag-fetch error skips that one namespace with a
+// ServiceWarn rather than aborting the region; a Route53 hop error emits
+// the namespace with vpc_id="UNKNOWN" and surfaces a ServiceWarn so the
 // operator sees the gap. ListNamespaces / GetNamespace failures at the
 // region level abort that region and surface as the outer error.
 func (d *serviceDiscoveryPrivateDNSNamespaceDiscoverer) Discover(ctx context.Context, args DiscoverArgs) ([]imported.ImportedResource, error) {
@@ -210,7 +209,7 @@ func (d *serviceDiscoveryPrivateDNSNamespaceDiscoverer) Discover(ctx context.Con
 					// skip this namespace, do not abort the region.
 					var nf *sdtypes.NamespaceNotFound
 					if !errors.As(err, &nf) {
-						fmt.Fprintf(os.Stderr, "discover: WARN: service_discovery_private_dns_namespace %s: GetNamespace (region=%s): %v\n", c.name, region, err)
+						args.Emitter.ServiceWarn(slug, region, fmt.Sprintf("%s: GetNamespace: %v", c.name, err))
 					}
 					return nil
 				}
@@ -231,7 +230,7 @@ func (d *serviceDiscoveryPrivateDNSNamespaceDiscoverer) Discover(ctx context.Con
 						if cerr := gctx.Err(); cerr != nil {
 							return cerr
 						}
-						fmt.Fprintf(os.Stderr, "discover: WARN: service_discovery_private_dns_namespace %s: ListTagsForResource (region=%s): %v\n", c.name, region, err)
+						args.Emitter.ServiceWarn(slug, region, fmt.Sprintf("%s: ListTagsForResource: %v", c.name, err))
 						// Skip this namespace — tag filter cannot
 						// be evaluated without tags.
 						return nil
