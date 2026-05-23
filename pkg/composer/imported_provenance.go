@@ -14,22 +14,10 @@ import (
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported/generated"
 )
 
-// Provenance tag/label key names emitted on every taggable imported resource.
-// Decision #46 in docs/managed-resource-tiers.md: the same logical
-// <import-project-id> is used across AWS+GCP for one InsideOut stack/session.
-const (
-	awsTagImportProject = "InsideOutImportProject"
-	awsTagImportSession = "InsideOutImportSession"
-	awsTagImported      = "InsideOutImported"
-	awsTagImportedAt    = "InsideOutImportedAt"
-	awsTagImportedTrue  = "true"
-
-	gcpLabelImportProject = "insideout-import-project"
-	gcpLabelImportSession = "insideout-import-session"
-	gcpLabelImported      = "insideout-imported"
-	gcpLabelImportedAt    = "insideout-imported-at"
-	gcpLabelImportedTrue  = "true"
-)
+// The provenance tag/label keys emitted on every taggable imported resource
+// are exported from marker_tags.go. Decision #46 in
+// docs/managed-resource-tiers.md: the same logical <import-project-id> is
+// used across AWS+GCP for one InsideOut stack/session.
 
 // untaggableAWS mirrors the canonical NON_TAGGABLE_AWS array in
 // tests/lint-project-tag.sh. Resource types in this set do NOT accept a tags
@@ -151,26 +139,26 @@ func provenanceKeysFor(cloud, projectID, sessionID string, importedAt time.Time)
 	switch strings.ToLower(strings.TrimSpace(cloud)) {
 	case "aws":
 		entries := []provenanceEntry{
-			{Key: awsTagImportProject, Value: projectID},
+			{Key: AWSTagKeyImportProject, Value: projectID},
 		}
 		if sessionID != "" {
-			entries = append(entries, provenanceEntry{Key: awsTagImportSession, Value: sessionID})
+			entries = append(entries, provenanceEntry{Key: AWSTagKeyImportSession, Value: sessionID})
 		}
 		entries = append(entries,
-			provenanceEntry{Key: awsTagImported, Value: awsTagImportedTrue},
-			provenanceEntry{Key: awsTagImportedAt, Value: importedAt.UTC().Format(time.RFC3339)},
+			provenanceEntry{Key: AWSTagKeyImported, Value: markerValueTrue},
+			provenanceEntry{Key: AWSTagKeyImportedAt, Value: importedAt.UTC().Format(time.RFC3339)},
 		)
 		return entries
 	case "gcp":
 		entries := []provenanceEntry{
-			{Key: gcpLabelImportProject, Value: projectID},
+			{Key: GCPLabelKeyImportProject, Value: projectID},
 		}
 		if sessionID != "" {
-			entries = append(entries, provenanceEntry{Key: gcpLabelImportSession, Value: sessionID})
+			entries = append(entries, provenanceEntry{Key: GCPLabelKeyImportSession, Value: sessionID})
 		}
 		entries = append(entries,
-			provenanceEntry{Key: gcpLabelImported, Value: gcpLabelImportedTrue},
-			provenanceEntry{Key: gcpLabelImportedAt, Value: gcpLabelTimestamp(importedAt)},
+			provenanceEntry{Key: GCPLabelKeyImported, Value: markerValueTrue},
+			provenanceEntry{Key: GCPLabelKeyImportedAt, Value: gcpLabelTimestamp(importedAt)},
 		)
 		return entries
 	}
@@ -199,9 +187,9 @@ func existingProvenanceProject(ir imported.ImportedResource) (string, bool) {
 	if !ok {
 		return "", false
 	}
-	key := awsTagImportProject
+	key := AWSTagKeyImportProject
 	if attrName == "labels" {
-		key = gcpLabelImportProject
+		key = GCPLabelKeyImportProject
 	}
 
 	if len(ir.Attrs) > 0 {

@@ -86,17 +86,22 @@ func TestTaggable_AllowlistFallback(t *testing.T) {
 	assert.False(t, ok)
 }
 
+// TestProvenanceKeysFor_AWS verifies provenanceKeysFor wiring (key set,
+// order, session omission). The literal values of the marker keys are
+// pinned in TestMarkerTagKeyValues_PinnedLiterals; here we use the
+// constants so a value rename caught there isn't silently masked by a
+// tautological assertion at this call site.
 func TestProvenanceKeysFor_AWS(t *testing.T) {
 	t.Parallel()
 	entries := provenanceKeysFor("aws", "io-stack-1", "sess-9", fixedTime())
 	require.Len(t, entries, 4)
-	assert.Equal(t, awsTagImportProject, entries[0].Key)
+	assert.Equal(t, AWSTagKeyImportProject, entries[0].Key)
 	assert.Equal(t, "io-stack-1", entries[0].Value)
-	assert.Equal(t, awsTagImportSession, entries[1].Key)
+	assert.Equal(t, AWSTagKeyImportSession, entries[1].Key)
 	assert.Equal(t, "sess-9", entries[1].Value)
-	assert.Equal(t, awsTagImported, entries[2].Key)
+	assert.Equal(t, AWSTagKeyImported, entries[2].Key)
 	assert.Equal(t, "true", entries[2].Value)
-	assert.Equal(t, awsTagImportedAt, entries[3].Key)
+	assert.Equal(t, AWSTagKeyImportedAt, entries[3].Key)
 	assert.Equal(t, "2026-04-29T14:30:00Z", entries[3].Value)
 }
 
@@ -104,13 +109,13 @@ func TestProvenanceKeysFor_GCP(t *testing.T) {
 	t.Parallel()
 	entries := provenanceKeysFor("gcp", "io-stack-1", "sess-9", fixedTime())
 	require.Len(t, entries, 4)
-	assert.Equal(t, gcpLabelImportProject, entries[0].Key)
+	assert.Equal(t, GCPLabelKeyImportProject, entries[0].Key)
 	assert.Equal(t, "io-stack-1", entries[0].Value)
-	assert.Equal(t, gcpLabelImportSession, entries[1].Key)
+	assert.Equal(t, GCPLabelKeyImportSession, entries[1].Key)
 	assert.Equal(t, "sess-9", entries[1].Value)
-	assert.Equal(t, gcpLabelImported, entries[2].Key)
+	assert.Equal(t, GCPLabelKeyImported, entries[2].Key)
 	assert.Equal(t, "true", entries[2].Value)
-	assert.Equal(t, gcpLabelImportedAt, entries[3].Key)
+	assert.Equal(t, GCPLabelKeyImportedAt, entries[3].Key)
 	assert.Equal(t, "2026-04-29t14-30-00z", entries[3].Value)
 }
 
@@ -119,7 +124,7 @@ func TestProvenanceKeysFor_OmitSession(t *testing.T) {
 	entries := provenanceKeysFor("aws", "io-stack-1", "", fixedTime())
 	require.Len(t, entries, 3)
 	for _, e := range entries {
-		assert.NotEqual(t, awsTagImportSession, e.Key, "session entry must be omitted when sessionID is empty")
+		assert.NotEqual(t, AWSTagKeyImportSession, e.Key, "session entry must be omitted when sessionID is empty")
 	}
 }
 

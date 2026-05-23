@@ -53,8 +53,8 @@ func FirstImportProvenanceKeys(cloud string) []string {
 		var out []string
 		for _, parent := range []string{"tags", "tags_all"} {
 			for _, k := range []string{
-				awsTagImportProject, awsTagImportSession,
-				awsTagImported, awsTagImportedAt,
+				AWSTagKeyImportProject, AWSTagKeyImportSession,
+				AWSTagKeyImported, AWSTagKeyImportedAt,
 			} {
 				out = append(out, parent+"."+k)
 			}
@@ -64,8 +64,8 @@ func FirstImportProvenanceKeys(cloud string) []string {
 		var out []string
 		for _, parent := range []string{"labels", "effective_labels", "terraform_labels"} {
 			for _, k := range []string{
-				gcpLabelImportProject, gcpLabelImportSession,
-				gcpLabelImported, gcpLabelImportedAt,
+				GCPLabelKeyImportProject, GCPLabelKeyImportSession,
+				GCPLabelKeyImported, GCPLabelKeyImportedAt,
 			} {
 				out = append(out, parent+"."+k)
 			}
