@@ -70,6 +70,72 @@ func TestRunEmitsArtifactsAndImportSummary(t *testing.T) {
 	}
 }
 
+func TestRunEmitsAWSAssumeRoleFromProjectBundle(t *testing.T) {
+	root := t.TempDir()
+	mustWrite(t, filepath.Join(root, "outputs", "cloud-provision.json"), []byte(`{
+  "terraform_role": {
+    "value": "arn:aws:iam::123456789012:role/io-terraform",
+    "type": "string"
+  }
+}`))
+	mustWrite(t, filepath.Join(root, "tf", "auto-vars", "common.auto.tfvars.json"), []byte(`{
+  "aws_external_id": "external-123"
+}`))
+	dir := filepath.Join(root, "outputs", "reverse-import")
+	req := job.Request{
+		Version: job.Version,
+		Resources: []job.ResourceSpec{{
+			Identity: imported.ResourceIdentity{
+				Cloud:    "aws",
+				Type:     "aws_sqs_queue",
+				Address:  "aws_sqs_queue.orders",
+				ImportID: "https://sqs.us-east-1.amazonaws.com/123/orders",
+				Region:   "us-east-1",
+			},
+			Tier:   imported.TierImportedFlat,
+			Source: imported.SourceImporter,
+		}},
+	}
+
+	var gotGenconfig genconfig.Options
+	_, err := Run(context.Background(), req, Options{
+		OutputDir:    dir,
+		SkipDepChase: true,
+		deps: deps{
+			runGenconfig: func(ctx context.Context, opts genconfig.Options, resources []imported.ImportedResource) (*genconfig.Result, error) {
+				gotGenconfig = opts
+				return fakeGenconfig(ctx, opts, resources)
+			},
+			runDriftfix: fakeDriftfix,
+			runDepChase: fakeDepChase,
+			tf:          fakeTerraformRunner{},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if gotGenconfig.AWSRoleARN != "arn:aws:iam::123456789012:role/io-terraform" {
+		t.Fatalf("genconfig AWSRoleARN = %q, want project Terraform role", gotGenconfig.AWSRoleARN)
+	}
+	if gotGenconfig.AWSExternalID != "external-123" {
+		t.Fatalf("genconfig AWSExternalID = %q, want external-123", gotGenconfig.AWSExternalID)
+	}
+	providersTF, err := os.ReadFile(filepath.Join(dir, "providers-imported.tf"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(providersTF)
+	for _, want := range []string{
+		`assume_role`,
+		`role_arn    = "arn:aws:iam::123456789012:role/io-terraform"`,
+		`external_id = "external-123"`,
+	} {
+		if !strings.Contains(s, want) {
+			t.Fatalf("providers-imported.tf missing %q:\n%s", want, s)
+		}
+	}
+}
+
 func TestRunExpandsSelectedParentClosure(t *testing.T) {
 	dir := t.TempDir()
 	discoverer := &fakeClosureDiscoverer{

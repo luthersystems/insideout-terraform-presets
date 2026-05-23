@@ -48,6 +48,13 @@ type Options struct {
 	// no equivalent emulator (see issue #264 for the gap analysis).
 	AWSEndpointURL string
 
+	// AWSRoleARN and AWSExternalID configure the provider assume_role
+	// block used during readback. Reverse import runs inside the Oracle
+	// cluster but must read the user's AWS account through the project
+	// Terraform role, not the pod's IRSA role.
+	AWSRoleARN    string
+	AWSExternalID string
+
 	// Runner is optional. If nil, Run constructs an execRunner that shells
 	// out to the `terraform` binary on PATH. Tests inject a fake here to
 	// avoid the binary dependency.
@@ -131,7 +138,16 @@ func Run(ctx context.Context, opts Options, resources []imported.ImportedResourc
 	if err := emitImports(opts.Workdir, resources); err != nil {
 		return nil, fmt.Errorf("emit imports.tf: %w", err)
 	}
-	if err := emitProviders(opts.Workdir, provider, opts.Region, opts.GCPProjectID, opts.AWSEndpointURL); err != nil {
+	if err := emitProviders(opts.Workdir, providerEmitOptions{
+		Provider:       provider,
+		Region:         opts.Region,
+		GCPProjectID:   opts.GCPProjectID,
+		AWSEndpointURL: opts.AWSEndpointURL,
+		AWSAuth: awsProviderAuth{
+			RoleARN:    opts.AWSRoleARN,
+			ExternalID: opts.AWSExternalID,
+		},
+	}); err != nil {
 		return nil, fmt.Errorf("emit providers.tf: %w", err)
 	}
 

@@ -113,7 +113,10 @@ func TestEmitImports_RejectsBadAddress(t *testing.T) {
 func TestEmitProviders_HappyPath(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	if err := emitProviders(dir, ProviderAWS, "us-west-2", "", ""); err != nil {
+	if err := emitProviders(dir, providerEmitOptions{
+		Provider: ProviderAWS,
+		Region:   "us-west-2",
+	}); err != nil {
 		t.Fatal(err)
 	}
 	body, err := os.ReadFile(filepath.Join(dir, providersFile))
@@ -137,6 +140,7 @@ func TestEmitProviders_HappyPath(t *testing.T) {
 	// words doesn't trip the check.
 	bannedPatterns := []string{
 		`(?m)^\s*endpoints\s*\{`,
+		`(?m)^\s*assume_role\s*\{`,
 		`(?m)^\s*access_key\s*=`,
 		`(?m)^\s*skip_credentials_validation\s*=`,
 		`(?m)^\s*s3_use_path_style\s*=`,
@@ -144,6 +148,37 @@ func TestEmitProviders_HappyPath(t *testing.T) {
 	for _, pat := range bannedPatterns {
 		if regexp.MustCompile(pat).MatchString(got) {
 			t.Errorf("providers.tf must not contain pattern %q when endpointURL is empty\n--- got ---\n%s", pat, got)
+		}
+	}
+}
+
+func TestEmitProviders_AWSAssumeRole(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	if err := emitProviders(dir, providerEmitOptions{
+		Provider: ProviderAWS,
+		Region:   "us-west-2",
+		AWSAuth: awsProviderAuth{
+			RoleARN:    "arn:aws:iam::123456789012:role/io-terraform",
+			ExternalID: "external-123",
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(filepath.Join(dir, providersFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(body)
+	for _, pat := range []string{
+		`provider\s+"aws"\s+\{`,
+		`region\s*=\s*"us-west-2"`,
+		`assume_role\s*\{`,
+		`role_arn\s*=\s*"arn:aws:iam::123456789012:role/io-terraform"`,
+		`external_id\s*=\s*"external-123"`,
+	} {
+		if !regexp.MustCompile(pat).MatchString(got) {
+			t.Errorf("providers.tf missing pattern %q\n--- got ---\n%s", pat, got)
 		}
 	}
 }
@@ -159,7 +194,11 @@ func TestEmitProviders_HappyPath(t *testing.T) {
 func TestEmitProviders_LocalStackEndpoint(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	if err := emitProviders(dir, ProviderAWS, "us-east-1", "", "http://localhost:4566"); err != nil {
+	if err := emitProviders(dir, providerEmitOptions{
+		Provider:       ProviderAWS,
+		Region:         "us-east-1",
+		AWSEndpointURL: "http://localhost:4566",
+	}); err != nil {
 		t.Fatal(err)
 	}
 	body, err := os.ReadFile(filepath.Join(dir, providersFile))
@@ -225,7 +264,11 @@ func TestEmitProviders_LocalStackEndpoint(t *testing.T) {
 func TestEmitProviders_GCPHappyPath(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	if err := emitProviders(dir, ProviderGCP, "us-central1", "real-proj-12345", ""); err != nil {
+	if err := emitProviders(dir, providerEmitOptions{
+		Provider:     ProviderGCP,
+		Region:       "us-central1",
+		GCPProjectID: "real-proj-12345",
+	}); err != nil {
 		t.Fatal(err)
 	}
 	body, err := os.ReadFile(filepath.Join(dir, providersFile))
@@ -271,7 +314,10 @@ func TestEmitProviders_GCPHappyPath(t *testing.T) {
 func TestEmitProviders_GCPOmitsEmptyRegion(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	if err := emitProviders(dir, ProviderGCP, "", "real-proj", ""); err != nil {
+	if err := emitProviders(dir, providerEmitOptions{
+		Provider:     ProviderGCP,
+		GCPProjectID: "real-proj",
+	}); err != nil {
 		t.Fatal(err)
 	}
 	body, _ := os.ReadFile(filepath.Join(dir, providersFile))
@@ -292,13 +338,25 @@ func TestEmitProviders_GCPOmitsEmptyRegion(t *testing.T) {
 func TestEmitProviders_GCPIgnoresAWSEndpointURL(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	if err := emitProviders(dir, ProviderGCP, "us-central1", "real-proj", "http://localhost:4566"); err != nil {
+	if err := emitProviders(dir, providerEmitOptions{
+		Provider:       ProviderGCP,
+		Region:         "us-central1",
+		GCPProjectID:   "real-proj",
+		AWSEndpointURL: "http://localhost:4566",
+		AWSAuth: awsProviderAuth{
+			RoleARN:    "arn:aws:iam::123456789012:role/io-terraform",
+			ExternalID: "external-123",
+		},
+	}); err != nil {
 		t.Fatal(err)
 	}
 	body, _ := os.ReadFile(filepath.Join(dir, providersFile))
 	got := string(body)
 	if regexp.MustCompile(`(?m)^\s*endpoints\s*\{`).MatchString(got) {
 		t.Errorf("providers.tf must not emit endpoints {} on GCP path even with awsEndpointURL set\n--- got ---\n%s", got)
+	}
+	if regexp.MustCompile(`(?m)^\s*assume_role\s*\{`).MatchString(got) {
+		t.Errorf("providers.tf must not emit AWS assume_role on GCP path\n--- got ---\n%s", got)
 	}
 }
 
