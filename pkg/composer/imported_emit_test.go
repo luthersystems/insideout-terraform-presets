@@ -120,6 +120,35 @@ func TestEmitImportedTF_S3ImportIDUsesBareBucketName(t *testing.T) {
 	require.False(t, diags.HasErrors(), "imported.tf must parse: %s", diags.Error())
 }
 
+func TestEmitImportedTF_Route53ZoneIgnoresForceDestroySentinel(t *testing.T) {
+	t.Parallel()
+
+	attrs, err := json.Marshal(&generated.AWSRoute53Zone{
+		Name:         generated.LiteralOf("apps.example.com"),
+		ForceDestroy: generated.NullOf[bool](),
+	})
+	require.NoError(t, err)
+	ir := imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Cloud:    "aws",
+			Type:     "aws_route53_zone",
+			Address:  "aws_route53_zone.apps",
+			ImportID: "Z1234567890",
+			Region:   "us-west-2",
+		},
+		Tier:  imported.TierImportedFlat,
+		Attrs: attrs,
+	}
+
+	out, _ := EmitImportedTF("aws", []imported.ImportedResource{ir}, EmitImportedOpts{})
+	require.NotNil(t, out)
+	s := string(out)
+	assert.True(t, hasAttr(t, s, "force_destroy", "null"), "fixture must exercise the provider sentinel:\n%s", s)
+	assert.ElementsMatch(t, []string{"force_destroy"}, lifecycleIgnoreChanges(t, out, "aws_route53_zone"))
+	_, diags := hclsyntax.ParseConfig(out, "imported.tf", hcl.InitialPos)
+	require.False(t, diags.HasErrors(), "imported.tf must parse: %s", diags.Error())
+}
+
 func TestEmitImportedTF_TypedGCP(t *testing.T) {
 	t.Parallel()
 	ir := imported.ImportedResource{

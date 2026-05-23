@@ -63,6 +63,14 @@ func Run(ctx context.Context, req job.Request, opts Options) (job.Result, error)
 	result.Diagnostics = append(result.Diagnostics, closure.diagnostics...)
 	dependenciesByAddress := closure.dependencies
 
+	var awsAuth awsProviderAuth
+	if cloud == "aws" {
+		awsAuth, err = resolveAWSProviderAuth(opts.OutputDir)
+		if err != nil {
+			return result, fmt.Errorf("resolve AWS provider auth: %w", err)
+		}
+	}
+
 	workdir := opts.Workdir
 	if workdir == "" {
 		workdir = filepath.Join(opts.OutputDir, "genconfig")
@@ -73,6 +81,8 @@ func Run(ctx context.Context, req job.Request, opts Options) (job.Result, error)
 		Region:         region,
 		GCPProjectID:   gcpProjectID,
 		AWSEndpointURL: opts.AWSEndpointURL,
+		AWSRoleARN:     awsAuth.RoleARN,
+		AWSExternalID:  awsAuth.ExternalID,
 	}
 
 	gcRes, err := opts.deps.runGenconfig(ctx, gcOpts, resources)
@@ -140,7 +150,14 @@ func Run(ctx context.Context, req job.Request, opts Options) (job.Result, error)
 	if err := writeFileAtomic(importedTFPath, importedTF, 0o644); err != nil {
 		return result, fmt.Errorf("write imported.tf: %w", err)
 	}
-	providersTF, err := renderImportedProvidersTF(cloud, region, gcpProjectID, opts.AWSEndpointURL, providersUsed)
+	providersTF, err := renderImportedProvidersTF(importedProviderRenderOptions{
+		Cloud:          cloud,
+		Region:         region,
+		GCPProjectID:   gcpProjectID,
+		AWSEndpointURL: opts.AWSEndpointURL,
+		ProvidersUsed:  providersUsed,
+		AWSAuth:        awsAuth,
+	})
 	if err != nil {
 		return result, err
 	}

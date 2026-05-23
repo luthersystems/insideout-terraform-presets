@@ -22,20 +22,29 @@ var localstackEndpointServices = []string{
 	"sts",
 }
 
-func renderImportedProvidersTF(cloud, region, gcpProjectID, awsEndpointURL string, providersUsed map[string]bool) ([]byte, error) {
+type importedProviderRenderOptions struct {
+	Cloud          string
+	Region         string
+	GCPProjectID   string
+	AWSEndpointURL string
+	ProvidersUsed  map[string]bool
+	AWSAuth        awsProviderAuth
+}
+
+func renderImportedProvidersTF(opts importedProviderRenderOptions) ([]byte, error) {
 	f := hclwrite.NewEmptyFile()
 	body := f.Body()
 	tfBlk := body.AppendNewBlock("terraform", nil)
 	rp := tfBlk.Body().AppendNewBlock("required_providers", nil)
 	body.AppendNewline()
 
-	switch strings.ToLower(strings.TrimSpace(cloud)) {
+	switch strings.ToLower(strings.TrimSpace(opts.Cloud)) {
 	case "gcp":
 		rp.Body().SetAttributeValue("google", cty.ObjectVal(map[string]cty.Value{
 			"source":  cty.StringVal("hashicorp/google"),
 			"version": cty.StringVal("~> 5.0"),
 		}))
-		if providersUsed[composer.ProvidersUsedKeyGCPBeta] {
+		if opts.ProvidersUsed[composer.ProvidersUsedKeyGCPBeta] {
 			rp.Body().SetAttributeValue("google-beta", cty.ObjectVal(map[string]cty.Value{
 				"source":  cty.StringVal("hashicorp/google-beta"),
 				"version": cty.StringVal("~> 5.0"),
@@ -43,16 +52,16 @@ func renderImportedProvidersTF(cloud, region, gcpProjectID, awsEndpointURL strin
 		}
 		prov := body.AppendNewBlock("provider", []string{"google"})
 		prov.Body().SetAttributeValue("alias", cty.StringVal("imported"))
-		prov.Body().SetAttributeValue("project", cty.StringVal(gcpProjectID))
-		if region != "" {
-			prov.Body().SetAttributeValue("region", cty.StringVal(region))
+		prov.Body().SetAttributeValue("project", cty.StringVal(opts.GCPProjectID))
+		if opts.Region != "" {
+			prov.Body().SetAttributeValue("region", cty.StringVal(opts.Region))
 		}
-		if providersUsed[composer.ProvidersUsedKeyGCPBeta] {
+		if opts.ProvidersUsed[composer.ProvidersUsedKeyGCPBeta] {
 			beta := body.AppendNewBlock("provider", []string{"google-beta"})
 			beta.Body().SetAttributeValue("alias", cty.StringVal("imported"))
-			beta.Body().SetAttributeValue("project", cty.StringVal(gcpProjectID))
-			if region != "" {
-				beta.Body().SetAttributeValue("region", cty.StringVal(region))
+			beta.Body().SetAttributeValue("project", cty.StringVal(opts.GCPProjectID))
+			if opts.Region != "" {
+				beta.Body().SetAttributeValue("region", cty.StringVal(opts.Region))
 			}
 		}
 	case "aws", "":
@@ -62,8 +71,8 @@ func renderImportedProvidersTF(cloud, region, gcpProjectID, awsEndpointURL strin
 		}))
 		prov := body.AppendNewBlock("provider", []string{"aws"})
 		prov.Body().SetAttributeValue("alias", cty.StringVal("imported"))
-		prov.Body().SetAttributeValue("region", cty.StringVal(region))
-		if awsEndpointURL != "" {
+		prov.Body().SetAttributeValue("region", cty.StringVal(opts.Region))
+		if opts.AWSEndpointURL != "" {
 			prov.Body().SetAttributeValue("access_key", cty.StringVal("test"))
 			prov.Body().SetAttributeValue("secret_key", cty.StringVal("test"))
 			prov.Body().SetAttributeValue("skip_credentials_validation", cty.True)
@@ -72,11 +81,23 @@ func renderImportedProvidersTF(cloud, region, gcpProjectID, awsEndpointURL strin
 			prov.Body().SetAttributeValue("s3_use_path_style", cty.True)
 			ep := prov.Body().AppendNewBlock("endpoints", nil)
 			for _, svc := range localstackEndpointServices {
-				ep.Body().SetAttributeValue(svc, cty.StringVal(awsEndpointURL))
+				ep.Body().SetAttributeValue(svc, cty.StringVal(opts.AWSEndpointURL))
 			}
 		}
+		appendAWSAssumeRole(prov.Body(), opts.AWSAuth)
 	default:
-		return nil, fmt.Errorf("unknown cloud %q", cloud)
+		return nil, fmt.Errorf("unknown cloud %q", opts.Cloud)
 	}
 	return f.Bytes(), nil
+}
+
+func appendAWSAssumeRole(body *hclwrite.Body, auth awsProviderAuth) {
+	if strings.TrimSpace(auth.RoleARN) == "" {
+		return
+	}
+	assume := body.AppendNewBlock("assume_role", nil)
+	assume.Body().SetAttributeValue("role_arn", cty.StringVal(auth.RoleARN))
+	if strings.TrimSpace(auth.ExternalID) != "" {
+		assume.Body().SetAttributeValue("external_id", cty.StringVal(auth.ExternalID))
+	}
 }

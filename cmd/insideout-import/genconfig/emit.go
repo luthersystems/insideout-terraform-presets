@@ -65,6 +65,19 @@ var localstackEndpointServices = []string{
 	"sts",
 }
 
+type awsProviderAuth struct {
+	RoleARN    string
+	ExternalID string
+}
+
+type providerEmitOptions struct {
+	Provider       string
+	Region         string
+	GCPProjectID   string
+	AWSEndpointURL string
+	AWSAuth        awsProviderAuth
+}
+
 // emitProviders writes <dir>/providers.tf with the configured provider
 // pinned to the same major as the rest of the repo. The provider block is
 // unaliased — see emitImports for why.
@@ -74,6 +87,8 @@ var localstackEndpointServices = []string{
 //   - provider "aws" { region = ... }
 //   - When awsEndpointURL is non-empty (LocalStack CI gate #272),
 //     emits the LocalStack attribute set + endpoints {} map.
+//   - When AWSAuth.RoleARN is non-empty, emits assume_role so provider
+//     readback runs through the project Terraform role.
 //
 // On GCP (provider == ProviderGCP):
 //   - required_providers entry for hashicorp/google ~> 5.0
@@ -83,7 +98,7 @@ var localstackEndpointServices = []string{
 //   - awsEndpointURL is ignored. The Cloud Asset Inventory API has no
 //     emulator (issue #264) so the GCP gate is a manual smoke against a
 //     real project; there's no LocalStack-equivalent shape to emit.
-func emitProviders(dir, provider, region, gcpProjectID, awsEndpointURL string) error {
+func emitProviders(dir string, opts providerEmitOptions) error {
 	f := hclwrite.NewEmptyFile()
 	body := f.Body()
 
@@ -92,16 +107,16 @@ func emitProviders(dir, provider, region, gcpProjectID, awsEndpointURL string) e
 
 	body.AppendNewline()
 
-	switch provider {
+	switch opts.Provider {
 	case ProviderGCP:
 		rp.Body().SetAttributeValue("google", cty.ObjectVal(map[string]cty.Value{
 			"source":  cty.StringVal("hashicorp/google"),
 			"version": cty.StringVal("~> 5.0"),
 		}))
 		prov := body.AppendNewBlock("provider", []string{"google"})
-		prov.Body().SetAttributeValue("project", cty.StringVal(gcpProjectID))
-		if region != "" {
-			prov.Body().SetAttributeValue("region", cty.StringVal(region))
+		prov.Body().SetAttributeValue("project", cty.StringVal(opts.GCPProjectID))
+		if opts.Region != "" {
+			prov.Body().SetAttributeValue("region", cty.StringVal(opts.Region))
 		}
 	default: // ProviderAWS
 		rp.Body().SetAttributeValue("aws", cty.ObjectVal(map[string]cty.Value{
@@ -109,9 +124,9 @@ func emitProviders(dir, provider, region, gcpProjectID, awsEndpointURL string) e
 			"version": cty.StringVal("~> 6.0"),
 		}))
 		prov := body.AppendNewBlock("provider", []string{"aws"})
-		prov.Body().SetAttributeValue("region", cty.StringVal(region))
+		prov.Body().SetAttributeValue("region", cty.StringVal(opts.Region))
 
-		if awsEndpointURL != "" {
+		if opts.AWSEndpointURL != "" {
 			prov.Body().SetAttributeValue("access_key", cty.StringVal("test"))
 			prov.Body().SetAttributeValue("secret_key", cty.StringVal("test"))
 			prov.Body().SetAttributeValue("skip_credentials_validation", cty.True)
@@ -120,12 +135,24 @@ func emitProviders(dir, provider, region, gcpProjectID, awsEndpointURL string) e
 			prov.Body().SetAttributeValue("s3_use_path_style", cty.True)
 			ep := prov.Body().AppendNewBlock("endpoints", nil)
 			for _, svc := range localstackEndpointServices {
-				ep.Body().SetAttributeValue(svc, cty.StringVal(awsEndpointURL))
+				ep.Body().SetAttributeValue(svc, cty.StringVal(opts.AWSEndpointURL))
 			}
 		}
+		appendAWSAssumeRole(prov.Body(), opts.AWSAuth)
 	}
 
 	return os.WriteFile(filepath.Join(dir, providersFile), f.Bytes(), 0o644)
+}
+
+func appendAWSAssumeRole(body *hclwrite.Body, auth awsProviderAuth) {
+	if strings.TrimSpace(auth.RoleARN) == "" {
+		return
+	}
+	assume := body.AppendNewBlock("assume_role", nil)
+	assume.Body().SetAttributeValue("role_arn", cty.StringVal(auth.RoleARN))
+	if strings.TrimSpace(auth.ExternalID) != "" {
+		assume.Body().SetAttributeValue("external_id", cty.StringVal(auth.ExternalID))
+	}
 }
 
 // addressTraversal converts a Terraform resource address like
