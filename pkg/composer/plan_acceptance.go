@@ -8,6 +8,7 @@ import (
 	tfjson "github.com/hashicorp/terraform-json"
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
+	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported/generated"
 )
 
 // ValidateFirstImportPlanOpts configures the first-import contract per
@@ -115,7 +116,7 @@ func ValidateFirstImportPlan(plan *tfjson.Plan, opts ValidateFirstImportPlanOpts
 			// tags/labels. Any non-provenance attribute change fails.
 			if actions.Update() || actions.Replace() {
 				issues = append(issues,
-					unauthorizedChangeIssues(field, rc.Change, opts.ProvenanceLabelKeys)...)
+					unauthorizedChangeIssues(field, rc.Type, rc.Change, opts.ProvenanceLabelKeys)...)
 			}
 			continue
 		}
@@ -148,7 +149,7 @@ func ValidateFirstImportPlan(plan *tfjson.Plan, opts ValidateFirstImportPlanOpts
 			// A non-import update is only allowed if every changed
 			// attribute is in the provenance allowlist.
 			issues = append(issues,
-				unauthorizedChangeIssues(field, rc.Change, opts.ProvenanceLabelKeys)...)
+				unauthorizedChangeIssues(field, rc.Type, rc.Change, opts.ProvenanceLabelKeys)...)
 		}
 	}
 
@@ -269,12 +270,15 @@ func ValidateSubsequentApplyPlan(plan *tfjson.Plan, irs []imported.ImportedResou
 // change.Before vs change.After that is not in allowedKeys. Used by the
 // first-import contract where the only permitted updates are provenance
 // repair.
-func unauthorizedChangeIssues(field string, change *tfjson.Change, allowedKeys []string) []ValidationIssue {
+func unauthorizedChangeIssues(field, resourceType string, change *tfjson.Change, allowedKeys []string) []ValidationIssue {
 	allow := stringSet(allowedKeys)
 	bad := diffPaths(change.Before, change.After, "")
 	var issues []ValidationIssue
 	for _, p := range bad {
 		if _, ok := allow[p]; ok {
+			continue
+		}
+		if allowedFirstImportOptionalZeroDefault(resourceType, p, change.Before, change.After) {
 			continue
 		}
 		issues = append(issues, ValidationIssue{
@@ -284,6 +288,57 @@ func unauthorizedChangeIssues(field string, change *tfjson.Change, allowedKeys [
 		})
 	}
 	return issues
+}
+
+func allowedFirstImportOptionalZeroDefault(resourceType, path string, before, after any) bool {
+	_, schema, ok := generated.Lookup(resourceType)
+	if !ok {
+		return false
+	}
+	field, ok := schema[path]
+	if !ok || !field.Optional || field.Required {
+		return false
+	}
+	beforeValue, beforeOK := valueAtPath(before, path)
+	if beforeOK && beforeValue != nil {
+		return false
+	}
+	afterValue, afterOK := valueAtPath(after, path)
+	return afterOK && isZeroProviderDefault(afterValue)
+}
+
+func isZeroProviderDefault(v any) bool {
+	switch x := v.(type) {
+	case nil:
+		return true
+	case bool:
+		return !x
+	case string:
+		return x == ""
+	case float64:
+		return x == 0
+	case []any:
+		return len(x) == 0
+	case map[string]any:
+		return len(x) == 0
+	default:
+		return false
+	}
+}
+
+func valueAtPath(v any, path string) (any, bool) {
+	cur := v
+	for _, part := range strings.Split(path, ".") {
+		m, ok := cur.(map[string]any)
+		if !ok {
+			return nil, false
+		}
+		cur, ok = m[part]
+		if !ok {
+			return nil, false
+		}
+	}
+	return cur, true
 }
 
 // unapprovedChangeIssues is the subsequent-apply variant: leaf paths
