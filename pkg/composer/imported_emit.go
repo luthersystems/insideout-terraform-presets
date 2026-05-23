@@ -426,6 +426,11 @@ var importedLifecycleIgnoreChanges = map[string][]string{
 	// generate-config path pins them; the IR emitter must preserve that
 	// adoption behavior because lifecycle blocks are not stored in Attrs.
 	"aws_secretsmanager_secret": {"force_overwrite_replica_secret", "recovery_window_in_days"},
+	// aws_route53_zone: force_destroy is a Terraform-only destroy-time
+	// sentinel. AWS readback has no durable value for it, so first-import
+	// plans can surface false/null churn even when no hosted-zone setting
+	// would change.
+	"aws_route53_zone": {"force_destroy"},
 }
 
 // appendImportedLifecycle appends a `lifecycle { ignore_changes = [...] }`
