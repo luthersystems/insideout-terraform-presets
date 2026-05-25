@@ -917,17 +917,28 @@ func generateProvidersFiles(in providersTFInput) providersTFFiles {
 		if region == "" {
 			region = "us-central1"
 		}
-		// Provider 5.16+ added default_labels; ">= 5.0" allows older
-		// minors. Hard-bumping to ">= 5.16" guarantees the safety net
-		// emitted below is always honored.
-		required["google"] = &tfconfig.ProviderRequirement{Source: "hashicorp/google", VersionConstraints: []string{">= 5.16"}}
+		// Provider 5.16+ added default_labels; the safety net emitted
+		// below depends on that, so a 5.0–5.15 install is unsafe.
+		//
+		// Hard-pinning to the exact version (= 6.10.0) — instead of an
+		// open ">= 5.16" — guarantees a cache hit against the
+		// luthersystems/mars provider bake. Without an exact pin
+		// terraform resolves to the registry's latest matching version
+		// at init time, which silently drifts ahead of mars's bake on
+		// every upstream release → terraform falls back from the
+		// filesystem_mirror symlink path to direct registry download,
+		// blowing up the workflow tar with a fresh provider binary
+		// every plan. Bump both this pin AND the mars bake together.
+		// See luthersystems/mars/Dockerfile `GOOGLE_PROVIDER_VERSION`.
+		required["google"] = &tfconfig.ProviderRequirement{Source: "hashicorp/google", VersionConstraints: []string{"= 6.10.0"}}
 		// google-beta is part of every GCP stack's provider set so the
 		// `google-beta.imported` alias block below always resolves —
 		// even when the current compose's Imported list is empty but
 		// terraform state still references the alias (issue #562).
 		// google-beta only ships with GCP-cloud composes; the outer
-		// `switch cloud` keeps it out of AWS stacks.
-		required["google-beta"] = &tfconfig.ProviderRequirement{Source: "hashicorp/google-beta", VersionConstraints: []string{">= 5.16"}}
+		// `switch cloud` keeps it out of AWS stacks. Mars bakes
+		// google-beta at the same version as google.
+		required["google-beta"] = &tfconfig.ProviderRequirement{Source: "hashicorp/google-beta", VersionConstraints: []string{"= 6.10.0"}}
 		maps.Copy(required, discovered)
 
 		// default_labels is a safety net so every GCP resource in the
@@ -1034,7 +1045,17 @@ variable "aws_external_id" {
     }
   }`, insideoutManagedByValue)
 
-		required["aws"] = &tfconfig.ProviderRequirement{Source: "hashicorp/aws", VersionConstraints: []string{">= 6.0"}}
+		// Hard-pin to exact version — bumped together with the
+		// luthersystems/mars provider bake. Without an exact pin
+		// terraform init resolves to the registry's latest 6.x at
+		// runtime, drifts ahead of the mars filesystem_mirror's baked
+		// version on every upstream release, and falls back from the
+		// symlink path to direct registry download. That blew up
+		// Argo's workflow tar with a fresh ~750 MiB provider binary
+		// for sess_v2_CnqUJ6NRJnLC on 2026-05-25 — see
+		// luthersystems/mars#171. Bump this AND the mars bake
+		// (`AWS_PROVIDER_VERSION` in mars/Dockerfile) together.
+		required["aws"] = &tfconfig.ProviderRequirement{Source: "hashicorp/aws", VersionConstraints: []string{"= 6.46.0"}}
 		maps.Copy(required, discovered)
 
 		var main strings.Builder
