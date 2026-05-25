@@ -206,6 +206,221 @@ func TestValidateFirstImportPlan_Contract(t *testing.T) {
 			opts:      ValidateFirstImportPlanOpts{ExpectedImports: 1, ProvenanceLabelKeys: gcpProvenance},
 			wantCodes: nil,
 		},
+		{
+			// Real-world repro from issue #685 (sess_v2_CnqUJ6NRJnLC).
+			// `tags` carries 7 user keys before, those 7 + 4
+			// InsideOutImport* after; `tags_all` is the computed mirror
+			// whose before is nil (terraform state had not yet
+			// materialised it on a fresh import) and after carries the
+			// full union. All other attributes identical.
+			name: "aws kms tag-only first-import with computed tags_all mirror passes",
+			plan: &tfjson.Plan{ResourceChanges: []*tfjson.ResourceChange{
+				typedImportChange("aws_kms_key", "aws_kms_key.r_0df0c214",
+					tfjson.Actions{tfjson.ActionUpdate},
+					map[string]any{
+						"description": "Luther tfstate KMS key",
+						"key_usage":   "ENCRYPT_DECRYPT",
+						"tags": map[string]any{
+							"Component":    "tfstate",
+							"Environment":  "default",
+							"ID":           "0",
+							"Name":         "647e1dd9-default-luther-tfstate-kms-0",
+							"Organization": "luther",
+							"Project":      "647e1dd9",
+							"Resource":     "kms",
+						},
+						// tags_all absent from before (fresh-import
+						// computed-mirror null shape).
+					},
+					map[string]any{
+						"description": "Luther tfstate KMS key",
+						"key_usage":   "ENCRYPT_DECRYPT",
+						"tags": map[string]any{
+							"Component":              "tfstate",
+							"Environment":            "default",
+							"ID":                     "0",
+							"InsideOutImportProject": "io-cnquj6nrjnlc",
+							"InsideOutImportSession": "sess_v2_CnqUJ6NRJnLC",
+							"InsideOutImported":      "true",
+							"InsideOutImportedAt":    "2026-05-25T03:46:14Z",
+							"Name":                   "647e1dd9-default-luther-tfstate-kms-0",
+							"Organization":           "luther",
+							"Project":                "647e1dd9",
+							"Resource":               "kms",
+						},
+						"tags_all": map[string]any{
+							"Component":              "tfstate",
+							"Environment":            "default",
+							"ID":                     "0",
+							"InsideOutImportProject": "io-cnquj6nrjnlc",
+							"InsideOutImportSession": "sess_v2_CnqUJ6NRJnLC",
+							"InsideOutImported":      "true",
+							"InsideOutImportedAt":    "2026-05-25T03:46:14Z",
+							"Name":                   "647e1dd9-default-luther-tfstate-kms-0",
+							"Organization":           "luther",
+							"Project":                "647e1dd9",
+							"Resource":               "kms",
+						},
+					},
+				),
+			}},
+			opts:      ValidateFirstImportPlanOpts{ExpectedImports: 1, ProvenanceLabelKeys: FirstImportProvenanceKeys("aws")},
+			wantCodes: nil,
+		},
+		{
+			// AWS mirror where tags_all appears on both sides as the
+			// computed sum of user tags + provenance. Adding the
+			// provenance keys to both `tags` and `tags_all` (the
+			// natural shape once a single refresh has run) must not
+			// flag.
+			name: "aws tags_all mirrors tags clean provenance add passes",
+			plan: &tfjson.Plan{ResourceChanges: []*tfjson.ResourceChange{
+				typedImportChange("aws_s3_bucket", "aws_s3_bucket.b",
+					tfjson.Actions{tfjson.ActionUpdate},
+					map[string]any{
+						"tags": map[string]any{
+							"Environment": "prod",
+						},
+						"tags_all": map[string]any{
+							"Environment": "prod",
+						},
+					},
+					map[string]any{
+						"tags": map[string]any{
+							"Environment":            "prod",
+							"InsideOutImportProject": "io-xyz",
+							"InsideOutImported":      "true",
+						},
+						"tags_all": map[string]any{
+							"Environment":            "prod",
+							"InsideOutImportProject": "io-xyz",
+							"InsideOutImported":      "true",
+						},
+					},
+				),
+			}},
+			opts:      ValidateFirstImportPlanOpts{ExpectedImports: 1, ProvenanceLabelKeys: FirstImportProvenanceKeys("aws")},
+			wantCodes: nil,
+		},
+		{
+			// GCP mirror of the canonical first-import shape. labels
+			// before is nil (fresh-import computed-mirror absence),
+			// after carries the 4 insideout-import-* provenance keys
+			// and nothing else.
+			name: "gcp first-import labels add via nil-before mirror passes",
+			plan: &tfjson.Plan{ResourceChanges: []*tfjson.ResourceChange{
+				typedImportChange("google_storage_bucket", "google_storage_bucket.a",
+					tfjson.Actions{tfjson.ActionUpdate},
+					map[string]any{"name": "a"},
+					map[string]any{
+						"name": "a",
+						"labels": map[string]any{
+							"insideout-import-project": "io-abc",
+							"insideout-import-session": "sess_v2_xyz",
+							"insideout-imported":       "true",
+							"insideout-imported-at":    "2026-05-25t03-46-14z",
+						},
+					},
+				),
+			}},
+			opts:      ValidateFirstImportPlanOpts{ExpectedImports: 1, ProvenanceLabelKeys: gcpProvenance},
+			wantCodes: nil,
+		},
+		{
+			// Negative — adding a user-owned tag (not in the
+			// provenance set) alongside the legitimate InsideOut
+			// writes is still real drift and must flag.
+			name: "aws import adds user-owned Environment tag fails",
+			plan: &tfjson.Plan{ResourceChanges: []*tfjson.ResourceChange{
+				typedImportChange("aws_s3_bucket", "aws_s3_bucket.b",
+					tfjson.Actions{tfjson.ActionUpdate},
+					map[string]any{
+						"tags": map[string]any{
+							"Name": "b",
+						},
+					},
+					map[string]any{
+						"tags": map[string]any{
+							"Name":                   "b",
+							"InsideOutImportProject": "io-xyz",
+							"Environment":            "prod",
+						},
+					},
+				),
+			}},
+			opts:      ValidateFirstImportPlanOpts{ExpectedImports: 1, ProvenanceLabelKeys: FirstImportProvenanceKeys("aws")},
+			wantCodes: []string{"imported_plan_unauthorized_change"},
+		},
+		{
+			// Negative — modifying a pre-existing user tag value flags
+			// even when the provenance set is also being added.
+			name: "aws import modifies user-owned Environment tag value fails",
+			plan: &tfjson.Plan{ResourceChanges: []*tfjson.ResourceChange{
+				typedImportChange("aws_s3_bucket", "aws_s3_bucket.b",
+					tfjson.Actions{tfjson.ActionUpdate},
+					map[string]any{
+						"tags": map[string]any{
+							"Environment": "staging",
+						},
+					},
+					map[string]any{
+						"tags": map[string]any{
+							"Environment":            "prod",
+							"InsideOutImportProject": "io-xyz",
+						},
+					},
+				),
+			}},
+			opts:      ValidateFirstImportPlanOpts{ExpectedImports: 1, ProvenanceLabelKeys: FirstImportProvenanceKeys("aws")},
+			wantCodes: []string{"imported_plan_unauthorized_change"},
+		},
+		{
+			// Negative — removing a pre-existing user tag flags even
+			// when provenance is also being added.
+			name: "aws import removes user-owned Environment tag fails",
+			plan: &tfjson.Plan{ResourceChanges: []*tfjson.ResourceChange{
+				typedImportChange("aws_s3_bucket", "aws_s3_bucket.b",
+					tfjson.Actions{tfjson.ActionUpdate},
+					map[string]any{
+						"tags": map[string]any{
+							"Environment": "staging",
+							"Name":        "b",
+						},
+					},
+					map[string]any{
+						"tags": map[string]any{
+							"Name":                   "b",
+							"InsideOutImportProject": "io-xyz",
+						},
+					},
+				),
+			}},
+			opts:      ValidateFirstImportPlanOpts{ExpectedImports: 1, ProvenanceLabelKeys: FirstImportProvenanceKeys("aws")},
+			wantCodes: []string{"imported_plan_unauthorized_change"},
+		},
+		{
+			// Negative — non-tag attribute change on the importing
+			// resource (force_destroy flipped) flags even when the
+			// tag diff is clean.
+			name: "aws import non-tag force_destroy change fails",
+			plan: &tfjson.Plan{ResourceChanges: []*tfjson.ResourceChange{
+				typedImportChange("aws_s3_bucket", "aws_s3_bucket.b",
+					tfjson.Actions{tfjson.ActionUpdate},
+					map[string]any{
+						"force_destroy": false,
+						"tags":          map[string]any{},
+					},
+					map[string]any{
+						"force_destroy": true,
+						"tags": map[string]any{
+							"InsideOutImportProject": "io-xyz",
+						},
+					},
+				),
+			}},
+			opts:      ValidateFirstImportPlanOpts{ExpectedImports: 1, ProvenanceLabelKeys: FirstImportProvenanceKeys("aws")},
+			wantCodes: []string{"imported_plan_unauthorized_change"},
+		},
 	}
 
 	for _, tc := range cases {

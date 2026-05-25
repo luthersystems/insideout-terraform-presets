@@ -270,9 +270,23 @@ func ValidateSubsequentApplyPlan(plan *tfjson.Plan, irs []imported.ImportedResou
 // change.Before vs change.After that is not in allowedKeys. Used by the
 // first-import contract where the only permitted updates are provenance
 // repair.
+//
+// Tag/label maps (AWS `tags`/`tags_all`, GCP `labels`/`effective_labels`/
+// `terraform_labels`) get special map-aware treatment: a leaf-key diff is
+// authorized iff every added key is in allowedKeys (i.e. a provenance
+// marker) and no pre-existing key is removed or modified. Pre-existing
+// keys that only appear in `after` because the before-side of the
+// computed mirror was nil/empty (the canonical `tags_all` shape on a
+// fresh import) are treated as discovered state, not as additions. This
+// closes the false-positive described in issue #685 where a clean
+// tag-only first-import plan got flagged as unauthorized drift purely
+// because `tags_all.Before` was nil while `tags_all.After` carried the
+// full user-tag union.
 func unauthorizedChangeIssues(field, resourceType string, change *tfjson.Change, allowedKeys []string) []ValidationIssue {
 	allow := stringSet(allowedKeys)
-	bad := diffPaths(change.Before, change.After, "")
+	tagParents := tagMapParents(allowedKeys)
+	bad := diffPathsExcludingTagMaps(change.Before, change.After, "", tagParents)
+
 	var issues []ValidationIssue
 	for _, p := range bad {
 		if _, ok := allow[p]; ok {
@@ -287,6 +301,12 @@ func unauthorizedChangeIssues(field, resourceType string, change *tfjson.Change,
 			Reason: fmt.Sprintf("first-import plan must only repair provenance tags/labels; path %q is not in the allowed set", p),
 		})
 	}
+
+	// Now run the tag-map-aware check for each known parent.
+	for parent := range tagParents {
+		issues = append(issues, tagMapIssues(field, parent, change.Before, change.After, allow)...)
+	}
+
 	return issues
 }
 
@@ -381,6 +401,14 @@ func changeCoveredByApproval(rc *tfjson.ResourceChange, approvedByAddr map[strin
 // a re-ordered list at the JSON level always indicates a real change to
 // the provider.
 func diffPaths(before, after any, prefix string) []string {
+	return diffPathsExcludingTagMaps(before, after, prefix, nil)
+}
+
+// diffPathsExcludingTagMaps is diffPaths plus an "exclude these top-level
+// keys" filter so the caller can handle tag/label parent maps with
+// map-aware semantics (see tagMapIssues). When skip is empty the
+// behaviour is identical to diffPaths.
+func diffPathsExcludingTagMaps(before, after any, prefix string, skip map[string]struct{}) []string {
 	if reflect.DeepEqual(before, after) {
 		return nil
 	}
@@ -394,7 +422,14 @@ func diffPaths(before, after any, prefix string) []string {
 			if prefix != "" {
 				child = prefix + "." + k
 			}
-			paths = append(paths, diffPaths(bMap[k], aMap[k], child)...)
+			// Only suppress at the top level — a key called `tags`
+			// nested inside another block is not a provenance parent.
+			if prefix == "" {
+				if _, ok := skip[k]; ok {
+					continue
+				}
+			}
+			paths = append(paths, diffPathsExcludingTagMaps(bMap[k], aMap[k], child, skip)...)
 		}
 		return paths
 	}
@@ -402,6 +437,110 @@ func diffPaths(before, after any, prefix string) []string {
 		return []string{"<root>"}
 	}
 	return []string{prefix}
+}
+
+// tagMapParents returns the set of top-level attribute names that the
+// caller passed as provenance-allowed parents. Derived from allowedKeys
+// (paths of the form `<parent>.<key>`) so the validator stays driven by
+// the FirstImportProvenanceKeys contract — adding a new cloud's tag
+// parent only requires updating that one builder.
+func tagMapParents(allowedKeys []string) map[string]struct{} {
+	parents := make(map[string]struct{})
+	for _, p := range allowedKeys {
+		idx := strings.Index(p, ".")
+		if idx <= 0 {
+			continue
+		}
+		parents[p[:idx]] = struct{}{}
+	}
+	return parents
+}
+
+// tagMapIssues validates a single tag/label parent map (e.g. `tags`,
+// `tags_all`, `labels`, `effective_labels`, `terraform_labels`) with
+// map-aware semantics:
+//
+//   - Pre-existing keys removed or modified → unauthorized change. The
+//     first-import contract forbids any user-tag touch beyond provenance
+//     writes.
+//   - Keys added when the before-side was present (even as `{}`): only
+//     allowed if the leaf path is in the provenance allowlist. An
+//     explicit empty map means the user genuinely had no tags, so any
+//     non-provenance addition is a real user-tag write.
+//   - Keys added when the before-side was NIL (the value was absent or
+//     literally null in the plan JSON): treated as "discovered state,
+//     not an InsideOut write". This is the canonical shape for AWS
+//     `tags_all` on a fresh import — terraform's pre-refresh state has
+//     it as null while the post-refresh `after` shows the union of user
+//     tags + provider defaults. Suppressing the noise here is the fix
+//     for issue #685.
+//
+// Values that aren't maps on both sides (e.g. one side is nil, both
+// scalar) are handled by the nil-before exception or by reporting the
+// leaf path as a single unauthorized change.
+func tagMapIssues(field, parent string, before, after any, allow map[string]struct{}) []ValidationIssue {
+	bMap, beforePresent := mapAtKey(before, parent)
+	aMap, _ := mapAtKey(after, parent)
+	if reflect.DeepEqual(bMap, aMap) {
+		return nil
+	}
+	var issues []ValidationIssue
+	emit := func(key, suffix string) {
+		path := parent + "." + key
+		issues = append(issues, ValidationIssue{
+			Field:  field + "." + path,
+			Code:   "imported_plan_unauthorized_change",
+			Reason: fmt.Sprintf("first-import plan must only repair provenance tags/labels; %s of %q is not permitted", suffix, path),
+		})
+	}
+	for _, k := range unionKeys(bMap, aMap) {
+		bVal, bHas := bMap[k]
+		aVal, aHas := aMap[k]
+		switch {
+		case bHas && aHas:
+			if !reflect.DeepEqual(bVal, aVal) {
+				emit(k, "modification")
+			}
+		case bHas && !aHas:
+			emit(k, "removal")
+		case !bHas && aHas:
+			if _, allowed := allow[parent+"."+k]; allowed {
+				continue
+			}
+			// Suppress discovered keys when the before-side of the
+			// parent was nil — covers the canonical fresh-import shape
+			// for computed mirrors (AWS `tags_all`, GCP
+			// `effective_labels`) where state has them as null until
+			// after the first refresh. A present-but-empty `{}` before
+			// is treated as user intent (no tags) so non-provenance
+			// adds still fail there.
+			if !beforePresent {
+				continue
+			}
+			emit(k, "addition")
+		}
+	}
+	return issues
+}
+
+// mapAtKey returns the map value at obj[key] when obj is a map. The
+// second return reports whether the key existed in the parent at all
+// (even as nil / non-map). Callers use that to distinguish "absent /
+// computed-mirror not yet refreshed" from "explicitly empty map".
+func mapAtKey(obj any, key string) (map[string]any, bool) {
+	m, ok := obj.(map[string]any)
+	if !ok {
+		return nil, false
+	}
+	v, present := m[key]
+	if !present {
+		return nil, false
+	}
+	if v == nil {
+		return nil, false
+	}
+	mv, _ := v.(map[string]any)
+	return mv, true
 }
 
 func stringSet(xs []string) map[string]struct{} {
