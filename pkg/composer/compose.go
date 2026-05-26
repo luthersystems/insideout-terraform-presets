@@ -34,7 +34,7 @@ type Client struct {
 // alternate preset source (e.g. tests, custom preset distributions).
 func New(opts ...Option) *Client {
 	c := &Client{
-		Mapper:           DefaultMapper{},
+		Mapper: DefaultMapper{},
 		// Default TF version written to /.terraform-version in the
 		// composed customer archive. Pinned to match the version
 		// pre-installed in luthersystems/mars's /opt/tfenv/versions/
