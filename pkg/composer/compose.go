@@ -35,7 +35,13 @@ type Client struct {
 func New(opts ...Option) *Client {
 	c := &Client{
 		Mapper:           DefaultMapper{},
-		TerraformVersion: "1.7.5",
+		// Default TF version written to /.terraform-version in the
+		// composed customer archive. Pinned to match the version
+		// pre-installed in luthersystems/mars's /opt/tfenv/versions/
+		// so first-time `tfenv install` inside an Argo pod is a no-op
+		// instead of a ~30s download from releases.hashicorp.com.
+		// Bump this AND the mars TFENV_PREINSTALL_VERSIONS together.
+		TerraformVersion: "1.9.8",
 		presets:          terraformpresets.FS,
 	}
 	for _, o := range opts {
