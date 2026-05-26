@@ -154,6 +154,193 @@ func TestInjectProvenance_AWSTypedAttrsExisting(t *testing.T) {
 	assert.True(t, hasAttr(t, s, "Owner", `"team-payments"`), "user-supplied Owner tag missing in:\n%s", s)
 }
 
+// TestBuildDiscoveredTagsExpression_FiltersProvenanceMarkers pins that
+// InsideOut* / insideout-* markers are filtered out of the discover-time
+// arg of the merge() expression — otherwise a re-import would emit stale
+// timestamp values under <discovered> that would shadow the current
+// pass's fresh stamp at runtime when their literals happen to differ
+// (the merge resolves by position, and <existing> doesn't always carry
+// the markers post-first-apply on resources whose Attrs lose tags).
+func TestBuildDiscoveredTagsExpression_FiltersProvenanceMarkers(t *testing.T) {
+	t.Parallel()
+	t.Run("aws", func(t *testing.T) {
+		got := buildDiscoveredTagsExpression("aws", map[string]string{
+			"Component":              "dns",
+			"Name":                   "zone-0",
+			"InsideOutImportProject": "io-old", // must be filtered
+			"InsideOutImported":      "true",   // must be filtered
+			"InsideOutImportedAt":    "stale",  // must be filtered
+		})
+		require.NotEmpty(t, got)
+		assert.NotContains(t, got, "InsideOutImportProject", "provenance marker must not appear in discovered arg")
+		assert.NotContains(t, got, "InsideOutImported", "provenance marker must not appear in discovered arg")
+		assert.Contains(t, got, `Component = "dns"`)
+		assert.Contains(t, got, `Name = "zone-0"`)
+	})
+	t.Run("gcp", func(t *testing.T) {
+		got := buildDiscoveredTagsExpression("gcp", map[string]string{
+			"team":                     "docs",
+			"insideout-import-project": "io-old", // must be filtered
+			"insideout-imported":       "true",   // must be filtered
+		})
+		require.NotEmpty(t, got)
+		assert.NotContains(t, got, "insideout-import-project", "provenance marker must not appear in discovered arg")
+		assert.NotContains(t, got, "insideout-imported", "provenance marker must not appear in discovered arg")
+		assert.Contains(t, got, `team = "docs"`)
+	})
+	t.Run("only-markers-returns-empty", func(t *testing.T) {
+		got := buildDiscoveredTagsExpression("aws", map[string]string{
+			"InsideOutImportProject": "io-x",
+			"InsideOutImported":      "true",
+		})
+		assert.Empty(t, got, "if every entry is a marker, no discovered arg is emitted")
+	})
+	t.Run("nil-map-returns-empty", func(t *testing.T) {
+		assert.Empty(t, buildDiscoveredTagsExpression("aws", nil))
+	})
+	t.Run("empty-map-returns-empty", func(t *testing.T) {
+		assert.Empty(t, buildDiscoveredTagsExpression("aws", map[string]string{}))
+	})
+}
+
+// TestInjectProvenance_AWSDiscoveredTagsMergedWhenAttrsEmpty pins the #690
+// fix: when a resource's tags are not present in Attrs (because some AWS
+// CFN schemas mark Tags as write-only and Cloud Control GetResource never
+// returns them — aws_route53_zone is the lead repro), the discover-time
+// tags captured on Identity.Tags must still be merged into the emitted
+// tags expression so customer-set tags survive the first apply.
+//
+// Before the fix the emitted HCL was effectively `tags = merge({InsideOut*}, {})`,
+// which wiped Component / Environment / Name / Organization / Project /
+// Resource on the live resource. This test would have caught that.
+func TestInjectProvenance_AWSDiscoveredTagsMergedWhenAttrsEmpty(t *testing.T) {
+	t.Parallel()
+	// Mirror the route53_zone repro: typed Attrs do NOT carry the tags map
+	// (the Cloud Control GetResource for AWS::Route53::HostedZone never
+	// returns HostedZoneTags), but Identity.Tags is populated by the
+	// discoverer's TagsFromProperties extractor over the parallel
+	// resourcegroupstaggingapi / list path.
+	ir := imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Cloud:    "aws",
+			Type:     "aws_route53_zone",
+			Address:  "aws_route53_zone.apps",
+			ImportID: "Z1234567890",
+			Tags: map[string]string{
+				"Component":    "dns",
+				"Environment":  "default",
+				"ID":           "0",
+				"Name":         "252819b1-default-luther-dns-zone-0",
+				"Organization": "luther",
+				"Project":      "252819b1",
+				"Resource":     "zone",
+			},
+		},
+		Tier:  imported.TierImportedFlat,
+		Attrs: []byte(`{"name":{"literal":"apps.example.com"}}`),
+	}
+	body, _, err := emitTestBody(t, ir)
+	require.NoError(t, err)
+
+	got, err := injectProvenance(body, &ir, "io-stack-1", "sess-9", fixedTime())
+	require.NoError(t, err)
+	s := string(got)
+	assert.False(t, ir.WeakLocked)
+	assert.Contains(t, s, "tags = merge(", "tags attribute must be a merge() call")
+	// InsideOut* provenance stamps must be present.
+	assert.True(t, hasAttr(t, s, "InsideOutImportProject", `"io-stack-1"`), "missing InsideOutImportProject in:\n%s", s)
+	assert.True(t, hasAttr(t, s, "InsideOutImportSession", `"sess-9"`), "missing InsideOutImportSession in:\n%s", s)
+	assert.True(t, hasAttr(t, s, "InsideOutImported", `"true"`), "missing InsideOutImported in:\n%s", s)
+	assert.True(t, hasAttr(t, s, "InsideOutImportedAt", `"2026-04-29T14:30:00Z"`), "missing InsideOutImportedAt in:\n%s", s)
+	// All seven customer-set tags from Identity.Tags must be preserved.
+	for _, kv := range []struct{ k, v string }{
+		{"Component", "dns"},
+		{"Environment", "default"},
+		{"ID", "0"},
+		{"Name", "252819b1-default-luther-dns-zone-0"},
+		{"Organization", "luther"},
+		{"Project", "252819b1"},
+		{"Resource", "zone"},
+	} {
+		assert.True(t, hasAttr(t, s, kv.k, `"`+kv.v+`"`),
+			"discover-time Identity.Tags[%q] = %q must survive the merge — silently wiping customer tags is data corruption (#690):\n%s",
+			kv.k, kv.v, s)
+	}
+}
+
+// TestInjectProvenance_AWSDiscoveredTagsPlusBodyTags pins that BOTH the
+// typed Attrs.Tags (when populated) AND Identity.Tags get merged into the
+// final expression. The body's tags win on key conflicts because Attrs is
+// the more authoritative state for the fields it actually carries; the
+// Identity.Tags layer is a backstop for shapes where Attrs lost tags in
+// transit (the #690 route53_zone case).
+func TestInjectProvenance_AWSDiscoveredTagsPlusBodyTags(t *testing.T) {
+	t.Parallel()
+	ir := imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Cloud:   "aws",
+			Type:    "aws_sqs_queue",
+			Address: "aws_sqs_queue.q",
+			Tags: map[string]string{
+				"Component":   "queue",
+				"Environment": "prod",
+				// Conflicting key — body wins.
+				"Owner": "old-team",
+			},
+		},
+		Tier:  imported.TierImportedFlat,
+		Attrs: []byte(`{"name":{"literal":"q"},"tags":{"Owner":{"literal":"team-payments"}}}`),
+	}
+	body, _, err := emitTestBody(t, ir)
+	require.NoError(t, err)
+
+	got, err := injectProvenance(body, &ir, "io-stack-1", "sess-9", fixedTime())
+	require.NoError(t, err)
+	s := string(got)
+	assert.False(t, ir.WeakLocked)
+	assert.Contains(t, s, "tags = merge(")
+	// Both Identity-only tags must be present.
+	assert.True(t, hasAttr(t, s, "Component", `"queue"`), "Identity.Tags[Component] missing:\n%s", s)
+	assert.True(t, hasAttr(t, s, "Environment", `"prod"`), "Identity.Tags[Environment] missing:\n%s", s)
+	// Body's Owner wins over Identity.Tags's Owner; the conflict is OK
+	// — the emitted HCL still resolves to the body's value at apply.
+	assert.True(t, hasAttr(t, s, "Owner", `"team-payments"`), "Attrs body Owner tag missing:\n%s", s)
+	// Provenance stamps still present.
+	assert.True(t, hasAttr(t, s, "InsideOutImportProject", `"io-stack-1"`), "missing InsideOutImportProject in:\n%s", s)
+}
+
+// TestInjectProvenance_GCPDiscoveredLabelsMergedWhenAttrsEmpty is the
+// GCP parallel to TestInjectProvenance_AWSDiscoveredTagsMergedWhenAttrsEmpty
+// — discover-time labels on Identity.Tags must survive into the merged
+// labels expression even when Attrs.Labels is empty.
+func TestInjectProvenance_GCPDiscoveredLabelsMergedWhenAttrsEmpty(t *testing.T) {
+	t.Parallel()
+	ir := imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Cloud:   "gcp",
+			Type:    "google_storage_bucket",
+			Address: "google_storage_bucket.docs",
+			Tags: map[string]string{
+				"team":        "docs",
+				"environment": "prod",
+			},
+		},
+		Tier:  imported.TierImportedFlat,
+		Attrs: []byte(`{"name":{"literal":"docs"}}`),
+	}
+	body, _, err := emitTestBody(t, ir)
+	require.NoError(t, err)
+
+	got, err := injectProvenance(body, &ir, "io-stack-1", "sess-9", fixedTime())
+	require.NoError(t, err)
+	s := string(got)
+	assert.False(t, ir.WeakLocked)
+	assert.Contains(t, s, "labels = merge(")
+	assert.True(t, hasAttr(t, s, "team", `"docs"`), "Identity.Tags[team] missing:\n%s", s)
+	assert.True(t, hasAttr(t, s, "environment", `"prod"`), "Identity.Tags[environment] missing:\n%s", s)
+	assert.True(t, hasAttr(t, s, `"insideout-import-project"`, `"io-stack-1"`), "missing insideout-import-project in:\n%s", s)
+}
+
 func TestInjectProvenance_GCPTypedAttrsExisting(t *testing.T) {
 	t.Parallel()
 	ir := imported.ImportedResource{
