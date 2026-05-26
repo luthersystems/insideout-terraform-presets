@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"math/rand"
 	"sort"
 	"time"
@@ -578,8 +579,43 @@ func (a *AWSDiscoverer) DiscoverTypes(ctx context.Context, types []string, args 
 			if err := gctx.Err(); err != nil {
 				return err
 			}
-			entries, err := d.Discover(gctx, args)
+			// Per-type deadline (#1787 reliable). When
+			// args.PerTypeTimeout > 0, wrap the Discover call in a
+			// child context so one slow / stalled SDK call can't hold
+			// the whole gather hostage. On timeout we WARN-log and
+			// emit an empty slice for this type — partial result is
+			// strictly more useful than no result for a best-effort
+			// survey. The errgroup itself never sees the timeout
+			// error, so siblings keep running.
+			//
+			// Non-timeout errors still propagate through the errgroup
+			// so a genuine API failure (Throttling, invalid creds)
+			// continues to fail-fast as before.
+			callCtx := gctx
+			var cancel context.CancelFunc
+			if args.PerTypeTimeout > 0 {
+				callCtx, cancel = context.WithTimeout(gctx, args.PerTypeTimeout)
+				defer cancel()
+			}
+			callStart := time.Now()
+			entries, err := d.Discover(callCtx, args)
 			if err != nil {
+				// Distinguish "per-type budget expired" from "parent
+				// context cancelled" (a fail-fast sibling). Only the
+				// per-type case downgrades to a partial-result warn;
+				// parent cancellation must still propagate so the
+				// caller's deadline / fail-fast semantics work.
+				if args.PerTypeTimeout > 0 &&
+					errors.Is(err, context.DeadlineExceeded) &&
+					gctx.Err() == nil {
+					log.Printf("[awsdiscover] level=warn reason=per_type_timeout type=%s regions=%v elapsed_ms=%d budget_ms=%d",
+						d.ResourceType(),
+						args.Regions,
+						time.Since(callStart).Milliseconds(),
+						args.PerTypeTimeout.Milliseconds())
+					results[i] = nil
+					return nil
+				}
 				return fmt.Errorf("%s: %w", d.ResourceType(), err)
 			}
 			results[i] = entries

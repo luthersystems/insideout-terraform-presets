@@ -1,6 +1,10 @@
 package awsdiscover
 
-import "github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/progress"
+import (
+	"time"
+
+	"github.com/luthersystems/insideout-terraform-presets/cmd/insideout-import/progress"
+)
 
 // DiscoverArgs is the per-call input shape consumed by the aggregator's
 // DiscoverTypes and every per-service Discoverer.Discover. Bundling the
@@ -31,6 +35,23 @@ type DiscoverArgs struct {
 	TagSelectors []TagSelector
 	AccountID    string
 	Emitter      progress.Emitter
+
+	// PerTypeTimeout, when > 0, bounds the wall time a single per-type
+	// Discoverer.Discover call may consume inside DiscoverTypes's
+	// errgroup. On expiry the aggregator records a structured warn log
+	// (`reason=per_type_timeout type=<t> elapsed_ms=<n>`) and emits an
+	// empty result slice for that type — siblings keep running and the
+	// overall call returns a partial result rather than failing the
+	// whole gather. Zero means "no per-type bound" (back-compat: the
+	// pre-#1787 behavior where one slow / stalled SDK call held the
+	// whole gather hostage until the caller's outer deadline fired).
+	//
+	// Why an explicit bound rather than relying on the parent
+	// `ctx` deadline: a parent deadline cancels every sibling
+	// simultaneously, which throws away their work. A per-type bound
+	// fences off the slow type while letting siblings finish, which is
+	// the right shape for a best-effort discovery survey.
+	PerTypeTimeout time.Duration
 
 	// rgtCache is the package-internal RGT prefetch result threaded
 	// through DiscoverTypes (#406). Per-type discoverers that opt into
