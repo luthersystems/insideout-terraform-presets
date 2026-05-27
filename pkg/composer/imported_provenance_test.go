@@ -170,7 +170,7 @@ func TestBuildDiscoveredTagsExpression_FiltersProvenanceMarkers(t *testing.T) {
 			"InsideOutImportProject": "io-old", // must be filtered
 			"InsideOutImported":      "true",   // must be filtered
 			"InsideOutImportedAt":    "stale",  // must be filtered
-		})
+		}, nil)
 		require.NotEmpty(t, got)
 		assert.NotContains(t, got, "InsideOutImportProject", "provenance marker must not appear in discovered arg")
 		assert.NotContains(t, got, "InsideOutImported", "provenance marker must not appear in discovered arg")
@@ -182,7 +182,7 @@ func TestBuildDiscoveredTagsExpression_FiltersProvenanceMarkers(t *testing.T) {
 			"team":                     "docs",
 			"insideout-import-project": "io-old", // must be filtered
 			"insideout-imported":       "true",   // must be filtered
-		})
+		}, nil)
 		require.NotEmpty(t, got)
 		assert.NotContains(t, got, "insideout-import-project", "provenance marker must not appear in discovered arg")
 		assert.NotContains(t, got, "insideout-imported", "provenance marker must not appear in discovered arg")
@@ -192,14 +192,35 @@ func TestBuildDiscoveredTagsExpression_FiltersProvenanceMarkers(t *testing.T) {
 		got := buildDiscoveredTagsExpression("aws", map[string]string{
 			"InsideOutImportProject": "io-x",
 			"InsideOutImported":      "true",
-		})
+		}, nil)
 		assert.Empty(t, got, "if every entry is a marker, no discovered arg is emitted")
 	})
 	t.Run("nil-map-returns-empty", func(t *testing.T) {
-		assert.Empty(t, buildDiscoveredTagsExpression("aws", nil))
+		assert.Empty(t, buildDiscoveredTagsExpression("aws", nil, nil))
 	})
 	t.Run("empty-map-returns-empty", func(t *testing.T) {
-		assert.Empty(t, buildDiscoveredTagsExpression("aws", map[string]string{}))
+		assert.Empty(t, buildDiscoveredTagsExpression("aws", map[string]string{}, nil))
+	})
+	t.Run("exclude-keys-drops-overlap", func(t *testing.T) {
+		// The injector passes the keys already present in <existing>
+		// here so the discovered arg doesn't duplicate them. Component
+		// is in the exclude set → filtered. Name is not → kept.
+		got := buildDiscoveredTagsExpression("aws", map[string]string{
+			"Component": "dns",
+			"Name":      "zone-0",
+		}, map[string]struct{}{"Component": {}})
+		require.NotEmpty(t, got)
+		assert.NotContains(t, got, "Component", "key already in <existing> must be filtered from <discovered>")
+		assert.Contains(t, got, `Name = "zone-0"`)
+	})
+	t.Run("exclude-keys-empties-out", func(t *testing.T) {
+		// When every discovered key is already in <existing>, the
+		// discovered arg collapses to empty so the caller can elide it.
+		got := buildDiscoveredTagsExpression("aws", map[string]string{
+			"Component": "dns",
+			"Name":      "zone-0",
+		}, map[string]struct{}{"Component": {}, "Name": {}})
+		assert.Empty(t, got, "every discovered key in <existing> → discovered arg empty")
 	})
 }
 
@@ -307,6 +328,126 @@ func TestInjectProvenance_AWSDiscoveredTagsPlusBodyTags(t *testing.T) {
 	assert.True(t, hasAttr(t, s, "Owner", `"team-payments"`), "Attrs body Owner tag missing:\n%s", s)
 	// Provenance stamps still present.
 	assert.True(t, hasAttr(t, s, "InsideOutImportProject", `"io-stack-1"`), "missing InsideOutImportProject in:\n%s", s)
+}
+
+// TestInjectProvenance_AWSDiscoveredTagsDeduped_AgainstBodyTags pins the
+// follow-up to #690: when ir.Identity.Tags and the body emitter's typed
+// Attrs.Tags carry the same keys (the common case for AWS resources whose
+// CloudControl GetResource returns tags — KMS keys, log groups, SQS
+// queues, the entire long tail), the emitted merge() must not contain
+// two object literals with identical keys. The discover-time arg only
+// makes sense as a *backfill* for keys the body dropped (route53_zone
+// repro); when every discovered key already appears in <existing>, the
+// middle arg has no work to do and must be elided to keep the HCL clean.
+//
+// Without dedupe the customer sees the duplicate-block output reported
+// against the v0.7.x KMS import in the field. The downstream merge()
+// still resolves to the right tags, but the visual duplication breaks
+// terraform fmt-style reviewability and confuses operators.
+func TestInjectProvenance_AWSDiscoveredTagsDeduped_AgainstBodyTags(t *testing.T) {
+	t.Parallel()
+	// Mirror the KMS repro: typed Attrs carries the full tag map AND
+	// Identity.Tags carries the same keys (CC GetResource returned them).
+	customer := map[string]string{
+		"Component":    "tfstate",
+		"Environment":  "default",
+		"ID":           "0",
+		"Name":         "252819b1-default-luther-tfstate-kms-0",
+		"Organization": "luther",
+		"Project":      "252819b1",
+		"Resource":     "kms",
+	}
+	ir := imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Cloud:   "aws",
+			Type:    "aws_kms_key",
+			Address: "aws_kms_key.c99a1dff_1b87_43a5_95a5_379e72e8046b",
+			Tags:    customer,
+		},
+		Tier: imported.TierImportedFlat,
+		Attrs: []byte(`{"description":{"literal":"tfstate encryption key"},` +
+			`"tags":{` +
+			`"Component":{"literal":"tfstate"},` +
+			`"Environment":{"literal":"default"},` +
+			`"ID":{"literal":"0"},` +
+			`"Name":{"literal":"252819b1-default-luther-tfstate-kms-0"},` +
+			`"Organization":{"literal":"luther"},` +
+			`"Project":{"literal":"252819b1"},` +
+			`"Resource":{"literal":"kms"}` +
+			`}}`),
+	}
+	body, _, err := emitTestBody(t, ir)
+	require.NoError(t, err)
+
+	got, err := injectProvenance(body, &ir, "io-stack-1", "sess-9", fixedTime())
+	require.NoError(t, err)
+	s := string(got)
+
+	// Each customer tag value must appear exactly ONCE in the merged
+	// expression — the body emitter already wrote it under <existing>,
+	// so the <discovered> arg must not re-emit the same key.
+	for k, v := range customer {
+		count := strings.Count(s, `"`+v+`"`)
+		assert.Equalf(t, 1, count,
+			"customer tag %q=%q appears %d times in emitted HCL — discover-time arg duplicated the body's tags:\n%s",
+			k, v, count, s)
+	}
+
+	// And the merge() itself should be 2-arg (provenance + existing),
+	// since every discovered key was already in the body. Count object
+	// literals inside the merge() — should be exactly 2.
+	merge := strings.Index(s, "tags = merge(")
+	require.GreaterOrEqual(t, merge, 0)
+	openBraces := strings.Count(s[merge:], "{")
+	closeBraces := strings.Count(s[merge:], "}")
+	assert.Equalf(t, 2, openBraces, "expected 2 object literals in merge(), got %d:\n%s", openBraces, s)
+	assert.Equalf(t, 2, closeBraces, "expected 2 closing braces in merge(), got %d:\n%s", closeBraces, s)
+
+	// Sanity: provenance + all customer keys still present.
+	assert.True(t, hasAttr(t, s, "InsideOutImportProject", `"io-stack-1"`),
+		"missing InsideOutImportProject:\n%s", s)
+	for k, v := range customer {
+		assert.Truef(t, hasAttr(t, s, k, `"`+v+`"`),
+			"customer tag %q=%q missing after dedupe:\n%s", k, v, s)
+	}
+}
+
+// TestInjectProvenance_AWSDiscoveredTagsPartialOverlap pins that the
+// discovered arg keeps the keys NOT in <existing> (so the route53_zone
+// data-loss case from #690 still works) but drops keys already in
+// <existing> (so the KMS-style duplicate block doesn't ship).
+func TestInjectProvenance_AWSDiscoveredTagsPartialOverlap(t *testing.T) {
+	t.Parallel()
+	ir := imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Cloud:   "aws",
+			Type:    "aws_sqs_queue",
+			Address: "aws_sqs_queue.q",
+			Tags: map[string]string{
+				// Overlaps the body — must be filtered out of <discovered>.
+				"Owner": "old-team",
+				// Not in body — must survive into <discovered>.
+				"Project": "io-stack-1",
+			},
+		},
+		Tier:  imported.TierImportedFlat,
+		Attrs: []byte(`{"name":{"literal":"q"},"tags":{"Owner":{"literal":"team-payments"}}}`),
+	}
+	body, _, err := emitTestBody(t, ir)
+	require.NoError(t, err)
+
+	got, err := injectProvenance(body, &ir, "io-stack-1", "sess-9", fixedTime())
+	require.NoError(t, err)
+	s := string(got)
+
+	// Owner appears exactly once (body wrote it; <discovered> filtered).
+	assert.Equalf(t, 1, strings.Count(s, `"team-payments"`),
+		"Owner present once (body); old-team must NOT survive from discovered:\n%s", s)
+	assert.NotContains(t, s, `"old-team"`,
+		"discovered Owner=old-team must be filtered (key already in <existing>):\n%s", s)
+	// Project survives because it isn't in <existing>.
+	assert.True(t, hasAttr(t, s, "Project", `"io-stack-1"`),
+		"discovered Project must survive (key not in <existing>):\n%s", s)
 }
 
 // TestInjectProvenance_GCPDiscoveredLabelsMergedWhenAttrsEmpty is the
