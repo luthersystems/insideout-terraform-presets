@@ -179,6 +179,513 @@ func TestInjectProvenance_AWSTypedAttrsExisting(t *testing.T) {
 	assert.True(t, hasAttr(t, s, "Owner", `"team-payments"`), "user-supplied Owner tag missing in:\n%s", s)
 }
 
+// TestInjectProvenance_PreservesImportedAtOnReImport pins the core
+// re-import idempotency contract: when a resource was already imported
+// under the same project+session on a prior pass, the cloud-side
+// InsideOutImportedAt marker survives into the emitted HCL unchanged.
+//
+// Symptom this fixes (field report against PR #690 follow-up): every
+// subsequent compose pass re-stamped InsideOutImportedAt with `nowFn()`
+// even on resources that hadn't been touched, producing a tag-only
+// diff in `terraform plan` for the entire carried-forward set
+// (CloudWatch log groups, KMS keys, anything that came along through
+// reliable3's import-baseline carry-forward). That churn falsely reads
+// as drift to operators reviewing plans, and breaks the "byte-identical
+// HCL on a no-op compose pass" idempotency expectation.
+//
+// The trigger condition: ir.Identity.Tags carries the live cloud-side
+// tags (the discoverer's TagsFromProperties extractor captures them
+// post-apply), AND ImportProject + ImportSession match the current
+// pass. Mismatch on either falls back to fresh stamping — see the
+// adjacent table-driven test for the negative cases.
+func TestInjectProvenance_PreservesImportedAtOnReImport(t *testing.T) {
+	t.Parallel()
+	priorStamp := "2026-05-26T21:10:48Z"
+	ir := imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Cloud:   "aws",
+			Type:    "aws_cloudwatch_log_group",
+			Address: "aws_cloudwatch_log_group.rdsosmetrics",
+			Tags: map[string]string{
+				// Live cloud-side tags captured by re-discovery —
+				// includes the markers stamped by the prior apply.
+				"Component":              "logs",
+				"Environment":            "default",
+				"InsideOutImportProject": "io-stack-1",
+				"InsideOutImportSession": "sess-9",
+				"InsideOutImported":      "true",
+				"InsideOutImportedAt":    priorStamp,
+			},
+		},
+		Tier:  imported.TierImportedFlat,
+		Attrs: []byte(`{"name":{"literal":"RDSOSMetrics"}}`),
+	}
+	body, _, err := emitTestBody(t, ir)
+	require.NoError(t, err)
+
+	// `fixedTime()` returns 2026-04-29T14:30:00Z. If preservation works,
+	// the emitted ImportedAt is priorStamp (May 26), NOT the fixed time
+	// (April 29).
+	got, err := injectProvenance(body, &ir, "io-stack-1", "sess-9", fixedTime())
+	require.NoError(t, err)
+	s := string(got)
+
+	assert.True(t, hasAttr(t, s, "InsideOutImportedAt", `"`+priorStamp+`"`),
+		"prior cloud-side InsideOutImportedAt must be preserved (drift-flag fix):\n%s", s)
+	assert.False(t, hasAttr(t, s, "InsideOutImportedAt", `"2026-04-29T14:30:00Z"`),
+		"fresh nowFn timestamp must NOT appear when prior stamp matched project+session:\n%s", s)
+	// Other markers carry the fresh project/session values from the call
+	// args (they happen to match the prior stamp's values here — that's
+	// the precondition for preservation).
+	assert.True(t, hasAttr(t, s, "InsideOutImportProject", `"io-stack-1"`), "missing InsideOutImportProject:\n%s", s)
+	assert.True(t, hasAttr(t, s, "InsideOutImportSession", `"sess-9"`), "missing InsideOutImportSession:\n%s", s)
+	assert.True(t, hasAttr(t, s, "InsideOutImported", `"true"`), "missing InsideOutImported:\n%s", s)
+}
+
+// TestInjectProvenance_PreservesImportedAt_DoubleSource pins the
+// merge-arg-order contract in the presence of preservation: when BOTH
+// ir.Identity.Tags AND the body's typed Attrs.Tags carry the SAME prior
+// `InsideOutImportedAt`, the resulting `terraform apply` must resolve
+// to that prior value — not the fresh `nowFn()` stamp in the first
+// merge arg. Without this, a mutation that swapped `<existing>` and
+// `{InsideOut*}` in `buildMergeExpression` would silently flip the
+// preservation semantic on its head (apply would resolve to the stale
+// stamp in some flows and the fresh stamp in others). QA reviewer #2.
+func TestInjectProvenance_PreservesImportedAt_DoubleSource(t *testing.T) {
+	t.Parallel()
+	priorStamp := "2026-05-26T21:10:48Z"
+	ir := imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Cloud:   "aws",
+			Type:    "aws_cloudwatch_log_group",
+			Address: "aws_cloudwatch_log_group.rdsosmetrics",
+			// Live cloud-side tags carry the prior markers (matches the
+			// production carry-forward path post-apply re-discovery).
+			Tags: map[string]string{
+				"Component":              "logs",
+				"InsideOutImportProject": "io-stack-1",
+				"InsideOutImportSession": "sess-9",
+				"InsideOutImported":      "true",
+				"InsideOutImportedAt":    priorStamp,
+			},
+		},
+		Tier: imported.TierImportedFlat,
+		// AND Attrs.Tags also carry them (so they appear in <existing>
+		// at merge-arg-3 position too). This is the worst-case shape
+		// for merge-ordering bugs.
+		Attrs: []byte(`{"name":{"literal":"RDSOSMetrics"},"tags":{` +
+			`"Component":{"literal":"logs"},` +
+			`"InsideOutImportProject":{"literal":"io-stack-1"},` +
+			`"InsideOutImportSession":{"literal":"sess-9"},` +
+			`"InsideOutImported":{"literal":"true"},` +
+			`"InsideOutImportedAt":{"literal":"` + priorStamp + `"}` +
+			`}}`),
+	}
+	body, _, err := emitTestBody(t, ir)
+	require.NoError(t, err)
+
+	got, err := injectProvenance(body, &ir, "io-stack-1", "sess-9", fixedTime())
+	require.NoError(t, err)
+	s := string(got)
+
+	// The fresh `fixedTime` value must NOT appear anywhere — preservation
+	// rewrote the first merge arg, and Attrs.Tags (which feeds <existing>)
+	// also carries priorStamp.
+	assert.NotContainsf(t, s, "2026-04-29T14:30:00Z",
+		"fresh nowFn stamp must not appear when prior stamp matches:\n%s", s)
+	// priorStamp appears in BOTH the first merge arg (preservation) and
+	// the last merge arg (<existing> from Attrs.Tags). That's the
+	// expected shape — merge() resolves to the same value either way.
+	// Pin both occurrences explicitly via structural inspection so a
+	// mutation that swapped arg order (a real concern at the design
+	// level — see #690 comment) couldn't silently inject the fresh
+	// stamp into the surviving position.
+	args := mergeArgsForAttr(t, got, "tags")
+	require.GreaterOrEqualf(t, len(args), 2, "expected at least 2-arg merge():\n%s", s)
+	// First arg: provenance object literal — preserved stamp.
+	firstObj, ok := args[0].(*hclsyntax.ObjectConsExpr)
+	require.Truef(t, ok, "first merge arg is %T, want ObjectConsExpr", args[0])
+	assert.Equalf(t, priorStamp, objectLiteralStringValue(t, firstObj, "InsideOutImportedAt"),
+		"first merge arg must carry preserved priorStamp:\n%s", s)
+	// Last arg: <existing> from body — also carries priorStamp via Attrs.Tags.
+	lastObj, ok := args[len(args)-1].(*hclsyntax.ObjectConsExpr)
+	require.Truef(t, ok, "last merge arg is %T, want ObjectConsExpr", args[len(args)-1])
+	assert.Equalf(t, priorStamp, objectLiteralStringValue(t, lastObj, "InsideOutImportedAt"),
+		"last merge arg (<existing>) must carry priorStamp:\n%s", s)
+}
+
+// objectLiteralStringValue extracts the literal string value of `key`
+// from a static HCL object constructor. Fails the test if the key is
+// missing or the value isn't a static string literal — both are bugs
+// in the test setup (callers pass body-emitter output, which always
+// produces static literals).
+func objectLiteralStringValue(t *testing.T, obj *hclsyntax.ObjectConsExpr, key string) string {
+	t.Helper()
+	for _, item := range obj.Items {
+		k, ok := objectConsKeyAsString(item.KeyExpr)
+		if !ok || k != key {
+			continue
+		}
+		v, diags := item.ValueExpr.Value(nil)
+		require.Falsef(t, diags.HasErrors(), "value for %q: %s", key, diags.Error())
+		return v.AsString()
+	}
+	t.Fatalf("key %q not found in object literal", key)
+	return ""
+}
+
+// TestInjectProvenance_PreservesImportedAt_ForceTakeoverFreshStamps
+// pins the force-takeover interaction: when the current project differs
+// from the prior project AND a valid ForceTakeover authorizes the
+// rewrite, the emitted `InsideOutImportedAt` MUST be the fresh
+// `nowFn()` stamp — not the prior cloud-side value — because the
+// takeover is a re-assertion of ownership and the timestamp must
+// reflect THAT moment, not the prior owner's import time. QA reviewer #1.
+func TestInjectProvenance_PreservesImportedAt_ForceTakeoverFreshStamps(t *testing.T) {
+	t.Parallel()
+	priorStamp := "2026-05-26T21:10:48Z"
+	freshStamp := "2026-04-29T14:30:00Z" // fixedTime()
+	ir := imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Cloud:   "aws",
+			Type:    "aws_sqs_queue",
+			Address: "aws_sqs_queue.q",
+			// Identity.Tags carries the OLD project + an old stamp —
+			// exactly the bait that a buggy preservation predicate
+			// reading from Identity.Tags alone could swallow.
+			Tags: map[string]string{
+				"InsideOutImportProject": "io-other",
+				"InsideOutImportSession": "sess-9",
+				"InsideOutImportedAt":    priorStamp,
+			},
+		},
+		Tier: imported.TierImportedFlat,
+		// Attrs.Tags also carries the old project so the existing-
+		// owner gate in injectProvenance reads it (existingProvenanceProject
+		// reads Attrs/Attributes, not Identity.Tags). Without a valid
+		// ForceTakeover, the injector would refuse to overwrite — see
+		// TestInjectProvenance_RefusesConflictingProject for that arm.
+		Attrs: []byte(`{"name":{"literal":"q"},"tags":{` +
+			`"InsideOutImportProject":{"literal":"io-other"}` +
+			`}}`),
+		ForceTakeover: &imported.ForceTakeover{
+			Actor:         "sam@luther",
+			Reason:        "test takeover",
+			PreviousOwner: "io-other",
+			ApprovedAt:    fixedTime(),
+		},
+	}
+	body, _, err := emitTestBody(t, ir)
+	require.NoError(t, err)
+
+	got, err := injectProvenance(body, &ir, "io-stack-1", "sess-9", fixedTime())
+	require.NoError(t, err)
+	s := string(got)
+
+	assert.True(t, hasAttr(t, s, "InsideOutImportedAt", `"`+freshStamp+`"`),
+		"valid force-takeover must emit FRESH InsideOutImportedAt — the takeover is a re-assertion of ownership:\n%s", s)
+	assert.False(t, hasAttr(t, s, "InsideOutImportedAt", `"`+priorStamp+`"`),
+		"prior stamp must NOT be preserved when force-takeover changes the project:\n%s", s)
+	// The new project marker carries the new owner.
+	assert.True(t, hasAttr(t, s, "InsideOutImportProject", `"io-stack-1"`),
+		"force-takeover must emit new project marker:\n%s", s)
+}
+
+// TestInjectProvenance_Idempotent_OnReEmissionWithPriorStamp pins the
+// end-to-end byte-for-byte idempotency claim of this fix: if the
+// composer is run a second time with the prior emission's stamp echoed
+// back through ir.Identity.Tags (the production carry-forward path),
+// the output is byte-identical regardless of what `nowFn()` returns
+// during run #2. This is the "no tag-only diff on a no-op compose
+// pass" guarantee. QA reviewer #5.
+func TestInjectProvenance_Idempotent_OnReEmissionWithPriorStamp(t *testing.T) {
+	t.Parallel()
+	// Run 1: a fresh import — Identity.Tags has customer tags only, no
+	// InsideOut* markers (first-time discovery shape).
+	ir1 := imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Cloud:   "aws",
+			Type:    "aws_cloudwatch_log_group",
+			Address: "aws_cloudwatch_log_group.rdsosmetrics",
+			Tags: map[string]string{
+				"Component": "logs",
+			},
+		},
+		Tier:  imported.TierImportedFlat,
+		Attrs: []byte(`{"name":{"literal":"RDSOSMetrics"}}`),
+	}
+	body1, _, err := emitTestBody(t, ir1)
+	require.NoError(t, err)
+	out1, err := injectProvenance(body1, &ir1, "io-stack-1", "sess-9", fixedTime())
+	require.NoError(t, err)
+
+	// Run 2: same logical resource, but Identity.Tags now mirrors what
+	// the cloud-side resource would carry post-apply (the 4 InsideOut*
+	// markers stamped by run 1's apply, including run 1's ImportedAt).
+	// `nowFn()` returns a DIFFERENT time on this pass.
+	run2Time := fixedTime().Add(24 * 7 * time.Hour) // a week later
+	ir2 := imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Cloud:   "aws",
+			Type:    "aws_cloudwatch_log_group",
+			Address: "aws_cloudwatch_log_group.rdsosmetrics",
+			Tags: map[string]string{
+				"Component":              "logs",
+				"InsideOutImportProject": "io-stack-1",
+				"InsideOutImportSession": "sess-9",
+				"InsideOutImported":      "true",
+				// CRITICAL: this is the exact literal run 1 emitted —
+				// the RFC3339 form of fixedTime(), which preservation
+				// must echo back unchanged.
+				"InsideOutImportedAt": fixedTime().UTC().Format(time.RFC3339),
+			},
+		},
+		Tier:  imported.TierImportedFlat,
+		Attrs: []byte(`{"name":{"literal":"RDSOSMetrics"}}`),
+	}
+	body2, _, err := emitTestBody(t, ir2)
+	require.NoError(t, err)
+	out2, err := injectProvenance(body2, &ir2, "io-stack-1", "sess-9", run2Time)
+	require.NoError(t, err)
+
+	// Idempotency: byte-identical output. Note: out1's body does NOT
+	// have customer tags in <existing> beyond Component (we didn't put
+	// them in Attrs.Tags). Out2 has the markers in <discovered> via
+	// Identity.Tags, but the dedupe + preservation pipeline should
+	// produce the same final HCL — markers come from the first merge
+	// arg with the preserved stamp, customer tags from <existing>.
+	if !assert.Equal(t, string(out1), string(out2),
+		"second compose pass with prior stamp echoed via Identity.Tags must produce byte-identical HCL") {
+		t.Logf("--- out1 ---\n%s\n--- out2 ---\n%s", out1, out2)
+	}
+}
+
+// TestPreserveExistingImportedAt covers the negative arms of the
+// preservation predicate: each non-match case must fall back to the
+// fresh stamp from `entries` so the caller's intent (re-stamp on a
+// genuine state change) survives.
+//
+// Cases:
+//   - project mismatch (force-takeover / cross-project re-import) —
+//     fresh stamp asserts the new ownership.
+//   - session mismatch (a new flow started) — fresh stamp signals the
+//     temporal boundary.
+//   - new pass has session but prior didn't (or vice versa) — same
+//     temporal boundary signal.
+//   - prior ImportedAt absent — nothing to preserve.
+//   - Identity.Tags entirely empty — first-import case, fresh stamp.
+//   - unsupported cloud — no markers to parse, fall through.
+func TestPreserveExistingImportedAt(t *testing.T) {
+	t.Parallel()
+	freshStamp := fixedTime().UTC().Format(time.RFC3339)
+	freshGCPStamp := gcpLabelTimestamp(fixedTime())
+
+	awsFresh := func() []provenanceEntry {
+		return provenanceKeysFor("aws", "io-stack-1", "sess-9", fixedTime())
+	}
+	gcpFresh := func() []provenanceEntry {
+		return provenanceKeysFor("gcp", "io-stack-1", "sess-9", fixedTime())
+	}
+
+	importedAtValue := func(entries []provenanceEntry, key string) string {
+		for _, e := range entries {
+			if e.Key == key {
+				return e.Value
+			}
+		}
+		return ""
+	}
+
+	cases := []struct {
+		name      string
+		cloud     string
+		projectID string
+		sessionID string
+		tags      map[string]string
+		freshFn   func() []provenanceEntry
+		wantKey   string
+		wantValue string // expected ImportedAt value after preservation
+	}{
+		{
+			name:      "aws/preserves on full match",
+			cloud:     "aws",
+			projectID: "io-stack-1",
+			sessionID: "sess-9",
+			tags: map[string]string{
+				"InsideOutImportProject": "io-stack-1",
+				"InsideOutImportSession": "sess-9",
+				"InsideOutImportedAt":    "2026-05-26T21:10:48Z",
+			},
+			freshFn:   awsFresh,
+			wantKey:   AWSTagKeyImportedAt,
+			wantValue: "2026-05-26T21:10:48Z",
+		},
+		{
+			name:      "aws/project mismatch → fresh stamp",
+			cloud:     "aws",
+			projectID: "io-stack-1",
+			sessionID: "sess-9",
+			tags: map[string]string{
+				"InsideOutImportProject": "io-other",
+				"InsideOutImportSession": "sess-9",
+				"InsideOutImportedAt":    "2026-05-26T21:10:48Z",
+			},
+			freshFn:   awsFresh,
+			wantKey:   AWSTagKeyImportedAt,
+			wantValue: freshStamp,
+		},
+		{
+			name:      "aws/session mismatch → fresh stamp",
+			cloud:     "aws",
+			projectID: "io-stack-1",
+			sessionID: "sess-9",
+			tags: map[string]string{
+				"InsideOutImportProject": "io-stack-1",
+				"InsideOutImportSession": "sess-OLD",
+				"InsideOutImportedAt":    "2026-05-26T21:10:48Z",
+			},
+			freshFn:   awsFresh,
+			wantKey:   AWSTagKeyImportedAt,
+			wantValue: freshStamp,
+		},
+		{
+			name:      "aws/prior had session, current doesn't → fresh stamp",
+			cloud:     "aws",
+			projectID: "io-stack-1",
+			sessionID: "", // no session this pass
+			tags: map[string]string{
+				"InsideOutImportProject": "io-stack-1",
+				"InsideOutImportSession": "sess-OLD",
+				"InsideOutImportedAt":    "2026-05-26T21:10:48Z",
+			},
+			freshFn: func() []provenanceEntry {
+				return provenanceKeysFor("aws", "io-stack-1", "", fixedTime())
+			},
+			wantKey:   AWSTagKeyImportedAt,
+			wantValue: freshStamp,
+		},
+		{
+			name:      "aws/no prior ImportedAt → fresh stamp",
+			cloud:     "aws",
+			projectID: "io-stack-1",
+			sessionID: "sess-9",
+			tags: map[string]string{
+				"InsideOutImportProject": "io-stack-1",
+				"InsideOutImportSession": "sess-9",
+				// no InsideOutImportedAt
+			},
+			freshFn:   awsFresh,
+			wantKey:   AWSTagKeyImportedAt,
+			wantValue: freshStamp,
+		},
+		{
+			name:      "aws/Identity.Tags empty (first import) → fresh stamp",
+			cloud:     "aws",
+			projectID: "io-stack-1",
+			sessionID: "sess-9",
+			tags:      nil,
+			freshFn:   awsFresh,
+			wantKey:   AWSTagKeyImportedAt,
+			wantValue: freshStamp,
+		},
+		{
+			name:      "gcp/preserves on full match",
+			cloud:     "gcp",
+			projectID: "io-stack-1",
+			sessionID: "sess-9",
+			tags: map[string]string{
+				"insideout-import-project": "io-stack-1",
+				"insideout-import-session": "sess-9",
+				"insideout-imported-at":    "2026-05-26t21-10-48z",
+			},
+			freshFn:   gcpFresh,
+			wantKey:   GCPLabelKeyImportedAt,
+			wantValue: "2026-05-26t21-10-48z",
+		},
+		{
+			name:      "gcp/project mismatch → fresh stamp",
+			cloud:     "gcp",
+			projectID: "io-stack-1",
+			sessionID: "sess-9",
+			tags: map[string]string{
+				"insideout-import-project": "io-other",
+				"insideout-import-session": "sess-9",
+				"insideout-imported-at":    "2026-05-26t21-10-48z",
+			},
+			freshFn:   gcpFresh,
+			wantKey:   GCPLabelKeyImportedAt,
+			wantValue: freshGCPStamp,
+		},
+		{
+			// Identity.Tags carries a FULL AWS marker set matching the
+			// passed-in project+session+ImportedAt — if the predicate
+			// silently routed "azure" to the AWS key set, this would
+			// preserve "2026-05-26T21:10:48Z" instead of the fresh
+			// stamp. The test pins that the default branch returns the
+			// input slice untouched.
+			name:      "unsupported cloud → default branch, no preservation",
+			cloud:     "azure",
+			projectID: "io-stack-1",
+			sessionID: "sess-9",
+			tags: map[string]string{
+				"InsideOutImportProject": "io-stack-1",
+				"InsideOutImportSession": "sess-9",
+				"InsideOutImportedAt":    "2026-05-26T21:10:48Z",
+			},
+			freshFn:   awsFresh,
+			wantKey:   AWSTagKeyImportedAt,
+			wantValue: freshStamp,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ir := &imported.ImportedResource{
+				Identity: imported.ResourceIdentity{
+					Cloud: tc.cloud,
+					Tags:  tc.tags,
+				},
+			}
+			got := preserveExistingImportedAt(tc.freshFn(), ir, tc.cloud, tc.projectID, tc.sessionID)
+			assert.Equalf(t, tc.wantValue, importedAtValue(got, tc.wantKey),
+				"unexpected ImportedAt value for case %q", tc.name)
+		})
+	}
+
+	t.Run("nil ir returns entries unchanged", func(t *testing.T) {
+		in := awsFresh()
+		got := preserveExistingImportedAt(in, nil, "aws", "io-stack-1", "sess-9")
+		assert.Equal(t, freshStamp, importedAtValue(got, AWSTagKeyImportedAt))
+	})
+	t.Run("copy-on-write: input slice + ir.Identity.Tags not mutated", func(t *testing.T) {
+		in := awsFresh()
+		inSnapshot := importedAtValue(in, AWSTagKeyImportedAt)
+		// Use a fresh map literal so we can detect any in-place mutation
+		// of ir.Identity.Tags (a future "optimization" that pops the
+		// markers out of the map to keep them out of <discovered> would
+		// silently leak across resources sharing the tag map).
+		tags := map[string]string{
+			"InsideOutImportProject": "io-stack-1",
+			"InsideOutImportSession": "sess-9",
+			"InsideOutImportedAt":    "2026-05-26T21:10:48Z",
+		}
+		tagsSnapshot := make(map[string]string, len(tags))
+		for k, v := range tags {
+			tagsSnapshot[k] = v
+		}
+		ir := &imported.ImportedResource{
+			Identity: imported.ResourceIdentity{Cloud: "aws", Tags: tags},
+		}
+		out := preserveExistingImportedAt(in, ir, "aws", "io-stack-1", "sess-9")
+		// Out should have preserved value, in should still have fresh.
+		assert.Equal(t, "2026-05-26T21:10:48Z", importedAtValue(out, AWSTagKeyImportedAt))
+		assert.Equal(t, inSnapshot, importedAtValue(in, AWSTagKeyImportedAt),
+			"caller's entries slice must not be mutated")
+		assert.Equal(t, tagsSnapshot, tags,
+			"ir.Identity.Tags must not be mutated by the read-only preserve helper")
+	})
+}
+
 // TestBuildDiscoveredTagsExpression_FiltersProvenanceMarkers pins that
 // InsideOut* / insideout-* markers are filtered out of the discover-time
 // arg of the merge() expression — otherwise a re-import would emit stale
