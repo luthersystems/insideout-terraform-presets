@@ -11,11 +11,36 @@ import (
 	"testing"
 	"time"
 
+	"github.com/hashicorp/hcl/v2"
+	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
 )
+
+// mergeArgsForAttr extracts the argument expressions from a `merge(...)`
+// call assigned to attribute `attr` inside body. Fails the test (via
+// require) when body doesn't parse, attr isn't found, or attr's value
+// isn't a merge() call. Returns hclsyntax expressions so callers can
+// type-assert each arg's shape (e.g. *hclsyntax.ObjectConsExpr).
+func mergeArgsForAttr(t *testing.T, body []byte, attr string) []hclsyntax.Expression {
+	t.Helper()
+	// Wrap the attribute body in a synthetic resource block so the
+	// parser has a stable top-level shape; the body returned by
+	// emitImportedResourceBody is just attribute lines.
+	src := []byte("resource \"x\" \"y\" {\n" + string(body) + "\n}\n")
+	f, diags := hclsyntax.ParseConfig(src, "synthetic.tf", hcl.InitialPos)
+	require.Falsef(t, diags.HasErrors(), "parse synthetic resource: %s\nsource:\n%s", diags.Error(), src)
+	blocks := f.Body.(*hclsyntax.Body).Blocks
+	require.Lenf(t, blocks, 1, "expected one resource block, got %d", len(blocks))
+	a, ok := blocks[0].Body.Attributes[attr]
+	require.Truef(t, ok, "attribute %q not found in body:\n%s", attr, src)
+	call, ok := a.Expr.(*hclsyntax.FunctionCallExpr)
+	require.Truef(t, ok, "attr %q expression is %T, want FunctionCallExpr (merge call):\n%s", attr, a.Expr, src)
+	require.Equalf(t, "merge", call.Name, "attr %q calls %q, want merge:\n%s", attr, call.Name, src)
+	return call.Args
+}
 
 // fixedTime returns a stable timestamp used by the provenance tests so output
 // HCL is deterministic across runs.
@@ -394,14 +419,15 @@ func TestInjectProvenance_AWSDiscoveredTagsDeduped_AgainstBodyTags(t *testing.T)
 	}
 
 	// And the merge() itself should be 2-arg (provenance + existing),
-	// since every discovered key was already in the body. Count object
-	// literals inside the merge() — should be exactly 2.
-	merge := strings.Index(s, "tags = merge(")
-	require.GreaterOrEqual(t, merge, 0)
-	openBraces := strings.Count(s[merge:], "{")
-	closeBraces := strings.Count(s[merge:], "}")
-	assert.Equalf(t, 2, openBraces, "expected 2 object literals in merge(), got %d:\n%s", openBraces, s)
-	assert.Equalf(t, 2, closeBraces, "expected 2 closing braces in merge(), got %d:\n%s", closeBraces, s)
+	// since every discovered key was already in the body. Parse the
+	// emitted tags expression and assert structurally — counting raw
+	// braces is too tied to body-emitter formatting.
+	args := mergeArgsForAttr(t, got, "tags")
+	require.Lenf(t, args, 2, "expected 2-arg merge() after dedupe, got %d args:\n%s", len(args), s)
+	for i, a := range args {
+		_, ok := a.(*hclsyntax.ObjectConsExpr)
+		assert.Truef(t, ok, "merge() arg #%d is %T, want ObjectConsExpr:\n%s", i, a, s)
+	}
 
 	// Sanity: provenance + all customer keys still present.
 	assert.True(t, hasAttr(t, s, "InsideOutImportProject", `"io-stack-1"`),
@@ -448,6 +474,198 @@ func TestInjectProvenance_AWSDiscoveredTagsPartialOverlap(t *testing.T) {
 	// Project survives because it isn't in <existing>.
 	assert.True(t, hasAttr(t, s, "Project", `"io-stack-1"`),
 		"discovered Project must survive (key not in <existing>):\n%s", s)
+}
+
+// TestInjectProvenance_GCPDiscoveredLabelsDeduped_AgainstBodyLabels is
+// the GCP parallel to the AWS dedupe test. Critical because GCP label
+// keys are hyphenated and emit as quoted strings — this exercises the
+// TemplateExpr branch of objectConsKeyAsString end-to-end. If that
+// branch regressed to "always return false", excludeKeys would be
+// empty and we'd silently ship the duplicate-block bug on GCP only.
+func TestInjectProvenance_GCPDiscoveredLabelsDeduped_AgainstBodyLabels(t *testing.T) {
+	t.Parallel()
+	// Use label values that don't collide with the resource's `name`
+	// attribute (the body emitter writes `name = "..."` too, and we
+	// count value occurrences in the full body output).
+	customer := map[string]string{
+		"team":        "platform-team",
+		"environment": "prod-env",
+		// A hyphenated GCP-style label — the body emitter writes it
+		// as a quoted-string key, exercising the TemplateExpr branch.
+		"cost-center": "infra-cost",
+	}
+	ir := imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Cloud:   "gcp",
+			Type:    "google_storage_bucket",
+			Address: "google_storage_bucket.docs",
+			Tags:    customer,
+		},
+		Tier: imported.TierImportedFlat,
+		Attrs: []byte(`{"name":{"literal":"bucket-name"},"labels":{` +
+			`"team":{"literal":"platform-team"},` +
+			`"environment":{"literal":"prod-env"},` +
+			`"cost-center":{"literal":"infra-cost"}` +
+			`}}`),
+	}
+	body, _, err := emitTestBody(t, ir)
+	require.NoError(t, err)
+
+	got, err := injectProvenance(body, &ir, "io-stack-1", "sess-9", fixedTime())
+	require.NoError(t, err)
+	s := string(got)
+
+	// Each customer label value must appear exactly once.
+	for k, v := range customer {
+		count := strings.Count(s, `"`+v+`"`)
+		assert.Equalf(t, 1, count,
+			"customer label %q=%q appears %d times — discover-time arg duplicated:\n%s",
+			k, v, count, s)
+	}
+
+	// Structural: merge() should be 2-arg after dedupe.
+	args := mergeArgsForAttr(t, got, "labels")
+	require.Lenf(t, args, 2, "expected 2-arg merge() after dedupe, got %d args:\n%s", len(args), s)
+}
+
+// TestInjectProvenance_AWSDiscoveredTagsDeduped_AgainstBodyTags_ReImport
+// pins re-import behavior: when both ir.Identity.Tags AND the body's
+// Attrs.Tags carry stale InsideOut* provenance markers from a prior
+// import pass, the discovered arg must STILL drop them (the marker
+// filter doesn't depend on excludeKeys — it has its own filter). And
+// the merge() must still resolve to the fresh project/session/timestamp
+// from the InsideOut* first arg, NOT the stale stamp from <existing>.
+//
+// Documenting the current behavior is the point: per the injector
+// docstring, "body-existing tags layer can override [the InsideOut
+// stamps] on a re-import that already carries the project's stamps."
+// That's the design from #690 — re-importing a previously-imported
+// resource doesn't churn the timestamp, because the live cloud-side
+// timestamp echoes back through <existing>. This test pins that
+// behavior so a future change to filter <existing>'s markers (which
+// the QA review flagged as ambiguous) doesn't silently regress it.
+func TestInjectProvenance_AWSDiscoveredTagsDeduped_AgainstBodyTags_ReImport(t *testing.T) {
+	t.Parallel()
+	staleTime := "2026-04-01T00:00:00Z"
+	ir := imported.ImportedResource{
+		Identity: imported.ResourceIdentity{
+			Cloud:   "aws",
+			Type:    "aws_sqs_queue",
+			Address: "aws_sqs_queue.q",
+			// Discovered carries stale markers — these must NOT appear
+			// in <discovered> (provenanceMarkerKeys filter), and they
+			// must not echo into the merge's customer-tag layer.
+			Tags: map[string]string{
+				"Component":              "queue",
+				"InsideOutImportProject": "io-stack-1",
+				"InsideOutImportedAt":    staleTime,
+				"InsideOutImported":      "true",
+			},
+		},
+		Tier: imported.TierImportedFlat,
+		// Body Attrs carries stale markers (re-import from a prior pass).
+		Attrs: []byte(`{"name":{"literal":"q"},"tags":{` +
+			`"InsideOutImportProject":{"literal":"io-stack-1"},` +
+			`"InsideOutImportedAt":{"literal":"` + staleTime + `"},` +
+			`"InsideOutImported":{"literal":"true"}` +
+			`}}`),
+	}
+	body, _, err := emitTestBody(t, ir)
+	require.NoError(t, err)
+
+	got, err := injectProvenance(body, &ir, "io-stack-1", "sess-9", fixedTime())
+	require.NoError(t, err)
+	s := string(got)
+
+	// The fresh ImportProject stamp must be present (provenance first arg).
+	assert.True(t, hasAttr(t, s, "InsideOutImportProject", `"io-stack-1"`),
+		"missing fresh InsideOutImportProject:\n%s", s)
+	// Component (the only non-marker key in Identity.Tags) flows through
+	// <discovered>. Body has no Component → it's a genuine backfill.
+	assert.True(t, hasAttr(t, s, "Component", `"queue"`),
+		"non-marker Component from Identity.Tags missing:\n%s", s)
+
+	// Structural pin: 2-arg merge (no <discovered> middle arg, since
+	// every non-marker discovered key was filtered out — Component is
+	// not in <existing>, but the only other discovered keys are
+	// markers, so <discovered> has exactly one entry). Three args
+	// expected: {InsideOut*}, {Component}, <body with stale markers>.
+	args := mergeArgsForAttr(t, got, "tags")
+	require.Lenf(t, args, 3, "expected 3-arg merge() (prov, discovered backfill, existing with stale markers), got %d:\n%s", len(args), s)
+}
+
+// TestParseObjectLiteralKeys_NonIntrospectable_FallsBackToNil pins
+// the safe-default contract: when <existing> is a reference, function
+// call, or anything else we can't statically resolve, parseObjectLiteralKeys
+// must return nil so the caller falls back to "don't filter discovered"
+// — over-including is safe; under-including silently re-introduces the
+// #690 data-loss bug.
+func TestParseObjectLiteralKeys_NonIntrospectable_FallsBackToNil(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name, expr string
+		wantNil    bool
+	}{
+		{"variable reference", `var.tags`, true},
+		{"local reference", `local.tags`, true},
+		{"nested merge call", `merge(local.a, local.b)`, true},
+		{"toset call", `toset(["a","b"])`, true},
+		{"dynamic key via parens", `{ (local.k) = "v" }`, true},
+		{"malformed input", `{ unclosed`, true},
+		{"empty object literal", `{}`, false}, // returns empty map, NOT nil
+		{"single bare-id key", `{ Foo = "bar" }`, false},
+		{"single quoted key", `{ "cost-center" = "x" }`, false},
+		{"mixed keys", `{ Foo = "a", "b-c" = "d" }`, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := parseObjectLiteralKeys(tc.expr)
+			if tc.wantNil {
+				assert.Nilf(t, got, "expected nil (don't-filter fallback) for %q, got %v", tc.expr, got)
+			} else {
+				assert.NotNilf(t, got, "expected non-nil map for %q", tc.expr)
+			}
+		})
+	}
+
+	t.Run("extracts both bare-id and quoted keys", func(t *testing.T) {
+		got := parseObjectLiteralKeys(`{ Foo = "a", "cost-center" = "b", Bar = "c" }`)
+		require.NotNil(t, got)
+		assert.Contains(t, got, "Foo")
+		assert.Contains(t, got, "Bar")
+		assert.Contains(t, got, "cost-center")
+		assert.Len(t, got, 3)
+	})
+}
+
+// TestBuildMergeExpression_ElidesDiscoveredWhenEmpty pins that the
+// emitter collapses to a 2-arg merge() when discoveredExpr is "".
+// Without this guard, the 3-arg shape would emit `merge({...},\n  ,\n  {...},\n)`
+// — invalid HCL. Caught at unit level so a refactor of buildMergeExpression
+// can't silently break the elision.
+func TestBuildMergeExpression_ElidesDiscoveredWhenEmpty(t *testing.T) {
+	t.Parallel()
+	entries := []provenanceEntry{{Key: "K", Value: "v"}}
+
+	t.Run("empty discovered → 2-arg merge", func(t *testing.T) {
+		got := buildMergeExpression(entries, "", "{}")
+		// Sanity-parse as HCL to catch invalid commas/newlines.
+		f, diags := hclsyntax.ParseExpression([]byte(got), "expr.tf", hcl.InitialPos)
+		require.Falsef(t, diags.HasErrors(), "elided merge() must parse: %s\n%s", diags.Error(), got)
+		call, ok := f.(*hclsyntax.FunctionCallExpr)
+		require.Truef(t, ok, "expected merge() call, got %T:\n%s", f, got)
+		assert.Equalf(t, "merge", call.Name, "wrong call name:\n%s", got)
+		assert.Lenf(t, call.Args, 2, "expected 2-arg merge() when discovered is empty:\n%s", got)
+	})
+
+	t.Run("non-empty discovered → 3-arg merge", func(t *testing.T) {
+		got := buildMergeExpression(entries, `{ Component = "x" }`, "{}")
+		f, diags := hclsyntax.ParseExpression([]byte(got), "expr.tf", hcl.InitialPos)
+		require.Falsef(t, diags.HasErrors(), "3-arg merge() must parse: %s\n%s", diags.Error(), got)
+		call, ok := f.(*hclsyntax.FunctionCallExpr)
+		require.True(t, ok)
+		assert.Lenf(t, call.Args, 3, "expected 3-arg merge() with discovered:\n%s", got)
+	})
 }
 
 // TestInjectProvenance_GCPDiscoveredLabelsMergedWhenAttrsEmpty is the
