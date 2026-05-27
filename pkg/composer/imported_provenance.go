@@ -367,6 +367,13 @@ func injectProvenance(body []byte, ir *imported.ImportedResource, projectID, ses
 	if len(entries) == 0 {
 		return body, nil
 	}
+	// Preserve the existing InsideOutImportedAt timestamp when the resource
+	// was previously imported under the same project+session — every fresh
+	// stamp would otherwise show up as a tag-only diff on each subsequent
+	// compose pass and falsely register as drift on the carried-forward
+	// resource set (a CloudWatch log group that was imported on day 1
+	// shouldn't churn on day 2's flow if nothing else changed).
+	entries = preserveExistingImportedAt(entries, ir, cloud, projectID, sessionID)
 
 	// emitImportedResourceBody trims trailing newlines; without one, hclwrite
 	// appends a new attribute on the same line as the previous one. Restore
@@ -501,6 +508,87 @@ func buildDiscoveredTagsExpression(cloud string, tags map[string]string, exclude
 	}
 	b.WriteString("  }")
 	return b.String()
+}
+
+// preserveExistingImportedAt rewrites the InsideOutImportedAt entry's
+// value to the literal already present on the cloud-side resource
+// (ir.Identity.Tags) when the resource was previously imported under the
+// same project+session. Returns the entries slice unchanged when:
+//
+//   - the cloud is neither aws nor gcp (the entries slice is empty in
+//     that case anyway — defensive),
+//   - ir.Identity.Tags has no ImportProject marker (first import — fresh
+//     stamp is correct),
+//   - the existing ImportProject marker doesn't match projectID (a
+//     force-takeover or cross-project re-import — fresh stamp asserts
+//     the new ownership),
+//   - the session changed since the prior stamp (the session boundary is
+//     the natural place to refresh the timestamp),
+//   - or no existing ImportedAt literal is present (nothing to preserve).
+//
+// Why this lives at the entries layer rather than overriding importedAt
+// for the whole call: provenanceKeysFor's signature is small and
+// stateless, and the override is conditional on per-resource state. A
+// per-call mutation keeps the rest of injectProvenance's contract
+// intact and keeps the override visible to readers who scan
+// injectProvenance top-to-bottom.
+//
+// Idempotency contract: re-running the compose pass without any state
+// change must emit byte-identical HCL. Without this rewrite, the
+// timestamp churns on every pass and breaks that contract — visible as
+// a tag-only diff in `terraform plan` on every flow even when nothing
+// material changed.
+func preserveExistingImportedAt(entries []provenanceEntry, ir *imported.ImportedResource, cloud, projectID, sessionID string) []provenanceEntry {
+	if ir == nil || len(ir.Identity.Tags) == 0 {
+		return entries
+	}
+	var projectKey, sessionKey, importedAtKey string
+	switch strings.ToLower(strings.TrimSpace(cloud)) {
+	case "aws":
+		projectKey = AWSTagKeyImportProject
+		sessionKey = AWSTagKeyImportSession
+		importedAtKey = AWSTagKeyImportedAt
+	case "gcp":
+		projectKey = GCPLabelKeyImportProject
+		sessionKey = GCPLabelKeyImportSession
+		importedAtKey = GCPLabelKeyImportedAt
+	default:
+		return entries
+	}
+
+	if got, ok := ir.Identity.Tags[projectKey]; !ok || got != projectID {
+		return entries
+	}
+	// Session marker comparison: if the current pass has a session, it
+	// must match the prior stamp. If the current pass has no session,
+	// the prior stamp must also have no session — otherwise the prior
+	// belongs to a different temporal scope and a fresh stamp is the
+	// right signal.
+	if sessionID != "" {
+		if got, ok := ir.Identity.Tags[sessionKey]; !ok || got != sessionID {
+			return entries
+		}
+	} else if _, ok := ir.Identity.Tags[sessionKey]; ok {
+		return entries
+	}
+
+	existing, ok := ir.Identity.Tags[importedAtKey]
+	if !ok || strings.TrimSpace(existing) == "" {
+		return entries
+	}
+
+	// Copy on write so callers that share the entries slice across
+	// resources aren't mutated through. provenanceKeysFor allocates a
+	// fresh slice today, but the contract is cheap to keep.
+	out := make([]provenanceEntry, len(entries))
+	copy(out, entries)
+	for i := range out {
+		if out[i].Key == importedAtKey {
+			out[i].Value = existing
+			break
+		}
+	}
+	return out
 }
 
 // parseObjectLiteralKeys returns the set of top-level keys when expr is
