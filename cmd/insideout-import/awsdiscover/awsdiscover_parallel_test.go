@@ -443,3 +443,124 @@ func TestNewAWSDiscoverer_DefaultsJitterFields(t *testing.T) {
 		t.Errorf("jitterSample is not d.defaultJitterSample (got pointer=%x, want %x)", gotSample, wantSample)
 	}
 }
+
+// TestDiscoverTypes_PerTypeTimeoutPartialResult pins the #1787 fix —
+// one stalled per-type Discover MUST NOT hold up its siblings or fail
+// the whole call. With args.PerTypeTimeout set, the aggregator wraps
+// each Discover in a child context-with-timeout; on expiry it emits an
+// empty slice for that type and lets siblings finish. The overall call
+// returns a partial result (the fast type's resources) without error.
+//
+// Why this matters: before #1787 a single slow S3 ListBuckets / EC2
+// DescribeInstances against a hot AWS quota could pin the broad scan
+// at the caller's outer Vercel deadline (300s), then fail the whole
+// gather. A best-effort survey should return what it has.
+func TestDiscoverTypes_PerTypeTimeoutPartialResult(t *testing.T) {
+	if testing.Short() {
+		t.Skip("timing-sensitive; skip in -short")
+	}
+	t.Parallel()
+
+	// Slow type sleeps well past the per-type budget; fast type
+	// returns immediately. With PerTypeTimeout=50ms the slow type must
+	// be timed out (and emit nothing) while the fast type's "fast1"
+	// row survives in the returned slice.
+	slow := &sleepDiscoverer{
+		t:     "type_slow",
+		out:   []imported.ImportedResource{ir("slow1")},
+		sleep: 500 * time.Millisecond,
+	}
+	fast := &fakeDiscoverer{
+		t:   "type_fast",
+		out: []imported.ImportedResource{ir("fast1")},
+	}
+	agg := &AWSDiscoverer{byType: map[string]Discoverer{
+		"type_slow": slow,
+		"type_fast": fast,
+	}}
+
+	args := argsBasic()
+	args.PerTypeTimeout = 50 * time.Millisecond
+
+	start := time.Now()
+	got, err := agg.DiscoverTypes(context.Background(), []string{"type_slow", "type_fast"}, args)
+	elapsed := time.Since(start)
+	if err != nil {
+		t.Fatalf("DiscoverTypes returned error on per-type timeout (partial result expected): %v", err)
+	}
+	// Wall time must be bounded by the timeout + a little overhead,
+	// NOT the slow sleeper's 500ms. The whole point of the per-type
+	// fence is to avoid waiting on the slow one.
+	if elapsed >= 400*time.Millisecond {
+		t.Errorf("DiscoverTypes elapsed=%v with PerTypeTimeout=50ms, want <400ms — the slow type was not fenced off", elapsed)
+	}
+	addrs := make([]string, 0, len(got))
+	for _, r := range got {
+		addrs = append(addrs, r.Identity.Address)
+	}
+	want := []string{"fast1"}
+	if !reflect.DeepEqual(addrs, want) {
+		t.Errorf("partial result = %v, want %v (slow type should emit nothing, fast type's row should survive)", addrs, want)
+	}
+}
+
+// TestDiscoverTypes_PerTypeTimeoutZeroDisablesFence pins the
+// back-compat default: PerTypeTimeout==0 means "no per-type bound".
+// A bare DiscoverArgs (the shape every existing test in the suite
+// uses) must behave exactly as it did pre-#1787: a slow per-type call
+// runs to completion and its results are included.
+func TestDiscoverTypes_PerTypeTimeoutZeroDisablesFence(t *testing.T) {
+	if testing.Short() {
+		t.Skip("timing-sensitive; skip in -short")
+	}
+	t.Parallel()
+
+	slow := &sleepDiscoverer{
+		t:     "type_slow",
+		out:   []imported.ImportedResource{ir("slow1")},
+		sleep: 60 * time.Millisecond,
+	}
+	agg := &AWSDiscoverer{byType: map[string]Discoverer{"type_slow": slow}}
+
+	// argsBasic leaves PerTypeTimeout at the zero value.
+	got, err := agg.DiscoverTypes(context.Background(), []string{"type_slow"}, argsBasic())
+	if err != nil {
+		t.Fatalf("DiscoverTypes returned error with no per-type fence: %v", err)
+	}
+	if len(got) != 1 || got[0].Identity.Address != "slow1" {
+		t.Errorf("got=%v, want [slow1] — PerTypeTimeout==0 must NOT fence off the slow type", got)
+	}
+}
+
+// TestDiscoverTypes_PerTypeTimeoutParentCancelPropagates pins that the
+// timeout downgrade is scoped to per-type budget expiry. A parent
+// context cancellation (caller's outer deadline, fail-fast sibling)
+// must still propagate as an error — operators rely on the fail-fast
+// shape to surface real failures, and silently swallowing parent
+// cancellation would let the broad scan return success for a request
+// the caller already abandoned.
+func TestDiscoverTypes_PerTypeTimeoutParentCancelPropagates(t *testing.T) {
+	if testing.Short() {
+		t.Skip("timing-sensitive; skip in -short")
+	}
+	t.Parallel()
+
+	slow := &sleepDiscoverer{
+		t:     "type_slow",
+		out:   []imported.ImportedResource{ir("slow1")},
+		sleep: 500 * time.Millisecond,
+	}
+	agg := &AWSDiscoverer{byType: map[string]Discoverer{"type_slow": slow}}
+
+	args := argsBasic()
+	// Per-type budget is generous; the parent ctx cancels first.
+	args.PerTypeTimeout = 1 * time.Second
+
+	parentCtx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
+	defer cancel()
+
+	_, err := agg.DiscoverTypes(parentCtx, []string{"type_slow"}, args)
+	if err == nil {
+		t.Fatal("expected error from parent-ctx cancellation; got nil — the per-type timeout downgrade must NOT swallow parent cancellation")
+	}
+}
