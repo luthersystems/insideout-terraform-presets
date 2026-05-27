@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/hcl/v2"
+	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/hashicorp/hcl/v2/hclwrite"
 
 	"github.com/luthersystems/insideout-terraform-presets/pkg/composer/imported"
@@ -398,7 +399,18 @@ func injectProvenance(body []byte, ir *imported.ImportedResource, projectID, ses
 	// any prior-run InsideOut* stamps; dropping them here keeps the
 	// emitted HCL deterministic across re-imports without nudging
 	// InsideOutImportedAt.
-	discoveredExprText := buildDiscoveredTagsExpression(cloud, ir.Identity.Tags)
+	//
+	// We also drop keys already present in <existing>: when the body
+	// emitter wrote a tag from typed Attrs, Identity.Tags re-emitting
+	// the same key just duplicates the object literal in the merge()
+	// (visually noisy, semantically a no-op). The discover-time arg
+	// is conceptually a backfill for keys the body dropped — keys it
+	// already has don't need backfilling. When existingExprText is
+	// not a static object literal (a reference, another merge() call,
+	// etc.) we can't introspect the keys, so we keep every discovered
+	// entry — the safe direction is to over-include.
+	excludeKeys := parseObjectLiteralKeys(existingExprText)
+	discoveredExprText := buildDiscoveredTagsExpression(cloud, ir.Identity.Tags, excludeKeys)
 
 	mergeExpr := buildMergeExpression(entries, discoveredExprText, existingExprText)
 	tokens, err := tokenizeExpression(mergeExpr)
@@ -438,7 +450,8 @@ func buildMergeExpression(entries []provenanceEntry, discoveredExpr, existingExp
 
 // buildDiscoveredTagsExpression formats ir.Identity.Tags as an HCL object
 // literal suitable for an argument position inside a merge() call.
-// Returns "" when the map is empty or every entry is a provenance marker.
+// Returns "" when the map is empty or every entry is a provenance marker
+// or already present in excludeKeys.
 //
 // Keys are emitted in sorted order so the output is deterministic
 // regardless of map iteration order. Provenance markers
@@ -449,10 +462,20 @@ func buildMergeExpression(entries []provenanceEntry, discoveredExpr, existingExp
 // timestamp in place across re-imports while producing the same
 // effective `merge()` result.
 //
+// excludeKeys carries the set of keys already present in the body
+// emitter's <existing> tag map. Filtering them out avoids visually
+// duplicate object literals like
+// `merge({InsideOut*}, {Component=...}, {Component=...})` for the
+// common case where Identity.Tags is the same map the body just
+// emitted (any resource where CC GetResource returns tags — KMS keys,
+// log groups, SQS queues, etc.). Pass nil when the caller can't
+// introspect the existing map (a reference or a nested merge()),
+// in which case every discovered key is kept.
+//
 // GCP label keys are emitted quoted (they may contain hyphens, which
 // HCL identifiers don't permit); AWS tag keys can contain arbitrary
 // characters and so are always quoted defensively via quoteKeyIfNeeded.
-func buildDiscoveredTagsExpression(cloud string, tags map[string]string) string {
+func buildDiscoveredTagsExpression(cloud string, tags map[string]string, excludeKeys map[string]struct{}) string {
 	if len(tags) == 0 {
 		return ""
 	}
@@ -460,6 +483,9 @@ func buildDiscoveredTagsExpression(cloud string, tags map[string]string) string 
 	keys := make([]string, 0, len(tags))
 	for k := range tags {
 		if _, isMarker := provenance[k]; isMarker {
+			continue
+		}
+		if _, alreadyEmitted := excludeKeys[k]; alreadyEmitted {
 			continue
 		}
 		keys = append(keys, k)
@@ -475,6 +501,78 @@ func buildDiscoveredTagsExpression(cloud string, tags map[string]string) string 
 	}
 	b.WriteString("  }")
 	return b.String()
+}
+
+// parseObjectLiteralKeys returns the set of top-level keys when expr is
+// a static HCL object constructor (`{ Foo = "bar" }`). Returns nil when
+// expr is anything else — a reference like `var.tags`, a function call
+// like `merge(local.a, local.b)`, or any expression we can't statically
+// resolve. Callers treat nil as "don't filter" so the safe default is
+// to over-include discovered tags rather than under-include them.
+//
+// Both bare-identifier keys (`Foo = "..."`) and quoted-string keys
+// (`"Foo-Bar" = "..."`) are extracted; the former is the common AWS
+// shape and the latter is the common GCP-label shape.
+func parseObjectLiteralKeys(expr string) map[string]struct{} {
+	parsed, diags := hclsyntax.ParseExpression([]byte(expr), "expr.tf", hcl.InitialPos)
+	if diags.HasErrors() {
+		return nil
+	}
+	obj, ok := parsed.(*hclsyntax.ObjectConsExpr)
+	if !ok {
+		return nil
+	}
+	out := make(map[string]struct{}, len(obj.Items))
+	for _, item := range obj.Items {
+		key, ok := objectConsKeyAsString(item.KeyExpr)
+		if !ok {
+			// A dynamic key (`(local.k) = "..."`) means we can't know
+			// statically what keys this literal carries. Bail to nil so
+			// the caller falls back to "don't filter".
+			return nil
+		}
+		out[key] = struct{}{}
+	}
+	return out
+}
+
+// objectConsKeyAsString extracts the static string key from an HCL
+// object-cons key expression. HCL wraps the key in a ObjectConsKeyExpr;
+// the inner expression is either a single-segment ScopeTraversalExpr
+// (bare identifier) or a string-literal TemplateExpr (quoted key).
+// Returns ("", false) for anything else (parens-wrapped expressions
+// for dynamic keys, etc.).
+func objectConsKeyAsString(key hclsyntax.Expression) (string, bool) {
+	wrap, ok := key.(*hclsyntax.ObjectConsKeyExpr)
+	if !ok {
+		return "", false
+	}
+	// ForceNonLiteral is set when the source had `(expr)` parens around
+	// the key — that signals a dynamic key, which we can't resolve here.
+	if wrap.ForceNonLiteral {
+		return "", false
+	}
+	switch inner := wrap.Wrapped.(type) {
+	case *hclsyntax.ScopeTraversalExpr:
+		if len(inner.Traversal) != 1 {
+			return "", false
+		}
+		root, ok := inner.Traversal[0].(hcl.TraverseRoot)
+		if !ok {
+			return "", false
+		}
+		return root.Name, true
+	case *hclsyntax.TemplateExpr:
+		if !inner.IsStringLiteral() {
+			return "", false
+		}
+		val, vDiags := inner.Value(nil)
+		if vDiags.HasErrors() {
+			return "", false
+		}
+		return val.AsString(), true
+	}
+	return "", false
 }
 
 // provenanceMarkerKeys returns the set of InsideOut marker keys for the
